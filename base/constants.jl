@@ -4,7 +4,8 @@ immutable MathConst{sym} <: Real end
 
 show{sym}(io::IO, x::MathConst{sym}) = print(io, "$sym = $(string(float(x))[1:15])...")
 
-promote_rule{s}(::Type{MathConst{s}}, ::Type) = Float64
+promote_rule{s,T<:Real}(::Type{MathConst{s}}, ::Type{T}) = Float64
+promote_rule{s,T<:Rational}(::Type{MathConst{s}}, ::Type{T}) = T
 promote_rule{s}(::Type{MathConst{s}}, ::Type{Float32}) = Float32
 promote_rule{s}(::Type{MathConst{s}}, ::Type{BigInt}) = BigFloat
 promote_rule{s}(::Type{MathConst{s}}, ::Type{BigFloat}) = BigFloat
@@ -73,9 +74,11 @@ const golden = φ
 #    .^(::MathConst{:e}, x) = exp(x)
 # but need to loop over types to prevent ambiguity with generic rules for ^(::Number, x) etc.
 for T in (MathConst, Rational, Integer, Number)
-    ^(::MathConst{:e}, x::T) = exp(x) 
+    ^(::MathConst{:e}, x::T) = exp(x)
 end
 for T in (Ranges, BitArray, SparseMatrixCSC, StridedArray, AbstractArray)
-    .^(::MathConst{:e}, x::T) = exp(x) 
+    .^(::MathConst{:e}, x::T) = exp(x)
 end
+^(::MathConst{:e}, x::AbstractMatrix) = expm(x)
+
 log(::MathConst{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
