@@ -128,13 +128,8 @@ convert(::Type{Float32}, x::BigFloat) =
 convert(::Type{Integer}, x::BigFloat) = convert(BigInt, x)
 
 promote_rule{T<:Real}(::Type{BigFloat}, ::Type{T}) = BigFloat
-
 promote_rule{T<:FloatingPoint}(::Type{BigInt},::Type{T}) = BigFloat
 promote_rule{T<:FloatingPoint}(::Type{BigFloat},::Type{T}) = BigFloat
-
-promote_rule(::Type{Rational{BigInt}}, ::Type{BigFloat}) = Rational{BigInt}
-promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{BigFloat}) = Rational{BigInt}
-promote_rule{T<:FloatingPoint}(::Type{Rational{BigInt}}, ::Type{T}) = Rational{BigInt}
 
 rationalize(x::BigFloat; tol::Real=eps(x)) = rationalize(BigInt, x, tol=tol)
 
