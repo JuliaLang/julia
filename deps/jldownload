@@ -9,9 +9,10 @@ WGET=/usr/bin/wget
 CURL=/usr/bin/curl
 FETCH=/usr/bin/fetch
 
-WGET_OPTS="--no-check-certificate --tries=1 --timeout=15"
-CURL_OPTS="-fkL --connect-timeout 15"
-FETCH_OPTS=
+TIMEOUT=15 # seconds
+WGET_OPTS="--no-check-certificate --tries=1 --timeout=$TIMEOUT"
+CURL_OPTS="-fkL --connect-timeout $TIMEOUT -y $TIMEOUT"
+FETCH_OPTS="-T $TIMEOUT"
 
 if [ $# -eq 1 ]; then
     CURL_OPTS="$CURL_OPTS -O"
