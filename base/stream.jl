@@ -11,11 +11,26 @@ abstract UVServer
 typealias UVHandle Ptr{Void}
 typealias UVStream AsyncStream
 
-const _sizeof_uv_pipe = int(ccall(:jl_sizeof_uv_pipe_t,Csize_t,()))
-const _sizeof_uv_poll = int(ccall(:jl_sizeof_uv_poll_t,Csize_t,()))
-const _sizeof_uv_fs_poll = int(ccall(:jl_sizeof_uv_fs_poll_t,Csize_t,()))
-const _sizeof_uv_fs_events = int(ccall(:jl_sizeof_uv_fs_events_t,Csize_t,()))
+function uv_sizeof_handle(handle) 
+    if !(UV_UNKNOWN_HANDLE < handle < UV_HANDLE_TYPE_MAX)
+        throw(DomainError())
+    end
+    ccall(:uv_handle_size,Csize_t,(Int32,),handle)
+end
 
+function uv_sizeof_req(req) 
+    if !(UV_UNKNOWN_REQ < req < UV_REQ_TYPE_MAX)
+        throw(DomainError())
+    end
+    ccall(:uv_req_size,Csize_t,(Int32,),req)
+end
+
+for h in uv_handle_types
+@eval const $(symbol("_sizeof_"*lowercase(string(h)))) = uv_sizeof_handle($h)
+end
+for r in uv_req_types
+@eval const $(symbol("_sizeof_"*lowercase(string(r)))) = uv_sizeof_req($r)
+end
 
 function eof(s::AsyncStream)
     start_reading(s)
@@ -532,7 +547,7 @@ process_events(block::Bool) = process_events(block,eventloop())
 run_event_loop() = run_event_loop(eventloop())
 
 ##pipe functions
-malloc_pipe() = c_malloc(_sizeof_uv_pipe)
+malloc_pipe() = c_malloc(_sizeof_uv_named_pipe)
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{Void},writeable_julia_only::Bool,pipe::AsyncStream)
     #make the pipe an unbuffered stream for now
     ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Int32,Int32,Any), read_end, 0, readable_julia_only, pipe)
