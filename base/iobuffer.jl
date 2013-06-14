@@ -108,7 +108,7 @@ function compact(io::IOBuffer)
     io.ptr = 1
     return true
 end
-function ensureroom(io::IOBuffer, nshort::Int)
+function ensureroom(io::IOBuffer, nshort::Integer)
     if !io.writable error("ensureroom failed") end 
     if !io.seekable
         if nshort < 0 error("ensureroom failed") end

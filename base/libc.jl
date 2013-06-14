@@ -64,7 +64,8 @@ time(tm::TmStruct) = float64(ccall(:mktime, Int, (Ptr{Void},), &tm))
 
 ## process-related functions ##
 
-getpid() = ccall(:jl_getpid, Int32, ())
+@windows_only getpid() = ccall(:GetCurrentProcessId, stdcall, Uint32, ())
+@unix_only getpid() = ccall(:getpid, Int32, ())
 
 ## network functions ##
 

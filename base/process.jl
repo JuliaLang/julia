@@ -130,8 +130,12 @@ type Process
         if(!isa(err,AsyncStream))
             err=null_handle
         end
-        new(cmd,handle,in,out,err,-2,-2,false,Condition(),false,Condition())
+        new(cmd,handle,in,out,err,-2,-2,empty_callback,Condition(),empty_callback,Condition())
     end
+end
+function close(p::Process)
+    ccall(:uv_close,Void,(Ptr{Void},Ptr{Void}),p.handle,
+    cfunction(default_close_cb,Void,(Ptr{Void},)))
 end
 
 type ProcessChain
@@ -152,16 +156,30 @@ uvhandle(::SpawnNullStream) = C_NULL
 uvhandle(x::Ptr) = x
 uvtype(::Ptr) = UV_STREAM
 
+function default_return_spawn_cb(handle,exit_status,term_signal)
+    data = uv_handle_data(handle)
+    if data != C_NULL
+        proc = unsafe_pointer_to_objref(data)::Process
+        proc.exit_code = exit_status
+        proc.term_signal = term_signal
+        if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, term_signal) end
+        close(proc)
+        notify(proc.exitnotify)
+    end 
+    nothing
+end
+
 function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::Process,
                    in, out, err)
     proc = c_malloc(_sizeof_uv_process)
     error = ccall(:jl_spawn, Int32,
         (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
          Ptr{Void},    Int32,       Ptr{Void},     Int32,       Ptr{Void},
-         Int32),
+         Int32, Ptr{Void}),
          cmd,        argv,            loop,      proc,      pp,  uvtype(in),
          uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
-         pp.cmd.detach)
+         pp.cmd.detach,
+         cfunction(default_return_spawn_cb,Void,(Ptr{Void},Int32,Int32)))
     if error != 0
         c_free(proc)
         throw(UVError("spawn"))
@@ -170,15 +188,7 @@ function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::
     return proc
 end
 
-function _uv_hook_return_spawn(proc::Process, exit_status::Int32, term_signal::Int32)
-    proc.exit_code = exit_status
-    proc.term_signal = term_signal
-    if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, term_signal) end
-    ccall(:jl_close_uv,Void,(Ptr{Void},),proc.handle)
-    notify(proc.exitnotify)
-end
-
-function _uv_hook_close(proc::Process)
+function close_cb(proc::Process)
     proc.handle = 0
     if isa(proc.closecb, Function) proc.closecb(proc) end
     notify(proc.closenotify)
@@ -231,9 +241,15 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
 end
 
 function spawn(pc::ProcessChainOrNot,redirect::CmdRedirect,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
-        spawn(pc,redirect.cmd,(redirect.stream_no==STDIN_NO ?redirect.handle:stdios[1],
-                                                   redirect.stream_no==STDOUT_NO?redirect.handle:stdios[2],
-                                                   redirect.stream_no==STDERR_NO?redirect.handle:stdios[3]),exitcb,closecb)
+        in,out,err = stdios
+        if redirect.stream_no==STDIN_NO
+            in = redirect.handle
+        elseif redirect.stream_no==STDOUT_NO
+            out = redirect.handle
+        elseif redirect.stream_no==STDERR_NO
+            err = redirect.handle
+        end
+        spawn(pc,redirect.cmd,(in,out,err),exitcb,closecb)
 end
 
 function spawn(pc::ProcessChainOrNot,cmds::OrCmds,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
@@ -327,20 +343,20 @@ for (sym, stdin, stdout, stderr) in {(:spawn_opts_inherit, STDIN,STDOUT,STDERR),
                        (:spawn_opts_swallow, null_handle,null_handle,null_handle)}
 @eval begin
  ($sym)(stdios::StdIOSet,exitcb::Callback,closecb::Callback) = (stdios,exitcb,closecb)
- ($sym)(stdios::StdIOSet,exitcb::Callback) = (stdios,exitcb,false)
- ($sym)(stdios::StdIOSet) = (stdios,false,false)
- ($sym)() = (($stdin,$stdout,$stderr),false,false)
- ($sym)(in::UVStream) = ((isa(in,AsyncStream)?in:$stdin,$stdout,$stderr),false,false)
- ($sym)(in::UVStream,out::UVStream) = ((isa(in,AsyncStream)?in:$stdin,isa(out,AsyncStream)?out:$stdout,$stderr),false,false)
- ($sym)(in::UVStream,out::UVStream,err::UVStream) = ((isa(in,AsyncStream)?in:$stdin,isa(out,AsyncStream)?out:$stdout,isa(err,AsyncStream)?err:$stderr),false,false)
+ ($sym)(stdios::StdIOSet,exitcb::Callback) = (stdios,exitcb,empty_callback)
+ ($sym)(stdios::StdIOSet) = (stdios,empty_callback,empty_callback)
+ ($sym)() = (($stdin,$stdout,$stderr),empty_callback,empty_callback)
+ ($sym)(in::UVStream) = ((isa(in,AsyncStream)?in:$stdin,$stdout,$stderr),empty_callback,empty_callback)
+ ($sym)(in::UVStream,out::UVStream) = ((isa(in,AsyncStream)?in:$stdin,isa(out,AsyncStream)?out:$stdout,$stderr),empty_callback,empty_callback)
+ ($sym)(in::UVStream,out::UVStream,err::UVStream) = ((isa(in,AsyncStream)?in:$stdin,isa(out,AsyncStream)?out:$stdout,isa(err,AsyncStream)?err:$stderr),empty_callback,empty_callback)
 end
 end
 
 spawn(pc::ProcessChainOrNot,cmds::AbstractCmd,args...) = spawn(pc,cmds,spawn_opts_swallow(args...)...)
 spawn(cmds::AbstractCmd,args...) = spawn(false,cmds,spawn_opts_swallow(args...)...)
 
-spawn_nostdin(pc::ProcessChainOrNot,cmd::AbstractCmd,out::UVStream) = spawn(pc,cmd,(null_handle,out,null_handle),false,false)
-spawn_nostdin(cmd::AbstractCmd,out::UVStream) = spawn(false,cmd,(null_handle,out,null_handle),false,false)
+spawn_nostdin(pc::ProcessChainOrNot,cmd::AbstractCmd,out::UVStream) = spawn(pc,cmd,(null_handle,out,null_handle),empty_callback,empty_callback)
+spawn_nostdin(cmd::AbstractCmd,out::UVStream) = spawn(false,cmd,(null_handle,out,null_handle),empty_callback,empty_callback)
 
 #returns a pipe to read from the last command in the pipelines
 readsfrom(cmds::AbstractCmd) = readsfrom(cmds, null_handle)
@@ -391,7 +407,7 @@ function run(cmds::AbstractCmd,args...)
 end
 
 function success(proc::Process)
-    assert(process_exited(proc))
+    @assert process_exited(proc)
     if proc.exit_code == -1
         error("could not start process ", proc)
     end

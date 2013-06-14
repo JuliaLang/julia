@@ -756,7 +756,6 @@ extern jl_function_t *jl_typeinf_func;
 extern int jl_boot_file_loaded;
 extern void jl_get_builtin_hooks(void);
 extern void jl_get_system_hooks(void);
-extern void jl_get_uv_hooks(void);
 
 DLLEXPORT
 void jl_restore_system_image(char *fname)
@@ -793,7 +792,6 @@ void jl_restore_system_image(char *fname)
 
     jl_get_builtin_hooks();
     jl_get_system_hooks();
-    jl_get_uv_hooks();
     jl_boot_file_loaded = 1;
     jl_typeinf_func = (jl_function_t*)jl_get_global(jl_base_module,
                                                     jl_symbol("typeinf_ext"));

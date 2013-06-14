@@ -277,6 +277,9 @@ static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg) {
     if (handle != (uv_handle_t*)jl_uv_stdout && handle != (uv_handle_t*)jl_uv_stderr)
         jl_uv_exitcleanup_add(handle, arg);
 }
+
+extern uv_loop_t *jl_io_loop;
+
 DLLEXPORT void uv_atexit_hook()
 {
 #if defined(JL_GC_MARKSWEEP) && defined(GC_FINAL_STATS)
@@ -288,7 +291,7 @@ DLLEXPORT void uv_atexit_hook()
             jl_apply((jl_function_t*)f, NULL, 0);
         }
     }
-    uv_loop_t* loop = jl_global_event_loop();
+    uv_loop_t* loop = jl_io_loop;
     struct uv_shutdown_queue queue = {NULL, NULL};
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
     // close stdout and stderr last, since we like being
@@ -296,6 +299,9 @@ DLLEXPORT void uv_atexit_hook()
     jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stdout, &queue);
     jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stderr, &queue);
     struct uv_shutdown_queue_item *item = queue.first;
+
+    jl_value_t *c = jl_get_global(jl_base_module, jl_symbol("close"));
+    assert(c != NULL && jl_is_function(c));
     while (item) {
         uv_handle_t *handle = item->h;
         if (uv_is_closing(handle)) {
@@ -305,15 +311,23 @@ DLLEXPORT void uv_atexit_hook()
         switch(handle->type) {
         case UV_TTY:
         case UV_UDP:
-//#ifndef _OS_WINDOWS_ // unix only supports shutdown on TCP and NAMED_PIPE
-// but uv_shutdown doesn't seem to be particularly reliable, so we'll avoid it in general
-            jl_close_uv(handle);
-            break;
-//#endif
         case UV_TCP:
         case UV_NAMED_PIPE:
-            // These will be shut down in jl_close_uv.
-            jl_close_uv(handle);
+        case UV_PREPARE:
+        case UV_CHECK:
+        case UV_SIGNAL:
+        case UV_PROCESS:
+            if(handle->data != NULL)
+            {
+                // has julia object associated with it
+                jl_apply((jl_function_t *)c,(jl_value_t**)&handle->data,1);
+            } else 
+            {
+                // This handle is either not one of Julia's
+                // or was somehow abandoned. In either case,
+                // it has no right to live
+                uv_close(handle,(uv_close_cb)free);
+            }
             break;
         //Don't close these directly, but rather let the GC take care of it
         case UV_POLL:
@@ -340,12 +354,6 @@ DLLEXPORT void uv_atexit_hook()
             uv_fs_poll_stop((uv_fs_poll_t*)handle);
             handle->data = NULL;
             uv_unref(handle);
-            break;
-        case UV_PREPARE:
-        case UV_CHECK:
-        case UV_SIGNAL:
-        case UV_PROCESS:
-            jl_close_uv(handle);
             break;
         case UV_HANDLE:
         case UV_STREAM:
@@ -377,7 +385,7 @@ uv_lib_t *jl_kernel32_handle=&_jl_kernel32_handle;
 uv_lib_t *jl_crtdll_handle=&_jl_crtdll_handle;
 uv_lib_t *jl_winsock_handle=&_jl_winsock_handle;
 #endif
-uv_loop_t *jl_io_loop;
+DLLEXPORT uv_loop_t *jl_io_loop;
 
 #ifdef COPY_STACKS
 void jl_switch_stack(jl_task_t *t, jl_jmp_buf *where);
