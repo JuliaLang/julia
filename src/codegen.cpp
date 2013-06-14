@@ -2088,9 +2088,15 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         jl_sym_t *var = (jl_sym_t*)args[0];
         if (jl_is_symbolnode(var))
             var = jl_symbolnode_sym(var);
-        if (isBoxed(var, ctx)) {
-            Value *lv = (*ctx->vars)[var];
-            builder.CreateStore(builder.CreateCall(jlbox_func, V_null), lv);
+        Value *lv = (*ctx->vars)[var];
+        if (lv != NULL) {
+            // create a new uninitialized variable
+            if (isBoxed(var, ctx)) {
+                builder.CreateStore(builder.CreateCall(jlbox_func, V_null), lv);
+            }
+            else if (lv->getType() == jl_ppvalue_llvmt) {
+                builder.CreateStore(V_null, lv);
+            }
         }
     }
     else {

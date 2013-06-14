@@ -299,6 +299,28 @@ glotest()
 @test glob_x == 88
 @test loc_x == 10
 
+# let - new variables, including undefinedness
+function let_undef()
+    first = true
+    for i = 1:2
+        let x
+            if first; x=1; first=false; end
+            x+1
+        end
+    end
+end
+@test_fails let_undef()
+
+a = cell(3)
+for i=1:3
+    let ii = i
+        a[i] = x->x+ii
+    end
+end
+@test a[1](10) == 11
+@test a[2](10) == 12
+@test a[3](10) == 13
+
 # syntax
 @test (true ? 1 : false ? 2 : 3) == 1
 
