@@ -36,8 +36,8 @@ require(fname::String) = require(bytestring(fname))
 require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 
 function require(name::ByteString)
-    if myid() == 1
-        @sync for p in list_workers()
+    if myid() == 1 
+        @sync for p in filter(x -> x != 1, list_allprocs())
             @spawnat p require(name)
         end
     end
@@ -52,7 +52,7 @@ end
 
 function reload(name::String)
     if myid() == 1
-        @sync for p in list_workers()
+        @sync for p in filter(x -> x != 1, list_allprocs())
             @spawnat p reload(name)
         end
     end
