@@ -21,25 +21,35 @@ int jl_array_store_unboxed(jl_value_t *el_type)
     return store_unboxed(el_type);
 }
 
-static jl_array_t *_new_array(jl_value_t *atype,
-                              uint32_t ndims, size_t *dims)
+#ifdef _P64
+typedef __uint128_t wideint_t;
+#else
+typedef uint64_t wideint_t;
+#endif
+
+static jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
 {
     size_t i, tot, nel=1;
+    wideint_t prod;
     int isunboxed=0, elsz;
     void *data;
     jl_array_t *a;
 
     for(i=0; i < ndims; i++) {
-        if ((long)dims[i] < 0)
-            jl_error("invalid Array dimension size");
-        nel *= dims[i];
+        prod = (wideint_t)nel * (wideint_t)dims[i];
+        if (prod > (wideint_t)(size_t)-1)
+            jl_error("invalid Array dimensions");
+        nel = prod;
     }
     jl_value_t *el_type = jl_tparam0(atype);
 
     isunboxed = store_unboxed(el_type);
     if (isunboxed) {
         elsz = jl_datatype_size(el_type);
-        tot = elsz * nel;
+        prod = (wideint_t)elsz * (wideint_t)nel;
+        if (prod > (wideint_t)(size_t)-1)
+            jl_error("invalid Array size");
+        tot = prod;
         if (elsz == 1) {
             // hidden 0 terminator for all byte arrays
             tot++;
@@ -47,7 +57,10 @@ static jl_array_t *_new_array(jl_value_t *atype,
     }
     else {
         elsz = sizeof(void*);
-        tot = sizeof(void*) * nel;
+        prod = (wideint_t)sizeof(void*) * (wideint_t)nel;
+        if (prod > (wideint_t)(size_t)-1)
+            jl_error("invalid Array size");
+        tot = prod;
     }
 
     int ndimwords = jl_array_ndimwords(ndims);
@@ -118,8 +131,7 @@ static jl_array_t *_new_array(jl_value_t *atype,
 
 static jl_mallocptr_t *array_new_buffer(jl_array_t *a, size_t newlen);
 
-jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
-                             jl_tuple_t *dims)
+jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_tuple_t *dims)
 {
     size_t i;
     jl_array_t *a;
@@ -189,11 +201,13 @@ jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     else {
         size_t *adims = &a->nrows;
         size_t l=1;
+        wideint_t prod;
         for(i=0; i < ndims; i++) {
             adims[i] = jl_unbox_long(jl_tupleref(dims, i));
-            if ((long)adims[i] < 0)
-                jl_error("invalid Array dimension size");
-            l *= adims[i];
+            prod = (wideint_t)l * (wideint_t)adims[i];
+            if (prod > (wideint_t)(size_t)-1)
+                jl_error("invalid Array dimensions");
+            l = prod;
         }
 #ifdef STORE_ARRAY_LEN
         a->length = l;
@@ -251,9 +265,13 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_tuple_t *dims,
     size_t i, elsz, nel=1;
     jl_array_t *a;
     size_t ndims = jl_tuple_len(dims);
+    wideint_t prod;
 
     for(i=0; i < ndims; i++) {
-        nel *= jl_unbox_long(jl_tupleref(dims, i));
+        prod = (wideint_t)nel * (wideint_t)jl_unbox_long(jl_tupleref(dims, i));
+        if (prod > (wideint_t)(size_t)-1)
+            jl_error("invalid Array dimensions");
+        nel = prod;
     }
     jl_value_t *el_type = jl_tparam0(atype);
 
