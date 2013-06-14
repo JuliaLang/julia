@@ -660,7 +660,6 @@ function deliver_result(sock::IO, msg, oid, value)
     if is(msg,:fetch) || is(msg,:call_fetch)
         val = value
     else
-        @assert is(msg, :wait)
         val = oid
     end
     try
@@ -692,7 +691,7 @@ type DisconnectException <: Exception end
 # schedule an expression to run asynchronously, with minimal ceremony
 macro schedule(expr)
     expr = localize_vars(:(()->($expr)), false)
-    :(enq_work(@task($(esc(expr)))))
+    :(enq_work(Task($(esc(expr)))))
 end
 
 function create_message_handler_loop(sock::AsyncStream) #returns immediately
@@ -714,7 +713,6 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     #print("$(myid()) got call $id\n")
                     let f=f0, args=args0, m=msg, rid=id
                         if m === :call_fetch || m === :call_wait
-                            if m === :call_wait; m = :wait; end
                             schedule_call(id, ()->(v = f(args...);
                                                    deliver_result(sock,m,rid,v);
                                                    v))
@@ -734,8 +732,8 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     # used to deliver result of wait or fetch
                     mkind = deserialize(sock)
                     oid = deserialize(sock)
+                    #print("$(myid()) got $msg $oid\n")
                     val = deserialize(sock)
-                    #deliver_result((), mkind, oid, val)
                     cv = get(Waiting, oid, false)
                     if cv !== false
                         notify(cv, val)
@@ -764,6 +762,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                 else
                     # the synchronization messages
                     oid = deserialize(sock)::(Int,Int)
+                    #print("$(myid()) got $msg $oid\n")
                     rv = lookup_ref(oid)
                     if rv.done
                         deliver_result(sock, msg, oid, work_result(rv))
