@@ -1282,6 +1282,7 @@ function event_loop(isclient)
                 end
             end
         catch err
+            iserr, lasterr = true, err
             bt = catch_backtrace()
             if isa(err,DisconnectException)
                 # TODO: wake up tasks waiting for failed process
@@ -1292,8 +1293,8 @@ function event_loop(isclient)
                 # root task is waiting for something on client. allow C-C
                 # to interrupt.
                 interrupt_waiting_task(roottask,err)
+                iserr, lasterr = false, nothing
             end
-            iserr, lasterr = true, err
         end
     end
 end
