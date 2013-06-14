@@ -586,36 +586,6 @@ char *jl_bufptr(ios_t *s)
     return s->buf;
 }
 
-DLLEXPORT size_t jl_sizeof_uv_stream_t()
-{
-    return sizeof(uv_stream_t);
-}
-
-DLLEXPORT size_t jl_sizeof_uv_poll_t()
-{
-    return sizeof(uv_poll_t);
-}
-
-DLLEXPORT size_t jl_sizeof_uv_pipe_t()
-{
-    return sizeof(uv_pipe_t);
-}
-
-DLLEXPORT size_t jl_sizeof_uv_process_t()
-{
-    return sizeof(uv_process_t);
-}
-
-DLLEXPORT size_t jl_sizeof_uv_fs_poll_t()
-{
-    return sizeof(uv_fs_poll_t);
-}
-
-DLLEXPORT size_t jl_sizeof_uv_fs_events_t()
-{
-    return sizeof(uv_fs_event_t);
-}
-
 DLLEXPORT void uv_atexit_hook();
 DLLEXPORT void jl_exit(int exitcode)
 {
