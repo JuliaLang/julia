@@ -14,7 +14,7 @@ function show(io::IO, x::ANY)
         for i=1:n
             f = t.names[i]
             if !isdefined(x, f)
-                print(io, "#undef")
+                print(io, undef_ref_str)
             else
                 show(io, x.(f))
             end
@@ -450,7 +450,11 @@ function xdump(fn::Function, io::IO, x, n::Int, indent)
             for field in T.names
                 if field != symbol("")    # prevents segfault if symbol is blank
                     print(io, indent, "  ", field, ": ")
-                    fn(io, getfield(x, field), n - 1, string(indent, "  "))
+                    if isdefined(x,field)
+                        fn(io, getfield(x, field), n - 1, string(indent, "  "))
+                    else
+                        println(io, undef_ref_str)
+                    end
                 end
             end
         end

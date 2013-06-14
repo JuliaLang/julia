@@ -48,8 +48,7 @@ pointer_from_objref(x::Any) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
 integer(x::Ptr) = convert(Uint, x)
 unsigned(x::Ptr) = convert(Uint, x)
 
-@eval sizeof(::Type{Ptr}) = $(div(WORD_SIZE,8))
-@eval sizeof{T}(::Type{Ptr{T}}) = $(div(WORD_SIZE,8))
+@eval sizeof{T<:Ptr}(::Type{T}) = $(div(WORD_SIZE,8))
 eltype{T}(::Ptr{T}) = T
 
 ## limited pointer arithmetic & comparison ##

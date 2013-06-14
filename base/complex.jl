@@ -100,6 +100,8 @@ imag(::ImaginaryUnit) = int32(1)
 promote_rule{T<:Complex}(::Type{ImaginaryUnit}, ::Type{T}) = T
 promote_rule{T<:Real}(::Type{ImaginaryUnit}, ::Type{T}) = Complex{T}
 
+show(io::IO, ::ImaginaryUnit) = print(io, "im")
+
 
 ## generic functions of complex numbers ##
 
@@ -127,8 +129,14 @@ sign(z::Complex) = z/abs(z)
 -(z::Complex, w::Complex) = complex(real(z) - real(w), imag(z) - imag(w))
 *(z::Complex, w::Complex) = complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
+
+# adding or multiplying real & complex is common
 *(x::Real, z::Complex) = complex(x * real(z), x * imag(z))
 *(z::Complex, x::Real) = complex(x * real(z), x * imag(z))
++(x::Real, z::Complex) = complex(x + real(z), imag(z))
++(z::Complex, x::Real) = complex(x + real(z), imag(z))
+-(x::Real, z::Complex) = complex(x - real(z), -imag(z))
+-(z::Complex, x::Real) = complex(real(z) - x, imag(z))
 
 # multiplying by im is common
 *(z::ImaginaryUnit, w::ImaginaryUnit) = complex(-imag(z), real(z))
@@ -161,7 +169,10 @@ function /(a::Complex, b::Complex)
     end
 end
 
-function /(a::Real, b::Complex)
+/(a::Real, b::Complex) =
+    real(convert(promote_type(typeof(a),typeof(b)),a)) /
+    convert(promote_type(typeof(a),typeof(b)),b)
+function /{T<:Real}(a::T, b::Complex{T})
     bre = real(b); bim = imag(b)
     if abs(bre) <= abs(bim)
         if isinf(bre) && isinf(bim)

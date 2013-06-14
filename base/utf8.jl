@@ -71,6 +71,8 @@ end
 
 ## overload methods for efficiency ##
 
+sizeof(s::UTF8String) = sizeof(s.data)
+
 isvalid(s::UTF8String, i::Integer) =
     (1 <= i <= endof(s.data)) && is_utf8_start(s.data[i])
 
@@ -85,6 +87,15 @@ function search(s::UTF8String, c::Char, i::Integer)
     if c < 0x80 return search(s.data, c, i) end
     while true
         i = search(s.data, first_utf8_byte(c), i)
+        if i==0 || s[i]==c return i end
+        i = next(s,i)[2]
+    end
+end
+
+function rsearch(s::UTF8String, c::Char, i::Integer)
+    if c < 0x80 return rsearch(s.data, c, i) end
+    while true
+        i = rsearch(s.data, first_utf8_byte(c), i)
         if i==0 || s[i]==c return i end
         i = next(s,i)[2]
     end

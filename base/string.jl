@@ -66,6 +66,8 @@ print(io::IO, s::String) = for c in s write(io, c) end
 write(io::IO, s::String) = print(io, s)
 show(io::IO, s::String) = print_quoted(io, s)
 
+sizeof(s::String) = error("type $(typeof(s)) has no canonical binary representation")
+
 (*)(s::String...) = string(s...)
 (^)(s::String, r::Integer) = repeat(s,r)
 
@@ -177,7 +179,7 @@ search(s::String, c::Chars) = search(s,c,start(s))
 
 contains(s::String, c::Char) = (search(s,c)!=0)
 
-function search(s::String, t::String, i::Integer)
+function _search(s, t, i)
     if isempty(t)
         return 1 <= i <= endof(s)+1 ? (i:i-1) :
                i == endof(s)+2      ? (0:-1) :
@@ -208,7 +210,48 @@ function search(s::String, t::String, i::Integer)
         i = ii
     end
 end
+
+search(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _search(s,t,i)
+search(s::String, t::String, i::Integer) = _search(s,t,i)
 search(s::String, t::String) = search(s,t,start(s))
+
+function _rsearch(s, t, i)
+    if isempty(t)
+        return 1 <= i <= endof(s)+1 ? (i:i-1) :
+               i == endof(s)+2      ? (0:-1) :
+               error(BoundsError)
+    end
+    t = reverse(t)
+    rs = reverse(s)
+    l = length(s)
+    t1, j2 = next(t,start(t))
+    while true
+        i = rsearch(s,t1,i)
+        if i == 0 return (0:-1) end
+        c, ii = next(rs,l-i+1)
+        j = j2; k = ii
+        matched = true
+        while !done(t,j)
+            if done(rs,k)
+                matched = false
+                break
+            end
+            c, k = next(rs,k)
+            d, j = next(t,j)
+            if c != d
+                matched = false
+                break
+            end
+        end
+        if matched
+            return (l-k+2):i
+        end
+        i = l-ii+1
+    end
+end
+rsearch(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _rsearch(s,t,i)
+rsearch(s::String, t::String, i::Integer) = _rsearch(s,t,i)
+rsearch(s::String, t::String) = rsearch(s,t,length(s))
 
 contains(::String, ::String) = error("use search() to look for substrings")
 
@@ -336,6 +379,8 @@ SubString(s::String, i::Integer) = SubString(s, i, endof(s))
 write{T<:ByteString}(to::IOBuffer, s::SubString{T}) =
     s.endof==0 ? 0 : write_sub(to, s.string.data, s.offset+1, next(s,s.endof)[2]-1)
 
+sizeof{T<:ByteString}(s::SubString{T}) = s.endof==0 ? 0 : next(s,s.endof)[2]-1
+
 function next(s::SubString, i::Int)
     if i < 1 || i > s.endof
         error(BoundsError)
@@ -366,6 +411,7 @@ end
 
 endof(s::RepString)  = endof(s.string)*s.repeat
 length(s::RepString) = length(s.string)*s.repeat
+sizeof(s::RepString) = sizeof(s.string)*s.repeat
 
 function next(s::RepString, i::Int)
     if i < 1 || i > endof(s)
@@ -402,6 +448,7 @@ end
 
 endof(s::RevString) = endof(s.string)
 length(s::RevString) = length(s.string)
+sizeof(s::RevString) = sizeof(s.string)
 
 function next(s::RevString, i::Int)
     n = endof(s); j = n-i+1
@@ -453,8 +500,10 @@ function next(s::RopeString, i::Int)
 end
 
 endof(s::RopeString) = s.endof
+length(s::RopeString) = length(s.head) + length(s.tail)
 print(io::IO, s::RopeString) = print(io, s.head, s.tail)
 write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
+sizeof(s::RopeString) = sizeof(s.head) + sizeof(s.tail)
 
 ## uppercase and lowercase transformations ##
 
@@ -472,7 +521,11 @@ lcfirst(s::String) = islower(s[1]) ? s : string(lowercase(s[1]),s[nextind(s,1):e
 function map(f::Function, s::String)
     out = memio(endof(s))
     for c in s
-        write(out, f(c)::Char)
+        c2 = f(c)
+        if !isa(c2,Char)
+            error("map(f,s::String) requires f to return Char. Try map(f,collect(s)) or a comprehension instead.")
+        end
+        write(out, c2::Char)
     end
     takebuf_string(out)
 end
@@ -1191,7 +1244,9 @@ end
 
 # find the index of the first occurrence of a value in a byte array
 
-function search(a::Union(Array{Uint8,1},Array{Int8,1}), b, i::Integer)
+typealias ByteArray Union(Array{Uint8,1},Array{Int8,1})
+
+function search(a::ByteArray, b::Union(Int8,Uint8), i::Integer)
     if i < 1 error(BoundsError) end
     n = length(a)
     if i > n return i == n+1 ? 0 : error(BoundsError) end
@@ -1199,7 +1254,31 @@ function search(a::Union(Array{Uint8,1},Array{Int8,1}), b, i::Integer)
     q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Csize_t), p+i-1, b, n-i+1)
     q == C_NULL ? 0 : int(q-p+1)
 end
-search(a::Union(Array{Uint8,1},Array{Int8,1}), b) = search(a,b,1)
+function search(a::ByteArray, b::Char, i::Integer)
+    if isascii(b)
+        search(a,uint8(b),i)
+    else
+        search(a,string(b).data,i)
+    end
+end
+search(a::ByteArray, b::Union(Int8,Uint8,Char)) = search(a,b,1)
+
+function rsearch(a::Union(Array{Uint8,1},Array{Int8,1}), b::Union(Int8,Uint8), i::Integer)
+    if i < 1 error(BoundsError) end
+    n = length(a)
+    if i > n return i == n+1 ? 0 : error(BoundsError) end
+    p = pointer(a)
+    q = ccall(:memrchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Csize_t), p, b, i)
+    q == C_NULL ? 0 : int(q-p+1)
+end
+function rsearch(a::ByteArray, b::Char, i::Integer)
+    if isascii(b)
+        rsearch(a,uint8(b),i)
+    else
+        rsearch(a,string(b).data,i)
+    end
+end
+rsearch(a::ByteArray, b::Union(Int8,Uint8,Char)) = rsearch(a,b,length(a))
 
 # return a random string (often useful for temporary filenames/dirnames)
 let

@@ -17,10 +17,9 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        beta, lbeta, eta, zeta, polygamma, invdigamma, digamma, trigamma,
        erfinv, erfcinv
 
-import Base.log, Base.exp, Base.sin, Base.cos, Base.tan, Base.sinh, Base.cosh,
-       Base.tanh, Base.asin, Base.acos, Base.atan, Base.asinh, Base.acosh,
-       Base.atanh, Base.sqrt, Base.log2, Base.log10, Base.max, Base.min,
-       Base.ceil, Base.floor, Base.trunc, Base.round, Base.^, Base.exp2, Base.exp10
+import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
+             acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
+             max, min, ceil, floor, trunc, round, ^, exp2, exp10
 
 import Core.Intrinsics.nan_dom_err
 
@@ -505,8 +504,6 @@ end
 gamma(z::Complex) = exp(lgamma(z))
 
 # Derivatives of the digamma function
-i1mach(i::Int) = ccall(("i1mach_", Math.openlibm_extras), Int32, (Ptr{Int32},), &i)
-d1mach(i::Int) = ccall(("d1mach_", Math.openlibm_extras), Float64, (Ptr{Int32},), &i)
 function psifn(x::Float64, n::Int, kode::Int, m::Int)
 # Translated from http://www.netlib.org/slatec/src/dpsifn.f
 # Note: Underflow handling at 380 in original is skipped
@@ -535,9 +532,9 @@ function psifn(x::Float64, n::Int, kode::Int, m::Int)
     if kode < 1 | kode > 2 error("kode must be one or two") end
     if m < 1 error("m must be larger than one") end
     mm = m
-    const nx = min(-i1mach(15),i1mach(16))
-    const r1m5 = d1mach(5)
-    const r1m4 = d1mach(4)*0.5
+    const nx = min(-exponent(realmin(Float64)) + 1, exponent(realmax(Float64)))
+    const r1m5 = log10(2)
+    const r1m4 = Base.eps(Float64) * 0.5
     const wdtol = max(r1m4, 0.5e-18)
 #-----------------------------------------------------------------------
 #     elim = approximate exponential over and underflow limit
@@ -570,7 +567,7 @@ function psifn(x::Float64, n::Int, kode::Int, m::Int)
 #-----------------------------------------------------------------------
 #     compute xmin and the number of terms of the series, fln+1
 #-----------------------------------------------------------------------
-    rln = r1m5*i1mach(14)
+    rln = r1m5 * get_precision(x)
     rln = min(rln, 18.06)
     fln = max(rln, 3.0) - 3.0
     yint = 3.50 + 0.40*fln

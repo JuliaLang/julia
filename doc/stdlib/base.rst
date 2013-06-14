@@ -117,6 +117,12 @@ All Objects
 
    While it isn't normally necessary, user-defined types can override the default ``deepcopy`` behavior by defining a specialized version of the function ``deepcopy_internal(x::T, dict::ObjectIdDict)`` (which shouldn't otherwise be used), where ``T`` is the type to be specialized for, and ``dict`` keeps track of objects copied so far within the recursion. Within the definition, ``deepcopy_internal`` should be used in place of ``deepcopy``, and the ``dict`` variable should be updated as appropriate before returning.
 
+.. function:: isdefined(object, index | symbol)
+
+   Tests whether an assignable location is defined. The arguments can be an
+   array and index, a composite object and field name (as a symbol), or a
+   module and a symbol.
+
 .. function:: convert(type, x)
 
    Try to convert ``x`` to the given type.

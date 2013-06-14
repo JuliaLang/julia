@@ -5,14 +5,14 @@ type Triangular{T<:Number} <: AbstractMatrix{T}
     unitdiag::Char
 end
 function Triangular{T<:Number}(A::Matrix{T}, uplo::Symbol, unitdiag::Bool)
-    if size(A, 1) != size(A, 2) throw(DimensionMismatch("Matrix must be square")) end
+    if size(A, 1) != size(A, 2) throw(DimensionMismatch("matrix must be square")) end
     return Triangular(A, string(uplo)[1], unitdiag ? 'U' : 'N')
 end
 Triangular(A::Matrix, uplo::Symbol) = Triangular(A, uplo, all(diag(A) .== 1) ? true : false)
 function Triangular(A::Matrix)
     if istriu(A) return Triangular(A, :U) end
     if istril(A) return Triangular(A, :L) end
-    error("Matrix is not triangular")
+    error("matrix is not triangular")
 end
 
 size(A::Triangular, args...) = size(A.UL, args...)

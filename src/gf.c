@@ -409,6 +409,11 @@ void jl_debug_print_type(JL_STREAM *s, jl_value_t *v)
     }
 }
 
+DLLEXPORT void jl_print_type(jl_value_t *v)
+{
+    jl_debug_print_type(JL_STDERR, v);
+}
+
 extern jl_function_t *jl_typeinf_func;
 
 /*
@@ -930,6 +935,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
                             // where a failure to determine the value of a
                             // static parameter is inconclusive.
                             // this is issue #3182, see test/core.jl
+                            JL_GC_POP();
                             return jl_bottom_func;
                         }
                         break;

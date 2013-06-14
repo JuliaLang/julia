@@ -160,15 +160,13 @@ let
         error()
     end
 
-    expected = ErrorException("don't copy this code, for breaking out of uv_run during boot-strapping only")
-    acceptable = ErrorException(expected.msg) # we would like to update the error msg for this later, but at
-                                              # this point in the bootstrapping, conflicts between old and new
-                                              # defintions for write, TTY, ASCIIString, and STDOUT make it fail
+    expected = ErrorException("don't copy this code, it's for breaking out of uv_run during boot-strapping only")
+    acceptable = ErrorException("failure: unknown exception!")
 
     outctim,ps = readsfrom(`git log -1 --pretty=format:%ct`)
     ps.closecb = function(proc)
         if !success(proc)
-            #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
+            acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
             error(acceptable)
         end
 
@@ -177,7 +175,7 @@ let
         outdesc,ps = readsfrom(`git describe --tags --dirty --long --abbrev=10`)
         ps.closecb = function(proc)
             if !success(proc)
-                #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
+                acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
                 error(acceptable)
             end
 
@@ -230,7 +228,8 @@ let
             global const VERSION_COMMIT = ""
             if err == acceptable
                 println("Warning: git failed in version.jl")
-                #println(err) # not a useful error msg currently
+                println(' ',' ',err.msg)
+                println()
             else
                 rethrow(err)
             end
@@ -248,7 +247,7 @@ const banner_plain =
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  $version_string
  _/ |\\__'_|_|_|\\__'_|  |  $commit_string
-|__/                   |
+|__/                   |  $(Sys.MACHINE)
 
 """
 local tx = "\033[0m\033[1m" # text
@@ -265,7 +264,7 @@ const banner_color =
   $(jl)| | | | | | |/ _` |$(tx)  |
   $(jl)| | |_| | | | (_| |$(tx)  |  $version_string
  $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $commit_string
-$(jl)|__/$(tx)                   |
+$(jl)|__/$(tx)                   |  $(Sys.MACHINE)
 
 \033[0m"
 end # begin

@@ -391,8 +391,6 @@ static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx);
 
 // --- dump function to IR and ASM ---
 
-//extern "C" void jl_dump_function_asm(void*, size_t, formatted_raw_ostream&);
-
 extern "C" DLLEXPORT
 const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dumpasm)
 {
@@ -434,7 +432,7 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dum
             JL_PRINTF(JL_STDERR, "Warning: Unable to find function pointer\n");
             return jl_cstr_to_string((char*)"");
         }
-        jl_dump_function_asm((void*)fptr, fit->second.lengthAdr, fstream);
+        jl_dump_function_asm((void*)fptr, fit->second.lengthAdr, fit->second.lines, fstream);
         fstream.flush();
     }
     return jl_cstr_to_string((char*)stream.str().c_str());
@@ -698,9 +696,12 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
                             esc = true;
                             // 2nd and 3d arguments are static
                             max_arg_depth(jl_exprarg(e,1), max, sp, esc, ctx);
-                            for(i=4; i < (size_t)alen; i++) {
+                            for(i=4; i < (size_t)alen; i+=2) {
                                 max_arg_depth(jl_exprarg(e,i), max, sp, esc, ctx);
+                                (*sp)++;
+                                if (*sp > *max) *max = *sp;
                             }
+                            (*sp) = lastsp;
                             return;
                         }
                     }
@@ -1118,7 +1119,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 JL_GC_POP();
                 Value *v = emit_expr(args[1], ctx);
                 if (tp0 == jl_bottom_type) {
-                    return builder.CreateUnreachable();
+                    v = builder.CreateUnreachable();
+                    BasicBlock *cont = BasicBlock::Create(getGlobalContext(),"after_assert",ctx->f);
+                    builder.SetInsertPoint(cont);
                 }
                 return v;
             }
@@ -1126,7 +1129,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 emit_expr(args[1], ctx);
                 emit_error("reached code declared unreachable", ctx);
                 JL_GC_POP();
-                return builder.CreateUnreachable();
+                Value *v = builder.CreateUnreachable();
+                BasicBlock *cont = BasicBlock::Create(getGlobalContext(),"after_assert",ctx->f);
+                builder.SetInsertPoint(cont);
+                return v;
             }
             if (!jl_is_tuple(tp0) && jl_is_leaf_type(tp0)) {
                 Value *arg1 = emit_expr(args[1], ctx);

@@ -261,7 +261,7 @@ b2 = randbool(n1, n2)
 @check_bit_operation (+) Matrix{Int} (b1, b2)
 @check_bit_operation (-) Matrix{Int} (b1, b2)
 @check_bit_operation (.*) BitMatrix (b1, b2)
-@check_bit_operation (./) Matrix{Float64} (b1, b2)
+@check_bit_operation (./) Matrix{Float32} (b1, b2)
 @check_bit_operation (.^) BitMatrix (b1, b2)
 
 b2 = trues(n1, n2)
@@ -344,10 +344,10 @@ for (x1,t1) = {(f1, Float64),
 end
 
 b2 = trues(n1, n2)
-@check_bit_operation (./) Matrix{Float64} (true, b2)
+@check_bit_operation (./) Matrix{Float32} (true, b2)
 @check_bit_operation div BitMatrix (true, b2)
 @check_bit_operation mod BitMatrix (true, b2)
-@check_bit_operation (./) Matrix{Float64} (false, b2)
+@check_bit_operation (./) Matrix{Float32} (false, b2)
 @check_bit_operation div BitMatrix (false, b2)
 @check_bit_operation mod BitMatrix (false, b2)
 
@@ -405,8 +405,8 @@ cf2 = complex(f2)
 @check_bit_operation (-) Matrix{Int} (b1, false)
 @check_bit_operation (.*) BitMatrix (b1, true)
 @check_bit_operation (.*) BitMatrix (b1, false)
-@check_bit_operation (./) Matrix{Float64} (b1, true)
-@check_bit_operation (./) Matrix{Float64} (b1, false)
+@check_bit_operation (./) Matrix{Float32} (b1, true)
+@check_bit_operation (./) Matrix{Float32} (b1, false)
 @check_bit_operation div BitMatrix (b1, true)
 @check_bit_operation mod BitMatrix (b1, true)
 

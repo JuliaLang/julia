@@ -131,6 +131,9 @@ end
 diagm(x::Number) = (X = Array(typeof(x),1,1); X[1,1] = x; X)
 
 function trace{T}(A::Matrix{T})
+    if size(A,1) != size(A,2)
+        error("expected square matrix")
+    end
     t = zero(T)
     for i=1:min(size(A))
         t += A[i,i]
@@ -405,8 +408,9 @@ function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
         ans, _, _, info = LAPACK.gesv!(copy(A), copy(B))
         if info > 0; throw(SingularException(info)); end
         return ans
+    else
+        LAPACK.gelsy!(copy(A), copy(B))[1]
     end
-    LAPACK.gelsd!(copy(A), copy(B))[1]
 end
 
 (\){T1<:BlasFloat, T2<:BlasFloat}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) =

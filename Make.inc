@@ -100,6 +100,7 @@ endif
 endif
 
 ifeq ($(USEGCC),1)
+HOSTCC = gcc
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
@@ -109,6 +110,7 @@ SHIPFLAGS = -O3 -DNDEBUG -falign-functions
 endif
 
 ifeq ($(USECLANG),1)
+HOSTCC = clang
 CC = $(CROSS_COMPILE)clang
 CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
@@ -122,10 +124,20 @@ JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
 
+BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
 ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
 endif
+ifeq ($(OS),Darwin)
+ifeq ($(OS),$(BUILD_OS))
+## Mac is a nifty dual-arch platform (or was until 10.8), so we detect the currently running OS arch instead
+## of the compiler "-dumpmachine" result, like I believe the compiler does, and make a substitution
+ARCH := $(shell uname -m)
+BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
+endif
+endif
+
 ifeq ($(USEGCC),1)
 ifneq ($(ARCH), ppc64)
   SHIPFLAGS += -momit-leaf-frame-pointer
@@ -150,7 +162,7 @@ OPENBLAS_TARGET_ARCH=
 
 # Use 64-bit libraries by default on 64-bit architectures
 ifeq ($(ARCH), x86_64)
-USE_LIB64 = 1
+USE_BLAS64 = 1
 endif
 
 # Use libraries available on the system instead of building them
@@ -261,7 +273,7 @@ else
 endif
 
 ifeq ($(USE_MKL), 1)
-  USE_LIB64 = 0
+  USE_BLAS64 = 0
 endif
 
 # OS specific stuff

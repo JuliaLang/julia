@@ -42,7 +42,7 @@ function gcd{T<:Integer}(a::T, b::T)
     g = abs(a)
     neg ? -g : g
 end
-lcm{T<:Integer}(a::T, b::T) = div(a*b, gcd(b,a))
+lcm{T<:Integer}(a::T, b::T) = a * div(b, gcd(b,a))
 
 gcd(a::Integer) = a
 lcm(a::Integer) = a

@@ -758,6 +758,7 @@ function insert!{T}(a::Array{T,1}, i::Integer, item)
         end
     end
     a[i] = item
+    return a
 end
 
 const _default_splice = []
@@ -920,14 +921,10 @@ promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 # ^ is difficult, since negative exponents give a different type
 
 .^(x::Number, y::StridedArray) =
-    reshape([ x    ^ y[i] for i=1:length(y) ], size(y))
-.^(x::Bool  , y::StridedArray) =
-    reshape([ bool(x ^ y[i]) for i=1:length(y) ], size(y))
+    reshape([ x ^ y[i] for i=1:length(y) ], size(y))
 
 .^(x::StridedArray, y::Number      ) =
-    reshape([ x[i] ^ y    for i=1:length(x) ], size(x))
-.^(x::StridedArray{Bool}, y::Integer) =
-    reshape([ bool(x[i] ^ y) for i=1:length(x) ], size(x))
+    reshape([ x[i] ^ y for i=1:length(x) ], size(x))
 
 for f in (:+, :-, :div, :mod, :&, :|, :$)
     @eval begin

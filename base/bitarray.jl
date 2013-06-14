@@ -1,7 +1,7 @@
 # preliminary definitions: constants, macros
 # and functions used throughout the code
 const _msk64 = ~uint64(0)
-macro _mskr(l) :(_msk64 >>> (64-$(esc(l)))) end
+macro _mskr(l) :(_msk64 >>> (63&(64-$(esc(l))))) end
 macro _div64(l) :($(esc(l)) >>> 6) end
 macro _mod64(l) :($(esc(l)) & 63) end
 macro _msk_end(l) :(@_mskr @_mod64 $(esc(l))) end
