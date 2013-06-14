@@ -18,9 +18,4 @@
 #endif
 const OS_NAME = :OS_CURRENT
 
-#define XSTR(x) STR(x)
-#define STR(x) #x
-const ARCH = :_ARCH
-const MACHINE = XSTR(_MACHINE)
-
 #endif // OS_DETECT_H
