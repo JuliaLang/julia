@@ -177,42 +177,37 @@ comma-separated series of assignments and variable names::
         code
     end
 
-Unlike local variable assignments, the assignments do not occur in
-order. Rather, all assignment right-hand sides are evaluated in the
-scope outside the ``let``, then the ``let`` variables are assigned
-"simultaneously". In this way, ``let`` operates like a function call.
-Indeed, the following code::
+The assignments are evaluated in order, with each right-hand side
+evaluated in the scope before the new variable on the left-hand side
+has been introduced. Therefore it makes sense to write something like
+``let x = x`` since the two ``x`` variables are distinct and have separate
+storage. Here is an example where the behavior of ``let`` is needed::
 
-    let a = b, c = d
-      body
-    end
-
-is equivalent to ``((a,c)->body)(b, d)``. Therefore it makes sense to
-write something like ``let x = x`` since the two ``x`` variables are
-distinct and have separate storage. Here is an example where the
-behavior of ``let`` is needed::
-
-    Fs = cell(2);
-    for i = 1:2
+    Fs = cell(2)
+    i = 1
+    while i <= 2
       Fs[i] = ()->i
+      i += 1
     end
 
     julia> Fs[1]()
-    2
+    3
 
     julia> Fs[2]()
-    2
+    3
 
 Here we create and store two closures that return variable ``i``.
 However, it is always the same variable ``i``, so the two closures
 behave identically. We can use ``let`` to create a new binding for
 ``i``::
 
-    Fs = cell(2);
-    for i = 1:2
+    Fs = cell(2)
+    i = 1
+    while i <= 2
       let i = i
         Fs[i] = ()->i
       end
+      i += 1
     end
 
     julia> Fs[1]()
@@ -221,7 +216,7 @@ behave identically. We can use ``let`` to create a new binding for
     julia> Fs[2]()
     2
 
-Since the ``begin`` construct does not introduce a new block, it can be
+Since the ``begin`` construct does not introduce a new scope, it can be
 useful to use the zero-argument ``let`` to just introduce a new scope
 block without creating any new bindings::
 
