@@ -321,13 +321,13 @@ accept(server::TcpServer) = accept(server, TcpSocket())
 
 ##
 
-bind(sock::Socket, addr::InetAddr) = bind(sock,addr.host,addr.port)
-bind(sock::Socket, host::IpAddr, port) = bind(sock, InetAddr(host,port))
+bind(sock::TcpServer, addr::InetAddr) = bind(sock,addr.host,addr.port)
+bind(sock::TcpServer, host::IpAddr, port) = bind(sock, InetAddr(host,port))
 
 const UV_SUCCESS = 0
 const UV_EADDRINUSE = 5
 
-function bind(sock::TcpSocket, host::IPv4, port::Uint16)
+function bind(sock::TcpServer, host::IPv4, port::Uint16)
     err = ccall(:jl_tcp_bind, Int32, (Ptr{Void}, Uint16, Uint32),
 	        sock.handle, hton(port), hton(host.host))
     if(err == -1 && _uv_lasterror() != UV_EADDRINUSE)
@@ -336,7 +336,7 @@ function bind(sock::TcpSocket, host::IPv4, port::Uint16)
     err != -1
 end
 
-bind(sock::TcpSocket, host::IPv6, port::Uint16) = 
+bind(sock::TcpServer, host::IPv6, port::Uint16) =
     error("IPv6 Support not fully implemented")
 
 ##
@@ -361,7 +361,7 @@ jl_getaddrinfo(loop::Ptr{Void}, host::ByteString, service::Ptr{Void},
         ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Ptr{Uint8}, Ptr{Uint8}, Any),
 	      loop,      host,       service,    cb)
 
-getaddrinfo(cb::Function,host::ASCIIString) = begin
+function getaddrinfo(cb::Function,host::ASCIIString)
     callback_dict[cb] = cb
     jl_getaddrinfo(eventloop(),host,C_NULL,cb)
 end
@@ -369,9 +369,9 @@ end
 function getaddrinfo(host::ASCIIString)
     c = Condition()
     getaddrinfo(host) do IP
-	   notify(c,IP)
+	notify(c,IP)
     end
-    ip = wait(wt)
+    ip = wait(c)
     return ip
 end
 
@@ -473,7 +473,7 @@ end
 function open_any_tcp_port(cb::Callback,default_port)
     addr = InetAddr(IPv4(uint32(0)),default_port)
     while true
-        sock = TcpSocket()
+        sock = TcpServer()
         sock.ccb = cb
         if (bind(sock,addr) && listen!(sock))
             return (addr.port,sock)

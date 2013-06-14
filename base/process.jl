@@ -525,6 +525,12 @@ function wait_success(x::Process)
     kill(x)
     success(x)
 end
-wait_success(x::ProcessChain) = for p in x.processes; wait_success(p); end
+function wait_success(x::ProcessChain)
+    s = false
+    for p in x.processes
+        s &= wait_success(p)
+    end
+    s
+end
 
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")

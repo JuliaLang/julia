@@ -66,3 +66,34 @@ macroexpand(x) = ccall(:jl_macroexpand, Any, (Any,), x)
 macro eval(x)
     :($(esc(:eval))($(Expr(:quote,x))))
 end
+
+## some macro utilities ##
+
+find_vars(e) = find_vars(e, {})
+function find_vars(e, lst)
+    if isa(e,Symbol)
+        if !isdefined(e) || isconst(e)
+            # exclude global constants
+        else
+            push!(lst, e)
+        end
+    elseif isa(e,Expr)
+        for x in e.args
+            find_vars(x,lst)
+        end
+    end
+    lst
+end
+
+# wrap an expression in "let a=a,b=b,..." for each var it references
+localize_vars(expr) = localize_vars(expr, true)
+function localize_vars(expr, esca)
+    v = find_vars(expr)
+    # requires a special feature of the front end that knows how to insert
+    # the correct variables. the list of free variables cannot be computed
+    # from a macro.
+    if esca
+        v = map(esc,v)
+    end
+    Expr(:localize, :(()->($expr)), v...)
+end

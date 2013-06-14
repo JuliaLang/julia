@@ -275,7 +275,7 @@ end
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
     if status != -1
         sock.open = true
-        err = UV_error_t(0,0)
+        err = UV_error_t(int32(0),int32(0))
     else
         err = UV_error_t(_uv_lasterror(),_uv_lastsystemerror())
     end
@@ -290,7 +290,7 @@ function _uv_hook_connectioncb(sock::UVServer, status::Int32)
     local err
     if status != -1
         sock.open = true
-        err = UV_error_t(0,0)
+        err = UV_error_t(int32(0),int32(0))
     else
         err = UV_error_t(_uv_lasterror(),_uv_lastsystemerror())
     end
@@ -463,7 +463,7 @@ function watch_file(cb, s; poll=false)
     end
 end
 
-function _uv_hook_close(uv::AsyncStream)
+function _uv_hook_close(uv::Union(AsyncStream,UVServer))
     uv.handle = 0
     uv.open = false
     if isa(uv.closecb, Function) uv.closecb(uv) end
@@ -559,13 +559,13 @@ function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Name
 end
 close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),handle)
 
-function isopen(stream::AsyncStream)
+function isopen(stream::Union(AsyncStream,UVServer))
     stream.open
 end
 
-_uv_hook_isopen(stream::AsyncStream) = int32(isopen(stream))
+_uv_hook_isopen(stream::Union(AsyncStream,UVServer)) = int32(isopen(stream))
 
-function close(stream::AsyncStream)
+function close(stream::Union(AsyncStream,UVServer))
     if stream.open
         ccall(:jl_close_uv,Void,(Ptr{Void},),stream.handle)
         stream.open = false
@@ -719,7 +719,7 @@ function accept_nonblock(server::PipeServer)
     client
 end
 
-const EAGAIN = 4
+const UV_EAGAIN = 4
 function accept(server::UVServer, client::AsyncStream)
     if !server.open
         error("accept: Server not connected. Did you `listen`?")
@@ -728,7 +728,7 @@ function accept(server::UVServer, client::AsyncStream)
         if accept_nonblock(server,client) == 0
             return client
         else
-            uv_error("accept:",_uv_lasterror()!=EAGAIN)
+            uv_error("accept:",_uv_lasterror()!=UV_EAGAIN)
         end
         err = wait(server.connectnotify)
         if err.uv_code != -1
