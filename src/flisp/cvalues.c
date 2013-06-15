@@ -78,7 +78,7 @@ static void sweep_finalizers(void)
                 t->vtable->finalize(tagptr(tmp, TAG_CVALUE));
             }
             if (!isinlined(tmp) && owned(tmp)) {
-#ifndef NDEBUG
+#ifdef DEBUG
                 memset(cv_data(tmp), 0xbb, cv_len(tmp));
 #endif
                 free(cv_data(tmp));

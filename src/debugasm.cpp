@@ -50,7 +50,7 @@ private:
     const char* Fptr;
     size_t Fsize;
 public:
-    FuncMCView(const void* fptr, size_t size) : Fptr((char*)fptr), Fsize(size) {}
+    FuncMCView(const void* fptr, size_t size) : Fptr((const char*)fptr), Fsize(size) {}
 
     const char* operator[] (const size_t idx) { return (Fptr+idx); }
 

@@ -649,6 +649,7 @@ function perform_work(t::Task)
         t.runnable = true
         yieldto(t, arg)
     end
+    t = current_task().last
     if !istaskdone(t) && t.runnable
         # still runnable; return to queue
         enq_work(t)

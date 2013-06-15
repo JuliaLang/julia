@@ -1357,7 +1357,7 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo)
 
     e = e::Expr
     head = e.head
-    if is(head,:static_typeof) || is(head,:line) || is(head,:const)
+    if is(head,:static_typeof) || is(head,:line) || is(head,:const) || is(head,:newvar)
         return e
     #elseif is(head,:gotoifnot) || is(head,:return)
     #    e.typ = Any

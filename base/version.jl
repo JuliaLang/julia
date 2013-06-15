@@ -165,7 +165,7 @@ let
 
     outctim,ps = readsfrom(`git log -1 --pretty=format:%ct`)
     ps.closecb = function(proc)
-        if !success(proc)
+        if proc.exit_code!=0
             acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
             error(acceptable)
         end
@@ -174,7 +174,7 @@ let
 
         outdesc,ps = readsfrom(`git describe --tags --dirty --long --abbrev=10`)
         ps.closecb = function(proc)
-            if !success(proc)
+            if proc.exit_code!=0
                 acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
                 error(acceptable)
             end

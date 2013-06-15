@@ -52,6 +52,13 @@
 @test 2. * 3. == 6.
 @test min(1.0,1) == 1
 
+# lexing typemin(Int64)
+@test_fails parse("9223372036854775808")
+@test_fails parse("-(9223372036854775808)")
+@test_fails parse("-9223372036854775808^1")
+@test (-9223372036854775808)^1 == -9223372036854775808
+@test [1 -1 -9223372036854775808] == [1 -1 typemin(Int64)]
+
 # definition and printing of extreme integers
 @test bin(typemin(Uint8)) == "0"
 @test bin(typemax(Uint8)) == "1"^8
