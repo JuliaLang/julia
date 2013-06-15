@@ -485,7 +485,6 @@ function mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
     end
     n = prod(dims)
     nc = num_bit_chunks(n)
-    B = BitArray{N}()
     chunks = mmap_array(Uint64, (nc,), s, offset)
     if iswrite
         chunks[end] &= @_msk_end n
@@ -494,9 +493,12 @@ function mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
             error("The given file does not contain a valid BitArray of size ", join(dims, 'x'), " (open with r+ to override)")
         end
     end
-    dims = [i::Int for i in dims]
+    B = BitArray{N}(ntuple(N,i->0)...)
     B.chunks = chunks
-    B.dims = dims
+    B.len = n
+    if N != 1
+        B.dims = Int[i for i in dims]
+    end
     return B
 end
 mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset) =
