@@ -74,9 +74,7 @@ end
 
 function setdiff!(s::IntSet, ns)
     for n in ns
-        if contains(s, n)
-            delete!(s, n)
-        end
+        delete!(s, n, nothing)
     end
     return s
 end
