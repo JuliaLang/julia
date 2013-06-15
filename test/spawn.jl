@@ -56,6 +56,6 @@ str2 = readall(stdout)
 
 # This test hangs if the end of run walk across uv streams calls shutdown on a stream that is shutting down.
 file = tempname()
-stdout, stdin, proc = readandwrite(`cat -` > file)
+stdin, proc = writesto(`cat -` > file)
 write(stdin, str)
 close(stdin)
