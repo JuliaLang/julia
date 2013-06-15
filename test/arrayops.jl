@@ -455,3 +455,21 @@ for idx in {1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
         @test a == [acopy[1:(first(idx)-1)], repl, acopy[(last(idx)+1):end]]
     end
 end
+
+# comprehensions
+X = [ i+2j for i=1:5, j=1:5 ]
+@test X[2,3] == 8
+@test X[4,5] == 14
+@test isequal(ones(2,3) * ones(2,3)', [3. 3.; 3. 3.])
+@test isequal([ [1,2] for i=1:2, : ], [1 2; 1 2])
+# where element type is a Union. try to confuse type inference.
+foo32_64(x) = (x<2) ? int32(x) : int64(x)
+boo32_64() = [ foo32_64(i) for i=1:2 ]
+let a36 = boo32_64()
+    @test a36[1]==1 && a36[2]==2
+end
+@test isequal([1,2,3], [a for (a,b) in enumerate(2:4)])
+@test isequal([2,3,4], [b for (a,b) in enumerate(2:4)])
+
+@test_fails (10.^[-1])[1] == 0.1
+@test (10.^[-1.])[1] == 0.1

@@ -324,6 +324,9 @@ end
 # syntax
 @test (true ? 1 : false ? 2 : 3) == 1
 
+# tricky space sensitive syntax cases
+@test [-1 ~1] == [(-1) (~1)]
+
 # undefinedness
 type UndefField
     field
