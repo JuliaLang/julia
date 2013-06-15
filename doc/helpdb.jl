@@ -216,6 +216,14 @@
 
 "),
 
+("All Objects","Base","isdefined","isdefined(object, index | symbol)
+
+   Tests whether an assignable location is defined. The arguments can
+   be an array and index, a composite object and field name (as a
+   symbol), or a module and a symbol.
+
+"),
+
 ("All Objects","Base","convert","convert(type, x)
 
    Try to convert \"x\" to the given type.
@@ -279,7 +287,7 @@
 
 ("Types","Base","realmin","realmin(type)
 
-   The smallest in absolute value non-denormal value representable by
+   The smallest in absolute value non-subnormal value representable by
    the given floating-point type
 
 "),
@@ -869,16 +877,21 @@
 
 "),
 
-("Dequeues","Base","delete!","delete!(collection, index) -> item
+("Dequeues","Base","splice!","splice!(collection, index[, replacement]) -> item
 
-   Remove the item at the given index, and return the deleted item.
+   Remove the item at the given index, and return the removed item.
+   Subsequent items are shifted down to fill the resulting gap. If
+   specified, replacement values from an ordered collection will be
+   spliced in place of the removed item.
 
 "),
 
-("Dequeues","Base","delete!","delete!(collection, range) -> items
+("Dequeues","Base","splice!","splice!(collection, range[, replacement]) -> items
 
-   Remove items at specified range, and return a collection containing
-   the deleted items.
+   Remove items in the specified index range, and return a collection
+   containing the removed items. Subsequent items are shifted down to
+   fill the resulting gap. If specified, replacement values from an
+   ordered collection will be spliced in place of the removed items.
 
 "),
 
@@ -2549,7 +2562,7 @@
 
 ("Mathematical Functions","Base","lgamma","lgamma(x)
 
-   Compute the logarithm of \"gamma(x)\"
+   Compute the logarithm of absolute value of \"gamma(x)\"
 
 "),
 
@@ -2673,8 +2686,8 @@
 
 ("Mathematical Functions","Base","lbeta","lbeta(x, y)
 
-   Natural logarithm of the beta function
-   \\log(\\operatorname{B}(x,y)).
+   Natural logarithm of the absolute value of the beta function
+   \\log(|\\operatorname{B}(x,y)|).
 
 "),
 
@@ -3021,9 +3034,9 @@
 
 "),
 
-("Numbers","Base","isdenormal","isdenormal(f) -> Bool
+("Numbers","Base","issubnormal","issubnormal(f) -> Bool
 
-   Test whether a floating point number is denormal
+   Test whether a floating point number is subnormal
 
 "),
 
@@ -4328,13 +4341,15 @@
 
 "),
 
-("Parallel Computing","Base","addprocs","addprocs({\"host1\", \"host2\", ...}; tunnel=false, dir=JULIA_HOME)
+("Parallel Computing","Base","addprocs","addprocs({\"host1\", \"host2\", ...}; tunnel=false, dir=JULIA_HOME, sshflags::Cmd=``)
 
    Add processes on remote machines via SSH. Requires julia to be
    installed in the same location on each node, or to be available via
    a shared file system. If \"tunnel\" is \"true\" then SSH tunneling
    will be used. Named argument \"dir\" optionally specifies the
-   location of the julia binaries on the worker nodes.
+   location of the julia binaries on the worker nodes. Additional ssh
+   options may be specified by passing a Cmd object with named
+   argument \"sshflags\", e.g., sshflags=`-i /home/foo/bar.pem`
 
 "),
 
@@ -5392,6 +5407,12 @@
 
 "),
 
+("Linear Algebra","","eig","eig(A, B) -> D, V
+
+   Compute generalized eigenvalues and vectors of A and B
+
+"),
+
 ("Linear Algebra","","eigvals","eigvals(A)
 
    Returns the eigenvalues of \"A\".
@@ -5430,10 +5451,19 @@
 
 "),
 
-("Linear Algebra","","eigfact!","eigfact!(A)
+("Linear Algebra","","eigfact","eigfact(A, B)
+
+   Compute the generalized eigenvalue decomposition of \"A\" and \"B\"
+   and return an \"GeneralizedEigen\" object. If \"F\" is the
+   factorization object, the eigenvalues can be accessed with
+   \"F[:values]\" and the eigenvectors with \"F[:vectors]\".
+
+"),
+
+("Linear Algebra","","eigfact!","eigfact!(A[, B])
 
    \"eigfact!\" is the same as \"eigfact\" but saves space by
-   overwriting the input A, instead of creating a copy.
+   overwriting the input A (and B), instead of creating a copy.
 
 "),
 
@@ -6185,6 +6215,13 @@
 ("Sparse Matrices","","sprandbool","sprandbool(m, n, density)
 
    Create a random sparse boolean matrix with the specified density.
+
+"),
+
+("Sparse Matrices","","etree","etree(A[, post])
+
+   Compute the elimination tree of a symmetric sparse matrix \"A\"
+   from \"triu(A)\" and, optionally, its post-ordering permutation.
 
 "),
 
