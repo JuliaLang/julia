@@ -222,10 +222,10 @@ function nworkers()
     n == 1 ? 1 : n-1
 end
 
-list_allprocs() = [x.id for x in PGRP.workers]
+procs() = [x.id for x in PGRP.workers]
 
-function list_workers()
-    allp = list_allprocs()
+function workers()
+    allp = procs()
     if nprocs() == 1
        allp 
     else

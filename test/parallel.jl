@@ -3,7 +3,7 @@ if nprocs() < 2
 end
 
 id_me = myid()
-id_other = filter(x -> x != id_me, list_allprocs())[rand(1:(nprocs()-1))]
+id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 
 @test fetch(@spawnat id_other myid()) == id_other
 
