@@ -1019,19 +1019,27 @@ Memory-mapped I/O
 
 .. function:: mmap_array(type, dims, stream, [offset])
 
-   Create an array whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.
+   Create an ``Array`` whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.
 
    The type determines how the bytes of the array are interpreted (no format conversions are possible), and dims is a tuple containing the size of the array.  
 
-   The file is specified via the stream.  When you initialize the stream, use "r" for a "read-only" array, and "w+" to create a new array used to write values to disk. Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file.
+   The file is specified via the stream.  When you initialize the stream, use ``"r"`` for a "read-only" array, and ``"w+"`` to create a new array used to write values to disk. Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file.
 
-   **Example**:  A = mmap_array(Int64, (25,30000), s)
+   **Example**:  ``A = mmap_array(Int64, (25,30000), s)``
 
-   This would create a 25-by-30000 array of Int64s, linked to the file associated with stream s.
+   This would create a 25-by-30000 ``Array{Int64}``, linked to the file associated with stream ``s``.
+
+.. function:: mmap_bitarray([type,] dims, stream, [offset])
+
+   Create a ``BitArray`` whose values are linked to a file, using memory-mapping; it has the same purpose, works in the same way, and has the same options, as ``mmap_array``, but the byte representation is different. The ``type`` parameter is optional, and must be ``Bool`` if given.
+
+   **Example**:  ``B = mmap_bitarray((25,30000), s)``
+
+   This would create a 25-by-30000 ``BitArray``, linked to the file associated with stream ``s``.
 
 .. function:: msync(array)
 
-   Forces synchronization between the in-memory version of a memory-mapped array and the on-disk version. You may not need to call this function, because synchronization is performed at intervals automatically by the operating system. Hower, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
+   Forces synchronization between the in-memory version of a memory-mapped ``Array`` or ``BitArray`` and the on-disk version. You may not need to call this function, because synchronization is performed at intervals automatically by the operating system. Hower, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
 
 .. function:: mmap(len, prot, flags, fd, offset)
 
