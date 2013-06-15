@@ -33,6 +33,7 @@ end
 
 @test  success(`true`)
 @test !success(`false`)
+@test success(`true`|`true`)
 if false
     @test  success(ignorestatus(`false`))
     @test  success(ignorestatus(`false`) | `true`)

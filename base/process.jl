@@ -532,7 +532,7 @@ function wait_success(x::Process)
     success(x)
 end
 function wait_success(x::ProcessChain)
-    s = false
+    s = true
     for p in x.processes
         s &= wait_success(p)
     end
