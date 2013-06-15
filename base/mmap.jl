@@ -110,3 +110,35 @@ type MmapArrayInfo
     eltype::Type
     dims::Dims
 end
+
+# Mmapped-bitarray constructor
+function mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
+    prot, flags, iswrite = mmap_stream_settings(s)
+    if length(dims) == 0
+        dims = 0
+    end
+    n = prod(dims)
+    nc = num_bit_chunks(n)
+    chunks = mmap_array(Uint64, (nc,), s, offset)
+    if iswrite
+        chunks[end] &= @_msk_end n
+    else
+        if chunks[end] != chunks[end] & @_msk_end n
+            error("The given file does not contain a valid BitArray of size ", join(dims, 'x'), " (open with r+ to override)")
+        end
+    end
+    B = BitArray{N}(ntuple(N,i->0)...)
+    B.chunks = chunks
+    B.len = n
+    if N != 1
+        B.dims = Int[i for i in dims]
+    end
+    return B
+end
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset) =
+    mmap_bitarray(dims, s, offset)
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+
+msync(B::BitArray, flags::Integer) = msync(pointer(B.chunks), flags)
+msync(B::BitArray) = msync(B.chunks,MS_SYNC)
