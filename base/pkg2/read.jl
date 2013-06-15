@@ -94,4 +94,15 @@ function fixed(avail::Dict=available())
     return pkgs
 end
 
+function free(avail::Dict=available())
+    pkgs = Dict{ByteString,VersionNumber}()
+    for pkg in readdir()
+        isinstalled(pkg) || continue
+        ap = avail[pkg]
+        isfixed(pkg,ap) && continue
+        pkgs[pkg] = installed_version(pkg,ap)
+    end
+    return pkgs
+end
+
 end # module
