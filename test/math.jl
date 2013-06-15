@@ -154,3 +154,7 @@ end
 @test_approx_eq quadgk(x -> exp(x), -Inf,0)[1] 1.0
 @test_approx_eq quadgk(x -> exp(-x^2), -Inf,Inf)[1] sqrt(pi)
 @test_approx_eq quadgk(x -> [exp(-x), exp(-2x)], 0, Inf)[1] [1,0.5]
+
+# Ensure subnormal flags functions don't segfault
+@test any(ccall("jl_zero_subnormals", Uint8, (Uint8,), 1) .== [0x00 0x01])
+@test any(ccall("jl_zero_subnormals", Uint8, (Uint8,), 0) .== [0x00 0x01])
