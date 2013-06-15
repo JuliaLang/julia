@@ -17,8 +17,8 @@ sizeof(s::ASCIIString) = sizeof(s.data)
 getindex(s::ASCIIString, r::Vector) = ASCIIString(getindex(s.data,r))
 getindex(s::ASCIIString, r::Range1{Int}) = ASCIIString(getindex(s.data,r))
 getindex(s::ASCIIString, indx::AbstractVector{Int}) = ASCIIString(s.data[indx])
-search(s::ASCIIString, c::Char, i::Integer) = c < 0x80 ? search(s.data,c,i) : 0
-rsearch(s::ASCIIString, c::Char, i::Integer) = c < 0x80 ? rsearch(s.data,c,i) : 0
+search(s::ASCIIString, c::Char, i::Integer) = c < 0x80 ? search(s.data,uint8(c),i) : 0
+rsearch(s::ASCIIString, c::Char, i::Integer) = c < 0x80 ? rsearch(s.data,uint8(c),i) : 0
 string(a::ASCIIString, b::ASCIIString, c::ASCIIString...) =
     ASCIIString([a.data,b.data,map(s->s.data,c)...])
 

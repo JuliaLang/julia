@@ -84,7 +84,7 @@ function getindex(s::UTF8String, r::Range1{Int})
 end
 
 function search(s::UTF8String, c::Char, i::Integer)
-    if c < 0x80 return search(s.data, c, i) end
+    if c < 0x80 return search(s.data, uint8(c), i) end
     while true
         i = search(s.data, first_utf8_byte(c), i)
         if i==0 || s[i]==c return i end
@@ -93,7 +93,7 @@ function search(s::UTF8String, c::Char, i::Integer)
 end
 
 function rsearch(s::UTF8String, c::Char, i::Integer)
-    if c < 0x80 return rsearch(s.data, c, i) end
+    if c < 0x80 return rsearch(s.data, uint8(c), i) end
     while true
         i = rsearch(s.data, first_utf8_byte(c), i)
         if i==0 || s[i]==c return i end

@@ -1258,7 +1258,7 @@ function search(a::ByteArray, b::Char, i::Integer)
     if isascii(b)
         search(a,uint8(b),i)
     else
-        search(a,string(b).data,i)
+        search(a,string(b).data,i).start
     end
 end
 search(a::ByteArray, b::Union(Int8,Uint8,Char)) = search(a,b,1)
@@ -1275,7 +1275,7 @@ function rsearch(a::ByteArray, b::Char, i::Integer)
     if isascii(b)
         rsearch(a,uint8(b),i)
     else
-        rsearch(a,string(b).data,i)
+        rsearch(a,string(b).data,i).start
     end
 end
 rsearch(a::ByteArray, b::Union(Int8,Uint8,Char)) = rsearch(a,b,length(a))
