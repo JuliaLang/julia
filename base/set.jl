@@ -22,7 +22,7 @@ delete!(s::Set, x) = (delete!(s.dict, x); x)
 delete!(s::Set, x, deflt) = haskey(s.dict, x) ? delete!(s.dict, x) : deflt
 
 union!(s::Set, xs) = (for x=xs; add!(s,x); end; s)
-setdiff!(s::Set, xs) = (for x=xs; if contains(s, x) delete!(s,x); end; end; s)
+setdiff!(s::Set, xs) = (for x=xs; delete!(s,x,nothing); end; s)
 
 similar{T}(s::Set{T}) = Set{T}()
 copy(s::Set) = union!(similar(s), s)
