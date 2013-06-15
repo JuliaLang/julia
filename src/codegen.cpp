@@ -383,7 +383,7 @@ static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx);
 
 #include "cgutils.cpp"
 #include "debuginfo.cpp"
-#include "debugasm.cpp"
+#include "disasm.cpp"
 
 // --- dump function to IR and ASM ---
 
