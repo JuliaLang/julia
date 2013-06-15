@@ -311,6 +311,20 @@ function let_undef()
 end
 @test_fails let_undef()
 
+# const implies local in a local scope block
+function const_implies_local()
+    let
+        x = 1
+        local y
+        let
+            const x = 0
+            y = x
+        end
+        x, y
+    end
+end
+@test const_implies_local() === (1, 0)
+
 a = cell(3)
 for i=1:3
     let ii = i
