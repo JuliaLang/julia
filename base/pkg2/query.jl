@@ -38,4 +38,25 @@ function dependencies(avail::Dict, fix::Dict)
     avail
 end
 
+function diff(have::Dict, want::Dict)
+    remove = Dict{ByteString,VersionNumber}()
+    update = Dict{ByteString,(VersionNumber,VersionNumber)}()
+    install = Dict{ByteString,VersionNumber}()
+
+    for pkg in sort!(union(keys(have),keys(want)))
+        h, w = haskey(have,pkg), haskey(want,pkg)
+        if h && w
+            if have[pkg] != want[pkg]
+                update[pkg] = (free[pkg], want[pkg])
+            end
+        elseif h
+            remove[pkg] = free[pkg]
+        elseif w
+            install[pkg] = want[pkg]
+        end
+    end
+
+    remove, update, install
+end
+
 end # module

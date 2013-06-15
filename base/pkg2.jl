@@ -13,10 +13,12 @@ using .Types
 resolve() = Dir.cd() do
     reqs  = Reqs.parse("REQUIRE")
     avail = Read.available()
-    fix   = Read.fixed(avail)
-    reqs  = Query.requirements(reqs,fix)
-    deps  = Query.dependencies(avail,fix)
+    fixed = Read.fixed(avail)
+    reqs  = Query.requirements(reqs,fixed)
+    deps  = Query.dependencies(avail,fixed)
     want  = Resolve.resolve(reqs,deps)
+    have  = Read.free(avail)
+    diff  = Query.diff(have,want)
 end
 
 add(pkg::ByteString, vers::VersionSet) = Dir.cd() do
