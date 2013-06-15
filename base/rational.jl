@@ -66,11 +66,7 @@ convert(::Type{Rational}, x::Union(Float64,Float32)) = convert(Rational{Int}, x)
 promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
 promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
 promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-
-promote_rule{T<:SmallSigned,S<:Union(Float32,Float64)}(::Type{Rational{T}}, ::Type{S}) = Rational{Int}
-promote_rule{T<:SmallUnsigned,S<:Union(Float32,Float64)}(::Type{Rational{T}}, ::Type{S}) = Rational{Uint}
-promote_rule{T<:Union(Int64,Int128),S<:Union(Float32,Float64)}(::Type{Rational{T}}, ::Type{S}) = Rational{T}
-promote_rule{T<:Union(Uint64,Uint128),S<:Union(Float32,Float64)}(::Type{Rational{T}}, ::Type{S}) = Rational{T}
+promote_rule{T<:Integer,S<:FloatingPoint}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
 
 function rationalize{T<:Integer}(::Type{T}, x::FloatingPoint; tol::Real=eps(x))
     if isnan(x);       return zero(T)//zero(T); end

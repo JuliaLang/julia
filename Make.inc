@@ -47,16 +47,6 @@ endif
 BUILD_OS := $(shell uname)
 OS := $(BUILD_OS)
 
-USE_MKL = 0
-MKLLIB = /path/to/mkl/lib/intel64
-
-# ATLAS must have been previously built with "make -C deps compile-atlas" (without -jN),
-# or installed to usr/lib/libatlas from some another source (built as
-# a shared library, for your platform, single threaded)
-USE_ATLAS = 0
-ATLAS_LIBDIR = $(BUILD)/lib
-#or ATLAS_LIBDIR = /path/to/system/atlas/lib
-
 ifneq (,$(findstring MINGW,$(OS)))
 override OS := WINNT
 endif
@@ -105,8 +95,8 @@ CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -ggdb3 -DDEBUG -fstack-protector-all
-SHIPFLAGS = -O3 -DNDEBUG -falign-functions
+DEBUGFLAGS = -O0 -ggdb3 -DDEBUG -fstack-protector-all
+SHIPFLAGS = -O3 -falign-functions
 endif
 
 ifeq ($(USECLANG),1)
@@ -115,8 +105,8 @@ CC = $(CROSS_COMPILE)clang
 CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -g -DDEBUG -fstack-protector-all
-SHIPFLAGS = -O3 -DNDEBUG
+DEBUGFLAGS = -O0 -g -DDEBUG -fstack-protector-all
+SHIPFLAGS = -O3
 ifeq ($(OS), Darwin)
 CC += -mmacosx-version-min=10.6
 CXX += -mmacosx-version-min=10.6
@@ -160,11 +150,6 @@ OPENBLAS_DYNAMIC_ARCH=0
 OPENBLAS_USE_THREAD=1
 OPENBLAS_TARGET_ARCH=
 
-# Use 64-bit libraries by default on 64-bit architectures
-ifeq ($(ARCH), x86_64)
-USE_BLAS64 = 1
-endif
-
 # Use libraries available on the system instead of building them
 
 USE_SYSTEM_LLVM=0
@@ -192,9 +177,8 @@ endif
 # Snow Leopard specific configuration
 ifeq ($(OS), Darwin)
 ifeq ($(OSXVER), 10.6)
-USE_SYSTEM_LIBM = 1
-USE_SYSTEM_BLAS = 1
-USE_SYSTEM_LAPACK = 1
+USE_SYSTEM_LIBM=1
+USE_SYSTEM_BLAS=1
 endif
 endif
 
@@ -230,10 +214,17 @@ else
 PCRE_CONFIG = $(BUILD)/bin/pcre-config
 endif
 
+# Use 64-bit libraries by default on 64-bit architectures
+ifeq ($(ARCH), x86_64)
+USE_BLAS64 = 1
+endif
+
 ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
+USE_BLAS64 = 0
+USE_SYSTEM_LAPACK = 0
 LIBBLAS = -framework vecLib -lBLAS
-LIBBLASNAME = libblas
+LIBBLASNAME = libBLAS
 else
 LIBBLAS = -lblas
 LIBBLASNAME = libblas
@@ -243,17 +234,19 @@ LIBBLAS = -L$(BUILD)/lib -lopenblas
 LIBBLASNAME = libopenblas
 endif
 
-ifeq ($(USE_SYSTEM_LAPACK), 1)
-ifeq ($(OS), Darwin)
-LIBLAPACK = -framework vecLib -lLAPACK
-LIBLAPACKNAME = liblapack
-else
-LIBLAPACK = -llapack
-LIBLAPACKNAME = liblapack
-endif
-else
+# OpenBLAS builds LAPACK as part of its build.
+# We only need to build LAPACK if we are not using OpenBLAS.
+ifeq ($(USE_SYSTEM_BLAS), 0)
 LIBLAPACK = $(LIBBLAS)
 LIBLAPACKNAME = $(LIBBLASNAME)
+else
+ifeq ($(USE_SYSTEM_LAPACK), 1)
+LIBLAPACK = -llapack
+LIBLAPACKNAME = liblapack
+else
+LIBLAPACK = -L$(BUILD)/lib -llapack
+LIBLAPACKNAME = liblapack
+endif
 endif
 
 ifeq ($(USE_SYSTEM_LIBM), 1)
@@ -270,10 +263,6 @@ ifeq ($(USE_SYSTEM_LIBUV), 1)
 else
   LIBUV = $(BUILD)/lib/libuv.a
   LIBUV_INC = $(JULIAHOME)/deps/libuv/include
-endif
-
-ifeq ($(USE_MKL), 1)
-  USE_BLAS64 = 0
 endif
 
 # OS specific stuff
@@ -359,7 +348,11 @@ endif
 
 # MKL
 
+USE_MKL = 0
+MKLLIB = $$MKLROOT/lib/intel64
+
 ifeq ($(USE_MKL), 1)
+USE_BLAS64 = 0
 USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
 LIBBLAS   = -L$(MKLLIB) -lmkl_rt
@@ -373,7 +366,17 @@ ifneq ($(strip $(MKLLIB)),)
 endif
 endif
 
+# ATLAS
+
+# ATLAS must have been previously built with "make -C deps compile-atlas" (without -jN),
+# or installed to usr/lib/libatlas from some another source (built as
+# a shared library, for your platform, single threaded)
+USE_ATLAS = 0
+ATLAS_LIBDIR = $(BUILD)/lib
+#or ATLAS_LIBDIR = /path/to/system/atlas/lib
+
 ifeq ($(USE_ATLAS), 1)
+USE_BLAS64 = 0
 USE_SYSTEM_BLAS = 1
 USE_SYSTEM_LAPACK = 1
 LIBBLAS = -L$(ATLAS_LIBDIR) -lsatlas

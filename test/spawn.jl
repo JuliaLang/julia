@@ -33,6 +33,7 @@ end
 
 @test  success(`true`)
 @test !success(`false`)
+@test success(`true`|`true`)
 if false
     @test  success(ignorestatus(`false`))
     @test  success(ignorestatus(`false`) | `true`)
@@ -55,6 +56,6 @@ str2 = readall(stdout)
 
 # This test hangs if the end of run walk across uv streams calls shutdown on a stream that is shutting down.
 file = tempname()
-stdout, stdin, proc = readandwrite(`cat -` > file)
+stdin, proc = writesto(`cat -` > file)
 write(stdin, str)
 close(stdin)

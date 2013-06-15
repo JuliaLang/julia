@@ -1,5 +1,5 @@
 testnames = ["core", "keywordargs", "numbers", "strings", "unicode",
-             "corelib", "hashing", "remote", "iostring", "arrayops",
+             "collections", "hashing", "remote", "iostring", "arrayops",
              "linalg", "blas", "fft", "dsp", "sparse", "bitarray",
              "random", "math", "functional", "bigint", "sorting",
              "statistics", "spawn", "parallel", "priorityqueue",

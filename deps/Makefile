@@ -116,9 +116,15 @@ ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 STAGE2_DEPS += suitesparse
 endif
 
-#ifeq ($(USE_SYSTEM_LAPACK), 0)
-#STAGE2_DEPS += lapack
-#endif
+# Only compile standalone LAPACK if we are not using OpenBLAS.
+# OpenBLAS otherwise compiles LAPACK as part of its build.
+# This is useful where one wants to use the vendor BLAS, but 
+# build LAPACK as the vendor LAPACK may be too old (eg. Apple vecLib)
+ifeq ($(USE_SYSTEM_BLAS), 1)
+ifeq ($(USE_SYSTEM_LAPACK), 0)
+STAGE2_DEPS += lapack
+endif
+endif
 
 #Platform specific flags
 

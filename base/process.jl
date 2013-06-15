@@ -154,7 +154,7 @@ uvtype(::Ptr) = UV_STREAM
 
 function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::Process,
                    in, out, err)
-    proc = c_malloc(int(ccall(:jl_sizeof_uv_process_t,Csize_t,())))
+    proc = c_malloc(_sizeof_uv_process)
     error = ccall(:jl_spawn, Int32,
         (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
          Ptr{Void},    Int32,       Ptr{Void},     Int32,       Ptr{Void},
@@ -190,20 +190,20 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
     pp = Process(cmd,C_NULL,stdios[1],stdios[2],stdios[3]);
     in,out,err=stdios
     if(isa(stdios[1],NamedPipe)&&stdios[1].handle==C_NULL)
-        in = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-        #in = c_malloc(_sizeof_uv_pipe)
+        in = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_named_pipe)))
+        #in = c_malloc(_sizeof_uv_named_pipe)
         link_pipe(in,false,stdios[1],true)
         close_in = true
     end
     if(isa(stdios[2],NamedPipe)&&stdios[2].handle==C_NULL)
-        out = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-        #out = c_malloc(_sizeof_uv_pipe)
+        out = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_named_pipe)))
+        #out = c_malloc(_sizeof_uv_named_pipe)
         link_pipe(stdios[2],false,out,true)
         close_out = true
     end
     if(isa(stdios[3],NamedPipe)&&stdios[3].handle==C_NULL)
-        err = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-        #err = c_malloc(_sizof_uv_pipe)
+        err = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_named_pipe)))
+        #err = c_malloc(_sizeof_uv_named_pipe)
         link_pipe(stdios[3],false,err,true)
         close_err = true
     end
@@ -237,10 +237,10 @@ function spawn(pc::ProcessChainOrNot,redirect::CmdRedirect,stdios::StdIOSet,exit
 end
 
 function spawn(pc::ProcessChainOrNot,cmds::OrCmds,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
-    out_pipe = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-    in_pipe = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-    #out_pipe = c_malloc(_sizeof_uv_pipe)
-    #in_pipe = c_malloc(_sizeof_uv_pipe)
+    out_pipe = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_named_pipe)))
+    in_pipe = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_named_pipe)))
+    #out_pipe = c_malloc(_sizeof_uv_named_pipe)
+    #in_pipe = c_malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe,false,out_pipe,false,null_handle)
     if pc == false
         pc = ProcessChain(stdios)
@@ -265,20 +265,20 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
     close_in,close_out,close_err = false,false,false
     in,out,err = stdios
     if(isa(stdios[1],NamedPipe)&&stdios[1].handle==C_NULL)
-        in = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-        #in = c_malloc(_sizeof_uv_pipe)
+        in = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_named_pipe)))
+        #in = c_malloc(_sizeof_uv_named_pipe)
         link_pipe(in,false,stdios[1],true)
         close_in = true
     end
     if(isa(stdios[2],NamedPipe)&&stdios[2].handle==C_NULL)
-        out = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-        #out = c_malloc(_sizeof_uv_pipe)
+        out = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_named_pipe)))
+        #out = c_malloc(_sizeof_uv_named_pipe)
         link_pipe(stdios[2],false,out,true)
         close_out = true
     end
     if(isa(stdios[3],NamedPipe)&&stdios[3].handle==C_NULL)
-        err = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-        #err = c_malloc(_sizof_uv_pipe)
+        err = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_named_pipe)))
+        #err = c_malloc(_sizeof_uv_named_pipe)
         link_pipe(stdios[3],false,err,true)
         close_err = true
     end
@@ -390,8 +390,14 @@ function run(cmds::AbstractCmd,args...)
     wait_success(ps) ? nothing : pipeline_error(ps)
 end
 
-success(proc::Process) = (assert(process_exited(proc)); proc.exit_code==0)
-success(procs::Vector{Process}) = all(map(success, procs))
+function success(proc::Process)
+    assert(process_exited(proc))
+    if proc.exit_code == -1
+        error("could not start process ", proc)
+    end
+    proc.exit_code==0
+end
+success(procs::Vector{Process}) = all(success, procs)
 success(procs::ProcessChain) = success(procs.processes)
 success(cmd::AbstractCmd) = wait_success(spawn(cmd))
 
@@ -436,12 +442,12 @@ end
 
 ## process status ##
 process_running(s::Process) = s.exit_code == -2
-process_running(s::Vector{Process}) = all(map(process_running,s))
+process_running(s::Vector{Process}) = all(process_running,s)
 process_running(s::ProcessChain) = process_running(s.processes)
 
 process_exit_status(s::Process) = s.exit_code
 process_exited(s::Process) = !process_running(s)
-process_exited(s::Vector{Process}) = all(map(process_exited,s))
+process_exited(s::Vector{Process}) = all(process_exited,s)
 process_exited(s::ProcessChain) = process_running(s.processes)
 
 process_term_signal(s::Process) = s.term_signal
@@ -526,7 +532,7 @@ function wait_success(x::Process)
     success(x)
 end
 function wait_success(x::ProcessChain)
-    s = false
+    s = true
     for p in x.processes
         s &= wait_success(p)
     end
