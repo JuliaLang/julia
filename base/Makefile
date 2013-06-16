@@ -24,6 +24,7 @@ build_h.jl: ../Make.inc build.h Makefile
 	@echo "const libm_name = \"$(LIBMNAME)\"" >> $@
 	@echo "const libblas_name = \"$(LIBBLASNAME)\"" >> $@
 	@echo "const liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
+	@echo "const BUILD_TYPE = \"$(JULIA_BUILD_TYPE)\"" >> $@
 ifeq ($(USE_BLAS64), 1)
 	@echo "const USE_BLAS64 = true" >> $@
 else

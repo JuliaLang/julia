@@ -899,7 +899,7 @@ function ssh_tunnel(user, host, port)
 end
 
 #function worker_ssh_cmd(host, key)
-#    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
+#    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-$(Base.BUILD_TYPE)-basic --worker\""`
 #end
 
 # start and connect to processes via SSH.
@@ -907,7 +907,7 @@ end
 # the tunnel is only used from the head (process 1); the nodes are assumed
 # to be mutually reachable without a tunnel, as is often the case in a cluster.
 function addprocs(machines::AbstractVector;
-                  tunnel=false, dir=JULIA_HOME, exename="./julia-release-basic", sshflags::Cmd=``)
+                  tunnel=false, dir=JULIA_HOME, exename="./julia-$(Base.BUILD_TYPE)-basic", sshflags::Cmd=``)
     add_workers(PGRP,
         start_remote_workers(machines,
             map(m->detach(`ssh -n $sshflags $m "bash -l -c \"cd $dir && $exename --worker\""`),
@@ -926,7 +926,7 @@ end
 #    add_workers(PGRP, start_remote_workers(machines, map(x->worker_ssh_cmd(x[1],x[2]), cmdargs)))
 #end
 
-worker_local_cmd() = `$JULIA_HOME/julia-release-basic --bind-to $bind_addr --worker`
+worker_local_cmd() = `$JULIA_HOME/julia-$(Base.BUILD_TYPE)-basic --bind-to $bind_addr --worker`
 
 addprocs(np::Integer) =
     add_workers(PGRP, start_remote_workers({ "localhost" for i=1:np },
@@ -937,7 +937,7 @@ function start_sge_workers(n)
     home = JULIA_HOME
     sgedir = joinpath(pwd(),"SGE")
     run(`mkdir -p $sgedir`)
-    qsub_cmd = `echo $home/julia-release-basic --worker` | `qsub -N JULIA -terse -cwd -j y -o $sgedir -t 1:$n`
+    qsub_cmd = `echo $home/julia-$(Base.BUILD_TYPE)-basic --worker` | `qsub -N JULIA -terse -cwd -j y -o $sgedir -t 1:$n`
     out,qsub_proc = readsfrom(qsub_cmd)
     if !success(qsub_proc)
         error("batch queue not available (could not run qsub)")
