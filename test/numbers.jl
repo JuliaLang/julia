@@ -129,7 +129,6 @@
 @test string(typemin(Uint128)) == "0x00000000000000000000000000000000"
 @test string(typemax(Uint128)) == "0xffffffffffffffffffffffffffffffff"
 
-if WORD_SIZE > 32
 @test dec(typemin(Uint128)) == "0"
 @test dec(typemax(Uint128)) == "340282366920938463463374607431768211455"
 @test base(3,typemin(Uint128)) == "0"
@@ -137,7 +136,6 @@ if WORD_SIZE > 32
     "202201102121002021012000211012011021221022212021111001022110211020010021100121010"
 @test base(12,typemin(Uint128)) == "0"
 @test base(12,typemax(Uint128)) == "5916b64b41143526a777873841863a6a6993"
-end
 
 @test bin(typemin(Int8)) == "-1"*"0"^7
 @test bin(typemax(Int8)) == "1"^7
@@ -206,7 +204,6 @@ end
 @test hex(typemin(Int128)) == "-80000000000000000000000000000000"
 @test hex(typemax(Int128)) == "7fffffffffffffffffffffffffffffff"
 
-if WORD_SIZE > 32
 @test dec(typemin(Int128)) == "-170141183460469231731687303715884105728"
 @test dec(typemax(Int128)) == "170141183460469231731687303715884105727"
 @test string(typemin(Int128)) == "-170141183460469231731687303715884105728"
@@ -217,7 +214,6 @@ if WORD_SIZE > 32
     "101100201022001010121000102002120122110122221010202000122201220121120010200022001"
 @test base(12,typemin(Int128)) == "-2a695925806818735399a37a20a31b3534a8"
 @test base(12,typemax(Int128)) == "2a695925806818735399a37a20a31b3534a7"
-end
 
 # floating-point printing
 @test repr(1.0) == "1.0"

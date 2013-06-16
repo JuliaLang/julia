@@ -524,7 +524,7 @@ if WORD_SIZE==32
         t = hilo + (lolo>>>64)
         w2 = t>>64
         w1 = lohi + (t&0xffffffffffffffff)
-        (lolo&0xffffffffffffffff) + int128(w1)<<64
+        int128(lolo&0xffffffffffffffff) + int128(w1)<<64
     end
 
     function *(u::Uint128, v::Uint128)
