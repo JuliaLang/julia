@@ -40,6 +40,10 @@ Getting Around
 
    Evaluate all expressions in the given file, and return the value of the last one. No other processing (path searching, fetching from node 1, etc.) is performed.
 
+.. function:: usingmodule(name)
+
+   Supports conditional inclusion of a package or module. Equivalent to ``using name`` in a file, except it can be inside an ``if`` statement.
+
 .. function:: help(name)
 
    Get help for a function. ``name`` can be an object or a string.
