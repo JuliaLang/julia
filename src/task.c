@@ -518,8 +518,10 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
     
     unw_getcontext(&uc);
     unw_init_local(&cursor, &uc);
-    while (unw_step(&cursor) && n < maxsize) {
-        unw_get_reg(&cursor, UNW_REG_IP, &ip);
+    while (unw_step(&cursor) > 0 && n < maxsize) {
+        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0) {
+            break;
+        }
         data[n++] = ip;
     }
     return n;
