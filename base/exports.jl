@@ -983,6 +983,7 @@ export
     include_string,
     reload,
     require,
+    usingmodule,
 
 # RTS internals
     precompile,
