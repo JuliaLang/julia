@@ -810,8 +810,8 @@ end
 UVError(p::String) = UVError(p,uv_lasterror())
 UVError(p::String,uv::Integer,system::Integer) = UVError(p,UV_error_t(uv,system))
 
-struverror(err::UVError) = bytestring(ccall(:uv_strerror,Ptr{Uint8},(UV_error_t,),err))
-uverrorname(err::UVError) = bytestring(ccall(:uv_err_name,Ptr{Uint8},(UV_error_t,),err))
+struverror(err::UVError) = bytestring(ccall(:uv_strerror,Ptr{Uint8},(UV_error_t,),err.s))
+uverrorname(err::UVError) = bytestring(ccall(:uv_err_name,Ptr{Uint8},(UV_error_t,),err.s))
 
 uv_error(prefix, e::UV_error_t) = e.uv_code != 0 ? throw(UVError(string(prefix),e)) : nothing
 uv_error(prefix, b::Bool) = b ? throw(UVError(string(prefix))) : nothing

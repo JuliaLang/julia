@@ -344,7 +344,7 @@ function default_getaddrinfo_cb(req,status,addrinfo)
     data = uv_req_data(req)
     cb = unsafe_pointer_to_objref(data)::Function
     if(status!=0)
-        throw(UVError("getaddrinfo callback"))
+        cb(uv_lasterror())
     end
     sockaddr = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
     if(ccall(:jl_sockaddr_is_ip4,Int32,(Ptr{Void},),sockaddr)==1)
@@ -370,9 +370,12 @@ end
 function getaddrinfo(host::ASCIIString)
     c = Condition()
     getaddrinfo(host) do IP
-	notify(c,IP)
+	   notify(c,IP)
     end
     ip = wait(c)
+    if isa(ip,UV_error_t)
+        throw(UVError("getaddrinfo",ip))
+    end
     return ip
 end
 
