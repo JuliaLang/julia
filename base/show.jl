@@ -91,9 +91,6 @@ show(io::IO, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
 show{T}(io::IO, p::Ptr{T}) =
     print(io, is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
 
-full_name(m::Module) = m===Main ? () : tuple(full_name(module_parent(m))...,
-                                             module_name(m))
-
 function show(io::IO, m::Module)
     if is(m,Main)
         print(io, "Main")
@@ -101,9 +98,6 @@ function show(io::IO, m::Module)
         print(io, join(full_name(m),"."))
     end
 end
-
-uncompressed_ast(l::LambdaStaticData) =
-    isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
 function show(io::IO, l::LambdaStaticData)
     print(io, "AST(")
