@@ -281,11 +281,10 @@ function init_head_sched()
     # start in "head node" mode
     global const Scheduler = Task(()->event_loop(true), 1024*1024)
     global PGRP
-    PGRP.myid = 1
-    assert(PGRP.np == 0)
-    push!(PGRP.workers,LocalProcess())
-    push!(PGRP.locs,("",0))
-    PGRP.np = 1
+    global LPROC
+    LPROC.id = 1
+    assert(length(PGRP.workers) == 0)
+    register_worker(LPROC)
     # make scheduler aware of current (root) task
     unshift!(Workqueue, roottask)
     yield()
