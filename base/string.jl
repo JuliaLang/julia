@@ -1212,6 +1212,11 @@ float64_isvalid(s::String, out::Array{Float64,1}) =
 float32_isvalid(s::String, out::Array{Float32,1}) =
     ccall(:jl_strtof, Int32, (Ptr{Uint8},Ptr{Float32}), s, out) == 0
 
+float64_isvalid(s::SubString, out::Array{Float64,1}) =
+    ccall(:jl_substrtod, Int32, (Ptr{Uint8},Int,Int,Ptr{Float64}), s.string, s.offset, s.endof, out) == 0
+float32_isvalid(s::SubString, out::Array{Float32,1}) =
+    ccall(:jl_substrtof, Int32, (Ptr{Uint8},Int,Int,Ptr{Float32}), s.string, s.offset, s.endof, out) == 0
+
 begin
     local tmp::Array{Float64,1} = Array(Float64,1)
     local tmpf::Array{Float32,1} = Array(Float32,1)
