@@ -348,8 +348,14 @@ endif
 
 # MKL
 
-USE_MKL = 0
-MKLLIB = $$MKLROOT/lib/intel64
+ifeq ($(USE_MKL),)
+  USE_MKL = 0
+endif
+ifeq ($(USE_MKL), 1)
+ifeq ($(strip $(MKLLIB)),)
+  MKLLIB = $$MKLROOT/lib/intel64
+endif
+endif
 
 ifeq ($(USE_MKL), 1)
 USE_BLAS64 = 0
