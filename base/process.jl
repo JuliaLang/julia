@@ -539,4 +539,6 @@ function wait_success(x::ProcessChain)
     s
 end
 
+wait(p::Process) = (wait_exit(p); p.exit_code)
+
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
