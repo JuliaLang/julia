@@ -215,6 +215,12 @@ export PipeString
 @deprecate  -(a::IntSet, b::IntSet)      setdiff(a,b)
 @deprecate  ~(s::IntSet)                 complement(s)
 
+# Redirection Operators
+@deprecate |(a::AbstractCmd,b::AbstractCmd) (a|>b)
+@deprecate >(a::Redirectable,b::AbstractCmd) (a|>b)
+@deprecate >(a::ASCIIString,b::AbstractCmd) (a|>b)
+@deprecate >(a::AbstractCmd,b::Redirectable) (a|>b)
+@deprecate >(a::AbstractCmd,b::ASCIIString) (a|>b)
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
 
