@@ -37,9 +37,9 @@ macro stat_call(sym,arg1type,arg)
     quote
         fill!(stat_buf,0)
         r = ccall($(Expr(:quote,sym)), Int32, ($arg1type,Ptr{Uint8}), $arg, stat_buf)
-        uv_errno = _uv_lasterror(eventloop())
+        uv_errno = uv_lasterror().uv_code
         ENOENT, ENOTDIR = 34, 27
-        systemerror(:stat, r!=0 && uv_errno!=ENOENT && uv_errno!=ENOTDIR)
+        uv_error(:stat, r!=0 && uv_errno!=ENOENT && uv_errno!=ENOTDIR)
         st = Stat(stat_buf)
         if ispath(st) != (r==0)
             error("WTF: stat returned zero type for a valid path!?")

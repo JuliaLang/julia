@@ -83,7 +83,9 @@ include("inference.jl")
 # For OS sprcific stuff in I/O
 include("osutils.jl")
 
-# I/O, strings & printing
+
+
+# strings & printing
 include("task.jl")
 include("io.jl")
 include("iobuffer.jl")
@@ -93,13 +95,21 @@ include("utf8.jl")
 include("string.jl")
 include("regex.jl")
 include("show.jl")
+
+# core math functions
+include("intfuncs.jl")
+include("floatfuncs.jl")
+include("math.jl")
+importall .Math
+include("primes.jl")
+
+# Async I/O
 include("stream.jl")
 include("socket.jl")
 include("stat.jl")
 include("fs.jl")
 importall .FS
 include("process.jl")
-ccall(:jl_get_uv_hooks, Void, ())
 include("grisu.jl")
 import .Grisu.print_shortest
 include("printf.jl")
@@ -121,13 +131,6 @@ include("path.jl")
 include("repl.jl")
 include("client.jl")
 include("loading.jl")
-
-# core math functions
-include("intfuncs.jl")
-include("floatfuncs.jl")
-include("math.jl")
-importall .Math
-include("primes.jl")
 
 # random number generation and statistics
 include("statistics.jl")

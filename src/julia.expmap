@@ -151,7 +151,7 @@
     jl_getaddrinfo;
     jl_getpid;
     jl_getutf8;
-    jl_global_event_loop;
+    jl_io_loop;
     jl_hrtime;
     jl_idle_init;
     jl_idle_start;

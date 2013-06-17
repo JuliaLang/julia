@@ -40,7 +40,7 @@ quit() = exit()
 function repl_callback(ast::ANY, show_value)
     global _repl_enough_stdin = true
     stop_reading(STDIN) 
-    STDIN.readcb = false
+    STDIN.readcb = empty_callback
     put(repl_channel, (ast, show_value))
 end
 

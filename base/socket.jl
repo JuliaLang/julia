@@ -245,16 +245,17 @@ type TcpSocket <: Socket
     connectnotify::Condition
     closecb::Callback
     closenotify::Condition
-    TcpSocket(handle,open)=new(handle,open,true,PipeBuffer(),false,
-                               Condition(),false,Condition(),false,Condition())
-
+    TcpSocket(handle,open)=new(handle,open,true,PipeBuffer(),empty_callback,
+                               Condition(),empty_callback,Condition(),empty_callback,Condition())
     function TcpSocket()
         this = TcpSocket(C_NULL,false)
-        this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},Any),
-                           eventloop(),this)
-        if (this.handle == C_NULL)
-            throw(UVError("Failed to create socket"))
+        this.handle = c_malloc(_sizeof_uv_tcp)
+        err = ccall(:uv_tcp_init,Int32,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)
+        if err == -1
+            c_free(this.handle)
+            throw(UVError("Failed to initialize TcpSocket"))
         end
+        associate_julia_struct(this.handle,this)
         this
     end
 end
@@ -266,15 +267,17 @@ type TcpServer <: UVServer
     connectnotify::Condition
     closecb::Callback
     closenotify::Condition
-    TcpServer(handle,open) = new(handle,open,false,Condition(),false,Condition())
+    TcpServer(handle,open) = new(handle,open,empty_callback,Condition(),empty_callback,Condition())
 
     function TcpServer()
         this = TcpServer(C_NULL,false)
-        this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},Any),
-                           eventloop(),this)
-        if (this.handle == C_NULL)
-            throw(UVError("Failed to create socket server"))
+        this.handle = c_malloc(_sizeof_uv_tcp)
+        err = ccall(:uv_tcp_init,Int32,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)
+        if err == -1
+            c_free(this.handle)
+            throw(UVError("Failed to initialize TcpServer"))
         end
+        associate_julia_struct(this.handle,this)
         this
     end
 end
@@ -309,8 +312,6 @@ _jl_udp_init(loop::Ptr{Void}) = ccall(:jl_udp_init,Ptr{Void},(Ptr{Void},),loop)
 
 ## VARIOUS METHODS TO BE MOVED TO BETTER LOCATION
 
-_jl_connect_raw(sock::TcpSocket,sockaddr::Ptr{Void}) = 
-    ccall(:jl_connect_raw,Int32,(Ptr{Void},Ptr{Void}),sock.handle,sockaddr)
 _jl_sockaddr_from_addrinfo(addrinfo::Ptr{Void}) = 
     ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
 _jl_sockaddr_set_port(ptr::Ptr{Void},port::Uint16) = 
@@ -330,7 +331,7 @@ const UV_EADDRINUSE = 5
 function bind(sock::TcpServer, host::IPv4, port::Uint16)
     err = ccall(:jl_tcp_bind, Int32, (Ptr{Void}, Uint16, Uint32),
 	        sock.handle, hton(port), hton(host.host))
-    if(err == -1 && _uv_lasterror() != UV_EADDRINUSE)
+    if(err == -1 && uv_lasterror().uv_code != UV_EADDRINUSE)
         throw(UVError("bind"))
     end
     err != -1
@@ -339,12 +340,9 @@ end
 bind(sock::TcpServer, host::IPv6, port::Uint16) =
     error("IPv6 Support not fully implemented")
 
-##
-
-callback_dict = ObjectIdDict()
-
-function _uv_hook_getaddrinfo(cb::Function,addrinfo::Ptr{Void}, status::Int32)
-    delete!(callback_dict,cb)
+function default_getaddrinfo_cb(req,status,addrinfo)
+    data = uv_req_data(req)
+    cb = unsafe_pointer_to_objref(data)::Function
     if(status!=0)
         throw(UVError("getaddrinfo callback"))
     end
@@ -354,15 +352,18 @@ function _uv_hook_getaddrinfo(cb::Function,addrinfo::Ptr{Void}, status::Int32)
     else
         cb(IPv6(ntoh(ccall(:jl_sockaddr_host6,Uint128,(Ptr{Void},),sockaddr))))
     end
+    c_free(req)
 end
+
+callback_dict = ObjectIdDict()
 
 jl_getaddrinfo(loop::Ptr{Void}, host::ByteString, service::Ptr{Void},
                cb::Function) =
-        ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Ptr{Uint8}, Ptr{Uint8}, Any),
-	      loop,      host,       service,    cb)
+        ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Ptr{Uint8}, Ptr{Uint8}, Any, Ptr{Void}),
+	      loop,      host,       service,    cb,
+          cfunction(default_getaddrinfo_cb,Void,(Ptr{Void},Int32,Ptr{Void})))
 
 function getaddrinfo(cb::Function,host::ASCIIString)
-    callback_dict[cb] = cb
     jl_getaddrinfo(eventloop(),host,C_NULL,cb)
 end
 
@@ -376,16 +377,26 @@ function getaddrinfo(host::ASCIIString)
 end
 
 ##
+function default_connect_cb(handle,status)
+    data = uv_req_data(handle)
+    if data != C_NULL
+        stream = unsafe_pointer_to_objref(data)::AsyncStream
+        stream.ccb(stream,status)
+    end
+    nothing
+end
 
 function connect(cb::Function, sock::TcpSocket, host::IPv4, port::Uint16)
     sock.ccb = cb
-    uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),
-			     sock.handle,hton(host.host),hton(port)) == -1)
+    uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16,Any,Ptr{Void}),
+		sock.handle,hton(host.host),hton(port),sock,
+            cfunction(default_connect_cb,Void,(Ptr{Void},Int32))) == -1)
 end
 
 function connect(sock::TcpSocket, host::IPv4, port::Uint16) 
-    uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),
-			     sock.handle,hton(host.host),hton(port)) == -1)
+    uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16,Any,Ptr{Void}),
+		sock.handle,hton(host.host),hton(port),sock,
+            cfunction(default_connect_cb,Void,(Ptr{Void},Int32))) == -1)
     wait_connected(sock)
 end
 
@@ -400,8 +411,10 @@ connect(port::Integer) = connect(IPv4(127,0,0,1),port)
 
 function default_connectcb(sock,status)
     if status == -1
-        throw(UVError("connect callback"))
+        notify(sock.connectnotify,uv_lasterror())
     end
+    sock.open=true
+    notify(sock.connectnotify,UV_error_t(0,0))
 end 
 
 function connect(cb::Function, sock::TcpSocket, host::ASCIIString, port)
@@ -477,12 +490,11 @@ function open_any_tcp_port(cb::Callback,default_port)
         if (bind(sock,addr) && listen!(sock))
             return (addr.port,sock)
         end
-        err = _uv_lasterror()
-        system = _uv_lastsystemerror()
+        err = uv_lasterror()
         sock.open = true #need to make close() work
         close(sock)
-        if (err != UV_SUCCESS && err != UV_EADDRINUSE)
-            throw(UVError("open_any_tcp_port",err,system))
+        if (err.uv_code != UV_SUCCESS && err.uv_code != UV_EADDRINUSE)
+            throw(UVError("open_any_tcp_port",err))
         end
 	    addr.port += 1
         if (addr.port==default_port)
@@ -491,3 +503,30 @@ function open_any_tcp_port(cb::Callback,default_port)
     end
 end
 open_any_tcp_port(default_port) = open_any_tcp_port(false,default_port)
+
+## END OF LIBUV code
+
+function close(x::Union(NamedPipe,PipeServer,TcpSocket,TcpServer))
+    if ccall(:uv_is_closing,Int32,(Ptr{Void},),x.handle) == 1
+        println("Not closeing: ",x)
+        return nothing
+    end
+    if ccall(:uv_is_writable,Int32,(Ptr{Void},),x.handle) == 0 
+        #not writeable
+        _close(x)
+    elseif isopen(x)
+        # Already mark as closed so the stream knows we're done
+        x.open = false
+        req = c_malloc(_sizeof_uv_shutdown)
+        uv_req_set_data(req,x)
+        err = ccall(:uv_shutdown,Int32,(Ptr{Void},Ptr{Void},Ptr{Void}),req,handle(x),
+            cfunction(default_shutdown_cb,Void,(Ptr{Void},Int32)))
+        if err != 0
+            c_free(req)
+            err = UVError("close")
+            _close(x)
+            throw(err)
+        end
+    end
+    nothing
+end

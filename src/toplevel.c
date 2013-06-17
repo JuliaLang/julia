@@ -45,7 +45,7 @@ void jl_add_standard_imports(jl_module_t *m)
                                                        jl_symbol("Operators")));
 }
 
-extern int base_module_conflict;
+//extern int base_module_conflict;
 jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 {
     assert(ex->head == module_sym);
@@ -69,9 +69,9 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         // pick up Base module during bootstrap
         jl_base_module = newm;
     }
-    else {
-        base_module_conflict = 1;
-    }
+    //else {
+    //    base_module_conflict = 1;
+    //}
     // export all modules from Main
     if (parent_module == jl_main_module)
         jl_module_export(jl_main_module, name);
