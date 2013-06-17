@@ -1020,17 +1020,20 @@ function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     rstr = ""
     i = a = start(str)
     r = search(str,pattern,i)
-    j, k = first(r), last(r)+1
+    j, k = first(r), last(r)
+    k1 = k
     out = IOBuffer()
     while j != 0
-        if i == a || i < k
+        if i == a || i <= k
             write(out, SubString(str,i,j-1))
-            write(out, string(repl(SubString(str,j,k-1))))
-            i = k
+            write(out, string(repl(SubString(str,j,k))))
+            i = nextind(str, k)
         end
         if k <= j; k = nextind(str,j) end
+        if k == k1 break end
+        k1 = k
         r = search(str,pattern,k)
-        j, k = first(r), last(r)+1
+        j, k = first(r), last(r)
         if n == limit break end
         n += 1
     end
