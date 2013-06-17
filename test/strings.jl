@@ -513,6 +513,20 @@ b = IOBuffer()
 write(b, u)
 @test takebuf_string(b) == "\u2200\u2222"
 
+str = "føøbar"
+u = SubString(str, 4, 3)
+@test length(u)==0
+b = IOBuffer()
+write(b, u)
+@test takebuf_string(b) == ""
+
+str = "føøbar"
+u = SubString(str, 10, 10)
+@test length(u)==0
+b = IOBuffer()
+write(b, u)
+@test takebuf_string(b) == ""
+
 @test replace("\u2202", '*', '\0') == "\u2202"
 
 # quotes + interpolation (issue #455)

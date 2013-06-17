@@ -368,8 +368,14 @@ immutable SubString{T<:String} <: String
     offset::Int
     endof::Int
 
-    SubString(s::T, i::Int, j::Int) =
-        (o=thisind(s,i)-1; new(s,o,thisind(s,j)-o))
+    function SubString(s::T, i::Int, j::Int)
+        if i > endof(s)
+            return new(s, i, 0)
+        else
+            o = thisind(s,i)-1
+            new(s, o, max(0, thisind(s,j)-o))
+        end
+    end
 end
 SubString{T<:String}(s::T, i::Int, j::Int) = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
