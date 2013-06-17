@@ -107,13 +107,10 @@ isapprox(x::Real, y::FloatingPoint; rtol::Real=rtoldefault(x, y), atol::Real=ato
 isapprox(x::FloatingPoint, y::Real; rtol::Real=rtoldefault(x, y), atol::Real=atoldefault(x, y)) = isapprox(promote(x, y)...; rtol=rtol, atol=atol)
 
 # other real numbers
-isapprox(x::Real, y::Real; rtol::Real=0, atol::Real=0) = atol == 0 ? isequal(x, y) : abs(x-y) <= atol
+isapprox(x::Real, y::Real; rtol::Real=0, atol::Real=0) = abs(x-y) <= atol
 
-# complex floats
-isapprox{T<:FloatingPoint}(z::Complex{T}, w::Complex{T}; rtol::Real=rtoldefault(abs(z), abs(w)), atol::Real=atoldefault(abs(z), abs(w))) = abs(z-w) <= atol + rtol*max(abs(z), abs(w))
-
-# other complex numbers
-isapprox(z::Complex, w::Complex; rtol::Real=0, atol::Real=0) = atol == 0 ? isequal(z, w) : abs(z-w) <= atol
+# complex numbers
+isapprox(z::Complex, w::Complex; rtol::Real=rtoldefault(abs(z), abs(w)), atol::Real=atoldefault(abs(z), abs(w))) = abs(z-w) <= atol + rtol*max(abs(z), abs(w))
 
 # real-complex combinations
 isapprox(x::Real, z::Complex; rtol::Real=rtoldefault(x, abs(z)), atol::Real=atoldefault(x, abs(z))) = isapprox(complex(x, 0), z; rtol=rtol, atol=atol)
