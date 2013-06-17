@@ -223,7 +223,7 @@ ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 USE_BLAS64 = 0
 USE_SYSTEM_LAPACK = 0
-LIBBLAS = -framework vecLib -lBLAS
+LIBBLAS = -framework vecLib -lblas
 LIBBLASNAME = libBLAS
 else
 LIBBLAS = -lblas
