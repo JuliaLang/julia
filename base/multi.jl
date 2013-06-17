@@ -95,17 +95,21 @@ type Worker
     add_msgs::Array{Any,1}
     id::Int
     gcflag::Bool
+    tunnel_user::String
     
     Worker(host::String, port::Integer, sock::TcpSocket, id::Int) =
-        new(bytestring(host), uint16(port), sock, IOBuffer(), {}, {}, id, false)
+        new(bytestring(host), uint16(port), sock, IOBuffer(), {}, {}, id, false, "")
 end
 Worker(host::String, port::Integer, sock::TcpSocket) =
     Worker(host, port, sock, 0)
 Worker(host::String, port::Integer) =
     Worker(host, port, connect(host,uint16(port)))
-Worker(host::String, port::Integer, tunnel_user::String) =
-    Worker(host, port, connect("localhost",
+function Worker(host::String, port::Integer, tunnel_user::String)
+    w = Worker(host, port, connect("localhost",
                                ssh_tunnel(tunnel_user, host, uint16(port))))
+    w.tunnel_user=tunnel_user
+    w
+end
 
 function send_msg_now(w::Worker, kind, args...)
     send_msg_(w, kind, args, true)
@@ -168,9 +172,11 @@ end
 
 type LocalProcess
     id::Int
+    host::String
+    port::Int
 end
 
-const LPROC = LocalProcess(0)
+const LPROC = LocalProcess(0, "", 0)
 
 const map_pid_wrkr = Dict{Int, Union(Worker, LocalProcess)}()
 const map_sock_wrkr = Dict{Socket, Union(Worker, LocalProcess)}()
@@ -271,6 +277,7 @@ end
 
 register_worker(w) = register_worker(PGRP, w)
 function register_worker(pg, w)
+    if haskey(map_pid_wrkr, w.id) error("Worker $(w.id) already exists.") end
     push!(pg.workers, w)
     map_pid_wrkr[w.id] = w
     if isa(w, Worker) map_sock_wrkr[w.socket] = w end
@@ -282,6 +289,7 @@ function deregister_worker(pg, pid)
     w = delete!(map_pid_wrkr, pid, nothing)
     if isa(w, Worker) delete!(map_sock_wrkr, w.socket) end
 end
+
 
 ## remote refs ##
 
@@ -744,6 +752,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
         #println("message_handler_loop")
         start_reading(sock)
         wait_connected(sock)
+        is_client_conn = false
         try
             while true
                 msg = deserialize(sock)
@@ -786,7 +795,16 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     end
                 elseif is(msg, :identify_socket)
                     otherid = deserialize(sock)
-                    register_worker(Worker("", 0, sock, otherid))
+                    
+                    #make sure we do not already have a connection from this id.
+                    if haskey(map_pid_wrkr, otherid)
+                        println("Connection to $otherid already exists. Discarding new incoming connection.")
+                        stop_reading(sock); close(sock)
+                        return nothing
+                    else
+                        register_worker(Worker("", 0, sock, otherid))
+                    end
+                    
                 elseif is(msg, :join_pgrp)
                     # first connection; get process group info from client
                     self_pid = LPROC.id = deserialize(sock)
@@ -794,23 +812,31 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     #print("\nLocation: ",locs,"\nId:",myid(),"\n")
                     # joining existing process group
                     
+                    is_client_conn = true
                     register_worker(Worker("", 0, sock, 1))
                     register_worker(LPROC)
                     
                     for (rhost, rport, rpid) in locs
                         if (rpid < self_pid) && (!(rpid == 1))
-                            # Connect to them
-                            w = Worker(rhost, rport)
-                            w.id = rpid
-                            register_worker(w)
-                            create_message_handler_loop(w.socket)
-                            send_msg_now(w, :identify_socket, self_pid)
+                            # Connect to them. Nodes in the cluster are expected to
+                            # not require a tunnel or ssh
+                            connect_to_worker_proc(rhost, rport, rpid, self_pid, "")
+                        elseif (rpid == self_pid)
+                            # These are the host and ports that process 1 used to connect to us.
+                            LPROC.host = rhost
+                            LPROC.port = rport
                         else
                             # Others will connect to us. Don't do anything just yet
                             continue
                         end
                         
                     end
+                elseif is(msg, :detach_client)
+                    # sanity check - ony the client can detach...
+                    assert(is_client_conn)
+                    stop_reading(sock); close(sock)
+                    deregister_worker(1)
+                    return 
                 else
                     # the synchronization messages
                     oid = deserialize(sock)::(Int,Int)
@@ -829,14 +855,14 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
             end # end of while
         catch e
             iderr = worker_id_from_socket(sock)
-            # If pid 1 is disconnected, commit harakiri
+            # If pid 1 is unexpectedly disconnected, commit harakiri
             if (iderr == 1) exit() end
             
             if isa(e,EOFError)
-                stop_reading(sock)
+                stop_reading(sock); close(sock)
                 deregister_worker(iderr)
                 
-                if (myid() == 1) println("Worker $iderr terminated.") end
+                if (myid() == 1) println("Worker $iderr disconnected.") end
                 
                 #TODO : Notify all RemoteRefs linked to this Worker who just died....
                 # How?
@@ -1370,3 +1396,62 @@ function interrupt_waiting_task(t::Task, with_value)
         enq_work(t)
     end
 end
+
+function connect_to_worker_proc(host, port, pid, self_pid, tunnel_user)
+    w = (tunnel_user != "") ? Worker(host, port, tunnel_user) : Worker(host, port)
+    w.id = pid
+    register_worker(w)
+    try 
+        create_message_handler_loop(w.socket)
+        send_msg_now(w, :identify_socket, self_pid)
+    catch e
+        deregister_worker(w)
+        rethrow(e)
+    end
+end
+
+function detach(fname::String="")
+    # Only pid 1 can detach
+    assert(myid() == 1)   
+    f = nothing
+# TODO : Notify any relevant RemoteRefs since we are detaching anyways
+    try
+        f = (fname != "") ? open(fname, "w") : error("filename to be specified.")
+        for w in PGRP.workers
+            if (w.id != 1)
+                (f != nothing) && (w.id != 1) ? write(f, "$(w.id),$(w.host),$(int(w.port)),$(w.tunnel_user)\n") : nothing
+                println("Detaching from id $(w.id) @ $(w.host):$(int(w.port))")
+                send_msg_now(w, :detach_client)
+            end
+        end
+        println("To reattach execute attach(\"$fname\")\n")
+    finally
+        (f != nothing) ? close(f) : nothing
+    end
+    
+    # wait till each of them has disconnected before returning....
+    start = time()
+    while (nprocs() > 1) && ((time() - start) < 60.0)
+        sleep(0.1)
+    end
+    
+    if (nprocs() > 1) error("Error in detaching from all workers") end
+end
+
+function attach(fname::String)
+    assert(myid() == 1)   
+    # Connect to each of the listed host:port combinations in the file
+    # TODO : Handle cases where some of the workers may not be available....
+    @sync begin
+        for line in open(readlines, fname)
+            v = split(strip(line), ",")
+            # First check if we already have a connection to this pid
+            if !haskey(map_pid_wrkr, int(v[1]))
+                @async begin
+                    connect_to_worker_proc(v[2], int(v[3]), int(v[1]), 1, v[4])
+                end
+            end
+        end
+    end
+end
+

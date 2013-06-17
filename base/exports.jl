@@ -1090,6 +1090,8 @@ export
     procs,
     workers,
     rmprocs,
+    detach,
+    attach,
     pmap,
     put,
     remotecall,
