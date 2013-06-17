@@ -5,7 +5,7 @@ export BigInt
 import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
-             widemul, sum
+             widemul, sum, colon, step, min, max
 
 type BigInt <: Integer
     alloc::Cint
@@ -316,5 +316,58 @@ isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr
 
 widemul(x::BigInt, y::BigInt) = x*y
 widemul(x::Union(Int128,Uint128), y::Union(Int128,Uint128)) = BigInt(x)*BigInt(y)
+
+## BigRanges
+immutable BigRange{T<:Real} <: Ranges{T}
+    start::T
+    step::T
+    len::BigInt
+
+    function BigRange(start::T, step::T, len::BigInt)
+        if step != step; error("BigRange: step cannot be NaN"); end
+        if !(len >= 0);  error("BigRange: length must be non-negative"); end
+        new(start, step, len)
+    end
+    BigRange(start::T, step::T, len::Integer) = BigRange(start, step, BigInt(len))
+    BigRange(start::T, step, len::Integer) = BigRange(start, convert(T,step), BigInt(len))
+end
+BigRange{T}(start::T, step, len::Integer) = BigRange{T}(start, step, len)
+
+immutable BigRange1{T<:Real} <: Ranges{T}
+    start::T
+    len::BigInt
+
+    function BigRange1(start::T, len::BigInt)
+        if !(len >= 0); error("BigRange: length must be non-negative"); end
+        new(start, len)
+    end
+    BigRange1(start::T, len::Integer) = BigRange1(start, BigInt(len))
+end
+BigRange1{T}(start::T, len::Integer) = BigRange1{T}(start, len)
+
+function colon(start::BigInt, step::BigInt, stop::BigInt)
+    step != 0 || error("step cannot be zero in colon syntax")
+    BigRange(start, step, max(0, div(stop-start+step, step)))
+end
+colon(start::BigInt, stop::BigInt) =
+    BigRange1(start, max(0, stop-start+1))
+
+last{T}(r::BigRange1{T}) = oftype(T, r.start + r.len-1)
+last{T}(r::BigRange{T})  = oftype(T, r.start + (r.len-1)*r.step)
+
+step(r::BigRange)  = r.step
+step(r::BigRange1) = one(r.start)
+
+min(r::BigRange1) = (isempty(r)&&error("min: range is empty")) || first(r)
+max(r::BigRange1) = (isempty(r)&&error("max: range is empty")) || last(r)
+
+function show(io::IO, r::BigRange)
+    if step(r) == 0
+        print(io, "BigRange(",r.start,",",step(r),",",r.len,")")
+    else
+        print(io, repr(r.start),':',repr(step(r)),':',repr(last(r)))
+    end
+end
+show(io::IO, r::BigRange1) = print(io, repr(r.start),':',repr(last(r)))
 
 end # module
