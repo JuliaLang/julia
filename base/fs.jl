@@ -36,7 +36,7 @@ export File,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
 #import Base.show, Base.open, Base.close, Base.write
-import Base: uvtype, uvhandle, eventloop, fd, position, stat
+import Base: uvtype, uvhandle, eventloop, fd, position, stat, close
 
 include("file_constants.jl")
 
@@ -81,7 +81,7 @@ function close(f::File)
     req = Intrinsics.box(Ptr{Void},Intrinsics.jl_alloca(Intrinsics.unbox(Int32,_sizeof_uv_fs_t)))
     err = ccall(:uv_fs_close,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Void}),
                 eventloop(),req,f.handle,C_NULL)
-    uv_error(err)
+    uv_error("close",err != 0)
     f.handle = -1
     f.open = false
     ccall(:uv_fs_req_cleanup,Void,(Ptr{Void},),req)
@@ -92,7 +92,7 @@ function unlink(p::String)
     req = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
     err = ccall(:uv_fs_unlink,Int32,(Ptr{Void},Ptr{Void},Ptr{Uint8},Ptr{Void}),
                 eventloop(),req,bytestring(p),C_NULL)
-    uv_error(err)
+    uv_error("unlink",err != 0)
 end
 function unlink(f::File)
     if f.open
