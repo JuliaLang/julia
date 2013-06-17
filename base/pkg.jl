@@ -102,7 +102,7 @@ function init(meta::String)
             run(`git init`)
             run(`git commit --allow-empty -m "Initial empty commit"`)
             run(`git remote add origin .`)
-        if success(`git config --global github.user` > SpawnNullStream())
+        if success(`git config --global github.user` |> SpawnNullStream())
                 base = basename(d)
                 user = readchomp(`git config --global github.user`)
                 run(`git config remote.origin.url git@github.com:$user/$base`)
@@ -466,7 +466,7 @@ function commit(f::Function, msg::String)
     end
     if Git.staged() && !Git.unstaged()
         commit(msg)
-        run(`git diff --name-only --diff-filter=D HEAD^ HEAD` | `xargs rm -rf`)
+        run(`git diff --name-only --diff-filter=D HEAD^ HEAD` |> `xargs rm -rf`)
         checkout()
     elseif !Git.dirty()
         warn("nothing to commit.")
@@ -569,7 +569,7 @@ pull() = cd_pkgdir() do
 
     # check for remaining merge conflicts
     if Git.unstaged()
-        unmerged = readall(`git ls-files -m` | `sort` | `uniq`)
+        unmerged = readall(`git ls-files -m` |> `sort` |> `uniq`)
         unmerged = replace(unmerged, r"^", "    ")
         warn("""
 
