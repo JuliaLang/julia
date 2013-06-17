@@ -138,6 +138,11 @@ typedef int64_t int_t;
 typedef uint32_t uint_t;
 typedef int32_t int_t;
 #endif
+
+#ifdef MY_HACK
+typedef __PTRDIFF_TYPE__ ptrdiff_t; 
+#endif
+
 typedef ptrdiff_t ptrint_t; // pointer-size int
 typedef size_t uptrint_t;
 typedef ptrdiff_t offset_t;

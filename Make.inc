@@ -148,7 +148,7 @@ JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../$(JL_PRIVATE_LIBDIR)/sys.ji"'
 # OPENBLAS build options
 OPENBLAS_DYNAMIC_ARCH=0
 OPENBLAS_USE_THREAD=1
-OPENBLAS_TARGET_ARCH=
+OPENBLAS_TARGET_ARCH=NEHALEM
 
 # Use libraries available on the system instead of building them
 
