@@ -142,7 +142,19 @@ automatically load a source file on all currently available processes::
     julia> require("myfile")
 
 In a cluster, the contents of the file (and any files loaded recursively)
-will be sent over the network.
+will be sent over the network. It is also useful to execute a statement on all processes. This can be done with the ``@everywhere`` macro::
+
+    julia> @everywhere id = myid()
+
+    julia> remotecall_fetch(2, ()->id)
+    2
+
+    @everywhere include("defs.jl")
+
+A file can also be preloaded on multiple processes at startup, and a driver script can be used to drive the computation::
+
+    julia -p <n> -L file1.jl -L file2.jl driver.jl
+
 
 Data Movement
 -------------
@@ -577,11 +589,3 @@ required, since the threads are scheduled cooperatively and not
 preemptively. This means context switches only occur at well-defined
 points: in this case, when ``remotecall_fetch`` is called.
 
-Sending Instructions To All Processors
---------------------------------------
-
-It is often useful to execute a statement on all processes, particularly
-for setup tasks such as loading source files and defining common variables.
-This can be done with the ``@everywhere`` macro::
-
-    @everywhere include("defs.jl")

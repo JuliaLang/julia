@@ -74,7 +74,7 @@ those available for the ``perl`` and ``ruby`` programs::
      -e --eval=<expr>         Evaluate <expr>
      -E --print=<expr>        Evaluate and show <expr>
      -P --post-boot=<expr>    Evaluate <expr> right after boot
-     -L --load=file           Load <file> right after boot
+     -L --load=file           Load <file> right after boot on all processors
      -J --sysimage=file       Start up with the given system image file
 
      -p n                     Run n local processes
