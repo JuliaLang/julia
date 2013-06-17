@@ -184,7 +184,6 @@ let next_pid = 2    # 1 is reserved for the client (always)
     end
 end
 
-
 type ProcessGroup
     name::String
     workers::Array{Any,1}
@@ -192,9 +191,7 @@ type ProcessGroup
     # global references
     refs::Dict
 
-    function ProcessGroup(w::Array{Any,1})
-        return new("pg-default", w, Dict())
-    end
+    ProcessGroup(w::Array{Any,1}) = new("pg-default", w, Dict())
 end
 const PGRP = ProcessGroup({})
 
@@ -222,7 +219,7 @@ function nworkers()
     n == 1 ? 1 : n-1
 end
 
-procs() = [x.id for x in PGRP.workers]
+procs() = Int[x.id for x in PGRP.workers]
 
 function workers()
     allp = procs()
@@ -235,10 +232,12 @@ end
 
 function rmprocs(args...)
     # Only pid 1 can add and remove processes
-    assert(myid() == 1)
-    for i in [args...]
+    if myid() != 1
+        error("only process 1 can add and remove processes")
+    end
+    for i in args
         if haskey(map_pid_wrkr, i)
-            remotecall(i, () -> exit())
+            remotecall(i, exit)
         end
     end
 end
@@ -828,9 +827,6 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     end
                 end
             end # end of while
-            
-            
-            
         catch e
             iderr = worker_id_from_socket(sock)
             # If pid 1 is disconnected, commit harakiri
