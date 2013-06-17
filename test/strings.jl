@@ -472,6 +472,27 @@ end
 @test replace("abcd", r"b?c?", "^") == "^a^d^"
 @test replace("abcd", r"[bc]?", "^") == "^a^^d^"
 
+@test replace("foobar", 'o', 'ø') == "føøbar"
+@test replace("foobar", 'o', 'ø', 1) == "føobar"
+@test replace("føøbar", 'ø', 'o') == "foobar"
+@test replace("føøbar", 'ø', 'o', 1) == "foøbar"
+@test replace("føøbar", 'ø', 'ö') == "fööbar"
+@test replace("føøbar", 'ø', 'ö', 1) == "föøbar"
+@test replace("føøbar", 'ø', "") == "fbar"
+@test replace("føøbar", 'ø', "", 1) == "føbar"
+@test replace("føøbar", 'f', 'F') == "Føøbar"
+@test replace("føøbar", 'r', 'R') == "føøbaR"
+
+@test replace("", "", "ẍ") == "ẍ"
+@test replace("", "ẍ", "ÿ") == ""
+
+@test replace("äƀçđ", "", "π") == "πäπƀπçπđπ"
+@test replace("äƀçđ", "ƀ", "π") == "äπçđ"
+@test replace("äƀçđ", r"ƀ?", "π") == "πäπçπđπ"
+@test replace("äƀçđ", r"ƀ+", "π") == "äπçđ"
+@test replace("äƀçđ", r"ƀ?ç?", "π") == "πäπđπ"
+@test replace("äƀçđ", r"[ƀç]?", "π") == "πäππđπ"
+
 # {begins,ends}with
 @test beginswith("abcd", 'a')
 @test beginswith("abcd", "a")
