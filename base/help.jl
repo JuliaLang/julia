@@ -54,11 +54,7 @@ function init_help()
                 CATEGORY_DICT[cat] = {}
             end
             if !isempty(mod)
-                if beginswith(func, '@')
-                    mfunc = "@" * mod * "." * func[2:]
-                else
-                    mfunc = mod * "." * func
-                end
+                mfunc = mod * "." * func
                 desc = decor_help_desc(func, mfunc, desc)
             else
                 mfunc = func
@@ -132,19 +128,12 @@ function help_for(fname::String, obj)
         print_help_entries(FUNCTION_DICT[fname])
         found = true
     else
-        macrocall = ""
-        if beginswith(fname, '@')
-            sfname = fname[2:]
-            macrocall = "@"
-        else
-            sfname = fname
-        end
         if haskey(MODULE_DICT, fname)
             allmods = MODULE_DICT[fname]
             alldesc = {}
             for mod in allmods
-                mod_prefix = isempty(mod) ? "" : mod * "."
-                append!(alldesc, FUNCTION_DICT[macrocall * mod_prefix * sfname])
+                mfname = isempty(mod) ? fname : mod * "." * fname
+                append!(alldesc, FUNCTION_DICT[mfname])
             end
             print_help_entries(alldesc)
             found = true
