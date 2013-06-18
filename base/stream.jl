@@ -734,7 +734,7 @@ function accept(server::UVServer, client::AsyncStream)
             uv_error("accept:",_uv_lasterror()!=UV_EAGAIN)
         end
         err = wait(server.connectnotify)
-        if err.uv_code != -1
+        if err.uv_code == -1
             throw(UVError("accept",err))
         end
     end
