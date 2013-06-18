@@ -5,7 +5,7 @@ pipe_fds = Array(Cint,2)
 @test 0 == ccall(:pipe, Cint, (Ptr{Cint},), pipe_fds)
 
 function test_poll(timeout_ms)
-    rc = poll_fd(OS_FD(pipe_fds[1]), UV_READABLE, timeout_ms)
+    rc = poll_fd(RawFD(pipe_fds[1]), timeout_ms; readable=true)
     produce(rc)
 end
 
@@ -43,11 +43,10 @@ function test_read(slval)
     @test slval <= tdiff
 end
 
-# Commented out the tests below due to issues 3015, 3016 and 3020 
-#test_timeout(100)
-#test_timeout(1000)
-#test_read(100)
-#test_read(1000)
+test_timeout(.1)
+test_timeout(1)
+test_read(.1)
+test_read(1)
 
 ccall(:close, Cint, (Cint,), pipe_fds[1])
 ccall(:close, Cint, (Cint,), pipe_fds[2])
