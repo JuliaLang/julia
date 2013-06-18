@@ -95,7 +95,7 @@ function show(io::IO, m::Module)
     if is(m,Main)
         print(io, "Main")
     else
-        print(io, join(full_name(m),"."))
+        print(io, join(fullname(m),"."))
     end
 end
 
