@@ -135,7 +135,7 @@ function readuntil(s::IO, delim::Char)
         enc = byte_string_classify(data)
         return (enc==1) ? ASCIIString(data) : UTF8String(data)
     end
-    out = memio()
+    out = IOBuffer()
     while !eof(s)
         c = read(s, Char)
         write(out, c)
@@ -161,7 +161,7 @@ end
 readline(s::IO) = readuntil(s, '\n')
 
 function readall(s::IO)
-    out = memio()
+    out = IOBuffer()
     while !eof(s)
         a = read(s, Uint8)
         write(out, a)
@@ -300,14 +300,6 @@ function open(f::Function, args...)
     end
 end
 
-function memio(x::Integer, finalize::Bool)
-    s = IOStream("<memio>", finalize)
-    ccall(:ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, x)
-    return s
-end
-memio(x::Integer) = memio(x, true)
-memio() = memio(0, true)
-
 ## low-level calls ##
 
 write(s::IOStream, b::Uint8) = int(ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, s.ios))
@@ -381,7 +373,8 @@ function takebuf_raw(s::IOStream)
 end
 
 function sprint(size::Integer, f::Function, args...)
-    s = memio(size, false)
+    s = IOBuffer(Array(Uint8,size), true, true)
+    truncate(s,0)
     f(s, args...)
     takebuf_string(s)
 end
@@ -389,7 +382,7 @@ end
 sprint(f::Function, args...) = sprint(0, f, args...)
 
 function repr(x)
-    s = memio(0, false)
+    s = IOBuffer()
     show(s, x)
     takebuf_string(s)
 end
@@ -400,10 +393,26 @@ function readuntil(s::IOStream, delim::Uint8)
     ccall(:jl_readuntil, Array{Uint8,1}, (Ptr{Void}, Uint8), s.ios, delim)
 end
 
+function readbytes(s::IOStream)
+    n = 65536
+    b = Array(Uint8, n)
+    p = 1
+    while true
+        nr = int(ccall(:ios_readall, Uint,
+                       (Ptr{Void}, Ptr{Void}, Uint), s.ios, pointer(b,p), n))
+        if eof(s)
+            resize!(b, p+nr-1)
+            break
+        end
+        p += nr
+        resize!(b, p+n-1)
+    end
+    b
+end
+
 function readall(s::IOStream)
-    dest = memio()
-    ccall(:ios_copyall, Uint, (Ptr{Void}, Ptr{Void}), dest.ios, s.ios)
-    takebuf_string(dest)
+    b = readbytes(s)
+    return is_valid_ascii(b) ? ASCIIString(b) : UTF8String(b)
 end
 readall(filename::String) = open(readall, filename)
 

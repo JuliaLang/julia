@@ -222,6 +222,8 @@ export PipeString
 @deprecate >(a::AbstractCmd,b::Redirectable) (a|>b)
 @deprecate >(a::AbstractCmd,b::ASCIIString) (a|>b)
 
+@deprecate memio(args...)  IOBuffer()
+
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
 
 # renamings
