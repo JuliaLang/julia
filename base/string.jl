@@ -369,8 +369,14 @@ immutable SubString{T<:String} <: String
     offset::Int
     endof::Int
 
-    SubString(s::T, i::Int, j::Int) =
-        (o=thisind(s,i)-1; new(s,o,thisind(s,j)-o))
+    function SubString(s::T, i::Int, j::Int)
+        if i > endof(s)
+            return new(s, i, 0)
+        else
+            o = thisind(s,i)-1
+            new(s, o, max(0, thisind(s,j)-o))
+        end
+    end
 end
 SubString{T<:String}(s::T, i::Int, j::Int) = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
@@ -1018,17 +1024,20 @@ function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     rstr = ""
     i = a = start(str)
     r = search(str,pattern,i)
-    j, k = first(r), last(r)+1
+    j, k = first(r), last(r)
+    k1 = k
     out = IOBuffer()
     while j != 0
-        if i == a || i < k
+        if i == a || i <= k
             write(out, SubString(str,i,j-1))
-            write(out, string(repl(SubString(str,j,k-1))))
-            i = k
+            write(out, string(repl(SubString(str,j,k))))
+            i = nextind(str, k)
         end
         if k <= j; k = nextind(str,j) end
+        if k == k1 break end
+        k1 = k
         r = search(str,pattern,k)
-        j, k = first(r), last(r)+1
+        j, k = first(r), last(r)
         if n == limit break end
         n += 1
     end

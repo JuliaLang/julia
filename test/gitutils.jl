@@ -2,7 +2,7 @@ function mktree(d::Dict)
     lstree = ""
     for (name, data) in d
         if isa(data, String)
-            sha1 = readchomp(`echo -n $data` | `git hash-object -w --stdin`)
+            sha1 = readchomp(`echo -n $data` |> `git hash-object -w --stdin`)
             lstree *= "100644 blob $sha1\t$name\n"
         elseif isa(data, Dict)
             sha1 = mktree(data)
@@ -13,7 +13,7 @@ function mktree(d::Dict)
             error("mktree: don't know what to do with $name => $data")
         end
     end
-    readchomp(`echo -n $lstree` | `git mktree`)
+    readchomp(`echo -n $lstree` |> `git mktree`)
 end
 
 function verify_tree(d::Dict, tree::String)
@@ -91,7 +91,7 @@ function git_setup(h::Dict, i::Dict, w::Dict, parents::String...)
     for parent in parents
         commit_tree = `$commit_tree -p $parent`
     end
-    head = readchomp(`echo $headt` | commit_tree)
+    head = readchomp(`echo $headt` |> commit_tree)
     run(`git reset -q --soft $head`)
 
     run(`git read-tree $work`)      # read work into the index
