@@ -1,0 +1,123 @@
+./" To get a preview of the man page as it will actually be displayed, run
+./"
+./" > nroff -man julia.1 | less
+./"
+./" at the terminal.
+./"
+./" Suggestions and improvements very much appreciated!
+./" Nothing is too large or too small.
+./" This man page was largely taken from pre-existing sources of documentation.
+./" This is documented by comments in the man page's source.
+./"
+./" # TODOs:
+./" 1. Simple, hopefully portable way to get the man page on everyone's manpath.
+./"    (The whole point was to be able to simply `man julia`!)
+./" 2. Put options in alphabetical order instead of the order from julia --help?
+./"
+./" Possible sections to add to man page:
+./" - licensing
+./" - internet resources and/or documentation
+./" - environment
+./" - files
+./" - see also
+./" - diagnostics
+./" - notes
+
+.TH JULIA 1 2013-06-11 Julia "Julia Programmers' Reference Guide"
+
+./" from the front page of http://julialang.org/
+.SH NAME
+julia - high-level, high-performance dynamic programming language for technical computing
+
+.SH SYNOPSIS
+julia [option] [program] [args..]
+
+./" Taken almost verbatim from the front page of http://julialang.org/
+.SH DESCRIPTION
+Julia is a high-level, high-performance dynamic programming language
+for technical computing, with syntax that is familiar to users
+of other technical computing environments.
+It provides a sophisticated compiler, distributed parallel execution,
+numerical accuracy, and an extensive mathematical function library.
+The library, largely written in Julia itself, also integrates mature,
+best-of-breed C and Fortran libraries for linear algebra,
+random number generation, signal processing, and string processing.
+In addition, the Julia developer community is contributing a number of
+external packages through Julia’s built-in package manager at a rapid pace.
+Julia programs are organized around multiple dispatch;
+by defining functions and overloading them for different combinations
+of argument types, which can also be user-defined.
+For a more in-depth discussion of the rationale and advantages of Julia
+over other systems, please see the online manual:
+http://docs.julialang.org/en/latest/manual/
+
+
+./" This section was taken nearly verbatim from the output of `julia --help`
+.SH "COMMAND-LINE OPTIONS"
+.TP 25
+-v --version
+Display version information
+
+.TP
+-q --quiet
+Quiet startup without banner
+
+.TP
+-H --home <dir>
+Load files relative to <dir>
+
+.TP
+-T --tab <size>
+Set REPL tab width to <size>
+
+.TP
+-e --eval <expr>
+Evaluate <expr>
+
+.TP
+-E --print <expr>
+Evaluate and show <expr>
+
+.TP
+-P --post-boot <expr>
+Evaluate <expr> right after boot
+
+.TP
+-L --load file
+Load <file> right after boot on all processors
+
+.TP
+-J --sysimage file
+Start up with the given system image file
+
+.TP
+-p n
+Run n local processes
+
+.TP
+--machinefile file
+Run processes on hosts listed in file
+
+.TP
+--no-history
+Don't load or save history
+
+.TP
+-f --no-startup
+Don't load ~/.juliarc.jl
+
+.TP
+-F
+Load ~/.juliarc.jl, then handle remaining inputs
+
+.TP
+-h --help
+Print a help message displaying command-line arguments
+
+
+.SH BUGS
+Please report any bugs using the GitHub issue tracker:
+https://github.com/julialang/julia/issues?state=open
+
+.SH AUTHORS
+Contributors: https://github.com/JuliaLang/julia/graphs/contributors
