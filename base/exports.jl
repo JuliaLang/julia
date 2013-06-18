@@ -352,6 +352,7 @@ export
     invdigamma,
     invmod,
     iround,
+    isapprox,
     iseltype,
     iseven,
     isfinite,
