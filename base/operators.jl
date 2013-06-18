@@ -128,7 +128,7 @@ copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
               TopNode,QuoteNode,DataType,UnionType)) = x
 
 # function pipelining
-|(x, f::Function) = f(x)
+|>(x, f::Function) = f(x)
 
 # array shape rules
 

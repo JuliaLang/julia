@@ -472,6 +472,27 @@ end
 @test replace("abcd", r"b?c?", "^") == "^a^d^"
 @test replace("abcd", r"[bc]?", "^") == "^a^^d^"
 
+@test replace("foobar", 'o', 'ø') == "føøbar"
+@test replace("foobar", 'o', 'ø', 1) == "føobar"
+@test replace("føøbar", 'ø', 'o') == "foobar"
+@test replace("føøbar", 'ø', 'o', 1) == "foøbar"
+@test replace("føøbar", 'ø', 'ö') == "fööbar"
+@test replace("føøbar", 'ø', 'ö', 1) == "föøbar"
+@test replace("føøbar", 'ø', "") == "fbar"
+@test replace("føøbar", 'ø', "", 1) == "føbar"
+@test replace("føøbar", 'f', 'F') == "Føøbar"
+@test replace("føøbar", 'r', 'R') == "føøbaR"
+
+@test replace("", "", "ẍ") == "ẍ"
+@test replace("", "ẍ", "ÿ") == ""
+
+@test replace("äƀçđ", "", "π") == "πäπƀπçπđπ"
+@test replace("äƀçđ", "ƀ", "π") == "äπçđ"
+@test replace("äƀçđ", r"ƀ?", "π") == "πäπçπđπ"
+@test replace("äƀçđ", r"ƀ+", "π") == "äπçđ"
+@test replace("äƀçđ", r"ƀ?ç?", "π") == "πäπđπ"
+@test replace("äƀçđ", r"[ƀç]?", "π") == "πäππđπ"
+
 # {begins,ends}with
 @test beginswith("abcd", 'a')
 @test beginswith("abcd", "a")
@@ -512,6 +533,20 @@ u = SubString(str, 3, 6)
 b = IOBuffer()
 write(b, u)
 @test takebuf_string(b) == "\u2200\u2222"
+
+str = "føøbar"
+u = SubString(str, 4, 3)
+@test length(u)==0
+b = IOBuffer()
+write(b, u)
+@test takebuf_string(b) == ""
+
+str = "føøbar"
+u = SubString(str, 10, 10)
+@test length(u)==0
+b = IOBuffer()
+write(b, u)
+@test takebuf_string(b) == ""
 
 @test replace("\u2202", '*', '\0') == "\u2202"
 

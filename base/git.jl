@@ -16,7 +16,7 @@ staged(paths) = !success(`git diff --quiet --cached -- $paths`)
 unstaged(paths) = !success(`git diff --quiet -- $paths`)
 iscommit(name) = success(`git cat-file commit $name`)
 
-attached() = success(`git symbolic-ref -q HEAD` > SpawnNullStream())
+attached() = success(`git symbolic-ref -q HEAD` |> SpawnNullStream())
 branch() = readchomp(`git rev-parse --symbolic-full-name --abbrev-ref HEAD`)
 head() = readchomp(`git rev-parse HEAD`)
 
