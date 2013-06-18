@@ -528,7 +528,9 @@ install-double-conversion: $(BUILD)/lib/libgrisu.$(SHLIB_EXT)
 
 ## openlibm && openlibm-extras ##
 
-OPENLIBM_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+#OPENLIBM_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+
+OPENLIBM_FLAGS = ARCH="i686" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 
 OPENLIBM_OBJ_TARGET = $(BUILD)/lib/libopenlibm.$(SHLIB_EXT)
 OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
@@ -625,8 +627,12 @@ install-random: $(LIBRANDOM_OBJ_TARGET)
 RMATH_OBJ_TARGET = $(BUILD)/lib/libRmath.$(SHLIB_EXT)
 RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
 
+#RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
+#			   OS="$(OS)" ARCH="$(ARCH)" \
+#			   USE_LIBRANDOM=1 LIBRANDOM_PATH="$(BUILD)/lib"
+
 RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
-			   OS="$(OS)" ARCH="$(ARCH)" \
+			   OS="$(OS)" ARCH="i486" \
 			   USE_LIBRANDOM=1 LIBRANDOM_PATH="$(BUILD)/lib"
 
 Rmath/Make.inc:
@@ -688,6 +694,8 @@ ifneq ($(BUILD_OS),$(OS))
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC)
 endif
 ifeq ($(ARCH),i686)
+OPENBLAS_BUILD_OPTS += BINARY=32
+else ifeq ($(ARCH),i486)
 OPENBLAS_BUILD_OPTS += BINARY=32
 else ifeq ($(ARCH),x86_64)
 OPENBLAS_BUILD_OPTS += BINARY=64

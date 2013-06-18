@@ -20,6 +20,8 @@
 #include <wchar.h>
 #include <wctype.h>
 
+#define MY_HACK
+
 #include "dtypes.h"
 
 #ifdef _OS_WINDOWS_

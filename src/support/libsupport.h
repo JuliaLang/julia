@@ -1,6 +1,8 @@
 #ifndef LIBSUPPORT_H
 #define LIBSUPPORT_H
 
+#define MY_HACK
+
 #include "platform.h"
 
 #if defined(_CPU_X86_64_)
