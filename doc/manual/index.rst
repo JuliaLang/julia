@@ -31,4 +31,4 @@
    calling-c-and-fortran-code
    packages
    performance-tips
-
+   style-guide
