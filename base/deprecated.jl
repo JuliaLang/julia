@@ -218,9 +218,10 @@ export PipeString
 # Redirection Operators
 @deprecate |(a::AbstractCmd,b::AbstractCmd) (a|>b)
 @deprecate >(a::Redirectable,b::AbstractCmd) (a|>b)
-@deprecate >(a::ASCIIString,b::AbstractCmd) (a|>b)
+@deprecate >(a::String,b::AbstractCmd) (a|>b)
 @deprecate >(a::AbstractCmd,b::Redirectable) (a|>b)
-@deprecate >(a::AbstractCmd,b::ASCIIString) (a|>b)
+@deprecate >(a::AbstractCmd,b::String) (a|>b)
+@deprecate <(a::AbstractCmd,b::String) (a<b)
 @deprecate |(x, f::Function) (x|>f)
 
 @deprecate memio(args...)  IOBuffer()
