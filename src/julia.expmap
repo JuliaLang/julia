@@ -287,6 +287,8 @@
     jl_stdout_stream;
     jl_strtod;
     jl_strtof;
+    jl_substrtod;
+    jl_substrtof;
     jl_symbol;
     jl_symbol_lookup;
     jl_symbol_n;
