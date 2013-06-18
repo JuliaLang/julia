@@ -11,6 +11,12 @@ abstract UVServer
 typealias UVHandle Ptr{Void}
 typealias UVStream AsyncStream
 
+#Wrapper for an OS file descriptor (on both Unix and Windows)
+immutable RawFD
+    fd::Int32
+    RawFD(fd::Integer) = new(int32(fd))
+end
+
 function uv_sizeof_handle(handle) 
     if !(UV_UNKNOWN_HANDLE < handle < UV_HANDLE_TYPE_MAX)
         throw(DomainError())
@@ -87,142 +93,6 @@ type TTY <: AsyncStream
 end
 
 show(io::IO,stream::TTY) = print(io,"TTY(",stream.open?"connected,":"disconnected,",nb_available(stream.buffer)," bytes waiting)")
-
-
-type FileMonitor
-    handle::Ptr{Void}
-    cb::Callback
-    function FileMonitor(cb, file)
-        handle = c_malloc(_sizeof_uv_fs_events)
-        err = ccall(:jl_fs_event_init,Int32, (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32), eventloop(),handle,file,0)
-        if err == -1
-            c_free(handle)
-            throw(UVError("FileMonitor"))
-        end
-        this = new(handle,cb)
-        associate_julia_struct(handle,this)
-        finalizer(this,close)
-        this        
-    end
-    FileMonitor(file) = FileMonitor(false,file)
-end
-
-close(t::FileMonitor) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
-
-const UV_READABLE = 1
-const UV_WRITEABLE = 2
-
-#Wrapper for an OS file descriptor (on both Unix and Windows)
-immutable OS_FD
-    fd::Int32
-end
-
-convert(::Type{Int32},fd::OS_FD) = fd.fd 
-
-#Wrapper for an OS file descriptor (for Windows)
-@windows_only immutable OS_SOCKET
-    handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows...
-end
-
-abstract UVPollingWatcher
-
-type PollingFileWatcher <: UVPollingWatcher
-    handle::Ptr{Void}
-    file::ASCIIString
-    cb::Callback
-    function PollingFileWatcher(cb, file)
-        handle = c_malloc(_sizeof_uv_fs_poll)
-        err = ccall(:uv_fs_poll_init,Int32,(Ptr{Void},Ptr{Void}),eventloop(),handle)
-        if err == -1
-            c_free(handle)
-            throw(UVError("PollingFileWatcher"))
-        end
-        this = new(handle, file, cb)
-        associate_julia_struct(handle,this)
-        finalizer(this,close)
-        this
-    end  
-    PollingFileWatcher(file) =  PollingFileWatcher(false,file)
-end
-
-type FDWatcher <: UVPollingWatcher
-    handle::Ptr{Void}
-    cb::Callback
-    function FDWatcher(fd::OS_FD)
-        handle = c_malloc(_sizeof_uv_poll)
-        err = ccall(:uv_poll_init,Int32,(Ptr{Void},Ptr{Void},Int32),eventloop(),handle,fd.fd)
-        if err == -1
-            c_free(handle)
-            throw(UVError("FDWatcher"))
-        end
-        this = new(handle,false)
-        associate_julia_struct(handle,this)
-        finalizer(this,close)
-        this
-    end
-    @windows_only function FDWatcher(fd::OS_SOCKET)
-        handle = c_malloc(_sizeof_uv_poll)
-        err = ccall(:uv_poll_init_socket,Int32,(Ptr{Void},   Ptr{Void}, Ptr{Void}),
-                                                eventloop(), handle,    fd.handle)
-        if err == -1
-            c_free(handle)
-            throw(UVError("FDWatcher"))
-        end
-        this = new(handle,false)
-        associate_julia_struct(handle,this)
-        finalizer(this,close)
-        this
-    end
-end
-
-close(t::UVPollingWatcher) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
-
-function start_watching(t::FDWatcher, events)
-    associate_julia_struct(t.handle, t)
-    uv_error("start_watching (FD)",
-        ccall(:jl_poll_start,Int32,(Ptr{Void},Int32),t.handle,events)==-1)
-end
-start_watching(f::Function, t::FDWatcher, events) = (t.cb = f; start_watching(t,events))
-
-function start_watching(t::PollingFileWatcher, interval)
-    associate_julia_struct(t.handle, t)
-    uv_error("start_watching (File)",
-        ccall(:jl_fs_poll_start,Int32,(Ptr{Void},Ptr{Uint8},Uint32),t.handle,t.file,interval)==-1)
-end
-start_watching(f::Function, t::PollingFileWatcher, interval) = (t.cb = f;start_watching(t,interval))
-
-function stop_watching(t::FDWatcher)
-    disassociate_julia_struct(t.handle)
-    uv_error("stop_watching (FD)",
-        ccall(:uv_poll_stop,Int32,(Ptr{Void},),t.handle)==-1)
-end
-
-function stop_watching(t::PollingFileWatcher)
-    disassociate_julia_struct(t.handle)
-    uv_error("stop_watching (File)",
-        ccall(:uv_fs_poll_stop,Int32,(Ptr{Void},),t.handle)==-1)
-end
-
-function _uv_hook_fseventscb(t::FileMonitor,filename::Ptr,events::Int32,status::Int32)
-    if(isa(t.cb,Function))
-        # bytestring(convert(Ptr{Uint8},filename)) - seems broken at the moment - got NULL
-        t.cb(status, events, status)
-    end
-end
-
-function _uv_hook_pollcb(t::FDWatcher,status::Int32,events::Int32)
-    if(isa(t.cb,Function))
-        t.cb(status, events)
-    end
-end
-function _uv_hook_fspollcb(t::PollingFileWatcher,status::Int32,prev::Ptr,cur::Ptr)
-    if(isa(t.cb,Function))
-        t.cb(status, Stat(convert(Ptr{Uint8},prev)), Stat(convert(Ptr{Uint8},cur)))
-    end
-end
-
-_uv_hook_close(uv::FileMonitor) = (uv.handle = 0; nothing)
-_uv_hook_close(uv::UVPollingWatcher) = (uv.handle = 0; nothing)
 
 uvtype(::AsyncStream) = UV_STREAM
 uvhandle(stream::AsyncStream) = stream.handle
@@ -408,69 +278,7 @@ TimeoutAsyncWork(cb::Function) = TimeoutAsyncWork(eventloop(),cb)
 
 close(t::TimeoutAsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
-function poll_fd(s, events::Integer, timeout_ms::Integer)
-    wt = Condition()
 
-    fdw = FDWatcher(s)
-    start_watching((status, events) -> notify(wt, (:poll, status, events)), fdw, events)
-    
-    if (timeout_ms > 0)
-        timer = TimeoutAsyncWork(status -> notify(wt, (:timeout, status)))
-        start_timer(timer, int64(timeout_ms), int64(0))
-    end
-
-    local args
-    try
-        args = wait(wt)
-    finally
-        if (timeout_ms > 0) stop_timer(timer) end
-        stop_watching(fdw)
-    end
-
-    if (args[2] == 0)
-        if (args[1] == :poll) return args[3] end
-        if (args[1] == :timeout) return 0 end
-    end
-
-    error("Error while polling") 
-end
-
-function poll_file(s, interval::Integer, timeout_ms::Integer)
-    wt = Condition()
-
-    pfw = PollingFileWatcher(s)
-    start_watching((status,prev,cur) -> notify(wt, (:poll, status)), pfw, interval)
-    
-    if (timeout_ms > 0)
-        timer = TimeoutAsyncWork(status -> notify(wt, (:timeout, status)))
-        start_timer(timer, int64(timeout_ms), int64(0))
-    end
-
-    local args
-    try
-        args = wait(wt)
-    finally
-        if (timeout_ms > 0) stop_timer(timer) end
-        stop_watching(pfw)
-    end
-
-    if (args[2] == 0)
-        if (args[1] == :poll) return 1 end
-        if (args[1] == :timeout) return 0 end
-    end
-
-    error("error while polling")
-end
-
-function watch_file(cb, s; poll=false)
-    if poll
-        pfw = PollingFileWatcher(cb,s)
-        start_watching(pfw)
-        return pfw
-    else 
-        return FileMonitor(cb,s)
-    end
-end
 
 function _uv_hook_close(uv::Union(AsyncStream,UVServer))
     uv.handle = 0
@@ -487,7 +295,7 @@ _uv_hook_asynccb(async::AsyncWork, status::Int32) = async.cb(status)
 function start_timer(timer::TimeoutAsyncWork,timeout::Int64,repeat::Int64)
     associate_julia_struct(timer.handle,timer)
     ccall(:uv_update_time,Void,(Ptr{Void},),eventloop())
-    ccall(:jl_timer_start,Int32,(Ptr{Void},Int64,Int64),timer.handle,timeout,repeat)
+    ccall(:jl_timer_start,Int32,(Ptr{Void},Int64,Int64),timer.handle,timeout+1,repeat)
 end
 
 function stop_timer(timer::TimeoutAsyncWork)

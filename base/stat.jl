@@ -48,7 +48,7 @@ macro stat_call(sym,arg1type,arg)
     end
 end
 
-stat(fd::OS_FD)     = @stat_call jl_fstat Int32 fd.fd
+stat(fd::RawFD)     = @stat_call jl_fstat Int32 fd.fd
 stat(fd::Integer)   = @stat_call jl_fstat Int32 fd
 stat(path::String)  = @stat_call jl_stat  Ptr{Uint8} path
 lstat(path::String) = @stat_call jl_lstat Ptr{Uint8} path

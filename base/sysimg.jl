@@ -109,6 +109,9 @@ importall .Printf
 include("serialize.jl")
 include("multi.jl")
 
+# Polling (requires multi.jl)
+include("poll.jl")
+
 # system & environment
 include("libc.jl")
 include("env.jl")
