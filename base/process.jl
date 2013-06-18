@@ -84,7 +84,7 @@ const STDOUT_NO = 1
 const STDERR_NO = 2
 
 immutable FileRedirect
-    filename::ASCIIString
+    filename::String
     append::Bool
 end
 
@@ -126,11 +126,11 @@ detach(cmd::Cmd) = (cmd.detach=true; cmd)
 (.>)(src::AbstractCmd,dest::Redirectable) = CmdRedirect(src,dest,STDERR_NO)
 
 # File redirects
-(|>)(src::AbstractCmd,dest::ASCIIString) = CmdRedirect(src,FileRedirect(dest,false),STDOUT_NO)
-(|>)(dest::Redirectable,src::AbstractCmd) = CmdRedirect(src,dest,STDIN_NO)
-(.>)(src::AbstractCmd,dest::Redirectable) = CmdRedirect(src,FileRedirect(dest,false),STDERR_NO)
-(>>)(src::AbstractCmd,dest::ASCIIString) = CmdRedirect(src,FileRedirect(dest,true),STDOUT_NO)
-(.>>)(src::AbstractCmd,dest::Redirectable) = CmdRedirect(src,FileRedirect(dest,true),STDERR_NO)
+(|>)(src::AbstractCmd,dest::String) = CmdRedirect(src,FileRedirect(dest,false),STDOUT_NO)
+(|>)(src::String,dest::AbstractCmd) = CmdRedirect(dest,FileRedirect(src,false),STDIN_NO)
+(.>)(src::AbstractCmd,dest::String) = CmdRedirect(src,FileRedirect(dest,false),STDERR_NO)
+(>>)(src::AbstractCmd,dest::String) = CmdRedirect(src,FileRedirect(dest,true),STDOUT_NO)
+(.>>)(src::AbstractCmd,dest::String) = CmdRedirect(src,FileRedirect(dest,true),STDERR_NO)
 
 
 typealias RawOrBoxedHandle Union(UVHandle,UVStream,FS.File,FileRedirect)
@@ -253,7 +253,7 @@ macro setup_stdio()
                 close_in = true
             end
         elseif isa(stdios[1],FileRedirect)
-            in = FS.open(stdios[1].filename,O_RDONLY)
+            in = FS.open(stdios[1].filename,JL_O_RDONLY)
             close_in = true
         end
         if isa(stdios[2],NamedPipe)
