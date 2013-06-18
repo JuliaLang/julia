@@ -258,12 +258,6 @@ end
 
 #@init_stdio
 
-function _init_buf(stream::AsyncStream)
-    if(!isa(stream.buf,IOStream))
-        stream.buf=memio()
-    end
-end
-
 flush(::TTY) = nothing
 
 function wait_connected(x)
@@ -711,12 +705,6 @@ uv_error(prefix, b::Bool) = b ? throw(UVError(string(prefix))) : nothing
 uv_error(prefix) = uv_error(prefix, _uv_lasterror() != 0)
 
 show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrorname(e)*")")
-
-function readall(s::IOStream)
-    dest = memio()
-    ccall(:ios_copyall, Uint, (Ptr{Void}, Ptr{Void}), dest.ios, s.ios)
-    takebuf_string(dest)
-end
 
 _jl_pipe_accept(server::Ptr{Void},client::Ptr{Void}) =
     ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server,client)
