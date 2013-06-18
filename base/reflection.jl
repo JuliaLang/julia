@@ -49,12 +49,12 @@ end
 
 # subtypes
 function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
-    add!(visited, m)
+    push!(visited, m)
     for s in names(m,true)
         if isdefined(m,s)
             t = eval(m,s)
             if isa(t, DataType) && super(t).name == x.name
-                add!(sts, t)
+                push!(sts, t)
             elseif isa(t, Module) && !contains(visited, t)
                 _subtypes(t, x, sts, visited)
             end

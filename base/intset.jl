@@ -6,7 +6,7 @@ type IntSet
     IntSet() = new(zeros(Uint32,256>>>5), 256, false)
 end
 
-IntSet(args...) = (s=IntSet(); for a in args; add!(s,a); end; s)
+IntSet(args...) = (s=IntSet(); for a in args; push!(s,a); end; s)
 
 similar(s::IntSet) = IntSet()
 
@@ -28,7 +28,7 @@ function sizehint(s::IntSet, top::Integer)
     s
 end
 
-function add!(s::IntSet, n::Integer)
+function push!(s::IntSet, n::Integer)
     if n >= s.limit
         if s.fill1s
             return s
@@ -43,12 +43,12 @@ end
 
 function union!(s::IntSet, ns)
     for n in ns
-        add!(s, n)
+        push!(s, n)
     end
     return s
 end
 
-function delete!(s::IntSet, n::Integer, deflt)
+function pop!(s::IntSet, n::Integer, deflt)
     if n >= s.limit
         if s.fill1s
             lim = int(n + div(n,2))
@@ -65,16 +65,36 @@ function delete!(s::IntSet, n::Integer, deflt)
     return n
 end
 
-function delete!(s::IntSet, n::Integer)
-    if delete!(s, n, n+1) == n+1
+function pop!(s::IntSet, n::Integer)
+    if pop!(s, n, n+1) == n+1
         throw(KeyError(n))
     end
     return n
 end
 
+# TODO: what should happen when fill1s == true?
+pop!(s::IntSet) = pop!(s, last(s))
+
+function delete!(s::IntSet, n::Integer)
+    if n >= s.limit
+        if s.fill1s
+            lim = int(n + div(n,2))
+            sizehint(s, lim)
+        else
+            return s
+        end
+    end
+    mask = uint32(1)<<(n&31)
+    idx = n>>5 + 1
+    b = s.bits[idx]
+    if (b&mask)==0; return s; end
+    s.bits[idx] = b&~mask
+    return s
+end
+
 function setdiff!(s::IntSet, ns)
     for n in ns
-        delete!(s, n, nothing)
+        delete!(s, n)
     end
     return s
 end
@@ -141,7 +161,7 @@ function first(s::IntSet)
     return n
 end
 
-shift!(s::IntSet) = delete!(s, first(s))
+shift!(s::IntSet) = pop!(s, first(s))
 
 function last(s::IntSet)
     if !s.fill1s
@@ -154,8 +174,6 @@ function last(s::IntSet)
     end
     error("last: set has no last element")
 end
-
-pop!(s::IntSet) = delete!(s, last(s))
 
 length(s::IntSet) = int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)) +
     (s.fill1s ? typemax(Int) - s.limit : 0)

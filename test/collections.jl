@@ -87,7 +87,7 @@ begin
     for id in seq
         if id > 0
             x = xs[id]
-            add!(s, x)
+            push!(s, x)
             @test contains(s, x)                 # check that x can be found
         else
             delete!(s, xs[-id])
@@ -183,7 +183,7 @@ d = (String => String)[ a => "foo" for a in ["a","b","c"]]
 s = Set()
 @test isempty(s)
 for i in 1:1000
-    add!(s, i)
+    push!(s, i)
     @test (length(s) == i)
 end
 
@@ -216,10 +216,16 @@ data_out = collect(s)
 # no duplicates
 s = Set(1,2,3)
 @test length(s) == 3
-add!(s,2)
+push!(s,2)
 @test length(s) == 3
 delete!(s,2)
 @test length(s) == 2
+push!(s,2)
+@test length(s) == 3
+pop!(s,2)
+@test length(s) == 2
+pop!(s)
+@test length(s) == 1
 
 # union
 s = union(Set(1,2), Set(3,4))
@@ -295,8 +301,8 @@ data_in = (1,2,9,8,4)
 s = Set(data_in...)
 c = copy(s)
 @test isequal(s,c)
-add!(s,100)
-add!(c,200)
+push!(s,100)
+push!(c,200)
 @test !contains(c, 100)
 @test !contains(s, 200)
 
@@ -307,7 +313,7 @@ for data_in in ((7,8,4,5),
 
     s_new = Set()
     for el in s
-        add!(s_new, el)
+        push!(s_new, el)
     end
     @test isequal(s, s_new)
 

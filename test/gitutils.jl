@@ -34,7 +34,7 @@ function verify_tree(d::Dict, tree::String)
         else
             error("verify_tree: don't know what to do with $name => $data")
         end
-        add!(seen, name)
+        push!(seen, name)
     end
     # check that nothing was missing from tree
     for (name, data) in d

@@ -680,7 +680,6 @@ export
     unshift!,
 
 # collections
-    add!,
     all,
     any,
     collect,
@@ -709,6 +708,8 @@ export
     mapreduce,
     merge!,
     merge,
+    #pop!,
+    #push!,
     reduce,
     setdiff!,
     setdiff,
