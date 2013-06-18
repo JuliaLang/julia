@@ -18,19 +18,8 @@ type SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
     nzval::Vector{Tv}       # Nonzero values
 end
 
-function SparseMatrixCSC(Tv::Type, Ti::Type, m::Integer, n::Integer, numnz::Integer)
-    colptr = Array(Ti, n+1)
-    rowval = Array(Ti, numnz)
-    nzval = Array(Tv, numnz)
-
-    colptr[1] = 1
-    colptr[end] = numnz+1
-    SparseMatrixCSC{Tv,Ti}(int(m), int(n), colptr, rowval, nzval)
-end
-
-function SparseMatrixCSC(m::Integer, n::Integer, colptr::Vector, rowval::Vector, nzval::Vector)
-    return SparseMatrixCSC(int(m), int(n), colptr, rowval, nzval)
-end
+SparseMatrixCSC{Tv,Ti}(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vector{Ti}, nzval::Vector{Tv}) =
+    SparseMatrixCSC(int(m), int(n), colptr, rowval, nzval)
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
 nnz(S::SparseMatrixCSC) = int(S.colptr[end]-1)
