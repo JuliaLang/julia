@@ -42,7 +42,10 @@ readdlm(input, dlm::Char, eol::Char) = readdlm_auto(input, dlm, Float64, eol, tr
 readdlm(input, dlm::Char, T::Type, eol::Char) = readdlm_auto(input, dlm, T, eol, false)
 
 readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool=false) = readdlm_string(readall(input), dlm, T, eol, auto)
-readdlm_auto(input::Vector{Uint8}, dlm::Char, T::Type, eol::Char, auto::Bool=false) = readdlm_string(bytestring(input), dlm, T, eol, auto)
+function readdlm_auto(input::Vector{Uint8}, dlm::Char, T::Type, eol::Char, auto::Bool=false)
+    s = ccall(:jl_array_to_string, ByteString, (Array{Uint8,1},), input)
+    readdlm_string(s, dlm, T, eol, auto)
+end
 
 function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool=false)
     nrows,ncols = dlm_dims(sbuff, eol, dlm)
