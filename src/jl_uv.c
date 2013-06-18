@@ -767,6 +767,21 @@ DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
     return lib;
 }
 
+#ifndef _OS_WINDOWS_
+
+DLLEXPORT int jl_uv_unix_fd_is_watched(int fd, uv_poll_t *handle, uv_loop_t *loop)
+{
+    if(fd > loop->nwatchers)
+        return 0;
+    if(loop->watchers[fd] == NULL)
+        return 0;
+    if(loop->watchers[fd] == &handle->io_watcher)
+        return 0;
+    return 1;
+}
+
+#endif
+
 #ifdef __cplusplus
 }
 #endif

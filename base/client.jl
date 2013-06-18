@@ -293,6 +293,7 @@ end
 function _start()
     # set up standard streams
     reinit_stdio()
+    fdwatcher_reinit()
     # Initialize RNG
     Random.librandom_init()
     # Check that OpenBLAS is correctly built
