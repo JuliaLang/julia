@@ -17,7 +17,8 @@ next(s::String, i::Integer) = next(s,int(i))
 ## conversion of general objects to strings ##
 
 function print_to_string(xs...)
-    s = memio(isa(xs[1],String) ? endof(xs[1]) : 0, false)
+    s = IOBuffer(Array(Uint8,isa(xs[1],String) ? endof(xs[1]) : 0), true, true)
+    truncate(s,0)
     for x in xs
         print(s, x)
     end
@@ -519,7 +520,8 @@ lcfirst(s::String) = islower(s[1]) ? s : string(lowercase(s[1]),s[nextind(s,1):e
 ## string map, filter, has ##
 
 function map(f::Function, s::String)
-    out = memio(endof(s))
+    out = IOBuffer(Array(Uint8,endof(s)),true,true)
+    truncate(out,0)
     for c in s
         c2 = f(c)
         if !isa(c2,Char)
@@ -531,7 +533,8 @@ function map(f::Function, s::String)
 end
 
 function filter(f::Function, s::String)
-    out = memio(endof(s))
+    out = IOBuffer(Array(Uint8,endof(s)),true,true)
+    truncate(out,0)
     for c in s
         if f(c)
             write(out, c)
@@ -699,7 +702,8 @@ function indentation(s::String)
 end
 
 function unindent(s::String, indent::Int)
-    buf = memio(endof(s), false)
+    buf = IOBuffer(Array(Uint8,endof(s)), true, true)
+    truncate(buf,0)
     a = i = start(s)
     cutting = false
     cut = 0

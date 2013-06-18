@@ -6,7 +6,7 @@
 # issue #1770
 let
     a = ['T', 'e', 's', 't']
-    f = memio()
+    f = IOBuffer()
     serialize(f, a)
     seek(f, 0)
     @test deserialize(f) == a

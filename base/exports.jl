@@ -1037,7 +1037,6 @@ export
     hton,
     ltoh,
     ntoh,
-    memio,
     mmap,
     mmap_array,
     mmap_bitarray,
