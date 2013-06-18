@@ -221,7 +221,7 @@ export PipeString
 @deprecate >(a::String,b::AbstractCmd) (a|>b)
 @deprecate >(a::AbstractCmd,b::Redirectable) (a|>b)
 @deprecate >(a::AbstractCmd,b::String) (a|>b)
-@deprecate <(a::AbstractCmd,b::String) (a<b)
+@deprecate <(a::AbstractCmd,b::String) (b|>a)
 @deprecate |(x, f::Function) (x|>f)
 
 @deprecate memio(args...)  IOBuffer()
