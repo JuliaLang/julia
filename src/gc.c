@@ -93,9 +93,9 @@ static size_t freed_bytes = 0;
 #define default_collect_interval (3200*1024*sizeof(void*))
 static size_t collect_interval = default_collect_interval;
 #ifdef _P64
-# define max_collect_interval 1250000000UL
+static size_t max_collect_interval = 1250000000UL;
 #else
-# define max_collect_interval 500000000UL
+static size_t max_collect_interval = 500000000UL;
 #endif
 
 static htable_t finalizer_table;
@@ -344,7 +344,8 @@ static void sweep_malloc_ptrs(void)
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
                 if (mp->isaligned) {
                     free_a16(mp->ptr);
-                } else {
+                }
+                else {
                     free(mp->ptr);
                 }
 #else
@@ -478,7 +479,7 @@ static size_t mark_sp = 0;
 static void push_root(jl_value_t *v)
 {
     assert(v != NULL);
-    if (gc_marked(v)) return;
+    //if (gc_marked(v)) return;
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
 #ifdef OBJPROFILE
     void **bp = ptrhash_bp(&obj_counts, vt);
@@ -501,7 +502,7 @@ static void push_root(jl_value_t *v)
     mark_stack[mark_sp++] = v;
 }
 
-#define gc_push_root(v) push_root((jl_value_t*)(v))
+#define gc_push_root(v) (!gc_marked(v) && (push_root((jl_value_t*)(v)),1))
 
 void jl_gc_setmark(jl_value_t *v)
 {
@@ -655,7 +656,7 @@ double clock_now(void);
 
 static void gc_mark_uv_handle(uv_handle_t *handle, void *arg)
 {
-    if(handle->data) {
+    if (handle->data) {
         gc_push_root((jl_value_t*)(handle->data));
     }
 }
@@ -754,6 +755,7 @@ static void print_obj_profile(void)
 
 void jl_gc_collect(void)
 {
+    size_t actual_allocd = allocd_bytes;
     allocd_bytes = 0;
     if (is_gc_enabled) {
         freed_bytes = 0;
@@ -789,7 +791,12 @@ void jl_gc_collect(void)
 #endif
 
         // tune collect interval based on current live ratio
-        if (freed_bytes < ((2*collect_interval)/5)) {
+#if defined(MEMPROFILE)
+        jl_printf(JL_STDERR, "allocd %ld, freed %ld, interval %ld, ratio %.2f\n",
+                  actual_allocd, freed_bytes, collect_interval,
+                  (double)freed_bytes/(double)actual_allocd);
+#endif
+        if (freed_bytes < ((7*actual_allocd)/10)) {
             if (collect_interval <= (2*max_collect_interval)/5)
                 collect_interval = (5*collect_interval)/2;
         }
@@ -913,6 +920,13 @@ void jl_gc_init(void)
 #endif
 #ifdef GC_FINAL_STATS
     process_t0 = clock_now();
+#endif
+
+#ifdef _P64
+    // on a big memory machine, set max_collect_interval to totalmem/ncores/2
+    size_t maxmem = (uv_get_total_memory()/jl_cpu_cores())/2;
+    if (maxmem > max_collect_interval)
+        max_collect_interval = maxmem;
 #endif
 }
 
