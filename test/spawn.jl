@@ -43,6 +43,25 @@ if false
     @test  success(ignorestatus(`false` & `false`))
 end
 
+# STDIN Redirection
+file = tempname()
+run(`echo hello world` |> file)
+@test readall(file |> `cat`) == "hello world\n"
+
+# Stream Redirection
+@async begin
+    server = listen(2326)
+    client = accept(server)
+    @test readall(client |> `cat`) == "hello world\n"
+    close(server)
+end
+@async begin
+    sock = connect(2326)
+    run(`echo hello world` |> sock)
+    close(sock)
+end
+
+
 # Here we test that if we close a stream with pending writes, we don't lose the writes.
 str = ""
 for i=1:1000
