@@ -121,7 +121,7 @@ function truncate(f::File, n::Integer)
     f    
 end
 
-fd(f::File) = OS_FD(f.handle)
+fd(f::File) = RawFD(f.handle)
 stat(f::File) = stat(fd(f))
 
 end
