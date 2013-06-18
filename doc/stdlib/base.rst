@@ -217,6 +217,14 @@ Types
 
    True if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``Uint8``, ``Float64``, and ``Complex{Float64}``.
 
+.. function:: typejoin(T, S)
+
+   Compute a type that contains both ``T`` and ``S``.
+
+.. function:: typeintersect(T, S)
+
+   Compute a type that contains the intersection of ``T`` and ``S``. Usually this will be the smallest such type or one close to it.
+
 Generic Functions
 -----------------
 
@@ -1243,6 +1251,18 @@ Mathematical Functions
 .. function:: $(x, y)
 
    Bitwise exclusive or
+
+.. function:: isapprox(x::Number, y::Number; rtol::Real=cbrt(maxeps), atol::Real=sqrt(maxeps))
+
+   Inexact equality comparison - behaves slightly different depending on types of input args:
+
+   * For ``FloatingPoint`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``.
+
+   * For ``Integer`` and ``Rational`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol``. The `rtol` argument is ignored. If one of ``x`` and ``y`` is ``FloatingPoint``, the other is promoted, and the method above is called instead.
+
+   * For ``Complex`` numbers, the distance in the complex plane is compared, using the same criterion as above.
+
+   For default tolerance arguments, ``maxeps = max(eps(abs(x)), eps(abs(y)))``.
 
 .. function:: sin(x)
 
@@ -3294,3 +3314,48 @@ Tasks
 
    Assign a value to a symbol in the current task's task-local storage.
 
+Reflection
+----------
+
+.. function:: module_name(m::Module) -> Symbol
+
+   Get the name of a module as a symbol.
+
+.. function:: module_parent(m::Module) -> Module
+
+   Get a module's enclosing module. ``Main`` is its own parent.
+
+.. function:: current_module() -> Module
+
+   Get the *dynamically* current module, which is the module code is currently being
+   read from. In general, this is not the same as the module containing the call to
+   this function.
+
+.. function:: fullname(m::Module)
+
+   Get the fully-qualified name of a module as a tuple of symbols. For example,
+   ``fullname(Base.Pkg)`` gives ``(:Base,:Pkg)``, and ``fullname(Main)`` gives ``()``.
+
+.. function:: names(x)
+
+   Get an array of the names exported by a module, or the fields of a data type.
+
+.. function:: isconst([m::Module], s::Symbol) -> Bool
+
+   Determine whether a global is declared ``const`` in a given module.
+
+.. function:: isgeneric(f::Function) -> Bool
+
+   Determine whether a function is generic.
+
+.. function:: function_name(f::Function) -> Symbol
+
+   Get the name of a generic function as a symbol, or ``:anonymous``.
+
+.. function:: function_module(f::Function, types) -> Module
+
+   Determine the module containing a given definition of a generic function.
+
+.. function:: functionloc(f::Function, types)
+
+   Returns a tuple ``(filename,line)`` giving the location of a method definition.
