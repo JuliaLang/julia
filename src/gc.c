@@ -502,7 +502,7 @@ static void push_root(jl_value_t *v)
     mark_stack[mark_sp++] = v;
 }
 
-#define gc_push_root(v) (!gc_marked(v) && (push_root((jl_value_t*)(v)),1))
+#define gc_push_root(v) if (!gc_marked(v)) push_root((jl_value_t*)(v));
 
 void jl_gc_setmark(jl_value_t *v)
 {
