@@ -3,13 +3,13 @@ module_name(m::Module) = ccall(:jl_module_name, Any, (Any,), m)::Symbol
 module_parent(m::Module) = ccall(:jl_module_parent, Any, (Any,), m)::Module
 current_module() = ccall(:jl_get_current_module, Any, ())::Module
 
-full_name(m::Module) = m===Main ? () : tuple(full_name(module_parent(m))...,
-                                             module_name(m))
+fullname(m::Module) = m===Main ? () : tuple(fullname(module_parent(m))...,
+                                            module_name(m))
 
 names(m::Module, all::Bool, imported::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32,Int32), m, all, imported)
 names(m::Module, all::Bool) = names(m, all, false)
 names(m::Module) = names(m, false, false)
-names(t::DataType) = t.names
+names(t::DataType) = collect(t.names)
 
 function names(v)
     t = typeof(v)
