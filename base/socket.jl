@@ -367,7 +367,7 @@ end
 callback_dict = ObjectIdDict()
 
 function _uv_hook_getaddrinfo(cb::Function, addrinfo::Ptr{Void}, status::Int32)
-    delete!(callback_dict,cb)
+    pop!(callback_dict,cb) # using pop forces an error if cb not in callback_dict
     if status != 0 || addrinfo == C_NULL
         cb(UVError("getaddrinfo callback",status))
         return

@@ -315,9 +315,9 @@ end
 deregister_worker(pid) = deregister_worker(PGRP, pid)
 function deregister_worker(pg, pid)
     pg.workers = filter(x -> !(x.id == pid), pg.workers)
-    w = delete!(map_pid_wrkr, pid, nothing)
+    w = pop!(map_pid_wrkr, pid, nothing)
     if isa(w, Worker) 
-        delete!(map_sock_wrkr, w.socket) 
+        pop!(map_sock_wrkr, w.socket) 
         
         # Notify the cluster manager of this workers death
         if myid() == 1
@@ -420,7 +420,7 @@ function lookup_ref(pg, id)
         # first we've heard of this ref
         rv = RemoteValue()
         pg.refs[id] = rv
-        add!(rv.clientset, id[1])
+        push!(rv.clientset, id[1])
     end
     rv
 end
@@ -478,7 +478,7 @@ end
 
 function add_client(id, client)
     rv = lookup_ref(id)
-    add!(rv.clientset, client)
+    push!(rv.clientset, client)
     nothing
 end
 
@@ -575,7 +575,7 @@ end
 function schedule_call(rid, thunk)
     rv = RemoteValue()
     (PGRP::ProcessGroup).refs[rid] = rv
-    add!(rv.clientset, rid[1])
+    push!(rv.clientset, rid[1])
     enq_work(@task(run_work_thunk(rv,thunk)))
     rv
 end

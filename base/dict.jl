@@ -131,6 +131,8 @@ function getindex(t::Associative, key)
     return v
 end
 
+push!(t::Associative, key, v) = setindex!(t, v, key)
+
 # hashing objects by identity
 
 type ObjectIdDict <: Associative{Any,Any}
@@ -148,12 +150,18 @@ end
 get(t::ObjectIdDict, key::ANY, default::ANY) =
     ccall(:jl_eqtable_get, Any, (Any, Any, Any), t.ht, key, default)
 
-delete!(t::ObjectIdDict, key::ANY, default::ANY) =
-    ccall(:jl_eqtable_del, Any, (Any, Any, Any), t.ht, key, default)
+pop!(t::ObjectIdDict, key::ANY, default::ANY) =
+    ccall(:jl_eqtable_pop, Any, (Any, Any, Any), t.ht, key, default)
+
+function pop!(t::ObjectIdDict, key::ANY)
+    val = pop!(t, key, secret_table_token)
+    !is(val,secret_table_token) ? val : throw(KeyError(key))
+end
 
 function delete!(t::ObjectIdDict, key::ANY)
-    val = delete!(t, key, secret_table_token)
-    !is(val,secret_table_token) ? val : throw(KeyError(key))
+    #warn_once("delete!(h::ObjectIdDict,key) now returns the modified dictionary.\nUse pop!(h::ObjectIdDict,key) to retrieve the value instead.")
+    ccall(:jl_eqtable_pop, Any, (Any, Any), t.ht, key)
+    t
 end
 
 empty!(t::ObjectIdDict) = (t.ht = cell(length(t.ht)); t)
@@ -502,7 +510,7 @@ function getkey{K,V}(h::Dict{K,V}, key, deflt)
     return (index<0) ? deflt : h.keys[index]::K
 end
 
-function _delete!(h::Dict, index)
+function _pop!(h::Dict, index)
     val = h.vals[index]
     h.slots[index] = 0x2
     ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
@@ -512,14 +520,31 @@ function _delete!(h::Dict, index)
     return val
 end
 
-function delete!(h::Dict, key)
+function pop!(h::Dict, key)
     index = ht_keyindex(h, key)
-    index > 0 ? _delete!(h, index) : throw(KeyError(key))
+    index > 0 ? _pop!(h, index) : throw(KeyError(key))
 end
 
-function delete!(h::Dict, key, default)
+function pop!(h::Dict, key, default)
     index = ht_keyindex(h, key)
-    index > 0 ? _delete!(h, index) : default
+    index > 0 ? _pop!(h, index) : default
+end
+
+function _delete!(h::Dict, index)
+    val = h.vals[index]
+    h.slots[index] = 0x2
+    ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
+    ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, index-1)
+    h.ndel += 1
+    h.count -= 1
+    h
+end
+
+function delete!(h::Dict, key)
+    warn_once("delete!(h::Dict,key) now returns the modified dictionary.\nUse pop!(h::Dict,key) to retrieve the value instead.")
+    index = ht_keyindex(h, key)
+    if index > 0; _delete!(h, index); end
+    h
 end
 
 function skip_deleted(h::Dict, i)
@@ -594,8 +619,9 @@ function getkey{K}(wkh::WeakKeyDict{K}, kk, deflt)
 end
 
 get{K}(wkh::WeakKeyDict{K}, key, def) = get(wkh.ht, key, def)
+pop!{K}(wkh::WeakKeyDict{K}, key) = pop!(wkh.ht, key)
+pop!{K}(wkh::WeakKeyDict{K}, key, def) = pop!(wkh.ht, key, def)
 delete!{K}(wkh::WeakKeyDict{K}, key) = delete!(wkh.ht, key)
-delete!{K}(wkh::WeakKeyDict{K}, key, def) = delete!(wkh.ht, key, def)
 empty!(wkh::WeakKeyDict)  = (empty!(wkh.ht); wkh)
 haskey{K}(wkh::WeakKeyDict{K}, key) = haskey(wkh.ht, key)
 getindex{K}(wkh::WeakKeyDict{K}, key) = getindex(wkh.ht, key)

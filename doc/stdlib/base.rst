@@ -554,6 +554,10 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
    Delete the mapping for the given key in a collection.
 
+.. function:: pop!(collection, key[, default])
+
+   Delete and return the mapping for ``key`` if it exists in ``collection``, otherwise return ``default``.
+
 .. function:: keys(collection)
 
    Return an iterator over all keys in a collection. ``collect(keys(d))`` returns an array of keys.

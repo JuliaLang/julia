@@ -73,9 +73,16 @@ const ENV = EnvHash()
 getindex(::EnvHash, k::String) = @accessEnv k throw(KeyError(k))
 get(::EnvHash, k::String, def) = @accessEnv k (return def)
 contains(::KeyIterator{EnvHash}, k::String) = _hasenv(k)
-delete!(::EnvHash, k::String) = (v = ENV[k]; _unsetenv(k); v)
+pop!(::EnvHash, k::String) = (v = ENV[k]; _unsetenv(k); v)
+pop!(::EnvHash, k::String, def) = haskey(ENV,k) ? pop!(ENV,k) : def
+function delete!(::EnvHash, k::String)
+    warn_once("delete!(h::EnvHash,key) now returns the modified environment.\nUse pop!(h::EnvHash,key) to retrieve the value instead.\n")
+    _unsetenv(k)
+    ENV
+end
 delete!(::EnvHash, k::String, def) = haskey(ENV,k) ? delete!(ENV,k) : def
 setindex!(::EnvHash, v, k::String) = _setenv(k,string(v))
+push!(::EnvHash, k::String, v) = setindex!(ENV, v, k)
 
 @unix_only begin
 start(::EnvHash) = 0

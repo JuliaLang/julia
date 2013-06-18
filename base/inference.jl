@@ -1133,7 +1133,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     recpts = IntSet()  # statements that depend recursively on our value
     W = IntSet()
     # initial set of pc
-    add!(W,1)
+    push!(W,1)
     # initial types
     s[1] = ObjectIdDict()
     for v in vars
@@ -1191,7 +1191,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         pc = first(W)
         while true
             #print(pc,": ",s[pc],"\n")
-            delete!(W, pc, 0)
+            delete!(W, pc)
             if is(handler_at[pc],())
                 handler_at[pc] = cur_hand
             else
@@ -1204,7 +1204,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                 if !(isa(frame.prev,CallStack) && frame.prev.cycleid == frame.cycleid)
                     toprec = true
                 end
-                add!(recpts, pc)
+                push!(recpts, pc)
                 #if dbg
                 #    show(pc); print(" recurred\n")
                 #end
@@ -1214,7 +1214,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                 # propagate type info to exception handler
                 l = cur_hand[1]::Int
                 if stchanged(changes, s[l], vars)
-                    add!(W, l)
+                    push!(W, l)
                     s[l] = stupdate(s[l], changes, vars)
                 end
             end
@@ -1234,7 +1234,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                         # general case
                         handler_at[l] = cur_hand
                         if stchanged(changes, s[l], vars)
-                            add!(W, l)
+                            push!(W, l)
                             s[l] = stupdate(s[l], changes, vars)
                         end
                     end
@@ -1257,7 +1257,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                         if ot === NF || !typeseq(vt,ot)
                             # l+1 is the statement after the label, where the
                             # static_typeof occurs.
-                            add!(W, l+1)
+                            push!(W, l+1)
                             s[l+1][var] = vt
                         end
                     end
@@ -1269,7 +1269,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                         if !(isa(frame.prev,CallStack) && frame.prev.cycleid == frame.cycleid)
                             toprec = true
                         end
-                        add!(recpts, pc)
+                        push!(recpts, pc)
                         #if dbg
                         #    show(pc); print(" recurred\n")
                         #end
@@ -1290,7 +1290,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                             #    show(r)
                             #    print("\n")
                             #end
-                            add!(W,r)
+                            push!(W,r)
                         end
                     end
                 elseif is(hd,:enter)
@@ -2030,7 +2030,7 @@ function find_sa_vars(ast)
     for vi in ast.args[2][2]
         if (vi[3]&1)!=0
             # remove captured vars
-            delete!(av, vi[1], nothing)
+            delete!(av, vi[1])
         end
     end
     av
