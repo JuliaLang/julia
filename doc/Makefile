@@ -3,7 +3,7 @@
 
 # You can set these variables from the command line.
 SPHINXOPTS    =
-SPHINXBUILD   = sphinx-build
+SPHINXBUILD   = PYTHONPATH=$(PYTHONPATH):juliadoc sphinx-build
 PAPER         =
 BUILDDIR      = _build
 JULIA         = ../julia
@@ -45,8 +45,8 @@ help:
 clean:
 	-rm -rf $(BUILDDIR)/*
 
-juliadoc-pkg:
-	pip install --user --upgrade -r requirements.txt
+juliadoc-pkg: juliadoc/juliadoc/__init__.py
+	@-cd .. && git submodule update doc/juliadoc
 
 html: juliadoc-pkg
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
