@@ -48,7 +48,8 @@ resolve() = Dir.cd() do
             Write.install(pkg, Read.sha1(pkg,ver))
         end
         for (pkg,(v1,v2)) in update
-            info("$(v1 <= v2 ? "Up" : "Down")grading $pkg: v$v1 => v$v2")
+            up = v1 <= v2 ? "Up" : "Down"
+            info("$(up)grading $pkg: v$v1 => v$v2")
             Write.update(pkg, Read.sha1(pkg,v2))
         end
         for (pkg,ver) in remove
