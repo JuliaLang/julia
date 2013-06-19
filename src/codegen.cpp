@@ -64,6 +64,7 @@
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Config/llvm-config.h"
+#include "llvm/Support/system_error.h"
 #include <setjmp.h>
 
 #include <string>
@@ -447,6 +448,15 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dum
         fstream.flush();
     }
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
+}
+
+#include "llvm/Bitcode/ReaderWriter.h"
+extern "C" DLLEXPORT
+void jl_dump_bitcode(char* fname)
+{
+    std::string err;
+    raw_fd_ostream OS(fname, err);
+    WriteBitcodeToFile(jl_Module, OS);
 }
 
 // --- code gen for intrinsic functions ---
@@ -3256,11 +3266,31 @@ static void init_julia_llvm_env(Module *m)
     FPM->doInitialization();
 }
 
-extern "C" void jl_init_codegen(void)
+extern "C" void jl_init_codegen(char *imageFile)
 {
     
     InitializeNativeTarget();
-    jl_Module = new Module("julia", jl_LLVMContext);
+    if (imageFile != NULL) {
+        char *irimgFile = strdup(imageFile);
+        int _irnmlen = strlen(irimgFile);
+        irimgFile[_irnmlen-2] = 'i';
+        irimgFile[_irnmlen-1] = 'r';
+ 
+        JL_PRINTF(JL_STDERR, "Trying module reload...\n");
+        JL_PRINTF(JL_STDERR, "IR file: %s\n", irimgFile);
+ 
+        OwningPtr<MemoryBuffer> MB;
+        std::string _errmsg;
+        error_code ec;
+        if ( !(ec = MemoryBuffer::getFile(irimgFile, MB)) ) {
+            jl_Module = llvm::ParseBitcodeFile(MB.get(), jl_LLVMContext, &_errmsg);
+            JL_PRINTF(JL_STDERR, "Parse output:    %s\n", _errmsg.c_str());
+        }
+    }
+    if (jl_Module == NULL) {
+        JL_PRINTF(JL_STDERR, "Initializing new jl_Module...\n");
+        jl_Module = new Module("julia", jl_LLVMContext);
+    }
 
 #if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
     jl_ExecutionEngine = EngineBuilder(jl_Module).setEngineKind(EngineKind::JIT).create();

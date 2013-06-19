@@ -491,7 +491,7 @@ void julia_init(char *imageFile)
     jl_init_frontend();
     jl_init_types();
     jl_init_tasks(jl_stack_lo, jl_stack_hi-jl_stack_lo);
-    jl_init_codegen();
+    jl_init_codegen(imageFile);
     jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
 
     jl_init_serializer();

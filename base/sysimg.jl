@@ -390,4 +390,5 @@ let JL_PRIVATE_LIBDIR = get(ENV, "JL_PRIVATE_LIBDIR", "lib/julia")
 # create system image file
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},),
       "$JULIA_HOME/../$JL_PRIVATE_LIBDIR/sys.ji")
+ccall(:jl_dump_bitcode, Void, (Ptr{Uint8},), "$JULIA_HOME/../$JL_PRIVATE_LIBDIR/sys.ir")
 end

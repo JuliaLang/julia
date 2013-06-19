@@ -128,6 +128,7 @@ RANLIB := $(CROSS_COMPILE)ranlib
 
 # if not absolute, then relative to JULIA_HOME
 JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../$(JL_PRIVATE_LIBDIR)/sys.ji"'
+JCFLAGS += '-DJL_SYSTEM_IRIMG_PATH="../$(JL_PRIVATE_LIBDIR)/sys.ir"'
 
 # OPENBLAS build options
 OPENBLAS_DYNAMIC_ARCH=0
