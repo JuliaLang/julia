@@ -12,6 +12,7 @@ function requirements(reqs::Dict, fix::Dict)
             merge_requires!(reqs, f2.requires)
         end
     end
+    reqs = copy(reqs)
     for (p,f) in fix
         delete!(reqs, p, nothing)
     end
@@ -19,12 +20,10 @@ function requirements(reqs::Dict, fix::Dict)
 end
 
 function dependencies(avail::Dict, fix::Dict)
+    avail = deepcopy(avail)
     for (fp,fx) in fix
-        if haskey(avail, fp)
-            delete!(avail, fp)
-            continue
-        end
-        for (ap,av) in avail, (v,a) in av
+        delete!(avail, fp, nothing)
+        for (ap,av) in avail, (v,a) in copy(av)
             if satisfies(fp, fx.version, a.requires)
                 delete!(a.requires, fp, nothing)
             else
@@ -39,24 +38,24 @@ function dependencies(avail::Dict, fix::Dict)
 end
 
 function diff(have::Dict, want::Dict)
-    remove = Dict{ByteString,VersionNumber}()
-    update = Dict{ByteString,(VersionNumber,VersionNumber)}()
     install = Dict{ByteString,VersionNumber}()
+    update  = Dict{ByteString,(VersionNumber,VersionNumber)}()
+    remove  = Dict{ByteString,VersionNumber}()
 
     for pkg in sort!(union(keys(have),keys(want)))
         h, w = haskey(have,pkg), haskey(want,pkg)
         if h && w
             if have[pkg] != want[pkg]
-                update[pkg] = (free[pkg], want[pkg])
+                update[pkg] = (have[pkg], want[pkg])
             end
         elseif h
-            remove[pkg] = free[pkg]
+            remove[pkg] = have[pkg]
         elseif w
             install[pkg] = want[pkg]
         end
     end
 
-    remove, update, install
+    install, update, remove
 end
 
 end # module
