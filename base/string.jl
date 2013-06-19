@@ -1033,8 +1033,10 @@ function replace(str::ByteString, pattern, repl::Function, limit::Integer)
             write(out, string(repl(SubString(str,j,k))))
             i = nextind(str, k)
         end
-        if k <= j; k = nextind(str,j) end
-        if k == k1 break end
+        if k <= j
+            k = nextind(str,j)
+            k == k1 && break
+        end
         k1 = k
         r = search(str,pattern,k)
         j, k = first(r), last(r)
