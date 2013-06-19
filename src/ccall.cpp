@@ -695,8 +695,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 #else
         attrs.push_back(AttributeWithIndex::get(1, Attribute::StructRet));
 #endif
-        fargt_sig.push_back(PointerType::get(lrt,0));
-        lrt = T_void;
         sret = 1;
     }
     size_t i;
@@ -822,8 +820,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     // make LLVM function object for the target
     Value *llvmf;
+    JL_PRINTF(JL_STDOUT,"\n%s :",f_name);
     FunctionType *functype = FunctionType::get(lrt, fargt_sig, isVa);
-    
+    functype->dump();
     if (jl_ptr != NULL) {
         null_pointer_check(jl_ptr,ctx);
         Type *funcptype = PointerType::get(functype,0);
