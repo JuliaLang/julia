@@ -644,7 +644,8 @@
   (receive
    (fields defs) (separate (lambda (x) (or (symbol? x) (decl? x)))
 			   fields)
-   (let* ((field-names (map decl-var fields))
+   (let* ((defs        (filter (lambda (x) (not (effect-free? x))) defs))
+	  (field-names (map decl-var fields))
 	  (field-types (map decl-type fields))
 	  (defs2 (if (null? defs)
 		     (list (default-inner-ctor name field-names field-types))
