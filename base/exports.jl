@@ -1227,6 +1227,8 @@ export
     @spawn,
     @spawnlocal,  # deprecated
     @spawnat,
+    @fetch,
+    @fetchfrom,
     @everywhere,
     @parallel,
     @gensym,

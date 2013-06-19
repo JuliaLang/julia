@@ -1067,8 +1067,6 @@ function sync_add(r)
     r
 end
 
-spawnat(p, thunk) = sync_add(remotecall(p, thunk))
-
 let nextidx = 1
     global chooseproc
     function chooseproc(thunk::Function)
@@ -1097,12 +1095,33 @@ let nextidx = 1
     end
 end
 
+spawnat(p, thunk) = sync_add(remotecall(p, thunk))
+
 spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
 
 macro spawn(expr)
     expr = localize_vars(:(()->($expr)), false)
     :(spawn_somewhere($(esc(expr))))
 end
+
+macro spawnat(p, expr)
+    expr = localize_vars(:(()->($expr)), false)
+    :(spawnat($(esc(p)), $(esc(expr))))
+end
+
+macro fetch(expr)
+    expr = localize_vars(:(()->($expr)), false)
+    quote
+        thunk = $(esc(expr))
+        remotecall_fetch(chooseproc(thunk), thunk)
+    end
+end
+
+macro fetchfrom(p, expr)
+    expr = localize_vars(:(()->($expr)), false)
+    :(remotecall_fetch($(esc(p)), $(esc(expr))))
+end
+
 
 function spawnlocal(thunk)
     rr = RemoteRef(myid())
@@ -1125,11 +1144,6 @@ end
 macro spawnlocal(expr)
     warn_once("@spawnlocal is deprecated, use @async instead.")
     :(@async $(esc(expr)))
-end
-
-macro spawnat(p, expr)
-    expr = localize_vars(:(()->($expr)), false)
-    :(spawnat($(esc(p)), $(esc(expr))))
 end
 
 function at_each(f, args...)

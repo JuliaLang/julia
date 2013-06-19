@@ -6,6 +6,8 @@ id_me = myid()
 id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 
 @test fetch(@spawnat id_other myid()) == id_other
+@test @fetchfrom id_other begin myid() end == id_other
+@fetch begin myid() end
 
 d = drand((200,200), [id_me, id_other])
 s = convert(Array, d[1:150, 1:150])
