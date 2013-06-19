@@ -15,7 +15,15 @@ ENV["OPENBLAS_NUM_THREADS"] = 1
 
 @everywhere include("testdefs.jl")
 
+
+#The parallel tests assume that they run from node 1
+run_threads = sum(tests .== "parallel") != 0
+tests = filter(x->(x!="parallel"), tests)
 reduce(propagate_errors, nothing, pmap(runtests, tests))
 
 @unix_only n > 1 && rmprocs(workers())
+if(run_threads)
+    runtests("parallel")
+end
+
 println("    \033[32;1mSUCCESS\033[0m")

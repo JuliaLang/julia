@@ -66,9 +66,9 @@ let
     local bar
     bestkey(d, key) = key
     bestkey{K<:String,V}(d::Associative{K,V}, key) = string(key)
-    bar(x) = bestkey(x, :y)
-    @test bar([:x => [1,2,5]]) == :y
-    @test bar(["x" => [1,2,5]]) == "y"
+    foobar(x) = bestkey(x, :y)
+    @test foobar([:x => [1,2,5]]) == :y
+    @test foobar(["x" => [1,2,5]]) == "y"
 end
 
 # issue #1438
