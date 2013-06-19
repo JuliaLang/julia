@@ -35,33 +35,39 @@ resolve() = Dir.cd() do
 
     # prefetch phase isolates network activity, nothing to roll back
     for (pkg,ver) in install
-        Cache.fetch(pkg, Read.url(pkg), ver, Read.sha1(pkg,ver))
+        Cache.prefetch(pkg, Read.url(pkg), ver, Read.sha1(pkg,ver))
     end
     for (pkg,(_,ver)) in update
-        Cache.fetch(pkg, Read.url(pkg), ver, Read.sha1(pkg,ver))
+        Cache.prefetch(pkg, Read.url(pkg), ver, Read.sha1(pkg,ver))
     end
 
     # try applying changes, roll back everything if anything fails
     try
         for (pkg,ver) in install
-            Write.install(pkg,ver)
+            info("Installing $pkg v$ver")
+            Write.install(pkg, Read.sha1(pkg,ver))
         end
         for (pkg,(v1,v2)) in update
-            Write.update(pkg,v1,v2)
+            info("$(v1 <= v2 ? "Up" : "Down")grading $pkg: v$v1 => v$v2")
+            Write.update(pkg, Read.sha1(pkg,v2))
         end
         for (pkg,ver) in remove
+            info("Removing $pkg v$ver")
             Write.remove(pkg)
         end
     catch
-        for (pkg,ver) in remove
-            Write.install!(pkg,ver)
-        end
-        for (pkg,(v1,v2)) in update
-            Write.update!(pkg,v2,v1)
-        end
-        for (pkg,ver) in install
-            Write.remove!(pkg)
-        end
+        # for (pkg,ver) in remove
+        #     info("Rolling back $pkg to v$ver")
+        #     Write.install!(pkg, Read.sha1(pkg,ver))
+        # end
+        # for (pkg,(v1,v2)) in update
+        #     info("Rolling back $pkg to v$v1")
+        #     Write.update!(pkg, Read.sha1(pkg,v1))
+        # end
+        # for (pkg,ver) in install
+        #     info("Rolling back install of $pkg")
+        #     Write.remove!(pkg)
+        # end
         rethrow()
     end
 end
