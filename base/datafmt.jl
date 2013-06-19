@@ -40,8 +40,14 @@ readdlm(input, dlm::Char) = readdlm(input, dlm, '\n')
 
 readdlm(input, dlm::Char, eol::Char) = readdlm_auto(input, dlm, Float64, eol, true)
 readdlm(input, dlm::Char, T::Type, eol::Char) = readdlm_auto(input, dlm, T, eol, false)
-function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool=false)
-    sbuff = readall(input)
+
+readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool=false) = readdlm_string(readall(input), dlm, T, eol, auto)
+function readdlm_auto(input::Vector{Uint8}, dlm::Char, T::Type, eol::Char, auto::Bool=false)
+    s = ccall(:jl_array_to_string, ByteString, (Array{Uint8,1},), input)
+    readdlm_string(s, dlm, T, eol, auto)
+end
+
+function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool=false)
     nrows,ncols = dlm_dims(sbuff, eol, dlm)
     offsets = zeros(Int, nrows, ncols)
     cells = Array(T, nrows, ncols)
@@ -55,7 +61,7 @@ function dlm_col_begin(ncols::Int, offsets::Array{Int,2}, row::Int, col::Int)
     pp_col = (1 == col) ? ncols : (col-1)
 
     ret = offsets[pp_row, pp_col]
-    (ret == 0) ? dlm_col_begin(csv, pp_row, pp_col) : (ret+2)
+    (ret == 0) ? dlm_col_begin(ncols, offsets, pp_row, pp_col) : (ret+2)
 end
 
 function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, auto::Bool)
