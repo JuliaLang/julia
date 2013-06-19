@@ -12,18 +12,37 @@ include("pkg2/write.jl")
 using .Types
 
 add(pkg::String, vers::VersionSet) = Dir.cd() do
+    avail = Read.available()
+    haskey(avail,pkg) || error("unknown package $pkg")
     Write.edit("REQUIRE", Reqs.add, pkg, vers)
+    resolve(avail)
+    # TODO: roll back REQUIRE on failure
 end
 add(pkg::String, vers::VersionNumber...) = add(pkg, VersionSet(vers...))
 
 rm(pkg::String) = Dir.cd() do
-    Write.edit("REQUIRE", Reqs.rm, pkg)
+    avail = Read.available()
+    Write.edit("REQUIRE") do input, output
+        altered = Reqs.rm(input, output, pkg)
+        altered || haskey(avail,pkg) || error("unknown package $pkg")
+        altered
+    end
+    resolve(avail)
+    # TODO: roll back REQUIRE on failure
 end
 
-resolve() = Dir.cd() do
+macro recover(ex)
+    quote
+        try $(esc(ex))
+        catch err
+            show(err)
+        end
+    end
+end
+
+resolve(avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
     # figure out what should be installed
     reqs  = Reqs.parse("REQUIRE")
-    avail = Read.available()
     fixed = Read.fixed(avail)
     reqs  = Query.requirements(reqs,fixed)
     deps  = Query.dependencies(avail,fixed)
@@ -57,18 +76,18 @@ resolve() = Dir.cd() do
             Write.remove(pkg)
         end
     catch
-        # for (pkg,ver) in remove
-        #     info("Rolling back $pkg to v$ver")
-        #     Write.install!(pkg, Read.sha1(pkg,ver))
-        # end
-        # for (pkg,(v1,v2)) in update
-        #     info("Rolling back $pkg to v$v1")
-        #     Write.update!(pkg, Read.sha1(pkg,v1))
-        # end
-        # for (pkg,ver) in install
-        #     info("Rolling back install of $pkg")
-        #     Write.remove!(pkg)
-        # end
+        for (pkg,ver) in remove
+            info("Rolling back $pkg to v$ver")
+            @recover Write.install(pkg, Read.sha1(pkg,ver))
+        end
+        for (pkg,(v1,v2)) in update
+            info("Rolling back $pkg to v$v1")
+            @recover Write.update(pkg, Read.sha1(pkg,v1))
+        end
+        for (pkg,ver) in install
+            info("Rolling back install of $pkg")
+            @recover Write.remove(pkg)
+        end
         rethrow()
     end
 end
