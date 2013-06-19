@@ -1,6 +1,6 @@
 module Write
 
-using ..Types, ..Reqs, ..Read, ..Cache
+using Base.Git, ..Cache
 
 function edit(f::Function, file::String, args...)
     tmp = "$file.$(randstring()).tmp"
@@ -21,23 +21,15 @@ edit(file::String, f::Function, args...) = edit(f, file, args...)
 
 function install(pkg::String, sha1::String)
     ispath(pkg) && error("path $pkg already exists! please remove to allow installation.")
-    url = Cache.origin(pkg)
-    cache = abspath(Cache.path(pkg))
-    run(`git clone -q $cache`)
-    cd(pkg) do
-        run(`git config remote.origin.url $url`)
-        run(`git checkout -q $sha1`)
-    end
+    Git.run(`clone -q $(Cache.path(pkg))`)
+    Git.run(`config remote.origin.url $(Cache.origin(pkg))`, dir=pkg)
+    Git.run(`checkout -q $sha1`, dir=pkg)
 end
 
 function update(pkg::String, sha1::String)
-    url = Cache.origin(pkg)
-    cache = abspath(Cache.path(pkg))
-    cd(pkg) do
-        run(`git config remote.origin.url $url`)
-        run(`git fetch -q --tags $cache`)
-        run(`git checkout -q $sha1`)
-    end
+    Git.run(`config remote.origin.url $(Cache.origin(pkg))`, dir=pkg)
+    Git.run(`fetch -q $(Cache.path(pkg))`, dir=pkg)
+    Git.run(`checkout -q $sha1`, dir=pkg)
 end
 
 function remove(pkg::String)
