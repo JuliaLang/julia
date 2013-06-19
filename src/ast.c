@@ -359,6 +359,9 @@ static value_t julia_to_scm(jl_value_t *v)
     if (v == jl_false) {
         return FL_F;
     }
+    if (v == jl_nothing) {
+        return fl_cons(symbol("null"), FL_NIL);
+    }
     if (jl_is_expr(v)) {
         jl_expr_t *ex = (jl_expr_t*)v;
         value_t args = array_to_list(ex->args);
