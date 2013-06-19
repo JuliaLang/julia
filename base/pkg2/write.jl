@@ -1,6 +1,6 @@
 module Write
 
-using ..Types, ..Reqs
+using ..Types, ..Reqs, ..Read, ..Cache
 
 function edit(f::Function, file::String, args...)
     tmp = "$file.$(randstring()).tmp"
@@ -19,34 +19,28 @@ function edit(f::Function, file::String, args...)
 end
 edit(file::String, f::Function, args...) = edit(f, file, args...)
 
-function install(pkg::String, ver::VersionNumber)
-    info("Installing $pkg v$ver")
-    if ispath(pkg)
-        error("Path $pkg already exists! Please remove to allow installation.")
-    end
-    run(`git clone --reference . $url $pkg`)
+function install(pkg::String, sha1::String)
+    ispath(pkg) && error("path $pkg already exists! please remove to allow installation.")
+    url = Cache.origin(pkg)
+    cache = abspath(Cache.path(pkg))
+    run(`git clone -q $cache`)
     cd(pkg) do
-        if !success(`git checkout -q $ver`)
-            run(`git fetch -q`)
-            try run(`git checkout -q $ver`)
-            catch
-                error("An invalid SHA1 hash seems to be registered for $pkg. Please contact the package maintainer.")
-            end
-        end
+        run(`git config remote.origin.url $url`)
+        run(`git checkout -q $sha1`)
     end
 end
 
-function update(pkg::String, A::VersionNumber, B::VersionNumber)
-    info("$(A <= B ? "Up" : "Down")grading $pkg: v$A => v$B")
+function update(pkg::String, sha1::String)
+    url = Cache.origin(pkg)
+    cache = abspath(Cache.path(pkg))
     cd(pkg) do
-        Git.transact() do
-            run(`git checkout -q $B`)
-        end
+        run(`git config remote.origin.url $url`)
+        run(`git fetch -q --tags $cache`)
+        run(`git checkout -q $sha1`)
     end
 end
 
 function remove(pkg::String)
-    info("Removing $pkg v$ver")
     run(`rm -rf -- $pkg`)
 end
 
