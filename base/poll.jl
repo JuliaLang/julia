@@ -54,9 +54,10 @@ type PollingFileWatcher <: UVPollingWatcher
 end
 
 @unix_only typealias FDW_FD RawFD 
-@windows_only typealias FDW_FD WindowsRawSocket 
+@windows_only typealias FDW_FD WindowsRawSocket
 
-_get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle,Ptr{Void},(Int32,),fd.fd))
+@unix_only _get_osfhandle(fd::RawFD) = fd
+@windows_only _get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle,Ptr{Void},(Int32,),fd.fd))
 
 type FDWatcher <: UVPollingWatcher
     handle::Ptr{Void}
@@ -65,8 +66,8 @@ type FDWatcher <: UVPollingWatcher
     notify::Condition
     cb::Callback
     events::Int32
-    FDWatcher(handle::Ptr,fd::FDW_FD,open::Bool,notify::Condition,cb::Callback,events::Integer) = 
-        new(handle,fd,open,notify,cb,int32(events))
+    FDWatcher(handle::Ptr,fd,open::Bool,notify::Condition,cb::Callback,events::Integer) =
+        new(handle,_get_osfhandle(fd),open,notify,cb,int32(events))
 end
 function FDWatcher(fd::RawFD)
     handle = c_malloc(_sizeof_uv_poll)
@@ -75,8 +76,7 @@ function FDWatcher(fd::RawFD)
         c_free(handle)
         throw(UVError("FDWatcher"))
     end
-    @unix_only this = FDWatcher(handle,fd,false,Condition(),false,0)
-    @windows_only this = FDWatcher(handle,_get_osfhandle(fd),false,Condition(),false,0)
+    this = FDWatcher(handle,fd,false,Condition(),false,0)
     associate_julia_struct(handle,this)
     finalizer(this,close)
     this
@@ -139,7 +139,7 @@ let
     global fdwatcher_reinit
     const empty_watcher = FDWatcher(C_NULL,RawFD(-1),false,Condition(),false,0)
     @unix_only begin
-        fdwatcher_array = Array(FDWatcher,0)
+        local fdwatcher_array = Array(FDWatcher,0)
         function fdwatcher_reinit()
             fdwatcher_array = Array(FDWatcher,0)
         end
@@ -157,7 +157,7 @@ let
         end 
     end
     @windows_only begin
-        fdwatcher_dict = Dict{WindowsRawSocket,FDWatcher}()
+        local fdwatcher_array = Dict{WindowsRawSocket,FDWatcher}()
         function fdwatcher_reinit()
             fdwatcher_array = Dict{WindowsRawSocket,FDWatcher}()
         end
