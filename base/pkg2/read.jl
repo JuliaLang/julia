@@ -2,6 +2,11 @@ module Read
 
 using ..Types, ..Reqs, Base.Git
 
+readstrip(path...) = strip(readall(joinpath(path...)))
+
+url(pkg::String) = readstrip("METADATA", pkg, "url")
+sha1(pkg::String, ver::VersionNumber) = readstrip("METADATA", pkg, "versions", string(ver), "sha1")
+
 function available(names=readdir("METADATA"))
     pkgs = Dict{ByteString,Dict{VersionNumber,Available}}()
     for pkg in names
