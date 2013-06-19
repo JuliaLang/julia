@@ -96,6 +96,182 @@ static void *add_library_sym(char *name, char *lib)
     return sval;
 }
 
+// --- ABI Implementations ---
+// Partially based on the LDC ABI implementations licensed under the BSD 3-clause license
+
+#define ABI_X86_64 1
+
+#if ABI_X86_64
+
+// used to track the state of the ABI generator during
+// code generation
+struct AbiState {
+    unsigned char int_regs, sse_regs;
+};
+
+const AbiState default_abi_state = {6,8};
+
+enum ArgClass { Integer, Sse, SseUp, X87, X87Up, ComplexX87, NoClass, Memory };
+
+struct Classification {
+    bool isMemory;
+    ArgClass classes[2];
+
+    Classification() : isMemory(false) {
+        classes[0] = NoClass;
+        classes[1] = NoClass;
+    }
+
+    void addField(unsigned offset, ArgClass cl) {
+        if (isMemory)
+            return;
+
+        // Note that we don't need to bother checking if it crosses 8 bytes.
+        // We don't get here with unaligned fields, and anything that can be
+        // big enough to cross 8 bytes (cdoubles, reals, structs and arrays)
+        // is special-cased in classifyType()
+        int idx = (offset < 8 ? 0 : 1);
+
+        ArgClass nw = merge(classes[idx], cl);
+        if (nw != classes[idx]) {
+            classes[idx] = nw;
+
+            if (nw == Memory) {
+                classes[1-idx] = Memory;
+                isMemory = true;
+            }
+        }
+    }
+
+    private:
+        ArgClass merge(ArgClass accum, ArgClass cl) {
+            if (accum == cl)
+                return accum;
+            if (accum == NoClass)
+                return cl;
+            if (cl == NoClass)
+                return accum;
+            if (accum == Memory || cl == Memory)
+                return Memory;
+            if (accum == Integer || cl == Integer)
+                return Integer;
+            if (accum == X87 || accum == X87Up || accum == ComplexX87 ||
+                cl == X87 || cl == X87Up || cl == ComplexX87)
+                return Memory;
+            return Sse;
+        }
+};
+
+/*else if (ty == jl_float80_type) { //if this is ever added
+        accum.addField(offset, X87);
+        accum.addField(offset+8, X87Up);
+    } else if (ty->ty == Tcomplex80) {
+        accum.addField(offset, ComplexX87);
+        // make sure other half knows about it too:
+        accum.addField(offset+16, ComplexX87);
+    } */ 
+void classifyType(Classification& accum, jl_value_t* ty, uint64_t offset) {
+    if (jl_is_cpointer_type(ty)) {
+        accum.addField(offset, Integer);
+    } else if (jl_is_bitstype(ty) && jl_datatype_size(ty) == 16) {
+        // Int128 or other 128bit wide INTEGER types
+        accum.addField(offset, Integer);
+        accum.addField(offset+8, Integer);
+    } 
+    // Floating point types
+    else if (ty == (jl_value_t*)jl_float64_type || ty == (jl_value_t*)jl_float32_type) {
+        accum.addField(offset, Sse);
+    }
+    // Other integer types
+    else if (jl_is_bitstype(ty))
+    {
+        if(jl_datatype_size(ty) > 8)
+            jl_error("Bitstype of this size not supported in the C ABI");
+        accum.addField(offset,Integer);
+    } else if (jl_isbits(ty) && jl_datatype_size(ty) > 16) {
+        // This isn't creal, yet is > 16 bytes, so pass in memory.
+        // Must be after creal case but before arrays and structs,
+        // the other types that can get bigger than 16 bytes
+        accum.addField(offset, Memory);
+    } else if (jl_is_array_type(ty)) {
+        jl_value_t* eltType = jl_tparam0(ty);
+        assert(jl_isbits(eltType));
+        uint64_t eltsize = jl_datatype_size(eltType);
+        if (eltsize > 0) {
+            uint16_t dim = 0;
+            for (int i = 0; i<jl_array_ndims(ty); ++i)
+                dim += jl_array_dim(ty,i);
+            assert(dim <= 16
+                    && "Array of non-empty type <= 16 bytes but > 16 elements?");
+            for (int i = 0; i < dim; i++) {
+                classifyType(accum, eltType, offset);
+                offset += eltsize;
+            }
+        }
+    } else if (jl_is_structtype(ty)) {
+        int remaining_size = jl_datatype_size(ty);
+        int i = 0;
+        while(true) {
+            classifyType(accum, jl_tupleref(((jl_datatype_t*)ty)->types,i), offset + jl_field_offset(ty,i));
+            remaining_size -= jl_field_size(ty,i);
+            i++;
+            if(remaining_size <= 0)
+                break;
+        }
+    } else {
+        jl_error("Unsupported type in C ABI");
+    }
+}
+
+Classification classify(jl_value_t* ty) {
+    Classification cl;
+    classifyType(cl, ty, 0);
+    return cl;
+}
+
+bool use_sret(AbiState *state,jl_value_t *ty)
+{
+    int sret = classify(ty).isMemory;
+    if(sret) {
+        assert(state->int_regs>0 && "WTF? No int regs available?");
+        state->int_regs--;
+    }
+    return sret;
+}
+
+void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg)
+{
+    Classification cl = classify(ty);
+    if (cl.isMemory) {
+        *byRef = true;
+    }
+        
+
+    // Figure out how many registers we want for this arg:
+    AbiState wanted = { 0, 0 };
+    for (int i = 0 ; i < 2; i++) {
+        if (cl.classes[i] == Integer)
+            wanted.int_regs++;
+        else if (cl.classes[i] == Sse)
+            wanted.sse_regs++;
+    }
+
+    if (wanted.int_regs <= state->int_regs && wanted.sse_regs <= state->sse_regs) {
+        state->int_regs -= wanted.int_regs;
+        state->sse_regs -= wanted.sse_regs;
+        *inReg = true;
+    }else if(jl_is_structtype(ty))
+    {
+        *byRef = true;
+    }
+}
+
+#elif ABI_WIN64
+
+#elif ABI_86
+
+#endif
+
 // --- argument passing and scratch space utilities ---
 
 static Function *value_to_pointer_func;
@@ -216,19 +392,22 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
 
 static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                               jl_value_t *argex, bool addressOf,
+                              bool byRef, bool inReg,
                               int argn, jl_codectx_t *ctx,
                               bool *mightNeedTempSpace)
 {
     Type *vt = jv->getType();
+
+    // We're passing any
     if (ty == jl_pvalue_llvmt) {
         return boxed(jv);
     }
-    else if (ty == vt && !addressOf) {
+    else if (ty == vt && !addressOf && !byRef) {
         return jv;
     }
     else if (vt != jl_pvalue_llvmt) {
         // argument value is unboxed
-        if (addressOf) {
+        if (addressOf || (byRef && inReg)) {
             if (ty->isPointerTy() && ty->getContainedType(0)==vt) {
                 // pass the address of an alloca'd thing, not a box
                 // since those are immutable.
@@ -290,7 +469,10 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         //    emit_typecheck(emit_typeof(jv), (jl_value_t*)jl_struct_kind, "ccall: Struct argument called with something that isn't a struct", ctx);
         // //safe thing would be to also check that jl_typeof(aty)->size > sizeof(ty) here and/or at runtime
         Value *pjv = builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), PointerType::get(ty,0));
-        return builder.CreateLoad(pjv, false);
+        if(byRef)
+            return pjv;
+        else 
+            builder.CreateLoad(pjv, false);
     }
     // TODO: error for & with non-pointer argument type
     assert(jl_is_bitstype(jt));
@@ -497,13 +679,26 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     std::vector<Type *> fargt(0);
     std::vector<Type *> fargt_sig(0);
 #if LLVM33
-    std::vector<AttrBuilder> paramattrs;
-#else
     AttrBuilder retattrs;
     std::vector<AttrBuilder> paramattrs;
+#else
     std::vector<AttributeWithIndex> attrs;
 #endif
+    AbiState abi;
     int sret = 0;
+    if (jl_isbits(rt) && use_sret(&abi,rt)) {
+#if LLVM33
+        paramattrs[0].clear();
+        paramattrs[0].addAttribute(Attributes::StructRet);
+#elif LLVM32
+        attrs.push_back(AttributeWithIndex::get(getGlobalContext(), 1, Attributes::StructRet));
+#else
+        attrs.push_back(AttributeWithIndex::get(1, Attribute::StructRet));
+#endif
+        fargt_sig.push_back(PointerType::get(lrt,0));
+        lrt = T_void;
+        sret = 1;
+    }
     size_t i;
     bool isVa = false;
     size_t nargt = jl_tuple_len(tt);
@@ -539,6 +734,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     av = Attributes::SExt;
                 else
                     av = Attributes::ZExt;
+                attrs.push_back(AttributeWithIndex::get(getGlobalContext(), i+1+sret, av));
 #else
                 if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
                     av = Attribute::SExt;
@@ -561,6 +757,14 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             msg << " doesn't correspond to a C type";
             emit_error(msg.str(), ctx);
             return literal_pointer_val(jl_nothing);
+        }
+        if (0 && t->isStructTy()) {
+            t = PointerType::get(t,0);
+#ifdef LLVM32
+            attrs.push_back(AttributeWithIndex::get(getGlobalContext(), i+1+sret, Attributes::ByVal));
+#else
+            attrs.push_back(AttributeWithIndex::get(i+1, Attribute::ByVal));
+#endif
         }
         fargt.push_back(t);
         if (!isVa)
@@ -688,6 +892,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     // emit arguments
     Value *argvals[(nargs-3)/2 + sret];
     Value *result;
+
+    // First, if the ABI requires us to provide the space for the return
+    // argument, allocate the box and store that as the first argument type 
     if (sret) {
         assert(jl_is_structtype(rt));
         result = builder.CreateCall(
@@ -702,18 +909,32 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 emit_nthptr_addr(result, (size_t)1),
                 fargt_sig[0]);
     }
+
+    // save argument depth until after we're done emitting arguments
     int last_depth = ctx->argDepth;
+
+    // number of parameters to the cfunction
     int nargty = jl_tuple_len(tt);
     bool needTempSpace = false;
     for(i=4; i < nargs+1; i+=2) {
+
+        // Current C function parameter
         int ai = (i-4)/2;
+
+        // Julia (expression) value of current parameter
         jl_value_t *argi = args[i];
+
+        // pass the address of the argument rather than the argument itself
         bool addressOf = false;
         if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
             addressOf = true;
             argi = jl_exprarg(argi,0);
         }
+
+        // LLVM type of the current parameter
         Type *largty;
+
+        // Julia type of the current parameter
         jl_value_t *jargty;
         if (isVa && ai >= nargty-1) {
             largty = fargt[nargty-1];
@@ -723,6 +944,41 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             largty = fargt[ai];
             jargty = jl_tupleref(tt,ai);
         }
+
+
+        // Whether the ABI needs us to pass this by ref and/or in registers
+        // Valid combinations are:
+    
+        // Whether or not LLVM wants us to emit a pointer to the data
+        bool byRef = false;
+
+        // Whether or not to pass this in registers
+        bool inReg = false;
+
+        if(jl_isbits(jargty))
+            needPassByRef(&abi,jargty,&byRef,&inReg);
+
+        // Add the appropriate LLVM parameter attributes
+        // Note that even though the LLVM argument is called ByVal 
+        // this really means that the thing we're passing is pointing to
+        // the thing we want to pass by value 
+#if LLVM33
+        if(byRef)
+            paramattrs[ai+sret+1].addAttribute(Attributes::ByVal)
+        if(inReg)
+            paramattrs[ai+sret+1].addAttribute(Attributes::InReg)
+#elif LLVM32
+        if(byRef)
+            attrs.push_back(AttributeWithIndex::get(getGlobalContext(), ai+sret+1, Attributes::ByVal));
+        if(inReg)
+            attrs.push_back(AttributeWithIndex::get(getGlobalContext(), ai+sret+1, Attributes::InReg));
+#else
+        if(byRef)
+            attrs.push_back(AttributeWithIndex::get(ai+sret+1, Attribute::ByVal));
+        if(inReg)
+            attrs.push_back(AttributeWithIndex::get(ai+sret+1, Attribute::InReg));
+#endif
+
         Value *arg;
         if (largty == jl_pvalue_llvmt ||
                 largty->isStructTy()) {
@@ -747,7 +1003,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 #endif
 
         bool mightNeed=false;
-        argvals[ai+sret] = julia_to_native(largty, jargty, arg, argi, addressOf,
+        argvals[ai+sret] = julia_to_native(largty, jargty, arg, argi, addressOf, byRef, inReg,
                                            ai+1, ctx, &mightNeed);
         needTempSpace |= mightNeed;
     }
@@ -767,18 +1023,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     Value *ret = builder.CreateCall(
             llvmf,
             ArrayRef<Value*>(&argvals[0],(nargs-3)/2+sret));
-
-    attr_type attributes;
-#ifdef LLVM33
-    for(i = 0; i < nargt+sret; ++i)
-        if(paramattrs[i].hasAttributes()) 
-            attributes = attributes.addAttributes(jl_LLVMContext,i+1,
-                    AttributeSet::get(jl_LLVMContext,i+1,paramattrs[i]));
-#elif LLVM32
-    for(i = 0; i < nargt+sret; ++i)
-        if(paramattrs[i].hasAttributes()) 
-            attrs.push_back(AttributeWithIndex::get(i+1, Attributes::get(jl_LLVMContext,paramattrs[i])));
-    attributes = AttrListPtr::get(getGlobalContext(), ArrayRef<AttributeWithIndex>(attrs));
+#ifdef LLVM32
+    ((CallInst*)ret)->setAttributes(AttrListPtr::get(getGlobalContext(), ArrayRef<AttributeWithIndex>(attrs)));
 #else
     attributes = AttrListPtr::get(attrs.data(),attrs.size());
 #endif
@@ -809,13 +1055,20 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     JL_GC_POP();
     if (!sret && lrt == T_void)
         return literal_pointer_val((jl_value_t*)jl_nothing);
-    if (lrt->isStructTy()) {
+    
+    // Finally we need to box the result into julia type 
+    // However, if we have already created a box for the return 
+    // type because we the ABI required us to pass a pointer (sret),
+    // then we do not need to do this. 
+    if (!sret && lrt->isStructTy()) {
         //fprintf(stderr, "ccall rt: %s -> %s\n", f_name, ((jl_tag_type_t*)rt)->name->name->name);
         assert(jl_is_structtype(rt));
+        // Call jlallocobj_func with the appropriate size (argument size size_t)
         Value *strct =
             builder.CreateCall(jlallocobj_func,
                                ConstantInt::get(T_size,
                                     sizeof(void*)+((jl_datatype_t*)rt)->size));
+        // Store the type into the first field
         builder.CreateStore(literal_pointer_val((jl_value_t*)rt),
                             emit_nthptr_addr(strct, (size_t)0));
         builder.CreateStore(result,
