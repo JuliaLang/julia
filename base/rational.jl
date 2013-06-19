@@ -61,7 +61,8 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint)
         p > 0 ? (n>>p)//one(T) :
                 (n<<-p)//one(T)
 end
-convert(::Type{Rational}, x::Union(Float64,Float32)) = convert(Rational{Int}, x)
+convert(::Type{Rational}, x::Float64) = convert(Rational{Int64}, x)
+convert(::Type{Rational}, x::Float32) = convert(Rational{Int}, x)
 
 promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
 promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
