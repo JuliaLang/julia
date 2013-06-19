@@ -103,9 +103,10 @@ Worker(host::String, port::Integer, sock::TcpSocket) =
     Worker(host, port, sock, 0)
 Worker(host::String, port::Integer) =
     Worker(host, port, connect(host,uint16(port)))
-Worker(host::String, port::Integer, tunnel_user::String) =
+Worker(host::String, port::Integer, tunnel_user::String, sshflags) =
     Worker(host, port, connect("localhost",
-                               ssh_tunnel(tunnel_user, host, uint16(port))))
+                               ssh_tunnel(tunnel_user, host, uint16(port), sshflags)))
+
 
 function send_msg_now(w::Worker, kind, args...)
     send_msg_(w, kind, args, true)
@@ -880,7 +881,7 @@ function start_worker(out::IO)
     exit(0)
 end
 
-function start_remote_workers(machines, cmds, tunnel=false)
+function start_remote_workers(machines, cmds, tunnel=false, sshflags=``)
     n = length(cmds)
     outs = cell(n)
     w = cell(n)
@@ -910,7 +911,7 @@ function start_remote_workers(machines, cmds, tunnel=false)
         end
         
         if tunnel
-            w[i] = Worker(hostname, port, user)
+            w[i] = Worker(hostname, port, user, sshflags)
         else
             w[i] = Worker(hostname, port)
         end
@@ -945,13 +946,17 @@ end
 tunnel_port = 9201
 # establish an SSH tunnel to a remote worker
 # returns P such that localhost:P connects to host:port
-ssh_tunnel(host, port) = ssh_tunnel(ENV["USER"], host, port)
-function ssh_tunnel(user, host, port)
+function ssh_tunnel(user, host, port, sshflags)
     global tunnel_port
     localp = tunnel_port::Int
-    while !success(detach(`ssh -f -o ExitOnForwardFailure=yes $(user)@$host -L $localp:$host:$port -N`))
+    while !success(detach(`ssh -f -o ExitOnForwardFailure=yes $sshflags $(user)@$host -L $localp:$host:$(int(port)) -N`)) && localp < 10000
         localp += 1
     end
+    
+    if localp >= 10000
+        error("Unable to assign a local tunnel port between 9201 and 10000")
+    end
+    
     tunnel_port = localp+1
     localp
 end
@@ -970,7 +975,7 @@ function addprocs(machines::AbstractVector;
         start_remote_workers(machines,
             map(m->detach(`ssh -n $sshflags $m "bash -l -c \"cd $dir && $exename --worker\""`),
                 machines),
-            tunnel))
+            tunnel, sshflags))
 end
 
 #function addprocs_ssh(machines, keys)
