@@ -626,9 +626,7 @@ DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host)
 DLLEXPORT void getlocalip(char *buf, size_t len)
 {
     uv_err_t err;
-    uv_interface_address_t * ifAddrStruct=NULL;
-    struct sockaddr_in ifa;
-    void * tmpAddrPtr=NULL;
+    uv_interface_address_t * ifAddrStruct=NULL, *ifa;
     int count=0;
 
     err = uv_interface_addresses(&ifAddrStruct,&count);
@@ -637,32 +635,21 @@ DLLEXPORT void getlocalip(char *buf, size_t len)
             uv_free_interface_addresses(ifAddrStruct,count);
 
     for (int i = 0; i < count; i++) {
-        ifa = (ifAddrStruct+i)->address.address4;
-        if (ifa.sin_family==AF_INET) { // check it is IP4
-            // is a valid IP4 Address
-#ifndef _OS_WINDOWS_
-            tmpAddrPtr=&(ifa.sin_addr);
-            inet_ntop(AF_INET, tmpAddrPtr, buf, len); //Not available on WinXP
-#else
-            strncpy(buf,inet_ntoa(ifa.sin_addr),len-1);
-            buf[len]=0;
-#endif
-
-            if (strcmp(buf,"127.0.0.1")) //TODO: use (ifa.internal == false)
+        ifa = ifAddrStruct+i;
+        if (ifa->is_internal)
+            continue;
+        if (ifa->address.address4.sin_family == AF_INET) {
+            if (!uv_ip4_name(&(ifa->address.address4), buf, len))
                 break;
-            //printf("%s IP Address %s\n", ifa->ifa_name, addressBuffer);
+        } else {
+            // Enable the following for IPv6 support:
+            //if (!uv_ip6_name(&(ifa->address.address6), buf, len))
+            //    break;
         }
-        /*
-        else if (ifa->ifa_addr && ifa->ifa_addr->sa_family==AF_INET6) { // check it is IP6
-            // is a valid IP6 Address
-            tmpAddrPtr=&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
-            char addressBuffer[INET6_ADDRSTRLEN];
-            inet_ntop(AF_INET6, tmpAddrPtr, addressBuffer, INET6_ADDRSTRLEN);
-            printf("%s IP Address %s\n", ifa->ifa_name, addressBuffer);
-        }
-        */
     }
-    if (ifAddrStruct!=NULL) uv_free_interface_addresses(ifAddrStruct,count);
+    if (ifAddrStruct!=NULL)
+        uv_free_interface_addresses(ifAddrStruct,count);
+    //printf("%s IP Address %s\n", ifa->name, buf);
 }
 
 DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, const char *host, const char *service, jl_function_t *cb)
@@ -696,7 +683,6 @@ DLLEXPORT unsigned int jl_sockaddr_host4(struct sockaddr *addr)
 {
     return ((struct sockaddr_in*)addr)->sin_addr.s_addr;
 }
-
 
 DLLEXPORT void jl_sockaddr_set_port(struct sockaddr *addr,uint16_t port)
 {

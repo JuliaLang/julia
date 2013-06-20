@@ -11,25 +11,24 @@ include("pkg2/write.jl")
 
 using .Types
 
-add(pkg::String, vers::VersionSet) = Dir.cd() do
+edit(f::Function, pkg, args...) = Dir.cd() do
+    r = Reqs.read("REQUIRE")
+    reqs = Reqs.parse(r)
     avail = Read.available()
-    haskey(avail,pkg) || error("unknown package $pkg")
-    Write.edit("REQUIRE", Reqs.add, pkg, vers)
-    resolve(avail)
-    # TODO: roll back REQUIRE on failure
-end
-add(pkg::String, vers::VersionNumber...) = add(pkg, VersionSet(vers...))
-
-rm(pkg::String) = Dir.cd() do
-    avail = Read.available()
-    Write.edit("REQUIRE") do input, output
-        altered = Reqs.rm(input, output, pkg)
-        altered || haskey(avail,pkg) || error("unknown package $pkg")
-        altered
+    if !haskey(avail,pkg) && !haskey(reqs,pkg)
+        error("unknown package $pkg")
     end
-    resolve(avail)
-    # TODO: roll back REQUIRE on failure
+    r_ = f(r,pkg,args...)
+    r_ == r && return
+    reqs_ = Reqs.parse(r_)
+    reqs_ != reqs && resolve(reqs_,avail)
+    Reqs.write("REQUIRE",r_)
+    return
 end
+
+rm(pkg::String) = edit(Reqs.rm, pkg)
+add(pkg::String, vers::VersionSet) = edit(Reqs.add, pkg, vers)
+add(pkg::String, vers::VersionNumber...) = add(pkg, VersionSet(vers...))
 
 macro recover(ex)
     quote
@@ -40,9 +39,8 @@ macro recover(ex)
     end
 end
 
-resolve(avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
+resolve(reqs::Dict, avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
     # figure out what should be installed
-    reqs  = Reqs.parse("REQUIRE")
     fixed = Read.fixed(avail)
     reqs  = Query.requirements(reqs,fixed)
     deps  = Query.dependencies(avail,fixed)
@@ -90,6 +88,9 @@ resolve(avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
         end
         rethrow()
     end
+end
+resolve() = Dir.cd() do
+    resolve(Reqs.parse("REQUIRE"))
 end
 
 end # module
