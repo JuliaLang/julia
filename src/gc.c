@@ -514,8 +514,8 @@ extern void jl_unmark_symbols(void);
 
 static void gc_sweep(void)
 {
-    sweep_big();
     sweep_malloced_arrays();
+    sweep_big();
     int i;
     for(i=0; i < N_POOLS; i++) {
         sweep_pool(&norm_pools[i]);
