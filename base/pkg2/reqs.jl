@@ -26,9 +26,9 @@ immutable Requirement <: Line
         content = package
         if versions != VersionSet()
             for ival in versions.intervals
-                (content *= "\t$(ival.lower)")
+                (content *= " $(ival.lower)")
                 ival.upper < typemax(VersionNumber) &&
-                (content *= "\t$(ival.upper)")
+                (content *= " $(ival.upper)")
             end
         end
         new(content, package, versions)

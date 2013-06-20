@@ -34,38 +34,34 @@ function isfixed(pkg::String, avail::Dict=available(pkg))
     isinstalled(pkg) || error("$pkg is not an installed package.")
     isfile("METADATA", pkg, "url") || return true
     ispath(pkg, ".git") || return true
-    cd(pkg) do
-        Git.dirty() && return true
-        Git.attached() && return true
-        head = Git.head()
-        for (ver,info) in avail
-            if Git.iscommit(info.sha1)
-                Git.is_ancestor_of(head, info.sha1) && return false
-            else
-                Base.warn_once("unknown $pkg commit $(info.sha1[1:10]) (METADATA may be ahead of package repo).")
-            end
+    Git.dirty(dir=pkg) && return true
+    Git.attached(dir=pkg) && return true
+    head = Git.head(dir=pkg)
+    for (ver,info) in avail
+        if Git.iscommit(info.sha1, dir=pkg)
+            Git.is_ancestor_of(head, info.sha1, dir=pkg) && return false
+        else
+            Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package repo")
         end
-        return true
     end
+    return true
 end
 
 function installed_version(pkg::String, avail::Dict=available(pkg))
-    head = cd(Git.head,pkg)
+    head = Git.head(dir=pkg)
     lo = typemin(VersionNumber)
     hi = typemin(VersionNumber)
     for (ver,info) in avail
         head == info.sha1 && return ver
-        cd(pkg) do
-            if Git.iscommit(info.sha1)
-                base = readchomp(`git merge-base $head $(info.sha1)`)
-                if base == head # Git.is_ancestor_of(head, info.sha1)
-                    lo = max(lo,ver)
-                elseif base == info.sha1 # Git.is_ancestor_of(info.sha1, head)
-                    hi = max(hi,ver)
-                end
-            else
-                Base.warn_once("unknown $pkg commit $(info.sha1[1:10]) (METADATA may be ahead of package repo).")
+        if Git.iscommit(info.sha1, dir=pkg)
+            base = Git.readchomp(`merge-base $head $(info.sha1)`, dir=pkg)
+            if base == head # Git.is_ancestor_of(head, info.sha1)
+                lo = max(lo,ver)
+            elseif base == info.sha1 # Git.is_ancestor_of(info.sha1, head)
+                hi = max(hi,ver)
             end
+        else
+            Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package repo")
         end
     end
     typemin(VersionNumber) < lo ?
@@ -74,16 +70,14 @@ function installed_version(pkg::String, avail::Dict=available(pkg))
 end
 
 function requires_path(pkg::String, avail::Dict=available(pkg))
-    cd(pkg) do
-        Git.dirty("REQUIRE") && return joinpath(pkg, "REQUIRE")
-        head = Git.head()
-        for (ver,info) in avail
-            if head == info.sha1
-                return joinpath("METADATA", pkg, "versions", string(ver), "requires")
-            end
+    Git.dirty("REQUIRE", dir=pkg) && return joinpath(pkg, "REQUIRE")
+    head = Git.head(dir=pkg)
+    for (ver,info) in avail
+        if head == info.sha1
+            return joinpath("METADATA", pkg, "versions", string(ver), "requires")
         end
-        return joinpath(pkg, "REQUIRE")
     end
+    joinpath(pkg, "REQUIRE")
 end
 requires_dict(pkg::String, avail::Dict=available(pkg)) = Reqs.parse(requires_path(pkg,avail))
 
