@@ -10,7 +10,11 @@ function prefetch(pkg::String, url::String, ver::VersionNumber, sha1::String)
 	isdir(".cache") || mkpath(".cache")
 	if !isdir(cache)
 		from = ispath(pkg,".git") ? pkg : url
-		Git.run(`clone -q --bare $from $cache`)
+		try Git.run(`clone -q --bare $from $cache`)
+		catch
+			run(`rm -rf $cache`)
+			rethrow()
+		end
 	elseif ispath(pkg,".git")
 	    Git.run(`fetch -q $pkg`, dir=cache)
 	end
