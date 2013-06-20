@@ -645,14 +645,27 @@ for Ti in (:Int32,:Int64)
             if status != CHOLMOD_TRUE throw(CholmodException) end
             CholmodFactor(Lpt)
         end
+        function cholfact{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti},beta::Tv,ll::Bool)
+            cm = cmn($Ti)
+            ## may need to change final_asis as well as final_ll
+            if ll cm[chm_final_ll_inds] = reinterpret(Uint8, [one(Cint)]) end
+            Lpt = ccall((@chm_nm "analyze" $Ti
+                         ,:libcholmod), Ptr{c_CholmodFactor{Tv,$Ti}},
+                        (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Uint8}), &A.c, cm)
+            status = ccall((@chm_nm "factorize_p" $Ti
+                            ,:libcholmod), Cint,
+                           (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Tv}, Ptr{Cint}, Csize_t,
+                            Ptr{c_CholmodFactor{Tv,$Ti}}, Ptr{Uint8}),
+                           &A.c, &beta, C_NULL, zero(Csize_t), Lpt, cmn($Ti))
+            if status != CHOLMOD_TRUE throw(CholmodException) end
+            CholmodFactor(Lpt)
+        end
         function chm_analyze{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti})
             CholmodFactor(ccall((@chm_nm "analyze" $Ti
                                  ,:libcholmod), Ptr{c_CholmodFactor{Tv,$Ti}},
                                 (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Uint8}), &A.c, cmn($Ti)))
         end
-                                        # update the factorization - need a better name, "update"?
-        function chm_factorize!{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti},
-                                               A::CholmodSparse{Tv,$Ti})
+        function cholfact!{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti},A::CholmodSparse{Tv,$Ti})
             status = ccall((@chm_nm "factorize" $Ti
                             ,:libcholmod), Cint,
                            (Ptr{c_CholmodSparse{Tv,$Ti}},
@@ -661,9 +674,8 @@ for Ti in (:Int32,:Int64)
             if status != CHOLMOD_TRUE throw(CholmodException) end
             L
         end
-        function chm_factorize_p!{Tv<:Float64}(L::CholmodFactor{Tv,$Ti},
-                                               A::CholmodSparse{Tv,$Ti},
-                                               beta::Tv)
+        function cholfact!{Tv<:Float64}(L::CholmodFactor{Tv,$Ti},A::CholmodSparse{Tv,$Ti},
+                                        beta::Tv)
             status = ccall((@chm_nm "factorize_p" $Ti
                             ,:libcholmod), Cint,
                            (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Tv}, Ptr{Cint}, Csize_t,
@@ -876,10 +888,17 @@ function At_mul_B{Tv<:Union(Float32,Float64),Ti<:CHMITypes}(A::CholmodSparse{Tv,
     Ac_mul_B(A,B) # in the unlikely event of writing A.'*B instead of A'*B
 end
 
-cholfact(A::CholmodSparse,ll::Bool) = cholfact(A,ll)
+cholfact{T<:CHMVTypes}(A::CholmodSparse{T},beta::T) = cholfact(A,beta,false)
 cholfact(A::CholmodSparse) = cholfact(A,false) 
 cholfact(A::SparseMatrixCSC,ll::Bool) = cholfact(CholmodSparse(A),ll)
 cholfact(A::SparseMatrixCSC) = cholfact(CholmodSparse(A),false)
+function cholfact!{T<:CHMVTypes}(L::CholmodFactor{T},A::CholmodSparse{T},beta::Number)
+    cholfact!(L,A,convert(T,beta))
+end
+function cholfact!{T<:CHMVTypes}(L::CholmodFactor{T},A::SparseMatrixCSC{T},beta::Number)
+    cholfact!(L,CholmodSparse(A),convert(T,beta))
+end
+cholfact!{T<:CHMVTypes}(L::CholmodFactor{T},A::SparseMatrixCSC{T}) = cholfact!(L,CholmodSparse(A))
 
 chm_analyze(A::SparseMatrixCSC) = chm_analyze(CholmodSparse(A))
 
