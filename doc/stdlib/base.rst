@@ -2359,6 +2359,10 @@ Indexing, Assignment, and Concatenation
 
    Return a vector of the linear indexes of the non-zeros in ``A``.
 
+.. function:: find(f,A)
+
+   Return a vector of the linear indexes of  ``A`` where ``f`` returns true.
+
 .. function:: findn(A)
 
    Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A``.
