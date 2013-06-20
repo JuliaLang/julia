@@ -76,7 +76,7 @@ function methods(f::Function)
     f.env
 end
 
-methods(t::DataType) = (methods(t,Tuple);  # force constructor creation
+methods(t::DataType) = (_methods(t,Tuple,0);  # force constructor creation
                         t.env)
 
 uncompressed_ast(l::LambdaStaticData) =
