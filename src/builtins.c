@@ -299,14 +299,14 @@ JL_CALLABLE(jl_f_apply)
 JL_CALLABLE(jl_f_kwcall)
 {
     if (nargs < 3)
-        jl_error("internal error: malformed keyword argument call");
+        jl_error("internal error: malformed named argument call");
     JL_TYPECHK(apply, function, args[0]);
     jl_function_t *f = (jl_function_t*)args[0];
     if (!jl_is_gf(f))
-        jl_error("function does not accept keyword arguments");
+        jl_error("function does not accept named arguments");
     jl_function_t *sorter = ((jl_methtable_t*)f->env)->kwsorter;
     if (sorter == NULL)
-        jl_errorf("function %s does not accept keyword arguments",
+        jl_errorf("function %s does not accept named arguments",
                   jl_gf_name(f)->name);
 
     size_t nkeys = jl_unbox_long(args[1]);
@@ -323,6 +323,7 @@ JL_CALLABLE(jl_f_kwcall)
             rkw = jl_apply(jl_append_any_func, &rkw, 1);
             args[2 + 2*nkeys] = rkw;  // gc root
         }
+        assert(jl_is_array(rkw));
         nrest = jl_array_len(rkw);
     }
 
@@ -340,7 +341,12 @@ JL_CALLABLE(jl_f_kwcall)
     }
     for(size_t i=0; i < nrest; i++) {
         jl_value_t *ri = jl_cellref(rkw, i);
-        jl_tupleset(kwtuple, (nkeys+i)*2  , jl_tupleref(ri,0));
+        jl_value_t *sym;
+        if (!jl_is_tuple(ri) || jl_tuple_len(ri)<2 ||
+            !jl_is_symbol(sym=jl_tupleref(ri,0))) {
+            jl_error("expected (symbol,value) tuples in named argument container");
+        }
+        jl_tupleset(kwtuple, (nkeys+i)*2  , sym);
         jl_tupleset(kwtuple, (nkeys+i)*2+1, jl_tupleref(ri,1));
     }
     args[pa-1] = (jl_value_t*)kwtuple;
