@@ -2,34 +2,28 @@ module Write
 
 using Base.Git, ..Cache
 
-function edit(f::Function, file::String, args...)
-    tmp = "$file.$(randstring()).tmp"
-    ispath(tmp) && error("tempfile $tmp already exists!?")
-    try
-        replace = open(file) do input
-            open(tmp,"w") do output
-                f(input, output, args...)
-            end
-        end
-        replace && run(`mv -f $tmp $file`)
-        return replace
-    finally
-        ispath(tmp) && rm(tmp)
-    end
-end
-edit(file::String, f::Function, args...) = edit(f, file, args...)
-
 function install(pkg::String, sha1::String)
     ispath(pkg) && error("path $pkg already exists! please remove to allow installation.")
-    Git.run(`clone -q $(Cache.path(pkg))`)
-    Git.run(`config remote.origin.url $(Cache.origin(pkg))`, dir=pkg)
-    Git.run(`checkout -q $sha1`, dir=pkg)
+    try
+        Git.run(`clone -q $(Cache.path(pkg)) $pkg`)
+        Git.run(`config remote.origin.url $(Cache.origin(pkg))`, dir=pkg)
+        Git.run(`checkout -q $sha1`, dir=pkg)
+    catch
+        run(`rm -rf $pkg`)
+        rethrow()
+    end
 end
 
 function update(pkg::String, sha1::String)
-    Git.run(`config remote.origin.url $(Cache.origin(pkg))`, dir=pkg)
-    Git.run(`fetch -q $(Cache.path(pkg))`, dir=pkg)
-    Git.run(`checkout -q $sha1`, dir=pkg)
+    prev = Git.head(dir=pkg)
+    try
+        Git.run(`config remote.origin.url $(Cache.origin(pkg))`, dir=pkg)
+        Git.run(`fetch -q $(Cache.path(pkg))`, dir=pkg)
+        Git.run(`checkout -q $sha1`, dir=pkg)
+    catch
+        Git.run(`checkout -q $prev`, dir=pkg)
+        rethrow()
+    end
 end
 
 function remove(pkg::String)

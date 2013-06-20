@@ -36,7 +36,7 @@ function init(meta::String=DEFAULT_META)
     try
         run(`mkdir -p $d`)
         cd() do
-            run(`git clone $meta METADATA`)
+            run(`git clone -b devel $meta METADATA`)
             run(`touch REQUIRE`)
         end
     catch e
