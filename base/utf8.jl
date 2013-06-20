@@ -96,8 +96,8 @@ function rsearch(s::UTF8String, c::Char, i::Integer)
     if c < 0x80 return rsearch(s.data, uint8(c), i) end
     while true
         i = rsearch(s.data, first_utf8_byte(c), i)
-        if i==0 || s[i]==c return i end
-        i = next(s,i)[2]
+        if i==0 || s[i]==c return thisind(s,i) end
+        i = prevind(s,i)
     end
 end
 
