@@ -239,6 +239,25 @@ for str in {astr, Base.GenericString(astr)}
     @test search(str, ',') == 6
     @test search(str, ',', 7) == 0
     @test search(str, '\n') == 14
+    @test search(str, '\n', 15) == 0
+end
+
+# ascii rsearch
+for str in {astr}
+    @test rsearch(str, 'x') == 0
+    @test rsearch(str, '\0') == 0
+    @test rsearch(str, '\u80') == 0
+    @test rsearch(str, '∀') == 0
+    @test rsearch(str, 'H') == 1
+    @test rsearch(str, 'H', 0) == 0
+    @test rsearch(str, 'l') == 11
+    @test rsearch(str, 'l', 5) == 4
+    @test rsearch(str, 'l', 4) == 4
+    @test rsearch(str, 'l', 3) == 3
+    @test rsearch(str, 'l', 2) == 0
+    @test rsearch(str, ',') == 6
+    @test rsearch(str, ',', 5) == 0
+    @test rsearch(str, '\n') == 14
 end
 
 # utf-8 search
@@ -262,31 +281,28 @@ for str in {u8str, Base.GenericString(u8str)}
     @test search(str, 'ε', 55) == 0
 end
 
-# string search with a char
-@test search(astr, 'x') == 0
-@test search(astr, 'H') == 1
-@test search(astr, 'H', 2) == 0
-@test search(astr, 'l') == 3
-@test search(astr, 'l', 4) == 4
-@test search(astr, 'l', 5) == 11
-@test search(astr, 'l', 12) == 0
-@test search(astr, '\n') == 14
-@test search(astr, '\n', 15) == 0
-@test search(u8str, 'z') == 0
-@test search(u8str, '∄') == 0
-@test search(u8str, '∀') == 1
-@test search(u8str, '∀', 4) == 0
-@test search(u8str, '∃') == 13
-@test search(u8str, '∃', 16) == 0
-@test search(u8str, 'x') == 26
-@test search(u8str, 'x', 27) == 43
-@test search(u8str, 'x', 44) == 0
-@test search(u8str, 'ε') == 5
-# TODO: the character case returns (54,55), but searching for this as a
-# 1-character string returns (54,56) (see below). This might be OK if all
-# that matters is "> endof(s)", but needs investigation.
-@test search(u8str, 'ε', 7) == 54
-@test search(u8str, 'ε', 56) == 0
+# utf-8 rsearch
+for str in {u8str}
+    @test rsearch(str, 'z') == 0
+    @test rsearch(str, '\0') == 0
+    @test rsearch(str, '\u80') == 0
+    @test rsearch(str, '∄') == 0
+    @test rsearch(str, '∀') == 1
+    @test rsearch(str, '∀', 0) == 0
+    @test rsearch(str, '∃') == 13
+    @test rsearch(str, '∃', 14) == 13
+    @test rsearch(str, '∃', 13) == 13
+    @test rsearch(str, '∃', 12) == 0
+    @test rsearch(str, 'x') == 43
+    @test rsearch(str, 'x', 42) == 26
+    @test rsearch(str, 'x', 25) == 0
+    @test rsearch(str, 'δ') == 33
+    @test rsearch(str, 'δ', 32) == 17
+    @test rsearch(str, 'δ', 16) == 0
+    @test rsearch(str, 'ε') == 54
+    @test rsearch(str, 'ε', 53) == 5
+    @test rsearch(str, 'ε', 4) == 0
+end
 
 # string search with a single-char string
 @test search(astr, "x") == 0:-1
@@ -298,6 +314,7 @@ end
 @test search(astr, "l", 12) == 0:-1
 @test search(astr, "\n") == 14:14
 @test search(astr, "\n", 15) == 0:-1
+
 @test search(u8str, "z") == 0:-1
 @test search(u8str, "∄") == 0:-1
 @test search(u8str, "∀") == 1:3
@@ -310,6 +327,36 @@ end
 @test search(u8str, "ε") == 5:6
 @test search(u8str, "ε", 7) == 54:55
 @test search(u8str, "ε", 56) == 0:-1
+
+# string rsearch with a single-char string
+@test rsearch(astr, "x") == 0:-1
+@test rsearch(astr, "H") == 1:1
+@test rsearch(astr, "H", 2) == 1:1
+@test rsearch(astr, "H", 0) == 0:-1
+@test rsearch(astr, "l") == 11:11
+@test rsearch(astr, "l", 10) == 4:4
+@test rsearch(astr, "l", 4) == 4:4
+@test rsearch(astr, "l", 3) == 3:3
+@test rsearch(astr, "l", 2) == 0:-1
+@test rsearch(astr, "\n") == 14:14
+@test rsearch(astr, "\n", 13) == 0:-1
+
+@test rsearch(u8str, "z") == 0:-1
+@test rsearch(u8str, "∄") == 0:-1
+@test rsearch(u8str, "∀") == 1:3
+@test rsearch(u8str, "∀", 0) == 0:-1
+#TODO: setting the limit in the middle of a wide char
+#      makes search fail but rsearch succeed.
+#      Should rsearch fail as well?
+#@test rsearch(u8str, "∀", 2) == 0:-1 # gives 1:3
+@test rsearch(u8str, "∃") == 13:15
+@test rsearch(u8str, "∃", 12) == 0:-1
+@test rsearch(u8str, "x") == 43:43
+@test rsearch(u8str, "x", 42) == 26:26
+@test rsearch(u8str, "x", 25) == 0:-1
+@test rsearch(u8str, "ε") == 54:55
+@test rsearch(u8str, "ε", 53) == 5:6
+@test rsearch(u8str, "ε", 4) == 0:-1
 
 # string search with a single-char regex
 @test search(astr, r"x") == 0:-1
@@ -335,29 +382,37 @@ end
 @test search(u8str, r"ε") == 5:6
 @test search(u8str, r"ε", 7) == 54:55
 @test search(u8str, r"ε", 56) == 0:-1
-for i = 1:length(astr)
+for i = 1:endof(astr)
     @test search(astr, r"."s, i) == i:i
 end
-for i = 1:length(u8str)
+for i = 1:endof(u8str)
     # TODO: should regex search fast-forward invalid indices?
     if isvalid(u8str,i)
-        @test search(u8str, r"."s, i) == i:(nextind(u8str,i)-1)
+        @test search(u8str, r"."s, i) == i:(next(u8str,i)[2]-1)
     end
 end
 
 # string search with a zero-char string
-for i = 1:length(astr)
+for i = 1:endof(astr)
     @test search(astr, "", i) == i:i-1
 end
-for i = 1:length(u8str)
+for i = 1:endof(u8str)
     @test search(u8str, "", i) == i:i-1
 end
 
+# string rsearch with a zero-char string
+for i = 1:endof(astr)
+    @test rsearch(astr, "", i) == i:i-1
+end
+for i = 1:endof(u8str)
+    @test rsearch(u8str, "", i) == i:i-1
+end
+
 # string search with a zero-char regex
-for i = 1:length(astr)
+for i = 1:endof(astr)
     @test search(astr, r"", i) == i:i-1
 end
-for i = 1:length(u8str)
+for i = 1:endof(u8str)
     # TODO: should regex search fast-forward invalid indices?
     if isvalid(u8str,i)
         @test search(u8str, r""s, i) == i:i-1

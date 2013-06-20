@@ -216,6 +216,9 @@ search(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8
 search(s::String, t::String, i::Integer) = _search(s,t,i)
 search(s::String, t::String) = search(s,t,start(s))
 
+
+rsearch(s::String, c::Chars) = rsearch(s,c,endof(s))
+
 function _rsearch(s, t, i)
     if isempty(t)
         return 1 <= i <= endof(s)+1 ? (i:i-1) :
@@ -224,7 +227,7 @@ function _rsearch(s, t, i)
     end
     t = reverse(t)
     rs = reverse(s)
-    l = length(s)
+    l = endof(s)
     t1, j2 = next(t,start(t))
     while true
         i = rsearch(s,t1,i)
@@ -245,14 +248,20 @@ function _rsearch(s, t, i)
             end
         end
         if matched
-            return (l-k+2):i
+            fst = nextind(s,l-k+1)
+            # NOTE: there's a subtle difference between
+            #       nexind(s,i) and next(s,i)[2] if s::UTF8String
+            #       since at the end nextind returns endof(s)+1
+            #       while next returns length(s.data)+1
+            lst = next(s,i)[2]-1
+            return fst:lst
         end
         i = l-ii+1
     end
 end
 rsearch(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _rsearch(s,t,i)
 rsearch(s::String, t::String, i::Integer) = _rsearch(s,t,i)
-rsearch(s::String, t::String) = rsearch(s,t,length(s))
+rsearch(s::String, t::String) = rsearch(s,t,endof(s))
 
 contains(::String, ::String) = error("use search() to look for substrings")
 
@@ -1284,7 +1293,7 @@ end
 search(a::ByteArray, b::Union(Int8,Uint8,Char)) = search(a,b,1)
 
 function rsearch(a::Union(Array{Uint8,1},Array{Int8,1}), b::Union(Int8,Uint8), i::Integer)
-    if i < 1 error(BoundsError) end
+    if i < 1 return i == 0 ? 0 : error(BoundsError) end
     n = length(a)
     if i > n return i == n+1 ? 0 : error(BoundsError) end
     p = pointer(a)
