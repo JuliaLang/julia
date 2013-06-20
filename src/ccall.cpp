@@ -143,23 +143,22 @@ struct Classification {
         }
     }
 
-    private:
-        ArgClass merge(ArgClass accum, ArgClass cl) {
-            if (accum == cl)
-                return accum;
-            if (accum == NoClass)
-                return cl;
-            if (cl == NoClass)
-                return accum;
-            if (accum == Memory || cl == Memory)
-                return Memory;
-            if (accum == Integer || cl == Integer)
-                return Integer;
-            if (accum == X87 || accum == X87Up || accum == ComplexX87 ||
-                cl == X87 || cl == X87Up || cl == ComplexX87)
-                return Memory;
-            return Sse;
-        }
+    static ArgClass merge(ArgClass accum, ArgClass cl) {
+        if (accum == cl)
+            return accum;
+        if (accum == NoClass)
+            return cl;
+        if (cl == NoClass)
+            return accum;
+        if (accum == Memory || cl == Memory)
+            return Memory;
+        if (accum == Integer || cl == Integer)
+            return Integer;
+        if (accum == X87 || accum == X87Up || accum == ComplexX87 ||
+            cl == X87 || cl == X87Up || cl == ComplexX87)
+            return Memory;
+        return Sse;
+    }
 };
 
 /*else if (ty == jl_float80_type) { //if this is ever added
@@ -188,14 +187,13 @@ void classifyType(Classification& accum, jl_value_t* ty, uint64_t offset) {
         if(jl_datatype_size(ty) > 8)
             jl_error("Bitstype of this size not supported in the C ABI");
         accum.addField(offset,Integer);
-    } else if (jl_isbits(ty) && jl_datatype_size(ty) > 16) {
+    } else if (jl_datatype_size(ty) > 16) {
         // This isn't creal, yet is > 16 bytes, so pass in memory.
         // Must be after creal case but before arrays and structs,
         // the other types that can get bigger than 16 bytes
         accum.addField(offset, Memory);
     } else if (jl_is_array_type(ty)) {
         jl_value_t* eltType = jl_tparam0(ty);
-        assert(jl_isbits(eltType));
         uint64_t eltsize = jl_datatype_size(eltType);
         if (eltsize > 0) {
             uint16_t dim = 0;
@@ -209,14 +207,8 @@ void classifyType(Classification& accum, jl_value_t* ty, uint64_t offset) {
             }
         }
     } else if (jl_is_structtype(ty)) {
-        int remaining_size = jl_datatype_size(ty);
-        int i = 0;
-        while(true) {
+        for (int i = 0; i < jl_tuple_len(((jl_datatype_t*)ty)->types); ++i) {
             classifyType(accum, jl_tupleref(((jl_datatype_t*)ty)->types,i), offset + jl_field_offset(ty,i));
-            remaining_size -= jl_field_size(ty,i);
-            i++;
-            if(remaining_size <= 0)
-                break;
         }
     } else {
         jl_error("Unsupported type in C ABI");
@@ -264,6 +256,50 @@ void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg)
     {
         *byRef = true;
     }
+}
+
+Type *preferred_llvm_type(jl_value_t *ty)
+{  
+    // no need to rewrite bitstypes or pointers (really only agregates are the problem)
+    if(!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_bitstype(ty) ||  jl_is_cpointer_type(ty))
+        return NULL;
+
+    int size = jl_datatype_size(ty);
+    if(!(size == 1 || size == 2 || size == 4 || size == 8))
+        return NULL;
+
+    Classification cl = classify(ty);
+    if(cl.isMemory)
+        return NULL;
+    ArgClass c = Classification::merge(cl.classes[0],cl.classes[1]);
+    Type *target_type = NULL;
+
+    // Make into an aggregate of 
+    if(c == Sse)
+        target_type = Type::getDoubleTy(getGlobalContext());
+    else if(c == Integer)
+        target_type = T_int64;
+    else
+        assert("Don't know how to rewrite type");
+
+    return target_type;
+}
+
+Value *llvm_type_rewrite(Value *v, jl_value_t *ty)
+{
+
+
+    Type *target_type = preferred_llvm_type(ty);
+    if(target_type == NULL)
+        return v;
+
+    // LLVM doesn't allow us to cast values directly, so 
+    // we need to use this alloca trick
+    assert(!v->getType()->isPointerTy());
+
+    Value *mem = builder.CreateAlloca(target_type,ConstantInt::get(T_size,1));
+    builder.CreateStore(v,builder.CreateBitCast(mem,v->getType()->getPointerTo()));
+    return builder.CreateLoad(mem);
 }
 
 #elif ABI_WIN64
@@ -675,18 +711,24 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         emit_error("ccall: return type doesn't correspond to a C type", ctx);
         return literal_pointer_val(jl_nothing);
     }
+    Type *prt = preferred_llvm_type(rt);
+    if(prt == NULL)
+        prt = lrt;
+
     jl_tuple_t *tt = (jl_tuple_t*)at;
     std::vector<Type *> fargt(0);
     std::vector<Type *> fargt_sig(0);
+    std::vector<bool> inRegList;
+    std::vector<bool> byRefList;
 #if LLVM33
     AttrBuilder retattrs;
     std::vector<AttrBuilder> paramattrs;
 #else
     std::vector<AttributeWithIndex> attrs;
 #endif
-    AbiState abi;
+    AbiState abi = default_abi_state;
     int sret = 0;
-    if (jl_isbits(rt) && use_sret(&abi,rt)) {
+    if (jl_is_datatype(rt) && !jl_is_abstracttype(rt) && use_sret(&abi,rt)) {
 #if LLVM33
         paramattrs[0].clear();
         paramattrs[0].addAttribute(Attributes::StructRet);
@@ -695,6 +737,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 #else
         attrs.push_back(AttributeWithIndex::get(1, Attribute::StructRet));
 #endif
+        fargt_sig.push_back(PointerType::get(prt,0));
         sret = 1;
     }
     size_t i;
@@ -756,17 +799,47 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             emit_error(msg.str(), ctx);
             return literal_pointer_val(jl_nothing);
         }
-        if (0 && t->isStructTy()) {
-            t = PointerType::get(t,0);
-#ifdef LLVM32
-            attrs.push_back(AttributeWithIndex::get(getGlobalContext(), i+1+sret, Attributes::ByVal));
+
+        // Whether the ABI needs us to pass this by ref and/or in registers
+        // Valid combinations are:
+    
+        // Whether or not LLVM wants us to emit a pointer to the data
+        bool byRef = false;
+
+        // Whether or not to pass this in registers
+        bool inReg = false;
+
+        if(jl_is_datatype(tti) && !jl_is_abstracttype(tti))
+            needPassByRef(&abi,tti,&byRef,&inReg);
+
+        inRegList.push_back(inReg);
+        byRefList.push_back(byRef);
+
+        // Add the appropriate LLVM parameter attributes
+        // Note that even though the LLVM argument is called ByVal 
+        // this really means that the thing we're passing is pointing to
+        // the thing we want to pass by value 
+#if LLVM33
+        if(byRef)
+            paramattrs[i+sret+1].addAttribute(Attributes::ByVal)
+        if(inReg)
+            paramattrs[i+sret+1].addAttribute(Attributes::InReg)
+#elif LLVM32
+        if(byRef)
+            attrs.push_back(AttributeWithIndex::get(getGlobalContext(), i+sret+1, Attributes::ByVal));
+        if(inReg)
+            attrs.push_back(AttributeWithIndex::get(getGlobalContext(), i+sret+1, Attributes::InReg));
 #else
-            attrs.push_back(AttributeWithIndex::get(i+1, Attribute::ByVal));
+        if(byRef)
+            attrs.push_back(AttributeWithIndex::get(i+sret+1, Attribute::ByVal));
+        if(inReg)
+            attrs.push_back(AttributeWithIndex::get(i+sret+1, Attribute::InReg));
 #endif
-        }
+
         fargt.push_back(t);
-        if (!isVa)
-            fargt_sig.push_back(t);
+
+        if(byRef)
+            t = PointerType::get(t,0);
     }
     // check for calling convention specifier
     CallingConv::ID cc = CallingConv::C;
@@ -944,40 +1017,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             jargty = jl_tupleref(tt,ai);
         }
 
-
-        // Whether the ABI needs us to pass this by ref and/or in registers
-        // Valid combinations are:
-    
-        // Whether or not LLVM wants us to emit a pointer to the data
-        bool byRef = false;
-
-        // Whether or not to pass this in registers
-        bool inReg = false;
-
-        if(jl_isbits(jargty))
-            needPassByRef(&abi,jargty,&byRef,&inReg);
-
-        // Add the appropriate LLVM parameter attributes
-        // Note that even though the LLVM argument is called ByVal 
-        // this really means that the thing we're passing is pointing to
-        // the thing we want to pass by value 
-#if LLVM33
-        if(byRef)
-            paramattrs[ai+sret+1].addAttribute(Attributes::ByVal)
-        if(inReg)
-            paramattrs[ai+sret+1].addAttribute(Attributes::InReg)
-#elif LLVM32
-        if(byRef)
-            attrs.push_back(AttributeWithIndex::get(getGlobalContext(), ai+sret+1, Attributes::ByVal));
-        if(inReg)
-            attrs.push_back(AttributeWithIndex::get(getGlobalContext(), ai+sret+1, Attributes::InReg));
-#else
-        if(byRef)
-            attrs.push_back(AttributeWithIndex::get(ai+sret+1, Attribute::ByVal));
-        if(inReg)
-            attrs.push_back(AttributeWithIndex::get(ai+sret+1, Attribute::InReg));
-#endif
-
         Value *arg;
         if (largty == jl_pvalue_llvmt ||
                 largty->isStructTy()) {
@@ -1002,10 +1041,48 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 #endif
 
         bool mightNeed=false;
-        argvals[ai+sret] = julia_to_native(largty, jargty, arg, argi, addressOf, byRef, inReg,
-                                           ai+1, ctx, &mightNeed);
+        argvals[ai+sret] = llvm_type_rewrite(julia_to_native(largty, jargty, arg, argi, addressOf, byRefList[ai], inRegList[ai],
+                                           ai+1, ctx, &mightNeed),jargty);
         needTempSpace |= mightNeed;
+
+        if (!isVa || ai < nargty-1)
+            fargt_sig.push_back(argvals[ai+sret]->getType());
     }
+
+    // make LLVM function object for the target
+    Value *llvmf;
+    //JL_PRINTF(JL_STDOUT,"\n%s :",f_name);
+    FunctionType *functype = FunctionType::get(sret?T_void:prt, fargt_sig, isVa);
+    if (jl_ptr != NULL) {
+        null_pointer_check(jl_ptr,ctx);
+        Type *funcptype = PointerType::get(functype,0);
+        llvmf = builder.CreateIntToPtr(jl_ptr, funcptype);
+    }
+    else if (fptr != NULL) {
+        Type *funcptype = PointerType::get(functype,0);
+        llvmf = literal_pointer_val(fptr, funcptype);
+    }
+    else {
+        void *symaddr;
+        if (f_lib != NULL)
+            symaddr = add_library_sym(f_name, f_lib);
+        else
+            symaddr = sys::DynamicLibrary::SearchForAddressOfSymbol(f_name);
+        if (symaddr == NULL) {
+            JL_GC_POP();
+            std::stringstream msg;
+            msg << "ccall: could not find function ";
+            msg << f_name;
+            if (f_lib != NULL) {
+                msg << " in library ";
+                msg << f_lib;
+            }
+            emit_error(msg.str(), ctx);
+            return literal_pointer_val(jl_nothing);
+        }
+        llvmf = jl_Module->getOrInsertFunction(f_name, functype);
+    }
+
     if (needTempSpace) {
         // save temp argument area stack pointer
         // TODO: inline this
@@ -1052,29 +1129,33 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     JL_GC_POP();
-    if (!sret && lrt == T_void)
-        return literal_pointer_val((jl_value_t*)jl_nothing);
     
     // Finally we need to box the result into julia type 
     // However, if we have already created a box for the return 
     // type because we the ABI required us to pass a pointer (sret),
     // then we do not need to do this. 
-    if (!sret && lrt->isStructTy()) {
-        //fprintf(stderr, "ccall rt: %s -> %s\n", f_name, ((jl_tag_type_t*)rt)->name->name->name);
-        assert(jl_is_structtype(rt));
-        // Call jlallocobj_func with the appropriate size (argument size size_t)
-        Value *strct =
-            builder.CreateCall(jlallocobj_func,
-                               ConstantInt::get(T_size,
-                                    sizeof(void*)+((jl_datatype_t*)rt)->size));
-        // Store the type into the first field
-        builder.CreateStore(literal_pointer_val((jl_value_t*)rt),
-                            emit_nthptr_addr(strct, (size_t)0));
-        builder.CreateStore(result,
-                            builder.CreateBitCast(
-                                emit_nthptr_addr(strct, (size_t)1),
-                                PointerType::get(lrt,0)));
-        return mark_julia_type(strct, rt);
+    if (!sret) {
+        if (lrt == T_void)
+            return literal_pointer_val((jl_value_t*)jl_nothing);
+        if (lrt->isStructTy()) {
+            //fprintf(stderr, "ccall rt: %s -> %s\n", f_name, ((jl_tag_type_t*)rt)->name->name->name);
+            assert(jl_is_structtype(rt));
+            // Call jlallocobj_func with the appropriate size (argument size size_t)
+            Value *strct =
+                builder.CreateCall(jlallocobj_func,
+                                   ConstantInt::get(T_size,
+                                        sizeof(void*)+((jl_datatype_t*)rt)->size));
+            // Store the type into the first field
+            builder.CreateStore(literal_pointer_val((jl_value_t*)rt),
+                                emit_nthptr_addr(strct, (size_t)0));
+            builder.CreateStore(result,
+                                builder.CreateBitCast(
+                                    emit_nthptr_addr(strct, (size_t)1),
+                                    PointerType::get(prt,0)));
+            return mark_julia_type(strct, rt);
+        } else {
+            result = builder.CreateBitCast(result,lrt);
+        }
     }
     return mark_julia_type(result, rt);
 }
