@@ -482,6 +482,26 @@ end
 @test isequal(split("a b c"), ["a","b","c"])
 @test isequal(split("a  b \t c\n"), ["a","b","c"])
 
+@test isequal(rsplit("foo,bar,baz", 'x'), ["foo,bar,baz"])
+@test isequal(rsplit("foo,bar,baz", ','), ["foo","bar","baz"])
+@test isequal(rsplit("foo,bar,baz", ","), ["foo","bar","baz"])
+@test isequal(rsplit("foo,bar,baz", ',', 0), ["foo","bar","baz"])
+@test isequal(rsplit("foo,bar,baz", ',', 1), ["foo,bar,baz"])
+@test isequal(rsplit("foo,bar,baz", ',', 2), ["foo,bar","baz"])
+@test isequal(rsplit("foo,bar,baz", ',', 3), ["foo","bar","baz"])
+@test isequal(rsplit("foo,bar", "o,b"), ["fo","ar"])
+
+@test isequal(rsplit("", ','), [""])
+@test isequal(rsplit(",", ','), ["",""])
+@test isequal(rsplit(",,", ','), ["","",""])
+@test isequal(rsplit(",,", ',', 2), [",",""])
+@test isequal(rsplit("", ',', false), [])
+@test isequal(rsplit(",", ',', false), [])
+@test isequal(rsplit(",,", ',', false), [])
+
+#@test isequal(rsplit("a b c"), ["a","b","c"])
+#@test isequal(rsplit("a  b \t c\n"), ["a","b","c"])
+
 let str = "a.:.ba..:..cba.:.:.dcba.:."
 @test isequal(split(str, ".:."), ["a","ba.",".cba",":.dcba",""])
 @test isequal(split(str, ".:.", false), ["a","ba.",".cba",":.dcba"])
@@ -490,9 +510,19 @@ let str = "a.:.ba..:..cba.:.:.dcba.:."
 @test isequal(split(str, r"\.(:\.)+", false), ["a","ba.",".cba","dcba"])
 @test isequal(split(str, r"\.+:\.+"), ["a","ba","cba",":.dcba",""])
 @test isequal(split(str, r"\.+:\.+", false), ["a","ba","cba",":.dcba"])
+
+@test isequal(rsplit(str, ".:."), ["a","ba.",".cba.:","dcba",""])
+@test isequal(rsplit(str, ".:.", false), ["a","ba.",".cba.:","dcba"])
+@test isequal(rsplit(str, ".:.", 2), ["a.:.ba..:..cba.:.:.dcba", ""])
+@test isequal(rsplit(str, ".:.", 3), ["a.:.ba..:..cba.:", "dcba", ""])
+@test isequal(rsplit(str, ".:.", 4), ["a.:.ba.", ".cba.:", "dcba", ""])
+@test isequal(rsplit(str, ".:.", 5), ["a", "ba.", ".cba.:", "dcba", ""])
+@test isequal(rsplit(str, ".:.", 6), ["a", "ba.", ".cba.:", "dcba", ""])
 end
 
 # zero-width splits
+@test isequal(rsplit("", ""), [""])
+
 @test isequal(split("", ""), [""])
 @test isequal(split("", r""), [""])
 @test isequal(split("abc", ""), ["a","b","c"])
