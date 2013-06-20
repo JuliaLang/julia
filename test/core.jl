@@ -852,3 +852,9 @@ function x3220()
     a::Vector{Int} += [1]
 end
 @test x3220() == [2]
+
+# issue #3471
+function f3471(y)
+    convert(Array{typeof(y[1]),1}, y)
+end
+@test isa(f3471({1.0,2.0}), Vector{Float64})
