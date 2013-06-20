@@ -305,9 +305,6 @@ JL_CALLABLE(jl_f_kwcall)
     if (!jl_is_gf(f))
         jl_error("function does not accept named arguments");
     jl_function_t *sorter = ((jl_methtable_t*)f->env)->kwsorter;
-    if (sorter == NULL)
-        jl_errorf("function %s does not accept named arguments",
-                  jl_gf_name(f)->name);
 
     size_t nkeys = jl_unbox_long(args[1]);
     size_t nrest=0;
@@ -325,6 +322,15 @@ JL_CALLABLE(jl_f_kwcall)
         }
         assert(jl_is_array(rkw));
         nrest = jl_array_len(rkw);
+    }
+
+    if (nkeys+nrest == 0) {
+        // no named args passed; bypass sorter
+        return jl_apply(f, &args[3], nargs-3);
+    }
+    if (sorter == NULL) {
+        jl_errorf("function %s does not accept named arguments",
+                  jl_gf_name(f)->name);
     }
 
     size_t kwlen = (nkeys+nrest)*2;
