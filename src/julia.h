@@ -76,27 +76,10 @@ typedef struct {
     jl_value_t *data[1];
 } jl_tuple_t;
 
-// pseudo-object to track managed malloc pointers
-// currently only referenced from an array's data owner field
-typedef struct _jl_mallocptr_t {
-    struct _jl_mallocptr_t *next;
-    size_t sz;
-    void *ptr;
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    int isaligned;
-#endif
-} jl_mallocptr_t;
-
 // how much space we're willing to waste if an array outgrows its
 // original object
 #define ARRAY_INLINE_NBYTES (2048*sizeof(void*))
 
-/*
-  array data is allocated in two ways: either inline in the array object,
-  (in _space), or with malloc with data owner pointing to a jl_mallocptr_t.
-  data owner can also point to another array, if the original data was
-  allocated inline.
-*/
 typedef struct {
     JL_DATA_TYPE
     void *data;
@@ -104,10 +87,18 @@ typedef struct {
     size_t length;
 #endif
 
-    unsigned short ndims:13;
+    unsigned short ndims:11;
     unsigned short ptrarray:1;  // representation is pointer array
-    unsigned short ismalloc:1;  // data owner is a jl_mallocptr_t
-    unsigned short isinline:1;  // data stored inline
+    /*
+      how - allocation style
+      0 = data is inlined, or a foreign pointer we don't manage
+      1 = julia-allocated buffer that needs to be marked
+      2 = malloc-allocated pointer this array object manages
+      3 = has a pointer to the Array that owns the data
+    */
+    unsigned short how:2;
+    unsigned short isshared:1;  // data is shared by multiple Arrays
+    unsigned short isaligned:1; // data allocated with memalign
     uint16_t elsize;
     uint32_t offset;  // for 1-d only. does not need to get big.
 
@@ -120,11 +111,7 @@ typedef struct {
     };
     // other dim sizes go here for ndims > 2
 
-    // followed by alignment padding and inline data, or an owner pointer
-    union {
-        char _space[1];
-        void *_pad;
-    };
+    // followed by alignment padding and inline data, or owner pointer
 } jl_array_t;
 
 #ifdef STORE_ARRAY_LEN
@@ -138,7 +125,7 @@ DLLEXPORT size_t jl_array_len_(jl_array_t *a);
 #define jl_array_dim0(a)  (((jl_array_t*)(a))->nrows)
 #define jl_array_nrows(a) (((jl_array_t*)(a))->nrows)
 #define jl_array_ndims(a) ((int32_t)(((jl_array_t*)a)->ndims))
-#define jl_array_data_owner(a) (*((jl_value_t**)(&a->_pad+jl_array_ndimwords(jl_array_ndims(a)))))
+#define jl_array_data_owner(a) (*((jl_value_t**)(&a->ncols+1+jl_array_ndimwords(jl_array_ndims(a)))))
 
 // compute # of extra words needed to store dimensions
 static inline int jl_array_ndimwords(uint32_t ndims)
@@ -1100,8 +1087,10 @@ void jl_gc_unpreserve(void);
 int jl_gc_n_preserved_values(void);
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
-jl_mallocptr_t *jl_gc_acquire_buffer(void *b, size_t sz, int isaligned);
-jl_mallocptr_t *jl_gc_managed_malloc(size_t sz);
+void *jl_gc_managed_malloc(size_t sz);
+void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned);
+void jl_gc_free_array(jl_array_t *a);
+void jl_gc_track_malloced_array(jl_array_t *a);
 void *alloc_2w(void);
 void *alloc_3w(void);
 void *alloc_4w(void);
