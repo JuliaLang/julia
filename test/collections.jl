@@ -63,6 +63,7 @@ end
 
 # issue #2344
 let
+    local bar
     bestkey(d, key) = key
     bestkey{K<:String,V}(d::Associative{K,V}, key) = string(key)
     bar(x) = bestkey(x, :y)
