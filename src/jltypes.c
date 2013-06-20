@@ -118,7 +118,7 @@ DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
             if (jl_is_type_type(v)) {
                 jl_value_t *tp0 = jl_tparam0(v);
                 return (jl_is_datatype(tp0) && is_unspec((jl_datatype_t*)tp0)) ||
-                    jl_is_leaf_type(tp0);
+                    !jl_has_typevars_(tp0,1);
             }
             return 0;
         }
