@@ -12,8 +12,10 @@ function repl_show(io::IO, v::ANY)
             show(io, v)
         end
     end
-    if isgeneric(v) && !isa(v,DataType)
-        show(io, v.env)
+    isa(v,DataType) && methods(v)  # force constructor creation
+    if isgeneric(v)
+        isa(v,DataType) && println()
+        show_method_table(io, methods(v), 5)
     end
 end
 

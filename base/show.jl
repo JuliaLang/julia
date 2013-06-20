@@ -405,19 +405,29 @@ function show(io::IO, m::Method)
     end
 end
 
-function show(io::IO, mt::MethodTable)
+function show_method_table(io::IO, mt::MethodTable, max::Int=-1)
     name = mt.name
-    println(io, "# methods for generic function ", name)
+    print(io, "# methods for generic function ", name)
     d = mt.defs
+    n = rest = 0
     while !is(d,())
-        print(io, name)
-        show(io, d)
-        d = d.next
-        if !is(d,())
-            println(io)
+        if max==-1 || n<max || (rest==0 && n==max && d.next === ())
+            println()
+            print(io, name)
+            show(io, d)
+            n += 1
+        else
+            rest += 1
         end
+        d = d.next
+    end
+    if rest > 0
+        println()
+        print("... $rest not shown (use methods($name) to see them all)")
     end
 end
+
+show(io::IO, mt::MethodTable) = show_method_table(io, mt)
 
 # dump & xdump - structured tree representation like R's str()
 # - dump is for the user-facing structure
