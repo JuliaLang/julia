@@ -701,11 +701,15 @@ static void eval_decl_types(jl_array_t *vi, jl_tuple_t *spenv)
     for(i=0; i < jl_array_len(vi); i++) {
         jl_array_t *v = (jl_array_t*)jl_cellref(vi, i);
         assert(jl_array_len(v) > 1);
-        jl_value_t *ty =
-            jl_interpret_toplevel_expr_with(jl_cellref(v,1),
-                                            &jl_tupleref(spenv,0),
-                                            jl_tuple_len(spenv)/2);
-        jl_cellref(v, 1) = ty;
+        JL_TRY {
+            jl_value_t *ty =
+                jl_interpret_toplevel_expr_with(jl_cellref(v,1),
+                                                &jl_tupleref(spenv,0),
+                                                jl_tuple_len(spenv)/2);
+            jl_cellref(v, 1) = ty;
+        }
+        JL_CATCH {
+        }
     }
 }
 
