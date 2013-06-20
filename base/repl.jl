@@ -6,7 +6,7 @@ function repl_show(io::IO, v::ANY)
             print(io, summary(v))
             if !isempty(v)
                 println(io, ":")
-                print_matrix(io, reshape(v,(length(v),1)))
+                print_matrix(io, v)
             end
         else
             show(io, v)

@@ -620,7 +620,7 @@ const undef_ref_str = "#undef"
 const undef_ref_alignment = (3,3)
 
 function alignment(
-    X::AbstractMatrix,
+    X::Union(AbstractMatrix,AbstractVector),
     rows::AbstractVector, cols::AbstractVector,
     cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer
 )
@@ -651,7 +651,7 @@ function alignment(
 end
 
 function print_matrix_row(io::IO,
-    X::AbstractMatrix, A::Vector,
+    X::Union(AbstractMatrix,AbstractVector), A::Vector,
     i::Integer, cols::AbstractVector, sep::String
 )
     for k = 1:length(A)
@@ -688,7 +688,7 @@ function print_matrix_vdots(io::IO,
 end
 
 function print_matrix(io::IO,
-    X::AbstractMatrix, rows::Integer, cols::Integer,
+    X::Union(AbstractMatrix,AbstractVector), rows::Integer, cols::Integer,
     pre::String, sep::String, post::String,
     hdots::String, vdots::String, ddots::String,
     hmod::Integer, vmod::Integer
@@ -698,7 +698,7 @@ function print_matrix(io::IO,
     postsp = ""
     @assert strwidth(hdots) == strwidth(ddots)
     ss = length(sep)
-    m, n = size(X)
+    m, n = size(X,1), size(X,2)
     if m <= rows # rows fit
         A = alignment(X,1:m,1:n,cols,cols,ss)
         if n <= length(A) # rows and cols fit
@@ -762,11 +762,13 @@ function print_matrix(io::IO,
         end
     end
 end
-print_matrix(io::IO, X::AbstractMatrix, rows::Integer, cols::Integer) =
+print_matrix(io::IO, X::Union(AbstractMatrix,AbstractVector),
+             rows::Integer, cols::Integer) =
     print_matrix(io, X, rows, cols, " ", "  ", "",
                  "  \u2026  ", "\u22ee", "  \u22f1  ", 5, 5)
 
-print_matrix(io::IO, X::AbstractMatrix) = print_matrix(io, X, tty_rows()-4, tty_cols())
+print_matrix(io::IO, X::Union(AbstractMatrix,AbstractVector)) =
+               print_matrix(io, X, tty_rows()-4, tty_cols())
 
 summary(x) = string(typeof(x))
 
@@ -872,8 +874,7 @@ function showall(io::IO, a::AbstractArray)
 end
 
 function show_vector(io::IO, v, opn, cls)
-    X = reshape(v,(1,length(v)))
-    print_matrix(io, X, 1, tty_cols(), opn, ", ", cls, "  \u2026  ", "\u22ee", "  \u22f1  ", 5, 5)
+    show_delim_array(io, v, opn, ",", cls, false)
 end
 
 show(io::IO, v::AbstractVector{Any}) = show_vector(io, v, "{", "}")
