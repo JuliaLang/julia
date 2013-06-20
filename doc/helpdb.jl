@@ -1069,6 +1069,12 @@
 
 "),
 
+("Strings","Base","rsplit","rsplit(string, [chars, [limit,] [include_empty]])
+
+   Similar to \"split\", but starting from the end of the string.
+
+"),
+
 ("Strings","Base","strip","strip(string[, chars])
 
    Return \"string\" with any leading and trailing whitespace removed.
