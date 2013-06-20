@@ -122,7 +122,7 @@ end
 function read_config_blob(blob::String)
     tmp, io = mktemp()
     try
-        write(io, readall(`git cat-file blob $blob`))
+        write(io, readall(`cat-file blob $blob`))
     finally
         close(io)
     end
@@ -137,10 +137,10 @@ function write_config(file::String, cfg::Dict)
         val = cfg[key]
         if isa(val,Array)
             for x in val
-                run(`git config -f $tmp --add $key $x`)
+                run(`config -f $tmp --add $key $x`)
             end
         else
-            run(`git config -f $tmp $key $val`)
+            run(`config -f $tmp $key $val`)
         end
     end
     if isfile(tmp)
@@ -197,12 +197,12 @@ const GITHUB_REGEX = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](
 # setup a repo's push URL intelligently
 
 function autoconfig_pushurl()
-    url = readchomp(`git config remote.origin.url`)
+    url = readchomp(`config remote.origin.url`)
     m = match(GITHUB_REGEX,url)
     if m != nothing
         pushurl = "git@github.com:$(m.captures[1])"
         if pushurl != url
-            run(`git config remote.origin.pushurl $pushurl`)
+            run(`config remote.origin.pushurl $pushurl`)
         end
     end
 end
