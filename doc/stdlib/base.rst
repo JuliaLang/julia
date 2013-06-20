@@ -1006,11 +1006,20 @@ Text I/O
 
    Create an iterable object that will yield each line from a stream.
 
-.. function:: readdlm(source, delim::Char)
+.. function:: readdlm(source, delim::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false)
 
-   Read a matrix from the source where each line gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped filed can be used by passing the byte array representation of the mapped segment as source. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+   Read a matrix from the source where each line gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped filed can be used by passing the byte array representation of the mapped segment as source. 
 
-.. function:: readdlm(source, delim::Char, T::Type)
+   If ``has_header`` is ``true`` the first row of data would be read as headers and the tuple ``(data_cells, header_cells)`` is returned instead of only ``data_cells``.
+
+   If ``use_mmap`` is ``true`` the file specified by ``source`` is memory mapped for potential speedups.
+
+   If ``ignore_invalid_chars`` is ``true`` bytes in ``source`` with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.
+
+   If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+
+
+.. function:: readdlm(source, delim::Char, T::Type; options...)
 
    Read a matrix from the source with a given element type. If ``T`` is a numeric type, the result is an array of that type, with any non-numeric elements as ``NaN`` for floating-point types, or zero. Other useful values of ``T`` include ``ASCIIString``, ``String``, and ``Any``.
 
@@ -1018,7 +1027,7 @@ Text I/O
 
    Write an array to a text file using the given delimeter (defaults to comma).
 
-.. function:: readcsv(source, [T::Type])
+.. function:: readcsv(source, [T::Type]; options...)
 
    Equivalent to ``readdlm`` with ``delim`` set to comma.
 
