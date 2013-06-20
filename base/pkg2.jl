@@ -9,7 +9,11 @@ include("pkg2/resolve.jl")
 include("pkg2/cache.jl")
 include("pkg2/write.jl")
 
-using .Types
+using .Types, Base.Git
+
+rm(pkg::String) = edit(Reqs.rm, pkg)
+add(pkg::String, vers::VersionSet) = edit(Reqs.add, pkg, vers)
+add(pkg::String, vers::VersionNumber...) = add(pkg, VersionSet(vers...))
 
 edit(f::Function, pkg, args...) = Dir.cd() do
     r = Reqs.read("REQUIRE")
@@ -26,9 +30,16 @@ edit(f::Function, pkg, args...) = Dir.cd() do
     return
 end
 
-rm(pkg::String) = edit(Reqs.rm, pkg)
-add(pkg::String, vers::VersionSet) = edit(Reqs.add, pkg, vers)
-add(pkg::String, vers::VersionNumber...) = add(pkg, VersionSet(vers...))
+update() = Dir.cd() do
+    info("Updating metadata...")
+    cd("METADATA") do
+        Git.run(`fetch -q --all`)
+        Git.run(`checkout -q HEAD^0`)
+        Git.run(`branch -q -f devel refs/remotes/origin/devel`)
+        Git.run(`checkout -q devel`)
+        Git.run(`pull -q`)
+    end
+end
 
 macro recover(ex)
     quote
