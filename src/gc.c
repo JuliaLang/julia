@@ -799,6 +799,7 @@ static void print_obj_profile(void)
 void jl_gc_collect(void)
 {
     size_t actual_allocd = allocd_bytes;
+    allocd_bytes = 0;
     if (is_gc_enabled) {
         JL_SIGATOMIC_BEGIN();
 #if defined(GCTIME) || defined(GC_FINAL_STATS)
@@ -846,7 +847,6 @@ void jl_gc_collect(void)
         }
         freed_bytes = 0;
     }
-    allocd_bytes = 0;
 }
 
 // allocator entry points
