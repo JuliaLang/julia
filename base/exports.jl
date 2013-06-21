@@ -1080,6 +1080,7 @@ export
 
 # multiprocessing
     addprocs,
+    addprocs_scyld,
     addprocs_sge,
     fetch,
     isready,
