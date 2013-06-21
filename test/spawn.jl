@@ -14,6 +14,8 @@
 
 @test readall(`echo hello | sort`) == "hello | sort\n"
 @test readall(`echo hello` |> `sort`) == "hello\n"
+num = length(spawn(`echo hello` |> `sort`).processes) 
+@test num == 2
 
 out = readall(`echo hello` & `echo world`)
 @test search(out,"world") != (0,0)
