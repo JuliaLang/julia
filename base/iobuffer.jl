@@ -26,7 +26,7 @@ end
 PipeBuffer(data::Vector{Uint8},maxsize::Int) = IOBuffer(data,true,true,false,true,maxsize)
 PipeBuffer(data::Vector{Uint8}) = PipeBuffer(data,typemax(Int))
 PipeBuffer() = PipeBuffer(Uint8[])
-PipeBuffer(maxsize::Int) = (x = PipeBuffer(Array(Uint8,maxsize),data,maxsize); x.size=0; x)
+PipeBuffer(maxsize::Int) = (x = PipeBuffer(Array(Uint8,maxsize),maxsize); x.size=0; x)
 
 # IOBuffers behave like Files. They are readable and writable. They are seekable. (They can be appendable).
 IOBuffer(data::Vector{Uint8},readable::Bool,writable::Bool,maxsize::Int) =
