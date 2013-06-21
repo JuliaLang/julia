@@ -361,13 +361,13 @@ function sum{T<:Real}(r::Ranges{T})
     return l * first(r) + step(r) * div(l * (l - 1), 2)
 end
 
-function map!(f, dest, r::Ranges)
+function map!(f::Function, dest, r::Ranges)
     i = 1
     for ri in r dest[i] = f(ri); i+=1; end
     dest
 end
 
-map(f, r::Ranges) = [ f(x) for x in r ]
+map(f::Function, r::Ranges) = [ f(x) for x in r ]
 
 function contains(r::Ranges, x)
     n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1

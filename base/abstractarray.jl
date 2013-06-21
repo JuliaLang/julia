@@ -1468,7 +1468,7 @@ end
 
 
 ## 1 argument
-function map_to2(f, first, dest::AbstractArray, A::AbstractArray)
+function map_to2(f::Function, first, dest::AbstractArray, A::AbstractArray)
     dest[1] = first
     for i=2:length(A)
         dest[i] = f(A[i])
@@ -1476,7 +1476,7 @@ function map_to2(f, first, dest::AbstractArray, A::AbstractArray)
     return dest
 end
 
-function map(f, A::AbstractArray)
+function map(f::Function, A::AbstractArray)
     if isempty(A); return {}; end
     first = f(A[1])
     dest = similar(A, typeof(first))
@@ -1484,7 +1484,7 @@ function map(f, A::AbstractArray)
 end
 
 ## 2 argument
-function map_to2(f, first, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
+function map_to2(f::Function, first, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
     dest[1] = first
     for i=2:length(A)
         dest[i] = f(A[i], B[i])
@@ -1492,7 +1492,7 @@ function map_to2(f, first, dest::AbstractArray, A::AbstractArray, B::AbstractArr
     return dest
 end
 
-function map(f, A::AbstractArray, B::AbstractArray)
+function map(f::Function, A::AbstractArray, B::AbstractArray)
     shp = promote_shape(size(A),size(B))
     if isempty(A)
         return similar(A, Any, shp)
@@ -1503,7 +1503,7 @@ function map(f, A::AbstractArray, B::AbstractArray)
 end
 
 ## N argument
-function map_to2(f, first, dest::AbstractArray, As::AbstractArray...)
+function map_to2(f::Function, first, dest::AbstractArray, As::AbstractArray...)
     n = length(As[1])
     i = 1
     ith = a->a[i]
@@ -1514,7 +1514,7 @@ function map_to2(f, first, dest::AbstractArray, As::AbstractArray...)
     return dest
 end
 
-function map(f, As::AbstractArray...)
+function map(f::Function, As::AbstractArray...)
     shape = mapreduce(size, promote_shape, As)
     if prod(shape) == 0
         return similar(As[1], Any, shape)
