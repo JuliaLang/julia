@@ -1008,7 +1008,7 @@ function start_scyld_workers(n)
     nodes = split(chomp(readline(out)),':')
     outs = cell(n)
     for (i,node) in enumerate(nodes)
-        cmd = detach(`bpsh $node sh -l -c "cd $home && ./julia-release-basic --worker"`)
+        cmd = detach(`bpsh $node sh -l -c "cd $home && OPENBLAS_NUM_THREADS=1 ./julia-release-basic --worker"`)
         outs[i],_ = readsfrom(cmd)
         outs[i].line_buffered = true
     end
