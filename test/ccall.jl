@@ -1,5 +1,5 @@
-import Base.copy
-const verbose  = true
+import Base.copy, Base.isequal
+const verbose  = false
 ccall((:set_verbose, "./libccalltest"), Void, (Int32,), verbose)
 
 # Test for proper argument register truncation
@@ -50,6 +50,7 @@ type Struct1
     x::Float32
     y::Float64
 end
+isequal(a::Struct1,b::Struct1) = a.x == b.x && a.y == b.y
 copy(a::Struct1) = Struct1(a.x, a.y)
 s1 = Struct1(352.39422f23, 19.287577)
 a = copy(s1)
@@ -91,6 +92,7 @@ type Struct_Big
     y::Int
     z::Int8
 end
+isequal(a::Struct_Big,b::Struct_Big) = a.x == b.x && a.y == b.y && a.z == b.z
 copy(a::Struct_Big) = Struct_Big(a.x, a.y, a.z)
 sbig = Struct_Big(424,-5,int8('Z'))
 
@@ -111,13 +113,17 @@ for (t,v) in ((ComplexPair{Int32},:ci32),(ComplexPair{Int64},:ci64),
         verbose && println("A: ",a)
         function $(symbol("foo"*string(v)))(s::$t)
             verbose && println("B: ",s)
-            @test !(s === a)
+            if($(t).mutable)
+                @test !(s === a)
+            end
             @test s == a
             s
         end
         b = ccall(cfunction($(symbol("foo"*string(v))),$t,($t,)),$t,($t,),$v)
-        verbose && println("B: ",b)
-        @test !(a === b)
+        verbose && println("C: ",b)
+        if($(t).mutable)
+            @test !(b === a)
+        end
         @test a == b
     end
 end

@@ -236,6 +236,7 @@ void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg)
     Classification cl = classify(ty);
     if (cl.isMemory) {
         *byRef = true;
+        return;
     }
         
 
@@ -254,6 +255,8 @@ void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg)
         *inReg = true;
     }else if(jl_is_structtype(ty))
     {
+        // spill to memory even though we would ordinarily pass
+        // it in registers
         *byRef = true;
     }
 }
@@ -503,7 +506,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         if(byRef)
             return pjv;
         else 
-            builder.CreateLoad(pjv, false);
+            return builder.CreateLoad(pjv, false);
     }
     // TODO: error for & with non-pointer argument type
     assert(jl_is_bitstype(jt));
@@ -801,9 +804,9 @@ std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
         // the thing we want to pass by value 
 #if LLVM33 || LLVM32
         if(byRef)
-            paramattrs[i+sret+1].addAttribute(Attributes::ByVal);
+            paramattrs[i+sret].addAttribute(Attributes::ByVal);
         if(inReg)
-            paramattrs[i+sret+1].addAttribute(Attributes::InReg);
+            paramattrs[i+sret].addAttribute(Attributes::InReg);
 #else
         if(byRef)
             attrs.push_back(AttributeWithIndex::get(i+sret+1, Attribute::ByVal));
@@ -831,15 +834,15 @@ std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
 #ifdef LLVM33
     if(retattrs.hasAttributes())
         attributes = Attributes::get(AttributeSet::ReturnIndex,retattrs);
-    for(i = 1; i < nargt+sret; ++i)
+    for(i = 0; i < nargt+sret; ++i)
         if(paramattrs[i].hasAttributes()) 
-            attributes = attributes.addAttributes(i,paramattrs[i]);
+            attributes = attributes.addAttributes(i+1,paramattrs[i]);
 #elif LLVM32
     if(retattrs.hasAttributes())
         attrs.push_back(AttributeWithIndex::get(0, Attributes::get(jl_LLVMContext,retattrs)));
-    for(i = 1; i < nargt+sret; ++i)
+    for(i = 0; i < nargt+sret; ++i)
         if(paramattrs[i].hasAttributes()) 
-            attrs.push_back(AttributeWithIndex::get(i, Attributes::get(jl_LLVMContext,paramattrs[i])));
+            attrs.push_back(AttributeWithIndex::get(i+1, Attributes::get(jl_LLVMContext,paramattrs[i])));
     attributes = AttrListPtr::get(getGlobalContext(), ArrayRef<AttributeWithIndex>(attrs));
 #else
     attributes = AttrListPtr::get(attrs.data(),attrs.size());
