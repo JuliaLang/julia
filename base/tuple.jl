@@ -33,24 +33,24 @@ ntuple(f::Function, n::Integer) =
     tuple(ntuple(n-2,f)..., f(n-1), f(n))
 
 # 0 argument function
-map(f::Function) = f()
+map(f::Union(Function,DataType)) = f()
 # 1 argument function
-map(f::Function, t::())                   = ()
-map(f::Function, t::(Any,))               = (f(t[1]),)
-map(f::Function, t::(Any, Any))           = (f(t[1]), f(t[2]))
-map(f::Function, t::(Any, Any, Any))      = (f(t[1]), f(t[2]), f(t[3]))
-map(f::Function, t::(Any, Any, Any, Any)) = (f(t[1]), f(t[2]), f(t[3]), f(t[4]))
-map(f::Function, t::Tuple)                = tuple([f(ti) for ti in t]...)
+map(f::Union(Function,DataType), t::())                   = ()
+map(f::Union(Function,DataType), t::(Any,))               = (f(t[1]),)
+map(f::Union(Function,DataType), t::(Any, Any))           = (f(t[1]), f(t[2]))
+map(f::Union(Function,DataType), t::(Any, Any, Any))      = (f(t[1]), f(t[2]), f(t[3]))
+map(f::Union(Function,DataType), t::(Any, Any, Any, Any)) = (f(t[1]), f(t[2]), f(t[3]), f(t[4]))
+map(f::Union(Function,DataType), t::Tuple)                = tuple([f(ti) for ti in t]...)
 # 2 argument function
-map(f::Function, t::(),        s::())        = ()
-map(f::Function, t::(Any,),    s::(Any,))    = (f(t[1],s[1]),)
-map(f::Function, t::(Any,Any), s::(Any,Any)) = (f(t[1],s[1]), f(t[2],s[2]))
-map(f::Function, t::(Any,Any,Any), s::(Any,Any,Any)) =
+map(f::Union(Function,DataType), t::(),        s::())        = ()
+map(f::Union(Function,DataType), t::(Any,),    s::(Any,))    = (f(t[1],s[1]),)
+map(f::Union(Function,DataType), t::(Any,Any), s::(Any,Any)) = (f(t[1],s[1]), f(t[2],s[2]))
+map(f::Union(Function,DataType), t::(Any,Any,Any), s::(Any,Any,Any)) =
     (f(t[1],s[1]), f(t[2],s[2]), f(t[3],s[3]))
-map(f::Function, t::(Any,Any,Any,Any), s::(Any,Any,Any,Any)) =
+map(f::Union(Function,DataType), t::(Any,Any,Any,Any), s::(Any,Any,Any,Any)) =
     (f(t[1],s[1]), f(t[2],s[2]), f(t[3],s[3]), f(t[4],s[4]))
 # n argument function
-map(f::Function, ts::Tuple...) = tuple([f(map(t->t[n],ts)...) for n=1:length_checked_equal(ts...)]...)
+map(f::Union(Function,DataType), ts::Tuple...) = tuple([f(map(t->t[n],ts)...) for n=1:length_checked_equal(ts...)]...)
 
 function length_checked_equal(args...) 
     n = length(args[1])

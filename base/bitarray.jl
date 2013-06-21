@@ -1858,35 +1858,35 @@ function map!(f::Function, A::Union(StridedArray,BitArray))
     return A
 end
 
-function map!(f::Function, dest::Union(StridedArray,BitArray), A::Union(StridedArray,BitArray))
+function map!(f::Union(Function,DataType), dest::Union(StridedArray,BitArray), A::Union(StridedArray,BitArray))
     for i=1:length(A)
         dest[i] = f(A[i])
     end
     return dest
 end
 
-function map!(f::Function, dest::Union(StridedArray,BitArray), A::Union(StridedArray,BitArray), B::Union(StridedArray,BitArray))
+function map!(f::Union(Function,DataType), dest::Union(StridedArray,BitArray), A::Union(StridedArray,BitArray), B::Union(StridedArray,BitArray))
     for i=1:length(A)
         dest[i] = f(A[i], B[i])
     end
     return dest
 end
 
-function map!(f::Function, dest::Union(StridedArray,BitArray), A::Union(StridedArray,BitArray), B::Number)
+function map!(f::Union(Function,DataType), dest::Union(StridedArray,BitArray), A::Union(StridedArray,BitArray), B::Number)
     for i=1:length(A)
         dest[i] = f(A[i], B)
     end
     return dest
 end
 
-function map!(f::Function, dest::Union(StridedArray,BitArray), A::Number, B::Union(StridedArray,BitArray))
+function map!(f::Union(Function,DataType), dest::Union(StridedArray,BitArray), A::Number, B::Union(StridedArray,BitArray))
     for i=1:length(B)
         dest[i] = f(A, B[i])
     end
     return dest
 end
 
-function map!(f::Function, dest::Union(StridedArray,BitArray), As::Union(StridedArray,BitArray)...)
+function map!(f::Union(Function,DataType), dest::Union(StridedArray,BitArray), As::Union(StridedArray,BitArray)...)
     n = length(As[1])
     i = 1
     ith = a->a[i]
