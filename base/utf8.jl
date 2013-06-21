@@ -119,4 +119,25 @@ utf8(x) = convert(UTF8String, x)
 convert(::Type{UTF8String}, s::UTF8String) = s
 convert(::Type{UTF8String}, s::ASCIIString) = UTF8String(s.data)
 convert(::Type{UTF8String}, a::Array{Uint8,1}) = is_valid_utf8(a) ? UTF8String(a) : error("invalid UTF-8 sequence")
+function convert(::Type{UTF8String}, a::Array{Uint8,1}, invalids_as::String)
+    l = length(a)
+    idx = 1
+    iscopy = false
+    while idx <= l
+        if is_utf8_start(a[idx])
+            nextidx = idx+1+utf8_trailing[a[idx]+1]
+            (nextidx <= (l+1)) && (idx = nextidx; continue)
+        end
+        !iscopy && (a = copy(a); iscopy = true)
+        endn = idx
+        while endn <= l
+            is_utf8_start(a[endn]) && break
+            endn += 1
+        end
+        (endn > idx) && (endn -= 1)
+        splice!(a, idx:endn, invalids_as.data)
+        l = length(a)
+    end
+    UTF8String(a)
+end
 convert(::Type{UTF8String}, s::String) = utf8(bytestring(s))
