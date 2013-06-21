@@ -318,6 +318,9 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
     pp.handle = _jl_spawn(ptrs[1], convert(Ptr{Ptr{Uint8}}, ptrs), loop, pp,
                           in,out,err)
     @cleanup_stdio
+    if(isa(pc, ProcessChain))
+        push!(pc.processes,pp)
+    end
     pp
 end
 
