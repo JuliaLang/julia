@@ -963,7 +963,7 @@ function ssh_tunnel(user, host, port, sshflags)
 end
 
 #function worker_ssh_cmd(host, key)
-#    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
+#    `ssh -i $key -n $host "sh -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
 #end
 
 # start and connect to processes via SSH.
@@ -974,7 +974,7 @@ function addprocs(machines::AbstractVector;
                   tunnel=false, dir=JULIA_HOME, exename="./julia-release-basic", sshflags::Cmd=``)
     add_workers(PGRP,
         start_remote_workers(machines,
-            map(m->detach(`ssh -n $sshflags $m "bash -l -c \"cd $dir && $exename --worker\""`),
+            map(m->detach(`ssh -n $sshflags $m "sh -l -c \"cd $dir && $exename --worker\""`),
                 machines),
             tunnel, sshflags))
 end
@@ -1008,7 +1008,7 @@ function start_scyld_workers(n)
     nodes = split(chomp(readline(out)),':')
     outs = cell(n)
     for (i,node) in enumerate(nodes)
-        cmd = detach(`bpsh $node bash -l -c "cd $home && ./julia-release-basic --worker"`)
+        cmd = detach(`bpsh $node sh -l -c "cd $home && ./julia-release-basic --worker"`)
         outs[i],_ = readsfrom(cmd)
         outs[i].line_buffered = true
     end
