@@ -165,9 +165,12 @@ typedef struct _jl_lambda_info_t {
     // used to avoid infinite recursion
     int8_t inInference : 1;
     int8_t inCompile : 1;
-    jl_fptr_t fptr;        // jlcall entry point
-    void *functionObject;  // jlcall llvm Function
-    void *cFunctionObject; // c callable llvm Function
+    jl_fptr_t fptr;             // jlcall entry point
+    void *functionObject;       // jlcall llvm Function
+    void *specFunctionObject;      // c callable llvm Function
+
+    // specialized llvm Function (common core for the other two)
+    void *cFunctionObject;  
 } jl_lambda_info_t;
 
 #define LAMBDA_INFO_NW (NWORDS(sizeof(jl_lambda_info_t))-1)

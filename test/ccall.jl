@@ -1,5 +1,6 @@
 import Base.copy
-ccall((:set_verbose, "./libccalltest"), Void, (Int32,), 0)
+const verbose  = true
+ccall((:set_verbose, "./libccalltest"), Void, (Int32,), verbose)
 
 # Test for proper argument register truncation
 ccall_test_func(x) = ccall((:testUcharX, "./libccalltest"), Int32, (Uint8,), x)
@@ -57,6 +58,12 @@ b = ccall((:test_1, "./libccalltest"), Struct1, (Struct1,), a)
 @test !(a === b)
 @test b.x == s1.x + 1 && b.y == s1.y - 2
 
+function foos1(s::Struct1)
+    @test !(s === a)
+    @test s == a
+    s
+end
+
 ci32 = ComplexPair{Int32}(int32(10),int32(31))
 a = copy(ci32)
 ba = ccall((:test_2a, "./libccalltest"), ComplexPair{Int32}, (ComplexPair{Int32},), a)
@@ -93,3 +100,24 @@ b = ccall((:test_big, "./libccalltest"), Struct_Big, (Struct_Big,), a)
 @test b.x == sbig.x + 1
 @test b.y == sbig.y - 2
 @test b.z == sbig.z - 'A'
+
+verbose && println("Testing cfunction roundtrip: ")
+# cfunction roundtrip
+for (t,v) in ((ComplexPair{Int32},:ci32),(ComplexPair{Int64},:ci64),
+            (Complex64,:cf32),(Complex128,:cf64),(Struct1,:s1))
+    @eval begin
+        verbose && println($t)
+        a = copy($v)
+        verbose && println("A: ",a)
+        function $(symbol("foo"*string(v)))(s::$t)
+            verbose && println("B: ",s)
+            @test !(s === a)
+            @test s == a
+            s
+        end
+        b = ccall(cfunction($(symbol("foo"*string(v))),$t,($t,)),$t,($t,),$v)
+        verbose && println("B: ",b)
+        @test !(a === b)
+        @test a == b
+    end
+end
