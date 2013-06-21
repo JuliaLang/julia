@@ -376,7 +376,7 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
 #endif
     opts.cwd = NULL;
     opts.args = argv;
-    opts.flags = 0;
+    opts.flags = UV_PROCESS_RESET_SIGPIPE;
     if (detach)
         opts.flags |= UV_PROCESS_DETACHED;
     opts.stdio = stdio;
