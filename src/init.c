@@ -419,7 +419,29 @@ void *init_stdio_handle(uv_file fd,int readable)
             ((uv_pipe_t*)handle)->data=0;
             break;
         case UV_TCP:
+            handle = malloc(sizeof(uv_tcp_t));
+            if (uv_tcp_init(jl_io_loop, (uv_tcp_t*)handle)) {
+                jl_errorf("Error initializing stdio in uv_tcp_init (%d, %d)\n", fd, type);
+                abort();
+            }
+            if (uv_tcp_open((uv_tcp_t*)handle,fd)) {
+                jl_errorf("Error initializing stdio in uv_tcp_open (%d, %d)\n", fd, type);
+                abort();
+            }
+            ((uv_tcp_t*)handle)->data=0;
+            break;
         case UV_UDP:
+            handle = malloc(sizeof(uv_udp_t));
+            if (uv_udp_init(jl_io_loop, (uv_udp_t*)handle)) {
+                jl_errorf("Error initializing stdio in uv_udp_init (%d, %d)\n", fd, type);
+                abort();
+            }
+            if (uv_udp_open((uv_udp_t*)handle,fd)) {
+                jl_errorf("Error initializing stdio in uv_udp_open (%d, %d)\n", fd, type);
+                abort();
+            }
+            ((uv_udp_t*)handle)->data=0;
+            break;
         default:
             jl_errorf("This type of handle for stdio is not yet supported (%d, %d)!\n", fd, type);
             handle = NULL;
