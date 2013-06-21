@@ -106,7 +106,7 @@ function reduce(op::Function, v0, itr)
     return v
 end
 
-function mapreduce(f::Function, op::Function, itr)
+function mapreduce(f::Union(Function,DataType), op::Function, itr)
     s = start(itr)
     if done(itr, s)
         return op()  # empty collection
@@ -120,7 +120,7 @@ function mapreduce(f::Function, op::Function, itr)
     return v
 end
 
-function mapreduce(f::Function, op::Function, v0, itr)
+function mapreduce(f::Union(Function,DataType), op::Function, v0, itr)
     v = v0
     for x in itr
         v = op(v,f(x))
