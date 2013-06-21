@@ -2296,6 +2296,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     volvars = find_volatile_vars(stmts);
 
     // step 4. determine function signature
+    jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)ast);
     Function *f = NULL;
 
     bool specsig = false;
@@ -2314,6 +2315,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             }
             if (jl_tuple_len(lam->specTypes) == 0)
                 specsig = true;
+            if (jl_isbits(jlrettype))
+                specsig = true;
         }
     }
 
@@ -2321,7 +2324,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     // try to avoid conflicts in the global symbol table
     funcName = "julia_" + funcName;
 
-    jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)ast);
     if (specsig) {
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
