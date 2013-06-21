@@ -36,7 +36,7 @@ contains(x::Number, y::Number) = x == y
 
 reinterpret{T<:Real}(::Type{T}, x::Real) = box(T,x)
 
-map(f, x::Number) = f(x)
+map(f::Function, x::Number) = f(x)
 
 const _numeric_conversion_func_names =
     (:int,:integer,:signed,:int8,:int16,:int32,:int64,:int128,
