@@ -15,17 +15,19 @@ file_constants.jl: ../src/file_constants.h
 	$(QUIET_PERL) ${CC} -E -P -DJULIA ../src/file_constants.h | perl -nle 'print "$$1 0o$$2" if /^(\s*const\s+[A-z_]+\s+=)\s+(0[0-9]*)\s*$$/; print "$$1" if /^\s*(const\s+[A-z_]+\s+=\s+([1-9]|0x)[0-9A-z]*)\s*$$/' > $@
 
 uv_constants.jl: ../src/uv_constants.h
-	$(QUIET_PERL) ${CC} -E -P "-I$(LIBUV_INC)" -DJULIA ../src/uv_constants.h | tail -n 5 > $@
+	$(QUIET_PERL) ${CC} -E -P "-I$(LIBUV_INC)" -DJULIA ../src/uv_constants.h | tail -n 12 > $@
 
-build_h.jl: ../Make.inc ../src/os_detect.h
-	$(QUIET_PERL) $(CC) -E -P -DJULIA ../src/os_detect.h | grep OS_NAME > $@
+build_h.jl: ../Make.inc build.h Makefile
+	$(QUIET_PERL) $(CC) -E -P build.h -I../src/support | grep . > $@
+	@echo "const ARCH = :$(ARCH)" >> $@
+	@echo "const MACHINE = \"$(shell $(CC) -dumpmachine)\"" >> $@
 	@echo "const libm_name = \"$(LIBMNAME)\"" >> $@
 	@echo "const libblas_name = \"$(LIBBLASNAME)\"" >> $@
 	@echo "const liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
-ifeq ($(USE_LIB64), 1)
-	@echo "const USE_LIB64 = true" >> $@
+ifeq ($(USE_BLAS64), 1)
+	@echo "const USE_BLAS64 = true" >> $@
 else
-	@echo "const USE_LIB64 = false" >> $@
+	@echo "const USE_BLAS64 = false" >> $@
 endif
 
 

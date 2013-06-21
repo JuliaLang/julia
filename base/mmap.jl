@@ -1,7 +1,7 @@
 # Low-level routines
 # These are needed for things like MAP_ANONYMOUS
 function mmap(len::Integer, prot::Integer, flags::Integer, fd::Integer, offset::FileOffset)
-    const pagesize::Int = 4096
+    const pagesize::Int = ccall(:jl_getpagesize, Clong, ())
     # Check that none of the computations will overflow
     if len > typemax(Int)-pagesize
         error("Cannot map such a large buffer")
@@ -37,7 +37,7 @@ function mmap_grow(len::Integer, prot::Integer, flags::Integer, fd::Integer, off
         error(strerror())
     end
     if (filelen < offset + len)
-        n = ccall(:pwrite, Int, (Int32, Ptr{Void}, Int, FileOffset), fd, int8([0]), 1, offset + len - 1)
+        n = ccall(:pwrite, Int, (Int32, Ptr{Void}, Uint, FileOffset), fd, int8([0]), 1, offset + len - 1)
         if (n < 1)
             error(strerror())
         end
@@ -110,3 +110,35 @@ type MmapArrayInfo
     eltype::Type
     dims::Dims
 end
+
+# Mmapped-bitarray constructor
+function mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
+    prot, flags, iswrite = mmap_stream_settings(s)
+    if length(dims) == 0
+        dims = 0
+    end
+    n = prod(dims)
+    nc = num_bit_chunks(n)
+    chunks = mmap_array(Uint64, (nc,), s, offset)
+    if iswrite
+        chunks[end] &= @_msk_end n
+    else
+        if chunks[end] != chunks[end] & @_msk_end n
+            error("The given file does not contain a valid BitArray of size ", join(dims, 'x'), " (open with r+ to override)")
+        end
+    end
+    B = BitArray{N}(ntuple(N,i->0)...)
+    B.chunks = chunks
+    B.len = n
+    if N != 1
+        B.dims = Int[i for i in dims]
+    end
+    return B
+end
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset) =
+    mmap_bitarray(dims, s, offset)
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+
+msync(B::BitArray, flags::Integer) = msync(pointer(B.chunks), flags)
+msync(B::BitArray) = msync(B.chunks,MS_SYNC)

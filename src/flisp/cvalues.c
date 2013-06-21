@@ -78,7 +78,7 @@ static void sweep_finalizers(void)
                 t->vtable->finalize(tagptr(tmp, TAG_CVALUE));
             }
             if (!isinlined(tmp) && owned(tmp)) {
-#ifndef NDEBUG
+#ifdef DEBUG
                 memset(cv_data(tmp), 0xbb, cv_len(tmp));
 #endif
                 free(cv_data(tmp));
@@ -370,7 +370,7 @@ static int cvalue_array_init(fltype_t *ft, value_t arg, void *dest)
     if (isvector(arg)) {
         for(i=0; i < cnt; i++) {
             cvalue_init(eltype, vector_elt(arg,i), dest);
-            dest += elsize;
+            dest = (char *)dest + elsize;
         }
         return 0;
     }
@@ -380,7 +380,7 @@ static int cvalue_array_init(fltype_t *ft, value_t arg, void *dest)
             if (i == cnt) { i++; break; } // trigger error
             cvalue_init(eltype, car_(arg), dest);
             i++;
-            dest += elsize;
+            dest = (char *)dest + elsize;
             arg = cdr_(arg);
         }
         if (i != cnt)
@@ -1156,7 +1156,12 @@ int numeric_compare(value_t a, value_t b, int eq, int eqnans, char *fname)
     return 1;
 }
 
+#if defined(_OS_WINDOWS_)
+__declspec(noreturn) static void DivideByZeroError();
+#else
 static void DivideByZeroError() __attribute__ ((__noreturn__));
+#endif
+
 static void DivideByZeroError(void)
 {
     lerror(DivideError, "/: division by zero");

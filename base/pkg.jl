@@ -32,7 +32,7 @@ dir(pkg::String...) = joinpath(dir(),pkg...)
 function cd_pkgdir(f::Function)
     d = dir()
     if !isdir(d)
-        if has(ENV,"JULIA_PKGDIR")
+        if haskey(ENV,"JULIA_PKGDIR")
             error("Package directory $d doesn't exist; run Pkg.init() to create it.")
         else
             info("Auto-initializing default package repository $d.")
@@ -93,7 +93,7 @@ status(pkg::String) = status(OUTPUT_STREAM, pkg)
 
 function init(meta::String)
     d = dir()
-    isdir(d) && error("Package directory $d already exists.")
+    isdir(joinpath(d,"METADATA")) && error("Package directory $d is already initialized.")
     try
         run(`mkdir -p $d`)
         cd(d) do
@@ -102,7 +102,7 @@ function init(meta::String)
             run(`git init`)
             run(`git commit --allow-empty -m "Initial empty commit"`)
             run(`git remote add origin .`)
-        if success(`git config --global github.user` > SpawnNullStream())
+        if success(`git config --global github.user` |> SpawnNullStream())
                 base = basename(d)
                 user = readchomp(`git config --global github.user`)
                 run(`git config remote.origin.url git@github.com:$user/$base`)
@@ -252,12 +252,10 @@ function runbuildscript(pkg)
     end
 end
 
-# update packages from requirements
-
-function _resolve()
+function gather_repository_data(julia_version::VersionNumber=VERSION)
     have = (String=>ASCIIString)[]
     reqs = parse_requires("REQUIRE")
-    fixed = (String=>VersionNumber)["julia"=>VERSION]
+    fixed = (String=>VersionNumber)["julia"=>julia_version]
     index = readchomp(`git write-tree`)
     for pkg in packages(parse_requires(`git cat-file blob $index:REQUIRE`))
         isdir(pkg) || continue
@@ -275,25 +273,25 @@ function _resolve()
     vers = Metadata.versions(pkgs)
     deps = Metadata.dependencies(union(pkgs,keys(fixed)))
     filter!(reqs) do r
-        if has(fixed, r.package)
+        if haskey(fixed, r.package)
             if !contains(r, Version(r.package,fixed[r.package]))
                 warn("$(r.package) is fixed at $(repr(fixed[r.package])) which doesn't satisfy $(r.versions).")
             end
-            false
+            false # drop
         else
-            true
+            true # keep
         end
     end
     filter!(pkgs) do p
-        !has(fixed, p)
+        !haskey(fixed, p)
     end
     filter!(vers) do v
-        !has(fixed, v.package)
+        !haskey(fixed, v.package)
     end
     unsatisfiable = Set{Version}()
     filter!(deps) do d
         p = d[2].package
-        if has(fixed, p)
+        if haskey(fixed, p)
             if !contains(d[2], Version(p, fixed[p]))
                 add!(unsatisfiable, d[1])
             end
@@ -305,19 +303,54 @@ function _resolve()
     filter!(vers) do v
         !contains(unsatisfiable, v)
     end
+    pkgs = Set{String}()
+    for v in vers add!(pkgs, v.package) end
     filter!(deps) do d
-        !contains(unsatisfiable, d[1])
+        contains(pkgs, d[1].package) && !contains(unsatisfiable, d[1])
     end
-    want = Resolve.resolve(reqs,vers,deps)
+    while true
+        empty!(unsatisfiable)
+        filter!(deps) do d
+            p = d[2].package
+            if !contains(pkgs, p)
+                add!(unsatisfiable, d[1])
+                false # drop
+            else
+                true # keep
+            end
+        end
+        if isempty(unsatisfiable)
+            break
+        end
+        filter!(vers) do v
+            !contains(unsatisfiable, v)
+        end
+        empty!(pkgs)
+        for v in vers add!(pkgs, v.package) end
+        filter!(deps) do d
+            contains(pkgs, d[1].package) && !contains(unsatisfiable, d[1])
+        end
+    end
+
+    return have, reqs, vers, deps, fixed
+end
+
+# update packages from requirements
+
+function _resolve()
+    have, reqs, vers, deps, fixed = gather_repository_data()
+
+    want_vers = Resolve.resolve(reqs,vers,deps)
+    want = [p=>readchomp("METADATA/$p/versions/$v/sha1") for (p,v) in want_vers]
 
     pkgs = sort!(collect(keys(merge(want,have))))
     for pkg in pkgs
-        if has(have,pkg)
+        if haskey(have,pkg)
             managed = cd(pkg) do
                 !Git.dirty() && !Git.attached()
             end
             if !managed continue end
-            if has(want,pkg)
+            if haskey(want,pkg)
                 if have[pkg] != want[pkg]
                     oldver = Metadata.version(pkg,have[pkg])
                     newver = Metadata.version(pkg,want[pkg])
@@ -433,7 +466,7 @@ function commit(f::Function, msg::String)
     end
     if Git.staged() && !Git.unstaged()
         commit(msg)
-        run(`git diff --name-only --diff-filter=D HEAD^ HEAD` | `xargs rm -rf`)
+        run(`git diff --name-only --diff-filter=D HEAD^ HEAD` |> `xargs rm -rf`)
         checkout()
     elseif !Git.dirty()
         warn("nothing to commit.")
@@ -525,7 +558,7 @@ pull() = cd_pkgdir() do
 
     # merge submodules
     Git.each_submodule(false) do name, path, sha1
-        if has(Rs,"submodule.$name") && Git.different(L,R,path)
+        if haskey(Rs,"submodule.$name") && Git.different(L,R,path)
             alt = readchomp(`git rev-parse $R:$path`)
             cd(path) do
                 run(`git merge --no-edit $alt`)
@@ -536,7 +569,7 @@ pull() = cd_pkgdir() do
 
     # check for remaining merge conflicts
     if Git.unstaged()
-        unmerged = readall(`git ls-files -m` | `sort` | `uniq`)
+        unmerged = readall(`git ls-files -m` |> `sort` |> `uniq`)
         unmerged = replace(unmerged, r"^", "    ")
         warn("""
 
@@ -753,21 +786,24 @@ obliterate(pkg::String) = cd_pkgdir() do
 end
 
 # Repository sanity check
-check_repository() = cd_pkgdir() do
+check_repository(julia_version::VersionNumber=VERSION) = cd_pkgdir() do
+    _,_,vers,deps,_ = gather_repository_data(julia_version)
     try
-        Resolve.sanity_check()
+        Resolve.sanity_check(vers, deps)
     catch err
         if !isa(err, Resolve.MetadataError)
             rethrow(err)
         end
-        warning = "Packages with unsatisfiable requirements found:"
+        warning = "Packages with unsatisfiable requirements found:\n"
         for (v, pp) in err.info
-            warning *= "  $(v.package) v$(v.version) : no valid versions exist for package $pp"
+            warning *= "    $(v.package) v$(v.version) : no valid versions exist for package $pp\n"
         end
         warn(warning)
         return false
     end
     return true
 end
+check_repository(julia_version::String) = check_repository(convert(VersionNumber, julia_version))
+
 
 end # module

@@ -5,7 +5,7 @@ macro deprecate(old,new)
         Expr(:toplevel,
             Expr(:export,esc(old)),
             :(function $(esc(old))(args...)
-                  warn_once(string($oldname," is deprecated, use ",$newname," instead."))
+                  warn_once(string($oldname," is deprecated, use ",$newname," instead."); depth=1)
                   $(esc(new))(args...)
               end))
     elseif isa(old,Expr) && old.head == :call
@@ -14,7 +14,7 @@ macro deprecate(old,new)
         Expr(:toplevel,
             Expr(:export,esc(old.args[1])),
             :($(esc(old)) = begin
-                  warn_once(string($oldcall," is deprecated, use ",$newcall," instead."))
+                  warn_once(string($oldcall," is deprecated, use ",$newcall," instead."); depth=1)
                   $(esc(new))
               end))
     else
@@ -50,7 +50,6 @@ end
 @deprecate  nCr             binomial
 @deprecate  julia_pkgdir    Pkg.dir
 @deprecate  tintersect      typeintersect
-@deprecate  searchsorted    searchsortedfirst
 @deprecate  choose          first
 @deprecate  system          run
 @deprecate  order           sortperm
@@ -120,12 +119,12 @@ end
 @deprecate  unsetenv(var)           delete!(ENV,var)
 
 function svd(a::StridedMatrix, vecs::Bool, thin::Bool)
-    warn_once("The second argument ``vecs`` is no longer supported. Use svd(a, thin) instead.")
+    warn_once("The second argument ``vecs`` is no longer supported. Use svd(a, thin) instead."; depth=1)
     svd(a, thin)
 end
 
 function svdt(a::StridedMatrix, vecs::Bool, thin::Bool)
-    warn_once("The second argument ``vecs`` is no longer supported. Use svdt(a, thin) instead.")
+    warn_once("The second argument ``vecs`` is no longer supported. Use svdt(a, thin) instead."; depth=1)
     svdt(a, thin)
 end
 
@@ -187,10 +186,45 @@ export PipeString
 @deprecate  remote_call_wait    remotecall_wait
 @deprecate  has(s::Set, x)      contains(s, x)
 @deprecate  has(s::IntSet, x)   contains(s, x)
-
+@deprecate  has(d,k)            haskey(d,k)
+@deprecate  diagmm              scale
+@deprecate  diagmm!             scale!
+@deprecate  unsafe_ref          unsafe_load
+@deprecate  unsafe_assign       unsafe_store!
+@deprecate  add_each!           union!
+@deprecate  del_each!           setdiff!
+@deprecate  real_valued         isreal
+@deprecate  integer_valued      isinteger
+@deprecate  float64_valued      isfloat64
+@deprecate  isdenormal          issubnormal
 @deprecate  expr(hd, a...)              Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1})   Expr(hd, a...)
 @deprecate  readdir(cmd::Cmd)           readdir(string(cmd)[2:end-1])
+@deprecate  isbool(x)                   iseltype(x,Bool)
+@deprecate  iscomplex(x)                iseltype(x,Complex)
+@deprecate  lstrip(a::String, b::String) lstrip(a, collect(b))
+@deprecate  rstrip(a::String, b::String) rstrip(a, collect(b))
+@deprecate  delete!(a::Vector, x)     splice!(a, x)
+@deprecate  delete!(a::BitVector, x)  splice!(a, x)
+@deprecate  |(s::Set...)              union(s...)
+@deprecate  (&)(s::Set...)            intersect(s...)
+@deprecate  -(a::Set, b::Set)         setdiff(a,b)
+@deprecate  ($)(s1::IntSet, s2::IntSet)  symdiff(s1,s2)
+@deprecate  |(s::IntSet, s2::IntSet)     union(s, s2)
+@deprecate  (&)(s::IntSet, s2::IntSet)   intersect(s, s2)
+@deprecate  -(a::IntSet, b::IntSet)      setdiff(a,b)
+@deprecate  ~(s::IntSet)                 complement(s)
+
+# Redirection Operators
+@deprecate |(a::AbstractCmd,b::AbstractCmd) (a|>b)
+@deprecate >(a::Redirectable,b::AbstractCmd) (a|>b)
+@deprecate >(a::String,b::AbstractCmd) (a|>b)
+@deprecate >(a::AbstractCmd,b::Redirectable) (a|>b)
+@deprecate >(a::AbstractCmd,b::String) (a|>b)
+@deprecate <(a::AbstractCmd,b::String) (b|>a)
+@deprecate |(x, f::Function) (x|>f)
+
+@deprecate memio(args...)  IOBuffer()
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
 
@@ -199,3 +233,8 @@ const ref = getindex
 export ref
 const assign = setindex!
 export assign
+
+# will be removed from exports (moved into Base.Sys): OS_NAME, WORD_SIZE, CPU_CORES
+
+typealias ComplexPair Complex
+export ComplexPair

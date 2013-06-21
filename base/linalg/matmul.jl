@@ -1,7 +1,7 @@
 # matmul.jl: Everything to do with dense matrix multiplication
 
 # multiply by diagonal matrix as vector
-function diagmm!(C::Matrix, A::Matrix, b::Vector)
+function scale!(C::Matrix, A::Matrix, b::Vector)
     m, n = size(A)
     if n != length(b)
         error("argument dimensions do not match")
@@ -15,7 +15,7 @@ function diagmm!(C::Matrix, A::Matrix, b::Vector)
     return C
 end
 
-function diagmm!(C::Matrix, b::Vector, A::Matrix)
+function scale!(C::Matrix, b::Vector, A::Matrix)
     m, n = size(A)
     if m != length(b)
         error("argument dimensions do not match")
@@ -28,24 +28,27 @@ function diagmm!(C::Matrix, b::Vector, A::Matrix)
     return C
 end
 
-diagmm(A::Matrix, b::Vector) =
-    diagmm!(Array(promote_type(eltype(A),eltype(b)),size(A)), A, b)
+scale(A::Matrix, b::Vector) =
+    scale!(Array(promote_type(eltype(A),eltype(b)),size(A)), A, b)
 
-diagmm(b::Vector, A::Matrix) =
-    diagmm!(Array(promote_type(eltype(A),eltype(b)),size(A)), b, A)
+scale(b::Vector, A::Matrix) =
+    scale!(Array(promote_type(eltype(A),eltype(b)),size(A)), b, A)
 
 # Dot products
 
 dot{T<:Union(Float32, Float64)}(x::Vector{T}, y::Vector{T}) = BLAS.dot(x, y)
 function dot{T<:BLAS.BlasFloat, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
-    length(rx) != length(ry) ? error("Ranges should be of same length") : true
+    length(rx) != length(ry) ? error("ranges should be of same length") : true
     if min(rx) < 1 || max(rx) > length(x) || min(ry) < 1 || max(ry) > length(y)
         throw(BoundsError())
     end
     BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
-function dot(x::Vector, y::Vector)
-    s = zero(eltype(x))
+function dot(x::AbstractVector, y::AbstractVector)
+    if length(x) != length(y)
+        error("argument dimensions do not match")
+    end
+    s = zero(eltype(x))*zero(eltype(y))
     for i=1:length(x)
         s += conj(x[i])*y[i]
     end
@@ -59,7 +62,8 @@ dot(x::Number, y::Number) = conj(x) * y
 
 # Matrix-vector multiplication
 
-(*){T<:Union(Float32,Complex64,Integer,Rational)}(A::Union(StridedMatrix{Float64},StridedMatrix{Complex128}), X::StridedVector{T}) = A*convert(Vector{eltype(A)},X)
+(*){T<:Union(Float32,Integer,Rational)}(A::StridedMatrix{Float64}, X::StridedVector{T}) = A*convert(Vector{eltype(A)},X)
+(*){T<:Union(Float32,Complex64,Integer,Rational)}(A::StridedMatrix{Complex128}, X::StridedVector{T}) = A*convert(Vector{eltype(A)},X)
 function (*){T<:BlasFloat}(A::StridedMatrix{T}, X::StridedVector{T})
     Y = similar(A, size(A,1))
     gemv(Y, 'N', A, X)
@@ -68,7 +72,8 @@ end
 A_mul_B{T<:BlasFloat}(y::StridedVector{T}, A::StridedMatrix{T}, x::StridedVector{T}) = gemv(y, 'N', A, x)
 A_mul_B(y::StridedVector, A::StridedMatrix, x::StridedVector) = generic_matvecmul(y, 'N', A, x)
 
-At_mul_B{T<:Union(Float32,Complex64,Integer,Rational)}(A::Union(StridedMatrix{Float64},StridedMatrix{Complex128}), X::StridedVector{T}) = At_mul_B(A,convert(Vector{eltype(A)},X))
+At_mul_B{T<:Union(Float32,Integer,Rational)}(A::StridedMatrix{Float64}, X::StridedVector{T}) = At_mul_B(A,convert(Vector{eltype(A)},X))
+At_mul_B{T<:Union(Float32,Complex64,Integer,Rational)}(A::StridedMatrix{Complex128}, X::StridedVector{T}) = At_mul_B(A,convert(Vector{eltype(A)},X))
 function At_mul_B{T<:BlasFloat}(A::StridedMatrix{T}, x::StridedVector{T})
     y = similar(A, size(A, 2))
     gemv(y, 'T', A, x)
@@ -77,7 +82,8 @@ end
 At_mul_B{T<:BlasFloat}(y::StridedVector{T}, A::StridedMatrix{T}, x::StridedVector{T}) = gemv(y, 'T', A, x)
 At_mul_B(y::StridedVector, A::StridedMatrix, x::StridedVector) = generic_matvecmul(y, 'T', A, x)
 
-Ac_mul_B{T<:Union(Float32,Complex64,Integer,Rational)}(A::Union(StridedMatrix{Float64},StridedMatrix{Complex128}), X::StridedVector{T}) = Ac_mul_B(A,convert(Vector{eltype(A)},X))
+Ac_mul_B{T<:Union(Float32,Integer,Rational)}(A::StridedMatrix{Float64}, X::StridedVector{T}) = Ac_mul_B(A,convert(Vector{eltype(A)},X))
+Ac_mul_B{T<:Union(Float32,Complex64,Integer,Rational)}(A::StridedMatrix{Complex128}, X::StridedVector{T}) = Ac_mul_B(A,convert(Vector{eltype(A)},X))
 Ac_mul_B{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, x::StridedVector{T}) = At_mul_B(A, x)
 function Ac_mul_B{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T}, x::StridedVector{T})
     y = similar(A, size(A, 2))
@@ -176,7 +182,7 @@ function symmetrize!(A::StridedMatrix, UL::BlasChar)
             end
         end
     else
-        error("Second argument UL should be 'U' or 'L'")
+        error("second argument UL should be 'U' or 'L'")
     end
     return A
 end
@@ -199,7 +205,7 @@ function symmetrize_conj!(A::StridedMatrix, UL::BlasChar)
             end
         end
     else
-        error("Second argument UL should be 'U' or 'L'")
+        error("second argument UL should be 'U' or 'L'")
     end
     return A
 end
@@ -331,7 +337,8 @@ end
 (*){T,S}(A::StridedMatrix{T}, B::StridedVector{S}) = generic_matvecmul('N', A, B)
 
 function generic_matvecmul{T,S}(tA, A::StridedMatrix{T}, B::StridedVector{S})
-    C = Array(promote_type(T,S), size(A, tA=='N' ? 1 : 2))
+    x, y = one(T), one(S)
+    C = Array(typeof(x*y+x*y), size(A, tA=='N' ? 1 : 2))
     generic_matvecmul(C, tA, A, B)
 end
 
@@ -384,7 +391,8 @@ end
 function generic_matmatmul{T,S}(tA, tB, A::StridedVecOrMat{T}, B::StridedMatrix{S})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
-    C = Array(promote_type(T,S), mA, nB)
+    x, y = one(T), one(S)
+    C = Array(typeof(x*y+x*y), mA, nB)
     generic_matmatmul(C, tA, tB, A, B)
 end
 

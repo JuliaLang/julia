@@ -12,16 +12,15 @@ BUILD_LLDB = 0
 
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
-CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
+CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) F77="$(FC)" CC="$(CC)" CXX="$(CXX)" --build=$(BUILD_MACHINE)
 ifneq ($(XC_HOST),)
-CONFIG_GUESS := $(shell ./config.guess)
-CONFIGURE_COMMON += --host=$(XC_HOST) --build=$(CONFIG_GUESS)
+CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
 ifeq ($(OS),WINNT)
 CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
 endif
 
-#autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp patchelf
+#autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr patchelf
 #custom configure-driven script: zlib
 #custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas uv
 
@@ -98,8 +97,15 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
 endif
 
-ifeq ($(USE_SYSTEM_ZLIB), 0)
-STAGE1_DEPS += zlib
+#ifeq ($(USE_SYSTEM_ZLIB), 0)
+#STAGE1_DEPS += zlib
+#endif
+
+ifeq ($(USE_SYSTEM_MPFR), 0)
+STAGE2_DEPS += mpfr
+ifeq ($(USE_SYSTEM_GMP), 0)
+MPFR_OPTS = --with-gmp=$(abspath $(BUILD))
+endif
 endif
 
 ifeq ($(USE_SYSTEM_ARPACK), 0)
@@ -110,9 +116,15 @@ ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 STAGE2_DEPS += suitesparse
 endif
 
-#ifeq ($(USE_SYSTEM_LAPACK), 0)
-#STAGE2_DEPS += lapack
-#endif
+# Only compile standalone LAPACK if we are not using OpenBLAS.
+# OpenBLAS otherwise compiles LAPACK as part of its build.
+# This is useful where one wants to use the vendor BLAS, but 
+# build LAPACK as the vendor LAPACK may be too old (eg. Apple vecLib)
+ifeq ($(USE_SYSTEM_BLAS), 1)
+ifeq ($(USE_SYSTEM_LAPACK), 0)
+STAGE2_DEPS += lapack
+endif
+endif
 
 #Platform specific flags
 
@@ -134,7 +146,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf $(BUILD)
-getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-fftw get-suitesparse get-unwind get-gmp get-zlib get-patchelf
+getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-fftw get-suitesparse get-unwind get-gmp get-mpfr get-zlib get-patchelf
 
 ## PATHS ##
 DIRS = $(addprefix $(BUILD)/,lib include bin share etc)
@@ -188,6 +200,9 @@ LLVM_FLAGS += --disable-embed-stdcxx
 endif
 else
 LLVM_FLAGS += --disable-assertions --enable-optimized
+endif
+ifeq ($(OS), WINNT)
+LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared
 endif
 
 ifeq ($(BUILD_LLDB),1)
@@ -273,7 +288,6 @@ endif
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) -C llvm-$(LLVM_VER)/build install
-	$(AUTOTOOLS_PATH_CORRECT) 
 	touch -c $@
 
 clean-llvm:
@@ -389,7 +403,11 @@ $(UV_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
 LIBUV_MAKE_FLAGS = -C libuv CC="$(CC)" AR="$(AR)"
 ifeq ($(OS),WINNT)
-LIBUV_MAKE_FLAGS += OS=mingw
+LIBUV_MAKE_FLAGS += PLATFORM=mingw
+else
+ifneq ($(OS),$(BUILD_OS))
+$(error libuv may autodetect your cross-compile PLATFORM incorrectly)
+endif
 endif
 $(UV_OBJ_SOURCE): libuv/Makefile
 	$(MAKE) libuv.a $(LIBUV_MAKE_FLAGS)
@@ -406,7 +424,7 @@ $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	cp -r libuv/include/* $(BUILD)/include
 
 clean-uv:
-	-$(MAKE) clean $(LIBUV_MAKE_FLAGS)
+	-$(MAKE) clean $(LIBUV_MAKE_FLAGS) RUNNER_LIBS=
 	-rm -rf $(BUILD)/lib/libuv.a $(BUILD)/include/uv.h $(BUILD)/include/uv-private
 distclean-uv: clean-uv
 
@@ -651,23 +669,36 @@ ifneq ($(ARCH),x86_64)
 OPENBLAS_BUILD_OPTS += NUM_THREADS=30
 else
 # assume we may want lots of threads on some future machine
-OPENBLAS_BUILD_OPTS += NUM_THREADS=512
+ifeq ($(OS),WINNT) #windows seems unable to handle very many
+OPENBLAS_BUILD_OPTS += NUM_THREADS=30
+else #linux can handle up to 256 according to the FAQ
+OPENBLAS_BUILD_OPTS += NUM_THREADS=256
+endif
 endif
 endif
 
-ifeq ($(USE_LIB64), 1)
+# don't touch scheduler affinity since we manage this ourselves
+OPENBLAS_BUILD_OPTS += NO_AFFINITY=1
+
+ifeq ($(USE_BLAS64), 1)
 OPENBLAS_BUILD_OPTS += INTERFACE64=1
 endif
 
 ifneq ($(BUILD_OS),$(OS))
-OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 
-ifeq ($(ARCH),i686)
+OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC)
+endif
+ifeq ($(ARCH),i386)
+OPENBLAS_BUILD_OPTS += BINARY=32
+else ifeq ($(ARCH),i387)
+OPENBLAS_BUILD_OPTS += BINARY=32
+else ifeq ($(ARCH),i486)
+OPENBLAS_BUILD_OPTS += BINARY=32
+else ifeq ($(ARCH),i686)
 OPENBLAS_BUILD_OPTS += BINARY=32
 else ifeq ($(ARCH),x86_64)
 OPENBLAS_BUILD_OPTS += BINARY=64
 else
 $(error "unknown arch for openblas cross-compile")
-endif
 endif
 
 openblas-$(OPENBLAS_VER).tar.gz:
@@ -795,7 +826,7 @@ install-lapack: $(LAPACK_OBJ_TARGET)
 
 ## ARPACK ##
 
-ifeq ($(USE_LIB64), 1)
+ifeq ($(USE_BLAS64), 1)
 ARPACK_FFLAGS = -fdefault-integer-8
 endif
 
@@ -1003,7 +1034,7 @@ install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
 SUITESPARSE_OBJ_TARGET = $(BUILD)/lib/libumfpack.$(SHLIB_EXT)
 
-ifeq ($(USE_LIB64), 1)
+ifeq ($(USE_BLAS64), 1)
 UMFPACK_CONFIG = -DLONGBLAS='long long' 
 CHOLMOD_CONFIG = -DLONGBLAS='long long' 
 endif
@@ -1174,6 +1205,52 @@ configure-gmp: gmp-$(GMP_VER)/config.status
 compile-gmp: $(GMP_SRC_TARGET)
 check-gmp: gmp-$(GMP_VER)/checked
 install-gmp: $(GMP_OBJ_TARGET)
+
+ifeq ($(USE_SYSTEM_GMP), 0)
+MPFR_DEPS = $(GMP_OBJ_TARGET)
+endif
+
+## MPFR ##
+
+MPFR_SRC_TARGET = mpfr-$(MPFR_VER)/src/.libs/libmpfr.$(SHLIB_EXT)
+MPFR_OBJ_TARGET = $(BUILD)/lib/libmpfr.$(SHLIB_EXT)
+ifeq ($(OS),Darwin)
+MPFR_CHECK_MFLAGS = LDFLAGS="-Wl,-rpath,'$(BUILD)/$(JL_LIBDIR)'"
+endif
+
+mpfr-$(MPFR_VER).tar.bz2:
+	$(WGET_DASH_O) $@ http://www.mpfr.org/mpfr-current/$@
+mpfr-$(MPFR_VER)/configure: mpfr-$(MPFR_VER).tar.bz2
+	tar jxf $<
+	touch -c $@
+mpfr-$(MPFR_VER)/config.status: mpfr-$(MPFR_VER)/configure $(MPFR_DEPS)
+	cd mpfr-$(MPFR_VER) && \
+	./configure $(CONFIGURE_COMMON) $(MPFR_OPTS) F77= --enable-shared --disable-static
+	touch -c $@
+$(MPFR_SRC_TARGET): mpfr-$(MPFR_VER)/config.status
+	$(MAKE) -C mpfr-$(MPFR_VER) $(LIBTOOL_CCLD)
+mpfr-$(MPFR_VER)/checked: $(MPFR_SRC_TARGET)
+ifeq ($(OS),$(BUILD_OS))
+	$(MAKE) -C mpfr-$(MPFR_VER) $(LIBTOOL_CCLD) check $(MPFR_CHECK_MFLAGS)
+endif
+	echo 1 > $@
+$(MPFR_OBJ_TARGET): $(MPFR_SRC_TARGET) mpfr-$(MPFR_VER)/checked
+	$(MAKE) -C mpfr-$(MPFR_VER) $(LIBTOOL_CCLD) install
+	$(INSTALL_NAME_CMD)libmpfr.dylib $@
+	$(AUTOTOOLS_PATH_CORRECT) 
+	touch -c $@
+
+clean-mpfr:
+	-$(MAKE) -C mpfr-$(MPFR_VER) clean
+	-rm -f $(MPFR_OBJ_TARGET)
+distclean-mpfr:
+	-rm -rf mpfr-$(MPFR_VER).tar.bz2 mpfr-$(MPFR_VER)
+
+get-mpfr: mpfr-$(MPFR_VER).tar.bz2
+configure-mpfr: mpfr-$(MPFR_VER)/config.status
+compile-mpfr: $(MPFR_SRC_TARGET)
+check-mpfr: mpfr-$(MPFR_VER)/checked
+install-mpfr: $(MPFR_OBJ_TARGET)
 
 ## ZLIB ##
 

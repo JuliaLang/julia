@@ -23,7 +23,7 @@ static const char *opts =
     " -e --eval <expr>         Evaluate <expr>\n"
     " -E --print <expr>        Evaluate and show <expr>\n"
     " -P --post-boot <expr>    Evaluate <expr> right after boot\n"
-    " -L --load file           Load <file> right after boot\n"
+    " -L --load file           Load <file> right after boot on all processors\n"
     " -J --sysimage file       Start up with the given system image file\n\n"
 
     " -p n                     Run n local processes\n"

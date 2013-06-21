@@ -276,11 +276,10 @@ static Value *emit_typeof(Value *p)
 
 static void emit_error(const std::string &txt, jl_codectx_t *ctx)
 {
-    std::string txt2 = "in " + ctx->funcName + ": " + txt;
     Value *zeros[2] = { ConstantInt::get(T_int32, 0),
                         ConstantInt::get(T_int32, 0) };
     builder.CreateCall(jlerror_func,
-                       builder.CreateGEP(stringConst(txt2),
+                       builder.CreateGEP(stringConst(txt),
                                          ArrayRef<Value*>(zeros)));
 }
 
@@ -806,16 +805,15 @@ static Value *boxed(Value *v, jl_value_t *jt)
     return allocate_box_dynamic(literal_pointer_val(jt),jl_datatype_size(jt),v);
 }
 
-
 static void emit_cpointercheck(Value *x, const std::string &msg,
-                           jl_codectx_t *ctx)
+                               jl_codectx_t *ctx)
 {
     Value *t = emit_typeof(x);
     emit_typecheck(t, (jl_value_t*)jl_datatype_type, msg, ctx);
 
     Value *istype =
         builder.CreateICmpEQ(emit_nthptr(t, offsetof(jl_datatype_t,name)/sizeof(char*)),
-                literal_pointer_val((jl_value_t*)jl_pointer_type->name));
+                             literal_pointer_val((jl_value_t*)jl_pointer_type->name));
     BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(istype, passBB, failBB);

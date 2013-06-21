@@ -61,6 +61,8 @@ When compiled the first time, it will automatically download and build its [exte
 This takes a while, but only has to be done once. If the defaults in the build do not work for you, and you need to set specific make parameters, you can save them in `Make.user`. The build will automatically check for the existence of `Make.user` and use it if it exists.
 Building Julia requires 1.5GiB of diskspace and approximately 700MiB of virtual memory.
 
+If you need to build Julia in an environment that does not allow access to the outside world, use `make -C deps getall` to download all the necessary files. Then, copy the julia directory over to the target environment and build with `make`.
+
 **Note:** the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
 Once it is built, you can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the Julia program from anywhere (in the current shell session):
@@ -120,14 +122,17 @@ You must use the `gmake` command on FreeBSD instead of `make`.
 
 In order to build Julia on Windows, see [README.windows](https://github.com/JuliaLang/julia/blob/master/README.windows.md).
 
+### Vagrant
+
+Julia can be developed in an isolated Vagrant environment. See [the Vagrant README](https://github.com/JuliaLang/julia/blob/master/contrib/vagrant/README.md) for details.
+
 <a name="Required-Build-Tools-External-Libraries"/>
 ## Required Build Tools and External Libraries
 
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc, g++][gcc]**           — compiling and linking C, C++
-- **[clang][clang]**            — clang is the default compiler on OS X (Need at least v3.1, Xcode 4.3.3 on OS X)
+- **[gcc & g++][gcc]** or **[Clang][clang]** — compiling and linking C, C++ (if clang, need at least v3.1, Xcode 4.3.3 on OS X)
 - **[gfortran][gcc]**           — compiling and linking fortran libraries
 - **[git]**                     — version control and package management.
 - **[perl]**                    — preprocessing of header files of libraries.
@@ -152,6 +157,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[FFTW]**                — library for computing fast Fourier transforms very quickly and efficiently.
 - **[PCRE]**                — Perl-compatible regular expressions library.
 - **[GMP]**                 — the GNU multiple precision arithmetic library, needed for bigint support.
+- **[MPFR]**                — the GNU multiple precision floating point library, needed for arbitrary precision floating point support.
 - **[double-conversion]**   — efficient number-to-text conversion.
 - **[Rmath]**               — basic RNGs and distributions.
 
@@ -179,6 +185,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
 [readline]:     http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
 [GMP]:          http://gmplib.org/
+[MPFR]:         http://www.mpfr.org/
 [double-conversion]: http://double-conversion.googlecode.com/
 [Rmath]:        http://cran.r-project.org/doc/manuals/R-admin.html#The-standalone-Rmath-library
 [libuv]:        https://github.com/JuliaLang/libuv
@@ -244,7 +251,7 @@ The following distributions include julia, but the versions may be out of date d
 <a name="Editor-Terminal-Setup"/>
 ## Editor and Terminal Setup
 
-Currently, Julia editing mode support is available for Emacs, Vim, Textmate, Notepad++, and Kate, in `contrib/`
+Currently, Julia editing mode support is available for Emacs, Vim, Textmate, Sublime Text, Notepad++, and Kate, in `contrib/`
 
 Adjusting your terminal bindings is optional; everything will work fine without these key bindings.
 For the best interactive session experience, however, make sure that your terminal emulator (`Terminal`, `iTerm`, `xterm`, etc.) sends the `^H` sequence for `Backspace` (delete key) and that the `Shift-Enter` key combination sends a `\n` newline character to distinguish it from just pressing `Enter`, which sends a `\r` carriage return character.

@@ -45,13 +45,7 @@ for op = (:+, :*, :&, :|, :$, :min, :max)
         ($op)(a,b,c) = ($op)(($op)(a,b),c)
         ($op)(a,b,c,d) = ($op)(($op)(($op)(a,b),c),d)
         ($op)(a,b,c,d,e) = ($op)(($op)(($op)(($op)(a,b),c),d),e)
-        function ($op)(a, b, c, xs...)
-            accum = ($op)(($op)(a,b),c)
-            for x in xs
-                accum = ($op)(accum,x)
-            end
-            accum
-        end
+        ($op)(a, b, c, xs...) = ($op)(($op)(($op)(a,b),c), xs...)
     end
 end
 
@@ -78,11 +72,13 @@ end
 >>>(x,y::Integer) = x >>> convert(Int32,y)
 >>>(x,y::Int32)   = no_op_err(">>>", typeof(x))
 
-# fallback div, fld, rem & mod implementations
-div{T<:Real}(x::T, y::T) = convert(T,trunc(x/y))
-fld{T<:Real}(x::T, y::T) = convert(T,floor(x/y))
-rem{T<:Real}(x::T, y::T) = convert(T,x-y*div(x,y))
-mod{T<:Real}(x::T, y::T) = convert(T,x-y*fld(x,y))
+# fallback div and fld implementations
+# NOTE: C89 fmod() and x87 FPREM implicitly provide truncating float division,
+# so it is used here as the basis of float div().
+div{T<:Real}(x::T, y::T) = convert(T,trunc((x-rem(x,y))/y))
+fld{T<:Real}(x::T, y::T) = convert(T,floor((x-mod(x,y))/y))
+#rem{T<:Real}(x::T, y::T) = convert(T,x-y*trunc(x/y))
+#mod{T<:Real}(x::T, y::T) = convert(T,x-y*floor(x/y))
 
 # operator alias
 const % = rem
@@ -132,7 +128,7 @@ copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
               TopNode,QuoteNode,DataType,UnionType)) = x
 
 # function pipelining
-|(x, f::Function) = f(x)
+|>(x, f::Function) = f(x)
 
 # array shape rules
 
@@ -238,7 +234,7 @@ macro vectorize_2arg(S,f)
 end
 
 # some operators not defined yet
-global //, .>>, .<<, &>, &>>, &<, &<<
+global //, .>>, .<<, >:, <|, |>
 
 module Operators
 
@@ -268,6 +264,7 @@ export
     //,
     <,
     <:,
+    >:,
     <<,
     <=,
     ==,
@@ -277,21 +274,15 @@ export
     .>>,
     .<<,
     >>>,
-    &>,
-    &>>,
-    &<,
-    &<<,
     \,
     ^,
     |,
+    |>,
+    <|,
     ~
 
-import
-    Base.!, Base.!=, Base.$, Base.%, Base.&, Base.*, Base.+, Base.-, Base..!=,
-    Base..+, Base..-, Base..*, Base../, Base..<, Base..<=, Base..==, Base..>,
-    Base..>=, Base..\, Base..^, Base./, Base.//, Base.<, Base.<:, Base.<<,
-    Base.<=, Base.==, Base.>, Base.>=, Base.>>, Base..>>, Base..<<, Base.>>>,
-    Base.&>, Base.&>>, Base.&<, Base.&<<, Base.\, Base.^, Base.|, Base.~,
-    Base.!==
+import Base: !, !=, $, %, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
+    .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
+    <|, |>, \, ^, |, ~, !==, >:
 
 end

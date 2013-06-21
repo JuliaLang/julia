@@ -1,5 +1,7 @@
 .. _stdlib-sparse:
 
+.. currentmodule:: Base
+
 Sparse Matrices
 ---------------
 
@@ -11,7 +13,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
 .. function:: sparsevec(I, V, [m, combine])
 
-   Create a sparse matrix ``S`` of size ``m x 1`` such that ``S[I[k]] = V[k]``. Duplicates are combined using the ``combine`` function, which defaults to `+` if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
+   Create a sparse matrix ``S`` of size ``m x 1`` such that ``S[I[k]] = V[k]``. Duplicates are combined using the ``combine`` function, which defaults to ``+`` if it is not provided. In julia, sparse vectors are really just sparse matrices with one column. Given Julia's Compressed Sparse Columns (CSC) storage format, a sparse column matrix with one column is sparse, whereas a sparse row matrix with one row ends up being dense.
 
 .. function:: sparsevec(D::Dict, [m])
 
@@ -31,11 +33,11 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
 .. function:: dense(S)
 
-   Convert a sparse matrix ``S`` into a dense matrix.   
+   Convert a sparse matrix ``S`` into a dense matrix.
 
 .. function:: full(S)
 
-   Convert a sparse matrix ``S`` into a dense matrix.   
+   Convert a sparse matrix ``S`` into a dense matrix.
 
 .. function:: spzeros(m,n)
 
@@ -60,4 +62,9 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 .. function:: sprandbool(m,n,density)
 
    Create a random sparse boolean matrix with the specified density.
+
+.. function:: etree(A[, post])
+
+   Compute the elimination tree of a symmetric sparse matrix ``A`` from ``triu(A)`` and, optionally, its post-ordering permutation.
+
 

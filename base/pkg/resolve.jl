@@ -60,12 +60,14 @@ end
 
 function ReqsStruct(reqs::Vector{VersionSet}, vers::Vector{Version}, deps::Vector{(Version,VersionSet)})
     pkgs = Set{String}()
-    for r in reqs add!(pkgs, r.package) end
     for v in vers add!(pkgs, v.package) end
-    for d in deps
-        add!(pkgs, d[1].package)
-        add!(pkgs, d[2].package)
+
+    for r in reqs
+        if !contains(pkgs, r.package)
+            throw(MetadataError("required package $(r.package) has no version compatible with fixed requirements"))
+        end
     end
+
     ReqsStruct(reqs, sort!(collect(pkgs)), vers, deps)
 end
 
@@ -202,7 +204,7 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
     # To each version in each package, we associate a BitVector.
     # It is going to hold a pattern such that all versions with
     # the same pattern are equivalent.
-    vmask = [ [ BitVector() for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
+    vmask = [ [ BitVector(0) for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
 
     # From the point of view of resolve(), VectorSet(pkg,[]) and
     # VectorSet(pkg, [v0]) are equivelent if v0 is the first
@@ -461,9 +463,9 @@ typemax(::Type{FieldValue}) = FieldValue([typemax(Int) for i = 1:5])
 (-)(a::FieldValue, b::FieldValue) = FieldValue(a.v - b.v)
 (+)(a::FieldValue, b::FieldValue) = FieldValue(a.v + b.v)
 
-(==)(a::FieldValue, b::FieldValue) = (a.v == b.v)
+isequal(a::FieldValue, b::FieldValue) = (a.v == b.v)
 
-function (<)(a::FieldValue, b::FieldValue)
+function isless(a::FieldValue, b::FieldValue)
     va = a.v
     vb = b.v
     va[1] < vb[1] && return true
@@ -477,8 +479,6 @@ function (<)(a::FieldValue, b::FieldValue)
     va[5] < vb[5] && return true
     return false
 end
-
-isless(a::FieldValue, b::FieldValue) = a < b
 
 abs(a::FieldValue) = FieldValue(abs(a.v))
 abs(v::Vector{FieldValue}) = FieldValue[abs(a) for a in v]
@@ -1000,14 +1000,13 @@ function compute_output_dict(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::
     pvers = pkgstruct.pvers
     spp = pkgstruct.spp
 
-    want = (String=>ASCIIString)[]
+    want = (ByteString=>VersionNumber)[]
     for p0 = 1:np
         p = pkgs[p0]
         s = sol[p0]
         if s != spp[p0]
             v = pvers[p0][s]
-            want[p] = readchomp("METADATA/$p/versions/$v/sha1")
-            #want[p] = "$v"
+            want[p] = v
         end
     end
 
@@ -1073,7 +1072,7 @@ function enforce_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::V
         vs = d[2]
         push!(pdeps[p0][v0], vs)
         p1 = pdict[vs.package]
-        if !has(prevdeps[p1], p0)
+        if !haskey(prevdeps[p1], p0)
             prevdeps[p1][p0] = (Int=>VersionSet)[]
         end
         prevdeps[p1][p0][v0] = vs
@@ -1198,7 +1197,7 @@ function resolve(reqs::Vector{VersionSet}, vers::Vector{Version}, deps::Vector{(
 end
 
 # Build a subgraph incuding only the (direct and indirect) dependencies
-# of a given package (used in check_sanity)
+# of a given package (used in sanity_check)
 function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vector, v::Version)
 
     pkgs = reqsstruct0.pkgs
@@ -1212,8 +1211,8 @@ function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vecto
 
     p = v.package
     vn = v.version
-    nvn = deepcopy(vn)
-    nvn.patch += 1
+    nvn = VersionNumber(vn.major, vn.minor, vn.patch + 1, vn.prerelease, vn.build)
+
     reqs = [VersionSet(p, [vn, nvn])]
 
     p0 = pdict[p]
@@ -1224,7 +1223,9 @@ function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vecto
         for p0 in staged
             for w in pdeps[p0], vs in w
                 p1 = pdict[vs.package]
-                add!(staged_next, p1)
+                if !contains(pset, p1)
+                    add!(staged_next, p1)
+                end
             end
         end
         pset = union(pset, staged_next)
@@ -1258,8 +1259,8 @@ function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vecto
 end
 
 # Scan dependencies for (explicit or implicit) contradictions
-function sanity_check()
-    reqsstruct0 = ReqsStruct(VersionSet[])
+function sanity_check(vers::Vector{Version}, deps::Vector{(Version,VersionSet)})
+    reqsstruct0 = ReqsStruct(VersionSet[], vers, deps)
     pkgstruct0 = PkgStruct(reqsstruct0)
 
     eq_classes_map = prune_versions!(reqsstruct0, pkgstruct0, false)
@@ -1287,7 +1288,7 @@ function sanity_check()
         eqclass0 = eq_classes_map[p0]
         reveqclass0 = rev_eq_classes_map[p0]
         for (v,vtop) in eqclass0
-            if !has(reveqclass0, vtop)
+            if !haskey(reveqclass0, vtop)
                 reveqclass0[vtop] = VersionNumber[v]
             else
                 push!(reveqclass0[vtop], v)
@@ -1299,10 +1300,9 @@ function sanity_check()
         p0, v0 = vdict[v]
         return -pndeps[p0][v0]
     end
-    svers = sort(vers, Sort.By(vrank))
+    svers = sortby(vers, vrank)
 
     nv = length(svers)
-    nnzv = findfirst(v->vrank(v)==0, svers) - 1
 
     svdict = (Version=>Int)[]
     i = 1
@@ -1325,56 +1325,37 @@ function sanity_check()
         if checked[i]
             i += 1
             continue
-        elseif vr == 1
-            p0, v0 = vdict[v]
-            vs = pdeps[p0][v0][1]
-            p1 = pdict[vs.package]
-            found = false
-            for vn in pvers[p1]
-                if contains(vs, Version(vs.package, vn))
-                    found = true
-                    break
+        end
+        reqsstruct, pkgstruct = substructs(reqsstruct0, pkgstruct0, pdeps, v)
+
+        graph = Graph(reqsstruct, pkgstruct)
+        msgs = Messages(reqsstruct, pkgstruct, graph)
+
+        red_pkgs = reqsstruct.pkgs
+        red_np = reqsstruct.np
+        red_spp = pkgstruct.spp
+        red_pvers = pkgstruct.pvers
+
+        local sol::Vector{Int}
+        try
+            sol = converge(graph, msgs)
+            verify_sol(reqsstruct, pkgstruct, sol)
+
+            for p0 = 1:red_np
+                s0 = sol[p0]
+                if s0 != red_spp[p0]
+                    j = svdict[Version(red_pkgs[p0], red_pvers[p0][s0])]
+                    checked[j] = true
                 end
             end
-            if !found
-                pp = vs.package
-                push!(insane_ids, (p0,v0))
+            checked[i] = true
+        catch err
+            if isa(err, UnsatError)
+                pp = red_pkgs[err.info]
+                push!(insane_ids, vdict[v])
                 push!(problematic_pkgs, pp)
             else
-                checked[i] = true
-            end
-        else
-            reqsstruct, pkgstruct = substructs(reqsstruct0, pkgstruct0, pdeps, v)
-
-            graph = Graph(reqsstruct, pkgstruct)
-            msgs = Messages(reqsstruct, pkgstruct, graph)
-
-            red_pkgs = reqsstruct.pkgs
-            red_np = reqsstruct.np
-            red_spp = pkgstruct.spp
-            red_pvers = pkgstruct.pvers
-
-            local sol::Vector{Int}
-            try
-                sol = converge(graph, msgs)
-                verify_sol(reqsstruct, pkgstruct, sol)
-
-                for p0 = 1:red_np
-                    s0 = sol[p0]
-                    if s0 != red_spp[p0]
-                        j = svdict[Version(red_pkgs[p0], red_pvers[p0][s0])]
-                        checked[j] = true
-                    end
-                end
-                checked[i] = true
-            catch err
-                if isa(err, UnsatError)
-                    pp = red_pkgs[err.info]
-                    push!(insane_ids, vdict[v])
-                    push!(problematic_pkgs, pp)
-                else
-                    rethrow(err)
-                end
+                rethrow(err)
             end
         end
         i += 1
@@ -1392,7 +1373,7 @@ function sanity_check()
             end
             i += 1
         end
-        sort!(insane, Sort.By(x->x[1]))
+        sortby!(insane, x->x[1])
         throw(MetadataError(insane))
     end
 

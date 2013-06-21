@@ -2,20 +2,22 @@
   task.c
   lightweight processes (symmetric coroutines)
 */
+#include "platform.h"
+
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 //#include <sys/mman.h>
 #include <signal.h>
-#include <libgen.h>
-#include <unistd.h>
 #include <errno.h>
 #include "julia.h"
 #include "builtin_proto.h"
-#if defined(__WIN32__)
+#if defined(_OS_WINDOWS_)
 #include <winbase.h>
 #include <malloc.h>
+#include <dbghelp.h>
 #else
+#include <unistd.h>
 // This gives unwind only local unwinding options ==> faster code
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
@@ -66,7 +68,12 @@ static void boundlow(struct _probe_data *p)
 }
 
 // we need this function to exist so we can measure its stack frame!
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+static void __declspec(noinline) fill(struct _probe_data *p);
+#else
 static void fill(struct _probe_data *p) __attribute__ ((noinline));
+#endif
+
 static void fill(struct _probe_data *p)
 {
     boundlow(p);
@@ -162,9 +169,13 @@ static void save_stack(jl_task_t *t)
     memcpy(buf, (char*)&_x, nb);
 }
 
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+void __declspec(noinline) restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
+#else
 void __attribute__((noinline)) restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
+#endif
 {
-    char* _x = (char*)(t->stackbase-t->ssize);
+    char* _x = (char*)t->stackbase - t->ssize;
     if (!p) {
         p = _x;
         if ((char*)&_x > _x) {
@@ -358,7 +369,7 @@ static void start_task(jl_task_t *t)
     // this runs the first time we switch to t
     jl_value_t *arg = jl_task_arg_in_transit;
     jl_value_t *res;
-    JL_GC_PUSH(&arg);
+    JL_GC_PUSH1(&arg);
 
 #ifdef COPY_STACKS
     ptrint_t local_sp = (ptrint_t)jl_pgcstack;
@@ -427,7 +438,7 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
     getFunctionInfo(func_name, line_num, file_name, ip);
     if (*func_name == NULL && doCframes) {
         fromC = 1;
-#if defined(__WIN32__)
+#if defined(_OS_WINDOWS_)
         *func_name = name_unknown;   // FIXME
         *file_name = name_unknown;
         *line_num = 0;
@@ -453,35 +464,49 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
     return fromC;
 }
 
-#if defined(__WIN32__)
-DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
-{
-    /** MINGW does not have the necessary declarations for linking CaptureStackBackTrace*/
-#if defined(__MINGW_H)
-    HINSTANCE kernel32 = LoadLibrary("Kernel32.dll");
-
-    if (kernel32 != NULL) {
-        typedef USHORT (*CaptureStackBackTraceType)(ULONG FramesToSkip, ULONG FramesToCapture, void* BackTrace, ULONG* BackTraceHash);
-        CaptureStackBackTraceType func = (CaptureStackBackTraceType)GetProcAddress(kernel32, "RtlCaptureStackBackTrace");
-
-        if (func == NULL) {
-            FreeLibrary(kernel32);
-            kernel32 = NULL;
-            func = NULL;
-            return (size_t) 0;
-        }
-        else {
-            return func(0, maxsize, data, NULL);
-        }
-    }
-    else {
-        JL_PUTS("Failed to load kernel32.dll", JL_STDERR);
-        jl_exit(1);
-    }
-    FreeLibrary(kernel32);
-#else
-    return RtlCaptureStackBackTrace(0, maxsize, (void**)data, NULL);
+#if defined(_OS_WINDOWS_)
+#if defined(_CPU_X86_64_)
+extern int needsSymRefreshModuleList;
 #endif
+DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize) {
+    CONTEXT Context;
+    memset(&Context, 0, sizeof(Context));
+    RtlCaptureContext(&Context);
+    STACKFRAME64 stk;
+    memset(&stk, 0, sizeof(stk));
+
+#if defined(_CPU_X86_64_) 
+    if (needsSymRefreshModuleList) {
+        SymRefreshModuleList(GetCurrentProcess());
+        needsSymRefreshModuleList = 0;
+    }
+    DWORD MachineType = IMAGE_FILE_MACHINE_AMD64;
+    stk.AddrPC.Offset = Context.Rip;
+    stk.AddrStack.Offset = Context.Rsp;
+    stk.AddrFrame.Offset = Context.Rbp;
+#elif defined(_CPU_X86_)
+    DWORD MachineType = IMAGE_FILE_MACHINE_I386;
+    stk.AddrPC.Offset = Context.Eip;
+    stk.AddrStack.Offset = Context.Esp;
+    stk.AddrFrame.Offset = Context.Ebp;
+#else
+#error WIN16 not supported :P
+#endif
+    stk.AddrPC.Mode = AddrModeFlat;
+    stk.AddrStack.Mode = AddrModeFlat;
+    stk.AddrFrame.Mode = AddrModeFlat;
+    
+    size_t n = 0;
+    while (n < maxsize) {
+        BOOL result = StackWalk64(MachineType, GetCurrentProcess(), GetCurrentThread(),
+            &stk, &Context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL);
+        data[n++] = (ptrint_t)stk.AddrPC.Offset;
+        if (stk.AddrReturn.Offset == 0)
+            break;
+        if (!result)
+            break;
+    }
+    return n;
 }
 #else
 // stacktrace using libunwind
@@ -493,17 +518,11 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
     
     unw_getcontext(&uc);
     unw_init_local(&cursor, &uc);
-    while (unw_step(&cursor) && n < maxsize) {
-        unw_get_reg(&cursor, UNW_REG_IP, &ip);
+    while (unw_step(&cursor) > 0 && n < maxsize) {
+        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0) {
+            break;
+        }
         data[n++] = ip;
-        /*
-        char *func_name;
-        int line_num;
-        const char *file_name;
-        getFunctionInfo(&func_name, &line_num, &file_name, ip);
-        if (func_name != NULL)
-            ios_printf(ios_stdout, "in %s at %s:%d\n", func_name, file_name, line_num);
-        */
     }
     return n;
 }
@@ -536,7 +555,7 @@ DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int doCframes)
     (void)frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, doCframes);
     if (func_name != NULL) {
         jl_value_t *r = (jl_value_t*)jl_alloc_tuple(3);
-        JL_GC_PUSH(&r);
+        JL_GC_PUSH1(&r);
         jl_tupleset(r, 0, jl_symbol(func_name));
         jl_tupleset(r, 1, jl_symbol(file_name));
         jl_tupleset(r, 2, jl_box_long(line_num));
@@ -656,7 +675,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 #ifdef COPY_STACKS
     t->bufsz = 0;
 #else
-    JL_GC_PUSH(&t);
+    JL_GC_PUSH1(&t);
 
     char *stk = allocb(ssize+pagesz+(pagesz-1));
     t->stkbuf = stk;
@@ -757,7 +776,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task = (jl_task_t*)allocobj(sizeof(jl_task_t));
     jl_current_task->type = (jl_value_t*)jl_task_type;
 #ifdef COPY_STACKS
-    jl_current_task->stackbase = stack+ssize;
+    jl_current_task->stackbase = (char *)stack + ssize;
     jl_current_task->ssize = 0;  // size of saved piece
     jl_current_task->bufsz = 0;
 #else

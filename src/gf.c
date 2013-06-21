@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
 #include "julia.h"
@@ -292,7 +292,7 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
 // merged in.
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
 {
-    JL_GC_PUSH(&sp);
+    JL_GC_PUSH1(&sp);
     if (jl_tuple_len(l->sparams) > 0)
         sp = jl_tuple_append(sp, l->sparams);
     jl_lambda_info_t *nli = jl_new_lambda_info(l->ast, sp);
@@ -313,7 +313,7 @@ jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
     if (f->linfo == NULL)
         return f;
     jl_function_t *nf = jl_new_closure(f->fptr, f->env, NULL);
-    JL_GC_PUSH(&nf);
+    JL_GC_PUSH1(&nf);
     nf->linfo = jl_add_static_parameters(f->linfo, sp);
     JL_GC_POP();
     return nf;
@@ -409,6 +409,11 @@ void jl_debug_print_type(JL_STREAM *s, jl_value_t *v)
     }
 }
 
+DLLEXPORT void jl_print_type(jl_value_t *v)
+{
+    jl_debug_print_type(JL_STDERR, v);
+}
+
 extern jl_function_t *jl_typeinf_func;
 
 /*
@@ -497,7 +502,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     int need_guard_entries = 0;
     jl_value_t *temp=NULL;
     jl_function_t *newmeth=NULL;
-    JL_GC_PUSH(&type, &temp, &newmeth);
+    JL_GC_PUSH3(&type, &temp, &newmeth);
 
     for (i=0; i < jl_tuple_len(type); i++) {
         jl_value_t *elt = jl_tupleref(type,i);
@@ -907,14 +912,14 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
     return ti;
 }
 
-static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, int cache)
+static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, int cache, int inexact)
 {
     jl_methlist_t *m = mt->defs;
     size_t nargs = jl_tuple_len(tt);
     size_t i;
     jl_value_t *ti=(jl_value_t*)jl_bottom_type;
     jl_tuple_t *newsig=NULL, *env = jl_null;
-    JL_GC_PUSH(&env, &newsig);
+    JL_GC_PUSH2(&env, &newsig);
 
     while (m != JL_NULL) {
         if (m->tvars!=jl_null) {
@@ -924,8 +929,17 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
                 // parametric methods only match if all typevars are matched by
                 // non-typevars.
                 for(i=1; i < jl_tuple_len(env); i+=2) {
-                    if (jl_is_typevar(jl_tupleref(env,i)))
+                    if (jl_is_typevar(jl_tupleref(env,i))) {
+                        if (inexact) {
+                            // "inexact" means the given type is compile-time,
+                            // where a failure to determine the value of a
+                            // static parameter is inconclusive.
+                            // this is issue #3182, see test/core.jl
+                            JL_GC_POP();
+                            return jl_bottom_func;
+                        }
                         break;
+                    }
                 }
                 if (i >= jl_tuple_len(env))
                     break;
@@ -1056,7 +1070,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
                                                  (jl_value_t*)sig);
         if (isect == (jl_value_t*)jl_bottom_type)
             return;
-        JL_GC_PUSH(&isect);
+        JL_GC_PUSH1(&isect);
         jl_methlist_t *l = ml;
         while (l != JL_NULL) {
             if (sigs_eq(isect, (jl_value_t*)l->sig, 0))
@@ -1243,7 +1257,7 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
 {
     jl_value_t *argtup = jl_f_tuple(NULL, args, na);
-    JL_GC_PUSH(&argtup);
+    JL_GC_PUSH1(&argtup);
     jl_value_t *fargs[2] = { (jl_value_t*)f, argtup };
     jl_throw(jl_apply((jl_function_t*)jl_methoderror_type, fargs, 2));
     // not reached
@@ -1253,7 +1267,7 @@ jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
 static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
 {
     jl_tuple_t *tt = jl_alloc_tuple(nargs);
-    JL_GC_PUSH(&tt);
+    JL_GC_PUSH1(&tt);
     size_t i;
     for(i=0; i < nargs; i++) {
         jl_value_t *a;
@@ -1270,11 +1284,11 @@ static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
 }
 
 jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types,
-                                        int cache)
+                                        int cache, int inexact)
 {
     jl_function_t *sf = jl_method_table_assoc_exact_by_type(mt, types);
     if (sf == jl_bottom_func) {
-        sf = jl_mt_assoc_by_type(mt, types, cache);
+        sf = jl_mt_assoc_by_type(mt, types, cache, inexact);
     }
     return sf;
 }
@@ -1284,8 +1298,8 @@ jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t na
     jl_function_t *sf = jl_method_table_assoc_exact(mt, args, nargs);
     if (sf == jl_bottom_func) {
         jl_tuple_t *tt = arg_type_tuple(args, nargs);
-        JL_GC_PUSH(&tt);
-        sf = jl_mt_assoc_by_type(mt, tt, cache);
+        JL_GC_PUSH1(&tt);
+        sf = jl_mt_assoc_by_type(mt, tt, cache, 0);
         JL_GC_POP();
     }
     return sf;
@@ -1298,7 +1312,7 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
     if (!jl_is_leaf_type((jl_value_t*)types))
         return NULL;
     jl_methtable_t *mt = jl_gf_mtable(f);
-    jl_function_t *sf = jl_method_lookup_by_type(mt, types, 1);
+    jl_function_t *sf = jl_method_lookup_by_type(mt, types, 1, 1);
     if (sf == jl_bottom_func) {
         return NULL;
     }
@@ -1369,8 +1383,8 @@ JL_CALLABLE(jl_apply_generic)
     }
     else {
         jl_tuple_t *tt = arg_type_tuple(args, nargs);
-        JL_GC_PUSH(&tt);
-        mfunc = jl_mt_assoc_by_type(mt, tt, 1);
+        JL_GC_PUSH1(&tt);
+        mfunc = jl_mt_assoc_by_type(mt, tt, 1, 0);
         JL_GC_POP();
     }
 
@@ -1448,7 +1462,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
         jl_tuple_t *tpenv=jl_null;
         jl_tuple_t *newsig=NULL;
         jl_tuple_t *tt=NULL;
-        JL_GC_PUSH(&env, &newsig, &tt);
+        JL_GC_PUSH3(&env, &newsig, &tt);
 
         if (m->invokes == JL_NULL) {
             m->invokes = new_method_table(mt->name);
@@ -1541,7 +1555,7 @@ void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)
 jl_function_t *jl_new_generic_function(jl_sym_t *name)
 {
     jl_function_t *f = jl_new_closure(jl_apply_generic, NULL, NULL);
-    JL_GC_PUSH(&f);
+    JL_GC_PUSH1(&f);
     jl_initialize_generic_function(f, name);
     JL_GC_POP();
     return f;
@@ -1569,7 +1583,7 @@ DLLEXPORT jl_tuple_t *jl_match_method(jl_value_t *type, jl_value_t *sig,
 {
     jl_tuple_t *env = jl_null;
     jl_value_t *ti=NULL;
-    JL_GC_PUSH(&env, &ti);
+    JL_GC_PUSH2(&env, &ti);
     ti = lookup_match(type, (jl_value_t*)sig, &env, tvars);
     jl_tuple_t *result = jl_tuple2(ti, env);
     JL_GC_POP();
@@ -1582,7 +1596,7 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
 {
     jl_tuple_t *env = jl_null;
     jl_value_t *ti=NULL;
-    JL_GC_PUSH(&env, &ti);
+    JL_GC_PUSH2(&env, &ti);
 
     ti = lookup_match(type, (jl_value_t*)sig, &env, tvars);
     jl_tuple_t *result = NULL;
@@ -1607,7 +1621,7 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
 {
     jl_array_t *t = (jl_array_t*)jl_an_empty_cell;
     jl_tuple_t *matc=NULL;
-    JL_GC_PUSH(&t, &matc);
+    JL_GC_PUSH2(&t, &matc);
     int len=0;
     while (ml != JL_NULL) {
         // a method is shadowed if type <: S <: m->sig where S is the

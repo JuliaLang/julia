@@ -3,6 +3,10 @@
 Linear Algebra
 --------------
 
+.. module:: Base.LinAlg
+
+.. currentmodule:: Base
+
 Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http:://www.suitesparse.com/>`_.
 
 .. function:: *(A, B)
@@ -31,7 +35,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: lufact(A) -> LU
 
-   Compute the LU factorization of ``A``, returning an ``LU`` object for dense ``A`` or an ``UmfpackLU`` object for sparse ``A``. The individual components of the factorization ``F`` can be accesed by indexing: ``F[:L]``, ``F[:U]``, and ``F[:P]`` (permutation matrix) or ``F[:p]`` (permutation vector). An ``UmfpackLU`` object has additional components ``F[:q]`` (the left permutation vector) and ``Rs`` the vector of scaling factors. The following functions are available for both ``LU`` and ``UmfpackLU`` objects: ``size``, ``\`` and ``det``.  For ``LU`` there is also an ``inv`` method.  The sparse LU factorization is such that ``L*U`` is equal to``diagmm(Rs,A)[p,q]``.
+   Compute the LU factorization of ``A``, returning an ``LU`` object for dense ``A`` or an ``UmfpackLU`` object for sparse ``A``. The individual components of the factorization ``F`` can be accesed by indexing: ``F[:L]``, ``F[:U]``, and ``F[:P]`` (permutation matrix) or ``F[:p]`` (permutation vector). An ``UmfpackLU`` object has additional components ``F[:q]`` (the left permutation vector) and ``Rs`` the vector of scaling factors. The following functions are available for both ``LU`` and ``UmfpackLU`` objects: ``size``, ``\`` and ``det``.  For ``LU`` there is also an ``inv`` method.  The sparse LU factorization is such that ``L*U`` is equal to``scale(Rs,A)[p,q]``.
 
 .. function:: lufact!(A) -> LU
 
@@ -47,13 +51,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: cholfact(A, [ll]) -> CholmodFactor
 
-   Compute the sparse Cholesky factorization of a sparse matrix ``A``.  If ``A`` is Hermitian its Cholesky factor is determined.  If ``A`` is not Hermitian the Cholesky factor of ``A*A'`` is determined. A fill-reducing permutation is used.  Methods for ``size``, ``solve``, ``\``, ``findn_nzs``, ``diag``, ``det`` and ``logdet``.  One of the solve methods includes an integer argument that can be used to solve systems involving parts of the factorization only.  The optional boolean argument, ``ll`` determines whether the factorization returned is of the ``A[p,p] = L*L'`` form, where ``L`` is lower triangular or ``A[p,p] = diagmm(L,D)*L'`` form where ``L`` is unit lower triangular and ``D`` is a non-negative vector.  The default is LDL.
+   Compute the sparse Cholesky factorization of a sparse matrix ``A``.  If ``A`` is Hermitian its Cholesky factor is determined.  If ``A`` is not Hermitian the Cholesky factor of ``A*A'`` is determined. A fill-reducing permutation is used.  Methods for ``size``, ``solve``, ``\``, ``findn_nzs``, ``diag``, ``det`` and ``logdet``.  One of the solve methods includes an integer argument that can be used to solve systems involving parts of the factorization only.  The optional boolean argument, ``ll`` determines whether the factorization returned is of the ``A[p,p] = L*L'`` form, where ``L`` is lower triangular or ``A[p,p] = scale(L,D)*L'`` form where ``L`` is unit lower triangular and ``D`` is a non-negative vector.  The default is LDL.
 
 .. function:: cholfact!(A, [LU]) -> Cholesky
 
    ``cholfact!`` is the same as ``cholfact`` but saves space by overwriting the input A, instead of creating a copy.
 
-..  function:: cholpfact(A, [LU]) -> CholeskyPivoted
+.. function:: cholpfact(A, [LU]) -> CholeskyPivoted
 
    Compute the pivoted Cholesky factorization of a symmetric positive semi-definite matrix ``A`` and return a ``CholeskyPivoted`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. The triangular factors containted in the factorization ``F`` can be obtained with ``F[:L]`` and ``F[:U]``, whereas the permutation can be obtained with ``F[:P]`` or ``F[:p]``. The following functions are available for ``CholeskyPivoted`` objects: ``size``, ``\``, ``inv``, ``det``. A ``LAPACK.RankDeficientException`` error is thrown in case the matrix is rank deficient.
 
@@ -93,6 +97,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute eigenvalues and eigenvectors of A
 
+.. function:: eig(A, B) -> D, V
+
+   Compute generalized eigenvalues and vectors of A and B
+
 .. function:: eigvals(A)
 
    Returns the eigenvalues of ``A``.
@@ -115,9 +123,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the eigenvalue decomposition of ``A`` and return an ``Eigen`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``. The following functions are available for ``Eigen`` objects: ``inv``, ``det``.
 
-.. function:: eigfact!(A)
+.. function:: eigfact(A, B)
 
-   ``eigfact!`` is the same as ``eigfact`` but saves space by overwriting the input A, instead of creating a copy.
+   Compute the generalized eigenvalue decomposition of ``A`` and ``B`` and return an ``GeneralizedEigen`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``.
+
+.. function:: eigfact!(A, [B])
+
+   ``eigfact!`` is the same as ``eigfact`` but saves space by overwriting the input A (and B), instead of creating a copy.
 
 .. function:: hessfact(A)
 
@@ -166,11 +178,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svdfact(A, B) -> GeneralizedSVD
 
    Compute the generalized SVD of ``A`` and ``B``, returning a ``GeneralizedSVD`` Factorization object, such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``.
-   
+
 .. function:: svd(A, B) -> U, V, Q, D1, D2, R0
 
    Compute the generalized SVD of ``A`` and ``B``, returning ``U``, ``V``, ``Q``, ``D1``, ``D2``, and ``R0`` such that ``A = U*D1*R0*Q'`` and ``B = V*D2*R0*Q'``.
- 
+
 .. function:: svdvals(A, B)
 
    Return only the singular values from the generalized singular value decomposition of ``A`` and ``B``.
@@ -183,19 +195,35 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Lower triangle of a matrix
 
-.. function:: diag(M, [k])
+.. function:: diagind(M[, k])
+
+   A ``Range`` giving the indices of the ``k``-th diagonal of the matrix ``M``.
+
+.. function:: diag(M[, k])
 
    The ``k``-th diagonal of a matrix, as a vector
 
-.. function:: diagm(v, [k])
+.. function:: diagm(v[, k])
 
    Construct a diagonal matrix and place ``v`` on the ``k``-th diagonal
 
-.. function:: diagmm(matrix, vector)
+.. function:: scale(A, B)
 
-   Multiply matrices, interpreting the vector argument as a diagonal matrix.
-   The arguments may occur in the other order to multiply with the diagonal
-   matrix on the left.
+   ``scale(A::Array, B::Number)`` scales all values in ``A`` with ``B``.
+   Note: In cases where the array is big enough, ``scale`` can be much
+   faster than ``A .* B``, due to the use of BLAS.
+
+   ``scale(A::Matrix, B::Vector)`` is the same as multiplying with a
+   diagonal matrix on the right, and scales the columns of ``A`` with
+   the values in ``B``.
+
+   ``scale(A::Vector, B::Matrix)`` is the same as multiplying with a
+   diagonal matrix on the left, and scales the rows of ``B`` with the
+   values in ``A``.
+
+.. function:: scale!(A, B)
+
+   ``scale!(A,B)`` overwrites the input array with the scaled result.
 
 .. function:: Tridiagonal(dl, d, du)
 
@@ -288,15 +316,34 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: transpose(A)
 
-   The transpose operator (.').
+   The transpose operator (``.'``).
 
 .. function:: ctranspose(A)
 
-   The conjugate transpose operator (').
+   The conjugate transpose operator (``'``).
 
+.. function:: eigs(A; nev=6, which="LM", tol=0.0, maxiter=1000, ritzvec=true)
+
+   ``eigs`` computes the eigenvalues of A using Arnoldi factorization. The following keyword arguments are supported:
+    * ``nev``: Number of eigenvalues
+    * ``which``: type of eigenvalues ("LM", "SM")
+    * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
+    * ``maxiter``: Maximum number of iterations
+    * ``ritzvec``: Returns the Ritz vectors (eigenvectors) if ``true``
+
+.. function:: svds(A; nev=6, which="LA", tol=0.0, maxiter=1000, ritzvec=true)
+
+   ``svds`` computes the singular values of A using Arnoldi factorization. The following keyword arguments are supported:
+    * ``nsv``: Number of singular values
+    * ``which``: type of singular values ("LA")
+    * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
+    * ``maxiter``: Maximum number of iterations
+    * ``ritzvec``: Returns the singular vectors if ``true``
 
 BLAS Functions
 --------------
+
+.. module:: Base.LinAlg.BLAS
 
 This module provides wrappers for some of the BLAS functions for
 linear algebra.  Those BLAS functions that overwrite one of the input
@@ -304,6 +351,8 @@ arrays have names ending in ``'!'``.
 
 Usually a function has 4 methods defined, one each for ``Float64``,
 ``Float32``, ``Complex128`` and ``Complex64`` arrays.
+
+.. currentmodule:: Base
 
 .. function:: copy!(n, X, incx, Y, incy)
 
@@ -316,6 +365,10 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    ``X`` with stride ``incx`` and ``n`` elements of array ``Y`` with
    stride ``incy``.  There are no ``dot`` methods for ``Complex``
    arrays.
+
+The following functions are defined within the ``Base.LinAlg.BLAS`` module.
+
+.. currentmodule:: Base.LinAlg.BLAS
 
 .. function:: nrm2(n, X, incx)
 
@@ -370,11 +423,11 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
 .. function:: sbmv!(uplo, k, alpha, A, x, beta, y)
 
-   Update vector ``y`` as ``alpha*A*x + beta*y`` where ``A`` is a 
+   Update vector ``y`` as ``alpha*A*x + beta*y`` where ``A`` is a
    a symmetric band matrix of order ``size(A,2)`` with
    ``k`` super-diagonals stored in the argument ``A``.  The storage
    layout for ``A`` is described the reference BLAS module, level-2
-   BLAS at `<http://www.netlib.org/lapack/explore-html/>`.
+   BLAS at http://www.netlib.org/lapack/explore-html/.
 
    Returns the updated ``y``.
 

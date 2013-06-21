@@ -76,7 +76,7 @@ function serialize(s, t::Tuple)
 end
 
 function serialize(s, x::Symbol)
-    if has(ser_tag, x)
+    if haskey(ser_tag, x)
         return write_as_tag(s, x)
     end
     name = string(x)
@@ -157,7 +157,7 @@ end
 
 function serialize(s, m::Module)
     writetag(s, Module)
-    serialize(s, full_name(m))
+    serialize(s, fullname(m))
 end
 
 function lambda_number(l::LambdaStaticData)
@@ -233,7 +233,7 @@ function serialize_type_data(s, t)
 end
 
 function serialize(s, t::DataType)
-    if has(ser_tag,t)
+    if haskey(ser_tag,t)
         write_as_tag(s, t)
     else
         writetag(s, DataType)
@@ -243,7 +243,7 @@ function serialize(s, t::DataType)
 end
 
 function serialize_type(s, t::DataType)
-    if has(ser_tag,t)
+    if haskey(ser_tag,t)
         writetag(s, t)
     else
         writetag(s, DataType)
@@ -253,7 +253,7 @@ function serialize_type(s, t::DataType)
 end
 
 function serialize(s, x)
-    if has(ser_tag,x)
+    if haskey(ser_tag,x)
         return write_as_tag(s, x)
     end
     t = typeof(x)
@@ -315,10 +315,16 @@ function deserialize(s, ::Type{Function})
     b = read(s, Uint8)
     if b==0
         name = deserialize(s)::Symbol
+        if !isdefined(Base,name)
+            return (args...)->error("function $name not defined on process $(myid())")
+        end
         return eval(Base,name)
     elseif b==2
         mod = deserialize(s)::Module
         name = deserialize(s)::Symbol
+        if !isdefined(mod,name)
+            return (args...)->error("function $name not defined on process $(myid())")
+        end
         return eval(mod,name)
     elseif b==3
         env = deserialize(s)
@@ -338,7 +344,7 @@ function deserialize(s, ::Type{LambdaStaticData})
     infr = deserialize(s)
     mod = deserialize(s)
     capt = deserialize(s)
-    if has(known_lambda_data, lnumber)
+    if haskey(known_lambda_data, lnumber)
         return known_lambda_data[lnumber]
     else
         linfo = ccall(:jl_new_lambda_info, Any, (Any, Any), ast, sparams)

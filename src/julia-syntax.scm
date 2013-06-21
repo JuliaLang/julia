@@ -7,6 +7,8 @@
 
 ;; allow (:: T) => (:: #gensym T) in formal argument lists
 (define (fix-arglist l)
+  (if (any vararg? (butlast l))
+      (error "invalid ... on non-final argument"))
   (map (lambda (a)
 	 (if (and (pair? a) (eq? (car a) '|::|) (null? (cddr a)))
 	     `(|::| ,(gensy) ,(cadr a))
@@ -21,13 +23,15 @@
 	(else
 	 (case (car v)
 	   ((...)         (decl-var (cadr v)))
-	   ((= keyword)   (decl-var (caddr v)))
 	   ((|::|)        (decl-var v))
 	   (else (error (string "malformed function argument " v)))))))
 
 ; convert a lambda list into a list of just symbols
 (define (llist-vars lst)
-  (map arg-name lst))
+  (map arg-name (filter (lambda (a)
+			  (not (and (pair? a)
+				    (eq? (car a) 'parameters))))
+			lst)))
 
 (define (arg-type v)
   (cond ((symbol? v)  'Any)
@@ -36,7 +40,6 @@
 	(else
 	 (case (car v)
 	   ((...)         `(... ,(decl-type (cadr v))))
-	   ((= keyword)   (decl-type (caddr v)))
 	   ((|::|)        (decl-type v))
 	   (else (error
 		  (string "malformed function arguments " v)))))))
@@ -59,29 +62,40 @@
   (and (length= e 3) (eq? (car e) '|.|)
        (symbol? (cadr e))))
 
+(define (effect-free? e)
+  (or (not (pair? e)) (sym-dot? e) (quoted? e) (equal? e '(null))))
+
 ; make an expression safe for multiple evaluation
 ; for example a[f(x)] => (temp=f(x); a[temp])
 ; retuns a pair (expr . assignments)
 ; where 'assignments' is a list of needed assignment statements
 (define (remove-argument-side-effects e)
   (let ((a '()))
-    (if (not (pair? e))
-	(cons e '())
-	(cons (map (lambda (x)
-		     (if (and (pair? x) (not (quoted? x))
-			      (not (sym-dot? x)))
-			 (let ((g (gensy)))
-			   (if (or (eq? (car x) '...) (eq? (car x) '&))
-			       (if (and (pair? (cadr x))
-					(not (quoted? (cadr x))))
-				   (begin (set! a (cons `(= ,g ,(cadr x)) a))
-					  `(,(car x) ,g))
-				   x)
-			       (begin (set! a (cons `(= ,g ,x) a))
-				      g)))
-			 x))
-		   e)
-	      (reverse a)))))
+    (cond
+     ((and (decl? e) (symbol? (cadr e)))
+      (cons (cadr e) (list e)))
+     ((not (pair? e))
+      (cons e '()))
+     (else
+      (cons (map (lambda (x)
+		   (cond
+		    ((and (decl? x) (symbol? (cadr x)))
+		     (set! a (cons x a))
+		     (cadr x))
+		    ((not (effect-free? x))
+		     (let ((g (gensy)))
+		       (if (or (eq? (car x) '...) (eq? (car x) '&))
+			   (if (and (pair? (cadr x))
+				    (not (quoted? (cadr x))))
+			       (begin (set! a (cons `(= ,g ,(cadr x)) a))
+				      `(,(car x) ,g))
+			       x)
+			   (begin (set! a (cons `(= ,g ,x) a))
+				  g))))
+		    (else
+		     x)))
+		 e)
+	    (reverse a))))))
 
 (define (expand-update-operator- op lhs rhs)
   (let ((e (remove-argument-side-effects lhs)))
@@ -315,28 +329,34 @@
 (define (sym-ref? e)
   (or (symbol? e)
       (and (length= e 3) (eq? (car e) '|.|)
-	   (sym-ref? (cadr e))
+	   (or (atom? (cadr e)) (sym-ref? (cadr e)))
 	   (pair? (caddr e)) (eq? (car (caddr e)) 'quote)
 	   (symbol? (cadr (caddr e))))))
 
 (define (method-def-expr- name sparams argl body)
-  (if (has-dups (llist-vars argl))
-      (error "function argument names not unique"))
-  (if (not (or (sym-ref? name)
-	       (and (pair? name) (eq? (car name) 'kw)
-		    (sym-ref? (cadr name)))))
-      (error (string "invalid method name " name)))
-  (let* ((types (llist-types argl))
-	 (body  (method-lambda-expr argl body)))
-    (if (null? sparams)
-	`(method ,name (tuple ,@types) ,body (tuple))
-	(receive
-	 (names bounds) (sparam-name-bounds sparams '() '())
-	 (let ((f (gensy)))
-	   `(call (lambda (,@names ,f)
-		    (method ,name (tuple ,@types) ,f (tuple ,@names)))
-		  ,@(symbols->typevars names bounds #t)
-		  ,body))))))
+  (receive
+   (names bounds) (sparam-name-bounds sparams '() '())
+   (begin
+     (let ((anames (llist-vars argl)))
+       (if (has-dups anames)
+	   (error "function argument names not unique"))
+       (if (has-dups names)
+	   (error "function static parameter names not unique"))
+       (if (any (lambda (x) (memq x names)) anames)
+	   (error "function argument and static parameter names must be distinct")))
+     (if (not (or (sym-ref? name)
+		  (and (pair? name) (eq? (car name) 'kw)
+		       (sym-ref? (cadr name)))))
+	 (error (string "invalid method name " name)))
+     (let* ((types (llist-types argl))
+	    (body  (method-lambda-expr argl body)))
+       (if (null? sparams)
+	   `(method ,name (tuple ,@types) ,body (tuple))
+	   (let ((f (gensy)))
+	     `(call (lambda (,@names ,f)
+		      (method ,name (tuple ,@types) ,f (tuple ,@names)))
+		    ,@(symbols->typevars names bounds #t)
+		    ,body)))))))
 
 (define (vararg? x) (and (pair? x) (eq? (car x) '...)))
 
@@ -364,7 +384,8 @@
 	 ;; just the keyword names
 	 (keynames (map decl-var vars))
 	 ;; 1-element list of function's line number node, or empty if none
-	 (lno  (if (and (pair? (cadr body)) (eq? (caadr body) 'line))
+	 (lno  (if (and (pair? (cdr body))
+			(pair? (cadr body)) (eq? (caadr body) 'line))
 		   (list (cadr body))
 		   '()))
 	 ;; body statements, minus line number node
@@ -386,6 +407,9 @@
 	,(method-def-expr-
 	  name sparams (append pargl vararg)
 	  `(block
+	    ,(if (null? lno)
+		 `(line 0 || ||)
+		 (append (car lno) '(||)))
 	    ;; call mangled(vals..., [rest_kw ,]pargs..., [vararg]...)
 	    (return (call ,mangled
 			  ,@vals
@@ -399,7 +423,7 @@
 	  (list 'kw name) sparams
 	  `((:: ,kw (top Tuple)) ,@pargl ,@vararg)
 	  `(block
-	    ,@lno
+	    (line 0 || ||)
 	    ;; initialize keyword args to their defaults, or set a flag telling
 	    ;; whether this keyword needs to be set.
 	    ,@(map (lambda (name dflt flag)
@@ -434,7 +458,7 @@
 				   ,else)))
 			  (if (null? restkw)
 			      ;; if no rest kw, give error for unrecognized
-			      `(call (top error) "unrecognized keyword " ,elt)
+			      `(call (top error) "unrecognized named argument " ,elt)
 			      ;; otherwise add to rest keywords
 			      `(ccall 'jl_cell_1d_push Void (tuple Any Any)
 				      ,rkw (tuple ,elt
@@ -491,30 +515,42 @@
     ,(method-def-expr name sparams overall-argl body)))
 
 (define (method-def-expr name sparams argl body)
-  (if (has-keywords? argl)
-      ;; here (keywords ...) is optional positional args
-      (let ((opt  (map cadr  (cdar argl)))
-	    (dfl  (map caddr (cdar argl)))
-	    (argl (cdr argl)))
-	(if (has-parameters? argl)
-	    ;; both!
-	    ;; separate into keyword version with all positional args,
-	    ;; and a series of optional-positional-defs that delegate keywords
-	    (let ((kw   (car argl))
-		  (argl (cdr argl)))
-	      (receive
-	       (vararg req) (separate vararg? argl)
-	       (optional-positional-defs name sparams req opt dfl body
-					 (cons kw (append req opt vararg))
-					 `(parameters (... ,(gensy))))))
-	    ;; optional positional only
-	    (receive
-	     (vararg req) (separate vararg? argl)
-	     (optional-positional-defs name sparams req opt dfl body
-				       (append req opt vararg)))))
+  (if (any kwarg? argl)
+      ;; has optional positional args
+      (begin
+	(let check ((l     argl)
+		    (seen? #f))
+	  (if (pair? l)
+	      (if (kwarg? (car l))
+		  (check (cdr l) #t)
+		  (if (and seen? (not (vararg? (car l))))
+		      (error "optional positional arguments must occur at end")
+		      (check (cdr l) #f)))))
+	(receive
+	 (kws argl) (separate kwarg? argl)
+	 (let ((opt  (map cadr  kws))
+	       (dfl  (map caddr kws)))
+	   (if (has-parameters? argl)
+	       ;; both!
+	       ;; separate into keyword version with all positional args,
+	       ;; and a series of optional-positional-defs that delegate keywords
+	       (let ((kw   (car argl))
+		     (argl (cdr argl)))
+		 (check-kw-args (cdr kw))
+		 (receive
+		  (vararg req) (separate vararg? argl)
+		  (optional-positional-defs name sparams req opt dfl body
+					    (cons kw (append req opt vararg))
+					    `(parameters (... ,(gensy))))))
+	       ;; optional positional only
+	       (receive
+		(vararg req) (separate vararg? argl)
+		(optional-positional-defs name sparams req opt dfl body
+					  (append req opt vararg)))))))
       (if (has-parameters? argl)
 	  ;; keywords only
-	  (keywords-method-def-expr name sparams argl body)
+	  (begin (check-kw-args (cdar argl))
+		 (keywords-method-def-expr name sparams argl body))
 	  ;; neither
 	  (method-def-expr- name sparams argl body))))
 
@@ -523,19 +559,28 @@
    (params bounds) (sparam-name-bounds params '() '())
    (struct-def-expr- name params bounds super (flatten-blocks fields) mut)))
 
+;; replace field names with gensyms if they conflict with field-types
+(define (safe-field-names field-names field-types)
+  (if (any (lambda (v) (contains (lambda (e) (eq? e v)) field-types))
+	   field-names)
+      (map (lambda (x) (gensy)) field-names)
+      field-names))
+
 (define (default-inner-ctor name field-names field-types)
-  `(function (call ,name
-		   ,@(map make-decl field-names field-types))
-	     (block
-	      (call new ,@field-names))))
+  (let ((field-names (safe-field-names field-names field-types)))
+    `(function (call ,name
+		     ,@(map make-decl field-names field-types))
+	       (block
+		(call new ,@field-names)))))
 
 (define (default-outer-ctor name field-names field-types params bounds)
-  `(function (call (curly ,name
-			  ,@(map (lambda (p b) `(<: ,p ,b))
-				 params bounds))
-		   ,@(map make-decl field-names field-types))
-	     (block
-	      (call (curly ,name ,@params) ,@field-names))))
+  (let ((field-names (safe-field-names field-names field-types)))
+    `(function (call (curly ,name
+			    ,@(map (lambda (p b) `(<: ,p ,b))
+				   params bounds))
+		     ,@(map make-decl field-names field-types))
+	       (block
+		(call (curly ,name ,@params) ,@field-names)))))
 
 (define (new-call Texpr args field-names field-types mutabl)
   (cond ((length> args (length field-names))
@@ -599,7 +644,8 @@
   (receive
    (fields defs) (separate (lambda (x) (or (symbol? x) (decl? x)))
 			   fields)
-   (let* ((field-names (map decl-var fields))
+   (let* ((defs        (filter (lambda (x) (not (effect-free? x))) defs))
+	  (field-names (map decl-var fields))
 	  (field-types (map decl-type fields))
 	  (defs2 (if (null? defs)
 		     (list (default-inner-ctor name field-names field-types))
@@ -790,52 +836,61 @@
 
    ;; let
    (pattern-lambda (let ex . binds)
-		   (let loop ((binds binds)
-			      (args  ())
-			      (inits ())
-			      (locls ())
-			      (stmts ()))
-		     (if (null? binds)
-			 (begin
-			   (if (has-dups args)
-			       (error "let variables not unique"))
-			   `(call (-> (tuple ,@args)
-				      (block ,@(if (null? locls)
-						   '()
-						   `((local ,@locls)))
-					     ,@stmts
-					     ,ex))
-				  ,@inits))
-			 (cond
-			  ((or (symbol? (car binds)) (decl? (car binds)))
-			   ;; just symbol -> add local
-			   (loop (cdr binds) args inits
-				 (cons (car binds) locls)
-				 stmts))
-			  ((and (length= (car binds) 3)
-				(eq? (caar binds) '=))
-			   ;; some kind of assignment
-			   (cond
-			    ((or (symbol? (cadar binds))
-				 (decl?   (cadar binds)))
-			     ;; a=b -> add argument
-			     (loop (cdr binds)
-				   (cons (cadar binds) args)
-				   (cons (caddar binds) inits)
-				   locls stmts))
-				   #;(cons (cadar binds) locls)
-				   #;(cons `(= ,(decl-var (cadar binds))
-					     ,(caddar binds))
-					 stmts);))
-			    ((and (pair? (cadar binds))
-				  (eq? (caadar binds) 'call))
-			     ;; f()=c
-			     (let ((asgn (cadr (julia-expand0 (car binds)))))
-			       (loop (cdr binds) args inits
-				     (cons (cadr asgn) locls)
-				     (cons asgn stmts))))
-			    (else (error "invalid let syntax"))))
-			  (else (error "invalid let syntax"))))))
+		   (if
+		    (null? binds)
+		    `(scope-block (block ,ex))
+		    (let loop ((binds (reverse binds))
+			       (blk   ex))
+		      (if (null? binds)
+			  blk
+			  (cond
+			   ((or (symbol? (car binds)) (decl? (car binds)))
+			    ;; just symbol -> add local
+			    (loop (cdr binds)
+				  `(scope-block
+				    (block
+				     (local ,(car binds))
+				     (newvar ,(decl-var (car binds)))
+				     ,blk))))
+			   ((and (length= (car binds) 3)
+				 (eq? (caar binds) '=))
+			    ;; some kind of assignment
+			    (cond
+			     ((or (symbol? (cadar binds))
+				  (decl?   (cadar binds)))
+			      (let ((vname (decl-var (cadar binds))))
+				(loop (cdr binds)
+				      (if (contains (lambda (x) (eq? x vname))
+						    (caddar binds))
+					  (let ((tmp (gensy)))
+					    `(scope-block
+					      (block
+					       (local (= ,tmp ,(caddar binds)))
+					       (scope-block
+						(block
+						 (local ,(cadar binds))
+						 (newvar ,vname)
+						 (= ,vname ,tmp)
+						 ,blk)))))
+					  `(scope-block
+					    (block
+					     (local ,(cadar binds))
+					     (newvar ,vname)
+					     (= ,vname ,(caddar binds))
+					     ,blk))))))
+			     ((and (pair? (cadar binds))
+				   (eq? (caadar binds) 'call))
+			      ;; f()=c
+			      (let ((asgn (cadr (julia-expand0 (car binds)))))
+				(loop (cdr binds)
+				      `(scope-block
+					(block
+					 (local ,(cadr asgn))
+					 (newvar ,(cadr asgn))
+					 ,asgn
+					 ,blk)))))
+			     (else (error "invalid let syntax"))))
+			   (else (error "invalid let syntax")))))))
 
    ;; macro definition
    (pattern-lambda (macro (call name . argl) body)
@@ -928,20 +983,14 @@
    ;; let
    (pattern-lambda (let ex . binds)
 		   (let loop ((binds binds)
-			      (args  ())
-			      (inits ())
-			      (locls ())
-			      (stmts ()))
+			      (vars  '()))
 		     (if (null? binds)
-			 (cons 'varlist
-			       (append! (llist-vars (fix-arglist args))
-					locls))
+			 (cons 'varlist vars)
 			 (cond
 			  ((or (symbol? (car binds)) (decl? (car binds)))
 			   ;; just symbol -> add local
-			   (loop (cdr binds) args inits
-				 (cons (car binds) locls)
-				 stmts))
+			   (loop (cdr binds)
+				 (cons (decl-var (car binds)) vars)))
 			  ((and (length= (car binds) 3)
 				(eq? (caar binds) '=))
 			   ;; some kind of assignment
@@ -950,16 +999,13 @@
 				 (decl?   (cadar binds)))
 			     ;; a=b -> add argument
 			     (loop (cdr binds)
-				   (cons (cadar binds) args)
-				   (cons (caddar binds) inits)
-				   locls stmts))
+				   (cons (decl-var (cadar binds)) vars)))
 			    ((and (pair? (cadar binds))
 				  (eq? (caadar binds) 'call))
 			     ;; f()=c
 			     (let ((asgn (cadr (julia-expand0 (car binds)))))
-			       (loop (cdr binds) args inits
-				     (cons (cadr asgn) locls)
-				     (cons asgn stmts))))
+			       (loop (cdr binds)
+				     (cons (cadr asgn) vars))))
 			    (else '())))
 			  (else '())))))
 
@@ -971,6 +1017,18 @@
 		   (if var (list 'varlist var) '()))
    (pattern-lambda (try tryb var catchb)
 		   (if var (list 'varlist var) '()))
+
+   ;; type definition
+   (pattern-lambda (type mut (<: (curly tn . tvars) super) body)
+		   (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
+			  (map typevar-expr-name tvars)))
+   (pattern-lambda (type mut (curly tn . tvars) body)
+		   (list* 'varlist (cons (unescape tn) (unescape tn)) '(new . new)
+			  (map typevar-expr-name tvars)))
+   (pattern-lambda (type mut (<: tn super) body)
+		   (list 'varlist (cons (unescape tn) (unescape tn)) '(new . new)))
+   (pattern-lambda (type mut tn body)
+		   (list 'varlist (cons (unescape tn) (unescape tn)) '(new . new)))
 
    )) ; vars-introduced-by-patterns
 
@@ -1022,8 +1080,9 @@
 	    ,(cadr __))))
 
 ;; convert (lhss...) = (tuple ...) to assignments, eliminating the tuple
-(define (tuple-to-assignments lhss x)
-  (let loop ((lhss lhss)
+(define (tuple-to-assignments lhss0 x)
+  (let loop ((lhss lhss0)
+	     (assigned lhss0)
 	     (rhss (cdr x))
 	     (stmts '())
 	     (after '())
@@ -1035,15 +1094,19 @@
 	(let ((L (car lhss))
 	      (R (car rhss)))
 	  (if (and (symbol? L)
+		   (or (not (pair? R)) (quoted? R) (equal? R '(null)))
 		   ;; overwrite var immediately if it doesn't occur elsewhere
-		   (not (contains (lambda (e) (eq? e L)) (cdr rhss))))
+		   (not (contains (lambda (e) (eq? e L)) (cdr rhss)))
+		   (not (contains (lambda (e) (eq? e R)) assigned)))
 	      (loop (cdr lhss)
+		    (cons L assigned)
 		    (cdr rhss)
 		    (cons (make-assignment L R) stmts)
 		    after
-		    (cons L elts))
+		    (cons R elts))
 	      (let ((temp (gensy)))
 		(loop (cdr lhss)
+		      (cons L assigned)
 		      (cdr rhss)
 		      (cons (make-assignment temp R) stmts)
 		      (cons (make-assignment L temp) after)
@@ -1063,25 +1126,27 @@
 			  (+ i 1)))))
       ,t)))
 
-(define (lower-kw-call f kw pa)
-  (let ((invalid (filter (lambda (x)
-			   (not (or (assignment? x)
-				    (vararg? x))))
+(define (check-kw-args kw)
+  (let ((invalid (filter (lambda (x) (not (or (kwarg? x)
+					      (vararg? x))))
 			 kw)))
     (if (pair? invalid)
-	(error (string "invalid keyword argument " (car invalid))))
-    (receive
-     (keys restkeys) (separate assignment? kw)
-     `(call (top kwcall) ,f ,(length keys)
-	    ,@(apply append
-		     (map (lambda (a) `((quote ,(cadr a)) ,(caddr a)))
-			  keys))
-	    ,(if (null? restkeys)
-		 '(tuple)
-		 (if (length= restkeys 1)
-		     (cadr (car restkeys))
-		     `(call (top append_any) ,@(map cadr restkeys))))
-	    ,@pa))))
+	(error (string "invalid named argument " (car invalid))))))
+
+(define (lower-kw-call f kw pa)
+  (check-kw-args kw)
+  (receive
+   (keys restkeys) (separate kwarg? kw)
+   `(call (top kwcall) ,f ,(length keys)
+	  ,@(apply append
+		   (map (lambda (a) `((quote ,(cadr a)) ,(caddr a)))
+			keys))
+	  ,(if (null? restkeys)
+	       '(tuple)
+	       (if (length= restkeys 1)
+		   (cadr (car restkeys))
+		   `(call (top append_any) ,@(map cadr restkeys))))
+	  ,@pa)))
 
 (define patterns
   (pattern-set
@@ -1169,6 +1234,11 @@
 			  (call setindex! ,arr ,r ,@new-idxs)
 			  ,r)))))
 
+   (pattern-lambda (= (typed_hcat . any) rhs)
+		   (error "invalid spacing in left side of indexed assignment"))
+   (pattern-lambda (= (typed_vcat . any) rhs)
+		   (error "unexpected ; in left side of indexed assignment"))
+
    (pattern-lambda (ref a . idxs)
 		   (let* ((reuse (and (pair? a)
 				      (contains (lambda (x)
@@ -1189,17 +1259,14 @@
 		   `(call (top apply_type) ,type ,@elts))
 
    ;; call with keywords
-   (pattern-lambda (call f (keywords . kwargs) ...)
-		   (let ((kw (if (and (length> __ 3)
-				      (pair? (cadddr __))
-				      (eq? (car (cadddr __)) 'parameters))
-				 (append kwargs (cdr (cadddr __)))
-				 kwargs)))
-		     (lower-kw-call f kw (if (eq? kw kwargs)
-					     (cdddr __)
-					     (cddddr __)))))
    (pattern-lambda (call f (parameters . kwargs) ...)
-		   (lower-kw-call f kwargs (cdddr __)))
+		   (receive
+		    (kws args) (separate kwarg? (cdddr __))
+		    (lower-kw-call f (append kws kwargs) args)))
+   (pattern-lambda (call f ... (kw a b) ...)
+		   (receive
+		    (kws args) (separate kwarg? (cddr __))
+		    (lower-kw-call f kws args)))
 
    ;; call with splat
    (pattern-lambda (call f ... (... _) ...)
@@ -1515,7 +1582,7 @@
 	    `(block (= ,oneresult ,expr)
 		    (type_goto ,initlabl)
 		    (call (top setindex!) ,result ,oneresult ,ri)
-		    (+= ,ri 1))
+		    (= ,ri (call (top +) ,ri 1)))
 	    `(for ,(car ranges)
 		  ,(construct-loops (cdr ranges)))))
 
@@ -1555,7 +1622,7 @@
       (define (construct-loops ranges rs)
 	(if (null? ranges)
 	    `(block (call (top setindex!) ,result ,expr ,ri)
-		    (+= ,ri 1))
+		    (= ,ri (call (top +) ,ri 1)))
 	    `(for (= ,(cadr (car ranges)) ,(car rs))
 		  ,(construct-loops (cdr ranges) (cdr rs)))))
 
@@ -1673,9 +1740,9 @@
       (if (null? ranges)
 	  (if (null? iters)
 	      `(block (call (top setindex!) ,result ,expr ,ri)
-		      (+= ,ri 1))
+		      (= ,ri (call (top +) ,ri) 1))
 	      `(block (call (top setindex!) ,result (ref ,expr ,@(reverse iters)) ,ri)
-		      (+= ,ri 1)) )
+		      (= ,ri (call (top +) ,ri 1))) )
 	  (if (eq? (car ranges) `:)
 	      (let ((i (gensy)))
 		`(for (= ,i (: 1 (call (top size) ,oneresult ,oneresult-dim)))
@@ -1811,9 +1878,13 @@
   ; This expression walk is entirely within the "else" clause of the giant
   ; case expression. Everything else deals with special forms.
   (define (to-lff e dest tail)
-    (if (or (not (pair? e)) (memq (car e) '(quote top))
-	    (equal? e '(null)))
-	(cond ((symbol? dest) (cons `(= ,dest ,e) '()))
+    (if (effect-free? e)
+	(cond ((symbol? dest)
+	       (if (and (pair? e) (eq? (car e) 'break))
+		   ;; odd corner case: sometimes try/finally generates
+		   ;; a (break ) as an assignment RHS
+		   (to-lff e #f #f)
+		   (cons `(= ,dest ,e) '())))
 	      (dest (cons (if tail `(return ,e) e)
 			  '()))
 	      (else (cons e '())))
@@ -1823,15 +1894,29 @@
 	   (if (or (not (symbol? (cadr e)))
 		   (eq? (cadr e) 'true)
 		   (eq? (cadr e) 'false))
-	       (error (string "invalid assignment location " (cadr e)))
-	       (let ((r (to-lff (caddr e) (cadr e) #f)))
-		 (cond ((symbol? dest)
-			(cons `(block ,(car r)
-				      (= ,dest ,(cadr e)))
-			      (cdr r)))
-		       (dest
-			(cons (if tail `(return ,(cadr e)) (cadr e)) r))
-		       (else r)))))
+	       (error (string "invalid assignment location " (cadr e))))
+	   (let ((LHS (cadr e))
+		 (RHS (caddr e)))
+	     (cond ((not dest)
+		    (to-lff RHS LHS #f))
+		   #;((assignment? RHS)
+		    (let ((r (to-lff RHS dest #f)))
+		      (list* (if tail `(return ,(car r)) (car r))
+			     `(= ,LHS ,(car r))
+			     (cdr r))))
+		   ((effect-free? RHS)
+		    (cond ((symbol? dest)  (list `(= ,LHS ,RHS)
+						 `(= ,dest ,RHS)))
+			  (dest  (list (if tail `(return ,RHS) RHS)
+				       `(= ,LHS ,RHS)))
+			  (else  (list e))))
+		   (else
+		    (to-lff (let ((val (gensy)))
+			      `(block (local! ,val)
+				      (= ,val ,RHS)
+				      (= ,LHS ,val)
+				      ,val))
+			    dest tail)))))
 
 	  ((if)
 	   (cond ((or tail (eq? dest #f) (symbol? dest))
@@ -1854,8 +1939,9 @@
 	  ((trycatch)
 	   (cond ((and (eq? dest #t) (not tail))
 		  (let ((g (gensy)))
-		    (cons g
-			  (cons `(local! ,g) (to-lff e g #f)))))
+		    (list* g
+			   `(local! ,g)
+			   (to-lff e g #f))))
 		 (else
 		  (cons `(trycatch ,(fix-try-block-returns
 				     (to-blk (to-lff (cadr e) dest tail)))
@@ -1944,7 +2030,7 @@
 		 (cons (if tail `(return ,l) l) '()))))
 
 	  ((local global)
-	   (if (symbol? dest)
+	   (if dest
 	       (error (string "misplaced " (car e) " declaration")))
 	   (cons (to-blk (to-lff '(null) dest tail))
 		 (list e)))
@@ -2032,29 +2118,25 @@ So far only the second case can actually occur.
 	 (apply append! (map (lambda (x) (find-assigned-vars x env))
 			     e))))))
 
-(define (find-local-decls e env)
+(define (find-decls kind e env)
   (if (or (not (pair? e)) (quoted? e))
       '()
-      (case (car e)
-	((lambda scope-block)  '())
-	((local)  (list (decl-var (cadr e))))
-	(else
-	 (apply append! (map (lambda (x) (find-local-decls x env))
-			     e))))))
+      (cond ((or (eq? (car e) 'lambda) (eq? (car e) 'scope-block))
+	     '())
+	    ((eq? (car e) kind)
+	     (list (decl-var (cadr e))))
+	    (else
+	     (apply append! (map (lambda (x) (find-decls kind x env))
+				 e))))))
 
-(define (find-local!-decls e env)
-  (if (or (not (pair? e)) (quoted? e))
-      '()
-      (case (car e)
-	((lambda scope-block)  '())
-	((local!)  (list (decl-var (cadr e))))
-	(else
-	 (apply append! (map (lambda (x) (find-local!-decls x env))
-			     e))))))
+(define (find-local-decls  e env) (find-decls 'local  e env))
+(define (find-local!-decls e env) (find-decls 'local! e env))
 
-(define (find-locals e env)
+(define (find-locals e env glob)
   (delete-duplicates
    (append! (check-dups (find-local-decls e env))
+	    ;; const decls on non-globals also introduce locals
+	    (diff (find-decls 'const e env) glob)
 	    (find-local!-decls e env)
 	    (find-assigned-vars e env))))
 
@@ -2062,7 +2144,8 @@ So far only the second case can actually occur.
 ;; convert (scope-block x) to `(scope-block ,@locals ,x)
 ;; where locals is a list of (local x) expressions, derived from two sources:
 ;; 1. (local x) expressions inside this scope-block and lambda
-;; 2. variables assigned inside this scope-block that don't exist in outer
+;; 2. (const x) expressions in a scope-block where x is not declared global
+;; 3. variables assigned inside this scope-block that don't exist in outer
 ;;    scopes
 (define (add-local-decls e env)
   (if (or (not (pair? e)) (quoted? e)) e
@@ -2076,7 +2159,7 @@ So far only the second case can actually occur.
 		    (vars (find-locals
 			   ;; being declared global prevents a variable
 			   ;; assignment from introducing a local
-			   (cadr e) (append env glob)))
+			   (cadr e) (append env glob) glob))
 		    (body (add-local-decls (cadr e) (append vars glob env))))
 	       `(scope-block ,@(map (lambda (v) `(local ,v))
 				    vars)
@@ -2511,12 +2594,30 @@ So far only the second case can actually occur.
 	 (map julia-expand-macros e))))
 
 (define (pair-with-gensyms v)
-  (map (lambda (s) (cons s (named-gensy s))) v))
+  (map (lambda (s)
+	 (if (pair? s)
+	     s
+	     (cons s (named-gensy s))))
+       v))
 
 (define (unescape e)
   (if (and (pair? e) (eq? (car e) 'escape))
       (cadr e)
       e))
+
+(define (typevar-expr-name e)
+  (if (symbol? e) e
+      (cadr e)))
+
+(define (resolve-expansion-vars-with-new-env x env m)
+  (resolve-expansion-vars-
+   x
+   (append!
+    (filter (lambda (x)
+	      (not (assq (car x) env)))
+	    (pair-with-gensyms (vars-introduced-by x)))
+    env)
+   m))
 
 (define (resolve-expansion-vars- e env m)
   (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))
@@ -2536,7 +2637,7 @@ So far only the second case can actually occur.
 				 (resolve-expansion-vars- x env m))
 			       (cdr e))))
 	   ((type)
-	    `(type ,(cadr e) ,(unescape (caddr e))
+	    `(type ,(cadr e) ,(resolve-expansion-vars- (caddr e) env m)
 		   ;; type has special behavior: identifiers inside are
 		   ;; field names, not expressions.
 		   ,(map (lambda (x)
@@ -2545,20 +2646,24 @@ So far only the second case can actually occur.
 				  `(|::| ,(cadr x)
 				    ,(resolve-expansion-vars- (caddr x) env m)))
 				 (else
-				  (resolve-expansion-vars- x env m))))
+				  (resolve-expansion-vars-with-new-env x env m))))
 			 (cadddr e))))
+	   ((kw)
+	    ;; in keyword arg A=B, don't transform "A"
+	    (if (and (pair? (cadr e))
+		     (eq? (caadr e) '|::|))
+		`(kw (|::|
+		      ,(cadr (cadr e))
+		      ,(resolve-expansion-vars- (caddr (cadr e)) env m))
+		     ,(resolve-expansion-vars- (caddr e) env m))
+		`(kw ,(cadr e)
+		     ,(resolve-expansion-vars- (caddr e) env m))))
+
 	   ;; todo: trycatch
 	   (else
 	    (cons (car e)
 		  (map (lambda (x)
-			 (resolve-expansion-vars-
-			  x
-			  (append!
-			   (filter (lambda (x)
-				     (not (assq (car x) env)))
-				   (pair-with-gensyms (vars-introduced-by x)))
-			   env)
-			  m))
+			 (resolve-expansion-vars-with-new-env x env m))
 		       (cdr e))))))))
 
 ;; decl-var that also identifies f in f()=...
@@ -2605,7 +2710,9 @@ So far only the second case can actually occur.
   (let ((v (diff (delete-duplicates
 		  (append! (find-declared-vars-in-expansion e 'local)
 			   (find-assigned-vars-in-expansion e)
-			   (vars-introduced-by e)))
+			   (map (lambda (x)
+				  (if (pair? x) (car x) x))
+				(vars-introduced-by e))))
 		 (find-declared-vars-in-expansion e 'global))))
     (pair-with-gensyms v)))
 

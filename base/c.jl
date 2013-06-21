@@ -1,5 +1,7 @@
 # definitions related to C interface
 
+import Core.Intrinsics.cglobal
+
 ptr_arg_convert{T}(::Type{Ptr{T}}, x) = convert(T, x)
 ptr_arg_convert(::Type{Ptr{Void}}, x) = x
 
@@ -26,7 +28,7 @@ dlopen(s::String, flags::Integer) = ccall(:jl_load_dynamic_library, Ptr{Void}, (
 dlopen_e(s::String, flags::Integer) = ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Ptr{Uint8},Uint32), s, flags)
 dlopen(s::String) = dlopen(s, RTLD_LAZY | RTLD_DEEPBIND)
 dlopen_e(s::String) = dlopen_e(s, RTLD_LAZY | RTLD_DEEPBIND)
-dlclose(p::Ptr) = ccall(:uv_dlclose,Void,(Ptr{Void},),p)
+dlclose(p::Ptr) = if p!=C_NULL; ccall(:uv_dlclose,Void,(Ptr{Void},),p); end
 
 cfunction(f::Function, r, a) =
     ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
@@ -59,6 +61,16 @@ typealias Cfloat Float32
 typealias Cdouble Float64
 #typealias Ccomplex_float Complex64
 #typealias Ccomplex_double Complex128
+
+const sizeof_off_t = ccall(:jl_sizeof_off_t, Int, ())
+
+if sizeof_off_t === 4
+    typealias FileOffset Int32
+else
+    typealias FileOffset Int64
+end
+
+typealias Coff_t FileOffset
 
 # deferring (or un-deferring) ctrl-c handler for external C code that
 # is not interrupt safe (see also issue #2622).  The sigatomic_begin/end

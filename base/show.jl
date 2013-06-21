@@ -1,9 +1,72 @@
-# formerly built-in methods. can be replaced any time.
-
 show(x) = show(OUTPUT_STREAM::IO, x)
 
-print(io::IO, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, s)
-show(io::IO, x::ANY) = ccall(:jl_show_any, Void, (Any, Any,), io, x)
+function print(io::IO, s::Symbol)
+    pname = convert(Ptr{Uint8}, s)
+    write(io, pname, int(ccall(:strlen, Csize_t, (Ptr{Uint8},), pname)))
+end
+
+function show(io::IO, x::ANY)
+    t = typeof(x)::DataType
+    show(io, t)
+    print(io, '(')
+    if t.names !== () || t.size==0
+        n = length(t.names)
+        for i=1:n
+            f = t.names[i]
+            if !isdefined(x, f)
+                print(io, undef_ref_str)
+            else
+                show(io, x.(f))
+            end
+            if i < n
+                print(io, ',')
+            end
+        end
+    else
+        nb = t.size
+        print(io, "0x")
+        p = pointer_from_objref(x) + sizeof(Ptr{Void})
+        for i=nb-1:-1:0
+            print(io, hex(unsafe_load(convert(Ptr{Uint8}, p+i)), 2))
+        end
+    end
+    print(io,')')
+end
+
+function show(io::IO, f::Function)
+    if isgeneric(f)
+        print(io, f.env.name)
+    else
+        print(io, "# function")
+    end
+end
+
+function show(io::IO, x::IntrinsicFunction)
+    print(io, "# intrinsic function ", box(Int32,unbox(IntrinsicFunction,x)))
+end
+
+function show(io::IO, x::UnionType)
+    if is(x,None)
+        print(io, "None")
+    elseif is(x,Top)
+        print(io, "Top")
+    else
+        print(io, "Union", x.types)
+    end
+end
+
+show(io::IO, x::TypeConstructor) = show(io, x.body)
+
+function show(io::IO, x::DataType)
+    if isvarargtype(x)
+        print(io, x.parameters[1], "...")
+    else
+        print(io, x.name.name)
+        if length(x.parameters) > 0
+            show_comma_array(io, x.parameters, '{', '}')
+        end
+    end
+end
 
 showcompact(io::IO, x) = show(io, x)
 showcompact(x) = showcompact(OUTPUT_STREAM::IO, x)
@@ -12,7 +75,7 @@ macro show(exs...)
     blk = Expr(:block)
     for ex in exs
         push!(blk.args, :(println($(sprint(show_unquoted,ex)*" => "),
-                                 repr(begin value=$(esc(ex)) end))))
+                                  repr(begin value=$(esc(ex)) end))))
     end
     if !isempty(exs); push!(blk.args, :value); end
     return blk
@@ -28,19 +91,13 @@ show(io::IO, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
 show{T}(io::IO, p::Ptr{T}) =
     print(io, is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
 
-full_name(m::Module) = m===Main ? () : tuple(full_name(module_parent(m))...,
-                                             module_name(m))
-
 function show(io::IO, m::Module)
     if is(m,Main)
         print(io, "Main")
     else
-        print(io, join(full_name(m),"."))
+        print(io, join(fullname(m),"."))
     end
 end
-
-uncompressed_ast(l::LambdaStaticData) =
-    isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
 function show(io::IO, l::LambdaStaticData)
     print(io, "AST(")
@@ -230,13 +287,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
     elseif is(head, symbol("::")) && nargs == 1
         print(io, "::")        
         show_unquoted(io, args[1], indent)
-    elseif has(_expr_parens, head)               # :tuple/:vcat/:cell1d
+    elseif haskey(_expr_parens, head)               # :tuple/:vcat/:cell1d
         op, cl = _expr_parens[head]
         print(io, op)
         show_list(io, args, ",", indent)
         if is(head, :tuple) && nargs == 1; print(io, ','); end
         print(io, cl)
-    elseif has(_expr_calls, head) && nargs >= 1  # :call/:ref/:curly
+    elseif haskey(_expr_calls, head) && nargs >= 1  # :call/:ref/:curly
         op, cl = _expr_calls[head]
         show_unquoted(io, args[1], indent)
         show_enclosed_list(io, op, args[2:end], ",", cl, indent)
@@ -319,7 +376,7 @@ function argtype_decl_string(n, t)
         n = n.args[1]  # handle n::T in arg list
     end
     n = clean_gensym(n)
-    if t === Any
+    if t === Any && !isempty(n)
         return n
     end
     if t <: Vararg && t.parameters[1] === Any
@@ -348,19 +405,29 @@ function show(io::IO, m::Method)
     end
 end
 
-function show(io::IO, mt::MethodTable)
+function show_method_table(io::IO, mt::MethodTable, max::Int=-1)
     name = mt.name
-    println(io, "# methods for generic function ", name)
+    print(io, "# methods for generic function ", name)
     d = mt.defs
+    n = rest = 0
     while !is(d,())
-        print(io, name)
-        show(io, d)
-        d = d.next
-        if !is(d,())
-            println(io)
+        if max==-1 || n<max || (rest==0 && n==max && d.next === ())
+            println()
+            print(io, name)
+            show(io, d)
+            n += 1
+        else
+            rest += 1
         end
+        d = d.next
+    end
+    if rest > 0
+        println()
+        print("... $rest not shown (use methods($name) to see them all)")
     end
 end
+
+show(io::IO, mt::MethodTable) = show_method_table(io, mt)
 
 # dump & xdump - structured tree representation like R's str()
 # - dump is for the user-facing structure
@@ -381,13 +448,17 @@ end
 function xdump(fn::Function, io::IO, x, n::Int, indent)
     T = typeof(x)
     print(io, T, " ")
-    if isa(T, DataType)
+    if isa(T, DataType) && length(T.names) > 0
         println(io)
         if n > 0
             for field in T.names
                 if field != symbol("")    # prevents segfault if symbol is blank
                     print(io, indent, "  ", field, ": ")
-                    fn(io, getfield(x, field), n - 1, string(indent, "  "))
+                    if isdefined(x,field)
+                        fn(io, getfield(x, field), n - 1, string(indent, "  "))
+                    else
+                        println(io, undef_ref_str)
+                    end
                 end
             end
         end
@@ -559,7 +630,7 @@ const undef_ref_str = "#undef"
 const undef_ref_alignment = (3,3)
 
 function alignment(
-    X::AbstractMatrix,
+    X::Union(AbstractMatrix,AbstractVector),
     rows::AbstractVector, cols::AbstractVector,
     cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer
 )
@@ -590,7 +661,7 @@ function alignment(
 end
 
 function print_matrix_row(io::IO,
-    X::AbstractMatrix, A::Vector,
+    X::Union(AbstractMatrix,AbstractVector), A::Vector,
     i::Integer, cols::AbstractVector, sep::String
 )
     for k = 1:length(A)
@@ -627,7 +698,7 @@ function print_matrix_vdots(io::IO,
 end
 
 function print_matrix(io::IO,
-    X::AbstractMatrix, rows::Integer, cols::Integer,
+    X::Union(AbstractMatrix,AbstractVector), rows::Integer, cols::Integer,
     pre::String, sep::String, post::String,
     hdots::String, vdots::String, ddots::String,
     hmod::Integer, vmod::Integer
@@ -637,7 +708,7 @@ function print_matrix(io::IO,
     postsp = ""
     @assert strwidth(hdots) == strwidth(ddots)
     ss = length(sep)
-    m, n = size(X)
+    m, n = size(X,1), size(X,2)
     if m <= rows # rows fit
         A = alignment(X,1:m,1:n,cols,cols,ss)
         if n <= length(A) # rows and cols fit
@@ -701,11 +772,13 @@ function print_matrix(io::IO,
         end
     end
 end
-print_matrix(io::IO, X::AbstractMatrix, rows::Integer, cols::Integer) =
+print_matrix(io::IO, X::Union(AbstractMatrix,AbstractVector),
+             rows::Integer, cols::Integer) =
     print_matrix(io, X, rows, cols, " ", "  ", "",
                  "  \u2026  ", "\u22ee", "  \u22f1  ", 5, 5)
 
-print_matrix(io::IO, X::AbstractMatrix) = print_matrix(io, X, tty_rows()-4, tty_cols())
+print_matrix(io::IO, X::Union(AbstractMatrix,AbstractVector)) =
+               print_matrix(io, X, tty_rows()-4, tty_cols())
 
 summary(x) = string(typeof(x))
 
@@ -753,8 +826,8 @@ function show_nd(io::IO, a::AbstractArray)
 end
 
 function whos(m::Module, pattern::Regex)
-    for s in sort!(map(string, names(m)))
-        v = symbol(s)
+    for v in sort(names(m))
+        s = string(v)
         if isdefined(m,v) && ismatch(pattern, s)
             println(rpad(s, 30), summary(eval(m,v)))
         end
@@ -762,7 +835,7 @@ function whos(m::Module, pattern::Regex)
 end
 whos() = whos(r"")
 whos(m::Module) = whos(m, r"")
-whos(pat::Regex) = whos(ccall(:jl_get_current_module, Any, ())::Module, pat)
+whos(pat::Regex) = whos(current_module(), pat)
 
 function show{T}(io::IO, x::AbstractArray{T,0})
     println(io, summary(x),":")
@@ -811,8 +884,7 @@ function showall(io::IO, a::AbstractArray)
 end
 
 function show_vector(io::IO, v, opn, cls)
-    X = reshape(v,(1,length(v)))
-    print_matrix(io, X, 1, tty_cols(), opn, ", ", cls, "  \u2026  ", "\u22ee", "  \u22f1  ", 5, 5)
+    show_delim_array(io, v, opn, ",", cls, false)
 end
 
 show(io::IO, v::AbstractVector{Any}) = show_vector(io, v, "{", "}")

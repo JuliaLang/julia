@@ -22,8 +22,8 @@
 @test is(None, typeintersect(Vector{Float64},Vector{Union(Float64,Float32)}))
 
 @test !isa(Array,Type{Any})
-@test subtype(Type{ComplexPair},DataType)
-@test isa(ComplexPair,Type{ComplexPair})
+@test subtype(Type{Complex},DataType)
+@test isa(Complex,Type{Complex})
 @test !subtype(Type{Ptr{None}},Type{Ptr})
 @test !subtype(Type{Rational{Int}}, Type{Rational})
 let T = TypeVar(:T,true)
@@ -44,8 +44,9 @@ let T = TypeVar(:T,true)
     @test isequal(typeintersect((T, AbstractArray{T}),(Any, Array{Number,1})),
                   (Number, Array{Number,1}))
     @test !is(None, typeintersect((Array{T}, Array{T}), (Array, Array{Any})))
-    @test is(None, typeintersect((Vector{Vector{Int}},Vector{Vector}),
-                                 (Vector{Vector{T}},Vector{Vector{T}})))
+    f47{T}(x::Vector{Vector{T}}) = 0
+    @test_fails f47(Array(Vector,0))
+    @test f47(Array(Vector{Int},0)) == 0
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
@@ -62,7 +63,7 @@ let N = TypeVar(:N,true)
                                 ((Int,Int...),Array{Int,2})),
                   ((Int,Int), Array{Int,2}))
 end
-@test is(None, typeintersect(Type{Any},Type{ComplexPair}))
+@test is(None, typeintersect(Type{Any},Type{Complex}))
 @test is(None, typeintersect(Type{Any},Type{TypeVar(:T,Real)}))
 @test !subtype(Type{Array{Integer}},Type{AbstractArray{Integer}})
 @test !subtype(Type{Array{Integer}},Type{Array{TypeVar(:T,Integer)}})
@@ -96,6 +97,11 @@ end
 
 @test !is(None, typeintersect((DataType,DataType),Type{TypeVar(:T,(Number,Number))}))
 @test !is(None, typeintersect((DataType,UnionType),Type{(Number,None)}))
+
+# issue #2997
+let T = TypeVar(:T,Union(Float64,Array{Float64,1}),true)
+    @test typeintersect(T,Real) === Float64
+end
 
 # join
 @test typejoin(Int8,Int16) === Signed
@@ -187,6 +193,18 @@ function fooo()
     x
 end
 @test int32(fooo()) == -24
+function fooo_2()
+    local x::Int8
+    x = 1000
+end
+@test fooo_2() == 1000
+function fooo_3()
+    local x::Int8
+    y = x = 1000
+    @test x == -24
+    y
+end
+@test fooo_3() == 1000
 function foo()
     local x::Int8
     function bar()
@@ -198,14 +216,14 @@ end
 @test int32(foo()) == -24
 
 function bar{T}(x::T)
-    local z::ComplexPair{T}
+    local z::Complex{T}
     z = x
     z
 end
-@test bar(3.0) == ComplexPair(3.0,0.0)
+@test bar(3.0) == Complex(3.0,0.0)
 
-z = convert(ComplexPair{Float64},2)
-@test z == ComplexPair(2.0,0.0)
+z = convert(Complex{Float64},2)
+@test z == Complex(2.0,0.0)
 
 # misc
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
@@ -281,8 +299,47 @@ glotest()
 @test glob_x == 88
 @test loc_x == 10
 
+# let - new variables, including undefinedness
+function let_undef()
+    first = true
+    for i = 1:2
+        let x
+            if first; x=1; first=false; end
+            x+1
+        end
+    end
+end
+@test_fails let_undef()
+
+# const implies local in a local scope block
+function const_implies_local()
+    let
+        x = 1
+        local y
+        let
+            const x = 0
+            y = x
+        end
+        x, y
+    end
+end
+@test const_implies_local() === (1, 0)
+
+a = cell(3)
+for i=1:3
+    let ii = i
+        a[i] = x->x+ii
+    end
+end
+@test a[1](10) == 11
+@test a[2](10) == 12
+@test a[3](10) == 13
+
 # syntax
 @test (true ? 1 : false ? 2 : 3) == 1
+
+# tricky space sensitive syntax cases
+@test [-1 ~1] == [(-1) (~1)]
 
 # undefinedness
 type UndefField
@@ -415,6 +472,32 @@ begin
     @test glo == 18
 end
 
+# chained and multiple assignment behavior (issue #2913)
+begin
+    local x, a, b, c, d, e
+    x = (a,b,b,b,e) = (1,2,3,4,5)
+    @test x === (1,2,3,4,5)
+    @test a == 1
+    @test b == 4
+    @test e == 5
+    x = (a,b,b,e) = (1,2,3,4,5)
+    @test x === (1,2,3,4,5)
+    @test a == 1
+    @test b == 3
+    @test e == 4
+
+    a = complex(1,2)
+    b = 3
+    b, a = a.re, b
+    @test b == 1
+    @test a == 3
+    a = complex(1,2)
+    b = 3
+    a, b = b, a.re
+    @test a == 3
+    @test b == 1
+end
+
 # allow typevar in Union to match as long as the arguments contain
 # sufficient information
 # issue #814
@@ -485,13 +568,13 @@ begin
     local a,p, a2,p2
     a = [11,12,13]
     p = pointer(a)
-    @test unsafe_ref(p, 1) == 11
-    unsafe_assign(p, 99, 2)
+    @test unsafe_load(p, 1) == 11
+    unsafe_store!(p, 99, 2)
     @test a == [11,99,13]
     a2 = Any[101,102,103]
     p2 = pointer(a2)
-    @test unsafe_ref(p2) == 101
-    @test_fails unsafe_assign(p2, 909, 3)
+    @test unsafe_load(p2) == 101
+    @test_fails unsafe_store!(p2, 909, 3)
     @test a2 == [101,102,103]
 end
 
@@ -507,8 +590,8 @@ begin
     local X, p
     X = FooBar[ FooBar(3,1), FooBar(4,4) ]
     p = convert(Ptr{FooBar}, X)
-    @test unsafe_ref(p, 2) == FooBar(4,4)
-    unsafe_assign(p, FooBar(7,3), 1)
+    @test unsafe_load(p, 2) == FooBar(4,4)
+    unsafe_store!(p, FooBar(7,3), 1)
     @test X[1] == FooBar(7,3)
 end
 
@@ -720,4 +803,58 @@ function i2619()
 end
 i2619()
 @test !bad2619
-@test isa(e2619,ErrorException) && e2619.msg == "in i2619: f not defined"
+@test isa(e2619,ErrorException) && e2619.msg == "f not defined"
+
+# issue #2919
+typealias Foo2919 Int
+type Baz2919; Foo2919::Foo2919; end
+@test Baz2919(3).Foo2919 === 3
+
+# issue #2959
+@test 1.0:1.5 == 1.0:1.0:1.5 == 1.0:1.0
+@test 1.0:(.3-.1)/.1 == 1.0:2.0
+
+# issue #2982
+module M2982
+abstract U
+macro bad(Y)
+    quote
+        type $(esc(Y)) <: U
+        end
+    end
+end
+export @bad
+end
+
+@M2982.bad(T2982)
+@test T2982.super === M2982.U
+
+# issue #3182
+f3182{T}(::Type{T}) = 0
+f3182(x) = 1
+function g3182(t::DataType)
+    # tricky thing here is that DataType is a concrete type, and a
+    # subtype of Type, but we cannot infer the T in Type{T} just
+    # by knowing (at compile time) that the argument is a DataType.
+    # however the ::Type{T} method should still match at run time.
+    f3182(t)
+end
+@test g3182(Complex) == 0
+
+# issue #3221
+let x = fill(nothing, 1)
+    @test_fails x[1] = 1
+end
+
+# issue #3220
+function x3220()
+    a = [1]
+    a::Vector{Int} += [1]
+end
+@test x3220() == [2]
+
+# issue #3471
+function f3471(y)
+    convert(Array{typeof(y[1]),1}, y)
+end
+@test isa(f3471({1.0,2.0}), Vector{Float64})

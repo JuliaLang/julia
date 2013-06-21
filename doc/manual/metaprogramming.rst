@@ -185,7 +185,7 @@ dynamically generate arbitrary code which can then be run using
 
     julia> a = 1;
 
-    julia> ex = Expr(:call, {:+,a,:b}, Any)
+    julia> ex = Expr(:call, :+,a,:b)
     :(+(1,b))
 
     julia> a = 0; b = 2;
@@ -446,8 +446,6 @@ string literals prefixed by an identifier are called non-standard string
 literals, and can have different semantics than un-prefixed string
 literals. For example:
 
--  ``E"$100\n"`` interprets escape sequences but does no string
-   interpolation
 -  ``r"^\s*(?:#|$)"`` produces a regular expression object rather than a
    string
 -  ``b"DATA\xff\u2200"`` is a byte array literal for

@@ -21,8 +21,8 @@ Explore and have fun!
 
 Recommended external libraries:
 
- - msysGit https://code.google.com/p/msysgit/downloads/list 
- - TortoiseGit https://code.google.com/p/tortoisegit/wiki/Download
+ - [msysGit](https://code.google.com/p/msysgit/downloads/list)
+ - [TortoiseGit](https://code.google.com/p/tortoisegit/wiki/Download)
 
 Optional external libraries
 
@@ -32,46 +32,45 @@ ___________________________________________________
 Source Compiling
 ================
 
-There are a number of environments you can use to build julia. Making this easy requires getting the right environment. They are ordered below from worst to best.
+There are a few environments you can use to build julia. Making this easy requires getting the right environment.
 
 Native Compile
 --------------
 
-On Windows, you can get the mingw/msys environment from http://www.mingw.org/wiki/Getting_Started. I strongly discourage this. However, if you choose to ignore me, you will need to do the following steps (thanks to Pavan):
-
-1. Download MinGW+ MSYS Innosetup installer from this url 
-2. Run this installer to choose from options: Destination Directory (Default- C:\MinGW), MinGW compiler suite (selected C, C++, Fortran), MSYS Basic System (selected), MinGW Developer Toolkit packages (selected). Based on your connection speed, it may take a while to download packages.
-3. Set path by choosing ControlPanel > System and Security > System > Advanced System Settings > (Advanced) Environment Variables > Path and add to the end of line: C:\MinGW\bin;C:\MinGW\msys\1.0\bin;
-4. At command prompt, type - "mingw-get install wget" - to install wget
-5. Install 7-zip (http://www.7-zip.org/download.html), if you don't have it already
-5. Download Python-2.6.7_msys.7z from [here](https://osspack32.googlecode.com/files/python-2.6.7_msys.7z) and extract files (using 7-Zip) to respective locations in C:\MinGw\msys\1.0 path, i.e., bin, lib, libs, to get Python 2.6.7
-6. Add the following line -  _CRTIMP int __cdecl _resetstkoflw (void); - to C:\MinGW\include\malloc.h at Line 76. This helped in tackling _resetstkoflw errors being showed in compiling codegen.cpp
+On Windows, do not use the mingw/msys environment from http://www.mingw.org as it will miscompile the OpenBLAS math library
 
 The recommended way to setup your environment follows:
 
-1. Download and extract mingw to C:/MinGW (or similar location) from http://sourceforge.net/projects/mingwbuilds/files/external-binary-packages/
-2. Download and extract msys to C:/MinGW/msys/1.0 (or similar location) from http://sourceforge.net/projects/mingwbuilds/files/host-windows/releases/4.7.2/64-bit/threads-win32/sjlj/
+1. Download and extract MinGW (e.g. x64-4.8.0-release-win32-seh-rev2.7z) to C:/MinGW (or similar location) from
+MinGW-builds [32-bit](http://sourceforge.net/projects/mingwbuilds/files/host-windows/releases/4.8.0/32-bit/threads-win32/sjlj/)
+or [64-bit](http://sourceforge.net/projects/mingwbuilds/files/host-windows/releases/4.8.0/64-bit/threads-win32/seh/) 
+2. Download and extract MSYS (e.g. msys+7za+wget+svn+git+mercurial+cvs-rev12.7z) to C:/MinGW/msys/1.0 (or similar location) from [MinGW-w64/MSYS](http://sourceforge.net/projects/mingwbuilds/files/external-binary-packages/)
 3. Add the line "C:/MinGW /mingw" to C:/MinGW/msys/1.0/etc/fstab (create the file if it doesn't exist)
-4. Replace C:/MinGW/msys/1.0/bin/make.exe with a copy of make.exe extracted from the installer in step 1 of the not-recommended setup
+4. You will need to replace C:/MinGW/msys/1.0/bin/make.exe with C:/MinGW/msys/1.0/bin/make-old.exe or with a copy of make.exe extracted from [mingw-msys](http://sourceforge.net/projects/mingw/files/MSYS/Base/make/make-3.81-3/) (e.g. make-3.81-3-msys-1.0.13-bin.tar.lzma)
+
+Before proceeding, verify that python.exe is available in the MSYS PATH. If Python is not installed on your computer, [download Python 2.7](http://www.python.org/download/releases/2.7.5/) and install with default options (Python is required for LLVM build).
 
 These sections assume you are familiar with building code. If you are not, you should stop reading now and go the the section on binaries. Regardless of which set of steps you followed above, you are now ready to compile julia. Open a unix shell by launching C:/MinGW/msys/1.0/msys.bat (or your favorite shortcut to that file). 
 
 Run the following commands in your build directory ($HOME at C:/MinGW/msys/1.0/home/your_name is fine)
+
 1. `git clone https://github.com/JuliaLang/julia.git`
 2. `cd julia`
-3. `make`
-NEVER use the `-j` argument to make. Windows will sometimes corrupt your build files. Additionally, make will probably lock up several times during the process, using 100% cpu, but not show progress. The only solution appears to be to kill make from the Task Manager and rerunning make. It should pickup where it left off. Expect this to take a very long time (dozens of hours is not uncommon).
+3. `make` Avoid using the `-j` argument to make. Windows will sometimes corrupt your build files. Additionally, make will probably lock up several times during the process, using 100% cpu, but not show progress. The only solution appears to be to kill make from the Task Manager and rerunning make. It should pickup where it left off. Expect this to take a very long time (dozens of hours is not uncommon).
 
 Running julia can be done in two ways:
+
 1. `make run-julia[-release|-debug] [DEFAULT_REPL=(basic|readline)]` (e.g. `make run-julia`)
 2. Launching the julia.bat script in usr/bin
 
 Cross-Compile
 -------------
 
-If you prefer to cross-compile (i.e. you are sane), the following steps should get you started:
+If you prefer to cross-compile, the following steps should get you started.
 
-First, you will need to ensure your system has the required dependencies. Note that I build on an Ubuntu system, so the `make dist` may not be fully functional on other systems. On Ubuntu 12.04, the following command will install the required build dependencies.
+### Building on Ubuntu
+
+First, you will need to ensure your system has the required dependencies. On Ubuntu 12.04, the following command will install the required build dependencies.
 
 ```
 apt-get install \
@@ -85,24 +84,68 @@ apt-get install \
   wine
 ```
 
+Unfortunately, the version of gcc installed by Ubuntu is currently 4.6, which does not compile OpenBLAS correctly. So first we need to replace it. Most binary packages appear to not include gfortran, so we will need to compile it from source. This is typically quite a bit of work, so we will use [this script](https://code.google.com/p/mingw-w64-dgn/) to make it easier.
+
+0. `apt-get install wine subversion cvs`
+1. `svn checkout http://mingw-w64-dgn.googlecode.com/svn/trunk/ mingw-w64-dgn`
+2. `cd mingw-w64-dgn`
+3. edit `rebuild_cross.sh` and make the following two changes:
+(a) uncomment `export MAKE_OPT="-j 2"`, if appropriate for your machine
+(b) add `fortran` to the end of `--enable-languages=c,c++,objc,obj-c++`
+5. `bash update_source.sh`
+4. `bash rebuild_cross.sh`
+5. `mv cross ~/cross-w64`
+6. `export PATH=$HOME/cross-w64/bin:$PATH` # NOTE: it is important that you remember to always do this before using make in the following steps!
+Then we can essentially just repeat these steps for the 32-bit compiler:
+7. `cd ..`
+8. `cp -a mingw-w64-dgn mingw-w32-dgn`
+9. `cd mingw-w32-dgn`
+10. `rm -r cross build`
+11. `bash rebuild_cross.sh 32r`
+12. `mv cross ~/cross-w32`
+13. `export PATH=$HOME/cross-w32/bin:$PATH` # NOTE: it is important that you remember to always do this before using make in the following steps!
+
+Note: for systems that support rpm-based package managers, the OpenSUSE build service appears to contain a fully up-to-date versions of the necessary environment.
+
 Finally, the build and install process:
 
 1. `git clone https://github.com/JuliaLang/julia.git julia-win32`
 2. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
 3. `echo override DEFAULT_REPL = basic >> Make.user`
-4. `make && make install`
-5. (optional) `mkdir dist-extras && make win-extras` (actually, you probably want to hand execute these steps)
-6. move the julia-* directory to the target machine
-7. Ensure your target has the following dependencies "libgfortran-3.dll" "libquadmath-0.dll" "libgcc_s_sjlj-1.dll" "libstdc++-6.dll" "libssp-0.dll" in the PATH (or in installed julia-* lib folder). These can be copied from the your unix system (on my Ubuntu 12.04 system, they are at /usr/lib/gcc/i686-w64-mingw32/4.6/) or, if you followed my advice above to setup MinGW, they are are in C:/MinGW/bin on your Windows system.
+4. `make -j4`
+5. (optional) `mkdir dist-extras && make win-extras` (actually, you probably want to hand execute the steps in this recipe since they may be inaccurate)
+4. `make dist`
+6. move the julia-* directory/zipfile to the target machine
 
-If you are building for 64-bit windows. The steps are pretty much the same. Just replace i686 in XC_HOST with x86_64.
+If you are building for 64-bit windows. The steps are essentially the same. Just replace i686 in XC_HOST with x86_64.
+
+### Building on Arch Linux
+
+First the required dependencies will be installed:
+
+1. Install the following packages from the official Arch repository:
+`sudo pacman -S cloog gcc-ada libmpc p7zip ppl subversion zlib`
+2. The rest of the prerequisites consist of the mingw-w64 packages, which are available in the AUR Arch repository. They must be installed exactly in the order they are given or else their installation will fail. The `yaourt` package manager is used for illustration purposes; you may instead follow the [Arch instructions for installing packages from AUR](https://wiki.archlinux.org/index.php/Arch_User_Repository#Installing_packages) or may use your preferred package manager. To start with, install `mingw-w64-binutils` via the command
+`yaourt -S mingw-w64-binutils`
+3. `yaourt -S mingw-w64-headers-svn`
+4. `yaourt -S mingw-w64-headers-bootstrap`
+5. `yaourt -S mingw-w64-gcc-base`
+6. `yaourt -S mingw-w64-crt-svn`
+7. Remove `mingw-w64-headers-bootstrap` without removing its dependent mingw-w64 installed packages by using the command
+`yaourt -Rdd mingw-w64-headers-bootstrap`
+8. `yaourt -S mingw-w64-winpthreads`
+9. Remove `mingw-w64-gcc-base` without removing its installed mingw-w64 dependencies:
+`yaourt -Rdd mingw-w64-gcc-base`
+10. Complete the installation of the required `mingw-w64` packages:
+`yaourt -S mingw-w64-gcc`
+
+The build and install process of Julia is the same as in steps 1-7 of Ubuntu.
 
 Important Build Errata
 ----------------------
 
-- Arpack 3.1.2 has an error in the tar file (a symlink from ./depcomp to a nonexistant file) that prevents it from being extracted on windows (cross-build is fine). To resolve this, we need a tar file that doesn't contain this symlink file. I found the easiest way to solve this was to run `make -C deps get-arpack` and then edit the arpack-*.tar.gz in 7zip to delete the depcomp symlink file before running the primary make target.
+- Do not use GCC 4.6 or earlier
 
-- LLVM 3.x has an error on when compiling for 64-bit Windows that causes the build to fail when building the shared library file. Therefore, before building, you will need to change `--enable-shared` to `--disable-shared` in the `LLVM_FLAGS` variable in `deps/Makefile`.
+- LLVM doesn't build with the newly released 4.8 SEH gcc for 64-bit Windows because of an incorrect preprocessor definition. In deps/llvm-3.2/lib/ExecutionEngine/JIT/JIT.cpp, find the section that defines HAVE_EHTABLE_SUPPORT and replace it with an unconditional 0
 
-- The cross-build does not have access to git. If you want your sysimg to contain version information from the commit, remove the `#` from the line in Makefile that begins with @#echo `git rev-parse --short HEAD ...` and ends with `... > COMMIT`
-
+- While building on native windows, MPFR tests fail. To fix this, edit deps/Makefile and add `MPFR_OPTS += --disable-thread-safe CFLAGS="-DNPRINTF_L -DNPRINTF_T -DNPRINTF_J"` somewhere

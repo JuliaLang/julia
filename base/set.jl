@@ -2,7 +2,7 @@ type Set{T}
     dict::Dict{T,Nothing}
 
     Set() = new(Dict{T,Nothing}())
-    Set(x...) = add_each!(new(Dict{T,Nothing}()), x)
+    Set(x...) = union!(new(Dict{T,Nothing}()), x)
 end
 Set() = Set{Any}()
 Set(x...) = Set{Any}(x...)
@@ -14,18 +14,17 @@ isempty(s::Set) = isempty(s.dict)
 length(s::Set)  = length(s.dict)
 eltype{T}(s::Set{T}) = T
 
-contains(s::Set, x) = has(s.dict, x)
+contains(s::Set, x) = haskey(s.dict, x)
 
 add!(s::Set, x) = (s.dict[x] = nothing; s)
 delete!(s::Set, x) = (delete!(s.dict, x); x)
-# TODO: this method doesn't make much sense for sets:
-delete!(s::Set, x, deflt) = has(s.dict, x) ? delete!(s.dict, x) : deflt
+delete!(s::Set, x, deflt) = delete!(s.dict, x, deflt)
 
-add_each!(s::Set, xs) = (for x=xs; add!(s,x); end; s)
-del_each!(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
+union!(s::Set, xs) = (for x=xs; add!(s,x); end; s)
+setdiff!(s::Set, xs) = (for x=xs; delete!(s,x,nothing); end; s)
 
 similar{T}(s::Set{T}) = Set{T}()
-copy(s::Set) = add_each!(similar(s), s)
+copy(s::Set) = union!(similar(s), s)
 
 empty!{T}(s::Set{T}) = (empty!(s.dict); s)
 
@@ -49,9 +48,9 @@ function union(s::Set, sets::Set...)
         end
     end
     u = Set{U}()
-    add_each!(u,s)
+    union!(u,s)
     for t in sets
-        add_each!(u,t)
+        union!(u,t)
     end
     return u
 end
@@ -79,13 +78,11 @@ function setdiff(a::Set, b::Set)
     d
 end
 
-|(s::Set...) = union(s...)
-(&)(s::Set...) = intersect(s...)
--(a::Set, b::Set) = setdiff(a,b)
-
 isequal(l::Set, r::Set) = (length(l) == length(r)) && (l <= r)
 isless(l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
-function <=(l::Set, r::Set)
+<=(l::Set, r::Set) = issubset(l, r)
+
+function issubset(l, r)
     for elt in l
         if !contains(r, elt)
             return false
@@ -94,7 +91,17 @@ function <=(l::Set, r::Set)
     return true
 end
 
-unique(C) = collect(add_each!(Set{eltype(C)}(), C))
+function unique(C)
+    out = Array(eltype(C),0)
+    seen = Set{eltype(C)}()
+    for x in C
+        if !contains(seen, x)
+            add!(seen, x)
+            push!(out, x)
+        end
+    end
+    out
+end
 
 function filter!(f::Function, s::Set)
     for x in s
@@ -105,4 +112,3 @@ function filter!(f::Function, s::Set)
     return s
 end
 filter(f::Function, s::Set) = filter!(f, copy(s))
-

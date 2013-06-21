@@ -165,11 +165,17 @@ end
 
 # T[a:b] and T[a:s:b] also contruct typed ranges
 function getindex{T<:Number}(::Type{T}, r::Ranges)
-    a = Array(T,length(r))
-    i = 1
-    for x in r
-        a[i] = x
-        i += 1
+    copy!(Array(T,length(r)), r)
+end
+
+function getindex{T<:Number}(::Type{T}, r1::Ranges, rs::Ranges...)
+    a = Array(T,length(r1)+sum(length,rs))
+    o = 1
+    copy!(a, r1, o)
+    o += length(r1)
+    for r in rs
+        copy!(a, r, o)
+        o += length(r)
     end
     return a
 end
@@ -179,7 +185,8 @@ function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
     return a
 end
 function fill!{T<:Union(Integer,FloatingPoint)}(a::Array{T}, x)
-    if isbits(T) && convert(T,x) == 0
+    # note: preserve -0.0 for floats
+    if isbits(T) && T<:Integer && convert(T,x) == 0
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Int32, Csize_t), a,0,length(a)*sizeof(T))
     else
         for i = 1:length(a)
@@ -322,9 +329,9 @@ function getindex{T<:Real}(A::Array, I::AbstractVector{T}, J::AbstractVector{T})
     X = similar(A, index_shape(I, J))
     storeind = 1
     for j = J
-        offset = (j-1)*size(A,1)
+        offset = (convert(Int,j)-1)*size(A,1)
         for i = I
-            X[storeind] = A[i+offset]
+            X[storeind] = A[convert(Int,i)+offset]
             storeind += 1
         end
     end
@@ -380,9 +387,7 @@ getindex{T<:Real}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = A[
 getindex{T<:Real}(A::Matrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = A[find(I),J]
 
 ## Indexing: setindex! ##
-setindex!{T}(A::Array{T,0}, x) = arrayset(A, convert(T,x), 1)
-
-setindex!(A::Array{Any}, x::ANY, i::Real) = arrayset(A, x, to_index(i))
+setindex!{T}(A::Array{T}, x) = arrayset(A, convert(T,x), 1)
 
 setindex!{T}(A::Array{T}, x, i0::Real) = arrayset(A, convert(T,x), to_index(i0))
 setindex!{T}(A::Array{T}, x, i0::Real, i1::Real) =
@@ -414,6 +419,9 @@ end
 function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
     if length(X) != length(I); error("argument dimensions must match"); end
     count = 1
+    if is(X,A)
+        X = copy(X)
+    end
     for i in I
         A[i] = X[count]
         count += 1
@@ -662,7 +670,7 @@ function push!(a::Array{Any,1}, item::ANY)
     return a
 end
 
-function append!{T}(a::Array{T,1}, items::Array{T,1})
+function append!{T}(a::Array{T,1}, items::Vector)
     if is(T,None)
         error("[] cannot grow. Instead, initialize the array with \"T[]\".")
     end
@@ -748,50 +756,90 @@ function insert!{T}(a::Array{T,1}, i::Integer, item)
         end
     end
     a[i] = item
+    return a
 end
 
-function delete!(a::Vector, i::Integer)
+const _default_splice = []
+
+function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
     n = length(a)
     if !(1 <= i <= n)
         throw(BoundsError())
     end
     v = a[i]
-    if i < div(n,2)
-        for k = i:-1:2
-            a[k] = a[k-1]
+    m = length(ins)
+    if m == 0
+        if i < div(n,2)
+            for k = i:-1:2
+                a[k] = a[k-1]
+            end
+            ccall(:jl_array_del_beg, Void, (Any, Uint), a, 1)
+        else
+            for k = i:n-1
+                a[k] = a[k+1]
+            end
+            ccall(:jl_array_del_end, Void, (Any, Uint), a, 1)
         end
-        ccall(:jl_array_del_beg, Void, (Any, Uint), a, 1)
+    elseif m == 1
+        a[i] = ins[1]
     else
-        for k = i:n-1
-            a[k] = a[k+1]
+        if i < div(n,2)
+            ccall(:jl_array_grow_beg, Void, (Any, Uint), a, m-1)
+            for k = 1:i-1
+                a[k] = a[k+m-1]
+            end
+        else
+            ccall(:jl_array_grow_end, Void, (Any, Uint), a, m-1)
+            for k = n+m-1:-1:(i+1+(m-1))
+                a[k] = a[k-(m-1)]
+            end
         end
-        ccall(:jl_array_del_end, Void, (Any, Uint), a, 1)
+        for k = 1:m
+            a[i+k-1] = ins[k]
+        end
     end
     return v
 end
 
-function delete!{T<:Integer}(a::Vector, r::Range1{T})
+function splice!{T<:Integer}(a::Vector, r::Range1{T}, ins::AbstractArray=_default_splice)
     n = length(a)
     f = first(r)
     l = last(r)
     if !(1 <= f && l <= n)
         throw(BoundsError())
     end
-    if l < f
-        return T[]
-    end
-    v = a[r]
     d = l-f+1
-    if f-1 < n-l
-        for k = l:-1:1+d
-            a[k] = a[k-d]
+    v = a[r]
+    m = length(ins)
+    if m < d
+        delta = d - m
+        if f-1 < n-l
+            for k = l:-1:1+delta
+                a[k] = a[k-delta]
+            end
+            ccall(:jl_array_del_beg, Void, (Any, Uint), a, delta)
+        else
+            for k = f:n-delta
+                a[k] = a[k+delta]
+            end
+            ccall(:jl_array_del_end, Void, (Any, Uint), a, delta)
         end
-        ccall(:jl_array_del_beg, Void, (Any, Uint), a, d)
-    else
-        for k = f:n-d
-            a[k] = a[k+d]
+    elseif m > d
+        delta = m - d
+        if f-1 < n-l
+            ccall(:jl_array_grow_beg, Void, (Any, Uint), a, delta)
+            for k = 1:f-1
+                a[k] = a[k+delta]
+            end
+        else
+            ccall(:jl_array_grow_end, Void, (Any, Uint), a, delta)
+            for k = n+delta:-1:(l+1+delta)
+                a[k] = a[k-delta]
+            end
         end
-        ccall(:jl_array_del_end, Void, (Any, Uint), a, d)
+    end
+    for k = 1:m
+        a[f+k-1] = ins[k]
     end
     return v
 end
@@ -854,38 +902,29 @@ promote_array_type{S<:Integer, A<:Integer}(::Type{S}, ::Type{A}) = A
 promote_array_type{S<:Real, A<:Integer}(::Type{S}, ::Type{A}) = promote_type(S, A)
 promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 
-./{T<:Integer,S<:Integer}(x::StridedArray{T}, y::StridedArray{S}) =
-    reshape([ x[i] ./ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
 ./{T<:Integer}(x::Integer, y::StridedArray{T}) =
     reshape([ x    ./ y[i] for i=1:length(y) ], size(y))
 ./{T<:Integer}(x::StridedArray{T}, y::Integer) =
     reshape([ x[i] ./ y    for i=1:length(x) ], size(x))
 
-./{T<:Integer,S<:Integer}(x::StridedArray{ComplexPair{T}}, y::StridedArray{S}) =
-    reshape([ x[i] ./ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
-./{T<:Integer,S<:Integer}(x::StridedArray{T}, y::StridedArray{ComplexPair{S}}) =
-    reshape([ x[i] ./ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
-./{T<:Integer,S<:Integer}(x::StridedArray{ComplexPair{T}}, y::StridedArray{ComplexPair{S}}) =
-    reshape([ x[i] ./ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
-./{T<:Integer}(x::Integer, y::StridedArray{ComplexPair{T}}) =
+./{T<:Integer}(x::Integer, y::StridedArray{Complex{T}}) =
     reshape([ x    ./ y[i] for i=1:length(y) ], size(y))
-./{T<:Integer}(x::StridedArray{ComplexPair{T}}, y::Integer) =
+./{T<:Integer}(x::StridedArray{Complex{T}}, y::Integer) =
     reshape([ x[i] ./ y    for i=1:length(x) ], size(x))
-./{S<:Integer,T<:Integer}(x::ComplexPair{S}, y::StridedArray{T}) =
+./{S<:Integer,T<:Integer}(x::Complex{S}, y::StridedArray{T}) =
     reshape([ x    ./ y[i] for i=1:length(y) ], size(y))
-./{S<:Integer,T<:Integer}(x::StridedArray{S}, y::ComplexPair{T}) =
+./{S<:Integer,T<:Integer}(x::StridedArray{S}, y::Complex{T}) =
     reshape([ x[i] ./ y    for i=1:length(x) ], size(x))
 
 # ^ is difficult, since negative exponents give a different type
 
-.^(x::StridedArray, y::StridedArray) =
-    reshape([ x[i] ^ y[i] for i=1:length(x) ], promote_shape(size(x),size(y)))
-.^(x::Number,       y::StridedArray) =
-    reshape([ x    ^ y[i] for i=1:length(y) ], size(y))
-.^(x::StridedArray, y::Number      ) =
-    reshape([ x[i] ^ y    for i=1:length(x) ], size(x))
+.^(x::Number, y::StridedArray) =
+    reshape([ x ^ y[i] for i=1:length(y) ], size(y))
 
-for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
+.^(x::StridedArray, y::Number      ) =
+    reshape([ x[i] ^ y for i=1:length(x) ], size(x))
+
+for f in (:+, :-, :div, :mod, :&, :|, :$)
     @eval begin
         function ($f){S,T}(A::StridedArray{S}, B::StridedArray{T})
             F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
@@ -894,6 +933,10 @@ for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
             end
             return F
         end
+    end
+end
+for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
+    @eval begin
         function ($f){T}(A::Number, B::StridedArray{T})
             F = similar(B, promote_array_type(typeof(A),T))
             for i=1:length(B)
@@ -949,6 +992,7 @@ end
 ## promotion to complex ##
 
 function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
+    if size(A) != size(B); error("argument dimensions must match"); end
     F = similar(A, typeof(complex(zero(S),zero(T))))
     for i=1:length(A)
         F[i] = complex(A[i], B[i])
@@ -1337,7 +1381,7 @@ end
 
 function findin(a, b)
     ind = Array(Int, 0)
-    bset = add_each!(Set(), b)
+    bset = union!(Set(), b)
     for i = 1:length(a)
         if contains(bset, a[i])
             push!(ind, i)
@@ -1429,7 +1473,7 @@ function reducedim(f::Function, A, region, v0, R)
         key = (fname, ndimsA)
     end
 
-    if !has(reducedim_cache,key)
+    if !haskey(reducedim_cache,key)
         fexpr = gen_reducedim_func(ndimsA, fname)
         func = eval(fexpr)
         reducedim_cache[key] = func
@@ -1456,7 +1500,7 @@ function filter!(f::Function, a::Vector)
             insrt += 1
         end
     end
-    delete!(a, insrt:length(a))
+    splice!(a, insrt:length(a))
     return a
 end
 
@@ -1472,12 +1516,45 @@ end
 
 ## Transpose ##
 
-function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
-    if length(A) > 50000
-        return FFTW.transpose(reshape(A, size(A, 2), size(A, 1)))
-    else
-        return [ A[j,i] for i=1:size(A,2), j=1:size(A,1) ]
+const sqrthalfcache = 1<<7
+function transpose!{T<:Number}(B::Matrix{T}, A::Matrix{T})
+    m, n = size(A)
+    if size(B) != (n,m)
+        error("Size of output is incorrect")
     end
+    blocksize = ifloor(sqrthalfcache/sizeof(T)/1.4) # /1.4 to avoid complete fill of cache
+    if m*n <= 4*blocksize*blocksize
+        # For small sizes, use a simple linear-indexing algorithm
+        for i2 = 1:n
+            j = i2
+            offset = (j-1)*m
+            for i = offset+1:offset+m
+                B[j] = A[i]
+                j += n
+            end
+        end
+        return B
+    end
+    # For larger sizes, use a cache-friendly algorithm
+    for outer2 = 1:blocksize:size(A, 2)
+        for outer1 = 1:blocksize:size(A, 1)
+            for inner2 = outer2:min(n,outer2+blocksize)
+                i = (inner2-1)*m + outer1
+                j = inner2 + (outer1-1)*n
+                for inner1 = outer1:min(m,outer1+blocksize)
+                    B[j] = A[i]
+                    i += 1
+                    j += n
+                end
+            end
+        end
+    end
+    B
+end
+
+function transpose{T<:Number}(A::Matrix{T})
+    B = similar(A, size(A, 2), size(A, 1))
+    transpose!(B, A)
 end
 
 ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)

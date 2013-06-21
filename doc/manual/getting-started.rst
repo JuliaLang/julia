@@ -74,7 +74,7 @@ those available for the ``perl`` and ``ruby`` programs::
      -e --eval=<expr>         Evaluate <expr>
      -E --print=<expr>        Evaluate and show <expr>
      -P --post-boot=<expr>    Evaluate <expr> right after boot
-     -L --load=file           Load <file> right after boot
+     -L --load=file           Load <file> right after boot on all processors
      -J --sysimage=file       Start up with the given system image file
 
      -p n                     Run n local processes
@@ -175,5 +175,5 @@ One of Julia's goals is to provide an effective language for data analysis and s
 - ``colMeans()`` and ``rowMeans()``, ``size(m, 1)`` and ``size(m, 2)``
 - In R, performance requires vectorization. In Julia, almost the opposite is true: the best performing code is often achieved by using devectorized loops.
 - Unlike R, there is no delayed evaluation in Julia. For most users, this means that there are very few unquoted expressions or column names.
-- Julia does not ``NULL`` type.
+- Julia does not support the ``NULL`` type.
 - There is no equivalent of R's ``assign`` or ``get`` in Julia.

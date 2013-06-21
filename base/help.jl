@@ -49,26 +49,22 @@ function init_help()
         MODULE_DICT = Dict()
         FUNCTION_DICT = Dict()
         for (cat,mod,func,desc) in helpdb
-            if !has(CATEGORY_DICT, cat)
+            if !haskey(CATEGORY_DICT, cat)
                 push!(CATEGORY_LIST, cat)
                 CATEGORY_DICT[cat] = {}
             end
             if !isempty(mod)
-                if beginswith(func, '@')
-                    mfunc = "@" * mod * "." * func[2:]
-                else
-                    mfunc = mod * "." * func
-                end
+                mfunc = mod * "." * func
                 desc = decor_help_desc(func, mfunc, desc)
             else
                 mfunc = func
             end
             push!(CATEGORY_DICT[cat], mfunc)
-            if !has(FUNCTION_DICT, mfunc)
+            if !haskey(FUNCTION_DICT, mfunc)
                 FUNCTION_DICT[mfunc] = {}
             end
             push!(FUNCTION_DICT[mfunc], desc)
-            if !has(MODULE_DICT, func)
+            if !haskey(MODULE_DICT, func)
                 MODULE_DICT[func] = {}
             end
             if !contains(MODULE_DICT[func], mod)
@@ -102,7 +98,7 @@ end
 
 function help(cat::String)
     init_help()
-    if !has(CATEGORY_DICT, cat)
+    if !haskey(CATEGORY_DICT, cat)
         # if it's not a category, try another named thing
         return help_for(cat)
     end
@@ -128,30 +124,39 @@ help_for(s::String) = help_for(s, 0)
 function help_for(fname::String, obj)
     init_help()
     found = false
-    if has(FUNCTION_DICT, fname)
+    if haskey(FUNCTION_DICT, fname)
         print_help_entries(FUNCTION_DICT[fname])
         found = true
     else
-        macrocall = ""
-        if beginswith(fname, '@')
-            sfname = fname[2:]
-            macrocall = "@"
-        else
-            sfname = fname
-        end
-        if has(MODULE_DICT, fname)
+        if haskey(MODULE_DICT, fname)
             allmods = MODULE_DICT[fname]
             alldesc = {}
             for mod in allmods
-                mod_prefix = isempty(mod) ? "" : mod * "."
-                append!(alldesc, FUNCTION_DICT[macrocall * mod_prefix * sfname])
+                mfname = isempty(mod) ? fname : mod * "." * fname
+                append!(alldesc, FUNCTION_DICT[mfname])
             end
             print_help_entries(alldesc)
             found = true
         end
     end
     if !found
-        if isgeneric(obj)
+        if isa(obj, DataType)
+            print("DataType   : ")
+            repl_show(obj)
+            println()
+            println("  supertype: ", super(obj))
+            if obj.abstract
+                st = subtypes(obj)
+                if length(st) > 0
+                    print("  subtypes : ")
+                    showcompact(st)
+                    println()
+                end
+            end
+            if length(obj.names) > 0
+                println("  fields   : ", obj.names)
+            end
+        elseif isgeneric(obj)
             repl_show(obj); println()
         else
             println("No help information found.")
@@ -194,13 +199,16 @@ function help(f::Function)
 end
 
 help(t::DataType) = help_for(string(t.name),t)
+help(t::Module) = help(string(t))
 
 function help(x)
     show(x)
     t = typeof(x)
-    println(" is of type $t")
-    if isa(t,DataType) && length(t.names)>0
-        println("  which has fields $(t.names)")
+    if isa(t,DataType)
+        println(" is of type")
+        help(t)
+    else
+        println(" is of type $t")
     end
 end
 

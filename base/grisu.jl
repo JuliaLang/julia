@@ -30,7 +30,7 @@ function grisu(x::Float64, mode::Integer, ndigits::Integer)
     if !isfinite(x); error("non-finite value: $x"); end
     if ndigits < 0; error("negative digits requested"); end
     @grisu_ccall x mode ndigits
-    NEG[1], DIGITS[1:LEN[1]], POINT[1]
+    NEG[1], DIGITS[1:LEN[1]], int(POINT[1])
 end
 
 grisu(x::Float64) = grisu(x, SHORTEST, int32(0))
@@ -56,8 +56,8 @@ function _show(io::IO, x::FloatingPoint, mode::Int32, n::Int)
     @grisu_ccall x mode n
     pdigits = pointer(DIGITS)
     neg = NEG[1]
-    len = LEN[1]
-    pt  = POINT[1]
+    len = int(LEN[1])
+    pt  = int(POINT[1])
     if mode == PRECISION
         while len > 1 && DIGITS[len] == '0'
             len -= 1
@@ -120,8 +120,8 @@ function _print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode::Int32)
     if isinf(x); return write(io, isa(x,Float32) ? "Inf32" : "Inf"); end
     @grisu_ccall x mode 0
     pdigits = pointer(DIGITS)
-    len = LEN[1]
-    pt  = POINT[1]
+    len = int(LEN[1])
+    pt  = int(POINT[1])
     e = pt-len
     k = -9<=e<=9 ? 1 : 2
     if -pt > k+1 || e+dot > k+1

@@ -29,18 +29,10 @@ extern int asprintf(char **strp, const char *fmt, ...);
 #include <readline/readline.h>
 #include <readline/history.h>
 
-char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[0m\033[1m\002";
-char prompt_plain[] = "julia> ";
-char *prompt_string = prompt_plain;
 int prompt_length;
 int disable_history;
 static char *history_file = NULL;
 static jl_value_t *rl_ast = NULL;
-
-DLLEXPORT void jl_enable_color(void)
-{
-    prompt_string = jl_prompt_color;
-}
 
 // yes, readline uses inconsistent indexing internally.
 #define history_rem(n) remove_history(n-history_base)
@@ -659,7 +651,7 @@ static void init_rl(void)
         // make sure keywords are in symbol table
         (void)jl_symbol(lang_keywords[i]);
     }
-    rl_completer_word_break_characters = " \t\n\"\\'`@$><=;|&{}()[],+-*/?%^~!";
+    rl_completer_word_break_characters = " \t\n\"\\'`@$><=;|&{}()[],+-*/?%^~!:";
     Keymap keymaps[] = {emacs_standard_keymap, vi_insertion_keymap};
     int i;
     for (i = 0; i < sizeof(keymaps)/sizeof(keymaps[0]); i++) {
@@ -752,14 +744,20 @@ void init_repl_environment(int argc, char *argv[])
     rl_prep_term_function = &jl_prep_terminal;
     rl_deprep_term_function = &jl_deprep_terminal;
     rl_instream = fopen("/dev/null","r");
-    prompt_length = strlen(prompt_plain);
+    prompt_length = 7;  // == strlen("julia> ")
     init_history();
     rl_startup_hook = (Function*)init_rl;
 }
 
-void repl_callback_enable()
+static char *prompt_string=NULL;
+
+void repl_callback_enable(char *prompt)
 {
     callback_en = 1;
+    if (prompt_string == NULL || strcmp(prompt, prompt_string)) {
+        if (prompt_string) free(prompt_string);
+        prompt_string = strdup(prompt);
+    }
     rl_callback_handler_install(prompt_string, jl_input_line_callback);
 }
 

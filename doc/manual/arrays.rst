@@ -186,7 +186,7 @@ Example::
 
     julia> x = reshape(1:16, 4, 4)
     4x4 Int64 Array
-    1 5 9 13
+    1 5  9 13
     2 6 10 14
     3 7 11 15
     4 8 12 16
@@ -216,7 +216,7 @@ the value ``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``.
 
 Index assignment syntax is equivalent to a call to ``setindex!``::
 
-      A = setindex!(A, X, I_1, I_2, ..., I_n)
+      setindex!(A, X, I_1, I_2, ..., I_n)
 
 Example::
 
@@ -230,7 +230,7 @@ Example::
     3x3 Int64 Array
     1 -1 -1
     2 -1 -1
-    3 6 9
+    3  6  9
 
 Concatenation
 -------------
@@ -329,13 +329,13 @@ vector to the size of the matrix::
      0.848333  1.66714  1.3262 
      1.26743   1.77988  1.13859
 
-This is wasteful when dimensions get large, so Julia offers the
-MATLAB-inspired ``bsxfun``, which expands singleton dimensions in
+This is wasteful when dimensions get large, so Julia offers
+``broadcast``, which expands singleton dimensions in
 array arguments to match the corresponding dimension in the other
-array without using extra memory, and applies the given binary
-function::
+array without using extra memory, and applies the given
+function elementwise::
 
-    julia> bsxfun(+, a, A)
+    julia> broadcast(+, a, A)
     2x3 Float64 Array:
      0.848333  1.66714  1.3262 
      1.26743   1.77988  1.13859
@@ -344,10 +344,12 @@ function::
     1x2 Float64 Array:
      0.629799  0.754948
 
-    julia> bsxfun(+, a, b)
+    julia> broadcast(+, a, b)
     2x2 Float64 Array:
      1.31849  1.44364
      1.56107  1.68622
+
+Elementwise operators such as ``.+`` and ``.*`` perform broadcasting if necessary. There is also a ``broadcast!`` function to specify an explicit destination, and ``broadcast_getindex`` and ``broadcast_setindex!`` that broadcast the indices before indexing.
 
 Implementation
 --------------

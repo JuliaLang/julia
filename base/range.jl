@@ -11,7 +11,6 @@ immutable Range{T<:Real} <: Ranges{T}
 
     function Range(start::T, step::T, len::Int)
         if step != step; error("Range: step cannot be NaN"); end
-        if step == 0;    error("Range: step cannot be zero"); end
         if !(len >= 0);  error("Range: length must be non-negative"); end
         new(start, step, len)
     end
@@ -32,12 +31,15 @@ immutable Range1{T<:Real} <: Ranges{T}
 end
 Range1{T}(start::T, len::Integer) = Range1{T}(start, len)
 
-colon{T<:Integer}(start::T, step::T, stop::T) =
+function colon{T<:Integer}(start::T, step::T, stop::T)
+    step != 0 || error("step cannot be zero in colon syntax")
     Range(start, step, max(0, div(stop-start+step, step)))
+end
 colon{T<:Integer}(start::T, stop::T) =
     Range1(start, max(0, stop-start+1))
 
 function colon{T<:Real}(start::T, step::T, stop::T)
+    step != 0 || error("step cannot be zero in colon syntax")
     if (step<0) != (stop<start)
         len = 0
     else
@@ -53,7 +55,7 @@ function colon{T<:Real}(start::T, step::T, stop::T)
             end
         else
             n = nf
-            len = iround(n)
+            len = itrunc(n)
         end
         if n >= typemax(Int)
             error("Range: length ",n," is too large")
@@ -65,11 +67,17 @@ function colon{T<:Real}(start::T, stop::T)
     if stop < start
         len = 0
     else
-        n = round(stop-start+1)
+        nf = stop - start + 1
+        if T <: FloatingPoint
+            n = round(nf)
+            len = abs(n-nf) < eps(n)*3 ? itrunc(n) : itrunc(nf)
+        else
+            n = nf
+            len = itrunc(n)
+        end
         if n >= typemax(Int)
             error("Range: length ",n," is too large")
         end
-        len = itrunc(n)
     end
     Range1(start, len)
 end
@@ -97,6 +105,8 @@ max(r::Ranges) = (isempty(r)&&error("max: range is empty")) || (step(r) > 0 ?  l
 # Ranges are intended to be immutable
 copy(r::Ranges) = r
 
+getindex(r::Ranges, i::Real) = getindex(r, to_index(i))
+
 function getindex{T}(r::Ranges{T}, i::Integer)
     if !(1 <= i <= r.len); error(BoundsError); end
     oftype(T, r.start + (i-1)*step(r))
@@ -111,7 +121,13 @@ getindex(r::Range, s::Range1{Int}) =
 getindex(r::Range1, s::Range1{Int}) =
     r.len < last(s) ? error(BoundsError) : Range1(r[s.start], s.len)
 
-show(io::IO, r::Range)  = print(io, repr(r.start),':',repr(step(r)),':',repr(last(r)))
+function show(io::IO, r::Range)
+    if step(r) == 0
+        print(io, "Range(",r.start,",",step(r),",",r.len,")")
+    else
+        print(io, repr(r.start),':',repr(step(r)),':',repr(last(r)))
+    end
+end
 show(io::IO, r::Range1) = print(io, repr(r.start),':',repr(last(r)))
 
 start(r::Ranges) = 0
@@ -119,12 +135,15 @@ next{T}(r::Range{T},  i) = (oftype(T, r.start + i*step(r)), i+1)
 next{T}(r::Range1{T}, i) = (oftype(T, r.start + i), i+1)
 done(r::Ranges, i) = (length(r) <= i)
 
-isequal(r::Ranges, s::Ranges) = (r.start==s.start) & (step(r)==step(s)) & (r.len==s.len)
-isequal(r::Range1, s::Range1) = (r.start==s.start) & (r.len==s.len)
+==(r::Ranges, s::Ranges) = (r.start==s.start) & (step(r)==step(s)) & (r.len==s.len)
+==(r::Range1, s::Range1) = (r.start==s.start) & (r.len==s.len)
+isequal(r::Ranges, s::Ranges) =
+    isequal(r.start,s.start) & isequal(step(r),step(s)) & (r.len==s.len)
+isequal(r::Range1, s::Range1) = isequal(r.start,s.start) & (r.len==s.len)
 
 # TODO: isless?
 
-intersect(r::Range1, s::Range1) = max(r.start,s.start):min(last(r),last(s))
+intersect{T1<:Integer, T2<:Integer}(r::Range1{T1}, s::Range1{T2}) = max(r.start,s.start):min(last(r),last(s))
 
 intersect{T<:Integer}(i::Integer, r::Range1{T}) =
     i < first(r) ? (first(r):i) :
@@ -132,23 +151,90 @@ intersect{T<:Integer}(i::Integer, r::Range1{T}) =
 
 intersect{T<:Integer}(r::Range1{T}, i::Integer) = intersect(i, r)
 
-# TODO: general intersect?
-function intersect(r::Range1, s::Range)
-    sta = first(s)
-    ste = step(s)
-    sto = last(s)
-    lo = first(r)
-    hi = last(r)
-    i0 = max(lo, sta + ste*div((lo-sta)+ste-1, ste))
-    i1 = min(hi, sta + ste*div((hi-sta), ste))
-    i0 = max(i0, sta)
-    i1 = min(i1, sto)
-    i0:ste:i1
+function intersect{T1<:Integer, T2<:Integer}(r::Range1{T1}, s::Range{T2})
+    if length(s) == 0
+        Range1(first(r), 0)
+    elseif step(s) == 0
+        intersect(first(s), r)
+    elseif step(s) < 0
+        intersect(r, reverse(s))
+    else
+        sta = first(s)
+        ste = step(s)
+        sto = last(s)
+        lo = first(r)
+        hi = last(r)
+        i0 = max(sta, lo + mod(sta - lo, ste))
+        i1 = min(sto, hi - mod(hi - sta, ste))
+        i0:ste:i1
+    end
 end
-intersect(r::Range, s::Range1) = intersect(s, r)
+
+function intersect{T1<:Integer, T2<:Integer}(r::Range{T1}, s::Range1{T2})
+    if step(r) == 0
+        first(s) <= first(r) <= last(s) ? r : Range(first(r), 0, 0)
+    elseif step(r) < 0
+        reverse(intersect(s, reverse(r)))
+    else
+        intersect(s, r)
+    end
+end
+
+function intersect{T1<:Integer, T2<:Integer}(r::Range{T1}, s::Range{T2})
+    if length(r) == 0 || length(s) == 0
+        return Range(first(r), step(r), 0)
+    elseif step(s) < 0
+        return intersect(r, reverse(s))
+    elseif step(r) < 0
+        return reverse(intersect(reverse(r), s))
+    end
+
+    start1 = first(r)
+    step1 = step(r)
+    stop1 = last(r)
+    start2 = first(s)
+    step2 = step(s)
+    stop2 = last(s)
+    a = lcm(step1, step2)
+
+    if a == 0
+        # One or both ranges have step 0.
+        if step1 == 0 && step2 == 0
+            return start1 == start2 ? r : Range(start1, 0, 0)
+        elseif step1 == 0
+            return start2 <= start1 <= stop2 && rem(start1 - start2, step2) == 0 ? r : Range(start1, 0, 0)
+        else
+            return start1 <= start2 <= stop1 && rem(start2 - start1, step1) == 0 ? (start2:step1:start2) : Range(start1, step1, 0)
+        end
+    end
+
+    g, x, y = gcdx(step1, step2)
+
+    if rem(start1 - start2, g) != 0
+        # Unaligned, no overlap possible.
+        return Range(start1, a, 0)
+    end
+
+    z = div(start1 - start2, g)
+    b = start1 - x * z * step1
+    # Possible points of the intersection of r and s are
+    # ..., b-2a, b-a, b, b+a, b+2a, ...
+    # Determine where in the sequence to start and stop.
+    m = max(start1 + mod(b - start1, a), start2 + mod(b - start2, a))
+    n = min(stop1 - mod(stop1 - b, a), stop2 - mod(stop2 - b, a))
+    m:a:n
+end
+
+function intersect(r::Ranges, s::Ranges...)
+    i = r
+    for t in s
+        i = intersect(i, t)
+    end
+    i
+end
 
 # findin (the index of intersection)
-function findin(r::Ranges, span::Range1)
+function findin{T1<:Integer, T2<:Integer}(r::Ranges{T1}, span::Range1{T2})
     local ifirst
     local ilast
     fspan = first(span)
@@ -159,9 +245,12 @@ function findin(r::Ranges, span::Range1)
     if sr > 0
         ifirst = fr >= fspan ? 1 : iceil((fspan-fr)/sr)+1
         ilast = lr <= lspan ? length(r) : length(r) - iceil((lr-lspan)/sr)
-    else
+    elseif sr < 0
         ifirst = fr <= lspan ? 1 : iceil((lspan-fr)/sr)+1
         ilast = lr >= fspan ? length(r) : length(r) - iceil((lr-fspan)/sr)
+    else
+        ifirst = fr >= fspan ? 1 : length(r)+1
+        ilast = fr <= lspan ? length(r) : 0
     end
     ifirst:ilast
 end
@@ -257,7 +346,7 @@ reverse{T<:Real}(r::Ranges{T}) = Range(last(r), -step(r), r.len)
 ## sorting ##
 
 issorted(r::Range1) = true
-issorted(r::Ranges) = step(r) > 0
+issorted(r::Ranges) = step(r) >= 0
 
 sort(r::Range1) = r
 sort!(r::Range1) = r
@@ -279,3 +368,10 @@ function map!(f, dest, r::Ranges)
 end
 
 map(f, r::Ranges) = [ f(x) for x in r ]
+
+function contains(r::Ranges, x)
+    n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1
+    n >= 1 && n <= length(r) && r[n] == x
+end
+
+contains{T<:Integer}(r::Ranges{T}, x) = isinteger(x) && x>=min(r) && x<=max(r) && (step(r)==0 || mod(int(x)-first(r),step(r))==0)

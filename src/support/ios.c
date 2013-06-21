@@ -9,7 +9,7 @@
 
 #include "dtypes.h"
 
-#ifdef WIN32
+#ifdef _OS_WINDOWS_
 #include <malloc.h>
 #include <io.h>
 #include <fcntl.h>
@@ -31,10 +31,10 @@
 
 /* OS-level primitive wrappers */
 
-#if defined(__APPLE__) || defined(__WIN32__)
-void *memrchr(const void *s, int c, size_t n)
+#if defined(__APPLE__) || defined(_OS_WINDOWS_)
+DLLEXPORT void *memrchr(const void *s, int c, size_t n)
 {
-    const unsigned char *src = s + n;
+    const unsigned char *src = (unsigned char *)s + n;
     unsigned char uc = c;
     while (--src >= (unsigned char *) s)
         if (*src == uc)
@@ -48,7 +48,7 @@ extern void *memrchr(const void *s, int c, size_t n);
 /*
 static int _fd_available(long fd)
 {
-#ifndef WIN32
+#ifndef _OS_WINDOWS_
     fd_set set;
     struct timeval tv = {0, 0};
 
@@ -99,7 +99,7 @@ static int _os_read_all(long fd, void *buf, size_t n, size_t *nread)
         int err = _os_read(fd, buf, n, &got);
         n -= got;
         *nread += got;
-        buf += got;
+        buf = (char *)buf + got;
         if (err || got==0)
             return err;
     }
@@ -135,7 +135,7 @@ int _os_write_all(long fd, const void *buf, size_t n, size_t *nwritten)
         int err = _os_write(fd, buf, n, &wrote);
         n -= wrote;
         *nwritten += wrote;
-        buf += wrote;
+        buf = (char *)buf + wrote;
         if (err)
             return err;
     }
@@ -227,6 +227,11 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
     size_t got, avail;
     //int result;
 
+    if (s->state == bst_wr) {
+        ios_seek(s, ios_pos(s));
+    }
+    s->state = bst_rd;
+
     while (n > 0) {
         avail = s->size - s->bpos;
         
@@ -235,13 +240,11 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
             memcpy(dest, s->buf + s->bpos, ncopy);
             s->bpos += ncopy;
             if (ncopy >= n) {
-                s->state = bst_rd;
                 return tot+ncopy;
             }
         }
         if (s->bm == bm_mem || s->fd == -1) {
             // can't get any more data
-            s->state = bst_rd;
             if (avail == 0)
                 s->_eof = 1;
             return avail;
@@ -253,7 +256,6 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
         
         ios_flush(s);
         s->bpos = s->size = 0;
-        s->state = bst_rd;
         
         s->fpos = -1;
         if (n > MOST_OF(s->maxsize)) {
@@ -353,17 +355,11 @@ size_t ios_write(ios_t *s, const char *data, size_t n)
     size_t space;
     size_t wrote = 0;
 
-    if (s->state == bst_none) s->state = bst_wr;
     if (s->state == bst_rd) {
-        if (!s->rereadable) {
-            s->size = 0;
-            s->bpos = 0;
-        }
-        space = s->size - s->bpos;
+        ios_seek(s, ios_pos(s));
     }
-    else {
-        space = s->maxsize - s->bpos;
-    }
+    s->state = bst_wr;
+    space = s->maxsize - s->bpos;
 
     if (s->bm == bm_mem) {
         wrote = _write_grow(s, data, n);
@@ -391,7 +387,6 @@ size_t ios_write(ios_t *s, const char *data, size_t n)
         wrote += n;
     }
     else {
-        s->state = bst_wr;
         ios_flush(s);
         if (n > MOST_OF(s->maxsize)) {
             _os_write_all(s->fd, data, n, &wrote);
@@ -497,6 +492,10 @@ off_t ios_pos(ios_t *s)
     return fdpos;
 }
 
+#if defined(_OS_WINDOWS)
+#include <io.h>
+#endif /* _OS_WINDOWS_ */
+
 int ios_trunc(ios_t *s, size_t size)
 {
     if (s->bm == bm_mem) {
@@ -520,7 +519,11 @@ int ios_trunc(ios_t *s, size_t size)
             if (size < p + (s->size - s->bpos))
                 s->size -= (p + (s->size - s->bpos) - size);
         }
-        if (ftruncate(s->fd, size)==0)
+#if !defined(_OS_WINDOWS_)
+        if (ftruncate(s->fd, size) == 0)
+#else
+        if (_chsize(s->fd, size) == 0)
+#endif
             return 0;
     }
     return 1;
@@ -782,11 +785,11 @@ ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
     int flags = wr ? (rd ? O_RDWR : O_WRONLY) : O_RDONLY;
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
-    fd = open(fname, flags, S_IRUSR | S_IWUSR /* 600 */
-#ifndef __WIN32__
-	      | S_IRGRP | S_IROTH /* 644 */
+#if defined(_OS_WINDOWS_)
+    fd = open(fname, flags | O_BINARY, _S_IREAD | _S_IWRITE);
+#else
+    fd = open(fname, flags, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */);
 #endif
-	      );
     if (fd == -1)
         goto open_file_err;
     s = ios_fd(s, fd, 1, 1);
@@ -998,7 +1001,11 @@ int ios_vprintf(ios_t *s, const char *format, va_list args)
     char *str=NULL;
     int c;
     va_list al;
+#if defined(_OS_WINDOWS_)
+    al = args;
+#else
     va_copy(al, args);
+#endif /* _OS_WINDOWS_ */
 
     if (s->state == bst_wr && s->bpos < s->maxsize && s->bm != bm_none) {
         size_t avail = s->maxsize - s->bpos;

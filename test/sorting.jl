@@ -5,6 +5,7 @@
 @test issorted([1,2,3])
 @test reverse([2,3,1]) == [1,3,2]
 @test select([3,6,30,1,9],3) == 6
+@test select([3,6,30,1,9],3:4) == [6,9]
 @test sum(randperm(6)) == 21
 @test nthperm([0,1,2],3) == [1,0,2]
 
@@ -18,6 +19,11 @@
 @test searchsortedlast([1, 1, 2, 2, 3, 3], 2) == 4
 @test searchsortedlast([1, 1, 2, 2, 3, 3], 4) == 6
 @test searchsortedlast([1.0, 1, 2, 2, 3, 3], 2.5) == 4
+@test searchsorted([1, 1, 2, 2, 3, 3], 0) == 1:0
+@test searchsorted([1, 1, 2, 2, 3, 3], 1) == 1:2
+@test searchsorted([1, 1, 2, 2, 3, 3], 2) == 3:4
+@test searchsorted([1, 1, 2, 2, 3, 3], 4) == 7:6
+@test searchsorted([1.0, 1, 2, 2, 3, 3], 2.5) == 5:4
 
 rg = 49:57; rgv = [rg]
 rg_r = 57:-1:49; rgv_r = [rg_r]
@@ -48,6 +54,39 @@ for i = -5:.5:4
           searchsortedfirst(rgv_r, i, Sort.Reverse)
     @test searchsortedlast(rg_r, i, Sort.Reverse) ==
           searchsortedlast(rgv_r, i, Sort.Reverse)
+end
+
+rg = 3+0*(1:5); rgv = [rg]
+rg_r = rg; rgv_r = [rg_r]
+for i = 2:4
+    @test searchsortedfirst(rg, i) == searchsortedfirst(rgv, i)
+    @test searchsortedlast(rg, i) == searchsortedlast(rgv, i)
+    @test searchsortedfirst(rg_r, i, Sort.Reverse) ==
+          searchsortedfirst(rgv_r, i, Sort.Reverse)
+    @test searchsortedlast(rg_r, i, Sort.Reverse) ==
+          searchsortedlast(rgv_r, i, Sort.Reverse)
+end
+
+rg = 0.0:0.01:1.0
+for i = 2:101
+    @test searchsortedfirst(rg,rg[i]) == i
+    @test searchsortedfirst(rg,prevfloat(rg[i])) == i
+    @test searchsortedfirst(rg,nextfloat(rg[i])) == i+1
+
+    @test searchsortedlast(rg,rg[i]) == i
+    @test searchsortedlast(rg,prevfloat(rg[i])) == i-1
+    @test searchsortedlast(rg,nextfloat(rg[i])) == i
+end
+
+rg_r = reverse(rg)
+for i = 1:100
+    @test searchsortedfirst(rg_r,rg_r[i],Sort.Reverse) == i
+    @test searchsortedfirst(rg_r,prevfloat(rg_r[i]),Sort.Reverse) == i+1
+    @test searchsortedfirst(rg_r,nextfloat(rg_r[i]),Sort.Reverse) == i
+
+    @test searchsortedlast(rg_r,rg_r[i],Sort.Reverse) == i
+    @test searchsortedlast(rg_r,prevfloat(rg_r[i]),Sort.Reverse) == i
+    @test searchsortedlast(rg_r,nextfloat(rg_r[i]),Sort.Reverse) == i-1
 end
 
 a = rand(1:10000, 1000)

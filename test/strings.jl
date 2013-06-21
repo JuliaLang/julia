@@ -239,6 +239,25 @@ for str in {astr, Base.GenericString(astr)}
     @test search(str, ',') == 6
     @test search(str, ',', 7) == 0
     @test search(str, '\n') == 14
+    @test search(str, '\n', 15) == 0
+end
+
+# ascii rsearch
+for str in {astr}
+    @test rsearch(str, 'x') == 0
+    @test rsearch(str, '\0') == 0
+    @test rsearch(str, '\u80') == 0
+    @test rsearch(str, '∀') == 0
+    @test rsearch(str, 'H') == 1
+    @test rsearch(str, 'H', 0) == 0
+    @test rsearch(str, 'l') == 11
+    @test rsearch(str, 'l', 5) == 4
+    @test rsearch(str, 'l', 4) == 4
+    @test rsearch(str, 'l', 3) == 3
+    @test rsearch(str, 'l', 2) == 0
+    @test rsearch(str, ',') == 6
+    @test rsearch(str, ',', 5) == 0
+    @test rsearch(str, '\n') == 14
 end
 
 # utf-8 search
@@ -262,31 +281,28 @@ for str in {u8str, Base.GenericString(u8str)}
     @test search(str, 'ε', 55) == 0
 end
 
-# string search with a char
-@test search(astr, 'x') == 0
-@test search(astr, 'H') == 1
-@test search(astr, 'H', 2) == 0
-@test search(astr, 'l') == 3
-@test search(astr, 'l', 4) == 4
-@test search(astr, 'l', 5) == 11
-@test search(astr, 'l', 12) == 0
-@test search(astr, '\n') == 14
-@test search(astr, '\n', 15) == 0
-@test search(u8str, 'z') == 0
-@test search(u8str, '∄') == 0
-@test search(u8str, '∀') == 1
-@test search(u8str, '∀', 4) == 0
-@test search(u8str, '∃') == 13
-@test search(u8str, '∃', 16) == 0
-@test search(u8str, 'x') == 26
-@test search(u8str, 'x', 27) == 43
-@test search(u8str, 'x', 44) == 0
-@test search(u8str, 'ε') == 5
-# TODO: the character case returns (54,55), but searching for this as a
-# 1-character string returns (54,56) (see below). This might be OK if all
-# that matters is "> endof(s)", but needs investigation.
-@test search(u8str, 'ε', 7) == 54
-@test search(u8str, 'ε', 56) == 0
+# utf-8 rsearch
+for str in {u8str}
+    @test rsearch(str, 'z') == 0
+    @test rsearch(str, '\0') == 0
+    @test rsearch(str, '\u80') == 0
+    @test rsearch(str, '∄') == 0
+    @test rsearch(str, '∀') == 1
+    @test rsearch(str, '∀', 0) == 0
+    @test rsearch(str, '∃') == 13
+    @test rsearch(str, '∃', 14) == 13
+    @test rsearch(str, '∃', 13) == 13
+    @test rsearch(str, '∃', 12) == 0
+    @test rsearch(str, 'x') == 43
+    @test rsearch(str, 'x', 42) == 26
+    @test rsearch(str, 'x', 25) == 0
+    @test rsearch(str, 'δ') == 33
+    @test rsearch(str, 'δ', 32) == 17
+    @test rsearch(str, 'δ', 16) == 0
+    @test rsearch(str, 'ε') == 54
+    @test rsearch(str, 'ε', 53) == 5
+    @test rsearch(str, 'ε', 4) == 0
+end
 
 # string search with a single-char string
 @test search(astr, "x") == 0:-1
@@ -298,6 +314,7 @@ end
 @test search(astr, "l", 12) == 0:-1
 @test search(astr, "\n") == 14:14
 @test search(astr, "\n", 15) == 0:-1
+
 @test search(u8str, "z") == 0:-1
 @test search(u8str, "∄") == 0:-1
 @test search(u8str, "∀") == 1:3
@@ -310,6 +327,36 @@ end
 @test search(u8str, "ε") == 5:6
 @test search(u8str, "ε", 7) == 54:55
 @test search(u8str, "ε", 56) == 0:-1
+
+# string rsearch with a single-char string
+@test rsearch(astr, "x") == 0:-1
+@test rsearch(astr, "H") == 1:1
+@test rsearch(astr, "H", 2) == 1:1
+@test rsearch(astr, "H", 0) == 0:-1
+@test rsearch(astr, "l") == 11:11
+@test rsearch(astr, "l", 10) == 4:4
+@test rsearch(astr, "l", 4) == 4:4
+@test rsearch(astr, "l", 3) == 3:3
+@test rsearch(astr, "l", 2) == 0:-1
+@test rsearch(astr, "\n") == 14:14
+@test rsearch(astr, "\n", 13) == 0:-1
+
+@test rsearch(u8str, "z") == 0:-1
+@test rsearch(u8str, "∄") == 0:-1
+@test rsearch(u8str, "∀") == 1:3
+@test rsearch(u8str, "∀", 0) == 0:-1
+#TODO: setting the limit in the middle of a wide char
+#      makes search fail but rsearch succeed.
+#      Should rsearch fail as well?
+#@test rsearch(u8str, "∀", 2) == 0:-1 # gives 1:3
+@test rsearch(u8str, "∃") == 13:15
+@test rsearch(u8str, "∃", 12) == 0:-1
+@test rsearch(u8str, "x") == 43:43
+@test rsearch(u8str, "x", 42) == 26:26
+@test rsearch(u8str, "x", 25) == 0:-1
+@test rsearch(u8str, "ε") == 54:55
+@test rsearch(u8str, "ε", 53) == 5:6
+@test rsearch(u8str, "ε", 4) == 0:-1
 
 # string search with a single-char regex
 @test search(astr, r"x") == 0:-1
@@ -335,29 +382,37 @@ end
 @test search(u8str, r"ε") == 5:6
 @test search(u8str, r"ε", 7) == 54:55
 @test search(u8str, r"ε", 56) == 0:-1
-for i = 1:length(astr)
+for i = 1:endof(astr)
     @test search(astr, r"."s, i) == i:i
 end
-for i = 1:length(u8str)
+for i = 1:endof(u8str)
     # TODO: should regex search fast-forward invalid indices?
     if isvalid(u8str,i)
-        @test search(u8str, r"."s, i) == i:(nextind(u8str,i)-1)
+        @test search(u8str, r"."s, i) == i:(next(u8str,i)[2]-1)
     end
 end
 
 # string search with a zero-char string
-for i = 1:length(astr)
+for i = 1:endof(astr)
     @test search(astr, "", i) == i:i-1
 end
-for i = 1:length(u8str)
+for i = 1:endof(u8str)
     @test search(u8str, "", i) == i:i-1
 end
 
+# string rsearch with a zero-char string
+for i = 1:endof(astr)
+    @test rsearch(astr, "", i) == i:i-1
+end
+for i = 1:endof(u8str)
+    @test rsearch(u8str, "", i) == i:i-1
+end
+
 # string search with a zero-char regex
-for i = 1:length(astr)
+for i = 1:endof(astr)
     @test search(astr, r"", i) == i:i-1
 end
-for i = 1:length(u8str)
+for i = 1:endof(u8str)
     # TODO: should regex search fast-forward invalid indices?
     if isvalid(u8str,i)
         @test search(u8str, r""s, i) == i:i-1
@@ -377,6 +432,20 @@ end
 @test search("foo,bar,baz", ",b", 10) == 0:-1
 @test search("foo,bar,baz", "az") == 10:11
 @test search("foo,bar,baz", "az", 12) == 0:-1
+
+# string rsearch with a two-char string literal
+@test rsearch("foo,bar,baz", "xx") == 0:-1
+@test rsearch("foo,bar,baz", "fo") == 1:2
+@test rsearch("foo,bar,baz", "fo", 1) == 0:-1
+@test rsearch("foo,bar,baz", "oo") == 2:3
+@test rsearch("foo,bar,baz", "oo", 2) == 0:-1
+@test rsearch("foo,bar,baz", "o,") == 3:4
+@test rsearch("foo,bar,baz", "o,", 1) == 0:-1
+@test rsearch("foo,bar,baz", ",b") == 8:9
+@test rsearch("foo,bar,baz", ",b", 6) == 4:5
+@test rsearch("foo,bar,baz", ",b", 3) == 0:-1
+@test rsearch("foo,bar,baz", "az") == 10:11
+@test rsearch("foo,bar,baz", "az", 10) == 0:-1
 
 # string search with a two-char regex
 @test search("foo,bar,baz", r"xx") == 0:-1
@@ -447,6 +516,10 @@ end
 @test replace("foobar", 'f', 'F') == "Foobar"
 @test replace("foobar", 'r', 'R') == "foobaR"
 
+@test replace("foofoofoo", "foo", "bar") == "barbarbar"
+@test replace("foobarfoo", "foo", "baz") == "bazbarbaz"
+@test replace("barfoofoo", "foo", "baz") == "barbazbaz"
+
 @test replace("", "", "") == ""
 @test replace("", "", "x") == "x"
 @test replace("", "x", "y") == ""
@@ -457,6 +530,72 @@ end
 @test replace("abcd", r"b+", "^") == "a^cd"
 @test replace("abcd", r"b?c?", "^") == "^a^d^"
 @test replace("abcd", r"[bc]?", "^") == "^a^^d^"
+
+@test replace("foobarfoo", r"(fo|ba)", "xx") == "xxoxxrxxo"
+@test replace("foobarfoo", r"(foo|ba)", "bar") == "barbarrbar"
+
+@test replace("foobar", 'o', 'ø') == "føøbar"
+@test replace("foobar", 'o', 'ø', 1) == "føobar"
+@test replace("føøbar", 'ø', 'o') == "foobar"
+@test replace("føøbar", 'ø', 'o', 1) == "foøbar"
+@test replace("føøbar", 'ø', 'ö') == "fööbar"
+@test replace("føøbar", 'ø', 'ö', 1) == "föøbar"
+@test replace("føøbar", 'ø', "") == "fbar"
+@test replace("føøbar", 'ø', "", 1) == "føbar"
+@test replace("føøbar", 'f', 'F') == "Føøbar"
+@test replace("ḟøøbar", 'ḟ', 'F') == "Føøbar"
+@test replace("føøbar", 'f', 'Ḟ') == "Ḟøøbar"
+@test replace("ḟøøbar", 'ḟ', 'Ḟ') == "Ḟøøbar"
+@test replace("føøbar", 'r', 'R') == "føøbaR"
+@test replace("føøbaṙ", 'ṙ', 'R') == "føøbaR"
+@test replace("føøbar", 'r', 'Ṙ') == "føøbaṘ"
+@test replace("føøbaṙ", 'ṙ', 'Ṙ') == "føøbaṘ"
+
+@test replace("ḟøøḟøøḟøø", "ḟøø", "bar") == "barbarbar"
+@test replace("ḟøøbarḟøø", "ḟøø", "baz") == "bazbarbaz"
+@test replace("barḟøøḟøø", "ḟøø", "baz") == "barbazbaz"
+
+@test replace("foofoofoo", "foo", "ƀäṙ") == "ƀäṙƀäṙƀäṙ"
+@test replace("fooƀäṙfoo", "foo", "baz") == "bazƀäṙbaz"
+@test replace("ƀäṙfoofoo", "foo", "baz") == "ƀäṙbazbaz"
+
+@test replace("foofoofoo", "foo", "bar") == "barbarbar"
+@test replace("foobarfoo", "foo", "ƀäż") == "ƀäżbarƀäż"
+@test replace("barfoofoo", "foo", "ƀäż") == "barƀäżƀäż"
+
+@test replace("ḟøøḟøøḟøø", "ḟøø", "ƀäṙ") == "ƀäṙƀäṙƀäṙ"
+@test replace("ḟøøƀäṙḟøø", "ḟøø", "baz") == "bazƀäṙbaz"
+@test replace("ƀäṙḟøøḟøø", "ḟøø", "baz") == "ƀäṙbazbaz"
+
+@test replace("ḟøøḟøøḟøø", "ḟøø", "bar") == "barbarbar"
+@test replace("ḟøøbarḟøø", "ḟøø", "ƀäż") == "ƀäżbarƀäż"
+@test replace("barḟøøḟøø", "ḟøø", "ƀäż") == "barƀäżƀäż"
+
+@test replace("ḟøøḟøøḟøø", "ḟøø", "ƀäṙ") == "ƀäṙƀäṙƀäṙ"
+@test replace("ḟøøƀäṙḟøø", "ḟøø", "ƀäż") == "ƀäżƀäṙƀäż"
+@test replace("ƀäṙḟøøḟøø", "ḟøø", "ƀäż") == "ƀäṙƀäżƀäż"
+
+@test replace("", "", "ẍ") == "ẍ"
+@test replace("", "ẍ", "ÿ") == ""
+
+@test replace("äƀçđ", "", "π") == "πäπƀπçπđπ"
+@test replace("äƀçđ", "ƀ", "π") == "äπçđ"
+@test replace("äƀçđ", r"ƀ?", "π") == "πäπçπđπ"
+@test replace("äƀçđ", r"ƀ+", "π") == "äπçđ"
+@test replace("äƀçđ", r"ƀ?ç?", "π") == "πäπđπ"
+@test replace("äƀçđ", r"[ƀç]?", "π") == "πäππđπ"
+
+@test replace("foobarfoo", r"(fo|ba)", "ẍẍ") == "ẍẍoẍẍrẍẍo"
+
+@test replace("ḟøøbarḟøø", r"(ḟø|ba)", "xx") == "xxøxxrxxø"
+@test replace("ḟøøbarḟøø", r"(ḟøø|ba)", "bar") == "barbarrbar"
+
+@test replace("fooƀäṙfoo", r"(fo|ƀä)", "xx") == "xxoxxṙxxo"
+@test replace("fooƀäṙfoo", r"(foo|ƀä)", "ƀäṙ") == "ƀäṙƀäṙṙƀäṙ"
+
+@test replace("ḟøøƀäṙḟøø", r"(ḟø|ƀä)", "xx") == "xxøxxṙxxø"
+@test replace("ḟøøƀäṙḟøø", r"(ḟøø|ƀä)", "ƀäṙ") == "ƀäṙƀäṙṙƀäṙ"
+
 
 # {begins,ends}with
 @test beginswith("abcd", 'a')
@@ -491,6 +630,29 @@ for i1 = 1:length(u8str2)
         @test u8str2[i1:i2] == u8str2plain[i1:i2]
     end
 end
+
+str = "aa\u2200\u2222bb"
+u = SubString(str, 3, 6)
+@test length(u)==2
+b = IOBuffer()
+write(b, u)
+@test takebuf_string(b) == "\u2200\u2222"
+
+str = "føøbar"
+u = SubString(str, 4, 3)
+@test length(u)==0
+b = IOBuffer()
+write(b, u)
+@test takebuf_string(b) == ""
+
+str = "føøbar"
+u = SubString(str, 10, 10)
+@test length(u)==0
+b = IOBuffer()
+write(b, u)
+@test takebuf_string(b) == ""
+
+@test replace("\u2202", '*', '\0') == "\u2202"
 
 # quotes + interpolation (issue #455)
 @test "$("string")" == "string"
@@ -554,3 +716,31 @@ s = "   p"
 @test """
        $s
       """ == " $s\n"
+
+# bytes2hex and hex2bytes
+hex_str = "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"
+bin_val = hex2bytes(hex_str)
+
+@test div(length(hex_str), 2) == length(bin_val)
+@test hex_str == bytes2hex(bin_val)
+
+bin_val = hex2bytes("07bf")
+@test bin_val[1] == 7
+@test bin_val[2] == 191
+@test typeof(bin_val) == Array{Uint8, 1}
+@test length(bin_val) == 2
+
+# all valid hex chars
+@test "0123456789abcdefabcdef" == bytes2hex(hex2bytes("0123456789abcdefABCDEF"))
+
+# odd size
+@test_fails hex2bytes("0123456789abcdefABCDEF0")
+
+#non-hex characters
+@test_fails hex2bytes("0123456789abcdefABCDEFGH")
+
+# sizeof
+@test sizeof("abc") == 3
+@test sizeof("\u2222") == 3
+@test sizeof(SubString("abc\u2222def",4,6)) == 3
+@test sizeof(RopeString("abc","def")) == 6

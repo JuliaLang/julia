@@ -8,18 +8,16 @@ immutable VersionNumber
     build::(Union(Int,ASCIIString)...)
 
     function VersionNumber(major::Integer, minor::Integer, patch::Integer, pre::(Union(Int,ASCIIString)...), bld::(Union(Int,ASCIIString)...))
-        if major < 0 error("invalid major version: $major") end
-        if minor < 0 error("invalid minor version: $minor") end
-        if patch < 0 error("invalid patch version: $patch") end
+        major >= 0 || error("invalid negative major version: $major")
+        minor >= 0 || error("invalid negative minor version: $minor")
+        patch >= 0 || error("invalid negative patch version: $patch")
         for ident in pre
             if isa(ident,Int)
                 ident >= 0 || error("invalid negative pre-release identifier: $ident")
             else
-                if !ismatch(r"^[0-9a-z-]*$"i, ident)
-                    error("invalid pre-release identifier: $ident")
-                end
-                if isempty(ident) && !(length(pre)==1 && isempty(bld))
-                    error("invalid pre-release identifier: empty string")
+                if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
+                    isempty(ident) && !(length(pre)==1 && isempty(bld))
+                    error("invalid pre-release identifier: ", repr(ident))
                 end
             end
         end
@@ -27,11 +25,9 @@ immutable VersionNumber
             if isa(ident,Int)
                 ident >= 0 || error("invalid negative build identifier: $ident")
             else
-                if !ismatch(r"^[0-9a-z-]*$"i, ident)
-                    error("invalid build identifier: $ident")
-                end
-                if isempty(ident) && length(bld)!=1
-                    error("invalid pre-release identifier: empty string")
+                if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
+                    isempty(ident) && length(bld)!=1
+                    error("invalid build identifier: ", repr(ident))
                 end
             end
         end
@@ -164,15 +160,13 @@ let
         error()
     end
 
-    expected = ErrorException("don't copy this code, for breaking out of uv_run during boot-strapping only")
-    acceptable = ErrorException(expected.msg) # we would like to update the error msg for this later, but at
-                                              # this point in the bootstrapping, conflicts between old and new
-                                              # defintions for write, TTY, ASCIIString, and STDOUT make it fail
+    expected = ErrorException("don't copy this code, it's for breaking out of uv_run during boot-strapping only")
+    acceptable = ErrorException("failure: unknown exception!")
 
     outctim,ps = readsfrom(`git log -1 --pretty=format:%ct`)
     ps.closecb = function(proc)
-        if !success(proc)
-            #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
+        if proc.exit_code!=0
+            acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
             error(acceptable)
         end
 
@@ -180,8 +174,8 @@ let
 
         outdesc,ps = readsfrom(`git describe --tags --dirty --long --abbrev=10`)
         ps.closecb = function(proc)
-            if !success(proc)
-                #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
+            if proc.exit_code!=0
+                acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
                 error(acceptable)
             end
 
@@ -230,11 +224,12 @@ let
             else
                 global const commit_string = ""
             end
-            global const VERSION = VersionNumber(0,0,0)
+            global const VERSION = version
             global const VERSION_COMMIT = ""
             if err == acceptable
                 println("Warning: git failed in version.jl")
-                #println(err) # not a useful error msg currently
+                println(' ',' ',err.msg)
+                println()
             else
                 rethrow(err)
             end
@@ -252,7 +247,7 @@ const banner_plain =
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  $version_string
  _/ |\\__'_|_|_|\\__'_|  |  $commit_string
-|__/                   |
+|__/                   |  $(Sys.MACHINE)
 
 """
 local tx = "\033[0m\033[1m" # text
@@ -269,7 +264,7 @@ const banner_color =
   $(jl)| | | | | | |/ _` |$(tx)  |
   $(jl)| | |_| | | | (_| |$(tx)  |  $version_string
  $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $commit_string
-$(jl)|__/$(tx)                   |
+$(jl)|__/$(tx)                   |  $(Sys.MACHINE)
 
 \033[0m"
 end # begin

@@ -42,8 +42,21 @@
 #include <locale.h>
 #include <limits.h>
 #include <errno.h>
+
+#include "platform.h"
+
+#if defined(_OS_WINDOWS_) && defined(_COMPILER_INTEL_)
+#include <mathimf.h>
+#else
 #include <math.h>
+#endif
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+char * basename(char *);
+char * dirname(char *);
+#else
 #include <libgen.h>
+#endif
+
 #include "libsupport.h"
 #include "flisp.h"
 #include "opcodes.h"
@@ -101,7 +114,7 @@ static value_t NIL, LAMBDA, IF, TRYCATCH;
 static value_t BACKQUOTE, COMMA, COMMAAT, COMMADOT, FUNCTION;
 
 static value_t pairsym, symbolsym, fixnumsym, vectorsym, builtinsym, vu8sym;
-static value_t definesym, defmacrosym, forsym, labelsym, setqsym;
+static value_t definesym, defmacrosym, forsym, setqsym;
 static value_t tsym, Tsym, fsym, Fsym, booleansym, nullsym, evalsym, fnsym;
 // for reading characters
 static value_t nulsym, alarmsym, backspacesym, tabsym, linefeedsym, newlinesym;
@@ -2185,6 +2198,7 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
             Stack[argSP+i] = cdr_(Stack[argSP+i]);
         }
         v = _applyn(nargs-1);
+        POPN(nargs);
         PUSH(v);
         v = mk_cons();
         car_(v) = POP(); cdr_(v) = NIL;
@@ -2192,19 +2206,19 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
         fl_gc_handle(&first);
         fl_gc_handle(&last);
         while (iscons(Stack[argSP+1])) {
-            Stack[SP-nargs] = Stack[argSP];
+            PUSH(Stack[argSP]);
             for(i=1; i < nargs; i++) {
-                Stack[SP-nargs+i] = car(Stack[argSP+i]);
+                PUSH(car(Stack[argSP+i]));
                 Stack[argSP+i] = cdr_(Stack[argSP+i]);
             }
             v = _applyn(nargs-1);
+            POPN(nargs);
             PUSH(v);
             v = mk_cons();
             car_(v) = POP(); cdr_(v) = NIL;
             cdr_(last) = v;
             last = v;
         }
-        POPN(nargs);
         fl_free_gc_handles(2);
     }
     return first;
@@ -2270,7 +2284,7 @@ static void lisp_init(size_t initial_heapsize)
     vectorsym = symbol("vector");     builtinsym = symbol("builtin");
     booleansym = symbol("boolean");   nullsym = symbol("null");
     definesym = symbol("define");     defmacrosym = symbol("define-macro");
-    forsym = symbol("for");           labelsym = symbol("label");
+    forsym = symbol("for");
     setqsym = symbol("set!");         evalsym = symbol("eval");
     vu8sym = symbol("vu8");           fnsym = symbol("fn");
     nulsym = symbol("nul");           alarmsym = symbol("alarm");
@@ -2296,11 +2310,11 @@ static void lisp_init(size_t initial_heapsize)
     setc(symbol("procedure?"), builtin(OP_FUNCTIONP));
     setc(symbol("top-level-bound?"), builtin(OP_BOUNDP));
 
-#ifdef __linux__
+#if defined(_OS_LINUX_)
     set(symbol("*os-name*"), symbol("linux"));
-#elif defined(_WIN32) || defined(_WIN64)
+#elif defined(_OS_WINDOWS_)
     set(symbol("*os-name*"), symbol("win32"));
-#elif defined(__APPLE__)
+#elif defined(_OS_DARWIN_)
     set(symbol("*os-name*"), symbol("macos"));
 #else
     set(symbol("*os-name*"), symbol("unknown"));

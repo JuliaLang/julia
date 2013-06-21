@@ -43,37 +43,50 @@ convert(::Type{FloatingPoint}, x::Uint128) = convert(Float64, x) # LOSSY
 
 float32(x) = convert(Float32, x)
 float64(x) = convert(Float64, x)
-float(x)   = convert(FloatingPoint,   x)
+float(x)   = convert(FloatingPoint, x)
 
 ## conversions from floating-point ##
+
+# fallbacks using only convert, trunc, ceil, floor, round
+itrunc(x::FloatingPoint) = convert(Integer,trunc(x))
+iceil (x::FloatingPoint) = convert(Integer,ceil(x))  # TODO: fast primitive for iceil
+ifloor(x::FloatingPoint) = convert(Integer,floor(x)) # TOOD: fast primitive for ifloor
+iround(x::FloatingPoint) = convert(Integer,round(x))
+
+itrunc{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,trunc(x))
+iceil {T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,ceil(x))
+ifloor{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,floor(x))
+iround{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,round(x))
+
+## fast specific type converions ##
 
 if WORD_SIZE == 64
     iround(x::Float32) = iround(float64(x))
     itrunc(x::Float32) = itrunc(float64(x))
-    iround(x::Float64) = box(Int64,fpsiround64(unbox(Float64,x)))
-    itrunc(x::Float64) = box(Int64,fptosi64(unbox(Float64,x)))
+    iround(x::Float64) = box(Int64,fpsiround(unbox(Float64,x)))
+    itrunc(x::Float64) = box(Int64,fptosi(unbox(Float64,x)))
 else
-    iround(x::Float32) = box(Int32,fpsiround32(unbox(Float32,x)))
-    itrunc(x::Float32) = box(Int32,fptosi32(unbox(Float32,x)))
-    iround(x::Float64) = int32(box(Int64,fpsiround64(unbox(Float64,x))))
-    itrunc(x::Float64) = int32(box(Int64,fptosi64(unbox(Float64,x))))
+    iround(x::Float32) = box(Int32,fpsiround(unbox(Float32,x)))
+    itrunc(x::Float32) = box(Int32,fptosi(unbox(Float32,x)))
+    iround(x::Float64) = int32(box(Int64,fpsiround(unbox(Float64,x))))
+    itrunc(x::Float64) = int32(box(Int64,fptosi(unbox(Float64,x))))
 end
 
 for to in (Int8, Uint8, Int16, Uint16)
     @eval begin
-        iround(::Type{$to}, x::Float32) = box($to,trunc_int($to,fpsiround32(unbox(Float32,x))))
-        iround(::Type{$to}, x::Float64) = box($to,trunc_int($to,fpsiround64(unbox(Float64,x))))
+        iround(::Type{$to}, x::Float32) = box($to,trunc_int($to,fpsiround(unbox(Float32,x))))
+        iround(::Type{$to}, x::Float64) = box($to,trunc_int($to,fpsiround(unbox(Float64,x))))
     end
 end
 
-iround(::Type{Int32}, x::Float32) = box(Int32,fpsiround32(unbox(Float32,x)))
-iround(::Type{Int32}, x::Float64) = box(Int32,trunc_int(Int32,fpsiround64(unbox(Float64,x))))
-iround(::Type{Uint32}, x::Float32) = box(Uint32,fpuiround32(unbox(Float32,x)))
-iround(::Type{Uint32}, x::Float64) = box(Uint32,trunc_int(Uint32,fpuiround64(unbox(Float64,x))))
-iround(::Type{Int64}, x::Float32) = box(Int64,fpsiround64(fpext64(unbox(Float32,x))))
-iround(::Type{Int64}, x::Float64) = box(Int64,fpsiround64(unbox(Float64,x)))
-iround(::Type{Uint64}, x::Float32) = box(Uint64,fpuiround64(fpext64(unbox(Float32,x))))
-iround(::Type{Uint64}, x::Float64) = box(Uint64,fpuiround64(unbox(Float64,x)))
+iround(::Type{Int32}, x::Float32) = box(Int32,fpsiround(unbox(Float32,x)))
+iround(::Type{Int32}, x::Float64) = box(Int32,trunc_int(Int32,fpsiround(unbox(Float64,x))))
+iround(::Type{Uint32}, x::Float32) = box(Uint32,fpuiround(unbox(Float32,x)))
+iround(::Type{Uint32}, x::Float64) = box(Uint32,trunc_int(Uint32,fpuiround(unbox(Float64,x))))
+iround(::Type{Int64}, x::Float32) = box(Int64,fpsiround(fpext64(unbox(Float32,x))))
+iround(::Type{Int64}, x::Float64) = box(Int64,fpsiround(unbox(Float64,x)))
+iround(::Type{Uint64}, x::Float32) = box(Uint64,fpuiround(fpext64(unbox(Float32,x))))
+iround(::Type{Uint64}, x::Float64) = box(Uint64,fpuiround(unbox(Float64,x)))
 
 iround(::Type{Int128}, x::Float32) = convert(Int128,round(x))
 iround(::Type{Int128}, x::Float64) = convert(Int128,round(x))
@@ -84,32 +97,33 @@ iround(::Type{Uint128}, x::Float64) = convert(Uint128,round(x))
 round(x::Float64) = ccall((:round, Base.libm_name), Float64, (Float64,), x)
 floor(x::Float64) = ccall((:floor, Base.libm_name), Float64, (Float64,), x)
 
-iceil(x::FloatingPoint)  = itrunc(ceil(x))  # TODO: fast primitive for iceil
-ifloor(x::FloatingPoint) = itrunc(floor(x)) # TOOD: fast primitive for ifloor
-
 ## floating point promotions ##
 
 promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 
-promote_rule(::Type{Float32}, ::Type{Int8} ) = Float32
-promote_rule(::Type{Float32}, ::Type{Int16}) = Float32
-promote_rule(::Type{Float32}, ::Type{Int32}) = Float32
-promote_rule(::Type{Float32}, ::Type{Int64}) = Float32
+promote_rule(::Type{Float32}, ::Type{Int8}  ) = Float32
+promote_rule(::Type{Float32}, ::Type{Int16} ) = Float32
+promote_rule(::Type{Float32}, ::Type{Int32} ) = Float32
+promote_rule(::Type{Float32}, ::Type{Int64} ) = Float32
+promote_rule(::Type{Float32}, ::Type{Int128}) = Float32
 
-promote_rule(::Type{Float64}, ::Type{Int8} ) = Float64
-promote_rule(::Type{Float64}, ::Type{Int16}) = Float64
-promote_rule(::Type{Float64}, ::Type{Int32}) = Float64
-promote_rule(::Type{Float64}, ::Type{Int64}) = Float64
+promote_rule(::Type{Float64}, ::Type{Int8}  ) = Float64
+promote_rule(::Type{Float64}, ::Type{Int16} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Int32} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Int64} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Int128}) = Float64
 
-promote_rule(::Type{Float32}, ::Type{Uint8} ) = Float32
-promote_rule(::Type{Float32}, ::Type{Uint16}) = Float32
-promote_rule(::Type{Float32}, ::Type{Uint32}) = Float32
-promote_rule(::Type{Float32}, ::Type{Uint64}) = Float32
+promote_rule(::Type{Float32}, ::Type{Uint8}  ) = Float32
+promote_rule(::Type{Float32}, ::Type{Uint16} ) = Float32
+promote_rule(::Type{Float32}, ::Type{Uint32} ) = Float32
+promote_rule(::Type{Float32}, ::Type{Uint64} ) = Float32
+promote_rule(::Type{Float32}, ::Type{Uint128}) = Float32
 
-promote_rule(::Type{Float64}, ::Type{Uint8} ) = Float64
-promote_rule(::Type{Float64}, ::Type{Uint16}) = Float64
-promote_rule(::Type{Float64}, ::Type{Uint32}) = Float64
-promote_rule(::Type{Float64}, ::Type{Uint64}) = Float64
+promote_rule(::Type{Float64}, ::Type{Uint8}  ) = Float64
+promote_rule(::Type{Float64}, ::Type{Uint16} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Uint32} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Uint64} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Uint128}) = Float64
 
 promote_rule(::Type{Float32}, ::Type{Char}) = Float32
 promote_rule(::Type{Float64}, ::Type{Char}) = Float64
@@ -136,6 +150,8 @@ morebits(::Type{Float32}) = Float64
 rem(x::Float32, y::Float32) = box(Float32,rem_float(unbox(Float32,x),unbox(Float32,y)))
 rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x),unbox(Float64,y)))
 
+mod{T<:FloatingPoint}(x::T, y::T) = rem(y+rem(x,y),y)
+
 ## floating point comparisons ##
 
 ==(x::Float32, y::Float32) = eq_float(unbox(Float32,x),unbox(Float32,y))
@@ -147,10 +163,13 @@ rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x),unbox(Float
 <=(x::Float32, y::Float32) = le_float(unbox(Float32,x),unbox(Float32,y))
 <=(x::Float64, y::Float64) = le_float(unbox(Float64,x),unbox(Float64,y))
 
-isequal(x::Float32, y::Float32) = fpiseq32(unbox(Float32,x),unbox(Float32,y))
-isequal(x::Float64, y::Float64) = fpiseq64(unbox(Float64,x),unbox(Float64,y))
-isless (x::Float32, y::Float32) = fpislt32(unbox(Float32,x),unbox(Float32,y))
-isless (x::Float64, y::Float64) = fpislt64(unbox(Float64,x),unbox(Float64,y))
+isequal(x::FloatingPoint, y::FloatingPoint) =
+    ((x==y) & (signbit(x)==signbit(y))) | (isnan(x)&isnan(y))
+
+isequal(x::Float32, y::Float32) = fpiseq(unbox(Float32,x),unbox(Float32,y))
+isequal(x::Float64, y::Float64) = fpiseq(unbox(Float64,x),unbox(Float64,y))
+isless (x::Float32, y::Float32) = fpislt(unbox(Float32,x),unbox(Float32,y))
+isless (x::Float64, y::Float64) = fpislt(unbox(Float64,x),unbox(Float64,y))
 
 isequal(a::Integer, b::FloatingPoint) = (a==b) & isequal(float(a),b)
 isequal(a::FloatingPoint, b::Integer) = isequal(b, a)
@@ -187,14 +206,14 @@ isless (a::FloatingPoint, b::Integer) = (a<b) | isless(a,float(b))
 <=(x::Int64  , y::Float32) = lesif64(unbox(Int64,x),unbox(Float64,float64(y)))
 <=(x::Uint64 , y::Float32) = leuif64(unbox(Uint64,x),unbox(Float64,float64(y)))
 
-==(x::Float32, y::Union(Int32,Int64,Uint32,Uint64)) = float64(x)==float64(y)
-==(x::Union(Int32,Int64,Uint32,Uint64), y::Float32) = float64(x)==float64(y)
+==(x::Float32, y::Union(Int32,Uint32)) = float64(x)==float64(y)
+==(x::Union(Int32,Uint32), y::Float32) = float64(x)==float64(y)
 
-<(x::Float32, y::Union(Int32,Int64,Uint32,Uint64)) = float64(x)<float64(y)
-<(x::Union(Int32,Int64,Uint32,Uint64), y::Float32) = float64(x)<float64(y)
+<(x::Float32, y::Union(Int32,Uint32)) = float64(x)<float64(y)
+<(x::Union(Int32,Uint32), y::Float32) = float64(x)<float64(y)
 
-<=(x::Float32, y::Union(Int32,Int64,Uint32,Uint64)) = float64(x)<=float64(y)
-<=(x::Union(Int32,Int64,Uint32,Uint64), y::Float32) = float64(x)<=float64(y)
+<=(x::Float32, y::Union(Int32,Uint32)) = float64(x)<=float64(y)
+<=(x::Union(Int32,Uint32), y::Float32) = float64(x)<=float64(y)
 
 ## floating point traits ##
 
@@ -211,8 +230,8 @@ const NaN = box(Float64,unbox(Uint64,0x7ff8000000000000))
     inf{T<:FloatingPoint}(x::T) = inf(T)
     nan{T<:FloatingPoint}(x::T) = nan(T)
 
-    isdenormal(x::Float32) = (abs(x) < $(box(Float32,unbox(Uint32,0x00800000))))
-    isdenormal(x::Float64) = (abs(x) < $(box(Float64,unbox(Uint64,0x0010000000000000))))
+    issubnormal(x::Float32) = (abs(x) < $(box(Float32,unbox(Uint32,0x00800000)))) & (x!=0)
+    issubnormal(x::Float64) = (abs(x) < $(box(Float64,unbox(Uint64,0x0010000000000000)))) & (x!=0)
 
     typemin(::Type{Float32}) = $(-Inf32)
     typemax(::Type{Float32}) = $(Inf32)
@@ -243,11 +262,6 @@ end
 
 sizeof(::Type{Float32}) = 4
 sizeof(::Type{Float64}) = 8
-
-## mathematical constants ##
-
-const e  = 2.71828182845904523536
-const pi = 3.14159265358979323846
 
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
 bswap(x::Float32) = box(Float32,bswap_int(unbox(Float32,x)))

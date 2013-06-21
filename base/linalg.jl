@@ -1,7 +1,7 @@
 module LinAlg
 
 importall Base
-import Base.USE_LIB64, Base.size, Base.copy, Base.copy_transpose!, Base.power_by_squaring
+import Base.USE_BLAS64, Base.size, Base.copy, Base.copy_transpose!, Base.power_by_squaring
 
 export 
 # Types
@@ -34,7 +34,6 @@ export
     chol,
     cholfact,
     cholfact!,
-    cholp,
     cholpfact,
     cholpfact!,
     cond,
@@ -43,9 +42,8 @@ export
     ctranspose,
     det,
     diag,
+    diagind,
     diagm,
-    diagmm,
-    diagmm!,
     diff,
     dot,
     eig,
@@ -59,8 +57,7 @@ export
     expm,
     sqrtm,
     eye,
-    factors,
-    hess,
+    gradient,
     hessfact,
     hessfact!,
     ishermitian,
@@ -87,11 +84,10 @@ export
     qrp,
     qrpfact!,
     qrpfact,
-    qmulQR,
-    qTmulQR,
     randsym,
     rank,
     rref,
+    scale,
     scale!,
     schur,
     schurfact!,
@@ -137,9 +133,11 @@ export
 
 
 typealias BlasFloat Union(Float64,Float32,Complex128,Complex64)
+typealias BlasReal Union(Float64,Float32)
+typealias BlasComplex Union(Complex128,Complex64)
 typealias BlasChar Char
 
-if USE_LIB64
+if USE_BLAS64
     typealias BlasInt Int64
     blas_int(x) = int64(x)
 else
@@ -147,6 +145,7 @@ else
     blas_int(x) = int32(x)
 end
 
+include("linalg/exceptions.jl")
 include("linalg/generic.jl")
 
 include("linalg/blas.jl")

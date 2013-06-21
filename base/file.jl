@@ -2,16 +2,16 @@
 
 function pwd()
     b = Array(Uint8,1024)
-    @unix_only p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
-    @windows_only p = ccall(:_getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
+    @unix_only p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Csize_t), b, length(b))
+    @windows_only p = ccall(:_getcwd, Ptr{Uint8}, (Ptr{Uint8}, Cint), b, length(b))
     systemerror(:getcwd, p == C_NULL)
     bytestring(p)
 end
 
 
 function cd(dir::String) 
-    @windows_only systemerror(:_chdir, ccall(:_chdir,Int32,(Ptr{Uint8},),dir) == -1)
-    @unix_only systemerror(:chdir, ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
+    @windows_only systemerror("chdir $dir", ccall(:_chdir,Int32,(Ptr{Uint8},),dir) == -1)
+    @unix_only systemerror("chdir $dir", ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
 end
 cd() = cd(ENV["HOME"])
 
@@ -147,7 +147,7 @@ function download(url::String, filename::String)
     global downloadcmd
     if downloadcmd === nothing
         for checkcmd in (:curl, :wget, :fetch)
-            if success(`which $checkcmd` > SpawnNullStream())
+            if success(`which $checkcmd` |> SpawnNullStream())
                 downloadcmd = checkcmd
                 break
             end

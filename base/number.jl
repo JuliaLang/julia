@@ -1,16 +1,7 @@
 ## generic operations on numbers ##
 
-isreal(x::Number) = false
 isreal(x::Real) = true
-
-isinteger(x::Number) = false
 isinteger(x::Integer) = true
-
-real_valued(x::Real) = true
-integer_valued(x::Integer) = true
-
-isbool(x::Number) = false
-isbool(x::Bool) = true
 
 size(x::Number) = ()
 size(x::Number,d) = convert(Int,d)<1 ? throw(BoundsError()) : 1
@@ -27,7 +18,7 @@ first(x::Number) = x
 last(x::Number) = x
 
 signbit(x::Real) = int(x < 0)
-sign(x::Real) = x < 0 ? -one(x) : x > 0 ? one(x) : x
+sign(x::Real) = x < 0 ? oftype(x,-1) : x > 0 ? one(x) : x
 abs(x::Real) = x < 0 ? -x : x
 abs2(x::Real) = x*x
 
@@ -46,3 +37,8 @@ contains(x::Number, y::Number) = x == y
 reinterpret{T<:Real}(::Type{T}, x::Real) = box(T,x)
 
 map(f, x::Number) = f(x)
+
+const _numeric_conversion_func_names =
+    (:int,:integer,:signed,:int8,:int16,:int32,:int64,:int128,
+     :uint,:unsigned,:uint8,:uint16,:uint32,:uint64,:uint128,
+     :float,:float32,:float64)

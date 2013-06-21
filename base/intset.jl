@@ -12,6 +12,8 @@ similar(s::IntSet) = IntSet()
 
 copy(s::IntSet) = union!(IntSet(), s)
 
+eltype(s::IntSet) = Int64
+
 function sizehint(s::IntSet, top::Integer)
     if top >= s.limit
         lim = ((top+31) & -32)>>>5
@@ -39,7 +41,7 @@ function add!(s::IntSet, n::Integer)
     return s
 end
 
-function add_each!(s::IntSet, ns)
+function union!(s::IntSet, ns)
     for n in ns
         add!(s, n)
     end
@@ -70,15 +72,16 @@ function delete!(s::IntSet, n::Integer)
     return n
 end
 
-function del_each!(s::IntSet, ns)
+function setdiff!(s::IntSet, ns)
     for n in ns
-        delete!(s, n)
+        delete!(s, n, nothing)
     end
     return s
 end
 
-setdiff(a::IntSet, b::IntSet) = del_each!(copy(a),b)
-symdiff(a::IntSet, b::IntSet) = a $ b
+setdiff(a::IntSet, b::IntSet) = setdiff!(copy(a),b)
+symdiff(a::IntSet, b::IntSet) =
+    (s1.limit >= s2.limit ? symdiff!(copy(s1), s2) : symdiff!(copy(s2), s1))
 
 function empty!(s::IntSet)
     s.bits[:] = 0
@@ -108,7 +111,9 @@ end
 
 function contains(s::IntSet, n::Integer)
     if n >= s.limit
-        s.fill1s && n >= 0
+        # max IntSet length is typemax(Int), so highest possible element is
+        # typemax(Int)-1
+        s.fill1s && n >= 0 && n < typemax(Int)
     else
         (s.bits[n>>5 + 1] & (uint32(1)<<(n&31))) != 0
     end
@@ -118,9 +123,9 @@ start(s::IntSet) = int64(0)
 done(s::IntSet, i) = (!s.fill1s && next(s,i)[1] >= s.limit) || i == typemax(Int)
 function next(s::IntSet, i)
     if i >= s.limit
-        n = i
+        n = int64(i)
     else
-        n = ccall(:bitvector_next, Int64, (Ptr{Uint32}, Uint64, Uint64), s.bits, i, s.limit)
+        n = int64(ccall(:bitvector_next, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, i, s.limit))
     end
     (n, n+1)
 end
@@ -137,6 +142,20 @@ function first(s::IntSet)
 end
 
 shift!(s::IntSet) = delete!(s, first(s))
+
+function last(s::IntSet)
+    if !s.fill1s
+        for i = length(s.bits):-1:1
+            w = s.bits[i]
+            if w != 0
+                return (i-1)<<5 + (31-leading_zeros(w))
+            end
+        end
+    end
+    error("last: set has no last element")
+end
+
+pop!(s::IntSet) = delete!(s, last(s))
 
 length(s::IntSet) = int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)) +
     (s.fill1s ? typemax(Int) - s.limit : 0)
@@ -180,9 +199,9 @@ function union!(s::IntSet, s2::IntSet)
     s
 end
 
+union(s1::IntSet) = copy(s1)
 union(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? union!(copy(s1), s2) : union!(copy(s2), s1))
-
-add_each!(s::IntSet, s2::IntSet) = union!(s, s2)
+union(s1::IntSet, ss::IntSet...) = union(s1, union(ss...))
 
 function intersect!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
@@ -201,7 +220,10 @@ function intersect!(s::IntSet, s2::IntSet)
     s
 end
 
-intersect(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? intersect!(copy(s1), s2) : intersect!(copy(s2), s1))
+intersect(s1::IntSet) = copy(s1)
+intersect(s1::IntSet, s2::IntSet) =
+    (s1.limit >= s2.limit ? intersect!(copy(s1), s2) : intersect!(copy(s2), s1))
+intersect(s1::IntSet, ss::IntSet...) = intersect(s1, intersect(ss...))
 
 function complement!(s::IntSet)
     for n = 1:length(s.bits)
@@ -230,14 +252,6 @@ function symdiff!(s::IntSet, s2::IntSet)
     s
 end
 
-($)(s1::IntSet, s2::IntSet) =
-    (s1.limit >= s2.limit ? symdiff!(copy(s1), s2) : symdiff!!(copy(s2), s1))
-
-|(s::IntSet, s2::IntSet) = union(s, s2)
-(&)(s::IntSet, s2::IntSet) = intersect(s, s2)
--(a::IntSet, b::IntSet) = setdiff(a,b)
-~(s::IntSet) = complement(s)
-
 function isequal(s1::IntSet, s2::IntSet)
     if s1.fill1s != s2.fill1s
         return false
@@ -265,3 +279,5 @@ function isequal(s1::IntSet, s2::IntSet)
     end
     return true
 end
+
+issubset(a::IntSet, b::IntSet) = isequal(a, intersect(a,b))

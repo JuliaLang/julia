@@ -5,9 +5,6 @@
  The Julia Manual
 ##################
 
-:Release: |version|
-:Date: |today|
-
 .. toctree::
    :maxdepth: 1
 
@@ -34,4 +31,4 @@
    calling-c-and-fortran-code
    packages
    performance-tips
-
+   style-guide

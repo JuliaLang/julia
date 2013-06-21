@@ -107,7 +107,7 @@ timesofar("indexing")
 
 ## Dequeue functionality ##
 
-b1 = BitArray()
+b1 = BitArray(0)
 i1 = Bool[]
 for m = 1 : v1
     x = randbool()
@@ -137,7 +137,7 @@ end
 @test length(b1) == 0
 
 
-b1 = BitArray()
+b1 = BitArray(0)
 i1 = Bool[]
 for m = 1 : v1
     x = randbool()
@@ -157,7 +157,7 @@ for m = 1 : v1
 end
 @test length(b1) == 0
 
-b1 = BitArray()
+b1 = BitArray(0)
 i1 = bitunpack(b1)
 for m = 1 : v1
     j = rand(1:m)
@@ -180,8 +180,8 @@ b1 = randbool(v1)
 i1 = bitunpack(b1)
 for m = v1 : -1 : 1
     j = rand(1:m)
-    delete!(b1, j)
-    delete!(i1, j)
+    splice!(b1, j)
+    splice!(i1, j)
     @test isequal(bitunpack(b1), i1)
 end
 @test length(b1) == 0
@@ -189,8 +189,8 @@ end
 b1 = randbool(v1)
 i1 = bitunpack(b1)
 for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
-    delete!(b1, j)
-    delete!(i1, j)
+    splice!(b1, j)
+    splice!(i1, j)
     @test isequal(bitunpack(b1), i1)
 end
 
@@ -200,9 +200,25 @@ for m1 = 1 : v1
     for m2 = m1 : v1
         b2 = copy(b1)
         i2 = copy(i1)
-        delete!(b2, m1:m2)
-        delete!(i2, m1:m2)
+        splice!(b2, m1:m2)
+        splice!(i2, m1:m2)
         @test isequal(bitunpack(b2), i2)
+    end
+end
+
+b1 = randbool(v1)
+i1 = bitunpack(b1)
+for m1 = 1 : v1 + 1
+    for m2 = m1 - 1 : v1
+        for v2 = [0, 1, 63, 64, 65, 127, 128, 129, 191, 192, 193, rand(1:v1)]
+            b2 = copy(b1)
+            i2 = copy(i1)
+            b3 = randbool(v2)
+            i3 = bitunpack(b3)
+            splice!(b2, m1:m2, b3)
+            splice!(i2, m1:m2, i3)
+            @test isequal(bitunpack(b2), i2)
+        end
     end
 end
 
@@ -245,7 +261,7 @@ b2 = randbool(n1, n2)
 @check_bit_operation (+) Matrix{Int} (b1, b2)
 @check_bit_operation (-) Matrix{Int} (b1, b2)
 @check_bit_operation (.*) BitMatrix (b1, b2)
-@check_bit_operation (./) Matrix{Float64} (b1, b2)
+@check_bit_operation (./) Matrix{Float32} (b1, b2)
 @check_bit_operation (.^) BitMatrix (b1, b2)
 
 b2 = trues(n1, n2)
@@ -261,7 +277,7 @@ while true
 end
 b2 = randbool(n1, n1)
 
-@check_bit_operation (*) BitMatrix (b1, b2)
+@check_bit_operation (*) Matrix{Int} (b1, b2)
 @check_bit_operation (/) Matrix{Float64} (b1, b1)
 @check_bit_operation (\) Matrix{Float64} (b1, b1)
 
@@ -270,7 +286,7 @@ b0 = falses(0)
 @check_bit_operation (|) BitVector (b0, b0)
 @check_bit_operation ($) BitVector (b0, b0)
 @check_bit_operation (.*) BitVector (b0, b0)
-@check_bit_operation (*) BitMatrix (b0, b0')
+@check_bit_operation (*) Matrix{Int} (b0, b0')
 
 # Matrix{Bool}/Matrix{Int}
 b1 = randbool(n1, n2)
@@ -319,8 +335,8 @@ cf1 = complex(f1)
 @check_bit_operation (.*) Matrix{Uint8} (u1, b2)
 
 for (x1,t1) = {(f1, Float64),
-               (ci1, ComplexPair{Int}),
-               (cu1, ComplexPair{Uint8}),
+               (ci1, Complex{Int}),
+               (cu1, Complex{Uint8}),
                (cf1, Complex128)}
     @check_bit_operation (+) Matrix{t1} (x1, b2)
     @check_bit_operation (-) Matrix{t1} (x1, b2)
@@ -328,10 +344,10 @@ for (x1,t1) = {(f1, Float64),
 end
 
 b2 = trues(n1, n2)
-@check_bit_operation (./) Matrix{Float64} (true, b2)
+@check_bit_operation (./) Matrix{Float32} (true, b2)
 @check_bit_operation div BitMatrix (true, b2)
 @check_bit_operation mod BitMatrix (true, b2)
-@check_bit_operation (./) Matrix{Float64} (false, b2)
+@check_bit_operation (./) Matrix{Float32} (false, b2)
 @check_bit_operation div BitMatrix (false, b2)
 @check_bit_operation mod BitMatrix (false, b2)
 
@@ -363,10 +379,10 @@ b2 = randbool(n1, n2)
 @check_bit_operation (.^) Matrix{Float64} (1.0, b2)
 @check_bit_operation (.^) Matrix{Complex128} (0.0im, b2)
 @check_bit_operation (.^) Matrix{Complex128} (1.0im, b2)
-@check_bit_operation (.^) Matrix{ComplexPair{Int}} (0im, b2)
-@check_bit_operation (.^) Matrix{ComplexPair{Int}} (1im, b2)
-@check_bit_operation (.^) Matrix{ComplexPair{Uint}} (0x0im, b2)
-@check_bit_operation (.^) Matrix{ComplexPair{Uint}} (0x1im, b2)
+@check_bit_operation (.^) Matrix{Complex{Int}} (0im, b2)
+@check_bit_operation (.^) Matrix{Complex{Int}} (1im, b2)
+@check_bit_operation (.^) Matrix{Complex{Uint8}} (0x0im, b2)
+@check_bit_operation (.^) Matrix{Complex{Uint8}} (0x1im, b2)
 
 # Matrix/Number
 b1 = randbool(n1, n2)
@@ -389,8 +405,8 @@ cf2 = complex(f2)
 @check_bit_operation (-) Matrix{Int} (b1, false)
 @check_bit_operation (.*) BitMatrix (b1, true)
 @check_bit_operation (.*) BitMatrix (b1, false)
-@check_bit_operation (./) Matrix{Float64} (b1, true)
-@check_bit_operation (./) Matrix{Float64} (b1, false)
+@check_bit_operation (./) Matrix{Float32} (b1, true)
+@check_bit_operation (./) Matrix{Float32} (b1, false)
 @check_bit_operation div BitMatrix (b1, true)
 @check_bit_operation mod BitMatrix (b1, true)
 
@@ -421,14 +437,14 @@ cf2 = complex(f2)
 @check_bit_operation div Matrix{Float64} (b1, f2)
 @check_bit_operation mod Matrix{Float64} (b1, f2)
 
-@check_bit_operation (+) Matrix{ComplexPair{Int}} (b1, ci2)
-@check_bit_operation (-) Matrix{ComplexPair{Int}} (b1, ci2)
-@check_bit_operation (.*) Matrix{ComplexPair{Int}} (b1, ci2)
+@check_bit_operation (+) Matrix{Complex{Int}} (b1, ci2)
+@check_bit_operation (-) Matrix{Complex{Int}} (b1, ci2)
+@check_bit_operation (.*) Matrix{Complex{Int}} (b1, ci2)
 @check_bit_operation (./) Matrix{Complex128} (b1, ci2)
 
-@check_bit_operation (+) Matrix{ComplexPair{Uint8}} (b1, cu2)
-@check_bit_operation (-) Matrix{ComplexPair{Uint8}} (b1, cu2)
-@check_bit_operation (.*) Matrix{ComplexPair{Uint8}} (b1, cu2)
+@check_bit_operation (+) Matrix{Complex{Uint8}} (b1, cu2)
+@check_bit_operation (-) Matrix{Complex{Uint8}} (b1, cu2)
+@check_bit_operation (.*) Matrix{Complex{Uint8}} (b1, cu2)
 @check_bit_operation (./) Matrix{Complex64} (b1, cu2)
 
 @check_bit_operation (+) Matrix{Complex128} (b1, cf2)

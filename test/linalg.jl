@@ -15,6 +15,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq apd * inv(capd) eye(elty, n)
         @test_approx_eq a*(capd\(a'*b)) b # least squares soln for square a
         @test_approx_eq det(capd) det(apd)
+        @test_approx_eq logdet(capd) log(det(capd)) # logdet is less likely to overflow
 
         l     = cholfact(apd, :L)[:L] # lower Cholesky factor
         @test_approx_eq l*l' apd
@@ -56,25 +57,38 @@ for elty in (Float32, Float64, Complex64, Complex128)
 
         d,v   = eig(asym)              # symmetric eigen-decomposition
         @test_approx_eq asym*v[:,1] d[1]*v[:,1]
-        @test_approx_eq v*diagmm(d,v') asym
+        @test_approx_eq v*scale(d,v') asym
 
         d,v   = eig(a)                 # non-symmetric eigen decomposition
         for i in 1:size(a,2) @test_approx_eq a*v[:,i] d[i]*v[:,i] end
+
+        # symmetric generalized eigenproblem
+        a610 = a[:,6:10]
+        f = eigfact(asym[1:5,1:5], a610'a610)
+        @test_approx_eq asym[1:5,1:5]*f[:vectors] scale(a610'a610*f[:vectors], f[:values])
+        @test_approx_eq f[:values] eigvals(asym[1:5,1:5], a610'a610)
+        @test_approx_eq prod(f[:values]) prod(eigvals(asym[1:5,1:5]/(a610'a610)))
+
+        # Non-symmetric generalized eigenproblem
+        f = eigfact(a[1:5,1:5], a[6:10,6:10])
+        @test_approx_eq a[1:5,1:5]*f[:vectors] scale(a[6:10,6:10]*f[:vectors], f[:values])
+        @test_approx_eq f[:values] eigvals(a[1:5,1:5], a[6:10,6:10])
+        @test_approx_eq prod(f[:values]) prod(eigvals(a[1:5,1:5]/a[6:10,6:10]))
 
         f = schurfact(a)             # Schur
         @test_approx_eq f[:vectors]*f[:Schur]*f[:vectors]' a
         @test_approx_eq sort(real(f[:values])) sort(real(d))
         @test_approx_eq sort(imag(f[:values])) sort(imag(d))
-        @test istriu(f[:Schur]) || isreal(a)
+        @test istriu(f[:Schur]) || iseltype(a,Real)
 
         f = schurfact(a[1:5,1:5], a[6:10,6:10]) # Generalized Schur
         @test_approx_eq f[:Q]*f[:S]*f[:Z]' a[1:5,1:5]
         @test_approx_eq f[:Q]*f[:T]*f[:Z]' a[6:10,6:10]
-        @test istriu(f[:S]) || isreal(a)
-        @test istriu(f[:T]) || isreal(a)
+        @test istriu(f[:S]) || iseltype(a,Real)
+        @test istriu(f[:T]) || iseltype(a,Real)
 
         usv = svdfact(a)                # singular value decomposition
-        @test_approx_eq usv[:U]*diagmm(usv[:S],usv[:Vt]) a
+        @test_approx_eq usv[:U]*scale(usv[:S],usv[:Vt]) a
     
         gsvd = svdfact(a,a[1:5,:])         # Generalized svd
         @test_approx_eq gsvd[:U]*gsvd[:D1]*gsvd[:R]*gsvd[:Q]' a
@@ -261,7 +275,7 @@ A2 = A1 + A1'
 @test_approx_eq expm(A2) expm(Hermitian(A2))
 
                                         # matmul for types w/o sizeof (issue #1282)
-A = Array(ComplexPair{Int},10,10)
+A = Array(Complex{Int},10,10)
 A[:] = complex(1,1)
 A2 = A^2
 @test A2[1,1] == 20im
@@ -382,7 +396,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         A = convert(Array{elty, 2}, Ainit)
         Asym = A'A
         vals, Z = LinAlg.LAPACK.syevr!('V', copy(Asym))
-        @test_approx_eq Z*diagmm(vals, Z') Asym
+        @test_approx_eq Z*scale(vals, Z') Asym
         @test all(vals .> 0.0)
         @test_approx_eq LinAlg.LAPACK.syevr!('N','V','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[vals .< 1.0]
         @test_approx_eq LinAlg.LAPACK.syevr!('N','I','U',copy(Asym),0.0,1.0,4,5,-1.0)[1] vals[4:5]
@@ -472,6 +486,15 @@ for elty in (Float32, Float64, Complex64, Complex128)
     end
 end
 
+
+# Test gglse
+for elty in (Float32, Float64, Complex64, Complex128)
+    A = convert(Array{elty, 2}, [1 1 1 1; 1 3 1 1; 1 -1 3 1; 1 1 1 3; 1 1 1 -1])
+    c = convert(Array{elty, 1}, [2, 1, 6, 3, 1])
+    B = convert(Array{elty, 2}, [1 1 1 -1; 1 -1 1 1; 1 1 -1 1])
+    d = convert(Array{elty, 1}, [1, 3, -1])
+    @test_approx_eq_eps LinAlg.LAPACK.gglse!(A, c, B, d) [0.5, -0.5, 1.5, 0.5] 1e-6
+end
 
 
 ## Issue related tests

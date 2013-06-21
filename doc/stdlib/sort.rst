@@ -4,11 +4,11 @@
 .. module:: Base.Sort
    :synopsis: Sort and related routines
 
-The `Sort` module contains algorithms and other functions related to
+The ``Sort`` module contains algorithms and other functions related to
 sorting.  Default sort functions and standard versions of the various
-sort algorithm are available by default. 
+sort algorithm are available by default.
 Specific sort algorithms can be used by importing
-`Sort` or using the fully qualified algorithm name, e.g.,::
+``Sort`` or using the fully qualified algorithm name, e.g.::
 
   # Julia code
   sort(v, Sort.TimSort)
@@ -20,7 +20,7 @@ Overview
 --------
 
 Many users will simply want to use the default sort algorithms, which
-allow sorting in ascending or descending order,::
+allow sorting in ascending or descending order::
 
   # Julia code
   julia> sort([2,3,1]) == [1,2,3]
@@ -29,7 +29,7 @@ allow sorting in ascending or descending order,::
   julia> sort([2,3,1], Sort.Reverse) == [3,2,1]
   true
 
-return a permutation,::
+return a permutation::
 
   julia> v = [20,30,10]
   3-element Int64 Array:
@@ -52,20 +52,20 @@ and use a custom extractor function to order inputs::
 
   julia> sortby(["New York", "New Jersey", "Nevada", "Nebraska", "Newark"], canonicalize)
   5-element ASCIIString Array:
-   "Nebraska"  
-   "Nevada"    
-   "Newark"    
+   "Nebraska"
+   "Nevada"
+   "Newark"
    "New Jersey"
-   "New York"  
+   "New York"
 
 Note that none of the variants above modify the original arrays.  To
-sort in-place (which is often more efficient), :func:`sort` and 
-:func:`sortby` have mutating versions which end with an exclamation 
+sort in-place (which is often more efficient), :func:`sort` and
+:func:`sortby` have mutating versions which end with an exclamation
 point (:func:`sort!` and :func:`sortby!`).
 
 These sort functions use reasonable default algorithms, but if you
 want more control or want to see if a different sort algorithm will
-work better on your data, read on... 
+work better on your data, read on...
 
 
 Sort Algorithms
@@ -80,7 +80,7 @@ There are currently four main sorting algorithms available in Julia::
 
 Insertion sort is an O(n^2) stable sorting algorithm.  It is
 efficient for very small ``n``, and is used internally by
-``QuickSort`` and ``TimSort``. 
+``QuickSort`` and ``TimSort``.
 
 Quicksort is an O(n log n) sorting algorithm.  For efficiency, it
 is not stable.  It is among the fastest sorting algorithms.
@@ -89,26 +89,29 @@ Mergesort is an O(n log n) stable sorting algorithm.
 
 Timsort is an O(n log n) stable adaptive sorting algorithm.  It
 takes advantage of sorted runs which exist in many real world
-datasets.  
+datasets.
 
 The sort functions select a reasonable default algorithm, depending on
 the type of the target array.  To force a specific algorithm to be
-used, append ``Sort.<algorithm>`` to the argument list (e.g., use 
+used, append ``Sort.<algorithm>`` to the argument list (e.g., use
 ``sort!(v, Sort.TimSort)`` to force the use of the Timsort algorithm).
 
 
 Functions
 ---------
 
+.. module:: Base
+
 --------------
 Sort Functions
 --------------
+
 .. function:: sort(v[, alg[, ord]])
 
    Sort a vector in ascending order.  Specify ``alg`` to choose a
    particular sorting algorithm (``Sort.InsertionSort``,
    ``Sort.QuickSort``, ``Sort.MergeSort``, or ``Sort.TimSort``), and
-   ``ord`` to sort with a custom ordering (e.g., Sort.Reverse or a
+   ``ord`` to sort with a custom ordering (e.g., ``Sort.Reverse`` or a
    comparison function).
 
 .. function:: sort!(...)
@@ -131,7 +134,7 @@ Sort Functions
    ``v`` will sort it.  Specify ``alg`` to choose a particular sorting
    algorithm (``Sort.InsertionSort``, ``Sort.QuickSort``,
    ``Sort.MergeSort``, or ``Sort.TimSort``), and ``ord`` to sort with
-   a custom ordering (e.g., Sort.Reverse or a comparison function).
+   a custom ordering (e.g., ``Sort.Reverse`` or a comparison function).
 
 .. function:: sort(A, dim, [alg[, ord]])
 
@@ -156,11 +159,10 @@ Sorting-related Functions
 
 .. function:: searchsorted(a, x[, ord])
 
-   Returns the index of the first value of ``a`` equal to or
-   succeeding ``x``, according to ordering ``ord`` (default:
-   ``Sort.Forward``).
-
-   Alias for ``searchsortedfirst()``
+   Returns the range of indices of ``a`` equal to ``x``, assuming ``a``
+   is sorted according to ordering ``ord`` (default:
+   ``Sort.Forward``).  Returns an empty range located at the insertion
+   point if ``a`` does not contain ``x``.
 
 .. function:: searchsortedfirst(a, x[, ord])
 
@@ -175,9 +177,10 @@ Sorting-related Functions
 
 .. function:: select(v, k[, ord])
 
-   Find the element in position ``k`` in the sorted vector ``v``
-   without sorting, according to ordering ``ord`` (default:
-   ``Sort.Forward``).
+   Partially sort vector ``v`` according to ordering ``ord``, and return
+   the element at position ``k``.  ``k`` can also be a range, in which
+   case a vector of elements corresponding to the range positions is
+   returned.
 
 .. function:: select!(v, k[, ord])
 

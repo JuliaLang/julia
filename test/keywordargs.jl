@@ -81,3 +81,9 @@ extravagant_args(x,y=0,rest...;color="blue",kw...) =
 @test isequal(extravagant_args(1;hundreds=7), (1,0,(),"blue",786))
 @test isequal(extravagant_args(1,2,3;{:color=>"red", :hundreds=>3}...),
               (1,2,(3,),"red",386))
+
+# passing empty kw container to function with no kwargs
+@test sin(1.0) == sin(1.0;{}...)
+
+# passing junk kw container
+@test_fails extravagant_args(1; {[]}...)

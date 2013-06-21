@@ -1,6 +1,6 @@
 module Graphics
 
-import Base.norm
+import Base.norm, Base.scale
 
 export
     # Part 1. 2D Geometry
@@ -22,10 +22,12 @@ export
     
     # drawing attribute manipulation
     save, restore, set_line_width, set_dash, set_source_rgb, set_source_rgba,
+    set_source,
     
     # coordinate systems
     reset_transform, set_coords, rotate, scale, translate, user_to_device!,
     device_to_user!, user_to_device_distance!, device_to_user_distance!,
+    user_to_device, device_to_user,
     
     # clipping
     clip, clip_preserve, reset_clip,
@@ -98,10 +100,21 @@ function BoundingBox(points::Point...)
     return BoundingBox(xmin, xmax, ymin, ymax)
 end
 
+function BoundingBox(bboxes::BoundingBox...)
+    xmin, xmax, ymin, ymax = NaN, NaN, NaN, NaN
+    for bb in bboxes
+        xmin = min(xmin, bb.xmin)
+        xmax = max(xmax, bb.xmax)
+        ymin = min(ymin, bb.ymin)
+        ymax = max(ymax, bb.ymax)
+    end
+    return BoundingBox(xmin, xmax, ymin, ymax)
+end
+
 width(bb::BoundingBox) = bb.xmax - bb.xmin
 height(bb::BoundingBox) = bb.ymax - bb.ymin
-diagonal(bb::BoundingBox) = hypot(width(bb), height(bb))
-aspect_ratio(bb::BoundingBox) = height(bb)/width(bb)
+diagonal(bb) = hypot(width(bb), height(bb))
+aspect_ratio(bb) = height(bb)/width(bb)
 
 xmin(bb::BoundingBox) = bb.xmin
 xmax(bb::BoundingBox) = bb.xmax
@@ -224,12 +237,27 @@ device_to_user!(gc::GraphicsContext, c::Vector{Float64}) = c
 user_to_device_distance!(gc::GraphicsContext, c::Vector{Float64}) = c
 device_to_user_distance!(gc::GraphicsContext, c::Vector{Float64}) = c
 
+const d2ubuf = zeros(2)
+function device_to_user(gc::GraphicsContext, x::Real, y::Real)
+    d2ubuf[1] = x
+    d2ubuf[2] = y
+    device_to_user!(gc, d2ubuf)
+    d2ubuf[1], d2ubuf[2]
+end
+function user_to_device(gc::GraphicsContext, x::Real, y::Real)
+    d2ubuf[1] = x
+    d2ubuf[2] = y
+    user_to_device!(gc, d2ubuf)
+    d2ubuf[1], d2ubuf[2]
+end
+
 # drawing and properties
 
 @mustimplement set_line_width(gc::GraphicsContext, ::Real)
 @mustimplement set_dash(gc::GraphicsContext, ::Vector{Float64}, ::Real)
 @mustimplement set_source_rgb(gc::GraphicsContext, ::Real, ::Real, ::Real)
 @mustimplement set_source_rgba(gc::GraphicsContext, ::Real, ::Real, ::Real, ::Real)
+@mustimplement set_source(gc::GraphicsContext, src)
 
 @mustimplement clip(gc::GraphicsContext)
 @mustimplement clip_preserve(gc::GraphicsContext)

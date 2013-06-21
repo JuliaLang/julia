@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <setjmp.h>
 #include <assert.h>
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
 #include "julia.h"
@@ -175,7 +175,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == new_sym) {
         jl_value_t *thetype = eval(args[0], locals, nl);
         jl_value_t *v=NULL;
-        JL_GC_PUSH(&thetype, &v);
+        JL_GC_PUSH2(&thetype, &v);
         assert(jl_is_structtype(thetype));
         v = jl_new_struct_uninit((jl_datatype_t*)thetype);
         for(size_t i=1; i < nargs; i++) {
@@ -189,6 +189,16 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     }
     else if (ex->head == body_sym) {
         return eval_body(ex->args, locals, nl, 0);
+    }
+    else if (ex->head == newvar_sym) {
+        jl_value_t *var = args[0];
+        for(size_t i=0; i < nl; i++) {
+            if (locals[i*2] == var) {
+                locals[i*2+1] = NULL;
+                break;
+            }
+        }
+        return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == exc_sym) {
         return jl_exception_in_transit;
@@ -232,7 +242,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             }
         }
         jl_value_t *atypes=NULL, *meth=NULL, *tvars=NULL;
-        JL_GC_PUSH(&atypes, &meth, &tvars);
+        JL_GC_PUSH3(&atypes, &meth, &tvars);
         atypes = eval(args[1], locals, nl);
         meth = eval(args[2], locals, nl);
         tvars = eval(args[3], locals, nl);
@@ -265,7 +275,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_value_t *name = args[0];
         jl_value_t *para = eval(args[1], locals, nl);
         jl_value_t *super = NULL;
-        JL_GC_PUSH(&para, &super);
+        JL_GC_PUSH2(&para, &super);
         jl_datatype_t *dt =
             jl_new_abstracttype(name, jl_any_type, (jl_tuple_t*)para);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
@@ -278,7 +288,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == bitstype_sym) {
         jl_value_t *name = args[0];
         jl_value_t *super = NULL, *para = NULL, *vnb = NULL;
-        JL_GC_PUSH(&para, &super, &vnb);
+        JL_GC_PUSH3(&para, &super, &vnb);
         para = eval(args[1], locals, nl);
         vnb  = eval(args[2], locals, nl);
         if (!jl_is_long(vnb))
@@ -303,7 +313,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_value_t *fnames = NULL;
         jl_value_t *super = NULL;
         jl_datatype_t *dt = NULL;
-        JL_GC_PUSH(&para, &super, &fnames, &dt);
+        JL_GC_PUSH4(&para, &super, &fnames, &dt);
         fnames = eval(args[2], locals, nl);
         dt = jl_new_datatype((jl_sym_t*)name, jl_any_type, (jl_tuple_t*)para,
                              (jl_tuple_t*)fnames, NULL,

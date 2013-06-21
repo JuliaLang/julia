@@ -4,7 +4,7 @@ abstract Associative{K,V}
 
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
-has(d::Associative, k) = contains(keys(d),k)
+haskey(d::Associative, k) = contains(keys(d),k)
 
 function contains(a::Associative, p::(Any,Any))
     v = get(a,p[1],secret_table_token)
@@ -195,7 +195,22 @@ else
         ccall(:int64to32hash, Uint32, (Uint64,), x)
 end
 
-hash(x::Integer) = hash64(uint64(x))
+hash(x::Union(Bool,Char,Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64)) =
+    hash64(uint64(x))
+
+function hash(x::Integer)
+    h::Uint = hash(uint64(x&0xffffffffffffffff))
+    if typemin(Int64) <= x <= typemax(Uint64)
+        return h
+    end
+    x >>>= 64
+    while x != 0 && x != -1
+        h = bitmix(h, hash(uint64(x&0xffffffffffffffff)))
+        x >>>= 64
+    end
+    return h
+end
+
 @eval function hash(x::FloatingPoint)
     if trunc(x) == x
         # hash as integer if equal to some integer. note the result of
@@ -314,32 +329,46 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
     oldv = h.vals
     sz = length(olds)
     newsz = _tablesz(newsz)
-    nel = h.count
-    h.ndel = h.count = 0
-    if nel == 0
+    if h.count == 0
         resize!(h.slots, newsz)
         fill!(h.slots, 0)
         resize!(h.keys, newsz)
         resize!(h.vals, newsz)
+        h.ndel = 0
         return h
     end
-    h.slots = zeros(Uint8,newsz)
-    h.keys = Array(K, newsz)
-    h.vals = Array(V, newsz)
+
+    slots = zeros(Uint8,newsz)
+    keys = Array(K, newsz)
+    vals = Array(V, newsz)
+    count0 = h.count
+    count = 0
 
     for i = 1:sz
         if olds[i] == 0x1
             k = oldk[i]
+            v = oldv[i]
             index = hashindex(k, newsz)
-            while h.slots[index] != 0
+            while slots[index] != 0
                 index = (index & (newsz-1)) + 1
             end
-            h.slots[index] = 0x1
-            h.keys[index] = k
-            h.vals[index] = oldv[i]
-            h.count += 1
+            slots[index] = 0x1
+            keys[index] = k
+            vals[index] = v
+            count += 1
+
+            if h.count != count0
+                # if items are removed by finalizers, retry
+                return rehash(h, newsz)
+            end
         end
     end
+
+    h.slots = slots
+    h.keys = keys
+    h.vals = vals
+    h.count = count
+    h.ndel = 0
 
     return h
 end
@@ -465,7 +494,7 @@ function get{K,V}(h::Dict{K,V}, key, deflt)
     return (index<0) ? deflt : h.vals[index]::V
 end
 
-has(h::Dict, key) = (ht_keyindex(h, key) >= 0)
+haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
 contains{T<:Dict}(v::KeyIterator{T}, key) = (ht_keyindex(v.dict, key) >= 0)
 
 function getkey{K,V}(h::Dict{K,V}, key, deflt)
@@ -513,9 +542,17 @@ next{T<:Dict}(v::ValueIterator{T}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1
 
 # weak key dictionaries
 
+function weak_key_delete!(t::Dict, k)
+    # when a weak key is finalized, remove from dictionary if it is still there
+    wk = getkey(t, k, secret_table_token)
+    if !is(wk,secret_table_token) && is(wk.value, k)
+        delete!(t, k)
+    end
+end
+
 function add_weak_key(t::Dict, k, v)
     if is(t.deleter, identity)
-        t.deleter = x->delete!(t, x)
+        t.deleter = x->weak_key_delete!(t, x)
     end
     t[WeakRef(k)] = v
     # TODO: it might be better to avoid the finalizer, allow
@@ -525,9 +562,17 @@ function add_weak_key(t::Dict, k, v)
     return t
 end
 
+function weak_value_delete!(t::Dict, k, v)
+    # when a weak value is finalized, remove from dictionary if it is still there
+    wv = get(t, k, secret_table_token)
+    if !is(wv,secret_table_token) && is(wv.value, v)
+        delete!(t, k)
+    end
+end
+
 function add_weak_value(t::Dict, k, v)
     t[k] = WeakRef(v)
-    finalizer(v, x->delete!(t, k))
+    finalizer(v, x->weak_value_delete!(t, k, x))
     return t
 end
 
@@ -552,7 +597,7 @@ get{K}(wkh::WeakKeyDict{K}, key, def) = get(wkh.ht, key, def)
 delete!{K}(wkh::WeakKeyDict{K}, key) = delete!(wkh.ht, key)
 delete!{K}(wkh::WeakKeyDict{K}, key, def) = delete!(wkh.ht, key, def)
 empty!(wkh::WeakKeyDict)  = (empty!(wkh.ht); wkh)
-has{K}(wkh::WeakKeyDict{K}, key) = has(wkh.ht, key)
+haskey{K}(wkh::WeakKeyDict{K}, key) = haskey(wkh.ht, key)
 getindex{K}(wkh::WeakKeyDict{K}, key) = getindex(wkh.ht, key)
 isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
 

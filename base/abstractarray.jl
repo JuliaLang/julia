@@ -10,6 +10,14 @@ eltype(x) = Any
 eltype{T,n}(::AbstractArray{T,n}) = T
 eltype{T,n}(::Type{AbstractArray{T,n}}) = T
 eltype{T<:AbstractArray}(::Type{T}) = eltype(super(T))
+iseltype(x,T) = eltype(x) <: T
+isinteger(x::AbstractArray) = all(isinteger,x)
+isinteger{T<:Integer,n}(x::AbstractArray{T,n}) = true
+isreal(x::AbstractArray) = all(isreal,x)
+isreal{T<:Real,n}(x::AbstractArray{T,n}) = true
+isfloat64(x::AbstractArray) = all(isfloat64,x)
+isfloat64{T<:Float64,n}(x::AbstractArray{T,n}) = true
+isfloat64{T<:Float32,n}(x::AbstractArray{T,n}) = true
 ndims{T,n}(::AbstractArray{T,n}) = n
 ndims{T,n}(::Type{AbstractArray{T,n}}) = n
 ndims{T<:AbstractArray}(::Type{T}) = ndims(super(T))
@@ -19,15 +27,6 @@ first(a::AbstractArray) = a[1]
 last(a::AbstractArray) = a[end]
 
 strides(a::AbstractArray) = ntuple(ndims(a), i->stride(a,i))::Dims
-
-isinteger{T<:Integer}(::AbstractArray{T}) = true
-isinteger(::AbstractArray) = false
-isreal{T<:Real}(::AbstractArray{T}) = true
-isreal(::AbstractArray) = false
-iscomplex{T<:Complex}(::AbstractArray{T}) = true
-iscomplex(::AbstractArray) = false
-isbool(::AbstractArray{Bool}) = true
-isbool(::AbstractArray) = false
 
 function isassigned(a::AbstractArray, i::Int...)
     # TODO
@@ -68,7 +67,7 @@ function checkbounds{T<:Integer}(sz::Int, I::Ranges{T})
     end
 end
 
-function checkbounds{T <: Real}(sz::Int, I::AbstractVector{T})
+function checkbounds{T <: Real}(sz::Int, I::AbstractArray{T})
     for i in I
         i = to_index(i)
         if i < 1 || i > sz
@@ -167,8 +166,8 @@ function fill!(A::AbstractArray, x)
     return A
 end
 
-function copy!(dest::AbstractArray, src)
-    i = 1
+function copy!(dest::AbstractArray, src, dsto::Integer=1)
+    i = dsto
     for x in src
         dest[i] = x
         i += 1
@@ -240,6 +239,15 @@ complex (x::AbstractArray) = copy!(similar(x,typeof(complex(one(eltype(x))))), x
 dense(x::AbstractArray) = x
 full(x::AbstractArray) = x
 
+## range conversions ##
+
+for fn in _numeric_conversion_func_names
+    @eval begin
+        $fn(r::Range ) = Range($fn(r.start), $fn(r.step), r.len)
+        $fn(r::Range1) = Range1($fn(r.start), r.len)
+    end
+end
+
 ## Unary operators ##
 
 conj{T<:Real}(x::AbstractArray{T}) = x
@@ -309,8 +317,11 @@ end
 ## specifies what it wants to do before and after each loop.
 ## If genbodies creates an array it must of length N.
 function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
+    if ranges === ()
+        ranges = (1,)
+    end
     N = length(ranges)
-    if !has(cache,N)
+    if !haskey(cache,N)
         if isdefined(genbodies,:code)
             mod = genbodies.code.module
         else
@@ -436,7 +447,7 @@ end
 #     turn are used for computing the linear index)
 function gen_array_index_map(cache, genbody, ranges, exargnames, exargs...)
     N = length(ranges)
-    if !has(cache,N)
+    if !haskey(cache,N)
         dimargnames = { symbol(string("_d",i)) for i=1:N }
         loopvars = { symbol(string("_l",i)) for i=1:N }
         offsetvars = { symbol(string("_offs",i)) for i=1:N }
@@ -535,8 +546,8 @@ vcat() = Array(None, 0)
 hcat() = Array(None, 0)
 
 ## cat: special cases
-hcat{T}(X::T...) = [ X[j] for i=1, j=1:length(X) ]
-vcat{T}(X::T...) = [ X[i] for i=1:length(X) ]
+hcat{T}(X::T...) = T[ X[j] for i=1, j=1:length(X) ]
+vcat{T}(X::T...) = T[ X[i] for i=1:length(X) ]
 
 function hcat{T}(V::AbstractVector{T}...)
     height = length(V[1])
@@ -1077,6 +1088,8 @@ function ind2sub{T<:Integer}(dims::(Integer,Integer...), ind::AbstractVector{T})
 end
 
 indices(I) = I
+indices(I::Int) = I
+indices(I::Real) = convert(Int, I)
 indices(I::AbstractArray{Bool,1}) = find(I)
 indices(I::Tuple) = map(indices, I)
 
@@ -1464,7 +1477,7 @@ function map_to2(f, first, dest::AbstractArray, A::AbstractArray)
 end
 
 function map(f, A::AbstractArray)
-    if isempty(A); return A; end
+    if isempty(A); return {}; end
     first = f(A[1])
     dest = similar(A, typeof(first))
     return map_to2(f, first, dest, A)
@@ -1482,7 +1495,7 @@ end
 function map(f, A::AbstractArray, B::AbstractArray)
     shp = promote_shape(size(A),size(B))
     if isempty(A)
-        return similar(A, eltype(A), shp)
+        return similar(A, Any, shp)
     end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first), shp)
@@ -1504,10 +1517,9 @@ end
 function map(f, As::AbstractArray...)
     shape = mapreduce(size, promote_shape, As)
     if prod(shape) == 0
-        return similar(As[1], eltype(As[1]), shape)
+        return similar(As[1], Any, shape)
     end
     first = f(map(a->a[1], As)...)
     dest = similar(As[1], typeof(first), shape)
     return map_to2(f, first, dest, As...)
 end
-

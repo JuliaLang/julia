@@ -4,7 +4,7 @@
 .. module:: Base.Test
    :synopsis: Test and related routines
 
-The `Test` module contains macros and functions related to testing. 
+The ``Test`` module contains macros and functions related to testing.
 A default handler is provided to run the tests, and a custom one can be
 provided by the user by using the :func:`registerhandler` function.
 
@@ -12,7 +12,7 @@ provided by the user by using the :func:`registerhandler` function.
 Overview
 ________
 
-To use the default handler, the macro :func:`\@test` can be used directly::
+To use the default handler, the macro :func:`@test` can be used directly::
 
   # Julia code
   julia> @test 1 == 1
@@ -69,7 +69,7 @@ As floating point comparisons can be imprecise, two additional macros exist taki
 Handlers
 ________
 
-A handler is a function defined for three kinds of arguments: `Success`, `Failure`, `Error`::
+A handler is a function defined for three kinds of arguments: ``Success``, ``Failure``, ``Error``::
 
   # The definition of the default handler
   default_handler(r::Success) = nothing
@@ -118,33 +118,34 @@ or globally redefined (with :func:`registerhandler`)::
 Macros
 ______
 
-.. function:: @test ex
+.. function:: @test(ex)
 
-   Test the expression `ex` and calls the current handler to handle the result.
+   Test the expression ``ex`` and calls the current handler to handle the result.
 
-.. function:: @test_fails ex
+.. function:: @test_fails(ex)
 
-   Test the expression `ex` and calls the current handler to handle the result in the following manner:
+   Test the expression ``ex`` and calls the current handler to handle the result in the following manner:
 
-   * If the test doesn't throw an error, the `Failure` case is called.
-   * If the test throws an error, the `Success` case is called.
+   * If the test doesn't throw an error, the ``Failure`` case is called.
+   * If the test throws an error, the ``Success`` case is called.
 
-.. function:: @test_approx_eq a b
+.. function:: @test_approx_eq(a, b)
 
-   Test two floating point numbers `a` and `b` for equality taking in account
+   Test two floating point numbers ``a`` and ``b`` for equality taking in account
    small numerical errors.
 
-.. function:: @test_approx_eq_eps a b c
-   
-   Test two floating point numbers `a` and `b` for equality taking in account
-   a margin of tolerance given by `c`.
+.. function:: @test_approx_eq_eps(a, b, tol)
+
+   Test two floating point numbers ``a`` and ``b`` for equality taking in account
+   a margin of tolerance given by ``tol``.
 
 Functions
 _________
+
 .. function:: registerhandler(handler)
-   
-   Change the handler function used globally to `handler`.
+
+   Change the handler function used globally to ``handler``.
 
 .. function:: withhandler(f, handler)
 
-   Run the function `f` using the `handler` as the handler.
+   Run the function ``f`` using the ``handler`` as the handler.

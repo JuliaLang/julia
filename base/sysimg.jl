@@ -74,46 +74,51 @@ include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
 include("set.jl")
+include("iterator.jl")
 
 # compiler
 import Core.Undef  # used internally by compiler
 include("inference.jl")
 
+# For OS sprcific stuff in I/O
+include("osutils.jl")
+
 # I/O, strings & printing
+include("task.jl")
 include("io.jl")
 include("iobuffer.jl")
-include("stream.jl")
-include("socket.jl")
-include("fs.jl")
-importall .FS
-include("process.jl")
-ccall(:jl_get_uv_hooks, Void, ())
 include("char.jl")
 include("ascii.jl")
 include("utf8.jl")
 include("string.jl")
 include("regex.jl")
 include("show.jl")
+include("stream.jl")
+include("socket.jl")
+include("stat.jl")
+include("fs.jl")
+importall .FS
+include("process.jl")
+ccall(:jl_get_uv_hooks, Void, ())
 include("grisu.jl")
 import .Grisu.print_shortest
 include("printf.jl")
 importall .Printf
 
 # concurrency and parallelism
-include("iterator.jl")
-include("task.jl")
 include("serialize.jl")
 include("multi.jl")
 
+# Polling (requires multi.jl)
+include("poll.jl")
+
 # system & environment
-include("osutils.jl")
 include("libc.jl")
 include("env.jl")
 include("errno.jl")
 using .Errno
 include("file.jl")
 include("path.jl")
-include("stat.jl")
 
 # front end & code loading
 include("repl.jl")
@@ -125,6 +130,7 @@ include("intfuncs.jl")
 include("floatfuncs.jl")
 include("math.jl")
 importall .Math
+include("primes.jl")
 
 # random number generation and statistics
 include("statistics.jl")
@@ -137,11 +143,15 @@ include("sort.jl")
 importall .Sort
 include("combinatorics.jl")
 
+# basic data structures
+include("collections.jl")
+
 # distributed arrays and memory-mapped arrays
-include("darray2.jl")
+include("darray.jl")
 include("mmap.jl")
 
 # utilities - version, timing, help, edit, metaprogramming
+include("sysinfo.jl")
 include("version.jl")
 include("datafmt.jl")
 include("deepcopy.jl")
@@ -156,8 +166,11 @@ push!(I18n.CALLBACKS, Help.clear_cache)
 
 # sparse matrices and linear algebra
 include("sparse.jl")
+include("jlsparse.jl")
 include("linalg.jl")
 importall .LinAlg
+include("broadcast.jl")
+importall .Broadcast
 
 # signal processing
 include("fftw.jl")
@@ -167,6 +180,19 @@ importall .DSP
 # BigInts and BigFloats
 include("gmp.jl")
 importall .GMP
+include("mpfr.jl")
+importall .MPFR
+big(n::Integer) = convert(BigInt,n)
+big(x::FloatingPoint) = convert(BigFloat,x)
+big(q::Rational) = big(num(q))//big(den(q))
+big(z::Complex) = complex(big(real(z)),big(imag(z)))
+
+# mathematical constants
+include("constants.jl")
+
+# Numerical integration
+include("quadgk.jl")
+importall .QuadGK
 
 # deprecated functions
 include("deprecated.jl")
@@ -188,7 +214,6 @@ precompile(next, (Dict{Any,Any}, Int))
 precompile(start, (Dict{Any,Any},))
 precompile(perform_work, ())
 precompile(isempty, (Array{Any,1},))
-precompile(isempty, (Array{WorkItem,1},))
 precompile(getindex, (Dict{Any,Any}, Int32))
 precompile(event_loop, (Bool,))
 precompile(_start, ())
@@ -215,12 +240,10 @@ precompile(open, (ASCIIString, Bool, Bool, Bool, Bool))
 precompile(done, (IntSet, Int64))
 precompile(next, (IntSet, Int64))
 precompile(ht_keyindex, (Dict{Any,Any}, Int32))
-precompile(perform_work, (WorkItem,))
-precompile(notify_done, (WorkItem,))
-precompile(work_result, (WorkItem,))
-precompile(unshift!, (Array{WorkItem,1}, WorkItem))
-precompile(enq_work, (WorkItem,))
-precompile(pop!, (Array{WorkItem,1},))
+precompile(perform_work, (Task,))
+precompile(notify_full, (RemoteValue,))
+precompile(work_result, (RemoteValue,))
+precompile(enq_work, (Task,))
 precompile(string, (Int,))
 precompile(parseint, (Type{Int}, ASCIIString, Int))
 precompile(repeat, (ASCIIString, Int))
@@ -244,16 +267,14 @@ precompile(bitmix, (Uint64, Int64))
 precompile(hash, (Int,))
 precompile(isequal, (Symbol, Symbol))
 precompile(isequal, (Bool, Bool))
-precompile(WaitFor, (Symbol, RemoteRef))
 precompile(get, (EnvHash, ASCIIString, ASCIIString))
-precompile(notify_empty, (WorkItem,))
+precompile(notify_empty, (RemoteValue,))
 precompile(rr2id, (RemoteRef,))
 precompile(isequal, (RemoteRef, WeakRef))
 precompile(isequal, (RemoteRef, RemoteRef))
 precompile(_ieval, (Symbol,))
 precompile(static_convert, (Nothing, Nothing))
 precompile(setindex!, (Array{Any,1}, WeakRef, Int))
-precompile(setindex!, (Dict{Any,Any}, WorkItem, (Int,Int)))
 precompile(isequal, ((Int,Int),(Int,Int)))
 precompile(isequal, (Int,Int))
 precompile(RemoteRef, (Int, Int, Int))
@@ -261,7 +282,8 @@ precompile(eval_user_input, (Expr, Bool))
 precompile(print, (Float64,))
 precompile(a2t, (Array{Any,1},))
 precompile(flush, (IOStream,))
-precompile(getindex, (Type{ByteString}, ASCIIString, ASCIIString, ASCIIString, ASCIIString, ASCIIString))
+precompile(getindex, (Type{ByteString}, ASCIIString, ASCIIString, ASCIIString))
+precompile(bytestring, (ASCIIString,))
 precompile(int, (Int,))
 precompile(uint, (Uint,))
 precompile(_atexit, ())
@@ -303,6 +325,7 @@ precompile(abstract_eval_arg, (Uint8, ObjectIdDict, StaticVarInfo))
 precompile(occurs_outside_tupleref, (Function, Symbol, StaticVarInfo, Int))
 precompile(search, (ASCIIString, Regex, Int))
 precompile(setindex!, (Vector{Any}, Uint8, Int))
+precompile(setindex!, (Vector{Any}, Vector{Any}, Int))
 precompile(first, (Range1{Int},))
 precompile(last, (Range1{Int},))
 precompile(isempty, (ASCIIString,))

@@ -58,7 +58,7 @@ macro timed(ex)
     end
 end
 
-function peakflops(n)
+function peakflops(n=2000)
     a = rand(n,n)
     t = @elapsed a*a
     t = @elapsed a*a
@@ -66,8 +66,6 @@ function peakflops(n)
     println("The peak flop rate is ", floprate*1e-9, " gigaflops")
     floprate
 end
-
-peakflops() = peakflops(2000)
 
 # searching definitions
 
@@ -101,7 +99,7 @@ macro which(ex)
         a1 = ex.args[1]
         if isa(a1, Expr) && a1.head == :call
             a11 = a1.args[1]
-            if isa(a11, TopNode) && a11.name == :setindex!
+            if a11 == :setindex!
                 exret = Expr(:call, :which, a11, map(esc, a1.args[2:end])...)
             end
         end
@@ -130,7 +128,15 @@ function find_source_file(file)
 end
 
 function edit(file::String, line::Integer)
-    editor = get(ENV, "JULIA_EDITOR", "emacs")
+    if OS_NAME == :Windows || OS_NAME == :Darwin
+        default_editor = "open"
+    elseif isreadable("/etc/alternatives/editor")
+        default_editor = "/etc/alternatives/editor"
+    else
+        default_editor = "emacs"
+    end
+    envvar = haskey(ENV,"JULIA_EDITOR") ? "JULIA_EDITOR" : "EDITOR"
+    editor = get(ENV, envvar, default_editor)
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
         file = find_source_file(file)
@@ -147,22 +153,18 @@ function edit(file::String, line::Integer)
         end
     elseif editor == "vim"
         run(`vim $file +$line`)
-    elseif editor == "textmate"
-        run(`mate $file -l $line`)
+    elseif editor == "textmate" || editor == "mate"
+        spawn(`mate $file -l $line`)
     elseif editor == "subl"
-        run(`subl $file:$line`)
-    elseif editor == "notepad"
-        run(`notepad $file`)
-    elseif editor == "start" || editor == "open"
-        if OS_NAME == :Windows
-            run(`start /b $file`)
-        elseif OS_NAME == :Darwin
-            run(`open -t $file`)
-        else
-            error("Don't know how to launch the default editor on your platform")
-        end
+        spawn(`subl $file:$line`)
+    elseif OS_NAME == :Windows && (editor == "start" || editor == "open")
+        spawn(`start /b $file`)
+    elseif OS_NAME == :Darwin && (editor == "start" || editor == "open")
+        spawn(`open -t $file`)
+    elseif editor == "kate"
+        spawn(`kate $file -l $line`)
     else
-        error("Invalid JULIA_EDITOR value: $(repr(editor))")
+        run(`$(shell_split(editor)) $file`)
     end
     nothing
 end
@@ -182,11 +184,11 @@ less(f::Function, t) = less(functionloc(f,t)...)
 # print a warning only once
 
 const have_warned = (ByteString=>Bool)[]
-function warn_once(msg::String...)
+function warn_once(msg::String...; depth=0)
     msg = bytestring(msg...)
-    has(have_warned,msg) && return
+    haskey(have_warned,msg) && return
     have_warned[msg] = true
-    warn(msg)
+    warn(msg; depth=depth+1)
 end
 
 # openblas utility routines
@@ -200,15 +202,15 @@ if Base.libblas_name == "libopenblas"
     function check_openblas()
         openblas_config = openblas_get_config()
         openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
-        if Base.USE_LIB64 != openblas64
+        if Base.USE_BLAS64 != openblas64
             if !openblas64
                 println("ERROR: OpenBLAS was not built with 64bit integer support.")
-                println("You're seeing this error because Julia was built with USE_LIB64=1")
-                println("Please rebuild Julia with USE_LIB64=0")
+                println("You're seeing this error because Julia was built with USE_BLAS64=1")
+                println("Please rebuild Julia with USE_BLAS64=0")
             else
                 println("ERROR: Julia was not built with support for OpenBLAS with 64bit integer support")
-                println("You're seeing this error because Julia was built with USE_LIB64=0")
-                println("Please rebuild Julia with USE_LIB64=1")
+                println("You're seeing this error because Julia was built with USE_BLAS64=0")
+                println("Please rebuild Julia with USE_BLAS64=1")
             end
             println("Quitting.")
             quit()
@@ -219,26 +221,24 @@ end
 
 # system information
 
-versioninfo() = versioninfo(false)
-versioninfo(verbose::Bool) = versioninfo(OUTPUT_STREAM, verbose)
-function versioninfo(io::IO, verbose::Bool)
+function versioninfo(io::IO=OUTPUT_STREAM, verbose::Bool=false)
     println(io,             "Julia $version_string")
     println(io,             commit_string)
     println(io,             "Platform Info:")
-    println(io,             "  OS_NAME: ", OS_NAME)
-    println(io,             "  WORD_SIZE: ", WORD_SIZE)
+    println(io,             "  System: ", Sys.OS_NAME, " (", Sys.MACHINE, ")")
+    println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
         lsb = readchomp(ignorestatus(`lsb_release -ds`) .> SpawnNullStream())
         if lsb != ""
             println(io,     "           ", lsb)
         end
         println(io,         "  uname: ",readchomp(`uname -mprsv`))
-        println(io,         "Memory: $(total_memory()/2^30) GB ($(free_memory()/2^20) MB free)")
-        try println(io,     "Uptime: $(uptime()) sec") catch end
+        println(io,         "Memory: $(Sys.total_memory()/2^30) GB ($(Sys.free_memory()/2^20) MB free)")
+        try println(io,     "Uptime: $(Sys.uptime()) sec") catch end
         print(io,           "Load Avg: ")
-        print_matrix(io,    Base.loadavg()')
+        print_matrix(io,    Sys.loadavg()')
         println(io          )
-        println(io,         cpu_info())
+        println(io,         Sys.cpu_info())
     end
     if Base.libblas_name == "libopenblas"
         openblas_config = openblas_get_config()
@@ -256,117 +256,11 @@ function versioninfo(io::IO, verbose::Bool)
             end
         end
         println(io          )
+        println(io,         "Package Directory: ", Pkg.dir())
         println(io,         "Packages Installed:")
         Pkg.status(io       )
     end
 end
-
-type UV_cpu_info_t
-    model::Ptr{Uint8}
-    speed::Int32
-    cpu_times!user::Uint64
-    cpu_times!nice::Uint64
-    cpu_times!sys::Uint64
-    cpu_times!idle::Uint64
-    cpu_times!irq::Uint64
-end
-type CPUinfo
-    model::ASCIIString
-    speed::Int32
-    cpu_times!user::Uint64
-    cpu_times!nice::Uint64
-    cpu_times!sys::Uint64
-    cpu_times!idle::Uint64
-    cpu_times!irq::Uint64
-    SC_CLK_TCK::Int
-    CPUinfo(model,speed,u,n,s,id,ir,ticks)=new(model,speed,u,n,s,id,ir,ticks)
-end
-CPUinfo(info::UV_cpu_info_t, ticks) = CPUinfo(bytestring(info.model), info.speed,
-    info.cpu_times!user, info.cpu_times!nice, info.cpu_times!sys,
-    info.cpu_times!idle, info.cpu_times!irq, ticks)
-
-show(io::IO, cpu::CPUinfo) = show(io, cpu, true, "    ")
-function show(io::IO, info::CPUinfo, header::Bool, prefix::String)
-    tck = info.SC_CLK_TCK 
-    if header
-        println(io, info.model, ": ")
-        print(" "^length(prefix))
-        if tck > 0
-            @printf io "    %5s    %9s    %9s    %9s    %9s    %9s\n" "speed" "user" "nice" "sys" "idle" "irq"
-        else
-            @printf io "    %5s    %9s  %9s  %9s  %9s  %9s ticks\n" "speed" "user" "nice" "sys" "idle" "irq"
-        end
-    end
-    print(prefix)
-    if tck > 0
-        @printf io "%5d MHz  %9d s  %9d s  %9d s  %9d s  %9d s" info.speed info.cpu_times!user/tck info.cpu_times!nice/tck info.cpu_times!sys/tck info.cpu_times!idle/tck info.cpu_times!irq/tck
-    else
-        @printf io "%5d MHz  %9d  %9d  %9d  %9d  %9d ticks" info.speed info.cpu_times!user info.cpu_times!nice info.cpu_times!sys info.cpu_times!idle info.cpu_times!irq
-    end
-end
-function cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
-    if j-i < 9
-        header = true
-        for x = i:j
-            if header == false println() end
-            show(io,cpu[x],header,"#$(x-i+1) ")
-            header = false
-        end
-    else
-        summary = CPUinfo(cpu[i].model,0,0,0,0,0,0,cpu[i].SC_CLK_TCK)
-        count = j-i+1
-        for x = i:j
-            summary.speed += cpu[i].speed
-            summary.cpu_times!user += cpu[x].cpu_times!user
-            summary.cpu_times!nice += cpu[x].cpu_times!nice
-            summary.cpu_times!sys += cpu[x].cpu_times!sys
-            summary.cpu_times!idle += cpu[x].cpu_times!idle
-            summary.cpu_times!irq += cpu[x].cpu_times!irq
-        end
-        summary.speed = div(summary.speed,count)
-        show(io,summary,true,"#1-$(count) ") 
-    end
-end
-function show(io::IO, cpu::Array{CPUinfo})
-    model = cpu[1].model
-    first = 1
-    for i = 2:length(cpu)
-        if model != cpu[i].model
-            cpu_summary(io,cpu,first,i-1)
-            first = i
-        end
-    end
-    cpu_summary(io,cpu,first,length(cpu))
-end
-repl_show(io::IO, cpu::Array{CPUinfo}) = show(io, cpu)
-function cpu_info()
-    SC_CLK_TCK = ccall(:SC_CLK_TCK, Int, ())
-    UVcpus = Array(Ptr{UV_cpu_info_t},1)
-    count = Array(Int32,1)
-    uv_error("uv_cpu_info",ccall(:uv_cpu_info, UV_error_t, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
-    cpus = Array(CPUinfo,count[1])
-    for i = 1:length(cpus)
-        cpus[i] = CPUinfo(unsafe_ref(UVcpus[1],i),SC_CLK_TCK)
-    end
-    ccall(:uv_free_cpu_info, Void, (Ptr{UV_cpu_info_t}, Int32), UVcpus[1], count[1])
-    cpus
-end
-
-function uptime()
-    uptime_ = Array(Float64,1)
-    uv_error("uv_uptime",ccall(:uv_uptime, UV_error_t, (Ptr{Float64},), uptime_))
-    return uptime_[1]
-end
-
-function loadavg()
-    loadavg_ = Array(Float64,3)
-    ccall(:uv_loadavg, Void, (Ptr{Float64},), loadavg_)
-    return loadavg_
-end
-
-free_memory() = ccall(:uv_get_free_memory, Uint64, ())
-total_memory() = ccall(:uv_get_total_memory, Uint64, ())
-
 
 # `methodswith` -- shows a list of methods using the type given
 
@@ -392,7 +286,7 @@ methodswith(t::Type, showparents::Bool) = methodswith(OUTPUT_STREAM, t, showpare
 methodswith(t::Type, m::Module) = methodswith(OUTPUT_STREAM, t, m, false)
 methodswith(t::Type) = methodswith(OUTPUT_STREAM, t, false)
 function methodswith(io::IO, t::Type, showparents::Bool)
-    mainmod = ccall(:jl_get_current_module, Any, ())::Module
+    mainmod = current_module()
     # find modules in Main
     for nm in names(mainmod)
         if isdefined(mainmod,nm)
@@ -403,3 +297,7 @@ function methodswith(io::IO, t::Type, showparents::Bool)
         end
     end
 end
+
+# Conditional usage of packages and modules
+usingmodule(name::Symbol) = eval(current_module(), Expr(:toplevel, Expr(:using, name)))
+usingmodule(name::String) = usingmodule(symbol(name))

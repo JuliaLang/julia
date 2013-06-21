@@ -1,6 +1,8 @@
 /*
   evaluating top-level expressions, loading source files
 */
+#include "platform.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,12 +12,18 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <unistd.h>
-#ifdef __WIN32__
+#if defined(_OS_WINDOWS_)
 #include <malloc.h>
+#if defined(_COMPILER_INTEL_)
+#include <mathimf.h>
+#else
+#include <math.h>
+#endif
+#else
+#include <math.h>
+#include <unistd.h>
 #endif
 #include <ctype.h>
-#include <math.h>
 #include "julia.h"
 #include <sys/stat.h>
 #include "builtin_proto.h"
@@ -75,7 +83,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         }
     }
 
-    JL_GC_PUSH(&last_module);
+    JL_GC_PUSH1(&last_module);
     jl_current_module = newm;
 
     jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
@@ -239,7 +247,7 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
                     require_func = jl_get_global(jl_base_module, jl_symbol("require"));
                 if (require_func != NULL) {
                     jl_value_t *str = jl_cstr_to_string(var->name);
-                    JL_GC_PUSH(&str);
+                    JL_GC_PUSH1(&str);
                     jl_apply((jl_function_t*)require_func, &str, 1);
                     JL_GC_POP();
                     return eval_import_path_(args, 1);
@@ -335,7 +343,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     jl_value_t *result;
     jl_lambda_info_t *thk=NULL;
     int ewc = 0;
-    JL_GC_PUSH(&thunk, &thk, &ex);
+    JL_GC_PUSH3(&thunk, &thk, &ex);
 
     if (ex->head != body_sym && ex->head != thunk_sym) {
         // not yet expanded
@@ -347,6 +355,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         for(i=0; i < jl_array_len(ex->args); i++) {
             res = jl_toplevel_eval_flex(jl_cellref(ex->args, i), fast);
         }
+        JL_GC_POP();
         return res;
     }
 
@@ -399,7 +408,7 @@ void jl_parse_eval_all(char *fname)
     int last_lineno = jl_lineno;
     jl_lineno=0;
     jl_value_t *fn=NULL, *ln=NULL, *form=NULL;
-    JL_GC_PUSH(&fn, &ln, &form);
+    JL_GC_PUSH3(&fn, &ln, &form);
     JL_TRY {
         // handle syntax error
         while (1) {
@@ -439,7 +448,7 @@ void jl_load(const char *fname)
         jl_printf(JL_STDOUT, "%s\n", fname);
     }
     char *fpath = (char*)fname;
-    uv_statbuf_t stbuf;
+    uv_stat_t stbuf;
     if (jl_stat(fpath, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
         jl_errorf("could not open file %s", fpath);
     }
@@ -447,7 +456,7 @@ void jl_load(const char *fname)
     jl_parse_eval_all(fpath);
     if (fpath != fname) free(fpath);
     if (jl_current_module == jl_base_module) {
-        jl_printf(JL_STDOUT, "\e[1F\e[2K");
+        jl_printf(JL_STDOUT, "\x1B[1F\x1B[2K");
     }
 }
 
@@ -475,6 +484,7 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
     if (!jl_is_datatype(super) || super == (jl_value_t*)jl_undef_type ||
         !jl_is_abstracttype(super) ||
+        jl_subtype(super,(jl_value_t*)jl_vararg_type,0) ||
         jl_subtype(super,(jl_value_t*)jl_type_type,0)) {
         jl_errorf("invalid subtyping in definition of %s",tt->name->name->name);
     }
@@ -518,7 +528,7 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
             }
         }
     }
-    JL_GC_PUSH(&gf);
+    JL_GC_PUSH1(&gf);
     assert(jl_is_function(f));
     assert(jl_is_tuple(argtypes));
     assert(jl_is_tuple(t));

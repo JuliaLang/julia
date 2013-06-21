@@ -5,9 +5,6 @@
  The Julia Standard Library
 ############################
 
-:Release: |version|
-:Date: |today|
-
 *********
 Built-ins
 *********
@@ -29,7 +26,6 @@ Built-in Modules
 .. toctree::
    :maxdepth: 1
 
+   collections
    sort
    test
-
-

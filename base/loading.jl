@@ -6,7 +6,7 @@ function is_file_readable(path)
 end
 
 function find_in_path(name::String)
-    name[1] == '/' && return abspath(name)
+    isabspath(name) && return name
     isfile(name) && return abspath(name)
     base = name
     if endswith(name,".jl")
@@ -14,7 +14,7 @@ function find_in_path(name::String)
     else
         name = string(base,".jl")
     end
-    for prefix in LOAD_PATH
+    for prefix in [Pkg.dir(), LOAD_PATH]
         path = joinpath(prefix, name)
         is_file_readable(path) && return abspath(path)
         path = joinpath(prefix, base, "src", name)
@@ -36,22 +36,23 @@ require(fname::String) = require(bytestring(fname))
 require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 
 function require(name::ByteString)
-    if myid() == 1
-        @sync for p = 2:nprocs()
+    if myid() == 1 
+        @sync for p in filter(x -> x != 1, procs())
             @spawnat p require(name)
         end
     end
     path = find_in_node1_path(name)
-    if has(package_list,path)
+    if haskey(package_list,path)
         wait(package_locks[path])
     else
         reload_path(path)
     end
+    nothing
 end
 
 function reload(name::String)
     if myid() == 1
-        @sync for p = 2:nprocs()
+        @sync for p in filter(x -> x != 1, procs())
             @spawnat p reload(name)
         end
     end
@@ -69,7 +70,7 @@ function source_path(default)
     t = current_task()
     while true
         s = t.storage
-        if !is(s, nothing) && has(s, :SOURCE_PATH)
+        if !is(s, nothing) && haskey(s, :SOURCE_PATH)
             return s[:SOURCE_PATH]
         end
         if is(t, t.parent)
@@ -102,7 +103,7 @@ function include_from_node1(path)
 end
 
 function reload_path(path)
-    had = has(package_list, path)
+    had = haskey(package_list, path)
     if !had
         package_locks[path] = RemoteRef()
     end

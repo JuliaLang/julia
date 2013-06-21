@@ -44,6 +44,7 @@
     ios_write;
     ios_write_direct;
     iswprint;
+    jl_print_type;
     jl_alloc_array_1d;
     jl_alloc_array_2d;
     jl_alloc_array_3d;
@@ -286,6 +287,8 @@
     jl_stdout_stream;
     jl_strtod;
     jl_strtof;
+    jl_substrtod;
+    jl_substrtof;
     jl_symbol;
     jl_symbol_lookup;
     jl_symbol_n;
@@ -297,6 +300,9 @@
     jl_tcp_bind;
     jl_tcp_init;
     jl_test;
+    jl_poll_start;
+    jl_fs_poll_start;
+    jl_fs_event_init;
     jl_timer_start;
     jl_timer_stop;
     jl_toplevel_eval;
@@ -310,7 +316,7 @@
     jl_wrap_raw_dl_handle;
     jl_write;
     jl_value_ptr;
-    jl_zero_denormals;
+    jl_zero_subnormals;
     julia_free;
     julia_home;
     julia_init;
@@ -326,7 +332,8 @@
     repl_callback_enable;
     restore_signals;
     rl_clear_input;
-    SC_CLK_TCK;
+    jl_SC_CLK_TCK;
+    jl_getpagesize;
     u8_isvalid;
     u8_strlen;
     u8_strwidth;

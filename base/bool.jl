@@ -17,22 +17,20 @@ typemax(::Type{Bool}) = true
 ## boolean operations ##
 
 !(x::Bool) = box(Bool,not_int(unbox(Bool,x)))
-isequal(x::Bool, y::Bool) = eq_int(unbox(Bool,x),unbox(Bool,y))
 
 (~)(x::Bool) = !x
 (&)(x::Bool, y::Bool) = box(Bool,and_int(unbox(Bool,x),unbox(Bool,y)))
 (|)(x::Bool, y::Bool) = box(Bool,or_int(unbox(Bool,x),unbox(Bool,y)))
 ($)(x::Bool, y::Bool) = (x!=y)
 
-## do arithmetic as Int ##
-
 signbit(x::Bool) = 0
-sign(x::Bool) = int(x)
-abs(x::Bool) = int(x)
+sign(x::Bool) = x
+abs(x::Bool) = x
 
 <(x::Bool, y::Bool) = y&!x
 <=(x::Bool, y::Bool) = y|!x
-==(x::Bool, y::Bool) = eq_int(unbox(Bool,x),unbox(Bool,y))
+
+## do arithmetic as Int ##
 
 +(x::Bool) =  int(x)
 -(x::Bool) = -int(x)
@@ -40,7 +38,6 @@ abs(x::Bool) = int(x)
 +(x::Bool, y::Bool) = int(x)+int(y)
 -(x::Bool, y::Bool) = int(x)-int(y)
 *(x::Bool, y::Bool) = x&y
-/(x::Bool, y::Bool) = int(x)/int(y)
 ^(x::Bool, y::Bool) = x|!y
 ^(x::Integer, y::Bool) = y ? x : one(x)
 

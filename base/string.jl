@@ -17,7 +17,8 @@ next(s::String, i::Integer) = next(s,int(i))
 ## conversion of general objects to strings ##
 
 function print_to_string(xs...)
-    s = memio(isa(xs[1],String) ? endof(xs[1]) : 0, false)
+    s = IOBuffer(Array(Uint8,isa(xs[1],String) ? endof(xs[1]) : 0), true, true)
+    truncate(s,0)
     for x in xs
         print(s, x)
     end
@@ -45,6 +46,7 @@ end
 convert(::Type{Array{Uint8,1}}, s::String) = bytestring(s).data
 convert(::Type{Array{Uint8}}, s::String) = bytestring(s).data
 convert(::Type{ByteString}, s::String) = bytestring(s)
+convert(::Type{Array{Char,1}}, s::String) = collect(s)
 
 ## generic supplied functions ##
 
@@ -64,6 +66,8 @@ symbol(s::String) = symbol(bytestring(s))
 print(io::IO, s::String) = for c in s write(io, c) end
 write(io::IO, s::String) = print(io, s)
 show(io::IO, s::String) = print_quoted(io, s)
+
+sizeof(s::String) = error("type $(typeof(s)) has no canonical binary representation")
 
 (*)(s::String...) = string(s...)
 (^)(s::String, r::Integer) = repeat(s,r)
@@ -176,7 +180,7 @@ search(s::String, c::Chars) = search(s,c,start(s))
 
 contains(s::String, c::Char) = (search(s,c)!=0)
 
-function search(s::String, t::String, i::Integer)
+function _search(s, t, i)
     if isempty(t)
         return 1 <= i <= endof(s)+1 ? (i:i-1) :
                i == endof(s)+2      ? (0:-1) :
@@ -207,7 +211,57 @@ function search(s::String, t::String, i::Integer)
         i = ii
     end
 end
+
+search(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _search(s,t,i)
+search(s::String, t::String, i::Integer) = _search(s,t,i)
 search(s::String, t::String) = search(s,t,start(s))
+
+
+rsearch(s::String, c::Chars) = rsearch(s,c,endof(s))
+
+function _rsearch(s, t, i)
+    if isempty(t)
+        return 1 <= i <= endof(s)+1 ? (i:i-1) :
+               i == endof(s)+2      ? (0:-1) :
+               error(BoundsError)
+    end
+    t = reverse(t)
+    rs = reverse(s)
+    l = endof(s)
+    t1, j2 = next(t,start(t))
+    while true
+        i = rsearch(s,t1,i)
+        if i == 0 return (0:-1) end
+        c, ii = next(rs,l-i+1)
+        j = j2; k = ii
+        matched = true
+        while !done(t,j)
+            if done(rs,k)
+                matched = false
+                break
+            end
+            c, k = next(rs,k)
+            d, j = next(t,j)
+            if c != d
+                matched = false
+                break
+            end
+        end
+        if matched
+            fst = nextind(s,l-k+1)
+            # NOTE: there's a subtle difference between
+            #       nexind(s,i) and next(s,i)[2] if s::UTF8String
+            #       since at the end nextind returns endof(s)+1
+            #       while next returns length(s.data)+1
+            lst = next(s,i)[2]-1
+            return fst:lst
+        end
+        i = l-ii+1
+    end
+end
+rsearch(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _rsearch(s,t,i)
+rsearch(s::String, t::String, i::Integer) = _rsearch(s,t,i)
+rsearch(s::String, t::String) = rsearch(s,t,endof(s))
 
 contains(::String, ::String) = error("use search() to look for substrings")
 
@@ -269,13 +323,17 @@ beginswith(a::ByteString, b::ByteString) = beginswith(a.data, b.data)
 beginswith(a::Array{Uint8,1}, b::Array{Uint8,1}) =
     (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint), a, b, length(b)) == 0)
 
+cmp(a::Symbol, b::Symbol) =
+    int(sign(ccall(:strcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}), a, b)))
+isless(a::Symbol, b::Symbol) = cmp(a,b)<0
+
 # TODO: fast endswith
 
 ## character column width function ##
 
-charwidth(c::Char) = max(0,int(ccall(:wcwidth, Int32, (Char,), c)))
+charwidth(c::Char) = max(0,int(ccall(:wcwidth, Int32, (Uint32,), c)))
 strwidth(s::String) = (w=0; for c in s; w += charwidth(c); end; w)
-strwidth(s::ByteString) = ccall(:u8_strwidth, Int, (Ptr{Uint8},), s.data)
+strwidth(s::ByteString) = int(ccall(:u8_strwidth, Csize_t, (Ptr{Uint8},), s.data))
 # TODO: implement and use u8_strnwidth that takes a length argument
 
 ## libc character class predicates ##
@@ -285,7 +343,7 @@ isascii(c::Char) = c < 0x80
 for name = ("alnum", "alpha", "cntrl", "digit", "graph",
             "lower", "print", "punct", "space", "upper")
     f = symbol(string("is",name))
-    @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Char,), c))
+    @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Cwchar_t,), c))
 end
 
 isblank(c::Char) = c==' ' || c=='\t'
@@ -320,15 +378,24 @@ immutable SubString{T<:String} <: String
     offset::Int
     endof::Int
 
-    SubString(s::T, i::Int, j::Int) =
-        (o=nextind(s,i-1)-1; new(s,o,nextind(s,j)-o-1))
+    function SubString(s::T, i::Int, j::Int)
+        if i > endof(s)
+            return new(s, i, 0)
+        else
+            o = thisind(s,i)-1
+            new(s, o, max(0, thisind(s,j)-o))
+        end
+    end
 end
 SubString{T<:String}(s::T, i::Int, j::Int) = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
 SubString(s::String, i::Integer, j::Integer) = SubString(s, int(i), int(j))
 SubString(s::String, i::Integer) = SubString(s, i, endof(s))
 
-write{T<:ByteString}(to::IOBuffer, s::SubString{T}) = write_sub(to, s.string.data, s.offset+1, s.endof)
+write{T<:ByteString}(to::IOBuffer, s::SubString{T}) =
+    s.endof==0 ? 0 : write_sub(to, s.string.data, s.offset+1, next(s,s.endof)[2]-1)
+
+sizeof{T<:ByteString}(s::SubString{T}) = s.endof==0 ? 0 : next(s,s.endof)[2]-1
 
 function next(s::SubString, i::Int)
     if i < 1 || i > s.endof
@@ -360,6 +427,7 @@ end
 
 endof(s::RepString)  = endof(s.string)*s.repeat
 length(s::RepString) = length(s.string)*s.repeat
+sizeof(s::RepString) = sizeof(s.string)*s.repeat
 
 function next(s::RepString, i::Int)
     if i < 1 || i > endof(s)
@@ -396,6 +464,7 @@ end
 
 endof(s::RevString) = endof(s.string)
 length(s::RevString) = length(s.string)
+sizeof(s::RevString) = sizeof(s.string)
 
 function next(s::RevString, i::Int)
     n = endof(s); j = n-i+1
@@ -447,13 +516,15 @@ function next(s::RopeString, i::Int)
 end
 
 endof(s::RopeString) = s.endof
+length(s::RopeString) = length(s.head) + length(s.tail)
 print(io::IO, s::RopeString) = print(io, s.head, s.tail)
 write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
+sizeof(s::RopeString) = sizeof(s.head) + sizeof(s.tail)
 
 ## uppercase and lowercase transformations ##
 
-uppercase(c::Char) = ccall(:towupper, Char, (Char,), c)
-lowercase(c::Char) = ccall(:towlower, Char, (Char,), c)
+uppercase(c::Char) = convert(Char, ccall(:towupper, Cwchar_t, (Cwchar_t,), c))
+lowercase(c::Char) = convert(Char, ccall(:towlower, Cwchar_t, (Cwchar_t,), c))
 
 uppercase(s::String) = map(uppercase, s)
 lowercase(s::String) = map(lowercase, s)
@@ -464,15 +535,21 @@ lcfirst(s::String) = islower(s[1]) ? s : string(lowercase(s[1]),s[nextind(s,1):e
 ## string map, filter, has ##
 
 function map(f::Function, s::String)
-    out = memio(endof(s))
+    out = IOBuffer(Array(Uint8,endof(s)),true,true)
+    truncate(out,0)
     for c in s
-        write(out, f(c)::Char)
+        c2 = f(c)
+        if !isa(c2,Char)
+            error("map(f,s::String) requires f to return Char. Try map(f,collect(s)) or a comprehension instead.")
+        end
+        write(out, c2::Char)
     end
     takebuf_string(out)
 end
 
 function filter(f::Function, s::String)
-    out = memio(endof(s))
+    out = IOBuffer(Array(Uint8,endof(s)),true,true)
+    truncate(out,0)
     for c in s
         if f(c)
             write(out, c)
@@ -640,7 +717,8 @@ function indentation(s::String)
 end
 
 function unindent(s::String, indent::Int)
-    buf = memio(endof(s), false)
+    buf = IOBuffer(Array(Uint8,endof(s)), true, true)
+    truncate(buf,0)
     a = i = start(s)
     cutting = false
     cut = 0
@@ -717,6 +795,8 @@ macro mstr(s...); triplequoted(s...); end
 function shell_parse(raw::String, interp::Bool)
 
     s = strip(raw)
+    isempty(s) && return interp ? Expr(:tuple,:()) : {}
+
     in_single_quotes = false
     in_double_quotes = false
 
@@ -816,7 +896,7 @@ function shell_split(s::String)
     args
 end
 
-function print_shell_word(io, word::String)
+function print_shell_word(io::IO, word::String)
     if isempty(word)
         print(io, "''")
     end
@@ -846,16 +926,16 @@ function print_shell_word(io, word::String)
     end
 end
 
-function print_shell_escaped(io, cmd::String, args::String...)
+function print_shell_escaped(io::IO, cmd::String, args::String...)
     print_shell_word(io, cmd)
     for arg in args
         print(io, ' ')
         print_shell_word(io, arg)
     end
 end
+print_shell_escaped(io::IO) = nothing
 
-shell_escape(cmd::String, args::String...) =
-    sprint(print_shell_escaped, cmd, args...)
+shell_escape(args::String...) = sprint(print_shell_escaped, args...)
 
 ## interface to parser ##
 
@@ -953,17 +1033,22 @@ function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     rstr = ""
     i = a = start(str)
     r = search(str,pattern,i)
-    j, k = first(r), last(r)+1
+    j, k = first(r), last(r)
+    k1 = k
     out = IOBuffer()
     while j != 0
-        if i == a || i < k
+        if i == a || i <= k
             write(out, SubString(str,i,j-1))
-            write(out, string(repl(SubString(str,j,k-1))))
-            i = k
+            write(out, string(repl(SubString(str,j,k))))
+            i = nextind(str, k)
         end
-        if k <= j; k = nextind(str,j) end
+        if k <= j
+            k = nextind(str,j)
+            k == k1 && break
+        end
+        k1 = k
         r = search(str,pattern,k)
-        j, k = first(r), last(r)+1
+        j, k = first(r), last(r)
         if n == limit break end
         n += 1
     end
@@ -1025,7 +1110,7 @@ function chomp!(s::ByteString)
 end
 chomp!(s::String) = chomp(s) # copying fallback for other string types
 
-function lstrip(s::String, chars::String)
+function lstrip(s::String, chars::Chars=_default_delims)
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
@@ -1037,7 +1122,7 @@ function lstrip(s::String, chars::String)
     ""
 end
 
-function rstrip(s::String, chars::String)
+function rstrip(s::String, chars::Chars=_default_delims)
     r = reverse(s)
     i = start(r)
     while !done(r,i)
@@ -1050,12 +1135,8 @@ function rstrip(s::String, chars::String)
     ""
 end
 
-for stripfn in {:lstrip, :rstrip}
-    @eval ($stripfn)(s::String) = ($stripfn)(s, " \f\n\r\t\v")
-end
-
 strip(s::String) = lstrip(rstrip(s))
-strip(s::String, chars::String) = lstrip(rstrip(s, chars), chars)
+strip(s::String, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 ## string to integer functions ##
 
@@ -1155,6 +1236,11 @@ float64_isvalid(s::String, out::Array{Float64,1}) =
 float32_isvalid(s::String, out::Array{Float32,1}) =
     ccall(:jl_strtof, Int32, (Ptr{Uint8},Ptr{Float32}), s, out) == 0
 
+float64_isvalid(s::SubString, out::Array{Float64,1}) =
+    ccall(:jl_substrtod, Int32, (Ptr{Uint8},Int,Int,Ptr{Float64}), s.string, s.offset, s.endof, out) == 0
+float32_isvalid(s::SubString, out::Array{Float32,1}) =
+    ccall(:jl_substrtof, Int32, (Ptr{Uint8},Int,Int,Ptr{Float32}), s.string, s.offset, s.endof, out) == 0
+
 begin
     local tmp::Array{Float64,1} = Array(Float64,1)
     local tmpf::Array{Float32,1} = Array(Float32,1)
@@ -1187,7 +1273,9 @@ end
 
 # find the index of the first occurrence of a value in a byte array
 
-function search(a::Union(Array{Uint8,1},Array{Int8,1}), b, i::Integer)
+typealias ByteArray Union(Array{Uint8,1},Array{Int8,1})
+
+function search(a::ByteArray, b::Union(Int8,Uint8), i::Integer)
     if i < 1 error(BoundsError) end
     n = length(a)
     if i > n return i == n+1 ? 0 : error(BoundsError) end
@@ -1195,7 +1283,31 @@ function search(a::Union(Array{Uint8,1},Array{Int8,1}), b, i::Integer)
     q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Csize_t), p+i-1, b, n-i+1)
     q == C_NULL ? 0 : int(q-p+1)
 end
-search(a::Union(Array{Uint8,1},Array{Int8,1}), b) = search(a,b,1)
+function search(a::ByteArray, b::Char, i::Integer)
+    if isascii(b)
+        search(a,uint8(b),i)
+    else
+        search(a,string(b).data,i).start
+    end
+end
+search(a::ByteArray, b::Union(Int8,Uint8,Char)) = search(a,b,1)
+
+function rsearch(a::Union(Array{Uint8,1},Array{Int8,1}), b::Union(Int8,Uint8), i::Integer)
+    if i < 1 return i == 0 ? 0 : error(BoundsError) end
+    n = length(a)
+    if i > n return i == n+1 ? 0 : error(BoundsError) end
+    p = pointer(a)
+    q = ccall(:memrchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Csize_t), p, b, i)
+    q == C_NULL ? 0 : int(q-p+1)
+end
+function rsearch(a::ByteArray, b::Char, i::Integer)
+    if isascii(b)
+        rsearch(a,uint8(b),i)
+    else
+        rsearch(a,string(b).data,i).start
+    end
+end
+rsearch(a::ByteArray, b::Union(Int8,Uint8,Char)) = rsearch(a,b,length(a))
 
 # return a random string (often useful for temporary filenames/dirnames)
 let
@@ -1204,3 +1316,29 @@ let
     randstring(n::Int) = ASCIIString(b[rand(1:length(b),n)])
     randstring() = randstring(8)
 end
+
+
+function hex2bytes(s::ASCIIString)
+    len = length(s)
+    if isodd(len)
+        error("Input string length should be even")
+    end
+    arr = zeros(Uint8, div(len,2))
+    i = j = 0
+    while i < len
+        n = 0
+        c = s[i+=1]
+        n = '0' <= c <= '9' ? c - '0' :
+            'a' <= c <= 'f' ? c - 'a' + 10 :
+            'A' <= c <= 'F' ? c - 'A' + 10 : error("Input string isn't a hexadecimal string")
+        c = s[i+=1]
+        n = '0' <= c <= '9' ? n << 4 + c - '0' :
+            'a' <= c <= 'f' ? n << 4 + c - 'a' + 10 :
+            'A' <= c <= 'F' ? n << 4 + c - 'A' + 10 : error("Input string isn't a hexadecimal string")
+        arr[j+=1] = n
+    end
+    return arr
+end
+
+bytes2hex(arr::Array{Uint8,1}) = join([hex(i, 2) for i in arr])
+

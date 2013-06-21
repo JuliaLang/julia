@@ -23,11 +23,12 @@ type CallStack
     mod::Module
     types::Tuple
     recurred::Bool
+    cycleid
     result
     prev::Union(EmptyCallStack,CallStack)
     sv::StaticVarInfo
 
-    CallStack(ast, mod, types, prev) = new(ast, mod, types, false, None, prev)
+    CallStack(ast, mod, types, prev) = new(ast, mod, types, false, 0, None, prev)
 end
 
 inference_stack = EmptyCallStack()
@@ -52,7 +53,7 @@ function contains_is(itr, x::ANY)
 end
 
 is_local(sv::StaticVarInfo, s::Symbol) = contains_is(sv.vars, s)
-is_closed(sv::StaticVarInfo, s::Symbol) = has(sv.cenv, s)
+is_closed(sv::StaticVarInfo, s::Symbol) = haskey(sv.cenv, s)
 is_global(sv::StaticVarInfo, s::Symbol) =
     !is_local(sv,s) && !is_closed(sv,s) && !is_static_parameter(sv,s)
 
@@ -107,14 +108,15 @@ t_func[ltsif64] = (2, 2, cmp_tfunc)
 t_func[ltuif64] = (2, 2, cmp_tfunc)
 t_func[lesif64] = (2, 2, cmp_tfunc)
 t_func[leuif64] = (2, 2, cmp_tfunc)
-t_func[fpiseq32] = (2, 2, cmp_tfunc)
-t_func[fpiseq64] = (2, 2, cmp_tfunc)
-t_func[fpislt32] = (2, 2, cmp_tfunc)
-t_func[fpislt64] = (2, 2, cmp_tfunc)
+t_func[fpiseq] = (2, 2, cmp_tfunc)
+t_func[fpislt] = (2, 2, cmp_tfunc)
 t_func[nan_dom_err] = (2, 2, (a, b)->a)
-t_func[eval(Core,:ccall)] =
+t_func[eval(Core.Intrinsics,:ccall)] =
     (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? Nothing :
                                     isType(rt) ? rt.parameters[1] : Any))
+t_func[eval(Core.Intrinsics,:cglobal)] =
+    (1, 2, (fptr, t...)->(isempty(t) ? Ptr{Void} :
+                          isType(t[1]) ? Ptr{t[1].parameters[1]} : Ptr))
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
@@ -336,6 +338,10 @@ const apply_type_tfunc = function (A, args...)
         elseif isa(A[i],Int)
             tparams = tuple(tparams..., A[i])
         else
+            if i-1 > length(headtype.parameters)
+                # too many parameters for type
+                return None
+            end
             uncertain = true
             tparams = tuple(tparams..., headtype.parameters[i-1])
         end
@@ -440,6 +446,9 @@ function isconstantfunc(f::ANY, sv::StaticVarInfo)
         end
     end
 
+    if isa(f,QuoteNode) && isa(f.value, Function)
+        return f.value
+    end
     if isa(f,SymbolNode)
         f = f.name
     end
@@ -582,6 +591,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if is(f,apply) && length(fargs)>0
         if isType(argtypes[1]) && isleaftype(argtypes[1].parameters[1])
             af = argtypes[1].parameters[1]
+            _methods(af,(),0)
         else
             af = isconstantfunc(fargs[1], sv)
         end
@@ -789,7 +799,7 @@ end
 const Type_Array = Type{Array}
 
 function abstract_eval_constant(x::ANY)
-    if isa(x,DataType) || isa(x,UnionType) || isa(x,TypeConstructor)
+    if isa(x,Type)
         if is(x,Array)
             return Type_Array
         end
@@ -822,7 +832,7 @@ function abstract_eval_global(M, s::Symbol)
 end
 
 function abstract_eval_symbol(s::Symbol, vtypes, sv::StaticVarInfo)
-    if has(sv.cenv,s)
+    if haskey(sv.cenv,s)
         # consider closed vars to always have their propagated (declared) type
         return sv.cenv[s]
     end
@@ -1015,6 +1025,8 @@ typeinf(linfo,atypes::ANY,sparams::ANY,def) = typeinf(linfo,atypes,sparams,def,t
 
 ast_rettype(ast) = ast.args[3].typ
 
+CYCLE_ID = 1
+
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
 function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
@@ -1055,19 +1067,22 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     # end
     #print("typeinf ", ast0, " ", sparams, " ", atypes, "\n")
 
-    global inference_stack
+    global inference_stack, CYCLE_ID
     # check for recursion
     f = inference_stack
     while !isa(f,EmptyCallStack)
         if is(f.ast,ast0) && typeseq(f.types, atypes)
             # return best guess so far
             (f::CallStack).recurred = true
+            (f::CallStack).cycleid = CYCLE_ID
             r = inference_stack
             while !is(r, f)
                 # mark all frames that are part of the cycle
                 r.recurred = true
+                r.cycleid = CYCLE_ID
                 r = r.prev
             end
+            CYCLE_ID += 1
             #print("*==> ", f.result,"\n")
             return ((),f.result)
         end
@@ -1171,7 +1186,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             changes = abstract_interpret(stmt, s[pc], sv)
             if frame.recurred
                 rec = true
-                if !(isa(frame.prev,CallStack) && frame.prev.recurred)
+                if !(isa(frame.prev,CallStack) && frame.prev.cycleid == frame.cycleid)
                     toprec = true
                 end
                 add!(recpts, pc)
@@ -1219,7 +1234,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                     rt = abstract_eval_arg(stmt.args[1], s[pc], sv)
                     if frame.recurred
                         rec = true
-                        if !(isa(frame.prev,CallStack) && frame.prev.recurred)
+                        if !(isa(frame.prev,CallStack) && frame.prev.cycleid == frame.cycleid)
                             toprec = true
                         end
                         add!(recpts, pc)
@@ -1342,7 +1357,7 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo)
 
     e = e::Expr
     head = e.head
-    if is(head,:static_typeof) || is(head,:line) || is(head,:const)
+    if is(head,:static_typeof) || is(head,:line) || is(head,:const) || is(head,:newvar)
         return e
     #elseif is(head,:gotoifnot) || is(head,:return)
     #    e.typ = Any
@@ -1649,6 +1664,9 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
         if isa(spvals[i],TypeVar)
             return NF
         end
+        if isa(spvals[i],Symbol)
+            spvals[i] = qn(spvals[i])
+        end
     end
     (ast, ty) = typeinf(meth[3], meth[1], meth[2], meth[3])
     if is(ast,())
@@ -1724,6 +1742,7 @@ end
 
 tn(sym::Symbol) =
     ccall(:jl_new_struct, Any, (Any,Any...), TopNode, sym, Any)
+qn(v) = ccall(:jl_new_struct, Any, (Any,Any...), QuoteNode, v)
 
 const top_tupleref = tn(:tupleref)
 const top_tuple = tn(:tuple)
@@ -1751,7 +1770,7 @@ function inlining_pass(e::Expr, sv, ast)
         return (e,())
     end
     arg1 = eargs[1]
-    if is_known_call(e, ccall, sv)
+    if is_known_call(e, Core.Intrinsics.ccall, sv)
         i0 = 3
         isccall = true
     else
@@ -1789,8 +1808,9 @@ function inlining_pass(e::Expr, sv, ast)
         end
     end
     if isccall
-        for i=5:2:length(eargs)
-            if isa(eargs[i],Symbol) || isa(eargs[i],SymbolNode)
+        le = length(eargs)
+        for i=5:2:le
+            if i<le && (isa(eargs[i],Symbol) || isa(eargs[i],SymbolNode))
                 eargs[i+1] = 0
             end
         end
@@ -1910,14 +1930,14 @@ function find_sa_vars(ast)
         e = body[i]
         if isa(e,Expr) && is(e.head,:(=))
             lhs = e.args[1]
-            if !has(av, lhs)
+            if !haskey(av, lhs)
                 av[lhs] = e.args[2]
             else
                 av2[lhs] = true
             end
         end
     end
-    filter!((var,_)->!has(av2,var), av)
+    filter!((var,_)->!haskey(av2,var), av)
     for vi in ast.args[2][2]
         if (vi[3]&1)!=0
             # remove captured vars
@@ -1966,7 +1986,7 @@ function tuple_elim_pass(ast::Expr)
     i = 1
     while i < length(body)
         e = body[i]
-        if !(isa(e,Expr) && is(e.head,:(=)) && has(vs, e.args[1]))
+        if !(isa(e,Expr) && is(e.head,:(=)) && haskey(vs, e.args[1]))
             i += 1
             continue
         end
@@ -1980,7 +2000,7 @@ function tuple_elim_pass(ast::Expr)
                 continue
             end
 
-            delete!(body, i)  # remove tuple allocation
+            splice!(body, i)  # remove tuple allocation
             # convert tuple allocation to a series of local var assignments
             vals = cell(nv)
             n_ins = 0

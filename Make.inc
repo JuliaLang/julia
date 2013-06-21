@@ -30,48 +30,28 @@ endif
 ifeq ($(XC_HOST),)
 CROSS_COMPILE=
 else
-ifeq ($(XC_HOST),i686-w64-mingw32)
-override OS = WINNT
-override ARCH = i686
 override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
-export WINEPATH := '$(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | sed "s/:/;/g");C:\\MinGW\\bin;C:\\MinGW\\msys\\1.0\\bin;$(BUILD)/Git/bin'
-else ifeq ($(XC_HOST),x86_64-w64-mingw32)
-override OS = WINNT
-override ARCH = x86_64
-override OPENBLAS_DYNAMIC_ARCH = 1
-override CROSS_COMPILE=$(XC_HOST)-
-export WINEPATH := '$(BUILD)/lib/julia;$(BUILD)/lib;$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | sed "s/:/;/g");C:\\MinGW\\bin;C:\\MinGW\\msys\\1.0\\bin;$(BUILD)/Git/bin'
+ifneq (,$(findstring mingw,$(XC_HOST)))
+override OS := WINNT
+export WINE_PATH := $(shell winepath -w $(BUILD)/lib/julia);$(shell winepath -w $(BUILD)/lib)
+export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
+export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
+export WINE_PATH := $(WINE_PATH);C:\MinGW\\bin;C:\MinGW\msys\1.0\bin;$(shell winepath -w $(BUILD)/Git/bin)
 else
 $(error "unknown XC_HOST variable set")
 endif
 endif
 
 # Figure out OS and architecture
-BUILD_OS = $(shell uname)
-OS = $(BUILD_OS)
-ARCH = $(shell uname -m)
+BUILD_OS := $(shell uname)
+OS := $(BUILD_OS)
 
-# Use 64-bit libraries by default on 64-bit architectures
-ifeq ($(ARCH), x86_64)
-USE_LIB64 = 1
+ifneq (,$(findstring MINGW,$(OS)))
+override OS := WINNT
 endif
-
-USE_MKL = 0
-MKLLIB = /path/to/mkl/lib/intel64
-
-# ATLAS must have been previously built with "make -C deps compile-atlas" (without -jN),
-# or installed to usr/lib/libatlas from some another source (built as
-# a shared library, for your platform, single threaded)
-USE_ATLAS = 0
-ATLAS_LIBDIR = $(BUILD)/lib
-#or ATLAS_LIBDIR = /path/to/system/atlas/lib
-
-ifeq ($(OS), MINGW32_NT-6.1)
-OS=WINNT
-endif
-ifeq ($(BUILD_OS), MINGW32_NT-6.1)
-BUILD_OS=WINNT
+ifneq (,$(findstring MINGW,$(BUILD_OS)))
+override BUILD_OS := WINNT
 endif
 
 ifeq ($(OS), WINNT)
@@ -110,28 +90,47 @@ endif
 endif
 
 ifeq ($(USEGCC),1)
+HOSTCC = gcc
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -ggdb3 -DDEBUG -fstack-protector-all
-SHIPFLAGS = -O3 -DNDEBUG -falign-functions
-ifneq ($(ARCH), ppc64)
-  SHIPFLAGS += -momit-leaf-frame-pointer
-endif
+DEBUGFLAGS = -O0 -ggdb3 -DDEBUG -fstack-protector-all
+SHIPFLAGS = -O3 -falign-functions
 endif
 
 ifeq ($(USECLANG),1)
+HOSTCC = clang
 CC = $(CROSS_COMPILE)clang
 CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
-DEBUGFLAGS = -g -DDEBUG -fstack-protector-all
-SHIPFLAGS = -O3 -DNDEBUG
+DEBUGFLAGS = -O0 -g -DDEBUG -fstack-protector-all
+SHIPFLAGS = -O3
 ifeq ($(OS), Darwin)
 CC += -mmacosx-version-min=10.6
 CXX += -mmacosx-version-min=10.6
 JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
+endif
+endif
+
+BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
+ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
+ifeq ($(ARCH),mingw32)
+$(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
+endif
+ifeq ($(OS),Darwin)
+ifeq ($(OS),$(BUILD_OS))
+## Mac is a nifty dual-arch platform (or was until 10.8), so we detect the currently running OS arch instead
+## of the compiler "-dumpmachine" result, like I believe the compiler does, and make a substitution
+ARCH := $(shell uname -m)
+BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
+endif
+endif
+
+ifeq ($(USEGCC),1)
+ifneq ($(ARCH), ppc64)
+  SHIPFLAGS += -momit-leaf-frame-pointer
 endif
 endif
 
@@ -163,6 +162,7 @@ USE_SYSTEM_BLAS=0
 USE_SYSTEM_LAPACK=0
 USE_SYSTEM_FFTW=0
 USE_SYSTEM_GMP=0
+USE_SYSTEM_MPFR=0
 USE_SYSTEM_ARPACK=0
 USE_SYSTEM_SUITESPARSE=0
 USE_SYSTEM_ZLIB=0
@@ -177,9 +177,8 @@ endif
 # Snow Leopard specific configuration
 ifeq ($(OS), Darwin)
 ifeq ($(OSXVER), 10.6)
-USE_SYSTEM_LIBM = 1
-USE_SYSTEM_BLAS = 1
-USE_SYSTEM_LAPACK = 1
+USE_SYSTEM_LIBM=1
+USE_SYSTEM_BLAS=1
 endif
 endif
 
@@ -215,10 +214,17 @@ else
 PCRE_CONFIG = $(BUILD)/bin/pcre-config
 endif
 
+# Use 64-bit libraries by default on 64-bit architectures
+ifeq ($(ARCH), x86_64)
+USE_BLAS64 = 1
+endif
+
 ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
-LIBBLAS = -framework vecLib -lBLAS
-LIBBLASNAME = libblas
+USE_BLAS64 = 0
+USE_SYSTEM_LAPACK = 0
+LIBBLAS = -framework vecLib -lblas
+LIBBLASNAME = libBLAS
 else
 LIBBLAS = -lblas
 LIBBLASNAME = libblas
@@ -228,17 +234,19 @@ LIBBLAS = -L$(BUILD)/lib -lopenblas
 LIBBLASNAME = libopenblas
 endif
 
-ifeq ($(USE_SYSTEM_LAPACK), 1)
-ifeq ($(OS), Darwin)
-LIBLAPACK = -framework vecLib -lLAPACK
-LIBLAPACKNAME = liblapack
-else
-LIBLAPACK = -llapack
-LIBLAPACKNAME = liblapack
-endif
-else
+# OpenBLAS builds LAPACK as part of its build.
+# We only need to build LAPACK if we are not using OpenBLAS.
+ifeq ($(USE_SYSTEM_BLAS), 0)
 LIBLAPACK = $(LIBBLAS)
 LIBLAPACKNAME = $(LIBBLASNAME)
+else
+ifeq ($(USE_SYSTEM_LAPACK), 1)
+LIBLAPACK = -llapack
+LIBLAPACKNAME = liblapack
+else
+LIBLAPACK = -L$(BUILD)/lib -llapack
+LIBLAPACKNAME = liblapack
+endif
 endif
 
 ifeq ($(USE_SYSTEM_LIBM), 1)
@@ -255,10 +263,6 @@ ifeq ($(USE_SYSTEM_LIBUV), 1)
 else
   LIBUV = $(BUILD)/lib/libuv.a
   LIBUV_INC = $(JULIAHOME)/deps/libuv/include
-endif
-
-ifeq ($(USE_MKL), 1)
-  USE_LIB64 = 0
 endif
 
 # OS specific stuff
@@ -331,9 +335,11 @@ endif
 
 ifeq ($(OS), WINNT)
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi
+ifeq ($(ARCH),x86_64)
+OSLIBS += -ldbghelp
+endif
 JCFLAGS += -D_WIN32_WINNT=0x0600
 JCXXFLAGS += -D_WIN32_WINNT=0x0600
-LLVM_CONFIG := WINEPATH="$(WINEPATH)" $(LLVM_CONFIG).exe
 JLDFLAGS = -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
@@ -342,7 +348,17 @@ endif
 
 # MKL
 
+ifeq ($(USE_MKL),)
+  USE_MKL = 0
+endif
 ifeq ($(USE_MKL), 1)
+ifeq ($(strip $(MKLLIB)),)
+  MKLLIB = $$MKLROOT/lib/intel64
+endif
+endif
+
+ifeq ($(USE_MKL), 1)
+USE_BLAS64 = 0
 USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
 LIBBLAS   = -L$(MKLLIB) -lmkl_rt
@@ -356,7 +372,17 @@ ifneq ($(strip $(MKLLIB)),)
 endif
 endif
 
+# ATLAS
+
+# ATLAS must have been previously built with "make -C deps compile-atlas" (without -jN),
+# or installed to usr/lib/libatlas from some another source (built as
+# a shared library, for your platform, single threaded)
+USE_ATLAS = 0
+ATLAS_LIBDIR = $(BUILD)/lib
+#or ATLAS_LIBDIR = /path/to/system/atlas/lib
+
 ifeq ($(USE_ATLAS), 1)
+USE_BLAS64 = 0
 USE_SYSTEM_BLAS = 1
 USE_SYSTEM_LAPACK = 1
 LIBBLAS = -L$(ATLAS_LIBDIR) -lsatlas
@@ -377,24 +403,41 @@ ifeq ($(BUILD_OS), WINNT)
 define mingw_to_dos
 $(subst /,\\,$(subst $(shell $(2) pwd),$(shell $(2) cmd //C cd),$(abspath $(1))))
 endef
-define symlink_target
-CLEAN_TARGETS += clean-$(2)/$(1)
-clean-$$(abspath $(2)/$(1)): 
-	@-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&)
-$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
-$$(abspath $(2)/$(1)): | $$(abspath $(2))
-	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&) $$(call mingw_to_dos,$(1),) 
-endef
-else
-define symlink_target
-CLEAN_TARGETS += clean-$(2)/$(1)
-clean-$$(abspath $(2)/$(1)): 
-	@-rm $$(abspath $(2)/$(1))
-$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
-$$(abspath $(2)/$(1)): | $$(abspath $(2))
-	@ln -sf $$(abspath $(1)) $$@ 
-endef
 endif
+
+define symlink_target
+CLEAN_TARGETS += clean-$(2)/$(1)
+clean-$$(abspath $(2)/$(1)): 
+ifeq ($(BUILD_OS), WINNT)
+	@-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&)
+else
+	@-rm $$(abspath $(2)/$(1))
+endif
+$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
+$$(abspath $(2)/$(1)): | $$(abspath $(2))
+ifeq ($(BUILD_OS), WINNT)
+	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&) $$(call mingw_to_dos,$(1),)
+else ifdef JULIA_VAGRANT_BUILD
+	@cp -R $$(abspath $(1)) $$@
+else
+	@ln -sf $$(abspath $(1)) $$@
+endif
+endef
+
+ifeq ($(BUILD_OS), WINNT)
+spawn = $(1)
+else
+ifeq ($(OS), WINNT)
+spawn = wine cmd /c "set PATH=$(WINE_PATH) && $$(exec winepath -w '$(1)')"
+else
+spawn = $(1)
+endif
+endif
+
+exec = $(shell $(call spawn,$(1)))
+
+wine_pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(shell printf %s\n '$(2)' | xargs -d";" winepath -u | tr '\n' ' '))))
+pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 
 JULIA_EXECUTABLE_debug = $(BUILD)/bin/julia-debug-$(DEFAULT_REPL)$(EXE)
 JULIA_EXECUTABLE_release = $(BUILD)/bin/julia-release-$(DEFAULT_REPL)$(EXE)

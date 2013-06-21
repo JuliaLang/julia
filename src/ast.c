@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
 #include "julia.h"
@@ -359,6 +359,9 @@ static value_t julia_to_scm(jl_value_t *v)
     if (v == jl_false) {
         return FL_F;
     }
+    if (v == jl_nothing) {
+        return fl_cons(symbol("null"), FL_NIL);
+    }
     if (jl_is_expr(v)) {
         jl_expr_t *ex = (jl_expr_t*)v;
         value_t args = array_to_list(ex->args);
@@ -404,8 +407,8 @@ static value_t julia_to_scm(jl_value_t *v)
 // this is used to parse a line of repl input
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str)
 {
-    value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string")),
-                          cvalue_static_cstring(str));
+    value_t s = cvalue_static_cstring(str);
+    value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string")), s);
     if (e == FL_EOF)
         return jl_nothing;
     
@@ -420,7 +423,7 @@ DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy)
     value_t p = fl_applyn(3, symbol_value(symbol("jl-parse-one-string")),
                           s, fixnum(pos0), greedy?FL_T:FL_F);
     jl_value_t *expr=NULL, *pos1=NULL;
-    JL_GC_PUSH(&expr, &pos1);
+    JL_GC_PUSH2(&expr, &pos1);
 
     value_t e = car_(p);
     if (e == FL_EOF) {
@@ -438,8 +441,8 @@ DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy)
 
 void jl_start_parsing_file(const char *fname)
 {
-    fl_applyn(1, symbol_value(symbol("jl-parse-file")),
-              cvalue_static_cstring(fname));
+    value_t s = cvalue_static_cstring(fname);
+    fl_applyn(1, symbol_value(symbol("jl-parse-file")), s);
 }
 
 void jl_stop_parsing()
@@ -467,9 +470,13 @@ jl_value_t *jl_parse_next()
 
 void jl_load_file_string(const char *text, char *filename)
 {
+    value_t t, f;
+    t = cvalue_static_cstring(text);
+    fl_gc_handle(&t);
+    f = cvalue_static_cstring(filename);
     fl_applyn(2, symbol_value(symbol("jl-parse-string-stream")),
-              cvalue_static_cstring(text),
-              cvalue_static_cstring(filename));
+              t, f);
+    fl_free_gc_handles(1);
     jl_parse_eval_all(filename);
 }
 
@@ -505,7 +512,7 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
     // `(lambda () (() () ()) ,expr)
     jl_expr_t *le=NULL, *bo=NULL; jl_value_t *vi=NULL;
     jl_value_t *mt = jl_an_empty_cell;
-    JL_GC_PUSH(&le, &vi, &bo);
+    JL_GC_PUSH3(&le, &vi, &bo);
     le = jl_exprn(lambda_sym, 3);
     jl_cellset(le->args, 0, mt);
     vi = (jl_value_t*)jl_alloc_cell_1d(3);
@@ -631,7 +638,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
         */
         // TODO: avoid if above condition is true and decls have already
         // been evaluated.
-        JL_GC_PUSH(&li);
+        JL_GC_PUSH1(&li);
         li = jl_add_static_parameters(li, sp);
         li->ast = jl_prepare_ast(li, li->sparams);
         JL_GC_POP();
@@ -640,7 +647,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
     else if (jl_typeis(expr,jl_array_any_type)) {
         jl_array_t *a = (jl_array_t*)expr;
         jl_array_t *na = jl_alloc_cell_1d(jl_array_len(a));
-        JL_GC_PUSH(&na);
+        JL_GC_PUSH1(&na);
         size_t i;
         for(i=0; i < jl_array_len(a); i++)
             jl_cellset(na, i, copy_ast(jl_cellref(a,i), sp, do_sp));
@@ -650,7 +657,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
         jl_expr_t *ne = jl_exprn(e->head, jl_array_len(e->args));
-        JL_GC_PUSH(&ne);
+        JL_GC_PUSH1(&ne);
         if (e->head == lambda_sym) {
             jl_exprarg(ne, 0) = copy_ast(jl_exprarg(e,0), sp, 0);
             jl_exprarg(ne, 1) = copy_ast(jl_exprarg(e,1), sp, 0);
@@ -694,11 +701,15 @@ static void eval_decl_types(jl_array_t *vi, jl_tuple_t *spenv)
     for(i=0; i < jl_array_len(vi); i++) {
         jl_array_t *v = (jl_array_t*)jl_cellref(vi, i);
         assert(jl_array_len(v) > 1);
-        jl_value_t *ty =
-            jl_interpret_toplevel_expr_with(jl_cellref(v,1),
-                                            &jl_tupleref(spenv,0),
-                                            jl_tuple_len(spenv)/2);
-        jl_cellref(v, 1) = ty;
+        JL_TRY {
+            jl_value_t *ty =
+                jl_interpret_toplevel_expr_with(jl_cellref(v,1),
+                                                &jl_tupleref(spenv,0),
+                                                jl_tuple_len(spenv)/2);
+            jl_cellref(v, 1) = ty;
+        }
+        JL_CATCH {
+        }
     }
 }
 
@@ -725,7 +736,7 @@ jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
     jl_tuple_t *spenv = NULL;
     jl_value_t *ast = li->ast;
     if (ast == NULL) return NULL;
-    JL_GC_PUSH(&spenv, &ast);
+    JL_GC_PUSH2(&spenv, &ast);
     spenv = jl_tuple_tvars_to_symbols(sparams);
     if (!jl_is_expr(ast)) {
         ast = jl_uncompress_ast(li, ast);

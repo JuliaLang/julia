@@ -4,27 +4,31 @@
 #include <assert.h>
 #include <sys/stat.h>
 
-#ifdef _WIN32
-#  include <windows.h>
-#  include <direct.h>
+#include "platform.h"
+#include "julia.h"
+#include "uv.h"
+#ifdef _OS_WINDOWS_
+#include <windows.h>
+#include <direct.h>
 #else
-#  include <unistd.h>
-#  include <dlfcn.h>
+#include <unistd.h>
+#include <dlfcn.h>
 #endif
 
 #if defined(__APPLE__)
 static char *extensions[] = { "", ".dylib" };
 #define N_EXTENSIONS 2
-#elif defined(_WIN32)
+#elif defined(_OS_WINDOWS_)
 static char *extensions[] = { "", ".dll" };
 #define N_EXTENSIONS 2
+#if defined(_CPU_X86_64_)
+int needsSymRefreshModuleList = 0;
+#endif
 #else
 static char *extensions[] = { ".so", "" };
 #define N_EXTENSIONS 2
 #endif
 
-#include "julia.h"
-#include "uv.h"
 
 #define PATHBUF 512
 
@@ -38,6 +42,9 @@ char *jl_lookup_soname(char *pfx, size_t n);
 
 int jl_uv_dlopen(const char* filename, uv_lib_t* lib, unsigned flags)
 {
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+    needsSymRefreshModuleList = 1;
+#endif
 #if defined(RTLD_GLOBAL) && defined(RTLD_LAZY) /* POSIX flags available */
     dlerror(); /* Reset error status. */
     lib->handle = dlopen(filename, 
@@ -78,7 +85,7 @@ uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int throw_err)
     handle->errmsg=NULL;
 
     if (modname == NULL) {
-#ifdef _WIN32
+#ifdef _OS_WINDOWS_
         if(!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
             (LPCSTR)(&jl_load_dynamic_library),
             &handle->handle))
@@ -88,7 +95,7 @@ uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int throw_err)
 #endif
         goto done;
     }
-#ifdef _WIN32
+#ifdef _OS_WINDOWS_
     else if (modname[1] == ':') {
 #else
     else if (modname[0] == '/') {
@@ -151,7 +158,7 @@ void *jl_dlsym(uv_lib_t *handle, char *symbol)
     return ptr;
 }
 
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 //Look for symbols in win32 libraries
 void *jl_dlsym_win32(char *f_name)
 {

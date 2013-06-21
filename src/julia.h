@@ -1,10 +1,6 @@
 #ifndef JULIA_H
 #define JULIA_H
 
-#if (defined(_WIN32) || defined (_MSC_VER)) && !defined(__WIN32__)
-    #define __WIN32__
-#endif
-
 #include "libsupport.h"
 #include <stdint.h>
 #include "uv.h"
@@ -15,7 +11,7 @@
 #include "arraylist.h"
 
 #include <setjmp.h>
-#ifndef __WIN32__
+#ifndef _OS_WINDOWS_
 #  define jl_jmp_buf sigjmp_buf
 #else
 #  define jl_jmp_buf jmp_buf
@@ -80,24 +76,10 @@ typedef struct {
     jl_value_t *data[1];
 } jl_tuple_t;
 
-// pseudo-object to track managed malloc pointers
-// currently only referenced from an array's data owner field
-typedef struct _jl_mallocptr_t {
-    struct _jl_mallocptr_t *next;
-    size_t sz;
-    void *ptr;
-} jl_mallocptr_t;
-
 // how much space we're willing to waste if an array outgrows its
 // original object
 #define ARRAY_INLINE_NBYTES (2048*sizeof(void*))
 
-/*
-  array data is allocated in two ways: either inline in the array object,
-  (in _space), or with malloc with data owner pointing to a jl_mallocptr_t.
-  data owner can also point to another array, if the original data was
-  allocated inline.
-*/
 typedef struct {
     JL_DATA_TYPE
     void *data;
@@ -105,10 +87,18 @@ typedef struct {
     size_t length;
 #endif
 
-    unsigned short ndims:13;
+    unsigned short ndims:11;
     unsigned short ptrarray:1;  // representation is pointer array
-    unsigned short ismalloc:1;  // data owner is a jl_mallocptr_t
-    unsigned short isinline:1;  // data stored inline
+    /*
+      how - allocation style
+      0 = data is inlined, or a foreign pointer we don't manage
+      1 = julia-allocated buffer that needs to be marked
+      2 = malloc-allocated pointer this array object manages
+      3 = has a pointer to the Array that owns the data
+    */
+    unsigned short how:2;
+    unsigned short isshared:1;  // data is shared by multiple Arrays
+    unsigned short isaligned:1; // data allocated with memalign
     uint16_t elsize;
     uint32_t offset;  // for 1-d only. does not need to get big.
 
@@ -121,11 +111,7 @@ typedef struct {
     };
     // other dim sizes go here for ndims > 2
 
-    // followed by alignment padding and inline data, or an owner pointer
-    union {
-        char _space[1];
-        void *_pad;
-    };
+    // followed by alignment padding and inline data, or owner pointer
 } jl_array_t;
 
 #ifdef STORE_ARRAY_LEN
@@ -139,7 +125,7 @@ DLLEXPORT size_t jl_array_len_(jl_array_t *a);
 #define jl_array_dim0(a)  (((jl_array_t*)(a))->nrows)
 #define jl_array_nrows(a) (((jl_array_t*)(a))->nrows)
 #define jl_array_ndims(a) ((int32_t)(((jl_array_t*)a)->ndims))
-#define jl_array_data_owner(a) (*((jl_value_t**)(&a->_pad+jl_array_ndimwords(jl_array_ndims(a)))))
+#define jl_array_data_owner(a) (*((jl_value_t**)(&a->ncols+1+jl_array_ndimwords(jl_array_ndims(a)))))
 
 // compute # of extra words needed to store dimensions
 static inline int jl_array_ndimwords(uint32_t ndims)
@@ -426,20 +412,22 @@ extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
 
 extern uv_lib_t *jl_dl_handle;
-#if defined(__WIN32__) || defined (_WIN32)
+
+#if defined(_OS_WINDOWS_)
 extern uv_lib_t *jl_ntdll_handle;
 extern uv_lib_t *jl_exe_handle;
 extern uv_lib_t *jl_kernel32_handle;
 extern uv_lib_t *jl_crtdll_handle;
 extern uv_lib_t *jl_winsock_handle;
 #endif
+
 extern uv_loop_t *jl_io_loop;
 
 // some important symbols
 extern jl_sym_t *call_sym;
 extern jl_sym_t *call1_sym;
 extern jl_sym_t *dots_sym;
-extern jl_sym_t *quote_sym;
+extern jl_sym_t *quote_sym;   extern jl_sym_t *newvar_sym;
 extern jl_sym_t *top_sym;     extern jl_sym_t *dot_sym;
 extern jl_sym_t *line_sym;    extern jl_sym_t *toplevel_sym;
 extern DLLEXPORT jl_sym_t *jl_continue_sym;
@@ -694,9 +682,9 @@ void jl_assign_bits(void *dest, jl_value_t *bits);
 DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...);
 DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na);
 DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
-jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env,
+DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env,
                               jl_lambda_info_t *li);
-jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);
+DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);
 jl_tuple_t *jl_tuple(size_t n, ...);
 jl_tuple_t *jl_tuple1(void *a);
 jl_tuple_t *jl_tuple2(void *a, void *b);
@@ -709,7 +697,7 @@ DLLEXPORT jl_sym_t *jl_symbol_lookup(const char *str);
 DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len);
 DLLEXPORT jl_sym_t *jl_gensym(void);
 DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len);
-jl_sym_t *jl_get_root_symbol(void);
+DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name);
 void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name);
@@ -801,7 +789,7 @@ DLLEXPORT void jl_array_grow_beg(jl_array_t *a, size_t inc);
 DLLEXPORT void jl_array_del_beg(jl_array_t *a, size_t dec);
 DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz);
 DLLEXPORT void *jl_value_ptr(jl_value_t *a);
-void jl_cell_1d_push(jl_array_t *a, jl_value_t *item);
+DLLEXPORT void jl_cell_1d_push(jl_array_t *a, jl_value_t *item);
 
 // system information
 DLLEXPORT int jl_errno(void);
@@ -809,7 +797,7 @@ DLLEXPORT int32_t jl_stat(const char* path, char* statbuf);
 
 // environment entries
 DLLEXPORT jl_value_t *jl_environ(int i);
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 DLLEXPORT jl_value_t *jl_env_done(char *pos);
 #endif
 
@@ -827,7 +815,7 @@ DLLEXPORT uv_loop_t *jl_global_event_loop();
 DLLEXPORT uv_pipe_t *jl_make_pipe(int writable, int julia_only, jl_value_t *julia_struct);
 DLLEXPORT void jl_close_uv(uv_handle_t *handle);
 
-DLLEXPORT int16_t jl_start_reading(uv_stream_t *handle);
+DLLEXPORT int32_t jl_start_reading(uv_stream_t *handle);
 
 DLLEXPORT void jl_callback(void *callback);
 
@@ -853,7 +841,7 @@ DLLEXPORT size_t jl_sizeof_uv_stream_t();
 DLLEXPORT size_t jl_sizeof_uv_pipe_t();
 DLLEXPORT int jl_sizeof_ios_t();
 
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 DLLEXPORT struct tm* localtime_r(const time_t *t, struct tm *tm);
 #endif
 
@@ -870,19 +858,18 @@ void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
 
 // initialization functions
 DLLEXPORT void julia_init(char *imageFile);
-DLLEXPORT
-int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
+DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
 void jl_init_types(void);
 void jl_init_box_caches(void);
-void jl_init_frontend(void);
+DLLEXPORT void jl_init_frontend(void);
 void jl_init_primitives(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void *stack, size_t ssize);
 void jl_init_serializer(void);
 
-void jl_save_system_image(char *fname);
-void jl_restore_system_image(char *fname);
+DLLEXPORT void jl_save_system_image(char *fname);
+DLLEXPORT void jl_restore_system_image(char *fname);
 
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str);
@@ -975,7 +962,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
 DLLEXPORT void jl_show_method_table(jl_value_t *outstr, jl_function_t *gf);
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
 jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types,
-                                        int cache);
+                                        int cache, int inexact);
 jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache);
 jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
                          jl_value_t **args, size_t nargs);
@@ -987,14 +974,14 @@ jl_array_t *jl_lam_vinfo(jl_expr_t *l);
 jl_array_t *jl_lam_capt(jl_expr_t *l);
 int jl_lam_vars_captured(jl_expr_t *ast);
 jl_expr_t *jl_lam_body(jl_expr_t *l);
-jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast);
+DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast);
 jl_sym_t *jl_decl_var(jl_value_t *ex);
 DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
-jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams);
+DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams);
 
-jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);
-jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data);
+DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);
+DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data);
 
 static inline int jl_vinfo_capt(jl_array_t *vi)
 {
@@ -1032,6 +1019,10 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
     if (!jl_is_##type(v)) {                                             \
         jl_type_error(#fname, (jl_value_t*)jl_##type##_type, (v));      \
     }
+#define JL_TYPECHKS(fname, type, v)                                     \
+    if (!jl_is_##type(v)) {                                             \
+        jl_type_error(fname, (jl_value_t*)jl_##type##_type, (v));       \
+    }
 
 // gc
 
@@ -1053,6 +1044,22 @@ extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
 #define JL_GC_PUSH(...)                                                   \
   void *__gc_stkf[] = {(void*)((VA_NARG(__VA_ARGS__)<<1)|1), jl_pgcstack, \
                        __VA_ARGS__};                                      \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSH1(arg1)                                                 \
+  void *__gc_stkf[] = {(void*)3, jl_pgcstack, arg1};                      \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSH2(arg1, arg2)                                           \
+  void *__gc_stkf[] = {(void*)5, jl_pgcstack, arg1, arg2};                \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSH3(arg1, arg2, arg3)                                     \
+  void *__gc_stkf[] = {(void*)7, jl_pgcstack, arg1, arg2, arg3};          \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSH4(arg1, arg2, arg3, arg4)                               \
+  void *__gc_stkf[] = {(void*)9, jl_pgcstack, arg1, arg2, arg3, arg4};    \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 #define JL_GC_PUSHARGS(rts_var,n)                               \
@@ -1079,9 +1086,11 @@ void jl_gc_preserve(jl_value_t *v);
 void jl_gc_unpreserve(void);
 int jl_gc_n_preserved_values(void);
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
-jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
-jl_mallocptr_t *jl_gc_acquire_buffer(void *b, size_t sz);
-jl_mallocptr_t *jl_gc_managed_malloc(size_t sz);
+DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
+void *jl_gc_managed_malloc(size_t sz);
+void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned);
+void jl_gc_free_array(jl_array_t *a);
+void jl_gc_track_malloced_array(jl_array_t *a);
 void *alloc_2w(void);
 void *alloc_3w(void);
 void *alloc_4w(void);
@@ -1181,6 +1190,7 @@ DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
 DLLEXPORT void jl_free2(void *p, void *hint);
 
 DLLEXPORT int jl_cpu_cores(void);
+DLLEXPORT long jl_getpagesize(void);
 
 DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n);
 DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
@@ -1210,12 +1220,18 @@ static inline void jl_eh_restore_state(jl_handler_t *eh)
 DLLEXPORT void jl_enter_handler(jl_handler_t *eh);
 DLLEXPORT void jl_pop_handler(int n);
 
-#if defined(__WIN32__)
+#if defined(_OS_WINDOWS_)
+#if defined(_COMPILER_MINGW_)
 int __attribute__ ((__nothrow__,__returns_twice__)) jl_setjmp(jmp_buf _Buf);
 __declspec(noreturn) __attribute__ ((__nothrow__)) void jl_longjmp(jmp_buf _Buf,int _Value);
-#define jl_setjmp_f    jl_setjmp
+#define jl_setjmp_f jl_setjmp
 #define jl_setjmp(a,b) jl_setjmp(a)
 #define jl_longjmp(a,b) jl_longjmp(a,b)
+#else
+#define jl_setjmp_f setjmp
+#define jl_setjmp(a,b) setjmp(a)
+#define jl_longjmp(a,b) longjmp(a,b)
+#endif
 #else
 // determine actual entry point name
 #if defined(sigsetjmp)
@@ -1235,7 +1251,7 @@ __declspec(noreturn) __attribute__ ((__nothrow__)) void jl_longjmp(jmp_buf _Buf,
 
 #define JL_EH_POP() jl_eh_restore_state(&__eh)
 
-#ifdef __WIN32__
+#ifdef _OS_WINDOWS_
 #define JL_CATCH                                                \
     else                                                        \
         for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0) \

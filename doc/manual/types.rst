@@ -367,13 +367,16 @@ instance of such types::
     true
 
 The ``is`` function confirms that the "two" constructed instances of
-``NoFields`` are actually one and the same.
+``NoFields`` are actually one and the same. Singleton types are
+described in further detail `below <#man-singleton-types>`_.
 
 There is much more to say about how instances of composite types are
 created, but that discussion depends on both `Parametric
 Types <#man-parametric-types>`_ and on :ref:`man-methods`, and is
 sufficiently important to be addressed in its own section:
 :ref:`man-constructors`.
+
+.. _man-immutable-composite-types:
 
 Immutable Composite Types
 -------------------------
@@ -570,8 +573,8 @@ subtypes of each other::
 
 This last point is very important:
 
-    **Even though ``Float64 <: Real`` we DO NOT have
-    ``Point{Float64} <: Point{Real}``.**
+    **Even though** ``Float64 <: Real`` **we DO NOT have**
+    ``Point{Float64} <: Point{Real}``\ **.**
 
 In other words, in the parlance of type theory, Julia's type parameters
 are *invariant*, rather than being covariant (or even contravariant).

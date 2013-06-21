@@ -400,7 +400,17 @@ let
     for i = 1:length(a2)
         @test a2[i] == a[I[i]]
     end
+    a = [1,3,5]
+    b = [1 3]
+    a[b] = 8
+    @test a == [8,3,8]
 end
+
+# assigning an array into itself
+a = [1,3,5]
+b = [3,1,2]
+a[b] = a
+@test a == [3,5,1]
 
 # sort on arrays
 begin
@@ -414,11 +424,11 @@ begin
     @test isless(asc[:,1],asc[:,2])
     @test isless(asc[:,2],asc[:,3])
 
-    asr = sortrows(a, Sort.Reverse())
+    asr = sortrows(a, Sort.Reverse)
     @test isless(asr[2,:],asr[1,:])
     @test isless(asr[3,:],asr[2,:])
 
-    asc = sortcols(a, Sort.Reverse())
+    asc = sortcols(a, Sort.Reverse)
     @test isless(asc[:,2],asc[:,1])
     @test isless(asc[:,3],asc[:,2])
 
@@ -432,3 +442,34 @@ begin
     @test issorted(as[2,:])
     @test issorted(as[3,:])
 end
+
+# fill
+@test fill!(Array(Float64,1),-0.0)[1] === -0.0
+
+# splice!
+for idx in {1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
+            8:9, 9:10, 6:9, 7:10}
+    for repl in {[], [11], [11,22], [11,22,33,44,55]}
+        a = [1:10]; acopy = copy(a)
+        @test splice!(a, idx, repl) == acopy[idx]
+        @test a == [acopy[1:(first(idx)-1)], repl, acopy[(last(idx)+1):end]]
+    end
+end
+
+# comprehensions
+X = [ i+2j for i=1:5, j=1:5 ]
+@test X[2,3] == 8
+@test X[4,5] == 14
+@test isequal(ones(2,3) * ones(2,3)', [3. 3.; 3. 3.])
+@test isequal([ [1,2] for i=1:2, : ], [1 2; 1 2])
+# where element type is a Union. try to confuse type inference.
+foo32_64(x) = (x<2) ? int32(x) : int64(x)
+boo32_64() = [ foo32_64(i) for i=1:2 ]
+let a36 = boo32_64()
+    @test a36[1]==1 && a36[2]==2
+end
+@test isequal([1,2,3], [a for (a,b) in enumerate(2:4)])
+@test isequal([2,3,4], [b for (a,b) in enumerate(2:4)])
+
+@test_fails (10.^[-1])[1] == 0.1
+@test (10.^[-1.])[1] == 0.1

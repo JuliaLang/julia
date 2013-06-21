@@ -1,15 +1,28 @@
+## type aliases ##
+
+typealias SmallSigned Union(Int8,Int16,Int32,Int)
+typealias SmallUnsigned Union(Uint8,Uint16,Uint32,Uint)
+
 ## integer arithmetic ##
 
--(x::Signed) = -int(x)
--(x::Unsigned) = -uint(x)
+-(x::SmallSigned) = -int(x)
+-(x::SmallUnsigned) = -uint(x)
 
-+{T<:Signed}(x::T, y::T) = int(x) + int(y)
--{T<:Signed}(x::T, y::T) = int(x) - int(y)
-*{T<:Signed}(x::T, y::T) = int(x) * int(y)
++{T<:SmallSigned}(x::T, y::T) = int(x) + int(y)
+-{T<:SmallSigned}(x::T, y::T) = int(x) - int(y)
+*{T<:SmallSigned}(x::T, y::T) = int(x) * int(y)
 
-+{T<:Unsigned}(x::T, y::T) = uint(x) + uint(y)
--{T<:Unsigned}(x::T, y::T) = uint(x) - uint(y)
-*{T<:Unsigned}(x::T, y::T) = uint(x) * uint(y)
++{T<:SmallUnsigned}(x::T, y::T) = uint(x) + uint(y)
+-{T<:SmallUnsigned}(x::T, y::T) = uint(x) - uint(y)
+*{T<:SmallUnsigned}(x::T, y::T) = uint(x) * uint(y)
+
+div{T<:SmallSigned}(x::T, y::T) = div(int(x),int(y))
+rem{T<:SmallSigned}(x::T, y::T) = rem(int(x),int(y))
+mod{T<:SmallSigned}(x::T, y::T) = mod(int(x),int(y))
+
+div{T<:SmallUnsigned}(x::T, y::T) = div(uint(x),uint(y))
+rem{T<:SmallUnsigned}(x::T, y::T) = rem(uint(x),uint(y))
+mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 
 -(x::Int)     = box(Int,neg_int(unbox(Int,x)))
 -(x::Uint)    = box(Uint,neg_int(unbox(Uint,x)))
@@ -39,14 +52,6 @@
 
 /(x::Integer, y::Integer) = float(x)/float(y)
 inv(x::Integer) = float(one(x))/float(x)
-
-div{T<:Signed}(x::T, y::T) = div(int(x),int(y))
-rem{T<:Signed}(x::T, y::T) = rem(int(x),int(y))
-mod{T<:Signed}(x::T, y::T) = mod(int(x),int(y))
-
-div{T<:Unsigned}(x::T, y::T) = div(uint(x),uint(y))
-rem{T<:Unsigned}(x::T, y::T) = rem(uint(x),uint(y))
-mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 
 div(x::Signed, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)),y)),x)
 div(x::Unsigned, y::Signed) = unsigned(flipsign(signed(div(x,unsigned(abs(y)))),y))
@@ -212,30 +217,6 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 ## integer comparisons ##
 
-==(x::Int8,   y::Int8 )  = eq_int(unbox(Int8,x),unbox(Int8,y))
-==(x::Int16,  y::Int16)  = eq_int(unbox(Int16,x),unbox(Int16,y))
-==(x::Int32,  y::Int32)  = eq_int(unbox(Int32,x),unbox(Int32,y))
-==(x::Int64,  y::Int64)  = eq_int(unbox(Int64,x),unbox(Int64,y))
-==(x::Int128, y::Int128) = eq_int(unbox(Int128,x),unbox(Int128,y))
-
-==(x::Uint8,   y::Uint8 )  = eq_int(unbox(Uint8,x),unbox(Uint8,y))
-==(x::Uint16,  y::Uint16)  = eq_int(unbox(Uint16,x),unbox(Uint16,y))
-==(x::Uint32,  y::Uint32)  = eq_int(unbox(Uint32,x),unbox(Uint32,y))
-==(x::Uint64,  y::Uint64)  = eq_int(unbox(Uint64,x),unbox(Uint64,y))
-==(x::Uint128, y::Uint128) = eq_int(unbox(Uint128,x),unbox(Uint128,y))
-
-!=(x::Int8,   y::Int8)   = ne_int(unbox(Int8,x),unbox(Int8,y))
-!=(x::Int16,  y::Int16)  = ne_int(unbox(Int16,x),unbox(Int16,y))
-!=(x::Int32,  y::Int32)  = ne_int(unbox(Int32,x),unbox(Int32,y))
-!=(x::Int64,  y::Int64)  = ne_int(unbox(Int64,x),unbox(Int64,y))
-!=(x::Int128, y::Int128) = ne_int(unbox(Int128,x),unbox(Int128,y))
-
-!=(x::Uint8,   y::Uint8)   = ne_int(unbox(Uint8,x),unbox(Uint8,y))
-!=(x::Uint16,  y::Uint16)  = ne_int(unbox(Uint16,x),unbox(Uint16,y))
-!=(x::Uint32,  y::Uint32)  = ne_int(unbox(Uint32,x),unbox(Uint32,y))
-!=(x::Uint64,  y::Uint64)  = ne_int(unbox(Uint64,x),unbox(Uint64,y))
-!=(x::Uint128, y::Uint128) = ne_int(unbox(Uint128,x),unbox(Uint128,y))
-
 <(x::Int8,   y::Int8)   = slt_int(unbox(Int8,x),unbox(Int8,y))
 <(x::Int16,  y::Int16)  = slt_int(unbox(Int16,x),unbox(Int16,y))
 <(x::Int32,  y::Int32)  = slt_int(unbox(Int32,x),unbox(Int32,y))
@@ -304,7 +285,7 @@ for to in (Uint8, Uint16, Uint32, Uint64)
     end
 end
 
-function convert(::Type{Int128}, x::Float64)
+function convert(::Type{Int128}, x::FloatingPoint)
     ax = abs(x)
     top = trunc(ldexp(ax,-64))
     bot = ax - ldexp(top,64)
@@ -313,7 +294,7 @@ function convert(::Type{Int128}, x::Float64)
 end
 convert(::Type{Int128}, x::Float32) = convert(Int128, float64(x))
 
-function convert(::Type{Uint128}, x::Float64)
+function convert(::Type{Uint128}, x::FloatingPoint)
     ax = abs(x)
     top = trunc(ldexp(ax,-64))
     bot = ax - ldexp(top,64)
@@ -497,6 +478,9 @@ end
 
 ## wide multiplication, Int128 multiply and divide ##
 
+widemul(x::Union(Int8,Uint8,Int16), y::Union(Int8,Uint8,Int16)) = int32(x)*int32(y)
+widemul(x::Uint16, y::Uint16) = uint32(x)*uint32(y)
+
 widemul(x::Int32, y::Int32) = int64(x)*int64(y)
 widemul(x::Uint32, y::Uint32) = uint64(x)*uint64(y)
 
@@ -511,9 +495,9 @@ if WORD_SIZE==32
         t = u1*v0 + (w0>>>32)
         w2 = t>>32
         w1 = u0*v1 + (t&0xffffffff)
-        high = u1*v1 + w2 + (w1 >> 32)
+        hi = u1*v1 + w2 + (w1 >> 32)
         lo = w0&0xffffffff + (w1 << 32)
-        int128(high)<<64 + int128(uint128(lo))
+        int128(hi)<<64 + int128(uint128(lo))
     end
 
     function widemul(u::Uint64, v::Uint64)
@@ -526,9 +510,9 @@ if WORD_SIZE==32
         t = u1*v0 + (w0>>>32)
         w2 = t>>>32
         w1 = u0*v1 + (t&0xffffffff)
-        high = u1*v1 + w2 + (w1 >>> 32)
+        hi = u1*v1 + w2 + (w1 >>> 32)
         lo = w0&0xffffffff + (w1 << 32)
-        int128(high)<<64 + int128(uint128(lo))
+        uint128(hi)<<64 + uint128(lo)
     end
 
     function *(u::Int128, v::Int128)
@@ -540,7 +524,7 @@ if WORD_SIZE==32
         t = hilo + (lolo>>>64)
         w2 = t>>64
         w1 = lohi + (t&0xffffffffffffffff)
-        (lolo&0xffffffffffffffff) + int128(w1)<<64
+        int128(lolo&0xffffffffffffffff) + int128(w1)<<64
     end
 
     function *(u::Uint128, v::Uint128)
@@ -554,6 +538,14 @@ if WORD_SIZE==32
         w1 = lohi + (t&0xffffffffffffffff)
         (lolo&0xffffffffffffffff) + uint128(w1)<<64
     end
+
+    div(x::Int128, y::Int128) = int128(div(BigInt(x),BigInt(y)))
+    div(x::Uint128, y::Uint128) = uint128(div(BigInt(x),BigInt(y)))
+
+    rem(x::Int128, y::Int128) = int128(rem(BigInt(x),BigInt(y)))
+    rem(x::Uint128, y::Uint128) = uint128(rem(BigInt(x),BigInt(y)))
+
+    mod(x::Int128, y::Int128) = int128(mod(BigInt(x),BigInt(y)))
 else
     widemul(u::Int64, v::Int64) = int128(u)*int128(v)
     widemul(u::Uint64, v::Uint64) = uint128(u)*uint128(v)

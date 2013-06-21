@@ -27,7 +27,8 @@ else
 XOBJS = $(DOBJS)
 endif
 
-FLAGS = -Wall -Wno-strict-aliasing $(CFLAGS) $(HFILEDIRS:%=-I%) -fvisibility=hidden
+FLAGS = -Wall -Wno-strict-aliasing $(CFLAGS) $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) \
+        -fvisibility=hidden
 
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)

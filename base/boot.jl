@@ -145,14 +145,13 @@ export
     JULIA_HOME, nothing, Main,
     # intrinsics module
     Intrinsics
-    #ccall, abs_float, add_float, add_int, and_int, ashr_int,
+    #ccall, cglobal, abs_float, add_float, add_int, and_int, ashr_int,
     #box, bswap_int, checked_fptosi, checked_fptoui, checked_sadd,
     #checked_smul, checked_ssub, checked_uadd, checked_umul, checked_usub,
     #nan_dom_err, copysign_float, ctlz_int, ctpop_int, cttz_int,
     #div_float, eq_float, eq_int, eqfsi64, eqfui64, flipsign_int,
-    #fpext64, fpiseq32, fpiseq64, fpislt32, fpislt64,
-    #fpsiround32, fpsiround64, fptosi32, fptosi64, fptoui32, fptoui64,
-    #fptrunc32, fpuiround32, fpuiround64, le_float, lefsi64, lefui64, lesif64,
+    #fpext64, fpiseq, fpislt, fpsiround, fpuiround, fptosi, fptoui,
+    #fptrunc32, le_float, lefsi64, lefui64, lesif64,
     #leuif64, lshr_int, lt_float, ltfsi64, ltfui64, ltsif64, ltuif64, mul_float,
     #mul_int, ne_float, ne_int, neg_float, neg_int, not_int, or_int, rem_float,
     #sdiv_int, shl_int, sitofp32, sitofp64, sle_int, slt_int, smod_int,

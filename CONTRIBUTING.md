@@ -17,21 +17,27 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 ## Submitting your contributions
 
-### Contributing to core functionality or base libraries
-
-The Julia team uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests.
-
-You can make pull requests for incomplete features to get code review. The convention is to prefix the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready for merging. This will prevent accidental merging of work that is in progress.
-
-Before submitting, make sure that all tests pass by running `make testall`. Add your own tests for the new functionality in `test/`. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git). Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a `Good to merge` message.
-
-*By contributing code to Julia, you are agreeing to release it under the [MIT License](https://github.com/JuliaLang/julia/tree/master/LICENSE.md).*
-
 ### Contributing a Julia package
 
 Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on git. A number of [packages](http://docs.julialang.org/en/latest/packages/packagelist/) across many domains are already available for julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating julia packages](http://docs.julialang.org/en/latest/manual/packages/). 
 
 For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
+
+### Contributing to core functionality or base libraries
+
+*By contributing code to Julia, you are agreeing to release it under the [MIT License](https://github.com/JuliaLang/julia/tree/master/LICENSE.md).*
+
+The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests. You can make pull requests for incomplete features to get code review. The convention is to prefix the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready for merging. This will prevent accidental merging of work that is in progress.
+
+Note: These instructions are for adding functionality to the base library. Usually, this is not encouraged, and before doing so, it is essential to discuss the proposed changes or additions on the mailing list or in a github issue. Changing stuff in the base can potentially break a lot of things. Make sure you test your code as described here, together with the latest Julia updates, to avoid problems. Add new code to Julia's base libraries as follows:
+
+ 1. Add files to the `base/` directory, and tests into `test/`. Often, this may not be necessary and you may be able to add your code to an existing file in `base/`.
+
+ 2. Add any new files to `sysimg.jl` in order to build them into the Julia system image and export necessary symbols in `exports.jl`.
+
+ 3. Include your tests in `test/Makefile` and `test/runtests.jl`.
+
+Build as usual, and do `make clean testall` to test your contribution. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git). Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a `Good to merge` message.
 
 ## Getting help
 
