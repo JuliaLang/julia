@@ -395,7 +395,7 @@ function connect(sock::TcpSocket, host::ASCIIString, port::Integer)
 end
 
 # Default Host to localhost
-connect(sock::TcpSocket, port::Integer) = conenct(sock,IPv4(127,0,0,1),port)
+connect(sock::TcpSocket, port::Integer) = connect(sock,IPv4(127,0,0,1),port)
 connect(port::Integer) = connect(IPv4(127,0,0,1),port)
 
 function default_connectcb(sock,status)
