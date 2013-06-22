@@ -2041,7 +2041,7 @@ function replace_tupleref(e::ANY, tupname, vals, sv, i0)
     end
 end
 
-function finfer(f::Union(Function,DataType), types)
+function finfer(f::Callable, types)
     x = methods(f,types)[1]
     (tree, ty) = typeinf(x[3], x[1], x[2])
     if !isa(tree,Expr)
