@@ -148,6 +148,13 @@ end
 
 promote_shape(a::(Int,), b::(Int,Int)) = promote_shape(b, a)
 
+function promote_shape(a::(Int, Int), b::(Int, Int))
+    if a[1] != b[1] || a[2] != b[2]
+        error("argument dimensions must match")
+    end
+    return a
+end
+
 function promote_shape(a::Dims, b::Dims)
     if length(a) < length(b)
         return promote_shape(b, a)
