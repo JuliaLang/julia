@@ -236,7 +236,8 @@ function rmprocs(args...)
     if myid() != 1
         error("only process 1 can add and remove processes")
     end
-    for i in args
+    
+    for i in [args...]
         if haskey(map_pid_wrkr, i)
             remotecall(i, exit)
         end
@@ -834,7 +835,6 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
             if (iderr == 1) exit() end
             
             if isa(e,EOFError)
-                stop_reading(sock)
                 deregister_worker(iderr)
                 
                 if (myid() == 1) println("Worker $iderr terminated.") end
@@ -842,8 +842,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                 #TODO : Notify all RemoteRefs linked to this Worker who just died....
                 # How?
                 
-                # FIXME: Without the below throw, the main process results in a segmentation fault.
-                throw("DisconnectedException")
+                return nothing
             else
                 # TODO : Treat any exception as death of node / major screw-up and cleanup?
                 rethrow(e)
