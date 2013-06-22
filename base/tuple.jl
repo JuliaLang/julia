@@ -33,24 +33,24 @@ ntuple(f::Function, n::Integer) =
     tuple(ntuple(n-2,f)..., f(n-1), f(n))
 
 # 0 argument function
-map(f) = f()
+map(f::Callable) = f()
 # 1 argument function
-map(f, t::())                   = ()
-map(f, t::(Any,))               = (f(t[1]),)
-map(f, t::(Any, Any))           = (f(t[1]), f(t[2]))
-map(f, t::(Any, Any, Any))      = (f(t[1]), f(t[2]), f(t[3]))
-map(f, t::(Any, Any, Any, Any)) = (f(t[1]), f(t[2]), f(t[3]), f(t[4]))
-map(f, t::Tuple)                = tuple([f(ti) for ti in t]...)
+map(f::Callable, t::())                   = ()
+map(f::Callable, t::(Any,))               = (f(t[1]),)
+map(f::Callable, t::(Any, Any))           = (f(t[1]), f(t[2]))
+map(f::Callable, t::(Any, Any, Any))      = (f(t[1]), f(t[2]), f(t[3]))
+map(f::Callable, t::(Any, Any, Any, Any)) = (f(t[1]), f(t[2]), f(t[3]), f(t[4]))
+map(f::Callable, t::Tuple)                = tuple([f(ti) for ti in t]...)
 # 2 argument function
-map(f, t::(),        s::())        = ()
-map(f, t::(Any,),    s::(Any,))    = (f(t[1],s[1]),)
-map(f, t::(Any,Any), s::(Any,Any)) = (f(t[1],s[1]), f(t[2],s[2]))
-map(f, t::(Any,Any,Any), s::(Any,Any,Any)) =
+map(f::Callable, t::(),        s::())        = ()
+map(f::Callable, t::(Any,),    s::(Any,))    = (f(t[1],s[1]),)
+map(f::Callable, t::(Any,Any), s::(Any,Any)) = (f(t[1],s[1]), f(t[2],s[2]))
+map(f::Callable, t::(Any,Any,Any), s::(Any,Any,Any)) =
     (f(t[1],s[1]), f(t[2],s[2]), f(t[3],s[3]))
-map(f, t::(Any,Any,Any,Any), s::(Any,Any,Any,Any)) =
+map(f::Callable, t::(Any,Any,Any,Any), s::(Any,Any,Any,Any)) =
     (f(t[1],s[1]), f(t[2],s[2]), f(t[3],s[3]), f(t[4],s[4]))
 # n argument function
-map(f, ts::Tuple...) = tuple([f(map(t->t[n],ts)...) for n=1:length_checked_equal(ts...)]...)
+map(f::Callable, ts::Tuple...) = tuple([f(map(t->t[n],ts)...) for n=1:length_checked_equal(ts...)]...)
 
 function length_checked_equal(args...) 
     n = length(args[1])
