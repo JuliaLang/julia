@@ -109,7 +109,7 @@ function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, au
 
             if T <: Char
                 (length(sval) != 1) && error("file entry \"$(sval)\" is not a Char")
-                cells[cell_row,col] = sval
+                cells[cell_row,col] = next(sval,1)[1]
             elseif T <: Number
                 if(float64_isvalid(sval, tmp64))
                     cells[cell_row,col] = tmp64[1]
@@ -132,6 +132,8 @@ end
 
 
 function dlm_offsets(sbuff::UTF8String, dlm, eol, offsets::Array{Int,2})
+    isascii(dlm) && isascii(eol) && (return dlm_offsets(sbuff.data, uint8(dlm), uint8(eol), offsets))
+
     col = 0
     row = 1
     maxrow,maxcol = size(offsets)
@@ -145,10 +147,9 @@ function dlm_offsets(sbuff::UTF8String, dlm, eol, offsets::Array{Int,2})
         (val == eol) && (row += 1; col = 0)
     end
 end
-function dlm_offsets(sbuff::ASCIIString, dlmc, eolc, offsets::Array{Int,2})
-    dbuff = sbuff.data
-    dlm = uint8(dlmc)
-    eol = uint8(eolc)
+
+dlm_offsets(sbuff::ASCIIString, dlmc, eolc, offsets::Array{Int,2}) = dlm_offsets(sbuff.data, uint8(dlmc), uint8(eolc), offsets)
+function dlm_offsets(dbuff::Vector{Uint8}, dlm::Uint8, eol::Uint8, offsets::Array{Int,2})
     col = 0
     row = 1
     maxrow,maxcol = size(offsets)
@@ -162,8 +163,9 @@ function dlm_offsets(sbuff::ASCIIString, dlmc, eolc, offsets::Array{Int,2})
     end
 end
 
-dlm_dims(s::ASCIIString, eol, dlm) = dlm_dims(s.data, uint8(eol), uint8(dlm))
-function dlm_dims(dbuff, eol, dlm)
+dlm_dims(s::ASCIIString, eol::Char, dlm::Char) = dlm_dims(s.data, uint8(eol), uint8(dlm))
+function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D)
+    isa(dbuff, UTF8String) && isascii(eol) && isascii(dlm) && (return dlm_dims(dbuff.data, uint8(eol), uint8(dlm)))
     ncols = nrows = col = 0
     try
         for val in dbuff
@@ -184,22 +186,19 @@ readcsv(io; opts...)          = readdlm(io, ','; opts...)
 readcsv(io, T::Type; opts...) = readdlm(io, ',', T; opts...)
 
 # todo: keyword argument for # of digits to print
+writedlm_cell{T<:FloatingPoint}(io::IO, elt::T) = print_shortest(io, elt)
+writedlm_cell(io::IO, elt) = print(io, elt)
 function writedlm(io::IO, a::Matrix, dlm::Char)
+    pb = PipeBuffer()
     nr, nc = size(a)
     for i = 1:nr
         for j = 1:nc
-            elt = a[i,j]
-            if isa(elt,FloatingPoint)
-                print_shortest(io, elt)
-            else
-                print(io, elt)
-            end
-            if j < nc
-                write(io, dlm)
-            end
+            writedlm_cell(pb, a[i,j])
+            write(pb, (j == nc) ? '\n' : dlm)
         end
-        write(io, '\n')
+        (nb_available(pb) > (16*1024)) && write(io, takebuf_array(pb))
     end
+    write(io, takebuf_array(pb))
     nothing
 end
 
