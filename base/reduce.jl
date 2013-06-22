@@ -1,6 +1,6 @@
 ## reductions ##
 
-function reduce(op, itr) # this is a left fold
+function reduce(op::Function, itr) # this is a left fold
     if is(op,max)
         return max(itr)
     elseif is(op,min)
@@ -106,7 +106,7 @@ function reduce(op::Function, v0, itr)
     return v
 end
 
-function mapreduce(f, op, itr)
+function mapreduce(f::Callable, op::Function, itr)
     s = start(itr)
     if done(itr, s)
         return op()  # empty collection
@@ -120,7 +120,7 @@ function mapreduce(f, op, itr)
     return v
 end
 
-function mapreduce(f::Function, op::Function, v0, itr)
+function mapreduce(f::Callable, op::Function, v0, itr)
     v = v0
     for x in itr
         v = op(v,f(x))
