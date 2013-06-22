@@ -2969,10 +2969,14 @@ static void init_julia_llvm_env(Module *m)
     T_void = Type::getVoidTy(jl_LLVMContext);
 
     // add needed base definitions to our LLVM environment
-    StructType *valueSt = StructType::create(getGlobalContext(), "jl_value_t");
+    StructType *valueSt;
+    if ( !(valueSt = jl_Module->getTypeByName("jl_value_t")) )
+    {
+    valueSt = StructType::create(getGlobalContext(), "jl_value_t");
     Type *valueStructElts[1] = { PointerType::getUnqual(valueSt) };
     ArrayRef<Type*> vselts(valueStructElts);
     valueSt->setBody(vselts);
+    }
     jl_value_llvmt = valueSt;
 
     jl_pvalue_llvmt = PointerType::get(jl_value_llvmt, 0);
@@ -3241,15 +3245,17 @@ extern "C" void jl_init_codegen(char *imageFile)
         irimgFile[_irnmlen-2] = 'i';
         irimgFile[_irnmlen-1] = 'r';
  
-        JL_PRINTF(JL_STDERR, "Trying module reload...\n");
-        JL_PRINTF(JL_STDERR, "IR file: %s\n", irimgFile);
+        // JL_PRINTF(JL_STDERR, "Trying module reload...\n");
+        // JL_PRINTF(JL_STDERR, "IR file: %s\n", irimgFile);
  
         OwningPtr<MemoryBuffer> MB;
         std::string _errmsg;
         error_code ec;
         if ( !(ec = MemoryBuffer::getFile(irimgFile, MB)) ) {
             jl_Module = llvm::ParseBitcodeFile(MB.get(), jl_LLVMContext, &_errmsg);
-            JL_PRINTF(JL_STDERR, "Parse output:    %s\n", _errmsg.c_str());
+            // JL_PRINTF(JL_STDERR, "Parse output:    %s\n", _errmsg.c_str());
+            jl_Module->MaterializeAllPermanently(&_errmsg);
+            // JL_PRINTF(JL_STDERR, "Materialize output:    %s\n", _errmsg.c_str());
         }
     }
     if (jl_Module == NULL) {
