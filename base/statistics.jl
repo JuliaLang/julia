@@ -51,7 +51,7 @@ function var(v::Ranges)
 end
 var(v::AbstractArray) = varm(v, mean(v))
 function var(v::AbstractArray, region)
-    x = bsxfun(-, v, mean(v, region))
+    x = v .- mean(v, region)
     return sum(x.^2, region) / (prod(size(v)[region]) - 1)
 end
 
