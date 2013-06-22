@@ -200,6 +200,7 @@ include("deprecated.jl")
 # git utils & package manager
 include("git.jl")
 include("pkg.jl")
+include("pkg2.jl")
 
 # base graphics API
 include("graphics.jl")

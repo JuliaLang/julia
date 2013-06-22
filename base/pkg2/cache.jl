@@ -1,6 +1,6 @@
 module Cache
 
-using Base.Git
+using ..Types, Base.Git
 
 path(pkg::String) = abspath(".cache", pkg)
 origin(pkg::String) = Git.readchomp(`config remote.origin.url`, dir=path(pkg))
@@ -34,5 +34,13 @@ function prefetch(pkg::String, url::String, vers::Dict{String,VersionNumber})
 end
 prefetch(pkg::String, url::String, sha1::String, ver::VersionNumber) =
     prefetch(pkg, url, (String=>VersionNumber)[sha1=>ver])
+
+function prefetch(pkg::String, url::String, avail::Dict{VersionNumber,Available})
+    vers = Dict{String,VersionNumber}()
+    for (v,a) in avail
+        vers[a.sha1] = v
+    end
+    prefetch(pkg, url, vers)
+end
 
 end # module

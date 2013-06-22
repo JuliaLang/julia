@@ -16,6 +16,7 @@ export
     Sys,
     Test,
     Pkg,
+    Pkg2,
     Operators,
     Errno,
     Meta,
