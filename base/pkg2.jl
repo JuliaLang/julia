@@ -30,17 +30,6 @@ edit(f::Function, pkg, args...) = Dir.cd() do
     return
 end
 
-update() = Dir.cd() do
-    info("Updating metadata...")
-    cd("METADATA") do
-        Git.run(`fetch -q --all`)
-        Git.run(`checkout -q HEAD^0`)
-        Git.run(`branch -q -f devel refs/remotes/origin/devel`)
-        Git.run(`checkout -q devel`)
-        Git.run(`pull -q`)
-    end
-end
-
 macro recover(ex)
     quote
         try $(esc(ex))
@@ -50,13 +39,41 @@ macro recover(ex)
     end
 end
 
-resolve(reqs::Dict, avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
-    # figure out what should be installed
+update(avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
+    info("Updating metadata...")
+    cd("METADATA") do
+        Git.run(`fetch -q --all`)
+        Git.run(`checkout -q HEAD^0`)
+        Git.run(`branch -q -f devel refs/remotes/origin/devel`)
+        Git.run(`checkout -q devel`)
+        Git.run(`pull -q`)
+    end
     fixed = Read.fixed(avail)
+    for (pkg,ver) in fixed
+        ispath(pkg,".git") || continue
+        if Git.attached(dir=pkg) && !Git.isdirty(dir=pkg)
+            @recover begin
+                Git.run(`fetch -q --all`)
+                Git.run(`pull -q`)
+            end
+        end
+        haskey(avail,pkg) &&
+            Cache.prefetch(pkg, Read.url(pkg), avail[pkg])
+    end
+    free = Read.free(avail)
+    for (pkg,ver) in free
+        Cache.prefetch(pkg, Read.url(pkg), avail[pkg])
+    end
+    resolve(Reqs.parse("REQUIRE"), avail, fixed, free)
+end
+
+resolve(reqs::Dict, avail::Dict=Dir.cd(Read.available),
+                    fixed::Dict=Dir.cd(()->Read.fixed(avail)),
+                    have::Dict=Dir.cd(()->Read.free(avail))) = Dir.cd() do
+    # figure out what should be installed
     reqs  = Query.requirements(reqs,fixed)
     deps  = Query.dependencies(avail,fixed)
     want  = Resolve.resolve(reqs,deps)
-    have  = Read.free(avail)
 
     # compare what is installed with what should be
     install, update, remove = Query.diff(have, want)
