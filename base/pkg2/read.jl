@@ -1,6 +1,6 @@
 module Read
 
-using ..Types, ..Reqs, Base.Git
+using ..Types, ..Reqs, ..Cache, Base.Git
 
 readstrip(path...) = strip(readall(joinpath(path...)))
 
@@ -36,32 +36,36 @@ function isfixed(pkg::String, avail::Dict=available(pkg))
     ispath(pkg, ".git") || return true
     Git.dirty(dir=pkg) && return true
     Git.attached(dir=pkg) && return true
+    cache = Cache.path(pkg)
+    isdir(cache) || return true
     head = Git.head(dir=pkg)
     for (ver,info) in avail
-        if Git.iscommit(info.sha1, dir=pkg)
-            Git.is_ancestor_of(head, info.sha1, dir=pkg) && return false
+        if Git.iscommit(info.sha1, dir=cache)
+            Git.is_ancestor_of(head, info.sha1, dir=cache) && return false
         else
-            Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package repo")
+            Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package cache")
         end
     end
     return true
 end
 
 function installed_version(pkg::String, avail::Dict=available(pkg))
+    cache = Cache.path(pkg)
+    isdir(cache) || return typemin(VersionNumber)
     head = Git.head(dir=pkg)
     lo = typemin(VersionNumber)
     hi = typemin(VersionNumber)
     for (ver,info) in avail
         head == info.sha1 && return ver
-        if Git.iscommit(info.sha1, dir=pkg)
-            base = Git.readchomp(`merge-base $head $(info.sha1)`, dir=pkg)
+        if Git.iscommit(info.sha1, dir=cache)
+            base = Git.readchomp(`merge-base $head $(info.sha1)`, dir=cache)
             if base == head # Git.is_ancestor_of(head, info.sha1)
                 lo = max(lo,ver)
             elseif base == info.sha1 # Git.is_ancestor_of(info.sha1, head)
                 hi = max(hi,ver)
             end
         else
-            Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package repo")
+            Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package cache")
         end
     end
     typemin(VersionNumber) < lo ?

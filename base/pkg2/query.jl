@@ -55,7 +55,9 @@ function diff(have::Dict, want::Dict)
         end
     end
 
-    install, update, remove
+    sort!(collect(install)),
+    sort!(collect(update)),
+    sort!(collect(remove))
 end
 
 end # module

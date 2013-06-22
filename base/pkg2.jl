@@ -3,10 +3,10 @@ module Pkg2
 include("pkg2/dir.jl")
 include("pkg2/types.jl")
 include("pkg2/reqs.jl")
+include("pkg2/cache.jl")
 include("pkg2/read.jl")
 include("pkg2/query.jl")
 include("pkg2/resolve.jl")
-include("pkg2/cache.jl")
 include("pkg2/write.jl")
 
 using .Types, Base.Git
@@ -23,7 +23,7 @@ edit(f::Function, pkg, args...) = Dir.cd() do
         error("unknown package $pkg")
     end
     r_ = f(r,pkg,args...)
-    r_ == r && return
+    r_ == r && return info("nothing to be done.")
     reqs_ = Reqs.parse(r_)
     reqs_ != reqs && resolve(reqs_,avail)
     Reqs.write("REQUIRE",r_)
@@ -60,13 +60,16 @@ resolve(reqs::Dict, avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
 
     # compare what is installed with what should be
     install, update, remove = Query.diff(have, want)
+    if isempty(install) && isempty(update) && isempty(remove)
+        return info("no packages to install, update or remove.")
+    end
 
     # prefetch phase isolates network activity, nothing to roll back
     for (pkg,ver) in install
-        Cache.prefetch(pkg, Read.url(pkg), ver, Read.sha1(pkg,ver))
+        Cache.prefetch(pkg, Read.url(pkg), Read.sha1(pkg,ver), ver)
     end
     for (pkg,(_,ver)) in update
-        Cache.prefetch(pkg, Read.url(pkg), ver, Read.sha1(pkg,ver))
+        Cache.prefetch(pkg, Read.url(pkg), Read.sha1(pkg,ver), ver)
     end
 
     # try applying changes, roll back everything if anything fails
@@ -85,15 +88,15 @@ resolve(reqs::Dict, avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
             Write.remove(pkg)
         end
     catch
-        for (pkg,ver) in remove
+        for (pkg,ver) in reverse!(remove)
             info("Rolling back $pkg to v$ver")
             @recover Write.install(pkg, Read.sha1(pkg,ver))
         end
-        for (pkg,(v1,v2)) in update
+        for (pkg,(v1,v2)) in reverse!(update)
             info("Rolling back $pkg to v$v1")
             @recover Write.update(pkg, Read.sha1(pkg,v1))
         end
-        for (pkg,ver) in install
+        for (pkg,ver) in reverse!(install)
             info("Rolling back install of $pkg")
             @recover Write.remove(pkg)
         end
