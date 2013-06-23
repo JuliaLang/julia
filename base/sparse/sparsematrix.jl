@@ -148,7 +148,14 @@ function convert{Tv,Ti,TvS,TiS}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixC
     end
 end
 
-convert(::Type{SparseMatrixCSC}, M::Matrix) = sparse(M)
+function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, M::Matrix)
+    m, n = size(M)
+    (I, J, V) = findnz(M)
+    return sparse_IJ_sorted!(convert(Vector{Ti},I), 
+                             convert(Vector{Ti},J), 
+                             convert(Vector{Tv},V), 
+                             m, n)
+end
 
 convert(::Type{Matrix}, S::SparseMatrixCSC) = dense(S)
 
@@ -191,11 +198,9 @@ end
 
 sparse(a::Vector) = sparsevec(a)
 
-function sparse(A::Matrix)
-    m, n = size(A)
-    (I, J, V) = findnz(A)
-    return sparse_IJ_sorted!(I,J,V,m,n)
-end
+## Construct a sparse matrix
+
+sparse{Tv}(A::Matrix{Tv}) = convert(SparseMatrixCSC{Tv,Int}, A)
 
 sparse(S::SparseMatrixCSC) = copy(S)
 
@@ -1014,13 +1019,13 @@ setindex!{T<:Integer}(A::SparseMatrixCSC, v::AbstractMatrix, i::Integer, J::Abst
 setindex!{T<:Integer}(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector{T}, j::Integer) = setindex!(A, v, I, [j])
 
 setindex!{Tv,T<:Integer}(A::SparseMatrixCSC{Tv}, x::Number, I::AbstractVector{T}, J::AbstractVector{T}) =
-      setindex!(A, sparse(fill(x::Tv, length(I), length(J))), I, J)
+      setindex!(A, fill(x::Tv, length(I), length(J)), I, J)
 
-setindex!{T<:Integer}(A::SparseMatrixCSC, S::AbstractMatrix, I::AbstractVector{T}, J::AbstractVector{T}) =
-      setindex!(A, sparse(S), I, J)
+setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, S::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) =
+      setindex!(A, convert(SparseMatrixCSC{Tv,Ti}, S), I, J)
 
 # A[I,J] = B
-function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{T})
+function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::AbstractVector{T}, J::AbstractVector{T})
     if size(B,1) != length(I) || size(B,2) != length(J)
         return("error in setindex!: mismatched dimensions")
     end
@@ -1139,11 +1144,11 @@ end
 
 # Logical setindex!
 
-setindex!(A::SparseMatrixCSC, x::AbstractMatrix, I::Integer, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, find(J))
-setindex!(A::SparseMatrixCSC, x::AbstractMatrix, I::AbstractVector{Bool}, J::Integer) = setindex!(A, sparse(x), find(I), J)
-setindex!(A::SparseMatrixCSC, x::AbstractMatrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), find(I), find(J))
-setindex!{T<:Integer}(A::SparseMatrixCSC, x::AbstractMatrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, find(J))
-setindex!{T<:Integer}(A::SparseMatrixCSC, x::AbstractMatrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = setindex!(A, sparse(x), find(I),J)
+setindex!(A::SparseMatrixCSC, x::Matrix, I::Integer, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, find(J))
+setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::Integer) = setindex!(A, sparse(x), find(I), J)
+setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), find(I), find(J))
+setindex!{T<:Integer}(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, find(J))
+setindex!{T<:Integer}(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = setindex!(A, sparse(x), find(I),J)
 
 setindex!(A::Matrix, x::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = setindex!(A, dense(x), I, find(J))
 setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = setindex!(A, dense(x), find(I), J)
