@@ -765,6 +765,7 @@ export
     rstrip,
     search,
     split,
+    rsplit,
     string,
     strip,
     strwidth,
