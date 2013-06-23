@@ -44,7 +44,7 @@ update(avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
     cd("METADATA") do
         Git.run(`fetch -q --all`)
         Git.run(`checkout -q HEAD^0`)
-        Git.run(`branch -q -f devel refs/remotes/origin/devel`)
+        Git.run(`branch -f devel refs/remotes/origin/devel`)
         Git.run(`checkout -q devel`)
         Git.run(`pull -q`)
     end
