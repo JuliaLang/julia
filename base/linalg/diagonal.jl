@@ -3,6 +3,7 @@
 type Diagonal{T} <: AbstractMatrix{T}
     diag::Vector{T}
 end
+Diagonal(A::Matrix) = Diagonal(diag(A))
 
 size(D::Diagonal) = (length(D.diag),length(D.diag))
 size(D::Diagonal,d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(D.diag) : 1)

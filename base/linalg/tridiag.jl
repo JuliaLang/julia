@@ -5,7 +5,7 @@ import Base.conj, Base.transpose, Base.ctranspose, Base.convert
 ## Hermitian tridiagonal matrices
 type SymTridiagonal{T<:BlasFloat} <: AbstractMatrix{T}
     dv::Vector{T}                        # diagonal
-    ev::Vector{T}                        # sub/super diagonal
+    ev::Vector{T}                        # subdiagonal
     function SymTridiagonal(dv::Vector{T}, ev::Vector{T})
         if length(ev) != length(dv) - 1 error("dimension mismatch") end
         new(dv,ev)
@@ -25,13 +25,13 @@ end
 
 SymTridiagonal(M::AbstractMatrix) = diag(A,1)==diag(A,-1)?SymTridiagonal(diag(A), diag(A,1)):error("Matrix is not symmetric, cannot convert to SymTridiagonal")
 full{T}(M::SymTridiagonal{T}) = convert(Matrix{T}, M)
-convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})=diagm(M.dv)+diagm(M.ev,-1)+diagm(M.ev,1)
+convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})=diagm(M.dv)+diagm(M.ev,-1)+conj(diagm(M.ev,1))
 
 function show(io::IO, S::SymTridiagonal)
     println(io, summary(S), ":")
     print(io, "diag: ")
     print_matrix(io, (S.dv)')
-    print(io, "\n sup: ")
+    print(io, "\n sub: ")
     print_matrix(io, (S.ev)')
 end
 
@@ -324,6 +324,7 @@ LDLTTridiagonal{S<:BlasFloat,T<:BlasFloat}(D::Vector{S}, E::Vector{T}) = LDLTTri
 
 ldltd!{T<:BlasFloat}(A::SymTridiagonal{T}) = LDLTTridiagonal(LAPACK.pttrf!(real(A.dv),A.ev)...)
 ldltd{T<:BlasFloat}(A::SymTridiagonal{T}) = ldltd!(copy(A))
+factorize!(A::SymTridiagonal) = ldltd(A)
 
 (\){T<:BlasReal}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) = LAPACK.pttrs!(C.D, C.E, copy(B))
 (\){T<:BlasComplex}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) = LAPACK.pttrs!('L', C.D, C.E, copy(B))
@@ -334,17 +335,18 @@ type LUTridiagonal{T} <: Factorization{T}
     du::Vector{T}
     du2::Vector{T}
     ipiv::Vector{BlasInt}
-    function LUTridiagonal(dl::Vector{T}, d::Vector{T}, du::Vector{T},
-                           du2::Vector{T}, ipiv::Vector{BlasInt})
-        n = length(d)
-        if length(dl) != n - 1 || length(du) != n - 1 || length(ipiv) != n || length(du2) != n-2
-            error("LUTridiagonal: dimension mismatch")
-        end
-        new(dl, d, du, du2, ipiv)
-    end
+    # function LUTridiagonal(dl::Vector{T}, d::Vector{T}, du::Vector{T},
+    #                        du2::Vector{T}, ipiv::Vector{BlasInt})
+    #     n = length(d)
+    #     if length(dl) != n - 1 || length(du) != n - 1 || length(ipiv) != n || length(du2) != n-2
+    #         error("LUTridiagonal: dimension mismatch")
+    #     end
+    #     new(dl, d, du, du2, ipiv)
+    # end
 end
-LUTridiagonal{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(A.dl,A.d,A.du)...)
-
+lufact!{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(A.dl,A.d,A.du)...)
+lufact(A::Tridiagonal) = lufact!(copy(A))
+factorize!(A::Tridiagonal) = lufact!(A)
 #show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
 
 function det{T}(lu::LUTridiagonal{T})
@@ -352,7 +354,7 @@ function det{T}(lu::LUTridiagonal{T})
     prod(lu.d) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -one(T) : one(T))
 end
 
-det(A::Tridiagonal) = det(LUTridiagonal(copy(A)))
+det(A::Tridiagonal) = det(lufact(A))
 
 (\){T<:BlasFloat}(lu::LUTridiagonal{T}, B::StridedVecOrMat{T}) =
     LAPACK.gttrs!('N', lu.dl, lu.d, lu.du, lu.du2, lu.ipiv, copy(B))

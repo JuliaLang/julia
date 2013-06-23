@@ -4,11 +4,11 @@ type Hermitian{T<:Number} <: AbstractMatrix{T}
     S::Matrix{T}
     uplo::Char
 end
-function Hermitian{T<:Number}(S::Matrix{T}, uplo::Symbol)
-    if size(S, 1) != size(S, 2) throw(DimensionMismatch("matrix must be square")); end
+function Hermitian(S::Matrix, uplo::Symbol)
+    if size(S, 1) != size(S, 2) throw(DimensionMismatch("Matrix must be square")); end
     return Hermitian(S, string(uplo)[1])
 end
-Hermitian(A::StridedMatrix) = Hermitian(A, :U)
+Hermitian(A::Matrix) = Hermitian(A, :U)
 
 copy(A::Hermitian) = Hermitian(copy(A.S), A.uplo)
 size(A::Hermitian, args...) = size(A.S, args...)
@@ -16,19 +16,15 @@ print_matrix(io::IO, A::Hermitian) = print_matrix(io, full(A))
 full(A::Hermitian) = A.S
 ishermitian(A::Hermitian) = true
 issym{T<:Real}(A::Hermitian{T}) = true
+issym{T<:Complex}(A::Hermitian{T}) = all(imag(A.S) .== 0)
 ctranspose(A::Hermitian) = A
 
 *(A::Hermitian, B::Hermitian) = *(full(A), full(B))
 *(A::Hermitian, B::StridedMatrix) = *(full(A), B)
 *(A::StridedMatrix, B::Hermitian) = *(A, full(B))
 
-function \{T<:BlasFloat}(A::Hermitian{T}, B::StridedVecOrMat{T})
-    r, _, _, info = LAPACK.sysv!(A.uplo, copy(A.S), copy(B))
-    if info > 0 throw(SingularException(info)) end
-    return r
-end
-
-inv(A::Hermitian) = inv(BunchKaufman(copy(A.S), A.uplo))
+factorize!(A::Hermitian) = bkfact!(A.S, symbol(A.uplo), issym(A))
+\(A::Hermitian, B::StridedVecOrMat) = \(bkfact(A.S, symbol(A.uplo), issym(A)), B)
 
 eigfact!{T<:BlasFloat}(A::Hermitian{T}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)...)
 eigfact(A::Hermitian) = eigfact!(copy(A))
