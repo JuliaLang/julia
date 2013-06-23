@@ -133,7 +133,7 @@ function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
     if prod(dims) != nel
         error("reinterpret: invalid dimensions")
     end
-    ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
+    ccall(:jl_reshape_array, Any, (Any, Any, Any), Array{T,N}, a, dims)::Array{T,N}
 end
 reinterpret(t::Type,x) = reinterpret(t,[x])[1]
 
@@ -141,7 +141,7 @@ function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
     if prod(dims) != length(a)
         error("reshape: invalid dimensions")
     end
-    ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
+    ccall(:jl_reshape_array, Any, (Any, Any, Any), Array{T,N}, a, dims)::Array{T,N}
 end
 
 ## Constructors ##

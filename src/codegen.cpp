@@ -2355,8 +2355,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool force_specialized, bo
         }
         if (cstyle && lam->cFunctionObject == NULL)
         {
-            bool isVa = false;
-
             // Generate a c-callable wrapper
             lrt = julia_struct_to_llvm(rt);
             if (lrt == NULL) {
@@ -2369,9 +2367,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool force_specialized, bo
                 jl_value_t *tti = jl_tupleref(lam->specTypes,i);
                 if (tti == (jl_value_t*)jl_pointer_type) {
                     jl_error("cfunction: argument type Ptr should have an element type, Ptr{T}");
-                }
-                if (jl_is_vararg_type(tti)) {
-                    isVa = true;
                 }
             }  
 
@@ -2388,6 +2383,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool force_specialized, bo
 
             Function *cw = Function::Create(FunctionType::get(sret?T_void:prt, fargt_sig, false), Function::ExternalLinkage,
                                    f->getName(), jl_Module);
+            cw->setAttributes(attrs);
 
             BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", cw);
 
@@ -2398,7 +2394,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool force_specialized, bo
             // Alright, let's do this!
             // let's first emit the arguments
             size_t nargs = jl_tuple_len(lam->specTypes);
-            Value *args[nargs];
+            std::vector<Value*> args;
             Function::arg_iterator AI = cw->arg_begin();
             Value *sretPtr = NULL;
             if(sret)
@@ -2406,42 +2402,63 @@ static Function *emit_function(jl_lambda_info_t *lam, bool force_specialized, bo
 
             for(size_t i=0; i < nargs; i++)
             {
+                jl_value_t *jty = jl_tupleref(lam->specTypes,i);
                 Value *v = AI++;
+                Value *val = NULL;
                 if(fargt[i+sret] == fargt_sig[i+sret])
-                    args[i] = v;
+                    val = v;
                 else {
                     // undo whatever we did to this poor function
-                    args[i] = llvm_type_rewrite(v,fargt[i+sret],jl_tupleref(lam->specTypes,i));
+                    val = llvm_type_rewrite(v,fargt[i+sret],jl_tupleref(lam->specTypes,i),false);
                 }
                 // and perhaps box it if necessary
-                Type *t = julia_type_to_llvm(jl_tupleref(lam->specTypes,i));
+                Type *t = julia_type_to_llvm(jty);
+                //t->dump();
+                //fargt[i+sret]->dump();
+                if(byRefList[i]) {
+                    val = builder.CreateLoad(val,false);
+                }
                 if(t != fargt[i+sret])
                 {
-                    Value *mem = builder.CreateCall(
-                            jlallocobj_func,
-                            ConstantInt::get(T_size,
-                                sizeof(void*)+((jl_datatype_t*)rt)->size));
-                    //TODO: Fill type pointer fields with C_NULL's
-                    builder.CreateStore(
-                            literal_pointer_val((jl_value_t*)rt),
-                            emit_nthptr_addr(mem, (size_t)0));
-                    builder.CreateStore(v,builder.CreateBitCast(
-                        emit_nthptr_addr(mem, (size_t)1),v->getType()->getPointerTo()));
+                    if(t == jl_pvalue_llvmt) {
+                        if(byRefList[i])
+                            v = builder.CreateLoad(v,false);
+                        Value *mem = builder.CreateCall(
+                                jlallocobj_func,
+                                ConstantInt::get(T_size,
+                                    sizeof(void*)+((jl_datatype_t*)rt)->size));
+                        //TODO: Fill type pointer fields with C_NULL's
+                        builder.CreateStore(
+                                literal_pointer_val((jl_value_t*)jty),
+                                emit_nthptr_addr(mem, (size_t)0));
+                        builder.CreateStore(val,builder.CreateBitCast(
+                            emit_nthptr_addr(mem, (size_t)1),v->getType()->getPointerTo()));
 
-                    args[i] = builder.CreateBitCast(mem,jl_pvalue_llvmt);
+                        val = builder.CreateBitCast(mem,jl_pvalue_llvmt);
+                    } else {
+                        assert(0);
+                    } 
                 }
+
+                args.push_back(val); 
             }
 
             //f->dump();
-            Value *r = builder.CreateCall(f, ArrayRef<Value*>(&args[0], nargs));
+            //cw->dump();
+            //for (std::vector<Value *>::iterator it = args.begin() ; it != args.end(); ++it)
+            //    (*it)->dump();
+            Value *r = builder.CreateCall(f, ArrayRef<Value*>(args));
             
             bool mightNeed = false;
             if(!sret) {
-                builder.CreateRet(llvm_type_rewrite(julia_to_native(fargt[0], rt, r, jl_ast_rettype(lam, lam->ast), 0, false, false,
-                                           0, &ctx, &mightNeed),prt,rt));
+                builder.CreateRet(llvm_type_rewrite(julia_to_native(lrt, rt, r, jl_ast_rettype(lam, lam->ast), 0, false, false,
+                                           0, &ctx, &mightNeed),prt,rt,true));
             } else {
-                builder.CreateStore(sretPtr,llvm_type_rewrite(julia_to_native(fargt[0], rt, r, jl_ast_rettype(lam, lam->ast), 0, true, false,
-                                           0, &ctx, &mightNeed),fargt_sig[0],rt));
+                //sretPtr->dump();
+                Value *sretVal = llvm_type_rewrite(julia_to_native(lrt, rt, r, jl_ast_rettype(lam, lam->ast), 0, false, false,
+                                           0, &ctx, &mightNeed),fargt_sig[0],rt,true);
+                //sretVal->dump();
+                builder.CreateStore(sretVal,sretPtr);
                 builder.CreateRetVoid();
             }
 

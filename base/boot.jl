@@ -123,7 +123,7 @@ export
     # numeric types
     Bool, FloatingPoint, Float32, Float64, Number, Integer, Int, Int8, Int16,
     Int32, Int64, Int128, Ptr, Real, Signed, Uint, Uint8, Uint16, Uint32,
-    Uint64, Uint128, Unsigned,
+    Uint64, Uint128, Complex, Unsigned,
     # string types
     Char, ASCIIString, ByteString, DirectIndexString, String, UTF8String,
     # errors

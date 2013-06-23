@@ -685,6 +685,12 @@ void jl_get_builtin_hooks(void)
     jl_float32_type = (jl_datatype_t*)core("Float32");
     jl_float64_type = (jl_datatype_t*)core("Float64");
 
+    #ifdef _OS_LINUX_
+    #ifdef _P32
+        jl_float64_type->alignment = 4;
+    #endif
+    #endif
+
     jl_stackovf_exception =
         jl_apply((jl_function_t*)core("StackOverflowError"), NULL, 0);
     jl_diverror_exception =
@@ -723,4 +729,5 @@ DLLEXPORT void jl_get_system_hooks(void)
     jl_methoderror_type = (jl_datatype_t*)basemod("MethodError");
     jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");
     jl_weakref_type = (jl_datatype_t*)basemod("WeakRef");
+    jl_complex_type = (jl_datatype_t*)basemod("Complex");
 }

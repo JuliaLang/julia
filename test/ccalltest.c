@@ -20,16 +20,6 @@ volatile int (*fptr)(unsigned char x);
 volatile int a;
 volatile int b;
 
-int main() {
-    printf("all of the following should be 1 except xs[259] = 0");
-    a = 3;
-    b = 259;
-    fptr = (volatile int (*)(unsigned char x))&testUcharX;
-    if ((((long)fptr)&((long)1)<<32) == 1) fptr = NULL;
-    printf("compiled with: '%s'\nxs[3] = %d\nxs[259] = %d\ntestUcharX(3) = %d\ntestUcharX(%d) = %d\nfptr(3) = %d\nfptr(259) = %d\n",
-           xstr(CC), xs[a], xs[b], testUcharX(a), b, testUcharX((unsigned char)b), fptr(a), fptr(b));
-}
-
 //////////////////////////////////
 // Tests for passing and returning Structs
 
@@ -121,6 +111,70 @@ typedef struct {
 } struct3b;
 
 typedef struct {
+    int32_t x;
+    int32_t y;
+    int32_t z;
+} struct4;
+
+typedef struct {
+    int32_t x;
+    int32_t y;
+    int32_t z;
+    int32_t a;
+} struct5;
+
+typedef struct {
+    int64_t x;
+    int64_t y;
+    int64_t z;
+} struct6;
+
+typedef struct {
+    int64_t x;
+    char y;
+} struct7;
+
+typedef struct {
+    int32_t x;
+    char y;
+} struct8;
+
+typedef struct {
+    int32_t x;
+    int16_t y;
+} struct9;
+
+typedef struct {
+    char x;
+    char y;
+    char z;
+    char a;
+} struct10;
+
+typedef struct {
+    complex float x;
+} struct11;
+
+typedef struct {
+    complex float x;
+    complex float y;
+} struct12;
+
+typedef struct {
+    complex double x;
+} struct13;
+
+typedef struct {
+    float x;
+    float y;
+} struct14;
+
+typedef struct {
+    double x;
+    double y;
+} struct15;
+
+typedef struct {
     long x;
     long y;
     char z;
@@ -132,6 +186,14 @@ struct1 test_1(struct1 a) {
     a.x += 1;
     a.y -= 2;
     return a;
+}
+
+struct1 add_1(struct1 a, struct1 b) {
+    // Two small structs 
+    struct1 c;
+    c.x = a.x + b.x;
+    c.y = a.y + b.y;
+    return c;
 }
 
 struct2a test_2a(struct2a a) {
@@ -166,8 +228,90 @@ struct3b test_3b(struct3b a) {
     return a;
 }
 
+struct4 test_4(struct4 a)
+{
+    if (verbose) printf("(%" PRId32 ",%" PRId32 ",%" PRId32 ")\n", a.x, a.y, a.z);
+    a.x += 1;
+    a.y -= 2;
+    a.z += 3;
+    return a;    
+}
+
+
+struct5 test_5(struct5 a)
+{
+    if (verbose) printf("(%" PRId32 ",%" PRId32 ",%" PRId32 ",%" PRId32 ")\n", a.x, a.y, a.z, a.a);
+    a.x += 1;
+    a.y -= 2;
+    a.z += 3;
+    a.a -= 4;
+
+    return a;    
+}
+
+
+struct6 test_6(struct6 a)
+{
+    if (verbose) printf("(%" PRId64 ",%" PRId64 ",%" PRId64 ")\n", a.x, a.y, a.z);
+    a.x += 1;
+    a.y -= 2;
+    a.z += 3;
+    return a;    
+}
+
+struct7 test_7(struct7 a)
+{
+    if (verbose) printf("(%" PRId64 ",%" PRId8 ")\n", a.x, a.y);
+    a.x += 1;
+    a.y -= 2;
+    return a;    
+}
+
+struct8 test_8(struct8 a)
+{
+    if (verbose) printf("(%" PRId32 ",%" PRId8 ")\n", a.x, a.y);
+    a.x += 1;
+    a.y -= 2;
+    return a;    
+}
+
+struct9 test_9(struct9 a)
+{
+    if (verbose) printf("(%" PRId32 ",%" PRId16 ")\n", a.x, a.y);
+    a.x += 1;
+    a.y -= 2;
+    return a;    
+}
+
+struct10 test_10(struct10 a)
+{
+    if (verbose) printf("(%" PRId8 ",%" PRId8 ",%" PRId8 ",%" PRId8 ")\n", a.x, a.y, a.z, a.a);
+    a.x += 1;
+    a.y -= 2;
+    a.z += 3;
+    a.a -= 4;
+
+    return a;    
+}
+
+struct14 test_14(struct14 a) {
+    //The C equivalent of a  ComplexPair{Float32} struct (but without special complex ABI)
+    if (verbose) printf("%g + %g i\n", a.x, a.y);
+    a.x += 1;
+    a.y -= 2;
+    return a;
+}
+
+struct15 test_15(struct15 a) {
+    //The C equivalent of a  ComplexPair{Float32} struct (but without special complex ABI)
+    if (verbose) printf("%g + %g i\n", a.x, a.y);
+    a.x += 1;
+    a.y -= 2;
+    return a;
+}
+
 #define int128_t struct3b
-int128_t test_4(int128_t a) {
+int128_t test_128(int128_t a) {
     //Unpack a Int128
     if (verbose) printf("0x%016" PRIx64 "%016" PRIx64 "\n", a.y, a.x);
     a.x += 1;
@@ -183,6 +327,18 @@ struct_big test_big(struct_big a) {
     a.y -= 2;
     a.z -= 'A';
     return a;
+}
+
+int main() {
+    printf("all of the following should be 1 except xs[259] = 0");
+    a = 3;
+    b = 259;
+    fptr = (volatile int (*)(unsigned char x))&testUcharX;
+    if ((((long)fptr)&((long)1)<<32) == 1) fptr = NULL;
+    printf("compiled with: '%s'\nxs[3] = %d\nxs[259] = %d\ntestUcharX(3) = %d\ntestUcharX(%d) = %d\nfptr(3) = %d\nfptr(259) = %d\n",
+           xstr(CC), xs[a], xs[b], testUcharX(a), b, testUcharX((unsigned char)b), fptr(a), fptr(b));
+    struct1 a = {352.39422e23, 19.287577};
+    a = test_1(a);
 }
 
 //////////////////////////////////

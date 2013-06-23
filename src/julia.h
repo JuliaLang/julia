@@ -386,6 +386,7 @@ extern jl_datatype_t *jl_int64_type;
 extern jl_datatype_t *jl_uint64_type;
 extern jl_datatype_t *jl_float32_type;
 extern jl_datatype_t *jl_float64_type;
+extern jl_datatype_t *jl_complex_type;
 extern jl_datatype_t *jl_voidpointer_type;
 extern jl_datatype_t *jl_pointer_type;
 
@@ -573,7 +574,7 @@ static inline int jl_is_structtype(void *v)
     return (jl_is_datatype(v) &&
             (jl_tuple_len(((jl_datatype_t*)(v))->names) > 0 ||
              ((jl_datatype_t*)(v))->size == 0) &&
-            !((jl_datatype_t*)(v))->abstract);
+            !(((jl_datatype_t*)(v))->abstract));
 }
 
 static inline int jl_isbits(void *t)   // corresponding to isbits() in julia

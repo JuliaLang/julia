@@ -1,5 +1,5 @@
 import Base.copy, Base.isequal
-const verbose  = false
+const verbose  = true
 ccall((:set_verbose, "./libccalltest"), Void, (Int32,), verbose)
 
 # Test for proper argument register truncation
@@ -76,14 +76,14 @@ ci64 = ComplexPair{Int64}(int64(20),int64(51))
 a = copy(ci64)
 ba = ccall((:test_3a, "./libccalltest"), ComplexPair{Int64}, (ComplexPair{Int64},), a)
 bb = ccall((:test_3b, "./libccalltest"), ComplexPair{Int64}, (ComplexPair{Int64},), a)
-bc = ccall((:test_4, "./libccalltest"), ComplexPair{Int64}, (ComplexPair{Int64},), a)
+bc = ccall((:test_128, "./libccalltest"), ComplexPair{Int64}, (ComplexPair{Int64},), a)
 @test a == ci64
 @test ba == bb == ci64 + 1 - 2im
 @test bc == ci64 + 1
 
 i128 = int128(0x7f00123456789abc)<<64 + uint64(-1)
 a = copy(i128)
-b = ccall((:test_4, "./libccalltest"), Int128, (Int128,), a)
+b = ccall((:test_128, "./libccalltest"), Int128, (Int128,), a)
 @test a == i128
 @test b == i128 + 1
 

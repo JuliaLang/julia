@@ -843,7 +843,7 @@ JL_CALLABLE(jl_f_new_expr)
     ex->args = ar;
     ex->etype = (jl_value_t*)jl_any_type;
     JL_GC_POP();
-    return (jl_value_t*)ex;
+    return (jl_value_t*)ex; 
 }
 
 JL_CALLABLE(jl_f_new_box)
