@@ -261,7 +261,7 @@ function _rsearch(s, t, i)
 end
 rsearch(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _rsearch(s,t,i)
 rsearch(s::String, t::String, i::Integer) = _rsearch(s,t,i)
-rsearch(s::String, t::String) = rsearch(s,t,endof(s))
+rsearch(s::String, t::String) = (isempty(s) && isempty(t)) ? (1:0) : rsearch(s,t,endof(s))
 
 contains(::String, ::String) = error("use search() to look for substrings")
 
@@ -1028,6 +1028,32 @@ split(s::String, spl)             = split(s, spl, 0, true)
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 const _default_delims = [' ','\t','\n','\v','\f','\r']
 split(str::String) = split(str, _default_delims, 0, false)
+
+function rsplit(str::String, splitter, limit::Integer, keep_empty::Bool)
+    strs = String[]
+    i = start(str)
+    n = endof(str)
+    r = rsearch(str,splitter)
+    j = first(r)-1
+    k = last(r)
+    while((0 <= j < n) && (length(strs) != limit-1))
+        if(i <= k)
+            (keep_empty || (k < n)) && unshift!(strs, str[k+1:n])
+            n = j
+        end
+        (k <= j) && (j = prevind(str,j))
+        r = rsearch(str,splitter,j)
+        j = first(r)-1
+        k = last(r)
+    end
+    (keep_empty || (n > 0)) && unshift!(strs, str[1:n])
+    return strs
+end
+rsplit(s::String, spl, n::Integer) = rsplit(s, spl, n, true)
+rsplit(s::String, spl, keep::Bool) = rsplit(s, spl, 0, keep)
+rsplit(s::String, spl)             = rsplit(s, spl, 0, true)
+#rsplit(str::String) = rsplit(str, _default_delims, 0, false)
+
 
 function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     n = 1
