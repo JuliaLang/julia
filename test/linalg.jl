@@ -476,7 +476,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
             #XXX If I run either of these tests separately, by themselves, things are OK.
             # Enabling BOTH tests results in segfault.
             # Where is the memory corruption???
-            #@test_approx_eq svdvals(full(T)) svdvals(T)
+            @test_approx_eq svdvals(full(T)) svdvals(T)
             u1, d1, v1 = svd(full(T))
             u2, d2, v2 = svd(T)
             @test_approx_eq d1 d2

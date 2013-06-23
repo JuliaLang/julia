@@ -2067,7 +2067,7 @@ for (bdsdc, elty) in
             validate(uplo)
             n, ldiq, ldq, ldu, ldvt = length(d), 1, 1, 1, 1
             if compq == 'N'
-                lwork = 4n
+                lwork = 6n
             elseif compq == 'P'
                 warn("COMPQ='P' is not tested")
                 #TODO turn this into an actual LAPACK call
