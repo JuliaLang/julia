@@ -51,7 +51,7 @@ function show(io::IO, cmds::OrCmds)
     else
         show(io, cmds.a)
     end
-    print(" |> ")
+    print(io, " |> ")
     if isa(cmds.b, AndCmds) || isa(cmds.b, CmdRedirect)
         print(io,"(")
         show(io, cmds.b)
