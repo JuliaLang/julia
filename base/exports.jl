@@ -1,10 +1,10 @@
-
 export
 # Modules
+    Collections,
     PCRE,
     FFTW,
-    Collections,
     DSP,
+    SparseMatrix,
     LinAlg,
     LibRandom,
     Random,
