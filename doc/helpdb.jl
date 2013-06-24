@@ -387,6 +387,19 @@
 
 "),
 
+("Types","Base","typejoin","typejoin(T, S)
+
+   Compute a type that contains both \"T\" and \"S\".
+
+"),
+
+("Types","Base","typeintersect","typeintersect(T, S)
+
+   Compute a type that contains the intersection of \"T\" and \"S\".
+   Usually this will be the smallest such type or one close to it.
+
+"),
+
 ("Generic Functions","Base","method_exists","method_exists(f, tuple) -> Bool
 
    Determine whether the given generic function has a method matching
@@ -702,13 +715,15 @@
 
 ("Associative Collections","Base","keys","keys(collection)
 
-   Return an array of all keys in a collection.
+   Return an iterator over all keys in a collection.
+   \"collect(keys(d))\" returns an array of keys.
 
 "),
 
 ("Associative Collections","Base","values","values(collection)
 
-   Return an array of all values in a collection.
+   Return an iterator over all values in a collection.
+   \"collect(values(d))\" returns an array of values.
 
 "),
 
@@ -1545,26 +1560,26 @@
 
 ("Text I/O","Base","readdlm","readdlm(source, delim::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false)
 
-   Read a matrix from the source where each line gives one row, with 
-   elements separated by the given delimeter. The source can be a 
-   text file, stream or byte array. Memory mapped filed can be used 
-   by passing the byte array representation of the mapped segment as 
-   source. 
+   Read a matrix from the source where each line gives one row, with
+   elements separated by the given delimeter. The source can be a text
+   file, stream or byte array. Memory mapped filed can be used by
+   passing the byte array representation of the mapped segment as
+   source.
 
-   If \"has_header\" is \"true\" the first row of data would be read 
-   as headers and the tuple \"(data_cells, header_cells)\" is 
-   returned instead of only \"data_cells\".
+   If \"has_header\" is \"true\" the first row of data would be read
+   as headers and the tuple \"(data_cells, header_cells)\" is returned
+   instead of only \"data_cells\".
 
-   If \"use_mmap\" is \"true\" the file specified by \"source\" is 
+   If \"use_mmap\" is \"true\" the file specified by \"source\" is
    memory mapped for potential speedups.
 
-   If \"ignore_invalid_chars\" is \"true\" bytes in \"source\" with 
-   invalid character encoding will be ignored. Otherwise an error is 
+   If \"ignore_invalid_chars\" is \"true\" bytes in \"source\" with
+   invalid character encoding will be ignored. Otherwise an error is
    thrown indicating the offending character position.
 
-   If all data is numeric, \"data_cells\" will be a numeric array. If 
-   some elements cannot be parsed as numbers, a cell array of numbers 
-   and strings is returned for \"data_cells\".
+   If all data is numeric, the result will be a numeric array. If some
+   elements cannot be parsed as numbers, a cell array of numbers and
+   strings is returned.
 
 "),
 
@@ -1585,7 +1600,7 @@
 
 "),
 
-("Text I/O","Base","readcsv","readcsv(filename[, T::Type]; options...)
+("Text I/O","Base","readcsv","readcsv(source, [T::Type]; options...)
 
    Equivalent to \"readdlm\" with \"delim\" set to comma.
 
@@ -1931,6 +1946,27 @@
 ("Mathematical Functions","Base","\$","\$(x, y)
 
    Bitwise exclusive or
+
+"),
+
+("Mathematical Functions","Base","isapprox","isapprox(x::Number, y::Number; rtol::Real=cbrt(maxeps), atol::Real=sqrt(maxeps))
+
+   Inexact equality comparison - behaves slightly different depending
+   on types of input args:
+
+   * For \"FloatingPoint\" numbers, \"isapprox\" returns \"true\" if
+     \"abs(x-y) <= atol + rtol*max(abs(x), abs(y))\".
+
+   * For \"Integer\" and \"Rational\" numbers, \"isapprox\" returns
+     \"true\" if \"abs(x-y) <= atol\". The *rtol* argument is ignored.
+     If one of \"x\" and \"y\" is \"FloatingPoint\", the other is
+     promoted, and the method above is called instead.
+
+   * For \"Complex\" numbers, the distance in the complex plane is
+     compared, using the same criterion as above.
+
+   For default tolerance arguments, \"maxeps = max(eps(abs(x)),
+   eps(abs(y)))\".
 
 "),
 
@@ -3630,6 +3666,13 @@
 
 "),
 
+("Arrays","Base","find","find(f, A)
+
+   Return a vector of the linear indexes of  \"A\" where \"f\" returns
+   true.
+
+"),
+
 ("Arrays","Base","findn","findn(A)
 
    Return a vector of indexes for each dimension giving the locations
@@ -4981,6 +5024,73 @@
 
    Assign a value to a symbol in the current task's task-local
    storage.
+
+"),
+
+("Reflection","Base","module_name","module_name(m::Module) -> Symbol
+
+   Get the name of a module as a symbol.
+
+"),
+
+("Reflection","Base","module_parent","module_parent(m::Module) -> Module
+
+   Get a module's enclosing module. \"Main\" is its own parent.
+
+"),
+
+("Reflection","Base","current_module","current_module() -> Module
+
+   Get the *dynamically* current module, which is the module code is
+   currently being read from. In general, this is not the same as the
+   module containing the call to this function.
+
+"),
+
+("Reflection","Base","fullname","fullname(m::Module)
+
+   Get the fully-qualified name of a module as a tuple of symbols. For
+   example, \"fullname(Base.Pkg)\" gives \"(:Base,:Pkg)\", and
+   \"fullname(Main)\" gives \"()\".
+
+"),
+
+("Reflection","Base","names","names(x)
+
+   Get an array of the names exported by a module, or the fields of a
+   data type.
+
+"),
+
+("Reflection","Base","isconst","isconst([m::Module], s::Symbol) -> Bool
+
+   Determine whether a global is declared \"const\" in a given module.
+
+"),
+
+("Reflection","Base","isgeneric","isgeneric(f::Function) -> Bool
+
+   Determine whether a function is generic.
+
+"),
+
+("Reflection","Base","function_name","function_name(f::Function) -> Symbol
+
+   Get the name of a generic function as a symbol, or \":anonymous\".
+
+"),
+
+("Reflection","Base","function_module","function_module(f::Function, types) -> Module
+
+   Determine the module containing a given definition of a generic
+   function.
+
+"),
+
+("Reflection","Base","functionloc","functionloc(f::Function, types)
+
+   Returns a tuple \"(filename,line)\" giving the location of a method
+   definition.
 
 "),
 
