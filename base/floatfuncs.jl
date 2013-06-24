@@ -76,24 +76,25 @@ function _signif_og(x, digits, base)
     end
 end
 
-function signif(x, digits::Integer, base::Integer)
+function signif(x, digits::Integer, base::Integer=10)
     if digits < 0
         throw(DomainError())
+    end
+    if x==0 || !isfinite(x)
+        return x
     end
     og = _signif_og(float(x), digits, base)
     round(float(x)/og) * og
 end
-signif(x, digits) = signif(x, digits, 10)
 
 _round_og(digits, base) = float(base) ^ digits
 
 for f in (:round, :ceil, :floor, :trunc)
     @eval begin
-        function ($f)(x, digits::Integer, base::Integer)
+        function ($f)(x, digits::Integer, base::Integer=10)
             og = _round_og(digits, base)
             ($f)(float(x) * og) / og
         end
-        ($f)(x, digits) = ($f)(x, digits, 10)
     end
 end
 
