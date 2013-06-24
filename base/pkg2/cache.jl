@@ -7,7 +7,7 @@ origin(pkg::String) = Git.readchomp(`config remote.origin.url`, dir=path(pkg))
 
 function prefetch(pkg::String, url::String, vers::Dict{String,VersionNumber})
     cache = path(pkg)
-    isdir(".cache") || mkpath(".cache")
+    isdir(".cache") || mkdir(".cache")
     if !isdir(cache)
         from = ispath(pkg,".git") ? abspath(pkg) : url
         info("Cloning $pkg from $from...")
