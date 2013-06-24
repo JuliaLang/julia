@@ -408,7 +408,7 @@ void *init_stdio_handle(uv_file fd,int readable)
 #endif
         case UV_NAMED_PIPE:
             handle = malloc(sizeof(uv_pipe_t));
-            if (uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle, (readable?UV_PIPE_READABLE:UV_PIPE_WRITEABLE))) {
+            if (uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle, (readable?UV_PIPE_READABLE:UV_PIPE_WRITABLE))) {
                 jl_errorf("Error initializing stdio in uv_pipe_init (%d, %d)\n", fd, type);
                 abort();
             }
