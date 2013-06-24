@@ -15,7 +15,9 @@ size(a::Array) = arraysize(a)
 size(a::Array, d) = arraysize(a, d)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
 length(a::Array) = arraylen(a)
-sizeof(a::Array) = sizeof(eltype(a)) * length(a)
+function sizeof{T}(a::Array{T})
+    (isbits(T) ? sizeof(eltype(a)) : sizeof(Ptr)) * length(a)
+end
 
 function stride(a::Array, i::Integer)
     s = 1

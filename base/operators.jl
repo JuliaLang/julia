@@ -121,6 +121,8 @@ one(x)  = oftype(x,1)
 
 sizeof(T::Type) = error(string("size of type ",T," unknown"))
 sizeof(T::DataType) = if isleaftype(T) T.size else error("type does not have a native size") end
+sizeof(::Type{Symbol}) = error("type does not have a native size")
+sizeof{T<:Array}(::Type{T}) = error("type does not have a native size")
 sizeof(x) = sizeof(typeof(x))
 
 # copying immutable things
