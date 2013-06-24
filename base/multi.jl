@@ -66,25 +66,15 @@
 
 ## workers and message i/o ##
 
-function send_msg_unknown(s::IO, kind, args)
-    error("attempt to send to unknown socket")
+# Globals
+
+## process group creation ##
+
+type LocalProcess
+    id::Int
 end
 
-function send_msg(s::IO, kind, args...)
-    id = worker_id_from_socket(s)
-    if id > -1
-        return send_msg(worker_from_id(id), kind, args...)
-    end
-    send_msg_unknown(s, kind, args)
-end
-
-function send_msg_now(s::IO, kind, args...)
-    id = worker_id_from_socket(s)
-    if id > -1
-        return send_msg_now(worker_from_id(id), kind, args...)
-    end
-    send_msg_unknown(s, kind, args)
-end
+const LPROC = LocalProcess(0)
 
 type Worker
     host::ByteString
@@ -106,6 +96,45 @@ Worker(host::String, port::Integer) =
 Worker(host::String, port::Integer, tunnel_user::String, sshflags) =
     Worker(host, port, connect("localhost",
                                ssh_tunnel(tunnel_user, host, uint16(port), sshflags)))
+
+
+
+const map_pid_wrkr = Dict{Int, Union(Worker, LocalProcess)}()
+const map_sock_wrkr = Dict{Socket, Union(Worker, LocalProcess)}()
+
+                               
+type WorkerSet
+    idset::Array{Int,1}
+    nextidx::Int
+
+    WorkerSet() = WorkerSet(Int[])
+    WorkerSet(w) = new(w, 1)
+end
+
+# global references
+const grefs = Dict()
+const ALLPROCS = WorkerSet()
+
+
+function send_msg_unknown(s::IO, kind, args)
+    error("attempt to send to unknown socket")
+end
+
+function send_msg(s::IO, kind, args...)
+    id = worker_id_from_socket(s)
+    if id > -1
+        return send_msg(worker_from_id(id), kind, args...)
+    end
+    send_msg_unknown(s, kind, args)
+end
+
+function send_msg_now(s::IO, kind, args...)
+    id = worker_id_from_socket(s)
+    if id > -1
+        return send_msg_now(worker_from_id(id), kind, args...)
+    end
+    send_msg_unknown(s, kind, args)
+end
 
 
 function send_msg_now(w::Worker, kind, args...)
@@ -155,7 +184,7 @@ function send_msg_(w::Worker, kind, args, now::Bool)
 end
 
 function flush_gc_msgs()
-    for w in (PGRP::ProcessGroup).workers
+    for w in collect(values(map_pid_wrkr))
         if isa(w,Worker)
             k = w::Worker
             if k.gcflag
@@ -164,17 +193,6 @@ function flush_gc_msgs()
         end
     end
 end
-
-## process group creation ##
-
-type LocalProcess
-    id::Int
-end
-
-const LPROC = LocalProcess(0)
-
-const map_pid_wrkr = Dict{Int, Union(Worker, LocalProcess)}()
-const map_sock_wrkr = Dict{Socket, Union(Worker, LocalProcess)}()
 
 let next_pid = 2    # 1 is reserved for the client (always)
     global get_next_pid
@@ -185,18 +203,9 @@ let next_pid = 2    # 1 is reserved for the client (always)
     end
 end
 
-type ProcessGroup
-    name::String
-    workers::Array{Any,1}
 
-    # global references
-    refs::Dict
 
-    ProcessGroup(w::Array{Any,1}) = new("pg-default", w, Dict())
-end
-const PGRP = ProcessGroup({})
-
-function add_workers(pg::ProcessGroup, w::Array{Any,1})
+function add_workers(w::Array{Any,1})
     # NOTE: currently only node 1 can add new nodes, since nobody else
     # has the full list of address:port
     assert(LPROC.id == 1)
@@ -205,7 +214,8 @@ function add_workers(pg::ProcessGroup, w::Array{Any,1})
         register_worker(w[i])
         create_message_handler_loop(w[i].socket)
     end
-    all_locs = map(x -> isa(x, Worker) ? (x.host,x.port, x.id) : ("", 0, x.id), pg.workers)
+    
+    all_locs = map(x -> isa(x, Worker) ? (x.host, x.port, x.id) : ("", 0, x.id), collect(values(map_pid_wrkr)))
     for i=1:length(w)
         send_msg_now(w[i], :join_pgrp, w[i].id, all_locs)
     end
@@ -213,21 +223,26 @@ function add_workers(pg::ProcessGroup, w::Array{Any,1})
 end
 
 myid() = LPROC.id
+function register_initproc() 
+    LPROC.id = 1
+    register_worker(LPROC)
+end
 
-nprocs() = length(PGRP.workers)
-function nworkers() 
-    n = nprocs()
+
+nprocs() = length(ALLPROCS.idset)
+function nworkers()
+    n = nprocs() 
     n == 1 ? 1 : n-1
 end
 
-procs() = Int[x.id for x in PGRP.workers]
 
+procs() = ALLPROCS.idset
 function workers()
     allp = procs()
     if nprocs() == 1
-       allp 
+        return allp 
     else
-       filter(x -> x != 1, allp)
+        return filter(x -> x != 1, allp)
     end
 end
 
@@ -235,23 +250,37 @@ function rmprocs(args...)
     # Only pid 1 can add and remove processes
     if myid() != 1
         error("only process 1 can add and remove processes")
+    elseif nprocs() == 1
+        return :ok
     end
     
-    for i in [args...]
+    rmset = [args...]
+    for i in rmset
         if haskey(map_pid_wrkr, i)
             remotecall(i, exit)
         end
     end
+
+    # Wait till all processes have exited.
+    start = time()
+    pending = intersect(ALLPROCS.idset, rmset)
+    while ((length(pending) > 0) && ((time() - start) < 60.0))
+        sleep(0.1)              
+        pending = intersect(ALLPROCS.idset, rmset)
+    end
+    
+    if length(pending) > 0
+        error("All requested workers have not exited")
+    end
+    :ok
 end
 
 
-worker_from_id(i) = worker_from_id(PGRP, i)
-function worker_from_id(pg::ProcessGroup, i)
+function worker_from_id(i)
 #   Processes with pids > ours, have to connect to us. May not have happened. Wait for some time.
     start = time()
     while (!haskey(map_pid_wrkr, i) && ((time() - start) < 60.0))
         sleep(0.1)		
-        yield()
     end
     map_pid_wrkr[i]
 end
@@ -271,18 +300,18 @@ function worker_id_from_socket(s)
 end
 
 
-register_worker(w) = register_worker(PGRP, w)
-function register_worker(pg, w)
-    push!(pg.workers, w)
+function register_worker(w)
+    push!(ALLPROCS.idset, w.id)
     map_pid_wrkr[w.id] = w
     if isa(w, Worker) map_sock_wrkr[w.socket] = w end
 end
 
-deregister_worker(pid) = deregister_worker(PGRP, pid)
-function deregister_worker(pg, pid)
-    pg.workers = filter(x -> !(x.id == pid), pg.workers)
+function deregister_worker(pid)
     w = delete!(map_pid_wrkr, pid, nothing)
-    if isa(w, Worker) delete!(map_sock_wrkr, w.socket) end
+    if w != nothing
+        ALLPROCS.idset = filter(x -> !(x == pid), ALLPROCS.idset)
+        if isa(w, Worker) delete!(map_sock_wrkr, w.socket) end
+    end
 end
 
 ## remote refs ##
@@ -347,13 +376,12 @@ isequal(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
 
 rr2id(r::RemoteRef) = (r.whence, r.id)
 
-lookup_ref(id) = lookup_ref(PGRP, id)
-function lookup_ref(pg, id)
-    rv = get(pg.refs, id, false)
+function lookup_ref(id)
+    rv = get(grefs, id, false)
     if rv === false
         # first we've heard of this ref
         rv = RemoteValue()
-        pg.refs[id] = rv
+        grefs[id] = rv
         add!(rv.clientset, id[1])
     end
     rv
@@ -376,12 +404,11 @@ function isready(rr::RemoteRef)
     end
 end
 
-del_client(id, client) = del_client(PGRP, id, client)
-function del_client(pg, id, client)
+function del_client(id, client)
     rv = lookup_ref(id)
     delete!(rv.clientset, client)
     if isempty(rv.clientset)
-        delete!(pg.refs, id)
+        delete!(grefs, id)
         #print("$(myid()) collected $id\n")
     end
     nothing
@@ -511,7 +538,7 @@ end
 
 function schedule_call(rid, thunk)
     rv = RemoteValue()
-    (PGRP::ProcessGroup).refs[rid] = rv
+    grefs[rid] = rv
     add!(rv.clientset, rid[1])
     enq_work(@task(run_work_thunk(rv,thunk)))
     rv
@@ -566,6 +593,7 @@ function remotecall(w::Worker, f, args...)
 end
 
 remotecall(id::Integer, f, args...) = remotecall(worker_from_id(id), f, args...)
+remotecall(ws::WorkerSet, f, args...) = remotecall(chooseproc(ws), f, args...)
 
 # faster version of fetch(remotecall(...))
 function remotecall_fetch(w::LocalProcess, f, args...)
@@ -584,8 +612,8 @@ function remotecall_fetch(w::Worker, f, args...)
     wait_full(rr)
 end
 
-remotecall_fetch(id::Integer, f, args...) =
-    remotecall_fetch(worker_from_id(id), f, args...)
+remotecall_fetch(id::Integer, f, args...) = remotecall_fetch(worker_from_id(id), f, args...)
+remotecall_fetch(ws::WorkerSet, f, args...) = remotecall_fetch(chooseproc(ws), f, args...)
 
 # faster version of wait(remotecall(...))
 remotecall_wait(w::LocalProcess, f, args...) = wait(remotecall(w,f,args...))
@@ -598,8 +626,8 @@ function remotecall_wait(w::Worker, f, args...)
     rr
 end
 
-remotecall_wait(id::Integer, f, args...) =
-    remotecall_wait(worker_from_id(id), f, args...)
+remotecall_wait(id::Integer, f, args...) =  remotecall_wait(worker_from_id(id), f, args...)
+remotecall_wait(ws::WorkerSet, f, args...) =  remotecall_wait(chooseproc(ws), f, args...)
 
 function remote_do(w::LocalProcess, f, args...)
     # the LocalProcess version just performs in local memory what a worker
@@ -616,9 +644,9 @@ function remote_do(w::Worker, f, args...)
 end
 
 remote_do(id::Integer, f, args...) = remote_do(worker_from_id(id), f, args...)
+remote_do(ws::WorkerSet, f, args...) = remote_do(chooseproc(ws), f, args...)
 
 function sync_msg(verb::Symbol, r::RemoteRef)
-    pg = (PGRP::ProcessGroup)
     oid = rr2id(r)
     if r.where==myid() || isa(worker_from_id(r.where), LocalProcess)
         rv = lookup_ref(oid)
@@ -742,7 +770,6 @@ end
 
 function create_message_handler_loop(sock::AsyncStream) #returns immediately
     enq_work(@task begin
-        global PGRP
         #println("message_handler_loop")
         start_reading(sock)
         wait_connected(sock)
@@ -811,7 +838,6 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                             # Others will connect to us. Don't do anything just yet
                             continue
                         end
-                        
                     end
                 else
                     # the synchronization messages
@@ -970,28 +996,18 @@ end
 # to be mutually reachable without a tunnel, as is often the case in a cluster.
 function addprocs(machines::AbstractVector;
                   tunnel=false, dir=JULIA_HOME, exename="./julia-release-basic", sshflags::Cmd=``)
-    add_workers(PGRP,
+    add_workers(
         start_remote_workers(machines,
             map(m->detach(`ssh -n $sshflags $m "bash -l -c \"cd $dir && $exename --worker\""`),
                 machines),
             tunnel, sshflags))
 end
 
-#function addprocs_ssh(machines, keys)
-#    if !(isa(keys, Array)) && isa(machines,Array)
-#        key = keys
-#        keys = [ key for x = 1:length(machines)]
-#        cmdargs = { {machines[x],keys[x]} for x = 1:length(machines)}
-#    else
-#        cmdargs = {{machines,keys}}
-#    end #if/else
-#    add_workers(PGRP, start_remote_workers(machines, map(x->worker_ssh_cmd(x[1],x[2]), cmdargs)))
-#end
 
 worker_local_cmd() = `$JULIA_HOME/julia-release-basic --bind-to $bind_addr --worker`
 
 function addprocs(np::Integer)
-    add_workers(PGRP, start_remote_workers({ "localhost" for i=1:np },
+    add_workers(start_remote_workers({ "localhost" for i=1:np },
                                            { worker_local_cmd() for i=1:np }))
 end
 
@@ -1036,7 +1052,7 @@ function start_sge_workers(n)
     workers
 end
 
-addprocs_sge(n) = add_workers(PGRP, start_sge_workers(n))
+addprocs_sge(n) = add_workers(start_sge_workers(n))
 
 ## higher-level functions: spawn, pmap, pfor, etc. ##
 
@@ -1071,41 +1087,50 @@ function sync_add(r)
     r
 end
 
-let nextidx = 1
-    global chooseproc
-    function chooseproc(thunk::Function)
-        p = -1
-        env = thunk.env
-        if isa(env,Tuple)
-            for v in env
-                if isa(v,Box)
-                    v = v.contents
-                end
-                if isa(v,RemoteRef)
-                    p = v.where; break
-                end
+function chooseproc(ws::WorkerSet, thunk::Function)
+    p = -1
+    env = thunk.env
+    if isa(env,Tuple)
+        for v in env
+            if isa(v,Box)
+                v = v.contents
+            end
+            if isa(v,RemoteRef)
+                p = v.where; break
             end
         end
-        if p == -1
-            if nextidx > nprocs()
-               p = PGRP.workers[1].id
-               nextidx = 2
-            else 
-               p = PGRP.workers[nextidx].id
-               nextidx += 1
-            end
-        end
-        p
     end
+    if p == -1
+        p = chooseproc(ws)
+    end
+    p
 end
+
+function chooseproc(ws::WorkerSet)
+    nextidx = ws.nextidx
+    if nextidx > length(ws.idset)
+        p = ws.idset[1]
+        ws.nextidx = 2
+    else 
+        p = ws.idset[nextidx]
+        ws.nextidx += 1
+    end
+    p
+end
+
 
 spawnat(p, thunk) = sync_add(remotecall(p, thunk))
 
-spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
+spawn_somewhere(ws, thunk) = spawnat(chooseproc(ws, thunk),thunk)
+
+macro spawnon(ws, expr)
+    expr = localize_vars(:(()->($expr)), false)
+    :(spawn_somewhere(ws, $(esc(expr))))
+end
 
 macro spawn(expr)
     expr = localize_vars(:(()->($expr)), false)
-    :(spawn_somewhere($(esc(expr))))
+    :(spawn_somewhere(ALLPROCS, $(esc(expr))))
 end
 
 macro spawnat(p, expr)
@@ -1117,7 +1142,7 @@ macro fetch(expr)
     expr = localize_vars(:(()->($expr)), false)
     quote
         thunk = $(esc(expr))
-        remotecall_fetch(chooseproc(thunk), thunk)
+        remotecall_fetch(chooseproc(ALLPROCS, thunk), thunk)
     end
 end
 
@@ -1132,7 +1157,7 @@ function spawnlocal(thunk)
     sync_add(rr)
     rid = rr2id(rr)
     rv = RemoteValue()
-    (PGRP::ProcessGroup).refs[rid] = rv
+    grefs[rid] = rv
     add!(rv.clientset, rid[1])
     # add to the *front* of the queue, work first
     push!(Workqueue, @task(run_work_thunk(rv,thunk)))
@@ -1151,7 +1176,7 @@ macro spawnlocal(expr)
 end
 
 function at_each(f, args...)
-    for w in PGRP.workers
+    for w in collect(values(map_pid_wrkr))
         sync_add(remotecall(w.id, f, args...))
     end
 end
@@ -1167,10 +1192,12 @@ end
 function pmap_static(f, lsts...)
     np = nprocs()
     n = length(lsts[1])
-    { remotecall(PGRP.workers[(i-1)%np+1].id, f, map(L->L[i], lsts)...) for i = 1:n }
+    { remotecall(ALLPROCS.idset[(i-1)%np+1], f, map(L->L[i], lsts)...) for i = 1:n }
 end
 
 pmap(f) = f()
+
+pmap(f, lsts...) = pmap_procs(ALLPROCS.idset, f, lsts...)
 
 # dynamic scheduling by creating a local task to feed work to each processor
 # as it finishes.
@@ -1178,8 +1205,8 @@ pmap(f) = f()
 # rsym(n) = (a=rand(n,n);a*a')
 # L = {rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000)};
 # pmap(eig, L);
-function pmap(f, lsts...)
-    np = nprocs()
+function pmap_procs(wset, f, lsts...)
+    np = length(wset)
     n = length(lsts[1])
     results = cell(n)
     i = 1
@@ -1188,7 +1215,7 @@ function pmap(f, lsts...)
     nextidx() = (idx=i; i+=1; idx)
     @sync begin
         for p=1:np
-            wpid = PGRP.workers[p].id
+            wpid = wset[p]
             if wpid != myid() || np == 1
                 @async begin
                     while true
@@ -1225,18 +1252,20 @@ function splitrange(N::Int, np::Int)
     return chunks
 end
 
-function preduce(reducer, f, N::Int)
-    chunks = splitrange(N, nprocs())
+function preduce(procs, reducer, f, N::Int)
+    chunks = splitrange(N, length(procs))
     results = cell(length(chunks))
+    ws = WorkerSet(procs)
     for i in 1:length(chunks)
-        results[i] = @spawn f(first(chunks[i]), last(chunks[i]))
+        results[i] = @spawnon ws  f(first(chunks[i]), last(chunks[i]))
     end
     mapreduce(fetch, reducer, results)
 end
 
-function pfor(f, N::Int)
-    for c in splitrange(N, nprocs())
-        @spawn f(first(c), last(c))
+function pfor(procs, f, N::Int)
+    ws = WorkerSet(procs)
+    for c in splitrange(N, length(procs))
+        @spawnon ws f(first(c), last(c))
     end
     nothing
 end
@@ -1272,6 +1301,7 @@ function make_pfor_body(var, body, ran)
 end
 
 macro parallel(args...)
+    procs = ALLPROCS.idset
     na = length(args)
     if na==1
         loop = args[1]
@@ -1290,6 +1320,10 @@ macro parallel(args...)
     elseif na==2
         reducer = args[1]
         loop = args[2]
+    elseif na==3
+        procs = esc(args[1])
+        reducer = args[2]
+        loop = args[3]
     else
         throw(ArgumentError("wrong number of arguments to @parallel"))
     end
@@ -1301,11 +1335,11 @@ macro parallel(args...)
     body = loop.args[2]
     if na==1
         quote
-            pfor($(make_pfor_body(var, body, r)), length($(esc(r))))
+            pfor($procs, $(make_pfor_body(var, body, r)), length($(esc(r))))
         end
     else
         quote
-            preduce($(esc(reducer)),
+            preduce($procs, $(esc(reducer)),
                     $(make_preduce_body(reducer, var, body, r)), length($(esc(r))))
         end
     end
