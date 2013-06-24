@@ -232,12 +232,12 @@ end
 
 # Algorithm H from TAoCP 7.2.1.4
 # Partition n into m parts
-function integer_partitions(n::Int64, m::Int64) # why only Int64?
+function integer_partitions{T<:Integer}(n::T, m::T)
   if n < m || m < 2
-    throw("Assumed n >= m >= 2!")
+    throw("Require n >= m >= 2!")
   end
   # H1
-  a = [n - m + 1, ones(Int64, m), -1]
+  a = [n - m + 1, ones(T, m), -1]
   # H2
   while true
     produce(a[1:m])
