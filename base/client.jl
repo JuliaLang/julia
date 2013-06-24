@@ -325,6 +325,12 @@ function _start()
         repl && startup && try_include(abspath(ENV["HOME"],".juliarc.jl"))
 
         if repl
+            if isa(STDIN,File)
+                global is_interactive = false
+                eval(parse_input_line(readall(STDIN)))
+                quit()
+            end
+
             if !color_set
                 @unix_only global have_color = (beginswith(get(ENV,"TERM",""),"xterm") || success(`tput setaf 0`))
                 @windows_only global have_color = true
