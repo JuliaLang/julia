@@ -63,6 +63,18 @@ function info{T}(
     reinterpret(T,buf)[1]
 end
 
+function config{T}(what::Integer, ::Type{T})
+    buf = Array(Uint8, sizeof(T))
+    ret = ccall((:pcre_config, :libpcre), Int32,
+                (Int32, Ptr{Uint8}),
+                what, buf)
+
+    if ret != 0
+        error("config: error $n")
+    end
+    reinterpret(T,buf)[1]
+end
+
 function compile(pattern::String, options::Integer)
     errstr = Array(Ptr{Uint8},1)
     erroff = Array(Int32,1)
