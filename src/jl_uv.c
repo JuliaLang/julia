@@ -369,14 +369,15 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
     uv_stdio_container_t stdio[3];
     int error;
     opts.file = name;
-#ifndef _OS_WINDOWS_
-    opts.env = environ;
-#else
+#ifdef _OS_WINDOWS_
     opts.env = NULL;
+    opts.flags = 0;
+#else
+    opts.env = environ;
+    opts.flags = UV_PROCESS_RESET_SIGPIPE;
 #endif
     opts.cwd = NULL;
     opts.args = argv;
-    opts.flags = UV_PROCESS_RESET_SIGPIPE;
     if (detach)
         opts.flags |= UV_PROCESS_DETACHED;
     opts.stdio = stdio;
