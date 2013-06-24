@@ -350,10 +350,8 @@ DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog)
 
 #ifdef __APPLE__
 #include <crt_externs.h>
-#else
-#if defined(_COMPILER_MINGW_)
+#elif !defined(_OS_WINDOWS_) || defined(_COMPILER_MINGW_)
 extern char **environ;
-#endif
 #endif
 
 DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
