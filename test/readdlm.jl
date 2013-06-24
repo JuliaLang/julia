@@ -1,8 +1,4 @@
-dlm_data = try
-        readdlm(joinpath(JULIA_HOME, split("../../test/perf2/imdb-1.tsv", '/')...), '\t')
-    catch
-        readdlm(joinpath(JULIA_HOME, split("../../julia/share/julia/test/perf2/imdb-1.tsv", '/')...), '\t')
-    end
+dlm_data = readdlm(joinpath("perf2", "imdb-1.tsv"), '\t')
 
 @test size(dlm_data) == (31383,3)
 @test dlm_data[12345,2] == "Gladiator"
