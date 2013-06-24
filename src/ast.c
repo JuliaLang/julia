@@ -183,47 +183,43 @@ static jl_value_t *scm_to_julia(value_t e, int expronly)
     return v;
 }
 
+extern int64_t conv_to_int64(void *data, numerictype_t tag);
+
 static jl_value_t *scm_to_julia_(value_t e, int eo)
 {
     if (fl_isnumber(e)) {
-        if (iscprim(e)) {
-            numerictype_t nt = cp_numtype((cprim_t*)ptr(e));
+        int64_t i64;
+        if (isfixnum(e)) {
+            i64 = numval(e);
+        }
+        else {
+            assert(iscprim(e));
+            cprim_t *cp = (cprim_t*)ptr(e);
+            numerictype_t nt = cp_numtype(cp);
             switch (nt) {
             case T_DOUBLE:
-                return (jl_value_t*)jl_box_float64(*(double*)cp_data((cprim_t*)ptr(e)));
+                return (jl_value_t*)jl_box_float64(*(double*)cp_data(cp));
             case T_FLOAT:
-                return (jl_value_t*)jl_box_float32(*(float*)cp_data((cprim_t*)ptr(e)));
-            case T_INT64:
-                return (jl_value_t*)jl_box_int64(*(int64_t*)cp_data((cprim_t*)ptr(e)));
+                return (jl_value_t*)jl_box_float32(*(float*)cp_data(cp));
             case T_UINT8:
-                return (jl_value_t*)jl_box_uint8(*(uint8_t*)cp_data((cprim_t*)ptr(e)));
+                return (jl_value_t*)jl_box_uint8(*(uint8_t*)cp_data(cp));
             case T_UINT16:
-                return (jl_value_t*)jl_box_uint16(*(uint16_t*)cp_data((cprim_t*)ptr(e)));
+                return (jl_value_t*)jl_box_uint16(*(uint16_t*)cp_data(cp));
             case T_UINT32:
-                return (jl_value_t*)jl_box_uint32(*(uint32_t*)cp_data((cprim_t*)ptr(e)));
+                return (jl_value_t*)jl_box_uint32(*(uint32_t*)cp_data(cp));
             case T_UINT64:
-                return (jl_value_t*)jl_box_uint64(*(uint64_t*)cp_data((cprim_t*)ptr(e)));
+                return (jl_value_t*)jl_box_uint64(*(uint64_t*)cp_data(cp));
             default:
                 ;
             }
+            i64 = conv_to_int64(cp_data(cp), nt);
         }
-        if (isfixnum(e)) {
-            int64_t ne = numval(e);
 #ifdef _P64
-            return (jl_value_t*)jl_box_int64(ne);
+        return (jl_value_t*)jl_box_int64(i64);
 #else
-            if (ne > S32_MAX || ne < S32_MIN)
-                return (jl_value_t*)jl_box_int64(ne);
-            return (jl_value_t*)jl_box_int32((int32_t)ne);
-#endif
-        }
-        size_t n = tosize(e, "scm_to_julia");
-#ifdef _P64
-        return (jl_value_t*)jl_box_int64((int64_t)n);
-#else
-        if (n > S32_MAX)
-            return (jl_value_t*)jl_box_int64((int64_t)n);
-        return (jl_value_t*)jl_box_int32((int32_t)n);
+        if (i64 > (int64_t)S32_MAX || i64 < (int64_t)S32_MIN)
+            return (jl_value_t*)jl_box_int64(i64);
+        return (jl_value_t*)jl_box_int32((int32_t)i64);
 #endif
     }
     if (issymbol(e)) {

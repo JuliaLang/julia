@@ -1476,3 +1476,6 @@ end
 @test 10>>64 == 0
 @test 10>>>64 == 0
 @test 10<<64 == 0
+
+# issue #3520 - certain int literals on 32-bit systems
+@test -536870913 === -536870912-1
