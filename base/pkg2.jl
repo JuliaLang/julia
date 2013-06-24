@@ -30,15 +30,6 @@ edit(f::Function, pkg, args...) = Dir.cd() do
     return
 end
 
-macro recover(ex)
-    quote
-        try $(esc(ex))
-        catch err
-            show(err)
-        end
-    end
-end
-
 update(avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
     info("Updating metadata...")
     cd("METADATA") do
@@ -90,30 +81,34 @@ resolve(reqs::Dict, avail::Dict=Dir.cd(Read.available),
     end
 
     # try applying changes, roll back everything if anything fails
+    installed, updated, removed = {}, {}, {}
     try
         for (pkg,ver) in install
             info("Installing $pkg v$ver")
             Write.install(pkg, Read.sha1(pkg,ver))
+            push!(installed,(pkg,ver))
         end
         for (pkg,(v1,v2)) in update
             up = v1 <= v2 ? "Up" : "Down"
             info("$(up)grading $pkg: v$v1 => v$v2")
             Write.update(pkg, Read.sha1(pkg,v2))
+            push!(updated,(pkg,(v1,v2)))
         end
         for (pkg,ver) in remove
             info("Removing $pkg v$ver")
             Write.remove(pkg)
+            push!(removed,(pkg,ver))
         end
     catch
-        for (pkg,ver) in reverse!(remove)
-            info("Rolling back $pkg to v$ver")
+        for (pkg,ver) in reverse!(removed)
+            info("Rolling back deleted $pkg to v$ver")
             @recover Write.install(pkg, Read.sha1(pkg,ver))
         end
-        for (pkg,(v1,v2)) in reverse!(update)
-            info("Rolling back $pkg to v$v1")
+        for (pkg,(v1,v2)) in reverse!(updated)
+            info("Rolling back $pkg from v$v2 to v$v1")
             @recover Write.update(pkg, Read.sha1(pkg,v1))
         end
-        for (pkg,ver) in reverse!(install)
+        for (pkg,ver) in reverse!(installed)
             info("Rolling back install of $pkg")
             @recover Write.remove(pkg)
         end
