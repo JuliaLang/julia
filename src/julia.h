@@ -1192,6 +1192,13 @@ DLLEXPORT void jl_free2(void *p, void *hint);
 DLLEXPORT int jl_cpu_cores(void);
 DLLEXPORT long jl_getpagesize(void);
 
+typedef struct {
+    uv_loop_t *loop;
+    uv_handle_type type;
+    void *data;
+    uv_file file;
+} jl_uv_file_t;
+
 DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n);
 DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);

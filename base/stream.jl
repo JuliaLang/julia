@@ -46,8 +46,8 @@ end
 
 type NamedPipe <: AsyncStream
     handle::Ptr{Void}
-    buffer::IOBuffer
     open::Bool
+    buffer::IOBuffer
     line_buffered::Bool
     readcb::Callback
     readnotify::Condition
@@ -55,8 +55,9 @@ type NamedPipe <: AsyncStream
     connectnotify::Condition
     closecb::Callback
     closenotify::Condition
-    NamedPipe() = new(C_NULL,PipeBuffer(),false,true,false,Condition(),false,
+    NamedPipe(handle, open) = new(handle,open,PipeBuffer(),true,false,Condition(),false,
                       Condition(),false,Condition())
+    NamedPipe() = NamedPipe(C_NULL,false)
 end
 
 type PipeServer <: UVServer
@@ -110,23 +111,35 @@ associate_julia_struct(handle::Ptr{Void},jlobj::ANY) =
 disassociate_julia_struct(handle::Ptr{Void}) = 
     ccall(:jl_uv_disassociate_julia_struct,Void,(Ptr{Void},),handle)
 
-function _uv_tty2tty(handle::Ptr{Void})
-    tty = TTY(handle,true)
-    tty.line_buffered = false
-    associate_julia_struct(handle,tty)
-    tty
+function init_stdio(handle,fd)
+    t = ccall(:jl_uv_handle_type,Int32,(Ptr{Void},),handle)
+    if t == UV_FILE
+        return File(RawFD(fd))
+    else
+        if t == UV_TTY
+            ret = TTY(handle,true)
+        elseif t == UV_TCP
+            ret = TcpSocket(handle,true)
+        elseif t == UV_NAMED_PIPE
+            ret = NamedPipe(handle, true)
+        end
+        ret.line_buffered = false  
+        ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},Any),ret.handle,ret)     
+        return ret
+    end
 end
 
-#macro init_stdio()
-#begin
-    const STDIN  = _uv_tty2tty(ccall(:jl_stdin_stream ,Ptr{Void},()))
-    const STDOUT = _uv_tty2tty(ccall(:jl_stdout_stream,Ptr{Void},()))
-    const STDERR = _uv_tty2tty(ccall(:jl_stderr_stream,Ptr{Void},()))
+function reinit_stdio()
+    global STDIN, STDERR, STDOUT, OUTPUT_STREAM
+    STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()),0)
+    STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()),1)
+    STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()),2)
     OUTPUT_STREAM = STDOUT
-#end
-#end
+end
 
-#@init_stdio
+reinit_stdio()
+
+OUTPUT_STREAM = STDOUT
 
 flush(::TTY) = nothing
 
