@@ -1,6 +1,6 @@
 module ARPACK 
 
-import ..LinAlg: BlasInt, blas_int
+import ..LinAlg: BlasInt, blas_int, ARPACKException
 
 ## aupd and eupd wrappers 
 
@@ -59,6 +59,8 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
                       workd, workl, lworkl, rwork)
 
     howmny = "A"
+    TR     = cmplx ? T.types[1] : T
+    tol = convert(TR, tol)
     info   = zeros(BlasInt, 1)
     
     if cmplx
