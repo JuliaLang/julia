@@ -761,6 +761,7 @@ export
     lpad,
     lstrip,
     match,
+    match_all,
     ismatch,
     nextind,
     prevind,
