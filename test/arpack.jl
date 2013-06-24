@@ -3,7 +3,7 @@ begin
     n = 10
     a = rand(n,n)
 
-    for elty in (Float32, Float64) # Complex tests fail (#3511)
+    for elty in (Float32, Float64, Complex64, Complex128) # Complex tests fail (#3511)
         a     = convert(Matrix{elty}, a)
         asym  = a' + a                  # symmetric indefinite
         apd   = a'*a                    # symmetric positive-definite
