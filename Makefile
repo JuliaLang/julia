@@ -53,7 +53,7 @@ COMMIT:
 	echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > COMMIT
 
 # use sys.ji if it exists, otherwise run two stages
-$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl $(BUILD)/share/julia/helpdb.jl $(BUILD)/share/man/man1/julia.1
+$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl base/sparse/*.jl $(BUILD)/share/julia/helpdb.jl $(BUILD)/share/man/man1/julia.1
 	@$(MAKE) $(QUIET_MAKE) COMMIT
 	$(QUIET_JULIA) cd base && \
 	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(call spawn,$(JULIA_EXECUTABLE)) -bf sysimg.jl) && $(call spawn,$(JULIA_EXECUTABLE)) -f sysimg.jl || echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***"
