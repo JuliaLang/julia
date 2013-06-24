@@ -473,11 +473,11 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
 .. function:: keys(collection)
 
-   Return an array of all keys in a collection.
+   Return an iterator over all keys in a collection. ``collect(keys(d))`` returns an array of keys.
 
 .. function:: values(collection)
 
-   Return an array of all values in a collection.
+   Return an iterator over all values in a collection. ``collect(values(d))`` returns an array of values.
 
 .. function:: merge(collection, others...)
 
