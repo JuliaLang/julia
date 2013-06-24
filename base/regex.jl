@@ -118,6 +118,7 @@ immutable RegexMatchIterator
     overlap::Bool
 end
 
+eltype(itr::RegexMatchIterator) = RegexMatch
 start(itr::RegexMatchIterator) = match(itr.regex, itr.string)
 done(itr::RegexMatchIterator, m) = m == nothing
 next(itr::RegexMatchIterator, m) =
