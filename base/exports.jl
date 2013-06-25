@@ -1229,6 +1229,7 @@ export
     @unix_only,
     @osx_only,
     @linux_only,
+    @schedule,
     @sync,
     @async,
     @spawn,

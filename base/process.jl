@@ -409,12 +409,13 @@ function run(cmds::AbstractCmd,args...)
     wait_success(ps) ? nothing : pipeline_error(ps)
 end
 
+const SIGPIPE = 13
 function success(proc::Process)
     assert(process_exited(proc))
     if proc.exit_code == -1
         error("could not start process ", proc)
     end
-    proc.exit_code==0
+    proc.exit_code==0 && (proc.term_signal == 0 || proc.term_signal == SIGPIPE)
 end
 success(procs::Vector{Process}) = all(success, procs)
 success(procs::ProcessChain) = success(procs.processes)
