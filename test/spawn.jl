@@ -23,6 +23,20 @@ out = readall(`echo hello` & `echo world`)
 
 @test (run(`printf "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
+# Test for SIGPIPE being treated as normal termination (throws an error if broken)
+@test (run(`yes`|>`head`|>SpawnNullStream()); true)
+
+a = Base.Condition()
+
+@schedule begin
+    p = spawn(`yes`|>SpawnNullStream())
+    Base.notify(a,p)
+    @test !Base.wait_success(p)
+end
+kill(wait(a))
+
+@test_fails run(`foo`)
+
 if false
     prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
     @test success(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` |>
@@ -79,3 +93,4 @@ file = tempname()
 stdin, proc = writesto(`cat -` |> file)
 write(stdin, str)
 close(stdin)
+
