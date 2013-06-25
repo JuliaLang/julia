@@ -344,6 +344,16 @@ static value_t array_to_list(jl_array_t *a)
     return lst;
 }
 
+static value_t julia_to_list2(jl_value_t *a, jl_value_t *b)
+{
+    value_t sa = julia_to_scm(a);
+    fl_gc_handle(&sa);
+    value_t sb = julia_to_scm(b);
+    value_t l = fl_list2(sa, sb);
+    fl_free_gc_handles(1);
+    return l;
+}
+
 static value_t julia_to_scm(jl_value_t *v)
 {
     if (jl_is_symbol(v)) {
@@ -368,29 +378,19 @@ static value_t julia_to_scm(jl_value_t *v)
         return scmv;
     }
     if (jl_typeis(v, jl_linenumbernode_type)) {
-        return fl_cons(julia_to_scm((jl_value_t*)line_sym),
-                       fl_cons(julia_to_scm(jl_fieldref(v,0)),
-                               FL_NIL));
+        return julia_to_list2((jl_value_t*)line_sym, jl_fieldref(v,0));
     }
     if (jl_typeis(v, jl_labelnode_type)) {
-        return fl_cons(julia_to_scm((jl_value_t*)label_sym),
-                       fl_cons(julia_to_scm(jl_fieldref(v,0)),
-                               FL_NIL));
+        return julia_to_list2((jl_value_t*)label_sym, jl_fieldref(v,0));
     }
     if (jl_typeis(v, jl_gotonode_type)) {
-        return fl_cons(julia_to_scm((jl_value_t*)goto_sym),
-                       fl_cons(julia_to_scm(jl_fieldref(v,0)),
-                               FL_NIL));
+        return julia_to_list2((jl_value_t*)goto_sym, jl_fieldref(v,0));
     }
     if (jl_typeis(v, jl_quotenode_type)) {
-        return fl_cons(julia_to_scm((jl_value_t*)quote_sym),
-                       fl_cons(julia_to_scm(jl_fieldref(v,0)),
-                               FL_NIL));
+        return julia_to_list2((jl_value_t*)quote_sym, jl_fieldref(v,0));
     }
     if (jl_typeis(v, jl_topnode_type)) {
-        return fl_cons(julia_to_scm((jl_value_t*)top_sym),
-                       fl_cons(julia_to_scm(jl_fieldref(v,0)),
-                               FL_NIL));
+        return julia_to_list2((jl_value_t*)top_sym, jl_fieldref(v,0));
     }
     if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v))) {
         return fixnum(jl_unbox_long(v));
