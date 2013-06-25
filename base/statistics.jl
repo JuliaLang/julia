@@ -52,7 +52,7 @@ end
 var(v::AbstractArray) = varm(v, mean(v))
 function var(v::AbstractArray, region)
     x = v .- mean(v, region)
-    return sum(x.^2, region) / (prod(size(v)[region]) - 1)
+    return sum(x.*x, region) / (prod(size(v)[region]) - 1)
 end
 
 ## standard deviation with known mean
