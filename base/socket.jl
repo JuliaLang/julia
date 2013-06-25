@@ -144,8 +144,14 @@ function parse_ipv4(str)
         end
         if f[1] == '0'
             if length(f) >= 2 && f[2] == 'x'
+                if length(f) > 8 # 2+(3*2) - prevent parseint from overflowing on 32bit
+                    error("IPv4 field too large")
+                end
                 r = parseint(f[3:end],16)
             else 
+                if length(f) > 9 # 1+8 - prevent parseint from overflowing on 32bit
+                    error("IPv4 field too large")
+                end
                 r = parseint(f,8)
             end
         else
@@ -157,7 +163,7 @@ function parse_ipv4(str)
             end
             ret |= uint32(r) << ((4-i)*8)
         else
-            if r > ((uint64(1)<<((5-length(f))*8))-1)
+            if r > ((uint64(1)<<((5-length(fields))*8))-1)
                 error("IPv4 field too large")
             end
             ret |= r
