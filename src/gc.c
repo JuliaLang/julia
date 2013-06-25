@@ -707,6 +707,8 @@ static void gc_mark_uv_state(uv_loop_t *loop)
     uv_walk(loop,gc_mark_uv_handle,0);
 }
 
+extern jl_module_t *jl_old_base_module;
+
 static void gc_mark(void)
 {
     // mark all roots
@@ -718,6 +720,7 @@ static void gc_mark(void)
     // modules
     gc_push_root(jl_main_module);
     gc_push_root(jl_current_module);
+    if (jl_old_base_module) gc_push_root(jl_old_base_module);
 
     // invisible builtin values
     if (jl_an_empty_cell) gc_push_root(jl_an_empty_cell);

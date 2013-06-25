@@ -936,8 +936,8 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
     JL_GC_POP();
 
     int argStart = ctx->argDepth;
-    Value *arg1 = emit_expr(expr, ctx);
-    make_gcroot(boxed(arg1), ctx);
+    Value *arg1 = boxed(emit_expr(expr, ctx));
+    make_gcroot(arg1, ctx);
     Value *arg2 = literal_pointer_val((jl_value_t*)name);
     make_gcroot(arg2, ctx);
     Value *myargs = builder.CreateGEP(ctx->argTemp,
@@ -1950,12 +1950,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                 bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
             }
         }
-        Value *a1 = emit_expr(args[1], ctx);
-        make_gcroot(boxed(a1), ctx);
-        Value *a2 = emit_expr(args[2], ctx);
-        make_gcroot(boxed(a2), ctx);
-        Value *a3 = emit_expr(args[3], ctx);
-        make_gcroot(boxed(a3), ctx);
+        Value *a1 = boxed(emit_expr(args[1], ctx));
+        make_gcroot(a1, ctx);
+        Value *a2 = boxed(emit_expr(args[2], ctx));
+        make_gcroot(a2, ctx);
+        Value *a3 = boxed(emit_expr(args[3], ctx));
+        make_gcroot(a3, ctx);
         Value *mdargs[6] = { name, bp, literal_pointer_val((void*)bnd),
                              a1, a2, a3 };
         ctx->argDepth = last_depth;
