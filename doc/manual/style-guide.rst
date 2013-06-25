@@ -107,3 +107,20 @@ Splicing function arguments can be addictive. Instead of ``[a..., b...]``,
 use simply ``[a, b]``, which already concatenates arrays.
 ``collect(a)`` is better than ``[a...]``, but since ``a`` is already iterable
 it is often even better to leave it alone, and not convert it to an array.
+
+Don't use unnecessary static parameters
+---------------------------------------
+
+A function signature like this:
+
+    foo{T<:Real}(x::T) = ...
+
+should be written as
+
+    foo(x::Real) = ...
+
+instead, especially if ``T`` is not used in the function body.
+If ``T`` is used, it can be replaced with ``typeof(x)`` if convenient.
+There is no performance difference.
+Note that this is not a general caution against static parameters, just
+against uses where they are not needed.
