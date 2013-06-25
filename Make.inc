@@ -164,8 +164,8 @@ endif
 
 # ===========================================================================
 
-BUILD_MACHINE = $(shell $(HOSTCC) -dumpmachine)
-ARCH = $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
+BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
+ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
 endif
@@ -173,8 +173,8 @@ ifeq ($(OS),Darwin)
 ifeq ($(OS),$(BUILD_OS))
 ## Mac is a nifty dual-arch platform (or was until 10.8), so we detect the currently running OS arch instead
 ## of the compiler "-dumpmachine" result, like I believe the compiler does, and make a substitution
-ARCH = $(shell uname -m)
-BUILD_MACHINE = $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
+ARCH := $(shell uname -m)
+BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
 endif
 
