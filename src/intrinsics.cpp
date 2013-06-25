@@ -515,7 +515,7 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
     if (!jl_is_cpointer_type(aty))
         jl_error("pointerref: expected pointer type as first argument");
     jl_value_t *ety = jl_tparam0(aty);
-    if(jl_is_typevar(ety))
+    if (jl_is_typevar(ety))
         jl_error("pointerref: invalid pointer");
     if ((jl_datatype_t*)expr_type(i, ctx) != jl_long_type) {
         jl_error("pointerref: invalid index type");
@@ -555,7 +555,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
     if (!jl_is_cpointer_type(aty))
         jl_error("pointerset: expected pointer type as first argument");
     jl_value_t *ety = jl_tparam0(aty);
-    if(jl_is_typevar(ety))
+    if (jl_is_typevar(ety))
         jl_error("pointerset: invalid pointer");
     jl_value_t *xty = expr_type(x, ctx);    
     if (!jl_subtype(xty, ety, 0)) {

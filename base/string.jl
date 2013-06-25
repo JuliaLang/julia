@@ -1037,7 +1037,7 @@ function rsplit(str::String, splitter, limit::Integer, keep_empty::Bool)
     j = first(r)-1
     k = last(r)
     while((0 <= j < n) && (length(strs) != limit-1))
-        if(i <= k)
+        if i <= k
             (keep_empty || (k < n)) && unshift!(strs, str[k+1:n])
             n = j
         end

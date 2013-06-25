@@ -1248,12 +1248,12 @@ end
 function (.^)(x::Bool, B::BitArray)
     x ? trues(size(B)) : ~B
 end
-function (.^){T<:Number}(x::T, B::BitArray)
+function (.^)(x::Number, B::BitArray)
     z = x ^ false
     u = x ^ true
     reshape([ B[i] ? u : z for i = 1:length(B) ], size(B))
 end
-function (.^){T<:Integer}(B::BitArray, x::T)
+function (.^)(B::BitArray, x::Integer)
     if x == 0
         return trues(size(B))
     elseif x < 0

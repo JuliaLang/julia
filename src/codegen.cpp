@@ -416,7 +416,7 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dum
     else {
         llvmf = to_function(sf->linfo, false);
     }
-    if(dumpasm == false) {
+    if (dumpasm == false) {
         llvmf->print(stream);
     }
     else {
@@ -493,8 +493,7 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams)
                 jl_fptr_t fptr = ((jl_function_t*)f)->fptr;
                 if (fptr == &jl_apply_generic) {
                     if (f == jl_get_global(jl_base_module, jl_symbol("dlsym")) ||
-                        f == jl_get_global(jl_base_module, jl_symbol("dlopen")))
-                    {
+                        f == jl_get_global(jl_base_module, jl_symbol("dlopen"))) {
                         size_t i;
                         size_t n = jl_array_dim0(e->args);
                         jl_value_t **v;
@@ -512,7 +511,8 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams)
                         JL_GC_POP();
                         return result;
                     }
-                } else if (jl_array_dim0(e->args) == 3 && fptr == &jl_f_get_field) {
+                }
+                else if (jl_array_dim0(e->args) == 3 && fptr == &jl_f_get_field) {
                     m = (jl_module_t*)static_eval(jl_exprarg(e,1),ctx,sparams);
                     s = (jl_sym_t*)static_eval(jl_exprarg(e,2),ctx,sparams);
                     if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
@@ -520,7 +520,8 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams)
                         if (b && b->constp)
                             return b->value;
                     }
-                } else if (fptr == &jl_f_tuple) {
+                }
+                else if (fptr == &jl_f_tuple) {
                     size_t i;
                     size_t n = jl_array_dim0(e->args)-1;
                     if (n==0) return (jl_value_t*)jl_null;
@@ -1803,7 +1804,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         return NULL;
     }
     else if (jl_is_linenode(expr)) {
-        if(valuepos)
+        if (valuepos)
             jl_error("Linenode in value position");
         return NULL;
     }

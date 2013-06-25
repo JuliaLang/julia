@@ -131,7 +131,7 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
 
 void closeHandle(uv_handle_t* handle)
 {
-    if(handle->data) {
+    if (handle->data) {
         JULIA_CB(close,handle->data,0); (void)ret;
     }
     free(handle);
@@ -470,8 +470,7 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
 {
     if (stream!=0) {
         if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
-            if (stream->type == UV_FILE)
-            {
+            if (stream->type == UV_FILE) {
                 JL_SIGATOMIC_BEGIN();
                 jl_uv_file_t *file = (jl_uv_file_t *)stream;
                 // Do a blocking write for now
@@ -479,7 +478,8 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
                 int err = uv_fs_write(file->loop, &req, file->file, &c, 1, -1, NULL);
                 JL_SIGATOMIC_END();
                 return err ? 0 : 1;
-            } else {
+            }
+            else {
                 JL_SIGATOMIC_BEGIN();
                 uv_write_t *uvw = malloc(sizeof(uv_write_t) + 1);
                 char *data = (char*)(uvw+1);
@@ -505,8 +505,7 @@ DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
     if (stream == 0)
         return 0;
     if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
-        if (stream->type == UV_FILE)
-        {
+        if (stream->type == UV_FILE) {
             JL_SIGATOMIC_BEGIN();
             jl_uv_file_t *file = (jl_uv_file_t *)stream;
             // Do a blocking write for now
@@ -514,7 +513,8 @@ DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
             int err = uv_fs_write(file->loop, &req, file->file, (void*)str, n, -1, NULL);
             JL_SIGATOMIC_END();
             return err ? 0 : n;
-        } else {
+        }
+        else {
             JL_SIGATOMIC_BEGIN();
             uv_write_t *uvw = malloc(sizeof(uv_write_t)+n);
             char *data = (char*)(uvw+1);
@@ -626,7 +626,8 @@ DLLEXPORT void getlocalip(char *buf, size_t len)
         if (ifa->address.address4.sin_family == AF_INET) {
             if (!uv_ip4_name(&(ifa->address.address4), buf, len))
                 break;
-        } else {
+        }
+        else {
             // Enable the following for IPv6 support:
             //if (!uv_ip6_name(&(ifa->address.address6), buf, len))
             //    break;
@@ -742,11 +743,11 @@ DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
 
 DLLEXPORT int jl_uv_unix_fd_is_watched(int fd, uv_poll_t *handle, uv_loop_t *loop)
 {
-    if(fd > loop->nwatchers)
+    if (fd > loop->nwatchers)
         return 0;
-    if(loop->watchers[fd] == NULL)
+    if (loop->watchers[fd] == NULL)
         return 0;
-    if(loop->watchers[fd] == &handle->io_watcher)
+    if (loop->watchers[fd] == &handle->io_watcher)
         return 0;
     return 1;
 }

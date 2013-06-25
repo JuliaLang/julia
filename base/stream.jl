@@ -186,7 +186,7 @@ function _uv_hook_connectioncb(sock::UVServer, status::Int32)
     else
         err = UV_error_t(_uv_lasterror(),_uv_lastsystemerror())
     end
-    if(isa(sock.ccb,Function))
+    if isa(sock.ccb,Function)
         sock.ccb(sock,status)
     end
     notify(sock.connectnotify, err)
@@ -229,8 +229,8 @@ function notify_filled(stream::AsyncStream, nread::Int)
 end
 
 function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Int32)
-    if(nread == -1)
-        if(_uv_lasterror() != 1) #UV_EOF == 1
+    if nread == -1
+        if _uv_lasterror() != 1 #UV_EOF == 1
            error = UVError("readcb")
            close(stream)
            throw(error)
@@ -254,7 +254,7 @@ type SingleAsyncWork <: AsyncWork
     cb::Function
     handle::Ptr{Void}
     function SingleAsyncWork(loop::Ptr{Void},cb::Function)
-        if(loop == C_NULL)
+        if loop == C_NULL
             return new(cb,C_NULL)
         end
         this=new(cb)
@@ -352,7 +352,7 @@ function run_event_loop(loop::Ptr{Void})
     ccall(:jl_run_event_loop,Void,(Ptr{Void},),loop)
 end
 function process_events(block::Bool,loop::Ptr{Void})
-    if(block)
+    if block
         ccall(:jl_run_once,Int32,(Ptr{Void},),loop)
     else
         ccall(:jl_process_events,Int32,(Ptr{Void},),loop)        
@@ -374,14 +374,14 @@ function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{
 end
 
 function link_pipe(read_end2::NamedPipe,readable_julia_only::Bool,write_end::Ptr{Void},writeable_julia_only::Bool)
-    if(read_end2.handle == C_NULL)
+    if read_end2.handle == C_NULL
         read_end2.handle = malloc_pipe()
     end
     link_pipe(read_end2.handle,readable_julia_only,write_end,writeable_julia_only,read_end2)
     read_end2.open = true
 end
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::NamedPipe,writeable_julia_only::Bool)
-    if(write_end.handle == C_NULL)
+    if write_end.handle == C_NULL
         write_end.handle = malloc_pipe()
     end
     link_pipe(read_end,readable_julia_only,write_end.handle,writeable_julia_only,write_end)
