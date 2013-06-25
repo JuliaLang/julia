@@ -65,12 +65,10 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     newm->parent = parent_module;
     b->value = (jl_value_t*)newm;
     if (parent_module == jl_main_module && name == jl_symbol("Base")) {
+        base_module_conflict = (jl_base_module != NULL);
         jl_old_base_module = jl_base_module;
         // pick up Base module during bootstrap
         jl_base_module = newm;
-    }
-    else {
-        base_module_conflict = 1;
     }
     // export all modules from Main
     if (parent_module == jl_main_module)
