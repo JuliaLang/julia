@@ -853,6 +853,11 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
     end)
 end
 
+function disable_parallel_ops()
+    ENV["OMP_NUM_THREADS"] = 1
+    ENV["OPENBLAS_NUM_THREADS"] = 1
+end
+
 ## worker creation and setup ##
 
 # the entry point for julia worker processes. does not return.
@@ -867,6 +872,9 @@ function start_worker(out::IO)
     write(out, '\n')
     # close STDIN; workers will not use it
     #close(STDIN)
+
+    # disable threaded BLAS/FFTW
+    disable_parallel_ops()
 
     ccall(:jl_install_sigint_handler, Void, ())
 
@@ -992,12 +1000,13 @@ end
 
 worker_local_cmd() = `$JULIA_HOME/julia-release-basic --bind-to $bind_addr --worker`
 
-function addprocs(np::Integer)
+function addprocs(np::Integer) 
+    disable_parallel_ops()
     add_workers(PGRP, start_remote_workers({ "localhost" for i=1:np },
                                            { worker_local_cmd() for i=1:np }))
 end
 
-function start_scyld_workers(n)
+function start_scyld_workers(n::Integer)
     home = JULIA_HOME
     beomap_cmd = `beomap --no-local --np $n`
     out,beomap_proc = readsfrom(beomap_cmd)
@@ -1008,7 +1017,7 @@ function start_scyld_workers(n)
     nodes = split(chomp(readline(out)),':')
     outs = cell(n)
     for (i,node) in enumerate(nodes)
-        cmd = detach(`bpsh $node sh -l -c "cd $home && OPENBLAS_NUM_THREADS=1 ./julia-release-basic --worker"`)
+        cmd = detach(`bpsh $node sh -l -c "cd $home && ./julia-release-basic --worker"`)
         outs[i],_ = readsfrom(cmd)
         outs[i].line_buffered = true
     end
@@ -1043,7 +1052,10 @@ function start_scyld_workers(n)
     workers
 end
 
-addprocs_scyld(n) = add_workers(PGRP, start_scyld_workers(n))
+function addprocs_scyld(n::Integer)
+    disable_parallel_ops()
+    add_workers(PGRP, start_scyld_workers(n))
+end
 
 function start_sge_workers(n)
     home = JULIA_HOME
