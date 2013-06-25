@@ -122,6 +122,14 @@ function write(f::File, c::Uint8)
     write(f,pointer(a),1)
 end
 
+function write{T}(f::File, a::Array{T})
+    if isbits(T)
+        write(f,pointer(a),length(a)*sizeof(eltype(a)))
+    else
+        invoke(write, (IO, Array), f, a)
+    end
+end
+
 function write(f::File, buf::Ptr{Uint8},len::Integer)
       if !f.open
         error("File is not open")
