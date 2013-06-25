@@ -149,13 +149,13 @@ type Process
     closecb::Callback
     closenotify::Condition
     function Process(cmd::Cmd,handle::Ptr{Void},in::RawOrBoxedHandle,out::RawOrBoxedHandle,err::RawOrBoxedHandle)
-        if(!isa(in,AsyncStream))
+        if !isa(in,AsyncStream)
             in=null_handle
         end
-        if(!isa(out,AsyncStream))
+        if !isa(out,AsyncStream)
             out=null_handle
         end
-        if(!isa(err,AsyncStream))
+        if !isa(err,AsyncStream)
             err=null_handle
         end
         new(cmd,handle,in,out,err,-2,-2,false,Condition(),false,Condition())
@@ -291,14 +291,14 @@ macro cleanup_stdio()
                 close(in)
             end
         end
-        if(close_out)
+        if close_out
             if isa(out,Ptr)
                 close_pipe_sync(out)
             else
                 close(out)
             end
         end
-        if(close_err)
+        if close_err
             if isa(err,Ptr)
                 close_pipe_sync(err)
             else
@@ -318,7 +318,7 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
     pp.handle = _jl_spawn(ptrs[1], convert(Ptr{Ptr{Uint8}}, ptrs), loop, pp,
                           in,out,err)
     @cleanup_stdio
-    if(isa(pc, ProcessChain))
+    if isa(pc, ProcessChain)
         push!(pc.processes,pp)
     end
     pp

@@ -45,7 +45,7 @@ BigInt(x::Integer) =
 BigInt(x::Unsigned) =
     x <= typemax(Culong) ? BigInt(convert(Culong,x)) : BigInt(string(x))
 
-convert{T<:Integer}(::Type{BigInt}, x::T) = BigInt(x)
+convert(::Type{BigInt}, x::Integer) = BigInt(x)
 
 convert(::Type{Int64}, n::BigInt) = int64(convert(Clong, n))
 convert(::Type{Int32}, n::BigInt) = int32(convert(Clong, n))

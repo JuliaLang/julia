@@ -686,26 +686,26 @@ function major(pkg)
 end
 
 function promptuserinfo()
-    if(isempty(chomp(readall(ignorestatus(`git config --global user.name`)))))
+    if isempty(chomp(readall(ignorestatus(`git config --global user.name`))))
         info("""
              Git would like to know your name to initialize your .julia directory.
              Enter it below:
              """)
         name = chomp(readline(STDIN))
-        if(isempty(name))
+        if isempty(name)
             error("Could not read name")
         else
             run(`git config --global user.name $name`)
             info("Thank you. You can change it using run(`git config --global user.name NAME`)")
         end
     end
-    if(isempty(chomp(readall(ignorestatus(`git config --global user.email`)))))
+    if isempty(chomp(readall(ignorestatus(`git config --global user.email`))))
         info("""
              Git would like to know your email to initialize your .julia directory.
              Enter it below:
              """)
         email = chomp(readline(STDIN))
-        if(isempty(email))
+        if isempty(email)
             error("Could not read email")
         else
             run(`git config --global user.email $email`)

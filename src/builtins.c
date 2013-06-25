@@ -618,7 +618,7 @@ DLLEXPORT int jl_substrtod(char *str, int offset, int len, double *out)
     errno = 0;
     char *bstr = str+offset;
     *out = strtod(bstr, &p);
-    if((p == bstr) || (p != (bstr+len)) ||
+    if ((p == bstr) || (p != (bstr+len)) ||
         (errno==ERANGE && (*out==0 || *out==HUGE_VAL || *out==-HUGE_VAL)))
         return 1;
     return 0;
@@ -651,7 +651,7 @@ DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
     *out = strtof(bstr, &p);
 #endif
 
-    if((p == bstr) || (p != (bstr+len)) ||
+    if ((p == bstr) || (p != (bstr+len)) ||
         (errno==ERANGE && (*out==0 || *out==HUGE_VALF || *out==-HUGE_VALF)))
         return 1;
     return 0;

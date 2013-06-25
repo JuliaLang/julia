@@ -111,7 +111,7 @@ function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, au
                 (length(sval) != 1) && error("file entry \"$(sval)\" is not a Char")
                 cells[cell_row,col] = next(sval,1)[1]
             elseif T <: Number
-                if(float64_isvalid(sval, tmp64))
+                if float64_isvalid(sval, tmp64)
                     cells[cell_row,col] = tmp64[1]
                 elseif auto
                     return dlm_fill(Array(Any,maxrow,maxcol), offsets, sbuff, false, row_offset)
@@ -186,7 +186,7 @@ readcsv(io; opts...)          = readdlm(io, ','; opts...)
 readcsv(io, T::Type; opts...) = readdlm(io, ',', T; opts...)
 
 # todo: keyword argument for # of digits to print
-writedlm_cell{T<:FloatingPoint}(io::IO, elt::T) = print_shortest(io, elt)
+writedlm_cell(io::IO, elt::FloatingPoint) = print_shortest(io, elt)
 writedlm_cell(io::IO, elt) = print(io, elt)
 function writedlm(io::IO, a::Matrix, dlm::Char)
     pb = PipeBuffer()

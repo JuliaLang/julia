@@ -450,11 +450,13 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
                 *func_name = dlinfo.dli_sname;
                 // line number in C looks tricky. addr2line and libbfd seem promising. For now, punt and just return address offset.
                 *line_num = ip-(size_t)dlinfo.dli_saddr;
-            } else {
+            }
+            else {
                 *func_name = name_unknown;
                 *line_num = 0;
             }
-        } else {
+        }
+        else {
             *func_name = name_unknown;
             *file_name = name_unknown;
             *line_num = 0;

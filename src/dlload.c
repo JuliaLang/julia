@@ -66,7 +66,8 @@ int jl_uv_dlopen(const char* filename, uv_lib_t* lib, unsigned flags)
     if (lib->handle) {
         lib->errmsg = NULL;
         return 0;
-    } else {
+    }
+    else {
         lib->errmsg = strdup(dlerror());
         return -1;
     }
@@ -86,9 +87,9 @@ uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int throw_err)
 
     if (modname == NULL) {
 #ifdef _OS_WINDOWS_
-        if(!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            (LPCSTR)(&jl_load_dynamic_library),
-            &handle->handle))
+        if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                (LPCSTR)(&jl_load_dynamic_library),
+                                &handle->handle))
             jl_errorf("could not load base module", modname);
 #else
         handle->handle = dlopen(NULL,RTLD_NOW);
@@ -144,7 +145,7 @@ void *jl_dlsym_e(uv_lib_t *handle, char *symbol)
 {
     void *ptr;
     int  error=uv_dlsym(handle, symbol, &ptr);
-    if(error) ptr=NULL;
+    if (error) ptr=NULL;
     return ptr;
 }
 
@@ -163,7 +164,7 @@ void *jl_dlsym(uv_lib_t *handle, char *symbol)
 void *jl_dlsym_win32(char *f_name)
 {
     void *fptr = jl_dlsym_e(jl_exe_handle, f_name);
-    if(!fptr) {
+    if (!fptr) {
         fptr = jl_dlsym_e(jl_dl_handle, f_name);
         if (!fptr) {
             fptr = jl_dlsym_e(jl_kernel32_handle, f_name);

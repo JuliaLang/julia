@@ -639,9 +639,9 @@ setindex!{T<:Real}(A::Array, x, I::AbstractVector{Bool}, J::AbstractVector{T}) =
 
 # get (getindex with a default value)
 
-get{T}(A::Array, i::Integer, default::T) = in_bounds(length(A), i) ? A[i] : default
-get{T}(A::Array, I::(), default::T) = Array(T, 0)
-get{T}(A::Array, I::Dims, default::T) = in_bounds(size(A), I...) ? A[I...] : default
+get(A::Array, i::Integer, default) = in_bounds(length(A), i) ? A[i] : default
+get(A::Array, I::(), default) = Array(typeof(default), 0)
+get(A::Array, I::Dims, default) = in_bounds(size(A), I...) ? A[I...] : default
 
 function get{T}(X::Array{T}, A::Array, I::Union(Ranges, Vector{Int}), default::T)
     ind = findin(I, 1:length(A))
@@ -650,9 +650,9 @@ function get{T}(X::Array{T}, A::Array, I::Union(Ranges, Vector{Int}), default::T
     X[last(ind)+1:length(X)] = default
     X
 end
-get{T}(A::Array, I::Ranges, default::T) = get(Array(T, length(I)), A, I, default)
+get(A::Array, I::Ranges, default) = get(Array(typeof(default), length(I)), A, I, default)
 
-RangeVecIntList = Union((Union(Ranges, Vector{Int})...), Vector{Range1{Int}}, Vector{Range{Int}}, Vector{Vector{Int}})
+typealias RangeVecIntList Union((Union(Ranges, Vector{Int})...), Vector{Range1{Int}}, Vector{Range{Int}}, Vector{Vector{Int}})
 
 function get{T}(X::Array{T}, A::Array, I::RangeVecIntList, default::T)
     fill!(X, default)
@@ -660,7 +660,7 @@ function get{T}(X::Array{T}, A::Array, I::RangeVecIntList, default::T)
     X[dst...] = A[src...]
     X
 end
-get{T}(A::Array, I::RangeVecIntList, default::T) = get(Array(T, map(length, I)...), A, I, default)
+get(A::Array, I::RangeVecIntList, default) = get(Array(typeof(default), map(length, I)...), A, I, default)
 
 ## Dequeue functionality ##
 

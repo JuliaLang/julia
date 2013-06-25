@@ -725,7 +725,7 @@ notify_empty(rv::RemoteValue) = notify(rv.empty)
 
 # activity on accept fd
 function accept_handler(server::TcpServer, status::Int32)
-    if(status == -1)
+    if status == -1
         error("An error occured during the creation of the server")
     end
     client = accept_nonblock(server)
@@ -917,7 +917,7 @@ function start_remote_workers(machines, cmds, tunnel=false, sshflags=``)
         let wrker = w[i]
             # redirect console output from workers to the client's stdout:
             start_reading(stream,function(stream::AsyncStream,nread::Int)
-                if(nread>0)
+                if nread>0
                     try
                         line = readbytes(stream.buffer, nread)
                         print("\tFrom worker $(wrker.id):\t",line)
