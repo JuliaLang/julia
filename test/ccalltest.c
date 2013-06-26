@@ -4,6 +4,86 @@
 #include <inttypes.h>
 int verbose = 1;
 
+/*******************************************************************************
+ * *                               Compiler                                       *
+ * *******************************************************************************/
+
+/*
+ *  * Notes:
+ *   *
+ *    *  1. Checking for Intel's compiler should be done before checking for
+ *     * Microsoft's. On Windows Intel's compiler also defines _MSC_VER as the
+ *      * acknoledgement of the fact that it is integrated with Visual Studio.
+ *       *
+ *        *  2. Checking for MinGW should be done before checking for GCC as MinGW
+ *         * pretends to be GCC.
+ *          */
+#if defined(__clang__)
+#define _COMPILER_CLANG_
+#elif defined(__INTEL_COMPILER) || defined(__ICC)
+#define _COMPILER_INTEL_
+#elif defined(__MINGW32__)
+#define _COMPILER_MINGW_
+#elif defined(_MSC_VER)
+#define _COMPILER_MICROSOFT_
+#elif defined(__GNUC__)
+#define _COMPILER_GCC_
+#endif
+
+/*******************************************************************************
+ * *                               OS                                             *
+ * *******************************************************************************/
+
+#if defined(__FreeBSD__)
+#define _OS_FREEBSD__
+#elif defined(__linux__)
+#define _OS_LINUX_
+#elif defined(_WIN32) || defined(_WIN64)
+#define _OS_WINDOWS_
+#elif defined(__APPLE__) && defined(__MACH__)
+#define _OS_DARWIN_
+#endif
+
+/*******************************************************************************
+ * *                               Architecture                                   *
+ * *******************************************************************************/
+
+#if defined(__amd64__) || defined(__amd64) || defined(__x86_64__) || defined(__x86_64) || defined(_M_X64) || defined(_M_AMD64)
+#define _CPU_X86_64_
+#elif defined(i386) || defined(__i386) || defined(__i386__) || defined(_M_IX86) || defined(_X86_)
+#define _CPU_X86_
+#elif defined(__arm__) || defined(_M_ARM)
+#define _CPU_ARM_
+#endif
+
+
+#if defined(_CPU_X86_64_)
+#  define _P64
+#elif defined(_CPU_X86_)
+#  define _P32
+#elif defined(_OS_WINDOWS_)
+/* Not sure how to determine pointer size on Windows running ARM. */
+#  if _WIN64
+#    define _P64
+#  else
+#    define _P32
+#  endif
+#elif defined(_COMPILER_GCC_)
+#  if __x86_64__ || __ppc64__
+#    define _P64
+#  else
+#    define _P32
+#  endif
+#else
+#  error pointer size not known for your platform / compiler
+#endif
+
+#ifdef _P64
+#define jint int64_t
+#else
+#define jint int32_t
+#endif
+
 //////////////////////////////////
 // Test for proper argument register truncation
 
@@ -25,8 +105,8 @@ volatile int b;
 
 // Complex-like data types
 typedef struct {
-    int64_t real;
-    int64_t imag;
+    jint real;
+    jint imag;
 } complex_t;
 
 complex_t ctest(complex_t a) {
@@ -65,7 +145,7 @@ complex float* cfptest(complex float *a) {
 
 complex_t* cptest(complex_t *a) {
     //Unpack a ComplexPair{Int} struct pointer
-    if (verbose) printf("%ld + %ld i\n", a->real, a->imag);
+    if (verbose) printf("%lld + %lld i\n", a->real, a->imag);
     a->real += 1;
     a->imag -= 2;
     return a;
@@ -173,8 +253,8 @@ typedef struct {
 } struct15;
 
 typedef struct {
-    int64_t x;
-    int64_t y;
+    jint x;
+    jint y;
     char z;
 } struct_big;
 
@@ -320,7 +400,7 @@ int128_t test_128(int128_t a) {
 
 struct_big test_big(struct_big a) {
     //Unpack a "big" struct { int, int, char }
-    if (verbose) printf("%ld %ld %c\n", a.x, a.y, a.z);
+    if (verbose) printf("%lld %lld %c\n", a.x, a.y, a.z);
     a.x += 1;
     a.y -= 2;
     a.z -= 'A';

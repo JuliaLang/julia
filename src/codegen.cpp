@@ -3317,8 +3317,6 @@ extern "C" void jl_init_codegen(void)
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);
 
-    JL_PUTS((char*)llvm::sys::getDefaultTargetTriple().c_str(),JL_STDOUT);
-
 #if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
     jl_ExecutionEngine = EngineBuilder(jl_Module).setEngineKind(EngineKind::JIT).create();
 #ifdef DEBUG

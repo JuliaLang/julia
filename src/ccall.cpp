@@ -243,7 +243,7 @@ void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg, boo
 {
     Classification cl = classify(ty);
     if (cl.isMemory) {
-        *byRef = true;
+        *byRefAttr = *byRef = true;
         return;
     }
         
@@ -303,7 +303,7 @@ bool need_destructure_argument(jl_value_t *ty)
     return false;
 }
 
-bool need_private_copy(jl_value_t *ty)
+bool need_private_copy(jl_value_t *ty, bool isRef)
 {
     return false;
 }
