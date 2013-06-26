@@ -1983,9 +1983,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     else if (head == new_sym) {
         jl_value_t *ty = expr_type(args[0], ctx);
         size_t nargs = jl_array_len(ex->args);
-        Value *strct = emit_newsym(ty,nargs,args,ctx);
-        if(strct != NULL)
-            return strct;
+        if (jl_is_type_type(ty) &&
+            jl_is_datatype(jl_tparam0(ty)) &&
+            jl_is_leaf_type(jl_tparam0(ty))) {
+            return emit_newsym(jl_tparam0(ty),nargs,args,ctx);
+        }
         Value *typ = emit_expr(args[0], ctx);
         return emit_jlcall(jlnew_func, typ, &args[1], nargs-1, ctx);
     }
