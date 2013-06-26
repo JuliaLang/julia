@@ -20,21 +20,33 @@
 #define __STDC_LIMIT_MACROS
 #define __STDC_CONSTANT_MACROS
 #endif
-#include "llvm/DerivedTypes.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
+#include "llvm/PassManager.h"
+#include "llvm/Analysis/Verifier.h"
+#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/Attributes.h"
+#include "llvm/IR/IRBuilder.h"
+#define LLVM33 1
+#else
+#include "llvm/DerivedTypes.h" 
 #include "llvm/LLVMContext.h"
 #include "llvm/Module.h"
 #include "llvm/Intrinsics.h"
-#include "llvm/PassManager.h"
-#include "llvm/Analysis/Verifier.h"
 #include "llvm/Attributes.h"
+#endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 2 
 #include "llvm/DebugInfo.h"
 #include "llvm/DIBuilder.h"
+#ifndef LLVM33
 #include "llvm/IRBuilder.h"
-#define LLVM32
+#endif
+#define LLVM32 1
 #else
 #include "llvm/Analysis/DebugInfo.h"
 #include "llvm/Analysis/DIBuilder.h"
@@ -179,6 +191,7 @@ static Function *box8_func;
 static Function *box16_func;
 static Function *box32_func;
 static Function *box64_func;
+static Function *jlputs_func;
 #ifdef _OS_WINDOWS_
 static Function *resetstkoflw_func;
 #endif
@@ -2357,7 +2370,11 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     attr->addAlignmentAttr(16);
     f->addAttribute(~0U, Attributes::get(f->getContext(), *attr));
 #endif
+#if LLVM32 && !LLVM33
     f->addFnAttr(Attributes::StackProtectReq);
+#else
+    f->addFnAttr(Attribute::StackProtectReq);
+#endif
 #endif
     ctx.f = f;
 
@@ -2982,7 +2999,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_int32, args2, false),
                          Function::ExternalLinkage, "sigsetjmp", jl_Module);
         //Intrinsic::getDeclaration(jl_Module, Intrinsic::eh_sjlj_setjmp);
-#ifdef LLVM32
+#if LLVM32 && !LLVM33
     setjmp_func->addFnAttr(Attributes::ReturnsTwice);
 #else
     setjmp_func->addFnAttr(Attribute::ReturnsTwice);
@@ -3117,6 +3134,15 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "alloc_3w", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlalloc3w_func, (void*)&alloc_3w);
+    
+    std::vector<Type *> puts_args(0);
+    puts_args.push_back(T_pint8);
+    puts_args.push_back(T_pint8);
+    jlputs_func =
+        Function::Create(FunctionType::get(T_void, puts_args, false),
+                         Function::ExternalLinkage,
+                         "jl_puts", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlputs_func, (void*)&jl_puts);
 
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);
