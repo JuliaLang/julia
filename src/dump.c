@@ -39,6 +39,8 @@ static jl_value_t *jl_idtable_type=NULL;
 // queue of types to cache
 static jl_array_t *datatype_list=NULL;
 
+char *llname;
+
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc(s))
 #define write_int8(s, n) write_uint8(s, n)
@@ -336,6 +338,17 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->roots);
         jl_serialize_value(s, (jl_value_t*)li->def);
         jl_serialize_value(s, (jl_value_t*)li->capt);
+        // save functionObject name 
+        // as mangled by llvm
+        if (li->functionObject) {
+            llname = jl_get_llvmname(li->functionObject);
+            int32_t llname_size = strlen(llname);
+            write_int32(s, llname_size);
+            ios_write(s, llname, llname_size);
+        }
+        else {
+            write_int32(s, 0);
+        }
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
@@ -467,6 +480,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     return (jl_value_t*)dt;
 }
 
+void *jl_get_llvmfunc_cached(char *name);
 jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
 
 static jl_value_t *jl_deserialize_value(ios_t *s)
@@ -604,9 +618,21 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         li->roots = (jl_array_t*)jl_deserialize_value(s);
         li->def = (jl_lambda_info_t*)jl_deserialize_value(s);
         li->capt = jl_deserialize_value(s);
-
-        li->fptr = &jl_trampoline;
+        
+        int32_t llname_size = read_int32(s);
+        if (llname_size > 0) {
+            memset(llname, 0x0, llname_size+1);
+            ios_read(s, llname, llname_size);
+            llname[llname_size] = 0x0;
+            void* func = jl_get_llvmfunc_cached(llname);
+            li->fptr = func;
+        }
+        else {
+            li->fptr = &jl_trampoline;
+            //li->functionObject = NULL;
+        }
         li->functionObject = NULL;
+
         li->cFunctionObject = NULL;
         li->inInference = 0;
         li->inCompile = 0;
@@ -761,6 +787,7 @@ extern void jl_get_uv_hooks(void);
 DLLEXPORT
 void jl_restore_system_image(char *fname)
 {
+    llname = malloc(1024);
     ios_t f;
     char *fpath = fname;
     if (ios_file(&f, fpath, 1, 0, 0, 0) == NULL) {
@@ -809,6 +836,8 @@ void jl_restore_system_image(char *fname)
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();
 #endif
+    
+    free(llname);
 }
 
 DLLEXPORT

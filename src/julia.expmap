@@ -120,6 +120,7 @@
     jl_array_rank;
     jl_array_size;
     jl_get_field;
+    jl_get_llvmfunc_cached;
     jl_call1;
     jl_call2;
     jl_sigatomic_begin;

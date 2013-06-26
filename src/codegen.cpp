@@ -450,6 +450,8 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dum
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
 }
 
+// --- helpers for reloading IR image
+
 #include "llvm/Bitcode/ReaderWriter.h"
 extern "C" DLLEXPORT
 void jl_dump_bitcode(char* fname)
@@ -457,6 +459,22 @@ void jl_dump_bitcode(char* fname)
     std::string err;
     raw_fd_ostream OS(fname, err);
     WriteBitcodeToFile(jl_Module, OS);
+}
+
+extern "C" DLLEXPORT
+const char* jl_get_llvmname(void *llvmFunc)
+{
+    Function *f = (Function*)llvmFunc;
+    const char *llname = f->getName().data();
+    return llname;
+}
+
+extern "C" DLLEXPORT
+void *jl_get_llvmfunc_cached(char* name)
+{
+    //return (void*)jl_Module->getFunction(StringRef(name));
+    void* hnd = jl_load_dynamic_library("libjulia-debug", JL_RTLD_DEFAULT);
+    return (void*)jl_dlsym( (uv_lib_t*)hnd, name);
 }
 
 // --- code gen for intrinsic functions ---
@@ -3242,8 +3260,8 @@ extern "C" void jl_init_codegen(char *imageFile)
     if (imageFile != NULL) {
         char *irimgFile = strdup(imageFile);
         int _irnmlen = strlen(irimgFile);
-        irimgFile[_irnmlen-2] = 'i';
-        irimgFile[_irnmlen-1] = 'r';
+        irimgFile[_irnmlen-2] = 'b';
+        irimgFile[_irnmlen-1] = 'c';
  
         // JL_PRINTF(JL_STDERR, "Trying module reload...\n");
         // JL_PRINTF(JL_STDERR, "IR file: %s\n", irimgFile);
@@ -3253,9 +3271,12 @@ extern "C" void jl_init_codegen(char *imageFile)
         error_code ec;
         if ( !(ec = MemoryBuffer::getFile(irimgFile, MB)) ) {
             jl_Module = llvm::ParseBitcodeFile(MB.get(), jl_LLVMContext, &_errmsg);
-            // JL_PRINTF(JL_STDERR, "Parse output:    %s\n", _errmsg.c_str());
-            jl_Module->MaterializeAllPermanently(&_errmsg);
-            // JL_PRINTF(JL_STDERR, "Materialize output:    %s\n", _errmsg.c_str());
+            
+            //jl_Module->MaterializeAllPermanently(&_errmsg);
+            
+            // TEMP TODO
+            jl_load_dynamic_library("libopenblas", JL_RTLD_GLOBAL);
+            jl_load_dynamic_library("libRmath", JL_RTLD_GLOBAL);
         }
     }
     if (jl_Module == NULL) {
