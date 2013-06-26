@@ -93,7 +93,7 @@ subtype of the abstract type. If the type assertion is not true, an
 exception is thrown, otherwise, the left-hand value is returned::
 
     julia> (1+2)::FloatingPoint
-    type error: typeassert: expected FloatingPoint, got Int64
+    ERROR: type: typeassert: expected FloatingPoint, got Int64
 
     julia> (1+2)::Int
     3
@@ -431,7 +431,7 @@ instances of any of its argument types, constructed using the special
     "Hello!"
 
     julia> 1.0 :: IntOrString
-    type error: typeassert: expected Union(Int,String), got Float64
+    ERROR: type: typeassert: expected Union(String,Int64), got Float64
 
 The compilers for many languages have an internal union construct for
 reasoning about types; Julia simply exposes it to the programmer. The
@@ -463,13 +463,13 @@ Accordingly, a tuple of types can be used anywhere a type is expected::
     (1,"foo",2.5)
 
     julia> (1,"foo",2.5) :: (Int64,String,Float32)
-    type error: typeassert: expected (Int64,String,Float32), got (Int64,ASCIIString,Float64)
+    ERROR: type: typeassert: expected (Int64,String,Float32), got (Int64,ASCIIString,Float64)
 
 If one of the components of the tuple is not a type, however, you will
 get an error::
 
     julia> (1,"foo",2.5) :: (Int64,String,3)
-    type error: typeassert: expected Type{T}, got (BitsKind,AbstractKind,Int64)
+    ERROR: type: typeassert: expected Type{T<:Top}, got (DataType,DataType,Int64)
 
 Note that the empty tuple ``()`` is its own type::
 
@@ -748,10 +748,10 @@ subtypes of ``Real``::
     Pointy{Real}
 
     julia> Pointy{String}
-    type error: Pointy: in T, expected Real, got AbstractKind
+    ERROR: type: Pointy: in T, expected Real, got Type{String}
 
     julia> Pointy{1}
-    type error: Pointy: in T, expected Real, got Int64
+    ERROR: type: Pointy: in T, expected Real, got Int64
 
 Type parameters for parametric composite types can be restricted in the
 same manner::
@@ -944,71 +944,61 @@ we apply ``typeof`` to an instance of each of the kinds of types
 discussed above::
 
     julia> typeof(Real)
-    AbstractKind
+    DataType
 
     julia> typeof(Float64)
-    BitsKind
+    DataType
 
     julia> typeof(Rational)
-    CompositeKind
+    DataType
 
     julia> typeof(Union(Real,Float64,Rational))
-    UnionKind
+    UnionType
 
     julia> typeof((Real,Float64,Rational,None))
-    (AbstractKind,BitsKind,CompositeKind,UnionKind)
+    (DataType,DataType,DataType,UnionType)
 
-As you can see, the types of types are called, by convention, "kinds":
+As you can see, the types of types are:
 
--  Abstract types have type ``AbstractKind``
--  Bits types have type ``BitsKind``
--  Composite types have type ``CompositeKind``
--  Unions have type ``UnionKind``
--  Tuples of types have a type that is the tuple of their respective
-   kinds.
+-  Abstract, bits, and composite types have type ``DataType``
+-  Unions have type ``UnionType``
+-  Tuples of types have a type that is the tuple of their respective types.
 
-What if we repeat the process? What is the type of a kind? Kinds, as it
+What if we repeat the process? What is the type of a type? Types, as it
 happens, are all composite values and thus all have a type of
-``CompositeKind``::
+``DataType``::
 
-    julia> typeof(AbstractKind)
-    CompositeKind
+    julia> typeof(DataType)
+    DataType
 
-    julia> typeof(BitsKind)
-    CompositeKind
+    julia> typeof(UnionType)
+    DataType
 
-    julia> typeof(CompositeKind)
-    CompositeKind
-
-    julia> typeof(UnionKind)
-    CompositeKind
-
-The reader may note that ``CompositeKind`` shares with the empty tuple
+The reader may note that ``DataType`` shares with the empty tuple
 (see `above <#tuple-types>`_), the distinction of being its own type
 (i.e. a fixed point of the ``typeof`` function). This leads any number
-of tuple types recursively built with ``()`` and ``CompositeKind`` as
+of tuple types recursively built with ``()`` and ``DataType`` as
 their only atomic values, which are their own type::
 
     julia> typeof(())
     ()
 
-    julia> typeof(CompositeKind)
-    CompositeKind
+    julia> typeof(DataType)
+    DataType
 
     julia> typeof(((),))
     ((),)
 
-    julia> typeof((CompositeKind,))
-    (CompositeKind,)
+    julia> typeof((DataType,))
+    (DataType,)
 
-    julia> typeof(((),CompositeKind))
-    ((),CompositeKind)
+    julia> typeof(((),DataType))
+    ((),DataType)
 
 All fixed points of the ``typeof`` function are like this.
 
 Another operation that applies to some kinds of types is ``super``. Only
-abstract types (``AbstractKind``), bits types (``BitsKind``), and
-composite types (``CompositeKind``) have a supertype, so these are the
+data types (``DataType``) have a supertype, so these are the
 only kinds of types that the ``super`` function applies to::
 
     julia> super(Float64)
@@ -1027,11 +1017,11 @@ If you apply ``super`` to other type objects (or non-type objects), a
 "no method" error is raised::
 
     julia> super(Union(Float64,Int64))
-    no method super(UnionKind,)
+    no method super(UnionType,)
 
     julia> super(None)
-    no method super(UnionKind,)
+    no method super(UnionType,)
 
     julia> super((Float64,Int64))
-    no method super((BitsKind,BitsKind),)
+    no method super((DataType,DataType),)
 
