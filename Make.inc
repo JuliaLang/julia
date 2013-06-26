@@ -223,8 +223,8 @@ ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 USE_BLAS64 = 0
 USE_SYSTEM_LAPACK = 0
-LIBBLAS = -framework vecLib -lblas
-LIBBLASNAME = libBLAS
+LIBBLAS = -L$(BUILD)/lib -lgfortblas
+LIBBLASNAME = libgfortblas
 else
 LIBBLAS = -lblas
 LIBBLASNAME = libblas
@@ -244,7 +244,7 @@ ifeq ($(USE_SYSTEM_LAPACK), 1)
 LIBLAPACK = -llapack
 LIBLAPACKNAME = liblapack
 else
-LIBLAPACK = -L$(BUILD)/lib -llapack
+LIBLAPACK = -L$(BUILD)/lib -llapack $(LIBBLAS)
 LIBLAPACKNAME = liblapack
 endif
 endif
