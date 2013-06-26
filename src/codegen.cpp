@@ -2451,11 +2451,11 @@ static Function *emit_function(jl_lambda_info_t *lam, bool force_specialized, bo
             
             bool mightNeed = false;
             if(!sret) {
-                builder.CreateRet(llvm_type_rewrite(julia_to_native(lrt, rt, r, jl_ast_rettype(lam, lam->ast), 0, false, false,
+                builder.CreateRet(llvm_type_rewrite(julia_to_native(lrt, rt, r, jl_ast_rettype(lam, lam->ast), 0, false, false, false,
                                            0, &ctx, &mightNeed),prt,rt,true));
             } else {
                 //sretPtr->dump();
-                Value *sretVal = llvm_type_rewrite(julia_to_native(lrt, rt, r, jl_ast_rettype(lam, lam->ast), 0, false, false,
+                Value *sretVal = llvm_type_rewrite(julia_to_native(lrt, rt, r, jl_ast_rettype(lam, lam->ast), 0, false, false, false,
                                            0, &ctx, &mightNeed),fargt_sig[0],rt,true);
                 //sretVal->dump();
                 builder.CreateStore(sretVal,sretPtr);
@@ -3316,6 +3316,8 @@ extern "C" void jl_init_codegen(void)
     
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);
+
+    JL_PUTS((char*)llvm::sys::getDefaultTargetTriple().c_str(),JL_STDOUT);
 
 #if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
     jl_ExecutionEngine = EngineBuilder(jl_Module).setEngineKind(EngineKind::JIT).create();

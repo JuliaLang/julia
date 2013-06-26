@@ -239,7 +239,7 @@ bool use_sret(AbiState *state,jl_value_t *ty)
     return sret;
 }
 
-void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg)
+void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg, bool *byRefAttr)
 {
     Classification cl = classify(ty);
     if (cl.isMemory) {
@@ -267,6 +267,7 @@ void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg)
         // it in registers
         *byRef = true;
     }
+    *byRefAttr = *byRef;
 }
 
 Type *preferred_llvm_type(jl_value_t *ty, bool isret)
@@ -302,7 +303,72 @@ bool need_destructure_argument(jl_value_t *ty)
     return false;
 }
 
+bool need_private_copy(jl_value_t *ty)
+{
+    return false;
+}
+
 #elif ABI_WIN64
+
+// Windows only uses the first four registers of either
+struct AbiState {
+    unsigned char int_regs, sse_regs;
+};
+
+const AbiState default_abi_state = {4,4};
+
+
+bool use_sret(AbiState *state,jl_value_t *ty)
+{
+    if(!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
+        return false;
+    size_t size = jl_datatype_size(ty);
+    bool sret =  !(size == 1 || size == 2 || size == 4 || size == 8); // || jl_is_sse(ty) if every implemented
+    if(sret)
+        state->int_regs--;
+    return sret;
+}
+
+void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg, bool *byRefAttr)
+{
+    if(!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
+        return;
+    if ((jl_datatype_t*)ty == jl_float32_type || (jl_datatype_t*)ty == jl_float64_type) {
+        state->sse_regs--;
+        return;
+    }
+    size_t size = jl_datatype_size(ty);
+    *byRef = !(size == 1 || size == 2 || size == 4 || size == 8); // but not sse types        
+    *byRefAttr = *byRef;
+    if(state->int_regs > 0) {
+        state->int_regs--; //Windows passes these by pointer
+        //*inReg = true;
+    }
+}
+
+bool need_destructure_argument(jl_value_t *ty)
+{
+    return false;
+}
+
+Type *preferred_llvm_type(jl_value_t *ty, bool isret)
+{
+    if(!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
+        return NULL;
+    if(jl_is_bitstype(ty))
+        return NULL;
+    size_t size = jl_datatype_size(ty);
+    if (size == 1 || size == 2 || size == 4 || size == 8)
+        return T_int64;
+    return NULL;
+}
+
+// Windows needs all types pased byRef to be passed in caller allocated memory
+bool need_private_copy(jl_value_t *ty, bool byRef)
+{
+    return byRef;
+}
+
 
 #elif ABI_X86
 
@@ -333,12 +399,13 @@ bool need_destructure_argument(jl_value_t *ty)
     return false;
 }
 
-void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg)
+void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg, bool *byRefAttr)
 {
     if(!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_bitstype(ty) ||  jl_is_cpointer_type(ty) || jl_is_array_type(ty))
         return;
     if(jl_is_structtype(ty) && !need_destructure_argument(ty))
         *byRef = true;
+    *byRefAttr = *byRef;
 }
 
 Type *preferred_llvm_type(jl_value_t *ty, bool isret)
@@ -352,6 +419,12 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
         return T_int64;
     return NULL;
 }
+
+bool need_private_copy(jl_value_t *ty)
+{
+    return false;
+}
+
 
 #elif ABI_LLVM
 
@@ -376,6 +449,11 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
 }
 
 bool need_destructure_argument(jl_value_t *ty)
+{
+    return false;
+}
+
+bool need_private_copy(jl_value_t *ty)
 {
     return false;
 }
@@ -517,6 +595,7 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
 static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                               jl_value_t *aty, bool addressOf,
                               bool byRef, bool inReg,
+                              bool needCopy,
                               int argn, jl_codectx_t *ctx,
                               bool *mightNeedTempSpace)
 {
@@ -545,13 +624,21 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                  (vt->isPointerTy() && ty->isPointerTy())) {
             if (vt->getPrimitiveSizeInBits() ==
                 ty->getPrimitiveSizeInBits()) {
-                return builder.CreateBitCast(jv, ty);
+                if (!byRef) {
+                    return builder.CreateBitCast(jv, ty);
+                }
+                else {
+                    Value *mem = builder.CreateAlloca(ty,ConstantInt::get(T_size,1));
+                    builder.CreateStore(jv,builder.CreateBitCast(mem,vt->getPointerTo()));
+                    return mem;
+                }
             }
         }
         else if (vt->isStructTy())
         {
-            if(!byRef)
+            if (!byRef) {
                 return jv;
+            }
             else {
                 Value *mem = builder.CreateAlloca(vt,ConstantInt::get(T_size,1));
                 builder.CreateStore(jv,mem);
@@ -604,8 +691,15 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         //    emit_typecheck(emit_typeof(jv), (jl_value_t*)jl_struct_kind, "ccall: Struct argument called with something that isn't a struct", ctx);
         // //safe thing would be to also check that jl_typeof(aty)->size > sizeof(ty) here and/or at runtime
         Value *pjv = builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), PointerType::get(ty,0));
-        if(byRef)
-            return pjv;
+        if(byRef) {
+            if(!needCopy)
+                return pjv;
+            else {
+                Value *mem = builder.CreateAlloca(ty,ConstantInt::get(T_size, 0));
+                builder.CreateMemCpy(mem,pjv,(uint64_t)jl_datatype_size(jt),(uint64_t)jl_datatype_size(jt));
+                return mem;
+            }
+        }
         else 
             return builder.CreateLoad(pjv, false);
     }
@@ -616,9 +710,18 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
     msg << argn;
     emit_typecheck(jv, jt, msg.str(), ctx);
     Value *p = data_pointer(jv);
-    return builder.CreateLoad(builder.CreateBitCast(p,
-                                                    PointerType::get(ty,0)),
-                              false);
+    Value *pjv = builder.CreateBitCast(p, PointerType::get(ty,0));
+    if (byRef) {
+        if(!needCopy)
+            return pjv;
+        else {
+            Value *mem = builder.CreateAlloca(ty,ConstantInt::get(T_size, 0));
+            builder.CreateMemCpy(mem,pjv,(uint64_t)jl_datatype_size(jt),(uint64_t)jl_datatype_size(jt));
+            return mem;
+        }
+    }
+    else
+        return builder.CreateLoad(pjv,false);
 }
 
 static jl_value_t *jl_signed_type=NULL;
@@ -891,6 +994,8 @@ std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
 
         // Whether the ABI needs us to pass this by ref and/or in registers
         // Valid combinations are:
+
+        bool byRefAttr = false;
     
         // Whether or not LLVM wants us to emit a pointer to the data
         bool byRef = false;
@@ -899,19 +1004,19 @@ std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
         bool inReg = false;
 
         if(jl_is_datatype(tti) && !jl_is_abstracttype(tti))
-            needPassByRef(&abi,tti,&byRef,&inReg);
+            needPassByRef(&abi,tti,&byRef,&inReg,&byRefAttr);
 
         // Add the appropriate LLVM parameter attributes
         // Note that even though the LLVM argument is called ByVal 
         // this really means that the thing we're passing is pointing to
         // the thing we want to pass by value 
 #if LLVM33 || LLVM32
-        if(byRef)
+        if(byRefAttr)
             paramattrs[i+sret].addAttribute(Attributes::ByVal);
         if(inReg)
             paramattrs[i+sret].addAttribute(Attributes::InReg);
 #else
-        if(byRef)
+        if(byRefAttr)
             attrs.push_back(AttributeWithIndex::get(i+sret+1, Attribute::ByVal));
         if(inReg)
             attrs.push_back(AttributeWithIndex::get(i+sret+1, Attribute::InReg));
@@ -1006,6 +1111,29 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     jl_tuple_t *tt = (jl_tuple_t*)at;
 
+    // check for calling convention specifier
+    CallingConv::ID cc = CallingConv::C;
+    jl_value_t *last = args[nargs];
+    if (jl_is_expr(last)) {
+        jl_sym_t *lhd = ((jl_expr_t*)last)->head;
+        if (lhd == jl_symbol("stdcall")) {
+            cc = CallingConv::X86_StdCall;
+            nargs--;
+        }
+        else if (lhd == jl_symbol("cdecl")) {
+            cc = CallingConv::C;
+            nargs--;
+        }
+        else if (lhd == jl_symbol("fastcall")) {
+            cc = CallingConv::X86_FastCall;
+            nargs--;
+        }
+        else if (lhd == jl_symbol("thiscall")) {
+            cc = CallingConv::X86_ThisCall;
+            nargs--;
+        }
+    }
+
     Value *err = sanity_check(rt,tt,nargs,isVa,ctx);
     if (err != NULL)
         return err;
@@ -1070,28 +1198,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         llvmf = jl_Module->getOrInsertFunction(f_name, functype);
     }
 
-    // check for calling convention specifier
-    CallingConv::ID cc = CallingConv::C;
-    jl_value_t *last = args[nargs];
-    if (jl_is_expr(last)) {
-        jl_sym_t *lhd = ((jl_expr_t*)last)->head;
-        if (lhd == jl_symbol("stdcall")) {
-            cc = CallingConv::X86_StdCall;
-            nargs--;
-        }
-        else if (lhd == jl_symbol("cdecl")) {
-            cc = CallingConv::C;
-            nargs--;
-        }
-        else if (lhd == jl_symbol("fastcall")) {
-            cc = CallingConv::X86_FastCall;
-            nargs--;
-        }
-        else if (lhd == jl_symbol("thiscall")) {
-            cc = CallingConv::X86_ThisCall;
-            nargs--;
-        }
-    }
+
     // save place before arguments, for possible insertion of temp arg
     // area saving code.
     Value *saveloc=NULL;
@@ -1225,12 +1332,12 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         bool mightNeed=false;
         if (!need_destructure_argument(jargty)) {
             argvals.push_back(llvm_type_rewrite(julia_to_native(largty, jargty, arg, expr_type(argi, ctx), addressOf, byRefList[ai], inRegList[ai],
-                                               ai+1, ctx, &mightNeed),fargt_sig[ai+sret],jargty,false));
+                                               need_private_copy(jargty,byRefList[ai]),ai+1, ctx, &mightNeed),fargt_sig[ai+sret],jargty,false));
         } else {
             assert(jl_is_structtype(jargty));
             assert(largty->isStructTy());
             StructType *sty = dyn_cast<StructType>(largty);
-            Value *s = julia_to_native(largty, jargty, arg, expr_type(argi, ctx), addressOf, true, false, ai+1, ctx, &mightNeed);
+            Value *s = julia_to_native(largty, jargty, arg, expr_type(argi, ctx), addressOf, true, false, need_private_copy(jargty,byRefList[ai]), ai+1, ctx, &mightNeed);
             for (size_t j = 0; j < sty->getNumElements(); ++j)
             {
                 std::vector<Value*> args;

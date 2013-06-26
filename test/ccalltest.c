@@ -25,13 +25,11 @@ volatile int b;
 
 // Complex-like data types
 typedef struct {
-    long real;
-    long imag;
+    int64_t real;
+    int64_t imag;
 } complex_t;
 
 complex_t ctest(complex_t a) {
-    //Unpack a ComplexPair{Int} struct
-    if (verbose) printf("%ld + %ld i\n", a.real, a.imag);
     a.real += 1;
     a.imag -= 2;
     return a;
@@ -175,8 +173,8 @@ typedef struct {
 } struct15;
 
 typedef struct {
-    long x;
-    long y;
+    int64_t x;
+    int64_t y;
     char z;
 } struct_big;
 
