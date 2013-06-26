@@ -851,6 +851,10 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
     end)
 end
 
+function disable_parallel_libs()
+    ccall((:openblas_set_num_threads,Base.libblas_name), Void, (Int,), 1)
+end
+
 ## worker creation and setup ##
 
 # the entry point for julia worker processes. does not return.
@@ -865,6 +869,8 @@ function start_worker(out::IO)
     write(out, '\n')
     # close STDIN; workers will not use it
     #close(STDIN)
+
+    disable_parallel_libs()
 
     ccall(:jl_install_sigint_handler, Void, ())
 
@@ -991,6 +997,7 @@ end
 worker_local_cmd() = `$JULIA_HOME/julia-release-basic --bind-to $bind_addr --worker`
 
 function addprocs(np::Integer)
+    disable_parallel_libs()
     add_workers(PGRP, start_remote_workers({ "localhost" for i=1:np },
                                            { worker_local_cmd() for i=1:np }))
 end
