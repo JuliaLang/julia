@@ -3,6 +3,7 @@
 ## julia starts with one process, and processors can be added using:
 ##   addprocs(n)                         using exec
 ##   addprocs({"host1","host2",...})     using remote execution
+##   addprocs_scyld(n)                   using Scyld ClusterWare
 ##   addprocs_sge(n)                     using Sun Grid Engine batch queue
 ##
 ## remotecall(w, func, args...) -
@@ -1000,6 +1001,57 @@ function addprocs(np::Integer)
     disable_parallel_libs()
     add_workers(PGRP, start_remote_workers({ "localhost" for i=1:np },
                                            { worker_local_cmd() for i=1:np }))
+end
+
+function start_scyld_workers(np::Integer)
+    home = JULIA_HOME
+    beomap_cmd = `beomap --no-local --np $np`
+    out,beomap_proc = readsfrom(beomap_cmd)
+    wait(beomap_proc)
+    if !success(beomap_proc)
+        error("node availability inaccessible (could not run beomap)")
+    end
+    nodes = split(chomp(readline(out)),':')
+    outs = cell(np)
+    for (i,node) in enumerate(nodes)
+        cmd = detach(`bpsh $node sh -l -c "cd $home && ./julia-release-basic --worker"`)
+        outs[i],_ = readsfrom(cmd)
+        outs[i].line_buffered = true
+    end
+    workers = cell(np)
+    for (i,stream) in enumerate(outs)
+        local hostname::String, port::Int16
+        stream.line_buffered = true
+        while true
+            conninfo = readline(stream)
+            hostname, port = parse_connection_info(conninfo)
+            if hostname != ""
+                break
+            end
+        end
+        workers[i] = Worker(hostname, port)
+        let worker = workers[i]
+            # redirect console output from workers to the client's stdout:
+            start_reading(stream,function(stream::AsyncStream,nread::Int)
+                if(nread>0)
+                    try
+                        line = readbytes(stream.buffer, nread)
+                        print("\tFrom worker $(worker.id):\t",line)
+                    catch err
+                        println(STDERR,"\tError parsing reply from worker $(worker.id):\t",err)
+                        return false
+                    end
+                end
+                true
+            end)
+        end
+    end
+    workers
+end
+
+function addprocs_scyld(np::Integer)
+    disable_parallel_libs()
+    add_workers(PGRP, start_scyld_workers(np))
 end
 
 function start_sge_workers(n)
