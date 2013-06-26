@@ -6,20 +6,19 @@ path(pkg::String) = abspath(".cache", pkg)
 origin(pkg::String) = Git.readchomp(`config remote.origin.url`, dir=path(pkg))
 
 function prefetch(pkg::String, url::String, vers::Dict{String,VersionNumber})
-    cache = path(pkg)
     isdir(".cache") || mkdir(".cache")
+    cache = path(pkg)
     if !isdir(cache)
-        from = ispath(pkg,".git") ? abspath(pkg) : url
-        info("Cloning $pkg from $from...")
-        try Git.run(`clone --bare $from $cache`)
+        info("Cloning $pkg from $url")
+        try Git.run(`clone -q --mirror $url $cache`)
         catch
             run(`rm -rf $cache`)
             rethrow()
         end
-    elseif ispath(pkg,".git")
-        Git.run(`fetch -q $pkg`, dir=cache)
+    else
+        Git.run(`config remote.origin.url $url`, dir=cache)
     end
-    Git.run(`config remote.origin.url $url`, dir=cache)
+    # ensure that desired versions exist
     sha1s = collect(keys(vers))
     all(sha1->Git.iscommit(sha1, dir=cache), sha1s) && return
     Git.run(`fetch -q $url`, dir=cache)
