@@ -191,6 +191,7 @@ static Function *box8_func;
 static Function *box16_func;
 static Function *box32_func;
 static Function *box64_func;
+static Function *jlputs_func;
 #ifdef _OS_WINDOWS_
 static Function *resetstkoflw_func;
 #endif
@@ -3133,6 +3134,15 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "alloc_3w", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlalloc3w_func, (void*)&alloc_3w);
+    
+    std::vector<Type *> puts_args(0);
+    puts_args.push_back(T_pint8);
+    puts_args.push_back(T_pint8);
+    jlputs_func =
+        Function::Create(FunctionType::get(T_void, puts_args, false),
+                         Function::ExternalLinkage,
+                         "jl_puts", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlputs_func, (void*)&jl_puts);
 
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);
