@@ -571,23 +571,23 @@ reference.
 | ``dense(S)``          | ``sparse(A)``     | Interconverts between dense            |
 | ``full(S)``           |                   | and sparse formats.                    |
 +-----------------------+-------------------+----------------------------------------+
-| ``sprand(m,n,d)``     | ``rand(m,n)``     | Creates a *n*-by-*n* random matrix (of |
+| ``sprand(m,n,d)``     | ``rand(m,n)``     | Creates a *m*-by-*n* random matrix (of |
 |                       |                   | density *d*) with iid non-zero elements|
 |                       |                   | distributed uniformly on the           |
 |                       |                   | interval [0, 1].                       |
 +-----------------------+-------------------+----------------------------------------+
-| ``sprandn(m,n,d)``    | ``randn(m,n)``    | Creates a *n*-by-*n* random matrix (of |
+| ``sprandn(m,n,d)``    | ``randn(m,n)``    | Creates a *m*-by-*n* random matrix (of |
 |                       |                   | density *d*) with iid non-zero elements|
 |                       |                   | distributed according to the standard  |
 |                       |                   | normal (Gaussian) distribution.        |
 +-----------------------+-------------------+----------------------------------------+
-| ``sprandn(m,n,d,X)``  | ``randn(m,n,X)``  | Creates a *n*-by-*n* random matrix (of |
+| ``sprandn(m,n,d,X)``  | ``randn(m,n,X)``  | Creates a *m*-by-*n* random matrix (of |
 |                       |                   | density *d*) with iid non-zero elements|
 |                       |                   | distributed according to the *X*       |
 |                       |                   | distribution. (Requires the            |
 |                       |                   | ``Distributions`` package.)            |
 +-----------------------+-------------------+----------------------------------------+
-| ``sprandbool(m,n,d)`` | ``randbool(m,n)`` | Creates a *n*-by-*n* random matrix (of |
+| ``sprandbool(m,n,d)`` | ``randbool(m,n)`` | Creates a *m*-by-*n* random matrix (of |
 |                       |                   | density *d*) with non-zero ``Bool``    |
 |                       |                   | elements with probability *d* (*d* =0.5|
 |                       |                   | for ``randbool``.)                     |
