@@ -21,6 +21,7 @@ signbit(x::Real) = int(x < 0)
 sign(x::Real) = x < 0 ? oftype(x,-1) : x > 0 ? one(x) : x
 abs(x::Real) = x < 0 ? -x : x
 abs2(x::Real) = x*x
+copysign(x::Real, y::Real) = y >= 0 ? abs(x) : -abs(x)
 
 conj(x::Real) = x
 transpose(x::Number) = x
