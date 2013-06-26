@@ -825,3 +825,77 @@ static void emit_cpointercheck(Value *x, const std::string &msg,
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
 }
+
+static void emit_setfield(jl_datatype_t *sty, Value *strct, size_t idx,
+                          Value *rhs, jl_codectx_t *ctx, bool checked=true)
+{
+    if (sty->mutabl || !checked) {
+        Value *addr =
+            builder.CreateGEP(builder.CreateBitCast(strct, T_pint8),
+                              ConstantInt::get(T_size, sty->fields[idx].offset + sizeof(void*)));
+        jl_value_t *jfty = jl_tupleref(sty->types, idx);
+        if (sty->fields[idx].isptr) {
+            builder.CreateStore(boxed(rhs),
+                                builder.CreateBitCast(addr, jl_ppvalue_llvmt));
+        }
+        else {
+            typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx);
+        }
+    }
+    else {
+        // TODO: better error
+        emit_error("type is immutable", ctx);
+    }
+}
+
+static Value *emit_newsym(jl_value_t *ty, size_t nargs, jl_value_t **args, jl_codectx_t *ctx)
+{
+    if (jl_is_type_type(ty) &&
+        jl_is_datatype(jl_tparam0(ty)) &&
+        jl_is_leaf_type(jl_tparam0(ty))) {
+        ty = jl_tparam0(ty);
+        jl_datatype_t *sty = (jl_datatype_t*)ty;
+        size_t nf = jl_tuple_len(sty->names);
+        if (nf > 0) {
+            if (jl_isbits(sty)) {
+                Type *lt = julia_struct_to_llvm(ty);
+                Value *strct = UndefValue::get(lt);
+                size_t na = nargs-1 < nf ? nargs-1 : nf;
+                for(size_t i=0; i < na; i++) {
+                    unsigned idx = i;
+                    Type *fty = julia_type_to_llvm(jl_tupleref(sty->types,i));
+                    Value *fval = emit_unbox(fty, PointerType::get(fty,0), emit_unboxed(args[i+1],ctx));
+                    if (fty == T_int1)
+                        fval = builder.CreateZExt(fval, T_int8);
+                    strct = builder.
+                        CreateInsertValue(strct, fval, ArrayRef<unsigned>(&idx,1));
+                }
+                return mark_julia_type(strct,ty);
+            }
+            Value *strct =
+                builder.CreateCall(jlallocobj_func,
+                                   ConstantInt::get(T_size,
+                                                    sizeof(void*)+sty->size));
+            builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
+                                emit_nthptr_addr(strct, (size_t)0));
+            for(size_t i=0; i < nf; i++) {
+                if (sty->fields[i].isptr) {
+                    emit_setfield(sty, strct, i, V_null, ctx, false);
+                }
+            }
+            make_gcroot(strct, ctx);
+            for(size_t i=1; i < nargs; i++) {
+                emit_setfield(sty, strct, i-1, emit_expr(args[i],ctx), ctx,
+                              false);
+            }
+            ctx->argDepth--;
+            return strct;
+        }
+        else {
+            // 0 fields, singleton
+            return literal_pointer_val
+                (jl_new_struct_uninit((jl_datatype_t*)ty));
+        }
+    }
+    return NULL;
+}
