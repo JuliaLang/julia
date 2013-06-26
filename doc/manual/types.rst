@@ -1,3 +1,4 @@
+
 .. _man-types:
 
 *********
@@ -36,8 +37,8 @@ perhaps somewhat counterintuitively, often significantly simplify them.
 
 Describing Julia in the lingo of `type
 systems <http://en.wikipedia.org/wiki/Type_system>`_, it is: dynamic,
-nominative, parametric and dependent. Generic types can be parameterized
-by other types and by integers, and the hierarchical relationships
+nominative, parametric and dependent. Generic types can be parameterized,
+and the hierarchical relationships
 between types are explicitly declared, rather than implied by compatible
 structure. One particularly distinctive feature of Julia's type system
 is that concrete types may not subtype each other: all concrete types
@@ -61,8 +62,9 @@ Julia's type system that should be mentioned up front are:
 -  Only values, not variables, have types — variables are simply names
    bound to values.
 -  Both abstract and concrete types can be paramaterized by other types
-   and by integers. Type parameters may be completely omitted when they
-   do not need to be explicitly referenced or restricted.
+   and by certain other values (currently integers and symbols).
+   Type parameters may be completely omitted when they
+   do not need to be referenced or restricted.
 
 Julia's type system is designed to be powerful and expressive, yet
 clear, intuitive and unobtrusive. Many Julia programmers may never feel
@@ -80,7 +82,7 @@ do this:
 1. As an assertion to help confirm that your program works the way you
    expect,
 2. To provide extra type information to the compiler, which can then
-   improve performance in many cases
+   improve performance in some cases
 
 The ``::`` operator is read as "is an instance of" and can be used
 anywhere to assert that the value of the expression on the left is an
@@ -147,16 +149,14 @@ type system more than just a collection of object implementations.
 Recall that in :ref:`man-integers-and-floating-point-numbers`, we introduced a
 variety of concrete types of numeric values: ``Int8``, ``Uint8``,
 ``Int16``, ``Uint16``, ``Int32``, ``Uint32``, ``Int64``, ``Uint64``,
-``Float32``, and ``Float64``. These are all `bits types <#Bits+Types>`_,
-which we will discuss in the next section. Although they have different
+``Float32``, and ``Float64``. Although they have different
 representation sizes, ``Int8``, ``Int16``, ``Int32`` and ``Int64`` all
 have in common that they are signed integer types. Likewise ``Uint8``,
 ``Uint16``, ``Uint32`` and ``Uint64`` are all unsigned integer types,
 while ``Float32`` and ``Float64`` are distinct in being floating-point
 types rather than integers. It is common for a piece of code to make
 sense, for example, only if its arguments are some kind of integer, but
-not really depend on what particular *kind* of integer, as long as the
-appropriate low-level implementations of integer operations are used.
+not really depend on what particular *kind* of integer.
 For example, the greatest common denominator algorithm works for all
 kinds of integers, but will not work for floating-point numbers.
 Abstract types allow the construction of a hierarchy of types,
@@ -183,8 +183,8 @@ abstract "bottom" type, at the nadir of the type graph, which is called
 ``None``. It is the exact opposite of ``Any``: no object is an instance
 of ``None`` and all types are supertypes of ``None``.
 
-As a specific example, let's consider a subset of the abstract types
-that make up Julia's numerical hierarchy::
+Let's consider some of the abstract types that make up Julia's numerical
+hierarchy::
 
     abstract Number
     abstract Real     <: Number
@@ -199,7 +199,7 @@ are shown here; we'll get to the others later): ``Integer`` and
 ``FloatingPoint``, separating the world into representations of integers and
 representations of real numbers. Representations of real numbers
 include, of course, floating-point types, but also include other types,
-such as Julia's rationals. Hence, ``FloatingPoint`` is a proper subtype of
+such as rationals. Hence, ``FloatingPoint`` is a proper subtype of
 ``Real``, including only floating-point representations of real numbers.
 Integers are further subdivided into ``Signed`` and ``Unsigned``
 varieties.
@@ -389,7 +389,7 @@ the keyword ``immutable`` instead of ``type``::
       imag::Float64
     end
 
-Such types behave just like other composite types, except that instances
+Such types behave much like other composite types, except that instances
 of them cannot be modified. Immutable types have several advantages:
 
 - They are more efficient in some cases. Types like the ``Complex``
@@ -407,12 +407,89 @@ immutable object itself cannot be changed to point to different objects.
 A useful way to think about immutable composites is that each instance is
 associated with specific field values --- the field values alone tell
 you everything about the object. In contrast, a mutable object is like a
-little container that might contain different values over time, and so is
+little container that might hold different values over time, and so is
 not identified with specific field values. In deciding whether to make a
 type immutable, ask whether two instances with the same field values
 would be considered identical, or if they might need to change independently
 over time. If they would be considered identical, the type should probably
 be immutable.
+
+Declared Types
+--------------
+
+The three kinds of types discussed in the previous three sections
+are actually all closely related. They share the same key properties:
+
+- They are explicitly declared.
+- They have names.
+- They have explicitly declared supertypes.
+- They may have parameters.
+
+Because of these shared properties, these types are internally
+represented as instances of the same concept, ``DataType``, which
+is the type of any of these types:
+
+    julia> typeof(Real)
+    DataType
+
+    julia> typeof(Int)
+    DataType
+
+A ``DataType`` may be abstract or concrete. If it is concrete, it
+has a specified size, storage layout, and (optionally) field names.
+Thus a bits type is a ``DataType`` with nonzero size, but no field
+names. A composite type is a ``DataType`` that has field names or
+is empty (zero size).
+
+Every concrete value in the system is either an instance of some
+``DataType``, or is a tuple.
+
+Tuple Types
+-----------
+
+Tuples are an abstraction of the arguments of a function — without the
+function itself. The salient aspects of a function's arguments are their
+order and their types. The type of a tuple of values is the tuple of
+types of values::
+
+    julia> typeof((1,"foo",2.5))
+    (Int64,ASCIIString,Float64)
+
+Accordingly, a tuple of types can be used anywhere a type is expected::
+
+    julia> (1,"foo",2.5) :: (Int64,String,Any)
+    (1,"foo",2.5)
+
+    julia> (1,"foo",2.5) :: (Int64,String,Float32)
+    type error: typeassert: expected (Int64,String,Float32), got (Int64,ASCIIString,Float64)
+
+If one of the components of the tuple is not a type, however, you will
+get an error::
+
+    julia> (1,"foo",2.5) :: (Int64,String,3)
+    type error: typeassert: expected Type{T}, got (DataType,DataType,Int64)
+
+Note that the empty tuple ``()`` is its own type::
+
+    julia> typeof(())
+    ()
+
+Tuple types are *covariant* in their constituent types, which means
+that one tuple type is a subtype of another if elements of the first
+are subtypes of the corresponding elements of the second. For
+example::
+
+    julia> (Int,String) <: (Real,Any)
+    true
+
+    julia> (Int,String) <: (Real,Real)
+    false
+
+    julia> (Int,String) <: (Real,)
+    false
+
+Intuitively, this corresponds to the type of a function's arguments
+being a subtype of the function's signature (when the signature matches).
 
 Type Unions
 -----------
@@ -446,36 +523,6 @@ object is an instance of. Since a zero-argument ``Union`` call has no
 argument types for objects to be instances of, it should produce a
 type which no objects are instances of — i.e. ``None``.
 
-Tuple Types
------------
-
-Tuples are an abstraction of the arguments of a function — without the
-function itself. The salient aspects of a function's arguments are their
-order and their types. The type of a tuple of values is the tuple of
-types of values::
-
-    julia> typeof((1,"foo",2.5))
-    (Int64,ASCIIString,Float64)
-
-Accordingly, a tuple of types can be used anywhere a type is expected::
-
-    julia> (1,"foo",2.5) :: (Int64,String,Any)
-    (1,"foo",2.5)
-
-    julia> (1,"foo",2.5) :: (Int64,String,Float32)
-    type error: typeassert: expected (Int64,String,Float32), got (Int64,ASCIIString,Float64)
-
-If one of the components of the tuple is not a type, however, you will
-get an error::
-
-    julia> (1,"foo",2.5) :: (Int64,String,3)
-    type error: typeassert: expected Type{T}, got (BitsKind,AbstractKind,Int64)
-
-Note that the empty tuple ``()`` is its own type::
-
-    julia> typeof(())
-    ()
-
 .. _man-parametric-types:
 
 Parametric Types
@@ -502,8 +549,7 @@ all type decisions at compile time, many traditional difficulties
 encountered in static parametric type systems can be relatively easily
 handled.
 
-The only kinds of types that are declared are abstract types, bits
-types, and composite types. All such types can be parameterized, with
+All declared types (the ``DataType`` variety) can be parameterized, with
 the same syntax in each case. We will discuss them in in the following
 order: first, parametric composite types, then parametric abstract
 types, and finally parametric bits types.
@@ -748,7 +794,7 @@ subtypes of ``Real``::
     Pointy{Real}
 
     julia> Pointy{String}
-    type error: Pointy: in T, expected Real, got AbstractKind
+    type error: Pointy: in T, expected Real, got Type{String}
 
     julia> Pointy{1}
     type error: Pointy: in T, expected Real, got Int64
@@ -824,8 +870,7 @@ Until we discuss :ref:`man-parametric-methods`
 and :ref:`conversions <man-conversion>`, it is
 difficult to explain the utility of the singleton type construct, but in
 short, it allows one to specialize function behavior on specific type
-*values*, rather just kinds of types, which is all that would be
-possible in the absence of singleton types. This is useful for writing
+*values*. This is useful for writing
 methods (especially parametric ones) whose behavior depends on a type
 that is given as an explicit argument rather than implied by the type of
 one of its arguments.
@@ -834,8 +879,7 @@ A few popular languages have singleton types, including Haskell, Scala
 and Ruby. In general usage, the term "singleton type" refers to a type
 whose only instance is a single value. This meaning applies to Julia's
 singleton types, but with that caveat that only type objects have
-singleton types, whereas in most languages with singleton types, every
-object has one.
+singleton types.
 
 Parametric Bits Types
 ~~~~~~~~~~~~~~~~~~~~~
@@ -892,10 +936,10 @@ This is accomplished via the following code in ``base/boot.jl``::
 Of course, this depends on what ``Int`` is aliased to — but that is
 pre-defined to be the correct type — either ``Int32`` or ``Int64``.
 
-For parametric types, ``typealias`` can be convenient for providing a
-new parametric types name where one of the parameter choices is fixed.
-Julia's arrays have type ``Array{T,n}`` where ``T`` is the element type
-and ``n`` is the number of array dimensions. For convenience, writing
+For parametric types, ``typealias`` can be convenient for providing
+names for cases where some of the parameter choices are fixed.
+Julia's arrays have type ``Array{T,N}`` where ``T`` is the element type
+and ``N`` is the number of array dimensions. For convenience, writing
 ``Array{Float64}`` allows one to specify the element type without
 specifying the dimension::
 
@@ -904,8 +948,8 @@ specifying the dimension::
 
 However, there is no way to equally simply restrict just the dimension
 but not the element type. Yet, one often needs to ensure an object
-is a vector or a matrix (imposing restrictions on the number of dimensions). For 
-that reason, the following type aliases are provided::
+is a vector or a matrix (imposing restrictions on the number of dimensions).
+For that reason, the following type aliases are provided::
 
     typealias Vector{T} Array{T,1}
     typealias Matrix{T} Array{T,2}
@@ -914,7 +958,7 @@ Writing ``Vector{Float64}`` is equivalent to writing
 ``Array{Float64,1}``, and the umbrella type ``Vector`` has as instances
 all ``Array`` objects where the second parameter — the number of array
 dimensions — is 1, regardless of what the element type is. In languages
-where parametric types must be always specified in full, this is not
+where parametric types must always be specified in full, this is not
 especially helpful, but in Julia, this allows one to write just
 ``Matrix`` for the abstract type including all two-dimensional dense
 arrays of any element type.
@@ -939,77 +983,53 @@ true or false::
 
 The ``typeof`` function, already used throughout the manual in examples,
 returns the type of its argument. Since, as noted above, types are
-objects, they also have types, and we can ask what their types are. Here
-we apply ``typeof`` to an instance of each of the kinds of types
-discussed above::
-
-    julia> typeof(Real)
-    AbstractKind
-
-    julia> typeof(Float64)
-    BitsKind
+objects, they also have types, and we can ask what their types are::
 
     julia> typeof(Rational)
-    CompositeKind
+    DataType
 
     julia> typeof(Union(Real,Float64,Rational))
-    UnionKind
+    UnionType
 
-    julia> typeof((Real,Float64,Rational,None))
-    (AbstractKind,BitsKind,CompositeKind,UnionKind)
+    julia> typeof((Rational,None))
+    (DataType,UnionType)
 
-As you can see, the types of types are called, by convention, "kinds":
+What if we repeat the process? What is the type of a type of a type?
+As it happens, types are all composite values and thus all have a type of
+``DataType``::
 
--  Abstract types have type ``AbstractKind``
--  Bits types have type ``BitsKind``
--  Composite types have type ``CompositeKind``
--  Unions have type ``UnionKind``
--  Tuples of types have a type that is the tuple of their respective
-   kinds.
+    julia> typeof(DataType)
+    DataType
 
-What if we repeat the process? What is the type of a kind? Kinds, as it
-happens, are all composite values and thus all have a type of
-``CompositeKind``::
+    julia> typeof(UnionType)
+    DataType
 
-    julia> typeof(AbstractKind)
-    CompositeKind
-
-    julia> typeof(BitsKind)
-    CompositeKind
-
-    julia> typeof(CompositeKind)
-    CompositeKind
-
-    julia> typeof(UnionKind)
-    CompositeKind
-
-The reader may note that ``CompositeKind`` shares with the empty tuple
+The reader may note that ``DataType`` shares with the empty tuple
 (see `above <#tuple-types>`_), the distinction of being its own type
-(i.e. a fixed point of the ``typeof`` function). This leads any number
-of tuple types recursively built with ``()`` and ``CompositeKind`` as
+(i.e. a fixed point of the ``typeof`` function). This leaves any number
+of tuple types recursively built with ``()`` and ``DataType`` as
 their only atomic values, which are their own type::
 
     julia> typeof(())
     ()
 
-    julia> typeof(CompositeKind)
-    CompositeKind
+    julia> typeof(DataType)
+    DataType
 
     julia> typeof(((),))
     ((),)
 
-    julia> typeof((CompositeKind,))
-    (CompositeKind,)
+    julia> typeof((DataType,))
+    (DataType,)
 
-    julia> typeof(((),CompositeKind))
-    ((),CompositeKind)
+    julia> typeof(((),DataType))
+    ((),DataType)
 
 All fixed points of the ``typeof`` function are like this.
 
-Another operation that applies to some kinds of types is ``super``. Only
-abstract types (``AbstractKind``), bits types (``BitsKind``), and
-composite types (``CompositeKind``) have a supertype, so these are the
-only kinds of types that the ``super`` function applies to::
+Another operation that applies to some types is ``super``, which
+reveals a type's supertype.
+Only declared types (``DataType``) have unambiguous supertypes::
 
     julia> super(Float64)
     FloatingPoint
@@ -1027,11 +1047,10 @@ If you apply ``super`` to other type objects (or non-type objects), a
 "no method" error is raised::
 
     julia> super(Union(Float64,Int64))
-    no method super(UnionKind,)
+    no method super(UnionType,)
 
     julia> super(None)
-    no method super(UnionKind,)
+    no method super(UnionType,)
 
     julia> super((Float64,Int64))
-    no method super((BitsKind,BitsKind),)
-
+    no method super((DataType,DataType),)
