@@ -420,7 +420,7 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
     return NULL;
 }
 
-bool need_private_copy(jl_value_t *ty)
+bool need_private_copy(jl_value_t *ty, bool byRef)
 {
     return false;
 }
@@ -453,7 +453,7 @@ bool need_destructure_argument(jl_value_t *ty)
     return false;
 }
 
-bool need_private_copy(jl_value_t *ty)
+bool need_private_copy(jl_value_t *ty, bool byRef)
 {
     return false;
 }
@@ -696,7 +696,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                 return pjv;
             else {
                 Value *mem = builder.CreateAlloca(ty,ConstantInt::get(T_size, 0));
-                builder.CreateMemCpy(mem,pjv,(uint64_t)jl_datatype_size(jt),(uint64_t)jl_datatype_size(jt));
+                builder.CreateMemCpy(mem,pjv,(uint64_t)jl_datatype_size(jt),(uint64_t)((jl_datatype_t*)jt)->alignment);
                 return mem;
             }
         }
@@ -716,7 +716,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
             return pjv;
         else {
             Value *mem = builder.CreateAlloca(ty,ConstantInt::get(T_size, 0));
-            builder.CreateMemCpy(mem,pjv,(uint64_t)jl_datatype_size(jt),(uint64_t)jl_datatype_size(jt));
+            builder.CreateMemCpy(mem,pjv,(uint64_t)jl_datatype_size(jt),(uint64_t)((jl_datatype_t*)jt)->alignment);
             return mem;
         }
     }
