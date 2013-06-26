@@ -428,12 +428,12 @@
 
 "),
 
-("Generic Functions","Base","|","|(x, f)
+("Generic Functions","Base","|>","|>(x, f)
 
    Applies a function to the preceding argument which allows for easy
    function chaining.
 
-   **Example**: \"[1:5] | x->x.^2 | sum | inv\"
+   **Example**: \"[1:5] |> x->x.^2 |> sum |> inv\"
 
 "),
 

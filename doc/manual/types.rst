@@ -95,7 +95,7 @@ subtype of the abstract type. If the type assertion is not true, an
 exception is thrown, otherwise, the left-hand value is returned::
 
     julia> (1+2)::FloatingPoint
-    type error: typeassert: expected FloatingPoint, got Int64
+    ERROR: type: typeassert: expected FloatingPoint, got Int64
 
     julia> (1+2)::Int
     3
@@ -461,13 +461,13 @@ Accordingly, a tuple of types can be used anywhere a type is expected::
     (1,"foo",2.5)
 
     julia> (1,"foo",2.5) :: (Int64,String,Float32)
-    type error: typeassert: expected (Int64,String,Float32), got (Int64,ASCIIString,Float64)
+    ERROR: type: typeassert: expected (Int64,String,Float32), got (Int64,ASCIIString,Float64)
 
 If one of the components of the tuple is not a type, however, you will
 get an error::
 
     julia> (1,"foo",2.5) :: (Int64,String,3)
-    type error: typeassert: expected Type{T}, got (DataType,DataType,Int64)
+    ERROR: type: typeassert: expected Type{T<:Top}, got (DataType,DataType,Int64)
 
 Note that the empty tuple ``()`` is its own type::
 
@@ -794,10 +794,10 @@ subtypes of ``Real``::
     Pointy{Real}
 
     julia> Pointy{String}
-    type error: Pointy: in T, expected Real, got Type{String}
+    ERROR: type: Pointy: in T, expected Real, got Type{String}
 
     julia> Pointy{1}
-    type error: Pointy: in T, expected Real, got Int64
+    ERROR: type: Pointy: in T, expected Real, got Int64
 
 Type parameters for parametric composite types can be restricted in the
 same manner::

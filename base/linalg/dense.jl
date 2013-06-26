@@ -465,12 +465,12 @@ function factorize!{T}(A::Matrix{T})
                     return Diagonal(A)
                 end
                 if utri1
-                    return lufact!(Bidiagonal(diag(A), diag(A, -1), false))
+                    return Bidiagonal(diag(A), diag(A, -1), false)
                 end
                 return Triangular(A, :L)
             end
             if utri
-                return lufact!(Bidiagonal(diag(A), diag(A, 1), true))
+                return Bidiagonal(diag(A), diag(A, 1), true)
             end
             if utri1
                 if (herm & (T <: Complex)) | sym
