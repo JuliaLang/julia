@@ -105,6 +105,13 @@ import .Grisu.print_shortest
 include("printf.jl")
 importall .Printf
 
+# core math functions
+include("intfuncs.jl")
+include("floatfuncs.jl")
+include("math.jl")
+importall .Math
+include("primes.jl")
+
 # concurrency and parallelism
 include("serialize.jl")
 include("multi.jl")
@@ -125,12 +132,6 @@ include("repl.jl")
 include("client.jl")
 include("loading.jl")
 
-# core math functions
-include("intfuncs.jl")
-include("floatfuncs.jl")
-include("math.jl")
-importall .Math
-include("primes.jl")
 
 # random number generation and statistics
 include("statistics.jl")
@@ -211,7 +212,7 @@ include = include_from_node1
 # prime method cache with some things we know we'll need right after startup
 precompile(pwd, ())
 precompile(fdio, (Int32,))
-precompile(ProcessGroup, (Int, Array{Any,1}, Array{Any,1}))
+precompile(WorkerSet, (Array{Int,1}, Int))
 precompile(next, (Dict{Any,Any}, Int))
 precompile(start, (Dict{Any,Any},))
 precompile(perform_work, ())

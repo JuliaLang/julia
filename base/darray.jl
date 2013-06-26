@@ -45,6 +45,7 @@ function DArray(init, dims, procs)
     end
     DArray(init, dims, procs, defaultdist(dims,procs))
 end
+
 DArray(init, dims) = DArray(init, dims, procs()[1:min(nprocs(),max(dims))])
 
 size(d::DArray) = d.dims
