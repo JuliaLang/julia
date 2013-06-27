@@ -6,8 +6,7 @@ module Resolve
 
 using ..Types
 
-import Base: <, <=, ==, -, +, zero, isless, abs, typemin, typemax,
-       indmax
+include("pkg2/resolve/fieldvalue.jl")
 
 export resolve, sanity_check, MetadataError
 
@@ -43,20 +42,20 @@ end
 
 # Fetch all data and keep it in a single structure
 type ReqsStruct
-    reqs::Dict{ByteString,VersionSet}
+    reqs::Requires
     pkgs::Vector{ByteString}
     deps::Dict{ByteString,Dict{VersionNumber,Available}}
     np::Int
 
     function ReqsStruct(
-        reqs::Dict{ByteString,VersionSet},
+        reqs::Requires,
         pkgs::Vector{ByteString},
         deps::Dict{ByteString,Dict{VersionNumber,Available}})
         new(reqs, pkgs, deps, length(pkgs))
     end
 end
 
-function ReqsStruct(reqs::Dict{ByteString,VersionSet}, deps::Dict{ByteString,Dict{VersionNumber,Available}})
+function ReqsStruct(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
     pkgs = Set{ByteString}()
     for (p,_) in deps add!(pkgs, p) end
 
@@ -137,12 +136,12 @@ function gen_pvers(np::Int, pdict::Dict{ByteString,Int}, deps::Dict{ByteString,D
     pvers = [ VersionNumber[] for i = 1:np ]
 
     for (p,d) in deps, (vn,_) in d
-        j = pdict[p]
-        spp[j] += 1
-        push!(pvers[j], vn)
+        p0 = pdict[p]
+        spp[p0] += 1
+        push!(pvers[p0], vn)
     end
-    for j = 1:np
-        sort!(pvers[j])
+    for p0 = 1:np
+        sort!(pvers[p0])
     end
 
     return spp, pvers
@@ -179,8 +178,7 @@ end
 # Also, for each package explicitly required, dicards all versions outside
 # the allowed range (checking for impossible ranges while at it).
 # This function mutates both input structs.
-prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct) = prune_versions!(reqsstruct, pkgstruct, true)
-function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_reqs::Bool)
+function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_reqs::Bool = true)
 
     np = reqsstruct.np
     reqs = reqsstruct.reqs
@@ -254,7 +252,7 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
 
         # Extract unique dependencies lists (aka classes), thereby
         # assigning an index to each class.
-        uniqdepssets = unique(pdeps0) # XXX: verify hashing
+        uniqdepssets = unique(pdeps0)
 
         # Store all dependencies seen so far for later use
         for dd in uniqdepssets, v in dd
@@ -406,120 +404,26 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
     end
 
     #println("pruning stats:")
-    #println("  before: vers=$(length(vers)) deps=$(length(deps))")
-    #println("  after: vers=$(length(new_vers)) deps=$(length(new_deps))")
+    #numvers = 0
+    #numdeps = 0
+    #for (p,d) in deps, (vn,a) in d
+    #    numvers += 1
+    #    for r in a.requires
+    #        numdeps += 1
+    #    end
+    #end
+    #numnewvers = 0
+    #numnewdeps = 0
+    #for (p,d) in new_deps, (vn,a) in d
+    #    numnewvers += 1
+    #    for r in a.requires
+    #        numnewdeps += 1
+    #    end
+    #end
+    #println("  before: vers=$numvers deps=$numdeps")
+    #println("  after: vers=$numnewvers deps=$numnewdeps")
 
     return eq_classes_map
-end
-
-# FieldValue is a numeric type which helps dealing with
-# infinities. It holds 5 numbers l0,l1,l2,l3,l4. It can
-# be interpreted as a polynomial
-#  x = a^4 * l0 + a^3 * l1 + a^2 + l2 + a^1 * l3 + l4
-# where a -> Inf
-# The levels are used as such:
-#  l0 : for hard constraints (dependencies and requirements)
-#  l1 : for favoring higher versions of the explicitly required
-#       packages
-#  l2 : for favoring higher versions of all other packages (and
-#       favoring uninstallation of non-needed packages)
-#  l3 : for favoring dependants over dependencies
-#  l4 : for symmetry-breaking random noise
-#
-type FieldValue
-    v::Vector{Int}
-    function FieldValue(v::Vector{Int})
-        if length(v) != 5
-            error("FieldValue only accepts Vectors of length 5")
-        end
-        new(v)
-    end
-end
-FieldValue(l0::Int,l1::Int,l2::Int,l3::Int,l4::Int) = FieldValue([l0, l1, l2, l3, l4])
-FieldValue(l0::Int,l1::Int,l2::Int,l3::Int) = FieldValue([l0, l1, l2, l3, 0])
-FieldValue(l0::Int,l1::Int,l2::Int) = FieldValue([l0, l1, l2, 0, 0])
-FieldValue(l0::Int,l1::Int) = FieldValue([l0, l1, 0, 0, 0])
-FieldValue(l0::Int) = FieldValue([l0, 0, 0, 0, 0])
-FieldValue() = FieldValue([0,0,0,0,0])
-
-zero(::Type{FieldValue}) = FieldValue()
-
-typemin(::Type{FieldValue}) = FieldValue([typemin(Int) for i = 1:5])
-typemax(::Type{FieldValue}) = FieldValue([typemax(Int) for i = 1:5])
-
-(-)(a::FieldValue, b::FieldValue) = FieldValue(a.v - b.v)
-(+)(a::FieldValue, b::FieldValue) = FieldValue(a.v + b.v)
-
-isequal(a::FieldValue, b::FieldValue) = (a.v == b.v)
-
-function isless(a::FieldValue, b::FieldValue)
-    va = a.v
-    vb = b.v
-    va[1] < vb[1] && return true
-    va[1] > vb[1] && return false
-    va[2] < vb[2] && return true
-    va[2] > vb[2] && return false
-    va[3] < vb[3] && return true
-    va[3] > vb[3] && return false
-    va[4] < vb[4] && return true
-    va[4] > vb[4] && return false
-    va[5] < vb[5] && return true
-    return false
-end
-
-abs(a::FieldValue) = FieldValue(abs(a.v))
-abs(v::Vector{FieldValue}) = FieldValue[abs(a) for a in v]
-
-# A faster, in-place version of
-#   a += FieldValue(0,0,0,x,0)
-# where the position of the x is set by n
-inplaceadd!(a::FieldValue, x::Int, n::Int) = (a.v[n] = x)
-
-# A faster, in-place version of
-#   a += b
-function inplaceadd!(a::FieldValue, b::FieldValue)
-    av = a.v
-    bv = b.v
-    for i = 1:5
-        av[i] += bv[i]
-    end
-end
-
-# if the maximum field has l0 < 0, it means that
-# some hard constraint is being violated
-validmax(a::FieldValue) = a.v[1] >= 0
-
-# like usual indmax, but favors the highest indices
-# in case of a tie
-function indmax(v::Vector{FieldValue})
-    m = typemin(FieldValue)
-    mi = 0
-    for j = length(v):-1:1
-        if v[j] > m
-            m = v[j]
-            mi = j
-        end
-    end
-    @assert mi != 0
-    return mi
-end
-
-# secondmax returns the (normalized) value of the second maximum in a
-# field (i.e. a Vector of FieldValues. It's used to determine the most
-# polarized field.
-function secondmax(v::Vector{FieldValue})
-    m = typemin(FieldValue)
-    m2 = typemin(FieldValue)
-    for i = 1:length(v)
-        a = v[i]
-        if a > m
-            m2 = m
-            m = a
-        elseif a > m2
-            m2 = a
-        end
-    end
-    return m2 - m
 end
 
 # Graph holds the graph structure onto which max-sum is run, in
@@ -537,7 +441,7 @@ type Graph
     #   Each mask has dimension spp1 x spp0, where
     #   spp0 is the number of states of p0, and
     #   spp1 is the number of states of p1.
-    gmsk::Vector{Vector{Matrix{Bool}}}
+    gmsk::Vector{Vector{BitMatrix}}
 
     # dependency direction:
     #   keeps track of which direction the dependency goes
@@ -578,7 +482,7 @@ type Graph
         vdict = pkgstruct.vdict
 
         gadj = [ Int[] for i = 1:np ]
-        gmsk = [ Matrix{Bool}[] for i = 1:np ]
+        gmsk = [ BitMatrix[] for i = 1:np ]
         gdir = [ Int[] for i = 1:np ]
         adjdict = [ (Int=>Int)[] for i = 1:np ]
 
@@ -610,7 +514,7 @@ type Graph
                         adjdict[p1][p0] = j0
                         adjdict[p0][p1] = j1
 
-                        bm = ones(Bool, spp[p1], spp[p0])
+                        bm = trues(spp[p1], spp[p0])
                         bmt = bm'
 
                         push!(gmsk[p0], bm)
@@ -796,7 +700,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         if dir1 == -1
             # p0 depends on p1
             for v0 = 1:spp0-1
-                inplaceadd!(cavmsg[v0], v0, 4)
+                cavmsg[v0] += FieldValue(0,0,0,v0)
             end
         end
 
@@ -820,8 +724,6 @@ function update(p0::Int, graph::Graph, msgs::Messages)
             end
             if dir1 == 1 && v1 != spp1
                 # p1 depends on p0
-                # Note: cannot use inplaceadd! here since it may
-                #       mutate cavmsg
                 newmsg[v1] += FieldValue(0,0,0,v1)
             end
             m = max(m, newmsg[v1])
@@ -844,7 +746,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         # update the field of p1
         fld1 = fld[p1]
         for v1 = 1:spp1
-            inplaceadd!(fld1[v1], diff[v1])
+            fld1[v1] += diff[v1]
         end
 
         # put the newly computed message in place
@@ -1160,7 +1062,7 @@ function enforce_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::V
 end
 
 # The external-facing function
-function resolve(reqs::Dict{ByteString,VersionSet}, deps::Dict{ByteString,Dict{VersionNumber,Available}})
+function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
     # fetch data
     reqsstruct = ReqsStruct(reqs, deps)
@@ -1356,7 +1258,9 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
         catch err
             if isa(err, UnsatError)
                 pp = red_pkgs[err.info]
-                push!(insane_ids, vdict[pdict[p]][vn])
+                p0 = pdict[p]
+                v0 = vdict[p0][vn]
+                push!(insane_ids, (p0, v0))
                 push!(problematic_pkgs, pp)
             else
                 rethrow(err)
