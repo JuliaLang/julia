@@ -853,7 +853,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
 end
 
 function disable_parallel_libs()
-    ccall((:openblas_set_num_threads,Base.libblas_name), Void, (Int,), 1)
+    openblas_set_num_threads(1)
 end
 
 ## worker creation and setup ##
