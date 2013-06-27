@@ -1163,41 +1163,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 rt);
     }
 
-    // make LLVM function object for the target
-    Value *llvmf;
-    JL_PRINTF(JL_STDOUT,"\n%s :",f_name);
-    FunctionType *functype = FunctionType::get(lrt, fargt_sig, isVa);
-    functype->dump();
-    if (jl_ptr != NULL) {
-        null_pointer_check(jl_ptr,ctx);
-        Type *funcptype = PointerType::get(functype,0);
-        llvmf = builder.CreateIntToPtr(jl_ptr, funcptype);
-    }
-    else if (fptr != NULL) {
-        Type *funcptype = PointerType::get(functype,0);
-        llvmf = literal_pointer_val(fptr, funcptype);
-    }
-    else {
-        void *symaddr;
-        if (f_lib != NULL)
-            symaddr = add_library_sym(f_name, f_lib);
-        else
-            symaddr = sys::DynamicLibrary::SearchForAddressOfSymbol(f_name);
-        if (symaddr == NULL) {
-            JL_GC_POP();
-            std::stringstream msg;
-            msg << "ccall: could not find function ";
-            msg << f_name;
-            if (f_lib != NULL) {
-                msg << " in library ";
-                msg << f_lib;
-            }
-            emit_error(msg.str(), ctx);
-            return literal_pointer_val(jl_nothing);
-        }
-        llvmf = jl_Module->getOrInsertFunction(f_name, functype);
-    }
-
 
     // save place before arguments, for possible insertion of temp arg
     // area saving code.
@@ -1401,13 +1366,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     // the actual call
     Value *ret = builder.CreateCall(
             llvmf,
-            ArrayRef<Value*>(argvals);
-#ifdef LLVM32
-    ((CallInst*)ret)->setAttributes(AttrListPtr::get(getGlobalContext(), ArrayRef<AttributeWithIndex>(attrs)));
-#else
-    attributes = AttrListPtr::get(attrs.data(),attrs.size());
-    ((CallInst*)ret)->setAttributes(attributes);
-#endif
+            ArrayRef<Value*>(argvals));
+
+    ((CallInst*)ret)->setAttributes(attrs);
 
     if (cc != CallingConv::C)
         ((CallInst*)ret)->setCallingConv(cc);
@@ -1444,20 +1405,15 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             //fprintf(stderr, "ccall rt: %s -> %s\n", f_name, ((jl_tag_type_t*)rt)->name->name->name);
             assert(jl_is_structtype(rt));
 
-            // Call jlallocobj_func with the appropriate size (argument size size_t)
-            Value *strct =
-                builder.CreateCall(jlallocobj_func,
-                                   ConstantInt::get(T_size,
-                                        sizeof(void*)+((jl_datatype_t*)rt)->size));
-            // Store the type into the first field
-            builder.CreateStore(literal_pointer_val((jl_value_t*)rt),
-                                emit_nthptr_addr(strct, (size_t)0));
-            builder.CreateStore(result,
-                                builder.CreateBitCast(
-                                    emit_nthptr_addr(strct, (size_t)1),
-                                    PointerType::get(prt,0)));
-            result->dump();
-            return mark_julia_type(strct, rt);
+            Value *newsym = emit_newsym(rt,1,NULL,ctx);
+            assert(result != NULL && "Type was not concrete");
+            if (newsym->getType()->isPointerTy()) {
+                builder.CreateStore(result,builder.CreateBitCast(emit_nthptr_addr(newsym, (size_t)1), prt));
+                result = newsym;
+            }
+            // otherwise it's fine to pass this by value. Techincally we could do alloca/store/load, 
+            // but why should we?
+            
         } else {
             if(prt->getPrimitiveSizeInBits() == lrt->getPrimitiveSizeInBits()) {
                 result = builder.CreateBitCast(result,lrt);
