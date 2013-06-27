@@ -816,7 +816,7 @@ LAPACK_OBJ_TARGET =
 LAPACK_OBJ_SOURCE =
 endif
 
-LAPACK_MFLAGS = NOOPT="-O0 $(fPIC) $(GFORTBLAS_FFLAGS)" OPTS="$(FFLAGS) $(JFFLAGS) $(GFORTBLAS_FFLAGS)" FORTRAN="$(FC)" LOADER="$(FC)"
+LAPACK_MFLAGS = NOOPT="$(FFLAGS) $(JFFLAGS) $(GFORTBLAS_FFLAGS) -O0" OPTS="$(FFLAGS) $(JFFLAGS) $(GFORTBLAS_FFLAGS)" FORTRAN="$(FC)" LOADER="$(FC)"
 ifneq ($(OS),WINNT)
 LAPACK_MFLAGS += BLASLIB="-Wl,-rpath,'$(BUILD)/lib' $(LIBBLAS)"
 endif
@@ -845,6 +845,7 @@ $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/liblapack.a
 	$(FC) -shared $(FFLAGS) $(JFFLAGS) SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o $(LIBBLAS) -o liblapack.$(SHLIB_EXT)
 $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	cp $< $@
+	$(INSTALL_NAME_CMD)liblapack.dylib $@
 
 clean-lapack:
 	-$(MAKE) -C lapack-$(LAPACK_VER) clean
