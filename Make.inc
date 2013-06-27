@@ -169,11 +169,18 @@ ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
 endif
-ifeq ($(OS),Darwin)
-ifeq ($(OS),$(BUILD_OS))
-## Mac is a nifty dual-arch platform (or was until 10.8), so we detect the currently running OS arch instead
-## of the compiler "-dumpmachine" result, like I believe the compiler does, and make a substitution
-ARCH := $(shell uname -m)
+ifeq ($(BUILD_OS),Darwin)
+## Mac is a rather amazing 64-bit user-space on 32-bit kernel architecture, so to determine arch we detect
+## the capabilities of the hardware, rather than the compiler or kernel, and make a substitution
+ifeq ($(ARCH),x86_64)
+ARCH = i686
+else ifeq ($(ARCH),i386)
+ARCH = i686
+endif
+ifeq ($(ARCH),i686)
+ifeq ($(shell sysctl -n hw.cpu64bit_capable),1)
+ARCH = x86_64
+endif
 BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
 endif
@@ -223,8 +230,8 @@ ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 USE_BLAS64 = 0
 USE_SYSTEM_LAPACK = 0
-LIBBLAS = -framework vecLib -lblas
-LIBBLASNAME = libBLAS
+LIBBLAS = -L$(BUILD)/lib -lgfortblas
+LIBBLASNAME = libgfortblas
 else
 LIBBLAS = -lblas
 LIBBLASNAME = libblas
@@ -244,7 +251,7 @@ ifeq ($(USE_SYSTEM_LAPACK), 1)
 LIBLAPACK = -llapack
 LIBLAPACKNAME = liblapack
 else
-LIBLAPACK = -L$(BUILD)/lib -llapack
+LIBLAPACK = -L$(BUILD)/lib -llapack $(LIBBLAS)
 LIBLAPACKNAME = liblapack
 endif
 endif

@@ -214,6 +214,8 @@ export PipeString
 @deprecate  (&)(s::IntSet, s2::IntSet)   intersect(s, s2)
 @deprecate  -(a::IntSet, b::IntSet)      setdiff(a,b)
 @deprecate  ~(s::IntSet)                 complement(s)
+@deprecate openblas_set_num_threads      blas_set_num_threads
+@deprecate check_openblas                check_blas
 
 # Redirection Operators
 @deprecate |(a::AbstractCmd,b::AbstractCmd) (a|>b)
