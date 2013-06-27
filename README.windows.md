@@ -5,7 +5,7 @@ Please see the README at https://github.com/JuliaLang/julia/blob/master/README.m
 
 Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and Windows 8). Both the 32-bit and 64-bit versions are supported. The 32-bit i686 binary will run on either 32-bit and 64-bit operating systems. The 64-bit x86_64 binary will only run on 64-bit Windows.
 
-Downloading additional libraries (Tk, Cairo, etc) is not necessary. Julia's package manager will acquire them as needed.
+Downloading additional libraries (Tk, Cairo, etc) is not necessary. Julia's package manager will acquire them as needed. For this to work, you must have the `7z` command-line tool installed (see below), and it must be on your path.
 
 Julia requires that the lib and lib/julia directories be part of your `%PATH%` variable to startup. The `julia.bat` script will attempt to do this for you and is the recommended way of running julia on your system. The julia.bat file can be given arguments (e.g. `julia.bat -p 2 script.jl` for running script.jl on two processors) which will be passed directly to julia.exe.
 
@@ -21,6 +21,7 @@ Explore and have fun!
 
 Recommended external libraries:
 
+ - [7z](http://www.7-zip.org/download.html)
  - [msysGit](https://code.google.com/p/msysgit/downloads/list)
  - [TortoiseGit](https://code.google.com/p/tortoisegit/wiki/Download)
 
