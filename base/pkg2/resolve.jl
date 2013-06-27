@@ -88,14 +88,10 @@ type PkgStruct
     #                   to indices
     pvers::Vector{Vector{VersionNumber}}
 
-    # versions dict: associates a package number and a version index
-    #                to each version: suppose we have p::ByteString and
-    #                vn::VersionNumber such that:
-    #                  vdict[(p,vn)] = (p0, v0)
-    #                then:
-    #                  pdict[p] = p0
-    #                  pvers[p0][v0] = vn
-    vdict::Dict{(ByteString,VersionNumber),(Int,Int)}
+    # versions dict: associates a version index to each package
+    #                version;
+    #                  pvers[p0][vdict[p0][vn]] = vn
+    vdict::Vector{Dict{VersionNumber,Int}}
 
     # version weights: the weight for each version of each package
     #                  (versions include the uninstalled state; the
@@ -108,7 +104,7 @@ type PkgStruct
 
     PkgStruct(spp::Vector{Int}, pdict::Dict{ByteString,Int},
               pvers::Vector{Vector{VersionNumber}},
-              vdict::Dict{(ByteString,VersionNumber),(Int,Int)},
+              vdict::Vector{Dict{VersionNumber,Int}},
               vweight::Vector{Vector{VersionWeight}}) =
         new(spp, pdict, pvers, vdict, vweight, false)
 end
@@ -157,13 +153,17 @@ end
 function gen_vdict(pdict::Dict{ByteString,Int}, pvers::Vector{Vector{VersionNumber}},
                    deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
-    vdict = ((ByteString,VersionNumber)=>(Int,Int))[]
-    for (p,d) in deps, (vn,_) in d
-        j = pdict[p]
-        for i in 1:length(pvers[j])
-            if pvers[j][i] == vn
-                vdict[(p,vn)] = (j, i)
-                break
+    np = length(pvers)
+    vdict = [(VersionNumber=>Int)[] for p0 = 1:np]
+    for (p,d) in deps
+        p0 = pdict[p]
+        vdict0 = vdict[p0]
+        for (vn,_) in d
+            for v0 in 1:length(pvers[p0])
+                if pvers[p0][v0] == vn
+                    vdict0[vn] = v0
+                    break
+                end
             end
         end
     end
@@ -227,17 +227,21 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
     # Parse the dependency list, segregate them according to the
     # dependant package and version
     pdeps = [ [ Array((ByteString,VersionSet),0) for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
-    for (p,d) in deps, (vn,a) in d
-        p0, v0 = vdict[(p,vn)]
-        if !allowed[p0][v0]
-            continue
-        end
-        for (rp, rvs) in a.requires 
-            p1 = pdict[rp]
-            if contains_any(rvs, pvers[p1][1])
-                rvs = VersionSet()
+    for (p,d) in deps
+        p0 = pdict[p]
+        vdict0 = vdict[p0]
+        for (vn,a) in d
+            v0 = vdict0[vn]
+            if !allowed[p0][v0]
+                continue
             end
-            push!(pdeps[p0][v0], (rp,rvs))
+            for (rp, rvs) in a.requires
+                p1 = pdict[rp]
+                if contains_any(rvs, pvers[p1][1])
+                    rvs = VersionSet()
+                end
+                push!(pdeps[p0][v0], (rp,rvs))
+            end
         end
     end
 
@@ -360,15 +364,18 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
     # Reompute deps. We could simplify them, but it's not worth it
     new_deps = Dict{ByteString,Dict{VersionNumber,Available}}()
 
-    for (p,d) in deps, (vn, a) in d
-        p0, v0 = vdict[(p,vn)]
-        if !contains(pruned_vers_id[p0], v0)
-            continue
+    for (p,d) in deps
+        p0 = pdict[p]
+        @assert !haskey(new_deps, p)
+        new_deps[p] = Dict{VersionNumber,Available}()
+        vdict0 = vdict[p0]
+        for (vn,a) in d
+            v0 = vdict0[vn]
+            if !contains(pruned_vers_id[p0], v0)
+                continue
+            end
+            new_deps[p][vn] = a
         end
-        if !haskey(new_deps, p)
-            new_deps[p] = Dict{VersionNumber,Available}()
-        end
-        new_deps[p][vn] = a
     end
 
     reqsstruct.deps = new_deps
@@ -575,56 +582,60 @@ type Graph
         gdir = [ Int[] for i = 1:np ]
         adjdict = [ (Int=>Int)[] for i = 1:np ]
 
-        for (p,d) in deps, (vn,a) in d
-            p0, v0 = vdict[(p,vn)]
-            for (rp, rvs) in a.requires 
-                p1 = pdict[rp]
+        for (p,d) in deps
+            p0 = pdict[p]
+            vdict0 = vdict[p0]
+            for (vn,a) in d
+                v0 = vdict0[vn]
+                for (rp, rvs) in a.requires
+                    p1 = pdict[rp]
 
-                j0 = 1
-                while j0 <= length(gadj[p0]) && gadj[p0][j0] != p1
-                    j0 += 1
-                end
-                j1 = 1
-                while j1 <= length(gadj[p1]) && gadj[p1][j1] != p0
-                    j1 += 1
-                end
-                @assert (j0 > length(gadj[p0]) && j1 > length(gadj[p1])) ||
-                        (j0 <= length(gadj[p0]) && j1 <= length(gadj[p1]))
-
-                if j0 > length(gadj[p0])
-                    push!(gadj[p0], p1)
-                    push!(gadj[p1], p0)
-                    j0 = length(gadj[p0])
-                    j1 = length(gadj[p1])
-
-                    adjdict[p1][p0] = j0
-                    adjdict[p0][p1] = j1
-
-                    bm = ones(Bool, spp[p1], spp[p0])
-                    bmt = bm'
-
-                    push!(gmsk[p0], bm)
-                    push!(gmsk[p1], bmt)
-
-                    push!(gdir[p0], 1)
-                    push!(gdir[p1], -1)
-                else
-                    bm = gmsk[p0][j0]
-                    bmt = gmsk[p1][j1]
-                    if gdir[p0][j0] == -1
-                        gdir[p0][j0] = 0
-                        gdir[p1][j0] = 0
+                    j0 = 1
+                    while j0 <= length(gadj[p0]) && gadj[p0][j0] != p1
+                        j0 += 1
                     end
-                end
-
-                for v1 = 1:length(pvers[p1])
-                    if !contains(rvs, pvers[p1][v1])
-                        bm[v1, v0] = false
-                        bmt[v0, v1] = false
+                    j1 = 1
+                    while j1 <= length(gadj[p1]) && gadj[p1][j1] != p0
+                        j1 += 1
                     end
+                    @assert (j0 > length(gadj[p0]) && j1 > length(gadj[p1])) ||
+                            (j0 <= length(gadj[p0]) && j1 <= length(gadj[p1]))
+
+                    if j0 > length(gadj[p0])
+                        push!(gadj[p0], p1)
+                        push!(gadj[p1], p0)
+                        j0 = length(gadj[p0])
+                        j1 = length(gadj[p1])
+
+                        adjdict[p1][p0] = j0
+                        adjdict[p0][p1] = j1
+
+                        bm = ones(Bool, spp[p1], spp[p0])
+                        bmt = bm'
+
+                        push!(gmsk[p0], bm)
+                        push!(gmsk[p1], bmt)
+
+                        push!(gdir[p0], 1)
+                        push!(gdir[p1], -1)
+                    else
+                        bm = gmsk[p0][j0]
+                        bmt = gmsk[p1][j1]
+                        if gdir[p0][j0] == -1
+                            gdir[p0][j0] = 0
+                            gdir[p1][j0] = 0
+                        end
+                    end
+
+                    for v1 = 1:length(pvers[p1])
+                        if !contains(rvs, pvers[p1][v1])
+                            bm[v1, v0] = false
+                            bmt[v0, v1] = false
+                        end
+                    end
+                    bm[end,v0] = false
+                    bmt[v0,end] = false
                 end
-                bm[end,v0] = false
-                bmt[v0,end] = false
             end
         end
 
@@ -663,6 +674,7 @@ type Messages
         np = reqsstruct.np
         spp = pkgstruct.spp
         pvers = pkgstruct.pvers
+        pdict = pkgstruct.pdict
         vdict = pkgstruct.vdict
         vweight = pkgstruct.vweight
 
@@ -681,9 +693,13 @@ type Messages
         reqps = falses(np)
         reqmsk = [ falses(spp[p0]) for p0 = 1:np ]
 
-        for (p,d) in deps, (vn,_) in d
-            if haskey(reqs, p) && contains(reqs[p], vn)
-                p0, v0 = vdict[(p,vn)]
+        for (p,d) in deps
+            haskey(reqs, p) || continue
+            p0 = pdict[p]
+            vdict0 = vdict[p0]
+            for (vn,_) in d
+                contains(reqs[p], vn) || continue
+                v0 = vdict0[vn]
                 reqps[p0] = true
                 reqmsk[p0][v0] = true
             end
@@ -1014,14 +1030,18 @@ function verify_sol(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Vector{In
     end
 
     # verify dependencies
-    for (p,d) in deps, (vn,a) in d
-        p0, v0 = vdict[(p,vn)]
-        if sol[p0] == v0
-            for (rp, rvs) in a.requires 
-                p1 = pdict[rp]
-                @assert sol[p1] != spp[p1]
-                vn = pvers[p1][sol[p1]]
-                @assert contains(rvs, vn)
+    for (p,d) in deps
+        p0 = pdict[p]
+        vdict0 = vdict[p0]
+        for (vn,a) in d
+            v0 = vdict0[vn]
+            if sol[p0] == v0
+                for (rp, rvs) in a.requires
+                    p1 = pdict[rp]
+                    @assert sol[p1] != spp[p1]
+                    vn = pvers[p1][sol[p1]]
+                    @assert contains(rvs, vn)
+                end
             end
         end
     end
@@ -1047,15 +1067,19 @@ function enforce_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::V
     # depends upon
     prevdeps = [ (Int=>Dict{Int,VersionSet})[] for p0 = 1:np ]
 
-    for (p,d) in deps, (vn,a) in d
-        p0, v0 = vdict[(p,vn)]
-        pdeps[p0][v0] = a.requires
-        for (rp, rvs) in a.requires 
-            p1 = pdict[rp]
-            if !haskey(prevdeps[p1], p0)
-                prevdeps[p1][p0] = (Int=>VersionSet)[]
+    for (p,d) in deps
+        p0 = pdict[p]
+        vdict0 = vdict[p0]
+        for (vn,a) in d
+            v0 = vdict0[vn]
+            pdeps[p0][v0] = a.requires
+            for (rp, rvs) in a.requires
+                p1 = pdict[rp]
+                if !haskey(prevdeps[p1], p0)
+                    prevdeps[p1][p0] = (Int=>VersionSet)[]
+                end
+                prevdeps[p1][p0][v0] = rvs
             end
-            prevdeps[p1][p0][v0] = rvs
         end
     end
 
@@ -1248,10 +1272,14 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
     pdeps = [ [ Available[] for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
     pndeps = [ zeros(Int,spp[p0]-1) for p0 = 1:np ]
-    for (p,d) in deps, (vn,a) in d
-        p0, v0 = vdict[(p,vn)]
-        push!(pdeps[p0][v0], a)
-        pndeps[p0][v0] += 1
+    for (p,d) in deps
+        p0 = pdict[p]
+        vdict0 = vdict[p0]
+        for (vn,a) in d
+            v0 = vdict0[vn]
+            push!(pdeps[p0][v0], a)
+            pndeps[p0][v0] += 1
+        end
     end
 
     rev_eq_classes_map = [ (VersionNumber=>Vector{VersionNumber})[] for p0 = 1:np ]
@@ -1271,11 +1299,12 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
     for (p,d) in deps, (vn,_) in d
         push!(vers, (p,vn))
     end
-    function vrank(v::(ByteString, VersionNumber))
-        p0, v0 = vdict[v]
+    function vrank(p::ByteString, vn::VersionNumber)
+        p0 = pdict[p]
+        v0 = vdict[p0][vn]
         return -pndeps[p0][v0]
     end
-    sortby!(vers, vrank)
+    sortby!(vers, x->vrank(x...))
 
     nv = length(vers)
 
@@ -1293,7 +1322,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
     i = 1
     psl = 0
     for (p,vn) in vers
-        vr = -vrank((p,vn))
+        vr = -vrank(p,vn)
         if vr == 0
             break
         end
@@ -1327,7 +1356,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
         catch err
             if isa(err, UnsatError)
                 pp = red_pkgs[err.info]
-                push!(insane_ids, vdict[(p,vn)])
+                push!(insane_ids, vdict[pdict[p]][vn])
                 push!(problematic_pkgs, pp)
             else
                 rethrow(err)
