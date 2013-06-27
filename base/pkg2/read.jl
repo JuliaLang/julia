@@ -41,6 +41,7 @@ function isfixed(pkg::String, avail::Dict=available(pkg))
     head = Git.head(dir=pkg)
     for (ver,info) in avail
         if cache_exists && Git.iscommit(info.sha1, dir=cache)
+            Git.iscommit(head, dir=cache) &&
             Git.is_ancestor_of(head, info.sha1, dir=cache) && return false
         elseif Git.iscommit(info.sha1, dir=pkg)
             Git.is_ancestor_of(head, info.sha1, dir=pkg) && return false
@@ -60,7 +61,7 @@ function installed_version(pkg::String, avail::Dict=available(pkg))
     for (ver,info) in avail
         head == info.sha1 && return ver
         base =
-            Git.iscommit(info.sha1, dir=cache) ?
+            Git.iscommit(head, dir=cache) && Git.iscommit(info.sha1, dir=cache) ?
                 Git.readchomp(`merge-base $head $(info.sha1)`, dir=cache) :
             Git.iscommit(info.sha1, dir=pkg) ?
                 Git.readchomp(`merge-base $head $(info.sha1)`, dir=pkg) :
