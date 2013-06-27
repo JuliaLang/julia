@@ -21,7 +21,6 @@ function aupd_wrapper(T, linop::Function, n::Integer,
     workl  = Array(T, lworkl)
     rwork  = cmplx ? Array(TR, ncv) : Array(TR, 0)
     resid  = Array(T, n)
-    select = Array(BlasInt, ncv)
     iparam = zeros(BlasInt, 11)
     ipntr  = zeros(BlasInt, 14)
 
@@ -50,17 +49,18 @@ function aupd_wrapper(T, linop::Function, n::Integer,
         workd[ipntr[2]+zernm1] = linop(getindex(workd, ipntr[1]+zernm1))
     end
     
-    return (select, resid, ncv, v, n, iparam, ipntr, workd, workl, lworkl, rwork)
+    return (resid, ncv, v, n, iparam, ipntr, workd, workl, lworkl, rwork)
 end
 
 function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
                       nev::Integer, which::ASCIIString, ritzvec::Bool,
-                      select, tol, resid, ncv, v, ldv, iparam, ipntr,
+                      tol, resid, ncv, v, ldv, iparam, ipntr,
                       workd, workl, lworkl, rwork)
 
     howmny = "A"
     TR     = cmplx ? T.types[1] : T
     tol = convert(TR, tol)
+    select = Array(BlasInt, ncv)
     info   = zeros(BlasInt, 1)
     
     if cmplx
