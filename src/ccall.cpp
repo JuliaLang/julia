@@ -1256,7 +1256,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     // First, if the ABI requires us to provide the space for the return
     // argument, allocate the box and store that as the first argument type 
     if (sret) {
-        result = emit_newsym(rt,0,NULL,ctx);
+        result = emit_newsym(rt,1,NULL,ctx);
         assert(result != NULL && "Type was not concrete");
         if (!result->getType()->isPointerTy()) {
             Value *mem = builder.CreateAlloca(lrt);
@@ -1397,10 +1397,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             instList.push_front((Instruction*)saveloc);
         instList.insertAfter((Instruction*)saveloc, (Instruction*)stacksave);
     }
-    llvmf->dump();
-    for (std::vector<Value *>::iterator it = argvals.begin() ; it != argvals.end(); ++it)
-        (*it)->dump();
-  
+
     // the actual call
     Value *ret = builder.CreateCall(
             llvmf,
@@ -1459,14 +1456,19 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                 builder.CreateBitCast(
                                     emit_nthptr_addr(strct, (size_t)1),
                                     PointerType::get(prt,0)));
+            result->dump();
             return mark_julia_type(strct, rt);
         } else {
-            if(prt->getPrimitiveSizeInBits() == lrt->getPrimitiveSizeInBits())
+            if(prt->getPrimitiveSizeInBits() == lrt->getPrimitiveSizeInBits()) {
                 result = builder.CreateBitCast(result,lrt);
+            }
             else {
                 assert(0 && "Unimplemented");
             }
         }
+    } else {
+        if (result->getType() != jl_pvalue_llvmt)
+            result = builder.CreateLoad(result);
     }
     return mark_julia_type(result,rt);
 }

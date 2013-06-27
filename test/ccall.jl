@@ -11,9 +11,7 @@ ccall_test_func(x) = ccall((:testUcharX, "./libccalltest"), Int32, (Uint8,), x)
 copy{T}(x::ComplexPair{T}) = ComplexPair{T}(x.re,x.im)
 
 ci = 20+51im
-a = copy(ci)
-b = ccall((:ctest, "./libccalltest"), ComplexPair{Int}, (ComplexPair{Int},), a)
-@test a == ci
+b = ccall((:ctest, "./libccalltest"), ComplexPair{Int}, (ComplexPair{Int},), ci)
 @test b == ci + 1 - 2im
 a = copy(ci)
 b = unsafe_load(ccall((:cptest, "./libccalltest"), Ptr{ComplexPair{Int}}, (Ptr{ComplexPair{Int}},), &a))
