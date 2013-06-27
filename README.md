@@ -75,7 +75,7 @@ In csh / tcsh:
 
     set path= ( $path $cwd )
 
-Now you should be able to run Julia like this:
+On some systems, julia is not built with executable permissions by default. Make sure to enable those.  Now you should be able to run Julia like this:
 
     julia
 
