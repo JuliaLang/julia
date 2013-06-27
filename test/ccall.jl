@@ -8,40 +8,32 @@ ccall_test_func(x) = ccall((:testUcharX, "./libccalltest"), Int32, (Uint8,), x)
 @test ccall_test_func(259) == 1
 
 # Tests for passing and returning structs
-copy{T}(x::ComplexPair{T}) = ComplexPair{T}(x.re,x.im)
-
 ci = 20+51im
 b = ccall((:ctest, "./libccalltest"), ComplexPair{Int}, (ComplexPair{Int},), ci)
 @test b == ci + 1 - 2im
-a = copy(ci)
-b = unsafe_load(ccall((:cptest, "./libccalltest"), Ptr{ComplexPair{Int}}, (Ptr{ComplexPair{Int}},), &a))
-@test !(a === b)
+b = unsafe_load(ccall((:cptest, "./libccalltest"), Ptr{ComplexPair{Int}}, (Ptr{ComplexPair{Int}},), &ci))
 @test b == ci + 1 - 2im
+@test ci == 20+51im
+
 
 cf64 = 2.84+5.2im
-a = copy(cf64)
-b = ccall((:cgtest, "./libccalltest"), Complex128, (Complex128,), a)
-@test a == cf64
+b = ccall((:cgtest, "./libccalltest"), Complex128, (Complex128,), cf64)
 @test b == cf64 + 1 - 2im
-b = unsafe_load(ccall((:cgptest, "./libccalltest"), Ptr{Complex128}, (Ptr{Complex128},), &a))
-@test !(a === b)
-@test a == cf64
+b = unsafe_load(ccall((:cgptest, "./libccalltest"), Ptr{Complex128}, (Ptr{Complex128},), &cf64))
 @test b == cf64 + 1 - 2im
+@test cf64 == 2.84+5.2im
 
 cf32 = 3.34f0+53.2f0im
-a = copy(cf32)
-b = ccall((:cftest, "./libccalltest"), Complex64, (Complex64,), a)
-@test a == cf32
+b = ccall((:cftest, "./libccalltest"), Complex64, (Complex64,), cf32)
 @test b == cf32 + 1 - 2im
-b = unsafe_load(ccall((:cfptest, "./libccalltest"), Ptr{Complex64}, (Ptr{Complex64},), &a))
-@test !(a === b)
-@test a == cf32
+b = unsafe_load(ccall((:cfptest, "./libccalltest"), Ptr{Complex64}, (Ptr{Complex64},), &cf32))
 @test b == cf32 + 1 - 2im
+@test cf32 == 3.34f0+53.2f0im
 
 
 # Tests for native Julia data types
-@test_fails ccall((:cptest, "./libccalltest"), Ptr{ComplexPair{Int}}, (Ptr{ComplexPair{Int}},), a)
-@test_fails ccall((:cptest, "./libccalltest"), Ptr{ComplexPair{Int}}, (ComplexPair{Int},), &a)
+@test_fails ccall((:cptest, "./libccalltest"), Ptr{ComplexPair{Int}}, (Ptr{ComplexPair{Int}},), cf32)
+@test_fails ccall((:cptest, "./libccalltest"), Ptr{ComplexPair{Int}}, (ComplexPair{Int},), &cf32)
 
 # Tests for various sized data types (ByVal)
 type Struct1
@@ -107,7 +99,11 @@ for (t,v) in ((ComplexPair{Int32},:ci32),(ComplexPair{Int64},:ci64),
             (Complex64,:cf32),(Complex128,:cf64),(Struct1,:s1))
     @eval begin
         verbose && println($t)
-        a = copy($v)
+        if($(t).mutable)
+            a = copy($v)
+        else
+            a = $v
+        end
         verbose && println("A: ",a)
         function $(symbol("foo"*string(v)))(s::$t)
             verbose && println("B: ",s)

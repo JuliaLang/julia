@@ -1406,10 +1406,12 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             assert(jl_is_structtype(rt));
 
             Value *newsym = emit_newsym(rt,1,NULL,ctx);
-            assert(result != NULL && "Type was not concrete");
+            assert(newsym != NULL && "Type was not concrete");
             if (newsym->getType()->isPointerTy()) {
-                builder.CreateStore(result,builder.CreateBitCast(emit_nthptr_addr(newsym, (size_t)1), prt));
+                builder.CreateStore(result,builder.CreateBitCast(emit_nthptr_addr(newsym, (size_t)1), prt->getPointerTo()));
                 result = newsym;
+            } else if(lrt != prt) {
+                result = llvm_type_rewrite(result,lrt,rt,true);
             }
             // otherwise it's fine to pass this by value. Techincally we could do alloca/store/load, 
             // but why should we?
