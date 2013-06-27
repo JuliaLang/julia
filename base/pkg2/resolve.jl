@@ -45,20 +45,18 @@ end
 type ReqsStruct
     reqs::Dict{ByteString,VersionSet}
     pkgs::Vector{ByteString}
-    vers::Vector{(ByteString,VersionNumber)}
     deps::Dict{ByteString,Dict{VersionNumber,Available}}
     np::Int
 
     function ReqsStruct(
         reqs::Dict{ByteString,VersionSet},
         pkgs::Vector{ByteString},
-        vers::Vector{(ByteString,VersionNumber)},
         deps::Dict{ByteString,Dict{VersionNumber,Available}})
-        new(reqs, pkgs, vers, deps, length(pkgs))
+        new(reqs, pkgs, deps, length(pkgs))
     end
 end
 
-function ReqsStruct(reqs::Dict{ByteString,VersionSet}, vers::Vector{(ByteString,VersionNumber)}, deps::Dict{ByteString,Dict{VersionNumber,Available}})
+function ReqsStruct(reqs::Dict{ByteString,VersionSet}, deps::Dict{ByteString,Dict{VersionNumber,Available}})
     pkgs = Set{ByteString}()
     for (p,_) in deps add!(pkgs, p) end
 
@@ -68,7 +66,7 @@ function ReqsStruct(reqs::Dict{ByteString,VersionSet}, vers::Vector{(ByteString,
         end
     end
 
-    ReqsStruct(reqs, sort!(ByteString[pkgs...]), vers, deps)
+    ReqsStruct(reqs, sort!(ByteString[pkgs...]), deps)
 end
 
 # The numeric type used to determine how the different
@@ -119,13 +117,13 @@ end
 function PkgStruct(reqsstruct::ReqsStruct)
 
     pkgs = reqsstruct.pkgs
-    vers = reqsstruct.vers
+    deps = reqsstruct.deps
     np = reqsstruct.np
 
     pdict = (ByteString=>Int)[ pkgs[i] => i for i = 1:np ]
 
-    spp, pvers = gen_pvers(np, pdict, vers)
-    vdict = gen_vdict(pdict, pvers, vers)
+    spp, pvers = gen_pvers(np, pdict, deps)
+    vdict = gen_vdict(pdict, pvers, deps)
 
     # the version weights are just progressive integer numbers,
     # there is no difference between major, minor, patch etc.
@@ -137,15 +135,15 @@ end
 
 # Generate the pvers field in PkgStruct; used by the
 # constructor and within `prune_versions!`
-function gen_pvers(np::Int, pdict::Dict{ByteString,Int}, vers::Vector{(ByteString,VersionNumber)})
+function gen_pvers(np::Int, pdict::Dict{ByteString,Int}, deps::Dict{ByteString,Dict{VersionNumber,Available}})
     spp = ones(Int, np)
 
     pvers = [ VersionNumber[] for i = 1:np ]
 
-    for (vp, vv) in vers
-        j = pdict[vp]
+    for (p,d) in deps, (vn,_) in d
+        j = pdict[p]
         spp[j] += 1
-        push!(pvers[j], vv)
+        push!(pvers[j], vn)
     end
     for j = 1:np
         sort!(pvers[j])
@@ -157,10 +155,10 @@ end
 # Generate the vdict field in PkgStruct; used by the
 # constructor and within `prune_versions!`
 function gen_vdict(pdict::Dict{ByteString,Int}, pvers::Vector{Vector{VersionNumber}},
-                   vers::Vector{(ByteString,VersionNumber)})
+                   deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
     vdict = ((ByteString,VersionNumber)=>(Int,Int))[]
-    for (p, vn) in vers
+    for (p,d) in deps, (vn,_) in d
         j = pdict[p]
         for i in 1:length(pvers[j])
             if pvers[j][i] == vn
@@ -187,7 +185,6 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
     np = reqsstruct.np
     reqs = reqsstruct.reqs
     pkgs = reqsstruct.pkgs
-    vers = reqsstruct.vers
     deps = reqsstruct.deps
     spp = pkgstruct.spp
     pdict = pkgstruct.pdict
@@ -360,17 +357,8 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
     # Recompute pvers
     new_pvers = [ pvers[p0][pruned_vers_id[p0]] for p0 = 1:np ]
 
-    # Recompute vers
-    new_vers = Array((ByteString,VersionNumber),0)
-    for p0 = 1:np
-        p = pkgs[p0]
-        for v in new_pvers[p0]
-            push!(new_vers, (p, v))
-        end
-    end
-
     # Reompute deps. We could simplify them, but it's not worth it
-    new_deps = Dict{ByteString,Dict{VersionNumber,Available}}() #Array((Version,VersionSet), 0)
+    new_deps = Dict{ByteString,Dict{VersionNumber,Available}}()
 
     for (p,d) in deps, (vn, a) in d
         p0, v0 = vdict[(p,vn)]
@@ -383,14 +371,13 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
         new_deps[p][vn] = a
     end
 
-    reqsstruct.vers = new_vers
     reqsstruct.deps = new_deps
 
     # Finally, mutate pkgstruct fields by regenerating pvers, vdict
     # and vweights
 
-    new_spp, new_pvers = gen_pvers(np, pdict, new_vers)
-    new_vdict = gen_vdict(pdict, new_pvers, new_vers)
+    new_spp, new_pvers = gen_pvers(np, pdict, new_deps)
+    new_vdict = gen_vdict(pdict, new_pvers, new_deps)
 
     new_vweight = [ Array(VersionWeight,new_spp[p0]) for p0 = 1:np ]
     for p0 = 1:np
@@ -672,7 +659,7 @@ type Messages
 
         reqs = reqsstruct.reqs
         pkgs = reqsstruct.pkgs
-        vers = reqsstruct.vers
+        deps = reqsstruct.deps
         np = reqsstruct.np
         spp = pkgstruct.spp
         pvers = pkgstruct.pvers
@@ -694,7 +681,7 @@ type Messages
         reqps = falses(np)
         reqmsk = [ falses(spp[p0]) for p0 = 1:np ]
 
-        for (p,vn) in vers
+        for (p,d) in deps, (vn,_) in d
             if haskey(reqs, p) && contains(reqs[p], vn)
                 p0, v0 = vdict[(p,vn)]
                 reqps[p0] = true
@@ -1151,14 +1138,8 @@ end
 # The external-facing function
 function resolve(reqs::Dict{ByteString,VersionSet}, deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
-    vers = Array((ByteString,VersionNumber), 0)
-    for (p,d) in deps, (vn,_) in d
-        push!(vers, (p,vn))
-    end
-    sort!(vers)
-
     # fetch data
-    reqsstruct = ReqsStruct(reqs, vers, deps)
+    reqsstruct = ReqsStruct(reqs, deps)
 
     # init structures
     pkgstruct = PkgStruct(reqsstruct)
@@ -1199,7 +1180,6 @@ end
 function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vector, p::ByteString, vn::VersionNumber)
 
     pkgs = reqsstruct0.pkgs
-    vers = reqsstruct0.vers
     deps = reqsstruct0.deps
     np = reqsstruct0.np
     spp = pkgstruct0.spp
@@ -1229,14 +1209,6 @@ function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vecto
     end
 
     red_pkgs = ByteString[ pkgs[p0] for p0 in pset ]
-    red_vers = Array((ByteString,VersionNumber), 0)
-    for p0 in pset
-        pvers0 = pvers[p0]
-        for vn in pvers0
-            push!(red_vers, (pkgs[p0], vn))
-        end
-    end
-    #red_deps = Array((Version,VersionSet),0)
     red_deps = Dict{ByteString,Dict{VersionNumber,Available}}()
     for p0 in pset
         pdeps0 = pdeps[p0]
@@ -1253,7 +1225,7 @@ function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vecto
         end
     end
 
-    reqsstruct = ReqsStruct(reqs, red_pkgs, red_vers, red_deps)
+    reqsstruct = ReqsStruct(reqs, red_pkgs, red_deps)
     pkgstruct = PkgStruct(reqsstruct)
     return reqsstruct, pkgstruct
 end
@@ -1261,19 +1233,12 @@ end
 # Scan dependencies for (explicit or implicit) contradictions
 function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
-    vers = Array((ByteString,VersionNumber), 0)
-    for (p,d) in deps, (vn,_) in d
-        push!(vers, (p,vn))
-    end
-    sort!(vers)
-
-    reqsstruct0 = ReqsStruct((ByteString=>VersionSet)[], vers, deps)
+    reqsstruct0 = ReqsStruct((ByteString=>VersionSet)[], deps)
     pkgstruct0 = PkgStruct(reqsstruct0)
 
     eq_classes_map = prune_versions!(reqsstruct0, pkgstruct0, false)
 
     pkgs = reqsstruct0.pkgs
-    vers = reqsstruct0.vers
     deps = reqsstruct0.deps
     np = reqsstruct0.np
     spp = pkgstruct0.spp
@@ -1302,17 +1267,21 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
         end
     end
 
+    vers = Array((ByteString,VersionNumber), 0)
+    for (p,d) in deps, (vn,_) in d
+        push!(vers, (p,vn))
+    end
     function vrank(v::(ByteString, VersionNumber))
         p0, v0 = vdict[v]
         return -pndeps[p0][v0]
     end
-    svers = sortby(vers, vrank)
+    sortby!(vers, vrank)
 
-    nv = length(svers)
+    nv = length(vers)
 
     svdict = ((ByteString,VersionNumber)=>Int)[]
     i = 1
-    for v in svers
+    for v in vers
         svdict[v] = i
         i += 1
     end
@@ -1323,7 +1292,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
     i = 1
     psl = 0
-    for (p,vn) in svers
+    for (p,vn) in vers
         vr = -vrank((p,vn))
         if vr == 0
             break
@@ -1385,40 +1354,5 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
     return
 end
-
-
-#function versions(vset::VersionSet)
-    #vers = VersionNumber[]
-    #vset == VersionSet() && return vers
-    #for ival in vset.intervals
-        #push!(vers, ival.lower)
-        #ival.upper < typemax(VersionNumber) &&
-        #push!(vers, ival.upper)
-    #end
-    #return vers
-#end
-#
-## adapt requirements and dependencies for old resolve code
-#
-#function resolve(reqs::Dict{ByteString,VersionSet},
-	             #deps::Dict{ByteString,Dict{VersionNumber,Available}})
-#
-    #vx = old.Version[]
-    #rx = old.VersionSet[]
-    #dx = Array((old.Version,old.VersionSet),0)
-#
-    #for (pkg,vset) in reqs
-        #push!(rx, old.VersionSet(pkg,versions(vset)))
-    #end
-    #for (pkg,vers) in deps, (v,a) in vers
-        #ver = old.Version(pkg,v)
-        #push!(vx, ver)
-        #for (p,vset) in a.requires
-            #push!(dx, (ver,old.VersionSet(p,versions(vset))))
-        #end
-    #end
-#
-    #old.resolve(sort!(rx), sort!(vx), sort!(dx))
-#end
 
 end # module
