@@ -2,7 +2,7 @@ module Dir
 
 using Base.Git
 
-const DEFAULT_META = "git@github.com:JuliaLang/METADATA.jl.git"
+const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
 
 @unix_only const DIR_NAME = ".julia"
 @windows_only const DIR_NAME = "packages"
