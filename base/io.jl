@@ -267,27 +267,31 @@ fdio(name::String, fd::Integer) = fdio(name, fd, false)
 fdio(fd::Integer, own::Bool) = fdio(string("<fd ",fd,">"), fd, own)
 fdio(fd::Integer) = fdio(fd, false)
 
-function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
+function open(fname::String;
+              read::Bool=true,
+              write::Bool=false,
+              create::Bool=false,
+              truncate::Bool=false,
+              fastforward::Bool=false)
     s = IOStream(string("<file ",fname,">"))
     if ccall(:ios_file, Ptr{Void},
              (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
-             s.ios, fname, rd, wr, cr, tr) == C_NULL
+             s.ios, fname, read, write, create, truncate) == C_NULL
         error("could not open file ", fname)
     end
-    if ff && ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios) != 0
+    if fastforward && ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios) != 0
         error("error seeking to end of file ", fname)
     end
     return s
 end
-open(fname::String) = open(fname, true, false, false, false, false)
 
 function open(fname::String, mode::String)
-    mode == "r"  ? open(fname, true , false, false, false, false) :
-    mode == "r+" ? open(fname, true , true , false, false, false) :
-    mode == "w"  ? open(fname, false, true , true , true , false) :
-    mode == "w+" ? open(fname, true , true , true , true , false) :
-    mode == "a"  ? open(fname, false, true , true , false, true ) :
-    mode == "a+" ? open(fname, true , true , true , false, true ) :
+    mode == "r"  ? open(fname) :
+    mode == "r+" ? open(fname, write=true, create=true) :
+    mode == "w"  ? open(fname, read=false, write=true, create=true, truncate=true) :
+    mode == "w+" ? open(fname, write=true, create=true, truncate=true) :
+    mode == "a"  ? open(fname, read=false, write=true, create=true, fastforward=true) :
+    mode == "a+" ? open(fname, write=true, create=true, fastforward=true) :
     error("invalid open mode: ", mode)
 end
 
