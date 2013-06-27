@@ -296,10 +296,8 @@ function _start()
     fdwatcher_reinit()
     # Initialize RNG
     Random.librandom_init()
-    # Check that OpenBLAS is correctly built
-    if Base.libblas_name == "libopenblas"
-        check_openblas()
-    end
+    # Check that BLAS is correctly built
+    check_blas()
     Sys.init()
     global const CPU_CORES = Sys.CPU_CORES
 

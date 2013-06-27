@@ -193,13 +193,18 @@ end
 
 # openblas utility routines
 
-if Base.libblas_name == "libopenblas"
+const sym_openblas_set_num_threads = try
+    cglobal((:openblas_set_num_threads, Base.libblas_name), Void)
+catch
+    C_NULL
+end
+if sym_openblas_set_num_threads !== C_NULL
 
     openblas_get_config() = chop(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
 
-    openblas_set_num_threads(n::Integer) = ccall((:openblas_set_num_threads, Base.libblas_name), Void, (Int32, ), n)
+    blas_set_num_threads(n::Integer) = ccall(sym_openblas_set_num_threads, Void, (Int32,), n)
 
-    function check_openblas()
+    function check_blas()
         openblas_config = openblas_get_config()
         openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
         if Base.USE_BLAS64 != openblas64
@@ -216,7 +221,26 @@ if Base.libblas_name == "libopenblas"
             quit()
         end
     end
+else
+    function blas_set_num_threads(n::Integer)
+        # ATLAS doesn't have the ability to set number of threads
 
+        # MKL may let us set the number of threads in several ways
+        MKL_Set_Num_Threads = try
+            cglobal((:MKL_Set_Num_Threads, Base.libblas_name), Void)
+        catch
+            C_NULL
+        end
+        if MKL_Set_Num_Threads != C_NULL
+            return ccall((:MKL_Set_Num_Threads, Base.libblas_name), Void, (Cint,), n)
+        end
+
+        # OSX BLAS looks at an environment variable
+        @osx_only ENV["VECLIB_MAXIMUM_THREADS"] = n
+
+        return nothing
+    end
+    check_blas() = !Base.USE_BLAS64
 end
 
 # system information
