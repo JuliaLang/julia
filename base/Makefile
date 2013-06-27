@@ -20,7 +20,11 @@ uv_constants.jl: ../src/uv_constants.h
 build_h.jl: ../Make.inc build.h Makefile
 	$(QUIET_PERL) $(CC) -E -P build.h -I../src/support | grep . > $@
 	@echo "const ARCH = :$(ARCH)" >> $@
+ifeq ($(OS),$(BUILD_OS))
+	@echo "const MACHINE = \"$(BUILD_MACHINE)\"" >> $@
+else
 	@echo "const MACHINE = \"$(shell $(CC) -dumpmachine)\"" >> $@
+endif
 	@echo "const libm_name = \"$(LIBMNAME)\"" >> $@
 	@echo "const libblas_name = \"$(LIBBLASNAME)\"" >> $@
 	@echo "const liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@

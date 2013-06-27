@@ -191,32 +191,58 @@ function warn_once(msg::String...; depth=0)
     warn(msg; depth=depth+1)
 end
 
-# openblas utility routines
-
-if Base.libblas_name == "libopenblas"
-
-    openblas_get_config() = chop(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
-
-    openblas_set_num_threads(n::Integer) = ccall((:openblas_set_num_threads, Base.libblas_name), Void, (Int32, ), n)
-
-    function check_openblas()
-        openblas_config = openblas_get_config()
-        openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
-        if Base.USE_BLAS64 != openblas64
-            if !openblas64
-                println("ERROR: OpenBLAS was not built with 64bit integer support.")
-                println("You're seeing this error because Julia was built with USE_BLAS64=1")
-                println("Please rebuild Julia with USE_BLAS64=0")
-            else
-                println("ERROR: Julia was not built with support for OpenBLAS with 64bit integer support")
-                println("You're seeing this error because Julia was built with USE_BLAS64=0")
-                println("Please rebuild Julia with USE_BLAS64=1")
-            end
-            println("Quitting.")
-            quit()
-        end
+# blas utility routines
+blas_is_openblas() =
+    try
+        cglobal((:openblas_set_num_threads, Base.libblas_name), Void)
+        true
+    catch
+        false
     end
 
+openblas_get_config() = chop(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
+
+function blas_set_num_threads(n::Integer)
+    if blas_is_openblas()
+        return ccall((:openblas_set_num_threads, Base.libblas_name), Void, (Int32,), n)
+    end
+
+    # MKL may let us set the number of threads in several ways
+    set_num_threads = try
+        cglobal((:MKL_Set_Num_Threads, Base.libblas_name), Void)
+    catch
+        C_NULL
+    end
+    if set_num_threads != C_NULL
+        return ccall(set_num_threads, Void, (Cint,), n)
+    end
+
+    # OSX BLAS looks at an environment variable
+    @osx_only ENV["VECLIB_MAXIMUM_THREADS"] = n
+
+    return nothing
+end
+
+function check_blas()
+    if blas_is_openblas()
+        openblas_config = openblas_get_config()
+        openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
+    else
+        openblas64 = false
+    end
+    if Base.USE_BLAS64 != openblas64
+        if !openblas64
+            println("ERROR: OpenBLAS was not built with 64bit integer support.")
+            println("You're seeing this error because Julia was built with USE_BLAS64=1")
+            println("Please rebuild Julia with USE_BLAS64=0")
+        else
+            println("ERROR: Julia was not built with support for OpenBLAS with 64bit integer support")
+            println("You're seeing this error because Julia was built with USE_BLAS64=0")
+            println("Please rebuild Julia with USE_BLAS64=1")
+        end
+        println("Quitting.")
+        quit()
+    end
 end
 
 # system information

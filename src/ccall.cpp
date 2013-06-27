@@ -650,6 +650,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         llvmf = jl_Module->getOrInsertFunction(f_name, functype);
     }
 
+
     // save place before arguments, for possible insertion of temp arg
     // area saving code.
     Value *saveloc=NULL;
@@ -663,6 +664,25 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         // hey C++, there's this thing called pointers...
         Instruction &_savespot = builder.GetInsertBlock()->back();
         savespot = &_savespot;
+    }
+
+    if (0 && f_name != NULL && f_lib != NULL) {
+        // print the f_name before each ccall
+        Value *zeros[2] = { ConstantInt::get(T_int32, 0),
+                            ConstantInt::get(T_int32, 0) };
+        std::stringstream msg;
+            msg << "ccall: ";
+            msg << f_name;
+            msg << "(...)";
+            if (f_lib != NULL) {
+                msg << " in library ";
+                msg << f_lib;
+            }
+            msg << "\n";
+        builder.CreateCall2(jlputs_func,
+                            builder.CreateGEP(stringConst(msg.str()),
+                                         ArrayRef<Value*>(zeros)),
+                            literal_pointer_val(JL_STDERR));
     }
 
     // emit arguments

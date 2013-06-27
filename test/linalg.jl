@@ -450,7 +450,7 @@ for elty in (Float32, Float64)
         ev1 = v[:,i]
         ev2 = evecs[:,i]
         deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
-        @test_approx_eq_eps deviation 0.0 n*eps(abs(convert(elty, 1.0)))
+        @test_approx_eq_eps deviation 0.0 n*eps(abs(convert(elty, 2.0)))
     end
 
     #Test stein! call using iblock and isplit
