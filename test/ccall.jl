@@ -56,26 +56,23 @@ function foos1(s::Struct1)
 end
 
 ci32 = ComplexPair{Int32}(int32(10),int32(31))
-a = copy(ci32)
-ba = ccall((:test_2a, "./libccalltest"), ComplexPair{Int32}, (ComplexPair{Int32},), a)
-bb = ccall((:test_2b, "./libccalltest"), ComplexPair{Int32}, (ComplexPair{Int32},), a)
-@test a == ci32
+ba = ccall((:test_2a, "./libccalltest"), ComplexPair{Int32}, (ComplexPair{Int32},), ci32)
+bb = ccall((:test_2b, "./libccalltest"), ComplexPair{Int32}, (ComplexPair{Int32},), ci32)
 @test ba == bb == ci32 + 1 - 2im 
+@test ci32 == ComplexPair{Int32}(int32(10),int32(31))
 
 ci64 = ComplexPair{Int64}(int64(20),int64(51))
-a = copy(ci64)
-ba = ccall((:test_3a, "./libccalltest"), ComplexPair{Int64}, (ComplexPair{Int64},), a)
-bb = ccall((:test_3b, "./libccalltest"), ComplexPair{Int64}, (ComplexPair{Int64},), a)
-bc = ccall((:test_128, "./libccalltest"), ComplexPair{Int64}, (ComplexPair{Int64},), a)
-@test a == ci64
+ba = ccall((:test_3a, "./libccalltest"), ComplexPair{Int64}, (ComplexPair{Int64},), ci64)
+bb = ccall((:test_3b, "./libccalltest"), ComplexPair{Int64}, (ComplexPair{Int64},), ci64)
+bc = ccall((:test_128, "./libccalltest"), ComplexPair{Int64}, (ComplexPair{Int64},), ci64)
 @test ba == bb == ci64 + 1 - 2im
 @test bc == ci64 + 1
+@test ci64 == ComplexPair{Int64}(int64(20),int64(51))
 
 i128 = int128(0x7f00123456789abc)<<64 + uint64(-1)
-a = copy(i128)
-b = ccall((:test_128, "./libccalltest"), Int128, (Int128,), a)
-@test a == i128
+b = ccall((:test_128, "./libccalltest"), Int128, (Int128,), i128)
 @test b == i128 + 1
+@test i128 == int128(0x7f00123456789abc)<<64 + uint64(-1)
 
 type Struct_Big
     x::Int
