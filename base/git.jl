@@ -13,14 +13,14 @@ function git(d)
     `git --work-tree=$work_tree --git-dir=$git_dir`
 end
 
-run(args; dir="") = Base.run(`$(git(dir)) $args`)
-success(args; dir="") = Base.success(`$(git(dir)) $args`)
-readall(args; dir="") = Base.readall(`$(git(dir)) $args`)
-readchomp(args; dir="") = Base.readchomp(`$(git(dir)) $args`)
+run(args::Cmd; dir="") = Base.run(`$(git(dir)) $args`)
+success(args::Cmd; dir="") = Base.success(`$(git(dir)) $args`)
+readall(args::Cmd; dir="") = Base.readall(`$(git(dir)) $args`)
+readchomp(args::Cmd; dir="") = Base.readchomp(`$(git(dir)) $args`)
 
-modules(args::Cmd) = readchomp(`config -f .gitmodules $args`)
-different(verA::String, verB::String, path::String) =
-    !success(`diff --quiet $verA $verB -- $path`)
+modules(args::Cmd; dir="") = readchomp(`config -f .gitmodules $args`, dir=dir)
+different(verA::String, verB::String, path::String; dir="") =
+    !success(`diff --quiet $verA $verB -- $path`, dir=dir)
 
 dirty(; dir="") = !success(`diff --quiet HEAD`, dir=dir)
 staged(; dir="") = !success(`diff --quiet --cached`, dir=dir)
@@ -30,7 +30,7 @@ staged(paths; dir="") = !success(`diff --quiet --cached -- $paths`, dir=dir)
 unstaged(paths; dir="") = !success(`diff --quiet -- $paths`, dir=dir)
 iscommit(name; dir="") = success(`cat-file commit $name`, dir=dir)
 
-attached(; dir="") = success(`symbolic-ref -q HEAD` |> SpawnNullStream(); dir=dir)
+attached(; dir="") = success(`symbolic-ref -q HEAD`, dir=dir)
 branch(; dir="") = readchomp(`rev-parse --symbolic-full-name --abbrev-ref HEAD`, dir=dir)
 head(; dir="") = readchomp(`rev-parse HEAD`, dir=dir)
 
