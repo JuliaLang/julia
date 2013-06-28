@@ -629,7 +629,12 @@ function sync_msg(verb::Symbol, r::RemoteRef)
     return is(verb,:fetch) ? v : r
 end
 
-wait(r::RemoteRef) = sync_msg(:wait, r)
+function wait(rs::RemoteRef...)
+    for r in rs
+        sync_msg(:wait, r)
+    end
+end
+
 fetch(r::RemoteRef) = sync_msg(:fetch, r)
 fetch(x::ANY) = x
 
