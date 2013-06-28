@@ -215,6 +215,10 @@ g = BigInt("-1")
 @test !isprime(BigInt(1))
 @test !isprime(BigInt(10000000020))
 
+@test trailing_ones(a) == 8
+@test trailing_zeros(b) == 2
+@test count_ones(a) == 14
+
 # Large Fibonacci to exercise BigInt
 # from Bill Hart, https://groups.google.com/group/julia-dev/browse_frm/thread/798e2d1322daf633
 function mul(a::Vector{BigInt}, b::Vector{BigInt})
