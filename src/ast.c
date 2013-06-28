@@ -435,10 +435,12 @@ DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy)
     return result;
 }
 
-void jl_start_parsing_file(const char *fname)
+int jl_start_parsing_file(const char *fname)
 {
     value_t s = cvalue_static_cstring(fname);
-    fl_applyn(1, symbol_value(symbol("jl-parse-file")), s);
+    if (fl_applyn(1, symbol_value(symbol("jl-parse-file")), s) == FL_F)
+        return 1;
+    return 0;
 }
 
 void jl_stop_parsing()

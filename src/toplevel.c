@@ -450,7 +450,9 @@ void jl_load(const char *fname)
     if (jl_stat(fpath, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
         jl_errorf("could not open file %s", fpath);
     }
-    jl_start_parsing_file(fpath);
+    if (jl_start_parsing_file(fpath) != 0) {
+        jl_errorf("could not open file %s", fpath);
+    }
     jl_parse_eval_all(fpath);
     if (fpath != fname) free(fpath);
     if (jl_current_module == jl_base_module) {
