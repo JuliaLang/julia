@@ -569,10 +569,7 @@ remotecall(id::Integer, f, args...) = remotecall(worker_from_id(id), f, args...)
 
 # faster version of fetch(remotecall(...))
 function remotecall_fetch(w::LocalProcess, f, args...)
-    rr = WeakRemoteRef(w)
-    oid = rr2id(rr)
-    rv = schedule_call(oid, local_remotecall_thunk(f,args))
-    wait_full(rv)
+    local_remotecall_thunk(f,args)()
 end
 
 function remotecall_fetch(w::Worker, f, args...)
@@ -703,8 +700,11 @@ end
 
 function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
-    if is(msg,:fetch) || is(msg,:call_fetch)
+    if is(msg,:fetch)
         val = value
+    elseif is(msg,:call_fetch)
+        val = value
+        delete!((PGRP::ProcessGroup).refs, oid)
     else
         val = oid
     end
