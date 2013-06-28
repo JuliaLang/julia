@@ -33,7 +33,7 @@ export
 # Functions
     bkfact,
     bkfact!,
-    check_openblas,
+    check_blas,
     chol,
     cholfact,
     cholfact!,

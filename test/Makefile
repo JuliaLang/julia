@@ -4,8 +4,8 @@ include ../Make.inc
 TESTS = all core keywordargs numbers strings unicode collections hashing	\
 	remote iostring arrayops linalg blas fft dsp sparse bitarray		\
 	random math functional bigint sorting statistics spawn parallel		\
-	arpack file git pkg pkg2 resolve suitesparse complex version		\
-	pollfd mpfr broadcast socket floatapprox priorityqueue readdlm
+	arpack file git pkg pkg2 resolve resolve2 suitesparse complex		\
+	version	pollfd mpfr broadcast socket floatapprox priorityqueue readdlm
 
 $(TESTS) ::
 	$(QUIET_JULIA) $(call spawn,$(JULIA_EXECUTABLE)) ./runtests.jl $@
