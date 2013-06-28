@@ -342,6 +342,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->fptr = &jl_trampoline;
     li->roots = NULL;
     li->functionObject = NULL;
+    li->specFunctionObject = NULL;
     li->cFunctionObject = NULL;
     li->specTypes = NULL;
     li->inferred = 0;
@@ -842,7 +843,7 @@ JL_CALLABLE(jl_f_new_expr)
     ex->args = ar;
     ex->etype = (jl_value_t*)jl_any_type;
     JL_GC_POP();
-    return (jl_value_t*)ex;
+    return (jl_value_t*)ex; 
 }
 
 JL_CALLABLE(jl_f_new_box)

@@ -141,7 +141,7 @@ end
 similar(d::ObjectIdDict) = ObjectIdDict()
 
 function setindex!(t::ObjectIdDict, v::ANY, k::ANY)
-    t.ht = ccall(:jl_eqtable_put, Array{Any,1}, (Any, Any, Any), t.ht, k, v)
+    t.ht = ccall(:jl_eqtable_put, Any, (Any, Any, Any), t.ht, k, v)::Array{Any,1}
     return t
 end
 

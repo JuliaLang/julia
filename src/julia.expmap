@@ -140,6 +140,7 @@
     jl_gc_lookfor;
     jl_gc_new_weakref;
     jl_gensym;
+    jl_get_alignment;
     jl_get_binding;
     jl_get_current_module;
     jl_get_current_task;
@@ -340,6 +341,7 @@
     wcwidth;
     uv_*;
     add_library_mapping;
+    jl_get_field_offset;
 
     /* freebsd */
     environ;

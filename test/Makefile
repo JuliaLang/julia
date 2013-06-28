@@ -5,8 +5,9 @@ TESTS = all core keywordargs numbers strings unicode collections hashing	\
 	remote iostring arrayops linalg blas fft dsp sparse bitarray		\
 	random math functional bigint sorting statistics spawn parallel		\
 	arpack file git pkg pkg2 resolve suitesparse complex version		\
-	pollfd mpfr broadcast socket floatapprox priorityqueue readdlm
+	pollfd mpfr broadcast socket floatapprox priorityqueue readdlm ccall
 
+all ccall :: libccalltest.$(SHLIB_EXT)
 $(TESTS) ::
 	$(QUIET_JULIA) $(call spawn,$(JULIA_EXECUTABLE)) ./runtests.jl $@
 
@@ -27,7 +28,7 @@ clean:
 .PHONY: $(TESTS) perf benchmark clean
 
 libccalltest.$(SHLIB_EXT): ccalltest.c
-	$(CC) $(CFLAGS) $(DEBUGFLAGS) -O3 $< -fPIC -shared -o $@ $(LDFLAGS) -DCC=$(CC)
+	$(CC) $(CFLAGS) $(DEBUGFLAGS) -O3 $< -fno-stack-protector -fPIC -shared -o $@ $(LDFLAGS) -DCC=$(CC)
 
 ccalltest: ccalltest.c
 	$(CC) $(CFLAGS) $(DEBUGFLAGS) -O3 $< -o $@ $(LDFLAGS) -DCC=$(CC)

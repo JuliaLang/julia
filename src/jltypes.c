@@ -45,6 +45,7 @@ jl_datatype_t *jl_int64_type;
 jl_datatype_t *jl_uint64_type;
 jl_datatype_t *jl_float32_type;
 jl_datatype_t *jl_float64_type;
+jl_datatype_t *jl_complex_type;
 
 jl_tuple_t *jl_null;
 jl_value_t *jl_nothing;
