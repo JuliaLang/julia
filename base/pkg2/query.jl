@@ -9,10 +9,12 @@ function requirements(reqs::Dict, fix::Dict)
         for (p2,f2) in fix
             satisfies(p1, f1.version, f2.requires) ||
                 warn("$p1 is fixed at $(f1.version) conflicting with requirement for $p2: $(f2.requires[p1])")
-            merge_requires!(reqs, f2.requires)
         end
     end
     reqs = copy(reqs)
+    for (p1,f1) in fix
+        merge_requires!(reqs, f1.requires)
+    end
     for (p,f) in fix
         delete!(reqs, p, nothing)
     end

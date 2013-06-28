@@ -119,4 +119,26 @@ resolve() = Dir.cd() do
     resolve(Reqs.parse("REQUIRE"))
 end
 
+# Metadata sanity check
+check_metadata(julia_version::VersionNumber=VERSION) = Dir.cd() do
+    avail = Read.available()
+    fixed = Read.fixed(avail)
+    deps  = Query.dependencies(avail,fixed)
+    try
+        Resolve.sanity_check(deps)
+    catch err
+        if !isa(err, Resolve.MetadataError)
+            rethrow(err)
+        end
+        warning = "Packages with unsatisfiable requirements found:\n"
+        for (p, vn, rp) in err.info
+            warning *= "    $p v$vn : no valid versions exist for package $rp\n"
+        end
+        warn(warning)
+        return false
+    end
+    return true
+end
+check_metadata(julia_version::String) = check_metadata(convert(VersionNumber, julia_version))
+
 end # module

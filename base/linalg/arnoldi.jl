@@ -14,12 +14,12 @@ function eigs{T<:BlasFloat}(A::AbstractMatrix{T};
     bmat  = "I"
 
     # Compute the Ritz values and Ritz vectors
-    (select, resid, ncv, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork) = 
+    (resid, ncv, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork) = 
        ARPACK.aupd_wrapper(T, (x) -> A * x, n, sym, cmplx, bmat, nev, which, tol, maxiter)
     
     # Postprocessing to get eigenvalues and eigenvectors
     return ARPACK.eupd_wrapper(T, n, sym, cmplx, bmat, nev, which, ritzvec,
-                               select, tol, resid, ncv, v, ldv, iparam, ipntr, 
+                               tol, resid, ncv, v, ldv, iparam, ipntr, 
                                workd, workl, lworkl, rwork)
 
 end
@@ -43,13 +43,13 @@ function svds{T<:Union(Float64,Float32)}(A::AbstractMatrix{T};
     At = isa(A, StridedMatrix) ? BLAS.syrk('U','T',1.0,A) : A'
 
     # Compute the Ritz values and Ritz vectors
-    (select, resid, ncv, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork) = 
+    (resid, ncv, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork) = 
          ARPACK.aupd_wrapper(T, (x) -> sarupdate(A, At, x), n, sym, cmplx, bmat, 
                              nsv, which, tol, maxiter)
 
     # Postprocessing to get eigenvalues and eigenvectors
     (svals, svecs) = ARPACK.eupd_wrapper(T, n, sym, cmplx, bmat, nsv, which, ritzvec, 
-                                         select, tol, resid, ncv, v, ldv, iparam, ipntr, 
+                                         tol, resid, ncv, v, ldv, iparam, ipntr, 
                                          workd, workl, lworkl, rwork)
     
     svals = sqrt(svals)

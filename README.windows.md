@@ -5,7 +5,7 @@ Please see the README at https://github.com/JuliaLang/julia/blob/master/README.m
 
 Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and Windows 8). Both the 32-bit and 64-bit versions are supported. The 32-bit i686 binary will run on either 32-bit and 64-bit operating systems. The 64-bit x86_64 binary will only run on 64-bit Windows.
 
-Downloading additional libraries (Tk, Cairo, etc) is not necessary. Julia's package manager will acquire them as needed.
+Downloading additional libraries (Tk, Cairo, etc) is not necessary. Julia's package manager will acquire them as needed. For this to work, you must have `7z` installed (not the command-line version / 7za) (see below), and it must be on your path.
 
 Julia requires that the lib and lib/julia directories be part of your `%PATH%` variable to startup. The `julia.bat` script will attempt to do this for you and is the recommended way of running julia on your system. The julia.bat file can be given arguments (e.g. `julia.bat -p 2 script.jl` for running script.jl on two processors) which will be passed directly to julia.exe.
 
@@ -19,8 +19,9 @@ Unzip the download to a folder. Do not attempt to run Julia without extracting t
 
 Explore and have fun!
 
-Recommended external libraries:
+Recommended external libraries (essential, if you use binary-only or source distribution, without batteries-included):
 
+ - [7z](http://www.7-zip.org/download.html) (install the full program, not the command line version / 7za)
  - [msysGit](https://code.google.com/p/msysgit/downloads/list)
  - [TortoiseGit](https://code.google.com/p/tortoisegit/wiki/Download)
 
@@ -33,6 +34,16 @@ Source Compiling
 ================
 
 There are a few environments you can use to build julia. Making this easy requires getting the right environment.
+
+Important Build Errata
+----------------------
+
+- Do not use GCC 4.6 or earlier
+
+- LLVM doesn't build with the newly released 4.8 SEH gcc for 64-bit Windows because of an incorrect preprocessor definition. In deps/llvm-3.2/lib/ExecutionEngine/JIT/JIT.cpp, find the section that defines HAVE_EHTABLE_SUPPORT and replace it with an unconditional 0
+
+- While building on native windows, MPFR tests fail. To fix this, edit deps/Makefile and add `MPFR_OPTS += --disable-thread-safe CFLAGS="-DNPRINTF_L -DNPRINTF_T -DNPRINTF_J"` somewhere
+
 
 Native Compile
 --------------
@@ -68,60 +79,47 @@ Cross-Compile
 
 If you prefer to cross-compile, the following steps should get you started.
 
-### Building on Ubuntu
+### Ubuntu and Mac Dependencies (these steps will work for almost any linux platform)
 
-First, you will need to ensure your system has the required dependencies. On Ubuntu 12.04, the following command will install the required build dependencies.
+First, you will need to ensure your system has the required dependencies. We need wine, a system compiler, and some downloaders.
 
-```
-apt-get install \
-  mingw-w64 \
-  gfortran-mingw-w64 \
-  g++-mingw-w64 \
-  gdb-mingw-w64 \
-  mingw-w64-tools \
-  binutils-mingw-w64 \
-  gcc-mingw-w64 \
-  wine
-```
+On Ubuntu: ```apt-get install wine subversion cvs gcc wget```
 
-Unfortunately, the version of gcc installed by Ubuntu is currently 4.6, which does not compile OpenBLAS correctly. So first we need to replace it. Most binary packages appear to not include gfortran, so we will need to compile it from source. This is typically quite a bit of work, so we will use [this script](https://code.google.com/p/mingw-w64-dgn/) to make it easier.
+On Mac: Install XCode, XCode command line tools, X11 (now [XQuartz](http://xquartz.macosforge.org/)),
+and [MacPorts](http://www.macports.org/install.php) or [Homebrew](http://mxcl.github.io/homebrew/).
+Then run ```port install wine wget``` or ```brew install wine wget```, as appropriate.
 
-0. `apt-get install wine subversion cvs`
+On Both:
+
+Unfortunately, the version of gcc installed by Ubuntu is currently 4.6, which does not compile OpenBLAS correctly.
+On Mac, the situation is the same: the version in MacPorts is very old and Homebrew does not have it. So first we need to get
+a cross-compile version of gcc. Most binary packages appear to not include gfortran, so we will need to compile it
+from source (or ask @vtjnash to send you a tgz of my build). This is typically quite a bit of work, so we will use
+[this script](https://code.google.com/p/mingw-w64-dgn/) to make it easy. 
+
 1. `svn checkout http://mingw-w64-dgn.googlecode.com/svn/trunk/ mingw-w64-dgn`
 2. `cd mingw-w64-dgn`
 3. edit `rebuild_cross.sh` and make the following two changes:
-(a) uncomment `export MAKE_OPT="-j 2"`, if appropriate for your machine
-(b) add `fortran` to the end of `--enable-languages=c,c++,objc,obj-c++`
+  a. uncomment `export MAKE_OPT="-j 2"`, if appropriate for your machine
+  b. add `fortran` to the end of `--enable-languages=c,c++,objc,obj-c++`
 5. `bash update_source.sh`
 4. `bash rebuild_cross.sh`
 5. `mv cross ~/cross-w64`
-6. `export PATH=$HOME/cross-w64/bin:$PATH` # NOTE: it is important that you remember to always do this before using make in the following steps!
-Then we can essentially just repeat these steps for the 32-bit compiler:
+6. `export PATH=$HOME/cross-w64/bin:$PATH` # NOTE: it is important that you remember to always do this before using make in the following steps!, you can put this line in your .profile to make it easy
+
+Then we can essentially just repeat these steps for the 32-bit compiler, reusing some of the work:
+
 7. `cd ..`
 8. `cp -a mingw-w64-dgn mingw-w32-dgn`
 9. `cd mingw-w32-dgn`
 10. `rm -r cross build`
 11. `bash rebuild_cross.sh 32r`
 12. `mv cross ~/cross-w32`
-13. `export PATH=$HOME/cross-w32/bin:$PATH` # NOTE: it is important that you remember to always do this before using make in the following steps!
+13. `export PATH=$HOME/cross-w32/bin:$PATH` # NOTE: it is important that you remember to always do this before using make in the following steps!, you can put this line in your .profile to make it easy
 
-Note: for systems that support rpm-based package managers, the OpenSUSE build service appears to contain a fully up-to-date versions of the necessary environment.
+Note: for systems that support rpm-based package managers, the OpenSUSE build service appears to contain a fully up-to-date versions of the necessary dependencies.
 
-Finally, the build and install process:
-
-1. `git clone https://github.com/JuliaLang/julia.git julia-win32`
-2. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
-3. `echo override DEFAULT_REPL = basic >> Make.user`
-4. `make -j4`
-5. (optional) `mkdir dist-extras && make win-extras` (actually, you probably want to hand execute the steps in this recipe since they may be inaccurate)
-4. `make dist`
-6. move the julia-* directory/zipfile to the target machine
-
-If you are building for 64-bit windows. The steps are essentially the same. Just replace i686 in XC_HOST with x86_64.
-
-### Building on Arch Linux
-
-First the required dependencies will be installed:
+### Arch Linux Dependencies
 
 1. Install the following packages from the official Arch repository:
 `sudo pacman -S cloog gcc-ada libmpc p7zip ppl subversion zlib`
@@ -139,13 +137,16 @@ First the required dependencies will be installed:
 10. Complete the installation of the required `mingw-w64` packages:
 `yaourt -S mingw-w64-gcc`
 
-The build and install process of Julia is the same as in steps 1-7 of Ubuntu.
+### Cross-building Julia
 
-Important Build Errata
-----------------------
+Finally, the build and install process for Julia:
 
-- Do not use GCC 4.6 or earlier
+1. `git clone https://github.com/JuliaLang/julia.git julia-win32`
+2. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
+3. `echo override DEFAULT_REPL = basic >> Make.user`
+4. `make`
+5. (optional) `mkdir dist-extras && make win-extras` (actually, you probably want to hand execute the steps in this recipe since they may be inaccurate)
+4. `make dist`
+6. move the julia-* directory / zip file to the target machine
 
-- LLVM doesn't build with the newly released 4.8 SEH gcc for 64-bit Windows because of an incorrect preprocessor definition. In deps/llvm-3.2/lib/ExecutionEngine/JIT/JIT.cpp, find the section that defines HAVE_EHTABLE_SUPPORT and replace it with an unconditional 0
-
-- While building on native windows, MPFR tests fail. To fix this, edit deps/Makefile and add `MPFR_OPTS += --disable-thread-safe CFLAGS="-DNPRINTF_L -DNPRINTF_T -DNPRINTF_J"` somewhere
+If you are building for 64-bit windows. The steps are essentially the same. Just replace i686 in XC_HOST with x86_64. (note: on Mac, wine only runs in 32-bit mode)
