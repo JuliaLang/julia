@@ -99,6 +99,7 @@ include("stat.jl")
 include("fs.jl")
 importall .FS
 include("process.jl")
+reinit_stdio()
 ccall(:jl_get_uv_hooks, Void, ())
 include("grisu.jl")
 import .Grisu.print_shortest
