@@ -112,12 +112,18 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one)
     first = true
     if !done(itr,state)
 	while true
-	    x, state = next(itr,state)
-            multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
-            if newline
-                if multiline; println(io); end
+            if isa(itr,Array) && !isdefined(itr,state)
+                print(io, undef_ref_str)
+                state += 1
+                multiline = false
+            else
+	        x, state = next(itr,state)
+                multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
+                if newline
+                    if multiline; println(io); end
+                end
+	        show(io, x)
             end
-	    show(io, x)
 	    if done(itr,state)
                 if delim_one && first
                     print(io, delim)
@@ -470,19 +476,23 @@ function xdump(fn::Function, io::IO, x::Module, n::Int, indent)
     print(io, Module, " ")
     println(io, x)
 end
+function xdump_elts(fn::Function, io::IO, x::Array{Any}, n::Int, indent, i0, i1)
+    for i in i0:i1
+        print(io, indent, "  ", i, ": ")
+        if !isdefined(x,i)
+            println(undef_ref_str)
+        else
+            fn(io, x[i], n - 1, string(indent, "  "))
+        end
+    end
+end
 function xdump(fn::Function, io::IO, x::Array{Any}, n::Int, indent)
     println("Array($(eltype(x)),$(size(x)))")
     if n > 0
-        for i in 1:(length(x) <= 10 ? length(x) : 5)
-            print(io, indent, "  ", i, ": ")
-            fn(io, x[i], n - 1, string(indent, "  "))
-        end
+        xdump_elts(fn, io, x, n, indent, 1, (length(x) <= 10 ? length(x) : 5))
         if length(x) > 10
             println(io, indent, "  ...")
-            for i in length(x)-4:length(x)
-                print(io, indent, "  ", i, ": ")
-                fn(io, x[i], n - 1, string(indent, "  "))
-            end
+            xdump_elts(fn, io, x, n, indent, length(x)-4, length(x))
         end
     end
 end
