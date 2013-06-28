@@ -76,8 +76,8 @@ function whicht(f, types)
             d = f.env.defs
             while !is(d,())
                 if is(d.func.code, lsd)
-                    print(OUTPUT_STREAM, f.env.name)
-                    show(OUTPUT_STREAM, d); println(OUTPUT_STREAM)
+                    print(STDOUT, f.env.name)
+                    show(STDOUT, d); println(STDOUT)
                     return
                 end
                 d = d.next
@@ -247,7 +247,7 @@ end
 
 # system information
 
-function versioninfo(io::IO=OUTPUT_STREAM, verbose::Bool=false)
+function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "Julia $version_string")
     println(io,             commit_string)
     println(io,             "Platform Info:")
@@ -307,10 +307,10 @@ function methodswith(io::IO, t::Type, m::Module, showparents::Bool)
     end
 end
 
-methodswith(t::Type, m::Module, showparents::Bool) = methodswith(OUTPUT_STREAM, t, m, showparents)
-methodswith(t::Type, showparents::Bool) = methodswith(OUTPUT_STREAM, t, showparents)
-methodswith(t::Type, m::Module) = methodswith(OUTPUT_STREAM, t, m, false)
-methodswith(t::Type) = methodswith(OUTPUT_STREAM, t, false)
+methodswith(t::Type, m::Module, showparents::Bool) = methodswith(STDOUT, t, m, showparents)
+methodswith(t::Type, showparents::Bool) = methodswith(STDOUT, t, showparents)
+methodswith(t::Type, m::Module) = methodswith(STDOUT, t, m, false)
+methodswith(t::Type) = methodswith(STDOUT, t, false)
 function methodswith(io::IO, t::Type, showparents::Bool)
     mainmod = current_module()
     # find modules in Main

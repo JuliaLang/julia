@@ -172,7 +172,6 @@ export
     MS_SYNC,
     NaN,
     NaN32,
-    OUTPUT_STREAM,
     RTLD_LOCAL,
     RTLD_GLOBAL,
     RTLD_LAZY,
