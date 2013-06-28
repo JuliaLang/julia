@@ -1,25 +1,22 @@
 module Resolve
 
-include("pkg2/resolve/pkgstruct.jl")
+include("pkg2/resolve/interface.jl")
 include("pkg2/resolve/maxsum.jl")
 
-using ..Types, .PkgStructs, .MaxSum
+using ..Types, .PkgToMaxSumInterface, .MaxSum
 
 export resolve, sanity_check, MetadataError
 
 # Use the max-sum algorithm to resolve packages dependencies
 function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
-    # fetch data
-    reqsstruct = ReqsStruct(reqs, deps)
-
     # init structures
-    pkgstruct = PkgStruct(reqsstruct)
+    interface = Interface(reqs, deps)
 
-    prune_versions!(reqsstruct, pkgstruct)
+    prune_versions!(interface)
 
-    graph = Graph(reqsstruct, pkgstruct)
-    msgs = Messages(reqsstruct, pkgstruct, graph)
+    graph = Graph(interface)
+    msgs = Messages(interface, graph)
 
     # find solution
     local sol::Vector{Int}
@@ -27,7 +24,7 @@ function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Availa
         sol = maxsum(graph, msgs)
     catch err
         if isa(err, UnsatError)
-            p = reqsstruct.pkgs[err.info]
+            p = interface.pkgs[err.info]
             msg = "Unsatisfiable package requirements detected: " *
                   "no feasible version could be found for package: $p"
             if msgs.num_nondecimated != graph.np
@@ -40,28 +37,27 @@ function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Availa
     end
 
     # verify solution (debug code) and enforce its optimality
-    verify_sol(reqsstruct, pkgstruct, sol)
-    enforce_optimality(reqsstruct, pkgstruct, sol)
+    verify_sol(interface, sol)
+    enforce_optimality(interface, sol)
 
     # return the solution as a Dict mapping package_name => sha1
-    return compute_output_dict(reqsstruct, pkgstruct, sol)
+    return compute_output_dict(interface, sol)
 end
 
 # Scan dependencies for (explicit or implicit) contradictions
 function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
-    reqsstruct0 = ReqsStruct((ByteString=>VersionSet)[], deps)
-    pkgstruct0 = PkgStruct(reqsstruct0)
+    interface0 = Interface((ByteString=>VersionSet)[], deps)
 
-    eq_classes_map = prune_versions!(reqsstruct0, pkgstruct0, false)
+    eq_classes_map = prune_versions!(interface0, false)
 
-    pkgs = reqsstruct0.pkgs
-    deps = reqsstruct0.deps
-    np = reqsstruct0.np
-    spp = pkgstruct0.spp
-    pdict = pkgstruct0.pdict
-    pvers = pkgstruct0.pvers
-    vdict = pkgstruct0.vdict
+    pkgs = interface0.pkgs
+    deps = interface0.deps
+    np = interface0.np
+    spp = interface0.spp
+    pdict = interface0.pdict
+    pvers = interface0.pvers
+    vdict = interface0.vdict
 
     pdeps = [ [ Available[] for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
     pndeps = [ zeros(Int,spp[p0]-1) for p0 = 1:np ]
@@ -123,20 +119,20 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
             i += 1
             continue
         end
-        reqsstruct, pkgstruct = substructs(reqsstruct0, pkgstruct0, pdeps, p, vn)
+        interface = reduce_interface(interface0, pdeps, p, vn)
 
-        graph = Graph(reqsstruct, pkgstruct)
-        msgs = Messages(reqsstruct, pkgstruct, graph)
+        graph = Graph(interface)
+        msgs = Messages(interface, graph)
 
-        red_pkgs = reqsstruct.pkgs
-        red_np = reqsstruct.np
-        red_spp = pkgstruct.spp
-        red_pvers = pkgstruct.pvers
+        red_pkgs = interface.pkgs
+        red_np = interface.np
+        red_spp = interface.spp
+        red_pvers = interface.pvers
 
         local sol::Vector{Int}
         try
             sol = maxsum(graph, msgs)
-            verify_sol(reqsstruct, pkgstruct, sol)
+            verify_sol(interface, sol)
 
             for p0 = 1:red_np
                 s0 = sol[p0]
