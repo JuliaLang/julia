@@ -94,7 +94,7 @@ function fixed(avail::Dict=available())
     pkgs = Dict{ByteString,Fixed}()
     for pkg in readdir()
         isinstalled(pkg) || continue
-        ap = avail[pkg]
+        ap = get(avail,pkg,Dict{VersionNumber,Available}())
         isfixed(pkg,ap) || continue
         pkgs[pkg] = Fixed(installed_version(pkg,ap),requires_dict(pkg,ap))
     end
@@ -106,7 +106,7 @@ function free(avail::Dict=available())
     pkgs = Dict{ByteString,VersionNumber}()
     for pkg in readdir()
         isinstalled(pkg) || continue
-        ap = avail[pkg]
+        ap = get(avail,pkg,Dict{VersionNumber,Available}())
         isfixed(pkg,ap) && continue
         pkgs[pkg] = installed_version(pkg,ap)
     end
