@@ -906,7 +906,7 @@ for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
 
         c[1] = v[1]
         for i=2:n
-           c[i] = ($op)(v[i], c[i-1])
+           c[i] = ($op)(c[i-1], v[i])
         end
         return c
     end
@@ -931,7 +931,7 @@ for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
             if div(i-1, axis_stride) % axis_size == 0
                B[i] = A[i]
             else
-               B[i] = ($op)(A[i], B[i-axis_stride])
+               B[i] = ($op)(B[i-axis_stride], A[i])
             end
         end
 
