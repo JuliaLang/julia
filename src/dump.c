@@ -608,6 +608,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         li->fptr = &jl_trampoline;
         li->functionObject = NULL;
         li->cFunctionObject = NULL;
+        li->specFunctionObject = NULL;
         li->inInference = 0;
         li->inCompile = 0;
         li->unspecialized = NULL;
