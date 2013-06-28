@@ -1,50 +1,35 @@
-module PkgStructs
+module PkgToMaxSumInterface
 
 using ...Types
 
-export MetadataError, ReqsStruct, PkgStruct,
+export MetadataError, Interface,
        prune_versions!, compute_output_dict,
-       verify_sol, enforce_optimality, substructs
+       verify_sol, enforce_optimality, reduce_interface
 
+# Error type used to signal that there was some
+# problem with the metadata info passed to resolve
 type MetadataError <: Exception
     info
-end
-
-# Fetch all data and keep it in a single structure
-type ReqsStruct
-    reqs::Requires
-    pkgs::Vector{ByteString}
-    deps::Dict{ByteString,Dict{VersionNumber,Available}}
-    np::Int
-
-    function ReqsStruct(
-        reqs::Requires,
-        pkgs::Vector{ByteString},
-        deps::Dict{ByteString,Dict{VersionNumber,Available}})
-        new(reqs, pkgs, deps, length(pkgs))
-    end
-end
-
-function ReqsStruct(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
-    pkgs = Set{ByteString}()
-    for (p,_) in deps add!(pkgs, p) end
-
-    for (p,_) in reqs
-        if !contains(pkgs, p)
-            throw(MetadataError("required package $p has no version compatible with fixed requirements"))
-        end
-    end
-
-    ReqsStruct(reqs, sort!(ByteString[pkgs...]), deps)
 end
 
 # The numeric type used to determine how the different
 # versions of a package should be weighed
 typealias VersionWeight Int
 
-# Auxiliary structure to map data from ReqsStruct into
-# internal representation and vice versa
-type PkgStruct
+# A collection of objects which allow interfacing external (Pkg) and
+# internal (MaxSum) representation, and doing some manipulation
+# (i.e. version pruning, reduction)
+type Interface
+    # requirements and dependencies, in external representation
+    reqs::Requires
+    deps::Dict{ByteString,Dict{VersionNumber,Available}}
+
+    # packages list
+    pkgs::Vector{ByteString}
+
+    # number of packages
+    np::Int
+
     # states per package: one per version + uninstalled
     spp::Vector{Int}
 
@@ -58,7 +43,7 @@ type PkgStruct
     pvers::Vector{Vector{VersionNumber}}
 
     # versions dict: associates a version index to each package
-    #                version;
+    #                version; such that
     #                  pvers[p0][vdict[p0][vn]] = vn
     vdict::Vector{Dict{VersionNumber,Int}}
 
@@ -68,14 +53,21 @@ type PkgStruct
     vweight::Vector{Vector{VersionWeight}}
 
     # has version pruning been performed?
-    # (used for debug purposes only)
     waspruned::Bool
 
-    function PkgStruct(reqsstruct::ReqsStruct)
+    function Interface(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
-        pkgs = reqsstruct.pkgs
-        deps = reqsstruct.deps
-        np = reqsstruct.np
+        pkgs_set = Set{ByteString}()
+        for (p,_) in deps add!(pkgs_set, p) end
+
+        for (p,_) in reqs
+            if !contains(pkgs_set, p)
+                throw(MetadataError("required package $p has no version compatible with fixed requirements"))
+            end
+        end
+
+        pkgs = ByteString[pkgs_set...]
+        np = length(pkgs)
 
         pdict = (ByteString=>Int)[ pkgs[i] => i for i = 1:np ]
 
@@ -87,11 +79,11 @@ type PkgStruct
         # TODO: change this to weigh differently major, minor etc. ?
         vweight = [ [ v0-1 for v0 = 1:spp[p0] ] for p0 = 1:np ]
 
-        return new(spp, pdict, pvers, vdict, vweight, false)
+        return new(reqs, deps, pkgs, np, spp, pdict, pvers, vdict, vweight, false)
     end
 end
 
-# Generate the pvers field in PkgStruct; used by the
+# Generate the pvers field in Interface; used by the
 # constructor and within `prune_versions!`
 function gen_pvers(np::Int, pdict::Dict{ByteString,Int}, deps::Dict{ByteString,Dict{VersionNumber,Available}})
     spp = ones(Int, np)
@@ -110,7 +102,7 @@ function gen_pvers(np::Int, pdict::Dict{ByteString,Int}, deps::Dict{ByteString,D
     return spp, pvers
 end
 
-# Generate the vdict field in PkgStruct; used by the
+# Generate the vdict field in Interface; used by the
 # constructor and within `prune_versions!`
 function gen_vdict(pdict::Dict{ByteString,Int}, pvers::Vector{Vector{VersionNumber}},
                    deps::Dict{ByteString,Dict{VersionNumber,Available}})
@@ -140,18 +132,18 @@ end
 #   2) They have the same dependencies
 # Also, for each package explicitly required, dicards all versions outside
 # the allowed range (checking for impossible ranges while at it).
-# This function mutates both input structs.
-function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_reqs::Bool = true)
+# This function mutates interface.
+function prune_versions!(interface::Interface, prune_reqs::Bool = true)
 
-    np = reqsstruct.np
-    reqs = reqsstruct.reqs
-    pkgs = reqsstruct.pkgs
-    deps = reqsstruct.deps
-    spp = pkgstruct.spp
-    pdict = pkgstruct.pdict
-    pvers = pkgstruct.pvers
-    vdict = pkgstruct.vdict
-    vweight = pkgstruct.vweight
+    np = interface.np
+    reqs = interface.reqs
+    pkgs = interface.pkgs
+    deps = interface.deps
+    spp = interface.spp
+    pdict = interface.pdict
+    pvers = interface.pvers
+    vdict = interface.vdict
+    vweight = interface.vweight
 
     # To each version in each package, we associate a BitVector.
     # It is going to hold a pattern such that all versions with
@@ -339,9 +331,9 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
         end
     end
 
-    reqsstruct.deps = new_deps
+    interface.deps = new_deps
 
-    # Finally, mutate pkgstruct fields by regenerating pvers, vdict
+    # Finally, mutate remaining interface fields by regenerating pvers, vdict
     # and vweights
 
     new_spp, new_pvers = gen_pvers(np, pdict, new_deps)
@@ -358,12 +350,12 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
         new_vweight0[end] = vweight0[end]
     end
 
-    pkgstruct.spp = new_spp
-    pkgstruct.pvers = new_pvers
-    pkgstruct.vdict = new_vdict
-    pkgstruct.vweight = new_vweight
+    interface.spp = new_spp
+    interface.pvers = new_pvers
+    interface.vdict = new_vdict
+    interface.vweight = new_vweight
     if prune_reqs
-        pkgstruct.waspruned = true
+        interface.waspruned = true
     end
 
     #println("pruning stats:")
@@ -390,12 +382,12 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
 end
 
 # The output format is a dict which associates sha1's to each installed package name
-function compute_output_dict(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Vector{Int})
+function compute_output_dict(interface::Interface, sol::Vector{Int})
 
-    pkgs = reqsstruct.pkgs
-    np = reqsstruct.np
-    pvers = pkgstruct.pvers
-    spp = pkgstruct.spp
+    pkgs = interface.pkgs
+    np = interface.np
+    pvers = interface.pvers
+    spp = interface.spp
 
     want = (ByteString=>VersionNumber)[]
     for p0 = 1:np
@@ -412,14 +404,14 @@ end
 
 # verifies that the solution fulfills all hard constraints
 # (requirements and dependencies)
-function verify_sol(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Vector{Int})
+function verify_sol(interface::Interface, sol::Vector{Int})
 
-    reqs = reqsstruct.reqs
-    deps = reqsstruct.deps
-    spp = pkgstruct.spp
-    pdict = pkgstruct.pdict
-    pvers = pkgstruct.pvers
-    vdict = pkgstruct.vdict
+    reqs = interface.reqs
+    deps = interface.deps
+    spp = interface.spp
+    pdict = interface.pdict
+    pvers = interface.pvers
+    vdict = interface.vdict
 
     # verify requirements
     for (p,vs) in reqs
@@ -449,16 +441,16 @@ function verify_sol(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Vector{In
 end
 
 # Push the given solution to a local optimium if needed
-function enforce_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Vector{Int})
-    np = reqsstruct.np
+function enforce_optimality(interface::Interface, sol::Vector{Int})
+    np = interface.np
 
-    reqs = reqsstruct.reqs
-    deps = reqsstruct.deps
-    spp = pkgstruct.spp
-    pdict = pkgstruct.pdict
-    pvers = pkgstruct.pvers
-    vdict = pkgstruct.vdict
-    waspruned = pkgstruct.waspruned
+    reqs = interface.reqs
+    deps = interface.deps
+    spp = interface.spp
+    pdict = interface.pdict
+    pvers = interface.pvers
+    vdict = interface.vdict
+    waspruned = interface.waspruned
 
     # prepare some useful structures
     # pdeps[p0][v0] has all dependencies of package p0 version v0
@@ -551,7 +543,7 @@ function enforce_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::V
                 continue
             end
             # So the solution is non-optimal: we bump it manually
-            #println(STDERR, "Warning: nonoptimal solution for package $(reqsstruct.pkgs[p0]): sol=$s0")
+            #println(STDERR, "Warning: nonoptimal solution for package $(interface.pkgs[p0]): sol=$s0")
             sol[p0] += 1
             restart = true
         end
@@ -561,15 +553,15 @@ end
 
 # Build a subgraph incuding only the (direct and indirect) dependencies
 # of a given package (used in sanity_check)
-function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vector, p::ByteString, vn::VersionNumber)
+function reduce_interface(interface0::Interface, pdeps::Vector, p::ByteString, vn::VersionNumber)
 
-    pkgs = reqsstruct0.pkgs
-    deps = reqsstruct0.deps
-    np = reqsstruct0.np
-    spp = pkgstruct0.spp
-    pdict = pkgstruct0.pdict
-    pvers = pkgstruct0.pvers
-    vdict = pkgstruct0.vdict
+    pkgs = interface0.pkgs
+    deps = interface0.deps
+    np = interface0.np
+    spp = interface0.spp
+    pdict = interface0.pdict
+    pvers = interface0.pvers
+    vdict = interface0.vdict
 
     nvn = VersionNumber(vn.major, vn.minor, vn.patch + 1, vn.prerelease, vn.build)
 
@@ -592,7 +584,6 @@ function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vecto
         staged = staged_next
     end
 
-    red_pkgs = ByteString[ pkgs[p0] for p0 in pset ]
     red_deps = Dict{ByteString,Dict{VersionNumber,Available}}()
     for p0 in pset
         pdeps0 = pdeps[p0]
@@ -609,9 +600,7 @@ function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vecto
         end
     end
 
-    reqsstruct = ReqsStruct(reqs, red_pkgs, red_deps)
-    pkgstruct = PkgStruct(reqsstruct)
-    return reqsstruct, pkgstruct
+    return Interface(reqs, red_deps)
 end
 
 end

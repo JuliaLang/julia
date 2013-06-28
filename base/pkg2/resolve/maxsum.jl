@@ -2,7 +2,7 @@ module MaxSum
 
 include("pkg2/resolve/fieldvalue.jl")
 
-using .FieldValues, ..PkgStructs
+using .FieldValues, ..PkgToMaxSumInterface
 
 export UnsatError, Graph, Messages, maxsum
 
@@ -67,7 +67,7 @@ type Graph
     #   gadj[p0][adjdict[p1][p0]] = p1
     adjdict::Vector{Dict{Int,Int}}
 
-    # states per package: same as in PkgStruct
+    # states per package: same as in Interface
     spp::Vector{Int}
 
     # update order: shuffled at each iteration
@@ -76,16 +76,15 @@ type Graph
     # number of packages (all Vectors above have this length)
     np::Int
 
-    function Graph(reqsstruct::ReqsStruct,
-                   pkgstruct::PkgStruct)
+    function Graph(interface::Interface)
 
-        deps = reqsstruct.deps
-        np = reqsstruct.np
+        deps = interface.deps
+        np = interface.np
 
-        spp = pkgstruct.spp
-        pdict = pkgstruct.pdict
-        pvers = pkgstruct.pvers
-        vdict = pkgstruct.vdict
+        spp = interface.spp
+        pdict = interface.pdict
+        pvers = interface.pvers
+        vdict = interface.vdict
 
         gadj = [ Int[] for i = 1:np ]
         gmsk = [ BitMatrix[] for i = 1:np ]
@@ -174,19 +173,17 @@ type Messages
     decimated::BitVector
     num_nondecimated::Int
 
-    function Messages(reqsstruct::ReqsStruct,
-                      pkgstruct::PkgStruct,
-                      graph::Graph)
+    function Messages(interface::Interface, graph::Graph)
 
-        reqs = reqsstruct.reqs
-        pkgs = reqsstruct.pkgs
-        deps = reqsstruct.deps
-        np = reqsstruct.np
-        spp = pkgstruct.spp
-        pvers = pkgstruct.pvers
-        pdict = pkgstruct.pdict
-        vdict = pkgstruct.vdict
-        vweight = pkgstruct.vweight
+        reqs = interface.reqs
+        pkgs = interface.pkgs
+        deps = interface.deps
+        np = interface.np
+        spp = interface.spp
+        pvers = interface.pvers
+        pdict = interface.pdict
+        vdict = interface.vdict
+        vweight = interface.vweight
 
         # a "deterministic noise" function based on hashes
         function noise(p0::Int, v0::Int)
