@@ -516,7 +516,14 @@ function abstract_call_gf(f, fargs, argtypes, e)
                 return Type
             end
         end
-        return Type{f(c...)}
+        if f === Main.Base.promote_type
+            try
+                return Type{f(c...)}
+            catch
+            end
+        else
+            return Type{f(c...)}
+        end
     end
     # don't consider more than N methods. this trades off between
     # compiler performance and generated code performance.
