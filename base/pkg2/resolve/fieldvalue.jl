@@ -1,3 +1,7 @@
+module FieldValues
+
+export FieldValue, validmax, secondmax
+
 # FieldValue is a numeric type which helps dealing with
 # infinities. It holds 5 numbers l0,l1,l2,l3,l4. It can
 # be interpreted as a polynomial
@@ -88,3 +92,4 @@ function secondmax(v::Vector{FieldValue})
     return m2 - m
 end
 
+end
