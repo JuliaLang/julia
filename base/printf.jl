@@ -768,7 +768,7 @@ macro printf(args...)
     end
     local io, fmt
     if isa(args[1],String)
-        io = :(Base.OUTPUT_STREAM)
+        io = :(Base.STDOUT)
         fmt = args[1]
         args = args[2:]
     else

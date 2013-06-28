@@ -1,5 +1,5 @@
 # called to show a REPL result
-repl_show(v::ANY) = repl_show(OUTPUT_STREAM, v)
+repl_show(v::ANY) = repl_show(STDOUT, v)
 function repl_show(io::IO, v::ANY)
     if !(isa(v,Function) && isgeneric(v))
         if isa(v,AbstractVector) && !isa(v,Ranges)

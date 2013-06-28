@@ -130,16 +130,13 @@ function init_stdio(handle,fd)
 end
 
 function reinit_stdio()
-    global STDIN, STDERR, STDOUT, OUTPUT_STREAM
+    global STDIN, STDERR, STDOUT
     STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()),0)
     STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()),1)
     STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()),2)
-    OUTPUT_STREAM = STDOUT
 end
 
 reinit_stdio()
-
-OUTPUT_STREAM = STDOUT
 
 flush(::TTY) = nothing
 

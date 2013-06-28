@@ -80,14 +80,14 @@ function print_pkg_status(io::IO, pkg::String)
 end
 
 # show the status packages in the repo
-status() = status(OUTPUT_STREAM)
+status() = status(STDOUT)
 status(io::IO) = cd_pkgdir() do
     for pkg in packages()
         print_pkg_status(io, pkg)
     end
 end
 status(io::IO, pkg::String) = print_pkg_status(io, pkg)
-status(pkg::String) = status(OUTPUT_STREAM, pkg)
+status(pkg::String) = status(STDOUT, pkg)
 
 # create a new empty packge repository
 
