@@ -150,14 +150,6 @@ USE_SYSTEM_GRISU=0
 USE_SYSTEM_RMATH=0
 USE_SYSTEM_LIBUV=0
 
-# Snow Leopard specific configuration
-ifeq ($(OS), Darwin)
-ifeq ($(OSXVER), 10.6)
-USE_SYSTEM_LIBM=1
-USE_SYSTEM_BLAS=1
-endif
-endif
-
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
 endif
