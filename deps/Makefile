@@ -398,7 +398,7 @@ libuv/Makefile:
 ifeq (exists, $(shell [ -d libuv/.git ] && echo exists ))
 $(UV_OBJ_SOURCE): libuv/.git/HEAD
 endif
-ifeq (exists, $(shell [ -d $(JULIAHOME)/modules ] && echo exists ))
+ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/libuv ] && echo exists ))
 $(UV_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
 LIBUV_MAKE_FLAGS = -C libuv CC="$(CC)" AR="$(AR)"
@@ -410,6 +410,7 @@ $(error libuv may autodetect your cross-compile PLATFORM incorrectly)
 endif
 endif
 $(UV_OBJ_SOURCE): libuv/Makefile
+	$(MAKE) clean $(LIBUV_MAKE_FLAGS) RUNNER_LIBS=
 	$(MAKE) libuv.a $(LIBUV_MAKE_FLAGS)
 	touch -c $@
 libuv/checked: $(LIBUV_OBJ_SOURCE)
@@ -541,7 +542,7 @@ ifeq (exists, $(shell [ -d openlibm/.git ] && echo exists ))
 $(OPENLIBM_OBJ_SOURCE): openlibm/.git/HEAD
 $(OPENLIBMEXT_OBJ_SOURCE): openlibm/.git/HEAD
 endif
-ifeq (exists, $(shell [ -d $(JULIAHOME)/modules ] && echo exists ))
+ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/openlibm ] && echo exists ))
 $(OPENLIBM_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
 $(OPENLIBMEXT_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
 endif
@@ -634,7 +635,7 @@ Rmath/Make.inc:
 ifeq (exists, $(shell [ -d Rmath/.git ] && echo exists ))
 $(RMATH_OBJ_SOURCE): Rmath/.git/HEAD
 endif
-ifeq (exists, $(shell [ -d $(JULIAHOME)/modules ] && echo exists ))
+ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/Rmath ] && echo exists ))
 $(RMATH_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/Rmath/HEAD
 endif
 $(RMATH_OBJ_SOURCE): Rmath/Make.inc $(LIBRANDOM_OBJ_TARGET)
