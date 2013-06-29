@@ -65,8 +65,6 @@ static Type *julia_struct_to_llvm(jl_value_t *jt);
 static Type *julia_type_to_llvm(jl_value_t *jt)
 {
     if (jt == (jl_value_t*)jl_bool_type) return T_int1;
-    if (jt == (jl_value_t*)jl_float32_type) return T_float32;
-    if (jt == (jl_value_t*)jl_float64_type) return T_float64;
     if (jt == (jl_value_t*)jl_bottom_type) return T_void;
     if (!jl_is_leaf_type(jt))
         return jl_pvalue_llvmt;
@@ -79,12 +77,18 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
         return PointerType::get(lt, 0);
     }
     if (jl_is_bitstype(jt)) {
-        int nb = jl_datatype_size(jt)*8;
-        if (nb == 8)  return T_int8;
-        if (nb == 16) return T_int16;
-        if (nb == 32) return T_int32;
-        if (nb == 64) return T_int64;
-        else          return Type::getIntNTy(getGlobalContext(), nb);
+        int nb = jl_datatype_size(jt);
+        if(jl_is_floattype(jt)) {
+            if(nb == 2)
+                return Type::getHalfTy(jl_LLVMContext);
+            else if(nb == 4)
+                return Type::getFloatTy(jl_LLVMContext);
+            else if(nb == 8)
+                return Type::getDoubleTy(jl_LLVMContext);
+            else if(nb == 16)
+                return Type::getFP128Ty(jl_LLVMContext);
+        }
+        return Type::getIntNTy(jl_LLVMContext, nb*8);
     }
     if (jl_isbits(jt)) {
         if (((jl_datatype_t*)jt)->size == 0) {
@@ -243,11 +247,6 @@ static Value *mark_julia_type(Value *v, jl_value_t *jt)
     MDNode *mdn = MDNode::get(jl_LLVMContext, ArrayRef<Value*>(md));
     ((Instruction*)v)->setMetadata("julia_type", mdn);
     return v;
-}
-
-static Value *mark_julia_type(Value *v, jl_datatype_t *jt)
-{
-    return mark_julia_type(v, (jl_value_t*)jt);
 }
 
 // --- generating various error checks ---

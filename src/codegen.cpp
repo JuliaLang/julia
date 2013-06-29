@@ -142,7 +142,7 @@ static Value *V_null;
 static GlobalVariable *jltrue_var;
 static GlobalVariable *jlfalse_var;
 static GlobalVariable *jlnull_var;
-static GlobalVariable *jlfloat32temp_var;
+static GlobalVariable *jlfloattemp_var;
 #ifdef JL_GC_MARKSWEEP
 static GlobalVariable *jlpgcstack_var;
 #endif
@@ -247,7 +247,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     assert(f != NULL);
     nested_compile = last_n_c;
     //f->dump();
-    //verifyFunction(*f);
+    verifyFunction(*f);
     FPM->run(*f);
     //n_compile++;
     // print out the function's LLVM code
@@ -2953,10 +2953,13 @@ static void init_julia_llvm_env(Module *m)
                                       (void*)&jl_inexact_exception);
     jlboundserr_var = global_to_llvm("jl_bounds_exception",
                                      (void*)&jl_bounds_exception);
-    jlfloat32temp_var =
-        new GlobalVariable(*jl_Module, T_float32,
-                           false, GlobalVariable::PrivateLinkage,
-                           ConstantFP::get(T_float32,0.0), "jl_float32_temp");
+    
+    // Has to be big enough for the biggest LLVM-supported float type
+    jlfloattemp_var =
+        new GlobalVariable(*jl_Module, IntegerType::get(jl_LLVMContext,128),
+                           false, GlobalVariable::PrivateLinkage, 
+                           ConstantInt::get(IntegerType::get(jl_LLVMContext,128),0),
+                           "jl_float_temp");
 
     std::vector<Type*> args1(0);
     args1.push_back(T_pint8);
