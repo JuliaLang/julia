@@ -24,8 +24,8 @@ namespace JL_I {
         bswap_int, ctpop_int, ctlz_int, cttz_int,
         // conversion
         sext_int, zext_int, trunc_int,
-        fptoui, fptosi, uitofp32, sitofp32, uitofp64, sitofp64,
-        fptrunc32, fpext64,
+        fptoui, fptosi, uitofp, sitofp,
+        fptrunc, fpext,
         // checked conversion
         fpsiround, fpuiround, checked_fptoui, checked_fptosi,
         // checked arithmetic
@@ -57,14 +57,25 @@ using namespace JL_I;
     where the box is needed.
 */
 
+static Type *FTnbits(size_t nb)
+{
+    if(nb == 16)
+        return Type::getHalfTy(jl_LLVMContext);
+    else if(nb == 32)
+        return Type::getFloatTy(jl_LLVMContext);
+    else if(nb == 64)
+        return Type::getDoubleTy(jl_LLVMContext);
+    else if(nb == 128)
+        return Type::getFP128Ty(jl_LLVMContext);
+    else 
+        jl_error("Unsupported Float Size");
+}
 // convert int type to same-size float type
 static Type *FT(Type *t)
 {
     if (t->isFloatingPointTy())
         return t;
-    if (t == T_int32) return T_float32;
-    assert(t == T_int64);
-    return T_float64;
+    return FTnbits(t->getPrimitiveSizeInBits());
 }
 
 // reinterpret-cast to float
@@ -109,24 +120,7 @@ static Value *uint_cnvt(Type *to, Value *x)
 
 static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
 {
-    if (jl_is_int32(e)) {
-        return ConstantInt::get(T_int32, jl_unbox_int32(e));
-    }
-    else if (jl_is_int64(e)) {
-        return ConstantInt::get(T_int64, jl_unbox_int64(e));
-    }
-    else if (jl_is_uint64(e)) {
-        return mark_julia_type(ConstantInt::get(T_int64,
-                                                (int64_t)jl_unbox_uint64(e)),
-                               jl_uint64_type);
-    }
-    else if (jl_is_float64(e)) {
-        return ConstantFP::get(T_float64, jl_unbox_float64(e));
-    }
-    else if (jl_is_float32(e)) {
-        return ConstantFP::get(T_float32, jl_unbox_float32(e));
-    }
-    else if (e == jl_true) {
+    if (e == jl_true) {
         return ConstantInt::get(T_int1, 1);
     }
     else if (e == jl_false) {
@@ -135,19 +129,26 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
     else if (jl_is_bitstype(jl_typeof(e))) {
         jl_datatype_t *bt = (jl_datatype_t*)jl_typeof(e);
         int nb = jl_datatype_size(bt);
-        if (nb == 1)
-            return mark_julia_type(ConstantInt::get(T_int8, jl_unbox_int8(e)),
-                                   (jl_value_t*)bt);
-        if (nb == 2)
-            return mark_julia_type(ConstantInt::get(T_int16, jl_unbox_int16(e)),
-                                   (jl_value_t*)bt);
-        if (nb == 4)
-            return mark_julia_type(ConstantInt::get(T_int32, jl_unbox_int32(e)),
-                                   (jl_value_t*)bt);
-        if (nb == 8)
-            return mark_julia_type(ConstantInt::get(T_int64, jl_unbox_int64(e)),
-                                   (jl_value_t*)bt);
-        // TODO: bigger sizes
+        //APInt copies the data (but only as much as needed, so it doesn't matter if ArrayRef extends too far)
+        APInt val = APInt(8*nb,ArrayRef<uint64_t>((uint64_t*)jl_data_ptr(e),(nb+7)/8));
+        if(jl_is_float(e))
+        {
+#ifdef LLVM33
+            #define LLVM_FP(a,b) APFloat(a,b)
+#else
+            #define LLVM_FP(a,b) APFloat(b,true)
+#endif
+            if(nb == 2)
+                return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEhalf,val)),(jl_value_t*)bt);
+            else if(nb == 4)
+                return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEfloat,val)),(jl_value_t*)bt);
+            else if(nb == 8)
+                return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEdouble,val)),(jl_value_t*)bt);
+            else if(nb == 16)
+                return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEquad,val)),(jl_value_t*)bt);
+            // If we have a floating point type that's not hardware supported, just treat it like an integer for LLVM purposes
+        }
+        return mark_julia_type(ConstantInt::get(IntegerType::get(jl_LLVMContext,8*nb),val),(jl_value_t*)bt);
     }
     return emit_expr(e, ctx, false);
 }
@@ -608,6 +609,21 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *x = FP(auto_unbox(args[2], ctx));
         return emit_checked_fptoui(args[1], x, ctx);
     }
+    HANDLE(uitofp,2) return builder.CreateUIToFP(JL_INT(auto_unbox(args[1],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[2],ctx)));
+    HANDLE(sitofp,2) return builder.CreateSIToFP(JL_INT(auto_unbox(args[1],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[2],ctx)));
+    HANDLE(fptrunc,2) return builder.CreateFPTrunc(FP(auto_unbox(args[1],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[2],ctx)));
+    HANDLE(fpext,2) {
+        // when extending a float32 to a float64, we need to force
+        // rounding to single precision first. the reason is that it's
+        // fine to keep working in extended precision as long as it's
+        // understood that everything is implicitly rounded to 23 bits,
+        // but if we start looking at more bits we need to actually do the
+        // rounding first instead of carrying around incorrect low bits.
+        Value *x = auto_unbox(args[1],ctx);
+        builder.CreateStore(FP(x), builder.CreateBitCast(jlfloattemp_var,FT(x->getType())->getPointerTo()), true);
+        return builder.CreateFPExt(builder.CreateLoad(builder.CreateBitCast(jlfloattemp_var,FT(x->getType())->getPointerTo()), true),
+                                   FTnbits(try_to_determine_bitstype_nbits(args[2],ctx)));
+    }
     default: ;
     }
 
@@ -945,22 +961,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     {
         return emit_iround(x, f == fpsiround, ctx);
     }
-    HANDLE(uitofp32,1)  return builder.CreateUIToFP(JL_INT(x), T_float32);
-    HANDLE(sitofp32,1)  return builder.CreateSIToFP(JL_INT(x), T_float32);
-    HANDLE(uitofp64,1)  return builder.CreateUIToFP(JL_INT(x), T_float64);
-    HANDLE(sitofp64,1)  return builder.CreateSIToFP(JL_INT(x), T_float64);
-    HANDLE(fptrunc32,1) return builder.CreateFPTrunc(FP(x), T_float32);
-    HANDLE(fpext64,1)
-        // when extending a float32 to a float64, we need to force
-        // rounding to single precision first. the reason is that it's
-        // fine to keep working in extended precision as long as it's
-        // understood that everything is implicitly rounded to 23 bits,
-        // but if we start looking at more bits we need to actually do the
-        // rounding first instead of carrying around incorrect low bits.
-        builder.CreateStore(FP(x), jlfloat32temp_var, true);
-        return builder.CreateFPExt(builder.CreateLoad(jlfloat32temp_var, true),
-                                   T_float64);
-
     HANDLE(nan_dom_err,2) {
         // nan_dom_err(f, x) throw DomainError if isnan(f)&&!isnan(x)
         Value *f = FP(x); x = FP(y);
@@ -1096,8 +1096,8 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(sext_int); ADD_I(zext_int); ADD_I(trunc_int);
     ADD_I(fptoui); ADD_I(fptosi);
     ADD_I(fpsiround); ADD_I(fpuiround);
-    ADD_I(uitofp32); ADD_I(sitofp32); ADD_I(uitofp64); ADD_I(sitofp64);
-    ADD_I(fptrunc32); ADD_I(fpext64);
+    ADD_I(uitofp); ADD_I(sitofp);
+    ADD_I(fptrunc); ADD_I(fpext);
     ADD_I(abs_float); ADD_I(copysign_float);
     ADD_I(flipsign_int);
     ADD_I(pointerref); ADD_I(pointerset); ADD_I(pointertoref);
