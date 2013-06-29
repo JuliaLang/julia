@@ -85,8 +85,8 @@ end
 ismatch(r::Regex, s::String) =
     PCRE.exec(r.regex, C_NULL, bytestring(s), 0, r.options & PCRE.EXECUTE_MASK, false)
 
-function match(re::Regex, str::ByteString, idx::Integer)
-    opts = re.options & PCRE.EXECUTE_MASK
+function match(re::Regex, str::ByteString, idx::Integer, add_opts::Uint32)
+    opts = re.options & PCRE.EXECUTE_MASK | add_opts
     m, n = PCRE.exec(re.regex, C_NULL, str, idx-1, opts, true)
     if isempty(m); return nothing; end
     mat = str[m[1]+1:m[2]]
@@ -95,9 +95,54 @@ function match(re::Regex, str::ByteString, idx::Integer)
     off = Int[ m[2i+1]::Int32+1 for i=1:n ]
     RegexMatch(mat, cap, m[1]+1, off)
 end
+match(re::Regex, str::ByteString, idx::Integer) = match(re, str, idx, uint32(0))
 match(r::Regex, s::String) = match(r, s, start(s))
 match(r::Regex, s::String, i::Integer) =
     error("regex matching is only available for bytestrings; use bytestring(s) to convert")
+
+function match_all(re::Regex, str::ByteString)
+    m = match(re, str, 1)
+    if m == nothing; return nothing; end
+
+    re_opts = PCRE.info(re.regex, C_NULL, PCRE.INFO_OPTIONS, Uint32)
+    is_utf = (re_opts & PCRE.UTF8) != 0
+
+    matches = [m]
+    while true
+      opts = uint32(0)
+      if m != nothing
+          idx = m.offset + length(m.match.data)
+
+          if length(m.match) == 0
+              if m.offset == length(str.data) + 1
+                  break
+              end
+              opts = opts | PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART
+          end
+      end
+
+      m = match(re, str, idx, opts)
+      if m == nothing
+          if opts == 0
+              break
+          end
+          idx += 1
+          if is_utf
+              # Ensure we skip entire UTF character.
+              while idx <= length(str.data)
+                  if (str.data[idx] & 0xc0) != 0x80
+                      break;
+                  end
+                  idx += 1
+              end
+          end
+          continue
+      end
+
+      push!(matches, m)
+    end
+    matches
+end
 
 function search(str::ByteString, re::Regex, idx::Integer)
     len = length(str.data)
