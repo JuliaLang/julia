@@ -438,8 +438,17 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             res = literal_pointer_val(NULL, lrt);
         }
         else {
-            res = jl_Module->getOrInsertGlobal(sym.f_name,
-                                               lrt->getContainedType(0));
+            Value *nv = jl_Module->getNamedValue(sym.f_name);
+            if (nv != NULL) {
+                // if the symbol already exists, it might be a function or
+                // something else other than a GlobalVariable, so return
+                // whatever it is.
+                res = nv;
+            }
+            else {
+                res = jl_Module->getOrInsertGlobal(sym.f_name,
+                                                   lrt->getContainedType(0));
+            }
         }
     }
 
