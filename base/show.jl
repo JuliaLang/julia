@@ -413,7 +413,7 @@ end
 
 function show_method_table(io::IO, mt::MethodTable, max::Int=-1)
     name = mt.name
-    max!=0 && print(io, "# methods for generic function ", name)
+    print(io, "# methods for generic function ", name)
     d = mt.defs
     n = rest = 0
     while !is(d,())
@@ -428,7 +428,7 @@ function show_method_table(io::IO, mt::MethodTable, max::Int=-1)
         d = d.next
     end
     if rest > 0
-        max!=0 && println()
+        println()
         print("... $rest methods not shown (use methods($name) to see them all)")
     end
 end
