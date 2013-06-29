@@ -878,6 +878,7 @@ function start_worker(out::IO)
     global const Scheduler = current_task()
 
     try
+        check_master_connect(60.0)
         event_loop(false)
     catch err
         print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")
@@ -886,6 +887,7 @@ function start_worker(out::IO)
     close(sock)
     exit(0)
 end
+
 
 function start_remote_workers(machines, cmds, tunnel=false, sshflags=``)
     n = length(cmds)
@@ -1445,5 +1447,21 @@ function interrupt_waiting_task(t::Task, with_value)
     if !t.runnable
         t.result = with_value
         enq_work(t)
+    end
+end
+
+function check_master_connect(timeout)
+    # If we do not have at least process 1 connect to us within timeout
+    # we log an error and exit
+    @async begin
+        start = time()
+        while !haskey(map_pid_wrkr, 1) && (time() - start) < timeout
+            sleep(1.0)
+        end
+        
+        if !haskey(map_pid_wrkr, 1)
+            print(STDERR, "Master process (id 1) could not connect within $timeout seconds.\nexiting.\n")
+            exit(1)
+        end
     end
 end
