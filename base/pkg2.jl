@@ -14,6 +14,7 @@ using .Types, Base.Git
 rm(pkg::String) = edit(Reqs.rm, pkg)
 add(pkg::String, vers::VersionSet) = edit(Reqs.add, pkg, vers)
 add(pkg::String, vers::VersionNumber...) = add(pkg, VersionSet(vers...))
+init(meta::String=Dir.DEFAULT_META) = Dir.init(meta)
 
 edit(f::Function, pkg, args...) = Dir.cd() do
     r = Reqs.read("REQUIRE")
