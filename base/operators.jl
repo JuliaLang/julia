@@ -4,6 +4,8 @@ const (<:) = subtype
 
 super(T::DataType) = T.super
 
+==(T::Type, S::Type) = typeseq(T, S)
+
 ## comparison ##
 
 isequal(x,y) = is(x,y)

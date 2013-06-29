@@ -142,6 +142,12 @@ int jl_egal(jl_value_t *a, jl_value_t *b)
         return 1;
     }
     jl_datatype_t *dt = (jl_datatype_t*)ta;
+    if (dt == jl_datatype_type) {
+        jl_datatype_t *dta = (jl_datatype_t*)a;
+        jl_datatype_t *dtb = (jl_datatype_t*)b;
+        return dta->name == dtb->name &&
+            jl_egal((jl_value_t*)dta->parameters, (jl_value_t*)dtb->parameters);
+    }
     if (dt->mutabl) return 0;
     size_t sz = dt->size;
     if (sz == 0) return 1;
@@ -999,6 +1005,12 @@ DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
         return h;
     }
     jl_datatype_t *dt = (jl_datatype_t*)tv;
+    if (dt == jl_datatype_type) {
+        jl_datatype_t *dtv = (jl_datatype_t*)v;
+        uptrint_t h = inthash((uptrint_t)tv);
+        return bitmix(bitmix(h, jl_object_id((jl_value_t*)dtv->name)),
+                      jl_object_id((jl_value_t*)dtv->parameters));
+    }
     if (dt->mutabl) return inthash((uptrint_t)v);
     size_t sz = jl_datatype_size(tv);
     uptrint_t h = inthash((uptrint_t)tv);
