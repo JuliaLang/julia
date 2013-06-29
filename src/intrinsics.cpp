@@ -44,6 +44,7 @@ namespace JL_I {
 using namespace JL_I;
 
 #include "ccall.cpp"
+#define DISABLE_FLOAT16
 
 /*
   low-level intrinsics design:
@@ -59,9 +60,12 @@ using namespace JL_I;
 
 static Type *FTnbits(size_t nb)
 {
+    #ifndef DISABLE_FLOAT16
     if(nb == 16)
         return Type::getHalfTy(jl_LLVMContext);
-    else if(nb == 32)
+    else
+    #endif
+    if(nb == 32)
         return Type::getFloatTy(jl_LLVMContext);
     else if(nb == 64)
         return Type::getDoubleTy(jl_LLVMContext);
@@ -138,10 +142,13 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
 #else
             #define LLVM_FP(a,b) APFloat(b,true)
 #endif
+#ifndef DISABLE_FLOAT16
             if(nb == 2)
                 return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEhalf,val)),(jl_value_t*)bt);
-            else if(nb == 4)
-                return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEfloat,val)),(jl_value_t*)bt);
+            else
+#endif
+            if(nb == 4)
+                return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEsingle,val)),(jl_value_t*)bt);
             else if(nb == 8)
                 return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEdouble,val)),(jl_value_t*)bt);
             else if(nb == 16)
@@ -609,9 +616,9 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *x = FP(auto_unbox(args[2], ctx));
         return emit_checked_fptoui(args[1], x, ctx);
     }
-    HANDLE(uitofp,2) return builder.CreateUIToFP(JL_INT(auto_unbox(args[1],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[2],ctx)));
-    HANDLE(sitofp,2) return builder.CreateSIToFP(JL_INT(auto_unbox(args[1],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[2],ctx)));
-    HANDLE(fptrunc,2) return builder.CreateFPTrunc(FP(auto_unbox(args[1],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[2],ctx)));
+    HANDLE(uitofp,2) return builder.CreateUIToFP(JL_INT(auto_unbox(args[2],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
+    HANDLE(sitofp,2) return builder.CreateSIToFP(JL_INT(auto_unbox(args[2],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
+    HANDLE(fptrunc,2) return builder.CreateFPTrunc(FP(auto_unbox(args[2],ctx)), FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
     HANDLE(fpext,2) {
         // when extending a float32 to a float64, we need to force
         // rounding to single precision first. the reason is that it's
@@ -619,10 +626,10 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         // understood that everything is implicitly rounded to 23 bits,
         // but if we start looking at more bits we need to actually do the
         // rounding first instead of carrying around incorrect low bits.
-        Value *x = auto_unbox(args[1],ctx);
+        Value *x = auto_unbox(args[2],ctx);
         builder.CreateStore(FP(x), builder.CreateBitCast(jlfloattemp_var,FT(x->getType())->getPointerTo()), true);
         return builder.CreateFPExt(builder.CreateLoad(builder.CreateBitCast(jlfloattemp_var,FT(x->getType())->getPointerTo()), true),
-                                   FTnbits(try_to_determine_bitstype_nbits(args[2],ctx)));
+                                   FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
     }
     default: ;
     }
