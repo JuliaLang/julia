@@ -42,7 +42,7 @@ update(avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
     fixed = Read.fixed(avail)
     for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
-        if Git.attached(dir=pkg) && !Git.isdirty(dir=pkg)
+        if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
             @recover begin
                 Git.run(`fetch -q --all`)
                 Git.run(`pull -q`)
