@@ -50,7 +50,7 @@ $(BUILD)/share/man/man1/julia.1: doc/man/julia.1 | $(BUILD)/share/julia
 
 COMMIT:
 	@#this is a .PHONY target so that it will always run
-	echo `git rev-parse --short HEAD`-$(OS)-$(ARCH) \(`date +"%Y-%m-%d %H:%M:%S"`\) > COMMIT
+	echo Commit `git rev-parse --short HEAD` `date +"%Y-%m-%d %H:%M:%S"` > COMMIT
 
 # use sys.ji if it exists, otherwise run two stages
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl base/sparse/*.jl $(BUILD)/share/julia/helpdb.jl $(BUILD)/share/man/man1/julia.1
