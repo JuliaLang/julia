@@ -1954,13 +1954,18 @@ function find_sa_vars(ast)
     av
 end
 
+symequal(x::SymbolNode, y::SymbolNode) = is(x.name,y.name)
+symequal(x::SymbolNode, y::Symbol)     = is(x.name,y)
+symequal(x::Symbol    , y::SymbolNode) = is(x,y.name)
+symequal(x::ANY       , y::ANY)        = is(x,y)
+
 function occurs_outside_tupleref(e::ANY, sym::ANY, sv::StaticVarInfo, tuplen::Int)
     if is(e, sym) || (isa(e, SymbolNode) && is(e.name, sym))
         return true
     end
     if isa(e,Expr)
         e = e::Expr
-        if is_known_call(e, tupleref, sv) && isequal(e.args[2],sym)
+        if is_known_call(e, tupleref, sv) && symequal(e.args[2],sym)
             targ = e.args[2]
             if !(exprtype(targ)<:Tuple)
                 return true
@@ -2040,7 +2045,7 @@ function replace_tupleref(e::ANY, tupname, vals, sv, i0)
     for i = i0:length(e.args)
         a = e.args[i]
         if isa(a,Expr) && is_known_call(a,tupleref, sv) &&
-            isequal(a.args[2],tupname)
+            symequal(a.args[2],tupname)
             e.args[i] = vals[a.args[3]]
         else
             replace_tupleref(a, tupname, vals, sv, 1)
