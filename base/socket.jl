@@ -1,7 +1,7 @@
 ## IP ADDRESS HANDLING ##
 abstract IpAddr
 
-type IPv4 <: IpAddr
+immutable IPv4 <: IpAddr
     host::Uint32
     IPv4(host::Uint32) = new(host)
     IPv4(a::Uint8,b::Uint8,c::Uint8,d::Uint8) = new(uint32(a)<<24|
@@ -31,10 +31,7 @@ show(io::IO,ip::IPv4) = print(io,"IPv4(",dec((ip.host&(0xFF000000))>>24),".",
                                          dec((ip.host&(0xFF00))>>8),".",
                                          dec(ip.host&0xFF),")")
 
-isequal(a::IPv4,b::IPv4) = a.host == b.host
-hash(ip::IPv4) = hash(ip.host)
-
-type IPv6 <: IpAddr
+immutable IPv6 <: IpAddr
     host::Uint128
     IPv6(host::Uint128) = new(host)
     IPv6(a::Uint16,b::Uint16,c::Uint16,d::Uint16,
@@ -128,9 +125,6 @@ function show(io::IO,ip::IPv6)
     end
     print(io,")")
 end
-
-isequal(a::IPv6,b::IPv6) = a.host == b.host
-hash(ip::IPv6) = hash(ip.host)
 
 # Parsing
 
