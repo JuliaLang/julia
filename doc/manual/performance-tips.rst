@@ -30,8 +30,9 @@ Type declarations
 -----------------
 
 In many languages with optional type declarations, adding declarations
-is the principal way to make code run faster. In Julia, the compiler
-generally knows the types of all function arguments and local variables.
+is the principal way to make code run faster. This is *not* the case
+in Julia. In Julia, the compiler generally knows the types of all function
+arguments, local variables, and expressions.
 However, there are a few specific instances where declarations are
 helpful.
 

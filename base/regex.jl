@@ -130,6 +130,7 @@ immutable RegexMatchIterator
     RegexMatchIterator(regex::Regex, string::String) = RegexMatchIterator(regex, string, false)
 end
 
+eltype(itr::RegexMatchIterator) = RegexMatch
 start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1)
 done(itr::RegexMatchIterator, prev_match) = (prev_match == nothing)
 

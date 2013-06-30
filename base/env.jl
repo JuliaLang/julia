@@ -10,7 +10,7 @@ _hasenv(s::String) = _getenvlen(s)!=0
 function _jl_win_getenv(s::String,len::Uint32)
     val=zeros(Uint8,len-1)
     ret=ccall(:GetEnvironmentVariableA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32),s,val,len)
-    if(ret==0||ret!=len-1) #Trailing 0 is only included on first call to GetEnvA
+    if ret==0||ret!=len-1 #Trailing 0 is only included on first call to GetEnvA
         error("getenv: unknown system error: ", s, len, ret)
     end
     val
@@ -41,7 +41,7 @@ function _setenv(var::String, val::String, overwrite::Bool)
     systemerror(:setenv, ret != 0)
 end
 @windows_only begin
-    if(overwrite||!_hasenv(var))
+    if overwrite||!_hasenv(var)
         ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),var,val)
         systemerror(:setenv, ret == 0)
     end
@@ -98,7 +98,7 @@ end
 @windows_only begin
 start(hash::EnvHash) = (hash.block = ccall(:GetEnvironmentStringsA,stdcall,Ptr{Uint8},()))
 function done(hash::EnvHash, pos::Ptr{Uint8})
-    if(ccall(:jl_env_done,Any,(Ptr{Uint8},),pos)::Bool)
+    if ccall(:jl_env_done,Any,(Ptr{Uint8},),pos)::Bool
         ccall(:FreeEnvironmentStringsA,stdcall,Int32,(Ptr{Uint8},),hash.block)
         hash.block=C_NULL
         return true

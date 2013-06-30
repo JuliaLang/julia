@@ -266,7 +266,6 @@ isinteractive() = (is_interactive::Bool)
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     global const LOAD_PATH = ByteString[
-        abspath(JULIA_HOME,"..","share","julia","extras"),
         abspath(JULIA_HOME,"..","local","share","julia","site",vers),
         abspath(JULIA_HOME,"..","share","julia","site",vers)
     ]
@@ -296,10 +295,8 @@ function _start()
     fdwatcher_reinit()
     # Initialize RNG
     Random.librandom_init()
-    # Check that OpenBLAS is correctly built
-    if Base.libblas_name == "libopenblas"
-        check_openblas()
-    end
+    # Check that BLAS is correctly built
+    check_blas()
     Sys.init()
     global const CPU_CORES = Sys.CPU_CORES
 
@@ -325,6 +322,12 @@ function _start()
         repl && startup && try_include(abspath(ENV["HOME"],".juliarc.jl"))
 
         if repl
+            if isa(STDIN,File)
+                global is_interactive = false
+                eval(parse_input_line(readall(STDIN)))
+                quit()
+            end
+
             if !color_set
                 @unix_only global have_color = (beginswith(get(ENV,"TERM",""),"xterm") || success(`tput setaf 0`))
                 @windows_only global have_color = true

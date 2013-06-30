@@ -20,21 +20,33 @@
 #define __STDC_LIMIT_MACROS
 #define __STDC_CONSTANT_MACROS
 #endif
-#include "llvm/DerivedTypes.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
+#include "llvm/PassManager.h"
+#include "llvm/Analysis/Verifier.h"
+#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/Attributes.h"
+#include "llvm/IR/IRBuilder.h"
+#define LLVM33 1
+#else
+#include "llvm/DerivedTypes.h" 
 #include "llvm/LLVMContext.h"
 #include "llvm/Module.h"
 #include "llvm/Intrinsics.h"
-#include "llvm/PassManager.h"
-#include "llvm/Analysis/Verifier.h"
 #include "llvm/Attributes.h"
+#endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 2 
 #include "llvm/DebugInfo.h"
 #include "llvm/DIBuilder.h"
+#ifndef LLVM33
 #include "llvm/IRBuilder.h"
-#define LLVM32
+#endif
+#define LLVM32 1
 #else
 #include "llvm/Analysis/DebugInfo.h"
 #include "llvm/Analysis/DIBuilder.h"
@@ -179,6 +191,7 @@ static Function *box8_func;
 static Function *box16_func;
 static Function *box32_func;
 static Function *box64_func;
+static Function *jlputs_func;
 #ifdef _OS_WINDOWS_
 static Function *resetstkoflw_func;
 #endif
@@ -416,7 +429,7 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dum
     else {
         llvmf = to_function(sf->linfo, false);
     }
-    if(dumpasm == false) {
+    if (dumpasm == false) {
         llvmf->print(stream);
     }
     else {
@@ -493,8 +506,7 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams)
                 jl_fptr_t fptr = ((jl_function_t*)f)->fptr;
                 if (fptr == &jl_apply_generic) {
                     if (f == jl_get_global(jl_base_module, jl_symbol("dlsym")) ||
-                        f == jl_get_global(jl_base_module, jl_symbol("dlopen")))
-                    {
+                        f == jl_get_global(jl_base_module, jl_symbol("dlopen"))) {
                         size_t i;
                         size_t n = jl_array_dim0(e->args);
                         jl_value_t **v;
@@ -512,7 +524,8 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams)
                         JL_GC_POP();
                         return result;
                     }
-                } else if (jl_array_dim0(e->args) == 3 && fptr == &jl_f_get_field) {
+                }
+                else if (jl_array_dim0(e->args) == 3 && fptr == &jl_f_get_field) {
                     m = (jl_module_t*)static_eval(jl_exprarg(e,1),ctx,sparams);
                     s = (jl_sym_t*)static_eval(jl_exprarg(e,2),ctx,sparams);
                     if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
@@ -520,7 +533,8 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams)
                         if (b && b->constp)
                             return b->value;
                     }
-                } else if (fptr == &jl_f_tuple) {
+                }
+                else if (fptr == &jl_f_tuple) {
                     size_t i;
                     size_t n = jl_array_dim0(e->args)-1;
                     if (n==0) return (jl_value_t*)jl_null;
@@ -936,8 +950,8 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
     JL_GC_POP();
 
     int argStart = ctx->argDepth;
-    Value *arg1 = emit_expr(expr, ctx);
-    make_gcroot(boxed(arg1), ctx);
+    Value *arg1 = boxed(emit_expr(expr, ctx));
+    make_gcroot(arg1, ctx);
     Value *arg2 = literal_pointer_val((jl_value_t*)name);
     make_gcroot(arg2, ctx);
     Value *myargs = builder.CreateGEP(ctx->argTemp,
@@ -1803,7 +1817,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         return NULL;
     }
     else if (jl_is_linenode(expr)) {
-        if(valuepos)
+        if (valuepos)
             jl_error("Linenode in value position");
         return NULL;
     }
@@ -1950,12 +1964,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                 bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
             }
         }
-        Value *a1 = emit_expr(args[1], ctx);
-        make_gcroot(boxed(a1), ctx);
-        Value *a2 = emit_expr(args[2], ctx);
-        make_gcroot(boxed(a2), ctx);
-        Value *a3 = emit_expr(args[3], ctx);
-        make_gcroot(boxed(a3), ctx);
+        Value *a1 = boxed(emit_expr(args[1], ctx));
+        make_gcroot(a1, ctx);
+        Value *a2 = boxed(emit_expr(args[2], ctx));
+        make_gcroot(a2, ctx);
+        Value *a3 = boxed(emit_expr(args[3], ctx));
+        make_gcroot(a3, ctx);
         Value *mdargs[6] = { name, bp, literal_pointer_val((void*)bnd),
                              a1, a2, a3 };
         ctx->argDepth = last_depth;
@@ -2356,7 +2370,11 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     attr->addAlignmentAttr(16);
     f->addAttribute(~0U, Attributes::get(f->getContext(), *attr));
 #endif
+#if LLVM32 && !LLVM33
     f->addFnAttr(Attributes::StackProtectReq);
+#else
+    f->addFnAttr(Attribute::StackProtectReq);
+#endif
 #endif
     ctx.f = f;
 
@@ -2981,7 +2999,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_int32, args2, false),
                          Function::ExternalLinkage, "sigsetjmp", jl_Module);
         //Intrinsic::getDeclaration(jl_Module, Intrinsic::eh_sjlj_setjmp);
-#ifdef LLVM32
+#if LLVM32 && !LLVM33
     setjmp_func->addFnAttr(Attributes::ReturnsTwice);
 #else
     setjmp_func->addFnAttr(Attribute::ReturnsTwice);
@@ -3116,6 +3134,15 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "alloc_3w", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlalloc3w_func, (void*)&alloc_3w);
+    
+    std::vector<Type *> puts_args(0);
+    puts_args.push_back(T_pint8);
+    puts_args.push_back(T_pint8);
+    jlputs_func =
+        Function::Create(FunctionType::get(T_void, puts_args, false),
+                         Function::ExternalLinkage,
+                         "jl_puts", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlputs_func, (void*)&jl_puts);
 
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);

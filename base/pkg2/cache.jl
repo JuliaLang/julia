@@ -1,46 +1,27 @@
 module Cache
 
-using ..Types, Base.Git
+using Base.Git, ..Types
 
 path(pkg::String) = abspath(".cache", pkg)
-origin(pkg::String) = Git.readchomp(`config remote.origin.url`, dir=path(pkg))
 
-function prefetch(pkg::String, url::String, vers::Dict{String,VersionNumber})
-    cache = path(pkg)
+function prefetch{S<:String}(pkg::String, url::String, sha1s::Vector{S})
     isdir(".cache") || mkdir(".cache")
+    cache = path(pkg)
     if !isdir(cache)
-        from = ispath(pkg,".git") ? abspath(pkg) : url
-        info("Cloning $pkg from $from...")
-        try Git.run(`clone --bare $from $cache`)
+        info("Cloning $pkg from $url")
+        try Git.run(`clone -q --mirror $url $cache`)
         catch
             run(`rm -rf $cache`)
             rethrow()
         end
-    elseif ispath(pkg,".git")
-        Git.run(`fetch -q $pkg`, dir=cache)
+    else
+        Git.run(`config remote.origin.url $url`, dir=cache)
     end
-    Git.run(`config remote.origin.url $url`, dir=cache)
-    sha1s = collect(keys(vers))
-    all(sha1->Git.iscommit(sha1, dir=cache), sha1s) && return
-    Git.run(`fetch -q $url`, dir=cache)
-    all(sha1->Git.iscommit(sha1, dir=cache), sha1s) && return
-    unfound = filter(sha1->!Git.iscommit(sha1, dir=cache), sha1s)
-    msg = "unfound versions of $pkg (possible metadata misconfiguration):"
-    for sha1 in sha1s
-        ver = vers[sha1]
-        msg *= "  $(ver[sha1]) [$sha1[1:10]]\n"
-    end
-    error(msg)
+    if !all(sha1->Git.iscommit(sha1, dir=cache), sha1s)
+	    Git.run(`fetch -q $url`, dir=cache)
+	end
+    filter(sha1->!Git.iscommit(sha1, dir=cache), sha1s)
 end
-prefetch(pkg::String, url::String, sha1::String, ver::VersionNumber) =
-    prefetch(pkg, url, (String=>VersionNumber)[sha1=>ver])
-
-function prefetch(pkg::String, url::String, avail::Dict{VersionNumber,Available})
-    vers = Dict{String,VersionNumber}()
-    for (v,a) in avail
-        vers[a.sha1] = v
-    end
-    prefetch(pkg, url, vers)
-end
+prefetch(pkg::String, url::String, sha1::String...) = prefetch(pkg, url, [sha1...])
 
 end # module

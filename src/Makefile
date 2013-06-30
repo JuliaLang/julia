@@ -43,7 +43,7 @@ release debug: %: libjulia-%
 HEADERS = julia.h $(wildcard support/*.h) $(LIBUV_INC)/uv.h
 
 %.o: %.c $(HEADERS)
-	$(QUIET_CC) $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
+	$(QUIET_CC) $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@
 %.do: %.c $(HEADERS)
 	$(QUIET_CC) $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 %.o: %.cpp $(HEADERS)

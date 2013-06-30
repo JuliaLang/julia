@@ -149,13 +149,13 @@ type Process
     closecb::Callback
     closenotify::Condition
     function Process(cmd::Cmd,handle::Ptr{Void},in::RawOrBoxedHandle,out::RawOrBoxedHandle,err::RawOrBoxedHandle)
-        if(!isa(in,AsyncStream))
+        if !isa(in,AsyncStream)
             in=null_handle
         end
-        if(!isa(out,AsyncStream))
+        if !isa(out,AsyncStream)
             out=null_handle
         end
-        if(!isa(err,AsyncStream))
+        if !isa(err,AsyncStream)
             err=null_handle
         end
         new(cmd,handle,in,out,err,-2,-2,false,Condition(),false,Condition())
@@ -291,14 +291,14 @@ macro cleanup_stdio()
                 close(in)
             end
         end
-        if(close_out)
+        if close_out
             if isa(out,Ptr)
                 close_pipe_sync(out)
             else
                 close(out)
             end
         end
-        if(close_err)
+        if close_err
             if isa(err,Ptr)
                 close_pipe_sync(err)
             else
@@ -318,7 +318,7 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
     pp.handle = _jl_spawn(ptrs[1], convert(Ptr{Ptr{Uint8}}, ptrs), loop, pp,
                           in,out,err)
     @cleanup_stdio
-    if(isa(pc, ProcessChain))
+    if isa(pc, ProcessChain)
         push!(pc.processes,pp)
     end
     pp
@@ -333,18 +333,6 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
     spawn(pc, cmds.b, (in,out,err), exitcb, closecb)
     @cleanup_stdio
     pc
-end
-
-function reinit_stdio()
-    STDIN.handle  = ccall(:jl_stdin_stream ,Ptr{Void},())
-    STDOUT.handle = ccall(:jl_stdout_stream,Ptr{Void},())
-    STDERR.handle = ccall(:jl_stderr_stream,Ptr{Void},())
-    STDIN.buffer = PipeBuffer()
-    STDOUT.buffer = PipeBuffer()
-    STDERR.buffer = PipeBuffer()
-    for stream in (STDIN,STDOUT,STDERR)
-        ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},Any),stream.handle,stream)
-    end
 end
 
 # INTERNAL
@@ -421,12 +409,13 @@ function run(cmds::AbstractCmd,args...)
     wait_success(ps) ? nothing : pipeline_error(ps)
 end
 
+const SIGPIPE = 13
 function success(proc::Process)
     assert(process_exited(proc))
     if proc.exit_code == -1
         error("could not start process ", proc)
     end
-    proc.exit_code==0
+    proc.exit_code==0 && (proc.term_signal == 0 || proc.term_signal == SIGPIPE)
 end
 success(procs::Vector{Process}) = all(success, procs)
 success(procs::ProcessChain) = success(procs.processes)

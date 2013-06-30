@@ -1,4 +1,4 @@
-show(x) = show(OUTPUT_STREAM::IO, x)
+show(x) = show(STDOUT::IO, x)
 
 function print(io::IO, s::Symbol)
     pname = convert(Ptr{Uint8}, s)
@@ -69,7 +69,7 @@ function show(io::IO, x::DataType)
 end
 
 showcompact(io::IO, x) = show(io, x)
-showcompact(x) = showcompact(OUTPUT_STREAM::IO, x)
+showcompact(x) = showcompact(STDOUT::IO, x)
 
 macro show(exs...)
     blk = Expr(:block)
@@ -112,12 +112,18 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one)
     first = true
     if !done(itr,state)
 	while true
-	    x, state = next(itr,state)
-            multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
-            if newline
-                if multiline; println(io); end
+            if isa(itr,Array) && !isdefined(itr,state)
+                print(io, undef_ref_str)
+                state += 1
+                multiline = false
+            else
+	        x, state = next(itr,state)
+                multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
+                if newline
+                    if multiline; println(io); end
+                end
+	        show(io, x)
             end
-	    show(io, x)
 	    if done(itr,state)
                 if delim_one && first
                     print(io, delim)
@@ -161,10 +167,10 @@ unquoted(ex::Expr)       = ex.args[1]
 # which shows the contents using show_unquoted(),
 # which shows subexpressions using show_unquoted()
 # ==> AST:s are printed wrapped in a single quotation
-show_indented(x)                 = show_indented(OUTPUT_STREAM, x)
+show_indented(x)                 = show_indented(STDOUT, x)
 show_indented(io::IO, x)         = show_indented(io, x, 0)
 show_indented(io::IO, x, indent) = show(io, x)
-show_unquoted(x)                 = show_unquoted(OUTPUT_STREAM, x)
+show_unquoted(x)                 = show_unquoted(STDOUT, x)
 show_unquoted(io::IO, x)         = show_unquoted(io, x, 0)
 show_unquoted(io::IO, x, indent) = (print(io,"\$("); show(io,x); print(io,')'))
 
@@ -423,7 +429,7 @@ function show_method_table(io::IO, mt::MethodTable, max::Int=-1)
     end
     if rest > 0
         println()
-        print("... $rest not shown (use methods($name) to see them all)")
+        print("... $rest methods not shown (use methods($name) to see them all)")
     end
 end
 
@@ -470,19 +476,23 @@ function xdump(fn::Function, io::IO, x::Module, n::Int, indent)
     print(io, Module, " ")
     println(io, x)
 end
+function xdump_elts(fn::Function, io::IO, x::Array{Any}, n::Int, indent, i0, i1)
+    for i in i0:i1
+        print(io, indent, "  ", i, ": ")
+        if !isdefined(x,i)
+            println(undef_ref_str)
+        else
+            fn(io, x[i], n - 1, string(indent, "  "))
+        end
+    end
+end
 function xdump(fn::Function, io::IO, x::Array{Any}, n::Int, indent)
     println("Array($(eltype(x)),$(size(x)))")
     if n > 0
-        for i in 1:(length(x) <= 10 ? length(x) : 5)
-            print(io, indent, "  ", i, ": ")
-            fn(io, x[i], n - 1, string(indent, "  "))
-        end
+        xdump_elts(fn, io, x, n, indent, 1, (length(x) <= 10 ? length(x) : 5))
         if length(x) > 10
             println(io, indent, "  ...")
-            for i in length(x)-4:length(x)
-                print(io, indent, "  ", i, ": ")
-                fn(io, x[i], n - 1, string(indent, "  "))
-            end
+            xdump_elts(fn, io, x, n, indent, length(x)-4, length(x))
         end
     end
 end
@@ -561,15 +571,15 @@ xdump(fn::Function, io::IO, x::DataType, n::Int) = x.abstract ? dumptype(io, x, 
 # defaults:
 xdump(fn::Function, io::IO, x) = xdump(xdump, io, x, 5, "")  # default is 5 levels
 xdump(fn::Function, io::IO, x, n::Int) = xdump(xdump, io, x, n, "")
-xdump(fn::Function, args...) = xdump(fn, OUTPUT_STREAM::IO, args...)
+xdump(fn::Function, args...) = xdump(fn, STDOUT::IO, args...)
 xdump(io::IO, args...) = xdump(xdump, io, args...)
-xdump(args...) = xdump(xdump, OUTPUT_STREAM::IO, args...)
+xdump(args...) = xdump(xdump, STDOUT::IO, args...)
 
 
 # Here are methods specifically for dump:
 dump(io::IO, x, n::Int) = dump(io, x, n, "")
 dump(io::IO, x) = dump(io, x, 5, "")  # default is 5 levels
-dump(args...) = dump(OUTPUT_STREAM::IO, args...)
+dump(args...) = dump(STDOUT::IO, args...)
 dump(io::IO, x::String, n::Int, indent) = println(io, typeof(x), " \"", x, "\"")
 dump(io::IO, x, n::Int, indent) = xdump(dump, io, x, n, indent)
 
@@ -596,7 +606,7 @@ dump(io::IO, x::DataType) = dump(io, x, 5, "")
 dump(io::IO, x::TypeVar, n::Int, indent) = println(io, x.name)
 
 
-showall(x) = showall(OUTPUT_STREAM::IO, x)
+showall(x) = showall(STDOUT::IO, x)
 
 function showall{T}(io::IO, a::AbstractArray{T,1})
     if is(T,Any)
@@ -909,8 +919,8 @@ end
 
 print_bit_chunk(io::IO, c::Uint64) = print_bit_chunk(io, c, 64)
 
-print_bit_chunk(c::Uint64, l::Integer) = print_bit_chunk(OUTPUT_STREAM, c, l)
-print_bit_chunk(c::Uint64) = print_bit_chunk(OUTPUT_STREAM, c)
+print_bit_chunk(c::Uint64, l::Integer) = print_bit_chunk(STDOUT, c, l)
+print_bit_chunk(c::Uint64) = print_bit_chunk(STDOUT, c)
 
 function bitshow(io::IO, B::BitArray)
     if length(B) == 0
@@ -923,6 +933,6 @@ function bitshow(io::IO, B::BitArray)
     l = (@_mod64 (length(B)-1)) + 1
     print_bit_chunk(io, B.chunks[end], l)
 end
-bitshow(B::BitArray) = bitshow(OUTPUT_STREAM, B)
+bitshow(B::BitArray) = bitshow(STDOUT, B)
 
 bitstring(B::BitArray) = sprint(bitshow, B)

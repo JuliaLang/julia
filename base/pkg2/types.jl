@@ -14,7 +14,7 @@ Base.show(io::IO, i::VersionInterval) = print(io, "[$(i.lower),$(i.upper))")
 Base.isempty(i::VersionInterval) = i.upper <= i.lower
 Base.contains(i::VersionInterval, v::VersionNumber) = i.lower <= v < i.upper
 Base.intersect(a::VersionInterval, b::VersionInterval) = VersionInterval(max(a.lower,b.lower), min(a.upper,b.upper))
-==(a::VersionInterval, b::VersionInterval) = (a.lower == b.lower) & (a.upper == b.upper)
+Base.isequal(a::VersionInterval, b::VersionInterval) = (a.lower == b.lower) & (a.upper == b.upper)
 
 immutable VersionSet
     intervals::Vector{VersionInterval}
@@ -42,7 +42,8 @@ function Base.intersect(A::VersionSet, B::VersionSet)
     sortby!(ivals, i->i.lower)
     VersionSet(ivals)
 end
-==(A::VersionSet, B::VersionSet) = (A.intervals == B.intervals)
+Base.isequal(A::VersionSet, B::VersionSet) = (A.intervals == B.intervals)
+Base.hash(s::VersionSet) = hash(s.intervals)
 
 typealias Requires Dict{ByteString,VersionSet}
 
