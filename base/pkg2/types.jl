@@ -62,6 +62,8 @@ immutable Available
     requires::Requires
 end
 
+Base.isequal(a::Available, b::Available) = (a.sha1 == b.sha1 && a.requires == b.requires)
+
 Base.show(io::IO, a::Available) = isempty(a.requires) ?
     print(io, "Available(", repr(a.sha1), ")") :
     print(io, "Available(", repr(a.sha1), ",", a.requires, ")")
@@ -71,6 +73,8 @@ immutable Fixed
     requires::Requires
 end
 Fixed(v::VersionNumber) = Fixed(v,Requires())
+
+Base.isequal(a::Fixed, b::Fixed) = (a.version == b.version && a.requires == b.requires)
 
 Base.show(io::IO, f::Fixed) = isempty(f.requires) ?
     print(io, "Fixed(", repr(f.version), ")") :
