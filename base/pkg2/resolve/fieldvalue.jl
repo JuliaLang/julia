@@ -37,8 +37,6 @@ Base.typemax(::Type{FieldValue}) = (x=typemax(Int); FieldValue(x,x,x,x,x))
 Base.(:-)(a::FieldValue, b::FieldValue) = FieldValue(a.l0-b.l0, a.l1-b.l1, a.l2-b.l2, a.l3-b.l3, a.l4-b.l4)
 Base.(:+)(a::FieldValue, b::FieldValue) = FieldValue(a.l0+b.l0, a.l1+b.l1, a.l2+b.l2, a.l3+b.l3, a.l4+b.l4)
 
-Base.isequal(a::FieldValue, b::FieldValue) = (a.l0==b.l0 && a.l1==b.l1 && a.l2==b.l2 && a.l3==b.l3 && a.l4==b.l4)
-
 function Base.isless(a::FieldValue, b::FieldValue)
     a.l0 < b.l0 && return true
     a.l0 > b.l0 && return false

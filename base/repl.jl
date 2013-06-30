@@ -12,11 +12,18 @@ function repl_show(io::IO, v::ANY)
             show(io, v)
         end
     end
-    isa(v,DataType) && methods(v)  # force constructor creation
-    if isgeneric(v)
-        lim = 5
-        if isa(v,DataType); println(); lim=0; end
-        show_method_table(io, methods(v), lim)
+    if isa(v,DataType)
+        methods(v)  # force constructor creation
+        if isgeneric(v)
+            if v === v.name.primary
+                name = string(v.name.name)
+            else
+                name = repr(v)
+            end
+            print(io, "  (use methods($name) to see constructors)")
+        end
+    elseif isgeneric(v)
+        show_method_table(io, methods(v), 5)
     end
 end
 
