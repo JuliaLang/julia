@@ -35,7 +35,7 @@ function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Availa
     end
 
     # verify solution (debug code) and enforce its optimality
-    verify_sol(interface, sol)
+    verify_solution(interface, sol)
     enforce_optimality(interface, sol)
 
     # return the solution as a Dict mapping package_name => sha1
@@ -104,8 +104,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
         nvn = VersionNumber(vn.major, vn.minor, vn.patch + 1, vn.prerelease, vn.build)
         sub_reqs = (ByteString=>VersionSet)[p=>VersionSet([vn, nvn])]
-        sub_deps = Query.dependencies_subset(deps, p)
-        interface = Interface(sub_reqs, sub_deps)
+        interface = Interface(sub_reqs, deps)
 
         graph = Graph(interface)
         msgs = Messages(interface, graph)
@@ -118,7 +117,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
         local sol::Vector{Int}
         try
             sol = maxsum(graph, msgs)
-            verify_sol(interface, sol)
+            verify_solution(interface, sol)
 
             for p0 = 1:red_np
                 s0 = sol[p0]

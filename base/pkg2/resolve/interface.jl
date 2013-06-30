@@ -3,7 +3,7 @@ module PkgToMaxSumInterface
 using ...Types, ...Query
 
 export MetadataError, Interface, compute_output_dict,
-       verify_sol, enforce_optimality
+       verify_solution, enforce_optimality
 
 # Error type used to signal that there was some
 # problem with the metadata info passed to resolve
@@ -16,7 +16,7 @@ end
 typealias VersionWeight Int
 
 # A collection of objects which allow interfacing external (Pkg) and
-# internal (MaxSum) representation, and doing some manipulation
+# internal (MaxSum) representation
 type Interface
     # requirements and dependencies, in external representation
     reqs::Requires
@@ -57,46 +57,42 @@ type Interface
 
     function Interface(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
-        # generate pkgs
-        pkgs_set = Set{ByteString}()
-        for (p,_) in deps add!(pkgs_set, p) end
-
-        pkgs = sort!(ByteString[pkgs_set...])
-        np = length(pkgs)
-
         # check reqs for unknown packages
-        for (p,_) in reqs
-            if !contains(pkgs_set, p)
-                throw(MetadataError("required package $p has no version compatible with fixed requirements"))
-            end
+        for rp in keys(reqs)
+            haskey(deps, rp) || throw(MetadataError("required package $rp has no version compatible with fixed requirements"))
         end
 
         # reduce deps by version pruning
         deps, eq_classes_map = Query.prune_versions(reqs, deps)
 
+        # generate pkgs
+        pkgs = sort!(ByteString[Set{ByteString}(keys(deps)...)...])
+
+        np = length(pkgs)
+
         # generate pdict
         pdict = (ByteString=>Int)[ pkgs[i] => i for i = 1:np ]
 
         # generate spp and pvers
-        spp = ones(Int, np)
+        spp = Array(Int, np)
 
         pvers = [ VersionNumber[] for i = 1:np ]
 
-        for (p,d) in deps, (vn,_) in d
+        for (p,depsp) in deps, vn in keys(depsp)
             p0 = pdict[p]
-            spp[p0] += 1
             push!(pvers[p0], vn)
         end
         for p0 = 1:np
             sort!(pvers[p0])
+            spp[p0] = length(pvers[p0]) + 1
         end
 
         # generate vdict
         vdict = [(VersionNumber=>Int)[] for p0 = 1:np]
-        for (p,d) in deps
+        for (p,depsp) in deps
             p0 = pdict[p]
             vdict0 = vdict[p0]
-            for (vn,_) in d
+            for vn in keys(depsp)
                 for v0 in 1:length(pvers[p0])
                     if pvers[p0][v0] == vn
                         vdict0[vn] = v0
@@ -158,7 +154,7 @@ end
 
 # verifies that the solution fulfills all hard constraints
 # (requirements and dependencies)
-function verify_sol(interface::Interface, sol::Vector{Int})
+function verify_solution(interface::Interface, sol::Vector{Int})
 
     reqs = interface.reqs
     deps = interface.deps

@@ -68,10 +68,15 @@ end
 #   1) They appear together as dependecies of another package (i.e. for each
 #      dependency relation, they are both required or both not required)
 #   2) They have the same dependencies
-# Also, for each package explicitly required, dicards all versions outside
-# the allowed range (checking for impossible ranges while at it).
+# Also, if there are explicitly required packages, dicards all versions outside
+# the allowed range (checking for impossible ranges while at it), and keeps only
+# the subgraph or requirements dependencies.
 prune_versions(deps::Dict{ByteString,Dict{VersionNumber,Available}}) = prune_versions((ByteString=>VersionSet)[], deps)
 function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
+
+    if !isempty(reqs)
+        deps = dependencies_subset(deps, Set{ByteString}(keys(reqs)...))
+    end
 
     np = length(deps)
 
@@ -283,8 +288,5 @@ function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}
 
     return sub_deps
 end
-dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkg::ByteString) =
-    dependencies_subset(deps, Set{ByteString}(pkg))
-
 
 end # module

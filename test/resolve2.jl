@@ -10,7 +10,7 @@ function deps_from_data(deps_data)
         end
         vn = VersionNumber(vnn)
         if !haskey(deps[p], vn)
-            deps[p][vn] = Available("fakesha1", (ByteString=>VersionSet)[])
+            deps[p][vn] = Available("$(p)_$(vn)_sha1", (ByteString=>VersionSet)[])
         end
         isempty(r) && continue
         rp = r[1]
@@ -28,18 +28,13 @@ function reqs_from_data(reqs_data)
     for r in reqs_data
         p = r[1]; vns = r[2:end]
         reqs[p] = VersionSet([VersionNumber(vn) for vn in vns])
-        #if length(r)==1
-            #push!(reqs, VersionSet(r[1]))
-        #else
-            #push!(reqs, VersionSet(r[1], [VersionNumber(v) for v=r[2:end]]))
-        #end
     end
     reqs
 end
 function sanity_tst(deps_data)
     deps = deps_from_data(deps_data)
+    #println("deps=$deps")
     #println()
-    #println("deps="); showall(deps); println()
     sanity_check(deps)
     return true
 end
