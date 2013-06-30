@@ -1,11 +1,11 @@
 module Cache
 
-using ..Types, Base.Git
+using Base.Git, ..Types, ..Read
 
 path(pkg::String) = abspath(".cache", pkg)
-origin(pkg::String) = Git.readchomp(`config remote.origin.url`, dir=path(pkg))
 
-function prefetch(pkg::String, url::String, vers::Dict{String,VersionNumber})
+function prefetch{S<:String}(pkg::String, sha1s::Vector{S})
+	url = Read.url(pkg)
     isdir(".cache") || mkdir(".cache")
     cache = path(pkg)
     if !isdir(cache)
@@ -18,28 +18,15 @@ function prefetch(pkg::String, url::String, vers::Dict{String,VersionNumber})
     else
         Git.run(`config remote.origin.url $url`, dir=cache)
     end
-    # ensure that desired versions exist
-    sha1s = collect(keys(vers))
-    all(sha1->Git.iscommit(sha1, dir=cache), sha1s) && return
-    Git.run(`fetch -q $url`, dir=cache)
-    all(sha1->Git.iscommit(sha1, dir=cache), sha1s) && return
-    unfound = filter(sha1->!Git.iscommit(sha1, dir=cache), sha1s)
-    msg = "unfound versions of $pkg (possible metadata misconfiguration):"
-    for sha1 in sha1s
-        ver = vers[sha1]
-        msg *= "  $(ver[sha1]) [$sha1[1:10]]\n"
-    end
-    error(msg)
+    if !all(sha1->Git.iscommit(sha1, dir=cache), sha1s)
+	    Git.run(`fetch -q $url`, dir=cache)
+	end
+    filter(sha1->!Git.iscommit(sha1, dir=cache), sha1s)
 end
-prefetch(pkg::String, url::String, sha1::String, ver::VersionNumber) =
-    prefetch(pkg, url, (String=>VersionNumber)[sha1=>ver])
-
-function prefetch(pkg::String, url::String, avail::Dict{VersionNumber,Available})
-    vers = Dict{String,VersionNumber}()
-    for (v,a) in avail
-        vers[a.sha1] = v
-    end
-    prefetch(pkg, url, vers)
+function prefetch(pkg::String, vers::Vector{VersionNumber})
+	prefetch(pkg, map(ver->Read.sha1(pkg,ver), vers))
 end
+prefetch(pkg::String, sha1::String) = prefetch(pkg,[sha1])
+prefetch(pkg::String, ver::VersionNumber) = prefetch(pkg,[ver])
 
 end # module

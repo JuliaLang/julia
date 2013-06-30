@@ -3,13 +3,13 @@ module Pkg2
 include("pkg2/dir.jl")
 include("pkg2/types.jl")
 include("pkg2/reqs.jl")
-include("pkg2/cache.jl")
 include("pkg2/read.jl")
 include("pkg2/query.jl")
 include("pkg2/resolve.jl")
+include("pkg2/cache.jl")
 include("pkg2/write.jl")
 
-using .Types, Base.Git
+using Base.Git, .Types
 
 rm(pkg::String) = edit(Reqs.rm, pkg)
 add(pkg::String, vers::VersionSet) = edit(Reqs.add, pkg, vers)
@@ -33,13 +33,15 @@ end
 update(avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
     info("Updating metadata...")
     cd("METADATA") do
-        Git.run(`fetch -q --all`)
-        Git.run(`checkout -q HEAD^0`)
-        Git.run(`branch -f devel refs/remotes/origin/devel`)
-        Git.run(`checkout -q devel`)
+        if Git.branch() != "devel"
+            Git.run(`fetch -q --all`)
+            Git.run(`checkout -q HEAD^0`)
+            Git.run(`branch -f devel refs/remotes/origin/devel`)
+            Git.run(`checkout -q devel`)
+        end
         Git.run(`pull -q`)
     end
-    fixed = Read.fixed(avail)
+    fixed = Read.fixed(Cache.path, avail)
     for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
         if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
@@ -48,19 +50,23 @@ update(avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
                 Git.run(`pull -q`)
             end
         end
-        haskey(avail,pkg) &&
-            Cache.prefetch(pkg, Read.url(pkg), avail[pkg])
+        if haskey(avail,pkg)
+            Cache.prefetch(pkg, [a.sha1 for (v,a)=avail[pkg]])
+        end
     end
-    free = Read.free(avail)
+    free = Read.free(Cache.path, avail)
     for (pkg,ver) in free
-        Cache.prefetch(pkg, Read.url(pkg), avail[pkg])
+        Cache.prefetch(pkg, [a.sha1 for (v,a)=avail[pkg]])
     end
     resolve(Reqs.parse("REQUIRE"), avail, fixed, free)
 end
 
-resolve(reqs::Dict, avail::Dict=Dir.cd(Read.available),
-                    fixed::Dict=Dir.cd(()->Read.fixed(avail)),
-                    have::Dict=Dir.cd(()->Read.free(avail))) = Dir.cd() do
+resolve(
+    reqs::Dict,
+    avail::Dict=Dir.cd(Read.available),
+    fixed::Dict=Dir.cd(()->Read.fixed(Cache.path, avail)),
+    have::Dict=Dir.cd(()->Read.free(Cache.path, avail))
+) = Dir.cd() do
     # figure out what should be installed
     reqs  = Query.requirements(reqs,fixed)
     deps  = Query.dependencies(avail,fixed)
@@ -73,11 +79,19 @@ resolve(reqs::Dict, avail::Dict=Dir.cd(Read.available),
     end
 
     # prefetch phase isolates network activity, nothing to roll back
+    missing = {}
     for (pkg,ver) in install
-        Cache.prefetch(pkg, Read.url(pkg), Read.sha1(pkg,ver), ver)
+        append!(missing, map(sha1->(pkg,ver,sha1), Cache.prefetch(pkg,ver)))
     end
-    for (pkg,(_,ver)) in update
-        Cache.prefetch(pkg, Read.url(pkg), Read.sha1(pkg,ver), ver)
+    for (pkg,(v1,v2)) in update
+        append!(missing, map(sha1->(pkg,ver,sha1), Cache.prefetch(pkg,[v1,v2])))
+    end
+    if !isempty(missing)
+        msg = "unfound package versions (possible metadata misconfiguration):"
+        for (pkg,ver,sha1) in missing
+            msg *= "  $pkg v$ver [$sha1[1:10]]\n"
+        end
+        error(msg)
     end
 
     # try applying changes, roll back everything if anything fails
@@ -122,7 +136,7 @@ end
 # Metadata sanity check
 check_metadata(julia_version::VersionNumber=VERSION) = Dir.cd() do
     avail = Read.available()
-    fixed = Read.fixed(avail)
+    fixed = Read.fixed(Cache.path, avail)
     deps  = Query.dependencies(avail,fixed)
     try
         Resolve.sanity_check(deps)
