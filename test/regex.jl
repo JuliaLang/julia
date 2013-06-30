@@ -1,6 +1,6 @@
 
 str = "The dark side of the moon"
-matches = match_all(r"(\w+)(\s*)", str)
+matches = matchall(r"(\w+)(\s*)", str)
 
 @test size(matches, 1) == 6
 @test matches[1].match == "The "
@@ -11,7 +11,7 @@ matches = match_all(r"(\w+)(\s*)", str)
 @test matches[6].match == "moon"
 
 s = "x \u2200 x \u2203 y"
-matches = match_all(r".\s", s)
+matches = matchall(r".\s", s)
 
 @test size(matches, 1) == 4
 @test matches[1].match == "x "
@@ -21,7 +21,7 @@ matches = match_all(r".\s", s)
 
 r = r"a?b?"
 s = "asbd"
-matches = match_all(r, s)
+matches = matchall(r, s)
 
 @test size(matches, 1) == 5
 @test matches[1].match == "a"
