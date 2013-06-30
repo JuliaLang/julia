@@ -188,7 +188,7 @@ type Messages
         # a "deterministic noise" function based on hashes
         function noise(p0::Int, v0::Int)
             s = pkgs[p0] * string(v0 == spp[p0] ? "UNINST" : pvers[p0][v0])
-            int(hash(s)) >> (4 * sizeof(Int))
+            int128(hash(s))
         end
 
         # external fields: there are 2 terms, a noise to break potential symmetries
@@ -343,8 +343,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         end
 
         diff = newmsg - oldmsg
-        maxabsdiff = max(abs(diff))
-        maxdiff = max(maxdiff, maxabsdiff)
+        maxdiff = max(maxdiff, max(abs(diff)))
 
         # update the field of p1
         fld1 = fld[p1]
