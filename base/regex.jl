@@ -100,7 +100,7 @@ match(r::Regex, s::String) = match(r, s, start(s))
 match(r::Regex, s::String, i::Integer) =
     error("regex matching is only available for bytestrings; use bytestring(s) to convert")
 
-function match_all(re::Regex, str::ByteString)
+function matchall(re::Regex, str::ByteString)
     [eachmatch(re, str)...]
 end
 
