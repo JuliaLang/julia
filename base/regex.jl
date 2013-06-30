@@ -101,47 +101,7 @@ match(r::Regex, s::String, i::Integer) =
     error("regex matching is only available for bytestrings; use bytestring(s) to convert")
 
 function match_all(re::Regex, str::ByteString)
-    m = match(re, str, 1)
-    if m == nothing; return nothing; end
-
-    re_opts = PCRE.info(re.regex, C_NULL, PCRE.INFO_OPTIONS, Uint32)
-    is_utf = (re_opts & PCRE.UTF8) != 0
-
-    matches = [m]
-    while true
-      opts = uint32(0)
-      if m != nothing
-          idx = m.offset + length(m.match.data)
-
-          if length(m.match) == 0
-              if m.offset == length(str.data) + 1
-                  break
-              end
-              opts = opts | PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART
-          end
-      end
-
-      m = match(re, str, idx, opts)
-      if m == nothing
-          if opts == 0
-              break
-          end
-          idx += 1
-          if is_utf
-              # Ensure we skip entire UTF character.
-              while idx <= length(str.data)
-                  if (str.data[idx] & 0xc0) != 0x80
-                      break;
-                  end
-                  idx += 1
-              end
-          end
-          continue
-      end
-
-      push!(matches, m)
-    end
-    matches
+    [eachmatch(re, str)...]
 end
 
 function search(str::ByteString, re::Regex, idx::Integer)
@@ -161,15 +121,64 @@ immutable RegexMatchIterator
     regex::Regex
     string::ByteString
     overlap::Bool
+    is_utf::Bool
+
+    function RegexMatchIterator(regex::Regex, string::String, ovr::Bool)
+        re_opts = PCRE.info(regex.regex, C_NULL, PCRE.INFO_OPTIONS, Uint32)
+        is_utf = (re_opts & PCRE.UTF8) != 0
+
+        new(regex, string, ovr, is_utf)
+    end
+    RegexMatchIterator(regex::Regex, string::String) = RegexMatchIterator(regex, string, false)
 end
 
-start(itr::RegexMatchIterator) = match(itr.regex, itr.string)
-done(itr::RegexMatchIterator, m) = m == nothing
-next(itr::RegexMatchIterator, m) =
-    (m, match(itr.regex, itr.string, m.offset + (itr.overlap ? 1 : length(m.match))))
+start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1)
+done(itr::RegexMatchIterator, prev_match) = (prev_match == nothing)
+
+# Assumes prev_match is not nothing
+function next(itr::RegexMatchIterator, prev_match)
+    m = prev_match
+    str = itr.string
+
+    while true
+      opts = uint32(0)
+      if m != nothing
+          idx = m.offset + length(m.match.data)
+
+          if length(m.match) == 0
+              if m.offset == length(str.data) + 1
+                  break
+              end
+              opts = opts | PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART
+          end
+      end
+
+      m = match(itr.regex, str, idx, opts)
+      if m == nothing
+          if opts == 0
+              break
+          end
+          idx += 1
+          if itr.is_utf
+              # Ensure we skip entire UTF character.
+              while idx <= length(str.data)
+                  if (str.data[idx] & 0xc0) != 0x80
+                      break;
+                  end
+                  idx += 1
+              end
+          end
+          continue
+      end
+
+      return (prev_match, m)
+    end
+
+    (prev_match, nothing)
+end
 
 eachmatch(re::Regex, str::String, ovr::Bool) = RegexMatchIterator(re,str,ovr)
-eachmatch(re::Regex, str::String)            = RegexMatchIterator(re,str,false)
+eachmatch(re::Regex, str::String)            = RegexMatchIterator(re,str)
 
 # miscellaneous methods that depend on Regex being defined
 
