@@ -46,8 +46,8 @@ end
 
 type NamedPipe <: AsyncStream
     handle::Ptr{Void}
-    buffer::IOBuffer
     open::Bool
+    buffer::IOBuffer
     line_buffered::Bool
     readcb::Callback
     readnotify::Condition
@@ -55,8 +55,9 @@ type NamedPipe <: AsyncStream
     connectnotify::Condition
     closecb::Callback
     closenotify::Condition
-    NamedPipe() = new(C_NULL,PipeBuffer(),false,true,false,Condition(),false,
+    NamedPipe(handle, open) = new(handle,open,PipeBuffer(),true,false,Condition(),false,
                       Condition(),false,Condition())
+    NamedPipe() = NamedPipe(C_NULL,false)
 end
 
 type PipeServer <: UVServer
@@ -110,23 +111,30 @@ associate_julia_struct(handle::Ptr{Void},jlobj::ANY) =
 disassociate_julia_struct(handle::Ptr{Void}) = 
     ccall(:jl_uv_disassociate_julia_struct,Void,(Ptr{Void},),handle)
 
-function _uv_tty2tty(handle::Ptr{Void})
-    tty = TTY(handle,true)
-    tty.line_buffered = false
-    associate_julia_struct(handle,tty)
-    tty
+function init_stdio(handle,fd)
+    t = ccall(:jl_uv_handle_type,Int32,(Ptr{Void},),handle)
+    if t == UV_FILE
+        return File(RawFD(fd))
+    else
+        if t == UV_TTY
+            ret = TTY(handle,true)
+        elseif t == UV_TCP
+            ret = TcpSocket(handle,true)
+        elseif t == UV_NAMED_PIPE
+            ret = NamedPipe(handle, true)
+        end
+        ret.line_buffered = false  
+        ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},Any),ret.handle,ret)     
+        return ret
+    end
 end
 
-#macro init_stdio()
-#begin
-    const STDIN  = _uv_tty2tty(ccall(:jl_stdin_stream ,Ptr{Void},()))
-    const STDOUT = _uv_tty2tty(ccall(:jl_stdout_stream,Ptr{Void},()))
-    const STDERR = _uv_tty2tty(ccall(:jl_stderr_stream,Ptr{Void},()))
-    OUTPUT_STREAM = STDOUT
-#end
-#end
-
-#@init_stdio
+function reinit_stdio()
+    global STDIN, STDERR, STDOUT
+    STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()),0)
+    STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()),1)
+    STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()),2)
+end
 
 flush(::TTY) = nothing
 
@@ -173,7 +181,7 @@ function _uv_hook_connectioncb(sock::UVServer, status::Int32)
     else
         err = UV_error_t(_uv_lasterror(),_uv_lastsystemerror())
     end
-    if(isa(sock.ccb,Function))
+    if isa(sock.ccb,Function)
         sock.ccb(sock,status)
     end
     notify(sock.connectnotify, err)
@@ -216,8 +224,8 @@ function notify_filled(stream::AsyncStream, nread::Int)
 end
 
 function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Int32)
-    if(nread == -1)
-        if(_uv_lasterror() != 1) #UV_EOF == 1
+    if nread == -1
+        if _uv_lasterror() != 1 #UV_EOF == 1
            error = UVError("readcb")
            close(stream)
            throw(error)
@@ -241,7 +249,7 @@ type SingleAsyncWork <: AsyncWork
     cb::Function
     handle::Ptr{Void}
     function SingleAsyncWork(loop::Ptr{Void},cb::Function)
-        if(loop == C_NULL)
+        if loop == C_NULL
             return new(cb,C_NULL)
         end
         this=new(cb)
@@ -339,7 +347,7 @@ function run_event_loop(loop::Ptr{Void})
     ccall(:jl_run_event_loop,Void,(Ptr{Void},),loop)
 end
 function process_events(block::Bool,loop::Ptr{Void})
-    if(block)
+    if block
         ccall(:jl_run_once,Int32,(Ptr{Void},),loop)
     else
         ccall(:jl_process_events,Int32,(Ptr{Void},),loop)        
@@ -361,14 +369,14 @@ function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{
 end
 
 function link_pipe(read_end2::NamedPipe,readable_julia_only::Bool,write_end::Ptr{Void},writeable_julia_only::Bool)
-    if(read_end2.handle == C_NULL)
+    if read_end2.handle == C_NULL
         read_end2.handle = malloc_pipe()
     end
     link_pipe(read_end2.handle,readable_julia_only,write_end,writeable_julia_only,read_end2)
     read_end2.open = true
 end
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::NamedPipe,writeable_julia_only::Bool)
-    if(write_end.handle == C_NULL)
+    if write_end.handle == C_NULL
         write_end.handle = malloc_pipe()
     end
     link_pipe(read_end,readable_julia_only,write_end.handle,writeable_julia_only,write_end)

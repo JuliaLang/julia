@@ -37,7 +37,7 @@ debug: $(EXENAME)-debug
 HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
 
 %.o: %.c $(HEADERS)
-	$(QUIET_CC) $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@
+	$(QUIET_CC) $(CC) $(CPPFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@
 %.do: %.c $(HEADERS)
 	$(QUIET_CC) $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@
 

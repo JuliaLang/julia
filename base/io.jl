@@ -387,7 +387,7 @@ function repr(x)
     takebuf_string(s)
 end
 
-write(x) = write(OUTPUT_STREAM::IO, x)
+write(x) = write(STDOUT::IO, x)
 
 function readuntil(s::IOStream, delim::Uint8)
     ccall(:jl_readuntil, Array{Uint8,1}, (Ptr{Void}, Uint8), s.ios, delim)

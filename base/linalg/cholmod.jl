@@ -20,7 +20,7 @@ import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul
                  cholfact, cholfact!, copy, dense, det, diag,
                  full, logdet, norm, scale, scale!, solve, sparse
 
-include("linalg/cholmod_h.jl")
+include("cholmod_h.jl")
 
 const chm_ver    = Array(Cint, 3)
 if dlsym(dlopen("libcholmod"), :cholmod_version) != C_NULL

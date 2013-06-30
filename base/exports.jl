@@ -172,7 +172,6 @@ export
     MS_SYNC,
     NaN,
     NaN32,
-    OUTPUT_STREAM,
     RTLD_LOCAL,
     RTLD_GLOBAL,
     RTLD_LAZY,
@@ -1088,6 +1087,7 @@ export
 
 # multiprocessing
     addprocs,
+    addprocs_scyld,
     addprocs_sge,
     fetch,
     isready,
@@ -1230,6 +1230,7 @@ export
     @unix_only,
     @osx_only,
     @linux_only,
+    @schedule,
     @sync,
     @async,
     @spawn,

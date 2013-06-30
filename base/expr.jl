@@ -42,9 +42,6 @@ astcopy(x::Array{Any,1}) = map(astcopy, x)
 astcopy(x) = x
 
 isequal(x::Expr, y::Expr) = (is(x.head,y.head) && isequal(x.args,y.args))
-isequal(x::SymbolNode, y::SymbolNode) = is(x.name,y.name)
-isequal(x::SymbolNode, y::Symbol)     = is(x.name,y)
-isequal(x::Symbol    , y::SymbolNode) = is(x,y.name)
 
 function show(io::IO, tv::TypeVar)
     if !is(tv.lb, None)

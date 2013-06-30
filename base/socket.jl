@@ -1,7 +1,7 @@
 ## IP ADDRESS HANDLING ##
 abstract IpAddr
 
-type IPv4 <: IpAddr
+immutable IPv4 <: IpAddr
     host::Uint32
     IPv4(host::Uint32) = new(host)
     IPv4(a::Uint8,b::Uint8,c::Uint8,d::Uint8) = new(uint32(a)<<24|
@@ -31,10 +31,7 @@ show(io::IO,ip::IPv4) = print(io,"IPv4(",dec((ip.host&(0xFF000000))>>24),".",
                                          dec((ip.host&(0xFF00))>>8),".",
                                          dec(ip.host&0xFF),")")
 
-isequal(a::IPv4,b::IPv4) = a.host == b.host
-hash(ip::IPv4) = hash(ip.host)
-
-type IPv6 <: IpAddr
+immutable IPv6 <: IpAddr
     host::Uint128
     IPv6(host::Uint128) = new(host)
     IPv6(a::Uint16,b::Uint16,c::Uint16,d::Uint16,
@@ -129,9 +126,6 @@ function show(io::IO,ip::IPv6)
     print(io,")")
 end
 
-isequal(a::IPv6,b::IPv6) = a.host == b.host
-hash(ip::IPv6) = hash(ip.host)
-
 # Parsing
 
 function parse_ipv4(str)
@@ -144,8 +138,14 @@ function parse_ipv4(str)
         end
         if f[1] == '0'
             if length(f) >= 2 && f[2] == 'x'
+                if length(f) > 8 # 2+(3*2) - prevent parseint from overflowing on 32bit
+                    error("IPv4 field too large")
+                end
                 r = parseint(f[3:end],16)
             else 
+                if length(f) > 9 # 1+8 - prevent parseint from overflowing on 32bit
+                    error("IPv4 field too large")
+                end
                 r = parseint(f,8)
             end
         else
@@ -157,7 +157,7 @@ function parse_ipv4(str)
             end
             ret |= uint32(r) << ((4-i)*8)
         else
-            if r > ((uint64(1)<<((5-length(f))*8))-1)
+            if r > ((uint64(1)<<((5-length(fields))*8))-1)
                 error("IPv4 field too large")
             end
             ret |= r
@@ -330,7 +330,7 @@ const UV_EADDRINUSE = 5
 function bind(sock::TcpServer, host::IPv4, port::Uint16)
     err = ccall(:jl_tcp_bind, Int32, (Ptr{Void}, Uint16, Uint32),
 	        sock.handle, hton(port), hton(host.host))
-    if(err == -1 && _uv_lasterror() != UV_EADDRINUSE)
+    if err == -1 && _uv_lasterror() != UV_EADDRINUSE
         throw(UVError("bind"))
     end
     err != -1
@@ -345,11 +345,11 @@ callback_dict = ObjectIdDict()
 
 function _uv_hook_getaddrinfo(cb::Function,addrinfo::Ptr{Void}, status::Int32)
     delete!(callback_dict,cb)
-    if(status!=0)
+    if status!=0
         throw(UVError("getaddrinfo callback"))
     end
     sockaddr = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
-    if(ccall(:jl_sockaddr_is_ip4,Int32,(Ptr{Void},),sockaddr)==1)
+    if ccall(:jl_sockaddr_is_ip4,Int32,(Ptr{Void},),sockaddr) == 1
         cb(IPv4(ntoh(ccall(:jl_sockaddr_host4,Uint32,(Ptr{Void},),sockaddr))))
     else
         cb(IPv6(ntoh(ccall(:jl_sockaddr_host6,Uint128,(Ptr{Void},),sockaddr))))

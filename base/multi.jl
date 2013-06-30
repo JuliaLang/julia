@@ -3,6 +3,7 @@
 ## julia starts with one process, and processors can be added using:
 ##   addprocs(n)                         using exec
 ##   addprocs({"host1","host2",...})     using remote execution
+##   addprocs_scyld(n)                   using Scyld ClusterWare
 ##   addprocs_sge(n)                     using Sun Grid Engine batch queue
 ##
 ## remotecall(w, func, args...) -
@@ -569,10 +570,7 @@ remotecall(id::Integer, f, args...) = remotecall(worker_from_id(id), f, args...)
 
 # faster version of fetch(remotecall(...))
 function remotecall_fetch(w::LocalProcess, f, args...)
-    rr = WeakRemoteRef(w)
-    oid = rr2id(rr)
-    rv = schedule_call(oid, local_remotecall_thunk(f,args))
-    wait_full(rv)
+    local_remotecall_thunk(f,args)()
 end
 
 function remotecall_fetch(w::Worker, f, args...)
@@ -703,8 +701,11 @@ end
 
 function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
-    if is(msg,:fetch) || is(msg,:call_fetch)
+    if is(msg,:fetch)
         val = value
+    elseif is(msg,:call_fetch)
+        val = value
+        delete!((PGRP::ProcessGroup).refs, oid)
     else
         val = oid
     end
@@ -725,7 +726,7 @@ notify_empty(rv::RemoteValue) = notify(rv.empty)
 
 # activity on accept fd
 function accept_handler(server::TcpServer, status::Int32)
-    if(status == -1)
+    if status == -1
         error("An error occured during the creation of the server")
     end
     client = accept_nonblock(server)
@@ -851,6 +852,10 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
     end)
 end
 
+function disable_parallel_libs()
+    blas_set_num_threads(1)
+end
+
 ## worker creation and setup ##
 
 # the entry point for julia worker processes. does not return.
@@ -866,11 +871,14 @@ function start_worker(out::IO)
     # close STDIN; workers will not use it
     #close(STDIN)
 
+    disable_parallel_libs()
+
     ccall(:jl_install_sigint_handler, Void, ())
 
     global const Scheduler = current_task()
 
     try
+        check_master_connect(60.0)
         event_loop(false)
     catch err
         print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")
@@ -879,6 +887,7 @@ function start_worker(out::IO)
     close(sock)
     exit(0)
 end
+
 
 function start_remote_workers(machines, cmds, tunnel=false, sshflags=``)
     n = length(cmds)
@@ -917,7 +926,7 @@ function start_remote_workers(machines, cmds, tunnel=false, sshflags=``)
         let wrker = w[i]
             # redirect console output from workers to the client's stdout:
             start_reading(stream,function(stream::AsyncStream,nread::Int)
-                if(nread>0)
+                if nread>0
                     try
                         line = readbytes(stream.buffer, nread)
                         print("\tFrom worker $(wrker.id):\t",line)
@@ -961,7 +970,7 @@ function ssh_tunnel(user, host, port, sshflags)
 end
 
 #function worker_ssh_cmd(host, key)
-#    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
+#    `ssh -i $key -n $host "sh -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
 #end
 
 # start and connect to processes via SSH.
@@ -972,7 +981,7 @@ function addprocs(machines::AbstractVector;
                   tunnel=false, dir=JULIA_HOME, exename="./julia-release-basic", sshflags::Cmd=``)
     add_workers(PGRP,
         start_remote_workers(machines,
-            map(m->detach(`ssh -n $sshflags $m "bash -l -c \"cd $dir && $exename --worker\""`),
+            map(m->detach(`ssh -n $sshflags $m "sh -l -c \"cd $dir && $exename --worker\""`),
                 machines),
             tunnel, sshflags))
 end
@@ -991,8 +1000,60 @@ end
 worker_local_cmd() = `$JULIA_HOME/julia-release-basic --bind-to $bind_addr --worker`
 
 function addprocs(np::Integer)
+    disable_parallel_libs()
     add_workers(PGRP, start_remote_workers({ "localhost" for i=1:np },
                                            { worker_local_cmd() for i=1:np }))
+end
+
+function start_scyld_workers(np::Integer)
+    home = JULIA_HOME
+    beomap_cmd = `beomap --no-local --np $np`
+    out,beomap_proc = readsfrom(beomap_cmd)
+    wait(beomap_proc)
+    if !success(beomap_proc)
+        error("node availability inaccessible (could not run beomap)")
+    end
+    nodes = split(chomp(readline(out)),':')
+    outs = cell(np)
+    for (i,node) in enumerate(nodes)
+        cmd = detach(`bpsh $node sh -l -c "cd $home && ./julia-release-basic --worker"`)
+        outs[i],_ = readsfrom(cmd)
+        outs[i].line_buffered = true
+    end
+    workers = cell(np)
+    for (i,stream) in enumerate(outs)
+        local hostname::String, port::Int16
+        stream.line_buffered = true
+        while true
+            conninfo = readline(stream)
+            hostname, port = parse_connection_info(conninfo)
+            if hostname != ""
+                break
+            end
+        end
+        workers[i] = Worker(hostname, port)
+        let worker = workers[i]
+            # redirect console output from workers to the client's stdout:
+            start_reading(stream,function(stream::AsyncStream,nread::Int)
+                if(nread>0)
+                    try
+                        line = readbytes(stream.buffer, nread)
+                        print("\tFrom worker $(worker.id):\t",line)
+                    catch err
+                        println(STDERR,"\tError parsing reply from worker $(worker.id):\t",err)
+                        return false
+                    end
+                end
+                true
+            end)
+        end
+    end
+    workers
+end
+
+function addprocs_scyld(np::Integer)
+    disable_parallel_libs()
+    add_workers(PGRP, start_scyld_workers(np))
 end
 
 function start_sge_workers(n)
@@ -1386,5 +1447,21 @@ function interrupt_waiting_task(t::Task, with_value)
     if !t.runnable
         t.result = with_value
         enq_work(t)
+    end
+end
+
+function check_master_connect(timeout)
+    # If we do not have at least process 1 connect to us within timeout
+    # we log an error and exit
+    @async begin
+        start = time()
+        while !haskey(map_pid_wrkr, 1) && (time() - start) < timeout
+            sleep(1.0)
+        end
+        
+        if !haskey(map_pid_wrkr, 1)
+            print(STDERR, "Master process (id 1) could not connect within $timeout seconds.\nexiting.\n")
+            exit(1)
+        end
     end
 end

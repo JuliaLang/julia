@@ -80,14 +80,14 @@ function print_pkg_status(io::IO, pkg::String)
 end
 
 # show the status packages in the repo
-status() = status(OUTPUT_STREAM)
+status() = status(STDOUT)
 status(io::IO) = cd_pkgdir() do
     for pkg in packages()
         print_pkg_status(io, pkg)
     end
 end
 status(io::IO, pkg::String) = print_pkg_status(io, pkg)
-status(pkg::String) = status(OUTPUT_STREAM, pkg)
+status(pkg::String) = status(STDOUT, pkg)
 
 # create a new empty packge repository
 
@@ -686,26 +686,26 @@ function major(pkg)
 end
 
 function promptuserinfo()
-    if(isempty(chomp(readall(ignorestatus(`git config --global user.name`)))))
+    if isempty(chomp(readall(ignorestatus(`git config --global user.name`))))
         info("""
              Git would like to know your name to initialize your .julia directory.
              Enter it below:
              """)
         name = chomp(readline(STDIN))
-        if(isempty(name))
+        if isempty(name)
             error("Could not read name")
         else
             run(`git config --global user.name $name`)
             info("Thank you. You can change it using run(`git config --global user.name NAME`)")
         end
     end
-    if(isempty(chomp(readall(ignorestatus(`git config --global user.email`)))))
+    if isempty(chomp(readall(ignorestatus(`git config --global user.email`))))
         info("""
              Git would like to know your email to initialize your .julia directory.
              Enter it below:
              """)
         email = chomp(readline(STDIN))
-        if(isempty(email))
+        if isempty(email)
             error("Could not read email")
         else
             run(`git config --global user.email $email`)

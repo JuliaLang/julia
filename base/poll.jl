@@ -238,7 +238,7 @@ function stop_watching(t::PollingFileWatcher)
 end
 
 function _uv_hook_fseventscb(t::FileMonitor,filename::Ptr,events::Int32,status::Int32)
-    if(isa(t.cb,Function))
+    if isa(t.cb,Function)
         # bytestring(convert(Ptr{Uint8},filename)) - seems broken at the moment - got NULL
         t.cb(status, events, status)
         if status == -1
@@ -250,12 +250,12 @@ function _uv_hook_fseventscb(t::FileMonitor,filename::Ptr,events::Int32,status::
 end
 
 function _uv_hook_pollcb(t::FDWatcher,status::Int32,events::Int32)
-    if(isa(t.cb,Function))
+    if isa(t.cb,Function)
         t.cb(t,status, events)
     end
 end
 function _uv_hook_fspollcb(t::PollingFileWatcher,status::Int32,prev::Ptr,cur::Ptr)
-    if(isa(t.cb,Function))
+    if isa(t.cb,Function)
         t.cb(t, status, Stat(convert(Ptr{Uint8},prev)), Stat(convert(Ptr{Uint8},cur)))
     end
 end

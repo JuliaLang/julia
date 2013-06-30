@@ -158,7 +158,10 @@
   (jl-parser-set-stream filename (open-input-string str)))
 
 (define (jl-parse-file s)
-  (jl-parser-set-stream s (open-input-file s)))
+  (trycatch
+   (begin (jl-parser-set-stream s (open-input-file s))
+	  #t)
+   (lambda (e) #f)))
 
 (define *filename-stack* '())
 (define *ts-stack* '())

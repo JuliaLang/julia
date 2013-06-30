@@ -5,7 +5,7 @@ export BigInt
 import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
-             widemul, sum
+             widemul, sum, trailing_zeros, trailing_ones, count_ones
 
 type BigInt <: Integer
     alloc::Cint
@@ -45,7 +45,7 @@ BigInt(x::Integer) =
 BigInt(x::Unsigned) =
     x <= typemax(Culong) ? BigInt(convert(Culong,x)) : BigInt(string(x))
 
-convert{T<:Integer}(::Type{BigInt}, x::T) = BigInt(x)
+convert(::Type{BigInt}, x::Integer) = BigInt(x)
 
 convert(::Type{Int64}, n::BigInt) = int64(convert(Clong, n))
 convert(::Type{Int32}, n::BigInt) = int32(convert(Clong, n))
@@ -206,7 +206,9 @@ end
 >>(x::BigInt, c::Int32) = x >>> c
 
 trailing_zeros(x::BigInt) = int(ccall((:__gmpz_scan1, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
- trailing_ones(x::BigInt) = int(ccall((:__gmpz_scan0, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
+trailing_ones(x::BigInt) = int(ccall((:__gmpz_scan0, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
+
+count_ones(x::BigInt) = int(ccall((:__gmpz_popcount, :libgmp), Culong, (Ptr{BigInt},), &x))
 
 function divrem(x::BigInt, y::BigInt)
     z1 = BigInt()

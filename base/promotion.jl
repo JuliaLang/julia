@@ -102,15 +102,20 @@ promote_type{T}(::Type{T}, ::Type{T}) = T
 promote_type{T}(::Type{T}, ::Type{None}) = T
 promote_type{T}(::Type{None}, ::Type{T}) = T
 
-function promote_type{T,S}(::Type{T}, ::Type{S})
-    if applicable(promote_rule, T, S)
-        return promote_rule(T,S)
-    elseif applicable(promote_rule, S, T)
-        return promote_rule(S,T)
-    else
-        return typejoin(T,S)
-    end
-end
+# Try promote_rule in both orders. Typically only one is defined,
+# and there is a fallback returning None below, so the common case is
+#   promote_type(T, S) =>
+#   promote_result(T, S, result, None) =>
+#   typejoin(result, None) => result
+promote_type{T,S}(::Type{T}, ::Type{S}) =
+    promote_result(T, S, promote_rule(T,S), promote_rule(S,T))
+
+promote_rule(T, S) = None
+
+promote_result(t,s,T,S) = typejoin(T,S)
+# If no promote_rule is defined, both directions give None. In that
+# case use typejoin on the original types instead.
+promote_result{T,S}(::Type{T},::Type{S},::Type{None},::Type{None}) = typejoin(T, S)
 
 promote() = ()
 promote(x) = (x,)
@@ -131,6 +136,14 @@ end
 # TODO: promote{T}(x::T, ys::T...) here to catch all circularities?
 
 ## promotions in arithmetic, etc. ##
+
+# Because of the promoting fallback definitions for Number, we need
+# a special case for undefined promote_rule on numeric types.
+# Otherwise, typejoin(T,S) is called (returning Number) so no conversion
+# happens, and +(promote(x,y)...) is called again, causing a stack
+# overflow.
+promote_result{T<:Number,S<:Number}(::Type{T},::Type{S},::Type{None},::Type{None}) =
+    error("no promotion exists for ", T, " and ", S)
 
 +(x::Number, y::Number) = +(promote(x,y)...)
 *(x::Number, y::Number) = *(promote(x,y)...)

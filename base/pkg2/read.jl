@@ -1,6 +1,6 @@
 module Read
 
-using ..Types, ..Reqs, ..Cache, Base.Git
+using Base.Git, ..Types, ..Cache, ..Reqs
 
 readstrip(path...) = strip(readall(joinpath(path...)))
 
@@ -37,11 +37,14 @@ function isfixed(pkg::String, avail::Dict=available(pkg))
     Git.dirty(dir=pkg) && return true
     Git.attached(dir=pkg) && return true
     cache = Cache.path(pkg)
-    isdir(cache) || return true
+    cache_exists = isdir(cache)
     head = Git.head(dir=pkg)
     for (ver,info) in avail
-        if Git.iscommit(info.sha1, dir=cache)
+        if cache_exists && Git.iscommit(info.sha1, dir=cache)
+            Git.iscommit(head, dir=cache) &&
             Git.is_ancestor_of(head, info.sha1, dir=cache) && return false
+        elseif Git.iscommit(info.sha1, dir=pkg)
+            Git.is_ancestor_of(head, info.sha1, dir=pkg) && return false
         else
             Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package cache")
         end
@@ -51,21 +54,22 @@ end
 
 function installed_version(pkg::String, avail::Dict=available(pkg))
     cache = Cache.path(pkg)
-    isdir(cache) || return typemin(VersionNumber)
+    cache_exists = isdir(cache)
     head = Git.head(dir=pkg)
     lo = typemin(VersionNumber)
     hi = typemin(VersionNumber)
     for (ver,info) in avail
         head == info.sha1 && return ver
-        if Git.iscommit(info.sha1, dir=cache)
-            base = Git.readchomp(`merge-base $head $(info.sha1)`, dir=cache)
-            if base == head # Git.is_ancestor_of(head, info.sha1)
-                lo = max(lo,ver)
-            elseif base == info.sha1 # Git.is_ancestor_of(info.sha1, head)
-                hi = max(hi,ver)
-            end
-        else
+        base =
+            cache_exists && Git.iscommit(head, dir=cache) && Git.iscommit(info.sha1, dir=cache) ?
+                Git.readchomp(`merge-base $head $(info.sha1)`, dir=cache) :
+            Git.iscommit(info.sha1, dir=pkg) ?
+                Git.readchomp(`merge-base $head $(info.sha1)`, dir=pkg) :
             Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package cache")
+        if base == head # Git.is_ancestor_of(head, info.sha1)
+            lo = max(lo,ver)
+        elseif base == info.sha1 # Git.is_ancestor_of(info.sha1, head)
+            hi = max(hi,ver)
         end
     end
     typemin(VersionNumber) < lo ?
@@ -89,7 +93,7 @@ function fixed(avail::Dict=available())
     pkgs = Dict{ByteString,Fixed}()
     for pkg in readdir()
         isinstalled(pkg) || continue
-        ap = avail[pkg]
+        ap = get(avail,pkg,Dict{VersionNumber,Available}())
         isfixed(pkg,ap) || continue
         pkgs[pkg] = Fixed(installed_version(pkg,ap),requires_dict(pkg,ap))
     end
@@ -101,7 +105,7 @@ function free(avail::Dict=available())
     pkgs = Dict{ByteString,VersionNumber}()
     for pkg in readdir()
         isinstalled(pkg) || continue
-        ap = avail[pkg]
+        ap = get(avail,pkg,Dict{VersionNumber,Available}())
         isfixed(pkg,ap) && continue
         pkgs[pkg] = installed_version(pkg,ap)
     end

@@ -99,6 +99,7 @@ include("stat.jl")
 include("fs.jl")
 importall .FS
 include("process.jl")
+reinit_stdio()
 ccall(:jl_get_uv_hooks, Void, ())
 include("grisu.jl")
 import .Grisu.print_shortest
@@ -124,6 +125,17 @@ include("path.jl")
 include("repl.jl")
 include("client.jl")
 include("loading.jl")
+
+begin
+    SOURCE_PATH = ""
+    include = function(path)
+        prev = SOURCE_PATH
+        path = joinpath(dirname(prev),path)
+        SOURCE_PATH = path
+        Core.include(path)
+        SOURCE_PATH = prev
+    end
+end
 
 # core math functions
 include("intfuncs.jl")
