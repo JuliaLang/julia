@@ -3,7 +3,7 @@ module Resolve
 include("resolve/interface.jl")
 include("resolve/maxsum.jl")
 
-using ..Types, .PkgToMaxSumInterface, .MaxSum
+using ..Types, ..Query, .PkgToMaxSumInterface, .MaxSum
 
 export resolve, sanity_check, MetadataError
 
@@ -12,8 +12,6 @@ function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Availa
 
     # init structures
     interface = Interface(reqs, deps)
-
-    prune_versions!(interface)
 
     graph = Graph(interface)
     msgs = Messages(interface, graph)
@@ -47,9 +45,7 @@ end
 # Scan dependencies for (explicit or implicit) contradictions
 function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
-    interface0 = Interface((ByteString=>VersionSet)[], deps)
-
-    eq_classes_map = prune_versions!(interface0, false)
+    interface0 = Interface(deps)
 
     pkgs = interface0.pkgs
     deps = interface0.deps
@@ -58,6 +54,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
     pdict = interface0.pdict
     pvers = interface0.pvers
     vdict = interface0.vdict
+    eq_classes_map = interface0.eq_classes_map
 
     pdeps = [ [ Available[] for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
     pndeps = [ zeros(Int,spp[p0]-1) for p0 = 1:np ]
@@ -68,19 +65,6 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
             v0 = vdict0[vn]
             push!(pdeps[p0][v0], a)
             pndeps[p0][v0] += 1
-        end
-    end
-
-    rev_eq_classes_map = [ (VersionNumber=>Vector{VersionNumber})[] for p0 = 1:np ]
-    for p0 = 1:np
-        eqclass0 = eq_classes_map[p0]
-        reveqclass0 = rev_eq_classes_map[p0]
-        for (v,vtop) in eqclass0
-            if !haskey(reveqclass0, vtop)
-                reveqclass0[vtop] = VersionNumber[v]
-            else
-                push!(reveqclass0[vtop], v)
-            end
         end
     end
 
@@ -105,9 +89,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
     end
     checked = falses(nv)
 
-    insane_ids = Array((Int,Int),0)
-    problematic_pkgs = String[]
-
+    insane = Array((ByteString,VersionNumber,ByteString),0)
     i = 1
     psl = 0
     for (p,vn) in vers
@@ -119,7 +101,11 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
             i += 1
             continue
         end
-        interface = reduce_interface(interface0, pdeps, p, vn)
+
+        nvn = VersionNumber(vn.major, vn.minor, vn.patch + 1, vn.prerelease, vn.build)
+        sub_reqs = (ByteString=>VersionSet)[p=>VersionSet([vn, nvn])]
+        sub_deps = Query.dependencies_subset(deps, p)
+        interface = Interface(sub_reqs, sub_deps)
 
         graph = Graph(interface)
         msgs = Messages(interface, graph)
@@ -145,10 +131,9 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
         catch err
             if isa(err, UnsatError)
                 pp = red_pkgs[err.info]
-                p0 = pdict[p]
-                v0 = vdict[p0][vn]
-                push!(insane_ids, (p0, v0))
-                push!(problematic_pkgs, pp)
+                for vneq in eq_classes_map[p][vn]
+                    push!(insane, (p, vneq, pp))
+                end
             else
                 rethrow(err)
             end
@@ -156,18 +141,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
         i += 1
     end
 
-    insane = Array((ByteString,VersionNumber,ByteString), 0)
-    if !isempty(insane_ids)
-        i = 1
-        for (p0,v0) in insane_ids
-            p = pkgs[p0]
-            vn = pvers[p0][v0]
-            pp = problematic_pkgs[i]
-            for vneq in rev_eq_classes_map[p0][vn]
-                push!(insane, (p, vneq, pp))
-            end
-            i += 1
-        end
+    if !isempty(insane)
         sortby!(insane, x->x[1])
         throw(MetadataError(insane))
     end
