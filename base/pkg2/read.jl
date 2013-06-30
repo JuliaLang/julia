@@ -1,6 +1,6 @@
 module Read
 
-using Base.Git, ..Types, ..Reqs
+using Base.Git, ..Types, ..Cache, ..Reqs
 
 readstrip(path...) = strip(readall(joinpath(path...)))
 
@@ -30,13 +30,13 @@ available(pkg::String) = available([pkg])[pkg]
 isinstalled(pkg::String) =
     pkg != "METADATA" && pkg != "REQUIRE" && isfile(pkg, "src", "$pkg.jl")
 
-function isfixed(cache::Function, pkg::String, avail::Dict=available(pkg))
+function isfixed(pkg::String, avail::Dict=available(pkg))
     isinstalled(pkg) || error("$pkg is not an installed package.")
     isfile("METADATA", pkg, "url") || return true
     ispath(pkg, ".git") || return true
     Git.dirty(dir=pkg) && return true
     Git.attached(dir=pkg) && return true
-    cache = cache(pkg)
+    cache = Cache.path(pkg)
     cache_exists = isdir(cache)
     head = Git.head(dir=pkg)
     for (ver,info) in avail
@@ -52,8 +52,8 @@ function isfixed(cache::Function, pkg::String, avail::Dict=available(pkg))
     return true
 end
 
-function installed_version(cache::Function, pkg::String, avail::Dict=available(pkg))
-    cache = cache(pkg)
+function installed_version(pkg::String, avail::Dict=available(pkg))
+    cache = Cache.path(pkg)
     cache_exists = isdir(cache)
     head = Git.head(dir=pkg)
     lo = typemin(VersionNumber)
@@ -89,25 +89,25 @@ function requires_path(pkg::String, avail::Dict=available(pkg))
 end
 requires_dict(pkg::String, avail::Dict=available(pkg)) = Reqs.parse(requires_path(pkg,avail))
 
-function fixed(cache::Function, avail::Dict=available())
+function fixed(avail::Dict=available())
     pkgs = Dict{ByteString,Fixed}()
     for pkg in readdir()
         isinstalled(pkg) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
-        isfixed(cache,pkg,ap) || continue
-        pkgs[pkg] = Fixed(installed_version(cache,pkg,ap),requires_dict(pkg,ap))
+        isfixed(pkg,ap) || continue
+        pkgs[pkg] = Fixed(installed_version(pkg,ap),requires_dict(pkg,ap))
     end
     pkgs["julia"] = Fixed(VERSION)
     return pkgs
 end
 
-function free(cache::Function, avail::Dict=available())
+function free(avail::Dict=available())
     pkgs = Dict{ByteString,VersionNumber}()
     for pkg in readdir()
         isinstalled(pkg) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
-        isfixed(cache,pkg,ap) && continue
-        pkgs[pkg] = installed_version(cache,pkg,ap)
+        isfixed(pkg,ap) && continue
+        pkgs[pkg] = installed_version(pkg,ap)
     end
     return pkgs
 end

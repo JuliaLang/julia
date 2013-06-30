@@ -3,7 +3,7 @@ module Write
 using Base.Git, ..Cache, ..Read
 
 function prefetch(pkg::String, sha1::String)
-    isempty(Cache.prefetch(pkg, sha1)) ||
+    isempty(Cache.prefetch(pkg, Read.url(pkg), sha1)) ||
         error("$pkg: couldn't find commit $(sha1[1:10])")
 end
 
