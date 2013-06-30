@@ -19,8 +19,8 @@ matches = matchall(r".\s", s)
 @test matches[3].match == "x "
 @test matches[4].match == "∃ "
 
-r = r"a?b?"
 s = "asbd"
+r = r"a?b?"
 matches = matchall(r, s)
 
 @test size(matches, 1) == 5
@@ -29,3 +29,15 @@ matches = matchall(r, s)
 @test matches[3].match == "b"
 @test matches[4].match == ""
 @test matches[5].match == ""
+
+s = "hello"
+r = r"\w+"
+matches = matchall(r, s, true)
+
+@test size(matches, 1) == 5
+@test matches[1].match == "hello"
+@test matches[2].match == "ello"
+@test matches[3].match == "llo"
+@test matches[4].match == "lo"
+@test matches[5].match == "o"
+

@@ -100,9 +100,11 @@ match(r::Regex, s::String) = match(r, s, start(s))
 match(r::Regex, s::String, i::Integer) =
     error("regex matching is only available for bytestrings; use bytestring(s) to convert")
 
-function matchall(re::Regex, str::ByteString)
-    [eachmatch(re, str)...]
+function matchall(re::Regex, str::ByteString, overlap::Bool)
+    [eachmatch(re, str, overlap)...]
 end
+
+matchall(re::Regex, str::ByteString) = matchall(re, str, false)
 
 function search(str::ByteString, re::Regex, idx::Integer)
     len = length(str.data)
@@ -143,7 +145,7 @@ function next(itr::RegexMatchIterator, prev_match)
     while true
       opts = uint32(0)
       if m != nothing
-          idx = m.offset + length(m.match.data)
+          idx = itr.overlap ? next(str, m.offset)[2] : m.offset + length(m.match.data)
 
           if length(m.match) == 0
               if m.offset == length(str.data) + 1
@@ -158,16 +160,7 @@ function next(itr::RegexMatchIterator, prev_match)
           if opts == 0
               break
           end
-          idx += 1
-          if itr.is_utf
-              # Ensure we skip entire UTF character.
-              while idx <= length(str.data)
-                  if (str.data[idx] & 0xc0) != 0x80
-                      break;
-                  end
-                  idx += 1
-              end
-          end
+          idx = next(str, idx)[2]
           continue
       end
 
