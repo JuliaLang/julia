@@ -1,11 +1,10 @@
 module Cache
 
-using Base.Git, ..Types, ..Read
+using Base.Git, ..Types
 
 path(pkg::String) = abspath(".cache", pkg)
 
-function prefetch{S<:String}(pkg::String, sha1s::Vector{S})
-	url = Read.url(pkg)
+function prefetch{S<:String}(pkg::String, url::String, sha1s::Vector{S})
     isdir(".cache") || mkdir(".cache")
     cache = path(pkg)
     if !isdir(cache)
@@ -23,10 +22,6 @@ function prefetch{S<:String}(pkg::String, sha1s::Vector{S})
 	end
     filter(sha1->!Git.iscommit(sha1, dir=cache), sha1s)
 end
-function prefetch(pkg::String, vers::Vector{VersionNumber})
-	prefetch(pkg, map(ver->Read.sha1(pkg,ver), vers))
-end
-prefetch(pkg::String, sha1::String) = prefetch(pkg,[sha1])
-prefetch(pkg::String, ver::VersionNumber) = prefetch(pkg,[ver])
+prefetch(pkg::String, url::String, sha1::String...) = prefetch(pkg, url, [sha1...])
 
 end # module

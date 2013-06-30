@@ -3,10 +3,10 @@ module Pkg2
 include("pkg2/dir.jl")
 include("pkg2/types.jl")
 include("pkg2/reqs.jl")
+include("pkg2/cache.jl")
 include("pkg2/read.jl")
 include("pkg2/query.jl")
 include("pkg2/resolve.jl")
-include("pkg2/cache.jl")
 include("pkg2/write.jl")
 
 using Base.Git, .Types
@@ -41,7 +41,7 @@ update(avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
         end
         Git.run(`pull -q`)
     end
-    fixed = Read.fixed(Cache.path, avail)
+    fixed = Read.fixed(avail)
     for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
         if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
@@ -51,12 +51,12 @@ update(avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
             end
         end
         if haskey(avail,pkg)
-            Cache.prefetch(pkg, [a.sha1 for (v,a)=avail[pkg]])
+            Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
         end
     end
-    free = Read.free(Cache.path, avail)
+    free = Read.free(avail)
     for (pkg,ver) in free
-        Cache.prefetch(pkg, [a.sha1 for (v,a)=avail[pkg]])
+        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
     resolve(Reqs.parse("REQUIRE"), avail, fixed, free)
 end
@@ -64,8 +64,8 @@ end
 resolve(
     reqs::Dict,
     avail::Dict=Dir.cd(Read.available),
-    fixed::Dict=Dir.cd(()->Read.fixed(Cache.path, avail)),
-    have::Dict=Dir.cd(()->Read.free(Cache.path, avail))
+    fixed::Dict=Dir.cd(()->Read.fixed(avail)),
+    have::Dict=Dir.cd(()->Read.free(avail))
 ) = Dir.cd() do
     # figure out what should be installed
     reqs  = Query.requirements(reqs,fixed)
@@ -81,10 +81,19 @@ resolve(
     # prefetch phase isolates network activity, nothing to roll back
     missing = {}
     for (pkg,ver) in install
-        append!(missing, map(sha1->(pkg,ver,sha1), Cache.prefetch(pkg,ver)))
+        append!(missing,
+            map(sha1->(pkg,ver,sha1),
+                Cache.prefetch(pkg, Read.url(pkg), Read.sha1(pkg,ver))))
     end
-    for (pkg,(v1,v2)) in update
-        append!(missing, map(sha1->(pkg,ver,sha1), Cache.prefetch(pkg,[v1,v2])))
+    for (pkg,(_,ver)) in update
+        append!(missing,
+            map(sha1->(pkg,ver,sha1),
+                Cache.prefetch(pkg, Read.url(pkg), Git.head(dir=pkg), Read.sha1(pkg,ver))))
+    end
+    for (pkg,ver) in remove
+        append!(missing,
+            map(sha1->(pkg,ver,sha1),
+                Cache.prefetch(pkg, Read.url(pkg), Git.head(dir=pkg))))
     end
     if !isempty(missing)
         msg = "unfound package versions (possible metadata misconfiguration):"
@@ -136,7 +145,7 @@ end
 # Metadata sanity check
 check_metadata(julia_version::VersionNumber=VERSION) = Dir.cd() do
     avail = Read.available()
-    fixed = Read.fixed(Cache.path, avail)
+    fixed = Read.fixed(avail)
     deps  = Query.dependencies(avail,fixed)
     try
         Resolve.sanity_check(deps)
