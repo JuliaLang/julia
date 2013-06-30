@@ -123,13 +123,9 @@ immutable RegexMatchIterator
     regex::Regex
     string::ByteString
     overlap::Bool
-    is_utf::Bool
 
     function RegexMatchIterator(regex::Regex, string::String, ovr::Bool)
-        re_opts = PCRE.info(regex.regex, C_NULL, PCRE.INFO_OPTIONS, Uint32)
-        is_utf = (re_opts & PCRE.UTF8) != 0
-
-        new(regex, string, ovr, is_utf)
+        new(regex, string, ovr)
     end
     RegexMatchIterator(regex::Regex, string::String) = RegexMatchIterator(regex, string, false)
 end
