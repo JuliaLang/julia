@@ -1,6 +1,6 @@
 module MaxSum
 
-include("pkg2/resolve/fieldvalue.jl")
+include("fieldvalue.jl")
 
 using .FieldValues, ..PkgToMaxSumInterface
 

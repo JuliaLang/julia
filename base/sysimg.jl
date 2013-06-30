@@ -126,6 +126,17 @@ include("repl.jl")
 include("client.jl")
 include("loading.jl")
 
+begin
+    SOURCE_PATH = ""
+    include = function(path)
+        prev = SOURCE_PATH
+        path = joinpath(dirname(prev),path)
+        SOURCE_PATH = path
+        Core.include(path)
+        SOURCE_PATH = prev
+    end
+end
+
 # core math functions
 include("intfuncs.jl")
 include("floatfuncs.jl")
