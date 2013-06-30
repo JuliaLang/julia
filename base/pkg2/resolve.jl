@@ -1,7 +1,7 @@
 module Resolve
 
-include("pkg2/resolve/interface.jl")
-include("pkg2/resolve/maxsum.jl")
+include("resolve/interface.jl")
+include("resolve/maxsum.jl")
 
 using ..Types, .PkgToMaxSumInterface, .MaxSum
 
