@@ -35,36 +35,24 @@ function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Availa
     end
 
     # verify solution (debug code) and enforce its optimality
-    verify_solution(interface, sol)
-    enforce_optimality(interface, sol)
+    verify_solution(sol, interface)
+    enforce_optimality!(sol, interface)
 
     # return the solution as a Dict mapping package_name => sha1
-    return compute_output_dict(interface, sol)
+    return compute_output_dict(sol, interface)
 end
 
 # Scan dependencies for (explicit or implicit) contradictions
 function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
-    interface0 = Interface(deps)
+    deps, eq_classes_map = Query.prune_versions(deps)
 
-    pkgs = interface0.pkgs
-    deps = interface0.deps
-    np = interface0.np
-    spp = interface0.spp
-    pdict = interface0.pdict
-    pvers = interface0.pvers
-    vdict = interface0.vdict
-    eq_classes_map = interface0.eq_classes_map
+    ndeps = (ByteString=>Dict{VersionNumber,Int})[]
 
-    pdeps = [ [ Available[] for v0 = 1:spp[p0]-1 ] for p0 = 1:np ]
-    pndeps = [ zeros(Int,spp[p0]-1) for p0 = 1:np ]
-    for (p,d) in deps
-        p0 = pdict[p]
-        vdict0 = vdict[p0]
-        for (vn,a) in d
-            v0 = vdict0[vn]
-            push!(pdeps[p0][v0], a)
-            pndeps[p0][v0] += 1
+    for (p,depsp) in deps
+        ndeps[p] = ndepsp = (VersionNumber=>Int)[]
+        for (vn,a) in depsp
+            ndepsp[vn] = length(a.requires)
         end
     end
 
@@ -72,29 +60,19 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
     for (p,d) in deps, (vn,_) in d
         push!(vers, (p,vn))
     end
-    function vrank(p::ByteString, vn::VersionNumber)
-        p0 = pdict[p]
-        v0 = vdict[p0][vn]
-        return -pndeps[p0][v0]
-    end
-    sortby!(vers, x->vrank(x...))
+    sortby!(vers, pvn->(-ndeps[pvn[1]][pvn[2]]))
 
     nv = length(vers)
 
-    svdict = ((ByteString,VersionNumber)=>Int)[]
-    i = 1
-    for v in vers
-        svdict[v] = i
-        i += 1
-    end
+    svdict = ((ByteString,VersionNumber)=>Int)[ vers[i]=>i for i = 1:nv ]
+
     checked = falses(nv)
 
     insane = Array((ByteString,VersionNumber,ByteString),0)
     i = 1
     psl = 0
     for (p,vn) in vers
-        vr = -vrank(p,vn)
-        if vr == 0
+        if ndeps[p][vn] == 0
             break
         end
         if checked[i]
@@ -117,7 +95,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
         local sol::Vector{Int}
         try
             sol = maxsum(graph, msgs)
-            verify_solution(interface, sol)
+            verify_solution(sol, interface)
 
             for p0 = 1:red_np
                 s0 = sol[p0]

@@ -3,7 +3,7 @@ module PkgToMaxSumInterface
 using ...Types, ...Query
 
 export MetadataError, Interface, compute_output_dict,
-       verify_solution, enforce_optimality
+       verify_solution, enforce_optimality!
 
 # Error type used to signal that there was some
 # problem with the metadata info passed to resolve
@@ -129,10 +129,9 @@ type Interface
         return new(reqs, deps, pkgs, np, spp, pdict, pvers, vdict, vweight, eq_classes_map)
     end
 end
-Interface(deps::Dict{ByteString,Dict{VersionNumber,Available}}) = Interface((ByteString=>VersionSet)[], deps)
 
-# The output format is a dict which associates sha1's to each installed package name
-function compute_output_dict(interface::Interface, sol::Vector{Int})
+# The output format is a Dict which associates a VersionNumber to each installed package name
+function compute_output_dict(sol::Vector{Int}, interface::Interface)
 
     pkgs = interface.pkgs
     np = interface.np
@@ -154,7 +153,7 @@ end
 
 # verifies that the solution fulfills all hard constraints
 # (requirements and dependencies)
-function verify_solution(interface::Interface, sol::Vector{Int})
+function verify_solution(sol::Vector{Int}, interface::Interface)
 
     reqs = interface.reqs
     deps = interface.deps
@@ -191,7 +190,7 @@ function verify_solution(interface::Interface, sol::Vector{Int})
 end
 
 # Push the given solution to a local optimium if needed
-function enforce_optimality(interface::Interface, sol::Vector{Int})
+function enforce_optimality!(sol::Vector{Int}, interface::Interface)
     np = interface.np
 
     reqs = interface.reqs
@@ -276,7 +275,7 @@ function enforce_optimality(interface::Interface, sol::Vector{Int})
                 continue
             end
             # So the solution is non-optimal: we bump it manually
-            #println(STDERR, "Warning: nonoptimal solution for package $(interface.pkgs[p0]): sol=$s0")
+            #warn("nonoptimal solution for package $(interface.pkgs[p0]): sol=$s0")
             sol[p0] += 1
             restart = true
         end
