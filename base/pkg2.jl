@@ -28,6 +28,7 @@ edit(f::Function, pkg, args...) = Dir.cd() do
     reqs_ = Reqs.parse(r_)
     reqs_ != reqs && resolve(reqs_,avail)
     Reqs.write("REQUIRE",r_)
+    info("REQUIRE updated.")
     return
 end
 
