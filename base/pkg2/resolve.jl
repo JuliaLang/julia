@@ -80,7 +80,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
             continue
         end
 
-        nvn = VersionNumber(vn.major, vn.minor, vn.patch + 1, vn.prerelease, vn.build)
+        nvn = VersionNumber(vn.major, vn.minor, vn.patch, vn.prerelease, tuple(vn.build..., 0))
         sub_reqs = (ByteString=>VersionSet)[p=>VersionSet([vn, nvn])]
         interface = Interface(sub_reqs, deps)
 
