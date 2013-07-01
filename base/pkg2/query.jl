@@ -95,7 +95,8 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
             allowedp[vn] = contains(vs, vn)
         end
         @assert !isempty(allowedp)
-        any([a for (_,a) in allowedp]) || error("Invalid requirements: no version allowed for package $p")
+        any([a for (_,a) in allowedp]) ||
+            error("Invalid requirements: no version allowed for package $p")
     end
 
     filtered_deps = (ByteString=>Dict{VersionNumber,Available})[]

@@ -32,7 +32,7 @@ edit(f::Function, pkg, args...) = Dir.cd() do
     return
 end
 
-update(avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
+update() = Dir.cd() do
     info("Updating metadata...")
     cd("METADATA") do
         if Git.branch() != "devel"
@@ -43,6 +43,7 @@ update(avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
         end
         Git.run(`pull -q`)
     end
+    avail = Read.available()
     fixed = Read.fixed(avail)
     for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
