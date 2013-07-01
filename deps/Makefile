@@ -658,33 +658,45 @@ install-Rmath: $(RMATH_OBJ_TARGET)
 
 
 ## OpenBLAS ##
+# LAPACK is built into OpenBLAS by default
 
 OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT)
 OPENBLAS_OBJ_TARGET = $(BUILD)/lib/libopenblas.$(SHLIB_EXT)
 
-OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" USE_THREAD=$(OPENBLAS_USE_THREAD) TARGET=$(OPENBLAS_TARGET_ARCH)
-ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
-OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
+OPENBLAS_BUILD_OPTS = CC=clang FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH)
+
+# Thread support
+ifeq ($(OPENBLAS_USE_THREAD), 1)
+OPENBLAS_BUILD_OPTS += USE_THREAD=1
+endif
+
+# Maximum number of threads for parallelism
 ifneq ($(ARCH),x86_64)
-# assume we can't address much memory to spawn many threads
+# Assume we can't address much memory to spawn many threads
 OPENBLAS_BUILD_OPTS += NUM_THREADS=30
 else
-# assume we may want lots of threads on some future machine
+# Assume we may want lots of threads on some future machine
 ifeq ($(OS),WINNT) #windows seems unable to handle very many
 OPENBLAS_BUILD_OPTS += NUM_THREADS=30
-else #linux can handle up to 256 according to the FAQ
-OPENBLAS_BUILD_OPTS += NUM_THREADS=256
-endif
+else # Linux can handle up to 256 according to the FAQ. Use 128 for now as that should suffice everywhere.
+OPENBLAS_BUILD_OPTS += NUM_THREADS=128
 endif
 endif
 
 # don't touch scheduler affinity since we manage this ourselves
 OPENBLAS_BUILD_OPTS += NO_AFFINITY=1
 
+# Build for all architectures - required for distribution
+ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
+OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
+endif
+
+# 64-bit BLAS interface
 ifeq ($(USE_BLAS64), 1)
 OPENBLAS_BUILD_OPTS += INTERFACE64=1
 endif
 
+# Decide whether to build for 32-bit or 64-bit arch
 ifneq ($(BUILD_OS),$(OS))
 OPENBLAS_BUILD_OPTS += OSNAME=$(OS) CROSS=1 HOSTCC=$(HOSTCC)
 endif
@@ -700,6 +712,11 @@ else ifeq ($(ARCH),x86_64)
 OPENBLAS_BUILD_OPTS += BINARY=64
 else
 $(error "unknown arch for openblas cross-compile")
+endif
+
+# Debug OpenBLAS
+ifeq ($(OPENBLAS_DEBUG), 1)
+OPENBLAS_BUILD_OPTS += DEBUG=1
 endif
 
 openblas-$(OPENBLAS_VER).tar.gz:
