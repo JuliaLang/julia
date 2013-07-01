@@ -48,8 +48,8 @@ update(avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
         ispath(pkg,".git") || continue
         if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
             @recover begin
-                Git.run(`fetch -q --all`)
-                Git.run(`pull -q`)
+                Git.run(`fetch -q --all`, dir=pkg)
+                Git.run(`pull -q`, dir=pkg)
             end
         end
         if haskey(avail,pkg)
