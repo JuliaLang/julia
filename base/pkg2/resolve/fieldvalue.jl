@@ -1,6 +1,6 @@
 module FieldValues
 
-export FieldValue, validmax, secondmax
+export FieldValue, Field, validmax, secondmax
 
 # FieldValue is a numeric type which helps dealing with
 # infinities. It holds 5 numbers l0,l1,l2,l3,l4. It can
@@ -29,6 +29,8 @@ FieldValue(l0::Int,l1::Int) = FieldValue(l0, l1, 0)
 FieldValue(l0::Int) = FieldValue(l0, 0)
 FieldValue() = FieldValue(0)
 
+typealias Field Vector{FieldValue}
+
 Base.zero(::Type{FieldValue}) = FieldValue()
 
 Base.typemin(::Type{FieldValue}) = (x=typemin(Int); FieldValue(x,x,x,x,typemin(Int128)))
@@ -51,7 +53,7 @@ function Base.isless(a::FieldValue, b::FieldValue)
 end
 
 Base.abs(a::FieldValue) = FieldValue(abs(a.l0), abs(a.l1), abs(a.l2), abs(a.l3), abs(a.l4))
-Base.abs(v::Vector{FieldValue}) = FieldValue[abs(a) for a in v]
+Base.abs(f::Field) = FieldValue[abs(a) for a in f]
 
 # if the maximum field has l0 < 0, it means that
 # some hard constraint is being violated
@@ -59,12 +61,12 @@ validmax(a::FieldValue) = a.l0 >= 0
 
 # like usual indmax, but favors the highest indices
 # in case of a tie
-function Base.indmax(v::Vector{FieldValue})
+function Base.indmax(f::Field)
     m = typemin(FieldValue)
     mi = 0
-    for j = length(v):-1:1
-        if v[j] > m
-            m = v[j]
+    for j = length(f):-1:1
+        if f[j] > m
+            m = f[j]
             mi = j
         end
     end
@@ -73,13 +75,12 @@ function Base.indmax(v::Vector{FieldValue})
 end
 
 # secondmax returns the (normalized) value of the second maximum in a
-# field (i.e. a Vector of FieldValues. It's used to determine the most
-# polarized field.
-function secondmax(v::Vector{FieldValue})
+# field. It's used to determine the most polarized field.
+function secondmax(f::Field)
     m = typemin(FieldValue)
     m2 = typemin(FieldValue)
-    for i = 1:length(v)
-        a = v[i]
+    for i = 1:length(f)
+        a = f[i]
         if a > m
             m2 = m
             m = a
