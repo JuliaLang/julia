@@ -11,7 +11,7 @@ tests = ARGS==["all"] ? testnames : ARGS
 n = min(8, CPU_CORES, length(tests))
 @unix_only n > 1 && addprocs(n)
 
-ENV["OPENBLAS_NUM_THREADS"] = 1
+blas_set_num_threads(1)
 
 @everywhere include("testdefs.jl")
 
