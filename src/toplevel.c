@@ -99,6 +99,8 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     JL_GC_POP();
     jl_current_module = last_module;
 
+#if 0
+    // some optional post-processing steps
     size_t i;
     void **table = newm->bindings.table;
     for(i=1; i < newm->bindings.size; i+=2) {
@@ -115,6 +117,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
             */
         }
     }
+#endif
     return jl_nothing;
 }
 
