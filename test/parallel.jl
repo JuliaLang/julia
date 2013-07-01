@@ -1,3 +1,7 @@
+# NOTE: worker processes cannot add more workers, only the client process can. 
+# Make sure to update runtests.jl with the mnimum number of 
+# workers required whenever the requirement here changes.
+
 if nprocs() < 2
     addprocs(1)
 end
