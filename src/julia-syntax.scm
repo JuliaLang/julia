@@ -6,13 +6,17 @@
 (define (lam:body x) (cadddr x))
 
 ;; allow (:: T) => (:: #gensym T) in formal argument lists
+(define (fill-missing-argname a)
+  (if (and (pair? a) (eq? (car a) '|::|) (null? (cddr a)))
+      `(|::| ,(gensy) ,(cadr a))
+      a))
 (define (fix-arglist l)
   (if (any vararg? (butlast l))
       (error "invalid ... on non-final argument"))
   (map (lambda (a)
-	 (if (and (pair? a) (eq? (car a) '|::|) (null? (cddr a)))
-	     `(|::| ,(gensy) ,(cadr a))
-	     a))
+	 (if (and (pair? a) (eq? (car a) 'kw))
+	     `(kw ,(fill-missing-argname (cadr a)) ,(caddr a))
+	     (fill-missing-argname a)))
        l))
 
 (define (arg-name v)
