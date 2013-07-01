@@ -66,9 +66,9 @@ function installed_version(pkg::String, avail::Dict=available(pkg))
             Git.iscommit(info.sha1, dir=pkg) ?
                 Git.readchomp(`merge-base $head $(info.sha1)`, dir=pkg) :
             Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package cache")
-        if base == head # Git.is_ancestor_of(head, info.sha1)
+        if base == head # head is_ancestor_of info.sha1
             lo = max(lo,ver)
-        elseif base == info.sha1 # Git.is_ancestor_of(info.sha1, head)
+        elseif base == info.sha1 # info.sha1 is_ancestor_of head
             hi = max(hi,ver)
         end
     end
