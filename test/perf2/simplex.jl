@@ -5,6 +5,13 @@ const dualTol = 1e-7
 
 # Adapted from https://github.com/mlubin/SimplexBenchmarks.
 # See that project for a suite of cross-language benchmarks.
+
+# This code performs a two-pass "Harris" ratio test used within the
+# dual simplex algorithm for linear programming.
+# See the thesis of Achim Koberstein,
+# "The dual simplex method, techniques for a fast and stable implementation"
+# 2005, Section 6.2.2.2.
+
 # Data taken from sample greenbea iteration
 function doTwoPassRatioTest()
 
