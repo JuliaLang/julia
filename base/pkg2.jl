@@ -63,15 +63,15 @@ update(avail::Dict=Dir.cd(Read.available)) = Dir.cd() do
 end
 
 resolve(
-    reqs::Dict,
-    avail::Dict=Dir.cd(Read.available),
-    fixed::Dict=Dir.cd(()->Read.fixed(avail)),
-    have::Dict=Dir.cd(()->Read.free(avail))
+    reqs  :: Dict,
+    avail :: Dict = Dir.cd(Read.available),
+    fixed :: Dict = Dir.cd(()->Read.fixed(avail)),
+    have  :: Dict = Dir.cd(()->Read.free(avail))
 ) = Dir.cd() do
-    # figure out what should be installed
-    reqs  = Query.requirements(reqs,fixed)
-    deps  = Query.dependencies(avail,fixed)
-    want  = Resolve.resolve(reqs,deps)
+
+    reqs = Query.requirements(reqs,fixed)
+    deps = Query.dependencies(avail,fixed)
+    want = Resolve.resolve(reqs,deps)
 
     # compare what is installed with what should be
     install, update, remove = Query.diff(have, want)

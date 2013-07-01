@@ -504,6 +504,7 @@
 			       (loop (list* (down s) loc ex) #f))
 			     (loop (cons (down s) ex) #f)))))))))
 
+; parse ranges and postfix ...
 ; colon is strange; 3 arguments with 2 colons yields one call:
 ; 1:2   => (: 1 2)
 ; 1:2:3 => (: 1 2 3)
@@ -542,6 +543,9 @@
 		   (if first?
 		       (loop (list t ex argument) #f)
 		       (loop (append ex (list argument)) #t)))))
+	    ((eq? t '...)
+	     (take-token s)
+	     (list '... ex))
 	    (else ex)))))
 
 ; the principal non-terminals follow, in increasing precedence order
@@ -704,14 +708,11 @@
 	  (else
 	   (parse-juxtapose (parse-factor s) s)))))
 
-; handle ^, .^, and postfix ...
+; handle ^ and .^
 (define (parse-factor-h s down ops)
   (let ((ex (down s)))
     (let ((t (peek-token s)))
-      (cond ((eq? t '...)
-	     (take-token s)
-	     (list '... ex))
-	    ((not (memq t ops))
+      (cond ((not (memq t ops))
 	     ex)
 	    (else
 	     (list 'call
