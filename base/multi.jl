@@ -878,7 +878,7 @@ function start_worker(out::IO)
     global const Scheduler = current_task()
 
     try
-        check_master_connect(60.0)
+        # check_master_connect(60.0)
         event_loop(false)
     catch err
         print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")
