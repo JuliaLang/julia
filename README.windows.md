@@ -145,7 +145,7 @@ Finally, the build and install process for Julia:
 2. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
 3. `echo override DEFAULT_REPL = basic >> Make.user`
 4. `make`
-5. (optional) `mkdir dist-extras && make win-extras` (actually, you probably want to hand execute the steps in this recipe since they may be inaccurate)
+5. `make win-extras` (optional step: prepares "batteries" for make dist target)
 4. `make dist`
 6. move the julia-* directory / zip file to the target machine
 

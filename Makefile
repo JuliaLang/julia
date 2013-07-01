@@ -119,14 +119,18 @@ ifeq ($(OS), Darwin)
 	-./contrib/mac/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
 ifeq ($(OS), WINNT)
-	-[ -e dist-extras/7za.exe ] && cp dist-extras/7za.exe $(PREFIX)/bin/7z.exe
-	-[ -e dist-extras/PortableGit-1.8.1.2-preview20130201.7z ] && \
-	  mkdir $(PREFIX)/Git && \
-	  7z x dist-extras/PortableGit-1.8.1.2-preview20130201.7z -o"$(PREFIX)/Git"
+	[ ! -d dist-extras ] || ( cd dist-extras && \
+   		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll ../$(PREFIX)/bin && \
+	    mkdir ../$(PREFIX)/Git && \
+	    7z x PortableGit.7z -o"../$(PREFIX)/Git" )
 ifeq ($(BUILD_OS),WINNT)
 	cp $(call pathsearch,libgfortran-3.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 	cp $(call pathsearch,libquadmath-0.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+ifeq ($(ARCH),i686)
 	cp $(call pathsearch,libgcc_s_sjlj-1.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+else
+	cp $(call pathsearch,libgcc_s_seh-1.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
+endif
 	cp $(call pathsearch,libstdc++-6.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 	#cp $(call pathsearch,libssp-0.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 else
@@ -140,6 +144,7 @@ endif
 	cp $(call wine_pathsearch,libstdc++-6.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 	cp $(call wine_pathsearch,libssp-0.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 endif
+	cd $(PREFIX)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.exe bugpoint.exe macho-dump.exe
 	7z a -mx9 julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).zip julia-$(JULIA_COMMIT)
 else
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
@@ -188,9 +193,32 @@ test-%: release
 # download target for some hardcoded windows dependencies
 .PHONY: win-extras, wine_path
 win-extras:
+	[ -d dist-extras ] || mkdir dist-extras
+ifeq ($(ARCH),i686)
 	cd dist-extras && \
-	wget -O 7za920.zip http://downloads.sourceforge.net/sevenzip/7za920.zip && \
-	wget -O PortableGit-1.8.1.2-preview20130201.7z https://msysgit.googlecode.com/files/PortableGit-1.8.1.2-preview20130201.7z
+	wget -O 7z920.exe http://downloads.sourceforge.net/sevenzip/7z920.exe && \
+	7z x -y 7z920.exe 7z.exe 7z.dll && \
+	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP2/noarch/mingw32-libexpat-2.0.1-4.15.noarch.rpm && \
+	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP2/noarch/mingw32-zlib-1.2.7-1.16.noarch.rpm
+else ifeq ($(ARCH),x86_64)
+	cd dist-extras && \
+	wget -O 7z920-x64.msi http://downloads.sourceforge.net/sevenzip/7z920-x64.msi && \
+	7z x -y 7z920-x64.msi _7z.exe _7z.dll && \
+	mv _7z.dll 7z.dll && \
+	mv _7z.exe 7z.exe && \
+	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-libexpat-2.0.1-3.15.noarch.rpm && \
+	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-zlib-1.2.7-1.19.noarch.rpm
+else
+$(error no win-extras target for ARCH=$(ARCH))
+endif
+	cd dist-extras && \
+	chmod a+x 7z.exe && \
+	7z x -y mingw-libexpat.rpm -so > mingw-libexpat.cpio && \
+	7z e -y mingw-libexpat.cpio && \
+	7z x -y mingw-zlib.rpm -so > mingw-zlib.cpio && \
+	7z e -y mingw-zlib.cpio && \
+	wget -O PortableGit.7z https://msysgit.googlecode.com/files/PortableGit-1.8.3-preview20130601.7z
+
 wine_path:
 	$(info $(WINE_PATH))
 	@echo "wine cmd /c \"set \$$PATH=...\";%PATH% && program"

@@ -130,7 +130,7 @@ endif
 
 ifeq ($(OS), WINNT)
 LIBTOOL_CCLD = CCLD="$(CC) -no-undefined -avoid-version"
-AUTOTOOLS_PATH_CORRECT = -cp -f $(BUILD)/bin/$(@F) $(BUILD)/lib/$(@F)
+AUTOTOOLS_PATH_CORRECT = mv $(BUILD)/bin/$(@F) $(BUILD)/lib/$(@F)
 endif
 
 ## Common build target prefixes
