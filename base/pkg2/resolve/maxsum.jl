@@ -177,12 +177,10 @@ type Messages
 
         reqs = interface.reqs
         pkgs = interface.pkgs
-        deps = interface.deps
         np = interface.np
         spp = interface.spp
         pvers = interface.pvers
         pdict = interface.pdict
-        vdict = interface.vdict
         vweight = interface.vweight
 
         # a "deterministic noise" function based on hashes
@@ -195,36 +193,25 @@ type Messages
         #                  and one to favor newest versions over older, and no-version over all
         fld = [ [ FieldValue(0,0,vweight[p0][v0],0,noise(p0,v0)) for v0 = 1:spp[p0] ] for p0 = 1:np]
 
-        # enforce requirements as infinite external fields over the desired
-        # version ranges
-        reqps = falses(np)
-        reqmsk = [ falses(spp[p0]) for p0 = 1:np ]
-
-        for (p,d) in deps
-            haskey(reqs, p) || continue
-            p0 = pdict[p]
-            vdict0 = vdict[p0]
-            for (vn,_) in d
-                contains(reqs[p], vn) || continue
-                v0 = vdict0[vn]
-                reqps[p0] = true
-                reqmsk[p0][v0] = true
-            end
-        end
-        for p0 = 1:np
-            if reqps[p0]
-                for v0 = 1:spp[p0]
-                    if !reqmsk[p0][v0]
-                        # the state is forbidden by requirements
-                        fld[p0][v0] = FieldValue(-1)
-                    else
-                        # the state is one of those explicitly requested:
-                        # favor it at a higer level than normal (upgrade
-                        # FieldValue from l2 to l1)
-                        fld[p0][v0] += FieldValue(0,vweight[p0][v0],-vweight[p0][v0])
-                    end
+        # enforce requirements
+        for (rp, rvs) in reqs
+            p0 = pdict[rp]
+            pvers0 = pvers[p0]
+            fld0 = fld[p0]
+            for v0 = 1:spp[p0]-1
+                vn = pvers0[v0]
+                if !contains(rvs, vn)
+                    # the state is forbidden by requirements
+                    fld0[v0] = FieldValue(-1)
+                else
+                    # the state is one of those explicitly requested:
+                    # favor it at a higer level than normal (upgrade
+                    # FieldValue from l2 to l1)
+                    fld0[v0] += FieldValue(0,vweight[p0][v0],-vweight[p0][v0])
                 end
             end
+            # the uninstalled state is forbidden by requirements
+            fld0[spp[p0]] = FieldValue(-1)
         end
         # normalize fields
         for p0 = 1:np
