@@ -328,7 +328,7 @@ export
     fld,
     flipsign,
     float,
-    float16,
+    #float16,
     float32,
     float64,
     floor,
