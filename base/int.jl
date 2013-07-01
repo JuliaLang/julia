@@ -135,13 +135,21 @@ mod(x::Int64,  y::Int64)  = box(Int64,smod_int(unbox(Int64,x),unbox(Int64,y)))
 <<(x::Int16,  y::Int32) = box(Int16,shl_int(unbox(Int16,x),unbox(Int32,y)))
 <<(x::Int32,  y::Int32) = box(Int32,shl_int(unbox(Int32,x),unbox(Int32,y)))
 <<(x::Int64,  y::Int32) = box(Int64,shl_int(unbox(Int64,x),unbox(Int32,y)))
+if Int === Int64
 <<(x::Int128, y::Int32) = box(Int128,shl_int(unbox(Int128,x),unbox(Int32,y)))
+else
+<<(x::Int128, y::Int32) = y==0 ? x : box(Int128,shl_int(unbox(Int128,x),unbox(Int32,y)))
+end
 
 <<(x::Uint8,   y::Int32) = box(Uint8,shl_int(unbox(Uint8,x),unbox(Int32,y)))
 <<(x::Uint16,  y::Int32) = box(Uint16,shl_int(unbox(Uint16,x),unbox(Int32,y)))
 <<(x::Uint32,  y::Int32) = box(Uint32,shl_int(unbox(Int32,x),unbox(Uint32,y)))
 <<(x::Uint64,  y::Int32) = box(Uint64,shl_int(unbox(Uint64,x),unbox(Int32,y)))
+if Int === Int64
 <<(x::Uint128, y::Int32) = box(Uint128,shl_int(unbox(Uint128,x),unbox(Int32,y)))
+else
+<<(x::Uint128, y::Int32) = y==0 ? x : box(Uint128,shl_int(unbox(Uint128,x),unbox(Int32,y)))
+end
 
 >>(x::Int8,   y::Int32) = box(Int8,ashr_int(unbox(Int8,x),unbox(Int32,y)))
 >>(x::Int16,  y::Int32) = box(Int16,ashr_int(unbox(Int16,x),unbox(Int32,y)))
