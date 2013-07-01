@@ -46,8 +46,9 @@ else
 end
 
 write(s::IO, x::Bool)    = write(s, uint8(x))
-write(s::IO, x::Float32) = write(s, box(Int32,unbox(Float32,x)))
-write(s::IO, x::Float64) = write(s, box(Int64,unbox(Float64,x)))
+#write(s::IO, x::Float16) = write(s, reinterpret(Int16,x))
+write(s::IO, x::Float32) = write(s, reinterpret(Int32,x))
+write(s::IO, x::Float64) = write(s, reinterpret(Int64,x))
 
 function write(s::IO, a::AbstractArray)
     nb = 0
