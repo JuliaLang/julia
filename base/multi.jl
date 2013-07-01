@@ -648,6 +648,7 @@ end
 
 fetch(r::RemoteRef) = sync_msg(:fetch, r)
 
+fetch(x::ANY) = x
 fetch(x::ANY...) = x
 
 # storing a value to a Ref
