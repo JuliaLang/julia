@@ -566,6 +566,7 @@ export
     checkbounds,
 
 # linear algebra
+    blas_set_num_threads,
     bkfact,
     bkfact!,
     chol,
