@@ -35,7 +35,7 @@ a = Base.Condition()
 end
 kill(wait(a))
 
-@test_fails run(`foo`)
+@test_throws run(`foo`)
 
 if false
     prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
@@ -93,4 +93,3 @@ file = tempname()
 stdin, proc = writesto(`cat -` |> file)
 write(stdin, str)
 close(stdin)
-

@@ -6399,7 +6399,7 @@
 
 "),
 
-("Base.Test","Base.Test","@test_fails","@test_fails(ex)
+("Base.Test","Base.Test","@test_throws","@test_throws(ex)
 
    Test the expression \"ex\" and calls the current handler to handle
    the result in the following manner:
