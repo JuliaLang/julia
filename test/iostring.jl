@@ -115,3 +115,5 @@ skip(io,72)
 @assert takebuf_string(io) == ""
 close(io)
 end
+
+@test isempty(readlines(IOBuffer()))
