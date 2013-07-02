@@ -12,6 +12,8 @@ export # also exported by Base
     sortby,
     sortby!,
     sortperm,
+    sortrows,
+    sortcols,
     select,
     select!,
     issorted,
@@ -491,12 +493,11 @@ sort!{O<:Direct,T<:Floats}(v::Vector{Int}, a::Algorithm, o::Perm{O,Vector{T}}) =
 
 end # module Sort.Float
 
-end # module Sort
-
 # sorting multi-dimensional arrays
-sort(A::AbstractArray, dim::Integer, o::Base.Sort.Ordering = Base.Sort.Forward,
+
+sort(A::AbstractArray, dim::Integer, o::Base.Sort.Ordering=Base.Sort.Forward,
      alg::Base.Sort.Algorithm = DEFAULT_STABLE) =
-    mapslices(sort, A, [dim])
+    mapslices(a->sort(a,o), A, [dim])
 
 sort(A::AbstractArray, dim::Integer, alg::Base.Sort.Algorithm) =
     sort(A, dim, Base.Sort.Forward, alg)
@@ -504,7 +505,7 @@ sort(A::AbstractArray, dim::Integer, alg::Base.Sort.Algorithm) =
 sort(A::AbstractArray, dim::Integer, alg::Base.Sort.Algorithm, o::Base.Sort.Ordering) =
     sort(A, dim, o, alg)
 
-function sortrows(A::AbstractMatrix, o::Base.Sort.Ordering = Base.Sort.Forward,
+function sortrows(A::AbstractMatrix, o::Base.Sort.Ordering=Base.Sort.Forward,
                   alg::Base.Sort.Algorithm = DEFAULT_STABLE)
     c = 1:size(A,2)
     rows = [ sub(A,i,c) for i=1:size(A,1) ]
@@ -518,7 +519,7 @@ sortrows(A::AbstractMatrix, alg::Base.Sort.Algorithm) =
 sortrows(A::AbstractMatrix, alg::Base.Sort.Algorithm, o::Base.Sort.Ordering) =
     sortrows(A, o, alg)
 
-function sortcols(A::AbstractMatrix, o::Base.Sort.Ordering = Base.Sort.Forward,
+function sortcols(A::AbstractMatrix, o::Base.Sort.Ordering=Base.Sort.Forward,
                   alg::Base.Sort.Algorithm = DEFAULT_STABLE)
     r = 1:size(A,1)
     cols = [ sub(A,r,i) for i=1:size(A,2) ]
@@ -531,3 +532,5 @@ sortcols(A::AbstractMatrix, alg::Base.Sort.Algorithm) =
 
 sortcols(A::AbstractMatrix, alg::Base.Sort.Algorithm, o::Base.Sort.Ordering) =
     sortcols(A, o, alg)
+
+end # module Sort
