@@ -214,9 +214,9 @@ parsehex(s) = parseint(s,16)
 @test parseint(" 2") == 2
 @test parseint("+2\n") == 2
 @test parseint("-2") == -2
-@test_fails parseint("   2 \n 0")
-@test_fails parseint("2x")
-@test_fails parseint("-")
+@test_throws parseint("   2 \n 0")
+@test_throws parseint("2x")
+@test_throws parseint("-")
 
 # string manipulation
 @test strip("\t  hi   \n") == "hi"
@@ -764,10 +764,10 @@ bin_val = hex2bytes("07bf")
 @test "0123456789abcdefabcdef" == bytes2hex(hex2bytes("0123456789abcdefABCDEF"))
 
 # odd size
-@test_fails hex2bytes("0123456789abcdefABCDEF0")
+@test_throws hex2bytes("0123456789abcdefABCDEF0")
 
 #non-hex characters
-@test_fails hex2bytes("0123456789abcdefABCDEFGH")
+@test_throws hex2bytes("0123456789abcdefABCDEFGH")
 
 # sizeof
 @test sizeof("abc") == 3

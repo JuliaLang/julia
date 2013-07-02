@@ -23,17 +23,17 @@ for arr in (identity, as_sub)
     @test broadcast(+, arr([1, 0]), arr([1, 4])) == [2, 4]
     @test broadcast(+) == 0
     @test broadcast(*) == 1
-    
+
     @test arr(eye(2)) .+ arr([1, 4]) == arr([2 1; 4 5])
     @test arr(eye(2)) .+ arr([1  4]) == arr([2 4; 1 5])
     @test arr([1  0]) .+ arr([1, 4]) == arr([2 1; 5 4])
     @test arr([1, 0]) .+ arr([1  4]) == arr([2 5; 1 4])
     @test arr([1, 0]) .+ arr([1, 4]) == arr([2, 4])
     @test arr([1]) .+ arr([]) == arr([])
-    
+
     A = arr(eye(2)); @test broadcast!(+, A, A, arr([1, 4])) == arr([2 1; 4 5])
     A = arr(eye(2)); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4; 1 5])
-    A = arr([1  0]); @test_fails broadcast!(+, A, A, arr([1, 4]))
+    A = arr([1  0]); @test_throws broadcast!(+, A, A, arr([1, 4]))
     A = arr([1  0]); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4])
 
     @test arr([ 1    2])   .* arr([3,   4])   == [ 3 6; 4 8]
@@ -41,12 +41,11 @@ for arr in (identity, as_sub)
     @test arr([1 2]) ./ arr([3, 4]) == [1/3 2/3; 1/4 2/4]
     @test arr([1 2]) .\ arr([3, 4]) == [3 1.5; 4 2]
     @test arr([3 4]) .^ arr([1, 2]) == [3 4; 9 16]
-    
+
     M = arr([11 12; 21 22])
     @test broadcast_getindex(M, eye(Int, 2)+1,arr([1, 2])) == [21 11; 12 22]
-    
+
     A = arr(zeros(2,2))
     broadcast_setindex!(A, arr([21 11; 12 22]), eye(Int, 2)+1,arr([1, 2]))
     @test A == M
 end
-

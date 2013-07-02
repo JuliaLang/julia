@@ -57,7 +57,7 @@ _d = {"a"=>0}
 let
     d = Dict{UTF8String, Vector{Int}}()
     d["a"] = [1, 2]
-    @test_fails d["b"] = 1
+    @test_throws d["b"] = 1
     @test isa(repr(d), String)  # check that printable without error
 end
 
@@ -310,7 +310,7 @@ for data_in in ((7,8,4,5),
         add!(s_new, el)
     end
     @test isequal(s, s_new)
-    
+
     t = tuple(s...)
     @test length(t) == length(s)
     for e in t
@@ -375,5 +375,5 @@ s = IntSet(0,1,10,20,200,300,1000,10000,10002)
 @test !contains(s,0)
 @test !contains(s,10002)
 @test contains(s,10000)
-@test_fails first(IntSet())
-@test_fails last(IntSet())
+@test_throws first(IntSet())
+@test_throws last(IntSet())
