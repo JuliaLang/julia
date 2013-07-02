@@ -176,6 +176,21 @@ static int newline_callback(int count, int key)
     return 0;
 }
 
+static jl_value_t* repl_parse_input_line(char *buf) {
+    if (buf[0] == ';') {
+        buf++;
+        jl_value_t *f = jl_get_global(jl_base_module,jl_symbol("repl_hook"));
+        assert(f);
+        jl_value_t **fargs;
+        JL_GC_PUSHARGS(fargs, 1);
+        fargs[0] = jl_pchar_to_string((char*)buf, strlen(buf));
+        jl_value_t *result = jl_apply((jl_function_t*)f, fargs, 1);
+        JL_GC_POP();
+        return result;
+    }
+    return jl_parse_input_line(buf);
+}
+
 static int return_callback(int count, int key)
 {
     static int consecutive_returns = 0;
@@ -185,7 +200,7 @@ static int return_callback(int count, int key)
     else
         consecutive_returns = 0;
     add_history_temporary(rl_line_buffer);
-    rl_ast = jl_parse_input_line(rl_line_buffer);
+    rl_ast = repl_parse_input_line(rl_line_buffer);
     rl_done = !rl_ast || !jl_is_expr(rl_ast) ||
         (((jl_expr_t*)rl_ast)->head != jl_continue_sym) ||
         consecutive_returns > 1;
@@ -386,7 +401,7 @@ void jl_input_line_callback(char *input)
     else if (!rl_ast) {
         // In vi mode, it's possible for this function to be called w/o a
         // previous call to return_callback.
-        rl_ast = jl_parse_input_line(rl_line_buffer);
+        rl_ast = repl_parse_input_line(rl_line_buffer);
     }
 
     if (rl_ast != NULL) {
