@@ -217,6 +217,14 @@ export PipeString
 @deprecate openblas_set_num_threads      blas_set_num_threads
 @deprecate check_openblas                check_blas
 
+deprecated_ls() = run(`ls -l`)
+deprecated_ls(args::Cmd) = run(`ls -l $args`)
+deprecated_ls(args::String...) = run(`ls -l $args`)
+function ls(args...)
+    warn_once("ls() is deprecated, use readdir() instead. If you are at the repl prompt, consider `;ls`.")
+    deprecated_ls(args...)
+end
+
 # Redirection Operators
 @deprecate |(a::AbstractCmd,b::AbstractCmd) (a|>b)
 @deprecate >(a::Redirectable,b::AbstractCmd) (a|>b)
