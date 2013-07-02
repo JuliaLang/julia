@@ -10,7 +10,8 @@ function git(d)
     isempty(d) && return `git`
     work_tree = abspath(d)
     git_dir = joinpath(work_tree, dir(work_tree))
-    `git --work-tree=$work_tree --git-dir=$git_dir`
+    normpath(work_tree, ".") == normpath(git_dir, ".") ? # is it a bare repo?
+    `git --git-dir=$work_tree` : `git --work-tree=$work_tree --git-dir=$git_dir`
 end
 
 run(args::Cmd; dir="", out=STDOUT) = Base.run(`$(git(dir)) $args` |> out)
