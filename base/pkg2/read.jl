@@ -99,14 +99,14 @@ function installed(avail::Dict=available())
     return pkgs
 end
 
-function fixed(avail::Dict=available(), inst::Dict=installed(avail))
+function fixed(avail::Dict=available(), inst::Dict=installed(avail), julia_version::VersionNumber=VERSION)
     pkgs = Dict{ByteString,Fixed}()
     for (pkg,(ver,fix)) in inst
         fix || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
         pkgs[pkg] = Fixed(ver,requires_dict(pkg,ap))
     end
-    pkgs["julia"] = Fixed(VERSION)
+    pkgs["julia"] = Fixed(julia_version)
     return pkgs
 end
 
