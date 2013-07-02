@@ -119,6 +119,13 @@ test_monitor(0.1)
 # @test isfile(file) == true
 # @test readall(file) == "Here is some text"
 
+emptyfile = joinpath(dir, "empty")
+touch(emptyfile)
+emptyf = open(emptyfile)
+@test isempty(readlines(emptyf))
+close(emptyf)
+rm(emptyfile)
+
 ############
 # Clean up #
 ############
