@@ -1,3 +1,25 @@
+### Generic interface ###
+
+# Arrays
+mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IO) = mmap_array(T, dims, s, position(s))
+
+msync{T}(A::Array{T}) = msync(pointer(A), length(A)*sizeof(T))
+
+munmap{T}(A::Array{T}) = munmap(pointer(A), length(A)*sizeof(T))
+
+# BitArrays
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset) =
+    mmap_bitarray(dims, s, offset)
+mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+
+msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(Uint64))
+
+munmap(B::BitArray) = munmap(pointer(B.chunks), length(B.chunks)*sizeof(Uint64))
+
+### UNIX implementation ###
+
+@unix_only begin
 # Low-level routines
 # These are needed for things like MAP_ANONYMOUS
 function mmap(len::Integer, prot::Integer, flags::Integer, fd::Integer, offset::FileOffset)
@@ -10,8 +32,8 @@ function mmap(len::Integer, prot::Integer, flags::Integer, fd::Integer, offset::
     offset_page::FileOffset = ifloor(offset/pagesize)*pagesize
     len_page::Int = (offset-offset_page) + len
     # Mmap the file
-    p = ccall(:mmap, Ptr{Void}, (Ptr{Void}, Int, Int32, Int32, Int32, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
-    if convert(Int,p) == -1
+    p = ccall(:mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
+    if int(p) == -1
         error("Memory mapping failed", strerror())
     end
     # Also return a pointer that compensates for any adjustment in the offset
@@ -24,30 +46,30 @@ end
 # Note: a few mappable streams do not support lseek. When Julia
 # supports structures in ccall, switch to fstat.
 function mmap_grow(len::Integer, prot::Integer, flags::Integer, fd::Integer, offset::FileOffset)
-    const SEEK_SET::Int32 = 0
-    const SEEK_CUR::Int32 = 1
-    const SEEK_END::Int32 = 2
+    const SEEK_SET::Cint = 0
+    const SEEK_CUR::Cint = 1
+    const SEEK_END::Cint = 2
     # Save current file position so we can restore it later
-    cpos = ccall(:lseek, FileOffset, (Int32, FileOffset, Int32), fd, 0, SEEK_CUR)
+    cpos = ccall(:lseek, FileOffset, (Cint, FileOffset, Cint), fd, 0, SEEK_CUR)
     if cpos < 0
         error(strerror())
     end
-    filelen = ccall(:lseek, FileOffset, (Int32, FileOffset, Int32), fd, 0, SEEK_END)
+    filelen = ccall(:lseek, FileOffset, (Cint, FileOffset, Cint), fd, 0, SEEK_END)
     if filelen < 0
         error(strerror())
     end
     if (filelen < offset + len)
-        n = ccall(:pwrite, Int, (Int32, Ptr{Void}, Uint, FileOffset), fd, int8([0]), 1, offset + len - 1)
+        n = ccall(:pwrite, Cssize_t, (Cint, Ptr{Void}, Uint, FileOffset), fd, int8([0]), 1, offset + len - 1)
         if (n < 1)
             error(strerror())
         end
     end
-    cpos = ccall(:lseek, FileOffset, (Int32, FileOffset, Int32), fd, cpos, SEEK_SET)
+    cpos = ccall(:lseek, FileOffset, (Cint, FileOffset, Cint), fd, cpos, SEEK_SET)
     return mmap(len, prot, flags, fd, offset)
 end
 
 function munmap(p::Ptr,len::Integer)
-    ret = ccall(:munmap,Int32,(Ptr{Void},Int),p,len)
+    ret = ccall(:munmap,Cint,(Ptr{Void},Int),p,len)
     if ret != 0
         error(strerror())
     end
@@ -57,21 +79,23 @@ const MS_ASYNC = 1
 const MS_INVALIDATE = 2
 const MS_SYNC = 4
 function msync(p::Ptr, len::Integer, flags::Integer)
-    ret = ccall(:msync, Int32, (Ptr{Void}, Int, Int32), p, len, flags)
+    ret = ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), p, len, flags)
     if ret != 0
         error(strerror())
     end
-end    
+end
+msync(p::Ptr, len::Integer) = msync(p, len, MS_SYNC)
 
 # Higher-level functions
 # Determine a stream's read/write mode, and return prot & flags
 # appropriate for mmap
+# We could use isreadonly here, but it's worth checking that it's readable too
 function mmap_stream_settings(s::IO)
-    const PROT_READ::Int32 = 1
-    const PROT_WRITE::Int32 = 2
-    const MAP_SHARED::Int32 = 1
-    const F_GETFL::Int32 = 3
-    mode = ccall(:fcntl,Int32,(Int32,Int32),fd(s),F_GETFL)
+    const PROT_READ::Cint = 1
+    const PROT_WRITE::Cint = 2
+    const MAP_SHARED::Cint = 1
+    const F_GETFL::Cint = 3
+    mode = ccall(:fcntl,Cint,(Cint,Cint),fd(s),F_GETFL)
     mode = mode & 3
     if mode == 0
         prot = PROT_READ
@@ -100,16 +124,6 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IO, offset::FileOffs
     finalizer(A,x->munmap(pmap,len+delta))
     return A
 end
-mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IO) = mmap_array(T, dims, s, position(s))
-msync{T}(A::Array{T}, flags::Int) = msync(pointer(A), prod(size(A))*sizeof(T), flags)
-msync{T}(A::Array{T}) = msync(A,MS_SYNC)
-
-# For storing information about a mmapped-array
-type MmapArrayInfo
-    pathname::ByteString
-    eltype::Type
-    dims::Dims
-end
 
 # Mmapped-bitarray constructor
 function mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
@@ -135,10 +149,44 @@ function mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
     end
     return B
 end
-mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset) =
-    mmap_bitarray(dims, s, offset)
-mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
-mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
+end
 
-msync(B::BitArray, flags::Integer) = msync(pointer(B.chunks), flags)
-msync(B::BitArray) = msync(B.chunks,MS_SYNC)
+
+### Windows implementation ###
+@windows_only begin
+# Mmapped-array constructor
+function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IO, offset::FileOffset)
+    shandle = _get_osfhandle(s)
+    ro = isreadonly(shandle)
+    flprotect = ro ? 0x02 : 0x04
+    szarray = int64(prod(dims))*sizeof(T)
+    szfile = szarray + int64(offset)
+    mmaphandle = ccall(:CreateFileMappingA, stdcall, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Cint, Cint, Cint, Ptr{Void}), shandle, C_NULL, flprotect, szfile>>32, szfile&0xffffffff, C_NULL)
+    if mmaphandle == C_NULL
+        error("Could not create file mapping")
+    end
+    access = ro ? 4 : 2
+    viewhandle = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, Cint, Cint, Cint, Csize_t), mmaphandle, access, offset>>32, offset&0xffffffff, szarray)
+    if viewhandle == C_NULL
+        error("Could not create mapping view")
+    end
+    A = pointer_to_array(pointer(T, viewhandle), dims)
+    finalizer(A, x->munmap(viewhandle))
+    return A
+end
+
+function munmap(viewhandle::Ptr)
+    status = bool(ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle))
+    if !status
+        error("Could not unmap view")
+    end
+end
+
+function msync(p::Ptr, len::Integer)
+    status = bool(ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), p, len))
+    if !status
+        error("Could not msync")
+    end
+end
+
+end

@@ -677,6 +677,11 @@ int ios_bufmode(ios_t *s, bufmode_t mode)
     return 0;
 }
 
+int ios_get_readonly(ios_t *s)
+{
+    return s->readonly;
+}
+
 void ios_set_readonly(ios_t *s)
 {
     if (s->readonly) return;
