@@ -39,7 +39,7 @@ end
 
 function read(io::IO)
     lines = Line[]
-    for line in eachline(chomp,io)
+    for line in eachline(io)
         line = chomp(line)
         push!(lines, ismatch(r"^\s*(?:#|$)", line) ? Comment(line) : Requirement(line))
     end
