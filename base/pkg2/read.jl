@@ -112,4 +112,14 @@ function free(avail::Dict=available())
     return pkgs
 end
 
+function installed(avail::Dict=available())
+    pkgs = Dict{ByteString,(VersionNumber,Bool)}()
+    for pkg in readdir()
+        isinstalled(pkg) || continue
+        ap = get(avail,pkg,Dict{VersionNumber,Available}())
+        pkgs[pkg] = (installed_version(pkg,ap),isfixed(pkg,ap))
+    end
+    return pkgs
+end
+
 end # module
