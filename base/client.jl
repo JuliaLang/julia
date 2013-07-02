@@ -44,6 +44,29 @@ function repl_callback(ast::ANY, show_value)
     put(repl_channel, (ast, show_value))
 end
 
+function repl_cmd(cmd)
+    if isempty(cmd.exec)
+        error("no cmd to execute")
+    elseif cmd.exec[1] == "cd"
+        if length(cmd.exec) > 2
+            error("cd method only takes one argument")
+        elseif length(cmd.exec) == 2
+            cd(cmd.exec[2])
+        else
+            cd()
+        end
+        println(pwd())
+    else
+        run(cmd)
+    end
+    nothing
+end
+
+function repl_hook(input::String)
+    return Expr(:call, :(Base.repl_cmd),
+        macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
+end
+
 display_error(er) = display_error(er, {})
 function display_error(er, bt)
     with_output_color(:red, STDERR) do io
