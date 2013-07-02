@@ -316,7 +316,9 @@ end
 ndigits(x::BigInt) = ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, 10)
 isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
 
-widemul(x::BigInt, y::BigInt) = x*y
-widemul(x::Union(Int128,Uint128), y::Union(Int128,Uint128)) = BigInt(x)*BigInt(y)
+widemul(x::BigInt, y::BigInt)   = x*y
+widemul(x::Int128, y::Uint128)  = BigInt(x)*BigInt(y)
+widemul(x::Uint128, y::Int128)  = BigInt(x)*BigInt(y)
+widemul{T<:Integer}(x::T, y::T) = BigInt(x)*BigInt(y)
 
 end # module

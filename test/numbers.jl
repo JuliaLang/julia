@@ -1479,3 +1479,7 @@ end
 
 # issue #3520 - certain int literals on 32-bit systems
 @test -536870913 === -536870912-1
+
+# overflow in rational comparison
+@test 3//2 < typemax(Int)
+@test 3//2 <= typemax(Int)
