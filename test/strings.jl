@@ -774,3 +774,6 @@ bin_val = hex2bytes("07bf")
 @test sizeof("\u2222") == 3
 @test sizeof(SubString("abc\u2222def",4,6)) == 3
 @test sizeof(RopeString("abc","def")) == 6
+
+# issue #3597
+@test string(CharString(['T', 'e', 's', 't'])[1:1], "X") == "TX"
