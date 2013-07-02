@@ -299,6 +299,149 @@ begin
     @test isequal(cumsum(A,2),A2)
     @test isequal(cumsum(A,3),A3)
 
+    R = repeat([1, 2], inner = [1], outer = [1])
+    @assert R == [1, 2]
+    R = repeat([1, 2], inner = [2], outer = [1])
+    @assert R == [1, 1, 2, 2]
+    R = repeat([1, 2], inner = [1], outer = [2])
+    @assert R == [1, 2, 1, 2]
+    R = repeat([1, 2], inner = [2], outer = [2])
+    @assert R == [1, 1, 2, 2, 1, 1, 2, 2]
+    R = repeat([1, 2], inner = [1, 1], outer = [1, 1])
+    @assert R == [1, 2]''
+    R = repeat([1, 2], inner = [2, 1], outer = [1, 1])
+    @assert R == [1, 1, 2, 2]''
+    R = repeat([1, 2], inner = [1, 2], outer = [1, 1])
+    @assert R == [1 1; 2 2]
+    R = repeat([1, 2], inner = [1, 1], outer = [2, 1])
+    @assert R == [1, 2, 1, 2]''
+    R = repeat([1, 2], inner = [1, 1], outer = [1, 2])
+    @assert R == [1 1; 2 2]
+
+    R = repeat([1 2;
+                3 4], inner = [1, 1], outer = [1, 1]) 
+    @assert R == [1 2;
+                  3 4]
+    R = repeat([1 2;
+                3 4], inner = [1, 1], outer = [2, 1])
+    @assert R == [1 2;
+                  3 4;
+                  1 2;
+                  3 4]
+    R = repeat([1 2;
+                3 4], inner = [1, 1], outer = [1, 2])
+    @assert R == [1 2 1 2;
+                  3 4 3 4]
+    R = repeat([1 2;
+                3 4], inner = [1, 1], outer = [2, 2])
+    @assert R == [1 2 1 2;
+                  3 4 3 4;
+                  1 2 1 2;
+                  3 4 3 4]
+    R = repeat([1 2;
+                3 4], inner = [2, 1], outer = [1, 1])
+    @assert R == [1 2;
+                  1 2;
+                  3 4;
+                  3 4]
+    R = repeat([1 2;
+                3 4], inner = [2, 1], outer = [2, 1])
+    @assert R == [1 2;
+                  1 2;
+                  3 4;
+                  3 4;
+                  1 2;
+                  1 2;
+                  3 4;
+                  3 4]
+    R = repeat([1 2;
+                3 4], inner = [2, 1], outer = [1, 2])
+    @assert R == [1 2 1 2;
+                  1 2 1 2;
+                  3 4 3 4;
+                  3 4 3 4;]
+    R = repeat([1 2;
+                3 4], inner = [2, 1], outer = [2, 2])
+    @assert R == [1 2 1 2;
+                  1 2 1 2;
+                  3 4 3 4;
+                  3 4 3 4;
+                  1 2 1 2;
+                  1 2 1 2;
+                  3 4 3 4;
+                  3 4 3 4]
+    R = repeat([1 2;
+                3 4], inner = [1, 2], outer = [1, 1])
+    @assert R == [1 1 2 2;
+                  3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = [1, 2], outer = [2, 1])
+    @assert R == [1 1 2 2;
+                  3 3 4 4;
+                  1 1 2 2;
+                  3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = [1, 2], outer = [1, 2])
+    @assert R == [1 1 2 2 1 1 2 2;
+                  3 3 4 4 3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = [1, 2], outer = [2, 2])
+    @assert R == [1 1 2 2 1 1 2 2;
+                  3 3 4 4 3 3 4 4;
+                  1 1 2 2 1 1 2 2;
+                  3 3 4 4 3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = [2, 2], outer = [1, 1])
+    @assert R == [1 1 2 2;
+                  1 1 2 2;
+                  3 3 4 4;
+                  3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = [2, 2], outer = [2, 1])
+    @assert R == [1 1 2 2;
+                  1 1 2 2;
+                  3 3 4 4;
+                  3 3 4 4;
+                  1 1 2 2;
+                  1 1 2 2;
+                  3 3 4 4;
+                  3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = [2, 2], outer = [1, 2])
+    @assert R == [1 1 2 2 1 1 2 2;
+                  1 1 2 2 1 1 2 2;
+                  3 3 4 4 3 3 4 4;
+                  3 3 4 4 3 3 4 4]
+    R = repeat([1 2;
+                3 4], inner = [2, 2], outer = [2, 2])
+    @assert R == [1 1 2 2 1 1 2 2;
+                  1 1 2 2 1 1 2 2;
+                  3 3 4 4 3 3 4 4;
+                  3 3 4 4 3 3 4 4;
+                  1 1 2 2 1 1 2 2;
+                  1 1 2 2 1 1 2 2;
+                  3 3 4 4 3 3 4 4;
+                  3 3 4 4 3 3 4 4]
+
+    A = reshape([1:8], 2, 2, 2)
+    R = repeat(A, inner = [1, 1, 2], outer = [1, 1, 1])
+    T = reshape([1:4, 1:4, 5:8, 5:8], 2, 2, 4)
+    @assert R == T
+    A = Array(Int, 2, 2, 2)
+    A[:, :, 1] = [1 2;
+                  3 4]
+    A[:, :, 2] = [5 6;
+                  7 8]
+    R = repeat(A, inner = [2, 2, 2], outer = [2, 2, 2])
+    @assert R[1, 1, 1] == 1
+    @assert R[2, 2, 2] == 1
+    @assert R[3, 3, 3] == 8
+    @assert R[4, 4, 4] == 8
+    @assert R[5, 5, 5] == 1
+    @assert R[6, 6, 6] == 1
+    @assert R[7, 7, 7] == 8
+    @assert R[8, 8, 8] == 8
+
     A = rand(4,4)
     for s in {A[1:2:4, 1:2:4], sub(A, 1:2:4, 1:2:4)}
         c = cumsum(s, 1)
