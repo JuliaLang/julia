@@ -1093,6 +1093,55 @@ indices(I::Real) = convert(Int, I)
 indices(I::AbstractArray{Bool,1}) = find(I)
 indices(I::Tuple) = map(indices, I)
 
+# Generalized repmat
+fld1{T <: Integer}(x::T, y::Integer) = fld(x - one(T), y) + one(T)
+
+function repeat{T}(A::Array{T};
+                   inner::Array{Int} = ones(Int, ndims(A)),
+                   outer::Array{Int} = ones(Int, ndims(A)))
+    size_A = size(A)
+    ndims_A = ndims(A)
+    length_inner, length_outer = length(inner), length(outer)
+    ndims_out = max(ndims_A, length_inner, length_outer)
+
+    if length_inner < ndims_A || length_outer < ndims_A
+        error("Inner/outer repetitions must be set for all input dimensions")
+    end
+
+    size_out = Array(Int, ndims_out)
+    inner_size_out = Array(Int, ndims_out)
+
+    for i in 1:ndims_out
+        t1 = ndims_A < i ? 1 : size_A[i]
+        t2 = length_inner < i ? 1 : inner[i]
+        t3 = length_outer < i ? 1 : outer[i]
+        size_out[i] = t1 * t2 * t3
+        inner_size_out[i] = t1 * t2
+    end
+
+    length_out = prod(size_out)
+
+    R = Array(T, size_out...)
+
+    for index_out in 1:length_out
+        indices_out = ind2sub(tuple(size_out...), index_out)
+        indices_in = Array(Int, length(indices_out))
+        for t in 1:length(indices_out)
+            indices_in[t] = indices_out[t]
+            # "Project" outer repetitions into inner repetitions
+            indices_in[t] = mod1(indices_out[t], inner_size_out[t])
+            # Find inner repetitions using flooring division
+            if inner[t] != 1
+                indices_in[t] = fld1(indices_in[t], inner[t])
+            end
+        end
+        index_in = sub2ind(size_A, tuple(indices_in[1:ndims_A]...)...)
+        R[index_out] = A[index_in]
+    end
+
+    return R
+end
+
 ## iteration utilities ##
 
 # slow, but useful
