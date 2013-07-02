@@ -52,8 +52,9 @@ extern "C" const char *jl_lookup_soname(char *pfx, size_t n)
 // map from user-specified lib names to handles
 static std::map<std::string, void*> libMap;
 
-int add_library_mapping(char *lib, void *hnd)
+extern "C" int add_library_mapping(char *lib, void *hnd)
 {
+    JL_PUTS((char*)"WARNING: add_library_mapping is deprecated, use push!(DL_LOAD_PATH,\"/path/to/search\") instead.\n", JL_STDERR);
     if (libMap[lib] == NULL && hnd != NULL) {
         libMap[lib] = hnd;
         return 0;
@@ -74,7 +75,7 @@ static void *add_library_sym(char *name, char *lib)
         if (hnd == NULL) {
             hnd = jl_load_dynamic_library(lib, JL_RTLD_DEFAULT);
             if (hnd != NULL)
-            libMap[lib] = hnd;
+                libMap[lib] = hnd;
             else
                 return NULL;
         }
