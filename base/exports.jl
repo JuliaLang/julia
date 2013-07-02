@@ -1055,7 +1055,6 @@ export
     mmap_grow,
     mmap_stream_settings,
     msync,
-    munmap,
     nb_available,
     open,
     open_any_tcp_port,
