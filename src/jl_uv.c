@@ -170,6 +170,7 @@ uv_buf_t jl_alloc_buf(uv_handle_t *handle, size_t suggested_size)
 void jl_connectcb(uv_connect_t *connect, int status)
 {
     JULIA_CB(connectcb,connect->handle->data,1,CB_INT32,status);
+    free(connect);
     (void)ret;
 }
 
@@ -596,7 +597,7 @@ DLLEXPORT int jl_getpid()
 #endif
 }
 
-//NOTE: This function expects port/host to be in network byte-order (Big Endian)
+//NOTE: These function expects port/host to be in network byte-order (Big Endian)
 DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host)
 {
     struct sockaddr_in addr;
@@ -607,6 +608,17 @@ DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host)
     int err = uv_tcp_bind(handle,addr);
     return err;
 }
+DLLEXPORT int jl_tcp_bind6(uv_tcp_t* handle, uint16_t port, void *host)
+{
+    struct sockaddr_in6 addr;
+    memset(&addr, 0, sizeof(struct sockaddr_in6));
+    addr.sin6_port = port;
+    memcpy(&addr.sin6_addr, host, 16);
+    addr.sin6_family = AF_INET6;
+    int err = uv_tcp_bind6(handle,addr);
+    return err;
+}
+
 
 DLLEXPORT void getlocalip(char *buf, size_t len)
 {
@@ -644,7 +656,7 @@ DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, const char *host, const char *serv
     struct addrinfo hints;
 
     memset (&hints, 0, sizeof (hints));
-    hints.ai_family = AF_INET; //ipv4 for now
+    hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags |= AI_CANONNAME;
 
@@ -655,24 +667,37 @@ DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, const char *host, const char *serv
 
 DLLEXPORT struct sockaddr *jl_sockaddr_from_addrinfo(struct addrinfo *addrinfo)
 {
-    struct sockaddr *addr = malloc(sizeof(struct sockaddr));
-    memcpy(addr,addrinfo->ai_addr,sizeof(struct sockaddr));
-    return addr;
+    return addrinfo->ai_addr;
+}
+DLLEXPORT struct addrinfo *jl_next_from_addrinfo(struct addrinfo *addrinfo)
+{
+    return addrinfo->ai_next;
 }
 
-DLLEXPORT int jl_sockaddr_is_ip4(struct sockaddr *addr)
+DLLEXPORT int jl_sockaddr_is_ip4(struct sockaddr_storage *addr)
 {
-    return (addr->sa_family==AF_INET);
+    return (addr->ss_family==AF_INET);
 }
 
-DLLEXPORT unsigned int jl_sockaddr_host4(struct sockaddr *addr)
+DLLEXPORT int jl_sockaddr_is_ip6(struct sockaddr_storage *addr)
 {
-    return ((struct sockaddr_in*)addr)->sin_addr.s_addr;
+    return (addr->ss_family==AF_INET6);
 }
 
-DLLEXPORT void jl_sockaddr_set_port(struct sockaddr *addr,uint16_t port)
+DLLEXPORT unsigned int jl_sockaddr_host4(struct sockaddr_in *addr)
 {
-    if (addr->sa_family==AF_INET) {
+    return addr->sin_addr.s_addr;
+}
+
+DLLEXPORT unsigned int jl_sockaddr_host6(struct sockaddr_in6 *addr, char *host)
+{
+    memcpy(host, &addr->sin6_addr, 16);
+    return addr->sin6_scope_id;
+}
+
+DLLEXPORT void jl_sockaddr_set_port(struct sockaddr_storage *addr,uint16_t port)
+{
+    if (addr->ss_family==AF_INET) {
         ((struct sockaddr_in*)addr)->sin_port=port;
     }
     else {
@@ -691,10 +716,21 @@ DLLEXPORT int jl_tcp4_connect(uv_tcp_t *handle,uint32_t host, uint16_t port)
     return uv_tcp_connect(req,handle,addr,&jl_connectcb);
 }
 
-DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr *addr)
+DLLEXPORT int jl_tcp6_connect(uv_tcp_t *handle, void *host, uint16_t port)
+{
+    struct sockaddr_in6 addr;
+    uv_connect_t *req = malloc(sizeof(uv_connect_t));
+    memset(&addr, 0, sizeof(struct sockaddr_in6));
+    addr.sin6_family = AF_INET6;
+    memcpy(&addr.sin6_addr, host, 16);
+    addr.sin6_port = port;
+    return uv_tcp_connect6(req,handle,addr,&jl_connectcb);
+}
+
+DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr_storage *addr)
 {
     uv_connect_t *req = malloc(sizeof(uv_connect_t));
-    if (addr->sa_family==AF_INET) {
+    if (addr->ss_family==AF_INET) {
         return uv_tcp_connect(req,handle,*((struct sockaddr_in*)addr),&jl_connectcb);
     }
     else {
