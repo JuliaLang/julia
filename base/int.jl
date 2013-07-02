@@ -484,6 +484,8 @@ widemul(x::Uint16, y::Uint16) = uint32(x)*uint32(y)
 widemul(x::Int32, y::Int32) = int64(x)*int64(y)
 widemul(x::Uint32, y::Uint32) = uint64(x)*uint64(y)
 
+widemul(x::Integer, y::Integer) = widemul(promote(x,y)...)
+
 if WORD_SIZE==32
     function widemul(u::Int64, v::Int64)
         local u0::Uint64, v0::Uint64, w0::Uint64
