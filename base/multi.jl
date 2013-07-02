@@ -693,7 +693,11 @@ function perform_work(t::Task)
         yieldto(t, arg)
     end
     t = current_task().last
-    if !istaskdone(t) && t.runnable
+    if istaskdone(t)
+        if isa(t.donenotify, Condition)
+            notify(t.donenotify, t.result)
+        end
+    elseif t.runnable
         # still runnable; return to queue
         enq_work(t)
     end
@@ -878,7 +882,7 @@ function start_worker(out::IO)
     global const Scheduler = current_task()
 
     try
-        # check_master_connect(60.0)
+        check_master_connect(60.0)
         event_loop(false)
     catch err
         print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")
@@ -1187,18 +1191,11 @@ macro fetchfrom(p, expr)
     :(remotecall_fetch($(esc(p)), $(esc(expr))))
 end
 
-
 function spawnlocal(thunk)
-    rr = RemoteRef(myid())
-    sync_add(rr)
-    rid = rr2id(rr)
-    rv = RemoteValue()
-    (PGRP::ProcessGroup).refs[rid] = rv
-    add!(rv.clientset, rid[1])
-    # add to the *front* of the queue, work first
-    push!(Workqueue, @task(run_work_thunk(rv,thunk)))
-    yield()
-    rr
+    t = Task(thunk)
+    sync_add(t)
+    enq_work(t)
+    t
 end
 
 macro async(expr)
@@ -1453,7 +1450,7 @@ end
 function check_master_connect(timeout)
     # If we do not have at least process 1 connect to us within timeout
     # we log an error and exit
-    @async begin
+    @schedule begin
         start = time()
         while !haskey(map_pid_wrkr, 1) && (time() - start) < timeout
             sleep(1.0)
