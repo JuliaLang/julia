@@ -1151,6 +1151,7 @@ typedef struct _jl_task_t {
     int8_t done;
     int8_t runnable;
     jl_value_t *result;
+    jl_value_t *donenotify;
     jl_jmp_buf ctx;
     union {
         void *stackbase;
