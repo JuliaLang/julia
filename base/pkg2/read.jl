@@ -89,35 +89,32 @@ function requires_path(pkg::String, avail::Dict=available(pkg))
 end
 requires_dict(pkg::String, avail::Dict=available(pkg)) = Reqs.parse(requires_path(pkg,avail))
 
-function fixed(avail::Dict=available())
-    pkgs = Dict{ByteString,Fixed}()
-    for pkg in readdir()
-        isinstalled(pkg) || continue
-        ap = get(avail,pkg,Dict{VersionNumber,Available}())
-        isfixed(pkg,ap) || continue
-        pkgs[pkg] = Fixed(installed_version(pkg,ap),requires_dict(pkg,ap))
-    end
-    pkgs["julia"] = Fixed(VERSION)
-    return pkgs
-end
-
-function free(avail::Dict=available())
-    pkgs = Dict{ByteString,VersionNumber}()
-    for pkg in readdir()
-        isinstalled(pkg) || continue
-        ap = get(avail,pkg,Dict{VersionNumber,Available}())
-        isfixed(pkg,ap) && continue
-        pkgs[pkg] = installed_version(pkg,ap)
-    end
-    return pkgs
-end
-
 function installed(avail::Dict=available())
     pkgs = Dict{ByteString,(VersionNumber,Bool)}()
     for pkg in readdir()
         isinstalled(pkg) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
         pkgs[pkg] = (installed_version(pkg,ap),isfixed(pkg,ap))
+    end
+    return pkgs
+end
+
+function fixed(avail::Dict=available(), inst::Dict=installed(avail))
+    pkgs = Dict{ByteString,Fixed}()
+    for (pkg,(ver,fix)) in inst
+        fix || continue
+        ap = get(avail,pkg,Dict{VersionNumber,Available}())
+        pkgs[pkg] = Fixed(ver,requires_dict(pkg,ap))
+    end
+    pkgs["julia"] = Fixed(VERSION)
+    return pkgs
+end
+
+function free(inst::Dict=installed())
+    pkgs = Dict{ByteString,VersionNumber}()
+    for (pkg,(ver,fix)) in inst
+        fix && continue
+        pkgs[pkg] = ver
     end
     return pkgs
 end

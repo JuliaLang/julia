@@ -44,7 +44,8 @@ update() = Dir.cd() do
         Git.run(`pull -q`)
     end
     avail = Read.available()
-    fixed = Read.fixed(avail)
+    instd = Read.installed(avail)
+    fixed = Read.fixed(avail,instd)
     for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
         if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
@@ -57,18 +58,19 @@ update() = Dir.cd() do
             Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
         end
     end
-    free = Read.free(avail)
+    free = Read.free(instd)
     for (pkg,ver) in free
         Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
-    resolve(Reqs.parse("REQUIRE"), avail, fixed, free)
+    resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
 end
 
 resolve(
     reqs  :: Dict,
     avail :: Dict = Dir.cd(Read.available),
-    fixed :: Dict = Dir.cd(()->Read.fixed(avail)),
-    have  :: Dict = Dir.cd(()->Read.free(avail))
+    instd :: Dict = Dir.cd(()->Read.installed(avail)),
+    fixed :: Dict = Dir.cd(()->Read.fixed(avail,instd)),
+    have  :: Dict = Dir.cd(()->Read.free(instd))
 ) = Dir.cd() do
 
     reqs = Query.requirements(reqs,fixed)
@@ -148,7 +150,8 @@ end
 # Metadata sanity check
 check_metadata(julia_version::VersionNumber=VERSION) = Dir.cd() do
     avail = Read.available()
-    fixed = Read.fixed(avail)
+    instd = Read.installed(avail)
+    fixed = Read.fixed(avail,instd)
     deps  = Query.dependencies(avail,fixed)
     try
         Resolve.sanity_check(deps)
