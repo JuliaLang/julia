@@ -39,9 +39,7 @@ end
 
 function read(io::IO)
     lines = Line[]
-    for line in eachline(io)
-        # workaround for https://github.com/JuliaLang/julia/issues/3473
-        isempty(line) && continue
+    for line in eachline(chomp,io)
         line = chomp(line)
         push!(lines, ismatch(r"^\s*(?:#|$)", line) ? Comment(line) : Requirement(line))
     end
