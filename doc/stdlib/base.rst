@@ -1010,7 +1010,7 @@ Text I/O
 
    Create an iterable object that will yield each line from a stream.
 
-.. function:: readdlm(source, delim::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false)
+.. function:: readdlm(source, delim::Char; has_header=false, use_mmap=false, ignore_invalid_chars=false)
 
    Read a matrix from the source where each line gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped filed can be used by passing the byte array representation of the mapped segment as source. 
 
@@ -1041,6 +1041,8 @@ Text I/O
 
 Memory-mapped I/O
 -----------------
+
+Note: Currently not available on Windows.
 
 .. function:: mmap_array(type, dims, stream, [offset])
 
