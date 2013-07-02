@@ -71,6 +71,10 @@ include("laplace.jl")
 include("go_benchmark.jl")
 @timeit1 benchmark(10) "go_benchmark"
 
+# issue #3142
+include("simplex.jl")
+simplexbenchmark()
+
 function cmp_with_func(x::Vector, f::Function)
     count::Int = 0
     for i = 1:length(x)-1
