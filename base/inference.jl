@@ -1928,19 +1928,56 @@ function is_known_call(e::Expr, func, sv)
     return !is(f,false) && is(_ieval(f), func)
 end
 
+function is_var_assigned(ast, v)
+    for vi in ast.args[2][2]
+        if symequal(vi[1], v) && (vi[3]&2)!=0
+            return true
+        end
+    end
+    return false
+end
+
+function delete_var!(ast, v)
+    filter!(vi->!symequal(vi[1],v), ast.args[2][2])
+    filter!(x->!symequal(x,v), ast.args[2][1])
+    filter!(x->!(isa(x,Expr) && x.head === :(=) &&
+                 symequal(x.args[1],v)),
+            ast.args[3].args)
+    ast
+end
+
+# remove all single-assigned vars v in "v = x" where x is an argument
+# and not assigned.
+# "sa" is the result of find_sa_vars
+function remove_redundant_temp_vars(ast, sa)
+    for (v,init) in sa
+        if ((isa(init,Symbol) || isa(init,SymbolNode)) &&
+            any(vi->symequal(vi[1],init), ast.args[2][2]) &&
+            !is_var_assigned(ast, init))
+
+            delete_var!(ast, v)
+            sym_replace(ast.args[3], {v}, {}, {init}, {})
+        end
+    end
+    ast
+end
+
 # compute set of vars assigned once
 function find_sa_vars(ast)
     body = ast.args[3].args
     av = ObjectIdDict()
     av2 = ObjectIdDict()
+    vnames = ast.args[2][1]
     for i = 1:length(body)
         e = body[i]
         if isa(e,Expr) && is(e.head,:(=))
             lhs = e.args[1]
-            if !haskey(av, lhs)
-                av[lhs] = e.args[2]
-            else
-                av2[lhs] = true
+            if contains_is(vnames, lhs)  # exclude globals
+                if !haskey(av, lhs)
+                    av[lhs] = e.args[2]
+                else
+                    av2[lhs] = true
+                end
             end
         end
     end
@@ -1995,6 +2032,7 @@ function tuple_elim_pass(ast::Expr)
     bexpr = ast.args[3]::Expr
     body = (ast.args[3].args)::Array{Any,1}
     vs = find_sa_vars(ast)
+    remove_redundant_temp_vars(ast, vs)
     i = 1
     while i < length(body)
         e = body[i]
