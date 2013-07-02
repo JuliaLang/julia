@@ -1558,7 +1558,7 @@
 
 "),
 
-("Text I/O","Base","readdlm","readdlm(source, delim::Char; has_header=false, use_mmap=true, ignore_invalid_chars=false)
+("Text I/O","Base","readdlm","readdlm(source, delim::Char; has_header=false, use_mmap=false, ignore_invalid_chars=false)
 
    Read a matrix from the source where each line gives one row, with
    elements separated by the given delimeter. The source can be a text
