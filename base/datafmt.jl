@@ -43,7 +43,7 @@ readdlm(input, dlm::Char, T::Type, eol::Char; opts...) = readdlm_auto(input, dlm
 
 function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
     optsd = val_opts(opts)
-    isa(input, String) && (input = get(optsd, :use_mmap, true) ? mmap_array(Uint8, (filesize(input),), open(input, "r")) : readall(input))
+    isa(input, String) && (input = get(optsd, :use_mmap, is_unix(OS_NAME)) ? mmap_array(Uint8, (filesize(input),), open(input, "r")) : readall(input))
     sinp = isa(input, Vector{Uint8}) ? ccall(:jl_array_to_string, ByteString, (Array{Uint8,1},), input) :
            isa(input, IO) ? readall(input) :
            input
