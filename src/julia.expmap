@@ -19,6 +19,7 @@
     ios_fd;
     ios_file;
     ios_flush;
+    ios_get_readonly;
     ios_getc;
     ios_getutf8;
     ios_mem;
