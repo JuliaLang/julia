@@ -5,8 +5,6 @@ mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IO) = mmap_array(T, dims, s, 
 
 msync{T}(A::Array{T}) = msync(pointer(A), length(A)*sizeof(T))
 
-munmap{T}(A::Array{T}) = munmap(pointer(A), length(A)*sizeof(T))
-
 # BitArrays
 mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset) =
     mmap_bitarray(dims, s, offset)
@@ -14,8 +12,6 @@ mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray
 mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
 
 msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(Uint64))
-
-munmap(B::BitArray) = munmap(pointer(B.chunks), length(B.chunks)*sizeof(Uint64))
 
 ### UNIX implementation ###
 
@@ -147,6 +143,7 @@ function mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
     if N != 1
         B.dims = Int[i for i in dims]
     end
+    finalizer(B, x->munmap(pointer(B.chunks), length(B.chunks)*sizeof(Uint64)))
     return B
 end
 end

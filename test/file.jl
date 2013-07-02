@@ -112,14 +112,12 @@ s = open(file, "r")
 @test isreadonly(s) == true
 c = mmap_array(Uint8, (11,), s)
 @test c == "Hello World".data
-munmap(c)
 close(s)
 s = open(file, "r+")
 @test isreadonly(s) == false
 c = mmap_array(Uint8, (11,), s)
 c[5] = uint8('x')
 msync(c)
-munmap(c)
 close(s)
 s = open(file, "r")
 str = readline(s)
