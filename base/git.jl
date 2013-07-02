@@ -13,7 +13,7 @@ function git(d)
     `git --work-tree=$work_tree --git-dir=$git_dir`
 end
 
-run(args::Cmd; dir="") = Base.run(`$(git(dir)) $args`)
+run(args::Cmd; dir="", out=STDOUT) = Base.run(`$(git(dir)) $args` |> out)
 success(args::Cmd; dir="") = Base.success(`$(git(dir)) $args`)
 readall(args::Cmd; dir="") = Base.readall(`$(git(dir)) $args`)
 readchomp(args::Cmd; dir="") = Base.readchomp(`$(git(dir)) $args`)
