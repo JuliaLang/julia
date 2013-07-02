@@ -18,7 +18,7 @@ function prefetch{S<:String}(pkg::String, url::String, sha1s::Vector{S})
         Git.run(`config remote.origin.url $url`, dir=cache)
     end
     if !all(sha1->Git.iscommit(sha1, dir=cache), sha1s)
-	    Git.run(`fetch -q $url`, dir=cache)
+	    Git.run(`remote update`, dir=cache, out=SpawnNullStream())
 	end
     filter(sha1->!Git.iscommit(sha1, dir=cache), sha1s)
 end
