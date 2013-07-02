@@ -156,7 +156,7 @@ end
 check_metadata(julia_version::VersionNumber=VERSION) = Dir.cd() do
     avail = Read.available()
     instd = Read.installed(avail)
-    fixed = Read.fixed(avail,instd)
+    fixed = Read.fixed(avail,instd,julia_version)
     deps  = Query.dependencies(avail,fixed)
 
     problematic = Resolve.sanity_check(deps)
