@@ -5,7 +5,7 @@ include("resolve/maxsum.jl")
 
 using ..Types, ..Query, .PkgToMaxSumInterface, .MaxSum
 
-export resolve, sanity_check, MetadataError
+export resolve, sanity_check
 
 # Use the max-sum algorithm to resolve packages dependencies
 function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
@@ -68,7 +68,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
     checked = falses(nv)
 
-    insane = Array((ByteString,VersionNumber,ByteString),0)
+    problematic = Array((ByteString,VersionNumber,ByteString),0)
     i = 1
     psl = 0
     for (p,vn) in vers
@@ -109,7 +109,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
             if isa(err, UnsatError)
                 pp = red_pkgs[err.info]
                 for vneq in eq_classes_map[p][vn]
-                    push!(insane, (p, vneq, pp))
+                    push!(problematic, (p, vneq, pp))
                 end
             else
                 rethrow(err)
@@ -118,12 +118,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
         i += 1
     end
 
-    if !isempty(insane)
-        sortby!(insane, x->x[1])
-        throw(MetadataError(insane))
-    end
-
-    return
+    return sort!(problematic)
 end
 
 end # module

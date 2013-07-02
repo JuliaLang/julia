@@ -75,6 +75,11 @@ resolve(
 
     reqs = Query.requirements(reqs,fixed)
     deps = Query.dependencies(avail,fixed)
+
+    for rp in keys(reqs)
+        haskey(deps, rp) || error("required package $rp has no version compatible with fixed requirements")
+    end
+
     want = Resolve.resolve(reqs,deps)
 
     # compare what is installed with what should be
@@ -153,14 +158,11 @@ check_metadata(julia_version::VersionNumber=VERSION) = Dir.cd() do
     instd = Read.installed(avail)
     fixed = Read.fixed(avail,instd)
     deps  = Query.dependencies(avail,fixed)
-    try
-        Resolve.sanity_check(deps)
-    catch err
-        if !isa(err, Resolve.MetadataError)
-            rethrow(err)
-        end
+
+    problematic = Resolve.sanity_check(deps)
+    if !isempty(problematic)
         warning = "Packages with unsatisfiable requirements found:\n"
-        for (p, vn, rp) in err.info
+        for (p, vn, rp) in problematic
             warning *= "    $p v$vn : no valid versions exist for package $rp\n"
         end
         warn(warning)
