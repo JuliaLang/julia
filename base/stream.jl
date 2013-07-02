@@ -140,7 +140,10 @@ flush(::TTY) = nothing
 
 function wait_connected(x)
     while !x.open
-        wait(x.connectnotify)
+        err = wait(x.connectnotify)
+        if err.uv_code != 0
+            throw(UVError("connect",err))
+        end
     end
 end
 
@@ -556,7 +559,9 @@ function accept(server::UVServer, client::AsyncStream)
     end
 end
 
-function listen!(sock::UVServer; backlog::Integer=511)
+const BACKLOG_DEFAULT = 511
+
+function listen!(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT)
     err = ccall(:jl_listen, Int32, (Ptr{Void}, Int32), sock.handle, backlog)
     err != -1 ? (sock.open = true): false
 end
