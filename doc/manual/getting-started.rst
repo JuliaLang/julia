@@ -62,6 +62,15 @@ Or you could put that code into a script and run it::
     foo
     bar
 
+If you have code that you want executed whenever julia is run, you can
+put it in ``~\.juliarc.jl``::
+
+    $ echo 'println("Greetings! 你好! 안녕하세요?")' > ~/.juliarc.jl
+    $ julia
+    Greetings! 你好! 안녕하세요?
+    
+    ...
+
 There are various ways to run Julia code and provide options, similar to
 those available for the ``perl`` and ``ruby`` programs::
 
