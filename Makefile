@@ -194,7 +194,7 @@ test-%: release
 .PHONY: win-extras, wine_path
 win-extras:
 	[ -d dist-extras ] || mkdir dist-extras
-ifeq ($(ARCH),i686)
+ifneq (,$(filter $(ARCH), i386 i686))
 	cd dist-extras && \
 	wget -O 7z920.exe http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll && \
