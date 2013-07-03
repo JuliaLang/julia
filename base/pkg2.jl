@@ -44,7 +44,7 @@ update() = Dir.cd() do
         Git.run(`pull -q`)
     end
     avail = Read.available()
-    for pkg in filter!(Read.isinstalled,readdir())
+    for pkg in filter!(Read.isinstalled,[keys(avail)...])
         Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
     info("Computing changes...")
