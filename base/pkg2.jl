@@ -29,7 +29,20 @@ edit(f::Function, pkg, args...) = Dir.cd() do
     reqs_ != reqs && resolve(reqs_,avail)
     Reqs.write("REQUIRE",r_)
     info("REQUIRE updated.")
-    return
+end
+
+urlpkg(url::String) = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$/*", url).captures[1]
+
+clone(url::String, pkg::String=urlpkg(url); opts::Cmd=``) = Dir.cd() do
+    ispath(pkg) && error("$pkg already exists")
+    try Git.run(`clone $opts $url $pkg`)
+    catch
+        run(`rm -rf $pkg`)
+        rethrow()
+    end
+    isempty(Reqs.parse("$pkg/REQUIRE")) && return
+    info("Computing changes...")
+    resolve()
 end
 
 update() = Dir.cd() do
