@@ -33,7 +33,7 @@ edit(f::Function, pkg, args...) = Dir.cd() do
 end
 
 update() = Dir.cd() do
-    info("Updating metadata...")
+    info("Updating METADATA...")
     cd("METADATA") do
         if Git.branch() != "devel"
             Git.run(`fetch -q --all`)
@@ -44,15 +44,20 @@ update() = Dir.cd() do
         Git.run(`pull -q`)
     end
     avail = Read.available()
+    # this has to happen before computing free/fixed
     for pkg in filter!(Read.isinstalled,[keys(avail)...])
         Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
-    info("Computing changes...")
     instd = Read.installed(avail)
+    free = Read.free(instd)
+    for (pkg,ver) in free
+        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+    end
     fixed = Read.fixed(avail,instd)
     for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
         if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
+            info("Updating $pkg...")
             @recover begin
                 Git.run(`fetch -q --all`, dir=pkg)
                 Git.run(`pull -q`, dir=pkg)
@@ -62,10 +67,7 @@ update() = Dir.cd() do
             Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
         end
     end
-    free = Read.free(instd)
-    for (pkg,ver) in free
-        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
-    end
+    info("Computing changes...")
     resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
 end
 
