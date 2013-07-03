@@ -179,4 +179,10 @@ include("linalg/cholmod.jl")
 include("linalg/arpack.jl")
 include("linalg/arnoldi.jl")
 
+function init()
+    if Base.blas_vendor() == :mkl
+        ccall((:MKL_Set_Interface_Layer, Base.libblas_name), Void, (Cint,), USE_BLAS64 ? 1 : 0)
+    end
+end
+
 end # module LinAlg
