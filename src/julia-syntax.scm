@@ -2063,11 +2063,11 @@
 			     (cdr e))))
 		 (cond ((symbol? dest)
 			(cons `(= ,dest ,(cons (car e) (map car r)))
-			      (apply append (map cdr r))))
+			      (apply append (map cdr (reverse r)))))
 		       (else
 			(let ((ex (cons (car e) (map car r))))
 			  (cons (if tail `(return ,ex) ex)
-				(apply append (map cdr r))))))))))))
+				(apply append (map cdr (reverse r)))))))))))))
   (to-blk (to-lff e #t #t)))
 #|
 future issue:
