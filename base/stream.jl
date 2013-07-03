@@ -303,10 +303,10 @@ _uv_hook_close(uv::AsyncWork) = (uv.handle = 0; nothing)
 _uv_hook_asynccb(async::AsyncWork, status::Int32) = async.cb(status)
 
 
-function start_timer(timer::TimeoutAsyncWork,timeout::Int64,repeat::Int64)
+function start_timer(timer::TimeoutAsyncWork,timeout::Real,repeat::Real)
     associate_julia_struct(timer.handle,timer)
     ccall(:uv_update_time,Void,(Ptr{Void},),eventloop())
-    ccall(:jl_timer_start,Int32,(Ptr{Void},Int64,Int64),timer.handle,timeout+1,repeat)
+    ccall(:jl_timer_start,Int32,(Ptr{Void},Int64,Int64),timer.handle,int64(round(timeout))+1,int64(round(repeat)))
 end
 
 function stop_timer(timer::TimeoutAsyncWork)
@@ -317,7 +317,7 @@ end
 function sleep(sec::Real)
     w = Condition()
     timer = TimeoutAsyncWork(status->notify(w, status))
-    start_timer(timer, int64(iround(sec*1000)), int64(0))
+    start_timer(timer, sec*1000, 0)
     local st
     try
         st = wait(w)

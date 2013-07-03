@@ -6,9 +6,9 @@ immutable Stat
     uid     :: Uint
     gid     :: Uint
     rdev    :: Uint
-    size    :: Int
-    blksize :: Int
-    blocks  :: Int
+    size    :: Int64
+    blksize :: Int64
+    blocks  :: Int64
     mtime   :: Float64
     ctime   :: Float64
 end
@@ -21,9 +21,9 @@ Stat(buf::Union(Vector{Uint8},Ptr{Uint8})) = Stat(
     uint(ccall(:jl_stat_uid,     Uint32,  (Ptr{Uint8},), buf)),
     uint(ccall(:jl_stat_gid,     Uint32,  (Ptr{Uint8},), buf)),
     uint(ccall(:jl_stat_rdev,    Uint32,  (Ptr{Uint8},), buf)),
-     int(ccall(:jl_stat_size,    Coff_t,  (Ptr{Uint8},), buf)),
-     int(ccall(:jl_stat_blksize, Uint32,  (Ptr{Uint8},), buf)),
-     int(ccall(:jl_stat_blocks,  Uint32,  (Ptr{Uint8},), buf)),
+     int64(ccall(:jl_stat_size,    Uint64,  (Ptr{Uint8},), buf)),
+     int64(ccall(:jl_stat_blksize, Uint64,  (Ptr{Uint8},), buf)),
+     int64(ccall(:jl_stat_blocks,  Uint64,  (Ptr{Uint8},), buf)),
          ccall(:jl_stat_mtime,   Float64, (Ptr{Uint8},), buf),
          ccall(:jl_stat_ctime,   Float64, (Ptr{Uint8},), buf),
 )
