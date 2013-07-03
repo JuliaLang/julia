@@ -33,19 +33,19 @@ As seen in the examples above, failures or errors will print the abstract
 syntax tree of the expression in question.
 
 Another macro is provided to check if the given expression throws an error,
-:func:`@test_fails`::
+:func:`@test_throws`::
 
-  julia> @test_fails error("An error")
+  julia> @test_throws error("An error")
 
-  julia> @test_fails 1 == 1
+  julia> @test_throws 1 == 1
   ERROR: test failed: :((1==1))
    in default_handler at test.jl:20
-   in do_test_fails at test.jl:46
+   in do_test_throws at test.jl:46
 
-  julia> @test_fails 1 != 1
+  julia> @test_throws 1 != 1
   ERROR: test failed: :((1!=1))
    in default_handler at test.jl:20
-   in do_test_fails at test.jl:46
+   in do_test_throws at test.jl:46
 
 As floating point comparisons can be imprecise, two additional macros exist taking in account small numerical errors::
 
@@ -122,7 +122,7 @@ ______
 
    Test the expression ``ex`` and calls the current handler to handle the result.
 
-.. function:: @test_fails(ex)
+.. function:: @test_throws(ex)
 
    Test the expression ``ex`` and calls the current handler to handle the result in the following manner:
 

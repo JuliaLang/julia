@@ -94,7 +94,7 @@ ind = findin(a, b)
 A = reshape(1:120, 3, 5, 8)
 sA = sub(A, 2, 1:5, 1:8)
 @test size(sA) == (1, 5, 8)
-@test_fails sA[2, 1:8]
+@test_throws sA[2, 1:8]
 @test sA[1, 2, 1:8][:] == 5:15:120
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
@@ -232,7 +232,7 @@ for i = 1:3
 end
 
 #permutes correctly
-@test isequal(z,permutedims(y,(3,1,2))) 
+@test isequal(z,permutedims(y,(3,1,2)))
 
 # of a subarray
 a = rand(5,5)
@@ -477,5 +477,5 @@ end
 @test isequal([1,2,3], [a for (a,b) in enumerate(2:4)])
 @test isequal([2,3,4], [b for (a,b) in enumerate(2:4)])
 
-@test_fails (10.^[-1])[1] == 0.1
+@test_throws (10.^[-1])[1] == 0.1
 @test (10.^[-1.])[1] == 0.1

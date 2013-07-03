@@ -2,7 +2,7 @@ ENV["JULIA_PKGDIR"] = string("tmp.",randstring())
 @test !isdir(Pkg.dir())
 try # ensure directory removal
 
-@test_fails Pkg.cd_pkgdir()
+@test_throws Pkg.cd_pkgdir()
 Pkg.init()
 @test isdir(Pkg.dir())
 Pkg.resolve()

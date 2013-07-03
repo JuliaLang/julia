@@ -24,7 +24,7 @@ edit(f::Function, pkg, args...) = Dir.cd() do
         error("unknown package $pkg")
     end
     r_ = f(r,pkg,args...)
-    r_ == r && return info("nothing to be done.")
+    r_ == r && return info("Nothing to be done.")
     reqs_ = Reqs.parse(r_)
     reqs_ != reqs && resolve(reqs_,avail)
     Reqs.write("REQUIRE",r_)
@@ -44,6 +44,10 @@ update() = Dir.cd() do
         Git.run(`pull -q`)
     end
     avail = Read.available()
+    for pkg in filter!(Read.isinstalled,readdir())
+        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+    end
+    info("Computing changes...")
     instd = Read.installed(avail)
     fixed = Read.fixed(avail,instd)
     for (pkg,ver) in fixed
@@ -75,12 +79,17 @@ resolve(
 
     reqs = Query.requirements(reqs,fixed)
     deps = Query.dependencies(avail,fixed)
+
+    for rp in keys(reqs)
+        haskey(deps, rp) || error("required package $rp has no version compatible with fixed requirements")
+    end
+
     want = Resolve.resolve(reqs,deps)
 
     # compare what is installed with what should be
     install, update, remove = Query.diff(have, want)
     if isempty(install) && isempty(update) && isempty(remove)
-        return info("no packages to install, update or remove.")
+        return info("No packages to install, update or remove.")
     end
 
     # prefetch phase isolates network activity, nothing to roll back
@@ -151,16 +160,13 @@ end
 check_metadata(julia_version::VersionNumber=VERSION) = Dir.cd() do
     avail = Read.available()
     instd = Read.installed(avail)
-    fixed = Read.fixed(avail,instd)
+    fixed = Read.fixed(avail,instd,julia_version)
     deps  = Query.dependencies(avail,fixed)
-    try
-        Resolve.sanity_check(deps)
-    catch err
-        if !isa(err, Resolve.MetadataError)
-            rethrow(err)
-        end
+
+    problematic = Resolve.sanity_check(deps)
+    if !isempty(problematic)
         warning = "Packages with unsatisfiable requirements found:\n"
-        for (p, vn, rp) in err.info
+        for (p, vn, rp) in problematic
             warning *= "    $p v$vn : no valid versions exist for package $rp\n"
         end
         warn(warning)
