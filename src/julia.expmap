@@ -139,6 +139,9 @@
     jl_gc_is_enabled;
     jl_gc_lookfor;
     jl_gc_new_weakref;
+    jl_gc_counted_malloc;
+    jl_gc_counted_free;
+    jl_gc_counted_realloc;
     jl_gensym;
     jl_get_binding;
     jl_get_current_module;
