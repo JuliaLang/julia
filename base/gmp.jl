@@ -18,7 +18,18 @@ type BigInt <: Integer
         return b
     end
 end
-BigInt_clear(mpz::BigInt) = ccall((:__gmpz_clear, :libgmp), Void, (Ptr{BigInt},), &mpz)
+
+function BigInt_clear(mpz::BigInt)
+    ccall((:__gmpz_clear, :libgmp), Void, (Ptr{BigInt},), &mpz)
+end
+
+function gmp_init()
+    ccall((:__gmp_set_memory_functions, :libgmp), Void,
+          (Ptr{Void},Ptr{Void},Ptr{Void}),
+          cglobal(:jl_gc_counted_malloc),
+          cglobal(:jl_gc_counted_realloc),
+          cglobal(:jl_gc_counted_free))
+end
 
 BigInt(x::BigInt) = x
 function BigInt(x::String)
