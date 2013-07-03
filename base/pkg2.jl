@@ -24,7 +24,7 @@ edit(f::Function, pkg, args...) = Dir.cd() do
         error("unknown package $pkg")
     end
     r_ = f(r,pkg,args...)
-    r_ == r && return info("nothing to be done.")
+    r_ == r && return info("Nothing to be done.")
     reqs_ = Reqs.parse(r_)
     reqs_ != reqs && resolve(reqs_,avail)
     Reqs.write("REQUIRE",r_)
@@ -44,6 +44,10 @@ update() = Dir.cd() do
         Git.run(`pull -q`)
     end
     avail = Read.available()
+    for pkg in filter!(Read.isinstalled,[keys(avail)...])
+        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+    end
+    info("Computing changes...")
     instd = Read.installed(avail)
     fixed = Read.fixed(avail,instd)
     for (pkg,ver) in fixed
@@ -85,7 +89,7 @@ resolve(
     # compare what is installed with what should be
     install, update, remove = Query.diff(have, want)
     if isempty(install) && isempty(update) && isempty(remove)
-        return info("no packages to install, update or remove.")
+        return info("No packages to install, update or remove.")
     end
 
     # prefetch phase isolates network activity, nothing to roll back

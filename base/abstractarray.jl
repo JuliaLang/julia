@@ -1381,30 +1381,6 @@ end
 
 ## map over arrays ##
 
-## along an axis
-function amap(f::Function, A::AbstractArray, axis::Integer)
-    warn_once("amap is deprecated, use mapslices(f, A, dims) instead")
-    dimsA = size(A)
-    ndimsA = ndims(A)
-    axis_size = dimsA[axis]
-
-    if axis_size == 0
-        return f(A)
-    end
-
-    idx = ntuple(ndimsA, j -> j == axis ? 1 : 1:dimsA[j])
-    r = f(sub(A, idx))
-    R = Array(typeof(r), axis_size)
-    R[1] = r
-
-    for i = 2:axis_size
-        idx = ntuple(ndimsA, j -> j == axis ? i : 1:dimsA[j])
-        R[i] = f(sub(A, idx))
-    end
-
-    return R
-end
-
 ## transform any set of dimensions
 ## dims specifies which dimensions will be transformed. for example
 ## dims==1:2 will call f on all slices A[:,:,...]
@@ -1440,7 +1416,7 @@ function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
     if isempty(size(r1))
         r1 = [r1]
     end
-    Rsize[dims] = [size(r1)...]
+    Rsize[dims] = [size(r1)...; ones(Int,max(0,length(dims)-ndims(r1)))]
     R = similar(r1, tuple(Rsize...))
 
     ridx = cell(ndims(R))

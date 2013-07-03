@@ -248,3 +248,27 @@ export assign
 
 typealias ComplexPair Complex
 export ComplexPair
+
+## along an axis
+function amap(f::Function, A::AbstractArray, axis::Integer)
+    warn_once("amap is deprecated, use mapslices(f, A, dims) instead")
+    dimsA = size(A)
+    ndimsA = ndims(A)
+    axis_size = dimsA[axis]
+
+    if axis_size == 0
+        return f(A)
+    end
+
+    idx = ntuple(ndimsA, j -> j == axis ? 1 : 1:dimsA[j])
+    r = f(sub(A, idx))
+    R = Array(typeof(r), axis_size)
+    R[1] = r
+
+    for i = 2:axis_size
+        idx = ntuple(ndimsA, j -> j == axis ? i : 1:dimsA[j])
+        R[i] = f(sub(A, idx))
+    end
+
+    return R
+end
