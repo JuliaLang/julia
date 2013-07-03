@@ -153,12 +153,12 @@ end
 @windows_only begin
 # Mmapped-array constructor
 function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IO, offset::FileOffset)
-    shandle = _get_osfhandle(s)
+    shandle = _get_osfhandle(RawFD(fd(s)))
     ro = isreadonly(shandle)
     flprotect = ro ? 0x02 : 0x04
-    szarray = int64(prod(dims))*sizeof(T)
-    szfile = szarray + int64(offset)
-    mmaphandle = ccall(:CreateFileMappingA, stdcall, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Cint, Cint, Cint, Ptr{Void}), shandle, C_NULL, flprotect, szfile>>32, szfile&0xffffffff, C_NULL)
+    szarray = convert(Csize_t, prod(dims))*sizeof(T)
+    szfile = szarray + convert(Csize_t, offset)
+    mmaphandle = ccall(:CreateFileMappingA, stdcall, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Cint, Cint, Cint, Ptr{Void}), shandle.handle, C_NULL, flprotect, szfile>>32, szfile&0xffffffff, C_NULL)
     if mmaphandle == C_NULL
         error("Could not create file mapping")
     end
