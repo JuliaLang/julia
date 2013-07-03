@@ -321,6 +321,7 @@ function _start()
     Random.librandom_init()
     # Check that BLAS is correctly built
     check_blas()
+    LinAlg.init()
     Sys.init()
     GMP.gmp_init()
     global const CPU_CORES = Sys.CPU_CORES
