@@ -38,11 +38,7 @@ There are a few environments you can use to build julia. Making this easy requir
 Important Build Errata
 ----------------------
 
-- Do not use GCC 4.6 or earlier
-
-- LLVM doesn't build with the newly released 4.8 SEH gcc for 64-bit Windows because of an incorrect preprocessor definition. In deps/llvm-3.2/lib/ExecutionEngine/JIT/JIT.cpp, find the section that defines HAVE_EHTABLE_SUPPORT and replace it with an unconditional 0
-
-- While building on native windows, MPFR tests fail. To fix this, edit deps/Makefile and add `MPFR_OPTS += --disable-thread-safe CFLAGS="-DNPRINTF_L -DNPRINTF_T -DNPRINTF_J"` somewhere
+- Do not use GCC 4.6 or earlier or gcc-dw2, stuff will be broken
 
 
 Native Compile

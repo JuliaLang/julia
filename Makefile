@@ -217,7 +217,7 @@ endif
 	7z e -y mingw-libexpat.cpio && \
 	7z x -y mingw-zlib.rpm -so > mingw-zlib.cpio && \
 	7z e -y mingw-zlib.cpio && \
-	wget -O PortableGit.7z https://msysgit.googlecode.com/files/PortableGit-1.8.3-preview20130601.7z
+	wget -O PortableGit.7z http://msysgit.googlecode.com/files/PortableGit-1.8.3-preview20130601.7z
 
 wine_path:
 	$(info $(WINE_PATH))

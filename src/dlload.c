@@ -116,10 +116,10 @@ static uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int thr
                     ext = extensions[i];
                     path[0] = '\0';
                     handle->handle = NULL;
-                    if (dl_path[len-1] == '/')
+                    if (dl_path[len-1] == PATHSEP)
                         snprintf(path, PATHBUF, "%s%s%s", dl_path, modname, ext);
                     else
-                        snprintf(path, PATHBUF, "%s/%s%s", dl_path, modname, ext);
+                        snprintf(path, PATHBUF, "%s" PATHSEPSTRING "%s%s", dl_path, modname, ext);
                     error = jl_uv_dlopen(path, handle, flags);
                     if (!error) goto done;
                 }
