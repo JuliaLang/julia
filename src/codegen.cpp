@@ -355,10 +355,12 @@ typedef struct {
 typedef struct {
     Function *f;
     std::map<jl_sym_t*, Value*> *vars;
+    std::map<jl_sym_t*, Value*> *SAvars;
     std::map<jl_sym_t*, Value*> *passedArguments;
     std::map<jl_sym_t*, int> *closureEnv;
     std::map<jl_sym_t*, bool> *isAssigned;
     std::map<jl_sym_t*, bool> *isCaptured;
+    std::map<jl_sym_t*, bool> *isSA;
     std::map<jl_sym_t*, bool> *escapes;
     std::map<jl_sym_t*, jl_arrayvar_t> *arrayvars;
     std::set<jl_sym_t*> *volatilevars;
@@ -1754,6 +1756,9 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx,
         return arg;
     }
     jl_binding_t *jbp;
+    Value *ssaval = (*ctx->SAvars)[sym];
+    if (ssaval != NULL)
+        return ssaval;
     Value *bp = var_binding_pointer(sym, &jbp, false, ctx);
     if (arg != NULL ||    // arguments are always defined
         (!is_var_closed(sym, ctx) &&
@@ -1806,6 +1811,13 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             if (av!=NULL) {
                 assign_arrayvar(*av, rval);
             }
+        }
+        if ((*ctx->isSA)[s] && jl_is_leaf_type((*ctx->declTypes)[s]) &&
+            (*ctx->vars)[s] != NULL && !isBoxed(s,ctx) &&
+            rval->getType() == jl_pvalue_llvmt &&
+            (*ctx->passedArguments)[s] == NULL) {
+            // use SSA value instead of GC frame load for var access
+            (*ctx->SAvars)[s] = rval;
         }
     }
 }
@@ -2271,11 +2283,13 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     //JL_PRINTF((jl_value_t*)ast);
     //JL_PRINTF(JL_STDOUT, "\n");
     std::map<jl_sym_t*, Value*> localVars;
+    std::map<jl_sym_t*, Value*> SAvars;
     //std::map<std::string, Value*> argumentMap;
     std::map<jl_sym_t*, Value*> passedArgumentMap;
     std::map<jl_sym_t*, int> closureEnv;
     std::map<jl_sym_t*, bool> isAssigned;
     std::map<jl_sym_t*, bool> isCaptured;
+    std::map<jl_sym_t*, bool> isSA;
     std::map<jl_sym_t*, bool> escapes;
     std::map<jl_sym_t*, jl_arrayvar_t> arrayvars;
     std::set<jl_sym_t*> volvars;
@@ -2284,11 +2298,13 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     std::map<int, Value*> handlers;
     jl_codectx_t ctx;
     ctx.vars = &localVars;
+    ctx.SAvars = &SAvars;
     //ctx.arguments = &argumentMap;
     ctx.passedArguments = &passedArgumentMap;
     ctx.closureEnv = &closureEnv;
     ctx.isAssigned = &isAssigned;
     ctx.isCaptured = &isCaptured;
+    ctx.isSA = &isSA;
     ctx.escapes = &escapes;
     ctx.arrayvars = &arrayvars;
     ctx.volatilevars = &volvars;
@@ -2328,6 +2344,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         bool iscapt = (jl_vinfo_capt(vi)!=0);
         isCaptured[vname] = iscapt;
         escapes[vname] = iscapt;
+        isSA[vname] = (jl_vinfo_sa(vi)!=0);
         declTypes[vname] = jl_cellref(vi,1);
     }
     vinfos = jl_lam_capt(ast);

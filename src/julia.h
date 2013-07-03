@@ -1001,6 +1001,11 @@ static inline int jl_vinfo_assigned_inner(jl_array_t *vi)
     return (jl_unbox_long(jl_cellref(vi,2))&4)!=0;
 }
 
+static inline int jl_vinfo_sa(jl_array_t *vi)
+{
+    return (jl_unbox_long(jl_cellref(vi,2))&16)!=0;
+}
+
 // for writing julia functions in C
 #define JL_CALLABLE(name) \
     jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
