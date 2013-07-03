@@ -205,7 +205,7 @@ To use the Intel [MKL] BLAS and LAPACK libraries, edit the following settings in
     USE_MKL = 1
     MKLLIB = /path/to/mkl/lib/arch
 
-`MKLLIB` points to the directory containing `libmkl_rt.so`. MKL version 10.3 or greater is required.
+`MKLLIB` points to the directory containing `libmkl_rt.so`. MKL version 10.3.6 or greater is required.
 To rebuild a pre-built Julia source install with MKL support, delete the OpenBLAS, ARPACK, and SuiteSparse dependencies from `deps`, and run `make cleanall testall`.
 
 <a name="Source-Code-Organization"/>
