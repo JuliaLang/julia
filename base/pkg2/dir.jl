@@ -21,7 +21,7 @@ function cd(f::Function, d::String=path())
         if haskey(ENV,"JULIA_PKGDIR")
             error("Package directory $d doesn't exist; run Pkg.init() to create it.")
         else
-            info("Auto-initializing default package repository $d.")
+            info("Initializing package repository $d.")
             init()
         end
     end
