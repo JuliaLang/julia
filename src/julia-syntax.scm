@@ -2286,6 +2286,7 @@ So far only the second case can actually occur.
 (define vinfo:name car)
 (define vinfo:type cadr)
 (define (vinfo:capt v) (< 0 (logand (caddr v) 1)))
+(define (vinfo:asgn v) (< 0 (logand (caddr v) 2)))
 (define (vinfo:const v) (< 0 (logand (caddr v) 8)))
 (define (vinfo:set-type! v t) (set-car! (cdr v) t))
 ;; record whether var is captured
@@ -2308,6 +2309,11 @@ So far only the second case can actually occur.
 					 (if a
 					     (logior (caddr v) 8)
 					     (logand (caddr v) -9))))
+;; whether var is assigned once
+(define (vinfo:set-sa! v a) (set-car! (cddr v)
+				      (if a
+					  (logior (caddr v) 16)
+					  (logand (caddr v) -17))))
 
 (define var-info-for assq)
 
@@ -2332,6 +2338,9 @@ So far only the second case can actually occur.
 	 (let ((vi (var-info-for (cadr e) env)))
 	   (if vi
 	       (begin
+		 (if (vinfo:asgn vi)
+		     (vinfo:set-sa! vi #f)
+		     (vinfo:set-sa! vi #t))
 		 (vinfo:set-asgn! vi #t)
 		 (if (assq (car vi) captvars)
 		     (vinfo:set-iasg! vi #t)))))
