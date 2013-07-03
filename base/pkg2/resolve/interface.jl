@@ -2,14 +2,8 @@ module PkgToMaxSumInterface
 
 using ...Types, ...Query
 
-export MetadataError, Interface, compute_output_dict,
+export Interface, compute_output_dict,
        verify_solution, enforce_optimality!
-
-# Error type used to signal that there was some
-# problem with the metadata info passed to resolve
-type MetadataError <: Exception
-    info
-end
 
 # The numeric type used to determine how the different
 # versions of a package should be weighed
@@ -56,11 +50,6 @@ type Interface
     eq_classes_map::Dict{ByteString,Dict{VersionNumber,Vector{VersionNumber}}}
 
     function Interface(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
-
-        # check reqs for unknown packages
-        for rp in keys(reqs)
-            haskey(deps, rp) || throw(MetadataError("required package $rp has no version compatible with fixed requirements"))
-        end
 
         # reduce deps by version pruning
         deps, eq_classes_map = Query.prune_versions(reqs, deps)

@@ -143,9 +143,9 @@ y = BigFloat(1)
 
 # exponent
 x = BigFloat(0)
-@test_fails exponent(x)
+@test_throws exponent(x)
 x = BigFloat(Inf)
-@test_fails exponent(x)
+@test_throws exponent(x)
 x = BigFloat(15.674)
 @test exponent(x) == exponent(15.674)
 
@@ -159,7 +159,7 @@ prevfloat(y)
 @test x == y
 
 # sqrt DomainError
-@test_fails sqrt(BigFloat(-1))
+@test_throws sqrt(BigFloat(-1))
 
 # precision
 old_precision = get_bigfloat_precision()
@@ -177,7 +177,7 @@ end
 @test get_precision(z) == 240
 x = BigFloat(12)
 @test get_precision(x) == old_precision
-@test_fails set_bigfloat_precision(1)
+@test_throws set_bigfloat_precision(1)
 
 # isinteger
 @test isinteger(BigFloat(12))
@@ -283,13 +283,13 @@ with_bigfloat_precision(53) do
 x = BigFloat(42)
     @test log(x) == log(42)
     @test isinf(log(BigFloat(0)))
-    @test_fails log(BigFloat(-1))
+    @test_throws log(BigFloat(-1))
     @test log2(x) == log2(42)
     @test isinf(log2(BigFloat(0)))
-    @test_fails log2(BigFloat(-1))
+    @test_throws log2(BigFloat(-1))
     @test log10(x) == log10(42)
     @test isinf(log10(BigFloat(0)))
-    @test_fails log10(BigFloat(-1))
+    @test_throws log10(BigFloat(-1))
 end
 
 # exp / exp2 / exp10
@@ -303,11 +303,11 @@ end
 # convert to integer types
 x = BigFloat(12.1)
 y = BigFloat(42)
-@test_fails convert(Int32, x)
-@test_fails convert(Int64, x)
-@test_fails convert(BigInt, x)
-@test_fails convert(Uint32, x)
-@test_fails convert(Uint32, x)
+@test_throws convert(Int32, x)
+@test_throws convert(Int64, x)
+@test_throws convert(BigInt, x)
+@test_throws convert(Uint32, x)
+@test_throws convert(Uint32, x)
 @test convert(Int32, y) == 42
 @test convert(Int64, y) == 42
 @test convert(BigInt, y) == 42
@@ -346,8 +346,8 @@ with_bigfloat_precision(256) do
     @test factorial(x) == factorial(BigInt(42))
     x = BigFloat(10)
     @test factorial(x) == factorial(10)
-    @test_fails factorial(BigFloat(-1))
-    @test_fails factorial(BigFloat(331.3))
+    @test_throws factorial(BigFloat(-1))
+    @test_throws factorial(BigFloat(331.3))
 end
 
 # bessel functions
@@ -372,7 +372,7 @@ with_bigfloat_precision(53) do
     for f in (:acos,:asin,:acosh,:atanh),
         j in (-2, -1.5)
         @eval begin
-            @test_fails ($f)(BigFloat($j))
+            @test_throws ($f)(BigFloat($j))
         end
     end
     for f in (:sin,:cos,:tan,:sec,:csc,:cot,:cosh,:sinh,:tanh,
@@ -733,4 +733,3 @@ tol = 1e-3
 @test_approx_eq_eps f+one(Rational{BigInt}) g tol
 
 # new tests
-

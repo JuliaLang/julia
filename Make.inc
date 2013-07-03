@@ -366,7 +366,10 @@ LIBBLASNAME = libmkl_rt
 LIBLAPACKNAME = libmkl_rt
 ifneq ($(strip $(MKLLIB)),)
   ifeq ($(OS), Linux)
-    RPATH += -Wl,-rpath,$(MKLLIB)
+    RPATH_MKL = -Wl,-rpath,$(MKLLIB)
+    RPATH     += $(RPATH_MKL)
+    LIBBLAS   += $(RPATH_MKL)
+    LIBLAPACK += $(RPATH_MKL)
   endif
 endif
 endif

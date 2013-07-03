@@ -36,12 +36,14 @@ function isfixed(pkg::String, avail::Dict=available(pkg))
     ispath(pkg, ".git") || return true
     Git.dirty(dir=pkg) && return true
     Git.attached(dir=pkg) && return true
-    cache = Cache.path(pkg)
-    cache_exists = isdir(cache)
     head = Git.head(dir=pkg)
     for (ver,info) in avail
-        if cache_exists && Git.iscommit(info.sha1, dir=cache)
-            Git.iscommit(head, dir=cache) &&
+        head == info.sha1 && return false
+    end
+    cache = Cache.path(pkg)
+    cache_has_head = isdir(cache) && Git.iscommit(head, dir=cache)
+    for (ver,info) in avail
+        if cache_has_head && Git.iscommit(info.sha1, dir=cache)
             Git.is_ancestor_of(head, info.sha1, dir=cache) && return false
         elseif Git.iscommit(info.sha1, dir=pkg)
             Git.is_ancestor_of(head, info.sha1, dir=pkg) && return false
@@ -53,15 +55,17 @@ function isfixed(pkg::String, avail::Dict=available(pkg))
 end
 
 function installed_version(pkg::String, avail::Dict=available(pkg))
-    cache = Cache.path(pkg)
-    cache_exists = isdir(cache)
     head = Git.head(dir=pkg)
+    for (ver,info) in avail
+        head == info.sha1 && return ver
+    end
+    cache = Cache.path(pkg)
+    cache_has_head = isdir(cache) && Git.iscommit(head, dir=cache)
     lo = typemin(VersionNumber)
     hi = typemin(VersionNumber)
     for (ver,info) in avail
-        head == info.sha1 && return ver
         base =
-            cache_exists && Git.iscommit(head, dir=cache) && Git.iscommit(info.sha1, dir=cache) ?
+            cache_has_head && Git.iscommit(info.sha1, dir=cache) ?
                 Git.readchomp(`merge-base $head $(info.sha1)`, dir=cache) :
             Git.iscommit(info.sha1, dir=pkg) ?
                 Git.readchomp(`merge-base $head $(info.sha1)`, dir=pkg) :
@@ -99,14 +103,14 @@ function installed(avail::Dict=available())
     return pkgs
 end
 
-function fixed(avail::Dict=available(), inst::Dict=installed(avail))
+function fixed(avail::Dict=available(), inst::Dict=installed(avail), julia_version::VersionNumber=VERSION)
     pkgs = Dict{ByteString,Fixed}()
     for (pkg,(ver,fix)) in inst
         fix || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())
         pkgs[pkg] = Fixed(ver,requires_dict(pkg,ap))
     end
-    pkgs["julia"] = Fixed(VERSION)
+    pkgs["julia"] = Fixed(julia_version)
     return pkgs
 end
 

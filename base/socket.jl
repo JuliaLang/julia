@@ -222,10 +222,10 @@ type InetAddr
     host::IpAddr
     port::Uint16
     function InetAddr(host,port)
-	if !(0 <= port <= typemax(Uint16))
-	    throw(DomainError())
-	end
-	new(host,uint16(port))
+        if !(0 <= port <= typemax(Uint16))
+            throw(DomainError())
+        end
+        new(host,uint16(port))
     end
 end
 
@@ -336,24 +336,38 @@ function bind(sock::TcpServer, host::IPv4, port::Uint16)
     err != -1
 end
 
-bind(sock::TcpServer, host::IPv6, port::Uint16) =
-    error("IPv6 Support not fully implemented")
-
-##
+function bind(sock::TcpServer, host::IPv6, port::Uint16)
+    err = ccall(:jl_tcp_bind6, Int32, (Ptr{Void}, Uint16, Ptr{Uint128}),
+            sock.handle, hton(port), &hton(host.host))
+    if(err == -1 && _uv_lasterror() != UV_EADDRINUSE)
+        throw(UVError("bind"))
+    end
+    err != -1
+end
 
 callback_dict = ObjectIdDict()
 
-function _uv_hook_getaddrinfo(cb::Function,addrinfo::Ptr{Void}, status::Int32)
+function _uv_hook_getaddrinfo(cb::Function, addrinfo::Ptr{Void}, status::Int32)
     delete!(callback_dict,cb)
-    if status!=0
-        throw(UVError("getaddrinfo callback"))
+    if status!=0 || addrinfo == C_NULL
+        cb(UVError("getaddrinfo callback"))
+        return
     end
-    sockaddr = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
-    if ccall(:jl_sockaddr_is_ip4,Int32,(Ptr{Void},),sockaddr) == 1
-        cb(IPv4(ntoh(ccall(:jl_sockaddr_host4,Uint32,(Ptr{Void},),sockaddr))))
-    else
-        cb(IPv6(ntoh(ccall(:jl_sockaddr_host6,Uint128,(Ptr{Void},),sockaddr))))
+    freeaddrinfo = addrinfo
+    while addrinfo != C_NULL
+        sockaddr = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
+        if ccall(:jl_sockaddr_is_ip4,Int32,(Ptr{Void},),sockaddr) == 1
+            cb(IPv4(ntoh(ccall(:jl_sockaddr_host4,Uint32,(Ptr{Void},),sockaddr))))
+            break
+        #elseif ccall(:jl_sockaddr_is_ip6,Int32,(Ptr{Void},),sockaddr) == 1
+        #    host = Array(Uint128,1)
+        #    scope_id = ccall(:jl_sockaddr_host6,Uint32,(Ptr{Void},Ptr{Uint128}),sockaddr,host)
+        #    cb(IPv6(ntoh(host[1])))
+        #    break
+        end
+        addrinfo = ccall(:jl_next_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
     end
+    ccall(:uv_freeaddrinfo,Void,(Ptr{Void},),freeaddrinfo)
 end
 
 jl_getaddrinfo(loop::Ptr{Void}, host::ByteString, service::Ptr{Void},
@@ -372,7 +386,10 @@ function getaddrinfo(host::ASCIIString)
 	notify(c,IP)
     end
     ip = wait(c)
-    return ip
+    if isa(ip, Exception)
+        error(ip)
+    end
+    return ip::IpAddr
 end
 
 ##
@@ -389,6 +406,18 @@ function connect(sock::TcpSocket, host::IPv4, port::Uint16)
     wait_connected(sock)
 end
 
+function connect(cb::Function, sock::TcpSocket, host::IPv6, port::Uint16)
+    sock.ccb = cb
+    uv_error("connect",ccall(:jl_tcp6_connect,Int32,(Ptr{Void},Ptr{Uint128},Uint16),
+			     sock.handle,&hton(host.host),hton(port)) == -1)
+end
+
+function connect(sock::TcpSocket, host::IPv6, port::Uint16) 
+    uv_error("connect",ccall(:jl_tcp6_connect,Int32,(Ptr{Void},Ptr{Uint128},Uint16),
+			     sock.handle,&hton(host.host),hton(port)) == -1)
+    wait_connected(sock)
+end
+
 function connect(sock::TcpSocket, host::ASCIIString, port::Integer)
     ipaddr = getaddrinfo(host)
     connect(sock,ipaddr,port)
@@ -399,14 +428,11 @@ connect(sock::TcpSocket, port::Integer) = connect(sock,IPv4(127,0,0,1),port)
 connect(port::Integer) = connect(IPv4(127,0,0,1),port)
 
 function default_connectcb(sock,status)
-    if status == -1
-        throw(UVError("connect callback"))
-    end
 end 
 
 function connect(cb::Function, sock::TcpSocket, host::ASCIIString, port)
     getaddrinfo(host) do ipaddr
-	connect(cb,sock,ipaddr,port)
+        connect(cb,sock,ipaddr,port)
     end
 end
 
@@ -416,38 +442,37 @@ for (args,forward_args) in (((:(addr::InetAddr),), (:(addr.host),:(addr.port))),
 			    ((:(addr::InetAddr),), (:(addr.host),:(addr.port))),
 			    ((:(host::ASCIIString),:port), (:host,:port)))
     @eval begin
-	connect(sock::Socket,$(args...)) = connect(sock,$(forward_args...))
-	connect(cb::Function,sock::Socket,$(args...)) =
-	connect(cb,sock,$(forward_args...))
-	function connect($(args...))
-	    sock = TcpSocket()
+        connect(sock::Socket,$(args...)) = connect(sock,$(forward_args...))
+        connect(cb::Function,sock::Socket,$(args...)) =
+        connect(cb,sock,$(forward_args...))
+        function connect($(args...))
+            sock = TcpSocket()
             sock.ccb = default_connectcb
-	    connect(sock,$(forward_args...))
-	    sock
-	end
-	function connect(cb::Function,$(args...))
-	    sock = TcpSocket()
+            connect(sock,$(forward_args...))
+            sock
+        end
+        function connect(cb::Function,$(args...))
+            sock = TcpSocket()
             sock.ccb = default_connectcb
-	    connect(cb,sock,$(forward_args...))
-	    sock
-	end
+            connect(cb,sock,$(forward_args...))
+            sock
+        end
     end
 end
 
 ##
 
-function listen(host::IPv4, port::Uint16; backlog::Integer=511)
+function listen(addr; backlog::Integer=BACKLOG_DEFAULT)
     sock = TcpServer()
-    uv_error("listen",!bind(sock,host,port))
+    uv_error("listen",!bind(sock,addr))
     uv_error("listen",!listen!(sock;backlog=backlog))
     sock
 end
-listen(port::Integer; backlog::Integer=511) = listen(IPv4(uint32(0)),uint16(port);backlog=backlog)
-listen(addr::InetAddr; backlog::Integer=511) = listen(addr.host,addr.port;backlog=backlog)
-listen(host::IpAddr, port::Uint16; backlog::Integer=511) = listen(InetAddr(host,port);backlog=backlog)
+listen(port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(IPv4(uint32(0)),port;backlog=backlog)
+listen(host::IpAddr, port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(InetAddr(host,port);backlog=backlog)
 
-listen(cb::Callback,args...; backlog::Integer=511) = (sock=listen(args...;backlog=backlog);sock.ccb=cb;sock)
-listen(cb::Callback,sock::Socket; backlog::Integer=511) = (sock.ccb=cb;listen(sock;backlog=backlog))
+listen(cb::Callback,args...; backlog::Integer=BACKLOG_DEFAULT) = (sock=listen(args...;backlog=backlog);sock.ccb=cb;sock)
+listen(cb::Callback,sock::Socket; backlog::Integer=BACKLOG_DEFAULT) = (sock.ccb=cb;listen(sock;backlog=backlog))
 
 ##
 

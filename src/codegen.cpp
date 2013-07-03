@@ -247,7 +247,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     assert(f != NULL);
     nested_compile = last_n_c;
     //f->dump();
-    verifyFunction(*f);
+    //verifyFunction(*f);
     FPM->run(*f);
     //n_compile++;
     // print out the function's LLVM code
@@ -2025,23 +2025,44 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                     }
                     return mark_julia_type(strct,ty);
                 }
+                Value *f1 = NULL;
+                size_t j = 0;
+                int fieldStart = ctx->argDepth;
+                if (nf > 0 && sty->fields[0].isptr && nargs>1) {
+                    // emit first field before allocating struct to save
+                    // a couple store instructions. avoids initializing
+                    // the first field to NULL, and sometimes the GC root
+                    // for the new struct.
+                    f1 = boxed(emit_expr(args[1],ctx));
+                    j++;
+                    if (!jl_is_symbol(args[1]) && !jl_is_symbolnode(args[1]))
+                        make_gcroot(f1, ctx);
+                }
                 Value *strct =
                     builder.CreateCall(jlallocobj_func,
                                        ConstantInt::get(T_size,
                                                         sizeof(void*)+sty->size));
                 builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
                                     emit_nthptr_addr(strct, (size_t)0));
-                for(size_t i=0; i < nf; i++) {
+                if (f1) {
+                    emit_setfield(sty, strct, 0, f1, ctx, false);
+                    ctx->argDepth = fieldStart;
+                    if (nf > 1)
+                        make_gcroot(strct, ctx);
+                }
+                else if (nf > 0) {
+                    make_gcroot(strct, ctx);
+                }
+                for(size_t i=j; i < nf; i++) {
                     if (sty->fields[i].isptr) {
                         emit_setfield(sty, strct, i, V_null, ctx, false);
                     }
                 }
-                make_gcroot(strct, ctx);
-                for(size_t i=1; i < nargs; i++) {
+                for(size_t i=j+1; i < nargs; i++) {
                     emit_setfield(sty, strct, i-1, emit_expr(args[i],ctx), ctx,
                                   false);
                 }
-                ctx->argDepth--;
+                ctx->argDepth = fieldStart;
                 return strct;
             }
             else {
