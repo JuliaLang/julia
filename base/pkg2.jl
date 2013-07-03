@@ -44,6 +44,9 @@ update() = Dir.cd() do
         Git.run(`pull -q`)
     end
     avail = Read.available()
+    for pkg in filter!(Read.isinstalled,readdir())
+        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+    end
     instd = Read.installed(avail)
     fixed = Read.fixed(avail,instd)
     for (pkg,ver) in fixed
