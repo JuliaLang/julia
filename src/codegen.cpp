@@ -718,7 +718,9 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
                     else if (jl_is_function(fv)) {
                         jl_function_t *ff = (jl_function_t*)fv;
                         if (ff->fptr == jl_f_tuplelen ||
-                            ff->fptr == jl_f_tupleref) {
+                            ff->fptr == jl_f_tupleref ||
+                            (ff->fptr == jl_f_apply && alen==3 &&
+                             expr_type(jl_exprarg(e,1),ctx) == (jl_value_t*)jl_function_type)) {
                             esc = false;
                         }
                     }
@@ -1205,6 +1207,22 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 return emit_tuplelen(arg1);
             }
         }
+    }
+    else if (f->fptr == &jl_f_apply && nargs==2 && ctx->vaStack &&
+             symbol_eq(args[2], ctx->vaName)) {
+        Value *theF = emit_expr(args[1],ctx);
+        Value *theFptr = builder.CreateBitCast(emit_nthptr(theF,1),jl_fptr_llvmt);
+        Value *nva = emit_n_varargs(ctx);
+#ifdef _P64
+        nva = builder.CreateTrunc(nva, T_int32);
+#endif
+        Value *r =
+            builder.CreateCall3(theFptr, theF,
+                                builder.CreateGEP(ctx->argArray,
+                                                  ConstantInt::get(T_size, ctx->nReqArgs)),
+                                nva);
+        JL_GC_POP();
+        return r;
     }
     else if (f->fptr == &jl_f_tupleref && nargs==2) {
         jl_value_t *tty = expr_type(args[1], ctx); rt1 = tty;
