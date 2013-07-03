@@ -29,11 +29,24 @@ edit(f::Function, pkg, args...) = Dir.cd() do
     reqs_ != reqs && resolve(reqs_,avail)
     Reqs.write("REQUIRE",r_)
     info("REQUIRE updated.")
-    return
+end
+
+urlpkg(url::String) = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$/*", url).captures[1]
+
+clone(url::String, pkg::String=urlpkg(url); opts::Cmd=``) = Dir.cd() do
+    ispath(pkg) && error("$pkg already exists")
+    try Git.run(`clone $opts $url $pkg`)
+    catch
+        run(`rm -rf $pkg`)
+        rethrow()
+    end
+    isempty(Reqs.parse("$pkg/REQUIRE")) && return
+    info("Computing changes...")
+    resolve()
 end
 
 update() = Dir.cd() do
-    info("Updating metadata...")
+    info("Updating METADATA...")
     cd("METADATA") do
         if Git.branch() != "devel"
             Git.run(`fetch -q --all`)
@@ -44,15 +57,20 @@ update() = Dir.cd() do
         Git.run(`pull -q`)
     end
     avail = Read.available()
+    # this has to happen before computing free/fixed
     for pkg in filter!(Read.isinstalled,[keys(avail)...])
         Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
-    info("Computing changes...")
     instd = Read.installed(avail)
+    free = Read.free(instd)
+    for (pkg,ver) in free
+        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+    end
     fixed = Read.fixed(avail,instd)
     for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
         if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
+            info("Updating $pkg...")
             @recover begin
                 Git.run(`fetch -q --all`, dir=pkg)
                 Git.run(`pull -q`, dir=pkg)
@@ -62,10 +80,7 @@ update() = Dir.cd() do
             Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
         end
     end
-    free = Read.free(instd)
-    for (pkg,ver) in free
-        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
-    end
+    info("Computing changes...")
     resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
 end
 
