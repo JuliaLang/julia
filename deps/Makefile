@@ -107,6 +107,11 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 MPFR_OPTS = --with-gmp=$(abspath $(BUILD))
 endif
 endif
+ifeq ($(BUILD_OS),WINNT)
+ifeq ($(OS),WINNT)
+MPFR_OPTS += --disable-thread-safe CFLAGS="-DNPRINTF_L -DNPRINTF_T -DNPRINTF_J"
+endif
+endif
 
 ifeq ($(USE_SYSTEM_ARPACK), 0)
 STAGE2_DEPS += arpack
@@ -202,7 +207,7 @@ else
 LLVM_FLAGS += --disable-assertions --enable-optimized
 endif
 ifeq ($(OS), WINNT)
-LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared
+LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared CPPFLAGS="-D__USING_SJLJ_EXCEPTIONS__"
 endif
 
 ifeq ($(BUILD_LLDB),1)

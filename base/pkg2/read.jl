@@ -28,7 +28,7 @@ end
 available(pkg::String) = available([pkg])[pkg]
 
 isinstalled(pkg::String) =
-    pkg != "METADATA" && pkg != "REQUIRE" && isfile(pkg, "src", "$pkg.jl")
+    pkg != "METADATA" && pkg != "REQUIRE" && pkg[1] != '.' && isdir(pkg)
 
 function isfixed(pkg::String, avail::Dict=available(pkg))
     isinstalled(pkg) || error("$pkg is not an installed package.")
