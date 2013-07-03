@@ -389,7 +389,13 @@ begin
         @test s[:,i] == sort(a[:,i])
         @test vec(S[i,:]) == sort(vec(a[i,:]))
     end
+
+    # issue #3613
+    b = mapslices(sum, ones(2,3,4), [1,2])
+    @test size(b) === (1,1,4)
+    @test all(b.==6)
 end
+
 
 # single multidimensional index
 let

@@ -1440,7 +1440,7 @@ function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
     if isempty(size(r1))
         r1 = [r1]
     end
-    Rsize[dims] = [size(r1)...]
+    Rsize[dims] = [size(r1)...; ones(Int,max(0,length(dims)-ndims(r1)))]
     R = similar(r1, tuple(Rsize...))
 
     ridx = cell(ndims(R))
