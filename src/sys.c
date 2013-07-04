@@ -164,17 +164,17 @@ DLLEXPORT unsigned int jl_stat_rdev(char *statbuf)
     return ((uv_stat_t*) statbuf)->st_rdev;
 }
 
-DLLEXPORT off_t jl_stat_size(char *statbuf)
+DLLEXPORT uint64_t jl_stat_size(char *statbuf)
 {
     return ((uv_stat_t*) statbuf)->st_size;
 }
 
-DLLEXPORT unsigned int jl_stat_blksize(char *statbuf)
+DLLEXPORT uint64_t jl_stat_blksize(char *statbuf)
 {
     return ((uv_stat_t*) statbuf)->st_blksize;
 }
 
-DLLEXPORT unsigned int jl_stat_blocks(char *statbuf)
+DLLEXPORT uint64_t jl_stat_blocks(char *statbuf)
 {
     return ((uv_stat_t*) statbuf)->st_blocks;
 }
