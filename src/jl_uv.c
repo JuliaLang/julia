@@ -289,7 +289,7 @@ DLLEXPORT int jl_process_events(uv_loop_t *loop)
 DLLEXPORT uv_pipe_t *jl_init_pipe(uv_pipe_t *pipe, int writable, int julia_only, jl_value_t *julia_struct)
 {
      int flags;
-     flags = writable ? UV_PIPE_WRITEABLE : UV_PIPE_READABLE;
+     flags = writable ? UV_PIPE_WRITABLE : UV_PIPE_READABLE;
      if (!julia_only)
          flags |= UV_PIPE_SPAWN_SAFE;
      uv_pipe_init(jl_io_loop, pipe, flags);
