@@ -354,17 +354,17 @@ extern DLLEXPORT jl_datatype_t *jl_ascii_string_type;
 extern DLLEXPORT jl_datatype_t *jl_utf8_string_type;
 extern DLLEXPORT jl_datatype_t *jl_errorexception_type;
 extern DLLEXPORT jl_datatype_t *jl_loaderror_type;
-extern jl_datatype_t *jl_typeerror_type;
-extern jl_datatype_t *jl_methoderror_type;
-extern jl_value_t *jl_stackovf_exception;
-extern jl_value_t *jl_memory_exception;
-extern jl_value_t *jl_diverror_exception;
-extern jl_value_t *jl_domain_exception;
-extern jl_value_t *jl_overflow_exception;
-extern jl_value_t *jl_inexact_exception;
-extern jl_value_t *jl_undefref_exception;
-extern jl_value_t *jl_interrupt_exception;
-extern jl_value_t *jl_bounds_exception;
+extern DLLEXPORT jl_datatype_t *jl_typeerror_type;
+extern DLLEXPORT jl_datatype_t *jl_methoderror_type;
+extern DLLEXPORT jl_value_t *jl_stackovf_exception;
+extern DLLEXPORT jl_value_t *jl_memory_exception;
+extern DLLEXPORT jl_value_t *jl_diverror_exception;
+extern DLLEXPORT jl_value_t *jl_domain_exception;
+extern DLLEXPORT jl_value_t *jl_overflow_exception;
+extern DLLEXPORT jl_value_t *jl_inexact_exception;
+extern DLLEXPORT jl_value_t *jl_undefref_exception;
+extern DLLEXPORT jl_value_t *jl_interrupt_exception;
+extern DLLEXPORT jl_value_t *jl_bounds_exception;
 extern jl_value_t *jl_an_empty_cell;
 
 extern jl_datatype_t *jl_box_type;
@@ -875,6 +875,7 @@ DLLEXPORT void jl_save_system_image(char *fname);
 DLLEXPORT void jl_restore_system_image(char *fname);
 DLLEXPORT void jl_dump_bitcode(char *fname);
 DLLEXPORT const char *jl_get_llvmname(void *func);
+DLLEXPORT void *jl_get_llvmfptr(void *func);
 
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str);
@@ -934,10 +935,10 @@ enum JL_RTLD_CONSTANT {
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
 DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname, unsigned flags);
 DLLEXPORT uv_lib_t *jl_load_dynamic_library_e(char *fname, unsigned flags);
-DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol);
+DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, const char *symbol);
 DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
 DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
-void *jl_dlsym_e(uv_lib_t *handle, char *symbol); //supress errors
+void *jl_dlsym_e(uv_lib_t *handle, const char *symbol); //supress errors
 void *jl_dlsym_win32(char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
 

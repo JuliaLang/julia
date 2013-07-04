@@ -108,6 +108,9 @@ static DIBuilder *dbuilder;
 static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
 
+// for image reloading
+static std::map<size_t, std::string> delayed_fptrs;
+
 // types
 static Type *jl_value_llvmt;
 static Type *jl_pvalue_llvmt;
@@ -458,7 +461,43 @@ void jl_dump_bitcode(char* fname)
 {
     std::string err;
     raw_fd_ostream OS(fname, err);
+
+    std::set<std::string> filt_set;
+    filt_set.insert("julia_StackoverFlow");
+    
+    std::set<std::string>::iterator filt_iter;
+    
+    Module::FunctionListType::iterator fiter = jl_Module->begin();
+//    for (; fiter != jl_Module->end(); fiter = fiter.next()) {
+        
+        
+
     WriteBitcodeToFile(jl_Module, OS);
+}
+
+extern "C" DLLEXPORT
+void jl_delayed_fptr(void *li, const char *sym)
+{
+    std::string s(sym);
+    delayed_fptrs[(size_t)li] = s;
+}
+
+extern "C" DLLEXPORT
+void *jl_get_llvmfunc_cached(const char* name)
+{
+    //return (void*)jl_Module->getFunction(StringRef(name));
+    void* hnd = jl_load_dynamic_library("sysimg.so", JL_RTLD_DEFAULT);
+    return (void*)jl_dlsym_e( (uv_lib_t*)hnd, (char*)name);
+}
+
+
+extern "C" DLLEXPORT
+void jl_restore_fptrs()
+{
+    std::map<size_t, std::string>::iterator symiter;
+    for (symiter = delayed_fptrs.begin();
+         symiter != delayed_fptrs.end(); symiter++)
+        ((jl_lambda_info_t*)((*symiter).first))->fptr = (jl_fptr_t)jl_get_llvmfunc_cached( (const char*)((*symiter).second.c_str()) );
 }
 
 extern "C" DLLEXPORT
@@ -470,11 +509,10 @@ const char* jl_get_llvmname(void *llvmFunc)
 }
 
 extern "C" DLLEXPORT
-void *jl_get_llvmfunc_cached(char* name)
+void* jl_get_llvmfptr(void* llvmFunc)
 {
-    //return (void*)jl_Module->getFunction(StringRef(name));
-    void* hnd = jl_load_dynamic_library("libjulia-debug", JL_RTLD_DEFAULT);
-    return (void*)jl_dlsym( (uv_lib_t*)hnd, name);
+    Function *f = (Function*)llvmFunc;
+    return jl_ExecutionEngine->getPointerToFunction(f);
 }
 
 // --- code gen for intrinsic functions ---
@@ -2420,6 +2458,9 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 
     std::string funcName = lam->name->name;
     // try to avoid conflicts in the global symbol table
+    size_t atpos = funcName.find("@");
+    if (atpos != std::string::npos)
+        funcName.replace(atpos, 1, "#");
     funcName = "julia_" + funcName;
 
     if (specsig) {
@@ -3275,8 +3316,8 @@ extern "C" void jl_init_codegen(char *imageFile)
             //jl_Module->MaterializeAllPermanently(&_errmsg);
             
             // TEMP TODO
-            jl_load_dynamic_library("libopenblas", JL_RTLD_GLOBAL);
-            jl_load_dynamic_library("libRmath", JL_RTLD_GLOBAL);
+            //jl_load_dynamic_library("libopenblas", JL_RTLD_GLOBAL);
+            //jl_load_dynamic_library("libRmath", JL_RTLD_GLOBAL);
         }
     }
     if (jl_Module == NULL) {

@@ -341,10 +341,14 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         // save functionObject name 
         // as mangled by llvm
         if (li->functionObject) {
+            // force compiling the function
+            void* fptr = jl_get_llvmfptr(li->functionObject);
+
             llname = jl_get_llvmname(li->functionObject);
             int32_t llname_size = strlen(llname);
             write_int32(s, llname_size);
             ios_write(s, llname, llname_size);
+            JL_PRINTF(JL_STDERR, "name: %s   fptr: %p\n", llname, fptr);
         }
         else {
             write_int32(s, 0);
@@ -477,6 +481,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
         // parametric types here.
         jl_cell_1d_push(datatype_list, (jl_value_t*)dt);
     }
+
     return (jl_value_t*)dt;
 }
 
@@ -597,6 +602,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         f->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
         f->env = jl_deserialize_value(s);
         f->fptr = jl_deserialize_fptr(s);
+f->linfo && JL_PRINTF(JL_STDERR, "deser_func: %s  fptr: %p\n", f->linfo->name->name, f->fptr);
         return (jl_value_t*)f;
     }
     else if (vtag == (jl_value_t*)jl_lambda_info_type) {
@@ -624,13 +630,12 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
             memset(llname, 0x0, llname_size+1);
             ios_read(s, llname, llname_size);
             llname[llname_size] = 0x0;
-            void* func = jl_get_llvmfunc_cached(llname);
-            li->fptr = func;
+            jl_delayed_fptr(li, llname);
         }
-        else {
+        //else {
             li->fptr = &jl_trampoline;
             //li->functionObject = NULL;
-        }
+        //}
         li->functionObject = NULL;
 
         li->cFunctionObject = NULL;
@@ -817,7 +822,7 @@ void jl_restore_system_image(char *fname)
         jl_cache_type_((jl_datatype_t*)v);
         ((jl_datatype_t*)v)->uid = uid;
     }
-
+    
     jl_get_builtin_hooks();
     jl_get_system_hooks();
     jl_get_uv_hooks();

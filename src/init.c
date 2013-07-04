@@ -516,6 +516,7 @@ void julia_init(char *imageFile)
     if (imageFile) {
         JL_TRY {
             jl_restore_system_image(imageFile);
+            jl_restore_fptrs();
         }
         JL_CATCH {
             JL_PRINTF(JL_STDERR, "error during init:\n");

@@ -120,6 +120,7 @@
     jl_array_rank;
     jl_array_size;
     jl_get_field;
+    jl_get_llvmfptr;
     jl_get_llvmfunc_cached;
     jl_call1;
     jl_call2;
@@ -271,7 +272,6 @@
     jl_tcp4_connect;
     jl_tcp6_connect;
     jl_spawn;
-    jl_stackovf_exception;
     jl_start_io_thread;
     jl_start_reading;
     jl_stat;
@@ -327,6 +327,17 @@
     jl_write;
     jl_value_ptr;
     jl_zero_subnormals;
+    
+    jl_stackovf_exception;
+    jl_memory_exception;
+    jl_diverror_exception;
+    jl_domain_exception;
+    jl_overflow_exception;
+    jl_inexact_exception;
+    jl_undefref_exception;
+    jl_interrupt_exception;
+    jl_bounds_exception;
+    
     julia_free;
     julia_home;
     julia_init;
