@@ -946,6 +946,7 @@ export
 # types
     convert,
     isleaftype,
+    fieldoffsets,
     oftype,
     promote,
     promote_rule,

@@ -205,6 +205,10 @@ Types
    The syntax ``a.b = c`` calls ``setfield(a, :b, c)``, and the syntax ``a.(b) = c``
    calls ``setfield(a, b, c)``.
 
+.. function:: fieldoffsets(type)
+
+   The offset of each field of ``type`` relative to data start.
+
 .. function:: fieldtype(value, name::Symbol)
 
    Determine the declared type of a named field in a value of composite type.
