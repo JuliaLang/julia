@@ -364,6 +364,12 @@
 
 "),
 
+("Types","Base","fieldoffsets","fieldoffsets(type)
+
+   The offset of each field of \"type\" relative to data start.
+
+"),
+
 ("Types","Base","fieldtype","fieldtype(value, name::Symbol)
 
    Determine the declared type of a named field in a value of
