@@ -290,4 +290,27 @@ function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}
     return sub_deps
 end
 
+function filter_prereleases(deps::Dict{ByteString,Dict{VersionNumber,Available}})
+
+    filtered_deps = (ByteString=>Dict{VersionNumber,Available})[]
+    for (p, depsp) in deps
+        filtered_deps[p] = (VersionNumber=>Available)[]
+        vmap = (VersionNumber=>Vector{VersionNumber})[]
+        for vn in keys(depsp)
+            eqvn = VersionNumber(vn.major, vn.minor, vn.patch)
+            haskey(vmap, eqvn) || (vmap[eqvn] = VersionNumber[])
+            push!(vmap[eqvn], vn)
+        end
+        for eqvn in keys(vmap)
+            sort!(vmap[eqvn])
+        end
+        for (vn, a) in depsp
+            eqvn = VersionNumber(vn.major, vn.minor, vn.patch)
+            vn != vmap[eqvn][end] && continue
+            filtered_deps[p][vn] = a
+        end
+    end
+    return filtered_deps
+end
+
 end # module
