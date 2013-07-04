@@ -29,7 +29,7 @@ debug release: | $(DIRS) $(BUILD)/share/julia/base $(BUILD)/share/julia/test $(B
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(BUILD)/lib:$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji
 
 julia-debug julia-release:
-	@-git submodule init
+	@-git submodule init --quiet
 	@-git submodule update
 	@$(MAKE) $(QUIET_MAKE) -C deps
 	@$(MAKE) $(QUIET_MAKE) -C src lib$@
@@ -56,7 +56,7 @@ COMMIT:
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl base/sparse/*.jl $(BUILD)/share/julia/helpdb.jl $(BUILD)/share/man/man1/julia.1
 	@$(MAKE) $(QUIET_MAKE) COMMIT
 	$(QUIET_JULIA) cd base && \
-	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(call spawn,$(JULIA_EXECUTABLE)) -bf sysimg.jl) && $(call spawn,$(JULIA_EXECUTABLE)) -f sysimg.jl || echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***"
+	(test -f $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji || $(call spawn,$(JULIA_EXECUTABLE)) -bf sysimg.jl) && $(call spawn,$(BUILD)/bin/llc) -filetype=obj -relocation-model=pic -o sysimg.o $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.bc && $(call spawn,$(CXX)) -shared -fPIC -ljulia-debug -L$(BUILD)/lib -o $(BUILD)/lib/sysimg.so sysimg.o && $(call spawn,$(JULIA_EXECUTABLE)) -f sysimg.jl || echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***"
 
 run-julia-debug run-julia-release: run-julia-%:
 	$(MAKE) $(QUIET_MAKE) run-julia JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)"

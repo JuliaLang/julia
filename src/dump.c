@@ -341,14 +341,12 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         // save functionObject name 
         // as mangled by llvm
         if (li->functionObject) {
-            // force compiling the function
-            void* fptr = jl_get_llvmfptr(li->functionObject);
-
-            llname = jl_get_llvmname(li->functionObject);
+            // force compile
+            (void)jl_get_llvmfptr(li->functionObject);
+            llname = (char*)jl_get_llvmname(li->functionObject);
             int32_t llname_size = strlen(llname);
             write_int32(s, llname_size);
             ios_write(s, llname, llname_size);
-            JL_PRINTF(JL_STDERR, "name: %s   fptr: %p\n", llname, fptr);
         }
         else {
             write_int32(s, 0);
@@ -602,7 +600,6 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         f->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
         f->env = jl_deserialize_value(s);
         f->fptr = jl_deserialize_fptr(s);
-f->linfo && JL_PRINTF(JL_STDERR, "deser_func: %s  fptr: %p\n", f->linfo->name->name, f->fptr);
         return (jl_value_t*)f;
     }
     else if (vtag == (jl_value_t*)jl_lambda_info_type) {
@@ -632,12 +629,9 @@ f->linfo && JL_PRINTF(JL_STDERR, "deser_func: %s  fptr: %p\n", f->linfo->name->n
             llname[llname_size] = 0x0;
             jl_delayed_fptr(li, llname);
         }
-        //else {
-            li->fptr = &jl_trampoline;
-            //li->functionObject = NULL;
-        //}
+            
+        li->fptr = &jl_trampoline;
         li->functionObject = NULL;
-
         li->cFunctionObject = NULL;
         li->inInference = 0;
         li->inCompile = 0;

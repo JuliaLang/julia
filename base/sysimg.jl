@@ -1,4 +1,5 @@
 # Disable deleteBody after function generation
+# TODO: this does not work. get "ccall not defined" error
 #ccall(:jl_set_imaging_mode, Void, (Uint8,), 1)
 
 baremodule Base
@@ -376,16 +377,6 @@ precompile(isslotempty, (Dict{Any,Any}, Int))
 precompile(setindex!, (Array{Uint8,1}, Uint8, Int))
 precompile(get, (Dict{Any,Any}, Symbol, ASCIIString))
 precompile(*, (ASCIIString, ASCIIString, ASCIIString))
-precompile(reinit_stdio, () )
-#precompile(BoundsError, (Int,))
-#precompile(DivideError, (Any,))
-#precompile(DomainError, (Any,))
-#precompile(OverflowError, (Any,))
-#precompile(InexactError, (Any,))
-#precompile(MemoryError, (Any,))
-#precompile(StackOverflowError, (Any,))
-#precompile(UndefRefError, (Any,))
-#precompile(InterruptException, (Any,))
 
 # invoke type inference, running the existing inference code on the new
 # inference code to cache an optimized version of it.

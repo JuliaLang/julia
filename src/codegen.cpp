@@ -109,7 +109,8 @@ static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
 
 // for image reloading
-static bool imaging_mode = false;
+static void *sysimg_handle;
+static bool imaging_mode = true;
 static std::map<size_t, std::string> delayed_fptrs;
 
 // types
@@ -282,8 +283,8 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         if (li->cFunctionObject != NULL)
             (void)jl_ExecutionEngine->getPointerToFunction((Function*)li->cFunctionObject);
         JL_SIGATOMIC_END();
-        //if (!imaging_mode)
-        //    llvmf->deleteBody();
+        if (!imaging_mode)
+            llvmf->deleteBody();
         if (li->cFunctionObject != NULL)
             ((Function*)li->cFunctionObject)->deleteBody();
     }
@@ -463,15 +464,6 @@ void jl_dump_bitcode(char* fname)
 {
     std::string err;
     raw_fd_ostream OS(fname, err);
-/*
-    std::set<std::string> filt_set;
-    filt_set.insert("julia_StackoverFlow");
-    
-    std::set<std::string>::iterator filt_iter;
-    
-    Module::FunctionListType::iterator fiter = jl_Module->begin();
-    for (; fiter != jl_Module->end(); fiter = fiter.next()) {
-*/
     WriteBitcodeToFile(jl_Module, OS);
 }
 
@@ -489,11 +481,15 @@ void jl_delayed_fptr(void *li, const char *sym)
 }
 
 extern "C" DLLEXPORT
+void jl_load_sysimg_so()
+{
+    sysimg_handle = jl_load_dynamic_library(const_cast<char*>("sysimg.so"), JL_RTLD_DEFAULT);
+}
+
+extern "C" DLLEXPORT
 void *jl_get_llvmfunc_cached(const char* name)
 {
-    //return (void*)jl_Module->getFunction(StringRef(name));
-    void* hnd = jl_load_dynamic_library("sysimg.so", JL_RTLD_DEFAULT);
-    return (void*)jl_dlsym_e( (uv_lib_t*)hnd, (char*)name);
+    return (void*)jl_dlsym_e( (uv_lib_t*)sysimg_handle, const_cast<char*>(name));
 }
 
 
@@ -2463,10 +2459,11 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     }
 
     std::string funcName = lam->name->name;
-    // try to avoid conflicts in the global symbol table
+    // sanitize macro names, otherwise julia_@name means versioned symbol
     size_t atpos = funcName.find("@");
     if (atpos != std::string::npos)
         funcName.replace(atpos, 1, "#");
+    // try to avoid conflicts in the global symbol table
     funcName = "julia_" + funcName;
 
     if (specsig) {
@@ -3304,33 +3301,7 @@ extern "C" void jl_init_codegen(char *imageFile)
 {
     
     InitializeNativeTarget();
-    /*
-    if (imageFile != NULL) {
-        char *irimgFile = strdup(imageFile);
-        int _irnmlen = strlen(irimgFile);
-        irimgFile[_irnmlen-2] = 'b';
-        irimgFile[_irnmlen-1] = 'c';
- 
-        // JL_PRINTF(JL_STDERR, "Trying module reload...\n");
-        // JL_PRINTF(JL_STDERR, "IR file: %s\n", irimgFile);
-        
-        OwningPtr<MemoryBuffer> MB;
-        std::string _errmsg;
-        error_code ec;
-        if ( !(ec = MemoryBuffer::getFile(irimgFile, MB)) ) {
-            jl_Module = llvm::ParseBitcodeFile(MB.get(), jl_LLVMContext, &_errmsg);
-            
-            //jl_Module->MaterializeAllPermanently(&_errmsg);
-            
-            // TEMP TODO
-            //jl_load_dynamic_library("libopenblas", JL_RTLD_GLOBAL);
-            //jl_load_dynamic_library("libRmath", JL_RTLD_GLOBAL);
-        }
-    } */
-    if (jl_Module == NULL) {
-        JL_PRINTF(JL_STDERR, "Initializing new jl_Module...\n");
-        jl_Module = new Module("julia", jl_LLVMContext);
-    }
+    jl_Module = new Module("julia", jl_LLVMContext);
 
 #if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
     jl_ExecutionEngine = EngineBuilder(jl_Module).setEngineKind(EngineKind::JIT).create();

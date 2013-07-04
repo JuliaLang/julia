@@ -877,6 +877,9 @@ DLLEXPORT void jl_dump_bitcode(char *fname);
 DLLEXPORT const char *jl_get_llvmname(void *func);
 DLLEXPORT void *jl_get_llvmfptr(void *func);
 DLLEXPORT void jl_set_imaging_mode(uint8_t stat);
+DLLEXPORT void jl_load_sysimg_so(void);
+DLLEXPORT void jl_restore_fptrs(void);
+DLLEXPORT void jl_delayed_fptr(void *li, const char *sym);
 
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str);
@@ -936,10 +939,10 @@ enum JL_RTLD_CONSTANT {
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
 DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname, unsigned flags);
 DLLEXPORT uv_lib_t *jl_load_dynamic_library_e(char *fname, unsigned flags);
-DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, const char *symbol);
+DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol);
 DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
 DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
-void *jl_dlsym_e(uv_lib_t *handle, const char *symbol); //supress errors
+void *jl_dlsym_e(uv_lib_t *handle, char *symbol); //supress errors
 void *jl_dlsym_win32(char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
 
