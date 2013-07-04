@@ -57,6 +57,8 @@ or [64-bit](http://sourceforge.net/projects/mingwbuilds/files/host-windows/relea
 
 Before proceeding, verify that python.exe from Python 2.7 is available in the MSYS PATH. If Python is not installed on your computer, [download Python 2.7](http://www.python.org/download/releases/2.7.5/) and install with default options (Python 2.7 is required to build LLVM; Python 3.3 will not work).
 
+If you plan to build Cairo (for graphics), you'll also need to install [CMake](http://www.cmake.org/cmake/resources/software.html).
+
 These sections assume you are familiar with building code. If you are not, you should stop reading now and go the the section on binaries. Regardless of which set of steps you followed above, you are now ready to compile julia. Open a unix shell by launching C:/MinGW/msys/1.0/msys.bat (or your favorite shortcut to that file). 
 
 Run the following commands in your build directory ($HOME at C:/MinGW/msys/1.0/home/your_name is fine)
