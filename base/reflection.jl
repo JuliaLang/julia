@@ -41,6 +41,12 @@ isleaftype(t::ANY) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 typeintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
 typeseq(a::ANY,b::ANY) = subtype(a,b)&&subtype(b,a)
 
+function fieldoffsets(x::DataType)
+    offsets = Array(Int, length(x.names))
+    ccall(:jl_field_offsets, Void, (Any, Ptr{Int}), x, offsets)
+    offsets
+end
+
 # subtypes
 function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
     add!(visited, m)

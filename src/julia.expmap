@@ -130,6 +130,7 @@
     jl_fd_isset;
     jl_fd_set;
     jl_fd_zero;
+    jl_field_offsets;
     jl_free2;
     jl_fstat;
     jl_gc_add_finalizer;

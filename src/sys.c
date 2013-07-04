@@ -477,6 +477,14 @@ DLLEXPORT jl_value_t *jl_is_char_signed()
     return ((char)255) < 0 ? jl_true : jl_false;
 }
 
+DLLEXPORT void jl_field_offsets(jl_datatype_t *dt, ssize_t *offsets)
+{
+    size_t i;
+    for(i=0; i < jl_tuple_len(dt->names); i++) {
+        offsets[i] = jl_field_offset(dt, i);
+    }
+}
+
 // -- misc sysconf info --
 
 #ifdef _OS_WINDOWS_
