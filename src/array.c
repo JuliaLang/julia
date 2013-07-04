@@ -542,6 +542,7 @@ void jl_array_grow_end(jl_array_t *a, size_t inc)
 void jl_array_del_end(jl_array_t *a, size_t dec)
 {
     if (a->isshared) jl_error("cannot resize array with shared data");
+    if (dec == 0) return;
     if (dec > a->nrows)
         jl_throw(jl_bounds_exception);
     char *ptail = (char*)a->data + (a->nrows-dec)*a->elsize;
@@ -571,8 +572,7 @@ void jl_array_grow_beg(jl_array_t *a, size_t inc)
 {
     if (a->isshared) jl_error("cannot resize array with shared data");
     // designed to handle the case of growing and shrinking at both ends
-    if (inc == 0)
-        return;
+    if (inc == 0) return;
     size_t es = a->elsize;
     size_t incnb = inc*es;
     if (a->offset >= inc) {
@@ -612,8 +612,7 @@ void jl_array_grow_beg(jl_array_t *a, size_t inc)
 void jl_array_del_beg(jl_array_t *a, size_t dec)
 {
     if (a->isshared) jl_error("cannot resize array with shared data");
-    if (dec == 0)
-        return;
+    if (dec == 0) return;
     if (dec > a->nrows)
         jl_throw(jl_bounds_exception);
     size_t es = a->elsize;
