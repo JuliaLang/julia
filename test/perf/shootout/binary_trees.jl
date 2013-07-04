@@ -36,30 +36,24 @@ function loop_depths(d, min_depth, max_depth)
         for j = 1:niter
             c += check(make(i, d)) + check(make(-i, d))
         end
-        @printf("%i\t trees of depth %i\t check: %i\n", 2*niter, d, c)
+#        @printf("%i\t trees of depth %i\t check: %i\n", 2*niter, d, c)
         d += 2        
     end
 end
 
-function binary_trees(N::Int)
+function binary_trees(N::Int=10)
     const min_depth = 4
     const max_depth = N
     const stretch_depth = max_depth + 1
 
     # create and check stretch tree
     let c = check(make(0, stretch_depth))
-        @printf("stretch tree of depth %i\t check: %i\n", stretch_depth, c)
+#        @printf("stretch tree of depth %i\t check: %i\n", stretch_depth, c)
     end
 
     long_lived_tree = make(0, max_depth)
 
     loop_depths(min_depth, min_depth, max_depth)
-    @printf("long lived tree of depth %i\t check: %i\n", max_depth, check(long_lived_tree))
+#    @printf("long lived tree of depth %i\t check: %i\n", max_depth, check(long_lived_tree))
 end
 
-if length(ARGS) >= 1
-    N = int(ARGS[1])
-else
-    N = 10
-end
-binary_trees(N)

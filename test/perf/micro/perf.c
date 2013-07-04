@@ -2,7 +2,7 @@
 
 #define DSFMT_MEXP 19937
 #include "perf.h"
-#include "../../deps/random/randmtzig.c"
+#include "../../../deps/random/randmtzig.c"
 
 double *myrand(int n) {
     double *d = (double *)malloc(n*sizeof(double));

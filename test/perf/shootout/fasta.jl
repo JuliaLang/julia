@@ -39,14 +39,14 @@ function repeat_fasta(src, n)
     k = length(src)
     s = string(src, src, src[1:n % k])
 
-    for j = 0:div(n, line_width) - 1
-        i = j * line_width % k
-        println(s[i + 1:i + line_width])
-    end
+#    for j = 0:div(n, line_width) - 1
+#        i = j * line_width % k
+#        println(s[i + 1:i + line_width])
+#    end
 
-    if n % line_width > 0
-        println(s[end - (n % line_width) + 1:])
-    end
+#    if n % line_width > 0
+#        println(s[end - (n % line_width) + 1:])
+#    end
 end
 
 
@@ -77,21 +77,7 @@ function random_fasta(symb, pr, n)
         for i = 1:m
             line[i] = symb[choose_char(cs)]
         end
-        write(line[1:m]); println()
+#        write(line[1:m]); println()
         k -= line_width
     end
 end
-
-
-
-const n = int(ARGS[1])
-
-println(">ONE Homo sapiens alu")
-repeat_fasta(alu, 2n)
-
-println(">TWO IUB ambiguity codes")
-random_fasta(iub[1], iub[2], 3n)
-
-println(">THREE Homo sapiens frequency")
-random_fasta(homosapiens[1], homosapiens[2], 5n)
-

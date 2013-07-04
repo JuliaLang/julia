@@ -56,7 +56,7 @@ function print_knucs(a::Array{KNuc, 1})
     println()
 end
 
-function main()
+function k_nucleotide()
     three = ">THREE "
     while true
         line = readline(STDIN)
@@ -85,5 +85,3 @@ function main()
         @printf("%d\t%s\n", count_one(str, s), s)
     end
 end
-
-main()
