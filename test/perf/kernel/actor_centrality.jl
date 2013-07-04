@@ -39,7 +39,7 @@ function read_graph()
     G = Graph()
     actors = Set()
 
-    open("imdb-1.tsv", "r") do io
+    open(joinpath(JULIA_HOME,"..","..","test","perf","kernel","imdb-1.tsv"), "r") do io
         while !eof(io) 
             k = split(strip(readline(io)), "\t")
             actor, movie = k[1], join(k[2:3], "_")
