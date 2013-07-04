@@ -420,8 +420,7 @@ det(x::Number) = x
 logdet(A::Matrix) = logdet(lufact(A))
 
 function inv(A::AbstractMatrix)
-    if istriu(A) return inv(Triangular(A, :U, false)) end
-    if istril(A) return inv(Triangular(A, :L, false)) end
+    if istriu(A) | istril(A); return inv(Triangular(A, :U, false)); end
     return inv(lufact(A))
 end
 
