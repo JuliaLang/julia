@@ -257,6 +257,7 @@
     jl_set_current_module;
     jl_set_current_output_stream_obj;
     jl_set_global;
+    jl_set_imaging_mode;
     jl_set_timeval;
     jl_setjmp;
     jl_show;

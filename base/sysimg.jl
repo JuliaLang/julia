@@ -1,3 +1,6 @@
+# Disable deleteBody after function generation
+#ccall(:jl_set_imaging_mode, Void, (Uint8,), 1)
+
 baremodule Base
 
 eval(x) = Core.eval(Base,x)
@@ -99,7 +102,7 @@ include("stat.jl")
 include("fs.jl")
 importall .FS
 include("process.jl")
-reinit_stdio()
+reinit_stdio_fake()
 ccall(:jl_get_uv_hooks, Void, ())
 include("grisu.jl")
 import .Grisu.print_shortest
@@ -373,16 +376,16 @@ precompile(isslotempty, (Dict{Any,Any}, Int))
 precompile(setindex!, (Array{Uint8,1}, Uint8, Int))
 precompile(get, (Dict{Any,Any}, Symbol, ASCIIString))
 precompile(*, (ASCIIString, ASCIIString, ASCIIString))
-
-precompile(BoundsError, (Int,))
-precompile(DivideError, (Any,))
-precompile(DomainError, (Any,))
-precompile(OverflowError, (Any,))
-precompile(InexactError, (Any,))
-precompile(MemoryError, (Any,))
-precompile(StackOverflowError, (Any,))
-precompile(UndefRefError, (Any,))
-precompile(InterruptException, (Any,))
+precompile(reinit_stdio, () )
+#precompile(BoundsError, (Int,))
+#precompile(DivideError, (Any,))
+#precompile(DomainError, (Any,))
+#precompile(OverflowError, (Any,))
+#precompile(InexactError, (Any,))
+#precompile(MemoryError, (Any,))
+#precompile(StackOverflowError, (Any,))
+#precompile(UndefRefError, (Any,))
+#precompile(InterruptException, (Any,))
 
 # invoke type inference, running the existing inference code on the new
 # inference code to cache an optimized version of it.

@@ -109,6 +109,7 @@ static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
 
 // for image reloading
+static bool imaging_mode = false;
 static std::map<size_t, std::string> delayed_fptrs;
 
 // types
@@ -281,7 +282,8 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         if (li->cFunctionObject != NULL)
             (void)jl_ExecutionEngine->getPointerToFunction((Function*)li->cFunctionObject);
         JL_SIGATOMIC_END();
-        llvmf->deleteBody();
+        //if (!imaging_mode)
+        //    llvmf->deleteBody();
         if (li->cFunctionObject != NULL)
             ((Function*)li->cFunctionObject)->deleteBody();
     }
@@ -461,18 +463,22 @@ void jl_dump_bitcode(char* fname)
 {
     std::string err;
     raw_fd_ostream OS(fname, err);
-
+/*
     std::set<std::string> filt_set;
     filt_set.insert("julia_StackoverFlow");
     
     std::set<std::string>::iterator filt_iter;
     
     Module::FunctionListType::iterator fiter = jl_Module->begin();
-//    for (; fiter != jl_Module->end(); fiter = fiter.next()) {
-        
-        
-
+    for (; fiter != jl_Module->end(); fiter = fiter.next()) {
+*/
     WriteBitcodeToFile(jl_Module, OS);
+}
+
+extern "C" DLLEXPORT
+void jl_set_imaging_mode(uint8_t stat)
+{
+    imaging_mode = (stat == 1);
 }
 
 extern "C" DLLEXPORT
@@ -3298,6 +3304,7 @@ extern "C" void jl_init_codegen(char *imageFile)
 {
     
     InitializeNativeTarget();
+    /*
     if (imageFile != NULL) {
         char *irimgFile = strdup(imageFile);
         int _irnmlen = strlen(irimgFile);
@@ -3306,7 +3313,7 @@ extern "C" void jl_init_codegen(char *imageFile)
  
         // JL_PRINTF(JL_STDERR, "Trying module reload...\n");
         // JL_PRINTF(JL_STDERR, "IR file: %s\n", irimgFile);
- 
+        
         OwningPtr<MemoryBuffer> MB;
         std::string _errmsg;
         error_code ec;
@@ -3319,7 +3326,7 @@ extern "C" void jl_init_codegen(char *imageFile)
             //jl_load_dynamic_library("libopenblas", JL_RTLD_GLOBAL);
             //jl_load_dynamic_library("libRmath", JL_RTLD_GLOBAL);
         }
-    }
+    } */
     if (jl_Module == NULL) {
         JL_PRINTF(JL_STDERR, "Initializing new jl_Module...\n");
         jl_Module = new Module("julia", jl_LLVMContext);
