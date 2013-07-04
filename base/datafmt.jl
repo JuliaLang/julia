@@ -137,6 +137,7 @@ function dlm_offsets(sbuff::UTF8String, dlm, eol, offsets::Array{Int,2})
     col = 0
     row = 1
     maxrow,maxcol = size(offsets)
+    offsets[maxrow,maxcol] = length(sbuff.data)
     idx = 1
     while(idx <= length(sbuff.data))
         val,idx = next(sbuff, idx)
@@ -153,6 +154,7 @@ function dlm_offsets(dbuff::Vector{Uint8}, dlm::Uint8, eol::Uint8, offsets::Arra
     col = 0
     row = 1
     maxrow,maxcol = size(offsets)
+    offsets[maxrow,maxcol] = length(dbuff)
     for idx in 1:length(dbuff)
         val = dbuff[idx]
         (val != eol) && ((dlm == invalid_dlm) ? !contains(_default_delims, val) : (val != dlm)) && continue
