@@ -219,7 +219,7 @@ endif
 
 # Use 64-bit libraries by default on 64-bit architectures
 ifeq ($(ARCH), x86_64)
-USE_BLAS64 = 1
+USE_BLAS64 ?= 1
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 1)
