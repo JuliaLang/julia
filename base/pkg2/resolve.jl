@@ -1,5 +1,6 @@
 module Resolve
 
+include("resolve/versionweight.jl")
 include("resolve/interface.jl")
 include("resolve/maxsum.jl")
 
@@ -8,11 +9,10 @@ using ..Types, ..Query, .PkgToMaxSumInterface, .MaxSum
 export resolve, sanity_check
 
 # Use the max-sum algorithm to resolve packages dependencies
-function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}},
-                 eq_classes::Dict{ByteString,Dict{VersionNumber,Vector{VersionNumber}}})
+function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
     # init structures
-    interface = Interface(reqs, deps, eq_classes)
+    interface = Interface(reqs, deps)
 
     graph = Graph(interface)
     msgs = Messages(interface, graph)
@@ -84,9 +84,9 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
         nvn = VersionNumber(vn.major, vn.minor, vn.patch+1)
         sub_reqs = (ByteString=>VersionSet)[p=>VersionSet([vn, nvn])]
         fixed = (ByteString=>VersionNumber)[p=>vn]
-        sub_deps, sub_eq_classes = Query.prune_dependencies(sub_reqs, deps, fixed)
+        sub_deps = Query.prune_dependencies(sub_reqs, deps, fixed)
 
-        interface = Interface(sub_reqs, sub_deps, sub_eq_classes)
+        interface = Interface(sub_reqs, sub_deps)
 
         graph = Graph(interface)
         msgs = Messages(interface, graph)

@@ -319,9 +319,9 @@ function prune_dependencies(reqs::Requires, deps::Dict{ByteString,Dict{VersionNu
                             fixed::Dict{ByteString,VersionNumber} = (ByteString=>VersionNumber)[])
     deps = dependencies_subset(deps, Set{ByteString}(keys(reqs)...))
     deps = filter_prereleases(deps, fixed)
-    deps, eq_classes = prune_versions(reqs, deps)
+    deps, _ = prune_versions(reqs, deps)
 
-    return deps, eq_classes
+    return deps
 end
 
 

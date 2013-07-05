@@ -100,9 +100,9 @@ resolve(
             error("$pkg has no version compatible with fixed requirements")
     end
 
-    deps, eq_classes = Query.prune_dependencies(reqs,deps)
+    deps = Query.prune_dependencies(reqs,deps)
 
-    want = Resolve.resolve(reqs,deps,eq_classes)
+    want = Resolve.resolve(reqs,deps)
 
     # compare what is installed with what should be
     install, update, remove = Query.diff(have, want)
