@@ -340,6 +340,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
     * ``maxiter``: Maximum number of iterations
     * ``ritzvec``: Returns the singular vectors if ``true``
 
+.. function:: peakflops(n)
+
+   ``peakflops`` computes the peak flop rate of the computer by using BLAS dgemm. By default, if no arguments are specified, it multiplies a matrix of size ``n x n``, where ``n = 2000``. If the underlying BLAS is using multiple threads, higher flop rates are realized. The number of BLAS threads can be set with ``blas_set_num_threads(n)``.
+
 BLAS Functions
 --------------
 
@@ -448,3 +452,6 @@ The following functions are defined within the ``Base.LinAlg.BLAS`` module.
    Returns ``alpha*A*B`` or the other three variants
    according to ``tA`` (transpose ``A``) and ``tB``.
 
+.. function:: blas_set_num_threads(n)
+
+   Set the number of threads the BLAS library should use.
