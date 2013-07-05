@@ -123,24 +123,4 @@ function free(inst::Dict=installed())
     return pkgs
 end
 
-function dependencies(pkg::String, avail::Dict=available(),free::Dict=free(installed(avail)),fix::Dict=fixed(avail,installed(avail)))
-    # This is a released version, look in METADATA
-    if haskey(free,pkg)
-        return avail[pkg][free[pkg]].requires
-    elseif haskey(fix,pkg)
-        return fix[pkg].requires
-    else 
-        error("Package is neither fixed nor free")
-    end
-end
-
-function alldependencies(pkg::String,avail::Dict=available(),free::Dict=free(installed(avail)),fix::Dict=fixed(avail,installed(avail)))
-    deps = [ k for (k,v) in dependencies(pkg,avail,free,fix) ]
-    alldeps = copy(deps)
-    for dep in deps
-        dep != "julia" && append!(alldeps,[ k for (k,v) in dependencies(pkg,avail,free,fix) ])
-    end
-    unique(alldeps)
-end
-
 end # module
