@@ -39,39 +39,27 @@ function dependencies(avail::Dict, fix::Dict)
     avail
 end
 
-typealias PackageState Union(Nothing,VersionNumber) 
+function diff(have::Dict, want::Dict)
+    install = Dict{ByteString,VersionNumber}()
+    update  = Dict{ByteString,(VersionNumber,VersionNumber)}()
+    remove  = Dict{ByteString,VersionNumber}()
 
-function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
-    changeslist  = Array((ByteString,(PackageState,PackageState)),0)
-
-    for pkg in collect(union(keys(have),keys(want)))
+    for pkg in sort!(union(keys(have),keys(want)))
         h, w = haskey(have,pkg), haskey(want,pkg)
         if h && w
             if have[pkg] != want[pkg]
-                push!(changeslist, (pkg,(have[pkg], want[pkg])))
+                update[pkg] = (have[pkg], want[pkg])
             end
         elseif h
-            push!(changeslist, (pkg,(have[pkg],nothing)))
+            remove[pkg] = have[pkg]
         elseif w
-            push!(changeslist, (pkg,(nothing,want[pkg])))
+            install[pkg] = want[pkg]
         end
     end
 
-    # Sort packages topologically
-    sort!(changeslist) do a,b
-        ((a,vera),(b,verb)) = (a,b)
-        c = contains(Pkg2.Read.alldependencies(a,avail,want,fixed),b) 
-        nonordered = (!c && !contains(Pkg2.Read.alldependencies(b,avail,want,fixed),a))
-        if vera[2] == nothing
-            if vera[2] == verb[2]
-                return nonordered ? a < b : !c
-            end
-            return true
-        end
-        nonordered ? a < b : c
-    end
-
-    changeslist
+    sort!(collect(install)),
+    sort!(collect(update)),
+    sort!(collect(remove))
 end
 
 # Reduce the number of versions by creating equivalence classes, and retaining
