@@ -262,9 +262,9 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         println(io          )
         println(io,         Sys.cpu_info())
     end
-    if Base.libblas_name == "libopenblas"
+    if Base.libblas_name == "libopenblas" || blas_vendor() == :openblas
         openblas_config = openblas_get_config()
-        println(io,         "  BLAS: ",libblas_name, " (", openblas_config, ")")
+        println(io,         "  BLAS: libopenblas (", openblas_config, ")")
     else
         println(io,         "  BLAS: ",libblas_name)
     end
