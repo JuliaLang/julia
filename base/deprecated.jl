@@ -115,7 +115,7 @@ end
 @deprecate  squeeze(A)              squeeze(A,find([size(A)...].==1))
 @deprecate  getenv(var)             ENV[var]
 @deprecate  hasenv(var)             has(ENV,var)
-@deprecate  setenv(var,val)         ENV[var] = val
+@deprecate  setenv(var::ByteString,val::ByteString)         ENV[var] = val
 @deprecate  unsetenv(var)           delete!(ENV,var)
 
 function svd(a::StridedMatrix, vecs::Bool, thin::Bool)

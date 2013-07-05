@@ -359,7 +359,8 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
                        uv_process_t *proc, jl_value_t *julia_struct,
                        uv_handle_type stdin_type, uv_pipe_t *stdin_pipe,
                        uv_handle_type stdout_type, uv_pipe_t *stdout_pipe,
-                       uv_handle_type stderr_type, uv_pipe_t *stderr_pipe, int detach)
+                       uv_handle_type stderr_type, uv_pipe_t *stderr_pipe, 
+                       int detach, char **env)
 {
 #ifdef __APPLE__
     char **environ = *_NSGetEnviron();
@@ -368,11 +369,10 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
     uv_stdio_container_t stdio[3];
     int error;
     opts.file = name;
+    opts.env = env;
 #ifdef _OS_WINDOWS_
-    opts.env = NULL;
     opts.flags = 0;
 #else
-    opts.env = environ;
     opts.flags = UV_PROCESS_RESET_SIGPIPE;
 #endif
     opts.cwd = NULL;
