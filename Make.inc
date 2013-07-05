@@ -241,8 +241,8 @@ endif
 # decide whether use system libopenblas on linux
 ifeq ($(USE_SYSTEM_OPENBLAS), 1)
 ifeq ($(OS), Linux)
-LIBBLAS_PATH ?= /usr/lib/openblas-base
-LDFLAGS += -Wl,-rpath $(LIBBLAS_PATH)
+LIBOPENBLAS_PATH ?= /usr/lib/openblas-base
+LDFLAGS += -Wl,-rpath $(LIBOPENBLAS_PATH)
 LIBBLAS = -lopenblas
 LIBBLASNAME = libopenblas
 USE_SYSTEM_BLAS = 1
