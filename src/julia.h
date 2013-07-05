@@ -1100,6 +1100,7 @@ void *jl_gc_managed_malloc(size_t sz);
 void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned);
 void jl_gc_free_array(jl_array_t *a);
 void jl_gc_track_malloced_array(jl_array_t *a);
+void jl_gc_run_all_finalizers();
 void *alloc_2w(void);
 void *alloc_3w(void);
 void *alloc_4w(void);
