@@ -450,11 +450,13 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
                 *func_name = dlinfo.dli_sname;
                 // line number in C looks tricky. addr2line and libbfd seem promising. For now, punt and just return address offset.
                 *line_num = ip-(size_t)dlinfo.dli_saddr;
-            } else {
+            }
+            else {
                 *func_name = name_unknown;
                 *line_num = 0;
             }
-        } else {
+        }
+        else {
             *func_name = name_unknown;
             *file_name = name_unknown;
             *line_num = 0;
@@ -518,8 +520,10 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
     
     unw_getcontext(&uc);
     unw_init_local(&cursor, &uc);
-    while (unw_step(&cursor) && n < maxsize) {
-        unw_get_reg(&cursor, UNW_REG_IP, &ip);
+    while (unw_step(&cursor) > 0 && n < maxsize) {
+        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0) {
+            break;
+        }
         data[n++] = ip;
     }
     return n;
@@ -663,6 +667,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->runnable = 1;
     t->start = start;
     t->result = NULL;
+    t->donenotify = jl_nothing;
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
 #ifdef JL_GC_MARKSWEEP
@@ -754,19 +759,20 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_task_type = jl_new_datatype(jl_symbol("Task"),
                                    jl_any_type,
                                    jl_null,
-                                   jl_tuple(7,
+                                   jl_tuple(8,
                                             jl_symbol("parent"),
                                             jl_symbol("last"),
                                             jl_symbol("storage"),
                                             jl_symbol("consumers"),
                                             jl_symbol("done"),
                                             jl_symbol("runnable"),
-                                            jl_symbol("result")),
-                                   jl_tuple(7,
+                                            jl_symbol("result"),
+                                            jl_symbol("donenotify")),
+                                   jl_tuple(8,
                                             jl_any_type, jl_any_type,
                                             jl_any_type, jl_any_type,
                                             jl_bool_type, jl_bool_type,
-                                            jl_any_type),
+                                            jl_any_type, jl_any_type),
                                    0, 1);
     jl_tupleset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
     jl_task_type->fptr = jl_f_task;
@@ -790,6 +796,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->runnable = 1;
     jl_current_task->start = NULL;
     jl_current_task->result = NULL;
+    jl_current_task->donenotify = NULL;
     jl_current_task->eh = NULL;
 #ifdef JL_GC_MARKSWEEP
     jl_current_task->gcstack = NULL;

@@ -3,6 +3,7 @@
 ## julia starts with one process, and processors can be added using:
 ##   addprocs(n)                         using exec
 ##   addprocs({"host1","host2",...})     using remote execution
+##   addprocs_scyld(n)                   using Scyld ClusterWare
 ##   addprocs_sge(n)                     using Sun Grid Engine batch queue
 ##
 ## remotecall(w, func, args...) -
@@ -103,9 +104,10 @@ Worker(host::String, port::Integer, sock::TcpSocket) =
     Worker(host, port, sock, 0)
 Worker(host::String, port::Integer) =
     Worker(host, port, connect(host,uint16(port)))
-Worker(host::String, port::Integer, tunnel_user::String) =
+Worker(host::String, port::Integer, tunnel_user::String, sshflags) =
     Worker(host, port, connect("localhost",
-                               ssh_tunnel(tunnel_user, host, uint16(port))))
+                               ssh_tunnel(tunnel_user, host, uint16(port), sshflags)))
+
 
 function send_msg_now(w::Worker, kind, args...)
     send_msg_(w, kind, args, true)
@@ -167,59 +169,99 @@ end
 ## process group creation ##
 
 type LocalProcess
+    id::Int
+end
+
+const LPROC = LocalProcess(0)
+
+const map_pid_wrkr = Dict{Int, Union(Worker, LocalProcess)}()
+const map_sock_wrkr = Dict{Socket, Union(Worker, LocalProcess)}()
+
+let next_pid = 2    # 1 is reserved for the client (always)
+    global get_next_pid
+    function get_next_pid()
+        retval = next_pid
+        next_pid += 1
+        retval
+    end
 end
 
 type ProcessGroup
-    myid::Int
+    name::String
     workers::Array{Any,1}
-    locs::Array{Any,1}
-    np::Int
 
     # global references
     refs::Dict
 
-    function ProcessGroup(myid::Integer, w::Array{Any,1}, locs::Array{Any,1})
-        return new(myid, w, locs, length(w), Dict())
-    end
+    ProcessGroup(w::Array{Any,1}) = new("pg-default", w, Dict())
 end
-const PGRP = ProcessGroup(0, {}, {})
+const PGRP = ProcessGroup({})
 
-function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
-    n = length(w)
-    locs = map(x->(x.host,x.port), w)
+function add_workers(pg::ProcessGroup, w::Array{Any,1})
     # NOTE: currently only node 1 can add new nodes, since nobody else
     # has the full list of address:port
-    newlocs = [PGRP.locs, locs]
-    for i=1:n
-        push!(PGRP.workers, w[i])
-        w[i].id = PGRP.np+i
-        send_msg_now(w[i], :join_pgrp, w[i].id, newlocs)
+    assert(LPROC.id == 1)
+    for i=1:length(w)
+        w[i].id = get_next_pid()
+        register_worker(w[i])
         create_message_handler_loop(w[i].socket)
     end
-    PGRP.locs = newlocs
-    PGRP.np += n
+    all_locs = map(x -> isa(x, Worker) ? (x.host,x.port, x.id) : ("", 0, x.id), pg.workers)
+    for i=1:length(w)
+        send_msg_now(w[i], :join_pgrp, w[i].id, all_locs)
+    end
     :ok
 end
 
-myid() = PGRP.myid
-nprocs() = PGRP.np
+myid() = LPROC.id
 
-function worker_from_id(i)
-    pg = PGRP::ProcessGroup
-    while i > length(pg.workers) || pg.workers[i]===nothing
-        sleep(0.1)
+nprocs() = length(PGRP.workers)
+function nworkers() 
+    n = nprocs()
+    n == 1 ? 1 : n-1
+end
+
+procs() = Int[x.id for x in PGRP.workers]
+
+function workers()
+    allp = procs()
+    if nprocs() == 1
+       allp 
+    else
+       filter(x -> x != 1, allp)
+    end
+end
+
+function rmprocs(args...)
+    # Only pid 1 can add and remove processes
+    if myid() != 1
+        error("only process 1 can add and remove processes")
+    end
+    
+    for i in [args...]
+        if haskey(map_pid_wrkr, i)
+            remotecall(i, exit)
+        end
+    end
+end
+
+
+worker_from_id(i) = worker_from_id(PGRP, i)
+function worker_from_id(pg::ProcessGroup, i)
+#   Processes with pids > ours, have to connect to us. May not have happened. Wait for some time.
+    start = time()
+    while (!haskey(map_pid_wrkr, i) && ((time() - start) < 60.0))
+        sleep(0.1)		
         yield()
     end
-    pg.workers[i]
+    map_pid_wrkr[i]
 end
 
 function worker_id_from_socket(s)
-    for i=1:nprocs()
-        w = worker_from_id(i)
-        if isa(w,Worker)
-            if is(s, w.socket) || is(s, w.sendbuf)
-                return i
-            end
+    w = get(map_sock_wrkr, s, nothing)
+    if isa(w,Worker)
+        if is(s, w.socket) || is(s, w.sendbuf)
+            return w.id
         end
     end
     if isa(s,IOStream) && fd(s)==-1
@@ -229,16 +271,19 @@ function worker_id_from_socket(s)
     return -1
 end
 
-function register_worker(i, wrkr)
-    d = i-length(PGRP.workers)
-    if d > 0
-        resize!(PGRP.workers, i)
-        PGRP.workers[(end-d+1):end] = nothing
-        PGRP.np += d
-    end
-    PGRP.workers[i] = wrkr
-    #write(STDOUT, "$(PGRP.myid) heard from $i\n")
-    nothing
+
+register_worker(w) = register_worker(PGRP, w)
+function register_worker(pg, w)
+    push!(pg.workers, w)
+    map_pid_wrkr[w.id] = w
+    if isa(w, Worker) map_sock_wrkr[w.socket] = w end
+end
+
+deregister_worker(pid) = deregister_worker(PGRP, pid)
+function deregister_worker(pg, pid)
+    pg.workers = filter(x -> !(x.id == pid), pg.workers)
+    w = delete!(map_pid_wrkr, pid, nothing)
+    if isa(w, Worker) delete!(map_sock_wrkr, w.socket) end
 end
 
 ## remote refs ##
@@ -275,7 +320,7 @@ type RemoteRef
         rr
     end
 
-    RemoteRef(w::LocalProcess) = RemoteRef(myid())
+    RemoteRef(w::LocalProcess) = RemoteRef(w.id)
     RemoteRef(w::Worker) = RemoteRef(w.id)
     RemoteRef() = RemoteRef(myid())
 
@@ -303,13 +348,13 @@ isequal(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
 
 rr2id(r::RemoteRef) = (r.whence, r.id)
 
-function lookup_ref(id)
-    GRP = PGRP::ProcessGroup
-    rv = get(GRP.refs, id, false)
+lookup_ref(id) = lookup_ref(PGRP, id)
+function lookup_ref(pg, id)
+    rv = get(pg.refs, id, false)
     if rv === false
         # first we've heard of this ref
         rv = RemoteValue()
-        GRP.refs[id] = rv
+        pg.refs[id] = rv
         add!(rv.clientset, id[1])
     end
     rv
@@ -332,11 +377,12 @@ function isready(rr::RemoteRef)
     end
 end
 
-function del_client(id, client)
+del_client(id, client) = del_client(PGRP, id, client)
+function del_client(pg, id, client)
     rv = lookup_ref(id)
     delete!(rv.clientset, client)
     if isempty(rv.clientset)
-        delete!((PGRP::ProcessGroup).refs, id)
+        delete!(pg.refs, id)
         #print("$(myid()) collected $id\n")
     end
     nothing
@@ -524,10 +570,7 @@ remotecall(id::Integer, f, args...) = remotecall(worker_from_id(id), f, args...)
 
 # faster version of fetch(remotecall(...))
 function remotecall_fetch(w::LocalProcess, f, args...)
-    rr = WeakRemoteRef(w)
-    oid = rr2id(rr)
-    rv = schedule_call(oid, local_remotecall_thunk(f,args))
-    wait_full(rv)
+    local_remotecall_thunk(f,args)()
 end
 
 function remotecall_fetch(w::Worker, f, args...)
@@ -575,7 +618,7 @@ remote_do(id::Integer, f, args...) = remote_do(worker_from_id(id), f, args...)
 function sync_msg(verb::Symbol, r::RemoteRef)
     pg = (PGRP::ProcessGroup)
     oid = rr2id(r)
-    if r.where==myid() || isa(pg.workers[r.where], LocalProcess)
+    if r.where==myid() || isa(worker_from_id(r.where), LocalProcess)
         rv = lookup_ref(oid)
         wait_full(rv)
         return is(verb,:fetch) ? work_result(rv) : r
@@ -650,7 +693,11 @@ function perform_work(t::Task)
         yieldto(t, arg)
     end
     t = current_task().last
-    if !istaskdone(t) && t.runnable
+    if istaskdone(t)
+        if isa(t.donenotify, Condition)
+            notify(t.donenotify, t.result)
+        end
+    elseif t.runnable
         # still runnable; return to queue
         enq_work(t)
     end
@@ -658,8 +705,11 @@ end
 
 function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
-    if is(msg,:fetch) || is(msg,:call_fetch)
+    if is(msg,:fetch)
         val = value
+    elseif is(msg,:call_fetch)
+        val = value
+        delete!((PGRP::ProcessGroup).refs, oid)
     else
         val = oid
     end
@@ -680,7 +730,7 @@ notify_empty(rv::RemoteValue) = notify(rv.empty)
 
 # activity on accept fd
 function accept_handler(server::TcpServer, status::Int32)
-    if(status == -1)
+    if status == -1
         error("An error occured during the creation of the server")
     end
     client = accept_nonblock(server)
@@ -701,9 +751,8 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
         #println("message_handler_loop")
         start_reading(sock)
         wait_connected(sock)
-        #println("loop")
-        while true
-            try
+        try
+            while true
                 msg = deserialize(sock)
                 #println("got msg: ",msg)
                 # handle message
@@ -744,21 +793,30 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     end
                 elseif is(msg, :identify_socket)
                     otherid = deserialize(sock)
-                    # establish a Worker connection for processes that connected to us
-                    register_worker(otherid, Worker("", 0, sock, otherid))
+                    register_worker(Worker("", 0, sock, otherid))
                 elseif is(msg, :join_pgrp)
-                    PGRP.myid = deserialize(sock)
-                    PGRP.locs = locs = deserialize(sock)
-
-                    register_worker(PGRP.myid, LocalProcess())
-                    register_worker(1, Worker("", 0, sock, 1))
-
-                    w = PGRP.workers
-                    for i = 2:(PGRP.myid-1)
-                        w[i] = Worker(locs[i][1], locs[i][2])
-                        w[i].id = i
-                        create_message_handler_loop(w[i].socket)
-                        send_msg_now(w[i], :identify_socket, PGRP.myid)
+                    # first connection; get process group info from client
+                    self_pid = LPROC.id = deserialize(sock)
+                    locs = deserialize(sock)
+                    #print("\nLocation: ",locs,"\nId:",myid(),"\n")
+                    # joining existing process group
+                    
+                    register_worker(Worker("", 0, sock, 1))
+                    register_worker(LPROC)
+                    
+                    for (rhost, rport, rpid) in locs
+                        if (rpid < self_pid) && (!(rpid == 1))
+                            # Connect to them
+                            w = Worker(rhost, rport)
+                            w.id = rpid
+                            register_worker(w)
+                            create_message_handler_loop(w.socket)
+                            send_msg_now(w, :identify_socket, self_pid)
+                        else
+                            # Others will connect to us. Don't do anything just yet
+                            continue
+                        end
+                        
                     end
                 else
                     # the synchronization messages
@@ -775,22 +833,31 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                         end
                     end
                 end
-            catch e
-                if isa(e,EOFError)
-                    #print("eof. $(myid()) exiting\n")
-                    stop_reading(sock)
-                    # TODO: remove machine from group
-                    throw(DisconnectException())
-                else
-                    print(STDERR, "deserialization: ", e, "\n")
-                    rethrow(e)
-                    #        #while nb_available(sock) > 0 #|| select(sock)
-                    #        #    read(sock, Uint8)
-                    #        #end
-                end
+            end # end of while
+        catch e
+            iderr = worker_id_from_socket(sock)
+            # If pid 1 is disconnected, commit harakiri
+            if (iderr == 1) exit() end
+            
+            if isa(e,EOFError)
+                deregister_worker(iderr)
+                
+                if (myid() == 1) println("Worker $iderr terminated.") end
+                
+                #TODO : Notify all RemoteRefs linked to this Worker who just died....
+                # How?
+                
+                return nothing
+            else
+                # TODO : Treat any exception as death of node / major screw-up and cleanup?
+                rethrow(e)
             end
         end
     end)
+end
+
+function disable_parallel_libs()
+    blas_set_num_threads(1)
 end
 
 ## worker creation and setup ##
@@ -808,11 +875,14 @@ function start_worker(out::IO)
     # close STDIN; workers will not use it
     #close(STDIN)
 
+    disable_parallel_libs()
+
     ccall(:jl_install_sigint_handler, Void, ())
 
     global const Scheduler = current_task()
 
     try
+        check_master_connect(60.0)
         event_loop(false)
     catch err
         print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")
@@ -822,7 +892,8 @@ function start_worker(out::IO)
     exit(0)
 end
 
-function start_remote_workers(machines, cmds, tunnel=false)
+
+function start_remote_workers(machines, cmds, tunnel=false, sshflags=``)
     n = length(cmds)
     outs = cell(n)
     w = cell(n)
@@ -852,14 +923,14 @@ function start_remote_workers(machines, cmds, tunnel=false)
         end
         
         if tunnel
-            w[i] = Worker(hostname, port, user)
+            w[i] = Worker(hostname, port, user, sshflags)
         else
             w[i] = Worker(hostname, port)
         end
         let wrker = w[i]
             # redirect console output from workers to the client's stdout:
             start_reading(stream,function(stream::AsyncStream,nread::Int)
-                if(nread>0)
+                if nread>0
                     try
                         line = readbytes(stream.buffer, nread)
                         print("\tFrom worker $(wrker.id):\t",line)
@@ -887,19 +958,23 @@ end
 tunnel_port = 9201
 # establish an SSH tunnel to a remote worker
 # returns P such that localhost:P connects to host:port
-ssh_tunnel(host, port) = ssh_tunnel(ENV["USER"], host, port)
-function ssh_tunnel(user, host, port)
+function ssh_tunnel(user, host, port, sshflags)
     global tunnel_port
     localp = tunnel_port::Int
-    while !success(detach(`ssh -f -o ExitOnForwardFailure=yes $(user)@$host -L $localp:$host:$port -N`))
+    while !success(detach(`ssh -f -o ExitOnForwardFailure=yes $sshflags $(user)@$host -L $localp:$host:$(int(port)) -N`)) && localp < 10000
         localp += 1
     end
+    
+    if localp >= 10000
+        error("Unable to assign a local tunnel port between 9201 and 10000")
+    end
+    
     tunnel_port = localp+1
     localp
 end
 
 #function worker_ssh_cmd(host, key)
-#    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
+#    `ssh -i $key -n $host "sh -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
 #end
 
 # start and connect to processes via SSH.
@@ -910,9 +985,9 @@ function addprocs(machines::AbstractVector;
                   tunnel=false, dir=JULIA_HOME, exename="./julia-release-basic", sshflags::Cmd=``)
     add_workers(PGRP,
         start_remote_workers(machines,
-            map(m->detach(`ssh -n $sshflags $m "bash -l -c \"cd $dir && $exename --worker\""`),
+            map(m->detach(`ssh -n $sshflags $m "sh -l -c \"cd $dir && $exename --worker\""`),
                 machines),
-            tunnel))
+            tunnel, sshflags))
 end
 
 #function addprocs_ssh(machines, keys)
@@ -928,16 +1003,68 @@ end
 
 worker_local_cmd() = `$JULIA_HOME/julia-release-basic --bind-to $bind_addr --worker`
 
-addprocs(np::Integer) =
+function addprocs(np::Integer)
+    disable_parallel_libs()
     add_workers(PGRP, start_remote_workers({ "localhost" for i=1:np },
                                            { worker_local_cmd() for i=1:np }))
+end
 
+function start_scyld_workers(np::Integer)
+    home = JULIA_HOME
+    beomap_cmd = `beomap --no-local --np $np`
+    out,beomap_proc = readsfrom(beomap_cmd)
+    wait(beomap_proc)
+    if !success(beomap_proc)
+        error("node availability inaccessible (could not run beomap)")
+    end
+    nodes = split(chomp(readline(out)),':')
+    outs = cell(np)
+    for (i,node) in enumerate(nodes)
+        cmd = detach(`bpsh $node sh -l -c "cd $home && ./julia-release-basic --worker"`)
+        outs[i],_ = readsfrom(cmd)
+        outs[i].line_buffered = true
+    end
+    workers = cell(np)
+    for (i,stream) in enumerate(outs)
+        local hostname::String, port::Int16
+        stream.line_buffered = true
+        while true
+            conninfo = readline(stream)
+            hostname, port = parse_connection_info(conninfo)
+            if hostname != ""
+                break
+            end
+        end
+        workers[i] = Worker(hostname, port)
+        let worker = workers[i]
+            # redirect console output from workers to the client's stdout:
+            start_reading(stream,function(stream::AsyncStream,nread::Int)
+                if(nread>0)
+                    try
+                        line = readbytes(stream.buffer, nread)
+                        print("\tFrom worker $(worker.id):\t",line)
+                    catch err
+                        println(STDERR,"\tError parsing reply from worker $(worker.id):\t",err)
+                        return false
+                    end
+                end
+                true
+            end)
+        end
+    end
+    workers
+end
+
+function addprocs_scyld(np::Integer)
+    disable_parallel_libs()
+    add_workers(PGRP, start_scyld_workers(np))
+end
 
 function start_sge_workers(n)
     home = JULIA_HOME
     sgedir = joinpath(pwd(),"SGE")
     run(`mkdir -p $sgedir`)
-    qsub_cmd = `echo $home/julia-release-basic --worker` | `qsub -N JULIA -terse -cwd -j y -o $sgedir -t 1:$n`
+    qsub_cmd = `echo $home/julia-release-basic --worker` |> `qsub -N JULIA -terse -cwd -j y -o $sgedir -t 1:$n`
     out,qsub_proc = readsfrom(qsub_cmd)
     if !success(qsub_proc)
         error("batch queue not available (could not run qsub)")
@@ -1009,9 +1136,7 @@ function sync_add(r)
     r
 end
 
-spawnat(p, thunk) = sync_add(remotecall(p, thunk))
-
-let lastp = 1
+let nextidx = 1
     global chooseproc
     function chooseproc(thunk::Function)
         p = -1
@@ -1027,14 +1152,19 @@ let lastp = 1
             end
         end
         if p == -1
-            p = lastp; lastp += 1
-            if lastp > nprocs()
-                lastp = 1
+            if nextidx > nprocs()
+               p = PGRP.workers[1].id
+               nextidx = 2
+            else 
+               p = PGRP.workers[nextidx].id
+               nextidx += 1
             end
         end
         p
     end
 end
+
+spawnat(p, thunk) = sync_add(remotecall(p, thunk))
 
 spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
 
@@ -1043,17 +1173,29 @@ macro spawn(expr)
     :(spawn_somewhere($(esc(expr))))
 end
 
+macro spawnat(p, expr)
+    expr = localize_vars(:(()->($expr)), false)
+    :(spawnat($(esc(p)), $(esc(expr))))
+end
+
+macro fetch(expr)
+    expr = localize_vars(:(()->($expr)), false)
+    quote
+        thunk = $(esc(expr))
+        remotecall_fetch(chooseproc(thunk), thunk)
+    end
+end
+
+macro fetchfrom(p, expr)
+    expr = localize_vars(:(()->($expr)), false)
+    :(remotecall_fetch($(esc(p)), $(esc(expr))))
+end
+
 function spawnlocal(thunk)
-    rr = RemoteRef(myid())
-    sync_add(rr)
-    rid = rr2id(rr)
-    rv = RemoteValue()
-    (PGRP::ProcessGroup).refs[rid] = rv
-    add!(rv.clientset, rid[1])
-    # add to the *front* of the queue, work first
-    push!(Workqueue, @task(run_work_thunk(rv,thunk)))
-    yield()
-    rr
+    t = Task(thunk)
+    sync_add(t)
+    enq_work(t)
+    t
 end
 
 macro async(expr)
@@ -1066,14 +1208,9 @@ macro spawnlocal(expr)
     :(@async $(esc(expr)))
 end
 
-macro spawnat(p, expr)
-    expr = localize_vars(:(()->($expr)), false)
-    :(spawnat($(esc(p)), $(esc(expr))))
-end
-
 function at_each(f, args...)
-    for i=1:nprocs()
-        sync_add(remotecall(i, f, args...))
+    for w in PGRP.workers
+        sync_add(remotecall(w.id, f, args...))
     end
 end
 
@@ -1088,7 +1225,7 @@ end
 function pmap_static(f, lsts...)
     np = nprocs()
     n = length(lsts[1])
-    { remotecall((i-1)%np+1, f, map(L->L[i], lsts)...) for i = 1:n }
+    { remotecall(PGRP.workers[(i-1)%np+1].id, f, map(L->L[i], lsts)...) for i = 1:n }
 end
 
 pmap(f) = f()
@@ -1109,14 +1246,15 @@ function pmap(f, lsts...)
     nextidx() = (idx=i; i+=1; idx)
     @sync begin
         for p=1:np
-            if p != myid() || np == 1
+            wpid = PGRP.workers[p].id
+            if wpid != myid() || np == 1
                 @async begin
                     while true
                         idx = nextidx()
                         if idx > n
                             break
                         end
-                        results[idx] = remotecall_fetch(p, f,
+                        results[idx] = remotecall_fetch(wpid, f,
                                                         map(L->L[idx], lsts)...)
                     end
                 end
@@ -1306,5 +1444,21 @@ function interrupt_waiting_task(t::Task, with_value)
     if !t.runnable
         t.result = with_value
         enq_work(t)
+    end
+end
+
+function check_master_connect(timeout)
+    # If we do not have at least process 1 connect to us within timeout
+    # we log an error and exit
+    @schedule begin
+        start = time()
+        while !haskey(map_pid_wrkr, 1) && (time() - start) < timeout
+            sleep(1.0)
+        end
+        
+        if !haskey(map_pid_wrkr, 1)
+            print(STDERR, "Master process (id 1) could not connect within $timeout seconds.\nexiting.\n")
+            exit(1)
+        end
     end
 end

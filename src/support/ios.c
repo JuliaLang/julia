@@ -263,7 +263,8 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
             if (all) {
                 //result = _os_read_all(s->fd, dest, n, &got);
                 _os_read_all(s->fd, dest, n, &got);
-            } else {
+            }
+            else {
                 //result = _os_read(s->fd, dest, n, &got);
                 _os_read(s->fd, dest, n, &got);
             }

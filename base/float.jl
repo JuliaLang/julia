@@ -1,32 +1,27 @@
+#bitstype 16 Float16 <: FloatingPoint
 ## conversions to floating-point ##
 
-convert(::Type{Float32}, x::Bool)    = box(Float32,uitofp32(unbox(Bool,x)))
-convert(::Type{Float32}, x::Char)    = box(Float32,uitofp32(unbox(Float32,x)))
-convert(::Type{Float32}, x::Int8)    = box(Float32,sitofp32(unbox(Int8,x)))
-convert(::Type{Float32}, x::Int16)   = box(Float32,sitofp32(unbox(Int16,x)))
-convert(::Type{Float32}, x::Int32)   = box(Float32,sitofp32(unbox(Int32,x)))
-convert(::Type{Float32}, x::Int64)   = box(Float32,sitofp32(unbox(Int64,x)))
-convert(::Type{Float32}, x::Int128)  = float32(uint128(abs(x)))*(1-2(x<0))
-convert(::Type{Float32}, x::Uint8)   = box(Float32,uitofp32(unbox(Uint8,x)))
-convert(::Type{Float32}, x::Uint16)  = box(Float32,uitofp32(unbox(Uint16,x)))
-convert(::Type{Float32}, x::Uint32)  = box(Float32,uitofp32(unbox(Uint32,x)))
-convert(::Type{Float32}, x::Uint64)  = box(Float32,uitofp32(unbox(Uint64,x)))
-convert(::Type{Float32}, x::Uint128) = float32(uint64(x)) + ldexp(float32(uint64(x>>>64)),64)
-convert(::Type{Float32}, x::Float64) = box(Float32,fptrunc32(unbox(Float64,x)))
+for t1 in (Float32,Float64) #,Float16)
+    for st in (Int8,Int16,Int32,Int64,Int128)
+        @eval begin 
+            convert(::Type{$t1},x::($st)) = box($t1,sitofp($t1,unbox($st,x)))
+            promote_rule(::Type{$t1}, ::Type{$st}  ) = $t1
+        end
+    end
+    for ut in (Bool,Char,Uint8,Uint16,Uint32,Uint64,Uint128)
+        @eval begin
+            convert(::Type{$t1},x::($ut)) = box($t1,uitofp($t1,unbox($ut,x)))
+            promote_rule(::Type{$t1}, ::Type{$ut}  ) = $t1
+        end
+    end
+end
+#convert(::Type{Float16}, x::Union(Float32,Float64)) = box(Float16,fptrunc(x,Float16))
+#convert(::Type{Float32}, x::Float16) = box(Float32,fpext(Float32,x))
+convert(::Type{Float32}, x::Float64) = box(Float32,fptrunc(Float32,x))
 
-convert(::Type{Float64}, x::Bool)    = box(Float64,uitofp64(unbox(Bool,x)))
-convert(::Type{Float64}, x::Char)    = box(Float64,uitofp64(unbox(Char,x)))
-convert(::Type{Float64}, x::Int8)    = box(Float64,sitofp64(unbox(Int8,x)))
-convert(::Type{Float64}, x::Int16)   = box(Float64,sitofp64(unbox(Int16,x)))
-convert(::Type{Float64}, x::Int32)   = box(Float64,sitofp64(unbox(Int32,x)))
-convert(::Type{Float64}, x::Int64)   = box(Float64,sitofp64(unbox(Int64,x)))
-convert(::Type{Float64}, x::Int128)  = float64(uint128(abs(x)))*(1-2(x<0))
-convert(::Type{Float64}, x::Uint8)   = box(Float64,uitofp64(unbox(Uint8,x)))
-convert(::Type{Float64}, x::Uint16)  = box(Float64,uitofp64(unbox(Uint16,x)))
-convert(::Type{Float64}, x::Uint32)  = box(Float64,uitofp64(unbox(Uint32,x)))
-convert(::Type{Float64}, x::Uint64)  = box(Float64,uitofp64(unbox(Uint64,x)))
-convert(::Type{Float64}, x::Uint128) = float64(uint64(x)) + ldexp(float64(uint64(x>>>64)),64)
-convert(::Type{Float64}, x::Float32) = box(Float64,fpext64(unbox(Float32,x)))
+# REPLACE when enabling Float16
+#convert(::Type{Float64}, x::Union(Float32,Float16)) = box(Float64,fpext(Float64,x))
+convert(::Type{Float64}, x::Float32) = box(Float64,fpext(Float64,x))
 
 convert(::Type{FloatingPoint}, x::Bool)    = convert(Float32, x)
 convert(::Type{FloatingPoint}, x::Char)    = convert(Float32, x)
@@ -41,6 +36,7 @@ convert(::Type{FloatingPoint}, x::Uint32)  = convert(Float64, x)
 convert(::Type{FloatingPoint}, x::Uint64)  = convert(Float64, x) # LOSSY
 convert(::Type{FloatingPoint}, x::Uint128) = convert(Float64, x) # LOSSY
 
+#float16(x) = convert(Float16, x)
 float32(x) = convert(Float32, x)
 float64(x) = convert(Float64, x)
 float(x)   = convert(FloatingPoint, x)
@@ -83,9 +79,9 @@ iround(::Type{Int32}, x::Float32) = box(Int32,fpsiround(unbox(Float32,x)))
 iround(::Type{Int32}, x::Float64) = box(Int32,trunc_int(Int32,fpsiround(unbox(Float64,x))))
 iround(::Type{Uint32}, x::Float32) = box(Uint32,fpuiround(unbox(Float32,x)))
 iround(::Type{Uint32}, x::Float64) = box(Uint32,trunc_int(Uint32,fpuiround(unbox(Float64,x))))
-iround(::Type{Int64}, x::Float32) = box(Int64,fpsiround(fpext64(unbox(Float32,x))))
+iround(::Type{Int64}, x::Float32) = box(Int64,fpsiround(float64(x)))
 iround(::Type{Int64}, x::Float64) = box(Int64,fpsiround(unbox(Float64,x)))
-iround(::Type{Uint64}, x::Float32) = box(Uint64,fpuiround(fpext64(unbox(Float32,x))))
+iround(::Type{Uint64}, x::Float32) = box(Uint64,fpuiround(float64(x)))
 iround(::Type{Uint64}, x::Float64) = box(Uint64,fpuiround(unbox(Float64,x)))
 
 iround(::Type{Int128}, x::Float32) = convert(Int128,round(x))
@@ -99,35 +95,10 @@ floor(x::Float64) = ccall((:floor, Base.libm_name), Float64, (Float64,), x)
 
 ## floating point promotions ##
 
+#promote_rule(::Type{Float32}, ::Type{Float16}) = Float32
 promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 
-promote_rule(::Type{Float32}, ::Type{Int8}  ) = Float32
-promote_rule(::Type{Float32}, ::Type{Int16} ) = Float32
-promote_rule(::Type{Float32}, ::Type{Int32} ) = Float32
-promote_rule(::Type{Float32}, ::Type{Int64} ) = Float32
-promote_rule(::Type{Float32}, ::Type{Int128}) = Float32
-
-promote_rule(::Type{Float64}, ::Type{Int8}  ) = Float64
-promote_rule(::Type{Float64}, ::Type{Int16} ) = Float64
-promote_rule(::Type{Float64}, ::Type{Int32} ) = Float64
-promote_rule(::Type{Float64}, ::Type{Int64} ) = Float64
-promote_rule(::Type{Float64}, ::Type{Int128}) = Float64
-
-promote_rule(::Type{Float32}, ::Type{Uint8}  ) = Float32
-promote_rule(::Type{Float32}, ::Type{Uint16} ) = Float32
-promote_rule(::Type{Float32}, ::Type{Uint32} ) = Float32
-promote_rule(::Type{Float32}, ::Type{Uint64} ) = Float32
-promote_rule(::Type{Float32}, ::Type{Uint128}) = Float32
-
-promote_rule(::Type{Float64}, ::Type{Uint8}  ) = Float64
-promote_rule(::Type{Float64}, ::Type{Uint16} ) = Float64
-promote_rule(::Type{Float64}, ::Type{Uint32} ) = Float64
-promote_rule(::Type{Float64}, ::Type{Uint64} ) = Float64
-promote_rule(::Type{Float64}, ::Type{Uint128}) = Float64
-
-promote_rule(::Type{Float32}, ::Type{Char}) = Float32
-promote_rule(::Type{Float64}, ::Type{Char}) = Float64
-
+#morebits(::Type{Float16}) = Float32
 morebits(::Type{Float32}) = Float64
 
 ## floating point arithmetic ##

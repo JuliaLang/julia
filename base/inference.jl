@@ -516,7 +516,14 @@ function abstract_call_gf(f, fargs, argtypes, e)
                 return Type
             end
         end
-        return Type{f(c...)}
+        if f === Main.Base.promote_type
+            try
+                return Type{f(c...)}
+            catch
+            end
+        else
+            return Type{f(c...)}
+        end
     end
     # don't consider more than N methods. this trades off between
     # compiler performance and generated code performance.
@@ -1921,19 +1928,56 @@ function is_known_call(e::Expr, func, sv)
     return !is(f,false) && is(_ieval(f), func)
 end
 
+function is_var_assigned(ast, v)
+    for vi in ast.args[2][2]
+        if symequal(vi[1], v) && (vi[3]&2)!=0
+            return true
+        end
+    end
+    return false
+end
+
+function delete_var!(ast, v)
+    filter!(vi->!symequal(vi[1],v), ast.args[2][2])
+    filter!(x->!symequal(x,v), ast.args[2][1])
+    filter!(x->!(isa(x,Expr) && x.head === :(=) &&
+                 symequal(x.args[1],v)),
+            ast.args[3].args)
+    ast
+end
+
+# remove all single-assigned vars v in "v = x" where x is an argument
+# and not assigned.
+# "sa" is the result of find_sa_vars
+function remove_redundant_temp_vars(ast, sa)
+    for (v,init) in sa
+        if ((isa(init,Symbol) || isa(init,SymbolNode)) &&
+            any(vi->symequal(vi[1],init), ast.args[2][2]) &&
+            !is_var_assigned(ast, init))
+
+            delete_var!(ast, v)
+            sym_replace(ast.args[3], {v}, {}, {init}, {})
+        end
+    end
+    ast
+end
+
 # compute set of vars assigned once
 function find_sa_vars(ast)
     body = ast.args[3].args
     av = ObjectIdDict()
     av2 = ObjectIdDict()
+    vnames = ast.args[2][1]
     for i = 1:length(body)
         e = body[i]
         if isa(e,Expr) && is(e.head,:(=))
             lhs = e.args[1]
-            if !haskey(av, lhs)
-                av[lhs] = e.args[2]
-            else
-                av2[lhs] = true
+            if contains_is(vnames, lhs)  # exclude globals
+                if !haskey(av, lhs)
+                    av[lhs] = e.args[2]
+                else
+                    av2[lhs] = true
+                end
             end
         end
     end
@@ -1947,13 +1991,18 @@ function find_sa_vars(ast)
     av
 end
 
+symequal(x::SymbolNode, y::SymbolNode) = is(x.name,y.name)
+symequal(x::SymbolNode, y::Symbol)     = is(x.name,y)
+symequal(x::Symbol    , y::SymbolNode) = is(x,y.name)
+symequal(x::ANY       , y::ANY)        = is(x,y)
+
 function occurs_outside_tupleref(e::ANY, sym::ANY, sv::StaticVarInfo, tuplen::Int)
     if is(e, sym) || (isa(e, SymbolNode) && is(e.name, sym))
         return true
     end
     if isa(e,Expr)
         e = e::Expr
-        if is_known_call(e, tupleref, sv) && isequal(e.args[2],sym)
+        if is_known_call(e, tupleref, sv) && symequal(e.args[2],sym)
             targ = e.args[2]
             if !(exprtype(targ)<:Tuple)
                 return true
@@ -1983,6 +2032,7 @@ function tuple_elim_pass(ast::Expr)
     bexpr = ast.args[3]::Expr
     body = (ast.args[3].args)::Array{Any,1}
     vs = find_sa_vars(ast)
+    remove_redundant_temp_vars(ast, vs)
     i = 1
     while i < length(body)
         e = body[i]
@@ -2033,7 +2083,7 @@ function replace_tupleref(e::ANY, tupname, vals, sv, i0)
     for i = i0:length(e.args)
         a = e.args[i]
         if isa(a,Expr) && is_known_call(a,tupleref, sv) &&
-            isequal(a.args[2],tupname)
+            symequal(a.args[2],tupname)
             e.args[i] = vals[a.args[3]]
         else
             replace_tupleref(a, tupname, vals, sv, 1)
@@ -2041,7 +2091,7 @@ function replace_tupleref(e::ANY, tupname, vals, sv, i0)
     end
 end
 
-function finfer(f::Union(Function,DataType), types)
+function finfer(f::Callable, types)
     x = methods(f,types)[1]
     (tree, ty) = typeinf(x[3], x[1], x[2])
     if !isa(tree,Expr)

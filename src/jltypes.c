@@ -45,6 +45,7 @@ jl_datatype_t *jl_int64_type;
 jl_datatype_t *jl_uint64_type;
 jl_datatype_t *jl_float32_type;
 jl_datatype_t *jl_float64_type;
+jl_datatype_t *jl_floatingpoint_type;
 
 jl_tuple_t *jl_null;
 jl_value_t *jl_nothing;
@@ -106,12 +107,19 @@ int jl_has_typevars(jl_value_t *v)
     return jl_has_typevars_(v, 0);
 }
 
+static inline int is_unspec(jl_datatype_t *dt)
+{
+    return (jl_datatype_t*)dt->name->primary == dt;
+}
+
 DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
 {
     if (jl_is_datatype(v)) {
         if (((jl_datatype_t*)v)->abstract) {
             if (jl_is_type_type(v)) {
-                return !jl_is_typevar(jl_tparam0(v));
+                jl_value_t *tp0 = jl_tparam0(v);
+                return (jl_is_datatype(tp0) && is_unspec((jl_datatype_t*)tp0)) ||
+                    !jl_has_typevars_(tp0,1);
             }
             return 0;
         }
@@ -277,11 +285,6 @@ static inline int is_bnd(jl_tvar_t *tv, cenv_t *env)
             return 1;
     }
     return 0;
-}
-
-static inline int is_unspec(jl_datatype_t *dt)
-{
-    return (jl_datatype_t*)dt->name->primary == dt;
 }
 
 static inline int is_btv(jl_value_t *v)

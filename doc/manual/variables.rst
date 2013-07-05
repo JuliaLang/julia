@@ -53,8 +53,7 @@ They can even be given Unicode names:
 Julia will even let you redefine built-in constants and functions if needed::
 
     julia> pi
-           
-    3.141592653589793
+    π = 3.1415926535897...
     
     julia> pi = 3
     Warning: imported binding for pi overwritten in module Main

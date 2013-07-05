@@ -54,9 +54,9 @@ promote_rule{T,S}(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}})=Tridiagonal{pro
 
 function show(io::IO, M::Bidiagonal)
     println(io, summary(M), ":")
-    print(io, "diag: ")
+    print(io, " diag:")
     print_matrix(io, (M.dv)')
-    print(io, M.isupper?"\n sup: ":"\n sub: ")
+    print(io, M.isupper?"\nsuper:":"\n  sub:")
     print_matrix(io, (M.ev)')
 end
 
@@ -112,7 +112,7 @@ end
 # solver uses tridiagonal gtsv! 
 function \{T<:BlasFloat}(M::Bidiagonal{T}, rhs::StridedVecOrMat{T})
     if stride(rhs, 1) == 1
-        z = zeros(size(M)[1])
+        z = zeros(size(M, 1) - 1)
         if M.isupper
             return LAPACK.gtsv!(z, copy(M.dv), copy(M.ev), copy(rhs))
         else

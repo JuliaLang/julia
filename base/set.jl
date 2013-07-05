@@ -18,8 +18,7 @@ contains(s::Set, x) = haskey(s.dict, x)
 
 add!(s::Set, x) = (s.dict[x] = nothing; s)
 delete!(s::Set, x) = (delete!(s.dict, x); x)
-# TODO: this method doesn't make much sense for sets:
-delete!(s::Set, x, deflt) = haskey(s.dict, x) ? delete!(s.dict, x) : deflt
+delete!(s::Set, x, deflt) = delete!(s.dict, x, deflt)
 
 union!(s::Set, xs) = (for x=xs; add!(s,x); end; s)
 setdiff!(s::Set, xs) = (for x=xs; delete!(s,x,nothing); end; s)

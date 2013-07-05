@@ -4,7 +4,7 @@
 
 /*.tar.gz
 /tmp
-/dist
+/dist*
 
 /julia
 /julia-*

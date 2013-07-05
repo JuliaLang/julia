@@ -55,6 +55,8 @@
    (append
     ;; vars assigned at the outer level
     (filter (lambda (x) (not (some-gensym? x))) (find-assigned-vars e '()))
+    ;; vars declared const outside any scope block
+    (find-decls 'const e '())
     ;; vars assigned anywhere, if they have been defined as global
     (filter defined-julia-global (find-possible-globals e)))))
 
@@ -156,7 +158,10 @@
   (jl-parser-set-stream filename (open-input-string str)))
 
 (define (jl-parse-file s)
-  (jl-parser-set-stream s (open-input-file s)))
+  (trycatch
+   (begin (jl-parser-set-stream s (open-input-file s))
+	  #t)
+   (lambda (e) #f)))
 
 (define *filename-stack* '())
 (define *ts-stack* '())

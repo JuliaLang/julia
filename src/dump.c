@@ -730,7 +730,7 @@ void jl_save_system_image(char *fname)
     // delete cached slow ASCIIString constructor if present
     jl_methtable_t *mt = jl_gf_mtable((jl_function_t*)jl_ascii_string_type);
     jl_array_t *spec = mt->defs->func->linfo->specializations;
-    if (jl_array_len(spec) > 0 &&
+    if (spec != NULL && jl_array_len(spec) > 0 &&
         ((jl_lambda_info_t*)jl_cellref(spec,0))->inferred == 0) {
         mt->cache = JL_NULL;
         mt->cache_arg1 = JL_NULL;

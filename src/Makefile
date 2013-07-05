@@ -43,7 +43,7 @@ release debug: %: libjulia-%
 HEADERS = julia.h $(wildcard support/*.h) $(LIBUV_INC)/uv.h
 
 %.o: %.c $(HEADERS)
-	$(QUIET_CC) $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
+	$(QUIET_CC) $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@
 %.do: %.c $(HEADERS)
 	$(QUIET_CC) $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 %.o: %.cpp $(HEADERS)
@@ -60,7 +60,7 @@ julia_flisp.boot: julia-parser.scm julia-syntax.scm \
 	match.scm utils.scm jlfrontend.scm mk_julia_flisp_boot.scm flisp/libflisp.a
 	$(QUIET_FLISP) $(call spawn,./flisp/flisp) ./mk_julia_flisp_boot.scm
 
-codegen.o codegen.do: intrinsics.cpp debuginfo.cpp cgutils.cpp ccall.cpp
+codegen.o codegen.do: intrinsics.cpp debuginfo.cpp cgutils.cpp ccall.cpp disasm.cpp
 builtins.o builtins.do: table.c
 
 support/libsupport.a: support/*.h support/*.c

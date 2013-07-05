@@ -39,7 +39,7 @@
 @test bool(-1.0) == true
 @test bool(Complex(0,0)) == false
 @test bool(Complex(1,0)) == true
-@test_fails bool(Complex(0,1)) == true
+@test_throws bool(Complex(0,1)) == true
 @test bool(0//1) == false
 @test bool(1//1) == true
 @test bool(1//2) == true
@@ -53,9 +53,9 @@
 @test min(1.0,1) == 1
 
 # lexing typemin(Int64)
-@test_fails parse("9223372036854775808")
-@test_fails parse("-(9223372036854775808)")
-@test_fails parse("-9223372036854775808^1")
+@test_throws parse("9223372036854775808")
+@test_throws parse("-(9223372036854775808)")
+@test_throws parse("-9223372036854775808^1")
 @test (-9223372036854775808)^1 == -9223372036854775808
 @test [1 -1 -9223372036854775808] == [1 -1 typemin(Int64)]
 
@@ -129,7 +129,6 @@
 @test string(typemin(Uint128)) == "0x00000000000000000000000000000000"
 @test string(typemax(Uint128)) == "0xffffffffffffffffffffffffffffffff"
 
-if WORD_SIZE > 32
 @test dec(typemin(Uint128)) == "0"
 @test dec(typemax(Uint128)) == "340282366920938463463374607431768211455"
 @test base(3,typemin(Uint128)) == "0"
@@ -137,7 +136,6 @@ if WORD_SIZE > 32
     "202201102121002021012000211012011021221022212021111001022110211020010021100121010"
 @test base(12,typemin(Uint128)) == "0"
 @test base(12,typemax(Uint128)) == "5916b64b41143526a777873841863a6a6993"
-end
 
 @test bin(typemin(Int8)) == "-1"*"0"^7
 @test bin(typemax(Int8)) == "1"^7
@@ -206,7 +204,6 @@ end
 @test hex(typemin(Int128)) == "-80000000000000000000000000000000"
 @test hex(typemax(Int128)) == "7fffffffffffffffffffffffffffffff"
 
-if WORD_SIZE > 32
 @test dec(typemin(Int128)) == "-170141183460469231731687303715884105728"
 @test dec(typemax(Int128)) == "170141183460469231731687303715884105727"
 @test string(typemin(Int128)) == "-170141183460469231731687303715884105728"
@@ -217,7 +214,6 @@ if WORD_SIZE > 32
     "101100201022001010121000102002120122110122221010202000122201220121120010200022001"
 @test base(12,typemin(Int128)) == "-2a695925806818735399a37a20a31b3534a8"
 @test base(12,typemax(Int128)) == "2a695925806818735399a37a20a31b3534a7"
-end
 
 # floating-point printing
 @test repr(1.0) == "1.0"
@@ -695,7 +691,7 @@ for a = -5:5, b = -5:5
     @test rationalize(a/b) == a//b
     @test a//b == a//b
     if b == 0
-        @test_fails integer(a//b) == integer(a/b)
+        @test_throws integer(a//b) == integer(a/b)
     else
         @test integer(a//b) == integer(a/b)
     end
@@ -786,8 +782,8 @@ for A = real_types, B = real_types
 end
 
 # comparison should fail on complex
-@test_fails complex(1,2) > 0
-@test_fails complex(1,2) > complex(0,0)
+@test_throws complex(1,2) > 0
+@test_throws complex(1,2) > complex(0,0)
 
 # div, fld, rem, mod
 for yr = {
@@ -1118,21 +1114,21 @@ for x = 2^24-10:2^24+10
     @test iceil(y)      == i
 end
 
-@test_fails iround(Inf)
-@test_fails iround(NaN)
+@test_throws iround(Inf)
+@test_throws iround(NaN)
 @test iround(2.5) == 3
 @test iround(-1.9) == -2
-@test_fails iround(Int64, 9.223372036854776e18)
+@test_throws iround(Int64, 9.223372036854776e18)
 @test       iround(Int64, 9.223372036854775e18) == 9223372036854774784
-@test_fails iround(Int64, -9.223372036854778e18)
+@test_throws iround(Int64, -9.223372036854778e18)
 @test       iround(Int64, -9.223372036854776e18) == typemin(Int64)
-@test_fails iround(Uint64, 1.8446744073709552e19)
+@test_throws iround(Uint64, 1.8446744073709552e19)
 @test       iround(Uint64, 1.844674407370955e19) == 0xfffffffffffff800
-@test_fails iround(Int32, 2.1474836f9)
+@test_throws iround(Int32, 2.1474836f9)
 @test       iround(Int32, 2.1474835f9) == 2147483520
-@test_fails iround(Int32, -2.147484f9)
+@test_throws iround(Int32, -2.147484f9)
 @test       iround(Int32, -2.1474836f9) == typemin(Int32)
-@test_fails iround(Uint32, 4.2949673f9)
+@test_throws iround(Uint32, 4.2949673f9)
 @test       iround(Uint32, 4.294967f9) == 0xffffff00
 
 for n = 1:100
@@ -1153,7 +1149,7 @@ end
 
 @test iround(Uint, 0.5) == 1
 @test iround(Uint, prevfloat(0.5)) == 0
-@test_fails iround(Uint, -0.5)
+@test_throws iround(Uint, -0.5)
 @test iround(Uint, prevfloat(-0.5)) == 0
 
 @test iround(Int, 0.5f0) == 1
@@ -1163,7 +1159,7 @@ end
 
 @test iround(Uint, 0.5f0) == 1
 @test iround(Uint, prevfloat(0.5f0)) == 0
-@test_fails iround(Uint, -0.5f0)
+@test_throws iround(Uint, -0.5f0)
 @test iround(Uint, prevfloat(-0.5f0)) == 0
 
 # numbers that can't be rounded by trunc(x+0.5)
@@ -1277,7 +1273,7 @@ function approx_eq(a, b, tol)
     abs(a - b) < tol
 end
 approx_eq(a, b) = approx_eq(a, b, 1e-6)
-# rounding to digits relative to the decimal point 
+# rounding to digits relative to the decimal point
 @test approx_eq(round(pi,0), 3.)
 @test approx_eq(round(pi,1), 3.1)
 @test approx_eq(round(10*pi,-1), 30.)
@@ -1305,6 +1301,8 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test approx_eq(signif(123.456,3), 123.)
 @test approx_eq(signif(123.456,5), 123.46)
 @test approx_eq(signif(123.456,8,2), 123.5)
+@test signif(0.0, 1) === 0.0
+@test signif(-0.0, 1) === -0.0
 
 # issue #1308
 @test hex(~uint128(0)) == "f"^32
@@ -1478,3 +1476,10 @@ end
 @test 10>>64 == 0
 @test 10>>>64 == 0
 @test 10<<64 == 0
+
+# issue #3520 - certain int literals on 32-bit systems
+@test -536870913 === -536870912-1
+
+# overflow in rational comparison
+@test 3//2 < typemax(Int)
+@test 3//2 <= typemax(Int)

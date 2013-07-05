@@ -1,19 +1,29 @@
 # called to show a REPL result
-repl_show(v::ANY) = repl_show(OUTPUT_STREAM, v)
+repl_show(v::ANY) = repl_show(STDOUT, v)
 function repl_show(io::IO, v::ANY)
     if !(isa(v,Function) && isgeneric(v))
         if isa(v,AbstractVector) && !isa(v,Ranges)
             print(io, summary(v))
             if !isempty(v)
                 println(io, ":")
-                print_matrix(io, reshape(v,(length(v),1)))
+                print_matrix(io, v)
             end
         else
             show(io, v)
         end
     end
-    if isgeneric(v) && !isa(v,DataType)
-        show(io, v.env)
+    if isa(v,DataType)
+        methods(v)  # force constructor creation
+        if isgeneric(v)
+            if v === v.name.primary
+                name = string(v.name.name)
+            else
+                name = repr(v)
+            end
+            print(io, "  (use methods($name) to see constructors)")
+        end
+    elseif isgeneric(v)
+        show_method_table(io, methods(v), 5)
     end
 end
 

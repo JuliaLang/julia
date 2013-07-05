@@ -61,7 +61,8 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint)
         p > 0 ? (n>>p)//one(T) :
                 (n<<-p)//one(T)
 end
-convert(::Type{Rational}, x::Union(Float64,Float32)) = convert(Rational{Int}, x)
+convert(::Type{Rational}, x::Float64) = convert(Rational{Int64}, x)
+convert(::Type{Rational}, x::Float32) = convert(Rational{Int}, x)
 
 promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
 promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
@@ -143,12 +144,18 @@ end
 ==(q::Rational, x::FloatingPoint) = ispow2(q.den) & (x == q.num/q.den) & (x*q.den == q.num)
 
 # TODO: fix inequalities to be in line with equality check
-< (x::Rational, y::Rational) = x.den == y.den ? x.num < y.num : x.num*y.den < x.den*y.num
+< (x::Rational, y::Rational) = x.den == y.den ? x.num < y.num :
+                               widemul(x.num,y.den) < widemul(x.den,y.num)
+< (x::Rational, y::Integer ) = x.num < widemul(x.den,y)
 < (x::Rational, y::Real    ) = x.num < x.den*y
+< (x::Integer , y::Rational) = widemul(x,y.den) < y.num
 < (x::Real    , y::Rational) = x*y.den < y.num
 
-<=(x::Rational, y::Rational) = x.den == y.den ? x.num <= y.num : x.num*y.den <= x.den*y.num
+<=(x::Rational, y::Rational) = x.den == y.den ? x.num <= y.num :
+                               widemul(x.num,y.den) <= widemul(x.den,y.num)
+<=(x::Rational, y::Integer ) = x.num <= widemul(x.den,y)
 <=(x::Rational, y::Real    ) = x.num <= x.den*y
+<=(x::Integer , y::Rational) = widemul(x,y.den) <= y.num
 <=(x::Real    , y::Rational) = x*y.den <= y.num
 
 div(x::Rational, y::Rational) = div(x.num*y.den, x.den*y.num)

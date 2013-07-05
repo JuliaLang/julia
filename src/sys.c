@@ -65,10 +65,8 @@ DLLEXPORT int jl_ios_eof(ios_t *s)
 {
     if (ios_eof(s))
         return 1;
-    if (s->state == bst_rd) {
-        if (ios_readprep(s, 1) < 1)
-            return 1;
-    }
+    if (ios_readprep(s, 1) < 1)
+        return 1;
     return 0;
 }
 
@@ -166,17 +164,17 @@ DLLEXPORT unsigned int jl_stat_rdev(char *statbuf)
     return ((uv_stat_t*) statbuf)->st_rdev;
 }
 
-DLLEXPORT off_t jl_stat_size(char *statbuf)
+DLLEXPORT uint64_t jl_stat_size(char *statbuf)
 {
     return ((uv_stat_t*) statbuf)->st_size;
 }
 
-DLLEXPORT unsigned int jl_stat_blksize(char *statbuf)
+DLLEXPORT uint64_t jl_stat_blksize(char *statbuf)
 {
     return ((uv_stat_t*) statbuf)->st_blksize;
 }
 
-DLLEXPORT unsigned int jl_stat_blocks(char *statbuf)
+DLLEXPORT uint64_t jl_stat_blocks(char *statbuf)
 {
     return ((uv_stat_t*) statbuf)->st_blocks;
 }
@@ -477,6 +475,14 @@ DLLEXPORT void jl_native_alignment(uint_t* int8align, uint_t* int16align, uint_t
 DLLEXPORT jl_value_t *jl_is_char_signed()
 {
     return ((char)255) < 0 ? jl_true : jl_false;
+}
+
+DLLEXPORT void jl_field_offsets(jl_datatype_t *dt, ssize_t *offsets)
+{
+    size_t i;
+    for(i=0; i < jl_tuple_len(dt->names); i++) {
+        offsets[i] = jl_field_offset(dt, i);
+    }
 }
 
 // -- misc sysconf info --

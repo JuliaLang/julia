@@ -29,7 +29,7 @@ The constructs introducing such blocks are:
 
 Notably missing from this list are
 :ref:`begin blocks <man-compound-expressions>`, which do
-*not* introduce a new scope block.
+*not* introduce new scope blocks.
 
 Certain constructs introduce new variables into the current innermost
 scope. When a variable is introduced into a scope, it is also inherited
@@ -37,7 +37,7 @@ by all inner scopes unless one of those inner scopes explicitly
 overrides it. These constructs which introduce new variables into the
 current scope are as follows:
 
--  A declaration ``local x`` introduces a new local variable.
+-  A declaration ``local x`` or ``const x`` introduces a new local variable.
 -  A declaration ``global x`` makes ``x`` in the current scope and inner
    scopes refer to the global variable of that name.
 -  A function's arguments are introduced as new local variables into the
@@ -91,8 +91,8 @@ a global variable ``x``)::
 
 A variable that is not assigned to or otherwise introduced locally
 defaults to global, so this function would return the value of the
-global ``x`` if there is such a variable, or produce an error if no such
-global exists. As a consequence, the only way to assign to a global
+global ``x`` if there were such a variable, or produce an error if no such
+global existed. As a consequence, the only way to assign to a global
 variable inside a non-top-level scope is to explicitly declare the
 variable as global within some scope, since otherwise the assignment
 would introduce a new local rather than assigning to the global. This
@@ -217,7 +217,7 @@ behave identically. We can use ``let`` to create a new binding for
     2
 
 Since the ``begin`` construct does not introduce a new scope, it can be
-useful to use the zero-argument ``let`` to just introduce a new scope
+useful to use a zero-argument ``let`` to just introduce a new scope
 block without creating any new bindings::
 
     julia> begin

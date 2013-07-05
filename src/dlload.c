@@ -40,7 +40,7 @@ char *jl_lookup_soname(char *pfx, size_t n);
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
-int jl_uv_dlopen(const char* filename, uv_lib_t* lib, unsigned flags)
+static int jl_uv_dlopen(const char* filename, uv_lib_t* lib, unsigned flags)
 {
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
     needsSymRefreshModuleList = 1;
@@ -66,7 +66,8 @@ int jl_uv_dlopen(const char* filename, uv_lib_t* lib, unsigned flags)
     if (lib->handle) {
         lib->errmsg = NULL;
         return 0;
-    } else {
+    }
+    else {
         lib->errmsg = strdup(dlerror());
         return -1;
     }
@@ -75,7 +76,7 @@ int jl_uv_dlopen(const char* filename, uv_lib_t* lib, unsigned flags)
 #endif
 }
 
-uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int throw_err)
+static uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int throw_err)
 {
     int error;
     char *ext;
@@ -86,9 +87,9 @@ uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int throw_err)
 
     if (modname == NULL) {
 #ifdef _OS_WINDOWS_
-        if(!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            (LPCSTR)(&jl_load_dynamic_library),
-            &handle->handle))
+        if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                (LPCSTR)(&jl_load_dynamic_library),
+                                &handle->handle))
             jl_errorf("could not load base module", modname);
 #else
         handle->handle = dlopen(NULL,RTLD_NOW);
@@ -102,15 +103,36 @@ uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int throw_err)
 #endif
         error = jl_uv_dlopen(modname,handle,flags);
         if (!error) goto done;
+    } else {
+        jl_array_t* DL_LOAD_PATH = (jl_array_t*)jl_get_global(jl_main_module, jl_symbol("DL_LOAD_PATH"));
+        if (DL_LOAD_PATH != NULL) {
+            size_t i;
+            for (i = 0; i < jl_array_len(DL_LOAD_PATH); i++) {
+                char *dl_path = jl_string_data(jl_cell_data(DL_LOAD_PATH)[i]);
+                size_t len = strlen(dl_path);
+                if (len == 0)
+                    continue;
+                for(i=0; i < N_EXTENSIONS; i++) {
+                    ext = extensions[i];
+                    path[0] = '\0';
+                    handle->handle = NULL;
+                    if (dl_path[len-1] == PATHSEP)
+                        snprintf(path, PATHBUF, "%s%s%s", dl_path, modname, ext);
+                    else
+                        snprintf(path, PATHBUF, "%s" PATHSEPSTRING "%s%s", dl_path, modname, ext);
+                    error = jl_uv_dlopen(path, handle, flags);
+                    if (!error) goto done;
+                }
+            }
+        }
     }
-
     for(i=0; i < N_EXTENSIONS; i++) {
         ext = extensions[i];
         path[0] = '\0';
         handle->handle = NULL;
         /* try loading from standard library path */
         snprintf(path, PATHBUF, "%s%s", modname, ext);
-        error = jl_uv_dlopen(path, handle,flags);
+        error = jl_uv_dlopen(path, handle, flags);
         if (!error) goto done;
     }
 #if defined(__linux__)
@@ -140,15 +162,15 @@ uv_lib_t *jl_load_dynamic_library(char *modname, unsigned flags)
     return jl_load_dynamic_library_(modname, flags, 1);
 }
 
-void *jl_dlsym_e(uv_lib_t *handle, char *symbol)
+DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol)
 {
     void *ptr;
     int  error=uv_dlsym(handle, symbol, &ptr);
-    if(error) ptr=NULL;
+    if (error) ptr=NULL;
     return ptr;
 }
 
-void *jl_dlsym(uv_lib_t *handle, char *symbol)
+DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol)
 {
     void *ptr;
     int  error = uv_dlsym(handle, symbol, &ptr);
@@ -163,7 +185,7 @@ void *jl_dlsym(uv_lib_t *handle, char *symbol)
 void *jl_dlsym_win32(char *f_name)
 {
     void *fptr = jl_dlsym_e(jl_exe_handle, f_name);
-    if(!fptr) {
+    if (!fptr) {
         fptr = jl_dlsym_e(jl_dl_handle, f_name);
         if (!fptr) {
             fptr = jl_dlsym_e(jl_kernel32_handle, f_name);

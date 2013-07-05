@@ -6,6 +6,8 @@ import Core.Array  # to add methods
 
 const NonTupleType = Union(DataType,UnionType,TypeConstructor)
 
+typealias Callable Union(Function,DataType)
+
 convert(T, x)               = convert_default(T, x, convert)
 convert(T::Tuple, x::Tuple) = convert_tuple(T, x, convert)
 

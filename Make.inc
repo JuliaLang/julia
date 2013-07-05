@@ -1,5 +1,9 @@
 # -*- mode: makefile-gmake -*-
 
+USE_MKL = 0
+#MKLROOT = /opt/intel/composerxe/mkl/
+MKLLIB = $(MKLROOT)/lib/intel64
+
 # include twice to pickup user definitions
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user 
@@ -29,7 +33,9 @@ endif
 
 ifeq ($(XC_HOST),)
 CROSS_COMPILE=
+HOSTCC = $(CC)
 else
+HOSTCC = gcc
 override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
@@ -56,7 +62,7 @@ endif
 
 ifeq ($(OS), WINNT)
 fPIC = 
-PATH := ${PATH}:${BUILD}/lib:${BUILD}/lib/julia
+PATH := ${PATH}:${BUILD}/lib:${BUILD}/lib/julia:/c/Program Files/7-zip
 EXE = .exe
 else
 fPIC = -fPIC
@@ -90,7 +96,6 @@ endif
 endif
 
 ifeq ($(USEGCC),1)
-HOSTCC = gcc
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
@@ -100,7 +105,6 @@ SHIPFLAGS = -O3 -falign-functions
 endif
 
 ifeq ($(USECLANG),1)
-HOSTCC = clang
 CC = $(CROSS_COMPILE)clang
 CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
@@ -111,26 +115,6 @@ ifeq ($(OS), Darwin)
 CC += -mmacosx-version-min=10.6
 CXX += -mmacosx-version-min=10.6
 JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
-endif
-endif
-
-BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
-ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
-ifeq ($(ARCH),mingw32)
-$(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
-endif
-ifeq ($(OS),Darwin)
-ifeq ($(OS),$(BUILD_OS))
-## Mac is a nifty dual-arch platform (or was until 10.8), so we detect the currently running OS arch instead
-## of the compiler "-dumpmachine" result, like I believe the compiler does, and make a substitution
-ARCH := $(shell uname -m)
-BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
-endif
-endif
-
-ifeq ($(USEGCC),1)
-ifneq ($(ARCH), ppc64)
-  SHIPFLAGS += -momit-leaf-frame-pointer
 endif
 endif
 
@@ -174,15 +158,34 @@ ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
 endif
 
-# Snow Leopard specific configuration
-ifeq ($(OS), Darwin)
-ifeq ($(OSXVER), 10.6)
-USE_SYSTEM_LIBM=1
-USE_SYSTEM_BLAS=1
+# ===========================================================================
+
+BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
+ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
+ifeq ($(ARCH),mingw32)
+$(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
+endif
+ifeq ($(BUILD_OS),Darwin)
+## Mac is a rather amazing 64-bit user-space on 32-bit kernel architecture, so to determine arch we detect
+## the capabilities of the hardware, rather than the compiler or kernel, and make a substitution
+ifeq ($(ARCH),x86_64)
+ARCH = i686
+else ifeq ($(ARCH),i386)
+ARCH = i686
+endif
+ifeq ($(ARCH),i686)
+ifeq ($(shell sysctl -n hw.cpu64bit_capable),1)
+ARCH = x86_64
+endif
+BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
 endif
 
-# ===========================================================================
+ifeq ($(USEGCC),1)
+ifneq ($(ARCH), ppc64)
+  SHIPFLAGS += -momit-leaf-frame-pointer
+endif
+endif
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
@@ -223,8 +226,8 @@ ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 USE_BLAS64 = 0
 USE_SYSTEM_LAPACK = 0
-LIBBLAS = -framework vecLib -lBLAS
-LIBBLASNAME = libBLAS
+LIBBLAS = -L$(BUILD)/lib -lgfortblas
+LIBBLASNAME = libgfortblas
 else
 LIBBLAS = -lblas
 LIBBLASNAME = libblas
@@ -244,7 +247,7 @@ ifeq ($(USE_SYSTEM_LAPACK), 1)
 LIBLAPACK = -llapack
 LIBLAPACKNAME = liblapack
 else
-LIBLAPACK = -L$(BUILD)/lib -llapack
+LIBLAPACK = -L$(BUILD)/lib -llapack $(LIBBLAS)
 LIBLAPACKNAME = liblapack
 endif
 endif
@@ -348,22 +351,21 @@ endif
 
 # MKL
 
-USE_MKL = 0
-MKLLIB = $$MKLROOT/lib/intel64
-
 ifeq ($(USE_MKL), 1)
-USE_BLAS64 = 0
 USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
-LIBBLAS   = -L$(MKLLIB) -lmkl_rt
-LIBLAPACK = -L$(MKLLIB) -lmkl_rt
 LIBBLASNAME = libmkl_rt
 LIBLAPACKNAME = libmkl_rt
+MKL_LDFLAGS = -L$(MKLLIB) -lmkl_rt
 ifneq ($(strip $(MKLLIB)),)
   ifeq ($(OS), Linux)
-    RPATH += -Wl,-rpath,$(MKLLIB)
+    RPATH_MKL = -Wl,-rpath,$(MKLLIB)
+    RPATH     += $(RPATH_MKL)
+    MKL_LDFLAGS += $(RPATH_MKL)
   endif
 endif
+LIBBLAS   = $(MKL_LDFLAGS)
+LIBLAPACK = $(MKL_LDFLAGS)
 endif
 
 # ATLAS

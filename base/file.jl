@@ -65,11 +65,6 @@ end
 
 # The following use Unix command line facilites
 
-# list the contents of a directory
-ls() = run(`ls -l`)
-ls(args::Cmd) = run(`ls -l $args`)
-ls(args::String...) = run(`ls -l $args`)
-
 rm(path::String) = run(`rm $path`)
 cp(src::String, dst::String) = run(`cp $src $dst`)
 mv(src::String, dst::String) = run(`mv $src $dst`)
@@ -147,7 +142,7 @@ function download(url::String, filename::String)
     global downloadcmd
     if downloadcmd === nothing
         for checkcmd in (:curl, :wget, :fetch)
-            if success(`which $checkcmd` > SpawnNullStream())
+            if success(`which $checkcmd` |> SpawnNullStream())
                 downloadcmd = checkcmd
                 break
             end

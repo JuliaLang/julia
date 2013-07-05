@@ -27,6 +27,8 @@ end
 # all subtypes should implement this
 write(s::IO, x::Uint8) = error(typeof(s)," does not support byte I/O")
 
+write(io::IO, xs...) = for x in xs write(io, x) end
+
 if ENDIAN_BOM == 0x01020304
     function write(s::IO, x::Integer)
         sz = sizeof(x)
@@ -46,8 +48,9 @@ else
 end
 
 write(s::IO, x::Bool)    = write(s, uint8(x))
-write(s::IO, x::Float32) = write(s, box(Int32,unbox(Float32,x)))
-write(s::IO, x::Float64) = write(s, box(Int64,unbox(Float64,x)))
+#write(s::IO, x::Float16) = write(s, reinterpret(Int16,x))
+write(s::IO, x::Float32) = write(s, reinterpret(Int32,x))
+write(s::IO, x::Float64) = write(s, reinterpret(Int64,x))
 
 function write(s::IO, a::AbstractArray)
     nb = 0
@@ -135,7 +138,7 @@ function readuntil(s::IO, delim::Char)
         enc = byte_string_classify(data)
         return (enc==1) ? ASCIIString(data) : UTF8String(data)
     end
-    out = memio()
+    out = IOBuffer()
     while !eof(s)
         c = read(s, Char)
         write(out, c)
@@ -161,7 +164,7 @@ end
 readline(s::IO) = readuntil(s, '\n')
 
 function readall(s::IO)
-    out = memio()
+    out = IOBuffer()
     while !eof(s)
         a = read(s, Uint8)
         write(out, a)
@@ -300,14 +303,6 @@ function open(f::Function, args...)
     end
 end
 
-function memio(x::Integer, finalize::Bool)
-    s = IOStream("<memio>", finalize)
-    ccall(:ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, x)
-    return s
-end
-memio(x::Integer) = memio(x, true)
-memio() = memio(0, true)
-
 ## low-level calls ##
 
 write(s::IOStream, b::Uint8) = int(ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, s.ios))
@@ -381,7 +376,8 @@ function takebuf_raw(s::IOStream)
 end
 
 function sprint(size::Integer, f::Function, args...)
-    s = memio(size, false)
+    s = IOBuffer(Array(Uint8,size), true, true)
+    truncate(s,0)
     f(s, args...)
     takebuf_string(s)
 end
@@ -389,21 +385,37 @@ end
 sprint(f::Function, args...) = sprint(0, f, args...)
 
 function repr(x)
-    s = memio(0, false)
+    s = IOBuffer()
     show(s, x)
     takebuf_string(s)
 end
 
-write(x) = write(OUTPUT_STREAM::IO, x)
+write(x) = write(STDOUT::IO, x)
 
 function readuntil(s::IOStream, delim::Uint8)
     ccall(:jl_readuntil, Array{Uint8,1}, (Ptr{Void}, Uint8), s.ios, delim)
 end
 
+function readbytes(s::IOStream)
+    n = 65536
+    b = Array(Uint8, n)
+    p = 1
+    while true
+        nr = int(ccall(:ios_readall, Uint,
+                       (Ptr{Void}, Ptr{Void}, Uint), s.ios, pointer(b,p), n))
+        if eof(s)
+            resize!(b, p+nr-1)
+            break
+        end
+        p += nr
+        resize!(b, p+n-1)
+    end
+    b
+end
+
 function readall(s::IOStream)
-    dest = memio()
-    ccall(:ios_copyall, Uint, (Ptr{Void}, Ptr{Void}), dest.ios, s.ios)
-    takebuf_string(dest)
+    b = readbytes(s)
+    return is_valid_ascii(b) ? ASCIIString(b) : UTF8String(b)
 end
 readall(filename::String) = open(readall, filename)
 
@@ -477,32 +489,3 @@ end
 
 write(s::IO, B::BitArray) = write(s, B.chunks)
 read(s::IO, B::BitArray) = read(s, B.chunks)
-
-function mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
-    prot, flags, iswrite = mmap_stream_settings(s)
-    if length(dims) == 0
-        dims = 0
-    end
-    n = prod(dims)
-    nc = num_bit_chunks(n)
-    B = BitArray{N}()
-    chunks = mmap_array(Uint64, (nc,), s, offset)
-    if iswrite
-        chunks[end] &= @_msk_end n
-    else
-        if chunks[end] != chunks[end] & @_msk_end n
-            error("The given file does not contain a valid BitArray of size ", join(dims, 'x'), " (open with r+ to override)")
-        end
-    end
-    dims = [i::Int for i in dims]
-    B.chunks = chunks
-    B.dims = dims
-    return B
-end
-mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset) =
-    mmap_bitarray(dims, s, offset)
-mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
-mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(dims, s, position(s))
-
-msync(B::BitArray, flags::Integer) = msync(pointer(B.chunks), flags)
-msync(B::BitArray) = msync(B.chunks,MS_SYNC)

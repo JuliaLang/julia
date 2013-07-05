@@ -99,6 +99,7 @@ include("stat.jl")
 include("fs.jl")
 importall .FS
 include("process.jl")
+reinit_stdio()
 ccall(:jl_get_uv_hooks, Void, ())
 include("grisu.jl")
 import .Grisu.print_shortest
@@ -108,6 +109,9 @@ importall .Printf
 # concurrency and parallelism
 include("serialize.jl")
 include("multi.jl")
+
+# Polling (requires multi.jl)
+include("poll.jl")
 
 # system & environment
 include("libc.jl")
@@ -121,6 +125,17 @@ include("path.jl")
 include("repl.jl")
 include("client.jl")
 include("loading.jl")
+
+begin
+    SOURCE_PATH = ""
+    include = function(path)
+        prev = SOURCE_PATH
+        path = joinpath(dirname(prev),path)
+        SOURCE_PATH = path
+        Core.include(path)
+        SOURCE_PATH = prev
+    end
+end
 
 # core math functions
 include("intfuncs.jl")
@@ -163,7 +178,8 @@ push!(I18n.CALLBACKS, Help.clear_cache)
 
 # sparse matrices and linear algebra
 include("sparse.jl")
-include("jlsparse.jl")
+importall .SparseMatrix
+include("matrixmarket.jl")
 include("linalg.jl")
 importall .LinAlg
 include("broadcast.jl")
@@ -197,6 +213,7 @@ include("deprecated.jl")
 # git utils & package manager
 include("git.jl")
 include("pkg.jl")
+include("pkg2.jl")
 
 # base graphics API
 include("graphics.jl")
@@ -239,7 +256,10 @@ precompile(next, (IntSet, Int64))
 precompile(ht_keyindex, (Dict{Any,Any}, Int32))
 precompile(perform_work, (Task,))
 precompile(notify_full, (RemoteValue,))
+precompile(notify_empty, (RemoteValue,))
 precompile(work_result, (RemoteValue,))
+precompile(take, (RemoteValue,))
+precompile(wait_full, (RemoteValue,))
 precompile(enq_work, (Task,))
 precompile(string, (Int,))
 precompile(parseint, (Type{Int}, ASCIIString, Int))
@@ -265,7 +285,6 @@ precompile(hash, (Int,))
 precompile(isequal, (Symbol, Symbol))
 precompile(isequal, (Bool, Bool))
 precompile(get, (EnvHash, ASCIIString, ASCIIString))
-precompile(notify_empty, (RemoteValue,))
 precompile(rr2id, (RemoteRef,))
 precompile(isequal, (RemoteRef, WeakRef))
 precompile(isequal, (RemoteRef, RemoteRef))
@@ -279,7 +298,7 @@ precompile(eval_user_input, (Expr, Bool))
 precompile(print, (Float64,))
 precompile(a2t, (Array{Any,1},))
 precompile(flush, (IOStream,))
-precompile(getindex, (Type{ByteString}, ASCIIString, ASCIIString, ASCIIString))
+precompile(getindex, (Type{ByteString}, ASCIIString, ASCIIString))
 precompile(bytestring, (ASCIIString,))
 precompile(int, (Int,))
 precompile(uint, (Uint,))
@@ -307,7 +326,7 @@ precompile(isabspath, (ASCIIString,))
 precompile(split, (ASCIIString,))
 precompile(split, (ASCIIString, ASCIIString, Int, Bool))
 precompile(split, (ASCIIString, Regex, Int, Bool))
-precompile(print_joined, (IOStream, Array{String,1}, ASCIIString))
+precompile(print_joined, (IOBuffer, Array{String,1}, ASCIIString))
 precompile(beginswith, (ASCIIString, ASCIIString))
 precompile(resolve_globals, (Symbol, Module, Module, Vector{Any}, Vector{Any}))
 precompile(resolve_globals, (SymbolNode, Module, Module, Vector{Any}, Vector{Any}))
@@ -315,6 +334,8 @@ precompile(BitArray, (Int,))
 precompile(getindex, (BitArray{1}, Int,))
 precompile(setindex!, (BitArray{1}, Bool, Int,))
 precompile(fill!, (BitArray{1}, Bool))
+precompile(pop!, (Array{Any,1},))
+precompile(unshift!, (Array{Any,1}, Task))
 precompile(nnz, (BitArray{1},))
 precompile(get_chunks_id, (Int,))
 precompile(occurs_more, (Uint8, Function, Int))
@@ -348,6 +369,10 @@ precompile(open, (ASCIIString, ASCIIString))
 precompile(readline, (ASCIIString,))
 precompile(endof, (Array{Any,1},))
 precompile(sym_replace, (Uint8, Array{Any,1}, Array{Any,1}, Array{Any,1}, Array{Any,1}))
+precompile(isslotempty, (Dict{Any,Any}, Int))
+precompile(setindex!, (Array{Uint8,1}, Uint8, Int))
+precompile(get, (Dict{Any,Any}, Symbol, ASCIIString))
+precompile(*, (ASCIIString, ASCIIString, ASCIIString))
 
 # invoke type inference, running the existing inference code on the new
 # inference code to cache an optimized version of it.

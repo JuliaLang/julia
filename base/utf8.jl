@@ -32,6 +32,17 @@ endof(s::UTF8String) = thisind(s,length(s.data))
 length(s::UTF8String) = int(ccall(:u8_strlen, Csize_t, (Ptr{Uint8},), s.data))
 
 function getindex(s::UTF8String, i::Int)
+    # potentially faster version
+    # d = s.data
+    # a::Uint32 = d[i]
+    # if a < 0x80; return char(a); end
+    # #if a&0xc0==0x80; return '\ufffd'; end
+    # b::Uint32 = a<<6 + d[i+1]
+    # if a < 0xe0; return char(b - 0x00003080); end
+    # c::Uint32 = b<<6 + d[i+2]
+    # if a < 0xf0; return char(c - 0x000e2080); end
+    # return char(c<<6 + d[i+3] - 0x03c82080)
+
     d = s.data
     b = d[i]
     if !is_utf8_start(b)
@@ -84,7 +95,7 @@ function getindex(s::UTF8String, r::Range1{Int})
 end
 
 function search(s::UTF8String, c::Char, i::Integer)
-    if c < 0x80 return search(s.data, c, i) end
+    if c < 0x80 return search(s.data, uint8(c), i) end
     while true
         i = search(s.data, first_utf8_byte(c), i)
         if i==0 || s[i]==c return i end
@@ -93,11 +104,11 @@ function search(s::UTF8String, c::Char, i::Integer)
 end
 
 function rsearch(s::UTF8String, c::Char, i::Integer)
-    if c < 0x80 return rsearch(s.data, c, i) end
+    if c < 0x80 return rsearch(s.data, uint8(c), i) end
     while true
         i = rsearch(s.data, first_utf8_byte(c), i)
-        if i==0 || s[i]==c return i end
-        i = next(s,i)[2]
+        if i==0 || s[i]==c return thisind(s,i) end
+        i = prevind(s,i)
     end
 end
 
@@ -119,4 +130,25 @@ utf8(x) = convert(UTF8String, x)
 convert(::Type{UTF8String}, s::UTF8String) = s
 convert(::Type{UTF8String}, s::ASCIIString) = UTF8String(s.data)
 convert(::Type{UTF8String}, a::Array{Uint8,1}) = is_valid_utf8(a) ? UTF8String(a) : error("invalid UTF-8 sequence")
+function convert(::Type{UTF8String}, a::Array{Uint8,1}, invalids_as::String)
+    l = length(a)
+    idx = 1
+    iscopy = false
+    while idx <= l
+        if is_utf8_start(a[idx])
+            nextidx = idx+1+utf8_trailing[a[idx]+1]
+            (nextidx <= (l+1)) && (idx = nextidx; continue)
+        end
+        !iscopy && (a = copy(a); iscopy = true)
+        endn = idx
+        while endn <= l
+            is_utf8_start(a[endn]) && break
+            endn += 1
+        end
+        (endn > idx) && (endn -= 1)
+        splice!(a, idx:endn, invalids_as.data)
+        l = length(a)
+    end
+    UTF8String(a)
+end
 convert(::Type{UTF8String}, s::String) = utf8(bytestring(s))

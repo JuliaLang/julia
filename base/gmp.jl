@@ -5,7 +5,7 @@ export BigInt
 import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
-             widemul, sum
+             widemul, sum, trailing_zeros, trailing_ones, count_ones
 
 type BigInt <: Integer
     alloc::Cint
@@ -18,7 +18,18 @@ type BigInt <: Integer
         return b
     end
 end
-BigInt_clear(mpz::BigInt) = ccall((:__gmpz_clear, :libgmp), Void, (Ptr{BigInt},), &mpz)
+
+function BigInt_clear(mpz::BigInt)
+    ccall((:__gmpz_clear, :libgmp), Void, (Ptr{BigInt},), &mpz)
+end
+
+function gmp_init()
+    ccall((:__gmp_set_memory_functions, :libgmp), Void,
+          (Ptr{Void},Ptr{Void},Ptr{Void}),
+          cglobal(:jl_gc_counted_malloc),
+          cglobal(:jl_gc_counted_realloc),
+          cglobal(:jl_gc_counted_free))
+end
 
 BigInt(x::BigInt) = x
 function BigInt(x::String)
@@ -45,7 +56,7 @@ BigInt(x::Integer) =
 BigInt(x::Unsigned) =
     x <= typemax(Culong) ? BigInt(convert(Culong,x)) : BigInt(string(x))
 
-convert{T<:Integer}(::Type{BigInt}, x::T) = BigInt(x)
+convert(::Type{BigInt}, x::Integer) = BigInt(x)
 
 convert(::Type{Int64}, n::BigInt) = int64(convert(Clong, n))
 convert(::Type{Int32}, n::BigInt) = int32(convert(Clong, n))
@@ -206,7 +217,9 @@ end
 >>(x::BigInt, c::Int32) = x >>> c
 
 trailing_zeros(x::BigInt) = int(ccall((:__gmpz_scan1, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
- trailing_ones(x::BigInt) = int(ccall((:__gmpz_scan0, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
+trailing_ones(x::BigInt) = int(ccall((:__gmpz_scan0, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
+
+count_ones(x::BigInt) = int(ccall((:__gmpz_popcount, :libgmp), Culong, (Ptr{BigInt},), &x))
 
 function divrem(x::BigInt, y::BigInt)
     z1 = BigInt()
@@ -314,7 +327,9 @@ end
 ndigits(x::BigInt) = ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, 10)
 isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
 
-widemul(x::BigInt, y::BigInt) = x*y
-widemul(x::Union(Int128,Uint128), y::Union(Int128,Uint128)) = BigInt(x)*BigInt(y)
+widemul(x::BigInt, y::BigInt)   = x*y
+widemul(x::Int128, y::Uint128)  = BigInt(x)*BigInt(y)
+widemul(x::Uint128, y::Int128)  = BigInt(x)*BigInt(y)
+widemul{T<:Integer}(x::T, y::T) = BigInt(x)*BigInt(y)
 
 end # module

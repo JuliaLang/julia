@@ -141,7 +141,7 @@ reqs_data = {
     {"A", 1, 2},
     {"C", 2}
 }
-@test_fails resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 4: TWO PACKAGES, DAG, WITH TRIVIAL INCONSISTENCY
@@ -150,7 +150,7 @@ deps_data = {
     {"B", 1}
 }
 
-@test_fails sanity_tst(deps_data)
+@test_throws sanity_tst(deps_data)
 
 # require B (must not give errors)
 reqs_data = {
@@ -172,7 +172,7 @@ deps_data = {
     {"C", 2}
 }
 
-@test_fails sanity_tst(deps_data)
+@test_throws sanity_tst(deps_data)
 
 # require A, any version (must use the highest non-inconsistent)
 reqs_data = {
@@ -185,7 +185,7 @@ want = resolve_tst(deps_data, reqs_data)
 reqs_data = {
     {"A", 2}
 }
-@test_fails resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 6: TWO PACKAGES, CYCLIC, TOTALLY INCONSISTENT
@@ -196,19 +196,19 @@ deps_data = {
     {"B", 2, "A", 2}
 }
 
-@test_fails sanity_tst(deps_data)
+@test_throws sanity_tst(deps_data)
 
 # require A (impossible)
 reqs_data = {
     {"A"}
 }
-@test_fails resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data)
 
 # require B (impossible)
 reqs_data = {
     {"B"}
 }
-@test_fails resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 7: THREE PACKAGES, CYCLIC, WITH INCONSISTENCY
@@ -221,7 +221,7 @@ deps_data = {
     {"C", 2, "A", 2},
 }
 
-@test_fails sanity_tst(deps_data)
+@test_throws sanity_tst(deps_data)
 
 # require A
 reqs_data = {
@@ -241,7 +241,7 @@ want = resolve_tst(deps_data, reqs_data)
 reqs_data = {
     {"C", 1, 2}
 }
-@test_fails resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 8: THREE PACKAGES, CYCLIC, TOTALLY INCONSISTENT
@@ -254,25 +254,25 @@ deps_data = {
     {"C", 2, "A", 1, 2},
 }
 
-@test_fails sanity_tst(deps_data)
+@test_throws sanity_tst(deps_data)
 
 # require A (impossible)
 reqs_data = {
     {"A"}
 }
-@test_fails resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data)
 
 # require B (impossible)
 reqs_data = {
     {"B"}
 }
-@test_fails resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data)
 
 # require C (impossible)
 reqs_data = {
     {"C"}
 }
-@test_fails resolve_tst(deps_data, reqs_data)
+@test_throws resolve_tst(deps_data, reqs_data)
 
 ## DEPENDENCY SCHEME 9: SIX PACKAGES, DAG
 deps_data = {

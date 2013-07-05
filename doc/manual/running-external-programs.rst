@@ -33,7 +33,6 @@ Here's a simple example of actually running an external program::
 
     julia> run(`echo hello`)
     hello
-    true
 
 The ``hello`` is the output of the ``echo`` command, sent to stdout. 
 The run method itself returns ``Nothing``, and throws an ``ErrorException``
@@ -184,7 +183,6 @@ Julia::
     1
     2
     3
-    true
 
     julia> first = "A"; second = "B";
 
@@ -194,7 +192,6 @@ Julia::
     julia> run(ans)
     1: A
     2: B
-    true
 
 The results are identical, and Julia's interpolation behavior mimics the
 shell's with some improvements due to the fact that Julia supports
@@ -213,30 +210,27 @@ backticks, a pipe is always just a pipe::
 
     julia> run(`echo hello | sort`)
     hello | sort
-    true
 
 This expression invokes the ``echo`` command with three words as
 arguments: "hello", "\|", and "sort". The result is that a single line
 is printed: "hello \| sort". Inside of backticks, a "\|" is just a
 literal pipe character. How, then, does one construct a pipeline?
-Instead of using "\|" inside of backticks, one uses Julia's ``|``
+Instead of using "\|" inside of backticks, one uses Julia's ``|>``
 operator between ``Cmd`` objects::
 
-    julia> run(`echo hello` | `sort`)
+    julia> run(`echo hello` |> `sort`)
     hello
-    true
 
 This pipes the output of the ``echo`` command to the ``sort`` command.
 Of course, this isn't terribly interesting since there's only one line
 to sort, but we can certainly do much more interesting things::
 
-    julia> run(`cut -d: -f3 /etc/passwd` | `sort -n` | `tail -n5`)
+    julia> run(`cut -d: -f3 /etc/passwd` |> `sort -n` |> `tail -n5`)
     210
     211
     212
     213
     214
-    true
 
 This prints the highest five user IDs on a UNIX system. The ``cut``,
 ``sort`` and ``tail`` commands are all spawned as immediate children of
@@ -250,7 +244,6 @@ Julia can run multiple commands in parallel::
     julia> run(`echo hello` & `echo world`)
     world
     hello
-    true
 
 The order of the output here is non-deterministic because the two
 ``echo`` processes are started nearly simultaneously, and race to make
@@ -258,10 +251,9 @@ the first write to the ``stdout`` descriptor they share with each other
 and the ``julia`` parent process. Julia lets you pipe the output from
 both of these processes to another program::
 
-    julia> run(`echo world` & `echo hello` | `sort`)
+    julia> run(`echo world` & `echo hello` |> `sort`)
     hello
     world
-    true
 
 In terms of UNIX plumbing, what's happening here is that a single UNIX
 pipe object is created and written to by both ``echo`` processes, and
@@ -275,7 +267,7 @@ apologies for the excessive use of Perl one-liners::
 
     julia> prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
 
-    julia> run(`perl -le '$|=1; for(0..9){ print; sleep 1 }'` | prefixer("A",2) & prefixer("B",2))
+    julia> run(`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |> prefixer("A",2) & prefixer("B",2))
     A   0
     B   1
     A   2
@@ -286,7 +278,6 @@ apologies for the excessive use of Perl one-liners::
     B   7
     A   8
     B   9
-    true
 
 This is a classic example of a single producer feeding two concurrent
 consumers: one ``perl`` process generates lines with the numbers 0
@@ -301,8 +292,8 @@ once, to be read by just one consumer process.)
 
 Here is an even more complex multi-stage producer-consumer example::
 
-    julia> run(`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |
-               prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3) |
+    julia> run(`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |>
+               prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3) |>
                prefixer("A",2) & prefixer("B",2))
     B   Y   0
     A   Z   1
@@ -314,7 +305,6 @@ Here is an even more complex multi-stage producer-consumer example::
     A   Z   7
     B   X   8
     A   Y   9
-    true
 
 This example is similar to the previous one, except there are two stages
 of consumers, and the stages have different latency so they use a
@@ -329,7 +319,7 @@ itself::
     julia> dup = `perl -ne '$|=1; warn $_; print ".$_"; sleep 1'`
     `perl -ne '$|=1; warn $_; print ".$_"; sleep 1'`
 
-    julia> run(gen | dup | dup)
+    julia> run(gen |> dup |> dup)
     0
     .0
     1

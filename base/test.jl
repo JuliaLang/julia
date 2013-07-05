@@ -1,7 +1,7 @@
 module Test
 
 export Result, Success, Failure, Error,
-       @test, @test_fails, @test_approx_eq, @test_approx_eq_eps,
+       @test, @test_fails, @test_throws, @test_approx_eq, @test_approx_eq_eps,
        registerhandler, withhandler
 
 abstract Result
@@ -39,7 +39,7 @@ function do_test(thk, qex)
     end)
 end
 
-function do_test_fails(thk, qex)
+function do_test_throws(thk, qex)
     handlers[end](try
         thk()
         Failure(qex)
@@ -63,8 +63,12 @@ macro test(ex)
     :(do_test(()->($(esc(ex))),$(Expr(:quote,ex))))
 end
 
+macro test_throws(ex)
+    :(do_test_throws(()->($(esc(ex))),$(Expr(:quote,ex))))
+end
 macro test_fails(ex)
-    :(do_test_fails(()->($(esc(ex))),$(Expr(:quote,ex))))
+    Base.warn_once("@test_fails is deprecated, use @test_throws instead.")
+    :(@test_throws $ex)
 end
 
 function test_approx_eq(va, vb, Eps, astr, bstr)

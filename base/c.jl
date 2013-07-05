@@ -83,3 +83,22 @@ sigatomic_begin() = ccall(:jl_sigatomic_begin, Void, ())
 sigatomic_end() = ccall(:jl_sigatomic_end, Void, ())
 disable_sigint(f::Function) = try sigatomic_begin(); f(); finally sigatomic_end(); end
 reenable_sigint(f::Function) = try sigatomic_end(); f(); finally sigatomic_begin(); end
+
+function find_library{T<:ByteString, S<:ByteString}(libnames::Array{T,1}, extrapaths::Array{S,1}=ASCIIString[])
+    for lib in libnames
+        for path in extrapaths
+            l = joinpath(path, lib)
+            p = dlopen_e(l, RTLD_LAZY)
+            if p != C_NULL
+                dlclose(p)
+                return l
+            end
+        end
+        p = dlopen_e(lib, RTLD_LAZY)
+        if p != C_NULL
+            dlclose(p)
+            return lib
+        end
+    end
+    return ""
+end

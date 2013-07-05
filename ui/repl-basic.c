@@ -1,22 +1,95 @@
 #include "repl.h"
 #include <unistd.h>
 
-char *stdin_buf = NULL;
-unsigned long stdin_buf_len = 0;
-unsigned long stdin_buf_maxlen = 128;
+static char *stdin_buf = NULL;
+static size_t stdin_buf_len = 0;
+static size_t stdin_buf_maxlen = 128;
+static char *given_prompt=NULL, *prompt_to_use=NULL;
+static int callback_en=0;
+
+#ifdef __WIN32__
+int repl_sigint_handler_installed = 0;
+BOOL WINAPI repl_sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
+{
+    if (callback_en) {
+        JL_WRITE(jl_uv_stdout, "^C", 2);
+        jl_clear_input();
+        return 1;
+    }
+    return 0; // continue to next handler
+}
+#else
+void sigcont_handler(int arg)
+{
+    if (callback_en) {
+        jl_write(jl_uv_stdout, prompt_to_use, strlen(prompt_to_use));
+        //jl_write(jl_uv_stdout, stdin_buf, stdin_buf_len); //disabled because the current line was still in the system buffer
+    }
+}
+
+struct sigaction jl_sigint_act = {};
+void repl_sigint_handler(int sig, siginfo_t *info, void *context)
+{
+    if (callback_en) {
+        JL_WRITE(jl_uv_stdout, "\n", 1);
+        jl_clear_input();
+    }
+    else {
+        if (jl_sigint_act.sa_flags & SA_SIGINFO) {
+            jl_sigint_act.sa_sigaction(sig, info, context);
+        }
+        else {
+            void (*f)(int) = jl_sigint_act.sa_handler;
+            if (f == SIG_DFL)
+                raise(sig);
+            else if (f != SIG_IGN)
+                f(sig);
+        }
+    }
+}
+#endif
 
 void init_repl_environment(int argc, char *argv[])
 {
     stdin_buf = malloc(stdin_buf_maxlen);
+    stdin_buf_len = 0;
+#ifdef __WIN32__
+    repl_sigint_handler_installed = 0;
+#else
+    jl_sigint_act.sa_sigaction = NULL;
+    signal(SIGCONT, sigcont_handler);
+#endif
 }
 
 void jl_prep_terminal(int meta_flag)
 {
+#ifdef __WIN32__
+    if (!repl_sigint_handler_installed) {
+        if (SetConsoleCtrlHandler((PHANDLER_ROUTINE)repl_sigint_handler,1))
+            repl_sigint_handler_installed = 1;
+    }
+#else
+    if (jl_sigint_act.sa_sigaction == NULL) {
+        struct sigaction oldact, repl_sigint_act;
+        memset(&repl_sigint_act, 0, sizeof(struct sigaction));
+        sigemptyset(&repl_sigint_act.sa_mask);
+        repl_sigint_act.sa_sigaction = repl_sigint_handler;
+        repl_sigint_act.sa_flags = SA_SIGINFO;
+        if (sigaction(SIGINT, &repl_sigint_act, &oldact) < 0) {
+            JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+            jl_exit(1);
+        }
+        if (repl_sigint_act.sa_sigaction != oldact.sa_sigaction &&
+            jl_sigint_act.sa_sigaction != oldact.sa_sigaction)
+            jl_sigint_act = oldact;
+    }
+#endif
 }
 
 /* Restore the terminal's normal settings and modes. */
 void jl_deprep_terminal()
 {
+    callback_en = 0;
 }
 
 void jl_input_line_callback(char *input)
@@ -35,11 +108,9 @@ void jl_input_line_callback(char *input)
     }
 }
 
-static char *given_prompt=NULL;
-static char *prompt_to_use=NULL;
-
 void repl_callback_enable(char *prompt)
 {
+    callback_en = 1;
     if (given_prompt == NULL || strcmp(prompt, given_prompt)) {
         if (given_prompt) free(given_prompt);
         given_prompt = strdup(prompt);

@@ -43,14 +43,14 @@ end
 @test typeof(BigInt(typemax(Int16))) == BigInt
 @test typeof(BigInt(typemax(Int32))) == BigInt
 @test typeof(BigInt(typemax(Int64))) == BigInt
-#@test typeof(BigInt(typemax(Int128))) == BigInt
+@test typeof(BigInt(typemax(Int128))) == BigInt
 
 @test typeof(BigInt(true)) == BigInt
 @test typeof(BigInt(typemax(Uint8))) == BigInt
 @test typeof(BigInt(typemax(Uint16))) == BigInt
 @test typeof(BigInt(typemax(Uint32))) == BigInt
 @test typeof(BigInt(typemax(Uint64))) == BigInt
-#@test typeof(BigInt(typemax(Uint128))) == BigInt
+@test typeof(BigInt(typemax(Uint128))) == BigInt
 
 @test typeof(BigInt(BigInt(1))) == BigInt
 
@@ -60,6 +60,7 @@ end
 @test a+int16(1) == b
 @test a+int32(1) == b
 @test a+int64(1) == b
+@test a+int128(1) == b
 @test int8(1)+ a == b
 @test int16(1)+a == b
 @test int32(1)+a == b
@@ -79,6 +80,7 @@ end
 @test a+uint16(1) == b
 @test a+uint32(1) == b
 @test a+uint64(1) == b
+@test a+uint128(1) == b
 @test true+a == b
 @test uint8(1)+ a == b
 @test uint16(1)+a == b
@@ -212,6 +214,10 @@ g = BigInt("-1")
 @test isprime(BigInt("359334085968622831041960188598043661065388726959079837"))
 @test !isprime(BigInt(1))
 @test !isprime(BigInt(10000000020))
+
+@test trailing_ones(a) == 8
+@test trailing_zeros(b) == 2
+@test count_ones(a) == 14
 
 # Large Fibonacci to exercise BigInt
 # from Bill Hart, https://groups.google.com/group/julia-dev/browse_frm/thread/798e2d1322daf633

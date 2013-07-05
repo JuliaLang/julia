@@ -214,7 +214,27 @@ export PipeString
 @deprecate  (&)(s::IntSet, s2::IntSet)   intersect(s, s2)
 @deprecate  -(a::IntSet, b::IntSet)      setdiff(a,b)
 @deprecate  ~(s::IntSet)                 complement(s)
+@deprecate openblas_set_num_threads      blas_set_num_threads
+@deprecate check_openblas                check_blas
 
+deprecated_ls() = run(`ls -l`)
+deprecated_ls(args::Cmd) = run(`ls -l $args`)
+deprecated_ls(args::String...) = run(`ls -l $args`)
+function ls(args...)
+    warn_once("ls() is deprecated, use readdir() instead. If you are at the repl prompt, consider `;ls`.")
+    deprecated_ls(args...)
+end
+
+# Redirection Operators
+@deprecate |(a::AbstractCmd,b::AbstractCmd) (a|>b)
+@deprecate >(a::Redirectable,b::AbstractCmd) (a|>b)
+@deprecate >(a::String,b::AbstractCmd) (a|>b)
+@deprecate >(a::AbstractCmd,b::Redirectable) (a|>b)
+@deprecate >(a::AbstractCmd,b::String) (a|>b)
+@deprecate <(a::AbstractCmd,b::String) (b|>a)
+@deprecate |(x, f::Function) (x|>f)
+
+@deprecate memio(args...)  IOBuffer()
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
 
@@ -228,3 +248,27 @@ export assign
 
 typealias ComplexPair Complex
 export ComplexPair
+
+## along an axis
+function amap(f::Function, A::AbstractArray, axis::Integer)
+    warn_once("amap is deprecated, use mapslices(f, A, dims) instead")
+    dimsA = size(A)
+    ndimsA = ndims(A)
+    axis_size = dimsA[axis]
+
+    if axis_size == 0
+        return f(A)
+    end
+
+    idx = ntuple(ndimsA, j -> j == axis ? 1 : 1:dimsA[j])
+    r = f(sub(A, idx))
+    R = Array(typeof(r), axis_size)
+    R[1] = r
+
+    for i = 2:axis_size
+        idx = ntuple(ndimsA, j -> j == axis ? i : 1:dimsA[j])
+        R[i] = f(sub(A, idx))
+    end
+
+    return R
+end
