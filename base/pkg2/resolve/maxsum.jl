@@ -2,7 +2,7 @@ module MaxSum
 
 include("fieldvalue.jl")
 
-using .FieldValues, ..PkgToMaxSumInterface
+using .FieldValues, ..VersionWeights, ..PkgToMaxSumInterface
 
 export UnsatError, Graph, Messages, maxsum
 
@@ -191,7 +191,7 @@ type Messages
 
         # external fields: there are 2 terms, a noise to break potential symmetries
         #                  and one to favor newest versions over older, and no-version over all
-        fld = [ [ FieldValue(0,0,vweight[p0][v0],0,noise(p0,v0)) for v0 = 1:spp[p0] ] for p0 = 1:np]
+        fld = [ [ FieldValue(0,VersionWeight(0),vweight[p0][v0],0,noise(p0,v0)) for v0 = 1:spp[p0] ] for p0 = 1:np]
 
         # enforce requirements
         for (rp, rvs) in reqs
@@ -290,7 +290,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         if dir1 == -1
             # p0 depends on p1
             for v0 = 1:spp0-1
-                cavmsg[v0] += FieldValue(0,0,0,v0)
+                cavmsg[v0] += FieldValue(0,VersionWeight(0),VersionWeight(0),v0)
             end
         end
 
@@ -314,7 +314,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
             end
             if dir1 == 1 && v1 != spp1
                 # p1 depends on p0
-                newmsg[v1] += FieldValue(0,0,0,v1)
+                newmsg[v1] += FieldValue(0,VersionWeight(0),VersionWeight(0),v1)
             end
             m = max(m, newmsg[v1])
         end

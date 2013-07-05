@@ -52,8 +52,8 @@ function resolve_tst(deps_data, reqs_data)
     #println()
     #println("deps=$deps")
     #println("reqs=$reqs")
-    deps, eq_classes = Query.prune_dependencies(reqs, deps)
-    want = resolve(reqs, deps, eq_classes)
+    deps = Query.prune_dependencies(reqs, deps)
+    want = resolve(reqs, deps)
 end
 
 ## DEPENDENCY SCHEME 1: TWO PACKAGES, DAG

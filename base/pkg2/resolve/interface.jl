@@ -1,13 +1,9 @@
 module PkgToMaxSumInterface
 
-using ...Types, ...Query
+using ...Types, ...Query, ..VersionWeights
 
 export Interface, compute_output_dict,
        verify_solution, enforce_optimality!
-
-# The numeric type used to determine how the different
-# versions of a package should be weighed
-typealias VersionWeight Int
 
 # A collection of objects which allow interfacing external (Pkg) and
 # internal (MaxSum) representation
@@ -44,13 +40,7 @@ type Interface
     #                   higher the weight, the more favored the version)
     vweight::Vector{Vector{VersionWeight}}
 
-    # equivalence classes: after version pruning, for each package and each
-    #                      version keeps a vector with all versions in the
-    #                      equivalence class
-    eq_classes::Dict{ByteString,Dict{VersionNumber,Vector{VersionNumber}}}
-
-    function Interface(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}},
-                       eq_classes::Dict{ByteString,Dict{VersionNumber,Vector{VersionNumber}}})
+    function Interface(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
         # generate pkgs
         pkgs = sort!(ByteString[Set{ByteString}(keys(deps)...)...])
@@ -89,31 +79,19 @@ type Interface
             end
         end
 
-        # generate wveights:
-        # the version weights are just progressive integer numbers,
-        # there is no difference between major, minor, patch etc.
-        # TODO: change this to weigh differently major, minor etc. ?
-        # NOTE: the computation uses eq_classes_map so that version
-        # pruning has no effect on the final output and the end result
-        # is the same as if it was computed as
-        #   vweight = [ [ v0-1 for v0 = 1:spp[p0] ] for p0 = 1:np ]
-        # before pruning, and pruning was performed afterwards
-        vweight = [ Array(Int, spp[p0]) for p0 = 1:np ]
+        ## generate wveights:
+        vweight = Array(Vector{VersionWeight}, np)
         for p0 = 1:np
-            p = pkgs[p0]
-            @assert haskey(eq_classes, p)
-            eqclass0 = eq_classes[p]
-            allv = vcat([cl for (_,cl) in eqclass0]...)
-            vweight0 = vweight[p0]
             pvers0 = pvers[p0]
-            for v0 = 1:spp[p0]-1
-                vn = pvers0[v0]
-                vweight0[v0] = nnz(allv .< vn)
+            spp0 = spp[p0]
+            vweight0 = vweight[p0] = Array(VersionWeight, spp0)
+            for v0 = 1:spp0-1
+                vweight0[v0] = VersionWeight(pvers0[v0])
             end
-            vweight0[spp[p0]] = length(allv)
+            vweight0[spp0] = VersionWeight(pvers0[spp0-1], true)
         end
 
-        return new(reqs, deps, pkgs, np, spp, pdict, pvers, vdict, vweight, eq_classes)
+        return new(reqs, deps, pkgs, np, spp, pdict, pvers, vdict, vweight)
     end
 end
 
