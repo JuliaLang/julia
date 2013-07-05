@@ -1,9 +1,8 @@
 # NOTE: worker processes cannot add more workers, only the client process can. 
-# Make sure to update runtests.jl with the mnimum number of 
-# workers required whenever the requirement here changes.
+require("testdefs.jl")
 
 if nprocs() < 2
-    addprocs(1)
+    remotecall_fetch(1, () -> addprocs(1))
 end
 
 id_me = myid()
@@ -24,7 +23,7 @@ a = convert(Array, d)
 # Test @parallel load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.
 if nprocs() < 4
-    addprocs(4 - nprocs())
+    remotecall_fetch(1, () -> addprocs(4 - nprocs()))
 end
 workloads = hist(@parallel((a,b)->[a,b], for i=1:7; myid(); end), nprocs())[2]
 @test max(workloads) - min(workloads) <= 1
