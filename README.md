@@ -217,7 +217,6 @@ The Julia source code is organized as follows:
     contrib/       editor support for Julia source, miscellaneous scripts
     deps/          external dependencies
     examples/      example Julia programs
-    extras/        useful optional libraries
     src/           source for Julia language core
     test/          unit and functional test cases
     ui/            source for various front ends
