@@ -373,8 +373,10 @@ static Value *emit_bounds_check(Value *i, Value *len, jl_codectx_t *ctx)
 {
     Value *im1 = builder.CreateSub(i, ConstantInt::get(T_size, 1));
 #if CHECK_BOUNDS==1
-    Value *ok = builder.CreateICmpULT(im1, len);
-    raise_exception_unless(ok, jlboundserr_var, ctx);
+    if (ctx->boundsCheck.empty() || ctx->boundsCheck.back()==true) {
+        Value *ok = builder.CreateICmpULT(im1, len);
+        raise_exception_unless(ok, jlboundserr_var, ctx);
+    }
 #endif
     return im1;
 }
@@ -683,9 +685,13 @@ static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_
 {
     Value *i = ConstantInt::get(T_size, 0);
     Value *stride = ConstantInt::get(T_size, 1);
+    bool bc = ctx->boundsCheck.empty() || ctx->boundsCheck.back()==true;
 #if CHECK_BOUNDS==1
-    BasicBlock *failBB = BasicBlock::Create(getGlobalContext(), "oob");
-    BasicBlock *endBB = BasicBlock::Create(getGlobalContext(), "idxend");
+    BasicBlock *failBB=NULL, *endBB=NULL;
+    if (bc) {
+        failBB = BasicBlock::Create(getGlobalContext(), "oob");
+        endBB = BasicBlock::Create(getGlobalContext(), "idxend");
+    }
 #endif
     for(size_t k=0; k < nidxs; k++) {
         Value *ii = emit_unbox(T_size, T_psize, emit_unboxed(args[k], ctx));
@@ -695,28 +701,32 @@ static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_
             Value *d =
                 k >= nd ? ConstantInt::get(T_size, 1) : emit_arraysize(a, ex, k+1, ctx);
 #if CHECK_BOUNDS==1
-            BasicBlock *okBB = BasicBlock::Create(getGlobalContext(), "ib");
-            // if !(i < d) goto error
-            builder.CreateCondBr(builder.CreateICmpULT(ii, d), okBB, failBB);
-            ctx->f->getBasicBlockList().push_back(okBB);
-            builder.SetInsertPoint(okBB);
+            if (bc) {
+                BasicBlock *okBB = BasicBlock::Create(getGlobalContext(), "ib");
+                // if !(i < d) goto error
+                builder.CreateCondBr(builder.CreateICmpULT(ii, d), okBB, failBB);
+                ctx->f->getBasicBlockList().push_back(okBB);
+                builder.SetInsertPoint(okBB);
+            }
 #endif
             stride = builder.CreateMul(stride, d);
         }
     }
 #if CHECK_BOUNDS==1
-    Value *alen = emit_arraylen(a, ex, ctx);
-    // if !(i < alen) goto error
-    builder.CreateCondBr(builder.CreateICmpULT(i, alen), endBB, failBB);
+    if (bc) {
+        Value *alen = emit_arraylen(a, ex, ctx);
+        // if !(i < alen) goto error
+        builder.CreateCondBr(builder.CreateICmpULT(i, alen), endBB, failBB);
 
-    ctx->f->getBasicBlockList().push_back(failBB);
-    builder.SetInsertPoint(failBB);
-    builder.CreateCall2(jlthrow_line_func, builder.CreateLoad(jlboundserr_var),
-                        ConstantInt::get(T_int32, ctx->lineno));
-    builder.CreateUnreachable();
+        ctx->f->getBasicBlockList().push_back(failBB);
+        builder.SetInsertPoint(failBB);
+        builder.CreateCall2(jlthrow_line_func, builder.CreateLoad(jlboundserr_var),
+                            ConstantInt::get(T_int32, ctx->lineno));
+        builder.CreateUnreachable();
 
-    ctx->f->getBasicBlockList().push_back(endBB);
-    builder.SetInsertPoint(endBB);
+        ctx->f->getBasicBlockList().push_back(endBB);
+        builder.SetInsertPoint(endBB);
+    }
 #endif
 
     return i;
