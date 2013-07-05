@@ -11,9 +11,6 @@ tests = ARGS==["all"] ? testnames : ARGS
 
 n = min(8, CPU_CORES, length(tests))
 
-# if parallel tests are being run, make sure we have at least 4 workers - refer parallel.jl
-contains(tests, "parallel") && (n = max(n, 4))
-
 @unix_only n > 1 && addprocs(n)
 
 blas_set_num_threads(1)
