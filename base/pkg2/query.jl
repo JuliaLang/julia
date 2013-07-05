@@ -287,14 +287,14 @@ end
 function filter_prereleases(deps::Dict{ByteString,Dict{VersionNumber,Available}},
                             fixed::Dict{ByteString,VersionNumber} = (ByteString=>VersionNumber)[])
 
-    eqfixed = [ p=>VersionNumber(vn.major, vn.minor, vn.patch) for (p,vn) in fixed ]
+    eqfixed = [ p=>normal(vn) for (p,vn) in fixed ]
 
     filtered_deps = (ByteString=>Dict{VersionNumber,Available})[]
     for (p, depsp) in deps
         filtered_deps[p] = (VersionNumber=>Available)[]
         vmap = (VersionNumber=>Vector{VersionNumber})[]
         for vn in keys(depsp)
-            eqvn = VersionNumber(vn.major, vn.minor, vn.patch)
+            eqvn = normal(vn)
             haskey(vmap, eqvn) || (vmap[eqvn] = VersionNumber[])
             push!(vmap[eqvn], vn)
         end
@@ -302,7 +302,7 @@ function filter_prereleases(deps::Dict{ByteString,Dict{VersionNumber,Available}}
             sort!(vmap[eqvn])
         end
         for (vn, a) in depsp
-            eqvn = VersionNumber(vn.major, vn.minor, vn.patch)
+            eqvn = normal(vn)
             if haskey(fixed, p) && eqvn == eqfixed[p]
                 vn != fixed[p] && continue
                 filtered_deps[p][vn] = a
