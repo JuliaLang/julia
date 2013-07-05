@@ -25,6 +25,12 @@ a = Array(Uint8, 2)
 @assert position(io) == 0
 @assert all(io.data .== 0)
 @assert write(io,Int16[1,2,3,4,5,6]) == 12
+@assert seek(io,0)
+@assert read(io,Int16,6) == Int16[1,2,3,4,5,6]
+@assert truncate(io,0)
+@assert write(io,Int16[1,2,3,4,5,6],NetworkByteOrder) == 12
+@assert seek(io,0)
+@assert read(io,Int16,NetworkByteOrder,6) == Int16[1,2,3,4,5,6]
 @assert seek(io,2)
 @assert truncate(io, 10)
 @assert ioslength(io) == 10
