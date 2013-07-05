@@ -383,6 +383,7 @@ typedef struct {
     bool vaStack;      // varargs stack-allocated
     int nReqArgs;
     int lineno;
+    std::vector<bool> boundsCheck;
 } jl_codectx_t;
 
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool boxed=true,
@@ -2145,6 +2146,23 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
 #endif
         builder.SetInsertPoint(tryblk);
     }
+    else if (head == boundscheck_sym) {
+        if (jl_array_len(ex->args) > 0) {
+            jl_value_t *arg = args[0];
+            if (arg == jl_true) {
+                ctx->boundsCheck.push_back(true);
+            }
+            else if (arg == jl_false) {
+                ctx->boundsCheck.push_back(false);
+            }
+            else {
+                if (!ctx->boundsCheck.empty())
+                    ctx->boundsCheck.pop_back();
+            }
+        }
+        if (valuepos)
+            return literal_pointer_val((jl_value_t*)jl_nothing);
+    }
     else if (head == newvar_sym) {
         jl_sym_t *var = (jl_sym_t*)args[0];
         if (jl_is_symbolnode(var))
@@ -2318,6 +2336,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     ctx.funcName = lam->name->name;
     ctx.vaName = NULL;
     ctx.vaStack = false;
+    ctx.boundsCheck.push_back(true);
 
     // step 2. process var-info lists to see what vars are captured, need boxing
     jl_array_t *largs = jl_lam_args(ast);

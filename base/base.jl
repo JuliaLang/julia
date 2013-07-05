@@ -129,6 +129,18 @@ function precompile(f, args::Tuple)
     end
 end
 
+macro boundscheck(yesno,blk)
+    quote
+        $(Expr(:boundscheck,yesno))
+        $(esc(blk))
+        $(Expr(:boundscheck,:pop))
+    end
+end
+
+macro inbounds(blk)
+    :(@boundscheck false $(esc(blk)))
+end
+
 # NOTE: Base shares Array with Core so we can add definitions to it
 
 Array{T,N}(::Type{T}, d::NTuple{N,Int}) =
