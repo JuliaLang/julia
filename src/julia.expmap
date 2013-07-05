@@ -130,6 +130,7 @@
     jl_fd_isset;
     jl_fd_set;
     jl_fd_zero;
+    jl_field_offsets;
     jl_free2;
     jl_fstat;
     jl_gc_add_finalizer;
@@ -139,6 +140,9 @@
     jl_gc_is_enabled;
     jl_gc_lookfor;
     jl_gc_new_weakref;
+    jl_gc_counted_malloc;
+    jl_gc_counted_free;
+    jl_gc_counted_realloc;
     jl_gensym;
     jl_get_binding;
     jl_get_current_module;

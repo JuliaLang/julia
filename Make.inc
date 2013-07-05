@@ -1,5 +1,9 @@
 # -*- mode: makefile-gmake -*-
 
+USE_MKL = 0
+#MKLROOT = /opt/intel/composerxe/mkl/
+MKLLIB = $(MKLROOT)/lib/intel64
+
 # include twice to pickup user definitions
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user 
@@ -347,31 +351,21 @@ endif
 
 # MKL
 
-ifeq ($(USE_MKL),)
-  USE_MKL = 0
-endif
 ifeq ($(USE_MKL), 1)
-ifeq ($(strip $(MKLLIB)),)
-  MKLLIB = $$MKLROOT/lib/intel64
-endif
-endif
-
-ifeq ($(USE_MKL), 1)
-USE_BLAS64 = 0
 USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
-LIBBLAS   = -L$(MKLLIB) -lmkl_rt
-LIBLAPACK = -L$(MKLLIB) -lmkl_rt
 LIBBLASNAME = libmkl_rt
 LIBLAPACKNAME = libmkl_rt
+MKL_LDFLAGS = -L$(MKLLIB) -lmkl_rt
 ifneq ($(strip $(MKLLIB)),)
   ifeq ($(OS), Linux)
     RPATH_MKL = -Wl,-rpath,$(MKLLIB)
     RPATH     += $(RPATH_MKL)
-    LIBBLAS   += $(RPATH_MKL)
-    LIBLAPACK += $(RPATH_MKL)
+    MKL_LDFLAGS += $(RPATH_MKL)
   endif
 endif
+LIBBLAS   = $(MKL_LDFLAGS)
+LIBLAPACK = $(MKL_LDFLAGS)
 endif
 
 # ATLAS

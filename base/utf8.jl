@@ -32,6 +32,17 @@ endof(s::UTF8String) = thisind(s,length(s.data))
 length(s::UTF8String) = int(ccall(:u8_strlen, Csize_t, (Ptr{Uint8},), s.data))
 
 function getindex(s::UTF8String, i::Int)
+    # potentially faster version
+    # d = s.data
+    # a::Uint32 = d[i]
+    # if a < 0x80; return char(a); end
+    # #if a&0xc0==0x80; return '\ufffd'; end
+    # b::Uint32 = a<<6 + d[i+1]
+    # if a < 0xe0; return char(b - 0x00003080); end
+    # c::Uint32 = b<<6 + d[i+2]
+    # if a < 0xf0; return char(c - 0x000e2080); end
+    # return char(c<<6 + d[i+3] - 0x03c82080)
+
     d = s.data
     b = d[i]
     if !is_utf8_start(b)

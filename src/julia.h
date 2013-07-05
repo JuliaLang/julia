@@ -449,6 +449,7 @@ extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
 extern jl_sym_t *compositetype_sym; extern jl_sym_t *type_goto_sym;
 extern jl_sym_t *global_sym;  extern jl_sym_t *tuple_sym;
+extern jl_sym_t *boundscheck_sym;
 
 
 #ifdef _P64
@@ -999,6 +1000,11 @@ static inline int jl_vinfo_assigned(jl_array_t *vi)
 static inline int jl_vinfo_assigned_inner(jl_array_t *vi)
 {
     return (jl_unbox_long(jl_cellref(vi,2))&4)!=0;
+}
+
+static inline int jl_vinfo_sa(jl_array_t *vi)
+{
+    return (jl_unbox_long(jl_cellref(vi,2))&16)!=0;
 }
 
 // for writing julia functions in C
