@@ -617,6 +617,7 @@ export
     norm,
     normfro,
     null,
+    peakflops,
     pinv,
     qr,
     qrfact!,
@@ -946,6 +947,7 @@ export
 # types
     convert,
     isleaftype,
+    fieldoffsets,
     oftype,
     promote,
     promote_rule,
@@ -1008,7 +1010,6 @@ export
     quit,
     atexit,
     ntuple,
-    peakflops,
     tty_cols,
     tty_rows,
 
@@ -1253,4 +1254,6 @@ export
     @show,
     @printf,
     @sprintf,
-    @deprecate
+    @deprecate,
+    @boundscheck,
+    @inbounds

@@ -125,6 +125,37 @@ static inline void *malloc_a16(size_t sz)
 
 #endif
 
+DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
+{
+    if (allocd_bytes > collect_interval) {
+        jl_gc_collect();
+    }
+    allocd_bytes += sz;
+    void *b = malloc(sz);
+    if (b == NULL)
+        jl_throw(jl_memory_exception);
+    return b;
+}
+
+DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
+{
+    free(p);
+    freed_bytes += sz;
+}
+
+DLLEXPORT void *jl_gc_counted_realloc(void *p, size_t old, size_t sz)
+{
+    if (allocd_bytes > collect_interval) {
+        jl_gc_collect();
+    }
+    if (sz > old)
+        allocd_bytes += (sz-old);
+    void *b = realloc(p, sz);
+    if (b == NULL)
+        jl_throw(jl_memory_exception);
+    return b;
+}
+
 void *jl_gc_managed_malloc(size_t sz)
 {
     if (allocd_bytes > collect_interval) {

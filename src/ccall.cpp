@@ -347,8 +347,8 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
         if (f_name != NULL) {
             // just symbol, default to JuliaDLHandle
 #ifdef _OS_WINDOWS_
-         //TODO: store the f_lib name instead of fptr
-        fptr = jl_dlsym_win32(f_name);
+            //TODO: store the f_lib name instead of fptr
+            fptr = jl_dlsym_win32(f_name);
 #else
             // will look in process symbol table
 #endif
@@ -604,14 +604,16 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         jl_error("ccall: wrong number of arguments to C function");
 
     // some special functions
-    if (fptr == &jl_array_ptr) {
+    if (fptr == &jl_array_ptr ||
+        (f_lib==NULL && f_name && !strcmp(f_name,"jl_array_ptr"))) {
         assert(lrt->isPointerTy());
         Value *ary = emit_expr(args[4], ctx);
         JL_GC_POP();
         return mark_julia_type(builder.CreateBitCast(emit_arrayptr(ary),lrt),
                                rt);
     }
-    if (fptr == &jl_value_ptr) {
+    if (fptr == &jl_value_ptr ||
+        (f_lib==NULL && f_name && !strcmp(f_name,"jl_value_ptr"))) {
         assert(lrt->isPointerTy());
         jl_value_t *argi = args[4];
         bool addressOf = false;
