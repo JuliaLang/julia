@@ -102,27 +102,20 @@ resolve(
     want = Resolve.resolve(reqs,deps)
 
     # compare what is installed with what should be
-    install, update, remove = Query.diff(have, want)
-    if isempty(install) && isempty(update) && isempty(remove)
+    changes = Query.diff(have, want, avail, fixed)
+    if isempty(changes)
         return info("No packages to install, update or remove.")
     end
 
     # prefetch phase isolates network activity, nothing to roll back
     missing = {}
-    for (pkg,ver) in install
+    for (pkg,(ver1,ver2)) in changes
+        vers = ASCIIString[]
+        ver1 !== nothing && push!(vers,Git.head(dir=pkg))
+        ver2 !== nothing && push!(vers,Read.sha1(pkg,ver2))
         append!(missing,
-            map(sha1->(pkg,ver,sha1),
-                Cache.prefetch(pkg, Read.url(pkg), Read.sha1(pkg,ver))))
-    end
-    for (pkg,(_,ver)) in update
-        append!(missing,
-            map(sha1->(pkg,ver,sha1),
-                Cache.prefetch(pkg, Read.url(pkg), Git.head(dir=pkg), Read.sha1(pkg,ver))))
-    end
-    for (pkg,ver) in remove
-        append!(missing,
-            map(sha1->(pkg,ver,sha1),
-                Cache.prefetch(pkg, Read.url(pkg), Git.head(dir=pkg))))
+            map(sha1->(pkg,(ver1,ver2),sha1),
+                Cache.prefetch(pkg, Read.url(pkg), vers)))
     end
     if !isempty(missing)
         msg = "unfound package versions (possible metadata misconfiguration):"
@@ -133,40 +126,40 @@ resolve(
     end
 
     # try applying changes, roll back everything if anything fails
-    installed, updated, removed = {}, {}, {}
+    changed = {}
     try
-        for (pkg,ver) in install
-            info("Installing $pkg v$ver")
-            Write.install(pkg, Read.sha1(pkg,ver))
-            push!(installed,(pkg,ver))
-        end
-        for (pkg,(v1,v2)) in update
-            up = v1 <= v2 ? "Up" : "Down"
-            info("$(up)grading $pkg: v$v1 => v$v2")
-            Write.update(pkg, Read.sha1(pkg,v2))
-            push!(updated,(pkg,(v1,v2)))
-        end
-        for (pkg,ver) in remove
-            info("Removing $pkg v$ver")
-            Write.remove(pkg)
-            push!(removed,(pkg,ver))
+        for (pkg,(ver1,ver2)) in changes
+            if ver1 === nothing
+                info("Installing $pkg v$ver2")
+                Write.install(pkg, Read.sha1(pkg,ver2))
+            elseif ver2 == nothing
+                info("Removing $pkg v$ver1")
+                Write.remove(pkg)
+            else
+                up = ver1 <= ver2 ? "Up" : "Down"
+                info("$(up)grading $pkg: v$ver1 => v$ver2")
+                Write.update(pkg, Read.sha1(pkg,ver2))
+            end
+            push!(changed,(pkg,(ver1,ver2)))
         end
     catch
-        for (pkg,ver) in reverse!(removed)
-            info("Rolling back deleted $pkg to v$ver")
-            @recover Write.install(pkg, Read.sha1(pkg,ver))
-        end
-        for (pkg,(v1,v2)) in reverse!(updated)
-            info("Rolling back $pkg from v$v2 to v$v1")
-            @recover Write.update(pkg, Read.sha1(pkg,v1))
-        end
-        for (pkg,ver) in reverse!(installed)
-            info("Rolling back install of $pkg")
-            @recover Write.remove(pkg)
+        for (pkg,(ver1,ver2)) in reverse!(changed)
+            if ver1 == nothing
+                info("Rolling back install of $pkg")
+                @recover Write.remove(pkg)
+            elseif ver2 == nothing
+                info("Rolling back deleted $pkg to v$ver1")
+                @recover Write.install(pkg, Read.sha1(pkg,ver1))
+            else
+                info("Rolling back $pkg from v$ver2 to v$ver1")
+                @recover Write.update(pkg, Read.sha1(pkg,ver1))
+            end
+            push!(changed,(pkg,(ver1,ver2)))
         end
         rethrow()
     end
 end
+
 resolve() = Dir.cd() do
     resolve(Reqs.parse("REQUIRE"))
 end
