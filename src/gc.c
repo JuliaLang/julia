@@ -266,32 +266,47 @@ static void schedule_finalization(void *o)
     arraylist_push(&to_finalize, o);
 }
 
+static void run_finalizer(jl_value_t *o, jl_value_t *ff)
+{
+    jl_function_t *f;
+    while (jl_is_tuple(ff)) {
+        f = (jl_function_t*)jl_t0(ff);
+        assert(jl_is_function(f));
+        JL_TRY {
+            jl_apply(f, (jl_value_t**)&o, 1);
+        }
+        JL_CATCH {
+        }
+        ff = jl_t1(ff);
+    }
+    f = (jl_function_t*)ff;
+    assert(jl_is_function(f));
+    jl_apply(f, (jl_value_t**)&o, 1);
+}
+
 static void run_finalizers(void)
 {
     void *o = NULL;
-    jl_function_t *f=NULL;
-    jl_value_t *ff=NULL;
-    JL_GC_PUSH3(&o, &f, &ff);
+    jl_value_t *ff = NULL;
+    JL_GC_PUSH2(&o, &ff);
     while (to_finalize.len > 0) {
         o = arraylist_pop(&to_finalize);
         ff = (jl_value_t*)ptrhash_get(&finalizer_table, o);
         assert(ff != HT_NOTFOUND);
         ptrhash_remove(&finalizer_table, o);
-        while (jl_is_tuple(ff)) {
-            f = (jl_function_t*)jl_t0(ff);
-            assert(jl_is_function(f));
-            JL_TRY {
-                jl_apply(f, (jl_value_t**)&o, 1);
-            }
-            JL_CATCH {
-            }
-            ff = jl_t1(ff);
-        }
-        f = (jl_function_t*)ff;
-        assert(jl_is_function(f));
-        jl_apply(f, (jl_value_t**)&o, 1);
+        run_finalizer(o, ff);
     }
     JL_GC_POP();
+}
+
+void jl_gc_run_all_finalizers()
+{
+    for(size_t i=0; i < finalizer_table.size; i+=2) {
+        if (finalizer_table.table[i+1] != HT_NOTFOUND) {
+            schedule_finalization(finalizer_table.table[i]);
+        }
+    }
+    run_finalizers();
 }
 
 void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
