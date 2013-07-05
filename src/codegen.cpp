@@ -25,6 +25,7 @@
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/PassManager.h"
 #include "llvm/Analysis/Verifier.h"
+#include "llvm/Analysis/Passes.h"
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/LLVMContext.h"
@@ -674,13 +675,10 @@ static bool expr_is_symbol(jl_value_t *e)
     return (jl_is_symbol(e) || jl_is_symbolnode(e) || jl_is_topnode(e));
 }
 
-// some analysis. determine max needed "evaluation stack" space for
-// gc-rooting function arguments.
-// also a very simple, conservative escape analysis that is sufficient for
+// a very simple, conservative escape analysis that is sufficient for
 // eliding allocation of varargs tuples.
 // "esc" means "in escaping context"
-static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
-                          bool esc, jl_codectx_t *ctx)
+static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx)
 {
     if (jl_is_expr(expr)) {
         esc = true;
@@ -688,7 +686,6 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
         size_t i;
         if (e->head == call_sym || e->head == call1_sym || e->head == new_sym) {
             int alen = jl_array_dim0(e->args);
-            int lastsp = *sp;
             jl_value_t *f = jl_exprarg(e,0);
             if (expr_is_symbol(f)) {
                 if (is_constant(f, ctx, false)) {
@@ -698,23 +695,15 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
                         esc = false;
                         JL_I::intrinsic fi = (JL_I::intrinsic)jl_unbox_int32(fv);
                         if (fi != JL_I::ccall) {
-                            // here we need space for each argument, but
-                            // not for each of their results
-                            for(i=1; i < (size_t)alen; i++) {
-                                max_arg_depth(jl_exprarg(e,i), max, sp, esc, ctx);
-                            }
                             return;
                         }
                         else {
                             esc = true;
+                            simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
                             // 2nd and 3d arguments are static
-                            max_arg_depth(jl_exprarg(e,1), max, sp, esc, ctx);
                             for(i=4; i < (size_t)alen; i+=2) {
-                                max_arg_depth(jl_exprarg(e,i), max, sp, esc, ctx);
-                                (*sp)++;
-                                if (*sp > *max) *max = *sp;
+                                simple_escape_analysis(jl_exprarg(e,i), esc, ctx);
                             }
-                            (*sp) = lastsp;
                             return;
                         }
                     }
@@ -730,50 +719,27 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
                 }
             }
             else if (jl_is_expr(f) || jl_is_lambda_info(f)) {
-                max_arg_depth(f, max, sp, esc, ctx);
-                (*sp)++;
-                if (*sp > *max) *max = *sp;
+                simple_escape_analysis(f, esc, ctx);
             }
 
             for(i=1; i < (size_t)alen; i++) {
-                max_arg_depth(jl_exprarg(e,i), max, sp, esc, ctx);
-                (*sp)++;
-                if (*sp > *max) *max = *sp;
+                simple_escape_analysis(jl_exprarg(e,i), esc, ctx);
             }
-            if (e->head == new_sym && *max < 1)
-                *max = 1;
-            (*sp) = lastsp;
         }
         else if (e->head == method_sym) {
-            int lastsp = *sp;
-            if (jl_is_expr(jl_exprarg(e,0)))
-                (*sp)++;
-            max_arg_depth(jl_exprarg(e,1), max, sp, esc, ctx);
-            (*sp)++;
-            if (*sp > *max) *max = *sp;
-            max_arg_depth(jl_exprarg(e,2), max, sp, esc, ctx);
-            (*sp)++;
-            if (*sp > *max) *max = *sp;
-            max_arg_depth(jl_exprarg(e,3), max, sp, esc, ctx);
-            (*sp)++;
-            if (*sp > *max) *max = *sp;
-            (*sp) = lastsp;
+            simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
+            simple_escape_analysis(jl_exprarg(e,2), esc, ctx);
+            simple_escape_analysis(jl_exprarg(e,3), esc, ctx);
         }
         else {
             size_t elen = jl_array_dim0(e->args);
             for(i=0; i < elen; i++) {
-                max_arg_depth(jl_exprarg(e,i), max, sp, esc, ctx);
+                simple_escape_analysis(jl_exprarg(e,i), esc, ctx);
             }
         }
     }
-    else if (jl_is_lambda_info(expr)) {
-        if (1 > *max) *max = 1;
-    }
     else if (jl_is_symbolnode(expr)) {
         expr = (jl_value_t*)jl_symbolnode_sym(expr);
-    }
-    else if (jl_is_getfieldnode(expr)) {
-        if (2 > *max) *max = 2;
     }
     if (jl_is_symbol(expr)) {
         jl_sym_t *vname = ((jl_sym_t*)expr);
@@ -2561,11 +2527,10 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         ctx.envArg = emit_nthptr(fArg, 2);
     }
 
+    simple_escape_analysis((jl_value_t*)ast, true, &ctx);
+
     // step 8. set up GC frame
-    int32_t argdepth=0, vsp=0;
-    max_arg_depth((jl_value_t*)ast, &argdepth, &vsp, true, &ctx);
     ctx.argSpaceOffs = n_roots;
-    n_roots += argdepth;
     //total_roots += n_roots;
     ctx.argDepth = 0;
     ctx.maxDepth = 0;
@@ -2576,36 +2541,31 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 #endif
     BasicBlock::iterator first_gcframe_inst;
     BasicBlock::iterator last_gcframe_inst;
-    if (n_roots > 0) {
+
 #ifdef JL_GC_MARKSWEEP
-        // allocate gc frame
-        ctx.argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
-                                           ConstantInt::get(T_int32,n_roots+2));
-        gcframe = (Instruction*)ctx.argTemp;
-        first_gcframe_inst = BasicBlock::iterator(gcframe);
-        ctx.argTemp = (Instruction*)builder.CreateConstGEP1_32(ctx.argTemp, 2);
-        storeFrameSize =
-            builder.CreateStore(ConstantInt::get(T_size, n_roots<<1),
-                                builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 0), T_psize));
-        builder.CreateStore(builder.CreateLoad(jlpgcstack_var, false),
-                            builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 1), PointerType::get(jl_ppvalue_llvmt,0)));
-        Instruction *linst=builder.CreateStore(gcframe, jlpgcstack_var, false);
-        last_gcframe_inst = BasicBlock::iterator(linst);
-        // initialize local variable stack roots to null
-        for(i=0; i < (size_t)ctx.argSpaceOffs; i++) {
-            Value *varSlot = builder.CreateConstGEP1_32(ctx.argTemp,i);
-            builder.CreateStore(V_null, varSlot);
-        }
-        argSpaceInits = &b0->back();
+    // allocate gc frame
+    ctx.argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
+                                       ConstantInt::get(T_int32,n_roots+2));
+    gcframe = (Instruction*)ctx.argTemp;
+    first_gcframe_inst = BasicBlock::iterator(gcframe);
+    ctx.argTemp = (Instruction*)builder.CreateConstGEP1_32(ctx.argTemp, 2);
+    storeFrameSize =
+        builder.CreateStore(ConstantInt::get(T_size, n_roots<<1),
+                            builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 0), T_psize));
+    builder.CreateStore(builder.CreateLoad(jlpgcstack_var, false),
+                        builder.CreateBitCast(builder.CreateConstGEP1_32(gcframe, 1), PointerType::get(jl_ppvalue_llvmt,0)));
+    Instruction *linst = builder.CreateStore(gcframe, jlpgcstack_var, false);
+    last_gcframe_inst = BasicBlock::iterator(linst);
+    // initialize local variable stack roots to null
+    for(i=0; i < (size_t)ctx.argSpaceOffs; i++) {
+        Value *varSlot = builder.CreateConstGEP1_32(ctx.argTemp,i);
+        builder.CreateStore(V_null, varSlot);
+    }
+    argSpaceInits = &b0->back();
 #else
-        ctx.argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
-                                           ConstantInt::get(T_int32, n_roots));
+    ctx.argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
+                                       ConstantInt::get(T_int32, n_roots));
 #endif
-    }
-    else {
-        ctx.argTemp = NULL;
-        //n_elim++;
-    }
 
     // get pointers for locals stored in the gc frame array (argTemp)
     int varnum = 0;
@@ -2822,12 +2782,10 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             }
 #ifdef JL_GC_MARKSWEEP
             // JL_GC_POP();
-            if (n_roots > 0) {
-                Instruction *gcpop = (Instruction*)builder.CreateConstGEP1_32(gcframe, 1);
-                gc_frame_pops.push_back(gcpop);
-                builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
-                                    jlpgcstack_var);
-            }
+            Instruction *gcpop = (Instruction*)builder.CreateConstGEP1_32(gcframe, 1);
+            gc_frame_pops.push_back(gcpop);
+            builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
+                                jlpgcstack_var);
 #endif
             if (builder.GetInsertBlock()->getTerminator() == NULL) {
                 if (retty == T_void)
@@ -2850,69 +2808,67 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         builder.CreateUnreachable();
     }
 
-    // step 16. fix up size of stack root list (just a code simplification)
-    if (n_roots > 0) {
-        if (ctx.argSpaceOffs + ctx.maxDepth == 0) {
-            // 0 roots; remove gc frame entirely
-            // replace instruction uses with Undef first to avoid LLVM assertion failures
-            BasicBlock::iterator bbi = first_gcframe_inst;
-            while (1) {
-                Instruction &iii = *bbi;
+    // step 16. fix up size of stack root list
+    if (ctx.argSpaceOffs + ctx.maxDepth == 0) {
+        // 0 roots; remove gc frame entirely
+        // replace instruction uses with Undef first to avoid LLVM assertion failures
+        BasicBlock::iterator bbi = first_gcframe_inst;
+        while (1) {
+            Instruction &iii = *bbi;
+            iii.replaceAllUsesWith(UndefValue::get(iii.getType()));
+            if (bbi == last_gcframe_inst) break;
+            bbi++;
+        }
+        for(size_t i=0; i < gc_frame_pops.size(); i++) {
+            Instruction *pop = gc_frame_pops[i];
+            BasicBlock::iterator pi(pop);
+            for(size_t j=0; j < 4; j++) {
+                Instruction &iii = *pi;
                 iii.replaceAllUsesWith(UndefValue::get(iii.getType()));
-                if (bbi == last_gcframe_inst) break;
-                bbi++;
-            }
-            for(size_t i=0; i < gc_frame_pops.size(); i++) {
-                Instruction *pop = gc_frame_pops[i];
-                BasicBlock::iterator pi(pop);
-                for(size_t j=0; j < 4; j++) {
-                    Instruction &iii = *pi;
-                    iii.replaceAllUsesWith(UndefValue::get(iii.getType()));
-                    pi++;
-                }
-            }
-
-            BasicBlock::InstListType &il = gcframe->getParent()->getInstList();
-            il.erase(first_gcframe_inst, last_gcframe_inst);
-            // erase() erases up *to* the end point; erase last inst too
-            il.erase(last_gcframe_inst);
-            for(size_t i=0; i < gc_frame_pops.size(); i++) {
-                Instruction *pop = gc_frame_pops[i];
-                BasicBlock::InstListType &il2 = pop->getParent()->getInstList();
-                BasicBlock::iterator pi(pop);
-                for(size_t j=0; j < 4; j++) {
-                    pi = il2.erase(pi);
-                }
+                pi++;
             }
         }
-        else {
-            BasicBlock::iterator bbi(gcframe);
-            AllocaInst *newgcframe =
-                new AllocaInst(jl_pvalue_llvmt,
-                               ConstantInt::get(T_int32, (ctx.argSpaceOffs +
-                                                          ctx.maxDepth + 2)));
-            ReplaceInstWithInst(ctx.argTemp->getParent()->getInstList(), bbi,
-                                newgcframe);
-            
-            BasicBlock::iterator bbi2(storeFrameSize);
-            StoreInst *newFrameSize =
-                new StoreInst(ConstantInt::get(T_size, (ctx.argSpaceOffs +
-                                                        ctx.maxDepth)<<1),
-                              storeFrameSize->getPointerOperand());
-            ReplaceInstWithInst(storeFrameSize->getParent()->getInstList(), bbi2,
-                                newFrameSize);
-            
-            BasicBlock::InstListType &instList = argSpaceInits->getParent()->getInstList();
-            Instruction *after = argSpaceInits;
-            
-            for(i=0; i < (size_t)ctx.maxDepth; i++) {
-                Instruction *argTempi =
-                    GetElementPtrInst::Create(newgcframe,
-                                              ConstantInt::get(T_int32, i+ctx.argSpaceOffs+2));
-                instList.insertAfter(after, argTempi);
-                after = new StoreInst(V_null, argTempi);
-                instList.insertAfter(argTempi, after);
+
+        BasicBlock::InstListType &il = gcframe->getParent()->getInstList();
+        il.erase(first_gcframe_inst, last_gcframe_inst);
+        // erase() erases up *to* the end point; erase last inst too
+        il.erase(last_gcframe_inst);
+        for(size_t i=0; i < gc_frame_pops.size(); i++) {
+            Instruction *pop = gc_frame_pops[i];
+            BasicBlock::InstListType &il2 = pop->getParent()->getInstList();
+            BasicBlock::iterator pi(pop);
+            for(size_t j=0; j < 4; j++) {
+                pi = il2.erase(pi);
             }
+        }
+    }
+    else {
+        BasicBlock::iterator bbi(gcframe);
+        AllocaInst *newgcframe =
+            new AllocaInst(jl_pvalue_llvmt,
+                           ConstantInt::get(T_int32, (ctx.argSpaceOffs +
+                                                      ctx.maxDepth + 2)));
+        ReplaceInstWithInst(ctx.argTemp->getParent()->getInstList(), bbi,
+                            newgcframe);
+
+        BasicBlock::iterator bbi2(storeFrameSize);
+        StoreInst *newFrameSize =
+            new StoreInst(ConstantInt::get(T_size, (ctx.argSpaceOffs +
+                                                    ctx.maxDepth)<<1),
+                          storeFrameSize->getPointerOperand());
+        ReplaceInstWithInst(storeFrameSize->getParent()->getInstList(), bbi2,
+                            newFrameSize);
+
+        BasicBlock::InstListType &instList = argSpaceInits->getParent()->getInstList();
+        Instruction *after = argSpaceInits;
+
+        for(i=0; i < (size_t)ctx.maxDepth; i++) {
+            Instruction *argTempi =
+                GetElementPtrInst::Create(newgcframe,
+                                          ConstantInt::get(T_int32, i+ctx.argSpaceOffs+2));
+            instList.insertAfter(after, argTempi);
+            after = new StoreInst(V_null, argTempi);
+            instList.insertAfter(argTempi, after);
         }
     }
 
