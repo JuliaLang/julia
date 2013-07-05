@@ -131,7 +131,7 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
 
 void closeHandle(uv_handle_t* handle)
 {
-    if(handle->data) {
+    if (handle->data) {
         JULIA_CB(close,handle->data,0); (void)ret;
     }
     free(handle);
@@ -170,6 +170,7 @@ uv_buf_t jl_alloc_buf(uv_handle_t *handle, size_t suggested_size)
 void jl_connectcb(uv_connect_t *connect, int status)
 {
     JULIA_CB(connectcb,connect->handle->data,1,CB_INT32,status);
+    free(connect);
     (void)ret;
 }
 
@@ -288,7 +289,7 @@ DLLEXPORT int jl_process_events(uv_loop_t *loop)
 DLLEXPORT uv_pipe_t *jl_init_pipe(uv_pipe_t *pipe, int writable, int julia_only, jl_value_t *julia_struct)
 {
      int flags;
-     flags = writable ? UV_PIPE_WRITEABLE : UV_PIPE_READABLE;
+     flags = writable ? UV_PIPE_WRITABLE : UV_PIPE_READABLE;
      if (!julia_only)
          flags |= UV_PIPE_SPAWN_SAFE;
      uv_pipe_init(jl_io_loop, pipe, flags);
@@ -350,10 +351,8 @@ DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog)
 
 #ifdef __APPLE__
 #include <crt_externs.h>
-#else
-#if defined(_COMPILER_MINGW_)
+#elif !defined(_OS_WINDOWS_) || defined(_COMPILER_MINGW_)
 extern char **environ;
-#endif
 #endif
 
 DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
@@ -369,14 +368,15 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
     uv_stdio_container_t stdio[3];
     int error;
     opts.file = name;
-#ifndef _OS_WINDOWS_
-    opts.env = environ;
-#else
+#ifdef _OS_WINDOWS_
     opts.env = NULL;
+    opts.flags = 0;
+#else
+    opts.env = environ;
+    opts.flags = UV_PROCESS_RESET_SIGPIPE;
 #endif
     opts.cwd = NULL;
     opts.args = argv;
-    opts.flags = 0;
     if (detach)
         opts.flags |= UV_PROCESS_DETACHED;
     opts.stdio = stdio;
@@ -462,46 +462,8 @@ DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar )
     return jl_write(s, buf, n);
 }
 
-static char chars[] = {
-      0,  1,  2,  3,  4,  5,  6,  7,
-      8,  9, 10, 11, 12, 13, 14, 15,
-     16, 17, 18, 19, 20, 21, 22, 23,
-     24, 25, 26, 27, 28, 29, 30, 31,
-     32, 33, 34, 35, 36, 37, 38, 39,
-     40, 41, 42, 43, 44, 45, 46, 47,
-     48, 49, 50, 51, 52, 53, 54, 55,
-     56, 57, 58, 59, 60, 61, 62, 63,
-     64, 65, 66, 67, 68, 69, 70, 71,
-     72, 73, 74, 75, 76, 77, 78, 79,
-     80, 81, 82, 83, 84, 85, 86, 87,
-     88, 89, 90, 91, 92, 93, 94, 95,
-     96, 97, 98, 99,100,101,102,103,
-    104,105,106,107,108,109,110,111,
-    112,113,114,115,116,117,118,119,
-    120,121,122,123,124,125,126,127,
-    128,129,130,131,132,133,134,135,
-    136,137,138,139,140,141,142,143,
-    144,145,146,147,148,149,150,151,
-    152,153,154,155,156,157,158,159,
-    160,161,162,163,164,165,166,167,
-    168,169,170,171,172,173,174,175,
-    176,177,178,179,180,181,182,183,
-    184,185,186,187,188,189,190,191,
-    192,193,194,195,196,197,198,199,
-    200,201,202,203,204,205,206,207,
-    208,209,210,211,212,213,214,215,
-    216,217,218,219,220,221,222,223,
-    224,225,226,227,228,229,230,231,
-    232,233,234,235,236,237,238,239,
-    240,241,242,243,244,245,246,247,
-    248,249,250,251,252,253,254,255
-};
-
 static void jl_free_buffer(uv_write_t* req, int status)
 {
-    if (req->data) {
-        free(req->data);
-    }
     free(req);
 }
 
@@ -509,13 +471,26 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
 {
     if (stream!=0) {
         if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
-            JL_SIGATOMIC_BEGIN();
-            uv_write_t *uvw = malloc(sizeof(uv_write_t));
-            uvw->data=0;
-            uv_buf_t buf[]  = {{.base = chars+c,.len=1}};
-            int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
-            JL_SIGATOMIC_END();
-            return err ? 0 : 1;
+            if (stream->type == UV_FILE) {
+                JL_SIGATOMIC_BEGIN();
+                jl_uv_file_t *file = (jl_uv_file_t *)stream;
+                // Do a blocking write for now
+                uv_fs_t req;
+                int err = uv_fs_write(file->loop, &req, file->file, &c, 1, -1, NULL);
+                JL_SIGATOMIC_END();
+                return err ? 0 : 1;
+            }
+            else {
+                JL_SIGATOMIC_BEGIN();
+                uv_write_t *uvw = malloc(sizeof(uv_write_t) + 1);
+                char *data = (char*)(uvw+1);
+                *data = c;
+                uv_buf_t buf[]  = {{.base = data,.len=1}};
+                uvw->data = data;
+                int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
+                JL_SIGATOMIC_END();
+                return err ? 0 : 1;
+            }
         }
         else {
             ios_t *handle = (ios_t*)stream;
@@ -531,15 +506,26 @@ DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
     if (stream == 0)
         return 0;
     if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
-        JL_SIGATOMIC_BEGIN();
-        uv_write_t *uvw = malloc(sizeof(uv_write_t));
-        char *data = malloc(n);
-        memcpy(data,str,n);
-        uv_buf_t buf[]  = {{.base = data,.len=n}};
-        uvw->data = data;
-        int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
-        JL_SIGATOMIC_END();
-        return err ? 0 : n;
+        if (stream->type == UV_FILE) {
+            JL_SIGATOMIC_BEGIN();
+            jl_uv_file_t *file = (jl_uv_file_t *)stream;
+            // Do a blocking write for now
+            uv_fs_t req;
+            int err = uv_fs_write(file->loop, &req, file->file, (void*)str, n, -1, NULL);
+            JL_SIGATOMIC_END();
+            return err ? 0 : n;
+        }
+        else {
+            JL_SIGATOMIC_BEGIN();
+            uv_write_t *uvw = malloc(sizeof(uv_write_t)+n);
+            char *data = (char*)(uvw+1);
+            memcpy(data,str,n);
+            uv_buf_t buf[]  = {{.base = data,.len=n}};
+            uvw->data = data;
+            int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
+            JL_SIGATOMIC_END();
+            return err ? 0 : n;
+        }
     }
     else {
         ios_t *handle = (ios_t*)stream;
@@ -611,7 +597,7 @@ DLLEXPORT int jl_getpid()
 #endif
 }
 
-//NOTE: This function expects port/host to be in network byte-order (Big Endian)
+//NOTE: These function expects port/host to be in network byte-order (Big Endian)
 DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host)
 {
     struct sockaddr_in addr;
@@ -622,13 +608,22 @@ DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host)
     int err = uv_tcp_bind(handle,addr);
     return err;
 }
+DLLEXPORT int jl_tcp_bind6(uv_tcp_t* handle, uint16_t port, void *host)
+{
+    struct sockaddr_in6 addr;
+    memset(&addr, 0, sizeof(struct sockaddr_in6));
+    addr.sin6_port = port;
+    memcpy(&addr.sin6_addr, host, 16);
+    addr.sin6_family = AF_INET6;
+    int err = uv_tcp_bind6(handle,addr);
+    return err;
+}
+
 
 DLLEXPORT void getlocalip(char *buf, size_t len)
 {
     uv_err_t err;
-    uv_interface_address_t * ifAddrStruct=NULL;
-    struct sockaddr_in ifa;
-    void * tmpAddrPtr=NULL;
+    uv_interface_address_t * ifAddrStruct=NULL, *ifa;
     int count=0;
 
     err = uv_interface_addresses(&ifAddrStruct,&count);
@@ -637,32 +632,22 @@ DLLEXPORT void getlocalip(char *buf, size_t len)
             uv_free_interface_addresses(ifAddrStruct,count);
 
     for (int i = 0; i < count; i++) {
-        ifa = (ifAddrStruct+i)->address.address4;
-        if (ifa.sin_family==AF_INET) { // check it is IP4
-            // is a valid IP4 Address
-#ifndef _OS_WINDOWS_
-            tmpAddrPtr=&(ifa.sin_addr);
-            inet_ntop(AF_INET, tmpAddrPtr, buf, len); //Not available on WinXP
-#else
-            strncpy(buf,inet_ntoa(ifa.sin_addr),len-1);
-            buf[len]=0;
-#endif
-
-            if (strcmp(buf,"127.0.0.1")) //TODO: use (ifa.internal == false)
+        ifa = ifAddrStruct+i;
+        if (ifa->is_internal)
+            continue;
+        if (ifa->address.address4.sin_family == AF_INET) {
+            if (!uv_ip4_name(&(ifa->address.address4), buf, len))
                 break;
-            //printf("%s IP Address %s\n", ifa->ifa_name, addressBuffer);
         }
-        /*
-        else if (ifa->ifa_addr && ifa->ifa_addr->sa_family==AF_INET6) { // check it is IP6
-            // is a valid IP6 Address
-            tmpAddrPtr=&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
-            char addressBuffer[INET6_ADDRSTRLEN];
-            inet_ntop(AF_INET6, tmpAddrPtr, addressBuffer, INET6_ADDRSTRLEN);
-            printf("%s IP Address %s\n", ifa->ifa_name, addressBuffer);
+        else {
+            // Enable the following for IPv6 support:
+            //if (!uv_ip6_name(&(ifa->address.address6), buf, len))
+            //    break;
         }
-        */
     }
-    if (ifAddrStruct!=NULL) uv_free_interface_addresses(ifAddrStruct,count);
+    if (ifAddrStruct!=NULL)
+        uv_free_interface_addresses(ifAddrStruct,count);
+    //printf("%s IP Address %s\n", ifa->name, buf);
 }
 
 DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, const char *host, const char *service, jl_function_t *cb)
@@ -671,7 +656,7 @@ DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, const char *host, const char *serv
     struct addrinfo hints;
 
     memset (&hints, 0, sizeof (hints));
-    hints.ai_family = AF_INET; //ipv4 for now
+    hints.ai_family = PF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags |= AI_CANONNAME;
 
@@ -682,25 +667,37 @@ DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, const char *host, const char *serv
 
 DLLEXPORT struct sockaddr *jl_sockaddr_from_addrinfo(struct addrinfo *addrinfo)
 {
-    struct sockaddr *addr = malloc(sizeof(struct sockaddr));
-    memcpy(addr,addrinfo->ai_addr,sizeof(struct sockaddr));
-    return addr;
+    return addrinfo->ai_addr;
+}
+DLLEXPORT struct addrinfo *jl_next_from_addrinfo(struct addrinfo *addrinfo)
+{
+    return addrinfo->ai_next;
 }
 
-DLLEXPORT int jl_sockaddr_is_ip4(struct sockaddr *addr)
+DLLEXPORT int jl_sockaddr_is_ip4(struct sockaddr_storage *addr)
 {
-    return (addr->sa_family==AF_INET);
+    return (addr->ss_family==AF_INET);
 }
 
-DLLEXPORT unsigned int jl_sockaddr_host4(struct sockaddr *addr)
+DLLEXPORT int jl_sockaddr_is_ip6(struct sockaddr_storage *addr)
 {
-    return ((struct sockaddr_in*)addr)->sin_addr.s_addr;
+    return (addr->ss_family==AF_INET6);
 }
 
-
-DLLEXPORT void jl_sockaddr_set_port(struct sockaddr *addr,uint16_t port)
+DLLEXPORT unsigned int jl_sockaddr_host4(struct sockaddr_in *addr)
 {
-    if (addr->sa_family==AF_INET) {
+    return addr->sin_addr.s_addr;
+}
+
+DLLEXPORT unsigned int jl_sockaddr_host6(struct sockaddr_in6 *addr, char *host)
+{
+    memcpy(host, &addr->sin6_addr, 16);
+    return addr->sin6_scope_id;
+}
+
+DLLEXPORT void jl_sockaddr_set_port(struct sockaddr_storage *addr,uint16_t port)
+{
+    if (addr->ss_family==AF_INET) {
         ((struct sockaddr_in*)addr)->sin_port=port;
     }
     else {
@@ -719,10 +716,21 @@ DLLEXPORT int jl_tcp4_connect(uv_tcp_t *handle,uint32_t host, uint16_t port)
     return uv_tcp_connect(req,handle,addr,&jl_connectcb);
 }
 
-DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr *addr)
+DLLEXPORT int jl_tcp6_connect(uv_tcp_t *handle, void *host, uint16_t port)
+{
+    struct sockaddr_in6 addr;
+    uv_connect_t *req = malloc(sizeof(uv_connect_t));
+    memset(&addr, 0, sizeof(struct sockaddr_in6));
+    addr.sin6_family = AF_INET6;
+    memcpy(&addr.sin6_addr, host, 16);
+    addr.sin6_port = port;
+    return uv_tcp_connect6(req,handle,addr,&jl_connectcb);
+}
+
+DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr_storage *addr)
 {
     uv_connect_t *req = malloc(sizeof(uv_connect_t));
-    if (addr->sa_family==AF_INET) {
+    if (addr->ss_family==AF_INET) {
         return uv_tcp_connect(req,handle,*((struct sockaddr_in*)addr),&jl_connectcb);
     }
     else {
@@ -765,6 +773,26 @@ DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
     lib->handle=handle;
     lib->errmsg=NULL;
     return lib;
+}
+
+#ifndef _OS_WINDOWS_
+
+DLLEXPORT int jl_uv_unix_fd_is_watched(int fd, uv_poll_t *handle, uv_loop_t *loop)
+{
+    if (fd > loop->nwatchers)
+        return 0;
+    if (loop->watchers[fd] == NULL)
+        return 0;
+    if (loop->watchers[fd] == &handle->io_watcher)
+        return 0;
+    return 1;
+}
+
+#endif
+
+DLLEXPORT uv_handle_type jl_uv_handle_type(uv_handle_t *handle)
+{
+    return handle->type;
 }
 
 #ifdef __cplusplus

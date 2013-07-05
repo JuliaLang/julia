@@ -132,8 +132,7 @@ Julia can be developed in an isolated Vagrant environment. See [the Vagrant READ
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc, g++][gcc]**           — compiling and linking C, C++
-- **[clang][clang]**            — clang is the default compiler on OS X (Need at least v3.1, Xcode 4.3.3 on OS X)
+- **[gcc & g++][gcc]** or **[Clang][clang]** — compiling and linking C, C++ (if clang, need at least v3.1, Xcode 4.3.3 on OS X)
 - **[gfortran][gcc]**           — compiling and linking fortran libraries
 - **[git]**                     — version control and package management.
 - **[perl]**                    — preprocessing of header files of libraries.
@@ -206,7 +205,7 @@ To use the Intel [MKL] BLAS and LAPACK libraries, edit the following settings in
     USE_MKL = 1
     MKLLIB = /path/to/mkl/lib/arch
 
-`MKLLIB` points to the directory containing `libmkl_rt.so`. MKL version 10.3 or greater is required.
+`MKLLIB` points to the directory containing `libmkl_rt.so`. MKL version 10.3.6 or greater is required.
 To rebuild a pre-built Julia source install with MKL support, delete the OpenBLAS, ARPACK, and SuiteSparse dependencies from `deps`, and run `make cleanall testall`.
 
 <a name="Source-Code-Organization"/>
@@ -252,7 +251,7 @@ The following distributions include julia, but the versions may be out of date d
 <a name="Editor-Terminal-Setup"/>
 ## Editor and Terminal Setup
 
-Currently, Julia editing mode support is available for Emacs, Vim, Textmate, Notepad++, and Kate, in `contrib/`
+Currently, Julia editing mode support is available for Emacs, Vim, Textmate, Sublime Text, Notepad++, and Kate, in `contrib/`
 
 Adjusting your terminal bindings is optional; everything will work fine without these key bindings.
 For the best interactive session experience, however, make sure that your terminal emulator (`Terminal`, `iTerm`, `xterm`, etc.) sends the `^H` sequence for `Backspace` (delete key) and that the `Shift-Enter` key combination sends a `\n` newline character to distinguish it from just pressing `Enter`, which sends a `\r` carriage return character.

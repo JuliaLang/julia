@@ -26,7 +26,7 @@ end
 PipeBuffer(data::Vector{Uint8},maxsize::Int) = IOBuffer(data,true,true,false,true,maxsize)
 PipeBuffer(data::Vector{Uint8}) = PipeBuffer(data,typemax(Int))
 PipeBuffer() = PipeBuffer(Uint8[])
-PipeBuffer(maxsize::Int) = (x = PipeBuffer(Array(Uint8,maxsize),data,maxsize); x.size=0; x)
+PipeBuffer(maxsize::Int) = (x = PipeBuffer(Array(Uint8,maxsize),maxsize); x.size=0; x)
 
 # IOBuffers behave like Files. They are readable and writable. They are seekable. (They can be appendable).
 IOBuffer(data::Vector{Uint8},readable::Bool,writable::Bool,maxsize::Int) =
@@ -89,19 +89,19 @@ function seekend(io::IOBuffer)
 end
 position(io::IOBuffer) = io.ptr-1
 function truncate(io::IOBuffer, n::Integer)
-    if !io.writable error("truncate failed") end 
+    if !io.writable error("truncate failed") end
     if !io.seekable error("truncate failed") end #because absolute offsets are meaningless
     if n > io.maxsize || n < 0 error("truncate failed") end
     if n > length(io.data)
         resize!(io.data, n)
     end
-    io.data[io.size+1:end] = 0
+    io.data[io.size+1:n] = 0
     io.size = n
     io.ptr = min(io.ptr, n+1)
     return true
 end
 function compact(io::IOBuffer)
-    if !io.writable error("compact failed") end 
+    if !io.writable error("compact failed") end
     if io.seekable error("compact failed") end
     ccall(:memmove, Ptr{Void}, (Ptr{Void},Ptr{Void},Uint), io.data, pointer(io.data,io.ptr), nb_available(io))
     io.size -= io.ptr - 1
@@ -109,7 +109,7 @@ function compact(io::IOBuffer)
     return true
 end
 function ensureroom(io::IOBuffer, nshort::Int)
-    if !io.writable error("ensureroom failed") end 
+    if !io.writable error("ensureroom failed") end
     if !io.seekable
         if nshort < 0 error("ensureroom failed") end
         if io.ptr > 1 && io.size <= io.ptr - 1
@@ -172,7 +172,8 @@ function takebuf_array(io::IOBuffer)
 end
 takebuf_string(io::IOBuffer) = bytestring(takebuf_array(io))
 
-function write(to::IOBuffer, p::Ptr, nb::Integer)
+write(to::IOBuffer, p::Ptr, nb::Integer) = write(to, p, int(nb))
+function write(to::IOBuffer, p::Ptr, nb::Int)
     !to.writable && error("write failed")
     ensureroom(to, nb)
     ptr = (to.append ? to.size+1 : to.ptr)

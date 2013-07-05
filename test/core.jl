@@ -34,7 +34,7 @@ let T = TypeVar(:T,true)
 
     @test isequal(typeintersect((Range{Int},(Int,Int)),(AbstractArray{T},Dims)),
                   (Range{Int},(Int,Int)))
-    
+
     @test isequal(typeintersect((T, AbstractArray{T}),(Number, Array{Int,1})),
                   (Int, Array{Int,1}))
 
@@ -45,7 +45,7 @@ let T = TypeVar(:T,true)
                   (Number, Array{Number,1}))
     @test !is(None, typeintersect((Array{T}, Array{T}), (Array, Array{Any})))
     f47{T}(x::Vector{Vector{T}}) = 0
-    @test_fails f47(Array(Vector,0))
+    @test_throws f47(Array(Vector,0))
     @test f47(Array(Vector{Int},0)) == 0
 end
 let N = TypeVar(:N,true)
@@ -309,7 +309,21 @@ function let_undef()
         end
     end
 end
-@test_fails let_undef()
+@test_throws let_undef()
+
+# const implies local in a local scope block
+function const_implies_local()
+    let
+        x = 1
+        local y
+        let
+            const x = 0
+            y = x
+        end
+        x, y
+    end
+end
+@test const_implies_local() === (1, 0)
 
 a = cell(3)
 for i=1:3
@@ -342,16 +356,16 @@ begin
     a = Array(Float64,1)
     @test isdefined(a,1)
     @test isdefined(a)
-    @test_fails isdefined(a,2)
+    @test_throws isdefined(a,2)
 
     @test isdefined("a",:data)
     a = UndefField()
     @test !isdefined(a, :field)
-    @test_fails isdefined(a, :foo)
+    @test_throws isdefined(a, :foo)
 
-    @test_fails isdefined(2)
-    @test_fails isdefined(2, :a)
-    @test_fails isdefined("a", 2)
+    @test_throws isdefined(2)
+    @test_throws isdefined(2, :a)
+    @test_throws isdefined("a", 2)
 end
 
 # dispatch
@@ -506,7 +520,7 @@ begin
     c = Vector[a]
 
     @test my_func(c,c)==0
-    @test_fails my_func(a,c)
+    @test_throws my_func(a,c)
 end
 
 begin
@@ -527,9 +541,9 @@ begin
 
     # issue #1202
     foor(x::UnionType) = 1
-    @test_fails foor(StridedArray)
+    @test_throws foor(StridedArray)
     @test foor(StridedArray.body) == 1
-    @test_fails foor(StridedArray)
+    @test_throws foor(StridedArray)
 end
 
 # issue #1153
@@ -560,7 +574,7 @@ begin
     a2 = Any[101,102,103]
     p2 = pointer(a2)
     @test unsafe_load(p2) == 101
-    @test_fails unsafe_store!(p2, 909, 3)
+    @test_throws unsafe_store!(p2, 909, 3)
     @test a2 == [101,102,103]
 end
 
@@ -637,9 +651,9 @@ function NewEntity{ T<:Component }(components::Type{T}...)
   map((c)->c(), components)
 end
 
-@test_fails NewEntity(Transform, Transform, Body, Body)
+@test_throws NewEntity(Transform, Transform, Body, Body)
 @test isa(NewEntity(Transform, Transform), (Transform, Transform))
-@test_fails NewEntity(Transform, Transform, Body, Body)
+@test_throws NewEntity(Transform, Transform, Body, Body)
 
 # issue #1826
 let
@@ -829,7 +843,7 @@ end
 
 # issue #3221
 let x = fill(nothing, 1)
-    @test_fails x[1] = 1
+    @test_throws x[1] = 1
 end
 
 # issue #3220
@@ -838,3 +852,9 @@ function x3220()
     a::Vector{Int} += [1]
 end
 @test x3220() == [2]
+
+# issue #3471
+function f3471(y)
+    convert(Array{typeof(y[1]),1}, y)
+end
+@test isa(f3471({1.0,2.0}), Vector{Float64})

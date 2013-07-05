@@ -46,9 +46,9 @@ function plife(m, n)
     pack(c)
     done = false
     c.mouse.button1press = (c,x,y)->(done=true)
-    cr = cairo_context(c)
+    cr = getgc(c)
 
-    grid = DArray(I->convert(Array{Bool,2},randbool(map(length,I))), (m, n), [2:nprocs()])
+    grid = DArray(I->convert(Array{Bool,2},randbool(map(length,I))), (m, n), workers())
 
     last = time(); f = 1
     while !done

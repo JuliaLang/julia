@@ -60,7 +60,7 @@ for (gbtrf, gbtrs, elty) in
             n    = size(AB,2)
             if m != n || m != size(B,1) throw(DimensionMismatch("gbtrs!")) end
             ccall(($(string(gbtrs)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},   Ptr{BlasInt},
                    Ptr{BlasInt}),
                   &trans, &n, &kl, &ku, &size(B,2), AB, &stride(AB,2), ipiv,
@@ -93,7 +93,7 @@ for (gebal, gebak, elty, relty) in
             ilo     = Array(BlasInt, 1)
             scale   = Array($relty, n)
             ccall(($(string(gebal)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
                   &job, &n, A, &stride(A,2), ilo, ihi, scale, info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
@@ -112,7 +112,7 @@ for (gebal, gebak, elty, relty) in
             chksquare(V)
             info    = Array(BlasInt, 1)
             ccall(($(string(gebak)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
+                  (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &job, &side, &size(V,1), &ilo, &ihi, scale, &n, V, &stride(V,2), info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
@@ -231,7 +231,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
             chkstride1(A)
             m, n  = size(A)
             jpvt  = zeros(BlasInt, n)
-            tau   = Array($elty, n)
+            tau   = Array($elty, min(m,n))
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
@@ -262,6 +262,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
         function geqrt3!(A::StridedMatrix{$elty})
             chkstride1(A)
             m, n = size(A)
+            if m < n throw(DimensionMismatch("Matrix cannot have less rows than columns")) end
             lda = max(1, stride(A, 2))
             T = Array($elty, n, n)
             info = Array(BlasInt, 1)
@@ -348,6 +349,82 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
     end
 end
 
+## Complete orthogonaliztion tools
+for (tzrzf, ormrz, elty) in 
+    ((:dtzrzf_,:dormrz_,:Float64),
+     (:stzrzf_,:sormrz_,:Float32),
+     (:ztzrzf_,:zunmrz_,:Complex128),
+     (:ctzrzf_,:cunmrz_,:Complex64))
+    @eval begin
+ #      *       SUBROUTINE ZTZRZF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
+ #   22 * 
+ #   23 *       .. Scalar Arguments ..
+ #   24 *       INTEGER            INFO, LDA, LWORK, M, N
+ #   25 *       ..
+ #   26 *       .. Array Arguments ..
+ #   27 *       COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
+        function tzrzf!(A::StridedMatrix{$elty})
+            m, n = size(A)
+            if n < m throw(DimensionMismatch("Matrix cannot have fewer columns than rows")) end
+            lda = max(1, m)
+            tau = Array($elty, m)
+            work = Array($elty, 1)
+            lwork = -1
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(string(tzrzf)), liblapack), Void,
+                    (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                     Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                    &m, &n, A, &lda, 
+                    tau, work, &lwork, info)
+                if i == 1
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
+            return A, tau
+        end
+   # 21 *       SUBROUTINE ZUNMRZ( SIDE, TRANS, M, N, K, L, A, LDA, TAU, C, LDC,
+   # 22 *                          WORK, LWORK, INFO )
+   # 23 * 
+   # 24 *       .. Scalar Arguments ..
+   # 25 *       CHARACTER          SIDE, TRANS
+   # 26 *       INTEGER            INFO, K, L, LDA, LDC, LWORK, M, N
+   # 27 *       ..
+   # 28 *       .. Array Arguments ..
+   # 29 *       COMPLEX*16         A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
+        function ormrz!(side::BlasChar, trans::BlasChar, A::StridedMatrix{$elty}, tau::StridedVector{$elty}, C::StridedMatrix{$elty})
+            m, n = size(C)
+            k = length(tau)
+            l = size(A, 2) - size(A, 1)
+            lda = max(1, k)
+            ldc = max(1, m)
+            work = Array($elty, 1)
+            lwork = -1
+            info = Array(BlasInt, 1)
+            for i = 1:2
+                ccall(($(string(ormrz)), liblapack), Void,
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
+                     Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                     Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                     Ptr{BlasInt}, Ptr{BlasInt}),
+                    &side, &trans, &m, &n, 
+                    &k, &l, A, &lda, 
+                    tau, C, &ldc, work, 
+                    &lwork, info)
+                if i == 1
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            if info[1] != 0 throw(LAPACKException(info[1])) end
+            return C
+        end
+    end
+end
+
+
 ## (GE) general matrices, solvers with factorization, solver and inverse
 for (gels, gesv, getrs, getri, elty) in
     ((:dgels_,:dgesv_,:dgetrs_,:dgetri_,:Float64),
@@ -369,7 +446,7 @@ for (gels, gesv, getrs, getri, elty) in
             lwork = blas_int(-1)
             for i in 1:2
                 ccall(($(string(gels)),liblapack), Void,
-                      (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
+                      (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &(btrn?'T':'N'), &m, &n, &size(B,2), A, &stride(A,2),
@@ -420,7 +497,7 @@ for (gels, gesv, getrs, getri, elty) in
             nrhs    = size(B, 2)
             info    = Array(BlasInt, 1)
             ccall(($(string(getrs)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &trans, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
@@ -720,7 +797,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             for i = 1:2
                 if cmplx
                     ccall(($(string(geev)),liblapack), Void,
-                          (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty},
+                          (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, 
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$relty}, Ptr{BlasInt}),
@@ -728,7 +805,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           work, &lwork, rwork, info)
                 else
                     ccall(($(string(geev)),liblapack), Void,
-                          (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty},
+                          (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{BlasInt}),
@@ -782,7 +859,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             for i = 1:2
                 if cmplx
                     ccall(($(string(gesdd)),liblapack), Void,
-                          (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                          (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -790,7 +867,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           work, &lwork, rwork, iwork, info)
                 else
                     ccall(($(string(gesdd)),liblapack), Void,
-                          (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                          (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{BlasInt}, Ptr{BlasInt}),
@@ -832,7 +909,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             for i in 1:2
                 if cmplx
                     ccall(($(string(gesvd)),liblapack), Void,
-                          (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt},
+                          (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
@@ -840,7 +917,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           work, &lwork, rwork, info)
                 else
                     ccall(($(string(gesvd)),liblapack), Void,
-                          (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt},
+                          (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{BlasInt}),
@@ -893,7 +970,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             info = Array(BlasInt, 1)
             if cmplx
                 ccall(($(string(ggsvd)),liblapack), Void,
-                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt},
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
                     Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                     Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
@@ -907,7 +984,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                     work, rwork, iwork, info)
             else
                 ccall(($(string(ggsvd)),liblapack), Void,
-                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt},
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
                     Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                     Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
@@ -936,12 +1013,6 @@ for (ggev, elty) in
     @eval begin
     #       SUBROUTINE DGGEV( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHAR, ALPHAI,
 #      $                  BETA, VL, LDVL, VR, LDVR, WORK, LWORK, INFO )
-# *
-# *  -- LAPACK driver routine (version 3.2) --
-# *  -- LAPACK is a software package provided by Univ. of Tennessee,    --
-# *  -- Univ. of California Berkeley, Univ. of Colorado Denver and NAG Ltd..--
-# *     November 2006
-# *
 # *     .. Scalar Arguments ..
 #       CHARACTER          JOBVL, JOBVR
 #       INTEGER            INFO, LDA, LDB, LDVL, LDVR, LWORK, N
@@ -995,12 +1066,6 @@ for (ggev, elty, relty) in
     @eval begin
       # SUBROUTINE ZGGEV( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHA, BETA,
      # $                  VL, LDVL, VR, LDVR, WORK, LWORK, RWORK, INFO )
-# *
-# *  -- LAPACK driver routine (version 3.2) --
-# *  -- LAPACK is a software package provided by Univ. of Tennessee,    --
-# *  -- Univ. of California Berkeley, Univ. of Colorado Denver and NAG Ltd..--
-# *     November 2006
-# *
 # *     .. Scalar Arguments ..
       # CHARACTER          JOBVL, JOBVR
       # INTEGER            INFO, LDA, LDB, LDVL, LDVR, LWORK, N
@@ -1049,6 +1114,67 @@ for (ggev, elty, relty) in
         end
     end
 end
+# One step incremental condition estimation of max/min singular values
+for (laic1, elty) in
+    ((:dlaic1_,:Float64),
+     (:slaic1_,:Float32))
+    @eval begin
+   # 21 *       SUBROUTINE DLAIC1( JOB, J, X, SEST, W, GAMMA, SESTPR, S, C )
+   # 22 * 
+   # 23 *       .. Scalar Arguments ..
+   # 24 *       INTEGER            J, JOB
+   # 25 *       DOUBLE PRECISION   C, GAMMA, S, SEST, SESTPR
+   # 26 *       ..
+   # 27 *       .. Array Arguments ..
+   # 28 *       DOUBLE PRECISION   W( J ), X( J )
+        function laic1!(job::Integer, x::StridedVector{$elty}, sest::$elty, w::StridedVector{$elty}, gamma::$elty)
+            j = length(x)
+            if j != length(w) error(DimensionMismatch("Vectors must have same length")) end
+            sestpr = Array($elty, 1)
+            s = Array($elty, 1)
+            c = Array($elty, 1)
+            ccall(($(string(laic1)), liblapack), Void,
+                (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
+                 Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
+                 Ptr{$elty}),
+                &job, &j, x, &sest, 
+                w, &gamma, sestpr, s, 
+                c)
+            return sestpr[1], s[1], c[1]
+        end
+    end
+end
+for (laic1, elty, relty) in
+    ((:zlaic1_,:Complex128,:Float64),
+     (:claic1_,:Complex64,:Float32))
+    @eval begin
+   # 21 *       SUBROUTINE ZLAIC1( JOB, J, X, SEST, W, GAMMA, SESTPR, S, C )
+   # 22 * 
+   # 23 *       .. Scalar Arguments ..
+   # 24 *       INTEGER            J, JOB
+   # 25 *       DOUBLE PRECISION   SEST, SESTPR
+   # 26 *       COMPLEX*16         C, GAMMA, S
+   # 27 *       ..
+   # 28 *       .. Array Arguments ..
+   # 29 *       COMPLEX*16         W( J ), X( J )
+        function laic1!(job::Integer, x::StridedVector{$elty}, sest::$relty, w::StridedVector{$elty}, gamma::$elty)
+            j = length(x)
+            if j != length(w) error(DimensionMismatch("Vectors must have same length")) end
+            sestpr = Array($relty, 1)
+            s = Array($elty, 1)
+            c = Array($elty, 1)
+            ccall(($(string(laic1)), liblapack), Void,
+                (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$relty},
+                 Ptr{$elty}, Ptr{$elty}, Ptr{$relty}, Ptr{$elty},
+                 Ptr{$elty}),
+                &job, &j, x, &sest, 
+                w, &gamma, sestpr, s, 
+                c)
+            return sestpr[1], s[1], c[1]
+        end
+    end
+end
+
 
 # (GT) General tridiagonal, decomposition, solver and direct solver
 for (gtsv, gttrf, gttrs, elty) in
@@ -1115,7 +1241,7 @@ for (gtsv, gttrf, gttrs, elty) in
             if n != size(B,1) throw(DimensionMismatch("gttrs!")) end
             info = Array(BlasInt, 1)
             ccall(($(string(gttrs)),liblapack), Void,
-                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt},
+                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                    &trans, &n, &size(B,2), dl, d, du, du2, ipiv, B, &stride(B,2), info)
@@ -1162,7 +1288,8 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
         function orgqr!(A::StridedMatrix{$elty}, tau::Vector{$elty})
             chkstride1(A)
-            m, n = size(A)
+            m = size(A, 1)
+            n = min(m, size(A, 2))
             k = length(tau)
             if k > n throw(DimensionMismatch("invalid number of reflectors")) end
             work  = Array($elty, 1)
@@ -1181,7 +1308,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                     work = Array($elty, lwork)
                 end
             end
-            A
+            A[:,1:n]
         end
         #      SUBROUTINE DORMLQ( SIDE, TRANS, M, N, K, A, LDA, TAU, C, LDC,
         #                         WORK, LWORK, INFO )
@@ -1200,7 +1327,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(string(ormlq)),liblapack), Void,
-                      (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
+                      (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &side, &trans, &m, &n, &k, A, &stride(A,2), tau,
@@ -1235,7 +1362,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(string(ormqr)),liblapack), Void,
-                      (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, 
+                      (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, 
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, 
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
                        Ptr{BlasInt}),
@@ -1271,7 +1398,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             work = Array($elty, wss)
             info = Array(BlasInt, 1)
             ccall(($(string(gemqrt)), liblapack), Void,
-                (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt},
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}),
@@ -1308,7 +1435,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             if size(B,1) != n throw(DimensionMismatch("posv!")) end
             info    = Array(BlasInt, 1)
             ccall(($(string(posv)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), A, &stride(A,2), B, &stride(B,2), info)
             if info[1] < 0 throw(LAPACKException(info[1])) end
@@ -1327,7 +1454,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             chksquare(A)
             info = Array(BlasInt, 1)
             ccall(($(string(potrf)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &size(A,1), A, &stride(A,2), info)
             if info[1] < 0 throw(LAPACKException(info[1])) end
             A, info[1]
@@ -1344,7 +1471,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             chkstride1(A)
             info = Array(BlasInt, 1)
             ccall(($(string(potri)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &size(A,1), A, &stride(A,2), info)
             if info[1] < 0 throw(LAPACKException(info[1])) end
             A, info[1]
@@ -1362,7 +1489,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             if size(B,1) != n throw(DimensionMismatch("left and right hand sides do not fit")) end
             info = Array(BlasInt, 1)
             ccall(($(string(potrs)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), A, &stride(A,2), B, &stride(B,2), info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
@@ -1385,7 +1512,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             work = Array($rtyp, 2n)
             info = Array(BlasInt, 1)
             ccall(($(string(pstrf)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$rtyp}, Ptr{$rtyp}, Ptr{BlasInt}),
                   &uplo, &n, A, &stride(A,2), piv, rank, &tol, work, info)
             if info[1] < 0 throw(LAPACKException(info[1])) end
@@ -1477,7 +1604,7 @@ for (pttrs, elty, relty) in
             if length(E) != (n-1) || size(B,1) != n throw(DimensionMismatch("pttrs!")) end
             info = Array(BlasInt, 1)
             ccall(($(string(pttrs)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), D, E, B, &stride(B,2), info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
@@ -1506,7 +1633,7 @@ for (trtri, trtrs, elty) in
             lda     = stride(A, 2)
             info    = Array(BlasInt, 1)
             ccall(($(string(trtri)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                  (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}),
                   &uplo, &diag, &n, A, &lda, info)
             if info[1] < 0 throw(LAPACKException(info[1])) end
@@ -1526,7 +1653,7 @@ for (trtri, trtrs, elty) in
             if size(B,1) != n throw(DimensionMismatch("trtrs!")) end
             info    = Array(BlasInt, 1)
             ccall(($(string(trtrs)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt},
+                  (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &trans, &diag, &n, &size(B,2), A, &stride(A,2),
                   B, &stride(B,2), info)
@@ -1553,7 +1680,7 @@ for (stev, stebz, stegr, stein, elty) in
             work = Array($elty, max(1, 2n-2))
             info = Array(BlasInt, 1)
             ccall(($(string(stev)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &job, &n, dv, ev, Zmat, &n, work, info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
@@ -1576,7 +1703,7 @@ for (stev, stebz, stegr, stein, elty) in
             iwork = Array(BlasInt,3*n)
             info = Array(BlasInt, 1)
             ccall(($(string(stebz)),liblapack), Void,
-                (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty},
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                 Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                 Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                 Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
@@ -1614,7 +1741,7 @@ for (stev, stebz, stegr, stein, elty) in
             info = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(string(stegr)), liblapack), Void, 
-                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty},
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                     Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                     Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
@@ -1691,13 +1818,11 @@ stein!(dv::Vector, ev::Vector, w_in::Vector)=stein!(dv, ev, w_in, zeros(BlasInt,
 # Allow user to specify just one eigenvector to get in stein!
 stein!(dv::Vector, ev::Vector, eval::Real)=stein!(dv, ev, [eval], zeros(BlasInt,0), zeros(BlasInt,0))
 
-## (SY) symmetric matrices - eigendecomposition, Bunch-Kaufman decomposition,
+## (SY) symmetric real matrices - Bunch-Kaufman decomposition,
 ## solvers (direct and factored) and inverse.
-for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
-    ((:dsyconv_,:dsyev_,:dsysv_,:dsytrf_,:dsytri_,:dsytrs_,:Float64, :Float64),
-     (:ssyconv_,:ssyev_,:ssysv_,:ssytrf_,:ssytri_,:ssytrs_,:Float32, :Float32),
-     (:zheconv_,:zheev_,:zhesv_,:zhetrf_,:zhetri_,:zhetrs_,:Complex128, :Float64),
-     (:checonv_,:cheev_,:chesv_,:chetrf_,:chetri_,:chetrs_,:Complex64, :Float32))
+for (syconv, sysv, sytrf, sytri, sytrs, elty) in
+    ((:dsyconv_,:dsysv_,:dsytrf_,:dsytri_,:dsytrs_,:Float64),
+     (:ssyconv_,:ssysv_,:ssytrf_,:ssytri_,:ssytrs_,:Float32))
     @eval begin
         #       SUBROUTINE DSYCONV( UPLO, WAY, N, A, LDA, IPIV, WORK, INFO )
         # *     .. Scalar Arguments ..
@@ -1713,49 +1838,11 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
             work  = Array($elty, n)
             info  = Array(BlasInt, 1)
             ccall(($(string(syconv)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                  (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &uplo, &'C', &n, A, &stride(A,2), ipiv, work, info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             A, work
-        end
-        #       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
-        # *     .. Scalar Arguments ..
-        #       CHARACTER          JOBZ, UPLO
-        #       INTEGER            INFO, LDA, LWORK, N
-        # *     .. Array Arguments ..
-        #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
-        function syev!(jobz::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty})
-            chkstride1(A)
-            chksquare(A)
-            cmplx = iseltype(A,Complex)
-            n     = size(A, 1)
-            W     = Array($relty, n)
-            work  = Array($elty, 1)
-            lwork = blas_int(-1)
-            if cmplx
-                rwork = Array($relty, max(1, 3n-2))
-            end
-            info  = Array(BlasInt, 1)
-            for i in 1:2
-                if cmplx
-                    ccall(($(string(syev)),liblapack), Void,
-                          (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                          Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
-                          &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, rwork, info)
-                else
-                    ccall(($(string(syev)),liblapack), Void,
-                          (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                          Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                          &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, info)
-                end
-                if info[1] != 0 throw(LAPACKException(info[1])) end
-                if lwork < 0
-                    lwork = blas_int(real(work[1]))
-                    work = Array($elty, lwork)
-                end
-            end
-            jobz == 'V' ? (W, A) : W
         end
         #       SUBROUTINE DSYSV( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, WORK,
         #                         LWORK, INFO )
@@ -1776,7 +1863,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(string(sysv)),liblapack), Void,
-                      (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                      (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2),
                       work, &lwork, info)
@@ -1805,7 +1892,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(string(sytrf)),liblapack), Void,
-                      (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                      (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
                 if info[1] < 0 throw(LAPACKException(info[1])) end
@@ -1833,7 +1920,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
 #             info  = Array(BlasInt, 1)
 #             for i in 1:2
 #                 ccall(($(string(sytri)),liblapack), Void,
-#                       (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+#                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
 #                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
 #                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
 #                 if info[1] != 0 throw(LAPACKException(info[1])) end
@@ -1858,7 +1945,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
             work  = Array($elty, n)
             info  = Array(BlasInt, 1)
             ccall(($(string(sytri)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &uplo, &n, A, &stride(A,2), ipiv, work, info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
@@ -1880,7 +1967,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
             if n != size(B,1) throw(DimensionMismatch("sytrs!")) end
             info  = Array(BlasInt, 1)
             ccall(($(string(sytrs)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
@@ -1888,18 +1975,401 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty, relty) in
         end
     end
 end
-for (sygvd, elty) in
-    ((:dsygvd_,:Float64),
-     (:ssygvd_,:Float32))
+## (SY) hermitian matrices - eigendecomposition, Bunch-Kaufman decomposition,
+## solvers (direct and factored) and inverse.
+for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
+    ((:zsyconv_,:zhesv_,:zhetrf_,:zhetri_,:zhetrs_,:Complex128, :Float64),
+     (:csyconv_,:chesv_,:chetrf_,:chetri_,:chetrs_,:Complex64, :Float32))
     @eval begin
+   #   SUBROUTINE ZSYCONV( UPLO, WAY, N, A, LDA, IPIV, WORK, INFO )
+   # 22 * 
+   # 23 *       .. Scalar Arguments ..
+   # 24 *       CHARACTER          UPLO, WAY
+   # 25 *       INTEGER            INFO, LDA, N
+   # 26 *       ..
+   # 27 *       .. Array Arguments ..
+   # 28 *       INTEGER            IPIV( * )
+   # 29 *       COMPLEX*16         A( LDA, * ), WORK( * )
+        function syconv!(uplo::BlasChar, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
+            chkstride1(A)
+            chksquare(A)
+            n     = size(A,1)
+            work  = Array($elty, n)
+            info  = Array(BlasInt, 1)
+            ccall(($(string(syconv)),liblapack), Void,
+                  (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                  &uplo, &'C', &n, A, &stride(A,2), ipiv, work, info)
+            if info[1] != 0 throw(LAPACKException(info[1])) end
+            A, work
+        end
+#       SUBROUTINE ZHESV( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, WORK,
+# *     .. Scalar Arguments ..
+#       CHARACTER          UPLO
+#       INTEGER            INFO, LDA, LDB, LWORK, N, NRHS
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            IPIV( * )
+#       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
+        function hesv!(uplo::BlasChar, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B)
+            chksquare(A)
+            n     = size(A,1)
+            if n != size(B,1) throw(DimensionMismatch("sysv!")) end
+            ipiv  = Array(BlasInt, n)
+            work  = Array($elty, 1)
+            lwork = blas_int(-1)
+            info  = Array(BlasInt, 1)
+            for i in 1:2
+                ccall(($(string(hesv)),liblapack), Void,
+                      (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                       Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2),
+                      work, &lwork, info)
+                if info[1] < 0 throw(LAPACKException(info[1])) end
+                if lwork < 0
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            B, A, ipiv, info[1]
+        end
+#       SUBROUTINE ZHETRF( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          UPLO
+#       INTEGER            INFO, LDA, LWORK, N
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            IPIV( * )
+#       COMPLEX*16         A( LDA, * ), WORK( * )
+        function hetrf!(uplo::BlasChar, A::StridedMatrix{$elty})
+            chkstride1(A)
+            chksquare(A)
+            n     = size(A,1)
+            ipiv  = Array(BlasInt, n)
+            work  = Array($elty, 1)
+            lwork = blas_int(-1)
+            info  = Array(BlasInt, 1)
+            for i in 1:2
+                ccall(($(string(hetrf)),liblapack), Void,
+                      (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                       Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
+                if info[1] < 0 throw(LAPACKException(info[1])) end
+                if info[1] > 0 throw(SingularException(info[1])) end
+                if lwork < 0
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            A, ipiv, info
+        end
+#       SUBROUTINE ZHETRI2( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          UPLO
+#       INTEGER            INFO, LDA, LWORK, N
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            IPIV( * )
+#       COMPLEX*16         A( LDA, * ), WORK( * )
+#         function hetri!(uplo::BlasChar, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
+#             chkstride1(A)
+#             chksquare(A)
+#             n     = size(A,1)
+#             work  = Array($elty, 1)
+#             lwork = blas_int(-1)
+#             info  = Array(BlasInt, 1)
+#             for i in 1:2
+#                 ccall(($(string(hetri)),liblapack), Void,
+#                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+#                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+#                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
+#                 if info[1] != 0 throw(LAPACKException(info[1])) end
+#                 if lwork < 0
+#                     lwork = blas_int(real(work[1]))
+#                     work = Array($elty, lwork)
+#                 end
+#             end
+#             A
+#         end
+#       SUBROUTINE ZHETRI( UPLO, N, A, LDA, IPIV, WORK, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          UPLO
+#       INTEGER            INFO, LDA, N
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            IPIV( * )
+#       COMPLEX*16         A( LDA, * ), WORK( * )
+        function hetri!(uplo::BlasChar, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
+            chkstride1(A)
+            chksquare(A)
+            n     = size(A,1)
+            work  = Array($elty, n)
+            info  = Array(BlasInt, 1)
+            ccall(($(string(hetri)),liblapack), Void,
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                  &uplo, &n, A, &stride(A,2), ipiv, work, info)
+            if info[1] != 0 throw(LAPACKException(info[1])) end
+            A
+        end
+#       SUBROUTINE ZHETRS( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          UPLO
+#       INTEGER            INFO, LDA, LDB, N, NRHS
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            IPIV( * )
+#       COMPLEX*16         A( LDA, * ), B( LDB, * )
+        function hetrs!(uplo::BlasChar, A::StridedMatrix{$elty},
+                       ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B)
+            chksquare(A)
+            n     = size(A,1)
+            if n != size(B,1) throw(DimensionMismatch("hetrs!")) end
+            info  = Array(BlasInt, 1)
+            ccall(($(string(hetrs)),liblapack), Void,
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                  &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
+            if info[1] != 0 throw(LAPACKException(info[1])) end
+            B
+        end
+    end
+end
+for (sysv, sytrf, sytri, sytrs, elty, relty) in
+    ((:zsysv_,:zsytrf_,:zsytri_,:zsytrs_,:Complex128, :Float64),
+     (:csysv_,:csytrf_,:csytri_,:csytrs_,:Complex64, :Float32))
+    @eval begin
+#       SUBROUTINE ZSYSV( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, WORK,
+#      $                  LWORK, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          UPLO
+#       INTEGER            INFO, LDA, LDB, LWORK, N, NRHS
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            IPIV( * )
+#       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
+        function sysv!(uplo::BlasChar, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B)
+            chksquare(A)
+            n     = size(A,1)
+            if n != size(B,1) throw(DimensionMismatch("sysv!")) end
+            ipiv  = Array(BlasInt, n)
+            work  = Array($elty, 1)
+            lwork = blas_int(-1)
+            info  = Array(BlasInt, 1)
+            for i in 1:2
+                ccall(($(string(sysv)),liblapack), Void,
+                      (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                       Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2),
+                      work, &lwork, info)
+                if info[1] < 0 throw(LAPACKException(info[1])) end
+                if lwork < 0
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            B, A, ipiv, info[1]
+        end
+#       SUBROUTINE ZSYTRF( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          UPLO
+#       INTEGER            INFO, LDA, LWORK, N
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            IPIV( * )
+#       COMPLEX*16         A( LDA, * ), WORK( * )
+        function sytrf!(uplo::BlasChar, A::StridedMatrix{$elty})
+            chkstride1(A)
+            chksquare(A)
+            n     = size(A,1)
+            ipiv  = Array(BlasInt, n)
+            work  = Array($elty, 1)
+            lwork = blas_int(-1)
+            info  = Array(BlasInt, 1)
+            for i in 1:2
+                ccall(($(string(sytrf)),liblapack), Void,
+                      (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                       Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
+                if info[1] < 0 throw(LAPACKException(info[1])) end
+                if info[1] > 0 throw(SingularException(info[1])) end
+                if lwork < 0
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            A, ipiv, info
+        end
+#       SUBROUTINE ZSYTRI2( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          UPLO
+#       INTEGER            INFO, LDA, LWORK, N
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            IPIV( * )
+#       COMPLEX*16         A( LDA, * ), WORK( * )
+#         function sytri!(uplo::BlasChar, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
+#             chkstride1(A)
+#             chksquare(A)
+#             n     = size(A,1)
+#             work  = Array($elty, 1)
+#             lwork = blas_int(-1)
+#             info  = Array(BlasInt, 1)
+#             for i in 1:2
+#                 ccall(($(string(sytri)),liblapack), Void,
+#                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+#                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+#                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
+#                 if info[1] != 0 throw(LAPACKException(info[1])) end
+#                 if lwork < 0
+#                     lwork = blas_int(real(work[1]))
+#                     work = Array($elty, lwork)
+#                 end
+#             end
+#             A
+#         end
+#       SUBROUTINE ZSYTRI( UPLO, N, A, LDA, IPIV, WORK, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          UPLO
+#       INTEGER            INFO, LDA, N
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            IPIV( * )
+#       COMPLEX*16         A( LDA, * ), WORK( * )
+        function sytri!(uplo::BlasChar, A::StridedMatrix{$elty}, ipiv::Vector{BlasInt})
+            chkstride1(A)
+            chksquare(A)
+            n     = size(A,1)
+            work  = Array($elty, n)
+            info  = Array(BlasInt, 1)
+            ccall(($(string(sytri)),liblapack), Void,
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                  &uplo, &n, A, &stride(A,2), ipiv, work, info)
+            if info[1] != 0 throw(LAPACKException(info[1])) end
+            A
+        end
+#       SUBROUTINE ZSYTRS( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          UPLO
+#       INTEGER            INFO, LDA, LDB, N, NRHS
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            IPIV( * )
+#       COMPLEX*16         A( LDA, * ), B( LDB, * )
+        function sytrs!(uplo::BlasChar, A::StridedMatrix{$elty},
+                       ipiv::Vector{BlasInt}, B::StridedVecOrMat{$elty})
+            chkstride1(A,B)
+            chksquare(A)
+            n     = size(A,1)
+            if n != size(B,1) throw(DimensionMismatch("sytrs!")) end
+            info  = Array(BlasInt, 1)
+            ccall(($(string(sytrs)),liblapack), Void,
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                  &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
+            if info[1] != 0 throw(LAPACKException(info[1])) end
+            B
+        end
+    end
+end
+
+# Symmetric (real) eigensolvers
+for (syev, syevr, sygvd, elty) in
+    ((:dsyev_,:dsyevr_,:dsygvd_,:Float64),
+     (:ssyev_,:ssyevr_,:ssygvd_,:Float32))
+    @eval begin
+        #       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBZ, UPLO
+        #       INTEGER            INFO, LDA, LWORK, N
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
+        function syev!(jobz::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty})
+            chkstride1(A)
+            chksquare(A)
+            n     = size(A, 1)
+            W     = Array($elty, n)
+            work  = Array($elty, 1)
+            lwork = blas_int(-1)
+            info  = Array(BlasInt, 1)
+            for i in 1:2
+                ccall(($(string(syev)),liblapack), Void,
+                      (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                      Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, info)
+                if info[1] != 0 throw(LAPACKException(info[1])) end
+                if lwork < 0
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            jobz == 'V' ? (W, A) : W
+        end
+        #       SUBROUTINE DSYEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
+        #      $                   ABSTOL, M, W, Z, LDZ, ISUPPZ, WORK, LWORK,
+        #      $                   IWORK, LIWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBZ, RANGE, UPLO
+        #       INTEGER            IL, INFO, IU, LDA, LDZ, LIWORK, LWORK, M, N
+        #       DOUBLE PRECISION   ABSTOL, VL, VU
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            ISUPPZ( * ), IWORK( * )
+        #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * ), Z( LDZ, * )    
+        function syevr!(jobz::BlasChar, range::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, abstol::FloatingPoint)
+            chkstride1(A)
+            chksquare(A)                   
+            n = size(A, 2)
+            lda = max(1,stride(A,2))
+            m = Array(BlasInt, 1)
+            w = Array($elty, n)
+            if jobz == 'N'
+                ldz = 1
+                Z = Array($elty, ldz, 0)
+            elseif jobz == 'V'
+                ldz = n
+                Z = Array($elty, ldz, n)
+            else
+                error("jobz must be 'N' of 'V'")
+            end
+            isuppz = Array(BlasInt, 2*n)
+            work  = Array($elty, 1)
+            lwork = blas_int(-1)
+            iwork = Array(BlasInt, 1)
+            liwork = blas_int(-1)
+            info  = Array(BlasInt, 1)
+            for i in 1:2
+                ccall(($(string(syevr)),liblapack), Void,
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
+                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, 
+                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
+                        Ptr{BlasInt}),
+                    &jobz, &range, &uplo, &n, 
+                    A, &lda, &vl, &vu, 
+                    &il, &iu, &abstol, m,
+                    w, Z, &ldz, isuppz,
+                    work, &lwork, iwork, &liwork, 
+                    info)
+                if info[1] != 0 throw(LAPACKException(info[1])) end
+                if lwork < 0
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                    liwork = iwork[1]
+                    iwork = Array(BlasInt, liwork)
+                end
+            end
+            return w[1:m[1]], Z[:,1:(jobz == 'V' ? m[1] : 0)]
+        end    
+        syevr!(jobz::BlasChar, A::StridedMatrix{$elty}) = syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)   
+        # Generalized eigenproblem
 #           SUBROUTINE DSYGVD( ITYPE, JOBZ, UPLO, N, A, LDA, B, LDB, W, WORK,
 #      $                   LWORK, IWORK, LIWORK, INFO )
-# *
-# *  -- LAPACK driver routine (version 3.3.1) --
-# *  -- LAPACK is a software package provided by Univ. of Tennessee,    --
-# *  -- Univ. of California Berkeley, Univ. of Colorado Denver and NAG Ltd..--
-# *  -- April 2011                                                      --
-# *
 # *     .. Scalar Arguments ..
 #       CHARACTER          JOBZ, UPLO
 #       INTEGER            INFO, ITYPE, LDA, LDB, LIWORK, LWORK, N
@@ -1910,8 +2380,8 @@ for (sygvd, elty) in
         function sygvd!(itype::Integer, jobz::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A,B)
             n = size(A, 1)
-            if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("matrices must be square")) end
-            if size(B, 1) != n throw(DimensionMismatch("matrices must have same size")) end
+            if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("Matrices must be square")) end
+            if size(B, 1) != n throw(DimensionMismatch("Matrices must have same size")) end
             lda = max(1, n)
             ldb = max(1, n)
             w = Array($elty, n)
@@ -1943,10 +2413,105 @@ for (sygvd, elty) in
         end
     end
 end
-for (sygvd, elty, relty) in 
-    ((:zhegvd_,:Complex128,:Float64),
-     (:chegvd_,:Complex64,:Float32))
+# Hermitian eigensolvers
+for (syev, syevr, sygvd, elty, relty) in 
+    ((:zheev_,:zheevr_,:zhegvd_,:Complex128,:Float64),
+     (:cheev_,:cheevr_,:chegvd_,:Complex64,:Float32))
     @eval begin
+# SUBROUTINE ZHEEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO )        
+# *     .. Scalar Arguments ..
+#       CHARACTER          JOBZ, UPLO
+#       INTEGER            INFO, LDA, LWORK, N
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION   RWORK( * ), W( * )
+#       COMPLEX*16         A( LDA, * ), WORK( * )
+        function syev!(jobz::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty})
+            chkstride1(A)
+            chksquare(A)
+            n     = size(A, 1)
+            W     = Array($relty, n)
+            work  = Array($elty, 1)
+            lwork = blas_int(-1)
+            rwork = Array($relty, max(1, 3n-2))
+            info  = Array(BlasInt, 1)
+            for i in 1:2
+                ccall(($(string(syev)),liblapack), Void,
+                      (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                      Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
+                      &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, rwork, info)
+                if info[1] != 0 throw(LAPACKException(info[1])) end
+                if lwork < 0
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            jobz == 'V' ? (W, A) : W
+        end
+#       SUBROUTINE ZHEEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
+#      $                   ABSTOL, M, W, Z, LDZ, ISUPPZ, WORK, LWORK,
+#      $                   RWORK, LRWORK, IWORK, LIWORK, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          JOBZ, RANGE, UPLO
+#       INTEGER            IL, INFO, IU, LDA, LDZ, LIWORK, LRWORK, LWORK,
+#      $                   M, N
+#       DOUBLE PRECISION   ABSTOL, VL, VU
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            ISUPPZ( * ), IWORK( * )
+#       DOUBLE PRECISION   RWORK( * ), W( * )
+#       COMPLEX*16         A( LDA, * ), WORK( * ), Z( LDZ, * ) 
+        function syevr!(jobz::BlasChar, range::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, abstol::FloatingPoint)
+            chkstride1(A)
+            chksquare(A)
+            n = size(A, 2)
+            lda = max(1,stride(A,2))
+            m = Array(BlasInt, 1)
+            w = Array($relty, n)
+            if jobz == 'N'
+                ldz = 1
+                Z = Array($elty, ldz, 0)
+            elseif jobz == 'V'
+                ldz = n
+                Z = Array($elty, ldz, n)
+            else
+                error("jobz must be 'N' of 'V'")
+            end
+            isuppz = Array(BlasInt, 2*n)
+            work  = Array($elty, 1)
+            lwork = blas_int(-1)
+            rwork = Array($relty, 1)
+            lrwork = blas_int(-1)
+            iwork = Array(BlasInt, 1)
+            liwork = blas_int(-1)
+            info  = Array(BlasInt, 1)
+            for i in 1:2
+                ccall(($(string(syevr)),liblapack), Void,
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
+                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, 
+                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt},
+                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+                    &jobz, &range, &uplo, &n, 
+                    A, &lda, &vl, &vu, 
+                    &il, &iu, &abstol, m,
+                    w, Z, &ldz, isuppz,
+                    work, &lwork, rwork, &lrwork,
+                    iwork, &liwork, info)
+                if info[1] != 0 throw(LAPACKException(info[1])) end
+                if lwork < 0
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                    lrwork = blas_int(rwork[1])
+                    rwork = Array($relty, lrwork)
+                    liwork = iwork[1]
+                    iwork = Array(BlasInt, liwork)
+                end
+            end
+            return w[1:m[1]], Z[:,1:(jobz == 'V' ? m[1] : 0)]
+        end
+        syevr!(jobz::BlasChar, A::StridedMatrix{$elty}) = syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
 #       SUBROUTINE ZHEGVD( ITYPE, JOBZ, UPLO, N, A, LDA, B, LDB, W, WORK,
 #      $                   LWORK, RWORK, LRWORK, IWORK, LIWORK, INFO )
 # *
@@ -1966,8 +2531,8 @@ for (sygvd, elty, relty) in
         function sygvd!(itype::Integer, jobz::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A,B)
             n = size(A, 1)
-            if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("matrices must be square")) end
-            if size(B, 1) != n throw(DimensionMismatch("matrices must have same size")) end
+            if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("Matrices must be square")) end
+            if size(B, 1) != n throw(DimensionMismatch("Matrices must have same size")) end
             lda = max(1, n)
             ldb = max(1, n)
             w = Array($relty, n)
@@ -2067,7 +2632,7 @@ for (bdsdc, elty) in
             validate(uplo)
             n, ldiq, ldq, ldu, ldvt = length(d), 1, 1, 1, 1
             if compq == 'N'
-                lwork = 4n
+                lwork = 6n
             elseif compq == 'P'
                 warn("COMPQ='P' is not tested")
                 #TODO turn this into an actual LAPACK call
@@ -2087,7 +2652,7 @@ for (bdsdc, elty) in
             q = Array($elty, ldq)
             iq= Array(BlasInt, ldiq)
             work =Array($elty, lwork)
-            iwork=Array(BlasInt, 7n)
+            iwork=Array(BlasInt, 8n)
             info =Array(BlasInt, 1)
             ccall(($(string(bdsdc)),liblapack), Void,
            (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
@@ -2108,143 +2673,6 @@ for (bdsdc, elty) in
         end
     end
 end
-
-
-
-# New symmetric eigen solver
-for (syevr, elty) in
-    ((:dsyevr_,:Float64),
-     (:ssyevr_,:Float32))
-    @eval begin
-        function syevr!(jobz::BlasChar, range::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, abstol::FloatingPoint)
-        #       SUBROUTINE DSYEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
-        #      $                   ABSTOL, M, W, Z, LDZ, ISUPPZ, WORK, LWORK,
-        #      $                   IWORK, LIWORK, INFO )
-        # *     .. Scalar Arguments ..
-        #       CHARACTER          JOBZ, RANGE, UPLO
-        #       INTEGER            IL, INFO, IU, LDA, LDZ, LIWORK, LWORK, M, N
-        #       DOUBLE PRECISION   ABSTOL, VL, VU
-        # *     ..
-        # *     .. Array Arguments ..
-        #       INTEGER            ISUPPZ( * ), IWORK( * )
-        #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * ), Z( LDZ, * )    
-            chkstride1(A)
-            chksquare(A)                   
-            n = size(A, 2)
-            lda = max(1,stride(A,2))
-            m = Array(BlasInt, 1)
-            w = Array($elty, n)
-            if jobz == 'N'
-                ldz = 1
-                Z = Array($elty, ldz, 0)
-            elseif jobz == 'V'
-                ldz = n
-                Z = Array($elty, ldz, n)
-            else
-                error("jobz must be 'N' of 'V'")
-            end
-            isuppz = Array(BlasInt, 2*n)
-            work  = Array($elty, 1)
-            lwork = blas_int(-1)
-            iwork = Array(BlasInt, 1)
-            liwork = blas_int(-1)
-            info  = Array(BlasInt, 1)
-            for i in 1:2
-                ccall(($(string(syevr)),liblapack), Void,
-                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, 
-                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, 
-                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
-                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
-                        Ptr{BlasInt}),
-                    &jobz, &range, &uplo, &n, 
-                    A, &lda, &vl, &vu, 
-                    &il, &iu, &abstol, m,
-                    w, Z, &ldz, isuppz,
-                    work, &lwork, iwork, &liwork, 
-                    info)
-                if info[1] != 0 throw(LAPACKException(info[1])) end
-                if lwork < 0
-                    lwork = blas_int(real(work[1]))
-                    work = Array($elty, lwork)
-                    liwork = iwork[1]
-                    iwork = Array(BlasInt, liwork)
-                end
-            end
-            return w[1:m[1]], Z[:,1:(jobz == 'V' ? m[1] : 0)]
-        end
-    end
-end
-for (syevr, elty, relty) in
-    ((:zheevr_,:Complex128,:Float64),
-     (:cheevr_,:Complex64,:Float32))
-    @eval begin
-        function syevr!(jobz::BlasChar, range::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, abstol::FloatingPoint)
-#       SUBROUTINE ZHEEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
-#      $                   ABSTOL, M, W, Z, LDZ, ISUPPZ, WORK, LWORK,
-#      $                   RWORK, LRWORK, IWORK, LIWORK, INFO )
-# *     .. Scalar Arguments ..
-#       CHARACTER          JOBZ, RANGE, UPLO
-#       INTEGER            IL, INFO, IU, LDA, LDZ, LIWORK, LRWORK, LWORK,
-#      $                   M, N
-#       DOUBLE PRECISION   ABSTOL, VL, VU
-# *     ..
-# *     .. Array Arguments ..
-#       INTEGER            ISUPPZ( * ), IWORK( * )
-#       DOUBLE PRECISION   RWORK( * ), W( * )
-#       COMPLEX*16         A( LDA, * ), WORK( * ), Z( LDZ, * ) 
-            chkstride1(A)
-            chksquare(A)
-            n = size(A, 2)
-            lda = max(1,stride(A,2))
-            m = Array(BlasInt, 1)
-            w = Array($relty, n)
-            if jobz == 'N'
-                ldz = 1
-                Z = Array($elty, ldz, 0)
-            elseif jobz == 'V'
-                ldz = n
-                Z = Array($elty, ldz, n)
-            else
-                error("jobz must be 'N' of 'V'")
-            end
-            isuppz = Array(BlasInt, 2*n)
-            work  = Array($elty, 1)
-            lwork = blas_int(-1)
-            rwork = Array($relty, 1)
-            lrwork = blas_int(-1)
-            iwork = Array(BlasInt, 1)
-            liwork = blas_int(-1)
-            info  = Array(BlasInt, 1)
-            for i in 1:2
-                ccall(($(string(syevr)),liblapack), Void,
-                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, 
-                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, 
-                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
-                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt},
-                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
-                    &jobz, &range, &uplo, &n, 
-                    A, &lda, &vl, &vu, 
-                    &il, &iu, &abstol, m,
-                    w, Z, &ldz, isuppz,
-                    work, &lwork, rwork, &lrwork,
-                    iwork, &liwork, info)
-                if info[1] != 0 throw(LAPACKException(info[1])) end
-                if lwork < 0
-                    lwork = blas_int(real(work[1]))
-                    work = Array($elty, lwork)
-                    lrwork = blas_int(rwork[1])
-                    rwork = Array($relty, lrwork)
-                    liwork = iwork[1]
-                    iwork = Array(BlasInt, liwork)
-                end
-            end
-            return w[1:m[1]], Z[:,1:(jobz == 'V' ? m[1] : 0)]
-        end
-    end
-end
-syevr!(jobz::Char, A::StridedMatrix) = syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
 
 # Estimate condition number
 for (gecon, elty) in
@@ -2270,7 +2698,7 @@ for (gecon, elty) in
             iwork = Array(BlasInt, n)
             info = Array(BlasInt, 1)
             ccall(($(string(gecon)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}),
                   &normtype, &n, A, &lda, &anorm, rcond, work, iwork,
@@ -2304,7 +2732,7 @@ for (gecon, elty, relty) in
             rwork = Array($relty, 2n)
             info = Array(BlasInt, 1)
             ccall(($(string(gecon)),liblapack), Void,
-                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
                    Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty},
                    Ptr{BlasInt}),
                   &normtype, &n, A, &lda, &anorm, rcond, work, rwork,
@@ -2420,7 +2848,7 @@ for (gees, gges, elty) in
             info = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(string(gees)),liblapack), Void,
-                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Void}, Ptr{BlasInt},
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Void}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{Void}, Ptr{BlasInt}),
@@ -2467,7 +2895,7 @@ for (gees, gges, elty) in
             info = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(string(gges)), liblapack), Void,
-                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Void},
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Void},
                         Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                         Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
@@ -2516,7 +2944,7 @@ for (gees, gges, elty, relty) in
             info = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(string(gees)),liblapack), Void,
-                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Void}, Ptr{BlasInt},
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Void}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
                         Ptr{$relty}, Ptr{Void}, Ptr{BlasInt}),
@@ -2560,7 +2988,7 @@ for (gees, gges, elty, relty) in
             info = Array(BlasInt, 1)
             for i = 1:2
                 ccall(($(string(gges)), liblapack), Void,
-                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Void},
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Void},
                         Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -2602,7 +3030,7 @@ for (fn, elty, relty) in ((:dsfrk_, :Float64, :Float64),
             end
             lda = max(1, stride(A, 2))
             ccall(($(string(fn)), liblapack), Void,
-                (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt},
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
                  Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$relty}, Ptr{$elty}),
                 &transr, &uplo, &trans, &n,
@@ -2623,7 +3051,7 @@ for (fn, elty) in ((:dpftrf_, :Float64),
             n = int(div(sqrt(8length(A)), 2))
             info = Array(BlasInt, 1)
             ccall(($(string(fn)), liblapack), Void,
-                (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty},
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{BlasInt}),
                 &transr, &uplo, &n, A,
                 info)
@@ -2643,7 +3071,7 @@ for (fn, elty) in ((:dpftri_, :Float64),
             n = int(div(sqrt(8length(A)), 2))
             info = Array(BlasInt, 1)
             ccall(($(string(fn)), liblapack), Void,
-                (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty},
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{BlasInt}),
                 &transr, &uplo, &n, A, 
                 info)
@@ -2667,7 +3095,7 @@ for (fn, elty) in ((:dpftrs_, :Float64),
             ldb = max(1, stride(B, 2))
             info = Array(BlasInt, 1)
             ccall(($(string(fn)), liblapack), Void,
-                (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt},
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                 &transr, &uplo, &n, &nhrs,
                 A, B, &ldb, info)
@@ -2689,8 +3117,8 @@ for (fn, elty) in ((:dtfsm_, :Float64),
             if int(div(sqrt(8length(A)), 2)) != m throw(DimensionMismatch("")) end
             ldb = max(1, stride(B, 2))
             ccall(($(string(fn)), liblapack), Void,
-                (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8},
-                 Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar},
+                 Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
                 &transr, &side, &uplo, &trans,
                 &diag, &m, &n, &alpha,
@@ -2710,7 +3138,7 @@ for (fn, elty) in ((:dtftri_, :Float64),
             n = int(div(sqrt(8length(A)), 2))
             info = Array(BlasInt, 1)
             ccall(($(string(fn)), liblapack), Void,
-                (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, 
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
                  Ptr{$elty}, Ptr{BlasInt}),
                 &transr, &uplo, &diag, &n, 
                 A, info)
@@ -2731,7 +3159,7 @@ for (fn, elty) in ((:dtfttr_, :Float64),
             info = Array(BlasInt, 1)
             A = Array($elty, n, n)
             ccall(($(string(fn)), liblapack), Void,
-                (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty},
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                 &transr, &uplo, &n, Arf,
                 A, &n, info)
@@ -2754,7 +3182,7 @@ for (fn, elty) in ((:dtrttf_, :Float64),
             info = Array(BlasInt, 1)
             Arf = Array($elty, div(n*(n+1), 2))
             ccall(($(string(fn)), liblapack), Void,
-                (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty},
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                 &transr, &uplo, &n, A,
                 &lda, Arf, info)

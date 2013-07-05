@@ -13,35 +13,69 @@
 #### Examples used in the manual ####
 
 @test readall(`echo hello | sort`) == "hello | sort\n"
-@test readall(`echo hello`|`sort`) == "hello\n"
+@test readall(`echo hello` |> `sort`) == "hello\n"
+@test length(spawn(`echo hello` |> `sort`).processes) == 2
 
 out = readall(`echo hello` & `echo world`)
 @test search(out,"world") != (0,0)
 @test search(out,"hello") != (0,0)
-@test readall((`echo hello` & `echo world`)|`sort`)=="hello\nworld\n"
+@test readall((`echo hello` & `echo world`) |> `sort`)=="hello\nworld\n"
 
 @test (run(`printf "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
+# Test for SIGPIPE being treated as normal termination (throws an error if broken)
+@test (run(`yes`|>`head`|>SpawnNullStream()); true)
+
+a = Base.Condition()
+
+@schedule begin
+    p = spawn(`yes`|>SpawnNullStream())
+    Base.notify(a,p)
+    @test !Base.wait_success(p)
+end
+kill(wait(a))
+
+@test_throws run(`foo`)
+
 if false
     prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
-    @test success(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` |
+    @test success(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` |>
                   prefixer("A",2) & prefixer("B",2))
-    @test success(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` |
-                  prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3) |
+    @test success(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` |>
+                  prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3) |>
                   prefixer("A",2) & prefixer("B",2))
 end
 
 @test  success(`true`)
 @test !success(`false`)
-@test success(`true`|`true`)
+@test success(`true` |> `true`)
 if false
     @test  success(ignorestatus(`false`))
-    @test  success(ignorestatus(`false`) | `true`)
-    @test !success(ignorestatus(`false`) | `false`)
+    @test  success(ignorestatus(`false`) |> `true`)
+    @test !success(ignorestatus(`false`) |> `false`)
     @test !success(ignorestatus(`false`) & `false`)
-    @test  success(ignorestatus(`false` | `false`))
+    @test  success(ignorestatus(`false` |> `false`))
     @test  success(ignorestatus(`false` & `false`))
 end
+
+# STDIN Redirection
+file = tempname()
+run(`echo hello world` |> file)
+@test readall(file |> `cat`) == "hello world\n"
+
+# Stream Redirection
+@async begin
+    server = listen(2326)
+    client = accept(server)
+    @test readall(client |> `cat`) == "hello world\n"
+    close(server)
+end
+@async begin
+    sock = connect(2326)
+    run(`echo hello world` |> sock)
+    close(sock)
+end
+
 
 # Here we test that if we close a stream with pending writes, we don't lose the writes.
 str = ""
@@ -56,6 +90,6 @@ str2 = readall(stdout)
 
 # This test hangs if the end of run walk across uv streams calls shutdown on a stream that is shutting down.
 file = tempname()
-stdin, proc = writesto(`cat -` > file)
+stdin, proc = writesto(`cat -` |> file)
 write(stdin, str)
 close(stdin)

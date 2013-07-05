@@ -2,9 +2,8 @@
 =================================================================
 
 .. module:: Base.Collections
-   :synopsis: 
 
-The `Collections` module contains implementations of some common data
+The ``Collections`` module contains implementations of some common data
 structures.
 
 
@@ -30,7 +29,7 @@ the priority of existing keys can be changed efficiently.
    Remove and return the lowest priority key from a priority queue.
 
 ``PriorityQueue`` also behaves similarly to a ``Dict`` so that keys can be
-inserted and priorities accessed or changed using indexing notation,::
+inserted and priorities accessed or changed using indexing notation::
 
   # Julia code
   pq = PriorityQueue()
@@ -72,7 +71,7 @@ the heap are given in ascending order.
    indeed heap-ordered.
 
 .. function:: heappop!(v, [ord])
-    
+
    Given a binary heap-ordered array, remove and return the lowest ordered
    element. For efficiency, this function does not check that the array is
    indeed heap-ordered.

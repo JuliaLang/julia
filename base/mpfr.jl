@@ -53,7 +53,7 @@ MPFR_clear(mpfr::BigFloat) = ccall((:mpfr_clear, :libmpfr), Void, (Ptr{BigFloat}
 
 BigFloat(x::BigFloat) = x
 
-for (fJ, fC) in ((:si,:Int), (:ui,:Uint), (:d,:Float64))
+for (fJ, fC) in ((:si,:Clong), (:ui,:Culong), (:d,:Float64))
     @eval begin
         function BigFloat(x::($fC))
             z = BigFloat()
@@ -77,14 +77,11 @@ function BigFloat(x::String, base::Int)
 end
 BigFloat(x::String) = BigFloat(x, 10)
 
+BigFloat(x::Integer) = BigFloat(BigInt(x))
 
-BigFloat(x::Bool) = BigFloat(uint(x))
-BigFloat(x::Signed) = BigFloat(int(x))
-BigFloat(x::Unsigned) = BigFloat(uint(x))
-if WORD_SIZE == 32
-    BigFloat(x::Int64) = BigFloat(string(x))
-    BigFloat(x::Uint64) = BigFloat(BigInt(x))
-end
+BigFloat(x::Union(Bool,Int8,Int16,Int32)) = BigFloat(convert(Clong,x))
+BigFloat(x::Union(Uint8,Uint16,Uint32)) = BigFloat(convert(Culong,x))
+
 BigFloat(x::Float32) = BigFloat(float64(x))
 BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 

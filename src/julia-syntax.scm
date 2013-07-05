@@ -6,13 +6,17 @@
 (define (lam:body x) (cadddr x))
 
 ;; allow (:: T) => (:: #gensym T) in formal argument lists
+(define (fill-missing-argname a)
+  (if (and (pair? a) (eq? (car a) '|::|) (null? (cddr a)))
+      `(|::| ,(gensy) ,(cadr a))
+      a))
 (define (fix-arglist l)
   (if (any vararg? (butlast l))
       (error "invalid ... on non-final argument"))
   (map (lambda (a)
-	 (if (and (pair? a) (eq? (car a) '|::|) (null? (cddr a)))
-	     `(|::| ,(gensy) ,(cadr a))
-	     a))
+	 (if (and (pair? a) (eq? (car a) 'kw))
+	     `(kw ,(fill-missing-argname (cadr a)) ,(caddr a))
+	     (fill-missing-argname a)))
        l))
 
 (define (arg-name v)
@@ -334,23 +338,29 @@
 	   (symbol? (cadr (caddr e))))))
 
 (define (method-def-expr- name sparams argl body)
-  (if (has-dups (llist-vars argl))
-      (error "function argument names not unique"))
-  (if (not (or (sym-ref? name)
-	       (and (pair? name) (eq? (car name) 'kw)
-		    (sym-ref? (cadr name)))))
-      (error (string "invalid method name " name)))
-  (let* ((types (llist-types argl))
-	 (body  (method-lambda-expr argl body)))
-    (if (null? sparams)
-	`(method ,name (tuple ,@types) ,body (tuple))
-	(receive
-	 (names bounds) (sparam-name-bounds sparams '() '())
-	 (let ((f (gensy)))
-	   `(call (lambda (,@names ,f)
-		    (method ,name (tuple ,@types) ,f (tuple ,@names)))
-		  ,@(symbols->typevars names bounds #t)
-		  ,body))))))
+  (receive
+   (names bounds) (sparam-name-bounds sparams '() '())
+   (begin
+     (let ((anames (llist-vars argl)))
+       (if (has-dups anames)
+	   (error "function argument names not unique"))
+       (if (has-dups names)
+	   (error "function static parameter names not unique"))
+       (if (any (lambda (x) (memq x names)) anames)
+	   (error "function argument and static parameter names must be distinct")))
+     (if (not (or (sym-ref? name)
+		  (and (pair? name) (eq? (car name) 'kw)
+		       (sym-ref? (cadr name)))))
+	 (error (string "invalid method name " name)))
+     (let* ((types (llist-types argl))
+	    (body  (method-lambda-expr argl body)))
+       (if (null? sparams)
+	   `(method ,name (tuple ,@types) ,body (tuple))
+	   (let ((f (gensy)))
+	     `(call (lambda (,@names ,f)
+		      (method ,name (tuple ,@types) ,f (tuple ,@names)))
+		    ,@(symbols->typevars names bounds #t)
+		    ,body)))))))
 
 (define (vararg? x) (and (pair? x) (eq? (car x) '...)))
 
@@ -638,7 +648,8 @@
   (receive
    (fields defs) (separate (lambda (x) (or (symbol? x) (decl? x)))
 			   fields)
-   (let* ((field-names (map decl-var fields))
+   (let* ((defs        (filter (lambda (x) (not (effect-free? x))) defs))
+	  (field-names (map decl-var fields))
 	  (field-types (map decl-type fields))
 	  (defs2 (if (null? defs)
 		     (list (default-inner-ctor name field-names field-types))
@@ -2058,11 +2069,11 @@
 			     (cdr e))))
 		 (cond ((symbol? dest)
 			(cons `(= ,dest ,(cons (car e) (map car r)))
-			      (apply append (map cdr r))))
+			      (apply append (map cdr (reverse r)))))
 		       (else
 			(let ((ex (cons (car e) (map car r))))
 			  (cons (if tail `(return ,ex) ex)
-				(apply append (map cdr r))))))))))))
+				(apply append (map cdr (reverse r)))))))))))))
   (to-blk (to-lff e #t #t)))
 #|
 future issue:
@@ -2117,29 +2128,25 @@ So far only the second case can actually occur.
 	 (apply append! (map (lambda (x) (find-assigned-vars x env))
 			     e))))))
 
-(define (find-local-decls e env)
+(define (find-decls kind e env)
   (if (or (not (pair? e)) (quoted? e))
       '()
-      (case (car e)
-	((lambda scope-block)  '())
-	((local)  (list (decl-var (cadr e))))
-	(else
-	 (apply append! (map (lambda (x) (find-local-decls x env))
-			     e))))))
+      (cond ((or (eq? (car e) 'lambda) (eq? (car e) 'scope-block))
+	     '())
+	    ((eq? (car e) kind)
+	     (list (decl-var (cadr e))))
+	    (else
+	     (apply append! (map (lambda (x) (find-decls kind x env))
+				 e))))))
 
-(define (find-local!-decls e env)
-  (if (or (not (pair? e)) (quoted? e))
-      '()
-      (case (car e)
-	((lambda scope-block)  '())
-	((local!)  (list (decl-var (cadr e))))
-	(else
-	 (apply append! (map (lambda (x) (find-local!-decls x env))
-			     e))))))
+(define (find-local-decls  e env) (find-decls 'local  e env))
+(define (find-local!-decls e env) (find-decls 'local! e env))
 
-(define (find-locals e env)
+(define (find-locals e env glob)
   (delete-duplicates
    (append! (check-dups (find-local-decls e env))
+	    ;; const decls on non-globals also introduce locals
+	    (diff (find-decls 'const e env) glob)
 	    (find-local!-decls e env)
 	    (find-assigned-vars e env))))
 
@@ -2147,7 +2154,8 @@ So far only the second case can actually occur.
 ;; convert (scope-block x) to `(scope-block ,@locals ,x)
 ;; where locals is a list of (local x) expressions, derived from two sources:
 ;; 1. (local x) expressions inside this scope-block and lambda
-;; 2. variables assigned inside this scope-block that don't exist in outer
+;; 2. (const x) expressions in a scope-block where x is not declared global
+;; 3. variables assigned inside this scope-block that don't exist in outer
 ;;    scopes
 (define (add-local-decls e env)
   (if (or (not (pair? e)) (quoted? e)) e
@@ -2161,7 +2169,7 @@ So far only the second case can actually occur.
 		    (vars (find-locals
 			   ;; being declared global prevents a variable
 			   ;; assignment from introducing a local
-			   (cadr e) (append env glob)))
+			   (cadr e) (append env glob) glob))
 		    (body (add-local-decls (cadr e) (append vars glob env))))
 	       `(scope-block ,@(map (lambda (v) `(local ,v))
 				    vars)
@@ -2284,6 +2292,7 @@ So far only the second case can actually occur.
 (define vinfo:name car)
 (define vinfo:type cadr)
 (define (vinfo:capt v) (< 0 (logand (caddr v) 1)))
+(define (vinfo:asgn v) (< 0 (logand (caddr v) 2)))
 (define (vinfo:const v) (< 0 (logand (caddr v) 8)))
 (define (vinfo:set-type! v t) (set-car! (cdr v) t))
 ;; record whether var is captured
@@ -2306,6 +2315,11 @@ So far only the second case can actually occur.
 					 (if a
 					     (logior (caddr v) 8)
 					     (logand (caddr v) -9))))
+;; whether var is assigned once
+(define (vinfo:set-sa! v a) (set-car! (cddr v)
+				      (if a
+					  (logior (caddr v) 16)
+					  (logand (caddr v) -17))))
 
 (define var-info-for assq)
 
@@ -2330,6 +2344,9 @@ So far only the second case can actually occur.
 	 (let ((vi (var-info-for (cadr e) env)))
 	   (if vi
 	       (begin
+		 (if (vinfo:asgn vi)
+		     (vinfo:set-sa! vi #f)
+		     (vinfo:set-sa! vi #t))
 		 (vinfo:set-asgn! vi #t)
 		 (if (assq (car vi) captvars)
 		     (vinfo:set-iasg! vi #t)))))

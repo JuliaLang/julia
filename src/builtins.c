@@ -142,6 +142,12 @@ int jl_egal(jl_value_t *a, jl_value_t *b)
         return 1;
     }
     jl_datatype_t *dt = (jl_datatype_t*)ta;
+    if (dt == jl_datatype_type) {
+        jl_datatype_t *dta = (jl_datatype_t*)a;
+        jl_datatype_t *dtb = (jl_datatype_t*)b;
+        return dta->name == dtb->name &&
+            jl_egal((jl_value_t*)dta->parameters, (jl_value_t*)dtb->parameters);
+    }
     if (dt->mutabl) return 0;
     size_t sz = dt->size;
     if (sz == 0) return 1;
@@ -299,15 +305,12 @@ JL_CALLABLE(jl_f_apply)
 JL_CALLABLE(jl_f_kwcall)
 {
     if (nargs < 3)
-        jl_error("internal error: malformed keyword argument call");
+        jl_error("internal error: malformed named argument call");
     JL_TYPECHK(apply, function, args[0]);
     jl_function_t *f = (jl_function_t*)args[0];
     if (!jl_is_gf(f))
-        jl_error("function does not accept keyword arguments");
+        jl_error("function does not accept named arguments");
     jl_function_t *sorter = ((jl_methtable_t*)f->env)->kwsorter;
-    if (sorter == NULL)
-        jl_errorf("function %s does not accept keyword arguments",
-                  jl_gf_name(f)->name);
 
     size_t nkeys = jl_unbox_long(args[1]);
     size_t nrest=0;
@@ -323,7 +326,17 @@ JL_CALLABLE(jl_f_kwcall)
             rkw = jl_apply(jl_append_any_func, &rkw, 1);
             args[2 + 2*nkeys] = rkw;  // gc root
         }
+        assert(jl_is_array(rkw));
         nrest = jl_array_len(rkw);
+    }
+
+    if (nkeys+nrest == 0) {
+        // no named args passed; bypass sorter
+        return jl_apply(f, &args[3], nargs-3);
+    }
+    if (sorter == NULL) {
+        jl_errorf("function %s does not accept named arguments",
+                  jl_gf_name(f)->name);
     }
 
     size_t kwlen = (nkeys+nrest)*2;
@@ -340,7 +353,12 @@ JL_CALLABLE(jl_f_kwcall)
     }
     for(size_t i=0; i < nrest; i++) {
         jl_value_t *ri = jl_cellref(rkw, i);
-        jl_tupleset(kwtuple, (nkeys+i)*2  , jl_tupleref(ri,0));
+        jl_value_t *sym;
+        if (!jl_is_tuple(ri) || jl_tuple_len(ri)<2 ||
+            !jl_is_symbol(sym=jl_tupleref(ri,0))) {
+            jl_error("expected (symbol,value) tuples in named argument container");
+        }
+        jl_tupleset(kwtuple, (nkeys+i)*2  , sym);
         jl_tupleset(kwtuple, (nkeys+i)*2+1, jl_tupleref(ri,1));
     }
     args[pa-1] = (jl_value_t*)kwtuple;
@@ -600,6 +618,18 @@ DLLEXPORT void jl_print_int64(JL_STREAM *s, int64_t i)
     JL_PRINTF(s, "%lld", i);
 }
 
+DLLEXPORT int jl_substrtod(char *str, int offset, int len, double *out)
+{
+    char *p;
+    errno = 0;
+    char *bstr = str+offset;
+    *out = strtod(bstr, &p);
+    if ((p == bstr) || (p != (bstr+len)) ||
+        (errno==ERANGE && (*out==0 || *out==HUGE_VAL || *out==-HUGE_VAL)))
+        return 1;
+    return 0;
+}
+
 DLLEXPORT int jl_strtod(char *str, double *out)
 {
     char *p;
@@ -613,6 +643,23 @@ DLLEXPORT int jl_strtod(char *str, double *out)
             return 1;
         p++;
     }
+    return 0;
+}
+
+DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
+{
+    char *p;
+    errno = 0;
+    char *bstr = str+offset;
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+    *out = (float)strtod(bstr, &p);
+#else
+    *out = strtof(bstr, &p);
+#endif
+
+    if ((p == bstr) || (p != (bstr+len)) ||
+        (errno==ERANGE && (*out==0 || *out==HUGE_VALF || *out==-HUGE_VALF)))
+        return 1;
     return 0;
 }
 
@@ -958,6 +1005,12 @@ DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
         return h;
     }
     jl_datatype_t *dt = (jl_datatype_t*)tv;
+    if (dt == jl_datatype_type) {
+        jl_datatype_t *dtv = (jl_datatype_t*)v;
+        uptrint_t h = inthash((uptrint_t)tv);
+        return bitmix(bitmix(h, jl_object_id((jl_value_t*)dtv->name)),
+                      jl_object_id((jl_value_t*)dtv->parameters));
+    }
     if (dt->mutabl) return inthash((uptrint_t)v);
     size_t sz = jl_datatype_size(tv);
     uptrint_t h = inthash((uptrint_t)tv);

@@ -76,8 +76,8 @@ function whicht(f, types)
             d = f.env.defs
             while !is(d,())
                 if is(d.func.code, lsd)
-                    print(OUTPUT_STREAM, f.env.name)
-                    show(OUTPUT_STREAM, d); println(OUTPUT_STREAM)
+                    print(STDOUT, f.env.name)
+                    show(STDOUT, d); println(STDOUT)
                     return
                 end
                 d = d.next
@@ -191,15 +191,38 @@ function warn_once(msg::String...; depth=0)
     warn(msg; depth=depth+1)
 end
 
-# openblas utility routines
+# blas utility routines
+function blas_vendor()
+    try
+        cglobal((:openblas_set_num_threads, Base.libblas_name), Void)
+        return :openblas
+    end
+    try
+        cglobal((:MKL_Set_Num_Threads, Base.libblas_name), Void)
+        return :mkl
+    end
+    return :unknown
+end
 
-if Base.libblas_name == "libopenblas"
+openblas_get_config() = chop(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
 
-    openblas_get_config() = chop(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
+function blas_set_num_threads(n::Integer)
+    blas = blas_vendor()
+    if blas == :openblas
+        return ccall((:openblas_set_num_threads, Base.libblas_name), Void, (Int32,), n)
+    elseif blas == :mkl
+        # MKL may let us set the number of threads in several ways
+        return ccall((:MKL_Set_Num_Threads, Base.libblas_name), Void, (Cint,), n)
+    end
 
-    openblas_set_num_threads(n::Integer) = ccall((:openblas_set_num_threads, Base.libblas_name), Void, (Int32, ), n)
+    # OSX BLAS looks at an environment variable
+    @osx_only ENV["VECLIB_MAXIMUM_THREADS"] = n
 
-    function check_openblas()
+    return nothing
+end
+
+function check_blas()
+    if blas_vendor() == :openblas
         openblas_config = openblas_get_config()
         openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
         if Base.USE_BLAS64 != openblas64
@@ -216,12 +239,11 @@ if Base.libblas_name == "libopenblas"
             quit()
         end
     end
-
 end
 
 # system information
 
-function versioninfo(io::IO=OUTPUT_STREAM, verbose::Bool=false)
+function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "Julia $version_string")
     println(io,             commit_string)
     println(io,             "Platform Info:")
@@ -281,10 +303,10 @@ function methodswith(io::IO, t::Type, m::Module, showparents::Bool)
     end
 end
 
-methodswith(t::Type, m::Module, showparents::Bool) = methodswith(OUTPUT_STREAM, t, m, showparents)
-methodswith(t::Type, showparents::Bool) = methodswith(OUTPUT_STREAM, t, showparents)
-methodswith(t::Type, m::Module) = methodswith(OUTPUT_STREAM, t, m, false)
-methodswith(t::Type) = methodswith(OUTPUT_STREAM, t, false)
+methodswith(t::Type, m::Module, showparents::Bool) = methodswith(STDOUT, t, m, showparents)
+methodswith(t::Type, showparents::Bool) = methodswith(STDOUT, t, showparents)
+methodswith(t::Type, m::Module) = methodswith(STDOUT, t, m, false)
+methodswith(t::Type) = methodswith(STDOUT, t, false)
 function methodswith(io::IO, t::Type, showparents::Bool)
     mainmod = current_module()
     # find modules in Main
@@ -297,3 +319,7 @@ function methodswith(io::IO, t::Type, showparents::Bool)
         end
     end
 end
+
+# Conditional usage of packages and modules
+usingmodule(name::Symbol) = eval(current_module(), Expr(:toplevel, Expr(:using, name)))
+usingmodule(name::String) = usingmodule(symbol(name))

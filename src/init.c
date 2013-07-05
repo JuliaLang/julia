@@ -303,6 +303,9 @@ DLLEXPORT void uv_atexit_hook()
             continue;
         }
         switch(handle->type) {
+        case UV_FILE:
+            free(handle);
+            break;
         case UV_TTY:
         case UV_UDP:
 //#ifndef _OS_WINDOWS_ // unix only supports shutdown on TCP and NAMED_PIPE
@@ -388,6 +391,7 @@ void *init_stdio_handle(uv_file fd,int readable)
 {
     void *handle;
     uv_handle_type type = uv_guess_handle(fd);
+    jl_uv_file_t *file;
     //printf("%d: %d -- %d\n", fd, type);
     switch(type)
     {
@@ -400,15 +404,17 @@ void *init_stdio_handle(uv_file fd,int readable)
             ((uv_tty_t*)handle)->data=0;
             uv_tty_set_mode((void*)handle,0); //cooked stdio
             break;
-        case UV_FILE:
-#ifdef _OS_WINDOWS_
-            jl_errorf("This type of handle for stdio is not yet supported on Windows (%d, %d)!\n", fd, type);
-            handle = NULL;
+        case UV_FILE: 
+            file = malloc(sizeof(jl_uv_file_t));
+            file->loop = jl_io_loop;
+            file->type = UV_FILE;
+            file->file = fd;
+            file->data = 0;
+            handle = file;
             break;
-#endif
         case UV_NAMED_PIPE:
             handle = malloc(sizeof(uv_pipe_t));
-            if (uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle, (readable?UV_PIPE_READABLE:UV_PIPE_WRITEABLE))) {
+            if (uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle, (readable?UV_PIPE_READABLE:UV_PIPE_WRITABLE))) {
                 jl_errorf("Error initializing stdio in uv_pipe_init (%d, %d)\n", fd, type);
                 abort();
             }
@@ -419,6 +425,17 @@ void *init_stdio_handle(uv_file fd,int readable)
             ((uv_pipe_t*)handle)->data=0;
             break;
         case UV_TCP:
+            handle = malloc(sizeof(uv_tcp_t));
+            if (uv_tcp_init(jl_io_loop, (uv_tcp_t*)handle)) {
+                jl_errorf("Error initializing stdio in uv_tcp_init (%d, %d)\n", fd, type);
+                abort();
+            }
+            if (uv_tcp_open((uv_tcp_t*)handle,fd)) {
+                jl_errorf("Error initializing stdio in uv_tcp_open (%d, %d)\n", fd, type);
+                abort();
+            }
+            ((uv_tcp_t*)handle)->data=0;
+            break;
         case UV_UDP:
         default:
             jl_errorf("This type of handle for stdio is not yet supported (%d, %d)!\n", fd, type);
@@ -656,6 +673,7 @@ void jl_get_builtin_hooks(void)
     jl_nothing      = core("nothing");
     jl_root_task->tls = jl_nothing;
     jl_root_task->consumers = jl_nothing;
+    jl_root_task->donenotify = jl_nothing;
 
     jl_char_type    = (jl_datatype_t*)core("Char");
     jl_int8_type    = (jl_datatype_t*)core("Int8");
@@ -667,6 +685,7 @@ void jl_get_builtin_hooks(void)
 
     jl_float32_type = (jl_datatype_t*)core("Float32");
     jl_float64_type = (jl_datatype_t*)core("Float64");
+    jl_floatingpoint_type = (jl_datatype_t*)core("FloatingPoint");
 
     jl_stackovf_exception =
         jl_apply((jl_function_t*)core("StackOverflowError"), NULL, 0);

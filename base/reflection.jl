@@ -3,10 +3,13 @@ module_name(m::Module) = ccall(:jl_module_name, Any, (Any,), m)::Symbol
 module_parent(m::Module) = ccall(:jl_module_parent, Any, (Any,), m)::Module
 current_module() = ccall(:jl_get_current_module, Any, ())::Module
 
+fullname(m::Module) = m===Main ? () : tuple(fullname(module_parent(m))...,
+                                            module_name(m))
+
 names(m::Module, all::Bool, imported::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32,Int32), m, all, imported)
 names(m::Module, all::Bool) = names(m, all, false)
 names(m::Module) = names(m, false, false)
-names(t::DataType) = t.names
+names(t::DataType) = collect(t.names)
 
 function names(v)
     t = typeof(v)
@@ -38,6 +41,12 @@ isleaftype(t::ANY) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 typeintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
 typeseq(a::ANY,b::ANY) = subtype(a,b)&&subtype(b,a)
 
+function fieldoffsets(x::DataType)
+    offsets = Array(Int, length(x.names))
+    ccall(:jl_field_offsets, Void, (Any, Ptr{Int}), x, offsets)
+    offsets
+end
+
 # subtypes
 function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
     add!(visited, m)
@@ -61,6 +70,8 @@ subtypetree(x::DataType, level=-1) = (level == 0 ? (x, {}) : (x, {subtypetree(y,
 # function reflection
 isgeneric(f::ANY) = (isa(f,Function)||isa(f,DataType)) && isa(f.env,MethodTable)
 
+function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
+
 methods(f::ANY,t::ANY) = _methods(f,t,-1)::Array{Any,1}
 _methods(f::ANY,t::ANY,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
 
@@ -71,15 +82,18 @@ function methods(f::Function)
     f.env
 end
 
-methods(t::DataType) = (methods(t,Tuple);  # force constructor creation
+methods(t::DataType) = (_methods(t,Tuple,0);  # force constructor creation
                         t.env)
+
+uncompressed_ast(l::LambdaStaticData) =
+    isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
 disassemble(f::Function, types::Tuple, asm::Bool = false) =
     print(ccall(:jl_dump_function, Any, (Any,Any,Bool), f, types, asm)::ByteString)
 
-function functionlocs(f::Function, types)
-    locs = Array(Tuple, 0)
-    for m = methods(f, types)
+function functionlocs(f::Function, types=(Any...))
+    locs = Any[]
+    for m in methods(f, types)
         if isa(m[3],LambdaStaticData)
             lsd = m[3]::LambdaStaticData
             ln = lsd.line
@@ -93,9 +107,13 @@ function functionlocs(f::Function, types)
     end
     locs
 end
-functionlocs(f::Function) = functionlocs(f, (Any...))
 
-functionloc(f::Function, types) = functionlocs(f, types)[1]
-functionloc(f::Function) = functionloc(f, (Any...))
+functionloc(f::Function, types=(Any...)) = functionlocs(f, types)[1]
 
-
+function function_module(f::Function, types=(Any...))
+    m = methods(f, types)
+    if isempty(m)
+        error("no matching methods")
+    end
+    m[1][3].module
+end

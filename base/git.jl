@@ -3,22 +3,37 @@ module Git
 # some utility functions for working with git repos
 #
 
-dir() = readchomp(`git rev-parse --git-dir`)
-modules(args::Cmd) = readchomp(`git config -f .gitmodules $args`)
-different(verA::String, verB::String, path::String) =
-    !success(`git diff --quiet $verA $verB -- $path`)
+dir(d) = cd(dir,d)
+dir() = Base.readchomp(`git rev-parse --git-dir`)
 
-dirty() = !success(`git diff --quiet HEAD`)
-staged() = !success(`git diff --quiet --cached`)
-unstaged() = !success(`git diff --quiet`)
-dirty(paths) = !success(`git diff --quiet HEAD -- $paths`)
-staged(paths) = !success(`git diff --quiet --cached -- $paths`)
-unstaged(paths) = !success(`git diff --quiet -- $paths`)
-iscommit(name) = success(`git cat-file commit $name`)
+function git(d)
+    isempty(d) && return `git`
+    work_tree = abspath(d)
+    git_dir = joinpath(work_tree, dir(work_tree))
+    normpath(work_tree, ".") == normpath(git_dir, ".") ? # is it a bare repo?
+    `git --git-dir=$work_tree` : `git --work-tree=$work_tree --git-dir=$git_dir`
+end
 
-attached() = success(`git symbolic-ref -q HEAD` > SpawnNullStream())
-branch() = readchomp(`git rev-parse --symbolic-full-name --abbrev-ref HEAD`)
-head() = readchomp(`git rev-parse HEAD`)
+run(args::Cmd; dir="", out=STDOUT) = Base.run(`$(git(dir)) $args` |> out)
+success(args::Cmd; dir="") = Base.success(`$(git(dir)) $args`)
+readall(args::Cmd; dir="") = Base.readall(`$(git(dir)) $args`)
+readchomp(args::Cmd; dir="") = Base.readchomp(`$(git(dir)) $args`)
+
+modules(args::Cmd; dir="") = readchomp(`config -f .gitmodules $args`, dir=dir)
+different(verA::String, verB::String, path::String; dir="") =
+    !success(`diff --quiet $verA $verB -- $path`, dir=dir)
+
+dirty(; dir="") = !success(`diff --quiet HEAD`, dir=dir)
+staged(; dir="") = !success(`diff --quiet --cached`, dir=dir)
+unstaged(; dir="") = !success(`diff --quiet`, dir=dir)
+dirty(paths; dir="") = !success(`diff --quiet HEAD -- $paths`, dir=dir)
+staged(paths; dir="") = !success(`diff --quiet --cached -- $paths`, dir=dir)
+unstaged(paths; dir="") = !success(`diff --quiet -- $paths`, dir=dir)
+iscommit(name; dir="") = success(`cat-file commit $name`, dir=dir)
+
+attached(; dir="") = success(`symbolic-ref -q HEAD`, dir=dir)
+branch(; dir="") = readchomp(`rev-parse --symbolic-full-name --abbrev-ref HEAD`, dir=dir)
+head(; dir="") = readchomp(`rev-parse HEAD`, dir=dir)
 
 immutable State
     head::ASCIIString
@@ -26,40 +41,42 @@ immutable State
     work::ASCIIString
 end
 
-function snapshot()
-    head = readchomp(`git rev-parse HEAD`)
-    index = readchomp(`git write-tree`)
+function snapshot(; dir="")
+    head = readchomp(`rev-parse HEAD`, dir=dir)
+    index = readchomp(`write-tree`, dir=dir)
     work = try
-        run(`git add --all`)
-        run(`git add .`)
-        readchomp(`git write-tree`)
+        run(`add --all`, dir=dir)
+        run(`add .`, dir=dir)
+        readchomp(`write-tree`, dir=dir)
     finally
-        run(`git read-tree $index`) # restore index
+        run(`read-tree $index`, dir=dir) # restore index
     end
     State(head, index, work)
 end
 
-function restore(s::State)
-    run(`git reset -q --`)               # unstage everything
-    run(`git read-tree $(s.work)`)       # move work tree to index
-    run(`git checkout-index -fa`)        # check the index out to work
-    run(`git clean -qdf`)                # remove everything else
-    run(`git read-tree $(s.index)`)      # restore index
-    run(`git reset -q --soft $(s.head)`) # restore head
+function restore(s::State; dir="")
+    run(`reset -q --`, dir=dir)               # unstage everything
+    run(`read-tree $(s.work)`, dir=dir)       # move work tree to index
+    run(`checkout-index -fa`, dir=dir)        # check the index out to work
+    run(`clean -qdf`, dir=dir)                # remove everything else
+    run(`read-tree $(s.index)`, dir=dir)      # restore index
+    run(`reset -q --soft $(s.head)`, dir=dir) # restore head
 end
 
-function transact(f::Function)
-    state = snapshot()
+function transact(f::Function; dir="")
+    state = snapshot(dir=dir)
     try f() catch
-        restore(state)
+        restore(state, dir=dir)
         rethrow()
     end
 end
 
-function is_ancestor_of(a::String, b::String)
-    A = readchomp(`git rev-parse $a`)
-    readchomp(`git merge-base $A $b`) == A
+function is_ancestor_of(a::String, b::String; dir="")
+    A = readchomp(`rev-parse $a`, dir=dir)
+    readchomp(`merge-base $A $b`, dir=dir) == A
 end
+
+## below here to be retired ##
 
 function each_tagged_version()
     git_dir = abspath(dir())
@@ -106,7 +123,7 @@ end
 function read_config_blob(blob::String)
     tmp, io = mktemp()
     try
-        write(io, readall(`git cat-file blob $blob`))
+        write(io, readall(`cat-file blob $blob`))
     finally
         close(io)
     end
@@ -121,10 +138,10 @@ function write_config(file::String, cfg::Dict)
         val = cfg[key]
         if isa(val,Array)
             for x in val
-                run(`git config -f $tmp --add $key $x`)
+                run(`config -f $tmp --add $key $x`)
             end
         else
-            run(`git config -f $tmp $key $val`)
+            run(`config -f $tmp $key $val`)
         end
     end
     if isfile(tmp)
@@ -181,12 +198,12 @@ const GITHUB_REGEX = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](
 # setup a repo's push URL intelligently
 
 function autoconfig_pushurl()
-    url = readchomp(`git config remote.origin.url`)
+    url = readchomp(`config remote.origin.url`)
     m = match(GITHUB_REGEX,url)
     if m != nothing
         pushurl = "git@github.com:$(m.captures[1])"
         if pushurl != url
-            run(`git config remote.origin.pushurl $pushurl`)
+            run(`config remote.origin.pushurl $pushurl`)
         end
     end
 end

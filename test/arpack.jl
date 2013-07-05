@@ -1,12 +1,20 @@
 begin
-	local n,a,asym,d,v
-	n = 10
-	a = rand(n,n)
-	asym = a' * a
+    local n,a,asym,d,v
+    n = 10
+    a = rand(n,n)
 
-	(d,v) = eigs(asym; nev=3)
-	@test sum(asym*v[:,1]-d[1]*v[:,1]) < 1e-8
+    for elty in (Float32, Float64, Complex64, Complex128)
+        a     = convert(Matrix{elty}, a)
+        asym  = a' + a                  # symmetric indefinite
+        apd   = a'*a                    # symmetric positive-definite
 
-	(d,v) = eigs(a; nev=3)
-	@test abs(sum(a*v[:,2]-d[2]*v[:,2])) < 1e-8
+	(d,v) = eigs(a, nev=3)
+	Test.@test_approx_eq a*v[:,2] d[2]*v[:,2]
+
+	(d,v) = eigs(asym, nev=3)
+	Test.@test_approx_eq asym*v[:,1] d[1]*v[:,1]
+
+	(d,v) = eigs(apd, nev=3)
+	Test.@test_approx_eq apd*v[:,3] d[3]*v[:,3]
+    end
 end

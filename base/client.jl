@@ -44,6 +44,29 @@ function repl_callback(ast::ANY, show_value)
     put(repl_channel, (ast, show_value))
 end
 
+function repl_cmd(cmd)
+    if isempty(cmd.exec)
+        error("no cmd to execute")
+    elseif cmd.exec[1] == "cd"
+        if length(cmd.exec) > 2
+            error("cd method only takes one argument")
+        elseif length(cmd.exec) == 2
+            cd(cmd.exec[2])
+        else
+            cd()
+        end
+        println(pwd())
+    else
+        run(cmd)
+    end
+    nothing
+end
+
+function repl_hook(input::String)
+    return Expr(:call, :(Base.repl_cmd),
+        macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
+end
+
 display_error(er) = display_error(er, {})
 function display_error(er, bt)
     with_output_color(:red, STDERR) do io
@@ -266,10 +289,10 @@ isinteractive() = (is_interactive::Bool)
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     global const LOAD_PATH = ByteString[
-        abspath(JULIA_HOME,"..","share","julia","extras"),
         abspath(JULIA_HOME,"..","local","share","julia","site",vers),
         abspath(JULIA_HOME,"..","share","julia","site",vers)
     ]
+    global const DL_LOAD_PATH = ByteString[]
 end
 
 function init_sched()
@@ -281,11 +304,10 @@ function init_head_sched()
     # start in "head node" mode
     global const Scheduler = Task(()->event_loop(true), 1024*1024)
     global PGRP
-    PGRP.myid = 1
-    assert(PGRP.np == 0)
-    push!(PGRP.workers,LocalProcess())
-    push!(PGRP.locs,("",0))
-    PGRP.np = 1
+    global LPROC
+    LPROC.id = 1
+    assert(length(PGRP.workers) == 0)
+    register_worker(LPROC)
     # make scheduler aware of current (root) task
     unshift!(Workqueue, roottask)
     yield()
@@ -294,13 +316,14 @@ end
 function _start()
     # set up standard streams
     reinit_stdio()
+    fdwatcher_reinit()
     # Initialize RNG
     Random.librandom_init()
-    # Check that OpenBLAS is correctly built
-    if Base.libblas_name == "libopenblas"
-        check_openblas()
-    end
+    # Check that BLAS is correctly built
+    check_blas()
+    LinAlg.init()
     Sys.init()
+    GMP.gmp_init()
     global const CPU_CORES = Sys.CPU_CORES
 
     # set default local address
@@ -325,6 +348,12 @@ function _start()
         repl && startup && try_include(abspath(ENV["HOME"],".juliarc.jl"))
 
         if repl
+            if isa(STDIN,File)
+                global is_interactive = false
+                eval(parse_input_line(readall(STDIN)))
+                quit()
+            end
+
             if !color_set
                 @unix_only global have_color = (beginswith(get(ENV,"TERM",""),"xterm") || success(`tput setaf 0`))
                 @windows_only global have_color = true

@@ -59,11 +59,11 @@ big(x::MathConst) = convert(BigFloat,x)
 
 ## specific mathematical constants
 
-@math_const π 3.14159265358979323846 pi
-@math_const e 2.71828182845904523536 exp(big(1))
-@math_const γ 0.57721566490153286061 euler
-@math_const catalan 0.91596559417721901505 catalan
-@math_const φ 1.61803398874989484820 (1+sqrt(big(5)))/2
+@math_const π        3.14159265358979323846  pi
+@math_const e        2.71828182845904523536  exp(big(1))
+@math_const γ        0.57721566490153286061  euler
+@math_const catalan  0.91596559417721901505  catalan
+@math_const φ        1.61803398874989484820  (1+sqrt(big(5)))/2
 
 # aliases
 const pi = π

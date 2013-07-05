@@ -40,6 +40,10 @@ Getting Around
 
    Evaluate all expressions in the given file, and return the value of the last one. No other processing (path searching, fetching from node 1, etc.) is performed.
 
+.. function:: usingmodule(name)
+
+   Supports conditional inclusion of a package or module. Equivalent to ``using name`` in a file, except it can be inside an ``if`` statement.
+
 .. function:: help(name)
 
    Get help for a function. ``name`` can be an object or a string.
@@ -60,7 +64,7 @@ Getting Around
 
    Show all methods with an argument of type ``typ``. If optional
    ``showparents`` is ``true``, also show arguments with a parent type
-   of ``typ``, excluding type ``Any``.  
+   of ``typ``, excluding type ``Any``.
 
 All Objects
 -----------
@@ -201,6 +205,10 @@ Types
    The syntax ``a.b = c`` calls ``setfield(a, :b, c)``, and the syntax ``a.(b) = c``
    calls ``setfield(a, b, c)``.
 
+.. function:: fieldoffsets(type)
+
+   The offset of each field of ``type`` relative to data start.
+
 .. function:: fieldtype(value, name::Symbol)
 
    Determine the declared type of a named field in a value of composite type.
@@ -212,6 +220,14 @@ Types
 .. function:: isbits(T)
 
    True if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``Uint8``, ``Float64``, and ``Complex{Float64}``.
+
+.. function:: typejoin(T, S)
+
+   Compute a type that contains both ``T`` and ``S``.
+
+.. function:: typeintersect(T, S)
+
+   Compute a type that contains the intersection of ``T`` and ``S``. Usually this will be the smallest such type or one close to it.
 
 Generic Functions
 -----------------
@@ -230,11 +246,11 @@ Generic Functions
 
    Invoke a method for the given generic function matching the specified types (as a tuple), on the specified arguments. The arguments must be compatible with the specified types. This allows invoking a method other than the most specific matching method, which is useful when the behavior of a more general definition is explicitly needed (often as part of the implementation of a more specific method of the same function).
 
-.. function:: |(x, f)
-   
+.. function:: |>(x, f)
+
    Applies a function to the preceding argument which allows for easy function chaining.
 
-   **Example**: ``[1:5] | x->x.^2 | sum | inv``
+   **Example**: ``[1:5] |> x->x.^2 |> sum |> inv``
 
 Iteration
 ---------
@@ -299,7 +315,7 @@ General Collections
 .. function:: endof(collection) -> Integer
 
    Returns the last index of the collection.
-   
+
    **Example**: ``endof([1,2,4]) = 3``
 
 Fully implemented by: ``Range``, ``Range1``, ``Tuple``, ``Number``, ``AbstractArray``, ``IntSet``, ``Dict``, ``WeakKeyDict``, ``String``, ``Set``.
@@ -461,11 +477,11 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
 .. function:: keys(collection)
 
-   Return an array of all keys in a collection.
+   Return an iterator over all keys in a collection. ``collect(keys(d))`` returns an array of keys.
 
 .. function:: values(collection)
 
-   Return an array of all values in a collection.
+   Return an iterator over all values in a collection. ``collect(values(d))`` returns an array of values.
 
 .. function:: merge(collection, others...)
 
@@ -490,7 +506,7 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 .. function:: sizehint(s, n)
 
    Suggest that collection ``s`` reserve capacity for at least ``n`` elements. This can improve performance.
-   
+
 Fully implemented by: ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``.
 
 Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``Array``.
@@ -694,6 +710,10 @@ Strings
 .. function:: split(string, [chars, [limit,] [include_empty]])
 
    Return an array of strings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``'s second argument (i.e. a single character, collection of characters, string, or regular expression). If ``chars`` is omitted, it defaults to the set of all space characters, and ``include_empty`` is taken to be false. The last two arguments are also optional: they are are a maximum size for the result and a flag determining whether empty fields should be included in the result.
+
+.. function:: rsplit(string, [chars, [limit,] [include_empty]])
+
+   Similar to ``split``, but starting from the end of the string.
 
 .. function:: strip(string, [chars])
 
@@ -963,7 +983,7 @@ Text I/O
    Print arg(s) using C ``printf()`` style format specification string. Optionally, an IOStream may be passed as the first argument to redirect output.
 
 .. function:: @sprintf("%Fmt", args...)
-    
+
    Return ``@printf`` formatted output as string.
 
 .. function:: showall(x)
@@ -994,19 +1014,28 @@ Text I/O
 
    Create an iterable object that will yield each line from a stream.
 
-.. function:: readdlm(filename, delim::Char)
+.. function:: readdlm(source, delim::Char; has_header=false, use_mmap=false, ignore_invalid_chars=false)
 
-   Read a matrix from a text file where each line gives one row, with elements separated by the given delimeter. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+   Read a matrix from the source where each line gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped filed can be used by passing the byte array representation of the mapped segment as source. 
 
-.. function:: readdlm(filename, delim::Char, T::Type)
+   If ``has_header`` is ``true`` the first row of data would be read as headers and the tuple ``(data_cells, header_cells)`` is returned instead of only ``data_cells``.
 
-   Read a matrix from a text file with a given element type. If ``T`` is a numeric type, the result is an array of that type, with any non-numeric elements as ``NaN`` for floating-point types, or zero. Other useful values of ``T`` include ``ASCIIString``, ``String``, and ``Any``.
+   If ``use_mmap`` is ``true`` the file specified by ``source`` is memory mapped for potential speedups.
+
+   If ``ignore_invalid_chars`` is ``true`` bytes in ``source`` with invalid character encoding will be ignored. Otherwise an error is thrown indicating the offending character position.
+
+   If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
+
+
+.. function:: readdlm(source, delim::Char, T::Type; options...)
+
+   Read a matrix from the source with a given element type. If ``T`` is a numeric type, the result is an array of that type, with any non-numeric elements as ``NaN`` for floating-point types, or zero. Other useful values of ``T`` include ``ASCIIString``, ``String``, and ``Any``.
 
 .. function:: writedlm(filename, array, delim::Char)
 
    Write an array to a text file using the given delimeter (defaults to comma).
 
-.. function:: readcsv(filename, [T::Type])
+.. function:: readcsv(source, [T::Type]; options...)
 
    Equivalent to ``readdlm`` with ``delim`` set to comma.
 
@@ -1017,21 +1046,31 @@ Text I/O
 Memory-mapped I/O
 -----------------
 
+Note: Currently not available on Windows.
+
 .. function:: mmap_array(type, dims, stream, [offset])
 
-   Create an array whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.
+   Create an ``Array`` whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.
 
-   The type determines how the bytes of the array are interpreted (no format conversions are possible), and dims is a tuple containing the size of the array.  
+   The type determines how the bytes of the array are interpreted (no format conversions are possible), and dims is a tuple containing the size of the array.
 
-   The file is specified via the stream.  When you initialize the stream, use "r" for a "read-only" array, and "w+" to create a new array used to write values to disk. Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file.
+   The file is specified via the stream.  When you initialize the stream, use ``"r"`` for a "read-only" array, and ``"w+"`` to create a new array used to write values to disk. Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file.
 
-   **Example**:  A = mmap_array(Int64, (25,30000), s)
+   **Example**:  ``A = mmap_array(Int64, (25,30000), s)``
 
-   This would create a 25-by-30000 array of Int64s, linked to the file associated with stream s.
+   This would create a 25-by-30000 ``Array{Int64}``, linked to the file associated with stream ``s``.
+
+.. function:: mmap_bitarray([type,] dims, stream, [offset])
+
+   Create a ``BitArray`` whose values are linked to a file, using memory-mapping; it has the same purpose, works in the same way, and has the same arguments, as :func:`mmap_array`, but the byte representation is different. The ``type`` parameter is optional, and must be ``Bool`` if given.
+
+   **Example**:  ``B = mmap_bitarray((25,30000), s)``
+
+   This would create a 25-by-30000 ``BitArray``, linked to the file associated with stream ``s``.
 
 .. function:: msync(array)
 
-   Forces synchronization between the in-memory version of a memory-mapped array and the on-disk version. You may not need to call this function, because synchronization is performed at intervals automatically by the operating system. Hower, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
+   Forces synchronization between the in-memory version of a memory-mapped ``Array`` or ``BitArray`` and the on-disk version. You may not need to call this function, because synchronization is performed at intervals automatically by the operating system. Hower, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
 
 .. function:: mmap(len, prot, flags, fd, offset)
 
@@ -1232,6 +1271,18 @@ Mathematical Functions
 
    Bitwise exclusive or
 
+.. function:: isapprox(x::Number, y::Number; rtol::Real=cbrt(maxeps), atol::Real=sqrt(maxeps))
+
+   Inexact equality comparison - behaves slightly different depending on types of input args:
+
+   * For ``FloatingPoint`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol + rtol*max(abs(x), abs(y))``.
+
+   * For ``Integer`` and ``Rational`` numbers, ``isapprox`` returns ``true`` if ``abs(x-y) <= atol``. The `rtol` argument is ignored. If one of ``x`` and ``y`` is ``FloatingPoint``, the other is promoted, and the method above is called instead.
+
+   * For ``Complex`` numbers, the distance in the complex plane is compared, using the same criterion as above.
+
+   For default tolerance arguments, ``maxeps = max(eps(abs(x)), eps(abs(y)))``.
+
 .. function:: sin(x)
 
    Compute sine of ``x``, where ``x`` is in radians
@@ -1402,7 +1453,7 @@ Mathematical Functions
    Compute the :math:`\sqrt{x^2+y^2}` without undue overflow or underflow
 
 .. function:: log(x)
-   
+
    Compute the natural logarithm of ``x``
 
 .. function:: log2(x)
@@ -1485,7 +1536,7 @@ Mathematical Functions
 
 .. function:: signif(x, digits, [base])
 
-   Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``. 
+   Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``.
 
 .. function:: min(x, y)
 
@@ -1524,7 +1575,7 @@ Mathematical Functions
    Return ``x`` with its sign flipped if ``y`` is negative. For example ``abs(x) = flipsign(x,x)``.
 
 .. function:: sqrt(x)
-   
+
    Return :math:`\sqrt{x}`
 
 .. function:: cbrt(x)
@@ -1587,7 +1638,7 @@ Mathematical Functions
 
 .. function:: angle(z)
 
-   Compute the phase angle of a complex number ``z``   
+   Compute the phase angle of a complex number ``z``
 
 .. function:: cis(z)
 
@@ -1878,7 +1929,7 @@ Data Formats
 .. function:: significand(x)
 
    Extract the significand(s) (a.k.a. mantissa), in binary representation, of a floating-point number or array.
-   
+
    For example, ``significand(15.2)/15.2 == 0.125``, and ``significand(15.2)*8 == 15.2``
 
 .. function:: exponent(x) -> Int
@@ -1925,7 +1976,7 @@ Data Formats
 
    Convert an array of bytes to its hexadecimal representation. All characters are in lower-case. Returns an ASCIIString.
 
-   
+
 Numbers
 -------
 
@@ -2007,12 +2058,12 @@ Numbers
 
 .. function:: BigInt(x)
 
-   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``) or a ``String``. 
-   The usual mathematical operators are defined for this type, and results are promoted to a ``BigInt``. 
+   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``) or a ``String``.
+   The usual mathematical operators are defined for this type, and results are promoted to a ``BigInt``.
 
 .. function:: BigFloat(x)
 
-   Create an arbitrary precision floating point number. ``x`` may be an ``Integer``, a ``Float64``, a ``String`` or a ``BigInt``. The 
+   Create an arbitrary precision floating point number. ``x`` may be an ``Integer``, a ``Float64``, a ``String`` or a ``BigInt``. The
    usual mathematical operators are defined for this type, and results are promoted to a ``BigFloat``.
 
 Integers
@@ -2021,37 +2072,37 @@ Integers
 .. function:: count_ones(x::Integer) -> Integer
 
    Number of ones in the binary representation of ``x``.
-   
+
    **Example**: ``count_ones(7) -> 3``
 
 .. function:: count_zeros(x::Integer) -> Integer
 
    Number of zeros in the binary representation of ``x``.
-   
+
    **Example**: ``count_zeros(int32(2 ^ 16 - 1)) -> 16``
 
 .. function:: leading_zeros(x::Integer) -> Integer
 
    Number of zeros leading the binary representation of ``x``.
-   
+
    **Example**: ``leading_zeros(int32(1)) -> 31``
 
 .. function:: leading_ones(x::Integer) -> Integer
 
    Number of ones leading the binary representation of ``x``.
-   
+
    **Example**: ``leading_ones(int32(2 ^ 32 - 2)) -> 31``
 
 .. function:: trailing_zeros(x::Integer) -> Integer
 
    Number of zeros trailing the binary representation of ``x``.
-   
+
    **Example**: ``trailing_zeros(2) -> 1``
 
 .. function:: trailing_ones(x::Integer) -> Integer
 
    Number of ones trailing the binary representation of ``x``.
-   
+
    **Example**: ``trailing_ones(3) -> 2``
 
 .. function:: isprime(x::Integer) -> Bool
@@ -2116,7 +2167,7 @@ Random number generateion in Julia uses the `Mersenne Twister library <http://ww
 
 .. function:: randbool!(A)
 
-   Fill an array with random boolean values. A may be an ``Array`` or a ``BitArray``.   
+   Fill an array with random boolean values. A may be an ``Array`` or a ``BitArray``.
 
 .. function:: randn(dims or [dims...])
 
@@ -2187,7 +2238,7 @@ Constructors
 
 .. function:: cell(dims)
 
-   Construct an uninitialized cell array (heterogeneous array). ``dims`` can be either a tuple or a series of integer arguments.  
+   Construct an uninitialized cell array (heterogeneous array). ``dims`` can be either a tuple or a series of integer arguments.
 .. function:: zeros(type, dims)
 
    Create an array of all zeros of specified type
@@ -2258,7 +2309,7 @@ All mathematical operations and functions are supported for arrays
    Returns a function ``broadcast_f`` such that ``broadcast_function(f)(As...) === broadcast(f, As...)``. Most useful in the form ``const broadcast_f = broadcast_function(f)``.
 
 .. function:: broadcast!_function(f)
-   
+
    Like ``broadcast_function``, but for ``broadcast!``.
 
 Indexing, Assignment, and Concatenation
@@ -2326,6 +2377,10 @@ Indexing, Assignment, and Concatenation
 .. function:: find(A)
 
    Return a vector of the linear indexes of the non-zeros in ``A``.
+
+.. function:: find(f,A)
+
+   Return a vector of the linear indexes of  ``A`` where ``f`` returns true.
 
 .. function:: findn(A)
 
@@ -2541,14 +2596,14 @@ Statistics
 
 .. function:: histrange(v, n)
 
-   Compute `nice` bin ranges for the edges of a histogram of ``v``, using
+   Compute *nice* bin ranges for the edges of a histogram of ``v``, using
    approximately ``n`` bins. The resulting step sizes will be 1, 2 or 5
    multiplied by a power of 10.
 
 .. function:: midpoints(e)
 
    Compute the midpoints of the bins with edges ``e``. The result is a
-   vector/range of length ``length(e) - 1``. 
+   vector/range of length ``length(e) - 1``.
 
 .. function:: quantile(v, p)
 
@@ -2573,7 +2628,13 @@ Statistics
 Signal Processing
 -----------------
 
+.. module:: Base.FFTW
+
+.. module:: Base.DSP
+
 FFT functions in Julia are largely implemented by calling functions from `FFTW <http://www.fftw.org>`_
+
+.. currentmodule:: Base
 
 .. function:: fft(A [, dims])
 
@@ -2688,7 +2749,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    ``d`` is the length of the transformed real array along the ``dims[1]``
    dimension, which must satisfy ``d == floor(size(A,dims[1])/2)+1``.
-   (This parameter cannot be inferred from ``size(A)`` due to the 
+   (This parameter cannot be inferred from ``size(A)`` due to the
    possibility of rounding by the ``floor`` function here.)
 
 .. function:: brfft(A, d [, dims])
@@ -2725,7 +2786,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Same as :func:`dct!`, except that it operates in-place
    on ``A``, which must be an array of real or complex floating-point
-   values. 
+   values.
 
 .. function:: idct(A [, dims])
 
@@ -2762,45 +2823,6 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Same as :func:`plan_idct`, but operates in-place on ``A``.
 
-.. function:: FFTW.r2r(A, kind [, dims])
-
-   Performs a multidimensional real-input/real-output (r2r) transform
-   of type ``kind`` of the array ``A``, as defined in the FFTW manual.
-   ``kind`` specifies either a discrete cosine transform of various types
-   (``FFTW.REDFT00``, ``FFTW.REDFT01``, ``FFTW.REDFT10``, or
-   ``FFTW.REDFT11``), a discrete sine transform of various types 
-   (``FFTW.RODFT00``, ``FFTW.RODFT01``, ``FFTW.RODFT10``, or
-   ``FFTW.RODFT11``), a real-input DFT with halfcomplex-format output
-   (``FFTW.R2HC`` and its inverse ``FFTW.HC2R``), or a discrete
-   Hartley transform (``FFTW.DHT``).  The ``kind`` argument may be
-   an array or tuple in order to specify different transform types
-   along the different dimensions of ``A``; ``kind[end]`` is used
-   for any unspecified dimensions.  See the FFTW manual for precise
-   definitions of these transform types, at `<http://www.fftw.org/doc>`.
-
-   The optional ``dims`` argument specifies an iterable subset of
-   dimensions (e.g. an integer, range, tuple, or array) to transform
-   along. ``kind[i]`` is then the transform type for ``dims[i]``,
-   with ``kind[end]`` being used for ``i > length(kind)``.
-
-   See also :func:`FFTW.plan_r2r` to pre-plan optimized r2r transforms.
-
-.. function:: FFTW.r2r!(A, kind [, dims])
-
-   :func:`FFTW.r2r!` is the same as :func:`FFTW.r2r`, but operates
-   in-place on ``A``, which must be an array of real or complex 
-   floating-point numbers.
-
-.. function:: FFTW.plan_r2r(A, kind [, dims [, flags [, timelimit]]])
-
-   Pre-plan an optimized r2r transform, similar to :func:`plan_fft`
-   except that the transforms (and the first three arguments)
-   correspond to :func:`FFTW.r2r` and :func:`FFTW.r2r!`, respectively.
-
-.. function:: FFTW.plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
-
-   Similar to :func:`plan_fft`, but corresponds to :func:`FFTW.r2r!`.
-
 .. function:: fftshift(x)
 
    Swap the first and second halves of each dimension of ``x``.
@@ -2829,8 +2851,55 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
    Compute the cross-correlation of two vectors.
 
+The following functions are defined within the ``Base.FFTW`` module.
+
+.. currentmodule:: Base.FFTW
+
+.. function:: r2r(A, kind [, dims])
+
+   Performs a multidimensional real-input/real-output (r2r) transform
+   of type ``kind`` of the array ``A``, as defined in the FFTW manual.
+   ``kind`` specifies either a discrete cosine transform of various types
+   (``FFTW.REDFT00``, ``FFTW.REDFT01``, ``FFTW.REDFT10``, or
+   ``FFTW.REDFT11``), a discrete sine transform of various types
+   (``FFTW.RODFT00``, ``FFTW.RODFT01``, ``FFTW.RODFT10``, or
+   ``FFTW.RODFT11``), a real-input DFT with halfcomplex-format output
+   (``FFTW.R2HC`` and its inverse ``FFTW.HC2R``), or a discrete
+   Hartley transform (``FFTW.DHT``).  The ``kind`` argument may be
+   an array or tuple in order to specify different transform types
+   along the different dimensions of ``A``; ``kind[end]`` is used
+   for any unspecified dimensions.  See the FFTW manual for precise
+   definitions of these transform types, at http://www.fftw.org/doc.
+
+   The optional ``dims`` argument specifies an iterable subset of
+   dimensions (e.g. an integer, range, tuple, or array) to transform
+   along. ``kind[i]`` is then the transform type for ``dims[i]``,
+   with ``kind[end]`` being used for ``i > length(kind)``.
+
+   See also :func:`plan_r2r` to pre-plan optimized r2r transforms.
+
+.. function:: r2r!(A, kind [, dims])
+
+   Same as :func:`r2r`, but operates in-place on ``A``, which must be
+   an array of real or complex floating-point numbers.
+
+.. function:: plan_r2r(A, kind [, dims [, flags [, timelimit]]])
+
+   Pre-plan an optimized r2r transform, similar to :func:`Base.plan_fft`
+   except that the transforms (and the first three arguments)
+   correspond to :func:`r2r` and :func:`r2r!`, respectively.
+
+.. function:: plan_r2r!(A, kind [, dims [, flags [, timelimit]]])
+
+   Similar to :func:`Base.plan_fft`, but corresponds to :func:`r2r!`.
+
+
 Numerical Integration
 ---------------------
+
+.. module:: Base.QuadGK
+
+.. currentmodule:: Base
 
 Although several external packages are available for numeric integration
 and solution of ordinary differential equations, we also provide
@@ -2844,7 +2913,7 @@ some built-in integration support in Julia.
    to ``sqrt(eps)`` in the precision of the endpoints), an absolute error
    tolerance ``abstol`` (defaults to 0), a maximum number of function
    evaluations ``maxevals`` (defaults to ``10^7``), and the ``order``
-   of the integration rule (defaults to 7).     
+   of the integration rule (defaults to 7).
 
    Returns a pair ``(I,E)`` of the estimated integral ``I`` and an
    estimated upper bound on the absolute error ``E``.  If ``maxevals``
@@ -2898,8 +2967,8 @@ Parallel Computing
 
    Add processes on remote machines via SSH. Requires julia to be installed in the same location on each node, or to be available via a shared file system.
    If ``tunnel`` is ``true`` then SSH tunneling will be used. Named argument ``dir``
-   optionally specifies the location of the julia binaries on the worker nodes. Additional ssh options may be specified 
-   by passing a Cmd object with named argument ``sshflags``, e.g., sshflags=`-i /home/foo/bar.pem`
+   optionally specifies the location of the julia binaries on the worker nodes. Additional ssh options may be specified
+   by passing a Cmd object with named argument ``sshflags``, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\``
 
 .. function:: addprocs_sge(n)
 
@@ -2960,7 +3029,7 @@ Distributed Arrays
 
    Construct a distributed array. ``init`` is a function that accepts a tuple of index ranges. This function should allocate a local chunk of the distributed array and initialize it for the specified indices. ``dims`` is the overall size of the distributed array. ``procs`` optionally specifies a vector of processor IDs to use. ``dist`` is an integer vector specifying how many chunks the distributed array should be divided into in each dimension.
 
-   For example, the `dfill` function that creates a distributed array and fills it with a value ``v`` is implemented as:
+   For example, the ``dfill`` function that creates a distributed array and fills it with a value ``v`` is implemented as:
 
    ``dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)``
 
@@ -3027,21 +3096,21 @@ System
 
    Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the output stream and input stream of the process, and the process object itself.
 
-.. function:: >
+.. data:: >
 
    Redirect standard output of a process.
 
    **Example**: ``run(`ls` > "out.log")``
 
-.. function:: <
+.. data:: <
 
    Redirect standard input of a process.
 
-.. function:: >>
+.. data:: >>
 
    Redirect standard output of a process, appending to the destination file.
 
-.. function:: .>
+.. data:: .>
 
    Redirect the standard error stream of a process.
 
@@ -3061,9 +3130,9 @@ System
 
    Set the current working directory. Returns the new current directory.
 
-.. function:: cd(f, ["dir"])
+.. function:: cd(f, [dir])
 
-   Temporarily changes the current working directory (HOME if not specified) and applies function f before returning. 
+   Temporarily changes the current working directory (HOME if not specified) and applies function f before returning.
 
 .. function:: mkdir(path, [mode])
 
@@ -3135,8 +3204,8 @@ C Interface
    Obtain a pointer to a global variable in a C-exported shared library, specified exactly as in ``ccall``.  Returns a ``Ptr{Type}``, defaulting to ``Ptr{Void}`` if no Type argument is supplied.  The values can be read or written by ``unsafe_load`` or ``unsafe_store!``, respectively.
 
 .. function:: cfunction(fun::Function, RetType::Type, (ArgTypes...))
-   
-   Generate C-callable function pointer from Julia function. Type annotation of the return value in the 
+
+   Generate C-callable function pointer from Julia function. Type annotation of the return value in the
    callback function is a must for situations where Julia cannot infer the return type automatically.
 
    For example::
@@ -3144,7 +3213,7 @@ C Interface
     function foo()
       # body
 
-      retval::Float64  
+      retval::Float64
     end
 
     bar = cfunction(foo, Float64, ())
@@ -3171,7 +3240,7 @@ C Interface
    Look up a symbol from a shared library handle, return callable function pointer on success.
 
 .. function:: dlsym_e(handle, sym)
-   
+
    Look up a symbol from a shared library handle, silently return NULL pointer on lookup failure.
 
 .. function:: dlclose(handle)
@@ -3179,7 +3248,7 @@ C Interface
    Close shared library referenced by handle.
 
 .. function:: c_free(addr::Ptr)
-  
+
    Call free() from C standard library.
 
 .. function:: unsafe_load(p::Ptr{T},i::Integer)
@@ -3267,3 +3336,49 @@ Tasks
 .. function:: task_local_storage(symbol, value)
 
    Assign a value to a symbol in the current task's task-local storage.
+
+Reflection
+----------
+
+.. function:: module_name(m::Module) -> Symbol
+
+   Get the name of a module as a symbol.
+
+.. function:: module_parent(m::Module) -> Module
+
+   Get a module's enclosing module. ``Main`` is its own parent.
+
+.. function:: current_module() -> Module
+
+   Get the *dynamically* current module, which is the module code is currently being
+   read from. In general, this is not the same as the module containing the call to
+   this function.
+
+.. function:: fullname(m::Module)
+
+   Get the fully-qualified name of a module as a tuple of symbols. For example,
+   ``fullname(Base.Pkg)`` gives ``(:Base,:Pkg)``, and ``fullname(Main)`` gives ``()``.
+
+.. function:: names(x)
+
+   Get an array of the names exported by a module, or the fields of a data type.
+
+.. function:: isconst([m::Module], s::Symbol) -> Bool
+
+   Determine whether a global is declared ``const`` in a given module.
+
+.. function:: isgeneric(f::Function) -> Bool
+
+   Determine whether a function is generic.
+
+.. function:: function_name(f::Function) -> Symbol
+
+   Get the name of a generic function as a symbol, or ``:anonymous``.
+
+.. function:: function_module(f::Function, types) -> Module
+
+   Determine the module containing a given definition of a generic function.
+
+.. function:: functionloc(f::Function, types)
+
+   Returns a tuple ``(filename,line)`` giving the location of a method definition.

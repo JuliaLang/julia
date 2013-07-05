@@ -4,6 +4,8 @@ const (<:) = subtype
 
 super(T::DataType) = T.super
 
+==(T::Type, S::Type) = typeseq(T, S)
+
 ## comparison ##
 
 isequal(x,y) = is(x,y)
@@ -121,6 +123,8 @@ one(x)  = oftype(x,1)
 
 sizeof(T::Type) = error(string("size of type ",T," unknown"))
 sizeof(T::DataType) = if isleaftype(T) T.size else error("type does not have a native size") end
+sizeof(::Type{Symbol}) = error("type does not have a native size")
+sizeof{T<:Array}(::Type{T}) = error("type does not have a native size")
 sizeof(x) = sizeof(typeof(x))
 
 # copying immutable things
@@ -128,7 +132,7 @@ copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
               TopNode,QuoteNode,DataType,UnionType)) = x
 
 # function pipelining
-|(x, f::Function) = f(x)
+|>(x, f::Function) = f(x)
 
 # array shape rules
 
@@ -147,6 +151,13 @@ function promote_shape(a::(Int,Int), b::(Int,))
 end
 
 promote_shape(a::(Int,), b::(Int,Int)) = promote_shape(b, a)
+
+function promote_shape(a::(Int, Int), b::(Int, Int))
+    if a[1] != b[1] || a[2] != b[2]
+        error("argument dimensions must match")
+    end
+    return a
+end
 
 function promote_shape(a::Dims, b::Dims)
     if length(a) < length(b)

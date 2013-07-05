@@ -157,7 +157,7 @@ end
 
 function serialize(s, m::Module)
     writetag(s, Module)
-    serialize(s, full_name(m))
+    serialize(s, fullname(m))
 end
 
 function lambda_number(l::LambdaStaticData)

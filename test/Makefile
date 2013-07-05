@@ -1,11 +1,11 @@
 JULIAHOME = $(abspath ..)
 include ../Make.inc
 
-TESTS = all core keywordargs numbers strings unicode corelib hashing	\
-	remote iostring arrayops linalg blas fft dsp sparse bitarray		\
-	random math functional bigint sorting statistics spawn	parallel	\
-	arpack bigfloat file git pkg pkg2 resolve suitesparse complex		\
-	version pollfd mpfr broadcast socket setdiff
+TESTS = all core keywordargs numbers strings unicode collections hashing	\
+	remote iostring arrayops linalg blas fft dsp sparse bitarray random		\
+	math functional bigint sorting statistics spawn parallel arpack file	\
+	git pkg pkg2 resolve resolve2 suitesparse complex version pollfd mpfr	\
+	broadcast socket floatapprox priorityqueue readdlm regex
 
 $(TESTS) ::
 	$(QUIET_JULIA) $(call spawn,$(JULIA_EXECUTABLE)) ./runtests.jl $@

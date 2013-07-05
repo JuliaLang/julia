@@ -906,7 +906,7 @@ for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
 
         c[1] = v[1]
         for i=2:n
-           c[i] = ($op)(v[i], c[i-1])
+           c[i] = ($op)(c[i-1], v[i])
         end
         return c
     end
@@ -931,7 +931,7 @@ for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
             if div(i-1, axis_stride) % axis_size == 0
                B[i] = A[i]
             else
-               B[i] = ($op)(A[i], B[i-axis_stride])
+               B[i] = ($op)(B[i-axis_stride], A[i])
             end
         end
 
@@ -1381,30 +1381,6 @@ end
 
 ## map over arrays ##
 
-## along an axis
-function amap(f::Function, A::AbstractArray, axis::Integer)
-    warn_once("amap is deprecated, use mapslices(f, A, dims) instead")
-    dimsA = size(A)
-    ndimsA = ndims(A)
-    axis_size = dimsA[axis]
-
-    if axis_size == 0
-        return f(A)
-    end
-
-    idx = ntuple(ndimsA, j -> j == axis ? 1 : 1:dimsA[j])
-    r = f(sub(A, idx))
-    R = Array(typeof(r), axis_size)
-    R[1] = r
-
-    for i = 2:axis_size
-        idx = ntuple(ndimsA, j -> j == axis ? i : 1:dimsA[j])
-        R[i] = f(sub(A, idx))
-    end
-
-    return R
-end
-
 ## transform any set of dimensions
 ## dims specifies which dimensions will be transformed. for example
 ## dims==1:2 will call f on all slices A[:,:,...]
@@ -1440,7 +1416,7 @@ function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
     if isempty(size(r1))
         r1 = [r1]
     end
-    Rsize[dims] = [size(r1)...]
+    Rsize[dims] = [size(r1)...; ones(Int,max(0,length(dims)-ndims(r1)))]
     R = similar(r1, tuple(Rsize...))
 
     ridx = cell(ndims(R))
@@ -1468,7 +1444,7 @@ end
 
 
 ## 1 argument
-function map_to2(f, first, dest::AbstractArray, A::AbstractArray)
+function map_to2(f::Callable, first, dest::AbstractArray, A::AbstractArray)
     dest[1] = first
     for i=2:length(A)
         dest[i] = f(A[i])
@@ -1476,7 +1452,7 @@ function map_to2(f, first, dest::AbstractArray, A::AbstractArray)
     return dest
 end
 
-function map(f, A::AbstractArray)
+function map(f::Callable, A::AbstractArray)
     if isempty(A); return {}; end
     first = f(A[1])
     dest = similar(A, typeof(first))
@@ -1484,7 +1460,7 @@ function map(f, A::AbstractArray)
 end
 
 ## 2 argument
-function map_to2(f, first, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
+function map_to2(f::Callable, first, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
     dest[1] = first
     for i=2:length(A)
         dest[i] = f(A[i], B[i])
@@ -1492,7 +1468,7 @@ function map_to2(f, first, dest::AbstractArray, A::AbstractArray, B::AbstractArr
     return dest
 end
 
-function map(f, A::AbstractArray, B::AbstractArray)
+function map(f::Callable, A::AbstractArray, B::AbstractArray)
     shp = promote_shape(size(A),size(B))
     if isempty(A)
         return similar(A, Any, shp)
@@ -1503,7 +1479,7 @@ function map(f, A::AbstractArray, B::AbstractArray)
 end
 
 ## N argument
-function map_to2(f, first, dest::AbstractArray, As::AbstractArray...)
+function map_to2(f::Callable, first, dest::AbstractArray, As::AbstractArray...)
     n = length(As[1])
     i = 1
     ith = a->a[i]
@@ -1514,7 +1490,7 @@ function map_to2(f, first, dest::AbstractArray, As::AbstractArray...)
     return dest
 end
 
-function map(f, As::AbstractArray...)
+function map(f::Callable, As::AbstractArray...)
     shape = mapreduce(size, promote_shape, As)
     if prod(shape) == 0
         return similar(As[1], Any, shape)

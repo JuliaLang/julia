@@ -484,6 +484,8 @@ widemul(x::Uint16, y::Uint16) = uint32(x)*uint32(y)
 widemul(x::Int32, y::Int32) = int64(x)*int64(y)
 widemul(x::Uint32, y::Uint32) = uint64(x)*uint64(y)
 
+widemul(x::Integer, y::Integer) = widemul(promote(x,y)...)
+
 if WORD_SIZE==32
     function widemul(u::Int64, v::Int64)
         local u0::Uint64, v0::Uint64, w0::Uint64
@@ -524,7 +526,7 @@ if WORD_SIZE==32
         t = hilo + (lolo>>>64)
         w2 = t>>64
         w1 = lohi + (t&0xffffffffffffffff)
-        (lolo&0xffffffffffffffff) + int128(w1)<<64
+        int128(lolo&0xffffffffffffffff) + int128(w1)<<64
     end
 
     function *(u::Uint128, v::Uint128)
@@ -546,6 +548,13 @@ if WORD_SIZE==32
     rem(x::Uint128, y::Uint128) = uint128(rem(BigInt(x),BigInt(y)))
 
     mod(x::Int128, y::Int128) = int128(mod(BigInt(x),BigInt(y)))
+
+    << (x::Int128,  y::Int32) = y == 0 ? x : box(Int128,shl_int(unbox(Int128,x),unbox(Int32,y)))
+    << (x::Uint128, y::Int32) = y == 0 ? x : box(Uint128,shl_int(unbox(Uint128,x),unbox(Int32,y)))
+    >> (x::Int128,  y::Int32) = y == 0 ? x : box(Int128,ashr_int(unbox(Int128,x),unbox(Int32,y)))
+    >> (x::Uint128, y::Int32) = y == 0 ? x : box(Uint128,lshr_int(unbox(Uint128,x),unbox(Int32,y)))
+    >>>(x::Int128,  y::Int32) = y == 0 ? x : box(Int128,lshr_int(unbox(Int128,x),unbox(Int32,y)))
+    >>>(x::Uint128, y::Int32) = y == 0 ? x : box(Uint128,lshr_int(unbox(Uint128,x),unbox(Int32,y)))
 else
     widemul(u::Int64, v::Int64) = int128(u)*int128(v)
     widemul(u::Uint64, v::Uint64) = uint128(u)*uint128(v)

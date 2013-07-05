@@ -1,4 +1,5 @@
-# These functions are based on C functions in the CSparse library by Tim Davis
+# These functions are based on C functions in the CSparse library by Tim Davis.
+# These are pure Julia implementations, and do not link to the CSparse library.
 # CSparse can be downloaded from http://www.cise.ufl.edu/research/sparse/CSparse/CSparse.tar.gz
 # CSparse is Copyright (c) 2006-2007, Timothy A. Davis and released under
 # Lesser GNU Public License, version 2.1 or later.  A copy of the license can be

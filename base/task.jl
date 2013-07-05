@@ -13,6 +13,17 @@ end
 task_local_storage(key) = task_local_storage()[key]
 task_local_storage(key, val) = (task_local_storage()[key] = val)
 
+# NOTE: you can only wait for scheduled tasks
+function wait(t::Task)
+    if is(t.donenotify, nothing)
+        t.donenotify = Condition()
+    end
+    while !istaskdone(t)
+        wait(t.donenotify)
+    end
+    t.result
+end
+
 function produce(v)
     ct = current_task()
     q = ct.consumers

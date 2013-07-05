@@ -18,7 +18,7 @@ const S_IRWXO = 0o007
 export File,
        # open,
        # close,
-       # write,
+       write,
        unlink,
        JL_O_WRONLY,
        JL_O_RDONLY,
@@ -35,8 +35,7 @@ export File,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
-#import Base.show, Base.open, Base.close, Base.write
-import Base: uvtype, uvhandle, eventloop, fd, position, stat
+import Base: uvtype, uvhandle, eventloop, fd, position, stat, close, write, read, readall
 
 include("file_constants.jl")
 
@@ -49,6 +48,7 @@ type File <: AbstractFile
     open::Bool
     handle::Int32
     File(path::String) = new(path,false,-1)
+    File(fd::RawFD) = new("",true,fd.fd)
 end
 
 type AsyncFile <: AbstractFile
@@ -81,7 +81,7 @@ function close(f::File)
     req = Intrinsics.box(Ptr{Void},Intrinsics.jl_alloca(Intrinsics.unbox(Int32,_sizeof_uv_fs_t)))
     err = ccall(:uv_fs_close,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Void}),
                 eventloop(),req,f.handle,C_NULL)
-    uv_error(err)
+    uv_error("close",err != 0)
     f.handle = -1
     f.open = false
     ccall(:uv_fs_req_cleanup,Void,(Ptr{Void},),req)
@@ -92,9 +92,12 @@ function unlink(p::String)
     req = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
     err = ccall(:uv_fs_unlink,Int32,(Ptr{Void},Ptr{Void},Ptr{Uint8},Ptr{Void}),
                 eventloop(),req,bytestring(p),C_NULL)
-    uv_error(err)
+    uv_error("unlink",err != 0)
 end
 function unlink(f::File)
+    if isempty(f.path)
+      error("No path associated with this file")
+    end
     if f.open
         close(f)
     end
@@ -106,11 +109,37 @@ function write(f::File,buf::Ptr{Uint8},len::Integer,offset::Integer)
     if !f.open
         error("File is not open")
     end
-    req = box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
+    req = Base.c_malloc(_sizeof_uv_fs_t) #box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
     err = ccall(:uv_fs_write,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Uint8},Csize_t,Int64,Ptr{Void}),
                 eventloop(),req,f.handle,buf,len,offset,C_NULL)
-    uv_error(err)
-    f
+    Base.c_free(req)
+    uv_error("write",err == -1)
+    len
+end
+
+function write(f::File, c::Uint8)
+    a = [c]
+    write(f,pointer(a),1)
+end
+
+function write{T}(f::File, a::Array{T})
+    if isbits(T)
+        write(f,pointer(a),length(a)*sizeof(eltype(a)))
+    else
+        invoke(write, (IO, Array), f, a)
+    end
+end
+
+function write(f::File, buf::Ptr{Uint8},len::Integer)
+      if !f.open
+        error("File is not open")
+    end
+    req = Base.c_malloc(_sizeof_uv_fs_t)
+    err = ccall(:uv_fs_write,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Uint8},Csize_t,Int64,Ptr{Void}),
+                eventloop(),req,f.handle,buf,len,-1,C_NULL)
+    Base.c_free(req)
+    uv_error("write",err == -1)
+    len
 end
 
 function truncate(f::File, n::Integer)
@@ -121,7 +150,46 @@ function truncate(f::File, n::Integer)
     f    
 end
 
-fd(f::File) = OS_FD(f.handle)
+function read(f::File, ::Type{Uint8})
+    if !f.open
+        error("File is not open")
+    end
+    req = Base.c_malloc(_sizeof_uv_fs_t) #box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
+    buf = Array(Uint8,1)
+    err = ccall(:uv_fs_read,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Uint8},Csize_t,Int64,Ptr{Void}),
+                eventloop(),req,f.handle,buf,len,offset,C_NULL)
+    Base.c_free(req)
+    uv_error("write",err == -1)
+    len 
+end
+
+function read{T}(f::File, a::Array{T})
+    if isbits(T)
+        nb = length(a)*sizeof(T)
+        req = Base.c_malloc(_sizeof_uv_fs_t) #box(Ptr{Void},Intrinsics.jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
+        buf = Array(Uint8,1)
+        err = ccall(:uv_fs_read,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Uint8},Csize_t,Int64,Ptr{Void}),
+                    eventloop(),req,f.handle,a,nb,-1,C_NULL)
+        Base.c_free(req)
+        uv_error("write",err == -1)
+    else
+        invoke(read, (IO, Array), s, a)
+    end
+end
+
+function readall(f::File)
+    a = Array(Uint8, filesize(f) - position(f))
+    read(f,a)
+    is_valid_ascii(a) ? ASCIIString(a) : UTF8String(a)
+end
+
+const SEEK_SET = int32(0)
+const SEEK_CUR = int32(1)
+const SEEK_END = int32(2)
+
+position(f::File) = ccall(:lseek,Coff_t,(Int32,Coff_t,Int32),f.handle,0,SEEK_CUR)
+
+fd(f::File) = RawFD(f.handle)
 stat(f::File) = stat(fd(f))
 
 end

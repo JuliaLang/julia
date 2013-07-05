@@ -76,23 +76,55 @@ function _signif_og(x, digits, base)
     end
 end
 
-function signif(x, digits::Integer, base::Integer)
+function signif(x, digits::Integer, base::Integer=10)
     if digits < 0
         throw(DomainError())
+    end
+    if x==0 || !isfinite(x)
+        return x
     end
     og = _signif_og(float(x), digits, base)
     round(float(x)/og) * og
 end
-signif(x, digits) = signif(x, digits, 10)
 
 _round_og(digits, base) = float(base) ^ digits
 
 for f in (:round, :ceil, :floor, :trunc)
     @eval begin
-        function ($f)(x, digits::Integer, base::Integer)
+        function ($f)(x, digits::Integer, base::Integer=10)
             og = _round_og(digits, base)
             ($f)(float(x) * og) / og
         end
-        ($f)(x, digits) = ($f)(x, digits, 10)
+    end
+end
+
+# isapprox: Tolerant comparison of floating point numbers
+function isapprox(x::FloatingPoint, y::FloatingPoint; rtol::Real=rtoldefault(x,y), atol::Real=atoldefault(x,y))
+    (isinf(x) || isinf(y)) ? x == y : abs(x-y) <= atol + rtol.*max(abs(x), abs(y))
+end
+
+# promotion of non-floats
+isapprox(x::Real, y::FloatingPoint; rtol::Real=rtoldefault(x, y), atol::Real=atoldefault(x, y)) = isapprox(promote(x, y)...; rtol=rtol, atol=atol)
+isapprox(x::FloatingPoint, y::Real; rtol::Real=rtoldefault(x, y), atol::Real=atoldefault(x, y)) = isapprox(promote(x, y)...; rtol=rtol, atol=atol)
+
+# other real numbers
+isapprox(x::Real, y::Real; rtol::Real=0, atol::Real=0) = abs(x-y) <= atol
+
+# complex numbers
+isapprox(z::Complex, w::Complex; rtol::Real=rtoldefault(abs(z), abs(w)), atol::Real=atoldefault(abs(z), abs(w))) = abs(z-w) <= atol + rtol*max(abs(z), abs(w))
+
+# real-complex combinations
+isapprox(x::Real, z::Complex; rtol::Real=rtoldefault(x, abs(z)), atol::Real=atoldefault(x, abs(z))) = isapprox(complex(x), z; rtol=rtol, atol=atol)
+isapprox(z::Complex, x::Real; rtol::Real=rtoldefault(x, abs(z)), atol::Real=atoldefault(x, abs(z))) = isapprox(complex(x), z; rtol=rtol, atol=atol)
+
+# default tolerance arguments
+rtoldefault(x::FloatingPoint, y::FloatingPoint) = cbrt(max(eps(x), eps(y)))
+atoldefault(x::FloatingPoint, y::FloatingPoint) = sqrt(max(eps(x), eps(y)))
+
+# promotion of non-floats
+for fun in (:rtoldefault, :atoldefault)
+    @eval begin
+        ($fun)(x::Real, y::FloatingPoint) = ($fun)(promote(x,y)...)
+        ($fun)(x::FloatingPoint, y::Real) = ($fun)(promote(x,y)...)
     end
 end

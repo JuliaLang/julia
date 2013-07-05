@@ -183,47 +183,43 @@ static jl_value_t *scm_to_julia(value_t e, int expronly)
     return v;
 }
 
+extern int64_t conv_to_int64(void *data, numerictype_t tag);
+
 static jl_value_t *scm_to_julia_(value_t e, int eo)
 {
     if (fl_isnumber(e)) {
-        if (iscprim(e)) {
-            numerictype_t nt = cp_numtype((cprim_t*)ptr(e));
+        int64_t i64;
+        if (isfixnum(e)) {
+            i64 = numval(e);
+        }
+        else {
+            assert(iscprim(e));
+            cprim_t *cp = (cprim_t*)ptr(e);
+            numerictype_t nt = cp_numtype(cp);
             switch (nt) {
             case T_DOUBLE:
-                return (jl_value_t*)jl_box_float64(*(double*)cp_data((cprim_t*)ptr(e)));
+                return (jl_value_t*)jl_box_float64(*(double*)cp_data(cp));
             case T_FLOAT:
-                return (jl_value_t*)jl_box_float32(*(float*)cp_data((cprim_t*)ptr(e)));
-            case T_INT64:
-                return (jl_value_t*)jl_box_int64(*(int64_t*)cp_data((cprim_t*)ptr(e)));
+                return (jl_value_t*)jl_box_float32(*(float*)cp_data(cp));
             case T_UINT8:
-                return (jl_value_t*)jl_box_uint8(*(uint8_t*)cp_data((cprim_t*)ptr(e)));
+                return (jl_value_t*)jl_box_uint8(*(uint8_t*)cp_data(cp));
             case T_UINT16:
-                return (jl_value_t*)jl_box_uint16(*(uint16_t*)cp_data((cprim_t*)ptr(e)));
+                return (jl_value_t*)jl_box_uint16(*(uint16_t*)cp_data(cp));
             case T_UINT32:
-                return (jl_value_t*)jl_box_uint32(*(uint32_t*)cp_data((cprim_t*)ptr(e)));
+                return (jl_value_t*)jl_box_uint32(*(uint32_t*)cp_data(cp));
             case T_UINT64:
-                return (jl_value_t*)jl_box_uint64(*(uint64_t*)cp_data((cprim_t*)ptr(e)));
+                return (jl_value_t*)jl_box_uint64(*(uint64_t*)cp_data(cp));
             default:
                 ;
             }
+            i64 = conv_to_int64(cp_data(cp), nt);
         }
-        if (isfixnum(e)) {
-            int64_t ne = numval(e);
 #ifdef _P64
-            return (jl_value_t*)jl_box_int64(ne);
+        return (jl_value_t*)jl_box_int64(i64);
 #else
-            if (ne > S32_MAX || ne < S32_MIN)
-                return (jl_value_t*)jl_box_int64(ne);
-            return (jl_value_t*)jl_box_int32((int32_t)ne);
-#endif
-        }
-        size_t n = tosize(e, "scm_to_julia");
-#ifdef _P64
-        return (jl_value_t*)jl_box_int64((int64_t)n);
-#else
-        if (n > S32_MAX)
-            return (jl_value_t*)jl_box_int64((int64_t)n);
-        return (jl_value_t*)jl_box_int32((int32_t)n);
+        if (i64 > (int64_t)S32_MAX || i64 < (int64_t)S32_MIN)
+            return (jl_value_t*)jl_box_int64(i64);
+        return (jl_value_t*)jl_box_int32((int32_t)i64);
 #endif
     }
     if (issymbol(e)) {
@@ -348,6 +344,16 @@ static value_t array_to_list(jl_array_t *a)
     return lst;
 }
 
+static value_t julia_to_list2(jl_value_t *a, jl_value_t *b)
+{
+    value_t sa = julia_to_scm(a);
+    fl_gc_handle(&sa);
+    value_t sb = julia_to_scm(b);
+    value_t l = fl_list2(sa, sb);
+    fl_free_gc_handles(1);
+    return l;
+}
+
 static value_t julia_to_scm(jl_value_t *v)
 {
     if (jl_is_symbol(v)) {
@@ -359,6 +365,9 @@ static value_t julia_to_scm(jl_value_t *v)
     if (v == jl_false) {
         return FL_F;
     }
+    if (v == jl_nothing) {
+        return fl_cons(symbol("null"), FL_NIL);
+    }
     if (jl_is_expr(v)) {
         jl_expr_t *ex = (jl_expr_t*)v;
         value_t args = array_to_list(ex->args);
@@ -369,29 +378,19 @@ static value_t julia_to_scm(jl_value_t *v)
         return scmv;
     }
     if (jl_typeis(v, jl_linenumbernode_type)) {
-        return fl_cons(julia_to_scm((jl_value_t*)line_sym),
-                       fl_cons(julia_to_scm(jl_fieldref(v,0)),
-                               FL_NIL));
+        return julia_to_list2((jl_value_t*)line_sym, jl_fieldref(v,0));
     }
     if (jl_typeis(v, jl_labelnode_type)) {
-        return fl_cons(julia_to_scm((jl_value_t*)label_sym),
-                       fl_cons(julia_to_scm(jl_fieldref(v,0)),
-                               FL_NIL));
+        return julia_to_list2((jl_value_t*)label_sym, jl_fieldref(v,0));
     }
     if (jl_typeis(v, jl_gotonode_type)) {
-        return fl_cons(julia_to_scm((jl_value_t*)goto_sym),
-                       fl_cons(julia_to_scm(jl_fieldref(v,0)),
-                               FL_NIL));
+        return julia_to_list2((jl_value_t*)goto_sym, jl_fieldref(v,0));
     }
     if (jl_typeis(v, jl_quotenode_type)) {
-        return fl_cons(julia_to_scm((jl_value_t*)quote_sym),
-                       fl_cons(julia_to_scm(jl_fieldref(v,0)),
-                               FL_NIL));
+        return julia_to_list2((jl_value_t*)quote_sym, jl_fieldref(v,0));
     }
     if (jl_typeis(v, jl_topnode_type)) {
-        return fl_cons(julia_to_scm((jl_value_t*)top_sym),
-                       fl_cons(julia_to_scm(jl_fieldref(v,0)),
-                               FL_NIL));
+        return julia_to_list2((jl_value_t*)top_sym, jl_fieldref(v,0));
     }
     if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v))) {
         return fixnum(jl_unbox_long(v));
@@ -436,10 +435,12 @@ DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy)
     return result;
 }
 
-void jl_start_parsing_file(const char *fname)
+int jl_start_parsing_file(const char *fname)
 {
     value_t s = cvalue_static_cstring(fname);
-    fl_applyn(1, symbol_value(symbol("jl-parse-file")), s);
+    if (fl_applyn(1, symbol_value(symbol("jl-parse-file")), s) == FL_F)
+        return 1;
+    return 0;
 }
 
 void jl_stop_parsing()
@@ -698,11 +699,15 @@ static void eval_decl_types(jl_array_t *vi, jl_tuple_t *spenv)
     for(i=0; i < jl_array_len(vi); i++) {
         jl_array_t *v = (jl_array_t*)jl_cellref(vi, i);
         assert(jl_array_len(v) > 1);
-        jl_value_t *ty =
-            jl_interpret_toplevel_expr_with(jl_cellref(v,1),
-                                            &jl_tupleref(spenv,0),
-                                            jl_tuple_len(spenv)/2);
-        jl_cellref(v, 1) = ty;
+        JL_TRY {
+            jl_value_t *ty =
+                jl_interpret_toplevel_expr_with(jl_cellref(v,1),
+                                                &jl_tupleref(spenv,0),
+                                                jl_tuple_len(spenv)/2);
+            jl_cellref(v, 1) = ty;
+        }
+        JL_CATCH {
+        }
     }
 }
 

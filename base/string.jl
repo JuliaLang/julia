@@ -4,8 +4,8 @@ print(io::IO, x) = show(io, x)
 print(io::IO, xs...) = for x in xs print(io, x) end
 println(io::IO, xs...) = print(io, xs..., '\n')
 
-print(xs...)   = print(OUTPUT_STREAM, xs...)
-println(xs...) = println(OUTPUT_STREAM, xs...)
+print(xs...)   = print(STDOUT, xs...)
+println(xs...) = println(STDOUT, xs...)
 
 ## core string functions ##
 
@@ -17,7 +17,8 @@ next(s::String, i::Integer) = next(s,int(i))
 ## conversion of general objects to strings ##
 
 function print_to_string(xs...)
-    s = memio(isa(xs[1],String) ? endof(xs[1]) : 0, false)
+    s = IOBuffer(Array(Uint8,isa(xs[1],String) ? endof(xs[1]) : 0), true, true)
+    truncate(s,0)
     for x in xs
         print(s, x)
     end
@@ -62,8 +63,8 @@ getindex(s::String, v::AbstractVector) =
 
 symbol(s::String) = symbol(bytestring(s))
 
-print(io::IO, s::String) = for c in s write(io, c) end
-write(io::IO, s::String) = print(io, s)
+print(io::IO, s::String) = write(io, s)
+write(io::IO, s::String) = for c in s write(io, c) end
 show(io::IO, s::String) = print_quoted(io, s)
 
 sizeof(s::String) = error("type $(typeof(s)) has no canonical binary representation")
@@ -215,6 +216,9 @@ search(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8
 search(s::String, t::String, i::Integer) = _search(s,t,i)
 search(s::String, t::String) = search(s,t,start(s))
 
+
+rsearch(s::String, c::Chars) = rsearch(s,c,endof(s))
+
 function _rsearch(s, t, i)
     if isempty(t)
         return 1 <= i <= endof(s)+1 ? (i:i-1) :
@@ -223,7 +227,7 @@ function _rsearch(s, t, i)
     end
     t = reverse(t)
     rs = reverse(s)
-    l = length(s)
+    l = endof(s)
     t1, j2 = next(t,start(t))
     while true
         i = rsearch(s,t1,i)
@@ -244,14 +248,20 @@ function _rsearch(s, t, i)
             end
         end
         if matched
-            return (l-k+2):i
+            fst = nextind(s,l-k+1)
+            # NOTE: there's a subtle difference between
+            #       nexind(s,i) and next(s,i)[2] if s::UTF8String
+            #       since at the end nextind returns endof(s)+1
+            #       while next returns length(s.data)+1
+            lst = next(s,i)[2]-1
+            return fst:lst
         end
         i = l-ii+1
     end
 end
 rsearch(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _rsearch(s,t,i)
 rsearch(s::String, t::String, i::Integer) = _rsearch(s,t,i)
-rsearch(s::String, t::String) = rsearch(s,t,length(s))
+rsearch(s::String, t::String) = (isempty(s) && isempty(t)) ? (1:0) : rsearch(s,t,endof(s))
 
 contains(::String, ::String) = error("use search() to look for substrings")
 
@@ -368,8 +378,14 @@ immutable SubString{T<:String} <: String
     offset::Int
     endof::Int
 
-    SubString(s::T, i::Int, j::Int) =
-        (o=thisind(s,i)-1; new(s,o,thisind(s,j)-o))
+    function SubString(s::T, i::Int, j::Int)
+        if i > endof(s)
+            return new(s, i, 0)
+        else
+            o = thisind(s,i)-1
+            new(s, o, max(0, thisind(s,j)-o))
+        end
+    end
 end
 SubString{T<:String}(s::T, i::Int, j::Int) = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
@@ -378,6 +394,7 @@ SubString(s::String, i::Integer) = SubString(s, i, endof(s))
 
 write{T<:ByteString}(to::IOBuffer, s::SubString{T}) =
     s.endof==0 ? 0 : write_sub(to, s.string.data, s.offset+1, next(s,s.endof)[2]-1)
+print(io::IOBuffer, s::SubString) = write(io, s)
 
 sizeof{T<:ByteString}(s::SubString{T}) = s.endof==0 ? 0 : next(s,s.endof)[2]-1
 
@@ -519,7 +536,8 @@ lcfirst(s::String) = islower(s[1]) ? s : string(lowercase(s[1]),s[nextind(s,1):e
 ## string map, filter, has ##
 
 function map(f::Function, s::String)
-    out = memio(endof(s))
+    out = IOBuffer(Array(Uint8,endof(s)),true,true)
+    truncate(out,0)
     for c in s
         c2 = f(c)
         if !isa(c2,Char)
@@ -531,7 +549,8 @@ function map(f::Function, s::String)
 end
 
 function filter(f::Function, s::String)
-    out = memio(endof(s))
+    out = IOBuffer(Array(Uint8,endof(s)),true,true)
+    truncate(out,0)
     for c in s
         if f(c)
             write(out, c)
@@ -699,7 +718,8 @@ function indentation(s::String)
 end
 
 function unindent(s::String, indent::Int)
-    buf = memio(endof(s), false)
+    buf = IOBuffer(Array(Uint8,endof(s)), true, true)
+    truncate(buf,0)
     a = i = start(s)
     cutting = false
     cut = 0
@@ -1009,22 +1029,53 @@ split(s::String, spl)             = split(s, spl, 0, true)
 const _default_delims = [' ','\t','\n','\v','\f','\r']
 split(str::String) = split(str, _default_delims, 0, false)
 
+function rsplit(str::String, splitter, limit::Integer, keep_empty::Bool)
+    strs = String[]
+    i = start(str)
+    n = endof(str)
+    r = rsearch(str,splitter)
+    j = first(r)-1
+    k = last(r)
+    while((0 <= j < n) && (length(strs) != limit-1))
+        if i <= k
+            (keep_empty || (k < n)) && unshift!(strs, str[k+1:n])
+            n = j
+        end
+        (k <= j) && (j = prevind(str,j))
+        r = rsearch(str,splitter,j)
+        j = first(r)-1
+        k = last(r)
+    end
+    (keep_empty || (n > 0)) && unshift!(strs, str[1:n])
+    return strs
+end
+rsplit(s::String, spl, n::Integer) = rsplit(s, spl, n, true)
+rsplit(s::String, spl, keep::Bool) = rsplit(s, spl, 0, keep)
+rsplit(s::String, spl)             = rsplit(s, spl, 0, true)
+#rsplit(str::String) = rsplit(str, _default_delims, 0, false)
+
+
 function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     n = 1
     rstr = ""
     i = a = start(str)
     r = search(str,pattern,i)
-    j, k = first(r), last(r)+1
+    j, k = first(r), last(r)
+    k1 = k
     out = IOBuffer()
     while j != 0
-        if i == a || i < k
+        if i == a || i <= k
             write(out, SubString(str,i,j-1))
-            write(out, string(repl(SubString(str,j,k-1))))
-            i = k
+            write(out, string(repl(SubString(str,j,k))))
+            i = nextind(str, k)
         end
-        if k <= j; k = nextind(str,j) end
+        if k <= j
+            k = nextind(str,j)
+            k == k1 && break
+        end
+        k1 = k
         r = search(str,pattern,k)
-        j, k = first(r), last(r)+1
+        j, k = first(r), last(r)
         if n == limit break end
         n += 1
     end
@@ -1212,6 +1263,11 @@ float64_isvalid(s::String, out::Array{Float64,1}) =
 float32_isvalid(s::String, out::Array{Float32,1}) =
     ccall(:jl_strtof, Int32, (Ptr{Uint8},Ptr{Float32}), s, out) == 0
 
+float64_isvalid(s::SubString, out::Array{Float64,1}) =
+    ccall(:jl_substrtod, Int32, (Ptr{Uint8},Int,Int,Ptr{Float64}), s.string, s.offset, s.endof, out) == 0
+float32_isvalid(s::SubString, out::Array{Float32,1}) =
+    ccall(:jl_substrtof, Int32, (Ptr{Uint8},Int,Int,Ptr{Float32}), s.string, s.offset, s.endof, out) == 0
+
 begin
     local tmp::Array{Float64,1} = Array(Float64,1)
     local tmpf::Array{Float32,1} = Array(Float32,1)
@@ -1258,13 +1314,13 @@ function search(a::ByteArray, b::Char, i::Integer)
     if isascii(b)
         search(a,uint8(b),i)
     else
-        search(a,string(b).data,i)
+        search(a,string(b).data,i).start
     end
 end
 search(a::ByteArray, b::Union(Int8,Uint8,Char)) = search(a,b,1)
 
 function rsearch(a::Union(Array{Uint8,1},Array{Int8,1}), b::Union(Int8,Uint8), i::Integer)
-    if i < 1 error(BoundsError) end
+    if i < 1 return i == 0 ? 0 : error(BoundsError) end
     n = length(a)
     if i > n return i == n+1 ? 0 : error(BoundsError) end
     p = pointer(a)
@@ -1275,7 +1331,7 @@ function rsearch(a::ByteArray, b::Char, i::Integer)
     if isascii(b)
         rsearch(a,uint8(b),i)
     else
-        rsearch(a,string(b).data,i)
+        rsearch(a,string(b).data,i).start
     end
 end
 rsearch(a::ByteArray, b::Union(Int8,Uint8,Char)) = rsearch(a,b,length(a))

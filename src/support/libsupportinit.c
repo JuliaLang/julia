@@ -11,7 +11,7 @@ static int isInitialized = 0;
 
 void libsupport_init(void)
 {
-    if(!isInitialized) {
+    if (!isInitialized) {
         locale_is_utf8 = u8_is_locale_utf8(setlocale(LC_ALL, ""));
         setlocale(LC_NUMERIC, "C");
 
