@@ -136,6 +136,13 @@ function reinit_stdio()
     STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()),2)
 end
 
+function reinit_stdio_fake()
+    global STDIN, STDERR, STDOUT
+    STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()),0)
+    STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()),1)
+    STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()),2)
+end
+
 flush(::TTY) = nothing
 
 function wait_connected(x)

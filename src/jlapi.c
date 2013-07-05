@@ -18,7 +18,7 @@ char * __cdecl basename(char *);
 #include "julia.h"
 extern char *julia_home;
 
-DLLEXPORT char *jl_locate_sysimg(char *jlhome)
+DLLEXPORT char *jl_locate_sysimg(char *jlhome, char* imgpath)
 {
     if (jlhome == NULL) {
         char *julia_path = (char*)malloc(512);
@@ -32,7 +32,7 @@ DLLEXPORT char *jl_locate_sysimg(char *jlhome)
     }
     char path[512];
     snprintf(path, sizeof(path), "%s%s%s",
-             julia_home, PATHSEPSTRING, JL_SYSTEM_IMAGE_PATH);
+             julia_home, PATHSEPSTRING, imgpath);
     return strdup(path);
 }
 
@@ -44,7 +44,7 @@ DLLEXPORT void *jl_eval_string(char *str);
 DLLEXPORT void jl_init(char *julia_home_dir)
 {
     libsupport_init();
-    char *image_file = jl_locate_sysimg(julia_home_dir);
+    char *image_file = jl_locate_sysimg(julia_home_dir, JL_SYSTEM_IMAGE_PATH);
     julia_init(image_file);
     jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
                  jl_cstr_to_string(julia_home));

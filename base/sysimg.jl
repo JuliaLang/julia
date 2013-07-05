@@ -1,3 +1,7 @@
+# Disable deleteBody after function generation
+# TODO: this does not work. get "ccall not defined" error
+#ccall(:jl_set_imaging_mode, Void, (Uint8,), 1)
+
 baremodule Base
 
 eval(x) = Core.eval(Base,x)
@@ -99,7 +103,7 @@ include("stat.jl")
 include("fs.jl")
 importall .FS
 include("process.jl")
-reinit_stdio()
+reinit_stdio_fake()
 ccall(:jl_get_uv_hooks, Void, ())
 include("grisu.jl")
 import .Grisu.print_shortest
@@ -390,4 +394,5 @@ let JL_PRIVATE_LIBDIR = get(ENV, "JL_PRIVATE_LIBDIR", "lib/julia")
 # create system image file
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},),
       "$JULIA_HOME/../$JL_PRIVATE_LIBDIR/sys.ji")
+ccall(:jl_dump_bitcode, Void, (Ptr{Uint8},), "$JULIA_HOME/../$JL_PRIVATE_LIBDIR/sys.bc")
 end

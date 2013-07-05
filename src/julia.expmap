@@ -94,6 +94,7 @@
     jl_dlsym;
     jl_dlsym_e;
     jl_dump_function;
+    jl_dump_bitcode;
     jl_function_ptr;
     jl_enable_color;
     jl_enable_inference;
@@ -119,6 +120,8 @@
     jl_array_rank;
     jl_array_size;
     jl_get_field;
+    jl_get_llvmfptr;
+    jl_get_llvmfunc_cached;
     jl_call1;
     jl_call2;
     jl_sigatomic_begin;
@@ -178,6 +181,7 @@
     jl_load;
     jl_load_dynamic_library;
     jl_load_dynamic_library_e;
+    jl_load_sysimg_so;
     jl_load_file_string;
     jl_loaderror_type;
     jl_load_file_string;
@@ -255,6 +259,7 @@
     jl_set_current_module;
     jl_set_current_output_stream_obj;
     jl_set_global;
+    jl_set_imaging_mode;
     jl_set_timeval;
     jl_setjmp;
     jl_show;
@@ -270,7 +275,6 @@
     jl_tcp4_connect;
     jl_tcp6_connect;
     jl_spawn;
-    jl_stackovf_exception;
     jl_start_io_thread;
     jl_start_reading;
     jl_stat;
@@ -326,6 +330,17 @@
     jl_write;
     jl_value_ptr;
     jl_zero_subnormals;
+    
+    jl_stackovf_exception;
+    jl_memory_exception;
+    jl_diverror_exception;
+    jl_domain_exception;
+    jl_overflow_exception;
+    jl_inexact_exception;
+    jl_undefref_exception;
+    jl_interrupt_exception;
+    jl_bounds_exception;
+    
     julia_free;
     julia_home;
     julia_init;
