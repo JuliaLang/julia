@@ -75,37 +75,39 @@ function (*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
     rowvalC = Array(Ti, nnzC)
     nzvalC = Array(Tv, nnzC)
 
-    ip = 1
-    xb = zeros(Ti, mA)
-    x  = zeros(Tv, mA)
-    for i in 1:nB
-        if ip + mA - 1 > nnzC
-            resize!(rowvalC, nnzC + max(nnzC,mA))
-            resize!(nzvalC, nnzC + max(nnzC,mA))
-            nnzC = length(nzvalC)
-        end
-        colptrC[i] = ip
-        for jp in colptrB[i]:(colptrB[i+1] - 1)
-            nzB = nzvalB[jp]
-            j = rowvalB[jp]
-            for kp in colptrA[j]:(colptrA[j+1] - 1)
-                nzC = nzvalA[kp] * nzB
-                k = rowvalA[kp]
-                if xb[k] != i
-                    rowvalC[ip] = k
-                    ip += 1
-                    xb[k] = i
-                    x[k] = nzC
-                else
-                    x[k] += nzC
+    @inbounds begin
+        ip = 1
+        xb = zeros(Ti, mA)
+        x  = zeros(Tv, mA)
+        for i in 1:nB
+            if ip + mA - 1 > nnzC
+                resize!(rowvalC, nnzC + max(nnzC,mA))
+                resize!(nzvalC, nnzC + max(nnzC,mA))
+                nnzC = length(nzvalC)
+            end
+            colptrC[i] = ip
+            for jp in colptrB[i]:(colptrB[i+1] - 1)
+                nzB = nzvalB[jp]
+                j = rowvalB[jp]
+                for kp in colptrA[j]:(colptrA[j+1] - 1)
+                    nzC = nzvalA[kp] * nzB
+                    k = rowvalA[kp]
+                    if xb[k] != i
+                        rowvalC[ip] = k
+                        ip += 1
+                        xb[k] = i
+                        x[k] = nzC
+                    else
+                        x[k] += nzC
+                    end
                 end
             end
+            for vp in colptrC[i]:(ip - 1)
+                nzvalC[vp] = x[rowvalC[vp]]
+            end
         end
-        for vp in colptrC[i]:(ip - 1)
-            nzvalC[vp] = x[rowvalC[vp]]
-        end
+        colptrC[nB+1] = ip
     end
-    colptrC[nB+1] = ip
 
     splice!(rowvalC, colptrC[end]:length(rowvalC))
     splice!(nzvalC, colptrC[end]:length(nzvalC))
