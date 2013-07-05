@@ -16,9 +16,19 @@ immutable Requirement <: Line
     function Requirement(content::String)
         fields = split(replace(content, r"#.*$", ""))
         package = shift!(fields)
-        all(field->ismatch(Base.VERSION_REGEX, field), fields) ||
-            error("invalid requires entry for $package: $fields")
-        versions = [ convert(VersionNumber, field) for field in fields ]
+        versions = VersionNumber[]
+        for field in fields
+            m = match(Base.VERSION_REGEX, field)
+            m == nothing && error("invalid requires entry field for $package: $field")
+            major, minor, patch, minus, prerl, plus, build = m.captures
+            major = int(major)
+            minor = minor != nothing ? int(minor) : 0
+            patch = patch != nothing ? int(patch) : 0
+            v = VersionNumber(major, minor, patch)
+            (prerl != nothing || build != nothing || plus == "+") &&
+                warn("in requires entry for $package: field $field will be treated as $v")
+            push!(versions, v)
+        end
         issorted(versions) || error("invalid requires entry for $package: $versions")
         new(content, package, VersionSet(versions))
     end
