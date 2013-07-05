@@ -956,6 +956,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
 
     int argStart = ctx->argDepth;
     Value *arg1 = boxed(emit_expr(expr, ctx));
+    // TODO: generic getfield func with more efficient calling convention
     make_gcroot(arg1, ctx);
     Value *arg2 = literal_pointer_val((jl_value_t*)name);
     make_gcroot(arg2, ctx);
@@ -3236,17 +3237,18 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     FPM->add(createJumpThreadingPass());        // Thread jumps.
     FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
-    //FPM->add(createInstructionCombiningPass()); // Combine silly seq's
+    FPM->add(createInstructionCombiningPass()); // Combine silly seq's
     
-    //FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
+    FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
     FPM->add(createReassociatePass());          // Reassociate expressions
 
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
+    // this has the potential to make some things a bit slower
     //FPM->add(createBBVectorizePass());
 #endif
     FPM->add(createEarlyCSEPass()); //// ****
 
-    //FPM->add(createLoopIdiomPass()); //// ****
+    FPM->add(createLoopIdiomPass()); //// ****
     FPM->add(createLoopRotatePass());           // Rotate loops.
     FPM->add(createLICMPass());                 // Hoist loop invariants
     FPM->add(createLoopUnswitchPass());         // Unswitch loops.
@@ -3263,8 +3265,8 @@ static void init_julia_llvm_env(Module *m)
     
     // Run instcombine after redundancy elimination to exploit opportunities
     // opened up by them.
-    //FPM->add(createSinkingPass()); ////////////// ****
-    //FPM->add(createInstructionSimplifierPass());///////// ****
+    FPM->add(createSinkingPass()); ////////////// ****
+    FPM->add(createInstructionSimplifierPass());///////// ****
     FPM->add(createInstructionCombiningPass());
     FPM->add(createJumpThreadingPass());         // Thread jumps
     FPM->add(createDeadStoreEliminationPass());  // Delete dead stores
