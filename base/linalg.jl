@@ -82,6 +82,7 @@ export
     norm,
     normfro,
     null,
+    peakflops,
     pinv,
     qr,
     qrfact!,

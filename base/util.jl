@@ -58,15 +58,6 @@ macro timed(ex)
     end
 end
 
-function peakflops(n=2000)
-    a = rand(n,n)
-    t = @elapsed a*a
-    t = @elapsed a*a
-    floprate = (2.0*float64(n)^3/t)
-    println("The peak flop rate is ", floprate*1e-9, " gigaflops")
-    floprate
-end
-
 # searching definitions
 
 function whicht(f, types)
@@ -191,7 +182,7 @@ function warn_once(msg::String...; depth=0)
     warn(msg; depth=depth+1)
 end
 
-# blas utility routines
+# BLAS utility routines
 function blas_vendor()
     try
         cglobal((:openblas_set_num_threads, Base.libblas_name), Void)

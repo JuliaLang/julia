@@ -617,6 +617,7 @@ export
     norm,
     normfro,
     null,
+    peakflops,
     pinv,
     qr,
     qrfact!,
@@ -1009,7 +1010,6 @@ export
     quit,
     atexit,
     ntuple,
-    peakflops,
     tty_cols,
     tty_rows,
 
