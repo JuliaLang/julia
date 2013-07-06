@@ -94,13 +94,15 @@ Julia does not install anything outside the directory it was cloned into. Julia 
 
 GCC version 4.6 or later is recommended to build Julia.
 
-If the build fails trying to compile OpenBLAS, set one of the following build options in `Make.user` and build again. Use `OPENBLAS_TARGET_ARCH=BARCELONA` on AMD CPUs, and `OPENBLAS_TARGET_ARCH=NEHALEM` on Intel CPUs.
+If the build fails trying to compile OpenBLAS, set one of the following build options in `Make.user` and build again. Use `OPENBLAS_TARGET_ARCH=BARCELONA` on AMD CPUs, and `OPENBLAS_TARGET_ARCH=NEHALEM` on Intel CPUs. If you want to use the system provided `libblas`, set `USE_SYSTEM_BLAS=1` in `Make.user`. If you want to use the system provided `libopenblas`(instead of `libblas`), set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` in `Make.user`i beside `USE_SYSTEM_BLAS=1`. Note that on some Linux distributions(e.g. Debian) `libblas.so` is a soft link to `libopenblas.so` by default if both of them were installed.
 
 On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, set `USE_SYSTEM_READLINE=1` in `Make.user`.
 
 On Ubuntu or Debian systems, if you get any errors related to `ncurses`, you need to `apt-get install libncurses5-dev`.
 
 On CentOS 5 systems, the default compiler (gcc 4.1) is too old to build Julia.
+
+You can set `USE_SYSTEM_XXX=1` and `LDFLAGS=-Wl,-rpath /path/to/dir/contains/libXXX.so` in `Make.user` to use an external `XXX` shared library which is not in the system library search path. Instead of setting `LDFLAGS`, putting the library directory into the environment variable `LD_LIBRARY_PATH` (at both compiling time and runtime) also works.
 
 ### OS X
 
