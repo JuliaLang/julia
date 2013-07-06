@@ -6,7 +6,7 @@
 # A vectorized version of the Java port from nbody.jl
 # 
 
-include("timing.jl")
+module NBodyVec
 
 # Constants
 const solar_mass = 4 * pi * pi
@@ -100,19 +100,13 @@ function energy(bodies)
 end
 
 
-function nbody(N::Int)
+function nbody_vec(N::Int=1000)
     init_sun(bodies)
-    @printf("%.9f\n", energy(bodies))
+#    @printf("%.9f\n", energy(bodies))
     for i = 1:N
         advance(bodies, 0.01)
     end
-    @printf("%.9f\n", energy(bodies))
+#    @printf("%.9f\n", energy(bodies))
 end
 
-# main
-if length(ARGS) >= 1
-    N = int(ARGS[1])
-else
-    N = 1000
-end
-@timeit nbody(N) "nbody"
+end # module

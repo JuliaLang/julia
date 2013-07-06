@@ -5,7 +5,7 @@
 
 const ITER = 50
 
-function mandel(z::Complex128)
+function ismandel(z::Complex128)
     c = z
     for n = 1:ITER
         if abs2(z) > 4
@@ -21,20 +21,14 @@ function draw_mandel(M::Array{Uint8, 2}, n::Int)
         ci = 2y/n - 1
         for x = 0:n-1
             c = complex(2x/n - 1.5, ci)
-            if mandel(c)
+            if ismandel(c)
                 M[div(x, 8) + 1, y + 1] |= 1 << uint8(7 - x%8)
             end
         end
     end
 end
 
-function main(args, stream)
-    if length(args) > 0
-        n = int(args[1])
-    else
-        n = 200
-    end
-
+function mandel(n=800, stream=STDOUT)
     if n%8 != 0
         error("Error: n of $n is not divisible by 8")
     end
@@ -45,6 +39,3 @@ function main(args, stream)
     write(stream, M)
     flush(stream)
 end
-
-#main([1600], open("mandel.txt", "w"))
-main(ARGS, STDOUT)

@@ -71,9 +71,3 @@ function fannkuch(n)
 		end
 	end
 end
-if length(ARGS) >= 1
-    N = int(ARGS[1])
-else
-    N = 7
-end
-@printf("Pfannkuchen(%i) = %i\n", N, fannkuch(N))

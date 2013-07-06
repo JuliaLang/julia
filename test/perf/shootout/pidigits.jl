@@ -1,5 +1,3 @@
-include("timing.jl")
-
 function pidigits(N::Int, printOut::Bool)
     """
     See http://shootout.alioth.debian.org/u64q/performance.php?test=pidigits#about
@@ -59,17 +57,6 @@ function pidigits(N::Int, printOut::Bool)
     end
 end
 
-function pidigits(N::Int)
+function pidigits(N::Int=1000)
     pidigits(N,false)
 end
-
-
-@assert pidigits(1000) == 9216420198
-
-if length(ARGS)==1
-    N = int(ARGS[1])
-else
-    N = 1000
-end
-@timeit pidigits(N) "pidigits"
-

@@ -1,3 +1,5 @@
+include("../perfutil.jl")
+
 function cat2d_perf(n, iter)
     a = rand(n,n)
     b = rand(n,n)
@@ -10,7 +12,7 @@ function cat2d_perf2(n, iter)
     a = rand(n,n)
     b = rand(n,n)
     for i=1:iter
-        c = Array(Float64, 2n, 2n)
+        c = Array(Float64,2n,2n)
         c[1:n,1:n] = a
         c[1:n,n+1:end] = b
         c[n+1:end,1:n] = b
@@ -19,11 +21,11 @@ function cat2d_perf2(n, iter)
     end
 end
 
-@timeit cat2d_perf(5, 20000) "small cat"
-@timeit cat2d_perf2(5, 20000) "small cat 2"
+@timeit cat2d_perf(5,20000) "small_cat"
+@timeit cat2d_perf2(5,20000) "small_cat_2"
 
-@timeit cat2d_perf(500, 2) "large cat"
-@timeit cat2d_perf2(500, 2) "large cat 2"
+@timeit cat2d_perf(500,2) "large_cat"
+@timeit cat2d_perf2(500,2) "large_cat_2"
 
 function hcat_perf(n, iter)
     a = rand(n,n)
@@ -45,11 +47,11 @@ function hcat_perf2(n, iter)
     end
 end
 
-@timeit hcat_perf(5, 20000) "small hcat"
-@timeit hcat_perf2(5, 20000) "small hcat 2"
+@timeit hcat_perf(5,20000) "small_hcat"
+@timeit hcat_perf2(5,20000) "small_hcat_2"
 
-@timeit hcat_perf(500, 2) "large hcat"
-@timeit hcat_perf2(500, 2) "large hcat 2"
+@timeit hcat_perf(500,2) "large_hcat"
+@timeit hcat_perf2(500,2) "large_hcat_2"
 
 function vcat_perf(n, iter)
     a = rand(n,n)
@@ -71,11 +73,11 @@ function vcat_perf2(n, iter)
     end
 end
 
-@timeit vcat_perf(5, 20000) "small vcat"
-@timeit vcat_perf2(5, 20000) "small vcat 2"
+@timeit vcat_perf(5,20000) "small_vcat"
+@timeit vcat_perf2(5,20000) "small_vcat_2"
 
-@timeit vcat_perf(500, 2) "large vcat"
-@timeit vcat_perf2(500, 2) "large vcat 2"
+@timeit vcat_perf(500,2) "large_vcat"
+@timeit vcat_perf2(500,2) "large_vcat_2"
 
 function catnd_perf(n, iter)
     a = rand(1,n,n,1)
@@ -97,8 +99,8 @@ function catnd_perf2(n, iter)
     end
 end
 
-@timeit catnd_perf(5, 20000) "small catnd"
-@timeit catnd_perf2(5, 20000) "small catnd 2"
+@timeit catnd_perf(5,20000) "small_catnd"
+@timeit catnd_perf2(5,20000) "small_catnd_2"
 
-@timeit catnd_perf(500, 2) "large catnd"
-@timeit catnd_perf2(500, 2) "large catnd 2"
+@timeit catnd_perf(500,2) "large_catnd"
+@timeit catnd_perf2(500,2) "large_catnd_2"
