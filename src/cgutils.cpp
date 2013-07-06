@@ -276,7 +276,7 @@ static Value *emit_typeof(Value *p)
     return literal_pointer_val(julia_type_of(p));
 }
 
-static void emit_error(const std::string &txt, jl_codectx_t *ctx)
+static void just_emit_error(const std::string &txt, jl_codectx_t *ctx)
 {
     Value *zeros[2] = { ConstantInt::get(T_int32, 0),
                         ConstantInt::get(T_int32, 0) };
@@ -285,13 +285,22 @@ static void emit_error(const std::string &txt, jl_codectx_t *ctx)
                                          ArrayRef<Value*>(zeros)));
 }
 
+static Value *emit_error(const std::string &txt, jl_codectx_t *ctx)
+{
+    just_emit_error(txt, ctx);
+    Value *v = builder.CreateUnreachable();
+    BasicBlock *cont = BasicBlock::Create(getGlobalContext(),"after_error",ctx->f);
+    builder.SetInsertPoint(cont);
+    return v;
+}
+
 static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
 {
     BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(cond, passBB, failBB);
     builder.SetInsertPoint(failBB);
-    emit_error(msg, ctx);
+    just_emit_error(msg, ctx);
     builder.CreateUnreachable();
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
