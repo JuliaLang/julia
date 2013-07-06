@@ -47,12 +47,10 @@ type Interface
     # equivalence classes: after version pruning, for each package and each
     #                      version keeps a vector with all versions in the
     #                      equivalence class
-    eq_classes_map::Dict{ByteString,Dict{VersionNumber,Vector{VersionNumber}}}
+    eq_classes::Dict{ByteString,Dict{VersionNumber,Vector{VersionNumber}}}
 
-    function Interface(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
-
-        # reduce deps by version pruning
-        deps, eq_classes_map = Query.prune_versions(reqs, deps)
+    function Interface(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}},
+                       eq_classes::Dict{ByteString,Dict{VersionNumber,Vector{VersionNumber}}})
 
         # generate pkgs
         pkgs = sort!(ByteString[Set{ByteString}(keys(deps)...)...])
@@ -103,8 +101,8 @@ type Interface
         vweight = [ Array(Int, spp[p0]) for p0 = 1:np ]
         for p0 = 1:np
             p = pkgs[p0]
-            @assert haskey(eq_classes_map, p)
-            eqclass0 = eq_classes_map[p]
+            @assert haskey(eq_classes, p)
+            eqclass0 = eq_classes[p]
             allv = vcat([cl for (_,cl) in eqclass0]...)
             vweight0 = vweight[p0]
             pvers0 = pvers[p0]
@@ -115,7 +113,7 @@ type Interface
             vweight0[spp[p0]] = length(allv)
         end
 
-        return new(reqs, deps, pkgs, np, spp, pdict, pvers, vdict, vweight, eq_classes_map)
+        return new(reqs, deps, pkgs, np, spp, pdict, pvers, vdict, vweight, eq_classes)
     end
 end
 

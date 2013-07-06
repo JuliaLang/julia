@@ -69,14 +69,9 @@ end
 #      dependency relation, they are both required or both not required)
 #   2) They have the same dependencies
 # Also, if there are explicitly required packages, dicards all versions outside
-# the allowed range (checking for impossible ranges while at it), and keeps only
-# the subgraph or requirements dependencies.
+# the allowed range (checking for impossible ranges while at it).
 prune_versions(deps::Dict{ByteString,Dict{VersionNumber,Available}}) = prune_versions((ByteString=>VersionSet)[], deps)
 function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
-
-    if !isempty(reqs)
-        deps = dependencies_subset(deps, Set{ByteString}(keys(reqs)...))
-    end
 
     np = length(deps)
 
@@ -168,7 +163,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
     # At this point, the vmask patterns are computed. We divide them into
     # classes so that we can keep just one version for each class.
     pruned_vers = (ByteString=>Vector{VersionNumber})[]
-    eq_classes_map = (ByteString=>Dict{VersionNumber,Vector{VersionNumber}})[]
+    eq_classes = (ByteString=>Dict{VersionNumber,Vector{VersionNumber}})[]
     for (p, vmaskp) in vmask
         vmask0_uniq = unique([vm for (_,vm) in vmaskp])
         nc = length(vmask0_uniq)
@@ -182,8 +177,8 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         # For each nonempty class, we store only the highest version)
         pruned_vers[p] = VersionNumber[]
         prunedp = pruned_vers[p]
-        eq_classes_map[p] = (VersionNumber=>Vector{VersionNumber})[]
-        eqclassp = eq_classes_map[p]
+        eq_classes[p] = (VersionNumber=>Vector{VersionNumber})[]
+        eqclassp = eq_classes[p]
         for cl in classes
             if !isempty(cl)
                 vtop = max(cl)
@@ -194,20 +189,20 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         end
         sort!(prunedp)
     end
-    # Put non-allowed versions into eq_classes_map
+    # Put non-allowed versions into eq_classes
     for (p, allowedp) in allowed
-        haskey(eq_classes_map, p) || continue
-        eqclassp = eq_classes_map[p]
+        haskey(eq_classes, p) || continue
+        eqclassp = eq_classes[p]
         for (vn, a) in allowedp
             a && continue
             eqclassp[vn] = [vn]
         end
     end
-    # Put all remaining packages into eq_classes_map
+    # Put all remaining packages into eq_classes
     for (p, depsp) in deps
-        haskey(eq_classes_map, p) && continue
-        eq_classes_map[p] = (VersionNumber=>Vector{VersionNumber})[]
-        eqclassp = eq_classes_map[p]
+        haskey(eq_classes, p) && continue
+        eq_classes[p] = (VersionNumber=>Vector{VersionNumber})[]
+        eqclassp = eq_classes[p]
         for (vn,_) in depsp
             eqclassp[vn] = [vn]
         end
@@ -252,7 +247,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
     #println("  after: vers=$numnewvers deps=$numnewdeps")
     #println()
 
-    return new_deps, eq_classes_map
+    return new_deps, eq_classes
 end
 
 # Build a subgraph incuding only the (direct and indirect) dependencies
@@ -276,21 +271,23 @@ function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}
 
     sub_deps = Dict{ByteString,Dict{VersionNumber,Available}}()
     for p in allpkgs
-        if !haskey(sub_deps, p)
-            sub_depsp = (VersionNumber=>Available)[]
-            sub_deps[p] = sub_depsp
-        else
-            sub_depsp = sub_deps[p]
-        end
+        haskey(sub_deps, p) || (sub_deps[p] = (VersionNumber=>Available)[])
+        sub_depsp = sub_deps[p]
         for (vn, a) in deps[p]
-            sub_deps[p][vn] = a
+            sub_depsp[vn] = a
         end
     end
 
     return sub_deps
 end
 
-function filter_prereleases(deps::Dict{ByteString,Dict{VersionNumber,Available}})
+# For each version of each package in dependencies, compute the whole version number (i.e. discard
+# prerelease and build fields); then, for each whole version, keep only the highest corresponding version.
+# The fixed optional argument can be used to force specific versions  (one per package).
+function filter_prereleases(deps::Dict{ByteString,Dict{VersionNumber,Available}},
+                            fixed::Dict{ByteString,VersionNumber} = (ByteString=>VersionNumber)[])
+
+    eqfixed = [ p=>VersionNumber(vn.major, vn.minor, vn.patch) for (p,vn) in fixed ]
 
     filtered_deps = (ByteString=>Dict{VersionNumber,Available})[]
     for (p, depsp) in deps
@@ -306,11 +303,26 @@ function filter_prereleases(deps::Dict{ByteString,Dict{VersionNumber,Available}}
         end
         for (vn, a) in depsp
             eqvn = VersionNumber(vn.major, vn.minor, vn.patch)
-            vn != vmap[eqvn][end] && continue
-            filtered_deps[p][vn] = a
+            if haskey(fixed, p) && eqvn == eqfixed[p]
+                vn != fixed[p] && continue
+                filtered_deps[p][vn] = a
+            else
+                vn != vmap[eqvn][end] && continue
+                filtered_deps[p][vn] = a
+            end
         end
     end
     return filtered_deps
 end
+
+function prune_dependencies(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}},
+                            fixed::Dict{ByteString,VersionNumber} = (ByteString=>VersionNumber)[])
+    deps = dependencies_subset(deps, Set{ByteString}(keys(reqs)...))
+    deps = filter_prereleases(deps, fixed)
+    deps, eq_classes = prune_versions(reqs, deps)
+
+    return deps, eq_classes
+end
+
 
 end # module

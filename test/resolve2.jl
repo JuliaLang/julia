@@ -1,4 +1,5 @@
 using Base.Pkg2.Types
+using Base.Pkg2.Query
 using Base.Pkg2.Resolve
 
 function deps_from_data(deps_data)
@@ -51,7 +52,8 @@ function resolve_tst(deps_data, reqs_data)
     #println()
     #println("deps=$deps")
     #println("reqs=$reqs")
-    want = resolve(reqs, deps)
+    deps, eq_classes = Query.prune_dependencies(reqs, deps)
+    want = resolve(reqs, deps, eq_classes)
 end
 
 ## DEPENDENCY SCHEME 1: TWO PACKAGES, DAG
