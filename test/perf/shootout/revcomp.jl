@@ -6,7 +6,7 @@
 # FIXME(davekong) Is there support in Julia for doing more efficient IO and
 # handling of byte arrays?
 
-const revcomp = {
+const revcompdata = {
    'A'=> 'T', 'a'=> 'T',
    'C'=> 'G', 'c'=> 'G',
    'G'=> 'C', 'g'=> 'C',
@@ -37,7 +37,7 @@ function print_buff(b)
     end
 end
 
-function main()
+function revcomp()
     buff = Uint8[]
     while true
         line = readline(STDIN).data
@@ -50,9 +50,8 @@ function main()
             write(line)
         else
             l = length(line)-1
-            append!(buff, [uint8(revcomp[line[i]]) for i=1:l])
+            append!(buff, [uint8(revcompdata[line[i]]) for i=1:l])
         end
     end
 end
 
-main()

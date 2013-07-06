@@ -30,7 +30,7 @@ const subs = [
     (r"Y", "(c|t)")
 ]
 
-function main()
+function regex_dna()
     seq = readall(STDIN)
     l1 = length(seq)
 
@@ -55,4 +55,3 @@ function main()
     println(length(seq))
 end
 
-main()

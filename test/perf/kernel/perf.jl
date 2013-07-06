@@ -1,20 +1,4 @@
-macro timeit(ex,name)
-    quote
-        t = Inf
-        for i=1:5
-            t = min(t, @elapsed $ex)
-        end
-        println($name, "\t", t*1000)
-    end
-end
-
-macro timeit1(ex,name)
-    quote
-        println($name, "\t", (@elapsed $ex)*1000)
-    end
-end
-
-srand(1776)  # get more consistent times
+include("../perfutil.jl")
 
 require("$JULIA_HOME/../../examples/list.jl")
 
@@ -26,7 +10,7 @@ function listn1n2(n1::Int,n2::Int)
     l1
 end
 
-@timeit listn1n2(1,10^6) "cons    "
+@timeit listn1n2(1,10^6) "cons"
 gc()
 
 # issue #1211
@@ -36,7 +20,7 @@ a = Array(Float64, 1000000)
 
 # issue #950
 include("gk.jl")
-@timeit gk(350,[0.1]) "gk      "
+@timeit gk(350,[0.1]) "gk"
 
 # issue #942
 s = sparse(ones(280,280));
@@ -73,7 +57,7 @@ include("go_benchmark.jl")
 
 # issue #3142
 include("simplex.jl")
-simplexbenchmark()
+@timeit doTwoPassRatioTest() "simplex"
 
 function cmp_with_func(x::Vector, f::Function)
     count::Int = 0
@@ -86,7 +70,7 @@ function cmp_with_func(x::Vector, f::Function)
 end
 
 x = randn(200_000)
-@timeit (for n in 1:10; count = cmp_with_func(x, isless) end) "funarg  "
+@timeit (for n in 1:10; count = cmp_with_func(x, isless) end) "funarg"
 
 
 function arith_vectorized(b,c,d)
@@ -98,7 +82,7 @@ b = randn(len)
 c = randn(len)
 d = randn(len)
 
-@timeit (for n in 1:10; a = arith_vectorized(b,c,d); end) "vectoriz"
+@timeit (for n in 1:10; a = arith_vectorized(b,c,d); end) "vectorize"
 
 open("random.csv","w") do io
     writecsv(io, rand(100000,4))
