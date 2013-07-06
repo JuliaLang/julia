@@ -1,4 +1,4 @@
-dlm_data = readdlm(joinpath("perf2", "imdb-1.tsv"), '\t')
+dlm_data = readdlm(joinpath("perf", "kernel", "imdb-1.tsv"), '\t')
 
 @test size(dlm_data) == (31383,3)
 @test dlm_data[12345,2] == "Gladiator"

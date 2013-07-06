@@ -56,9 +56,6 @@ PATCHELF=patchelf
 endif
 endif
 
-WGET = $(abspath .)/jldownload
-WGET_DASH_O = $(WGET)
-
 ## USE_SYSTEM_LIBS options
 
 ifeq ($(USE_SYSTEM_OPENLIBM), 0)
@@ -225,14 +222,14 @@ endif
 
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR):
-	$(WGET_DASH_O) $@ http://llvm.org/releases/$(LLVM_VER)/$@
+	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
 endif
 ifneq ($(LLVM_COMPILER_RT_TAR),)
 $(LLVM_COMPILER_RT_TAR):
-	$(WGET_DASH_O) $@ http://llvm.org/releases/$(LLVM_VER)/$@
+	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
 endif
 $(LLVM_TAR):
-	$(WGET_DASH_O) $@ http://llvm.org/releases/$(LLVM_VER)/$@
+	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
 
 ifeq ($(BUILD_LLDB),1)
 llvm-$(LLVM_VER)/tools/lldb:
@@ -319,7 +316,7 @@ READLINE_URL = https://github.com/JuliaLang/readline/tarball/master
 READLINE_OPTS = --disable-shared --enable-static --with-curses
 READLINE_CFLAGS = LOCAL_DEFS="-include $(abspath .)/readline-win.h"
 readline-$(READLINE_VER).tar.gz:
-	$(WGET_DASH_O) $@ $(READLINE_URL)
+	$(JLDOWNLOAD) $@ $(READLINE_URL)
 	touch -c $@
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	mkdir readline-$(READLINE_VER)
@@ -339,11 +336,11 @@ READLINE_URL = ftp://ftp.gnu.org/gnu/readline/readline-$(READLINE_VER).tar.gz
 READLINE_OPTS = --enable-shared --enable-static --with-curses
 READLINE_CFLAGS = 
 readline-$(READLINE_VER).tar.gz:
-	$(WGET_DASH_O) readline62-001 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-001
-	$(WGET_DASH_O) readline62-002 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-002
-	$(WGET_DASH_O) readline62-003 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-003
-	$(WGET_DASH_O) readline62-004 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-004
-	$(WGET_DASH_O) $@ http://ftp.gnu.org/gnu/readline/$@
+	$(JLDOWNLOAD) readline62-001 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-001
+	$(JLDOWNLOAD) readline62-002 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-002
+	$(JLDOWNLOAD) readline62-003 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-003
+	$(JLDOWNLOAD) readline62-004 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-004
+	$(JLDOWNLOAD) $@ http://ftp.gnu.org/gnu/readline/$@
 	touch -c $@
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	tar zxf $<
@@ -447,7 +444,7 @@ PCRE_SRC_TARGET = pcre-$(PCRE_VER)/.libs/libpcre.$(SHLIB_EXT)
 PCRE_OBJ_TARGET = $(BUILD)/lib/libpcre.$(SHLIB_EXT)
 
 pcre-$(PCRE_VER).tar.bz2:
-	$(WGET) ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/$@
+	$(JLDOWNLOAD) ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/$@
 pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	tar jxf $<
 	touch -c $@
@@ -490,7 +487,7 @@ install-pcre: $(PCRE_OBJ_TARGET)
 GRISU_OPTS = $(CXXFLAGS) -O3 -fvisibility=hidden $(fPIC)
 
 double-conversion-$(GRISU_VER).tar.gz:
-	$(WGET_DASH_O) $@ http://double-conversion.googlecode.com/files/$@
+	$(JLDOWNLOAD) $@ http://double-conversion.googlecode.com/files/$@
 	touch -c $@
 double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
 	mkdir -p double-conversion-$(GRISU_VER) && \
@@ -599,7 +596,7 @@ LIBRANDOM_CFLAGS += -msse2 -DHAVE_SSE2
 endif
 
 random/dsfmt-$(DSFMT_VER).tar.gz:
-	$(WGET_DASH_O) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
+	$(JLDOWNLOAD) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
 	touch -c $@
 random/dsfmt-$(DSFMT_VER)/config.status: random/dsfmt-$(DSFMT_VER).tar.gz
 	cd random && \
@@ -725,7 +722,7 @@ OPENBLAS_BUILD_OPTS += DEBUG=1
 endif
 
 openblas-$(OPENBLAS_VER).tar.gz:
-	$(WGET_DASH_O) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) 
+	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) 
 openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
@@ -845,7 +842,7 @@ LAPACK_MFLAGS += BLASLIB="-Wl,-rpath,'$(BUILD)/lib' $(LIBBLAS)"
 endif
 
 lapack-$(LAPACK_VER).tgz:
-	$(WGET_DASH_O) $@ http://www.netlib.org/lapack/$@
+	$(JLDOWNLOAD) $@ http://www.netlib.org/lapack/$@
 lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 	tar zxf $<
 	touch -c $@
@@ -904,7 +901,7 @@ ARPACK_FLAGS += LDFLAGS="-Wl,-rpath,'$(BUILD)/lib'"
 endif
 
 arpack-ng-$(ARPACK_VER).tar.gz:
-	$(WGET_DASH_O) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/get/arpack-ng-$(ARPACK_VER).tar.gz
+	$(JLDOWNLOAD) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/get/arpack-ng-$(ARPACK_VER).tar.gz
 	touch -c $@
 arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	tar zxf $< 
@@ -989,7 +986,7 @@ ifeq ($(OS),WINNT)
 endif
 
 fftw-$(FFTW_VER).tar.gz:
-	$(WGET_DASH_O) $@ http://www.fftw.org/$@
+	$(JLDOWNLOAD) $@ http://www.fftw.org/$@
 
 fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	mkdir -p fftw-$(FFTW_VER)-single && \
@@ -1120,7 +1117,7 @@ SUITESPARSE_MFLAGS = CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RA
 	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)"
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
-	$(WGET_DASH_O) $@ http://www.cise.ufl.edu/research/sparse/SuiteSparse/$@ 
+	$(JLDOWNLOAD) $@ http://www.cise.ufl.edu/research/sparse/SuiteSparse/$@ 
 SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
@@ -1204,7 +1201,7 @@ LIBUNWIND_TARGET_SOURCE = libunwind-$(UNWIND_VER)/src/.libs/libunwind.a
 LIBUNWIND_CFLAGS = $(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)
 
 libunwind-$(UNWIND_VER).tar.gz:
-	$(WGET_DASH_O) $@ http://download.savannah.gnu.org/releases/libunwind/$@ 
+	$(JLDOWNLOAD) $@ http://download.savannah.gnu.org/releases/libunwind/$@ 
 libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
 	tar xfz $<
 	touch -c $@
@@ -1247,7 +1244,7 @@ GMP_SRC_TARGET = gmp-$(GMP_VER)/.libs/libgmp.$(SHLIB_EXT)
 GMP_OBJ_TARGET = $(BUILD)/lib/libgmp.$(SHLIB_EXT)
 
 gmp-$(GMP_VER).tar.bz2:
-	$(WGET_DASH_O) $@ ftp://ftp.gmplib.org/pub/gmp-$(GMP_VER)/$@
+	$(JLDOWNLOAD) $@ ftp://ftp.gmplib.org/pub/gmp-$(GMP_VER)/$@
 gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	tar jxf $<
 	touch -c $@
@@ -1292,7 +1289,7 @@ MPFR_CHECK_MFLAGS = LDFLAGS="-Wl,-rpath,'$(BUILD)/$(JL_LIBDIR)'"
 endif
 
 mpfr-$(MPFR_VER).tar.bz2:
-	$(WGET_DASH_O) $@ http://www.mpfr.org/mpfr-current/$@
+	$(JLDOWNLOAD) $@ http://www.mpfr.org/mpfr-current/$@
 mpfr-$(MPFR_VER)/configure: mpfr-$(MPFR_VER).tar.bz2
 	tar jxf $<
 	touch -c $@
@@ -1341,7 +1338,7 @@ ZLIB_CONFIGFLAGS += CC="$(CC)"
 endif
 
 zlib-$(ZLIB_VER).tar.gz:
-	$(WGET_DASH_O) $@ http://zlib.net/$@
+	$(JLDOWNLOAD) $@ http://zlib.net/$@
 zlib-$(ZLIB_VER)/configure: zlib-$(ZLIB_VER).tar.gz
 	tar zxf $<
 	touch -c $@
@@ -1393,7 +1390,7 @@ compile-patchelf: install-patchelf
 install-patchelf: $(PATCHELF_TARGET)
 
 patchelf-$(PATCHELF_VER).tar.bz2:
-	$(WGET_DASH_O) $@ http://hydra.nixos.org/build/1524660/download/2/$@
+	$(JLDOWNLOAD) $@ http://hydra.nixos.org/build/1524660/download/2/$@
 patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.bz2
 	tar jxf $<
 	touch -c $@
@@ -1432,7 +1429,7 @@ GIT_SOURCE = git-$(GIT_VER)/src/git
 GIT_TARGET = $(BUILD)/git
 
 git-$(GIT_VER).tar.gz:
-	$(WGET_DASH_O) $@ http://git-core.googlecode.com/files/$@
+	$(JLDOWNLOAD) $@ http://git-core.googlecode.com/files/$@
 git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
 	tar zxf $<
 	touch -c $@

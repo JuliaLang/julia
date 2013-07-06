@@ -95,8 +95,9 @@ resolve(
     reqs = Query.requirements(reqs,fixed)
     deps = Query.dependencies(avail,fixed)
 
-    for rp in keys(reqs)
-        haskey(deps, rp) || error("required package $rp has no version compatible with fixed requirements")
+    for pkg in keys(reqs)
+        haskey(deps, pkg) ||
+            error("$pkg has no version compatible with fixed requirements")
     end
 
     want = Resolve.resolve(reqs,deps)
