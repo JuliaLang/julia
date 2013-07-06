@@ -6,8 +6,6 @@
 # Based on the Javascript program
 # 
 
-include("timing.jl")
-
 A(i,j) = 1.0 / ((i+j)*(i+j+1.0)/2.0+i+1.0)
 
 function Au(u,w)
@@ -44,16 +42,9 @@ function approximate(n)
 	return sqrt(vBv/vv)
 end
 
-function spectralnorm(N)
-    @printf("%.09f\n", approximate(N))
+function spectralnorm(N::Int=100)
+    approximate(N)
 end
-
-if length(ARGS) >= 1
-    N = int(ARGS[1])
-else
-    N = 100
-end
-spectralnorm(N)
 
 # @assert spectralnorm(100) == 1.274219991
 # @timeit spectralnorm(500) "spectralnorm(n=500)"

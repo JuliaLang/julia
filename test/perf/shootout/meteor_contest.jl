@@ -231,20 +231,12 @@ function printSolution(s)
     end
 end
 
-function main()
-    if length(ARGS) < 1
-        n = 2098
-    else
-        n = int(ARGS[1])
-    end
-
+function meteor_contest(n::Int=2098)
     solve(n)
-    println("$(length(solutions)) solutions found")
-    println()
-    printSolution(min(solutions))
-    println()
-    printSolution(max(solutions))
-    println()
+#    println("$(length(solutions)) solutions found")
+#    println()
+#    printSolution(min(solutions))
+#    println()
+#    printSolution(max(solutions))
+#    println()
 end
-
-main()

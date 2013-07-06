@@ -68,13 +68,3 @@ function doTwoPassRatioTest()
     return time() - t
 
 end
-
-function simplexbenchmark() 
-    
-    t = Inf
-    for k in 1:5
-        t = min(t,doTwoPassRatioTest())
-    end
-    println("simplex\t\t",1000*t)
-
-end

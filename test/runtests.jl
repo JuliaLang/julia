@@ -3,7 +3,7 @@ testnames = ["core", "keywordargs", "numbers", "strings", "unicode",
              "linalg", "blas", "fft", "dsp", "sparse", "bitarray",
              "random", "math", "functional", "bigint", "sorting",
              "statistics", "spawn", "parallel", "priorityqueue",
-             "arpack", "file", "perf", "suitesparse", "version",
+             "arpack", "file", "suitesparse", "version",
              "resolve", "pollfd", "mpfr", "broadcast", "complex",
              "socket", "floatapprox", "readdlm", "regex"]
 
