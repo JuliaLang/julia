@@ -15,10 +15,10 @@ n = 100
 end "fasta"
 
 include("k_nucleotide.jl")
-#@timeit1 k_nucleotide() "k_nucleotide"
+@timeit1 k_nucleotide("shootout/knucleotide-input.txt") "k_nucleotide"
 
 include("mandelbrot.jl")
-#@timeit1 mandel(n=800, stream=open("/dev/null", "w"))
+@timeit1 mandel("shootout/mandelbrot-output-julia.txt") "mandelbrot"
 
 include("meteor_contest.jl")
 @timeit1 meteor_contest() "meteor_contest"
@@ -36,10 +36,10 @@ include("pidigits.jl")
 #@timeit1 pidigits(1000) "pidigits"
 
 include("regex_dna.jl")
-#@timeit1 regex_dna() "regex_dna"
+@timeit1 regex_dna("shootout/regexdna-input.txt") "regex_dna"
 
 include("revcomp.jl")
-#@timeit1 revcomp() "revcomp"
+@timeit1 revcomp("shootout/revcomp-input.txt") "revcomp"
 
 include("spectralnorm.jl")
 @timeit1 spectralnorm() "spectralnorm"
