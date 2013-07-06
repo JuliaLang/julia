@@ -4,6 +4,8 @@
 # Contributed by David Campbell
 # Based on the Go version
 
+import Base.isless
+
 function count(data::String, n::Int)
     counts = Dict{String, Int}()
     top = length(data) - n + 1
@@ -56,15 +58,16 @@ function print_knucs(a::Array{KNuc, 1})
     println()
 end
 
-function k_nucleotide()
+function k_nucleotide(infile="knucleotide-input.txt")
+    input = open(infile, "r")
     three = ">THREE "
     while true
-        line = readline(STDIN)
+        line = readline(input)
         if length(line) >= length(three) && line[1:length(three)] == three
             break
         end
     end
-    data = chars(readall(STDIN))
+    data = collect(readall(input))
     # delete the newlines and convert to upper case
     i, j = 1, 1
     while i <= length(data)
@@ -79,9 +82,9 @@ function k_nucleotide()
     arr1 = sorted_array(count(str, 1))
     arr2 = sorted_array(count(str, 2))
 
-    print_knucs(arr1)
-    print_knucs(arr2)
-    for s in ["GGT", "GGTA", "GGTATT", "GGTATTTTAATT", "GGTATTTTAATTTATAGT"]
-        @printf("%d\t%s\n", count_one(str, s), s)
-    end
+#    print_knucs(arr1)
+#    print_knucs(arr2)
+#    for s in ["GGT", "GGTA", "GGTATT", "GGTATTTTAATT", "GGTATTTTAATTTATAGT"]
+#        @printf("%d\t%s\n", count_one(str, s), s)
+#    end
 end

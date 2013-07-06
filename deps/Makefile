@@ -56,9 +56,6 @@ PATCHELF=patchelf
 endif
 endif
 
-WGET = $(abspath .)/jldownload
-WGET_DASH_O = $(WGET)
-
 ## USE_SYSTEM_LIBS options
 
 ifeq ($(USE_SYSTEM_OPENLIBM), 0)

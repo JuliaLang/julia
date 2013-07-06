@@ -37,17 +37,18 @@ function print_buff(b)
     end
 end
 
-function revcomp()
+function revcomp(infile="revcomp-input.txt")
+    input = open(infile, "r")
     buff = Uint8[]
     while true
-        line = readline(STDIN).data
+        line = readline(input).data
         if isempty(line)
-            print_buff(buff)
+#            print_buff(buff)
             return
         elseif line[1] == '>'
-            print_buff(buff)
+#            print_buff(buff)
             buff = Uint8[]
-            write(line)
+#            write(line)
         else
             l = length(line)-1
             append!(buff, [uint8(revcompdata[line[i]]) for i=1:l])

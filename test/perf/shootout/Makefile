@@ -1,0 +1,10 @@
+JULIAHOME = $(abspath ../../..)
+include ../../../Make.inc
+
+getall: knucleotide-input.txt regexdna-input.txt revcomp-input.txt fasta-output.txt mandelbrot-output.txt nbody-output.txt fannkuchredux-output.txt pidigits-output.txt knucleotide-output.txt revcomp-output.txt spectralnorm-output.txt regexdna-output.txt meteor-output.txt 
+
+%.txt:
+	$(WGET_DASH_O) http://benchmarksgame.alioth.debian.org/download/$@
+
+clean:
+	rm -f *.txt *~
