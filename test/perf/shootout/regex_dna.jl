@@ -30,8 +30,8 @@ const subs = [
     (r"Y", "(c|t)")
 ]
 
-function main()
-    seq = readall(STDIN)
+function regex_dna(infile="regexdna-input.txt")
+    seq = readall(infile)
     l1 = length(seq)
 
     seq = replace(seq, r">.*\n|\n", "")
@@ -39,20 +39,19 @@ function main()
 
     for v in variants
         k = 0
-        for m in each_match(Regex(v), seq)
+        for m in eachmatch(Regex(v), seq)
             k += 1
         end
-        @printf("%s %d\n", v, k)
+#        @printf("%s %d\n", v, k)
     end
 
     for (u, v) in subs
         seq = replace(seq, u, v)
     end
 
-    println()
-    println(l1)
-    println(l2)
-    println(length(seq))
+#    println()
+#    println(l1)
+#    println(l2)
+#    println(length(seq))
 end
 
-main()

@@ -312,6 +312,7 @@ export
     den,
     digamma,
     div,
+    divrem,
     eps,
     erf,
     erfc,

@@ -4,7 +4,8 @@ type Cmd <: AbstractCmd
     exec::Executable
     ignorestatus::Bool
     detach::Bool
-    Cmd(exec::Executable) = new(exec,false,false)
+    env::Union(Array{ByteString},Nothing)
+    Cmd(exec::Executable) = new(exec,false,false,nothing)
 end
 
 function eachline(cmd::AbstractCmd,stdin)
@@ -117,6 +118,9 @@ ignorestatus(cmd::Cmd) = (cmd.ignorestatus=true; cmd)
 ignorestatus(cmd::Union(OrCmds,AndCmds)) = (ignorestatus(cmd.a); ignorestatus(cmd.b); cmd)
 detach(cmd::Cmd) = (cmd.detach=true; cmd)
 
+setenv{S<:ByteString}(cmd::Cmd, env::Array{S}) = (cmd.env = ByteString[x for x in env];cmd)
+setenv(cmd::Cmd, env::Associative) = (cmd.env = ByteString[string(k)*"="*string(v) for (k,v) in env];cmd)
+
 (&)(left::AbstractCmd,right::AbstractCmd) = AndCmds(left,right)
 (|>)(src::AbstractCmd,dest::AbstractCmd) = OrCmds(src,dest)
 
@@ -186,10 +190,10 @@ function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::
     error = ccall(:jl_spawn, Int32,
         (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
          Ptr{Void},    Int32,       Ptr{Void},     Int32,       Ptr{Void},
-         Int32),
+         Int32, Ptr{Ptr{Uint8}}),
          cmd,        argv,            loop,      proc,      pp,  uvtype(in),
          uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
-         pp.cmd.detach)
+         pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env)
     if error != 0
         c_free(proc)
         throw(UVError("spawn"))

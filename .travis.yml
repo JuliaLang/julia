@@ -4,6 +4,11 @@ compiler:
     - gcc
 notifications:
     email: false
+    irc:
+        channels:
+            - "chat.freenode.net#julia"
+        on_success: change
+        on_failure: always
     webhooks:
         urls:
           - http://128.52.160.154/travis-hook
