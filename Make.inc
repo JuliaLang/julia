@@ -49,8 +49,7 @@ $(error "unknown XC_HOST variable set")
 endif
 endif
 
-WGET = $(JULIAHOME)/deps/jldownload
-WGET_DASH_O = $(WGET)
+JLDOWNLOAD = $(JULIAHOME)/deps/jldownload
 
 # Figure out OS and architecture
 BUILD_OS := $(shell uname)
