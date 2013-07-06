@@ -8,10 +8,11 @@ using ..Types, ..Query, .PkgToMaxSumInterface, .MaxSum
 export resolve, sanity_check
 
 # Use the max-sum algorithm to resolve packages dependencies
-function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
+function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}},
+                 eq_classes::Dict{ByteString,Dict{VersionNumber,Vector{VersionNumber}}})
 
     # init structures
-    interface = Interface(reqs, deps)
+    interface = Interface(reqs, deps, eq_classes)
 
     graph = Graph(interface)
     msgs = Messages(interface, graph)
@@ -45,7 +46,7 @@ end
 # Scan dependencies for (explicit or implicit) contradictions
 function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
-    deps, eq_classes_map = Query.prune_versions(deps)
+    deps, eq_classes = Query.prune_versions(deps)
 
     ndeps = (ByteString=>Dict{VersionNumber,Int})[]
 
@@ -80,9 +81,12 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
             continue
         end
 
-        nvn = VersionNumber(vn.major, vn.minor, vn.patch, vn.prerelease, tuple(vn.build..., 0))
+        nvn = VersionNumber(vn.major, vn.minor, vn.patch+1)
         sub_reqs = (ByteString=>VersionSet)[p=>VersionSet([vn, nvn])]
-        interface = Interface(sub_reqs, deps)
+        fixed = (ByteString=>VersionNumber)[p=>vn]
+        sub_deps, sub_eq_classes = Query.prune_dependencies(sub_reqs, deps, fixed)
+
+        interface = Interface(sub_reqs, sub_deps, sub_eq_classes)
 
         graph = Graph(interface)
         msgs = Messages(interface, graph)
@@ -96,6 +100,11 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
         try
             sol = maxsum(graph, msgs)
             verify_solution(sol, interface)
+            let
+                p0 = interface.pdict[p]
+                svn = red_pvers[p0][sol[p0]]
+                @assert svn == vn
+            end
 
             for p0 = 1:red_np
                 s0 = sol[p0]
@@ -106,13 +115,10 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
             end
             checked[i] = true
         catch err
-            if isa(err, UnsatError)
-                pp = red_pkgs[err.info]
-                for vneq in eq_classes_map[p][vn]
-                    push!(problematic, (p, vneq, pp))
-                end
-            else
-                rethrow(err)
+            isa(err, UnsatError) || rethrow(err)
+            pp = red_pkgs[err.info]
+            for vneq in eq_classes[p][vn]
+                push!(problematic, (p, vneq, pp))
             end
         end
         i += 1
