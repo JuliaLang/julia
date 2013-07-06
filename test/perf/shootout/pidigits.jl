@@ -33,7 +33,7 @@ function pidigits(N::Int, printOut::Bool)
         d *= k1
 
         if a >= n
-            t,u = Base.GMP.divrem(n*3 +a, d)
+            t,u = divrem(n*3 +a, d)
             u += n
             if d > u
                 ns = ns*10 + t
