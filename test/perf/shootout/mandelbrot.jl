@@ -28,7 +28,7 @@ function draw_mandel(M::Array{Uint8, 2}, n::Int)
     end
 end
 
-function mandel(n=200, output="mandelbrot-output-julia.txt")
+function mandelbrot(n::Int=200, outfile="mandelbrot-output-julia.txt")
     if n%8 != 0
         error("Error: n of $n is not divisible by 8")
     end
@@ -36,8 +36,8 @@ function mandel(n=200, output="mandelbrot-output-julia.txt")
     M = zeros(Uint8, div(n, 8), n)
     draw_mandel(M, n)
 
-    output = open(f, "w")
-    write(stream, "P4\n$n $n\n")
-    write(stream, M)
-    flush(stream)
+    output = open(outfile, "w")
+    write(output, "P4\n$n $n\n")
+    write(output, M)
+    close(output)
 end

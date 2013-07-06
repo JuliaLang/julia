@@ -18,7 +18,7 @@ include("k_nucleotide.jl")
 @timeit1 k_nucleotide("shootout/knucleotide-input.txt") "k_nucleotide"
 
 include("mandelbrot.jl")
-@timeit1 mandel("shootout/mandelbrot-output-julia.txt") "mandelbrot"
+@timeit1 mandelbrot(200, "shootout/mandelbrot-output-julia.txt") "mandelbrot"
 
 include("meteor_contest.jl")
 @timeit1 meteor_contest() "meteor_contest"
@@ -32,8 +32,8 @@ using NBodyVec
 @timeit1 NBodyVec.nbody_vec() "nbody_vec"
 
 include("pidigits.jl")
-#@assert pidigits(1000) == 9216420198
-#@timeit1 pidigits(1000) "pidigits"
+@assert pidigits(1000) == 9216420198
+@timeit1 pidigits(1000) "pidigits"
 
 include("regex_dna.jl")
 @timeit1 regex_dna("shootout/regexdna-input.txt") "regex_dna"
