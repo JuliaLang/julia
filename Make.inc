@@ -143,7 +143,6 @@ USE_SYSTEM_PCRE=0
 USE_SYSTEM_LIBM=0
 USE_SYSTEM_OPENLIBM=0
 USE_SYSTEM_BLAS=0
-USE_SYSTEM_OPENBLAS=0
 USE_SYSTEM_LAPACK=0
 USE_SYSTEM_FFTW=0
 USE_SYSTEM_GMP=0
@@ -230,24 +229,12 @@ USE_SYSTEM_LAPACK = 0
 LIBBLAS = -L$(BUILD)/lib -lgfortblas
 LIBBLASNAME = libgfortblas
 else
-LIBBLAS = -lblas
-LIBBLASNAME = libblas
+LIBBLAS ?= -lblas
+LIBBLASNAME ?= libblas
 endif
 else
 LIBBLAS = -L$(BUILD)/lib -lopenblas
 LIBBLASNAME = libopenblas
-endif
-
-# decide whether use system libopenblas on linux
-ifeq ($(USE_SYSTEM_OPENBLAS), 1)
-ifeq ($(OS), Linux)
-ifneq (, $(LIBOPENBLAS_PATH))
-LDFLAGS += -Wl,-rpath $(LIBOPENBLAS_PATH)
-endif
-LIBBLAS = -lopenblas
-LIBBLASNAME = libopenblas
-USE_SYSTEM_BLAS = 1
-endif
 endif
 
 # OpenBLAS builds LAPACK as part of its build.
