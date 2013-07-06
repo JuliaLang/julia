@@ -6,7 +6,7 @@ notifications:
     email: false
     irc:
         channels:
-            - "chat.freenode.net#travis"
+            - "chat.freenode.net#julia"
         on_success: change
         on_failure: always
     webhooks:
