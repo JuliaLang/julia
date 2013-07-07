@@ -2,14 +2,17 @@ print_output = isempty(ARGS) || contains(ARGS, "perf/perf.jl") || contains(ARGS,
 
 macro timeit(ex,name)
     quote
-        t = Inf
-        for i=1:5
-            t = min(t, @elapsed $ex)
-            gc()
+        t = 0.0
+        for i=1:6
+            s = (@elapsed $(esc(ex)))
+            if i > 1
+                t += s
+            end
         end
         if print_output
-            println("julia,", $name, ",", t*1000)
+            println("julia,", $name, ",", (t/5)*1000)
         end
+        gc()
     end
 end
 
