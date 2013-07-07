@@ -1,16 +1,17 @@
-print_output = isempty(ARGS) || contains(ARGS, "perf/perf.jl") || contains(ARGS, "perf")
+const ntrials = 5
+print_output = isempty(ARGS)
 
 macro timeit(ex,name)
     quote
-        t = 0.0
-        for i=1:6
-            s = (@elapsed $(esc(ex)))
-            if i > 1
-                t += s
-            end
+        # warm up
+        $(esc(ex))
+        # benchmark
+        t = zeros(ntrials)
+        for i=1:ntrials
+            t[i] = @elapsed $(esc(ex))
         end
         if print_output
-            println("julia,", $name, ",", (t/5)*1000)
+            @printf "julia,%s,%f\n" $name median(t)*1000
         end
         gc()
     end
@@ -18,9 +19,16 @@ end
 
 macro timeit1(ex,name)
     quote
-        @printf "julia,%s,%f\n" $name (@elapsed $ex)*1000
+        # warm up
+        $(esc(ex))        
+        # benchmark
+        t = @elapsed $(esc(ex))
+        if print_output
+            @printf "julia,%s,%f\n" $name t*1000
+        end
         gc()
     end
 end
 
-srand(1776)  # get more consistent times
+# seed rng for more consistent timings
+srand(1776)
