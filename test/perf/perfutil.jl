@@ -3,15 +3,16 @@ print_output = isempty(ARGS)
 
 macro timeit(ex,name)
     quote
-        # warm up
-        $(esc(ex))
-        # benchmark
         t = zeros(ntrials)
-        for i=1:ntrials
-            t[i] = @elapsed $(esc(ex))
+        for i=0:ntrials
+            e = 1000*(@elapsed $(esc(ex)))
+            if i > 0
+                # warm up on first iteration
+                t[i] = e
+            end
         end
         if print_output
-            @printf "julia,%s,%f\n" $name median(t)*1000
+            @printf "julia,%s,%f,%f,%f,%f\n" $name min(t) max(t) mean(t) std(t)
         end
         gc()
     end
@@ -19,12 +20,12 @@ end
 
 macro timeit1(ex,name)
     quote
-        # warm up
-        $(esc(ex))        
-        # benchmark
-        t = @elapsed $(esc(ex))
+        t = 0.0
+        for i=0:1
+            t = 1000*(@elapsed $(esc(ex)))
+        end
         if print_output
-            @printf "julia,%s,%f\n" $name t*1000
+            @printf "julia,%s,%f,%f,%f,%f\n" $name t t t NaN
         end
         gc()
     end
