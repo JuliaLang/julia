@@ -450,7 +450,10 @@ endif
 ifndef USE_QUIET
 USE_QUIET = 1
 endif
+
 ifeq ($(USE_QUIET), 1)
+
+QUIET_MAKE = -s
 
 CCCOLOR="\033[34m"
 LINKCOLOR="\033[34;1m"
@@ -473,6 +476,7 @@ QUIET_JULIA = @printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(G
 
 else
 
+QUIET_MAKE =
 QUIET_CC =
 QUIET_LINK =
 QUIET_PERL =
