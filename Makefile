@@ -179,7 +179,7 @@ distclean: cleanall
 .PHONY: default debug release julia-debug julia-release \
 	test testall test-* clean distclean cleanall \
 	run-julia run-julia-debug run-julia-release run \
-   	COMMIT install dist
+	COMMIT install dist
 
 test: release
 	@$(MAKE) $(QUIET_MAKE) -C test default
@@ -189,6 +189,12 @@ testall: release
 
 test-%: release
 	@$(MAKE) $(QUIET_MAKE) -C test $*
+
+perf: release
+	@$(MAKE) $(QUIET_MAKE) -C test/perf
+
+perf-%: release
+	@$(MAKE) $(QUIET_MAKE) -C test/perf $*
 
 # download target for some hardcoded windows dependencies
 .PHONY: win-extras, wine_path
