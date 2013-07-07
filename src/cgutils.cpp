@@ -484,7 +484,8 @@ static Value *julia_bool(Value *cond)
 
 // --- get the inferred type of an AST node ---
 
-static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true);
+static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true,
+                               bool allow_alloc=true);
 
 static inline jl_module_t *topmod(jl_codectx_t *ctx)
 {
