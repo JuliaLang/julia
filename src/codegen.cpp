@@ -1782,7 +1782,7 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool is
                 return literal_pointer_val(jl_tupleref(ctx->sp, i+1));
             }
         }
-        jl_binding_t *jbp;
+        jl_binding_t *jbp=NULL;
         Value *bp = var_binding_pointer(sym, &jbp, false, ctx);
         assert(jbp != NULL);
         if (jbp->value != NULL) {
@@ -1806,7 +1806,7 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool is
     if (vi.SAvalue != NULL)
         return vi.SAvalue;
 
-    jl_binding_t *jbp;
+    jl_binding_t *jbp=NULL;
     Value *bp = var_binding_pointer(sym, &jbp, false, ctx);
     assert(jbp == NULL);
     if (arg != NULL ||    // arguments are always defined
