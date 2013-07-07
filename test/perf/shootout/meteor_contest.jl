@@ -232,6 +232,8 @@ function printSolution(s)
 end
 
 function meteor_contest(n::Int=2098)
+    empty!(solutions)
+    fill!(masks, 0)
     solve(n)
 #    println("$(length(solutions)) solutions found")
 #    println()
