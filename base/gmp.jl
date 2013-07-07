@@ -5,7 +5,7 @@ export BigInt
 import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
-             widemul, sum, trailing_zeros, trailing_ones, count_ones
+             widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint
 
 type BigInt <: Integer
     alloc::Cint
@@ -32,11 +32,22 @@ function gmp_init()
 end
 
 BigInt(x::BigInt) = x
-function BigInt(x::String)
+
+function mpz_set_str(x::String, b::Integer)
     z = BigInt()
-    err = ccall((:__gmpz_set_str, :libgmp), Int32, (Ptr{BigInt}, Ptr{Uint8}, Int32), &z, bytestring(x), 0)
-    if err != 0; error("Invalid input"); end
+    err = ccall((:__gmpz_set_str, :libgmp), Int32, (Ptr{BigInt}, Ptr{Uint8}, Int32), &z, bytestring(x), b)
+    if err != 0; error("string is not a valid integer"); end
     return z
+end
+
+# note: 0 is a special base value that uses leading characters (0x, 0b, 0)
+BigInt(x::String) = mpz_set_str(x, 0)
+
+function parseint(::Type{BigInt}, s::String, base::Integer=10)
+    if !(2 <= base <= 62)
+        error("invalid base: $b")
+    end
+    mpz_set_str(s, base)
 end
 
 function BigInt(x::Clong)
@@ -324,7 +335,17 @@ function show(io::IO, x::BigInt)
     print(io, string(x))
 end
 
-ndigits(x::BigInt) = ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, 10)
+function base(b::Integer, n::BigInt)
+    if !(2 <= b <= 62)
+        error("invalid base: $b")
+    end
+    p = ccall((:__gmpz_get_str,:libgmp), Ptr{Uint8}, (Ptr{Uint8}, Cint, Ptr{BigInt}),
+              C_NULL, b, &n)
+    len = int(ccall(:strlen, Csize_t, (Ptr{Uint8},), p))
+    ASCIIString(pointer_to_array(p,len,true))
+end
+
+ndigits(x::BigInt, base::Integer=10) = ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, base)
 isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
 
 widemul(x::BigInt, y::BigInt)   = x*y
