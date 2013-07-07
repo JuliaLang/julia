@@ -312,5 +312,5 @@ function methodswith(io::IO, t::Type, showparents::Bool)
 end
 
 # Conditional usage of packages and modules
-usingmodule(name::Symbol) = eval(current_module(), Expr(:toplevel, Expr(:using, name)))
-usingmodule(name::String) = usingmodule(symbol(name))
+usingmodule(names::Symbol...) = eval(current_module(), Expr(:toplevel, Expr(:using, names...)))
+usingmodule(names::String) = usingmodule([symbol(name) for name in split(names,".")]...)
