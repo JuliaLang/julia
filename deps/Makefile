@@ -1460,8 +1460,6 @@ install-git: $(GIT_TARGET)
 
 ## phony targets ##
 
-.PHONY: \
-	default compile install cleanall distclean \
+.PHONY: default compile install cleanall distclean \
 	get-* configure-* compile-* check-* install-* \
 	clean-* distclean-*
-
