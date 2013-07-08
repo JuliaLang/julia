@@ -1,6 +1,10 @@
 @test ip"127.0.0.1" == IPv4(127,0,0,1)
 @test ip"192.0" == IPv4(192,0,0,0)
+@test ip"192.0xFFF" == IPv4(192,0,15,255)
 @test ip"192.0xFFFF" == IPv4(192,0,255,255)
+@test ip"192.0xFFFFF" == IPv4(192,15,255,255)
+@test ip"192.0xFFFFFF" == IPv4(192,255,255,255)
+@test_throws Base.parse_ipv4("192.0xFFFFFFF")
 @test ip"022.0.0.1" == IPv4(18,0,0,1)
 
 @test_throws Base.parse_ipv4("192.0xFFFFFFFFF")
