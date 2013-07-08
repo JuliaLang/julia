@@ -371,6 +371,8 @@ next(s::CharString, i::Int) = (s.chars[i], i+1)
 endof(s::CharString) = length(s.chars)
 length(s::CharString) = length(s.chars)
 
+convert(::Type{CharString}, s::String) = CharString(Char[c for c in s])
+
 ## substrings reference original strings ##
 
 immutable SubString{T<:String} <: String
@@ -411,6 +413,13 @@ endof(s::SubString) = s.endof
 # default implementation will work but it's slow
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
+
+convert{T<:String}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
+
+function serialize{T}(s, ss::SubString{T})
+    # avoid saving a copy of the parent string, keeping the type of ss
+    invoke(serialize, (Any,Any), s, convert(SubString{T}, convert(T,ss)))
+end
 
 function getindex(s::String, r::Range1{Int})
     if first(r) < 1 || endof(s) < last(r)
