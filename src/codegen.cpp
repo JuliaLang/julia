@@ -709,10 +709,7 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
                     if (jl_typeis(fv, jl_intrinsic_type)) {
                         esc = false;
                         JL_I::intrinsic fi = (JL_I::intrinsic)jl_unbox_int32(fv);
-                        if (fi != JL_I::ccall) {
-                            return;
-                        }
-                        else {
+                        if (fi == JL_I::ccall) {
                             esc = true;
                             simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
                             // 2nd and 3d arguments are static
