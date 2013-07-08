@@ -497,17 +497,20 @@ end
 
 ## core messages: do, call, fetch, wait, ref, put ##
 
-function run_work_thunk(rv::RemoteValue, thunk)
+function run_work_thunk(thunk)
     local result
     try
         result = thunk()
     catch err
         print(STDERR, "exception on ", myid(), ": ")
         display_error(err,catch_backtrace())
-        println(STDERR)
         result = err
     end
-    put(rv, result)
+    result
+end
+
+function run_work_thunk(rv::RemoteValue, thunk)
+    put(rv, run_work_thunk(thunk))
 end
 
 function schedule_call(rid, thunk)
@@ -709,7 +712,6 @@ function deliver_result(sock::IO, msg, oid, value)
         val = value
     elseif is(msg,:call_fetch)
         val = value
-        delete!((PGRP::ProcessGroup).refs, oid)
     else
         val = oid
     end
@@ -763,9 +765,11 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     #print("$(myid()) got call $id\n")
                     let f=f0, args=args0, m=msg, rid=id
                         if m === :call_fetch || m === :call_wait
-                            schedule_call(id, ()->(v = f(args...);
-                                                   deliver_result(sock,m,rid,v);
-                                                   v))
+                            enq_work(@task begin
+                                v = run_work_thunk(()->f(args...))
+                                deliver_result(sock, m, rid, v)
+                                v
+                                     end)
                         else
                             schedule_call(id, ()->f(args...))
                         end
