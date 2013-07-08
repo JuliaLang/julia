@@ -1326,16 +1326,12 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
 
         int last_depth = ctx->argDepth;
-        // we only get a GC root per-argument, so we can't allocate the
-        // tuple before evaluating one argument. so eval the first argument
-        // first, then do hand-over-hand to track the tuple.
-        bool needroots = false;
-        for(i=0; i < nargs; i++) {
-            needroots |= might_need_root(args[i+1]);
-        }
-        Value *arg1 = boxed(emit_expr(args[1], ctx));
-        if (needroots)
+        // eval the first argument first, then do hand-over-hand to track the tuple.
+        Value *arg1val = emit_expr(args[1], ctx);
+        Value *arg1 = boxed(arg1val);
+        if (arg1val->getType() != jl_pvalue_llvmt || might_need_root(args[1]))
             make_gcroot(arg1, ctx);
+        bool rooted = false;
 #ifdef OVERLAP_TUPLE_LEN
         size_t nwords = nargs+1;
 #else
@@ -1350,8 +1346,6 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         builder.CreateStore(arg1, emit_nthptr_addr(tup, 2));
 #endif
         ctx->argDepth = last_depth;
-        if (needroots)
-            make_gcroot(tup, ctx);
 #ifdef  OVERLAP_TUPLE_LEN
         builder.
             CreateStore(builder.
@@ -1375,8 +1369,17 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                 emit_nthptr_addr(tup, i+offs));
         }
         for(i=1; i < nargs; i++) {
-            builder.CreateStore(boxed(emit_expr(args[i+1], ctx)),
-                                emit_nthptr_addr(tup, i+offs));
+            if (might_need_root(args[i+1]) && !rooted) {
+                make_gcroot(tup, ctx);
+                rooted = true;
+            }
+            Value *argval = emit_expr(args[i+1], ctx);
+            if (argval->getType() != jl_pvalue_llvmt && !rooted) {
+                make_gcroot(tup, ctx);
+                rooted = true;
+            }
+            Value *argi = boxed(argval);
+            builder.CreateStore(argi, emit_nthptr_addr(tup, i+offs));
         }
         ctx->argDepth = last_depth;
         JL_GC_POP();
@@ -2115,9 +2118,10 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                     // a couple store instructions. avoids initializing
                     // the first field to NULL, and sometimes the GC root
                     // for the new struct.
-                    f1 = boxed(emit_expr(args[1],ctx));
+                    Value *fval = emit_expr(args[1],ctx);
+                    f1 = boxed(fval);
                     j++;
-                    if (might_need_root(args[1]))
+                    if (might_need_root(args[1]) || fval->getType() != jl_pvalue_llvmt)
                         make_gcroot(f1, ctx);
                 }
                 Value *strct =
@@ -2141,8 +2145,15 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                     }
                 }
                 for(size_t i=j+1; i < nargs; i++) {
-                    emit_setfield(sty, strct, i-1, emit_expr(args[i],ctx), ctx,
-                                  false);
+                    Value *rhs = emit_expr(args[i],ctx);
+                    if (sty->fields[i].isptr && rhs->getType() != jl_pvalue_llvmt &&
+                        !needroots) {
+                        // if this struct element needs boxing and we haven't rooted
+                        // the struct, root it now.
+                        make_gcroot(strct, ctx);
+                        needroots = true;
+                    }
+                    emit_setfield(sty, strct, i-1, rhs, ctx, false);
                 }
                 ctx->argDepth = fieldStart;
                 return strct;
