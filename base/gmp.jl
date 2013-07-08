@@ -5,7 +5,8 @@ export BigInt
 import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
-             widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint
+             widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
+             serialize, deserialize
 
 type BigInt <: Integer
     alloc::Cint
@@ -114,6 +115,15 @@ end
 convert(::Type{Int128}, x::BigInt) = copysign(int128(uint128(abs(x))),x)
 
 promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
+
+# serialization
+
+function serialize(s, n::BigInt)
+    Base.serialize_type(s, BigInt)
+    serialize(s, base(62,n))
+end
+
+deserialize(s, ::Type{BigInt}) = parseint(BigInt, deserialize(s), 62)
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
