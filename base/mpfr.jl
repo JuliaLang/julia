@@ -18,7 +18,7 @@ import
         string, trunc, get_precision, exp10, expm1, gamma, lgamma, digamma,
         erf, erfc, zeta, log1p, airyai, iceil, ifloor, itrunc, eps, signbit,
         sin, cos, tan, sec, csc, cot, acos, asin, atan, cosh, sinh, tanh,
-        sech, csch, coth, acosh, asinh, atanh, atan2
+        sech, csch, coth, acosh, asinh, atanh, atan2, serialize, deserialize
 
 const ROUNDING_MODE = [0]
 const DEFAULT_PRECISION = [256]
@@ -129,6 +129,15 @@ promote_rule{T<:FloatingPoint}(::Type{BigInt},::Type{T}) = BigFloat
 promote_rule{T<:FloatingPoint}(::Type{BigFloat},::Type{T}) = BigFloat
 
 rationalize(x::BigFloat; tol::Real=eps(x)) = rationalize(BigInt, x, tol=tol)
+
+# serialization
+
+function serialize(s, n::BigFloat)
+    Base.serialize_type(s, BigFloat)
+    serialize(s, string(n))
+end
+
+deserialize(s, ::Type{BigFloat}) = BigFloat(deserialize(s))
 
 # Basic arithmetic without promotion
 # Unsigned addition
