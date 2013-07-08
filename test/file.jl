@@ -101,7 +101,28 @@ test_touch(1)
 test_monitor(1)
 test_monitor(0.1)
 
+##########
+#  mmap  #
+##########
 
+s = open(file, "w")
+write(s, "Hello World\n")
+close(s)
+s = open(file, "r")
+@test isreadonly(s) == true
+c = mmap_array(Uint8, (11,), s)
+@test c == "Hello World".data
+close(s)
+s = open(file, "r+")
+@test isreadonly(s) == false
+c = mmap_array(Uint8, (11,), s)
+c[5] = uint8('x')
+msync(c)
+close(s)
+s = open(file, "r")
+str = readline(s)
+close(s)
+@test beginswith(str, "Hellx World")
 
 #######################################################################
 # This section tests temporary file and directory creation.           #

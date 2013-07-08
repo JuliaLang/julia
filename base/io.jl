@@ -234,6 +234,7 @@ show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
 fd(s::IOStream) = int(ccall(:jl_ios_fd, Clong, (Ptr{Void},), s.ios))
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
+isreadonly(s::IOStream) = bool(ccall(:ios_get_readonly, Cint, (Ptr{Void},), s.ios))
 
 truncate(s::IOStream, n::Integer) =
     (ccall(:ios_trunc, Int32, (Ptr{Void}, Uint), s.ios, n)==0 ||

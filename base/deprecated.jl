@@ -216,6 +216,8 @@ export PipeString
 @deprecate  ~(s::IntSet)                 complement(s)
 @deprecate openblas_set_num_threads      blas_set_num_threads
 @deprecate check_openblas                check_blas
+@deprecate msync(A::Array, flags::Int)    msync(A)
+@deprecate msync(A::BitArray, flags::Int) msync(A)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)

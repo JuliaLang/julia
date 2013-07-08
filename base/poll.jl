@@ -57,7 +57,15 @@ end
 @windows_only typealias FDW_FD WindowsRawSocket
 
 @unix_only _get_osfhandle(fd::RawFD) = fd
-@windows_only _get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle,Ptr{Void},(Int32,),fd.fd))
+@windows_only begin
+function _get_osfhandle(fd::RawFD)
+    handle = ccall(:_get_osfhandle,Ptr{Void},(Int32,),fd.fd)
+    if int(handle) == -1
+        error("Could not get handle")
+    end
+    WindowsRawSocket(handle)
+end
+end
 
 type FDWatcher <: UVPollingWatcher
     handle::Ptr{Void}
