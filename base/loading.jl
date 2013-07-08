@@ -126,10 +126,10 @@ function reload_path(path)
     nothing
 end
 
-function evalfile(path::String)
+function evalfile(path::String,args::Array = [])
     s = readall(path)
     m = Module(:__anon__)
-    body = Expr(:toplevel)
+    body = Expr(:toplevel,:(ARGS=$args))
     i = 1
     while !done(s,i)
         ex, i = parse(s,i,true,false)
