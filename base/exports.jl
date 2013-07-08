@@ -1092,8 +1092,6 @@ export
 
 # multiprocessing
     addprocs,
-    addprocs_scyld,
-    addprocs_sge,
     fetch,
     isready,
     yield,
@@ -1110,6 +1108,7 @@ export
     remotecall_wait,
     take,
     wait,
+    ClusterManager,
 
 # distributed arrays
     distribute,
