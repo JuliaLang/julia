@@ -108,9 +108,12 @@ function mmap_stream_settings(s::IO)
 end
 
 # Mmapped-array constructor
-function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IO, offset::FileOffset)
+function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, offset::FileOffset)
     prot, flags, iswrite = mmap_stream_settings(s)
     len = prod(dims)*sizeof(T)
+    if len > typemax(Int)
+        error("File is too large to memory-map on this platform")
+    end
     if iswrite
         pmap, delta = mmap_grow(len, prot, flags, fd(s), offset)
     else
@@ -122,13 +125,16 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IO, offset::FileOffs
 end
 
 # Mmapped-bitarray constructor
-function mmap_bitarray{N}(dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
+function mmap_bitarray{N,TInt<:Integer}(dims::NTuple{N,TInt}, s::IOStream, offset::FileOffset)
     prot, flags, iswrite = mmap_stream_settings(s)
     if length(dims) == 0
         dims = 0
     end
     n = prod(dims)
     nc = num_bit_chunks(n)
+    if nc > typemax(Int)
+        error("File is too large to memory-map on this platform")
+    end
     chunks = mmap_array(Uint64, (nc,), s, offset)
     if iswrite
         chunks[end] &= @_msk_end n
@@ -152,11 +158,15 @@ end
 ### Windows implementation ###
 @windows_only begin
 # Mmapped-array constructor
-function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IO, offset::FileOffset)
+function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, offset::FileOffset)
     shandle = _get_osfhandle(RawFD(fd(s)))
     ro = isreadonly(shandle)
     flprotect = ro ? 0x02 : 0x04
-    szarray = convert(Csize_t, prod(dims))*sizeof(T)
+    len = prod(dims)*sizeof(T)
+    if len > typemax(Int)
+        error("File is too large to memory-map on this platform")
+    end
+    szarray = convert(Csize_t, len)
     szfile = szarray + convert(Csize_t, offset)
     mmaphandle = ccall(:CreateFileMappingA, stdcall, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Cint, Cint, Cint, Ptr{Void}), shandle.handle, C_NULL, flprotect, szfile>>32, szfile&0xffffffff, C_NULL)
     if mmaphandle == C_NULL
