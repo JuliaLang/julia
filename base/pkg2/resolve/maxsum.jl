@@ -399,7 +399,7 @@ function decimate(n::Int, graph::Graph, msgs::Messages)
     #println("DECIMATING $n NODES")
     fld = msgs.fld
     decimated = msgs.decimated
-    fldorder = sortperm(fld, Sort.By(secondmax))
+    fldorder = sortperm(fld, order=Sort.By(secondmax))
     for p0 in fldorder
         if decimated[p0]
             continue

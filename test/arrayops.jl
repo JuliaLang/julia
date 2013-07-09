@@ -430,11 +430,11 @@ begin
     @test isless(asc[:,1],asc[:,2])
     @test isless(asc[:,2],asc[:,3])
 
-    asr = sortrows(a, Sort.Reverse)
+    asr = sortrows(a, order=Sort.Reverse)
     @test isless(asr[2,:],asr[1,:])
     @test isless(asr[3,:],asr[2,:])
 
-    asc = sortcols(a, Sort.Reverse)
+    asc = sortcols(a, order=Sort.Reverse)
     @test isless(asc[:,2],asc[:,1])
     @test isless(asc[:,3],asc[:,2])
 
