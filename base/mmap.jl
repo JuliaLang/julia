@@ -160,7 +160,10 @@ end
 # Mmapped-array constructor
 function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, offset::FileOffset)
     shandle = _get_osfhandle(RawFD(fd(s)))
-    ro = isreadonly(shandle)
+    if int(shandle.handle) == -1
+        error("Could not get handle")
+    end
+    ro = isreadonly(s)
     flprotect = ro ? 0x02 : 0x04
     len = prod(dims)*sizeof(T)
     if len > typemax(Int)
