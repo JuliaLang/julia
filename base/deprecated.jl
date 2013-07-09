@@ -274,3 +274,13 @@ function amap(f::Function, A::AbstractArray, axis::Integer)
 
     return R
 end
+
+function addprocs_scyld(np::Integer)
+    error("Base.addprocs_scyld is deprecated - add package ClusterManagers and then use ClusterManagers.addprocs_scyld instead.")
+end
+export addprocs_scyld
+
+function addprocs_sge(np::Integer)
+    error("Base.addprocs_sge is deprecated - add package ClusterManagers and then use ClusterManagers.addprocs_sge instead.")
+end
+export addprocs_sge
