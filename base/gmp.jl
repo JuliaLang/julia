@@ -46,7 +46,7 @@ BigInt(x::String) = mpz_set_str(x, 0)
 
 function parseint(::Type{BigInt}, s::String, base::Integer=10)
     if !(2 <= base <= 62)
-        error("invalid base: $b")
+        error("invalid base: $b. Base b must satisfy: 2 <= b =< 62.")
     end
     mpz_set_str(s, base)
 end
