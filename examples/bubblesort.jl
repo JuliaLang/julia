@@ -1,8 +1,9 @@
 importall Base
 
-type BubbleSort <: Sort.Algorithm end
+type BubbleSortAlg <: Sort.Algorithm end
+const BubbleSort = BubbleSortAlg()
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, ::BubbleSort, o::Sort.Ordering)
+function sort!(v::AbstractVector, lo::Int, hi::Int, ::BubbleSortAlg, o::Sort.Ordering)
     while true
         clean = true
         for i = lo:hi-1
