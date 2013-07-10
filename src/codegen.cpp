@@ -1791,6 +1791,10 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool is
         Value *bp = var_binding_pointer(sym, &jbp, false, ctx);
         assert(jbp != NULL);
         if (jbp->value != NULL) {
+            if (jbp->constp) {
+                if (!isboxed && jl_is_bitstype(jl_typeof(jbp->value)))
+                    return emit_unboxed(jbp->value, ctx);
+            }
             // double-check that a global variable is actually defined. this
             // can be a problem in parallel when a definition is missing on
             // one machine.
