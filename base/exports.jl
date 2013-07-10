@@ -419,7 +419,6 @@ export
     sind,
     sinh,
     sqrt,
-    square,
     tan,
     tand,
     tanh,

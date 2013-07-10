@@ -7,7 +7,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        acosd, acotd, acscd, asecd, asind, atand, atan2,
        radians2degrees, degrees2radians,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
-       cbrt, sqrt, square, erf, erfc, erfcx, erfi, dawson,
+       cbrt, sqrt, erf, erfc, erfcx, erfi, dawson,
        ceil, floor, trunc, round, significand, 
        lgamma, hypot, gamma, lfact, max, min, ldexp, frexp,
        clamp, modf, ^, 
@@ -89,8 +89,6 @@ function hypot(x::Real, y::Real)
     end
     x * sqrt(one(r)+r*r)
 end
-
-square(x::Number) = x*x
 
 # type specific math functions
 

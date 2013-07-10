@@ -218,6 +218,7 @@ export PipeString
 @deprecate check_openblas                check_blas
 @deprecate msync(A::Array, flags::Int)    msync(A)
 @deprecate msync(A::BitArray, flags::Int) msync(A)
+@deprecate square(x::Number)          x*x
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
