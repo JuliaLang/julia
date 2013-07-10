@@ -1,7 +1,7 @@
-.. _man-frequently-asked-questions:
+.. _man-faq:
 
 ****************************
- Frequently-asked questions
+ Frequently-Asked Questions
 ****************************
 
 .. contents::
