@@ -2965,16 +2965,24 @@ Parallel Computing
 
 .. function:: addprocs({"host1","host2",...}; tunnel=false, dir=JULIA_HOME, sshflags::Cmd=``, cman::ClusterManager) -> List of process identifiers
 
-   Add processes on remote machines via SSH or a custom cluster manager. Requires julia to be installed in the same location on each node, or to be available via a shared file system.
+   Add processes on remote machines via SSH or a custom cluster manager. 
+   Requires julia to be installed in the same location on each node, or to be available via a shared file system.
    
    Keyword arguments:
+
    ``tunnel`` : if ``true`` then SSH tunneling will be used to connect to the worker. 
+
    ``dir`` specifies the location of the julia binaries on the worker nodes. 
-   ``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\``
-   ``cman`` : Workers are started using the specified cluster manager. For example Beowulf clusters are 
-   supported via a custom cluster manager implemented in  package ``ClusterManagers``.
+
+   ``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\`` .
+
+   ``cman`` : Workers are started using the specified cluster manager. 
+
+   For example Beowulf clusters are  supported via a custom cluster manager implemented 
+   in  package ``ClusterManagers``.
    
-   See the documentation for package ``ClusterManagers`` for more information on how to write a custom cluster manager.
+   See the documentation for package ``ClusterManagers`` for more information on how to 
+   write a custom cluster manager.
    
 .. function:: addprocs_sge(n) - DEPRECATED from Base, use ClusterManagers.addprocs_sge(n)
 
