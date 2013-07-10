@@ -402,12 +402,14 @@ struct jl_varinfo_t {
     bool hasGCRoot;
     bool escapes;
     bool usedUndef;
+    bool used;
     jl_value_t *declType;
     jl_value_t *initExpr;  // initializing expression for SSA variables
 
     jl_varinfo_t() : memvalue(NULL), SAvalue(NULL), passedAs(NULL), closureidx(-1),
                      isAssigned(true), isCaptured(false), isSA(false), isVolatile(false),
                      isArgument(false), hasGCRoot(false), escapes(true), usedUndef(false),
+                     used(false),
                      declType((jl_value_t*)jl_any_type), initExpr(NULL)
     {
     }
@@ -739,6 +741,7 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
             }
         }
         else if (e->head == method_sym) {
+            simple_escape_analysis(jl_exprarg(e,0), esc, ctx);
             simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
             simple_escape_analysis(jl_exprarg(e,2), esc, ctx);
             simple_escape_analysis(jl_exprarg(e,3), esc, ctx);
@@ -758,8 +761,10 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
     if (jl_is_symbol(expr)) {
         jl_sym_t *vname = ((jl_sym_t*)expr);
         if (ctx->vars.find(vname) != ctx->vars.end()) {
-            ctx->vars[vname].escapes |= esc;
-            ctx->vars[vname].usedUndef |= (jl_subtype((jl_value_t*)jl_undef_type,ty,0)!=0);
+            jl_varinfo_t &vi = ctx->vars[vname];
+            vi.escapes |= esc;
+            vi.usedUndef |= (jl_subtype((jl_value_t*)jl_undef_type,ty,0)!=0);
+            vi.used = true;
         }
     }
 }
@@ -2414,6 +2419,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         varinfo.isAssigned = (jl_vinfo_assigned(vi)!=0);
         varinfo.isCaptured = (jl_vinfo_capt(vi)!=0);
         varinfo.escapes = varinfo.isCaptured;
+        if (varinfo.isCaptured)
+            varinfo.used = true;
         varinfo.isSA = (jl_vinfo_sa(vi)!=0);
         varinfo.declType = jl_cellref(vi,1);
     }
@@ -2428,6 +2435,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         varinfo.closureidx = i;
         varinfo.isAssigned = (jl_vinfo_assigned(vi)!=0);
         varinfo.isCaptured = true;
+        varinfo.used = true;
         varinfo.escapes = true;
         varinfo.declType = jl_cellref(vi,1);
     }
@@ -2624,6 +2632,10 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         }
         else {
             jl_varinfo_t &vi = ctx.vars[s];
+            if (!vi.used) {
+                vi.hasGCRoot = false;
+                continue;
+            }
             vi.hasGCRoot = true;
             if (vi.isSA && !vi.isVolatile && !vi.isCaptured && !vi.usedUndef &&
                 vi.initExpr && is_stable_expr(vi.initExpr, &ctx)) {
