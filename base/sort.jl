@@ -7,16 +7,14 @@ import
     Base.sortperm
 
 export # also exported by Base
+    issorted,
     sort,
     sort!,
-    sortby,
-    sortby!,
     sortperm,
     sortrows,
     sortcols,
     select,
     select!,
-    issorted,
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
@@ -57,9 +55,13 @@ lt(o::ReverseOrdering, a, b) = isless(b,a)
 lt(o::By,              a, b) = isless(o.by(a),o.by(b))
 lt(o::Lt,              a, b) = o.lt(a,b)
 
+ord(lt::Function, by::Function, order::Ordering) =
+    (lt === isless) & (by === identity) ? order :
+    (lt === isless) ? By(by) : Lt(lt)
+
 ## functions requiring only ordering ##
 
-function issorted(itr; order::Ordering=Forward)
+function issorted(itr, order::Ordering)
     state = start(itr)
     done(itr,state) && return true
     prev, state = next(itr, state)
@@ -70,6 +72,8 @@ function issorted(itr; order::Ordering=Forward)
     end
     return true
 end
+issorted(itr; lt::Function=isless, by::Function=identity, order::Ordering=Forward) =
+    issorted(itr, ord(lt,by,order))
 
 function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
     lo <= k <= hi || error("select index $k is out of range $lo:$hi")
@@ -130,22 +134,12 @@ function select!(v::AbstractVector, r::Range1, lo::Int, hi::Int, o::Ordering)
     end
 end
 
-select!(v::AbstractVector, k; order::Ordering=Forward) = select!(v,k,1,length(v),order)
-select (v::AbstractVector, k; order::Ordering=Forward) = select!(copy(v),k,order=order)
+select!(v::AbstractVector, k, o::Ordering) = select!(v,k,1,length(v),o)
+select!(v::AbstractVector, k;
+    lt::Function=isless, by::Function=identity, order::Ordering=Forward) =
+    select!(v, k, ord(lt,by,order))
 
-for s in {:select!, :select}
-    @eval begin
-        $s(v::AbstractVector, k::Int, lt::Function)  = $s(v, k, order=Sort.Lt(lt))
-        $s(lt::Function, v::AbstractVector, k::Int)  = $s(v, k, order=Sort.Lt(lt))
-    end
-end
-
-for s in {:selectby!, :selectby}
-    @eval begin
-        $s(v::AbstractVector, k::Int, by::Function)  = $s(v, k, order=Sort.By(by))
-        $s(by::Function, v::AbstractVector, k::Int)  = $s(v, k, order=Sort.By(by))
-    end
-end
+select(v::AbstractVector, k; kws...) = select!(copy(v), k; kws...)
 
 # reference on sorted binary search:
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
@@ -346,48 +340,37 @@ Perm{O<:Ordering,V<:AbstractVector}(o::O,v::V) = Perm{O,V}(o,v)
 
 lt(p::Perm, a, b) = lt(p.order, p.data[a], p.data[b])
 
-sortperm(v::AbstractVector; alg::Algorithm=defalg(v), order::Ordering=Forward) =
-    sort!([1:length(v)], alg, Perm(order,v))
-
 ## generic sorting methods ##
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
 defalg{T<:Number}(v::AbstractArray{T}) = DEFAULT_UNSTABLE
 
-sort!(v::AbstractVector, alg::Algorithm, order::Ordering) = sort!(v, 1, length(v), alg, order)
-sort!(v::AbstractVector; alg::Algorithm=defalg(v), order::Ordering=Forward) = sort!(v, alg, order)
-sort (v::AbstractVector; alg::Algorithm=defalg(v), order::Ordering=Forward) = sort!(copy(v), alg, order)
+sort!(v::AbstractVector, alg::Algorithm, order::Ordering) = sort!(v,1,length(v),alg,order)
+sort!(v::AbstractVector; alg::Algorithm=defalg(v),
+    lt::Function=isless, by::Function=identity, order::Ordering=Forward) =
+    sort!(v, alg, ord(lt,by,order))
 
-for s in {:sort!, :sort, :sortperm}
-    @eval begin
-        $s(v::AbstractVector, lt::Function; alg::Algorithm=defalg(v)) = $s(v, alg=alg, order=Sort.Lt(lt))
-        $s(lt::Function, v::AbstractVector; alg::Algorithm=defalg(v)) = $s(v, alg=alg, order=Sort.Lt(lt))
-    end
-end
+sortperm(v::AbstractVector; alg::Algorithm=defalg(v),
+    lt::Function=isless, by::Function=identity, order::Ordering=Forward) =
+    sort!([1:length(v)], alg, Perm(ord(lt,by,order),v))
 
-for (sb,s) in {(:sortby!, :sort!), (:sortby, :sort), (:sortpermby, :sortperm)}
-    @eval begin
-        $sb(v::AbstractVector, by::Function; alg::Algorithm=defalg(v)) = $s(v, alg=alg, order=Sort.By(by))
-        $sb(by::Function, v::AbstractVector; alg::Algorithm=defalg(v)) = $s(v, alg=alg, order=Sort.By(by))
-    end
-end
+sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
 
 ## sorting multi-dimensional arrays ##
 
-sort(A::AbstractArray, dim::Integer; alg::Algorithm=defalg(A), order::Ordering=Forward) =
-    mapslices(a->sort(a, alg=alg, order=order), A, [dim])
+sort(A::AbstractArray, dim::Integer; kws...) = mapslices(a->sort(a; kws...), A, [dim])
 
-function sortrows(A::AbstractMatrix; alg::Algorithm=defalg(A), order::Ordering=Forward)
+function sortrows(A::AbstractMatrix; kws...)
     c = 1:size(A,2)
     rows = [ sub(A,i,c) for i=1:size(A,1) ]
-    p = sortperm(rows, alg=alg, order=order)
+    p = sortperm(rows; kws...)
     A[p,:]
 end
 
-function sortcols(A::AbstractMatrix; alg::Algorithm=defalg(A), order::Ordering=Forward)
+function sortcols(A::AbstractMatrix; kws...)
     r = 1:size(A,1)
     cols = [ sub(A,r,i) for i=1:size(A,2) ]
-    p = sortperm(cols, alg=alg, order=order)
+    p = sortperm(cols; kws...)
     A[:,p]
 end
 
@@ -396,8 +379,8 @@ end
 module Float
 using ..Sort
 
+import Core.Intrinsics: unbox, slt_int
 import ..Sort: sort!, Perm, lt, Reverse
-import Core.Intrinsics.slt_int, Core.Intrinsics.unbox
 
 typealias Floats Union(Float32,Float64)
 typealias Direct Union(ForwardOrdering,ReverseOrdering)
@@ -460,10 +443,10 @@ function nans2right!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v
     return lo, i
 end
 
-nans2end!(v::AbstractVector, o::ForwardOrdering) = nans2right!(v, o)
-nans2end!(v::AbstractVector, o::ReverseOrdering) = nans2left!(v, o)
-nans2end!{O<:ForwardOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2right!(v, o)
-nans2end!{O<:ReverseOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2left!(v, o)
+nans2end!(v::AbstractVector, o::ForwardOrdering) = nans2right!(v,o)
+nans2end!(v::AbstractVector, o::ReverseOrdering) = nans2left!(v,o)
+nans2end!{O<:ForwardOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2right!(v,o)
+nans2end!{O<:ReverseOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2left!(v,o)
 
 issignleft(o::Direct, x::Floats) = lt(o, x, zero(x))
 issignleft{O<:Direct}(o::Perm{O}, i::Int) = issignleft(O(), o.data[i])
@@ -471,8 +454,8 @@ issignleft{O<:Direct}(o::Perm{O}, i::Int) = issignleft(O(), o.data[i])
 function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     i, j = lo, hi = nans2end!(v,o)
     while true
-        while i <= j &&  issignleft(o, v[i]); i += 1; end
-        while i <= j && !issignleft(o, v[j]); j -= 1; end
+        while i <= j &&  issignleft(o,v[i]); i += 1; end
+        while i <= j && !issignleft(o,v[j]); j -= 1; end
         if i <= j
             v[i], v[j] = v[j], v[i]
             i += 1
@@ -486,8 +469,8 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     return v
 end
 
-sort!{T<:Floats}(v::AbstractVector{T}, a::Algorithm, o::Direct) = fpsort!(v, a, o)
-sort!{O<:Direct,T<:Floats}(v::Vector{Int}, a::Algorithm, o::Perm{O,Vector{T}}) = fpsort!(v, a, o)
+sort!{T<:Floats}(v::AbstractVector{T}, a::Algorithm, o::Direct) = fpsort!(v,a,o)
+sort!{O<:Direct,T<:Floats}(v::Vector{Int}, a::Algorithm, o::Perm{O,Vector{T}}) = fpsort!(v,a,o)
 
 end # module Sort.Float
 
