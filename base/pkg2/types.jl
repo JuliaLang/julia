@@ -39,7 +39,7 @@ Base.contains(s::VersionSet, v::VersionNumber) = any(i->contains(i,v), s.interva
 function Base.intersect(A::VersionSet, B::VersionSet)
     ivals = vec([ intersect(a,b) for a in A.intervals, b in B.intervals ])
     filter!(i->!isempty(i), ivals)
-    sortby!(ivals, i->i.lower)
+    sort!(ivals, by=i->i.lower)
     VersionSet(ivals)
 end
 Base.isequal(A::VersionSet, B::VersionSet) = (A.intervals == B.intervals)

@@ -106,11 +106,11 @@ for alg in [InsertionSort, MergeSort, TimSort]
     @test issorted(b, order=Sort.Reverse)
     @test a[ix] == b
 
-    b = sortby(a, x->1/x, alg=alg)
-    @test issorted(b, order=Sort.By(x->1/x))
-    ix = sortperm(a, alg=alg, order=Sort.By(x->1/x))
+    b = sort(a, alg=alg, by=x->1/x)
+    @test issorted(b, by=x->1/x)
+    ix = sortperm(a, alg=alg, by=x->1/x)
     b = a[ix]
-    @test issorted(b, order=Sort.By(x->1/x))
+    @test issorted(b, by=x->1/x)
     @test a[ix] == b
 
     c = copy(a)
@@ -120,14 +120,10 @@ for alg in [InsertionSort, MergeSort, TimSort]
     ipermute!(c, ix)
     @test c == a
 
-    c = sort(a, alg=alg) do x,y
-        x > y
-    end
+    c = sort(a, alg=alg, lt=(>))
     @test b == c
 
-    c = sortby(a, alg=alg) do x
-        -10x
-    end
+    c = sort(a, alg=alg, by=x->1/x)
     @test b == c
 end
 
@@ -135,11 +131,11 @@ b = sort(a, alg=QuickSort)
 @test issorted(b)
 b = sort(a, alg=QuickSort, order=Sort.Reverse)
 @test issorted(b, order=Sort.Reverse)
-b = sortby(a, x->1/x, alg=QuickSort)
-@test issorted(b, order=Sort.By(x->1/x))
+b = sort(a, alg=QuickSort, by=x->1/x)
+@test issorted(b, by=x->1/x)
 
 @test select([3,6,30,1,9], 2, order=Sort.Reverse) == 9
-@test select([3,6,30,1,9], 2, order=Sort.By(x->1/x)) == 9
+@test select([3,6,30,1,9], 2, by=x->1/x) == 9
 
 ## more advanced sorting tests ##
 
@@ -215,7 +211,7 @@ for n in [0:10, 100, 1000]
         p = sortperm(v, alg=alg, order=ord)
         @test isperm(p)
         vp = v[p]
-        @test isequal(s,vp)
-        @test reinterpret(Uint64,s) == reinterpret(Uint64,vp)
+        @test isequal(vp,s)
+        @test reinterpret(Uint64,vp) == reinterpret(Uint64,s)
     end
 end

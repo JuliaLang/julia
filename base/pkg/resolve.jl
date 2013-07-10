@@ -911,7 +911,7 @@ function decimate(n::Int, graph::Graph, msgs::Messages)
     #println("DECIMATING $n NODES")
     fld = msgs.fld
     decimated = msgs.decimated
-    fldorder = sortperm(fld, order=Sort.By(secondmax))
+    fldorder = sortperm(fld, by=secondmax)
     for p0 in fldorder
         if decimated[p0]
             continue
@@ -1300,7 +1300,7 @@ function sanity_check(vers::Vector{Version}, deps::Vector{(Version,VersionSet)})
         p0, v0 = vdict[v]
         return -pndeps[p0][v0]
     end
-    svers = sortby(vers, vrank)
+    svers = sort(vers, by=vrank)
 
     nv = length(svers)
 
@@ -1373,7 +1373,7 @@ function sanity_check(vers::Vector{Version}, deps::Vector{(Version,VersionSet)})
             end
             i += 1
         end
-        sortby!(insane, x->x[1])
+        sort!(insane, by=x->x[1])
         throw(MetadataError(insane))
     end
 
