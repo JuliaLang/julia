@@ -630,9 +630,27 @@ function sync_msg(verb::Symbol, r::RemoteRef)
     return is(verb,:fetch) ? v : r
 end
 
-wait(r::RemoteRef) = sync_msg(:wait, r)
+function wait(rs::RemoteRef...)
+    for r in rs
+        sync_msg(:wait, r)
+    end
+end
+
+function fetch(rs::RemoteRef...)
+    vals = Any[]
+    sizehint(vals, length(rs))
+
+    for r in rs
+        push!(vals, fetch(r))
+    end
+
+    vals
+end
+
 fetch(r::RemoteRef) = sync_msg(:fetch, r)
+
 fetch(x::ANY) = x
+fetch(x::ANY...) = x
 
 # storing a value to a Ref
 put_ref(rid, v) = put(lookup_ref(rid), v)
@@ -669,6 +687,17 @@ function take(rr::RemoteRef)
     else
         remotecall_fetch(rr.where, take_ref, rid)
     end
+end
+
+function take(rs::RemoteRef...)
+    vals = Any[]
+    sizehint(vals, length(rs))
+
+    for r in rs
+        push!(vals, take(r))
+    end
+
+    vals
 end
 
 ## work queue ##
