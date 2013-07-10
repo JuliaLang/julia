@@ -32,3 +32,4 @@
    packages
    performance-tips
    style-guide
+   frequently-asked-questions
