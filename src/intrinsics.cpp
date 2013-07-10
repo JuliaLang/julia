@@ -135,23 +135,22 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
         int nb = jl_datatype_size(bt);
         //APInt copies the data (but only as much as needed, so it doesn't matter if ArrayRef extends too far)
         APInt val = APInt(8*nb,ArrayRef<uint64_t>((uint64_t*)jl_data_ptr(e),(nb+7)/8));
-        if(jl_is_float(e))
-        {
+        if (jl_is_float(e)) {
 #ifdef LLVM33
             #define LLVM_FP(a,b) APFloat(a,b)
 #else
             #define LLVM_FP(a,b) APFloat(b,true)
 #endif
 #ifndef DISABLE_FLOAT16
-            if(nb == 2)
+            if (nb == 2)
                 return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEhalf,val)),(jl_value_t*)bt);
             else
 #endif
-            if(nb == 4)
+            if (nb == 4)
                 return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEsingle,val)),(jl_value_t*)bt);
-            else if(nb == 8)
+            else if (nb == 8)
                 return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEdouble,val)),(jl_value_t*)bt);
-            else if(nb == 16)
+            else if (nb == 16)
                 return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEquad,val)),(jl_value_t*)bt);
             // If we have a floating point type that's not hardware supported, just treat it like an integer for LLVM purposes
         }
@@ -170,6 +169,8 @@ static Value *emit_unbox(Type *to, Type *pto, Value *x)
             return builder.CreateZExt(x, T_int8);
         if (ty->isPointerTy() && !to->isPointerTy())
             return builder.CreatePtrToInt(x, to);
+        if (!ty->isPointerTy() && to->isPointerTy())
+            return builder.CreateIntToPtr(x, to);
         if (ty != to)
             jl_error("unbox: T != typeof(x)");
         return x;
