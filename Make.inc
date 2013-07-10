@@ -64,7 +64,9 @@ endif
 
 ifeq ($(OS), WINNT)
 fPIC = 
+ifeq ($(BUILD_OS), WINNT)
 PATH := ${PATH}:${BUILD}/lib:${BUILD}/lib/julia:/c/Program Files/7-zip
+endif
 EXE = .exe
 else
 fPIC = -fPIC
