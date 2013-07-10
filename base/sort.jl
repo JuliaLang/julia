@@ -417,7 +417,7 @@ lt{T<:Floats}(::Right, x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
 isnan(o::Direct, x::Floats) = (x!=x)
 isnan{O<:Direct}(o::Perm{O}, i::Int) = isnan(O(),o.data[i])
 
-function nans2left!(v::AbstractVector, lo::Int, hi::Int, o::Ordering)
+function nans2left!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
     hi < lo && return lo, hi
     i = lo
     while (i < hi) & isnan(o, v[i])
@@ -438,7 +438,7 @@ function nans2left!(v::AbstractVector, lo::Int, hi::Int, o::Ordering)
     end
     return i, hi
 end
-function nans2right!(v::AbstractVector, lo::Int, hi::Int, o::Ordering)
+function nans2right!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
     hi < lo && return lo, hi
     i = hi
     while (i > lo) & isnan(o, v[i])
@@ -459,8 +459,6 @@ function nans2right!(v::AbstractVector, lo::Int, hi::Int, o::Ordering)
     end
     return lo, i
 end
-nans2left!(v::AbstractVector, o::Ordering) = nans2left!(v, 1, length(v), o)
-nans2right!(v::AbstractVector, o::Ordering) = nans2right!(v, 1, length(v), o)
 
 nans2end!(v::AbstractVector, o::ForwardOrdering) = nans2right!(v, o)
 nans2end!(v::AbstractVector, o::ReverseOrdering) = nans2left!(v, o)
@@ -487,6 +485,7 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     sort!(v, i,  hi, a, right(o))
     return v
 end
+
 sort!{T<:Floats}(v::AbstractVector{T}, a::Algorithm, o::Direct) = fpsort!(v, a, o)
 sort!{O<:Direct,T<:Floats}(v::Vector{Int}, a::Algorithm, o::Perm{O,Vector{T}}) = fpsort!(v, a, o)
 
