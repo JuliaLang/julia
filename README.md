@@ -88,21 +88,40 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 Julia does not install anything outside the directory it was cloned into. Julia can be completely uninstalled by deleting this directory.
 
 <a name="Platform-Specific-Notes"/>
-## Platform-Specific Notes
+## Platform-Specific Build Notes
 
 ### Linux
 
-GCC version 4.6 or later is recommended to build Julia.
+#### General
 
-If the build fails trying to compile OpenBLAS, set one of the following build options in `Make.user` and build again. Use `OPENBLAS_TARGET_ARCH=BARCELONA` on AMD CPUs, and `OPENBLAS_TARGET_ARCH=NEHALEM` on Intel CPUs. If you want to use the system provided `libblas`, set `USE_SYSTEM_BLAS=1` in `Make.user`. If you want to use the system provided `libopenblas`(instead of `libblas`), set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` in `Make.user` beside `USE_SYSTEM_BLAS=1`. Note that on some Linux distributions(e.g. Debian) `libblas.so` is a soft link to `libopenblas.so` by default if both of them were installed.
+* GCC version 4.6 or later is recommended to build Julia.
+* To use external shared libraries not in the system library search path, set `USE_SYSTEM_XXX=1` and `LDFLAGS=-Wl,-rpath /path/to/dir/contains/libXXX.so` in `Make.user`.
+  * Instead of setting `LDFLAGS`, putting the library directory into the environment variable `LD_LIBRARY_PATH` (at both compiling time and runtime) also works.
+* See also the [external dependencies](#Required-Build-Tools-External-Libraries).
 
-On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, set `USE_SYSTEM_READLINE=1` in `Make.user`.
+#### Ubuntu
 
-On Ubuntu or Debian systems, if you get any errors related to `ncurses`, you need to `apt-get install libncurses5-dev`.
+* The [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/) contains updated packages for julia dependencies if you want to use system libraries instead of having them downloaded and built during the build process.  See [System Provided Libraries](#System-Provided-Libraries).
+
+#### CentOS 5
 
 On CentOS 5 systems, the default compiler (gcc 4.1) is too old to build Julia.
 
-You can set `USE_SYSTEM_XXX=1` and `LDFLAGS=-Wl,-rpath /path/to/dir/contains/libXXX.so` in `Make.user` to use an external `XXX` shared library which is not in the system library search path. Instead of setting `LDFLAGS`, putting the library directory into the environment variable `LD_LIBRARY_PATH` (at both compiling time and runtime) also works.
+If the gcc44 and gfortran44 packages are installed, you can specify their use by adding the following to Make.user
+
+    FC = gfortran44
+    CC = gcc44
+    CXX = g++44
+
+Otherwise, install or contact your systems adminstrator to install a more recent version of gcc.
+
+#### Linux Build Troubleshooting
+
+ Problem              | Possible Solution
+------------------------|---------------------
+ OpenBLAS build failure | Set one of the following build options in `Make.user` and build again: <ul><li> `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) </li><li> `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs) </li><li> `USE_SYSTEM_BLAS=1` uses the system provided `libblas` <ul><li> Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force the use of the system provided OpenBLAS when multiple BLAS versions are installed </li></ul></li></ul>
+ readline build error   | Set `USE_SYSTEM_READLINE=1` in `Make.user`
+ ncurses build error    | Install the `libncurses5` development package <ul><li> Debian/Ubuntu: `apt-get install libncurses5-dev` </li><li> RPM-based systems: `yum install libncurses5-devel` </li></ul>
 
 ### OS X
 
@@ -161,7 +180,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[GMP]**                 — the GNU multiple precision arithmetic library, needed for bigint support.
 - **[MPFR]**                — the GNU multiple precision floating point library, needed for arbitrary precision floating point support.
 - **[double-conversion]**   — efficient number-to-text conversion.
-- **[Rmath]**               — basic RNGs and distributions.
 
 
 [GNU make]:     http://www.gnu.org/software/make/
@@ -189,12 +207,14 @@ Julia uses the following external libraries, which are automatically downloaded 
 [GMP]:          http://gmplib.org/
 [MPFR]:         http://www.mpfr.org/
 [double-conversion]: http://double-conversion.googlecode.com/
-[Rmath]:        http://cran.r-project.org/doc/manuals/R-admin.html#The-standalone-Rmath-library
 [libuv]:        https://github.com/JuliaLang/libuv
 
-### Build options for make
+<a name="System-Provided-Libraries">
+### System Provided Libraries
 
-If you already have one or more of these packages installed on your system, it is possible to pass `USE_SYSTEM_...=1` to `make` to prevent Julia from compiling duplicates of these libraries. The complete list of possible flags can be found in Make.inc. Please be aware that this procedure is not officially supported, as it introduces additional variablity into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
+If you already have one or more of these packages installed on your system, you can prevent Julia from compiling duplicates of these libraries by passing `USE_SYSTEM_...=1` to `make` or adding the line to `Make.user`. The complete list of possible flags can be found in `Make.inc`. 
+
+Please be aware that this procedure is not officially supported, as it introduces additional variablity into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
 
 ### SuiteSparse
 
@@ -246,7 +266,9 @@ The following distributions include julia, but the versions may be out of date d
 
 * [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877)
 * [Debian GNU/Linux](http://packages.debian.org/sid/julia)
-* [Ubuntu](http://packages.ubuntu.com/raring/julia)
+* Ubuntu
+  * [Ubuntu 13.04 (Raring Ringtail)](http://packages.ubuntu.com/raring/julia)
+  * [Nightly builds PPA](https://launchpad.net/~staticfloat/+archive/julianightlies) (depends on the [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/))
 * [OS X Homebrew](http://mxcl.github.com/homebrew/)
 
 <a name="Editor-Terminal-Setup"/>
