@@ -204,7 +204,8 @@ else
 LLVM_FLAGS += --disable-assertions --enable-optimized
 endif
 ifeq ($(OS), WINNT)
-LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared CPPFLAGS="-D__USING_SJLJ_EXCEPTIONS__"
+LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared
+LLVM_MFLAGS += CPPFLAGS="-D__USING_SJLJ_EXCEPTIONS__"
 endif
 
 ifeq ($(BUILD_LLDB),1)
