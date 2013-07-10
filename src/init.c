@@ -158,6 +158,8 @@ static void __fastcall win_raise_exception(void* excpt)
 { //why __fastcall? because the first two arguments are passed in registers, making this easier
     jl_throw(excpt);
 }
+DLLEXPORT void gdbbacktrace();
+DLLEXPORT void gdblookup(ptrint_t ip);
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
     int sig;
@@ -232,7 +234,54 @@ static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) 
 #endif
             return EXCEPTION_CONTINUE_EXECUTION;
         default:
-            puts("Please submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\n");
+            ios_puts("Please submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ", ios_stderr);
+            switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
+                case EXCEPTION_ACCESS_VIOLATION:
+                    ios_puts("EXCEPTION_ACCESS_VIOLATION", ios_stderr); break;
+                case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
+                    ios_puts("EXCEPTION_ARRAY_BOUNDS_EXCEEDED", ios_stderr); break;
+                case EXCEPTION_BREAKPOINT:
+                    ios_puts("EXCEPTION_BREAKPOINT", ios_stderr); break;
+                case EXCEPTION_DATATYPE_MISALIGNMENT:
+                    ios_puts("EXCEPTION_DATATYPE_MISALIGNMENT", ios_stderr); break;
+                case EXCEPTION_FLT_DENORMAL_OPERAND:
+                    ios_puts("EXCEPTION_FLT_DENORMAL_OPERAND", ios_stderr); break;
+                case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+                    ios_puts("EXCEPTION_FLT_DIVIDE_BY_ZERO", ios_stderr); break;
+                case EXCEPTION_FLT_INEXACT_RESULT:
+                    ios_puts("EXCEPTION_FLT_INEXACT_RESULT", ios_stderr); break;
+                case EXCEPTION_FLT_INVALID_OPERATION:
+                    ios_puts("EXCEPTION_FLT_INVALID_OPERATION", ios_stderr); break;
+                case EXCEPTION_FLT_OVERFLOW:
+                    ios_puts("EXCEPTION_FLT_OVERFLOW", ios_stderr); break;
+                case EXCEPTION_FLT_STACK_CHECK:
+                    ios_puts("EXCEPTION_FLT_STACK_CHECK", ios_stderr); break;
+                case EXCEPTION_FLT_UNDERFLOW:
+                    ios_puts("EXCEPTION_FLT_UNDERFLOW", ios_stderr); break;
+                case EXCEPTION_ILLEGAL_INSTRUCTION:
+                    ios_puts("EXCEPTION_ILLEGAL_INSTRUCTION", ios_stderr); break;
+                case EXCEPTION_IN_PAGE_ERROR:
+                    ios_puts("EXCEPTION_IN_PAGE_ERROR", ios_stderr); break;
+                case EXCEPTION_INT_DIVIDE_BY_ZERO:
+                    ios_puts("EXCEPTION_INT_DIVIDE_BY_ZERO", ios_stderr); break;
+                case EXCEPTION_INT_OVERFLOW:
+                    ios_puts("EXCEPTION_INT_OVERFLOW", ios_stderr); break;
+                case EXCEPTION_INVALID_DISPOSITION:
+                    ios_puts("EXCEPTION_INVALID_DISPOSITION", ios_stderr); break;
+                case EXCEPTION_NONCONTINUABLE_EXCEPTION:
+                    ios_puts("EXCEPTION_NONCONTINUABLE_EXCEPTION", ios_stderr); break;
+                case EXCEPTION_PRIV_INSTRUCTION:
+                    ios_puts("EXCEPTION_PRIV_INSTRUCTION", ios_stderr); break;
+                case EXCEPTION_SINGLE_STEP:
+                    ios_puts("EXCEPTION_SINGLE_STEP", ios_stderr); break;
+                case EXCEPTION_STACK_OVERFLOW:
+                    ios_puts("EXCEPTION_STACK_OVERFLOW", ios_stderr); break;
+                default:
+                    ios_puts("UNKNOWN", ios_stderr); break;
+            }
+            ios_printf(ios_stderr," at 0x%Ix\n", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+            gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+            gdbbacktrace();
             break;
         }
     }
