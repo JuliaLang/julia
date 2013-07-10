@@ -2959,24 +2959,42 @@ some built-in integration support in Julia.
 Parallel Computing
 ------------------
 
-.. function:: addprocs(n)
+.. function:: addprocs(n) -> List of process identifiers
 
    Add processes on the local machine. Can be used to take advantage of multiple cores.
 
-.. function:: addprocs({"host1","host2",...}; tunnel=false, dir=JULIA_HOME, sshflags::Cmd=``)
+.. function:: addprocs({"host1","host2",...}; tunnel=false, dir=JULIA_HOME, sshflags::Cmd=``, cman::ClusterManager) -> List of process identifiers
 
-   Add processes on remote machines via SSH. Requires julia to be installed in the same location on each node, or to be available via a shared file system.
-   If ``tunnel`` is ``true`` then SSH tunneling will be used. Named argument ``dir``
-   optionally specifies the location of the julia binaries on the worker nodes. Additional ssh options may be specified
-   by passing a Cmd object with named argument ``sshflags``, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\``
+   Add processes on remote machines via SSH or a custom cluster manager. Requires julia to be installed in the same location on each node, or to be available via a shared file system.
+   
+   Keyword arguments:
+   ``tunnel`` : if ``true`` then SSH tunneling will be used to connect to the worker. 
+   ``dir`` specifies the location of the julia binaries on the worker nodes. 
+   ``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\``
+   ``cman`` : Workers are started using the specified cluster manager. For example Beowulf clusters are 
+   supported via a custom cluster manager implemented in  package ``ClusterManagers``.
+   
+   See the documentation for package ``ClusterManagers`` for more information on how to write a custom cluster manager.
+   
+.. function:: addprocs_sge(n) - DEPRECATED from Base, use ClusterManagers.addprocs_sge(n)
 
-.. function:: addprocs_sge(n)
-
-   Add processes via the Sun/Oracle Grid Engine batch queue, using ``qsub``.
+   Adds processes via the Sun/Oracle Grid Engine batch queue, using ``qsub``.
 
 .. function:: nprocs()
 
    Get the number of available processors.
+
+.. function:: nworkers()
+
+   Get the number of available worker processors. This is one less than nprocs(). Equal to nprocs() if nprocs() == 1.
+
+.. function:: procs()
+
+   Returns a list of all process identifiers
+
+.. function:: workers()
+
+   Returns a list of all worker process identifiers
 
 .. function:: myid()
 
@@ -3021,7 +3039,9 @@ Parallel Computing
 .. function:: RemoteRef(n)
 
    Make an uninitialized remote reference on processor ``n``.
-
+   
+   
+   
 Distributed Arrays
 ------------------
 
