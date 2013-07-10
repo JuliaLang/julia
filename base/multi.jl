@@ -1031,7 +1031,7 @@ function launch_procs(n::Integer, config::Dict)
     cman = config[:cman]
     outs=cell(n)
     
-    # start the processes first
+    # start the processes first...
     if (cman.ssh)
         sshflags = config[:sshflags]
         lcmd(idx) =  `ssh -n $sshflags $(cman.machines[idx]) "sh -l -c \"cd $dir && $exename $exeflags\""`
@@ -1073,22 +1073,22 @@ end
 # optionally through an SSH tunnel.
 # the tunnel is only used from the head (process 1); the nodes are assumed
 # to be mutually reachable without a tunnel, as is often the case in a cluster.
-function addprocs(instances::Union(AbstractVector, Integer);
-                  tunnel=false, dir=JULIA_HOME, exename="./julia-release-basic", sshflags::Cmd=``, cman=nothing)
+function addprocs_internal(np::Integer;
+                  tunnel=false, dir=JULIA_HOME, exename="./julia-release-basic", sshflags::Cmd=``, cman=RegularCluster())
                   
-    config={:dir=>dir, :exename=>exename, :exeflags=>` --worker `, :tunnel=>tunnel, :sshflags=>sshflags}
+    config={:dir=>dir, :exename=>exename, :exeflags=>` --worker `, :tunnel=>tunnel, :sshflags=>sshflags, :cman=>cman}
     disable_threaded_libs()
-    
-    if isa(instances, AbstractVector) && (cman == nothing)
-        config[:cman] = RegularCluster(ssh=true, machines=instances)
-        return add_workers(PGRP, start_cluster_workers(length(instances), config))
+    add_workers(PGRP, start_cluster_workers(np, config))
+end
+
+addprocs(np::Integer; kwargs...) = addprocs_internal(np; kwargs...)
+
+function addprocs(machines::AbstractVector; kwargs...)
+    cman_defined = any(x -> begin k,v = x; k==:cman end, kwargs)
+    if cman_defined
+        error("custom cluster managers unsupported on the ssh interface")
     else
-        if isa(cman, ClusterManager)
-            config[:cman] = cman
-        else
-            config[:cman] = RegularCluster()
-        end
-        return add_workers(PGRP, start_cluster_workers(instances, config))
+        addprocs_internal(length(machines); cman=RegularCluster(ssh=true, machines=machines), kwargs...)
     end
 end
 
