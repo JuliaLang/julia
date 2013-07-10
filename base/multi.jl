@@ -1029,27 +1029,36 @@ function launch_procs(n::Integer, config::Dict)
     exeflags = config[:exeflags]
     
     cman = config[:cman]
-    if cman.ssh
+    outs=cell(n)
+    
+    # start the processes first
+    if (cman.ssh)
         sshflags = config[:sshflags]
-        outs=cell(n)
-        for i in 1:n
-            m = cman.machines[i]
-            cmd = detach(`ssh -n $sshflags $m "sh -l -c \"cd $dir && $exename $exeflags\""`)
-            io,_ = readsfrom(cmd)
-            io.line_buffered = true
-            local port::Int16
-            (_, port) = read_worker_host_port (io)
-            
+        lcmd(idx) =  `ssh -n $sshflags $(cman.machines[idx]) "sh -l -c \"cd $dir && $exename $exeflags\""`
+    else
+        lcmd(idx) =  `$(dir)/$(exename) --bind-to $bind_addr $exeflags`
+    end
+    
+    for i in 1:n
+        io,_ = readsfrom(detach(lcmd(i)))
+        outs[i] = io
+    end    
+    
+    # ...and then read the host:port info. This optimizes overall start times.
+    for i in 1:n
+        io = outs[i]
+        io.line_buffered = true
+        (private_hostname, port) = read_worker_host_port (io)
+        if cman.ssh
             # We ignore the hostname printed by the worker, since the worker may be behind a NATed interface,
             # we just use the hostname specified by the caller as part of the machine name
-            outs[i] = (io, m, port)
+            outs[i] = (io, cman.machines[i], port)
+        else
+            outs[i] = (io, private_hostname, port)
         end
-        return (:io_host_port, outs)
-    
-    else
-        worker_local_cmd = `$(dir)/$(exename) --bind-to $bind_addr $exeflags`
-        return (:cmd, {worker_local_cmd for i in 1:n})
     end
+    
+    return (:io_host_port, outs)
 end
 
 immutable RegularCluster <: ClusterManager
