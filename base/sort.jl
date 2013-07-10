@@ -372,6 +372,25 @@ for (sb,s) in {(:sortby!, :sort!), (:sortby, :sort), (:sortpermby, :sortperm)}
     end
 end
 
+## sorting multi-dimensional arrays ##
+
+sort(A::AbstractArray, dim::Integer; alg::Algorithm=defalg(A), order::Ordering=Forward) =
+    mapslices(a->sort(a, alg=alg, order=order), A, [dim])
+
+function sortrows(A::AbstractMatrix; alg::Algorithm=defalg(A), order::Ordering=Forward)
+    c = 1:size(A,2)
+    rows = [ sub(A,i,c) for i=1:size(A,1) ]
+    p = sortperm(rows, alg=alg, order=order)
+    A[p,:]
+end
+
+function sortcols(A::AbstractMatrix; alg::Algorithm=defalg(A), order::Ordering=Forward)
+    r = 1:size(A,1)
+    cols = [ sub(A,r,i) for i=1:size(A,2) ]
+    p = sortperm(cols, alg=alg, order=order)
+    A[:,p]
+end
+
 ## fast clever sorting for floats ##
 
 module Float
@@ -472,24 +491,5 @@ sort!{T<:Floats}(v::AbstractVector{T}, a::Algorithm, o::Direct) = fpsort!(v, a, 
 sort!{O<:Direct,T<:Floats}(v::Vector{Int}, a::Algorithm, o::Perm{O,Vector{T}}) = fpsort!(v, a, o)
 
 end # module Sort.Float
-
-## sorting multi-dimensional arrays ##
-
-sort(A::AbstractArray, dim::Integer; alg::Algorithm=defalg(A), order::Ordering=Forward) =
-    mapslices(a->sort(a, alg=alg, order=order), A, [dim])
-
-function sortrows(A::AbstractMatrix; alg::Algorithm=defalg(A), order::Ordering=Forward)
-    c = 1:size(A,2)
-    rows = [ sub(A,i,c) for i=1:size(A,1) ]
-    p = sortperm(rows, alg=alg, order=order)
-    A[p,:]
-end
-
-function sortcols(A::AbstractMatrix; alg::Algorithm=defalg(A), order::Ordering=Forward)
-    r = 1:size(A,1)
-    cols = [ sub(A,r,i) for i=1:size(A,2) ]
-    p = sortperm(cols, alg=alg, order=order)
-    A[:,p]
-end
 
 end # module Sort
