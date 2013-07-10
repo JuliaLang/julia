@@ -13,6 +13,11 @@ static int is_uws(uint32_t wc)
             wc==8232 || wc==8233 || wc==8239 || wc==8287 || wc==12288);
 }
 
+static int is_bom(uint32_t wc)
+{
+    return wc == 0xFEFF;
+}
+
 value_t fl_skipws(value_t *args, u_int32_t nargs)
 {
     argcount("skip-ws", nargs, 2);
@@ -22,7 +27,7 @@ value_t fl_skipws(value_t *args, u_int32_t nargs)
     if (ios_peekutf8(s, &wc) == IOS_EOF)
         return FL_EOF;
     value_t skipped = FL_F;
-    while (!ios_eof(s) && is_uws(wc) && (newlines || wc!=10)) {
+    while (!ios_eof(s) && (is_uws(wc) || is_bom(wc)) && (newlines || wc!=10)) {
         skipped = FL_T;
         ios_getutf8(s, &wc);
         ios_peekutf8(s, &wc);
