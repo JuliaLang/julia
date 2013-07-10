@@ -1059,6 +1059,23 @@ end
 sub2ind{T<:Integer}(dims, I::AbstractVector{T}...) =
     [ sub2ind(dims, map(X->X[i], I)...)::Int for i=1:length(I[1]) ]
 
+function ind2sub(dims::(Integer,Integer...), ind::Int)
+    ndims = length(dims)
+    stride = dims[1]
+    for i=2:ndims-1
+        stride *= dims[i]
+    end
+
+    sub = ()
+    for i=(ndims-1):-1:1
+        rest = rem(ind-1, stride) + 1
+        sub = tuple(div(ind - rest, stride) + 1, sub...)
+        ind = rest
+        stride = div(stride, dims[i])
+    end
+    return tuple(ind, sub...)
+end
+
 ind2sub(dims::(Integer...), ind::Integer) = ind2sub(dims, int(ind))
 ind2sub(dims::(), ind::Integer) = ind==1 ? () : throw(BoundsError())
 ind2sub(dims::(Integer,), ind::Int) = (ind,)
