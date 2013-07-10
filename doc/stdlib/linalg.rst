@@ -278,6 +278,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Construct a matrix by repeating the given matrix ``n`` times in dimension 1 and ``m`` times in dimension 2.
 
+.. function:: repeat(A, inner = Int[], outer = Int[])
+
+   Construct an array by repeating the entries of ``A``. The i-th element of ``inner`` specifies the number of times that the individual entries of the i-th dimension of ``A`` should be repeated. The i-th element of ``outer`` specifies the number of times that a slice along the i-th dimension of ``A` should be repeated.
+
 .. function:: kron(A, B)
 
    Kronecker tensor product of two vectors or two matrices.
