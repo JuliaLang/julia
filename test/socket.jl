@@ -24,3 +24,26 @@
 @test repr(ip"2001:db8::1:1:1:1:1") == "IPv6(2001:db8:0:1:1:1:1:1)"
 @test repr(ip"2001:db8:0:0:1:0:0:1") == "IPv6(2001:db8::1:0:0:1)"
 @test repr(ip"2001:0:0:1:0:0:0:1") == "IPv6(2001:0:0:1::1)"
+
+c = Base.Condition()
+@async begin
+	s = listen(2000)
+	Base.notify(c)
+	sock = accept(s)
+	write(sock,"Hello World\n")
+	close(s)
+	close(sock)
+end
+wait(c)
+@test readall(connect(2000)) == "Hello World\n"
+
+@async begin
+	s = listen("testsocket")
+	Base.notify(c)
+	sock = accept(s)
+	write(sock,"Hello World\n")
+	close(s)
+	close(sock)
+end
+wait(c)
+@test readall(connect("testsocket")) == "Hello World\n"

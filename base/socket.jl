@@ -405,84 +405,38 @@ end
 
 ##
 
-function connect(cb::Function, sock::TcpSocket, host::IPv4, port::Uint16)
-    @assert sock.status == StatusInit
-    sock.ccb = cb
+function connect!(sock::TcpSocket, host::IPv4, port::Integer)
+    if !(0 <= port <= typemax(Uint16))
+        throw(DomainError())
+    end
     uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),
-			     sock.handle,hton(host.host),hton(port)) == -1)
-    sock.status = StatusConnecting
-    nothing
+                 sock.handle,hton(host.host),hton(uint16(port))) == -1)
 end
 
-function connect(sock::TcpSocket, host::IPv4, port::Uint16)
-    @assert sock.status == StatusInit
-    uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),
-			     sock.handle,hton(host.host),hton(port)) == -1)
-    sock.status = StatusConnecting
-    wait_connected(sock)
-    nothing
-end
-
-function connect(cb::Function, sock::TcpSocket, host::IPv6, port::Uint16)
-    @assert sock.status == StatusInit
-    sock.ccb = cb
+function connect!(sock::TcpSocket, host::IPv6, port::Integer)
+    if !(0 <= port <= typemax(Uint16))
+        throw(DomainError())
+    end
     uv_error("connect",ccall(:jl_tcp6_connect,Int32,(Ptr{Void},Ptr{Uint128},Uint16),
-			     sock.handle,&hton(host.host),hton(port)) == -1)
-    sock.status = StatusConnecting
-    nothing
-end
-
-function connect(sock::TcpSocket, host::IPv6, port::Uint16)
-    @assert sock.status == StatusInit
-    uv_error("connect",ccall(:jl_tcp6_connect,Int32,(Ptr{Void},Ptr{Uint128},Uint16),
-			     sock.handle,&hton(host.host),hton(port)) == -1)
-    sock.status = StatusConnecting
-    wait_connected(sock)
-    nothing
-end
-
-function connect(sock::TcpSocket, host::ASCIIString, port::Integer)
-    @assert sock.status == StatusInit
-    ipaddr = getaddrinfo(host)
-    connect(sock,ipaddr,port)
+                 sock.handle,&hton(host.host),hton(uint16(port))) == -1)
 end
 
 # Default Host to localhost
 connect(sock::TcpSocket, port::Integer) = connect(sock,IPv4(127,0,0,1),port)
 connect(port::Integer) = connect(IPv4(127,0,0,1),port)
 
+# Valid connect signatures for TCP
+connect(host::ASCIIString, port::Integer) = connect(TcpSocket(),host,port)
+connect(addr::IpAddr, port::Integer) = connect(TcpSocket(),addr,port)
+connect(addr::InetAddr) = connect(TcpSocket(),addr)
+ 
 default_connectcb(sock,status) = nothing
 
-function connect(cb::Function, sock::TcpSocket, host::ASCIIString, port)
-    sock.status = StatusConnecting
+function connect!(sock::TcpSocket, host::ASCIIString, port::Integer)
     getaddrinfo(host) do ipaddr
-        sock.status = StatusInit
-        connect(cb,sock,ipaddr,port)
+        connect!(sock,ipaddr,port)
     end
-end
-
-
-for (args,forward_args) in (((:(addr::InetAddr),), (:(addr.host),:(addr.port))),
-			    ((:(host::IpAddr),:port),(:(InetAddr(host,port)),)),
-			    ((:(addr::InetAddr),), (:(addr.host),:(addr.port))),
-			    ((:(host::ASCIIString),:port), (:host,:port)))
-    @eval begin
-        connect(sock::Socket,$(args...)) = connect(sock,$(forward_args...))
-        connect(cb::Function,sock::Socket,$(args...)) =
-            connect(cb,sock,$(forward_args...))
-        function connect($(args...))
-            sock = TcpSocket()
-            sock.ccb = default_connectcb
-            connect(sock,$(forward_args...))
-            sock
-        end
-        function connect(cb::Function,$(args...))
-            sock = TcpSocket()
-            sock.ccb = default_connectcb
-            connect(cb,sock,$(forward_args...))
-            sock
-        end
-    end
+    sock
 end
 
 ##

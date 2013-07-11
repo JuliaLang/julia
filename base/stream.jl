@@ -187,6 +187,7 @@ function reinit_stdio()
     global uv_jl_alloc_buf = cglobal(:jl_uv_alloc_buf)
     global uv_jl_readcb = cglobal(:jl_uv_readcb)
     global uv_jl_connectioncb = cglobal(:jl_uv_connectioncb)
+    global uv_jl_connectcb = cglobal(:jl_uv_connectcb)
     global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Void}, ())
     global STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()),0)
     global STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()),1)
@@ -667,14 +668,52 @@ function listen!(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT)
     end
 end
 
-function listen(path::ASCIIString)
+function bind(server::PipeServer, name::ASCIIString)
+    @assert server.status == StatusInit
+    if 0 != ccall(:uv_pipe_bind, Int32, (Ptr{Void}, Ptr{Uint8}),
+            server.handle, name)
+        if (err=_uv_lasterror()) != UV_EADDRINUSE && err != UV_EACCES
+            error(UVError("bind"))
+        else
+            return false
+        end
+    end
+    server.status = StatusOpen
+    true
+end
+
+
+function listen(path::ByteString)
     sock = PipeServer()
-    uv_error("listen", bind(sock, path))
+    uv_error("listen", !bind(sock, path))
     uv_error("listen", !listen!(sock))
     sock
 end
 
-function connect(cb::Function,sock::NamedPipe,path::ASCIIString)
-    sock.ccb = cb
-    error("Unimplemented on this branch")
+function connect!(sock::NamedPipe,path::ByteString) 
+    req = c_malloc(_sizeof_uv_connect)
+    ccall(:uv_pipe_connect, Void, (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Ptr{Void}), req, sock.handle, path, uv_jl_connectcb::Ptr{Void})
 end
+
+function connect(cb::Function,sock::AsyncStream,args...)
+    @assert sock.status == StatusInit
+    sock.ccb = cb
+    connect!(sock,path)
+    sock.status = StatusConnecting
+    sock
+end
+
+function connect(sock::AsyncStream, args...)
+    @assert sock.status == StatusInit
+    connect!(sock,args...)
+    sock.status = StatusConnecting
+    wait_connected(sock)
+    sock
+end
+
+function connect(cb::Function,args...)
+    sock.ccb = cb
+    connect(args...)
+end
+
+connect(path::ByteString) = connect(NamedPipe(),path)
