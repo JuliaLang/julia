@@ -1043,6 +1043,7 @@ export
     UV_READABLE,
     UV_WRITEABLE,
     flush,
+    getaddrinfo,
     gethostname,
     getipaddr,
     htol,
