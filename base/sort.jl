@@ -7,17 +7,20 @@ import
     Base.sortperm
 
 export # also exported by Base
+    # order-only:
     issorted,
-    sort,
-    sort!,
-    sortperm,
-    sortrows,
-    sortcols,
     select,
     select!,
     searchsorted,
     searchsortedfirst,
     searchsortedlast,
+    # order & algorithm:
+    sort,
+    sort!,
+    sortperm,
+    sortrows,
+    sortcols,
+    # algorithms:
     InsertionSort,
     QuickSort,
     MergeSort,
@@ -32,11 +35,6 @@ export # not exported by Base
     DEFAULT_STABLE,
     SMALL_ALGORITHM,
     SMALL_THRESHOLD
-
-# not exported
-    # selectby
-    # selectby!
-    # sortpermby
 
 ## notions of element ordering ##
 
@@ -142,12 +140,12 @@ function select!(v::AbstractVector, r::Range1, lo::Int, hi::Int, o::Ordering)
     end
 end
 
-select!(v::AbstractVector, k, o::Ordering) = select!(v,k,1,length(v),o)
-select!(v::AbstractVector, k;
+select!(v::AbstractVector, k::Union(Int,Range1), o::Ordering) = select!(v,k,1,length(v),o)
+select!(v::AbstractVector, k::Union(Int,Range1);
     lt::Function=isless, by::Function=identity, order::Ordering=Forward, rev::Bool=false) =
     select!(v, k, ord(lt,by,order,rev))
 
-select(v::AbstractVector, k; kws...) = select!(copy(v), k; kws...)
+select(v::AbstractVector, k::Union(Int,Range1); kws...) = select!(copy(v), k; kws...)
 
 # reference on sorted binary search:
 #   http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary
