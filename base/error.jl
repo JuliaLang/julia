@@ -42,8 +42,7 @@ systemerror(p, b::Bool) = b ? throw(SystemError(string(p))) : nothing
 assert(x) = assert(x,'?')
 assert(x,labl) = x ? nothing : error("assertion failed: ", labl)
 macro assert(ex)
-    strex = try string(ex) catch err ex end # during sysimg build, string(Expr) doesn't work, so we may delay it
-    :($(esc(ex)) ? nothing : error("assertion failed: ", string($(strex))))
+    :($(esc(ex)) ? nothing : error("assertion failed: ", string($(Expr(:quote,ex)))))
 end
 
 ## printing with color ##
