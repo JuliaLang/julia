@@ -559,6 +559,7 @@ $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
 $(OPENLIBMEXT_OBJ_TARGET): $(OPENLIBMEXT_OBJ_SOURCE) | $(BUILD)/lib
+	cp openlibm/libopenlibm.a $(BUILD)/lib/libopenlibm.a
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm-extras.$(SHLIB_EXT) $@
 
