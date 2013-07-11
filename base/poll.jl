@@ -71,6 +71,10 @@ type FDWatcher <: UVPollingWatcher
 end
 function FDWatcher(fd::RawFD)
     handle = c_malloc(_sizeof_uv_poll)
+    @unix_only if ccall(:jl_uv_unix_fd_is_watched,Int32,(Int32,Ptr{Void},Ptr{Void}),fd.fd,handle,eventloop()) == 1
+        c_free(handle)
+        error("FD is already being watched by another watcher")
+    end
     err = ccall(:uv_poll_init,Int32,(Ptr{Void},Ptr{Void},Int32),eventloop(),handle,fd.fd)
     if err == -1
         c_free(handle)
@@ -146,7 +150,7 @@ let
 
         function wait(fd::RawFD; readable=false, writeable=false)
             old_length = length(fdwatcher_array)
-            if fd.fd > old_length
+            if fd.fd+1 > old_length
                 resize!(fdwatcher_array,fd.fd+1)
                 fdwatcher_array[old_length+1:fd.fd+1] = empty_watcher
             end
