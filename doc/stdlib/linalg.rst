@@ -227,12 +227,16 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: Tridiagonal(dl, d, du)
 
-   Construct a tridiagonal matrix from the lower diagonal, diagonal, and upper diagonal
+   Construct a tridiagonal matrix from the lower diagonal, diagonal, and upper diagonal, respectively.  The result is of type ``Tridiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with ``full``.
 
 .. function:: Bidiagonal(dv, ev, isupper)
 
    Constructs an upper (isupper=true) or lower (isupper=false) bidiagonal matrix
-   using the given diagonal (dv) and off-diagonal (ev) vectors
+   using the given diagonal (dv) and off-diagonal (ev) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with ``full``.
+
+.. function:: SymTridiagonal(d, du)
+
+   Construct a real-symmetric tridiagonal matrix from the diagonal and upper diagonal, respectively. The result is of type ``SymTridiagonal`` and provides efficient specialized eigensolvers, but may be converted into a regular matrix with ``full``.
 
 .. function:: Woodbury(A, U, C, V)
 
