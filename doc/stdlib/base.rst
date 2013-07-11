@@ -963,6 +963,31 @@ I/O
    Converts the endianness of a value from that used by the Host to
    Little-endian.
 
+Network I/O
+-----------
+
+.. function:: connect([host],port) -> TcpSocket
+
+   Connect to the host ``host`` on port ``port``
+
+.. function:: connect(path) -> NamedPipe
+
+   Connect to the Named Pipe/Domain Socket at ``path``
+
+.. function:: listen([addr,]port) -> TcpServer
+
+   Listen on port on the address specified by ``addr``. By default this listens on localhost only.
+   To listen on all interfaces pass, ``IPv4(0)`` or ``IPv6(0)`` as appropriate.
+
+.. function:: listen(path) -> PipeServer
+
+   Listens on/Creates a Named Pipe/Domain Socket 
+
+.. fucntion:: getaddrinfo(host)
+
+   Gets the IP address of the ``host`` (may have to do a DNS lookup)
+
+
 Text I/O
 --------
 
