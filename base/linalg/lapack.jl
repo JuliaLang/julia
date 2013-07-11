@@ -755,7 +755,7 @@ for (gglse, elty) in ((:dgglse_, :Float64),
                     work = Array($elty, lwork)
                 end
             end
-            X
+            X, dot(sub(c, n - p + 1:m), sub(c, n - p + 1:m))
         end
     end
 end
