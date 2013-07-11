@@ -62,7 +62,7 @@ function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
     end
     sts
 end
-subtypes(m::Module, x::DataType) = sortby(string, collect(_subtypes(m, x)))
+subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
 subtypes(x::DataType) = subtypes(Main, x)
 
 subtypetree(x::DataType, level=-1) = (level == 0 ? (x, {}) : (x, {subtypetree(y, level-1) for y in subtypes(x)}))
