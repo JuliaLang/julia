@@ -62,7 +62,6 @@
     jl_arrayset;
     jl_arrayunset;
     jl_array_to_string;
-    jl_async_send;
     jl_atexit_hook;
     jl_backtrace_type;
     jl_base_module;
@@ -158,9 +157,6 @@
     jl_getutf8;
     jl_global_event_loop;
     jl_hrtime;
-    jl_idle_init;
-    jl_idle_start;
-    jl_idle_stop;
     jl_init_frontend;
     jl_init_pipe;
     jl_install_sigint_handler;
@@ -189,7 +185,6 @@
     jl_make_async;
     jl_make_pipe;
     jl_make_tcp;
-    jl_make_timer;
     jl_matching_methods;
     jl_match_method;
     jl_module_export;
@@ -272,8 +267,6 @@
     jl_tcp6_connect;
     jl_spawn;
     jl_stackovf_exception;
-    jl_start_io_thread;
-    jl_start_reading;
     jl_stat;
     jl_stat_blksize;
     jl_stat_blocks;
@@ -313,8 +306,6 @@
     jl_poll_start;
     jl_fs_poll_start;
     jl_fs_event_init;
-    jl_timer_start;
-    jl_timer_stop;
     jl_toplevel_eval;
     jl_type_intersection;
     jl_type_match;
