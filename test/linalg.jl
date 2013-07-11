@@ -506,7 +506,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     c = convert(Array{elty, 1}, [2, 1, 6, 3, 1])
     B = convert(Array{elty, 2}, [1 1 1 -1; 1 -1 1 1; 1 1 -1 1])
     d = convert(Array{elty, 1}, [1, 3, -1])
-    @test_approx_eq_eps LinAlg.LAPACK.gglse!(A, c, B, d) [0.5, -0.5, 1.5, 0.5] 1e-6
+    @test_approx_eq LinAlg.LAPACK.gglse!(A, c, B, d)[1] convert(Array{elty}, [0.5, -0.5, 1.5, 0.5])
 end
 
 
