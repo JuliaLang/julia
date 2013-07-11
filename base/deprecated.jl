@@ -227,6 +227,10 @@ function ls(args...)
     warn_once("ls() is deprecated, use readdir() instead. If you are at the repl prompt, consider `;ls`.")
     deprecated_ls(args...)
 end
+function start_timer(timer::TimeoutAsyncWork, timeout::Int, repeat::Int)
+    warn_once("start_timer now expects arguments in units of seconds. you may need to update your code")
+    start_timer(timer, timeout, repeat)
+end
 
 # Redirection Operators
 @deprecate |(a::AbstractCmd,b::AbstractCmd) (a|>b)

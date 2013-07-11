@@ -545,7 +545,7 @@ macro cmd(str)
     :(cmd_gen($(shell_parse(str))))
 end
 
-wait_close(x) = if x.open; wait(x.closenotify); end
+wait_close(x) = if uv_isopen(x) wait(x.closenotify); end
 
 wait_exit(x::Process)      = if !process_exited(x); wait(x.exitnotify); end
 wait_exit(x::ProcessChain) = for p in x.processes; wait_exit(p); end
