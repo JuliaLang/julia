@@ -42,16 +42,22 @@ export # not exported by Base
 
 abstract Ordering
 
-type ForwardOrdering <: Ordering end
-type ReverseOrdering <: Ordering end
-immutable By <: Ordering by::Function end
-immutable Lt <: Ordering lt::Function end
+immutable ForwardOrdering <: Ordering end
+immutable ReverseOrdering{Fwd<:Ordering} <: Ordering
+    fwd::Fwd
+end
+immutable By <: Ordering
+    by::Function
+end
+immutable Lt <: Ordering
+    lt::Function
+end
 
 const Forward = ForwardOrdering()
-const Reverse = ReverseOrdering()
+const Reverse = ReverseOrdering(Forward)
 
 lt(o::ForwardOrdering, a, b) = isless(a,b)
-lt(o::ReverseOrdering, a, b) = isless(b,a)
+lt(o::ReverseOrdering, a, b) = lt(o.fwd,b,a)
 lt(o::By,              a, b) = isless(o.by(a),o.by(b))
 lt(o::Lt,              a, b) = o.lt(a,b)
 
@@ -242,10 +248,10 @@ searchsorted{T<:Real}(a::Ranges{T}, x::Real; order::Ordering=Forward) =
 
 abstract Algorithm
 
-type InsertionSortAlg <: Algorithm end
-type QuickSortAlg     <: Algorithm end
-type MergeSortAlg     <: Algorithm end
-type TimSortAlg       <: Algorithm end
+immutable InsertionSortAlg <: Algorithm end
+immutable QuickSortAlg     <: Algorithm end
+immutable MergeSortAlg     <: Algorithm end
+immutable TimSortAlg       <: Algorithm end
 
 const InsertionSort = InsertionSortAlg()
 const QuickSort     = QuickSortAlg()
@@ -383,22 +389,22 @@ import Core.Intrinsics: unbox, slt_int
 import ..Sort: sort!, Perm, lt, Reverse
 
 typealias Floats Union(Float32,Float64)
-typealias Direct Union(ForwardOrdering,ReverseOrdering)
+typealias Direct Union(ForwardOrdering,ReverseOrdering{ForwardOrdering})
 
-type Left <: Ordering end
-type Right <: Ordering end
+immutable Left <: Ordering end
+immutable Right <: Ordering end
 
 left(::Direct) = Left()
 right(::Direct) = Right()
 
-left{O<:Direct}(o::Perm{O}) = Perm(left(O()),o.data)
-right{O<:Direct}(o::Perm{O}) = Perm(right(O()),o.data)
+left(o::Perm) = Perm(left(o.order),o.data)
+right(o::Perm) = Perm(right(o.order),o.data)
 
 lt{T<:Floats}(::Left, x::T, y::T) = slt_int(unbox(T,y),unbox(T,x))
 lt{T<:Floats}(::Right, x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
 
 isnan(o::Direct, x::Floats) = (x!=x)
-isnan{O<:Direct}(o::Perm{O}, i::Int) = isnan(O(),o.data[i])
+isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])
 
 function nans2left!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
     hi < lo && return lo, hi
@@ -449,7 +455,7 @@ nans2end!{O<:ForwardOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2right!(
 nans2end!{O<:ReverseOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2left!(v,o)
 
 issignleft(o::Direct, x::Floats) = lt(o, x, zero(x))
-issignleft{O<:Direct}(o::Perm{O}, i::Int) = issignleft(O(), o.data[i])
+issignleft(o::Perm, i::Int) = issignleft(o.order, o.data[i])
 
 function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     i, j = lo, hi = nans2end!(v,o)
