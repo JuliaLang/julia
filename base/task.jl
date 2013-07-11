@@ -89,14 +89,14 @@ function wait(c::Condition)
     ct.runnable = false
     args = yield(c)
 
-    if isa(args,InterruptException)
+    if isa(args,Exception)
         filter!(x->x!==ct, c.waitq)
         error(args)
     end
     args
 end
 
-function notify(c::Condition, arg=nothing; all=true)
+function notify(c::Condition, arg::ANY=nothing; all=true)
     if all
         for t in c.waitq
             t.result = arg
