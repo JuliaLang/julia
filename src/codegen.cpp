@@ -197,6 +197,22 @@ static Function *jlputs_func;
 static Function *resetstkoflw_func;
 #endif
 
+static void jl_rethrow_with_add(const char *fmt, ...) {
+    if (jl_typeis(jl_exception_in_transit, jl_errorexception_type)) {
+        char *str = jl_string_data(jl_fieldref(jl_exception_in_transit,0));
+        char buf[1024];
+        va_list args;
+        va_start(args, fmt);
+        int nc = vsnprintf(buf, sizeof(buf), fmt, args);
+        va_end(args);
+        nc += snprintf(buf+nc, sizeof(buf)-nc, ": %s", str);
+        jl_value_t *msg = jl_pchar_to_string(buf, nc);
+        JL_GC_PUSH1(&msg);
+        jl_throw(jl_new_struct(jl_errorexception_type, msg));
+    }
+    jl_rethrow();
+}
+
 // --- entry point ---
 //static int n_emit=0;
 static Function *emit_function(jl_lambda_info_t *lam, bool cstyle);
@@ -224,16 +240,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
             builder.SetCurrentDebugLocation(olddl);
         }
         JL_SIGATOMIC_END();
-        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type)) {
-            char *str = jl_string_data(jl_fieldref(jl_exception_in_transit,0));
-            char buf[1024];
-            int nc = snprintf(buf, sizeof(buf), "error compiling %s: %s",
-                              li->name->name, str);
-            jl_value_t *msg = jl_pchar_to_string(buf, nc);
-            JL_GC_PUSH1(&msg);
-            jl_throw(jl_new_struct(jl_errorexception_type, msg));
-        }
-        jl_rethrow();
+        jl_rethrow_with_add("error compiling %s", li->name->name);
     }
     assert(f != NULL);
     nested_compile = last_n_c;
