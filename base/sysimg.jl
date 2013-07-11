@@ -83,15 +83,24 @@ include("inference.jl")
 # For OS sprcific stuff in I/O
 include("osutils.jl")
 
-# I/O, strings & printing
-include("task.jl")
-include("io.jl")
-include("iobuffer.jl")
+# strings & printing
 include("char.jl")
 include("ascii.jl")
 include("utf8.jl")
+include("iobuffer.jl")
 include("string.jl")
 include("regex.jl")
+
+# system & environment
+include("libc.jl")
+include("env.jl")
+include("errno.jl")
+using .Errno
+include("path.jl")
+
+# I/O
+include("task.jl")
+include("io.jl")
 include("show.jl")
 include("stream.jl")
 include("socket.jl")
@@ -105,6 +114,7 @@ include("grisu.jl")
 import .Grisu.print_shortest
 include("printf.jl")
 importall .Printf
+include("file.jl")
 
 # concurrency and parallelism
 include("serialize.jl")
@@ -112,14 +122,6 @@ include("multi.jl")
 
 # Polling (requires multi.jl)
 include("poll.jl")
-
-# system & environment
-include("libc.jl")
-include("env.jl")
-include("errno.jl")
-using .Errno
-include("file.jl")
-include("path.jl")
 
 # front end & code loading
 include("repl.jl")

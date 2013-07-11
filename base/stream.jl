@@ -97,7 +97,15 @@ type NamedPipe <: AsyncStream
         false,Condition(),
         false,Condition())
 end
-NamedPipe() = NamedPipe(C_NULL)
+function NamedPipe()
+    handle = malloc_pipe()
+    try
+        return init_pipe!(NamedPipe(handle);readable=true)
+    catch
+        c_free(handle)
+        rethrow()
+    end
+end
 
 type PipeServer <: UVServer
     handle::Ptr{Void}
@@ -112,16 +120,26 @@ type PipeServer <: UVServer
         false,Condition(),
         false,Condition())
 end
+
+function init_pipe!(pipe::Union(NamedPipe,PipeServer);readable::Bool=false,writeable=false,julia_only=true)
+    if pipe.handle == C_NULL || pipe.status != StatusUninit
+        error("Failed to initialize pipe")
+    end
+    if 0 != ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), pipe.handle, writeable,readable,julia_only,pipe) 
+        throw(UVError("init_pipe"))
+    end
+    pipe.status = StatusInit
+    pipe
+end
+
 function PipeServer()
-    this = PipeServer(malloc_pipe())
-    if this.handle == C_NULL || this.status != StatusUninit
-        throw(UVError("Failed to create pipe server"))
+    handle = malloc_pipe()
+    try
+        return init_pipe!(PipeServer(handle);readable=true)
+    catch
+        c_free(handle)
+        rethrow()
     end
-    if 0 != ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Any), this.handle, 0, 1, this) #readable, julia_only
-        error(UVError("init_pipe"))
-    end
-    this.status = StatusInit
-    this
 end
 
 show(io::IO,stream::NamedPipe) = print(io,"NamedPipe(",uv_status_string(stream),", ",
@@ -445,10 +463,10 @@ malloc_pipe() = c_malloc(_sizeof_uv_named_pipe)
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{Void},writeable_julia_only::Bool,pipe::AsyncStream)
     #make the pipe an unbuffered stream for now
     #TODO: this is probably not freeing memory properly after errors
-    if 0 != ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Any), read_end, 0, readable_julia_only, pipe)
+    if 0 != ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), read_end, 0, 1, readable_julia_only, pipe)
         error(UVError("init_pipe"))
     end
-    if 0 != ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Any), write_end, 1, readable_julia_only, pipe)
+    if 0 != ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), write_end, 1, 0, readable_julia_only, pipe)
         error(UVError("init_pipe"))
     end
     if 0 != ccall(:uv_pipe_link, Int32, (Ptr{Void}, Ptr{Void}), read_end, write_end)
@@ -645,7 +663,10 @@ end
 
 const UV_EAGAIN = 4
 function accept(server::UVServer, client::AsyncStream)
-    assert(server.status == StatusActive, "accept: Server not connected. Did you `listen`?")
+    if server.status != StatusActive 
+        error("accept: Server not connected. Did you `listen`?")
+    end
+    @assert client.status == StatusInit
     while true
         if accept_nonblock(server,client) == 0
             return client
