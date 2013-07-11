@@ -1197,6 +1197,7 @@ export
     writesto,
 
 # C interface
+    c_malloc,
     c_free,
     cglobal,
     dlopen,
