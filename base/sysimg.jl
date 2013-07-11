@@ -43,6 +43,7 @@ end
 
 include("base.jl")
 include("reflection.jl")
+include("promotion.jl") # We need promote_type() before we can use composite types
 include("build_h.jl")
 include("c.jl")
 
@@ -54,7 +55,6 @@ include("expr.jl")
 include("error.jl")
 
 # core numeric operations & types
-include("promotion.jl")
 include("bool.jl")
 include("number.jl")
 include("int.jl")
