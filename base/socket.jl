@@ -324,7 +324,8 @@ _jl_sockaddr_from_addrinfo(addrinfo::Ptr{Void}) =
 _jl_sockaddr_set_port(ptr::Ptr{Void},port::Uint16) = 
     ccall(:jl_sockaddr_set_port,Void,(Ptr{Void},Uint16),ptr,port)
 
-accept(server::UVServer) = accept(server, TcpSocket())
+accept(server::TcpServer) = accept(server, TcpSocket())
+accept(server::PipeServer) = accept(server, NamedPipe())
 
 ##
 
@@ -335,7 +336,7 @@ const UV_SUCCESS = 0
 const UV_EADDRINUSE = 5
 
 function bind(sock::TcpServer, host::IPv4, port::Uint16)
-    assert(sock.status == StatusInit)
+    @assert sock.status == StatusInit
     if 0 != ccall(:jl_tcp_bind, Int32, (Ptr{Void}, Uint16, Uint32),
 	        sock.handle, hton(port), hton(host.host))
         if _uv_lasterror() != UV_EADDRINUSE
@@ -349,7 +350,7 @@ function bind(sock::TcpServer, host::IPv4, port::Uint16)
 end
 
 function bind(sock::TcpServer, host::IPv6, port::Uint16)
-    assert(sock.status == StatusInit)
+    @assert sock.status == StatusInit
     if 0 != ccall(:jl_tcp_bind6, Int32, (Ptr{Void}, Uint16, Ptr{Uint128}),
             sock.handle, hton(port), &hton(host.host))
         if _uv_lasterror() != UV_EADDRINUSE
@@ -404,7 +405,7 @@ end
 ##
 
 function connect(cb::Function, sock::TcpSocket, host::IPv4, port::Uint16)
-    assert(sock.status == StatusInit)
+    @assert sock.status == StatusInit
     sock.ccb = cb
     uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),
 			     sock.handle,hton(host.host),hton(port)) == -1)
@@ -413,7 +414,7 @@ function connect(cb::Function, sock::TcpSocket, host::IPv4, port::Uint16)
 end
 
 function connect(sock::TcpSocket, host::IPv4, port::Uint16)
-    assert(sock.status == StatusInit)
+    @assert sock.status == StatusInit
     uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),
 			     sock.handle,hton(host.host),hton(port)) == -1)
     sock.status = StatusConnecting
@@ -422,7 +423,7 @@ function connect(sock::TcpSocket, host::IPv4, port::Uint16)
 end
 
 function connect(cb::Function, sock::TcpSocket, host::IPv6, port::Uint16)
-    assert(sock.status == StatusInit)
+    @assert sock.status == StatusInit
     sock.ccb = cb
     uv_error("connect",ccall(:jl_tcp6_connect,Int32,(Ptr{Void},Ptr{Uint128},Uint16),
 			     sock.handle,&hton(host.host),hton(port)) == -1)
@@ -431,7 +432,7 @@ function connect(cb::Function, sock::TcpSocket, host::IPv6, port::Uint16)
 end
 
 function connect(sock::TcpSocket, host::IPv6, port::Uint16)
-    assert(sock.status == StatusInit)
+    @assert sock.status == StatusInit
     uv_error("connect",ccall(:jl_tcp6_connect,Int32,(Ptr{Void},Ptr{Uint128},Uint16),
 			     sock.handle,&hton(host.host),hton(port)) == -1)
     sock.status = StatusConnecting
@@ -440,7 +441,7 @@ function connect(sock::TcpSocket, host::IPv6, port::Uint16)
 end
 
 function connect(sock::TcpSocket, host::ASCIIString, port::Integer)
-    assert(sock.status == StatusInit)
+    @assert sock.status == StatusInit
     ipaddr = getaddrinfo(host)
     connect(sock,ipaddr,port)
 end

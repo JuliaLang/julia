@@ -227,7 +227,7 @@ end
 
 #from `connect`
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
-    assert(sock.status == StatusConnecting)
+    @assert sock.status == StatusConnecting
     if status != -1
         sock.status = StatusOpen
         err = ()
@@ -264,7 +264,7 @@ function alloc_request(buffer::IOBuffer, recommended_size::Int32)
 end
 function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Int32)
     (buf,size) = alloc_request(stream.buffer, recommended_size)
-    assert(size>0) # because libuv requires this (TODO: possibly stop reading too if it fails)
+    @assert size>0 # because libuv requires this (TODO: possibly stop reading too if it fails)
     (buf,int32(size))
 end
 
@@ -529,8 +529,8 @@ function read{T}(this::AsyncStream, a::Array{T})
     assert(isbits(T),"Read from Buffer only supports bits types or arrays of bits types")
     nb = length(a)*sizeof(T)
     buf = this.buffer
-    assert(buf.seekable == false)
-    assert(buf.maxsize >= nb)
+    @assert buf.seekable == false
+    @assert buf.maxsize >= nb
     start_reading(this)
     wait_readnb(this,nb)
     read(this.buffer, a)
@@ -539,28 +539,28 @@ end
 
 function read(this::AsyncStream,::Type{Uint8})
     buf = this.buffer
-    assert(buf.seekable == false)
+    @assert buf.seekable == false
     wait_readnb(this,1)
     read(buf,Uint8)
 end
 
 function readline(this::AsyncStream)
     buf = this.buffer
-    assert(buf.seekable == false)
+    @assert buf.seekable == false
     wait_readline(this)
     readline(buf)
 end
 
 function readavailable(this::AsyncStream)
     buf = this.buffer
-    assert(buf.seekable == false)
+    @assert buf.seekable == false
     wait_readnb(this,1)
     takebuf_string(buf)
 end
 
 function readuntil(this::AsyncStream,c::Uint8)
     buf = this.buffer
-    assert(buf.seekable == false)
+    @assert buf.seekable == false
     wait_readbyte(this,c)
     readuntil(buf,c)
 end
