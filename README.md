@@ -106,11 +106,13 @@ You can set `USE_SYSTEM_XXX=1` and `LDFLAGS=-Wl,-rpath /path/to/dir/contains/lib
 
 ### OS X
 
-It is essential to use a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in brew and macports work for building Julia. If you do not use brew or macports, you can download and install [gfortran and gcc from hpc.sf.net](http://hpc.sf.net/). The HPC gfortran requires gcc to function properly. 
+It is essential to use a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in brew and macports work for building Julia. If you do not use brew or macports, you can download and install [gfortran and gcc from hpc.sf.net](http://hpc.sf.net/). The HPC gfortran requires HPC gcc to be installed to function properly. 
 
-Clang is now used by default to build Julia on OS X (10.7 and above). Make sure to update to at least Xcode 4.3.3, and update to the latest command line tools from the Xcode preferences. This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build Julia. On older systems, the Julia build will attempt to use gcc. The build also detects Snow Leopard and sets `USE_SYSTEM_LIBM=1`, `USE_SYSTEM_BLAS=1`, and `USE_SYSTEM_LAPACK=1`.
+Clang is now used by default to build Julia on OS X (10.7 and above). Make sure to update to at least Xcode 4.3.3, and update to the latest command line tools from the Xcode preferences. This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build Julia. On OS X 10.6, the Julia build will automatically use gcc.
 
 If you have set `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` in your .bashrc or equivalent, Julia may be unable to find various libraries that come bundled with it. These environment variables need to be unset for Julia to work.
+
+If you see build failures in OpenBLAS or if you prefer to experiment, you can use the Apple provided BLAS in vecLib by building with `USE_SYSTEM_BLAS=1`. Julia does not use the Apple provided LAPACK, as it is too old.
 
 ### FreeBSD
 
