@@ -281,7 +281,11 @@ static void run_finalizer(jl_value_t *o, jl_value_t *ff)
     }
     f = (jl_function_t*)ff;
     assert(jl_is_function(f));
-    jl_apply(f, (jl_value_t**)&o, 1);
+    JL_TRY {
+        jl_apply(f, (jl_value_t**)&o, 1);
+    }
+    JL_CATCH {
+    }
 }
 
 static void run_finalizers(void)
