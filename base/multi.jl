@@ -102,9 +102,9 @@ Worker(host::String, port::Integer, sock::TcpSocket) =
     Worker(host, port, sock, 0)
 Worker(host::String, port::Integer) =
     Worker(host, port, connect(host,uint16(port)))
-Worker(host::String, port::Integer, tunnel_user::String, sshflags) =
+Worker(host::String, privhost::String, port::Integer, tunnel_user::String, sshflags) =
     Worker(host, port, connect("localhost",
-                               ssh_tunnel(tunnel_user, host, uint16(port), sshflags)))
+                               ssh_tunnel(tunnel_user, host, privhost, uint16(port), sshflags)))
 
 
 function send_msg_now(w::Worker, kind, args...)
@@ -906,34 +906,33 @@ function start_cluster_workers(n, config)
         read_cb_response(inst) = 
         begin
             (host, port) = read_worker_host_port(inst)
-            inst, host, port
+            inst, host, port, host
         end
     elseif  insttype == :io_host
         read_cb_response(inst) = 
         begin
             io = inst[1]
-            (_, port) = read_worker_host_port(io)
-            io, inst[2], port
+            (priv_hostname, port) = read_worker_host_port(io)
+            io, priv_hostname, port, inst[2]
         end
     elseif insttype == :io_host_port
-        read_cb_response(inst) = (inst[1], inst[2], inst[3])
+        read_cb_response(inst) = (inst[1], inst[2], inst[3], inst[2])
     elseif insttype == :host_port
-        read_cb_response(inst) = (nothing, inst[1], inst[2])
+        read_cb_response(inst) = (nothing, inst[1], inst[2], inst[1])
     elseif insttype == :cmd
         read_cb_response(inst) = 
         begin
             io,_ = readsfrom(detach(inst))
-            io.line_buffered = true
             (host, port) = read_worker_host_port(io)
-            io, host, port
+            io, host, port, host
         end
     else
         error("Unsupported format from Cluster Manager callback")
     end
     
     for i=1:n
-        (io, host, port) = read_cb_response(instances[i])
-        w[i] = create_worker(host, port, io, config)
+        (io, privhost, port, pubhost) = read_cb_response(instances[i])
+        w[i] = create_worker(privhost, port, pubhost, io, config)
     end
     w
 end
@@ -949,30 +948,30 @@ function read_worker_host_port (io::IO)
     end
 end
 
-function create_worker(hostname, port, stream, config)
+function create_worker(privhost, port, pubhost, stream, config)
     tunnel = config[:tunnel]
     
-    s = split(hostname,'@')
+    s = split(pubhost,'@')
     if length(s) > 1
         user = s[1]
-        hostname = s[2]
+        pubhost = s[2]
     else
         if haskey(ENV, "USER")
             user = ENV["USER"]
         elseif tunnel
             error("USER must be specified either in the environment or as part of the hostname when tunnel option is used.")
         end
-        hostname = s[1]
     end
     
     if tunnel
         sshflags = config[:sshflags]
-        w = Worker(hostname, port, user, sshflags)
+        w = Worker(pubhost, privhost, port, user, sshflags)
     else
-        w = Worker(hostname, port)
+        w = Worker(pubhost, port)
     end
     
     if isa(stream, AsyncStream)
+        stream.line_buffered = true
         let wrker = w
             # redirect console output from workers to the client's stdout:
             start_reading(stream,function(stream::AsyncStream,nread::Int)
@@ -1005,10 +1004,10 @@ end
 tunnel_port = 9201
 # establish an SSH tunnel to a remote worker
 # returns P such that localhost:P connects to host:port
-function ssh_tunnel(user, host, port, sshflags)
+function ssh_tunnel(user, host, privhost, port, sshflags)
     global tunnel_port
     localp = tunnel_port::Int
-    while !success(detach(`ssh -f -o ExitOnForwardFailure=yes $sshflags $(user)@$host -L $localp:$host:$(int(port)) -N`)) && localp < 10000
+    while !success(detach(`ssh -f -o ExitOnForwardFailure=yes $sshflags $(user)@$host -L $localp:$privhost:$(int(port)) sleep 60`)) && localp < 10000
         localp += 1
     end
     
@@ -1045,20 +1044,21 @@ function launch_procs(n::Integer, config::Dict)
     end    
     
     # ...and then read the host:port info. This optimizes overall start times.
-    for i in 1:n
-        io = outs[i]
-        io.line_buffered = true
-        (private_hostname, port) = read_worker_host_port (io)
-        if cman.ssh
-            # We ignore the hostname printed by the worker, since the worker may be behind a NATed interface,
-            # we just use the hostname specified by the caller as part of the machine name
-            outs[i] = (io, cman.machines[i], port)
-        else
-            outs[i] = (io, private_hostname, port)
+    
+    # For ssh, the tunnel connection, if any, has to be with the specified machine name.
+    # but the port needs to be forwarded to the private hostname/ip-address
+    if cman.ssh
+        for i in 1:n
+            io = outs[i]
+            outs[i] = (io, cman.machines[i])
         end
     end
     
-    return (:io_host_port, outs)
+    if cman.ssh
+        return (:io_host, outs)
+    else
+        return (:io_only, outs)
+    end    
 end
 
 immutable RegularCluster <: ClusterManager
