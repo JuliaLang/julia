@@ -26,6 +26,7 @@
    metaprogramming
    arrays
    linear-algebra
+   networking-and-streams
    parallel-computing
    running-external-programs
    calling-c-and-fortran-code
