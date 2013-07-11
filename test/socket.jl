@@ -37,6 +37,7 @@ end
 wait(c)
 @test readall(connect(2000)) == "Hello World\n"
 
+isfile("testsocket") && Base.FS.unlink("testsocket")
 @async begin
 	s = listen("testsocket")
 	Base.notify(c)

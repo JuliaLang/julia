@@ -233,10 +233,11 @@ DLLEXPORT int jl_process_events(uv_loop_t *loop)
     else return 0;
 }
 
-DLLEXPORT int jl_init_pipe(uv_pipe_t *pipe, int writable, int julia_only, jl_value_t *julia_struct)
+DLLEXPORT int jl_init_pipe(uv_pipe_t *pipe, int writable, int readable, int julia_only, jl_value_t *julia_struct)
 {
-     int flags;
-     flags = writable ? UV_PIPE_WRITABLE : UV_PIPE_READABLE;
+     int flags = 0;
+     flags |= writable ? UV_PIPE_WRITABLE : 0;
+     flags |= readable ? UV_PIPE_READABLE : 0;
      if (!julia_only)
          flags |= UV_PIPE_SPAWN_SAFE;
      int err = uv_pipe_init(jl_io_loop, pipe, flags);
