@@ -144,7 +144,7 @@ export IOString
 const PipeString = PipeBuffer
 export PipeString
 
-# @spawnlocal deprecated
+# @spawnlocal discontinued
 
 # 0.2
 
@@ -232,7 +232,7 @@ function start_timer(timer::TimeoutAsyncWork, timeout::Int, repeat::Int)
     invoke(start_timer, (TimeoutAsyncWork,Real,Real), timer, timeout, repeat)
 end
 
-# Redirection Operators
+# redirection operators
 @deprecate |(a::AbstractCmd,b::AbstractCmd) (a|>b)
 @deprecate >(a::Redirectable,b::AbstractCmd) (a|>b)
 @deprecate >(a::String,b::AbstractCmd) (a|>b)
@@ -245,7 +245,6 @@ end
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
 
-# renamings
 const ref = getindex
 export ref
 const assign = setindex!
@@ -346,12 +345,14 @@ function amap(f::Function, A::AbstractArray, axis::Integer)
     return R
 end
 
+# discontinued functions
+
 function addprocs_scyld(np::Integer)
-    error("Base.addprocs_scyld is deprecated - add package ClusterManagers and then use ClusterManagers.addprocs_scyld instead.")
+    error("Base.addprocs_scyld is discontinued - add package ClusterManagers and then use ClusterManagers.addprocs_scyld instead.")
 end
 export addprocs_scyld
 
 function addprocs_sge(np::Integer)
-    error("Base.addprocs_sge is deprecated - add package ClusterManagers and then use ClusterManagers.addprocs_sge instead.")
+    error("Base.addprocs_sge is discontinued - add package ClusterManagers and then use ClusterManagers.addprocs_sge instead.")
 end
 export addprocs_sge
