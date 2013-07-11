@@ -333,13 +333,14 @@ bind(sock::TcpServer, addr::InetAddr) = bind(sock,addr.host,addr.port)
 bind(sock::TcpServer, host::IpAddr, port) = bind(sock, InetAddr(host,port))
 
 const UV_SUCCESS = 0
+const UV_EACCES = 3
 const UV_EADDRINUSE = 5
 
 function bind(sock::TcpServer, host::IPv4, port::Uint16)
     @assert sock.status == StatusInit
     if 0 != ccall(:jl_tcp_bind, Int32, (Ptr{Void}, Uint16, Uint32),
 	        sock.handle, hton(port), hton(host.host))
-        if _uv_lasterror() != UV_EADDRINUSE
+        if (err=_uv_lasterror()) != UV_EADDRINUSE && err != UV_EACCES
             error(UVError("bind"))
         else
             return false
@@ -353,7 +354,7 @@ function bind(sock::TcpServer, host::IPv6, port::Uint16)
     @assert sock.status == StatusInit
     if 0 != ccall(:jl_tcp_bind6, Int32, (Ptr{Void}, Uint16, Ptr{Uint128}),
             sock.handle, hton(port), &hton(host.host))
-        if _uv_lasterror() != UV_EADDRINUSE
+        if (err=_uv_lasterror()) != UV_EADDRINUSE && err != UV_EACCES
             error(UVError("bind"))
         else
             return false
@@ -526,7 +527,7 @@ function open_any_tcp_port(cb::Callback,default_port)
         err = _uv_lasterror()
         system = _uv_lastsystemerror()
         close(sock)
-        if (err != UV_SUCCESS && err != UV_EADDRINUSE)
+        if (err != UV_SUCCESS && err != UV_EADDRINUSE && err != UV_EACCES)
             throw(UVError("open_any_tcp_port",err,system))
         end
 	    addr.port += 1
