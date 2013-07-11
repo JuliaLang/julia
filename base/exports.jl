@@ -1039,7 +1039,6 @@ export
     eof,
     fd,
     fdio,
-    FDWatcher,
     isreadonly,
     UV_READABLE,
     UV_WRITEABLE,
