@@ -1,5 +1,5 @@
 @test sort([2,3,1]) == [1,2,3]
-@test sort([2,3,1], order=Sort.Reverse) == [3,2,1]
+@test sort([2,3,1], rev=true) == [3,2,1]
 @test sortperm([2,3,1]) == [3,1,2]
 @test !issorted([2,3,1])
 @test issorted([1,2,3])
@@ -30,30 +30,30 @@ rg_r = 57:-1:49; rgv_r = [rg_r]
 for i = 47:59
     @test searchsortedfirst(rg, i) == searchsortedfirst(rgv, i)
     @test searchsortedlast(rg, i) == searchsortedlast(rgv, i)
-    @test searchsortedfirst(rg_r, i, order=Sort.Reverse) ==
-          searchsortedfirst(rgv_r, i, order=Sort.Reverse)
-    @test searchsortedlast(rg_r, i, order=Sort.Reverse) ==
-          searchsortedlast(rgv_r, i, order=Sort.Reverse)
+    @test searchsortedfirst(rg_r, i, rev=true) ==
+          searchsortedfirst(rgv_r, i, rev=true)
+    @test searchsortedlast(rg_r, i, rev=true) ==
+          searchsortedlast(rgv_r, i, rev=true)
 end
 rg = 1:2:17; rgv = [rg]
 rg_r = 17:-2:1; rgv_r = [rg_r]
 for i = -1:19
     @test searchsortedfirst(rg, i) == searchsortedfirst(rgv, i)
     @test searchsortedlast(rg, i) == searchsortedlast(rgv, i)
-    @test searchsortedfirst(rg_r, i, order=Sort.Reverse) ==
-          searchsortedfirst(rgv_r, i, order=Sort.Reverse)
-    @test searchsortedlast(rg_r, i, order=Sort.Reverse) ==
-          searchsortedlast(rgv_r, i, order=Sort.Reverse)
+    @test searchsortedfirst(rg_r, i, rev=true) ==
+          searchsortedfirst(rgv_r, i, rev=true)
+    @test searchsortedlast(rg_r, i, rev=true) ==
+          searchsortedlast(rgv_r, i, rev=true)
 end
 rg = -3:0.5:2; rgv = [rg]
 rg_r = 2:-0.5:-3; rgv_r = [rg_r]
 for i = -5:.5:4
     @test searchsortedfirst(rg, i) == searchsortedfirst(rgv, i)
     @test searchsortedlast(rg, i) == searchsortedlast(rgv, i)
-    @test searchsortedfirst(rg_r, i, order=Sort.Reverse) ==
-          searchsortedfirst(rgv_r, i, order=Sort.Reverse)
-    @test searchsortedlast(rg_r, i, order=Sort.Reverse) ==
-          searchsortedlast(rgv_r, i, order=Sort.Reverse)
+    @test searchsortedfirst(rg_r, i, rev=true) ==
+          searchsortedfirst(rgv_r, i, rev=true)
+    @test searchsortedlast(rg_r, i, rev=true) ==
+          searchsortedlast(rgv_r, i, rev=true)
 end
 
 rg = 3+0*(1:5); rgv = [rg]
@@ -61,10 +61,10 @@ rg_r = rg; rgv_r = [rg_r]
 for i = 2:4
     @test searchsortedfirst(rg, i) == searchsortedfirst(rgv, i)
     @test searchsortedlast(rg, i) == searchsortedlast(rgv, i)
-    @test searchsortedfirst(rg_r, i, order=Sort.Reverse) ==
-          searchsortedfirst(rgv_r, i, order=Sort.Reverse)
-    @test searchsortedlast(rg_r, i, order=Sort.Reverse) ==
-          searchsortedlast(rgv_r, i, order=Sort.Reverse)
+    @test searchsortedfirst(rg_r, i, rev=true) ==
+          searchsortedfirst(rgv_r, i, rev=true)
+    @test searchsortedlast(rg_r, i, rev=true) ==
+          searchsortedlast(rgv_r, i, rev=true)
 end
 
 rg = 0.0:0.01:1.0
@@ -80,13 +80,13 @@ end
 
 rg_r = reverse(rg)
 for i = 1:100
-    @test searchsortedfirst(rg_r, rg_r[i], order=Sort.Reverse) == i
-    @test searchsortedfirst(rg_r, prevfloat(rg_r[i]), order=Sort.Reverse) == i+1
-    @test searchsortedfirst(rg_r, nextfloat(rg_r[i]), order=Sort.Reverse) == i
+    @test searchsortedfirst(rg_r, rg_r[i], rev=true) == i
+    @test searchsortedfirst(rg_r, prevfloat(rg_r[i]), rev=true) == i+1
+    @test searchsortedfirst(rg_r, nextfloat(rg_r[i]), rev=true) == i
 
-    @test searchsortedlast(rg_r, rg_r[i], order=Sort.Reverse) == i
-    @test searchsortedlast(rg_r, prevfloat(rg_r[i]), order=Sort.Reverse) == i
-    @test searchsortedlast(rg_r, nextfloat(rg_r[i]), order=Sort.Reverse) == i-1
+    @test searchsortedlast(rg_r, rg_r[i], rev=true) == i
+    @test searchsortedlast(rg_r, prevfloat(rg_r[i]), rev=true) == i
+    @test searchsortedlast(rg_r, nextfloat(rg_r[i]), rev=true) == i-1
 end
 
 a = rand(1:10000, 1000)
@@ -99,11 +99,11 @@ for alg in [InsertionSort, MergeSort, TimSort]
     @test issorted(b)
     @test a[ix] == b
 
-    b = sort(a, alg=alg, order=Sort.Reverse)
-    @test issorted(b, order=Sort.Reverse)
-    ix = sortperm(a, alg=alg, order=Sort.Reverse)
+    b = sort(a, alg=alg, rev=true)
+    @test issorted(b, rev=true)
+    ix = sortperm(a, alg=alg, rev=true)
     b = a[ix]
-    @test issorted(b, order=Sort.Reverse)
+    @test issorted(b, rev=true)
     @test a[ix] == b
 
     b = sort(a, alg=alg, by=x->1/x)
@@ -129,12 +129,12 @@ end
 
 b = sort(a, alg=QuickSort)
 @test issorted(b)
-b = sort(a, alg=QuickSort, order=Sort.Reverse)
-@test issorted(b, order=Sort.Reverse)
+b = sort(a, alg=QuickSort, rev=true)
+@test issorted(b, rev=true)
 b = sort(a, alg=QuickSort, by=x->1/x)
 @test issorted(b, by=x->1/x)
 
-@test select([3,6,30,1,9], 2, order=Sort.Reverse) == 9
+@test select([3,6,30,1,9], 2, rev=true) == 9
 @test select([3,6,30,1,9], 2, by=x->1/x) == 9
 
 ## more advanced sorting tests ##

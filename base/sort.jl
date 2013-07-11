@@ -61,9 +61,10 @@ lt(o::ReverseOrdering, a, b) = lt(o.fwd,b,a)
 lt(o::By,              a, b) = isless(o.by(a),o.by(b))
 lt(o::Lt,              a, b) = o.lt(a,b)
 
-ord(lt::Function, by::Function, order::Ordering) =
-    (lt === isless) & (by === identity) ? order :
-    (lt === isless) ? By(by) : Lt(lt)
+function ord(lt::Function, by::Function, order::Ordering, rev::Bool)
+    o = (lt===isless) & (by===identity) ? order : (lt===isless) ? By(by) : Lt(lt)
+    rev ? ReverseOrdering(o) : o
+end
 
 ## functions requiring only ordering ##
 
@@ -78,8 +79,9 @@ function issorted(itr, order::Ordering)
     end
     return true
 end
-issorted(itr; lt::Function=isless, by::Function=identity, order::Ordering=Forward) =
-    issorted(itr, ord(lt,by,order))
+issorted(itr;
+    lt::Function=isless, by::Function=identity, order::Ordering=Forward, rev::Bool=false) =
+    issorted(itr, ord(lt,by,order,rev))
 
 function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
     lo <= k <= hi || error("select index $k is out of range $lo:$hi")
@@ -142,8 +144,8 @@ end
 
 select!(v::AbstractVector, k, o::Ordering) = select!(v,k,1,length(v),o)
 select!(v::AbstractVector, k;
-    lt::Function=isless, by::Function=identity, order::Ordering=Forward) =
-    select!(v, k, ord(lt,by,order))
+    lt::Function=isless, by::Function=identity, order::Ordering=Forward, rev::Bool=false) =
+    select!(v, k, ord(lt,by,order,rev))
 
 select(v::AbstractVector, k; kws...) = select!(copy(v), k; kws...)
 
@@ -203,46 +205,51 @@ function searchsorted(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
     return lo+1:hi-1
 end
 
-for s in {:searchsortedfirst, :searchsortedlast, :searchsorted}
-    @eval $s(v::AbstractVector, x; order::Ordering=Forward) = $s(v,x,1,length(v),order)
-end
-
-function searchsortedlast{T<:Real}(a::Ranges{T}, x::Real; order::Ordering=Forward)
+function searchsortedlast{T<:Real}(a::Ranges{T}, x::Real, o::Ordering=Forward)
     if step(a) == 0
-        lt(order, x, first(a)) ? 0 : length(a)
+        lt(o, x, first(a)) ? 0 : length(a)
     else
         n = max(min(iround((x-first(a))/step(a))+1,length(a)),1)
-        lt(order, x, a[n]) ? n-1 : n
+        lt(o, x, a[n]) ? n-1 : n
     end
 end
 
-function searchsortedfirst{T<:Real}(a::Ranges{T}, x::Real; order::Ordering=Forward)
+function searchsortedfirst{T<:Real}(a::Ranges{T}, x::Real, o::Ordering=Forward)
     if step(a) == 0
-        lt(order, first(a), x) ? length(a)+1 : 1
+        lt(o, first(a), x) ? length(a)+1 : 1
     else
         n = max(min(iround((x-first(a))/step(a))+1,length(a)),1)
-        lt(order, a[n] ,x) ? n+1 : n
+        lt(o, a[n] ,x) ? n+1 : n
     end
 end
 
-function searchsortedlast{T<:Integer}(a::Ranges{T}, x::Real; order::Ordering=Forward)
+function searchsortedlast{T<:Integer}(a::Ranges{T}, x::Real, o::Ordering=Forward)
     if step(a) == 0
-        lt(order, x, first(a)) ? 0 : length(a)
+        lt(o, x, first(a)) ? 0 : length(a)
     else
         max(min(fld(ifloor(x)-first(a),step(a))+1,length(a)),0)
     end
 end
 
-function searchsortedfirst{T<:Integer}(a::Ranges{T}, x::Real; order::Ordering=Forward)
+function searchsortedfirst{T<:Integer}(a::Ranges{T}, x::Real, o::Ordering=Forward)
     if step(a) == 0
-        lt(order, first(a), x) ? length(a)+1 : 1
+        lt(o, first(a), x) ? length(a)+1 : 1
     else
         max(min(-fld(ifloor(-x)+first(a),step(a))+1,length(a)+1),1)
     end
 end
 
-searchsorted{T<:Real}(a::Ranges{T}, x::Real; order::Ordering=Forward) =
-    searchsortedfirst(a,x,order=order):searchsortedlast(a,x,order=order)
+searchsorted{T<:Real}(a::Ranges{T}, x::Real; kws...) =
+    searchsortedfirst(a,x; kws...):searchsortedlast(a,x; kws...)
+
+for s in {:searchsortedfirst, :searchsortedlast, :searchsorted}
+    @eval begin
+        $s(v::AbstractVector, x, o::Ordering) = $s(v,x,1,length(v),o)
+        $s(v::AbstractVector, x;
+           lt::Function=isless, by::Function=identity, order::Ordering=Forward, rev::Bool=false) =
+            $s(v,x,ord(lt,by,order,rev))
+    end
+end
 
 ## sorting algorithms ##
 
@@ -353,12 +360,12 @@ defalg{T<:Number}(v::AbstractArray{T}) = DEFAULT_UNSTABLE
 
 sort!(v::AbstractVector, alg::Algorithm, order::Ordering) = sort!(v,1,length(v),alg,order)
 sort!(v::AbstractVector; alg::Algorithm=defalg(v),
-    lt::Function=isless, by::Function=identity, order::Ordering=Forward) =
-    sort!(v, alg, ord(lt,by,order))
+    lt::Function=isless, by::Function=identity, order::Ordering=Forward, rev::Bool=false) =
+    sort!(v, alg, ord(lt,by,order,rev))
 
 sortperm(v::AbstractVector; alg::Algorithm=defalg(v),
-    lt::Function=isless, by::Function=identity, order::Ordering=Forward) =
-    sort!([1:length(v)], alg, Perm(ord(lt,by,order),v))
+    lt::Function=isless, by::Function=identity, order::Ordering=Forward, rev::Bool=false) =
+    sort!([1:length(v)], alg, Perm(ord(lt,by,order,rev),v))
 
 sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
 
