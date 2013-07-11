@@ -53,7 +53,12 @@ const StatusClosed      = 6 # handle is closed
 function uv_status_string(x)
     s = x.status
     if x.handle == C_NULL
-        return "null"
+        if s == StatusClosed
+            return "closed"
+        elseif s == StatusUninit
+            return "null"
+        end
+        return "invalid status"
     elseif s == StatusUninit
         return "uninit"
     elseif s == StatusInit
@@ -69,7 +74,7 @@ function uv_status_string(x)
     elseif s == StatusClosed
         return "closed"
     end
-    return "unknown"
+    return "invalid status"
 end
 
 type NamedPipe <: AsyncStream
@@ -350,7 +355,6 @@ end
 
 close(t::TimeoutAsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
-
 function _uv_hook_close(uv::Union(AsyncStream,UVServer))
     uv.handle = 0
     uv.status = StatusClosed
@@ -358,6 +362,8 @@ function _uv_hook_close(uv::Union(AsyncStream,UVServer))
         uv.closecb(uv)
     end
     notify(uv.closenotify)
+    try notify(uv.readnotify) end
+    try notify(uv.connectnotify) end
 end
 _uv_hook_close(uv::AsyncWork) = (uv.handle = C_NULL; nothing)
 
@@ -570,10 +576,6 @@ end
 
 ## low-level calls ##
 
-function write(s::AsyncStream, b::ASCIIString)
-    assert(uv_isopen(s),"UV object is not in a valid state")
-    int(ccall(:jl_puts, Int32, (Ptr{Uint8},Ptr{Void}),b.data,handle(s)))
-end
 function write(s::AsyncStream, b::Uint8)
     assert(uv_isopen(s),"UV object is not in a valid state")
     int(ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, handle(s)))
