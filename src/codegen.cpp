@@ -197,7 +197,8 @@ static Function *jlputs_func;
 static Function *resetstkoflw_func;
 #endif
 
-static void jl_rethrow_with_add(const char *fmt, ...) {
+static void jl_rethrow_with_add(const char *fmt, ...)
+{
     if (jl_typeis(jl_exception_in_transit, jl_errorexception_type)) {
         char *str = jl_string_data(jl_fieldref(jl_exception_in_transit,0));
         char buf[1024];
@@ -2162,7 +2163,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                 }
                 for(size_t i=j+1; i < nargs; i++) {
                     Value *rhs = emit_expr(args[i],ctx);
-                    if (sty->fields[i].isptr && rhs->getType() != jl_pvalue_llvmt &&
+                    if (sty->fields[i-1].isptr && rhs->getType() != jl_pvalue_llvmt &&
                         !needroots) {
                         // if this struct element needs boxing and we haven't rooted
                         // the struct, root it now.

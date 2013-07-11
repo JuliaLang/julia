@@ -229,7 +229,7 @@ function ls(args...)
 end
 function start_timer(timer::TimeoutAsyncWork, timeout::Int, repeat::Int)
     warn_once("start_timer now expects arguments in units of seconds. you may need to update your code")
-    start_timer(timer, timeout, repeat)
+    invoke(start_timer, (TimeoutAsyncWork,Real,Real), timer, timeout, repeat)
 end
 
 # Redirection Operators
