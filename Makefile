@@ -139,7 +139,7 @@ endif
 	cp $(call wine_pathsearch,libstdc++-6.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 	cp $(call wine_pathsearch,libssp-0.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
 endif
-	cd $(PREFIX)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.exe bugpoint.exe macho-dump.exe
+	cd $(PREFIX)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 	./dist-extras/7z a -mx9 -sfx7z.sfx julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).exe julia-$(JULIA_COMMIT)
 else
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
