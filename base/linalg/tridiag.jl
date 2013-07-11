@@ -58,7 +58,7 @@ ctranspose(M::SymTridiagonal) = conj(M)
 ## Solver
 function \{T<:BlasFloat}(M::SymTridiagonal{T}, rhs::StridedVecOrMat{T})
     if stride(rhs, 1) == 1
-        return LAPACK.gtsv!(copy(M.dv), copy(M.ev), copy(M.dv), copy(rhs))
+        return LAPACK.gtsv!(copy(M.ev), copy(M.dv), copy(M.ev), copy(rhs))
     end
     solve(Tridiagonal(M), rhs)  # use the Julia "fallback"
 end
