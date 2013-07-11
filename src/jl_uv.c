@@ -361,6 +361,57 @@ DLLEXPORT int jl_fs_event_init(uv_loop_t* loop, uv_fs_event_t* handle,
     return uv_fs_event_init(loop,handle,filename,&jl_uv_fseventscb,flags);
 }
 
+DLLEXPORT int jl_fs_unlink(char *path)
+{
+    uv_fs_t req;
+    int ret = uv_fs_unlink(jl_io_loop, &req, path, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
+DLLEXPORT int jl_fs_write(int handle, char *buf, size_t len, size_t offset)
+{
+    uv_fs_t req;
+    int ret = uv_fs_write(jl_io_loop, &req, handle, buf, len, offset, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
+DLLEXPORT int jl_fs_write_byte(int handle, char c)
+{
+    uv_fs_t req;
+    int ret = uv_fs_write(jl_io_loop, &req, handle, &c, 1, -1, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
+DLLEXPORT int jl_fs_read(int handle, char *buf, size_t len)
+{
+    uv_fs_t req;
+    int ret = uv_fs_read(jl_io_loop, &req, handle, buf, len, -1, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
+DLLEXPORT int jl_fs_read_byte(int handle)
+{
+    uv_fs_t req;
+    char buf;
+    int ret = uv_fs_read(jl_io_loop, &req, handle, &buf, 1, -1, NULL);
+    uv_fs_req_cleanup(&req);
+    if (ret == -1)
+        return ret;
+    return (int)buf;
+}
+
+DLLEXPORT int jl_fs_close(int handle)
+{
+    uv_fs_t req;
+    int ret = uv_fs_close(jl_io_loop, &req, handle, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
 //units are in ms
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream)
 {

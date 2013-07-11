@@ -36,7 +36,7 @@ export File,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
 import Base: uvtype, uvhandle, eventloop, fd, position, stat, close, write, read, readall, 
-            _sizeof_uv_fs, c_malloc, c_free
+            _sizeof_uv_fs
 
 include("file_constants.jl")
 
@@ -78,11 +78,7 @@ function close(f::File)
     if !f.open
         error("File is already closed")
     end
-    req = c_malloc(_sizeof_uv_fs)
-    err = ccall(:uv_fs_close,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Void}),
-                eventloop(),req,f.handle,C_NULL)
-    ccall(:uv_fs_req_cleanup,Void,(Ptr{Void},),req)
-    c_free(req)
+    err = ccall(:jl_fs_close, Int32, (Int32,), f.handle)
     uv_error("close",err != 0)
     f.handle = -1
     f.open = false
@@ -90,10 +86,7 @@ function close(f::File)
 end
 
 function unlink(p::String)
-    req = c_malloc(_sizeof_uv_fs)
-    err = ccall(:uv_fs_unlink,Int32,(Ptr{Void},Ptr{Void},Ptr{Uint8},Ptr{Void}),
-                eventloop(),req,bytestring(p),C_NULL)
-    c_free(req)
+    err = ccall(:jl_fs_unlink, Int32, (Ptr{Uint8},), bytestring(p))
     uv_error("unlink",err != 0)
 end
 function unlink(f::File)
@@ -107,21 +100,23 @@ function unlink(f::File)
     f
 end
 
-function write(f::File,buf::Ptr{Uint8},len::Integer,offset::Integer)
+function write(f::File, buf::Ptr{Uint8}, len::Integer, offset::Integer=-1)
     if !f.open
         error("File is not open")
     end
-    req = Base.c_malloc(_sizeof_uv_fs)
-    err = ccall(:uv_fs_write,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Uint8},Csize_t,Int64,Ptr{Void}),
-                eventloop(),req,f.handle,buf,len,offset,C_NULL)
-    Base.c_free(req)
+    err = ccall(:jl_fs_write, Int32, (Int32, Ptr{Uint8}, Csize_t, Csize_t),
+                f.handle, buf, len, offset)
     uv_error("write",err == -1)
     len
 end
 
 function write(f::File, c::Uint8)
-    a = [c]
-    write(f,pointer(a),1)
+    if !f.open
+        error("File is not open")
+    end
+    err = ccall(:jl_fs_write_byte, Int32, (Int32, Cchar), f.handle, c)
+    uv_error("write",err == -1)
+    1
 end
 
 function write{T}(f::File, a::Array{T})
@@ -130,18 +125,6 @@ function write{T}(f::File, a::Array{T})
     else
         invoke(write, (IO, Array), f, a)
     end
-end
-
-function write(f::File, buf::Ptr{Uint8},len::Integer)
-      if !f.open
-        error("File is not open")
-    end
-    req = Base.c_malloc(_sizeof_uv_fs)
-    err = ccall(:uv_fs_write,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Uint8},Csize_t,Int64,Ptr{Void}),
-                eventloop(),req,f.handle,buf,len,-1,C_NULL)
-    Base.c_free(req)
-    uv_error("write",err == -1)
-    len
 end
 
 function truncate(f::File, n::Integer)
@@ -157,33 +140,27 @@ function read(f::File, ::Type{Uint8})
     if !f.open
         error("File is not open")
     end
-    req = Base.c_malloc(_sizeof_uv_fs)
-    buf = Array(Uint8,1)
-    err = ccall(:uv_fs_read,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Uint8},Csize_t,Int64,Ptr{Void}),
-                eventloop(),req,f.handle,buf,len,offset,C_NULL)
-    Base.c_free(req)
-    uv_error("write",err == -1)
-    len 
+    ret = ccall(:jl_fs_read_byte, Int32, (Int32,), f.handle)
+    uv_error("read", ret == -1)
+    return uint8(ret)
 end
 
 function read{T}(f::File, a::Array{T})
     if isbits(T)
         nb = length(a)*sizeof(T)
-        req = Base.c_malloc(_sizeof_uv_fs) 
-        buf = Array(Uint8,1)
-        err = ccall(:uv_fs_read,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Uint8},Csize_t,Int64,Ptr{Void}),
-                    eventloop(),req,f.handle,a,nb,-1,C_NULL)
-        Base.c_free(req)
-        uv_error("write",err == -1)
+        ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Void}, Csize_t),
+                    f.handle, a, nb)
+        uv_error("write",ret == -1)
     else
         invoke(read, (IO, Array), s, a)
     end
+    a
 end
 
-function readall(f::File)
+function readbytes(f::File)
     a = Array(Uint8, filesize(f) - position(f))
     read(f,a)
-    is_valid_ascii(a) ? ASCIIString(a) : UTF8String(a)
+    a
 end
 
 const SEEK_SET = int32(0)

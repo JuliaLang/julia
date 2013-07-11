@@ -174,6 +174,12 @@ end
 
 readchomp(x) = chomp!(readall(x))
 
+function readall(s::IO)
+    b = readbytes(s)
+    return is_valid_ascii(b) ? ASCIIString(b) : UTF8String(b)
+end
+readall(filename::String) = open(readall, filename)
+
 ## high-level iterator interfaces ##
 
 type EachLine
@@ -413,12 +419,6 @@ function readbytes(s::IOStream)
     end
     b
 end
-
-function readall(s::IOStream)
-    b = readbytes(s)
-    return is_valid_ascii(b) ? ASCIIString(b) : UTF8String(b)
-end
-readall(filename::String) = open(readall, filename)
 
 # based on code by Glen Hertz
 function readuntil(s::IO, t::String)

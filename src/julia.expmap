@@ -306,6 +306,12 @@
     jl_poll_start;
     jl_fs_poll_start;
     jl_fs_event_init;
+    jl_fs_unlink;
+    jl_fs_write;
+    jl_fs_write_byte;
+    jl_fs_read;
+    jl_fs_read_byte;
+    jl_fs_close;
     jl_toplevel_eval;
     jl_type_intersection;
     jl_type_match;
