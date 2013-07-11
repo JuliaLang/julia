@@ -401,9 +401,15 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     JL_GC_PUSH1(&rt);
 
     if (nargs == 2) {
-        rt = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                           &jl_tupleref(ctx->sp,0),
-                                           jl_tuple_len(ctx->sp)/2);
+        JL_TRY {
+            rt = jl_interpret_toplevel_expr_in(ctx->module, args[2],
+                                               &jl_tupleref(ctx->sp,0),
+                                               jl_tuple_len(ctx->sp)/2);
+        }
+        JL_CATCH {
+            jl_rethrow_with_add("error interpreting cglobal type");
+        }
+
         JL_TYPECHK(cglobal, type, rt);
         rt = (jl_value_t*)jl_apply_type((jl_value_t*)jl_pointer_type, jl_tuple1(rt));
     }
@@ -480,9 +486,16 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         return literal_pointer_val(jl_nothing);
     }
 
-    rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                        &jl_tupleref(ctx->sp,0),
-                                        jl_tuple_len(ctx->sp)/2);
+    {
+        JL_TRY {
+            rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
+                                                &jl_tupleref(ctx->sp,0),
+                                                jl_tuple_len(ctx->sp)/2);
+        }
+        JL_CATCH {
+            jl_rethrow_with_add("error interpreting ccall return type");
+        }
+    }
     if (jl_is_tuple(rt)) {
         std::string msg = "in " + ctx->funcName +
             ": ccall: missing return type";
@@ -490,9 +503,17 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     if (rt == (jl_value_t*)jl_pointer_type)
         jl_error("ccall: return type Ptr should have an element type, Ptr{T}");
-    at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                        &jl_tupleref(ctx->sp,0),
-                                        jl_tuple_len(ctx->sp)/2);
+
+    {
+        JL_TRY {
+            at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
+                                                &jl_tupleref(ctx->sp,0),
+                                                jl_tuple_len(ctx->sp)/2);
+        }
+        JL_CATCH {
+            jl_rethrow_with_add("error interpreting ccall argument tuple");
+        }
+    }
 
     JL_TYPECHK(ccall, type, rt);
     JL_TYPECHK(ccall, tuple, at);
