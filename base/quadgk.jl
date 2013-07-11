@@ -220,12 +220,7 @@ end
 # on det(H - lambda I).  Unlike eig, handles BigFloat.
 function eignewt(b,m,n)
     # get initial guess from eig on Float64 matrix
-    H = zeros(m, m)
-    for i in 2:m
-        H[i-1,i] = H[i,i-1] = b[i-1]
-    end
-    # TODO: use LAPACK routine for eigenvalues of tridiagonal matrix
-    #       rather than generic O(n^3) routine
+    H = SymTridiagonal(zeros(m), Float64[ float64(b[i]) for i in 1:m-1 ])
     lambda0 = sort(eigvals(H))
 
     lambda = Array(eltype(b), n)
