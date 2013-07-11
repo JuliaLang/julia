@@ -650,16 +650,10 @@ function accept(server::UVServer, client::AsyncStream)
     while true
         if accept_nonblock(server,client) == 0
             return client
-        else
-            uv_error("accept:",_uv_lasterror()!=UV_EAGAIN)
+        elseif _uv_lasterror() != UV_EAGAIN
+            uv_error("accept")
         end
-        try
-            wait(server.connectnotify)
-        catch err
-            if isa(err, UVError) && err.s.uv_code == -1
-                throw(UVError("accept",err.s))
-            end
-        end
+        wait(server.connectnotify)
     end
 end
 
