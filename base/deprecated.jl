@@ -252,7 +252,73 @@ export assign
 typealias ComplexPair Complex
 export ComplexPair
 
-## along an axis
+# superseded sorting API
+
+@deprecate select(v::AbstractVector,k::Union(Int,Range1),o::Ordering) select(v,k,order=o)
+@deprecate select(v::AbstractVector,k::Union(Int,Range1),f::Function) select(v,k,lt=f)
+@deprecate select(f::Function,v::AbstractVector,k::Union(Int,Range1)) select(v,k,lt=f)
+
+# @deprecate select!(v::AbstractVector,k::Union(Int,Range1),o::Ordering) select!(v,k,order=o)
+@deprecate select!(v::AbstractVector,k::Union(Int,Range1),f::Function) select!(v,k,lt=f)
+@deprecate select!(f::Function,v::AbstractVector,k::k::Union(Int,Range1)) select!(v,k,lt=f)
+
+@deprecate sort(v::AbstractVector,o::Ordering) sort(v,order=o)
+@deprecate sort(v::AbstractVector,a::Algorithm) sort(v,alg=a)
+@deprecate sort(v::AbstractVector,a::Algorithm,o::Ordering) sort(v,alg=a,order=o)
+@deprecate sort(v::AbstractVector,o::Ordering,a::Algorithm) sort(v,alg=a,order=o)
+@deprecate sort(v::AbstractVector,f::Function) sort(v,lt=f)
+@deprecate sort(v::AbstractVector,a::Algorithm,f::Function) sort(v,alg=a,lt=f)
+@deprecate sort(v::AbstractVector,f::Function,a::Algorithm) sort(v,alg=a,lt=f)
+@deprecate sort(f::Function,v::AbstractVector,a::Algorithm) sort(v,alg=a,lt=f)
+
+@deprecate sort!(v::AbstractVector,o::Ordering) sort!(v,order=o)
+@deprecate sort!(v::AbstractVector,a::Algorithm) sort!(v,alg=a)
+# @deprecate sort!(v::AbstractVector,a::Algorithm,o::Ordering) sort!(v,alg=a,order=o)
+@deprecate sort!(v::AbstractVector,o::Ordering,a::Algorithm) sort!(v,alg=a,order=o)
+@deprecate sort!(v::AbstractVector,f::Function) sort!(v,lt=f)
+@deprecate sort!(v::AbstractVector,a::Algorithm,f::Function) sort!(v,alg=a,lt=f)
+@deprecate sort!(v::AbstractVector,f::Function,a::Algorithm) sort!(v,alg=a,lt=f)
+@deprecate sort!(f::Function,v::AbstractVector,a::Algorithm) sort!(v,alg=a,lt=f)
+
+@deprecate sortperm(v::AbstractVector,o::Ordering) sortperm(v,order=o)
+@deprecate sortperm(v::AbstractVector,a::Algorithm) sortperm(v,alg=a)
+@deprecate sortperm(v::AbstractVector,a::Algorithm,o::Ordering) sortperm(v,alg=a,order=o)
+@deprecate sortperm(v::AbstractVector,o::Ordering,a::Algorithm) sortperm(v,alg=a,order=o)
+@deprecate sortperm(v::AbstractVector,f::Function) sortperm(v,lt=f)
+@deprecate sortperm(v::AbstractVector,a::Algorithm,f::Function) sortperm(v,alg=a,lt=f)
+@deprecate sortperm(v::AbstractVector,f::Function,a::Algorithm) sortperm(v,alg=a,lt=f)
+@deprecate sortperm(f::Function,v::AbstractVector,a::Algorithm) sortperm(v,alg=a,lt=f)
+
+@deprecate sort(v::AbstractVector,d::Integer,o::Ordering) sort(v,d,order=o)
+@deprecate sort(v::AbstractVector,d::Integer,a::Algorithm) sort(v,d,alg=a)
+@deprecate sort(v::AbstractVector,d::Integer,a::Algorithm,o::Ordering) sort(v,d,alg=a,order=o)
+@deprecate sort(v::AbstractVector,d::Integer,o::Ordering,a::Algorithm) sort(v,d,alg=a,order=o)
+
+@deprecate sort!(v::AbstractVector,d::Integer,o::Ordering) sort!(v,d,order=o)
+@deprecate sort!(v::AbstractVector,d::Integer,a::Algorithm) sort!(v,d,alg=a)
+@deprecate sort!(v::AbstractVector,d::Integer,a::Algorithm,o::Ordering) sort!(v,d,alg=a,order=o)
+@deprecate sort!(v::AbstractVector,d::Integer,o::Ordering,a::Algorithm) sort!(v,d,alg=a,order=o)
+
+@deprecate sortby(v::AbstractVector,f::Function) sort(v,by=f)
+@deprecate sortby(v::AbstractVector,a::Algorithm,f::Function) sort(v,alg=a,by=f)
+@deprecate sortby(v::AbstractVector,f::Function,a::Algorithm) sort(v,alg=a,by=f)
+@deprecate sortby(f::Function,v::AbstractVector,a::Algorithm) sort(v,alg=a,by=f)
+
+@deprecate sortby!(v::AbstractVector,f::Function) sortby!(v,by=f)
+@deprecate sortby!(v::AbstractVector,a::Algorithm,f::Function) sort!(v,alg=a,by=f)
+@deprecate sortby!(v::AbstractVector,f::Function,a::Algorithm) sort!(v,alg=a,by=f)
+@deprecate sortby!(f::Function,v::AbstractVector,a::Algorithm) sort!(v,alg=a,by=f)
+
+@deprecate sortrows(v::AbstractMatrix,o::Ordering) sortrows(v,order=o)
+@deprecate sortrows(v::AbstractMatrix,a::Algorithm) sortrows(v,alg=a)
+@deprecate sortrows(v::AbstractMatrix,a::Algorithm,o::Ordering) sortrows(v,alg=a,order=o)
+@deprecate sortrows(v::AbstractMatrix,o::Ordering,a::Algorithm) sortrows(v,alg=a,order=o)
+
+@deprecate sortcols(v::AbstractMatrix,o::Ordering) sortcols(v,order=o)
+@deprecate sortcols(v::AbstractMatrix,a::Algorithm) sortcols(v,alg=a)
+@deprecate sortcols(v::AbstractMatrix,a::Algorithm,o::Ordering) sortcols(v,alg=a,order=o)
+@deprecate sortcols(v::AbstractMatrix,o::Ordering,a::Algorithm) sortcols(v,alg=a,order=o)
+
 function amap(f::Function, A::AbstractArray, axis::Integer)
     warn_once("amap is deprecated, use mapslices(f, A, dims) instead")
     dimsA = size(A)
