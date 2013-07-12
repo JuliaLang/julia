@@ -155,6 +155,8 @@ getindex{T}(s::SubArray{T,0,AbstractArray{T,0}}) = s.parent[]
 getindex{T}(s::SubArray{T,0}) = s.parent[s.first_index]
 
 getindex{T}(s::SubArray{T,1}, i::Integer) = s.parent[s.first_index + (i-1)*s.strides[1]]
+getindex{T}(s::SubArray{T,1}, i::Integer, j::Integer) =
+    j==1 ? s.parent[s.first_index + (i-1)*s.strides[1]] : throw(BoundsError())
 getindex{T}(s::SubArray{T,2}, i::Integer, j::Integer) =
     s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2]]
 
@@ -180,7 +182,10 @@ end
 function getindex(s::SubArray, is::Integer...)
     index = s.first_index
     for i = 1:length(is)
-        index += (is[i]-1)*s.strides[i]
+        isi = is[i]
+        if isi != 1
+            index += (is[i]-1)*s.strides[i]
+        end
     end
     s.parent[index]
 end
