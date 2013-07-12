@@ -721,7 +721,7 @@ end
 
 function connect(cb::Function,sock::AsyncStream,args...)
     sock.ccb = cb
-    connect!(sock,path)
+    connect!(sock,args...)
 end
 
 function connect(cb::Function,args...)
