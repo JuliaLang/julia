@@ -53,16 +53,17 @@ while developing you might use a workflow something like this::
 
 Type declarations and constructors
 ----------------------------------
+.. _man-abstract-fields:
 
-How do I handle "abstract" fields in types?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-You are not required to declare the type of any fields, so the following is acceptable::
+How do "abstract" or ambigious fields in types interact with the compiler?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Types can be declared without specifying the types of their fields::
 
-    type MyType
+    type MyAmbiguousType
         a
     end
 
-This allows ``a`` to be of any type. However, very little will be known at compile-time about an object of type ``MyType``, and hence performance may suffer. You can do better by declaring the type of ``a``. When ``a`` might be any one of several types, you should probably use parameters. For example::
+This allows ``a`` to be of any type. However, very little will be known at compile-time about an object of type ``MyAmbiguousType``, and hence performance may suffer. You can do better by declaring the type of ``a``. When ``a`` might be any one of several types, you should probably use parameters. For example::
 
     type MyType{T<:FloatingPoint}
         a::T
@@ -70,13 +71,66 @@ This allows ``a`` to be of any type. However, very little will be known at compi
 
 This is a better choice than::
 
-    type MyWorseType
+    type MyStillAmbiguousType
         a::FloatingPoint
     end
 
-because, with the first version, you can write (parametric) functions that know the type of ``a`` at compile time.
+because the first version allows the type of ``a`` to be specified, a fact which helps the compiler.  For example::
 
-This procedure also works fine for container types::
+    julia> m = MyType(3.2)
+    MyType{Float64}(3.2)
+
+    julia> t = MyStillAmbiguousType(3.2)
+    MyStillAmbiguousType(3.2)
+
+    julia> typeof(t.a)
+    Float64
+
+    julia> m.a = 4.5f0
+    4.5
+    
+    julia> t.a = 4.5f0
+    4.5f0
+    
+    julia> typeof(m.a)
+    Float64
+    
+    julia> typeof(t.a)
+    Float32
+
+We can change the type of ``t.a``, and that fact prevents the compiler from generating type-specialized functions.  In contrast, we can't change the type of ``m.a``; the compiler knows this, and hence can optimize the code it produces.  Of course, that's only true if we construct ``m`` with a concrete type::
+
+    julia> m = MyType{FloatingPoint}(3.2)
+    MyType{FloatingPoint}(3.2)
+
+    julia> typeof(m.a)
+    Float64
+    
+    julia> m.a = 4.5f0
+    4.5f0
+    
+    julia> typeof(m.a)
+    Float32
+
+For all practical purposes, such objects behave identically to the declaration of ``MyStillAmbiguousType``.
+
+It's quite instructive to compare the code that the compiler generates for this function::
+
+    func{T}(m::MyType{T}) = m.a+1
+
+using
+
+    ``disassemble(func,(MyType{Float64},))``
+and
+
+    ``disassemble(func,(MyType{FloatingPoint},))``.
+
+For reasons of length the result is not shown here, so you should try this yourself.
+
+How should I declare "abstract container type" fields?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The same considerations, and approaches, that apply in the `previous section <#man-abstract-fields>`_ also work for container types::
 
     type MySimpleContainer{A<:AbstractVector}
         a::A
@@ -85,13 +139,13 @@ This procedure also works fine for container types::
     julia> MySimpleContainer(1:3)
     MySimpleContainer{Range1{Int64}}(1:3)
 
-Again, parametric functions can know the type of ``a`` at compile time::
+Note that the object is fully-specified by its type and parameters, so it is easy to write parametric functions that know the type of ``a`` at compile time::
 
     function myfunc{A}(c::MySimpleContainer{A})
         ...
     end
 
-However, with this declaration of ``MySimpleContainer``, you can't write compile-time optimized functions that behave differently depending on whether (for example) the element type of ``a`` is integer or floating-point. For that, you'll want to use two parameters::
+However, with this declaration of ``MySimpleContainer``, you can't write compile-time optimized functions that behave differently depending on the element type of ``a``. For that, you'll want to use two parameters::
 
     type MyContainer{T, A<:AbstractVector}
         a::A
@@ -103,12 +157,16 @@ Note the somewhat surprising fact that ``T`` doesn't appear in the declaration o
     function myfunc{T<:Integer, A<:AbstractArray}(c::MyContainer{T,A})
         return c.a[1]+1
     end
+    # Note: because we can only define MyContainer for
+    # A<:AbstractArray, and any unspecified parameters are arbitrary,
+    # the previous could have been written more succinctly as
+    #     function myfunc{T<:Integer}(c::MyContainer{T})
 
-    function myfunc{T<:FloatingPoint, A<:AbstractArray}(c::MyContainer{T,A})
+    function myfunc{T<:FloatingPoint}(c::MyContainer{T})
         return c.a[1]+2
     end
 
-    function myfunc{T<:Integer, A<:Vector}(c::MyContainer{T,A})
+    function myfunc{T<:Integer}(c::MyContainer{T,Vector{T}})
         return c.a[1]+3
     end
 
@@ -120,6 +178,8 @@ Note the somewhat surprising fact that ``T`` doesn't appear in the declaration o
 
     julia> myfunc(MyContainer([1:3]))
     4
+
+As you can see, one can specialize on both the element type ``T`` and the ``AbstractArray`` type ``A``.
 
 However, there's one remaining hole: we haven't actually enforced that ``A`` has element type ``T``, so it's perfectly possible to construct an object like this::
 
@@ -134,7 +194,7 @@ To prevent this, we can add an inner constructor::
         MyBetterContainer(v::AbstractVector{T}) = new(v)
     end
 
-This requires that the element type of the ``AbstractVector`` input matches the declared element type ``T``.
+This (indirectly) requires that the element type of ``A`` be ``T``.
 
 
 Developing Julia
