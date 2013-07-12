@@ -304,7 +304,7 @@ function deserialize(s, ::Type{Module})
     path = deserialize(s)
     m = Main
     for mname in path
-        m = eval(m,mname)
+        m = eval(m,mname)::Module
     end
     m
 end
@@ -318,17 +318,17 @@ function deserialize(s, ::Type{Function})
         if !isdefined(Base,name)
             return (args...)->error("function $name not defined on process $(myid())")
         end
-        return eval(Base,name)
+        return eval(Base,name)::Function
     elseif b==2
         mod = deserialize(s)::Module
         name = deserialize(s)::Symbol
         if !isdefined(mod,name)
             return (args...)->error("function $name not defined on process $(myid())")
         end
-        return eval(mod,name)
+        return eval(mod,name)::Function
     elseif b==3
         env = deserialize(s)
-        return ccall(:jl_new_gf_internal, Any, (Any,), env)
+        return ccall(:jl_new_gf_internal, Any, (Any,), env)::Function
     end
     env = deserialize(s)
     linfo = deserialize(s)

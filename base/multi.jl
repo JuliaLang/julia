@@ -525,6 +525,7 @@ end
 
 ## core messages: do, call, fetch, wait, ref, put ##
 
+
 function run_work_thunk(thunk)
     local result
     try
@@ -536,7 +537,6 @@ function run_work_thunk(thunk)
     end
     result
 end
-
 function run_work_thunk(rv::RemoteValue, thunk)
     put(rv, run_work_thunk(thunk))
 end
@@ -786,9 +786,11 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                 # handle message
                 if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
                     id = deserialize(sock)
+                    #print("$(myid()) got id $id\n")
                     f0 = deserialize(sock)
+                    #print("$(myid()) got call $f0\n")
                     args0 = deserialize(sock)
-                    #print("$(myid()) got call $id\n")
+                    #print("$(myid()) got args $args0\n")
                     let f=f0, args=args0, m=msg, rid=id
                         if m === :call_fetch || m === :call_wait
                             enq_work(@task begin
@@ -867,8 +869,12 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
             end # end of while
         catch e
             iderr = worker_id_from_socket(sock)
-            # If pid 1 is disconnected, commit harakiri
-            if (iderr == 1) exit() end
+            # If error occured talking to pid 1, commit harakiri
+            if iderr == 1 && uv_isopen(sock)
+                print(STDERR, "exception on ", myid(), ": ")
+                display_error(e, catch_backtrace())
+                exit(1)
+            end
             
             if isa(e,EOFError)
                 deregister_worker(iderr)
