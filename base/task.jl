@@ -72,6 +72,8 @@ end
 
 ## condition variables
 
+type ProcessExitedException <: Exception end
+
 type Condition
     waitq::Vector{Any}
 
@@ -89,7 +91,7 @@ function wait(c::Condition)
     ct.runnable = false
     args = yield(c)
 
-    if isa(args,InterruptException)
+    if isa(args,InterruptException) || isa(args,ProcessExitedException)
         filter!(x->x!==ct, c.waitq)
         error(args)
     end

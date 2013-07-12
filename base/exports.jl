@@ -147,7 +147,7 @@ export
 
 # Exceptions
     ArgumentError,
-    DisconnectException,
+    ProcessExitedException,
     EOFError,
     ErrorException,
     KeyError,
