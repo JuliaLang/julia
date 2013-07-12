@@ -556,15 +556,15 @@ $(OPENLIBMEXT_OBJ_SOURCE): openlibm/Makefile.extras
 	$(MAKE) -C openlibm -f Makefile.extras $(OPENLIBM_FLAGS)
 	touch -c $@
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(BUILD)/lib
+	cp openlibm/libopenlibm.a $(BUILD)/lib/libopenlibm.a
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
 $(OPENLIBMEXT_OBJ_TARGET): $(OPENLIBMEXT_OBJ_SOURCE) | $(BUILD)/lib
-	cp openlibm/libopenlibm.a $(BUILD)/lib/libopenlibm.a
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm-extras.$(SHLIB_EXT) $@
 
 clean-openlibm:
-	-$(MAKE) -C openlibm distclean
+	-$(MAKE) -C openlibm distclean $(OPENLIBM_FLAGS)
 	-rm $(OPENLIBM_OBJ_TARGET)
 distclean-openlibm: clean-openlibm
 
