@@ -51,6 +51,92 @@ while developing you might use a workflow something like this::
     ...
 
 
+Type declarations and constructors
+----------------------------------
+
+How do I handle "abstract" fields in types?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+You are not required to declare the type of any fields, so the following is acceptable::
+
+    type MyType
+        a
+    end
+
+This allows ``a`` to be of any type. However, very little will be known at compile-time about an object of type ``MyType``, and hence performance may suffer. You can do better by declaring the type of ``a``. When ``a`` might be any one of several types, you should probably use parameters. For example::
+
+    type MyType{T<:FloatingPoint}
+        a::T
+    end
+
+This is a better choice than::
+
+    type MyWorseType
+        a::FloatingPoint
+    end
+
+because, with the first version, you can write (parametric) functions that know the type of ``a`` at compile time.
+
+This procedure also works fine for container types::
+
+    type MySimpleContainer{A<:AbstractVector}
+        a::A
+    end
+
+    julia> MySimpleContainer(1:3)
+    MySimpleContainer{Range1{Int64}}(1:3)
+
+Again, parametric functions can know the type of ``a`` at compile time::
+
+    function myfunc{A}(c::MySimpleContainer{A})
+        ...
+    end
+
+However, with this declaration of ``MySimpleContainer``, you can't write compile-time optimized functions that behave differently depending on whether (for example) the element type of ``a`` is integer or floating-point. For that, you'll want to use two parameters::
+
+    type MyContainer{T, A<:AbstractVector}
+        a::A
+    end
+    MyContainer(v::AbstractVector) = MyContainer{eltype(v), typeof(v)}(v)
+
+Note the somewhat surprising fact that ``T`` doesn't appear in the declaration of field ``a``, a point that we'll return to in a moment.  With this approach, one can write functions such as::
+
+    function myfunc{T<:Integer, A<:AbstractArray}(c::MyContainer{T,A})
+        return c.a[1]+1
+    end
+
+    function myfunc{T<:FloatingPoint, A<:AbstractArray}(c::MyContainer{T,A})
+        return c.a[1]+2
+    end
+
+    function myfunc{T<:Integer, A<:Vector}(c::MyContainer{T,A})
+        return c.a[1]+3
+    end
+
+    julia> myfunc(MyContainer(1:3))
+    2
+    
+    julia> myfunc(MyContainer(1.0:1:3))
+    3.0
+
+    julia> myfunc(MyContainer([1:3]))
+    4
+
+However, there's one remaining hole: we haven't actually enforced that ``A`` has element type ``T``, so it's perfectly possible to construct an object like this::
+
+    julia> MyContainer{Int64, Range{Float64}}(1.0:1:3)
+    MyContainer{Int64,Range{Float64}}(1.0:1.0:3.0)
+
+To prevent this, we can add an inner constructor::
+
+    type MyBetterContainer{T<:Real, A<:AbstractVector}
+        a::A
+
+        MyBetterContainer(v::AbstractVector{T}) = new(v)
+    end
+
+This requires that the element type of the ``AbstractVector`` input matches the declared element type ``T``.
+
+
 Developing Julia
 ----------------
 
