@@ -91,7 +91,7 @@ function wait(c::Condition)
     ct.runnable = false
     args = yield(c)
 
-    if isa(args,InterruptException) || isa(args,ProcessExitedException)
+    if isa(args,Exception)
         filter!(x->x!==ct, c.waitq)
         error(args)
     end
