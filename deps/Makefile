@@ -148,7 +148,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf $(BUILD)
-getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-fftw get-suitesparse get-unwind get-gmp get-mpfr get-zlib get-patchelf
+getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-lapack get-fftw get-suitesparse get-unwind get-gmp get-mpfr get-zlib get-patchelf
 
 ## PATHS ##
 DIRS = $(addprefix $(BUILD)/,lib include bin share etc)
