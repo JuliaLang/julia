@@ -391,12 +391,6 @@ end
 
 sprint(f::Function, args...) = sprint(0, f, args...)
 
-function repr(x)
-    s = IOBuffer()
-    show(s, x)
-    takebuf_string(s)
-end
-
 write(x) = write(STDOUT::IO, x)
 
 function readuntil(s::IOStream, delim::Uint8)
