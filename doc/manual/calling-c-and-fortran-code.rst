@@ -363,6 +363,12 @@ of the buffer, so that it is safe to free (or alter) the original data without
 affecting Julia. A notable exception is ``pointer_to_array()`` which, for performance
 reasons, shares (or can be told to take ownership of) the underlying buffer.
 
+The garbage collector does not guarantee any order of finalization. That is, if ``a`` 
+contained a reference to ``b`` and both ``a`` and ``b`` are due for garbage 
+collection, there is no guarantee that ``b`` would be finalized after ``a``. If
+proper finalization of ``a`` depends on ``b`` being valid, it must be handled in 
+other ways.
+
 
 Non-constant Function Specifications
 ------------------------------------
