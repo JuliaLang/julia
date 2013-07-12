@@ -378,7 +378,7 @@ function _uv_hook_close(uv::Union(AsyncStream,UVServer))
         uv.closecb(uv)
     end
     notify(uv.closenotify)
-    try notify(uv.readnotify) end
+    try notify(uv.readnotify,uv_noerror()) end
     try notify(uv.connectnotify) end
 end
 _uv_hook_close(uv::AsyncWork) = (uv.handle = C_NULL; nothing)
