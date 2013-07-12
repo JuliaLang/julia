@@ -104,11 +104,11 @@ static uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int thr
         error = jl_uv_dlopen(modname,handle,flags);
         if (!error) goto done;
     } else {
-        jl_array_t* DL_LOAD_PATH = (jl_array_t*)jl_get_global(jl_main_module, jl_symbol("DL_LOAD_PATH"));
+        jl_array_t* DL_LOAD_PATH = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("DL_LOAD_PATH"));
         if (DL_LOAD_PATH != NULL) {
-            size_t i;
-            for (i = 0; i < jl_array_len(DL_LOAD_PATH); i++) {
-                char *dl_path = jl_string_data(jl_cell_data(DL_LOAD_PATH)[i]);
+            size_t j;
+            for (j = 0; j < jl_array_len(DL_LOAD_PATH); j++) {
+                char *dl_path = jl_string_data(jl_cell_data(DL_LOAD_PATH)[j]);
                 size_t len = strlen(dl_path);
                 if (len == 0)
                     continue;
