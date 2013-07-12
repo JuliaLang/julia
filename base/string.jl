@@ -1378,3 +1378,9 @@ end
 
 bytes2hex(arr::Array{Uint8,1}) = join([hex(i, 2) for i in arr])
 
+function repr(x)
+    s = IOBuffer()
+    show(s, x)
+    takebuf_string(s)
+end
+
