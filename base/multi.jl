@@ -174,6 +174,7 @@ const LPROC = LocalProcess(0)
 
 const map_pid_wrkr = Dict{Int, Union(Worker, LocalProcess)}()
 const map_sock_wrkr = Dict{Socket, Union(Worker, LocalProcess)}()
+const map_del_wrkr = Set{Int}()
 
 let next_pid = 2    # 1 is reserved for the client (always)
     global get_next_pid
@@ -247,6 +248,9 @@ end
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)
 #   Processes with pids > ours, have to connect to us. May not have happened. Wait for some time.
+    if contains(map_del_wrkr, i)
+        throw(ProcessExitedException())
+    end
     if myid()==1 && !haskey(map_pid_wrkr,i)
         error("no process with id $i exists")
     end
@@ -285,6 +289,7 @@ function deregister_worker(pg, pid)
     pg.workers = filter(x -> !(x.id == pid), pg.workers)
     w = delete!(map_pid_wrkr, pid, nothing)
     if isa(w, Worker) delete!(map_sock_wrkr, w.socket) end
+    add!(map_del_wrkr, pid)
 
     # delete this worker from our RemoteRef client sets
     ids = {}
