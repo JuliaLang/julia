@@ -98,7 +98,7 @@ However, with this declaration of ``MySimpleContainer``, you can't write compile
     end
     MyContainer(v::AbstractVector) = MyContainer{eltype(v), typeof(v)}(v)
 
-Note the somewhat surprising fact that ``T`` doesn't appear in the declaration of field ``a``---we'll get back to this point in a moment.  With this approach, one can write functions such as::
+Note the somewhat surprising fact that ``T`` doesn't appear in the declaration of field ``a``, a point that we'll return to in a moment.  With this approach, one can write functions such as::
 
     function myfunc{T<:Integer, A<:AbstractArray}(c::MyContainer{T,A})
         return c.a[1]+1
@@ -108,11 +108,18 @@ Note the somewhat surprising fact that ``T`` doesn't appear in the declaration o
         return c.a[1]+2
     end
 
+    function myfunc{T<:Integer, A<:Vector}(c::MyContainer{T,A})
+        return c.a[1]+3
+    end
+
     julia> myfunc(MyContainer(1:3))
     2
     
     julia> myfunc(MyContainer(1.0:1:3))
     3.0
+
+    julia> myfunc(MyContainer([1:3]))
+    4
 
 However, there's one remaining hole: we haven't actually enforced that ``A`` has element type ``T``, so it's perfectly possible to construct an object like this::
 
