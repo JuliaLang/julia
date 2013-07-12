@@ -19,7 +19,7 @@ our @benchmarks = qw(
   rand_mat_mul
 );
 
-our $julia_ver = `julia -e 'print(Base.VERSION_COMMIT[1:8])'`;
+our $julia_ver = `julia -e 'print(Base.VERSION_COMMIT[1:9])'`;
 
 our %systems = (
   "fortran"    => ["Fortran"     , "GCC 4.5.1"  ],

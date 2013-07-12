@@ -172,7 +172,7 @@ let
 
         ctim = int(readall(proc.out.buffer))
 
-        outdesc,ps = readsfrom(`git describe --tags --dirty --long --abbrev=10`)
+        outdesc,ps = readsfrom(`git describe --tags --dirty --long --abbrev=40`)
         ps.closecb = function(proc)
             if proc.exit_code!=0
                 acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
@@ -180,7 +180,7 @@ let
             end
 
             description = readchomp(proc.out.buffer)
-            m = match(r"^(v\d+(?:\.\d+)+)-(\d+)-g([0-9a-f]{10})(-dirty)?$", description)
+            m = match(r"^(v\d+(?:\.\d+)+)-(\d+)-g([0-9a-f]{40})(-dirty)?$", description)
             if m == nothing
                 error(acceptable)
             end
@@ -189,9 +189,11 @@ let
             commit = m.captures[3]
             dirty = m.captures[4] != nothing
 
+            commit_short = commit[1:9]
+
             if commits_after_tag > 0
                 field = tag < version ? version.prerelease : version.build
-                field = tuple(field..., commits_after_tag, "r$(commit[1:8])")
+                field = tuple(field..., commits_after_tag, "r$commit_short")
                 if dirty
                     field = tuple(field..., "dirty")
                 end
@@ -204,7 +206,7 @@ let
                 )
             end
             isotime = strftime("%Y-%m-%d %H:%M:%S", ctim)
-            global const commit_string = "Commit $commit $isotime" * (dirty ? "*" : "")
+            global const commit_string = "Commit $commit_short $isotime" * (dirty ? "*" : "")
 
             global const VERSION = tag
             global const VERSION_COMMIT = commit
