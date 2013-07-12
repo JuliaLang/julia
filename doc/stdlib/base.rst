@@ -2997,7 +2997,7 @@ Parallel Computing
 
    ``tunnel`` : if ``true`` then SSH tunneling will be used to connect to the worker. 
 
-   ``dir`` specifies the location of the julia binaries on the worker nodes. 
+   ``dir`` :  specifies the location of the julia binaries on the worker nodes. 
 
    ``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\`` .
 
@@ -3023,11 +3023,15 @@ Parallel Computing
 
 .. function:: procs()
 
-   Returns a list of all process identifiers
+   Returns a list of all process identifiers.
 
 .. function:: workers()
 
-   Returns a list of all worker process identifiers
+   Returns a list of all worker process identifiers.
+
+.. function:: rmprocs(pids...)
+
+   Removes the specified workers. 
 
 .. function:: myid()
 
