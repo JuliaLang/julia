@@ -1,4 +1,3 @@
-
 .. _man-types:
 
 *********
@@ -427,7 +426,7 @@ are actually all closely related. They share the same key properties:
 
 Because of these shared properties, these types are internally
 represented as instances of the same concept, ``DataType``, which
-is the type of any of these types:
+is the type of any of these types::
 
     julia> typeof(Real)
     DataType
