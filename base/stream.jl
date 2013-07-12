@@ -223,7 +223,7 @@ end
 function wait_connected(x)
     assert(uv_isopen(x), "UV object not in a valid state")
     while x.status == StatusConnecting
-        wait(x.connectnotify)
+        uv_error("connect",wait(x.connectnotify))
         assert(uv_isopen(x), "UV object not in a valid state")
     end
 end
@@ -231,7 +231,8 @@ end
 function wait_readbyte(x::AsyncStream, c::Uint8)
     while uv_isopen(x) && search(x.buffer,c) <= 0
         start_reading(x)
-        wait(x.readnotify)
+        err = wait(x.readnotify)
+        err.uv_code > 1 && throw(UVError("read",err)) #Ignore EOF
     end
 end
 
@@ -240,7 +241,8 @@ wait_readline(x) = wait_readbyte(x, uint8('\n'))
 function wait_readnb(x::AsyncStream, nb::Int)
     while uv_isopen(x) && nb_available(x.buffer) < nb
         start_reading(x)
-        wait(x.readnotify)
+        err = wait(x.readnotify)
+        err.uv_code > 1 && throw(UVError("read",err)) #Ignore EOF
     end
 end
 
@@ -249,10 +251,10 @@ function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
     @assert sock.status == StatusConnecting
     if status != -1
         sock.status = StatusOpen
-        err = ()
+        err = uv_noerror()
     else
         sock.status = StatusInit
-        err = UVError("connect")
+        err = uv_lasterror()
     end
     if isa(sock.ccb,Function)
         sock.ccb(sock, status)
@@ -264,9 +266,9 @@ end
 function _uv_hook_connectioncb(sock::UVServer, status::Int32)
     local err
     if status != -1
-        err = ()
+        err = uv_noerror()
     else
-        err = UVError("connection")
+        err = uv_lasterror()
     end
     if isa(sock.ccb,Function)
         sock.ccb(sock,status)
@@ -312,17 +314,12 @@ end
 
 function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Int32)
     if nread == -1
-        if _uv_lasterror() != 1 #UV_EOF == 1
-           err = UVError("readcb")
-        else
-           err = EOFError()
-        end
         close(stream)
-        notify(stream.readnotify,err)
+        notify(stream.readnotify,uv_lasterror())
     else
         notify_filled(stream.buffer, nread, base, len)
         notify_filled(stream, nread)
-        notify(stream.readnotify)
+        notify(stream.readnotify,UV_error_t(0,0))
     end
 end
 ##########################################
@@ -624,10 +621,15 @@ _uv_lasterror() = _uv_lasterror(eventloop())
 _uv_lastsystemerror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)
 _uv_lastsystemerror() = _uv_lasterror(eventloop())
 
+uv_lasterror() = UV_error_t(_uv_lasterror(),_uv_lastsystemerror())
+uv_noerror() = UV_error_t(0,0)
 type UV_error_t
     uv_code::Int32
     system_code::Int32
 end
+UV_error_t(uv_code::Integer,system_code::Integer) = UV_error_t(int32(uv_code),int32(system_code))
+
+
 type UVError <: Exception
     prefix::String
     s::UV_error_t
@@ -673,7 +675,7 @@ function accept(server::UVServer, client::AsyncStream)
         elseif _uv_lasterror() != UV_EAGAIN
             uv_error("accept")
         end
-        wait(server.connectnotify)
+        uv_error("accept",wait(server.connectnotify)::UV_error_t)
     end
 end
 

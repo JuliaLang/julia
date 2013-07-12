@@ -400,7 +400,9 @@ function getaddrinfo(host::ASCIIString)
     getaddrinfo(host) do IP
         notify(c,IP)
     end
-    return wait(c)::IpAddr
+    ret = wait(c)
+    isa(ret,UVError) && throw(ret)
+    return ret::IpAddr
 end
 
 ##
@@ -432,12 +434,7 @@ connect(addr::InetAddr) = connect(TcpSocket(),addr)
  
 default_connectcb(sock,status) = nothing
 
-function connect!(sock::TcpSocket, host::ASCIIString, port::Integer)
-    getaddrinfo(host) do ipaddr
-        connect!(sock,ipaddr,port)
-    end
-    sock
-end
+connect!(sock::TcpSocket, host::ASCIIString, port::Integer) = connect!(sock,getaddrinfo(host),port)
 
 ##
 
