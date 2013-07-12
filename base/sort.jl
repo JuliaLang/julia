@@ -59,8 +59,11 @@ lt(o::ReverseOrdering, a, b) = lt(o.fwd,b,a)
 lt(o::By,              a, b) = isless(o.by(a),o.by(b))
 lt(o::Lt,              a, b) = o.lt(a,b)
 
-function ord(lt::Function, by::Function, order::Ordering, rev::Bool)
-    o = (lt===isless) & (by===identity) ? order : (lt===isless) ? By(by) : Lt(lt)
+function ord(lt::Function, by::Function, rev::Bool, order::Ordering=Forward)
+    o = (lt===isless) & (by===identity) ? order  :
+        (lt===isless) & (by!==identity) ? By(by) :
+        (lt!==isless) & (by===identity) ? Lt(lt) :
+                                          Lt((x,y)->lt(by(x),by(y)))
     rev ? ReverseOrdering(o) : o
 end
 
@@ -78,8 +81,8 @@ function issorted(itr, order::Ordering)
     return true
 end
 issorted(itr;
-    lt::Function=isless, by::Function=identity, order::Ordering=Forward, rev::Bool=false) =
-    issorted(itr, ord(lt,by,order,rev))
+    lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
+    issorted(itr, ord(lt,by,rev,order))
 
 function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
     lo <= k <= hi || error("select index $k is out of range $lo:$hi")
@@ -142,8 +145,8 @@ end
 
 select!(v::AbstractVector, k::Union(Int,Range1), o::Ordering) = select!(v,k,1,length(v),o)
 select!(v::AbstractVector, k::Union(Int,Range1);
-    lt::Function=isless, by::Function=identity, order::Ordering=Forward, rev::Bool=false) =
-    select!(v, k, ord(lt,by,order,rev))
+    lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
+    select!(v, k, ord(lt,by,rev,order))
 
 select(v::AbstractVector, k::Union(Int,Range1); kws...) = select!(copy(v), k; kws...)
 
@@ -244,8 +247,8 @@ for s in {:searchsortedfirst, :searchsortedlast, :searchsorted}
     @eval begin
         $s(v::AbstractVector, x, o::Ordering) = $s(v,x,1,length(v),o)
         $s(v::AbstractVector, x;
-           lt::Function=isless, by::Function=identity, order::Ordering=Forward, rev::Bool=false) =
-            $s(v,x,ord(lt,by,order,rev))
+           lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
+            $s(v,x,ord(lt,by,rev,order))
     end
 end
 
@@ -358,12 +361,12 @@ defalg{T<:Number}(v::AbstractArray{T}) = DEFAULT_UNSTABLE
 
 sort!(v::AbstractVector, alg::Algorithm, order::Ordering) = sort!(v,1,length(v),alg,order)
 sort!(v::AbstractVector; alg::Algorithm=defalg(v),
-    lt::Function=isless, by::Function=identity, order::Ordering=Forward, rev::Bool=false) =
-    sort!(v, alg, ord(lt,by,order,rev))
+    lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
+    sort!(v, alg, ord(lt,by,rev,order))
 
 sortperm(v::AbstractVector; alg::Algorithm=defalg(v),
-    lt::Function=isless, by::Function=identity, order::Ordering=Forward, rev::Bool=false) =
-    sort!([1:length(v)], alg, Perm(ord(lt,by,order,rev),v))
+    lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
+    sort!([1:length(v)], alg, Perm(ord(lt,by,rev,order),v))
 
 sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
 
