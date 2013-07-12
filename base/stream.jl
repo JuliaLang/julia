@@ -257,7 +257,7 @@ function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
     if isa(sock.ccb,Function)
         sock.ccb(sock, status)
     end
-    notify(sock.connectnotify, err)
+    err===() ? notify(sock.connectnotify) : notify_error(sock.connectnotify, err)
 end
 
 #from `listen`
@@ -271,7 +271,7 @@ function _uv_hook_connectioncb(sock::UVServer, status::Int32)
     if isa(sock.ccb,Function)
         sock.ccb(sock,status)
     end
-    notify(sock.connectnotify, err)
+    err===() ? notify(sock.connectnotify) : notify_error(sock.connectnotify, err)
 end
 
 ## BUFFER ##
@@ -313,12 +313,13 @@ end
 function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Int32)
     if nread == -1
         if _uv_lasterror() != 1 #UV_EOF == 1
-           err = UVError("readcb")
+            err = UVError("readcb")
+            close(stream)
+            notify_error(stream.readnotify, err)
         else
-           err = () #EOFError
+            close(stream)
+            notify(stream.readnotify)
         end
-        close(stream)
-        notify(stream.readnotify,err)
     else
         notify_filled(stream.buffer, nread, base, len)
         notify_filled(stream, nread)

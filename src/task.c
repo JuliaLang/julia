@@ -262,6 +262,12 @@ static jl_value_t *switchto(jl_task_t *t)
     ctx_switch(t, &t->ctx);
     jl_value_t *val = jl_task_arg_in_transit;
     jl_task_arg_in_transit = (jl_value_t*)jl_null;
+    if (jl_current_task->exception != NULL &&
+        jl_current_task->exception != jl_nothing) {
+        jl_value_t *exc = jl_current_task->exception;
+        jl_current_task->exception = jl_nothing;
+        jl_throw(exc);
+    }
     return val;
 }
 
@@ -668,6 +674,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->start = start;
     t->result = NULL;
     t->donenotify = jl_nothing;
+    t->exception = jl_nothing;
     // there is no active exception handler available on this stack yet
     t->eh = NULL;
 #ifdef JL_GC_MARKSWEEP
@@ -759,7 +766,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_task_type = jl_new_datatype(jl_symbol("Task"),
                                    jl_any_type,
                                    jl_null,
-                                   jl_tuple(8,
+                                   jl_tuple(9,
                                             jl_symbol("parent"),
                                             jl_symbol("last"),
                                             jl_symbol("storage"),
@@ -767,12 +774,14 @@ void jl_init_tasks(void *stack, size_t ssize)
                                             jl_symbol("done"),
                                             jl_symbol("runnable"),
                                             jl_symbol("result"),
-                                            jl_symbol("donenotify")),
-                                   jl_tuple(8,
+                                            jl_symbol("donenotify"),
+                                            jl_symbol("exception")),
+                                   jl_tuple(9,
                                             jl_any_type, jl_any_type,
                                             jl_any_type, jl_any_type,
                                             jl_bool_type, jl_bool_type,
-                                            jl_any_type, jl_any_type),
+                                            jl_any_type, jl_any_type,
+                                            jl_any_type),
                                    0, 1);
     jl_tupleset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
     jl_task_type->fptr = jl_f_task;
@@ -797,6 +806,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->start = NULL;
     jl_current_task->result = NULL;
     jl_current_task->donenotify = NULL;
+    jl_current_task->exception = NULL;
     jl_current_task->eh = NULL;
 #ifdef JL_GC_MARKSWEEP
     jl_current_task->gcstack = NULL;

@@ -245,6 +245,8 @@ function rmprocs(args...)
 end
 
 
+type ProcessExitedException <: Exception end
+
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)
 #   Processes with pids > ours, have to connect to us. May not have happened. Wait for some time.
@@ -306,7 +308,7 @@ function deregister_worker(pg, pid)
     rrs = {}
     for (rr,cv) in Waiting
         if rr.where == pid
-            notify(cv, ProcessExitedException())
+            notify_error(cv, ProcessExitedException())
             push!(rrs, rr)
         end
     end
@@ -1467,11 +1469,10 @@ function event_loop(isclient)
     end
 end
 
-# force a task to stop waiting, providing with_value as the value of
-# whatever it's waiting for.
-function interrupt_waiting_task(t::Task, with_value)
+# force a task to stop waiting with an exception
+function interrupt_waiting_task(t::Task, err)
     if !t.runnable
-        t.result = with_value
+        t.exception = err
         enq_work(t)
     end
 end
