@@ -238,7 +238,7 @@ function rmprocs(args...)
     
     for i in [args...]
         if haskey(map_pid_wrkr, i)
-            remotecall(i, exit)
+            remote_do(i, exit)
         end
     end
 end
@@ -247,6 +247,9 @@ end
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)
 #   Processes with pids > ours, have to connect to us. May not have happened. Wait for some time.
+    if myid()==1 && !haskey(map_pid_wrkr,i)
+        error("no process with id $i exists")
+    end
     start = time()
     while (!haskey(map_pid_wrkr, i) && ((time() - start) < 60.0))
         sleep(0.1)		
@@ -282,6 +285,29 @@ function deregister_worker(pg, pid)
     pg.workers = filter(x -> !(x.id == pid), pg.workers)
     w = delete!(map_pid_wrkr, pid, nothing)
     if isa(w, Worker) delete!(map_sock_wrkr, w.socket) end
+
+    # delete this worker from our RemoteRef client sets
+    ids = {}
+    for (id,rv) in pg.refs
+        if contains(rv.clientset,pid)
+            push!(ids, id)
+        end
+    end
+    for id in ids
+        del_client(pg, id, pid)
+    end
+
+    # throw exception to tasks waiting for this pid
+    rrs = {}
+    for (rr,cv) in Waiting
+        if rr.where == pid
+            notify(cv, ProcessExitedException())
+            push!(rrs, rr)
+        end
+    end
+    for rr in rrs
+        delete!(Waiting, rr)
+    end
 end
 
 ## remote refs ##
@@ -451,11 +477,10 @@ end
 
 # wait on a local proxy condition for a remote ref
 function wait_full(rr::RemoteRef)
-    oid = rr2id(rr)
-    cv = get(Waiting, oid, false)
+    cv = get(Waiting, rr, false)
     if cv === false
         cv = Condition()
-        Waiting[oid] = cv
+        Waiting[rr] = cv
     end
     wait(cv)
 end
@@ -737,8 +762,6 @@ function accept_handler(server::TcpServer, status::Int32)
     create_message_handler_loop(client)
 end
 
-type DisconnectException <: Exception end
-
 # schedule an expression to run asynchronously, with minimal ceremony
 macro schedule(expr)
     expr = localize_vars(:(()->($expr)), false)
@@ -784,13 +807,14 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     # used to deliver result of wait or fetch
                     mkind = deserialize(sock)
                     oid = deserialize(sock)
+                    rr = WeakRemoteRef(0, oid[1], oid[2])
                     #print("$(myid()) got $msg $oid\n")
                     val = deserialize(sock)
-                    cv = get(Waiting, oid, false)
+                    cv = get(Waiting, rr, false)
                     if cv !== false
                         notify(cv, val)
                         if isempty(cv.waitq)
-                            delete!(Waiting, oid)
+                            delete!(Waiting, rr)
                         end
                     end
                 elseif is(msg, :identify_socket)
@@ -1230,22 +1254,25 @@ function pmap(f, lsts...)
     np = nprocs()
     n = length(lsts[1])
     results = cell(n)
+    queue = [1:n]
     i = 1
-    # function to produce the next work item from the queue.
-    # in this case it's just an index.
-    nextidx() = (idx=i; i+=1; idx)
     @sync begin
         for p=1:np
             wpid = PGRP.workers[p].id
             if wpid != myid() || np == 1
                 @async begin
                     while true
-                        idx = nextidx()
-                        if idx > n
+                        if isempty(queue)
                             break
                         end
-                        results[idx] = remotecall_fetch(wpid, f,
-                                                        map(L->L[idx], lsts)...)
+                        idx = shift!(queue)
+                        try
+                            results[idx] = remotecall_fetch(wpid, f,
+                                                            map(L->L[idx], lsts)...)
+                        catch
+                            push!(queue, idx)
+                            break
+                        end
                     end
                 end
             end
@@ -1413,12 +1440,7 @@ function event_loop(isclient)
         catch err
             iserr, lasterr = true, err
             bt = catch_backtrace()
-            if isa(err,DisconnectException)
-                # TODO: wake up tasks waiting for failed process
-                if !isclient
-                    return
-                end
-            elseif isclient && isa(err,InterruptException)
+            if isclient && isa(err,InterruptException)
                 # root task is waiting for something on client. allow C-C
                 # to interrupt.
                 interrupt_waiting_task(roottask,err)
