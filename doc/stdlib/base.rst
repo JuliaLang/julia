@@ -983,7 +983,7 @@ Network I/O
 
    Listens on/Creates a Named Pipe/Domain Socket 
 
-.. fucntion:: getaddrinfo(host)
+.. function:: getaddrinfo(host)
 
    Gets the IP address of the ``host`` (may have to do a DNS lookup)
 
