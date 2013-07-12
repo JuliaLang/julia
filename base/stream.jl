@@ -711,30 +711,29 @@ function listen(path::ByteString)
     sock
 end
 
-function connect!(sock::NamedPipe,path::ByteString) 
+function connect!(sock::NamedPipe,path::ByteString)
+    @assert sock.status == StatusInit
     req = c_malloc(_sizeof_uv_connect)
     ccall(:uv_pipe_connect, Void, (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Ptr{Void}), req, sock.handle, path, uv_jl_connectcb::Ptr{Void})
+    sock.status = StatusConnecting
+    sock
 end
 
 function connect(cb::Function,sock::AsyncStream,args...)
-    @assert sock.status == StatusInit
     sock.ccb = cb
     connect!(sock,path)
-    sock.status = StatusConnecting
-    sock
-end
-
-function connect(sock::AsyncStream, args...)
-    @assert sock.status == StatusInit
-    connect!(sock,args...)
-    sock.status = StatusConnecting
-    wait_connected(sock)
-    sock
 end
 
 function connect(cb::Function,args...)
     sock.ccb = cb
     connect(args...)
 end
+
+function connect(sock::AsyncStream, args...)
+    connect!(sock,args...)
+    wait_connected(sock)
+    sock
+end
+
 
 connect(path::ByteString) = connect(NamedPipe(),path)

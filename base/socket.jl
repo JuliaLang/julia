@@ -406,19 +406,23 @@ end
 ##
 
 function connect!(sock::TcpSocket, host::IPv4, port::Integer)
+    @assert sock.status == StatusInit
     if !(0 <= port <= typemax(Uint16))
         throw(DomainError())
     end
     uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),
                  sock.handle,hton(host.host),hton(uint16(port))) == -1)
+    sock.status = StatusConnecting
 end
 
 function connect!(sock::TcpSocket, host::IPv6, port::Integer)
+    @assert sock.status == StatusInit
     if !(0 <= port <= typemax(Uint16))
         throw(DomainError())
     end
     uv_error("connect",ccall(:jl_tcp6_connect,Int32,(Ptr{Void},Ptr{Uint128},Uint16),
                  sock.handle,&hton(host.host),hton(uint16(port))) == -1)
+    sock.status = StatusConnecting
 end
 
 # Default Host to localhost
@@ -429,11 +433,13 @@ connect(port::Integer) = connect(IPv4(127,0,0,1),port)
 connect(host::ASCIIString, port::Integer) = connect(TcpSocket(),host,port)
 connect(addr::IpAddr, port::Integer) = connect(TcpSocket(),addr,port)
 connect(addr::InetAddr) = connect(TcpSocket(),addr)
- 
+
 default_connectcb(sock,status) = nothing
 
 function connect!(sock::TcpSocket, host::ASCIIString, port::Integer)
+    sock.status = StatusConnecting
     getaddrinfo(host) do ipaddr
+        sock.status = StatusInit
         connect!(sock,ipaddr,port)
     end
     sock
@@ -456,6 +462,7 @@ listen(cb::Callback,sock::Socket; backlog::Integer=BACKLOG_DEFAULT) = (sock.ccb=
 ##
 
 function accept_nonblock(server::TcpServer,client::TcpSocket)
+    @assert client.status == StatusInit
     err = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server.handle,client.handle)
     if err == 0
         client.status = StatusOpen
