@@ -400,7 +400,7 @@ function getaddrinfo(host::ASCIIString)
     getaddrinfo(host) do IP
         notify(c,IP)
     end
-    ip = wait(IP)
+    ip = wait(c)
     isa(ip,UVError) && throw(ip)
     return ip::IpAddr
 end
