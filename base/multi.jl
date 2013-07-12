@@ -1103,7 +1103,9 @@ end
 # the tunnel is only used from the head (process 1); the nodes are assumed
 # to be mutually reachable without a tunnel, as is often the case in a cluster.
 function addprocs_internal(np::Integer;
-                  tunnel=false, dir=JULIA_HOME, exename="./julia-release-basic", sshflags::Cmd=``, cman=RegularCluster())
+                  tunnel=false, dir=JULIA_HOME,
+                  exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia-release-basic":"./julia-debug-basic"),
+                  sshflags::Cmd=``, cman=RegularCluster())
                   
     config={:dir=>dir, :exename=>exename, :exeflags=>` --worker `, :tunnel=>tunnel, :sshflags=>sshflags, :cman=>cman}
     disable_threaded_libs()
