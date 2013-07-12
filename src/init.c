@@ -722,10 +722,11 @@ static jl_value_t *basemod(char *name)
 // fetch references to things defined in boot.jl
 void jl_get_builtin_hooks(void)
 {
-    jl_nothing      = core("nothing");
+    jl_nothing = core("nothing");
     jl_root_task->tls = jl_nothing;
     jl_root_task->consumers = jl_nothing;
     jl_root_task->donenotify = jl_nothing;
+    jl_root_task->exception = jl_nothing;
 
     jl_char_type    = (jl_datatype_t*)core("Char");
     jl_int8_type    = (jl_datatype_t*)core("Int8");
