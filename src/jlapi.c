@@ -185,3 +185,12 @@ DLLEXPORT void jl_sigatomic_end(void)
         jl_error("sigatomic_end called in non-sigatomic region");
     JL_SIGATOMIC_END();
 }
+
+DLLEXPORT int jl_is_debugbuild(void) {
+#ifdef DEBUG
+    return 1;
+#else
+    return 0;
+#endif
+}
+
