@@ -73,7 +73,7 @@ update() = Dir.cd() do
             info("Updating $pkg...")
             @recover begin
                 Git.run(`fetch -q --all`, dir=pkg)
-                Git.run(`pull -q`, dir=pkg)
+                Git.success(`pull -q --ff-only`, dir=pkg) # suppress output
             end
         end
         if haskey(avail,pkg)
