@@ -1484,6 +1484,38 @@
 
 "),
 
+("Network I/O","Base","connect","connect([host], port) -> TcpSocket
+
+   Connect to the host \"host\" on port \"port\"
+
+"),
+
+("Network I/O","Base","connect","connect(path) -> NamedPipe
+
+   Connect to the Named Pipe/Domain Socket at \"path\"
+
+"),
+
+("Network I/O","Base","listen","listen([addr], port) -> TcpServer
+
+   Listen on port on the address specified by \"addr\". By default
+   this listens on localhost only. To listen on all interfaces pass,
+   \"IPv4(0)\" or \"IPv6(0)\" as appropriate.
+
+"),
+
+("Network I/O","Base","listen","listen(path) -> PipeServer
+
+   Listens on/Creates a Named Pipe/Domain Socket
+
+"),
+
+("Network I/O","Base","getaddrinfo","getaddrinfo(host)
+
+   Gets the IP address of the \"host\" (may have to do a DNS lookup)
+
+"),
+
 ("Text I/O","Base","show","show(x)
 
    Write an informative text representation of a value to the current
@@ -4426,28 +4458,43 @@
 
 "),
 
-("Parallel Computing","Base","addprocs","addprocs(n)
+("Parallel Computing","Base","addprocs","addprocs(n) -> List of process identifiers
 
    Add processes on the local machine. Can be used to take advantage
    of multiple cores.
 
 "),
 
-("Parallel Computing","Base","addprocs","addprocs({\"host1\", \"host2\", ...}; tunnel=false, dir=JULIA_HOME, sshflags::Cmd=``)
+("Parallel Computing","Base","addprocs","addprocs({\"host1\", \"host2\", ...}; tunnel=false, dir=JULIA_HOME, sshflags::Cmd=``, cman::ClusterManager) -> List of process identifiers
 
-   Add processes on remote machines via SSH. Requires julia to be
-   installed in the same location on each node, or to be available via
-   a shared file system. If \"tunnel\" is \"true\" then SSH tunneling
-   will be used. Named argument \"dir\" optionally specifies the
-   location of the julia binaries on the worker nodes. Additional ssh
-   options may be specified by passing a Cmd object with named
-   argument \"sshflags\", e.g. \"sshflags=`-i /home/foo/bar.pem`\"
+   Add processes on remote machines via SSH or a custom cluster
+   manager. Requires julia to be installed in the same location on
+   each node, or to be available via a shared file system.
+
+   Keyword arguments:
+
+   \"tunnel\" : if \"true\" then SSH tunneling will be used to connect
+   to the worker.
+
+   \"dir\" :  specifies the location of the julia binaries on the
+   worker nodes.
+
+   \"sshflags\" : specifies additional ssh options, e.g.
+   \"sshflags=`-i /home/foo/bar.pem`\" .
+
+   \"cman\" : Workers are started using the specified cluster manager.
+
+   For example Beowulf clusters are  supported via a custom cluster
+   manager implemented in  package \"ClusterManagers\".
+
+   See the documentation for package \"ClusterManagers\" for more
+   information on how to write a custom cluster manager.
 
 "),
 
-("Parallel Computing","Base","addprocs_sge","addprocs_sge(n)
+("Parallel Computing","Base","addprocs_sge","addprocs_sge(n) - DEPRECATED from Base, use ClusterManagers.addprocs_sge(n)
 
-   Add processes via the Sun/Oracle Grid Engine batch queue, using
+   Adds processes via the Sun/Oracle Grid Engine batch queue, using
    \"qsub\".
 
 "),
@@ -4455,6 +4502,31 @@
 ("Parallel Computing","Base","nprocs","nprocs()
 
    Get the number of available processors.
+
+"),
+
+("Parallel Computing","Base","nworkers","nworkers()
+
+   Get the number of available worker processors. This is one less
+   than nprocs(). Equal to nprocs() if nprocs() == 1.
+
+"),
+
+("Parallel Computing","Base","procs","procs()
+
+   Returns a list of all process identifiers.
+
+"),
+
+("Parallel Computing","Base","workers","workers()
+
+   Returns a list of all worker process identifiers.
+
+"),
+
+("Parallel Computing","Base","rmprocs","rmprocs(pids...)
+
+   Removes the specified workers.
 
 "),
 
@@ -5804,7 +5876,9 @@
 ("Linear Algebra","Base","Tridiagonal","Tridiagonal(dl, d, du)
 
    Construct a tridiagonal matrix from the lower diagonal, diagonal,
-   and upper diagonal
+   and upper diagonal, respectively.  The result is of type
+   \"Tridiagonal\" and provides efficient specialized linear solvers,
+   but may be converted into a regular matrix with \"full\".
 
 "),
 
@@ -5812,7 +5886,18 @@
 
    Constructs an upper (isupper=true) or lower (isupper=false)
    bidiagonal matrix using the given diagonal (dv) and off-diagonal
-   (ev) vectors
+   (ev) vectors.  The result is of type \"Bidiagonal\" and provides
+   efficient specialized linear solvers, but may be converted into a
+   regular matrix with \"full\".
+
+"),
+
+("Linear Algebra","Base","SymTridiagonal","SymTridiagonal(d, du)
+
+   Construct a real-symmetric tridiagonal matrix from the diagonal and
+   upper diagonal, respectively. The result is of type
+   \"SymTridiagonal\" and provides efficient specialized eigensolvers,
+   but may be converted into a regular matrix with \"full\".
 
 "),
 
@@ -5993,6 +6078,17 @@
 
 "),
 
+("Linear Algebra","Base","peakflops","peakflops(n)
+
+   \"peakflops\" computes the peak flop rate of the computer by using
+   BLAS dgemm. By default, if no arguments are specified, it
+   multiplies a matrix of size \"n x n\", where \"n = 2000\". If the
+   underlying BLAS is using multiple threads, higher flop rates are
+   realized. The number of BLAS threads can be set with
+   \"blas_set_num_threads(n)\".
+
+"),
+
 ("BLAS Functions","Base","copy!","copy!(n, X, incx, Y, incy)
 
    Copy \"n\" elements of array \"X\" with stride \"incx\" to array
@@ -6109,6 +6205,12 @@
 
    Returns \"alpha*A*B\" or the other three variants according to
    \"tA\" (transpose \"A\") and \"tB\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","blas_set_num_threads","blas_set_num_threads(n)
+
+   Set the number of threads the BLAS library should use.
 
 "),
 
