@@ -129,7 +129,7 @@ function dependencies(pkg::String,avail::Dict,free::Dict,fix::Dict)
     elseif haskey(fix,pkg)
         return fix[pkg].requires
     else 
-        error("Package $pkg is neither fixed nor free")
+        error("$pkg is neither fixed nor free (this shouldn't happen)")
     end
 end
 
