@@ -11,11 +11,11 @@ you with the language and to help you choose among alternative designs.
 Avoid writing overly-specific types
 -----------------------------------
 
-Code should be as generic as possible. Instead of writing:
+Code should be as generic as possible. Instead of writing::
 
     convert(Complex{Float64}, x)
 
-it's better to use available generic functions:
+it's better to use available generic functions::
 
     complex(float(x))
 
@@ -29,7 +29,7 @@ any integer, expressed with the abstract type ``Integer``.
 Handle excess argument diversity in the caller
 ----------------------------------------------
 
-Instead of:
+Instead of::
 
     function foo(x, y)
         x = int(x); y = int(y)
@@ -37,7 +37,7 @@ Instead of:
     end
     foo(x, y)
 
-use:
+use::
 
     function foo(x::Int, y::Int)
         ...
@@ -69,7 +69,7 @@ When using ``x::Union(Nothing,T)``, ask whether the option for ``x`` to be
 Avoid elaborate container types
 -------------------------------
 
-It is usually not much help to construct arrays like the following:
+It is usually not much help to construct arrays like the following::
 
     a = Array(Union(Int,String,Tuple,Array), n)
 
@@ -93,11 +93,11 @@ Don't parenthesize conditions
 
 Julia doesn't require parens around conditions in ``if`` and ``while``.
 Write
-
+::
     if a == b
 
 instead of
-
+::
     if (a == b)
 
 Don't overuse ...
@@ -111,12 +111,13 @@ it is often even better to leave it alone, and not convert it to an array.
 Don't use unnecessary static parameters
 ---------------------------------------
 
-A function signature like this:
+A function signature
+::
 
     foo{T<:Real}(x::T) = ...
 
 should be written as
-
+::
     foo(x::Real) = ...
 
 instead, especially if ``T`` is not used in the function body.

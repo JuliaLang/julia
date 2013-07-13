@@ -4,8 +4,6 @@
  Frequently-Asked Questions
 ****************************
 
-.. contents::
-
 Sessions and the REPL
 ---------------------
 
@@ -25,8 +23,8 @@ collector runs; you can force this to happen with ``gc()``.
 How can I modify the declaration of a type/immutable in my session?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Perhaps you've defined a type and and then realize you need to add a new field.
-If you try this at the REPL, you get the error::
+Perhaps you've defined a type and and then realize you need to add a
+new field.  If you try this at the REPL, you get the error::
 
     ERROR: invalid redefinition of constant MyType
 
@@ -63,19 +61,51 @@ Types can be declared without specifying the types of their fields::
         a
     end
 
-This allows ``a`` to be of any type. However, very little will be known at compile-time about an object of type ``MyAmbiguousType``, and hence performance may suffer. You can do better by declaring the type of ``a``. When ``a`` might be any one of several types, you should probably use parameters. For example::
+This allows ``a`` to be of any type. This can often be useful, but it
+does have a downside: for objects of type ``MyAmbiguousType``, the
+compiler will not be able to generate high-performance code.  The
+reason is that the compiler uses the types of objects, not their
+values, to determine how to build code. Unfortunately, very little can
+be inferred about an object of type ``MyAmbiguousType``::
+
+    julia> b = MyAmbiguousType("Hello")
+    MyAmbiguousType("Hello")
+
+    julia> c = MyAmbiguousType(17)
+    MyAmbiguousType(17)
+
+    julia> typeof(b)
+    MyAmbiguousType
+
+    julia> typeof(c)
+    MyAmbiguousType
+
+``b`` and ``c`` have the same type, yet their underlying
+representation of data in memory is very different. Even if you stored
+just numeric values in field ``a``, the fact that the memory
+representation of a ``Uint8`` differs from a ``Float64`` also means
+that the CPU needs to handle them using two different kinds of
+instructions.  Since the required information is not available in the
+type, such decisions have to be made at run-time. This slows
+performance.
+
+You can do better by declaring the type of ``a``. Here, we are focused
+on the case where ``a`` might be any one of several types, in which
+case the natural solution is to use parameters. For example::
 
     type MyType{T<:FloatingPoint}
         a::T
     end
 
-This is a better choice than::
+This is a better choice than
+::
 
     type MyStillAmbiguousType
         a::FloatingPoint
     end
 
-because the first version allows the type of ``a`` to be specified, a fact which helps the compiler.  For example::
+because the first version specifies the type of ``a`` from the type of
+the wrapper object.  For example::
 
     julia> m = MyType(3.2)
     MyType{Float64}(3.2)
@@ -83,22 +113,42 @@ because the first version allows the type of ``a`` to be specified, a fact which
     julia> t = MyStillAmbiguousType(3.2)
     MyStillAmbiguousType(3.2)
 
+    julia> typeof(m)
+    MyType{Float64}
+
+    julia> typeof(t)
+    MyStillAmbiguousType
+
+The type of field ``a`` can be readily determined from the type of
+``m``, but not from the type of ``t``.  Indeed, in ``t`` it's possible
+to change the type of field ``a``::
+
     julia> typeof(t.a)
     Float64
 
-    julia> m.a = 4.5f0
-    4.5
-    
     julia> t.a = 4.5f0
     4.5f0
-    
-    julia> typeof(m.a)
-    Float64
     
     julia> typeof(t.a)
     Float32
 
-We can change the type of ``t.a``, and that fact prevents the compiler from generating type-specialized functions.  In contrast, we can't change the type of ``m.a``; the compiler knows this, and hence can optimize the code it produces.  Of course, that's only true if we construct ``m`` with a concrete type::
+In contrast, once ``m`` is constructed, the type of ``m.a`` cannot
+change::
+
+    julia> m.a = 4.5f0
+    4.5
+    
+    julia> typeof(m.a)
+    Float64
+    
+The fact that the type of ``m.a`` is known from ``m``'s type---coupled
+with the fact that its type cannot change mid-function---allows the
+compiler to generate highly-optimized code for objects like ``m`` but
+not for objects like ``t``.
+
+Of course, all of this is true only if we construct ``m`` with a
+concrete type.  We can break this by explicitly constructing it with
+an abstract type::
 
     julia> m = MyType{FloatingPoint}(3.2)
     MyType{FloatingPoint}(3.2)
@@ -112,47 +162,116 @@ We can change the type of ``t.a``, and that fact prevents the compiler from gene
     julia> typeof(m.a)
     Float32
 
-For all practical purposes, such objects behave identically to the declaration of ``MyStillAmbiguousType``.
+For all practical purposes, such objects behave identically to those
+of ``MyStillAmbiguousType``.
 
-It's quite instructive to compare the code that the compiler generates for this function::
+It's quite instructive to compare the sheer amount code generated for
+a simple function
+::
 
-    func{T}(m::MyType{T}) = m.a+1
+    func(m::MyType) = m.a+1
 
 using
+::
 
-    ``disassemble(func,(MyType{Float64},))``
-and
+    disassemble(func,(MyType{Float64},))
+    disassemble(func,(MyType{FloatingPoint},))
+    disassemble(func,(MyType,))
 
-    ``disassemble(func,(MyType{FloatingPoint},))``.
-
-For reasons of length the result is not shown here, so you should try this yourself.
+For reasons of length the results are not shown here, but you may wish
+to try this yourself. Because the type is fully-specified in the first
+case, the compiler doesn't need to generate any code to resolve the
+type at run-time.  This results in shorter and faster code.
 
 How should I declare "abstract container type" fields?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The same considerations, and approaches, that apply in the `previous section <#man-abstract-fields>`_ also work for container types::
+The same best practices that apply in the `previous section
+<#man-abstract-fields>`_ also work for container types::
 
     type MySimpleContainer{A<:AbstractVector}
         a::A
     end
 
-    julia> MySimpleContainer(1:3)
-    MySimpleContainer{Range1{Int64}}(1:3)
+    type MyAmbiguousContainer{T}
+        a::AbstractVector{T}
+    end
 
-Note that the object is fully-specified by its type and parameters, so it is easy to write parametric functions that know the type of ``a`` at compile time::
+For example::
 
-    function myfunc{A}(c::MySimpleContainer{A})
+    julia> c = MySimpleContainer(1:3);
+
+    julia> typeof(c)
+    MySimpleContainer{Range1{Int64}}
+
+    julia> c = MySimpleContainer([1:3]);
+
+    julia> typeof(c)
+    MySimpleContainer{Array{Int64,1}}
+
+    julia> b = MyAmbiguousContainer(1:3);
+
+    julia> typeof(b)
+    MyAmbiguousContainer{Int64}
+
+    julia> b = MyAmbiguousContainer([1:3]);
+
+    julia> typeof(b)
+    MyAmbiguousContainer{Int64}
+
+For ``MySimpleContainer``, the object is fully-specified by its type
+and parameters, so the compiler can generate optimized functions. In
+most instances, this will probably suffice.
+
+While the compiler can now do its job perfectly well, there are cases
+where *you* might wish that your code could do different things
+depending on the *element type* of ``a``.  Usually the best way to
+achieve this is to wrap your specific operation (here, ``foo``) in a
+separate function::
+
+    function sumfoo(c::MySimpleContainer)
+        s = 0
+	for x in c.a
+	    s += foo(x)
+	end
+	s
+    end
+
+    foo(x::Integer) = x
+    foo(x::FloatingPoint) = round(x)
+
+This keeps things simple, while allowing the compiler to generate
+optimized code in all cases.
+
+However, there are cases where you may need to declare different
+versions of the outer function for different element types of
+``a``. You could do it like this::
+
+    function myfun{T<:FloatingPoint}(c::MySimpleContainer{Vector{T}})
+        ...
+    end
+    function myfun{T<:Integer}(c::MySimpleContainer{Vector{T}})
         ...
     end
 
-However, with this declaration of ``MySimpleContainer``, you can't write compile-time optimized functions that behave differently depending on the element type of ``a``. For that, you'll want to use two parameters::
+This works fine for ``Vector{T}``, but we'd also have to write
+explicit versions for ``Range1{T}`` or other abstract types. To
+prevent such tedium, you can use two parameters in the declaration of
+``MyContainer``::
 
     type MyContainer{T, A<:AbstractVector}
         a::A
     end
     MyContainer(v::AbstractVector) = MyContainer{eltype(v), typeof(v)}(v)
 
-Note the somewhat surprising fact that ``T`` doesn't appear in the declaration of field ``a``, a point that we'll return to in a moment.  With this approach, one can write functions such as::
+    julia> b = MyContainer(1.3:5);
+
+    julia> typeof(b)
+    MyContainer{Float64,Range1{Float64}}
+
+Note the somewhat surprising fact that ``T`` doesn't appear in the
+declaration of field ``a``, a point that we'll return to in a moment.
+With this approach, one can write functions such as::
 
     function myfunc{T<:Integer, A<:AbstractArray}(c::MyContainer{T,A})
         return c.a[1]+1
@@ -173,18 +292,23 @@ Note the somewhat surprising fact that ``T`` doesn't appear in the declaration o
     julia> myfunc(MyContainer(1:3))
     2
     
-    julia> myfunc(MyContainer(1.0:1:3))
+    julia> myfunc(MyContainer(1.0:3))
     3.0
 
     julia> myfunc(MyContainer([1:3]))
     4
 
-As you can see, one can specialize on both the element type ``T`` and the ``AbstractArray`` type ``A``.
+As you can see, with this approach it's possible to specialize on both
+the element type ``T`` and the array type ``A``.
 
-However, there's one remaining hole: we haven't actually enforced that ``A`` has element type ``T``, so it's perfectly possible to construct an object like this::
+However, there's one remaining hole: we haven't enforced that ``A``
+has element type ``T``, so it's perfectly possible to construct an
+object like this::
 
-    julia> MyContainer{Int64, Range{Float64}}(1.0:1:3)
-    MyContainer{Int64,Range{Float64}}(1.0:1.0:3.0)
+  julia> b = MyContainer{Int64, Range1{Float64}}(1.3:5);
+
+  julia> typeof(b)
+  MyContainer{Int64,Range1{Float64}}
 
 To prevent this, we can add an inner constructor::
 
@@ -193,8 +317,18 @@ To prevent this, we can add an inner constructor::
 
         MyBetterContainer(v::AbstractVector{T}) = new(v)
     end
+    MyBetterContainer(v::AbstractVector) = MyBetterContainer{eltype(v),typeof(v)}(v)
 
-This (indirectly) requires that the element type of ``A`` be ``T``.
+
+    julia> b = MyBetterContainer(1.3:5);
+
+    julia> typeof(b)
+    MyBetterContainer{Float64,Range1{Float64}}
+
+    julia> b = MyBetterContainer{Int64, Range1{Float64}}(1.3:5);
+    ERROR: no method MyBetterContainer(Range1{Float64},)
+
+The inner constructor requires that the element type of ``A`` be ``T``.
 
 
 Developing Julia
@@ -233,7 +367,8 @@ Now:
 - From within shell 1, ``gdb julia-debug-basic``. You can find this
   executable within ``julia/usr/bin``.
 
-- From within shell 1, ``(gdb) tty /dev/pts/#`` where ``#`` is the number shown after ``pts/`` in terminal 2.
+- From within shell 1, ``(gdb) tty /dev/pts/#`` where ``#`` is the
+  number shown after ``pts/`` in terminal 2.
 
 - From within shell 1, ``(gdb) run``
 
