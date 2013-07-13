@@ -378,7 +378,8 @@ value_t stream_to_string(value_t *ps)
     if (st->buf == &st->local[0]) {
         n = st->size;
         str = cvalue_string(n);
-        memcpy(cvalue_data(str), value2c(ios_t*,*ps)->buf, n);
+        st = value2c(ios_t*,*ps); // reload after allocating str
+        memcpy(cvalue_data(str), st->buf, n);
         ios_trunc(st, 0);
     }
     else {

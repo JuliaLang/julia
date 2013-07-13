@@ -57,6 +57,8 @@ char * dirname(char *);
 #include <libgen.h>
 #endif
 
+//#define MEMDEBUG
+
 #include "libsupport.h"
 #include "flisp.h"
 #include "opcodes.h"
@@ -548,12 +550,12 @@ void gc(int mustgrow)
     void *temp;
     uint32_t i, f, top;
     fl_readstate_t *rs;
-
+    size_t hsz = grew ? heapsize*2 : heapsize;
+#ifdef MEMDEBUG
+    tospace = LLT_ALLOC(hsz);
+#endif
     curheap = tospace;
-    if (grew)
-        lim = curheap+heapsize*2-sizeof(cons_t);
-    else
-        lim = curheap+heapsize-sizeof(cons_t);
+    lim = curheap + hsz - sizeof(cons_t);
 
     if (fl_throwing_frame > curr_frame) {
         top = fl_throwing_frame - 4;
@@ -614,6 +616,9 @@ void gc(int mustgrow)
         }
         grew = !grew;
     }
+#ifdef MEMDEBUG
+    LLT_FREE(tospace);
+#endif
     if (curheap > lim)  // all data was live
         gc(0);
 }
@@ -2255,7 +2260,11 @@ static void lisp_init(size_t initial_heapsize)
     heapsize = initial_heapsize;
 
     fromspace = LLT_ALLOC(heapsize);
+#ifdef MEMDEBUG
+    tospace   = NULL;
+#else
     tospace   = LLT_ALLOC(heapsize);
+#endif
     curheap = fromspace;
     lim = curheap+heapsize-sizeof(cons_t);
     consflags = bitvector_new(heapsize/sizeof(cons_t), 1);
