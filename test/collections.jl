@@ -382,3 +382,108 @@ s = IntSet(0,1,10,20,200,300,1000,10000,10002)
 
 @test isempty((1:4)[5:4])
 @test_throws (1:10)[8:-1:-2]
+
+# Counters
+
+using Base.Collections
+
+c = Counter()
+@assert isa(c, Counter)
+@assert c["a"] == 0
+
+c["a"] += 3
+@assert c["a"] == 3
+
+c = Counter(1:5)
+@assert isa(c, Counter{Int})
+@assert c == (Int => Int)[1 => 1, 2 => 1, 3 => 1, 4 => 1, 5 => 1]
+
+c = Counter([1, 2, 3, 3])
+@assert isa(c, Counter{Int})
+@assert c == (Int => Int)[1 => 1, 2 => 1, 3 => 2]
+
+c = Counter(["a", "b", "c", "c", "e"])
+@assert isa(c, Counter{ASCIIString})
+@assert c == (ASCIIString => Int)["a" => 1, "b" => 1, "c" => 2, "e" => 1]
+
+c = Counter([1, 2, 3, 3])
+c[4] = 0
+for (k, v) in elements(c)
+    @assert k != 4
+end
+
+c = Counter(["eggs", "ham"])
+@assert c["bacon"] == 0
+
+c = Counter("gallahad")
+@assert c == (Any => Int)['a' => 3, 'l' => 2, 'h' => 1, 'g' => 1, 'd' => 1]
+
+c = Counter({"red" => 4, "blue" => 2})
+
+c = Counter(cats = 4, dogs = 8)
+@assert c == (Any => Int)["dogs" => 8, "cats" => 4]
+
+c["dogs"] = 0
+@assert c["dogs"] == 0
+delete!(c, "dogs")
+@assert !haskey(c, "dogs")
+
+c1 = Counter([1, 2, 3, 3])
+@assert c1 == (Int => Int)[2 => 1, 3 => 2, 1 => 1]
+
+c2 = Counter([2, 5, 5])
+@assert c2 == (Int => Int)[5 => 2, 2 => 1]
+
+c3 = c1 + c2
+@assert c3 == (Int => Int)[5 => 2, 2 => 2, 3 => 2, 1 => 1]
+
+c = Counter(1:3)
+@assert c == (Int => Int)[1 => 1, 2 => 1, 3 => 1]
+
+@assert length(c) == 3
+
+@assert !isempty(c)
+
+for (k, v) in c
+    @assert contains(1:3, k)
+    @assert v == 1
+end
+
+@assert haskey(c, 1)
+@assert !haskey(c, 0)
+
+delete!(c, 2)
+@assert !haskey(c, 2)
+
+@assert isempty(similar(c))
+
+@assert eltype(similar(c)) == Int
+
+@assert contains(collect(keys(c)), 1)
+@assert contains(collect(values(c)), 1)
+
+@assert !contains(collect(keys(c)), 0)
+@assert !contains(collect(values(c)), 0)
+
+empty!(c)
+@assert length(c) == 0
+
+c1 = Counter([1, 2, 2, 3])
+c2 = Counter([4, 5])
+@assert !haskey(merge(c1, c1), 4)
+@assert haskey(merge(c1, c2), 4)
+
+merge!(c1, c2)
+@assert c1 == (Int => Int)[5 => 1, 4 => 1, 2 => 2, 3 => 1, 1 => 1]
+
+c3 = filter((k, v) -> k > 3, c1)
+@assert c3 == (Int => Int)[5 => 1, 4 => 1]
+
+filter!((k, v) -> k > 3, c1)
+@assert c1 == (Int => Int)[5 => 1, 4 => 1]
+
+c3 = c1 + c1
+@assert c3 == (Int => Int)[5 => 2, 4 => 2]
+
+c4 = c1 - c1
+@assert c4 == (Int => Int)[5 => 0, 4 => 0]

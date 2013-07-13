@@ -12,8 +12,9 @@ export
     heappop!,
     heappush!,
     isheap,
-    peek
-
+    peek,
+    Counter,
+    elements
 
 
 # Heap operations on flat arrays
@@ -292,6 +293,133 @@ function next(pq::PriorityQueue, i)
     return ((k, pq.xs[idx][2]), i)
 end
 
+# Counter type for counting objects
+#------------------------
+
+immutable Counter{T} <: Associative{T, Int}
+    counts::Dict{T, Int}
+end
+
+Counter() = Counter(Dict{Any, Int}())
+
+function Counter{T}(itr::AbstractVector{T})
+    c = Counter(Dict{T, Int}())
+    for el in itr
+        c.counts[el] = get(c.counts, el, 0) + 1
+    end
+    return c
+end
+
+function Counter(h::Dict{Any, Any})
+    c = Counter(Dict{Any, Int}())
+    for (k, v) in h
+        c.counts[k] = get(c.counts, k, 0) + int(v)
+    end
+    return c
+end
+
+function Counter(itr::Any)
+    c = Counter(Dict{Any, Int}())
+    for el in itr
+        c.counts[el] = get(c.counts, el, 0) + 1
+    end
+    return c
+end
+
+function Counter(; kwargs...)
+    c = Counter(Dict{Any, Int}())
+    for (k, v) in kwargs
+        c[string(k)] = v
+    end
+    return c
+end
+
+getindex{T}(c::Counter{T}, k::Any) = get(c.counts, k, 0)
+
+setindex!{T}(c::Counter{T}, v::Integer, k::Any) = setindex!(c.counts, v, k)
+
+length(c::Counter) = length(c.counts)
+
+isempty(c::Counter) = isempty(c.counts)
+
+start(c::Counter) = start(c.counts)
+
+next(c::Counter, i) = next(c.counts, i)
+
+done(c::Counter, i) = done(c.counts, i)
+
+haskey(c::Counter, key::Any) = haskey(c.counts, key)
+
+Base.delete!(c::Counter, key::Any) = delete!(c.counts, key)
+
+Base.delete!(c::Counter, key::Any, default::Any) = delete!(c.counts, key, default)
+
+Base.similar{T}(c::Counter{T}) = Counter{T}(similar(c.counts))
+
+sizehint(c::Counter, newsz::Integer) = sizehint(c.counts, newsz)
+
+getkey(c::Counter, key::Any, deflt::Any) = getkey(c.counts, key, deflt)
+
+Base.keys(c::Counter) = keys(c.counts)
+
+Base.values(c::Counter) = values(c.counts)
+
+Base.empty!(c::Counter) = empty!(c.counts)
+
+function merge(c::Counter, others::Counter...)
+    Counter(merge(c.counts, map(o -> o.counts, others)...))
+end
+
+function merge!(c::Counter, others::Counter...)
+    merge!(c.counts, map(o -> o.counts, others)...)
+end
+
+filter(f::Function, c::Counter) = Counter(filter(f, c.counts))
+
+filter!(f::Function, c::Counter) = filter!(f, c.counts)
+
+Base.eltype{T}(c::Counter{T}) = T
+
+function (+)(c::Counter, others::Counter...)
+    res = Counter(copy(c.counts))
+    for other in others
+        for (k, v) in other
+            res[k] += v
+        end
+    end
+    return res
+end
+
+function (-)(c::Counter, others::Counter...)
+    res = Counter(copy(c.counts))
+    for other in others
+        for (k, v) in other
+            res[k] -= v
+        end
+    end
+    return res
+end
+
+# elements() Iterate over keys but ignore 0 counts
+
+immutable CounterElements
+    c::Counter
+    i::Int
+end
+
+elements(c::Counter) = CounterElements(c, 0)
+
+start(e::CounterElements) = start(e.c.counts)
+
+function next(e::CounterElements, i::Integer)
+    pair, i = next(e.c.counts, i)
+    while pair[2] == 0 && !done(e.c.counts, i)
+        pair, i = next(e.c.counts, i)
+    end
+    return pair, i
+end
+
+done(e::CounterElements, i::Integer) = done(e.c.counts, i)
 
 end # module Collections
 
