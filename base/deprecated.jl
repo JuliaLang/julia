@@ -303,11 +303,13 @@ export ComplexPair
 @deprecate sort!(v::AbstractVector,d::Integer,o::Ordering,a::Algorithm) sort!(v,d,alg=a,order=o)
 
 @deprecate sortby(v::AbstractVector,f::Function) sort(v,by=f)
+@deprecate sortby(f::Function,v::AbstractVector) sort(v,by=f)
 @deprecate sortby(v::AbstractVector,a::Algorithm,f::Function) sort(v,alg=a,by=f)
 @deprecate sortby(v::AbstractVector,f::Function,a::Algorithm) sort(v,alg=a,by=f)
 @deprecate sortby(f::Function,v::AbstractVector,a::Algorithm) sort(v,alg=a,by=f)
 
-@deprecate sortby!(v::AbstractVector,f::Function) sortby!(v,by=f)
+@deprecate sortby!(v::AbstractVector,f::Function) sort!(v,by=f)
+@deprecate sortby!(f::Function,v::AbstractVector) sort!(v,by=f)
 @deprecate sortby!(v::AbstractVector,a::Algorithm,f::Function) sort!(v,alg=a,by=f)
 @deprecate sortby!(v::AbstractVector,f::Function,a::Algorithm) sort!(v,alg=a,by=f)
 @deprecate sortby!(f::Function,v::AbstractVector,a::Algorithm) sort!(v,alg=a,by=f)

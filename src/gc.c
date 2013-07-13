@@ -705,6 +705,7 @@ static void gc_mark_all()
         gc_push_root(ta->tls);
         gc_push_root(ta->consumers);
         gc_push_root(ta->donenotify);
+        gc_push_root(ta->exception);
         if (ta->start)  gc_push_root(ta->start);
         if (ta->result) gc_push_root(ta->result);
         if (ta->stkbuf != NULL || ta == jl_current_task) {
