@@ -207,6 +207,12 @@ zeros(args...)               = fill!(Array(Float64, args...), float64(0))
 ones{T}(::Type{T}, args...) = fill!(Array(T, args...), one(T))
 ones(args...)               = fill!(Array(Float64, args...), float64(1))
 
+infs{T<:FloatingPoint}(::Type{T}, args...) = fill!(Array(T, args...), inf(T))
+infs(args...)               = fill!(Array(Float64, args...), Inf)
+
+nans{T<:FloatingPoint}(::Type{T}, args...) = fill!(Array(T, args...), nan(T))
+nans(args...)               = fill!(Array(Float64, args...), NaN)
+
 function eye(T::Type, m::Int, n::Int)
     a = zeros(T,m,n)
     for i = 1:min(m,n)
