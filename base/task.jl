@@ -3,6 +3,12 @@ show(io::IO, t::Task) = print(io, "Task")
 current_task() = ccall(:jl_get_current_task, Any, ())::Task
 istaskdone(t::Task) = t.done
 
+# yield to a task, throwing an exception in it
+function throwto(t::Task, exc)
+    t.exception = exc
+    yieldto(t)
+end
+
 function task_local_storage()
     t = current_task()
     if is(t.storage, nothing)
@@ -72,8 +78,6 @@ end
 
 ## condition variables
 
-type ProcessExitedException <: Exception end
-
 type Condition
     waitq::Vector{Any}
 
@@ -89,28 +93,25 @@ function wait(c::Condition)
     push!(c.waitq, ct)
 
     ct.runnable = false
-    args = yield(c)
-
-    if isa(args,Exception)
-        filter!(x->x!==ct, c.waitq)
-        error(args)
-    end
-    args
+    yield(c)
 end
 
-function notify(c::Condition, arg::ANY=nothing; all=true)
+function notify(c::Condition, arg::ANY=nothing; all=true, error=false)
     if all
         for t in c.waitq
-            t.result = arg
+            !error ? (t.result = arg) : (t.exception = arg)
             enq_work(t)
         end
         empty!(c.waitq)
     elseif !isempty(c.waitq)
         t = shift!(c.waitq)
-        t.result = arg
+        !error? (t.result = arg) : (t.exception = arg)
         enq_work(t)
     end
     nothing
 end
 
 notify1(c::Condition, arg=nothing) = notify(c, arg, all=false)
+
+notify_error(c::Condition, err) = notify(c, err, error=true)
+notify1_error(c::Condition, err) = notify(c, err, error=true, all=false)

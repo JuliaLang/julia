@@ -377,3 +377,8 @@ s = IntSet(0,1,10,20,200,300,1000,10000,10002)
 @test contains(s,10000)
 @test_throws first(IntSet())
 @test_throws last(IntSet())
+
+# Ranges
+
+@test isempty((1:4)[5:4])
+@test_throws (1:10)[8:-1:-2]

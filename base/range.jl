@@ -112,14 +112,27 @@ function getindex{T}(r::Ranges{T}, i::Integer)
     oftype(T, r.start + (i-1)*step(r))
 end
 
-getindex(r::Range, s::Range{Int}) =
-    r.len < last(s) ? error(BoundsError) : Range(r[s.start], r.step*s.step, s.len)
-getindex(r::Range1, s::Range{Int}) =
-    r.len < last(s) ? error(BoundsError) : Range(r[s.start], s.step, s.len)
-getindex(r::Range, s::Range1{Int}) =
-    r.len < last(s) ? error(BoundsError) : Range(r[s.start], r.step, s.len)
-getindex(r::Range1, s::Range1{Int}) =
-    r.len < last(s) ? error(BoundsError) : Range1(r[s.start], s.len)
+function getindex(r::Range1, s::Range1{Int})
+    if s.len > 0
+        if !(1 <= last(s) <= r.len)
+            throw(BoundsError())
+        end
+        Range1(r[s.start], s.len)
+    else
+        Range1(r.start, s.len)
+    end
+end
+
+function getindex(r::Ranges, s::Ranges{Int})
+    if s.len > 0
+        if !(1 <= last(s) <= r.len)
+            throw(BoundsError())
+        end
+        Range(r[s.start], step(r)*step(s), s.len)
+    else
+        Range(r.start, step(r)*step(s), s.len)
+    end
+end
 
 function show(io::IO, r::Range)
     if step(r) == 0
