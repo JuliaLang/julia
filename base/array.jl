@@ -202,10 +202,16 @@ fill(v, dims::Dims)       = fill!(Array(typeof(v), dims), v)
 fill(v, dims::Integer...) = fill!(Array(typeof(v), dims...), v)
 
 zeros{T}(::Type{T}, args...) = fill!(Array(T, args...), zero(T))
-zeros(args...)               = fill!(Array(Float64, args...), float64(0))
+zeros(args...)               = fill!(Array(Float64, args...), 0.0)
 
 ones{T}(::Type{T}, args...) = fill!(Array(T, args...), one(T))
-ones(args...)               = fill!(Array(Float64, args...), float64(1))
+ones(args...)               = fill!(Array(Float64, args...), 1.0)
+
+infs{T}(::Type{T}, args...) = fill!(Array(T, args...), inf(T))
+infs(args...)               = fill!(Array(Float64, args...), Inf)
+
+nans{T}(::Type{T}, args...) = fill!(Array(T, args...), nan(T))
+nans(args...)               = fill!(Array(Float64, args...), NaN)
 
 function eye(T::Type, m::Int, n::Int)
     a = zeros(T,m,n)
