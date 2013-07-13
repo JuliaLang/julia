@@ -450,6 +450,8 @@ end
 
 ##
 
+listen(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT) = (uv_error("listen",!listen!(sock;backlog=backlog)); sock)
+
 function listen(addr; backlog::Integer=BACKLOG_DEFAULT)
     sock = TcpServer()
     uv_error("listen",!bind(sock,addr))
