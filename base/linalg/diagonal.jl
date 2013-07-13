@@ -72,7 +72,15 @@ ctranspose(D::Diagonal) = conj(D)
 diag(D::Diagonal) = D.diag
 det(D::Diagonal) = prod(D.diag)
 logdet(D::Diagonal) = sum(log(D.diag))
-inv(D::Diagonal) = Diagonal(1 ./ D.diag)
+function inv{T<:BlasFloat}(D::Diagonal{T})
+    Di = similar(D.diag)
+    for i in 1:length(D.diag)
+        if D.diag[i] != 0 || throw(SingularException(i)) end
+        Di[i] = 1 / D.diag[i]
+    end
+    return Diagonal(Di)
+end
+inv(D::Diagonal) = inv(Diagonal(float(D.diag)))
 
 eigvals(D::Diagonal) = sort(D.diag)
 
