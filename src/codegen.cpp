@@ -427,7 +427,7 @@ struct jl_varinfo_t {
 typedef struct {
     Value *dataptr;
     Value *len;
-    Value *nr;
+    std::vector<Value*> sizes;
     jl_value_t *ty;
 } jl_arrayvar_t;
 
@@ -2310,9 +2310,11 @@ static void maybe_alloc_arrayvar(jl_sym_t *s, jl_codectx_t *ctx)
         // we could make it work by reloading the metadata when the array is
         // passed to an external function (ideally only impure functions)
         jl_arrayvar_t av;
+        int ndims = jl_unbox_long(jl_tparam1(jt));
         av.dataptr = builder.CreateAlloca(T_pint8);
         av.len = builder.CreateAlloca(T_size);
-        av.nr = builder.CreateAlloca(T_size);
+        for(int i=0; i < ndims-1; i++)
+            av.sizes.push_back(builder.CreateAlloca(T_size));
         av.ty = jt;
         (*ctx->arrayvars)[s] = av;
     }
