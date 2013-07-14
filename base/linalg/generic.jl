@@ -192,13 +192,16 @@ scale!(b::AbstractVector, A::AbstractMatrix) = scale!(A,b,A)
 
 #rref{T}(A::AbstractMatrix{T})
 
-function peakflops(n=2000)
+function peakflops(n::Integer=2000; parallel::Bool=false)
     a = rand(100,100)
     t = @elapsed a*a
     a = rand(n,n)
     t = @elapsed a*a
-    floprate = (2.0*float64(n)^3/t)
-    println("The peak flop rate is ", floprate*1e-9, " gigaflops")
+    if parallel
+        floprate = sum(pmap(peakflops, [ n for i in 1:nworkers()]) )
+    else
+        floprate = (2.0*float64(n)^3/t)
+    end
     floprate
 end
 
