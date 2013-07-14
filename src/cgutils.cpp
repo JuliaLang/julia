@@ -668,11 +668,9 @@ static Value *emit_arrayptr(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
 
 static Value *emit_arraysize(Value *t, jl_value_t *ex, int dim, jl_codectx_t *ctx)
 {
-    if (dim == 1) {
-        jl_arrayvar_t *av = arrayvar_for(ex, ctx);
-        if (av!=NULL)
-            return builder.CreateLoad(av->nr);
-    }
+    jl_arrayvar_t *av = arrayvar_for(ex, ctx);
+    if (av != NULL && dim <= (int)av->sizes.size())
+        return builder.CreateLoad(av->sizes[dim-1]);
     return emit_arraysize(t, dim);
 }
 
@@ -681,7 +679,8 @@ static void assign_arrayvar(jl_arrayvar_t &av, Value *ar)
     builder.CreateStore(builder.CreateBitCast(emit_arrayptr(ar),T_pint8),
                         av.dataptr);
     builder.CreateStore(emit_arraylen_prim(ar, av.ty), av.len);
-    builder.CreateStore(emit_arraysize(ar,1), av.nr);
+    for(size_t i=0; i < av.sizes.size(); i++)
+        builder.CreateStore(emit_arraysize(ar,i+1), av.sizes[i]);
 }
 
 static Value *data_pointer(Value *x)
