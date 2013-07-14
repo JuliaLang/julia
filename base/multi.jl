@@ -876,9 +876,11 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
         catch e
             iderr = worker_id_from_socket(sock)
             # If error occured talking to pid 1, commit harakiri
-            if iderr == 1 && uv_isopen(sock)
-                print(STDERR, "exception on ", myid(), ": ")
-                display_error(e, catch_backtrace())
+            if iderr == 1
+                if uv_isopen(sock)
+                    print(STDERR, "exception on ", myid(), ": ")
+                    display_error(e, catch_backtrace())
+                end
                 exit(1)
             end
             
