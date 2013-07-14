@@ -876,19 +876,20 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
         catch e
             iderr = worker_id_from_socket(sock)
             # If error occured talking to pid 1, commit harakiri
-            if iderr == 1 && uv_isopen(sock)
-                print(STDERR, "exception on ", myid(), ": ")
-                display_error(e, catch_backtrace())
+            
+#             if iderr == 1 && uv_isopen(sock)
+#                 print(STDERR, "exception on ", myid(), ": ")
+#                 display_error(e, catch_backtrace())
+#                 exit(1)
+#             end
+            if iderr == 1 
                 exit(1)
             end
-            
+
             if isa(e,EOFError)
                 deregister_worker(iderr)
                 
                 if (myid() == 1) println("Worker $iderr terminated.") end
-                
-                #TODO : Notify all RemoteRefs linked to this Worker who just died....
-                # How?
                 
                 return nothing
             else
@@ -1074,13 +1075,13 @@ function launch_procs(n::Integer, config::Dict)
     # start the processes first...
     if (cman.ssh)
         sshflags = config[:sshflags]
-        lcmd(idx) =  `ssh -n $sshflags $(cman.machines[idx]) "sh -l -c \"cd $dir && $exename $exeflags\""`
+        lcmd(idx) =  detach(`ssh -n $sshflags $(cman.machines[idx]) "sh -l -c \"cd $dir && $exename $exeflags\""`)
     else
         lcmd(idx) =  `$(dir)/$(exename) --bind-to $bind_addr $exeflags`
     end
     
     for i in 1:n
-        io,_ = readsfrom(detach(lcmd(i)))
+        io,_ = readsfrom(lcmd(i))
         outs[i] = io
     end    
     
@@ -1093,9 +1094,6 @@ function launch_procs(n::Integer, config::Dict)
             io = outs[i]
             outs[i] = (io, cman.machines[i])
         end
-    end
-    
-    if cman.ssh
         return (:io_host, outs)
     else
         return (:io_only, outs)
