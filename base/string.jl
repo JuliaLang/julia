@@ -100,8 +100,11 @@ function isvalid(s::String, i::Integer)
 end
 
 prevind(s::DirectIndexString, i::Integer) = i-1
+prevind(s                   , i::Integer) = i-1
 thisind(s::DirectIndexString, i::Integer) = i
+thisind(s                   , i::Integer) = i
 nextind(s::DirectIndexString, i::Integer) = i+1
+nextind(s                   , i::Integer) = i+1
 
 prevind(s::String, i::Integer) = thisind(s,thisind(s,i)-1)
 
