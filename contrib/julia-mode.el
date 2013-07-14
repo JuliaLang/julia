@@ -222,6 +222,7 @@
     (when (julia-at-keyword julia-block-end-keywords)
       (forward-word 1)))
 
+;;;###autoload
 (defun julia-mode ()
   "Major mode for editing julia code"
   (interactive)
