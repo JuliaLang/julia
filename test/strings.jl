@@ -447,6 +447,10 @@ end
 @test rsearch("foo,bar,baz", "az") == 10:11
 @test rsearch("foo,bar,baz", "az", 10) == 0:-1
 
+# array rsearch
+@test rsearch(Uint8[1,2,3],Uint8[2,3],3) == 2:3
+@test rsearch(Uint8[1,2,3],Uint8[2,3],1) == 0:-1
+
 # string search with a two-char regex
 @test search("foo,bar,baz", r"xx") == 0:-1
 @test search("foo,bar,baz", r"fo") == 1:2
