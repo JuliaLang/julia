@@ -602,7 +602,14 @@ void gc(int mustgrow)
     // if we're using > 80% of the space, resize tospace so we have
     // more space to fill next time. if we grew tospace last time,
     // grow the other half of the heap this time to catch up.
-    if (grew || ((lim-curheap) < (int)(heapsize/5)) || mustgrow) {
+    if (grew || mustgrow
+#ifdef MEMDEBUG
+        // GC more often
+        || ((lim-curheap) < (int)(heapsize/128))
+#else
+        || ((lim-curheap) < (int)(heapsize/5))
+#endif
+        ) {
         temp = LLT_REALLOC(tospace, heapsize*2);
         if (temp == NULL)
             fl_raise(memory_exception_value);
