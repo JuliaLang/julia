@@ -1271,27 +1271,38 @@ pmap(f) = f()
 # rsym(n) = (a=rand(n,n);a*a')
 # L = {rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000)};
 # pmap(eig, L);
-function pmap(f, lsts...)
+function pmap(f, lsts...; err_retry=true, err_stop=false)
     np = nprocs()
     n = length(lsts[1])
     results = cell(n)
     queue = [1:n]
-    i = 1
+    errors = Set()
     @sync begin
+        task_in_err = false
         for p=1:np
             wpid = PGRP.workers[p].id
             if wpid != myid() || np == 1
                 @async begin
                     while true
-                        if isempty(queue)
+                        if isempty(queue) || (!isempty(errors) && err_stop)
                             break
                         end
                         idx = shift!(queue)
                         try
                             results[idx] = remotecall_fetch(wpid, f,
                                                             map(L->L[idx], lsts)...)
-                        catch
-                            push!(queue, idx)
+                            if isa(results[idx], Exception)
+                                rethrow(results[idx])
+                            end
+                        catch e
+                            if err_retry
+                                push!(queue, idx) 
+                            else
+                                results[idx] = e
+                            end
+                            add!(errors, e) 
+                            
+                            # remove this worker from accepting any more tasks 
                             break
                         end
                     end
