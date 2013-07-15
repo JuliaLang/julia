@@ -95,3 +95,18 @@ file = tempname()
 stdin, proc = writesto(`cat -` |> file)
 write(stdin, str)
 close(stdin)
+
+# issue #3373
+# fixing up Conditions after interruptions
+r = RemoteRef()
+t = @async begin
+    try
+        wait(r)
+    end
+    @test wait(spawn(`sleep 1`)) == 0
+end
+yield()
+Base.interrupt_waiting_task(t, InterruptException())
+yield()
+put(r,11)
+yield()

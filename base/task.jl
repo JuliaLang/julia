@@ -93,7 +93,12 @@ function wait(c::Condition)
     push!(c.waitq, ct)
 
     ct.runnable = false
-    yield(c)
+    try
+        yield(c)
+    catch
+        filter!(x->x!==ct, c.waitq)
+        rethrow()
+    end
 end
 
 function notify(c::Condition, arg::ANY=nothing; all=true, error=false)
