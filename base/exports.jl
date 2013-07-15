@@ -988,6 +988,7 @@ export
     llvmir,
     nativeassembly,
     typeinferredast,
+    loweredast,
     isconst,
     isgeneric,
 

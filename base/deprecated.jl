@@ -222,6 +222,7 @@ export PipeString
 @deprecate disassemble(f::Function,types::(Any...,)) llvmir
 @deprecate disassemble(f::Function,types::(Any...,),asm::Bool) nativeassembly
 @deprecate finfer                       typeinferredast
+@deprecate methods(f::ANY,t::ANY)       loweredast(f,t)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
