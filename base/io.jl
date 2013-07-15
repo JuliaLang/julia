@@ -27,6 +27,7 @@ end
 # all subtypes should implement this
 write(s::IO, x::Uint8) = error(typeof(s)," does not support byte I/O")
 
+write(io::IO, x) = throw(MethodError(write, (io, x)))
 write(io::IO, xs...) = for x in xs write(io, x) end
 
 if ENDIAN_BOM == 0x01020304
