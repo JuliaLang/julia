@@ -101,6 +101,8 @@ resolve(
             error("$pkg has no version compatible with fixed requirements")
     end
 
+    deps = Query.prune_dependencies(reqs,deps)
+
     want = Resolve.resolve(reqs,deps)
 
     # compare what is installed with what should be
