@@ -47,8 +47,8 @@ isless(i::Segment, j::Segment) = isless(i.E, j.E)
 cheapnorm(A::AbstractMatrix) = norm(A,1)
 cheapnorm(x) = norm(x)
 
-# Internal routine: integrate f(x) over a sequence of line segments
-# evaluate the integration rule and return a Segment.
+# Internal routine: approximately integrate f(x) over the interval (a,b)
+# by evaluating the integration rule (x,w,gw). Return a Segment.
 function evalrule(f, a,b, x,w,gw)
     # Ik and Ig are integrals via Kronrod and Gauss rules, respectively
     s = convert(eltype(x), 0.5) * (b-a)
