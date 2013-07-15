@@ -54,7 +54,8 @@ extern "C" {
     XX(pollcb) \
     XX(fspollcb) \
     XX(isopen) \
-    XX(fseventscb)
+    XX(fseventscb) \
+    XX(writecb)
 //TODO add UDP and other missing callbacks
 
 #define JULIA_HOOK_(m,hook)  ((jl_function_t*)jl_get_global(m, jl_symbol("_uv_hook_" #hook)))
@@ -427,8 +428,9 @@ DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar )
     return jl_write(s, buf, n);
 }
 
-static void jl_free_buffer(uv_write_t* req, int status)
+static void jl_uv_writecb(uv_write_t* req, int status)
 {
+    JULIA_CB(writecb, req->handle->data, 1, CB_INT32, status)
     free(req);
 }
 
@@ -451,8 +453,8 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
                 char *data = (char*)(uvw+1);
                 *data = c;
                 uv_buf_t buf[]  = {{.base = data,.len=1}};
-                uvw->data = data;
-                int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
+                uvw->data = NULL;
+                int err = uv_write(uvw,stream,buf,1,&jl_uv_writecb);
                 JL_SIGATOMIC_END();
                 return err ? 0 : 1;
             }
@@ -486,8 +488,8 @@ DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
             char *data = (char*)(uvw+1);
             memcpy(data,str,n);
             uv_buf_t buf[]  = {{.base = data,.len=n}};
-            uvw->data = data;
-            int err = uv_write(uvw,stream,buf,1,&jl_free_buffer);
+            uvw->data = NULL;
+            int err = uv_write(uvw,stream,buf,1,&jl_uv_writecb);
             JL_SIGATOMIC_END();
             return err ? 0 : n;
         }
