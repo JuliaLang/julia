@@ -781,3 +781,6 @@ bin_val = hex2bytes("07bf")
 
 # issue #3597
 @test string(CharString(['T', 'e', 's', 't'])[1:1], "X") == "TX"
+
+# issue #3710
+@test prevind(SubString("{var}",2,4),4) == 3
