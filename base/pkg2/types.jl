@@ -1,18 +1,27 @@
 module Types
 
 export VersionInterval, VersionSet, Requires, Available, Fixed,
-       merge_requires!, satisfies, @recover
+       merge_requires!, satisfies, normal, @recover
+
+normal(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch)
 
 immutable VersionInterval
     lower::VersionNumber
     upper::VersionNumber
+    VersionInterval(lower::VersionNumber, upper::VersionNumber) = new(normal(lower), normal(upper))
 end
 VersionInterval(lower::VersionNumber) = VersionInterval(lower,typemax(VersionNumber))
 VersionInterval() = VersionInterval(typemin(VersionNumber))
 
-Base.show(io::IO, i::VersionInterval) = print(io, "[$(i.lower),$(i.upper))")
+function Base.show(io::IO, i::VersionInterval)
+    if i.upper == normal(typemax(VersionNumber))
+        print(io, "[$(i.lower),$(typemax(VersionNumber)))")
+    else
+        print(io, "[$(i.lower),$(i.upper))")
+    end
+end
 Base.isempty(i::VersionInterval) = i.upper <= i.lower
-Base.contains(i::VersionInterval, v::VersionNumber) = i.lower <= v < i.upper
+Base.contains(i::VersionInterval, v::VersionNumber) = i.lower <= normal(v) < i.upper
 Base.intersect(a::VersionInterval, b::VersionInterval) = VersionInterval(max(a.lower,b.lower), min(a.upper,b.upper))
 Base.isequal(a::VersionInterval, b::VersionInterval) = (a.lower == b.lower) & (a.upper == b.upper)
 

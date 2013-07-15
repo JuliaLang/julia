@@ -1,5 +1,7 @@
 module FieldValues
 
+using ...VersionWeights
+
 export FieldValue, Field, validmax, secondmax
 
 # FieldValue is a numeric type which helps dealing with
@@ -18,23 +20,23 @@ export FieldValue, Field, validmax, secondmax
 #
 immutable FieldValue
     l0::Int
-    l1::Int
-    l2::Int
+    l1::VersionWeight
+    l2::VersionWeight
     l3::Int
     l4::Int128
 end
-FieldValue(l0::Int,l1::Int,l2::Int,l3::Int) = FieldValue(l0, l1, l2, l3, int128(0))
-FieldValue(l0::Int,l1::Int,l2::Int) = FieldValue(l0, l1, l2, 0)
-FieldValue(l0::Int,l1::Int) = FieldValue(l0, l1, 0)
-FieldValue(l0::Int) = FieldValue(l0, 0)
+FieldValue(l0::Int,l1::VersionWeight,l2::VersionWeight,l3::Int) = FieldValue(l0, l1, l2, l3, int128(0))
+FieldValue(l0::Int,l1::VersionWeight,l2::VersionWeight) = FieldValue(l0, l1, l2, 0)
+FieldValue(l0::Int,l1::VersionWeight) = FieldValue(l0, l1, VersionWeight(0))
+FieldValue(l0::Int) = FieldValue(l0, VersionWeight(0))
 FieldValue() = FieldValue(0)
 
 typealias Field Vector{FieldValue}
 
 Base.zero(::Type{FieldValue}) = FieldValue()
 
-Base.typemin(::Type{FieldValue}) = (x=typemin(Int); FieldValue(x,x,x,x,typemin(Int128)))
-Base.typemax(::Type{FieldValue}) = (x=typemax(Int); FieldValue(x,x,x,x,typemax(Int128)))
+Base.typemin(::Type{FieldValue}) = (x=typemin(Int); y=typemin(VersionWeight); FieldValue(x,y,y,x,typemin(Int128)))
+Base.typemax(::Type{FieldValue}) = (x=typemax(Int); y=typemax(VersionWeight); FieldValue(x,y,y,x,typemax(Int128)))
 
 Base.(:-)(a::FieldValue, b::FieldValue) = FieldValue(a.l0-b.l0, a.l1-b.l1, a.l2-b.l2, a.l3-b.l3, a.l4-b.l4)
 Base.(:+)(a::FieldValue, b::FieldValue) = FieldValue(a.l0+b.l0, a.l1+b.l1, a.l2+b.l2, a.l3+b.l3, a.l4+b.l4)
