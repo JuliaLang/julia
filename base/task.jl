@@ -101,6 +101,25 @@ function wait(c::Condition)
     end
 end
 
+function wait()
+    ct = current_task()
+    ct.runnable = false
+    yield()
+end
+
+function notify(t::Task, arg::ANY=nothing; error=false)
+    @assert t.runnable == false
+    if error
+        t.exception = arg
+    else
+        t.result = arg
+    end
+    enq_work(t)
+    nothing
+end
+notify_error(t::Task, err) = notify(c, err, error=true)
+
+
 function notify(c::Condition, arg::ANY=nothing; all=true, error=false)
     if all
         for t in c.waitq
