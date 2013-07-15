@@ -1276,15 +1276,20 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
     n = length(lsts[1])
     results = cell(n)
     queue = [1:n]
-    errors = Set()
+    
+    task_in_err = false
+    is_task_in_error() = task_in_err
+    function set_task_in_error() 
+        task_in_err = true
+    end
+    
     @sync begin
-        task_in_err = false
         for p=1:np
             wpid = PGRP.workers[p].id
             if wpid != myid() || np == 1
                 @async begin
                     while true
-                        if isempty(queue) || (!isempty(errors) && err_stop)
+                        if isempty(queue) || (is_task_in_error() && err_stop)
                             break
                         end
                         idx = shift!(queue)
@@ -1300,7 +1305,7 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
                             else
                                 results[idx] = e
                             end
-                            add!(errors, e) 
+                            set_task_in_error()
                             
                             # remove this worker from accepting any more tasks 
                             break
