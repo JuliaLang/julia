@@ -987,7 +987,7 @@ export
     isinteractive,
     llvmir,
     nativeassembly,
-    finfer,
+    typeinferredast,
     isconst,
     isgeneric,
 

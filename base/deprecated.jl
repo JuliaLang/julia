@@ -221,6 +221,7 @@ export PipeString
 @deprecate square(x::Number)          x*x
 @deprecate disassemble(f::Function,types::(Any...,)) llvmir
 @deprecate disassemble(f::Function,types::(Any...,),asm::Bool) nativeassembly
+@deprecate finfer                       typeinferredast
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
