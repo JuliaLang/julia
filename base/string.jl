@@ -417,6 +417,9 @@ endof(s::SubString) = s.endof
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
 
+thisind(s::SubString, i::Integer) = thisind(s.string, i+s.offset)-s.offset
+nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
+
 convert{T<:String}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
 
 function serialize{T}(s, ss::SubString{T})
