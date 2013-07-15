@@ -137,7 +137,7 @@ function alldependencies(pkg::String,avail::Dict=available(),free::Dict=free(ins
     deps = [ k for (k,v) in dependencies(pkg,avail,free,fix) ]
     alldeps = copy(deps)
     for dep in deps
-        dep != "julia" && append!(alldeps,[ k for (k,v) in dependencies(pkg,avail,free,fix) ])
+        dep != "julia" && append!(alldeps,[ k for (k,v) in dependencies(dep,avail,free,fix) ])
     end
     unique(alldeps)
 end
