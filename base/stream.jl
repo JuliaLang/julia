@@ -620,6 +620,12 @@ function _write(s::AsyncStream, p::Ptr{Void}, nb::Integer)
     int(ccall(:jl_write, Uint, (Ptr{Void},Ptr{Void},Uint), handle(s), p, uint(nb)))
 end
 
+function _uv_hook_writecb(s::AsyncStream,status::Int32) 
+    if status == -1
+        close(s)
+    end
+end
+
 ## Libuv error handling ##
 _uv_lasterror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)
 _uv_lasterror() = _uv_lasterror(eventloop())
