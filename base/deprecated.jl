@@ -219,8 +219,8 @@ export PipeString
 @deprecate msync(A::Array, flags::Int)    msync(A)
 @deprecate msync(A::BitArray, flags::Int) msync(A)
 @deprecate square(x::Number)          x*x
-@deprecate disassemble(f::Function,types::(Any...,)) llvmir
-@deprecate disassemble(f::Function,types::(Any...,),asm::Bool) nativeassembly
+@deprecate disassemble(f::Function,types::(Any...,)) llvmir(f,types)
+@deprecate disassemble(f::Function,types::(Any...,),asm::Bool) (asm?nativeassembly(f,types):llvmir(f,types))
 @deprecate finfer                       typeinferredast
 @deprecate methods(f::ANY,t::ANY)       loweredast(f,t)
 
