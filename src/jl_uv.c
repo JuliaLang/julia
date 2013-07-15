@@ -55,7 +55,8 @@ extern "C" {
     XX(fspollcb) \
     XX(isopen) \
     XX(fseventscb) \
-    XX(writecb)
+    XX(writecb) \
+    XX(writecb_task)
 //TODO add UDP and other missing callbacks
 
 #define JULIA_HOOK_(m,hook)  ((jl_function_t*)jl_get_global(m, jl_symbol("_uv_hook_" #hook)))
@@ -419,19 +420,32 @@ DLLEXPORT int jl_puts(char *str, uv_stream_t *stream)
     return jl_write(stream,str,strlen(str));
 }
 
-DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar )
+DLLEXPORT void jl_uv_writecb(uv_write_t* req, int status)
 {
-    char buf[8];
-    if (wchar < 0x80)
-        return jl_putc((int)wchar, s);
-    size_t n = u8_toutf8(buf, 8, &wchar, 1);
-    return jl_write(s, buf, n);
+    JULIA_CB(writecb, req->handle->data, 2, CB_PTR, req, CB_INT32, status)
+    free(req);
 }
 
-static void jl_uv_writecb(uv_write_t* req, int status)
+DLLEXPORT void jl_uv_writecb_task(uv_write_t* req, int status)
 {
-    JULIA_CB(writecb, req->handle->data, 1, CB_INT32, status)
+    JULIA_CB(writecb_task, req->handle->data, 2, CB_PTR, req, CB_INT32, status)
     free(req);
+}
+
+
+DLLEXPORT void *jl_write_sync(uv_stream_t *stream, const char *str, size_t n, void *writecb)
+{
+    JL_SIGATOMIC_BEGIN();
+    uv_write_t *uvw = malloc(sizeof(uv_write_t)+n);
+    char *data = (char*)(uvw+1);
+    memcpy(data,str,n);
+    uv_buf_t buf[]  = {{.base = data,.len=n}};
+    uvw->data = NULL;
+    int err = uv_write(uvw,stream,buf,1,writecb);  
+    if(err)
+        free(uvw);
+    JL_SIGATOMIC_END();
+    return err ? NULL : uvw; 
 }
 
 DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
@@ -448,15 +462,7 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
                 return err ? 0 : 1;
             }
             else {
-                JL_SIGATOMIC_BEGIN();
-                uv_write_t *uvw = malloc(sizeof(uv_write_t) + 1);
-                char *data = (char*)(uvw+1);
-                *data = c;
-                uv_buf_t buf[]  = {{.base = data,.len=1}};
-                uvw->data = NULL;
-                int err = uv_write(uvw,stream,buf,1,&jl_uv_writecb);
-                JL_SIGATOMIC_END();
-                return err ? 0 : 1;
+                return jl_write_sync(stream,(char*)&c,1,&jl_uv_writecb) == NULL ? 0 : 1;
             }
         }
         else {
@@ -465,6 +471,42 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
         }
     }
     return 0;
+}
+
+DLLEXPORT void *jl_write_no_copy(uv_stream_t *stream, char *data, size_t n, void *writecb)
+{
+    uv_buf_t buf[]  = {{.base = data,.len=n}};
+    JL_SIGATOMIC_BEGIN();
+    uv_write_t *uvw = malloc(sizeof(uv_write_t));
+    int err = uv_write(uvw,stream,buf,1,writecb);
+    uvw->data = NULL;
+    if(err != 0)
+        free(uvw);
+    JL_SIGATOMIC_END();
+    return err ? NULL : uvw;
+}
+
+DLLEXPORT void *jl_putc_sync(unsigned char c, uv_stream_t *stream, void *writecb)
+{
+    return jl_write_sync(stream,(char *)&c,1,writecb);
+}
+
+DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar )
+{
+    char buf[8];
+    if (wchar < 0x80)
+        return jl_putc((int)wchar, s);
+    size_t n = u8_toutf8(buf, 8, &wchar, 1);
+    return jl_write(s, buf, n);
+}
+
+DLLEXPORT void *jl_pututf8_sync(uv_stream_t *s, uint32_t wchar, void *writecb)
+{
+    char buf[8];
+    if (wchar < 0x80)
+        return jl_putc_sync((int)wchar, s, writecb);
+    size_t n = u8_toutf8(buf, 8, &wchar, 1);
+    return jl_write_sync(s, buf, n, writecb);
 }
 
 DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
@@ -483,15 +525,7 @@ DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
             return err ? 0 : n;
         }
         else {
-            JL_SIGATOMIC_BEGIN();
-            uv_write_t *uvw = malloc(sizeof(uv_write_t)+n);
-            char *data = (char*)(uvw+1);
-            memcpy(data,str,n);
-            uv_buf_t buf[]  = {{.base = data,.len=n}};
-            uvw->data = NULL;
-            int err = uv_write(uvw,stream,buf,1,&jl_uv_writecb);
-            JL_SIGATOMIC_END();
-            return err ? 0 : n;
+            return jl_write_sync(stream,str,n,&jl_uv_writecb) == NULL ? 0 : n;
         }
     }
     else {
@@ -757,6 +791,22 @@ DLLEXPORT int jl_uv_unix_fd_is_watched(int fd, uv_poll_t *handle, uv_loop_t *loo
 DLLEXPORT uv_handle_type jl_uv_handle_type(uv_handle_t *handle)
 {
     return handle->type;
+}
+
+DLLEXPORT void jl_uv_req_set_data(uv_req_t *req, void *data)
+{
+    req->data = data;
+}
+ 
+ 
+DLLEXPORT void *jl_uv_req_data(uv_req_t *req)
+{
+    return req->data;
+}
+
+DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle)
+{
+    return handle->data;
 }
 
 #ifdef __cplusplus
