@@ -186,7 +186,7 @@ function readdir(path::String)
         entry = bytestring(ccall(:jl_uv_fs_t_ptr_offset, Ptr{Uint8},
                                  (Ptr{Uint8}, Int32), uv_readdir_req, offset))
         push!(entries, entry)
-        offset += length(entry) + 1   # offset to the next entry
+        offset += sizeof(entry) + 1   # offset to the next entry
     end
 
     # Clean up the request string
