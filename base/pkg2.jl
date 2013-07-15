@@ -155,7 +155,6 @@ resolve(
                 info("Rolling back $pkg from v$ver2 to v$ver1")
                 @recover Write.update(pkg, Read.sha1(pkg,ver1))
             end
-            push!(changed,(pkg,(ver1,ver2)))
         end
         rethrow()
     end
