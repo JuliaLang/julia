@@ -40,7 +40,7 @@ end
 
 function eof(s::AsyncStream)
     wait_readnb(s,1)
-    !uv_isopen(s) && nb_available(s.buffer)<=0
+    !isopen(s) && nb_available(s.buffer)<=0
 end
 
 const StatusUninit      = 0 # handle is allocated, but not initialized
@@ -214,22 +214,22 @@ end
 
 flush(::TTY) = nothing
 
-function uv_isopen(x)
+function isopen(x)
     assert(x.status != StatusUninit && x.status != StatusInit,
         "UV object is not in a valid state")
     x.status != StatusClosed
 end
 
 function wait_connected(x)
-    assert(uv_isopen(x), "UV object not in a valid state")
+    assert(isopen(x), "UV object not in a valid state")
     while x.status == StatusConnecting
         wait(x.connectnotify)
-        assert(uv_isopen(x), "UV object not in a valid state")
+        assert(isopen(x), "UV object not in a valid state")
     end
 end
 
 function wait_readbyte(x::AsyncStream, c::Uint8)
-    while uv_isopen(x) && search(x.buffer,c) <= 0
+    while isopen(x) && search(x.buffer,c) <= 0
         start_reading(x)
         wait(x.readnotify)
     end
@@ -238,7 +238,7 @@ end
 wait_readline(x) = wait_readbyte(x, uint8('\n'))
 
 function wait_readnb(x::AsyncStream, nb::Int)
-    while uv_isopen(x) && nb_available(x.buffer) < nb
+    while isopen(x) && nb_available(x.buffer) < nb
         start_reading(x)
         wait(x.readnotify)
     end
@@ -596,15 +596,15 @@ end
 ## low-level calls ##
 
 function write(s::AsyncStream, b::Uint8)
-    assert(uv_isopen(s),"UV object is not in a valid state")
+    assert(isopen(s),"UV object is not in a valid state")
     int(ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, handle(s)))
 end
 function write(s::AsyncStream, c::Char)
-    assert(uv_isopen(s),"UV object is not in a valid state")
+    assert(isopen(s),"UV object is not in a valid state")
     int(ccall(:jl_pututf8, Int32, (Ptr{Void},Uint32), handle(s), c))
 end
 function write{T}(s::AsyncStream, a::Array{T})
-    assert(uv_isopen(s),"UV object is not in a valid state")
+    assert(isopen(s),"UV object is not in a valid state")
     if isbits(T)
         int(ccall(:jl_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), handle(s), a, uint(length(a)*sizeof(T))))
     else
@@ -612,11 +612,11 @@ function write{T}(s::AsyncStream, a::Array{T})
     end
 end
 function write(s::AsyncStream, p::Ptr, nb::Integer)
-    assert(uv_isopen(s),"UV object is not in a valid state")
+    assert(isopen(s),"UV object is not in a valid state")
     int(ccall(:jl_write, Uint, (Ptr{Void},Ptr{Void},Uint), handle(s), p, uint(nb)))
 end
 function _write(s::AsyncStream, p::Ptr{Void}, nb::Integer)
-    assert(uv_isopen(s),"UV object is not in a valid state")
+    assert(isopen(s),"UV object is not in a valid state")
     int(ccall(:jl_write, Uint, (Ptr{Void},Ptr{Void},Uint), handle(s), p, uint(nb)))
 end
 
