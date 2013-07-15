@@ -757,9 +757,13 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             jargty = jl_tupleref(tt,ai);
         }
         Value *arg;
-        if (largty == jl_pvalue_llvmt ||
-                largty->isStructTy()) {
+        bool needroot = false;
+        if (largty == jl_pvalue_llvmt || largty->isStructTy()) {
             arg = emit_expr(argi, ctx, true);
+            if (largty == jl_pvalue_llvmt && arg->getType() != jl_pvalue_llvmt) {
+                arg = boxed(arg);
+                needroot = true;
+            }
         }
         else {
             arg = emit_unboxed(argi, ctx);
@@ -773,8 +777,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
 #ifdef JL_GC_MARKSWEEP
         // make sure args are rooted
-        if (largty == jl_pvalue_llvmt &&
-            !(jl_is_symbol(argi) || jl_is_symbolnode(argi))) {
+        if (largty == jl_pvalue_llvmt && (needroot || might_need_root(argi))) {
             make_gcroot(arg, ctx);
         }
 #endif
