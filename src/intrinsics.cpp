@@ -44,7 +44,6 @@ namespace JL_I {
 using namespace JL_I;
 
 #include "ccall.cpp"
-#define DISABLE_FLOAT16
 
 /*
   low-level intrinsics design:
@@ -60,11 +59,11 @@ using namespace JL_I;
 
 static Type *FTnbits(size_t nb)
 {
-    #ifndef DISABLE_FLOAT16
+#ifndef DISABLE_FLOAT16
     if(nb == 16)
         return Type::getHalfTy(jl_LLVMContext);
     else
-    #endif
+#endif
     if(nb == 32)
         return Type::getFloatTy(jl_LLVMContext);
     else if(nb == 64)
