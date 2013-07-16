@@ -117,7 +117,7 @@ function notify(t::Task, arg::ANY=nothing; error=false)
     enq_work(t)
     nothing
 end
-notify_error(t::Task, err) = notify(c, err, error=true)
+notify_error(t::Task, err) = notify(t, err, iserror=true)
 
 
 function notify(c::Condition, arg::ANY=nothing; all=true, error=false)
