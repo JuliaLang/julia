@@ -79,11 +79,11 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
     if (jl_is_bitstype(jt)) {
         int nb = jl_datatype_size(jt);
         if(jl_is_floattype(jt)) {
-            #ifndef DISABLE_FLOAT16
+#ifndef DISABLE_FLOAT16
             if(nb == 2)
                 return Type::getHalfTy(jl_LLVMContext);
             else 
-            #endif
+#endif
             if(nb == 4)
                 return Type::getFloatTy(jl_LLVMContext);
             else if(nb == 8)
