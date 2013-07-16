@@ -82,6 +82,7 @@ static size_t max_collect_interval = 1250000000UL;
 #else
 static size_t max_collect_interval = 500000000UL;
 #endif
+int jl_in_gc; // referenced from switchto task.c
 
 #ifdef OBJPROFILE
 static htable_t obj_counts;
@@ -276,6 +277,9 @@ static void run_finalizer(jl_value_t *o, jl_value_t *ff)
             jl_apply(f, (jl_value_t**)&o, 1);
         }
         JL_CATCH {
+            JL_PRINTF(JL_STDERR, "error in running finalizer: ");
+            jl_show(jl_stderr_obj(), jl_exception_in_transit);
+            JL_PUTC('\n',JL_STDERR);
         }
         ff = jl_t1(ff);
     }
@@ -285,6 +289,9 @@ static void run_finalizer(jl_value_t *o, jl_value_t *ff)
         jl_apply(f, (jl_value_t**)&o, 1);
     }
     JL_CATCH {
+        JL_PRINTF(JL_STDERR, "error in running finalizer: ");
+        jl_show(jl_stderr_obj(), jl_exception_in_transit);
+        JL_PUTC('\n',JL_STDERR);
     }
 }
 
@@ -857,6 +864,7 @@ void jl_gc_collect(void)
     allocd_bytes = 0;
     if (is_gc_enabled) {
         JL_SIGATOMIC_BEGIN();
+        jl_in_gc = 1;
 #if defined(GCTIME) || defined(GC_FINAL_STATS)
         double t0 = clock_now();
 #endif
@@ -877,6 +885,7 @@ void jl_gc_collect(void)
         JL_PRINTF(JL_STDERR, "sweep time %.3f ms\n", (clock_now()-t0)*1000);
 #endif
         run_finalizers();
+        jl_in_gc = 0;
         JL_SIGATOMIC_END();
 #if defined(GC_FINAL_STATS)
         total_gc_time += (clock_now()-t0);
