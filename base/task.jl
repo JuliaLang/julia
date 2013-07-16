@@ -103,13 +103,16 @@ end
 
 function wait()
     ct = current_task()
+    if ct === Scheduler
+        write!(STDERR, "Warning: Scheduler executed blocking function.\n")
+    end
     ct.runnable = false
     yield()
 end
 
-function notify(t::Task, arg::ANY=nothing; error=false)
+function notify(t::Task, arg::ANY=nothing; iserror=false)
     @assert t.runnable == false
-    if error
+    if iserror
         t.exception = arg
     else
         t.result = arg
