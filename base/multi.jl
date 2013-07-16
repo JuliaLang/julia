@@ -431,7 +431,7 @@ function send_del_client(rr::RemoteRef)
     if rr.where == myid()
         del_client(rr2id(rr), myid())
     else
-        if contains(map_del_wrkr, i)
+        if contains(map_del_wrkr, rr.where)
             # for a removed worker, don't bother
             return
         end

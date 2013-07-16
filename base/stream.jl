@@ -396,11 +396,12 @@ function _uv_hook_asynccb(async::AsyncWork, status::Int32)
         end
     end
     try
-        async.cb(async,status)
+        async.cb(async, status)
     catch err
+        #bt = catch_backtrace()
         if isa(err, MethodError)
-            async.cb(status)
             warn_once("Async callbacks should take an AsyncWork object as the first argument")
+            async.cb(status)
             return
         end
         rethrow(err)

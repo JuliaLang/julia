@@ -253,11 +253,15 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
     //JL_SIGATOMIC_END();
 }
 
+extern int jl_in_gc;
 static jl_value_t *switchto(jl_task_t *t)
 {
     if (t->done) {
         jl_task_arg_in_transit = (jl_value_t*)jl_null;
         return t->result;
+    }
+    if (jl_in_gc) {
+        jl_error("task switch not allowed from inside gc finalizer");
     }
     ctx_switch(t, &t->ctx);
     jl_value_t *val = jl_task_arg_in_transit;
