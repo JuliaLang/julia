@@ -617,7 +617,7 @@ function write!(s::AsyncStream, p::Ptr, nb::Integer)
     uv_error("write", req == C_NULL)
     return nb
 end
-write!(s::AsyncStream, string::ASCIIString) = write!(s,sting.data)
+write!(s::AsyncStream, string::ByteString) = write!(s,string.data)
 
 _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32) = nothing
 
@@ -625,22 +625,22 @@ _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32) = nothing
 function write(s::AsyncStream, b::Uint8)
     assert(isopen(s),"UV object is not in a valid state")
     if isdefined(Base,:Scheduler) && current_task() != Scheduler
-        req = ccall(:jl_putc_sync, Ptr{Void}, (Uint8, Ptr{Void}, Ptr{Void}), b, handle(s), uv_jl_writecb_task::Ptr{Void})
+        req = ccall(:jl_putc_copy, Ptr{Void}, (Uint8, Ptr{Void}, Ptr{Void}), b, handle(s), uv_jl_writecb_task::Ptr{Void})
         uv_req_set_data(req,current_task())
         wait()
     else
-        req = ccall(:jl_putc_sync, Ptr{Void}, (Uint8, Ptr{Void}, Ptr{Void}), b, handle(s), uv_jl_writecb::Ptr{Void})
+        req = ccall(:jl_putc_copy, Ptr{Void}, (Uint8, Ptr{Void}, Ptr{Void}), b, handle(s), uv_jl_writecb::Ptr{Void})
     end
     return 1
 end
 function write(s::AsyncStream, c::Char)
     assert(isopen(s),"UV object is not in a valid state")
     if isdefined(Base,:Scheduler) && current_task() != Scheduler
-        req = ccall(:jl_pututf8_sync, Ptr{Void}, (Ptr{Void},Uint32, Ptr{Void}), handle(s), c, uv_jl_writecb_task::Ptr{Void})
+        req = ccall(:jl_pututf8_copy, Ptr{Void}, (Ptr{Void},Uint32, Ptr{Void}), handle(s), c, uv_jl_writecb_task::Ptr{Void})
         uv_req_set_data(req,current_task())
         wait()
     else
-        req = ccall(:jl_pututf8_sync, Ptr{Void}, (Ptr{Void},Uint32, Ptr{Void}), handle(s), c, uv_jl_writecb::Ptr{Void})
+        req = ccall(:jl_pututf8_copy, Ptr{Void}, (Ptr{Void},Uint32, Ptr{Void}), handle(s), c, uv_jl_writecb::Ptr{Void})
     end
     return utf8sizeof(c)
 end

@@ -230,10 +230,10 @@
     jl_ptr_to_array;
     jl_ptr_to_array_1d;
     jl_putc;
-    jl_putc_sync;
+    jl_putc_copy;
     jl_puts;
     jl_pututf8;
-    jl_pututf8_sync;
+    jl_pututf8_copy;
     jl_readBuffer;
     jl_readdir;
     jl_readuntil;
