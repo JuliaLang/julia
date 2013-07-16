@@ -230,8 +230,10 @@
     jl_ptr_to_array;
     jl_ptr_to_array_1d;
     jl_putc;
+    jl_putc_sync;
     jl_puts;
     jl_pututf8;
+    jl_pututf8_sync;
     jl_readBuffer;
     jl_readdir;
     jl_readuntil;
@@ -323,6 +325,7 @@
     jl_uv_*;
     jl_wrap_raw_dl_handle;
     jl_write;
+    jl_write_no_copy;
     jl_value_ptr;
     jl_zero_subnormals;
     julia_free;
