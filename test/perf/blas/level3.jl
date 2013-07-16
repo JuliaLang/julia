@@ -1,9 +1,9 @@
 # gemm on various size matrices
 
-function matmultest(n, repeats)
+function matmultest(n, repeat)
 	a = rand(n,n)
 	b = similar(a)
-	for ct=1:repeats
+	for ct=1:repeat
 		b = a * a
 	end
 	b
