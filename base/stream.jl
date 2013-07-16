@@ -642,7 +642,7 @@ function write(s::AsyncStream, c::Char)
     else
         req = ccall(:jl_pututf8_sync, Ptr{Void}, (Ptr{Void},Uint32, Ptr{Void}), handle(s), c, uv_jl_writecb::Ptr{Void})
     end
-    return sizeof(c)
+    return utf8sizeof(c)
 end
 function write{T}(s::AsyncStream, a::Array{T})
     assert(isopen(s),"UV object is not in a valid state")
@@ -670,7 +670,7 @@ function write(s::AsyncStream, p::Ptr, nb::Integer)
     else
         ccall(:jl_write, Uint, (Ptr{Void},Ptr{Void},Uint), handle(s), p, uint(nb))
     end
-    return nb
+    return int(nb)
 end
 
 function _uv_hook_writecb_task(s::AsyncStream,req::Ptr{Void},status::Int32) 
