@@ -1347,9 +1347,12 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo)
 
     if isa(e, SymbolNode)
         e = e::SymbolNode
+        curtype = e.typ
         t = abstract_eval(e.name, vtypes, sv)
-        record_var_type(e.name, t, decls)
-        e.typ = t
+        if !subtype(curtype, t) || typeseq(curtype, t)
+            record_var_type(e.name, t, decls)
+            e.typ = t
+        end
         return e
     end
 
