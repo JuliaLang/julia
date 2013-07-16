@@ -619,7 +619,10 @@ function write!(s::AsyncStream, p::Ptr, nb::Integer)
 end
 write!(s::AsyncStream, string::ByteString) = write!(s,string.data)
 
-_uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32) = nothing
+function _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32)
+    status == -1 && close(s)
+    nothing
+end
 
 
 function write(s::AsyncStream, b::Uint8)
