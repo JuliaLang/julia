@@ -858,3 +858,8 @@ function f3471(y)
     convert(Array{typeof(y[1]),1}, y)
 end
 @test isa(f3471({1.0,2.0}), Vector{Float64})
+
+# issue #3729
+typealias A3729{B} Vector{Vector{B}}
+typealias C3729{D} Vector{Vector{D}}
+@test Vector{Vector{Int}} === A3729{Int} === C3729{Int}

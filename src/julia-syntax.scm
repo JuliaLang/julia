@@ -1190,7 +1190,7 @@
 			     (const
 			      (= ,name (call (top TypeConstructor)
 					     (tuple ,@params) ,type-ex))))
-			   ,@(symbols->typevars params bounds #f))))
+			   ,@(symbols->typevars params bounds #t))))
 
    (pattern-lambda (comparison . chain) (expand-compare-chain chain))
 

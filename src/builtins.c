@@ -862,7 +862,11 @@ JL_CALLABLE(jl_f_new_type_constructor)
     if (!jl_is_type(args[1]))
         jl_type_error("typealias", (jl_value_t*)jl_type_type, args[1]);
     jl_tuple_t *p = (jl_tuple_t*)args[0];
-    return (jl_value_t*)jl_new_type_ctor(p, args[1]);
+    jl_value_t *tc = (jl_value_t*)jl_new_type_ctor(p, args[1]);
+    int i;
+    for(i=0; i < jl_tuple_len(p); i++)
+        ((jl_tvar_t*)jl_tupleref(p,i))->bound = 0;
+    return tc;
 }
 
 JL_CALLABLE(jl_f_typevar)
