@@ -433,7 +433,7 @@ DLLEXPORT void jl_uv_writecb_task(uv_write_t* req, int status)
 }
 
 
-DLLEXPORT void *jl_write_sync(uv_stream_t *stream, const char *str, size_t n, void *writecb)
+DLLEXPORT void *jl_write_copy(uv_stream_t *stream, const char *str, size_t n, void *writecb)
 {
     JL_SIGATOMIC_BEGIN();
     uv_write_t *uvw = malloc(sizeof(uv_write_t)+n);
@@ -462,7 +462,7 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
                 return err ? 0 : 1;
             }
             else {
-                return jl_write_sync(stream,(char*)&c,1,&jl_uv_writecb) == NULL ? 0 : 1;
+                return jl_write_copy(stream,(char*)&c,1,&jl_uv_writecb) == NULL ? 0 : 1;
             }
         }
         else {
@@ -486,9 +486,9 @@ DLLEXPORT void *jl_write_no_copy(uv_stream_t *stream, char *data, size_t n, void
     return err ? NULL : uvw;
 }
 
-DLLEXPORT void *jl_putc_sync(unsigned char c, uv_stream_t *stream, void *writecb)
+DLLEXPORT void *jl_putc_copy(unsigned char c, uv_stream_t *stream, void *writecb)
 {
-    return jl_write_sync(stream,(char *)&c,1,writecb);
+    return jl_write_copy(stream,(char *)&c,1,writecb);
 }
 
 DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar )
@@ -500,13 +500,13 @@ DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar )
     return jl_write(s, buf, n);
 }
 
-DLLEXPORT void *jl_pututf8_sync(uv_stream_t *s, uint32_t wchar, void *writecb)
+DLLEXPORT void *jl_pututf8_copy(uv_stream_t *s, uint32_t wchar, void *writecb)
 {
     char buf[8];
     if (wchar < 0x80)
-        return jl_putc_sync((int)wchar, s, writecb);
+        return jl_putc_copy((int)wchar, s, writecb);
     size_t n = u8_toutf8(buf, 8, &wchar, 1);
-    return jl_write_sync(s, buf, n, writecb);
+    return jl_write_copy(s, buf, n, writecb);
 }
 
 DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
@@ -525,7 +525,7 @@ DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
             return err ? 0 : n;
         }
         else {
-            return jl_write_sync(stream,str,n,&jl_uv_writecb) == NULL ? 0 : n;
+            return jl_write_copy(stream,str,n,&jl_uv_writecb) == NULL ? 0 : n;
         }
     }
     else {
