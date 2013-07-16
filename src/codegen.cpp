@@ -98,6 +98,8 @@ void __attribute__(()) __stack_chk_fail()
 
 #define CONDITION_REQUIRES_BOOL
 
+#define DISABLE_FLOAT16
+
 // llvm state
 static LLVMContext &jl_LLVMContext = getGlobalContext();
 static IRBuilder<> builder(getGlobalContext());
