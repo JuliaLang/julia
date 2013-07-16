@@ -317,6 +317,9 @@ write(s::IOStream, b::Uint8) = int(ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b,
 
 function write{T}(s::IOStream, a::Array{T})
     if isbits(T)
+        if isreadonly(s)
+            error("Cannot write to a read-only IOStream")
+        end
         int(ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
                   s.ios, a, length(a)*sizeof(T)))
     else
@@ -325,6 +328,9 @@ function write{T}(s::IOStream, a::Array{T})
 end
 
 function write(s::IOStream, p::Ptr, nb::Integer)
+    if isreadonly(s)
+        error("Cannot write to a read-only IOStream")
+    end
     int(ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb))
 end
 
@@ -368,7 +374,12 @@ end
 
 ## text I/O ##
 
-write(s::IOStream, c::Char) = int(ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c))
+function write(s::IOStream, c::Char)
+    if isreadonly(s)
+        error("Cannot write to a read-only IOStream")
+    end
+    int(ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c))
+end
 read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 
 takebuf_string(s::IOStream) =
