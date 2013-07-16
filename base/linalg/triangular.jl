@@ -63,3 +63,4 @@ A_rdiv_Bc{T<:BlasComplex}(A::StridedVecOrMat{T}, B::Triangular{T}) = BLAS.trsm!(
 det(A::Triangular) = prod(diag(A.UL))
 
 inv{T<:BlasFloat}(A::Triangular{T}) = LAPACK.trtri!(A.uplo, A.unitdiag, copy(A.UL))[1]
+inv(A::Triangular) = inv(Triangular(float(A.UL), A.uplo, A.unitdiag))
