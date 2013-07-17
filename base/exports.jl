@@ -1004,6 +1004,7 @@ export
     gc,
     gc_disable,
     gc_enable,
+    gc_bytes,
 
 # misc
     exit,
