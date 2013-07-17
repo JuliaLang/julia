@@ -440,10 +440,9 @@ default_connectcb(sock,status) = nothing
 
 function connect!(sock::TcpSocket, host::ASCIIString, port::Integer)
     @assert sock.status == StatusInit
-    getaddrinfo(host) do ipaddr
-        sock.status = StatusInit
-        connect!(sock,ipaddr,port)
-    end
+    ipaddr = getaddrinfo(host) 
+    sock.status = StatusInit
+    connect!(sock,ipaddr,port)
     sock.status = StatusConnecting
     sock
 end
