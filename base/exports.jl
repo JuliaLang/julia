@@ -1231,7 +1231,7 @@ export
     @time,
     @timed,
     @elapsed,
-    @bytes,
+    @allocated,
     @which,
     @windows_only,
     @unix_only,
