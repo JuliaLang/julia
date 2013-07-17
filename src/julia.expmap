@@ -138,6 +138,7 @@
     jl_gc_disable;
     jl_gc_enable;
     jl_gc_is_enabled;
+    jl_gc_total_bytes;
     jl_gc_lookfor;
     jl_gc_new_weakref;
     jl_gc_counted_malloc;

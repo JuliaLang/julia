@@ -6,6 +6,9 @@ time() = ccall(:clock_now, Float64, ())
 # high-resolution relative time, in nanoseconds
 time_ns() = ccall(:jl_hrtime, Uint64, ())
 
+# total number of bytes allocated so far
+gc_bytes() = ccall(:jl_gc_total_bytes, Csize_t, ())
+
 function tic()
     t0 = time_ns()
     task_local_storage(:TIMERS, (t0, get(task_local_storage(), :TIMERS, ())))
@@ -33,9 +36,11 @@ end
 macro time(ex)
     quote
         local t0 = time_ns()
+        local b0 = gc_bytes()
         local val = $(esc(ex))
         local t1 = time_ns()
-        println("elapsed time: ", (t1-t0)/1e9, " seconds")
+        local b1 = gc_bytes()
+        println("elapsed time: ", (t1-t0)/1e9, " seconds (", int(b1-b0), " allocated bytes)")
         val
     end
 end
