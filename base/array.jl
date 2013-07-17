@@ -213,7 +213,7 @@ infs(dims::Dims)                           = infs(dims...)
 
 nans{T<:FloatingPoint}(::Type{T}, dims...) = fill!(Array(T, dims...), nan(T))
 nans(dims::Integer...)                     = fill!(Array(Float64, dims...), NaN)
-infs(dims::Dims)                           = nans(dims...)
+nans(dims::Dims)                           = nans(dims...)
 
 function eye(T::Type, m::Int, n::Int)
     a = zeros(T,m,n)
