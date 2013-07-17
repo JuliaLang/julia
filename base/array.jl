@@ -201,23 +201,19 @@ end
 fill(v, dims::Dims)       = fill!(Array(typeof(v), dims), v)
 fill(v, dims::Integer...) = fill!(Array(typeof(v), dims...), v)
 
-zeros{T}(::Type{T}, args...) = fill!(Array(T, args...), zero(T))
-zeros(args...)               = fill!(Array(Float64, args...), 0.0)
+zeros{T}(::Type{T}, dims...) = fill!(Array(T, dims...), zero(T))
+zeros(dims...)               = fill!(Array(Float64, dims...), 0.0)
 
-ones{T}(::Type{T}, args...) = fill!(Array(T, args...), one(T))
-ones(args...)               = fill!(Array(Float64, args...), 1.0)
+ones{T}(::Type{T}, dims...) = fill!(Array(T, dims...), one(T))
+ones(dims...)               = fill!(Array(Float64, dims...), 1.0)
 
-infs{T}(::Type{T}, args...) = fill!(Array(T, args...), inf(T))
-infs(args...)               = fill!(Array(Float64, args...), Inf)
+infs{T<:FloatingPoint}(::Type{T}, dims...) = fill!(Array(T, dims...), inf(T))
+infs(dims::Integer...)                     = fill!(Array(Float64, dims...), Inf)
+infs(dims::Dims)                           = infs(dims...)
 
-nans{T}(::Type{T}, args...) = fill!(Array(T, args...), nan(T))
-nans(args...)               = fill!(Array(Float64, args...), NaN)
-
-infs{T<:FloatingPoint}(::Type{T}, args...) = fill!(Array(T, args...), inf(T))
-infs(args...)               = fill!(Array(Float64, args...), Inf)
-
-nans{T<:FloatingPoint}(::Type{T}, args...) = fill!(Array(T, args...), nan(T))
-nans(args...)               = fill!(Array(Float64, args...), NaN)
+nans{T<:FloatingPoint}(::Type{T}, dims...) = fill!(Array(T, dims...), nan(T))
+nans(dims::Integer...)                     = fill!(Array(Float64, dims...), NaN)
+infs(dims::Dims)                           = nans(dims...)
 
 function eye(T::Type, m::Int, n::Int)
     a = zeros(T,m,n)
