@@ -62,3 +62,15 @@ isfile("testsocket") && Base.FS.unlink("testsocket")
 end
 wait(c)
 @test readall(connect("testsocket")) == "Hello World\n"
+
+try 
+    getaddrinfo("foo.bar")
+catch e
+    @test typeof(e) == Base.UVError # E.g. not method error
+end
+
+try 
+    connect("foo.bar",80)
+catch e
+    @test typeof(e) == Base.UVError
+end
