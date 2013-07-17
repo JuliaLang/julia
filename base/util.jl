@@ -35,8 +35,8 @@ end
 # print elapsed time, return expression value
 macro time(ex)
     quote
-        local t0 = time_ns()
         local b0 = gc_bytes()
+        local t0 = time_ns()
         local val = $(esc(ex))
         local t1 = time_ns()
         local b1 = gc_bytes()
@@ -54,28 +54,24 @@ macro elapsed(ex)
     end
 end
 
-# Measure bytes allocated without any contamination from compilation
+# measure bytes allocated without any contamination from compilation
 macro allocated(ex)
     quote
-        let
-            local f
-            function f()
-                b0 = gc_bytes()
-                $(esc(ex))
-                b1 = gc_bytes()
-                int(b1- b0)
-            end
-            f()
-        end
+        local b0 = gc_bytes()
+        local val = $(esc(ex))
+        int(gc_bytes()-b0)
     end
 end
 
-# print nothing, return value & elapsed time
+# print nothing, return value, elapsed time & bytes allocated
 macro timed(ex)
     quote
+        local b0 = gc_bytes()
         local t0 = time_ns()
         local val = $(esc(ex))
-        val, (time_ns()-t0)/1e9
+        local t1 = time_ns()
+        local b1 = gc_bytes()
+        val, (t1-t0)/1e9, int(b1-b0)
     end
 end
 
