@@ -45,6 +45,20 @@ macro time(ex)
     end
 end
 
+# Measure bytes allocated without any contamination from compilation
+macro bytes(ex)
+    quote
+        function _jl_bytes_wrapper()
+            b0 = gc_bytes()
+            $(esc(ex))
+            b1 = gc_bytes()
+            b1 - b0
+        end
+        _jl_bytes_wrapper()
+        _jl_bytes_wrapper()
+    end
+end
+
 # print nothing, return elapsed time
 macro elapsed(ex)
     quote
