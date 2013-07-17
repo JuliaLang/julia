@@ -74,6 +74,7 @@ typedef struct _bigval_t {
 
 // GC knobs and self-measurement variables
 static size_t allocd_bytes = 0;
+static size_t total_allocd_bytes = 0;
 static size_t freed_bytes = 0;
 #define default_collect_interval (3200*1024*sizeof(void*))
 static size_t collect_interval = default_collect_interval;
@@ -837,6 +838,8 @@ DLLEXPORT void jl_gc_enable(void)    { is_gc_enabled = 1; }
 DLLEXPORT void jl_gc_disable(void)   { is_gc_enabled = 0; }
 DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
 
+DLLEXPORT size_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_bytes; }
+
 void jl_gc_ephemeral_on(void)  { pools = &ephe_pools[0]; }
 void jl_gc_ephemeral_off(void) { pools = &norm_pools[0]; }
 
@@ -861,6 +864,7 @@ static void print_obj_profile(void)
 void jl_gc_collect(void)
 {
     size_t actual_allocd = allocd_bytes;
+    total_allocd_bytes += allocd_bytes;
     allocd_bytes = 0;
     if (is_gc_enabled) {
         JL_SIGATOMIC_BEGIN();
