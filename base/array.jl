@@ -1357,7 +1357,7 @@ function findmax(a)
     m = a[1]
     mi = 1
     for i=2:length(a)
-        if a[i] > m
+        if !(a[i] <= m)
             m = a[i]
             mi = i
         end
@@ -1372,7 +1372,7 @@ function findmin(a)
     m = a[1]
     mi = 1
     for i=2:length(a)
-        if a[i] < m
+        if !(a[i] >= m)
             m = a[i]
             mi = i
         end

@@ -209,6 +209,8 @@ end
 #argmin argmax
 @assert indmax([10,12,9,11]) == 2
 @assert indmin([10,12,9,11]) == 3
+@assert findmin([NaN,3.2,1.8]) == (1.8,3)
+@assert findmax([NaN,3.2,1.8]) == (3.2,2)
 
 ## permutedims ##
 
