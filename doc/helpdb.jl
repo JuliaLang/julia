@@ -3498,6 +3498,19 @@
 
 "),
 
+("Arrays","Base","infs","infs(type, dims)
+
+   Create an array where every element is infinite and of the
+   specified type
+
+"),
+
+("Arrays","Base","nans","nans(type, dims)
+
+   Create an array where every element is NaN of the specified type
+
+"),
+
 ("Arrays","Base","trues","trues(dims)
 
    Create a Bool array with all values set to true
@@ -4878,6 +4891,22 @@
 
 "),
 
+("System","Base","@time","@time()
+
+   A macro to measure the elapsed time of an operation
+
+"),
+
+("System","Base","@bytes","@bytes()
+
+   A macro to measure the number of bytes allocated during an
+   operation. This executes the operation twice, to avoid
+   contamination by allocation due to compilation. Note that some
+   operations, like \"push!()\", have state-dependent allocation and
+   may yield inconsistent results.
+
+"),
+
 ("System","Base","EnvHash","EnvHash() -> EnvHash
 
    A singleton of this type provides a hash table interface to
@@ -6078,7 +6107,7 @@
 
 "),
 
-("Linear Algebra","Base","peakflops","peakflops(n)
+("Linear Algebra","Base","peakflops","peakflops(n; parallel=false)
 
    \"peakflops\" computes the peak flop rate of the computer by using
    BLAS dgemm. By default, if no arguments are specified, it
@@ -6086,6 +6115,12 @@
    underlying BLAS is using multiple threads, higher flop rates are
    realized. The number of BLAS threads can be set with
    \"blas_set_num_threads(n)\".
+
+   If the keyword argument \"parallel\" is set to \"true\",
+   \"peakflops\" is run in parallel on all the worker processors. The
+   flop rate of the entire parallel computer is returned. When running
+   in parallel, only 1 BLAS thread is used. The argument \"n\" still
+   refers to the size of the problem that is solved on each processor.
 
 "),
 
