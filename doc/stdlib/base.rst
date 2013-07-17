@@ -3251,14 +3251,15 @@ System
 
 .. function:: @time
 
-   A macro to measure the elapsed time of an operation
+   A macro to execute and expression, printing time it took to execute and the total number of bytes its execution caused to be allocated, before returning the value of the expression.
 
-.. function:: @bytes
+.. function:: @elapsed
 
-   A macro to measure the number of bytes allocated during an operation. This
-   executes the operation twice, to avoid contamination by allocation due to
-   compilation. Note that some operations, like :func:`push!`, have
-   state-dependent allocation and may yield inconsistent results.
+   A macro to evaluate an expression, discarding the resulting value, instead returning the number of seconds it took to execute as a floating-point number.
+
+.. function:: @allocated
+
+   A macro to evaluate an expression, discarding the resulting value, instead returning the total number of bytes allocated during evaluation of the expression.
 
 .. function:: EnvHash() -> EnvHash
 

@@ -40,22 +40,8 @@ macro time(ex)
         local val = $(esc(ex))
         local t1 = time_ns()
         local b1 = gc_bytes()
-        println("elapsed time: ", (t1-t0)/1e9, " seconds (", int(b1-b0), " allocated bytes)")
+        println("elapsed time: ", (t1-t0)/1e9, " seconds (", int(b1-b0), " bytes allocated)")
         val
-    end
-end
-
-# Measure bytes allocated without any contamination from compilation
-macro bytes(ex)
-    quote
-        function _jl_bytes_wrapper()
-            b0 = gc_bytes()
-            $(esc(ex))
-            b1 = gc_bytes()
-            b1 - b0
-        end
-        _jl_bytes_wrapper()
-        _jl_bytes_wrapper()
     end
 end
 
@@ -65,6 +51,22 @@ macro elapsed(ex)
         local t0 = time_ns()
         local val = $(esc(ex))
         (time_ns()-t0)/1e9
+    end
+end
+
+# Measure bytes allocated without any contamination from compilation
+macro allocated(ex)
+    quote
+        let
+            local f
+            function f()
+                b0 = gc_bytes()
+                $(esc(ex))
+                b1 = gc_bytes()
+                int(b1- b0)
+            end
+            f()
+        end
     end
 end
 
