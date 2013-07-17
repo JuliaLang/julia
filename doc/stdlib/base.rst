@@ -3241,6 +3241,17 @@ System
 
    Return, but do not print, the time elapsed since the last :func:`tic`.
 
+.. function:: @time
+
+   A macro to measure the elapsed time of an operation
+
+.. function:: @bytes
+
+   A macro to measure the number of bytes allocated during an operation. This
+   executes the operation twice, to avoid contamination by allocation due to
+   compilation. Note that some operations, like :func:`push!`, have
+   state-dependent allocation and may yield inconsistent results.
+
 .. function:: EnvHash() -> EnvHash
 
    A singleton of this type provides a hash table interface to environment variables.
