@@ -196,7 +196,7 @@ perf-%: release
 win-extras:
 	[ -d dist-extras ] || mkdir dist-extras
 	cp /usr/lib/p7zip/7z /usr/lib/p7zip/7z.so dist-extras
-ifneq (,$(filter $(ARCH), i386 i686))
+ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd dist-extras && \
 	wget -O 7z920.exe http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll 7z.sfx && \
@@ -212,7 +212,7 @@ else ifeq ($(ARCH),x86_64)
 	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-libexpat-2.0.1-3.15.noarch.rpm && \
 	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-zlib-1.2.7-1.19.noarch.rpm
 else
-$(error no win-extras target for ARCH=$(ARCH))
+	$(error no win-extras target for ARCH=$(ARCH))
 endif
 	cd dist-extras && \
 	chmod a+x 7z.exe && \
