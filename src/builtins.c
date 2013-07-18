@@ -945,7 +945,7 @@ JL_CALLABLE(jl_f_applicable)
     if (!jl_is_gf(args[0]))
         jl_error("applicable: not a generic function");
     return jl_method_lookup(jl_gf_mtable(args[0]),
-                            &args[1], nargs-1, 0) != jl_bottom_func ?
+                            &args[1], nargs-1, 1) != jl_bottom_func ?
         jl_true : jl_false;
 }
 
