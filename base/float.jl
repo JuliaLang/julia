@@ -1,14 +1,24 @@
 #bitstype 16 Float16 <: FloatingPoint
 ## conversions to floating-point ##
 
+convert(::Type{Float32}, x::Int128)  = float32(uint128(abs(x)))*(1-2(x<0))
+convert(::Type{Float32}, x::Uint128) = float32(uint64(x)) + ldexp(float32(uint64(x>>>64)),64)
+promote_rule(::Type{Float32}, ::Type{Int128} ) = Float32
+promote_rule(::Type{Float32}, ::Type{Uint128}) = Float32
+
+convert(::Type{Float64}, x::Int128)  = float64(uint128(abs(x)))*(1-2(x<0))
+convert(::Type{Float64}, x::Uint128) = float64(uint64(x)) + ldexp(float64(uint64(x>>>64)),64)
+promote_rule(::Type{Float64}, ::Type{Int128} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Uint128}) = Float64
+
 for t1 in (Float32,Float64) #,Float16)
-    for st in (Int8,Int16,Int32,Int64,Int128)
+    for st in (Int8,Int16,Int32,Int64)
         @eval begin 
             convert(::Type{$t1},x::($st)) = box($t1,sitofp($t1,unbox($st,x)))
             promote_rule(::Type{$t1}, ::Type{$st}  ) = $t1
         end
     end
-    for ut in (Bool,Char,Uint8,Uint16,Uint32,Uint64,Uint128)
+    for ut in (Bool,Char,Uint8,Uint16,Uint32,Uint64)
         @eval begin
             convert(::Type{$t1},x::($ut)) = box($t1,uitofp($t1,unbox($ut,x)))
             promote_rule(::Type{$t1}, ::Type{$ut}  ) = $t1
