@@ -1288,6 +1288,7 @@ jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types,
 {
     jl_function_t *sf = jl_method_table_assoc_exact_by_type(mt, types);
     if (sf == jl_bottom_func) {
+        if (jl_is_leaf_type((jl_value_t*)types)) cache=1;
         sf = jl_mt_assoc_by_type(mt, types, cache, inexact);
     }
     return sf;
