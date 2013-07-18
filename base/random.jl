@@ -160,17 +160,17 @@ function rand{T<:Integer}(r::Range1{T})
     if (hi-lo == m)
         return convert(T, s + lo)
     end
-    r = hi-lo+1
-    if (r&(r-1))==0
+    d = hi-lo+1
+    if (d&(d-1))==0
         # power of 2 range
-        return convert(T, s&(r-1) + lo)
+        return convert(T, s&(d-1) + lo)
     end
     # note: m>=0 && r>=0
-    lim = m - rem(rem(m,r)+1, r)
+    lim = m - rem(rem(m,d)+1, d)
     while s > lim
         s = rand(T) & m
     end
-    return convert(T, rem(s,r) + lo)
+    return convert(T, rem(s,d) + lo)
 end
 
 function rand!{T<:Integer}(r::Range1{T}, A::Array{T})
