@@ -775,6 +775,8 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
             jl_varinfo_t &vi = ctx->vars[vname];
             vi.escapes |= esc;
             vi.usedUndef |= (jl_subtype((jl_value_t*)jl_undef_type,ty,0)!=0);
+            if (!ctx->linfo->inferred)
+                vi.usedUndef = true;
             vi.used = true;
         }
     }
@@ -1886,8 +1888,10 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             }
         }
 
-        if (vi.isSA && !vi.isCaptured && !vi.isArgument && !vi.usedUndef &&
-            !vi.isVolatile && rval->getType() == jl_pvalue_llvmt) {
+        if (vi.isSA &&
+            ((bp == NULL) ||
+             (!vi.isCaptured && !vi.isArgument && !vi.usedUndef &&
+              !vi.isVolatile && rval->getType() == jl_pvalue_llvmt))) {
             // use SSA value instead of GC frame load for var access
             vi.SAvalue = rval;
         }
