@@ -1048,7 +1048,7 @@ function launch_procs(n::Integer, config::Dict)
         sshflags = config[:sshflags]
         lcmd(idx) =  `ssh -n $sshflags $(cman.machines[idx]) "sh -l -c \"cd $dir && $exename $exeflags\""`
     else
-        lcmd(idx) =  `$(dir)/$(exename) $exeflags`
+        lcmd(idx) =  `$(dir)/$(exename) --bind-to 127.0.0.1 $exeflags`
     end
     
     for i in 1:n
@@ -1096,7 +1096,7 @@ function addprocs_internal(np::Integer;
     add_workers(PGRP, start_cluster_workers(np, config))
 end
 
-addprocs(np::Integer; kwargs...) = addprocs_internal(np; exeflags=`--bind-to 127.0.0.1`, kwargs...)
+addprocs(np::Integer; kwargs...) = addprocs_internal(np; kwargs...)
 
 function addprocs(machines::AbstractVector; kwargs...)
     cman_defined = any(x -> begin k,v = x; k==:cman end, kwargs)
