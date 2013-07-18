@@ -180,9 +180,9 @@ function runbuildscript(pkg)
         path = Pkg2.Dir.path(pkg,"deps","build.jl")
         if isfile(path)
             info("Running build script for package $pkg")
-            Dir.cd(Dir.path(pkg)) do
+            Dir.cd(joinpath(Dir.path(pkg),"deps")) do
                 m = Module(:__anon__)
-                body = Expr(:toplevel,:(ARGS=[]),:(include($path)))
+                body = Expr(:toplevel,:(ARGS=[]),:(include("build.jl")))
                 eval(m,body)
             end
             if !isworking(pkg)
