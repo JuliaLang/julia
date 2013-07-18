@@ -60,8 +60,6 @@ end
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://www.cse.iitb.ac.in/graphics/~anand/website/include/papers/matrix/fast_matrix_mul.pdf
 
-# TODO: Try avoiding the double transpose to get sorted row values at the end.
-
 function (*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
     mA, nA = size(A)
     mB, nB = size(B)
@@ -113,7 +111,11 @@ function (*){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
     splice!(nzvalC, colptrC[end]:length(nzvalC))
 
     # The Gustavson algorithm does not guarantee the product to have sorted row indices.
-    return ((SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC).').')
+    Cunsorted = SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC)
+    Ct = Cunsorted.'
+    Ctt = SparseMatrix.transpose!(Ct, SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC))
+
+    return Ctt
 end
 
 ## triu, tril

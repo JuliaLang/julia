@@ -114,33 +114,18 @@ end
 # Section 2.5: Transpose
 # http://www.cise.ufl.edu/research/sparse/CSparse/
 
-# Return an array where rc[i+1] has the row counts for row i, so that
-# the result can also be directly used as a colptr
-function _rowcounts{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
-    (nT, mT) = size(S)
-    rowval_S = S.rowval
+function transpose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
+    (mT, nT) = size(T)
+    colptr_T = T.colptr
+    rowval_T = T.rowval
+    nzval_T = T.nzval
 
-    rc = zeros(Ti, nT+1)
-    rc[1] = 1
-    @inbounds for i=1:nnz(S)
-        rc[rowval_S[i]+1] += 1
-    end
-
-    return cumsum(rc)
-end
-
-function transpose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, w::Vector{Ti})
-    (nT, mT) = size(S)
     nnzS = nnz(S)
     colptr_S = S.colptr
     rowval_S = S.rowval
     nzval_S = S.nzval
 
-    rowval_T = Array(Ti, nnzS)
-    nzval_T = Array(Tv, nnzS)
-
-    colptr_T = copy(w)
-
+    w = copy(colptr_T)
     @inbounds for j = 1:mT, p = colptr_S[j]:(colptr_S[j+1]-1)
         ind = rowval_S[p]
         q = w[ind]
@@ -149,23 +134,40 @@ function transpose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, w::Vector{Ti})
         nzval_T[q] = nzval_S[p]
     end
 
-    SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    return SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
 end
 
-transpose(S::SparseMatrixCSC) = transpose!(S, _rowcounts(S))
-
-function ctranspose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, w::Vector{Ti})
+function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     (nT, mT) = size(S)
+    nnzS = nnz(S)    
+    rowval_S = S.rowval
+
+    rowval_T = Array(Ti, nnzS)
+    nzval_T = Array(Tv, nnzS)
+
+    colptr_T = zeros(Ti, nT+1)
+    colptr_T[1] = 1
+    @inbounds for i=1:nnz(S)
+        colptr_T[rowval_S[i]+1] += 1
+    end
+    colptr_T = cumsum(colptr_T)
+
+    T = SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    return transpose!(S, T)
+end
+
+function ctranspose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
+    (mT, nT) = size(T)
+    colptr_T = T.colptr
+    rowval_T = T.rowval
+    nzval_T = T.nzval
+
     nnzS = nnz(S)
     colptr_S = S.colptr
     rowval_S = S.rowval
     nzval_S = S.nzval
 
-    rowval_T = Array(Ti, nnzS)
-    nzval_T = Array(Tv, nnzS)
-
-    colptr_T = copy(w)
-
+    w = copy(colptr_T)
     @inbounds for j = 1:mT, p = colptr_S[j]:(colptr_S[j+1]-1)
         ind = rowval_S[p]
         q = w[ind]
@@ -174,10 +176,27 @@ function ctranspose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, w::Vector{Ti})
         nzval_T[q] = conj(nzval_S[p])
     end
 
-    SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    return SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
 end
 
-ctranspose(S::SparseMatrixCSC) = ctranspose!(S, _rowcounts(S))
+function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}) 
+    (nT, mT) = size(S)
+    nnzS = nnz(S)
+    rowval_S = S.rowval
+    
+    rowval_T = Array(Ti, nnzS)
+    nzval_T = Array(Tv, nnzS)
+
+    colptr_T = zeros(Ti, nT+1)
+    colptr_T[1] = 1
+    @inbounds for i=1:nnz(S)
+        colptr_T[rowval_S[i]+1] += 1
+    end
+    colptr_T = cumsum(colptr_T)
+
+    T = SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
+    return ctranspose!(S, T)
+end
 
 # Compute the elimination tree of A using triu(A) returning the parent vector.
 # A root node is indicated by 0. This tree may actually be a forest in that
