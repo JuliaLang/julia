@@ -40,7 +40,7 @@ end
 
 function eof(s::AsyncStream)
     wait_readnb(s,1)
-    !uv_isopen(s) && nb_available(s.buffer)<=0
+    !isopen(s) && nb_available(s.buffer)<=0
 end
 
 const StatusUninit      = 0 # handle is allocated, but not initialized
@@ -76,6 +76,11 @@ function uv_status_string(x)
     end
     return "invalid status"
 end
+
+uv_handle_data(handle) = ccall(:jl_uv_handle_data,Ptr{Void},(Ptr{Void},),handle)
+uv_req_data(handle) = ccall(:jl_uv_req_data,Ptr{Void},(Ptr{Void},),handle)
+uv_req_set_data(req,data) = ccall(:jl_uv_req_set_data,Void,(Ptr{Void},Any),req,data)
+uv_req_set_data(req,data::Ptr{Void}) = ccall(:jl_uv_req_set_data,Void,(Ptr{Void},Ptr{Void}),req,data)
 
 type NamedPipe <: AsyncStream
     handle::Ptr{Void}
@@ -206,6 +211,8 @@ function reinit_stdio()
     global uv_jl_readcb = cglobal(:jl_uv_readcb)
     global uv_jl_connectioncb = cglobal(:jl_uv_connectioncb)
     global uv_jl_connectcb = cglobal(:jl_uv_connectcb)
+    global uv_jl_writecb = cglobal(:jl_uv_writecb)
+    global uv_jl_writecb_task = cglobal(:jl_uv_writecb_task)
     global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Void}, ())
     global STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()),0)
     global STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()),1)
@@ -214,22 +221,22 @@ end
 
 flush(::TTY) = nothing
 
-function uv_isopen(x)
+function isopen(x)
     assert(x.status != StatusUninit && x.status != StatusInit,
         "UV object is not in a valid state")
     x.status != StatusClosed
 end
 
 function wait_connected(x)
-    assert(uv_isopen(x), "UV object not in a valid state")
+    assert(isopen(x), "UV object not in a valid state")
     while x.status == StatusConnecting
         wait(x.connectnotify)
-        assert(uv_isopen(x), "UV object not in a valid state")
+        assert(isopen(x), "UV object not in a valid state")
     end
 end
 
 function wait_readbyte(x::AsyncStream, c::Uint8)
-    while uv_isopen(x) && search(x.buffer,c) <= 0
+    while isopen(x) && search(x.buffer,c) <= 0
         start_reading(x)
         wait(x.readnotify)
     end
@@ -238,7 +245,7 @@ end
 wait_readline(x) = wait_readbyte(x, uint8('\n'))
 
 function wait_readnb(x::AsyncStream, nb::Int)
-    while uv_isopen(x) && nb_available(x.buffer) < nb
+    while isopen(x) && nb_available(x.buffer) < nb
         start_reading(x)
         wait(x.readnotify)
     end
@@ -595,29 +602,91 @@ end
 
 ## low-level calls ##
 
+function write!{T}(s::AsyncStream, a::Array{T})
+    if isbits(T)
+        req = ccall(:jl_write_no_copy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}), handle(s), a, uint(length(a)*sizeof(T)), uv_jl_writecb::Ptr{Void})
+        uv_error("write", req == C_NULL)
+        return int(length(a)*sizeof(T))
+    else
+        throw(MethodError(write,(s,a)))
+    end
+end
+function write!(s::AsyncStream, p::Ptr, nb::Integer)
+    assert(isopen(s),"UV object is not in a valid state")
+    req = ccall(:jl_write_no_copy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}), handle(s), p, nb, uv_jl_writecb::Ptr{Void})
+    uv_error("write", req == C_NULL)
+    return nb
+end
+write!(s::AsyncStream, string::ByteString) = write!(s,string.data)
+
+function _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32)
+    status == -1 && close(s)
+    nothing
+end
+
+
 function write(s::AsyncStream, b::Uint8)
-    assert(uv_isopen(s),"UV object is not in a valid state")
-    int(ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, handle(s)))
+    assert(isopen(s),"UV object is not in a valid state")
+    if isdefined(Base,:Scheduler) && current_task() != Scheduler
+        req = ccall(:jl_putc_copy, Ptr{Void}, (Uint8, Ptr{Void}, Ptr{Void}), b, handle(s), uv_jl_writecb_task::Ptr{Void})
+        uv_req_set_data(req,current_task())
+        wait()
+    else
+        req = ccall(:jl_putc_copy, Ptr{Void}, (Uint8, Ptr{Void}, Ptr{Void}), b, handle(s), uv_jl_writecb::Ptr{Void})
+    end
+    return 1
 end
 function write(s::AsyncStream, c::Char)
-    assert(uv_isopen(s),"UV object is not in a valid state")
-    int(ccall(:jl_pututf8, Int32, (Ptr{Void},Uint32), handle(s), c))
+    assert(isopen(s),"UV object is not in a valid state")
+    if isdefined(Base,:Scheduler) && current_task() != Scheduler
+        req = ccall(:jl_pututf8_copy, Ptr{Void}, (Ptr{Void},Uint32, Ptr{Void}), handle(s), c, uv_jl_writecb_task::Ptr{Void})
+        uv_req_set_data(req,current_task())
+        wait()
+    else
+        req = ccall(:jl_pututf8_copy, Ptr{Void}, (Ptr{Void},Uint32, Ptr{Void}), handle(s), c, uv_jl_writecb::Ptr{Void})
+    end
+    return utf8sizeof(c)
 end
 function write{T}(s::AsyncStream, a::Array{T})
-    assert(uv_isopen(s),"UV object is not in a valid state")
+    assert(isopen(s),"UV object is not in a valid state")
     if isbits(T)
-        int(ccall(:jl_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), handle(s), a, uint(length(a)*sizeof(T))))
+        if isdefined(Base,:Scheduler) && current_task() != Scheduler
+            req = ccall(:jl_write_no_copy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}), handle(s), a, uint(length(a)*sizeof(T)), uv_jl_writecb_task::Ptr{Void})
+            uv_error("write", req == C_NULL)
+            uv_req_set_data(req,current_task())
+            wait()
+        else
+            write!(s,copy(a))
+        end
+        return int(length(a)*sizeof(T))
     else
         invoke(write,(IO,Array),s,a)
     end
 end
 function write(s::AsyncStream, p::Ptr, nb::Integer)
-    assert(uv_isopen(s),"UV object is not in a valid state")
-    int(ccall(:jl_write, Uint, (Ptr{Void},Ptr{Void},Uint), handle(s), p, uint(nb)))
+    assert(isopen(s),"UV object is not in a valid state")
+    if isdefined(Base,:Scheduler) && current_task() != Scheduler
+        req = ccall(:jl_write_no_copy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}), handle(s), p, nb, uv_jl_writecb_task::Ptr{Void})
+        uv_error("write", req == C_NULL)
+        uv_req_set_data(req,current_task())
+        wait()
+    else
+        ccall(:jl_write, Uint, (Ptr{Void},Ptr{Void},Uint), handle(s), p, uint(nb))
+    end
+    return int(nb)
 end
-function _write(s::AsyncStream, p::Ptr{Void}, nb::Integer)
-    assert(uv_isopen(s),"UV object is not in a valid state")
-    int(ccall(:jl_write, Uint, (Ptr{Void},Ptr{Void},Uint), handle(s), p, uint(nb)))
+
+function _uv_hook_writecb_task(s::AsyncStream,req::Ptr{Void},status::Int32) 
+    d = uv_req_data(req)
+    if status == -1
+        err = UVError("write")
+        close(s)
+        if d != C_NULL
+            notify_error(unsafe_pointer_to_objref(d)::Task,err)
+        end
+    elseif d != C_NULL
+        notify(unsafe_pointer_to_objref(d)::Task)
+    end
 end
 
 ## Libuv error handling ##
