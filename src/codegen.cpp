@@ -1886,7 +1886,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
             }
         }
 
-        if (vi.isSA && bp == NULL) {
+        if (vi.isSA && !vi.isCaptured && !vi.isArgument && !vi.usedUndef &&
+            !vi.isVolatile && rval->getType() == jl_pvalue_llvmt) {
             // use SSA value instead of GC frame load for var access
             vi.SAvalue = rval;
         }
