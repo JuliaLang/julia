@@ -211,6 +211,10 @@ end
 @assert indmin([10,12,9,11]) == 3
 @assert findmin([NaN,3.2,1.8]) == (1.8,3)
 @assert findmax([NaN,3.2,1.8]) == (3.2,2)
+@assert findmin([NaN,3.2,1.8,NaN]) == (1.8,3)
+@assert findmax([NaN,3.2,1.8,NaN]) == (3.2,2)
+@assert findmin([3.2,1.8,NaN,2.0]) == (1.8,2)
+@assert findmax([3.2,1.8,NaN,2.0]) == (3.2,1)
 
 ## permutedims ##
 
