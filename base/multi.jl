@@ -877,11 +877,12 @@ end
 # argument is descriptor to write listening port # to.
 start_worker() = start_worker(STDOUT)
 function start_worker(out::IO)
+    global bind_addr
     default_port = uint16(9009)
     (actual_port,sock) = open_any_tcp_port(accept_handler,default_port) 
     write(out, "julia_worker:")  # print header
     write(out, "$(dec(actual_port))#") # print port
-    write(out, bind_addr)      #TODO: print hostname
+    write(out, bind_addr == "" ? "127.0.0.1" : bind_addr)      #TODO: print hostname
     write(out, '\n')
     # close STDIN; workers will not use it
     #close(STDIN)
@@ -1044,7 +1045,7 @@ function launch_procs(n::Integer, config::Dict)
         sshflags = config[:sshflags]
         lcmd(idx) =  `ssh -n $sshflags $(cman.machines[idx]) "sh -l -c \"cd $dir && $exename $exeflags\""`
     else
-        lcmd(idx) =  `$(dir)/$(exename) --bind-to $bind_addr $exeflags`
+        lcmd(idx) =  `$(dir)/$(exename) $exeflags`
     end
     
     for i in 1:n

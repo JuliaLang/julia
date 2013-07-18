@@ -192,7 +192,7 @@ function try_include(f::String)
 end
 
 function process_options(args::Array{Any,1})
-    global ARGS, bind_addr
+    global ARGS
     quiet = false
     repl = true
     startup = true
@@ -204,9 +204,6 @@ function process_options(args::Array{Any,1})
         elseif args[i]=="--worker"
             start_worker()
             # doesn't return
-        elseif args[i]=="--bind-to"
-            i += 1
-            bind_addr = args[i]
         elseif args[i]=="-e" || args[i]=="--eval"
             repl = false
             i+=1
