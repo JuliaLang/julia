@@ -424,14 +424,15 @@ DLLEXPORT void jl_uv_writecb(uv_write_t* req, int status)
 {
     JULIA_CB(writecb, req->handle->data, 2, CB_PTR, req, CB_INT32, status)
     free(req);
+    (void)ret;
 }
 
 DLLEXPORT void jl_uv_writecb_task(uv_write_t* req, int status)
 {
     JULIA_CB(writecb_task, req->handle->data, 2, CB_PTR, req, CB_INT32, status)
     free(req);
+    (void)ret;
 }
-
 
 DLLEXPORT void *jl_write_copy(uv_stream_t *stream, const char *str, size_t n, void *writecb)
 {
@@ -442,7 +443,7 @@ DLLEXPORT void *jl_write_copy(uv_stream_t *stream, const char *str, size_t n, vo
     uv_buf_t buf[]  = {{.base = data,.len=n}};
     uvw->data = NULL;
     int err = uv_write(uvw,stream,buf,1,writecb);  
-    if(err)
+    if (err)
         free(uvw);
     JL_SIGATOMIC_END();
     return err ? NULL : uvw; 
@@ -480,7 +481,7 @@ DLLEXPORT void *jl_write_no_copy(uv_stream_t *stream, char *data, size_t n, void
     uv_write_t *uvw = malloc(sizeof(uv_write_t));
     int err = uv_write(uvw,stream,buf,1,writecb);
     uvw->data = NULL;
-    if(err != 0)
+    if (err != 0)
         free(uvw);
     JL_SIGATOMIC_END();
     return err ? NULL : uvw;

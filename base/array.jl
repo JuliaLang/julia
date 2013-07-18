@@ -1375,7 +1375,7 @@ function findmin(a)
     for i=2:length(a)
         ai = a[i]
         if ai < m || isnan(m)
-            m = a[i]
+            m = ai
             mi = i
         end
     end

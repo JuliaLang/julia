@@ -222,16 +222,23 @@ end
 flush(::TTY) = nothing
 
 function isopen(x)
-    assert(x.status != StatusUninit && x.status != StatusInit,
-        "UV object is not in a valid state")
+    if !(x.status != StatusUninit && x.status != StatusInit)
+        error("I/O object not initialized")
+    end
     x.status != StatusClosed
 end
 
+function check_open(x)
+    if !isopen(x)
+        error("stream is closed or unusable")
+    end
+end
+
 function wait_connected(x)
-    assert(isopen(x), "UV object not in a valid state")
+    check_open(x)
     while x.status == StatusConnecting
         wait(x.connectnotify)
-        assert(isopen(x), "UV object not in a valid state")
+        check_open(x)
     end
 end
 
@@ -612,7 +619,7 @@ function write!{T}(s::AsyncStream, a::Array{T})
     end
 end
 function write!(s::AsyncStream, p::Ptr, nb::Integer)
-    assert(isopen(s),"UV object is not in a valid state")
+    check_open(s)
     req = ccall(:jl_write_no_copy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}), handle(s), p, nb, uv_jl_writecb::Ptr{Void})
     uv_error("write", req == C_NULL)
     return nb
@@ -626,7 +633,7 @@ end
 
 
 function write(s::AsyncStream, b::Uint8)
-    assert(isopen(s),"UV object is not in a valid state")
+    check_open(s)
     if isdefined(Base,:Scheduler) && current_task() != Scheduler
         req = ccall(:jl_putc_copy, Ptr{Void}, (Uint8, Ptr{Void}, Ptr{Void}), b, handle(s), uv_jl_writecb_task::Ptr{Void})
         uv_req_set_data(req,current_task())
@@ -637,7 +644,7 @@ function write(s::AsyncStream, b::Uint8)
     return 1
 end
 function write(s::AsyncStream, c::Char)
-    assert(isopen(s),"UV object is not in a valid state")
+    check_open(s)
     if isdefined(Base,:Scheduler) && current_task() != Scheduler
         req = ccall(:jl_pututf8_copy, Ptr{Void}, (Ptr{Void},Uint32, Ptr{Void}), handle(s), c, uv_jl_writecb_task::Ptr{Void})
         uv_req_set_data(req,current_task())
@@ -648,7 +655,7 @@ function write(s::AsyncStream, c::Char)
     return utf8sizeof(c)
 end
 function write{T}(s::AsyncStream, a::Array{T})
-    assert(isopen(s),"UV object is not in a valid state")
+    check_open(s)
     if isbits(T)
         if isdefined(Base,:Scheduler) && current_task() != Scheduler
             req = ccall(:jl_write_no_copy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}), handle(s), a, uint(length(a)*sizeof(T)), uv_jl_writecb_task::Ptr{Void})
@@ -664,7 +671,7 @@ function write{T}(s::AsyncStream, a::Array{T})
     end
 end
 function write(s::AsyncStream, p::Ptr, nb::Integer)
-    assert(isopen(s),"UV object is not in a valid state")
+    check_open(s)
     if isdefined(Base,:Scheduler) && current_task() != Scheduler
         req = ccall(:jl_write_no_copy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}), handle(s), p, nb, uv_jl_writecb_task::Ptr{Void})
         uv_error("write", req == C_NULL)
