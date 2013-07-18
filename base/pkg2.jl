@@ -175,32 +175,22 @@ resolve(
     end
 end
 
-function runbuildscript(pkg)
+function runbuildscript(pkg,args=[])
     try 
         path = Pkg2.Dir.path(pkg,"deps","build.jl")
         if isfile(path)
             info("Running build script for package $pkg")
             Dir.cd(joinpath(Dir.path(pkg),"deps")) do
                 m = Module(:__anon__)
-                body = Expr(:toplevel,:(ARGS=[]),:(include("build.jl")))
+                body = Expr(:toplevel,:(ARGS=$args),:(include($path)))
                 eval(m,body)
             end
-            if !isworking(pkg)
-                warn("""
-                     The package $pkg ran a build script, but indicated that it did not complete sucessfully.
-                     You may have to take manual steps to complete the installation. See if there is any output above.
-                     To reattempt the installation, run Pkg.fixup().
-                     """)
-                return false
-            end
-        else
-            markworking(pkg,true)
         end
     catch
         warn("""
              An exception occured while building binary dependencies.
              You may have to take manual steps to complete the installation, see the error message below.
-             To reattempt the installation, run Pkg.fixup().
+             To reattempt the installation, run Pkg.fixup("$pkg").
              """)
         rethrow()
     end
@@ -231,30 +221,25 @@ check_metadata(julia_version::VersionNumber=VERSION) = Dir.cd() do
 end
 check_metadata(julia_version::String) = check_metadata(convert(VersionNumber, julia_version))
 
-isworking(pkg::String;lines::Vector{Reqs.Line}=Dir.cd(()->ExtDeps.read("WORKING"))) = Dir.cd() do 
-    contains(lines,ExtDeps.Record(pkg))
-end
-
-markworking(pkg::String,working::Bool=true;lines::Vector{Reqs.Line}=Dir.cd(()->ExtDeps.read("WORKING"))) = Dir.cd() do
-    if !working && contains(lines,ExtDeps.Record(pkg))
-        Reqs.write("WORKING",ExtDeps.rm(lines,pkg))
-    elseif working 
-        Reqs.write("WORKING",ExtDeps.add(lines,pkg))
+function _fixup(instlist;exclude=[])
+    for (p,_) in instlist
+        if contains(exclude,p)
+            continue
+        end
+        if !runbuildscript(p,["fixup"])
+            return
+        end
     end
+    info("SUCCESS!")
 end
 
-hasworkingdeps(lines::Vector{Reqs.Line}=Dir.cd(()->ExtDeps.read("WORKING")),
+function fixup(
+        lines::Vector{Reqs.Line}=Dir.cd(()->ExtDeps.read("WORKING")),
         avail=Dir.cd(Read.available),
         inst::Dict=Dir.cd(()->Read.installed(avail)),
         free::Dict=Dir.cd(()->Read.free(inst)),
-        fixed::Dict=Dir.cd(()->Read.fixed(avail,inst))) = all(map(x->isworking(x;lines=lines),Read.alldependencies(pkg,avail,free,fixed)))
-
-
-function fixup(lines::Vector{Reqs.Line}=Dir.cd(()->ExtDeps.read("WORKING")),
-        avail=Dir.cd(Read.available),
-        inst::Dict=Dir.cd(()->Read.installed(avail)),
-        free::Dict=Dir.cd(()->Read.free(inst)),
-        fixed::Dict=Dir.cd(()->Read.fixed(avail,inst))) 
+        fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));exclude = []) 
+    # TODO: Replace by proper toposorts
     instlist = [(k,v) for (k,v) in inst]
     sort!(instlist, lt=function(a,b)
         ((a,vera),(b,verb)) = (a,b)
@@ -262,15 +247,7 @@ function fixup(lines::Vector{Reqs.Line}=Dir.cd(()->ExtDeps.read("WORKING")),
         nonordered = (!c && !contains(Pkg2.Read.alldependencies(b,avail,free,fixed),a))
         nonordered ? a < b : c
     end)
-    for (p,_) in instlist
-        if !isworking(p)
-            didwork = true
-            if !runbuildscript(p)
-                return
-            end
-        end
-    end
-    info("SUCCESS!")
+    _fixup(instlist,exclude=exclude)
 end
 
 end # module

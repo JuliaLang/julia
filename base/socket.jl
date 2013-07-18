@@ -26,10 +26,11 @@ function IPv4(host::Integer)
     end
 end
 
-show(io::IO,ip::IPv4) = print(io,"IPv4(",dec((ip.host&(0xFF000000))>>24),".",
-                                         dec((ip.host&(0xFF0000))>>16),".",
-                                         dec((ip.host&(0xFF00))>>8),".",
-                                         dec(ip.host&0xFF),")")
+show(io::IO,ip::IPv4) = print(io,"IPv4(",ip,")")
+print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
+                                  dec((ip.host&(0xFF0000))>>16),".",
+                                  dec((ip.host&(0xFF00))>>8),".",
+                                  dec(ip.host&0xFF))
 
 immutable IPv6 <: IpAddr
     host::Uint128
@@ -77,10 +78,10 @@ function ipv6_field(ip::IPv6,i)
     uint16(ip.host&(uint128(0xFFFF)<<(i*16))>>(i*16))
 end
 
+show(io::IO, ip::IPv6) = print(io,"IPv6(",ip,")")
 # RFC 5952 compliant show function
 # http://tools.ietf.org/html/rfc5952
-function show(io::IO,ip::IPv6)
-    print(io,"IPv6(")
+function print(io::IO,ip::IPv6)
     i = 8
     m = 0
     longest_sub_i = -1
@@ -123,7 +124,6 @@ function show(io::IO,ip::IPv6)
             print_ipv6_field(io,field)
         end
     end
-    print(io,")")
 end
 
 # Parsing
@@ -403,6 +403,36 @@ function getaddrinfo(host::ASCIIString)
     ip = wait(c)
     isa(ip,UVError) && throw(ip)
     return ip::IpAddr
+end
+
+const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32,())
+
+function getipaddr()
+    addr = Array(Ptr{Uint8},1)
+    count = Array(Int32,1)
+    err = ccall(:jl_uv_interface_addresses,Int32,(Ptr{Ptr{Uint8}},Ptr{Int32}),addr,count)
+    addr, count = addr[1],count[1]
+    if err != 0
+        ccall(:uv_free_interface_addresses,Void,(Ptr{Uint8},Int32),addr,count)
+        throw(UVError("getlocalip",err,0))
+    end
+    for i = 0:(count-1)
+        current_addr = addr + i*_sizeof_uv_interface_address
+        if 1 == ccall(:jl_uv_interface_address_is_internal,Int32,(Ptr{Uint8},),current_addr)
+            continue
+        end
+        sockaddr = ccall(:jl_uv_interface_address_sockaddr,Ptr{Void},(Ptr{Uint8},),current_addr)
+        if ccall(:jl_sockaddr_in_is_ip4,Int32,(Ptr{Void},),sockaddr) == 1
+            return IPv4(ntoh(ccall(:jl_sockaddr_host4,Int32,(Ptr{Void},),sockaddr)))
+        # Uncomment to enbable IPv6
+        #elseif ccall(:jl_sockaddr_in_is_ip6,Int32,(Ptr{Void},),sockaddr) == 1
+        #   host = Array(Uint128,1)
+        #   ccall(:jl_sockaddr_host6,Uint32,(Ptr{Void},Ptr{Uint128}),sockaddrr,host)
+        #   return IPv6(ntoh(host[1]))
+        end
+    end
+    ccall(:uv_free_interface_addresses,Void,(Ptr{Uint8},Int32),addr,count)
+    error("No active external interfaces")
 end
 
 ##

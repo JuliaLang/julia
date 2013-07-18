@@ -116,6 +116,13 @@ include("printf.jl")
 importall .Printf
 include("file.jl")
 
+# core math functions
+include("intfuncs.jl")
+include("floatfuncs.jl")
+include("math.jl")
+importall .Math
+include("primes.jl")
+
 # concurrency and parallelism
 include("serialize.jl")
 include("multi.jl")
@@ -138,13 +145,6 @@ begin
         SOURCE_PATH = prev
     end
 end
-
-# core math functions
-include("intfuncs.jl")
-include("floatfuncs.jl")
-include("math.jl")
-importall .Math
-include("primes.jl")
 
 # random number generation and statistics
 include("statistics.jl")

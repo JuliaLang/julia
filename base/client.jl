@@ -325,9 +325,6 @@ function _start()
     GMP.gmp_init()
     global const CPU_CORES = Sys.CPU_CORES
 
-    # set default local address
-    global bind_addr = getipaddr()
-
     @windows_only begin
         user_data_dir = abspath(ENV["AppData"],"julia")
         if !isdir(user_data_dir)

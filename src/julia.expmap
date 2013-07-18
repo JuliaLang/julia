@@ -263,6 +263,8 @@
     jl_sizeof_*;
     jl_sockaddr_from_addrinfo;
     jl_sockaddr_set_port;
+    jl_sockaddr_in_is_ip4;
+    jl_sockaddr_in_is_ip6;
     jl_sockaddr_is_ip4;
     jl_sockaddr_is_ip6;
     jl_sockaddr_host4;
