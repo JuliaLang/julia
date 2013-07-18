@@ -740,6 +740,8 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
         return abstract_eval_symbol(e.name, vtypes, sv)
     elseif isa(e,LambdaStaticData)
         return Function
+    elseif isa(e,GetfieldNode)
+        return abstract_eval_global(e.value::Module, e.name)
     end
 
     if !isa(e,Expr)
