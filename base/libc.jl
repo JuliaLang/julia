@@ -78,12 +78,6 @@ function gethostname()
     bytestring(convert(Ptr{Uint8},hn))
 end
 
-function getipaddr()
-    ip = Array(Uint8, 128)
-    ccall(:getlocalip, Void, (Ptr{Uint8}, Uint), ip, length(ip))
-    bytestring(convert(Ptr{Uint8},ip))
-end
-
 ## Memory related ##
 
 c_free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)

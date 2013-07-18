@@ -619,34 +619,24 @@ DLLEXPORT int jl_tcp_bind6(uv_tcp_t* handle, uint16_t port, void *host)
     return uv_tcp_bind6(handle, addr);
 }
 
-DLLEXPORT void getlocalip(char *buf, size_t len)
+DLLEXPORT int jl_uv_sizeof_interface_address()
 {
-    uv_err_t err;
-    uv_interface_address_t * ifAddrStruct=NULL, *ifa;
-    int count=0;
+    return sizeof(uv_interface_address_t);
+}
 
-    err = uv_interface_addresses(&ifAddrStruct,&count);
-    if (err.code!=0)
-        if (ifAddrStruct!=NULL)
-            uv_free_interface_addresses(ifAddrStruct,count);
+DLLEXPORT int jl_uv_interface_addresses(uv_interface_address_t **ifAddrStruct,int *count)
+{
+    return uv_interface_addresses(ifAddrStruct,count).code;
+}
 
-    for (int i = 0; i < count; i++) {
-        ifa = ifAddrStruct+i;
-        if (ifa->is_internal)
-            continue;
-        if (ifa->address.address4.sin_family == AF_INET) {
-            if (!uv_ip4_name(&(ifa->address.address4), buf, len))
-                break;
-        }
-        else {
-            // Enable the following for IPv6 support:
-            //if (!uv_ip6_name(&(ifa->address.address6), buf, len))
-            //    break;
-        }
-    }
-    if (ifAddrStruct!=NULL)
-        uv_free_interface_addresses(ifAddrStruct,count);
-    //printf("%s IP Address %s\n", ifa->name, buf);
+DLLEXPORT int jl_uv_interface_address_is_internal(uv_interface_address_t *addr)
+{
+    return addr->is_internal;
+}
+
+DLLEXPORT struct sockaddr_in *jl_uv_interface_address_sockaddr(uv_interface_address_t *ifa)
+{
+    return &ifa->address.address4;
 }
 
 DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, const char *host, const char *service, jl_function_t *cb)
@@ -671,6 +661,16 @@ DLLEXPORT struct sockaddr *jl_sockaddr_from_addrinfo(struct addrinfo *addrinfo)
 DLLEXPORT struct addrinfo *jl_next_from_addrinfo(struct addrinfo *addrinfo)
 {
     return addrinfo->ai_next;
+}
+
+DLLEXPORT int jl_sockaddr_in_is_ip4(struct sockaddr_in *addr)
+{
+    return (addr->sin_family==AF_INET);
+}
+
+DLLEXPORT int jl_sockaddr_in_is_ip6(struct sockaddr_in *addr)
+{
+    return (addr->sin_family==AF_INET6);
 }
 
 DLLEXPORT int jl_sockaddr_is_ip4(struct sockaddr_storage *addr)

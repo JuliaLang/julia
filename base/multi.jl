@@ -877,12 +877,16 @@ end
 # argument is descriptor to write listening port # to.
 start_worker() = start_worker(STDOUT)
 function start_worker(out::IO)
+    global bind_addr
+    if !isdefined(Base,:bind_addr)
+        bind_addr = getipaddr()
+    end
     default_port = uint16(9009)
     (actual_port,sock) = open_any_tcp_port(accept_handler,default_port) 
-    write(out, "julia_worker:")  # print header
-    write(out, "$(dec(actual_port))#") # print port
-    write(out, bind_addr)      #TODO: print hostname
-    write(out, '\n')
+    print(out, "julia_worker:")  # print header
+    print(out, "$(dec(actual_port))#") # print port
+    print(out, bind_addr)      #TODO: print hostname
+    print(out, '\n')
     # close STDIN; workers will not use it
     #close(STDIN)
 
@@ -1044,7 +1048,7 @@ function launch_procs(n::Integer, config::Dict)
         sshflags = config[:sshflags]
         lcmd(idx) =  `ssh -n $sshflags $(cman.machines[idx]) "sh -l -c \"cd $dir && $exename $exeflags\""`
     else
-        lcmd(idx) =  `$(dir)/$(exename) --bind-to $bind_addr $exeflags`
+        lcmd(idx) =  `$(dir)/$(exename) $exeflags`
     end
     
     for i in 1:n
@@ -1085,14 +1089,14 @@ end
 function addprocs_internal(np::Integer;
                   tunnel=false, dir=JULIA_HOME,
                   exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia-release-basic":"./julia-debug-basic"),
-                  sshflags::Cmd=``, cman=RegularCluster())
+                  sshflags::Cmd=``, cman=RegularCluster(), exeflags=``)
                   
-    config={:dir=>dir, :exename=>exename, :exeflags=>` --worker `, :tunnel=>tunnel, :sshflags=>sshflags, :cman=>cman}
+    config={:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags, :cman=>cman}
     disable_threaded_libs()
     add_workers(PGRP, start_cluster_workers(np, config))
 end
 
-addprocs(np::Integer; kwargs...) = addprocs_internal(np; kwargs...)
+addprocs(np::Integer; kwargs...) = addprocs_internal(np; exeflags=`--bind-to 127.0.0.1`, kwargs...)
 
 function addprocs(machines::AbstractVector; kwargs...)
     cman_defined = any(x -> begin k,v = x; k==:cman end, kwargs)
