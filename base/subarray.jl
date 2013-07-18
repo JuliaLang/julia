@@ -205,53 +205,45 @@ function getindex{T,S<:Integer}(s::SubArray{T,1}, I::AbstractVector{S})
 end
 
 function translate_indexes(s::SubArray, I::Union(Real,AbstractArray)...)
-    I = indices(I)
-    nds = ndims(s)
     n = length(I)
-    if n > nds
-        throw(BoundsError())
+    newindexes = Any[s.indexes...]
+    pdims = parentdims(s)
+    havelinear = n < ndims(s)
+    for i = 1:n-havelinear
+        newindexes[pdims[i]] = s.indexes[pdims[i]][I[i]]
     end
-    ndp = ndims(s.parent) - (nds-n)
-    newindexes = Array(Any, ndp)
-    sp = strides(s.parent)
-    j = 1
-    for i = 1:ndp
-        t = s.indexes[i]
-        if j <= nds && s.strides[j] == sp[i]
-            #TODO: don't generate the dense vector indexes if they can be ranges
-            if j==n && n < nds
-                newindexes[i] = translate_linear_indexes(s, j, I[j])
-            else
-                newindexes[i] = isa(t, Int) ? t : t[I[j]]
-            end
-            j += 1
-        else
-            newindexes[i] = t
-        end
+    lastdim = pdims[n]
+    if havelinear
+        newindexes = newindexes[1:lastdim]
+        newindexes[pdims[n]] = translate_linear_indexes(s, n, I[end], pdims)
     end
     newindexes
 end
 
 # translate a linear index vector I for dim n to a linear index vector for
 # the parent array
-function translate_linear_indexes(s, n, I)
+function translate_linear_indexes(s, n, I, pdims)
     idx = Array(Int, length(I))
     ssztail = size(s)[n:]
-    pdims = parentdims(s)
     psztail = size(s.parent)[pdims[n:]]
+    taildimsoffset = 0
+    for i = pdims[end]+1:ndims(s.parent)
+        taildimsoffset += (s.indexes[i]-1)*stride(s.parent, i)
+    end
     for j=1:length(I)
         su = ind2sub(ssztail,I[j])
-        idx[j] = sub2ind(psztail, [ s.indexes[pdims[n+k-1]][su[k]] for k=1:length(su) ]...)
+        idx[j] = sub2ind(psztail, [ s.indexes[pdims[n+k-1]][su[k]] for k=1:length(su) ]...) + taildimsoffset
     end
     idx
 end
 
 function parentdims(s::SubArray)
-    dimindex = Array(Int, ndims(s))
+    nd = ndims(s)
+    dimindex = Array(Int, nd)
     sp = strides(s.parent)
     j = 1
     for i = 1:ndims(s.parent)
-        if sp[i] == s.strides[j]
+        if j <= nd && sp[i] == s.strides[j]
             dimindex[j] = i
             j += 1
         end
