@@ -186,18 +186,22 @@ function runbuildscript(pkg)
                 eval(m,body)
             end
             if !isworking(pkg)
-                warn("The package $pkg ran a build script, but indicated that it did not complete sucessfully.\n"
-                    *"You may have to take manual steps to complete the installation. See if there is any output above.\n"
-                    *"To reattempt the installation, run Pkg.fixup()")
+                warn("""
+                     The package $pkg ran a build script, but indicated that it did not complete sucessfully.
+                     You may have to take manual steps to complete the installation. See if there is any output above.
+                     To reattempt the installation, run Pkg.fixup().
+                     """)
                 return false
             end
         else
             markworking(pkg,true)
         end
     catch
-        warn("An exception occured while building binary dependencies.\n"
-            *"You may have to take manual steps to complete the installation, see the error message below.\n"
-            *"To reattempt the installation, run Pkg.fixup()")
+        warn("""
+             An exception occured while building binary dependencies.
+             You may have to take manual steps to complete the installation, see the error message below.
+             To reattempt the installation, run Pkg.fixup().
+             """)
         rethrow()
     end
     true
