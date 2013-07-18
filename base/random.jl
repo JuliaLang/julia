@@ -139,13 +139,9 @@ for itype in (:Uint32, :Uint64, :Uint128, :Int32, :Int64, :Int128)
     end
 end
 
-# random integer from lo to hi inclusive
-function rand{T<:Integer}(r::Range1{T})
-    if !applicable(rand, T)
-        # Fallback for integer types where rand(T) is not defined.
-        return convert(T, rand(int(r)))
-    end
 
+# random integer from lo to hi inclusive
+function rand{T<:Union(Uint32,Uint64,Uint128,Int32,Int64,Int128)}(r::Range1{T})
     lo = r[1]
     hi = r[end]
     m = typemax(T)
@@ -172,6 +168,9 @@ function rand{T<:Integer}(r::Range1{T})
     end
     return convert(T, rem(s,d) + lo)
 end
+
+# fallback for other integer types
+rand{T<:Integer}(r::Range1{T}) = convert(T, rand(int(r)))
 
 function rand!{T<:Integer}(r::Range1{T}, A::Array{T})
     for i=1:length(A) 
