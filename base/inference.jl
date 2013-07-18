@@ -518,10 +518,13 @@ function abstract_call_gf(f, fargs, argtypes, e)
         end
         if f === Main.Base.promote_type
             try
-                return Type{f(c...)}
+                RT = Type{f(c...)}
+                e.head = :call1
+                return RT
             catch
             end
         else
+            e.head = :call1
             return Type{f(c...)}
         end
     end
@@ -1644,7 +1647,10 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
             return (e.args[3],())
         end
     end
-    if (is(f,apply_type) || is(f,fieldtype)) &&
+    # special-case inliners for known pure functions that compute types
+    if (is(f,apply_type) || is(f,fieldtype) ||
+        (isdefined(Main.Base,:typejoin) && is(f,Main.Base.typejoin)) ||
+        (isdefined(Main.Base,:promote_type) && is(f,Main.Base.promote_type))) &&
         isType(e.typ) && isleaftype(e.typ.parameters[1])
         return (e.typ.parameters[1],())
     end
