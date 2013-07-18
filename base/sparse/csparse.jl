@@ -114,6 +114,8 @@ end
 # Section 2.5: Transpose
 # http://www.cise.ufl.edu/research/sparse/CSparse/
 
+# NOTE: When calling transpose!(S,T), the colptr in the result matrix T must be set up
+# by counting the nonzeros in every row of S.
 function transpose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
     (mT, nT) = size(T)
     colptr_T = T.colptr
@@ -156,6 +158,8 @@ function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     return transpose!(S, T)
 end
 
+# NOTE: When calling ctranspose!(S,T), the colptr in the result matrix T must be set up
+# by counting the nonzeros in every row of S.
 function ctranspose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
     (mT, nT) = size(T)
     colptr_T = T.colptr
