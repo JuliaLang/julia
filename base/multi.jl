@@ -295,9 +295,13 @@ function deregister_worker(pg, pid)
 
     # delete this worker from our RemoteRef client sets
     ids = {}
+    tonotify = {}
     for (id,rv) in pg.refs
         if contains(rv.clientset,pid)
             push!(ids, id)
+        end
+        if rv.waitingfor == pid
+            push!(tonotify, (id,rv))
         end
     end
     for id in ids
@@ -305,15 +309,9 @@ function deregister_worker(pg, pid)
     end
 
     # throw exception to tasks waiting for this pid
-    rrs = {}
-    for (rr,cv) in Waiting
-        if rr.where == pid
-            notify_error(cv, ProcessExitedException())
-            push!(rrs, rr)
-        end
-    end
-    for rr in rrs
-        delete!(Waiting, rr)
+    for (id,rv) in tonotify
+        notify_error(rv.full, ProcessExitedException())
+        delete!(pg.refs, id, nothing)
     end
 end
 
@@ -372,6 +370,9 @@ type RemoteRef
     WeakRemoteRef(w::LocalProcess) = WeakRemoteRef(myid())
     WeakRemoteRef(w::Worker) = WeakRemoteRef(w.id)
     WeakRemoteRef() = WeakRemoteRef(myid())
+
+    global next_id
+    next_id() = (id=(myid(),REQ_ID); REQ_ID+=1; id)
 end
 
 hash(r::RemoteRef) = hash(r.whence)+3*hash(r.id)
@@ -486,16 +487,6 @@ function deserialize(s, t::Type{RemoteRef})
     RemoteRef(where, rr.whence, rr.id)
 end
 
-# wait on a local proxy condition for a remote ref
-function wait_full(rr::RemoteRef)
-    cv = get(Waiting, rr, false)
-    if cv === false
-        cv = Condition()
-        Waiting[rr] = cv
-    end
-    wait(cv)
-end
-
 # data stored by the owner of a RemoteRef
 type RemoteValue
     done::Bool
@@ -503,8 +494,9 @@ type RemoteValue
     full::Condition   # waiting for a value
     empty::Condition  # waiting for value to be removed
     clientset::IntSet
+    waitingfor::Int   # processor we need to hear from to fill this, or 0
 
-    RemoteValue() = new(false, nothing, Condition(), Condition(), IntSet())
+    RemoteValue() = new(false, nothing, Condition(), Condition(), IntSet(), 0)
 end
 
 function work_result(rv::RemoteValue)
@@ -607,16 +599,19 @@ remotecall(id::Integer, f, args...) = remotecall(worker_from_id(id), f, args...)
 
 # faster version of fetch(remotecall(...))
 function remotecall_fetch(w::LocalProcess, f, args...)
-    local_remotecall_thunk(f,args)()
+    run_work_thunk(local_remotecall_thunk(f,args))
 end
 
 function remotecall_fetch(w::Worker, f, args...)
     # can be weak, because the program will have no way to refer to the Ref
     # itself, it only gets the result.
-    rr = WeakRemoteRef(w)
-    oid = rr2id(rr)
+    oid = next_id()
+    rv = lookup_ref(oid)
+    rv.waitingfor = w.id
     send_msg(w, :call_fetch, oid, f, args)
-    wait_full(rr)
+    v = wait_full(rv)
+    delete!(PGRP.refs, oid)
+    v
 end
 
 remotecall_fetch(id::Integer, f, args...) =
@@ -626,10 +621,13 @@ remotecall_fetch(id::Integer, f, args...) =
 remotecall_wait(w::LocalProcess, f, args...) = wait(remotecall(w,f,args...))
 
 function remotecall_wait(w::Worker, f, args...)
+    prid = next_id()
+    rv = lookup_ref(prid)
+    rv.waitingfor = w.id
     rr = RemoteRef(w)
-    oid = rr2id(rr)
-    send_msg(w, :call_wait, oid, f, args)
-    wait_full(rr)
+    send_msg(w, :call_wait, rr2id(rr), prid, f, args)
+    wait_full(rv)
+    delete!(PGRP.refs, prid)
     rr
 end
 
@@ -652,26 +650,24 @@ end
 
 remote_do(id::Integer, f, args...) = remote_do(worker_from_id(id), f, args...)
 
-function sync_msg(verb::Symbol, r::RemoteRef)
-    pg = (PGRP::ProcessGroup)
-    oid = rr2id(r)
-    if r.where==myid() || isa(worker_from_id(r.where), LocalProcess)
-        rv = lookup_ref(oid)
-        wait_full(rv)
-        return is(verb,:fetch) ? work_result(rv) : r
+# have the owner of rr call f on it
+function call_on_owner(f, rr::RemoteRef, args...)
+    rid = rr2id(rr)
+    if rr.where == myid()
+        f(rid, args...)
+    else
+        remotecall_fetch(rr.where, f, rid, args...)
     end
-    send_msg(worker_from_id(r.where), verb, oid)
-    # yield to event loop, return here when answer arrives
-    v = wait_full(r)
-    return is(verb,:fetch) ? v : r
 end
 
-wait(r::RemoteRef) = sync_msg(:wait, r)
-fetch(r::RemoteRef) = sync_msg(:fetch, r)
+wait_ref(rid) = (wait_full(lookup_ref(rid)); nothing)
+wait(r::RemoteRef) = (call_on_owner(wait_ref, r); r)
+
+fetch_ref(rid) = wait_full(lookup_ref(rid))
+fetch(r::RemoteRef) = call_on_owner(fetch_ref, r)
 fetch(x::ANY) = x
 
 # storing a value to a Ref
-put_ref(rid, v) = put(lookup_ref(rid), v)
 function put(rv::RemoteValue, val::ANY)
     wait_empty(rv)
     rv.result = val
@@ -679,17 +675,9 @@ function put(rv::RemoteValue, val::ANY)
     notify_full(rv)
 end
 
-function put(rr::RemoteRef, val::ANY)
-    rid = rr2id(rr)
-    if rr.where == myid()
-        put_ref(rid, val)
-    else
-        remotecall_fetch(rr.where, put_ref, rid, val)
-    end
-    val
-end
+put_ref(rid, v) = put(lookup_ref(rid), v)
+put(rr::RemoteRef, val::ANY) = (call_on_owner(put_ref, rr, val); val)
 
-take_ref(rid) = take(lookup_ref(rid))
 function take(rv::RemoteValue)
     wait_full(rv)
     val = rv.result
@@ -698,14 +686,8 @@ function take(rv::RemoteValue)
     val
 end
 
-function take(rr::RemoteRef)
-    rid = rr2id(rr)
-    if rr.where == myid()
-        take_ref(rid)
-    else
-        remotecall_fetch(rr.where, take_ref, rid)
-    end
-end
+take_ref(rid) = take(lookup_ref(rid))
+take(rr::RemoteRef) = call_on_owner(take_ref, rr)
 
 ## work queue ##
 
@@ -742,19 +724,17 @@ end
 
 function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
-    if is(msg,:fetch)
-        val = value
-    elseif is(msg,:call_fetch)
+    if is(msg,:call_fetch)
         val = value
     else
         val = oid
     end
     try
-        send_msg_now(sock, :result, msg, oid, val)
+        send_msg_now(sock, :result, oid, val)
     catch err
         # send exception in case of serialization error; otherwise
         # request side would hang.
-        send_msg_now(sock, :result, msg, oid, err)
+        send_msg_now(sock, :result, oid, err)
     end
 end
 
@@ -790,46 +770,47 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                 msg = deserialize(sock)
                 #println("got msg: ",msg)
                 # handle message
-                if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
+                if is(msg, :call)
                     id = deserialize(sock)
                     #print("$(myid()) got id $id\n")
                     f0 = deserialize(sock)
                     #print("$(myid()) got call $f0\n")
                     args0 = deserialize(sock)
                     #print("$(myid()) got args $args0\n")
-                    let f=f0, args=args0, m=msg, rid=id
-                        if m === :call_fetch || m === :call_wait
-                            enq_work(@task begin
-                                v = run_work_thunk(()->f(args...))
-                                deliver_result(sock, m, rid, v)
-                                v
-                                     end)
-                        else
-                            schedule_call(id, ()->f(args...))
-                        end
+                    let f=f0, args=args0
+                        schedule_call(id, ()->f(args...))
+                    end
+                elseif is(msg, :call_fetch)
+                    id = deserialize(sock)
+                    f = deserialize(sock)
+                    args = deserialize(sock)
+                    @schedule begin
+                        v = run_work_thunk(()->f(args...))
+                        deliver_result(sock, msg, id, v)
+                        v
+                    end
+                elseif is(msg, :call_wait)
+                    id = deserialize(sock)
+                    notify_id = deserialize(sock)
+                    f = deserialize(sock)
+                    args = deserialize(sock)
+                    @schedule begin
+                        rv = schedule_call(id, ()->f(args...))
+                        deliver_result(sock, msg, notify_id, wait_full(rv))
                     end
                 elseif is(msg, :do)
                     f = deserialize(sock)
                     args = deserialize(sock)
                     #print("got args: $args\n")
-                    let func=f, ar=args
-                        enq_work(@task(run_work_thunk(RemoteValue(),
-                                                      ()->apply(func, ar))))
+                    @schedule begin
+                        run_work_thunk(RemoteValue(), ()->f(args...))
                     end
                 elseif is(msg, :result)
                     # used to deliver result of wait or fetch
-                    mkind = deserialize(sock)
                     oid = deserialize(sock)
-                    rr = WeakRemoteRef(0, oid[1], oid[2])
                     #print("$(myid()) got $msg $oid\n")
                     val = deserialize(sock)
-                    cv = get(Waiting, rr, false)
-                    if cv !== false
-                        notify(cv, val)
-                        if isempty(cv.waitq)
-                            delete!(Waiting, rr)
-                        end
-                    end
+                    put(lookup_ref(oid), val)
                 elseif is(msg, :identify_socket)
                     otherid = deserialize(sock)
                     register_worker(Worker("", 0, sock, otherid))
@@ -854,21 +835,6 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                         else
                             # Others will connect to us. Don't do anything just yet
                             continue
-                        end
-                        
-                    end
-                else
-                    # the synchronization messages
-                    oid = deserialize(sock)::(Int,Int)
-                    #print("$(myid()) got $msg $oid\n")
-                    rv = lookup_ref(oid)
-                    if rv.done
-                        deliver_result(sock, msg, oid, work_result(rv))
-                    else
-                        # TODO: should store the worker here, not the socket,
-                        # so we don't need to look up the worker later
-                        @schedule begin
-                            deliver_result(sock, msg, oid, wait_full(rv))
                         end
                     end
                 end

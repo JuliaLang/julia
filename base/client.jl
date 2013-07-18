@@ -297,7 +297,6 @@ end
 
 function init_sched()
     global const Workqueue = Any[]
-    global const Waiting = Dict()
 end
 
 function init_head_sched()
