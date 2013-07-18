@@ -101,6 +101,30 @@ function wait(c::Condition)
     end
 end
 
+function wait()
+    ct = current_task()
+    if ct === Scheduler
+        error("cannot execute blocking function from scheduler")
+    end
+    ct.runnable = false
+    yield()
+end
+
+function notify(t::Task, arg::ANY=nothing; error=false)
+    if t.runnable == true
+        Base.error("tried to resume task that is not stopped")
+    end
+    if error
+        t.exception = arg
+    else
+        t.result = arg
+    end
+    enq_work(t)
+    nothing
+end
+notify_error(t::Task, err) = notify(t, err, error=true)
+
+
 function notify(c::Condition, arg::ANY=nothing; all=true, error=false)
     if all
         for t in c.waitq
