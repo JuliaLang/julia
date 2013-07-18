@@ -19,5 +19,5 @@ blas_set_num_threads(1)
 
 reduce(propagate_errors, nothing, pmap(runtests, tests))
 
-@unix_only n > 1 && rmprocs(workers())
+@unix_only n > 1 && rmprocs(workers(), waitfor=5.0)
 println("    \033[32;1mSUCCESS\033[0m")
