@@ -243,7 +243,8 @@ function parentdims(s::SubArray)
     sp = strides(s.parent)
     j = 1
     for i = 1:ndims(s.parent)
-        if j <= nd && sp[i] == s.strides[j]
+        r = s.indexes[i]
+        if j <= nd && (isa(r,Range) ? sp[i]*step(r) : sp[i]) == s.strides[j]
             dimindex[j] = i
             j += 1
         end
@@ -312,14 +313,7 @@ function setindex!(s::SubArray, v, I::Union(Real,AbstractArray)...)
     setindex!(s.parent, v, newindexes...)
 end
 
-function stride(s::SubArray, i::Integer)
-    k = stride(s.parent, i)
-    j = s.indexes[i]
-    if isa(j,Range)
-        return k*step(j)
-    end
-    return k
-end
+stride(s::SubArray, i::Integer) = s.strides[i]
 
 convert{T}(::Type{Ptr{T}}, x::SubArray{T}) =
     pointer(x.parent) + (x.first_index-1)*sizeof(T)

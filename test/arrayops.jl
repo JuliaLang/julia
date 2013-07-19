@@ -93,29 +93,45 @@ ind = findin(a, b)
 # sub
 A = reshape(1:120, 3, 5, 8)
 sA = sub(A, 2, 1:5, 1:8)
+@test Base.parentdims(sA) == 1:3
 @test size(sA) == (1, 5, 8)
 @test_throws sA[2, 1:8]
 @test sA[1, 2, 1:8][:] == 5:15:120
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
+@test strides(sA) == (1,3,15)
 sA = sub(A, 1:3, 1:5, 5)
+@test Base.parentdims(sA) == 1:2
 sA[1:3,1:5] = -2
 @test all(A[:,:,5] .== -2)
 sA[:] = -3
 @test all(A[:,:,5] .== -3)
+@test strides(sA) == (1,3)
+sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
+@test Base.parentdims(sA) == 1:3
+@test strides(sA) == (2,9,30)
 
 # slice
 A = reshape(1:120, 3, 5, 8)
 sA = slice(A, 2, 1:5, 1:8)
+@test Base.parentdims(sA) == 2:3
 @test size(sA) == (5, 8)
+@test strides(sA) == (3,15)
 @test sA[2, 1:8][:] == 5:15:120
 @test sA[:,1] == 2:3:14
 @test sA[2:5:end] == 5:15:120
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
-
+sA = slice(A, 1:3, 1:5, 5)
+@test Base.parentdims(sA) == 1:2
+@test size(sA) == (3,5)
+@test strides(sA) == (1,3)
+sA = slice(A, 1:2:3, 3, 1:2:8)
+@test Base.parentdims(sA) == [1,3]
+@test size(sA) == (2,4)
+@test strides(sA) == (2,30)
 
 # get
 let
