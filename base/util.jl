@@ -331,3 +331,37 @@ end
 # Conditional usage of packages and modules
 usingmodule(names::Symbol...) = eval(current_module(), Expr(:toplevel, Expr(:using, names...)))
 usingmodule(names::String) = usingmodule([symbol(name) for name in split(names,".")]...)
+
+
+macro timedwait(ex, wait_secs, poll_interval)
+    quote
+        start = time()
+        done = RemoteRef()
+        function timercb(aw, status)
+            try
+                if $(esc(ex))
+                    put(done, :ok)
+                elseif (time() - start) > $(wait_secs)
+                    put(done, :timed_out)
+                elseif status != 0
+                    put(done, :error)
+                end
+            catch e
+                put(done, :error)
+                stop_timer(aw)
+            end
+        end
+
+        if !$(esc(ex))
+            t = TimeoutAsyncWork(timercb)
+            start_timer(t, $(poll_interval), $(poll_interval))
+            ret = fetch(done)
+            stop_timer(t)
+        else
+            ret = :ok
+        end
+        ret
+    end
+end
+
+
