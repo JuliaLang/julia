@@ -7,6 +7,18 @@ Getting Around
 
    Quit (or control-D at the prompt). The default exit code is zero, indicating that the processes completed successfully.
 
+.. function:: quit()
+
+   Calls ``exit(0)``.
+
+.. function:: atexit(f)
+
+   Register a zero-argument function to be called at exit.
+
+.. function:: isinteractive()
+
+   Determine whether Julia is running an interactive session.
+
 .. function:: whos([Module,] [pattern::Regex])
 
    Print information about global variables in a module, optionally restricted
@@ -135,6 +147,14 @@ All Objects
 
    Convert all arguments to their common promotion type (if any), and return them all (as a tuple).
 
+.. function:: oftype(x, y)
+
+   Convert ``y`` to the type of ``x``.
+
+.. function:: identity(x)
+
+   The identity function. Returns its argument.
+
 Types
 -----
 
@@ -194,6 +214,12 @@ Types
 
    Determine a type big enough to hold values of each argument type without loss, whenever possible. In some cases, where no type exists which to which both types can be promoted losslessly, some loss is tolerated; for example, ``promote_type(Int64,Float64)`` returns ``Float64`` even though strictly, not all ``Int64`` values can be represented exactly as ``Float64`` values.
 
+.. function:: promote_rule(type1, type2)
+
+   Specifies what type should be used by ``promote`` when given values of types
+   ``type1`` and ``type2``. This function should not be called directly, but
+   should have definitions added to it for new types as appropriate.
+
 .. function:: getfield(value, name::Symbol)
 
    Extract a named field from a value of composite type. The syntax ``a.b`` calls
@@ -220,6 +246,12 @@ Types
 .. function:: isbits(T)
 
    True if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``Uint8``, ``Float64``, and ``Complex{Float64}``.
+
+.. function:: isleaftype(T)
+
+   Determine whether ``T`` is a concrete type that can have instances, meaning
+   its only subtypes are itself and ``None`` (but ``T`` itself is not
+   ``None``).
 
 .. function:: typejoin(T, S)
 
@@ -420,6 +452,10 @@ Iterable Collections
 
    Get the last element of an ordered collection.
 
+.. function:: step(r)
+
+   Get the step size of a ``Range`` object.
+
 .. function:: collect(collection)
 
    Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
@@ -459,7 +495,7 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
    Construct a hashtable with keys of type K and values of type V
 
-.. function:: has(collection, key)
+.. function:: haskey(collection, key)
 
    Determine whether a collection has a mapping for a given key.
 
@@ -845,6 +881,10 @@ Strings
 
    Tests whether a character is a valid hexadecimal digit.
 
+.. function:: symbol(str)
+
+   Convert a string to a ``Symbol``.
+
 I/O
 ---
 
@@ -891,6 +931,14 @@ I/O
 .. function:: IOBuffer([size]) -> IOBuffer
 
    Create an in-memory I/O stream, optionally specifying how much initial space is needed.
+
+.. function:: takebuf_array(b::IOBuffer)
+
+   Obtain the contents of an ``IOBuffer`` as an array, without copying.
+
+.. function:: takebuf_string(b::IOBuffer)
+
+   Obtain the contents of an ``IOBuffer`` as a string, without copying.
 
 .. function:: fdio([name::String, ]fd::Integer[, own::Bool]) -> IOStream
 
@@ -962,6 +1010,18 @@ I/O
 
    Converts the endianness of a value from that used by the Host to
    Little-endian.
+
+.. function:: serialize(stream, value)
+
+   Write an arbitrary value to a stream in an opaque format, such that it can
+   be read back by ``deserialize``. The read-back value will be as identical as
+   possible to the original. In general, this process will not work if the
+   reading and writing are done by different versions of Julia, or
+   an instance of Julia with a different system image.
+
+.. function:: deserialize(stream)
+
+   Read a value written by ``serialize``.
 
 Network I/O
 -----------
@@ -1603,6 +1663,10 @@ Mathematical Functions
 
    Return :math:`\sqrt{x}`
 
+.. function:: isqrt(x)
+
+   Integer square root.
+
 .. function:: cbrt(x)
 
    Return :math:`x^{1/3}`
@@ -2135,6 +2199,10 @@ Integers
    Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
 
    **Example**: ``isprime(3) -> true``
+
+.. function:: primes(n)
+
+   Returns a collection of the prime numbers <= ``n``.
 
 .. function:: isodd(x::Integer) -> Bool
 
@@ -3424,6 +3492,21 @@ Errors
 
    Throw an object as an exception
 
+.. function:: rethrow([e])
+
+   Throw an object without changing the current exception backtrace.
+   The default argument is the current exception (if called within a
+   ``catch`` block).
+
+.. function:: backtrace()
+
+   Get a backtrace object for the current program point.
+
+.. function:: catch_backtrace()
+
+   Get the backtrace of the current exception, for use within ``catch``
+   blocks.
+
 .. function:: errno()
 
    Get the value of the C library's ``errno``
@@ -3557,3 +3640,19 @@ Reflection
 .. function:: functionloc(f::Function, types)
 
    Returns a tuple ``(filename,line)`` giving the location of a method definition.
+
+Internals
+---------
+
+.. function:: gc()
+
+   Perform garbage collection. This should not generally be used.
+
+.. function:: gc_disable()
+
+   Disable garbage collection. This should be used only with extreme
+   caution, as it can cause memory use to grow without bound.
+
+.. function:: gc_enable()
+
+   Re-enable garbage collection after calling ``gc_disable``.
