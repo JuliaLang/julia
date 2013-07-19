@@ -753,12 +753,6 @@ function accept_handler(server::TcpServer, status::Int32)
     create_message_handler_loop(client)
 end
 
-# schedule an expression to run asynchronously, with minimal ceremony
-macro schedule(expr)
-    expr = localize_vars(:(()->($expr)), false)
-    :(enq_work(Task($(esc(expr)))))
-end
-
 function create_message_handler_loop(sock::AsyncStream) #returns immediately
     enq_work(@task begin
         global PGRP
