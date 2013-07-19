@@ -3187,15 +3187,23 @@ System
 
    Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the output stream and input stream of the process, and the process object itself.
 
-.. data:: >
+.. function:: ignorestatus(command)
 
-   Redirect standard output of a process.
+   Mark a command object so that running it will not throw an error if the
+   result code is non-zero.
 
-   **Example**: ``run(`ls` > "out.log")``
+.. function:: detach(command)
 
-.. data:: <
+   Mark a command object so that it will be run in a new process group,
+   allowing it to outlive the julia process, and not have Ctl-C interrupts
+   passed to it.
 
-   Redirect standard input of a process.
+.. data:: |>
+
+   Redirect standard input or output of a process.
+
+   **Example**: ``run(`ls` |> "out.log")``
+   **Example**: ``run("file.txt" |> `cat`)``
 
 .. data:: >>
 
