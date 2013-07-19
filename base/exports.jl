@@ -919,12 +919,16 @@ export
     isimmutable,
     isbits,
 
-# tasks
+# tasks and conditions
+    Condition,
     consume,
     current_task,
     istaskdone,
     produce,
     task_local_storage,
+    schedule,
+    notify,
+    yield,
 
 # time
     sleep,
@@ -1094,7 +1098,6 @@ export
     addprocs,
     fetch,
     isready,
-    yield,
     myid,
     nprocs,
     nworkers,

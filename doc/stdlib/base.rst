@@ -3084,9 +3084,35 @@ Parallel Computing
 .. function:: RemoteRef(n)
 
    Make an uninitialized remote reference on processor ``n``.
-   
-   
-   
+
+.. function:: @spawn
+
+   Execute an expression on an automatically-chosen processor, returning a
+   ``RemoteRef`` to the result.
+
+.. function:: @spawnat
+
+   Accepts two arguments, ``p`` and an expression, and runs the expression
+   asynchronously on processor ``p``, returning a ``RemoteRef`` to the result.
+
+.. function:: @fetch
+
+   Equivalent to ``fetch(@spawn expr)``.
+
+.. function:: @fetchfrom
+
+   Equivalent to ``fetch(@spawnat p expr)``.
+
+.. function:: @async
+
+   Schedule an expression to run on the local machine, also adding it to the
+   set of items that the nearest enclosing ``@sync`` waits for.
+
+.. function:: @sync
+
+   Wait until all dynamically-enclosed uses of ``@async``, ``@spawn``, and
+   ``@spawnat`` complete.
+
 Distributed Arrays
 ------------------
 
@@ -3404,7 +3430,7 @@ Tasks
 
 .. function:: yield()
 
-   For scheduled tasks, switch back to the scheduler to allow another scheduled task to run.
+   For scheduled tasks, switch back to the scheduler to allow another scheduled task to run. A task that calls this function is still runnable, and will be restarted immediately if there are no other runnable tasks.
 
 .. function:: task_local_storage(symbol)
 
@@ -3413,6 +3439,39 @@ Tasks
 .. function:: task_local_storage(symbol, value)
 
    Assign a value to a symbol in the current task's task-local storage.
+
+.. function:: Condition()
+
+   Create an edge-triggered event source that tasks can wait for. Tasks
+   that call ``wait`` on a ``Condition`` are suspended and queued.
+   Tasks are woken up when ``notify`` is later called on the ``Condition``.
+   Edge triggering means that only tasks waiting at the time ``notify`` is
+   called can be woken up. For level-triggered notifications, you must
+   keep extra state to keep track of whether a notification has happened.
+   The ``RemoteRef`` type does this, and so can be used for level-triggered
+   events.
+
+.. function:: notify(condition, val=nothing; all=true, error=false)
+
+   Wake up tasks waiting for a condition, passing them ``val``.
+   If ``all`` is true (the default), all waiting tasks are woken, otherwise
+   only one is. If ``error`` is true, the passed value is raised as an
+   exception in the woken tasks.
+
+.. function:: schedule(t::Task)
+
+   Add a task to the scheduler's queue. This causes the task to run constantly
+   when the system is otherwise idle, unless the task performs a blocking
+   operation such as ``wait``.
+
+.. function:: @schedule
+
+   Wrap an expression in a Task and add it to the scheduler's queue.
+
+.. function:: @task
+
+   Wrap an expression in a Task executing it, and return the Task. This
+   only creates a task, and does not run it.
 
 Reflection
 ----------
