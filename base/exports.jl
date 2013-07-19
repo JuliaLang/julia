@@ -1179,6 +1179,7 @@ export
     operm,
 
 # external processes ## TODO: whittle down these exports.
+    detach,
     getpid,
     ignorestatus,
     kill,
