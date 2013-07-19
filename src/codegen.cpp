@@ -1155,6 +1155,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     }
     else if (f->fptr == &jl_f_typeof && nargs==1) {
         jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
+        Value *arg1 = emit_expr(args[1], ctx);
         if (!jl_is_typevar(aty) && aty != (jl_value_t*)jl_any_type &&
             jl_type_intersection(aty,(jl_value_t*)jl_tuple_type)==(jl_value_t*)jl_bottom_type) {
             if (jl_is_leaf_type(aty)) {
@@ -1163,7 +1164,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 JL_GC_POP();
                 return literal_pointer_val(aty);
             }
-            Value *arg1 = boxed(emit_expr(args[1], ctx));
+            arg1 = boxed(arg1);
             JL_GC_POP();
             return emit_typeof(arg1);
         }
