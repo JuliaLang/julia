@@ -55,6 +55,7 @@ function isfixed(pkg::String, avail::Dict=available(pkg))
 end
 
 function installed_version(pkg::String, avail::Dict=available(pkg))
+    ispath(pkg,".git") || return typemin(VersionNumber)
     head = Git.head(dir=pkg)
     for (ver,info) in avail
         head == info.sha1 && return ver
@@ -82,6 +83,7 @@ function installed_version(pkg::String, avail::Dict=available(pkg))
 end
 
 function requires_path(pkg::String, avail::Dict=available(pkg))
+    ispath(pkg,".git") || return joinpath(pkg, "REQUIRE")
     Git.dirty("REQUIRE", dir=pkg) && return joinpath(pkg, "REQUIRE")
     head = Git.head(dir=pkg)
     for (ver,info) in avail
