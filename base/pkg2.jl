@@ -32,6 +32,36 @@ edit(f::Function, pkg, args...) = Dir.cd() do
     info("REQUIRE updated.")
 end
 
+available() = [keys(Pkg2.Dir.cd(Pkg2.Read.available))...]
+
+status() = Dir.cd() do
+    reqs = Reqs.parse("REQUIRE")
+    instd = Read.installed()
+    println("Required:")
+    for pkg in sort!([keys(reqs)...])
+        ver,fix = delete!(instd,pkg)
+        status(pkg,ver,fix)
+    end
+    println("Additional:")
+    for pkg in sort!([keys(instd)...])
+        ver,fix = instd[pkg]
+        status(pkg,ver,fix)
+    end
+end
+function status(pkg::String, ver::VersionNumber, fix::Bool)
+    @printf " - %-29s " pkg
+    fix || return println(ver)
+    @printf "%-10s" ver
+    print(" fixed: ")
+    if ispath(Dir.path(pkg,".git"))
+        print(Git.attached(dir=pkg) ? Git.branch(dir=pkg) : Git.head(dir=pkg)[1:8])
+        Git.dirty(dir=pkg) && print("*")
+    else
+        print("non-repo")
+    end
+    println()
+end
+
 urlpkg(url::String) = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$/*", url).captures[1]
 
 clone(url::String, pkg::String=urlpkg(url); opts::Cmd=``) = Dir.cd() do
