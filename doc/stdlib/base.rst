@@ -3053,9 +3053,18 @@ Parallel Computing
 
    Call a function asynchronously on the given arguments on the specified processor. Returns a ``RemoteRef``.
 
-.. function:: wait(RemoteRef)
+.. function:: wait(x)
 
-   Wait for a value to become available for the specified remote reference.
+   Block the current task until some event occurs, depending on the type
+   of the argument:
+
+   * ``RemoteRef``: Wait for a value to become available for the specified remote reference.
+
+   * ``Condition``: Wait for ``notify`` on a condition.
+
+   * ``Process``: Wait for the process to exit, and get its exit code.
+
+   * ``Task``: Wait for a ``Task`` to finish, returning its result value.
 
 .. function:: fetch(RemoteRef)
 
@@ -3174,6 +3183,24 @@ System
 .. function:: success(command)
 
    Run a command object, constructed with backticks, and tell whether it was successful (exited with a code of 0).
+
+.. function:: process_running(p::Process)
+
+   Determine whether a process is currently running.
+
+.. function:: process_exited(p::Process)
+
+   Determine whether a process has exited.
+
+.. function:: process_exit_status(p::Process)
+
+   Get the exit status of an exited process. The result is undefined if the
+   process is still running. Use ``wait(p)`` to wait for a process to exit,
+   and get its exit status.
+
+.. function:: kill(p::Process, signum=SIGTERM)
+
+   Send a signal to a process. The default is to terminate the process.
 
 .. function:: readsfrom(command)
 
@@ -3480,6 +3507,10 @@ Tasks
 
    Wrap an expression in a Task executing it, and return the Task. This
    only creates a task, and does not run it.
+
+.. function:: sleep(seconds)
+
+   Block the current task for a specified number of seconds.
 
 Reflection
 ----------
