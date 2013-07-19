@@ -423,7 +423,7 @@ function getipaddr()
         end
         sockaddr = ccall(:jl_uv_interface_address_sockaddr,Ptr{Void},(Ptr{Uint8},),current_addr)
         if ccall(:jl_sockaddr_in_is_ip4,Int32,(Ptr{Void},),sockaddr) == 1
-            return IPv4(ntoh(ccall(:jl_sockaddr_host4,Int32,(Ptr{Void},),sockaddr)))
+            return IPv4(ntoh(ccall(:jl_sockaddr_host4,Uint32,(Ptr{Void},),sockaddr)))
         # Uncomment to enbable IPv6
         #elseif ccall(:jl_sockaddr_in_is_ip6,Int32,(Ptr{Void},),sockaddr) == 1
         #   host = Array(Uint128,1)
