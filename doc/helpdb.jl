@@ -4565,10 +4565,20 @@
 
 "),
 
-("Parallel Computing","Base","wait","wait(RemoteRef)
+("Parallel Computing","Base","wait","wait(x)
 
-   Wait for a value to become available for the specified remote
-   reference.
+   Block the current task until some event occurs, depending on the
+   type of the argument:
+
+   * \"RemoteRef\": Wait for a value to become available for the
+     specified remote reference.
+
+   * \"Condition\": Wait for \"notify\" on a condition.
+
+   * \"Process\": Wait for the process to exit, and get its exit code.
+
+   * \"Task\": Wait for a \"Task\" to finish, returning its result
+     value.
 
 "),
 
@@ -4614,6 +4624,47 @@
 ("Parallel Computing","Base","RemoteRef","RemoteRef(n)
 
    Make an uninitialized remote reference on processor \"n\".
+
+"),
+
+("Parallel Computing","Base","@spawn","@spawn()
+
+   Execute an expression on an automatically-chosen processor,
+   returning a \"RemoteRef\" to the result.
+
+"),
+
+("Parallel Computing","Base","@spawnat","@spawnat()
+
+   Accepts two arguments, \"p\" and an expression, and runs the
+   expression asynchronously on processor \"p\", returning a
+   \"RemoteRef\" to the result.
+
+"),
+
+("Parallel Computing","Base","@fetch","@fetch()
+
+   Equivalent to \"fetch(@spawn expr)\".
+
+"),
+
+("Parallel Computing","Base","@fetchfrom","@fetchfrom()
+
+   Equivalent to \"fetch(@spawnat p expr)\".
+
+"),
+
+("Parallel Computing","Base","@async","@async()
+
+   Schedule an expression to run on the local machine, also adding it
+   to the set of items that the nearest enclosing \"@sync\" waits for.
+
+"),
+
+("Parallel Computing","Base","@sync","@sync()
+
+   Wait until all dynamically-enclosed uses of \"@async\", \"@spawn\",
+   and \"@spawnat\" complete.
 
 "),
 
@@ -4715,6 +4766,33 @@
 
 "),
 
+("System","Base","process_running","process_running(p::Process)
+
+   Determine whether a process is currently running.
+
+"),
+
+("System","Base","process_exited","process_exited(p::Process)
+
+   Determine whether a process has exited.
+
+"),
+
+("System","Base","process_exit_status","process_exit_status(p::Process)
+
+   Get the exit status of an exited process. The result is undefined
+   if the process is still running. Use \"wait(p)\" to wait for a
+   process to exit, and get its exit status.
+
+"),
+
+("System","Base","kill","kill(p::Process, signum=SIGTERM)
+
+   Send a signal to a process. The default is to terminate the
+   process.
+
+"),
+
 ("System","Base","readsfrom","readsfrom(command)
 
    Starts running a command asynchronously, and returns a tuple
@@ -4739,17 +4817,27 @@
 
 "),
 
-("System","Base",">",">
+("System","Base","ignorestatus","ignorestatus(command)
 
-   Redirect standard output of a process.
-
-   **Example**: \"run(`ls` > \"out.log\")\"
+   Mark a command object so that running it will not throw an error if
+   the result code is non-zero.
 
 "),
 
-("System","Base","<","<
+("System","Base","detach","detach(command)
 
-   Redirect standard input of a process.
+   Mark a command object so that it will be run in a new process
+   group, allowing it to outlive the julia process, and not have Ctl-C
+   interrupts passed to it.
+
+"),
+
+("System","Base","|>","|>
+
+   Redirect standard input or output of a process.
+
+   **Example**: \"run(`ls` |> \"out.log\")\" **Example**:
+   \"run(\"file.txt\" |> `cat`)\"
 
 "),
 
@@ -4893,17 +4981,25 @@
 
 ("System","Base","@time","@time()
 
-   A macro to measure the elapsed time of an operation
+   A macro to execute and expression, printing time it took to execute
+   and the total number of bytes its execution caused to be allocated,
+   before returning the value of the expression.
 
 "),
 
-("System","Base","@bytes","@bytes()
+("System","Base","@elapsed","@elapsed()
 
-   A macro to measure the number of bytes allocated during an
-   operation. This executes the operation twice, to avoid
-   contamination by allocation due to compilation. Note that some
-   operations, like \"push!()\", have state-dependent allocation and
-   may yield inconsistent results.
+   A macro to evaluate an expression, discarding the resulting value,
+   instead returning the number of seconds it took to execute as a
+   floating-point number.
+
+"),
+
+("System","Base","@allocated","@allocated()
+
+   A macro to evaluate an expression, discarding the resulting value,
+   instead returning the total number of bytes allocated during
+   evaluation of the expression.
 
 "),
 
@@ -5116,7 +5212,9 @@
 ("Tasks","Base","yield","yield()
 
    For scheduled tasks, switch back to the scheduler to allow another
-   scheduled task to run.
+   scheduled task to run. A task that calls this function is still
+   runnable, and will be restarted immediately if there are no other
+   runnable tasks.
 
 "),
 
@@ -5131,6 +5229,55 @@
 
    Assign a value to a symbol in the current task's task-local
    storage.
+
+"),
+
+("Tasks","Base","Condition","Condition()
+
+   Create an edge-triggered event source that tasks can wait for.
+   Tasks that call \"wait\" on a \"Condition\" are suspended and
+   queued. Tasks are woken up when \"notify\" is later called on the
+   \"Condition\". Edge triggering means that only tasks waiting at the
+   time \"notify\" is called can be woken up. For level-triggered
+   notifications, you must keep extra state to keep track of whether a
+   notification has happened. The \"RemoteRef\" type does this, and so
+   can be used for level-triggered events.
+
+"),
+
+("Tasks","Base","notify","notify(condition, val=nothing; all=true, error=false)
+
+   Wake up tasks waiting for a condition, passing them \"val\". If
+   \"all\" is true (the default), all waiting tasks are woken,
+   otherwise only one is. If \"error\" is true, the passed value is
+   raised as an exception in the woken tasks.
+
+"),
+
+("Tasks","Base","schedule","schedule(t::Task)
+
+   Add a task to the scheduler's queue. This causes the task to run
+   constantly when the system is otherwise idle, unless the task
+   performs a blocking operation such as \"wait\".
+
+"),
+
+("Tasks","Base","@schedule","@schedule()
+
+   Wrap an expression in a Task and add it to the scheduler's queue.
+
+"),
+
+("Tasks","Base","@task","@task()
+
+   Wrap an expression in a Task executing it, and return the Task.
+   This only creates a task, and does not run it.
+
+"),
+
+("Tasks","Base","sleep","sleep(seconds)
+
+   Block the current task for a specified number of seconds.
 
 "),
 
