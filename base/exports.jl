@@ -1258,4 +1258,5 @@ export
     @sprintf,
     @deprecate,
     @boundscheck,
-    @inbounds
+    @inbounds,
+    @timedwait
