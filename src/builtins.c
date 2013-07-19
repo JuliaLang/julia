@@ -618,7 +618,7 @@ DLLEXPORT void jl_print_int64(JL_STREAM *s, int64_t i)
     JL_PRINTF(s, "%lld", i);
 }
 
-DLLEXPORT int jl_substrtod(char *str, int offset, int len, double *out)
+DLLEXPORT int jl_substrtod(char *str, size_t offset, int len, double *out)
 {
     char *p;
     errno = 0;
