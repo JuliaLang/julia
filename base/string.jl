@@ -414,6 +414,8 @@ function next(s::SubString, i::Int)
     c, i-s.offset
 end
 
+getindex(s::SubString, i::Int) = getindex(s.string, i+s.offset)
+
 endof(s::SubString) = s.endof
 # TODO: length(s::SubString) = ??
 # default implementation will work but it's slow
