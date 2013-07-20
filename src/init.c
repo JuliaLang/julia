@@ -579,7 +579,6 @@ DLLEXPORT kern_return_t catch_exception_raise
     ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
     HANDLE_MACH_ERROR("thread_get_state",ret);
     old_state = state;
-    state.__rsp = (((uint64_t)signal_stack + SIGSTKSZ - 512)&-16)-sizeof(void*);
     if (
 #ifdef COPY_STACKS
         (char*)fault_addr > (char*)jl_stack_lo-3000000 &&
@@ -590,19 +589,27 @@ DLLEXPORT kern_return_t catch_exception_raise
         (char*)jl_current_task->stack+jl_current_task->ssize
 #endif
         ) {
+        // memset(&state,0,sizeof(x86_thread_state64_t));
         // Setup libunwind information
         state.__rsp = (uint64_t)signal_stack + SIGSTKSZ;
         state.__rsp -= sizeof(unw_context_t);
         state.__rsp &= -16;
-        state.__rsp -= 512 + sizeof(void*);
-        state.__rsp &= -16;
         unw_context_t *uc = (unw_context_t*)state.__rsp;
-        memset(uc,0,sizeof(x86_thread_state64_t));
+        state.__rsp -= 512;
+        // This is for alignment. In particular note that the sizeof(void*) is necessary
+        // since it would usually specify the return address (i.e. we are aligning the call
+        // frame to a 16 byte boundary as required by the abi, but the stack pointer
+        // to point to the byte beyond that. Not doing this leads to funny behavior on
+        // the first access to an external function will fail due to stack misalignment
+        state.__rsp &= -16;
+        state.__rsp -= sizeof(void*);
+        memset(uc,0,sizeof(unw_context_t));
         memcpy(uc,&old_state,sizeof(x86_thread_state64_t));
         state.__rdi = (uint64_t)uc;
         state.__rip = (uint64_t)darwin_stack_overflow_handler;
     }
     else {
+        state.__rsp = (((uint64_t)signal_stack + SIGSTKSZ - 512)&-16)-sizeof(void*);
         state.__rip = (uint64_t)darwin_segfault_exit;
     }
 
