@@ -778,7 +778,6 @@ export
     string,
     strip,
     strwidth,
-    thisind,
     ucfirst,
     uppercase,
     utf8,
