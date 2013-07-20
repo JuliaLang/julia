@@ -11,6 +11,10 @@ DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(call exec,$(LLVM_CONFIG) --ldflags) $(OSLIBS) $(RPATH)
 
+ifeq ($(OS), Darwin)
+JLDFLAGS += -framework Tcl -framework Tk
+endif
+
 julia-release julia-debug: %: %-basic %-readline
 
 release debug:
