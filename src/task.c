@@ -433,8 +433,6 @@ static void init_task(jl_task_t *t)
 }
 #endif
 
-#define MAX_BT_SIZE 80000
-
 ptrint_t bt_data[MAX_BT_SIZE+1];
 size_t bt_size = 0;
 
