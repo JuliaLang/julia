@@ -512,6 +512,7 @@ static void *signal_stack;
 
 #include <mach/mach_traps.h>
 #include <mach/task.h>
+#include <mach/mig_errors.h>
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 static mach_port_t segv_port = 0;
@@ -548,13 +549,6 @@ void darwin_stack_overflow_handler(unw_context_t *uc)
     throw_internal(jl_stackovf_exception);
 }
 
-void darwin_segfault_exit()
-{
-    JL_PRINTF(JL_STDERR,"Segmentation Fault.\n");
-    uv_tty_reset_mode();
-    jl_exit(1);
-}
-
 #define HANDLE_MACH_ERROR(msg, retval) \
     if(retval!=KERN_SUCCESS) { mach_error(msg ":", (retval)); jl_exit(1); }
 
@@ -576,9 +570,6 @@ DLLEXPORT kern_return_t catch_exception_raise
     //memset(&exc_state,0,sizeof(x86_exception_state64_t));
     ret = thread_get_state(thread,x86_EXCEPTION_STATE64,(thread_state_t)&exc_state,&exc_count);
     uint64_t fault_addr = exc_state.__faultvaddr;
-    ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
-    HANDLE_MACH_ERROR("thread_get_state",ret);
-    old_state = state;
     if (
 #ifdef COPY_STACKS
         (char*)fault_addr > (char*)jl_stack_lo-3000000 &&
@@ -588,7 +579,11 @@ DLLEXPORT kern_return_t catch_exception_raise
         (char*)fault_addr <
         (char*)jl_current_task->stack+jl_current_task->ssize
 #endif
-        ) {
+        ) 
+    {
+        ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
+        HANDLE_MACH_ERROR("thread_get_state",ret);
+        old_state = state;
         // memset(&state,0,sizeof(x86_thread_state64_t));
         // Setup libunwind information
         state.__rsp = (uint64_t)signal_stack + SIGSTKSZ;
@@ -607,16 +602,15 @@ DLLEXPORT kern_return_t catch_exception_raise
         memcpy(uc,&old_state,sizeof(x86_thread_state64_t));
         state.__rdi = (uint64_t)uc;
         state.__rip = (uint64_t)darwin_stack_overflow_handler;
+
+        state.__rbp = state.__rsp;
+        ret = thread_set_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,count);
+        HANDLE_MACH_ERROR("thread_set_state",ret);
+        return KERN_SUCCESS;
     }
     else {
-        state.__rsp = (((uint64_t)signal_stack + SIGSTKSZ - 512)&-16)-sizeof(void*);
-        state.__rip = (uint64_t)darwin_segfault_exit;
+        return -309;
     }
-
-    state.__rbp = state.__rsp;
-    ret = thread_set_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,count);
-    HANDLE_MACH_ERROR("thread_set_state",ret);
-    return KERN_SUCCESS;
 }
 
 #endif
