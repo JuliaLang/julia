@@ -813,10 +813,6 @@ Strings
    Get the previous valid string index before ``i``. Returns ``0`` at
    the beginning of the string.
 
-.. function:: thisind(str, i)
-
-   Adjust ``i`` downwards until it reaches a valid index for the given string.
-
 .. function:: randstring(len)
 
    Create a random ASCII string of length ``len``, consisting of upper- and lower-case letters and the digits 0-9
