@@ -420,7 +420,7 @@ function show_method_table(io::IO, mt::MethodTable, max::Int=-1)
     n = rest = 0
     while !is(d,())
         if max==-1 || n<max || (rest==0 && n==max && d.next === ())
-            println()
+            println(io)
             print(io, name)
             show(io, d)
             n += 1
@@ -430,8 +430,8 @@ function show_method_table(io::IO, mt::MethodTable, max::Int=-1)
         d = d.next
     end
     if rest > 0
-        println()
-        print("... $rest methods not shown (use methods($name) to see them all)")
+        println(io)
+        print(io,"... $rest methods not shown (use methods($name) to see them all)")
     end
 end
 
