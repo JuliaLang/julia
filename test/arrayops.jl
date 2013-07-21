@@ -90,6 +90,25 @@ b = [4, 6, 2, -7, 1]
 ind = findin(a, b)
 @test ind == [3,4]
 
+# merging multidimensional range indexes into a single index
+strds = (1,8,40)
+@test Base.ismergeable(strds, 1:8, 1:5, 1:3) == true           # all elements
+@test Base.ismergeable(strds, 8:-1:1, 5:-1:1, 3:-1:1) == true  # all elements in reverse order
+@test Base.ismergeable(strds, 8:-1:1, 1:5, 1:3) == false
+@test Base.ismergeable(strds, 1, 1, 1) == true
+@test Base.ismergeable(strds, 1:8, 2:4, 3) == true
+@test Base.ismergeable(strds, 2:2:8, 2:4, 3) == true
+@test Base.ismergeable(strds, 1:8, 2:5, 1:2) == false
+@test Base.ismergeable(strds, 2, 3:5) == true
+
+@test Base.mergeindexes(strds, 1:8, 1:5, 1:3) == 1:120
+@test Base.mergeindexes(strds, 8:-1:1, 5:-1:1, 3:-1:1) == 120:-1:1
+@test Base.mergeindexes(strds, 1, 1, 1) == 1:1
+@test Base.mergeindexes(strds, 2, 3, 1) == 18:18
+@test Base.mergeindexes(strds, 1:8, 2:4, 3) == 89:112
+@test Base.mergeindexes(strds, 2:2:8, 2:4, 3) == 90:2:112
+@test Base.mergeindexes(strds, 2, 3:5) == 18:8:40
+
 # sub
 A = reshape(1:120, 3, 5, 8)
 sA = sub(A, 2, 1:5, 1:8)

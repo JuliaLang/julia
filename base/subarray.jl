@@ -215,7 +215,13 @@ function translate_indexes(s::SubArray, I::Union(Real,AbstractArray)...)
     lastdim = pdims[n]
     if havelinear
         newindexes = newindexes[1:lastdim]
-        newindexes[pdims[n]] = translate_linear_indexes(s, n, I[end], pdims)
+        pstrides = strides(s.parent)[lastdim:end]
+        pindexes = s.indexes[lastdim:end]
+        if ismergeable(pstrides, pindexes)
+            newindexes[lastdim] = mergeindexes(pstrides, pindexes)[I[end]]
+        else
+            newindexes[lastdim] = translate_linear_indexes(s, n, I[end], pdims)
+        end
     end
     newindexes
 end
@@ -271,6 +277,77 @@ function parentdims(s::SubArray)
     end
     dimindex
 end
+
+# True if indexing by a list of RangeIndexes is equivalent to indexing with a single Range
+function ismergeable(strides, indexes::(RangeIndex...))
+    m = true
+    n = length(indexes)
+    i = 1
+    local I
+    # Find the first non-singleton index
+    while i <= n
+        I = indexes[i]
+        i += 1
+        if length(I) > 1
+            break
+        end
+    end
+    if i > n
+        return true
+    end
+    # Check that strides in all later ranges are commensurate
+    pold = step(I)*strides[i-1]*length(I)
+    while i <= n
+        I = indexes[i]
+        i += 1
+        lI = length(I)
+        if lI == 1
+            continue
+        end
+        p = step(I)*strides[i-1]
+        m = pold == p
+        if !m
+            break
+        end
+        pold = p*lI
+    end
+    m
+end
+ismergeable(strides, indexes::RangeIndex...) = ismergeable(strides, indexes)
+
+function mergeindexes(strides::Union(Dims,AbstractVector), indexes::(RangeIndex...))
+    N = 1
+    f = 1
+    n = length(indexes)
+    i = 1
+    local I
+    # Find the first non-singleton index
+    while i <= n
+        I = indexes[i]
+        f += (first(I)-1)*strides[i]
+        i += 1
+        if length(I) > 1
+            break
+        end
+    end
+    if i > length(strides)
+        return f:f
+    end
+    N = length(I)
+    stp = step(I)*strides[i-1]/strides[1]
+    while i <= n
+        I = indexes[i]
+        f += (first(I)-1)*strides[i]
+        lI = length(I)
+        i += 1
+        if lI == 1
+            continue
+        end
+        N *= lI
+    end
+    return stp == 1 ? Range1{Int}(f, N) : Range{Int}(f, stp, N)   # is this a good idea or should it always be Range?
+end
+mergeindexes(strides::Union(Dims,AbstractVector), indexes::RangeIndex...) = mergeindexes(strides, indexes)
 
 function getindex(s::SubArray, I::Union(Real,AbstractVector)...)
     newindexes = translate_indexes(s, I...)
