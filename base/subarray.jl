@@ -225,14 +225,34 @@ end
 function translate_linear_indexes(s, n, I, pdims)
     idx = Array(Int, length(I))
     ssztail = size(s)[n:]
-    psztail = size(s.parent)[pdims[n:]]
-    taildimsoffset = 0
-    for i = pdims[end]+1:ndims(s.parent)
-        taildimsoffset += (s.indexes[i]-1)*stride(s.parent, i)
+    indexestail = s.indexes[pdims[n:]]
+    # The next gets the strides of dimensions listed in pdims[n:end], relative to the stride of pdims[n]
+    pstrd = [1]
+    j = n+1
+    strd = 1
+    for i = pdims[n]+1:ndims(s.parent)
+        strd *= size(s.parent, i-1)
+        if j <= length(pdims) && i == pdims[j]
+            push!(pstrd, strd)
+            j += 1
+        end
     end
+    # Compute the offset from any omitted dimensions
+    taildimsoffset = 0
+    for i = pdims[n]+1:ndims(s.parent)
+        thisI = s.indexes[i]
+        if isa(thisI, Integer)
+            taildimsoffset += (thisI-1)*stride(s.parent, i)
+        end
+    end
+    nd = length(pstrd)
     for j=1:length(I)
-        su = ind2sub(ssztail,I[j])
-        idx[j] = sub2ind(psztail, [ s.indexes[pdims[n+k-1]][su[k]] for k=1:length(su) ]...) + taildimsoffset
+        su = ind2sub(ssztail,I[j])  # convert to particular location within indexes
+        K = taildimsoffset + 1
+        for k = 1:nd
+            K += pstrd[k]*(indexestail[k][su[k]]-1)   # convert to particular location in parent
+        end
+        idx[j] = K
     end
     idx
 end
