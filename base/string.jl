@@ -269,6 +269,9 @@ rsearch(s::String, t::String) = (isempty(s) && isempty(t)) ? (1:0) : rsearch(s,t
 contains(::String, ::String) = error("use search() to look for substrings")
 
 function cmp(a::String, b::String)
+    if a === b
+        return 0
+    end
     i = start(a)
     j = start(b)
     while !done(a,i) && !done(b,i)
@@ -410,6 +413,8 @@ function next(s::SubString, i::Int)
     c, i = next(s.string, i+s.offset)
     c, i-s.offset
 end
+
+getindex(s::SubString, i::Int) = getindex(s.string, i+s.offset)
 
 endof(s::SubString) = s.endof
 # TODO: length(s::SubString) = ??
