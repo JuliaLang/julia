@@ -76,6 +76,14 @@ macro task(ex)
     :(Task(()->$(esc(ex))))
 end
 
+# schedule an expression to run asynchronously, with minimal ceremony
+macro schedule(expr)
+    expr = localize_vars(:(()->($expr)), false)
+    :(enq_work(Task($(esc(expr)))))
+end
+
+schedule(t::Task) = enq_work(t)
+
 ## condition variables
 
 type Condition
@@ -123,7 +131,6 @@ function notify(t::Task, arg::ANY=nothing; error=false)
     nothing
 end
 notify_error(t::Task, err) = notify(t, err, error=true)
-
 
 function notify(c::Condition, arg::ANY=nothing; all=true, error=false)
     if all
