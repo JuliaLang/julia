@@ -139,35 +139,40 @@ for itype in (:Uint32, :Uint64, :Uint128, :Int32, :Int64, :Int128)
     end
 end
 
+function randu{T<:Union(Uint32,Uint64,Uint128)}(k::T)
+    # generate an unsigned integer in 0:k-1
+    
+    # largest multiplies of k that can be represented in T
+    u = convert(T, div(typemax(T), k) * k)
+    x = rand(T)
+    while x >= u
+        x = rand(T)
+    end
+    rem(x, k)
+end
 
 # random integer from lo to hi inclusive
-function rand{T<:Union(Uint32,Uint64,Uint128,Int32,Int64,Int128)}(r::Range1{T})
-    lo = r[1]
-    hi = r[end]
-    m = typemax(T)
-
-    if hi - lo > m || hi - lo < 0
-        # Fallback for signed integer types when the length of the range
-        # is larger than typemax(T), e.g. rand(int32(-1):typemax(Int32)).
-        return convert(T, rand(unsigned(zero(T)):unsigned(hi - lo)) + lo)
-    end
-
-    s = rand(T) & m
-    if (hi-lo == m)
-        return convert(T, s + lo)
-    end
-    d = hi-lo+1
-    if (d&(d-1))==0
-        # power of 2 range
-        return convert(T, s&(d-1) + lo)
-    end
-    # note: m>=0 && r>=0
-    lim = m - rem(rem(m,d)+1, d)
-    while s > lim
-        s = rand(T) & m
-    end
-    return convert(T, rem(s,d) + lo)
+function rand{T<:Union(Uint32,Uint64,Uint128)}(r::Range1{T})   
+    ulen = convert(T, length(r))
+    convert(T, first(r) + randu(ulen))
 end
+
+function rand(r::Range1{Int32})  
+    ulen = convert(Uint32, length(r))
+    convert(Int32, first(r) + randu(ulen))
+end
+
+function rand(r::Range1{Int64})  
+    ulen = convert(Uint64, length(r))
+    convert(Int64, first(r) + randu(ulen))
+end
+
+function rand(r::Range1{Int128})  
+    ulen = convert(Uint128, length(r))
+    convert(Int128, first(r) + randu(ulen))
+end
+
+
 
 # fallback for other integer types
 rand{T<:Integer}(r::Range1{T}) = convert(T, rand(int(r)))
