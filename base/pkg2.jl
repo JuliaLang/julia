@@ -32,7 +32,7 @@ edit(f::Function, pkg, args...) = Dir.cd() do
     info("REQUIRE updated.")
 end
 
-available() = [keys(Pkg2.Dir.cd(Pkg2.Read.available))...]
+available() = sort!([keys(Pkg2.Dir.cd(Pkg2.Read.available))...], by=lowercase)
 
 status() = Dir.cd() do
     reqs = Reqs.parse("REQUIRE")
@@ -62,7 +62,7 @@ function status(pkg::String, ver::VersionNumber, fix::Bool)
     println()
 end
 
-urlpkg(url::String) = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$/*", url).captures[1]
+urlpkg(url::String) = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$", url).captures[1]
 
 clone(url::String, pkg::String=urlpkg(url); opts::Cmd=``) = Dir.cd() do
     ispath(pkg) && error("$pkg already exists")
