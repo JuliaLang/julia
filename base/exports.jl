@@ -992,6 +992,7 @@ export
     asm_llvm,
     asm_native,
     ast_typed,
+    ast_lowered,
     isconst,
     isgeneric,
 
