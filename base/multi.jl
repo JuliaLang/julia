@@ -1495,3 +1495,35 @@ function check_master_connect(timeout)
         end
     end
 end
+
+
+function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+    start = time()
+    done = RemoteRef()
+    timercb(aw, status) = begin
+        try
+            if testcb()
+                put(done, :ok)
+            elseif (time() - start) > secs
+                put(done, :timed_out)
+            elseif status != 0
+                put(done, :error)
+            end
+        catch e
+            put(done, :error)
+        finally
+            isready(done) && stop_timer(aw)
+        end
+    end
+
+    if !testcb()
+        t = TimeoutAsyncWork(timercb)
+        start_timer(t, pollint, pollint)
+        ret = fetch(done)
+        stop_timer(t)
+    else
+        ret = :ok
+    end
+    ret
+end
+
