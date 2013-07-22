@@ -72,7 +72,7 @@ isgeneric(f::ANY) = (isa(f,Function)||isa(f,DataType)) && isa(f.env,MethodTable)
 
 function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 
-ast_lowered(f::Function,t::Tuple) = methods(f,t)
+ast_lowered(f::Function,t::Tuple) = methods(f,t)[1]
 methods(f::ANY,t::ANY) = _methods(f,t,-1)::Array{Any,1}
 _methods(f::ANY,t::ANY,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
 
