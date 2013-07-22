@@ -989,7 +989,6 @@ export
     whicht,
     whos,
     isinteractive,
-    disassemble,
     asm_llvm,
     asm_native,
     finfer,
