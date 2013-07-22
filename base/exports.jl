@@ -991,7 +991,7 @@ export
     isinteractive,
     asm_llvm,
     asm_native,
-    finfer,
+    ast_typed,
     isconst,
     isgeneric,
 
