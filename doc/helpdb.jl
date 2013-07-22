@@ -9,6 +9,24 @@
 
 "),
 
+("Getting Around","Base","quit","quit()
+
+   Calls \"exit(0)\".
+
+"),
+
+("Getting Around","Base","atexit","atexit(f)
+
+   Register a zero-argument function to be called at exit.
+
+"),
+
+("Getting Around","Base","isinteractive","isinteractive()
+
+   Determine whether Julia is running an interactive session.
+
+"),
+
 ("Getting Around","Base","whos","whos([Module,] [pattern::Regex])
 
    Print information about global variables in a module, optionally
@@ -245,6 +263,18 @@
 
 "),
 
+("All Objects","Base","oftype","oftype(x, y)
+
+   Convert \"y\" to the type of \"x\".
+
+"),
+
+("All Objects","Base","identity","identity(x)
+
+   The identity function. Returns its argument.
+
+"),
+
 ("Types","Base","super","super(T::DataType)
 
    Return the supertype of DataType T
@@ -348,6 +378,15 @@
 
 "),
 
+("Types","Base","promote_rule","promote_rule(type1, type2)
+
+   Specifies what type should be used by \"promote\" when given values
+   of types \"type1\" and \"type2\". This function should not be
+   called directly, but should have definitions added to it for new
+   types as appropriate.
+
+"),
+
 ("Types","Base","getfield","getfield(value, name::Symbol)
 
    Extract a named field from a value of composite type. The syntax
@@ -390,6 +429,14 @@
    contains no references to other values. Typical examples are
    numeric types such as \"Uint8\", \"Float64\", and
    \"Complex{Float64}\".
+
+"),
+
+("Types","Base","isleaftype","isleaftype(T)
+
+   Determine whether \"T\" is a concrete type that can have instances,
+   meaning its only subtypes are itself and \"None\" (but \"T\" itself
+   is not \"None\").
 
 "),
 
@@ -664,6 +711,12 @@
 
 "),
 
+("Iterable Collections","Base","step","step(r)
+
+   Get the step size of a \"Range\" object.
+
+"),
+
 ("Iterable Collections","Base","collect","collect(collection)
 
    Return an array of all items in a collection. For associative
@@ -693,7 +746,7 @@
 
 "),
 
-("Associative Collections","Base","has","has(collection, key)
+("Associative Collections","Base","haskey","haskey(collection, key)
 
    Determine whether a collection has a mapping for a given key.
 
@@ -1300,6 +1353,12 @@
 
 "),
 
+("Strings","Base","symbol","symbol(str)
+
+   Convert a string to a \"Symbol\".
+
+"),
+
 ("I/O","Base","STDOUT","STDOUT
 
    Global variable referring to the standard out stream.
@@ -1369,6 +1428,20 @@
 
    Create an in-memory I/O stream, optionally specifying how much
    initial space is needed.
+
+"),
+
+("I/O","Base","takebuf_array","takebuf_array(b::IOBuffer)
+
+   Obtain the contents of an \"IOBuffer\" as an array, without
+   copying.
+
+"),
+
+("I/O","Base","takebuf_string","takebuf_string(b::IOBuffer)
+
+   Obtain the contents of an \"IOBuffer\" as a string, without
+   copying.
 
 "),
 
@@ -1481,6 +1554,23 @@
 
    Converts the endianness of a value from that used by the Host to
    Little-endian.
+
+"),
+
+("I/O","Base","serialize","serialize(stream, value)
+
+   Write an arbitrary value to a stream in an opaque format, such that
+   it can be read back by \"deserialize\". The read-back value will be
+   as identical as possible to the original. In general, this process
+   will not work if the reading and writing are done by different
+   versions of Julia, or an instance of Julia with a different system
+   image.
+
+"),
+
+("I/O","Base","deserialize","deserialize(stream)
+
+   Read a value written by \"serialize\".
 
 "),
 
@@ -2472,6 +2562,12 @@
 
 "),
 
+("Mathematical Functions","Base","isqrt","isqrt(x)
+
+   Integer square root.
+
+"),
+
 ("Mathematical Functions","Base","cbrt","cbrt(x)
 
    Return x^{1/3}
@@ -3288,6 +3384,12 @@
    Returns \"true\" if \"x\" is prime, and \"false\" otherwise.
 
    **Example**: \"isprime(3) -> true\"
+
+"),
+
+("Numbers","Base","primes","primes(n)
+
+   Returns a collection of the prime numbers <= \"n\".
 
 "),
 
@@ -5150,6 +5252,27 @@
 
 "),
 
+("Errors","Base","rethrow","rethrow([e])
+
+   Throw an object without changing the current exception backtrace.
+   The default argument is the current exception (if called within a
+   \"catch\" block).
+
+"),
+
+("Errors","Base","backtrace","backtrace()
+
+   Get a backtrace object for the current program point.
+
+"),
+
+("Errors","Base","catch_backtrace","catch_backtrace()
+
+   Get the backtrace of the current exception, for use within
+   \"catch\" blocks.
+
+"),
+
 ("Errors","Base","errno","errno()
 
    Get the value of the C library's \"errno\"
@@ -5345,6 +5468,25 @@
 
    Returns a tuple \"(filename,line)\" giving the location of a method
    definition.
+
+"),
+
+("Internals","Base","gc","gc()
+
+   Perform garbage collection. This should not generally be used.
+
+"),
+
+("Internals","Base","gc_disable","gc_disable()
+
+   Disable garbage collection. This should be used only with extreme
+   caution, as it can cause memory use to grow without bound.
+
+"),
+
+("Internals","Base","gc_enable","gc_enable()
+
+   Re-enable garbage collection after calling \"gc_disable\".
 
 "),
 
