@@ -8,7 +8,6 @@ include("pkg2/read.jl")
 include("pkg2/query.jl")
 include("pkg2/resolve.jl")
 include("pkg2/write.jl")
-include("pkg2/extdeps.jl")
 
 using Base.Git, .Types
 
@@ -192,17 +191,10 @@ resolve(
         rethrow()
     end
 
-    # run build scripts
-    lines = ExtDeps.read("WORKING")
-    for (pkg,_) in changes  
-        contains(lines,ExtDeps.Record(pkg)) && ExtDeps.rm(lines,pkg)
-    end
-    Reqs.write("WORKING",lines)
-    for (pkg,_) in changes
-        if !runbuildscript(pkg)
-            return
-        end
-    end
+    installed
+    # Since we just changed a lot of things, it's probably better to reread
+    # the state, so only pass avail
+    fixup(String[pkg for (pkg,_) in filter(x->x[2][2]!=nothing,changes)],avail)
 end
 
 function runbuildscript(pkg,args=[])
@@ -251,8 +243,18 @@ check_metadata(julia_version::VersionNumber=VERSION) = Dir.cd() do
 end
 check_metadata(julia_version::String) = check_metadata(convert(VersionNumber, julia_version))
 
-function _fixup(instlist;exclude=[])
-    for (p,_) in instlist
+function _fixup(instlist,
+        avail=Dir.cd(Read.available),
+        inst::Dict=Dir.cd(()->Read.installed(avail)),
+        free::Dict=Dir.cd(()->Read.free(inst)),
+        fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));exclude = [])
+    
+    sort!(instlist, lt=function(a,b)
+        c = contains(Pkg2.Read.alldependencies(a,avail,free,fixed),b) 
+        nonordered = (!c && !contains(Pkg2.Read.alldependencies(b,avail,free,fixed),a))
+        nonordered ? a < b : c
+    end)
+    for p in instlist
         if contains(exclude,p)
             continue
         end
@@ -263,21 +265,47 @@ function _fixup(instlist;exclude=[])
     info("SUCCESS!")
 end
 
+function fixup(pkg::Vector{String},
+        avail::Dict=Dir.cd(Read.available),
+        inst::Dict=Dir.cd(()->Read.installed(avail)),
+        free::Dict=Dir.cd(()->Read.free(inst)),
+        fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));exclude = []) 
+    tofixup = copy(pkg)
+    oldlength = length(tofixup)
+    while true
+        for (p,_) in inst
+            if !contains(tofixup,p) 
+                for pf in tofixup
+                    if contains(Pkg2.Read.alldependencies(p,avail,free,fixed),pf)
+                        push!(tofixup,p)
+                        break
+                    end
+                end
+            end
+        end
+        if oldlength == length(tofixup)
+            break
+        end
+    end
+    _fixup(tofixup,avail,inst,free,fixed; exclude = exclude)
+end
+
+fixup(pkg::String,
+    avail::Dict=Dir.cd(Read.available),
+    inst::Dict=Dir.cd(()->Read.installed(avail)),
+    free::Dict=Dir.cd(()->Read.free(inst)),
+    fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));exclude = []) = 
+        fixup([pkg],avail,inst,free,fixed;exclude = exclude)
+
+
 function fixup(
-        lines::Vector{Reqs.Line}=Dir.cd(()->ExtDeps.read("WORKING")),
-        avail=Dir.cd(Read.available),
+        avail::Dict=Dir.cd(Read.available),
         inst::Dict=Dir.cd(()->Read.installed(avail)),
         free::Dict=Dir.cd(()->Read.free(inst)),
         fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));exclude = []) 
     # TODO: Replace by proper toposorts
-    instlist = [(k,v) for (k,v) in inst]
-    sort!(instlist, lt=function(a,b)
-        ((a,vera),(b,verb)) = (a,b)
-        c = contains(Pkg2.Read.alldependencies(a,avail,free,fixed),b) 
-        nonordered = (!c && !contains(Pkg2.Read.alldependencies(b,avail,free,fixed),a))
-        nonordered ? a < b : c
-    end)
-    _fixup(instlist,exclude=exclude)
+    instlist = [k for (k,v) in inst]
+    _fixup(instlist,avail,inst,free,fixed;exclude=exclude)
 end
 
 end # module
