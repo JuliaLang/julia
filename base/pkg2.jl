@@ -286,6 +286,7 @@ function fixup(pkg::Vector{String},
         if oldlength == length(tofixup)
             break
         end
+        oldlength = length(tofixup)
     end
     _fixup(tofixup,avail,inst,free,fixed; exclude = exclude)
 end
