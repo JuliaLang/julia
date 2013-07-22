@@ -88,6 +88,8 @@ methods(t::DataType) = (_methods(t,Tuple,0);  # force constructor creation
 uncompressed_ast(l::LambdaStaticData) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
+asm_llvm(f::Function, types::Tuple) = disassemble(f,types,false)
+asm_native(f::Function,types::Tuple) = disassemble(f,types,true)
 disassemble(f::Function, types::Tuple, asm::Bool = false) =
     print(ccall(:jl_dump_function, Any, (Any,Any,Bool), f, types, asm)::ByteString)
 

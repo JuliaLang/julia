@@ -990,6 +990,8 @@ export
     whos,
     isinteractive,
     disassemble,
+    asm_llvm,
+    asm_native,
     finfer,
     isconst,
     isgeneric,
