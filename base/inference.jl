@@ -1657,6 +1657,12 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     if length(atypes)==2 && is(f,unbox) && isa(atypes[2],DataType)
         return (e.args[3],())
     end
+    if is(f,Union) && isType(e.typ)
+        union = e.typ.parameters[1]
+        if isa(union,UnionType) && all(isleaftype, (union::UnionType).types)
+            return (union,())
+        end
+    end
     if isa(f,IntrinsicFunction)
         return NF
     end
