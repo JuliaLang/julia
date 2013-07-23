@@ -433,10 +433,8 @@ static void init_task(jl_task_t *t)
 }
 #endif
 
-#define MAX_BT_SIZE 80000
-
-static ptrint_t bt_data[MAX_BT_SIZE+1];
-static size_t bt_size = 0;
+ptrint_t bt_data[MAX_BT_SIZE+1];
+size_t bt_size = 0;
 
 void getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer);
 
@@ -618,7 +616,7 @@ DLLEXPORT void jlbacktrace()
 
 
 // yield to exception handler
-static void NORETURN throw_internal(jl_value_t *e)
+void NORETURN throw_internal(jl_value_t *e)
 {
     jl_exception_in_transit = e;
     if (jl_current_task->eh != NULL) {
