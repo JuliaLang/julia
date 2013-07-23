@@ -469,6 +469,9 @@ end
 convert(::Type{RepString}, s::String) = RepString(s,1)
 
 function repeat(s::ByteString, r::Integer)
+    if r < 0
+        error("can't repeat a string ",r," times")
+    end
     d = s.data; n = length(d)
     out = Array(Uint8, n*r)
     for i=1:r
