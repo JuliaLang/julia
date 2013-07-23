@@ -760,6 +760,7 @@ install-openblas: $(OPENBLAS_OBJ_TARGET)
 # configure script will search for the best match
 # (gcc 4.7, gcc, clang,ICC/microsoft/others)
 ATLAS_OBJ_SOURCE = atlas/build/lib/libsatlas.$(SHLIB_EXT)
+ATLAS_OBJ_TARGET = $(BUILD)/lib/libsatlas.$(SHLIB_EXT)
 ATLAS_FLAGS = --shared --prefix=$(BUILD) --cc=gcc -t 0 \
 	--with-netlib-lapack-tarfile=$(JULIAHOME)/deps/lapack-$(LAPACK_VER).tgz
 ifeq ($(OS), WINNT)
@@ -789,9 +790,10 @@ else
 $(ATLAS_OBJ_SOURCE):
 	$(error cannot build atlas in parallel with anything else)
 endif
-$(BUILD)/lib/libsatlas.$(SHLIB_EXT): $(ATLAS_OBJ_SOURCE)
-	cp -f atlas/build/lib/libsatlas.$(SHLIB_EXT) $(BUILD)/lib
-	$(INSTALL_NAME_CMD)libsatlas.$(SHLIB_EXT) $(BUILD)/lib/libsatlas.$(SHLIB_EXT)
+
+$(ATLAS_OBJ_TARGET): $(ATLAS_OBJ_SOURCE)
+	cp -f $(ATLAS_OBJ_SOURCE) $@
+	$(INSTALL_NAME_CMD)libsatlas.$(SHLIB_EXT) $@
 
 clean-atlas:
 	rm -rf atlas/build
@@ -802,7 +804,7 @@ get-atlas: atlas/configure
 configure-atlas: atlas/build/Make.top
 compile-atlas: $(ATLAS_OBJ_SOURCE)
 check-atlas: compile-atlas
-install-atlas: $(BUILD)/lib/libsatlas.$(SHLIB_EXT)
+install-atlas: $(ATLAS_OBJ_TARGET)
 
 ## Mac gfortran BLAS wrapper ##
 GFORTBLAS_FFLAGS =
@@ -912,11 +914,17 @@ arpack-ng-$(ARPACK_VER).tar.gz:
 arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	tar zxf $< 
 	touch -c $@
+
+ifeq ($(USE_ATLAS), 1)
+arpack-ng-$(ARPACK_VER)/config.status: | $(ATLAS_OBJ_TARGET)
+endif
+
 ifeq ($(USE_SYSTEM_BLAS), 0)
 arpack-ng-$(ARPACK_VER)/config.status: | $(OPENBLAS_OBJ_TARGET)
 else ifeq ($(USE_SYSTEM_LAPACK), 0)
 arpack-ng-$(ARPACK_VER)/config.status: | $(LAPACK_OBJ_SOURCE)
 endif
+
 arpack-ng-$(ARPACK_VER)/config.status: arpack-ng-$(ARPACK_VER)/configure
 ifeq ($(OS),WINNT)
 	cd arpack-ng-$(ARPACK_VER) && \
@@ -1128,6 +1136,11 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
 	touch -c $@
+
+ifeq ($(USE_ATLAS), 1)
+$(SUITESPARSE_OBJ_SOURCE): | $(ATLAS_OBJ_TARGET)
+endif
+
 ifeq ($(USE_SYSTEM_BLAS), 0)
 $(SUITESPARSE_OBJ_SOURCE): | $(OPENBLAS_OBJ_TARGET)
 else ifeq ($(USE_SYSTEM_LAPACK), 0)
