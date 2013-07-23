@@ -774,6 +774,11 @@ endif
 
 atlas/configure:
 	git clone git://github.com/vtjnash/atlas-3.10.0.git atlas
+	patch atlas/bin/atlas_install.c < atlas_install.c.patch
+	chmod +x atlas/configure
+	chmod +x atlas/CONFIG/src/ATLrun.sh
+	cp -f atlas_types.h atlas/include/
+
 ifeq "$(MAKECMDGOALS)" "compile-atlas"
 # only allow building atlas as the sole target (without -jN)
 # since it internally handles parallelism, for tuning timing accuracy
