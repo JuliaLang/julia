@@ -38,7 +38,7 @@ function bytestring(p::Union(Ptr{Uint8},Ptr{Int8}))
     ccall(:jl_cstr_to_string, ByteString, (Ptr{Uint8},), p)
 end
 
-function bytestring(p::Union(Ptr{Uint8},Ptr{Int8}),len::Int)
+function bytestring(p::Union(Ptr{Uint8},Ptr{Int8}),len::Integer)
     p == C_NULL ? error("cannot convert NULL to string") :
     ccall(:jl_pchar_to_string, ByteString, (Ptr{Uint8},Int), p, len)
 end
