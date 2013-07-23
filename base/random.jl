@@ -113,6 +113,8 @@ rand!(r::MersenneTwister, A::Array{Float64}) = dsfmt_fill_array_close_open!(r.st
 rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
 rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
 
+rand(::Type{Float32}) = float32(rand())
+
 ## random integers
 
 dsfmt_randui32() = dsfmt_gv_genrand_uint32()
@@ -126,7 +128,7 @@ rand(::Type{Int32})   = int32(rand(Uint32))
 rand(::Type{Int64})   = int64(rand(Uint64))
 rand(::Type{Int128})  = int128(rand(Uint128))
 
-for itype in (:Uint32, :Uint64, :Uint128, :Int32, :Int64, :Int128) 
+for itype in (:Uint32, :Uint64, :Uint128, :Int32, :Int64, :Int128, :Float32) 
     @eval begin
         function rand!(A::Array{$itype})
             for i=1:length(A)
@@ -142,7 +144,7 @@ end
 function randu{T<:Union(Uint32,Uint64,Uint128)}(k::T)
     # generate an unsigned integer in 0:k-1
     
-    # largest multiplies of k that can be represented in T
+    # largest multiple of k that can be represented in T
     u = convert(T, div(typemax(T), k) * k)
     x = rand(T)
     while x >= u
