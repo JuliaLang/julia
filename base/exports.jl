@@ -1112,6 +1112,7 @@ export
     take,
     wait,
     ClusterManager,
+    timedwait,
 
 # distributed arrays
     distribute,
@@ -1262,5 +1263,4 @@ export
     @sprintf,
     @deprecate,
     @boundscheck,
-    @inbounds,
-    @timedwait
+    @inbounds
