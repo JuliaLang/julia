@@ -1217,6 +1217,7 @@ DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n);
 DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
 
+#define MAX_BT_SIZE 80000
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize);
 
 //IO objects
