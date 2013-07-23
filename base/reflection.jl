@@ -72,7 +72,7 @@ isgeneric(f::ANY) = (isa(f,Function)||isa(f,DataType)) && isa(f.env,MethodTable)
 
 function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 
-methods(f::ANY,t::ANY) = _methods(f,t,-1)::Array{Any,1}
+loweredast(f::ANY,t::ANY) = _methods(f,t,-1)::Array{Any,1}
 _methods(f::ANY,t::ANY,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
 
 function methods(f::Function)
@@ -88,8 +88,12 @@ methods(t::DataType) = (_methods(t,Tuple,0);  # force constructor creation
 uncompressed_ast(l::LambdaStaticData) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
-disassemble(f::Function, types::Tuple, asm::Bool = false) =
-    print(ccall(:jl_dump_function, Any, (Any,Any,Bool), f, types, asm)::ByteString)
+llvmir(f::Function, types::Tuple) =
+    print(ccall(:jl_dump_function, Any, (Any,Any,Bool), f, types, false)::ByteString)
+
+nativeassembly(f::Function, types::Tuple) =
+    print(ccall(:jl_dump_function, Any, (Any,Any,Bool), f, types, true)::ByteString)
+
 
 function functionlocs(f::Function, types=(Any...))
     locs = Any[]

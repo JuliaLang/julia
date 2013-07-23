@@ -989,8 +989,10 @@ export
     whicht,
     whos,
     isinteractive,
-    disassemble,
-    finfer,
+    llvmir,
+    nativeassembly,
+    typeinferredast,
+    loweredast,
     isconst,
     isgeneric,
 
