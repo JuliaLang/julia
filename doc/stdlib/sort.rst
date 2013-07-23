@@ -1,187 +1,199 @@
-:mod:`Base.Sort` --- Routines related to sorting
-=================================================================
+Sorting and Related Functions
+=============================
 
 .. module:: Base.Sort
-   :synopsis: Sort and related routines
 
-The ``Sort`` module contains algorithms and other functions related to
-sorting.  Default sort functions and standard versions of the various
-sort algorithm are available by default.
-Specific sort algorithms can be used by importing
-``Sort`` or using the fully qualified algorithm name, e.g.::
+Julia has an extensive, flexible API for sorting and interacting with
+already-sorted arrays of values. For many users, sorting in standard
+ascending order, letting Julia pick reasonable default algorithms
+will be sufficient::
 
-  # Julia code
-  sort(v, Sort.TimSort)
-
-will sort ``v`` using ``TimSort``.
-
-
-Overview
---------
-
-Many users will simply want to use the default sort algorithms, which
-allow sorting in ascending or descending order::
-
-  # Julia code
-  julia> sort([2,3,1]) == [1,2,3]
-  true
-
-  julia> sort([2,3,1], Sort.Reverse) == [3,2,1]
-  true
-
-return a permutation::
-
-  julia> v = [20,30,10]
+  julia> sort([2,3,1])
   3-element Int64 Array:
-   20
-   30
-   10
+   1
+   2
+   3
+
+You can easily sort in reverse order as well::
+
+  julia> sort([2,3,1], rev=true)
+  3-element Int64 Array:
+   3
+   2
+   1
+
+To sort an array in-place, use the "bang" version of the sort function::
+
+  julia> a = [2,3,1];
+
+  julia> sort!(a);
+
+  julia> a
+  3-element Int64 Array:
+   1
+   2
+   3
+
+Instead of directly sorting an array, you can compute a permutation of the array's indices that puts the array into sorted order::
+
+  julia> v = randn(5)
+  5-element Float64 Array:
+    0.587746
+   -0.870797
+   -0.111843
+    1.08793
+   -1.25061
 
   julia> p = sortperm(v)
-  [3, 1, 2]
+  5-element Int64 Array:
+   5
+   2
+   3
+   1
+   4
 
   julia> v[p]
-  3-element Int64 Array:
-   10
-   20
-   30
+  5-element Float64 Array:
+   -1.25061
+   -0.870797
+   -0.111843
+    0.587746
+    1.08793
 
-and use a custom extractor function to order inputs::
+Arrays can easily be sorted acording to an arbitrary transformation of their values::
 
-  julia> canonicalize(s) = filter(c -> ('A'<=c<='Z' || 'a'<=c<='z'), s) | uppercase
+  julia> sort(v, by=abs)
+  5-element Float64 Array:
+   -0.111843
+    0.587746
+   -0.870797
+    1.08793
+   -1.25061
 
-  julia> sortby(["New York", "New Jersey", "Nevada", "Nebraska", "Newark"], canonicalize)
-  5-element ASCIIString Array:
-   "Nebraska"
-   "Nevada"
-   "Newark"
-   "New Jersey"
-   "New York"
+Or in reverse order by a transformation::
 
-Note that none of the variants above modify the original arrays.  To
-sort in-place (which is often more efficient), :func:`sort` and
-:func:`sortby` have mutating versions which end with an exclamation
-point (:func:`sort!` and :func:`sortby!`).
+  julia> sort(v, by=abs, rev=true)
+  5-element Float64 Array:
+   -1.25061
+    1.08793
+   -0.870797
+    0.587746
+   -0.111843
 
-These sort functions use reasonable default algorithms, but if you
-want more control or want to see if a different sort algorithm will
-work better on your data, read on...
+Reasonable sorting algorithms are used by default, but you can choose
+other algorithms as well::
 
-
-Sort Algorithms
----------------
-
-There are currently four main sorting algorithms available in Julia::
-
-  InsertionSort
-  QuickSort
-  MergeSort
-  TimSort
-
-Insertion sort is an O(n^2) stable sorting algorithm.  It is
-efficient for very small ``n``, and is used internally by
-``QuickSort`` and ``TimSort``.
-
-Quicksort is an O(n log n) sorting algorithm.  For efficiency, it
-is not stable.  It is among the fastest sorting algorithms.
-
-Mergesort is an O(n log n) stable sorting algorithm.
-
-Timsort is an O(n log n) stable adaptive sorting algorithm.  It
-takes advantage of sorted runs which exist in many real world
-datasets.
-
-The sort functions select a reasonable default algorithm, depending on
-the type of the target array.  To force a specific algorithm to be
-used, append ``Sort.<algorithm>`` to the argument list (e.g., use
-``sort!(v, Sort.TimSort)`` to force the use of the Timsort algorithm).
+  julia> sort(v, alg=TimSort)
+  5-element Float64 Array:
+   -1.25061
+   -0.870797
+   -0.111843
+    0.587746
+    1.08793
 
 
-Functions
----------
+Sorting Functions
+-----------------
 
-.. module:: Base
+.. function:: sort!(v, [dim,] [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
---------------
-Sort Functions
---------------
+   Sort the vector ``v`` in place. ``QuickSort`` is used by default for numeric arrays
+   while ``MergeSort`` is used for other arrays. You can specify an algorithm to use via
+   the ``alg`` keyword (see `Sorting Algorithms`_ for available algorithms). The ``by``
+   keyword lets you provide a function that will be applied to each element before
+   comparison; the ``lt`` keyword allows providing a custom "less than" function; use
+   ``rev=true`` to reverse the sorting order. These options are independent and can be
+   used together in all possible combinations: if both ``by`` and ``lt`` are specified,
+   the ``lt`` function is applied to the result of the ``by`` function; ``rev=true``
+   reverses whatever ordering specified via the ``by`` and ``lt`` keywords.
 
-.. function:: sort(v[, alg[, ord]])
+.. function:: sort(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   Sort a vector in ascending order.  Specify ``alg`` to choose a
-   particular sorting algorithm (``Sort.InsertionSort``,
-   ``Sort.QuickSort``, ``Sort.MergeSort``, or ``Sort.TimSort``), and
-   ``ord`` to sort with a custom ordering (e.g., ``Sort.Reverse`` or a
-   comparison function).
+   Variant of ``sort!`` that returns a sorted copy of ``v`` leaving ``v`` itself unmodified.
 
-.. function:: sort!(...)
-
-   In-place sort.
-
-.. function:: sortby(v, by[, alg])
-
-   Sort a vector according to ``by(v)``.  Specify ``alg`` to choose a
-   particular sorting algorithm (``Sort.InsertionSort``,
-   ``Sort.QuickSort``, ``Sort.MergeSort``, or ``Sort.TimSort``).
-
-.. function:: sortby!(...)
-
-   In-place ``sortby``.
-
-.. function:: sortperm(v, [alg[, ord]])
-
-   Return a permutation vector, which when applied to the input vector
-   ``v`` will sort it.  Specify ``alg`` to choose a particular sorting
-   algorithm (``Sort.InsertionSort``, ``Sort.QuickSort``,
-   ``Sort.MergeSort``, or ``Sort.TimSort``), and ``ord`` to sort with
-   a custom ordering (e.g., ``Sort.Reverse`` or a comparison function).
-
-.. function:: sort(A, dim, [alg[, ord]])
+.. function:: sort(A, dim, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort a multidimensional array ``A`` along the given dimension.
 
-.. function:: sortrows(A, [alg[, ord]])
+.. function:: sortperm(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+   Return a permutation vector of indices of ``v`` that puts it in sorted order.
+   Specify ``alg`` to choose a particular sorting algorithm (see `Sorting Algorithms`_).
+   ``MergeSort`` is used by default, and since it is stable, the resulting permutation
+   will be the lexicographically first one that puts the input array into sorted order –
+   i.e. indices of equal elements appear in ascending order. If you choose a non-stable
+   sorting algorithm such as ``QuickSort``, a different permutation that puts the array
+   into order may be returned. The order is specified using the same keywords as ``sort!``.
+
+.. function:: sortrows(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the rows of matrix ``A`` lexicographically.
 
-.. function:: sortcols(A, [alg[, ord]])
+.. function:: sortcols(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the columns of matrix ``A`` lexicographically.
 
--------------------------
-Sorting-related Functions
--------------------------
 
-.. function:: issorted(v[, ord])
+Order-Related Functions
+-----------------------
 
-   Test whether a vector is in ascending sorted order.  If specified,
-   ``ord`` gives the ordering to test.
+.. function:: issorted(v, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-.. function:: searchsorted(a, x[, ord])
+   Test whether a vector is in sorted order. The ``by``, ``lt`` and ``rev``
+   keywords modify what order is considered to be sorted just as they do for ``sort``.
 
-   Returns the range of indices of ``a`` equal to ``x``, assuming ``a``
-   is sorted according to ordering ``ord`` (default:
-   ``Sort.Forward``).  Returns an empty range located at the insertion
-   point if ``a`` does not contain ``x``.
+.. function:: searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-.. function:: searchsortedfirst(a, x[, ord])
+   Returns the range of indices of ``a`` which compare as equal to ``x`` according to the
+   order specified by the ``by``, ``lt`` and ``rev`` keywords, assuming that ``a`` is
+   already sorted in that order. Returns an empty range located at the insertion point if
+   ``a`` does not contain values equal to ``x``.
 
-   Returns the index of the first value of ``a`` equal to or
-   succeeding ``x``, according to ordering ``ord`` (default:
-   ``Sort.Forward``).
+.. function:: select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-.. function:: searchsortedlast(a, x[, ord])
+   Partially sort the vector ``v`` in place, according to the order specified by ``by``,
+   ``lt`` and ``rev`` so that the value at index ``k`` (or range of adjacent values if
+   ``k`` is a range) occurs at the position where it would appear if the array were
+   fully sorted. If ``k`` is a single index, that values is returned; if ``k`` is a
+   range, an array of values at those indices is returned. Note that ``select!`` does
+   not fully sort the input array, but does leave the returned elements where they
+   would be if the array were fully sorted.
 
-   Returns the index of the last value of ``a`` preceding or equal to
-   ``x``, according to ordering ``ord`` (default: ``Sort.Forward``).
+.. function:: select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-.. function:: select(v, k[, ord])
+   Variant of ``select!`` which copies ``v`` before partially sorting it, thereby
+   returning the same thing as ``select!`` but leaving ``v`` unmodified.
 
-   Partially sort vector ``v`` according to ordering ``ord``, and return
-   the element at position ``k``.  ``k`` can also be a range, in which
-   case a vector of elements corresponding to the range positions is
-   returned.
 
-.. function:: select!(v, k[, ord])
+Sorting Algorithms
+------------------
 
-   Version of ``select`` which permutes the input vector in place.
+There are currently four sorting algorithms available in base Julia:
+
+- ``InsertionSort``
+- ``QuickSort``
+- ``MergeSort``
+- ``TimSort``
+
+``InsertionSort`` is an O(n^2) stable sorting algorithm. It is efficient
+for very small ``n``, and is used internally by ``QuickSort`` and ``TimSort``.
+
+``QuickSort`` is an O(n log n) sorting algorithm which is in-place,
+very fast, but not stable – i.e. elements which are considered
+equal will not remain in the same order in which they originally
+appeared in the array to be sorted. ``QuickSort`` is the default
+algorithm for numeric values, including integers and floats.
+
+``MergeSort`` is an O(n log n) stable sorting algorithm but is not
+in-place – it requires a temporary array of equal size to the
+input array – and is typically not quite as fast as ``QuickSort``.
+It is the default algorithm for non-numeric data.
+
+``TimSort`` is an O(n log n) stable adaptive sorting algorithm which is used as
+the default sorting algorithm in Python and Java. It takes advantage of sorted
+runs which exist in many real world datasets.
+
+The sort functions select a reasonable default algorithm, depending on
+the type of the array to be sorted. To force a specific algorithm to be
+used for ``sort`` or other soring functions, supply ``alg=<algorithm>``
+as a keyword argument after the array to be sorted.

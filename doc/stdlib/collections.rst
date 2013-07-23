@@ -1,5 +1,5 @@
-:mod:`Base.Collections` --- Common data structures and containers
-=================================================================
+Collections and Data Structures
+===============================
 
 .. module:: Base.Collections
 
