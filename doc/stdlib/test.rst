@@ -1,8 +1,7 @@
-:mod:`Base.Test` --- Routines related to testing
-------------------------------------------------
+Unit and Functional Testing
+===========================
 
 .. module:: Base.Test
-   :synopsis: Test and related routines
 
 The ``Test`` module contains macros and functions related to testing.
 A default handler is provided to run the tests, and a custom one can be
