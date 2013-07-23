@@ -265,7 +265,7 @@ function _fixup(instlist,
     info("SUCCESS!")
 end
 
-function fixup(pkg::Vector{String},
+function fixup{T<:String}(pkg::Vector{T},
         avail::Dict=Dir.cd(Read.available),
         inst::Dict=Dir.cd(()->Read.installed(avail)),
         free::Dict=Dir.cd(()->Read.free(inst)),
