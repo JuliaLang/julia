@@ -476,13 +476,13 @@ end
 
 ## pipe functions ##
 malloc_pipe() = c_malloc(_sizeof_uv_named_pipe)
-function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{Void},writeable_julia_only::Bool,pipe::AsyncStream)
+function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{Void},writeable_julia_only::Bool,readpipe::AsyncStream,writepipe::AsyncStream)
     #make the pipe an unbuffered stream for now
     #TODO: this is probably not freeing memory properly after errors
-    if 0 != ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), read_end, 0, 1, readable_julia_only, pipe)
+    if 0 != ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), read_end, 0, 1, readable_julia_only, readpipe)
         error(UVError("init_pipe"))
     end
-    if 0 != ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), write_end, 1, 0, readable_julia_only, pipe)
+    if 0 != ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), write_end, 1, 0, writeable_julia_only, writepipe)
         error(UVError("init_pipe"))
     end
     if 0 != ccall(:uv_pipe_link, Int32, (Ptr{Void}, Ptr{Void}), read_end, write_end)
@@ -494,15 +494,27 @@ function link_pipe(read_end2::NamedPipe,readable_julia_only::Bool,write_end::Ptr
     if read_end2.handle == C_NULL
         read_end2.handle = malloc_pipe()
     end
-    link_pipe(read_end2.handle,readable_julia_only,write_end,writeable_julia_only,read_end2)
+    link_pipe(read_end2.handle,readable_julia_only,write_end,writeable_julia_only,read_end2,read_end2)
     read_end2.status = StatusOpen
 end
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::NamedPipe,writeable_julia_only::Bool)
     if write_end.handle == C_NULL
         write_end.handle = malloc_pipe()
     end
-    link_pipe(read_end,readable_julia_only,write_end.handle,writeable_julia_only,write_end)
+    link_pipe(read_end,readable_julia_only,write_end.handle,writeable_julia_only,write_end,write_end)
     write_end.status = StatusOpen
+end
+function link_pipe(read_end::NamedPipe,readable_julia_only::Bool,write_end::NamedPipe,writeable_julia_only::Bool)
+    if write_end.handle == C_NULL
+        write_end.handle = malloc_pipe()
+    end
+    if read_end.handle == C_NULL
+        read_end.handle = malloc_pipe()
+    end
+    link_pipe(read_end.handle,readable_julia_only,write_end.handle,writeable_julia_only,read_end,write_end)
+    write_end.status = StatusOpen
+    read_end.status = StatusOpen
+    nothing
 end
 close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),handle)
 
@@ -634,7 +646,7 @@ end
 
 function write(s::AsyncStream, b::Uint8)
     check_open(s)
-    if isdefined(Base,:Scheduler) && current_task() != Scheduler
+    if isdefined(Main.Base,:Scheduler) && current_task() != Main.Base.Scheduler
         req = ccall(:jl_putc_copy, Ptr{Void}, (Uint8, Ptr{Void}, Ptr{Void}), b, handle(s), uv_jl_writecb_task::Ptr{Void})
         uv_req_set_data(req,current_task())
         wait()
@@ -645,7 +657,7 @@ function write(s::AsyncStream, b::Uint8)
 end
 function write(s::AsyncStream, c::Char)
     check_open(s)
-    if isdefined(Base,:Scheduler) && current_task() != Scheduler
+    if isdefined(Main.Base,:Scheduler) && current_task() != Main.Base.Scheduler
         req = ccall(:jl_pututf8_copy, Ptr{Void}, (Ptr{Void},Uint32, Ptr{Void}), handle(s), c, uv_jl_writecb_task::Ptr{Void})
         uv_req_set_data(req,current_task())
         wait()
@@ -657,7 +669,7 @@ end
 function write{T}(s::AsyncStream, a::Array{T})
     check_open(s)
     if isbits(T)
-        if isdefined(Base,:Scheduler) && current_task() != Scheduler
+        if isdefined(Main.Base,:Scheduler) && current_task() != Main.Base.Scheduler
             req = ccall(:jl_write_no_copy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}), handle(s), a, uint(length(a)*sizeof(T)), uv_jl_writecb_task::Ptr{Void})
             uv_error("write", req == C_NULL)
             uv_req_set_data(req,current_task())
@@ -672,7 +684,7 @@ function write{T}(s::AsyncStream, a::Array{T})
 end
 function write(s::AsyncStream, p::Ptr, nb::Integer)
     check_open(s)
-    if isdefined(Base,:Scheduler) && current_task() != Scheduler
+    if isdefined(Main.Base,:Scheduler) && current_task() != Main.Base.Scheduler
         req = ccall(:jl_write_no_copy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}), handle(s), p, nb, uv_jl_writecb_task::Ptr{Void})
         uv_error("write", req == C_NULL)
         uv_req_set_data(req,current_task())
