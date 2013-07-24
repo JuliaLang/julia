@@ -169,6 +169,16 @@ type TTY <: AsyncStream
         false,Condition())
 end
 
+function TTY(fd::RawFD; readable::Bool = false)
+    handle = c_malloc(_sizeof_uv_tty)
+    uv_error("TTY",ccall(:uv_tty_init,Int32,(Ptr{Void},Ptr{Void},Int32,Int32),eventloop(),handle,fd.fd,readable) == -1)
+    ret = TTY(handle)
+    associate_julia_struct(handle,ret)
+    ret.status = StatusOpen
+    ret.line_buffered = false
+    ret
+end
+
 show(io::IO,stream::TTY) = print(io,"TTY(",uv_status_string(stream),", ",
     nb_available(stream.buffer)," bytes waiting)")
 
