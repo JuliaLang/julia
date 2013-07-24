@@ -18,14 +18,14 @@ function axpytest(n, repeat)
 	y
 end
 
-@timeit dottest(2, 1_000_000) "dot_tiny"
-@timeit dottest(16, 1_000_000) "dot_small"
-@timeit dottest(64, 1_000_000) "dot_medium"
-@timeit dottest(256, 100_000) "dot_large"
-@timeit dottest(1024, 100_000) "dot_huge"
+@timeit dottest(2, 1_000_000) "dot_tiny" "Tiny dotproduct test"
+@timeit dottest(16, 1_000_000) "dot_small" "Small dotproduct test"
+@timeit dottest(64, 1_000_000) "dot_medium" "Medium dotproduct test"
+@timeit dottest(256, 100_000) "dot_large" "Large dotproduct test"
+@timeit dottest(1024, 100_000) "dot_huge" "Huge dotproduct test"
 
-@timeit axpytest(2, 1_000_000) "axpy_tiny"
-@timeit axpytest(16, 1_000_000) "axpy_small"
-@timeit axpytest(64, 1_000_000) "axpy_medium"
-@timeit axpytest(256, 100_000) "axpy_large"
-@timeit axpytest(1024, 100_000) "axpy_huge"
+@timeit axpytest(2, 1_000_000) "axpy_tiny" "Tiny BLAS axpy test"
+@timeit axpytest(16, 1_000_000) "axpy_small" "Small BLAS axpy test"
+@timeit axpytest(64, 1_000_000) "axpy_medium" "Medium BLAS axpy test"
+@timeit axpytest(256, 100_000) "axpy_large" "Large BLAS axpy test"
+@timeit axpytest(1024, 100_000) "axpy_huge" "Huge BLAS axpy test"
