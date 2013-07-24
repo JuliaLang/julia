@@ -30,6 +30,8 @@ typedef __uint128_t wideint_t;
 typedef uint64_t wideint_t;
 #endif
 
+#define MAXINTVAL (((size_t)-1)>>1)
+
 static jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
 {
     size_t i, tot, nel=1;
@@ -40,7 +42,7 @@ static jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
 
     for(i=0; i < ndims; i++) {
         prod = (wideint_t)nel * (wideint_t)dims[i];
-        if (prod > (wideint_t)(size_t)-1)
+        if (prod > (wideint_t) MAXINTVAL)
             jl_error("invalid Array dimensions");
         nel = prod;
     }
@@ -50,7 +52,7 @@ static jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
     if (isunboxed) {
         elsz = jl_datatype_size(el_type);
         prod = (wideint_t)elsz * (wideint_t)nel;
-        if (prod > (wideint_t)(size_t)-1)
+        if (prod > (wideint_t) MAXINTVAL)
             jl_error("invalid Array size");
         tot = prod;
         if (elsz == 1) {
@@ -61,7 +63,7 @@ static jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
     else {
         elsz = sizeof(void*);
         prod = (wideint_t)sizeof(void*) * (wideint_t)nel;
-        if (prod > (wideint_t)(size_t)-1)
+        if (prod > (wideint_t) MAXINTVAL)
             jl_error("invalid Array size");
         tot = prod;
     }
@@ -167,7 +169,7 @@ jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_tuple_t *di
         for(i=0; i < ndims; i++) {
             adims[i] = jl_unbox_long(jl_tupleref(dims, i));
             prod = (wideint_t)l * (wideint_t)adims[i];
-            if (prod > (wideint_t)(size_t)-1)
+            if (prod > (wideint_t) MAXINTVAL)
                 jl_error("invalid Array dimensions");
             l = prod;
         }
@@ -229,7 +231,7 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_tuple_t *dims,
 
     for(i=0; i < ndims; i++) {
         prod = (wideint_t)nel * (wideint_t)jl_unbox_long(jl_tupleref(dims, i));
-        if (prod > (wideint_t)(size_t)-1)
+        if (prod > (wideint_t) MAXINTVAL)
             jl_error("invalid Array dimensions");
         nel = prod;
     }
