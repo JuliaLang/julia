@@ -1105,6 +1105,7 @@ export
     addprocs,
     ClusterManager,
     fetch,
+    interrupt,
     isready,
     myid,
     nprocs,
