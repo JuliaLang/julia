@@ -1999,12 +1999,11 @@
 				 (to-lff e #f #f)))
 			  (else
 			   (let* ((r (to-lff (cadr e) #t #f))
-				  (w (cons `(_while ,(car r)
+				  (w (cons `(_while ,(to-blk (cdr r))
+						    ,(car r)
 					      ,(to-blk
-						(append
-						 (cdr r)
-						 (to-lff (caddr e) #f #f))))
-					   (cdr r))))
+						(to-lff (caddr e) #f #f)))
+					   '())))
 			     (if (symbol? dest)
 				 (cons `(= ,dest (null)) w)
 				 w)))))
@@ -2496,8 +2495,9 @@ So far only the second case can actually occur.
 			       (cdr e)))
 	    ((_while) (let ((topl (make&mark-label))
 			    (endl (make-label)))
-			(emit `(gotoifnot ,(goto-form (cadr e)) ,endl))
-			(compile (caddr e) break-labels vi)
+			(compile (cadr e) break-labels vi)
+			(emit `(gotoifnot ,(goto-form (caddr e)) ,endl))
+			(compile (cadddr e) break-labels vi)
 			(emit `(goto ,topl))
 			(mark-label endl)))
 	    ((break-block) (let ((endl (make-label)))

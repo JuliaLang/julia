@@ -863,3 +863,10 @@ end
 typealias A3729{B} Vector{Vector{B}}
 typealias C3729{D} Vector{Vector{D}}
 @test Vector{Vector{Int}} === A3729{Int} === C3729{Int}
+
+# issue #3789
+x3789 = 0
+while(all([false for idx in 1:10]))
+    x3789 = 1
+end
+@test x3789 == 0
