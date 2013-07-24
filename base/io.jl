@@ -8,10 +8,10 @@
 
 abstract ByteOrderedIO <: IO
 
-type NetworkByteOrder{T<:IO} <: ByteOrderedIO
+immutable NetworkByteOrder{T<:IO} <: ByteOrderedIO
     io::T
 end
-type LittleByteOrder{T<:IO} <: ByteOrderedIO
+immutable LittleByteOrder{T<:IO} <: ByteOrderedIO
     io::T
 end
 
@@ -63,7 +63,10 @@ end
 
 write(s::IO, x::Integer) = write(HostByteOrder(s), x::Integer)
 
+write{I<:IO}(s::NetworkByteOrder{I}, x::Bool) = write(s.io,x)
+write{I<:IO}(s::LittleByteOrder{I}, x::Bool) = write(s.io,x)
 write(s::IO, x::Bool) = write(s, uint8(x))
+
 #write(s::IO, x::Float16) = write(s, reinterpret(Int16,x))
 write(s::IO, x::Float32) = write(s, reinterpret(Int32,x))
 write(s::IO, x::Float64) = write(s, reinterpret(Int64,x))
@@ -76,7 +79,8 @@ function write(s::IO, a::AbstractArray)
     nb
 end
 
-
+write{I<:IO}(s::NetworkByteOrder{I}, x::Char) = write(s.io,x)
+write{I<:IO}(s::LittleByteOrder{I}, x::Char) = write(s.io,x)
 function write(s::IO, c::Char)
     if c < 0x80
         write(s, uint8(c))
@@ -124,7 +128,10 @@ end
 
 read{T<:Integer}(s::IO, ::Type{T}) = read(HostByteOrder(s), T)
 
+read{I<:IO}(s::NetworkByteOrder{I}, ::Type{Bool}) = read(s.io,Bool)
+read{I<:IO}(s::LittleByteOrder{I}, ::Type{Bool}) = read(s.io,Bool)
 read(s::IO, ::Type{Bool})    = (read(s,Uint8)!=0)
+
 read(s::IO, ::Type{Float32}) = reinterpret(Float32,read(s,Int32))
 read(s::IO, ::Type{Float64}) = reinterpret(Float64,read(s,Int64))
 
@@ -143,7 +150,8 @@ function read{T}(s::IO, a::Array{T})
 end
 
 
-
+read{I<:IO}(s::NetworkByteOrder{I}, ::Type{Char}) = read(s.io,Char)
+read{I<:IO}(s::LittleByteOrder{I}, ::Type{Char}) = read(s.io,Char)
 function read(s::IO, ::Type{Char})
     ch = read(s, Uint8)
     if ch < 0x80
