@@ -208,4 +208,29 @@ randn!(A::Array{Float64}) = randmtzig_fill_randn!(A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
 randn(dims::Int...) = randn!(Array(Float64, dims...))
 
+immutable UUID
+    value::Uint128
+end
+
+@eval function uuid4()
+    u = rand(Uint128)
+    u &= $(parseint(Uint128,"ffffffffffff0fff3fffffffffffffff",16))
+    u |= $(parseint(Uint128,"00000000000040008000000000000000",16))
+    UUID(u)
+end
+
+function Base.convert(::Type{Vector{Uint8}}, u::UUID)
+    u = u.value
+    a = Array(Uint8,36)
+    for i = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
+        a[i] = Base.digit(u & 0xf)
+        u >>= 4
+    end
+    a[[24,19,14,9]] = '-'
+    return a
+end
+
+Base.show(io::IO, u::UUID) = write(io,convert(Vector{Uint8},u))
+Base.repr(u::UUID) = ASCIIString(convert(Vector{Uint8},u))
+
 end # module
