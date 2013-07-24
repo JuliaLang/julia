@@ -194,6 +194,7 @@
     jl_module_name;
     jl_module_parent;
     jl_module_type;
+    jl_module_usings;
     jl_native_alignment;
     jl_next_from_addrinfo;
     jl_is_char_signed;
