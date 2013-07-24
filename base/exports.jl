@@ -696,6 +696,7 @@ export
     endof,
     eltype,
     get,
+    get!,
     getindex,
     haskey,
     intersect,

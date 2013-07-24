@@ -161,6 +161,20 @@ let
     @test X == Xv
     X2 = get(A, Vector{Int}[[2:4], [9:-2:-13]], 0)
     @test X == X2
+    # subarrays
+    A = reshape(1:40, 5, 8)
+    sA = sub(A, 2:4, 3:8)
+    X = get(sA, (0:3, 1:7), NaN)
+    @test isequal(X, hcat(float(A[1:4, 3:8]),nans(4)))
+    x = get(sA, (0, -1), NaN32)
+    @test x == 1
+    x = get(sA, (-1, -1), NaN32)
+    @test isnan(x)
+    a = 1:5
+    sa = sub(a, 1:3)
+    @test get(sa, 4, NaN) == 4
+    @test isnan(get(sa, 0, NaN))
+    @test isequal(get(sa, 1:6, NaN), [[1:5], NaN])
 end
 
 ## arrays as dequeues
