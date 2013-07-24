@@ -59,6 +59,10 @@ include("go_benchmark.jl")
 include("simplex.jl")
 @timeit doTwoPassRatioTest() "simplex"
 
+# issue #3811
+include("raytracer.jl")
+@timeit Raytracer(5, 256, 4) "raytracer"
+
 function cmp_with_func(x::Vector, f::Function)
     count::Int = 0
     for i = 1:length(x)-1
