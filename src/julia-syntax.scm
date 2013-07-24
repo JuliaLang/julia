@@ -395,7 +395,11 @@
 	 ;; body statements, minus line number node
 	 (stmts (if (null? lno) (cdr body) (cddr body))))
     (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy)) (rkw (gensy))
-	  (mangled (symbol (string name "#" (gensym))))
+	  (mangled (symbol
+		    (string (if (symbol? name)
+				name
+				(cadr (caddr name)))
+			    "#" (gensym))))
 	  (flags (map (lambda (x) (gensy)) vals)))
       `(block
 	;; call with keyword args pre-sorted - original method code goes here
