@@ -28,9 +28,17 @@ a = Array(Uint8, 2)
 @assert seek(io,0)
 @assert read(io,Int16,6) == Int16[1,2,3,4,5,6]
 @assert truncate(io,0)
-@assert write(io,Int16[1,2,3,4,5,6],NetworkByteOrder) == 12
+@assert write(io,int16(1),NetworkByteOrder) == 2
+@assert write(io,Int16[2,3,4,5,6],NetworkByteOrder) == 10
 @assert seek(io,0)
-@assert read(io,Int16,NetworkByteOrder,6) == Int16[1,2,3,4,5,6]
+@assert read(io,Int16,NetworkByteOrder,5) == Int16[1,2,3,4,5]
+@assert read(io,Int16,NetworkByteOrder) == 6
+@assert truncate(io,0)
+@assert write(io,float64(1),NetworkByteOrder) == 8
+@assert write(io,Float64[2,3,4,5,6],NetworkByteOrder) == 40
+@assert seek(io,0)
+@assert read(io,Float64,NetworkByteOrder,5) == Float64[1,2,3,4,5]
+@assert read(io,Float64,NetworkByteOrder) == float64(6)
 @assert seek(io,2)
 @assert truncate(io, 10)
 @assert ioslength(io) == 10
