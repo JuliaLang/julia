@@ -100,18 +100,14 @@ function srand(filename::String, n::Integer)
 end
 srand(filename::String) = srand(filename, 4)
 
-## rand()
+## random floating point values
 
+rand(::Type{Float64}) = dsfmt_gv_genrand_close_open()
 rand() = dsfmt_gv_genrand_close_open()
+
+rand(::Type{Float32}) = float32(rand())
+
 rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
-
-rand!(A::Array{Float64}) = dsfmt_gv_fill_array_close_open!(A)
-rand(dims::Dims) = rand!(Array(Float64, dims))
-rand(dims::Int...) = rand!(Array(Float64, dims...))
-
-rand!(r::MersenneTwister, A::Array{Float64}) = dsfmt_fill_array_close_open!(r.state, A)
-rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
-rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
 
 ## random integers
 
@@ -130,8 +126,22 @@ rand(::Type{Int32})   = int32(rand(Uint32))
 rand(::Type{Int64})   = int64(rand(Uint64))
 rand(::Type{Int128})  = int128(rand(Uint128))
 
+# Arrays of random numbers
+
+rand!(A::Array{Float64}) = dsfmt_gv_fill_array_close_open!(A)
+rand(::Type{Float64}, dims::Dims) = rand!(Array(Float64, dims))
+rand(::Type{Float64}, dims::Int...) = rand(Float64, dims)
+
+rand(dims::Dims) = rand(Float64, dims)
+rand(dims::Int...) = rand(Float64, dims)
+
+rand!(r::MersenneTwister, A::Array{Float64}) = dsfmt_fill_array_close_open!(r.state, A)
+rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
+rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
+
 for T in (:Uint8, :Uint16, :Uint32, :Uint64, :Uint128,
-           :Int8,  :Int16,  :Int32,  :Int64,  :Int128)
+          :Int8,  :Int16,  :Int32,  :Int64,  :Int128,  
+          :Float32)
     @eval begin
         function rand!(A::Array{$T})
             for i=1:length(A)
@@ -146,7 +156,7 @@ end
 
 function randu{T<:Union(Uint32,Uint64,Uint128)}(k::T)
     # generate an unsigned integer in 0:k-1
-    # largest multiplies of k that can be represented in T
+    # largest multiple of k that can be represented in T
     u = convert(T, div(typemax(T),k)*k)
     x = rand(T)
     while x >= u
