@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stddef.h>
+#include "julia.h"
 
 typedef ptrdiff_t ptrint_t;
 
@@ -38,7 +39,7 @@ static void sprofile_bt(int dummy)
     }
 }
 
-int sprofile_start_timer(void)
+DLLEXPORT int sprofile_start_timer(void)
 {
     timerprof.it_interval.tv_sec = 0;
     timerprof.it_interval.tv_usec = 0;
@@ -53,7 +54,7 @@ int sprofile_start_timer(void)
     return 0;
 }
 
-void sprofile_stop_timer(void)
+DLLEXPORT void sprofile_stop_timer(void)
 {
     running = 0;
 }
@@ -83,7 +84,7 @@ static void sprofile_bt(int signal, siginfo_t *si, void *uc)
     }
 }
 
-int sprofile_start_timer(void)
+DLLEXPORT int sprofile_start_timer(void)
 {
     struct sigevent sigprof;
     struct sigaction sa;
@@ -115,7 +116,7 @@ int sprofile_start_timer(void)
     return 0;
 }
 
-void sprofile_stop_timer(void)
+DLLEXPORT void sprofile_stop_timer(void)
 {
     timer_delete(timerprof);
 }
@@ -125,7 +126,7 @@ void sprofile_stop_timer(void)
 //
 // Utility functions
 //
-int sprofile_init(size_t maxsize, u_int64_t delay_nsec)
+DLLEXPORT int sprofile_init(size_t maxsize, u_int64_t delay_nsec)
 {
     bt_size_max = maxsize;
     nsecprof = delay_nsec;
@@ -137,22 +138,22 @@ int sprofile_init(size_t maxsize, u_int64_t delay_nsec)
     return 0;
 }
 
-u_int8_t* sprofile_get_data(void)
+DLLEXPORT u_int8_t* sprofile_get_data(void)
 {
     return (u_int8_t*) bt_data_prof;
 }
 
-size_t sprofile_len_data(void)
+DLLEXPORT size_t sprofile_len_data(void)
 {
     return bt_size_cur;
 }
 
-size_t sprofile_maxlen_data(void)
+DLLEXPORT size_t sprofile_maxlen_data(void)
 {
     return bt_size_max;
 }
 
-void sprofile_clear_data(void)
+DLLEXPORT void sprofile_clear_data(void)
 {
     bt_size_cur = 0;
 }
