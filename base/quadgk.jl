@@ -1,7 +1,7 @@
 module QuadGK
 export gauss, kronrod, quadgk
 using Base.Collections
-import Base.isless, Base.Sort.Reverse
+import Base.isless, Base.Order.Reverse
 
 # Adaptive Gauss-Kronrod quadrature routines (arbitrary precision),
 # written and contributed to Julia by Steven G. Johnson, 2013.
