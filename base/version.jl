@@ -149,97 +149,15 @@ hash(v::VersionNumber) = hash([v.(n) for n in VersionNumber.names])
 
 ## julia version info
 
-let
-    local version::VersionNumber
-    if isfile("$JULIA_HOME/../../VERSION")
-        version = readchomp("$JULIA_HOME/../../VERSION")
-    elseif isfile("$JULIA_HOME/../share/julia/VERSION")
-        version = readchomp("$JULIA_HOME/../share/julia/VERSION")
-    else
-        println("ERROR: VERSION file not found")
-        error()
-    end
-
-    expected = ErrorException("don't copy this code, it's for breaking out of uv_run during boot-strapping only")
-    acceptable = ErrorException("failure: unknown exception!")
-
-    outctim,ps = readsfrom(`git log -1 --pretty=format:%ct`)
-    ps.closecb = function(proc)
-        if proc.exit_code!=0
-            acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
-            error(acceptable)
-        end
-
-        ctim = int(readall(proc.out.buffer))
-
-        outdesc,ps = readsfrom(`git describe --tags --dirty --long --abbrev=40`)
-        ps.closecb = function(proc)
-            if proc.exit_code!=0
-                acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
-                error(acceptable)
-            end
-
-            description = readchomp(proc.out.buffer)
-            m = match(r"^(v\d+(?:\.\d+)+)-(\d+)-g([0-9a-f]{40})(-dirty)?$", description)
-            if m == nothing
-                error(acceptable)
-            end
-            tag = convert(VersionNumber, m.captures[1])
-            commits_after_tag = int(m.captures[2])
-            commit = m.captures[3]
-            dirty = m.captures[4] != nothing
-
-            commit_short = commit[1:9]
-
-            if commits_after_tag > 0
-                field = tag < version ? version.prerelease : version.build
-                field = tuple(field..., commits_after_tag, "r$commit_short")
-                if dirty
-                    field = tuple(field..., "dirty")
-                end
-                tag = VersionNumber(
-                    version.major,
-                    version.minor,
-                    version.patch,
-                    tag < version ? field : version.prerelease,
-                    tag < version ? version.build : field,
-                )
-            end
-            isotime = strftime("%Y-%m-%d %H:%M:%S", ctim)
-            global const commit_string = "Commit $commit_short $isotime" * (dirty ? "*" : "")
-
-            global const VERSION = tag
-            global const VERSION_COMMIT = commit
-            error(expected)
-        end
-    end
-    try
-        run_event_loop() # equivalent to wait_exit() on a more sane version of the previous
-                         # block of code, but Scheduler doesn't exist during bootstrapping
-                         # so we do what we must, but don't do this in user-land code or you'll regret it
-    catch err
-        if err != expected
-            if isfile("$JULIA_HOME/../../COMMIT")
-                global const commit_string = readchomp("$JULIA_HOME/../../COMMIT")
-            elseif isfile("$JULIA_HOME/../share/julia/COMMIT")
-                global const commit_string = readchomp("$JULIA_HOME/../share/julia/COMMIT")
-            else
-                global const commit_string = ""
-            end
-            global const VERSION = version
-            global const VERSION_COMMIT = ""
-            if err == acceptable
-                println("Warning: git failed in version.jl")
-                println(' ',' ',err.msg)
-                println()
-            else
-                rethrow(err)
-            end
-        end
-    end
-end
 begin
-const version_string = "Version $VERSION"
+# Include build number if we've got at least some distance from a tag (e.g. a release)
+prerelease = BUILD_INFO.prerelease ? "-prerelease" : ""
+build_number = BUILD_INFO.build_number != 0 ? "+$(BUILD_INFO.build_number)" : ""
+global const VERSION = convert( VersionNumber, "$(BUILD_INFO.version_string)$(prerelease)$(build_number)")
+branch_prefix = (BUILD_INFO.branch == "master") ? "" : "$(BUILD_INFO.branch)/"
+dirty_suffix = BUILD_INFO.dirty ? "*" : ""
+global const commit_string = (BUILD_INFO.commit == "") ? "" : "Commit $(branch_prefix)$(BUILD_INFO.commit_short)$(dirty_suffix) $(BUILD_INFO.date_string)"
+
 const banner_plain =
 """
                _
@@ -247,8 +165,8 @@ const banner_plain =
   (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
    _ _   _| |_  __ _   |  Type "help()" to list help topics
   | | | | | | |/ _` |  |
-  | | |_| | | | (_| |  |  $version_string
- _/ |\\__'_|_|_|\\__'_|  |  $commit_string
+  | | |_| | | | (_| |  |  Version $VERSION
+ _/ |\\__'_|_|_|\\__'_|  |  "$commit_string"
 |__/                   |  $(Sys.MACHINE)
 
 """
@@ -264,7 +182,7 @@ const banner_color =
   $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: http://docs.julialang.org
    $(jl)_ _   _| |_  __ _$(tx)   |  Type \"help()\" to list help topics
   $(jl)| | | | | | |/ _` |$(tx)  |
-  $(jl)| | |_| | | | (_| |$(tx)  |  $version_string
+  $(jl)| | |_| | | | (_| |$(tx)  |  Version $VERSION
  $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $commit_string
 $(jl)|__/$(tx)                   |  $(Sys.MACHINE)
 
