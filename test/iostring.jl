@@ -28,17 +28,19 @@ a = Array(Uint8, 2)
 @assert seek(io,0)
 @assert read(io,Int16,6) == Int16[1,2,3,4,5,6]
 @assert truncate(io,0)
-@assert write(io,int16(1),NetworkByteOrder) == 2
-@assert write(io,Int16[2,3,4,5,6],NetworkByteOrder) == 10
+@assert write(NetworkByteOrder(io),int16(1)) == 2
+@assert write(NetworkByteOrder(io),Int16[2,3,4,5,6]) == 10
 @assert seek(io,0)
-@assert read(io,Int16,NetworkByteOrder,5) == Int16[1,2,3,4,5]
-@assert read(io,Int16,NetworkByteOrder) == 6
+@assert read(NetworkByteOrder(io),Int16,5) == Int16[1,2,3,4,5]
+@assert read(NetworkByteOrder(io),Int16) == 6
 @assert truncate(io,0)
-@assert write(io,float64(1),NetworkByteOrder) == 8
-@assert write(io,Float64[2,3,4,5,6],NetworkByteOrder) == 40
+@assert write(NetworkByteOrder(io),float64(1)) == 8
+@assert write(NetworkByteOrder(io),Float64[2,3,4,5,6]) == 40
 @assert seek(io,0)
-@assert read(io,Float64,NetworkByteOrder,5) == Float64[1,2,3,4,5]
-@assert read(io,Float64,NetworkByteOrder) == float64(6)
+@assert read(NetworkByteOrder(io),Float64,5) == Float64[1,2,3,4,5]
+@assert read(NetworkByteOrder(io),Float64) == float64(6)
+@assert seek(io,0)
+@assert read(LittleByteOrder(io),Float64,6) == map(ntoh,Float64[1,2,3,4,5,6])
 @assert seek(io,2)
 @assert truncate(io, 10)
 @assert ioslength(io) == 10
