@@ -7,7 +7,7 @@ include("../perfutil.jl")
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 
 @test fib(20) == 6765
-@timeit fib(20) "fib"
+@timeit fib(20) "fib" "Recursive fibonacci"
 
 ## parse integer ##
 
@@ -22,18 +22,18 @@ function parseintperf(t)
     return n
 end
 
-@timeit parseintperf(1000) "parse_int"
+@timeit parseintperf(1000) "parse_int" "Integer parsing"
 
 ## array constructors ##
 
 @test all(ones(200,200) .== 1)
-# @timeit ones(200,200) "ones"
+# @timeit ones(200,200) "ones" "description"
 
 ## matmul and transpose ##
 
 A = ones(200,200)
 @test all(A*A' .== 200)
-# @timeit A*A' "AtA"
+# @timeit A*A' "AtA" "description"
 
 ## mandelbrot set: complex arithmetic and comprehensions ##
 
@@ -51,7 +51,7 @@ end
 
 mandelperf() = [ mandel(complex(r,i)) for i=-1.:.1:1., r=-2.0:.1:0.5 ]
 @test sum(mandelperf()) == 14791
-@timeit mandelperf() "mandel"
+@timeit mandelperf() "mandel" "Calculation of mandelbrot set"
 
 ## numeric vector sort ##
 
@@ -77,7 +77,7 @@ function sortperf(n)
     qsort!(rand(n), 1, n)
 end
 @test issorted(sortperf(5000))
-@timeit sortperf(5000) "quicksort"
+@timeit sortperf(5000) "quicksort" "Sorting of random numbers using quicksort"
 
 ## slow pi series ##
 
@@ -93,7 +93,7 @@ function pisum()
 end
 
 @test abs(pisum()-1.644834071848065) < 1e-12
-@timeit pisum() "pi_sum"
+@timeit pisum() "pi_sum" "Summation of a power series"
 
 ## slow pi series, vectorized ##
 
@@ -130,11 +130,11 @@ end
 
 (s1, s2) = randmatstat(1000)
 @test 0.5 < s1 < 1.0 && 0.5 < s2 < 1.0
-@timeit randmatstat(1000) "rand_mat_stat"
+@timeit randmatstat(1000) "rand_mat_stat" "Statistics on a random matrix"
 
 ## largish random number gen & matmul ##
 
-@timeit rand(1000,1000)*rand(1000,1000) "rand_mat_mul"
+@timeit rand(1000,1000)*rand(1000,1000) "rand_mat_mul" "Multiplication of random matrices"
 
 ## printfd ##
 
@@ -148,5 +148,5 @@ end
     end
 
     printfd(1)
-    @timeit printfd(100000) "printfd"
+    @timeit printfd(100000) "printfd" "Printing to a file descriptor"
 end
