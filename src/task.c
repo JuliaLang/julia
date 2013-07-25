@@ -478,19 +478,27 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
 #if defined(_CPU_X86_64_)
 extern int needsSymRefreshModuleList;
 #endif
+static volatile int in_stackwalk = 0;
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize) {
     CONTEXT Context;
     memset(&Context, 0, sizeof(Context));
+    in_stackwalk = 1;
     RtlCaptureContext(&Context);
+    in_stackwalk = 0;
     return rec_backtrace_ctx(data, maxsize, &Context);
 }
 DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Context) {
+    if (in_stackwalk) {
+        return 0;
+    }
     STACKFRAME64 stk;
     memset(&stk, 0, sizeof(stk));
 
 #if defined(_CPU_X86_64_) 
     if (needsSymRefreshModuleList) {
+        in_stackwalk = 1;
         SymRefreshModuleList(GetCurrentProcess());
+        in_stackwalk = 0;
         needsSymRefreshModuleList = 0;
     }
     DWORD MachineType = IMAGE_FILE_MACHINE_AMD64;
@@ -511,8 +519,10 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
     
     size_t n = 0;
     while (n < maxsize) {
+        in_stackwalk = 1;
         BOOL result = StackWalk64(MachineType, GetCurrentProcess(), hMainThread,
             &stk, Context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL);
+        in_stackwalk = 0;
         data[n++] = (ptrint_t)stk.AddrPC.Offset;
         if (stk.AddrReturn.Offset == 0)
             break;
