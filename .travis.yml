@@ -11,7 +11,7 @@ notifications:
         on_failure: always
     webhooks:
         urls:
-          - http://128.52.160.154/travis-hook
+          - http://julia.mit.edu:8000/travis-hook
           - http://criid.ee.washington.edu:8000/travis-hook
         on_failure: never
 before_install:
