@@ -22,6 +22,7 @@ export
     Errno,
     Meta,
     Graphics,
+    Profile,
 
 # Types
     AbstractMatrix,
@@ -1244,6 +1245,7 @@ export
     @timed,
     @elapsed,
     @allocated,
+    @profile,
     @which,
     @windows_only,
     @unix_only,

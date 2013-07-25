@@ -7,14 +7,16 @@ static volatile size_t bt_size_max = 0;
 static volatile size_t bt_size_cur = 0;
 static volatile u_int64_t nsecprof = 0;
 
-//
-// Timer section
-//
+/////////////////////////////////////////
+// Timers to take samples at intervals //
+/////////////////////////////////////////
 #if defined(__WIN32__)
-//Need timer implementation for windows
+//
+// Windows
+//
 volatile HANDLE hBtThread = 0;
 volatile int running = 0;
-static DWORD WINAPI sprofile_bt( LPVOID lparam ) {
+static DWORD WINAPI profile_bt( LPVOID lparam ) {
     TIMECAPS tc;
     if (MMSYSERR_NOERROR!=timeGetDevCaps(&tc, sizeof(tc))) {
         fputs("failed to get get timer resulution",stderr);
@@ -53,13 +55,13 @@ static DWORD WINAPI sprofile_bt( LPVOID lparam ) {
     hBtThread = 0;
     return 0;
 }
-DLLEXPORT int sprofile_start_timer(void) {
+DLLEXPORT int profile_start_timer(void) {
     running = 1;
     if (hBtThread == 0) {
         hBtThread = CreateThread( 
             NULL,                   // default security attributes
             0,                      // use default stack size
-            sprofile_bt,            // thread function name
+            profile_bt,            // thread function name
             0,                      // argument to thread function
             0,                      // use default creation flags
             0);                     // returns the thread identifier
@@ -72,18 +74,21 @@ DLLEXPORT int sprofile_start_timer(void) {
     }
     return (hBtThread != NULL ? 0 : -1);
 }
-DLLEXPORT void sprofile_stop_timer(void) {
+DLLEXPORT void profile_stop_timer(void) {
     running = 0;
 }
 #else
 #include <signal.h>
 #if defined (__APPLE__) || defined(__FreeBSD___)
+//
+// BSD/OSX
+//
 #include <sys/time.h>
 struct itimerval timerprof;
 volatile int running;
 
 // The handler function, called whenever the profiling timer elapses
-static void sprofile_bt(int dummy)
+static void profile_bt(int dummy)
 {
     // Get backtrace data
     bt_size_cur += rec_backtrace((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1);
@@ -94,11 +99,11 @@ static void sprofile_bt(int dummy)
     if (running && bt_size_cur < bt_size_max) {
         timerprof.it_value.tv_usec = nsecprof/1000;
         setitimer(ITIMER_REAL, &timerprof, 0);
-        signal(SIGALRM, sprofile_bt);
+        signal(SIGALRM, profile_bt);
     }
 }
 
-DLLEXPORT int sprofile_start_timer(void)
+DLLEXPORT int profile_start_timer(void)
 {
     timerprof.it_interval.tv_sec = 0;
     timerprof.it_interval.tv_usec = 0;
@@ -108,18 +113,20 @@ DLLEXPORT int sprofile_start_timer(void)
         return -3;
 
     running = 1;
-    signal(SIGALRM, sprofile_bt);
+    signal(SIGALRM, profile_bt);
 
     return 0;
 }
 
-DLLEXPORT void sprofile_stop_timer(void)
+DLLEXPORT void profile_stop_timer(void)
 {
     running = 0;
 }
 #else
-// Linux implementation. Linux can use the BSD timers, but this is
-// the more careful approach.
+//
+// Linux
+//
+// Linux can use the BSD timers, but this is the more careful approach.
 #include <time.h>
 #include <string.h>  // for memset
 
@@ -127,7 +134,7 @@ static timer_t timerprof;
 static struct itimerspec itsprof;
 
 // The handler function, called whenever the profiling timer elapses
-static void sprofile_bt(int signal, siginfo_t *si, void *uc)
+static void profile_bt(int signal, siginfo_t *si, void *uc)
 {
     if (si->si_value.sival_ptr == &timerprof && bt_size_cur < bt_size_max) {
         // Get backtrace data
@@ -143,7 +150,7 @@ static void sprofile_bt(int signal, siginfo_t *si, void *uc)
     }
 }
 
-DLLEXPORT int sprofile_start_timer(void)
+DLLEXPORT int profile_start_timer(void)
 {
     struct sigevent sigprof;
     struct sigaction sa;
@@ -151,7 +158,7 @@ DLLEXPORT int sprofile_start_timer(void)
     // Establish the signal handler
     memset(&sa, 0, sizeof(struct sigaction));
     sa.sa_flags = SA_SIGINFO;
-    sa.sa_sigaction = sprofile_bt;
+    sa.sa_sigaction = profile_bt;
     sigemptyset(&sa.sa_mask);
     if (sigaction(SIGUSR1, &sa, NULL) == -1)
         return -1;
@@ -175,17 +182,18 @@ DLLEXPORT int sprofile_start_timer(void)
     return 0;
 }
 
-DLLEXPORT void sprofile_stop_timer(void)
+DLLEXPORT void profile_stop_timer(void)
 {
     timer_delete(timerprof);
 }
 #endif
 #endif
 
-//
-// Utility functions
-//
-DLLEXPORT int sprofile_init(size_t maxsize, u_int64_t delay_nsec)
+
+///////////////////////
+// Utility functions //
+///////////////////////
+DLLEXPORT int profile_init(size_t maxsize, u_int64_t delay_nsec)
 {
     bt_size_max = maxsize;
     nsecprof = delay_nsec;
@@ -197,22 +205,22 @@ DLLEXPORT int sprofile_init(size_t maxsize, u_int64_t delay_nsec)
     return 0;
 }
 
-DLLEXPORT u_int8_t* sprofile_get_data(void)
+DLLEXPORT u_int8_t* profile_get_data(void)
 {
     return (u_int8_t*) bt_data_prof;
 }
 
-DLLEXPORT size_t sprofile_len_data(void)
+DLLEXPORT size_t profile_len_data(void)
 {
     return bt_size_cur;
 }
 
-DLLEXPORT size_t sprofile_maxlen_data(void)
+DLLEXPORT size_t profile_maxlen_data(void)
 {
     return bt_size_max;
 }
 
-DLLEXPORT void sprofile_clear_data(void)
+DLLEXPORT void profile_clear_data(void)
 {
     bt_size_cur = 0;
 }
