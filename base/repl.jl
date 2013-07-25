@@ -99,11 +99,15 @@ function show_backtrace(io::IO, t, set=1:typemax(Int))
     # we may not declare :eval_user_input
     # directly so that we get a compile error
     # in case its name changes in the future
-    const eval_function = try
-            symbol(string(eval_user_input))
-        catch
-            :(:) #for when client.jl is not yet defined
-        end
+    show_backtrace(io, try
+                         symbol(string(eval_user_input))
+                       catch
+                         :(:) #for when client.jl is not yet defined
+                       end, t, set)
+end
+
+# show the backtrace, up to (but not including) top_function
+function show_backtrace(io::IO, top_function::Symbol, t, set)
     n = 1
     lastfile = ""; lastline = -11; lastname = symbol("#")
     local fname, file, line
@@ -115,7 +119,7 @@ function show_backtrace(io::IO, t, set=1:typemax(Int))
         end
         fname, file, line = lkup
         if i == 1 && fname == :error; continue; end
-        if fname == eval_function; break; end
+        if fname == top_function; break; end
         count += 1
         if !contains(set, count); continue; end
         if file != lastfile || line != lastline || fname != lastname
