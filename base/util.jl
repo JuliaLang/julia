@@ -259,7 +259,7 @@ end
 # system information
 
 function versioninfo(io::IO=STDOUT, verbose::Bool=false)
-    println(io,             "Julia $version_string")
+    println(io,             "Julia Version $VERSION")
     println(io,             commit_string)
     println(io,             "Platform Info:")
     println(io,             "  System: ", Sys.OS_NAME, " (", Sys.MACHINE, ")")
