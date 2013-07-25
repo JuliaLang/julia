@@ -91,7 +91,7 @@ end
 
 a = rand(1:10000, 1000)
 
-for alg in [InsertionSort, MergeSort, TimSort]
+for alg in [InsertionSort, MergeSort, TimSort, HeapSort]
     b = sort(a, alg=alg)
     @test issorted(b)
     ix = sortperm(a, alg=alg)
@@ -155,7 +155,7 @@ for n in [0:10, 100, 1000]
     v = rand(1:10,n)
     h = hist(v,r)
 
-    for ord in [Sort.Forward, Sort.Reverse]
+    for ord in [Order.Forward, Order.Reverse]
         # insersion sort as a reference
         pi = sortperm(v, alg=InsertionSort, order=ord)
         @test isperm(pi)
@@ -197,11 +197,21 @@ for n in [0:10, 100, 1000]
         ipermute!(sq, pq)
         @test sq == v
 
+        # heapsort (unstable)
+        pq = sortperm(v, alg=HeapSort, order=ord)
+        @test isperm(pi)
+        @test v[pq] == s
+        sq = copy(v)
+        permute!(sq, pq)
+        @test sq == s
+        ipermute!(sq, pq)
+        @test sq == v
+
     end
 
     v = randn_with_nans(n,0.1)
-    for ord in [Sort.Forward, Sort.Reverse],
-        alg in [InsertionSort, QuickSort, MergeSort, TimSort]
+    for ord in [Order.Forward, Order.Reverse],
+        alg in [InsertionSort, QuickSort, MergeSort, TimSort, HeapSort]
         # test float sorting with NaNs
         s = sort(v, alg=alg, order=ord)
         @test issorted(s, order=ord)
