@@ -227,7 +227,7 @@ function spawn(pc::ProcessChainOrNot,cmds::OrCmds,stdios::StdIOSet,exitcb::Callb
     in_pipe = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
     #out_pipe = c_malloc(_sizeof_uv_named_pipe)
     #in_pipe = c_malloc(_sizeof_uv_named_pipe)
-    link_pipe(in_pipe,false,out_pipe,false,null_handle)
+    link_pipe(in_pipe,false,out_pipe,false,null_handle,null_handle)
     if pc == false
         pc = ProcessChain(stdios)
     end
