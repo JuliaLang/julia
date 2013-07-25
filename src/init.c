@@ -515,8 +515,6 @@ static void *signal_stack;
 #include <mach/mach_traps.h>
 #include <mach/task.h>
 #include <mach/mig_errors.h>
-#define UNW_LOCAL_ONLY
-#include <libunwind.h>
 static mach_port_t segv_port = 0;
 
 extern boolean_t exc_server(mach_msg_header_t *, mach_msg_header_t *);
