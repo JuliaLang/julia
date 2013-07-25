@@ -813,23 +813,6 @@ DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle)
     return handle->data;
 }
 
-#ifndef _OS_WINDOWS_
-#if defined(__APPLE__)
-int uv___stream_fd(uv_stream_t* handle);
-#define uv__stream_fd(handle) (uv___stream_fd((uv_stream_t*) (handle)))
-#else
-#define uv__stream_fd(handle) ((handle)->io_watcher.fd)
-#endif /* defined(__APPLE__) */
-DLLEXPORT int jl_uv_pipe_fd(uv_pipe_t *handle)
-{
-    return uv__stream_fd((uv_stream_t*)handle);
-}
-#else
-DLLEXPORT HANDLE jl_uv_pipe_handle(uv_pipe_t *handle)
-{
-    return uv_get_pipe_handle(handle);
-}
-#endif
 #ifdef __cplusplus
 }
 #endif
