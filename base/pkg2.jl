@@ -11,6 +11,8 @@ include("pkg2/write.jl")
 
 using Base.Git, .Types
 
+const dir = Dir.path
+
 rm(pkg::String) = edit(Reqs.rm, pkg)
 add(pkg::String, vers::VersionSet) = edit(Reqs.add, pkg, vers)
 add(pkg::String, vers::VersionNumber...) = add(pkg, VersionSet(vers...))
