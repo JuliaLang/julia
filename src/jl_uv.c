@@ -708,6 +708,7 @@ DLLEXPORT int jl_tcp4_connect(uv_tcp_t *handle,uint32_t host, uint16_t port)
 {
     struct sockaddr_in addr;
     uv_connect_t *req = malloc(sizeof(uv_connect_t));
+    req->data = 0;
     memset(&addr, 0, sizeof(struct sockaddr_in));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = host;
@@ -719,6 +720,7 @@ DLLEXPORT int jl_tcp6_connect(uv_tcp_t *handle, void *host, uint16_t port)
 {
     struct sockaddr_in6 addr;
     uv_connect_t *req = malloc(sizeof(uv_connect_t));
+    req->data = 0;
     memset(&addr, 0, sizeof(struct sockaddr_in6));
     addr.sin6_family = AF_INET6;
     memcpy(&addr.sin6_addr, host, 16);
@@ -729,6 +731,7 @@ DLLEXPORT int jl_tcp6_connect(uv_tcp_t *handle, void *host, uint16_t port)
 DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr_storage *addr)
 {
     uv_connect_t *req = malloc(sizeof(uv_connect_t));
+    req->data = 0;
     if (addr->ss_family==AF_INET) {
         return uv_tcp_connect(req,handle,*((struct sockaddr_in*)addr),&jl_uv_connectcb);
     }
