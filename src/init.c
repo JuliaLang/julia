@@ -506,7 +506,9 @@ void init_stdio()
     JL_STDIN = init_stdio_handle(0,1);
 }
 
+#ifndef _OS_WINDOWS_
 static void *signal_stack;
+#endif
 
 #ifdef _OS_DARWIN_
 
@@ -711,9 +713,9 @@ void julia_init(char *imageFile)
     jl_module_import(jl_main_module, jl_core_module, jl_symbol("eval"));
     jl_current_module = jl_main_module;
 
-    signal_stack = malloc(SIGSTKSZ);
 
 #ifndef _OS_WINDOWS_
+    signal_stack = malloc(SIGSTKSZ);
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);
