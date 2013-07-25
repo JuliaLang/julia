@@ -1219,15 +1219,15 @@ DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
 
 #ifdef _OS_WINDOWS_
 extern volatile HANDLE hMainThread;
-typedef CONTEXT bt_context_t;
+typedef CONTEXT *bt_context_t;
 #else
-typedef unw_context_t bt_context_t;
+typedef struct unw_context_t *bt_context_t;
 #endif
 #define MAX_BT_SIZE 80000
 extern ptrint_t bt_data[MAX_BT_SIZE+1];
 extern size_t bt_size;
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize);
-DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, bt_context_t *ctx);
+DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, bt_context_t ctx);
 
 //IO objects
 extern DLLEXPORT uv_stream_t *jl_uv_stdin; //these are actually uv_tty_t's and can be cast to such, but that gives warnings whenver they are used as streams
