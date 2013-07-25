@@ -2,8 +2,6 @@
 #include <stddef.h>
 #include "julia.h"
 
-typedef ptrdiff_t ptrint_t;
-
 extern size_t rec_backtrace(ptrint_t *bt_data, size_t maxsize);
 
 static ptrint_t* bt_data_prof = NULL;
