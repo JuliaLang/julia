@@ -45,6 +45,7 @@ is licensed under the GNU General Public License Version 2:
 
 External libraries, if used, include their own licenses:
 
+- [7-Zip](http://www.7-zip.org/license.txt)
 - [AMOS](http://www.netlib.org/slatec/guide)
 - [ARPACK](http://www.caam.rice.edu/software/ARPACK/RiceBSD.txt#LICENSE)
 - [D3](https://github.com/mbostock/d3/raw/master/LICENSE)
@@ -54,8 +55,10 @@ External libraries, if used, include their own licenses:
 - [FADDEEVA](http://ab-initio.mit.edu/Faddeeva)
 - [FEMTOLISP](https://github.com/JeffBezanson/femtolisp)
 - [FFTW](http://fftw.org/doc/License-and-Copyright.html)
+- Git is licensed under GPLv3
 - [GMP](http://gmplib.org/manual/Copying.html#Copying)
 - [LAPACK](http://netlib.org/lapack/LICENSE.txt)
+- [LIBEXPAT](http://expat.cvs.sourceforge.net/viewvc/expat/expat/README)
 - [LIBUNWIND](http://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=blob_plain;f=LICENSE;hb=master)
 - [LLVM](http://llvm.org/releases/3.0/LICENSE.TXT)
 - [MPFR](http://www.mpfr.org/mpfr-current/mpfr.html#Copying)
