@@ -57,9 +57,16 @@ end
 # measure bytes allocated without any contamination from compilation
 macro allocated(ex)
     quote
-        local b0 = gc_bytes()
-        local val = $(esc(ex))
-        int(gc_bytes()-b0)
+        let
+            local f
+            function f()
+                b0 = gc_bytes()
+                $(esc(ex))
+                b1 = gc_bytes()
+                int(b1-b0)
+            end
+            f()
+        end
     end
 end
 
