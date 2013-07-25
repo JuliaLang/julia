@@ -151,7 +151,6 @@ volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
 #ifdef _OS_WINDOWS_
-volatile HANDLE hMainThread = NULL;
 void restore_signals()
 {
     SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
@@ -160,7 +159,8 @@ static void __fastcall win_raise_exception(void* excpt)
 { //why __fastcall? because the first two arguments are passed in registers, making this easier
     jl_throw(excpt);
 }
-DLLEXPORT void gdbbacktrace();
+volatile HANDLE hMainThread = NULL;
+DLLEXPORT void jlbacktrace();
 DLLEXPORT void gdblookup(ptrint_t ip);
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
@@ -281,9 +281,10 @@ static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) 
                 default:
                     ios_puts("UNKNOWN", ios_stderr); break;
             }
-            ios_printf(ios_stderr," at 0x%Ix\n", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+            ios_printf(ios_stderr," at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
             gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-            gdbbacktrace();
+            bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ExceptionInfo->ContextRecord);
+            jlbacktrace();
             break;
         }
     }
@@ -511,7 +512,6 @@ static void *signal_stack;
 #endif
 
 #ifdef _OS_DARWIN_
-
 #include <mach/mach_traps.h>
 #include <mach/task.h>
 #include <mach/mig_errors.h>
@@ -531,24 +531,11 @@ void * mach_segv_listener(void *arg)
     }
 }
 
-extern ptrint_t bt_data[MAX_BT_SIZE+1];
-extern size_t bt_size;
-void NORETURN throw_internal(jl_value_t *e);
-
 void darwin_stack_overflow_handler(unw_context_t *uc)
 {
-    unw_word_t ip;
-    unw_cursor_t cursor;
-    unw_init_local(&cursor,uc);
-    size_t n=0;
-    while (unw_step(&cursor) > 0 && n < MAX_BT_SIZE) {
-        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0) {
-            break;
-        }
-        bt_data[n++] = ip;
-    }
-    bt_size = n;
-    throw_internal(jl_stackovf_exception);
+    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
+    jl_exception_in_transit = jl_stackovf_exception;
+    jl_rethrow();
 }
 
 #define HANDLE_MACH_ERROR(msg, retval) \
@@ -628,6 +615,11 @@ void julia_init(char *imageFile)
     uv_dlopen("msvcrt.dll",jl_crtdll_handle);
     uv_dlopen("Ws2_32.dll",jl_winsock_handle);
     _jl_exe_handle.handle = GetModuleHandleA(NULL);
+    if (!DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
+        GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
+        TRUE, DUPLICATE_SAME_ACCESS )) {
+        JL_PRINTF(JL_STDERR, "Couldn't access handle to main thread\n");
+    }
 #if defined(_CPU_X86_64_)
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
     SymInitialize(GetCurrentProcess(), NULL, 1);
@@ -792,11 +784,6 @@ void julia_init(char *imageFile)
 DLLEXPORT void jl_install_sigint_handler()
 {
 #ifdef _OS_WINDOWS_
-    if (!DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
-        GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
-        TRUE, DUPLICATE_SAME_ACCESS )) {
-        JL_PRINTF(JL_STDERR, "Couldn't access handle to main thread\n");
-    }
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 #else
     struct sigaction act;
