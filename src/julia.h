@@ -1221,7 +1221,9 @@ DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
 extern volatile HANDLE hMainThread;
 typedef CONTEXT *bt_context_t;
 #else
-typedef struct unw_context_t *bt_context_t;
+#define UNW_LOCAL_ONLY
+#include <libunwind.h>
+typedef unw_context_t *bt_context_t;
 #endif
 #define MAX_BT_SIZE 80000
 extern ptrint_t bt_data[MAX_BT_SIZE+1];
