@@ -8,17 +8,39 @@ function show(io::IO, x::ANY)
     show(io, t)
     print(io, '(')
     if t.names !== () || t.size==0
-        n = length(t.names)
-        for i=1:n
-            f = t.names[i]
-            if !isdefined(x, f)
-                print(io, undef_ref_str)
+        recorded = false
+        oid = object_id(x)
+        shown_set = get(task_local_storage(), :SHOWNSET, nothing)
+        if shown_set == nothing 
+            shown_set = Set()
+            task_local_storage(:SHOWNSET, shown_set) 
+        end
+        
+        try
+            if oid in shown_set
+                print(io, "#= circular reference =#")
             else
-                show(io, x.(i))
+                push!(shown_set, oid)
+                recorded = true
+            
+                n = length(t.names)
+                for i=1:n
+                    f = t.names[i]
+                    if !isdefined(x, f)
+                        print(io, undef_ref_str)
+                    else
+                        show(io, x.(f))
+                    end
+                    if i < n
+                        print(io, ',')
+                    end
+                end
             end
-            if i < n
-                print(io, ',')
-            end
+        catch e
+            rethrow(e)
+        
+        finally
+            if recorded delete!(shown_set, oid) end
         end
     else
         nb = t.size
