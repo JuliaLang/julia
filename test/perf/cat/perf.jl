@@ -20,11 +20,11 @@ function cat2d_perf2(n, iter)
     end
 end
 
-@timeit cat2d_perf(5,20000) "small_hvcat"
-@timeit cat2d_perf2(5,20000) "small_hvcat_setind"
+@timeit cat2d_perf(5,20000) "small_hvcat" "Small horizontal/vertical matrix concatenaion"
+@timeit cat2d_perf2(5,20000) "small_hvcat_setind" "Small horizontal/vertical matrix concatenation using setindex"
 
-@timeit cat2d_perf(500,2) "large_hvcat"
-@timeit cat2d_perf2(500,2) "large_hvcat_setind"
+@timeit cat2d_perf(500,2) "large_hvcat" "Large horizontal/vertical matrix concatenation"
+@timeit cat2d_perf2(500,2) "large_hvcat_setind" "Large horizontal/vertical matrix concatenation using setindex"
 
 function hcat_perf(n, iter)
     a = rand(n,n)
@@ -46,11 +46,11 @@ function hcat_perf2(n, iter)
     end
 end
 
-@timeit hcat_perf(5,20000) "small_hcat"
-@timeit hcat_perf2(5,20000) "small_hcat_setind"
+@timeit hcat_perf(5,20000) "small_hcat" "Small horizontal matrix concatenation"
+@timeit hcat_perf2(5,20000) "small_hcat_setind" "Small horizontal matrix concatenation using setindex"
 
-@timeit hcat_perf(500,2) "large_hcat"
-@timeit hcat_perf2(500,2) "large_hcat_setind"
+@timeit hcat_perf(500,2) "large_hcat" "Large horizontal matrix concatenation"
+@timeit hcat_perf2(500,2) "large_hcat_setind" "Large horizontal matrix concatenation using setindex"
 
 function vcat_perf(n, iter)
     a = rand(n,n)
@@ -72,11 +72,11 @@ function vcat_perf2(n, iter)
     end
 end
 
-@timeit vcat_perf(5,20000) "small_vcat"
-@timeit vcat_perf2(5,20000) "small_vcat_setind"
+@timeit vcat_perf(5,20000) "small_vcat" "Small vertical matrix concatenaion"
+@timeit vcat_perf2(5,20000) "small_vcat_setind" "Small vertical matrix concatenation using setindex"
 
-@timeit vcat_perf(500,2) "large_vcat"
-@timeit vcat_perf2(500,2) "large_vcat_setind"
+@timeit vcat_perf(500,2) "large_vcat" "Large vertical matrix concatenaion"
+@timeit vcat_perf2(500,2) "large_vcat_setind" "Large vertical matrix concatenation using setindex"
 
 function catnd_perf(n, iter)
     a = rand(1,n,n,1)
@@ -98,8 +98,8 @@ function catnd_perf2(n, iter)
     end
 end
 
-@timeit catnd_perf(5,20000) "small_catnd"
-@timeit catnd_perf2(5,20000) "small_catnd_setind"
+@timeit catnd_perf(5,20000) "small_catnd" "Small N-dimensional matrix concatenation"
+@timeit catnd_perf2(5,20000) "small_catnd_setind" "Small N-dimensional matrix concatenation using setindex"
 
-@timeit catnd_perf(500,2) "large_catnd"
-@timeit catnd_perf2(500,2) "large_catnd_setind"
+@timeit catnd_perf(500,2) "large_catnd" "Large N-dimensional matrix concatenation"
+@timeit catnd_perf2(500,2) "large_catnd_setind" "Large N-dimensional matrix concatenation using setindex"

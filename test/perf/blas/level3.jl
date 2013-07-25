@@ -9,7 +9,7 @@ function matmultest(n, repeat)
 	b
 end
 
-@timeit matmultest(2, 1_000_000) "matmul_tiny"
-@timeit matmultest(16, 100_000) "matmul_small"
-@timeit matmultest(64, 10_000) "matmul_medium"
-@timeit matmultest(256, 100) "matmul_large"
+@timeit matmultest(2, 1_000_000) "matmul_tiny" "Tiny matrix-matrix multiplication test"
+@timeit matmultest(16, 100_000) "matmul_small" "Small matrix-matrix multiplication test"
+@timeit matmultest(64, 10_000) "matmul_medium" "Medium matrix-matrix multiplication test"
+@timeit matmultest(256, 100) "matmul_large" "Large matrix-matrix multiplication test"
