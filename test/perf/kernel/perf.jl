@@ -10,58 +10,58 @@ function listn1n2(n1::Int,n2::Int)
     l1
 end
 
-@timeit listn1n2(1,10^6) "cons"
+@timeit listn1n2(1,10^6) "cons" "List concatenation"
 gc()
 
 # issue #1211
 include("ziggurat.jl")
 a = Array(Float64, 1000000)
-@timeit randn_zig!(a) "randn_zig"
+@timeit randn_zig!(a) "randn_zig" "Ziggurat gaussian number generator"
 
 # issue #950
 include("gk.jl")
-@timeit gk(350,[0.1]) "gk"
+@timeit gk(350,[0.1]) "gk" "Grigoriadis Khachiyan matrix games"
 
 # issue #942
 s = sparse(ones(280,280));
-@timeit s*s "sparsemul"
+@timeit s*s "sparsemul" "Sparse matrix multiplication"
 
 # issue #939
 y = [500000:-1:1];
-@timeit sortperm(y) "sortperm"
+@timeit sortperm(y) "sortperm" "Sorting of a worst-case vector"
 
 # issue #938
 x = 1:600000;
-@timeit sparse(x,x,x) "sparserang"
+@timeit sparse(x,x,x) "sparserange" "Construction of a sparse array from ranges"
 
 # issue #445
 include("stockcorr.jl")
-@timeit stockcorr() "stockcorr"
+@timeit stockcorr() "stockcorr" "Correlation analysis of random matrices"
 
 include("bench_eu.jl")
-@timeit bench_eu_vec(10000) "bench_eu_vec"
-@timeit bench_eu_devec(10000) "bench_eu_devec"
+@timeit bench_eu_vec(10000) "bench_eu_vec" "Vectorized Monte Carlo financial simulation"
+@timeit bench_eu_devec(10000) "bench_eu_devec" "Devectorized Monte Carlo financial simulation"
 
 # issue #1163
 include("actor_centrality.jl")
-@timeit1 actor_centrality() "actorgraph"
+@timeit1 actor_centrality() "actorgraph" "Centrality of actors in IMDB database"
 
 # issue #1168
 include("laplace.jl")
-@timeit1 laplace_vec() "laplace_vec"
-@timeit laplace_devec() "laplace_devec"
+@timeit1 laplace_vec() "laplace_vec" "Vectorized Laplacian"
+@timeit laplace_devec() "laplace_devec" "Devectorized Laplacian"
 
 # issue #1169
 include("go_benchmark.jl")
-@timeit1 benchmark(10) "go_benchmark"
+@timeit1 benchmark(10) "go_benchmark" "Simulation of random games of Go"
 
 # issue #3142
 include("simplex.jl")
-@timeit doTwoPassRatioTest() "simplex"
+@timeit doTwoPassRatioTest() "simplex" "Dual simplex algorithm for Linear Programming"
 
 # issue #3811
 include("raytracer.jl")
-@timeit Raytracer(5, 256, 4) "raytracer"
+@timeit Raytracer(5, 256, 4) "raytracer" "raytracer"
 
 function cmp_with_func(x::Vector, f::Function)
     count::Int = 0
@@ -74,7 +74,7 @@ function cmp_with_func(x::Vector, f::Function)
 end
 
 x = randn(200_000)
-@timeit (for n in 1:10; count = cmp_with_func(x, isless) end) "funarg"
+@timeit (for n in 1:10; count = cmp_with_func(x, isless) end) "funarg" "Function argument benchmark"
 
 
 function arith_vectorized(b,c,d)
@@ -86,7 +86,7 @@ b = randn(len)
 c = randn(len)
 d = randn(len)
 
-@timeit (for n in 1:10; a = arith_vectorized(b,c,d); end) "vectorize"
+@timeit (for n in 1:10; a = arith_vectorized(b,c,d); end) "vectorize" "Vectorized arithmetic"
 
 open("random.csv","w") do io
     writecsv(io, rand(100000,4))
@@ -99,7 +99,7 @@ function parsecsv()
     end
 end
 
-@timeit parsecsv() "splitline"
+@timeit parsecsv() "splitline" "CSV parsing"
 
 rm("random.csv")
 
@@ -194,4 +194,4 @@ _json_data = "{\"web-app\": {
     \"taglib-uri\": \"cofax.tld\",
     \"taglib-location\": \"/WEB-INF/tlds/cofax.tld\"}}}"
 
-@timeit (for n in 1:10; a = parse_json(_json_data); end) "json      "
+@timeit (for n in 1:10; a = parse_json(_json_data); end) "json" "JSON parsing"
