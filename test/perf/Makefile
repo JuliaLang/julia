@@ -11,10 +11,10 @@ codespeed:
 	@$(MAKE) $(QUIET_MAKE) -C shootout
 	@$(call spawn,$(JULIA_EXECUTABLE)) micro/perf.jl codespeed
 	@$(call spawn,$(JULIA_EXECUTABLE)) kernel/perf.jl codespeed
-	@$(call spawn,$(JULIA_EXECUTABLE)) cat/perf.jl codespeed
 	@$(call spawn,$(JULIA_EXECUTABLE)) shootout/perf.jl codespeed
-	@$(call spawn,$(JULIA_EXECUTABLE)) blas/perf.jl codespeed
-	@$(call spawn,$(JULIA_EXECUTABLE)) sort/perf.jl codespeed
+#	@$(call spawn,$(JULIA_EXECUTABLE)) cat/perf.jl codespeed
+#	@$(call spawn,$(JULIA_EXECUTABLE)) blas/perf.jl codespeed
+#	@$(call spawn,$(JULIA_EXECUTABLE)) sort/perf.jl codespeed
 
 
 clean:
