@@ -258,7 +258,9 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "  System: ", Sys.OS_NAME, " (", Sys.MACHINE, ")")
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
-        lsb = readchomp(ignorestatus(`lsb_release -ds`) .> SpawnNullStream())
+        lsb = ""
+        @linux_only try lsb = readchomp(`lsb_release -ds` .> SpawnNullStream()) end
+        @windows_only try lsb = strip(readall(`$(ENV["COMSPEC"]) /c ver`)) end
         if lsb != ""
             println(io,     "           ", lsb)
         end
