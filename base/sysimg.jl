@@ -222,6 +222,10 @@ include("pkg2.jl")
 # base graphics API
 include("graphics.jl")
 
+# profiler
+include("profile.jl")
+importall .Profile
+
 include = include_from_node1
 
 # prime method cache with some things we know we'll need right after startup
