@@ -7,7 +7,7 @@ PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
 version_string = $(shell cat ../VERSION)
 commit = $(shell git rev-parse HEAD 2>/dev/null)
 commit_short = $(shell git rev-parse --short HEAD 2>/dev/null)
-build_number = $(shell echo $$(git describe --tags --long 2>/dev/null) | awk -F- '{print $$(NF-1);}')
+build_number = $(shell echo $$(git describe --tags --long 2>/dev/null) | awk -F- '{ if( NF > 1 ) print $$(NF-1); else print 0; }')
 git_tag = $(shell git describe --tags --abbrev=0 2>/dev/null)
 prerelease = $(shell [ -z "$(git_tag)" -o "$(git_tag)" = "v$(version_string)" ] && echo false || echo true)
 
