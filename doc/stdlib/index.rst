@@ -29,3 +29,4 @@ Built-in Modules
    collections
    sort
    test
+   profile
