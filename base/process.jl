@@ -196,7 +196,7 @@ function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::
          pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env)
     if error != 0
         c_free(proc)
-        throw(UVError("spawn"))
+        throw(UVError("spawn",error))
     end
     associate_julia_struct(proc,pp)
     return proc
@@ -451,6 +451,7 @@ end
 _jl_kill(p::Process,signum::Integer) = ccall(:uv_process_kill,Int32,(Ptr{Void},Int32),p.handle,signum)
 function kill(p::Process,signum::Integer)
     if process_running(p)
+        @assert p.handle != C_NULL
         _jl_kill(p, signum)
     else
         int32(-1)
