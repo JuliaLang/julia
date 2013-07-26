@@ -407,7 +407,7 @@
 
    The byte offset of each field of a type relative to the data start.
    For example, we could use it in the following manner to summarize
-   information about the struct type:
+   information about a struct type:
 
       structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...]
       structinfo(Stat)
@@ -5130,6 +5130,39 @@
 
    Reference to the singleton \"EnvHash\", providing a dictionary
    interface to system environment variables.
+
+"),
+
+("System","Base","@unix","@unix()
+
+   Given \"@unix? a : b\", do \"a\" on Unix systems (including Linux
+   and OS X) and \"b\" elsewhere. See documentation for Handling
+   Platform Variations in the Calling C and Fortran Code section of
+   the manual.
+
+"),
+
+("System","Base","@osx","@osx()
+
+   Given \"@osx? a : b\", do \"a\" on OS X and \"b\" elsewhere. See
+   documentation for Handling Platform Variations in the Calling C and
+   Fortran Code section of the manual.
+
+"),
+
+("System","Base","@linux","@linux()
+
+   Given \"@linux? a : b\", do \"a\" on Linux and \"b\" elsewhere. See
+   documentation for Handling Platform Variations in the Calling C and
+   Fortran Code section of the manual.
+
+"),
+
+("System","Base","@windows","@windows()
+
+   Given \"@windows? a : b\", do \"a\" on Windows and \"b\" elsewhere.
+   See documentation for Handling Platform Variations in the Calling C
+   and Fortran Code section of the manual.
 
 "),
 
