@@ -213,9 +213,9 @@ function help(x)
 end
 
 macro help(ex)
-    if isa(ex, Symbol)
-        return Expr(:call, :help, ex)
-    elseif isa(ex, Expr) && ex.head == :macrocall && length(ex.args) == 1
+    if !isa(ex, Expr)
+        return Expr(:call, :help, esc(ex))
+    elseif ex.head == :macrocall && length(ex.args) == 1
         # e.g., "julia> @help @printf"
         return Expr(:call, :help, string(ex.args[1]))
     else
