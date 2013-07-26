@@ -268,7 +268,7 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
         uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
         int err = uv_shutdown(req, (uv_stream_t*)handle, &jl_uv_shutdownCallback);
         if (err != 0) {
-            printf("shutdown err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));
+            printf("shutdown err: %s\n", uv_strerror(err));
             uv_close(handle, &jl_uv_closeHandle);
         }
     }
@@ -434,23 +434,21 @@ DLLEXPORT void jl_uv_writecb_task(uv_write_t* req, int status)
     (void)ret;
 }
 
-DLLEXPORT void *jl_write_copy(uv_stream_t *stream, const char *str, size_t n, void *writecb)
+DLLEXPORT int jl_write_copy(uv_stream_t *stream, const char *str, size_t n, uv_write_t *uvw, void *writecb)
 {
     JL_SIGATOMIC_BEGIN();
-    uv_write_t *uvw = malloc(sizeof(uv_write_t)+n);
     char *data = (char*)(uvw+1);
     memcpy(data,str,n);
     uv_buf_t buf[]  = {{.base = data,.len=n}};
     uvw->data = NULL;
     int err = uv_write(uvw,stream,buf,1,writecb);  
-    if (err)
-        free(uvw);
     JL_SIGATOMIC_END();
-    return err ? NULL : uvw; 
+    return err;
 }
 
 DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
 {
+    int err;
     if (stream!=0) {
         if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
             if (stream->type == UV_FILE) {
@@ -458,12 +456,18 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
                 jl_uv_file_t *file = (jl_uv_file_t *)stream;
                 // Do a blocking write for now
                 uv_fs_t req;
-                int err = uv_fs_write(file->loop, &req, file->file, &c, 1, -1, NULL);
+                err = uv_fs_write(file->loop, &req, file->file, &c, 1, -1, NULL);
                 JL_SIGATOMIC_END();
                 return err ? 0 : 1;
             }
             else {
-                return jl_write_copy(stream,(char*)&c,1,&jl_uv_writecb) == NULL ? 0 : 1;
+                uv_write_t *uvw = malloc(sizeof(uv_write_t)+1);
+                err = jl_write_copy(stream,(char*)&c,1,uvw,&jl_uv_writecb);
+                if (err < 0) {
+                    free(uvw);
+                    return 0;
+                }
+                return 1;
             }
         }
         else {
@@ -474,22 +478,19 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
     return 0;
 }
 
-DLLEXPORT void *jl_write_no_copy(uv_stream_t *stream, char *data, size_t n, void *writecb)
+DLLEXPORT int jl_write_no_copy(uv_stream_t *stream, char *data, size_t n, uv_write_t *uvw, void *writecb)
 {
     uv_buf_t buf[]  = {{.base = data,.len=n}};
     JL_SIGATOMIC_BEGIN();
-    uv_write_t *uvw = malloc(sizeof(uv_write_t));
     int err = uv_write(uvw,stream,buf,1,writecb);
     uvw->data = NULL;
-    if (err != 0)
-        free(uvw);
     JL_SIGATOMIC_END();
-    return err ? NULL : uvw;
+    return err;
 }
 
-DLLEXPORT void *jl_putc_copy(unsigned char c, uv_stream_t *stream, void *writecb)
+DLLEXPORT int jl_putc_copy(unsigned char c, uv_stream_t *stream, void *uvw, void *writecb)
 {
-    return jl_write_copy(stream,(char *)&c,1,writecb);
+    return jl_write_copy(stream,(char *)&c,1,uvw,writecb);
 }
 
 DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar )
@@ -501,17 +502,18 @@ DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar )
     return jl_write(s, buf, n);
 }
 
-DLLEXPORT void *jl_pututf8_copy(uv_stream_t *s, uint32_t wchar, void *writecb)
+DLLEXPORT int jl_pututf8_copy(uv_stream_t *s, uint32_t wchar, void *uvw, void *writecb)
 {
     char buf[8];
     if (wchar < 0x80)
-        return jl_putc_copy((int)wchar, s, writecb);
+        return jl_putc_copy((int)wchar, s, uvw, writecb);
     size_t n = u8_toutf8(buf, 8, &wchar, 1);
-    return jl_write_copy(s, buf, n, writecb);
+    return jl_write_copy(s, buf, n, uvw, writecb);
 }
 
 DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
 {
+    int err;
     //TODO: BAD!! Needed because Julia can't yet detect null stdio
     if (stream == 0)
         return 0;
@@ -521,12 +523,18 @@ DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
             jl_uv_file_t *file = (jl_uv_file_t *)stream;
             // Do a blocking write for now
             uv_fs_t req;
-            int err = uv_fs_write(file->loop, &req, file->file, (void*)str, n, -1, NULL);
+            err = uv_fs_write(file->loop, &req, file->file, (void*)str, n, -1, NULL);
             JL_SIGATOMIC_END();
             return err ? 0 : n;
         }
         else {
-            return jl_write_copy(stream,str,n,&jl_uv_writecb) == NULL ? 0 : n;
+            uv_write_t *uvw = malloc(sizeof(uv_write_t)+n);
+            err = jl_write_copy(stream,str,n,uvw,&jl_uv_writecb);
+            if (err < 0) {
+                free(uvw);
+                return 0;
+            }
+            return n;
         }
     }
     else {
@@ -587,7 +595,7 @@ DLLEXPORT void jl_exit(int exitcode)
 
 DLLEXPORT int jl_cwd(char *buffer, size_t size)
 {
-    return (uv_cwd(buffer,size)).code;
+    return uv_cwd(buffer,size);
 }
 
 DLLEXPORT int jl_getpid()
@@ -626,7 +634,7 @@ DLLEXPORT int jl_uv_sizeof_interface_address()
 
 DLLEXPORT int jl_uv_interface_addresses(uv_interface_address_t **ifAddrStruct,int *count)
 {
-    return uv_interface_addresses(ifAddrStruct,count).code;
+    return uv_interface_addresses(ifAddrStruct,count);
 }
 
 DLLEXPORT int jl_uv_interface_address_is_internal(uv_interface_address_t *addr)
@@ -740,28 +748,6 @@ DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr_storage *addr)
     }
     free(req);
     return -2; //error! Only IPv4 and IPv6 are implemented atm
-}
-
-DLLEXPORT int jl_last_errno(uv_loop_t *loop)
-{
-    return (uv_last_error(loop)).code;
-}
-
-DLLEXPORT int jl_last_system_errno(uv_loop_t *loop)
-{
-    return (uv_last_error(loop)).sys_errno_;
-}
-
-DLLEXPORT const char *jl_uv_strerror(int a, int b)
-{
-    uv_err_t err = {a,b};
-    return uv_strerror(err);
-}
-
-DLLEXPORT const char *jl_uv_err_name(int a, int b)
-{
-    uv_err_t err = {a,b};
-    return uv_err_name(err);
 }
 
 DLLEXPORT char *jl_ios_buf_base(ios_t *ios)

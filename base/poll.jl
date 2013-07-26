@@ -6,9 +6,9 @@ type FileMonitor
     function FileMonitor(cb, file)
         handle = c_malloc(_sizeof_uv_fs_event)
         err = ccall(:jl_fs_event_init,Int32, (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32), eventloop(),handle,file,0)
-        if err == -1
+        if err < 0
             c_free(handle)
-            throw(UVError("FileMonitor"))
+            throw(UVError("FileMonitor",err))
         end
         this = new(handle,cb,false,Condition())
         associate_julia_struct(handle,this)
@@ -41,9 +41,9 @@ type PollingFileWatcher <: UVPollingWatcher
     function PollingFileWatcher(cb, file)
         handle = c_malloc(_sizeof_uv_fs_poll)
         err = ccall(:uv_fs_poll_init,Int32,(Ptr{Void},Ptr{Void}),eventloop(),handle)
-        if err == -1
+        if err < 0
             c_free(handle)
-            throw(UVError("PollingFileWatcher"))
+            throw(UVError("PollingFileWatcher",err))
         end
         this = new(handle, file, false, Condition(), cb)
         associate_julia_struct(handle,this)
@@ -76,9 +76,9 @@ function FDWatcher(fd::RawFD)
         error("FD is already being watched by another watcher")
     end
     err = ccall(:uv_poll_init,Int32,(Ptr{Void},Ptr{Void},Int32),eventloop(),handle,fd.fd)
-    if err == -1
+    if err < 0
         c_free(handle)
-        throw(UVError("FDWatcher"))
+        throw(UVError("FDWatcher",err))
     end
     this = FDWatcher(handle,fd,false,Condition(),false,0)
     associate_julia_struct(handle,this)
@@ -89,9 +89,9 @@ end
     handle = c_malloc(_sizeof_uv_poll)
     err = ccall(:uv_poll_init_socket,Int32,(Ptr{Void},   Ptr{Void}, Ptr{Void}),
                                             eventloop(), handle,    fd.handle)
-    if err == -1
+    if err < 0
         c_free(handle)
-        throw(UVError("FDWatcher"))
+        throw(UVError("FDWatcher",err))
     end
     this = FDWatcher(handle,fd,false,Condition(),false,0)
     associate_julia_struct(handle,this)
@@ -101,9 +101,9 @@ end
 
 function fdw_wait_cb(fdw::FDWatcher,status,events)
     if status == -1
-        notify(fdw.notify,(UV_error_t(_uv_lasterror(),_uv_lastsystemerror()),events))
+        notify_error(fdw.notify,UVError("FDWatcher",status))
     else
-        notify(fdw.notify,(UV_error_t(int32(0),int32(0)),events))
+        notify(fdw.notify,events)
     end
 end
 
@@ -119,10 +119,7 @@ function _wait(fdw::FDWatcher,readable,writeable)
         start_watching(fdw_wait_cb,fdw,events)
     end
     while true
-        err, events = wait(fdw.notify)
-        if err.uv_code != 0
-            throw(UVError("wait (FD)",err))
-        end
+        events = wait(fdw.notify)
         if (readable && (events & UV_READABLE) != 0) ||
             (writeable && (events & UV_WRITEABLE) != 0)
             break
@@ -180,10 +177,10 @@ let
 end
 
 function pfw_wait_cb(pfw::PollingFileWatcher, status, prev, cur)
-    if status == -1
-        notify(pfw.notify,(UV_error_t(_uv_lasterror(),_uv_lastsystemerror()),prev,cur))
+    if status < 0
+        notify_error(pfw.notify,UVError("PollingFileWatcher",status))
     else
-        notify(pfw.notify,(UV_error_t(int32(0),int32(0)),prev,cur))
+        notify(pfw.notify,(prev,cur))
     end
 end
 
@@ -191,10 +188,7 @@ function wait(pfw::PollingFileWatcher; interval=3.0)
     if !pfw.open
         start_watching(pfw_wait_cb,pfw,interval)
     end
-    err,prev,curr = wait(pfw.notify)
-    if err.uv_code != 0
-        throw(UVError("wait (PollingFileWatcher)",err))
-    end
+    prev,curr = wait(pfw.notify)
     if isempty(pfw.notify.waitq)
         stop_watching(pfw)
     end
@@ -203,9 +197,6 @@ end
 
 function wait(m::FileMonitor)
     err, filename, events = wait(m.notify)
-    if err.uv_code != 0
-        throw(UVError("wait (FileMonitor)",err))
-    end
     filename, events
 end
 
@@ -246,9 +237,9 @@ function _uv_hook_fseventscb(t::FileMonitor,filename::Ptr,events::Int32,status::
         # bytestring(convert(Ptr{Uint8},filename)) - seems broken at the moment - got NULL
         t.cb(status, events, status)
         if status == -1
-            notify(t.notify,(UV_error_t(_uv_lasterror(),_uv_lastsystemerror()),bytestring(convert(Ptr{Uint8},filename)),events))
+            notify_error(t.notify,UVError("FileMonitor",status))
         else
-            notify(t.notify,(UV_error_t(int32(0),int32(0)),bytestring(convert(Ptr{Uint8},filename)),events))
+            notify(t.notify,events)
         end
     end
 end
