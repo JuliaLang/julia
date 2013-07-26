@@ -13,9 +13,11 @@
 #include <setjmp.h>
 #ifndef _OS_WINDOWS_
 #  define jl_jmp_buf sigjmp_buf
+#  define MAX_ALIGN sizeof(void*)
 #else
 #  define jl_jmp_buf jmp_buf
 #  include <malloc.h> //for _resetstkoflw
+#  define MAX_ALIGN 8
 #endif
 #define JL_STREAM uv_stream_t
 #define JL_STDOUT jl_uv_stdout
@@ -59,10 +61,7 @@ typedef struct _jl_sym_t {
     struct _jl_sym_t *left;
     struct _jl_sym_t *right;
     uptrint_t hash;    // precomputed hash value
-    union {
-        char name[1];
-        void *_pad;    // ensure field aligned to pointer size
-    };
+    char name[] __attribute__ ((aligned (sizeof(void*))));
 } jl_sym_t;
 
 typedef struct {
@@ -73,7 +72,7 @@ typedef struct {
     JL_DATA_TYPE
     size_t length;
 #endif
-    jl_value_t *data[1];
+    jl_value_t *data[];
 } jl_tuple_t;
 
 // how much space we're willing to waste if an array outgrows its
@@ -230,7 +229,7 @@ typedef struct _jl_datatype_t {
     uint32_t alignment;  // strictest alignment over all fields
     uint32_t uid;
     void *struct_decl;  //llvm::Value*
-    jl_fielddesc_t fields[1];
+    jl_fielddesc_t fields[];
 } jl_datatype_t;
 
 #define jl_field_offset(st,i) (((jl_datatype_t*)st)->fields[i].offset)

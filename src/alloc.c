@@ -365,7 +365,7 @@ static jl_sym_t *mk_symbol(const char *str)
     jl_sym_t *sym;
     size_t len = strlen(str);
 
-    sym = (jl_sym_t*)malloc((sizeof(jl_sym_t)-sizeof(void*)+len+1+7)&-8);
+    sym = (jl_sym_t*)malloc((sizeof(jl_sym_t)+len+1+7)&-8);
     sym->type = (jl_value_t*)jl_sym_type;
     sym->left = sym->right = NULL;
 #ifdef _P64
@@ -531,7 +531,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields)
     return (jl_datatype_t*)
         newobj((jl_value_t*)jl_datatype_type,
                NWORDS(sizeof(jl_datatype_t) - sizeof(void*) +
-                      (nfields-1)*sizeof(jl_fielddesc_t)));
+                      nfields*sizeof(jl_fielddesc_t)));
 }
 
 void jl_compute_field_offsets(jl_datatype_t *st)
@@ -631,6 +631,8 @@ jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
                                         jl_null, jl_null, 0, 0);
     bt->size = nbits/8;
     bt->alignment = bt->size;
+    if (bt->alignment > MAX_ALIGN)
+        bt->alignment = MAX_ALIGN;
     bt->pointerfree = 1;
     return bt;
 }
