@@ -1,6 +1,6 @@
 module Help
 
-export help, apropos
+export help, apropos, @help
 
 CATEGORY_LIST = nothing
 CATEGORY_DICT = nothing
@@ -209,6 +209,17 @@ function help(x)
         help(t)
     else
         println(" is of type $t")
+    end
+end
+
+macro help(ex)
+    if isa(ex, Symbol)
+        return Expr(:call, :help, ex)
+    elseif isa(ex, Expr) && ex.head == :macrocall && length(ex.args) == 1
+        # e.g., "julia> @help @printf"
+        return Expr(:call, :help, string(ex.args[1]))
+    else
+        return Expr(:macrocall, symbol("@which"), esc(ex))
     end
 end
 
