@@ -308,19 +308,19 @@ static value_t fl_time_now(value_t *args, u_int32_t nargs)
 
 static value_t fl_path_cwd(value_t *args, uint32_t nargs)
 {
-    int err;
+    uv_err_t err;
     if (nargs > 1)
         argcount("path.cwd", nargs, 1);
     if (nargs == 0) {
         char buf[1024];
         err = uv_cwd(buf, sizeof(buf));
-        if (err != 0)
+        if (err.code != UV_OK)
           lerrorf(IOError, "path.cwd: could not get cwd: %s", uv_strerror(err));
         return string_from_cstr(buf);
     }
     char *ptr = tostring(args[0], "path.cwd");
     err = uv_chdir(ptr);
-    if (err != 0)
+    if (err.code != UV_OK)
         lerrorf(IOError, "path.cwd: could not cd to %s: %s", ptr, uv_strerror(err));
     return FL_T;
 }
