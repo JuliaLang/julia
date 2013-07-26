@@ -1282,7 +1282,11 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
                             results[idx] = remotecall_fetch(wpid, f,
                                                             map(L->L[idx], lsts)...)
                             if isa(results[idx], Exception)
-                                rethrow(results[idx])
+                                if wpid == myid()
+                                    rethrow(results[idx])
+                                else
+                                    throw(results[idx])
+                                end
                             end
                         catch e
                             if err_retry
