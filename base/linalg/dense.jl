@@ -536,7 +536,7 @@ pinv(x::Number) = one(x)/x
 ## Basis for null space
 function null{T<:BlasFloat}(A::StridedMatrix{T})
     m,n = size(A)
-    SVD = svdfact(A)
+    SVD = svdfact(A, false)
     if m == 0; return eye(T, n); end
     indstart = sum(SVD[:S] .> max(m,n)*max(SVD[:S])*eps(eltype(SVD[:S]))) + 1
     SVD[:V][:,indstart:]

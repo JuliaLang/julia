@@ -118,6 +118,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
 
                                         # Test null
         a15null = null(a[:,1:5]')
+        @test rank([a[:,1:5] a15null]) == 10
         @test_approx_eq_eps norm(a[:,1:5]'a15null) zero(elty) n*eps(real(one(elty)))
         @test_approx_eq_eps norm(a15null'a[:,1:5]) zero(elty) n*eps(real(one(elty)))
         @test size(null(b), 2) == 0
