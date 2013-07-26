@@ -233,7 +233,11 @@ Types
 
 .. function:: fieldoffsets(type)
 
-   The offset of each field of ``type`` relative to data start.
+   The byte offset of each field of a type relative to the data start. For example, we could use it
+   in the following manner to summarize information about a struct type::
+
+        structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...]
+        structinfo(Stat)
 
 .. function:: fieldtype(value, name::Symbol)
 
@@ -905,10 +909,6 @@ I/O
 .. data:: STDIN
 
    Global variable referring to the standard input stream.
-
-.. data:: OUTPUT_STREAM
-
-   The default stream used for text output, e.g. in the ``print`` and ``show`` functions.
 
 .. function:: open(file_name, [read, write, create, truncate, append]) -> IOStream
 
@@ -1596,10 +1596,6 @@ Mathematical Functions
 .. function:: expm1(x)
 
    Accurately compute :math:`e^x-1`
-
-.. function:: square(x)
-
-   Compute :math:`x^2`
 
 .. function:: round(x, [digits, [base]])
 
@@ -3511,6 +3507,7 @@ C Interface
 
    When calling ``dlopen``, the paths in this list will be searched first, in order, before searching the
    system locations for a valid library handle.
+
 
 Errors
 ------
