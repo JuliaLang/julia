@@ -3500,6 +3500,18 @@ C Interface
    ownership of the memory, calling ``free`` on the pointer when the array is no
    longer referenced.
 
+.. function:: find_library(names, locations)
+
+   Searches for the first library in ``names`` in the paths in the ``locations`` list, ``DL_LOAD_PATH``, or system
+   library paths (in that order) which can successfully be dlopen'd. On success, the return value will be one of
+   the names (potentially prefixed by one of the paths in locations). This string can be assigned to a ``global const``
+   and used as the library name in future ``ccall``'s. On failure, it returns the empty string.
+
+.. data:: DL_LOAD_PATH
+
+   When calling ``dlopen``, the paths in this list will be searched first, in order, before searching the
+   system locations for a valid library handle.
+
 Errors
 ------
 
