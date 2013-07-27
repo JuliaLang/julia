@@ -53,7 +53,7 @@ Type declarations and constructors
 ----------------------------------
 .. _man-abstract-fields:
 
-How do "abstract" or ambigious fields in types interact with the compiler?
+How do "abstract" or ambiguous fields in types interact with the compiler?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Types can be declared without specifying the types of their fields::
 
