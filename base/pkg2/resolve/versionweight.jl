@@ -33,7 +33,7 @@ function Base.isless(a::VersionWeight, b::VersionWeight)
     a.minor < b.minor && return true
     a.minor > b.minor && return false
     a.patch < b.patch && return true
-    a.patch > b.patch && return true
+    a.patch > b.patch && return false
     a.uninstall < b.uninstall && return true
     return false
 end
