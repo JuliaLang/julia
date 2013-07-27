@@ -202,6 +202,7 @@ DLLEXPORT int profile_init(size_t maxsize, u_int64_t delay_nsec)
     bt_data_prof = (ptrint_t*) malloc(maxsize*sizeof(ptrint_t));
     if (bt_data_prof == NULL && maxsize > 0)
         return -1;
+    bt_size_cur = 0;
     return 0;
 }
 
