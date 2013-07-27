@@ -33,8 +33,7 @@ a = Base.Condition()
     Base.notify(a,p)
     @test !Base.wait_success(p)
 end
-p = wait(a)
-kill(p)
+kill(wait(a))
 
 @test_throws run(`foo`)
 

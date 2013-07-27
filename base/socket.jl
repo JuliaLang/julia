@@ -256,12 +256,11 @@ type TcpSocket <: Socket
 end
 function TcpSocket()
     this = TcpSocket(c_malloc(_sizeof_uv_tcp))
-    err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
+    if 0 != ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
-    if err != 0 
         c_free(this.handle)
         this.handle = C_NULL
-        error(UVError("Failed to create tcp socket",err))
+        error(UVError("Failed to create tcp socket"))
     end
     associate_julia_struct(this.handle, this)
     this.status = StatusInit
@@ -283,12 +282,11 @@ type TcpServer <: UVServer
 end
 function TcpServer()
     this = TcpServer(c_malloc(_sizeof_uv_tcp))
-    err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
+    if 0 != ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
-    if err != 0 
         c_free(this.handle)
         this.handle = C_NULL
-        error(UVError("Failed to create tcp server",err))
+        error(UVError("Failed to create tcp server"))
     end
     associate_julia_struct(this.handle, this)
     this.status = StatusInit
@@ -334,13 +332,16 @@ accept(server::PipeServer) = accept(server, NamedPipe())
 bind(sock::TcpServer, addr::InetAddr) = bind(sock,addr.host,addr.port)
 bind(sock::TcpServer, host::IpAddr, port) = bind(sock, InetAddr(host,port))
 
+const UV_SUCCESS = 0
+const UV_EACCES = 3
+const UV_EADDRINUSE = 5
+
 function bind(sock::TcpServer, host::IPv4, port::Uint16)
     @assert sock.status == StatusInit
-    err = ccall(:jl_tcp_bind, Int32, (Ptr{Void}, Uint16, Uint32),
+    if 0 != ccall(:jl_tcp_bind, Int32, (Ptr{Void}, Uint16, Uint32),
 	        sock.handle, hton(port), hton(host.host))
-    if err < 0
-        if err != UV_EADDRINUSE && err != UV_EACCES
-            error(UVError("bind",err))
+        if (err=_uv_lasterror()) != UV_EADDRINUSE && err != UV_EACCES
+            error(UVError("bind"))
         else
             return false
         end
@@ -351,11 +352,10 @@ end
 
 function bind(sock::TcpServer, host::IPv6, port::Uint16)
     @assert sock.status == StatusInit
-    err = ccall(:jl_tcp_bind6, Int32, (Ptr{Void}, Uint16, Ptr{Uint128}),
+    if 0 != ccall(:jl_tcp_bind6, Int32, (Ptr{Void}, Uint16, Ptr{Uint128}),
             sock.handle, hton(port), &hton(host.host))
-    if err < 0
-        if err != UV_EADDRINUSE && err != UV_EACCES
-            error(UVError("bind",err))
+        if (err=_uv_lasterror()) != UV_EADDRINUSE && err != UV_EACCES
+            error(UVError("bind"))
         else
             return false
         end
@@ -369,7 +369,7 @@ callback_dict = ObjectIdDict()
 function _uv_hook_getaddrinfo(cb::Function, addrinfo::Ptr{Void}, status::Int32)
     delete!(callback_dict,cb)
     if status != 0 || addrinfo == C_NULL
-        cb(UVError("getaddrinfo callback",status))
+        cb(UVError("getaddrinfo callback"))
         return
     end
     freeaddrinfo = addrinfo
@@ -414,7 +414,7 @@ function getipaddr()
     addr, count = addr[1],count[1]
     if err != 0
         ccall(:uv_free_interface_addresses,Void,(Ptr{Uint8},Int32),addr,count)
-        throw(UVError("getlocalip",err))
+        throw(UVError("getlocalip",err,0))
     end
     for i = 0:(count-1)
         current_addr = addr + i*_sizeof_uv_interface_address
@@ -479,12 +479,12 @@ end
 
 ##
 
-listen(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT) = (uv_error("listen",_listen(sock;backlog=backlog)); sock)
+listen(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT) = (uv_error("listen",!listen!(sock;backlog=backlog)); sock)
 
 function listen(addr; backlog::Integer=BACKLOG_DEFAULT)
     sock = TcpServer()
-    !bind(sock,addr) && error("Cannot bind to port (may already be in use or access denied)")
-    uv_error("listen",_listen(sock;backlog=backlog))
+    uv_error("listen",!bind(sock,addr))
+    uv_error("listen",!listen!(sock;backlog=backlog))
     sock
 end
 listen(port::Integer; backlog::Integer=BACKLOG_DEFAULT) = listen(IPv4(uint32(0)),port;backlog=backlog)
@@ -505,7 +505,7 @@ function accept_nonblock(server::TcpServer,client::TcpSocket)
 end
 function accept_nonblock(server::TcpServer)
     client = TcpSocket()
-    uv_error("accept", accept_nonblock(server, client))
+    uv_error("accept", accept_nonblock(server, client) == -1)
     client
 end
 
@@ -516,10 +516,15 @@ function open_any_tcp_port(cb::Callback,default_port)
     while true
         sock = TcpServer()
         sock.ccb = cb
-        if (bind(sock,addr) && _listen(sock) == 0)
+        if (bind(sock,addr) && listen!(sock))
             return (addr.port,sock)
         end
+        err = _uv_lasterror()
+        system = _uv_lastsystemerror()
         close(sock)
+        if (err != UV_SUCCESS && err != UV_EADDRINUSE && err != UV_EACCES)
+            throw(UVError("open_any_tcp_port",err,system))
+        end
 	    addr.port += 1
         if (addr.port==default_port)
             error("Not a single port is available.")
