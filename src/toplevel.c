@@ -403,13 +403,13 @@ jl_value_t *jl_toplevel_eval(jl_value_t *v)
 }
 
 // repeatedly call jl_parse_next and eval everything
-void jl_parse_eval_all(char *fname)
+jl_value_t *jl_parse_eval_all(char *fname)
 {
     //jl_printf(JL_STDERR, "***** loading %s\n", fname);
     int last_lineno = jl_lineno;
     jl_lineno=0;
-    jl_value_t *fn=NULL, *ln=NULL, *form=NULL;
-    JL_GC_PUSH3(&fn, &ln, &form);
+    jl_value_t *fn=NULL, *ln=NULL, *form=NULL, *result=NULL;
+    JL_GC_PUSH4(&fn, &ln, &form, &result);
     JL_TRY {
         // handle syntax error
         while (1) {
@@ -424,7 +424,7 @@ void jl_parse_eval_all(char *fname)
                     jl_interpret_toplevel_expr(form);
                 }
             }
-            (void)jl_toplevel_eval_flex(form, 1);
+            result = jl_toplevel_eval_flex(form, 1);
         }
     }
     JL_CATCH {
@@ -438,11 +438,12 @@ void jl_parse_eval_all(char *fname)
     jl_stop_parsing();
     jl_lineno = last_lineno;
     JL_GC_POP();
+    return result;
 }
 
 int asprintf(char **strp, const char *fmt, ...);
 
-void jl_load(const char *fname)
+jl_value_t *jl_load(const char *fname)
 {
     if (jl_current_module == jl_base_module) {
         //This deliberatly uses ios, because stdio initialization has been moved to Julia
@@ -456,17 +457,18 @@ void jl_load(const char *fname)
     if (jl_start_parsing_file(fpath) != 0) {
         jl_errorf("could not open file %s", fpath);
     }
-    jl_parse_eval_all(fpath);
+    jl_value_t *result = jl_parse_eval_all(fpath);
     if (fpath != fname) free(fpath);
     if (jl_current_module == jl_base_module) {
         jl_printf(JL_STDOUT, "\x1B[1F\x1B[2K");
     }
+    return result;
 }
 
 // load from filename given as a ByteString object
-DLLEXPORT void jl_load_(jl_value_t *str)
+DLLEXPORT jl_value_t *jl_load_(jl_value_t *str)
 {
-    jl_load(jl_string_data(str));
+    return jl_load(jl_string_data(str));
 }
 
 // type definition ------------------------------------------------------------
