@@ -12,6 +12,7 @@ export
     MPFR,
     GMP,
     QuadGK,
+    Order,
     Sort,
     Sys,
     Test,
@@ -21,6 +22,7 @@ export
     Errno,
     Meta,
     Graphics,
+    Profile,
 
 # Types
     AbstractMatrix,
@@ -120,6 +122,7 @@ export
     Diagonal,
     InsertionSort,
     QuickSort,
+    HeapSort,
     MergeSort,
     TimeoutAsyncWork,
     TimSort,
@@ -503,6 +506,7 @@ export
     hcat,
     hvcat,
     ind2sub,
+    indexin,
     indmax,
     indmin,
     infs,
@@ -1054,6 +1058,10 @@ export
     hton,
     ltoh,
     ntoh,
+    HostByteOrder,
+    ReverseByteOrder,
+    LittleByteOrder,
+    NetworkByteOrder,
     mmap,
     mmap_array,
     mmap_bitarray,
@@ -1111,6 +1119,7 @@ export
     take,
     wait,
     ClusterManager,
+    timedwait,
 
 # distributed arrays
     distribute,
@@ -1235,7 +1244,12 @@ export
     @timed,
     @elapsed,
     @allocated,
+    @profile,
     @which,
+    @windows,
+    @unix,
+    @osx,
+    @linux,
     @windows_only,
     @unix_only,
     @osx_only,
@@ -1261,5 +1275,4 @@ export
     @sprintf,
     @deprecate,
     @boundscheck,
-    @inbounds,
-    @timedwait
+    @inbounds

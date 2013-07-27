@@ -342,7 +342,7 @@ JLDFLAGS =
 endif
 
 ifeq ($(OS), WINNT)
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm
 ifeq ($(ARCH),x86_64)
 OSLIBS += -ldbghelp
 endif
@@ -436,7 +436,7 @@ ifeq ($(BUILD_OS), WINNT)
 spawn = $(1)
 else
 ifeq ($(OS), WINNT)
-spawn = wine cmd /c "set PATH=$(WINE_PATH) && $$(exec winepath -w '$(1)')"
+spawn = wine cmd /c "set PATH=$(WINE_PATH)&& $$(exec winepath -w '$(1)')"
 else
 spawn = $(1)
 endif

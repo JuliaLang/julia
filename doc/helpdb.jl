@@ -9,6 +9,24 @@
 
 "),
 
+("Getting Around","Base","quit","quit()
+
+   Calls \"exit(0)\".
+
+"),
+
+("Getting Around","Base","atexit","atexit(f)
+
+   Register a zero-argument function to be called at exit.
+
+"),
+
+("Getting Around","Base","isinteractive","isinteractive()
+
+   Determine whether Julia is running an interactive session.
+
+"),
+
 ("Getting Around","Base","whos","whos([Module,] [pattern::Regex])
 
    Print information about global variables in a module, optionally
@@ -245,6 +263,18 @@
 
 "),
 
+("All Objects","Base","oftype","oftype(x, y)
+
+   Convert \"y\" to the type of \"x\".
+
+"),
+
+("All Objects","Base","identity","identity(x)
+
+   The identity function. Returns its argument.
+
+"),
+
 ("Types","Base","super","super(T::DataType)
 
    Return the supertype of DataType T
@@ -348,6 +378,15 @@
 
 "),
 
+("Types","Base","promote_rule","promote_rule(type1, type2)
+
+   Specifies what type should be used by \"promote\" when given values
+   of types \"type1\" and \"type2\". This function should not be
+   called directly, but should have definitions added to it for new
+   types as appropriate.
+
+"),
+
 ("Types","Base","getfield","getfield(value, name::Symbol)
 
    Extract a named field from a value of composite type. The syntax
@@ -366,7 +405,12 @@
 
 ("Types","Base","fieldoffsets","fieldoffsets(type)
 
-   The offset of each field of \"type\" relative to data start.
+   The byte offset of each field of a type relative to the data start.
+   For example, we could use it in the following manner to summarize
+   information about a struct type:
+
+      structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...]
+      structinfo(Stat)
 
 "),
 
@@ -390,6 +434,14 @@
    contains no references to other values. Typical examples are
    numeric types such as \"Uint8\", \"Float64\", and
    \"Complex{Float64}\".
+
+"),
+
+("Types","Base","isleaftype","isleaftype(T)
+
+   Determine whether \"T\" is a concrete type that can have instances,
+   meaning its only subtypes are itself and \"None\" (but \"T\" itself
+   is not \"None\").
 
 "),
 
@@ -512,6 +564,14 @@
 ("Iterable Collections","Base","contains","contains(itr, x) -> Bool
 
    Determine whether a collection contains the given value, \"x\".
+
+"),
+
+("Iterable Collections","Base","indexin","indexin(a, b)
+
+   Returns a vector containing the highest index in \"b\" for each
+   value in \"a\" that is a member of \"b\" . The output vector
+   contains 0 wherever \"a\" is not a member of \"b\".
 
 "),
 
@@ -664,6 +724,12 @@
 
 "),
 
+("Iterable Collections","Base","step","step(r)
+
+   Get the step size of a \"Range\" object.
+
+"),
+
 ("Iterable Collections","Base","collect","collect(collection)
 
    Return an array of all items in a collection. For associative
@@ -693,7 +759,7 @@
 
 "),
 
-("Associative Collections","Base","has","has(collection, key)
+("Associative Collections","Base","haskey","haskey(collection, key)
 
    Determine whether a collection has a mapping for a given key.
 
@@ -1067,12 +1133,12 @@
 
 ("Strings","Base","replace","replace(string, pat, r[, n])
 
-   Search for the given pattern \"pat\", and replace each occurance
-   with \"r\". If \"n\" is provided, replace at most \"n\" occurances.
-   As with search, the second argument may be a single character, a
-   vector or a set of characters, a string, or a regular expression.
-   If \"r\" is a function, each occurrence is replaced with \"r(s)\"
-   where \"s\" is the matched substring.
+   Search for the given pattern \"pat\", and replace each occurrence
+   with \"r\". If \"n\" is provided, replace at most \"n\"
+   occurrences.  As with search, the second argument may be a single
+   character, a vector or a set of characters, a string, or a regular
+   expression. If \"r\" is a function, each occurrence is replaced
+   with \"r(s)\" where \"s\" is the matched substring.
 
 "),
 
@@ -1300,6 +1366,12 @@
 
 "),
 
+("Strings","Base","symbol","symbol(str)
+
+   Convert a string to a \"Symbol\".
+
+"),
+
 ("I/O","Base","STDOUT","STDOUT
 
    Global variable referring to the standard out stream.
@@ -1315,13 +1387,6 @@
 ("I/O","Base","STDIN","STDIN
 
    Global variable referring to the standard input stream.
-
-"),
-
-("I/O","Base","OUTPUT_STREAM","OUTPUT_STREAM
-
-   The default stream used for text output, e.g. in the \"print\" and
-   \"show\" functions.
 
 "),
 
@@ -1372,6 +1437,20 @@
 
 "),
 
+("I/O","Base","takebuf_array","takebuf_array(b::IOBuffer)
+
+   Obtain the contents of an \"IOBuffer\" as an array, without
+   copying.
+
+"),
+
+("I/O","Base","takebuf_string","takebuf_string(b::IOBuffer)
+
+   Obtain the contents of an \"IOBuffer\" as a string, without
+   copying.
+
+"),
+
 ("I/O","Base","fdio","fdio([name::String], fd::Integer[, own::Bool]) -> IOStream
 
    Create an \"IOStream\" object from an integer file descriptor. If
@@ -1394,21 +1473,27 @@
 
 "),
 
-("I/O","Base","write","write(stream, x)
+("I/O","Base","write","write(stream, x[, byteorder])
 
    Write the canonical binary representation of a value to the given
-   stream.
+   stream. For numeric types, the optional argument specifies the byte
+   order or endianness: \"NetworkByteOrder\" for big-endian,
+   \"LittleByteOrder\" for little-endian, and \"HostByteOrder\" (the
+   default) for the type of the host.
 
 "),
 
-("I/O","Base","read","read(stream, type)
+("I/O","Base","read","read(stream, type[, byteorder])
 
    Read a value of the given type from a stream, in canonical binary
-   representation.
+   representation. For numeric types, the optional argument specifies
+   the byte order or endianness: \"NetworkByteOrder\" for big-endian,
+   \"LittleByteOrder\" for little-endian, and \"HostByteOrder\" (the
+   default) for the type of the host.
 
 "),
 
-("I/O","Base","read","read(stream, type, dims)
+("I/O","Base","read","read(stream, type[, byteorder], dims)
 
    Read a series of values of the given type from a stream, in
    canonical binary representation. \"dims\" is either a tuple or a
@@ -1481,6 +1566,23 @@
 
    Converts the endianness of a value from that used by the Host to
    Little-endian.
+
+"),
+
+("I/O","Base","serialize","serialize(stream, value)
+
+   Write an arbitrary value to a stream in an opaque format, such that
+   it can be read back by \"deserialize\". The read-back value will be
+   as identical as possible to the original. In general, this process
+   will not work if the reading and writing are done by different
+   versions of Julia, or an instance of Julia with a different system
+   image.
+
+"),
+
+("I/O","Base","deserialize","deserialize(stream)
+
+   Read a value written by \"serialize\".
 
 "),
 
@@ -2336,12 +2438,6 @@
 
 "),
 
-("Mathematical Functions","Base","square","square(x)
-
-   Compute x^2
-
-"),
-
 ("Mathematical Functions","Base","round","round(x[, digits[, base]])
 
    \"round(x)\" returns the nearest integral value of the same type as
@@ -2469,6 +2565,12 @@
 ("Mathematical Functions","Base","sqrt","sqrt(x)
 
    Return \\sqrt{x}
+
+"),
+
+("Mathematical Functions","Base","isqrt","isqrt(x)
+
+   Integer square root.
 
 "),
 
@@ -3288,6 +3390,12 @@
    Returns \"true\" if \"x\" is prime, and \"false\" otherwise.
 
    **Example**: \"isprime(3) -> true\"
+
+"),
+
+("Numbers","Base","primes","primes(n)
+
+   Returns a collection of the prime numbers <= \"n\".
 
 "),
 
@@ -4627,6 +4735,14 @@
 
 "),
 
+("Parallel Computing","Base","timedwait","timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+
+   Waits till \"testcb\" returns \"true\" or for \"secs`\" seconds,
+   whichever is earlier. \"testcb\" is polled every \"pollint\"
+   seconds.
+
+"),
+
 ("Parallel Computing","Base","@spawn","@spawn()
 
    Execute an expression on an automatically-chosen processor,
@@ -5017,6 +5133,39 @@
 
 "),
 
+("System","Base","@unix","@unix()
+
+   Given \"@unix? a : b\", do \"a\" on Unix systems (including Linux
+   and OS X) and \"b\" elsewhere. See documentation for Handling
+   Platform Variations in the Calling C and Fortran Code section of
+   the manual.
+
+"),
+
+("System","Base","@osx","@osx()
+
+   Given \"@osx? a : b\", do \"a\" on OS X and \"b\" elsewhere. See
+   documentation for Handling Platform Variations in the Calling C and
+   Fortran Code section of the manual.
+
+"),
+
+("System","Base","@linux","@linux()
+
+   Given \"@linux? a : b\", do \"a\" on Linux and \"b\" elsewhere. See
+   documentation for Handling Platform Variations in the Calling C and
+   Fortran Code section of the manual.
+
+"),
+
+("System","Base","@windows","@windows()
+
+   Given \"@windows? a : b\", do \"a\" on Windows and \"b\" elsewhere.
+   See documentation for Handling Platform Variations in the Calling C
+   and Fortran Code section of the manual.
+
+"),
+
 ("C Interface","Base","ccall","ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
 
    Call function in C-exported shared library, specified by (function
@@ -5138,6 +5287,26 @@
 
 "),
 
+("C Interface","Base","find_library","find_library(names, locations)
+
+   Searches for the first library in \"names\" in the paths in the
+   \"locations\" list, \"DL_LOAD_PATH\", or system library paths (in
+   that order) which can successfully be dlopen'd. On success, the
+   return value will be one of the names (potentially prefixed by one
+   of the paths in locations). This string can be assigned to a
+   \"global const\" and used as the library name in future
+   \"ccall\"'s. On failure, it returns the empty string.
+
+"),
+
+("C Interface","Base","DL_LOAD_PATH","DL_LOAD_PATH
+
+   When calling \"dlopen\", the paths in this list will be searched
+   first, in order, before searching the system locations for a valid
+   library handle.
+
+"),
+
 ("Errors","Base","error","error(message::String)
 
    Raise an error with the given message
@@ -5147,6 +5316,27 @@
 ("Errors","Base","throw","throw(e)
 
    Throw an object as an exception
+
+"),
+
+("Errors","Base","rethrow","rethrow([e])
+
+   Throw an object without changing the current exception backtrace.
+   The default argument is the current exception (if called within a
+   \"catch\" block).
+
+"),
+
+("Errors","Base","backtrace","backtrace()
+
+   Get a backtrace object for the current program point.
+
+"),
+
+("Errors","Base","catch_backtrace","catch_backtrace()
+
+   Get the backtrace of the current exception, for use within
+   \"catch\" blocks.
 
 "),
 
@@ -5348,7 +5538,26 @@
 
 "),
 
-("Base.Collections","Base.Collections","PriorityQueue{K,V}","PriorityQueue{K,V}([ord])
+("Internals","Base","gc","gc()
+
+   Perform garbage collection. This should not generally be used.
+
+"),
+
+("Internals","Base","gc_disable","gc_disable()
+
+   Disable garbage collection. This should be used only with extreme
+   caution, as it can cause memory use to grow without bound.
+
+"),
+
+("Internals","Base","gc_enable","gc_enable()
+
+   Re-enable garbage collection after calling \"gc_disable\".
+
+"),
+
+("Collections and Data Structures","Base.Collections","PriorityQueue{K,V}","PriorityQueue{K,V}([ord])
 
    Construct a new PriorityQueue, with keys of type K and
    values/priorites of type V. If an order is not given, the priority
@@ -5356,40 +5565,40 @@
 
 "),
 
-("Base.Collections","Base.Collections","enqueue!","enqueue!(pq, k, v)
+("Collections and Data Structures","Base.Collections","enqueue!","enqueue!(pq, k, v)
 
    Insert the a key \"k\" into a priority queue \"pq\" with priority
    \"v\".
 
 "),
 
-("Base.Collections","Base.Collections","dequeue!","dequeue!(pq)
+("Collections and Data Structures","Base.Collections","dequeue!","dequeue!(pq)
 
    Remove and return the lowest priority key from a priority queue.
 
 "),
 
-("Base.Collections","Base.Collections","heapify","heapify(v[, ord])
+("Collections and Data Structures","Base.Collections","heapify","heapify(v[, ord])
 
    Return a new vector in binary heap order, optionally using the
    given ordering.
 
 "),
 
-("Base.Collections","Base.Collections","heapify!","heapify!(v[, ord])
+("Collections and Data Structures","Base.Collections","heapify!","heapify!(v[, ord])
 
    In-place heapify.
 
 "),
 
-("Base.Collections","Base.Collections","isheap","isheap(v[, ord])
+("Collections and Data Structures","Base.Collections","isheap","isheap(v[, ord])
 
    Return true iff an array is heap-ordered according to the given
    order.
 
 "),
 
-("Base.Collections","Base.Collections","heappush!","heappush!(v[, ord])
+("Collections and Data Structures","Base.Collections","heappush!","heappush!(v[, ord])
 
    Given a binary heap-ordered array, push a new element, preserving
    the heap property. For efficiency, this function does not check
@@ -5397,7 +5606,7 @@
 
 "),
 
-("Base.Collections","Base.Collections","heappop!","heappop!(v[, ord])
+("Collections and Data Structures","Base.Collections","heappop!","heappop!(v[, ord])
 
    Given a binary heap-ordered array, remove and return the lowest
    ordered element. For efficiency, this function does not check that
@@ -6396,6 +6605,7 @@
 
 "),
 
+
 ("Punctuation","","punctuation","punctuation
 
    +-----------+---------------------------------------------------------------------------------------------+
@@ -6466,108 +6676,100 @@
 
 "),
 
-("Base.Sort","Base","sort","sort(v[, alg[, ord]])
+("Sorting and Related Functions","Base.Sort","sort!","sort!(v, [dim,] [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   Sort a vector in ascending order.  Specify \"alg\" to choose a
-   particular sorting algorithm (\"Sort.InsertionSort\",
-   \"Sort.QuickSort\", \"Sort.MergeSort\", or \"Sort.TimSort\"), and
-   \"ord\" to sort with a custom ordering (e.g., \"Sort.Reverse\" or a
-   comparison function).
-
-"),
-
-("Base.Sort","Base","sort!","sort!(...)
-
-   In-place sort.
-
-"),
-
-("Base.Sort","Base","sortby","sortby(v, by[, alg])
-
-   Sort a vector according to \"by(v)\".  Specify \"alg\" to choose a
-   particular sorting algorithm (\"Sort.InsertionSort\",
-   \"Sort.QuickSort\", \"Sort.MergeSort\", or \"Sort.TimSort\").
+   Sort the vector \"v\" in place. \"QuickSort\" is used by default
+   for numeric arrays while \"MergeSort\" is used for other arrays.
+   You can specify an algorithm to use via the \"alg\" keyword (see
+   Sorting Algorithms for available algorithms). The \"by\" keyword
+   lets you provide a function that will be applied to each element
+   before comparison; the \"lt\" keyword allows providing a custom
+   \"less than\" function; use \"rev=true\" to reverse the sorting
+   order. These options are independent and can be used together in
+   all possible combinations: if both \"by\" and \"lt\" are specified,
+   the \"lt\" function is applied to the result of the \"by\"
+   function; \"rev=true\" reverses whatever ordering specified via the
+   \"by\" and \"lt\" keywords.
 
 "),
 
-("Base.Sort","Base","sortby!","sortby!(...)
+("Sorting and Related Functions","Base.Sort","sort","sort(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   In-place \"sortby\".
-
-"),
-
-("Base.Sort","Base","sortperm","sortperm(v[, alg[, ord]])
-
-   Return a permutation vector, which when applied to the input vector
-   \"v\" will sort it.  Specify \"alg\" to choose a particular sorting
-   algorithm (\"Sort.InsertionSort\", \"Sort.QuickSort\",
-   \"Sort.MergeSort\", or \"Sort.TimSort\"), and \"ord\" to sort with
-   a custom ordering (e.g., \"Sort.Reverse\" or a comparison
-   function).
+   Variant of \"sort!\" that returns a sorted copy of \"v\" leaving
+   \"v\" itself unmodified.
 
 "),
 
-("Base.Sort","Base","sort","sort(A, dim[, alg[, ord]])
+("Sorting and Related Functions","Base.Sort","sort","sort(A, dim, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort a multidimensional array \"A\" along the given dimension.
 
 "),
 
-("Base.Sort","Base","sortrows","sortrows(A[, alg[, ord]])
+("Sorting and Related Functions","Base.Sort","sortperm","sortperm(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+   Return a permutation vector of indices of \"v\" that puts it in
+   sorted order. Specify \"alg\" to choose a particular sorting
+   algorithm (see Sorting Algorithms). \"MergeSort\" is used by
+   default, and since it is stable, the resulting permutation will be
+   the lexicographically first one that puts the input array into
+   sorted order – i.e. indices of equal elements appear in ascending
+   order. If you choose a non-stable sorting algorithm such as
+   \"QuickSort\", a different permutation that puts the array into
+   order may be returned. The order is specified using the same
+   keywords as \"sort!\".
+
+"),
+
+("Sorting and Related Functions","Base.Sort","sortrows","sortrows(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the rows of matrix \"A\" lexicographically.
 
 "),
 
-("Base.Sort","Base","sortcols","sortcols(A[, alg[, ord]])
+("Sorting and Related Functions","Base.Sort","sortcols","sortcols(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the columns of matrix \"A\" lexicographically.
 
 "),
 
-("Base.Sort","Base","issorted","issorted(v[, ord])
+("Sorting and Related Functions","Base.Sort","issorted","issorted(v, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   Test whether a vector is in ascending sorted order.  If specified,
-   \"ord\" gives the ordering to test.
-
-"),
-
-("Base.Sort","Base","searchsorted","searchsorted(a, x[, ord])
-
-   Returns the range of indices of \"a\" equal to \"x\", assuming
-   \"a\" is sorted according to ordering \"ord\" (default:
-   \"Sort.Forward\").  Returns an empty range located at the insertion
-   point if \"a\" does not contain \"x\".
+   Test whether a vector is in sorted order. The \"by\", \"lt\" and
+   \"rev\" keywords modify what order is considered to be sorted just
+   as they do for \"sort\".
 
 "),
 
-("Base.Sort","Base","searchsortedfirst","searchsortedfirst(a, x[, ord])
+("Sorting and Related Functions","Base.Sort","searchsorted","searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   Returns the index of the first value of \"a\" equal to or
-   succeeding \"x\", according to ordering \"ord\" (default:
-   \"Sort.Forward\").
-
-"),
-
-("Base.Sort","Base","searchsortedlast","searchsortedlast(a, x[, ord])
-
-   Returns the index of the last value of \"a\" preceding or equal to
-   \"x\", according to ordering \"ord\" (default: \"Sort.Forward\").
+   Returns the range of indices of \"a\" which compare as equal to
+   \"x\" according to the order specified by the \"by\", \"lt\" and
+   \"rev\" keywords, assuming that \"a\" is already sorted in that
+   order. Returns an empty range located at the insertion point if
+   \"a\" does not contain values equal to \"x\".
 
 "),
 
-("Base.Sort","Base","select","select(v, k[, ord])
+("Sorting and Related Functions","Base.Sort","select!","select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   Partially sort vector \"v\" according to ordering \"ord\", and
-   return the element at position \"k\".  \"k\" can also be a range,
-   in which case a vector of elements corresponding to the range
-   positions is returned.
+   Partially sort the vector \"v\" in place, according to the order
+   specified by \"by\", \"lt\" and \"rev\" so that the value at index
+   \"k\" (or range of adjacent values if \"k\" is a range) occurs at
+   the position where it would appear if the array were fully sorted.
+   If \"k\" is a single index, that values is returned; if \"k\" is a
+   range, an array of values at those indices is returned. Note that
+   \"select!\" does not fully sort the input array, but does leave the
+   returned elements where they would be if the array were fully
+   sorted.
 
 "),
 
-("Base.Sort","Base","select!","select!(v, k[, ord])
+("Sorting and Related Functions","Base.Sort","select","select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
-   Version of \"select\" which permutes the input vector in place.
+   Variant of \"select!\" which copies \"v\" before partially sorting
+   it, thereby returning the same thing as \"select!\" but leaving
+   \"v\" unmodified.
 
 "),
 
@@ -6682,14 +6884,14 @@
 
 "),
 
-("Base.Test","Base.Test","@test","@test(ex)
+("Unit and Functional Testing","Base.Test","@test","@test(ex)
 
    Test the expression \"ex\" and calls the current handler to handle
    the result.
 
 "),
 
-("Base.Test","Base.Test","@test_throws","@test_throws(ex)
+("Unit and Functional Testing","Base.Test","@test_throws","@test_throws(ex)
 
    Test the expression \"ex\" and calls the current handler to handle
    the result in the following manner:
@@ -6701,27 +6903,27 @@
 
 "),
 
-("Base.Test","Base.Test","@test_approx_eq","@test_approx_eq(a, b)
+("Unit and Functional Testing","Base.Test","@test_approx_eq","@test_approx_eq(a, b)
 
    Test two floating point numbers \"a\" and \"b\" for equality taking
    in account small numerical errors.
 
 "),
 
-("Base.Test","Base.Test","@test_approx_eq_eps","@test_approx_eq_eps(a, b, tol)
+("Unit and Functional Testing","Base.Test","@test_approx_eq_eps","@test_approx_eq_eps(a, b, tol)
 
    Test two floating point numbers \"a\" and \"b\" for equality taking
    in account a margin of tolerance given by \"tol\".
 
 "),
 
-("Base.Test","Base.Test","registerhandler","registerhandler(handler)
+("Unit and Functional Testing","Base.Test","registerhandler","registerhandler(handler)
 
    Change the handler function used globally to \"handler\".
 
 "),
 
-("Base.Test","Base.Test","withhandler","withhandler(f, handler)
+("Unit and Functional Testing","Base.Test","withhandler","withhandler(f, handler)
 
    Run the function \"f\" using the \"handler\" as the handler.
 

@@ -47,7 +47,7 @@ While getting familiar with Julia, remember to check out [the docs](http://docs.
 
 * Julia
   - **Homepage:** <http://julialang.org>
-  - **Mailing lists:** <http://julialang.org/mailing_lists>
+  - **Mailing lists:** <http://julialang.org/community/>
   - **IRC:** <http://webchat.freenode.net/?channels=Julia>
   - **Source code:** <https://github.com/JuliaLang/julia>
   - **Git clone URL:** <git://github.com/JuliaLang/julia.git>

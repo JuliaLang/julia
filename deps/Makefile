@@ -393,48 +393,46 @@ install-readline: $(READLINE_OBJ_TARGET)
 
 ## LIBUV ##
 
+UV_SRC_TARGET = libuv/libuv.a
 UV_OBJ_TARGET = $(BUILD)/lib/libuv.a
-UV_OBJ_SOURCE = libuv/libuv.a
 
-libuv/Makefile:
+libuv/configure:
 	(cd .. && git submodule init && git submodule update)
 ifeq (exists, $(shell [ -d libuv/.git ] && echo exists ))
-$(UV_OBJ_SOURCE): libuv/.git/HEAD
+libuv/config.status: libuv/.git/HEAD
 endif
 ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/libuv ] && echo exists ))
-$(UV_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/libuv/HEAD
+libuv/config.status: $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
-LIBUV_MAKE_FLAGS = -C libuv CC="$(CC)" AR="$(AR)"
-ifeq ($(OS),WINNT)
-LIBUV_MAKE_FLAGS += PLATFORM=mingw
-else
-ifneq ($(OS),$(BUILD_OS))
-$(error libuv may autodetect your cross-compile PLATFORM incorrectly)
-endif
-endif
-$(UV_OBJ_SOURCE): libuv/Makefile
-	$(MAKE) clean $(LIBUV_MAKE_FLAGS) RUNNER_LIBS=
-	$(MAKE) libuv.a $(LIBUV_MAKE_FLAGS)
+libuv/config.status: libuv/configure
+	cd libuv && \
+	./configure --with-pic $(CONFIGURE_COMMON)
 	touch -c $@
-libuv/checked: $(LIBUV_OBJ_SOURCE)
+$(UV_SRC_TARGET): libuv/config.status
+	touch -c libuv/aclocal.m4
+	touch -c libuv/Makefile.in
+	touch -c libuv/configure
+	touch -c libuv/config.status
+	$(MAKE) -C libuv
+	touch -c $@
+libuv/checked: $(UV_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) test $(LIBUV_MAKE_FLAGS)
+	-$(MAKE) -C libuv check
 endif
 	echo 1 > $@
-#todo: libuv tests are really slow
-$(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
-	mkdir -p $(BUILD)/include
-	cp $(UV_OBJ_SOURCE) $(BUILD)/lib/
-	cp -r libuv/include/* $(BUILD)/include
+$(UV_OBJ_TARGET): $(UV_SRC_TARGET)
+	$(MAKE) -C libuv install
+	$(INSTALL_NAME_CMD)libuv.dylib $@
 
 clean-uv:
-	-$(MAKE) clean $(LIBUV_MAKE_FLAGS) RUNNER_LIBS=
+	-$(MAKE) -C libuv clean
 	-rm -rf $(BUILD)/lib/libuv.a $(BUILD)/include/uv.h $(BUILD)/include/uv-private
 distclean-uv: clean-uv
+	-$(MAKE) -C libuv distclean
 
-get-uv: libuv/Makefile
-configure-uv: get-uv
-compile-uv: $(UV_OBJ_SOURCE)
+get-uv: libuv/configure
+configure-uv: libuv/config.status
+compile-uv: $(UV_SRC_TARGET)
 check-uv: libuv/checked
 install-uv: $(UV_OBJ_TARGET)
 
@@ -760,6 +758,7 @@ install-openblas: $(OPENBLAS_OBJ_TARGET)
 # configure script will search for the best match
 # (gcc 4.7, gcc, clang,ICC/microsoft/others)
 ATLAS_OBJ_SOURCE = atlas/build/lib/libsatlas.$(SHLIB_EXT)
+ATLAS_OBJ_TARGET = $(BUILD)/lib/libsatlas.$(SHLIB_EXT)
 ATLAS_FLAGS = --shared --prefix=$(BUILD) --cc=gcc -t 0 \
 	--with-netlib-lapack-tarfile=$(JULIAHOME)/deps/lapack-$(LAPACK_VER).tgz
 ifeq ($(OS), WINNT)
@@ -789,9 +788,10 @@ else
 $(ATLAS_OBJ_SOURCE):
 	$(error cannot build atlas in parallel with anything else)
 endif
-$(BUILD)/lib/libsatlas.$(SHLIB_EXT): $(ATLAS_OBJ_SOURCE)
-	cp -f atlas/build/lib/libsatlas.$(SHLIB_EXT) $(BUILD)/lib
-	$(INSTALL_NAME_CMD)libsatlas.$(SHLIB_EXT) $(BUILD)/lib/libsatlas.$(SHLIB_EXT)
+
+$(ATLAS_OBJ_TARGET): $(ATLAS_OBJ_SOURCE)
+	cp -f $(ATLAS_OBJ_SOURCE) $@
+	$(INSTALL_NAME_CMD)libsatlas.$(SHLIB_EXT) $@
 
 clean-atlas:
 	rm -rf atlas/build
@@ -802,7 +802,7 @@ get-atlas: atlas/configure
 configure-atlas: atlas/build/Make.top
 compile-atlas: $(ATLAS_OBJ_SOURCE)
 check-atlas: compile-atlas
-install-atlas: $(BUILD)/lib/libsatlas.$(SHLIB_EXT)
+install-atlas: $(ATLAS_OBJ_TARGET)
 
 ## Mac gfortran BLAS wrapper ##
 GFORTBLAS_FFLAGS =
@@ -912,11 +912,17 @@ arpack-ng-$(ARPACK_VER).tar.gz:
 arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	tar zxf $< 
 	touch -c $@
+
+ifeq ($(USE_ATLAS), 1)
+arpack-ng-$(ARPACK_VER)/config.status: | $(ATLAS_OBJ_TARGET)
+endif
+
 ifeq ($(USE_SYSTEM_BLAS), 0)
 arpack-ng-$(ARPACK_VER)/config.status: | $(OPENBLAS_OBJ_TARGET)
 else ifeq ($(USE_SYSTEM_LAPACK), 0)
 arpack-ng-$(ARPACK_VER)/config.status: | $(LAPACK_OBJ_SOURCE)
 endif
+
 arpack-ng-$(ARPACK_VER)/config.status: arpack-ng-$(ARPACK_VER)/configure
 ifeq ($(OS),WINNT)
 	cd arpack-ng-$(ARPACK_VER) && \
@@ -1128,6 +1134,11 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
 	touch -c $@
+
+ifeq ($(USE_ATLAS), 1)
+$(SUITESPARSE_OBJ_SOURCE): | $(ATLAS_OBJ_TARGET)
+endif
+
 ifeq ($(USE_SYSTEM_BLAS), 0)
 $(SUITESPARSE_OBJ_SOURCE): | $(OPENBLAS_OBJ_TARGET)
 else ifeq ($(USE_SYSTEM_LAPACK), 0)

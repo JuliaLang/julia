@@ -7,6 +7,7 @@
 
 module _TimSort
 using ..Sort
+using ...Order
 
 import ..Sort: sort!, TimSortAlg
 

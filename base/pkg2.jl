@@ -8,9 +8,10 @@ include("pkg2/read.jl")
 include("pkg2/query.jl")
 include("pkg2/resolve.jl")
 include("pkg2/write.jl")
-include("pkg2/extdeps.jl")
 
 using Base.Git, .Types
+
+const dir = Dir.path
 
 rm(pkg::String) = edit(Reqs.rm, pkg)
 add(pkg::String, vers::VersionSet) = edit(Reqs.add, pkg, vers)
@@ -32,7 +33,37 @@ edit(f::Function, pkg, args...) = Dir.cd() do
     info("REQUIRE updated.")
 end
 
-urlpkg(url::String) = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$/*", url).captures[1]
+available() = sort!([keys(Pkg2.Dir.cd(Pkg2.Read.available))...], by=lowercase)
+
+status() = Dir.cd() do
+    reqs = Reqs.parse("REQUIRE")
+    instd = Read.installed()
+    println("Required:")
+    for pkg in sort!([keys(reqs)...])
+        ver,fix = delete!(instd,pkg)
+        status(pkg,ver,fix)
+    end
+    println("Additional:")
+    for pkg in sort!([keys(instd)...])
+        ver,fix = instd[pkg]
+        status(pkg,ver,fix)
+    end
+end
+function status(pkg::String, ver::VersionNumber, fix::Bool)
+    @printf " - %-29s " pkg
+    fix || return println(ver)
+    @printf "%-10s" ver
+    print(" fixed: ")
+    if ispath(Dir.path(pkg,".git"))
+        print(Git.attached(dir=pkg) ? Git.branch(dir=pkg) : Git.head(dir=pkg)[1:8])
+        Git.dirty(dir=pkg) && print("*")
+    else
+        print("non-repo")
+    end
+    println()
+end
+
+urlpkg(url::String) = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$", url).captures[1]
 
 clone(url::String, pkg::String=urlpkg(url); opts::Cmd=``) = Dir.cd() do
     ispath(pkg) && error("$pkg already exists")
@@ -162,45 +193,28 @@ resolve(
         rethrow()
     end
 
-    # run build scripts
-    lines = ExtDeps.read("WORKING")
-    for (pkg,_) in changes  
-        contains(lines,ExtDeps.Record(pkg)) && ExtDeps.rm(lines,pkg)
-    end
-    Reqs.write("WORKING",lines)
-    for (pkg,_) in changes
-        if !runbuildscript(pkg)
-            return
-        end
-    end
+    installed
+    # Since we just changed a lot of things, it's probably better to reread
+    # the state, so only pass avail
+    fixup(String[pkg for (pkg,_) in filter(x->x[2][2]!=nothing,changes)],avail)
 end
 
-function runbuildscript(pkg)
+function runbuildscript(pkg,args=[])
     try 
         path = Pkg2.Dir.path(pkg,"deps","build.jl")
         if isfile(path)
             info("Running build script for package $pkg")
             Dir.cd(joinpath(Dir.path(pkg),"deps")) do
                 m = Module(:__anon__)
-                body = Expr(:toplevel,:(ARGS=[]),:(include("build.jl")))
+                body = Expr(:toplevel,:(ARGS=$args),:(include($path)))
                 eval(m,body)
             end
-            if !isworking(pkg)
-                warn("""
-                     The package $pkg ran a build script, but indicated that it did not complete sucessfully.
-                     You may have to take manual steps to complete the installation. See if there is any output above.
-                     To reattempt the installation, run Pkg.fixup().
-                     """)
-                return false
-            end
-        else
-            markworking(pkg,true)
         end
     catch
         warn("""
              An exception occured while building binary dependencies.
              You may have to take manual steps to complete the installation, see the error message below.
-             To reattempt the installation, run Pkg.fixup().
+             To reattempt the installation, run Pkg.fixup("$pkg").
              """)
         rethrow()
     end
@@ -231,46 +245,70 @@ check_metadata(julia_version::VersionNumber=VERSION) = Dir.cd() do
 end
 check_metadata(julia_version::String) = check_metadata(convert(VersionNumber, julia_version))
 
-isworking(pkg::String;lines::Vector{Reqs.Line}=Dir.cd(()->ExtDeps.read("WORKING"))) = Dir.cd() do 
-    contains(lines,ExtDeps.Record(pkg))
-end
-
-markworking(pkg::String,working::Bool=true;lines::Vector{Reqs.Line}=Dir.cd(()->ExtDeps.read("WORKING"))) = Dir.cd() do
-    if !working && contains(lines,ExtDeps.Record(pkg))
-        Reqs.write("WORKING",ExtDeps.rm(lines,pkg))
-    elseif working 
-        Reqs.write("WORKING",ExtDeps.add(lines,pkg))
-    end
-end
-
-hasworkingdeps(lines::Vector{Reqs.Line}=Dir.cd(()->ExtDeps.read("WORKING")),
+function _fixup(instlist,
         avail=Dir.cd(Read.available),
         inst::Dict=Dir.cd(()->Read.installed(avail)),
         free::Dict=Dir.cd(()->Read.free(inst)),
-        fixed::Dict=Dir.cd(()->Read.fixed(avail,inst))) = all(map(x->isworking(x;lines=lines),Read.alldependencies(pkg,avail,free,fixed)))
-
-
-function fixup(lines::Vector{Reqs.Line}=Dir.cd(()->ExtDeps.read("WORKING")),
-        avail=Dir.cd(Read.available),
-        inst::Dict=Dir.cd(()->Read.installed(avail)),
-        free::Dict=Dir.cd(()->Read.free(inst)),
-        fixed::Dict=Dir.cd(()->Read.fixed(avail,inst))) 
-    instlist = [(k,v) for (k,v) in inst]
+        fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));exclude = [])
+    
     sort!(instlist, lt=function(a,b)
-        ((a,vera),(b,verb)) = (a,b)
         c = contains(Pkg2.Read.alldependencies(a,avail,free,fixed),b) 
         nonordered = (!c && !contains(Pkg2.Read.alldependencies(b,avail,free,fixed),a))
         nonordered ? a < b : c
     end)
-    for (p,_) in instlist
-        if !isworking(p)
-            didwork = true
-            if !runbuildscript(p)
-                return
-            end
+    for p in instlist
+        if contains(exclude,p)
+            continue
+        end
+        if !runbuildscript(p,["fixup"])
+            return
         end
     end
     info("SUCCESS!")
+end
+
+function fixup{T<:String}(pkg::Vector{T},
+        avail::Dict=Dir.cd(Read.available),
+        inst::Dict=Dir.cd(()->Read.installed(avail)),
+        free::Dict=Dir.cd(()->Read.free(inst)),
+        fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));exclude = []) 
+    tofixup = copy(pkg)
+    oldlength = length(tofixup)
+    while true
+        for (p,_) in inst
+            if !contains(tofixup,p) 
+                for pf in tofixup
+                    if contains(Pkg2.Read.alldependencies(p,avail,free,fixed),pf)
+                        push!(tofixup,p)
+                        break
+                    end
+                end
+            end
+        end
+        if oldlength == length(tofixup)
+            break
+        end
+        oldlength = length(tofixup)
+    end
+    _fixup(tofixup,avail,inst,free,fixed; exclude = exclude)
+end
+
+fixup(pkg::String,
+    avail::Dict=Dir.cd(Read.available),
+    inst::Dict=Dir.cd(()->Read.installed(avail)),
+    free::Dict=Dir.cd(()->Read.free(inst)),
+    fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));exclude = []) = 
+        fixup([pkg],avail,inst,free,fixed;exclude = exclude)
+
+
+function fixup(
+        avail::Dict=Dir.cd(Read.available),
+        inst::Dict=Dir.cd(()->Read.installed(avail)),
+        free::Dict=Dir.cd(()->Read.free(inst)),
+        fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));exclude = []) 
+    # TODO: Replace by proper toposorts
+    instlist = [k for (k,v) in inst]
+    _fixup(instlist,avail,inst,free,fixed;exclude=exclude)
 end
 
 end # module

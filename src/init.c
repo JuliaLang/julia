@@ -112,6 +112,7 @@ void fpe_handler(int arg)
 }
 
 #ifndef _OS_WINDOWS_
+#if defined(_OS_LINUX_)
 void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
@@ -142,6 +143,7 @@ void segv_handler(int sig, siginfo_t *info, void *context)
             raise(sig);
     }
 }
+#endif
 
 #endif
 
@@ -149,7 +151,6 @@ volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
 #ifdef _OS_WINDOWS_
-volatile HANDLE hMainThread = NULL;
 void restore_signals()
 {
     SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
@@ -158,7 +159,8 @@ static void __fastcall win_raise_exception(void* excpt)
 { //why __fastcall? because the first two arguments are passed in registers, making this easier
     jl_throw(excpt);
 }
-DLLEXPORT void gdbbacktrace();
+volatile HANDLE hMainThread = NULL;
+DLLEXPORT void jlbacktrace();
 DLLEXPORT void gdblookup(ptrint_t ip);
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
@@ -279,9 +281,10 @@ static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) 
                 default:
                     ios_puts("UNKNOWN", ios_stderr); break;
             }
-            ios_printf(ios_stderr," at 0x%Ix\n", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+            ios_printf(ios_stderr," at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
             gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-            gdbbacktrace();
+            bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ExceptionInfo->ContextRecord);
+            jlbacktrace();
             break;
         }
     }
@@ -504,6 +507,101 @@ void init_stdio()
     JL_STDIN = init_stdio_handle(0,1);
 }
 
+#ifndef _OS_WINDOWS_
+static void *signal_stack;
+#endif
+
+#ifdef _OS_DARWIN_
+#include <mach/mach_traps.h>
+#include <mach/task.h>
+#include <mach/mig_errors.h>
+static mach_port_t segv_port = 0;
+
+extern boolean_t exc_server(mach_msg_header_t *, mach_msg_header_t *);
+
+void * mach_segv_listener(void *arg)
+{
+    (void) arg;
+    while (1) {
+        int ret = mach_msg_server(exc_server,2048,segv_port,MACH_MSG_TIMEOUT_NONE);
+        printf("mach_msg_server: %s\n", mach_error_string(ret));
+        jl_exit(1);
+    }
+}
+
+void darwin_stack_overflow_handler(unw_context_t *uc)
+{
+    bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, uc);
+    jl_exception_in_transit = jl_stackovf_exception;
+    jl_rethrow();
+}
+
+#define HANDLE_MACH_ERROR(msg, retval) \
+    if(retval!=KERN_SUCCESS) { mach_error(msg ":", (retval)); jl_exit(1); }
+
+//exc_server uses dlsym to find symbol
+DLLEXPORT kern_return_t catch_exception_raise
+                (mach_port_t                          exception_port,
+                 mach_port_t                                  thread,
+                 mach_port_t                                    task,
+                 exception_type_t                          exception,
+                 exception_data_t                               code,
+                 mach_msg_type_number_t                   code_count)
+{
+    unsigned int count = MACHINE_THREAD_STATE_COUNT;
+    unsigned int exc_count = X86_EXCEPTION_STATE64_COUNT;
+    x86_thread_state64_t state, old_state;
+    x86_exception_state64_t exc_state;
+    kern_return_t ret;
+    //memset(&state,0,sizeof(x86_thread_state64_t));
+    //memset(&exc_state,0,sizeof(x86_exception_state64_t));
+    ret = thread_get_state(thread,x86_EXCEPTION_STATE64,(thread_state_t)&exc_state,&exc_count);
+    uint64_t fault_addr = exc_state.__faultvaddr;
+    if (
+#ifdef COPY_STACKS
+        (char*)fault_addr > (char*)jl_stack_lo-3000000 &&
+        (char*)fault_addr < (char*)jl_stack_hi
+#else
+        (char*)fault_addr > (char*)jl_current_task->stack-8192 &&
+        (char*)fault_addr <
+        (char*)jl_current_task->stack+jl_current_task->ssize
+#endif
+        ) 
+    {
+        ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
+        HANDLE_MACH_ERROR("thread_get_state",ret);
+        old_state = state;
+        // memset(&state,0,sizeof(x86_thread_state64_t));
+        // Setup libunwind information
+        state.__rsp = (uint64_t)signal_stack + SIGSTKSZ;
+        state.__rsp -= sizeof(unw_context_t);
+        state.__rsp &= -16;
+        unw_context_t *uc = (unw_context_t*)state.__rsp;
+        state.__rsp -= 512;
+        // This is for alignment. In particular note that the sizeof(void*) is necessary
+        // since it would usually specify the return address (i.e. we are aligning the call
+        // frame to a 16 byte boundary as required by the abi, but the stack pointer
+        // to point to the byte beyond that. Not doing this leads to funny behavior on
+        // the first access to an external function will fail due to stack misalignment
+        state.__rsp &= -16;
+        state.__rsp -= sizeof(void*);
+        memset(uc,0,sizeof(unw_context_t));
+        memcpy(uc,&old_state,sizeof(x86_thread_state64_t));
+        state.__rdi = (uint64_t)uc;
+        state.__rip = (uint64_t)darwin_stack_overflow_handler;
+
+        state.__rbp = state.__rsp;
+        ret = thread_set_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,count);
+        HANDLE_MACH_ERROR("thread_set_state",ret);
+        return KERN_SUCCESS;
+    }
+    else {
+        return -309;
+    }
+}
+
+#endif
+
 void julia_init(char *imageFile)
 {
     jl_page_size = jl_getpagesize();
@@ -515,6 +613,11 @@ void julia_init(char *imageFile)
     uv_dlopen("msvcrt.dll",jl_crtdll_handle);
     uv_dlopen("Ws2_32.dll",jl_winsock_handle);
     _jl_exe_handle.handle = GetModuleHandleA(NULL);
+    if (!DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
+        GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
+        TRUE, DUPLICATE_SAME_ACCESS )) {
+        JL_PRINTF(JL_STDERR, "Couldn't access handle to main thread\n");
+    }
 #if defined(_CPU_X86_64_)
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
     SymInitialize(GetCurrentProcess(), NULL, 1);
@@ -600,7 +703,9 @@ void julia_init(char *imageFile)
     jl_module_import(jl_main_module, jl_core_module, jl_symbol("eval"));
     jl_current_module = jl_main_module;
 
+
 #ifndef _OS_WINDOWS_
+    signal_stack = malloc(SIGSTKSZ);
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);
@@ -610,11 +715,11 @@ void julia_init(char *imageFile)
         JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
-
+#if defined(_OS_LINUX_)
     stack_t ss;
     ss.ss_flags = 0;
     ss.ss_size = SIGSTKSZ;
-    ss.ss_sp = malloc(ss.ss_size);
+    ss.ss_sp = signal_stack;
     if (sigaltstack(&ss, NULL) < 0) {
         JL_PRINTF(JL_STDERR, "sigaltstack: %s\n", strerror(errno));
         jl_exit(1);
@@ -634,6 +739,33 @@ void julia_init(char *imageFile)
         JL_PRINTF(JL_STDERR, "Couldn't set SIGPIPE\n");
         jl_exit(1);
     }
+#elif defined (_OS_DARWIN_)
+    kern_return_t ret;
+    mach_port_t self = mach_task_self();
+    ret = mach_port_allocate(self,MACH_PORT_RIGHT_RECEIVE,&segv_port);
+    HANDLE_MACH_ERROR("mach_port_allocate",ret);
+    ret = mach_port_insert_right(self,segv_port,segv_port,MACH_MSG_TYPE_MAKE_SEND);
+    HANDLE_MACH_ERROR("mach_port_insert_right",ret);
+
+    // Alright, create a thread to serve as the listener for exceptions
+    pthread_t thread;
+    pthread_attr_t attr;
+    if (pthread_attr_init(&attr) != 0)
+    {
+        JL_PRINTF(JL_STDERR, "pthread_attr_init failed");
+        jl_exit(1);  
+    }
+    pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
+    if (pthread_create(&thread,&attr,mach_segv_listener,NULL) != 0)
+    {
+        JL_PRINTF(JL_STDERR, "pthread_create failed");
+        jl_exit(1);  
+    }     
+    pthread_attr_destroy(&attr);
+
+    ret = task_set_exception_ports(self,EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
+    HANDLE_MACH_ERROR("task_set_exception_ports",ret);
+#endif
 #else
     if (signal(SIGFPE, (void (__cdecl *)(int))fpe_handler) == SIG_ERR) {
         JL_PRINTF(JL_STDERR, "Couldn't set SIGFPE\n");
@@ -650,11 +782,6 @@ void julia_init(char *imageFile)
 DLLEXPORT void jl_install_sigint_handler()
 {
 #ifdef _OS_WINDOWS_
-    if (!DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
-        GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
-        TRUE, DUPLICATE_SAME_ACCESS )) {
-        JL_PRINTF(JL_STDERR, "Couldn't access handle to main thread\n");
-    }
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 #else
     struct sigaction act;

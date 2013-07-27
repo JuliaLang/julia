@@ -55,6 +55,7 @@ function isfixed(pkg::String, avail::Dict=available(pkg))
 end
 
 function installed_version(pkg::String, avail::Dict=available(pkg))
+    ispath(pkg,".git") || return typemin(VersionNumber)
     head = Git.head(dir=pkg)
     for (ver,info) in avail
         head == info.sha1 && return ver
@@ -82,6 +83,7 @@ function installed_version(pkg::String, avail::Dict=available(pkg))
 end
 
 function requires_path(pkg::String, avail::Dict=available(pkg))
+    ispath(pkg,".git") || return joinpath(pkg, "REQUIRE")
     Git.dirty("REQUIRE", dir=pkg) && return joinpath(pkg, "REQUIRE")
     head = Git.head(dir=pkg)
     for (ver,info) in avail
@@ -137,9 +139,9 @@ function alldependencies(pkg::String,avail::Dict=available(),free::Dict=free(ins
     deps = [ k for (k,v) in dependencies(pkg,avail,free,fix) ]
     alldeps = copy(deps)
     for dep in deps
-        dep != "julia" && append!(alldeps,[ k for (k,v) in dependencies(dep,avail,free,fix) ])
+        dep != "julia" && !contains(alldeps,dep) && append!(alldeps,[ k for (k,v) in alldependencies(dep,avail,free,fix) ])
     end
-    unique(alldeps)
+    alldeps
 end
 
 end # module

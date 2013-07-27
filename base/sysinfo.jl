@@ -12,7 +12,7 @@ export  CPU_CORES,
         total_memory,
         shlib_ext
 
-import ..Base: WORD_SIZE, OS_NAME, ARCH, MACHINE, UV_error_t
+import ..Base: WORD_SIZE, OS_NAME, ARCH, MACHINE
 import ..Base: show, repl_show
 
 function init()
@@ -105,7 +105,7 @@ repl_show(io::IO, cpu::Array{CPUinfo}) = show(io, cpu)
 function cpu_info()
     UVcpus = Array(Ptr{UV_cpu_info_t},1)
     count = Array(Int32,1)
-    uv_error("uv_cpu_info",ccall(:uv_cpu_info, UV_error_t, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
+    uv_error("uv_cpu_info",ccall(:uv_cpu_info, Int32, (Ptr{Ptr{UV_cpu_info_t}}, Ptr{Int32}), UVcpus, count))
     cpus = Array(CPUinfo,count[1])
     for i = 1:length(cpus)
         cpus[i] = CPUinfo(unsafe_load(UVcpus[1],i))
@@ -116,7 +116,7 @@ end
 
 function uptime()
     uptime_ = Array(Float64,1)
-    uv_error("uv_uptime",ccall(:uv_uptime, UV_error_t, (Ptr{Float64},), uptime_))
+    uv_error("uv_uptime",ccall(:uv_uptime, Int32, (Ptr{Float64},), uptime_))
     return uptime_[1]
 end
 

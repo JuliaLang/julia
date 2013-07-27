@@ -312,6 +312,12 @@ function init_head_sched()
     yield()
 end
 
+function init_profile()
+    # Use a max size of 1M profile samples, and fire timer evey 1ms
+    Profile.init(1_000_000, 0.001)
+end
+
+
 function _start()
     # set up standard streams
     reinit_stdio()
@@ -324,6 +330,7 @@ function _start()
     Sys.init()
     GMP.gmp_init()
     global const CPU_CORES = Sys.CPU_CORES
+    init_profile()
 
     @windows_only begin
         user_data_dir = abspath(ENV["AppData"],"julia")
