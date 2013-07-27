@@ -233,7 +233,11 @@ Types
 
 .. function:: fieldoffsets(type)
 
-   The offset of each field of ``type`` relative to data start.
+   The byte offset of each field of a type relative to the data start. For example, we could use it
+   in the following manner to summarize information about a struct type::
+
+        structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...]
+        structinfo(Stat)
 
 .. function:: fieldtype(value, name::Symbol)
 
@@ -358,6 +362,12 @@ Iterable Collections
 .. function:: contains(itr, x) -> Bool
 
    Determine whether a collection contains the given value, ``x``.
+   
+.. function:: indexin(a, b)
+
+   Returns a vector containing the highest index in ``b``
+   for each value in ``a`` that is a member of ``b`` .
+   The output vector contains 0 wherever ``a`` is not a member of ``b``.
 
 .. function:: findin(a, b)
 
@@ -741,7 +751,7 @@ Strings
 
 .. function:: replace(string, pat, r[, n])
 
-   Search for the given pattern ``pat``, and replace each occurance with ``r``. If ``n`` is provided, replace at most ``n`` occurances.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression. If ``r`` is a function, each occurrence is replaced with ``r(s)`` where ``s`` is the matched substring.
+   Search for the given pattern ``pat``, and replace each occurrence with ``r``. If ``n`` is provided, replace at most ``n`` occurrences.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression. If ``r`` is a function, each occurrence is replaced with ``r(s)`` where ``s`` is the matched substring.
 
 .. function:: split(string, [chars, [limit,] [include_empty]])
 
@@ -896,10 +906,6 @@ I/O
 
    Global variable referring to the standard input stream.
 
-.. data:: OUTPUT_STREAM
-
-   The default stream used for text output, e.g. in the ``print`` and ``show`` functions.
-
 .. function:: open(file_name, [read, write, create, truncate, append]) -> IOStream
 
    Open a file in a mode specified by five boolean arguments. The default is to open files for reading only. Returns a stream for accessing the file.
@@ -948,15 +954,23 @@ I/O
 
    Close an I/O stream. Performs a ``flush`` first.
 
-.. function:: write(stream, x)
+.. function:: write(stream, x[, byteorder])
 
-   Write the canonical binary representation of a value to the given stream.
+   Write the canonical binary representation of a value to the given
+   stream. For numeric types, the optional argument specifies the byte order
+   or endianness: ``NetworkByteOrder`` for big-endian, ``LittleByteOrder`` for
+   little-endian, and ``HostByteOrder`` (the default) for the type of the
+   host.
 
-.. function:: read(stream, type)
+.. function:: read(stream, type[, byteorder])
 
-   Read a value of the given type from a stream, in canonical binary representation.
+   Read a value of the given type from a stream, in canonical binary
+   representation. For numeric types, the optional argument specifies the byte
+   order or endianness: ``NetworkByteOrder`` for big-endian,
+   ``LittleByteOrder`` for little-endian, and ``HostByteOrder`` (the default)
+   for the type of the host.
 
-.. function:: read(stream, type, dims)
+.. function:: read(stream, type[, byteorder], dims)
 
    Read a series of values of the given type from a stream, in canonical binary representation. ``dims`` is either a tuple or a series of integer arguments specifying the size of ``Array`` to return.
 
@@ -1126,8 +1140,6 @@ Text I/O
 
 Memory-mapped I/O
 -----------------
-
-Note: Currently not available on Windows.
 
 .. function:: mmap_array(type, dims, stream, [offset])
 
@@ -1578,10 +1590,6 @@ Mathematical Functions
 .. function:: expm1(x)
 
    Accurately compute :math:`e^x-1`
-
-.. function:: square(x)
-
-   Compute :math:`x^2`
 
 .. function:: round(x, [digits, [base]])
 
@@ -3158,6 +3166,11 @@ Parallel Computing
 
    Make an uninitialized remote reference on processor ``n``.
 
+.. function:: timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+
+   Waits till ``testcb`` returns ``true`` or for ``secs``` seconds, whichever is earlier.
+   ``testcb`` is polled every ``pollint`` seconds.
+   
 .. function:: @spawn
 
    Execute an expression on an automatically-chosen processor, returning a
@@ -3394,12 +3407,33 @@ System
 
    Reference to the singleton ``EnvHash``, providing a dictionary interface to system environment variables.
 
+.. function:: @unix
+
+   Given ``@unix? a : b``, do ``a`` on Unix systems (including Linux and OS X) and ``b`` elsewhere. See documentation
+   for Handling Platform Variations in the Calling C and Fortran Code section of the manual.
+
+.. function:: @osx
+
+   Given ``@osx? a : b``, do ``a`` on OS X and ``b`` elsewhere. See documentation for Handling Platform Variations 
+   in the Calling C and Fortran Code section of the manual.
+
+.. function:: @linux
+
+   Given ``@linux? a : b``, do ``a`` on Linux and ``b`` elsewhere. See documentation for Handling Platform Variations 
+   in the Calling C and Fortran Code section of the manual.
+
+.. function:: @windows
+
+   Given ``@windows? a : b``, do ``a`` on Windows and ``b`` elsewhere. See documentation for Handling Platform Variations
+   in the Calling C and Fortran Code section of the manual.
+
 C Interface
 -----------
 
 .. function:: ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
 
-   Call function in C-exported shared library, specified by (function name, library) tuple (String or :Symbol). Alternatively, ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
+   Call function in C-exported shared library, specified by (function name, library) tuple (String or :Symbol). Alternatively,
+   ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
 
 .. function:: cglobal((symbol, library) or ptr [, Type=Void])
 
@@ -3476,6 +3510,19 @@ C Interface
    the array element type. ``own`` optionally specifies whether Julia should take
    ownership of the memory, calling ``free`` on the pointer when the array is no
    longer referenced.
+
+.. function:: find_library(names, locations)
+
+   Searches for the first library in ``names`` in the paths in the ``locations`` list, ``DL_LOAD_PATH``, or system
+   library paths (in that order) which can successfully be dlopen'd. On success, the return value will be one of
+   the names (potentially prefixed by one of the paths in locations). This string can be assigned to a ``global const``
+   and used as the library name in future ``ccall``'s. On failure, it returns the empty string.
+
+.. data:: DL_LOAD_PATH
+
+   When calling ``dlopen``, the paths in this list will be searched first, in order, before searching the
+   system locations for a valid library handle.
+
 
 Errors
 ------

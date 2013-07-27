@@ -1,10 +1,14 @@
 module Sort
 
+using Base.Order
+
 import
     Base.sort,
     Base.sort!,
     Base.issorted,
-    Base.sortperm
+    Base.sortperm,
+    Base.Collections.heapify!,
+    Base.Collections.percolate_down!
 
 export # also exported by Base
     # order-only:
@@ -24,48 +28,16 @@ export # also exported by Base
     InsertionSort,
     QuickSort,
     MergeSort,
-    TimSort
+    TimSort,
+    HeapSort
 
 export # not exported by Base
-    Ordering, Algorithm,
-    Forward, By, Lt, lt,
-    ReverseOrdering, ForwardOrdering,
-    # Reverse, # TODO: clashes with Reverse iterator
+    Algorithm,
     DEFAULT_UNSTABLE,
     DEFAULT_STABLE,
     SMALL_ALGORITHM,
     SMALL_THRESHOLD
 
-## notions of element ordering ##
-
-abstract Ordering
-
-immutable ForwardOrdering <: Ordering end
-immutable ReverseOrdering{Fwd<:Ordering} <: Ordering
-    fwd::Fwd
-end
-immutable By <: Ordering
-    by::Function
-end
-immutable Lt <: Ordering
-    lt::Function
-end
-
-const Forward = ForwardOrdering()
-const Reverse = ReverseOrdering(Forward)
-
-lt(o::ForwardOrdering, a, b) = isless(a,b)
-lt(o::ReverseOrdering, a, b) = lt(o.fwd,b,a)
-lt(o::By,              a, b) = isless(o.by(a),o.by(b))
-lt(o::Lt,              a, b) = o.lt(a,b)
-
-function ord(lt::Function, by::Function, rev::Bool, order::Ordering=Forward)
-    o = (lt===isless) & (by===identity) ? order  :
-        (lt===isless) & (by!==identity) ? By(by) :
-        (lt!==isless) & (by===identity) ? Lt(lt) :
-                                          Lt((x,y)->lt(by(x),by(y)))
-    rev ? ReverseOrdering(o) : o
-end
 
 ## functions requiring only ordering ##
 
@@ -258,11 +230,13 @@ abstract Algorithm
 
 immutable InsertionSortAlg <: Algorithm end
 immutable QuickSortAlg     <: Algorithm end
+immutable HeapSortAlg      <: Algorithm end
 immutable MergeSortAlg     <: Algorithm end
 immutable TimSortAlg       <: Algorithm end
 
 const InsertionSort = InsertionSortAlg()
 const QuickSort     = QuickSortAlg()
+const HeapSort      = HeapSortAlg()
 const MergeSort     = MergeSortAlg()
 const TimSort       = TimSortAlg()
 
@@ -306,6 +280,23 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering
     return v
 end
 
+function sort!(v::AbstractVector, lo::Int, hi::Int, a::HeapSortAlg, o::Ordering)
+    if lo > 1 || hi < length(v)
+        return sort!(sub(v, lo:hi), 1, length(v), a, o)
+    end
+    r = ReverseOrdering(o)
+    heapify!(v, r)
+    for i = length(v):-1:2
+        # Swap the root with i, the last unsorted position
+        x = v[i]
+        v[i] = v[1]
+        # The heap portion now ends at position i-1, but needs fixing up
+        # starting with the root
+        percolate_down!(v,1,x,r,i-1)
+    end
+    v
+end
+
 function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering, t=similar(v))
     if lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
@@ -344,16 +335,6 @@ end
 
 include("timsort.jl")
 
-## sortperm: the permutation to sort an array ##
-
-immutable Perm{O<:Ordering,V<:AbstractVector} <: Ordering
-    order::O
-    data::V
-end
-Perm{O<:Ordering,V<:AbstractVector}(o::O,v::V) = Perm{O,V}(o,v)
-
-lt(p::Perm, a, b) = lt(p.order, p.data[a], p.data[b])
-
 ## generic sorting methods ##
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
@@ -364,11 +345,13 @@ sort!(v::AbstractVector; alg::Algorithm=defalg(v),
     lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
     sort!(v, alg, ord(lt,by,rev,order))
 
+sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
+
+## sortperm: the permutation to sort an array ##
+
 sortperm(v::AbstractVector; alg::Algorithm=defalg(v),
     lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
     sort!([1:length(v)], alg, Perm(ord(lt,by,rev,order),v))
-
-sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
 
 ## sorting multi-dimensional arrays ##
 
@@ -392,9 +375,11 @@ end
 
 module Float
 using ..Sort
+using ...Order
 
 import Core.Intrinsics: unbox, slt_int
-import ..Sort: sort!, Perm, lt, Reverse
+import ..Sort: sort!
+import ...Order: lt
 
 typealias Floats Union(Float32,Float64)
 typealias Direct Union(ForwardOrdering,ReverseOrdering{ForwardOrdering})

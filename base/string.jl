@@ -38,7 +38,7 @@ function bytestring(p::Union(Ptr{Uint8},Ptr{Int8}))
     ccall(:jl_cstr_to_string, ByteString, (Ptr{Uint8},), p)
 end
 
-function bytestring(p::Union(Ptr{Uint8},Ptr{Int8}),len::Int)
+function bytestring(p::Union(Ptr{Uint8},Ptr{Int8}),len::Integer)
     p == C_NULL ? error("cannot convert NULL to string") :
     ccall(:jl_pchar_to_string, ByteString, (Ptr{Uint8},Int), p, len)
 end
@@ -267,6 +267,9 @@ rsearch(s::String, t::String) = (isempty(s) && isempty(t)) ? (1:0) : rsearch(s,t
 contains(::String, ::String) = error("use search() to look for substrings")
 
 function cmp(a::String, b::String)
+    if a === b
+        return 0
+    end
     i = start(a)
     j = start(b)
     while !done(a,i) && !done(b,i)
@@ -412,6 +415,8 @@ function next(s::SubString, i::Int)
     c, i-s.offset
 end
 
+getindex(s::SubString, i::Int) = getindex(s.string, i+s.offset)
+
 endof(s::SubString) = s.endof
 # TODO: length(s::SubString) = ??
 # default implementation will work but it's slow
@@ -465,6 +470,9 @@ end
 convert(::Type{RepString}, s::String) = RepString(s,1)
 
 function repeat(s::ByteString, r::Integer)
+    if r < 0
+        error("can't repeat a string ",r," times")
+    end
     d = s.data; n = length(d)
     out = Array(Uint8, n*r)
     for i=1:r

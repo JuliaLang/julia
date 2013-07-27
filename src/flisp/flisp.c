@@ -2172,34 +2172,36 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
     if (nargs < 2)
         lerror(ArgError, "map: too few arguments");
     if (!iscons(args[1])) return NIL;
-    value_t first, last, v;
+    value_t *first, *last, v;
     int64_t argSP = args-Stack;
     assert(argSP >= 0 && argSP < N_STACK);
     if (nargs == 2) {
-        if (SP+3 > N_STACK) grow_stack();
+        if (SP+4 > N_STACK) grow_stack();
         PUSH(Stack[argSP]);
         PUSH(car_(Stack[argSP+1]));
         v = _applyn(1);
+        POPN(2);
         PUSH(v);
         v = mk_cons();
         car_(v) = POP(); cdr_(v) = NIL;
-        last = first = v;
+        PUSH(v);
+        PUSH(v);
+        first = &Stack[SP-2];
+        last = &Stack[SP-1];
         Stack[argSP+1] = cdr_(Stack[argSP+1]);
-        fl_gc_handle(&first);
-        fl_gc_handle(&last);
         while (iscons(Stack[argSP+1])) {
-            Stack[SP-2] = Stack[argSP];
-            Stack[SP-1] = car_(Stack[argSP+1]);
+            PUSH(Stack[argSP]);
+            PUSH(car_(Stack[argSP+1]));
             v = _applyn(1);
+            POPN(2);
             PUSH(v);
             v = mk_cons();
             car_(v) = POP(); cdr_(v) = NIL;
-            cdr_(last) = v;
-            last = v;
+            cdr_(*last) = v;
+            *last = v;
             Stack[argSP+1] = cdr_(Stack[argSP+1]);
         }
         POPN(2);
-        fl_free_gc_handles(2);
     }
     else {
         size_t i;
@@ -2214,9 +2216,10 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
         PUSH(v);
         v = mk_cons();
         car_(v) = POP(); cdr_(v) = NIL;
-        last = first = v;
-        fl_gc_handle(&first);
-        fl_gc_handle(&last);
+        PUSH(v);
+        PUSH(v);
+        first = &Stack[SP-2];
+        last = &Stack[SP-1];
         while (iscons(Stack[argSP+1])) {
             PUSH(Stack[argSP]);
             for(i=1; i < nargs; i++) {
@@ -2228,12 +2231,12 @@ value_t fl_map1(value_t *args, u_int32_t nargs)
             PUSH(v);
             v = mk_cons();
             car_(v) = POP(); cdr_(v) = NIL;
-            cdr_(last) = v;
-            last = v;
+            cdr_(*last) = v;
+            *last = v;
         }
-        fl_free_gc_handles(2);
+        POPN(2);
     }
-    return first;
+    return *first;
 }
 
 static builtinspec_t core_builtin_info[] = {

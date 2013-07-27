@@ -57,9 +57,16 @@ end
 # measure bytes allocated without any contamination from compilation
 macro allocated(ex)
     quote
-        local b0 = gc_bytes()
-        local val = $(esc(ex))
-        int(gc_bytes()-b0)
+        let
+            local f
+            function f()
+                b0 = gc_bytes()
+                $(esc(ex))
+                b1 = gc_bytes()
+                int(b1-b0)
+            end
+            f()
+        end
     end
 end
 
@@ -252,13 +259,15 @@ end
 # system information
 
 function versioninfo(io::IO=STDOUT, verbose::Bool=false)
-    println(io,             "Julia $version_string")
+    println(io,             "Julia Version $VERSION")
     println(io,             commit_string)
     println(io,             "Platform Info:")
     println(io,             "  System: ", Sys.OS_NAME, " (", Sys.MACHINE, ")")
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
-        lsb = readchomp(ignorestatus(`lsb_release -ds`) .> SpawnNullStream())
+        lsb = ""
+        @linux_only try lsb = readchomp(`lsb_release -ds` .> SpawnNullStream()) end
+        @windows_only try lsb = strip(readall(`$(ENV["COMSPEC"]) /c ver`)) end
         if lsb != ""
             println(io,     "           ", lsb)
         end
@@ -331,37 +340,5 @@ end
 # Conditional usage of packages and modules
 usingmodule(names::Symbol...) = eval(current_module(), Expr(:toplevel, Expr(:using, names...)))
 usingmodule(names::String) = usingmodule([symbol(name) for name in split(names,".")]...)
-
-
-macro timedwait(ex, wait_secs, poll_interval)
-    quote
-        start = time()
-        done = RemoteRef()
-        function timercb(aw, status)
-            try
-                if $(esc(ex))
-                    put(done, :ok)
-                elseif (time() - start) > $(wait_secs)
-                    put(done, :timed_out)
-                elseif status != 0
-                    put(done, :error)
-                end
-            catch e
-                put(done, :error)
-                stop_timer(aw)
-            end
-        end
-
-        if !$(esc(ex))
-            t = TimeoutAsyncWork(timercb)
-            start_timer(t, $(poll_interval), $(poll_interval))
-            ret = fetch(done)
-            stop_timer(t)
-        else
-            ret = :ok
-        end
-        ret
-    end
-end
 
 

@@ -100,74 +100,90 @@ function srand(filename::String, n::Integer)
 end
 srand(filename::String) = srand(filename, 4)
 
-## rand()
+## random floating point values
 
+rand(::Type{Float64}) = dsfmt_gv_genrand_close_open()
 rand() = dsfmt_gv_genrand_close_open()
+
+rand(::Type{Float32}) = float32(rand())
+
 rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
-
-rand!(A::Array{Float64}) = dsfmt_gv_fill_array_close_open!(A)
-rand(dims::Dims) = rand!(Array(Float64, dims))
-rand(dims::Int...) = rand!(Array(Float64, dims...))
-
-rand!(r::MersenneTwister, A::Array{Float64}) = dsfmt_fill_array_close_open!(r.state, A)
-rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
-rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
 
 ## random integers
 
 dsfmt_randui32() = dsfmt_gv_genrand_uint32()
 dsfmt_randui64() = uint64(dsfmt_randui32()) | (uint64(dsfmt_randui32())<<32)
 
+rand(::Type{Uint8})   = uint8(rand(Uint32))
+rand(::Type{Uint16})  = uint16(rand(Uint32))
 rand(::Type{Uint32})  = dsfmt_randui32()
 rand(::Type{Uint64})  = dsfmt_randui64()
 rand(::Type{Uint128}) = uint128(rand(Uint64))<<64 | rand(Uint64)
 
+rand(::Type{Int8})    = int8(rand(Uint8))
+rand(::Type{Int16})   = int16(rand(Uint16))
 rand(::Type{Int32})   = int32(rand(Uint32))
 rand(::Type{Int64})   = int64(rand(Uint64))
 rand(::Type{Int128})  = int128(rand(Uint128))
 
-for itype in (:Uint32, :Uint64, :Uint128, :Int32, :Int64, :Int128) 
+# Arrays of random numbers
+
+rand!(A::Array{Float64}) = dsfmt_gv_fill_array_close_open!(A)
+rand(::Type{Float64}, dims::Dims) = rand!(Array(Float64, dims))
+rand(::Type{Float64}, dims::Int...) = rand(Float64, dims)
+
+rand(dims::Dims) = rand(Float64, dims)
+rand(dims::Int...) = rand(Float64, dims)
+
+rand!(r::MersenneTwister, A::Array{Float64}) = dsfmt_fill_array_close_open!(r.state, A)
+rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
+rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
+
+for T in (:Uint8, :Uint16, :Uint32, :Uint64, :Uint128,
+          :Int8,  :Int16,  :Int32,  :Int64,  :Int128,  
+          :Float32)
     @eval begin
-        function rand!(A::Array{$itype})
+        function rand!(A::Array{$T})
             for i=1:length(A)
-                A[i] = rand($itype)
+                A[i] = rand($T)
             end
             A
         end
-        rand(::Type{$itype}, dims::Dims) = rand!(Array($itype, dims))
-        rand(::Type{$itype}, dims::Int...) = rand($itype, dims)
+        rand(::Type{$T}, dims::Dims) = rand!(Array($T, dims))
+        rand(::Type{$T}, dims::Int...) = rand($T, dims)
     end
 end
 
+function randu{T<:Union(Uint32,Uint64,Uint128)}(k::T)
+    # generate an unsigned integer in 0:k-1
+    # largest multiple of k that can be represented in T
+    u = convert(T, div(typemax(T),k)*k)
+    x = rand(T)
+    while x >= u
+        x = rand(T)
+    end
+    rem(x, k)
+end
 
 # random integer from lo to hi inclusive
-function rand{T<:Union(Uint32,Uint64,Uint128,Int32,Int64,Int128)}(r::Range1{T})
-    lo = r[1]
-    hi = r[end]
-    m = typemax(T)
-
-    if hi - lo > m || hi - lo < 0
-        # Fallback for signed integer types when the length of the range
-        # is larger than typemax(T), e.g. rand(int32(-1):typemax(Int32)).
-        return convert(T, rand(unsigned(zero(T)):unsigned(hi - lo)) + lo)
-    end
-
-    s = rand(T) & m
-    if (hi-lo == m)
-        return convert(T, s + lo)
-    end
-    d = hi-lo+1
-    if (d&(d-1))==0
-        # power of 2 range
-        return convert(T, s&(d-1) + lo)
-    end
-    # note: m>=0 && r>=0
-    lim = m - rem(rem(m,d)+1, d)
-    while s > lim
-        s = rand(T) & m
-    end
-    return convert(T, rem(s,d) + lo)
+function rand{T<:Union(Uint32,Uint64,Uint128)}(r::Range1{T})
+    ulen = convert(T, length(r))
+    convert(T, first(r) + randu(ulen))
 end
+
+function rand(r::Range1{Int32})
+    ulen = convert(Uint32, length(r))
+    convert(Int32, first(r) + randu(ulen))
+end
+function rand(r::Range1{Int64})
+    ulen = convert(Uint64, length(r))
+    convert(Int64, first(r) + randu(ulen))
+end
+function rand(r::Range1{Int128})
+    ulen = convert(Uint128, length(r))
+    convert(Int128, first(r) + randu(ulen))
+end
+
 
 # fallback for other integer types
 rand{T<:Integer}(r::Range1{T}) = convert(T, rand(int(r)))
@@ -201,5 +217,30 @@ randn() = randmtzig_randn()
 randn!(A::Array{Float64}) = randmtzig_fill_randn!(A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
 randn(dims::Int...) = randn!(Array(Float64, dims...))
+
+immutable UUID
+    value::Uint128
+end
+
+@eval function uuid4()
+    u = rand(Uint128)
+    u &= $(parseint(Uint128,"ffffffffffff0fff3fffffffffffffff",16))
+    u |= $(parseint(Uint128,"00000000000040008000000000000000",16))
+    UUID(u)
+end
+
+function Base.convert(::Type{Vector{Uint8}}, u::UUID)
+    u = u.value
+    a = Array(Uint8,36)
+    for i = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
+        a[i] = Base.digit(u & 0xf)
+        u >>= 4
+    end
+    a[[24,19,14,9]] = '-'
+    return a
+end
+
+Base.show(io::IO, u::UUID) = write(io,convert(Vector{Uint8},u))
+Base.repr(u::UUID) = ASCIIString(convert(Vector{Uint8},u))
 
 end # module

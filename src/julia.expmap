@@ -194,6 +194,7 @@
     jl_module_name;
     jl_module_parent;
     jl_module_type;
+    jl_module_usings;
     jl_native_alignment;
     jl_next_from_addrinfo;
     jl_is_char_signed;
@@ -246,6 +247,13 @@
     jl_backtrace_from_here;
     jl_lookup_code_address;
     rec_backtrace;
+    profile_init;
+    profile_get_data;
+    profile_len_data;
+    profile_maxlen_data;
+    profile_clear_data;
+    profile_start_timer;
+    profile_stop_timer;
     jl_reshape_array;
     jl_restore_system_image;
     jl_run_event_loop;

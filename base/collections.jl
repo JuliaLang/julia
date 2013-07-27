@@ -2,7 +2,7 @@
 module Collections
 
 import Base: setindex!, done, get, haskey, isempty, length, next, getindex, start
-import ..Sort: Forward, Ordering, lt
+import ..Order: Forward, Ordering, lt
 
 export
     PriorityQueue,
@@ -27,78 +27,71 @@ heapparent(i::Integer) = div(i, 2)
 
 
 # Binary min-heap percolate down.
-function percolate_down!(xs::AbstractArray, i::Integer, o::Ordering)
-    while (l = heapleft(i)) <= length(xs)
+function percolate_down!(xs::AbstractArray, i::Integer, x=xs[i], o::Ordering=Forward, len::Integer=length(xs))
+    @inbounds while (l = heapleft(i)) <= len
         r = heapright(i)
-        j = r > length(xs) || lt(o, xs[l], xs[r]) ? l : r
-        if lt(o, xs[j], xs[i])
-            xs[i], xs[j] = xs[j], xs[i]
+        j = r > len || lt(o, xs[l], xs[r]) ? l : r
+        if lt(o, xs[j], x)
+            xs[i] = xs[j]
             i = j
         else
             break
         end
     end
+    xs[i] = x
 end
 
-percolate_down!(xs::AbstractArray, i::Integer) = percolate_down!(xs, i, Forward)
-
+percolate_down!(xs::AbstractArray, i::Integer, o::Ordering, len::Integer=length(xs)) = percolate_down!(xs, i, xs[i], o, len)
 
 
 # Binary min-heap percolate up.
-function percolate_up!(xs::AbstractArray, i::Integer, o::Ordering)
-    while i > 1
-        j = heapparent(i)
-        if lt(o, xs[i], xs[j])
-            xs[i], xs[j] = xs[j], xs[i]
+function percolate_up!(xs::AbstractArray, i::Integer, x=xs[i], o::Ordering=Forward)
+    @inbounds while (j = heapparent(i)) >= 1
+        if lt(o, x, xs[j])
+            xs[i] = xs[j]
             i = j
         else
             break
         end
     end
+    xs[i] = x
 end
 
-percolate_up!(xs::AbstractArray, i::Integer) = percolate_up!(xs, i, Forward)
+percolate_up!{T}(xs::AbstractArray{T}, i::Integer, o::Ordering) = percolate_up!(xs, i, xs[i], o)
 
 
 # Binary min-heap pop.
-function heappop!(xs::AbstractArray, o::Ordering)
+function heappop!(xs::AbstractArray, o::Ordering=Forward)
     x = xs[1]
     y = pop!(xs)
     if !isempty(xs)
-        xs[1] = y
-        percolate_down!(xs, 1, o)
+        percolate_down!(xs, 1, y, o)
     end
     x
 end
 
-heappop!(xs::AbstractArray) = heappop!(xs, Forward)
-
 
 # Binary min-heap push.
-function heappush!(xs::AbstractArray, x, o::Ordering)
+function heappush!(xs::AbstractArray, x, o::Ordering=Forward)
     push!(xs, x)
-    percolate_up!(xs, length(xs), o)
+    percolate_up!(xs, length(xs), x, o)
     xs
 end
 
-heappush!(xs::AbstractArray, x) = heappush!(xs, x, Forward)
-
 
 # Turn an arbitrary array into a binary min-heap in linear time.
-function heapify!(xs::AbstractArray, o::Ordering)
+function heapify!(xs::AbstractArray, o::Ordering=Forward)
     for i in heapparent(length(xs)):-1:1
         percolate_down!(xs, i, o)
     end
     xs
 end
 
-heapify!(xs::AbstractArray) = heapify!(xs, Forward)
-heapify(xs::AbstractArray, o::Ordering) = heapify!(copy(xs), o)
-heapify(xs::AbstractArray) = heapify(xs, Forward)
+heapify(xs::AbstractArray, o::Ordering=Forward) = heapify!(copy(xs), o)
 
 
 # Is an arbitrary array heap ordered?
-function isheap(xs::AbstractArray, o::Ordering)
+function isheap(xs::AbstractArray, o::Ordering=Forward)
     for i in 1:div(length(xs), 2)
         if lt(o, xs[heapleft(i)], xs[i]) ||
            (heapright(i) <= length(xs) && lt(o, xs[heapright(i)], xs[i]))
@@ -107,8 +100,6 @@ function isheap(xs::AbstractArray, o::Ordering)
     end
     true
 end
-
-isheap(xs::AbstractArray) = isheap(xs, Forward)
 
 
 # PriorityQueue
@@ -157,24 +148,15 @@ type PriorityQueue{K,V} <: Associative{K,V}
     end
 end
 
-PriorityQueue(o::Ordering) = PriorityQueue{Any,Any}(o)
-PriorityQueue() = PriorityQueue{Any,Any}(Forward)
+PriorityQueue(o::Ordering=Forward) = PriorityQueue{Any,Any}(o)
 
 function PriorityQueue{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V},
-                            o::Ordering)
+                            o::Ordering=Forward)
     PriorityQueue{K,V}(ks, vs, o)
 end
 
-function PriorityQueue{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V})
-    PriorityQueue{K,V}(ks, vs, Forward)
-end
-
-function PriorityQueue{K,V}(kvs::Dict{K,V}, o::Ordering)
+function PriorityQueue{K,V}(kvs::Dict{K,V}, o::Ordering=Forward)
     PriorityQueue{K,V}([k for k in keys(kvs)], [v for v in values(kvs)], o)
-end
-
-function PriorityQueue{K,V}(kvs::Dict{K,V})
-    PriorityQueue(kvs, Forward)
 end
 
 
@@ -184,38 +166,38 @@ haskey(pq::PriorityQueue, key) = haskey(pq.index, key)
 peek(pq::PriorityQueue) = pq.xs[1]
 
 
-# Swap two nodes in a PriorityQueue
-function swap!(pq::PriorityQueue, i::Integer, j::Integer)
-    pq.index[pq.xs[i][1]] = j
-    pq.index[pq.xs[j][1]] = i
-    pq.xs[i], pq.xs[j] = pq.xs[j], pq.xs[i]
-end
-
-
 function percolate_down!(pq::PriorityQueue, i::Integer)
-    while (l = heapleft(i)) <= length(pq)
+    x = pq.xs[i]
+    @inbounds while (l = heapleft(i)) <= length(pq)
         r = heapright(i)
         j = r > length(pq) || lt(pq.o, pq.xs[l][2], pq.xs[r][2]) ? l : r
-        if lt(pq.o, pq.xs[j][2], pq.xs[i][2])
-            swap!(pq, i, j)
+        if lt(pq.o, pq.xs[j][2], x[2])
+            pq.index[pq.xs[j][1]] = i
+            pq.xs[i] = pq.xs[j]
             i = j
         else
             break
         end
     end
+    pq.index[x[1]] = i
+    pq.xs[i] = x
 end
 
 
 function percolate_up!(pq::PriorityQueue, i::Integer)
-    while i > 1
+    x = pq.xs[i]
+    @inbounds while i > 1
         j = heapparent(i)
-        if lt(pq.o, pq.xs[i][2], pq.xs[j][2])
-            swap!(pq, i, j)
+        if lt(pq.o, x[2], pq.xs[j][2])
+            pq.index[pq.xs[j][1]] = i
+            pq.xs[i] = pq.xs[j]
             i = j
         else
             break
         end
     end
+    pq.index[x[1]] = i
+    pq.xs[i] = x
 end
 
 

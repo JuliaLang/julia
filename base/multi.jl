@@ -231,17 +231,33 @@ function workers()
     end
 end
 
-function rmprocs(args...)
+rmprocset = Set()
+function rmprocs(args...; waitfor = 0.0)
     # Only pid 1 can add and remove processes
     if myid() != 1
         error("only process 1 can add and remove processes")
     end
     
+    global rmprocset
+    empty!(rmprocset)
+    
     for i in [args...]
         if haskey(map_pid_wrkr, i)
+            add!(rmprocset, i)
             remote_do(i, exit)
         end
     end
+    
+    start = time()
+    while (time() - start) < waitfor 
+        if length(rmprocset) == 0
+            break;
+        else
+            sleep(0.1)
+        end
+    end
+    
+    ((waitfor > 0) && (length(rmprocset) > 0)) ? :timed_out : :ok
 end
 
 
@@ -844,19 +860,24 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                 exit(1)
             end
             
-            if isa(e,EOFError)
-                deregister_worker(iderr)
-                
-                if (myid() == 1) println("Worker $iderr terminated.") end
-                
-                #TODO : Notify all RemoteRefs linked to this Worker who just died....
-                # How?
-                
-                return nothing
-            else
-                # TODO : Treat any exception as death of node / major screw-up and cleanup?
-                rethrow(e)
+            # Will treat any exception as death of node and cleanup
+            # since currently we do not have a mechanism for workers to reconnect
+            # to each other on unhandled errors
+            deregister_worker(iderr)
+            
+            if isopen(sock) close(sock) end
+            
+            if (myid() == 1) 
+                global rmprocset
+                if contains(rmprocset, iderr)
+                    delete!(rmprocset, iderr)
+                else
+                    println("Worker $iderr terminated.") 
+                    rethrow(e)
+                end
             end
+
+            return nothing
         end
     end)
 end
@@ -1261,7 +1282,11 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
                             results[idx] = remotecall_fetch(wpid, f,
                                                             map(L->L[idx], lsts)...)
                             if isa(results[idx], Exception)
-                                rethrow(results[idx])
+                                if wpid == myid()
+                                    rethrow(results[idx])
+                                else
+                                    throw(results[idx])
+                                end
                             end
                         catch e
                             if err_retry
@@ -1474,3 +1499,35 @@ function check_master_connect(timeout)
         end
     end
 end
+
+
+function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
+    start = time()
+    done = RemoteRef()
+    timercb(aw, status) = begin
+        try
+            if testcb()
+                put(done, :ok)
+            elseif (time() - start) > secs
+                put(done, :timed_out)
+            elseif status != 0
+                put(done, :error)
+            end
+        catch e
+            put(done, :error)
+        finally
+            isready(done) && stop_timer(aw)
+        end
+    end
+
+    if !testcb()
+        t = TimeoutAsyncWork(timercb)
+        start_timer(t, pollint, pollint)
+        ret = fetch(done)
+        stop_timer(t)
+    else
+        ret = :ok
+    end
+    ret
+end
+

@@ -220,13 +220,12 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             gf = eval((jl_value_t*)fname, locals, nl);
             assert(jl_is_function(gf));
             assert(jl_is_gf(gf));
-            if (!kw) {
+            if (jl_is_expr(fname))
                 fname = (jl_sym_t*)jl_fieldref(jl_exprarg(fname, 2), 0);
+            if (!kw)
                 bp = &gf;
-            }
-            else {
+            else
                 bp = (jl_value_t**)&((jl_methtable_t*)((jl_function_t*)gf)->env)->kwsorter;
-            }
             assert(jl_is_symbol(fname));
         }
         else {

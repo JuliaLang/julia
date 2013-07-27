@@ -1358,7 +1358,7 @@ function findmax(a)
     mi = 1
     for i=2:length(a)
         ai = a[i]
-        if ai > m || isnan(m)
+        if ai > m || m!=m
             m = ai
             mi = i
         end
@@ -1374,7 +1374,7 @@ function findmin(a)
     mi = 1
     for i=2:length(a)
         ai = a[i]
-        if ai < m || isnan(m)
+        if ai < m || m!=m
             m = ai
             mi = i
         end
@@ -1384,6 +1384,13 @@ end
 
 indmax(a) = findmax(a)[2]
 indmin(a) = findmin(a)[2]
+
+# similar to Matlab's ismember
+# returns a vector containing the highest index in b for each value in a that is a member of b
+function indexin{T}(a::AbstractArray{T}, b::AbstractArray{T})
+    bdict = Dict(b, 1:length(b))
+    [get(bdict, i, 0) for i in a]
+end
 
 # findin (the index of intersection)
 function findin(a, b::Range1)

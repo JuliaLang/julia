@@ -61,6 +61,10 @@ end
 @vectorize_1arg Real isinf
 @vectorize_1arg Real isfinite
 
+iround{T<:Integer,R<:Real}(::Type{T}, x::AbstractArray{R,1}) = [ iround(T, x[i]) for i = 1:length(x) ]
+iround{T<:Integer,R<:Real}(::Type{T}, x::AbstractArray{R,2}) = [ iround(T, x[i,j]) for i = 1:size(x,1), j = 1:size(x,2) ]
+iround{T<:Integer,R<:Real}(::Type{T}, x::AbstractArray{R}) = reshape([ iround(T, x[i]) for i = 1:length(x) ], size(x))
+
 # adapted from Matlab File Exchange roundsd: http://www.mathworks.com/matlabcentral/fileexchange/26212
 # for round, og is the power of 10 relative to the decimal point
 # for signif, og is the absolute power of 10

@@ -202,8 +202,6 @@ ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
 
-const dig_syms = uint8(['0':'9','a':'z','A':'Z'])
-
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
     a = Array(Uint8,i)
@@ -240,11 +238,13 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
     ASCIIString(a)
 end
 
+digit(x::Integer) = '0'+x+39*(x>9)
+
 function hex(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
     a = Array(Uint8,i)
     while i > neg
-        a[i] = dig_syms[(x&0xf)+1]
+        a[i] = digit(x&0xf)
         x >>= 4
         i -= 1
     end
@@ -254,22 +254,20 @@ end
 
 num2hex(n::Integer) = hex(n, sizeof(n)*2)
 
-function _base(symbols::Array{Uint8}, b::Int, x::Unsigned, pad::Int, neg::Bool)
-    if !(2 <= b <= length(symbols)) error("invalid base: $b") end
+function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
+    if !(2 <= b <= 62) error("invalid base: $b") end
     i = neg + max(pad,ndigits0z(x,b))
     a = Array(Uint8,i)
     while i > neg
-        a[i] = symbols[rem(x,b)+1]
+        a[i] = digit(rem(x,b))
         x = div(x,b)
         i -= 1
     end
     if neg; a[1]='-'; end
     ASCIIString(a)
 end
-
-base(base::Integer, n::Integer, pad::Integer) = _base(dig_syms,int(base),unsigned(abs(n)),pad,n<0)
-base(symbols::Array{Uint8}, n::Integer, p::Integer) = _base(symbols,length(symbols),unsigned(abs(n)),p,n<0)
-base(base_or_symbols::Union(Integer,Array{Uint8}), n::Integer) = base(base_or_symbols, n, 1)
+base(b::Integer, n::Integer, pad::Integer=1) =
+    base(int(b), unsigned(abs(n)), pad, n<0)
 
 for sym in (:bin, :oct, :dec, :hex)
     @eval begin

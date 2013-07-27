@@ -8,7 +8,7 @@ function prefetch{S<:String}(pkg::String, url::String, sha1s::Vector{S})
     isdir(".cache") || mkdir(".cache")
     cache = path(pkg)
     if !isdir(cache)
-        info("Cloning $pkg from $url")
+        info("Cloning cache of $pkg from $url")
         try Git.run(`clone -q --mirror $url $cache`)
         catch
             run(`rm -rf $cache`)

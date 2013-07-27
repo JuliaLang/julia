@@ -437,6 +437,8 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     }
     else {
         dt->alignment = dt->size;
+        if (dt->alignment > MAX_ALIGN)
+            dt->alignment = MAX_ALIGN;
         dt->names = dt->types = jl_null;
     }
     uint8_t flags = read_uint8(s);

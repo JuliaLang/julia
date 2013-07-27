@@ -21,7 +21,7 @@ How to use Julia packages
 The ``Pkg`` module in Julia provides tools for installing and managing third
 party packages. It also manages the dependencies while installing packages.
 
-Get the updated list of packages with::
+Update the list of packages and currently installed packages with::
 
     Pkg.update()
 
@@ -39,6 +39,16 @@ The package system is still under active development. Sometimes, it
 can get into an inconsistent state. Deleting the ``$HOME/.julia``
 directory will wipe everything related to the package system. Repeat
 all the steps listed here to start from a clean slate.
+
+If the package needs a library which, on your system, is installed but is not
+found in a typical system location on your system, you may need to add the
+path to the library to the ``DL_LOAD_PATH`` variable. The paths in this list will
+be searched, in order, before searching the system locations. It is often easiest to
+add this line to your ~/.juliarc.jl configuration script. For example, if we want to
+use libraries in ``/opt/local/lib``, we can run the following statement (before
+loading the module)::
+
+    push!(DL_LOAD_PATH,"/opt/local/lib")
 
 .. _contrib-existing:
 
