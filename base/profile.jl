@@ -63,9 +63,9 @@ stop_timer() = ccall(:profile_stop_timer, Void, ())
 
 get_data_pointer() = convert(Ptr{Uint}, ccall(:profile_get_data, Ptr{Uint8}, ()))
 
-len_data() = convert(Int, ccall(:profile_len_data, Uint, ()))
+len_data() = convert(Int, ccall(:profile_len_data, Csize_t, ()))
 
-maxlen_data() = convert(Int, ccall(:profile_maxlen_data, Uint, ()))
+maxlen_data() = convert(Int, ccall(:profile_maxlen_data, Csize_t, ()))
 
 function lookup(ip::Uint, doCframes::Bool)
     info = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Bool), ip, doCframes)
