@@ -393,7 +393,7 @@ install-readline: $(READLINE_OBJ_TARGET)
 
 ## LIBUV ##
 
-UV_SRC_TARGET = libuv/libuv.a
+UV_SRC_TARGET = libuv/.libs/libuv.a
 UV_OBJ_TARGET = $(BUILD)/lib/libuv.a
 
 libuv/configure:
@@ -422,7 +422,7 @@ endif
 	echo 1 > $@
 $(UV_OBJ_TARGET): $(UV_SRC_TARGET)
 	$(MAKE) -C libuv install
-	$(INSTALL_NAME_CMD)libuv.dylib $@
+	$(INSTALL_NAME_CMD)libuv.dylib $(BUILD)/lib/libuv.dylib
 
 clean-uv:
 	-$(MAKE) -C libuv clean
