@@ -408,7 +408,7 @@ jl_value_t *jl_parse_eval_all(char *fname)
     //jl_printf(JL_STDERR, "***** loading %s\n", fname);
     int last_lineno = jl_lineno;
     jl_lineno=0;
-    jl_value_t *fn=NULL, *ln=NULL, *form=NULL, *result=NULL;
+    jl_value_t *fn=NULL, *ln=NULL, *form=NULL, *result=jl_nothing;
     JL_GC_PUSH4(&fn, &ln, &form, &result);
     JL_TRY {
         // handle syntax error
