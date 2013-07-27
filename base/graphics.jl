@@ -1,6 +1,6 @@
 module Graphics
 
-import Base.norm, Base.scale
+import Base: fill, norm, scale
 
 export
     # Part 1. 2D Geometry
@@ -47,7 +47,6 @@ export
     
     # TODO: rendering pipeline API
 
-global fill
 
 # Part 1. geometric primitives
 
