@@ -1145,8 +1145,6 @@ Text I/O
 Memory-mapped I/O
 -----------------
 
-Note: Currently not available on Windows.
-
 .. function:: mmap_array(type, dims, stream, [offset])
 
    Create an ``Array`` whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.
@@ -3413,12 +3411,33 @@ System
 
    Reference to the singleton ``EnvHash``, providing a dictionary interface to system environment variables.
 
+.. function:: @unix
+
+   Given ``@unix? a : b``, do ``a`` on Unix systems (including Linux and OS X) and ``b`` elsewhere. See documentation
+   for Handling Platform Variations in the Calling C and Fortran Code section of the manual.
+
+.. function:: @osx
+
+   Given ``@osx? a : b``, do ``a`` on OS X and ``b`` elsewhere. See documentation for Handling Platform Variations 
+   in the Calling C and Fortran Code section of the manual.
+
+.. function:: @linux
+
+   Given ``@linux? a : b``, do ``a`` on Linux and ``b`` elsewhere. See documentation for Handling Platform Variations 
+   in the Calling C and Fortran Code section of the manual.
+
+.. function:: @windows
+
+   Given ``@windows? a : b``, do ``a`` on Windows and ``b`` elsewhere. See documentation for Handling Platform Variations
+   in the Calling C and Fortran Code section of the manual.
+
 C Interface
 -----------
 
 .. function:: ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
 
-   Call function in C-exported shared library, specified by (function name, library) tuple (String or :Symbol). Alternatively, ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
+   Call function in C-exported shared library, specified by (function name, library) tuple (String or :Symbol). Alternatively,
+   ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
 
 .. function:: cglobal((symbol, library) or ptr [, Type=Void])
 
