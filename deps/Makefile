@@ -393,42 +393,48 @@ install-readline: $(READLINE_OBJ_TARGET)
 
 ## LIBUV ##
 
-UV_SRC_TARGET = libuv/libuv.a
 UV_OBJ_TARGET = $(BUILD)/lib/libuv.a
+UV_OBJ_SOURCE = libuv/libuv.a
 
-libuv/configure:
+libuv/Makefile:
 	(cd .. && git submodule init && git submodule update)
-libuv/config.status: libuv/configure
-	cd libuv && \
-	./configure --with-pic $(CONFIGURE_COMMON)
-	touch -c $@
 ifeq (exists, $(shell [ -d libuv/.git ] && echo exists ))
-$(UV_SRC_TARGET): libuv/.git/HEAD
+$(UV_OBJ_SOURCE): libuv/.git/HEAD
 endif
 ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/libuv ] && echo exists ))
-$(UV_SRC_TARGET): $(JULIAHOME)/.git/modules/deps/libuv/HEAD
+$(UV_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
-$(UV_SRC_TARGET): libuv/config.status
-	$(MAKE) -C libuv
+LIBUV_MAKE_FLAGS = -C libuv CC="$(CC)" AR="$(AR)"
+ifeq ($(OS),WINNT)
+LIBUV_MAKE_FLAGS += PLATFORM=mingw
+else
+ifneq ($(OS),$(BUILD_OS))
+$(error libuv may autodetect your cross-compile PLATFORM incorrectly)
+endif
+endif
+$(UV_OBJ_SOURCE): libuv/Makefile
+	$(MAKE) clean $(LIBUV_MAKE_FLAGS) RUNNER_LIBS=
+	$(MAKE) libuv.a $(LIBUV_MAKE_FLAGS)
 	touch -c $@
-libuv/checked: $(UV_SRC_TARGET)
+libuv/checked: $(LIBUV_OBJ_SOURCE)
 ifeq ($(OS),$(BUILD_OS))
-	-$(MAKE) -C libuv check
+	$(MAKE) test $(LIBUV_MAKE_FLAGS)
 endif
 	echo 1 > $@
-$(UV_OBJ_TARGET): $(UV_SRC_TARGET) libuv/checked
-	$(MAKE) -C libuv install
-	$(INSTALL_NAME_CMD)libuv.dylib $@
+#todo: libuv tests are really slow
+$(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
+	mkdir -p $(BUILD)/include
+	cp $(UV_OBJ_SOURCE) $(BUILD)/lib/
+	cp -r libuv/include/* $(BUILD)/include
 
 clean-uv:
-	-$(MAKE) -C libuv clean RUNNER_LIBS=
+	-$(MAKE) clean $(LIBUV_MAKE_FLAGS) RUNNER_LIBS=
 	-rm -rf $(BUILD)/lib/libuv.a $(BUILD)/include/uv.h $(BUILD)/include/uv-private
 distclean-uv: clean-uv
-	-$(MAKE) -C libuv distclean
 
-get-uv: libuv/configure
-configure-uv: libuv/config.status
-compile-uv: $(UV_SRC_TARGET)
+get-uv: libuv/Makefile
+configure-uv: get-uv
+compile-uv: $(UV_OBJ_SOURCE)
 check-uv: libuv/checked
 install-uv: $(UV_OBJ_TARGET)
 
