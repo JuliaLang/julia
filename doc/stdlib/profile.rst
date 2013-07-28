@@ -105,8 +105,8 @@ this line. Below that, you can see a call to
 ``rand`` function listed explicitly: that's because ``rand`` is *inlined*,
 and hence doesn't appear in the backtraces.
 
-A little further down, you see
-::
+A little further down, you see::
+
    15 none; myfunc; line: 3
 
 Line 3 of ``myfunc`` contains the call to ``max``, and there were 15
@@ -198,10 +198,12 @@ Let's discuss these arguments in order:
   default that is obtained from ``Profile.fetch()``, which pulls out
   the backtraces from a pre-allocated buffer. For example, if you want
   to profile the profiler, you could say::
+
      data = copy(Profile.fetch())
      Profile.clear()
      @profile Profile.print(STDOUT, data) # Prints the previous results
      Profile.print()                      # Prints results from Profile.print()
+
 - The first named argument, ``format``, was introduced above. The
   possible choices are ``:tree`` and ``:flat``.
 - ``C``, if set to ``true``, allows you to even see the calls to C

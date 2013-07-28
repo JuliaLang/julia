@@ -30,7 +30,7 @@ Punctuation
    ``?``       3-argument conditional operator
    ``""``      delimit string literals
    ``''``      delimit character literals
-   ``          delimit external process (command) specifications
+   ``\`\```    delimit external process (command) specifications
    ``...``     splice arguments into a function call, or declare a varargs function
    ``.``       access named fields in objects or names inside modules, also prefixes elementwise operators
    ``a:b``     range
