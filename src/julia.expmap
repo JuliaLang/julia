@@ -51,6 +51,7 @@
     jl_alloc_array_3d;
     jl_alloc_cell_1d;
     jl_cell_1d_push;
+    jl_cell_1d_push2;
     jl_apply_generic;
     jl_array_del_beg;
     jl_array_del_end;
