@@ -387,7 +387,7 @@ function argtype_decl_string(n, t)
     if t === Any && !isempty(n)
         return n
     end
-    if t <: Vararg && t.parameters[1] === Any
+    if t <: Vararg && t !== None && t.parameters[1] === Any
         return string(n, "...")
     end
     return string(n, "::", t)
