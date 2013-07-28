@@ -35,32 +35,32 @@ end
 
 available() = sort!([keys(Pkg2.Dir.cd(Pkg2.Read.available))...], by=lowercase)
 
-status() = Dir.cd() do
+status(io::IO) = Dir.cd() do
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
-    println("Required:")
+    println(io, "Required:")
     for pkg in sort!([keys(reqs)...])
         ver,fix = delete!(instd,pkg)
-        status(pkg,ver,fix)
+        status(io,pkg,ver,fix)
     end
-    println("Additional:")
+    println(io, "Additional:")
     for pkg in sort!([keys(instd)...])
         ver,fix = instd[pkg]
-        status(pkg,ver,fix)
+        status(io,pkg,ver,fix)
     end
 end
-function status(pkg::String, ver::VersionNumber, fix::Bool)
-    @printf " - %-29s " pkg
-    fix || return println(ver)
-    @printf "%-10s" ver
-    print(" fixed: ")
+function status(io::IO, pkg::String, ver::VersionNumber, fix::Bool)
+    @printf io " - %-29s " pkg
+    fix || return println(io,ver)
+    @printf io "%-10s" ver
+    print(io, " fixed: ")
     if ispath(Dir.path(pkg,".git"))
-        print(Git.attached(dir=pkg) ? Git.branch(dir=pkg) : Git.head(dir=pkg)[1:8])
-        Git.dirty(dir=pkg) && print("*")
+        print(io, Git.attached(dir=pkg) ? Git.branch(dir=pkg) : Git.head(dir=pkg)[1:8])
+        Git.dirty(dir=pkg) && print(io, "*")
     else
-        print("non-repo")
+        print(io, "non-repo")
     end
-    println()
+    println(io)
 end
 
 urlpkg(url::String) = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$", url).captures[1]

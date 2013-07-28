@@ -297,9 +297,10 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         println(io          )
         println(io,         "Package Directory: ", Pkg.dir())
         println(io,         "Packages Installed:")
-        Pkg.status(io       )
+        Pkg2.status(io       )
     end
 end
+versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 # `methodswith` -- shows a list of methods using the type given
 
