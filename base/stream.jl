@@ -606,6 +606,8 @@ function readline(this::AsyncStream)
     readline(buf)
 end
 
+readline() = readline(STDIN)
+
 function readavailable(this::AsyncStream)
     buf = this.buffer
     @assert buf.seekable == false
