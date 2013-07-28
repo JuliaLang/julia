@@ -53,14 +53,14 @@ function show(io::IO, info::CPUinfo, header::Bool, prefix::String)
     tck = SC_CLK_TCK
     if header
         println(io, info.model, ": ")
-        print(" "^length(prefix))
+        print(io, " "^length(prefix))
         if tck > 0
             @printf io "    %5s    %9s    %9s    %9s    %9s    %9s\n" "speed" "user" "nice" "sys" "idle" "irq"
         else
             @printf io "    %5s    %9s  %9s  %9s  %9s  %9s ticks\n" "speed" "user" "nice" "sys" "idle" "irq"
         end
     end
-    print(prefix)
+    print(io, prefix)
     if tck > 0
         @printf io "%5d MHz  %9d s  %9d s  %9d s  %9d s  %9d s" info.speed info.cpu_times!user/tck info.cpu_times!nice/tck info.cpu_times!sys/tck info.cpu_times!idle/tck info.cpu_times!irq/tck
     else
@@ -71,7 +71,7 @@ function cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
     if j-i < 9
         header = true
         for x = i:j
-            if header == false println() end
+            if header == false println(io) end
             show(io,cpu[x],header,"#$(x-i+1) ")
             header = false
         end
