@@ -162,7 +162,7 @@ type Process
         if !isa(err,AsyncStream)
             err=null_handle
         end
-        new(cmd,handle,in,out,err,-2,-2,false,Condition(),false,Condition())
+        new(cmd,handle,in,out,err,typemin(Int32),typemin(Int32),false,Condition(),false,Condition())
     end
 end
 
@@ -416,8 +416,8 @@ end
 const SIGPIPE = 13
 function success(proc::Process)
     assert(process_exited(proc))
-    if proc.exit_code == -1
-        error("could not start process ", proc)
+    if proc.exit_code < 0
+        error(UVError("could not start process "*proc,proc.exit_code))
     end
     proc.exit_code==0 && (proc.term_signal == 0 || proc.term_signal == SIGPIPE)
 end
@@ -466,7 +466,7 @@ function _contains_newline(bufptr::Ptr{Void},len::Int32)
 end
 
 ## process status ##
-process_running(s::Process) = s.exit_code == -2
+process_running(s::Process) = s.exit_code == typemin(Int32)
 process_running(s::Vector{Process}) = all(process_running,s)
 process_running(s::ProcessChain) = process_running(s.processes)
 
