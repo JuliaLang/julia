@@ -715,6 +715,7 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
         if (e->head == call_sym || e->head == call1_sym || e->head == new_sym) {
             int alen = jl_array_dim0(e->args);
             jl_value_t *f = jl_exprarg(e,0);
+            simple_escape_analysis(f, esc, ctx);
             if (expr_is_symbol(f)) {
                 if (is_constant(f, ctx, false)) {
                     jl_value_t *fv =
@@ -742,9 +743,6 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
                         }
                     }
                 }
-            }
-            else if (jl_is_expr(f) || jl_is_lambda_info(f)) {
-                simple_escape_analysis(f, esc, ctx);
             }
 
             for(i=1; i < (size_t)alen; i++) {

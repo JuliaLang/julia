@@ -870,3 +870,13 @@ while(all([false for idx in 1:10]))
     x3789 = 1
 end
 @test x3789 == 0
+
+# issue #3852
+function f3852()
+    local x
+    for i = 1:10
+        x = identity
+    end
+    x("hi")
+end
+@test f3852() == "hi"
