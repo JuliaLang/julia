@@ -62,7 +62,7 @@ typealias Cdouble Float64
 #typealias Ccomplex_float Complex64
 #typealias Ccomplex_double Complex128
 
-const sizeof_off_t = ccall(:jl_sizeof_off_t, Int, ())
+const sizeof_off_t = ccall(:jl_sizeof_off_t, Cint, ())
 
 if sizeof_off_t === 4
     typealias FileOffset Int32
