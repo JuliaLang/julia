@@ -537,6 +537,37 @@ setindex!(t::AbstractArray, x, i::Real) =
     error("setindex! not defined for ",typeof(t))
 setindex!(t::AbstractArray, x) = throw(MethodError(setindex!, (t, x)))
 
+## Indexing: handle more indices than dimensions if "extra" indices are 1
+
+# Don't require vector/matrix subclasses to implement more than 1/2 indices,
+# respectively, by handling the extra dimensions in AbstractMatrix.
+
+function getindex(A::AbstractVector, i1,i2,i3...)
+    if i2*prod(i3) != 1
+        throw(BoundsError())
+    end
+    A[i1]
+end
+function getindex(A::AbstractMatrix, i1,i2,i3,i4...)
+    if i3*prod(i4) != 1
+        throw(BoundsError())
+    end
+    A[i1,i2]
+end
+
+function setindex!(A::AbstractVector, x, i1,i2,i3...)
+    if i2*prod(i3) != 1
+        throw(BoundsError())
+    end
+    A[i1] = x
+end
+function setindex!(A::AbstractMatrix, x, i1,i2,i3,i4...)
+    if i3*prod(i4) != 1
+        throw(BoundsError())
+    end
+    A[i1,i2] = x
+end
+
 ## Concatenation ##
 
 #TODO: ERROR CHECK
