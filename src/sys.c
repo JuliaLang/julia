@@ -38,23 +38,21 @@ DLLEXPORT uint32_t jl_getutf8(ios_t *s)
     return wc;
 }
 
-DLLEXPORT size_t jl_ios_size(ios_t *s)
-{
-    return s->size;
-}
+DLLEXPORT size_t jl_ios_size(ios_t *s) { return s->size; }
 
-#ifdef _P64
-DLLEXPORT int64_t jl_sizeof_off_t(void) { return sizeof(off_t); }
-#else
-DLLEXPORT int32_t jl_sizeof_off_t(void) { return sizeof(off_t); }
-#endif
+DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
+DLLEXPORT off_t jl_lseek(int fd, off_t offset, int whence) { return lseek(fd, offset, whence); }
+DLLEXPORT ssize_t jl_pwrite(int fd, const void *buf, size_t count, off_t offset) {
+    return pwrite(fd, buf, count, offset);
+}
+DLLEXPORT void *jl_mmap(void *addr, size_t length, int prot, int flags,
+                        int fd, off_t offset) {
+    return mmap(addr, length, prot, flags, fd, offset);
+}
 
 DLLEXPORT int jl_sizeof_ios_t(void) { return sizeof(ios_t); }
 
-DLLEXPORT long jl_ios_fd(ios_t *s)
-{
-    return s->fd;
-}
+DLLEXPORT long jl_ios_fd(ios_t *s) { return s->fd; }
 
 DLLEXPORT int32_t jl_nb_available(ios_t *s)
 {
