@@ -15,9 +15,9 @@ git_branch = $(shell git branch 2>/dev/null | sed -n '/\* /s///p')
 git_time = $(shell git log -1 --pretty=format:%ct 2>/dev/null)
 ifneq ($(git_time), )
 	ifeq ($(OS), Darwin)
-		date_string = "$(shell date -jr $(git_time) -u '+%Y-%m-%d %H:%M:%S %Z')"
+		date_string = "$(shell /bin/date -jr $(git_time) -u '+%Y-%m-%d %H:%M:%S %Z')"
 	else
-		date_string = "$(shell date --date=@$(git_time) -u '+%Y-%m-%d %H:%M:%S %Z')"
+		date_string = "$(shell /bin/date --date=@$(git_time) -u '+%Y-%m-%d %H:%M:%S %Z')"
 	endif
 else
 	date_string = ""
