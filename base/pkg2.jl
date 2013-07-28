@@ -35,7 +35,7 @@ end
 
 available() = sort!([keys(Pkg2.Dir.cd(Pkg2.Read.available))...], by=lowercase)
 
-status(io::IO) = Dir.cd() do
+status(io::IO=STDOUT) = Dir.cd() do
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
     println(io, "Required:")
