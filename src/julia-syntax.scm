@@ -429,7 +429,7 @@
 	;; call with unsorted keyword args. this sorts and re-dispatches.
 	,(method-def-expr-
 	  (list 'kw name) sparams
-	  `((:: ,kw (top Tuple)) ,@pargl ,@vararg)
+	  `((:: ,kw (top Array)) ,@pargl ,@vararg)
 	  `(block
 	    (line 0 || ||)
 	    ;; initialize keyword args to their defaults, or set a flag telling
@@ -446,10 +446,10 @@
 		 (block
 		  ;; ii = i*2 - 1
 		  (= ,ii (call (top -) (call (top *) ,i 2) 1))
-		  (= ,elt (call (top tupleref) ,kw ,ii))
+		  (= ,elt (call (top arrayref) ,kw ,ii))
 		  ,(foldl (lambda (kvf else)
 			    (let* ((k    (car kvf))
-				   (rval0 `(call (top tupleref) ,kw
+				   (rval0 `(call (top arrayref) ,kw
 						 (call (top +) ,ii 1)))
 				   (rval (if (decl? k)
 					     `(call (top typeassert)
@@ -470,7 +470,7 @@
 			      ;; otherwise add to rest keywords
 			      `(ccall 'jl_cell_1d_push Void (tuple Any Any)
 				      ,rkw (tuple ,elt
-						  (call (top tupleref) ,kw
+						  (call (top arrayref) ,kw
 							(call (top +) ,ii 1)))))
 			  (map list vars vals flags))))
 	    ;; set keywords that weren't present to their default values
@@ -1145,16 +1145,30 @@
   (check-kw-args kw)
   (receive
    (keys restkeys) (separate kwarg? kw)
-   `(call (top kwcall) ,f ,(length keys)
-	  ,@(apply append
-		   (map (lambda (a) `((quote ,(cadr a)) ,(caddr a)))
-			keys))
-	  ,(if (null? restkeys)
-	       '(tuple)
-	       (if (length= restkeys 1)
-		   (cadr (car restkeys))
-		   `(call (top append_any) ,@(map cadr restkeys))))
-	  ,@pa)))
+   (let ((keyargs (apply append
+			 (map (lambda (a) `((quote ,(cadr a)) ,(caddr a)))
+			      keys))))
+     (if (null? restkeys)
+	 `(call (top kwcall) ,f ,(length keys) ,@keyargs
+		(call (top Array) (top Any) ,(* 2 (length keys)))
+		,@pa)
+	 (let ((container (gensy)))
+	   `(block
+	     (= ,container (call (top Array) (top Any) ,(* 2 (length keys))))
+	     ,@(let ((k (gensy))
+		     (v (gensy)))
+		 (map (lambda (rk)
+			`(for (= (tuple ,k ,v) ,(cadr rk))
+			      (ccall 'jl_cell_1d_push2 Void
+				     (tuple Any Any Any)
+				     ,container
+				     (|::| ,k (top Symbol))
+				     ,v)))
+		      restkeys))
+	     (if (call (top isempty) ,container)
+		 (call ,f ,@pa)
+		 (call (top kwcall) ,f ,(length keys) ,@keyargs
+		       ,container ,@pa))))))))
 
 (define patterns
   (pattern-set

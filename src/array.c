@@ -654,3 +654,11 @@ DLLEXPORT void jl_cell_1d_push(jl_array_t *a, jl_value_t *item)
     jl_array_grow_end(a, 1);
     jl_cellset(a, jl_array_dim(a,0)-1, item);
 }
+
+DLLEXPORT void jl_cell_1d_push2(jl_array_t *a, jl_value_t *b, jl_value_t *c)
+{
+    assert(jl_typeis(a, jl_array_any_type));
+    jl_array_grow_end(a, 2);
+    jl_cellset(a, jl_array_dim(a,0)-2, b);
+    jl_cellset(a, jl_array_dim(a,0)-1, c);
+}

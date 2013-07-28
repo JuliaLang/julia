@@ -677,7 +677,8 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                 # use the fact that kwcall(...) calls ff.env.kwsorter
                 kwcount = fargs[2]
                 posargt = argtypes[(4+2*kwcount):end]
-                return abstract_call_gf(ff.env.kwsorter, (), tuple(Tuple, posargt...), e)
+                return abstract_call_gf(ff.env.kwsorter, (),
+                                        tuple(Array{Any,1}, posargt...), e)
             end
         end
         return Any
