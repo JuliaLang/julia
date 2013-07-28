@@ -27,15 +27,12 @@ if codespeed
     # Setup codespeed data dict for submissions to codespeed's JSON endpoint.  These parameters
     # are constant across all benchmarks, so we'll just let them sit here for now
     csdata = Dict()
-    #csdata["commitid"] = Base.BUILD_INFO.commit
-    csdata["commitid"] = Base.VERSION_COMMIT
+    csdata["commitid"] = Base.BUILD_INFO.commit
     csdata["project"] = "Julia"
-    #csdata["branch"] = Base.BUILD_INFO.branch
-    csdata["branch"] = ENV["JULIA_BRANCH"]
+    csdata["branch"] = Base.BUILD_INFO.branch
     csdata["executable"] = ENV["JULIA_FLAVOR"]
     csdata["environment"] = chomp(readall(`hostname`))
-    #csdata["result_date"] = join( split(Base.BUILD_INFO.date_string)[1:2], " " )    #Cut the timezone out
-    csdata["result_date"] = join( split(ENV["JULIA_COMMIT_DATE"])[1:2], " " )    #Cut the timezone out
+    csdata["result_date"] = join( split(Base.BUILD_INFO.date_string)[1:2], " " )    #Cut the timezone out
 end
 
 # Takes in the raw array of values in vals, along with the benchmark name, description, unit and whether less is better
