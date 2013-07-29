@@ -177,6 +177,13 @@ function TTY(fd::RawFD; readable::Bool = false)
     ret
 end
 
+# note that uv_is_readable/writeable work for any subtype of
+# uv_stream_t, including uv_tty_t and uv_pipe_t
+isreadable(io::Union(NamedPipe,PipeServer,TTY)) =
+    bool(ccall(:uv_is_readable, Cint, (Ptr{Void},), io.handle))
+iswriteable(io::Union(NamedPipe,PipeServer,TTY)) =
+    bool(ccall(:uv_is_writable, Cint, (Ptr{Void},), io.handle))
+
 show(io::IO,stream::TTY) = print(io,"TTY(",uv_status_string(stream),", ",
     nb_available(stream.buffer)," bytes waiting)")
 
