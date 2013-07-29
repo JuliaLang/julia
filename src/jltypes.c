@@ -28,8 +28,8 @@ jl_datatype_t *jl_tvar_type;
 jl_datatype_t *jl_uniontype_type;
 jl_datatype_t *jl_datatype_type;
 
-jl_value_t *jl_bottom_type;
-jl_value_t *jl_top_type;
+jl_uniontype_t *jl_bottom_type;
+jl_uniontype_t *jl_top_type;
 jl_datatype_t *jl_vararg_type;
 jl_datatype_t *jl_abstractarray_type;
 
@@ -649,7 +649,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
     else {
         if (var == covariant) {
             b = jl_type_intersect(a->ub, b, penv, eqc, var);
-            if (b == jl_bottom_type)
+            if (b == (jl_value_t*)jl_bottom_type)
                 return b;
         }
         else if (!jl_is_typevar(b) || !((jl_tvar_t*)b)->bound) {
@@ -677,10 +677,10 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
         if (var == invariant) {
             if (jl_is_typevar(b)) {
                 jl_value_t *both = meet_tvars(a, (jl_tvar_t*)b);
-                if (both == jl_bottom_type)
+                if (both == (jl_value_t*)jl_bottom_type)
                     return both;
                 if (!jl_is_typevar(both))
-                    both = (jl_value_t*)jl_new_typevar(underscore_sym, jl_bottom_type, both);
+                    both = (jl_value_t*)jl_new_typevar(underscore_sym, (jl_value_t*)jl_bottom_type, both);
                 extend((jl_value_t*)a, both, penv);
                 extend((jl_value_t*)b, both, penv);
             }
@@ -886,7 +886,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
 
     super = (jl_datatype_t*)jl_type_intersect((jl_value_t*)sub->super, (jl_value_t*)super, penv, eqc, var);
 
-    if ((jl_value_t*)super == jl_bottom_type) {
+    if ((jl_value_t*)super == (jl_value_t*)jl_bottom_type) {
         JL_GC_POP();
         return (jl_value_t*)jl_bottom_type;
     }
@@ -1764,6 +1764,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         ndt->instance = NULL;
         ndt->uid = 0;
         ndt->struct_decl = NULL;
+        ndt->llvm_val = julia_to_llvm(tn, ndt);
         ndt->size = ndt->alignment = 0;
         ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)dt->super, env,n,stack);
         jl_tuple_t *ftypes = dt->types;
@@ -2464,6 +2465,7 @@ void jl_init_types(void)
     jl_datatype_type->instance = NULL;
     jl_datatype_type->uid = jl_assign_type_uid();
     jl_datatype_type->struct_decl = NULL;
+    jl_datatype_type->llvm_val = julia_to_llvm(jl_datatype_type->name, jl_datatype_type);
     jl_datatype_type->abstract = 0;
     jl_datatype_type->pointerfree = 0;
     // NOTE: types should not really be mutable, but the instance and
@@ -2486,6 +2488,7 @@ void jl_init_types(void)
     jl_typename_type->ctor_factory = NULL;
     jl_typename_type->instance = NULL;
     jl_typename_type->struct_decl = NULL;
+    jl_typename_type->llvm_val = julia_to_llvm(jl_typename_type->name, jl_typename_type);
     jl_typename_type->abstract = 0;
     jl_typename_type->pointerfree = 0;
     jl_typename_type->mutabl = 1;
@@ -2503,6 +2506,7 @@ void jl_init_types(void)
     jl_sym_type->instance = NULL;
     jl_sym_type->uid = jl_assign_type_uid();
     jl_sym_type->struct_decl = NULL;
+    jl_sym_type->llvm_val = julia_to_llvm(jl_sym_type->name, jl_sym_type);
     jl_sym_type->size = 0;
     jl_sym_type->abstract = 0;
     jl_sym_type->pointerfree = 0;
@@ -2511,12 +2515,13 @@ void jl_init_types(void)
     // now they can be used to create the remaining base kinds and types
     jl_uniontype_type = jl_new_datatype(jl_symbol("UnionType"),
                                         jl_type_type, jl_null,
-                                        jl_tuple(1, jl_symbol("types")),
-                                        jl_tuple(1, jl_tuple_type),
+                                        jl_tuple(2, jl_symbol("types"), jl_symbol("")),
+                                        jl_tuple(2, jl_tuple_type, jl_any_type),
                                         0, 0);
     jl_uniontype_type->fptr = jl_f_no_function;
 
-    jl_bottom_type = (jl_value_t*)jl_new_struct(jl_uniontype_type, jl_null);
+    jl_bottom_type = (jl_uniontype_t*)jl_new_struct(jl_uniontype_type, jl_null);
+    jl_bottom_type->llvm_val = julia_global_to_llvm("None", jl_bottom_type);
 
     jl_tvar_type = jl_new_datatype(jl_symbol("TypeVar"),
                                    jl_any_type, jl_null,
@@ -2531,11 +2536,12 @@ void jl_init_types(void)
     jl_undef_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Undef"),
                                         jl_any_type, jl_null);
 
-    jl_top_type = jl_new_struct(jl_uniontype_type,
+    jl_top_type = (jl_uniontype_t*)jl_new_struct(jl_uniontype_type,
                                 jl_tuple2(jl_any_type, jl_undef_type));
+    jl_top_type->llvm_val = NULL;
 
     jl_tvar_t *tttvar = jl_new_typevar(jl_symbol("T"),
-                                       (jl_value_t*)jl_bottom_type,jl_top_type);
+                                       (jl_value_t*)jl_bottom_type,(jl_value_t*)jl_top_type);
     jl_type_type->parameters = jl_tuple(1, tttvar);
 
     jl_tuple_t *tv;
@@ -2732,7 +2738,7 @@ void jl_init_types(void)
     // Type{T}
     jl_typetype_tvar = jl_new_typevar(jl_symbol("T"),
                                       (jl_value_t*)jl_bottom_type,
-                                      jl_top_type);
+                                      (jl_value_t*)jl_top_type);
     jl_typetype_type = (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_type_type,
                                                      jl_tuple(1,jl_typetype_tvar));
 
@@ -2748,6 +2754,7 @@ void jl_init_types(void)
     jl_tupleset(jl_datatype_type->types, 12, (jl_value_t*)jl_bool_type);
     jl_tupleset(jl_datatype_type->types, 13, (jl_value_t*)jl_bool_type);
     jl_tupleset(jl_function_type->types, 0, pointer_void);
+    jl_tupleset(jl_uniontype_type->types, 1, pointer_void);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);

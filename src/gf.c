@@ -515,7 +515,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                 jl_value_t *slottype = nth_slot_type(curr->sig, i);
                 if (slottype && curr->func!=method) {
                     if (jl_is_type_type(slottype) &&
-                        jl_type_intersection(slottype, decl_i) != jl_bottom_type) {
+                        jl_type_intersection(slottype, decl_i) != (jl_value_t*)jl_bottom_type) {
                         ok=0;
                         break;
                     }
@@ -719,7 +719,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                 jl_value_t *slottype = nth_slot_type(curr->sig, i);
                 if (slottype && curr->func!=method) {
                     if (jl_is_type_type(slottype) &&
-                        jl_type_intersection(slottype, decl_i) != jl_bottom_type) {
+                        jl_type_intersection(slottype, decl_i) != (jl_value_t*)jl_bottom_type) {
                         ok=0;
                         break;
                     }

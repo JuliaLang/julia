@@ -593,6 +593,7 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
         else
             tn = jl_new_typename((jl_sym_t*)name);
         t->name = tn;
+        t->llvm_val = julia_to_llvm(tn, t);
     }
 
     if (t->name->primary == NULL)
@@ -639,10 +640,11 @@ jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
 
 jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
 {
-    jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_value_t*)jl_uniontype_type,1);
+    jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_value_t*)jl_uniontype_type,2);
     // don't make unions of 1 type; Union(T)==T
     assert(jl_tuple_len(types) != 1);
     t->types = types;
+    t->llvm_val = NULL;
     return t;
 }
 

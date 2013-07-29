@@ -270,7 +270,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         }
         *mightNeedTempSpace = true;
         Value *p = builder.CreateCall4(value_to_pointer_func,
-                                       literal_pointer_val(jl_tparam0(jt)), jv,
+                                       literal_type(jl_tparam0(jt)), jv,
                                        ConstantInt::get(T_int32, argn),
                                        ConstantInt::get(T_int32, (int)addressOf));
         return builder.CreateBitCast(p, ty);
@@ -729,7 +729,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     sizeof(void*)+((jl_datatype_t*)rt)->size));
         //TODO: Fill type pointer fields with C_NULL's
         builder.CreateStore(
-                literal_pointer_val((jl_value_t*)rt),
+                literal_type(rt),
                 emit_nthptr_addr(result, (size_t)0));
         argvals[0] = builder.CreateBitCast(
                 emit_nthptr_addr(result, (size_t)1),
@@ -852,7 +852,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             builder.CreateCall(jlallocobj_func,
                                ConstantInt::get(T_size,
                                     sizeof(void*)+((jl_datatype_t*)rt)->size));
-        builder.CreateStore(literal_pointer_val((jl_value_t*)rt),
+        builder.CreateStore(literal_type(rt),
                             emit_nthptr_addr(strct, (size_t)0));
         builder.CreateStore(result,
                             builder.CreateBitCast(
