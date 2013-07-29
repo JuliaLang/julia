@@ -417,7 +417,7 @@ const SIGPIPE = 13
 function success(proc::Process)
     assert(process_exited(proc))
     if proc.exit_code < 0
-        error(UVError("could not start process "*proc,proc.exit_code))
+        error(UVError("could not start process "*string(proc.cmd),proc.exit_code))
     end
     proc.exit_code==0 && (proc.term_signal == 0 || proc.term_signal == SIGPIPE)
 end
