@@ -880,3 +880,10 @@ function f3852()
     x("hi")
 end
 @test f3852() == "hi"
+
+# issue #3821
+function f3821()
+    p = []
+    [x for x in p]
+end
+@test isa(f3821(), Array)

@@ -1602,7 +1602,7 @@
       (define (construct-loops ranges)
 	(if (null? ranges)
 	    `(block (= ,oneresult ,expr)
-		    (type_goto ,initlabl)
+		    (type_goto ,initlabl ,oneresult)
 		    (boundscheck false)
 		    (call (top setindex!) ,result ,oneresult ,ri)
 		    (boundscheck pop)
@@ -1683,7 +1683,7 @@
 	(if (null? ranges)
 	    `(block (= ,onekey ,(cadr expr))
 		    (= ,oneval ,(caddr expr))
-		    (type_goto ,initlabl)
+		    (type_goto ,initlabl ,onekey ,oneval)
 		    (call (top setindex!) ,result ,oneval ,onekey))
 	    `(for ,(car ranges)
 		  ,(construct-loops (cdr ranges)))))
@@ -2540,11 +2540,11 @@ So far only the second case can actually occur.
 				   (cons (cons (cadr e) l) label-map))))))
 	    ((type_goto) (let ((m (assq (cadr e) label-map)))
 			   (if m
-			       (emit `(type_goto ,(cdr m)))
+			       (emit `(type_goto ,(cdr m) ,@(cddr e)))
 			       (let ((l (make-label)))
 				 (set! label-map
 				       (cons (cons (cadr e) l) label-map))
-				 (emit `(type_goto ,l))))))
+				 (emit `(type_goto ,l ,@(cddr e)))))))
 	    ;; exception handlers are lowered using
 	    ;; (enter L) - push handler with catch block at label L
 	    ;; (leave n) - pop N exception handlers
