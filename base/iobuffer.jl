@@ -144,6 +144,7 @@ function close(io::IOBuffer)
     io.ptr = 1
     nothing
 end
+isopen(io::IOBuffer) = io.readable || io.writable || io.seekable || nb_available(io) > 0
 function bytestring(io::IOBuffer)
     if !io.readable error("bytestring read failed") end 
     if !io.seekable error("bytestring read failed") end 

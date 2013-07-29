@@ -605,6 +605,11 @@ void ios_close(ios_t *s)
     s->size = s->maxsize = s->bpos = 0;
 }
 
+int ios_isopen(ios_t *s)
+{
+	 return s->fd != -1;
+}
+
 static void _buf_init(ios_t *s, bufmode_t bm)
 {
     s->bm = bm;
