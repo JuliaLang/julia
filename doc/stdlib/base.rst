@@ -958,23 +958,15 @@ I/O
 
    Close an I/O stream. Performs a ``flush`` first.
 
-.. function:: write(stream, x[, byteorder])
+.. function:: write(stream, x)
 
-   Write the canonical binary representation of a value to the given
-   stream. For numeric types, the optional argument specifies the byte order
-   or endianness: ``NetworkByteOrder`` for big-endian, ``LittleByteOrder`` for
-   little-endian, and ``HostByteOrder`` (the default) for the type of the
-   host.
+   Write the canonical binary representation of a value to the given stream.
 
-.. function:: read(stream, type[, byteorder])
+.. function:: read(stream, type)
 
-   Read a value of the given type from a stream, in canonical binary
-   representation. For numeric types, the optional argument specifies the byte
-   order or endianness: ``NetworkByteOrder`` for big-endian,
-   ``LittleByteOrder`` for little-endian, and ``HostByteOrder`` (the default)
-   for the type of the host.
+   Read a value of the given type from a stream, in canonical binary representation.
 
-.. function:: read(stream, type[, byteorder], dims)
+.. function:: read(stream, type, dims)
 
    Read a series of values of the given type from a stream, in canonical binary representation. ``dims`` is either a tuple or a series of integer arguments specifying the size of ``Array`` to return.
 

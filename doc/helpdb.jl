@@ -1473,27 +1473,21 @@
 
 "),
 
-("I/O","Base","write","write(stream, x[, byteorder])
+("I/O","Base","write","write(stream, x)
 
    Write the canonical binary representation of a value to the given
-   stream. For numeric types, the optional argument specifies the byte
-   order or endianness: \"NetworkByteOrder\" for big-endian,
-   \"LittleByteOrder\" for little-endian, and \"HostByteOrder\" (the
-   default) for the type of the host.
+   stream.
 
 "),
 
-("I/O","Base","read","read(stream, type[, byteorder])
+("I/O","Base","read","read(stream, type)
 
    Read a value of the given type from a stream, in canonical binary
-   representation. For numeric types, the optional argument specifies
-   the byte order or endianness: \"NetworkByteOrder\" for big-endian,
-   \"LittleByteOrder\" for little-endian, and \"HostByteOrder\" (the
-   default) for the type of the host.
+   representation.
 
 "),
 
-("I/O","Base","read","read(stream, type[, byteorder], dims)
+("I/O","Base","read","read(stream, type, dims)
 
    Read a series of values of the given type from a stream, in
    canonical binary representation. \"dims\" is either a tuple or a
