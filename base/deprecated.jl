@@ -219,6 +219,9 @@ export PipeString
 @deprecate msync(A::Array, flags::Int)    msync(A)
 @deprecate msync(A::BitArray, flags::Int) msync(A)
 @deprecate square(x::Number)          x*x
+@deprecate disassemble(f::Function,t::Tuple) asm_llvm(f,t)
+@deprecate disassemble(f::Function,t::Tuple,asm::Bool) (asm ? asm_native(f,t) : asm_llvm(f,t))
+@deprecate finfer                        ast_typed
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)

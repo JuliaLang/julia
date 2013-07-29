@@ -993,8 +993,10 @@ export
     whicht,
     whos,
     isinteractive,
-    disassemble,
-    finfer,
+    asm_llvm,
+    asm_native,
+    ast_typed,
+    ast_lowered,
     isconst,
     isgeneric,
 
