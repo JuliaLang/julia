@@ -248,14 +248,14 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     assert(f != NULL);
     nested_compile = last_n_c;
     //f->dump();
-    //verifyFunction(*f);
+    verifyFunction(*f);
     FPM->run(*f);
     //n_compile++;
     // print out the function's LLVM code
     //ios_printf(ios_stderr, "%s:%d\n",
     //           ((jl_sym_t*)li->file)->name, li->line);
     //f->dump();
-    //verifyFunction(*f);
+    verifyFunction(*f);
     if (old != NULL) {
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
@@ -1162,7 +1162,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 if (jl_is_type_type(aty))
                     aty = (jl_value_t*)jl_typeof(jl_tparam0(aty));
                 JL_GC_POP();
-                return literal_pointer_val(aty);
+                return literal_type(aty);
             }
             arg1 = boxed(arg1);
             JL_GC_POP();
@@ -1177,14 +1177,14 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             if (jl_subtype(arg, tp0, 0)) {
                 JL_GC_POP();
                 Value *v = emit_expr(args[1], ctx);
-                if (tp0 == jl_bottom_type) {
+                if (tp0 == (jl_value_t*)jl_bottom_type) {
                     v = builder.CreateUnreachable();
                     BasicBlock *cont = BasicBlock::Create(getGlobalContext(),"after_assert",ctx->f);
                     builder.SetInsertPoint(cont);
                 }
                 return v;
             }
-            if (tp0 == jl_bottom_type) {
+            if (tp0 == (jl_value_t*)jl_bottom_type) {
                 emit_expr(args[1], ctx);
                 Value *v = emit_error("reached code declared unreachable", ctx);
                 JL_GC_POP();
@@ -1236,7 +1236,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 Value *arg1 = emit_expr(args[1], ctx);
                 JL_GC_POP();
                 return builder.CreateICmpEQ(emit_typeof(arg1),
-                                            literal_pointer_val(tp0));
+                                            literal_type(tp0));
             }
         }
     }
@@ -1368,12 +1368,12 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
 #ifdef  OVERLAP_TUPLE_LEN
         builder.
             CreateStore(builder.
-                        CreateOr(builder.CreatePtrToInt(literal_pointer_val((jl_value_t*)jl_tuple_type), T_int64),
+                        CreateOr(builder.CreatePtrToInt(literal_type(jl_tuple_type), T_int64),
                                  ConstantInt::get(T_int64, nargs<<52)),
                         builder.CreateBitCast(emit_nthptr_addr(tup, (size_t)0),
                                               T_pint64));
 #else
-        builder.CreateStore(literal_pointer_val((jl_value_t*)jl_tuple_type),
+        builder.CreateStore(literal_type((jl_value_t*)jl_tuple_type),
                             emit_nthptr_addr(tup, (size_t)0));
         builder.CreateStore(literal_pointer_val((jl_value_t*)nargs),
                             emit_nthptr_addr(tup, (size_t)1));
@@ -1580,7 +1580,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                               jl_tuple_len(ctx->sp)/2);
             if (jl_is_leaf_type(ty)) {
                 JL_GC_POP();
-                return literal_pointer_val(ty);
+                return literal_type(ty);
             }
         }
     }
@@ -1861,7 +1861,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     else {
         jl_varinfo_t &vi = ctx->vars[s];
         jl_value_t *rt = expr_type(r,ctx);
-        if ((jl_is_symbol(r) || jl_is_symbolnode(r)) && rt == jl_bottom_type) {
+        if ((jl_is_symbol(r) || jl_is_symbolnode(r)) && rt == (jl_value_t*)jl_bottom_type) {
             // sometimes x = y::None occurs
             if (builder.GetInsertBlock()->getTerminator() != NULL)
                 return;
@@ -2105,7 +2105,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         else {
             extype = (jl_value_t*)jl_any_type;
         }
-        return literal_pointer_val(extype);
+        return literal_type(extype);
     }
     else if (head == new_sym) {
         jl_value_t *ty = expr_type(args[0], ctx);
@@ -3031,6 +3031,39 @@ static GlobalVariable *global_to_llvm(const std::string &cname, void *addr)
                            NULL, cname);
     jl_ExecutionEngine->addGlobalMapping(gv, addr);
     return gv;
+}
+
+extern "C" void *julia_global_to_llvm(const char *cname, void *addr)
+{
+    GlobalVariable *gv =
+        new GlobalVariable(*jl_Module, jl_value_llvmt,
+                           true, GlobalVariable::ExternalLinkage,
+                           NULL, cname);
+    jl_ExecutionEngine->addGlobalMapping(gv, addr);
+    return (void*)gv;
+}
+extern "C" void *julia_to_llvm(jl_typename_t *name, void *addr) {
+    size_t len = strlen(name->name->name)+1;
+    jl_module_t *parent = name->module, *prev = NULL;
+    while (parent != NULL && parent != prev) {
+        len += strlen(parent->name->name)+1;
+        prev = parent;
+        parent = parent->parent;
+    }
+    char *fullname = (char*)alloca(len);
+    len -= strlen(name->name->name)+1;
+    strcpy(fullname+len,name->name->name);
+    parent = name->module;
+    prev = NULL;
+    while (parent != NULL && parent != prev) {
+        size_t part = strlen(parent->name->name)+1;
+        strcpy(fullname+len-part,parent->name->name);
+        fullname[len-1] = '.';
+        len -= part;
+        prev = parent;
+        parent = parent->parent;
+    }
+    return julia_global_to_llvm(fullname, addr);
 }
 
 static Function *jlfunc_to_llvm(const std::string &cname, void *addr)

@@ -58,6 +58,22 @@ static Value *literal_pointer_val(void *p)
     return literal_pointer_val(p, T_pint8);
 }
 
+static Value *literal_type(jl_value_t *t)
+{
+    if (jl_is_datatype(t))
+        return (Value*)((jl_datatype_t*)t)->llvm_val;
+    else if (jl_is_uniontype(t)) {
+        jl_uniontype_t *ut = (jl_uniontype_t*)t;
+        if (ut->llvm_val == NULL)
+            ut->llvm_val = julia_global_to_llvm((char*)"typeunion",t);
+        return (Value*)ut->llvm_val;
+    }
+    else {
+        assert(jl_is_tuple(t));
+        return literal_pointer_val(t);
+    }
+}
+
 // --- mapping between julia and llvm types ---
 
 static Type *julia_struct_to_llvm(jl_value_t *jt);
@@ -513,7 +529,7 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         e = jl_fieldref(e,0);
         jl_binding_t *b = jl_get_binding(topmod(ctx), (jl_sym_t*)e);
         if (!b || !b->value)
-            return jl_top_type;
+            return (jl_value_t*)jl_top_type;
         if (b->constp) {
             e = b->value;
             goto type_of_constant;
@@ -540,7 +556,7 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         }
         jl_binding_t *b = jl_get_binding(ctx->module, (jl_sym_t*)e);
         if (!b || !b->value)
-            return jl_top_type;
+            return (jl_value_t*)jl_top_type;
         if (b->constp)
             e = b->value;
         else
