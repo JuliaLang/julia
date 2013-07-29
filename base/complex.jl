@@ -75,6 +75,16 @@ end
 show(io::IO, z::Complex) = complex_show(io, z, false)
 showcompact(io::IO, z::Complex) = complex_show(io, z, true)
 
+function read{T<:Real}(s::IO, ::Type{Complex{T}})
+    r = read(s,T)
+    i = read(s,T)
+    Complex{T}(r,i)
+end
+function write(s::IO, z::Complex)
+    write(s,real(z))
+    write(s,imag(z))
+end
+
 
 ## singleton type for imaginary unit constant ##
 
