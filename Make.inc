@@ -181,13 +181,6 @@ endif
 ifeq ($(ARCH),i686)
 ifeq ($(shell sysctl -n hw.cpu64bit_capable),1)
 ARCH = x86_64
-CC += -m64
-CXX += -m64
-FC += -m64
-else
-CC += -m32
-CXX += -m32
-FC += -m32
 endif
 BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
