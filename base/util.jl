@@ -256,6 +256,22 @@ function check_blas()
     end
 end
 
+# Returns the PCRE version as a string, in an attempt to avoid using PCRE itself
+function get_pcre_version()
+    version_string = bytestring( ccall((:pcre_version, "libpcre"), Ptr{Uint8}, () ))
+    return version_string[1:search( version_string, " ")[1]-1]
+end
+
+function check_pcre()
+    required_version = "8.31"
+    linked_version = get_pcre_version()
+    # Check to see if it's a new enough pcre version, without actually using pcre
+    if float(linked_version) < float(required_version)
+        println("ERROR: The linked PCRE is too old!  PCRE $required_version or higher is required, currently linked against $linked_version")
+        quit()
+    end
+end
+
 # system information
 
 function versioninfo(io::IO=STDOUT, verbose::Bool=false)
@@ -288,6 +304,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "  LAPACK: ",liblapack_name)
     println(io,             "  LIBM: ",libm_name)
     if verbose
+        println(io,         "  libpcre: libpcre (Version $(get_pcre_version()))")
         println(io,         "Environment:")
         for (k,v) in ENV
             if !is(match(r"JULIA|PATH|FLAG|^TERM$|HOME",k), nothing)
