@@ -35,7 +35,7 @@ export File,
        S_IRGRP, S_IWGRP, S_IXGRP, S_IRWXG,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
-import Base: uvtype, uvhandle, eventloop, fd, position, stat, close, write, read, readall, 
+import Base: uvtype, uvhandle, eventloop, fd, position, stat, close, write, read, readbytes, 
             _sizeof_uv_fs
 
 include("file_constants.jl")
