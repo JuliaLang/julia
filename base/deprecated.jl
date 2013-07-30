@@ -148,6 +148,7 @@ export PipeString
 
 # 0.2
 
+@deprecate  iswriteable         iswritable
 @deprecate  localize            localpart
 @deprecate  logb                exponent
 @deprecate  ilogb               exponent

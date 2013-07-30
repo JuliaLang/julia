@@ -21,7 +21,7 @@ end
 close(t::FileMonitor) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
 const UV_READABLE = 1
-const UV_WRITEABLE = 2
+const UV_WRITABLE = 2
 
 convert(::Type{Int32},fd::RawFD) = fd.fd 
 
@@ -107,9 +107,9 @@ function fdw_wait_cb(fdw::FDWatcher,status,events)
     end
 end
 
-function _wait(fdw::FDWatcher,readable,writeable)
+function _wait(fdw::FDWatcher,readable,writable)
     events = (readable ? UV_READABLE : 0) | 
-             (writeable ? UV_WRITEABLE : 0)
+             (writable ? UV_WRITABLE : 0)
     if events == 0
         error("Must be watching for at least one event")
     end
@@ -121,7 +121,7 @@ function _wait(fdw::FDWatcher,readable,writeable)
     while true
         events = wait(fdw.notify)
         if (readable && (events & UV_READABLE) != 0) ||
-            (writeable && (events & UV_WRITEABLE) != 0)
+            (writable && (events & UV_WRITABLE) != 0)
             break
         end
     end
@@ -145,7 +145,7 @@ let
             fdwatcher_array = Array(FDWatcher,0)
         end
 
-        function wait(fd::RawFD; readable=false, writeable=false)
+        function wait(fd::RawFD; readable=false, writable=false)
             old_length = length(fdwatcher_array)
             if fd.fd+1 > old_length
                 resize!(fdwatcher_array,fd.fd+1)
@@ -154,7 +154,7 @@ let
             if is(fdwatcher_array[fd.fd+1],empty_watcher)
                 fdwatcher_array[fd.fd+1] = FDWatcher(fd)
             end
-            _wait(fdwatcher_array[fd.fd+1],readable,writeable)
+            _wait(fdwatcher_array[fd.fd+1],readable,writable)
         end 
     end
     @windows_only begin
@@ -163,15 +163,15 @@ let
             fdwatcher_array = Dict{WindowsRawSocket,FDWatcher}()
         end
 
-        function wait(fd::RawFD; readable=false, writeable=false)
-            wait(_get_osfhandle(fd); readable=readable, writeable=writeable)
+        function wait(fd::RawFD; readable=false, writable=false)
+            wait(_get_osfhandle(fd); readable=readable, writable=writable)
         end
 
-        function wait(socket::WindowsRawSocket; readable=false, writeable=false)
+        function wait(socket::WindowsRawSocket; readable=false, writable=false)
             if !has(fdwatcher_array,socket.handle)
                 fdwatcher_array[fd.handle] = FDWatcher(socket)
             end
-            _wait(fdwatcher_array[fd.handle],readable,writeable)
+            _wait(fdwatcher_array[fd.handle],readable,writable)
         end 
     end
 end
@@ -258,10 +258,10 @@ end
 _uv_hook_close(uv::FileMonitor) = (uv.handle = 0; nothing)
 _uv_hook_close(uv::UVPollingWatcher) = (uv.handle = 0; nothing)
 
-function poll_fd(s, seconds::Real; readable=false, writeable=false)
+function poll_fd(s, seconds::Real; readable=false, writable=false)
     wt = Condition()
 
-    @schedule (args = wait(s; readable=readable, writeable=writeable); notify(wt,(:poll,args)))
+    @schedule (args = wait(s; readable=readable, writable=writable); notify(wt,(:poll,args)))
     @schedule (sleep(seconds); notify(wt,(:timeout,0)))
 
     _, ret = wait(wt)
