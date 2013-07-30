@@ -2664,7 +2664,7 @@ Statistics
 
 .. function:: std(v[, region])
 
-   Compute the sample standard deviation of a vector or array``v``, optionally along dimensions in ``region``. The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v - mean(v)).^2) / (length(v) - 1))``.
+   Compute the sample standard deviation of a vector or array ``v``, optionally along dimensions in ``region``. The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v - mean(v)).^2) / (length(v) - 1))``.
 
 .. function:: stdm(v, m)
 
@@ -2672,7 +2672,7 @@ Statistics
 
 .. function:: var(v[, region])
 
-   Compute the sample variance of a vector or array``v``, optionally along dimensions in ``region``. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v - mean(v)).^2) / (length(v) - 1)``.
+   Compute the sample variance of a vector or array ``v``, optionally along dimensions in ``region``. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v - mean(v)).^2) / (length(v) - 1)``.
 
 .. function:: varm(v, m)
 
@@ -2692,8 +2692,8 @@ Statistics
 .. function:: hist(v, e) -> e, counts
 
    Compute the histogram of ``v`` using a vector/range ``e`` as the edges for
-   the bins. The result will be a vector of length ``length(e) - 1``, with the
-   ``i``th element being ``sum(e[i] .< v .<= e[i+1])``.
+   the bins. The result will be a vector of length ``length(e) - 1``, such that the
+   element at location ``i`` satisfies ``sum(e[i] .< v .<= e[i+1])``.
 
 .. function:: histrange(v, n)
 
