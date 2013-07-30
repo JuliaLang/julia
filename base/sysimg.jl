@@ -1,7 +1,3 @@
-# Disable deleteBody after function generation
-# TODO: this does not work. get "ccall not defined" error
-#ccall(:jl_set_imaging_mode, Void, (Uint8,), 1)
-
 baremodule Base
 
 eval(x) = Core.eval(Base,x)
@@ -112,7 +108,6 @@ include("stat.jl")
 include("fs.jl")
 importall .FS
 include("process.jl")
-reinit_stdio_fake()
 ccall(:jl_get_uv_hooks, Void, ())
 include("grisu.jl")
 import .Grisu.print_shortest

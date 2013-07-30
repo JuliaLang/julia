@@ -652,6 +652,7 @@ void julia_init(char *imageFile)
     jl_init_serializer();
 
     if (!imageFile) {
+        jl_set_imaging_mode(1);
         jl_main_module = jl_new_module(jl_symbol("Main"));
         jl_main_module->parent = jl_main_module;
         jl_core_module = jl_new_module(jl_symbol("Core"));

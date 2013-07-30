@@ -26,6 +26,7 @@
 #include "llvm/PassManager.h"
 #include "llvm/Analysis/Verifier.h"
 #include "llvm/Analysis/Passes.h"
+#include "llvm/Bitcode/ReaderWriter.h"
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/LLVMContext.h"
@@ -112,7 +113,7 @@ static FunctionPassManager *FPM;
 
 // for image reloading
 static void *sysimg_handle;
-static bool imaging_mode = true;
+static bool imaging_mode = false;
 static std::map<size_t, std::string> delayed_fptrs;
 
 // types
@@ -430,10 +431,20 @@ struct jl_varinfo_t {
     {
     }
 };
+
+// --- helpers for reloading IR image
 extern "C" DLLEXPORT
 void jl_set_imaging_mode(uint8_t stat)
 {
     imaging_mode = (stat == 1);
+}
+
+extern "C" DLLEXPORT
+void jl_dump_bitcode(char* fname)
+{
+    std::string err;
+    raw_fd_ostream OS(fname, err);
+    WriteBitcodeToFile(jl_Module, OS);
 }
 
 extern "C" DLLEXPORT
