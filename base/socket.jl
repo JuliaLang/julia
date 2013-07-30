@@ -327,7 +327,7 @@ _jl_sockaddr_set_port(ptr::Ptr{Void},port::Uint16) =
     ccall(:jl_sockaddr_set_port,Void,(Ptr{Void},Uint16),ptr,port)
 
 accept(server::TcpServer) = accept(server, TcpSocket())
-accept(server::PipeServer) = accept(server, NamedPipe())
+accept(server::PipeServer) = accept(server, Pipe())
 
 ##
 

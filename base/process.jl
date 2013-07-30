@@ -9,7 +9,7 @@ type Cmd <: AbstractCmd
 end
 
 function eachline(cmd::AbstractCmd,stdin)
-    out = NamedPipe(C_NULL)
+    out = Pipe(C_NULL)
     processes = spawn(false, cmd, (stdin,out,STDERR))
     # implicitly close after reading lines, since we opened
     EachLine(out, ()->close(out))
@@ -249,7 +249,7 @@ macro setup_stdio()
     quote
         close_in,close_out,close_err = false,false,false
         in,out,err = stdios
-        if isa(stdios[1],NamedPipe) 
+        if isa(stdios[1],Pipe) 
             if stdios[1].handle==C_NULL
                 in = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
                 #in = c_malloc(_sizeof_uv_named_pipe)
@@ -260,7 +260,7 @@ macro setup_stdio()
             in = FS.open(stdios[1].filename,JL_O_RDONLY)
             close_in = true
         end
-        if isa(stdios[2],NamedPipe)
+        if isa(stdios[2],Pipe)
             if stdios[2].handle==C_NULL
                 out = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
                 #out = c_malloc(_sizeof_uv_named_pipe)
@@ -271,7 +271,7 @@ macro setup_stdio()
             out = FS.open(stdios[2].filename,JL_O_WRONLY|JL_O_CREAT|(stdios[2].append?JL_O_APPEND:JL_O_TRUNC),S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
             close_out = true
         end
-        if isa(stdios[3],NamedPipe)
+        if isa(stdios[3],Pipe)
             if stdios[3].handle==C_NULL
                 err = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
                 #err = c_malloc(_sizeof_uv_named_pipe)
@@ -368,7 +368,7 @@ spawn_nostdin(cmd::AbstractCmd,out::UVStream) = spawn(false,cmd,(null_handle,out
 #returns a pipe to read from the last command in the pipelines
 readsfrom(cmds::AbstractCmd) = readsfrom(cmds, null_handle)
 function readsfrom(cmds::AbstractCmd, stdin::AsyncStream)
-    out = NamedPipe(C_NULL)
+    out = Pipe(C_NULL)
     processes = spawn(false, cmds, (stdin,out,STDERR))
     start_reading(out)
     (out, processes)
@@ -376,13 +376,13 @@ end
 
 writesto(cmds::AbstractCmd) = writesto(cmds, null_handle)
 function writesto(cmds::AbstractCmd, stdout::UVStream)
-    in = NamedPipe(C_NULL)
+    in = Pipe(C_NULL)
     processes = spawn(false, cmds, (in,stdout,null_handle))
     (in, processes)
 end
 
 function readandwrite(cmds::AbstractCmd)
-    in = NamedPipe(C_NULL)
+    in = Pipe(C_NULL)
     (out, processes) = readsfrom(cmds, in)
     return (out, in, processes)
 end
