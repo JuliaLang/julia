@@ -839,46 +839,32 @@ function connect(sock::AsyncStream, args...)
 end
 
 dup(x::RawFD) = RawFD(ccall((@windows? :_dup : :dup),Int32,(Int32,),x.fd))
-dup(src::RawFD,target::RawFD) = systemerror("dup",ccall((@windows? :_dup2 : :dup),Int32,(Int32,Int32),src.fd,target.fd) == -1)
+dup(src::RawFD,target::RawFD) = systemerror("dup",ccall((@windows? :_dup2 : :dup2),Int32,(Int32,Int32),src.fd,target.fd) == -1)
 
-@unix_only _fd(x::Pipe) = RawFD(ccall(:jl_uv_pipe_fd,Int32,(Ptr{Void},),x.handle))
+@unix_only _fd(x::AsyncStream) = RawFD(ccall(:jl_uv_pipe_fd,Int32,(Ptr{Void},),x.handle))
 @windows_only _fd(x::Pipe) = WindowsRawSocket(ccall(:jl_uv_pipe_handle,Ptr{Void},(Ptr{Void},),x.handle))
 
-function redirect_stdin(handle::AsyncStream) 
-    global STDIN
-    @windows? ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),-10,_fd(handle).handle) : dup(_fd(handle),  RawFD(0))
-    STDIN = handle
+for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,true,1,:jl_uv_stdout),(:STDERR,true,1,:jl_uv_stderr))
+    f = symbol("redirect_"*lowercase(string(x)))
+    @eval begin
+        function ($f)(handle::AsyncStream)
+            global $x
+            # We're about to dup the file descriptor over, so there's nothing else we can do
+            # Windows is different since the UV Stream has a handle not a file descriptor
+            @unix_only if isa($x,AsyncStream) && _fd($x) == RawFD($unix_fd)
+                ccall(:jl_forceclose_uv,Void,(Ptr{Void},),($x).handle)   
+            end
+            @windows? ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),$(-10-unix_fd),_fd(handle).handle) : dup(_fd(handle),  RawFD($unix_fd))
+            unsafe_store!(cglobal($(Expr(:quote,c_symbol)),Ptr{Void}),handle.handle)
+            $x = handle
+        end
+        function ($f)()
+            read,write = (Pipe(C_NULL), Pipe(C_NULL))
+            link_pipe(read,$(writable),write,$(!writable))
+            ($f)($(writable? :write : :read))
+            (read,write)
+        end
+    end
 end
-function redirect_stdin()
-   stdin_read, stdin_write = (Pipe(C_NULL), Pipe(C_NULL))
-   link_pipe(stdin_read,false,stdin_write,true)
-   redirect_stdin(stdin_read)
-   stdin_read, stdin_write
-end
-
-function redirect_stdout(handle::AsyncStream) 
-    global STDOUT
-    @windows? ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),-11,_fd(handle).handle) : dup(_fd(handle),  RawFD(1))
-    STDOUT = handle
-end
-function redirect_stdout()
-   stdout_read, stdout_write = (Pipe(C_NULL), Pipe(C_NULL))
-   link_pipe(stdout_read,true,stdout_write,false)
-   redirect_stdout(stdout_write)
-   stdout_read, stdout_write
-end
-
-function redirect_stderr(handle::AsyncStream) 
-    global STDERR
-    @windows? ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),-11,_fd(handle).handle) : dup(fd(handle),  RawFD(2))
-    STDERR = handle
-end
-function redirect_stderr()
-   stderr_read, stderr_write = (Pipe(C_NULL), Pipe(C_NULL))
-   link_pipe(stderr_read,true,stderr_write,false)
-   redirect_stderr(stderr_read)
-   stderr_read, stderr_write
-end
-
 
 connect(path::ByteString) = connect(Pipe(),path)

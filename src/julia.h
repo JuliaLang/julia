@@ -1231,7 +1231,7 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize);
 DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, bt_context_t ctx);
 
 //IO objects
-extern DLLEXPORT uv_stream_t *jl_uv_stdin; //these are actually uv_tty_t's and can be cast to such, but that gives warnings whenver they are used as streams
+extern DLLEXPORT uv_stream_t *jl_uv_stdin; 
 extern DLLEXPORT uv_stream_t * jl_uv_stdout;
 extern DLLEXPORT uv_stream_t * jl_uv_stderr;
 
