@@ -18,7 +18,11 @@ type FileMonitor
     FileMonitor(file) = FileMonitor(false,file)
 end
 
-close(t::FileMonitor) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
+function close(t::FileMonitor) 
+    if t.handle != C_NULL
+        ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
+    end
+end
 
 const UV_READABLE = 1
 const UV_WRITABLE = 2

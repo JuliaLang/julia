@@ -342,9 +342,10 @@ end
 function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::Int32)
     if nread < 0
         if nread != UV_EOF
-            err = UVError("readcb",nread)
-            close(stream)
-            notify_error(stream.readnotify, err)
+            # This is a fatal connectin error. Shutdown requests as per the usual 
+            # close function won't work and libuv will fail with an assertion failre
+            ccall(:jl_forceclose_uv,Void,(Ptr{Void},),stream.handle)
+            notify_error(stream.readnotify, UVError("readcb",nread))
         else
             close(stream)
             notify(stream.readnotify)
@@ -535,10 +536,10 @@ function link_pipe(read_end::NamedPipe,readable_julia_only::Bool,write_end::Name
 end
 close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),handle)
 
-_uv_hook_isopen(stream::Union(AsyncStream,UVServer)) = int32(stream.status!=StatusUninit && stream.status!=StatusClosed && stream.status!=StatusClosing)
+_uv_hook_isopen(stream) = int32(isopen(stream))
 
 function close(stream::Union(AsyncStream,UVServer))
-    if bool(_uv_hook_isopen(stream))
+    if isopen(stream) && stream.status != StatusClosing
         ccall(:jl_close_uv,Void,(Ptr{Void},),stream.handle)
         stream.status = StatusClosing
     end
@@ -739,7 +740,7 @@ end
 type UVError <: Exception
     prefix::String
     code::Int32
-    UVError(p::String,code::Int32)=new(p,code)
+    UVError(p::String,code::Integer)=new(p,int32(code))
 end
 
 struverror(err::UVError) = bytestring(ccall(:uv_strerror,Ptr{Uint8},(Int32,),err.code))
