@@ -38,12 +38,12 @@ available() = sort!([keys(Pkg2.Dir.cd(Pkg2.Read.available))...], by=lowercase)
 status(io::IO=STDOUT) = Dir.cd() do
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
-    println(io, "Required:")
+    println(io, "Required packages:")
     for pkg in sort!([keys(reqs)...])
         ver,fix = delete!(instd,pkg)
         status(io,pkg,ver,fix)
     end
-    println(io, "Additional:")
+    println(io, "Additional packages:")
     for pkg in sort!([keys(instd)...])
         ver,fix = instd[pkg]
         status(io,pkg,ver,fix)
@@ -52,11 +52,10 @@ end
 function status(io::IO, pkg::String, ver::VersionNumber, fix::Bool)
     @printf io " - %-29s " pkg
     fix || return println(io,ver)
-    @printf io "%-10s" ver
-    print(io, " fixed: ")
+    @printf io "%-19s" ver
     if ispath(Dir.path(pkg,".git"))
         print(io, Git.attached(dir=pkg) ? Git.branch(dir=pkg) : Git.head(dir=pkg)[1:8])
-        Git.dirty(dir=pkg) && print(io, "*")
+        Git.dirty(dir=pkg) && print(io, " (dirty)")
     else
         print(io, "non-repo")
     end
