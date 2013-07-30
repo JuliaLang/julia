@@ -715,7 +715,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         builder.CreateCall2(jlputs_func,
                             builder.CreateGEP(stringConst(msg.str()),
                                          ArrayRef<Value*>(zeros)),
-                            literal_pointer_val(JL_STDERR));
+                            literal_pointer_val(JL_STDERR,T_pint8));
     }
 
     // emit arguments

@@ -249,10 +249,9 @@ typedef struct {
 } jl_weakref_t;
 
 typedef struct {
-    // not first-class
+    JL_DATA_TYPE
     jl_sym_t *name;
     jl_value_t *value;
-    jl_value_t *type;
     struct _jl_module_t *owner;  // for individual imported bindings
     unsigned constp:1;
     unsigned exportp:1;
