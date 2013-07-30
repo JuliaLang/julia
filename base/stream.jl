@@ -82,7 +82,7 @@ uv_req_data(handle) = ccall(:jl_uv_req_data,Ptr{Void},(Ptr{Void},),handle)
 uv_req_set_data(req,data) = ccall(:jl_uv_req_set_data,Void,(Ptr{Void},Any),req,data)
 uv_req_set_data(req,data::Ptr{Void}) = ccall(:jl_uv_req_set_data,Void,(Ptr{Void},Ptr{Void}),req,data)
 
-type NamedPipe <: AsyncStream
+type Pipe <: AsyncStream
     handle::Ptr{Void}
     status::Int
     buffer::IOBuffer
@@ -93,7 +93,7 @@ type NamedPipe <: AsyncStream
     connectnotify::Condition
     closecb::Callback
     closenotify::Condition
-    NamedPipe(handle) = new(
+    Pipe(handle) = new(
         handle,
         StatusUninit,
         PipeBuffer(),
@@ -102,10 +102,10 @@ type NamedPipe <: AsyncStream
         false,Condition(),
         false,Condition())
 end
-function NamedPipe()
+function Pipe()
     handle = malloc_pipe()
     try
-        return init_pipe!(NamedPipe(handle);readable=true)
+        return init_pipe!(Pipe(handle);readable=true)
     catch
         c_free(handle)
         rethrow()
@@ -126,7 +126,7 @@ type PipeServer <: UVServer
         false,Condition())
 end
 
-function init_pipe!(pipe::Union(NamedPipe,PipeServer);readable::Bool=false,writable=false,julia_only=true)
+function init_pipe!(pipe::Union(Pipe,PipeServer);readable::Bool=false,writable=false,julia_only=true)
     if pipe.handle == C_NULL || pipe.status != StatusUninit
         error("Failed to initialize pipe")
     end
@@ -145,7 +145,7 @@ function PipeServer()
     end
 end
 
-show(io::IO,stream::NamedPipe) = print(io,"NamedPipe(",uv_status_string(stream),", ",
+show(io::IO,stream::Pipe) = print(io,"Pipe(",uv_status_string(stream),", ",
     nb_available(stream.buffer)," bytes waiting)")
 show(io::IO,stream::PipeServer) = print(io,"PipeServer(",uv_status_string(stream),")")
 
@@ -179,9 +179,9 @@ end
 
 # note that uv_is_readable/writable work for any subtype of
 # uv_stream_t, including uv_tty_t and uv_pipe_t
-isreadable(io::Union(NamedPipe,PipeServer,TTY)) =
+isreadable(io::Union(Pipe,PipeServer,TTY)) =
     bool(ccall(:uv_is_readable, Cint, (Ptr{Void},), io.handle))
-iswritable(io::Union(NamedPipe,PipeServer,TTY)) =
+iswritable(io::Union(Pipe,PipeServer,TTY)) =
     bool(ccall(:uv_is_writable, Cint, (Ptr{Void},), io.handle))
 
 show(io::IO,stream::TTY) = print(io,"TTY(",uv_status_string(stream),", ",
@@ -211,7 +211,7 @@ function init_stdio(handle,fd)
         elseif t == UV_TCP
             ret = TcpSocket(handle)
         elseif t == UV_NAMED_PIPE
-            ret = NamedPipe(handle)
+            ret = Pipe(handle)
         end
         ret.status = StatusOpen
         ret.line_buffered = false  
@@ -508,21 +508,21 @@ function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{
     uv_error("pipe_link",ccall(:uv_pipe_link, Int32, (Ptr{Void}, Ptr{Void}), read_end, write_end))
 end
 
-function link_pipe(read_end2::NamedPipe,readable_julia_only::Bool,write_end::Ptr{Void},writable_julia_only::Bool)
+function link_pipe(read_end2::Pipe,readable_julia_only::Bool,write_end::Ptr{Void},writable_julia_only::Bool)
     if read_end2.handle == C_NULL
         read_end2.handle = malloc_pipe()
     end
     link_pipe(read_end2.handle,readable_julia_only,write_end,writable_julia_only,read_end2,read_end2)
     read_end2.status = StatusOpen
 end
-function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::NamedPipe,writable_julia_only::Bool)
+function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Pipe,writable_julia_only::Bool)
     if write_end.handle == C_NULL
         write_end.handle = malloc_pipe()
     end
     link_pipe(read_end,readable_julia_only,write_end.handle,writable_julia_only,write_end,write_end)
     write_end.status = StatusOpen
 end
-function link_pipe(read_end::NamedPipe,readable_julia_only::Bool,write_end::NamedPipe,writable_julia_only::Bool)
+function link_pipe(read_end::Pipe,readable_julia_only::Bool,write_end::Pipe,writable_julia_only::Bool)
     if write_end.handle == C_NULL
         write_end.handle = malloc_pipe()
     end
@@ -630,11 +630,11 @@ function readuntil(this::AsyncStream,c::Uint8)
     readuntil(buf,c)
 end
 
-#function finish_read(pipe::NamedPipe)
+#function finish_read(pipe::Pipe)
 #    close(pipe) #handles to UV and ios will be invalid after this point
 #end
 #
-#function finish_read(state::(NamedPipe,ByteString))
+#function finish_read(state::(Pipe,ByteString))
 #    finish_read(state...)
 #end
 
@@ -754,7 +754,7 @@ show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrornam
 
 ## server functions ##
 
-function accept_nonblock(server::PipeServer,client::NamedPipe)
+function accept_nonblock(server::PipeServer,client::Pipe)
     err = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server.handle,client.handle)
     if err == 0
         client.status = StatusOpen
@@ -762,7 +762,7 @@ function accept_nonblock(server::PipeServer,client::NamedPipe)
     err
 end
 function accept_nonblock(server::PipeServer)
-    client = NamedPipe()
+    client = Pipe()
     uv_error("accept", accept_nonblock(server,client) != 0)
     client
 end
@@ -815,7 +815,7 @@ function listen(path::ByteString)
     sock
 end
 
-function connect!(sock::NamedPipe,path::ByteString)
+function connect!(sock::Pipe,path::ByteString)
     @assert sock.status == StatusInit
     req = c_malloc(_sizeof_uv_connect)
     ccall(:uv_pipe_connect, Void, (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Ptr{Void}), req, sock.handle, path, uv_jl_connectcb::Ptr{Void})
@@ -839,5 +839,47 @@ function connect(sock::AsyncStream, args...)
     sock
 end
 
+dup(x::RawFD) = RawFD(ccall((@windows? :_dup : :dup),Int32,(Int32,),x.fd))
+dup(src::RawFD,target::RawFD) = systemerror("dup",ccall((@windows? :_dup2 : :dup),Int32,(Int32,Int32),src.fd,target.fd) == -1)
 
-connect(path::ByteString) = connect(NamedPipe(),path)
+@unix_only _fd(x::Pipe) = RawFD(ccall(:jl_uv_pipe_fd,Int32,(Ptr{Void},),x.handle))
+@windows_only _fd(x::Pipe) = WindowsRawSocket(ccall(:jl_uv_pipe_handle,Ptr{Void},(Ptr{Void},),x.handle))
+
+function redirect_stdin(handle::AsyncStream) 
+    global STDIN
+    @windows? ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),-10,_fd(handle).handle) : dup(_fd(handle),  RawFD(0))
+    STDIN = handle
+end
+function redirect_stdin()
+   stdin_read, stdin_write = (Pipe(C_NULL), Pipe(C_NULL))
+   link_pipe(stdin_read,false,stdin_write,true)
+   redirect_stdin(stdin_read)
+   stdin_read, stdin_write
+end
+
+function redirect_stdout(handle::AsyncStream) 
+    global STDOUT
+    @windows? ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),-11,_fd(handle).handle) : dup(_fd(handle),  RawFD(1))
+    STDOUT = handle
+end
+function redirect_stdout()
+   stdout_read, stdout_write = (Pipe(C_NULL), Pipe(C_NULL))
+   link_pipe(stdout_read,true,stdout_write,false)
+   redirect_stdout(stdout_write)
+   stdout_read, stdout_write
+end
+
+function redirect_stderr(handle::AsyncStream) 
+    global STDERR
+    @windows? ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),-11,_fd(handle).handle) : dup(fd(handle),  RawFD(2))
+    STDERR = handle
+end
+function redirect_stderr()
+   stderr_read, stderr_write = (Pipe(C_NULL), Pipe(C_NULL))
+   link_pipe(stderr_read,true,stderr_write,false)
+   redirect_stderr(stderr_read)
+   stderr_read, stderr_write
+end
+
+
+connect(path::ByteString) = connect(Pipe(),path)
