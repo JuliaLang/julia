@@ -1010,7 +1010,7 @@ function create_worker(privhost, port, pubhost, stream, config)
                             println(STDERR,"\tTruncated reply from worker $(wrker.id)")
                             return false
                         end
-                        print("\tFrom worker $(wrker.id):\t",line)
+                        print("\tFrom worker $(wrker.id):\t",bytestring(line))
                     catch err
                         println(STDERR,"\tError parsing reply from worker $(wrker.id):\t",err)
                         return false
