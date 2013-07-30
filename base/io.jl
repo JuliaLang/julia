@@ -22,7 +22,7 @@ else
     error("seriously? what is this machine?")
 end
 
-isreadonly(s) = isreadable(s) && !iswriteable(s)
+isreadonly(s) = isreadable(s) && !iswritable(s)
 
 ## binary I/O ##
 
@@ -245,7 +245,7 @@ close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 isopen(s::IOStream) = bool(ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios))
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 isreadonly(s::IOStream) = bool(ccall(:ios_get_readonly, Cint, (Ptr{Void},), s.ios))
-iswriteable(s::IOStream) = !isreadonly(s)
+iswritable(s::IOStream) = !isreadonly(s)
 isreadable(s::IOStream) = true
 
 truncate(s::IOStream, n::Integer) =
