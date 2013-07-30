@@ -147,9 +147,12 @@ function read(f::File, ::Type{Uint8})
     return uint8(ret)
 end
 
-function read{T}(f::File, a::Array{T})
+function read{T}(f::File, a::Array{T}, nel=length(a))
+    if nel < 0 || nel > length(a)
+        throw(BoundsError())
+    end
     if isbits(T)
-        nb = length(a)*sizeof(T)
+        nb = nel*sizeof(T)
         ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Void}, Csize_t),
                     f.handle, a, nb)
         uv_error("write",ret == -1)
@@ -159,8 +162,21 @@ function read{T}(f::File, a::Array{T})
     a
 end
 
+nb_available(f::File) = filesize(f) - position(f)
+
+function readbytes!(f::File, b::Array{Uint8}, nb=length(b))
+    nr = min(nb, nb_available(f))
+    if length(b) < nr
+        resize!(b, nr)
+    end
+    read(f, b, nr)
+    return nr
+end
+readbytes(io::File) = read(io, Array(Uint8, nb_available(io)))
+readbytes(io::File, nb) = read(io, Array(Uint8, min(nb, nb_available(io))))
+
 function readbytes(f::File)
-    a = Array(Uint8, filesize(f) - position(f))
+    a = Array(Uint8, nb_available(f))
     read(f,a)
     a
 end

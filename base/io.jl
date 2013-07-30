@@ -165,17 +165,33 @@ function readuntil{T}(s::IO, delim::T)
 end
 
 readline(s::IO) = readuntil(s, '\n')
+readchomp(x) = chomp!(readall(x))
 
-function readall(s::IO)
-    out = IOBuffer()
-    while !eof(s)
+# read up to nb bytes into nb, returning # bytes read
+function readbytes!(s::IO, b::AbstractArray{Uint8}, nb=length(b))
+    olb = lb = length(b)
+    nr = 0
+    while !eof(s) && nr < nb
         a = read(s, Uint8)
-        write(out, a)
+        nr += 1
+        if nr > lb
+            lb = nr * 2
+            resize!(b, lb)
+        end
+        b[nr] = a
     end
-    takebuf_string(out)
+    if lb > olb
+        resize!(b, nr) # shrink to just contain input data if was resized
+    end
+    return nr
 end
 
-readchomp(x) = chomp!(readall(x))
+# read up to nb bytes from s, returning a Vector{Uint8} of bytes read.
+function readbytes(s::IO, nb=typemax(Int))
+    b = Array(Uint8, min(nb, 65536))
+    nr = readbytes!(s, b, nb)
+    resize!(b, nr)
+end
 
 function readall(s::IO)
     b = readbytes(s)
@@ -414,21 +430,22 @@ function readuntil(s::IOStream, delim::Uint8)
     ccall(:jl_readuntil, Array{Uint8,1}, (Ptr{Void}, Uint8), s.ios, delim)
 end
 
-function readbytes(s::IOStream)
-    n = 65536
-    b = Array(Uint8, n)
-    p = 1
-    while true
-        nr = int(ccall(:ios_readall, Uint,
-                       (Ptr{Void}, Ptr{Void}, Uint), s.ios, pointer(b,p), n))
-        if eof(s)
-            resize!(b, p+nr-1)
-            break
+function readbytes!(s::IOStream, b::Array{Uint8}, nb=length(b))
+    olb = lb = length(b)
+    nr = 0
+    while !eof(s) && nr < nb
+        if lb < nr+1
+            lb = max(65536, (nr+1) * 2)
+            resize!(b, lb)
         end
-        p += nr
-        resize!(b, p+n-1)
+        nr += int(ccall(:ios_readall, Uint,
+                        (Ptr{Void}, Ptr{Void}, Uint),
+                        s.ios, pointer(b, nr+1), lb - nr))
     end
-    b
+    if lb > olb
+        resize!(b, nr) # shrink to just contain input data if was resized
+    end
+    return nr
 end
 
 # based on code by Glen Hertz

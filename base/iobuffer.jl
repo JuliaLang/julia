@@ -38,19 +38,28 @@ IOBuffer(readable::Bool,writable::Bool) = IOBuffer(Uint8[],readable,writable)
 IOBuffer() = IOBuffer(Uint8[], true, true)
 IOBuffer(maxsize::Int) = (x=IOBuffer(Array(Uint8,maxsize),true,true,maxsize); x.size=0; x)
 
-function read{T}(from::IOBuffer, a::Array{T})
-    if !from.readable error("read failed") end
-    if isbits(T)
-        nb = length(a)*sizeof(T)
-        if nb > nb_available(from)
-            throw(EOFError())
-        end
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), a, pointer(from.data,from.ptr), nb)
-        from.ptr += nb
-        return a
-    else
+read(from::IOBuffer, a::Array) = read_sub(from, a, 1, length(a))
+
+function read_sub{T}(from::IOBuffer, a::Array{T}, offs, nel)
+    if offs+nel-1 > length(a) || offs < 1 || nel < 0
+        throw(BoundsError())
+    end
+    if !isbits(T)
         error("Read from IOBuffer only supports bits types or arrays of bits types; got "*string(T)*".")
     end
+    read(from, pointer(a, offs), nel*sizeof(T))
+    return a
+end
+
+read(from::IOBuffer, p::Ptr, nb::Integer) = read(from, p, int(nb))
+function read(from::IOBuffer, p::Ptr, nb::Int)
+    if !from.readable error("read failed") end
+    if nb > nb_available(from)
+        throw(EOFError())
+    end
+    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), p, pointer(from.data,from.ptr), nb)
+    from.ptr += nb
+    p
 end
 
 function read(from::IOBuffer, ::Type{Uint8})
@@ -216,8 +225,17 @@ end
 
 write(to::IOBuffer, p::Ptr) = write(to, convert(Uint, p))
 
-readbytes(io::IOBuffer,nb::Integer) = bytestring(read(io, Array(Uint8, nb)))
-readall(io::IOBuffer) = readbytes(io,nb_available(io))
+function readbytes!(io::IOBuffer, b::Array{Uint8}, nb=length(b))
+    nr = min(nb, nb_available(io))
+    if length(b) < nr
+        resize!(b, nr)
+    end
+    read_sub(io, b, 1, nr)
+    return nr
+end
+readbytes(io::IOBuffer) = read(io, Array(Uint8, nb_available(io)))
+readbytes(io::IOBuffer, nb) = read(io, Array(Uint8, min(nb, nb_available(io))))
+
 function search(buf::IOBuffer, delim)
     p = pointer(buf.data, buf.ptr)
     q = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,Csize_t),p,delim,nb_available(buf))
