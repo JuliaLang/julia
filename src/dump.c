@@ -350,48 +350,57 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
             *(int64_t*)data >= S32_MIN && *(int64_t*)data <= S32_MAX) {
             writetag(s, (jl_value_t*)SmallInt64_tag);
             write_int32(s, (int32_t)*(int64_t*)data);
-            return;
         }
-        if (t == jl_int32_type) {
+        else if (t == jl_int32_type) {
             writetag(s, (jl_value_t*)Int32_tag);
             write_int32(s, (int32_t)*(int32_t*)data);
-            return;
-        }
-        if ((jl_value_t*)t == jl_idtable_type)
-            writetag(s, (jl_value_t*)IdTable_tag);
-        else
-            writetag(s, (jl_value_t*)jl_datatype_type);
-        jl_serialize_value(s, t);
-        size_t nf = jl_tuple_len(t->names);
-        if (nf == 0 && jl_datatype_size(t)>0) {
-            if (t->name == jl_pointer_type->name) {
-                write_int32(s, 0);
-#ifdef _P64
-                write_int32(s, 0);
-#endif
-            }
-            else {
-                ios_write(s, data, jl_datatype_size(t));
-            }
         }
         else {
-            if ((jl_value_t*)t == jl_idtable_type) {
-                jl_array_t *data = (jl_array_t*)jl_get_nth_field(v, 0);
-                jl_value_t **d = (jl_value_t**)data->data;
-                for(size_t i=0; i < jl_array_len(data); i+=2) {
-                    if (d[i+1] != NULL) {
-                        jl_serialize_value(s, d[i+1]);
-                        jl_serialize_value(s, d[i]);
-                    }
+            if ((jl_value_t*)t == jl_idtable_type)
+                writetag(s, (jl_value_t*)IdTable_tag);
+            else
+                writetag(s, (jl_value_t*)jl_datatype_type);
+            jl_serialize_value(s, t);
+            size_t nf = jl_tuple_len(t->names);
+            if (nf == 0 && jl_datatype_size(t)>0) {
+                if (t->name == jl_pointer_type->name) {
+                    write_int32(s, 0);
+#ifdef _P64
+                    write_int32(s, 0);
+#endif
                 }
-                jl_serialize_value(s, NULL);
+                else {
+                    ios_write(s, data, jl_datatype_size(t));
+                }
             }
             else {
-                for(size_t i=0; i < nf; i++) {
-                    jl_serialize_value(s, jl_get_nth_field(v, i));
+                if ((jl_value_t*)t == jl_idtable_type) {
+                    jl_array_t *data = (jl_array_t*)jl_get_nth_field(v, 0);
+                    jl_value_t **d = (jl_value_t**)data->data;
+                    for(size_t i=0; i < jl_array_len(data); i+=2) {
+                        if (d[i+1] != NULL) {
+                            jl_serialize_value(s, d[i+1]);
+                            jl_serialize_value(s, d[i]);
+                        }
+                    }
+                    jl_serialize_value(s, NULL);
+                }
+                else {
+                    for(size_t i=0; i < nf; i++) {
+                        jl_serialize_value(s, jl_get_nth_field(v, i));
+                    }
                 }
             }
         }
+    }
+    const char *gvname = jl_get_llvm_gv(v);
+    if (gvname != NULL) {
+        int32_t gvname_len = strlen(gvname);
+        write_int32(s, gvname_len);
+        ios_write(s, gvname, gvname_len);
+    }
+    else {
+        write_int32(s, 0);
     }
 }
 
@@ -470,7 +479,8 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
 }
 
 jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
-
+#include <stdio.h>
+static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag);
 static jl_value_t *jl_deserialize_value(ios_t *s)
 {
     int pos = ios_pos(s);
@@ -495,7 +505,24 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
     if (tag >= VALUE_TAGS) {
         return vtag;
     }
-
+    else if (vtag == (jl_value_t*)LiteralVal_tag) {
+        return jl_cellref(tree_literal_values, read_uint16(s));
+    }
+    jl_value_t *v = jl_deserialize_value_(s, pos, vtag);
+    int32_t gvname_len = read_int32(s);
+    if (gvname_len > 0) {
+        char *gvname = alloca(gvname_len+1);
+        memset(gvname, 0, gvname_len+1);
+        ios_read(s, gvname, gvname_len);
+        gvname[gvname_len] = 0;
+        const char *old = jl_get_llvm_gv(v);
+        if (!old || strcmp(old,gvname)) {
+            //*((jl_value_t**)jl_dlsym_e((uv_lib_t*)sysimg_handle, const_cast<char*>(cname))) = addr;
+        }
+    }
+    return v;
+}
+static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag) {
     int usetable = (tree_literal_values == NULL);
 
     size_t i;
@@ -563,9 +590,6 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
             jl_cellset(e->args, i, jl_deserialize_value(s));
         }
         return (jl_value_t*)e;
-    }
-    else if (vtag == (jl_value_t*)LiteralVal_tag) {
-        return jl_cellref(tree_literal_values, read_uint16(s));
     }
     else if (vtag == (jl_value_t*)jl_tvar_type) {
         jl_tvar_t *tv = (jl_tvar_t*)newobj((jl_value_t*)jl_tvar_type, 4);

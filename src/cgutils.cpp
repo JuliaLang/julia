@@ -48,16 +48,30 @@ static Value *literal_pointer_val(void *p, Type *t)
 #endif
 }
 
+static std::map<void*, Value*> jl_value_to_llvm;
+
+DLLEXPORT extern "C" const char *jl_get_llvm_gv(jl_value_t *p)
+{
+    std::map<void*, Value*>::iterator it;
+    it = jl_value_to_llvm.find(p);
+    if (it == jl_value_to_llvm.end())
+        return NULL;
+    return it->second->getName().data();
+}
+
 static Value *julia_to_gv(const char *cname, jl_value_t *addr)
 {
-    const GlobalValue *gv = jl_ExecutionEngine->getGlobalValueAtAddress(addr);
-    if (gv != NULL)
-        return (Value*)gv;
-    gv = new GlobalVariable(*jl_Module, jl_value_llvmt,
-                           false, GlobalVariable::ExternalLinkage, //TODO: can we determine is-const?
-                           NULL, cname);
-    jl_ExecutionEngine->addGlobalMapping(gv,addr);
-    return (Value*)gv;
+    std::map<void*, Value*>::iterator it;
+    it = jl_value_to_llvm.find(addr);
+    if (it != jl_value_to_llvm.end())
+        return builder.CreateLoad(it->second);
+    GlobalValue *gv = new GlobalVariable(*jl_Module, jl_pvalue_llvmt,
+                           false, GlobalVariable::ExternalLinkage,
+                           ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt), cname);
+    jl_value_t **p = (jl_value_t**)jl_ExecutionEngine->getPointerToGlobal(gv);
+    *p = addr;
+    jl_value_to_llvm[addr] = gv;
+    return builder.CreateLoad(gv);
 }
 
 static Value *julia_to_gv(jl_value_t *addr)
