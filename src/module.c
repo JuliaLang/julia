@@ -356,7 +356,7 @@ DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
     b->value = rhs;
 }
 
-void jl_declare_constant(jl_binding_t *b)
+DLLEXPORT void jl_declare_constant(jl_binding_t *b)
 {
     if (b->value != NULL && !b->constp) {
         jl_errorf("cannot declare %s constant; it already has a value",

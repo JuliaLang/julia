@@ -218,7 +218,7 @@ DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
     return jv;
 }
 
-jl_tuple_t *jl_tuple(size_t n, ...)
+DLLEXPORT jl_tuple_t *jl_tuple(size_t n, ...)
 {
     va_list args;
     if (n == 0) return jl_null;

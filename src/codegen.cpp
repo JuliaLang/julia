@@ -224,6 +224,78 @@ static void jl_rethrow_with_add(const char *fmt, ...)
 //static int n_emit=0;
 static Function *emit_function(jl_lambda_info_t *lam, bool cstyle);
 //static int n_compile=0;
+
+static void jl_static_show(jl_value_t *v) {
+    // mimic jl_show, but never call a julia method
+    if (v == NULL)
+        return;
+    else if (jl_is_lambda_info(v)) {
+        jl_lambda_info_t *li = (jl_lambda_info_t*)v;
+        jl_static_show((jl_value_t*)li->module);
+        JL_PRINTF(JL_STDOUT, ".%s", li->name->name);
+        if (li->specTypes) {
+            jl_static_show((jl_value_t*)li->specTypes);
+        }
+        else {
+            JL_PRINTF(JL_STDOUT, "(?)");
+        }
+    }
+    else if (jl_is_tuple(v)) {
+        jl_tuple_t *t = (jl_tuple_t*)v;
+        size_t i, len = jl_tuple_len(t);
+        JL_PRINTF(JL_STDOUT, "(");
+        for (i = 0; i < len; i++) {
+            jl_value_t *v = jl_tupleref(t,i);
+            jl_static_show(v);
+            if (i == 0 || i != len-1) JL_PRINTF(JL_STDOUT, ", ");
+        }
+        JL_PRINTF(JL_STDOUT, ")");
+    }
+    else if (jl_is_vararg_type(v)) {
+        jl_static_show(jl_tparam0(v));
+        JL_PRINTF(JL_STDOUT, "...");
+    }
+    else if (jl_is_datatype(v)) {
+        jl_datatype_t *dv = (jl_datatype_t*)v;
+        jl_static_show((jl_value_t*)dv->name->module);
+        JL_PRINTF(JL_STDOUT, ".%s", dv->name->name->name);
+        if (dv->parameters) {
+            size_t j, tlen = jl_tuple_len(dv->parameters);
+            if (tlen > 0) {
+                JL_PRINTF(JL_STDOUT, "{");
+                for (j = 0; j < tlen; j++) {
+                    jl_value_t *p = jl_tupleref(dv->parameters,j);
+                    jl_static_show(p);
+                    if (j != tlen-1) JL_PRINTF(JL_STDOUT, ", ");
+                }
+                JL_PRINTF(JL_STDOUT, "}");
+            }
+        }
+    }
+    else if (jl_is_int64(v)) {
+        JL_PRINTF(JL_STDOUT, "%d", jl_unbox_int64(v));
+    }
+    else if (v == jl_bottom_type) {
+        JL_PRINTF(JL_STDOUT, "Void");
+    }
+    else if (jl_is_uniontype(v)) {
+        JL_PRINTF(JL_STDOUT, "Union");
+        jl_static_show((jl_value_t*)((jl_uniontype_t*)v)->types);
+    }
+    else if (jl_is_module(v)) {
+        jl_module_t *m = (jl_module_t*)v;
+        if (m->parent != m) {
+            jl_static_show((jl_value_t*)m->parent);
+            JL_PRINTF(JL_STDOUT, ".");
+        }
+        JL_PRINTF(JL_STDOUT, "%s", m->name->name);
+    }
+    else {
+        JL_PRINTF(JL_STDOUT, "?");
+    }
+}
+
+
 static Function *to_function(jl_lambda_info_t *li, bool cstyle)
 {
     JL_SIGATOMIC_BEGIN();
@@ -235,7 +307,10 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     Function *f = NULL;
     JL_TRY {
         f = emit_function(li, cstyle);
-        //JL_PRINTF(JL_STDOUT, "emit %s\n", li->name->name);
+        if (0 && !cstyle) {
+            jl_static_show((jl_value_t*)li);
+            JL_PRINTF(JL_STDOUT, "\n");
+        }
         //n_emit++;
     }
     JL_CATCH {
@@ -282,10 +357,11 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         if (li->cFunctionObject != NULL)
             (void)jl_ExecutionEngine->getPointerToFunction((Function*)li->cFunctionObject);
         JL_SIGATOMIC_END();
-        if (!imaging_mode)
+        if (!imaging_mode) {
             llvmf->deleteBody();
-        if (li->cFunctionObject != NULL)
-            ((Function*)li->cFunctionObject)->deleteBody();
+            if (li->cFunctionObject != NULL)
+                ((Function*)li->cFunctionObject)->deleteBody();
+        }
     }
     f->fptr = li->fptr;
 }
@@ -1768,7 +1844,7 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
     if (assign || b==NULL)
         b = jl_get_binding_wr(m, s);
     if (pbnd) *pbnd = b;
-    return emit_nthptr_addr(literal_pointer_val((jl_value_t*)b), offsetof(jl_binding_t,value)/sizeof(size_t));
+    return emit_nthptr_addr(julia_to_gv("jl_binding#", (jl_value_t*)b), offsetof(jl_binding_t,value)/sizeof(size_t));
 }
 
 // yields a jl_value_t** giving the binding location of a variable
@@ -1991,7 +2067,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         jl_binding_t *b = jl_get_binding(mod, var);
         if (b == NULL)
             b = jl_get_binding_wr(mod, var);
-        Value *bp = emit_nthptr_addr(literal_pointer_val((jl_value_t*)b), offsetof(jl_binding_t,value)/sizeof(size_t));
+        Value *bp = emit_nthptr_addr(julia_to_gv("jl_binding#", (jl_value_t*)b), offsetof(jl_binding_t,value)/sizeof(size_t));
         if ((b->constp && b->value!=NULL) ||
             (etype!=(jl_value_t*)jl_any_type &&
              !jl_subtype((jl_value_t*)jl_undef_type, etype, 0))) {
@@ -2098,7 +2174,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         else {
             if (is_global((jl_sym_t*)mn, ctx)) {
                 bnd = jl_get_binding_for_method_def(ctx->module, (jl_sym_t*)mn);
-                bp = emit_nthptr_addr(literal_pointer_val((jl_value_t*)bnd), offsetof(jl_binding_t,value)/sizeof(size_t));
+                bp = emit_nthptr_addr(julia_to_gv("jl_binding#", (jl_value_t*)bnd), offsetof(jl_binding_t,value)/sizeof(size_t));
             }
             else {
                 bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
@@ -2576,6 +2652,10 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         if (lam->functionObject == NULL) {
             lam->functionObject = (void*)f;
         }
+    }
+    if (lam->fptr != NULL && lam->fptr != &jl_trampoline) {
+        jl_ExecutionEngine->addGlobalMapping(f, (void*)lam->fptr);
+        return f;
     }
     //TODO: this seems to cause problems, but should be made to work eventually
     //if (jlrettype == (jl_value_t*)jl_bottom_type)
@@ -3079,7 +3159,7 @@ static Function *jlfunc_to_llvm(const std::string &cname, void *addr)
     return f;
 }
 
-extern "C" jl_value_t *jl_new_box(jl_value_t *v)
+DLLEXPORT extern "C" jl_value_t *jl_new_box(jl_value_t *v)
 {
     jl_value_t *box = (jl_value_t*)alloc_2w();
 #ifdef OVERLAP_TUPLE_LEN
@@ -3451,6 +3531,7 @@ extern "C" void jl_init_codegen(void)
         .setTargetOptions(options)
         .create();
 #endif // LLVM VERSION
+    jl_ExecutionEngine->DisableLazyCompilation();
     
     dbuilder = new DIBuilder(*jl_Module);
 

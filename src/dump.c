@@ -146,6 +146,16 @@ static void jl_serialize_gv(ios_t *s, jl_value_t *v)
         write_int32(s, 0);
     }
 }
+static void jl_serialize_gv_syms(ios_t *s, jl_sym_t *v)
+{
+    void *bp = ptrhash_bp(&backref_table, v);
+    if (bp != HT_NOTFOUND) {
+        if (jl_get_llvm_gv((jl_value_t*)v) != NULL)
+            jl_serialize_value(s, v);
+    }
+    if (v->left) jl_serialize_gv_syms(s, v->left);
+    if (v->right) jl_serialize_gv_syms(s, v->right);
+}
 
 static void jl_serialize_module(ios_t *s, jl_module_t *m)
 {
@@ -502,7 +512,7 @@ static uv_lib_t *sysimg_handle = NULL;
 
 static void jl_delayed_fptr(jl_lambda_info_t *li, const char *sym)
 {
-    li->fptr = (jl_fptr_t)jl_dlsym_e( (uv_lib_t*)sysimg_handle, (char*)sym);
+    li->fptr = (jl_fptr_t)jl_dlsym( (uv_lib_t*)sysimg_handle, (char*)sym);
 }
 
 void jl_load_sysimg_so()
@@ -528,7 +538,7 @@ static jl_value_t *jl_deserialize_gv(ios_t *s, jl_value_t *v)
         ios_read(s, gvname, gvname_len);
         gvname[gvname_len] = 0;
         if (sysimg_handle != NULL) {
-            *((jl_value_t**)jl_dlsym_e((uv_lib_t*)sysimg_handle, gvname)) = v;
+            *((jl_value_t**)jl_dlsym((uv_lib_t*)sysimg_handle, gvname)) = v;
         }
     }
     return v;
@@ -670,7 +680,12 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag) {
         li->roots = (jl_array_t*)jl_deserialize_value(s);
         li->def = (jl_lambda_info_t*)jl_deserialize_value(s);
         li->capt = jl_deserialize_value(s);
-        
+        li->fptr = &jl_trampoline;
+        li->functionObject = NULL;
+        li->cFunctionObject = NULL;
+        li->inInference = 0;
+        li->inCompile = 0;
+        li->unspecialized = NULL;
         int32_t llname_size = read_int32(s);
         if (llname_size > 0) {
             char *llname = alloca(llname_size+1);
@@ -679,13 +694,6 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag) {
             llname[llname_size] = 0;
             jl_delayed_fptr(li, llname);
         }
-            
-        li->fptr = &jl_trampoline;
-        li->functionObject = NULL;
-        li->cFunctionObject = NULL;
-        li->inInference = 0;
-        li->inCompile = 0;
-        li->unspecialized = NULL;
         return (jl_value_t*)li;
     }
     else if (vtag == (jl_value_t*)jl_module_type) {
@@ -820,6 +828,16 @@ void jl_save_system_image(char *fname)
 
     jl_serialize_value(&f, jl_main_module);
 
+    ptrint_t i=2;
+    void *v = ptrhash_get(&deser_tag, (void*)i);
+    while (v != HT_NOTFOUND) {
+        jl_serialize_gv(&f, (jl_value_t*)v);
+        v = ptrhash_get(&deser_tag, (void*)i);
+        i += 1;
+    }
+    jl_serialize_gv_syms(&f, jl_get_root_symbol());
+    jl_serialize_value(&f, NULL);
+
     write_int32(&f, jl_get_t_uid_ctr());
     write_int32(&f, jl_get_gs_ctr());
     htable_reset(&backref_table, 0);
@@ -858,6 +876,17 @@ void jl_restore_system_image(char *fname)
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module,
                                                  jl_symbol("Base"));
     jl_current_module = jl_base_module; // run start_image in Base
+
+    ptrint_t i=2;
+    void *v = ptrhash_get(&deser_tag, (void*)i);
+    while (v != HT_NOTFOUND) {
+        jl_deserialize_gv(&f, (jl_value_t*)v);
+        v = ptrhash_get(&deser_tag, (void*)i);
+        i += 1;
+    }
+    do {
+        v = jl_deserialize_value(&f); // deserializing symbols for the side-effects
+    } while (v != NULL);
 
     // cache builtin parametric types
     for(int i=0; i < jl_array_len(datatype_list); i++) {

@@ -249,9 +249,10 @@ typedef struct {
 } jl_weakref_t;
 
 typedef struct {
-    JL_DATA_TYPE
+    // not first-class
     jl_sym_t *name;
     jl_value_t *value;
+    jl_value_t *type;
     struct _jl_module_t *owner;  // for individual imported bindings
     unsigned constp:1;
     unsigned exportp:1;
@@ -687,7 +688,7 @@ DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type);
 DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env,
                               jl_lambda_info_t *li);
 DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);
-jl_tuple_t *jl_tuple(size_t n, ...);
+DLLEXPORT jl_tuple_t *jl_tuple(size_t n, ...);
 jl_tuple_t *jl_tuple1(void *a);
 jl_tuple_t *jl_tuple2(void *a, void *b);
 jl_tuple_t *jl_alloc_tuple(size_t n);
@@ -708,23 +709,23 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f,
                           jl_tuple_t *tvars);
-jl_value_t *jl_box_bool(int8_t x);
-jl_value_t *jl_box_int8(int32_t x);
-jl_value_t *jl_box_uint8(uint32_t x);
-jl_value_t *jl_box_int16(int16_t x);
-jl_value_t *jl_box_uint16(uint16_t x);
+DLLEXPORT jl_value_t *jl_box_bool(int8_t x);
+DLLEXPORT jl_value_t *jl_box_int8(int32_t x);
+DLLEXPORT jl_value_t *jl_box_uint8(uint32_t x);
+DLLEXPORT jl_value_t *jl_box_int16(int16_t x);
+DLLEXPORT jl_value_t *jl_box_uint16(uint16_t x);
 DLLEXPORT jl_value_t *jl_box_int32(int32_t x);
-jl_value_t *jl_box_uint32(uint32_t x);
-jl_value_t *jl_box_char(uint32_t x);
+DLLEXPORT jl_value_t *jl_box_uint32(uint32_t x);
+DLLEXPORT jl_value_t *jl_box_char(uint32_t x);
 DLLEXPORT jl_value_t *jl_box_int64(int64_t x);
-jl_value_t *jl_box_uint64(uint64_t x);
-jl_value_t *jl_box_float32(float x);
-jl_value_t *jl_box_float64(double x);
-jl_value_t *jl_box_voidpointer(void *x);
-jl_value_t *jl_box8 (jl_datatype_t *t, int8_t  x);
-jl_value_t *jl_box16(jl_datatype_t *t, int16_t x);
-jl_value_t *jl_box32(jl_datatype_t *t, int32_t x);
-jl_value_t *jl_box64(jl_datatype_t *t, int64_t x);
+DLLEXPORT jl_value_t *jl_box_uint64(uint64_t x);
+DLLEXPORT jl_value_t *jl_box_float32(float x);
+DLLEXPORT jl_value_t *jl_box_float64(double x);
+DLLEXPORT jl_value_t *jl_box_voidpointer(void *x);
+DLLEXPORT jl_value_t *jl_box8 (jl_datatype_t *t, int8_t  x);
+DLLEXPORT jl_value_t *jl_box16(jl_datatype_t *t, int16_t x);
+DLLEXPORT jl_value_t *jl_box32(jl_datatype_t *t, int32_t x);
+DLLEXPORT jl_value_t *jl_box64(jl_datatype_t *t, int64_t x);
 DLLEXPORT int8_t jl_unbox_bool(jl_value_t *v);
 DLLEXPORT int8_t jl_unbox_int8(jl_value_t *v);
 DLLEXPORT uint8_t jl_unbox_uint8(jl_value_t *v);
@@ -849,7 +850,7 @@ DLLEXPORT struct tm* localtime_r(const time_t *t, struct tm *tm);
 #endif
 
 // exceptions
-void NORETURN jl_error(const char *str);
+DLLEXPORT void NORETURN jl_error(const char *str);
 void NORETURN jl_errorf(const char *fmt, ...);
 void jl_too_few_args(const char *fname, int min);
 void jl_too_many_args(const char *fname, int max);
@@ -919,7 +920,7 @@ DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs);
-void jl_declare_constant(jl_binding_t *b);
+DLLEXPORT void jl_declare_constant(jl_binding_t *b);
 void jl_module_using(jl_module_t *to, jl_module_t *from);
 void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
@@ -1015,7 +1016,7 @@ static inline int jl_vinfo_sa(jl_array_t *vi)
 
 // for writing julia functions in C
 #define JL_CALLABLE(name) \
-    jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
+    DLLEXPORT jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 
 static inline
 jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)

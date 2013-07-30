@@ -108,10 +108,17 @@ static Value *julia_to_gv(jl_datatype_t *addr) {
 static Value *julia_to_gv(jl_lambda_info_t *linfo, jl_value_t *addr) {
     if (linfo != NULL)
         return julia_to_gv(linfo->name, linfo->module, addr);
-    return julia_to_gv(addr);
+    return julia_to_gv("jl_method#", addr);
 }
 static Value *julia_to_gv(jl_function_t *addr) {
     return julia_to_gv(addr->linfo, (jl_value_t*)addr);
+}
+static Value *julia_to_gv(jl_sym_t *addr) {
+    size_t len = strlen(addr->name);
+    char *name = (char*)alloca(len+1+7);
+    strcpy(name, "jl_sym#");
+    strcpy(name+7,addr->name);
+    return julia_to_gv(name, (jl_value_t*)addr);
 }
 
 static Value *literal_pointer_val(jl_value_t *p)
@@ -124,6 +131,8 @@ static Value *literal_pointer_val(jl_value_t *p)
         return julia_to_gv((jl_function_t*)p);
     if (jl_is_lambda_info(p))
         return julia_to_gv((jl_lambda_info_t*)p, p);
+    if (jl_is_symbol(p))
+        return julia_to_gv((jl_sym_t*)p);
     return julia_to_gv(p);
 }
 

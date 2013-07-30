@@ -111,12 +111,12 @@ static uint32_t arg_block_n = 0;
 static Function *save_arg_area_loc_func;
 static Function *restore_arg_area_loc_func;
 
-static uint64_t save_arg_area_loc()
+DLLEXPORT extern "C" uint64_t save_arg_area_loc()
 {
     return (((uint64_t)arg_block_n)<<32) | ((uint64_t)arg_area_loc);
 }
 
-static void restore_arg_area_loc(uint64_t l)
+DLLEXPORT extern "C" void restore_arg_area_loc(uint64_t l)
 {
     arg_area_loc = l&0xffffffff;
     uint32_t ab = l>>32;
@@ -155,7 +155,7 @@ static void *alloc_temp_arg_copy(void *obj, uint32_t sz)
 
 // this is a run-time function
 // warning: cannot allocate memory except using alloc_temp_arg_space
-extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
+DLLEXPORT extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
                                      int addressof)
 {
     jl_value_t *jvt = (jl_value_t*)jl_typeof(v);
@@ -426,6 +426,7 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     else if (sym.fptr != NULL) {
         res = literal_pointer_val(sym.fptr, lrt);
+        JL_PRINTF(JL_STDERR,"warning: generated literal_pointer_val for cglobal\n");
     }
     else {
         void *symaddr;
@@ -661,6 +662,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     else if (fptr != NULL) {
         Type *funcptype = PointerType::get(functype,0);
         llvmf = literal_pointer_val(fptr, funcptype);
+        JL_PRINTF(JL_STDERR,"warning: generated literal_pointer_val for %s\n", f_name);
     }
     else {
         void *symaddr;

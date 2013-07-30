@@ -71,9 +71,9 @@
     jl_backtrace_type;
     jl_base_module;
     jl_boundp;
+    jl_declare_constant;
     jl_defines_or_exports_p;
-    jl_box_int32;
-    jl_box_int64;
+    jl_box_*;
     jl_unbox_int32;
     jl_unbox_int64;
     jl_unbox_float32;
@@ -99,6 +99,7 @@
     jl_dlsym;
     jl_dlsym_e;
     jl_dump_function;
+    jl_f_*;
     jl_function_ptr;
     jl_enable_color;
     jl_enable_inference;
@@ -110,6 +111,7 @@
     jl_eqtable_next;
     jl_eqtable_put;
     jl_errno;
+    jl_error;
     jl_errorexception_type;
     jl_exception_in_transit;
     jl_exit;
@@ -208,6 +210,7 @@
     jl_module_usings;
     jl_native_alignment;
     jl_next_from_addrinfo;
+    jl_new_box;
     jl_is_char_signed;
     jl_nb_available;
     jl_new_array;
@@ -352,6 +355,7 @@
     jl_write;
     jl_write_no_copy;
     jl_value_ptr;
+    jl_value_to_pointer;
     jl_zero_subnormals;
     julia_free;
     julia_home;
@@ -366,8 +370,10 @@
     memhash_seed;
     open_any_tcp_port;
     repl_callback_enable;
+    restore_arg_area_loc_func;
     restore_signals;
     rl_clear_input;
+    save_arg_area_loc_func;
     jl_SC_CLK_TCK;
     jl_getpagesize;
     u8_isvalid;
