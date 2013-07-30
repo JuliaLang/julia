@@ -55,7 +55,7 @@ _d = {"a"=>0}
 
 # issue #1821
 let
-    d = Dict{UTF8String, Vector{Int}}()
+    d = Dict{UTF8String, Vector{Int}, Unordered}()
     d["a"] = [1, 2]
     @test_throws d["b"] = 1
     @test isa(repr(d), String)  # check that printable without error
@@ -105,7 +105,7 @@ end
 data_in = [ (rand(1:1000), randstring(2)) for _ in 1:1001 ]
 
 # Populate the first dict
-d1 = Dict{Int, String}()
+d1 = Dict{Int, String, Unordered}()
 for (k,v) in data_in
     d1[k] = v
 end
@@ -117,7 +117,7 @@ for i in 1:length(data_in)
 end
 # Inserting data in different (shuffled) order should result in
 # equivalent dict.
-d2 = Dict{Int, String}()
+d2 = Dict{Int, String, Unordered}()
 for (k,v) in data_in
     d2[k] = v
 end
@@ -141,7 +141,7 @@ d4[1001] = randstring(3)
 # are compared. This is not necessarily desirable. These tests are
 # descriptive rather than proscriptive.
 @test !isequal({1 => 2}, {"dog" => "bone"})
-@test isequal(Dict{Int, Int}(), Dict{String, String}())
+@test isequal(Dict{Int, Int, Unordered}(), Dict{String, String, Unordered}())
 
 # issue #2540
 d = {x => 1
@@ -206,12 +206,12 @@ data_out = collect(s)
 @test length(data_out) == length(data_in)
 
 # homogeneous sets
-@test is(typeof(Set(1,2,3)), Set{Int})
-@test is(typeof(Set{Int}(1.0, 4//2, 3)), Set{Int})
+@test is(typeof(Set(1,2,3)), Set{Int, Unordered})
+@test is(typeof(Set{Int, Unordered}(1.0, 4//2, 3)), Set{Int, Unordered})
 
 # eltype
 @test is(eltype(Set(1,"hello")), Any)
-@test is(eltype(Set{String}()), String)
+@test is(eltype(Set{String, Unordered}()), String)
 
 # no duplicates
 s = Set(1,2,3)
@@ -285,10 +285,10 @@ setdiff!(s,(3,5))
 # similar
 s = similar(Set(1,"Banana"))
 @test length(s) == 0
-@test typeof(s) == Set{Any}
-s = similar(Set{Float32}(2,3,4))
+@test typeof(s) == Set{Any,Unordered}
+s = similar(Set{Float32,Unordered}(2,3,4))
 @test length(s) == 0
-@test typeof(s) == Set{Float32}
+@test typeof(s) == Set{Float32,Unordered}
 
 # copy
 data_in = (1,2,9,8,4)
@@ -341,24 +341,24 @@ end
 # isequal
 @test  isequal(Set(), Set())
 @test !isequal(Set(), Set(1))
-@test  isequal(Set{Any}(1,2), Set{Int}(1,2))
-@test !isequal(Set{Any}(1,2), Set{Int}(1,2,3))
+@test  isequal(Set{Any,Unordered}(1,2), Set{Int,Unordered}(1,2))
+@test !isequal(Set{Any,Unordered}(1,2), Set{Int,Unordered}(1,2,3))
 
 # Comparison of unrelated types seems rather inconsistent
 
-@test  isequal(Set{Int}(), Set{String}())
-@test !isequal(Set{Int}(), Set{String}(""))
-@test !isequal(Set{String}(), Set{Int}(0))
-@test !isequal(Set{Int}(1), Set{String}())
+@test  isequal(Set{Int,Unordered}(), Set{String,Unordered}())
+@test !isequal(Set{Int,Unordered}(), Set{String,Unordered}(""))
+@test !isequal(Set{String,Unordered}(), Set{Int,Unordered}(0))
+@test !isequal(Set{Int,Unordered}(1), Set{String,Unordered}())
 
-@test  isequal(Set{Any}(1,2,3), Set{Int}(1,2,3))
-@test  isequal(Set{Int}(1,2,3), Set{Any}(1,2,3))
+@test  isequal(Set{Any,Unordered}(1,2,3), Set{Int,Unordered}(1,2,3))
+@test  isequal(Set{Int,Unordered}(1,2,3), Set{Any,Unordered}(1,2,3))
 
-@test !isequal(Set{Any}(1,2,3), Set{Int}(1,2,3,4))
-@test !isequal(Set{Int}(1,2,3), Set{Any}(1,2,3,4))
+@test !isequal(Set{Any,Unordered}(1,2,3), Set{Int,Unordered}(1,2,3,4))
+@test !isequal(Set{Int,Unordered}(1,2,3), Set{Any,Unordered}(1,2,3,4))
 
-@test !isequal(Set{Any}(1,2,3,4), Set{Int}(1,2,3))
-@test !isequal(Set{Int}(1,2,3,4), Set{Any}(1,2,3))
+@test !isequal(Set{Any,Unordered}(1,2,3,4), Set{Int,Unordered}(1,2,3))
+@test !isequal(Set{Int,Unordered}(1,2,3,4), Set{Any,Unordered}(1,2,3))
 
 # ########## end of set tests ##########
 

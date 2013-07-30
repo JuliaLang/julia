@@ -8,7 +8,7 @@ type TTNode
     typ::Type
     subtypes::Dict{String, TTNode}
 
-    TTNode(sname::String, t::Type) = new(sname, t, Dict{String, TTNode}())
+    TTNode(sname::String, t::Type) = new(sname, t, Dict{String, TTNode, Unordered}())
 end
 
 # Add a node to a dict if not added
@@ -109,7 +109,7 @@ end
 # TODO: optionally take module names in command line 
 # TODO: sort output
 # TODO: option to list subtrees of type tree, or other symbol types
-const types_tree = Dict{String, TTNode}()
+const types_tree = Dict{String, TTNode, Unordered}()
 
 for m = [Base, Core, Main]
     store_all_from(m)

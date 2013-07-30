@@ -117,7 +117,7 @@ type PriorityQueue{K,V} <: Associative{K,V}
     index::Dict{K, Int}
 
     function PriorityQueue(o::Ordering)
-        new(Array((K, V), 0), o, Dict{K, Int}())
+        new(Array((K, V), 0), o, Dict{K, Int, Unordered}())
     end
 
     PriorityQueue() = PriorityQueue{K,V}(Forward)
@@ -129,7 +129,7 @@ type PriorityQueue{K,V} <: Associative{K,V}
         end
 
         xs = Array((K, V), length(ks))
-        index = Dict{K, Int}()
+        index = Dict{K, Int, Unordered}()
         for (i, (k, v)) in enumerate(zip(ks, vs))
             xs[i] = (k, v)
             if haskey(index, k)

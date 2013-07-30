@@ -227,7 +227,7 @@ required(pkg::String) = cd_pkgdir() do
 end
 
 installed() = cd_pkgdir() do
-    h = Dict{String,Union(VersionNumber,String)}()
+    h = Dict{String,Union(VersionNumber,String),Unordered}()
     for pkg in packages()
         isdir(pkg) || continue
         sha1 = cd(Git.head,pkg)
@@ -288,7 +288,7 @@ function gather_repository_data(julia_version::VersionNumber=VERSION)
     filter!(vers) do v
         !haskey(fixed, v.package)
     end
-    unsatisfiable = Set{Version}()
+    unsatisfiable = Set{Version,Unordered}()
     filter!(deps) do d
         p = d[2].package
         if haskey(fixed, p)
@@ -303,7 +303,7 @@ function gather_repository_data(julia_version::VersionNumber=VERSION)
     filter!(vers) do v
         !contains(unsatisfiable, v)
     end
-    pkgs = Set{String}()
+    pkgs = Set{String,Unsorted}()
     for v in vers add!(pkgs, v.package) end
     filter!(deps) do d
         contains(pkgs, d[1].package) && !contains(unsatisfiable, d[1])

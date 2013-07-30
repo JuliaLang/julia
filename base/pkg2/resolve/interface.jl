@@ -43,7 +43,7 @@ type Interface
     function Interface(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
         # generate pkgs
-        pkgs = sort!(ByteString[Set{ByteString}(keys(deps)...)...])
+        pkgs = sort!(ByteString[Set{ByteString,Unsorted}(keys(deps)...)...])
 
         np = length(pkgs)
 

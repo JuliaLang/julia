@@ -116,7 +116,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
     # For each package, we examine the dependencies of its versions
     # and put together those which are equal.
     # While we're at it, we also collect all dependencies into alldeps
-    alldeps = Set{(ByteString,VersionSet)}()
+    alldeps = Set{(ByteString,VersionSet),Unsorted}()
     for (p, fdepsp) in filtered_deps
 
         # Extract unique dependencies lists (aka classes), thereby
@@ -267,7 +267,7 @@ function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}
     staged = pkgs
     allpkgs = pkgs
     while !isempty(staged)
-        staged_next = Set{ByteString}()
+        staged_next = Set{ByteString,Unsorted}()
         for p in staged, (_,a) in deps[p], (rp,_) in a.requires
             if !contains(allpkgs, rp)
                 add!(staged_next, rp)
@@ -277,7 +277,7 @@ function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}
         staged = staged_next
     end
 
-    sub_deps = Dict{ByteString,Dict{VersionNumber,Available}}()
+    sub_deps = Dict{ByteString,Dict{VersionNumber,Available},Unordered}()
     for p in allpkgs
         haskey(sub_deps, p) || (sub_deps[p] = (VersionNumber=>Available)[])
         sub_depsp = sub_deps[p]

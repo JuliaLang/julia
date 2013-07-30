@@ -59,7 +59,7 @@ type ReqsStruct
 end
 
 function ReqsStruct(reqs::Vector{VersionSet}, vers::Vector{Version}, deps::Vector{(Version,VersionSet)})
-    pkgs = Set{String}()
+    pkgs = Set{String,Unordered}()
     for v in vers add!(pkgs, v.package) end
 
     for r in reqs
