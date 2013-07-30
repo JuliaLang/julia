@@ -671,8 +671,8 @@ void julia_init(char *imageFile)
 
     if (imageFile) {
         JL_TRY {
-            jl_restore_system_image(imageFile);
             jl_load_sysimg_so();
+            jl_restore_system_image(imageFile);
             jl_restore_fptrs();
         }
         JL_CATCH {

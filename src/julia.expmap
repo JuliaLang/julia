@@ -1,5 +1,7 @@
 {
   global:
+    alloc_*w;
+    allocobj;
     asprintf;
     bitvector_any1;
     bitvector_count;
@@ -52,6 +54,7 @@
     jl_alloc_cell_1d;
     jl_cell_1d_push;
     jl_cell_1d_push2;
+    jl_checked_assignment;
     jl_apply_generic;
     jl_array_del_beg;
     jl_array_del_end;
@@ -374,11 +377,8 @@
     uv_*;
     add_library_mapping;
 
-    jl_load_sysimg_so;
     jl_dump_bitcode;
     jl_set_imaging_mode;	
-    jl_get_llvmfptr;
-    jl_get_llvmfunc_cached;
 
 	jl_stackovf_exception;
     jl_memory_exception;

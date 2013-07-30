@@ -103,7 +103,7 @@ static uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int thr
 #endif
         error = jl_uv_dlopen(modname,handle,flags);
         if (!error) goto done;
-    } else {
+    } else if (jl_base_module != NULL) {
         jl_array_t* DL_LOAD_PATH = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("DL_LOAD_PATH"));
         if (DL_LOAD_PATH != NULL) {
             size_t j;

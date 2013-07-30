@@ -875,11 +875,11 @@ DLLEXPORT void jl_save_system_image(char *fname);
 DLLEXPORT void jl_restore_system_image(char *fname);
 DLLEXPORT void jl_dump_bitcode(char *fname);
 DLLEXPORT const char *jl_get_llvmname(void *func);
-DLLEXPORT void *jl_get_llvmfptr(void *func);
+void *jl_get_llvmfptr(void *func);
 DLLEXPORT void jl_set_imaging_mode(uint8_t stat);
-DLLEXPORT void jl_load_sysimg_so(void);
-DLLEXPORT void jl_restore_fptrs(void);
-DLLEXPORT void jl_delayed_fptr(void *li, const char *sym);
+void jl_load_sysimg_so(void);
+void jl_restore_fptrs(void);
+const char *jl_get_llvm_gv(jl_value_t *p);
 
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str);
@@ -918,7 +918,7 @@ DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
-void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs);
+DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs);
 void jl_declare_constant(jl_binding_t *b);
 void jl_module_using(jl_module_t *to, jl_module_t *from);
 void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
