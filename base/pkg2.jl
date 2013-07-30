@@ -76,6 +76,38 @@ clone(url::String, pkg::String=urlpkg(url); opts::Cmd=``) = Dir.cd() do
     resolve()
 end
 
+checkout(pkg::String, branch::String="master"; force::Bool=false) = Dir.cd() do
+    ispath(pkg, ".git") || error("$pkg is not a git repo")
+    Git.transact(dir=pkg) do
+        info("Checking out $pkg $branch...")
+        if force
+            Git.run(`checkout -q -f $branch`, dir=pkg)
+        else
+            Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
+            Git.run(`checkout -q $branch`, dir=pkg)
+        end
+        resolve()
+    end
+end
+
+release(pkg::String; force::Bool=false) = Dir.cd() do
+    ispath(pkg, ".git") || error("$pkg is not a git repo")
+    avail = Dir.cd(Read.available)
+    haskey(avail,pkg) || error("$pkg is not registered")
+    ver = max(keys(avail[pkg]))
+    sha1 = avail[pkg][ver].sha1
+    Git.transact(dir=pkg) do
+        info("Releasing $pkg...")
+        if force
+            Git.run(`checkout -q -f $sha1`, dir=pkg)
+        else
+            Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
+            Git.run(`checkout -q $sha1`, dir=pkg)
+        end
+        resolve()
+    end
+end
+
 update() = Dir.cd() do
     info("Updating METADATA...")
     cd("METADATA") do
