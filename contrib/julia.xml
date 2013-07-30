@@ -29,7 +29,7 @@
 
 <!DOCTYPE language SYSTEM "language.dtd">
 
-<language name="Julia" section="Sources" version="0.2" kateversion="2.2" extensions="*.jl" casesensitive="1" priority="5" license="MIT">
+<language name="Julia" section="Sources" version="0.2" kateversion="2.4" extensions="*.jl" casesensitive="1" priority="5" license="MIT">
 
   <highlighting>
     <list name="block_begin">
@@ -84,6 +84,7 @@
       <item> ASCIIString </item>
       <item> Associative </item>
       <item> AsyncStream </item>
+      <item> Bidiagonal </item>
       <item> BitArray </item>
       <item> BigFloat </item>
       <item> BigInt </item>
@@ -93,25 +94,36 @@
       <item> ByteString </item>
       <item> Char </item>
       <item> CharString </item>
+      <item> Cholesky </item>
+      <item> CholeskyPivoted </item>
+      <item> Cmd </item>
       <item> Colon </item>
       <item> Complex </item>
       <item> Complex64 </item>
       <item> Complex128 </item>
       <item> ComplexPair </item>
       <item> DArray </item>
+      <item> Diagonal </item>
       <item> Dict </item>
       <item> Dims </item>
       <item> EachLine </item>
+      <item> Eigen </item>
+      <item> Enumerate </item>
       <item> EnvHash </item>
       <item> Exception </item>
       <item> Expr </item>
+      <item> FileMonitor </item>
       <item> FileOffset </item>
       <item> Filter </item>
       <item> Float </item>
       <item> Float32 </item>
       <item> Float64 </item>
       <item> Function </item>
-      <item> ObjectIdDict </item>
+      <item> GeneralizedSchur </item>
+      <item> GeneralizedSVD </item>
+      <item> HeapSort </item>
+      <item> Hermitian </item>
+      <item> Hessenberg </item>
       <item> Int </item>
       <item> Int8 </item>
       <item> Int16 </item>
@@ -125,12 +137,17 @@
       <item> IOBuffer </item>
       <item> IOStream </item>
       <item> LocalProcess </item>
+      <item> LU </item>
+      <item> MathConst </item>
       <item> Matrix </item>
       <item> Nothing </item>
       <item> None </item>
       <item> NTuple </item>
       <item> Number </item>
       <item> ObjectIdDict </item>
+      <item> PollingFileWatcher </item>
+      <item> QR </item>
+      <item> QRPivoted </item>
       <item> OrdinalRange </item>
       <item> PipeBuffer </item>
       <item> ProcessGroup </item>
@@ -149,6 +166,7 @@
       <item> RevString </item>
       <item> Reverse </item>
       <item> RopeString </item>
+      <item> Schur </item>
       <item> Set </item>
       <item> Signed </item>
       <item> SparseMatrixCSC </item>
@@ -162,10 +180,15 @@
       <item> SubDArray </item>
       <item> SubOrDArray </item>
       <item> SubString </item>
+      <item> SVD </item>
       <item> Symbol </item>
+      <item> Symmetric </item>
       <item> SymTridiagonal </item>
       <item> Task </item>
       <item> TcpSocket </item>
+      <item> TimeoutAsyncWork </item>
+      <item> TmStruct </item>
+      <item> Triangular </item>
       <item> Tridiagonal </item>
       <item> Tuple </item>
       <item> Type </item>
@@ -187,6 +210,17 @@
       <item> WeakRef </item>
       <item> Woodbury </item>
       <item> Zip </item>
+      <item> AbstractRNG </item>
+      <item> MersenneTwister </item>
+      <item> Condition </item>
+      <item> IPv4 </item>
+      <item> IPv6 </item>
+      <item> ClusterManager </item>
+      <item> RawFD </item>
+      <item> WindowsRawSocket </item>
+      <item> PipeBuffer </item>
+      <item> UV_READABLE </item>
+      <item> UV_WRITEABLE </item>
 
       <item> Stat </item>
       <item> Factorization </item>
@@ -215,12 +249,16 @@
       <item> Culong </item>
       <item> Cptrdiff_t </item>
       <item> Csize_t </item>
+      <item> Cssize_t </item>
       <item> Clonglong </item>
       <item> Culonglong </item>
+      <item> Coff_t </item>
       <item> Cfloat </item>
       <item> Cdouble </item>
+      <item> Cwchar_t </item>
 
       <item> ArgumentError </item>
+      <item> ProcessExitedException </item>
       <item> DisconnectException </item>
       <item> EOFError </item>
       <item> ErrorException </item>
@@ -230,6 +268,1006 @@
       <item> ParseError </item>
       <item> SystemError </item>
       <item> TypeError </item>
+
+      <item> Collections </item>
+      <item> PCRE </item>
+      <item> FFTW </item>
+      <item> DSP </item>
+      <item> SparseMatrix </item>
+      <item> LinAlg </item>
+      <item> LibRandom </item>
+      <item> Random </item>
+      <item> Math </item>
+      <item> MPFR </item>
+      <item> GMP </item>
+      <item> QuadGK </item>
+      <item> Order </item>
+      <item> Sort </item>
+      <item> Sys </item>
+      <item> Test </item>
+      <item> Pkg </item>
+      <item> Pkg2 </item>
+      <item> Operators </item>
+      <item> Errno </item>
+      <item> Meta </item>
+      <item> Graphics </item>
+      <item> Profile </item>
+    </list>
+    <list name="constants">
+      <item> ARGS </item>
+      <item> C_NULL </item>
+      <item> CPU_CORES </item>
+      <item> DL_LOAD_PATH </item>
+      <item> OS_NAME </item>
+      <item> ENDIAN_BOM </item>
+      <item> ENV </item>
+      <item> Inf </item>
+      <item> Inf32 </item>
+      <item> LOAD_PATH </item>
+      <item> MS_ASYNC </item>
+      <item> MS_INVALIDATE </item>
+      <item> MS_SYNC </item>
+      <item> NaN </item>
+      <item> NaN32 </item>
+      <item> RTLD_LOCAL </item>
+      <item> RTLD_GLOBAL </item>
+      <item> RTLD_LAZY </item>
+      <item> RTLD_NOW </item>
+      <item> RTLD_NOLOAD </item>
+      <item> RTLD_NODELETE </item>
+      <item> RTLD_DEEPBIND </item>
+      <item> RTLD_FIRST </item>
+      <item> STDERR </item>
+      <item> STDIN </item>
+      <item> STDOUT </item>
+      <item> VERSION </item>
+      <item> WORD_SIZE </item>
+    </list>
+    <list name="math-constants">
+      <item> im </item>
+      <item> π </item>
+      <item> pi </item>
+      <item> e </item>
+      <item> eu </item>
+      <item> γ </item>
+      <item> eulergamma </item>
+      <item> catalan </item>
+      <item> φ </item>
+      <item> golden </item>
+    </list>
+    <list name="functions">
+      <item> @allocated </item>
+      <item> @assert </item>
+      <item> @async </item>
+      <item> @b_str </item>
+      <item> @boundscheck </item>
+      <item> @cmd </item>
+      <item> @deprecate </item>
+      <item> @elapsed </item>
+      <item> @eval </item>
+      <item> @everywhere </item>
+      <item> @fetch </item>
+      <item> @fetchfrom </item>
+      <item> @gensym </item>
+      <item> @inbounds </item>
+      <item> @ip_str </item>
+      <item> @linux </item>
+      <item> @linux_only </item>
+      <item> @mstr </item>
+      <item> @osx </item>
+      <item> @osx_only </item>
+      <item> @parallel </item>
+      <item> @printf </item>
+      <item> @profile </item>
+      <item> @r_str </item>
+      <item> @schedule </item>
+      <item> @show </item>
+      <item> @spawn </item>
+      <item> @spawnat </item>
+      <item> @sprintf </item>
+      <item> @sync </item>
+      <item> @task </item>
+      <item> @thunk </item>
+      <item> @time </item>
+      <item> @timed </item>
+      <item> @unexpected </item>
+      <item> @unix </item>
+      <item> @unix_only </item>
+      <item> @v_str </item>
+      <item> @vectorize_1arg </item>
+      <item> @vectorize_2arg </item>
+      <item> @which </item>
+      <item> @windows </item>
+      <item> @windows_only </item>
+      <item> abs </item>
+      <item> abs2 </item>
+      <item> abspath </item>
+      <item> accept </item>
+      <item> acos </item>
+      <item> acosd </item>
+      <item> acosh </item>
+      <item> acot </item>
+      <item> acotd </item>
+      <item> acoth </item>
+      <item> acsc </item>
+      <item> acscd </item>
+      <item> acsch </item>
+      <item> add! </item>
+      <item> addprocs </item>
+      <item> airy </item>
+      <item> airyai </item>
+      <item> airyaiprime </item>
+      <item> airybi </item>
+      <item> airybiprime </item>
+      <item> airyprime </item>
+      <item> all </item>
+      <item> angle </item>
+      <item> ans </item>
+      <item> any </item>
+      <item> append! </item>
+      <item> apropos </item>
+      <item> ascii </item>
+      <item> asec </item>
+      <item> asecd </item>
+      <item> asech </item>
+      <item> asin </item>
+      <item> asind </item>
+      <item> asinh </item>
+      <item> assert </item>
+      <item> atan </item>
+      <item> atan2 </item>
+      <item> atand </item>
+      <item> atanh </item>
+      <item> atexit </item>
+      <item> backtrace </item>
+      <item> base </item>
+      <item> basename </item>
+      <item> beginswith </item>
+      <item> besselh </item>
+      <item> besseli </item>
+      <item> besselj </item>
+      <item> besselj0 </item>
+      <item> besselj1 </item>
+      <item> besselk </item>
+      <item> bessely </item>
+      <item> bessely0 </item>
+      <item> bessely1 </item>
+      <item> beta </item>
+      <item> bfft! </item>
+      <item> bfft </item>
+      <item> big </item>
+      <item> bin </item>
+      <item> bind </item>
+      <item> binomial </item>
+      <item> bitmix </item>
+      <item> bitpack </item>
+      <item> bits </item>
+      <item> bitunpack </item>
+      <item> bkfact! </item>
+      <item> bkfact </item>
+      <item> blas_set_num_threads </item>
+      <item> bool </item>
+      <item> brfft </item>
+      <item> broadcast! </item>
+      <item> broadcast!_function </item>
+      <item> broadcast </item>
+      <item> broadcast_function </item>
+      <item> broadcast_getindex </item>
+      <item> broadcast_setindex! </item>
+      <item> bswap </item>
+      <item> bsxfun </item>
+      <item> bytes2hex </item>
+      <item> bytestring </item>
+      <item> c_free </item>
+      <item> c_malloc </item>
+      <item> cartesianmap </item>
+      <item> cat </item>
+      <item> catch_backtrace </item>
+      <item> cbrt </item>
+      <item> cd </item>
+      <item> ceil </item>
+      <item> cell </item>
+      <item> cfunction </item>
+      <item> cglobal </item>
+      <item> char </item>
+      <item> charwidth </item>
+      <item> checkbounds </item>
+      <item> chol </item>
+      <item> cholfact! </item>
+      <item> cholfact </item>
+      <item> cholpfact! </item>
+      <item> cholpfact </item>
+      <item> chomp </item>
+      <item> chop </item>
+      <item> chr2ind </item>
+      <item> circshift </item>
+      <item> cis </item>
+      <item> clamp </item>
+      <item> close </item>
+      <item> cmp </item>
+      <item> collect </item>
+      <item> colon </item>
+      <item> combinations </item>
+      <item> complement! </item>
+      <item> complement </item>
+      <item> complex </item>
+      <item> complex128 </item>
+      <item> complex64 </item>
+      <item> cond </item>
+      <item> conj! </item>
+      <item> conj </item>
+      <item> connect </item>
+      <item> consume </item>
+      <item> contains </item>
+      <item> conv </item>
+      <item> conv2 </item>
+      <item> convert </item>
+      <item> copy! </item>
+      <item> copy </item>
+      <item> copysign </item>
+      <item> cor </item>
+      <item> cos </item>
+      <item> cosc </item>
+      <item> cosd </item>
+      <item> cosh </item>
+      <item> cot </item>
+      <item> cotd </item>
+      <item> coth </item>
+      <item> count </item>
+      <item> count_ones </item>
+      <item> count_zeros </item>
+      <item> countlines </item>
+      <item> cov </item>
+      <item> cp </item>
+      <item> cross </item>
+      <item> csc </item>
+      <item> cscd </item>
+      <item> csch </item>
+      <item> ctime </item>
+      <item> ctranspose </item>
+      <item> cummax </item>
+      <item> cummin </item>
+      <item> cumprod </item>
+      <item> cumsum </item>
+      <item> cumsum_kbn </item>
+      <item> current_module </item>
+      <item> current_task </item>
+      <item> dawson </item>
+      <item> dct! </item>
+      <item> dct </item>
+      <item> dec </item>
+      <item> deconv </item>
+      <item> deepcopy </item>
+      <item> deepcopy_internal </item>
+      <item> degrees2radians </item>
+      <item> delete! </item>
+      <item> den </item>
+      <item> dense </item>
+      <item> deserialize </item>
+      <item> det </item>
+      <item> detach </item>
+      <item> dfill </item>
+      <item> diag </item>
+      <item> diagind </item>
+      <item> diagm </item>
+      <item> diff </item>
+      <item> digamma </item>
+      <item> digits </item>
+      <item> dirname </item>
+      <item> disable_sigint </item>
+      <item> disassemble </item>
+      <item> distribute </item>
+      <item> div </item>
+      <item> divrem </item>
+      <item> dlclose </item>
+      <item> dlopen </item>
+      <item> dlopen_e </item>
+      <item> dlsym </item>
+      <item> dlsym_e </item>
+      <item> done </item>
+      <item> dones </item>
+      <item> dot </item>
+      <item> download </item>
+      <item> drand </item>
+      <item> drandn </item>
+      <item> dump </item>
+      <item> dzeros </item>
+      <item> eachline </item>
+      <item> eachmatch </item>
+      <item> eatwspace </item>
+      <item> eatwspace_comment </item>
+      <item> edit </item>
+      <item> eig </item>
+      <item> eigfact! </item>
+      <item> eigfact </item>
+      <item> eigmax </item>
+      <item> eigmin </item>
+      <item> eigs </item>
+      <item> eigvals </item>
+      <item> eigvecs </item>
+      <item> eltype </item>
+      <item> empty! </item>
+      <item> endof </item>
+      <item> endswith </item>
+      <item> enumerate </item>
+      <item> eof </item>
+      <item> eps </item>
+      <item> erf </item>
+      <item> erfc </item>
+      <item> erfcinv </item>
+      <item> erfcx </item>
+      <item> erfi </item>
+      <item> erfinv </item>
+      <item> errno </item>
+      <item> error </item>
+      <item> esc </item>
+      <item> escape_string </item>
+      <item> eta </item>
+      <item> etree </item>
+      <item> evalfile </item>
+      <item> exit </item>
+      <item> exp </item>
+      <item> exp10 </item>
+      <item> exp2 </item>
+      <item> expand </item>
+      <item> expanduser </item>
+      <item> expm </item>
+      <item> expm1 </item>
+      <item> exponent </item>
+      <item> eye </item>
+      <item> factor </item>
+      <item> factorial </item>
+      <item> factorize! </item>
+      <item> factorize </item>
+      <item> falses </item>
+      <item> fd </item>
+      <item> fdio </item>
+      <item> fetch </item>
+      <item> fft! </item>
+      <item> fft </item>
+      <item> fftshift </item>
+      <item> fieldoffsets </item>
+      <item> filemode </item>
+      <item> filesize </item>
+      <item> fill! </item>
+      <item> fill </item>
+      <item> filt </item>
+      <item> filter! </item>
+      <item> filter </item>
+      <item> finalizer </item>
+      <item> find </item>
+      <item> find_library </item>
+      <item> findfirst </item>
+      <item> findin </item>
+      <item> findmax </item>
+      <item> findmin </item>
+      <item> findn </item>
+      <item> findnext </item>
+      <item> findnz </item>
+      <item> finfer </item>
+      <item> first </item>
+      <item> first_utf8_byte </item>
+      <item> fld </item>
+      <item> flipbits! </item>
+      <item> flipdim </item>
+      <item> fliplr </item>
+      <item> flipsign </item>
+      <item> flipud </item>
+      <item> float </item>
+      <item> float32 </item>
+      <item> float32_isvalid </item>
+      <item> float64 </item>
+      <item> float64_isvalid </item>
+      <item> floor </item>
+      <item> flush </item>
+      <item> frexp </item>
+      <item> full </item>
+      <item> fullname </item>
+      <item> functionloc </item>
+      <item> functionlocs </item>
+      <item> gamma </item>
+      <item> gc </item>
+      <item> gc_bytes </item>
+      <item> gc_disable </item>
+      <item> gc_enable </item>
+      <item> gcd </item>
+      <item> gcdx </item>
+      <item> gensym </item>
+      <item> get </item>
+      <item> get_bigfloat_precision </item>
+      <item> get_bigfloat_rounding </item>
+      <item> get_precision </item>
+      <item> getaddrinfo </item>
+      <item> gethostname </item>
+      <item> getindex </item>
+      <item> getipaddr </item>
+      <item> getkey </item>
+      <item> getpid </item>
+      <item> gperm </item>
+      <item> gradient </item>
+      <item> hankelh1 </item>
+      <item> hankelh2 </item>
+      <item> hash </item>
+      <item> haskey </item>
+      <item> hcat </item>
+      <item> help </item>
+      <item> hessfact! </item>
+      <item> hessfact </item>
+      <item> hex </item>
+      <item> hex2bytes </item>
+      <item> hex2num </item>
+      <item> hist </item>
+      <item> hist2d </item>
+      <item> histrange </item>
+      <item> htol </item>
+      <item> hton </item>
+      <item> hvcat </item>
+      <item> hypot </item>
+      <item> iceil </item>
+      <item> idct! </item>
+      <item> idct </item>
+      <item> identity </item>
+      <item> ifft! </item>
+      <item> ifft </item>
+      <item> ifftshift </item>
+      <item> ifloor </item>
+      <item> ignorestatus </item>
+      <item> imag </item>
+      <item> include </item>
+      <item> include_string </item>
+      <item> ind2chr </item>
+      <item> ind2sub </item>
+      <item> index_shape </item>
+      <item> indexin </item>
+      <item> indmax </item>
+      <item> indmin </item>
+      <item> inf </item>
+      <item> info </item>
+      <item> infs </item>
+      <item> insert! </item>
+      <item> int </item>
+      <item> int128 </item>
+      <item> int16 </item>
+      <item> int32 </item>
+      <item> int64 </item>
+      <item> int8 </item>
+      <item> integer </item>
+      <item> integer_partitions </item>
+      <item> intersect! </item>
+      <item> intersect </item>
+      <item> inv </item>
+      <item> invdigamma </item>
+      <item> invmod </item>
+      <item> invperm </item>
+      <item> ipermute! </item>
+      <item> ipermutedims </item>
+      <item> irfft </item>
+      <item> iround </item>
+      <item> is_utf8_start </item>
+      <item> is_valid_ascii </item>
+      <item> is_valid_char </item>
+      <item> is_valid_utf8 </item>
+      <item> isabspath </item>
+      <item> isalnum </item>
+      <item> isalpha </item>
+      <item> isapprox </item>
+      <item> isascii </item>
+      <item> isbits </item>
+      <item> isblank </item>
+      <item> isblockdev </item>
+      <item> ischardev </item>
+      <item> iscntrl </item>
+      <item> isconst </item>
+      <item> isdigit </item>
+      <item> isdir </item>
+      <item> isdirpath </item>
+      <item> iseltype </item>
+      <item> isempty </item>
+      <item> isequal </item>
+      <item> iseven </item>
+      <item> isexecutable </item>
+      <item> isfifo </item>
+      <item> isfile </item>
+      <item> isfinite </item>
+      <item> isfloat64 </item>
+      <item> isgeneric </item>
+      <item> isgraph </item>
+      <item> ishermitian </item>
+      <item> isimmutable </item>
+      <item> isinf </item>
+      <item> isinteger </item>
+      <item> isinteractive </item>
+      <item> isleaftype </item>
+      <item> isless </item>
+      <item> islink </item>
+      <item> islower </item>
+      <item> ismatch </item>
+      <item> isnan </item>
+      <item> isodd </item>
+      <item> isopen </item>
+      <item> ispath </item>
+      <item> isperm </item>
+      <item> isposdef! </item>
+      <item> isposdef </item>
+      <item> ispow2 </item>
+      <item> isprime </item>
+      <item> isprint </item>
+      <item> ispunct </item>
+      <item> isqrt </item>
+      <item> isreadable </item>
+      <item> isreadonly </item>
+      <item> isready </item>
+      <item> isreal </item>
+      <item> issetgid </item>
+      <item> issetuid </item>
+      <item> issocket </item>
+      <item> issorted </item>
+      <item> isspace </item>
+      <item> issparse </item>
+      <item> issticky </item>
+      <item> issubnormal </item>
+      <item> issubset </item>
+      <item> issym </item>
+      <item> istaskdone </item>
+      <item> istril </item>
+      <item> istriu </item>
+      <item> isupper </item>
+      <item> isvalid </item>
+      <item> iswriteable </item>
+      <item> isxdigit </item>
+      <item> itrunc </item>
+      <item> join </item>
+      <item> joinpath </item>
+      <item> keys </item>
+      <item> kill </item>
+      <item> kron </item>
+      <item> last </item>
+      <item> lbeta </item>
+      <item> lcfirst </item>
+      <item> lcm </item>
+      <item> ldexp </item>
+      <item> ldltd! </item>
+      <item> ldltd </item>
+      <item> leading_ones </item>
+      <item> leading_zeros </item>
+      <item> length </item>
+      <item> less </item>
+      <item> lfact </item>
+      <item> lgamma </item>
+      <item> linreg </item>
+      <item> linspace </item>
+      <item> listen </item>
+      <item> localpart </item>
+      <item> log </item>
+      <item> log10 </item>
+      <item> log1p </item>
+      <item> log2 </item>
+      <item> logdet </item>
+      <item> logspace </item>
+      <item> lowercase </item>
+      <item> lpad </item>
+      <item> ls </item>
+      <item> lstat </item>
+      <item> lstrip </item>
+      <item> ltoh </item>
+      <item> lu </item>
+      <item> lufact! </item>
+      <item> lufact </item>
+      <item> macroexpand </item>
+      <item> map! </item>
+      <item> map </item>
+      <item> mapreduce </item>
+      <item> mapslices </item>
+      <item> match </item>
+      <item> matchall </item>
+      <item> max </item>
+      <item> maxintfloat </item>
+      <item> mean </item>
+      <item> median! </item>
+      <item> median </item>
+      <item> merge! </item>
+      <item> merge </item>
+      <item> methods </item>
+      <item> methodswith </item>
+      <item> midpoints </item>
+      <item> min </item>
+      <item> mkdir </item>
+      <item> mkpath </item>
+      <item> mktemp </item>
+      <item> mktempdir </item>
+      <item> mmap </item>
+      <item> mmap_array </item>
+      <item> mmap_bitarray </item>
+      <item> mmap_grow </item>
+      <item> mmap_stream_settings </item>
+      <item> mod </item>
+      <item> mod1 </item>
+      <item> modf </item>
+      <item> module_name </item>
+      <item> module_parent </item>
+      <item> msync </item>
+      <item> mtime </item>
+      <item> mv </item>
+      <item> myid </item>
+      <item> myindexes </item>
+      <item> names </item>
+      <item> nan </item>
+      <item> nans </item>
+      <item> nb_available </item>
+      <item> ndigits </item>
+      <item> ndigits0z </item>
+      <item> ndims </item>
+      <item> next </item>
+      <item> nextfloat </item>
+      <item> nextind </item>
+      <item> nextpow </item>
+      <item> nextpow2 </item>
+      <item> nextprod </item>
+      <item> nnz </item>
+      <item> nonzeros </item>
+      <item> norm </item>
+      <item> normfro </item>
+      <item> normpath </item>
+      <item> notify </item>
+      <item> nprocs </item>
+      <item> nthperm! </item>
+      <item> nthperm </item>
+      <item> ntoh </item>
+      <item> ntuple </item>
+      <item> null </item>
+      <item> num </item>
+      <item> num2hex </item>
+      <item> nworkers </item>
+      <item> object_id </item>
+      <item> oct </item>
+      <item> oftype </item>
+      <item> one </item>
+      <item> ones </item>
+      <item> open </item>
+      <item> open_any_tcp_port </item>
+      <item> operm </item>
+      <item> parse </item>
+      <item> parse_ipv4 </item>
+      <item> parse_ipv6 </item>
+      <item> parsefloat </item>
+      <item> parseint </item>
+      <item> partitions </item>
+      <item> pascal </item>
+      <item> peakflops </item>
+      <item> permute! </item>
+      <item> permutedims </item>
+      <item> pinv </item>
+      <item> pipeline_error </item>
+      <item> plan_bfft! </item>
+      <item> plan_bfft </item>
+      <item> plan_brfft </item>
+      <item> plan_dct! </item>
+      <item> plan_dct </item>
+      <item> plan_fft! </item>
+      <item> plan_fft </item>
+      <item> plan_idct! </item>
+      <item> plan_idct </item>
+      <item> plan_ifft! </item>
+      <item> plan_ifft </item>
+      <item> plan_irfft </item>
+      <item> plan_rfft </item>
+      <item> pmap </item>
+      <item> pointer </item>
+      <item> pointer_from_objref </item>
+      <item> pointer_to_array </item>
+      <item> poll_fd </item>
+      <item> poll_file </item>
+      <item> polygamma </item>
+      <item> pop! </item>
+      <item> position </item>
+      <item> powermod </item>
+      <item> precompile </item>
+      <item> prepend! </item>
+      <item> prevfloat </item>
+      <item> prevind </item>
+      <item> prevpow </item>
+      <item> prevpow2 </item>
+      <item> prevprod </item>
+      <item> primes </item>
+      <item> print </item>
+      <item> print_escaped </item>
+      <item> print_joined </item>
+      <item> print_matrix </item>
+      <item> print_quoted </item>
+      <item> print_quoted_literal </item>
+      <item> print_shortest </item>
+      <item> print_unescaped </item>
+      <item> print_unescaped_chars </item>
+      <item> print_with_color </item>
+      <item> println </item>
+      <item> process_exit_status </item>
+      <item> process_exited </item>
+      <item> process_options </item>
+      <item> process_running </item>
+      <item> process_signaled </item>
+      <item> process_status </item>
+      <item> process_term_signal </item>
+      <item> procs </item>
+      <item> procs </item>
+      <item> prod </item>
+      <item> produce </item>
+      <item> promote </item>
+      <item> promote_rule </item>
+      <item> promote_shape </item>
+      <item> promote_type </item>
+      <item> push! </item>
+      <item> put </item>
+      <item> pwd </item>
+      <item> qr </item>
+      <item> qrfact! </item>
+      <item> qrfact </item>
+      <item> qrp </item>
+      <item> qrpfact! </item>
+      <item> qrpfact </item>
+      <item> quadgk </item>
+      <item> quantile! </item>
+      <item> quantile </item>
+      <item> quit </item>
+      <item> radians2degrees </item>
+      <item> rand! </item>
+      <item> rand </item>
+      <item> randbool! </item>
+      <item> randbool </item>
+      <item> randcycle </item>
+      <item> randn! </item>
+      <item> randn </item>
+      <item> randperm </item>
+      <item> randstring </item>
+      <item> randsym </item>
+      <item> rank </item>
+      <item> rationalize </item>
+      <item> read </item>
+      <item> readall </item>
+      <item> readandwrite </item>
+      <item> readavailable </item>
+      <item> readchomp </item>
+      <item> readcsv </item>
+      <item> readdir </item>
+      <item> readdlm </item>
+      <item> readline </item>
+      <item> readlines </item>
+      <item> readsfrom </item>
+      <item> readuntil </item>
+      <item> real </item>
+      <item> realmax </item>
+      <item> realmin </item>
+      <item> realpath </item>
+      <item> reduce </item>
+      <item> reducedim </item>
+      <item> reenable_sigint </item>
+      <item> reim </item>
+      <item> reinterpret </item>
+      <item> reload </item>
+      <item> rem </item>
+      <item> remotecall </item>
+      <item> remotecall_fetch </item>
+      <item> remotecall_wait </item>
+      <item> repeat </item>
+      <item> repl_show </item>
+      <item> replace </item>
+      <item> repmat </item>
+      <item> repr </item>
+      <item> require </item>
+      <item> reshape </item>
+      <item> resize! </item>
+      <item> rethrow </item>
+      <item> reverse! </item>
+      <item> reverse </item>
+      <item> rfft </item>
+      <item> rm </item>
+      <item> rmdir </item>
+      <item> rmprocs </item>
+      <item> rol </item>
+      <item> ror </item>
+      <item> rot180 </item>
+      <item> rotl90 </item>
+      <item> rotr90 </item>
+      <item> round </item>
+      <item> rpad </item>
+      <item> rref </item>
+      <item> rsearch </item>
+      <item> rsplit </item>
+      <item> rstrip </item>
+      <item> run </item>
+      <item> scale! </item>
+      <item> scale </item>
+      <item> schedule </item>
+      <item> schur </item>
+      <item> schurfact! </item>
+      <item> schurfact </item>
+      <item> search </item>
+      <item> searchsorted </item>
+      <item> searchsortedfirst </item>
+      <item> searchsortedlast </item>
+      <item> sec </item>
+      <item> secd </item>
+      <item> sech </item>
+      <item> seek </item>
+      <item> seekend </item>
+      <item> seekstart </item>
+      <item> select! </item>
+      <item> select </item>
+      <item> serialize </item>
+      <item> set_bigfloat_precision </item>
+      <item> set_bigfloat_rounding </item>
+      <item> setdiff! </item>
+      <item> setdiff </item>
+      <item> setindex! </item>
+      <item> setindex_shape_check </item>
+      <item> shift! </item>
+      <item> show </item>
+      <item> showall </item>
+      <item> showcompact </item>
+      <item> shuffle! </item>
+      <item> sign </item>
+      <item> signbit </item>
+      <item> signed </item>
+      <item> signif </item>
+      <item> significand </item>
+      <item> similar </item>
+      <item> sin </item>
+      <item> sinc </item>
+      <item> sind </item>
+      <item> sinh </item>
+      <item> size </item>
+      <item> sizehint </item>
+      <item> sizeof </item>
+      <item> skip </item>
+      <item> sleep </item>
+      <item> slice </item>
+      <item> slicedim </item>
+      <item> solve </item>
+      <item> sort! </item>
+      <item> sort </item>
+      <item> sortcols </item>
+      <item> sortperm </item>
+      <item> sortrows </item>
+      <item> sparse </item>
+      <item> sparsevec </item>
+      <item> spawn </item>
+      <item> spawn_nostdin </item>
+      <item> spdiagm </item>
+      <item> speye </item>
+      <item> splice! </item>
+      <item> split </item>
+      <item> splitdir </item>
+      <item> splitdrive </item>
+      <item> splitext </item>
+      <item> spones </item>
+      <item> sprand </item>
+      <item> sprandbool </item>
+      <item> sprandn </item>
+      <item> sprint </item>
+      <item> spzeros </item>
+      <item> sqrt </item>
+      <item> sqrtm </item>
+      <item> squeeze </item>
+      <item> srand </item>
+      <item> start </item>
+      <item> start_reading </item>
+      <item> start_timer </item>
+      <item> start_watching </item>
+      <item> stat </item>
+      <item> std </item>
+      <item> stdm </item>
+      <item> step </item>
+      <item> stop_reading </item>
+      <item> stop_timer </item>
+      <item> strerror </item>
+      <item> strftime </item>
+      <item> stride </item>
+      <item> strides </item>
+      <item> string </item>
+      <item> strip </item>
+      <item> strptime </item>
+      <item> strwidth </item>
+      <item> sub </item>
+      <item> sub2ind </item>
+      <item> subtypes </item>
+      <item> success </item>
+      <item> sum </item>
+      <item> sum_kbn </item>
+      <item> summary </item>
+      <item> super </item>
+      <item> svd </item>
+      <item> svdfact! </item>
+      <item> svdfact </item>
+      <item> svds </item>
+      <item> svdvals! </item>
+      <item> svdvals </item>
+      <item> symbol </item>
+      <item> symdiff! </item>
+      <item> symdiff </item>
+      <item> symmetrize! </item>
+      <item> systemerror </item>
+      <item> take </item>
+      <item> takebuf_array </item>
+      <item> takebuf_string </item>
+      <item> tan </item>
+      <item> tand </item>
+      <item> tanh </item>
+      <item> task_local_storage </item>
+      <item> tempdir </item>
+      <item> tempname </item>
+      <item> thisind </item>
+      <item> tic </item>
+      <item> time </item>
+      <item> time_ns </item>
+      <item> timedwait </item>
+      <item> toc </item>
+      <item> toq </item>
+      <item> touch </item>
+      <item> trace </item>
+      <item> trailing_ones </item>
+      <item> trailing_zeros </item>
+      <item> transpose </item>
+      <item> trigamma </item>
+      <item> tril! </item>
+      <item> tril </item>
+      <item> triu! </item>
+      <item> triu </item>
+      <item> trues </item>
+      <item> trunc </item>
+      <item> truncate </item>
+      <item> tty_cols </item>
+      <item> tty_rows </item>
+      <item> typeintersect </item>
+      <item> typejoin </item>
+      <item> typemax </item>
+      <item> typemin </item>
+      <item> ucfirst </item>
+      <item> uint </item>
+      <item> uint128 </item>
+      <item> uint16 </item>
+      <item> uint32 </item>
+      <item> uint64 </item>
+      <item> uint8 </item>
+      <item> unescape_chars </item>
+      <item> unescape_string </item>
+      <item> union! </item>
+      <item> union </item>
+      <item> unique </item>
+      <item> unsafe_copy! </item>
+      <item> unsafe_load </item>
+      <item> unsafe_pointer_to_objref </item>
+      <item> unsafe_store! </item>
+      <item> unshift! </item>
+      <item> unsigned </item>
+      <item> uperm </item>
+      <item> uppercase </item>
+      <item> usingmodule </item>
+      <item> utf8 </item>
+      <item> uv_error </item>
+      <item> values </item>
+      <item> var </item>
+      <item> varm </item>
+      <item> vcat </item>
+      <item> vec </item>
+      <item> versioninfo </item>
+      <item> wait </item>
+      <item> warn </item>
+      <item> which </item>
+      <item> whicht </item>
+      <item> whos </item>
+      <item> with_bigfloat_precision </item>
+      <item> with_bigfloat_rounding </item>
+      <item> workers </item>
+      <item> write </item>
+      <item> writecsv </item>
+      <item> writedlm </item>
+      <item> writesto </item>
+      <item> xcorr </item>
+      <item> xdump </item>
+      <item> yield </item>
+      <item> zero </item>
+      <item> zeros </item>
+      <item> zeta </item>
+      <item> zip </item>
     </list>
     <contexts>
 
@@ -238,18 +1276,18 @@
         <DetectSpaces />
 
         <!-- Blocks -->
-        <keyword context="#stay" attribute="Keyword" String="block_begin" 
-beginRegion="block" />
-        <keyword context="#stay" attribute="Keyword" String="block_eb" 
-endRegion="block" beginRegion="block" />
-        <keyword context="#stay" attribute="Keyword" String="block_end" 
-endRegion="block" />
+        <keyword context="#stay" attribute="Keyword" String="block_begin" beginRegion="block" />
+        <keyword context="#stay" attribute="Keyword" String="block_eb" endRegion="block" beginRegion="block" />
+        <keyword context="#stay" attribute="Keyword" String="block_end" endRegion="block" />
         <StringDetect String="#BEGIN" context="region_marker" attribute="FoldingComment" beginRegion="user_region" />
         <StringDetect String="#END" context="region_marker" attribute="FoldingComment" endRegion="user_region" />
 
         <!-- Keywords, types, and comments -->
         <keyword context="#stay" attribute="Keyword" String="keywords" />
+        <keyword context="#stay" attribute="Function" String="functions" />
         <keyword context="#stay" attribute="Data Type" String="types" />
+        <keyword context="#stay" attribute="Constant" String="constants" />
+        <keyword context="#stay" attribute="Math Constant" String="math-constants" />
         <DetectChar char="#" context="1-comment" attribute="Comment"/>
 
         <!-- Lists and arrays -->
@@ -351,6 +1389,7 @@ endRegion="block" />
       <itemData name="Normal Text" defStyleNum="dsNormal" />
       <itemData name="Variable" defStyleNum="dsNormal" />
       <itemData name="Operator" defStyleNum="dsNormal"/>
+      <itemData name="Math Constant" defStyleNum="dsDecVal" />
       <itemData name="Decimal" defStyleNum="dsDecVal" />
       <itemData name="Float" defStyleNum="dsFloat" />
       <itemData name="Hex" defStyleNum="dsBaseN" />
@@ -360,6 +1399,8 @@ endRegion="block" />
       <itemData name="Incomplete Char" defStyleNum="dsChar"/>
       <itemData name="System" defStyleNum="dsBaseN"/>
       <itemData name="Keyword" defStyleNum="dsKeyword"/>
+      <itemData name="Function" defStyleNum="dsFunction"/>
+      <itemData name="Constant" defStyleNum="dsKeyword"/>
       <itemData name="Data Type" defStyleNum="dsDataType"/>
       <itemData name="Comment" defStyleNum="dsComment"/>
       <itemData name="FoldingComment" defStyleNum="dsComment" />
