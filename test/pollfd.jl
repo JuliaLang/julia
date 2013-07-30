@@ -32,7 +32,7 @@ function test_read(slval)
     tr = consume(t)
     t_elapsed = toq()
 
-    @test tr == UV_READABLE || (UV_READABLE | UV_WRITEABLE)
+    @test tr == UV_READABLE || (UV_READABLE | UV_WRITABLE)
 
     dout = Array(Uint8, 1)
     @test 1 == ccall(:read, Csize_t, (Cint, Ptr{Uint8},Csize_t), pipe_fds[1], dout, 1)
