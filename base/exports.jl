@@ -1074,6 +1074,8 @@ export
     position,
     read,
     readall,
+    readbytes,
+    readbytes!,
     readchomp,
     readdir,
     readline,
