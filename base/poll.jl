@@ -213,27 +213,27 @@ function start_watching(t::FDWatcher, events)
         error("Cannot watch an FD more than once on Unix")
     end
     uv_error("start_watching (FD)",
-        ccall(:jl_poll_start,Int32,(Ptr{Void},Int32),t.handle,events)==-1)
+        ccall(:jl_poll_start,Int32,(Ptr{Void},Int32),t.handle,events))
 end
 start_watching(f::Function, t::FDWatcher, events) = (t.cb = f; start_watching(t,events))
 
 function start_watching(t::PollingFileWatcher, interval)
     associate_julia_struct(t.handle, t)
     uv_error("start_watching (File)",
-        ccall(:jl_fs_poll_start,Int32,(Ptr{Void},Ptr{Uint8},Uint32),t.handle,t.file,interval)==-1)
+        ccall(:jl_fs_poll_start,Int32,(Ptr{Void},Ptr{Uint8},Uint32),t.handle,t.file,interval))
 end
 start_watching(f::Function, t::PollingFileWatcher, interval) = (t.cb = f;start_watching(t,interval))
 
 function stop_watching(t::FDWatcher)
     disassociate_julia_struct(t.handle)
     uv_error("stop_watching (FD)",
-        ccall(:uv_poll_stop,Int32,(Ptr{Void},),t.handle)==-1)
+        ccall(:uv_poll_stop,Int32,(Ptr{Void},),t.handle))
 end
 
 function stop_watching(t::PollingFileWatcher)
     disassociate_julia_struct(t.handle)
     uv_error("stop_watching (File)",
-        ccall(:uv_fs_poll_stop,Int32,(Ptr{Void},),t.handle)==-1)
+        ccall(:uv_fs_poll_stop,Int32,(Ptr{Void},),t.handle))
 end
 
 function _uv_hook_fseventscb(t::FileMonitor,filename::Ptr,events::Int32,status::Int32)

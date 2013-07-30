@@ -169,7 +169,7 @@ end
 
 function TTY(fd::RawFD; readable::Bool = false)
     handle = c_malloc(_sizeof_uv_tty)
-    uv_error("TTY",ccall(:uv_tty_init,Int32,(Ptr{Void},Ptr{Void},Int32,Int32),eventloop(),handle,fd.fd,readable) == -1)
+    uv_error("TTY",ccall(:uv_tty_init,Int32,(Ptr{Void},Ptr{Void},Int32,Int32),eventloop(),handle,fd.fd,readable))
     ret = TTY(handle)
     associate_julia_struct(handle,ret)
     ret.status = StatusOpen
@@ -746,9 +746,8 @@ end
 struverror(err::UVError) = bytestring(ccall(:uv_strerror,Ptr{Uint8},(Int32,),err.code))
 uverrorname(err::UVError) = bytestring(ccall(:uv_err_name,Ptr{Uint8},(Int32,),err.code))
 
-uv_error(prefix, c::Int32) = c != 0 ? throw(UVError(string(prefix),c)) : nothing
-uv_error(prefix, b::Bool) = b ? throw(UVError(string(prefix))) : nothing
-
+uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix),c)
+uv_error(prefix::String, c::Integer) = c < 0 ? throw(UVError(prefix,c)) : nothing
 show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrorname(e)*")")
 
 
