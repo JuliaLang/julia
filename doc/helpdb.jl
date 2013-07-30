@@ -1667,6 +1667,26 @@
 
 "),
 
+("I/O","Base","readbytes!","readbytes!(stream, b::Vector{Uint8}, nb=length(b))
+
+   Read up to nb bytes from the stream into b, returning the
+   number of bytes read (increasing the size of b as needed).
+
+"),
+
+("I/O","Base","readbytes","readbytes(stream, nb=typemax(Int))
+
+   Read at most nb bytes from the stream, returning a
+   Vector{Uint8} of the bytes read.
+
+"),
+
+("Text I/O","Base","readall","readall(stream)
+
+   Read the entire contents of an I/O stream as a string.
+
+"),
+
 ("Text I/O","Base","readline","readline(stream)
 
    Read a single line of text, including a trailing newline character
