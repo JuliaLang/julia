@@ -79,6 +79,7 @@
     jl_callback;
     jl_clear_input;
     jl_close_uv;
+    jl_forceclose_uv;
     jl_compile_hint;
     jl_compress_ast;
     jl_connect_raw;
