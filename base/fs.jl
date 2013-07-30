@@ -69,7 +69,7 @@ function open(f::File,flags::Integer,mode::Integer)
     f.handle = _uv_fs_result(req)
     ccall(:uv_fs_req_cleanup,Void,(Ptr{Void},),req)
     c_free(req)
-    uv_error(:open,ret==-1)
+    uv_error(:open,ret)
     f.open = true
     f
 end
@@ -81,7 +81,7 @@ function close(f::File)
         error("File is already closed")
     end
     err = ccall(:jl_fs_close, Int32, (Int32,), f.handle)
-    uv_error("close",err != 0)
+    uv_error("close",err)
     f.handle = -1
     f.open = false
     f
@@ -89,7 +89,7 @@ end
 
 function unlink(p::String)
     err = ccall(:jl_fs_unlink, Int32, (Ptr{Uint8},), bytestring(p))
-    uv_error("unlink",err != 0)
+    uv_error("unlink",err)
 end
 function unlink(f::File)
     if isempty(f.path)
@@ -108,7 +108,7 @@ function write(f::File, buf::Ptr{Uint8}, len::Integer, offset::Integer=-1)
     end
     err = ccall(:jl_fs_write, Int32, (Int32, Ptr{Uint8}, Csize_t, Csize_t),
                 f.handle, buf, len, offset)
-    uv_error("write",err == -1)
+    uv_error("write",err)
     len
 end
 
@@ -117,7 +117,7 @@ function write(f::File, c::Uint8)
         error("File is not open")
     end
     err = ccall(:jl_fs_write_byte, Int32, (Int32, Cchar), f.handle, c)
-    uv_error("write",err == -1)
+    uv_error("write",err)
     1
 end
 
@@ -143,7 +143,7 @@ function read(f::File, ::Type{Uint8})
         error("File is not open")
     end
     ret = ccall(:jl_fs_read_byte, Int32, (Int32,), f.handle)
-    uv_error("read", ret == -1)
+    uv_error("read", ret)
     return uint8(ret)
 end
 
@@ -155,7 +155,7 @@ function read{T}(f::File, a::Array{T}, nel=length(a))
         nb = nel*sizeof(T)
         ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Void}, Csize_t),
                     f.handle, a, nb)
-        uv_error("write",ret == -1)
+        uv_error("write",ret)
     else
         invoke(read, (IO, Array), s, a)
     end
