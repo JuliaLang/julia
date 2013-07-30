@@ -288,9 +288,6 @@ isinteractive() = (is_interactive::Bool)
 
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    global const DL_LOAD_PATH = ByteString[]
-    @osx_only push!(DL_LOAD_PATH, "@executable_path/../lib")
-    @osx_only push!(DL_LOAD_PATH, "@executable_path/../lib/julia")
     global const LOAD_PATH = ByteString[
         abspath(JULIA_HOME,"..","local","share","julia","site",vers),
         abspath(JULIA_HOME,"..","share","julia","site",vers)
