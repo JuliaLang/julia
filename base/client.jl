@@ -191,12 +191,15 @@ function try_include(f::String)
     end
 end
 
+
+PACKAGE_ARGS = Dict()
 function process_options(args::Array{Any,1})
     global ARGS, bind_addr
     quiet = false
     repl = true
     startup = true
     color_set = false
+    packages = Set()
     i = 1
     while i <= length(args)
         if args[i]=="-q" || args[i]=="--quiet"
@@ -266,6 +269,24 @@ function process_options(args::Array{Any,1})
             if !color_set
                 error("invalid option: ", args[i])
             end
+        elseif beginswith(args[i], "--package-")
+            global PACKAGE_ARGS
+            k = args[i+1]; v = args[i+2]
+            pkgname = args[i][length("--package-") + 1: end]
+            
+            # The key HAS to be of the type <packagename>.<key>
+            PACKAGE_ARGS[pkgname * "." * k] = v
+            i += 2
+
+        elseif args[i] == "--package"
+            add!(packages, args[i+1])
+            i += 1
+            
+        elseif beginswith(args[i], "--env")
+            k = args[i+1]; v = args[i+2]
+            ENV[k] = v
+            i += 2
+            
         elseif args[i][1]!='-'
             # program
             repl = false
@@ -278,6 +299,11 @@ function process_options(args::Array{Any,1})
         end
         i += 1
     end
+    
+    for pkg in packages
+        @schedule usingmodule(pkg)
+    end
+    
     return (quiet,repl,startup,color_set)
 end
 

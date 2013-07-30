@@ -33,6 +33,11 @@ static const char *opts =
     " -f --no-startup          Don't load ~/.juliarc.jl\n"
     " -F                       Load ~/.juliarc.jl, then handle remaining inputs\n\n"
 
+    " --package-<pkgname> var val\n"
+    "                          set package configuration parameter\n"
+    " --package pkgname        loads package pkgname\n"
+    " --env var val            set environment variable\n\n"
+    
     " -h --help                Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {
