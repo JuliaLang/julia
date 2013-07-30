@@ -264,38 +264,43 @@ end
 
 # dict
 
-type Dict{K,V} <: Associative{K,V}
+type Dict{K,V,O<:Union(Nothing,Int)} <: Associative{K,V}
     slots::Array{Uint8,1}
     keys::Array{K,1}
     vals::Array{V,1}
     ndel::Int
     count::Int
     deleter::Function
+    order::Array{O,1}
+    idx::Array{O,1}
 
     function Dict()
         n = 16
-        new(zeros(Uint8,n), Array(K,n), Array(V,n), 0, 0, identity)
+        new(zeros(Uint8,n), Array(K,n), Array(V,n), 0, 0, identity, Array(O,0), Array(O,n))
     end
-    function Dict(ks, vs)
+    function Dict(ks, vs, O::Type)
         n = length(ks)
-        h = Dict{K,V}()
+        h = Dict{K,V,O}()
         for i=1:n
             h[ks[i]] = vs[i]
         end
         return h
     end
 end
-Dict() = Dict{Any,Any}()
 
-Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = Dict{K,V}(ks,vs)
-Dict(ks, vs) = Dict{Any,Any}(ks, vs)
+Dict(args...; ordered::Bool = false) = ordered ? Dict(args..., Int) : Dict(args..., Nothing)
+
+Dict(O::Type) = Dict{Any,Any,O}()
+
+Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}, O::Type) = Dict{K,V,O}(ks,vs)
+Dict(ks, vs, O::Type) = Dict{Any,Any,O}(ks, vs)
 
 # syntax entry points
-Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
-Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
-Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
+Dict{K,V}(ks::(K...), vs::(V...), O::Type) = Dict{K  ,V  ,O}(ks, vs)
+Dict{K  }(ks::(K...), vs::Tuple , O::Type) = Dict{K  ,Any,O}(ks, vs)
+Dict{V  }(ks::Tuple , vs::(V...), O::Type) = Dict{Any,V  ,O}(ks, vs)
 
-similar{K,V}(d::Dict{K,V}) = (K=>V)[]
+similar{K,V,O}(d::Dict{K,V,O}) = (K=>V)[]
 
 function serialize(s, t::Dict)
     serialize_type(s, typeof(t))
