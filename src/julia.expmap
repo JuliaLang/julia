@@ -160,6 +160,9 @@
     jl_getutf8;
     jl_global_event_loop;
     jl_hrtime;
+    jl_idle_init;
+    jl_idle_start;
+    jl_idle_stop;
     jl_init_frontend;
     jl_init_pipe;
     jl_install_sigint_handler;
@@ -190,6 +193,7 @@
     jl_make_async;
     jl_make_pipe;
     jl_make_tcp;
+    jl_make_timer;
     jl_matching_methods;
     jl_match_method;
     jl_mmap;
@@ -221,6 +225,7 @@
     jl_pchar_to_string;
     jl_pgcstack;
     jl_prepare_ast;
+    jl_ast_rettype;
     jl_print_int64;
     jl_print_symbol;
     jl_printf;
@@ -285,6 +290,8 @@
     jl_tcp6_connect;
     jl_spawn;
     jl_stackovf_exception;
+    jl_start_io_thread;
+    jl_start_reading;
     jl_stat;
     jl_stat_blksize;
     jl_stat_blocks;
@@ -366,6 +373,22 @@
     wcwidth;
     uv_*;
     add_library_mapping;
+
+    jl_load_sysimg_so;
+    jl_dump_bitcode;
+    jl_set_imaging_mode;	
+    jl_get_llvmfptr;
+    jl_get_llvmfunc_cached;
+
+	jl_stackovf_exception;
+    jl_memory_exception;
+    jl_diverror_exception;
+    jl_domain_exception;
+    jl_overflow_exception;
+    jl_inexact_exception;
+    jl_undefref_exception;
+    jl_interrupt_exception;
+    jl_bounds_exception;
 
     /* freebsd */
     environ;

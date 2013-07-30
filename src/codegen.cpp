@@ -110,6 +110,11 @@ static DIBuilder *dbuilder;
 static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
 
+// for image reloading
+static void *sysimg_handle;
+static bool imaging_mode = true;
+static std::map<size_t, std::string> delayed_fptrs;
+
 // types
 static Type *jl_value_llvmt;
 static Type *jl_pvalue_llvmt;
@@ -278,7 +283,8 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         if (li->cFunctionObject != NULL)
             (void)jl_ExecutionEngine->getPointerToFunction((Function*)li->cFunctionObject);
         JL_SIGATOMIC_END();
-        llvmf->deleteBody();
+        if (!imaging_mode)
+            llvmf->deleteBody();
         if (li->cFunctionObject != NULL)
             ((Function*)li->cFunctionObject)->deleteBody();
     }
@@ -424,7 +430,24 @@ struct jl_varinfo_t {
     {
     }
 };
+extern "C" DLLEXPORT
+void jl_set_imaging_mode(uint8_t stat)
+{
+    imaging_mode = (stat == 1);
+}
 
+extern "C" DLLEXPORT
+void jl_delayed_fptr(void *li, const char *sym)
+{
+    std::string s(sym);
+    delayed_fptrs[(size_t)li] = s;
+}
+
+extern "C" DLLEXPORT
+void jl_load_sysimg_so()
+{
+    sysimg_handle = jl_load_dynamic_library(const_cast<char*>("sysimg.so"), JL_RTLD_DEFAULT);
+}
 // aggregate of array metadata
 typedef struct {
     Value *dataptr;
@@ -432,6 +455,12 @@ typedef struct {
     std::vector<Value*> sizes;
     jl_value_t *ty;
 } jl_arrayvar_t;
+
+extern "C" DLLEXPORT
+void *jl_get_llvmfunc_cached(const char* name)
+{
+    return (void*)jl_dlsym_e( (uv_lib_t*)sysimg_handle, const_cast<char*>(name));
+}
 
 // information about the context of a piece of code: its enclosing
 // function and module, and visible local variables and labels.
@@ -476,6 +505,29 @@ static bool might_need_root(jl_value_t *ex);
 // --- utilities ---
 
 #include "cgutils.cpp"
+extern "C" DLLEXPORT
+void jl_restore_fptrs()
+{
+    std::map<size_t, std::string>::iterator symiter;
+    for (symiter = delayed_fptrs.begin();
+         symiter != delayed_fptrs.end(); symiter++)
+        ((jl_lambda_info_t*)((*symiter).first))->fptr = (jl_fptr_t)jl_get_llvmfunc_cached( (const char*)((*symiter).second.c_str()) );
+}
+
+extern "C" DLLEXPORT
+const char* jl_get_llvmname(void *llvmFunc)
+{
+    Function *f = (Function*)llvmFunc;
+    const char *llname = f->getName().data();
+    return llname;
+}
+
+extern "C" DLLEXPORT
+void* jl_get_llvmfptr(void* llvmFunc)
+{
+    Function *f = (Function*)llvmFunc;
+    return jl_ExecutionEngine->getPointerToFunction(f);
+}
 
 // --- code gen for intrinsic functions ---
 

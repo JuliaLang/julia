@@ -646,7 +646,7 @@ void julia_init(char *imageFile)
     jl_init_frontend();
     jl_init_types();
     jl_init_tasks(jl_stack_lo, jl_stack_hi-jl_stack_lo);
-    jl_init_codegen();
+    jl_init_codegen(imageFile);
     jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
 
     jl_init_serializer();
@@ -671,6 +671,8 @@ void julia_init(char *imageFile)
     if (imageFile) {
         JL_TRY {
             jl_restore_system_image(imageFile);
+            jl_load_sysimg_so();
+            jl_restore_fptrs();
         }
         JL_CATCH {
             JL_PRINTF(JL_STDERR, "error during init:\n");
