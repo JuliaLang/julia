@@ -1373,8 +1373,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
 #else
         builder.CreateStore(literal_pointer_val((jl_value_t*)jl_tuple_type),
                             emit_nthptr_addr(tup, (size_t)0));
-        builder.CreateStore(literal_pointer_val((jl_value_t*)nargs),
-                            emit_nthptr_addr(tup, (size_t)1));
+        builder.CreateStore(ConstantInt::get(T_size, nargs),
+                            builder.CreateBitCast(emit_nthptr_addr(tup, (size_t)1), T_psize));
 #endif
 #ifdef OVERLAP_TUPLE_LEN
         size_t offs = 1;
@@ -1733,7 +1733,7 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
     if (assign || b==NULL)
         b = jl_get_binding_wr(m, s);
     if (pbnd) *pbnd = b;
-    return literal_pointer_val(&b->value, jl_ppvalue_llvmt);
+    return emit_nthptr_addr(literal_pointer_val((jl_value_t*)b), offsetof(jl_binding_t,value)/sizeof(size_t));
 }
 
 // yields a jl_value_t** giving the binding location of a variable
@@ -1853,7 +1853,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     if (bnd) {
         rval = boxed(emit_expr(r, ctx, true));
         builder.CreateCall2(jlcheckassign_func,
-                            literal_pointer_val((void*)bnd),
+                            literal_pointer_val((jl_value_t*)bnd),
                             rval);
     }
     else {
@@ -1956,7 +1956,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         jl_binding_t *b = jl_get_binding(mod, var);
         if (b == NULL)
             b = jl_get_binding_wr(mod, var);
-        Value *bp = literal_pointer_val(&b->value, jl_ppvalue_llvmt);
+        Value *bp = emit_nthptr_addr(literal_pointer_val((jl_value_t*)b), offsetof(jl_binding_t,value)/sizeof(size_t));
         if ((b->constp && b->value!=NULL) ||
             (etype!=(jl_value_t*)jl_any_type &&
              !jl_subtype((jl_value_t*)jl_undef_type, etype, 0))) {
@@ -2063,7 +2063,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         else {
             if (is_global((jl_sym_t*)mn, ctx)) {
                 bnd = jl_get_binding_for_method_def(ctx->module, (jl_sym_t*)mn);
-                bp = literal_pointer_val(&bnd->value, jl_ppvalue_llvmt);
+                bp = emit_nthptr_addr(literal_pointer_val((jl_value_t*)bnd), offsetof(jl_binding_t,value)/sizeof(size_t));
             }
             else {
                 bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
@@ -2075,7 +2075,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         make_gcroot(a2, ctx);
         Value *a3 = boxed(emit_expr(args[3], ctx));
         make_gcroot(a3, ctx);
-        Value *mdargs[6] = { name, bp, literal_pointer_val((void*)bnd),
+        Value *mdargs[6] = { name, bp, literal_pointer_val((jl_value_t*)bnd),
                              a1, a2, a3 };
         ctx->argDepth = last_depth;
         return builder.CreateCall(jlmethod_func, ArrayRef<Value*>(&mdargs[0], 6));
@@ -2086,7 +2086,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         (void)var_binding_pointer(sym, &bnd, true, ctx);
         if (bnd) {
             builder.CreateCall(jldeclareconst_func,
-                               literal_pointer_val((void*)bnd));
+                               literal_pointer_val((jl_value_t*)bnd));
         }
     }
 
@@ -3198,7 +3198,7 @@ static void init_julia_llvm_env(Module *m)
                                          (void*)&jl_type_error_rt);
 
     std::vector<Type *> args_2ptrs(0);
-    args_2ptrs.push_back(T_pint8);
+    args_2ptrs.push_back(jl_pvalue_llvmt);
     args_2ptrs.push_back(jl_pvalue_llvmt);
     jlcheckassign_func =
         Function::Create(FunctionType::get(T_void, args_2ptrs, false),
@@ -3208,7 +3208,7 @@ static void init_julia_llvm_env(Module *m)
                                          (void*)&jl_checked_assignment);
 
     std::vector<Type *> args_1ptr(0);
-    args_1ptr.push_back(T_pint8);
+    args_1ptr.push_back(jl_pvalue_llvmt);
     jldeclareconst_func =
         Function::Create(FunctionType::get(T_void, args_1ptr, false),
                          Function::ExternalLinkage,
@@ -3251,7 +3251,7 @@ static void init_julia_llvm_env(Module *m)
     std::vector<Type*> mdargs(0);
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_ppvalue_llvmt);
-    mdargs.push_back(T_pint8);
+    mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
