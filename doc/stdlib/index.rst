@@ -28,5 +28,6 @@ Built-in Modules
 
    collections
    sort
+   graphics
    test
    profile
