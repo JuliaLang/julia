@@ -816,7 +816,7 @@ DLLEXPORT int jl_uv_pipe_fd(uv_pipe_t *handle)
 #else
 DLLEXPORT HANDLE jl_uv_pipe_handle(uv_pipe_t *handle)
 {
-    return uv_get_pipe_handle(handle);
+    return handle->handle;
 }
 #endif
 #ifdef __cplusplus

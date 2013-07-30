@@ -839,5 +839,47 @@ function connect(sock::AsyncStream, args...)
     sock
 end
 
+dup(x::RawFD) = RawFD(ccall((@windows? :_dup : :dup),Int32,(Int32,),x.fd))
+dup(src::RawFD,target::RawFD) = systemerror("dup",ccall((@windows? :_dup2 : :dup),Int32,(Int32,Int32),src.fd,target.fd) == -1)
+
+@unix_only _fd(x::NamedPipe) = RawFD(ccall(:jl_uv_pipe_fd,Int32,(Ptr{Void},),x.handle))
+@windows_only _fd(x::NamedPipe) = WindowsRawSocket(ccall(:jl_uv_pipe_handle,Ptr{Void},(Ptr{Void},),x.handle))
+
+function redirect_stdin(handle::AsyncStream) 
+    global STDIN
+    @windows? ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),-10,_fd(handle).handle) : dup(_fd(handle),  RawFD(0))
+    STDIN = handle
+end
+function redirect_stdin()
+   stdin_read, stdin_write = (NamedPipe(C_NULL), NamedPipe(C_NULL))
+   link_pipe(stdin_read,false,stdin_write,true)
+   redirect_stdin(stdin_read)
+   stdin_read, stdin_write
+end
+
+function redirect_stdout(handle::AsyncStream) 
+    global STDOUT
+    @windows? ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),-11,_fd(handle).handle) : dup(_fd(handle),  RawFD(1))
+    STDOUT = handle
+end
+function redirect_stdout()
+   stdout_read, stdout_write = (NamedPipe(C_NULL), NamedPipe(C_NULL))
+   link_pipe(stdout_read,true,stdout_write,false)
+   redirect_stdout(stdout_write)
+   stdout_read, stdout_write
+end
+
+function redirect_stderr(handle::AsyncStream) 
+    global STDERR
+    @windows? ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),-11,_fd(handle).handle) : dup(fd(handle),  RawFD(2))
+    STDERR = handle
+end
+function redirect_stderr()
+   stderr_read, stderr_write = (NamedPipe(C_NULL), NamedPipe(C_NULL))
+   link_pipe(stderr_read,true,stderr_write,false)
+   redirect_stderr(stderr_read)
+   stderr_read, stderr_write
+end
+
 
 connect(path::ByteString) = connect(NamedPipe(),path)
