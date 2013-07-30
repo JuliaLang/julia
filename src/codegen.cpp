@@ -2565,6 +2565,10 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     }
 
     std::string funcName = lam->name->name;
+    // sanitize macro names, otherwise julia_@name means versioned symbol
+    size_t atpos = funcName.find("@");
+    if (atpos != std::string::npos)
+        funcName.replace(atpos, 1, "#");
     // try to avoid conflicts in the global symbol table
     funcName = "julia_" + funcName;
 
