@@ -83,6 +83,10 @@ include("inference.jl")
 # For OS sprcific stuff in I/O
 include("osutils.jl")
 
+const DL_LOAD_PATH = ByteString[]
+@osx_only push!(DL_LOAD_PATH, "@executable_path/../lib/julia")
+@osx_only push!(DL_LOAD_PATH, "@executable_path/../lib")
+
 # strings & printing
 include("char.jl")
 include("ascii.jl")
