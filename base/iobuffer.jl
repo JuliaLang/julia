@@ -74,7 +74,7 @@ end
 read{T}(from::IOBuffer, ::Type{Ptr{T}}) = convert(Ptr{T}, read(from, Uint))
 
 isreadable(io::IOBuffer) = io.readable
-iswriteable(io::IOBuffer) = io.writable
+iswritable(io::IOBuffer) = io.writable
 
 # TODO: IOBuffer is not iterable, so doesn't really have a length.
 # This should maybe be sizeof() instead.
