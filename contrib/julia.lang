@@ -309,11 +309,11 @@
       <keyword>MmapArrayInfo</keyword>
       <keyword>Module</keyword>
       <keyword>NTuple</keyword>
-      <keyword>NamedPipe</keyword>
       <keyword>(Getfield|Goto|Label|LineNumber|Quote)Node</keyword>
       <keyword>NotFound</keyword>
       <keyword>OS_FD</keyword>
       <keyword>ObjectIdDict</keyword>
+      <keyword>Pipe</keyword>
       <keyword>PollingFileWatcher</keyword>
       <keyword>Process(Chain(OrNot)?|Group)?</keyword>
       <keyword>Ptr</keyword>

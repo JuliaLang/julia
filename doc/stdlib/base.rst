@@ -1046,7 +1046,7 @@ Network I/O
 
    Connect to the host ``host`` on port ``port``
 
-.. function:: connect(path) -> NamedPipe
+.. function:: connect(path) -> Pipe
 
    Connect to the Named Pipe/Domain Socket at ``path``
 
