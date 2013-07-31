@@ -849,11 +849,6 @@ for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,tru
     @eval begin
         function ($f)(handle::AsyncStream)
             global $x
-            # We're about to dup the file descriptor over, so there's nothing else we can do
-            # Windows is different since the UV Stream has a handle not a file descriptor
-            @unix_only if isa($x,AsyncStream) && _fd($x) == RawFD($unix_fd)
-                ccall(:jl_forceclose_uv,Void,(Ptr{Void},),($x).handle)   
-            end
             @windows? ccall(:SetStdHandle,stdcall,Int32,(Uint32,Ptr{Void}),$(-10-unix_fd),_fd(handle).handle) : dup(_fd(handle),  RawFD($unix_fd))
             unsafe_store!(cglobal($(Expr(:quote,c_symbol)),Ptr{Void}),handle.handle)
             $x = handle
