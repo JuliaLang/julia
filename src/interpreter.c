@@ -327,6 +327,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_check_type_tuple(dt->types, dt->name->name, "type definition");
         super = eval(args[4], locals, nl);
         jl_set_datatype_super(dt, super);
+        for(size_t i=0; i < jl_tuple_len(para); i++) {
+            ((jl_tvar_t*)jl_tupleref(para,i))->bound = 0;
+        }
         jl_compute_field_offsets(dt);
         jl_add_constructors(dt);
         JL_GC_POP();
