@@ -30,7 +30,7 @@ end
 
 clear() = ccall(:profile_clear_data, Void, ())
 
-function print(io::IO = STDOUT, data = fetch(); format = :tree, C = false, combine = true, cols = tty_cols())
+function print{T<:Unsigned}(io::IO = STDOUT, data::Vector{T} = fetch(); format = :tree, C = false, combine = true, cols = tty_cols())
     if format == :tree
         tree(io, data, C, combine, cols)
     elseif format == :flat
@@ -39,7 +39,25 @@ function print(io::IO = STDOUT, data = fetch(); format = :tree, C = false, combi
         error("Output format ", format, " not recognized")
     end
 end
+print{T<:Unsigned}(data::Vector{T} = fetch(); kwargs...) = print(STDOUT, data; kwargs...)
 
+function print{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
+    if format == :tree
+        tree(io, data, lidict, combine, cols)
+    elseif format == :flat
+        flat(io, data, lidict, combine, cols)
+    else
+        error("Output format ", format, " not recognized")
+    end
+end
+print{T<:Unsigned}(data::Vector{T}, lidict::Dict; kwargs...) = print(STDOUT, data, lidict; kwargs...)
+
+function retrieve(;C = false)
+    data = fetch()
+    uip = unique(data)
+    lidict = Dict(uip, [lookup(ip, C) for ip in uip])
+    return copy(data), lidict
+end
 
 ####
 #### Internal interface
@@ -97,8 +115,8 @@ const btskip = 2
 
 ## Print as a flat list
 # Counts the number of times each line appears, at any nesting level
-function parse_flat(data::Vector{Uint}, doCframes::Bool)
-    linecount = (Uint=>Int)[]
+function count_flat{T<:Unsigned}(data::Vector{T})
+    linecount = (T=>Int)[]
     toskip = btskip
     for ip in data
         if toskip > 0
@@ -111,17 +129,18 @@ function parse_flat(data::Vector{Uint}, doCframes::Bool)
         end
         linecount[ip] = get(linecount, ip, 0)+1
     end
-    buf = Array(Uint, 0)
+    iplist = Array(T, 0)
     n = Array(Int, 0)
     for (k,v) in linecount
-        push!(buf, k)
+        push!(iplist, k)
         push!(n, v)
     end
+    return iplist, n
+end
+
+function parse_flat(iplist, n, lidict)
     # Convert instruction pointers to names & line numbers
-    lilist = Array(LineInfo, length(buf))
-    for i = 1:length(buf)
-        lilist[i] = lookup(buf[i], doCframes)
-    end
+    lilist = [lidict[ip] for ip in iplist]
     # Keep only the interpretable ones
     # The ones with no line number might appear multiple times in a single
     # backtrace, giving the wrong impression about the total number of backtraces.
@@ -132,12 +151,28 @@ function parse_flat(data::Vector{Uint}, doCframes::Bool)
     lilist, n
 end
 
-function flat(io::IO, data::Vector{Uint}, doCframes::Bool, combine::Bool, cols::Integer)
-    lilist, n = parse_flat(data, doCframes)
+function flat{T<:Unsigned}(io::IO, data::Vector{T}, doCframes::Bool, combine::Bool, cols::Integer)
+    iplist, n = count_flat(data)
     if isempty(n)
         warning_empty()
         return
     end
+    lidict = Dict(iplist, [lookup(ip, doCframes) for ip in iplist])
+    lilist, n = parse_flat(iplist, n, lidict)
+    print_flat(io, lilist, n, combine, cols)
+end
+
+function flat{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, combine::Bool, cols::Integer)
+    iplist, n = count_flat(data)
+    if isempty(n)
+        warning_empty()
+        return
+    end
+    lilist, n = parse_flat(iplist, n, lidict)
+    print_flat(io, lilist, n, combine, cols)
+end
+
+function print_flat(io::IO, lilist::Vector{LineInfo}, n::Vector{Int}, combine::Bool, cols::Integer)
     p = liperm(lilist)
     lilist = lilist[p]
     n = n[p]
@@ -182,16 +217,16 @@ end
 
 ## A tree representation
 # Identify and counts repetitions of all unique backtraces
-function tree_aggregate(data::Array{Uint})
+function tree_aggregate{T<:Unsigned}(data::Vector{T})
     iz = find(data .== 0)  # find the breaks between backtraces
-    treecount = (Vector{Uint}=>Int)[]
+    treecount = (Vector{T}=>Int)[]
     istart = 1+btskip
     for iend in iz
         tmp = data[iend-1:-1:istart]
         treecount[tmp] = get(treecount, tmp, 0)+1
         istart = iend+1+btskip
     end
-    bt = Array(Vector{Uint}, 0)
+    bt = Array(Vector{T}, 0)
     counts = Array(Int, 0)
     for (k,v) in treecount
         push!(bt, k)
@@ -239,7 +274,7 @@ function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, 
 end
 
 # Print a "branch" starting at a particular level. This gets called recursively.
-function tree(io::IO, bt::Vector{Vector{Uint}}, counts::Vector{Int}, lidict::Dict, level::Int, combine::Bool, cols::Integer)
+function tree{T<:Unsigned}(io::IO, bt::Vector{Vector{T}}, counts::Vector{Int}, lidict::Dict, level::Int, combine::Bool, cols::Integer)
     # Organize backtraces into groups that are identical up to this level
     if combine
         # Combine based on the line information
@@ -268,7 +303,7 @@ function tree(io::IO, bt::Vector{Vector{Uint}}, counts::Vector{Int}, lidict::Dic
         end
     else
         # Combine based on the instruction pointer
-        d = (Uint=>Vector{Int})[]
+        d = (T=>Vector{Int})[]
         for i = 1:length(bt)
             key = bt[i][level+1]
             indx = Base.ht_keyindex(d, key)
@@ -315,14 +350,18 @@ function tree(io::IO, bt::Vector{Vector{Uint}}, counts::Vector{Int}, lidict::Dic
     end
 end
 
-function tree(io::IO, data::Vector{Uint}, doCframes::Bool, combine::Bool, cols::Integer)
+function tree{T<:Unsigned}(io::IO, data::Vector{T}, doCframes::Bool, combine::Bool, cols::Integer)
+    uip = unique(data)
+    lidict = Dict(uip, [lookup(ip, doCframes) for ip in uip])
+    tree(io, data, lidict, combine, cols)
+end
+
+function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, combine::Bool, cols::Integer)
     bt, counts = tree_aggregate(data)
     if isempty(counts)
         warning_empty()
         return
     end
-    uip = unique(data)
-    lidict = Dict(uip, [lookup(ip, doCframes) for ip in uip])
     level = 0
     len = Int[length(x) for x in bt]
     keep = len .> 0
