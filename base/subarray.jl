@@ -350,3 +350,53 @@ end
 
 summary(s::SubArray) =
     string(dims2string(size(s)), " SubArray of ", summary(s.parent))
+
+## get() for SubArrays can pull data from the parent outside the region of the SubArray
+translate_get(idx::Integer, i::Integer) = idx + i - 1
+translate_get(idx, i::Integer) = first(idx) + (i-1)*step(idx)
+translate_get(idx::Integer, r::Ranges) = (idx-1) + r
+translate_get(idx, r::Ranges) = first(idx) + (r-1)*step(idx)
+
+# In contrast to arrays, don't allow linear indexing for ndims>1 here
+function get{T}(A::SubArray{T,1}, i::Integer, default)
+    ip = translate_get(A.indexes[1], i)
+    Ap = A.parent
+    in_bounds(length(Ap), ip) ? convert(typeof(default), Ap[ip]) : default
+end
+
+get(A::AbstractArray, I::(), default) = Array(typeof(default), 0)
+
+function get(A::SubArray, I::Dims, default)
+    if length(I) != ndims(A)
+        error("Wrong number of dimensions")
+    end
+    J = [ translate_get(A.indexes[i], I[i]) for i = 1:length(I) ]
+    Ap = A.parent
+    in_bounds(size(Ap), J...) ? convert(typeof(default), Ap[J...]) : default
+end
+
+function get!{T,R}(X::AbstractArray{T,1}, A::SubArray{R,1}, I::Union(Ranges, Array{Int,1}), default::T)
+    Ap = A.parent
+    J = translate_get(A.indexes[1], I)
+    ind = findin(J, 1:length(Ap))
+    X[ind] = Ap[J[ind]]
+    X[1:first(ind)-1] = default
+    X[last(ind)+1:length(X)] = default
+    X
+end
+get{T}(A::SubArray{T,1}, I::Ranges, default) = get!(Array(typeof(default), length(I)), A, I, default)
+
+typealias RangeVecIntList Union((Union(Ranges, Array{Int,1})...), Array{Range1{Int},1}, Array{Range{Int},1}, Array{Array{Int,1},1})
+
+function get!{T}(X::AbstractArray{T}, A::SubArray, I::RangeVecIntList, default::T)
+    if length(I) != ndims(A)
+        error("Wrong number of dimensions")
+    end
+    fill!(X, default)
+    J = [ translate_get(A.indexes[i], I[i]) for i = 1:length(I) ]
+    Ap = A.parent
+    dst, src = indcopy(size(Ap), J)
+    X[dst...] = Ap[src...]
+    X
+end
+get(A::SubArray, I::RangeVecIntList, default) = get!(Array(typeof(default), map(length, I)...), A, I, default)

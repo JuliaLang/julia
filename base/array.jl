@@ -645,28 +645,25 @@ setindex!{T<:Real}(A::Array, x, I::AbstractVector{Bool}, J::AbstractVector{T}) =
 
 # get (getindex with a default value)
 
-get(A::Array, i::Integer, default) = in_bounds(length(A), i) ? A[i] : default
-get(A::Array, I::(), default) = Array(typeof(default), 0)
-get(A::Array, I::Dims, default) = in_bounds(size(A), I...) ? A[I...] : default
+get(A::Array, i::Integer, default) = in_bounds(length(A), i) ? convert(typeof(default), A[i]) : default
+get(A::Array, I::Dims, default) = in_bounds(size(A), I...) ? convert(typeof(default), A[I...]) : default
 
-function get{T}(X::Array{T}, A::Array, I::Union(Ranges, Vector{Int}), default::T)
+function get!{T}(X::AbstractArray{T}, A::Array, I::Union(Ranges, Vector{Int}), default::T)
     ind = findin(I, 1:length(A))
     X[ind] = A[I[ind]]
     X[1:first(ind)-1] = default
     X[last(ind)+1:length(X)] = default
     X
 end
-get(A::Array, I::Ranges, default) = get(Array(typeof(default), length(I)), A, I, default)
+get(A::Array, I::Ranges, default) = get!(Array(typeof(default), length(I)), A, I, default)
 
-typealias RangeVecIntList Union((Union(Ranges, Vector{Int})...), Vector{Range1{Int}}, Vector{Range{Int}}, Vector{Vector{Int}})
-
-function get{T}(X::Array{T}, A::Array, I::RangeVecIntList, default::T)
+function get!{T}(X::AbstractArray{T}, A::Array, I::RangeVecIntList, default::T)
     fill!(X, default)
     dst, src = indcopy(size(A), I)
     X[dst...] = A[src...]
     X
 end
-get(A::Array, I::RangeVecIntList, default) = get(Array(typeof(default), map(length, I)...), A, I, default)
+get(A::Array, I::RangeVecIntList, default) = get!(Array(typeof(default), map(length, I)...), A, I, default)
 
 ## Dequeue functionality ##
 
