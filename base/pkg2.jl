@@ -76,36 +76,32 @@ clone(url::String, pkg::String=urlpkg(url); opts::Cmd=``) = Dir.cd() do
     resolve()
 end
 
-checkout(pkg::String, branch::String="master"; force::Bool=false) = Dir.cd() do
-    ispath(pkg, ".git") || error("$pkg is not a git repo")
+function checkout(pkg::String, what::String, force::Bool)
     Git.transact(dir=pkg) do
-        info("Checking out $pkg $branch...")
         if force
-            Git.run(`checkout -q -f $branch`, dir=pkg)
+            Git.run(`checkout -q -f $what`, dir=pkg)
         else
             Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
-            Git.run(`checkout -q $branch`, dir=pkg)
+            Git.run(`checkout -q $what`, dir=pkg)
         end
         resolve()
     end
 end
 
+checkout(pkg::String, branch::String="master"; force::Bool=false) = Dir.cd() do
+    ispath(pkg,".git") || error("$pkg is not a git repo")
+    info("Checking out $pkg $branch...")
+    checkout(pkg,branch,force)
+end
+
 release(pkg::String; force::Bool=false) = Dir.cd() do
-    ispath(pkg, ".git") || error("$pkg is not a git repo")
+    ispath(pkg,".git") || error("$pkg is not a git repo")
     avail = Dir.cd(Read.available)
     haskey(avail,pkg) || error("$pkg is not registered")
     ver = max(keys(avail[pkg]))
     sha1 = avail[pkg][ver].sha1
-    Git.transact(dir=pkg) do
-        info("Releasing $pkg...")
-        if force
-            Git.run(`checkout -q -f $sha1`, dir=pkg)
-        else
-            Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
-            Git.run(`checkout -q $sha1`, dir=pkg)
-        end
-        resolve()
-    end
+    info("Releasing $pkg...")
+    checkout(pkg,sha1,force)
 end
 
 update() = Dir.cd() do
