@@ -158,20 +158,20 @@ resolve(
     reqs = Query.requirements(reqs,fixed)
     deps = Query.dependencies(avail,fixed)
 
+    incompatible = {}
     for pkg in keys(reqs)
-        haskey(deps, pkg) ||
-            error("$pkg has no version compatible with fixed requirements")
+        haskey(deps,pkg) || push!(incompatible,pkg)
     end
+    isempty(incompatible) ||
+        error("The following packages are incompatible with fixed requirements: ",
+              join(incompatible, ", ", " and "))
 
     deps = Query.prune_dependencies(reqs,deps)
-
     want = Resolve.resolve(reqs,deps)
 
     # compare what is installed with what should be
     changes = Query.diff(have, want, avail, fixed)
-    if isempty(changes)
-        return info("No packages to install, update or remove.")
-    end
+    isempty(changes) && return info("No packages to install, update or remove.")
 
     # prefetch phase isolates network activity, nothing to roll back
     missing = {}
@@ -184,7 +184,7 @@ resolve(
                 Cache.prefetch(pkg, Read.url(pkg), vers)))
     end
     if !isempty(missing)
-        msg = "unfound package versions (possible metadata misconfiguration):"
+        msg = "missing package versions (possible metadata misconfiguration):"
         for (pkg,ver,sha1) in missing
             msg *= "  $pkg v$ver [$sha1[1:10]]\n"
         end
