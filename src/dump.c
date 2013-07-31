@@ -159,7 +159,7 @@ static void jl_serialize_gv_syms(ios_t *s, jl_sym_t *v)
 
 static void jl_serialize_module(ios_t *s, jl_module_t *m)
 {
-    // set on every startup; don't save
+    // set on every startup; don't save value
     jl_sym_t *jhsym = jl_symbol("JULIA_HOME");
     writetag(s, jl_module_type);
     jl_serialize_value(s, m->name);
@@ -167,12 +167,15 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
     size_t i;
     void **table = m->bindings.table;
     for(i=1; i < m->bindings.size; i+=2) {
-        if (table[i] != HT_NOTFOUND &&
-            !(table[i-1] == jhsym && m == jl_core_module)) {
+        if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            if (!(b->owner != m && m == jl_main_module)) {
+            if (b->owner == m || m != jl_main_module) {
                 jl_serialize_value(s, b->name);
-                jl_serialize_value(s, b->value);
+                if (table[i-1] == jhsym && m == jl_core_module) {
+                    jl_serialize_value(s, NULL);
+                } else {
+                    jl_serialize_value(s, b->value);
+                }
                 jl_serialize_value(s, b->type);
                 jl_serialize_value(s, b->owner);
                 write_int8(s, (b->constp<<2) | (b->exportp<<1) | (b->imported));
@@ -515,15 +518,11 @@ static void jl_delayed_fptr(jl_lambda_info_t *li, const char *sym)
     li->fptr = (jl_fptr_t)jl_dlsym( (uv_lib_t*)sysimg_handle, (char*)sym);
 }
 
-void jl_load_sysimg_so()
+static void jl_load_sysimg_so()
 {
     sysimg_handle = jl_load_dynamic_library("sysimg", JL_RTLD_DEFAULT); //TODO: use absolute path
 }
 
-void jl_restore_fptrs()
-{
-    sysimg_handle = NULL;
-}
 
 jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
 
@@ -703,10 +702,10 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag) {
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, m);
         m->parent = (jl_module_t*)jl_deserialize_value(s);
         while (1) {
-            jl_value_t *name = jl_deserialize_value(s);
+            jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(s);
             if (name == NULL)
                 break;
-            jl_binding_t *b = jl_get_binding_wr(m, (jl_sym_t*)name);
+            jl_binding_t *b = jl_get_binding_wr(m, name);
             b->value = jl_deserialize_value(s);
             b->type = (jl_value_t*)jl_deserialize_value(s);
             b->owner = (jl_module_t*)jl_deserialize_value(s);
@@ -861,6 +860,7 @@ void jl_restore_system_image(char *fname)
         JL_PRINTF(JL_STDERR, "system image file not found\n");
         exit(1);
     }
+    jl_load_sysimg_so();
 #ifdef JL_GC_MARKSWEEP
     int en = jl_gc_is_enabled();
     jl_gc_disable();
@@ -908,12 +908,16 @@ void jl_restore_system_image(char *fname)
     jl_set_gs_ctr(read_int32(&f));
     htable_reset(&backref_table, 0);
 
+    sysimg_handle = NULL;
     ios_close(&f);
     if (fpath != fname) free(fpath);
 
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();
 #endif
+    
+    jl_get_binding_wr(jl_core_module, jl_symbol("JULIA_HOME"))->value =
+        jl_cstr_to_string(julia_home);
 }
 
 DLLEXPORT

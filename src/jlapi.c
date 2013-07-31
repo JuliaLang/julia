@@ -16,7 +16,6 @@ char * __cdecl basename(char *);
 #include <libgen.h>
 #endif
 #include "julia.h"
-extern char *julia_home;
 
 DLLEXPORT char *jl_locate_sysimg(char *jlhome, char* imgpath)
 {

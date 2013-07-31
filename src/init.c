@@ -667,13 +667,14 @@ void julia_init(char *imageFile)
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
         jl_init_box_caches();
+        jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
+                     jl_cstr_to_string(julia_home));
+        jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));
     }
 
     if (imageFile) {
         JL_TRY {
-            jl_load_sysimg_so();
             jl_restore_system_image(imageFile);
-            jl_restore_fptrs();
         }
         JL_CATCH {
             JL_PRINTF(JL_STDERR, "error during init:\n");

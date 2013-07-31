@@ -112,7 +112,7 @@ static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
 
 // for image reloading
-static bool imaging_mode = false;
+static bool imaging_mode = true;
 
 // types
 static Type *jl_value_llvmt;
@@ -225,7 +225,7 @@ static void jl_rethrow_with_add(const char *fmt, ...)
 static Function *emit_function(jl_lambda_info_t *lam, bool cstyle);
 //static int n_compile=0;
 
-static void jl_static_show(jl_value_t *v) {
+DLLEXPORT extern "C" void jl_static_show(jl_value_t *v) {
     // mimic jl_show, but never call a julia method
     if (v == NULL)
         return;
@@ -289,6 +289,9 @@ static void jl_static_show(jl_value_t *v) {
             JL_PRINTF(JL_STDOUT, ".");
         }
         JL_PRINTF(JL_STDOUT, "%s", m->name->name);
+    }
+    else if (jl_is_symbol(v)) {
+        JL_PRINTF(JL_STDOUT, ":%s", ((jl_sym_t*)v)->name);
     }
     else {
         JL_PRINTF(JL_STDOUT, "?");
@@ -1844,7 +1847,7 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
     if (assign || b==NULL)
         b = jl_get_binding_wr(m, s);
     if (pbnd) *pbnd = b;
-    return emit_nthptr_addr(julia_to_gv("jl_binding#", (jl_value_t*)b), offsetof(jl_binding_t,value)/sizeof(size_t));
+    return julia_to_gv(b);
 }
 
 // yields a jl_value_t** giving the binding location of a variable
@@ -2067,7 +2070,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         jl_binding_t *b = jl_get_binding(mod, var);
         if (b == NULL)
             b = jl_get_binding_wr(mod, var);
-        Value *bp = emit_nthptr_addr(julia_to_gv("jl_binding#", (jl_value_t*)b), offsetof(jl_binding_t,value)/sizeof(size_t));
+        Value *bp = julia_to_gv(b);
         if ((b->constp && b->value!=NULL) ||
             (etype!=(jl_value_t*)jl_any_type &&
              !jl_subtype((jl_value_t*)jl_undef_type, etype, 0))) {
@@ -2174,7 +2177,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         else {
             if (is_global((jl_sym_t*)mn, ctx)) {
                 bnd = jl_get_binding_for_method_def(ctx->module, (jl_sym_t*)mn);
-                bp = emit_nthptr_addr(julia_to_gv("jl_binding#", (jl_value_t*)bnd), offsetof(jl_binding_t,value)/sizeof(size_t));
+                bp = julia_to_gv(bnd);
             }
             else {
                 bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
@@ -2643,7 +2646,14 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             lam->cFunctionObject = (void*)f;
         }
         if (lam->functionObject == NULL) {
-            lam->functionObject = (void*)gen_jlcall_wrapper(lam, f);
+            if (lam->fptr != NULL && lam->fptr != &jl_trampoline) {
+                Function *w = Function::Create(jl_func_sig, Function::ExternalLinkage,
+                                               f->getName(), jl_Module);
+                lam->functionObject = w;
+                jl_ExecutionEngine->addGlobalMapping(w, (void*)lam->fptr);
+            } else {
+                lam->functionObject = (void*)gen_jlcall_wrapper(lam, f);
+            }
         }
     }
     else {
@@ -2652,10 +2662,10 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         if (lam->functionObject == NULL) {
             lam->functionObject = (void*)f;
         }
-    }
-    if (lam->fptr != NULL && lam->fptr != &jl_trampoline) {
-        jl_ExecutionEngine->addGlobalMapping(f, (void*)lam->fptr);
-        return f;
+        if (lam->fptr != NULL && lam->fptr != &jl_trampoline) {
+            jl_ExecutionEngine->addGlobalMapping(f, (void*)lam->fptr);
+            return f;
+        }
     }
     //TODO: this seems to cause problems, but should be made to work eventually
     //if (jlrettype == (jl_value_t*)jl_bottom_type)

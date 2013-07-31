@@ -878,8 +878,6 @@ DLLEXPORT void jl_dump_bitcode(char *fname);
 DLLEXPORT const char *jl_get_llvmname(void *func);
 void *jl_get_llvmfptr(void *func);
 DLLEXPORT void jl_set_imaging_mode(uint8_t stat);
-void jl_load_sysimg_so(void);
-void jl_restore_fptrs(void);
 const char *jl_get_llvm_gv(jl_value_t *p);
 
 // front end interface
@@ -1245,6 +1243,8 @@ extern DLLEXPORT uv_stream_t * jl_uv_stderr;
 DLLEXPORT JL_STREAM *jl_stdout_stream();
 DLLEXPORT JL_STREAM *jl_stdin_stream();
 DLLEXPORT JL_STREAM *jl_stderr_stream();
+
+extern char *julia_home;
 
 static inline void jl_eh_restore_state(jl_handler_t *eh)
 {
