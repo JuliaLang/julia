@@ -83,10 +83,10 @@ BENCHMARKS = \
 	benchmarks/mathematica.csv
 
 benchmarks.csv: bin/collect.pl $(BENCHMARKS)
-	$(QUIET_PERL) $^ >$@
+	@$(PRINT_PERL) $^ >$@
 
 benchmarks.html: bin/table.pl benchmarks.csv
-	$(QUIET_PERL) $^ >$@
+	@$(PRINT_PERL) $^ >$@
 
 clean:
 	@rm -rf perf.h bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv *.mod *~
