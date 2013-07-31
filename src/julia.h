@@ -875,8 +875,7 @@ void jl_init_serializer(void);
 DLLEXPORT void jl_save_system_image(char *fname);
 DLLEXPORT void jl_restore_system_image(char *fname);
 DLLEXPORT void jl_dump_bitcode(char *fname);
-DLLEXPORT const char *jl_get_llvmname(void *func);
-void *jl_get_llvmfptr(void *func);
+const char *jl_get_llvmname(void *func);
 DLLEXPORT void jl_set_imaging_mode(uint8_t stat);
 const char *jl_get_llvm_gv(jl_value_t *p);
 
@@ -975,6 +974,7 @@ jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types,
 jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache);
 jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
                          jl_value_t **args, size_t nargs);
+void jlfptr_to_llvm(const char *cname, void *fptr, jl_lambda_info_t *lam, int specsig);
 
 // AST access
 jl_array_t *jl_lam_args(jl_expr_t *l);

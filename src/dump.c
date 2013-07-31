@@ -366,12 +366,19 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         // save functionObject name 
         // as mangled by llvm
         if (li->functionObject) {
-            // force compile
-            (void)jl_get_llvmfptr(li->functionObject);
-            char *llname = (char*)jl_get_llvmname(li->functionObject);
+            const char *llname = jl_get_llvmname(li->functionObject);
             int32_t llname_size = strlen(llname);
             write_int32(s, llname_size);
-            ios_write(s, llname, llname_size);
+            ios_write(s, (char*)llname, llname_size);
+        }
+        else {
+            write_int32(s, 0);
+        }
+        if (li->cFunctionObject) {
+            const char *llname = jl_get_llvmname(li->cFunctionObject);
+            int32_t llname_size = strlen(llname);
+            write_int32(s, llname_size);
+            ios_write(s, (char*)llname, llname_size);
         }
         else {
             write_int32(s, 0);
@@ -512,17 +519,64 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
 }
 
 static uv_lib_t *sysimg_handle = NULL;
-
-static void jl_delayed_fptr(jl_lambda_info_t *li, const char *sym)
-{
-    li->fptr = (jl_fptr_t)jl_dlsym( (uv_lib_t*)sysimg_handle, (char*)sym);
-}
-
 static void jl_load_sysimg_so()
 {
     sysimg_handle = jl_load_dynamic_library("sysimg", JL_RTLD_DEFAULT); //TODO: use absolute path
 }
 
+static void* *delayed_fptrs = NULL;
+static size_t delayed_fptrs_n = 0;
+static size_t delayed_fptrs_max = 0;
+
+static void jl_delayed_fptrs(jl_lambda_info_t *li, char *func, char *cfunc)
+{
+    if (cfunc || func) {
+        if (delayed_fptrs_max < delayed_fptrs_n + 3) {
+            if (delayed_fptrs_max == 0)
+                delayed_fptrs_max = 512;
+            else
+                delayed_fptrs_max *= 2;
+            delayed_fptrs = realloc(delayed_fptrs, delayed_fptrs_max*sizeof(delayed_fptrs[0]));
+        }
+        delayed_fptrs[delayed_fptrs_n++] = li;
+        if (func)
+            delayed_fptrs[delayed_fptrs_n++] = strdup(func);
+        else
+            delayed_fptrs[delayed_fptrs_n++] = 0;
+        if (cfunc)
+            delayed_fptrs[delayed_fptrs_n++] = strdup(cfunc);
+        else
+            delayed_fptrs[delayed_fptrs_n++] = 0;
+    }
+}
+static void jl_update_all_fptrs()
+{
+    uv_lib_t *sysimg = (uv_lib_t*)sysimg_handle;
+    sysimg_handle = NULL; // jlfptr_to_llvm needs to decompress some ast's
+    size_t i = 0;
+    while (i < delayed_fptrs_n) {
+        jl_lambda_info_t *li = (jl_lambda_info_t*)delayed_fptrs[i++];
+        char *func = delayed_fptrs[i++];
+        if (func) {
+            jlfptr_to_llvm(func,
+                    (jl_fptr_t)jl_dlsym(sysimg, func),
+                    li, 0);
+            free(func);
+        }
+        char *cfunc = delayed_fptrs[i++];
+        if (cfunc){
+            assert(cfunc != 0);
+            jlfptr_to_llvm(cfunc,
+                    (jl_fptr_t)jl_dlsym(sysimg, cfunc),
+                    li, 1);
+            free(cfunc);
+        }
+    }
+    delayed_fptrs_n = 0;
+    delayed_fptrs_max = 0;
+    free(delayed_fptrs);
+    delayed_fptrs = NULL;
+}
 
 jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
 
@@ -685,14 +739,23 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag) {
         li->inInference = 0;
         li->inCompile = 0;
         li->unspecialized = NULL;
-        int32_t llname_size = read_int32(s);
+        int32_t llname_size;
+        char *cfunc_llvm = NULL, *func_llvm = NULL;
+        llname_size = read_int32(s);
         if (llname_size > 0) {
-            char *llname = alloca(llname_size+1);
-            memset(llname, 0, llname_size+1);
-            ios_read(s, llname, llname_size);
-            llname[llname_size] = 0;
-            jl_delayed_fptr(li, llname);
+            func_llvm = alloca(llname_size+1);
+            memset(func_llvm, 0, llname_size+1);
+            ios_read(s, func_llvm, llname_size);
+            func_llvm[llname_size] = 0;
         }
+        llname_size = read_int32(s);
+        if (llname_size > 0) {
+            cfunc_llvm = alloca(llname_size+1);
+            memset(cfunc_llvm, 0, llname_size+1);
+            ios_read(s, cfunc_llvm, llname_size);
+            cfunc_llvm[llname_size] = 0;
+        }
+        jl_delayed_fptrs(li, func_llvm, cfunc_llvm);
         return (jl_value_t*)li;
     }
     else if (vtag == (jl_value_t*)jl_module_type) {
@@ -908,16 +971,15 @@ void jl_restore_system_image(char *fname)
     jl_set_gs_ctr(read_int32(&f));
     htable_reset(&backref_table, 0);
 
-    sysimg_handle = NULL;
     ios_close(&f);
     if (fpath != fname) free(fpath);
 
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();
 #endif
-    
     jl_get_binding_wr(jl_core_module, jl_symbol("JULIA_HOME"))->value =
         jl_cstr_to_string(julia_home);
+    jl_update_all_fptrs();
 }
 
 DLLEXPORT

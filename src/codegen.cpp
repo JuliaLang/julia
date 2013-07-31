@@ -112,7 +112,7 @@ static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
 
 // for image reloading
-static bool imaging_mode = true;
+static bool imaging_mode = false;
 
 // types
 static Type *jl_value_llvmt;
@@ -310,7 +310,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     Function *f = NULL;
     JL_TRY {
         f = emit_function(li, cstyle);
-        if (0 && !cstyle) {
+        if (0) {
             jl_static_show((jl_value_t*)li);
             JL_PRINTF(JL_STDOUT, "\n");
         }
@@ -580,15 +580,9 @@ extern "C" DLLEXPORT
 const char* jl_get_llvmname(void *llvmFunc)
 {
     Function *f = (Function*)llvmFunc;
+    (void)jl_ExecutionEngine->getPointerToFunction(f); //force compile
     const char *llname = f->getName().data();
     return llname;
-}
-
-extern "C" DLLEXPORT
-void* jl_get_llvmfptr(void* llvmFunc)
-{
-    Function *f = (Function*)llvmFunc;
-    return jl_ExecutionEngine->getPointerToFunction(f);
 }
 
 // --- code gen for intrinsic functions ---
@@ -2633,7 +2627,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         funcName.replace(atpos, 1, "#");
     // try to avoid conflicts in the global symbol table
     funcName = "julia_" + funcName;
-
+    
     if (specsig) {
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
@@ -2646,14 +2640,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             lam->cFunctionObject = (void*)f;
         }
         if (lam->functionObject == NULL) {
-            if (lam->fptr != NULL && lam->fptr != &jl_trampoline) {
-                Function *w = Function::Create(jl_func_sig, Function::ExternalLinkage,
-                                               f->getName(), jl_Module);
-                lam->functionObject = w;
-                jl_ExecutionEngine->addGlobalMapping(w, (void*)lam->fptr);
-            } else {
-                lam->functionObject = (void*)gen_jlcall_wrapper(lam, f);
-            }
+            lam->functionObject = (void*)gen_jlcall_wrapper(lam, f);
         }
     }
     else {
@@ -2661,10 +2648,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                              funcName, jl_Module);
         if (lam->functionObject == NULL) {
             lam->functionObject = (void*)f;
-        }
-        if (lam->fptr != NULL && lam->fptr != &jl_trampoline) {
-            jl_ExecutionEngine->addGlobalMapping(f, (void*)lam->fptr);
-            return f;
         }
     }
     //TODO: this seems to cause problems, but should be made to work eventually
@@ -3167,6 +3150,31 @@ static Function *jlfunc_to_llvm(const std::string &cname, void *addr)
                          cname, jl_Module);
     jl_ExecutionEngine->addGlobalMapping(f, addr);
     return f;
+}
+
+extern "C" void jlfptr_to_llvm(const char *cname, void *fptr, jl_lambda_info_t *lam, int specsig) {
+    if (specsig) {
+        jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)lam->ast);
+        std::vector<Type*> fsig(0);
+        for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
+            fsig.push_back(julia_type_to_llvm(jl_tupleref(lam->specTypes,i)));
+        }
+        Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
+        Function *f =
+            Function::Create(FunctionType::get(rt, fsig, false), Function::ExternalLinkage,
+                             cname, jl_Module);
+        if (lam->cFunctionObject == NULL) {
+            lam->cFunctionObject = (void*)f;
+        }
+        jl_ExecutionEngine->addGlobalMapping(f, (void*)fptr);
+    } else {
+        Function *f = jlfunc_to_llvm(cname, fptr);
+        if (lam->functionObject == NULL) {
+            lam->functionObject = (void*)f;
+            assert(lam->fptr == &jl_trampoline);
+            lam->fptr = (jl_fptr_t)fptr;
+        }
+    }
 }
 
 DLLEXPORT extern "C" jl_value_t *jl_new_box(jl_value_t *v)
