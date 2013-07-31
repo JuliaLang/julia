@@ -6747,6 +6747,72 @@
 
 "),
 
+("Profiling","Base","@profile","@profile()
+
+   \"@profile <expression>\" runs your expression while taking
+   periodic backtraces.  These are appended to an internal buffer of
+   backtraces.
+
+"),
+
+("Profiling","Base.Profile","clear","clear()
+
+   Clear any existing backtraces from the internal buffer.
+
+"),
+
+("Profiling","Base.Profile","print","print([io::IO = STDOUT], [data::Vector]; format = :tree, C = false, combine = true, cols = tty_cols())
+
+   Prints profiling results to \"io\" (by default, \"STDOUT\"). If you
+   do not supply a \"data\" vector, the internal buffer of accumulated
+   backtraces will be used.  \"format\" can be \":tree\" or \":flat\".
+   If \"C==true\", backtraces from C and Fortran code are shown.
+   \"combine==true\" merges instruction pointers that correspond to
+   the same line of code.  \"cols\" controls the width of the display.
+
+"),
+
+("Profiling","Base.Profile","print","print([io::IO = STDOUT], data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
+
+   Prints profiling results to \"io\". This variant is used to examine
+   results exported by a previous call to \"Profile.retrieve()\".
+   Supply the vector \"data\" of backtraces and a dictionary
+   \"lidict\" of line information.
+
+"),
+
+("Profiling","Base.Profile","init","init(n::Integer, delay::Float64)
+
+   Configure the \"delay\" between backtraces (measured in seconds),
+   and the number \"n\" of instruction pointers that may be stored.
+   Each instruction pointer corresponds to a single line of code;
+   backtraces generally consist of a long list of instruction
+   pointers. Default settings are \"n=10^6\" and \"delay=0.001\".
+
+"),
+
+("Profiling","Base.Profile","fetch","fetch() -> data
+
+   Returns a reference to the internal buffer of backtraces. Note that
+   subsequent operations, like \"Profile.clear()\", can affect
+   \"data\" unless you first make a copy. Note that the values in
+   \"data\" have meaning only on this machine in the current session,
+   because it depends on the exact memory addresses used in JIT-
+   compiling. This function is primarily for internal use;
+   \"Profile.retrieve()\" may be a better choice for most users.
+
+"),
+
+("Profiling","Base.Profile","retrieve","retrieve(;C = false) -> data, lidict
+
+   \"Exports\" profiling results in a portable format, returning the
+   set of all backtraces (\"data\") and a dictionary that maps the
+   (session-specific) instruction pointers in \"data\" to \"LineInfo\"
+   values that store the file name, function name, and line number.
+   This function allows you to save profiling results for future
+   analysis.
+
+"),
 
 ("Punctuation","","punctuation","punctuation
 

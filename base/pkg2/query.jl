@@ -42,33 +42,31 @@ end
 typealias PackageState Union(Nothing,VersionNumber) 
 
 function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
-    changeslist  = Array((ByteString,(PackageState,PackageState)),0)
+    changes = Array((ByteString,(PackageState,PackageState)),0)
     removed = Array((ByteString,(PackageState,PackageState)),0)
 
     for pkg in collect(union(keys(have),keys(want)))
         h, w = haskey(have,pkg), haskey(want,pkg)
         if h && w
             if have[pkg] != want[pkg]
-                push!(changeslist, (pkg,(have[pkg], want[pkg])))
+                push!(changes, (pkg,(have[pkg], want[pkg])))
             end
         elseif h
             push!(removed, (pkg,(have[pkg],nothing)))
         elseif w
-            push!(changeslist, (pkg,(nothing,want[pkg])))
+            push!(changes, (pkg,(nothing,want[pkg])))
         end
     end
 
     # Sort packages topologically
-    sort!(changeslist, lt=function(a,b)
+    sort!(changes, lt=function(a,b)
         ((a,vera),(b,verb)) = (a,b)
         c = contains(Pkg2.Read.alldependencies(a,avail,want,fixed),b) 
-        nonordered = (!c && !contains(Pkg2.Read.alldependencies(b,avail,want,fixed),a))
-        nonordered ? a < b : c
+        unnordered = (!c && !contains(Pkg2.Read.alldependencies(b,avail,want,fixed),a))
+        unnordered ? a < b : c
     end)
 
-    append!(changeslist, removed)
-
-    changeslist
+    append!(changes, removed)
 end
 
 # Reduce the number of versions by creating equivalence classes, and retaining
@@ -79,7 +77,6 @@ end
 #   2) They have the same dependencies
 # Also, if there are explicitly required packages, dicards all versions outside
 # the allowed range (checking for impossible ranges while at it).
-prune_versions(deps::Dict{ByteString,Dict{VersionNumber,Available}}) = prune_versions((ByteString=>VersionSet)[], deps)
 function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
     np = length(deps)
@@ -258,6 +255,8 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
 
     return new_deps, eq_classes
 end
+prune_versions(deps::Dict{ByteString,Dict{VersionNumber,Available}}) =
+    prune_versions((ByteString=>VersionSet)[], deps)
 
 # Build a subgraph incuding only the (direct and indirect) dependencies
 # of a given package set
@@ -332,6 +331,5 @@ function prune_dependencies(reqs::Requires, deps::Dict{ByteString,Dict{VersionNu
 
     return deps
 end
-
 
 end # module

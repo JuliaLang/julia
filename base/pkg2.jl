@@ -76,36 +76,32 @@ clone(url::String, pkg::String=urlpkg(url); opts::Cmd=``) = Dir.cd() do
     resolve()
 end
 
-checkout(pkg::String, branch::String="master"; force::Bool=false) = Dir.cd() do
-    ispath(pkg, ".git") || error("$pkg is not a git repo")
+function checkout(pkg::String, what::String, force::Bool)
     Git.transact(dir=pkg) do
-        info("Checking out $pkg $branch...")
         if force
-            Git.run(`checkout -q -f $branch`, dir=pkg)
+            Git.run(`checkout -q -f $what`, dir=pkg)
         else
             Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
-            Git.run(`checkout -q $branch`, dir=pkg)
+            Git.run(`checkout -q $what`, dir=pkg)
         end
         resolve()
     end
 end
 
+checkout(pkg::String, branch::String="master"; force::Bool=false) = Dir.cd() do
+    ispath(pkg,".git") || error("$pkg is not a git repo")
+    info("Checking out $pkg $branch...")
+    checkout(pkg,branch,force)
+end
+
 release(pkg::String; force::Bool=false) = Dir.cd() do
-    ispath(pkg, ".git") || error("$pkg is not a git repo")
+    ispath(pkg,".git") || error("$pkg is not a git repo")
     avail = Dir.cd(Read.available)
     haskey(avail,pkg) || error("$pkg is not registered")
     ver = max(keys(avail[pkg]))
     sha1 = avail[pkg][ver].sha1
-    Git.transact(dir=pkg) do
-        info("Releasing $pkg...")
-        if force
-            Git.run(`checkout -q -f $sha1`, dir=pkg)
-        else
-            Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
-            Git.run(`checkout -q $sha1`, dir=pkg)
-        end
-        resolve()
-    end
+    info("Releasing $pkg...")
+    checkout(pkg,sha1,force)
 end
 
 update() = Dir.cd() do
@@ -158,20 +154,20 @@ resolve(
     reqs = Query.requirements(reqs,fixed)
     deps = Query.dependencies(avail,fixed)
 
+    incompatible = {}
     for pkg in keys(reqs)
-        haskey(deps, pkg) ||
-            error("$pkg has no version compatible with fixed requirements")
+        haskey(deps,pkg) || push!(incompatible,pkg)
     end
+    isempty(incompatible) ||
+        error("The following packages are incompatible with fixed requirements: ",
+              join(incompatible, ", ", " and "))
 
     deps = Query.prune_dependencies(reqs,deps)
-
     want = Resolve.resolve(reqs,deps)
 
     # compare what is installed with what should be
     changes = Query.diff(have, want, avail, fixed)
-    if isempty(changes)
-        return info("No packages to install, update or remove.")
-    end
+    isempty(changes) && return info("No packages to install, update or remove.")
 
     # prefetch phase isolates network activity, nothing to roll back
     missing = {}
@@ -184,7 +180,7 @@ resolve(
                 Cache.prefetch(pkg, Read.url(pkg), vers)))
     end
     if !isempty(missing)
-        msg = "unfound package versions (possible metadata misconfiguration):"
+        msg = "missing package versions (possible metadata misconfiguration):"
         for (pkg,ver,sha1) in missing
             msg *= "  $pkg v$ver [$sha1[1:10]]\n"
         end
