@@ -1438,13 +1438,15 @@
 	   ,@(if (eq? lim b) '() `((= ,lim ,b)))
 	   (break-block loop-exit
 			(_while (call (top <=) ,cnt ,lim)
-				(block
-				 (= ,lhs ,cnt)
-				 (break-block loop-cont
-					      ,body)
-				 (= ,cnt (call (top convert)
-					       (call (top typeof) ,cnt)
-					       (call (top +) 1 ,cnt)))))))))))
+				(scope-block
+				 (block
+				  (local ,lhs)
+				  (= ,lhs ,cnt)
+				  (break-block loop-cont
+					       ,body)
+				  (= ,cnt (call (top convert)
+						(call (top typeof) ,cnt)
+						(call (top +) 1 ,cnt))))))))))))
 
    ; for loop over arbitrary vectors
    (pattern-lambda
@@ -1455,10 +1457,12 @@
 	(block (= ,coll ,X)
 	       (= ,state (call (top start) ,coll))
 	       (while (call (top !) (call (top done) ,coll ,state))
-		      (block
-		       ,(lower-tuple-assignment (list lhs state)
-						`(call (top next) ,coll ,state))
-		       ,body))))))
+		      (scope-block
+		       (block
+			,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
+			,(lower-tuple-assignment (list lhs state)
+						 `(call (top next) ,coll ,state))
+			,body)))))))
 
    ;; update operators
    (pattern-lambda (+= a b)     (expand-update-operator '+ a b))
@@ -1608,7 +1612,11 @@
 		    (boundscheck pop)
 		    (= ,ri (call (top +) ,ri 1)))
 	    `(for ,(car ranges)
-		  ,(construct-loops (cdr ranges)))))
+		  (block
+		   ;; *** either this or force all for loop vars local
+		   ,@(map (lambda (r) `(local ,r))
+			  (lhs-vars (cadr (car ranges))))
+		   ,(construct-loops (cdr ranges))))))
 
       ;; Evaluate the comprehension
       (let ((loopranges
@@ -1618,7 +1626,7 @@
 	  (scope-block
 	   (block
 	   (local ,oneresult)
-	   ,@(map (lambda (r) `(local ,r))
+	   #;,@(map (lambda (r) `(local ,r))
 		  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
 	   (label ,initlabl)
 	   (= ,result (call (top Array)
@@ -1661,7 +1669,7 @@
 	(= ,result (call (top Array) ,atype ,@(compute-dims rs)))
 	(scope-block
 	(block
-	 ,@(map (lambda (r) `(local ,r))
+	 #;,@(map (lambda (r) `(local ,r))
 		(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
 	 (= ,ri 1)
 	 ,(construct-loops (reverse ranges) (reverse rs))
@@ -1697,7 +1705,7 @@
 	   (block
 	   (local ,onekey)
 	   (local ,oneval)
-	   ,@(map (lambda (r) `(local ,r))
+	   #;,@(map (lambda (r) `(local ,r))
 		  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
 	   (label ,initlabl)
 	   (= ,result (call (curly (top Dict)
@@ -1731,7 +1739,7 @@
 	(= ,result (call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))))
 	(scope-block
 	(block
-	 ,@(map (lambda (r) `(local ,r))
+	 #;,@(map (lambda (r) `(local ,r))
 		(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
 	 ,(construct-loops (reverse ranges) (reverse rs))
 	 ,result)))))))
@@ -2167,6 +2175,16 @@ So far only the second case can actually occur.
 	    (find-local!-decls e env)
 	    (find-assigned-vars e env))))
 
+(define (remove-local-decls e)
+  (cond ((or (not (pair? e)) (quoted? e)) e)
+	((or (eq? (car e) 'scope-block) (eq? (car e) 'lambda)) e)
+	((eq? (car e) 'block)
+	 (map remove-local-decls
+	      (filter (lambda (x) (not (and (pair? x) (eq? (car x) 'local))))
+		      e)))
+	(else
+	 (map remove-local-decls e))))
+
 ;; local variable identification
 ;; convert (scope-block x) to `(scope-block ,@locals ,x)
 ;; where locals is a list of (local x) expressions, derived from two sources:
@@ -2190,7 +2208,7 @@ So far only the second case can actually occur.
 		    (body (add-local-decls (cadr e) (append vars glob env))))
 	       `(scope-block ,@(map (lambda (v) `(local ,v))
 				    vars)
-			     ,body)))
+			     ,(prn (remove-local-decls (prn body))))))
 	    (else
 	     ;; form (local! x) adds a local to a normal (non-scope) block
 	     (let ((newenv (append (declared-local!-vars e) env)))
@@ -2272,7 +2290,7 @@ So far only the second case can actually occur.
 	  ((eq? (car e) 'lambda) e)
 	  ((eq? (car e) 'scope-block)
 	   (let ((vars (declared-local-vars e))
-		 (body (car (last-pair e))))
+		 (body (cons 'block (cdr e))));(car (last-pair e))))
 	     (let* ((outer    (append usedv (vars-used-outside context e)))
 		    ;; only rename conflicted vars
 		    (to-ren   (filter (lambda (v) (memq v outer)) vars))
@@ -2368,7 +2386,7 @@ So far only the second case can actually occur.
 		 (if (assq (car vi) captvars)
 		     (vinfo:set-iasg! vi #t)))))
 	 `(= ,(cadr e) ,(analyze-vars (caddr e) env captvars)))
-	((or (eq? (car e) 'local) (eq? (car e) 'local!))
+	#;((or (eq? (car e) 'local) (eq? (car e) 'local!))
 	 '(null))
 	((eq? (car e) 'typeassert)
 	 ;(let ((vi (var-info-for (cadr e) env)))
@@ -2569,6 +2587,13 @@ So far only the second case can actually occur.
 	       ))
 
 	    ((global) #f)  ; remove global declarations
+	    ((local local!)
+	     ;; emit (newvar x) where captured locals are introduced.
+	     (let* ((vname (cadr e))
+		    (vinf  (var-info-for vname vi)))
+	       (if (and vinf (vinfo:capt vinf))
+		   (emit `(newvar ,(cadr e)))
+		   #f)))
 	    (else  (emit (goto-form e))))))
     (cond ((or (not (pair? e)) (quoted? e)) e)
 	  ((eq? (car e) 'lambda)
