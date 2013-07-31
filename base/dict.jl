@@ -304,14 +304,38 @@ Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  ,Unordered}(ks, vs)
 Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any,Unordered}(ks, vs)
 Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  ,Unordered}(ks, vs)
 
-OrderedDict() = Dict{Any,Any,Ordered}()
+# unordered dict
 
-OrderedDict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = Dict{K,V,Ordered}(ks,vs)
-OrderedDict(ks, vs) = Dict{Any,Any,Ordered}(ks, vs)
+type UnorderedDict{K,V} <: Associative{K,V}
+    UnorderedDict() = Dict{K,V,Unordered}()
+    UnorderedDict(ks,vs) = Dict{K,V,Unordered}(ks,vs)
+end
 
-OrderedDict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  ,Ordered}(ks, vs)
-OrderedDict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any,Ordered}(ks, vs)
-OrderedDict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  ,Ordered}(ks, vs)
+UnorderedDict() = UnorderedDict{Any,Any}()
+
+UnorderedDict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = UnorderedDict{K,V}(ks,vs)
+UnorderedDict(ks, vs) = UnorderedDict{Any,Any}(ks, vs)
+
+# syntax entry points
+UnorderedDict{K,V}(ks::(K...), vs::(V...)) = UnorderedDict{K  ,V  }(ks, vs)
+UnorderedDict{K  }(ks::(K...), vs::Tuple ) = UnorderedDict{K  ,Any}(ks, vs)
+UnorderedDict{V  }(ks::Tuple , vs::(V...)) = UnorderedDict{Any,V  }(ks, vs)
+
+# ordered dict
+
+type OrderedDict{K,V} <: Associative{K,V}
+    OrderedDict() = Dict{K,V,Ordered}()
+    OrderedDict(ks,vs) = Dict{K,V,Ordered}(ks,vs)
+end
+
+OrderedDict() = OrderedDict{Any,Any}()
+
+OrderedDict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = OrderedDict{K,V}(ks,vs)
+OrderedDict(ks, vs) = OrderedDict{Any,Any}(ks, vs)
+
+OrderedDict{K,V}(ks::(K...), vs::(V...)) = OrderedDict{K  ,V  }(ks, vs)
+OrderedDict{K  }(ks::(K...), vs::Tuple ) = OrderedDict{K  ,Any}(ks, vs)
+OrderedDict{V  }(ks::Tuple , vs::(V...)) = OrderedDict{Any,V  }(ks, vs)
 
 
 similar{K,V,O}(d::Dict{K,V,O}) = Dict{K,V,O}()
@@ -506,9 +530,14 @@ end
 
 function empty!{K,V}(h::Dict{K,V,Ordered})
     sz = length(h.slots)
+    fill!(h.slots, 0x0)
+    h.keys = Array(K, sz)
+    h.vals = Array(V, sz)
     h.idxs = Array(Int, sz)
     h.order = Array(Int, 0)
-    invoke(empty!, (Dict,), h)
+    h.ndel = 0
+    h.count = 0
+    return h
 end
 
 function _setindex!(h::Dict, index, key, v)
@@ -520,9 +549,13 @@ function _setindex!(h::Dict, index, key, v)
 end
 
 function _setindex!{K,V}(h::Dict{K,V,Ordered}, index, key, v)
+    h.slots[index] = 0x1
+    h.keys[index] = key
+    h.vals[index] = v
     push!(h.order, index)
     h.idxs[index] = length(h.order)
-    invoke(_setindex!, (Dict, Any, Any, Any), h, index, key, v)
+    h.count += 1
+    return h
 end
 
 function setindex!{K,V}(h::Dict{K,V}, v, key)
@@ -634,8 +667,14 @@ function _delete!(h::Dict, index)
 end
 
 function _delete!{K,V}(h::Dict{K,V,Ordered}, index)
+    val = h.vals[index]
+    h.slots[index] = 0x2
+    ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
+    ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, index-1)
     h.order[h.idxs[index]] = 0
-    invoke(_delete!, (Dict, Any), h, index)
+    h.ndel += 1
+    h.count -= 1
+    return val
 end
 
 function delete!(h::Dict, key)
@@ -674,8 +713,11 @@ next{K,V}(t::Dict{K,V,Ordered}, i) = ((t.keys[t.order[i]],t.vals[t.order[i]]), s
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-next{T<:Dict}(v::KeyIterator{T}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
-next{T<:Dict}(v::ValueIterator{T}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
+next(v::KeyIterator{Dict}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
+next(v::ValueIterator{Dict}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
+
+next{K,V}(v::KeyIterator{Dict{K,V,Ordered}}, i) = (v.dict.keys[v.dict.order[i]], skip_deleted(v.dict,i+1))
+next{K,V}(v::ValueIterator{Dict{K,V,Ordered}}, i) = (v.dict.vals[v.dict.order[i]], skip_deleted(v.dict,i+1))
 
 # weak key dictionaries
 
