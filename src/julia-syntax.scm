@@ -682,7 +682,7 @@
 	     (global ,name)
 	     (const ,name)
 	     ,@(map (lambda (v) `(local ,v)) params)
-	     ,@(map make-assignment params (symbols->typevars params bounds #f))
+	     ,@(map make-assignment params (symbols->typevars params bounds #t))
 	     (composite_type ,name (tuple ,@params)
 			     (tuple ,@(map (lambda (x) `',x) field-names))
 			     (lambda (,name)
