@@ -46,20 +46,9 @@ convert{T<:Integer}(::Type{T}, x::Rational) = (isinteger(x) ? convert(T, x.num) 
 convert{T<:FloatingPoint}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
 
 function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint)
-    x == 0 && return zero(T)//one(T)
-    if !isfinite(x)
-        x < 0 && return -one(T)//zero(T)
-        x > 0 && return +one(T)//zero(T)
-        error(InexactError())
-    end
-    # TODO: handle values that can't be converted exactly
-    p = get_precision(x)-1
-    n = convert(T, significand(x)*2.0^p)
-    p -= exponent(x)
-    z = trailing_zeros(n)
-    p - z > 0 ? (n>>z)//(one(T)<<(p-z)) :
-        p > 0 ? (n>>p)//one(T) :
-                (n<<-p)//one(T)
+    r = rationalize(T, x, tol=0)
+    x === convert(typeof(x), r) || throw(InexactError())
+    r
 end
 convert(::Type{Rational}, x::Float64) = convert(Rational{Int64}, x)
 convert(::Type{Rational}, x::Float32) = convert(Rational{Int}, x)
@@ -85,6 +74,7 @@ function rationalize{T<:Integer}(::Type{T}, x::FloatingPoint; tol::Real=eps(x))
         p, q = f*a+c, f*b+d
         typemin(T) <= p <= typemax(T) &&
         typemin(T) <= q <= typemax(T) || break
+        0 != sign(a)*sign(b) != sign(p)*sign(q) && break
         a, b, c, d = p, q, a, b
         if y == 0 || abs(a/b-x) <= tol
             break
