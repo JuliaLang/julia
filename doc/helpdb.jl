@@ -1496,6 +1496,20 @@
 
 "),
 
+("I/O","Base","readbytes!","readbytes!(stream, b::Vector{Uint8}, nb=length(b))
+
+   Read at most nb bytes from the stream into b, returning the number
+   of bytes read (increasing the size of b as needed).
+
+"),
+
+("I/O","Base","readbytes","readbytes(stream, nb=typemax(Int))
+
+   Read at most nb bytes from the stream, returning a Vector{Uint8} of
+   the bytes read.
+
+"),
+
 ("I/O","Base","position","position(s)
 
    Get the current position of a stream.
@@ -1586,7 +1600,7 @@
 
 "),
 
-("Network I/O","Base","connect","connect(path) -> NamedPipe
+("Network I/O","Base","connect","connect(path) -> Pipe
 
    Connect to the Named Pipe/Domain Socket at \"path\"
 
@@ -1658,26 +1672,6 @@
 
    Write a thorough text representation of a value to the current
    output stream.
-
-"),
-
-("Text I/O","Base","readall","readall(stream)
-
-   Read the entire contents of an I/O stream as a string.
-
-"),
-
-("I/O","Base","readbytes!","readbytes!(stream, b::Vector{Uint8}, nb=length(b))
-
-   Read up to nb bytes from the stream into b, returning the
-   number of bytes read (increasing the size of b as needed).
-
-"),
-
-("I/O","Base","readbytes","readbytes(stream, nb=typemax(Int))
-
-   Read at most nb bytes from the stream, returning a
-   Vector{Uint8} of the bytes read.
 
 "),
 
@@ -4102,7 +4096,7 @@
 
 ("Statistics","Base","std","std(v[, region])
 
-   Compute the sample standard deviation of a vector or array``v``,
+   Compute the sample standard deviation of a vector or array \"v\",
    optionally along dimensions in \"region\". The algorithm returns an
    estimator of the generative distribution's standard deviation under
    the assumption that each entry of \"v\" is an IID draw from that
@@ -4120,7 +4114,7 @@
 
 ("Statistics","Base","var","var(v[, region])
 
-   Compute the sample variance of a vector or array``v``, optionally
+   Compute the sample variance of a vector or array \"v\", optionally
    along dimensions in \"region\". The algorithm will return an
    estimator of the generative distribution's variance under the
    assumption that each entry of \"v\" is an IID draw from that
@@ -4155,8 +4149,8 @@
 
    Compute the histogram of \"v\" using a vector/range \"e\" as the
    edges for the bins. The result will be a vector of length
-   \"length(e) - 1\", with the \"i``th element being ``sum(e[i] .< v
-   .<= e[i+1])\".
+   \"length(e) - 1\", such that the element at location \"i\"
+   satisfies \"sum(e[i] .< v .<= e[i+1])\".
 
 "),
 
@@ -5823,6 +5817,140 @@
 ("Filesystem","Base","mktempdir","mktempdir()
 
    Create a temporary directory and return its path.
+
+"),
+
+("Graphics","Base","Vec2","Vec2(x, y)
+
+   Creates a point in two dimensions
+
+"),
+
+("Graphics","Base","BoundingBox","BoundingBox(xmin, xmax, ymin, ymax)
+
+   Creates a box in two dimensions with the given edges
+
+"),
+
+("Graphics","Base","BoundingBox","BoundingBox(objs...)
+
+   Creates a box in two dimensions that encloses all objects
+
+"),
+
+("Graphics","Base","width","width(obj)
+
+   Computes the width of an object
+
+"),
+
+("Graphics","Base","height","height(obj)
+
+   Computes the height of an object
+
+"),
+
+("Graphics","Base","xmin","xmin(obj)
+
+   Computes the minimum x-coordinate contained in an object
+
+"),
+
+("Graphics","Base","xmax","xmax(obj)
+
+   Computes the maximum x-coordinate contained in an object
+
+"),
+
+("Graphics","Base","ymin","ymin(obj)
+
+   Computes the minimum y-coordinate contained in an object
+
+"),
+
+("Graphics","Base","ymax","ymax(obj)
+
+   Computes the maximum y-coordinate contained in an object
+
+"),
+
+("Graphics","Base","diagonal","diagonal(obj)
+
+   Return the length of the diagonal of an object
+
+"),
+
+("Graphics","Base","aspect_ratio","aspect_ratio(obj)
+
+   Compute the height/width of an object
+
+"),
+
+("Graphics","Base","center","center(obj)
+
+   Return the point in the center of an object
+
+"),
+
+("Graphics","Base","xrange","xrange(obj)
+
+   Returns a tuple \"(xmin(obj), xmax(obj))\"
+
+"),
+
+("Graphics","Base","yrange","yrange(obj)
+
+   Returns a tuple \"(ymin(obj), ymax(obj))\"
+
+"),
+
+("Graphics","Base","rotate","rotate(obj, angle, origin) -> newobj
+
+   Rotates an object around origin by the specified angle (radians),
+   returning a new object of the same type.  Because of type-
+   constancy, this new object may not always be a strict geometric
+   rotation of the input; for example, if \"obj\" is a \"BoundingBox\"
+   the return is the smallest \"BoundingBox\" that encloses the
+   rotated input.
+
+"),
+
+("Graphics","Base","shift","shift(obj, dx, dy)
+
+   Returns an object shifted horizontally and vertically by the
+   indicated amounts
+
+"),
+
+("Graphics","Base","*","*(obj, s::Real)
+
+   Scale the width and height of a graphics object, keeping the center
+   fixed
+
+"),
+
+("Graphics","Base","+","+(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
+
+   Returns the smallest box containing both boxes
+
+"),
+
+("Graphics","Base","deform","deform(bb::BoundingBox, dxmin, dxmax, dymin, dymax)
+
+   Returns a bounding box with all edges shifted by the indicated
+   amounts
+
+"),
+
+("Graphics","Base","isinside","isinside(bb::BoundingBox, x, y)
+
+   True if the given point is inside the box
+
+"),
+
+("Graphics","Base","isinside","isinside(bb::BoundingBox, point)
+
+   True if the given point is inside the box
 
 "),
 
