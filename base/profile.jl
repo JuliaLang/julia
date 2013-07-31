@@ -239,14 +239,14 @@ function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, 
 end
 
 # Print a "branch" starting at a particular level. This gets called recursively.
-function tree(io::IO, bt::Vector{Vector{Uint}}, counts::Vector{Int}, level::Int, doCframes::Bool, combine::Bool, cols::Integer)
+function tree(io::IO, bt::Vector{Vector{Uint}}, counts::Vector{Int}, lidict::Dict, level::Int, combine::Bool, cols::Integer)
     # Organize backtraces into groups that are identical up to this level
     if combine
         # Combine based on the line information
         d = (LineInfo=>Vector{Int})[]
         for i = 1:length(bt)
             ip = bt[i][level+1]
-            key = lookup(ip, doCframes)
+            key = lidict[ip]
             indx = Base.ht_keyindex(d, key)
             if indx == -1
                 d[key] = [i]
@@ -285,17 +285,19 @@ function tree(io::IO, bt::Vector{Vector{Uint}}, counts::Vector{Int}, level::Int,
         n = Array(Int, dlen)
         i = 1
         for (key, v) in d
-            lilist[i] = lookup(key, doCframes)
+            lilist[i] = lidict[key]
             group[i] = v
             n[i] = sum(counts[v])
             i += 1
         end
     end
     # Order the line information
-    p = liperm(lilist)
-    lilist = lilist[p]
-    group = group[p]
-    n = n[p]
+    if length(lilist) > 1
+        p = liperm(lilist)
+        lilist = lilist[p]
+        group = group[p]
+        n = n[p]
+    end
     # Generate the string for each line
     strs = tree_format(lilist, n, level, cols)
     # Recurse to the next level
@@ -308,7 +310,7 @@ function tree(io::IO, bt::Vector{Vector{Uint}}, counts::Vector{Int}, level::Int,
         keep = len[idx] .> level+1
         if any(keep)
             idx = idx[keep]
-            tree(io, bt[idx], counts[idx], level+1, doCframes, combine, cols)
+            tree(io, bt[idx], counts[idx], lidict, level+1, combine, cols)
         end
     end
 end
@@ -319,10 +321,12 @@ function tree(io::IO, data::Vector{Uint}, doCframes::Bool, combine::Bool, cols::
         warning_empty()
         return
     end
+    uip = unique(data)
+    lidict = Dict(uip, [lookup(ip, doCframes) for ip in uip])
     level = 0
     len = Int[length(x) for x in bt]
     keep = len .> 0
-    tree(io, bt[keep], counts[keep], level, doCframes, combine, cols)
+    tree(io, bt[keep], counts[keep], lidict, level, combine, cols)
 end
 
 # Utilities
