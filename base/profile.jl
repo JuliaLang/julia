@@ -21,10 +21,10 @@ end
 ####
 #### User-level functions
 ####
-function init(nsamples::Integer, delay::Float64)
-    status = ccall(:profile_init, Cint, (Csize_t, Uint64), nsamples, iround(10^9*delay))
+function init(n::Integer, delay::Float64)
+    status = ccall(:profile_init, Cint, (Csize_t, Uint64), n, iround(10^9*delay))
     if status == -1
-        error("Could not allocate space for ", nsamples, " profiling samples")
+        error("Could not allocate space for ", n, " instruction pointers")
     end
 end
 
