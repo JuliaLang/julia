@@ -122,6 +122,7 @@ Otherwise, install or contact your systems adminstrator to install a more recent
  OpenBLAS build failure | Set one of the following build options in `Make.user` and build again: <ul><li> `OPENBLAS_TARGET_ARCH=BARCELONA` (AMD CPUs) </li><li> `OPENBLAS_TARGET_ARCH=NEHALEM` (Intel CPUs) </li><li> `USE_SYSTEM_BLAS=1` uses the system provided `libblas` <ul><li> Set `LIBBLAS=-lopenblas` and `LIBBLASNAME=libopenblas` to force the use of the system provided OpenBLAS when multiple BLAS versions are installed </li></ul></li></ul>
  readline build error   | Set `USE_SYSTEM_READLINE=1` in `Make.user`
  ncurses build error    | Install the `libncurses5` development package <ul><li> Debian/Ubuntu: `apt-get install libncurses5-dev` </li><li> RPM-based systems: `yum install libncurses5-devel` </li></ul>
+ Illegal Instruction error | Check if your CPU supports AVX while your OS does not (e.g. through virtualization, as described in [this issue](https://github.com/JuliaLang/julia/issues/3263)), and try installing LLVM 3.3 instead of LLVM 3.2.
 
 ### OS X
 
