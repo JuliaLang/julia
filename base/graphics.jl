@@ -131,6 +131,13 @@ function (+)(bb1::BoundingBox, bb2::BoundingBox)
                 max(bb1.ymax, bb2.ymax))
 end
 
+function (&)(bb1::BoundingBox, bb2::BoundingBox)
+    BoundingBox(max(bb1.xmin, bb2.xmin),
+                min(bb1.xmax, bb2.xmax),
+                max(bb1.ymin, bb2.ymin),
+                min(bb1.ymax, bb2.ymax))
+end
+
 function deform(bb::BoundingBox, dl, dr, dt, db)
     BoundingBox(bb.xmin + dl, bb.xmax + dr, bb.ymin + dt, bb.ymax + db)
 end
