@@ -89,6 +89,10 @@ Geometry
 
    Returns the smallest box containing both boxes
 
+.. function:: &(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
+
+   Returns the intersection, the largest box contained in both boxes
+
 .. function:: deform(bb::BoundingBox, dxmin, dxmax, dymin, dymax)
 
    Returns a bounding box with all edges shifted by the indicated amounts
