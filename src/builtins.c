@@ -29,7 +29,7 @@
 
 // exceptions -----------------------------------------------------------------
 
-void jl_error(const char *str)
+DLLEXPORT void jl_error(const char *str)
 {
     if (jl_errorexception_type == NULL) {
         JL_PRINTF(JL_STDERR, "%s", str);

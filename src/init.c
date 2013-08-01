@@ -653,12 +653,13 @@ void julia_init(char *imageFile)
     jl_init_frontend();
     jl_init_types();
     jl_init_tasks(jl_stack_lo, jl_stack_hi-jl_stack_lo);
-    jl_init_codegen();
+    jl_init_codegen(imageFile);
     jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
 
     jl_init_serializer();
 
     if (!imageFile) {
+        jl_set_imaging_mode(1);
         jl_main_module = jl_new_module(jl_symbol("Main"));
         jl_main_module->parent = jl_main_module;
         jl_core_module = jl_new_module(jl_symbol("Core"));
@@ -673,6 +674,9 @@ void julia_init(char *imageFile)
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
         jl_init_box_caches();
+        jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
+                     jl_cstr_to_string(julia_home));
+        jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));
     }
 
     if (imageFile) {

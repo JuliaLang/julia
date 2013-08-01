@@ -971,7 +971,7 @@ void *allocb(size_t sz)
     return (void*)((void**)b + 1);
 }
 
-void *allocobj(size_t sz)
+DLLEXPORT void *allocobj(size_t sz)
 {
 #ifdef MEMDEBUG
     return alloc_big(sz);
@@ -981,7 +981,7 @@ void *allocobj(size_t sz)
     return pool_alloc(&pools[szclass(sz)]);
 }
 
-void *alloc_2w(void)
+DLLEXPORT void *alloc_2w(void)
 {
 #ifdef MEMDEBUG
     return alloc_big(2*sizeof(void*));
@@ -993,7 +993,7 @@ void *alloc_2w(void)
 #endif
 }
 
-void *alloc_3w(void)
+DLLEXPORT void *alloc_3w(void)
 {
 #ifdef MEMDEBUG
     return alloc_big(3*sizeof(void*));
@@ -1005,7 +1005,7 @@ void *alloc_3w(void)
 #endif
 }
 
-void *alloc_4w(void)
+DLLEXPORT void *alloc_4w(void)
 {
 #ifdef MEMDEBUG
     return alloc_big(4*sizeof(void*));
