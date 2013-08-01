@@ -1,3 +1,9 @@
+# Sieve of Atkin for generating primes:
+#     http://en.wikipedia.org/wiki/Sieve_of_Atkin
+# Code very loosely based on this:
+#     http://thomasinterestingblog.wordpress.com/2011/11/30/generating-primes-with-the-sieve-of-atkin-in-c/
+#     http://dl.dropboxusercontent.com/u/29023244/atkin.cpp
+#
 function primesmask(n::Int)
     s = falses(n)
     n < 2 && return s; s[2] = true
@@ -25,6 +31,9 @@ end
 
 primes(n::Integer) = find(primesmask(n))
 
+# Miller-Rabin for primality testing:
+#     http://en.wikipedia.org/wiki/Miller–Rabin_primality_test
+#
 function isprime(n::Integer)
     n == 2 && return true
     (n < 2) | iseven(n) && return false
@@ -43,6 +52,12 @@ function isprime(n::Integer)
     end
     return true
 end
+
+# Miller-Rabin witness choices based on:
+#     http://mathoverflow.net/questions/101922/smallest-collection-of-bases-for-prime-testing-of-64-bit-numbers
+#     http://primes.utm.edu/prove/merged.html
+#     http://miller-rabin.appspot.com
+#
 witnesses(n::Union(Uint8,Int8,Uint16,Int16)) = (2,3)
 witnesses(n::Union(Uint32,Int32)) = n < 1373653 ? (2,3) : (2,7,61)
 witnesses(n::Union(Uint64,Int64)) =
@@ -57,7 +72,7 @@ isprime(n::Uint128) =
 isprime(n::Int128) = n < 2 ? false :
     n <= typemax(Int64)  ? isprime(int64(n))  : isprime(BigInt(n))
 
-# TODO: replace this factorization routine
+# TODO: faster factorization algorithms?
 
 const PRIMES = primes(10000)
 
