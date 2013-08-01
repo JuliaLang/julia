@@ -674,7 +674,7 @@ end
 
 # Do not task-block TTY methods. These writes are process-blocking anyway, so we use the non-copying versions
 write(t::TTY, b::Uint8) = @uv_write 1 ccall(:jl_putc_copy, Int32, (Uint8, Ptr{Void}, Ptr{Void}, Ptr{Void}), b, handle(s), uvw, uv_jl_writecb::Ptr{Void})
-write(s::AsyncStream, c::Char) = @uv_write utf8sizeof(c) ccall(:jl_pututf8_copy, Int32, (Ptr{Void},Uint32, Ptr{Void}, Ptr{Void}), handle(s), c, uvw, uv_jl_writecb::Ptr{Void})
+write(s::TTY, c::Char) = @uv_write utf8sizeof(c) ccall(:jl_pututf8_copy, Int32, (Ptr{Void},Uint32, Ptr{Void}, Ptr{Void}), handle(s), c, uvw, uv_jl_writecb::Ptr{Void})
 function write{T}(s::TTY, a::Array{T}) 
     if isbits(T)
         n = uint(length(a)*sizeof(T))
@@ -684,7 +684,7 @@ function write{T}(s::TTY, a::Array{T})
         invoke(write,(IO,Array),s,a)
     end
 end
-write(s::AsyncStream, p::Ptr, nb::Integer) = @uv_write nb ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}, Ptr{Void}), handle(s), p, nb, uvw, uv_jl_writecb::Ptr{Void})
+write(s::TTY, p::Ptr, nb::Integer) = @uv_write nb ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}, Ptr{Void}), handle(s), p, nb, uvw, uv_jl_writecb::Ptr{Void})
 
 function write(s::AsyncStream, b::Uint8)
     if isdefined(Main.Base,:Scheduler) && current_task() != Main.Base.Scheduler
