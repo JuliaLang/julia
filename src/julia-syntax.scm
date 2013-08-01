@@ -1440,7 +1440,8 @@
 			(_while (call (top <=) ,cnt ,lim)
 				(scope-block
 				 (block
-				  (local ,lhs)
+				  ;; NOTE: enable this to force loop-local var
+				  #;(local ,lhs)
 				  (= ,lhs ,cnt)
 				  (break-block loop-cont
 					       ,body)
@@ -1459,7 +1460,8 @@
 	       (while (call (top !) (call (top done) ,coll ,state))
 		      (scope-block
 		       (block
-			,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
+			;; NOTE: enable this to force loop-local var
+			#;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
 			,(lower-tuple-assignment (list lhs state)
 						 `(call (top next) ,coll ,state))
 			,body)))))))
@@ -1660,7 +1662,11 @@
 		    (boundscheck pop)
 		    (= ,ri (call (top +) ,ri 1)))
 	    `(for (= ,(cadr (car ranges)) ,(car rs))
-		  ,(construct-loops (cdr ranges) (cdr rs)))))
+		  (block
+		   ;; *** either this or force all for loop vars local
+		   ,@(map (lambda (r) `(local ,r))
+			  (lhs-vars (cadr (car ranges))))
+		   ,(construct-loops (cdr ranges) (cdr rs))))))
 
       ;; Evaluate the comprehension
       `(block
@@ -1694,7 +1700,11 @@
 		    (type_goto ,initlabl ,onekey ,oneval)
 		    (call (top setindex!) ,result ,oneval ,onekey))
 	    `(for ,(car ranges)
-		  ,(construct-loops (cdr ranges)))))
+		  (block
+		   ;; *** either this or force all for loop vars local
+		   ,@(map (lambda (r) `(local ,r))
+			  (lhs-vars (cadr (car ranges))))
+		   ,(construct-loops (cdr ranges))))))
 
       ;; Evaluate the comprehension
       (let ((loopranges
@@ -1730,7 +1740,11 @@
 	(if (null? ranges)
 	    `(call (top setindex!) ,result ,(caddr expr) ,(cadr expr))
 	    `(for (= ,(cadr (car ranges)) ,(car rs))
-		  ,(construct-loops (cdr ranges) (cdr rs)))))
+		  (block
+		   ;; *** either this or force all for loop vars local
+		   ,@(map (lambda (r) `(local ,r))
+			  (lhs-vars (cadr (car ranges))))
+		   ,(construct-loops (cdr ranges) (cdr rs))))))
 
       ;; Evaluate the comprehension
       `(block
@@ -2208,7 +2222,7 @@ So far only the second case can actually occur.
 		    (body (add-local-decls (cadr e) (append vars glob env))))
 	       `(scope-block ,@(map (lambda (v) `(local ,v))
 				    vars)
-			     ,(prn (remove-local-decls (prn body))))))
+			     ,(remove-local-decls body))))
 	    (else
 	     ;; form (local! x) adds a local to a normal (non-scope) block
 	     (let ((newenv (append (declared-local!-vars e) env)))
