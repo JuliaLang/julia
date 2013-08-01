@@ -85,6 +85,8 @@ end
 methods(t::DataType) = (_methods(t,Tuple,0);  # force constructor creation
                         t.env)
 
+length(mt::MethodTable) = (n = 0; while !is(d,()); n += 1; d = d.next; end; n)
+
 uncompressed_ast(l::LambdaStaticData) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
