@@ -65,13 +65,14 @@ end
 urlpkg(url::String) = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$", url).captures[1]
 
 clone(url::String, pkg::String=urlpkg(url); opts::Cmd=``) = Dir.cd() do
+    info("Cloning $pkg from $url")
     ispath(pkg) && error("$pkg already exists")
     try Git.run(`clone $opts $url $pkg`)
     catch
         run(`rm -rf $pkg`)
         rethrow()
     end
-    isempty(Reqs.parse("$pkg/REQUIRE")) && return
+    isempty(Reqs.parse("$pkg/REQUIRE")) && return info("Nothing to be done.")
     info("Computing changes...")
     resolve()
 end

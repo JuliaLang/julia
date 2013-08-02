@@ -6645,9 +6645,28 @@
 
 "),
 
+("BLAS Functions","Base.LinAlg.BLAS","asum","asum(n, X, incx)
+
+   sum of the absolute values of the first \"n\" elements of array
+   \"X\" with stride \"incx\".
+
+"),
+
 ("BLAS Functions","Base.LinAlg.BLAS","axpy!","axpy!(n, a, X, incx, Y, incy)
 
    Overwrite \"Y\" with \"a*X + Y\".  Returns \"Y\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","scal!","scal!(n, a, X, incx)
+
+   Overwrite \"X\" with \"a*X\".  Returns \"X\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","scal","scal(n, a, X, incx)
+
+   Returns \"a*X\".
 
 "),
 
@@ -6726,6 +6745,14 @@
 
 "),
 
+("BLAS Functions","Base.LinAlg.BLAS","sbmv","sbmv(uplo, k, A, x)
+
+   Returns \"A*x\" where \"A\" is a symmetric band matrix of order
+   \"size(A,2)\" with \"k\" super-diagonals stored in the argument
+   \"A\".
+
+"),
+
 ("BLAS Functions","Base.LinAlg.BLAS","gemm!","gemm!(tA, tB, alpha, A, B, beta, C)
 
    Update \"C\" as \"alpha*A*B + beta*C\" or the other three variants
@@ -6738,6 +6765,164 @@
 
    Returns \"alpha*A*B\" or the other three variants according to
    \"tA\" (transpose \"A\") and \"tB\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","gemm","gemm(tA, tB, alpha, A, B)
+
+   Returns \"alpha*A*B\" or the other three variants according to
+   \"tA\" (transpose \"A\") and \"tB\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","gemv!","gemv!(tA, alpha, A, x, beta, y)
+
+   Update the vector \"y\" as \"alpha*A*x + beta*x\" or \"alpha*A'x +
+   beta*x\" according to \"tA\" (transpose \"A\"). Returns the updated
+   \"y\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","gemv","gemv(tA, alpha, A, x)
+
+   Returns \"alpha*A*x\" or \"alpha*A'x\" according to \"tA\"
+   (transpose \"A\").
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","gemv","gemv(tA, alpha, A, x)
+
+   Returns \"A*x\" or \"A'x\" according to \"tA\" (transpose \"A\").
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symm!","symm!(side, ul, alpha, A, B, beta, C)
+
+   Update \"C\" as \"alpha*A*B + beta*C\" or \"alpha*B*A + beta*C\"
+   according to \"side\". \"A\" is assumed to be symmetric.  Only the
+   \"ul\" triangle of \"A\" is used.  Returns the updated \"C\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symm","symm(side, ul, alpha, A, B)
+
+   Returns \"alpha*A*B\" or \"alpha*B*A\" according to \"side\". \"A\"
+   is assumed to be symmetric.  Only the \"ul\" triangle of \"A\" is
+   used.
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symm","symm(side, ul, A, B)
+
+   Returns \"A*B\" or \"B*A\" according to \"side\".  \"A\" is assumed
+   to be symmetric.  Only the \"ul\" triangle of \"A\" is used.
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symm","symm(tA, tB, alpha, A, B)
+
+   Returns \"alpha*A*B\" or the other three variants according to
+   \"tA\" (transpose \"A\") and \"tB\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symv!","symv!(ul, alpha, A, x, beta, y)
+
+   Update the vector \"y\" as \"alpha*A*y + beta*y\". \"A\" is assumed
+   to be symmetric.  Only the \"ul\" triangle of \"A\" is used.
+   Returns the updated \"y\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symv","symv(ul, alpha, A, x)
+
+   Returns \"alpha*A*x\". \"A\" is assumed to be symmetric.  Only the
+   \"ul\" triangle of \"A\" is used.
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symv","symv(ul, A, x)
+
+   Returns \"A*x\".  \"A\" is assumed to be symmetric.  Only the
+   \"ul\" triangle of \"A\" is used.
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trmm!","trmm!(side, ul, tA, dA, alpha, A, B)
+
+   Update \"B\" as \"alpha*A*B\" or one of the other three variants
+   determined by \"side\" (A on left or right) and \"tA\" (transpose
+   A). Only the \"ul\" triangle of \"A\" is used.  \"dA\" indicates if
+   \"A\" is unit-triangular (the diagonal is assumed to be all ones).
+   Returns the updated \"B\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trmm","trmm(side, ul, tA, dA, alpha, A, B)
+
+   Returns \"alpha*A*B\" or one of the other three variants determined
+   by \"side\" (A on left or right) and \"tA\" (transpose A). Only the
+   \"ul\" triangle of \"A\" is used.  \"dA\" indicates if \"A\" is
+   unit-triangular (the diagonal is assumed to be all ones).
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trsm!","trsm!(side, ul, tA, dA, alpha, A, B)
+
+   Overwrite \"B\" with the solution to \"A*X = alpha*B\" or one of
+   the other three variants determined by \"side\" (A on left or right
+   of \"X\") and \"tA\" (transpose A). Only the \"ul\" triangle of
+   \"A\" is used.  \"dA\" indicates if \"A\" is unit-triangular (the
+   diagonal is assumed to be all ones).  Returns the updated \"B\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trsm","trsm(side, ul, tA, dA, alpha, A, B)
+
+   Returns the solution to \"A*X = alpha*B\" or one of the other three
+   variants determined by \"side\" (A on left or right of \"X\") and
+   \"tA\" (transpose A). Only the \"ul\" triangle of \"A\" is used.
+   \"dA\" indicates if \"A\" is unit-triangular (the diagonal is
+   assumed to be all ones).
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trmv!","trmv!(side, ul, tA, dA, alpha, A, b)
+
+   Update \"b\" as \"alpha*A*b\" or one of the other three variants
+   determined by \"side\" (A on left or right) and \"tA\" (transpose
+   A). Only the \"ul\" triangle of \"A\" is used.  \"dA\" indicates if
+   \"A\" is unit-triangular (the diagonal is assumed to be all ones).
+   Returns the updated \"b\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trmv","trmv(side, ul, tA, dA, alpha, A, b)
+
+   Returns \"alpha*A*b\" or one of the other three variants determined
+   by \"side\" (A on left or right) and \"tA\" (transpose A). Only the
+   \"ul\" triangle of \"A\" is used.  \"dA\" indicates if \"A\" is
+   unit-triangular (the diagonal is assumed to be all ones).
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trsv!","trsv!(side, ul, tA, dA, alpha, A, b)
+
+   Overwrite \"b\" with the solution to \"A*X = alpha*b\" or one of
+   the other three variants determined by \"side\" (A on left or right
+   of \"X\") and \"tA\" (transpose A). Only the \"ul\" triangle of
+   \"A\" is used.  \"dA\" indicates if \"A\" is unit-triangular (the
+   diagonal is assumed to be all ones).  Returns the updated \"b\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trsv","trsv(side, ul, tA, dA, alpha, A, b)
+
+   Returns the solution to \"A*X = alpha*b\" or one of the other three
+   variants determined by \"side\" (A on left or right of \"X\") and
+   \"tA\" (transpose A). Only the \"ul\" triangle of \"A\" is used.
+   \"dA\" indicates if \"A\" is unit-triangular (the diagonal is
+   assumed to be all ones).
 
 "),
 
