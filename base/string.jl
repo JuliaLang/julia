@@ -830,8 +830,14 @@ function shell_parse(raw::String, interp::Bool)
     j = i
 
     function update_arg(x)
-        if !isa(x,String) || !isempty(x)
+        if !isa(x,String)
             push!(arg, x)
+        elseif !isempty(x)
+            if x[1] == '~'
+                push!(arg, string(ENV["HOME"], x[2:end]))
+            else
+                push!(arg, x)
+            end
         end
     end
     function append_arg()
