@@ -3111,10 +3111,6 @@ Parallel Computing
    See the documentation for package ``ClusterManagers`` for more information on how to 
    write a custom cluster manager.
    
-.. function:: addprocs_sge(n) - DEPRECATED from Base, use ClusterManagers.addprocs_sge(n)
-
-   Adds processes via the Sun/Oracle Grid Engine batch queue, using ``qsub``.
-
 .. function:: nprocs()
 
    Get the number of available processors.
