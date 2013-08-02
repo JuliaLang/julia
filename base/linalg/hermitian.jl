@@ -46,8 +46,9 @@ function expm(A::Hermitian)
     scale(F[:vectors], exp(F[:values])) * F[:vectors]'
 end
 
-function sqrtm(A::Hermitian, cond::Bool)
+function sqrtm(A::Hermitian, cond::Bool=false)
     F = eigfact(A)
+    if length(F[:values]) == 0 return A end
     vsqrt = sqrt(complex(F[:values]))
     if all(imag(vsqrt) .== 0)
         retmat = symmetrize!(scale(F[:vectors], real(vsqrt)) * F[:vectors]')
