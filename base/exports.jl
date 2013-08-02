@@ -978,7 +978,7 @@ export
     current_module,
     disassemble,
     edit,
-    finfer,
+    code_typed,
     fullname,
     functionloc,
     functionlocs,
