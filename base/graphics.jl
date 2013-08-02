@@ -1,6 +1,6 @@
 module Graphics
 
-import Base.norm, Base.scale
+import Base: fill, norm, scale
 
 export
     # Part 1. 2D Geometry
@@ -47,7 +47,6 @@ export
     
     # TODO: rendering pipeline API
 
-global fill
 
 # Part 1. geometric primitives
 
@@ -130,6 +129,13 @@ function (+)(bb1::BoundingBox, bb2::BoundingBox)
                 max(bb1.xmax, bb2.xmax),
                 min(bb1.ymin, bb2.ymin),
                 max(bb1.ymax, bb2.ymax))
+end
+
+function (&)(bb1::BoundingBox, bb2::BoundingBox)
+    BoundingBox(max(bb1.xmin, bb2.xmin),
+                min(bb1.xmax, bb2.xmax),
+                max(bb1.ymin, bb2.ymin),
+                min(bb1.ymax, bb2.ymax))
 end
 
 function deform(bb::BoundingBox, dl, dr, dt, db)
@@ -224,6 +230,7 @@ function set_coords(c::GraphicsContext, x, y, w, h, l, r, t, b)
     end
     c
 end
+set_coords(c::GraphicsContext, device::BoundingBox, user::BoundingBox) = set_coords(c, device.xmin, device.ymin, width(device), height(device), user.xmin, user.xmax, user.ymin, user.ymax)
 
 @mustimplement save(gc::GraphicsContext)
 @mustimplement restore(gc::GraphicsContext)
@@ -289,6 +296,7 @@ function rectangle(gc::GraphicsContext, x::Real, y::Real, width::Real, height::R
     rel_line_to(gc, -width, 0)
     close_path(gc)
 end
+rectangle(gc::GraphicsContext, user::BoundingBox) = rectangle(gc, user.xmin, user.ymin, width(user), height(user))
 
 circle(ctx::GraphicsContext, x::Real, y::Real, r::Real) =
     arc(ctx, x, y, r, 0., 2pi)

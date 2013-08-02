@@ -954,25 +954,27 @@ I/O
 
    Close an I/O stream. Performs a ``flush`` first.
 
-.. function:: write(stream, x[, byteorder])
+.. function:: write(stream, x)
 
-   Write the canonical binary representation of a value to the given
-   stream. For numeric types, the optional argument specifies the byte order
-   or endianness: ``NetworkByteOrder`` for big-endian, ``LittleByteOrder`` for
-   little-endian, and ``HostByteOrder`` (the default) for the type of the
-   host.
+   Write the canonical binary representation of a value to the given stream.
 
-.. function:: read(stream, type[, byteorder])
+.. function:: read(stream, type)
 
-   Read a value of the given type from a stream, in canonical binary
-   representation. For numeric types, the optional argument specifies the byte
-   order or endianness: ``NetworkByteOrder`` for big-endian,
-   ``LittleByteOrder`` for little-endian, and ``HostByteOrder`` (the default)
-   for the type of the host.
+   Read a value of the given type from a stream, in canonical binary representation.
 
-.. function:: read(stream, type[, byteorder], dims)
+.. function:: read(stream, type, dims)
 
    Read a series of values of the given type from a stream, in canonical binary representation. ``dims`` is either a tuple or a series of integer arguments specifying the size of ``Array`` to return.
+
+.. function:: readbytes!(stream, b::Vector{Uint8}, nb=length(b))
+
+   Read at most nb bytes from the stream into b, returning the
+   number of bytes read (increasing the size of b as needed).
+
+.. function:: readbytes(stream, nb=typemax(Int))
+
+   Read at most nb bytes from the stream, returning a
+   Vector{Uint8} of the bytes read.
 
 .. function:: position(s)
 
@@ -1040,7 +1042,7 @@ Network I/O
 
    Connect to the host ``host`` on port ``port``
 
-.. function:: connect(path) -> NamedPipe
+.. function:: connect(path) -> Pipe
 
    Connect to the Named Pipe/Domain Socket at ``path``
 
@@ -2668,7 +2670,7 @@ Statistics
 
 .. function:: std(v[, region])
 
-   Compute the sample standard deviation of a vector or array``v``, optionally along dimensions in ``region``. The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v - mean(v)).^2) / (length(v) - 1))``.
+   Compute the sample standard deviation of a vector or array ``v``, optionally along dimensions in ``region``. The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v - mean(v)).^2) / (length(v) - 1))``.
 
 .. function:: stdm(v, m)
 
@@ -2676,7 +2678,7 @@ Statistics
 
 .. function:: var(v[, region])
 
-   Compute the sample variance of a vector or array``v``, optionally along dimensions in ``region``. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v - mean(v)).^2) / (length(v) - 1)``.
+   Compute the sample variance of a vector or array ``v``, optionally along dimensions in ``region``. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v - mean(v)).^2) / (length(v) - 1)``.
 
 .. function:: varm(v, m)
 
@@ -2696,8 +2698,8 @@ Statistics
 .. function:: hist(v, e) -> e, counts
 
    Compute the histogram of ``v`` using a vector/range ``e`` as the edges for
-   the bins. The result will be a vector of length ``length(e) - 1``, with the
-   ``i``th element being ``sum(e[i] .< v .<= e[i+1])``.
+   the bins. The result will be a vector of length ``length(e) - 1``, such that the
+   element at location ``i`` satisfies ``sum(e[i] .< v .<= e[i+1])``.
 
 .. function:: histrange(v, n)
 
@@ -2871,6 +2873,13 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    arguments, and the size of the transformed result, are the same as
    for :func:`rfft`.
 
+.. function:: plan_brfft(A, d [, dims [, flags [, timelimit]]])
+
+   Pre-plan an optimized real-input unnormalized transform, similar to
+   :func:`plan_rfft` except for :func:`brfft` instead of :func:`rfft`.
+   The first two arguments and the size of the transformed result, are
+   the same as for :func:`brfft`.
+
 .. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]])
 
    Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
@@ -2951,6 +2960,15 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 .. function:: conv(u,v)
 
    Convolution of two vectors. Uses FFT algorithm.
+
+.. function:: conv2(u,v,A)
+
+   2-D convolution of the matrix ``A`` with the 2-D separable kernel generated by
+   the vectors ``u`` and ``v``.  Uses 2-D FFT algorithm
+
+.. function:: conv2(B,A)
+
+   2-D convolution of the matrix ``B`` with the matrix ``A``.  Uses 2-D FFT algorithm
 
 .. function:: xcorr(u,v)
 
@@ -3089,10 +3107,6 @@ Parallel Computing
    See the documentation for package ``ClusterManagers`` for more information on how to 
    write a custom cluster manager.
    
-.. function:: addprocs_sge(n) - DEPRECATED from Base, use ClusterManagers.addprocs_sge(n)
-
-   Adds processes via the Sun/Oracle Grid Engine batch queue, using ``qsub``.
-
 .. function:: nprocs()
 
    Get the number of available processors.

@@ -425,6 +425,8 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     else
         dt = jl_new_uninitialized_datatype(nf);
     dt->size = size;
+    dt->struct_decl = NULL;
+    dt->instance = NULL;
 
     assert(tree_literal_values==NULL);
     ptrhash_put(&backref_table, (void*)(ptrint_t)pos, dt);
@@ -456,8 +458,6 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     dt->env = jl_deserialize_value(s);
     dt->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
     dt->fptr = jl_deserialize_fptr(s);
-    dt->struct_decl = NULL;
-    dt->instance = NULL;
     if (dt->name == jl_array_type->name || dt->name == jl_pointer_type->name ||
         dt->name == jl_type_type->name || dt->name == jl_vararg_type->name ||
         dt->name == jl_abstractarray_type->name) {

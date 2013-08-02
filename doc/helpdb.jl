@@ -1473,32 +1473,40 @@
 
 "),
 
-("I/O","Base","write","write(stream, x[, byteorder])
+("I/O","Base","write","write(stream, x)
 
    Write the canonical binary representation of a value to the given
-   stream. For numeric types, the optional argument specifies the byte
-   order or endianness: \"NetworkByteOrder\" for big-endian,
-   \"LittleByteOrder\" for little-endian, and \"HostByteOrder\" (the
-   default) for the type of the host.
+   stream.
 
 "),
 
-("I/O","Base","read","read(stream, type[, byteorder])
+("I/O","Base","read","read(stream, type)
 
    Read a value of the given type from a stream, in canonical binary
-   representation. For numeric types, the optional argument specifies
-   the byte order or endianness: \"NetworkByteOrder\" for big-endian,
-   \"LittleByteOrder\" for little-endian, and \"HostByteOrder\" (the
-   default) for the type of the host.
+   representation.
 
 "),
 
-("I/O","Base","read","read(stream, type[, byteorder], dims)
+("I/O","Base","read","read(stream, type, dims)
 
    Read a series of values of the given type from a stream, in
    canonical binary representation. \"dims\" is either a tuple or a
    series of integer arguments specifying the size of \"Array\" to
    return.
+
+"),
+
+("I/O","Base","readbytes!","readbytes!(stream, b::Vector{Uint8}, nb=length(b))
+
+   Read at most nb bytes from the stream into b, returning the number
+   of bytes read (increasing the size of b as needed).
+
+"),
+
+("I/O","Base","readbytes","readbytes(stream, nb=typemax(Int))
+
+   Read at most nb bytes from the stream, returning a Vector{Uint8} of
+   the bytes read.
 
 "),
 
@@ -1592,7 +1600,7 @@
 
 "),
 
-("Network I/O","Base","connect","connect(path) -> NamedPipe
+("Network I/O","Base","connect","connect(path) -> Pipe
 
    Connect to the Named Pipe/Domain Socket at \"path\"
 
@@ -4088,7 +4096,7 @@
 
 ("Statistics","Base","std","std(v[, region])
 
-   Compute the sample standard deviation of a vector or array``v``,
+   Compute the sample standard deviation of a vector or array \"v\",
    optionally along dimensions in \"region\". The algorithm returns an
    estimator of the generative distribution's standard deviation under
    the assumption that each entry of \"v\" is an IID draw from that
@@ -4106,7 +4114,7 @@
 
 ("Statistics","Base","var","var(v[, region])
 
-   Compute the sample variance of a vector or array``v``, optionally
+   Compute the sample variance of a vector or array \"v\", optionally
    along dimensions in \"region\". The algorithm will return an
    estimator of the generative distribution's variance under the
    assumption that each entry of \"v\" is an IID draw from that
@@ -4141,8 +4149,8 @@
 
    Compute the histogram of \"v\" using a vector/range \"e\" as the
    edges for the bins. The result will be a vector of length
-   \"length(e) - 1\", with the \"i``th element being ``sum(e[i] .< v
-   .<= e[i+1])\".
+   \"length(e) - 1\", such that the element at location \"i\"
+   satisfies \"sum(e[i] .< v .<= e[i+1])\".
 
 "),
 
@@ -5812,6 +5820,140 @@
 
 "),
 
+("Graphics","Base","Vec2","Vec2(x, y)
+
+   Creates a point in two dimensions
+
+"),
+
+("Graphics","Base","BoundingBox","BoundingBox(xmin, xmax, ymin, ymax)
+
+   Creates a box in two dimensions with the given edges
+
+"),
+
+("Graphics","Base","BoundingBox","BoundingBox(objs...)
+
+   Creates a box in two dimensions that encloses all objects
+
+"),
+
+("Graphics","Base","width","width(obj)
+
+   Computes the width of an object
+
+"),
+
+("Graphics","Base","height","height(obj)
+
+   Computes the height of an object
+
+"),
+
+("Graphics","Base","xmin","xmin(obj)
+
+   Computes the minimum x-coordinate contained in an object
+
+"),
+
+("Graphics","Base","xmax","xmax(obj)
+
+   Computes the maximum x-coordinate contained in an object
+
+"),
+
+("Graphics","Base","ymin","ymin(obj)
+
+   Computes the minimum y-coordinate contained in an object
+
+"),
+
+("Graphics","Base","ymax","ymax(obj)
+
+   Computes the maximum y-coordinate contained in an object
+
+"),
+
+("Graphics","Base","diagonal","diagonal(obj)
+
+   Return the length of the diagonal of an object
+
+"),
+
+("Graphics","Base","aspect_ratio","aspect_ratio(obj)
+
+   Compute the height/width of an object
+
+"),
+
+("Graphics","Base","center","center(obj)
+
+   Return the point in the center of an object
+
+"),
+
+("Graphics","Base","xrange","xrange(obj)
+
+   Returns a tuple \"(xmin(obj), xmax(obj))\"
+
+"),
+
+("Graphics","Base","yrange","yrange(obj)
+
+   Returns a tuple \"(ymin(obj), ymax(obj))\"
+
+"),
+
+("Graphics","Base","rotate","rotate(obj, angle, origin) -> newobj
+
+   Rotates an object around origin by the specified angle (radians),
+   returning a new object of the same type.  Because of type-
+   constancy, this new object may not always be a strict geometric
+   rotation of the input; for example, if \"obj\" is a \"BoundingBox\"
+   the return is the smallest \"BoundingBox\" that encloses the
+   rotated input.
+
+"),
+
+("Graphics","Base","shift","shift(obj, dx, dy)
+
+   Returns an object shifted horizontally and vertically by the
+   indicated amounts
+
+"),
+
+("Graphics","Base","*","*(obj, s::Real)
+
+   Scale the width and height of a graphics object, keeping the center
+   fixed
+
+"),
+
+("Graphics","Base","+","+(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
+
+   Returns the smallest box containing both boxes
+
+"),
+
+("Graphics","Base","deform","deform(bb::BoundingBox, dxmin, dxmax, dymin, dymax)
+
+   Returns a bounding box with all edges shifted by the indicated
+   amounts
+
+"),
+
+("Graphics","Base","isinside","isinside(bb::BoundingBox, x, y)
+
+   True if the given point is inside the box
+
+"),
+
+("Graphics","Base","isinside","isinside(bb::BoundingBox, point)
+
+   True if the given point is inside the box
+
+"),
+
 
 ("Linear Algebra","Base","*","*(A, B)
 
@@ -6503,9 +6645,28 @@
 
 "),
 
+("BLAS Functions","Base.LinAlg.BLAS","asum","asum(n, X, incx)
+
+   sum of the absolute values of the first \"n\" elements of array
+   \"X\" with stride \"incx\".
+
+"),
+
 ("BLAS Functions","Base.LinAlg.BLAS","axpy!","axpy!(n, a, X, incx, Y, incy)
 
    Overwrite \"Y\" with \"a*X + Y\".  Returns \"Y\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","scal!","scal!(n, a, X, incx)
+
+   Overwrite \"X\" with \"a*X\".  Returns \"X\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","scal","scal(n, a, X, incx)
+
+   Returns \"a*X\".
 
 "),
 
@@ -6584,6 +6745,14 @@
 
 "),
 
+("BLAS Functions","Base.LinAlg.BLAS","sbmv","sbmv(uplo, k, A, x)
+
+   Returns \"A*x\" where \"A\" is a symmetric band matrix of order
+   \"size(A,2)\" with \"k\" super-diagonals stored in the argument
+   \"A\".
+
+"),
+
 ("BLAS Functions","Base.LinAlg.BLAS","gemm!","gemm!(tA, tB, alpha, A, B, beta, C)
 
    Update \"C\" as \"alpha*A*B + beta*C\" or the other three variants
@@ -6599,12 +6768,236 @@
 
 "),
 
+("BLAS Functions","Base.LinAlg.BLAS","gemm","gemm(tA, tB, alpha, A, B)
+
+   Returns \"alpha*A*B\" or the other three variants according to
+   \"tA\" (transpose \"A\") and \"tB\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","gemv!","gemv!(tA, alpha, A, x, beta, y)
+
+   Update the vector \"y\" as \"alpha*A*x + beta*x\" or \"alpha*A'x +
+   beta*x\" according to \"tA\" (transpose \"A\"). Returns the updated
+   \"y\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","gemv","gemv(tA, alpha, A, x)
+
+   Returns \"alpha*A*x\" or \"alpha*A'x\" according to \"tA\"
+   (transpose \"A\").
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","gemv","gemv(tA, alpha, A, x)
+
+   Returns \"A*x\" or \"A'x\" according to \"tA\" (transpose \"A\").
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symm!","symm!(side, ul, alpha, A, B, beta, C)
+
+   Update \"C\" as \"alpha*A*B + beta*C\" or \"alpha*B*A + beta*C\"
+   according to \"side\". \"A\" is assumed to be symmetric.  Only the
+   \"ul\" triangle of \"A\" is used.  Returns the updated \"C\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symm","symm(side, ul, alpha, A, B)
+
+   Returns \"alpha*A*B\" or \"alpha*B*A\" according to \"side\". \"A\"
+   is assumed to be symmetric.  Only the \"ul\" triangle of \"A\" is
+   used.
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symm","symm(side, ul, A, B)
+
+   Returns \"A*B\" or \"B*A\" according to \"side\".  \"A\" is assumed
+   to be symmetric.  Only the \"ul\" triangle of \"A\" is used.
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symm","symm(tA, tB, alpha, A, B)
+
+   Returns \"alpha*A*B\" or the other three variants according to
+   \"tA\" (transpose \"A\") and \"tB\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symv!","symv!(ul, alpha, A, x, beta, y)
+
+   Update the vector \"y\" as \"alpha*A*y + beta*y\". \"A\" is assumed
+   to be symmetric.  Only the \"ul\" triangle of \"A\" is used.
+   Returns the updated \"y\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symv","symv(ul, alpha, A, x)
+
+   Returns \"alpha*A*x\". \"A\" is assumed to be symmetric.  Only the
+   \"ul\" triangle of \"A\" is used.
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symv","symv(ul, A, x)
+
+   Returns \"A*x\".  \"A\" is assumed to be symmetric.  Only the
+   \"ul\" triangle of \"A\" is used.
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trmm!","trmm!(side, ul, tA, dA, alpha, A, B)
+
+   Update \"B\" as \"alpha*A*B\" or one of the other three variants
+   determined by \"side\" (A on left or right) and \"tA\" (transpose
+   A). Only the \"ul\" triangle of \"A\" is used.  \"dA\" indicates if
+   \"A\" is unit-triangular (the diagonal is assumed to be all ones).
+   Returns the updated \"B\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trmm","trmm(side, ul, tA, dA, alpha, A, B)
+
+   Returns \"alpha*A*B\" or one of the other three variants determined
+   by \"side\" (A on left or right) and \"tA\" (transpose A). Only the
+   \"ul\" triangle of \"A\" is used.  \"dA\" indicates if \"A\" is
+   unit-triangular (the diagonal is assumed to be all ones).
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trsm!","trsm!(side, ul, tA, dA, alpha, A, B)
+
+   Overwrite \"B\" with the solution to \"A*X = alpha*B\" or one of
+   the other three variants determined by \"side\" (A on left or right
+   of \"X\") and \"tA\" (transpose A). Only the \"ul\" triangle of
+   \"A\" is used.  \"dA\" indicates if \"A\" is unit-triangular (the
+   diagonal is assumed to be all ones).  Returns the updated \"B\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trsm","trsm(side, ul, tA, dA, alpha, A, B)
+
+   Returns the solution to \"A*X = alpha*B\" or one of the other three
+   variants determined by \"side\" (A on left or right of \"X\") and
+   \"tA\" (transpose A). Only the \"ul\" triangle of \"A\" is used.
+   \"dA\" indicates if \"A\" is unit-triangular (the diagonal is
+   assumed to be all ones).
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trmv!","trmv!(side, ul, tA, dA, alpha, A, b)
+
+   Update \"b\" as \"alpha*A*b\" or one of the other three variants
+   determined by \"side\" (A on left or right) and \"tA\" (transpose
+   A). Only the \"ul\" triangle of \"A\" is used.  \"dA\" indicates if
+   \"A\" is unit-triangular (the diagonal is assumed to be all ones).
+   Returns the updated \"b\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trmv","trmv(side, ul, tA, dA, alpha, A, b)
+
+   Returns \"alpha*A*b\" or one of the other three variants determined
+   by \"side\" (A on left or right) and \"tA\" (transpose A). Only the
+   \"ul\" triangle of \"A\" is used.  \"dA\" indicates if \"A\" is
+   unit-triangular (the diagonal is assumed to be all ones).
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trsv!","trsv!(side, ul, tA, dA, alpha, A, b)
+
+   Overwrite \"b\" with the solution to \"A*X = alpha*b\" or one of
+   the other three variants determined by \"side\" (A on left or right
+   of \"X\") and \"tA\" (transpose A). Only the \"ul\" triangle of
+   \"A\" is used.  \"dA\" indicates if \"A\" is unit-triangular (the
+   diagonal is assumed to be all ones).  Returns the updated \"b\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trsv","trsv(side, ul, tA, dA, alpha, A, b)
+
+   Returns the solution to \"A*X = alpha*b\" or one of the other three
+   variants determined by \"side\" (A on left or right of \"X\") and
+   \"tA\" (transpose A). Only the \"ul\" triangle of \"A\" is used.
+   \"dA\" indicates if \"A\" is unit-triangular (the diagonal is
+   assumed to be all ones).
+
+"),
+
 ("BLAS Functions","Base.LinAlg.BLAS","blas_set_num_threads","blas_set_num_threads(n)
 
    Set the number of threads the BLAS library should use.
 
 "),
 
+("Profiling","Base","@profile","@profile()
+
+   \"@profile <expression>\" runs your expression while taking
+   periodic backtraces.  These are appended to an internal buffer of
+   backtraces.
+
+"),
+
+("Profiling","Base.Profile","clear","clear()
+
+   Clear any existing backtraces from the internal buffer.
+
+"),
+
+("Profiling","Base.Profile","print","print([io::IO = STDOUT], [data::Vector]; format = :tree, C = false, combine = true, cols = tty_cols())
+
+   Prints profiling results to \"io\" (by default, \"STDOUT\"). If you
+   do not supply a \"data\" vector, the internal buffer of accumulated
+   backtraces will be used.  \"format\" can be \":tree\" or \":flat\".
+   If \"C==true\", backtraces from C and Fortran code are shown.
+   \"combine==true\" merges instruction pointers that correspond to
+   the same line of code.  \"cols\" controls the width of the display.
+
+"),
+
+("Profiling","Base.Profile","print","print([io::IO = STDOUT], data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
+
+   Prints profiling results to \"io\". This variant is used to examine
+   results exported by a previous call to \"Profile.retrieve()\".
+   Supply the vector \"data\" of backtraces and a dictionary
+   \"lidict\" of line information.
+
+"),
+
+("Profiling","Base.Profile","init","init(n::Integer, delay::Float64)
+
+   Configure the \"delay\" between backtraces (measured in seconds),
+   and the number \"n\" of instruction pointers that may be stored.
+   Each instruction pointer corresponds to a single line of code;
+   backtraces generally consist of a long list of instruction
+   pointers. Default settings are \"n=10^6\" and \"delay=0.001\".
+
+"),
+
+("Profiling","Base.Profile","fetch","fetch() -> data
+
+   Returns a reference to the internal buffer of backtraces. Note that
+   subsequent operations, like \"Profile.clear()\", can affect
+   \"data\" unless you first make a copy. Note that the values in
+   \"data\" have meaning only on this machine in the current session,
+   because it depends on the exact memory addresses used in JIT-
+   compiling. This function is primarily for internal use;
+   \"Profile.retrieve()\" may be a better choice for most users.
+
+"),
+
+("Profiling","Base.Profile","retrieve","retrieve(;C = false) -> data, lidict
+
+   \"Exports\" profiling results in a portable format, returning the
+   set of all backtraces (\"data\") and a dictionary that maps the
+   (session-specific) instruction pointers in \"data\" to \"LineInfo\"
+   values that store the file name, function name, and line number.
+   This function allows you to save profiling results for future
+   analysis.
+
+"),
 
 ("Punctuation","","punctuation","punctuation
 
@@ -6657,7 +7050,7 @@
    +-----------+---------------------------------------------------------------------------------------------+
    | \\\"''\\\"    | delimit character literals                                                                  |
    +-----------+---------------------------------------------------------------------------------------------+
-   | >>``<<    | delimit external process (command) specifications                                           |
+   | \\\"\\\\`\\\\`\\ | delimit external process (command) specifications                                           |
    +-----------+---------------------------------------------------------------------------------------------+
    | \\\"...\\\"   | splice arguments into a function call, or declare a varargs function                        |
    +-----------+---------------------------------------------------------------------------------------------+

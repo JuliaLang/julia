@@ -447,6 +447,13 @@ void *init_stdio_handle(uv_file fd,int readable)
     void *handle;
     uv_handle_type type = uv_guess_handle(fd);
     jl_uv_file_t *file;
+#ifndef _OS_WINDOWS_    
+    // Duplicate the file descritor so we can later dup it over if we want to redirect
+    // STDIO without having to worry about closing the associated libuv object. 
+    // On windows however, libuv objects remember streams by their HANDLE, so this is 
+    // unnessecary. 
+    fd = dup(fd);
+#endif
     //printf("%d: %d -- %d\n", fd, type);
     switch(type)
     {

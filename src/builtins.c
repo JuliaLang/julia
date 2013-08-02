@@ -311,57 +311,20 @@ JL_CALLABLE(jl_f_kwcall)
     if (!jl_is_gf(f))
         jl_error("function does not accept named arguments");
     jl_function_t *sorter = ((jl_methtable_t*)f->env)->kwsorter;
-
-    size_t nkeys = jl_unbox_long(args[1]);
-    size_t nrest=0;
-    size_t pa = 3 + 2*nkeys;
-    jl_value_t *rkw = args[2 + 2*nkeys];
-    if (rkw != (jl_value_t*)jl_null) {
-        if (!jl_is_array(rkw)) {
-            if (jl_append_any_func == NULL) {
-                jl_append_any_func =
-                    (jl_function_t*)jl_get_global(jl_base_module,
-                                                  jl_symbol("append_any"));
-            }
-            rkw = jl_apply(jl_append_any_func, &rkw, 1);
-            args[2 + 2*nkeys] = rkw;  // gc root
-        }
-        assert(jl_is_array(rkw));
-        nrest = jl_array_len(rkw);
-    }
-
-    if (nkeys+nrest == 0) {
-        // no named args passed; bypass sorter
-        return jl_apply(f, &args[3], nargs-3);
-    }
     if (sorter == NULL) {
         jl_errorf("function %s does not accept named arguments",
                   jl_gf_name(f)->name);
     }
 
-    size_t kwlen = (nkeys+nrest)*2;
-#ifdef OVERLAP_TUPLE_LEN
-    jl_tuple_t *kwtuple = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, kwlen);
-#else
-    jl_tuple_t *kwtuple = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, kwlen+1);
-#endif
-    jl_tuple_set_len_unsafe(kwtuple, kwlen);
-
+    size_t nkeys = jl_unbox_long(args[1]);
+    size_t pa = 3 + 2*nkeys;
+    jl_array_t *container = (jl_array_t*)args[pa-1];
+    assert(jl_array_len(container) > 0);
     for(size_t i=0; i < nkeys*2; i+=2) {
-        jl_tupleset(kwtuple, i  , args[2+i]);
-        jl_tupleset(kwtuple, i+1, args[2+i+1]);
+        jl_cellset(container, i  , args[2+i]);
+        jl_cellset(container, i+1, args[2+i+1]);
     }
-    for(size_t i=0; i < nrest; i++) {
-        jl_value_t *ri = jl_cellref(rkw, i);
-        jl_value_t *sym;
-        if (!jl_is_tuple(ri) || jl_tuple_len(ri)<2 ||
-            !jl_is_symbol(sym=jl_tupleref(ri,0))) {
-            jl_error("expected (symbol,value) tuples in named argument container");
-        }
-        jl_tupleset(kwtuple, (nkeys+i)*2  , sym);
-        jl_tupleset(kwtuple, (nkeys+i)*2+1, jl_tupleref(ri,1));
-    }
-    args[pa-1] = (jl_value_t*)kwtuple;
+
     return jl_apply(sorter, &args[pa-1], nargs-(pa-1));
 }
 

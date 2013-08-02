@@ -469,8 +469,8 @@ computation, and also in the following references:
 Arbitrary Precision Arithmetic
 ------------------------------
 
-To allow computations with arbitrary precision integers and floating point numbers, 
-Julia wraps the `GNU Multiple Precision Arithmetic Library, GMP <http://gmplib.org>`_. 
+To allow computations with arbitrary-precision integers and floating point numbers, 
+Julia wraps the `GNU Multiple Precision Arithmetic Library (GMP) <http://gmplib.org>`_ and the `GNU MPFR Library <http://http://www.mpfr.org>`_, respectively. 
 The `BigInt` and `BigFloat` types are available in Julia for arbitrary precision 
 integer and floating point numbers respectively. 
 

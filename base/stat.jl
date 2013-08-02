@@ -72,7 +72,7 @@ issetgid(mode::Unsigned) = (mode & 0o2000) > 0
 issticky(mode::Unsigned) = (mode & 0o1000) > 0
 
   isreadable(mode::Unsigned) = (mode & 0o444) > 0
- iswriteable(mode::Unsigned) = (mode & 0o222) > 0
+ iswritable(mode::Unsigned) = (mode & 0o222) > 0
 isexecutable(mode::Unsigned) = (mode & 0o111) > 0
 
 uperm(mode::Unsigned) = uint8(mode >> 6) & 0x7
@@ -94,7 +94,7 @@ for f in {
     :issetgid
     :issticky
     :isreadable
-    :iswriteable
+    :iswritable
     :isexecutable
     :uperm
     :gperm

@@ -62,7 +62,7 @@ end
 # remote/parallel load
 
 include_string(txt::ByteString, fname::ByteString) =
-    ccall(:jl_load_file_string, Void, (Ptr{Uint8},Ptr{Uint8}), txt, fname)
+    ccall(:jl_load_file_string, Any, (Ptr{Uint8},Ptr{Uint8}), txt, fname)
 
 include_string(txt::ByteString) = include_string(txt, "string")
 
@@ -86,11 +86,14 @@ function include_from_node1(path)
     path = (prev == nothing) ? abspath(path) : joinpath(dirname(prev),path)
     tls = task_local_storage()
     tls[:SOURCE_PATH] = path
+    local result
     try
         if myid()==1
-            Core.include(path)
+            result = Core.include(path)
         else
             include_string(remotecall_fetch(1, readall, path), path)
+            # don't bother sending last value for remote include
+            result = nothing
         end
     finally
         if prev == nothing
@@ -99,7 +102,7 @@ function include_from_node1(path)
             tls[:SOURCE_PATH] = prev
         end
     end
-    nothing
+    result
 end
 
 function reload_path(path)
@@ -126,21 +129,7 @@ function reload_path(path)
     nothing
 end
 
-function evalfile(path::String,args::Array = [])
-    s = readall(path)
-    m = Module(:__anon__)
-    body = Expr(:toplevel,:(ARGS=$args))
-    i = 1
-    while !done(s,i)
-        ex, i = parse(s,i,true,false)
-        if isa(ex,Expr) && ex.head === :error
-            if ex.args[1] == "end of input"
-                break
-            else
-                throw(ParseError(ex.args[1]))
-            end
-        end
-        push!(body.args, ex)
-    end
-    return eval(m, body)
+function evalfile(path::String, args::Array = {})
+    return eval(Module(:__anon__),
+                Expr(:toplevel,:(ARGS=$args),:(include($path))))
 end
