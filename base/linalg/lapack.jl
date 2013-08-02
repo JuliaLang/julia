@@ -41,7 +41,7 @@ for (gbtrf, gbtrs, elty) in
             ccall(($(string(gbtrf)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &m, &n, &kl, &ku, AB, &stride(AB,2), ipiv, info)
+                  &m, &n, &kl, &ku, AB, &max(1,stride(AB,2)), ipiv, info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             AB, ipiv
         end
@@ -63,8 +63,8 @@ for (gbtrf, gbtrs, elty) in
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},   Ptr{BlasInt},
                    Ptr{BlasInt}),
-                  &trans, &n, &kl, &ku, &size(B,2), AB, &stride(AB,2), ipiv,
-                  B, &stride(B,2), info)
+                  &trans, &n, &kl, &ku, &size(B,2), AB, &max(1,stride(AB,2)), ipiv,
+                  B, &max(1,stride(B,2)), info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
@@ -95,7 +95,7 @@ for (gebal, gebak, elty, relty) in
             ccall(($(string(gebal)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
-                  &job, &n, A, &stride(A,2), ilo, ihi, scale, info)
+                  &job, &n, A, &max(1,stride(A,2)), ilo, ihi, scale, info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             ilo[1], ihi[1], scale
         end
@@ -114,7 +114,7 @@ for (gebal, gebak, elty, relty) in
             ccall(($(string(gebak)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &job, &side, &size(V,1), &ilo, &ihi, scale, &n, V, &stride(V,2), info)
+                  &job, &side, &size(V,1), &ilo, &ihi, scale, &n, V, &max(1,stride(V,2)), info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             V
         end
@@ -159,7 +159,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &m, &n, A, &stride(A,2), d, s, tauq, taup, work, &lwork, info)
+                      &m, &n, A, &max(1,stride(A,2)), d, s, tauq, taup, work, &lwork, info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
@@ -177,7 +177,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
             info  = Array(BlasInt, 1)
             m     = blas_int(size(A, 1))
             n     = blas_int(size(A, 2))
-            lda   = blas_int(stride(A, 2))
+            lda   = blas_int(max(1,stride(A, 2)))
             tau   = Array($elty, n)
             lwork = blas_int(-1)
             work  = Array($elty, (1,))
@@ -204,7 +204,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
             info  = Array(BlasInt, 1)
             m     = blas_int(size(A, 1))
             n     = blas_int(size(A, 2))
-            lda   = blas_int(stride(A, 2))
+            lda   = blas_int(max(1,stride(A, 2)))
             tau   = Array($elty, n)
             lwork = blas_int(-1)
             work  = Array($elty, (1,))
@@ -232,6 +232,8 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
             m, n  = size(A)
             jpvt  = zeros(BlasInt, n)
             tau   = Array($elty, min(m,n))
+            lda   = max(1,stride(A,2))
+            if lda == 0 return A, tau, jpvt end # Early exit
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
@@ -243,13 +245,17 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
                           (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$relty}, Ptr{BlasInt}),
-                          &m, &n, A, &stride(A,2), jpvt, tau, work, &lwork, rwork, info)
+                          &m, &n, A, &lda, 
+                          jpvt, tau, work, &lwork, 
+                          rwork, info)
                 else
                     ccall(($(string(geqp3)),liblapack), Void,
                           (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{BlasInt}),
-                          &m, &n, A, &stride(A,2), jpvt, tau, work, &lwork, info)
+                          &m, &n, A, &lda, 
+                          jpvt, tau, work, 
+                          &lwork, info)
                 end
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
@@ -293,7 +299,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
                 ccall(($(string(geqrf)),liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &m, &n, A, &stride(A,2), tau, work, &lwork, info)
+                      &m, &n, A, &max(1,stride(A,2)), tau, work, &lwork, info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
@@ -318,7 +324,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
                 ccall(($(string(gerqf)),liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &m, &n, A, &stride(A,2), tau, work, &lwork, info)
+                      &m, &n, A, &max(1,stride(A,2)), tau, work, &lwork, info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
@@ -337,7 +343,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
             chkstride1(A)
             info = Array(BlasInt, 1)
             m, n = size(A)
-            lda  = stride(A, 2)
+            lda  = max(1,stride(A, 2))
             ipiv = Array(BlasInt, min(m,n))
             ccall(($(string(getrf)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
@@ -449,8 +455,8 @@ for (gels, gesv, getrs, getri, elty) in
                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &(btrn?'T':'N'), &m, &n, &size(B,2), A, &stride(A,2),
-                      B, &stride(B,2), work, &lwork, info)
+                      &(btrn?'T':'N'), &m, &n, &size(B,2), A, &max(1,stride(A,2)),
+                      B, &max(1,stride(B,2)), work, &lwork, info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
@@ -478,7 +484,7 @@ for (gels, gesv, getrs, getri, elty) in
             ccall(($(string(gesv)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
+                  &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
             if info[1] < 0 throw(LAPACKException(info[1])) end
             B, A, ipiv, info[1]
         end
@@ -499,7 +505,7 @@ for (gels, gesv, getrs, getri, elty) in
             ccall(($(string(getrs)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &trans, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
+                  &trans, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
@@ -513,7 +519,7 @@ for (gels, gesv, getrs, getri, elty) in
             chkstride1(A)
             m, n    = size(A)
             if m != n || n != length(ipiv) throw(DimensionMismatch("matrix must be square")) end
-            lda     = stride(A, 2)
+            lda     = max(1,stride(A, 2))
             info    = Array(BlasInt, 1)
             lwork   = -1
             work    = Array($elty, 1)
@@ -747,7 +753,7 @@ for (gglse, elty) in ((:dgglse_, :Float64),
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}),
-                      &m, &n, &p, A, &stride(A,2), B, &stride(B,2), c, d, X,
+                      &m, &n, &p, A, &max(1,stride(A,2)), B, &max(1,stride(B,2)), c, d, X,
                       work, &lwork, info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
@@ -801,7 +807,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, 
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$relty}, Ptr{BlasInt}),
-                          &jobvl, &jobvr, &n, A, &stride(A,2), W, VL, &n, VR, &n,
+                          &jobvl, &jobvr, &n, A, &max(1,stride(A,2)), W, VL, &n, VR, &n,
                           work, &lwork, rwork, info)
                 else
                     ccall(($(string(geev)),liblapack), Void,
@@ -809,7 +815,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{BlasInt}),
-                          &jobvl, &jobvr, &n, A, &stride(A,2), WR, WI, VL, &n,
+                          &jobvl, &jobvr, &n, A, &max(1,stride(A,2)), WR, WI, VL, &n,
                           VR, &n, work, &lwork, info)
                 end
                 if info[1] != 0 throw(LAPACKException(info[1])) end
@@ -863,7 +869,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                          &job, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
+                          &job, &m, &n, A, &max(1,stride(A,2)), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, rwork, iwork, info)
                 else
                     ccall(($(string(gesdd)),liblapack), Void,
@@ -871,7 +877,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{BlasInt}, Ptr{BlasInt}),
-                          &job, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
+                          &job, &m, &n, A, &max(1,stride(A,2)), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, iwork, info)
                 end
                 if info[1] != 0 throw(LAPACKException(info[1])) end
@@ -913,7 +919,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
-                          &jobu, &jobvt, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
+                          &jobu, &jobvt, &m, &n, A, &max(1,stride(A,2)), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, rwork, info)
                 else
                     ccall(($(string(gesvd)),liblapack), Void,
@@ -921,7 +927,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{BlasInt}),
-                          &jobu, &jobvt, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
+                          &jobu, &jobvt, &m, &n, A, &max(1,stride(A,2)), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, info)
                 end
                 if info[1] != 0 throw(LAPACKException(info[1])) end
@@ -1200,7 +1206,7 @@ for (gtsv, gttrf, gttrs, elty) in
             ccall(($(string(gtsv)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &n, &size(B,2), dl, d, du, B, &stride(B,2), info)
+                  &n, &size(B,2), dl, d, du, B, &max(1,stride(B,2)), info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
@@ -1244,7 +1250,7 @@ for (gtsv, gttrf, gttrs, elty) in
                    (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                   &trans, &n, &size(B,2), dl, d, du, du2, ipiv, B, &stride(B,2), info)
+                   &trans, &n, &size(B,2), dl, d, du, du2, ipiv, B, &max(1,stride(B,2)), info)
              if info[1] != 0 throw(LAPACKException(info[1])) end
              B
          end
@@ -1272,7 +1278,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                 ccall(($(string(orglq)),liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &size(A,1), &size(A,2), &k, A, &stride(A,2), tau, work, &lwork, info)
+                      &size(A,1), &size(A,2), &k, A, &max(1,stride(A,2)), tau, work, &lwork, info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0 
                     lwork = blas_int(real(work[1]))
@@ -1330,8 +1336,8 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                       (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &side, &trans, &m, &n, &k, A, &stride(A,2), tau,
-                      C, &stride(C,2), work, &lwork, info)
+                      &side, &trans, &m, &n, &k, A, &max(1,stride(A,2)), tau,
+                      C, &max(1,stride(C,2)), work, &lwork, info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0 
                     lwork = blas_int(real(work[1]))
@@ -1437,7 +1443,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             ccall(($(string(posv)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &uplo, &n, &size(B,2), A, &stride(A,2), B, &stride(B,2), info)
+                  &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), B, &max(1,stride(B,2)), info)
             if info[1] < 0 throw(LAPACKException(info[1])) end
             A, B, info[1]
         end
@@ -1452,10 +1458,12 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
         function potrf!(uplo::BlasChar, A::StridedMatrix{$elty})
             chkstride1(A)
             chksquare(A)
+            lda = max(1,stride(A,2))
+            if lda == 0 return A, 0 end
             info = Array(BlasInt, 1)
             ccall(($(string(potrf)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &uplo, &size(A,1), A, &stride(A,2), info)
+                  &uplo, &size(A,1), A, &lda, info)
             if info[1] < 0 throw(LAPACKException(info[1])) end
             A, info[1]
         end
@@ -1472,7 +1480,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             info = Array(BlasInt, 1)
             ccall(($(string(potri)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &uplo, &size(A,1), A, &stride(A,2), info)
+                  &uplo, &size(A,1), A, &max(1,stride(A,2)), info)
             if info[1] < 0 throw(LAPACKException(info[1])) end
             A, info[1]
         end
@@ -1485,13 +1493,18 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
         function potrs!(uplo::BlasChar, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(A, B)
             chksquare(A)
-            n    =  size(A,2)
+            n = size(A,2)
+            nrhs = size(B,2)
             if size(B,1) != n throw(DimensionMismatch("left and right hand sides do not fit")) end
+            lda = max(1,stride(A,2))
+            if lda == 0 || nrhs == 0 return B end
+            ldb = max(1,stride(B,2))
             info = Array(BlasInt, 1)
             ccall(($(string(potrs)),liblapack), Void,
-                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                   Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &uplo, &n, &size(B,2), A, &stride(A,2), B, &stride(B,2), info)
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, 
+                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                   &uplo, &n, &nrhs, A, 
+                   &lda, B, &ldb, info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
@@ -1514,7 +1527,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             ccall(($(string(pstrf)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$rtyp}, Ptr{$rtyp}, Ptr{BlasInt}),
-                  &uplo, &n, A, &stride(A,2), piv, rank, &tol, work, info)
+                  &uplo, &n, A, &max(1,stride(A,2)), piv, rank, &tol, work, info)
             if info[1] < 0 throw(LAPACKException(info[1])) end
             A, piv, rank[1], info[1]
         end
@@ -1542,7 +1555,7 @@ for (ptsv, pttrf, pttrs, elty, relty) in
             ccall(($(string(ptsv)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &n, &size(B,2), D, E, B, &stride(B,2), info)
+                  &n, &size(B,2), D, E, B, &max(1,stride(B,2)), info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
@@ -1580,7 +1593,7 @@ for (pttrs, elty, relty) in
             ccall(($(string(pttrs)),liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &n, &size(B,2), D, E, B, &stride(B,2), info)
+                  &n, &size(B,2), D, E, B, &max(1,stride(B,2)), info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
@@ -1606,7 +1619,7 @@ for (pttrs, elty, relty) in
             ccall(($(string(pttrs)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &uplo, &n, &size(B,2), D, E, B, &stride(B,2), info)
+                  &uplo, &n, &size(B,2), D, E, B, &max(1,stride(B,2)), info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
@@ -1630,7 +1643,7 @@ for (trtri, trtrs, elty) in
             chkstride1(A)
             m, n    = size(A)
             if m != n throw(DimensionMismatch("")) end
-            lda     = stride(A, 2)
+            lda     = max(1,stride(A, 2))
             info    = Array(BlasInt, 1)
             ccall(($(string(trtri)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -1655,8 +1668,8 @@ for (trtri, trtrs, elty) in
             ccall(($(string(trtrs)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &uplo, &trans, &diag, &n, &size(B,2), A, &stride(A,2),
-                  B, &stride(B,2), info)
+                  &uplo, &trans, &diag, &n, &size(B,2), A, &max(1,stride(A,2)),
+                  B, &max(1,stride(B,2)), info)
             if info[1] < 0 throw(LAPACKException(info[1])) end
             B, info[1]
         end
@@ -1840,7 +1853,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             ccall(($(string(syconv)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                  &uplo, &'C', &n, A, &stride(A,2), ipiv, work, info)
+                  &uplo, &'C', &n, A, &max(1,stride(A,2)), ipiv, work, info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             A, work
         end
@@ -1865,7 +1878,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
                 ccall(($(string(sysv)),liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2),
+                      &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)),
                       work, &lwork, info)
                 if info[1] < 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
@@ -1887,6 +1900,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             chksquare(A)
             n     = size(A,1)
             ipiv  = Array(BlasInt, n)
+            if n == 0 return A, ipiv, 0 end
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
@@ -1922,7 +1936,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
 #                 ccall(($(string(sytri)),liblapack), Void,
 #                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
 #                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-#                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
+#                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
 #                 if info[1] != 0 throw(LAPACKException(info[1])) end
 #                 if lwork < 0
 #                     lwork = blas_int(real(work[1]))
@@ -1947,7 +1961,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             ccall(($(string(sytri)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                  &uplo, &n, A, &stride(A,2), ipiv, work, info)
+                  &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             A
         end
@@ -1969,7 +1983,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             ccall(($(string(sytrs)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
+                  &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
@@ -1999,7 +2013,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             ccall(($(string(syconv)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                  &uplo, &'C', &n, A, &stride(A,2), ipiv, work, info)
+                  &uplo, &'C', &n, A, &max(1,stride(A,2)), ipiv, work, info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             A, work
         end
@@ -2024,7 +2038,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
                 ccall(($(string(hesv)),liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2),
+                      &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)),
                       work, &lwork, info)
                 if info[1] < 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
@@ -2054,7 +2068,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
                 ccall(($(string(hetrf)),liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
+                      &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
                 if info[1] < 0 throw(LAPACKException(info[1])) end
                 if info[1] > 0 throw(SingularException(info[1])) end
                 if lwork < 0
@@ -2083,7 +2097,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
 #                 ccall(($(string(hetri)),liblapack), Void,
 #                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
 #                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-#                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
+#                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
 #                 if info[1] != 0 throw(LAPACKException(info[1])) end
 #                 if lwork < 0
 #                     lwork = blas_int(real(work[1]))
@@ -2109,7 +2123,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             ccall(($(string(hetri)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                  &uplo, &n, A, &stride(A,2), ipiv, work, info)
+                  &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             A
         end
@@ -2131,7 +2145,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             ccall(($(string(hetrs)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
+                  &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
@@ -2163,7 +2177,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
                 ccall(($(string(sysv)),liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2),
+                      &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)),
                       work, &lwork, info)
                 if info[1] < 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
@@ -2193,7 +2207,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
                 ccall(($(string(sytrf)),liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
+                      &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
                 if info[1] < 0 throw(LAPACKException(info[1])) end
                 if info[1] > 0 throw(SingularException(info[1])) end
                 if lwork < 0
@@ -2222,7 +2236,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
 #                 ccall(($(string(sytri)),liblapack), Void,
 #                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
 #                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-#                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
+#                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
 #                 if info[1] != 0 throw(LAPACKException(info[1])) end
 #                 if lwork < 0
 #                     lwork = blas_int(real(work[1]))
@@ -2248,7 +2262,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             ccall(($(string(sytri)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                  &uplo, &n, A, &stride(A,2), ipiv, work, info)
+                  &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             A
         end
@@ -2270,7 +2284,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             ccall(($(string(sytrs)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                  &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
+                  &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
             if info[1] != 0 throw(LAPACKException(info[1])) end
             B
         end
@@ -2300,7 +2314,7 @@ for (syev, syevr, sygvd, elty) in
                 ccall(($(string(syev)),liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                       Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, info)
+                      &jobz, &uplo, &n, A, &max(1,stride(A,2)), W, work, &lwork, info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
@@ -2331,7 +2345,7 @@ for (syev, syevr, sygvd, elty) in
                 ldz = 1
                 Z = Array($elty, ldz, 0)
             elseif jobz == 'V'
-                ldz = n
+                ldz = max(1,n)
                 Z = Array($elty, ldz, n)
             else
                 error("jobz must be 'N' of 'V'")
@@ -2439,7 +2453,7 @@ for (syev, syevr, sygvd, elty, relty) in
                 ccall(($(string(syev)),liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                       Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
-                      &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, rwork, info)
+                      &jobz, &uplo, &n, A, &max(stride(A,2)), W, work, &lwork, rwork, info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
@@ -2569,13 +2583,6 @@ for (syev, syevr, sygvd, elty, relty) in
     end
 end
 
-#Find the leading dimension
-ld = x->max(1,stride(x,2))
-function validate(uplo)
-    if !(uplo=='U' || uplo=='L')
-        error(string("Invalid UPLO: must be 'U' or 'L' but you said", uplo))
-    end
-end
 ## (BD) Bidiagonal matrices - singular value decomposition
 for (bdsqr, relty, elty) in
     ((:dbdsqr_,:Float64,:Float64),
@@ -2590,13 +2597,13 @@ for (bdsqr, relty, elty) in
         function bdsqr!(uplo::BlasChar, d::Vector{$relty}, e_::Vector{$relty},
             vt::StridedMatrix{$elty}, u::StridedMatrix{$elty}, c::StridedMatrix{$elty})
 
-            validate(uplo)
+            if uplo == 'U' || uplo == 'L' || error(string("Invalid UPLO: must be 'U' or 'L' but you said", uplo)) end
             n = length(d)
             if length(e_) != n-1 throw(DimensionMismatch("bdsqr!")) end
-            ncvt, nru, ncc = size(vt)[2], size(u)[1], size(c)[2]
-            ldvt, ldu, ldc = ld(vt), ld(u), ld(c)
-            work=Array($elty, 4n)
-            info=Array(BlasInt,1)
+            ncvt, nru, ncc = size(vt, 2), size(u, 1), size(c, 2)
+            ldvt, ldu, ldc = max(1,stride(vt,2)), max(1,stride(u,2)), max(1,stride(c,2))
+            work = Array($elty, 4n)
+            info = Array(BlasInt,1)
 
             ccall(($(string(bdsqr)),liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -2629,7 +2636,7 @@ for (bdsdc, elty) in
         #      DOUBLE PRECISION   D( * ), E( * ), Q( * ), U( LDU, * ),
         #     $                   VT( LDVT, * ), WORK( * )
         function bdsdc!(uplo::BlasChar, compq::BlasChar, d::Vector{$elty}, e_::Vector{$elty})
-            validate(uplo)
+            if uplo == 'U' || uplo == 'L' || error(string("Invalid UPLO: must be 'U' or 'L' but you said", uplo)) end
             n, ldiq, ldq, ldu, ldvt = length(d), 1, 1, 1, 1
             if compq == 'N'
                 lwork = 6n
@@ -2759,7 +2766,7 @@ for (gehrd, elty) in
             chkstride1(A)
             chksquare(A)
             n = size(A, 1)
-            tau = Array($elty, n - 1)
+            tau = Array($elty, max(0,n - 1))
             work = Array($elty, 1)
             lwork = blas_int(-1)
             info = Array(BlasInt, 1)

@@ -113,7 +113,7 @@ function diagind(A::Matrix,k::Integer=0)
     m,n = size(A)
     if 0 < k < n
         return Range(k*m+1,m+1,min(m,n-k))
-    elseif 0 <= -k < m
+    elseif 0 <= -k <= m
         return Range(1-k,m+1,min(m+k,n))
     end
     throw(BoundsError())
@@ -523,9 +523,12 @@ end
 
 ## Moore-Penrose inverse
 function pinv{T<:BlasFloat}(A::StridedMatrix{T})
+    m = size(A, 1)
+    n = size(A, 2)
+    if m == 0 || n == 0 return Array(T, n, m) end
     SVD         = svdfact(A, true)
     Sinv        = zeros(T, length(SVD[:S]))
-    index       = SVD[:S] .> eps(real(one(T)))*max(size(A))*max(SVD[:S])
+    index       = SVD[:S] .> eps(real(one(T)))*max(m,n)*max(SVD[:S])
     Sinv[index] = 1.0 ./ SVD[:S][index]
     SVD[:Vt]'scale(Sinv, SVD[:U]')
 end
@@ -536,6 +539,7 @@ pinv(x::Number) = one(x)/x
 ## Basis for null space
 function null{T<:BlasFloat}(A::StridedMatrix{T})
     m,n = size(A)
+    if m == 0 || n == 0 return eye(T, n) end
     SVD = svdfact(A, false)
     if m == 0; return eye(T, n); end
     indstart = sum(SVD[:S] .> max(m,n)*max(SVD[:S])*eps(eltype(SVD[:S]))) + 1
