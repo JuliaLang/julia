@@ -91,8 +91,10 @@ length(mt::MethodTable) = (n = 0; while !is(d,()); n += 1; d = d.next; end; n)
 uncompressed_ast(l::LambdaStaticData) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
-disassemble(f::Function, types::Tuple, asm::Bool = false) =
-    print(ccall(:jl_dump_function, Any, (Any,Any,Bool), f, types, asm)::ByteString)
+code_llvm(f::Function, types::Tuple) = 
+    print(ccall(:jl_dump_function, Any, (Any,Any,Bool), f, types, false)::ByteString)
+code_native(f::Function,types::Tuple) = 
+    print(ccall(:jl_dump_function, Any, (Any,Any,Bool), f, types, true)::ByteString)
 
 function functionlocs(f::Function, types=(Any...))
     locs = Any[]
