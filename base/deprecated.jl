@@ -351,6 +351,17 @@ function amap(f::Function, A::AbstractArray, axis::Integer)
     return R
 end
 
+# Conditional usage of packages and modules
+function usingmodule(names::Symbol...)
+    warn_once("usingmodule is deprecated, use using instead")
+    eval(current_module(), Expr(:toplevel, Expr(:using, names...)))
+end
+function usingmodule(names::String)
+    warn_once("usingmodule is deprecated, use using instead")
+    usingmodule([symbol(name) for name in split(names,".")]...)
+end
+export usingmodule
+
 # discontinued functions
 
 function addprocs_scyld(np::Integer)

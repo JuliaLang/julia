@@ -337,9 +337,3 @@ function methodswith(io::IO, t::Type, showparents::Bool)
         end
     end
 end
-
-# Conditional usage of packages and modules
-usingmodule(names::Symbol...) = eval(current_module(), Expr(:toplevel, Expr(:using, names...)))
-usingmodule(names::String) = usingmodule([symbol(name) for name in split(names,".")]...)
-
-

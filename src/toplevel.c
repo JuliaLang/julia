@@ -273,6 +273,8 @@ static jl_module_t *eval_import_path(jl_array_t *args)
     return eval_import_path_(args, 0);
 }
 
+jl_value_t *jl_toplevel_eval_body(jl_array_t *stmts);
+
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 {
     //jl_show(ex);
@@ -377,7 +379,12 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
             ewc = 1;
         }
         else {
-            result = jl_interpret_toplevel_expr((jl_value_t*)ex);
+            if (ex->head == body_sym) {
+                result = jl_toplevel_eval_body(ex->args);
+            }
+            else {
+                result = jl_interpret_toplevel_expr((jl_value_t*)ex);
+            }
             JL_GC_POP();
             return result;
         }
