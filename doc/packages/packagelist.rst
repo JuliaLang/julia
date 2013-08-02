@@ -4,6 +4,36 @@
  Available Packages  
 ********************
 
+`ASCIIPlots <https://github.com/johnmyleswhite/ASCIIPlots.jl>`_
+_______________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
+     :target: https://github.com/johnmyleswhite
+
+  Current Version: ``0.0.0``  (updated: 2013-07-26) 
+
+  Generate simple plots as ASCII art in Julia 
+
+  Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: John Myles White
+        :target: https://github.com/johnmyleswhite
+
+----
+
 `AWS <https://github.com/amitmurthy/AWS.jl>`_
 _____________________________________________
 
@@ -41,6 +71,42 @@ _____________________________________________
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
+
+----
+
+`ApproxFun <https://github.com/dlfivefifty/ApproxFun>`_
+_______________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/69459897cbc341ab301fa1d7d2e3486a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: dlfivefifty
+     :target: https://github.com/dlfivefifty
+
+  Current Version: ``0.0.0``  (updated: 2013-07-15) 
+
+  Julia IFun Implementation 
+
+  Maintainer: `dlfivefifty <https://github.com/dlfivefifty>`_
+
+  Dependencies::
+
+      Winston        Any Version
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/69459897cbc341ab301fa1d7d2e3486a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: dlfivefifty
+        :target: https://github.com/dlfivefifty
+
+    .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: John Myles White
+        :target: https://github.com/johnmyleswhite
 
 ----
 
@@ -171,7 +237,7 @@ ___________________________________________________
      :alt: Keno Fischer
      :target: https://github.com/loladiro
 
-  Current Version: ``0.2.0``  (updated: 2013-06-15) 
+  Current Version: ``0.2.2``  (updated: 2013-07-31) 
 
   Tool for building binary dependencies for Julia modules 
 
@@ -179,6 +245,7 @@ ___________________________________________________
 
   Dependencies::
 
+      URIParser      Any Version
       julia          [v"0.2.0-"]
 
   Contributors:
@@ -200,6 +267,12 @@ ___________________________________________________
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
+
+    .. image:: https://secure.gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Miles Lubin
+        :target: https://github.com/mlubin
 
     .. image:: https://secure.gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -281,6 +354,36 @@ ___________________________________________________________________
 
 ----
 
+`CRC32 <https://github.com/fhs/CRC32.jl>`_
+__________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Fazlul Shahriar
+     :target: https://github.com/fhs
+
+  Current Version: ``0.0.0``  (updated: 2013-07-21) 
+
+  32-bit cyclic redundancy check (CRC-32) checksum implementation for Julia 
+
+  Maintainer: `Fazlul Shahriar <https://github.com/fhs>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Fazlul Shahriar
+        :target: https://github.com/fhs
+
+----
+
 `Cairo <https://github.com/JuliaLang/Cairo.jl>`_
 ________________________________________________
 
@@ -291,7 +394,7 @@ ________________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
-  Current Version: ``0.2.3``  (updated: 2013-07-03) 
+  Current Version: ``0.2.5``  (updated: 2013-08-01) 
 
   Bindings to the Cairo graphics library. 
 
@@ -305,17 +408,23 @@ ________________________________________________
 
   Contributors:
 
-    .. image:: https://secure.gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Viral B. Shah
-        :target: https://github.com/ViralBShah
+        :alt: Tim Holy
+        :target: https://github.com/timholy
 
     .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
+
+    .. image:: https://secure.gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Viral B. Shah
+        :target: https://github.com/ViralBShah
 
     .. image:: https://secure.gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -329,11 +438,17 @@ ________________________________________________
         :alt: Mike Nolta
         :target: https://github.com/nolta
 
-    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Tim Holy
-        :target: https://github.com/timholy
+        :alt: Jameson Nash
+        :target: https://github.com/vtjnash
+
+    .. image:: https://secure.gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Daniel Jones
+        :target: https://github.com/dcjones
 
     .. image:: https://secure.gravatar.com/avatar/afb7f86706c41da610daf216d60e59b9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -341,23 +456,17 @@ ________________________________________________
         :alt: Ron Rock
         :target: https://github.com/rsrock
 
-    .. image:: https://secure.gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Patrick O'Leary
-        :target: https://github.com/pao
-
     .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Jameson Nash
-        :target: https://github.com/vtjnash
+        :alt: Patrick O'Leary
+        :target: https://github.com/pao
 
     .. image:: https://secure.gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -370,12 +479,6 @@ ________________________________________________
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
-
-    .. image:: https://secure.gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Daniel Jones
-        :target: https://github.com/dcjones
 
     .. image:: https://secure.gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -419,6 +522,12 @@ ___________________________________________________________
         :alt: Tim Holy
         :target: https://github.com/timholy
 
+    .. image:: https://secure.gravatar.com/avatar/6453a62bda2e46cf7778a2b64a5a259b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Ivar Nesje
+        :target: https://github.com/ivarne
+
     .. image:: https://secure.gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
@@ -443,7 +552,7 @@ __________________________________________________
      :alt: Mike Nolta
      :target: https://github.com/nolta
 
-  Current Version: ``0.3.1``  (updated: 2013-06-24) 
+  Current Version: ``0.3.3``  (updated: 2013-07-15) 
 
   Calendar time package for Julia 
 
@@ -880,7 +989,7 @@ ________________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
-  Current Version: ``0.2.3``  (updated: 2013-06-19) 
+  Current Version: ``0.2.4``  (updated: 2013-07-27) 
 
   Basic color manipulation utilities. 
 
@@ -940,7 +1049,7 @@ __________________________________________________
      :alt: Daniel Jones
      :target: https://github.com/dcjones
 
-  Current Version: ``0.1.5``  (updated: 2013-07-10) 
+  Current Version: ``0.1.6``  (updated: 2013-07-17) 
 
   Declarative vector graphics 
 
@@ -972,6 +1081,12 @@ __________________________________________________
         :alt: Tim Holy
         :target: https://github.com/timholy
 
+    .. image:: https://secure.gravatar.com/avatar/4206b43cb025b0c1fd8cd9fa89dd6086?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: catawbasam
+        :target: https://github.com/catawbasam
+
     .. image:: https://secure.gravatar.com/avatar/1af2db0b26142fd0c7ab082f3d445f73?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
@@ -983,12 +1098,6 @@ __________________________________________________
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
-
-    .. image:: https://secure.gravatar.com/avatar/4206b43cb025b0c1fd8cd9fa89dd6086?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: catawbasam
-        :target: https://github.com/catawbasam
 
     .. image:: https://secure.gravatar.com/avatar/910a5ad5931aeda034b38c9658eaadf2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1007,6 +1116,12 @@ __________________________________________________
         :width: 40px
         :alt: Westley Argentum Hennigh
         :target: https://github.com/WestleyArgentum
+
+    .. image:: https://secure.gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: john verzani
+        :target: https://github.com/jverzani
 
 ----
 
@@ -1080,7 +1195,7 @@ _____________________________________________________
      :alt: Steven G. Johnson
      :target: https://github.com/stevengj
 
-  Current Version: ``0.1.2``  (updated: 2013-06-24) 
+  Current Version: ``1.0.0``  (updated: 2013-07-15) 
 
   One- and multi-dimensional adaptive integration routines for the Julia language 
 
@@ -1223,21 +1338,21 @@ _______________________________________________
 
 ----
 
-`DataFrames <https://github.com/HarlanH/DataFrames.jl>`_
-________________________________________________________
+`DataFrames <https://github.com/JuliaStats/DataFrames.jl>`_
+___________________________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/9f1a68b9e623be5da422b44e733fa8bc?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: Harlan Harris
-     :target: https://github.com/HarlanH
+     :alt: Julia Statistics
+     :target: https://github.com/JuliaStats
 
-  Current Version: ``0.3.6``  (updated: 2013-06-29) 
+  Current Version: ``0.3.8``  (updated: 2013-07-26) 
 
   library for working with tabular data in Julia 
 
-  Maintainer: `Harlan Harris <https://github.com/HarlanH>`_
+  Maintainer: `Julia Statistics <https://github.com/JuliaStats>`_
 
   Dependencies::
 
@@ -1289,17 +1404,17 @@ ________________________________________________________
         :alt: Viral B. Shah
         :target: https://github.com/ViralBShah
 
-    .. image:: https://secure.gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: milktrader
-        :target: https://github.com/milktrader
-
     .. image:: https://secure.gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
+
+    .. image:: https://secure.gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: milktrader
+        :target: https://github.com/milktrader
 
     .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1336,6 +1451,12 @@ ________________________________________________________
         :width: 40px
         :alt: Glen Hertz
         :target: https://github.com/GlenHertz
+
+    .. image:: https://secure.gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tanmay Mohapatra
+        :target: https://github.com/tanmaykm
 
     .. image:: https://secure.gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1403,17 +1524,17 @@ ________________________________________________________
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
+    .. image:: https://secure.gravatar.com/avatar/957fc8103c58ee9ee9a5d96c91b15e76?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Randy Zwitch
+        :target: https://github.com/randyzwitch
+
     .. image:: https://secure.gravatar.com/avatar/5ac7b1da0f2e9107b5020f88023a15e5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Simon Byrne
         :target: https://github.com/simonbyrne
-
-    .. image:: https://secure.gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Tanmay Mohapatra
-        :target: https://github.com/tanmaykm
 
 ----
 
@@ -1427,7 +1548,7 @@ _________________________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
-  Current Version: ``0.2.3``  (updated: 2013-04-21) 
+  Current Version: ``0.2.4``  (updated: 2013-07-27) 
 
   Julia implementation of Data structures 
 
@@ -1453,6 +1574,42 @@ _________________________________________________________________
 
 ----
 
+`Datetime <https://github.com/karbarcca/Datetime.jl>`_
+______________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Jacob Quinn
+     :target: https://github.com/karbarcca
+
+  Current Version: ``0.0.0``  (updated: 2013-07-27) 
+
+  A Date and DateTime implementation for Julia 
+
+  Maintainer: `Jacob Quinn <https://github.com/karbarcca>`_
+
+  Dependencies::
+
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jacob Quinn
+        :target: https://github.com/karbarcca
+
+    .. image:: https://secure.gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Mike Nolta
+        :target: https://github.com/nolta
+
+----
+
 `Debug <https://github.com/toivoh/Debug.jl>`_
 _____________________________________________
 
@@ -1463,7 +1620,7 @@ _____________________________________________
      :alt: toivoh
      :target: https://github.com/toivoh
 
-  Current Version: ``0.0.0``  (updated: 2013-06-19) 
+  Current Version: ``0.0.0``  (updated: 2013-07-20) 
 
   Prototype interactive debugger for Julia 
 
@@ -1715,31 +1872,49 @@ _____________________________________________________
 `Distributions <https://github.com/JuliaStats/Distributions.jl>`_
 _________________________________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/d41d8cd98f00b204e9800998ecf8427e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: JuliaStats
+     :alt: Julia Statistics
      :target: https://github.com/JuliaStats
 
-  Current Version: ``0.1.4``  (updated: 2013-06-23) 
+  Current Version: ``0.2.3``  (updated: 2013-07-29) 
 
-  A Julia package for probability distributions and associated funtions. 
+  A Julia package for probability distributions and associated functions. 
 
-  Maintainer: `JuliaStats <https://github.com/JuliaStats>`_
+  Maintainer: `Julia Statistics <https://github.com/JuliaStats>`_
 
   Dependencies::
 
+      NumericExtensionsAny Version
       Stats          Any Version
-      julia          [v"0.2.0-"]
 
   Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
 
     .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
+
+    .. image:: https://secure.gravatar.com/avatar/5ac7b1da0f2e9107b5020f88023a15e5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Simon Byrne
+        :target: https://github.com/simonbyrne
+
+    .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Douglas Bates
+        :target: https://github.com/dmbates
 
     .. image:: https://secure.gravatar.com/avatar/52ec3f52d9c7be45b398b9e8afa4ee8c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1753,29 +1928,11 @@ _________________________________________________________________
         :alt: Andreas Noack Jensen
         :target: https://github.com/andreasnoackjensen
 
-    .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Douglas Bates
-        :target: https://github.com/dmbates
-
-    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Dahua Lin
-        :target: https://github.com/lindahua
-
     .. image:: https://secure.gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
-
-    .. image:: https://secure.gravatar.com/avatar/198e9aeca5b6c25a3c2b03a6506de1a9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Martin O'Leary
-        :target: https://github.com/mewo2
 
     .. image:: https://secure.gravatar.com/avatar/25d0ed671b01595bb0a6c12bfa90c9b2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1783,23 +1940,29 @@ _________________________________________________________________
         :alt: gusl
         :target: https://github.com/gusl
 
+    .. image:: https://secure.gravatar.com/avatar/198e9aeca5b6c25a3c2b03a6506de1a9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Martin O'Leary
+        :target: https://github.com/mewo2
+
     .. image:: https://secure.gravatar.com/avatar/6cba33e8e7c69fa63f6ad386b7a958c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Jiahao Chen
         :target: https://github.com/jiahao
 
-    .. image:: https://secure.gravatar.com/avatar/b4035aa7c2e4ecf012eed26a63573f5b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Alan Edelman
-        :target: https://github.com/alanedelman
-
     .. image:: https://secure.gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
+
+    .. image:: https://secure.gravatar.com/avatar/b4035aa7c2e4ecf012eed26a63573f5b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Alan Edelman
+        :target: https://github.com/alanedelman
 
     .. image:: https://secure.gravatar.com/avatar/0b41d1f9e580cde53307166a47ae5300?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1940,6 +2103,12 @@ ____________________________________________________
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
+    .. image:: https://secure.gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Iain Dunning
+        :target: https://github.com/IainNZ
+
     .. image:: https://secure.gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
@@ -2024,7 +2193,7 @@ _________________________________________________________
      :alt: Zach Allaun
      :target: https://github.com/zachallaun
 
-  Current Version: ``0.0.2``  (updated: 2013-06-21) 
+  Current Version: ``0.1.0``  (updated: 2013-07-02) 
 
   Midje-like testing for Julia 
 
@@ -2220,6 +2389,30 @@ _____________________________________________________________________
 
 ----
 
+`GARCH <https://github.com/AndreyKolev/GARCH.jl>`_
+__________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/27541ea7ad0954012c655bc3d2dad17f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Andrey Kolev
+     :target: https://github.com/AndreyKolev
+
+  Current Version: ``0.0.0``  (updated: 2013-07-29) 
+
+  Julia GARCH package 
+
+  Maintainer: `Andrey Kolev <https://github.com/AndreyKolev>`_
+
+  Dependencies::
+
+      NLopt          Any Version
+
+  Contributors:
+
+----
+
 `GLFW <https://github.com/jayschwa/GLFW.jl>`_
 _____________________________________________
 
@@ -2255,23 +2448,25 @@ _____________________________________________
 `GLM <https://github.com/JuliaStats/GLM.jl>`_
 _____________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/d41d8cd98f00b204e9800998ecf8427e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: JuliaStats
+     :alt: Julia Statistics
      :target: https://github.com/JuliaStats
 
-  Current Version: ``0.0.0``  (updated: 2013-05-06) 
+  Current Version: ``0.2.0``  (updated: 2013-07-30) 
 
   Generalized linear models in Julia 
 
-  Maintainer: `JuliaStats <https://github.com/JuliaStats>`_
+  Maintainer: `Julia Statistics <https://github.com/JuliaStats>`_
 
   Dependencies::
 
-      DataFrames     Any Version
-      Distributions  Any Version
+      DataFrames     [v"0.3.6-"]
+      Distributions  [v"0.2.0-"]
+      NumericExtensions[v"0.2.12-"]
+      julia          [v"0.2.0-"]
 
   Contributors:
 
@@ -2485,7 +2680,7 @@ ________________________________________________
      :alt: Daniel Jones
      :target: https://github.com/dcjones
 
-  Current Version: ``0.1.3``  (updated: 2013-06-29) 
+  Current Version: ``0.1.7``  (updated: 2013-07-09) 
 
   Crafty statistical graphics for Julia. 
 
@@ -2523,6 +2718,12 @@ ________________________________________________
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
+
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
 
     .. image:: https://secure.gravatar.com/avatar/b1f06f732d86e562563db728b2875eb2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -2700,6 +2901,37 @@ ______________________________________________
 
 ----
 
+`GnuTLS <https://github.com/loladiro/GnuTLS.jl>`_
+_________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Keno Fischer
+     :target: https://github.com/loladiro
+
+  Current Version: ``0.0.0``  (updated: 2013-07-26) 
+
+  Transport Level Security for Julia Streams provided by GnuTLS 
+
+  Maintainer: `Keno Fischer <https://github.com/loladiro>`_
+
+  Dependencies::
+
+      BinDeps        [v"0.2.1-"]
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
+
+----
+
 `GoogleCharts <https://github.com/jverzani/GoogleCharts.jl>`_
 _____________________________________________________________
 
@@ -2733,21 +2965,21 @@ _____________________________________________________________
 
 ----
 
-`Graphs <https://github.com/johnmyleswhite/Graphs.jl>`_
-_______________________________________________________
+`Graphs <https://github.com/JuliaLang/Graphs.jl>`_
+__________________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: John Myles White
-     :target: https://github.com/johnmyleswhite
+     :alt: The Julia Language
+     :target: https://github.com/JuliaLang
 
   Current Version: ``0.2.3``  (updated: 2013-06-20) 
 
   Working with graphs in Julia 
 
-  Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
+  Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
   Dependencies::
 
@@ -2768,6 +3000,12 @@ _______________________________________________________
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
+    .. image:: https://secure.gravatar.com/avatar/5c06e9faa0d7bd205f81d10e825d7e4a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: nfoti
+        :target: https://github.com/nfoti
+
     .. image:: https://secure.gravatar.com/avatar/c58394486ebc197a62fa31dde80fd336?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
@@ -2780,11 +3018,17 @@ _______________________________________________________
         :alt: David
         :target: https://github.com/maxlikely
 
-    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/79e1bcfc1ed23b8964171191e9073545?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Tim Holy
-        :target: https://github.com/timholy
+        :alt: Matt Weiden
+        :target: https://github.com/mweiden
+
+    .. image:: https://secure.gravatar.com/avatar/62df30beab9c2a6f3fe3f86995e94387?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: David de Laat
+        :target: https://github.com/daviddelaat
 
     .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -2792,11 +3036,11 @@ _______________________________________________________
         :alt: Douglas Bates
         :target: https://github.com/dmbates
 
-    .. image:: https://secure.gravatar.com/avatar/62df30beab9c2a6f3fe3f86995e94387?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: David de Laat
-        :target: https://github.com/daviddelaat
+        :alt: Tim Holy
+        :target: https://github.com/timholy
 
     .. image:: https://secure.gravatar.com/avatar/c928b9b00cbc5133c4ae7a743cf96f10?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -2822,7 +3066,7 @@ ____________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.2.1``  (updated: 2013-06-26) 
+  Current Version: ``0.2.3``  (updated: 2013-08-01) 
 
   Interpolation and related operations on grids 
 
@@ -2840,6 +3084,12 @@ ____________________________________________
         :alt: Tim Holy
         :target: https://github.com/timholy
 
+    .. image:: https://secure.gravatar.com/avatar/5ac7b1da0f2e9107b5020f88023a15e5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Simon Byrne
+        :target: https://github.com/simonbyrne
+
 ----
 
 `Gtk <https://github.com/vtjnash/Gtk.jl>`_
@@ -2852,7 +3102,7 @@ __________________________________________
      :alt: Jameson Nash
      :target: https://github.com/vtjnash
 
-  Current Version: ``0.1.0``  (updated: 2013-06-15) 
+  Current Version: ``0.2.0``  (updated: 2013-07-24) 
 
   Julia interface to Gtk windowing toolkit. 
 
@@ -2860,7 +3110,7 @@ __________________________________________
 
   Dependencies::
 
-      Cairo          [v"0.0.1"]
+      Cairo          [v"0.2.2"]
       julia          [v"0.2.0-"]
 
   Contributors:
@@ -2926,7 +3176,7 @@ ____________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.2.3``  (updated: 2013-07-01) 
+  Current Version: ``0.2.5``  (updated: 2013-07-27) 
 
   HDF5 interface for the Julia language 
 
@@ -2974,7 +3224,7 @@ _____________________________________________
      :alt: Tanmay Mohapatra
      :target: https://github.com/tanmaykm
 
-  Current Version: ``0.0.0``  (updated: 2013-06-06) 
+  Current Version: ``0.0.0``  (updated: 2013-07-24) 
 
   HDFS interface for Julia as a wrapper over Hadoop HDFS library. 
 
@@ -2982,7 +3232,6 @@ _____________________________________________
 
   Dependencies::
 
-      ChainedVectors Any Version
       PTools         Any Version
       URLParse       Any Version
       julia          [v"0.2.0-"]
@@ -3027,6 +3276,37 @@ _________________________________________
 
 ----
 
+`HTTPClient <https://github.com/amitmurthy/HTTPClient.jl>`_
+___________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Amit Murthy
+     :target: https://github.com/amitmurthy
+
+  Current Version: ``0.0.0``  (updated: 2013-07-06) 
+
+   
+
+  Maintainer: `Amit Murthy <https://github.com/amitmurthy>`_
+
+  Dependencies::
+
+      LibCURL        Any Version
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Amit Murthy
+        :target: https://github.com/amitmurthy
+
+----
+
 `Hadamard <https://github.com/stevengj/Hadamard.jl>`_
 _____________________________________________________
 
@@ -3051,6 +3331,36 @@ _____________________________________________________
 
 ----
 
+`HopfieldNets <https://github.com/johnmyleswhite/HopfieldNets.jl>`_
+___________________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
+     :target: https://github.com/johnmyleswhite
+
+  Current Version: ``0.0.0``  (updated: 2013-07-28) 
+
+  Hopfield networks in Julia 
+
+  Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: John Myles White
+        :target: https://github.com/johnmyleswhite
+
+----
+
 `HttpCommon <https://github.com/hackerschool/HttpCommon.jl>`_
 _____________________________________________________________
 
@@ -3061,7 +3371,7 @@ _____________________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``  (updated: 2013-04-30) 
+  Current Version: ``0.0.1``  (updated: 2013-07-18) 
 
    
 
@@ -3069,8 +3379,7 @@ _____________________________________________________________
 
   Dependencies::
 
-      Calendar       Any Version
-      FactCheck      [v"0.0.1"]
+      None
 
   Contributors:
 
@@ -3080,17 +3389,23 @@ _____________________________________________________________
         :alt: Daniel Mendel
         :target: https://github.com/danielmendel
 
+    .. image:: https://secure.gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Zach Allaun
+        :target: https://github.com/zachallaun
+
     .. image:: https://secure.gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Leah Hanson
         :target: https://github.com/astrieanna
 
-    .. image:: https://secure.gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Zach Allaun
-        :target: https://github.com/zachallaun
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
 
 ----
 
@@ -3104,7 +3419,7 @@ _____________________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``  (updated: 2013-04-30) 
+  Current Version: ``0.0.2``  (updated: 2013-07-26) 
 
    
 
@@ -3112,7 +3427,7 @@ _____________________________________________________________
 
   Dependencies::
 
-      HttpCommon     Any Version
+      None
 
   Contributors:
 
@@ -3122,23 +3437,29 @@ _____________________________________________________________
         :alt: Daniel Mendel
         :target: https://github.com/danielmendel
 
-    .. image:: https://secure.gravatar.com/avatar/2aff223681817a0fadddb6a94a4860b8?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Chuck
-        :target: https://github.com/ChuckHa
-
     .. image:: https://secure.gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Leah Hanson
         :target: https://github.com/astrieanna
 
+    .. image:: https://secure.gravatar.com/avatar/2aff223681817a0fadddb6a94a4860b8?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Chuck
+        :target: https://github.com/ChuckHa
+
     .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
+
+    .. image:: https://secure.gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Zach Allaun
+        :target: https://github.com/zachallaun
 
     .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -3158,7 +3479,7 @@ _____________________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``  (updated: 2013-04-30) 
+  Current Version: ``0.0.1``  (updated: 2013-07-18) 
 
    
 
@@ -3188,6 +3509,12 @@ _____________________________________________________________
         :width: 40px
         :alt: Zach Allaun
         :target: https://github.com/zachallaun
+
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
 
     .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -3245,7 +3572,7 @@ ________________________________________
      :alt: Mike Nolta
      :target: https://github.com/nolta
 
-  Current Version: ``0.0.0``  (updated: 2013-03-08) 
+  Current Version: ``0.0.0``  (updated: 2013-07-03) 
 
   Julia wrapper for the International Components for Unicode (ICU) library 
 
@@ -3293,7 +3620,7 @@ ______________________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.0.0``  (updated: 2013-05-29) 
+  Current Version: ``0.0.2``  (updated: 2013-07-25) 
 
   Interactive display of images and movies 
 
@@ -3303,6 +3630,7 @@ ______________________________________________________
 
       Images         Any Version
       Tk             Any Version
+      Winston        Any Version
       julia          [v"0.2.0-"]
 
   Contributors:
@@ -3312,6 +3640,12 @@ ______________________________________________________
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
+
+    .. image:: https://secure.gravatar.com/avatar/afb7f86706c41da610daf216d60e59b9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Ron Rock
+        :target: https://github.com/rsrock
 
 ----
 
@@ -3325,7 +3659,7 @@ ________________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.2.4``  (updated: 2013-06-26) 
+  Current Version: ``0.2.7``  (updated: 2013-07-19) 
 
   An image library for Julia 
 
@@ -3553,21 +3887,21 @@ ________________________________________
 
 ----
 
-`JSON <https://github.com/aviks/JSON.jl>`_
-__________________________________________
+`JSON <https://github.com/JuliaLang/JSON.jl>`_
+______________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: Avik Sengupta
-     :target: https://github.com/aviks
+     :alt: The Julia Language
+     :target: https://github.com/JuliaLang
 
-  Current Version: ``0.1.0``  (updated: 2013-06-06) 
+  Current Version: ``0.1.1``  (updated: 2013-07-12) 
 
   JSON parsing and printing 
 
-  Maintainer: `Avik Sengupta <https://github.com/aviks>`_
+  Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
   Dependencies::
 
@@ -3640,6 +3974,45 @@ __________________________________________
         :width: 40px
         :alt: S Wade
         :target: https://github.com/swadey
+
+----
+
+`JuMP <https://github.com/IainNZ/JuMP.jl>`_
+___________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Iain Dunning
+     :target: https://github.com/IainNZ
+
+  Current Version: ``0.0.0``  (updated: 2013-07-20) 
+
+  Modelling language for Linear, Integer, and Quadratic Programming 
+
+  Maintainer: `Iain Dunning <https://github.com/IainNZ>`_
+
+  Dependencies::
+
+      Clp            Any Version
+      CoinMP         Any Version
+      MathProgBase   Any Version
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Miles Lubin
+        :target: https://github.com/mlubin
+
+    .. image:: https://secure.gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Iain Dunning
+        :target: https://github.com/IainNZ
 
 ----
 
@@ -3824,6 +4197,36 @@ ______________________________________________________________
 
 ----
 
+`LibCURL <https://github.com/amitmurthy/LibCURL.jl>`_
+_____________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Amit Murthy
+     :target: https://github.com/amitmurthy
+
+  Current Version: ``0.0.0``  (updated: 2013-07-06) 
+
+  Thin Julia wrapper of libCURL 
+
+  Maintainer: `Amit Murthy <https://github.com/amitmurthy>`_
+
+  Dependencies::
+
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Amit Murthy
+        :target: https://github.com/amitmurthy
+
+----
+
 `LibExpat <https://github.com/amitmurthy/LibExpat.jl>`_
 _______________________________________________________
 
@@ -3834,7 +4237,7 @@ _______________________________________________________
      :alt: Amit Murthy
      :target: https://github.com/amitmurthy
 
-  Current Version: ``0.0.0``  (updated: 2013-06-18) 
+  Current Version: ``0.0.0``  (updated: 2013-07-05) 
 
   Julia interface to libexpat 
 
@@ -3931,7 +4334,7 @@ ____________________________________________
      :alt: Simon Kornblith
      :target: https://github.com/simonster
 
-  Current Version: ``0.2.0``  (updated: 2013-06-18) 
+  Current Version: ``0.2.1``  (updated: 2013-06-29) 
 
   Julia module for reading MATLAB files 
 
@@ -4083,7 +4486,7 @@ _________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
-  Current Version: ``0.2.2``  (updated: 2013-06-27) 
+  Current Version: ``0.2.3``  (updated: 2013-07-20) 
 
   A set of functions to support the development of machine learning algorithms 
 
@@ -4156,7 +4559,7 @@ _______________________________________________________________________
       Stats          Any Version
       TimeSeries     Any Version
       UTF16          Any Version
-      julia          [v"0.1.0-", v"0.2.0-"]
+      julia          [v"0.1.0-",v"0.2.0-"]
 
   Contributors:
 
@@ -4165,45 +4568,6 @@ _______________________________________________________________________
         :width: 40px
         :alt: milktrader
         :target: https://github.com/milktrader
-
-----
-
-`MathProg <https://github.com/IainNZ/MathProg.jl>`_
-___________________________________________________
-
-  .. image:: https://secure.gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-     :height: 80px
-     :width: 80px
-     :align: right
-     :alt: Iain Dunning
-     :target: https://github.com/IainNZ
-
-  Current Version: ``0.0.0``  (updated: 2013-06-24) 
-
-  Modelling language for Linear, Integer, and Quadratic Programming 
-
-  Maintainer: `Iain Dunning <https://github.com/IainNZ>`_
-
-  Dependencies::
-
-      Clp            Any Version
-      CoinMP         Any Version
-      MathProgBase   Any Version
-      julia          [v"0.2.0-"]
-
-  Contributors:
-
-    .. image:: https://secure.gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Miles Lubin
-        :target: https://github.com/mlubin
-
-    .. image:: https://secure.gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Iain Dunning
-        :target: https://github.com/IainNZ
 
 ----
 
@@ -4259,7 +4623,7 @@ _____________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``  (updated: 2013-04-29) 
+  Current Version: ``0.0.1``  (updated: 2013-07-18) 
 
    
 
@@ -4267,7 +4631,7 @@ _____________________________________________________
 
   Dependencies::
 
-      HttpServer     Any Version
+      None
 
   Contributors:
 
@@ -4288,6 +4652,18 @@ _____________________________________________________
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
+
+    .. image:: https://secure.gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Zach Allaun
+        :target: https://github.com/zachallaun
+
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
 
 ----
 
@@ -4420,6 +4796,39 @@ __________________________________________________________
 
 ----
 
+`MixtureModels <https://github.com/lindahua/MixtureModels.jl>`_
+_______________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Dahua Lin
+     :target: https://github.com/lindahua
+
+  Current Version: ``0.1.1``  (updated: 2013-07-23) 
+
+  A Julia package for probabilistic mixture models 
+
+  Maintainer: `Dahua Lin <https://github.com/lindahua>`_
+
+  Dependencies::
+
+      Distributions  Any Version
+      MLBase         Any Version
+      NumericExtensionsAny Version
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
+
+----
+
 `Monads <https://github.com/pao/Monads.jl>`_
 ____________________________________________
 
@@ -4535,7 +4944,7 @@ _____________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``  (updated: 2013-04-30) 
+  Current Version: ``0.0.1``  (updated: 2013-07-18) 
 
   Sinatra-like micro framework for web programming in Julia 
 
@@ -4543,9 +4952,7 @@ _____________________________________________________
 
   Dependencies::
 
-      HttpCommon     Any Version
-      HttpServer     Any Version
-      Meddle         Any Version
+      None
 
   Contributors:
 
@@ -4573,17 +4980,23 @@ _____________________________________________________
         :alt: Nick Collins
         :target: https://github.com/ncollins
 
+    .. image:: https://secure.gravatar.com/avatar/6c72d7139086df4435a1067a66b02fff?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: thinkpad20
+        :target: https://github.com/thinkpad20
+
     .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://secure.gravatar.com/avatar/6c72d7139086df4435a1067a66b02fff?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: thinkpad20
-        :target: https://github.com/thinkpad20
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
 
     .. image:: https://secure.gravatar.com/avatar/2bf4378d854e6f9e8cdba9505b90520e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -4603,7 +5016,7 @@ _____________________________________________________
      :alt: john verzani
      :target: https://github.com/jverzani
 
-  Current Version: ``0.0.0``  (updated: 2013-05-12) 
+  Current Version: ``0.0.0``  (updated: 2013-07-09) 
 
   Port of mustache.js to julia 
 
@@ -4638,6 +5051,12 @@ _____________________________________________________
         :width: 40px
         :alt: Dirk Gadsden
         :target: https://github.com/dirk
+
+    .. image:: https://secure.gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Leah Hanson
+        :target: https://github.com/astrieanna
 
 ----
 
@@ -4727,6 +5146,36 @@ _______________________________________________
 
 ----
 
+`NPZ <https://github.com/fhs/NPZ.jl>`_
+______________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Fazlul Shahriar
+     :target: https://github.com/fhs
+
+  Current Version: ``0.0.0``  (updated: 2013-07-24) 
+
+  A Julia package that provides support for reading and writing Numpy .npy and .npz files 
+
+  Maintainer: `Fazlul Shahriar <https://github.com/fhs>`_
+
+  Dependencies::
+
+      ZipFile        [v"0.1.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Fazlul Shahriar
+        :target: https://github.com/fhs
+
+----
+
 `Named <https://github.com/HarlanH/Named.jl>`_
 ______________________________________________
 
@@ -4797,7 +5246,7 @@ _______________________________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
-  Current Version: ``0.2.7``  (updated: 2013-06-26) 
+  Current Version: ``0.2.12``  (updated: 2013-07-29) 
 
   Julia extensions to provide high performance computational support 
 
@@ -4814,6 +5263,12 @@ _______________________________________________________________________
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
+
+    .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Douglas Bates
+        :target: https://github.com/dmbates
 
     .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -4833,7 +5288,7 @@ ______________________________________________
      :alt: Jacob Quinn
      :target: https://github.com/karbarcca
 
-  Current Version: ``0.2.0``  (updated: 2013-06-03) 
+  Current Version: ``0.2.0``  (updated: 2013-07-26) 
 
   A low-level ODBC interface for the Julia programming language 
 
@@ -4842,6 +5297,7 @@ ______________________________________________
   Dependencies::
 
       DataFrames     [v"0.2.0"]
+      ProgressMeter  Any Version
       julia          [v"0.2.0-"]
 
   Contributors:
@@ -4966,7 +5422,7 @@ _____________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.1.5``  (updated: 2013-05-28) 
+  Current Version: ``0.1.6``  (updated: 2013-07-15) 
 
   Optimization functions for Julia 
 
@@ -5001,6 +5457,12 @@ _____________________________________________________
         :alt: Blake Johnson
         :target: https://github.com/blakejohnson
 
+    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
+
     .. image:: https://secure.gravatar.com/avatar/02abdd20ef026f24d96035a407912df0?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
@@ -5012,12 +5474,6 @@ _____________________________________________________
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
-
-    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Dahua Lin
-        :target: https://github.com/lindahua
 
 ----
 
@@ -5115,7 +5571,7 @@ ___________________________________________________
      :alt: Amit Murthy
      :target: https://github.com/amitmurthy
 
-  Current Version: ``0.0.0``  (updated: 2013-06-25) 
+  Current Version: ``0.0.0``  (updated: 2013-07-05) 
 
   Collection of utilities for parallel processing in Julia  
 
@@ -5247,7 +5703,7 @@ __________________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.2.1``  (updated: 2013-06-17) 
+  Current Version: ``0.2.3``  (updated: 2013-07-26) 
 
   Profilers for Julia 
 
@@ -5289,6 +5745,46 @@ __________________________________________________
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
+    .. image:: https://secure.gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Kevin Squire
+        :target: https://github.com/kmsquire
+
+----
+
+`ProfileView <https://github.com/timholy/ProfileView.jl>`_
+__________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Tim Holy
+     :target: https://github.com/timholy
+
+  Current Version: ``0.0.0``  (updated: 2013-08-01) 
+
+  Visualization of Julia profiling data 
+
+  Maintainer: `Tim Holy <https://github.com/timholy>`_
+
+  Dependencies::
+
+      Cairo          [v"0.2.5-"]
+      Color          [v"0.2.4-"]
+      ImageView      Any Version
+      Tk             Any Version
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tim Holy
+        :target: https://github.com/timholy
+
 ----
 
 `ProgressMeter <https://github.com/timholy/ProgressMeter.jl>`_
@@ -5318,6 +5814,12 @@ ______________________________________________________________
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
+
+    .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jacob Quinn
+        :target: https://github.com/karbarcca
 
 ----
 
@@ -5362,7 +5864,7 @@ _________________________________________________
      :alt: Steven G. Johnson
      :target: https://github.com/stevengj
 
-  Current Version: ``0.0.0``  (updated: 2013-06-24) 
+  Current Version: ``0.0.0``  (updated: 2013-07-18) 
 
   Package to call Python functions from the Julia language 
 
@@ -5380,23 +5882,29 @@ _________________________________________________
         :alt: Steven G. Johnson
         :target: https://github.com/stevengj
 
-    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Jameson Nash
-        :target: https://github.com/vtjnash
-
     .. image:: https://secure.gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
+    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jameson Nash
+        :target: https://github.com/vtjnash
+
     .. image:: https://secure.gravatar.com/avatar/fa3b781987ef53c4d3b8397f2239e519?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Diego Javier Zea
         :target: https://github.com/diegozea
+
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
 
 ----
 
@@ -5430,6 +5938,12 @@ _________________________________________________
         :alt: Junfeng Li
         :target: https://github.com/autozimu
 
+    .. image:: https://secure.gravatar.com/avatar/5c06e9faa0d7bd205f81d10e825d7e4a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: nfoti
+        :target: https://github.com/nfoti
+
 ----
 
 `PySide <https://github.com/jverzani/PySide.jl>`_
@@ -5442,7 +5956,7 @@ _________________________________________________
      :alt: john verzani
      :target: https://github.com/jverzani
 
-  Current Version: ``0.0.0``  (updated: 2013-06-18) 
+  Current Version: ``0.0.0``  (updated: 2013-07-18) 
 
   julia interface for accessing Qt via PyCall and PySide 
 
@@ -5583,7 +6097,7 @@ _____________________________________________
 
   Current Version: ``0.0.0``  (updated: 2013-06-17) 
 
-   
+  Pure-julia REPL implementation 
 
   Maintainer: `Keno Fischer <https://github.com/loladiro>`_
 
@@ -5599,6 +6113,12 @@ _____________________________________________
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
+
+    .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Stefan Karpinski
+        :target: https://github.com/StefanKarpinski
 
 ----
 
@@ -5635,6 +6155,46 @@ _____________________________________________________________
         :width: 40px
         :alt: Viral B. Shah
         :target: https://github.com/ViralBShah
+
+----
+
+`RPMmd <https://github.com/vtjnash/RPMmd.jl>`_
+______________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Jameson Nash
+     :target: https://github.com/vtjnash
+
+  Current Version: ``0.0.3``  (updated: 2013-07-07) 
+
+  RPM-md processing library 
+
+  Maintainer: `Jameson Nash <https://github.com/vtjnash>`_
+
+  Dependencies::
+
+      HTTPClient     [v"0.0.0"]
+      LibExpat       [v"0.0.0"]
+      URLParse       [v"0.0.0"]
+      Zlib           [v"0.0.0"]
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jameson Nash
+        :target: https://github.com/vtjnash
+
+    .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Amit Murthy
+        :target: https://github.com/amitmurthy
 
 ----
 
@@ -5677,6 +6237,36 @@ _______________________________________________________________
 
 ----
 
+`RdRand <https://github.com/SamChill/RdRand.jl>`_
+_________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/76dcb63fadbea9db73d6309005165661?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Sam Chill
+     :target: https://github.com/SamChill
+
+  Current Version: ``0.0.0``  (updated: 2013-07-18) 
+
+   
+
+  Maintainer: `Sam Chill <https://github.com/SamChill>`_
+
+  Dependencies::
+
+      RNGTest        Any Version
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/76dcb63fadbea9db73d6309005165661?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Sam Chill
+        :target: https://github.com/SamChill
+
+----
+
 `Readline <https://github.com/loladiro/Readline.jl>`_
 _____________________________________________________
 
@@ -5705,6 +6295,38 @@ _____________________________________________________
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
+
+----
+
+`Regression <https://github.com/lindahua/Regression.jl>`_
+_________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Dahua Lin
+     :target: https://github.com/lindahua
+
+  Current Version: ``0.0.0``  (updated: 2013-07-06) 
+
+  Algorithms for regression analysis (e.g. linear regression and logistic regression) 
+
+  Maintainer: `Dahua Lin <https://github.com/lindahua>`_
+
+  Dependencies::
+
+      NumericExtensionsAny Version
+      Optim          Any Version
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
 
 ----
 
@@ -5814,7 +6436,7 @@ ___________________________________________________________
      :alt: Xiao He
      :target: https://github.com/mrxiaohe
 
-  Current Version: ``0.0.0``  (updated: 2013-06-29) 
+  Current Version: ``0.0.0``  (updated: 2013-06-30) 
 
   A collection of robust statistical tests 
 
@@ -5928,6 +6550,43 @@ ____________________________________________
         :width: 40px
         :alt: Robert J. Ennis
         :target: https://github.com/rennis250
+
+----
+
+`SQLite <https://github.com/karbarcca/SQLite.jl>`_
+__________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Jacob Quinn
+     :target: https://github.com/karbarcca
+
+  Current Version: ``0.1.0``  (updated: 2013-06-20) 
+
+  A Julia interface to the Sqlite library and support for operations on DataFrames 
+
+  Maintainer: `Jacob Quinn <https://github.com/karbarcca>`_
+
+  Dependencies::
+
+      DataFrames     [v"0.2.0"]
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jacob Quinn
+        :target: https://github.com/karbarcca
+
+    .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: John Myles White
+        :target: https://github.com/johnmyleswhite
 
 ----
 
@@ -6111,34 +6770,27 @@ ___________________________________________________
 
 ----
 
-`Sqlite <https://github.com/karbarcca/SQLite.jl>`_
-__________________________________________________
+`Soundex <https://github.com/johnmyleswhite/Soundex.jl>`_
+_________________________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: Jacob Quinn
-     :target: https://github.com/karbarcca
+     :alt: John Myles White
+     :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.1.0``  (updated: 2013-06-20) 
+  Current Version: ``0.0.0``  (updated: 2013-07-08) 
 
-  A Julia interface to the Sqlite library and support for operations on DataFrames 
+  The Soundex algorithm in Julia 
 
-  Maintainer: `Jacob Quinn <https://github.com/karbarcca>`_
+  Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
   Dependencies::
 
-      DataFrames     [v"0.2.0"]
-      julia          [v"0.2.0-"]
+      None
 
   Contributors:
-
-    .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Jacob Quinn
-        :target: https://github.com/karbarcca
 
     .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -6151,18 +6803,18 @@ __________________________________________________
 `Stats <https://github.com/JuliaStats/Stats.jl>`_
 _________________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/d41d8cd98f00b204e9800998ecf8427e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: JuliaStats
+     :alt: Julia Statistics
      :target: https://github.com/JuliaStats
 
-  Current Version: ``0.2.3``  (updated: 2013-06-14) 
+  Current Version: ``0.2.6``  (updated: 2013-07-22) 
 
   Basic statistics for Julia 
 
-  Maintainer: `JuliaStats <https://github.com/JuliaStats>`_
+  Maintainer: `Julia Statistics <https://github.com/JuliaStats>`_
 
   Dependencies::
 
@@ -6298,7 +6950,7 @@ _______________________________________________
      :alt: john verzani
      :target: https://github.com/jverzani
 
-  Current Version: ``0.2.0``  (updated: 2013-06-12) 
+  Current Version: ``0.2.0``  (updated: 2013-07-22) 
 
   Start of Julia interface to SymPy via PyCall 
 
@@ -6375,7 +7027,7 @@ _______________________________________________________
 
   Current Version: ``0.0.0``  (updated: 2013-06-17) 
 
-   
+  Terminal Interfaces for Julia 
 
   Maintainer: `Keno Fischer <https://github.com/loladiro>`_
 
@@ -6484,7 +7136,7 @@ ___________________________________________________________
       Stats          Any Version
       TimeSeries     Any Version
       UTF16          Any Version
-      julia          [v"0.1.0-", v"0.2.0-"]
+      julia          [v"0.1.0-",v"0.2.0-"]
 
   Contributors:
 
@@ -6512,7 +7164,7 @@ ___________________________________________________________
      :alt: milktrader
      :target: https://github.com/milktrader
 
-  Current Version: ``0.0.0``  (updated: 2013-02-15) 
+  Current Version: ``0.0.0``  (updated: 2013-04-10) 
 
   Time series toolkit for Julia 
 
@@ -6524,7 +7176,7 @@ ___________________________________________________________
       DataFrames     Any Version
       Stats          Any Version
       UTF16          Any Version
-      julia          [v"0.1.0-", v"0.2.0-"]
+      julia          [v"0.1.0-",v"0.2.0-"]
 
   Contributors:
 
@@ -6552,7 +7204,7 @@ __________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
-  Current Version: ``0.2.2``  (updated: 2013-06-21) 
+  Current Version: ``0.2.4``  (updated: 2013-08-01) 
 
   Julia interface to Tk windowing toolkit. 
 
@@ -6560,7 +7212,7 @@ __________________________________________
 
   Dependencies::
 
-      BinDeps        Any Version
+      BinDeps        [v"0.2.2-"]
       Cairo          Any Version
 
   Contributors:
@@ -6577,17 +7229,17 @@ __________________________________________
         :alt: john verzani
         :target: https://github.com/jverzani
 
-    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Tim Holy
-        :target: https://github.com/timholy
-
     .. image:: https://secure.gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
+
+    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tim Holy
+        :target: https://github.com/timholy
 
     .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -6600,6 +7252,12 @@ __________________________________________
         :width: 40px
         :alt: Ron Rock
         :target: https://github.com/rsrock
+
+    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jameson Nash
+        :target: https://github.com/vtjnash
 
     .. image:: https://secure.gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -6686,7 +7344,7 @@ _________________________________________________________________________
       Stats          Any Version
       TimeSeries     Any Version
       UTF16          Any Version
-      julia          [v"0.1.0-", v"0.2.0-"]
+      julia          [v"0.1.0-",v"0.2.0-"]
 
   Contributors:
 
@@ -6725,6 +7383,72 @@ ______________________________________________
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
+
+----
+
+`URIParser <https://github.com/loladiro/URIParser.jl>`_
+_______________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Keno Fischer
+     :target: https://github.com/loladiro
+
+  Current Version: ``0.0.0``  (updated: 2013-07-12) 
+
+  Pure julia URI parser 
+
+  Maintainer: `Keno Fischer <https://github.com/loladiro>`_
+
+  Dependencies::
+
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
+
+    .. image:: https://secure.gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tanmay Mohapatra
+        :target: https://github.com/tanmaykm
+
+----
+
+`URITemplate <https://github.com/loladiro/URITemplate.jl>`_
+___________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Keno Fischer
+     :target: https://github.com/loladiro
+
+  Current Version: ``0.0.0``  (updated: 2013-07-15) 
+
+  RFC6570 URI templates for Julia 
+
+  Maintainer: `Keno Fischer <https://github.com/loladiro>`_
+
+  Dependencies::
+
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
 
 ----
 
@@ -6804,7 +7528,7 @@ ______________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.0.0``  (updated: 2013-05-16) 
+  Current Version: ``0.2.0``  (updated: 2013-07-29) 
 
   Infrastructure for handling physical units for the Julia programming language 
 
@@ -6812,7 +7536,7 @@ ______________________________________________
 
   Dependencies::
 
-      None
+      julia          [v"0.2.0-"]
 
   Contributors:
 
@@ -6873,7 +7597,7 @@ ______________________________________________
   Dependencies::
 
       Options        Any Version
-      julia          [v"0.1.0-", v"0.2.0-"]
+      julia          [v"0.1.0-",v"0.2.0-"]
 
   Contributors:
 
@@ -6895,7 +7619,7 @@ _____________________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``  (updated: 2013-04-30) 
+  Current Version: ``0.0.1``  (updated: 2013-07-18) 
 
    
 
@@ -6903,8 +7627,7 @@ _____________________________________________________________
 
   Dependencies::
 
-      HttpCommon     Any Version
-      HttpServer     Any Version
+      None
 
   Contributors:
 
@@ -6926,6 +7649,18 @@ _____________________________________________________________
         :alt: Zach Allaun
         :target: https://github.com/zachallaun
 
+    .. image:: https://secure.gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Daniel Jones
+        :target: https://github.com/dcjones
+
+    .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Stefan Karpinski
+        :target: https://github.com/StefanKarpinski
+
 ----
 
 `Winston <https://github.com/nolta/Winston.jl>`_
@@ -6938,7 +7673,7 @@ ________________________________________________
      :alt: Mike Nolta
      :target: https://github.com/nolta
 
-  Current Version: ``0.3.0``  (updated: 2013-06-29) 
+  Current Version: ``0.3.0``  (updated: 2013-07-15) 
 
   2D plotting for Julia 
 
@@ -7032,7 +7767,7 @@ ____________________________________________
      :alt: Daniel Jones
      :target: https://github.com/dcjones
 
-  Current Version: ``0.1.0``  (updated: 2013-06-23) 
+  Current Version: ``0.1.3``  (updated: 2013-07-22) 
 
   parse yer yamls 
 
@@ -7055,21 +7790,21 @@ ____________________________________________
 
 ----
 
-`ZMQ <https://github.com/aviks/ZMQ.jl>`_
-________________________________________
+`ZMQ <https://github.com/JuliaLang/ZMQ.jl>`_
+____________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: Avik Sengupta
-     :target: https://github.com/aviks
+     :alt: The Julia Language
+     :target: https://github.com/JuliaLang
 
   Current Version: ``0.0.0``  (updated: 2013-04-13) 
 
   Julia interface to ZMQ 
 
-  Maintainer: `Avik Sengupta <https://github.com/aviks>`_
+  Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
   Dependencies::
 
@@ -7083,11 +7818,23 @@ ________________________________________
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
+
     .. image:: https://secure.gravatar.com/avatar/645b9a973f09e98d38b94955a980c9d5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Junfeng Li
         :target: https://github.com/autozimu
+
+    .. image:: https://secure.gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Steven G. Johnson
+        :target: https://github.com/stevengj
 
     .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -7103,6 +7850,37 @@ ________________________________________
 
 ----
 
+`ZipFile <https://github.com/fhs/ZipFile.jl>`_
+______________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Fazlul Shahriar
+     :target: https://github.com/fhs
+
+  Current Version: ``0.1.0``  (updated: 2013-07-24) 
+
+  Read/Write ZIP file archives in Julia 
+
+  Maintainer: `Fazlul Shahriar <https://github.com/fhs>`_
+
+  Dependencies::
+
+      CRC32          Any Version
+      Zlib           [v"0.1.1-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Fazlul Shahriar
+        :target: https://github.com/fhs
+
+----
+
 `Zlib <https://github.com/dcjones/Zlib.jl>`_
 ____________________________________________
 
@@ -7113,7 +7891,7 @@ ____________________________________________
      :alt: Daniel Jones
      :target: https://github.com/dcjones
 
-  Current Version: ``0.0.0``  (updated: 2013-03-12) 
+  Current Version: ``0.1.1``  (updated: 2013-07-22) 
 
   zlib bindings for Julia 
 
@@ -7136,6 +7914,12 @@ ____________________________________________
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
+
+    .. image:: https://secure.gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Fazlul Shahriar
+        :target: https://github.com/fhs
 
 ----
 
@@ -7169,35 +7953,5 @@ _________________________________________________
 
 ----
 
-`libCURL <https://github.com/amitmurthy/libCURL.jl>`_
-_____________________________________________________
-
-  .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-     :height: 80px
-     :width: 80px
-     :align: right
-     :alt: Amit Murthy
-     :target: https://github.com/amitmurthy
-
-  Current Version: ``0.0.0``  (updated: 2013-06-26) 
-
-  Thin Julia wrapper of libCURL 
-
-  Maintainer: `Amit Murthy <https://github.com/amitmurthy>`_
-
-  Dependencies::
-
-      julia          [v"0.2.0-"]
-
-  Contributors:
-
-    .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Amit Murthy
-        :target: https://github.com/amitmurthy
-
-----
-
-.. footer: 180 packages, generated 1 Jul 2013 17:32:26 GMT+01:00 
+.. footer: 200 packages, generated 2 Aug 2013 12:08:40 GMT+05:30 
 
