@@ -349,7 +349,7 @@ end
 function (\){T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
     ar = abs(A.hh[1])
     nr = min(size(A.hh))
-    if ar != 0 || error("Left hand side is zero") end
+    if ar == 0 return zeros(T, length(A.tau), size(B, 2)), 0 end
     rnk = 1
     xmin = ones(T, nr)
     xmax = ones(T, nr)

@@ -157,6 +157,17 @@ type Foo_{T} x::Foo_{Int} end
 type Circ_{T} x::Circ_{T} end
 @test is(Circ_{Int}, Circ_{Int}.types[1])
 
+# issue #3890
+type A3890{T1}
+    x::Matrix{Complex{T1}}
+end
+@test A3890{Float64}.types[1] === Array{Complex{Float64},2}
+# make sure the field type Matrix{Complex{T1}} isn't cached
+type B3890{T2}
+    x::Matrix{Complex{T2}}
+end
+@test B3890{Float64}.types[1] === Array{Complex{Float64},2}
+
 # issue #786
 type Node{T}
     v::Vector{Node}
@@ -870,3 +881,20 @@ while(all([false for idx in 1:10]))
     x3789 = 1
 end
 @test x3789 == 0
+
+# issue #3852
+function f3852()
+    local x
+    for i = 1:10
+        x = identity
+    end
+    x("hi")
+end
+@test f3852() == "hi"
+
+# issue #3821
+function f3821()
+    p = []
+    [x for x in p]
+end
+@test isa(f3821(), Array)

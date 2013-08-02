@@ -13,16 +13,20 @@ spent on individual line(s).  The most common usage is to identify
 profiler
 <http://en.wikipedia.org/wiki/Profiling_(computer_programming)>`_.  It
 works by periodically taking a backtrace during the execution of any
-task. Each backtrace captures the the currently-running function and
+task. Each backtrace captures the currently-running function and
 line number, plus the complete chain of function calls that led to
 this line, and hence is a "snapshot" of the current state of
-execution.  If you find that a particular line appears frequently in
-the set of backtraces, you might suspect that much of the run-time is
-spent on this line (and therefore is a bottleneck in your code).
+execution.
 
-These snapshots do not provide complete line-by-line coverage, because
-they occur at intervals (by default, 1 ms). However, this design has
-important strengths:
+If much of your run time is spent executing a particular line of code,
+this line will show up frequently in the set of all backtraces.  In
+other words, the "cost" of a given line---or really, the cost of the
+sequence of function calls up to and including this line---is
+proportional to how often it appears in the set of all backtraces.
+
+A sampling profiler does not provide complete line-by-line coverage,
+because the backtraces occur at intervals (by default, 1 ms). However,
+this design has important strengths:
 
 - You do not have to make any modifications to your code to take
   timing measurements (in contrast to the alternative `instrumenting
@@ -31,6 +35,9 @@ important strengths:
   and Fortran libraries
 - By running "infrequently" there is very little performance overhead;
   while profiling, your code will run at nearly native speed.
+
+For these reasons, it's recommended that you try using the built-in
+sampling profiler before considering any alternatives.
 
 Basic usage
 -----------
@@ -82,7 +89,8 @@ when you launch julia.  If you examine line 373 of ``client.jl``,
 you'll see that (at the time of this writing) it calls ``run_repl``,
 mentioned on the second line. This in turn calls ``eval_user_input``.
 These are the functions in ``client.jl`` that interpret what you type
-at the REPL, which is how we launched ``@profile``.  The next line
+at the REPL, and since we're working interactively these functions
+were invoked when we entered ``@profile myfunc()``.  The next line
 reflects actions taken in the ``@profile`` macro.
 
 The first line shows that 23 backtraces were taken at line 373 of
@@ -105,8 +113,8 @@ this line. Below that, you can see a call to
 ``rand`` function listed explicitly: that's because ``rand`` is *inlined*,
 and hence doesn't appear in the backtraces.
 
-A little further down, you see
-::
+A little further down, you see::
+
    15 none; myfunc; line: 3
 
 Line 3 of ``myfunc`` contains the call to ``max``, and there were 15
@@ -136,7 +144,10 @@ more samples::
 
 In general, if you have ``N`` samples collected at a line, you can
 expect an uncertainty on the order of ``sqrt(N)`` (barring other
-sources of noise, like how busy the computer is with other tasks).
+sources of noise, like how busy the computer is with other tasks). The
+major exception to this rule is garbage-collection, which runs
+infrequently but tends to be quite expensive. Below you'll see how you
+can detect such events.
 
 This illustrates the default "tree" dump; an alternative is the "flat"
 dump, which accumulates counts independent of their nesting::
@@ -198,33 +209,46 @@ Let's discuss these arguments in order:
   default that is obtained from ``Profile.fetch()``, which pulls out
   the backtraces from a pre-allocated buffer. For example, if you want
   to profile the profiler, you could say::
+
      data = copy(Profile.fetch())
      Profile.clear()
      @profile Profile.print(STDOUT, data) # Prints the previous results
      Profile.print()                      # Prints results from Profile.print()
+
 - The first named argument, ``format``, was introduced above. The
   possible choices are ``:tree`` and ``:flat``.
-- ``C``, if set to ``true``, allows you to even see the calls to C
+- ``C``, if set to ``true``, allows you to see even the calls to C
   code.  Try running the introductory example with ``Profile.print(C =
   true)``. This can be extremely helpful in deciding whether it's
   Julia code or C code that is causing a bottleneck; setting
   ``C=true`` also improves the interpretability of the nesting, at
-  some cost in length.
+  the cost of longer profile dumps.
 - Some lines of code contain multiple operations; for example, ``s +=
   A[i]`` contains both an array reference (``A[i]``) and a sum
   operation.  These correspond to different lines in the generated
   machine code, and hence there may be two or more different addresses
   captured during backtraces on this line.  ``combine=true`` lumps
-  them together, and is probably what you usually want, but you can
+  them together, and is probably what you typically want, but you can
   generate an output separately for each unique instruction pointer
   with ``combine=false``.
 - ``cols`` allows you to control the number of columns that you are
   willing to use for display.  When the text would be wider than the
-  display, file/function names are sometimes truncated (with ``...``),
-  and indentation is truncated (denoted by a ``+n`` at the beginning,
+  display, you might see output like this::
+
+                                33 inference.jl; abstract_call; line: 645
+                                  33 inference.jl; abstract_call; line: 645
+                                    33 ...rence.jl; abstract_call_gf; line: 567
+                                       33 ...nce.jl; typeinf; line: 1201
+                                     +1 5  ...nce.jl; ...t_interpret; line: 900
+                                     +3 5 ...ence.jl; abstract_eval; line: 758
+                                     +4 5 ...ence.jl; ...ct_eval_call; line: 733
+                                     +6 5 ...ence.jl; abstract_call; line: 645
+
+  File/function names are sometimes truncated (with ``...``),
+  and indentation is truncated with a ``+n`` at the beginning,
   where ``n`` is the number of extra spaces that would have been
-  inserted, had there been room). If you want a very complete profile
-  in deeply-nested code, often a good idea is to save to a file and
+  inserted, had there been room. If you want a complete profile
+  of deeply-nested code, often a good idea is to save to a file and
   use a very wide ``cols`` setting::
 
     s = open("/tmp/prof.txt","w")
@@ -260,3 +284,64 @@ setting is ``delay = 0.001``.  Of course, you can decrease the delay
 as well as increase it; however, the overhead of profiling grows once
 the delay becomes similar to the amount of time needed to take a
 backtrace (~30 microseconds on the author's laptop).
+
+Function reference
+------------------
+
+.. currentmodule:: Base
+
+.. function:: @profile
+
+   ``@profile <expression>`` runs your expression while taking
+   periodic backtraces.  These are appended to an internal buffer of
+   backtraces.
+
+.. currentmodule:: Base.Profile
+
+.. function:: clear()
+
+   Clear any existing backtraces from the internal buffer.
+
+.. function:: print([io::IO = STDOUT,] [data::Vector]; format = :tree, C = false, combine = true, cols = tty_cols())
+
+   Prints profiling results to ``io`` (by default, ``STDOUT``). If you
+   do not supply a ``data`` vector, the internal buffer of accumulated
+   backtraces will be used.  ``format`` can be ``:tree`` or
+   ``:flat``. If ``C==true``, backtraces from C and Fortran code are
+   shown. ``combine==true`` merges instruction pointers that
+   correspond to the same line of code.  ``cols`` controls the width
+   of the display.
+
+.. function:: print([io::IO = STDOUT,] data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
+
+   Prints profiling results to ``io``. This variant is used to examine
+   results exported by a previous call to ``Profile.retrieve()``.
+   Supply the vector ``data`` of backtraces and a dictionary
+   ``lidict`` of line information.
+
+.. function:: init(n::Integer, delay::Float64)
+
+   Configure the ``delay`` between backtraces (measured in seconds),
+   and the number ``n`` of instruction pointers that may be
+   stored. Each instruction pointer corresponds to a single line of
+   code; backtraces generally consist of a long list of instruction
+   pointers. Default settings are ``n=10^6`` and ``delay=0.001``.
+
+.. function:: fetch() -> data
+
+   Returns a reference to the internal buffer of backtraces. Note that
+   subsequent operations, like ``Profile.clear()``, can affect
+   ``data`` unless you first make a copy. Note that the values in
+   ``data`` have meaning only on this machine in the current session,
+   because it depends on the exact memory addresses used in
+   JIT-compiling. This function is primarily for internal use;
+   ``Profile.retrieve()`` may be a better choice for most users.
+
+.. function:: retrieve(;C = false) -> data, lidict
+
+   "Exports" profiling results in a portable format, returning the set
+   of all backtraces (``data``) and a dictionary that maps the
+   (session-specific) instruction pointers in ``data`` to ``LineInfo``
+   values that store the file name, function name, and line
+   number. This function allows you to save profiling results for
+   future analysis.

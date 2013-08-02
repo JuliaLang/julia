@@ -393,7 +393,7 @@ install-readline: $(READLINE_OBJ_TARGET)
 
 ## LIBUV ##
 
-UV_SRC_TARGET = libuv/libuv.a
+UV_SRC_TARGET = libuv/.libs/libuv.a
 UV_OBJ_TARGET = $(BUILD)/lib/libuv.a
 
 libuv/configure:
@@ -422,7 +422,7 @@ endif
 	echo 1 > $@
 $(UV_OBJ_TARGET): $(UV_SRC_TARGET)
 	$(MAKE) -C libuv install
-	$(INSTALL_NAME_CMD)libuv.dylib $@
+	$(INSTALL_NAME_CMD)libuv.dylib $(BUILD)/lib/libuv.dylib
 
 clean-uv:
 	-$(MAKE) -C libuv clean
@@ -484,6 +484,7 @@ install-pcre: $(PCRE_OBJ_TARGET)
 ## Grisu floating-point printing library ##
 
 GRISU_OPTS = $(CXXFLAGS) -O3 -fvisibility=hidden $(fPIC)
+GRISU_OBJ_TARGET = $(BUILD)/lib/libgrisu.$(SHLIB_EXT)
 
 double-conversion-$(GRISU_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://double-conversion.googlecode.com/files/$@
@@ -494,7 +495,7 @@ double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
 	touch -c $@
 
 ifeq ($(USE_SYSTEM_GRISU), 0)
-libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/Makefile
+$(GRISU_OBJ_TARGET): double-conversion-$(GRISU_VER)/Makefile
 	cd double-conversion-$(GRISU_VER) && \
 	$(CXX) -c $(GRISU_OPTS) -o src/bignum.o -Isrc src/bignum.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/bignum-dtoa.o -Isrc src/bignum-dtoa.cc && \
@@ -505,21 +506,19 @@ libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/Makefile
 	$(CXX) -c $(GRISU_OPTS) -o src/fixed-dtoa.o -Isrc src/fixed-dtoa.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/strtod.o -Isrc src/strtod.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/libdouble-conversion.o -I.. -Isrc ../double_conversion_wrapper.cpp && \
-	$(CXX) $(GRISU_OPTS) src/*.o $(LDFLAGS) -shared -dead_strip -o ../libgrisu.$(SHLIB_EXT)
+	$(CXX) $(GRISU_OPTS) src/*.o $(LDFLAGS) -shared -dead_strip -o $@ && \
+	$(INSTALL_NAME_CMD)libgrisu.dylib $@
 else
-libgrisu.$(SHLIB_EXT):
-	$(CXX) $(GRISU_OPTS) -I/usr/include/double-conversion double_conversion_wrapper.cpp -shared $(LDFLAGS) -o libgrisu.$(SHLIB_EXT) -ldouble-conversion
+$(GRISU_OBJ_TARGET):
+	$(CXX) $(GRISU_OPTS) -I/usr/include/double-conversion double_conversion_wrapper.cpp -shared $(LDFLAGS) -o $@ -ldouble-conversion && \
+	$(INSTALL_NAME_CMD)libgrisu.dylib $@
 endif
-
-$(BUILD)/lib/libgrisu.$(SHLIB_EXT): libgrisu.$(SHLIB_EXT)
-	cp -f $< $@
-	$(INSTALL_NAME_CMD)libdouble-conversion.dylib $@
 
 clean-double-conversion:
 	-rm -f double-conversion-$(GRISU_VER)/src/*.o
-	-rm -f libgrisu.$(SHLIB_EXT)
+	-rm -f $(GRISU_OBJ_TARGET)
 distclean-double-conversion:
-	-rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER) libgrisu.${SHLIB_EXT}
+	-rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER) $(GRISU_OBJ_TARGET)
 
 get-double-conversion: double-conversion-$(GRISU_VER).tar.gz
 configure-double-conversion: get-double-conversion

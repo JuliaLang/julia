@@ -6,26 +6,14 @@
 
 ## byte-order mark, ntoh & hton ##
 
-abstract ByteOrder
-
-type HostByteOrder <: ByteOrder 
-end
-
-type ReverseByteOrder <: ByteOrder 
-end
-
 const ENDIAN_BOM = reinterpret(Uint32,uint8([1:4]))[1]
 
 if ENDIAN_BOM == 0x01020304
-    typealias NetworkByteOrder HostByteOrder 
-    typealias LittleByteOrder ReverseByteOrder 
     ntoh(x) = identity(x)
     hton(x) = identity(x)
     ltoh(x) = bswap(x)
     htol(x) = bswap(x)
 elseif ENDIAN_BOM == 0x04030201
-    typealias NetworkByteOrder ReverseByteOrder
-    typealias LittleByteOrder HostByteOrder
     ntoh(x) = bswap(x)
     hton(x) = bswap(x)
     ltoh(x) = identity(x)
@@ -33,6 +21,8 @@ elseif ENDIAN_BOM == 0x04030201
 else
     error("seriously? what is this machine?")
 end
+
+isreadonly(s) = isreadable(s) && !iswritable(s)
 
 ## binary I/O ##
 
@@ -42,31 +32,28 @@ write(s::IO, x::Uint8) = error(typeof(s)," does not support byte I/O")
 write(io::IO, x) = throw(MethodError(write, (io, x)))
 write(io::IO, xs...) = for x in xs write(io, x) end
 
-function write(s::IO, x::Integer,::Type{NetworkByteOrder})
-    sz = sizeof(x)
-    for n = sz:-1:1
-        write(s, uint8((x>>>((n-1)<<3))))
+if ENDIAN_BOM == 0x01020304
+    function write(s::IO, x::Integer)
+        sz = sizeof(x)
+        for n = sz:-1:1
+            write(s, uint8((x>>>((n-1)<<3))))
+        end
+        sz
     end
-    sz
-end
-function write(s::IO, x::Integer,::Type{LittleByteOrder})
-    sz = sizeof(x)
-    for n = 1:sz
-        write(s, uint8((x>>>((n-1)<<3))))
+else
+    function write(s::IO, x::Integer)
+        sz = sizeof(x)
+        for n = 1:sz
+            write(s, uint8((x>>>((n-1)<<3))))
+        end
+        sz
     end
-    sz
 end
 
-write(s::IO, x::Bool) = write(s, uint8(x))
-#write{O<:ByteOrder}(s::IO, x::Float16, ::Type{O}) = write(s, reinterpret(Int16,x), O)
-write{O<:ByteOrder}(s::IO, x::Float32, ::Type{O}) = write(s, reinterpret(Int32,x), O)
-write{O<:ByteOrder}(s::IO, x::Float64, ::Type{O}) = write(s, reinterpret(Int64,x), O)
-function write{O<:ByteOrder}(s::IO, z::Complex, ::Type{O})
-    write(s,real(z),O)
-    write(s,imag(z),O)
-end
-
-write(s::IO, x::Number) = write(s, x, HostByteOrder)
+write(s::IO, x::Bool)    = write(s, uint8(x))
+#write(s::IO, x::Float16) = write(s, reinterpret(Int16,x))
+write(s::IO, x::Float32) = write(s, reinterpret(Int32,x))
+write(s::IO, x::Float64) = write(s, reinterpret(Int64,x))
 
 function write(s::IO, a::AbstractArray)
     nb = 0
@@ -75,14 +62,6 @@ function write(s::IO, a::AbstractArray)
     end
     nb
 end
-function write{O<:ByteOrder}(s::IO, a::AbstractArray, ::Type{O})
-    nb = 0
-    for i = 1:length(a)
-        nb += write(s, a[i],O)
-    end
-    nb
-end
-
 
 function write(s::IO, c::Char)
     if c < 0x80
@@ -111,7 +90,7 @@ end
 # all subtypes should implement this
 read(s::IO, x::Type{Uint8}) = error(typeof(s)," does not support byte I/O")
 
-function read{T <: Integer}(s::IO, ::Type{T},::Type{LittleByteOrder})
+function read{T <: Integer}(s::IO, ::Type{T})
     x = zero(T)
     for n = 1:sizeof(x)
         x |= (convert(T,read(s,Uint8))<<((n-1)<<3))
@@ -119,52 +98,23 @@ function read{T <: Integer}(s::IO, ::Type{T},::Type{LittleByteOrder})
     return x
 end
 
-function read{T <: Integer}(s::IO, ::Type{T},::Type{NetworkByteOrder})
-    x = zero(T)
-    for n = sizeof(x):-1:1
-        x |= (convert(T,read(s,Uint8))<<((n-1)<<3))
-    end
-    return x
-end
-
 read(s::IO, ::Type{Bool})    = (read(s,Uint8)!=0)
-read{O<:ByteOrder}(s::IO, ::Type{Float32}, ::Type{O}) = reinterpret(Float32,read(s,Int32,O))
-read{O<:ByteOrder}(s::IO, ::Type{Float64}, ::Type{O}) = reinterpret(Float64,read(s,Int64,O))
-function read{T<:Real,O<:ByteOrder}(s::IO, ::Type{Complex{T}}, ::Type{O})
-    r = read(s,T,O)
-    i = read(s,T,O)
-    Complex{T}(r,i)
-end
-
-read{N<:Number}(s::IO, ::Type{N}) = read(s,N,HostByteOrder)
-
+read(s::IO, ::Type{Float32}) = box(Float32,unbox(Int32,read(s,Int32)))
+read(s::IO, ::Type{Float64}) = box(Float64,unbox(Int64,read(s,Int64)))
 
 read{T}(s::IO, t::Type{T}, d1::Int, dims::Int...) =
     read(s, t, tuple(d1,dims...))
 read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
     read(s, t, map(int,tuple(d1,dims...)))
+
 read{T}(s::IO, ::Type{T}, dims::Dims) = read(s, Array(T, dims))
+
 function read{T}(s::IO, a::Array{T})
     for i = 1:length(a)
         a[i] = read(s, T)
     end
     return a
 end
-
-read{T,O<:ByteOrder}(s::IO, t::Type{T}, ::Type{O}, d1::Int, dims::Int...) =
-    read(s, t, O, tuple(d1,dims...))
-read{T,O<:ByteOrder}(s::IO, t::Type{T}, ::Type{O}, d1::Integer, dims::Integer...) =
-    read(s, t, O, map(int,tuple(d1,dims...)))
-read{T,O<:ByteOrder}(s::IO, ::Type{T}, ::Type{O}, dims::Dims) = read(s, Array(T, dims), O)
-
-function read{T,O<:ByteOrder}(s::IO, a::Array{T}, ::Type{O})
-    for i = 1:length(a)
-        a[i] = read(s, T, O)
-    end
-    return a
-end
-
-
 
 function read(s::IO, ::Type{Char})
     ch = read(s, Uint8)
@@ -215,17 +165,33 @@ function readuntil{T}(s::IO, delim::T)
 end
 
 readline(s::IO) = readuntil(s, '\n')
+readchomp(x) = chomp!(readall(x))
 
-function readall(s::IO)
-    out = IOBuffer()
-    while !eof(s)
+# read up to nb bytes into nb, returning # bytes read
+function readbytes!(s::IO, b::AbstractArray{Uint8}, nb=length(b))
+    olb = lb = length(b)
+    nr = 0
+    while !eof(s) && nr < nb
         a = read(s, Uint8)
-        write(out, a)
+        nr += 1
+        if nr > lb
+            lb = nr * 2
+            resize!(b, lb)
+        end
+        b[nr] = a
     end
-    takebuf_string(out)
+    if lb > olb
+        resize!(b, nr) # shrink to just contain input data if was resized
+    end
+    return nr
 end
 
-readchomp(x) = chomp!(readall(x))
+# read up to nb bytes from s, returning a Vector{Uint8} of bytes read.
+function readbytes(s::IO, nb=typemax(Int))
+    b = Array(Uint8, min(nb, 65536))
+    nr = readbytes!(s, b, nb)
+    resize!(b, nr)
+end
 
 function readall(s::IO)
     b = readbytes(s)
@@ -292,8 +258,11 @@ convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
 show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
 fd(s::IOStream) = int(ccall(:jl_ios_fd, Clong, (Ptr{Void},), s.ios))
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
+isopen(s::IOStream) = bool(ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios))
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 isreadonly(s::IOStream) = bool(ccall(:ios_get_readonly, Cint, (Ptr{Void},), s.ios))
+iswritable(s::IOStream) = !isreadonly(s)
+isreadable(s::IOStream) = true
 
 truncate(s::IOStream, n::Integer) =
     (ccall(:ios_trunc, Int32, (Ptr{Void}, Uint), s.ios, n)==0 ||
@@ -461,21 +430,22 @@ function readuntil(s::IOStream, delim::Uint8)
     ccall(:jl_readuntil, Array{Uint8,1}, (Ptr{Void}, Uint8), s.ios, delim)
 end
 
-function readbytes(s::IOStream)
-    n = 65536
-    b = Array(Uint8, n)
-    p = 1
-    while true
-        nr = int(ccall(:ios_readall, Uint,
-                       (Ptr{Void}, Ptr{Void}, Uint), s.ios, pointer(b,p), n))
-        if eof(s)
-            resize!(b, p+nr-1)
-            break
+function readbytes!(s::IOStream, b::Array{Uint8}, nb=length(b))
+    olb = lb = length(b)
+    nr = 0
+    while !eof(s) && nr < nb
+        if lb < nr+1
+            lb = max(65536, (nr+1) * 2)
+            resize!(b, lb)
         end
-        p += nr
-        resize!(b, p+n-1)
+        nr += int(ccall(:ios_readall, Uint,
+                        (Ptr{Void}, Ptr{Void}, Uint),
+                        s.ios, pointer(b, nr+1), lb - nr))
     end
-    b
+    if lb > olb
+        resize!(b, nr) # shrink to just contain input data if was resized
+    end
+    return nr
 end
 
 # based on code by Glen Hertz
@@ -547,6 +517,4 @@ end
 # BitArray I/O
 
 write(s::IO, B::BitArray) = write(s, B.chunks)
-write{O<:ByteOrder}(s::IO, B::BitArray, ::Type{O}) = write(s, B.chunks, O)
 read(s::IO, B::BitArray) = read(s, B.chunks)
-read{O<:ByteOrder}(s::IO, B::BitArray, ::Type{O}) = read(s, B.chunks, O)

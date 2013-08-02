@@ -249,8 +249,6 @@ DLLEXPORT int jl_init_pipe(uv_pipe_t *pipe, int writable, int readable, int juli
 
 DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
-    if (!handle || uv_is_closing(handle))
-       return;
     if (handle->type==UV_TTY)
         uv_tty_set_mode((uv_tty_t*)handle,0);
 
@@ -275,6 +273,11 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
     else {
         uv_close(handle,&jl_uv_closeHandle);
     }
+}
+
+DLLEXPORT void jl_forceclose_uv(uv_handle_t *handle)
+{
+    uv_close(handle,&jl_uv_closeHandle);
 }
 
 DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle, jl_value_t *data)
@@ -799,6 +802,23 @@ DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle)
     return handle->data;
 }
 
+#ifndef _OS_WINDOWS_
+#if defined(__APPLE__)
+int uv___stream_fd(uv_stream_t* handle);
+#define uv__stream_fd(handle) (uv___stream_fd((uv_stream_t*) (handle)))
+#else
+#define uv__stream_fd(handle) ((handle)->io_watcher.fd)
+#endif /* defined(__APPLE__) */
+DLLEXPORT int jl_uv_pipe_fd(uv_pipe_t *handle)
+{
+    return uv__stream_fd((uv_stream_t*)handle);
+}
+#else
+DLLEXPORT HANDLE jl_uv_pipe_handle(uv_pipe_t *handle)
+{
+    return handle->handle;
+}
+#endif
 #ifdef __cplusplus
 }
 #endif

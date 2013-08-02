@@ -935,9 +935,9 @@ end
 
 # evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
 macro horner(x, p...)
-    ex = p[end]
+    ex = esc(p[end])
     for i = length(p)-1:-1:1
-        ex = :($(p[i]) + $x * $ex)
+        ex = :($(esc(p[i])) + $(esc(x)) * $ex)
     end
     ex
 end

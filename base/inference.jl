@@ -677,7 +677,8 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                 # use the fact that kwcall(...) calls ff.env.kwsorter
                 kwcount = fargs[2]
                 posargt = argtypes[(4+2*kwcount):end]
-                return abstract_call_gf(ff.env.kwsorter, (), tuple(Tuple, posargt...), e)
+                return abstract_call_gf(ff.env.kwsorter, (),
+                                        tuple(Array{Any,1}, posargt...), e)
             end
         end
         return Any
@@ -771,13 +772,15 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
         abstract_eval(e.args[1], vtypes, sv)
         t = Any
     elseif is(e.head,:static_typeof)
-        t = abstract_eval(e.args[1], vtypes, sv)
+        t0 = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
-        t = typeintersect(t, Any)
-        if isa(t,UnionType)
-            t = typejoin(t.types...)
-        end
-        if is(t,None)
+        t = typeintersect(t0, Any)
+        if is(t,None) && subtype(Undef,t0)
+            # the first time we see this statement the variable will probably
+            # be Undef; return None so this doesn't contribute to the type
+            # we eventually pick.
+        elseif is(t,None)
+            t = Type{None}
         elseif isleaftype(t)
             t = Type{t}
         elseif isleaftype(inference_stack.types)
@@ -1237,9 +1240,26 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                     end
                 elseif is(hd,:type_goto)
                     l = findlabel(body,stmt.args[1])
-                    if stchanged(changes, s[l], vars)
-                        add!(W, l)
-                        s[l] = stupdate(s[l], changes, vars)
+                    for i = 2:length(stmt.args)
+                        var = stmt.args[i]
+                        if isa(var,SymbolNode)
+                            var = var.name
+                        end
+                        # type_goto provides a special update rule for the
+                        # listed vars: it feeds types directly to the
+                        # target statement as long as they are *different*,
+                        # not !subtype like usual. this is because we want
+                        # the specific type inferred at the point of the
+                        # type_goto, not just any type containing it.
+                        # Otherwise "None" doesn't work; see issue #3821
+                        vt = changes[var]
+                        ot = get(s[l],var,NF)
+                        if ot === NF || !typeseq(vt,ot)
+                            # l+1 is the statement after the label, where the
+                            # static_typeof occurs.
+                            add!(W, l+1)
+                            s[l+1][var] = vt
+                        end
                     end
                 elseif is(hd,:return)
                     pc´ = n+1

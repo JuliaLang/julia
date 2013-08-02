@@ -92,12 +92,12 @@ Don't parenthesize conditions
 -----------------------------
 
 Julia doesn't require parens around conditions in ``if`` and ``while``.
-Write
-::
+Write::
+
     if a == b
 
-instead of
-::
+instead of::
+
     if (a == b)
 
 Don't overuse ...
@@ -111,13 +111,12 @@ it is often even better to leave it alone, and not convert it to an array.
 Don't use unnecessary static parameters
 ---------------------------------------
 
-A function signature
-::
+A function signature::
 
     foo{T<:Real}(x::T) = ...
 
-should be written as
-::
+should be written as::
+
     foo(x::Real) = ...
 
 instead, especially if ``T`` is not used in the function body.

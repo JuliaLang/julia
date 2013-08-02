@@ -7,38 +7,6 @@ include = Core.include
 
 include("exports.jl")
 
-if false
-    # simple print definitions for debugging. enable these if something
-    # goes wrong during bootstrap before printing code is available.
-    length(a::Array) = arraylen(a)
-    print(x) = print(STDOUT, x)
-    show(x) = show(STDOUT, x)
-    write(io::IO, a::Array{Uint8,1}) =
-        ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
-              io.ios, a, length(a))
-    print(io::IO, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void},Any,),
-                                 io.ios, s)
-    print(io::IO, s::ASCIIString) = (write(io, s.data);nothing)
-    print(io::IO, x) = show(io, x)
-    println(io::IO, x) = (print(io, x); print(io, "\n"))
-    show(io::IO, x) = ccall(:jl_show_any, Void, (Any, Any,), io, x)
-    show(io::IO, s::ASCIIString) = (write(io, s.data);nothing)
-    show(io::IO, s::Symbol) = print(io, s)
-    show(io::IO, b::Bool) = print(io, b ? "true" : "false")
-    show(io::IO, n::Int64) = ccall(:jl_print_int64, Void, (Ptr{Void}, Int64,), io, n)
-    show(io::IO, n::Integer)  = show(io, int64(n))
-    print(io::IO, a...) = for x=a; print(io, x); end
-    function show(io::IO, e::Expr)
-        print(io, e.head)
-        print(io, "(")
-        for i=1:arraylen(e.args)
-            show(io, arrayref(e.args,i))
-            print(io, ", ")
-        end
-        print(io, ")\n")
-    end
-end
-
 ## Load essential files and libraries
 
 include("base.jl")
@@ -82,6 +50,10 @@ include("inference.jl")
 
 # For OS sprcific stuff in I/O
 include("osutils.jl")
+
+const DL_LOAD_PATH = ByteString[]
+@osx_only push!(DL_LOAD_PATH, "@executable_path/../lib/julia")
+@osx_only push!(DL_LOAD_PATH, "@executable_path/../lib")
 
 # strings & printing
 include("char.jl")

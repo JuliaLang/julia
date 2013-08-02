@@ -881,7 +881,7 @@ DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy);
 int jl_start_parsing_file(const char *fname);
 void jl_stop_parsing();
 jl_value_t *jl_parse_next();
-DLLEXPORT void jl_load_file_string(const char *text, char *filename);
+DLLEXPORT jl_value_t *jl_load_file_string(const char *text, char *filename);
 DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr);
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 
@@ -949,8 +949,8 @@ void jl_compile(jl_function_t *f);
 void jl_generate_fptr(jl_function_t *f);
 DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
-DLLEXPORT void jl_load(const char *fname);
-void jl_parse_eval_all(char *fname);
+DLLEXPORT jl_value_t *jl_load(const char *fname);
+jl_value_t *jl_parse_eval_all(char *fname);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
                                              jl_value_t **loc, size_t nl);
@@ -959,6 +959,7 @@ jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
                                             jl_value_t **locals, size_t nl);
 jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_value_t **locals, size_t nl);
+int jl_is_toplevel_only_expr(jl_value_t *e);
 jl_module_t *jl_base_relative_to(jl_module_t *m);
 void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
                    jl_lambda_info_t *def);
@@ -1231,7 +1232,7 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize);
 DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, bt_context_t ctx);
 
 //IO objects
-extern DLLEXPORT uv_stream_t *jl_uv_stdin; //these are actually uv_tty_t's and can be cast to such, but that gives warnings whenver they are used as streams
+extern DLLEXPORT uv_stream_t *jl_uv_stdin; 
 extern DLLEXPORT uv_stream_t * jl_uv_stdout;
 extern DLLEXPORT uv_stream_t * jl_uv_stderr;
 

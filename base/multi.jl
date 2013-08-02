@@ -1006,7 +1006,11 @@ function create_worker(privhost, port, pubhost, stream, config)
                 if nread>0
                     try
                         line = readbytes(stream.buffer, nread)
-                        print("\tFrom worker $(wrker.id):\t",line)
+                        if length(line) < nread
+                            println(STDERR,"\tTruncated reply from worker $(wrker.id)")
+                            return false
+                        end
+                        print("\tFrom worker $(wrker.id):\t",bytestring(line))
                     catch err
                         println(STDERR,"\tError parsing reply from worker $(wrker.id):\t",err)
                         return false

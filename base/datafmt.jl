@@ -43,11 +43,17 @@ readdlm(input, dlm::Char, T::Type, eol::Char; opts...) = readdlm_auto(input, dlm
 
 function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
     optsd = val_opts(opts)
-    isa(input, String) && (fsz = filesize(input); input = get(optsd, :use_mmap, true) && fsz < typemax(Int) ? mmap_array(Uint8, (int(fsz),), open(input, "r")) : readall(input))
+    isa(input, String) && (fsz = filesize(input); input = get(optsd, :use_mmap, true) && fsz < typemax(Int) ? as_mmap(input,fsz) : readall(input))
     sinp = isa(input, Vector{Uint8}) ? ccall(:jl_array_to_string, ByteString, (Array{Uint8,1},), input) :
            isa(input, IO) ? readall(input) :
            input
     readdlm_string(sinp, dlm, T, eol, auto, optsd)
+end
+
+function as_mmap(fname::String, fsz::Int64)
+    open(fname) do io
+        mmap_array(Uint8, (int(fsz),), io)
+    end
 end
 
 function ascii_if_possible(sbuff::String)

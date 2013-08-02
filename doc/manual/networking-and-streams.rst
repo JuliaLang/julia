@@ -1,4 +1,4 @@
-.. _man-networking-and-streams
+.. _man-networking-and-streams:
 
 ************************
  Networking and Streams  
@@ -11,9 +11,7 @@ usually unnecessary to think about the underlying asynchronous operation. This
 is achieved by making heavy use of Julia cooperative threading (coroutine) 
 functionality.
 
-So, let's jump right in with a simple example involving Tcp Sockets. To do, let's first create a simple server.
-
-:: 
+So, let's jump right in with a simple example involving Tcp Sockets. To do, let's first create a simple server:: 
 
     julia> @async begin
              server = listen(2000)
@@ -30,9 +28,7 @@ Those familiar with the Unix socket API, the method names will feel familiar,
 though their usage is somewhat simpler than the raw Unix socket API. The first
 call to `listen` will create a server waiting for incoming connections on the 
 specified port (2000) in this case. The same function may also be used to 
-create various other kinds of servers:
-
-::
+create various other kinds of servers::
     
     julia> listen(2000) # Listens on localhost:2000 (IPv4)
     TcpServer(active)
@@ -61,14 +57,12 @@ just created, while the `connect` function connects to a server using the
 specified method. The `connect` function takes the same arguments as the 
 `listen`, so, assuming the environment (i.e. host, cwd, etc.) is the same you 
 should be able to pass the same arguments to `connect` as you did to listen to 
-establish the connection. So let's try that out (after having created the server above): ::
+establish the connection. So let's try that out (after having created the server above)::
     
     julia> connect(2000)
     TcpSocket(open, 0 bytes waiting)
 
     julia> Hello World
-
-
 
 As expected we saw "Hello World" printed. So, let's actually analyze what happened behind the scenes. When we called connect, we connect to the server we had just created. Meanwhile, the accept function returns a server-side connection to the newly created socket and prints "Hello World" to indicate that the connection was successful. 
 
@@ -110,3 +104,4 @@ At the base of this functionality is the getaddrinfo function which will do the 
         
     julia> Base.getaddrinfo("google.com")
     IPv4(74.125.226.225)
+

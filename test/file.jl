@@ -18,10 +18,10 @@ touch(file)
 @test isfile(file) == true
 @test islink(file) == false
 @test isreadable(file) == true
-@test iswriteable(file) == true
+@test iswritable(file) == true
 # Here's something else that might be UNIX-specific?
 run(`chmod -w $file`)
-@test iswriteable(file) == false
+@test iswritable(file) == false
 run(`chmod +w $file`)
 @test isexecutable(file) == false
 @test filesize(file) == 0
