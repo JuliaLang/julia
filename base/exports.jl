@@ -979,6 +979,7 @@ export
     disassemble,
     edit,
     code_typed,
+    code_lowered,
     fullname,
     functionloc,
     functionlocs,
