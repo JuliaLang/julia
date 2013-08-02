@@ -122,3 +122,25 @@ end
     if c == '/' return ENV["HOME"]*path[i:end] end
     error("~user tilde expansion not yet implemented")
 end
+
+# This globs * and ?. [] seems problematic because of line 511 of pkg.jl,
+# so square brackets are protected.
+# Limited to globbing in the basename
+function glob(path::String)
+    dir, pattern = splitdir(path)
+    dir = isempty(dir) ? "." : dir
+    names = readdir(dir)
+    patterndot = replace(pattern, ['.', '[', ']'], s->string("\\",s))
+    re = Regex(string('^', replace(replace(patterndot, "?", "."), "*", ".*"), '$'))
+    paths = Array(ASCIIString, 0)
+    for name in names
+        m = match(re, name)
+        if !is(m, nothing)
+            push!(paths, joinpath(dir, name))
+        end
+    end
+    if isempty(paths)
+        error("Cannot access ", path, ": no such file or directory")
+    end
+    paths
+end
