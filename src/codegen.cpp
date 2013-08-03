@@ -65,6 +65,9 @@
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Config/llvm-config.h"
+#ifdef DEBUG
+#include "llvm/Support/CommandLine.h"
+#endif
 #include <setjmp.h>
 
 #include <string>
@@ -3394,7 +3397,9 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen(void)
 {
-    
+#ifdef DEBUG
+    cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
+#endif
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);
 
