@@ -368,10 +368,10 @@ USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
 LIBBLASNAME = libmkl_rt
 LIBLAPACKNAME = libmkl_rt
-USE_SYSTEM_LIBM=1
-LIBM = -lm
+USE_SYSTEM_LIBM = 1
+LIBM = -L$(MKLROOT)/../compiler/lib/intel64 -limf
 LIBMNAME = libimf
-MKL_LDFLAGS = -L$(MKLLIB) -lmkl_rt -L$(MKLROOT)/../compiler/lib/intel64 -limf
+MKL_LDFLAGS = -L$(MKLLIB) -lmkl_rt
 ifneq ($(strip $(MKLLIB)),)
   ifeq ($(OS), Linux)
     RPATH_MKL = -Wl,-rpath,$(MKLLIB)
