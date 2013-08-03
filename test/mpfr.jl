@@ -1,3 +1,4 @@
+import Base.MPFR
 # constructors
 with_bigfloat_precision(53) do
     x = BigFloat()
