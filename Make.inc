@@ -371,7 +371,7 @@ LIBLAPACKNAME = libmkl_rt
 USE_SYSTEM_LIBM=1
 LIBM = -lm
 LIBMNAME = libimf
-MKL_LDFLAGS = -L$(MKLLIB) -lmkl_rt -limf
+MKL_LDFLAGS = -L$(MKLLIB) -lmkl_rt -L$(MKLROOT)/../compiler/lib/intel64 -limf
 ifneq ($(strip $(MKLLIB)),)
   ifeq ($(OS), Linux)
     RPATH_MKL = -Wl,-rpath,$(MKLLIB)
