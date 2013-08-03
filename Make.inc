@@ -357,7 +357,7 @@ endif
 
 ifeq ($(USE_SYSTEM_LIBM),0)
 ifneq ($(UNTRUSTED_SYSTEM_LIBM),0)
-OSLIBS += $(BUILD)/lib/libopenlibm.a
+OSLIBS += $(WHOLE_ARCHIVE) $(BUILD)/lib/libopenlibm.a $(NO_WHOLE_ARCHIVE)
 endif
 endif
 
