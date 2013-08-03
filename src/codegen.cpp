@@ -2552,12 +2552,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     //if (jlrettype == (jl_value_t*)jl_bottom_type)
     //    f->setDoesNotReturn();
 #ifdef DEBUG
-#ifdef _OS_WINDOWS_
-    AttrBuilder *attr = new AttrBuilder();
-    attr->addStackAlignmentAttr(16);
-    attr->addAlignmentAttr(16);
-    f->addAttribute(~0U, Attributes::get(f->getContext(), *attr));
-#endif
 #if LLVM32 && !LLVM33
     f->addFnAttr(Attributes::StackProtectReq);
 #else
