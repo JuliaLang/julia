@@ -108,6 +108,7 @@ static LLVMContext &jl_LLVMContext = getGlobalContext();
 static IRBuilder<> builder(getGlobalContext());
 static bool nested_compile=false;
 static Module *jl_Module;
+static TargetMachine *jl_TargetMachine;
 static ExecutionEngine *jl_ExecutionEngine;
 static DIBuilder *dbuilder;
 static std::map<int, std::string> argNumberStrings;
@@ -3343,9 +3344,13 @@ static void init_julia_llvm_env(Module *m)
 
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);
-#ifndef LLVM32
+#ifdef LLVM32
+    FPM->add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
+#else
     FPM->add(new TargetData(*jl_ExecutionEngine->getTargetData()));
 #endif
+    jl_TargetMachine->addAnalysisPasses(*FPM);
+
     // list of passes from vmkit
     FPM->add(createCFGSimplificationPass()); // Clean up disgusting code
     FPM->add(createPromoteMemoryToRegisterPass());// Kill useless allocas
@@ -3428,10 +3433,11 @@ extern "C" void jl_init_codegen(void)
 #ifdef __APPLE__
     options.JITExceptionHandling = 1;
 #endif
-    jl_ExecutionEngine = EngineBuilder(jl_Module)
-        .setEngineKind(EngineKind::JIT)
-        .setTargetOptions(options)
-        .create();
+    EngineBuilder eb(jl_Module);
+    eb.setEngineKind(EngineKind::JIT)
+      .setTargetOptions(options);
+    jl_TargetMachine = eb.selectTarget();
+    jl_ExecutionEngine = eb.create();
 #endif // LLVM VERSION
     
     dbuilder = new DIBuilder(*jl_Module);
