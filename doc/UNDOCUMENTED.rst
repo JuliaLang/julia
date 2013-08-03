@@ -312,11 +312,11 @@ linear algebra
 
    UNDOCUMENTED
 
-.. function:: ldltd!(A::SymTridiagonal{T<:Union(Complex{Float64},Float64,Float32,Complex{Float32})})
+.. function:: ldltd!(A::SymTridiagonal{T<:Union(Float64,Complex{Float32},Complex{Float64},Float32)})
 
    UNDOCUMENTED
 
-.. function:: ldltd(A::SymTridiagonal{T<:Union(Complex{Float64},Float64,Float32,Complex{Float32})})
+.. function:: ldltd(A::SymTridiagonal{T<:Union(Float64,Complex{Float32},Complex{Float64},Float32)})
 
    UNDOCUMENTED
 
@@ -592,14 +592,6 @@ statistics
 signal processing
 -----------------
 
-.. function:: conv2(...)
-
-   UNDOCUMENTED
-
-.. function:: plan_brfft(...)
-
-   UNDOCUMENTED
-
 
   numerical integration
 -----------------------
@@ -848,6 +840,10 @@ I/O and events
 multiprocessing
 ---------------
 
+.. function:: interrupt(...)
+
+   UNDOCUMENTED
+
 .. function:: isready(rr::RemoteRef)
 
    UNDOCUMENTED
@@ -917,10 +913,6 @@ filesystem operations
    UNDOCUMENTED
 
 .. function:: gperm(...)
-
-   UNDOCUMENTED
-
-.. function:: iswritable(...)
 
    UNDOCUMENTED
 
