@@ -3092,11 +3092,12 @@ static void init_julia_llvm_env(Module *m)
     T_void = Type::getVoidTy(jl_LLVMContext);
 
     // add needed base definitions to our LLVM environment
-    StructType *valueSt = StructType::create(getGlobalContext(), "jl_value_t");
+    /*StructType *valueSt = StructType::create(getGlobalContext(), "jl_value_t");
     Type *valueStructElts[1] = { PointerType::getUnqual(valueSt) };
     ArrayRef<Type*> vselts(valueStructElts);
     valueSt->setBody(vselts);
-    jl_value_llvmt = valueSt;
+    jl_value_llvmt = valueSt;*/
+    jl_value_llvmt = PointerType::getUnqual(T_int8);
 
     jl_pvalue_llvmt = PointerType::get(jl_value_llvmt, 0);
     jl_ppvalue_llvmt = PointerType::get(jl_pvalue_llvmt, 0);
@@ -3380,6 +3381,7 @@ static void init_julia_llvm_env(Module *m)
     //FPM->add(createLoopDeletionPass());         // Delete dead loops
     FPM->add(createLoopUnrollPass());           // Unroll small loops
     //FPM->add(createLoopStrengthReducePass());   // (jwb added)
+    FPM->add(createLoopVectorizePass());          // Vectorize loops
     
     FPM->add(createInstructionCombiningPass()); // Clean up after the unroller
     FPM->add(createGVNPass());                  // Remove redundancies
