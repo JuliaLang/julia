@@ -1,3 +1,4 @@
+import Base.Sort
 immutable BubbleSortAlg <: Sort.Algorithm end
 const BubbleSort = BubbleSortAlg()
 

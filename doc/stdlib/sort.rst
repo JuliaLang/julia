@@ -1,7 +1,8 @@
+
+.. currentmodule:: Base
+
 Sorting and Related Functions
 =============================
-
-.. module:: Base.Sort
 
 Julia has an extensive, flexible API for sorting and interacting with
 already-sorted arrays of values. For many users, sorting in standard
