@@ -183,6 +183,9 @@ ifeq ($(BUILD_LLVM_CLANG),1)
 ifeq ($(LLVM_VER), 3.0)
 LLVM_CLANG_TAR=clang-$(LLVM_VER).tar.gz
 LLVM_COMPILER_RT_TAR=
+else ifeq ($(LLVM_VER), 3.3)
+LLVM_CLANG_TAR=cfe-$(LLVM_VER).src.tar.gz
+LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
 else
 LLVM_CLANG_TAR=clang-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
