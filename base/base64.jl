@@ -107,10 +107,6 @@ function write(b::Base64Pipe, x::Uint8)
 end
 
 function close(b::Base64Pipe)
-    try
-        flush(b.io)
-    catch
-    end
     if b.nb > 0
         # write leftover bytes + padding
         if b.nb == 1

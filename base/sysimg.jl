@@ -82,6 +82,8 @@ include("stat.jl")
 include("fs.jl")
 importall .FS
 include("process.jl")
+include("multimedia.jl")
+importall .Multimedia
 reinit_stdio()
 ccall(:jl_get_uv_hooks, Void, ())
 include("grisu.jl")

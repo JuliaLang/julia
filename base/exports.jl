@@ -1121,6 +1121,22 @@ export
     wait,
     workers,
 
+# multimedia I/O
+    Display,
+    display,
+    displayable,
+    TextDisplay,
+    istext,
+    MIME,
+    @MIME,
+    reprmime,
+    stringmime,
+    writemime,
+    mimewritable,
+    popdisplay,
+    pushdisplay,
+    redisplay,
+
 # distributed arrays
     dfill,
     distribute,
