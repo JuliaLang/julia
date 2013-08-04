@@ -62,6 +62,8 @@ include("utf8.jl")
 include("iobuffer.jl")
 include("string.jl")
 include("regex.jl")
+include("base64.jl")
+importall .Base64
 
 # system & environment
 include("libc.jl")

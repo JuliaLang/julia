@@ -1010,13 +1010,13 @@ I/O
 
 .. function:: readbytes!(stream, b::Vector{Uint8}, nb=length(b))
 
-   Read at most nb bytes from the stream into b, returning the
-   number of bytes read (increasing the size of b as needed).
+   Read at most ``nb`` bytes from the stream into ``b``, returning the
+   number of bytes read (increasing the size of ``b`` as needed).
 
 .. function:: readbytes(stream, nb=typemax(Int))
 
-   Read at most nb bytes from the stream, returning a
-   Vector{Uint8} of the bytes read.
+   Read at most ``nb`` bytes from the stream, returning a
+   ``Vector{Uint8}`` of the bytes read.
 
 .. function:: position(s)
 
@@ -1185,6 +1185,23 @@ Text I/O
 .. function:: writecsv(filename, array)
 
    Equivalent to ``writedlm`` with ``delim`` set to comma.
+
+.. function:: Base64Pipe(ostream)
+
+   Returns a new write-only I/O stream, which converts any bytes written
+   to it into base64-encoded ASCII bytes written to ``ostream``.  Calling
+   ``close`` on the ``Base64Pipe`` stream is necessary to complete the
+   encoding (but does not close ``ostream``).
+
+.. function:: base64(writefunc, args...), base64(args...)
+
+   Given a ``write``-like function ``writefunc``, which takes an I/O
+   stream as its first argument, ``base64(writefunc, args...)``
+   calls ``writefunc`` to write ``args...`` to a base64-encoded string,
+   and returns the string.  ``base64(args...)`` is equivalent to
+   ``base64(write, args...)``: it converts its arguments into bytes
+   using the standard ``write`` functions and returns the base64-encoded
+   string.
 
 Memory-mapped I/O
 -----------------

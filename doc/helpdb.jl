@@ -1827,6 +1827,18 @@
 
 "),
 
+("Text I/O","Base","base64","base64(stream, args...)
+
+   Given a \"write\"-like function \"writefunc\", which takes an I/O
+   stream as its first argument, \"base64(writefunc, args...)\"
+   calls \"writefunc\" to write \"args...\" to a base64-encoded string,
+   and returns the string.  \"base64(args...)\" is equivalent to
+   \"base64(write, args...)\": it converts its arguments into bytes
+   using the standard \"write\" functions and returns the base64-encoded
+   string.
+
+"),
+
 ("Memory-mapped I/O","Base","mmap_array","mmap_array(type, dims, stream[, offset])
 
    Create an \"Array\" whose values are linked to a file, using
