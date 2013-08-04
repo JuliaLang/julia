@@ -232,6 +232,7 @@ function reinit_stdio()
     global STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()),0)
     global STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()),1)
     global STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()),2)
+    reinit_displays() # since Multimedia.displays uses STDOUT as fallback
 end
 
 flush(::TTY) = nothing
