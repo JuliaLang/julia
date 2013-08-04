@@ -726,6 +726,8 @@ export
 # strings and text output
     ascii,
     base,
+    base64,
+    Base64Pipe,
     beginswith,
     bin,
     bits,
