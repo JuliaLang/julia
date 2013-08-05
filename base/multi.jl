@@ -96,12 +96,13 @@ type Worker
     add_msgs::Array{Any,1}
     id::Int
     gcflag::Bool
+    privhost::ByteString
     cman::ClusterManager
     cman_ctxt
     ospid
     
     Worker(host::String, port::Integer, sock::TcpSocket, id::Int) =
-        new(bytestring(host), uint16(port), sock, IOBuffer(), {}, {}, id, false)
+        new(bytestring(host), uint16(port), sock, IOBuffer(), {}, {}, id, false, "")
 end
 Worker(host::String, port::Integer, sock::TcpSocket) =
     Worker(host, port, sock, 0)
@@ -216,7 +217,7 @@ function add_workers(pg::ProcessGroup, w::Array{Any,1})
             cman.worker_cb(:register, cman, w[i].cman_ctxt, w[i].id, i)
         end
     end
-    all_locs = map(x -> isa(x, Worker) ? (x.host,x.port, x.id) : ("", 0, x.id), pg.workers)
+    all_locs = map(x -> isa(x, Worker) ? (x.privhost, x.port, x.id) : ("", 0, x.id), pg.workers)
     for i=1:numw
         send_msg_now(w[i], :join_pgrp, w[i].id, all_locs)
     end
@@ -1025,6 +1026,7 @@ function create_worker(privhost, port, pubhost, stream, config, cman_ctxt)
     else
         w = Worker(pubhost, port)
     end
+    w.privhost = privhost
     w.cman = config[:cman]
     w.cman_ctxt = cman_ctxt
     
