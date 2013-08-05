@@ -677,12 +677,16 @@ endif
 # Maximum number of threads for parallelism
 ifneq ($(ARCH),x86_64)
 # Assume we can't address much memory to spawn many threads
-OPENBLAS_BUILD_OPTS += NUM_THREADS=30
+# It is also unlikely that 32-bit architectures have too many cores
+OPENBLAS_BUILD_OPTS += NUM_THREADS=8
 else ifeq ($(OS),WINNT)
-#windows seems unable to handle very many
+# Windows seems unable to handle very many
 OPENBLAS_BUILD_OPTS += NUM_THREADS=24
-else # Linux can handle up to 256 according to the FAQ. Use 128 for now as that should suffice everywhere.
-# Assume we may want lots of threads on some future machine
+else ifeq ($(OS),Darwin)
+# This should suffice for the largest macs
+OPENBLAS_BUILD_OPTS += NUM_THREADS=24
+else
+# On linux, try to provision for the largest possible machine currently
 OPENBLAS_BUILD_OPTS += NUM_THREADS=128
 endif
 
