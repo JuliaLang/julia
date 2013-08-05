@@ -16,14 +16,6 @@ if codespeed
         error( "You must provide the JULIA_FLAVOR environment variable identifying this julia build!" )
     end
 
-    if !haskey(ENV, "JULIA_BRANCH")
-        error( "You must provide the JULIA_BRANCH environment variable identifying the branch this julia build grows on!" )
-    end
-
-    if !haskey(ENV, "JULIA_COMMIT_DATE")
-        error( "You must provide the JULIA_COMMIT_DATE environment variable in the form YYYY-MM-DD HH:MM:SS[TZ]" )
-    end
-
     # Setup codespeed data dict for submissions to codespeed's JSON endpoint.  These parameters
     # are constant across all benchmarks, so we'll just let them sit here for now
     csdata = Dict()
