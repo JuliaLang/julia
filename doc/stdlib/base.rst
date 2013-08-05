@@ -2898,13 +2898,7 @@ Statistics
 Signal Processing
 -----------------
 
-.. module:: Base.FFTW
-
-.. module:: Base.DSP
-
 FFT functions in Julia are largely implemented by calling functions from `FFTW <http://www.fftw.org>`_
-
-.. currentmodule:: Base
 
 .. function:: fft(A [, dims])
 
@@ -3179,13 +3173,10 @@ The following functions are defined within the ``Base.FFTW`` module.
 
    Similar to :func:`Base.plan_fft`, but corresponds to :func:`r2r!`.
 
+.. currentmodule:: Base
 
 Numerical Integration
 ---------------------
-
-.. module:: Base.QuadGK
-
-.. currentmodule:: Base
 
 Although several external packages are available for numeric integration
 and solution of ordinary differential equations, we also provide

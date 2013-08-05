@@ -270,25 +270,13 @@
       <item> TypeError </item>
 
       <item> Collections </item>
-      <item> PCRE </item>
       <item> FFTW </item>
-      <item> DSP </item>
-      <item> SparseMatrix </item>
-      <item> LinAlg </item>
-      <item> LibRandom </item>
-      <item> Random </item>
-      <item> Math </item>
-      <item> MPFR </item>
-      <item> GMP </item>
-      <item> QuadGK </item>
       <item> Order </item>
-      <item> Sort </item>
       <item> Sys </item>
       <item> Test </item>
       <item> Pkg </item>
       <item> Pkg2 </item>
       <item> Operators </item>
-      <item> Errno </item>
       <item> Meta </item>
       <item> Graphics </item>
       <item> Profile </item>

@@ -7560,7 +7560,7 @@
 
 "),
 
-("Sorting and Related Functions","Base.Sort","sort!","sort!(v, [dim,] [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","sort!","sort!(v, [dim,] [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the vector \"v\" in place. \"QuickSort\" is used by default
    for numeric arrays while \"MergeSort\" is used for other arrays.
@@ -7577,20 +7577,20 @@
 
 "),
 
-("Sorting and Related Functions","Base.Sort","sort","sort(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","sort","sort(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Variant of \"sort!\" that returns a sorted copy of \"v\" leaving
    \"v\" itself unmodified.
 
 "),
 
-("Sorting and Related Functions","Base.Sort","sort","sort(A, dim, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","sort","sort(A, dim, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort a multidimensional array \"A\" along the given dimension.
 
 "),
 
-("Sorting and Related Functions","Base.Sort","sortperm","sortperm(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","sortperm","sortperm(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Return a permutation vector of indices of \"v\" that puts it in
    sorted order. Specify \"alg\" to choose a particular sorting
@@ -7605,19 +7605,19 @@
 
 "),
 
-("Sorting and Related Functions","Base.Sort","sortrows","sortrows(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","sortrows","sortrows(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the rows of matrix \"A\" lexicographically.
 
 "),
 
-("Sorting and Related Functions","Base.Sort","sortcols","sortcols(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","sortcols","sortcols(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the columns of matrix \"A\" lexicographically.
 
 "),
 
-("Sorting and Related Functions","Base.Sort","issorted","issorted(v, [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","issorted","issorted(v, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Test whether a vector is in sorted order. The \"by\", \"lt\" and
    \"rev\" keywords modify what order is considered to be sorted just
@@ -7625,7 +7625,7 @@
 
 "),
 
-("Sorting and Related Functions","Base.Sort","searchsorted","searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","searchsorted","searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Returns the range of indices of \"a\" which compare as equal to
    \"x\" according to the order specified by the \"by\", \"lt\" and
@@ -7635,7 +7635,7 @@
 
 "),
 
-("Sorting and Related Functions","Base.Sort","select!","select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","select!","select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Partially sort the vector \"v\" in place, according to the order
    specified by \"by\", \"lt\" and \"rev\" so that the value at index
@@ -7649,7 +7649,7 @@
 
 "),
 
-("Sorting and Related Functions","Base.Sort","select","select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","select","select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Variant of \"select!\" which copies \"v\" before partially sorting
    it, thereby returning the same thing as \"select!\" but leaving

@@ -78,7 +78,7 @@ function deconv{T}(b::Vector{T}, a::Vector{T})
     filt(b, a, x)
 end
 
-function conv{T<:LinAlg.BlasFloat}(u::Vector{T}, v::Vector{T})
+function conv{T<:Base.LinAlg.BlasFloat}(u::Vector{T}, v::Vector{T})
     nu = length(u)
     nv = length(v)
     n = nu + nv - 1
@@ -95,8 +95,8 @@ function conv{T<:LinAlg.BlasFloat}(u::Vector{T}, v::Vector{T})
     return y[1:n]
 end
 conv{T<:Integer}(u::Vector{T}, v::Vector{T}) = conv(float(u), float(v))
-conv{T<:Integer, S<:LinAlg.BlasFloat}(u::Vector{T}, v::Vector{S}) = conv(float(u), v)
-conv{T<:Integer, S<:LinAlg.BlasFloat}(u::Vector{S}, v::Vector{T}) = conv(u, float(v))
+conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::Vector{T}, v::Vector{S}) = conv(float(u), v)
+conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::Vector{S}, v::Vector{T}) = conv(u, float(v))
 
 function conv2{T}(u::Vector{T}, v::Vector{T}, A::Matrix{T})
     m = length(u)+size(A,1)-1
