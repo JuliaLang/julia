@@ -644,7 +644,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     Value *typemin;
     switch (f) {
     HANDLE(neg_int,1) return builder.CreateSub(ConstantInt::get(t, 0), JL_INT(x));
-    HANDLE(add_int,2) return builder.CreateAdd(JL_INT(x), JL_INT(y));
+    HANDLE(add_int,2) return builder.CreateAdd(JL_INT(x), JL_INT(y), "", false, true);
     HANDLE(sub_int,2) return builder.CreateSub(JL_INT(x), JL_INT(y));
     HANDLE(mul_int,2) return builder.CreateMul(JL_INT(x), JL_INT(y));
     HANDLE(sdiv_int,2)
