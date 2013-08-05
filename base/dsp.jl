@@ -98,14 +98,14 @@ conv{T<:Integer}(u::Vector{T}, v::Vector{T}) = conv(float(u), float(v))
 conv{T<:Integer, S<:LinAlg.BlasFloat}(u::Vector{T}, v::Vector{S}) = conv(float(u), v)
 conv{T<:Integer, S<:LinAlg.BlasFloat}(u::Vector{S}, v::Vector{T}) = conv(u, float(v))
 
-function conv2{T}(y::Vector{T}, x::Vector{T}, A::Matrix{T})
-    m = length(y)+size(A,1)-1
-    n = length(x)+size(A,2)-1
+function conv2{T}(u::Vector{T}, v::Vector{T}, A::Matrix{T})
+    m = length(u)+size(A,1)-1
+    n = length(v)+size(A,2)-1
     B = zeros(T, m, n)
     B[1:size(A,1),1:size(A,2)] = A
-    y = fft([y;zeros(T,m-length(y))])
-    x = fft([x;zeros(T,n-length(x))])
-    C = ifft(fft(B) .* (y * x.'))
+    u = fft([u;zeros(T,m-length(u))])
+    v = fft([v;zeros(T,n-length(v))])
+    C = ifft(fft(B) .* (u * v.'))
     if T <: Real
         return real(C)
     end

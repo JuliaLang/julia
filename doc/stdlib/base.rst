@@ -48,14 +48,6 @@ Getting Around
 
    Like ``include``, except reads code from the given string rather than from a file. Since there is no file path involved, no path processing or fetching from node 1 is done.
 
-.. function:: evalfile(path::String)
-
-   Evaluate all expressions in the given file, and return the value of the last one. No other processing (path searching, fetching from node 1, etc.) is performed.
-
-.. function:: usingmodule(name)
-
-   Supports conditional inclusion of a package or module. Equivalent to ``using name`` in a file, except it can be inside an ``if`` statement.
-
 .. function:: help(name)
 
    Get help for a function. ``name`` can be an object or a string.
@@ -68,6 +60,10 @@ Getting Around
 
    Show which method of ``f`` will be called for the given arguments.
 
+.. function:: @which
+
+   Evaluates the arguments to the function call, determines their types, and calls the ``which`` function on the resulting expression
+
 .. function:: methods(f)
 
    Show all methods of ``f`` with their argument types.
@@ -77,6 +73,10 @@ Getting Around
    Show all methods with an argument of type ``typ``. If optional
    ``showparents`` is ``true``, also show arguments with a parent type
    of ``typ``, excluding type ``Any``.
+
+.. function:: @show
+
+   Show an expression and result, returning the result
 
 All Objects
 -----------
@@ -287,6 +287,35 @@ Generic Functions
    Applies a function to the preceding argument which allows for easy function chaining.
 
    **Example**: ``[1:5] |> x->x.^2 |> sum |> inv``
+
+
+Syntax
+------
+
+.. function:: eval(expr::Expr)
+
+   Evaluate an expression and return the value.
+
+.. function:: @eval
+
+   Evaluate an expression and return the value.
+
+.. function:: evalfile(path::String)
+
+   Evaluate all expressions in the given file, and return the value of the last one. No other processing (path searching, fetching from node 1, etc.) is performed.
+
+.. function:: esc(e::ANY)
+
+   Only valid in the context of an Expr returned from a macro. Prevents the macro hygine pass from turning embedded variables into gensym variables. See the :ref:`man-macros`
+   section of the Metaprogramming chapter of the manual for more details and examples.
+
+.. function:: gensym([tag])
+
+   Generates a symbol which will not conflict with other variable names
+
+.. function:: parse(str, [start, [greedy, [err]]])
+
+   Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing (default is 1). If greedy is true (default), parse will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid token. If err is true (default), parse errors will raise an error; otherwise, it will return the error as a normal expression.
 
 Iteration
 ---------
@@ -1027,6 +1056,10 @@ I/O
    Converts the endianness of a value from that used by the Host to
    Little-endian.
 
+.. data:: ENDIAN_BOM
+
+   The 32-bit byte-order-mark indicates the native byte order of the host machine. Little-endian machines will contain the value 0x04030201. Big-endian machines will contain the value 0x01020304.
+
 .. function:: serialize(stream, value)
 
    Write an arbitrary value to a stream in an opaque format, such that it can
@@ -1169,7 +1202,25 @@ Memory-mapped I/O
 
 .. function:: msync(array)
 
-   Forces synchronization between the in-memory version of a memory-mapped ``Array`` or ``BitArray`` and the on-disk version. You may not need to call this function, because synchronization is performed at intervals automatically by the operating system. Hower, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
+   Forces synchronization between the in-memory version of a memory-mapped ``Array`` or ``BitArray`` and the on-disk version.
+
+.. function:: msync(ptr, len, [flags])
+
+   Forces synchronization of the mmap'd memory region from ptr to ptr+len. Flags defaults to MS_SYNC, but can be a combination of MS_ASYNC, MS_SYNC, or MS_INVALIDATE. See your platform man page for specifics. The flags argument is not valid on Windows.
+ 
+   You may not need to call ``msync``, because synchronization is performed at intervals automatically by the operating system. However, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
+
+.. data:: MS_ASYNC
+
+   Enum constant for msync. See your platform man page for details. (not available on Windows).
+
+.. data:: MS_SYNC
+
+   Enum constant for msync. See your platform man page for details. (not available on Windows).
+
+.. data:: MS_INVALIDATE
+
+   Enum constant for msync. See your platform man page for details. (not available on Windows).
 
 .. function:: mmap(len, prot, flags, fd, offset)
 
@@ -1184,7 +1235,7 @@ Standard Numeric Types
 
 ``Bool`` ``Int8`` ``Uint8`` ``Int16`` ``Uint16`` ``Int32`` ``Uint32`` ``Int64`` ``Uint64`` ``Float32`` ``Float64`` ``Complex64`` ``Complex128``
 
-Mathematical Functions
+Mathematical Operators
 ----------------------
 
 .. function:: -(x)
@@ -1255,6 +1306,10 @@ Mathematical Functions
 
    Remainder after division
 
+.. function:: divrem(x, y)
+
+   Compute ``x/y`` and ``x%y`` at the same time
+
 .. function:: %(x, m)
 
    Remainder after division. The operator form of ``rem``.
@@ -1266,6 +1321,10 @@ Mathematical Functions
 .. function:: //(num, den)
 
    Rational division
+
+.. function:: rationalize([Type,] x)
+
+   Approximate the number x as a rational fraction
 
 .. function:: num(x)
 
@@ -1305,6 +1364,14 @@ Mathematical Functions
 .. function:: !=(x, y)
 
    Not-equals comparison operator.
+
+.. function:: ===(x, y)
+
+   See the :func:`is` operator
+
+.. function:: !==(x, y)
+
+   Equivalent to ``!is(x, y)``
 
 .. function:: <(x, y)
 
@@ -1350,10 +1417,6 @@ Mathematical Functions
 
    Return -1, 0, or 1 depending on whether ``x<y``, ``x==y``, or ``x>y``, respectively
 
-.. function:: !(x)
-
-   Boolean not
-
 .. function:: ~(x)
 
    Bitwise not
@@ -1369,6 +1432,98 @@ Mathematical Functions
 .. function:: $(x, y)
 
    Bitwise exclusive or
+
+.. function:: !(x)
+
+   Boolean not
+
+.. function:: &&(x, y)
+
+   Boolean and
+
+.. function:: ||(x, y)
+
+   Boolean or
+
+.. function:: A_ldiv_Bc(a,b)
+
+   Matrix operator A \\ B\ :sup:`H`
+
+.. function:: A_ldiv_Bt(a,b)
+
+   Matrix operator A \\ B\ :sup:`T`
+
+.. function:: A_mul_B(...)
+
+   Matrix operator A B
+
+.. function:: A_mul_Bc(...)
+
+   Matrix operator A B\ :sup:`H`
+
+.. function:: A_mul_Bt(...)
+
+   Matrix operator A B\ :sup:`T`
+
+.. function:: A_rdiv_Bc(...)
+
+   Matrix operator A / B\ :sup:`H`
+
+.. function:: A_rdiv_Bt(a,b)
+
+   Matrix operator A / B\ :sup:`T`
+
+.. function:: Ac_ldiv_B(...)
+
+   Matrix operator A\ :sup:`H` \\ B
+
+.. function:: Ac_ldiv_Bc(...)
+
+   Matrix operator A\ :sup:`H` \\ B\ :sup:`H`
+
+.. function:: Ac_mul_B(...)
+
+   Matrix operator A\ :sup:`H` B
+
+.. function:: Ac_mul_Bc(...)
+
+   Matrix operator A\ :sup:`H` B\ :sup:`H`
+
+.. function:: Ac_rdiv_B(a,b)
+
+   Matrix operator A\ :sup:`H` / B
+
+.. function:: Ac_rdiv_Bc(a,b)
+
+   Matrix operator A\ :sup:`H` / B\ :sup:`H`
+
+.. function:: At_ldiv_B(...)
+
+   Matrix operator A\ :sup:`T` \\ B
+
+.. function:: At_ldiv_Bt(...)
+
+   Matrix operator A\ :sup:`T` \\ B\ :sup:`T`
+
+.. function:: At_mul_B(...)
+
+   Matrix operator A\ :sup:`T` B
+
+.. function:: At_mul_Bt(...)
+
+   Matrix operator A\ :sup:`T` B\ :sup:`T`
+
+.. function:: At_rdiv_B(a,b)
+
+   Matrix operator A\ :sup:`T` / B
+
+.. function:: At_rdiv_Bt(a,b)
+
+   Matrix operator A\ :sup:`T` / B\ :sup:`T`
+
+
+Mathematical Functions
+----------------------
 
 .. function:: isapprox(x::Number, y::Number; rtol::Real=cbrt(maxeps), atol::Real=sqrt(maxeps))
 
@@ -1949,6 +2104,10 @@ Data Formats
 
    Parse a string as a decimal floating point number, yielding a number of the specified type.
 
+.. function:: big(x)
+
+   Convert a number to a maximum precision representation (typically ``BigInt`` or ``BigFloat``)
+
 .. function:: bool(x)
 
    Convert a number or numeric array to boolean
@@ -2384,7 +2543,7 @@ Constructors
 
 .. function:: reinterpret(type, A)
 
-   Construct an array with the same binary data as the given array, but with the specified element type
+   Change the type-interpretation of a block of memory. For example, ``reinterpret(Float32, uint32(7))`` interprets the 4 bytes corresponding to ``uint32(7)`` as a ``Float32``. For arrays, this constructs an array with the same binary data as the given array, but with the specified element type.
 
 .. function:: eye(n)
 
@@ -2877,6 +3036,13 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
    arguments, and the size of the transformed result, are the same as
    for :func:`rfft`.
 
+.. function:: plan_brfft(A, d [, dims [, flags [, timelimit]]])
+
+   Pre-plan an optimized real-input unnormalized transform, similar to
+   :func:`plan_rfft` except for :func:`brfft` instead of :func:`rfft`.
+   The first two arguments and the size of the transformed result, are
+   the same as for :func:`brfft`.
+
 .. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]])
 
    Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
@@ -2957,6 +3123,15 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 .. function:: conv(u,v)
 
    Convolution of two vectors. Uses FFT algorithm.
+
+.. function:: conv2(u,v,A)
+
+   2-D convolution of the matrix ``A`` with the 2-D separable kernel generated by
+   the vectors ``u`` and ``v``.  Uses 2-D FFT algorithm
+
+.. function:: conv2(B,A)
+
+   2-D convolution of the matrix ``B`` with the matrix ``A``.  Uses 2-D FFT algorithm
 
 .. function:: xcorr(u,v)
 
@@ -3095,10 +3270,6 @@ Parallel Computing
    See the documentation for package ``ClusterManagers`` for more information on how to 
    write a custom cluster manager.
    
-.. function:: addprocs_sge(n) - DEPRECATED from Base, use ClusterManagers.addprocs_sge(n)
-
-   Adds processes via the Sun/Oracle Grid Engine batch queue, using ``qsub``.
-
 .. function:: nprocs()
 
    Get the number of available processors.
@@ -3477,6 +3648,38 @@ C Interface
    symbols to be available for usage in other shared libraries, in
    situations where there are dependencies between shared libraries.
 
+.. data:: RTLD_DEEPBIND
+
+   Enum constant for dlopen. See your platform man page for details, if applicable.
+
+.. data:: RTLD_FIRST
+
+   Enum constant for dlopen. See your platform man page for details, if applicable.
+
+.. data:: RTLD_GLOBAL
+
+   Enum constant for dlopen. See your platform man page for details, if applicable.
+
+.. data:: RTLD_LAZY
+
+   Enum constant for dlopen. See your platform man page for details, if applicable.
+
+.. data:: RTLD_LOCAL
+
+   Enum constant for dlopen. See your platform man page for details, if applicable.
+
+.. data:: RTLD_NODELETE
+    
+   Enum constant for dlopen. See your platform man page for details, if applicable.
+
+.. data:: RTLD_NOLOAD
+
+   Enum constant for dlopen. See your platform man page for details, if applicable.
+
+.. data:: RTLD_NOW
+
+   Enum constant for dlopen. See your platform man page for details, if applicable.
+
 .. function:: dlsym(handle, sym)
 
    Look up a symbol from a shared library handle, return callable function pointer on success.
@@ -3529,6 +3732,74 @@ C Interface
    When calling ``dlopen``, the paths in this list will be searched first, in order, before searching the
    system locations for a valid library handle.
 
+.. data:: Cchar
+
+   Equivalent to the native ``char`` c-type
+
+.. data:: Cuchar
+
+   Equivalent to the native ``unsigned char`` c-type (Uint8)
+
+.. data:: Cshort
+
+   Equivalent to the native ``signed short`` c-type (Int16)
+
+.. data:: Cushort
+
+   Equivalent to the native ``unsigned short`` c-type (Uint16)
+
+.. data:: Cint
+
+   Equivalent to the native ``signed int`` c-type (Int32)
+
+.. data:: Cuint
+
+   Equivalent to the native ``unsigned int`` c-type (Uint32)
+
+.. data:: Clong
+
+   Equivalent to the native ``signed long`` c-type
+
+.. data:: Culong
+
+   Equivalent to the native ``unsigned long`` c-type
+ 
+.. data:: Clonglong
+
+   Equivalent to the native ``signed long long`` c-type (Int64)
+
+.. data:: Culonglong
+
+   Equivalent to the native ``unsigned long long`` c-type (Uint64)
+
+.. data:: Csize_t
+
+   Equivalent to the native ``size_t`` c-type (Uint)
+
+.. data:: Cssize_t
+
+   Equivalent to the native ``ssize_t`` c-type
+
+.. data:: Cptrdiff_t
+
+   Equivalent to the native ``ptrdiff_t`` c-type (Int)
+
+.. data:: Coff_t
+
+   Equivalent to the native ``off_t`` c-type
+
+.. data:: Cwchar_t
+
+   Equivalent to the native ``wchar_t`` c-type (Int32)
+
+.. data:: Cfloat
+
+   Equivalent to the native ``float`` c-type (Float32)
+
+.. data:: Cdouble
+
+   Equivalent to the native ``double`` c-type (Float64)
+
 
 Errors
 ------
@@ -3560,13 +3831,66 @@ Errors
 
    Get the value of the C library's ``errno``
 
+.. function:: systemerror(sysfunc, iftrue)
+
+   Raises a ``SystemError`` for ``errno`` with the descriptive string ``sysfunc`` if ``bool`` is true
+
 .. function:: strerror(n)
 
    Convert a system call error code to a descriptive string
 
-.. function:: assert(cond)
+.. function:: assert(cond, [text])
 
    Raise an error if ``cond`` is false. Also available as the macro ``@assert expr``.
+
+.. function:: @assert
+
+   Raise an error if ``cond`` is false. Preferred syntax for writings assertions.
+
+.. data:: ArgumentError
+
+   The parameters given to a function call are not valid.
+
+.. data:: BoundsError
+
+   An indexing operation into an array tried to access an out-of-bounds element.
+
+.. data:: EOFError
+
+   No more data was available to read from a file or stream.
+
+.. data:: ErrorException
+
+   Generic error type. The error message, in the `.msg` field, may provide more specific details.
+
+.. data:: KeyError
+
+   An indexing operation into an ``Associative`` (``Dict``) or ``Set`` like object tried to access or delete a non-existent element.
+
+.. data:: LoadError
+
+   An error occurred while `including`, `requiring`, or `using` a file. The error specifics should be available in the `.error` field.
+
+.. data:: MethodError
+
+   A method with the required type signature does not exist in the given generic function.
+
+.. data:: ParseError
+
+   The expression passed to the `parse` function could not be interpreted as a valid Julia expression.
+
+.. data:: ProcessExitedException
+
+   After a client Julia process has exited, further attempts to reference the dead child will throw this exception.
+
+.. data:: SystemError
+
+   A system call failed with an error code (in the ``errno`` global variable).
+
+.. data:: TypeError
+
+   A type assertion failure, or calling an intrinsic function with an incorrect argument type.
+
 
 Tasks
 -----
@@ -3705,3 +4029,27 @@ Internals
 .. function:: gc_enable()
 
    Re-enable garbage collection after calling ``gc_disable``.
+
+.. function:: macroexpand(x)
+
+   Takes the expression x and returns an equivalent expression with all macros removed (expanded).
+
+.. function:: expand(x)
+
+   Takes the expression x and returns an equivalent expression in lowered form
+
+.. function:: code_lowered(f, types)
+
+   Returns the lowered code for the method matching the given generic function and type signature
+
+.. function:: code_typed(f, types)
+
+   Returns the lowered and type-inferred code for the method matching the given generic function and type signature
+
+.. function:: code_llvm(f, types)
+
+   Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to STDOUT
+
+.. function:: code_native(f, types)
+
+   Prints the native assembly instructions generated for running the method matching the given generic function and type signature to STDOUT

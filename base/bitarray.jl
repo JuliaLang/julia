@@ -21,7 +21,13 @@ type BitArray{N} <: AbstractArray{Bool, N}
         if length(dims) != N
             error("incorrect number of dimensions")
         end
-        n = prod(dims)
+        n = 1
+        for d in dims
+            if d < 0
+                error("invalid dimension size")
+            end
+            n *= d
+        end
         nc = num_bit_chunks(n)
         chunks = Array(Uint64, nc)
         if nc > 0

@@ -1003,7 +1003,6 @@ export
     include_string,
     reload,
     require,
-    usingmodule,
 
 # RTS internals
     finalizer,
@@ -1106,6 +1105,7 @@ export
     addprocs,
     ClusterManager,
     fetch,
+    interrupt,
     isready,
     myid,
     nprocs,

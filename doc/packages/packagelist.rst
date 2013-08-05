@@ -4,6 +4,38 @@
  Available Packages  
 ********************
 
+`ASCIIPlots <https://github.com/johnmyleswhite/ASCIIPlots.jl>`_
+_______________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
+     :target: https://github.com/johnmyleswhite
+
+  Generate simple plots as ASCII art in Julia 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-26) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: John Myles White
+        :target: https://github.com/johnmyleswhite
+
+----
+
 `AWS <https://github.com/amitmurthy/AWS.jl>`_
 _____________________________________________
 
@@ -14,9 +46,11 @@ _____________________________________________
      :alt: Amit Murthy
      :target: https://github.com/amitmurthy
 
+  Julia interface to AWS 
+
   Current Version: ``0.0.0``  (updated: 2013-07-09) 
 
-  Julia interface to AWS 
+  Master build status: No Travis-CI build
 
   Maintainer: `Amit Murthy <https://github.com/amitmurthy>`_
 
@@ -44,6 +78,44 @@ _____________________________________________
 
 ----
 
+`ApproxFun <https://github.com/dlfivefifty/ApproxFun>`_
+_______________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/69459897cbc341ab301fa1d7d2e3486a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: dlfivefifty
+     :target: https://github.com/dlfivefifty
+
+  Julia IFun Implementation 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-15) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `dlfivefifty <https://github.com/dlfivefifty>`_
+
+  Dependencies::
+
+      Winston        Any Version
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/69459897cbc341ab301fa1d7d2e3486a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: dlfivefifty
+        :target: https://github.com/dlfivefifty
+
+    .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: John Myles White
+        :target: https://github.com/johnmyleswhite
+
+----
+
 `ArgParse <https://github.com/carlobaldassi/ArgParse.jl>`_
 __________________________________________________________
 
@@ -54,9 +126,14 @@ __________________________________________________________
      :alt: Carlo Baldassi
      :target: https://github.com/carlobaldassi
 
+  Package for parsing command-line arguments to Julia programs. 
+
   Current Version: ``0.2.4``  (updated: 2013-06-18) 
 
-  Package for parsing command-line arguments to Julia programs. 
+  Master build status: |ArgParse_build|
+
+  .. |ArgParse_build| image:: https://api.travis-ci.org/carlobaldassi/ArgParse.jl.png
+     :align: bottom
 
   Maintainer: `Carlo Baldassi <https://github.com/carlobaldassi>`_
 
@@ -98,9 +175,11 @@ _________________________________________________
      :alt: gusl
      :target: https://github.com/gusl
 
+   
+
   Current Version: ``0.0.0``  (updated: 2013-04-11) 
 
-   
+  Master build status: No Travis-CI build
 
   Maintainer: `gusl <https://github.com/gusl>`_
 
@@ -128,9 +207,11 @@ _____________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  A package for benchmarking code and packages 
+
   Current Version: ``0.0.1``  (updated: 2013-06-23) 
 
-  A package for benchmarking code and packages 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -171,14 +252,17 @@ ___________________________________________________
      :alt: Keno Fischer
      :target: https://github.com/loladiro
 
-  Current Version: ``0.2.0``  (updated: 2013-06-15) 
-
   Tool for building binary dependencies for Julia modules 
+
+  Current Version: ``0.2.2``  (updated: 2013-07-31) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Keno Fischer <https://github.com/loladiro>`_
 
   Dependencies::
 
+      URIParser      Any Version
       julia          [v"0.2.0-"]
 
   Contributors:
@@ -200,6 +284,12 @@ ___________________________________________________
         :width: 40px
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
+
+    .. image:: https://secure.gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Miles Lubin
+        :target: https://github.com/mlubin
 
     .. image:: https://secure.gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -225,9 +315,11 @@ _________________________________________________
      :alt: Diego Javier Zea
      :target: https://github.com/diegozea
 
+  Julia's package for working on Bioinformatics with DNA, RNA and Protein Sequences 
+
   Current Version: ``0.2.1``  (updated: 2013-05-25) 
 
-  Julia's package for working on Bioinformatics with DNA, RNA and Protein Sequences 
+  Master build status: No Travis-CI build
 
   Maintainer: `Diego Javier Zea <https://github.com/diegozea>`_
 
@@ -251,6 +343,40 @@ _________________________________________________
 
 ----
 
+`Blocks <https://github.com/tanmaykm/Blocks.jl>`_
+_________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Tanmay Mohapatra
+     :target: https://github.com/tanmaykm
+
+  A framework to represent chunks of entities and parallel methods on them. 
+
+  Current Version: ``0.0.0``  (updated: 2013-08-02) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Tanmay Mohapatra <https://github.com/tanmaykm>`_
+
+  Dependencies::
+
+      DataFrames     Any Version
+      HDFS           Any Version
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tanmay Mohapatra
+        :target: https://github.com/tanmaykm
+
+----
+
 `BloomFilters <https://github.com/johnmyleswhite/BloomFilters.jl>`_
 ___________________________________________________________________
 
@@ -261,9 +387,11 @@ ___________________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  Bloom filters in Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-02-03) 
 
-  Bloom filters in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -281,6 +409,38 @@ ___________________________________________________________________
 
 ----
 
+`CRC32 <https://github.com/fhs/CRC32.jl>`_
+__________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Fazlul Shahriar
+     :target: https://github.com/fhs
+
+  32-bit cyclic redundancy check (CRC-32) checksum implementation for Julia 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-21) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Fazlul Shahriar <https://github.com/fhs>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Fazlul Shahriar
+        :target: https://github.com/fhs
+
+----
+
 `Cairo <https://github.com/JuliaLang/Cairo.jl>`_
 ________________________________________________
 
@@ -291,9 +451,11 @@ ________________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
-  Current Version: ``0.2.3``  (updated: 2013-07-03) 
-
   Bindings to the Cairo graphics library. 
+
+  Current Version: ``0.2.5``  (updated: 2013-08-01) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
@@ -305,17 +467,23 @@ ________________________________________________
 
   Contributors:
 
-    .. image:: https://secure.gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Viral B. Shah
-        :target: https://github.com/ViralBShah
+        :alt: Tim Holy
+        :target: https://github.com/timholy
 
     .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
+
+    .. image:: https://secure.gravatar.com/avatar/55e277a715ee2afd0d29c309174eca02?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Viral B. Shah
+        :target: https://github.com/ViralBShah
 
     .. image:: https://secure.gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -329,11 +497,17 @@ ________________________________________________
         :alt: Mike Nolta
         :target: https://github.com/nolta
 
-    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Tim Holy
-        :target: https://github.com/timholy
+        :alt: Jameson Nash
+        :target: https://github.com/vtjnash
+
+    .. image:: https://secure.gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Daniel Jones
+        :target: https://github.com/dcjones
 
     .. image:: https://secure.gravatar.com/avatar/afb7f86706c41da610daf216d60e59b9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -341,23 +515,17 @@ ________________________________________________
         :alt: Ron Rock
         :target: https://github.com/rsrock
 
-    .. image:: https://secure.gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Patrick O'Leary
-        :target: https://github.com/pao
-
     .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Jameson Nash
-        :target: https://github.com/vtjnash
+        :alt: Patrick O'Leary
+        :target: https://github.com/pao
 
     .. image:: https://secure.gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -370,12 +538,6 @@ ________________________________________________
         :width: 40px
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
-
-    .. image:: https://secure.gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Daniel Jones
-        :target: https://github.com/dcjones
 
     .. image:: https://secure.gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -395,9 +557,14 @@ ___________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  Calculus functions in Julia 
+
   Current Version: ``0.1.1``  (updated: 2013-04-27) 
 
-  Calculus functions in Julia 
+  Master build status: |Calculus_build|
+
+  .. |Calculus_build| image:: https://api.travis-ci.org/johnmyleswhite/Calculus.jl.png
+     :align: bottom
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -418,6 +585,12 @@ ___________________________________________________________
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
+
+    .. image:: https://secure.gravatar.com/avatar/6453a62bda2e46cf7778a2b64a5a259b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Ivar Nesje
+        :target: https://github.com/ivarne
 
     .. image:: https://secure.gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -443,9 +616,11 @@ __________________________________________________
      :alt: Mike Nolta
      :target: https://github.com/nolta
 
-  Current Version: ``0.3.1``  (updated: 2013-06-24) 
-
   Calendar time package for Julia 
+
+  Current Version: ``0.3.3``  (updated: 2013-07-15) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Mike Nolta <https://github.com/nolta>`_
 
@@ -486,9 +661,11 @@ ______________________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
+  Fast multidimensional iteration 
+
   Current Version: ``0.0.0``  (updated: 2013-05-28) 
 
-  Fast multidimensional iteration 
+  Master build status: No Travis-CI build
 
   Maintainer: `Tim Holy <https://github.com/timholy>`_
 
@@ -516,9 +693,11 @@ ___________________________________________________
      :alt: Alessandro Andrioni
      :target: https://github.com/andrioni
 
+  Catalan: a combinatorics library for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-05-07) 
 
-  Catalan: a combinatorics library for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Alessandro Andrioni <https://github.com/andrioni>`_
 
@@ -558,9 +737,14 @@ _________________________________________________________________
      :alt: Tanmay Mohapatra
      :target: https://github.com/tanmaykm
 
+  Few utility types over Julia Vector type 
+
   Current Version: ``0.0.0``  (updated: 2013-05-25) 
 
-  Few utility types over Julia Vector type 
+  Master build status: |ChainedVectors_build|
+
+  .. |ChainedVectors_build| image:: https://api.travis-ci.org/tanmaykm/ChainedVectors.jl.png
+     :align: bottom
 
   Maintainer: `Tanmay Mohapatra <https://github.com/tanmaykm>`_
 
@@ -588,9 +772,11 @@ ___________________________________________________________________
      :alt: Theodore Papamarkou
      :target: https://github.com/scidom
 
+  Simulation, Bayesian inference and Bayesian model selection for chemical kinetics in Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-07-07) 
 
-  Simulation, Bayesian inference and Bayesian model selection for chemical kinetics in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Theodore Papamarkou <https://github.com/scidom>`_
 
@@ -620,9 +806,11 @@ _______________________________________________
      :alt: Isaiah
      :target: https://github.com/ihnorton
 
+  Julia interface to libclang and C wrapper generator 
+
   Current Version: ``0.0.0``  (updated: 2013-06-09) 
 
-  Julia interface to libclang and C wrapper generator 
+  Master build status: No Travis-CI build
 
   Maintainer: `Isaiah <https://github.com/ihnorton>`_
 
@@ -681,9 +869,11 @@ _________________________________________
      :alt: Miles Lubin
      :target: https://github.com/mlubin
 
+  Interface to the Coin-OR Linear Programming solver (CLP) 
+
   Current Version: ``0.0.3``  (updated: 2013-06-24) 
 
-  Interface to the Coin-OR Linear Programming solver (CLP) 
+  Master build status: No Travis-CI build
 
   Maintainer: `Miles Lubin <https://github.com/mlubin>`_
 
@@ -719,9 +909,11 @@ ___________________________________________________________________
      :alt: Lance Hepler
      :target: https://github.com/nlhepler
 
+   
+
   Current Version: ``0.0.0``  (updated: 2013-07-10) 
 
-   
+  Master build status: No Travis-CI build
 
   Maintainer: `Lance Hepler <https://github.com/nlhepler>`_
 
@@ -755,9 +947,11 @@ _______________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  Basic functions for clustering data: k-means, dp-means, etc. 
+
   Current Version: ``0.2.1``  (updated: 2013-06-21) 
 
-  Basic functions for clustering data: k-means, dp-means, etc. 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -806,9 +1000,11 @@ ________________________________________________
      :alt: Daniel Jones
      :target: https://github.com/dcjones
 
+  Common data encoding algorithms 
+
   Current Version: ``0.0.0``  (updated: 2013-06-23) 
 
-  Common data encoding algorithms 
+  Master build status: No Travis-CI build
 
   Maintainer: `Daniel Jones <https://github.com/dcjones>`_
 
@@ -842,9 +1038,11 @@ _______________________________________________
      :alt: Miles Lubin
      :target: https://github.com/mlubin
 
+  Interface to the Coin-OR CBC solver for mixed-integer programming 
+
   Current Version: ``0.0.2``  (updated: 2013-05-21) 
 
-  Interface to the Coin-OR CBC solver for mixed-integer programming 
+  Master build status: No Travis-CI build
 
   Maintainer: `Miles Lubin <https://github.com/mlubin>`_
 
@@ -880,9 +1078,11 @@ ________________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
-  Current Version: ``0.2.3``  (updated: 2013-06-19) 
-
   Basic color manipulation utilities. 
+
+  Current Version: ``0.2.4``  (updated: 2013-07-27) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
@@ -940,9 +1140,11 @@ __________________________________________________
      :alt: Daniel Jones
      :target: https://github.com/dcjones
 
-  Current Version: ``0.1.5``  (updated: 2013-07-10) 
-
   Declarative vector graphics 
+
+  Current Version: ``0.1.6``  (updated: 2013-07-17) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Daniel Jones <https://github.com/dcjones>`_
 
@@ -972,6 +1174,12 @@ __________________________________________________
         :alt: Tim Holy
         :target: https://github.com/timholy
 
+    .. image:: https://secure.gravatar.com/avatar/4206b43cb025b0c1fd8cd9fa89dd6086?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: catawbasam
+        :target: https://github.com/catawbasam
+
     .. image:: https://secure.gravatar.com/avatar/1af2db0b26142fd0c7ab082f3d445f73?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
@@ -983,12 +1191,6 @@ __________________________________________________
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
-
-    .. image:: https://secure.gravatar.com/avatar/4206b43cb025b0c1fd8cd9fa89dd6086?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: catawbasam
-        :target: https://github.com/catawbasam
 
     .. image:: https://secure.gravatar.com/avatar/910a5ad5931aeda034b38c9658eaadf2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1008,6 +1210,12 @@ __________________________________________________
         :alt: Westley Argentum Hennigh
         :target: https://github.com/WestleyArgentum
 
+    .. image:: https://secure.gravatar.com/avatar/8f514187144b1b19b0205fce41284d32?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: john verzani
+        :target: https://github.com/jverzani
+
 ----
 
 `ContinuedFractions <https://github.com/johnmyleswhite/ContinuedFractions.jl>`_
@@ -1020,9 +1228,11 @@ _______________________________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  Types and functions for working with continued fractions in Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-02-07) 
 
-  Types and functions for working with continued fractions in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -1050,9 +1260,11 @@ __________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
+  Utilities for calling C++ from Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-03-15) 
 
-  Utilities for calling C++ from Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Tim Holy <https://github.com/timholy>`_
 
@@ -1080,9 +1292,11 @@ _____________________________________________________
      :alt: Steven G. Johnson
      :target: https://github.com/stevengj
 
-  Current Version: ``0.1.2``  (updated: 2013-06-24) 
-
   One- and multi-dimensional adaptive integration routines for the Julia language 
+
+  Current Version: ``1.0.0``  (updated: 2013-07-15) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Steven G. Johnson <https://github.com/stevengj>`_
 
@@ -1105,9 +1319,11 @@ __________________________________________
      :alt: Forio Online Simulations
      :target: https://github.com/forio
 
+  a Julia HTTP curl library 
+
   Current Version: ``0.0.1``  (updated: 2013-05-29) 
 
-  a Julia HTTP curl library 
+  Master build status: No Travis-CI build
 
   Maintainer: `Forio Online Simulations <https://github.com/forio>`_
 
@@ -1141,9 +1357,11 @@ _______________________________________________
      :alt: Isaiah
      :target: https://github.com/ihnorton
 
+  DICOM for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-03-01) 
 
-  DICOM for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Isaiah <https://github.com/ihnorton>`_
 
@@ -1201,9 +1419,11 @@ _______________________________________________
      :alt: Keno Fischer
      :target: https://github.com/loladiro
 
+  Julia Package for parsing the DWARF file format 
+
   Current Version: ``0.0.0``  (updated: 2013-06-17) 
 
-  Julia Package for parsing the DWARF file format 
+  Master build status: No Travis-CI build
 
   Maintainer: `Keno Fischer <https://github.com/loladiro>`_
 
@@ -1223,21 +1443,26 @@ _______________________________________________
 
 ----
 
-`DataFrames <https://github.com/HarlanH/DataFrames.jl>`_
-________________________________________________________
+`DataFrames <https://github.com/JuliaStats/DataFrames.jl>`_
+___________________________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/9f1a68b9e623be5da422b44e733fa8bc?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: Harlan Harris
-     :target: https://github.com/HarlanH
-
-  Current Version: ``0.3.6``  (updated: 2013-06-29) 
+     :alt: Julia Statistics
+     :target: https://github.com/JuliaStats
 
   library for working with tabular data in Julia 
 
-  Maintainer: `Harlan Harris <https://github.com/HarlanH>`_
+  Current Version: ``0.3.8``  (updated: 2013-07-26) 
+
+  Master build status: |DataFrames_build|
+
+  .. |DataFrames_build| image:: https://api.travis-ci.org/JuliaStats/DataFrames.jl.png
+     :align: bottom
+
+  Maintainer: `Julia Statistics <https://github.com/JuliaStats>`_
 
   Dependencies::
 
@@ -1289,17 +1514,17 @@ ________________________________________________________
         :alt: Viral B. Shah
         :target: https://github.com/ViralBShah
 
-    .. image:: https://secure.gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: milktrader
-        :target: https://github.com/milktrader
-
     .. image:: https://secure.gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
+
+    .. image:: https://secure.gravatar.com/avatar/25ce2ab2f5e673e46208c1188a39e6ca?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: milktrader
+        :target: https://github.com/milktrader
 
     .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1336,6 +1561,12 @@ ________________________________________________________
         :width: 40px
         :alt: Glen Hertz
         :target: https://github.com/GlenHertz
+
+    .. image:: https://secure.gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tanmay Mohapatra
+        :target: https://github.com/tanmaykm
 
     .. image:: https://secure.gravatar.com/avatar/16d8443194c380ca93a77fb8530a5aee?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1403,17 +1634,17 @@ ________________________________________________________
         :alt: Miles Lubin
         :target: https://github.com/mlubin
 
+    .. image:: https://secure.gravatar.com/avatar/957fc8103c58ee9ee9a5d96c91b15e76?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Randy Zwitch
+        :target: https://github.com/randyzwitch
+
     .. image:: https://secure.gravatar.com/avatar/5ac7b1da0f2e9107b5020f88023a15e5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Simon Byrne
         :target: https://github.com/simonbyrne
-
-    .. image:: https://secure.gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Tanmay Mohapatra
-        :target: https://github.com/tanmaykm
 
 ----
 
@@ -1427,9 +1658,14 @@ _________________________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
-  Current Version: ``0.2.3``  (updated: 2013-04-21) 
-
   Julia implementation of Data structures 
+
+  Current Version: ``0.2.4``  (updated: 2013-07-27) 
+
+  Master build status: |DataStructures_build|
+
+  .. |DataStructures_build| image:: https://api.travis-ci.org/lindahua/DataStructures.jl.png
+     :align: bottom
 
   Maintainer: `Dahua Lin <https://github.com/lindahua>`_
 
@@ -1453,6 +1689,44 @@ _________________________________________________________________
 
 ----
 
+`Datetime <https://github.com/karbarcca/Datetime.jl>`_
+______________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Jacob Quinn
+     :target: https://github.com/karbarcca
+
+  A Date and DateTime implementation for Julia 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-27) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Jacob Quinn <https://github.com/karbarcca>`_
+
+  Dependencies::
+
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jacob Quinn
+        :target: https://github.com/karbarcca
+
+    .. image:: https://secure.gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Mike Nolta
+        :target: https://github.com/nolta
+
+----
+
 `Debug <https://github.com/toivoh/Debug.jl>`_
 _____________________________________________
 
@@ -1463,9 +1737,11 @@ _____________________________________________
      :alt: toivoh
      :target: https://github.com/toivoh
 
-  Current Version: ``0.0.0``  (updated: 2013-06-19) 
-
   Prototype interactive debugger for Julia 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-20) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `toivoh <https://github.com/toivoh>`_
 
@@ -1511,9 +1787,11 @@ _______________________________________________________________
      :alt: Ben Sadeghi
      :target: https://github.com/bensadeghi
 
+  Decision Tree Classifier in Julia 
+
   Current Version: ``0.1.0``  (updated: 2013-06-11) 
 
-  Decision Tree Classifier in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Ben Sadeghi <https://github.com/bensadeghi>`_
 
@@ -1541,9 +1819,11 @@ ___________________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
+  A Julia framework for delayed expression evaluation 
+
   Current Version: ``0.2.1``  (updated: 2013-04-15) 
 
-  A Julia framework for delayed expression evaluation 
+  Master build status: No Travis-CI build
 
   Maintainer: `Dahua Lin <https://github.com/lindahua>`_
 
@@ -1571,9 +1851,11 @@ _______________________________________________________
      :alt: Jonathan Chang
      :target: https://github.com/slycoder
 
+  Utility functions for manipulating Dicts in Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-05-14) 
 
-  Utility functions for manipulating Dicts in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Jonathan Chang <https://github.com/slycoder>`_
 
@@ -1601,9 +1883,11 @@ __________________________________________________________
      :alt: David de Laat
      :target: https://github.com/daviddelaat
 
+  KeysView and ValuesView types for dynamic low-overhead views into the entries of dictionaries 
+
   Current Version: ``0.0.0``  (updated: 2013-02-23) 
 
-  KeysView and ValuesView types for dynamic low-overhead views into the entries of dictionaries 
+  Master build status: No Travis-CI build
 
   Maintainer: `David de Laat <https://github.com/daviddelaat>`_
 
@@ -1631,9 +1915,11 @@ ________________________________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  Methods for dimensionality reduction: PCA, ICA, NMF 
+
   Current Version: ``0.0.0``  (updated: 2013-01-17) 
 
-  Methods for dimensionality reduction: PCA, ICA, NMF 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -1661,9 +1947,11 @@ _______________________________________________________________
      :alt: Lei WANG
      :target: https://github.com/wlbksy
 
+  Discrete factor and its operations in Probabilistic Graphical Models 
+
   Current Version: ``0.0.0``  (updated: 2013-06-06) 
 
-  Discrete factor and its operations in Probabilistic Graphical Models 
+  Master build status: No Travis-CI build
 
   Maintainer: `Lei WANG <https://github.com/wlbksy>`_
 
@@ -1691,9 +1979,11 @@ _____________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
+  Julia module for Distance evaluation 
+
   Current Version: ``0.2.1``  (updated: 2013-04-15) 
 
-  Julia module for Distance evaluation 
+  Master build status: No Travis-CI build
 
   Maintainer: `Dahua Lin <https://github.com/lindahua>`_
 
@@ -1715,31 +2005,54 @@ _____________________________________________________
 `Distributions <https://github.com/JuliaStats/Distributions.jl>`_
 _________________________________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/d41d8cd98f00b204e9800998ecf8427e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: JuliaStats
+     :alt: Julia Statistics
      :target: https://github.com/JuliaStats
 
-  Current Version: ``0.1.4``  (updated: 2013-06-23) 
+  A Julia package for probability distributions and associated functions. 
 
-  A Julia package for probability distributions and associated funtions. 
+  Current Version: ``0.2.3``  (updated: 2013-07-29) 
 
-  Maintainer: `JuliaStats <https://github.com/JuliaStats>`_
+  Master build status: |Distributions_build|
+
+  .. |Distributions_build| image:: https://api.travis-ci.org/JuliaStats/Distributions.jl.png
+     :align: bottom
+
+  Maintainer: `Julia Statistics <https://github.com/JuliaStats>`_
 
   Dependencies::
 
+      NumericExtensionsAny Version
       Stats          Any Version
-      julia          [v"0.2.0-"]
 
   Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
 
     .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
+
+    .. image:: https://secure.gravatar.com/avatar/5ac7b1da0f2e9107b5020f88023a15e5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Simon Byrne
+        :target: https://github.com/simonbyrne
+
+    .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Douglas Bates
+        :target: https://github.com/dmbates
 
     .. image:: https://secure.gravatar.com/avatar/52ec3f52d9c7be45b398b9e8afa4ee8c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1753,29 +2066,11 @@ _________________________________________________________________
         :alt: Andreas Noack Jensen
         :target: https://github.com/andreasnoackjensen
 
-    .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Douglas Bates
-        :target: https://github.com/dmbates
-
-    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Dahua Lin
-        :target: https://github.com/lindahua
-
     .. image:: https://secure.gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
-
-    .. image:: https://secure.gravatar.com/avatar/198e9aeca5b6c25a3c2b03a6506de1a9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Martin O'Leary
-        :target: https://github.com/mewo2
 
     .. image:: https://secure.gravatar.com/avatar/25d0ed671b01595bb0a6c12bfa90c9b2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1783,23 +2078,29 @@ _________________________________________________________________
         :alt: gusl
         :target: https://github.com/gusl
 
+    .. image:: https://secure.gravatar.com/avatar/198e9aeca5b6c25a3c2b03a6506de1a9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Martin O'Leary
+        :target: https://github.com/mewo2
+
     .. image:: https://secure.gravatar.com/avatar/6cba33e8e7c69fa63f6ad386b7a958c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Jiahao Chen
         :target: https://github.com/jiahao
 
-    .. image:: https://secure.gravatar.com/avatar/b4035aa7c2e4ecf012eed26a63573f5b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Alan Edelman
-        :target: https://github.com/alanedelman
-
     .. image:: https://secure.gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Kevin Squire
         :target: https://github.com/kmsquire
+
+    .. image:: https://secure.gravatar.com/avatar/b4035aa7c2e4ecf012eed26a63573f5b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Alan Edelman
+        :target: https://github.com/alanedelman
 
     .. image:: https://secure.gravatar.com/avatar/0b41d1f9e580cde53307166a47ae5300?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -1819,9 +2120,11 @@ _________________________________________________________
      :alt: Theodore Papamarkou
      :target: https://github.com/scidom
 
+  Julia package for representing dual numbers and for performing dual algebra 
+
   Current Version: ``0.0.0``  (updated: 2013-04-21) 
 
-  Julia package for representing dual numbers and for performing dual algebra 
+  Master build status: No Travis-CI build
 
   Maintainer: `Theodore Papamarkou <https://github.com/scidom>`_
 
@@ -1849,9 +2152,11 @@ ___________________________________________
      :alt: Keno Fischer
      :target: https://github.com/loladiro
 
+  Julia Package for working with ELF files 
+
   Current Version: ``0.0.0``  (updated: 2013-05-28) 
 
-  Julia Package for working with ELF files 
+  Master build status: No Travis-CI build
 
   Maintainer: `Keno Fischer <https://github.com/loladiro>`_
 
@@ -1880,9 +2185,11 @@ __________________________________________________
      :alt: Mike Nolta
      :target: https://github.com/nolta
 
+  Elliptic integral and Jacobi elliptic special functions 
+
   Current Version: ``0.0.0``  (updated: 2013-03-13) 
 
-  Elliptic integral and Jacobi elliptic special functions 
+  Master build status: No Travis-CI build
 
   Maintainer: `Mike Nolta <https://github.com/nolta>`_
 
@@ -1910,9 +2217,14 @@ ____________________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
+  Example Julia package repo. 
+
   Current Version: ``0.0.0``  (updated: 2012-11-22) 
 
-  Example Julia package repo. 
+  Master build status: |Example_build|
+
+  .. |Example_build| image:: https://api.travis-ci.org/JuliaLang/Example.jl.png
+     :align: bottom
 
   Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
@@ -1940,6 +2252,12 @@ ____________________________________________________
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
+    .. image:: https://secure.gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Iain Dunning
+        :target: https://github.com/IainNZ
+
     .. image:: https://secure.gravatar.com/avatar/002ccfd8ee9e135f0dfb5650c292052d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
@@ -1964,9 +2282,11 @@ _____________________________________________________________________
      :alt: Zach Allaun
      :target: https://github.com/zachallaun
 
+  Utilities for working with the Julia `Expr` type 
+
   Current Version: ``0.0.0``  (updated: 2013-04-30) 
 
-  Utilities for working with the Julia `Expr` type 
+  Master build status: No Travis-CI build
 
   Maintainer: `Zach Allaun <https://github.com/zachallaun>`_
 
@@ -1994,9 +2314,11 @@ ______________________________________________
      :alt: Mike Nolta
      :target: https://github.com/nolta
 
+  FITS file package for Julia 
+
   Current Version: ``0.0.0``  (updated: 2012-12-09) 
 
-  FITS file package for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Mike Nolta <https://github.com/nolta>`_
 
@@ -2024,9 +2346,11 @@ _________________________________________________________
      :alt: Zach Allaun
      :target: https://github.com/zachallaun
 
-  Current Version: ``0.0.2``  (updated: 2013-06-21) 
-
   Midje-like testing for Julia 
+
+  Current Version: ``0.1.0``  (updated: 2013-07-02) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Zach Allaun <https://github.com/zachallaun>`_
 
@@ -2060,9 +2384,14 @@ ________________________________________________________
      :alt: Carlo Baldassi
      :target: https://github.com/carlobaldassi
 
+  Utilities to read/write FASTA format files in Julia 
+
   Current Version: ``0.1.1``  (updated: 2013-06-28) 
 
-  Utilities to read/write FASTA format files in Julia 
+  Master build status: |FastaIO_build|
+
+  .. |FastaIO_build| image:: https://api.travis-ci.org/carlobaldassi/FastaIO.jl.png
+     :align: bottom
 
   Maintainer: `Carlo Baldassi <https://github.com/carlobaldassi>`_
 
@@ -2091,9 +2420,14 @@ ____________________________________________________________
      :alt: Carlo Baldassi
      :target: https://github.com/carlobaldassi
 
+  [DEPRECATED PACKAGE. USE FastaIO INSTEAD] 
+
   Current Version: ``0.2.1``  (updated: 2013-05-22) 
 
-  [DEPRECATED PACKAGE. USE FastaIO INSTEAD] 
+  Master build status: |FastaRead_build|
+
+  .. |FastaRead_build| image:: https://api.travis-ci.org/carlobaldassi/FastaRead.jl.png
+     :align: bottom
 
   Maintainer: `Carlo Baldassi <https://github.com/carlobaldassi>`_
 
@@ -2128,9 +2462,11 @@ ___________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  File::Find implementation in Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-01-19) 
 
-  File::Find implementation in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -2158,9 +2494,11 @@ ________________________________________________________________________________
      :alt: Zach Allaun
      :target: https://github.com/zachallaun
 
+  Functional and and persistent data structures for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-05-16) 
 
-  Functional and and persistent data structures for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Zach Allaun <https://github.com/zachallaun>`_
 
@@ -2200,9 +2538,11 @@ _____________________________________________________________________
      :alt: Zach Allaun
      :target: https://github.com/zachallaun
 
+  Functional Julia – based on fogus/lemonad 
+
   Current Version: ``0.0.0``  (updated: 2013-04-30) 
 
-  Functional Julia – based on fogus/lemonad 
+  Master build status: No Travis-CI build
 
   Maintainer: `Zach Allaun <https://github.com/zachallaun>`_
 
@@ -2220,6 +2560,32 @@ _____________________________________________________________________
 
 ----
 
+`GARCH <https://github.com/AndreyKolev/GARCH.jl>`_
+__________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/27541ea7ad0954012c655bc3d2dad17f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Andrey Kolev
+     :target: https://github.com/AndreyKolev
+
+  Julia GARCH package 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-29) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Andrey Kolev <https://github.com/AndreyKolev>`_
+
+  Dependencies::
+
+      NLopt          Any Version
+
+  Contributors:
+
+----
+
 `GLFW <https://github.com/jayschwa/GLFW.jl>`_
 _____________________________________________
 
@@ -2230,9 +2596,11 @@ _____________________________________________
      :alt: Jay Weisskopf
      :target: https://github.com/jayschwa
 
+  GLFW bindings for Julia. GLFW is a multi-platform library for opening a window, creating an OpenGL context, and managing input. 
+
   Current Version: ``0.0.0``  (updated: 2013-04-02) 
 
-  GLFW bindings for Julia. GLFW is a multi-platform library for opening a window, creating an OpenGL context, and managing input. 
+  Master build status: No Travis-CI build
 
   Maintainer: `Jay Weisskopf <https://github.com/jayschwa>`_
 
@@ -2255,23 +2623,27 @@ _____________________________________________
 `GLM <https://github.com/JuliaStats/GLM.jl>`_
 _____________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/d41d8cd98f00b204e9800998ecf8427e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: JuliaStats
+     :alt: Julia Statistics
      :target: https://github.com/JuliaStats
-
-  Current Version: ``0.0.0``  (updated: 2013-05-06) 
 
   Generalized linear models in Julia 
 
-  Maintainer: `JuliaStats <https://github.com/JuliaStats>`_
+  Current Version: ``0.2.0``  (updated: 2013-07-30) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Julia Statistics <https://github.com/JuliaStats>`_
 
   Dependencies::
 
-      DataFrames     Any Version
-      Distributions  Any Version
+      DataFrames     [v"0.3.6-"]
+      Distributions  [v"0.2.0-"]
+      NumericExtensions[v"0.2.12-"]
+      julia          [v"0.2.0-"]
 
   Contributors:
 
@@ -2311,9 +2683,14 @@ __________________________________________________
      :alt: Carlo Baldassi
      :target: https://github.com/carlobaldassi
 
+  GLPK wrapper module for Julia 
+
   Current Version: ``0.2.4``  (updated: 2013-06-18) 
 
-  GLPK wrapper module for Julia 
+  Master build status: |GLPK_build|
+
+  .. |GLPK_build| image:: https://api.travis-ci.org/carlobaldassi/GLPK.jl.png
+     :align: bottom
 
   Maintainer: `Carlo Baldassi <https://github.com/carlobaldassi>`_
 
@@ -2348,9 +2725,11 @@ ________________________________________________________________________________
      :alt: Carlo Baldassi
      :target: https://github.com/carlobaldassi
 
+  Interface between the GLPK.jl wrapper and MathProgBase.jl 
+
   Current Version: ``0.0.0``  (updated: 2013-06-07) 
 
-  Interface between the GLPK.jl wrapper and MathProgBase.jl 
+  Master build status: No Travis-CI build
 
   Maintainer: `Carlo Baldassi <https://github.com/carlobaldassi>`_
 
@@ -2380,9 +2759,11 @@ ______________________________________________
      :alt: Robert J. Ennis
      :target: https://github.com/rennis250
 
+  Julia interface to GLUT 
+
   Current Version: ``0.0.0``  (updated: 2013-01-18) 
 
-  Julia interface to GLUT 
+  Master build status: No Travis-CI build
 
   Maintainer: `Robert J. Ennis <https://github.com/rennis250>`_
 
@@ -2411,9 +2792,14 @@ _________________________________________
      :alt: Jiahao Chen
      :target: https://github.com/jiahao
 
+  Julia interface to the GNU Scientific Library (GSL) 
+
   Current Version: ``0.0.0``  (updated: 2013-04-04) 
 
-  Julia interface to the GNU Scientific Library (GSL) 
+  Master build status: |GSL_build|
+
+  .. |GSL_build| image:: https://api.travis-ci.org/jiahao/GSL.jl.png
+     :align: bottom
 
   Maintainer: `Jiahao Chen <https://github.com/jiahao>`_
 
@@ -2447,9 +2833,11 @@ _____________________________________________
      :alt: Kevin Squire
      :target: https://github.com/kmsquire
 
+  A Julia interface for gzip functions in zlib 
+
   Current Version: ``0.2.4``  (updated: 2013-06-25) 
 
-  A Julia interface for gzip functions in zlib 
+  Master build status: No Travis-CI build
 
   Maintainer: `Kevin Squire <https://github.com/kmsquire>`_
 
@@ -2485,9 +2873,11 @@ ________________________________________________
      :alt: Daniel Jones
      :target: https://github.com/dcjones
 
-  Current Version: ``0.1.3``  (updated: 2013-06-29) 
-
   Crafty statistical graphics for Julia. 
+
+  Current Version: ``0.1.7``  (updated: 2013-07-09) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Daniel Jones <https://github.com/dcjones>`_
 
@@ -2523,6 +2913,12 @@ ________________________________________________
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
+
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
 
     .. image:: https://secure.gravatar.com/avatar/b1f06f732d86e562563db728b2875eb2?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -2572,9 +2968,11 @@ _____________________________________________
      :alt: mbaz
      :target: https://github.com/mbaz
 
+  A julia front-end for gnuplot. 
+
   Current Version: ``0.0.0``  (updated: 2013-05-05) 
 
-  A julia front-end for gnuplot. 
+  Master build status: No Travis-CI build
 
   Maintainer: `mbaz <https://github.com/mbaz>`_
 
@@ -2614,9 +3012,11 @@ _____________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  A Julia package to estimate the geographic location of IP addresses 
+
   Current Version: ``0.0.0``  (updated: 2013-06-24) 
 
-  A Julia package to estimate the geographic location of IP addresses 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -2644,9 +3044,11 @@ _____________________________________________________________
      :alt: Theodore Papamarkou
      :target: https://github.com/scidom
 
+  Geometric MCMC algorithms and zero-variance (ZV) Monte Carlo Bayesian routines 
+
   Current Version: ``0.0.0``  (updated: 2013-04-12) 
 
-  Geometric MCMC algorithms and zero-variance (ZV) Monte Carlo Bayesian routines 
+  Master build status: No Travis-CI build
 
   Maintainer: `Theodore Papamarkou <https://github.com/scidom>`_
 
@@ -2674,9 +3076,11 @@ ______________________________________________
      :alt: Robert J. Ennis
      :target: https://github.com/rennis250
 
+  Minimal implementation of Jasper's Julia FFI 
+
   Current Version: ``0.0.0``  (updated: 2013-01-15) 
 
-  Minimal implementation of Jasper's Julia FFI 
+  Master build status: No Travis-CI build
 
   Maintainer: `Robert J. Ennis <https://github.com/rennis250>`_
 
@@ -2700,6 +3104,42 @@ ______________________________________________
 
 ----
 
+`GnuTLS <https://github.com/loladiro/GnuTLS.jl>`_
+_________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Keno Fischer
+     :target: https://github.com/loladiro
+
+  Transport Level Security for Julia Streams provided by GnuTLS 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-26) 
+
+  Master build status: |GnuTLS_build|
+
+  .. |GnuTLS_build| image:: https://api.travis-ci.org/loladiro/GnuTLS.jl.png
+     :align: bottom
+
+  Maintainer: `Keno Fischer <https://github.com/loladiro>`_
+
+  Dependencies::
+
+      BinDeps        [v"0.2.1-"]
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
+
+----
+
 `GoogleCharts <https://github.com/jverzani/GoogleCharts.jl>`_
 _____________________________________________________________
 
@@ -2710,9 +3150,11 @@ _____________________________________________________________
      :alt: john verzani
      :target: https://github.com/jverzani
 
+  Julia interface to Google Chart Tools 
+
   Current Version: ``0.0.0``  (updated: 2013-05-14) 
 
-  Julia interface to Google Chart Tools 
+  Master build status: No Travis-CI build
 
   Maintainer: `john verzani <https://github.com/jverzani>`_
 
@@ -2733,21 +3175,26 @@ _____________________________________________________________
 
 ----
 
-`Graphs <https://github.com/johnmyleswhite/Graphs.jl>`_
-_______________________________________________________
+`Graphs <https://github.com/JuliaLang/Graphs.jl>`_
+__________________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: John Myles White
-     :target: https://github.com/johnmyleswhite
-
-  Current Version: ``0.2.3``  (updated: 2013-06-20) 
+     :alt: The Julia Language
+     :target: https://github.com/JuliaLang
 
   Working with graphs in Julia 
 
-  Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
+  Current Version: ``0.2.3``  (updated: 2013-06-20) 
+
+  Master build status: |Graphs_build|
+
+  .. |Graphs_build| image:: https://api.travis-ci.org/JuliaLang/Graphs.jl.png
+     :align: bottom
+
+  Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
   Dependencies::
 
@@ -2768,6 +3215,12 @@ _______________________________________________________
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
 
+    .. image:: https://secure.gravatar.com/avatar/5c06e9faa0d7bd205f81d10e825d7e4a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: nfoti
+        :target: https://github.com/nfoti
+
     .. image:: https://secure.gravatar.com/avatar/c58394486ebc197a62fa31dde80fd336?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
@@ -2780,11 +3233,17 @@ _______________________________________________________
         :alt: David
         :target: https://github.com/maxlikely
 
-    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/79e1bcfc1ed23b8964171191e9073545?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Tim Holy
-        :target: https://github.com/timholy
+        :alt: Matt Weiden
+        :target: https://github.com/mweiden
+
+    .. image:: https://secure.gravatar.com/avatar/62df30beab9c2a6f3fe3f86995e94387?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: David de Laat
+        :target: https://github.com/daviddelaat
 
     .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -2792,11 +3251,11 @@ _______________________________________________________
         :alt: Douglas Bates
         :target: https://github.com/dmbates
 
-    .. image:: https://secure.gravatar.com/avatar/62df30beab9c2a6f3fe3f86995e94387?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: David de Laat
-        :target: https://github.com/daviddelaat
+        :alt: Tim Holy
+        :target: https://github.com/timholy
 
     .. image:: https://secure.gravatar.com/avatar/c928b9b00cbc5133c4ae7a743cf96f10?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -2822,9 +3281,11 @@ ____________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.2.1``  (updated: 2013-06-26) 
-
   Interpolation and related operations on grids 
+
+  Current Version: ``0.2.3``  (updated: 2013-08-01) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Tim Holy <https://github.com/timholy>`_
 
@@ -2840,6 +3301,12 @@ ____________________________________________
         :alt: Tim Holy
         :target: https://github.com/timholy
 
+    .. image:: https://secure.gravatar.com/avatar/5ac7b1da0f2e9107b5020f88023a15e5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Simon Byrne
+        :target: https://github.com/simonbyrne
+
 ----
 
 `Gtk <https://github.com/vtjnash/Gtk.jl>`_
@@ -2852,15 +3319,17 @@ __________________________________________
      :alt: Jameson Nash
      :target: https://github.com/vtjnash
 
-  Current Version: ``0.1.0``  (updated: 2013-06-15) 
-
   Julia interface to Gtk windowing toolkit. 
+
+  Current Version: ``0.2.0``  (updated: 2013-07-24) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Jameson Nash <https://github.com/vtjnash>`_
 
   Dependencies::
 
-      Cairo          [v"0.0.1"]
+      Cairo          [v"0.2.2"]
       julia          [v"0.2.0-"]
 
   Contributors:
@@ -2883,9 +3352,11 @@ _________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
+  Julia Port of Gurobi Optimizer 
+
   Current Version: ``0.0.0``  (updated: 2013-06-13) 
 
-  Julia Port of Gurobi Optimizer 
+  Master build status: No Travis-CI build
 
   Maintainer: `Dahua Lin <https://github.com/lindahua>`_
 
@@ -2926,9 +3397,11 @@ ____________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.2.3``  (updated: 2013-07-01) 
-
   HDF5 interface for the Julia language 
+
+  Current Version: ``0.2.5``  (updated: 2013-07-27) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Tim Holy <https://github.com/timholy>`_
 
@@ -2974,15 +3447,16 @@ _____________________________________________
      :alt: Tanmay Mohapatra
      :target: https://github.com/tanmaykm
 
-  Current Version: ``0.0.0``  (updated: 2013-06-06) 
-
   HDFS interface for Julia as a wrapper over Hadoop HDFS library. 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-24) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Tanmay Mohapatra <https://github.com/tanmaykm>`_
 
   Dependencies::
 
-      ChainedVectors Any Version
       PTools         Any Version
       URLParse       Any Version
       julia          [v"0.2.0-"]
@@ -3007,9 +3481,11 @@ _________________________________________
      :alt: Dirk Gadsden
      :target: https://github.com/dirk
 
+  HTTP library (server, client, parser) for the Julia language 
+
   Current Version: ``0.0.2``  (updated: 2013-03-06) 
 
-  HTTP library (server, client, parser) for the Julia language 
+  Master build status: No Travis-CI build
 
   Maintainer: `Dirk Gadsden <https://github.com/dirk>`_
 
@@ -3027,6 +3503,39 @@ _________________________________________
 
 ----
 
+`HTTPClient <https://github.com/amitmurthy/HTTPClient.jl>`_
+___________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Amit Murthy
+     :target: https://github.com/amitmurthy
+
+   
+
+  Current Version: ``0.0.0``  (updated: 2013-07-06) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Amit Murthy <https://github.com/amitmurthy>`_
+
+  Dependencies::
+
+      LibCURL        Any Version
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Amit Murthy
+        :target: https://github.com/amitmurthy
+
+----
+
 `Hadamard <https://github.com/stevengj/Hadamard.jl>`_
 _____________________________________________________
 
@@ -3037,9 +3546,11 @@ _____________________________________________________
      :alt: Steven G. Johnson
      :target: https://github.com/stevengj
 
+  Fast Walsh-Hadamard transforms for the Julia language 
+
   Current Version: ``0.0.0``  (updated: 2013-02-13) 
 
-  Fast Walsh-Hadamard transforms for the Julia language 
+  Master build status: No Travis-CI build
 
   Maintainer: `Steven G. Johnson <https://github.com/stevengj>`_
 
@@ -3048,6 +3559,38 @@ _____________________________________________________
       None
 
   Contributors:
+
+----
+
+`HopfieldNets <https://github.com/johnmyleswhite/HopfieldNets.jl>`_
+___________________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
+     :target: https://github.com/johnmyleswhite
+
+  Hopfield networks in Julia 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-28) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
+
+  Dependencies::
+
+      None
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: John Myles White
+        :target: https://github.com/johnmyleswhite
 
 ----
 
@@ -3061,16 +3604,17 @@ _____________________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``  (updated: 2013-04-30) 
-
    
+
+  Current Version: ``0.0.1``  (updated: 2013-07-18) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Hacker School <https://github.com/hackerschool>`_
 
   Dependencies::
 
-      Calendar       Any Version
-      FactCheck      [v"0.0.1"]
+      None
 
   Contributors:
 
@@ -3080,17 +3624,23 @@ _____________________________________________________________
         :alt: Daniel Mendel
         :target: https://github.com/danielmendel
 
+    .. image:: https://secure.gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Zach Allaun
+        :target: https://github.com/zachallaun
+
     .. image:: https://secure.gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Leah Hanson
         :target: https://github.com/astrieanna
 
-    .. image:: https://secure.gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: Zach Allaun
-        :target: https://github.com/zachallaun
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
 
 ----
 
@@ -3104,15 +3654,17 @@ _____________________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``  (updated: 2013-04-30) 
-
    
+
+  Current Version: ``0.0.2``  (updated: 2013-07-26) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Hacker School <https://github.com/hackerschool>`_
 
   Dependencies::
 
-      HttpCommon     Any Version
+      None
 
   Contributors:
 
@@ -3122,23 +3674,29 @@ _____________________________________________________________
         :alt: Daniel Mendel
         :target: https://github.com/danielmendel
 
-    .. image:: https://secure.gravatar.com/avatar/2aff223681817a0fadddb6a94a4860b8?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Chuck
-        :target: https://github.com/ChuckHa
-
     .. image:: https://secure.gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Leah Hanson
         :target: https://github.com/astrieanna
 
+    .. image:: https://secure.gravatar.com/avatar/2aff223681817a0fadddb6a94a4860b8?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Chuck
+        :target: https://github.com/ChuckHa
+
     .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Keno Fischer
         :target: https://github.com/loladiro
+
+    .. image:: https://secure.gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Zach Allaun
+        :target: https://github.com/zachallaun
 
     .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -3158,9 +3716,11 @@ _____________________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``  (updated: 2013-04-30) 
-
    
+
+  Current Version: ``0.0.1``  (updated: 2013-07-18) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Hacker School <https://github.com/hackerschool>`_
 
@@ -3189,6 +3749,12 @@ _____________________________________________________________
         :alt: Zach Allaun
         :target: https://github.com/zachallaun
 
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
+
     .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
@@ -3213,9 +3779,11 @@ ____________________________________________________________________
      :alt: Simon Kornblith
      :target: https://github.com/simonster
 
+  T-tests, Wilcoxon rank sum (Mann-Whitney U), signed rank, and circular statistics in Julia 
+
   Current Version: ``0.2.0``  (updated: 2013-04-16) 
 
-  T-tests, Wilcoxon rank sum (Mann-Whitney U), signed rank, and circular statistics in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Simon Kornblith <https://github.com/simonster>`_
 
@@ -3245,9 +3813,11 @@ ________________________________________
      :alt: Mike Nolta
      :target: https://github.com/nolta
 
-  Current Version: ``0.0.0``  (updated: 2013-03-08) 
-
   Julia wrapper for the International Components for Unicode (ICU) library 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-03) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Mike Nolta <https://github.com/nolta>`_
 
@@ -3293,9 +3863,11 @@ ______________________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.0.0``  (updated: 2013-05-29) 
-
   Interactive display of images and movies 
+
+  Current Version: ``0.0.2``  (updated: 2013-07-25) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Tim Holy <https://github.com/timholy>`_
 
@@ -3303,6 +3875,7 @@ ______________________________________________________
 
       Images         Any Version
       Tk             Any Version
+      Winston        Any Version
       julia          [v"0.2.0-"]
 
   Contributors:
@@ -3312,6 +3885,12 @@ ______________________________________________________
         :width: 40px
         :alt: Tim Holy
         :target: https://github.com/timholy
+
+    .. image:: https://secure.gravatar.com/avatar/afb7f86706c41da610daf216d60e59b9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Ron Rock
+        :target: https://github.com/rsrock
 
 ----
 
@@ -3325,9 +3904,11 @@ ________________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.2.4``  (updated: 2013-06-26) 
-
   An image library for Julia 
+
+  Current Version: ``0.2.7``  (updated: 2013-07-19) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Tim Holy <https://github.com/timholy>`_
 
@@ -3374,9 +3955,14 @@ ____________________________________________________________________
      :alt: Tracy Wadleigh
      :target: https://github.com/twadleigh
 
+  Statically-sized immutable vectors and matrices. 
+
   Current Version: ``0.0.0``  (updated: 2013-04-09) 
 
-  Statically-sized immutable vectors and matrices. 
+  Master build status: |ImmutableArrays_build|
+
+  .. |ImmutableArrays_build| image:: https://api.travis-ci.org/twadleigh/ImmutableArrays.jl.png
+     :align: bottom
 
   Maintainer: `Tracy Wadleigh <https://github.com/twadleigh>`_
 
@@ -3422,9 +4008,11 @@ ____________________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
+  Reading and writing Windows-style INI files (writing not yet implemented). 
+
   Current Version: ``0.2.1``  (updated: 2013-06-29) 
 
-  Reading and writing Windows-style INI files (writing not yet implemented). 
+  Master build status: No Travis-CI build
 
   Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
@@ -3476,9 +4064,11 @@ ________________________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
+  Common functional iterator patterns. 
+
   Current Version: ``0.1.1``  (updated: 2013-06-29) 
 
-  Common functional iterator patterns. 
+  Master build status: No Travis-CI build
 
   Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
@@ -3524,9 +4114,14 @@ ________________________________________
      :alt: Avik Sengupta
      :target: https://github.com/aviks
 
+  A Julia package for quantitative finance 
+
   Current Version: ``0.0.0``  (updated: 2013-01-03) 
 
-  A Julia package for quantitative finance 
+  Master build status: |Ito_build|
+
+  .. |Ito_build| image:: https://api.travis-ci.org/aviks/Ito.jl.png
+     :align: bottom
 
   Maintainer: `Avik Sengupta <https://github.com/aviks>`_
 
@@ -3553,21 +4148,23 @@ ________________________________________
 
 ----
 
-`JSON <https://github.com/aviks/JSON.jl>`_
-__________________________________________
+`JSON <https://github.com/JuliaLang/JSON.jl>`_
+______________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: Avik Sengupta
-     :target: https://github.com/aviks
-
-  Current Version: ``0.1.0``  (updated: 2013-06-06) 
+     :alt: The Julia Language
+     :target: https://github.com/JuliaLang
 
   JSON parsing and printing 
 
-  Maintainer: `Avik Sengupta <https://github.com/aviks>`_
+  Current Version: ``0.1.1``  (updated: 2013-07-12) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
   Dependencies::
 
@@ -3643,6 +4240,50 @@ __________________________________________
 
 ----
 
+`JuMP <https://github.com/IainNZ/JuMP.jl>`_
+___________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Iain Dunning
+     :target: https://github.com/IainNZ
+
+  Modelling language for Linear, Integer, and Quadratic Programming 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-20) 
+
+  Master build status: |JuMP_build|
+
+  .. |JuMP_build| image:: https://api.travis-ci.org/IainNZ/JuMP.jl.png
+     :align: bottom
+
+  Maintainer: `Iain Dunning <https://github.com/IainNZ>`_
+
+  Dependencies::
+
+      Clp            Any Version
+      CoinMP         Any Version
+      MathProgBase   Any Version
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Miles Lubin
+        :target: https://github.com/mlubin
+
+    .. image:: https://secure.gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Iain Dunning
+        :target: https://github.com/IainNZ
+
+----
+
 `JudyDicts <https://github.com/tanmaykm/JudyDicts.jl>`_
 _______________________________________________________
 
@@ -3653,9 +4294,14 @@ _______________________________________________________
      :alt: Tanmay Mohapatra
      :target: https://github.com/tanmaykm
 
+  Judy Array for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-05-26) 
 
-  Judy Array for Julia 
+  Master build status: |JudyDicts_build|
+
+  .. |JudyDicts_build| image:: https://api.travis-ci.org/tanmaykm/JudyDicts.jl.png
+     :align: bottom
 
   Maintainer: `Tanmay Mohapatra <https://github.com/tanmaykm>`_
 
@@ -3683,9 +4329,11 @@ ____________________________________________________________
      :alt: Jameson Nash
      :target: https://github.com/vtjnash
 
+   
+
   Current Version: ``0.0.0``  (updated: 2013-04-08) 
 
-   
+  Master build status: No Travis-CI build
 
   Maintainer: `Jameson Nash <https://github.com/vtjnash>`_
 
@@ -3714,9 +4362,11 @@ ___________________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  KL-divergence estimation in Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-01-17) 
 
-  KL-divergence estimation in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -3744,9 +4394,11 @@ __________________________________________________
      :alt: Simon Kornblith
      :target: https://github.com/simonster
 
+  LIBSVM bindings for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-04-15) 
 
-  LIBSVM bindings for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Simon Kornblith <https://github.com/simonster>`_
 
@@ -3774,9 +4426,11 @@ _____________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  A package for working with human languages 
+
   Current Version: ``0.0.1``  (updated: 2013-05-24) 
 
-  A package for working with human languages 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -3804,9 +4458,11 @@ ______________________________________________________________
      :alt: Daniel Jones
      :target: https://github.com/dcjones
 
+  Lazy sequences. 
+
   Current Version: ``0.1.0``  (updated: 2013-06-20) 
 
-  Lazy sequences. 
+  Master build status: No Travis-CI build
 
   Maintainer: `Daniel Jones <https://github.com/dcjones>`_
 
@@ -3824,6 +4480,38 @@ ______________________________________________________________
 
 ----
 
+`LibCURL <https://github.com/amitmurthy/LibCURL.jl>`_
+_____________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Amit Murthy
+     :target: https://github.com/amitmurthy
+
+  Thin Julia wrapper of libCURL 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-06) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Amit Murthy <https://github.com/amitmurthy>`_
+
+  Dependencies::
+
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Amit Murthy
+        :target: https://github.com/amitmurthy
+
+----
+
 `LibExpat <https://github.com/amitmurthy/LibExpat.jl>`_
 _______________________________________________________
 
@@ -3834,9 +4522,11 @@ _______________________________________________________
      :alt: Amit Murthy
      :target: https://github.com/amitmurthy
 
-  Current Version: ``0.0.0``  (updated: 2013-06-18) 
-
   Julia interface to libexpat 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-05) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Amit Murthy <https://github.com/amitmurthy>`_
 
@@ -3870,9 +4560,11 @@ ________________________________________________________________
      :alt: Carlo Baldassi
      :target: https://github.com/carlobaldassi
 
+  [DEPRECATED PACKAGE - SUPERSEDED BY MathProgBase] 
+
   Current Version: ``0.2.1``  (updated: 2013-05-23) 
 
-  [DEPRECATED PACKAGE - SUPERSEDED BY MathProgBase] 
+  Master build status: No Travis-CI build
 
   Maintainer: `Carlo Baldassi <https://github.com/carlobaldassi>`_
 
@@ -3901,9 +4593,11 @@ ___________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  Loss functions 
+
   Current Version: ``0.0.0``  (updated: 2012-12-23) 
 
-  Loss functions 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -3931,9 +4625,11 @@ ____________________________________________
      :alt: Simon Kornblith
      :target: https://github.com/simonster
 
-  Current Version: ``0.2.0``  (updated: 2013-06-18) 
-
   Julia module for reading MATLAB files 
+
+  Current Version: ``0.2.1``  (updated: 2013-06-29) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Simon Kornblith <https://github.com/simonster>`_
 
@@ -3981,9 +4677,11 @@ _________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
+  Calling MATLAB in Julia through MATLAB Engine 
+
   Current Version: ``0.0.0``  (updated: 2013-05-10) 
 
-  Calling MATLAB in Julia through MATLAB Engine 
+  Master build status: No Travis-CI build
 
   Maintainer: `Dahua Lin <https://github.com/lindahua>`_
 
@@ -4017,9 +4715,11 @@ ___________________________________________
      :alt: Chris DuBois
      :target: https://github.com/doobwa
 
+  MCMC tools for Julia 
+
   Current Version: ``0.0.0``  (updated: 2012-11-23) 
 
-  MCMC tools for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Chris DuBois <https://github.com/doobwa>`_
 
@@ -4059,9 +4759,11 @@ _____________________________________________
      :alt: Steven G. Johnson
      :target: https://github.com/stevengj
 
+  fast modified discrete cosine transform (MDCT and IMDCT) for the Julia language 
+
   Current Version: ``0.0.0``  (updated: 2013-04-05) 
 
-  fast modified discrete cosine transform (MDCT and IMDCT) for the Julia language 
+  Master build status: No Travis-CI build
 
   Maintainer: `Steven G. Johnson <https://github.com/stevengj>`_
 
@@ -4083,9 +4785,11 @@ _________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
-  Current Version: ``0.2.2``  (updated: 2013-06-27) 
-
   A set of functions to support the development of machine learning algorithms 
+
+  Current Version: ``0.2.3``  (updated: 2013-07-20) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Dahua Lin <https://github.com/lindahua>`_
 
@@ -4113,9 +4817,11 @@ _____________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  Tools for working with the MNIST data set 
+
   Current Version: ``0.0.0``  (updated: 2013-04-12) 
 
-  Tools for working with the MNIST data set 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -4143,9 +4849,11 @@ _______________________________________________________________________
      :alt: milktrader
      :target: https://github.com/milktrader
 
+  Technical analysis of financial time series in Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-03-02) 
 
-  Technical analysis of financial time series in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `milktrader <https://github.com/milktrader>`_
 
@@ -4156,7 +4864,7 @@ _______________________________________________________________________
       Stats          Any Version
       TimeSeries     Any Version
       UTF16          Any Version
-      julia          [v"0.1.0-", v"0.2.0-"]
+      julia          [v"0.1.0-",v"0.2.0-"]
 
   Contributors:
 
@@ -4165,45 +4873,6 @@ _______________________________________________________________________
         :width: 40px
         :alt: milktrader
         :target: https://github.com/milktrader
-
-----
-
-`MathProg <https://github.com/IainNZ/MathProg.jl>`_
-___________________________________________________
-
-  .. image:: https://secure.gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-     :height: 80px
-     :width: 80px
-     :align: right
-     :alt: Iain Dunning
-     :target: https://github.com/IainNZ
-
-  Current Version: ``0.0.0``  (updated: 2013-06-24) 
-
-  Modelling language for Linear, Integer, and Quadratic Programming 
-
-  Maintainer: `Iain Dunning <https://github.com/IainNZ>`_
-
-  Dependencies::
-
-      Clp            Any Version
-      CoinMP         Any Version
-      MathProgBase   Any Version
-      julia          [v"0.2.0-"]
-
-  Contributors:
-
-    .. image:: https://secure.gravatar.com/avatar/b0cf54b8431443687735cb486599ea9c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Miles Lubin
-        :target: https://github.com/mlubin
-
-    .. image:: https://secure.gravatar.com/avatar/cc283e3bd2784ad33dfd55afcfef4877?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Iain Dunning
-        :target: https://github.com/IainNZ
 
 ----
 
@@ -4217,9 +4886,11 @@ ___________________________________________________________
      :alt: Miles Lubin
      :target: https://github.com/mlubin
 
+  Provides standard interface to linear/mixed-integer/++ optimization solvers, including linprog and mixintprog functions. 
+
   Current Version: ``0.0.0``  (updated: 2013-06-24) 
 
-  Provides standard interface to linear/mixed-integer/++ optimization solvers, including linprog and mixintprog functions. 
+  Master build status: No Travis-CI build
 
   Maintainer: `Miles Lubin <https://github.com/mlubin>`_
 
@@ -4259,15 +4930,17 @@ _____________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``  (updated: 2013-04-29) 
-
    
+
+  Current Version: ``0.0.1``  (updated: 2013-07-18) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Hacker School <https://github.com/hackerschool>`_
 
   Dependencies::
 
-      HttpServer     Any Version
+      None
 
   Contributors:
 
@@ -4289,6 +4962,18 @@ _____________________________________________________
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
+    .. image:: https://secure.gravatar.com/avatar/06625cbad0c69f5c2e673a4312e9fd7e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Zach Allaun
+        :target: https://github.com/zachallaun
+
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
+
 ----
 
 `Memoize <https://github.com/simonster/Memoize.jl>`_
@@ -4301,9 +4986,11 @@ ____________________________________________________
      :alt: Simon Kornblith
      :target: https://github.com/simonster
 
+  @memoize macro for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-06-13) 
 
-  @memoize macro for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Simon Kornblith <https://github.com/simonster>`_
 
@@ -4331,9 +5018,11 @@ __________________________________________________
      :alt: Tracy Wadleigh
      :target: https://github.com/twadleigh
 
+  Generation and manipulation of triangular meshes. 
+
   Current Version: ``0.0.0``  (updated: 2013-03-03) 
 
-  Generation and manipulation of triangular meshes. 
+  Master build status: No Travis-CI build
 
   Maintainer: `Tracy Wadleigh <https://github.com/twadleigh>`_
 
@@ -4367,9 +5056,11 @@ ______________________________________________
      :alt: Douglas Bates
      :target: https://github.com/dmbates
 
+  Julia interface to Metis graph partitioning 
+
   Current Version: ``0.0.0``  (updated: 2013-04-30) 
 
-  Julia interface to Metis graph partitioning 
+  Master build status: No Travis-CI build
 
   Maintainer: `Douglas Bates <https://github.com/dmbates>`_
 
@@ -4398,9 +5089,11 @@ __________________________________________________________
      :alt: Douglas Bates
      :target: https://github.com/dmbates
 
+  A Julia package for fitting (statistical) mixed-effects models 
+
   Current Version: ``0.0.0``  (updated: 2013-06-19) 
 
-  A Julia package for fitting (statistical) mixed-effects models 
+  Master build status: No Travis-CI build
 
   Maintainer: `Douglas Bates <https://github.com/dmbates>`_
 
@@ -4420,6 +5113,41 @@ __________________________________________________________
 
 ----
 
+`MixtureModels <https://github.com/lindahua/MixtureModels.jl>`_
+_______________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Dahua Lin
+     :target: https://github.com/lindahua
+
+  A Julia package for probabilistic mixture models 
+
+  Current Version: ``0.1.1``  (updated: 2013-07-23) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Dahua Lin <https://github.com/lindahua>`_
+
+  Dependencies::
+
+      Distributions  Any Version
+      MLBase         Any Version
+      NumericExtensionsAny Version
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
+
+----
+
 `Monads <https://github.com/pao/Monads.jl>`_
 ____________________________________________
 
@@ -4430,9 +5158,11 @@ ____________________________________________
      :alt: Patrick O'Leary
      :target: https://github.com/pao
 
+  Monadic expressions and sequences for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-03-05) 
 
-  Monadic expressions and sequences for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Patrick O'Leary <https://github.com/pao>`_
 
@@ -4462,9 +5192,11 @@ ____________________________________________
      :alt: Brian Smith
      :target: https://github.com/Lytol
 
+  Mongo bindings for the Julia programming language 
+
   Current Version: ``0.0.0``  (updated: 2013-03-14) 
 
-  Mongo bindings for the Julia programming language 
+  Master build status: No Travis-CI build
 
   Maintainer: `Brian Smith <https://github.com/Lytol>`_
 
@@ -4492,9 +5224,11 @@ __________________________________________________
      :alt: Avik Sengupta
      :target: https://github.com/aviks
 
+  Mongrel2 handlers in Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-01-26) 
 
-  Mongrel2 handlers in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Avik Sengupta <https://github.com/aviks>`_
 
@@ -4535,17 +5269,17 @@ _____________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``  (updated: 2013-04-30) 
-
   Sinatra-like micro framework for web programming in Julia 
+
+  Current Version: ``0.0.1``  (updated: 2013-07-18) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Hacker School <https://github.com/hackerschool>`_
 
   Dependencies::
 
-      HttpCommon     Any Version
-      HttpServer     Any Version
-      Meddle         Any Version
+      None
 
   Contributors:
 
@@ -4573,17 +5307,23 @@ _____________________________________________________
         :alt: Nick Collins
         :target: https://github.com/ncollins
 
+    .. image:: https://secure.gravatar.com/avatar/6c72d7139086df4435a1067a66b02fff?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: thinkpad20
+        :target: https://github.com/thinkpad20
+
     .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Stefan Karpinski
         :target: https://github.com/StefanKarpinski
 
-    .. image:: https://secure.gravatar.com/avatar/6c72d7139086df4435a1067a66b02fff?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
-        :alt: thinkpad20
-        :target: https://github.com/thinkpad20
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
 
     .. image:: https://secure.gravatar.com/avatar/2bf4378d854e6f9e8cdba9505b90520e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -4603,9 +5343,11 @@ _____________________________________________________
      :alt: john verzani
      :target: https://github.com/jverzani
 
-  Current Version: ``0.0.0``  (updated: 2013-05-12) 
-
   Port of mustache.js to julia 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-09) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `john verzani <https://github.com/jverzani>`_
 
@@ -4639,6 +5381,12 @@ _____________________________________________________
         :alt: Dirk Gadsden
         :target: https://github.com/dirk
 
+    .. image:: https://secure.gravatar.com/avatar/54cc6bf56d6223bdb99e5d6cfbd11056?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Leah Hanson
+        :target: https://github.com/astrieanna
+
 ----
 
 `NHST <https://github.com/johnmyleswhite/NHST.jl>`_
@@ -4651,9 +5399,11 @@ ___________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  Null hypothesis significance tests 
+
   Current Version: ``0.0.1``  (updated: 2013-05-28) 
 
-  Null hypothesis significance tests 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -4682,9 +5432,11 @@ ________________________________________________
      :alt: Simon Kornblith
      :target: https://github.com/simonster
 
+  Julia module for reading NIfTI MRI files 
+
   Current Version: ``0.0.0``  (updated: 2013-05-12) 
 
-  Julia module for reading NIfTI MRI files 
+  Master build status: No Travis-CI build
 
   Maintainer: `Simon Kornblith <https://github.com/simonster>`_
 
@@ -4713,9 +5465,11 @@ _______________________________________________
      :alt: Steven G. Johnson
      :target: https://github.com/stevengj
 
+  Package to call the NLopt nonlinear-optimization library from the Julia language 
+
   Current Version: ``0.0.0``  (updated: 2013-03-28) 
 
-  Package to call the NLopt nonlinear-optimization library from the Julia language 
+  Master build status: No Travis-CI build
 
   Maintainer: `Steven G. Johnson <https://github.com/stevengj>`_
 
@@ -4724,6 +5478,38 @@ _______________________________________________
       julia          [v"0.2.0-"]
 
   Contributors:
+
+----
+
+`NPZ <https://github.com/fhs/NPZ.jl>`_
+______________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Fazlul Shahriar
+     :target: https://github.com/fhs
+
+  A Julia package that provides support for reading and writing Numpy .npy and .npz files 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-24) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Fazlul Shahriar <https://github.com/fhs>`_
+
+  Dependencies::
+
+      ZipFile        [v"0.1.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Fazlul Shahriar
+        :target: https://github.com/fhs
 
 ----
 
@@ -4737,9 +5523,11 @@ ______________________________________________
      :alt: Harlan Harris
      :target: https://github.com/HarlanH
 
+  Julia named index and named vector types 
+
   Current Version: ``0.0.0``  (updated: 2012-11-17) 
 
-  Julia named index and named vector types 
+  Master build status: No Travis-CI build
 
   Maintainer: `Harlan Harris <https://github.com/HarlanH>`_
 
@@ -4767,9 +5555,11 @@ ________________________________________________
      :alt: meggart
      :target: https://github.com/meggart
 
+  NetCDF support for the julia programming language 
+
   Current Version: ``0.0.0``  (updated: 2013-05-07) 
 
-  NetCDF support for the julia programming language 
+  Master build status: No Travis-CI build
 
   Maintainer: `meggart <https://github.com/meggart>`_
 
@@ -4797,9 +5587,14 @@ _______________________________________________________________________
      :alt: Dahua Lin
      :target: https://github.com/lindahua
 
-  Current Version: ``0.2.7``  (updated: 2013-06-26) 
-
   Julia extensions to provide high performance computational support 
+
+  Current Version: ``0.2.12``  (updated: 2013-07-29) 
+
+  Master build status: |NumericExtensions_build|
+
+  .. |NumericExtensions_build| image:: https://api.travis-ci.org/lindahua/NumericExtensions.jl.png
+     :align: bottom
 
   Maintainer: `Dahua Lin <https://github.com/lindahua>`_
 
@@ -4814,6 +5609,12 @@ _______________________________________________________________________
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
+
+    .. image:: https://secure.gravatar.com/avatar/a27d23ce4c080f3307cc6507f6fdfe87?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Douglas Bates
+        :target: https://github.com/dmbates
 
     .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -4833,15 +5634,18 @@ ______________________________________________
      :alt: Jacob Quinn
      :target: https://github.com/karbarcca
 
-  Current Version: ``0.2.0``  (updated: 2013-06-03) 
-
   A low-level ODBC interface for the Julia programming language 
+
+  Current Version: ``0.2.0``  (updated: 2013-07-26) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Jacob Quinn <https://github.com/karbarcca>`_
 
   Dependencies::
 
       DataFrames     [v"0.2.0"]
+      ProgressMeter  Any Version
       julia          [v"0.2.0-"]
 
   Contributors:
@@ -4876,9 +5680,11 @@ __________________________________________
      :alt: Jameson Nash
      :target: https://github.com/vtjnash
 
+  Assorted basic Ordinary Differential Equation solvers 
+
   Current Version: ``0.0.0``  (updated: 2013-03-01) 
 
-  Assorted basic Ordinary Differential Equation solvers 
+  Master build status: No Travis-CI build
 
   Maintainer: `Jameson Nash <https://github.com/vtjnash>`_
 
@@ -4906,9 +5712,11 @@ __________________________________________________
      :alt: Robert J. Ennis
      :target: https://github.com/rennis250
 
+  Julia interface to OpenGL 
+
   Current Version: ``0.0.0``  (updated: 2013-01-18) 
 
-  Julia interface to OpenGL 
+  Master build status: No Travis-CI build
 
   Maintainer: `Robert J. Ennis <https://github.com/rennis250>`_
 
@@ -4936,9 +5744,11 @@ _______________________________________________
      :alt: Dirk Gadsden
      :target: https://github.com/dirk
 
+  WIP OpenSSL bindings for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-03-06) 
 
-  WIP OpenSSL bindings for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Dirk Gadsden <https://github.com/dirk>`_
 
@@ -4966,9 +5776,14 @@ _____________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.1.5``  (updated: 2013-05-28) 
-
   Optimization functions for Julia 
+
+  Current Version: ``0.1.6``  (updated: 2013-07-15) 
+
+  Master build status: |Optim_build|
+
+  .. |Optim_build| image:: https://api.travis-ci.org/johnmyleswhite/Optim.jl.png
+     :align: bottom
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -5001,6 +5816,12 @@ _____________________________________________________
         :alt: Blake Johnson
         :target: https://github.com/blakejohnson
 
+    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
+
     .. image:: https://secure.gravatar.com/avatar/02abdd20ef026f24d96035a407912df0?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
@@ -5012,12 +5833,6 @@ _____________________________________________________
         :width: 40px
         :alt: Avik Sengupta
         :target: https://github.com/aviks
-
-    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Dahua Lin
-        :target: https://github.com/lindahua
 
 ----
 
@@ -5031,9 +5846,11 @@ ____________________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
+  A framework for providing optional arguments to functions. 
+
   Current Version: ``0.2.1``  (updated: 2013-06-06) 
 
-  A framework for providing optional arguments to functions. 
+  Master build status: No Travis-CI build
 
   Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
@@ -5085,9 +5902,11 @@ ____________________________________________
      :alt: Simon Kornblith
      :target: https://github.com/simonster
 
+  Julia module for reading Plexon PLX files 
+
   Current Version: ``0.0.0``  (updated: 2013-04-02) 
 
-  Julia module for reading Plexon PLX files 
+  Master build status: No Travis-CI build
 
   Maintainer: `Simon Kornblith <https://github.com/simonster>`_
 
@@ -5115,9 +5934,11 @@ ___________________________________________________
      :alt: Amit Murthy
      :target: https://github.com/amitmurthy
 
-  Current Version: ``0.0.0``  (updated: 2013-06-25) 
-
   Collection of utilities for parallel processing in Julia  
+
+  Current Version: ``0.0.0``  (updated: 2013-07-11) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Amit Murthy <https://github.com/amitmurthy>`_
 
@@ -5151,9 +5972,11 @@ _________________________________________________________________
      :alt: toivoh
      :target: https://github.com/toivoh
 
+  Method dispatch based on pattern matching for Julia 
+
   Current Version: ``0.0.1``  (updated: 2013-05-01) 
 
-  Method dispatch based on pattern matching for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `toivoh <https://github.com/toivoh>`_
 
@@ -5187,9 +6010,11 @@ _______________________________________________________________
      :alt: Ben J. Ward
      :target: https://github.com/Ward9250
 
+  The Julia package for analysis of evolution and phylogeny 
+
   Current Version: ``0.0.0``  (updated: 2013-06-29) 
 
-  The Julia package for analysis of evolution and phylogeny 
+  Master build status: No Travis-CI build
 
   Maintainer: `Ben J. Ward <https://github.com/Ward9250>`_
 
@@ -5217,9 +6042,11 @@ ________________________________________________________
      :alt: Jameson Nash
      :target: https://github.com/vtjnash
 
+  Polynomial manipulations 
+
   Current Version: ``0.0.0``  (updated: 2013-03-01) 
 
-  Polynomial manipulations 
+  Master build status: No Travis-CI build
 
   Maintainer: `Jameson Nash <https://github.com/vtjnash>`_
 
@@ -5247,9 +6074,11 @@ __________________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.2.1``  (updated: 2013-06-17) 
-
   Profilers for Julia 
+
+  Current Version: ``0.2.3``  (updated: 2013-07-26) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Tim Holy <https://github.com/timholy>`_
 
@@ -5289,6 +6118,48 @@ __________________________________________________
         :alt: Elliot Saba
         :target: https://github.com/staticfloat
 
+    .. image:: https://secure.gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Kevin Squire
+        :target: https://github.com/kmsquire
+
+----
+
+`ProfileView <https://github.com/timholy/ProfileView.jl>`_
+__________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Tim Holy
+     :target: https://github.com/timholy
+
+  Visualization of Julia profiling data 
+
+  Current Version: ``0.0.0``  (updated: 2013-08-01) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Tim Holy <https://github.com/timholy>`_
+
+  Dependencies::
+
+      Cairo          [v"0.2.5-"]
+      Color          [v"0.2.4-"]
+      ImageView      Any Version
+      Tk             Any Version
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tim Holy
+        :target: https://github.com/timholy
+
 ----
 
 `ProgressMeter <https://github.com/timholy/ProgressMeter.jl>`_
@@ -5301,9 +6172,11 @@ ______________________________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
+  Progress meter for long-running computations 
+
   Current Version: ``0.0.0``  (updated: 2013-06-07) 
 
-  Progress meter for long-running computations 
+  Master build status: No Travis-CI build
 
   Maintainer: `Tim Holy <https://github.com/timholy>`_
 
@@ -5319,6 +6192,12 @@ ______________________________________________________________
         :alt: Tim Holy
         :target: https://github.com/timholy
 
+    .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jacob Quinn
+        :target: https://github.com/karbarcca
+
 ----
 
 `ProjectTemplate <https://github.com/johnmyleswhite/ProjectTemplate.jl>`_
@@ -5331,9 +6210,11 @@ _________________________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  ProjectTemplate for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-01-19) 
 
-  ProjectTemplate for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -5362,9 +6243,11 @@ _________________________________________________
      :alt: Steven G. Johnson
      :target: https://github.com/stevengj
 
-  Current Version: ``0.0.0``  (updated: 2013-06-24) 
-
   Package to call Python functions from the Julia language 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-18) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Steven G. Johnson <https://github.com/stevengj>`_
 
@@ -5380,23 +6263,29 @@ _________________________________________________
         :alt: Steven G. Johnson
         :target: https://github.com/stevengj
 
-    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Jameson Nash
-        :target: https://github.com/vtjnash
-
     .. image:: https://secure.gravatar.com/avatar/9524ef56c2823a59d54f9226a7ef08ba?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
 
+    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jameson Nash
+        :target: https://github.com/vtjnash
+
     .. image:: https://secure.gravatar.com/avatar/fa3b781987ef53c4d3b8397f2239e519?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Diego Javier Zea
         :target: https://github.com/diegozea
+
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
 
 ----
 
@@ -5410,9 +6299,11 @@ _________________________________________________
      :alt: Junfeng Li
      :target: https://github.com/autozimu
 
+  Graphics solution for Julia based on pyplot 
+
   Current Version: ``0.0.0``  (updated: 2013-06-19) 
 
-  Graphics solution for Julia based on pyplot 
+  Master build status: No Travis-CI build
 
   Maintainer: `Junfeng Li <https://github.com/autozimu>`_
 
@@ -5430,6 +6321,12 @@ _________________________________________________
         :alt: Junfeng Li
         :target: https://github.com/autozimu
 
+    .. image:: https://secure.gravatar.com/avatar/5c06e9faa0d7bd205f81d10e825d7e4a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: nfoti
+        :target: https://github.com/nfoti
+
 ----
 
 `PySide <https://github.com/jverzani/PySide.jl>`_
@@ -5442,9 +6339,11 @@ _________________________________________________
      :alt: john verzani
      :target: https://github.com/jverzani
 
-  Current Version: ``0.0.0``  (updated: 2013-06-18) 
-
   julia interface for accessing Qt via PyCall and PySide 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-18) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `john verzani <https://github.com/jverzani>`_
 
@@ -5475,9 +6374,11 @@ ___________________________________________________
      :alt: milktrader
      :target: https://github.com/milktrader
 
+  Julia api to Quandl open source financial, economic and social datasets 
+
   Current Version: ``0.0.1``  (updated: 2013-04-09) 
 
-  Julia api to Quandl open source financial, economic and social datasets 
+  Master build status: No Travis-CI build
 
   Maintainer: `milktrader <https://github.com/milktrader>`_
 
@@ -5506,9 +6407,11 @@ ____________________________________________________
      :alt: Patrick O'Leary
      :target: https://github.com/pao
 
+  QuickCheck specification-based testing for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-02-22) 
 
-  QuickCheck specification-based testing for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Patrick O'Leary <https://github.com/pao>`_
 
@@ -5538,9 +6441,11 @@ _____________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  Julia package for loading many of the data sets available in R 
+
   Current Version: ``0.0.1``  (updated: 2013-06-23) 
 
-  Julia package for loading many of the data sets available in R 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -5581,9 +6486,11 @@ _____________________________________________
      :alt: Keno Fischer
      :target: https://github.com/loladiro
 
+  Pure-julia REPL implementation 
+
   Current Version: ``0.0.0``  (updated: 2013-06-17) 
 
-   
+  Master build status: No Travis-CI build
 
   Maintainer: `Keno Fischer <https://github.com/loladiro>`_
 
@@ -5600,6 +6507,12 @@ _____________________________________________
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
+    .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Stefan Karpinski
+        :target: https://github.com/StefanKarpinski
+
 ----
 
 `RNGTest <https://github.com/andreasnoackjensen/RNGTest.jl>`_
@@ -5612,9 +6525,11 @@ _____________________________________________________________
      :alt: Andreas Noack Jensen
      :target: https://github.com/andreasnoackjensen
 
+  Code for testing of Julia's random numbers 
+
   Current Version: ``0.0.0``  (updated: 2013-02-25) 
 
-  Code for testing of Julia's random numbers 
+  Master build status: No Travis-CI build
 
   Maintainer: `Andreas Noack Jensen <https://github.com/andreasnoackjensen>`_
 
@@ -5638,6 +6553,48 @@ _____________________________________________________________
 
 ----
 
+`RPMmd <https://github.com/vtjnash/RPMmd.jl>`_
+______________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Jameson Nash
+     :target: https://github.com/vtjnash
+
+  RPM-md processing library 
+
+  Current Version: ``0.0.3``  (updated: 2013-07-07) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Jameson Nash <https://github.com/vtjnash>`_
+
+  Dependencies::
+
+      HTTPClient     [v"0.0.0"]
+      LibExpat       [v"0.0.0"]
+      URLParse       [v"0.0.0"]
+      Zlib           [v"0.0.0"]
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jameson Nash
+        :target: https://github.com/vtjnash
+
+    .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Amit Murthy
+        :target: https://github.com/amitmurthy
+
+----
+
 `RandomMatrices <https://github.com/jiahao/RandomMatrices.jl>`_
 _______________________________________________________________
 
@@ -5648,9 +6605,11 @@ _______________________________________________________________
      :alt: Jiahao Chen
      :target: https://github.com/jiahao
 
+  Random matrices package for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-03-28) 
 
-  Random matrices package for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Jiahao Chen <https://github.com/jiahao>`_
 
@@ -5677,6 +6636,38 @@ _______________________________________________________________
 
 ----
 
+`RdRand <https://github.com/SamChill/RdRand.jl>`_
+_________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/76dcb63fadbea9db73d6309005165661?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Sam Chill
+     :target: https://github.com/SamChill
+
+   
+
+  Current Version: ``0.0.0``  (updated: 2013-07-18) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Sam Chill <https://github.com/SamChill>`_
+
+  Dependencies::
+
+      RNGTest        Any Version
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/76dcb63fadbea9db73d6309005165661?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Sam Chill
+        :target: https://github.com/SamChill
+
+----
+
 `Readline <https://github.com/loladiro/Readline.jl>`_
 _____________________________________________________
 
@@ -5687,9 +6678,11 @@ _____________________________________________________
      :alt: Keno Fischer
      :target: https://github.com/loladiro
 
+  Julia readline-like library 
+
   Current Version: ``0.0.0``  (updated: 2013-06-17) 
 
-  Julia readline-like library 
+  Master build status: No Travis-CI build
 
   Maintainer: `Keno Fischer <https://github.com/loladiro>`_
 
@@ -5708,6 +6701,40 @@ _____________________________________________________
 
 ----
 
+`Regression <https://github.com/lindahua/Regression.jl>`_
+_________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Dahua Lin
+     :target: https://github.com/lindahua
+
+  Algorithms for regression analysis (e.g. linear regression and logistic regression) 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-06) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Dahua Lin <https://github.com/lindahua>`_
+
+  Dependencies::
+
+      NumericExtensionsAny Version
+      Optim          Any Version
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
+
+----
+
 `Resampling <https://github.com/johnmyleswhite/Resampling.jl>`_
 _______________________________________________________________
 
@@ -5718,9 +6745,11 @@ _______________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  Tools for resampling data in Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-01-19) 
 
-  Tools for resampling data in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -5748,9 +6777,11 @@ ___________________________________________
      :alt: Laurent Gautier
      :target: https://github.com/lgautier
 
+  Julia-to-R interface 
+
   Current Version: ``0.0.0``  (updated: 2013-02-05) 
 
-  Julia-to-R interface 
+  Master build status: No Travis-CI build
 
   Maintainer: `Laurent Gautier <https://github.com/lgautier>`_
 
@@ -5784,9 +6815,11 @@ ______________________________________________
      :alt: Douglas Bates
      :target: https://github.com/dmbates
 
+  Archive of functions that emulate R's d-p-q-r functions for probability distributions 
+
   Current Version: ``0.0.0``  (updated: 2013-03-04) 
 
-  Archive of functions that emulate R's d-p-q-r functions for probability distributions 
+  Master build status: No Travis-CI build
 
   Maintainer: `Douglas Bates <https://github.com/dmbates>`_
 
@@ -5814,9 +6847,11 @@ ___________________________________________________________
      :alt: Xiao He
      :target: https://github.com/mrxiaohe
 
-  Current Version: ``0.0.0``  (updated: 2013-06-29) 
-
   A collection of robust statistical tests 
+
+  Current Version: ``0.0.0``  (updated: 2013-06-30) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Xiao He <https://github.com/mrxiaohe>`_
 
@@ -5849,9 +6884,11 @@ _____________________________________________
      :alt: John Travers
      :target: https://github.com/jtravs
 
+  Root finding functions for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-04-11) 
 
-  Root finding functions for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Travers <https://github.com/jtravs>`_
 
@@ -5879,9 +6916,11 @@ ___________________________________________
      :alt: M. Schauer
      :target: https://github.com/mschauer
 
+  Simulation and inference for Ito processes and diffusions. 
+
   Current Version: ``0.1.0``  (updated: 2013-06-21) 
 
-  Simulation and inference for Ito processes and diffusions. 
+  Master build status: No Travis-CI build
 
   Maintainer: `M. Schauer <https://github.com/mschauer>`_
 
@@ -5910,9 +6949,11 @@ ____________________________________________
      :alt: Robert J. Ennis
      :target: https://github.com/rennis250
 
+  Julia interface to SDL 
+
   Current Version: ``0.0.0``  (updated: 2013-01-18) 
 
-  Julia interface to SDL 
+  Master build status: No Travis-CI build
 
   Maintainer: `Robert J. Ennis <https://github.com/rennis250>`_
 
@@ -5931,6 +6972,45 @@ ____________________________________________
 
 ----
 
+`SQLite <https://github.com/karbarcca/SQLite.jl>`_
+__________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Jacob Quinn
+     :target: https://github.com/karbarcca
+
+  A Julia interface to the Sqlite library and support for operations on DataFrames 
+
+  Current Version: ``0.1.0``  (updated: 2013-06-20) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Jacob Quinn <https://github.com/karbarcca>`_
+
+  Dependencies::
+
+      DataFrames     [v"0.2.0"]
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jacob Quinn
+        :target: https://github.com/karbarcca
+
+    .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: John Myles White
+        :target: https://github.com/johnmyleswhite
+
+----
+
 `SVM <https://github.com/johnmyleswhite/SVM.jl>`_
 _________________________________________________
 
@@ -5941,9 +7021,11 @@ _________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  SVM's for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-04-14) 
 
-  SVM's for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -5971,9 +7053,11 @@ ________________________________________________________________________________
      :alt: David de Laat
      :target: https://github.com/daviddelaat
 
+  Interface to semidefinite programming libraries. 
+
   Current Version: ``0.0.0``  (updated: 2013-03-08) 
 
-  Interface to semidefinite programming libraries. 
+  Master build status: No Travis-CI build
 
   Maintainer: `David de Laat <https://github.com/daviddelaat>`_
 
@@ -6001,9 +7085,11 @@ _______________________________________________________
      :alt: Ben Lauwens
      :target: https://github.com/BenLauwens
 
+  Process oriented simulation library written in Julia 
+
   Current Version: ``0.1.2``  (updated: 2013-05-03) 
 
-  Process oriented simulation library written in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Ben Lauwens <https://github.com/BenLauwens>`_
 
@@ -6031,9 +7117,11 @@ ____________________________________________________________
      :alt: fredo-dedup
      :target: https://github.com/fredo-dedup
 
+  basic mcmc sampler implemented in Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-07-01) 
 
-  basic mcmc sampler implemented in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `fredo-dedup <https://github.com/fredo-dedup>`_
 
@@ -6061,9 +7149,11 @@ ___________________________________________
      :alt: Tom Short
      :target: https://github.com/tshort
 
+  Experiments with non-causal, equation-based modeling in Julia 
+
   Current Version: ``0.0.0``  (updated: 2012-11-23) 
 
-  Experiments with non-causal, equation-based modeling in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Tom Short <https://github.com/tshort>`_
 
@@ -6091,9 +7181,11 @@ ___________________________________________________
      :alt: Amit Murthy
      :target: https://github.com/amitmurthy
 
+  Julia wrapper for libsodium 
+
   Current Version: ``0.0.0``  (updated: 2013-04-24) 
 
-  Julia wrapper for libsodium 
+  Master build status: No Travis-CI build
 
   Maintainer: `Amit Murthy <https://github.com/amitmurthy>`_
 
@@ -6111,34 +7203,29 @@ ___________________________________________________
 
 ----
 
-`Sqlite <https://github.com/karbarcca/SQLite.jl>`_
-__________________________________________________
+`Soundex <https://github.com/johnmyleswhite/Soundex.jl>`_
+_________________________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: Jacob Quinn
-     :target: https://github.com/karbarcca
+     :alt: John Myles White
+     :target: https://github.com/johnmyleswhite
 
-  Current Version: ``0.1.0``  (updated: 2013-06-20) 
+  The Soundex algorithm in Julia 
 
-  A Julia interface to the Sqlite library and support for operations on DataFrames 
+  Current Version: ``0.0.0``  (updated: 2013-07-08) 
 
-  Maintainer: `Jacob Quinn <https://github.com/karbarcca>`_
+  Master build status: No Travis-CI build
+
+  Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
   Dependencies::
 
-      DataFrames     [v"0.2.0"]
-      julia          [v"0.2.0-"]
+      None
 
   Contributors:
-
-    .. image:: https://secure.gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Jacob Quinn
-        :target: https://github.com/karbarcca
 
     .. image:: https://secure.gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -6151,18 +7238,23 @@ __________________________________________________
 `Stats <https://github.com/JuliaStats/Stats.jl>`_
 _________________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/d41d8cd98f00b204e9800998ecf8427e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: JuliaStats
+     :alt: Julia Statistics
      :target: https://github.com/JuliaStats
-
-  Current Version: ``0.2.3``  (updated: 2013-06-14) 
 
   Basic statistics for Julia 
 
-  Maintainer: `JuliaStats <https://github.com/JuliaStats>`_
+  Current Version: ``0.2.6``  (updated: 2013-07-22) 
+
+  Master build status: |Stats_build|
+
+  .. |Stats_build| image:: https://api.travis-ci.org/JuliaStats/Stats.jl.png
+     :align: bottom
+
+  Maintainer: `Julia Statistics <https://github.com/JuliaStats>`_
 
   Dependencies::
 
@@ -6218,9 +7310,11 @@ ______________________________________________
      :alt: Patrick O'Leary
      :target: https://github.com/pao
 
+  Swiss Army Knife for encoding and decoding binary streams 
+
   Current Version: ``0.0.0``  (updated: 2013-05-23) 
 
-  Swiss Army Knife for encoding and decoding binary streams 
+  Master build status: No Travis-CI build
 
   Maintainer: `Patrick O'Leary <https://github.com/pao>`_
 
@@ -6274,9 +7368,11 @@ ___________________________________________________
      :alt: Tom Short
      :target: https://github.com/tshort
 
+  Julia interface to Sundials, including a nonlinear solver (KINSOL), ODE's (CVODE), and DAE's (IDA). 
+
   Current Version: ``0.0.0``  (updated: 2013-05-07) 
 
-  Julia interface to Sundials, including a nonlinear solver (KINSOL), ODE's (CVODE), and DAE's (IDA). 
+  Master build status: No Travis-CI build
 
   Maintainer: `Tom Short <https://github.com/tshort>`_
 
@@ -6298,9 +7394,11 @@ _______________________________________________
      :alt: john verzani
      :target: https://github.com/jverzani
 
-  Current Version: ``0.2.0``  (updated: 2013-06-12) 
-
   Start of Julia interface to SymPy via PyCall 
+
+  Current Version: ``0.2.0``  (updated: 2013-07-22) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `john verzani <https://github.com/jverzani>`_
 
@@ -6342,9 +7440,11 @@ _________________________________________
      :alt: pygy
      :target: https://github.com/pygy
 
+  A TOML parser for Julia. 
+
   Current Version: ``0.0.0``  (updated: 2013-03-06) 
 
-  A TOML parser for Julia. 
+  Master build status: No Travis-CI build
 
   Maintainer: `pygy <https://github.com/pygy>`_
 
@@ -6373,9 +7473,11 @@ _______________________________________________________
      :alt: Keno Fischer
      :target: https://github.com/loladiro
 
+  Terminal Interfaces for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-06-17) 
 
-   
+  Master build status: No Travis-CI build
 
   Maintainer: `Keno Fischer <https://github.com/loladiro>`_
 
@@ -6403,9 +7505,11 @@ ___________________________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  Julia package for text analysis 
+
   Current Version: ``0.0.1``  (updated: 2013-05-24) 
 
-  Julia package for text analysis 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -6435,9 +7539,14 @@ __________________________________________________________
      :alt: Carlo Baldassi
      :target: https://github.com/carlobaldassi
 
+  Package for wrapping text into paragraphs. 
+
   Current Version: ``0.1.1``  (updated: 2013-06-28) 
 
-  Package for wrapping text into paragraphs. 
+  Master build status: |TextWrap_build|
+
+  .. |TextWrap_build| image:: https://api.travis-ci.org/carlobaldassi/TextWrap.jl.png
+     :align: bottom
 
   Maintainer: `Carlo Baldassi <https://github.com/carlobaldassi>`_
 
@@ -6471,9 +7580,11 @@ ___________________________________________________________
      :alt: milktrader
      :target: https://github.com/milktrader
 
+  Modeling time series in Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-06-14) 
 
-  Modeling time series in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `milktrader <https://github.com/milktrader>`_
 
@@ -6484,7 +7595,7 @@ ___________________________________________________________
       Stats          Any Version
       TimeSeries     Any Version
       UTF16          Any Version
-      julia          [v"0.1.0-", v"0.2.0-"]
+      julia          [v"0.1.0-",v"0.2.0-"]
 
   Contributors:
 
@@ -6512,9 +7623,11 @@ ___________________________________________________________
      :alt: milktrader
      :target: https://github.com/milktrader
 
-  Current Version: ``0.0.0``  (updated: 2013-02-15) 
-
   Time series toolkit for Julia 
+
+  Current Version: ``0.0.0``  (updated: 2013-04-10) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `milktrader <https://github.com/milktrader>`_
 
@@ -6524,7 +7637,7 @@ ___________________________________________________________
       DataFrames     Any Version
       Stats          Any Version
       UTF16          Any Version
-      julia          [v"0.1.0-", v"0.2.0-"]
+      julia          [v"0.1.0-",v"0.2.0-"]
 
   Contributors:
 
@@ -6552,15 +7665,17 @@ __________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
-  Current Version: ``0.2.2``  (updated: 2013-06-21) 
-
   Julia interface to Tk windowing toolkit. 
+
+  Current Version: ``0.2.4``  (updated: 2013-08-01) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
   Dependencies::
 
-      BinDeps        Any Version
+      BinDeps        [v"0.2.2-"]
       Cairo          Any Version
 
   Contributors:
@@ -6577,17 +7692,17 @@ __________________________________________
         :alt: john verzani
         :target: https://github.com/jverzani
 
-    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Tim Holy
-        :target: https://github.com/timholy
-
     .. image:: https://secure.gravatar.com/avatar/b4b8db23d8096b722483a57d21b7d65d?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Jeff Bezanson
         :target: https://github.com/JeffBezanson
+
+    .. image:: https://secure.gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tim Holy
+        :target: https://github.com/timholy
 
     .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -6600,6 +7715,12 @@ __________________________________________
         :width: 40px
         :alt: Ron Rock
         :target: https://github.com/rsrock
+
+    .. image:: https://secure.gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Jameson Nash
+        :target: https://github.com/vtjnash
 
     .. image:: https://secure.gravatar.com/avatar/1b65c4698da5f30310e14aaee8f3f24e?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -6643,9 +7764,11 @@ ___________________________________________________________
      :alt: Jonathan Chang
      :target: https://github.com/slycoder
 
+  TopicModels for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-03-17) 
 
-  TopicModels for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Jonathan Chang <https://github.com/slycoder>`_
 
@@ -6673,9 +7796,11 @@ _________________________________________________________________________
      :alt: milktrader
      :target: https://github.com/milktrader
 
+  Downloading financial time series data and providing financial asset types in Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-03-01) 
 
-  Downloading financial time series data and providing financial asset types in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `milktrader <https://github.com/milktrader>`_
 
@@ -6686,7 +7811,7 @@ _________________________________________________________________________
       Stats          Any Version
       TimeSeries     Any Version
       UTF16          Any Version
-      julia          [v"0.1.0-", v"0.2.0-"]
+      julia          [v"0.1.0-",v"0.2.0-"]
 
   Contributors:
 
@@ -6708,9 +7833,11 @@ ______________________________________________
      :alt: The Julia Language
      :target: https://github.com/JuliaLang
 
+  Implementation of the trie data structure. 
+
   Current Version: ``0.0.0``  (updated: 2012-11-13) 
 
-  Implementation of the trie data structure. 
+  Master build status: No Travis-CI build
 
   Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
@@ -6728,6 +7855,79 @@ ______________________________________________
 
 ----
 
+`URIParser <https://github.com/loladiro/URIParser.jl>`_
+_______________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Keno Fischer
+     :target: https://github.com/loladiro
+
+  Pure julia URI parser 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-12) 
+
+  Master build status: |URIParser_build|
+
+  .. |URIParser_build| image:: https://api.travis-ci.org/loladiro/URIParser.jl.png
+     :align: bottom
+
+  Maintainer: `Keno Fischer <https://github.com/loladiro>`_
+
+  Dependencies::
+
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
+
+    .. image:: https://secure.gravatar.com/avatar/eea0b193dae8ac47946202ee404a6d7a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Tanmay Mohapatra
+        :target: https://github.com/tanmaykm
+
+----
+
+`URITemplate <https://github.com/loladiro/URITemplate.jl>`_
+___________________________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Keno Fischer
+     :target: https://github.com/loladiro
+
+  RFC6570 URI templates for Julia 
+
+  Current Version: ``0.0.0``  (updated: 2013-07-15) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Keno Fischer <https://github.com/loladiro>`_
+
+  Dependencies::
+
+      julia          [v"0.2.0-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
+
+----
+
 `URLParse <https://github.com/tanmaykm/URLParse.jl>`_
 _____________________________________________________
 
@@ -6738,9 +7938,14 @@ _____________________________________________________
      :alt: Tanmay Mohapatra
      :target: https://github.com/tanmaykm
 
+  Parse URL strings into components and re-create the URL string back from components. 
+
   Current Version: ``0.0.0``  (updated: 2013-06-24) 
 
-  Parse URL strings into components and re-create the URL string back from components. 
+  Master build status: |URLParse_build|
+
+  .. |URLParse_build| image:: https://api.travis-ci.org/tanmaykm/URLParse.jl.png
+     :align: bottom
 
   Maintainer: `Tanmay Mohapatra <https://github.com/tanmaykm>`_
 
@@ -6768,9 +7973,11 @@ ____________________________________________
      :alt: Mike Nolta
      :target: https://github.com/nolta
 
+  UTF16 string type for Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-01-14) 
 
-  UTF16 string type for Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `Mike Nolta <https://github.com/nolta>`_
 
@@ -6804,15 +8011,17 @@ ______________________________________________
      :alt: Tim Holy
      :target: https://github.com/timholy
 
-  Current Version: ``0.0.0``  (updated: 2013-05-16) 
-
   Infrastructure for handling physical units for the Julia programming language 
+
+  Current Version: ``0.2.0``  (updated: 2013-07-29) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Tim Holy <https://github.com/timholy>`_
 
   Dependencies::
 
-      None
+      julia          [v"0.2.0-"]
 
   Contributors:
 
@@ -6834,9 +8043,11 @@ _________________________________________________________________
      :alt: Zach Allaun
      :target: https://github.com/zachallaun
 
+  Function dispatch on values 
+
   Current Version: ``0.0.0``  (updated: 2013-04-30) 
 
-  Function dispatch on values 
+  Master build status: No Travis-CI build
 
   Maintainer: `Zach Allaun <https://github.com/zachallaun>`_
 
@@ -6864,16 +8075,18 @@ ______________________________________________
      :alt: Daniel Casimiro
      :target: https://github.com/dancasimiro
 
+  Julia package for working with WAV files 
+
   Current Version: ``0.1.0``  (updated: 2013-01-16) 
 
-  Julia package for working with WAV files 
+  Master build status: No Travis-CI build
 
   Maintainer: `Daniel Casimiro <https://github.com/dancasimiro>`_
 
   Dependencies::
 
       Options        Any Version
-      julia          [v"0.1.0-", v"0.2.0-"]
+      julia          [v"0.1.0-",v"0.2.0-"]
 
   Contributors:
 
@@ -6895,16 +8108,17 @@ _____________________________________________________________
      :alt: Hacker School
      :target: https://github.com/hackerschool
 
-  Current Version: ``0.0.0``  (updated: 2013-04-30) 
-
    
+
+  Current Version: ``0.0.1``  (updated: 2013-07-18) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Hacker School <https://github.com/hackerschool>`_
 
   Dependencies::
 
-      HttpCommon     Any Version
-      HttpServer     Any Version
+      None
 
   Contributors:
 
@@ -6926,6 +8140,18 @@ _____________________________________________________________
         :alt: Zach Allaun
         :target: https://github.com/zachallaun
 
+    .. image:: https://secure.gravatar.com/avatar/fd97b03d16e1aa4c404391216d81c1d5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Daniel Jones
+        :target: https://github.com/dcjones
+
+    .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Stefan Karpinski
+        :target: https://github.com/StefanKarpinski
+
 ----
 
 `Winston <https://github.com/nolta/Winston.jl>`_
@@ -6938,9 +8164,11 @@ ________________________________________________
      :alt: Mike Nolta
      :target: https://github.com/nolta
 
-  Current Version: ``0.3.0``  (updated: 2013-06-29) 
-
   2D plotting for Julia 
+
+  Current Version: ``0.3.0``  (updated: 2013-07-15) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Mike Nolta <https://github.com/nolta>`_
 
@@ -7032,9 +8260,11 @@ ____________________________________________
      :alt: Daniel Jones
      :target: https://github.com/dcjones
 
-  Current Version: ``0.1.0``  (updated: 2013-06-23) 
-
   parse yer yamls 
+
+  Current Version: ``0.1.3``  (updated: 2013-07-22) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Daniel Jones <https://github.com/dcjones>`_
 
@@ -7055,21 +8285,23 @@ ____________________________________________
 
 ----
 
-`ZMQ <https://github.com/aviks/ZMQ.jl>`_
-________________________________________
+`ZMQ <https://github.com/JuliaLang/ZMQ.jl>`_
+____________________________________________
 
-  .. image:: https://secure.gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+  .. image:: https://secure.gravatar.com/avatar/d57c99557ab0dc0fa44b4c84447d0f15?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-org-420.png
      :height: 80px
      :width: 80px
      :align: right
-     :alt: Avik Sengupta
-     :target: https://github.com/aviks
-
-  Current Version: ``0.0.0``  (updated: 2013-04-13) 
+     :alt: The Julia Language
+     :target: https://github.com/JuliaLang
 
   Julia interface to ZMQ 
 
-  Maintainer: `Avik Sengupta <https://github.com/aviks>`_
+  Current Version: ``0.0.0``  (updated: 2013-04-13) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `The Julia Language <https://github.com/JuliaLang>`_
 
   Dependencies::
 
@@ -7083,11 +8315,23 @@ ________________________________________
         :alt: Avik Sengupta
         :target: https://github.com/aviks
 
+    .. image:: https://secure.gravatar.com/avatar/ed9f9395e60acde24eb4bb89fe2154aa?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Keno Fischer
+        :target: https://github.com/loladiro
+
     .. image:: https://secure.gravatar.com/avatar/645b9a973f09e98d38b94955a980c9d5?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
         :width: 40px
         :alt: Junfeng Li
         :target: https://github.com/autozimu
+
+    .. image:: https://secure.gravatar.com/avatar/9563cfcf21df990e570df1dd019bce16?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Steven G. Johnson
+        :target: https://github.com/stevengj
 
     .. image:: https://secure.gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
         :height: 40px
@@ -7103,6 +8347,39 @@ ________________________________________
 
 ----
 
+`ZipFile <https://github.com/fhs/ZipFile.jl>`_
+______________________________________________
+
+  .. image:: https://secure.gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Fazlul Shahriar
+     :target: https://github.com/fhs
+
+  Read/Write ZIP file archives in Julia 
+
+  Current Version: ``0.1.0``  (updated: 2013-07-24) 
+
+  Master build status: No Travis-CI build
+
+  Maintainer: `Fazlul Shahriar <https://github.com/fhs>`_
+
+  Dependencies::
+
+      CRC32          Any Version
+      Zlib           [v"0.1.1-"]
+
+  Contributors:
+
+    .. image:: https://secure.gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Fazlul Shahriar
+        :target: https://github.com/fhs
+
+----
+
 `Zlib <https://github.com/dcjones/Zlib.jl>`_
 ____________________________________________
 
@@ -7113,9 +8390,11 @@ ____________________________________________
      :alt: Daniel Jones
      :target: https://github.com/dcjones
 
-  Current Version: ``0.0.0``  (updated: 2013-03-12) 
-
   zlib bindings for Julia 
+
+  Current Version: ``0.1.1``  (updated: 2013-07-22) 
+
+  Master build status: No Travis-CI build
 
   Maintainer: `Daniel Jones <https://github.com/dcjones>`_
 
@@ -7137,6 +8416,12 @@ ____________________________________________
         :alt: Jameson Nash
         :target: https://github.com/vtjnash
 
+    .. image:: https://secure.gravatar.com/avatar/f11cd39050d2eb63ec494c0e7ae81d98?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
+        :height: 40px
+        :width: 40px
+        :alt: Fazlul Shahriar
+        :target: https://github.com/fhs
+
 ----
 
 `kNN <https://github.com/johnmyleswhite/kNN.jl>`_
@@ -7149,9 +8434,11 @@ _________________________________________________
      :alt: John Myles White
      :target: https://github.com/johnmyleswhite
 
+  The k-nearest neighbors algorithm in Julia 
+
   Current Version: ``0.0.0``  (updated: 2013-04-12) 
 
-  The k-nearest neighbors algorithm in Julia 
+  Master build status: No Travis-CI build
 
   Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
 
@@ -7169,35 +8456,5 @@ _________________________________________________
 
 ----
 
-`libCURL <https://github.com/amitmurthy/libCURL.jl>`_
-_____________________________________________________
-
-  .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-     :height: 80px
-     :width: 80px
-     :align: right
-     :alt: Amit Murthy
-     :target: https://github.com/amitmurthy
-
-  Current Version: ``0.0.0``  (updated: 2013-06-26) 
-
-  Thin Julia wrapper of libCURL 
-
-  Maintainer: `Amit Murthy <https://github.com/amitmurthy>`_
-
-  Dependencies::
-
-      julia          [v"0.2.0-"]
-
-  Contributors:
-
-    .. image:: https://secure.gravatar.com/avatar/313e7a578240d11c97a68c9c6918a90b?d=https://a248.e.akamai.net/assets.github.com%2Fimages%2Fgravatars%2Fgravatar-user-420.png
-        :height: 40px
-        :width: 40px
-        :alt: Amit Murthy
-        :target: https://github.com/amitmurthy
-
-----
-
-.. footer: 180 packages, generated 1 Jul 2013 17:32:26 GMT+01:00 
+.. footer: 201 packages, generated 2 Aug 2013 21:49:37 GMT+05:30 
 

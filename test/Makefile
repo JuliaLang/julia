@@ -8,7 +8,7 @@ TESTS = all core keywordargs numbers strings unicode collections hashing	\
 	broadcast socket floatapprox priorityqueue readdlm regex
 
 $(TESTS) ::
-	$(QUIET_JULIA) $(call spawn,$(JULIA_EXECUTABLE)) ./runtests.jl $@
+	@$(PRINT_JULIA) $(call spawn,$(JULIA_EXECUTABLE)) ./runtests.jl $@
 
 perf:
 	@$(MAKE) -C perf all
