@@ -29,7 +29,8 @@ export # also exported by Base
     QuickSort,
     MergeSort,
     TimSort,
-    HeapSort
+    HeapSort,
+    RadixSort
 
 export # not exported by Base
     Algorithm,
@@ -233,12 +234,14 @@ immutable QuickSortAlg     <: Algorithm end
 immutable HeapSortAlg      <: Algorithm end
 immutable MergeSortAlg     <: Algorithm end
 immutable TimSortAlg       <: Algorithm end
+immutable RadixSortAlg     <: Algorithm end
 
 const InsertionSort = InsertionSortAlg()
 const QuickSort     = QuickSortAlg()
 const HeapSort      = HeapSortAlg()
 const MergeSort     = MergeSortAlg()
 const TimSort       = TimSortAlg()
+const RadixSort     = RadixSortAlg()
 
 const DEFAULT_UNSTABLE = QuickSort
 const DEFAULT_STABLE   = MergeSort
@@ -333,6 +336,68 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering
     return v
 end
 
+const RADIX_SIZE = 11
+const RADIX_MASK = 0x7FF
+
+function sort!(vs::AbstractVector, lo::Int, hi::Int, ::RadixSortAlg, o::Ordering, ts=similar(vs))
+    # Input checking
+    if lo >= hi;  return vs;  end
+
+    # Make sure we're sorting a bits type
+    T = ordtype(o, vs)
+    if !isbits(T)
+        error("Radix sort only sorts bits types (got $T)")
+    end
+
+    # Init
+    iters = iceil(sizeof(T)*8/RADIX_SIZE)
+    bin = zeros(Uint32, 2^RADIX_SIZE, iters)
+    if lo > 1;  bin[1,:] = lo-1;  end
+
+    # Histogram for each element, radix
+    for i = lo:hi
+        v = uint_mapping(o, vs[i])
+        for j = 1:iters
+            idx = int((v >> (j-1)*RADIX_SIZE) & RADIX_MASK)+1
+            @inbounds bin[idx,j] += 1
+        end
+    end
+
+    # Sort!
+    swaps = 0
+    len = hi-lo+1
+    for j = 1:iters
+        # Unroll first data iteration, check for degenerate case
+        v = uint_mapping(o, vs[hi])
+        idx = int((v >> (j-1)*RADIX_SIZE) & RADIX_MASK)+1
+
+        # are all values the same at this radix?
+        if bin[idx,j] == len;  continue;  end
+
+        cbin = cumsum(bin[:,j])
+        ci = cbin[idx]
+        ts[ci] = vs[hi]
+        cbin[idx] -= 1
+
+        # Finish the loop...
+        @inbounds for i in hi-1:-1:lo
+            v = uint_mapping(o, vs[i])
+            idx = int((v >> (j-1)*RADIX_SIZE) & RADIX_MASK)+1
+            ci = cbin[idx]
+            ts[ci] = vs[i]
+            cbin[idx] -= 1
+        end
+        vs,ts = ts,vs
+        swaps += 1
+    end
+
+    if isodd(swaps)
+        vs,ts = ts,vs
+        copy!(vs,ts)
+    end
+    vs
+end
+
 include("timsort.jl")
 
 ## generic sorting methods ##
@@ -379,16 +444,15 @@ using ...Order
 
 import Core.Intrinsics: unbox, slt_int
 import ..Sort: sort!
-import ...Order: lt
+import ...Order: lt, DirectOrdering, uint_mapping
 
 typealias Floats Union(Float32,Float64)
-typealias Direct Union(ForwardOrdering,ReverseOrdering{ForwardOrdering})
 
 immutable Left <: Ordering end
 immutable Right <: Ordering end
 
-left(::Direct) = Left()
-right(::Direct) = Right()
+left(::DirectOrdering) = Left()
+right(::DirectOrdering) = Right()
 
 left(o::Perm) = Perm(left(o.order),o.data)
 right(o::Perm) = Perm(right(o.order),o.data)
@@ -396,8 +460,13 @@ right(o::Perm) = Perm(right(o.order),o.data)
 lt{T<:Floats}(::Left, x::T, y::T) = slt_int(unbox(T,y),unbox(T,x))
 lt{T<:Floats}(::Right, x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
 
-isnan(o::Direct, x::Floats) = (x!=x)
+isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])
+
+uint_mapping{F<:Floats}(::Right, x::F) = uint_mapping(Forward, x)
+#uint_mapping{F<:Floats}(::Left,  x::F) = uint_mapping(Base.Ordering.Reverse, x)  ## Manually inlined
+uint_mapping(::Left, x::Float32) = (y = reinterpret(Int32, x); uint32(y < 0 ? y : ~(y $ typemin(Int32))))
+uint_mapping(::Left, x::Float64) = (y = reinterpret(Int64, x); uint64(y < 0 ? y : ~(y $ typemin(Int64))))
 
 function nans2left!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
     hi < lo && return lo, hi
@@ -447,7 +516,7 @@ nans2end!(v::AbstractVector, o::ReverseOrdering) = nans2left!(v,o)
 nans2end!{O<:ForwardOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2right!(v,o)
 nans2end!{O<:ReverseOrdering}(v::AbstractVector{Int}, o::Perm{O}) = nans2left!(v,o)
 
-issignleft(o::Direct, x::Floats) = lt(o, x, zero(x))
+issignleft(o::DirectOrdering, x::Floats) = lt(o, x, zero(x))
 issignleft(o::Perm, i::Int) = issignleft(o.order, o.data[i])
 
 function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
@@ -468,8 +537,8 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     return v
 end
 
-sort!{T<:Floats}(v::AbstractVector{T}, a::Algorithm, o::Direct) = fpsort!(v,a,o)
-sort!{O<:Direct,T<:Floats}(v::Vector{Int}, a::Algorithm, o::Perm{O,Vector{T}}) = fpsort!(v,a,o)
+sort!{T<:Floats}(v::AbstractVector{T}, a::Algorithm, o::DirectOrdering) = fpsort!(v,a,o)
+sort!{O<:DirectOrdering,T<:Floats}(v::Vector{Int}, a::Algorithm, o::Perm{O,Vector{T}}) = fpsort!(v,a,o)
 
 end # module Sort.Float
 
