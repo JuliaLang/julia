@@ -678,13 +678,12 @@ endif
 ifneq ($(ARCH),x86_64)
 # Assume we can't address much memory to spawn many threads
 OPENBLAS_BUILD_OPTS += NUM_THREADS=30
-else
-# Assume we may want lots of threads on some future machine
-ifeq ($(OS),WINNT) #windows seems unable to handle very many
-OPENBLAS_BUILD_OPTS += NUM_THREADS=30
+else ifeq ($(OS),WINNT)
+#windows seems unable to handle very many
+OPENBLAS_BUILD_OPTS += NUM_THREADS=24
 else # Linux can handle up to 256 according to the FAQ. Use 128 for now as that should suffice everywhere.
+# Assume we may want lots of threads on some future machine
 OPENBLAS_BUILD_OPTS += NUM_THREADS=128
-endif
 endif
 
 # don't touch scheduler affinity since we manage this ourselves
@@ -718,6 +717,13 @@ else
 $(error "unknown arch for openblas cross-compile")
 endif
 
+ifeq ($(OS),WINNT)
+ifneq ($(ARCH),x86_64)
+OPENBLAS_BUILD_OPTS += CFLAGS="$(CFLAGS) -mincoming-stack-boundary=2"
+OPENBLAS_BUILD_OPTS += FFLAGS="$(FFLAGS) -mincoming-stack-boundary=2"
+endif
+endif
+
 # Debug OpenBLAS
 ifeq ($(OPENBLAS_DEBUG), 1)
 OPENBLAS_BUILD_OPTS += DEBUG=1
@@ -732,7 +738,7 @@ openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
 	cp lapack-$(LAPACK_VER).tgz openblas-$(OPENBLAS_VER)
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
-	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || echo "*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***"
+	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || (echo "*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***" && false)
 	touch -c $@
 $(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) | $(BUILD)/lib
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(BUILD)/lib
@@ -996,7 +1002,10 @@ ifneq ($(ARCH), ppc64)
   FFTW_CONFIG += --enable-sse2
 endif
 ifeq ($(OS),WINNT)
-	FFTW_CONFIG += --with-our-malloc --with-combined-threads
+FFTW_CONFIG += --with-our-malloc --with-combined-threads
+ifneq ($(OS),x86_64)
+FFTW_CONFIG += --with-incoming-stack-boundary=2
+endif
 endif
 
 fftw-$(FFTW_VER).tar.gz:
