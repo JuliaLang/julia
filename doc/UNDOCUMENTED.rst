@@ -116,103 +116,12 @@ Mathematical constants
 Operators
 ---------
 
-.. function:: !==(x,y)
-
-   UNDOCUMENTED
-
-.. function:: A_ldiv_Bc(a,b)
-
-   UNDOCUMENTED
-
-.. function:: A_ldiv_Bt(a,b)
-
-   UNDOCUMENTED
-
-.. function:: A_mul_B(...)
-
-   UNDOCUMENTED
-
-.. function:: A_mul_Bc(...)
-
-   UNDOCUMENTED
-
-.. function:: A_mul_Bt(...)
-
-   UNDOCUMENTED
-
-.. function:: A_rdiv_Bc(...)
-
-   UNDOCUMENTED
-
-.. function:: A_rdiv_Bt(a,b)
-
-   UNDOCUMENTED
-
-.. function:: Ac_ldiv_B(...)
-
-   UNDOCUMENTED
-
-.. function:: Ac_ldiv_Bc(...)
-
-   UNDOCUMENTED
-
-.. function:: Ac_mul_B(...)
-
-   UNDOCUMENTED
-
-.. function:: Ac_mul_Bc(...)
-
-   UNDOCUMENTED
-
-.. function:: Ac_rdiv_B(a,b)
-
-   UNDOCUMENTED
-
-.. function:: Ac_rdiv_Bc(a,b)
-
-   UNDOCUMENTED
-
-.. function:: At_ldiv_B(...)
-
-   UNDOCUMENTED
-
-.. function:: At_ldiv_Bt(...)
-
-   UNDOCUMENTED
-
-.. function:: At_mul_B(...)
-
-   UNDOCUMENTED
-
-.. function:: At_mul_Bt(...)
-
-   UNDOCUMENTED
-
-.. function:: At_rdiv_B(a,b)
-
-   UNDOCUMENTED
-
-.. function:: At_rdiv_Bt(a,b)
-
-   UNDOCUMENTED
 
 
 scalar math
 -----------
 
-.. function:: big(...)
-
-   UNDOCUMENTED
-
-.. function:: divrem(...)
-
-   UNDOCUMENTED
-
 .. function:: invdigamma(...)
-
-   UNDOCUMENTED
-
-.. function:: rationalize(...)
 
    UNDOCUMENTED
 
@@ -593,8 +502,8 @@ signal processing
 -----------------
 
 
-  numerical integration
------------------------
+numerical integration
+---------------------
 
 
 iteration
@@ -619,10 +528,6 @@ time
 
 errors
 ------
-
-.. function:: systemerror(p,b::Bool)
-
-   UNDOCUMENTED
 
 
 types
@@ -1016,23 +921,11 @@ C interface
 Macros
 ------
 
-.. function:: assert(...)
-
-   UNDOCUMENTED
-
-.. function:: which(f,args...)
-
-   UNDOCUMENTED
-
 .. function:: gensym(...)
 
    UNDOCUMENTED
 
 .. function:: eval(...)
-
-   UNDOCUMENTED
-
-.. function:: show(...)
 
    UNDOCUMENTED
 
