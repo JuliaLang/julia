@@ -289,44 +289,8 @@ function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}
     return sub_deps
 end
 
-# For each version of each package in dependencies, compute the whole version number (i.e. discard
-# prerelease and build fields); then, for each whole version, keep only the highest corresponding version.
-# The fixed optional argument can be used to force specific versions  (one per package).
-function filter_prereleases(deps::Dict{ByteString,Dict{VersionNumber,Available}},
-                            fixed::Dict{ByteString,VersionNumber} = (ByteString=>VersionNumber)[])
-
-    eqfixed = [ p=>normal(vn) for (p,vn) in fixed ]
-
-    filtered_deps = (ByteString=>Dict{VersionNumber,Available})[]
-    for (p, depsp) in deps
-        filtered_deps[p] = (VersionNumber=>Available)[]
-        vmap = (VersionNumber=>Vector{VersionNumber})[]
-        for vn in keys(depsp)
-            eqvn = normal(vn)
-            haskey(vmap, eqvn) || (vmap[eqvn] = VersionNumber[])
-            push!(vmap[eqvn], vn)
-        end
-        for eqvn in keys(vmap)
-            sort!(vmap[eqvn])
-        end
-        for (vn, a) in depsp
-            eqvn = normal(vn)
-            if haskey(fixed, p) && eqvn == eqfixed[p]
-                vn != fixed[p] && continue
-                filtered_deps[p][vn] = a
-            else
-                vn != vmap[eqvn][end] && continue
-                filtered_deps[p][vn] = a
-            end
-        end
-    end
-    return filtered_deps
-end
-
-function prune_dependencies(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}},
-                            fixed::Dict{ByteString,VersionNumber} = (ByteString=>VersionNumber)[])
+function prune_dependencies(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
     deps = dependencies_subset(deps, Set{ByteString}(keys(reqs)...))
-    deps = filter_prereleases(deps, fixed)
     deps, _ = prune_versions(reqs, deps)
 
     return deps

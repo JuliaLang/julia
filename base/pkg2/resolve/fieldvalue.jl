@@ -27,8 +27,8 @@ immutable FieldValue
 end
 FieldValue(l0::Int,l1::VersionWeight,l2::VersionWeight,l3::Int) = FieldValue(l0, l1, l2, l3, int128(0))
 FieldValue(l0::Int,l1::VersionWeight,l2::VersionWeight) = FieldValue(l0, l1, l2, 0)
-FieldValue(l0::Int,l1::VersionWeight) = FieldValue(l0, l1, VersionWeight(0))
-FieldValue(l0::Int) = FieldValue(l0, VersionWeight(0))
+FieldValue(l0::Int,l1::VersionWeight) = FieldValue(l0, l1, zero(VersionWeight))
+FieldValue(l0::Int) = FieldValue(l0, zero(VersionWeight))
 FieldValue() = FieldValue(0)
 
 typealias Field Vector{FieldValue}
@@ -44,15 +44,20 @@ Base.(:+)(a::FieldValue, b::FieldValue) = FieldValue(a.l0+b.l0, a.l1+b.l1, a.l2+
 function Base.isless(a::FieldValue, b::FieldValue)
     a.l0 < b.l0 && return true
     a.l0 > b.l0 && return false
-    a.l1 < b.l1 && return true
-    a.l1 > b.l1 && return false
-    a.l2 < b.l2 && return true
-    a.l2 > b.l2 && return false
+    c = cmp(a.l1, b.l1)
+    c < 0 && return true
+    c > 0 && return false
+    c = cmp(a.l2, b.l2)
+    c < 0 && return true
+    c > 0 && return false
     a.l3 < b.l3 && return true
     a.l3 > b.l3 && return false
     a.l4 < b.l4 && return true
     return false
 end
+
+Base.isequal(a::FieldValue, b::FieldValue) =
+    a.l0 == b.l0 && a.l1 == b.l1 && a.l2 == b.l2 && a.l3 == b.l3 && a.l4 == b.l4
 
 Base.abs(a::FieldValue) = FieldValue(abs(a.l0), abs(a.l1), abs(a.l2), abs(a.l3), abs(a.l4))
 Base.abs(f::Field) = FieldValue[abs(a) for a in f]
