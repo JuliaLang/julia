@@ -144,6 +144,7 @@ end
 reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 
 vec(a::AbstractArray) = reshape(a,length(a))
+vec(a::AbstractVector) = a
 
 function squeeze(A::AbstractArray, dims)
     d = ()
