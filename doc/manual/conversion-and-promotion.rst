@@ -267,7 +267,7 @@ fields promoted to an appropriate common type. For example, recall that
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_
 provides the following outer constructor method::
 
-    Rational(n::Integere, d::Integer) = Rational(promote(n,d)...)
+    Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 
 This allows calls like the following to work::
 
