@@ -464,9 +464,7 @@ isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])
 
 uint_mapping{F<:Floats}(::Right, x::F) = uint_mapping(Forward, x)
-#uint_mapping{F<:Floats}(::Left,  x::F) = uint_mapping(Base.Ordering.Reverse, x)  ## Manually inlined
-uint_mapping(::Left, x::Float32) = (y = reinterpret(Int32, x); uint32(y < 0 ? y : ~(y $ typemin(Int32))))
-uint_mapping(::Left, x::Float64) = (y = reinterpret(Int64, x); uint64(y < 0 ? y : ~(y $ typemin(Int64))))
+uint_mapping{F<:Floats}(::Left , x::F) = uint_mapping(Forward, x)
 
 function nans2left!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
     hi < lo && return lo, hi
