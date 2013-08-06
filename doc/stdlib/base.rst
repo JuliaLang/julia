@@ -2786,9 +2786,13 @@ Combinatorics
 
    Construct a random cyclic permutation of the given length.
 
+.. function:: shuffle(v)
+
+   Randomly rearrange the elements of a vector.
+
 .. function:: shuffle!(v)
 
-   Randomly rearrange the elements of a vector in-place
+   In-place version of :func:`shuffle`.
 
 .. function:: reverse(v)
 
