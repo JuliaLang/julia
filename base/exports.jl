@@ -1029,6 +1029,7 @@ export
     fd,
     fdio,
     flush,
+    flush_cstdio,
     getaddrinfo,
     gethostname,
     getipaddr,
