@@ -26,7 +26,7 @@ function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
     end
 end
 median{T<:Real}(v::AbstractArray{T}; checknan::Bool=true) =
-    median!(copy(vec(v)), checknan=checknan)
+    median!(vec(copy(v)), checknan=checknan)
 
 ## variance with known mean
 function varm(v::AbstractVector, m::Number)
