@@ -537,6 +537,7 @@ export
     select!,
     select,
     setindex_shape_check,
+    shuffle,
     shuffle!,
     size,
     slice,
