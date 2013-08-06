@@ -8,39 +8,7 @@ Modules
 
    UNDOCUMENTED (may not appear in helpdb.jl)
 
-.. module:: DSP
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: Errno
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: FFTW
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: GMP
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: LibRandom
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: LinAlg
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: Math
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
 .. module:: Meta
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: MPFR
 
    UNDOCUMENTED (may not appear in helpdb.jl)
 
@@ -49,10 +17,6 @@ Modules
    UNDOCUMENTED (may not appear in helpdb.jl)
 
 .. module:: Order
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: PCRE
 
    UNDOCUMENTED (may not appear in helpdb.jl)
 
@@ -65,22 +29,6 @@ Modules
    UNDOCUMENTED (may not appear in helpdb.jl)
 
 .. module:: Profile
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: QuadGK
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: Random
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: Sort
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: SparseMatrix
 
    UNDOCUMENTED (may not appear in helpdb.jl)
 
@@ -221,11 +169,11 @@ linear algebra
 
    UNDOCUMENTED
 
-.. function:: ldltd!(A::SymTridiagonal{T<:Union(Float64,Complex{Float32},Complex{Float64},Float32)})
+.. function:: ldltd!(A::SymTridiagonal{T<:Union(Float64,Complex{Float32},Float32,Complex{Float64})})
 
    UNDOCUMENTED
 
-.. function:: ldltd(A::SymTridiagonal{T<:Union(Float64,Complex{Float32},Complex{Float64},Float32)})
+.. function:: ldltd(A::SymTridiagonal{T<:Union(Float64,Complex{Float32},Float32,Complex{Float64})})
 
    UNDOCUMENTED
 
@@ -560,6 +508,10 @@ syntax
 
 help and reflection
 -------------------
+
+.. function:: ans(...)
+
+   UNDOCUMENTED
 
 .. function:: disassemble(...)
 
