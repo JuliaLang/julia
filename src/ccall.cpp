@@ -662,6 +662,17 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         Type *funcptype = PointerType::get(functype,0);
         llvmf = literal_pointer_val(fptr, funcptype);
     }
+    else if (!strncmp(f_name, "llvm.", 5)) {
+        llvmf = jl_Module->getOrInsertFunction(f_name, functype);
+        Function *llvmffunc = dyn_cast<Function>(llvmf);
+        if (llvmffunc == NULL || llvmffunc->getIntrinsicID() == 0) {
+            std::stringstream msg;
+            msg << "ccall: could not find intrinsic function ";
+            msg << f_name;
+            emit_error(msg.str(), ctx);
+            return literal_pointer_val(jl_nothing);
+        }
+    }
     else {
         void *symaddr;
         if (f_lib != NULL)
