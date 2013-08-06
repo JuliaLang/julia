@@ -243,7 +243,3 @@ end
 
 sizeof(::Type{Float32}) = 4
 sizeof(::Type{Float64}) = 8
-
-## byte order swaps for arbitrary-endianness serialization/deserialization ##
-bswap(x::Float32) = box(Float32,bswap_int(unbox(Float32,x)))
-bswap(x::Float64) = box(Float64,bswap_int(unbox(Float64,x)))
