@@ -111,6 +111,7 @@ void jl_dump_function_asm(void* Fptr, size_t Fsize,
 
     OwningPtr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
     MCContext Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
+    MOFI->InitMCObjectFileInfo(TripleName, Reloc::Default, CodeModel::Default, Ctx);
 
     unsigned OutputAsmVariant = 1;
     bool ShowEncoding = false;
