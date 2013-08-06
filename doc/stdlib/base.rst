@@ -2788,7 +2788,7 @@ Combinatorics
 
 .. function:: shuffle(v)
 
-   Randomly rearrange the elements of a vector.
+   Return a randomly permuted copy of ``v``.
 
 .. function:: shuffle!(v)
 
