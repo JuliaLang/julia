@@ -12,7 +12,7 @@ function chkstride1(A::StridedVecOrMat...)
     end
 end
 
-function chksquare(A::Matrix...)
+function chksquare(A::AbstractMatrix...)
     for a in A
         m, n = size(a)
         if m != n throw(DimensionMismatch("matrix must be square")) end
