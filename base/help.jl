@@ -167,7 +167,7 @@ end
 function apropos(txt::String)
     init_help()
     n = 0
-    r = Regex("\\Q$txt", PCRE.CASELESS)
+    r = Regex("\\Q$txt", Base.PCRE.CASELESS)
     for (cat, _) in CATEGORY_DICT
         if ismatch(r, cat)
             println("Category: \"$cat\"")
