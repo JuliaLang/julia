@@ -1671,6 +1671,11 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
         # remove redundant unbox
         return (e.args[3],())
     end
+    if isdefined(Main.Base,:isbits) && is(f,Main.Base.isbits) &&
+        length(atypes)==1 && isType(atypes[1]) && effect_free(argexprs[1]) &&
+        isleaftype(atypes[1].parameters[1])
+        return (isbits(atypes[1].parameters[1]),())
+    end
     # special-case inliners for known pure functions that compute types
     if isType(e.typ)
         if (is(f,apply_type) || is(f,fieldtype) ||
@@ -1678,10 +1683,6 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
             (isdefined(Main.Base,:promote_type) && is(f,Main.Base.promote_type))) &&
             isleaftype(e.typ.parameters[1])
             return (e.typ.parameters[1],())
-        end
-        if isdefined(Main.Base,:isbits) && is(f,Main.Base.isbits) &&
-            isleaftype(e.typ.parameters[1])
-            return (isbits(e.typ.parameters[1]),())
         end
         if is(f,Union)
             union = e.typ.parameters[1]
