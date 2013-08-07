@@ -380,6 +380,7 @@ extern jl_datatype_t *jl_int32_type;
 extern jl_datatype_t *jl_uint32_type;
 extern jl_datatype_t *jl_int64_type;
 extern jl_datatype_t *jl_uint64_type;
+extern jl_datatype_t *jl_float16_type;
 extern jl_datatype_t *jl_float32_type;
 extern jl_datatype_t *jl_float64_type;
 extern jl_datatype_t *jl_floatingpoint_type;
@@ -523,6 +524,7 @@ void *allocobj(size_t sz);
 #define jl_is_uint64(v)      jl_typeis(v,jl_uint64_type)
 #define jl_is_float(v)       jl_subtype(v,(jl_value_t*)jl_floatingpoint_type,true)
 #define jl_is_floattype(v)   jl_subtype(v,(jl_value_t*)jl_floatingpoint_type,false)
+#define jl_is_float16(v)     jl_typeis(v,jl_float16_type)
 #define jl_is_float32(v)     jl_typeis(v,jl_float32_type)
 #define jl_is_float64(v)     jl_typeis(v,jl_float64_type)
 #define jl_is_bool(v)        jl_typeis(v,jl_bool_type)
