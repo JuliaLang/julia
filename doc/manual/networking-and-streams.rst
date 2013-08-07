@@ -95,7 +95,7 @@ Resolving IP Addresses
 
 One of the `connect` methods that does not follow the `listen` methods is `connect(host::ASCIIString,port)`, which will attempt to connect to the host 
 given by the `host` parameter on the port given by the port parameter. It 
-allows you to do thins like::
+allows you to do things like::
     
     julia> connect("google.com",80)
     TcpSocket(open, 0 bytes waiting)
