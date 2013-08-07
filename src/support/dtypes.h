@@ -3,6 +3,7 @@
 
 #include <inttypes.h>
 #include <stddef.h>
+#include <stddef.h> // double include of stddef.h fixes #3421
 #include <stdint.h>
 
 #include "platform.h"

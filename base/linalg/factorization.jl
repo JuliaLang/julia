@@ -614,7 +614,7 @@ end
 function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, thin::Bool)
     m,n = size(A)
     if m == 0 || n == 0
-        u,s,vt = (eye(m, thin ? n : m), zeros(0), eye(n,n))
+        u,s,vt = (eye(T, m, thin ? n : m), real(zeros(T,0)), eye(T,n,n))
     else
         u,s,vt = LAPACK.gesdd!(thin ? 'S' : 'A', A)
     end
