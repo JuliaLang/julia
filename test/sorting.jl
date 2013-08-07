@@ -91,7 +91,7 @@ end
 
 a = rand(1:10000, 1000)
 
-for alg in [InsertionSort, MergeSort, TimSort, HeapSort]
+for alg in [InsertionSort, MergeSort, TimSort, HeapSort, RadixSort]
     b = sort(a, alg=alg)
     @test issorted(b)
     ix = sortperm(a, alg=alg)
@@ -120,8 +120,10 @@ for alg in [InsertionSort, MergeSort, TimSort, HeapSort]
     ipermute!(c, ix)
     @test c == a
 
-    c = sort(a, alg=alg, lt=(>))
-    @test b == c
+    if alg != RadixSort  # RadixSort does not work with Lt orderings
+        c = sort(a, alg=alg, lt=(>))
+        @test b == c
+    end
 
     c = sort(a, alg=alg, by=x->1/x)
     @test b == c
@@ -195,7 +197,7 @@ for n in [0:10, 100, 101, 1000, 1001]
 
     v = randn_with_nans(n,0.1)
     for ord in [Order.Forward, Order.Reverse],
-        alg in [InsertionSort, QuickSort, MergeSort, TimSort, HeapSort]
+        alg in [InsertionSort, QuickSort, MergeSort, TimSort, HeapSort, RadixSort]
         # test float sorting with NaNs
         s = sort(v, alg=alg, order=ord)
         @test issorted(s, order=ord)
