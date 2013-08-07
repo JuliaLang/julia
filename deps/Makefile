@@ -20,9 +20,9 @@ ifeq ($(OS),WINNT)
 CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
 endif
 
-#autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr patchelf
+#autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr patchelf uv
 #custom configure-driven script: zlib
-#custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas uv
+#custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
