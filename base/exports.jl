@@ -70,6 +70,7 @@ export
     QR,
     QRPivoted,
     QuickSort,
+    RadixSort,
     Range,
     Range1,
     RangeIndex,
