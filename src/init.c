@@ -870,7 +870,6 @@ void jl_get_builtin_hooks(void)
     jl_uint32_type  = (jl_datatype_t*)core("Uint32");
     jl_uint64_type  = (jl_datatype_t*)core("Uint64");
 
-    jl_float16_type = (jl_datatype_t*)core("Float16");
     jl_float32_type = (jl_datatype_t*)core("Float32");
     jl_float64_type = (jl_datatype_t*)core("Float64");
     jl_floatingpoint_type = (jl_datatype_t*)core("FloatingPoint");
