@@ -97,9 +97,8 @@ type Worker
     id::Int
     gcflag::Bool
     privhost::ByteString
-    cman::ClusterManager
-    cman_ctxt
-    ospid
+    manage::Function
+    config::Dict
     
     Worker(host::String, port::Integer, sock::TcpSocket, id::Int) =
         new(bytestring(host), uint16(port), sock, IOBuffer(), {}, {}, id, false, "")
@@ -202,27 +201,25 @@ type ProcessGroup
 end
 const PGRP = ProcessGroup({})
 
-function add_workers(pg::ProcessGroup, w::Array{Any,1})
+function add_workers(pg::ProcessGroup, ws::Array{Any,1})
     # NOTE: currently only node 1 can add new nodes, since nobody else
     # has the full list of address:port
     assert(LPROC.id == 1)
-    numw = length(w)
-    for i=1:numw
-        w[i].id = get_next_pid()
-        register_worker(w[i])
-        create_message_handler_loop(w[i].socket)
-        
-        cman = w[i].cman
-        if contains(names(cman), :worker_cb) && isdefined(cman, :worker_cb)
-            cman.worker_cb(:register, cman, w[i].cman_ctxt, w[i].id, i)
-        end
+    for w in ws
+        w.id = get_next_pid()
+        register_worker(w)
+        create_message_handler_loop(w.socket) 
     end
     all_locs = map(x -> isa(x, Worker) ? (x.privhost, x.port, x.id) : ("", 0, x.id), pg.workers)
-    for i=1:numw
-        send_msg_now(w[i], :join_pgrp, w[i].id, all_locs)
+    for w in ws
+        send_msg_now(w, :join_pgrp, w.id, all_locs)
     end
-        
-    [w[i].id for i in 1:length(w)]
+    for w in ws
+        @schedule begin
+            w.manage(w.id, w.config, :register)
+        end
+    end 
+    [w.id for w in ws]
 end
 
 myid() = LPROC.id
@@ -322,9 +319,9 @@ function deregister_worker(pg, pid)
     if isa(w, Worker) 
         delete!(map_sock_wrkr, w.socket) 
         
-        # Notify the cluster manager of this workers death 
-        if (myid() == 1) && contains(names(w.cman), :worker_cb) && isdefined(w.cman, :worker_cb)
-            w.cman.worker_cb(:deregister, w.cman, w.cman_ctxt, w.id)
+        # Notify the cluster manager of this workers death
+        if myid() == 1
+            w.manage(w.id, w.config, :deregister)
         end
     end
     add!(map_del_wrkr, pid)
@@ -854,9 +851,6 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     register_worker(Worker("", 0, sock, 1))
                     register_worker(LPROC)
                     
-                    #send back env info to pid 1. Currently only ospid
-                    send_msg(sock, :worker_info, getpid())
-                    
                     for (rhost, rport, rpid) in locs
                         if (rpid < self_pid) && (!(rpid == 1))
                             # Connect to them
@@ -870,10 +864,6 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                             continue
                         end
                     end
-                elseif is(msg, :worker_info)
-                    w = map_sock_wrkr[sock]
-                    ospid = deserialize(sock)
-                    w.ospid = ospid
                 end
                 
             end # end of while
@@ -950,50 +940,47 @@ function start_worker(out::IO)
     exit(0)
 end
 
-function start_cluster_workers(n, config)
-    w = cell(n)
-    cman = config[:cman]
+function start_cluster_workers(np::Integer, config::Dict, cman::ClusterManager)
+    ws = cell(np)
     
     # Get the cluster manager to launch the instance
-    (insttype, instances) = cman.launch_cb(n, config)
-    
-    safe_tupidx(tup, pos) = length(tup) >= pos ? tup[pos] : nothing
+    (insttype, instances) = cman.launch(cman, np, config)
     
     if insttype == :io_only
         read_cb_response(inst) = 
         begin
             (host, port) = read_worker_host_port(inst[1])
-            inst[1], host, port, host, safe_tupidx(inst,2)
+            inst[1], host, port, host, inst[2]
         end
     elseif  insttype == :io_host
         read_cb_response(inst) = 
         begin
             (priv_hostname, port) = read_worker_host_port(inst[1])
-            inst[1], priv_hostname, port, inst[2], safe_tupidx(inst,3)
+            inst[1], priv_hostname, port, inst[2], inst[3]
         end
     elseif insttype == :io_host_port
-        read_cb_response(inst) = (inst[1], inst[2], inst[3], inst[2], safe_tupidx(inst,4))
+        read_cb_response(inst) = (inst[1], inst[2], inst[3], inst[2], inst[4])
     elseif insttype == :host_port
-        read_cb_response(inst) = (nothing, inst[1], inst[2], inst[1], safe_tupidx(inst,3))
+        read_cb_response(inst) = (nothing, inst[1], inst[2], inst[1], inst[3])
     elseif insttype == :cmd
         read_cb_response(inst) = 
         begin
-            io,_ = readsfrom(detach(inst))
+            io,_ = readsfrom(detach(inst[1]))
             (host, port) = read_worker_host_port(io)
-            io, host, port, host, safe_tupidx(inst,2)
+            io, host, port, host, inst[2]
         end
     else
         error("Unsupported format from Cluster Manager callback")
     end
     
-    for i=1:n
-        (io, privhost, port, pubhost, cman_ctxt) = read_cb_response(instances[i])
-        w[i] = create_worker(privhost, port, pubhost, io, config, cman_ctxt)
+    for i=1:np
+        (io, privhost, port, pubhost, wconfig) = read_cb_response(instances[i])
+        ws[i] = create_worker(privhost, port, pubhost, io, wconfig, cman.manage)
     end
-    w
+    ws
 end
 
-function read_worker_host_port (io::IO)
+function read_worker_host_port(io::IO)
     io.line_buffered = true
     while true
         conninfo = readline(io)
@@ -1004,7 +991,7 @@ function read_worker_host_port (io::IO)
     end
 end
 
-function create_worker(privhost, port, pubhost, stream, config, cman_ctxt)
+function create_worker(privhost, port, pubhost, stream, config, manage)
     tunnel = config[:tunnel]
     
     s = split(pubhost,'@')
@@ -1026,9 +1013,10 @@ function create_worker(privhost, port, pubhost, stream, config, cman_ctxt)
     else
         w = Worker(pubhost, port)
     end
+    
     w.privhost = privhost
-    w.cman = config[:cman]
-    w.cman_ctxt = cman_ctxt
+    w.config = config
+    w.manage = manage
     
     if isa(stream, AsyncStream)
         stream.line_buffered = true
@@ -1084,71 +1072,80 @@ function ssh_tunnel(user, host, privhost, port, sshflags)
 end
 
 
-function launch_procs(n::Integer, config::Dict)
+immutable LocalManager <: ClusterManager
+    launch::Function
+    manage::Function
+
+    LocalManager() = new(launch_workers, manage_local_worker)
+end
+
+immutable SSHManager <: ClusterManager
+    launch::Function
+    manage::Function
+    machines::AbstractVector
+
+    SSHManager(; machines=[]) = new(launch_workers, manage_ssh_worker, machines)
+end
+
+show(io::IO, cman::LocalManager) = println("LocalManager()")
+show(io::IO, cman::SSHManager) = println("SSHManager(machines=", cman.machines, ")")
+
+function launch_workers(cman::Union(LocalManager, SSHManager), np::Integer, config::Dict)
     dir = config[:dir]
     exename = config[:exename]
     exeflags = config[:exeflags]
-    
-    cman = config[:cman]
-    cman.config = config        # Will need the various startup env later
-    
-    io_objs = cell(n)
-    contexts = cell(n)
+    ssh = isa(cman, SSHManager)
+
+    io_objs = cell(np)
+    configs = cell(np)
     
     # start the processes first...
-    if (cman.ssh)
+    if ssh
         sshflags = config[:sshflags]
         lcmd(idx) =  `ssh -n $sshflags $(cman.machines[idx]) "sh -l -c \"cd $dir && $exename $exeflags\""`
     else
         lcmd(idx) =  `$(dir)/$(exename) --bind-to 127.0.0.1 $exeflags`
     end
     
-    for i in 1:n
+    for i in 1:np
         io, pobj = readsfrom(detach(lcmd(i)))
         io_objs[i] = io
-        contexts[i] = cman.ssh ? {:machine => cman.machines[i]} : {:pobj => pobj}
+        configs[i] = merge(config, ssh ? {:machine => cman.machines[i]} : {:process => pobj})
     end    
     
     # ...and then read the host:port info. This optimizes overall start times.
     
     # For ssh, the tunnel connection, if any, has to be with the specified machine name.
     # but the port needs to be forwarded to the private hostname/ip-address
-    
-    if cman.ssh
-        return (:io_host, map(i -> (io_objs[i], cman.machines[i], contexts[i]), 1:n))
+  
+    if ssh
+        return (:io_host, collect(zip(io_objs, cman.machines, configs)))
     else
-        return (:io_only, map(i -> (io_objs[i], contexts[i]), 1:n))
-    end    
-end
-
-function cman_worker_cb(op, cman, ctxt, pid, args...)
-    if op == :interrupt
-        (ospid,) = args
-        if cman.ssh
-            machine = ctxt[:machine]
-            sshflags = cman.config[:sshflags] 
-            if !success(`ssh -n $sshflags $machine "kill -2 $ospid"`)
-                println("Error sending a Ctrl-C to julia worker $pid on $machine")
-            end
-        else
-            pobj = ctxt[:pobj]
-            kill(pobj, 2)
-        end
+        return (:io_only, collect(zip(io_objs, configs)))
     end
 end
 
-type RegularCluster <: ClusterManager
-    launch_cb::Function
-    ssh::Bool
-    machines
-    
-    worker_cb::Function
-    config::Dict
-    
-    RegularCluster(; ssh=false, machines=[]) = new(launch_procs, ssh, machines, cman_worker_cb)
+function manage_local_worker(id::Integer, config::Dict, op::Symbol)
+    if op == :interrupt
+        kill(config[:process], 2)
+    end
 end
 
-show(io::IO, cman::RegularCluster) = println("RegularCluster :: ssh: ", cman.ssh, ", machines : ", cman.machines)
+function manage_ssh_worker(id::Integer, config::Dict, op::Symbol)
+    if op == :interrupt
+        if haskey(config, :ospid)
+            machine = config[:machine]
+            if !success(`ssh -n $(config[:sshflags]) $machine "kill -2 $(config[:ospid])"`)
+                println("Error sending a Ctrl-C to julia worker $id on $machine")
+            end
+        else
+            # This state can happen immediately after an addprocs
+            println("Worker $id cannot be presently interrupted.")
+        end
+    elseif op == :register
+        config[:ospid] = remotecall_fetch(id, getpid)
+    end
+end
 
 # start and connect to processes via SSH.
 # optionally through an SSH tunnel.
@@ -1157,11 +1154,11 @@ show(io::IO, cman::RegularCluster) = println("RegularCluster :: ssh: ", cman.ssh
 function addprocs_internal(np::Integer;
                   tunnel=false, dir=JULIA_HOME,
                   exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia-release-basic":"./julia-debug-basic"),
-                  sshflags::Cmd=``, cman=RegularCluster(), exeflags=``)
+                  sshflags::Cmd=``, cman=LocalManager(), exeflags=``)
                   
-    config={:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags, :cman=>cman}
+    config={:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags}
     disable_threaded_libs()
-    add_workers(PGRP, start_cluster_workers(np, config))
+    add_workers(PGRP, start_cluster_workers(np, config, cman))
 end
 
 addprocs(np::Integer; kwargs...) = addprocs_internal(np; kwargs...)
@@ -1171,7 +1168,7 @@ function addprocs(machines::AbstractVector; kwargs...)
     if cman_defined
         error("custom cluster managers unsupported on the ssh interface")
     else
-        addprocs_internal(length(machines); cman=RegularCluster(ssh=true, machines=machines), kwargs...)
+        addprocs_internal(length(machines); cman=SSHManager(machines=machines), kwargs...)
     end
 end
 
@@ -1588,16 +1585,7 @@ function interrupt(pid::Integer)
     assert(myid() == 1)
     w = map_pid_wrkr[pid]
     if isa(w, Worker) 
-        if contains(names(w.cman), :worker_cb) && isdefined(w.cman, :worker_cb)
-            if isdefined(w, :ospid)
-                w.cman.worker_cb(:interrupt, w.cman, w.cman_ctxt, w.id, w.ospid)
-            else
-                # This state can happen immediately after an addprocs
-                println("Worker $(w.id) cannot be presently interrupted.")
-            end
-        else
-            println("This worker's ClusterManager does not support interrupts.")
-        end
+        w.manage(w.id, w.config, :interrupt)
     end
 end
 
