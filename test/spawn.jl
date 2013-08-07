@@ -9,6 +9,7 @@
 #TODO:
 # - Windows:
 #   - Add a test whether coreutils are available and skip tests if not
+yes = `perl -le 'while (1) {print STDOUT "y"}'`
 
 #### Examples used in the manual ####
 
@@ -24,12 +25,12 @@ out = readall(`echo hello` & `echo world`)
 @test (run(`printf "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
-@test (run(`yes`|>`head`|>SpawnNullStream()); true)
+@test (run(yes|>`head`|>SpawnNullStream()); true)
 
 a = Base.Condition()
 
 @schedule begin
-    p = spawn(`yes`|>SpawnNullStream())
+    p = spawn(yes|>SpawnNullStream())
     Base.notify(a,p)
     @test !Base.wait_success(p)
 end
