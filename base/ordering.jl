@@ -68,6 +68,7 @@ uint_mapping(::ReverseOrdering{ForwardOrdering}, x::Float64)  = (y = reinterpret
 
 uint_mapping(o::By,   x)      = uint_mapping(Forward, o.by(x))
 uint_mapping(o::Perm, i::Int) = uint_mapping(o.order, o.data[i])
+uint_mapping(o::Lt,   x)      = error("uint_mapping does not work with general Lt Orderings")
 
 ordtype   (o::ReverseOrdering, vs::AbstractArray) = ordtype(o.fwd, vs)
 ordtype   (o::Perm,            vs::AbstractArray) = ordtype(o.order, o.data)
