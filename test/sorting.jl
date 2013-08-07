@@ -170,7 +170,7 @@ for n in [0:10, 100, 101, 1000, 1001]
         @test c == v
 
         # stable algorithms
-        for alg in [MergeSort, TimSort]
+        for alg in [MergeSort, TimSort, RadixSort]
             p = sortperm(v, alg=alg, order=ord)
             @test p == pi
             s = copy(v)
