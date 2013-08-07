@@ -22,7 +22,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 <a name="Resources"/>
 
 - **Homepage:** <http://julialang.org>
-- **Binaries:** <http://code.google.com/p/julialang/downloads/list>
+- **Binaries:** <http://julialang.org/downloads/>
 - **Documentation:** <http://docs.julialang.org/>
 - **Packages:** <http://docs.julialang.org/en/latest/packages/packagelist/>
 - **Source code:** <https://github.com/JuliaLang/julia>
@@ -96,7 +96,7 @@ Julia does not install anything outside the directory it was cloned into. Julia 
 
 * GCC version 4.6 or later is recommended to build Julia.
 * To use external shared libraries not in the system library search path, set `USE_SYSTEM_XXX=1` and `LDFLAGS=-Wl,-rpath /path/to/dir/contains/libXXX.so` in `Make.user`.
-  * Instead of setting `LDFLAGS`, putting the library directory into the environment variable `LD_LIBRARY_PATH` (at both compiling time and runtime) also works.
+  * Instead of setting `LDFLAGS`, putting the library directory into the environment variable `LD_LIBRARY_PATH` (at both compile and run time) also works.
 * See also the [external dependencies](#Required-Build-Tools-External-Libraries).
 
 #### Ubuntu
@@ -221,7 +221,7 @@ Please be aware that this procedure is not officially supported, as it introduce
 
 ### SuiteSparse
 
-SuiteSparse is a special case, since it is typically only installed as a static library, while `USE_SYSTEM_SUITESPARSE=1` requires that it is a shared library. Running the script `contrib/repackage_system_suitesparse4.make` will copy your static system SuiteSparse installation into the shared library format required by Julia.
+SuiteSparse is a special case, since it is typically only installed as a static library, while `USE_SYSTEM_SUITESPARSE=1` requires that it is a shared library. Running the script `contrib/repackage_system_suitesparse4.make` will copy your static system SuiteSparse installation into the shared library format required by Julia. `make USE_SYSTEM_SUITESPARSE=1` will then use the SuiteSparse that has been copied into Julia's directory, but will not build a new SuiteSparse library from scratch.
 
 ### Intel Math Kernel Libraries
 
@@ -272,7 +272,7 @@ The following distributions include julia, but the versions may be out of date d
 * Ubuntu
   * [Ubuntu 13.04 (Raring Ringtail)](http://packages.ubuntu.com/raring/julia)
   * [Nightly builds PPA](https://launchpad.net/~staticfloat/+archive/julianightlies) (depends on the [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/))
-* [OS X Homebrew](http://mxcl.github.com/homebrew/)
+* [OS X Homebrew Tap](https://github.com/staticfloat/homebrew-julia/)
 
 <a name="Editor-Terminal-Setup"/>
 ## Editor and Terminal Setup
