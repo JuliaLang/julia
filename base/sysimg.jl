@@ -94,6 +94,7 @@ include("floatfuncs.jl")
 include("math.jl")
 importall .Math
 include("primes.jl")
+include("float16.jl")
 
 # concurrency and parallelism
 include("serialize.jl")

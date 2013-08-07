@@ -42,4 +42,4 @@ map(f::Callable, x::Number) = f(x)
 const _numeric_conversion_func_names =
     (:int,:integer,:signed,:int8,:int16,:int32,:int64,:int128,
      :uint,:unsigned,:uint8,:uint16,:uint32,:uint64,:uint128,
-     :float,:float32,:float64)
+     :float,:float16,:float32,:float64)
