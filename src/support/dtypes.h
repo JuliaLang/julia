@@ -1,6 +1,10 @@
 #ifndef DTYPES_H
 #define DTYPES_H
 
+#include <inttypes.h>
+#include <stddef.h>
+#include <stdint.h>
+
 #include "platform.h"
 
 #if defined(_OS_WINDOWS_) && defined(_COMPILER_INTEL_)
@@ -65,7 +69,6 @@
 #endif
 
 #ifdef _OS_LINUX_
-#include <features.h>
 #include <endian.h>
 #define LITTLE_ENDIAN  __LITTLE_ENDIAN
 #define BIG_ENDIAN     __BIG_ENDIAN
@@ -122,8 +125,6 @@
 # define INLINE inline
 #endif
 
-#include <stdint.h>
-#include <stddef.h>
 typedef int bool_t;
 typedef unsigned char  byte_t;   /* 1 byte */
 
