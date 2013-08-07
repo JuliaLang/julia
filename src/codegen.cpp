@@ -3334,7 +3334,9 @@ static void init_julia_llvm_env(Module *m)
 
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);
-#ifndef LLVM32
+#ifdef LLVM32
+    FPM->add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
+#else 
     FPM->add(new TargetData(*jl_ExecutionEngine->getTargetData()));
 #endif
     // list of passes from vmkit
