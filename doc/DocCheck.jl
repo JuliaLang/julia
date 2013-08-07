@@ -103,7 +103,7 @@ function _undocumented_rst()
                s = symbol(line) # for submodules: string(:Sort) == "Base.Sort"
                if !isdefined(s) continue end
                if haskey(FUNCTION_DICT, line) || haskey(MODULE_DICT, line) || haskey(CATEGORY_DICT, string(s))
-                  m = getkey(MODULE_DICT, line, "")
+                  m = eval(symbol(getkey(MODULE_DICT, line, "Base")))
                   isdeprecated(m,s) && continue
                   havecount+=1; total+=1; continue
                end
