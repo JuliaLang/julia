@@ -13,7 +13,6 @@ HierarchicalValue(T::Type) = HierarchicalValue(T[])
 Base.zero{T}(::Type{HierarchicalValue{T}}) = HierarchicalValue(T)
 
 Base.typemin{T}(::Type{HierarchicalValue{T}}) = HierarchicalValue(T[], typemin(T))
-Base.typemax{T}(::Type{HierarchicalValue{T}}) = HierarchicalValue(T[], typemax(T))
 
 for (bf,f) in ((:(:-), :-), (:(:+),:+))
     @eval function Base.($bf){T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
@@ -66,13 +65,6 @@ Base.isequal{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = (a.v == b.v)
 
 Base.abs{T}(a::HierarchicalValue{T}) = HierarchicalValue(T[abs(x) for x in a.v], abs(a.rest))
 
-bpencode(ident::ASCIIString) =
-    Int[c == '-' ? 1 :
-        ('0' <= c <= '9') ? (c - '0' + 2) :
-        ('A' <= c <= 'Z') ? (c - 'A' + 12) :
-        # 'a' <= c <= 'z'
-        (c - 'a' + 38) for c in ident]
-
 immutable VWPreBuildItem
     nonempty::Int
     s::HierarchicalValue{Int}
@@ -80,12 +72,11 @@ immutable VWPreBuildItem
 end
 VWPreBuildItem() = VWPreBuildItem(0, HierarchicalValue(Int), 0)
 VWPreBuildItem(i::Int) = VWPreBuildItem(1, HierarchicalValue(Int), i)
-VWPreBuildItem(s::ASCIIString) = VWPreBuildItem(1, HierarchicalValue(bpencode(s)), 0)
+VWPreBuildItem(s::ASCIIString) = VWPreBuildItem(1, HierarchicalValue(Int[s...]), 0)
 
 Base.zero(::Type{VWPreBuildItem}) = VWPreBuildItem()
 
-Base.typemin(::Type{VWPreBuildItem}) = (x=typemin(Int); VWPreBuildItem(x, HierarchicalValue(Int[], x), x))
-Base.typemax(::Type{VWPreBuildItem}) = (x=typemax(Int); VWPreBuildItem(x, HierarchicalValue(Int[], x), x))
+Base.typemin(::Type{VWPreBuildItem}) = (x=typemin(Int); VWPreBuildItem(x, typemin(HierarchicalValue{Int}), x))
 
 Base.(:-)(a::VWPreBuildItem, b::VWPreBuildItem) = VWPreBuildItem(a.nonempty-b.nonempty, a.s-b.s, a.i-b.i)
 Base.(:+)(a::VWPreBuildItem, b::VWPreBuildItem) = VWPreBuildItem(a.nonempty+b.nonempty, a.s+b.s, a.i+b.i)
@@ -124,7 +115,6 @@ VWPreBuild() = VWPreBuild(0, HierarchicalValue(VWPreBuildItem))
 Base.zero(::Type{VWPreBuild}) = VWPreBuild()
 
 Base.typemin(::Type{VWPreBuild}) = VWPreBuild(typemin(Int), typemin(HierarchicalValue{VWPreBuildItem}))
-Base.typemax(::Type{VWPreBuild}) = VWPreBuild(typemax(Int), typemax(HierarchicalValue{VWPreBuildItem}))
 
 Base.(:-)(a::VWPreBuild, b::VWPreBuild) = VWPreBuild(a.nonempty-b.nonempty, a.w-b.w)
 Base.(:+)(a::VWPreBuild, b::VWPreBuild) = VWPreBuild(a.nonempty+b.nonempty, a.w+b.w)
@@ -165,7 +155,6 @@ VersionWeight(vn::VersionNumber, uninstall=false) =
 Base.zero(::Type{VersionWeight}) = VersionWeight()
 
 Base.typemin(::Type{VersionWeight}) = (x=typemin(Int); y=typemin(VWPreBuild); VersionWeight(x,x,x,y,y,x))
-Base.typemax(::Type{VersionWeight}) = (x=typemax(Int); y=typemax(VWPreBuild); VersionWeight(x,x,x,y,y,x))
 
 Base.(:-)(a::VersionWeight, b::VersionWeight) =
     VersionWeight(a.major-b.major, a.minor-b.minor, a.patch-b.patch,
