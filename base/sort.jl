@@ -393,7 +393,9 @@ function sort!(vs::AbstractVector, lo::Int, hi::Int, ::RadixSortAlg, o::Ordering
 
     if isodd(swaps)
         vs,ts = ts,vs
-        copy!(vs,ts)
+        for i = lo:hi
+            vs[i] = ts[i]
+        end
     end
     vs
 end
@@ -463,9 +465,6 @@ lt{T<:Floats}(::Right, x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])
 
-uint_mapping{F<:Floats}(::Right, x::F) = uint_mapping(Forward, x)
-uint_mapping{F<:Floats}(::Left , x::F) = uint_mapping(Forward, x)
-
 function nans2left!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
     hi < lo && return lo, hi
     i = lo
@@ -533,6 +532,11 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     sort!(v, lo, j,  a, left(o))
     sort!(v, i,  hi, a, right(o))
     return v
+end
+
+function fpsort!(v::AbstractVector, ::Base.Sort.RadixSortAlg, o::Ordering)
+    lo, hi = nans2end!(v,o)
+    sort!(v, lo, hi, RadixSort, o)
 end
 
 sort!{T<:Floats}(v::AbstractVector{T}, a::Algorithm, o::DirectOrdering) = fpsort!(v,a,o)
