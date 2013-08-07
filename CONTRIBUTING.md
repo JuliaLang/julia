@@ -33,6 +33,7 @@ Julia's documentation is stored in the `doc` directory, and like everything else
 - Click `doc` 
 - If you want to modify an entry in the help for Julia's standard library, click `stdlib`
 - Pick the file you want to edit (for example, `base.rst`)
+- Select the `master` branch (if not browsing it already)
 - Click "Edit" 
 - Click on the icon that looks like a fullscreen symbol ("Zen" mode) 
 - Search for the function you want to change
