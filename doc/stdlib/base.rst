@@ -3315,7 +3315,7 @@ Parallel Computing
 
    * ``Condition``: Wait for ``notify`` on a condition.
 
-   * ``Process``: Wait for the process to exit, and get its exit code.
+   * ``Process``: Wait for a process or process chain to exit. The ``exitcode`` field of a process can be used to determine success or failure.
 
    * ``Task``: Wait for a ``Task`` to finish, returning its result value.
 
@@ -3440,7 +3440,7 @@ System
 
 .. function:: success(command)
 
-   Run a command object, constructed with backticks, and tell whether it was successful (exited with a code of 0).
+   Run a command object, constructed with backticks, and tell whether it was successful (exited with a code of 0). An exception is raised if the process cannot be started.
 
 .. function:: process_running(p::Process)
 
@@ -3449,12 +3449,6 @@ System
 .. function:: process_exited(p::Process)
 
    Determine whether a process has exited.
-
-.. function:: process_exit_status(p::Process)
-
-   Get the exit status of an exited process. The result is undefined if the
-   process is still running. Use ``wait(p)`` to wait for a process to exit,
-   and get its exit status.
 
 .. function:: kill(p::Process, signum=SIGTERM)
 

@@ -273,6 +273,8 @@ function wait_readnb(x::AsyncStream, nb::Int)
     end
 end
 
+wait_close(x) = if isopen(x) wait(x.closenotify); end
+
 #from `connect`
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
     @assert sock.status == StatusConnecting

@@ -146,8 +146,8 @@ type Process
     in::AsyncStream
     out::AsyncStream
     err::AsyncStream
-    exit_code::Int32
-    term_signal::Int32
+    exitcode::Int32
+    termsignal::Int32
     exitcb::Callback
     exitnotify::Condition
     closecb::Callback
@@ -202,10 +202,10 @@ function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::
     return proc
 end
 
-function _uv_hook_return_spawn(proc::Process, exit_status::Int32, term_signal::Int32)
-    proc.exit_code = exit_status
-    proc.term_signal = term_signal
-    if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, term_signal) end
+function _uv_hook_return_spawn(proc::Process, exit_status::Int32, termsignal::Int32)
+    proc.exitcode = exit_status
+    proc.termsignal = termsignal
+    if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, termsignal) end
     ccall(:jl_close_uv,Void,(Ptr{Void},),proc.handle)
     notify(proc.exitnotify)
 end
@@ -390,7 +390,7 @@ end
 readall(cmd::AbstractCmd) = readall(cmd, null_handle)
 function readall(cmd::AbstractCmd,stdin::AsyncStream)
     (out,pc) = readsfrom(cmd, stdin)
-    if !wait_success(pc)
+    if !success(pc)
         pipeline_error(pc)
     end
     wait_close(out)
@@ -402,7 +402,7 @@ function writeall(cmd::AbstractCmd, stdin::String, stdout::AsyncStream)
     (in,pc) = writesto(cmd, stdout)
     write(in, stdin)
     close(in)
-    if !wait_success(pc)
+    if !success(pc)
         pipeline_error(pc)
     end
     return true
@@ -410,26 +410,30 @@ end
 
 function run(cmds::AbstractCmd,args...)
     ps = spawn(cmds,spawn_opts_inherit(args...)...)
-    wait_success(ps) ? nothing : pipeline_error(ps)
+    success(ps) ? nothing : pipeline_error(ps)
 end
 
 const SIGPIPE = 13
 function test_success(proc::Process)
     assert(process_exited(proc))
-    if proc.exit_code < 0
-        error(UVError("could not start process "*string(proc.cmd),proc.exit_code))
+    if proc.exitcode < 0
+        error(UVError("could not start process "*string(proc.cmd),proc.exitcode))
     end
-    proc.exit_code==0 && (proc.term_signal == 0 || proc.term_signal == SIGPIPE)
+    proc.exitcode==0 && (proc.termsignal == 0 || proc.termsignal == SIGPIPE)
 end
 
-success(proc::Process) = wait_success(proc)
+function success(x::Process)
+    wait(x)
+    kill(x)
+    test_success(x)
+end
 success(procs::Vector{Process}) = all(success, procs)
 success(procs::ProcessChain) = success(procs.processes)
 success(cmd::AbstractCmd) = success(spawn(cmd))
 
 function pipeline_error(proc::Process)
     if !proc.cmd.ignorestatus
-        error("failed process: ",proc," [",proc.exit_code,"]")
+        error("failed process: ",proc," [",proc.exitcode,"]")
     end
     nothing
 end
@@ -445,7 +449,7 @@ function pipeline_error(procs::ProcessChain)
     if length(failed)==1 pipeline_error(failed[1]) end
     msg = "failed processes:"
     for proc in failed
-        msg = string(msg,"\n  ",proc," [",proc.exit_code,"]")
+        msg = string(msg,"\n  ",proc," [",proc.exitcode,"]")
     end
     error(msg)
 end
@@ -468,26 +472,24 @@ function _contains_newline(bufptr::Ptr{Void},len::Int32)
 end
 
 ## process status ##
-process_running(s::Process) = s.exit_code == typemin(Int32)
+process_running(s::Process) = s.exitcode == typemin(Int32)
 process_running(s::Vector{Process}) = all(process_running,s)
 process_running(s::ProcessChain) = process_running(s.processes)
 
-process_exit_status(s::Process) = s.exit_code
 process_exited(s::Process) = !process_running(s)
 process_exited(s::Vector{Process}) = all(process_exited,s)
 process_exited(s::ProcessChain) = process_running(s.processes)
 
-process_term_signal(s::Process) = s.term_signal
-process_signaled(s::Process) = (s.term_signal > 0)
+process_signaled(s::Process) = (s.termsignal > 0)
 
 #process_stopped (s::Process) = false #not supported by libuv. Do we need this?
 #process_stop_signal(s::Process) = false #not supported by libuv. Do we need this?
 
 function process_status(s::Process)
     process_running (s) ? "ProcessRunning" :
-    process_signaled(s) ? "ProcessSignaled("*string(process_term_signal(s))*")" :
+    process_signaled(s) ? "ProcessSignaled("*string(s.termsignal)*")" :
     #process_stopped (s) ? "ProcessStopped("*string(process_stop_signal(s))*")" :
-    process_exited  (s) ? "ProcessExited("*string(process_exit_status(s))*")" :
+    process_exited  (s) ? "ProcessExited("*string(s.exitcode)*")" :
     error("process status error")
 end
 
@@ -548,18 +550,7 @@ macro cmd(str)
     :(cmd_gen($(shell_parse(str))))
 end
 
-wait_close(x) = if isopen(x) wait(x.closenotify); end
-
-wait_exit(x::Process)      = if !process_exited(x); wait(x.exitnotify); end
-wait_exit(x::ProcessChain) = for p in x.processes; wait_exit(p); end
-
-function wait_success(x::Process)
-    wait_exit(x)
-    kill(x)
-    test_success(x)
-end
-wait_success(x::ProcessChain) = all(wait_success, x.processes)
-
-wait(p::Process) = (wait_exit(p); p.exit_code)
+wait(x::Process)      = if !process_exited(x); wait(x.exitnotify); end
+wait(x::ProcessChain) = for p in x.processes; wait(p); end
 
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
