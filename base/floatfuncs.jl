@@ -23,6 +23,7 @@ copysign(x::Float64, y::Real) = copysign(x, float64(y))
 
 signbit(x::Float64) = signbit(reinterpret(Int64,x))
 signbit(x::Float32) = signbit(reinterpret(Int32,x))
+signbit(x::Float16) = signbit(reinterpret(Int16,x))
 
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = float32(16777216.)
@@ -35,9 +36,11 @@ isfloat64(::Float64) = true
 isfloat64(::Float32) = true
 
 ## precision, as defined by the effective number of bits in the mantissa ##
+get_precision(::Float16) = 11
 get_precision(::Float32) = 24
 get_precision(::Float64) = 53
 
+num2hex(x::Float16) = hex(reinterpret(Uint16,x), 4)
 num2hex(x::Float32) = hex(box(Uint32,unbox(Float32,x)),8)
 num2hex(x::Float64) = hex(box(Uint64,unbox(Float64,x)),16)
 
