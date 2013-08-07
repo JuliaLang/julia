@@ -320,7 +320,7 @@ end
 @test sum_kbn([1,1e100,1,-1e100]) == 2
 
 begin
-    local A, A1, A2, A3, v, v2, cv, cv2, c
+    local A, A1, A2, A3, v, v2, cv, cv2, c, R, T
     A = ones(Int,2,3,4)
     A1 = reshape(repmat([1,2],1,12),2,3,4)
     A2 = reshape(repmat([1 2 3],2,4),2,3,4)
