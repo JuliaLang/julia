@@ -237,10 +237,12 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
         if (jl_binding_resolved_p(m, var)) {
             jl_binding_t *mb = jl_get_binding(m, var);
             assert(mb != NULL);
-            if (mb->value == NULL || !jl_is_module(mb->value))
-                jl_errorf("invalid module path");
-            m = (jl_module_t*)mb->value;
-            break;
+            if (mb->owner == m || mb->imported) {
+                m = (jl_module_t*)mb->value;
+                if (m == NULL || !jl_is_module(m))
+                    jl_errorf("invalid module path");
+                break;
+            }
         }
         if (m == jl_main_module) {
             if (!retrying) {
