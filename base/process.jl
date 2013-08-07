@@ -414,16 +414,18 @@ function run(cmds::AbstractCmd,args...)
 end
 
 const SIGPIPE = 13
-function success(proc::Process)
+function test_success(proc::Process)
     assert(process_exited(proc))
     if proc.exit_code < 0
         error(UVError("could not start process "*string(proc.cmd),proc.exit_code))
     end
     proc.exit_code==0 && (proc.term_signal == 0 || proc.term_signal == SIGPIPE)
 end
+
+success(proc::Process) = wait_success(proc)
 success(procs::Vector{Process}) = all(success, procs)
 success(procs::ProcessChain) = success(procs.processes)
-success(cmd::AbstractCmd) = wait_success(spawn(cmd))
+success(cmd::AbstractCmd) = success(spawn(cmd))
 
 function pipeline_error(proc::Process)
     if !proc.cmd.ignorestatus
@@ -435,7 +437,7 @@ end
 function pipeline_error(procs::ProcessChain)
     failed = Process[]
     for p = procs.processes
-        if !success(p) && !p.cmd.ignorestatus
+        if !test_success(p) && !p.cmd.ignorestatus
             push!(failed, p)
         end
     end
@@ -554,15 +556,9 @@ wait_exit(x::ProcessChain) = for p in x.processes; wait_exit(p); end
 function wait_success(x::Process)
     wait_exit(x)
     kill(x)
-    success(x)
+    test_success(x)
 end
-function wait_success(x::ProcessChain)
-    s = true
-    for p in x.processes
-        s &= wait_success(p)
-    end
-    s
-end
+wait_success(x::ProcessChain) = all(wait_success, x.processes)
 
 wait(p::Process) = (wait_exit(p); p.exit_code)
 
