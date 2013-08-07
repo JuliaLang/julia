@@ -524,7 +524,14 @@
 ("Syntax","Base","gensym","gensym([tag])
 
    Generates a symbol which will not conflict with other variable
-   names
+   names.
+
+"),
+
+("Syntax","Base","@gensym","@gensym()
+
+   Generates a gensym symbol for a variable. For example, *@gensym x
+   y* is transformed into *x = gensym(\"x\"); y = gensym(\"y\")*.
 
 "),
 
@@ -3748,6 +3755,13 @@
 
 "),
 
+("Random Numbers","Base","randsym","randsym(n)
+
+   Generate a \"nxn\" symmetric array of normally-distributed random
+   numbers with mean 0 and standard deviation 1.
+
+"),
+
 ("Arrays","Base","ndims","ndims(A) -> Integer
 
    Returns the number of dimensions of A
@@ -4280,7 +4294,7 @@
 
 ("Combinatorics","Base","shuffle","shuffle(v)
 
-   Randomly rearrange the elements of a vector.
+   Return a randomly permuted copy of \"v\".
 
 "),
 
@@ -6552,6 +6566,29 @@
 
 "),
 
+("Linear Algebra","Base","rref","rref(A)
+
+   Compute the reduced row echelon form of the matrix A.
+
+"),
+
+("Linear Algebra","Base","factorize","factorize(A)
+
+   Compute a convenient factorization (including LU, Cholesky, Bunch
+   Kaufman, Triangular) of A, based upon the type of the input matrix.
+   The return value can then be reused for efficient solving of
+   multiple systems. For example: \"A=factorize(A); x=A\\\\b;
+   y=A\\\\C\".
+
+"),
+
+("Linear Algebra","Base","factorize!","factorize!(A)
+
+   \"factorize!\" is the same as \"factorize()\", but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
 ("Linear Algebra","Base","lu","lu(A) -> L, U, P
 
    Compute the LU factorization of \"A\", such that \"P*A = L*U\".
@@ -6576,7 +6613,7 @@
 
 ("Linear Algebra","Base","lufact!","lufact!(A) -> LU
 
-   \"lufact!\" is the same as \"lufact\" but saves space by
+   \"lufact!\" is the same as \"lufact()\", but saves space by
    overwriting the input A, instead of creating a copy.  For sparse
    \"A\" the \"nzval\" field is not overwritten but the index fields,
    \"colptr\" and \"rowval\" are decremented in place, converting from
@@ -6624,7 +6661,7 @@
 
 ("Linear Algebra","Base","cholfact!","cholfact!(A[, LU]) -> Cholesky
 
-   \"cholfact!\" is the same as \"cholfact\" but saves space by
+   \"cholfact!\" is the same as \"cholfact()\", but saves space by
    overwriting the input A, instead of creating a copy.
 
 "),
@@ -6646,7 +6683,7 @@
 
 ("Linear Algebra","Base","cholpfact!","cholpfact!(A[, LU]) -> CholeskyPivoted
 
-   \"cholpfact!\" is the same as \"cholpfact\" but saves space by
+   \"cholpfact!\" is the same as \"cholpfact\", but saves space by
    overwriting the input A, instead of creating a copy.
 
 "),
@@ -6673,7 +6710,7 @@
 
 ("Linear Algebra","Base","qrfact!","qrfact!(A)
 
-   \"qrfact!\" is the same as \"qrfact\" but saves space by
+   \"qrfact!\" is the same as \"qrfact()\", but saves space by
    overwriting the input A, instead of creating a copy.
 
 "),
@@ -6704,7 +6741,23 @@
 
 ("Linear Algebra","Base","qrpfact!","qrpfact!(A) -> QRPivoted
 
-   \"qrpfact!\" is the same as \"qrpfact\" but saves space by
+   \"qrpfact!\" is the same as \"qrpfact()\", but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+("Linear Algebra","Base","bkfact","bkfact(A) -> BunchKaufman
+
+   Compute the Bunch Kaufman factorization of a real symmetric or
+   complex Hermitian matrix \"A\" and return a \"BunchKaufman\"
+   object. The following functions are available for \"BunchKaufman\"
+   objects: \"size\", \"\\\", \"inv\", \"issym\", \"ishermitian\".
+
+"),
+
+("Linear Algebra","Base","bkfact!","bkfact!(A) -> BunchKaufman
+
+   \"bkfact!\" is the same as \"bkfact()\", but saves space by
    overwriting the input A, instead of creating a copy.
 
 "),
@@ -6777,7 +6830,7 @@
 
 ("Linear Algebra","Base","eigfact!","eigfact!(A[, B])
 
-   \"eigfact!\" is the same as \"eigfact\" but saves space by
+   \"eigfact!\" is the same as \"eigfact()\", but saves space by
    overwriting the input A (and B), instead of creating a copy.
 
 "),
@@ -6795,7 +6848,7 @@
 
 ("Linear Algebra","Base","hessfact!","hessfact!(A)
 
-   \"hessfact!\" is the same as \"hessfact\" but saves space by
+   \"hessfact!\" is the same as \"hessfact()\", but saves space by
    overwriting the input A, instead of creating a copy.
 
 "),
@@ -6809,6 +6862,13 @@
    \"F[:vectors]\" or \"F[:Z]\" such that
    \"A=F[:vectors]*F[:Schur]*F[:vectors]'\". The eigenvalues of \"A\"
    can be obtained with \"F[:values]\".
+
+"),
+
+("Linear Algebra","Base","schurfact!","schurfact!(A)
+
+   Computer the Schur factorization of A, overwriting A in the
+   process. See \"schurfact()\"
 
 "),
 
@@ -6852,7 +6912,7 @@
 
 ("Linear Algebra","Base","svdfact!","svdfact!(A[, thin]) -> SVD
 
-   \"svdfact!\" is the same as \"svdfact\" but saves space by
+   \"svdfact!\" is the same as \"svdfact()\", but saves space by
    overwriting the input A, instead of creating a copy. If \"thin\" is
    \"true\", an economy mode decomposition is returned. The default is
    to produce a thin decomposition.
@@ -6905,13 +6965,25 @@
 
 ("Linear Algebra","Base","triu","triu(M)
 
-   Upper triangle of a matrix
+   Upper triangle of a matrix.
+
+"),
+
+("Linear Algebra","Base","triu!","triu!(M)
+
+   Upper triangle of a matrix, overwriting M in the process.
 
 "),
 
 ("Linear Algebra","Base","tril","tril(M)
 
-   Lower triangle of a matrix
+   Lower triangle of a matrix.
+
+"),
+
+("Linear Algebra","Base","tril!","tril!(M)
+
+   Lower triangle of a matrix, overwriting M in the process.
 
 "),
 
@@ -6924,14 +6996,14 @@
 
 ("Linear Algebra","Base","diag","diag(M[, k])
 
-   The \"k\"-th diagonal of a matrix, as a vector
+   The \"k\"-th diagonal of a matrix, as a vector.
 
 "),
 
 ("Linear Algebra","Base","diagm","diagm(v[, k])
 
    Construct a diagonal matrix and place \"v\" on the \"k\"-th
-   diagonal
+   diagonal.
 
 "),
 
@@ -7035,6 +7107,13 @@
 
 "),
 
+("Linear Algebra","Base","logdet","logdet(M)
+
+   Log of Matrix determinant. Equivalent to \"log(det(M))\", but may
+   provide increased accuracy and/or speed.
+
+"),
+
 ("Linear Algebra","Base","inv","inv(M)
 
    Matrix inverse
@@ -7094,6 +7173,13 @@
 ("Linear Algebra","Base","isposdef","isposdef(A)
 
    Test whether a matrix is positive-definite.
+
+"),
+
+("Linear Algebra","Base","isposdef!","isposdef!(A)
+
+   Test whether a matrix is positive-definite, overwriting A in the
+   processes.
 
 "),
 

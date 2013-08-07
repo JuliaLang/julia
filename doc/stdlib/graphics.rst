@@ -82,14 +82,17 @@ Geometry
    Returns an object shifted horizontally and vertically by the indicated amounts
 
 .. function:: *(obj, s::Real)
+   :noindex:
 
    Scale the width and height of a graphics object, keeping the center fixed
 
 .. function:: +(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
+   :noindex:
 
    Returns the smallest box containing both boxes
 
 .. function:: &(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
+   :noindex:
 
    Returns the intersection, the largest box contained in both boxes
 
