@@ -1077,17 +1077,19 @@ function sub2ind(dims, I::Integer...)
     return index
 end
 
+function sub2ind{T<:Integer}(dims::Array{T}, sub::Array{T})
+    ndims = length(dims)
+    ind = sub[1]
+    stride = 1
+    for k in 2:ndims
+        stride = stride * dims[k - 1]
+        ind += (sub[k] - 1) * stride
+    end
+    return ind
+end
+
 sub2ind{T<:Integer}(dims, I::AbstractVector{T}...) =
     [ sub2ind(dims, map(X->X[i], I)...)::Int for i=1:length(I[1]) ]
-
-ind2sub(dims::(Integer...), ind::Integer) = ind2sub(dims, int(ind))
-ind2sub(dims::(), ind::Integer) = ind==1 ? () : throw(BoundsError())
-ind2sub(dims::(Integer,), ind::Int) = (ind,)
-ind2sub(dims::(Integer,Integer), ind::Int) =
-    (rem(ind-1,dims[1])+1, div(ind-1,dims[1])+1)
-ind2sub(dims::(Integer,Integer,Integer), ind::Int) =
-    (rem(ind-1,dims[1])+1, div(rem(ind-1,dims[1]*dims[2]), dims[1])+1,
-     div(rem(ind-1,dims[1]*dims[2]*dims[3]), dims[1]*dims[2])+1)
 
 function ind2sub(dims::(Integer,Integer...), ind::Int)
     ndims = length(dims)
@@ -1106,6 +1108,15 @@ function ind2sub(dims::(Integer,Integer...), ind::Int)
     return tuple(ind, sub...)
 end
 
+ind2sub(dims::(Integer...), ind::Integer) = ind2sub(dims, int(ind))
+ind2sub(dims::(), ind::Integer) = ind==1 ? () : throw(BoundsError())
+ind2sub(dims::(Integer,), ind::Int) = (ind,)
+ind2sub(dims::(Integer,Integer), ind::Int) =
+    (rem(ind-1,dims[1])+1, div(ind-1,dims[1])+1)
+ind2sub(dims::(Integer,Integer,Integer), ind::Int) =
+    (rem(ind-1,dims[1])+1, div(rem(ind-1,dims[1]*dims[2]), dims[1])+1,
+     div(rem(ind-1,dims[1]*dims[2]*dims[3]), dims[1]*dims[2])+1)
+
 function ind2sub{T<:Integer}(dims::(Integer,Integer...), ind::AbstractVector{T})
     n = length(dims)
     l = length(ind)
@@ -1119,11 +1130,79 @@ function ind2sub{T<:Integer}(dims::(Integer,Integer...), ind::AbstractVector{T})
     return t
 end
 
+function ind2sub!{T<:Integer}(sub::Array{T}, dims::Array{T}, ind::T)
+    ndims = length(dims)
+    stride = dims[1]
+    for i in 2:(ndims - 1)
+        stride *= dims[i]
+    end
+    for i in (ndims - 1):-1:1
+        rest = rem1(ind, stride)
+        sub[i + 1] = div(ind - rest, stride) + 1
+        ind = rest
+        stride = div(stride, dims[i])
+    end
+    sub[1] = ind
+    return
+end
+
 indices(I) = I
 indices(I::Int) = I
 indices(I::Real) = convert(Int, I)
 indices(I::AbstractArray{Bool,1}) = find(I)
 indices(I::Tuple) = map(indices, I)
+
+# Generalized repmat
+function repeat{T}(A::Array{T};
+                   inner::Array{Int} = ones(Int, ndims(A)),
+                   outer::Array{Int} = ones(Int, ndims(A)))
+    ndims_in = ndims(A)
+    length_inner = length(inner)
+    length_outer = length(outer)
+    ndims_out = max(ndims_in, length_inner, length_outer)
+
+    if length_inner < ndims_in || length_outer < ndims_in
+        msg = "Inner/outer repetitions must be set for all input dimensions"
+        throw(ArgumentError(msg))
+    end
+
+    size_in = Array(Int, ndims_in)
+    size_out = Array(Int, ndims_out)
+    inner_size_out = Array(Int, ndims_out)
+
+    for i in 1:ndims_in
+        size_in[i] = size(A, i)
+    end
+    for i in 1:ndims_out
+        t1 = ndims_in < i ? 1 : size_in[i]
+        t2 = length_inner < i ? 1 : inner[i]
+        t3 = length_outer < i ? 1 : outer[i]
+        size_out[i] = t1 * t2 * t3
+        inner_size_out[i] = t1 * t2
+    end
+
+    indices_in = Array(Int, ndims_in)
+    indices_out = Array(Int, ndims_out)
+
+    length_out = prod(size_out)
+    R = Array(T, size_out...)
+
+    for index_out in 1:length_out
+        ind2sub!(indices_out, size_out, index_out)
+        for t in 1:ndims_in
+            # "Project" outer repetitions into inner repetitions
+            indices_in[t] = mod1(indices_out[t], inner_size_out[t])
+            # Find inner repetitions using flooring division
+            if inner[t] != 1
+                indices_in[t] = fld1(indices_in[t], inner[t])
+            end
+        end
+        index_in = sub2ind(size_in, indices_in)
+        R[index_out] = A[index_in]
+    end
+
+    return R
+end
 
 ## iteration utilities ##
 
