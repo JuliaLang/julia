@@ -150,63 +150,47 @@ end
 
 srand(0xdeadbeef)
 
-for n in [0:10, 100, 1000]
+for n in [0:10, 100, 101, 1000, 1001]
     r = 1:10
     v = rand(1:10,n)
     h = hist(v,r)
 
     for ord in [Order.Forward, Order.Reverse]
-        # insersion sort as a reference
+        # insertion sort (stable) as reference
         pi = sortperm(v, alg=InsertionSort, order=ord)
         @test isperm(pi)
-        s = v[pi]
-        @test issorted(s, order=ord)
-        @test hist(s,r) == h
-        @test all(issorted,[pi[s.==i] for i in r])
-        si = copy(v)
-        permute!(si, pi)
-        @test si == s
-        ipermute!(si, pi)
-        @test si == v
+        si = v[pi]
+        @test hist(si,r) == h
+        @test issorted(si, order=ord)
+        @test all(issorted,[pi[si.==x] for x in r])
+        c = copy(v)
+        permute!(c, pi)
+        @test c == si
+        ipermute!(c, pi)
+        @test c == v
 
-        # mergesort
-        pm = sortperm(v, alg=MergeSort, order=ord)
-        @test pi == pm
-        sm = copy(v)
-        permute!(sm, pm)
-        @test sm == s
-        ipermute!(sm, pm)
-        @test sm == v
+        # stable algorithms
+        for alg in [MergeSort, TimSort]
+            p = sortperm(v, alg=alg, order=ord)
+            @test p == pi
+            s = copy(v)
+            permute!(s, p)
+            @test s == si
+            ipermute!(s, p)
+            @test s == v
+        end
 
-        # timsort
-        pt = sortperm(v, alg=TimSort, order=ord)
-        @test pi == pt
-        st = copy(v)
-        permute!(st, pt)
-        @test st == s
-        ipermute!(st, pt)
-        @test st == v
-
-        # quicksort (unstable)
-        pq = sortperm(v, alg=QuickSort, order=ord)
-        @test isperm(pi)
-        @test v[pq] == s
-        sq = copy(v)
-        permute!(sq, pq)
-        @test sq == s
-        ipermute!(sq, pq)
-        @test sq == v
-
-        # heapsort (unstable)
-        pq = sortperm(v, alg=HeapSort, order=ord)
-        @test isperm(pi)
-        @test v[pq] == s
-        sq = copy(v)
-        permute!(sq, pq)
-        @test sq == s
-        ipermute!(sq, pq)
-        @test sq == v
-
+        # unstable algorithms
+        for alg in [QuickSort, HeapSort]
+            p = sortperm(v, alg=alg, order=ord)
+            @test isperm(p)
+            @test v[p] == si
+            s = copy(v)
+            permute!(s, p)
+            @test s == si
+            ipermute!(s, p)
+            @test s == v
+        end
     end
 
     v = randn_with_nans(n,0.1)
