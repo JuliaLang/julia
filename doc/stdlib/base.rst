@@ -311,7 +311,11 @@ Syntax
 
 .. function:: gensym([tag])
 
-   Generates a symbol which will not conflict with other variable names
+   Generates a symbol which will not conflict with other variable names.
+
+.. function:: @gensym
+
+   Generates a gensym symbol for a variable. For example, `@gensym x y` is transformed into `x = gensym("x"); y = gensym("y")`.
 
 .. function:: parse(str, [start, [greedy, [err]]])
 
@@ -2434,6 +2438,10 @@ Random number generateion in Julia uses the `Mersenne Twister library <http://ww
 .. function:: randn(dims or [dims...])
 
    Generate a normally-distributed random number with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers.
+
+.. function:: randsym(n)
+
+   Generate a ``nxn`` symmetric array of normally-distributed random numbers with mean 0 and standard deviation 1.
 
 Arrays
 ------

@@ -149,26 +149,6 @@ arrays
 linear algebra
 --------------
 
-.. function:: bkfact!(...)
-
-   UNDOCUMENTED
-
-.. function:: bkfact(...)
-
-   UNDOCUMENTED
-
-.. function:: factorize!(...)
-
-   UNDOCUMENTED
-
-.. function:: factorize(A::AbstractArray{T,2})
-
-   UNDOCUMENTED
-
-.. function:: isposdef!(...)
-
-   UNDOCUMENTED
-
 .. function:: ldltd!(A::SymTridiagonal{T<:Union(Float64,Complex{Float32},Float32,Complex{Float64})})
 
    UNDOCUMENTED
@@ -177,35 +157,11 @@ linear algebra
 
    UNDOCUMENTED
 
-.. function:: logdet(...)
-
-   UNDOCUMENTED
-
-.. function:: randsym(n)
-
-   UNDOCUMENTED
-
-.. function:: rref(...)
-
-   UNDOCUMENTED
-
-.. function:: schurfact!(...)
-
-   UNDOCUMENTED
-
 .. function:: solve(...)
 
    UNDOCUMENTED
 
 .. function:: symmetrize!(...)
-
-   UNDOCUMENTED
-
-.. function:: tril!(...)
-
-   UNDOCUMENTED
-
-.. function:: triu!(...)
 
    UNDOCUMENTED
 
@@ -485,41 +441,10 @@ types
 syntax
 ------
 
-.. function:: esc(e::ANY)
-
-   UNDOCUMENTED
-
-.. function:: expand(x)
-
-   UNDOCUMENTED
-
-.. function:: gensym(...)
-
-   UNDOCUMENTED
-
-.. function:: macroexpand(x)
-
-   UNDOCUMENTED
-
-.. function:: parse(...)
-
-   UNDOCUMENTED
 
 
 help and reflection
 -------------------
-
-.. function:: ans(...)
-
-   UNDOCUMENTED
-
-.. function:: disassemble(...)
-
-   UNDOCUMENTED
-
-.. function:: finfer(f::Union(Function,DataType),types)
-
-   UNDOCUMENTED
 
 .. function:: functionlocs(...)
 
@@ -872,12 +797,4 @@ C interface
 
 Macros
 ------
-
-.. function:: gensym(...)
-
-   UNDOCUMENTED
-
-.. function:: eval(...)
-
-   UNDOCUMENTED
 
