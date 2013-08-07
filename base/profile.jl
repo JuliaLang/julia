@@ -111,7 +111,8 @@ end
 
 # Number of backtrace "steps" that are triggered by taking the backtrace, e.g., inside profile_bt
 # May be platform-specific?
-const btskip = 2
+@unix_only const btskip = 2
+@windows_only const btskip = 0
 
 ## Print as a flat list
 # Counts the number of times each line appears, at any nesting level
