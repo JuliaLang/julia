@@ -648,6 +648,12 @@ DLLEXPORT int jl_strtof(char *str, float *out)
 
 // showing --------------------------------------------------------------------
 
+void jl_flush_cstdio()
+{
+    fflush(stdout);
+    fflush(stderr);
+}
+
 jl_value_t *jl_stdout_obj()
 {
     jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("STDOUT"));
