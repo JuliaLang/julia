@@ -9,7 +9,7 @@ type Cmd <: AbstractCmd
 end
 
 function eachline(cmd::AbstractCmd,stdin)
-    out = NamedPipe(C_NULL)
+    out = Pipe(C_NULL)
     processes = spawn(false, cmd, (stdin,out,STDERR))
     # implicitly close after reading lines, since we opened
     EachLine(out, ()->close(out))
@@ -146,8 +146,8 @@ type Process
     in::AsyncStream
     out::AsyncStream
     err::AsyncStream
-    exit_code::Int32
-    term_signal::Int32
+    exitcode::Int32
+    termsignal::Int32
     exitcb::Callback
     exitnotify::Condition
     closecb::Callback
@@ -162,7 +162,7 @@ type Process
         if !isa(err,AsyncStream)
             err=null_handle
         end
-        new(cmd,handle,in,out,err,-2,-2,false,Condition(),false,Condition())
+        new(cmd,handle,in,out,err,typemin(Int32),typemin(Int32),false,Condition(),false,Condition())
     end
 end
 
@@ -202,10 +202,10 @@ function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::
     return proc
 end
 
-function _uv_hook_return_spawn(proc::Process, exit_status::Int32, term_signal::Int32)
-    proc.exit_code = exit_status
-    proc.term_signal = term_signal
-    if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, term_signal) end
+function _uv_hook_return_spawn(proc::Process, exit_status::Int32, termsignal::Int32)
+    proc.exitcode = exit_status
+    proc.termsignal = termsignal
+    if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, termsignal) end
     ccall(:jl_close_uv,Void,(Ptr{Void},),proc.handle)
     notify(proc.exitnotify)
 end
@@ -249,7 +249,7 @@ macro setup_stdio()
     quote
         close_in,close_out,close_err = false,false,false
         in,out,err = stdios
-        if isa(stdios[1],NamedPipe) 
+        if isa(stdios[1],Pipe) 
             if stdios[1].handle==C_NULL
                 in = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
                 #in = c_malloc(_sizeof_uv_named_pipe)
@@ -260,7 +260,7 @@ macro setup_stdio()
             in = FS.open(stdios[1].filename,JL_O_RDONLY)
             close_in = true
         end
-        if isa(stdios[2],NamedPipe)
+        if isa(stdios[2],Pipe)
             if stdios[2].handle==C_NULL
                 out = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
                 #out = c_malloc(_sizeof_uv_named_pipe)
@@ -271,7 +271,7 @@ macro setup_stdio()
             out = FS.open(stdios[2].filename,JL_O_WRONLY|JL_O_CREAT|(stdios[2].append?JL_O_APPEND:JL_O_TRUNC),S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
             close_out = true
         end
-        if isa(stdios[3],NamedPipe)
+        if isa(stdios[3],Pipe)
             if stdios[3].handle==C_NULL
                 err = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
                 #err = c_malloc(_sizeof_uv_named_pipe)
@@ -368,7 +368,7 @@ spawn_nostdin(cmd::AbstractCmd,out::UVStream) = spawn(false,cmd,(null_handle,out
 #returns a pipe to read from the last command in the pipelines
 readsfrom(cmds::AbstractCmd) = readsfrom(cmds, null_handle)
 function readsfrom(cmds::AbstractCmd, stdin::AsyncStream)
-    out = NamedPipe(C_NULL)
+    out = Pipe(C_NULL)
     processes = spawn(false, cmds, (stdin,out,STDERR))
     start_reading(out)
     (out, processes)
@@ -376,13 +376,13 @@ end
 
 writesto(cmds::AbstractCmd) = writesto(cmds, null_handle)
 function writesto(cmds::AbstractCmd, stdout::UVStream)
-    in = NamedPipe(C_NULL)
+    in = Pipe(C_NULL)
     processes = spawn(false, cmds, (in,stdout,null_handle))
     (in, processes)
 end
 
 function readandwrite(cmds::AbstractCmd)
-    in = NamedPipe(C_NULL)
+    in = Pipe(C_NULL)
     (out, processes) = readsfrom(cmds, in)
     return (out, in, processes)
 end
@@ -390,7 +390,7 @@ end
 readall(cmd::AbstractCmd) = readall(cmd, null_handle)
 function readall(cmd::AbstractCmd,stdin::AsyncStream)
     (out,pc) = readsfrom(cmd, stdin)
-    if !wait_success(pc)
+    if !success(pc)
         pipeline_error(pc)
     end
     wait_close(out)
@@ -402,7 +402,7 @@ function writeall(cmd::AbstractCmd, stdin::String, stdout::AsyncStream)
     (in,pc) = writesto(cmd, stdout)
     write(in, stdin)
     close(in)
-    if !wait_success(pc)
+    if !success(pc)
         pipeline_error(pc)
     end
     return true
@@ -410,24 +410,30 @@ end
 
 function run(cmds::AbstractCmd,args...)
     ps = spawn(cmds,spawn_opts_inherit(args...)...)
-    wait_success(ps) ? nothing : pipeline_error(ps)
+    success(ps) ? nothing : pipeline_error(ps)
 end
 
 const SIGPIPE = 13
-function success(proc::Process)
+function test_success(proc::Process)
     assert(process_exited(proc))
-    if proc.exit_code == -1
-        error("could not start process ", proc)
+    if proc.exitcode < 0
+        error(UVError("could not start process "*string(proc.cmd),proc.exitcode))
     end
-    proc.exit_code==0 && (proc.term_signal == 0 || proc.term_signal == SIGPIPE)
+    proc.exitcode==0 && (proc.termsignal == 0 || proc.termsignal == SIGPIPE)
+end
+
+function success(x::Process)
+    wait(x)
+    kill(x)
+    test_success(x)
 end
 success(procs::Vector{Process}) = all(success, procs)
 success(procs::ProcessChain) = success(procs.processes)
-success(cmd::AbstractCmd) = wait_success(spawn(cmd))
+success(cmd::AbstractCmd) = success(spawn(cmd))
 
 function pipeline_error(proc::Process)
     if !proc.cmd.ignorestatus
-        error("failed process: ",proc," [",proc.exit_code,"]")
+        error("failed process: ",proc," [",proc.exitcode,"]")
     end
     nothing
 end
@@ -435,7 +441,7 @@ end
 function pipeline_error(procs::ProcessChain)
     failed = Process[]
     for p = procs.processes
-        if !success(p) && !p.cmd.ignorestatus
+        if !test_success(p) && !p.cmd.ignorestatus
             push!(failed, p)
         end
     end
@@ -443,7 +449,7 @@ function pipeline_error(procs::ProcessChain)
     if length(failed)==1 pipeline_error(failed[1]) end
     msg = "failed processes:"
     for proc in failed
-        msg = string(msg,"\n  ",proc," [",proc.exit_code,"]")
+        msg = string(msg,"\n  ",proc," [",proc.exitcode,"]")
     end
     error(msg)
 end
@@ -466,26 +472,24 @@ function _contains_newline(bufptr::Ptr{Void},len::Int32)
 end
 
 ## process status ##
-process_running(s::Process) = s.exit_code == -2
+process_running(s::Process) = s.exitcode == typemin(Int32)
 process_running(s::Vector{Process}) = all(process_running,s)
 process_running(s::ProcessChain) = process_running(s.processes)
 
-process_exit_status(s::Process) = s.exit_code
 process_exited(s::Process) = !process_running(s)
 process_exited(s::Vector{Process}) = all(process_exited,s)
 process_exited(s::ProcessChain) = process_running(s.processes)
 
-process_term_signal(s::Process) = s.term_signal
-process_signaled(s::Process) = (s.term_signal > 0)
+process_signaled(s::Process) = (s.termsignal > 0)
 
 #process_stopped (s::Process) = false #not supported by libuv. Do we need this?
 #process_stop_signal(s::Process) = false #not supported by libuv. Do we need this?
 
 function process_status(s::Process)
     process_running (s) ? "ProcessRunning" :
-    process_signaled(s) ? "ProcessSignaled("*string(process_term_signal(s))*")" :
+    process_signaled(s) ? "ProcessSignaled("*string(s.termsignal)*")" :
     #process_stopped (s) ? "ProcessStopped("*string(process_stop_signal(s))*")" :
-    process_exited  (s) ? "ProcessExited("*string(process_exit_status(s))*")" :
+    process_exited  (s) ? "ProcessExited("*string(s.exitcode)*")" :
     error("process status error")
 end
 
@@ -546,24 +550,7 @@ macro cmd(str)
     :(cmd_gen($(shell_parse(str))))
 end
 
-wait_close(x) = if isopen(x) wait(x.closenotify); end
-
-wait_exit(x::Process)      = if !process_exited(x); wait(x.exitnotify); end
-wait_exit(x::ProcessChain) = for p in x.processes; wait_exit(p); end
-
-function wait_success(x::Process)
-    wait_exit(x)
-    kill(x)
-    success(x)
-end
-function wait_success(x::ProcessChain)
-    s = true
-    for p in x.processes
-        s &= wait_success(p)
-    end
-    s
-end
-
-wait(p::Process) = (wait_exit(p); p.exit_code)
+wait(x::Process)      = if !process_exited(x); wait(x.exitnotify); end
+wait(x::ProcessChain) = for p in x.processes; wait(p); end
 
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")

@@ -1,3 +1,7 @@
+# flush C stdio output from external libraries:
+
+flush_cstdio() = ccall(:jl_flush_cstdio, Void, ())
+
 # timing
 
 # system date in seconds
@@ -297,9 +301,10 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         println(io          )
         println(io,         "Package Directory: ", Pkg.dir())
         println(io,         "Packages Installed:")
-        Pkg.status(io       )
+        Pkg2.status(io       )
     end
 end
+versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 # `methodswith` -- shows a list of methods using the type given
 
@@ -336,9 +341,3 @@ function methodswith(io::IO, t::Type, showparents::Bool)
         end
     end
 end
-
-# Conditional usage of packages and modules
-usingmodule(names::Symbol...) = eval(current_module(), Expr(:toplevel, Expr(:using, names...)))
-usingmodule(names::String) = usingmodule([symbol(name) for name in split(names,".")]...)
-
-

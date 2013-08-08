@@ -121,7 +121,7 @@ export
     Box, Function, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
     Module, Nothing, Symbol, Task, Array,
     # numeric types
-    Bool, FloatingPoint, Float32, Float64, Number, Integer, Int, Int8, Int16,
+    Bool, FloatingPoint, Float16, Float32, Float64, Number, Integer, Int, Int8, Int16,
     Int32, Int64, Int128, Ptr, Real, Signed, Uint, Uint8, Uint16, Uint32,
     Uint64, Uint128, Unsigned,
     # string types
@@ -171,6 +171,7 @@ abstract Integer  <: Real
 abstract Signed   <: Integer
 abstract Unsigned <: Integer
 
+bitstype 16 Float16 <: FloatingPoint
 bitstype 32 Float32 <: FloatingPoint
 bitstype 64 Float64 <: FloatingPoint
 
@@ -234,4 +235,4 @@ end
 
 typealias ByteString Union(ASCIIString,UTF8String)
 
-include(fname::ByteString) = ccall(:jl_load_, Void, (Any,), fname)
+include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)

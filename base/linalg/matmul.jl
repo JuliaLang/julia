@@ -243,6 +243,7 @@ function syrk_wrapper{T<:BlasFloat}(tA, A::StridedMatrix{T})
         tAt = 'T'
     end
 
+    if mA == 0 || nA == 0; return zeros(T, mA, mA); end
     if mA == 2 && nA == 2; return matmul2x2(tA,tAt,A,A); end
     if mA == 3 && nA == 3; return matmul3x3(tA,tAt,A,A); end
 

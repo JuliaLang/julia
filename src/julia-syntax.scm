@@ -429,7 +429,7 @@
 	;; call with unsorted keyword args. this sorts and re-dispatches.
 	,(method-def-expr-
 	  (list 'kw name) sparams
-	  `((:: ,kw (top Tuple)) ,@pargl ,@vararg)
+	  `((:: ,kw (top Array)) ,@pargl ,@vararg)
 	  `(block
 	    (line 0 || ||)
 	    ;; initialize keyword args to their defaults, or set a flag telling
@@ -446,10 +446,10 @@
 		 (block
 		  ;; ii = i*2 - 1
 		  (= ,ii (call (top -) (call (top *) ,i 2) 1))
-		  (= ,elt (call (top tupleref) ,kw ,ii))
+		  (= ,elt (call (top arrayref) ,kw ,ii))
 		  ,(foldl (lambda (kvf else)
 			    (let* ((k    (car kvf))
-				   (rval0 `(call (top tupleref) ,kw
+				   (rval0 `(call (top arrayref) ,kw
 						 (call (top +) ,ii 1)))
 				   (rval (if (decl? k)
 					     `(call (top typeassert)
@@ -470,7 +470,7 @@
 			      ;; otherwise add to rest keywords
 			      `(ccall 'jl_cell_1d_push Void (tuple Any Any)
 				      ,rkw (tuple ,elt
-						  (call (top tupleref) ,kw
+						  (call (top arrayref) ,kw
 							(call (top +) ,ii 1)))))
 			  (map list vars vals flags))))
 	    ;; set keywords that weren't present to their default values
@@ -682,7 +682,7 @@
 	     (global ,name)
 	     (const ,name)
 	     ,@(map (lambda (v) `(local ,v)) params)
-	     ,@(map make-assignment params (symbols->typevars params bounds #f))
+	     ,@(map make-assignment params (symbols->typevars params bounds #t))
 	     (composite_type ,name (tuple ,@params)
 			     (tuple ,@(map (lambda (x) `',x) field-names))
 			     (lambda (,name)
@@ -1145,16 +1145,30 @@
   (check-kw-args kw)
   (receive
    (keys restkeys) (separate kwarg? kw)
-   `(call (top kwcall) ,f ,(length keys)
-	  ,@(apply append
-		   (map (lambda (a) `((quote ,(cadr a)) ,(caddr a)))
-			keys))
-	  ,(if (null? restkeys)
-	       '(tuple)
-	       (if (length= restkeys 1)
-		   (cadr (car restkeys))
-		   `(call (top append_any) ,@(map cadr restkeys))))
-	  ,@pa)))
+   (let ((keyargs (apply append
+			 (map (lambda (a) `((quote ,(cadr a)) ,(caddr a)))
+			      keys))))
+     (if (null? restkeys)
+	 `(call (top kwcall) ,f ,(length keys) ,@keyargs
+		(call (top Array) (top Any) ,(* 2 (length keys)))
+		,@pa)
+	 (let ((container (gensy)))
+	   `(block
+	     (= ,container (call (top Array) (top Any) ,(* 2 (length keys))))
+	     ,@(let ((k (gensy))
+		     (v (gensy)))
+		 (map (lambda (rk)
+			`(for (= (tuple ,k ,v) ,(cadr rk))
+			      (ccall 'jl_cell_1d_push2 Void
+				     (tuple Any Any Any)
+				     ,container
+				     (|::| ,k (top Symbol))
+				     ,v)))
+		      restkeys))
+	     (if (call (top isempty) ,container)
+		 (call ,f ,@pa)
+		 (call (top kwcall) ,f ,(length keys) ,@keyargs
+		       ,container ,@pa))))))))
 
 (define patterns
   (pattern-set
@@ -1588,7 +1602,7 @@
       (define (construct-loops ranges)
 	(if (null? ranges)
 	    `(block (= ,oneresult ,expr)
-		    (type_goto ,initlabl)
+		    (type_goto ,initlabl ,oneresult)
 		    (boundscheck false)
 		    (call (top setindex!) ,result ,oneresult ,ri)
 		    (boundscheck pop)
@@ -1669,7 +1683,7 @@
 	(if (null? ranges)
 	    `(block (= ,onekey ,(cadr expr))
 		    (= ,oneval ,(caddr expr))
-		    (type_goto ,initlabl)
+		    (type_goto ,initlabl ,onekey ,oneval)
 		    (call (top setindex!) ,result ,oneval ,onekey))
 	    `(for ,(car ranges)
 		  ,(construct-loops (cdr ranges)))))
@@ -2526,11 +2540,11 @@ So far only the second case can actually occur.
 				   (cons (cons (cadr e) l) label-map))))))
 	    ((type_goto) (let ((m (assq (cadr e) label-map)))
 			   (if m
-			       (emit `(type_goto ,(cdr m)))
+			       (emit `(type_goto ,(cdr m) ,@(cddr e)))
 			       (let ((l (make-label)))
 				 (set! label-map
 				       (cons (cons (cadr e) l) label-map))
-				 (emit `(type_goto ,l))))))
+				 (emit `(type_goto ,l ,@(cddr e)))))))
 	    ;; exception handlers are lowered using
 	    ;; (enter L) - push handler with catch block at label L
 	    ;; (leave n) - pop N exception handlers

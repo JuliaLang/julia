@@ -51,6 +51,7 @@
     jl_alloc_array_3d;
     jl_alloc_cell_1d;
     jl_cell_1d_push;
+    jl_cell_1d_push2;
     jl_apply_generic;
     jl_array_del_beg;
     jl_array_del_end;
@@ -62,6 +63,7 @@
     jl_arrayset;
     jl_arrayunset;
     jl_array_to_string;
+    jl_ast_rettype;
     jl_atexit_hook;
     jl_backtrace_type;
     jl_base_module;
@@ -77,6 +79,7 @@
     jl_callback;
     jl_clear_input;
     jl_close_uv;
+    jl_forceclose_uv;
     jl_compile_hint;
     jl_compress_ast;
     jl_connect_raw;
@@ -181,6 +184,7 @@
     jl_loaderror_type;
     jl_load_file_string;
     jl_locate_sysimg;
+    jl_lseek;
     jl_lstat;
     jl_macroexpand;
     jl_main_module;
@@ -189,6 +193,7 @@
     jl_make_tcp;
     jl_matching_methods;
     jl_match_method;
+    jl_mmap;
     jl_module_export;
     jl_module_names;
     jl_module_name;
@@ -217,7 +222,6 @@
     jl_pchar_to_string;
     jl_pgcstack;
     jl_prepare_ast;
-    jl_ast_rettype;
     jl_print_int64;
     jl_print_symbol;
     jl_printf;
@@ -236,6 +240,7 @@
     jl_puts;
     jl_pututf8;
     jl_pututf8_copy;
+    jl_pwrite;
     jl_readBuffer;
     jl_readdir;
     jl_readuntil;

@@ -91,22 +91,6 @@
 
 "),
 
-("Getting Around","Base","evalfile","evalfile(path::String)
-
-   Evaluate all expressions in the given file, and return the value of
-   the last one. No other processing (path searching, fetching from
-   node 1, etc.) is performed.
-
-"),
-
-("Getting Around","Base","usingmodule","usingmodule(name)
-
-   Supports conditional inclusion of a package or module. Equivalent
-   to \"using name\" in a file, except it can be inside an \"if\"
-   statement.
-
-"),
-
 ("Getting Around","Base","help","help(name)
 
    Get help for a function. \"name\" can be an object or a string.
@@ -125,6 +109,13 @@
 
 "),
 
+("Getting Around","Base","@which","@which()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"which\" function on the resulting expression
+
+"),
+
 ("Getting Around","Base","methods","methods(f)
 
    Show all methods of \"f\" with their argument types.
@@ -136,6 +127,12 @@
    Show all methods with an argument of type \"typ\". If optional
    \"showparents\" is \"true\", also show arguments with a parent type
    of \"typ\", excluding type \"Any\".
+
+"),
+
+("Getting Around","Base","@show","@show()
+
+   Show an expression and result, returning the result
 
 "),
 
@@ -492,6 +489,61 @@
    function chaining.
 
    **Example**: \"[1:5] |> x->x.^2 |> sum |> inv\"
+
+"),
+
+("Syntax","Base","eval","eval(expr::Expr)
+
+   Evaluate an expression and return the value.
+
+"),
+
+("Syntax","Base","@eval","@eval()
+
+   Evaluate an expression and return the value.
+
+"),
+
+("Syntax","Base","evalfile","evalfile(path::String)
+
+   Evaluate all expressions in the given file, and return the value of
+   the last one. No other processing (path searching, fetching from
+   node 1, etc.) is performed.
+
+"),
+
+("Syntax","Base","esc","esc(e::ANY)
+
+   Only valid in the context of an Expr returned from a macro.
+   Prevents the macro hygine pass from turning embedded variables into
+   gensym variables. See the *Macros* section of the Metaprogramming
+   chapter of the manual for more details and examples.
+
+"),
+
+("Syntax","Base","gensym","gensym([tag])
+
+   Generates a symbol which will not conflict with other variable
+   names.
+
+"),
+
+("Syntax","Base","@gensym","@gensym()
+
+   Generates a gensym symbol for a variable. For example, *@gensym x
+   y* is transformed into *x = gensym(\"x\"); y = gensym(\"y\")*.
+
+"),
+
+("Syntax","Base","parse","parse(str[, start[, greedy[, err]]])
+
+   Parse the expression string and return an expression (which could
+   later be passed to eval for execution). Start is the index of the
+   first character to start parsing (default is 1). If greedy is true
+   (default), parse will try to consume as much input as it can;
+   otherwise, it will stop as soon as it has parsed a valid token. If
+   err is true (default), parse errors will raise an error; otherwise,
+   it will return the error as a normal expression.
 
 "),
 
@@ -1467,38 +1519,53 @@
 
 "),
 
+("I/O","Base","flush_cstdio","flush_cstdio()
+
+   Flushes the C stdout and stderr streams (which may have been
+   written to by external C code).
+
+"),
+
 ("I/O","Base","close","close(stream)
 
    Close an I/O stream. Performs a \"flush\" first.
 
 "),
 
-("I/O","Base","write","write(stream, x[, byteorder])
+("I/O","Base","write","write(stream, x)
 
    Write the canonical binary representation of a value to the given
-   stream. For numeric types, the optional argument specifies the byte
-   order or endianness: \"NetworkByteOrder\" for big-endian,
-   \"LittleByteOrder\" for little-endian, and \"HostByteOrder\" (the
-   default) for the type of the host.
+   stream.
 
 "),
 
-("I/O","Base","read","read(stream, type[, byteorder])
+("I/O","Base","read","read(stream, type)
 
    Read a value of the given type from a stream, in canonical binary
-   representation. For numeric types, the optional argument specifies
-   the byte order or endianness: \"NetworkByteOrder\" for big-endian,
-   \"LittleByteOrder\" for little-endian, and \"HostByteOrder\" (the
-   default) for the type of the host.
+   representation.
 
 "),
 
-("I/O","Base","read","read(stream, type[, byteorder], dims)
+("I/O","Base","read","read(stream, type, dims)
 
    Read a series of values of the given type from a stream, in
    canonical binary representation. \"dims\" is either a tuple or a
    series of integer arguments specifying the size of \"Array\" to
    return.
+
+"),
+
+("I/O","Base","readbytes!","readbytes!(stream, b::Vector{Uint8}, nb=length(b))
+
+   Read at most nb bytes from the stream into b, returning the number
+   of bytes read (increasing the size of b as needed).
+
+"),
+
+("I/O","Base","readbytes","readbytes(stream, nb=typemax(Int))
+
+   Read at most nb bytes from the stream, returning a Vector{Uint8} of
+   the bytes read.
 
 "),
 
@@ -1569,6 +1636,14 @@
 
 "),
 
+("I/O","Base","ENDIAN_BOM","ENDIAN_BOM
+
+   The 32-bit byte-order-mark indicates the native byte order of the
+   host machine. Little-endian machines will contain the value
+   0x04030201. Big-endian machines will contain the value 0x01020304.
+
+"),
+
 ("I/O","Base","serialize","serialize(stream, value)
 
    Write an arbitrary value to a stream in an opaque format, such that
@@ -1592,7 +1667,7 @@
 
 "),
 
-("Network I/O","Base","connect","connect(path) -> NamedPipe
+("Network I/O","Base","connect","connect(path) -> Pipe
 
    Connect to the Named Pipe/Domain Socket at \"path\"
 
@@ -1793,11 +1868,42 @@
 ("Memory-mapped I/O","Base","msync","msync(array)
 
    Forces synchronization between the in-memory version of a memory-
-   mapped \"Array\" or \"BitArray\" and the on-disk version. You may
-   not need to call this function, because synchronization is
+   mapped \"Array\" or \"BitArray\" and the on-disk version.
+
+"),
+
+("Memory-mapped I/O","Base","msync","msync(ptr, len[, flags])
+
+   Forces synchronization of the mmap'd memory region from ptr to
+   ptr+len. Flags defaults to MS_SYNC, but can be a combination of
+   MS_ASYNC, MS_SYNC, or MS_INVALIDATE. See your platform man page for
+   specifics. The flags argument is not valid on Windows.
+
+   You may not need to call \"msync\", because synchronization is
    performed at intervals automatically by the operating system.
-   Hower, you can call this directly if, for example, you are
+   However, you can call this directly if, for example, you are
    concerned about losing the result of a long-running calculation.
+
+"),
+
+("Memory-mapped I/O","Base","MS_ASYNC","MS_ASYNC
+
+   Enum constant for msync. See your platform man page for details.
+   (not available on Windows).
+
+"),
+
+("Memory-mapped I/O","Base","MS_SYNC","MS_SYNC
+
+   Enum constant for msync. See your platform man page for details.
+   (not available on Windows).
+
+"),
+
+("Memory-mapped I/O","Base","MS_INVALIDATE","MS_INVALIDATE
+
+   Enum constant for msync. See your platform man page for details.
+   (not available on Windows).
 
 "),
 
@@ -1815,157 +1921,169 @@
 
 "),
 
-("Mathematical Functions","Base","-","-(x)
+("Mathematical Operators","Base","-","-(x)
 
    Unary minus operator.
 
 "),
 
-("Mathematical Functions","Base","+","+(x, y)
+("Mathematical Operators","Base","+","+(x, y)
 
    Binary addition operator.
 
 "),
 
-("Mathematical Functions","Base","-","-(x, y)
+("Mathematical Operators","Base","-","-(x, y)
 
    Binary subtraction operator.
 
 "),
 
-("Mathematical Functions","Base","*","*(x, y)
+("Mathematical Operators","Base","*","*(x, y)
 
    Binary multiplication operator.
 
 "),
 
-("Mathematical Functions","Base","/","/(x, y)
+("Mathematical Operators","Base","/","/(x, y)
 
    Binary left-division operator.
 
 "),
 
-("Mathematical Functions","Base","\\","\\(x, y)
+("Mathematical Operators","Base","\\","\\(x, y)
 
    Binary right-division operator.
 
 "),
 
-("Mathematical Functions","Base","^","^(x, y)
+("Mathematical Operators","Base","^","^(x, y)
 
    Binary exponentiation operator.
 
 "),
 
-("Mathematical Functions","Base",".+",".+(x, y)
+("Mathematical Operators","Base",".+",".+(x, y)
 
    Element-wise binary addition operator.
 
 "),
 
-("Mathematical Functions","Base",".-",".-(x, y)
+("Mathematical Operators","Base",".-",".-(x, y)
 
    Element-wise binary subtraction operator.
 
 "),
 
-("Mathematical Functions","Base",".*",".*(x, y)
+("Mathematical Operators","Base",".*",".*(x, y)
 
    Element-wise binary multiplication operator.
 
 "),
 
-("Mathematical Functions","Base","./","./(x, y)
+("Mathematical Operators","Base","./","./(x, y)
 
    Element-wise binary left division operator.
 
 "),
 
-("Mathematical Functions","Base",".\\",".\\(x, y)
+("Mathematical Operators","Base",".\\",".\\(x, y)
 
    Element-wise binary right division operator.
 
 "),
 
-("Mathematical Functions","Base",".^",".^(x, y)
+("Mathematical Operators","Base",".^",".^(x, y)
 
    Element-wise binary exponentiation operator.
 
 "),
 
-("Mathematical Functions","Base","div","div(a, b)
+("Mathematical Operators","Base","div","div(a, b)
 
    Compute a/b, truncating to an integer
 
 "),
 
-("Mathematical Functions","Base","fld","fld(a, b)
+("Mathematical Operators","Base","fld","fld(a, b)
 
    Largest integer less than or equal to a/b
 
 "),
 
-("Mathematical Functions","Base","mod","mod(x, m)
+("Mathematical Operators","Base","mod","mod(x, m)
 
    Modulus after division, returning in the range [0,m)
 
 "),
 
-("Mathematical Functions","Base","rem","rem(x, m)
+("Mathematical Operators","Base","rem","rem(x, m)
 
    Remainder after division
 
 "),
 
-("Mathematical Functions","Base","%","%(x, m)
+("Mathematical Operators","Base","divrem","divrem(x, y)
+
+   Compute \"x/y\" and \"x%y\" at the same time
+
+"),
+
+("Mathematical Operators","Base","%","%(x, m)
 
    Remainder after division. The operator form of \"rem\".
 
 "),
 
-("Mathematical Functions","Base","mod1","mod1(x, m)
+("Mathematical Operators","Base","mod1","mod1(x, m)
 
    Modulus after division, returning in the range (0,m]
 
 "),
 
-("Mathematical Functions","Base","//","//(num, den)
+("Mathematical Operators","Base","//","//(num, den)
 
    Rational division
 
 "),
 
-("Mathematical Functions","Base","num","num(x)
+("Mathematical Operators","Base","rationalize","rationalize([Type], x)
+
+   Approximate the number x as a rational fraction
+
+"),
+
+("Mathematical Operators","Base","num","num(x)
 
    Numerator of the rational representation of \"x\"
 
 "),
 
-("Mathematical Functions","Base","den","den(x)
+("Mathematical Operators","Base","den","den(x)
 
    Denominator of the rational representation of \"x\"
 
 "),
 
-("Mathematical Functions","Base","<<","<<(x, n)
+("Mathematical Operators","Base","<<","<<(x, n)
 
    Left shift operator.
 
 "),
 
-("Mathematical Functions","Base",">>",">>(x, n)
+("Mathematical Operators","Base",">>",">>(x, n)
 
    Right shift operator.
 
 "),
 
-("Mathematical Functions","Base",">>>",">>>(x, n)
+("Mathematical Operators","Base",">>>",">>>(x, n)
 
    Unsigned right shift operator.
 
 "),
 
-("Mathematical Functions","Base",":",":(start[, step], stop)
+("Mathematical Operators","Base",":",":(start[, step], stop)
 
    Range operator. \"a:b\" constructs a range from \"a\" to \"b\" with
    a step size of 1, and \"a:s:b\" is similar but uses a step size of
@@ -1974,118 +2092,256 @@
 
 "),
 
-("Mathematical Functions","Base","colon","colon(start[, step], stop)
+("Mathematical Operators","Base","colon","colon(start[, step], stop)
 
    Called by \":\" syntax for constructing ranges.
 
 "),
 
-("Mathematical Functions","Base","==","==(x, y)
+("Mathematical Operators","Base","==","==(x, y)
 
    Equality comparison operator.
 
 "),
 
-("Mathematical Functions","Base","!=","!=(x, y)
+("Mathematical Operators","Base","!=","!=(x, y)
 
    Not-equals comparison operator.
 
 "),
 
-("Mathematical Functions","Base","<","<(x, y)
+("Mathematical Operators","Base","===","===(x, y)
+
+   See the \"is()\" operator
+
+"),
+
+("Mathematical Operators","Base","!==","!==(x, y)
+
+   Equivalent to \"!is(x, y)\"
+
+"),
+
+("Mathematical Operators","Base","<","<(x, y)
 
    Less-than comparison operator.
 
 "),
 
-("Mathematical Functions","Base","<=","<=(x, y)
+("Mathematical Operators","Base","<=","<=(x, y)
 
    Less-than-or-equals comparison operator.
 
 "),
 
-("Mathematical Functions","Base",">",">(x, y)
+("Mathematical Operators","Base",">",">(x, y)
 
    Greater-than comparison operator.
 
 "),
 
-("Mathematical Functions","Base",">=",">=(x, y)
+("Mathematical Operators","Base",">=",">=(x, y)
 
    Greater-than-or-equals comparison operator.
 
 "),
 
-("Mathematical Functions","Base",".==",".==(x, y)
+("Mathematical Operators","Base",".==",".==(x, y)
 
    Element-wise equality comparison operator.
 
 "),
 
-("Mathematical Functions","Base",".!=",".!=(x, y)
+("Mathematical Operators","Base",".!=",".!=(x, y)
 
    Element-wise not-equals comparison operator.
 
 "),
 
-("Mathematical Functions","Base",".<",".<(x, y)
+("Mathematical Operators","Base",".<",".<(x, y)
 
    Element-wise less-than comparison operator.
 
 "),
 
-("Mathematical Functions","Base",".<=",".<=(x, y)
+("Mathematical Operators","Base",".<=",".<=(x, y)
 
    Element-wise less-than-or-equals comparison operator.
 
 "),
 
-("Mathematical Functions","Base",".>",".>(x, y)
+("Mathematical Operators","Base",".>",".>(x, y)
 
    Element-wise greater-than comparison operator.
 
 "),
 
-("Mathematical Functions","Base",".>=",".>=(x, y)
+("Mathematical Operators","Base",".>=",".>=(x, y)
 
    Element-wise greater-than-or-equals comparison operator.
 
 "),
 
-("Mathematical Functions","Base","cmp","cmp(x, y)
+("Mathematical Operators","Base","cmp","cmp(x, y)
 
    Return -1, 0, or 1 depending on whether \"x<y\", \"x==y\", or
    \"x>y\", respectively
 
 "),
 
-("Mathematical Functions","Base","!","!(x)
-
-   Boolean not
-
-"),
-
-("Mathematical Functions","Base","~","~(x)
+("Mathematical Operators","Base","~","~(x)
 
    Bitwise not
 
 "),
 
-("Mathematical Functions","Base","&","&(x, y)
+("Mathematical Operators","Base","&","&(x, y)
 
    Bitwise and
 
 "),
 
-("Mathematical Functions","Base","|","|(x, y)
+("Mathematical Operators","Base","|","|(x, y)
 
    Bitwise or
 
 "),
 
-("Mathematical Functions","Base","\$","\$(x, y)
+("Mathematical Operators","Base","\$","\$(x, y)
 
    Bitwise exclusive or
+
+"),
+
+("Mathematical Operators","Base","!","!(x)
+
+   Boolean not
+
+"),
+
+("Mathematical Operators","Base","&&","&&(x, y)
+
+   Boolean and
+
+"),
+
+("Mathematical Operators","Base","||","||(x, y)
+
+   Boolean or
+
+"),
+
+("Mathematical Operators","Base","A_ldiv_Bc","A_ldiv_Bc(a, b)
+
+   Matrix operator A \\ B^H
+
+"),
+
+("Mathematical Operators","Base","A_ldiv_Bt","A_ldiv_Bt(a, b)
+
+   Matrix operator A \\ B^T
+
+"),
+
+("Mathematical Operators","Base","A_mul_B","A_mul_B(...)
+
+   Matrix operator A B
+
+"),
+
+("Mathematical Operators","Base","A_mul_Bc","A_mul_Bc(...)
+
+   Matrix operator A B^H
+
+"),
+
+("Mathematical Operators","Base","A_mul_Bt","A_mul_Bt(...)
+
+   Matrix operator A B^T
+
+"),
+
+("Mathematical Operators","Base","A_rdiv_Bc","A_rdiv_Bc(...)
+
+   Matrix operator A / B^H
+
+"),
+
+("Mathematical Operators","Base","A_rdiv_Bt","A_rdiv_Bt(a, b)
+
+   Matrix operator A / B^T
+
+"),
+
+("Mathematical Operators","Base","Ac_ldiv_B","Ac_ldiv_B(...)
+
+   Matrix operator A^H \\ B
+
+"),
+
+("Mathematical Operators","Base","Ac_ldiv_Bc","Ac_ldiv_Bc(...)
+
+   Matrix operator A^H \\ B^H
+
+"),
+
+("Mathematical Operators","Base","Ac_mul_B","Ac_mul_B(...)
+
+   Matrix operator A^H B
+
+"),
+
+("Mathematical Operators","Base","Ac_mul_Bc","Ac_mul_Bc(...)
+
+   Matrix operator A^H B^H
+
+"),
+
+("Mathematical Operators","Base","Ac_rdiv_B","Ac_rdiv_B(a, b)
+
+   Matrix operator A^H / B
+
+"),
+
+("Mathematical Operators","Base","Ac_rdiv_Bc","Ac_rdiv_Bc(a, b)
+
+   Matrix operator A^H / B^H
+
+"),
+
+("Mathematical Operators","Base","At_ldiv_B","At_ldiv_B(...)
+
+   Matrix operator A^T \\ B
+
+"),
+
+("Mathematical Operators","Base","At_ldiv_Bt","At_ldiv_Bt(...)
+
+   Matrix operator A^T \\ B^T
+
+"),
+
+("Mathematical Operators","Base","At_mul_B","At_mul_B(...)
+
+   Matrix operator A^T B
+
+"),
+
+("Mathematical Operators","Base","At_mul_Bt","At_mul_Bt(...)
+
+   Matrix operator A^T B^T
+
+"),
+
+("Mathematical Operators","Base","At_rdiv_B","At_rdiv_B(a, b)
+
+   Matrix operator A^T / B
+
+"),
+
+("Mathematical Operators","Base","At_rdiv_Bt","At_rdiv_Bt(a, b)
+
+   Matrix operator A^T / B^T
 
 "),
 
@@ -2995,6 +3251,13 @@
 
 "),
 
+("Data Formats","Base","big","big(x)
+
+   Convert a number to a maximum precision representation (typically
+   \"BigInt\" or \"BigFloat\")
+
+"),
+
 ("Data Formats","Base","bool","bool(x)
 
    Convert a number or numeric array to boolean
@@ -3499,6 +3762,13 @@
 
 "),
 
+("Random Numbers","Base","randsym","randsym(n)
+
+   Generate a \"nxn\" symmetric array of normally-distributed random
+   numbers with mean 0 and standard deviation 1.
+
+"),
+
 ("Arrays","Base","ndims","ndims(A) -> Integer
 
    Returns the number of dimensions of A
@@ -3662,8 +3932,11 @@
 
 ("Arrays","Base","reinterpret","reinterpret(type, A)
 
-   Construct an array with the same binary data as the given array,
-   but with the specified element type
+   Change the type-interpretation of a block of memory. For example,
+   \"reinterpret(Float32, uint32(7))\" interprets the 4 bytes
+   corresponding to \"uint32(7)\" as a \"Float32\". For arrays, this
+   constructs an array with the same binary data as the given array,
+   but with the specified element type.
 
 "),
 
@@ -4028,7 +4301,7 @@
 
 ("Combinatorics","Base","shuffle","shuffle(v)
 
-   Randomly rearrange the elements of a vector.
+   Return a randomly permuted copy of \"v\".
 
 "),
 
@@ -4088,7 +4361,7 @@
 
 ("Statistics","Base","std","std(v[, region])
 
-   Compute the sample standard deviation of a vector or array``v``,
+   Compute the sample standard deviation of a vector or array \"v\",
    optionally along dimensions in \"region\". The algorithm returns an
    estimator of the generative distribution's standard deviation under
    the assumption that each entry of \"v\" is an IID draw from that
@@ -4106,7 +4379,7 @@
 
 ("Statistics","Base","var","var(v[, region])
 
-   Compute the sample variance of a vector or array``v``, optionally
+   Compute the sample variance of a vector or array \"v\", optionally
    along dimensions in \"region\". The algorithm will return an
    estimator of the generative distribution's variance under the
    assumption that each entry of \"v\" is an IID draw from that
@@ -4141,8 +4414,8 @@
 
    Compute the histogram of \"v\" using a vector/range \"e\" as the
    edges for the bins. The result will be a vector of length
-   \"length(e) - 1\", with the \"i``th element being ``sum(e[i] .< v
-   .<= e[i+1])\".
+   \"length(e) - 1\", such that the element at location \"i\"
+   satisfies \"sum(e[i] .< v .<= e[i+1])\".
 
 "),
 
@@ -4358,6 +4631,15 @@
 
 "),
 
+("Signal Processing","Base","plan_brfft","plan_brfft(A, d[, dims[, flags[, timelimit]]])
+
+   Pre-plan an optimized real-input unnormalized transform, similar to
+   \"plan_rfft()\" except for \"brfft()\" instead of \"rfft()\". The
+   first two arguments and the size of the transformed result, are the
+   same as for \"brfft()\".
+
+"),
+
 ("Signal Processing","Base","plan_irfft","plan_irfft(A, d[, dims[, flags[, timelimit]]])
 
    Pre-plan an optimized inverse real-input FFT, similar to
@@ -4469,6 +4751,20 @@
 ("Signal Processing","Base","conv","conv(u, v)
 
    Convolution of two vectors. Uses FFT algorithm.
+
+"),
+
+("Signal Processing","Base","conv2","conv2(u, v, A)
+
+   2-D convolution of the matrix \"A\" with the 2-D separable kernel
+   generated by the vectors \"u\" and \"v\".  Uses 2-D FFT algorithm
+
+"),
+
+("Signal Processing","Base","conv2","conv2(B, A)
+
+   2-D convolution of the matrix \"B\" with the matrix \"A\".  Uses
+   2-D FFT algorithm
 
 "),
 
@@ -4610,13 +4906,6 @@
 
    See the documentation for package \"ClusterManagers\" for more
    information on how to write a custom cluster manager.
-
-"),
-
-("Parallel Computing","Base","addprocs_sge","addprocs_sge(n) - DEPRECATED from Base, use ClusterManagers.addprocs_sge(n)
-
-   Adds processes via the Sun/Oracle Grid Engine batch queue, using
-   \"qsub\".
 
 "),
 
@@ -5223,6 +5512,62 @@
 
 "),
 
+("C Interface","Base","RTLD_DEEPBIND","RTLD_DEEPBIND
+
+   Enum constant for dlopen. See your platform man page for details,
+   if applicable.
+
+"),
+
+("C Interface","Base","RTLD_FIRST","RTLD_FIRST
+
+   Enum constant for dlopen. See your platform man page for details,
+   if applicable.
+
+"),
+
+("C Interface","Base","RTLD_GLOBAL","RTLD_GLOBAL
+
+   Enum constant for dlopen. See your platform man page for details,
+   if applicable.
+
+"),
+
+("C Interface","Base","RTLD_LAZY","RTLD_LAZY
+
+   Enum constant for dlopen. See your platform man page for details,
+   if applicable.
+
+"),
+
+("C Interface","Base","RTLD_LOCAL","RTLD_LOCAL
+
+   Enum constant for dlopen. See your platform man page for details,
+   if applicable.
+
+"),
+
+("C Interface","Base","RTLD_NODELETE","RTLD_NODELETE
+
+   Enum constant for dlopen. See your platform man page for details,
+   if applicable.
+
+"),
+
+("C Interface","Base","RTLD_NOLOAD","RTLD_NOLOAD
+
+   Enum constant for dlopen. See your platform man page for details,
+   if applicable.
+
+"),
+
+("C Interface","Base","RTLD_NOW","RTLD_NOW
+
+   Enum constant for dlopen. See your platform man page for details,
+   if applicable.
+
+"),
+
 ("C Interface","Base","dlsym","dlsym(handle, sym)
 
    Look up a symbol from a shared library handle, return callable
@@ -5307,6 +5652,108 @@
 
 "),
 
+("C Interface","Base","Cchar","Cchar
+
+   Equivalent to the native \"char\" c-type
+
+"),
+
+("C Interface","Base","Cuchar","Cuchar
+
+   Equivalent to the native \"unsigned char\" c-type (Uint8)
+
+"),
+
+("C Interface","Base","Cshort","Cshort
+
+   Equivalent to the native \"signed short\" c-type (Int16)
+
+"),
+
+("C Interface","Base","Cushort","Cushort
+
+   Equivalent to the native \"unsigned short\" c-type (Uint16)
+
+"),
+
+("C Interface","Base","Cint","Cint
+
+   Equivalent to the native \"signed int\" c-type (Int32)
+
+"),
+
+("C Interface","Base","Cuint","Cuint
+
+   Equivalent to the native \"unsigned int\" c-type (Uint32)
+
+"),
+
+("C Interface","Base","Clong","Clong
+
+   Equivalent to the native \"signed long\" c-type
+
+"),
+
+("C Interface","Base","Culong","Culong
+
+   Equivalent to the native \"unsigned long\" c-type
+
+"),
+
+("C Interface","Base","Clonglong","Clonglong
+
+   Equivalent to the native \"signed long long\" c-type (Int64)
+
+"),
+
+("C Interface","Base","Culonglong","Culonglong
+
+   Equivalent to the native \"unsigned long long\" c-type (Uint64)
+
+"),
+
+("C Interface","Base","Csize_t","Csize_t
+
+   Equivalent to the native \"size_t\" c-type (Uint)
+
+"),
+
+("C Interface","Base","Cssize_t","Cssize_t
+
+   Equivalent to the native \"ssize_t\" c-type
+
+"),
+
+("C Interface","Base","Cptrdiff_t","Cptrdiff_t
+
+   Equivalent to the native \"ptrdiff_t\" c-type (Int)
+
+"),
+
+("C Interface","Base","Coff_t","Coff_t
+
+   Equivalent to the native \"off_t\" c-type
+
+"),
+
+("C Interface","Base","Cwchar_t","Cwchar_t
+
+   Equivalent to the native \"wchar_t\" c-type (Int32)
+
+"),
+
+("C Interface","Base","Cfloat","Cfloat
+
+   Equivalent to the native \"float\" c-type (Float32)
+
+"),
+
+("C Interface","Base","Cdouble","Cdouble
+
+   Equivalent to the native \"double\" c-type (Float64)
+
+"),
+
 ("Errors","Base","error","error(message::String)
 
    Raise an error with the given message
@@ -5346,16 +5793,106 @@
 
 "),
 
+("Errors","Base","systemerror","systemerror(sysfunc, iftrue)
+
+   Raises a \"SystemError\" for \"errno\" with the descriptive string
+   \"sysfunc\" if \"bool\" is true
+
+"),
+
 ("Errors","Base","strerror","strerror(n)
 
    Convert a system call error code to a descriptive string
 
 "),
 
-("Errors","Base","assert","assert(cond)
+("Errors","Base","assert","assert(cond[, text])
 
    Raise an error if \"cond\" is false. Also available as the macro
    \"@assert expr\".
+
+"),
+
+("Errors","Base","@assert","@assert()
+
+   Raise an error if \"cond\" is false. Preferred syntax for writings
+   assertions.
+
+"),
+
+("Errors","Base","ArgumentError","ArgumentError
+
+   The parameters given to a function call are not valid.
+
+"),
+
+("Errors","Base","BoundsError","BoundsError
+
+   An indexing operation into an array tried to access an out-of-
+   bounds element.
+
+"),
+
+("Errors","Base","EOFError","EOFError
+
+   No more data was available to read from a file or stream.
+
+"),
+
+("Errors","Base","ErrorException","ErrorException
+
+   Generic error type. The error message, in the *.msg* field, may
+   provide more specific details.
+
+"),
+
+("Errors","Base","KeyError","KeyError
+
+   An indexing operation into an \"Associative\" (\"Dict\") or \"Set\"
+   like object tried to access or delete a non-existent element.
+
+"),
+
+("Errors","Base","LoadError","LoadError
+
+   An error occurred while *including*, *requiring*, or *using* a
+   file. The error specifics should be available in the *.error*
+   field.
+
+"),
+
+("Errors","Base","MethodError","MethodError
+
+   A method with the required type signature does not exist in the
+   given generic function.
+
+"),
+
+("Errors","Base","ParseError","ParseError
+
+   The expression passed to the *parse* function could not be
+   interpreted as a valid Julia expression.
+
+"),
+
+("Errors","Base","ProcessExitedException","ProcessExitedException
+
+   After a client Julia process has exited, further attempts to
+   reference the dead child will throw this exception.
+
+"),
+
+("Errors","Base","SystemError","SystemError
+
+   A system call failed with an error code (in the \"errno\" global
+   variable).
+
+"),
+
+("Errors","Base","TypeError","TypeError
+
+   A type assertion failure, or calling an intrinsic function with an
+   incorrect argument type.
 
 "),
 
@@ -5557,6 +6094,49 @@
 
 "),
 
+("Internals","Base","macroexpand","macroexpand(x)
+
+   Takes the expression x and returns an equivalent expression with
+   all macros removed (expanded).
+
+"),
+
+("Internals","Base","expand","expand(x)
+
+   Takes the expression x and returns an equivalent expression in
+   lowered form
+
+"),
+
+("Internals","Base","code_lowered","code_lowered(f, types)
+
+   Returns the lowered code for the method matching the given generic
+   function and type signature
+
+"),
+
+("Internals","Base","code_typed","code_typed(f, types)
+
+   Returns the lowered and type-inferred code for the method matching
+   the given generic function and type signature
+
+"),
+
+("Internals","Base","code_llvm","code_llvm(f, types)
+
+   Prints the LLVM bitcodes generated for running the method matching
+   the given generic function and type signature to STDOUT
+
+"),
+
+("Internals","Base","code_native","code_native(f, types)
+
+   Prints the native assembly instructions generated for running the
+   method matching the given generic function and type signature to
+   STDOUT
+
+"),
+
 ("Collections and Data Structures","Base.Collections","PriorityQueue{K,V}","PriorityQueue{K,V}([ord])
 
    Construct a new PriorityQueue, with keys of type K and
@@ -5747,7 +6327,7 @@
 
 "),
 
-("Filesystem","Base","iswriteable","iswriteable(path) -> Bool
+("Filesystem","Base","iswritable","iswritable(path) -> Bool
 
    Returns \"true\" if the current user has permission to write to
    \"path\", \"false\" otherwise.
@@ -5812,6 +6392,146 @@
 
 "),
 
+("Graphics","Base","Vec2","Vec2(x, y)
+
+   Creates a point in two dimensions
+
+"),
+
+("Graphics","Base","BoundingBox","BoundingBox(xmin, xmax, ymin, ymax)
+
+   Creates a box in two dimensions with the given edges
+
+"),
+
+("Graphics","Base","BoundingBox","BoundingBox(objs...)
+
+   Creates a box in two dimensions that encloses all objects
+
+"),
+
+("Graphics","Base","width","width(obj)
+
+   Computes the width of an object
+
+"),
+
+("Graphics","Base","height","height(obj)
+
+   Computes the height of an object
+
+"),
+
+("Graphics","Base","xmin","xmin(obj)
+
+   Computes the minimum x-coordinate contained in an object
+
+"),
+
+("Graphics","Base","xmax","xmax(obj)
+
+   Computes the maximum x-coordinate contained in an object
+
+"),
+
+("Graphics","Base","ymin","ymin(obj)
+
+   Computes the minimum y-coordinate contained in an object
+
+"),
+
+("Graphics","Base","ymax","ymax(obj)
+
+   Computes the maximum y-coordinate contained in an object
+
+"),
+
+("Graphics","Base","diagonal","diagonal(obj)
+
+   Return the length of the diagonal of an object
+
+"),
+
+("Graphics","Base","aspect_ratio","aspect_ratio(obj)
+
+   Compute the height/width of an object
+
+"),
+
+("Graphics","Base","center","center(obj)
+
+   Return the point in the center of an object
+
+"),
+
+("Graphics","Base","xrange","xrange(obj)
+
+   Returns a tuple \"(xmin(obj), xmax(obj))\"
+
+"),
+
+("Graphics","Base","yrange","yrange(obj)
+
+   Returns a tuple \"(ymin(obj), ymax(obj))\"
+
+"),
+
+("Graphics","Base","rotate","rotate(obj, angle, origin) -> newobj
+
+   Rotates an object around origin by the specified angle (radians),
+   returning a new object of the same type.  Because of type-
+   constancy, this new object may not always be a strict geometric
+   rotation of the input; for example, if \"obj\" is a \"BoundingBox\"
+   the return is the smallest \"BoundingBox\" that encloses the
+   rotated input.
+
+"),
+
+("Graphics","Base","shift","shift(obj, dx, dy)
+
+   Returns an object shifted horizontally and vertically by the
+   indicated amounts
+
+"),
+
+("Graphics","Base","*","*(obj, s::Real)
+
+   Scale the width and height of a graphics object, keeping the center
+   fixed
+
+"),
+
+("Graphics","Base","+","+(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
+
+   Returns the smallest box containing both boxes
+
+"),
+
+("Graphics","Base","&","&(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
+
+   Returns the intersection, the largest box contained in both boxes
+
+"),
+
+("Graphics","Base","deform","deform(bb::BoundingBox, dxmin, dxmax, dymin, dymax)
+
+   Returns a bounding box with all edges shifted by the indicated
+   amounts
+
+"),
+
+("Graphics","Base","isinside","isinside(bb::BoundingBox, x, y)
+
+   True if the given point is inside the box
+
+"),
+
+("Graphics","Base","isinside","isinside(bb::BoundingBox, point)
+
+   True if the given point is inside the box
+
+"),
+
 
 ("Linear Algebra","Base","*","*(A, B)
 
@@ -5853,6 +6573,29 @@
 
 "),
 
+("Linear Algebra","Base","rref","rref(A)
+
+   Compute the reduced row echelon form of the matrix A.
+
+"),
+
+("Linear Algebra","Base","factorize","factorize(A)
+
+   Compute a convenient factorization (including LU, Cholesky, Bunch
+   Kaufman, Triangular) of A, based upon the type of the input matrix.
+   The return value can then be reused for efficient solving of
+   multiple systems. For example: \"A=factorize(A); x=A\\\\b;
+   y=A\\\\C\".
+
+"),
+
+("Linear Algebra","Base","factorize!","factorize!(A)
+
+   \"factorize!\" is the same as \"factorize()\", but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
 ("Linear Algebra","Base","lu","lu(A) -> L, U, P
 
    Compute the LU factorization of \"A\", such that \"P*A = L*U\".
@@ -5877,7 +6620,7 @@
 
 ("Linear Algebra","Base","lufact!","lufact!(A) -> LU
 
-   \"lufact!\" is the same as \"lufact\" but saves space by
+   \"lufact!\" is the same as \"lufact()\", but saves space by
    overwriting the input A, instead of creating a copy.  For sparse
    \"A\" the \"nzval\" field is not overwritten but the index fields,
    \"colptr\" and \"rowval\" are decremented in place, converting from
@@ -5925,7 +6668,7 @@
 
 ("Linear Algebra","Base","cholfact!","cholfact!(A[, LU]) -> Cholesky
 
-   \"cholfact!\" is the same as \"cholfact\" but saves space by
+   \"cholfact!\" is the same as \"cholfact()\", but saves space by
    overwriting the input A, instead of creating a copy.
 
 "),
@@ -5947,7 +6690,7 @@
 
 ("Linear Algebra","Base","cholpfact!","cholpfact!(A[, LU]) -> CholeskyPivoted
 
-   \"cholpfact!\" is the same as \"cholpfact\" but saves space by
+   \"cholpfact!\" is the same as \"cholpfact\", but saves space by
    overwriting the input A, instead of creating a copy.
 
 "),
@@ -5974,7 +6717,7 @@
 
 ("Linear Algebra","Base","qrfact!","qrfact!(A)
 
-   \"qrfact!\" is the same as \"qrfact\" but saves space by
+   \"qrfact!\" is the same as \"qrfact()\", but saves space by
    overwriting the input A, instead of creating a copy.
 
 "),
@@ -6005,7 +6748,23 @@
 
 ("Linear Algebra","Base","qrpfact!","qrpfact!(A) -> QRPivoted
 
-   \"qrpfact!\" is the same as \"qrpfact\" but saves space by
+   \"qrpfact!\" is the same as \"qrpfact()\", but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+("Linear Algebra","Base","bkfact","bkfact(A) -> BunchKaufman
+
+   Compute the Bunch Kaufman factorization of a real symmetric or
+   complex Hermitian matrix \"A\" and return a \"BunchKaufman\"
+   object. The following functions are available for \"BunchKaufman\"
+   objects: \"size\", \"\\\", \"inv\", \"issym\", \"ishermitian\".
+
+"),
+
+("Linear Algebra","Base","bkfact!","bkfact!(A) -> BunchKaufman
+
+   \"bkfact!\" is the same as \"bkfact()\", but saves space by
    overwriting the input A, instead of creating a copy.
 
 "),
@@ -6078,7 +6837,7 @@
 
 ("Linear Algebra","Base","eigfact!","eigfact!(A[, B])
 
-   \"eigfact!\" is the same as \"eigfact\" but saves space by
+   \"eigfact!\" is the same as \"eigfact()\", but saves space by
    overwriting the input A (and B), instead of creating a copy.
 
 "),
@@ -6096,7 +6855,7 @@
 
 ("Linear Algebra","Base","hessfact!","hessfact!(A)
 
-   \"hessfact!\" is the same as \"hessfact\" but saves space by
+   \"hessfact!\" is the same as \"hessfact()\", but saves space by
    overwriting the input A, instead of creating a copy.
 
 "),
@@ -6110,6 +6869,13 @@
    \"F[:vectors]\" or \"F[:Z]\" such that
    \"A=F[:vectors]*F[:Schur]*F[:vectors]'\". The eigenvalues of \"A\"
    can be obtained with \"F[:values]\".
+
+"),
+
+("Linear Algebra","Base","schurfact!","schurfact!(A)
+
+   Computer the Schur factorization of A, overwriting A in the
+   process. See \"schurfact()\"
 
 "),
 
@@ -6153,7 +6919,7 @@
 
 ("Linear Algebra","Base","svdfact!","svdfact!(A[, thin]) -> SVD
 
-   \"svdfact!\" is the same as \"svdfact\" but saves space by
+   \"svdfact!\" is the same as \"svdfact()\", but saves space by
    overwriting the input A, instead of creating a copy. If \"thin\" is
    \"true\", an economy mode decomposition is returned. The default is
    to produce a thin decomposition.
@@ -6206,13 +6972,25 @@
 
 ("Linear Algebra","Base","triu","triu(M)
 
-   Upper triangle of a matrix
+   Upper triangle of a matrix.
+
+"),
+
+("Linear Algebra","Base","triu!","triu!(M)
+
+   Upper triangle of a matrix, overwriting M in the process.
 
 "),
 
 ("Linear Algebra","Base","tril","tril(M)
 
-   Lower triangle of a matrix
+   Lower triangle of a matrix.
+
+"),
+
+("Linear Algebra","Base","tril!","tril!(M)
+
+   Lower triangle of a matrix, overwriting M in the process.
 
 "),
 
@@ -6225,14 +7003,14 @@
 
 ("Linear Algebra","Base","diag","diag(M[, k])
 
-   The \"k\"-th diagonal of a matrix, as a vector
+   The \"k\"-th diagonal of a matrix, as a vector.
 
 "),
 
 ("Linear Algebra","Base","diagm","diagm(v[, k])
 
    Construct a diagonal matrix and place \"v\" on the \"k\"-th
-   diagonal
+   diagonal.
 
 "),
 
@@ -6336,6 +7114,13 @@
 
 "),
 
+("Linear Algebra","Base","logdet","logdet(M)
+
+   Log of Matrix determinant. Equivalent to \"log(det(M))\", but may
+   provide increased accuracy and/or speed.
+
+"),
+
 ("Linear Algebra","Base","inv","inv(M)
 
    Matrix inverse
@@ -6395,6 +7180,13 @@
 ("Linear Algebra","Base","isposdef","isposdef(A)
 
    Test whether a matrix is positive-definite.
+
+"),
+
+("Linear Algebra","Base","isposdef!","isposdef!(A)
+
+   Test whether a matrix is positive-definite, overwriting A in the
+   processes.
 
 "),
 
@@ -6503,9 +7295,28 @@
 
 "),
 
+("BLAS Functions","Base.LinAlg.BLAS","asum","asum(n, X, incx)
+
+   sum of the absolute values of the first \"n\" elements of array
+   \"X\" with stride \"incx\".
+
+"),
+
 ("BLAS Functions","Base.LinAlg.BLAS","axpy!","axpy!(n, a, X, incx, Y, incy)
 
    Overwrite \"Y\" with \"a*X + Y\".  Returns \"Y\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","scal!","scal!(n, a, X, incx)
+
+   Overwrite \"X\" with \"a*X\".  Returns \"X\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","scal","scal(n, a, X, incx)
+
+   Returns \"a*X\".
 
 "),
 
@@ -6584,6 +7395,14 @@
 
 "),
 
+("BLAS Functions","Base.LinAlg.BLAS","sbmv","sbmv(uplo, k, A, x)
+
+   Returns \"A*x\" where \"A\" is a symmetric band matrix of order
+   \"size(A,2)\" with \"k\" super-diagonals stored in the argument
+   \"A\".
+
+"),
+
 ("BLAS Functions","Base.LinAlg.BLAS","gemm!","gemm!(tA, tB, alpha, A, B, beta, C)
 
    Update \"C\" as \"alpha*A*B + beta*C\" or the other three variants
@@ -6599,84 +7418,242 @@
 
 "),
 
+("BLAS Functions","Base.LinAlg.BLAS","gemm","gemm(tA, tB, alpha, A, B)
+
+   Returns \"alpha*A*B\" or the other three variants according to
+   \"tA\" (transpose \"A\") and \"tB\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","gemv!","gemv!(tA, alpha, A, x, beta, y)
+
+   Update the vector \"y\" as \"alpha*A*x + beta*x\" or \"alpha*A'x +
+   beta*x\" according to \"tA\" (transpose \"A\"). Returns the updated
+   \"y\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","gemv","gemv(tA, alpha, A, x)
+
+   Returns \"alpha*A*x\" or \"alpha*A'x\" according to \"tA\"
+   (transpose \"A\").
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","gemv","gemv(tA, alpha, A, x)
+
+   Returns \"A*x\" or \"A'x\" according to \"tA\" (transpose \"A\").
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symm!","symm!(side, ul, alpha, A, B, beta, C)
+
+   Update \"C\" as \"alpha*A*B + beta*C\" or \"alpha*B*A + beta*C\"
+   according to \"side\". \"A\" is assumed to be symmetric.  Only the
+   \"ul\" triangle of \"A\" is used.  Returns the updated \"C\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symm","symm(side, ul, alpha, A, B)
+
+   Returns \"alpha*A*B\" or \"alpha*B*A\" according to \"side\". \"A\"
+   is assumed to be symmetric.  Only the \"ul\" triangle of \"A\" is
+   used.
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symm","symm(side, ul, A, B)
+
+   Returns \"A*B\" or \"B*A\" according to \"side\".  \"A\" is assumed
+   to be symmetric.  Only the \"ul\" triangle of \"A\" is used.
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symm","symm(tA, tB, alpha, A, B)
+
+   Returns \"alpha*A*B\" or the other three variants according to
+   \"tA\" (transpose \"A\") and \"tB\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symv!","symv!(ul, alpha, A, x, beta, y)
+
+   Update the vector \"y\" as \"alpha*A*y + beta*y\". \"A\" is assumed
+   to be symmetric.  Only the \"ul\" triangle of \"A\" is used.
+   Returns the updated \"y\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symv","symv(ul, alpha, A, x)
+
+   Returns \"alpha*A*x\". \"A\" is assumed to be symmetric.  Only the
+   \"ul\" triangle of \"A\" is used.
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","symv","symv(ul, A, x)
+
+   Returns \"A*x\".  \"A\" is assumed to be symmetric.  Only the
+   \"ul\" triangle of \"A\" is used.
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trmm!","trmm!(side, ul, tA, dA, alpha, A, B)
+
+   Update \"B\" as \"alpha*A*B\" or one of the other three variants
+   determined by \"side\" (A on left or right) and \"tA\" (transpose
+   A). Only the \"ul\" triangle of \"A\" is used.  \"dA\" indicates if
+   \"A\" is unit-triangular (the diagonal is assumed to be all ones).
+   Returns the updated \"B\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trmm","trmm(side, ul, tA, dA, alpha, A, B)
+
+   Returns \"alpha*A*B\" or one of the other three variants determined
+   by \"side\" (A on left or right) and \"tA\" (transpose A). Only the
+   \"ul\" triangle of \"A\" is used.  \"dA\" indicates if \"A\" is
+   unit-triangular (the diagonal is assumed to be all ones).
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trsm!","trsm!(side, ul, tA, dA, alpha, A, B)
+
+   Overwrite \"B\" with the solution to \"A*X = alpha*B\" or one of
+   the other three variants determined by \"side\" (A on left or right
+   of \"X\") and \"tA\" (transpose A). Only the \"ul\" triangle of
+   \"A\" is used.  \"dA\" indicates if \"A\" is unit-triangular (the
+   diagonal is assumed to be all ones).  Returns the updated \"B\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trsm","trsm(side, ul, tA, dA, alpha, A, B)
+
+   Returns the solution to \"A*X = alpha*B\" or one of the other three
+   variants determined by \"side\" (A on left or right of \"X\") and
+   \"tA\" (transpose A). Only the \"ul\" triangle of \"A\" is used.
+   \"dA\" indicates if \"A\" is unit-triangular (the diagonal is
+   assumed to be all ones).
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trmv!","trmv!(side, ul, tA, dA, alpha, A, b)
+
+   Update \"b\" as \"alpha*A*b\" or one of the other three variants
+   determined by \"side\" (A on left or right) and \"tA\" (transpose
+   A). Only the \"ul\" triangle of \"A\" is used.  \"dA\" indicates if
+   \"A\" is unit-triangular (the diagonal is assumed to be all ones).
+   Returns the updated \"b\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trmv","trmv(side, ul, tA, dA, alpha, A, b)
+
+   Returns \"alpha*A*b\" or one of the other three variants determined
+   by \"side\" (A on left or right) and \"tA\" (transpose A). Only the
+   \"ul\" triangle of \"A\" is used.  \"dA\" indicates if \"A\" is
+   unit-triangular (the diagonal is assumed to be all ones).
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trsv!","trsv!(side, ul, tA, dA, alpha, A, b)
+
+   Overwrite \"b\" with the solution to \"A*X = alpha*b\" or one of
+   the other three variants determined by \"side\" (A on left or right
+   of \"X\") and \"tA\" (transpose A). Only the \"ul\" triangle of
+   \"A\" is used.  \"dA\" indicates if \"A\" is unit-triangular (the
+   diagonal is assumed to be all ones).  Returns the updated \"b\".
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","trsv","trsv(side, ul, tA, dA, alpha, A, b)
+
+   Returns the solution to \"A*X = alpha*b\" or one of the other three
+   variants determined by \"side\" (A on left or right of \"X\") and
+   \"tA\" (transpose A). Only the \"ul\" triangle of \"A\" is used.
+   \"dA\" indicates if \"A\" is unit-triangular (the diagonal is
+   assumed to be all ones).
+
+"),
+
 ("BLAS Functions","Base.LinAlg.BLAS","blas_set_num_threads","blas_set_num_threads(n)
 
    Set the number of threads the BLAS library should use.
 
 "),
 
+("Profiling","Base","@profile","@profile()
 
-("Punctuation","","punctuation","punctuation
-
-   +-----------+---------------------------------------------------------------------------------------------+
-   | symbol    | meaning                                                                                     |
-   +===========+=============================================================================================+
-   | \\\"@m\\\"    | invoke macro m; followed by space-separated expressions                                     |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"!\\\"     | prefix \\\"not\\\" operator                                                                     |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"!\\\"     | at the end of a function name, indicates that a function modifies its argument(s)           |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"#\\\"     | begin single line comment                                                                   |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"\\\$\\\"    | xor operator, string and expression interpolation                                           |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"%\\\"     | remainder operator                                                                          |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"^\\\"     | exponent operator                                                                           |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"&\\\"     | bitwise and                                                                                 |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"*\\\"     | multiply, or matrix multiply                                                                |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"()\\\"    | the empty tuple                                                                             |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"~\\\"     | bitwise not operator                                                                        |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"\\\\\\\"    | backslash operator                                                                          |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"a[]\\\"   | array indexing                                                                              |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"[,]\\\"   | vertical concatenation                                                                      |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"[;]\\\"   | also vertical concatenation                                                                 |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"[  ]\\\"  | with space-separated expressions, horizontal concatenation                                  |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"T{ }\\\"  | parametric type instantiation                                                               |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"{  }\\\"  | construct a cell array                                                                      |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\";\\\"     | statement separator                                                                         |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\",\\\"     | separate function arguments or tuple components                                             |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"?\\\"     | 3-argument conditional operator                                                             |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"\\\"\\\"\\\"  | delimit string literals                                                                     |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"''\\\"    | delimit character literals                                                                  |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | >>``<<    | delimit external process (command) specifications                                           |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"...\\\"   | splice arguments into a function call, or declare a varargs function                        |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\".\\\"     | access named fields in objects or names inside modules, also prefixes elementwise operators |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"a:b\\\"   | range                                                                                       |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"a:s:b\\\" | range                                                                                       |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\":\\\"     | index an entire dimension                                                                   |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\"::\\\"    | type annotation                                                                             |
-   +-----------+---------------------------------------------------------------------------------------------+
-   | \\\":( )\\\"  | quoted expression                                                                           |
-   +-----------+---------------------------------------------------------------------------------------------+
+   \"@profile <expression>\" runs your expression while taking
+   periodic backtraces.  These are appended to an internal buffer of
+   backtraces.
 
 "),
 
-("Sorting and Related Functions","Base.Sort","sort!","sort!(v, [dim,] [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Profiling","Base.Profile","clear","clear()
+
+   Clear any existing backtraces from the internal buffer.
+
+"),
+
+("Profiling","Base.Profile","print","print([io::IO = STDOUT], [data::Vector]; format = :tree, C = false, combine = true, cols = tty_cols())
+
+   Prints profiling results to \"io\" (by default, \"STDOUT\"). If you
+   do not supply a \"data\" vector, the internal buffer of accumulated
+   backtraces will be used.  \"format\" can be \":tree\" or \":flat\".
+   If \"C==true\", backtraces from C and Fortran code are shown.
+   \"combine==true\" merges instruction pointers that correspond to
+   the same line of code.  \"cols\" controls the width of the display.
+
+"),
+
+("Profiling","Base.Profile","print","print([io::IO = STDOUT], data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
+
+   Prints profiling results to \"io\". This variant is used to examine
+   results exported by a previous call to \"Profile.retrieve()\".
+   Supply the vector \"data\" of backtraces and a dictionary
+   \"lidict\" of line information.
+
+"),
+
+("Profiling","Base.Profile","init","init(n::Integer, delay::Float64)
+
+   Configure the \"delay\" between backtraces (measured in seconds),
+   and the number \"n\" of instruction pointers that may be stored.
+   Each instruction pointer corresponds to a single line of code;
+   backtraces generally consist of a long list of instruction
+   pointers. Default settings are \"n=10^6\" and \"delay=0.001\".
+
+"),
+
+("Profiling","Base.Profile","fetch","fetch() -> data
+
+   Returns a reference to the internal buffer of backtraces. Note that
+   subsequent operations, like \"Profile.clear()\", can affect
+   \"data\" unless you first make a copy. Note that the values in
+   \"data\" have meaning only on this machine in the current session,
+   because it depends on the exact memory addresses used in JIT-
+   compiling. This function is primarily for internal use;
+   \"Profile.retrieve()\" may be a better choice for most users.
+
+"),
+
+("Profiling","Base.Profile","retrieve","retrieve(;C = false) -> data, lidict
+
+   \"Exports\" profiling results in a portable format, returning the
+   set of all backtraces (\"data\") and a dictionary that maps the
+   (session-specific) instruction pointers in \"data\" to \"LineInfo\"
+   values that store the file name, function name, and line number.
+   This function allows you to save profiling results for future
+   analysis.
+
+"),
+
+("Punctuation","","punctuation","punctuation
+
+"),
+
+("Sorting and Related Functions","Base","sort!","sort!(v, [dim,] [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the vector \"v\" in place. \"QuickSort\" is used by default
    for numeric arrays while \"MergeSort\" is used for other arrays.
@@ -6693,20 +7670,20 @@
 
 "),
 
-("Sorting and Related Functions","Base.Sort","sort","sort(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","sort","sort(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Variant of \"sort!\" that returns a sorted copy of \"v\" leaving
    \"v\" itself unmodified.
 
 "),
 
-("Sorting and Related Functions","Base.Sort","sort","sort(A, dim, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","sort","sort(A, dim, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort a multidimensional array \"A\" along the given dimension.
 
 "),
 
-("Sorting and Related Functions","Base.Sort","sortperm","sortperm(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","sortperm","sortperm(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Return a permutation vector of indices of \"v\" that puts it in
    sorted order. Specify \"alg\" to choose a particular sorting
@@ -6721,19 +7698,19 @@
 
 "),
 
-("Sorting and Related Functions","Base.Sort","sortrows","sortrows(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","sortrows","sortrows(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the rows of matrix \"A\" lexicographically.
 
 "),
 
-("Sorting and Related Functions","Base.Sort","sortcols","sortcols(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","sortcols","sortcols(A, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Sort the columns of matrix \"A\" lexicographically.
 
 "),
 
-("Sorting and Related Functions","Base.Sort","issorted","issorted(v, [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","issorted","issorted(v, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Test whether a vector is in sorted order. The \"by\", \"lt\" and
    \"rev\" keywords modify what order is considered to be sorted just
@@ -6741,7 +7718,7 @@
 
 "),
 
-("Sorting and Related Functions","Base.Sort","searchsorted","searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","searchsorted","searchsorted(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Returns the range of indices of \"a\" which compare as equal to
    \"x\" according to the order specified by the \"by\", \"lt\" and
@@ -6751,7 +7728,7 @@
 
 "),
 
-("Sorting and Related Functions","Base.Sort","select!","select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","select!","select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Partially sort the vector \"v\" in place, according to the order
    specified by \"by\", \"lt\" and \"rev\" so that the value at index
@@ -6765,7 +7742,7 @@
 
 "),
 
-("Sorting and Related Functions","Base.Sort","select","select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
+("Sorting and Related Functions","Base","select","select(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Variant of \"select!\" which copies \"v\" before partially sorting
    it, thereby returning the same thing as \"select!\" but leaving

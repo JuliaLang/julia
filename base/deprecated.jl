@@ -148,6 +148,7 @@ export PipeString
 
 # 0.2
 
+@deprecate  iswriteable         iswritable
 @deprecate  localize            localpart
 @deprecate  logb                exponent
 @deprecate  ilogb               exponent
@@ -219,6 +220,9 @@ export PipeString
 @deprecate msync(A::Array, flags::Int)    msync(A)
 @deprecate msync(A::BitArray, flags::Int) msync(A)
 @deprecate square(x::Number)          x*x
+@deprecate finfer                     code_typed
+@deprecate disassemble(f::Function,t::Tuple)           code_llvm(f,t)
+@deprecate disassemble(f::Function,t::Tuple,asm::Bool) (asm ? code_native(f,t) : code_llvm(f,t))
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
@@ -349,6 +353,17 @@ function amap(f::Function, A::AbstractArray, axis::Integer)
 
     return R
 end
+
+# Conditional usage of packages and modules
+function usingmodule(names::Symbol...)
+    warn_once("usingmodule is deprecated, use using instead")
+    eval(current_module(), Expr(:toplevel, Expr(:using, names...)))
+end
+function usingmodule(names::String)
+    warn_once("usingmodule is deprecated, use using instead")
+    usingmodule([symbol(name) for name in split(names,".")]...)
+end
+export usingmodule
 
 # discontinued functions
 

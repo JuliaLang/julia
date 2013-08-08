@@ -165,6 +165,7 @@ static Function *jlerror_func;
 static Function *jltypeerror_func;
 static Function *jlcheckassign_func;
 static Function *jldeclareconst_func;
+static Function *jltopeval_func;
 static Function *jltuple_func;
 static Function *jlntuple_func;
 static Function *jlapplygeneric_func;
@@ -715,6 +716,7 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
         if (e->head == call_sym || e->head == call1_sym || e->head == new_sym) {
             int alen = jl_array_dim0(e->args);
             jl_value_t *f = jl_exprarg(e,0);
+            simple_escape_analysis(f, esc, ctx);
             if (expr_is_symbol(f)) {
                 if (is_constant(f, ctx, false)) {
                     jl_value_t *fv =
@@ -742,9 +744,6 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
                         }
                     }
                 }
-            }
-            else if (jl_is_expr(f) || jl_is_lambda_info(f)) {
-                simple_escape_analysis(f, esc, ctx);
             }
 
             for(i=1; i < (size_t)alen; i++) {
@@ -958,6 +957,8 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
     }
 
     jl_datatype_t *sty = (jl_datatype_t*)expr_type(expr, ctx);
+    if (jl_is_type_type((jl_value_t*)sty) && jl_is_leaf_type(jl_tparam0(sty)))
+        sty = (jl_datatype_t*)jl_typeof(jl_tparam0(sty));
     JL_GC_PUSH1(&sty);
     if (jl_is_structtype(sty) && sty != jl_module_type && sty->uid != 0) {
         unsigned idx = jl_field_index(sty, name, 0);
@@ -2269,6 +2270,15 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     else {
         if (!strcmp(head->name, "$"))
             jl_error("syntax: prefix $ in non-quoted expression");
+        if (jl_is_toplevel_only_expr(expr) &&
+            ctx->linfo->name == anonymous_sym && ctx->vars.empty() &&
+            ctx->linfo->module == jl_current_module) {
+            // call interpreter to run a toplevel expr from inside a
+            // compiled toplevel thunk.
+            builder.CreateCall(jltopeval_func, literal_pointer_val(expr));
+            jl_add_linfo_root(ctx->linfo, expr);
+            return valuepos ? literal_pointer_val(jl_nothing) : NULL;
+        }
         // some expression types are metadata and can be ignored
         if (valuepos || !(head == line_sym || head == type_goto_sym)) {
             jl_errorf("unsupported or misplaced expression %s in function %s",
@@ -2544,12 +2554,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     //if (jlrettype == (jl_value_t*)jl_bottom_type)
     //    f->setDoesNotReturn();
 #ifdef DEBUG
-#ifdef _OS_WINDOWS_
-    AttrBuilder *attr = new AttrBuilder();
-    attr->addStackAlignmentAttr(16);
-    attr->addAlignmentAttr(16);
-    f->addAttribute(~0U, Attributes::get(f->getContext(), *attr));
-#endif
 #if LLVM32 && !LLVM33
     f->addFnAttr(Attributes::StackProtectReq);
 #else
@@ -3231,6 +3235,12 @@ static void init_julia_llvm_env(Module *m)
                          "jl_new_box", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlbox_func, (void*)&jl_new_box);
 
+    jltopeval_func =
+        Function::Create(FunctionType::get(jl_pvalue_llvmt, args3, false),
+                         Function::ExternalLinkage,
+                         "jl_toplevel_eval", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jltopeval_func, (void*)&jl_toplevel_eval);
+
     std::vector<Type*> args4(0);
     args4.push_back(T_pint8);
     args4.push_back(jl_pvalue_llvmt);
@@ -3326,7 +3336,9 @@ static void init_julia_llvm_env(Module *m)
 
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);
-#ifndef LLVM32
+#ifdef LLVM32
+    FPM->add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
+#else 
     FPM->add(new TargetData(*jl_ExecutionEngine->getTargetData()));
 #endif
     // list of passes from vmkit

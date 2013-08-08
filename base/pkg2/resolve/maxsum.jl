@@ -191,7 +191,7 @@ type Messages
 
         # external fields: there are 2 terms, a noise to break potential symmetries
         #                  and one to favor newest versions over older, and no-version over all
-        fld = [ [ FieldValue(0,VersionWeight(0),vweight[p0][v0],0,noise(p0,v0)) for v0 = 1:spp[p0] ] for p0 = 1:np]
+        fld = [ [ FieldValue(0,zero(VersionWeight),vweight[p0][v0],0,noise(p0,v0)) for v0 = 1:spp[p0] ] for p0 = 1:np]
 
         # enforce requirements
         for (rp, rvs) in reqs

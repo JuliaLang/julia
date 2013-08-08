@@ -292,7 +292,6 @@ function init_load_path()
         abspath(JULIA_HOME,"..","local","share","julia","site",vers),
         abspath(JULIA_HOME,"..","share","julia","site",vers)
     ]
-    global const DL_LOAD_PATH = ByteString[]
 end
 
 function init_sched()

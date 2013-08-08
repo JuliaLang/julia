@@ -14,8 +14,10 @@
 module DocCheck
 
 import Base.Help: init_help, FUNCTION_DICT, MODULE_DICT, CATEGORY_DICT
+import Base: argtype_decl_string, uncompressed_ast
 
-export isdeprecated, isdocumented, undefined_exports, undocumented, undocumented_by_file, undocumented_rst
+export isdeprecated, isdocumented, undefined_exports, undocumented, undocumented_by_file, undocumented_rst,
+       gen_undocumented_template
 
 isdeprecated(m::Module, v) = try endswith(functionloc(eval(m, v))[1], "deprecated.jl") catch return false end
 isdeprecated(v)            = try endswith(functionloc(eval(v))[1], "deprecated.jl") catch return false end
@@ -101,7 +103,7 @@ function _undocumented_rst()
                s = symbol(line) # for submodules: string(:Sort) == "Base.Sort"
                if !isdefined(s) continue end
                if haskey(FUNCTION_DICT, line) || haskey(MODULE_DICT, line) || haskey(CATEGORY_DICT, string(s))
-                  m = getkey(MODULE_DICT, line, "")
+                  m = eval(symbol(getkey(MODULE_DICT, line, "Base")))
                   isdeprecated(m,s) && continue
                   havecount+=1; total+=1; continue
                end
@@ -134,5 +136,61 @@ function _undocumented_rst()
 end
 
 undocumented_rst() = println(_undocumented_rst()[1])
+
+function gen_undocumented_template(outfile = "$JULIA_HOME/../../doc/UNDOCUMENTED.rst")
+    out = open(outfile, "w")
+    init_help()
+    println(out, ".. currentmodule:: Base")
+    println(out)
+    exports=[strip(x) for x in split(replace(open(readall, "$JULIA_HOME/../../base/exports.jl"),",",""),"\n")]
+    for line in exports
+        if search(line, "deprecated")!=0:-1; continue end
+        if haskey(MODULE_DICT, line); continue end
+        if length(line)>1
+            if line[1]=='#'
+                if line[2]!= ' ' continue end
+                println(out)
+                println(out, line[3:end])
+                println(out, repeat("-", length(line)-2))
+                println(out)
+                continue
+            else
+                s = symbol(line) # for submodules: string(:Sort) == "Base.Sort"
+                if !isdefined(s) continue end
+                if haskey(FUNCTION_DICT, line) || haskey(MODULE_DICT, line) || haskey(CATEGORY_DICT, string(s))
+                    continue
+                end
+                if line[1]=='@'; line = line[2:end] end
+                sym = try eval(symbol(line)) catch :() end
+                if isa(sym, Function)
+                    mt = methods(sym)
+                    if length(mt) == 1  # easy case
+                        m = mt.defs
+                        li = m.func.code
+                        e = uncompressed_ast(li)
+                        argnames = e.args[1]
+                        decls = map(argtype_decl_string, argnames, {m.sig...})
+                        args = join(decls, ",")
+                        line = line * "($args)"
+                    else
+                        line = line * "(...)"
+                    end
+                    println(out, ".. function:: "*line)
+                    println(out)
+                    println(out, "   UNDOCUMENTED")
+                    println(out)
+                elseif isa(sym, Module)
+                    println(out, ".. module:: "*line)
+                    println(out)
+                    println(out, "   UNDOCUMENTED (may not appear in helpdb.jl)")
+                    println(out)
+                end
+            end
+        end
+    end
+
+    close(out)
+    nothing
+end
 
 end

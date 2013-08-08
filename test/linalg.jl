@@ -1,3 +1,4 @@
+import Base.LinAlg
 n     = 10
 srand(1234321)
 a     = rand(n,n)

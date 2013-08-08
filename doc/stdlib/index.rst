@@ -18,6 +18,7 @@ Built-ins
    constants
    file
    punctuation
+   sort
 
 ****************
 Built-in Modules
@@ -27,6 +28,6 @@ Built-in Modules
    :maxdepth: 1
 
    collections
-   sort
+   graphics
    test
    profile

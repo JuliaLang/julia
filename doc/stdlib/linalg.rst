@@ -10,10 +10,12 @@ Linear Algebra
 Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http:://www.suitesparse.com/>`_.
 
 .. function:: *(A, B)
+   :noindex:
 
    Matrix multiplication
 
 .. function:: \\(A, B)
+   :noindex:
 
    Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper- or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the BunchKaufman factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by reducing ``A`` to bidiagonal form and solving the bidiagonal least squares problem.  For sparse, square ``A`` the LU factorization (from UMFPACK) is used.
 
@@ -29,6 +31,18 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the norm of a ``Vector`` or a ``Matrix``
 
+.. function:: rref(A)
+
+   Compute the reduced row echelon form of the matrix A.
+
+.. function:: factorize(A)
+
+   Compute a convenient factorization (including LU, Cholesky, Bunch Kaufman, Triangular) of A, based upon the type of the input matrix. The return value can then be reused for efficient solving of multiple systems. For example: ``A=factorize(A); x=A\\b; y=A\\C``.
+
+.. function:: factorize!(A)
+
+   ``factorize!`` is the same as :func:`factorize`, but saves space by overwriting the input A, instead of creating a copy.
+
 .. function:: lu(A) -> L, U, P
 
    Compute the LU factorization of ``A``, such that ``P*A = L*U``.
@@ -39,7 +53,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: lufact!(A) -> LU
 
-   ``lufact!`` is the same as ``lufact`` but saves space by overwriting the input A, instead of creating a copy.  For sparse ``A`` the ``nzval`` field is not overwritten but the index fields, ``colptr`` and ``rowval`` are decremented in place, converting from 1-based indices to 0-based indices.
+   ``lufact!`` is the same as :func:`lufact`, but saves space by overwriting the input A, instead of creating a copy.  For sparse ``A`` the ``nzval`` field is not overwritten but the index fields, ``colptr`` and ``rowval`` are decremented in place, converting from 1-based indices to 0-based indices.
 
 .. function:: chol(A, [LU]) -> F
 
@@ -55,7 +69,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: cholfact!(A, [LU]) -> Cholesky
 
-   ``cholfact!`` is the same as ``cholfact`` but saves space by overwriting the input A, instead of creating a copy.
+   ``cholfact!`` is the same as :func:`cholfact`, but saves space by overwriting the input A, instead of creating a copy.
 
 .. function:: cholpfact(A, [LU]) -> CholeskyPivoted
 
@@ -63,7 +77,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: cholpfact!(A, [LU]) -> CholeskyPivoted
 
-   ``cholpfact!`` is the same as ``cholpfact`` but saves space by overwriting the input A, instead of creating a copy.
+   ``cholpfact!`` is the same as ``cholpfact``, but saves space by overwriting the input A, instead of creating a copy.
 
 .. function:: qr(A, [thin]) -> Q, R
 
@@ -75,7 +89,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qrfact!(A)
 
-   ``qrfact!`` is the same as ``qrfact`` but saves space by overwriting the input A, instead of creating a copy.
+   ``qrfact!`` is the same as :func:`qrfact`, but saves space by overwriting the input A, instead of creating a copy.
 
 .. function:: qrp(A, [thin]) -> Q, R, P
 
@@ -87,7 +101,15 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qrpfact!(A) -> QRPivoted
 
-   ``qrpfact!`` is the same as ``qrpfact`` but saves space by overwriting the input A, instead of creating a copy.
+   ``qrpfact!`` is the same as :func:`qrpfact`, but saves space by overwriting the input A, instead of creating a copy.
+
+.. function:: bkfact(A) -> BunchKaufman
+
+   Compute the Bunch Kaufman factorization of a real symmetric or complex Hermitian matrix ``A`` and return a ``BunchKaufman`` object. The following functions are available for ``BunchKaufman`` objects: ``size``, ``\``, ``inv``, ``issym``, ``ishermitian``.
+
+.. function:: bkfact!(A) -> BunchKaufman
+
+   ``bkfact!`` is the same as :func:`bkfact`, but saves space by overwriting the input A, instead of creating a copy.
 
 .. function:: sqrtm(A)
 
@@ -129,7 +151,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: eigfact!(A, [B])
 
-   ``eigfact!`` is the same as ``eigfact`` but saves space by overwriting the input A (and B), instead of creating a copy.
+   ``eigfact!`` is the same as :func:`eigfact`, but saves space by overwriting the input A (and B), instead of creating a copy.
 
 .. function:: hessfact(A)
 
@@ -137,11 +159,15 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: hessfact!(A)
 
-   ``hessfact!`` is the same as ``hessfact`` but saves space by overwriting the input A, instead of creating a copy.
+   ``hessfact!`` is the same as :func:`hessfact`, but saves space by overwriting the input A, instead of creating a copy.
 
 .. function:: schurfact(A) -> Schur
 
    Computes the Schur factorization of the matrix ``A``. The (quasi) triangular Schur factor can be obtained from the ``Schur`` object ``F`` with either ``F[:Schur]`` or ``F[:T]`` and the unitary/orthogonal Schur vectors can be obtained with ``F[:vectors]`` or ``F[:Z]`` such that ``A=F[:vectors]*F[:Schur]*F[:vectors]'``. The eigenvalues of ``A`` can be obtained with ``F[:values]``.
+
+.. function:: schurfact!(A)
+
+   Computer the Schur factorization of A, overwriting A in the process. See :func:`schurfact`
 
 .. function:: schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
 
@@ -161,7 +187,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: svdfact!(A, [thin]) -> SVD
 
-   ``svdfact!`` is the same as ``svdfact`` but saves space by overwriting the input A, instead of creating a copy. If ``thin`` is ``true``, an economy mode decomposition is returned. The default is to produce a thin decomposition.
+   ``svdfact!`` is the same as :func:`svdfact`, but saves space by overwriting the input A, instead of creating a copy. If ``thin`` is ``true``, an economy mode decomposition is returned. The default is to produce a thin decomposition.
 
 .. function:: svd(A, [thin]) -> U, S, V
 
@@ -189,11 +215,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: triu(M)
 
-   Upper triangle of a matrix
+   Upper triangle of a matrix.
+
+.. function:: triu!(M)
+
+   Upper triangle of a matrix, overwriting M in the process.
 
 .. function:: tril(M)
 
-   Lower triangle of a matrix
+   Lower triangle of a matrix.
+
+.. function:: tril!(M)
+
+   Lower triangle of a matrix, overwriting M in the process.
 
 .. function:: diagind(M[, k])
 
@@ -201,11 +235,11 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: diag(M[, k])
 
-   The ``k``-th diagonal of a matrix, as a vector
+   The ``k``-th diagonal of a matrix, as a vector.
 
 .. function:: diagm(v[, k])
 
-   Construct a diagonal matrix and place ``v`` on the ``k``-th diagonal
+   Construct a diagonal matrix and place ``v`` on the ``k``-th diagonal.
 
 .. function:: scale(A, B)
 
@@ -266,6 +300,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Matrix determinant
 
+.. function:: logdet(M)
+
+   Log of Matrix determinant. Equivalent to ``log(det(M))``, but may provide increased accuracy and/or speed.
+
 .. function:: inv(M)
 
    Matrix inverse
@@ -281,6 +319,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: repmat(A, n, m)
 
    Construct a matrix by repeating the given matrix ``n`` times in dimension 1 and ``m`` times in dimension 2.
+
+.. function:: repeat(A, inner = Int[], outer = Int[])
+
+   Construct an array by repeating the entries of ``A``. The i-th element of ``inner`` specifies the number of times that the individual entries of the i-th dimension of ``A`` should be repeated. The i-th element of ``outer`` specifies the number of times that a slice along the i-th dimension of ``A` should be repeated.
 
 .. function:: kron(A, B)
 
@@ -305,6 +347,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: isposdef(A)
 
    Test whether a matrix is positive-definite.
+
+.. function:: isposdef!(A)
+
+   Test whether a matrix is positive-definite, overwriting A in the processes.
 
 .. function:: istril(A)
 
@@ -385,9 +431,22 @@ The following functions are defined within the ``Base.LinAlg.BLAS`` module.
    2-norm of a vector consisting of ``n`` elements of array ``X`` with
    stride ``incx``.
 
+.. function:: asum(n, X, incx)
+
+   sum of the absolute values of the first ``n`` elements of array ``X`` with
+   stride ``incx``.
+
 .. function:: axpy!(n, a, X, incx, Y, incy)
 
    Overwrite ``Y`` with ``a*X + Y``.  Returns ``Y``.
+
+.. function:: scal!(n, a, X, incx)
+
+   Overwrite ``X`` with ``a*X``.  Returns ``X``.
+
+.. function:: scal(n, a, X, incx)
+
+   Returns ``a*X``.
 
 .. function:: syrk!(uplo, trans, alpha, A, beta, C)
 
@@ -447,6 +506,12 @@ The following functions are defined within the ``Base.LinAlg.BLAS`` module.
    order ``size(A,2)`` with ``k`` super-diagonals stored in the
    argument ``A``.
 
+.. function:: sbmv(uplo, k, A, x)
+
+   Returns ``A*x`` where ``A`` is a symmetric band matrix of
+   order ``size(A,2)`` with ``k`` super-diagonals stored in the
+   argument ``A``.
+
 .. function:: gemm!(tA, tB, alpha, A, B, beta, C)
 
    Update ``C`` as ``alpha*A*B + beta*C`` or the other three variants
@@ -457,6 +522,126 @@ The following functions are defined within the ``Base.LinAlg.BLAS`` module.
 
    Returns ``alpha*A*B`` or the other three variants
    according to ``tA`` (transpose ``A``) and ``tB``.
+
+.. function:: gemm(tA, tB, alpha, A, B)
+
+   Returns ``alpha*A*B`` or the other three variants
+   according to ``tA`` (transpose ``A``) and ``tB``.
+
+.. function:: gemv!(tA, alpha, A, x, beta, y)
+
+   Update the vector ``y`` as ``alpha*A*x + beta*x`` or
+   ``alpha*A'x + beta*x`` according to ``tA`` (transpose ``A``).
+   Returns the updated ``y``.
+
+.. function:: gemv(tA, alpha, A, x)
+
+   Returns ``alpha*A*x`` or ``alpha*A'x`` according to ``tA``
+   (transpose ``A``).
+
+.. function:: gemv(tA, alpha, A, x)
+
+   Returns ``A*x`` or ``A'x`` according to ``tA`` (transpose ``A``).
+
+.. function:: symm!(side, ul, alpha, A, B, beta, C)
+
+   Update ``C`` as ``alpha*A*B + beta*C`` or ``alpha*B*A + beta*C``
+   according to ``side``. ``A`` is assumed to be symmetric.  Only the
+   ``ul`` triangle of ``A`` is used.  Returns the updated ``C``.
+
+.. function:: symm(side, ul, alpha, A, B)
+
+   Returns ``alpha*A*B`` or ``alpha*B*A`` according to ``side``.
+   ``A`` is assumed to be symmetric.  Only the ``ul`` triangle of
+   ``A`` is used.
+
+.. function:: symm(side, ul, A, B)
+
+   Returns ``A*B`` or ``B*A`` according to ``side``.  ``A`` is assumed
+   to be symmetric.  Only the ``ul`` triangle of ``A`` is used.
+
+.. function:: symm(tA, tB, alpha, A, B)
+
+   Returns ``alpha*A*B`` or the other three variants
+   according to ``tA`` (transpose ``A``) and ``tB``.
+
+.. function:: symv!(ul, alpha, A, x, beta, y)
+
+   Update the vector ``y`` as ``alpha*A*y + beta*y``. ``A`` is assumed
+   to be symmetric.  Only the ``ul`` triangle of ``A`` is used.
+   Returns the updated ``y``.
+
+.. function:: symv(ul, alpha, A, x)
+
+   Returns ``alpha*A*x``. ``A`` is assumed to be symmetric.  Only the
+   ``ul`` triangle of ``A`` is used.
+
+.. function:: symv(ul, A, x)
+
+   Returns ``A*x``.  ``A`` is assumed to be symmetric.  Only the
+   ``ul`` triangle of ``A`` is used.
+
+.. function:: trmm!(side, ul, tA, dA, alpha, A, B)
+
+   Update ``B`` as ``alpha*A*B`` or one of the other three variants
+   determined by ``side`` (A on left or right) and ``tA`` (transpose A).
+   Only the ``ul`` triangle of ``A`` is used.  ``dA`` indicates if
+   ``A`` is unit-triangular (the diagonal is assumed to be all ones).
+   Returns the updated ``B``.
+
+.. function:: trmm(side, ul, tA, dA, alpha, A, B)
+
+   Returns ``alpha*A*B`` or one of the other three variants
+   determined by ``side`` (A on left or right) and ``tA`` (transpose A).
+   Only the ``ul`` triangle of ``A`` is used.  ``dA`` indicates if
+   ``A`` is unit-triangular (the diagonal is assumed to be all ones).
+
+.. function:: trsm!(side, ul, tA, dA, alpha, A, B)
+
+   Overwrite ``B`` with the solution to ``A*X = alpha*B`` or one of
+   the other three variants determined by ``side`` (A on left or
+   right of ``X``) and ``tA`` (transpose A). Only the ``ul`` triangle
+   of ``A`` is used.  ``dA`` indicates if ``A`` is unit-triangular
+   (the diagonal is assumed to be all ones).  Returns the updated ``B``.
+
+.. function:: trsm(side, ul, tA, dA, alpha, A, B)
+
+   Returns the solution to ``A*X = alpha*B`` or one of
+   the other three variants determined by ``side`` (A on left or
+   right of ``X``) and ``tA`` (transpose A). Only the ``ul`` triangle
+   of ``A`` is used.  ``dA`` indicates if ``A`` is unit-triangular
+   (the diagonal is assumed to be all ones).
+
+.. function:: trmv!(side, ul, tA, dA, alpha, A, b)
+
+   Update ``b`` as ``alpha*A*b`` or one of the other three variants
+   determined by ``side`` (A on left or right) and ``tA`` (transpose A).
+   Only the ``ul`` triangle of ``A`` is used.  ``dA`` indicates if
+   ``A`` is unit-triangular (the diagonal is assumed to be all ones).
+   Returns the updated ``b``.
+
+.. function:: trmv(side, ul, tA, dA, alpha, A, b)
+
+   Returns ``alpha*A*b`` or one of the other three variants
+   determined by ``side`` (A on left or right) and ``tA`` (transpose A).
+   Only the ``ul`` triangle of ``A`` is used.  ``dA`` indicates if
+   ``A`` is unit-triangular (the diagonal is assumed to be all ones).
+
+.. function:: trsv!(side, ul, tA, dA, alpha, A, b)
+
+   Overwrite ``b`` with the solution to ``A*X = alpha*b`` or one of
+   the other three variants determined by ``side`` (A on left or
+   right of ``X``) and ``tA`` (transpose A). Only the ``ul`` triangle
+   of ``A`` is used.  ``dA`` indicates if ``A`` is unit-triangular
+   (the diagonal is assumed to be all ones).  Returns the updated ``b``.
+
+.. function:: trsv(side, ul, tA, dA, alpha, A, b)
+
+   Returns the solution to ``A*X = alpha*b`` or one of
+   the other three variants determined by ``side`` (A on left or
+   right of ``X``) and ``tA`` (transpose A). Only the ``ul`` triangle
+   of ``A`` is used.  ``dA`` indicates if ``A`` is unit-triangular
+   (the diagonal is assumed to be all ones).
 
 .. function:: blas_set_num_threads(n)
 

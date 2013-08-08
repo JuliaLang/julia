@@ -35,46 +35,74 @@ end
 
 available() = sort!([keys(Pkg2.Dir.cd(Pkg2.Read.available))...], by=lowercase)
 
-status() = Dir.cd() do
+status(io::IO=STDOUT) = Dir.cd() do
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
-    println("Required:")
+    println(io, "Required packages:")
     for pkg in sort!([keys(reqs)...])
         ver,fix = delete!(instd,pkg)
-        status(pkg,ver,fix)
+        status(io,pkg,ver,fix)
     end
-    println("Additional:")
+    println(io, "Additional packages:")
     for pkg in sort!([keys(instd)...])
         ver,fix = instd[pkg]
-        status(pkg,ver,fix)
+        status(io,pkg,ver,fix)
     end
 end
-function status(pkg::String, ver::VersionNumber, fix::Bool)
-    @printf " - %-29s " pkg
-    fix || return println(ver)
-    @printf "%-10s" ver
-    print(" fixed: ")
+function status(io::IO, pkg::String, ver::VersionNumber, fix::Bool)
+    @printf io " - %-29s " pkg
+    fix || return println(io,ver)
+    @printf io "%-19s" ver
     if ispath(Dir.path(pkg,".git"))
-        print(Git.attached(dir=pkg) ? Git.branch(dir=pkg) : Git.head(dir=pkg)[1:8])
-        Git.dirty(dir=pkg) && print("*")
+        print(io, Git.attached(dir=pkg) ? Git.branch(dir=pkg) : Git.head(dir=pkg)[1:8])
+        Git.dirty(dir=pkg) && print(io, " (dirty)")
     else
-        print("non-repo")
+        print(io, "non-repo")
     end
-    println()
+    println(io)
 end
 
 urlpkg(url::String) = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$", url).captures[1]
 
 clone(url::String, pkg::String=urlpkg(url); opts::Cmd=``) = Dir.cd() do
+    info("Cloning $pkg from $url")
     ispath(pkg) && error("$pkg already exists")
     try Git.run(`clone $opts $url $pkg`)
     catch
         run(`rm -rf $pkg`)
         rethrow()
     end
-    isempty(Reqs.parse("$pkg/REQUIRE")) && return
+    isempty(Reqs.parse("$pkg/REQUIRE")) && return info("Nothing to be done.")
     info("Computing changes...")
     resolve()
+end
+
+function checkout(pkg::String, what::String, force::Bool)
+    Git.transact(dir=pkg) do
+        if force
+            Git.run(`checkout -q -f $what`, dir=pkg)
+        else
+            Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
+            Git.run(`checkout -q $what`, dir=pkg)
+        end
+        resolve()
+    end
+end
+
+checkout(pkg::String, branch::String="master"; force::Bool=false) = Dir.cd() do
+    ispath(pkg,".git") || error("$pkg is not a git repo")
+    info("Checking out $pkg $branch...")
+    checkout(pkg,branch,force)
+end
+
+release(pkg::String; force::Bool=false) = Dir.cd() do
+    ispath(pkg,".git") || error("$pkg is not a git repo")
+    avail = Dir.cd(Read.available)
+    haskey(avail,pkg) || error("$pkg is not registered")
+    ver = max(keys(avail[pkg]))
+    sha1 = avail[pkg][ver].sha1
+    info("Releasing $pkg...")
+    checkout(pkg,sha1,force)
 end
 
 update() = Dir.cd() do
@@ -127,20 +155,20 @@ resolve(
     reqs = Query.requirements(reqs,fixed)
     deps = Query.dependencies(avail,fixed)
 
+    incompatible = {}
     for pkg in keys(reqs)
-        haskey(deps, pkg) ||
-            error("$pkg has no version compatible with fixed requirements")
+        haskey(deps,pkg) || push!(incompatible,pkg)
     end
+    isempty(incompatible) ||
+        error("The following packages are incompatible with fixed requirements: ",
+              join(incompatible, ", ", " and "))
 
     deps = Query.prune_dependencies(reqs,deps)
-
     want = Resolve.resolve(reqs,deps)
 
     # compare what is installed with what should be
     changes = Query.diff(have, want, avail, fixed)
-    if isempty(changes)
-        return info("No packages to install, update or remove.")
-    end
+    isempty(changes) && return info("No packages to install, update or remove.")
 
     # prefetch phase isolates network activity, nothing to roll back
     missing = {}
@@ -153,7 +181,7 @@ resolve(
                 Cache.prefetch(pkg, Read.url(pkg), vers)))
     end
     if !isempty(missing)
-        msg = "unfound package versions (possible metadata misconfiguration):"
+        msg = "missing package versions (possible metadata misconfiguration):"
         for (pkg,ver,sha1) in missing
             msg *= "  $pkg v$ver [$sha1[1:10]]\n"
         end
