@@ -2794,7 +2794,7 @@
 
 ("Mathematical Functions","Base","clamp","clamp(x, lo, hi)
 
-   Return x if \"lo <= x <= y\". If \"x < lo\", return \"lo\". If \"x
+   Return x if \"lo <= x <= hi\". If \"x < lo\", return \"lo\". If \"x
    > hi\", return \"hi\".
 
 "),
