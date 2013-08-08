@@ -103,14 +103,22 @@ void jl_dump_function_asm(void* Fptr, size_t Fsize,
     OwningPtr<MCStreamer> Streamer;
     SourceMgr SrcMgr;
 
+#ifdef LLVM34
+    llvm::OwningPtr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(*TheTarget->createMCRegInfo(TripleName),TripleName));
+#else
     llvm::OwningPtr<MCAsmInfo> MAI(TheTarget->createMCAsmInfo(TripleName));
+#endif
     assert(MAI && "Unable to create target asm info!");
 
     llvm::OwningPtr<MCRegisterInfo> MRI(TheTarget->createMCRegInfo(TripleName));
     assert(MRI && "Unable to create target register info!");
 
     OwningPtr<MCObjectFileInfo> MOFI(new MCObjectFileInfo());
+#ifdef LLVM34
+    MCContext Ctx(MAI.get(), MRI.get(), MOFI.get(), &SrcMgr);
+#else
     MCContext Ctx(*MAI, *MRI, MOFI.get(), &SrcMgr);
+#endif    
     MOFI->InitMCObjectFileInfo(TripleName, Reloc::Default, CodeModel::Default, Ctx);
 
     unsigned OutputAsmVariant = 1;

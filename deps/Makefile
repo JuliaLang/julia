@@ -2,6 +2,7 @@ include Versions.make
 
 ## optional packages and options #
 LLVM_ASSERTIONS = 0
+LLVM_DEBUG = 0
 # set to 1 to get clang and compiler-rt
 BUILD_LLVM_CLANG = 0
 # set to 1 to get lldb (does not work with llvm3.1 and earlier)
@@ -163,20 +164,26 @@ BUILD_LLVM_CLANG = 1
 # because it's a build requirement
 endif
 
-ifeq ($(LLVM_ASSERTIONS), 1)
-LLVM_BUILDDIR = build/Release+Asserts
+ifeq ($(LLVM_DEBUG),1)
+LLVM_BUILDDIR = build/Debug
 else
 LLVM_BUILDDIR = build/Release
+endif
+
+ifeq ($(LLVM_ASSERTIONS), 1)
+LLVM_BUILDDIR += +Asserts
 endif
 
 LLVM_LIB_FILE = libLLVMJIT.a
 LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/lib/$(LLVM_LIB_FILE)
 LLVM_OBJ_TARGET = $(BUILD)/lib/$(LLVM_LIB_FILE)
 
+ifneq ($(LLVM_VER),svn)
 ifeq ($(LLVM_VER), 3.0)
 LLVM_TAR=llvm-$(LLVM_VER).tar.gz
 else
 LLVM_TAR=llvm-$(LLVM_VER).src.tar.gz
+endif
 endif
 
 ifeq ($(BUILD_LLVM_CLANG),1)
@@ -199,12 +206,17 @@ LLVM_TARGET_FLAGS= --enable-targets=host
 LLVM_FLAGS =  --disable-threads --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
 LLVM_MFLAGS =
 ifeq ($(LLVM_ASSERTIONS), 1)
-LLVM_FLAGS += --enable-assertions --enable-optimized
+LLVM_FLAGS += --enable-assertions 
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --disable-embed-stdcxx
 endif
 else
-LLVM_FLAGS += --disable-assertions --enable-optimized
+LLVM_FLAGS += --disable-assertions
+endif
+ifeq ($(LLVM_DEBUG), 1)
+LLVM_FLAGS += --disable-optimized
+else
+LLVM_FLAGS += --enable-optimized
 endif
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared
@@ -232,8 +244,10 @@ ifneq ($(LLVM_COMPILER_RT_TAR),)
 $(LLVM_COMPILER_RT_TAR):
 	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
 endif
+ifneq ($(LLVM_VER),svn)
 $(LLVM_TAR):
 	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
+endif
 
 ifeq ($(BUILD_LLDB),1)
 llvm-$(LLVM_VER)/tools/lldb:
@@ -248,9 +262,17 @@ llvm-$(LLVM_VER)/python2_path:
 	ln -sf /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python"
 llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
 
+
 llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR)
+ifneq ($(LLVM_VER),svn)
 	mkdir -p llvm-$(LLVM_VER) && \
 	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $(LLVM_TAR)
+else
+	([ ! -d llvm-$(LLVM_VER) ] && \
+		git clone http://llvm.org/git/llvm.git llvm-$(LLVM_VER) ) || \
+		(cd llvm-$(LLVM_VER) && \
+		git pull --ff-only)
+endif
 ifneq ($(LLVM_CLANG_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/tools/clang && \
 	tar -C llvm-$(LLVM_VER)/tools/clang --strip-components 1 -xf $(LLVM_CLANG_TAR)
