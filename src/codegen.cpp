@@ -26,6 +26,9 @@
 #include "llvm/PassManager.h"
 #include "llvm/Analysis/Verifier.h"
 #include "llvm/Analysis/Passes.h"
+#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 4
+#define LLVM34 1
+#endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/LLVMContext.h"
@@ -2601,9 +2604,18 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     }
     else {
         // TODO: Fix when moving to new LLVM version
+        #ifndef LLVM34
         dbuilder->createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
+        #else
+        DICompileUnit CU = dbuilder->createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
+        #endif
+
         fil = dbuilder->createFile(filename, ".");
+        #ifndef LLVM34
         SP = dbuilder->createFunction((DIDescriptor)dbuilder->getCU(),
+        #else 
+        SP = dbuilder->createFunction(CU,
+        #endif
                                       dbgFuncName, dbgFuncName,
                                       fil,
                                       0,
@@ -3414,7 +3426,9 @@ extern "C" void jl_init_codegen(void)
     options.JITEmitDebugInfo = true;
 #endif 
     options.NoFramePointerElim = true;
+#ifndef LLVM34
     options.NoFramePointerElimNonLeaf = true;
+#endif
 #ifdef __MINGW32__
     options.StackAlignmentOverride = 16;
 #endif
