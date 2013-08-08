@@ -658,11 +658,11 @@ function _ini_dec(x::Unsigned, n::Int)
             DIGITS[i] = '0'
         end
     else
-        p = powers_of_ten[k-n+1]
+        p = Base.powers_of_ten[k-n+1]
         r = rem(x,p)
         if r >= (p>>1)
             x += p
-            if x >= powers_of_ten[k+1]
+            if x >= Base.powers_of_ten[k+1]
                 p *= 10
                 k += 1
             end
@@ -716,11 +716,11 @@ function _sig_dec(x::Unsigned, n::Int)
         end
         LEN[1] = k
     else
-        p = powers_of_ten[k-n+1]
+        p = Base.powers_of_ten[k-n+1]
         r = rem(x,p)
         if r >= (p>>1)
             x += p
-            if x >= powers_of_ten[k+1]
+            if x >= Base.powers_of_ten[k+1]
                 p *= 10
                 k += 1
             end
