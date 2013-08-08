@@ -585,8 +585,8 @@ begin
     a2 = Any[101,102,103]
     p2 = pointer(a2)
     @test unsafe_load(p2) == 101
-    @test_throws unsafe_store!(p2, 909, 3)
-    @test a2 == [101,102,103]
+    unsafe_store!(p2, 909, 3)
+    @test a2 == [101,102,909]
 end
 
 @test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Void}, (Any,Any),
