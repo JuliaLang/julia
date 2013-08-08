@@ -33,8 +33,6 @@ end
 @deprecate  insert          insert!
 @deprecate  del             delete!
 @deprecate  del_all         empty!
-@deprecate  add             push!
-@deprecate  add!            push!
 @deprecate  add_each        add_each!
 @deprecate  del_each        del_each!
 @deprecate  toggle          symdiff!
@@ -224,6 +222,9 @@ export PipeString
 @deprecate finfer                     code_typed
 @deprecate disassemble(f::Function,t::Tuple)           code_llvm(f,t)
 @deprecate disassemble(f::Function,t::Tuple,asm::Bool) (asm ? code_native(f,t) : code_llvm(f,t))
+@deprecate  add(s::Set, x)                  push!
+@deprecate  add!(s::Set, x)                 push!
+@deprecate  delete!(d::Dict, key, default)  pop!(d, key, default)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
@@ -235,16 +236,6 @@ end
 function start_timer(timer::TimeoutAsyncWork, timeout::Int, repeat::Int)
     warn_once("start_timer now expects arguments in units of seconds. you may need to update your code")
     invoke(start_timer, (TimeoutAsyncWork,Real,Real), timer, timeout, repeat)
-end
-
-# delete!(Dict, key, ...)
-@deprecate  delete!(d::Dict, key, default)  pop!(d, key, default)
-
-# Duplicates function in dict.jl, but adds warning
-function delete!(t::ObjectIdDict, key::ANY)
-    warn_once("delete!(h::ObjectIdDict,key) now returns the modified dictionary.\nUse pop!(h::ObjectIdDict,key) to retrieve the value instead.")
-    ccall(:jl_eqtable_pop, Any, (Any, Any), t.ht, key)
-    t
 end
 
 # redirection operators

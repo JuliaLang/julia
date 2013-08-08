@@ -76,19 +76,7 @@ end
 pop!(s::IntSet) = pop!(s, last(s))
 
 function delete!(s::IntSet, n::Integer)
-    if n >= s.limit
-        if s.fill1s
-            lim = int(n + div(n,2))
-            sizehint(s, lim)
-        else
-            return s
-        end
-    end
-    mask = uint32(1)<<(n&31)
-    idx = n>>5 + 1
-    b = s.bits[idx]
-    if (b&mask)==0; return s; end
-    s.bits[idx] = b&~mask
+    pop!(s, n, n)
     return s
 end
 

@@ -253,7 +253,7 @@ function rmprocs(args...; waitfor = 0.0)
     
     for i in [args...]
         if haskey(map_pid_wrkr, i)
-            add!(rmprocset, i)
+            push!(rmprocset, i)
             remote_do(i, exit)
         end
     end
@@ -324,7 +324,7 @@ function deregister_worker(pg, pid)
             w.manage(w.id, w.config, :deregister)
         end
     end
-    add!(map_del_wrkr, pid)
+    push!(map_del_wrkr, pid)
 
     # delete this worker from our RemoteRef client sets
     ids = {}
@@ -344,7 +344,7 @@ function deregister_worker(pg, pid)
     # throw exception to tasks waiting for this pid
     for (id,rv) in tonotify
         notify_error(rv.full, ProcessExitedException())
-        delete!(pg.refs, id, nothing)
+        delete!(pg.refs, id)
     end
 end
 
