@@ -50,6 +50,8 @@ function require(name::ByteString)
     nothing
 end
 
+reload(name) = reload(string(name))
+
 function reload(name::String)
     if myid() == 1
         @sync for p in filter(x -> x != 1, procs())
