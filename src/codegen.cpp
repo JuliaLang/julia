@@ -1967,6 +1967,23 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         return emit_checked_var(bp, var, ctx);
     }
+    else if (jl_is_newvarnode(expr)) {
+        assert(!valuepos);
+        jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
+        assert(jl_is_symbol(var));
+        jl_varinfo_t &vi = ctx->vars[var];
+        Value *lv = vi.memvalue;
+        if (lv != NULL) {
+            // create a new uninitialized variable
+            if (isBoxed(var, ctx)) {
+                builder.CreateStore(builder.CreateCall(jlbox_func, V_null), lv);
+            }
+            else if (lv->getType() == jl_ppvalue_llvmt && vi.usedUndef) {
+                builder.CreateStore(V_null, lv);
+            }
+        }
+        return NULL;
+    }
     if (!jl_is_expr(expr)) {
         // numeric literals
         int needroot = 0;
@@ -2251,22 +2268,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         if (valuepos)
             return literal_pointer_val((jl_value_t*)jl_nothing);
-    }
-    else if (head == newvar_sym) {
-        jl_sym_t *var = (jl_sym_t*)args[0];
-        if (jl_is_symbolnode(var))
-            var = jl_symbolnode_sym(var);
-        jl_varinfo_t &vi = ctx->vars[var];
-        Value *lv = vi.memvalue;
-        if (lv != NULL) {
-            // create a new uninitialized variable
-            if (isBoxed(var, ctx)) {
-                builder.CreateStore(builder.CreateCall(jlbox_func, V_null), lv);
-            }
-            else if (lv->getType() == jl_ppvalue_llvmt && vi.usedUndef) {
-                builder.CreateStore(V_null, lv);
-            }
-        }
     }
     else {
         if (!strcmp(head->name, "$"))
