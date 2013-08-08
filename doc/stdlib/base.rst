@@ -3063,9 +3063,9 @@ Combinatorics
 .. function:: combinations(array, n)
 
    Generate all combinations of ``n`` elements from a given array. Because
-   the number of combinations can be very large, this function runs inside
-   a Task to produce values on demand. Write ``c = @task combinations(a,n)``,
-   then iterate ``c`` or call ``consume`` on it.
+   the number of combinations can be very large, this function returns an
+   iterator object. Use ``collect(combinations(a,n))`` to get an array of all
+   combinations.
 
 .. function:: integer_partitions(n, m)
 
