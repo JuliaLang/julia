@@ -169,41 +169,13 @@ linear algebra
 sparse
 ------
 
-.. function:: spdiagm(v::Union(AbstractArray{T,2},AbstractArray{T,1}))
-
-   UNDOCUMENTED
-
 
 bitarrays
 ---------
 
-.. function:: bitpack(A::AbstractArray{T,N})
-
-   UNDOCUMENTED
-
-.. function:: bitunpack(B::BitArray{N})
-
-   UNDOCUMENTED
-
-.. function:: flipbits!(B::BitArray{N})
-
-   UNDOCUMENTED
-
-.. function:: rol(B::BitArray{1},i::Integer)
-
-   UNDOCUMENTED
-
-.. function:: ror(B::BitArray{1},i::Integer)
-
-   UNDOCUMENTED
-
 
 dequeues
 --------
-
-.. function:: prepend!(a::Array{T,1},items::Array{T,1})
-
-   UNDOCUMENTED
 
 
 collections

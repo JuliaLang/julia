@@ -726,6 +726,8 @@ export
 # strings and text output
     ascii,
     base,
+    base64,
+    Base64Pipe,
     beginswith,
     bin,
     bits,
@@ -1118,6 +1120,22 @@ export
     timedwait,
     wait,
     workers,
+
+# multimedia I/O
+    Display,
+    display,
+    displayable,
+    TextDisplay,
+    istext,
+    MIME,
+    @MIME,
+    reprmime,
+    stringmime,
+    writemime,
+    mimewritable,
+    popdisplay,
+    pushdisplay,
+    redisplay,
 
 # distributed arrays
     dfill,
