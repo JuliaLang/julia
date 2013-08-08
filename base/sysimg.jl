@@ -62,6 +62,8 @@ include("utf8.jl")
 include("iobuffer.jl")
 include("string.jl")
 include("regex.jl")
+include("base64.jl")
+importall .Base64
 
 # system & environment
 include("libc.jl")
@@ -80,6 +82,8 @@ include("stat.jl")
 include("fs.jl")
 importall .FS
 include("process.jl")
+include("multimedia.jl")
+importall .Multimedia
 reinit_stdio()
 ccall(:jl_get_uv_hooks, Void, ())
 include("grisu.jl")
@@ -94,6 +98,7 @@ include("floatfuncs.jl")
 include("math.jl")
 importall .Math
 include("primes.jl")
+include("float16.jl")
 
 # concurrency and parallelism
 include("serialize.jl")

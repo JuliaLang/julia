@@ -32,7 +32,7 @@ a = Base.Condition()
 @schedule begin
     p = spawn(yes|>SpawnNullStream())
     Base.notify(a,p)
-    @test !Base.wait_success(p)
+    @test !success(p)
 end
 p = wait(a)
 kill(p)
@@ -105,7 +105,8 @@ t = @async begin
     try
         wait(r)
     end
-    @test wait(spawn(`sleep 1`)) == 0
+    p = spawn(`sleep 1`); wait(p)
+    @test p.exitcode == 0
 end
 yield()
 Base.interrupt_waiting_task(t, InterruptException())

@@ -1048,9 +1048,17 @@
 
 "),
 
-("Dequeues","Base","append!","append!(collection, items) -> collection
+("Dequeues","Base","append!","append!(collection, items) -> collection.
 
    Add the elements of \"items\" to the end of a collection.
+   \"append!([1],[2,3]) => [1,2,3]\"
+
+"),
+
+("Dequeues","Base","prepend!","prepend!(collection, items) -> collection
+
+   Insert the elements of \"items\" to the beginning of a collection.
+   \"prepend!([3],[1,2]) => [1,2,3]\"
 
 "),
 
@@ -1519,6 +1527,13 @@
 
 "),
 
+("I/O","Base","flush_cstdio","flush_cstdio()
+
+   Flushes the C stdout and stderr streams (which may have been
+   written to by external C code).
+
+"),
+
 ("I/O","Base","close","close(stream)
 
    Close an I/O stream. Performs a \"flush\" first.
@@ -1817,6 +1832,18 @@
 ("Text I/O","Base","writecsv","writecsv(filename, array)
 
    Equivalent to \"writedlm\" with \"delim\" set to comma.
+
+"),
+
+("Text I/O","Base","base64","base64(stream, args...)
+
+   Given a \"write\"-like function \"writefunc\", which takes an I/O
+   stream as its first argument, \"base64(writefunc, args...)\"
+   calls \"writefunc\" to write \"args...\" to a base64-encoded string,
+   and returns the string.  \"base64(args...)\" is equivalent to
+   \"base64(write, args...)\": it converts its arguments into bytes
+   using the standard \"write\" functions and returns the base64-encoded
+   string.
 
 "),
 
@@ -4237,6 +4264,36 @@
 
    Returns the sum of all array elements, using the Kahan-Babuska-
    Neumaier compensated summation algorithm for additional accuracy.
+
+"),
+
+("Arrays","Base","bitpack","bitpack(A::AbstractArray{T, N}) -> BitArray
+
+   Converts a numeric array to a packed boolean array
+
+"),
+
+("Arrays","Base","bitunpack","bitunpack(B::BitArray{N}) -> Array{Bool,N}
+
+   Converts a packed boolean array to an array of booleans
+
+"),
+
+("Arrays","Base","flipbits!","flipbits!(B::BitArray{N}) -> BitArray{N}
+
+   Performs a bitwise not operation on B. See *~ operator*.
+
+"),
+
+("Arrays","Base","rol","rol(B::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Left rotation operator.
+
+"),
+
+("Arrays","Base","ror","ror(B::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Right rotation operator.
 
 "),
 
@@ -7811,6 +7868,13 @@
 
 "),
 
+("Sparse Matrices","Base","spones","spones(S)
+
+   Create a sparse matrix with the same structure as that of \"S\",
+   but with every nonzero element having the value \"1.0\".
+
+"),
+
 ("Sparse Matrices","Base","speye","speye(type, m[, n])
 
    Create a sparse identity matrix of specified type of size \"m x
@@ -7819,10 +7883,9 @@
 
 "),
 
-("Sparse Matrices","Base","spones","spones(S)
+("Sparse Matrices","Base","spdiagm","spdiagm(v)
 
-   Create a sparse matrix with the same structure as that of \"S\",
-   but with every nonzero element having the value \"1.0\".
+   Construct a sparse diagonal matrix and place \"v\" on the diagonal.
 
 "),
 

@@ -1588,6 +1588,7 @@ function interrupt(pid::Integer)
         w.manage(w.id, w.config, :interrupt)
     end
 end
+interrupt(pids::Integer...) = interrupt([pids...])
 
 function interrupt(pids::AbstractVector=workers())
     assert(myid() == 1)
