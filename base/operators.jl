@@ -87,6 +87,8 @@ const % = rem
 
 # mod returns in [0,y) whereas mod1 returns in (0,y]
 mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
+rem1{T<:Real}(x::T, y::T) = rem(x-1,y)+1
+fld1{T<:Real}(x::T, y::T) = fld(x-1,y)+1
 
 # cmp returns -1, 0, +1 indicating ordering
 cmp{T<:Real}(x::T, y::T) = int(sign(x-y))

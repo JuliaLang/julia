@@ -232,6 +232,7 @@ function reinit_stdio()
     global STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()),0)
     global STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()),1)
     global STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()),2)
+    reinit_displays() # since Multimedia.displays uses STDOUT as fallback
 end
 
 flush(::TTY) = nothing
@@ -272,6 +273,8 @@ function wait_readnb(x::AsyncStream, nb::Int)
         wait(x.readnotify)
     end
 end
+
+wait_close(x) = if isopen(x) wait(x.closenotify); end
 
 #from `connect`
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
@@ -673,7 +676,7 @@ function _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32)
 end
 
 # Do not task-block TTY methods. These writes are process-blocking anyway, so we use the non-copying versions
-write(t::TTY, b::Uint8) = @uv_write 1 ccall(:jl_putc_copy, Int32, (Uint8, Ptr{Void}, Ptr{Void}, Ptr{Void}), b, handle(s), uvw, uv_jl_writecb::Ptr{Void})
+write(s::TTY, b::Uint8) = @uv_write 1 ccall(:jl_putc_copy, Int32, (Uint8, Ptr{Void}, Ptr{Void}, Ptr{Void}), b, handle(s), uvw, uv_jl_writecb::Ptr{Void})
 write(s::TTY, c::Char) = @uv_write utf8sizeof(c) ccall(:jl_pututf8_copy, Int32, (Ptr{Void},Uint32, Ptr{Void}, Ptr{Void}), handle(s), c, uvw, uv_jl_writecb::Ptr{Void})
 function write{T}(s::TTY, a::Array{T}) 
     if isbits(T)
