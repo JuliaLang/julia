@@ -178,7 +178,7 @@ static int is_ast_node(jl_value_t *v)
             li->ast = jl_compress_ast(li, li->ast);
         return 0;
     }
-    return jl_is_symbol(v) || jl_is_expr(v) ||
+    return jl_is_symbol(v) || jl_is_expr(v) || jl_is_newvarnode(v) ||
         jl_typeis(v, jl_array_any_type) || jl_is_tuple(v) ||
         jl_is_uniontype(v) || jl_is_int32(v) || jl_is_int64(v) ||
         jl_is_symbolnode(v) || jl_is_bool(v) || jl_is_typevar(v) ||
@@ -987,7 +987,7 @@ void jl_init_serializer(void)
                      jl_typename_type, jl_task_type, jl_uniontype_type,
                      jl_typetype_type, jl_typetype_tvar, jl_ANY_flag,
                      jl_array_any_type, jl_intrinsic_type, jl_method_type,
-                     jl_methtable_type, jl_voidpointer_type,
+                     jl_methtable_type, jl_voidpointer_type, jl_newvarnode_type,
                      jl_array_symbol_type, jl_tupleref(jl_tuple_type,0),
 
                      jl_symbol_type->name, jl_pointer_type->name,
