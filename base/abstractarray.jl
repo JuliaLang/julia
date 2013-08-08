@@ -1332,7 +1332,7 @@ bsxfun(f, a, b, c...) = bsxfun(f, bsxfun(f, a, b), c...)
 function nnz{T}(a::AbstractArray{T})
     n = 0
     for i = 1:length(a)
-        n += a[i] != zero(T) ? 1 : 0 
+        @inbounds n += (a[i] != zero(T))
     end
     return n
 end
@@ -1371,7 +1371,7 @@ function sum{T}(A::AbstractArray{T})
     end
     v = A[1]
     for i=2:length(A)
-        v += A[i]
+        @inbounds v += A[i]
     end
     v
 end
@@ -1461,29 +1461,29 @@ function prod{T}(A::AbstractArray{T})
     end
     v = A[1]
     for i=2:length(A)
-        v *= A[i]
+        @inbounds v *= A[i]
     end
     v
 end
 
-function min{T<:Integer}(A::AbstractArray{T})
+function min(A::AbstractArray)
     if isempty(A); error("min: argument is empty"); end
     v = A[1]
     for i=2:length(A)
-        x = A[i]
-        if x < v
+        @inbounds x = A[i]
+        if x < v || v!=v
             v = x
         end
     end
     v
 end
 
-function max{T<:Integer}(A::AbstractArray{T})
+function max(A::AbstractArray)
     if isempty(A); error("max: argument is empty"); end
     v = A[1]
     for i=2:length(A)
-        x = A[i]
-        if x > v
+        @inbounds x = A[i]
+        if x > v || v!=v
             v = x
         end
     end

@@ -19,6 +19,7 @@ promote_rule{s,T<:Real}(::Type{MathConst{s}}, ::Type{Complex{T}}) =
     Complex{promote_type(MathConst{s},T)}
 
 convert(::Type{FloatingPoint}, x::MathConst) = float64(x)
+convert(::Type{Float16}, x::MathConst) = float16(float32(x))
 convert{T<:Real}(::Type{Complex{T}}, x::MathConst) = convert(Complex{T}, float64(x))
 convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, float64(x))
 

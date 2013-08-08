@@ -39,6 +39,7 @@ jl_datatype_t *jl_linenumbernode_type;
 jl_datatype_t *jl_labelnode_type;
 jl_datatype_t *jl_gotonode_type;
 jl_datatype_t *jl_quotenode_type;
+jl_datatype_t *jl_newvarnode_type;
 jl_datatype_t *jl_topnode_type;
 jl_datatype_t *jl_intrinsic_type;
 jl_datatype_t *jl_methtable_type;

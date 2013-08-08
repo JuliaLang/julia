@@ -952,7 +952,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
         end
     end
 end
-for f in (:+, :-, :.*, :./, :div, :mod, :&, :|, :$)
+for f in (:+, :-, :.*, :./, :div, :mod, :rem, :&, :|, :$)
     @eval begin
         function ($f){T}(A::Number, B::StridedArray{T})
             F = similar(B, promote_array_type(typeof(A),T))
