@@ -1667,20 +1667,28 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
             return (e.args[3],())
         end
     end
-    # special-case inliners for known pure functions that compute types
-    if (is(f,apply_type) || is(f,fieldtype) ||
-        (isdefined(Main.Base,:typejoin) && is(f,Main.Base.typejoin)) ||
-        (isdefined(Main.Base,:promote_type) && is(f,Main.Base.promote_type))) &&
-        isType(e.typ) && isleaftype(e.typ.parameters[1])
-        return (e.typ.parameters[1],())
-    end
     if length(atypes)==2 && is(f,unbox) && isa(atypes[2],DataType)
+        # remove redundant unbox
         return (e.args[3],())
     end
-    if is(f,Union) && isType(e.typ)
-        union = e.typ.parameters[1]
-        if isa(union,UnionType) && all(isleaftype, (union::UnionType).types)
-            return (union,())
+    if isdefined(Main.Base,:isbits) && is(f,Main.Base.isbits) &&
+        length(atypes)==1 && isType(atypes[1]) && effect_free(argexprs[1]) &&
+        isleaftype(atypes[1].parameters[1])
+        return (isbits(atypes[1].parameters[1]),())
+    end
+    # special-case inliners for known pure functions that compute types
+    if isType(e.typ)
+        if (is(f,apply_type) || is(f,fieldtype) ||
+            (isdefined(Main.Base,:typejoin) && is(f,Main.Base.typejoin)) ||
+            (isdefined(Main.Base,:promote_type) && is(f,Main.Base.promote_type))) &&
+            isleaftype(e.typ.parameters[1])
+            return (e.typ.parameters[1],())
+        end
+        if is(f,Union)
+            union = e.typ.parameters[1]
+            if isa(union,UnionType) && all(isleaftype, (union::UnionType).types)
+                return (union,())
+            end
         end
     end
     if isa(f,IntrinsicFunction)
@@ -2128,7 +2136,7 @@ function replace_tupleref(e::ANY, tupname, vals, sv, i0)
     end
 end
 
-function finfer(f::Callable, types)
+function code_typed(f::Callable, types)
     x = methods(f,types)[1]
     (tree, ty) = typeinf(x[3], x[1], x[2])
     if !isa(tree,Expr)

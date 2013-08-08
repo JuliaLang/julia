@@ -58,7 +58,7 @@ Filesystem
 
    Returns ``true`` if ``path`` has the sticky bit set, ``false`` otherwise.
 
-.. function:: iswriteable(path) -> Bool
+.. function:: iswritable(path) -> Bool
 
    Returns ``true`` if the current user has permission to write to ``path``,
    ``false`` otherwise.

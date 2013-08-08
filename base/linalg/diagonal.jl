@@ -38,6 +38,7 @@ isposdef(D::Diagonal) = all(D.diag .> 0)
 \(D::Diagonal, V::Vector) = V ./ D.diag
 function \(D::Diagonal, A::Matrix)
     m, n = size(A)
+    if m == 0 || n == 0 return A end
     if m != length(D.diag)
         error("argument dimensions do not match")
     end
@@ -52,6 +53,7 @@ function \(D::Diagonal, A::Matrix)
 end
 function /(A::Matrix, D::Diagonal)
     m, n = size(A)
+    if m == 0 || n == 0 return A end
     if n != length(D.diag)
         error("argument dimensions do not match")
     end
