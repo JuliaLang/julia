@@ -697,11 +697,16 @@ Dequeues
 
    Resize collection to contain ``n`` elements.
 
-.. function:: append!(collection, items) -> collection
+.. function:: append!(collection, items) -> collection.
 
-   Add the elements of ``items`` to the end of a collection.
+   Add the elements of ``items`` to the end of a collection. ``append!([1],[2,3]) => [1,2,3]``
+
+.. function:: prepend!(collection, items) -> collection
+
+   Insert the elements of ``items`` to the beginning of a collection. ``prepend!([3],[1,2]) => [1,2,3]``
 
 Fully implemented by: ``Vector`` (aka 1-d ``Array``).
+
 
 Strings
 -------
@@ -1251,50 +1256,62 @@ Mathematical Operators
 
    Unary minus operator.
 
+.. _+:
 .. function:: +(x, y)
 
    Binary addition operator.
 
+.. _-:
 .. function:: -(x, y)
 
    Binary subtraction operator.
 
+.. _*:
 .. function:: *(x, y)
 
    Binary multiplication operator.
 
+.. _/:
 .. function:: /(x, y)
 
    Binary left-division operator.
 
+.. _\\:
 .. function:: \\(x, y)
 
    Binary right-division operator.
 
+.. _^:
 .. function:: ^(x, y)
 
    Binary exponentiation operator.
 
+.. _.+:
 .. function:: .+(x, y)
 
    Element-wise binary addition operator.
 
+.. _.-:
 .. function:: .-(x, y)
 
    Element-wise binary subtraction operator.
 
+.. _.*:
 .. function:: .*(x, y)
 
    Element-wise binary multiplication operator.
 
+.. _./:
 .. function:: ./(x, y)
 
    Element-wise binary left division operator.
 
+.. _.\\:
 .. function:: .\\(x, y)
 
    Element-wise binary right division operator.
 
+.. _.^:
 .. function:: .^(x, y)
 
    Element-wise binary exponentiation operator.
@@ -1319,6 +1336,7 @@ Mathematical Operators
 
    Compute ``x/y`` and ``x%y`` at the same time
 
+.. _%:
 .. function:: %(x, m)
 
    Remainder after division. The operator form of ``rem``.
@@ -1327,6 +1345,7 @@ Mathematical Operators
 
    Modulus after division, returning in the range (0,m]
 
+.. _//:
 .. function:: //(num, den)
 
    Rational division
@@ -1343,18 +1362,22 @@ Mathematical Operators
 
    Denominator of the rational representation of ``x``
 
+.. _<<:
 .. function:: <<(x, n)
 
    Left shift operator.
 
+.. _>>:
 .. function:: >>(x, n)
 
    Right shift operator.
 
+.. _>>>:
 .. function:: >>>(x, n)
 
    Unsigned right shift operator.
 
+.. _\::
 .. function:: \:(start, [step], stop)
 
    Range operator. ``a:b`` constructs a range from ``a`` to ``b`` with a step size of 1,
@@ -1366,58 +1389,72 @@ Mathematical Operators
 
    Called by ``:`` syntax for constructing ranges.
 
+.. _==:
 .. function:: ==(x, y)
 
    Equality comparison operator.
 
+.. _!=:
 .. function:: !=(x, y)
 
    Not-equals comparison operator.
 
+.. _===:
 .. function:: ===(x, y)
 
    See the :func:`is` operator
 
+.. _!==:
 .. function:: !==(x, y)
 
    Equivalent to ``!is(x, y)``
 
+.. _<:
 .. function:: <(x, y)
 
    Less-than comparison operator.
 
+.. _<=:
 .. function:: <=(x, y)
 
    Less-than-or-equals comparison operator.
 
+.. _>:
 .. function:: >(x, y)
 
    Greater-than comparison operator.
 
+.. _>=:
 .. function:: >=(x, y)
 
    Greater-than-or-equals comparison operator.
 
+.. _.==:
 .. function:: .==(x, y)
 
    Element-wise equality comparison operator.
 
+.. _.!=:
 .. function:: .!=(x, y)
 
    Element-wise not-equals comparison operator.
 
+.. _.<:
 .. function:: .<(x, y)
 
    Element-wise less-than comparison operator.
 
+.. _.<=:
 .. function:: .<=(x, y)
 
    Element-wise less-than-or-equals comparison operator.
 
+.. _.>:
 .. function:: .>(x, y)
 
    Element-wise greater-than comparison operator.
 
+.. _.>=:
 .. function:: .>=(x, y)
 
    Element-wise greater-than-or-equals comparison operator.
@@ -1426,30 +1463,37 @@ Mathematical Operators
 
    Return -1, 0, or 1 depending on whether ``x<y``, ``x==y``, or ``x>y``, respectively
 
+.. _~:
 .. function:: ~(x)
 
    Bitwise not
 
+.. _&:
 .. function:: &(x, y)
 
    Bitwise and
 
+.. _|:
 .. function:: |(x, y)
 
    Bitwise or
 
+.. _$:
 .. function:: $(x, y)
 
    Bitwise exclusive or
 
+.. _!:
 .. function:: !(x)
 
    Boolean not
 
+.. _&&:
 .. function:: &&(x, y)
 
    Boolean and
 
+.. _||:
 .. function:: ||(x, y)
 
    Boolean or
@@ -2760,6 +2804,30 @@ Array functions
    Returns the sum of all array elements, using the Kahan-Babuska-Neumaier compensated summation algorithm for additional accuracy.
 
 
+BitArrays
+~~~~~~~~~
+
+.. function:: bitpack(A::AbstractArray{T,N}) -> BitArray
+
+   Converts a numeric array to a packed boolean array
+
+.. function:: bitunpack(B::BitArray{N}) -> Array{Bool,N}
+
+   Converts a packed boolean array to an array of booleans
+
+.. function:: flipbits!(B::BitArray{N}) -> BitArray{N}
+
+   Performs a bitwise not operation on B. See :ref:`~ operator <~>`.
+
+.. function:: rol(B::BitArray{1},i::Integer) -> BitArray{1}
+
+   Left rotation operator.
+
+.. function:: ror(B::BitArray{1},i::Integer) -> BitArray{1}
+
+   Right rotation operator.
+
+
 Combinatorics
 -------------
 
@@ -2836,6 +2904,7 @@ Combinatorics
    arrays of arrays. Because the number of partitions can be very large, this
    function runs inside a Task to produce values on demand. Write
    ``c = @task partitions(a)``, then iterate ``c`` or call ``consume`` on it.
+
 
 Statistics
 ----------
