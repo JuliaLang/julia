@@ -3294,6 +3294,12 @@ Parallel Computing
 
    Removes the specified workers. 
 
+.. function:: interrupt([pids...])
+
+   Interrupt the current executing task on the specified workers. This is
+   equivalent to pressing Ctl-C on the local machine. If no arguments are given,
+   all workers are interrupted.
+
 .. function:: myid()
 
    Get the id of the current processor.
