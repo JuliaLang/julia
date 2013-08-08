@@ -167,6 +167,7 @@ function static_convert(to::ANY, from::ANY)
     pl = length(to)::Int; cl = length(from)::Int
     pseq = false
     result = Array(Any, cl)
+    local pe  # used across iterations
     for i=1:cl
         ce = from[i]
         if pseq
@@ -2056,6 +2057,9 @@ function occurs_outside_tupleref(e::ANY, sym::ANY, sv::StaticVarInfo, tuplen::In
             if !isa(idx,Int) || !(1 <= idx <= tuplen)
                 return true
             end
+            return false
+        end
+        if is(e.head,:newvar)
             return false
         end
         if is(e.head,:(=))
