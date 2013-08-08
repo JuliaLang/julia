@@ -396,6 +396,7 @@ extern jl_datatype_t *jl_linenumbernode_type;
 extern jl_datatype_t *jl_labelnode_type;
 extern jl_datatype_t *jl_gotonode_type;
 extern jl_datatype_t *jl_quotenode_type;
+extern jl_datatype_t *jl_newvarnode_type;
 extern jl_datatype_t *jl_topnode_type;
 extern jl_datatype_t *jl_intrinsic_type;
 extern jl_datatype_t *jl_methtable_type;
@@ -533,6 +534,7 @@ void *allocobj(size_t sz);
 #define jl_is_labelnode(v)   jl_typeis(v,jl_labelnode_type)
 #define jl_is_gotonode(v)    jl_typeis(v,jl_gotonode_type)
 #define jl_is_quotenode(v)   jl_typeis(v,jl_quotenode_type)
+#define jl_is_newvarnode(v)  jl_typeis(v,jl_newvarnode_type)
 #define jl_is_topnode(v)     jl_typeis(v,jl_topnode_type)
 #define jl_is_linenode(v)    jl_typeis(v,jl_linenumbernode_type)
 #define jl_is_lambda_info(v) jl_typeis(v,jl_lambda_info_type)
