@@ -70,7 +70,7 @@ function info(msg::String...; depth=0)
     #    else
     #        depth
     #    end
-    with_output_color(print, :blue, STDERR, "MESSAGE: ", msg...)
+    with_output_color(print, :blue, STDERR, "INFO: ", msg...)
     #with_output_color(show_backtrace, :blue, STDERR, backtrace(), stack)
     println(STDERR)
 end

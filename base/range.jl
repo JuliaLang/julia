@@ -46,7 +46,7 @@ function colon{T<:Real}(start::T, step::T, stop::T)
         nf = (stop-start)/step + 1
         if T <: FloatingPoint
             n = round(nf)
-            if abs(n-nf) < eps(n)*3
+            if n > 1 && abs(n-nf) < eps(n)*3
                 # adjust step to try to hit stop exactly
                 step = (stop-start)/(n-1)
                 len = itrunc(n)

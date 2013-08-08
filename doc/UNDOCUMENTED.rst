@@ -8,39 +8,7 @@ Modules
 
    UNDOCUMENTED (may not appear in helpdb.jl)
 
-.. module:: DSP
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: Errno
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: FFTW
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: GMP
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: LibRandom
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: LinAlg
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: Math
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
 .. module:: Meta
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: MPFR
 
    UNDOCUMENTED (may not appear in helpdb.jl)
 
@@ -49,10 +17,6 @@ Modules
    UNDOCUMENTED (may not appear in helpdb.jl)
 
 .. module:: Order
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: PCRE
 
    UNDOCUMENTED (may not appear in helpdb.jl)
 
@@ -65,22 +29,6 @@ Modules
    UNDOCUMENTED (may not appear in helpdb.jl)
 
 .. module:: Profile
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: QuadGK
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: Random
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: Sort
-
-   UNDOCUMENTED (may not appear in helpdb.jl)
-
-.. module:: SparseMatrix
 
    UNDOCUMENTED (may not appear in helpdb.jl)
 
@@ -116,103 +64,12 @@ Mathematical constants
 Operators
 ---------
 
-.. function:: !==(x,y)
-
-   UNDOCUMENTED
-
-.. function:: A_ldiv_Bc(a,b)
-
-   UNDOCUMENTED
-
-.. function:: A_ldiv_Bt(a,b)
-
-   UNDOCUMENTED
-
-.. function:: A_mul_B(...)
-
-   UNDOCUMENTED
-
-.. function:: A_mul_Bc(...)
-
-   UNDOCUMENTED
-
-.. function:: A_mul_Bt(...)
-
-   UNDOCUMENTED
-
-.. function:: A_rdiv_Bc(...)
-
-   UNDOCUMENTED
-
-.. function:: A_rdiv_Bt(a,b)
-
-   UNDOCUMENTED
-
-.. function:: Ac_ldiv_B(...)
-
-   UNDOCUMENTED
-
-.. function:: Ac_ldiv_Bc(...)
-
-   UNDOCUMENTED
-
-.. function:: Ac_mul_B(...)
-
-   UNDOCUMENTED
-
-.. function:: Ac_mul_Bc(...)
-
-   UNDOCUMENTED
-
-.. function:: Ac_rdiv_B(a,b)
-
-   UNDOCUMENTED
-
-.. function:: Ac_rdiv_Bc(a,b)
-
-   UNDOCUMENTED
-
-.. function:: At_ldiv_B(...)
-
-   UNDOCUMENTED
-
-.. function:: At_ldiv_Bt(...)
-
-   UNDOCUMENTED
-
-.. function:: At_mul_B(...)
-
-   UNDOCUMENTED
-
-.. function:: At_mul_Bt(...)
-
-   UNDOCUMENTED
-
-.. function:: At_rdiv_B(a,b)
-
-   UNDOCUMENTED
-
-.. function:: At_rdiv_Bt(a,b)
-
-   UNDOCUMENTED
 
 
 scalar math
 -----------
 
-.. function:: big(...)
-
-   UNDOCUMENTED
-
-.. function:: divrem(...)
-
-   UNDOCUMENTED
-
 .. function:: invdigamma(...)
-
-   UNDOCUMENTED
-
-.. function:: rationalize(...)
 
    UNDOCUMENTED
 
@@ -292,47 +149,11 @@ arrays
 linear algebra
 --------------
 
-.. function:: bkfact!(...)
+.. function:: ldltd!(A::SymTridiagonal{T<:Union(Float64,Complex{Float32},Float32,Complex{Float64})})
 
    UNDOCUMENTED
 
-.. function:: bkfact(...)
-
-   UNDOCUMENTED
-
-.. function:: factorize!(...)
-
-   UNDOCUMENTED
-
-.. function:: factorize(A::AbstractArray{T,2})
-
-   UNDOCUMENTED
-
-.. function:: isposdef!(...)
-
-   UNDOCUMENTED
-
-.. function:: ldltd!(A::SymTridiagonal{T<:Union(Complex{Float64},Float64,Float32,Complex{Float32})})
-
-   UNDOCUMENTED
-
-.. function:: ldltd(A::SymTridiagonal{T<:Union(Complex{Float64},Float64,Float32,Complex{Float32})})
-
-   UNDOCUMENTED
-
-.. function:: logdet(...)
-
-   UNDOCUMENTED
-
-.. function:: randsym(n)
-
-   UNDOCUMENTED
-
-.. function:: rref(...)
-
-   UNDOCUMENTED
-
-.. function:: schurfact!(...)
+.. function:: ldltd(A::SymTridiagonal{T<:Union(Float64,Complex{Float32},Float32,Complex{Float64})})
 
    UNDOCUMENTED
 
@@ -341,14 +162,6 @@ linear algebra
    UNDOCUMENTED
 
 .. function:: symmetrize!(...)
-
-   UNDOCUMENTED
-
-.. function:: tril!(...)
-
-   UNDOCUMENTED
-
-.. function:: triu!(...)
 
    UNDOCUMENTED
 
@@ -592,17 +405,9 @@ statistics
 signal processing
 -----------------
 
-.. function:: conv2(...)
 
-   UNDOCUMENTED
-
-.. function:: plan_brfft(...)
-
-   UNDOCUMENTED
-
-
-  numerical integration
------------------------
+numerical integration
+---------------------
 
 
 iteration
@@ -628,10 +433,6 @@ time
 errors
 ------
 
-.. function:: systemerror(p,b::Bool)
-
-   UNDOCUMENTED
-
 
 types
 -----
@@ -640,37 +441,10 @@ types
 syntax
 ------
 
-.. function:: esc(e::ANY)
-
-   UNDOCUMENTED
-
-.. function:: expand(x)
-
-   UNDOCUMENTED
-
-.. function:: gensym(...)
-
-   UNDOCUMENTED
-
-.. function:: macroexpand(x)
-
-   UNDOCUMENTED
-
-.. function:: parse(...)
-
-   UNDOCUMENTED
 
 
 help and reflection
 -------------------
-
-.. function:: disassemble(...)
-
-   UNDOCUMENTED
-
-.. function:: finfer(f::Union(Function,DataType),types)
-
-   UNDOCUMENTED
 
 .. function:: functionlocs(...)
 
@@ -848,6 +622,10 @@ I/O and events
 multiprocessing
 ---------------
 
+.. function:: interrupt(...)
+
+   UNDOCUMENTED
+
 .. function:: isready(rr::RemoteRef)
 
    UNDOCUMENTED
@@ -917,10 +695,6 @@ filesystem operations
    UNDOCUMENTED
 
 .. function:: gperm(...)
-
-   UNDOCUMENTED
-
-.. function:: iswritable(...)
 
    UNDOCUMENTED
 
@@ -1023,24 +797,4 @@ C interface
 
 Macros
 ------
-
-.. function:: assert(...)
-
-   UNDOCUMENTED
-
-.. function:: which(f,args...)
-
-   UNDOCUMENTED
-
-.. function:: gensym(...)
-
-   UNDOCUMENTED
-
-.. function:: eval(...)
-
-   UNDOCUMENTED
-
-.. function:: show(...)
-
-   UNDOCUMENTED
 

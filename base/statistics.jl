@@ -26,7 +26,7 @@ function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
     end
 end
 median{T<:Real}(v::AbstractArray{T}; checknan::Bool=true) =
-    median!(copy(vec(v)), checknan=checknan)
+    median!(vec(copy(v)), checknan=checknan)
 
 ## variance with known mean
 function varm(v::AbstractVector, m::Number)
@@ -217,7 +217,7 @@ cov(x::AbstractVector) = cov(x'')[1]
 
 function cor(x::AbstractVecOrMat, y::AbstractVecOrMat)
     z = cov(x, y)
-    scale = Base.amap(std, x, 2) * Base.amap(std, y, 2)'
+    scale = mapslices(std, x, 1)'*mapslices(std, y, 1)
     z ./ scale
 end
 cor(x::AbstractVector, y::AbstractVector) =
