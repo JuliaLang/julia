@@ -167,28 +167,6 @@ mod(x::Int64,  y::Int64)  = box(Int64,smod_int(unbox(Int64,x),unbox(Int64,y)))
 >>>(x::Uint64,  y::Int32) = box(Uint64,lshr_int(unbox(Uint64,x),unbox(Int32,y)))
 >>>(x::Uint128, y::Int32) = box(Uint128,lshr_int(unbox(Uint128,x),unbox(Int32,y)))
 
-bswap(x::Int8)    = x
-bswap(x::Uint8)   = x
-bswap(x::Int16)   = box(Int16,bswap_int(unbox(Int16,x)))
-bswap(x::Uint16)  = box(Uint16,bswap_int(unbox(Uint16,x)))
-bswap(x::Int32)   = box(Int32,bswap_int(unbox(Int32,x)))
-bswap(x::Uint32)  = box(Uint32,bswap_int(unbox(Uint32,x)))
-bswap(x::Int64)   = box(Int64,bswap_int(unbox(Int64,x)))
-bswap(x::Uint64)  = box(Uint64,bswap_int(unbox(Uint64,x)))
-bswap(x::Int128)  = box(Int128,bswap_int(unbox(Int128,x)))
-bswap(x::Uint128) = box(Uint128,bswap_int(unbox(Uint128,x)))
-
-count_ones(x::Int8)    = int(box(Int8,ctpop_int(unbox(Int8,x))))
-count_ones(x::Uint8)   = int(box(Uint8,ctpop_int(unbox(Uint8,x))))
-count_ones(x::Int16)   = int(box(Int16,ctpop_int(unbox(Int16,x))))
-count_ones(x::Uint16)  = int(box(Uint16,ctpop_int(unbox(Uint16,x))))
-count_ones(x::Int32)   = int(box(Int32,ctpop_int(unbox(Int32,x))))
-count_ones(x::Uint32)  = int(box(Uint32,ctpop_int(unbox(Uint32,x))))
-count_ones(x::Int64)   = int(box(Int64,ctpop_int(unbox(Int64,x))))
-count_ones(x::Uint64)  = int(box(Uint64,ctpop_int(unbox(Uint64,x))))
-count_ones(x::Int128)  = int(box(Int128,ctpop_int(unbox(Int128,x))))
-count_ones(x::Uint128) = int(box(Uint128,ctpop_int(unbox(Uint128,x))))
-
 leading_zeros(x::Int8)    = int(box(Int8,ctlz_int(unbox(Int8,x))))
 leading_zeros(x::Uint8)   = int(box(Uint8,ctlz_int(unbox(Uint8,x))))
 leading_zeros(x::Int16)   = int(box(Int16,ctlz_int(unbox(Int16,x))))

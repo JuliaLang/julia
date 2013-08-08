@@ -30,6 +30,28 @@ abs(x::Signed) = flipsign(x,x)
 
 ~(n::Integer) = -n-1
 
+bswap(x::Int8)    = x
+bswap(x::Uint8)   = x
+bswap(x::Int16)   = ccall("llvm.bswap.i16", Int16, (Int16,), x)
+bswap(x::Uint16)  = ccall("llvm.bswap.i16", Uint16, (Uint16,), x)
+bswap(x::Int32)   = ccall("llvm.bswap.i32", Int32, (Int32,), x)
+bswap(x::Uint32)  = ccall("llvm.bswap.i32", Uint32, (Uint32,), x)
+bswap(x::Int64)   = ccall("llvm.bswap.i64", Int64, (Int64,), x)
+bswap(x::Uint64)  = ccall("llvm.bswap.i64", Uint64, (Uint64,), x)
+bswap(x::Int128)  = ccall("llvm.bswap.i128", Int128, (Int128,), x)
+bswap(x::Uint128) = ccall("llvm.bswap.i128", Uint128, (Uint128,), x)
+
+count_ones(x::Int8)    = int(ccall("llvm.ctpop.i8", Int8, (Int8,), x))
+count_ones(x::Uint8)   = int(ccall("llvm.ctpop.i8", Uint8, (Uint8,), x))
+count_ones(x::Int16)   = int(ccall("llvm.ctpop.i16", Int16, (Int16,), x))
+count_ones(x::Uint16)  = int(ccall("llvm.ctpop.i16", Uint16, (Uint16,), x))
+count_ones(x::Int32)   = int(ccall("llvm.ctpop.i32", Int32, (Int32,), x))
+count_ones(x::Uint32)  = int(ccall("llvm.ctpop.i32", Uint32, (Uint32,), x))
+count_ones(x::Int64)   = int(ccall("llvm.ctpop.i64", Int64, (Int64,), x))
+count_ones(x::Uint64)  = int(ccall("llvm.ctpop.i64", Uint64, (Uint64,), x))
+count_ones(x::Int128)  = int(ccall("llvm.ctpop.i128", Int128, (Int128,), x))
+count_ones(x::Uint128) = int(ccall("llvm.ctpop.i128", Uint128, (Uint128,), x))
+
 ## number-theoretic functions ##
 
 function gcd{T<:Integer}(a::T, b::T)

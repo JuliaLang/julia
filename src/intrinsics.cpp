@@ -21,7 +21,7 @@ namespace JL_I {
         lesif64, leuif64,
         // bitwise operators
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
-        bswap_int, ctpop_int, ctlz_int, cttz_int,
+        ctlz_int, cttz_int,
         // conversion
         sext_int, zext_int, trunc_int,
         fptoui, fptosi, uitofp, sitofp,
@@ -922,16 +922,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                          builder.CreateAShr(x, ConstantInt::get(x->getType(),
                                                                 x->getType()->getPrimitiveSizeInBits()-1)),
                          builder.CreateAShr(x, uint_cnvt(t,y)));
-    HANDLE(bswap_int,1)
-        x = JL_INT(x);
-        return builder.CreateCall(
-            Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap,
-                                      ArrayRef<Type*>(x->getType())), x);
-    HANDLE(ctpop_int,1)
-        x = JL_INT(x);
-        return builder.CreateCall(
-            Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop,
-                                      ArrayRef<Type*>(x->getType())), x);
 #if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
     HANDLE(ctlz_int,1)
         x = JL_INT(x);
@@ -1096,8 +1086,8 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(lesif64); ADD_I(leuif64);
     ADD_I(fpiseq); ADD_I(fpislt);
     ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
-    ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
-    ADD_I(ctpop_int); ADD_I(ctlz_int); ADD_I(cttz_int);
+    ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int);
+    ADD_I(ctlz_int); ADD_I(cttz_int);
     ADD_I(sext_int); ADD_I(zext_int); ADD_I(trunc_int);
     ADD_I(fptoui); ADD_I(fptosi);
     ADD_I(fpsiround); ADD_I(fpuiround);

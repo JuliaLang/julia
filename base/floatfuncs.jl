@@ -35,6 +35,10 @@ isfloat64(x::Number) = float64(x) == x
 isfloat64(::Float64) = true
 isfloat64(::Float32) = true
 
+## byte order swaps for arbitrary-endianness serialization/deserialization ##
+bswap(x::Float32) = reinterpret(Float32, bswap(reinterpret(Int32, x)))
+bswap(x::Float64) = reinterpret(Float64, bswap(reinterpret(Int64, x)))
+
 ## precision, as defined by the effective number of bits in the mantissa ##
 get_precision(::Float16) = 11
 get_precision(::Float32) = 24
