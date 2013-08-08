@@ -718,38 +718,39 @@ a = [3,1,2]
 @test """$(a[2])""" == "1"
 @test """$(a[3]+7)""" == "9"
 @test """$(ifloor(4.5))""" == "4"
+nl = @windows? "\r\n" : "\n"
 @test """
      a
      b
 
      c
-     """ == "a\nb\n\nc\n"
+     """ == "a$(nl)b$(nl)$(nl)c$(nl)"
 @test """
       """ == ""
 @test """x
      a
-    """ == "x\n a\n"
+    """ == "x$(nl) a$(nl)"
 @test """
      $n
-   """ == "  $n\n"
+   """ == "  $n$(nl)"
 @test """
       a
      b
-       c""" == " a\nb\n  c"
+       c""" == " a$(nl)b$(nl)  c"
 # note tab/space mixing
 @test """
 	a
      b
-     """ == "   a\nb\n"
+     """ == "   a$(nl)b$(nl)"
 @test """
       a
-       """ == "a\n"
+       """ == "a$(nl)"
 s = "   p"
 @test """
       $s""" == "$s"
 @test """
        $s
-      """ == " $s\n"
+      """ == " $s$(nl)"
 
 # bytes2hex and hex2bytes
 hex_str = "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592"
