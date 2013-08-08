@@ -697,11 +697,16 @@ Dequeues
 
    Resize collection to contain ``n`` elements.
 
-.. function:: append!(collection, items) -> collection
+.. function:: append!(collection, items) -> collection.
 
-   Add the elements of ``items`` to the end of a collection.
+   Add the elements of ``items`` to the end of a collection. ``append!([1],[2,3]) => [1,2,3]``
+
+.. function:: prepend!(collection, items) -> collection
+
+   Insert the elements of ``items`` to the beginning of a collection. ``prepend!([3],[1,2]) => [1,2,3]``
 
 Fully implemented by: ``Vector`` (aka 1-d ``Array``).
+
 
 Strings
 -------
@@ -1006,13 +1011,13 @@ I/O
 
 .. function:: readbytes!(stream, b::Vector{Uint8}, nb=length(b))
 
-   Read at most nb bytes from the stream into b, returning the
-   number of bytes read (increasing the size of b as needed).
+   Read at most ``nb`` bytes from the stream into ``b``, returning the
+   number of bytes read (increasing the size of ``b`` as needed).
 
 .. function:: readbytes(stream, nb=typemax(Int))
 
-   Read at most nb bytes from the stream, returning a
-   Vector{Uint8} of the bytes read.
+   Read at most ``nb`` bytes from the stream, returning a
+   ``Vector{Uint8}`` of the bytes read.
 
 .. function:: position(s)
 
@@ -1182,6 +1187,183 @@ Text I/O
 
    Equivalent to ``writedlm`` with ``delim`` set to comma.
 
+.. function:: Base64Pipe(ostream)
+
+   Returns a new write-only I/O stream, which converts any bytes written
+   to it into base64-encoded ASCII bytes written to ``ostream``.  Calling
+   ``close`` on the ``Base64Pipe`` stream is necessary to complete the
+   encoding (but does not close ``ostream``).
+
+.. function:: base64(writefunc, args...)
+              base64(args...)
+
+   Given a ``write``-like function ``writefunc``, which takes an I/O
+   stream as its first argument, ``base64(writefunc, args...)``
+   calls ``writefunc`` to write ``args...`` to a base64-encoded string,
+   and returns the string.  ``base64(args...)`` is equivalent to
+   ``base64(write, args...)``: it converts its arguments into bytes
+   using the standard ``write`` functions and returns the base64-encoded
+   string.
+
+Multimedia I/O
+--------------
+
+Just as text output is performed by ``print`` and user-defined types
+can indicate their textual representation by overloading ``show``,
+Julia provides a standardized mechanism for rich multimedia output
+(such as images, formatted text, or even audio and video), consisting
+of three parts:
+
+* A function ``display(x)`` to request the richest available multimedia
+  display of a Julia object ``x`` (with a plain-text fallback).
+* Overloading ``writemime`` allows one to indicate arbitrary multimedia
+  representations (keyed by standard MIME types) of user-defined types.
+* Multimedia-capable display backends may be registered by subclassing
+  a generic ``Display`` type and pushing them onto a stack of display
+  backends via ``pushdisplay``.
+
+The base Julia runtime provides only plain-text display, but richer
+displays may be enabled by loading external modules or by using graphical
+Julia environments (such as the IPython-based IJulia notebook).
+
+.. function:: display(x)
+              display(d::Display, x)
+              display(mime, x)
+              display(d::Display, mime, x)
+
+   Display ``x`` using the topmost applicable display in the display stack,
+   typically using the richest supported multimedia output for ``x``, with
+   plain-text ``STDOUT`` output as a fallback.  The ``display(d, x)`` variant
+   attempts to display ``x`` on the given display ``d`` only, throwing
+   a ``MethodError`` if ``d`` cannot display objects of this type.
+
+   There are also two variants with a ``mime`` argument (a MIME type
+   string, such as ``"image/png"``) attempt to display ``x`` using the
+   requesed MIME type *only*, throwing a ``MethodError`` if this type
+   is not supported by either the display(s) or by ``x``.   With these
+   variants, one can also supply the "raw" data in the requested MIME
+   type by passing ``x::String`` (for MIME types with text-based storage,
+   such as text/html or application/postscript) or ``x::Vector{Uint8}``
+   (for binary MIME types).
+
+.. function:: redisplay(x)
+              redisplay(d::Display, x)
+              redisplay(mime, x)
+              redisplay(d::Display, mime, x)
+
+   By default, the `redisplay` functions simply call ``display``.  However,
+   some display backends may override ``redisplay`` to modify an existing
+   display of ``x`` (if any).   Using ``redisplay`` is also a hint to the
+   backend that ``x`` may be redisplayed several times, and the backend
+   may choose to defer the display until (for example) the next interactive
+   prompt.
+
+.. function:: displayable(mime)
+              displayable(d::Display, mime)
+
+   Returns a boolean value indicating whether the given ``mime`` type (string)
+   is displayable by any of the displays in the current display stack, or
+   specifically by the display ``d`` in the second variant.
+
+.. function:: writemime(stream, mime, x)
+
+   The ``display`` functions ultimately call ``writemime`` in order to
+   write an object ``x`` as a given ``mime`` type to a given I/O
+   ``stream`` (usually a memory buffer), if possible.  In order to
+   provide a rich multimedia representation of a user-defined type
+   ``T``, it is only necessary to define a new ``writemime`` method for
+   ``T``, via: ``writemime(stream, ::@MIME(mime), x::T) = ...``, where
+   ``mime`` is a MIME-type string and the function body calls
+   ``write`` (or similar) to write that representation of ``x`` to
+   ``stream``.
+
+   For example, if you define a ``MyImage`` type and know how to write
+   it to a PNG file, you could define a function ``writemime(stream,
+   ::@MIME("image/png"), x::MyImage) = ...``` to allow your images to
+   be displayed on any PNG-capable ``Display`` (such as IJulia).
+   As usual, be sure to ``import Base.writemime`` in order to add
+   new methods to the built-in Julia function ``writemime``.
+
+   Technically, the ``@MIME(mime)`` macro defines a singleton type for
+   the given ``mime`` string, which allows us to exploit Julia's
+   dispatch mechanisms in determining how to display objects of any
+   given type.
+
+.. function:: mimewritable(mime, T::Type)
+
+   Returns a boolean value indicating whether or not objects of type
+   ``T`` can be written as the given ``mime`` type.  (By default, this
+   is determined automatically by the existence of the corresponding
+   ``writemime`` function.)
+
+.. function:: reprmime(mime, x)
+
+   Returns a ``String`` or ``Vector{Uint8}`` containing the
+   representation of ``x`` in the requested ``mime`` type, as written
+   by ``writemime`` (throwing a ``MethodError`` if no appropriate
+   ``writemime`` is available).  A ``String`` is returned for MIME
+   types with textual representations (such as ``"text/html"`` or
+   ``"application/postscript"``), whereas binary data is returned as
+   ``Vector{Uint8}``.  (The function ``istext(mime)`` returns whether
+   or not Julia treats a given ``mime`` type as text.)
+
+   As a special case, if ``x`` is a ``String`` (for textual MIME types)
+   or a ``Vector{Uint8}`` (for binary MIME types), the ``reprmime`` function
+   assumes that ``x`` is already in the requested ``mime`` format and
+   simply returns ``x``.
+
+.. function:: stringmime(mime, x)
+
+   Returns a ``String`` containing the representation of ``x`` in the
+   requested ``mime`` type.  This is similar to ``reprmime`` except
+   that binary data is base64-encoded as an ASCII string.
+
+As mentioned above, one can also define new display backends. For
+example, a module that can display PNG images in a window can register
+this capability with Julia, so that calling `display(x)` on types
+with PNG representations will automatically display the image using
+the module's window.
+
+In order to define a new display backend, one should first create a
+subtype ``D`` of the abstract class ``Display``.  Then, for each MIME
+type (``mime`` string) that can be displayed on ``D``, one should
+define a function ``display(d::D, ::@MIME(mime), x) = ...`` that
+displays ``x`` as that MIME type, usually by calling ``reprmime(mime,
+x)``.  A ``MethodError`` should be thrown if ``x`` cannot be displayed
+as that MIME type; this is automatic if one calls ``reprmime``.
+Finally, one should define a function ``display(d::D, x)`` that
+queries ``mimewritable(mime, x)`` for the ``mime`` types supported by
+``D`` and displays the "best" one; a ``MethodError`` should be thrown
+if no supported MIME types are found for ``x``.  Similarly, some
+subtypes may wish to override ``redisplay(d::D, ...)``.  (Again, one
+should ``import Base.display`` to add new methods to ``display``.)
+The return values of these functions are up to the implementation
+(since in some cases it may be useful to return a display "handle" of
+some type).  The display functions for ``D`` can then be called
+directly, but they can also be invoked automatically from
+``display(x)`` simply by pushing a new display onto the display-backend
+stack with:
+
+.. function:: pushdisplay(d::Display)
+
+   Pushes a new display ``d`` on top of the global display-backend
+   stack.  Calling ``display(x)`` or ``display(mime, x)`` will display
+   ``x`` on the topmost compatible backend in the stack (i.e., the
+   topmost backend that does not throw a ``MethodError``).
+
+.. function:: popdisplay()
+   	      popdisplay(d::Display)
+
+   Pop the topmost backend off of the display-backend stack, or the
+   topmost copy of ``d`` in the second variant.
+
+.. function:: TextDisplay(stream)
+
+   Returns a ``TextDisplay <: Display``, which can display any object
+   as the text/plain MIME type (only), writing the text representation
+   to the given I/O stream.  (The text representation is the same
+   as the way an object is printed in the Julia REPL.)
+
 Memory-mapped I/O
 -----------------
 
@@ -1247,50 +1429,62 @@ Mathematical Operators
 
    Unary minus operator.
 
+.. _+:
 .. function:: +(x, y)
 
    Binary addition operator.
 
+.. _-:
 .. function:: -(x, y)
 
    Binary subtraction operator.
 
+.. _*:
 .. function:: *(x, y)
 
    Binary multiplication operator.
 
+.. _/:
 .. function:: /(x, y)
 
    Binary left-division operator.
 
+.. _\\:
 .. function:: \\(x, y)
 
    Binary right-division operator.
 
+.. _^:
 .. function:: ^(x, y)
 
    Binary exponentiation operator.
 
+.. _.+:
 .. function:: .+(x, y)
 
    Element-wise binary addition operator.
 
+.. _.-:
 .. function:: .-(x, y)
 
    Element-wise binary subtraction operator.
 
+.. _.*:
 .. function:: .*(x, y)
 
    Element-wise binary multiplication operator.
 
+.. _./:
 .. function:: ./(x, y)
 
    Element-wise binary left division operator.
 
+.. _.\\:
 .. function:: .\\(x, y)
 
    Element-wise binary right division operator.
 
+.. _.^:
 .. function:: .^(x, y)
 
    Element-wise binary exponentiation operator.
@@ -1315,6 +1509,7 @@ Mathematical Operators
 
    Compute ``x/y`` and ``x%y`` at the same time
 
+.. _%:
 .. function:: %(x, m)
 
    Remainder after division. The operator form of ``rem``.
@@ -1323,6 +1518,7 @@ Mathematical Operators
 
    Modulus after division, returning in the range (0,m]
 
+.. _//:
 .. function:: //(num, den)
 
    Rational division
@@ -1339,18 +1535,22 @@ Mathematical Operators
 
    Denominator of the rational representation of ``x``
 
+.. _<<:
 .. function:: <<(x, n)
 
    Left shift operator.
 
+.. _>>:
 .. function:: >>(x, n)
 
    Right shift operator.
 
+.. _>>>:
 .. function:: >>>(x, n)
 
    Unsigned right shift operator.
 
+.. _\::
 .. function:: \:(start, [step], stop)
 
    Range operator. ``a:b`` constructs a range from ``a`` to ``b`` with a step size of 1,
@@ -1362,58 +1562,72 @@ Mathematical Operators
 
    Called by ``:`` syntax for constructing ranges.
 
+.. _==:
 .. function:: ==(x, y)
 
    Equality comparison operator.
 
+.. _!=:
 .. function:: !=(x, y)
 
    Not-equals comparison operator.
 
+.. _===:
 .. function:: ===(x, y)
 
    See the :func:`is` operator
 
+.. _!==:
 .. function:: !==(x, y)
 
    Equivalent to ``!is(x, y)``
 
+.. _<:
 .. function:: <(x, y)
 
    Less-than comparison operator.
 
+.. _<=:
 .. function:: <=(x, y)
 
    Less-than-or-equals comparison operator.
 
+.. _>:
 .. function:: >(x, y)
 
    Greater-than comparison operator.
 
+.. _>=:
 .. function:: >=(x, y)
 
    Greater-than-or-equals comparison operator.
 
+.. _.==:
 .. function:: .==(x, y)
 
    Element-wise equality comparison operator.
 
+.. _.!=:
 .. function:: .!=(x, y)
 
    Element-wise not-equals comparison operator.
 
+.. _.<:
 .. function:: .<(x, y)
 
    Element-wise less-than comparison operator.
 
+.. _.<=:
 .. function:: .<=(x, y)
 
    Element-wise less-than-or-equals comparison operator.
 
+.. _.>:
 .. function:: .>(x, y)
 
    Element-wise greater-than comparison operator.
 
+.. _.>=:
 .. function:: .>=(x, y)
 
    Element-wise greater-than-or-equals comparison operator.
@@ -1422,30 +1636,37 @@ Mathematical Operators
 
    Return -1, 0, or 1 depending on whether ``x<y``, ``x==y``, or ``x>y``, respectively
 
+.. _~:
 .. function:: ~(x)
 
    Bitwise not
 
+.. _&:
 .. function:: &(x, y)
 
    Bitwise and
 
+.. _|:
 .. function:: |(x, y)
 
    Bitwise or
 
+.. _$:
 .. function:: $(x, y)
 
    Bitwise exclusive or
 
+.. _!:
 .. function:: !(x)
 
    Boolean not
 
+.. _&&:
 .. function:: &&(x, y)
 
    Boolean and
 
+.. _||:
 .. function:: ||(x, y)
 
    Boolean or
@@ -1803,7 +2024,7 @@ Mathematical Functions
 
 .. function:: clamp(x, lo, hi)
 
-   Return x if ``lo <= x <= y``. If ``x < lo``, return ``lo``. If ``x > hi``, return ``hi``.
+   Return x if ``lo <= x <= hi``. If ``x < lo``, return ``lo``. If ``x > hi``, return ``hi``.
 
 .. function:: abs(x)
 
@@ -2756,6 +2977,30 @@ Array functions
    Returns the sum of all array elements, using the Kahan-Babuska-Neumaier compensated summation algorithm for additional accuracy.
 
 
+BitArrays
+~~~~~~~~~
+
+.. function:: bitpack(A::AbstractArray{T,N}) -> BitArray
+
+   Converts a numeric array to a packed boolean array
+
+.. function:: bitunpack(B::BitArray{N}) -> Array{Bool,N}
+
+   Converts a packed boolean array to an array of booleans
+
+.. function:: flipbits!(B::BitArray{N}) -> BitArray{N}
+
+   Performs a bitwise not operation on B. See :ref:`~ operator <~>`.
+
+.. function:: rol(B::BitArray{1},i::Integer) -> BitArray{1}
+
+   Left rotation operator.
+
+.. function:: ror(B::BitArray{1},i::Integer) -> BitArray{1}
+
+   Right rotation operator.
+
+
 Combinatorics
 -------------
 
@@ -2832,6 +3077,7 @@ Combinatorics
    arrays of arrays. Because the number of partitions can be very large, this
    function runs inside a Task to produce values on demand. Write
    ``c = @task partitions(a)``, then iterate ``c`` or call ``consume`` on it.
+
 
 Statistics
 ----------
@@ -3609,8 +3855,9 @@ C Interface
 
 .. function:: ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
 
-   Call function in C-exported shared library, specified by (function name, library) tuple (String or :Symbol). Alternatively,
+   Call function in C-exported shared library, specified by ``(function name, library)`` tuple, where each component is a String or :Symbol. Alternatively,
    ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
+   Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression.
 
 .. function:: cglobal((symbol, library) or ptr [, Type=Void])
 

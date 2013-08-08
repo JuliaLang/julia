@@ -43,13 +43,17 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    Create an empty sparse matrix of size ``m x n``.
 
+.. function:: spones(S)
+
+   Create a sparse matrix with the same structure as that of ``S``, but with every nonzero element having the value ``1.0``.
+
 .. function:: speye(type,m[,n])
 
    Create a sparse identity matrix of specified type of size ``m x m``. In case ``n`` is supplied, create a sparse identity matrix of size ``m x n``.
 
-.. function:: spones(S)
+.. function:: spdiagm(v)
 
-   Create a sparse matrix with the same structure as that of ``S``, but with every nonzero element having the value ``1.0``.
+   Construct a sparse diagonal matrix and place "v" on the diagonal.
 
 .. function:: sprand(m,n,density[,rng])
 

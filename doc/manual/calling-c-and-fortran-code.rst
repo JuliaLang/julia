@@ -47,6 +47,8 @@ library function. Arguments to ``ccall`` are as follows:
    indicating a pointer to values of type ``T``, or ``Ptr{Void}`` for
    ``void*`` "untyped pointer" values.
 3. A tuple of input types, like those allowed for the return type.
+   The input types must be written as a literal tuple, not a tuple-valued
+   variable or expression.
 4. The following arguments, if any, are the actual argument values
    passed to the function.
 
