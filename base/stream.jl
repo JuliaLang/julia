@@ -273,6 +273,8 @@ function wait_readnb(x::AsyncStream, nb::Int)
     end
 end
 
+wait_close(x) = if isopen(x) wait(x.closenotify); end
+
 #from `connect`
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
     @assert sock.status == StatusConnecting
@@ -673,7 +675,7 @@ function _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32)
 end
 
 # Do not task-block TTY methods. These writes are process-blocking anyway, so we use the non-copying versions
-write(t::TTY, b::Uint8) = @uv_write 1 ccall(:jl_putc_copy, Int32, (Uint8, Ptr{Void}, Ptr{Void}, Ptr{Void}), b, handle(s), uvw, uv_jl_writecb::Ptr{Void})
+write(s::TTY, b::Uint8) = @uv_write 1 ccall(:jl_putc_copy, Int32, (Uint8, Ptr{Void}, Ptr{Void}, Ptr{Void}), b, handle(s), uvw, uv_jl_writecb::Ptr{Void})
 write(s::TTY, c::Char) = @uv_write utf8sizeof(c) ccall(:jl_pututf8_copy, Int32, (Ptr{Void},Uint32, Ptr{Void}, Ptr{Void}), handle(s), c, uvw, uv_jl_writecb::Ptr{Void})
 function write{T}(s::TTY, a::Array{T}) 
     if isbits(T)
@@ -855,7 +857,7 @@ dup(src::RawFD,target::RawFD) = systemerror("dup",ccall((@windows? :_dup2 : :dup
 @unix_only _fd(x::AsyncStream) = RawFD(ccall(:jl_uv_pipe_fd,Int32,(Ptr{Void},),x.handle))
 @windows_only _fd(x::Pipe) = WindowsRawSocket(ccall(:jl_uv_pipe_handle,Ptr{Void},(Ptr{Void},),x.handle))
 
-for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,true,1,:jl_uv_stdout),(:STDERR,true,1,:jl_uv_stderr))
+for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,true,1,:jl_uv_stdout),(:STDERR,true,2,:jl_uv_stderr))
     f = symbol("redirect_"*lowercase(string(x)))
     @eval begin
         function ($f)(handle::AsyncStream)

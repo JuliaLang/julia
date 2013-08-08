@@ -60,6 +60,8 @@ function shuffle!(a::AbstractVector)
     return a
 end
 
+shuffle(a::AbstractVector) = shuffle!(copy(a))
+
 function randperm(n::Integer)
     a = Array(typeof(n), n)
     a[1] = 1

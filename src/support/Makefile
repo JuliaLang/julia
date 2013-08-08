@@ -38,19 +38,19 @@ default: release
 HEADERS = $(wildcard *.h) $(JULIAHOME)/deps/libuv/include/uv.h
 
 %.o: %.c $(HEADERS)
-	$(QUIET_CC) $(CC) $(CPPFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@
+	@$(PRINT_CC) $(CC) $(CPPFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@
 %.do: %.c $(HEADERS)
-	$(QUIET_CC) $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@
+	@$(PRINT_CC) $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@
 %.o: %.S
-	$(QUIET_CC) $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@
+	@$(PRINT_CC) $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@
 %.do: %.S
-	$(QUIET_CC) $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@
+	@$(PRINT_CC) $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
 release debug: libsupport.a
 
 libsupport.a: $(XOBJS)
 	rm -rf $@
-	$(QUIET_LINK) $(AR) -rcs $@ $^
+	@$(PRINT_LINK) $(AR) -rcs $@ $^
 
 clean:
 	rm -f *.o

@@ -347,9 +347,11 @@ end
 
 # Julia implementation similarly to xgelsy
 function (\){T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
-    ar = abs(A.hh[1])
     nr = min(size(A.hh))
-    if ar == 0 return zeros(T, length(A.tau), size(B, 2)), 0 end
+    nrhs = size(B, 2)
+    if nr == 0 return zeros(0, nrhs), 0 end
+    ar = abs(A.hh[1])
+    if ar == 0 return zeros(nr, nrhs), 0 end
     rnk = 1
     xmin = ones(T, nr)
     xmax = ones(T, nr)
@@ -365,7 +367,7 @@ function (\){T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
         # if cond(r[1:rnk, 1:rnk])*rcond < 1 break end
     end
     C, tau = LAPACK.tzrzf!(A.hh[1:rnk,:])
-    X = [Triangular(C[1:rnk,1:rnk],:U)\(A[:Q]'B)[1:rnk,:]; zeros(T, size(A.hh, 2) - rnk, size(B, 2))]
+    X = [Triangular(C[1:rnk,1:rnk],:U)\(A[:Q]'B)[1:rnk,:]; zeros(T, size(A.hh, 2) - rnk, nrhs)]
     LAPACK.ormrz!('L', iseltype(B, Complex) ? 'C' : 'T', C, tau, X)
     return X[invperm(A[:p]),:], rnk
 end
@@ -612,7 +614,7 @@ end
 function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, thin::Bool)
     m,n = size(A)
     if m == 0 || n == 0
-        u,s,vt = (eye(m, thin ? n : m), zeros(0), eye(n,n))
+        u,s,vt = (eye(T, m, thin ? n : m), real(zeros(T,0)), eye(T,n,n))
     else
         u,s,vt = LAPACK.gesdd!(thin ? 'S' : 'A', A)
     end

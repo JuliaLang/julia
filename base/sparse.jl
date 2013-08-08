@@ -3,7 +3,7 @@ include("sparse/abstractsparse.jl")
 module SparseMatrix
 
 importall Base
-import Base.NonTupleType
+import Base.NonTupleType, Base.float
 
 export SparseMatrixCSC, 
        dense, diag, diagm, droptol!, dropzeros!, etree, full, 
