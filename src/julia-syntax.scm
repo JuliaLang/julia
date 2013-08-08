@@ -2616,7 +2616,11 @@ So far only the second case can actually occur.
 	     ;; emit (newvar x) where captured locals are introduced.
 	     (let* ((vname (cadr e))
 		    (vinf  (var-info-for vname vi)))
-	       (if (and vinf (vinfo:capt vinf))
+	       (if (and vinf
+			;; TODO: remove the following expression to re-null
+			;; all variables when they are allocated. see issue #1571
+			(vinfo:capt vinf)
+			)
 		   (emit `(newvar ,(cadr e)))
 		   #f)))
 	    (else  (emit (goto-form e))))))
