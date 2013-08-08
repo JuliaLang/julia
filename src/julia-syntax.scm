@@ -2601,7 +2601,8 @@ So far only the second case can actually occur.
 	       ))
 
 	    ((global) #f)  ; remove global declarations
-	    ((local local!)
+	    ((local!) #f)
+	    ((local)
 	     ;; emit (newvar x) where captured locals are introduced.
 	     (let* ((vname (cadr e))
 		    (vinf  (var-info-for vname vi)))

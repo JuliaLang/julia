@@ -2254,13 +2254,14 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         jl_sym_t *var = (jl_sym_t*)args[0];
         if (jl_is_symbolnode(var))
             var = jl_symbolnode_sym(var);
-        Value *lv = ctx->vars[var].memvalue;
+        jl_varinfo_t &vi = ctx->vars[var];
+        Value *lv = vi.memvalue;
         if (lv != NULL) {
             // create a new uninitialized variable
             if (isBoxed(var, ctx)) {
                 builder.CreateStore(builder.CreateCall(jlbox_func, V_null), lv);
             }
-            else if (lv->getType() == jl_ppvalue_llvmt) {
+            else if (lv->getType() == jl_ppvalue_llvmt && vi.usedUndef) {
                 builder.CreateStore(V_null, lv);
             }
         }
