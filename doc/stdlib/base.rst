@@ -3539,7 +3539,7 @@ Parallel Computing
 .. function:: interrupt([pids...])
 
    Interrupt the current executing task on the specified workers. This is
-   equivalent to pressing Ctl-C on the local machine. If no arguments are given,
+   equivalent to pressing Ctrl-C on the local machine. If no arguments are given,
    all workers are interrupted.
 
 .. function:: myid()
@@ -3722,21 +3722,25 @@ System
 .. function:: detach(command)
 
    Mark a command object so that it will be run in a new process group,
-   allowing it to outlive the julia process, and not have Ctl-C interrupts
+   allowing it to outlive the julia process, and not have Ctrl-C interrupts
    passed to it.
 
-.. data:: |>
+.. function:: |>(command, command)
+              |>(command, filename)
+              |>(filename, command)
 
-   Redirect standard input or output of a process.
+   Redirect operator. Used for piping the output of a process into another (first form) or to redirect the standard output/input of a command to/from a file (second and third forms).
 
-   **Example**: ``run(`ls` |> "out.log")``
-   **Example**: ``run("file.txt" |> `cat`)``
+   **Examples**:
+     * ``run(`ls` |> `grep xyz`)``
+     * ``run(`ls` |> "out.txt")``
+     * ``run("out.txt" |> `grep xyz`)``
 
-.. data:: >>
+.. function:: >>(command, filename)
 
    Redirect standard output of a process, appending to the destination file.
 
-.. data:: .>
+.. data:: .>(command, filename)
 
    Redirect the standard error stream of a process.
 
