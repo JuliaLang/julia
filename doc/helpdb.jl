@@ -1321,13 +1321,6 @@
 
 "),
 
-("Strings","Base","thisind","thisind(str, i)
-
-   Adjust \"i\" downwards until it reaches a valid index for the given
-   string.
-
-"),
-
 ("Strings","Base","randstring","randstring(len)
 
    Create a random ASCII string of length \"len\", consisting of
@@ -1529,8 +1522,8 @@
 
 ("I/O","Base","flush_cstdio","flush_cstdio()
 
-   Flushes the C stdout and stderr streams (which may have been
-   written to by external C code).
+   Flushes the C \"stdout\" and \"stderr\" streams (which may have
+   been written to by external C code).
 
 "),
 
@@ -1565,15 +1558,15 @@
 
 ("I/O","Base","readbytes!","readbytes!(stream, b::Vector{Uint8}, nb=length(b))
 
-   Read at most nb bytes from the stream into b, returning the number
-   of bytes read (increasing the size of b as needed).
+   Read at most \"nb\" bytes from the stream into \"b\", returning the
+   number of bytes read (increasing the size of \"b\" as needed).
 
 "),
 
 ("I/O","Base","readbytes","readbytes(stream, nb=typemax(Int))
 
-   Read at most nb bytes from the stream, returning a Vector{Uint8} of
-   the bytes read.
+   Read at most \"nb\" bytes from the stream, returning a
+   \"Vector{Uint8}\" of the bytes read.
 
 "),
 
@@ -1835,15 +1828,160 @@
 
 "),
 
-("Text I/O","Base","base64","base64(stream, args...)
+("Text I/O","Base","Base64Pipe","Base64Pipe(ostream)
+
+   Returns a new write-only I/O stream, which converts any bytes
+   written to it into base64-encoded ASCII bytes written to
+   \"ostream\".  Calling \"close\" on the \"Base64Pipe\" stream is
+   necessary to complete the encoding (but does not close
+   \"ostream\").
+
+"),
+
+("Text I/O","Base","base64","base64(writefunc, args...)
+base64(args...)
 
    Given a \"write\"-like function \"writefunc\", which takes an I/O
-   stream as its first argument, \"base64(writefunc, args...)\"
-   calls \"writefunc\" to write \"args...\" to a base64-encoded string,
-   and returns the string.  \"base64(args...)\" is equivalent to
+   stream as its first argument, \"base64(writefunc, args...)\" calls
+   \"writefunc\" to write \"args...\" to a base64-encoded string, and
+   returns the string.  \"base64(args...)\" is equivalent to
    \"base64(write, args...)\": it converts its arguments into bytes
-   using the standard \"write\" functions and returns the base64-encoded
-   string.
+   using the standard \"write\" functions and returns the
+   base64-encoded string.
+
+"),
+
+("Multimedia I/O","Base","display","display(x)
+display(d::Display, x)
+display(mime, x)
+display(d::Display, mime, x)
+
+   Display \"x\" using the topmost applicable display in the display
+   stack, typically using the richest supported multimedia output for
+   \"x\", with plain-text \"STDOUT\" output as a fallback.  The
+   \"display(d, x)\" variant attempts to display \"x\" on the given
+   display \"d\" only, throwing a \"MethodError\" if \"d\" cannot
+   display objects of this type.
+
+   There are also two variants with a \"mime\" argument (a MIME type
+   string, such as \"\"image/png\"\") attempt to display \"x\" using
+   the requesed MIME type *only*, throwing a \"MethodError\" if this
+   type is not supported by either the display(s) or by \"x\".   With
+   these variants, one can also supply the \"raw\" data in the
+   requested MIME type by passing \"x::String\" (for MIME types with
+   text-based storage, such as text/html or application/postscript) or
+   \"x::Vector{Uint8}\" (for binary MIME types).
+
+"),
+
+("Multimedia I/O","Base","redisplay","redisplay(x)
+redisplay(d::Display, x)
+redisplay(mime, x)
+redisplay(d::Display, mime, x)
+
+   By default, the *redisplay* functions simply call \"display\".
+   However, some display backends may override \"redisplay\" to modify
+   an existing display of \"x\" (if any).   Using \"redisplay\" is
+   also a hint to the backend that \"x\" may be redisplayed several
+   times, and the backend may choose to defer the display until (for
+   example) the next interactive prompt.
+
+"),
+
+("Multimedia I/O","Base","displayable","displayable(mime)
+displayable(d::Display, mime)
+
+   Returns a boolean value indicating whether the given \"mime\" type
+   (string) is displayable by any of the displays in the current
+   display stack, or specifically by the display \"d\" in the second
+   variant.
+
+"),
+
+("Multimedia I/O","Base","writemime","writemime(stream, mime, x)
+
+   The \"display\" functions ultimately call \"writemime\" in order to
+   write an object \"x\" as a given \"mime\" type to a given I/O
+   \"stream\" (usually a memory buffer), if possible.  In order to
+   provide a rich multimedia representation of a user-defined type
+   \"T\", it is only necessary to define a new \"writemime\" method
+   for \"T\", via: \"writemime(stream, ::@MIME(mime), x::T) = ...\",
+   where \"mime\" is a MIME-type string and the function body calls
+   \"write\" (or similar) to write that representation of \"x\" to
+   \"stream\".
+
+   For example, if you define a \"MyImage\" type and know how to write
+   it to a PNG file, you could define a function \"writemime(stream,
+   ::@MIME(\"image/png\"), x::MyImage) = ...`\" to allow your images
+   to be displayed on any PNG-capable \"Display\" (such as IJulia). As
+   usual, be sure to \"import Base.writemime\" in order to add new
+   methods to the built-in Julia function \"writemime\".
+
+   Technically, the \"@MIME(mime)\" macro defines a singleton type for
+   the given \"mime\" string, which allows us to exploit Julia's
+   dispatch mechanisms in determining how to display objects of any
+   given type.
+
+"),
+
+("Multimedia I/O","Base","mimewritable","mimewritable(mime, T::Type)
+
+   Returns a boolean value indicating whether or not objects of type
+   \"T\" can be written as the given \"mime\" type.  (By default, this
+   is determined automatically by the existence of the corresponding
+   \"writemime\" function.)
+
+"),
+
+("Multimedia I/O","Base","reprmime","reprmime(mime, x)
+
+   Returns a \"String\" or \"Vector{Uint8}\" containing the
+   representation of \"x\" in the requested \"mime\" type, as written
+   by \"writemime\" (throwing a \"MethodError\" if no appropriate
+   \"writemime\" is available).  A \"String\" is returned for MIME
+   types with textual representations (such as \"\"text/html\"\" or
+   \"\"application/postscript\"\"), whereas binary data is returned as
+   \"Vector{Uint8}\".  (The function \"istext(mime)\" returns whether
+   or not Julia treats a given \"mime\" type as text.)
+
+   As a special case, if \"x\" is a \"String\" (for textual MIME
+   types) or a \"Vector{Uint8}\" (for binary MIME types), the
+   \"reprmime\" function assumes that \"x\" is already in the
+   requested \"mime\" format and simply returns \"x\".
+
+"),
+
+("Multimedia I/O","Base","stringmime","stringmime(mime, x)
+
+   Returns a \"String\" containing the representation of \"x\" in the
+   requested \"mime\" type.  This is similar to \"reprmime\" except
+   that binary data is base64-encoded as an ASCII string.
+
+"),
+
+("Multimedia I/O","Base","pushdisplay","pushdisplay(d::Display)
+
+   Pushes a new display \"d\" on top of the global display-backend
+   stack.  Calling \"display(x)\" or \"display(mime, x)\" will display
+   \"x\" on the topmost compatible backend in the stack (i.e., the
+   topmost backend that does not throw a \"MethodError\").
+
+"),
+
+("Multimedia I/O","Base","popdisplay","popdisplay()
+popdisplay(d::Display)
+
+   Pop the topmost backend off of the display-backend stack, or the
+   topmost copy of \"d\" in the second variant.
+
+"),
+
+("Multimedia I/O","Base","TextDisplay","TextDisplay(stream)
+
+   Returns a \"TextDisplay <: Display\", which can display any object
+   as the text/plain MIME type (only), writing the text representation
+   to the given I/O stream.  (The text representation is the same as
+   the way an object is printed in the Julia REPL.)
 
 "),
 
@@ -4377,8 +4515,8 @@
 
    Generate all combinations of \"n\" elements from a given array.
    Because the number of combinations can be very large, this function
-   runs inside a Task to produce values on demand. Write \"c = @task
-   combinations(a,n)\", then iterate \"c\" or call \"consume\" on it.
+   returns an iterator object. Use \"collect(combinations(a,n))\" to
+   get an array of all combinations.
 
 "),
 
@@ -4990,6 +5128,14 @@
 
 "),
 
+("Parallel Computing","Base","interrupt","interrupt([pids...])
+
+   Interrupt the current executing task on the specified workers. This
+   is equivalent to pressing Ctrl-C on the local machine. If no
+   arguments are given, all workers are interrupted.
+
+"),
+
 ("Parallel Computing","Base","myid","myid()
 
    Get the id of the current processor.
@@ -5022,7 +5168,9 @@
 
    * \"Condition\": Wait for \"notify\" on a condition.
 
-   * \"Process\": Wait for the process to exit, and get its exit code.
+   * \"Process\": Wait for a process or process chain to exit. The
+     \"exitcode\" field of a process can be used to determine success
+     or failure.
 
    * \"Task\": Wait for a \"Task\" to finish, returning its result
      value.
@@ -5217,7 +5365,8 @@
 ("System","Base","success","success(command)
 
    Run a command object, constructed with backticks, and tell whether
-   it was successful (exited with a code of 0).
+   it was successful (exited with a code of 0). An exception is raised
+   if the process cannot be started.
 
 "),
 
@@ -5230,14 +5379,6 @@
 ("System","Base","process_exited","process_exited(p::Process)
 
    Determine whether a process has exited.
-
-"),
-
-("System","Base","process_exit_status","process_exit_status(p::Process)
-
-   Get the exit status of an exited process. The result is undefined
-   if the process is still running. Use \"wait(p)\" to wait for a
-   process to exit, and get its exit status.
 
 "),
 
@@ -5282,28 +5423,36 @@
 ("System","Base","detach","detach(command)
 
    Mark a command object so that it will be run in a new process
-   group, allowing it to outlive the julia process, and not have Ctl-C
-   interrupts passed to it.
+   group, allowing it to outlive the julia process, and not have
+   Ctrl-C interrupts passed to it.
 
 "),
 
-("System","Base","|>","|>
+("System","Base","|>","|>(command, command)
+|>(command, filename)
+|>(filename, command)
 
-   Redirect standard input or output of a process.
+   Redirect operator. Used for piping the output of a process into
+   another (first form) or to redirect the standard output/input of a
+   command to/from a file (second and third forms).
 
-   **Example**: \"run(`ls` |> \"out.log\")\" **Example**:
-   \"run(\"file.txt\" |> `cat`)\"
+   **Examples**:
+      * \"run(`ls` |> `grep xyz`)\"
+
+      * \"run(`ls` |> \"out.txt\")\"
+
+      * \"run(\"out.txt\" |> `grep xyz`)\"
 
 "),
 
-("System","Base",">>",">>
+("System","Base",">>",">>(command, filename)
 
    Redirect standard output of a process, appending to the destination
    file.
 
 "),
 
-("System","Base",".>",".>
+("System","Base",".>",".>(command, filename)
 
    Redirect the standard error stream of a process.
 
@@ -5507,11 +5656,13 @@
 
 ("C Interface","Base","ccall","ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
 
-   Call function in C-exported shared library, specified by (function
-   name, library) tuple (String or :Symbol). Alternatively, ccall may
-   be used to call a function pointer returned by dlsym, but note that
-   this usage is generally discouraged to facilitate future static
-   compilation.
+   Call function in C-exported shared library, specified by
+   \"(function name, library)\" tuple, where each component is a
+   String or :Symbol. Alternatively, ccall may be used to call a
+   function pointer returned by dlsym, but note that this usage is
+   generally discouraged to facilitate future static compilation. Note
+   that the argument type tuple must be a literal tuple, and not a
+   tuple-valued variable or expression.
 
 "),
 
@@ -7193,6 +7344,17 @@
 
    Construct a matrix by repeating the given matrix \"n\" times in
    dimension 1 and \"m\" times in dimension 2.
+
+"),
+
+("Linear Algebra","Base","repeat","repeat(A, inner = Int[], outer = Int[])
+
+   Construct an array by repeating the entries of \"A\". The i-th
+   element of \"inner\" specifies the number of times that the
+   individual entries of the i-th dimension of \"A\" should be
+   repeated. The i-th element of \"outer\" specifies the number of
+   times that a slice along the i-th dimension of >>``<<A` should be
+   repeated.
 
 "),
 
