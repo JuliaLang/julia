@@ -3859,8 +3859,9 @@ C Interface
 
 .. function:: ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
 
-   Call function in C-exported shared library, specified by (function name, library) tuple (String or :Symbol). Alternatively,
+   Call function in C-exported shared library, specified by ``(function name, library)`` tuple, where each component is a String or :Symbol. Alternatively,
    ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
+   Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression.
 
 .. function:: cglobal((symbol, library) or ptr [, Type=Void])
 
