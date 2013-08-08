@@ -62,7 +62,8 @@ function intersect(s::Set, sets::Set...)
     for x in s
         for t in sets
             if !contains(t,x)
-                delete!(i,x)  # no error thrown on missing value
+                delete!(i,x)
+                break
             end
         end
     end
@@ -72,7 +73,7 @@ end
 function setdiff(a::Set, b::Set)
     d = copy(a)
     for x in b
-        delete!(d, x)  # no error thrown on missing value
+        delete!(d, x)
     end
     d
 end

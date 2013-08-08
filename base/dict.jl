@@ -159,7 +159,6 @@ function pop!(t::ObjectIdDict, key::ANY)
 end
 
 function delete!(t::ObjectIdDict, key::ANY)
-    #warn_once("delete!(h::ObjectIdDict,key) now returns the modified dictionary.\nUse pop!(h::ObjectIdDict,key) to retrieve the value instead.")
     ccall(:jl_eqtable_pop, Any, (Any, Any), t.ht, key)
     t
 end
@@ -541,7 +540,6 @@ function _delete!(h::Dict, index)
 end
 
 function delete!(h::Dict, key)
-    warn_once("delete!(h::Dict,key) now returns the modified dictionary.\nUse pop!(h::Dict,key) to retrieve the value instead.")
     index = ht_keyindex(h, key)
     if index > 0; _delete!(h, index); end
     h
