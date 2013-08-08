@@ -37,12 +37,14 @@ function gen_listpkg()
 			u=get_user_details_gh(user)
 			gh_repo_url = "https://api.github.com/repos/$(user)/$(repo)?access_token=$(gh_auth)"
 			gh_contrib_url = "https://api.github.com/repos/$(user)/$(repo)/contributors?access_token=$(gh_auth)"
+			travis_url= "https://api.travis-ci.org/repositories/$(user)/$(repo).json"
 			#print("processing $gh_repo_url")
 			gh_repo=JSON.parse(readall(download_file(gh_repo_url)))
 			#print("processing $gh_user_url")
 			gh_contrib=JSON.parse(readall(download_file(gh_contrib_url)))
-			
 
+			travis = JSON.parse(readall(download_file(travis_url)))
+			
 			desc = get(gh_repo, "description", "No description provided")
 			homepage = get(gh_repo, "homepage", nothing)
 			html_url = gh_repo["html_url"]
@@ -59,11 +61,19 @@ function gen_listpkg()
 		print(io, "`$(pkg) <$(html_url)>`_\n"); 
 		print(io, "_"^(length("`$(pkg) <$(html_url)>`_")) * "\n\n")
 		print(io, "  .. image:: $(u[:avatar])\n     :height: 80px\n     :width: 80px\n     :align: right\n     :alt: $(u[:fullname])\n     :target: $(u[:url])\n\n")
+		print(io, "  $(desc) \n\n")
 		print(io, "  Current Version: ``$(maxv.version)``"); 
 		if date != nothing
 			print(io, "  (updated: $(date[1:10])) \n\n")
 		end
-		print(io, "  $(desc) \n\n")
+		if (get(travis, "file", nothing) != "not found" && get(travis, "last_build_status", nothing) != nothing)
+			print(io, "  Master build status: |$(pkg)_build|\n\n")
+			print(io, "  .. |$(pkg)_build| image:: https://api.travis-ci.org/$(user)/$(repo).png\n")
+			print(io, "     :align: bottom\n\n")
+		else 
+			print(io, "  Master build status: No Travis-CI build\n\n")
+		end
+
 		print(io, "  Maintainer: `$(u[:fullname]) <$(u[:url])>`_\n\n") 
 		
 		if homepage != nothing && length(chomp(homepage)) > 0

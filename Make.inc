@@ -357,7 +357,7 @@ endif
 
 ifeq ($(USE_SYSTEM_LIBM),0)
 ifneq ($(UNTRUSTED_SYSTEM_LIBM),0)
-OSLIBS += $(BUILD)/lib/libopenlibm.a
+OSLIBS += $(WHOLE_ARCHIVE) $(BUILD)/lib/libopenlibm.a $(NO_WHOLE_ARCHIVE)
 endif
 endif
 
@@ -368,10 +368,10 @@ USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
 LIBBLASNAME = libmkl_rt
 LIBLAPACKNAME = libmkl_rt
-USE_SYSTEM_LIBM=1
-LIBM = -lm
+USE_SYSTEM_LIBM = 1
+LIBM = -L$(MKLROOT)/../compiler/lib/intel64 -limf
 LIBMNAME = libimf
-MKL_LDFLAGS = -L$(MKLLIB) -lmkl_rt -limf
+MKL_LDFLAGS = -L$(MKLLIB) -lmkl_rt
 ifneq ($(strip $(MKLLIB)),)
   ifeq ($(OS), Linux)
     RPATH_MKL = -Wl,-rpath,$(MKLLIB)
@@ -481,19 +481,19 @@ ENDCOLOR="\033[0m"
 
 GOAL=$(subst $(abspath $(JULIAHOME))/,,$(abspath $@))
 
-QUIET_CC = @printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR);
-QUIET_LINK = @printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
-QUIET_PERL = @printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
-QUIET_FLISP = @printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
-QUIET_JULIA = @printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
+PRINT_CC = printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR);
+PRINT_LINK = printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
+PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
+PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
+PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 
 else
 
 QUIET_MAKE =
-QUIET_CC =
-QUIET_LINK =
-QUIET_PERL =
-QUIET_FLISP =
-QUIET_JULIA =
+PRINT_CC =
+PRINT_LINK =
+PRINT_PERL =
+PRINT_FLISP =
+PRINT_JULIA =
 
 endif

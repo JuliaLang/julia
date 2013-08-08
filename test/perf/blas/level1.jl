@@ -13,7 +13,7 @@ function axpytest(n, repeat)
 	x = rand(n)
 	y = zeros(n)
 	for ct = 1:repeat
-		LinAlg.BLAS.axpy!(a, x, y)
+		Base.LinAlg.BLAS.axpy!(a, x, y)
 	end
 	y
 end

@@ -957,6 +957,8 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
     }
 
     jl_datatype_t *sty = (jl_datatype_t*)expr_type(expr, ctx);
+    if (jl_is_type_type((jl_value_t*)sty) && jl_is_leaf_type(jl_tparam0(sty)))
+        sty = (jl_datatype_t*)jl_typeof(jl_tparam0(sty));
     JL_GC_PUSH1(&sty);
     if (jl_is_structtype(sty) && sty != jl_module_type && sty->uid != 0) {
         unsigned idx = jl_field_index(sty, name, 0);
@@ -2553,12 +2555,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     //if (jlrettype == (jl_value_t*)jl_bottom_type)
     //    f->setDoesNotReturn();
 #ifdef DEBUG
-#ifdef _OS_WINDOWS_
-    AttrBuilder *attr = new AttrBuilder();
-    attr->addStackAlignmentAttr(16);
-    attr->addAlignmentAttr(16);
-    f->addAttribute(~0U, Attributes::get(f->getContext(), *attr));
-#endif
 #if LLVM32 && !LLVM33
     f->addFnAttr(Attributes::StackProtectReq);
 #else
@@ -2746,6 +2742,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     assert(varnum == ctx.argSpaceOffs);
 
     // step 9. create boxes for boxed locals
+    // now handled by explicit :newvar nodes
+    /*
     for(i=0; i < lvarslen; i++) {
         jl_sym_t *s = ((jl_sym_t*)jl_cellref(lvars,i));
         if (isBoxed(s, &ctx)) {
@@ -2753,6 +2751,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             builder.CreateStore(builder.CreateCall(jlbox_func, V_null), lv);
         }
     }
+    */
 
     // step 10. allocate space for exception handler contexts
     size_t stmtslen = jl_array_dim0(stmts);
@@ -3341,7 +3340,9 @@ static void init_julia_llvm_env(Module *m)
 
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);
-#ifndef LLVM32
+#ifdef LLVM32
+    FPM->add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
+#else 
     FPM->add(new TargetData(*jl_ExecutionEngine->getTargetData()));
 #endif
     // list of passes from vmkit

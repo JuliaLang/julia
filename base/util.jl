@@ -1,3 +1,7 @@
+# flush C stdio output from external libraries:
+
+flush_cstdio() = ccall(:jl_flush_cstdio, Void, ())
+
 # timing
 
 # system date in seconds
