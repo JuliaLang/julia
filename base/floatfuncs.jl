@@ -27,6 +27,7 @@ signbit(x::Float16) = signbit(reinterpret(Int16,x))
 
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = float32(16777216.)
+maxintfloat(::Type{Float16}) = float16(2048f0)
 maxintfloat{T<:FloatingPoint}(x::T)  = maxintfloat(T)
 maxintfloat() = maxintfloat(Float64)
 

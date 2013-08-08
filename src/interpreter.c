@@ -116,6 +116,17 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         if (jl_is_linenode(e)) {
             jl_lineno = jl_linenode_line(e);
         }
+        if (jl_is_newvarnode(e)) {
+            jl_value_t *var = jl_fieldref(e,0);
+            assert(jl_is_symbol(var));
+            for(size_t i=0; i < nl; i++) {
+                if (locals[i*2] == var) {
+                    locals[i*2+1] = NULL;
+                    break;
+                }
+            }
+            return (jl_value_t*)jl_nothing;
+        }
         return e;
     }
     jl_expr_t *ex = (jl_expr_t*)e;
@@ -189,16 +200,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     }
     else if (ex->head == body_sym) {
         return eval_body(ex->args, locals, nl, 0, 0);
-    }
-    else if (ex->head == newvar_sym) {
-        jl_value_t *var = args[0];
-        for(size_t i=0; i < nl; i++) {
-            if (locals[i*2] == var) {
-                locals[i*2+1] = NULL;
-                break;
-            }
-        }
-        return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == exc_sym) {
         return jl_exception_in_transit;

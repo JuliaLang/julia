@@ -2651,6 +2651,11 @@ void jl_init_types(void)
                         jl_tuple(1, jl_symbol("value")),
                         jl_tuple(1, jl_any_type), 0, 0);
 
+    jl_newvarnode_type =
+        jl_new_datatype(jl_symbol("NewvarNode"), jl_any_type, jl_null,
+                        jl_tuple(1, jl_symbol("name")),
+                        jl_tuple(1, jl_sym_type), 0, 0);
+
     jl_topnode_type =
         jl_new_datatype(jl_symbol("TopNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("name")),
