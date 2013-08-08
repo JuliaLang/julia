@@ -2741,6 +2741,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     assert(varnum == ctx.argSpaceOffs);
 
     // step 9. create boxes for boxed locals
+    // now handled by explicit :newvar nodes
+    /*
     for(i=0; i < lvarslen; i++) {
         jl_sym_t *s = ((jl_sym_t*)jl_cellref(lvars,i));
         if (isBoxed(s, &ctx)) {
@@ -2748,6 +2750,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             builder.CreateStore(builder.CreateCall(jlbox_func, V_null), lv);
         }
     }
+    */
 
     // step 10. allocate space for exception handler contexts
     size_t stmtslen = jl_array_dim0(stmts);
