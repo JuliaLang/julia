@@ -317,15 +317,15 @@ end
 
 @test search(u8str, "z") == 0:-1
 @test search(u8str, "∄") == 0:-1
-@test search(u8str, "∀") == 1:3
+@test search(u8str, "∀") == 1:1
 @test search(u8str, "∀", 4) == 0:-1
-@test search(u8str, "∃") == 13:15
+@test search(u8str, "∃") == 13:13
 @test search(u8str, "∃", 16) == 0:-1
 @test search(u8str, "x") == 26:26
 @test search(u8str, "x", 27) == 43:43
 @test search(u8str, "x", 44) == 0:-1
-@test search(u8str, "ε") == 5:6
-@test search(u8str, "ε", 7) == 54:55
+@test search(u8str, "ε") == 5:5
+@test search(u8str, "ε", 7) == 54:54
 @test search(u8str, "ε", 56) == 0:-1
 
 # string rsearch with a single-char string
@@ -343,19 +343,19 @@ end
 
 @test rsearch(u8str, "z") == 0:-1
 @test rsearch(u8str, "∄") == 0:-1
-@test rsearch(u8str, "∀") == 1:3
+@test rsearch(u8str, "∀") == 1:1
 @test rsearch(u8str, "∀", 0) == 0:-1
 #TODO: setting the limit in the middle of a wide char
 #      makes search fail but rsearch succeed.
 #      Should rsearch fail as well?
 #@test rsearch(u8str, "∀", 2) == 0:-1 # gives 1:3
-@test rsearch(u8str, "∃") == 13:15
+@test rsearch(u8str, "∃") == 13:13
 @test rsearch(u8str, "∃", 12) == 0:-1
 @test rsearch(u8str, "x") == 43:43
 @test rsearch(u8str, "x", 42) == 26:26
 @test rsearch(u8str, "x", 25) == 0:-1
-@test rsearch(u8str, "ε") == 54:55
-@test rsearch(u8str, "ε", 53) == 5:6
+@test rsearch(u8str, "ε") == 54:54
+@test rsearch(u8str, "ε", 53) == 5:5
 @test rsearch(u8str, "ε", 4) == 0:-1
 
 # string search with a single-char regex
@@ -370,25 +370,24 @@ end
 @test search(astr, r"\n", 15) == 0:-1
 @test search(u8str, r"z") == 0:-1
 @test search(u8str, r"∄") == 0:-1
-@test search(u8str, r"∀") == 1:3
+@test search(u8str, r"∀") == 1:1
 @test search(u8str, r"∀", 4) == 0:-1
 @test search(u8str, r"∀") == search(u8str, r"\u2200")
 @test search(u8str, r"∀", 4) == search(u8str, r"\u2200", 4)
-@test search(u8str, r"∃") == 13:15
+@test search(u8str, r"∃") == 13:13
 @test search(u8str, r"∃", 16) == 0:-1
 @test search(u8str, r"x") == 26:26
 @test search(u8str, r"x", 27) == 43:43
 @test search(u8str, r"x", 44) == 0:-1
-@test search(u8str, r"ε") == 5:6
-@test search(u8str, r"ε", 7) == 54:55
+@test search(u8str, r"ε") == 5:5
+@test search(u8str, r"ε", 7) == 54:54
 @test search(u8str, r"ε", 56) == 0:-1
 for i = 1:endof(astr)
     @test search(astr, r"."s, i) == i:i
 end
 for i = 1:endof(u8str)
-    # TODO: should regex search fast-forward invalid indices?
     if isvalid(u8str,i)
-        @test search(u8str, r"."s, i) == i:(next(u8str,i)[2]-1)
+        @test search(u8str, r"."s, i) == i:i
     end
 end
 
@@ -778,7 +777,7 @@ bin_val = hex2bytes("07bf")
 # sizeof
 @test sizeof("abc") == 3
 @test sizeof("\u2222") == 3
-@test sizeof(SubString("abc\u2222def",4,6)) == 3
+@test sizeof(SubString("abc\u2222def",4,4)) == 3
 @test sizeof(RopeString("abc","def")) == 6
 
 # issue #3597
