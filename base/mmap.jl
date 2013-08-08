@@ -28,7 +28,7 @@ function mmap(len::Integer, prot::Integer, flags::Integer, fd::Integer, offset::
     offset_page::FileOffset = ifloor(offset/pagesize)*pagesize
     len_page::Int = (offset-offset_page) + len
     # Mmap the file
-    p = ccall(:mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
+    p = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
     if int(p) == -1
         error("Memory mapping failed", strerror())
     end
@@ -46,21 +46,21 @@ function mmap_grow(len::Integer, prot::Integer, flags::Integer, fd::Integer, off
     const SEEK_CUR::Cint = 1
     const SEEK_END::Cint = 2
     # Save current file position so we can restore it later
-    cpos = ccall(:lseek, FileOffset, (Cint, FileOffset, Cint), fd, 0, SEEK_CUR)
+    cpos = ccall(:jl_lseek, FileOffset, (Cint, FileOffset, Cint), fd, 0, SEEK_CUR)
     if cpos < 0
         error(strerror())
     end
-    filelen = ccall(:lseek, FileOffset, (Cint, FileOffset, Cint), fd, 0, SEEK_END)
+    filelen = ccall(:jl_lseek, FileOffset, (Cint, FileOffset, Cint), fd, 0, SEEK_END)
     if filelen < 0
         error(strerror())
     end
     if (filelen < offset + len)
-        n = ccall(:pwrite, Cssize_t, (Cint, Ptr{Void}, Uint, FileOffset), fd, int8([0]), 1, offset + len - 1)
+        n = ccall(:jl_pwrite, Cssize_t, (Cint, Ptr{Void}, Uint, FileOffset), fd, int8([0]), 1, offset + len - 1)
         if (n < 1)
             error(strerror())
         end
     end
-    cpos = ccall(:lseek, FileOffset, (Cint, FileOffset, Cint), fd, cpos, SEEK_SET)
+    cpos = ccall(:jl_lseek, FileOffset, (Cint, FileOffset, Cint), fd, cpos, SEEK_SET)
     return mmap(len, prot, flags, fd, offset)
 end
 

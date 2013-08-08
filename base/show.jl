@@ -387,7 +387,7 @@ function argtype_decl_string(n, t)
     if t === Any && !isempty(n)
         return n
     end
-    if t <: Vararg && t.parameters[1] === Any
+    if t <: Vararg && t !== None && t.parameters[1] === Any
         return string(n, "...")
     end
     return string(n, "::", t)
@@ -573,17 +573,18 @@ xdump(fn::Function, io::IO, x::DataType, n::Int) = x.abstract ? dumptype(io, x, 
 # defaults:
 xdump(fn::Function, io::IO, x) = xdump(xdump, io, x, 5, "")  # default is 5 levels
 xdump(fn::Function, io::IO, x, n::Int) = xdump(xdump, io, x, n, "")
+xdump(fn::Function, io::IO, args...) = error("invalid arguments to xdump")
 xdump(fn::Function, args...) = xdump(fn, STDOUT::IO, args...)
 xdump(io::IO, args...) = xdump(xdump, io, args...)
 xdump(args...) = xdump(xdump, STDOUT::IO, args...)
 
-
 # Here are methods specifically for dump:
 dump(io::IO, x, n::Int) = dump(io, x, n, "")
 dump(io::IO, x) = dump(io, x, 5, "")  # default is 5 levels
-dump(args...) = dump(STDOUT::IO, args...)
 dump(io::IO, x::String, n::Int, indent) = println(io, typeof(x), " \"", x, "\"")
 dump(io::IO, x, n::Int, indent) = xdump(dump, io, x, n, indent)
+dump(io::IO, args...) = error("invalid arguments to dump")
+dump(args...) = dump(STDOUT::IO, args...)
 
 function dump(io::IO, x::Dict, n::Int, indent)
     println(typeof(x), " len ", length(x))

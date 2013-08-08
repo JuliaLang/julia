@@ -222,22 +222,11 @@
       <keyword>Core</keyword> 
       <keyword>Main</keyword> 
       <!-- exports.jl -->
-      <keyword>PCRE</keyword>
       <keyword>FFTW</keyword>
       <keyword>Collections</keyword>
-      <keyword>DSP</keyword>
-      <keyword>LinAlg</keyword>
-      <keyword>LibRandom</keyword>
-      <keyword>Random</keyword>
-      <keyword>Math</keyword>
-      <keyword>MPFR</keyword>
-      <keyword>GMP</keyword>
-      <keyword>QuadGK</keyword>
-      <keyword>Sort</keyword>
       <keyword>Test</keyword>
       <keyword>Pkg</keyword>
       <keyword>Operators</keyword>
-      <keyword>Errno</keyword>
       <keyword>Meta</keyword>
       <keyword>Graphics</keyword>
     </context>
@@ -309,11 +298,11 @@
       <keyword>MmapArrayInfo</keyword>
       <keyword>Module</keyword>
       <keyword>NTuple</keyword>
-      <keyword>NamedPipe</keyword>
       <keyword>(Getfield|Goto|Label|LineNumber|Quote)Node</keyword>
       <keyword>NotFound</keyword>
       <keyword>OS_FD</keyword>
       <keyword>ObjectIdDict</keyword>
+      <keyword>Pipe</keyword>
       <keyword>PollingFileWatcher</keyword>
       <keyword>Process(Chain(OrNot)?|Group)?</keyword>
       <keyword>Ptr</keyword>

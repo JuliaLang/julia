@@ -11,7 +11,7 @@ extern int jl_lineno;
 
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl);
 static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
-                             int start);
+                             int start, int toplevel);
 jl_value_t *jl_eval_module_expr(jl_expr_t *ex);
 
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
@@ -188,7 +188,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == body_sym) {
-        return eval_body(ex->args, locals, nl, 0);
+        return eval_body(ex->args, locals, nl, 0, 0);
     }
     else if (ex->head == newvar_sym) {
         jl_value_t *var = args[0];
@@ -327,6 +327,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_check_type_tuple(dt->types, dt->name->name, "type definition");
         super = eval(args[4], locals, nl);
         jl_set_datatype_super(dt, super);
+        for(size_t i=0; i < jl_tuple_len(para); i++) {
+            ((jl_tvar_t*)jl_tupleref(para,i))->bound = 0;
+        }
         jl_compute_field_offsets(dt);
         jl_add_constructors(dt);
         JL_GC_POP();
@@ -378,11 +381,28 @@ static int label_idx(jl_value_t *tgt, jl_array_t *stmts)
     return j;
 }
 
+jl_value_t *jl_toplevel_eval_body(jl_array_t *stmts)
+{
+    return eval_body(stmts, NULL, 0, 0, 1);
+}
+
+int jl_is_toplevel_only_expr(jl_value_t *e)
+{
+    return jl_is_expr(e) &&
+        (((jl_expr_t*)e)->head == module_sym ||
+         ((jl_expr_t*)e)->head == importall_sym ||
+         ((jl_expr_t*)e)->head == import_sym ||
+         ((jl_expr_t*)e)->head == using_sym ||
+         ((jl_expr_t*)e)->head == export_sym ||
+         ((jl_expr_t*)e)->head == toplevel_sym);
+}
+
 static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
-                             int start)
+                             int start, int toplevel)
 {
     jl_handler_t __eh;
     size_t i=start;
+    assert(!toplevel || nl==0);
     while (1) {
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_gotonode(stmt)) {
@@ -403,12 +423,16 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                 }
             }
             else if (head == return_sym) {
-                return eval(jl_exprarg(stmt,0), locals, nl);
+                jl_value_t *ex = jl_exprarg(stmt,0);
+                if (toplevel && jl_is_toplevel_only_expr(ex))
+                    return jl_toplevel_eval(ex);
+                else
+                    return eval(ex, locals, nl);
             }
             else if (head == enter_sym) {
                 jl_enter_handler(&__eh);
                 if (!jl_setjmp(__eh.eh_ctx,1)) {
-                    return eval_body(stmts, locals, nl, i+1);
+                    return eval_body(stmts, locals, nl, i+1, toplevel);
                 }
                 else {
                     i = label_idx(jl_exprarg(stmt,0), stmts);
@@ -420,11 +444,17 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                 jl_pop_handler(hand_n_leave);
             }
             else {
-                eval(stmt, locals, nl);
+                if (toplevel && jl_is_toplevel_only_expr(stmt))
+                    jl_toplevel_eval(stmt);
+                else
+                    eval(stmt, locals, nl);
             }
         }
         else {
-            eval(stmt, locals, nl);
+            if (toplevel && jl_is_toplevel_only_expr(stmt))
+                jl_toplevel_eval(stmt);
+            else
+                eval(stmt, locals, nl);
         }
         i++;
     }
@@ -453,7 +483,7 @@ jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
         locals[i*2]   = loc[(i-llength)*2];
         locals[i*2+1] = loc[(i-llength)*2+1];
     }
-    r = eval_body(stmts, locals, nl, 0);
+    r = eval_body(stmts, locals, nl, 0, 0);
     JL_GC_POP();
     return r;
 }

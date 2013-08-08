@@ -466,7 +466,7 @@ jl_value_t *jl_parse_next()
     return scm_to_julia(c,0);
 }
 
-void jl_load_file_string(const char *text, char *filename)
+jl_value_t *jl_load_file_string(const char *text, char *filename)
 {
     value_t t, f;
     t = cvalue_static_cstring(text);
@@ -475,7 +475,7 @@ void jl_load_file_string(const char *text, char *filename)
     fl_applyn(2, symbol_value(symbol("jl-parse-string-stream")),
               t, f);
     fl_free_gc_handles(1);
-    jl_parse_eval_all(filename);
+    return jl_parse_eval_all(filename);
 }
 
 // returns either an expression or a thunk

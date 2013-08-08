@@ -180,8 +180,13 @@ function serialize(s, f::Function)
             serialize(s, name)
             return
         end
-        if !is(f.env.defs, ())
+        mod = ()
+        if isa(f.env,Symbol)
+            mod = Core
+        elseif !is(f.env.defs, ())
             mod = f.env.defs.func.code.module
+        end
+        if mod !== ()
             if isdefined(mod,name) && is(f,eval(mod,name))
                 # toplevel named func
                 write(s, uint8(2))

@@ -327,7 +327,7 @@ _jl_sockaddr_set_port(ptr::Ptr{Void},port::Uint16) =
     ccall(:jl_sockaddr_set_port,Void,(Ptr{Void},Uint16),ptr,port)
 
 accept(server::TcpServer) = accept(server, TcpSocket())
-accept(server::PipeServer) = accept(server, NamedPipe())
+accept(server::PipeServer) = accept(server, Pipe())
 
 ##
 
@@ -392,7 +392,7 @@ end
 function getaddrinfo(cb::Function,host::ASCIIString)
     callback_dict[cb] = cb
     uv_error("getaddrinfo",ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Ptr{Uint8}, Ptr{Uint8}, Any),
-        eventloop(), host, C_NULL, cb) != 0)
+        eventloop(), host, C_NULL, cb))
 end
 
 function getaddrinfo(host::ASCIIString)
@@ -443,7 +443,7 @@ function connect!(sock::TcpSocket, host::IPv4, port::Integer)
         throw(DomainError())
     end
     uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),
-                 sock.handle,hton(host.host),hton(uint16(port))) != 0)
+                 sock.handle,hton(host.host),hton(uint16(port))))
     sock.status = StatusConnecting
 end
 
@@ -453,7 +453,7 @@ function connect!(sock::TcpSocket, host::IPv6, port::Integer)
         throw(DomainError())
     end
     uv_error("connect",ccall(:jl_tcp6_connect,Int32,(Ptr{Void},Ptr{Uint128},Uint16),
-                 sock.handle,&hton(host.host),hton(uint16(port))) != 0)
+                 sock.handle,&hton(host.host),hton(uint16(port))))
     sock.status = StatusConnecting
 end
 

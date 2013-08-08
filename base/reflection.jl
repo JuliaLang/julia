@@ -33,7 +33,7 @@ object_id(x::ANY) = ccall(:jl_object_id, Uint, (Any,), x)
 const isimmutable = x->(isa(x,Tuple) || !typeof(x).mutable)
 isstructtype(t::DataType) = t.names!=() || (t.size==0 && !t.abstract)
 isstructtype(x) = false
-isbits(t::DataType) = !t.mutable && t.pointerfree
+isbits(t::DataType) = !t.mutable & t.pointerfree
 isbits(t::Type) = false
 isbits(x) = isbits(typeof(x))
 isleaftype(t::ANY) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
@@ -72,6 +72,7 @@ isgeneric(f::ANY) = (isa(f,Function)||isa(f,DataType)) && isa(f.env,MethodTable)
 
 function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 
+code_lowered(f::Function,t::Tuple) = methods(f,t)[1] 
 methods(f::ANY,t::ANY) = _methods(f,t,-1)::Array{Any,1}
 _methods(f::ANY,t::ANY,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
 
@@ -85,11 +86,23 @@ end
 methods(t::DataType) = (_methods(t,Tuple,0);  # force constructor creation
                         t.env)
 
+function length(mt::MethodTable)
+    n = 0
+    d = mt.defs
+    while !is(d,())
+        n += 1
+        d = d.next
+    end
+    n
+end
+
 uncompressed_ast(l::LambdaStaticData) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
-disassemble(f::Function, types::Tuple, asm::Bool = false) =
-    print(ccall(:jl_dump_function, Any, (Any,Any,Bool), f, types, asm)::ByteString)
+code_llvm(f::Function, types::Tuple) = 
+    print(ccall(:jl_dump_function, Any, (Any,Any,Bool), f, types, false)::ByteString)
+code_native(f::Function,types::Tuple) = 
+    print(ccall(:jl_dump_function, Any, (Any,Any,Bool), f, types, true)::ByteString)
 
 function functionlocs(f::Function, types=(Any...))
     locs = Any[]

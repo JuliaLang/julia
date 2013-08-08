@@ -20,9 +20,9 @@ ifeq ($(OS),WINNT)
 CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
 endif
 
-#autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr patchelf
+#autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr patchelf uv
 #custom configure-driven script: zlib
-#custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas uv
+#custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
@@ -183,6 +183,9 @@ ifeq ($(BUILD_LLVM_CLANG),1)
 ifeq ($(LLVM_VER), 3.0)
 LLVM_CLANG_TAR=clang-$(LLVM_VER).tar.gz
 LLVM_COMPILER_RT_TAR=
+else ifeq ($(LLVM_VER), 3.3)
+LLVM_CLANG_TAR=cfe-$(LLVM_VER).src.tar.gz
+LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
 else
 LLVM_CLANG_TAR=clang-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
@@ -205,7 +208,7 @@ LLVM_FLAGS += --disable-assertions --enable-optimized
 endif
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared
-LLVM_MFLAGS += CPPFLAGS="-D__USING_SJLJ_EXCEPTIONS__"
+LLVM_MFLAGS += CPPFLAGS="-D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE"
 endif
 
 ifeq ($(BUILD_LLDB),1)
@@ -393,7 +396,7 @@ install-readline: $(READLINE_OBJ_TARGET)
 
 ## LIBUV ##
 
-UV_SRC_TARGET = libuv/libuv.a
+UV_SRC_TARGET = libuv/.libs/libuv.a
 UV_OBJ_TARGET = $(BUILD)/lib/libuv.a
 
 libuv/configure:
@@ -422,7 +425,7 @@ endif
 	echo 1 > $@
 $(UV_OBJ_TARGET): $(UV_SRC_TARGET)
 	$(MAKE) -C libuv install
-	$(INSTALL_NAME_CMD)libuv.dylib $@
+	$(INSTALL_NAME_CMD)libuv.dylib $(BUILD)/lib/libuv.dylib
 
 clean-uv:
 	-$(MAKE) -C libuv clean
@@ -484,6 +487,7 @@ install-pcre: $(PCRE_OBJ_TARGET)
 ## Grisu floating-point printing library ##
 
 GRISU_OPTS = $(CXXFLAGS) -O3 -fvisibility=hidden $(fPIC)
+GRISU_OBJ_TARGET = $(BUILD)/lib/libgrisu.$(SHLIB_EXT)
 
 double-conversion-$(GRISU_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://double-conversion.googlecode.com/files/$@
@@ -494,7 +498,7 @@ double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
 	touch -c $@
 
 ifeq ($(USE_SYSTEM_GRISU), 0)
-libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/Makefile
+$(GRISU_OBJ_TARGET): double-conversion-$(GRISU_VER)/Makefile
 	cd double-conversion-$(GRISU_VER) && \
 	$(CXX) -c $(GRISU_OPTS) -o src/bignum.o -Isrc src/bignum.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/bignum-dtoa.o -Isrc src/bignum-dtoa.cc && \
@@ -505,21 +509,19 @@ libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/Makefile
 	$(CXX) -c $(GRISU_OPTS) -o src/fixed-dtoa.o -Isrc src/fixed-dtoa.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/strtod.o -Isrc src/strtod.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/libdouble-conversion.o -I.. -Isrc ../double_conversion_wrapper.cpp && \
-	$(CXX) $(GRISU_OPTS) src/*.o $(LDFLAGS) -shared -dead_strip -o ../libgrisu.$(SHLIB_EXT)
+	$(CXX) $(GRISU_OPTS) src/*.o $(LDFLAGS) -shared -dead_strip -o $@ && \
+	$(INSTALL_NAME_CMD)libgrisu.dylib $@
 else
-libgrisu.$(SHLIB_EXT):
-	$(CXX) $(GRISU_OPTS) -I/usr/include/double-conversion double_conversion_wrapper.cpp -shared $(LDFLAGS) -o libgrisu.$(SHLIB_EXT) -ldouble-conversion
+$(GRISU_OBJ_TARGET):
+	$(CXX) $(GRISU_OPTS) -I/usr/include/double-conversion double_conversion_wrapper.cpp -shared $(LDFLAGS) -o $@ -ldouble-conversion && \
+	$(INSTALL_NAME_CMD)libgrisu.dylib $@
 endif
-
-$(BUILD)/lib/libgrisu.$(SHLIB_EXT): libgrisu.$(SHLIB_EXT)
-	cp -f $< $@
-	$(INSTALL_NAME_CMD)libdouble-conversion.dylib $@
 
 clean-double-conversion:
 	-rm -f double-conversion-$(GRISU_VER)/src/*.o
-	-rm -f libgrisu.$(SHLIB_EXT)
+	-rm -f $(GRISU_OBJ_TARGET)
 distclean-double-conversion:
-	-rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER) libgrisu.${SHLIB_EXT}
+	-rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER) $(GRISU_OBJ_TARGET)
 
 get-double-conversion: double-conversion-$(GRISU_VER).tar.gz
 configure-double-conversion: get-double-conversion
@@ -675,14 +677,17 @@ endif
 # Maximum number of threads for parallelism
 ifneq ($(ARCH),x86_64)
 # Assume we can't address much memory to spawn many threads
-OPENBLAS_BUILD_OPTS += NUM_THREADS=30
+# It is also unlikely that 32-bit architectures have too many cores
+OPENBLAS_BUILD_OPTS += NUM_THREADS=8
+else ifeq ($(OS),WINNT)
+# Windows seems unable to handle very many
+OPENBLAS_BUILD_OPTS += NUM_THREADS=24
+else ifeq ($(OS),Darwin)
+# This should suffice for the largest macs
+OPENBLAS_BUILD_OPTS += NUM_THREADS=24
 else
-# Assume we may want lots of threads on some future machine
-ifeq ($(OS),WINNT) #windows seems unable to handle very many
-OPENBLAS_BUILD_OPTS += NUM_THREADS=30
-else # Linux can handle up to 256 according to the FAQ. Use 128 for now as that should suffice everywhere.
+# On linux, try to provision for the largest possible machine currently
 OPENBLAS_BUILD_OPTS += NUM_THREADS=128
-endif
 endif
 
 # don't touch scheduler affinity since we manage this ourselves
@@ -716,6 +721,13 @@ else
 $(error "unknown arch for openblas cross-compile")
 endif
 
+ifeq ($(OS),WINNT)
+ifneq ($(ARCH),x86_64)
+OPENBLAS_BUILD_OPTS += CFLAGS="$(CFLAGS) -mincoming-stack-boundary=2"
+OPENBLAS_BUILD_OPTS += FFLAGS="$(FFLAGS) -mincoming-stack-boundary=2"
+endif
+endif
+
 # Debug OpenBLAS
 ifeq ($(OPENBLAS_DEBUG), 1)
 OPENBLAS_BUILD_OPTS += DEBUG=1
@@ -730,7 +742,7 @@ openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
 	cp lapack-$(LAPACK_VER).tgz openblas-$(OPENBLAS_VER)
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
-	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || echo "*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***"
+	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || (echo "*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***" && false)
 	touch -c $@
 $(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) | $(BUILD)/lib
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(BUILD)/lib
@@ -994,7 +1006,10 @@ ifneq ($(ARCH), ppc64)
   FFTW_CONFIG += --enable-sse2
 endif
 ifeq ($(OS),WINNT)
-	FFTW_CONFIG += --with-our-malloc --with-combined-threads
+FFTW_CONFIG += --with-our-malloc --with-combined-threads
+ifneq ($(OS),x86_64)
+FFTW_CONFIG += --with-incoming-stack-boundary=2
+endif
 endif
 
 fftw-$(FFTW_VER).tar.gz:

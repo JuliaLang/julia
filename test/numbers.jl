@@ -1323,6 +1323,9 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test rationalize(Int8, 0.003803032342443835) == 0//1
 @test rationalize(Uint8, 0.003803032342443835) == 1//255
 
+# issue 3412
+@test convert(Rational{Int32},0.5) === int32(1)//int32(2)
+
 # primes
 
 @test Base.primes(10000) == [

@@ -186,11 +186,11 @@
 			  (julia-parse current-token-stream)))))
     (if (eof-object? e)
 	e
-	(cons (+ (input-port-line (ts:port current-token-stream))
-		 (if (eqv? (peek-token current-token-stream) #\newline)
-		     -1 0))
-	      (parser-wrap
-	       (lambda ()
+	(parser-wrap
+	 (lambda ()
+	   (cons (+ (input-port-line (ts:port current-token-stream))
+		    (if (eqv? (peek-token current-token-stream) #\newline)
+			-1 0))
 		 (if (and (pair? e) (or (eq? (car e) 'error)
 					(eq? (car e) 'continue)))
 		     e

@@ -57,22 +57,24 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
         end
     end
 
-    vers = Array((ByteString,VersionNumber), 0)
-    for (p,d) in deps, (vn,_) in d
-        push!(vers, (p,vn))
+    vers = Array((ByteString,VersionNumber,VersionNumber), 0)
+    for (p,d) in deps, vn in keys(d)
+        lvns = VersionNumber[filter(vn2->(vn2>vn), keys(d))...]
+        nvn = isempty(lvns) ? typemax(VersionNumber) : min(lvns)
+        push!(vers, (p,vn,nvn))
     end
     sort!(vers, by=pvn->(-ndeps[pvn[1]][pvn[2]]))
 
     nv = length(vers)
 
-    svdict = ((ByteString,VersionNumber)=>Int)[ vers[i]=>i for i = 1:nv ]
+    svdict = ((ByteString,VersionNumber)=>Int)[ vers[i][1:2]=>i for i = 1:nv ]
 
     checked = falses(nv)
 
     problematic = Array((ByteString,VersionNumber,ByteString),0)
     i = 1
     psl = 0
-    for (p,vn) in vers
+    for (p,vn,nvn) in vers
         if ndeps[p][vn] == 0
             break
         end
@@ -81,10 +83,8 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
             continue
         end
 
-        nvn = VersionNumber(vn.major, vn.minor, vn.patch+1)
         sub_reqs = (ByteString=>VersionSet)[p=>VersionSet([vn, nvn])]
-        fixed = (ByteString=>VersionNumber)[p=>vn]
-        sub_deps = Query.prune_dependencies(sub_reqs, deps, fixed)
+        sub_deps = Query.prune_dependencies(sub_reqs, deps)
 
         interface = Interface(sub_reqs, sub_deps)
 

@@ -29,7 +29,7 @@
 
 <!DOCTYPE language SYSTEM "language.dtd">
 
-<language name="Julia" section="Sources" version="0.2" kateversion="2.2" extensions="*.jl" casesensitive="1" priority="5" license="MIT">
+<language name="Julia" section="Sources" version="0.2" kateversion="2.4" extensions="*.jl" casesensitive="1" priority="5" license="MIT">
 
   <highlighting>
     <list name="block_begin">
@@ -84,6 +84,7 @@
       <item> ASCIIString </item>
       <item> Associative </item>
       <item> AsyncStream </item>
+      <item> Bidiagonal </item>
       <item> BitArray </item>
       <item> BigFloat </item>
       <item> BigInt </item>
@@ -93,25 +94,36 @@
       <item> ByteString </item>
       <item> Char </item>
       <item> CharString </item>
+      <item> Cholesky </item>
+      <item> CholeskyPivoted </item>
+      <item> Cmd </item>
       <item> Colon </item>
       <item> Complex </item>
       <item> Complex64 </item>
       <item> Complex128 </item>
       <item> ComplexPair </item>
       <item> DArray </item>
+      <item> Diagonal </item>
       <item> Dict </item>
       <item> Dims </item>
       <item> EachLine </item>
+      <item> Eigen </item>
+      <item> Enumerate </item>
       <item> EnvHash </item>
       <item> Exception </item>
       <item> Expr </item>
+      <item> FileMonitor </item>
       <item> FileOffset </item>
       <item> Filter </item>
       <item> Float </item>
       <item> Float32 </item>
       <item> Float64 </item>
       <item> Function </item>
-      <item> ObjectIdDict </item>
+      <item> GeneralizedSchur </item>
+      <item> GeneralizedSVD </item>
+      <item> HeapSort </item>
+      <item> Hermitian </item>
+      <item> Hessenberg </item>
       <item> Int </item>
       <item> Int8 </item>
       <item> Int16 </item>
@@ -125,12 +137,17 @@
       <item> IOBuffer </item>
       <item> IOStream </item>
       <item> LocalProcess </item>
+      <item> LU </item>
+      <item> MathConst </item>
       <item> Matrix </item>
       <item> Nothing </item>
       <item> None </item>
       <item> NTuple </item>
       <item> Number </item>
       <item> ObjectIdDict </item>
+      <item> PollingFileWatcher </item>
+      <item> QR </item>
+      <item> QRPivoted </item>
       <item> OrdinalRange </item>
       <item> PipeBuffer </item>
       <item> ProcessGroup </item>
@@ -149,6 +166,7 @@
       <item> RevString </item>
       <item> Reverse </item>
       <item> RopeString </item>
+      <item> Schur </item>
       <item> Set </item>
       <item> Signed </item>
       <item> SparseMatrixCSC </item>
@@ -162,10 +180,15 @@
       <item> SubDArray </item>
       <item> SubOrDArray </item>
       <item> SubString </item>
+      <item> SVD </item>
       <item> Symbol </item>
+      <item> Symmetric </item>
       <item> SymTridiagonal </item>
       <item> Task </item>
       <item> TcpSocket </item>
+      <item> TimeoutAsyncWork </item>
+      <item> TmStruct </item>
+      <item> Triangular </item>
       <item> Tridiagonal </item>
       <item> Tuple </item>
       <item> Type </item>
@@ -187,6 +210,17 @@
       <item> WeakRef </item>
       <item> Woodbury </item>
       <item> Zip </item>
+      <item> AbstractRNG </item>
+      <item> MersenneTwister </item>
+      <item> Condition </item>
+      <item> IPv4 </item>
+      <item> IPv6 </item>
+      <item> ClusterManager </item>
+      <item> RawFD </item>
+      <item> WindowsRawSocket </item>
+      <item> PipeBuffer </item>
+      <item> UV_READABLE </item>
+      <item> UV_WRITEABLE </item>
 
       <item> Stat </item>
       <item> Factorization </item>
@@ -215,12 +249,16 @@
       <item> Culong </item>
       <item> Cptrdiff_t </item>
       <item> Csize_t </item>
+      <item> Cssize_t </item>
       <item> Clonglong </item>
       <item> Culonglong </item>
+      <item> Coff_t </item>
       <item> Cfloat </item>
       <item> Cdouble </item>
+      <item> Cwchar_t </item>
 
       <item> ArgumentError </item>
+      <item> ProcessExitedException </item>
       <item> DisconnectException </item>
       <item> EOFError </item>
       <item> ErrorException </item>
@@ -230,6 +268,60 @@
       <item> ParseError </item>
       <item> SystemError </item>
       <item> TypeError </item>
+
+      <item> Collections </item>
+      <item> FFTW </item>
+      <item> Order </item>
+      <item> Sys </item>
+      <item> Test </item>
+      <item> Pkg </item>
+      <item> Pkg2 </item>
+      <item> Operators </item>
+      <item> Meta </item>
+      <item> Graphics </item>
+      <item> Profile </item>
+    </list>
+    <list name="constants">
+      <item> ARGS </item>
+      <item> C_NULL </item>
+      <item> CPU_CORES </item>
+      <item> DL_LOAD_PATH </item>
+      <item> OS_NAME </item>
+      <item> ENDIAN_BOM </item>
+      <item> ENV </item>
+      <item> Inf </item>
+      <item> Inf32 </item>
+      <item> LOAD_PATH </item>
+      <item> MS_ASYNC </item>
+      <item> MS_INVALIDATE </item>
+      <item> MS_SYNC </item>
+      <item> NaN </item>
+      <item> NaN32 </item>
+      <item> RTLD_LOCAL </item>
+      <item> RTLD_GLOBAL </item>
+      <item> RTLD_LAZY </item>
+      <item> RTLD_NOW </item>
+      <item> RTLD_NOLOAD </item>
+      <item> RTLD_NODELETE </item>
+      <item> RTLD_DEEPBIND </item>
+      <item> RTLD_FIRST </item>
+      <item> STDERR </item>
+      <item> STDIN </item>
+      <item> STDOUT </item>
+      <item> VERSION </item>
+      <item> WORD_SIZE </item>
+    </list>
+    <list name="math-constants">
+      <item> im </item>
+      <item> π </item>
+      <item> pi </item>
+      <item> e </item>
+      <item> eu </item>
+      <item> γ </item>
+      <item> eulergamma </item>
+      <item> catalan </item>
+      <item> φ </item>
+      <item> golden </item>
     </list>
     <contexts>
 
@@ -238,18 +330,17 @@
         <DetectSpaces />
 
         <!-- Blocks -->
-        <keyword context="#stay" attribute="Keyword" String="block_begin" 
-beginRegion="block" />
-        <keyword context="#stay" attribute="Keyword" String="block_eb" 
-endRegion="block" beginRegion="block" />
-        <keyword context="#stay" attribute="Keyword" String="block_end" 
-endRegion="block" />
+        <keyword context="#stay" attribute="Keyword" String="block_begin" beginRegion="block" />
+        <keyword context="#stay" attribute="Keyword" String="block_eb" endRegion="block" beginRegion="block" />
+        <keyword context="#stay" attribute="Keyword" String="block_end" endRegion="block" />
         <StringDetect String="#BEGIN" context="region_marker" attribute="FoldingComment" beginRegion="user_region" />
         <StringDetect String="#END" context="region_marker" attribute="FoldingComment" endRegion="user_region" />
 
         <!-- Keywords, types, and comments -->
         <keyword context="#stay" attribute="Keyword" String="keywords" />
         <keyword context="#stay" attribute="Data Type" String="types" />
+        <keyword context="#stay" attribute="Constant" String="constants" />
+        <keyword context="#stay" attribute="Math Constant" String="math-constants" />
         <DetectChar char="#" context="1-comment" attribute="Comment"/>
 
         <!-- Lists and arrays -->
@@ -351,6 +442,7 @@ endRegion="block" />
       <itemData name="Normal Text" defStyleNum="dsNormal" />
       <itemData name="Variable" defStyleNum="dsNormal" />
       <itemData name="Operator" defStyleNum="dsNormal"/>
+      <itemData name="Math Constant" defStyleNum="dsDecVal" />
       <itemData name="Decimal" defStyleNum="dsDecVal" />
       <itemData name="Float" defStyleNum="dsFloat" />
       <itemData name="Hex" defStyleNum="dsBaseN" />
@@ -360,6 +452,7 @@ endRegion="block" />
       <itemData name="Incomplete Char" defStyleNum="dsChar"/>
       <itemData name="System" defStyleNum="dsBaseN"/>
       <itemData name="Keyword" defStyleNum="dsKeyword"/>
+      <itemData name="Constant" defStyleNum="dsKeyword"/>
       <itemData name="Data Type" defStyleNum="dsDataType"/>
       <itemData name="Comment" defStyleNum="dsComment"/>
       <itemData name="FoldingComment" defStyleNum="dsComment" />
