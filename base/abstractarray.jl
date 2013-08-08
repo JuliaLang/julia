@@ -1466,24 +1466,24 @@ function prod{T}(A::AbstractArray{T})
     v
 end
 
-function min{T<:Integer}(A::AbstractArray{T})
+function min(A::AbstractArray)
     if isempty(A); error("min: argument is empty"); end
     v = A[1]
     for i=2:length(A)
         x = A[i]
-        if x < v
+        if x < v || v!=v
             v = x
         end
     end
     v
 end
 
-function max{T<:Integer}(A::AbstractArray{T})
+function max(A::AbstractArray)
     if isempty(A); error("max: argument is empty"); end
     v = A[1]
     for i=2:length(A)
         x = A[i]
-        if x > v
+        if x > v || v!=v
             v = x
         end
     end
