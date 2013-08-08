@@ -303,6 +303,10 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
                     return jl_new_struct(jl_topnode_type,
                                          scm_to_julia_(car_(e),0));
                 }
+                if (sym == newvar_sym) {
+                    return jl_new_struct(jl_newvarnode_type,
+                                         scm_to_julia_(car_(e),0));
+                }
             }
             jl_expr_t *ex = jl_exprn(sym, n);
             for(i=0; i < n; i++) {
@@ -388,6 +392,9 @@ static value_t julia_to_scm(jl_value_t *v)
     }
     if (jl_typeis(v, jl_quotenode_type)) {
         return julia_to_list2((jl_value_t*)quote_sym, jl_fieldref(v,0));
+    }
+    if (jl_typeis(v, jl_newvarnode_type)) {
+        return julia_to_list2((jl_value_t*)newvar_sym, jl_fieldref(v,0));
     }
     if (jl_typeis(v, jl_topnode_type)) {
         return julia_to_list2((jl_value_t*)top_sym, jl_fieldref(v,0));
