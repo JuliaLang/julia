@@ -164,7 +164,7 @@ function static_convert(to::ANY, from::ANY)
     if is(to,Tuple)
         return from
     end
-    pl = length(to); cl = length(from)
+    pl = length(to)::Int; cl = length(from)::Int
     pseq = false
     result = Array(Any, cl)
     for i=1:cl

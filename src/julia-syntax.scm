@@ -2219,8 +2219,18 @@ So far only the second case can actually occur.
 			   ;; being declared global prevents a variable
 			   ;; assignment from introducing a local
 			   (cadr e) (append env glob) glob))
-		    (body (add-local-decls (cadr e) (append vars glob env))))
-	       `(scope-block ,@(map (lambda (v) `(local ,v))
+		    (body (add-local-decls (cadr e) (append vars glob env)))
+		    (lineno (if (and (length> body 1)
+				     (pair? (cadr body))
+				     (eq? 'line (car (cadr body))))
+				(list (cadr body))
+				'()))
+		    (body (if (null? lineno)
+			      body
+			      `(,(car body) ,@(cddr body)))))
+	       `(scope-block ,@lineno
+			     ;; place local decls after initial line node
+			     ,@(map (lambda (v) `(local ,v))
 				    vars)
 			     ,(remove-local-decls body))))
 	    (else
