@@ -1307,54 +1307,76 @@ pmap(f) = f()
 # L = {rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000)};
 # pmap(eig, L);
 function pmap(f, lsts...; err_retry=true, err_stop=false)
+    len = length(lsts)
     np = nprocs()
-    n = length(lsts[1])
-    results = cell(n)
-    queue = [1:n]
-    
+    retrycond = Condition()
+
+    results = Dict{Int,Any}()
+    function setresult(idx,v)
+        results[idx] = v
+        notify(retrycond)
+    end
+
+    retryqueue = {}
+    function retry(idx,v,ex)
+        push!(retryqueue, (idx,v,ex))
+        notify(retrycond)
+    end
+
     task_in_err = false
     is_task_in_error() = task_in_err
-    function set_task_in_error() 
-        task_in_err = true
+    set_task_in_error() = (task_in_err = true)
+
+    nextidx = 0
+    getnextidx() = (nextidx += 1)
+    getcurridx() = nextidx
+
+    states = [start(lsts[idx]) for idx in 1:len]
+    function producer()
+        while true
+            if (is_task_in_error() && err_stop)     
+                break
+            elseif !isempty(retryqueue)
+                produce(shift!(retryqueue)[1:2])
+            elseif all([!done(lsts[idx],states[idx]) for idx in 1:len])
+                nxts = [next(lsts[idx],states[idx]) for idx in 1:len]
+                map(idx->states[idx]=nxts[idx][2], 1:len)
+                nxtvals = [x[1] for x in nxts]
+                produce((getnextidx(), nxtvals))
+            elseif (length(results) == getcurridx())
+                break
+            else
+                wait(retrycond)
+            end
+        end
     end
-    
+
+    pt = Task(producer)
     @sync begin
         for p=1:np
             wpid = PGRP.workers[p].id
             if wpid != myid() || np == 1
                 @async begin
-                    while true
-                        if isempty(queue) || (is_task_in_error() && err_stop)
-                            break
-                        end
-                        idx = shift!(queue)
+                    for (idx,nxtvals) in pt
                         try
-                            results[idx] = remotecall_fetch(wpid, f,
-                                                            map(L->L[idx], lsts)...)
-                            if isa(results[idx], Exception)
-                                if wpid == myid()
-                                    rethrow(results[idx])
-                                else
-                                    throw(results[idx])
-                                end
-                            end
-                        catch e
-                            if err_retry
-                                push!(queue, idx) 
-                            else
-                                results[idx] = e
-                            end
+                            result = remotecall_fetch(wpid, f, nxtvals...)
+                            isa(result, Exception) ? ((wpid == myid()) ? rethrow(result) : throw(result)) : setresult(idx, result)
+                        catch ex
+                            err_retry ? retry(idx,nxtvals,ex) : setresult(idx, ex)
                             set_task_in_error()
-                            
-                            # remove this worker from accepting any more tasks 
-                            break
+                            break # remove this worker from accepting any more tasks 
                         end
                     end
                 end
             end
         end
     end
-    results
+
+    !istaskdone(pt) && throwto(pt, InterruptException())
+    for failure in retryqueue
+        results[failure[1]] = failure[3]
+    end
+    [results[x] for x in 1:nextidx]
 end
 
 # Statically split range [1,N] into equal sized chunks for np processors
