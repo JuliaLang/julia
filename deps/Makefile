@@ -165,13 +165,17 @@ BUILD_LLVM_CLANG = 1
 endif
 
 ifeq ($(LLVM_DEBUG),1)
+ifeq ($(LLVM_ASSERTIONS), 1)
+LLVM_BUILDDIR = build/Debug+Asserts
+else 
 LLVM_BUILDDIR = build/Debug
+endif
 else
+ifeq ($(LLVM_ASSERTIONS), 1)
+LLVM_BUILDDIR = build/Release+Asserts
+else 
 LLVM_BUILDDIR = build/Release
 endif
-
-ifeq ($(LLVM_ASSERTIONS), 1)
-LLVM_BUILDDIR += +Asserts
 endif
 
 LLVM_LIB_FILE = libLLVMJIT.a
