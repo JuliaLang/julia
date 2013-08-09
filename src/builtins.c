@@ -1092,6 +1092,7 @@ void jl_init_primitives(void)
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("TopNode", (jl_value_t*)jl_topnode_type);
+    add_builtin("NewvarNode", (jl_value_t*)jl_newvarnode_type);
 
 #ifdef _P64
     add_builtin("Int", (jl_value_t*)jl_int64_type);

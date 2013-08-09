@@ -814,7 +814,6 @@ export
     strip,
     strwidth,
     summary,
-    thisind,
     ucfirst,
     unescape_chars,
     unescape_string,

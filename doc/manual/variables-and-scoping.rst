@@ -243,6 +243,39 @@ variable as local in the same scope twice. The second example is legal
 since the ``let`` introduces a new scope block, so the inner local ``x``
 is a different variable than the outer local ``x``.
 
+For Loops and Comprehensions
+----------------------------
+
+For loops and comprehensions have a special additional behavior: any
+new variables introduced in their body scopes are freshly allocated for
+each loop iteration. Therefore these constructs are similar to ``while``
+loops with ``let`` blocks inside:
+
+    Fs = cell(2)
+    for i = 1:2
+        Fs[i] = ()->i
+    end
+
+    julia> Fs[1]()
+    1
+
+    julia> Fs[2]()
+    2
+
+``for`` loops will reuse existing variables for iteration:
+
+    i = 0
+    for i = 1:3
+    end
+    i  # here equal to 3
+
+However, comprehensions do not do this, and always freshly allocate their
+iteration variables:
+
+    x = 0
+    [ x for x=1:3 ]
+    x  # here still equal to 0
+
 Constants
 ---------
 

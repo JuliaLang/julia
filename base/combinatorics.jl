@@ -180,57 +180,41 @@ end
 
 ipermute!(a, p::AbstractVector{Int}) = ipermute!!(a, copy(p))
 
-# Algorithm T from TAoCP 7.2.1.3
-function combinations(a::AbstractVector, t::Integer)
-  # T1
-  n = length(a)
-  c = [0:t-1, [n, 0]]
-  j = t
-  if (t >= n) 
-    # Algorithm T assumes t < n, just return a
-    produce(a)
-  else
-    while true
-      # T2
-      produce([ a[c[i]+1] for i=1:t ])
-
-      if j > 0
-        x = j
-      else
-        # T3
-        if c[1] + 1 < c[2]
-          c[1] = c[1] + 1
-          continue # to T2
-        else
-          j = 2
-        end
-
-        # T4
-        need_j = true
-        while need_j
-          need_j = false
-
-          c[j-1] = j-2
-          x = c[j] + 1
-          if x == c[j + 1]
-            j = j + 1
-            need_j = true # loop to T4
-          end
-        end
-
-        # T5
-        if j > t
-          # terminate
-          break
-        end
-      end
-
-      # T6
-      c[j] = x 
-      j = j - 1
-    end
-  end
+immutable Combinations{T}
+    a::T
+    t::Int
 end
+
+eltype(c::Combinations) = typeof(c.a)
+
+function combinations(a, t::Integer)
+    if t < 0
+        # generate 0 combinations for negative argument
+        t = length(a)+1
+    end
+    Combinations(a, t)
+end
+
+start(c::Combinations) = [1:c.t]
+function next(c::Combinations, s)
+    if c.t == 0
+        # special case to generate 1 result for t==0
+        return (c.a[s],[length(c.a)+2])
+    end
+    sn = copy(s)
+    for i = length(sn):-1:1
+        sn[i] += 1
+        if sn[i] > (length(c.a) - (length(sn)-i))
+            continue
+        end
+        for j = i+1:endof(sn)
+            sn[j] = sn[j-1]+1
+        end
+        break
+    end
+    (c.a[s],sn)
+end
+done(c::Combinations, s) = !isempty(s) && s[1] > length(c.a)-c.t+1
 
 # Algorithm H from TAoCP 7.2.1.4
 # Partition n into m parts

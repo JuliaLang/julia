@@ -861,10 +861,6 @@ Strings
    Get the previous valid string index before ``i``. Returns ``0`` at
    the beginning of the string.
 
-.. function:: thisind(str, i)
-
-   Adjust ``i`` downwards until it reaches a valid index for the given string.
-
 .. function:: randstring(len)
 
    Create a random ASCII string of length ``len``, consisting of upper- and lower-case letters and the digits 0-9
@@ -2028,7 +2024,7 @@ Mathematical Functions
 
 .. function:: clamp(x, lo, hi)
 
-   Return x if ``lo <= x <= y``. If ``x < lo``, return ``lo``. If ``x > hi``, return ``hi``.
+   Return x if ``lo <= x <= hi``. If ``x < lo``, return ``lo``. If ``x > hi``, return ``hi``.
 
 .. function:: abs(x)
 
@@ -3063,9 +3059,9 @@ Combinatorics
 .. function:: combinations(array, n)
 
    Generate all combinations of ``n`` elements from a given array. Because
-   the number of combinations can be very large, this function runs inside
-   a Task to produce values on demand. Write ``c = @task combinations(a,n)``,
-   then iterate ``c`` or call ``consume`` on it.
+   the number of combinations can be very large, this function returns an
+   iterator object. Use ``collect(combinations(a,n))`` to get an array of all
+   combinations.
 
 .. function:: integer_partitions(n, m)
 
@@ -3859,8 +3855,9 @@ C Interface
 
 .. function:: ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
 
-   Call function in C-exported shared library, specified by (function name, library) tuple (String or :Symbol). Alternatively,
+   Call function in C-exported shared library, specified by ``(function name, library)`` tuple, where each component is a String or :Symbol. Alternatively,
    ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
+   Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression.
 
 .. function:: cglobal((symbol, library) or ptr [, Type=Void])
 

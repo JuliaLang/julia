@@ -111,7 +111,8 @@ function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, au
         for col in 1:maxcol
             start_pos = dlm_col_begin(maxcol, offsets, row, col)
             end_pos = offsets[row,col]
-            sval = SubString(sbuff, start_pos, end_pos)
+            sval = SubString(sbuff, start_pos,
+                             prevind(sbuff, nextind(sbuff,end_pos)))
 
             if T <: Char
                 (length(sval) != 1) && error("file entry \"$(sval)\" is not a Char")
