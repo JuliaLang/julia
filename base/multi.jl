@@ -745,11 +745,7 @@ function perform_work(t::Task)
         yieldto(t, arg)
     end
     t = current_task().last
-    if istaskdone(t)
-        if isa(t.donenotify, Condition)
-            notify(t.donenotify, t.result)
-        end
-    elseif t.runnable
+    if t.runnable
         # still runnable; return to queue
         enq_work(t)
     end

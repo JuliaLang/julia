@@ -151,3 +151,14 @@ notify1(c::Condition, arg=nothing) = notify(c, arg, all=false)
 
 notify_error(c::Condition, err) = notify(c, err, error=true)
 notify1_error(c::Condition, err) = notify(c, err, error=true, all=false)
+
+function task_done_hook(t::Task)
+    if isa(t.donenotify, Condition)
+        if isdefined(t,:exception) && t.exception !== nothing
+            # TODO: maybe wrap this in a TaskExited exception
+            notify_error(t.donenotify, t.exception)
+        else
+            notify(t.donenotify, t.result)
+        end
+    end
+end
