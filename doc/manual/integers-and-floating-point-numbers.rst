@@ -49,12 +49,13 @@ Type         Signed?  Number of bits  Smallest value Largest value
 
 -  **Floating-point types:**
 
-=========== ========= ============== ===============================================================================
-Type        Precision Number of bits Precision
------------ --------- -------------- -------------------------------------------------------------------------------
-``Float32`` single          32       `single <http://en.wikipedia.org/wiki/Single_precision_floating-point_format>`_
-``Float64`` double          64       `double <http://en.wikipedia.org/wiki/Double_precision_floating-point_format>`_
-=========== ========= ============== ===============================================================================
+=========== =============================================================================== ==============
+Type        Precision                                                                       Number of bits
+----------- ------------------------------------------------------------------------------- --------------
+``Float16`` `half <http://en.wikipedia.org/wiki/Half-precision_floating-point_format>`_           16
+``Float32`` `single <http://en.wikipedia.org/wiki/Single_precision_floating-point_format>`_       32
+``Float64`` `double <http://en.wikipedia.org/wiki/Double_precision_floating-point_format>`_       64
+=========== =============================================================================== ==============
 
 Additionally, full support for :ref:`man-complex-and-rational-numbers` is built
 on top of these primitive numeric types. All numeric types interoperate
@@ -192,7 +193,7 @@ Overflow behavior
 ~~~~~~~~~~~~~~~~~
 
 In Julia, exceeding the maximum representable value of a given type results in
-a wraparound behavior.::
+a wraparound behavior::
 
     julia> x = typemax(Int64)
     9223372036854775807
@@ -269,6 +270,16 @@ Hexadecimal floating-point literals are also valid, but only as ``Float64`` valu
 
     julia> typeof(ans)
     Float64
+
+Half-precision floating-point numbers are also supported (``Float16``), but
+only as a storage format. In calculations they'll be converted to ``Float32``::
+
+    julia> sizeof(float16(4.))
+    2
+
+    julia> 2*float16(4.)
+    8.0f0
+
 
 Floating-point zero
 ~~~~~~~~~~~~~~~~~~~

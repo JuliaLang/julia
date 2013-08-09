@@ -250,7 +250,7 @@
       <keyword>Signed|Unsigned</keyword>
       <keyword>Int(eger|Set|8|16|32|64|128)?</keyword>
       <keyword>Uint(8|16|32|64|128)?</keyword>
-      <keyword>Float(ingPoint|32|64)</keyword>
+      <keyword>Float(ingPoint|16|32|64)</keyword>
       <keyword>Complex(Pair|64|128)?</keyword>
       <keyword>Big(Int|Float)</keyword>
       <keyword>C(float|double|ptrdiff_t|u?(int|long(long)?|char|short)|s?size_t|wchar_t)</keyword>
