@@ -59,8 +59,8 @@ end
 # or maybe it's better to just fail since that would be quite slow
 
 immutable RegexMatch
-    match::ByteString
-    captures::Vector{Union(Nothing,ByteString)}
+    match::SubString
+    captures::Vector{Union(Nothing,SubString)}
     offset::Int
     offsets::Vector{Int}
 end
@@ -85,17 +85,17 @@ end
 ismatch(r::Regex, s::String) =
     PCRE.exec(r.regex, C_NULL, bytestring(s), 0, r.options & PCRE.EXECUTE_MASK, false)
 
-function match(re::Regex, str::ByteString, idx::Integer, add_opts::Uint32)
+function match(re::Regex, str::ByteString, idx::Integer, add_opts::Uint32=uint32(0),
+               extra::Ptr{Void}=C_NULL)
     opts = re.options & PCRE.EXECUTE_MASK | add_opts
-    m, n = PCRE.exec(re.regex, C_NULL, str, idx-1, opts, true)
+    m, n = PCRE.exec(re.regex, extra, str, idx-1, opts, true)
     if isempty(m); return nothing; end
-    mat = str[m[1]+1:m[2]]
-    cap = Union(Nothing,ByteString)[
-            m[2i+1] < 0 ? nothing : str[m[2i+1]+1:m[2i+2]] for i=1:n ]
+    mat = SubString(str, m[1]+1, m[2])
+    cap = Union(Nothing,SubString)[
+            m[2i+1] < 0 ? nothing : SubString(str, m[2i+1]+1, m[2i+2]) for i=1:n ]
     off = Int[ m[2i+1]::Int32+1 for i=1:n ]
     RegexMatch(mat, cap, m[1]+1, off)
 end
-match(re::Regex, str::ByteString, idx::Integer) = match(re, str, idx, uint32(0))
 match(r::Regex, s::String) = match(r, s, start(s))
 match(r::Regex, s::String, i::Integer) =
     error("regex matching is only available for bytestrings; use bytestring(s) to convert")
@@ -118,7 +118,7 @@ function matchall(re::Regex, str::ByteString, overlap::Bool=false)
 
         if result < 0
             if prevempty && offset < n
-                offset = int32(next(str, offset + 1)[2] - 1)
+                offset = int32(nextind(str, offset + 1) - 1)
                 prevempty = false
                 continue
             else
@@ -130,7 +130,7 @@ function matchall(re::Regex, str::ByteString, overlap::Bool=false)
         prevempty = offset == ovec[2]
         if overlap
             if !prevempty
-                offset = int32(next(str, offset + 1)[2] - 1)
+                offset = int32(nextind(str, offset + 1) - 1)
             end
         else
             offset = ovec[2]
@@ -156,52 +156,59 @@ immutable RegexMatchIterator
     regex::Regex
     string::ByteString
     overlap::Bool
+    extra::Ptr{Void}
 
-    function RegexMatchIterator(regex::Regex, string::String, ovr::Bool)
-        new(regex, string, ovr)
+    function RegexMatchIterator(regex::Regex, string::String, ovr::Bool=false)
+        extra = PCRE.study(regex.regex, PCRE.STUDY_JIT_COMPILE)
+        new(regex, string, ovr, extra)
     end
-    RegexMatchIterator(regex::Regex, string::String) = RegexMatchIterator(regex, string, false)
 end
 
 eltype(itr::RegexMatchIterator) = RegexMatch
-start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1)
+start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1, uint32(0), itr.extra)
 done(itr::RegexMatchIterator, prev_match) = (prev_match == nothing)
 
 # Assumes prev_match is not nothing
 function next(itr::RegexMatchIterator, prev_match)
-    m = prev_match
-    str = itr.string
+    prevempty = isempty(prev_match.match)
 
-    while true
-      opts = uint32(0)
-      if m != nothing
-          idx = itr.overlap ? next(str, m.offset)[2] : m.offset + length(m.match.data)
-
-          if length(m.match) == 0
-              if m.offset == length(str.data) + 1
-                  break
-              end
-              opts = opts | PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART
-          end
-      end
-
-      m = match(itr.regex, str, idx, opts)
-      if m == nothing
-          if opts == 0
-              break
-          end
-          idx = next(str, idx)[2]
-          continue
-      end
-
-      return (prev_match, m)
+    if itr.overlap
+        if !prevempty
+            offset = nextind(itr.string, prev_match.offset)
+        else
+            offset = prev_match.offset
+        end
+    else
+        offset = prev_match.offset + endof(prev_match.match)
     end
 
+    opts_nonempty = uint32(PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART)
+    while true
+        mat = match(itr.regex, itr.string, offset,
+                    prevempty ? opts_nonempty : uint32(0), itr.extra)
+
+        if mat === nothing
+            if prevempty && offset <= length(itr.string.data)
+                offset = nextind(itr.string, offset)
+                prevempty = false
+                continue
+            else
+                break
+            end
+        else
+            return (prev_match, mat)
+        end
+    end
+
+    PCRE.free_study(itr.extra)
     (prev_match, nothing)
 end
 
-eachmatch(re::Regex, str::String, ovr::Bool) = RegexMatchIterator(re,str,ovr)
-eachmatch(re::Regex, str::String)            = RegexMatchIterator(re,str)
+function eachmatch(re::Regex, str::String, ovr::Bool=false)
+    RegexMatchIterator(re,str,ovr)
+end
+
+eachmatch(re::Regex, str::String) = RegexMatchIterator(re,str)
 
 # miscellaneous methods that depend on Regex being defined
 

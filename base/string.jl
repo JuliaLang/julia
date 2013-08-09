@@ -388,9 +388,14 @@ immutable SubString{T<:String} <: String
         if i > endof(s) || j<i
             return new(s, i, 0)
         else
-            if !isvalid(s,i) || !isvalid(s,j)
+            if !isvalid(s,i)
                 error("invalid SubString indexes")
             end
+
+            while !isvalid(s,j) && j > i
+                j -= 1
+            end
+
             o = i-1
             new(s, o, max(0, j-o))
         end
@@ -416,6 +421,8 @@ function next(s::SubString, i::Int)
 end
 
 getindex(s::SubString, i::Int) = getindex(s.string, i+s.offset)
+
+isempty(s::SubString) = s.endof == 0
 
 endof(s::SubString) = s.endof
 # TODO: length(s::SubString) = ??
