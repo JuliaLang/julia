@@ -59,8 +59,8 @@ end
 # or maybe it's better to just fail since that would be quite slow
 
 immutable RegexMatch
-    match::SubString
-    captures::Vector{Union(Nothing,SubString)}
+    match::SubString{UTF8String}
+    captures::Vector{Union(Nothing,SubString{UTF8String})}
     offset::Int
     offsets::Vector{Int}
 end
@@ -85,25 +85,29 @@ end
 ismatch(r::Regex, s::String) =
     PCRE.exec(r.regex, C_NULL, bytestring(s), 0, r.options & PCRE.EXECUTE_MASK, false)
 
-function match(re::Regex, str::ByteString, idx::Integer, add_opts::Uint32=uint32(0),
+function match(re::Regex, str::UTF8String, idx::Integer, add_opts::Uint32=uint32(0),
                extra::Ptr{Void}=C_NULL)
     opts = re.options & PCRE.EXECUTE_MASK | add_opts
     m, n = PCRE.exec(re.regex, extra, str, idx-1, opts, true)
     if isempty(m); return nothing; end
     mat = SubString(str, m[1]+1, m[2])
-    cap = Union(Nothing,SubString)[
+    cap = Union(Nothing,SubString{UTF8String})[
             m[2i+1] < 0 ? nothing : SubString(str, m[2i+1]+1, m[2i+2]) for i=1:n ]
     off = Int[ m[2i+1]::Int32+1 for i=1:n ]
     RegexMatch(mat, cap, m[1]+1, off)
 end
+
+match(re::Regex, str::ByteString, idx::Integer, add_opts::Uint32=uint32(0)) =
+    match(re, utf8(str), idx, add_opts)
+
 match(r::Regex, s::String) = match(r, s, start(s))
 match(r::Regex, s::String, i::Integer) =
     error("regex matching is only available for bytestrings; use bytestring(s) to convert")
 
-function matchall(re::Regex, str::ByteString, overlap::Bool=false)
+function matchall(re::Regex, str::UTF8String, overlap::Bool=false)
     extra = PCRE.study(re.regex, PCRE.STUDY_JIT_COMPILE)
     n = length(str.data)
-    matches = SubString[]
+    matches = SubString{UTF8String}[]
     offset = int32(0)
     opts = re.options & PCRE.EXECUTE_MASK
     opts_nonempty = opts | PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART
@@ -140,6 +144,9 @@ function matchall(re::Regex, str::ByteString, overlap::Bool=false)
     matches
 end
 
+matchall(re::Regex, str::ByteString, overlap::Bool=false) =
+    matchall(re, utf8(str), overlap)
+
 function search(str::ByteString, re::Regex, idx::Integer)
     if idx > nextind(str,endof(str))
         throw(BoundsError())
@@ -154,7 +161,7 @@ search(s::String, r::Regex) = search(s,r,start(s))
 
 immutable RegexMatchIterator
     regex::Regex
-    string::ByteString
+    string::UTF8String
     overlap::Bool
     extra::Ptr{Void}
 
