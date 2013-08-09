@@ -828,13 +828,14 @@ function listen(path::ByteString)
     sock
 end
 
-function connect!(sock::Pipe,path::ByteString)
+function connect!(sock::Pipe, path::ByteString)
     @assert sock.status == StatusInit
     req = c_malloc(_sizeof_uv_connect)
     ccall(:uv_pipe_connect, Void, (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Ptr{Void}), req, sock.handle, path, uv_jl_connectcb::Ptr{Void})
     sock.status = StatusConnecting
     sock
 end
+connect!(sock::Pipe, path::String) = connect(sock,bytestring(path))
 
 function connect(cb::Function,sock::AsyncStream,args...)
     sock.ccb = cb
@@ -851,6 +852,8 @@ function connect(sock::AsyncStream, args...)
     wait_connected(sock)
     sock
 end
+
+connect(path::String) = connect(Pipe(),path)
 
 dup(x::RawFD) = RawFD(ccall((@windows? :_dup : :dup),Int32,(Int32,),x.fd))
 dup(src::RawFD,target::RawFD) = systemerror("dup",ccall((@windows? :_dup2 : :dup2),Int32,(Int32,Int32),src.fd,target.fd) == -1)
@@ -875,5 +878,3 @@ for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,tru
         end
     end
 end
-
-connect(path::ByteString) = connect(Pipe(),path)
