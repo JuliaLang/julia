@@ -6,7 +6,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
-             serialize, deserialize
+             serialize, deserialize, bin, oct, dec, hex
 
 type BigInt <: Integer
     alloc::Cint
@@ -344,6 +344,11 @@ end
 function show(io::IO, x::BigInt)
     print(io, string(x))
 end
+
+bin(n::BigInt) = base( 2, n)
+oct(n::BigInt) = base( 8, n)
+dec(n::BigInt) = base(10, n)
+hex(n::BigInt) = base(16, n)
 
 function base(b::Integer, n::BigInt)
     if !(2 <= b <= 62)
