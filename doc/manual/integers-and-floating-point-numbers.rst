@@ -49,13 +49,17 @@ Type         Signed?  Number of bits  Smallest value Largest value
 
 -  **Floating-point types:**
 
-=========== =============================================================================== ==============
-Type        Precision                                                                       Number of bits
------------ ------------------------------------------------------------------------------- --------------
-``Float16`` `half <http://en.wikipedia.org/wiki/Half-precision_floating-point_format>`_           16
-``Float32`` `single <http://en.wikipedia.org/wiki/Single_precision_floating-point_format>`_       32
-``Float64`` `double <http://en.wikipedia.org/wiki/Double_precision_floating-point_format>`_       64
-=========== =============================================================================== ==============
+=========== ========= ==============
+Type        Precision Number of bits
+----------- --------- --------------
+``Float16`` half_          16
+``Float32`` single_        32
+``Float64`` double_        64
+=========== ========= ==============
+
+.. _half: http://en.wikipedia.org/wiki/Half-precision_floating-point_format
+.. _single: http://en.wikipedia.org/wiki/Single_precision_floating-point_format
+.. _double: http://en.wikipedia.org/wiki/Double_precision_floating-point_format
 
 Additionally, full support for :ref:`man-complex-and-rational-numbers` is built
 on top of these primitive numeric types. All numeric types interoperate
