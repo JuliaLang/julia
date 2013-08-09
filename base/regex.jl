@@ -100,11 +100,45 @@ match(r::Regex, s::String) = match(r, s, start(s))
 match(r::Regex, s::String, i::Integer) =
     error("regex matching is only available for bytestrings; use bytestring(s) to convert")
 
-function matchall(re::Regex, str::ByteString, overlap::Bool)
-    [eachmatch(re, str, overlap)...]
-end
+function matchall(re::Regex, str::ByteString, overlap::Bool=false)
+    extra = PCRE.study(re.regex, PCRE.STUDY_JIT_COMPILE)
+    n = length(str.data)
+    matches = SubString[]
+    offset = int32(0)
+    opts = re.options & PCRE.EXECUTE_MASK
+    opts_nonempty = opts | PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART
+    prevempty = false
+    ovec = Array(Int32, 3)
+    while true
+        result = ccall((:pcre_exec, :libpcre), Int32,
+                       (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32,
+                       Int32, Int32, Ptr{Int32}, Int32),
+                       re.regex, extra, str, n,
+                       offset, prevempty ? opts_nonempty : opts, ovec, 3)
 
-matchall(re::Regex, str::ByteString) = matchall(re, str, false)
+        if result < 0
+            if prevempty && offset < n
+                offset = int32(next(str, offset + 1)[2] - 1)
+                prevempty = false
+                continue
+            else
+                break
+            end
+        end
+
+        push!(matches, SubString(str, ovec[1]+1, ovec[2]))
+        prevempty = offset == ovec[2]
+        if overlap
+            if !prevempty
+                offset = int32(next(str, offset + 1)[2] - 1)
+            end
+        else
+            offset = ovec[2]
+        end
+    end
+    PCRE.free_study(extra)
+    matches
+end
 
 function search(str::ByteString, re::Regex, idx::Integer)
     if idx > nextind(str,endof(str))
