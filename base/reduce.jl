@@ -106,6 +106,29 @@ function reduce(op::Function, v0, itr)
     return v
 end
 
+##
+# generic map on any iterator
+function map(f::Union(Function,DataType), iters...)
+    result = {}
+    len = length(iters)
+    states = [start(iters[idx]) for idx in 1:len]
+    nxtvals = cell(len)
+    cont = true
+    for idx in 1:len
+        done(iters[idx], states[idx]) && (cont = false; break)
+    end
+    while cont
+        for idx in 1:len
+            nxtvals[idx],states[idx] = next(iters[idx], states[idx])
+        end
+        push!(result, f(nxtvals...))
+        for idx in 1:len
+            done(iters[idx], states[idx]) && (cont = false; break)
+        end
+    end
+    result
+end
+
 function mapreduce(f::Callable, op::Function, itr)
     s = start(itr)
     if done(itr, s)

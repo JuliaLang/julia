@@ -743,7 +743,7 @@
 
 ("Iterable Collections","Base","map","map(f, c) -> collection
 
-   Transform collection \"c\" by applying \"f\" to each element.
+   Transform collection or iterator \"c\" by applying \"f\" to each element.
 
    **Example**: \"map((x) -> x * 2, [1, 2, 3]) = [2, 4, 6]\"
 
@@ -5144,10 +5144,10 @@ popdisplay(d::Display)
 
 ("Parallel Computing","Base","pmap","pmap(f, c)
 
-   Transform collection \"c\" by applying \"f\" to each element in
-   parallel. If \"nprocs() > 1\", the calling process will be
-   dedicated to assigning tasks. All other available processes will be
-   used as parallel workers.
+   Transform collection or iterator \"c\" by applying \"f\" to each 
+   element in parallel. If \"nprocs() > 1\", the calling process 
+   will be dedicated to assigning tasks. All other available 
+   processes will be used as parallel workers.
 
 "),
 
