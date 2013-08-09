@@ -10,3 +10,6 @@
 [submodule "doc/juliadoc"]
 	path = doc/juliadoc
 	url = git://github.com/JuliaLang/JuliaDoc.git
+[submodule "contrib/Julia.tmbundle"]
+	path = contrib/Julia.tmbundle
+	url = https://github.com/WestleyArgentum/Julia.tmbundle.git
