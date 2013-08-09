@@ -101,29 +101,35 @@ end
 
 prevind(s::DirectIndexString, i::Integer) = i-1
 prevind(s                   , i::Integer) = i-1
-thisind(s::DirectIndexString, i::Integer) = i
-thisind(s                   , i::Integer) = i
 nextind(s::DirectIndexString, i::Integer) = i+1
 nextind(s                   , i::Integer) = i+1
 
-prevind(s::String, i::Integer) = thisind(s,thisind(s,i)-1)
-
-function thisind(s::String, i::Integer)
-    for j = i:-1:1
+function prevind(s::String, i::Integer)
+    e = endof(s)
+    if i > e
+        return e
+    end
+    j = i-1
+    while j >= 1
         if isvalid(s,j)
             return j
         end
+        j -= 1
     end
     return 0 # out of range
 end
 
 function nextind(s::String, i::Integer)
-    for j = i+1:endof(s)
+    e = endof(s)
+    if i < 1 || e == 0
+        return 1
+    end
+    for j = i+1:e
         if isvalid(s,j)
             return j
         end
     end
-    endof(s)+1 # out of range
+    next(s,e)[2] # out of range
 end
 
 ind2chr(s::DirectIndexString, i::Integer) = i
@@ -163,8 +169,7 @@ typealias Chars Union(Char,AbstractVector{Char},Set{Char})
 
 function search(s::String, c::Chars, i::Integer)
     if isempty(c)
-        return 1 <= i <= endof(s)+1 ? i :
-               i == endof(s)+2      ? 0 :
+        return 1 <= i <= nextind(s,endof(s)) ? i :
                error(BoundsError)
     end
 
@@ -185,8 +190,7 @@ contains(s::String, c::Char) = (search(s,c)!=0)
 
 function _search(s, t, i)
     if isempty(t)
-        return 1 <= i <= endof(s)+1 ? (i:i-1) :
-               i == endof(s)+2      ? (0:-1) :
+        return 1 <= i <= nextind(s,endof(s)) ? (i:i-1) :
                error(BoundsError)
     end
     t1, j2 = next(t,start(t))
@@ -209,7 +213,7 @@ function _search(s, t, i)
             end
         end
         if matched
-            return i:k-1
+            return i:prevind(s,k)
         end
         i = ii
     end
@@ -224,8 +228,7 @@ rsearch(s::String, c::Chars) = rsearch(s,c,endof(s))
 
 function _rsearch(s, t, i)
     if isempty(t)
-        return 1 <= i <= endof(s)+1 ? (i:i-1) :
-               i == endof(s)+2      ? (0:-1) :
+        return 1 <= i <= nextind(s,endof(s)) ? (i:i-1) :
                error(BoundsError)
     end
     t = reverse(t)
@@ -252,12 +255,7 @@ function _rsearch(s, t, i)
         end
         if matched
             fst = nextind(s,l-k+1)
-            # NOTE: there's a subtle difference between
-            #       nexind(s,i) and next(s,i)[2] if s::UTF8String
-            #       since at the end nextind returns endof(s)+1
-            #       while next returns length(s.data)+1
-            lst = next(s,i)[2]-1
-            return fst:lst
+            return fst:i
         end
         i = l-ii+1
     end
@@ -387,11 +385,14 @@ immutable SubString{T<:String} <: String
     endof::Int
 
     function SubString(s::T, i::Int, j::Int)
-        if i > endof(s)
+        if i > endof(s) || j<i
             return new(s, i, 0)
         else
-            o = thisind(s,i)-1
-            new(s, o, max(0, thisind(s,j)-o))
+            if !isvalid(s,i) || !isvalid(s,j)
+                error("invalid SubString indexes")
+            end
+            o = i-1
+            new(s, o, max(0, j-o))
         end
     end
 end
@@ -422,8 +423,8 @@ endof(s::SubString) = s.endof
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
 
-thisind(s::SubString, i::Integer) = thisind(s.string, i+s.offset)-s.offset
 nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
+prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 
 convert{T<:String}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
 
@@ -492,7 +493,7 @@ sizeof(s::RevString) = sizeof(s.string)
 
 function next(s::RevString, i::Int)
     n = endof(s); j = n-i+1
-    (s.string[j], n-thisind(s.string,j-1)+1)
+    (s.string[j], n-prevind(s.string,j)+1)
 end
 
 reverse(s::String) = RevString(s)
@@ -1027,17 +1028,17 @@ function split(str::String, splitter, limit::Integer, keep_empty::Bool)
     i = start(str)
     n = endof(str)
     r = search(str,splitter,i)
-    j, k = first(r), last(r)+1
+    j, k = first(r), nextind(str,last(r))
     while 0 < j <= n && length(strs) != limit-1
         if i < k
             if keep_empty || i < j
-                push!(strs, str[i:j-1])
+                push!(strs, str[i:prevind(str,j)])
             end
             i = k
         end
         if k <= j; k = nextind(str,j) end
         r = search(str,splitter,k)
-        j, k = first(r), last(r)+1
+        j, k = first(r), nextind(str,last(r))
     end
     if keep_empty || !done(str,i)
         push!(strs, str[i:])
@@ -1080,26 +1081,28 @@ rsplit(s::String, spl)             = rsplit(s, spl, 0, true)
 
 function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     n = 1
-    rstr = ""
+    e = endof(str)
     i = a = start(str)
     r = search(str,pattern,i)
     j, k = first(r), last(r)
-    k1 = k
     out = IOBuffer()
     while j != 0
         if i == a || i <= k
-            write(out, SubString(str,i,j-1))
+            write(out, SubString(str,i,prevind(str,j)))
             write(out, string(repl(SubString(str,j,k))))
-            i = nextind(str, k)
         end
-        if k <= j
-            k = nextind(str,j)
-            k == k1 && break
+        if k<j
+            i = j
+            k = nextind(str, j)
+        else
+            i = k = nextind(str, k)
         end
-        k1 = k
+        if j > e
+            break
+        end
         r = search(str,pattern,k)
         j, k = first(r), last(r)
-        if n == limit break end
+        n == limit && break
         n += 1
     end
     write(out, SubString(str,i))

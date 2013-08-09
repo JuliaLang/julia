@@ -28,7 +28,15 @@ is_utf8_start(byte::Uint8) = ((byte&0xc0)!=0x80)
 
 ## required core functionality ##
 
-endof(s::UTF8String) = thisind(s,length(s.data))
+function endof(s::UTF8String)
+    d = s.data
+    i = length(d)
+    i == 0 && return i
+    while !is_utf8_start(d[i])
+        i -= 1
+    end
+    i
+end
 length(s::UTF8String) = int(ccall(:u8_strlen, Csize_t, (Ptr{Uint8},), s.data))
 
 function getindex(s::UTF8String, i::Int)
@@ -105,9 +113,10 @@ end
 
 function rsearch(s::UTF8String, c::Char, i::Integer)
     if c < 0x80 return rsearch(s.data, uint8(c), i) end
+    b = first_utf8_byte(c)
     while true
-        i = rsearch(s.data, first_utf8_byte(c), i)
-        if i==0 || s[i]==c return thisind(s,i) end
+        i = rsearch(s.data, b, i)
+        if i==0 || s[i]==c return i end
         i = prevind(s,i)
     end
 end

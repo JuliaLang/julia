@@ -26,6 +26,9 @@
 #include "llvm/PassManager.h"
 #include "llvm/Analysis/Verifier.h"
 #include "llvm/Analysis/Passes.h"
+#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 4
+#define LLVM34 1
+#endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/LLVMContext.h"
@@ -1967,6 +1970,23 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         return emit_checked_var(bp, var, ctx);
     }
+    else if (jl_is_newvarnode(expr)) {
+        assert(!valuepos);
+        jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
+        assert(jl_is_symbol(var));
+        jl_varinfo_t &vi = ctx->vars[var];
+        Value *lv = vi.memvalue;
+        if (lv != NULL) {
+            // create a new uninitialized variable
+            if (isBoxed(var, ctx)) {
+                builder.CreateStore(builder.CreateCall(jlbox_func, V_null), lv);
+            }
+            else if (lv->getType() == jl_ppvalue_llvmt && vi.usedUndef) {
+                builder.CreateStore(V_null, lv);
+            }
+        }
+        return NULL;
+    }
     if (!jl_is_expr(expr)) {
         // numeric literals
         int needroot = 0;
@@ -2251,21 +2271,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         if (valuepos)
             return literal_pointer_val((jl_value_t*)jl_nothing);
-    }
-    else if (head == newvar_sym) {
-        jl_sym_t *var = (jl_sym_t*)args[0];
-        if (jl_is_symbolnode(var))
-            var = jl_symbolnode_sym(var);
-        Value *lv = ctx->vars[var].memvalue;
-        if (lv != NULL) {
-            // create a new uninitialized variable
-            if (isBoxed(var, ctx)) {
-                builder.CreateStore(builder.CreateCall(jlbox_func, V_null), lv);
-            }
-            else if (lv->getType() == jl_ppvalue_llvmt) {
-                builder.CreateStore(V_null, lv);
-            }
-        }
     }
     else {
         if (!strcmp(head->name, "$"))
@@ -2601,9 +2606,18 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     }
     else {
         // TODO: Fix when moving to new LLVM version
+        #ifndef LLVM34
         dbuilder->createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
+        #else
+        DICompileUnit CU = dbuilder->createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
+        #endif
+
         fil = dbuilder->createFile(filename, ".");
+        #ifndef LLVM34
         SP = dbuilder->createFunction((DIDescriptor)dbuilder->getCU(),
+        #else 
+        SP = dbuilder->createFunction(CU,
+        #endif
                                       dbgFuncName, dbgFuncName,
                                       fil,
                                       0,
@@ -2741,6 +2755,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     assert(varnum == ctx.argSpaceOffs);
 
     // step 9. create boxes for boxed locals
+    // now handled by explicit :newvar nodes
+    /*
     for(i=0; i < lvarslen; i++) {
         jl_sym_t *s = ((jl_sym_t*)jl_cellref(lvars,i));
         if (isBoxed(s, &ctx)) {
@@ -2748,6 +2764,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             builder.CreateStore(builder.CreateCall(jlbox_func, V_null), lv);
         }
     }
+    */
 
     // step 10. allocate space for exception handler contexts
     size_t stmtslen = jl_array_dim0(stmts);
@@ -3414,7 +3431,9 @@ extern "C" void jl_init_codegen(void)
     options.JITEmitDebugInfo = true;
 #endif 
     options.NoFramePointerElim = true;
+#ifndef LLVM34
     options.NoFramePointerElimNonLeaf = true;
+#endif
 #ifdef __MINGW32__
     options.StackAlignmentOverride = 16;
 #endif
