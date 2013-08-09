@@ -238,9 +238,9 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
         jl_pgcstack = t->gcstack;
 #endif
         t->last = jl_current_task;
-        // by default, exit to first task to switch to this one
-        if (t->on_exit == NULL)
-            t->on_exit = jl_current_task;
+        // by default, parent is first task to switch to this one
+        if (t->parent == NULL)
+            t->parent = jl_current_task;
         jl_current_task = t;
 
 #ifdef COPY_STACKS
@@ -363,15 +363,27 @@ jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
     return switchto(t);
 }
 
+static jl_function_t *task_done_hook_func=NULL;
+
 static void finish_task(jl_task_t *t, jl_value_t *resultval)
 {
     assert(t->done==0);
     t->done = 1;
+    t->runnable = 0;
     t->result = resultval;
     // TODO: early free of t->stkbuf
 #ifdef COPY_STACKS
     t->stkbuf = NULL;
 #endif
+    if (t->donenotify && t->donenotify != jl_nothing) {
+        if (task_done_hook_func == NULL) {
+            task_done_hook_func = (jl_function_t*)jl_get_global(jl_base_module,
+                                                                jl_symbol("task_done_hook"));
+        }
+        if (task_done_hook_func != NULL) {
+            jl_apply(task_done_hook_func, (jl_value_t**)&t, 1);
+        }
+    }
 }
 
 static void start_task(jl_task_t *t)
@@ -406,10 +418,10 @@ static void start_task(jl_task_t *t)
     }
     JL_GC_POP();
     finish_task(t, res);
-    jl_task_t *cont = t->on_exit;
+    jl_task_t *cont = t->parent;
     // if parent task has exited, try its parent, and so on
     while (cont->done)
-        cont = cont->on_exit;
+        cont = cont->parent;
     jl_switchto(cont, t->result);
     assert(0);
 }
@@ -647,11 +659,13 @@ void NORETURN throw_internal(jl_value_t *e)
                 JL_PRINTF(JL_STDERR, "%s\n", jl_string_data(jl_fieldref(e,0)));
             exit(1);
         }
-        jl_task_t *cont = jl_current_task->on_exit;
+        jl_task_t *cont = jl_current_task->parent;
         while (cont->done || cont->eh == NULL)
-            cont = cont->on_exit;
+            cont = cont->parent;
         // for now, exit the task
+        jl_current_task->exception = e;
         finish_task(jl_current_task, e);
+        jl_current_task->exception = jl_nothing;
         ctx_switch(cont, &cont->eh->eh_ctx);
         // TODO: continued exception
     }
@@ -687,7 +701,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->type = (jl_value_t*)jl_task_type;
     ssize = LLT_ALIGN(ssize, pagesz);
     t->ssize = ssize;
-    t->on_exit = NULL;
+    t->parent = NULL;
     t->last = jl_current_task;
     t->tls = jl_nothing;
     t->consumers = jl_nothing;
@@ -819,7 +833,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->ssize = ssize;
 #endif
     jl_current_task->stkbuf = NULL;
-    jl_current_task->on_exit = jl_current_task;
+    jl_current_task->parent = jl_current_task;
     jl_current_task->last = jl_current_task;
     jl_current_task->tls = NULL;
     jl_current_task->consumers = NULL;

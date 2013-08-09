@@ -50,3 +50,7 @@ et=toq()
 @test (et >= 1.0) && (et <= 1.5)
 @test isready(rr1)
 @test !isready(rr3)
+
+# make sure exceptions propagate when waiting on Tasks
+# TODO: should be enabled but the error is printed by the event loop
+#@test_throws (@sync (@async error("oops")))
