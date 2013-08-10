@@ -78,6 +78,11 @@ Getting Around
 
    Show an expression and result, returning the result
 
+.. function:: versioninfo([verbose::Bool])
+
+   Print information about the version of Julia in use. If the ``verbose`` argument
+   is true, detailed system information is shown as well.
+
 All Objects
 -----------
 
@@ -502,6 +507,12 @@ Iterable Collections
 .. function:: collect(collection)
 
    Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
+
+.. function:: issubset(a, b)
+
+   Determine whether every element of ``a`` is also in ``b``, using the
+   ``contains`` function.
+
 
 Indexable Collections
 ---------------------
@@ -1046,6 +1057,14 @@ I/O
    then return ``false``. Therefore it is always safe to read one byte after
    seeing ``eof`` return ``false``.
 
+.. function:: isreadonly(stream)
+
+   Determine whether a stream is read-only.
+
+.. function:: isopen(stream)
+
+   Determine whether a stream is open (i.e. has not been closed yet).
+
 .. function:: ntoh(x)
 
    Converts the endianness of a value from Network byte order (big-endian) to
@@ -1120,7 +1139,15 @@ Text I/O
 
 .. function:: println(x)
 
-   Print (using :func:`print`) ``x`` followed by a newline
+   Print (using :func:`print`) ``x`` followed by a newline.
+
+.. function:: info(msg)
+
+   Display an informational message.
+
+.. function:: warn(msg)
+
+   Display a warning.
 
 .. function:: @printf([io::IOStream], "%Fmt", args...)
 
@@ -1129,6 +1156,11 @@ Text I/O
 .. function:: @sprintf("%Fmt", args...)
 
    Return ``@printf`` formatted output as string.
+
+.. function:: sprint(f::Function, args...)
+
+   Call the given function with an I/O stream and the supplied extra arguments.
+   Everything written to this I/O stream is returned as a string.
 
 .. function:: showall(x)
 
@@ -2317,6 +2349,12 @@ Data Formats
 .. function:: base(base, n, [pad])
 
    Convert an integer to a string in the given base, optionally specifying a number of digits to pad to. The base can be specified as either an integer, or as a ``Uint8`` array of character values to use as digit symbols.
+
+.. function:: digits(n, [base], [pad])
+
+   Returns an array of the digits of ``n`` in the given base, optionally padded with
+   zeros to a specified size. More significant digits are at higher indexes, such
+   that ``n == sum([digits[k]*base^(k-1) for k=1:length(digits)])``.
 
 .. function:: bits(n)
 

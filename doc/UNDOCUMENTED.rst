@@ -129,14 +129,6 @@ arrays
 
    UNDOCUMENTED
 
-.. function:: searchsortedfirst(...)
-
-   UNDOCUMENTED
-
-.. function:: searchsortedlast(...)
-
-   UNDOCUMENTED
-
 .. function:: setindex_shape_check(X::AbstractArray{T,N},I...)
 
    UNDOCUMENTED
@@ -181,17 +173,9 @@ dequeues
 collections
 -----------
 
-.. function:: issubset(...)
-
-   UNDOCUMENTED
-
 
 strings and text output
 -----------------------
-
-.. function:: digits(...)
-
-   UNDOCUMENTED
 
 .. function:: eachmatch(...)
 
@@ -210,10 +194,6 @@ strings and text output
    UNDOCUMENTED
 
 .. function:: float64_isvalid(...)
-
-   UNDOCUMENTED
-
-.. function:: info(msg::String...)
 
    UNDOCUMENTED
 
@@ -289,10 +269,6 @@ strings and text output
 
    UNDOCUMENTED
 
-.. function:: sprint(...)
-
-   UNDOCUMENTED
-
 .. function:: summary(...)
 
    UNDOCUMENTED
@@ -306,10 +282,6 @@ strings and text output
    UNDOCUMENTED
 
 .. function:: unescape_string(s::String)
-
-   UNDOCUMENTED
-
-.. function:: warn(msg::String...)
 
    UNDOCUMENTED
 
@@ -426,10 +398,6 @@ help and reflection
 
    UNDOCUMENTED
 
-.. function:: versioninfo(...)
-
-   UNDOCUMENTED
-
 .. function:: whicht(f,types)
 
    UNDOCUMENTED
@@ -499,14 +467,6 @@ I/O and events
    UNDOCUMENTED
 
 .. function:: fd(...)
-
-   UNDOCUMENTED
-
-.. function:: isopen(...)
-
-   UNDOCUMENTED
-
-.. function:: isreadonly(...)
 
    UNDOCUMENTED
 
@@ -593,10 +553,6 @@ I/O and events
 
 multiprocessing
 ---------------
-
-.. function:: interrupt(...)
-
-   UNDOCUMENTED
 
 .. function:: isready(rr::RemoteRef)
 
@@ -709,14 +665,6 @@ filesystem operations
 
 external processes ## TODO: whittle down these exports.
 -------------------------------------------------------
-
-.. function:: pipeline_error(...)
-
-   UNDOCUMENTED
-
-.. function:: process_options(args::Array{Any,1})
-
-   UNDOCUMENTED
 
 .. function:: process_signaled(s::Process)
 
