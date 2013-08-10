@@ -380,7 +380,11 @@ function map!(f::Callable, dest, r::Ranges)
     dest
 end
 
-map(f::Callable, r::Ranges) = [ f(x) for x in r ]
+function map(f::Callable, r::Ranges)
+    if isempty(r); return {}; end
+    first = f(r[1])
+    map!(f, Array(typeof(first), length(r)), r)
+end
 
 function contains(r::Ranges, x)
     n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1
