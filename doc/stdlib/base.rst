@@ -1238,7 +1238,7 @@ Julia environments (such as the IPython-based IJulia notebook).
    a ``MethodError`` if ``d`` cannot display objects of this type.
 
    There are also two variants with a ``mime`` argument (a MIME type
-   string, such as ``"image/png"``) attempt to display ``x`` using the
+   string, such as ``"image/png"``), which attempt to display ``x`` using the
    requesed MIME type *only*, throwing a ``MethodError`` if this type
    is not supported by either the display(s) or by ``x``.   With these
    variants, one can also supply the "raw" data in the requested MIME
