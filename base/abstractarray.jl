@@ -254,7 +254,9 @@ end
 conj{T<:Real}(x::AbstractArray{T}) = x
 conj!{T<:Real}(x::AbstractArray{T}) = x
 
+real{T<:Real}(x::AbstractVector{T}) = x
 real{T<:Real}(x::AbstractArray{T}) = x
+imag{T<:Real}(x::AbstractVector{T}) = zero(x)
 imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 
 +{T<:Number}(x::AbstractArray{T}) = x
