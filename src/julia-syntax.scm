@@ -2504,13 +2504,11 @@ So far only the second case can actually occur.
 ;       such a location (the assignment to the variable).
 (define (goto-form e)
   (let ((code '())
-	(ip   0)
 	(label-counter 0)
 	(label-map '())
 	(handler-level 0))
     (define (emit c)
-      (set! code (cons c code))
-      (set! ip (+ ip 1)))
+      (set! code (cons c code)))
     (define (make-label)
       (begin0 label-counter
 	      (set! label-counter (+ 1 label-counter))))
@@ -2617,12 +2615,19 @@ So far only the second case can actually occur.
 	     (let* ((vname (cadr e))
 		    (vinf  (var-info-for vname vi)))
 	       (if (and vinf
+			(not (and (pair? code)
+				  (equal? (car code) `(newvar ,(cadr e)))))
 			;; TODO: remove the following expression to re-null
 			;; all variables when they are allocated. see issue #1571
 			(vinfo:capt vinf)
 			)
 		   (emit `(newvar ,(cadr e)))
 		   #f)))
+	    ((newvar)
+	     ;; avoid duplicate newvar nodes
+	     (if (not (and (pair? code) (equal? (car code) e)))
+		 (emit e)
+		 #f))
 	    (else  (emit (goto-form e))))))
     (cond ((or (not (pair? e)) (quoted? e)) e)
 	  ((eq? (car e) 'lambda)
