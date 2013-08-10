@@ -891,14 +891,8 @@ end
 
 for f in (:real, :imag)
     @eval begin
-        function ($f){T}(A::AbstractArray{T})
-            S = typeof(($f)(zero(T)))
-            F = similar(A, S)
-            for i=1:length(A)
-                F[i] = ($f)(A[i])
-            end
-            return F
-        end
+        ($f)(A::AbstractVector) = [ ($f)(x) for x in A ]
+        ($f)(A::AbstractArray)  = reshape([ ($f)(x) for x in A ], size(A))
     end
 end
 
