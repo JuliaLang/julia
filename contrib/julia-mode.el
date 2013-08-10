@@ -16,9 +16,8 @@
 
 (defvar julia-mode-syntax-table
   (let ((table (make-syntax-table)))
-    (modify-syntax-entry ?_ "_" table)   ; underscores in words
-    (modify-syntax-entry ?@ "_" table)
-    (modify-syntax-entry ?. "_" table)
+    (modify-syntax-entry ?_ "w" table)   ; underscores in words
+    (modify-syntax-entry ?@ "w" table)
     (modify-syntax-entry ?# "<" table)   ; #  single-line comment start
     (modify-syntax-entry ?\n ">" table)  ; \n single-line comment end
     (modify-syntax-entry ?\{ "(} " table)
@@ -28,10 +27,8 @@
     (modify-syntax-entry ?\( "() " table)
     (modify-syntax-entry ?\) ")( " table)
     ;(modify-syntax-entry ?\\ "." table)  ; \ is an operator outside quotes
-    (modify-syntax-entry ?'  "." table)  ; character quote or transpose
-    (modify-syntax-entry ?\" "\"" table)
-    (modify-syntax-entry ?` "\"" table)
-    ;; (modify-syntax-entry ?\" "." table)
+    (modify-syntax-entry ?'  "." table)  ; character quote or transpose 
+    ;(modify-syntax-entry ?\" "." table)
     (modify-syntax-entry ?? "." table)
     (modify-syntax-entry ?$ "." table)
     (modify-syntax-entry ?& "." table)
@@ -43,20 +40,20 @@
     (modify-syntax-entry ?= "." table)
     (modify-syntax-entry ?% "." table)
     table)
-  "Syntax table for `julia-mode'.")
+  "Syntax table for julia-mode")
 
 ;; syntax table that holds within strings
 (defvar julia-mode-string-syntax-table
   (let ((table (make-syntax-table)))
     table)
-  "Syntax table for `julia-mode'.")
+  "Syntax table for julia-mode")
 
 ;; disable " inside char quote
 (defvar julia-mode-char-syntax-table
   (let ((table (make-syntax-table)))
     (modify-syntax-entry ?\" "." table)
     table)
-  "Syntax table for `julia-mode'.")
+  "Syntax table for julia-mode")
 
 (defconst julia-string-regex
   "\"[^\"]*?\\(\\(\\\\\\\\\\)*\\\\\"[^\"]*?\\)*\"")
@@ -142,9 +139,7 @@
        (julia-strcount before ?]))))
 
 (defun julia-at-keyword (kw-list)
-  "Return the word at point if it matches any keyword in KW-LIST.
-KW-LIST is a list of strings.  The word at point is not considered
-a keyword if used as a field name, X.word, or quoted, :word."
+  ; not a keyword if used as a field name, X.word, or quoted, :word
   (and (or (= (point) 1)
 	   (and (not (equal (char-before (point)) ?.))
 		(not (equal (char-before (point)) ?:))))
@@ -155,11 +150,10 @@ a keyword if used as a field name, X.word, or quoted, :word."
 ;; if backward-sexp gives an error, move back 1 char to move over the '('
 (defun julia-safe-backward-sexp ()
   (if (condition-case nil (backward-sexp) (error t))
-      (ignore-errors (backward-char))))
+      (error2nil (backward-char))))
 
+; get the position of the last open block
 (defun julia-last-open-block-pos (min)
-  "Move back and return the position of the last open block, if one found.
-Do not move back beyond position MIN."
   (let ((count 0))
     (while (not (or (> count 0) (<= (point) min)))
       (julia-safe-backward-sexp)
@@ -174,44 +168,43 @@ Do not move back beyond position MIN."
 	(point)
       nil)))
 
+; get indent for last open block
 (defun julia-last-open-block (min)
-  "Move back and return indentation level for last open block.
-Do not move back beyond MIN."
   (let ((pos (julia-last-open-block-pos min)))
     (and pos
 	 (progn
 	   (goto-char pos)
 	   (+ julia-basic-offset (current-indentation))))))
 
+(defmacro error2nil (body) `(condition-case nil ,body (error nil)))
+
 (defun julia-paren-indent ()
-  "Return indent by last opening paren."
-  (let* ((p (parse-partial-sexp
-             (save-excursion
-               ;; only indent by paren if the last open
-               ;; paren is closer than the last open
-               ;; block
-               (or (julia-last-open-block-pos (point-min))
-                   (point-min)))
-             (progn (beginning-of-line)
-                    (point))))
+  (let* ((p (parse-partial-sexp (save-excursion
+				  ;; only indent by paren if the last open
+				  ;; paren is closer than the last open
+				  ;; block
+				  (or (julia-last-open-block-pos (point-min))
+				      (point-min)))
+				(progn (beginning-of-line)
+				       (point))))
          (pos (cadr p)))
     (if (or (= 0 (car p)) (null pos))
         nil
       (progn (goto-char pos) (+ 1 (current-column))))))
 
 (defun julia-indent-line ()
-  "Indent current line of julia code."
+  "Indent current line of julia code"
   (interactive)
 ;  (save-excursion
     (end-of-line)
     (indent-line-to
-     (or (save-excursion (ignore-errors (julia-paren-indent)))
+     (or (save-excursion (error2nil (julia-paren-indent)))
          (save-excursion
            (let ((endtok (progn
                            (beginning-of-line)
                            (forward-to-indentation 0)
                            (julia-at-keyword julia-block-end-keywords))))
-             (ignore-errors (+ (julia-last-open-block (point-min))
+             (error2nil (+ (julia-last-open-block (point-min))
                            (if endtok (- julia-basic-offset) 0)))))
 	 ;; previous line ends in =
 	 (save-excursion
@@ -230,45 +223,29 @@ Do not move back beyond MIN."
       (forward-word 1)))
 
 ;;;###autoload
-(define-derived-mode julia-mode prog-mode "Julia"
-  "Major mode for editing julia code."
+(defun julia-mode ()
+  "Major mode for editing julia code"
+  (interactive)
+  (kill-all-local-variables)
   (set-syntax-table julia-mode-syntax-table)
   (set (make-local-variable 'comment-start) "# ")
   (set (make-local-variable 'comment-start-skip) "#+\\s-*")
   (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords))
+;  (set (make-local-variable 'font-lock-syntactic-keywords)
+;      (list
+;       (list "\\(\\\\\\)\\s-*\".*?\"" 1 julia-mode-char-syntax-table)))
   (set (make-local-variable 'font-lock-syntactic-keywords)
        (list
-	(list "\\(\\\\\\)\\s-*\".*?\"" 1 julia-mode-char-syntax-table)))
-  (set (make-local-variable 'font-lock-syntactic-keywords)
-        (list
- 	(list julia-char-regex 2
- 	      julia-mode-char-syntax-table)
-        (list julia-string-regex 0
-              julia-mode-string-syntax-table)
-	))
+	(list julia-char-regex 2
+	      julia-mode-char-syntax-table)
+;        (list julia-string-regex 0
+;              julia-mode-string-syntax-table)
+))
   (set (make-local-variable 'indent-line-function) 'julia-indent-line)
   (set (make-local-variable 'julia-basic-offset) 4)
-  (setq imenu-generic-expression julia-imenu-generic-expression)
-  (imenu-add-to-menubar "Imenu"))
-
-;;; IMENU
-(defvar julia-imenu-generic-expression
-  ;; don't use syntax classes, screws egrep
-  '(("Function (_)" "[ \t]*function[ \t]+\\(_[^ \t\n]*\\)" 1)
-    ("Function" "^[ \t]*function[ \t]+\\([^_][^\t\n]*\\)" 1)
-    ("Const" "[ \t]*const \\([^ \t\n]*\\)" 1)
-    ("Type"  "^[ \t]*[a-zA-Z0-9_]*type[a-zA-Z0-9_]* \\([^ \t\n]*\\)" 1)
-    ("Require"      " *\\(\\brequire\\)(\\([^ \t\n)]*\\)" 2)
-    ("Include"      " *\\(\\binclude\\)(\\([^ \t\n)]*\\)" 2)
-    ;; ("Classes" "^.*setClass(\\(.*\\)," 1)
-    ;; ("Coercions" "^.*setAs(\\([^,]+,[^,]*\\)," 1) ; show from and to
-    ;; ("Generics" "^.*setGeneric(\\([^,]*\\)," 1)
-    ;; ("Methods" "^.*set\\(Group\\|Replace\\)?Method(\"\\(.+\\)\"," 2)
-    ;; ;;[ ]*\\(signature=\\)?(\\(.*,?\\)*\\)," 1)
-    ;; ;;
-    ;; ;;("Other" "^\\(.+\\)\\s-*<-[ \t\n]*[^\\(function\\|read\\|.*data\.frame\\)]" 1)
-    ;; ("Package" "^.*\\(library\\|require\\)(\\(.*\\)," 2)
-    ;; ("Data" "^\\(.+\\)\\s-*<-[ \t\n]*\\(read\\|.*data\.frame\\).*(" 1)))
-    ))
+  (setq indent-tabs-mode nil)
+  (setq major-mode 'julia-mode)
+  (setq mode-name "julia")
+  (run-hooks 'julia-mode-hook))
 
 (provide 'julia-mode)
