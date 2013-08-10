@@ -1072,7 +1072,34 @@ immutable LocalManager <: ClusterManager
     launch::Function
     manage::Function
 
-    LocalManager() = new(launch_workers, manage_local_worker)
+    LocalManager() = new(launch_local_workers, manage_local_worker)
+end
+
+show(io::IO, cman::LocalManager) = println("LocalManager()")
+
+function launch_local_workers(cman::LocalManager, np::Integer, config::Dict)
+    dir = config[:dir]
+    exename = config[:exename]
+    exeflags = config[:exeflags]
+
+    io_objs = cell(np)
+    configs = cell(np)
+
+    # start the processes first...
+    for i in 1:np
+        io, pobj = readsfrom(detach(`$(dir)/$(exename) --bind-to 127.0.0.1 $exeflags`))
+        io_objs[i] = io
+        configs[i] = merge(config, {:process => pobj})
+    end
+
+    # ...and then read the host:port info. This optimizes overall start times.
+    return (:io_only, collect(zip(io_objs, configs)))
+end
+
+function manage_local_worker(id::Integer, config::Dict, op::Symbol)
+    if op == :interrupt
+        kill(config[:process], 2)
+    end
 end
 
 immutable SSHManager <: ClusterManager
@@ -1080,51 +1107,32 @@ immutable SSHManager <: ClusterManager
     manage::Function
     machines::AbstractVector
 
-    SSHManager(; machines=[]) = new(launch_workers, manage_ssh_worker, machines)
+    SSHManager(; machines=[]) = new(launch_ssh_workers, manage_ssh_worker, machines)
 end
 
-show(io::IO, cman::LocalManager) = println("LocalManager()")
 show(io::IO, cman::SSHManager) = println("SSHManager(machines=", cman.machines, ")")
 
-function launch_workers(cman::Union(LocalManager, SSHManager), np::Integer, config::Dict)
+function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
     dir = config[:dir]
     exename = config[:exename]
     exeflags = config[:exeflags]
-    ssh = isa(cman, SSHManager)
 
     io_objs = cell(np)
     configs = cell(np)
-    
+
     # start the processes first...
-    if ssh
-        sshflags = config[:sshflags]
-        lcmd(idx) =  `ssh -n $sshflags $(cman.machines[idx]) "sh -l -c \"cd $dir && $exename $exeflags\""`
-    else
-        lcmd(idx) =  `$(dir)/$(exename) --bind-to 127.0.0.1 $exeflags`
-    end
-    
+    sshflags = config[:sshflags]
+
     for i in 1:np
-        io, pobj = readsfrom(detach(lcmd(i)))
+        io, pobj = readsfrom(detach(`ssh -n $sshflags $(cman.machines[i]) "sh -l -c \"cd $dir && $exename $exeflags\""`))
         io_objs[i] = io
-        configs[i] = merge(config, ssh ? {:machine => cman.machines[i]} : {:process => pobj})
-    end    
-    
+        configs[i] = merge(config, {:machine => cman.machines[i]})
+    end
+
     # ...and then read the host:port info. This optimizes overall start times.
-    
     # For ssh, the tunnel connection, if any, has to be with the specified machine name.
     # but the port needs to be forwarded to the private hostname/ip-address
-  
-    if ssh
-        return (:io_host, collect(zip(io_objs, cman.machines, configs)))
-    else
-        return (:io_only, collect(zip(io_objs, configs)))
-    end
-end
-
-function manage_local_worker(id::Integer, config::Dict, op::Symbol)
-    if op == :interrupt
-        kill(config[:process], 2)
-    end
+    return (:io_host, collect(zip(io_objs, cman.machines, configs)))
 end
 
 function manage_ssh_worker(id::Integer, config::Dict, op::Symbol)
