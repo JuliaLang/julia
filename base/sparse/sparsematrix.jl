@@ -27,7 +27,7 @@ function show(io::IO, S::SparseMatrixCSC)
             println(io, "\t[", rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ",
                     sprint(showcompact, S.nzval[k]))
         elseif k == half_screen_rows
-            println("\t\u22ee")
+            println(io, "\t\u22ee")
         end
         k += 1
     end
