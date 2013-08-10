@@ -1,14 +1,14 @@
 Julia v0.2.0 Release Notes
 ==========================
 
-New features
-------------
+New language features
+---------------------
+
+  * Keyword & optional function arguments (#485, #1817).
 
   * Immutable types (#13).
 
   * Triple-quoted string literals (#70).
-
-  * Keyword & optional function arguments (#485, #1817).
 
   * New variable bindings on each for loop and comprehension iteration (#1571).
     For example, before this change:
@@ -27,60 +27,68 @@ New features
          2
          3
 
-  * mapslices (#2204)
-
-  * Linear algebra updates (#2212)
-
-  * varm, stdm (#2265)
-
-  * names for C-compatible types: Cchar, Clong, etc (#2370).
-
   * Explicit relative importing (#2375)
 
-  * Support optional RTLD flags in dlopen (#2380)
 
-  * `unsafe_pointer_to_objref` (#2468) and `pointer_from_objref` (#2515)
-
-  * Other new functions: readandwrite, versioninfo, methodswith, logdet
+New library functions
+---------------------
 
   * Sampling profiler (#2597).
 
-  * More linear algebra fixes and eigensolver hooks for SymTridiagonal,
-    Tridiagonal and Bidiagonal matrix types (#2606, #2608, #2609, #2611, #2678,
-    #2713, #2720, #2725)
-
-  * Documentation for writing packages (#2714, 2769, #2791) and linear algebra
-    (#2807)
-
-  * MPFR-based BigFloats (#2814).
-
-  * priority queues (#2920)
-
-  * erfinv and erfcinv functions (#2987).
-
-  * change to isinteger, isreal, etc.: now different than Matlab/Octave (#3071).
-
-  * Transitive comparison of floats with rationals (#3102).
-
-  * `quadgk` 1d-integration routine (#3140).
-
-  * New half-precision IEEE floating-point type, Float16 (#3467).
+  * Multimedia I/O API (display, writemime, etcetera) (#3932).
 
   * Sort API changes (#3665 and others).
 
-  * readbytes and readbytes! functions (#3878).
+  * New half-precision IEEE floating-point type, `Float16` (#3467).
 
-  * Multimedia I/O API (display, writemime, etcetera) (#3932).
+  * `mapslices` (#2204)
+
+  * `varm`, `stdm` (#2265)
+
+  * `Collections.PriorityQueue` type and `Collections.heap` functions (#2920).
+
+  * `quadgk` 1d-integration routine (#3140).
+
+  * `erfinv` and `erfcinv` functions (#2987).
+
+  * names for C-compatible types: `Cchar`, `Clong`, etc (#2370).
+
+  * `unsafe_pointer_to_objref` (#2468) and `pointer_from_objref` (#2515)
+
+  * Other new functions: `readandwrite`, `versioninfo`, `methodswith`, `logdet`
+
+  * `readbytes` and `readbytes!` functions (#3878).
 
   * `flush_cstdio` function (#3949).
 
 
-Improvements
-------------
+Library improvements
+--------------------
+
+  * MPFR-based `BigFloat` (#2814), and many new `BigFloat` operations.
+
+  * Linear-algebra factorization routines (`lu`, `chol`, etc.) now
+    return `Factorization` objects (and `lud`, `chold`, etc. are
+    deprecated) (#2212).
+
+  * More linear algebra fixes and eigensolver hooks for
+    `SymTridiagonal`, `Tridiagonal` and `Bidiagonal` matrix types
+    (#2606, #2608, #2609, #2611, #2678, #2713, #2720, #2725)
+
+  * Change to `isinteger`, `isreal`, etc.: now different than Matlab/Octave (#3071).
+
+  * Transitive comparison of floats with rationals (#3102).
 
   * Fast primality testing (da670c4).
 
-  * isreadable/iswritable functions added for more IO types (#3872).
+  * `isreadable`/`iswritable` functions added for more IO types (#3872).
+
+  * `combinations` now returns an iterator instead of a task (#3989)
+
+  * Documentation for writing packages (#2714, 2769, #2791) and linear algebra
+    (#2807)
+
+  * Support optional RTLD flags in `dlopen` (#2380)
 
 
 Deprecated or removed
@@ -92,6 +100,9 @@ Deprecated or removed
   * `ref` renamed to `getindex`, and `assign` to `setindex!` (#1484).
 
   * `writeable` renamed to `writable` (#3874).
+
+  * Many others ...
+
 
 Bugfixes
 --------
