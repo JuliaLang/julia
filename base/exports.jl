@@ -843,6 +843,7 @@ export
     with_bigfloat_rounding,
 
 # statistics
+    bincount,
     cor,
     cov,
     hist,

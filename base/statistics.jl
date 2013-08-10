@@ -274,3 +274,26 @@ function bound_quantiles(qs::AbstractVector)
     end
     [min(1,max(0,q)) for q = qs]
 end
+
+function bincount(x::AbstractVector; weights=nothing, minlength=nothing)
+    if minlength == nothing
+        m = max(x)
+    else
+        m = max(max(x), minlength)
+    end
+    if weights == nothing
+        weights = ones(Uint, length(x))
+    end
+    if length(weights) != length(x)
+        error("Length of weights is not equal to length of values")
+    end
+    if any(x.<=0)
+        error("Some of the values are non-positive")
+    end
+    counts = zeros(typeof(weights[1]), m)
+    for i=1:length(x)
+        counts[x[i]] += weights[i]
+    end
+    counts
+end
+
