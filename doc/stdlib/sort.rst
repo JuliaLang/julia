@@ -150,6 +150,18 @@ Order-Related Functions
    already sorted in that order. Returns an empty range located at the insertion point if
    ``a`` does not contain values equal to ``x``.
 
+.. function:: searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+   Returns the index of the first value in ``a`` greater than or equal to ``x``,
+   according to the specified order. Returns ``length(a)+1`` if ``x`` is greater
+   than all values in ``a``.
+
+.. function:: searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+   Returns the index of the last value in ``a`` less than or equal to ``x``,
+   according to the specified order. Returns ``0`` if ``x`` is less than all
+   values in ``a``.
+
 .. function:: select!(v, k, [by=<transform>,] [lt=<comparison>,] [rev=false])
 
    Partially sort the vector ``v`` in place, according to the order specified by ``by``,
