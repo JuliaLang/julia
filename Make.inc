@@ -361,16 +361,19 @@ OSLIBS += $(WHOLE_ARCHIVE) $(BUILD)/lib/libopenlibm.a $(NO_WHOLE_ARCHIVE)
 endif
 endif
 
-# MKL
+# Intel libraries
+
+ifeq ($(USE_INTEL_LIBM), 1)
+USE_SYSTEM_LIBM = 1
+LIBM = -L$(MKLROOT)/../compiler/lib/intel64 -limf
+LIBMNAME = libimf
+endif
 
 ifeq ($(USE_MKL), 1)
 USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
 LIBBLASNAME = libmkl_rt
 LIBLAPACKNAME = libmkl_rt
-USE_SYSTEM_LIBM = 1
-LIBM = -L$(MKLROOT)/../compiler/lib/intel64 -limf
-LIBMNAME = libimf
 MKL_LDFLAGS = -L$(MKLLIB) -lmkl_rt
 ifneq ($(strip $(MKLLIB)),)
   ifeq ($(OS), Linux)
