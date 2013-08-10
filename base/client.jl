@@ -39,7 +39,7 @@ quit() = exit()
 
 function repl_callback(ast::ANY, show_value)
     global _repl_enough_stdin = true
-    stop_reading(STDIN) 
+    stop_reading(STDIN)
     STDIN.readcb = false
     put(repl_channel, (ast, show_value))
 end
@@ -195,6 +195,7 @@ function process_options(args::Array{Any,1})
     global ARGS, bind_addr
     quiet = false
     repl = true
+    force_repl = false
     startup = true
     color_set = false
     i = 1
@@ -249,6 +250,8 @@ function process_options(args::Array{Any,1})
             # load juliarc now before processing any more options
             try_include(abspath(ENV["HOME"],".juliarc.jl"))
             startup = false
+        elseif args[i] == "-i"
+            force_repl = true
         elseif beginswith(args[i], "--color")
             if args[i] == "--color"
                 color_set = true
@@ -268,7 +271,9 @@ function process_options(args::Array{Any,1})
             end
         elseif args[i][1]!='-'
             # program
-            repl = false
+            if !force_repl
+                repl = false
+            end
             # remove julia's arguments
             ARGS = args[i+1:end]
             include(args[i])
