@@ -1,5 +1,17 @@
 .. currentmodule:: Base
 
+Introduction
+------------
+
+The Julia standard library contains a range of functions and macros appropriate for performing scientific and numerical computing, but as broad as many general purpose programming languages.  Additional functionality is available from a growing collection of :ref:`available-packages`. Functions are grouped by topic below.  
+
+Some general notes:
+
+* Except for functions in :ref:`built-in-modules`, all functions documented here are directly available for use in programs.
+* To use module functions, use ``import Module`` to import the module, and ``Module.fn(x)`` to use the functions.
+* Alternatively, ``using ModuleName`` will import all exported ``Module`` functions into the current namespace.
+* By convention, function names ending with an exclamation point (``!``) modify their arguments.  Some functions have both modifying (e.g., ``sort!``) and non-modifying (``sort``) versions.
+
 Getting Around
 --------------
 
@@ -1453,6 +1465,8 @@ Standard Numeric Types
 ----------------------
 
 ``Bool`` ``Int8`` ``Uint8`` ``Int16`` ``Uint16`` ``Int32`` ``Uint32`` ``Int64`` ``Uint64`` ``Float32`` ``Float64`` ``Complex64`` ``Complex128``
+
+.. _mathematical-operators:
 
 Mathematical Operators
 ----------------------

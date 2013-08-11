@@ -47,6 +47,26 @@ use::
 This is better style because ``foo`` does not really accept numbers of all
 types; it really needs ``Int`` s.
 
+Append `!` to names of functions which modify their arguments
+-------------------------------------------------------------
+
+Instead of::
+
+    function double(a::AbstractArray{Real})
+        for i = 1:endof(a); a[i] *= 2; end
+    end
+
+use::
+
+    function double!(a::AbstractArray{Real})
+        for i = 1:endof(a); a[i] *= 2; end
+    end
+
+The Julia standard library uses this convention throughout and
+contains examples of functions with both copying and modifying forms
+(e.g., ``sort`` and ``sort!``), and others which are just modifying
+(e.g., ``push!``, ``pop!``, ``splice!``).
+
 Avoid strange type Unions
 -------------------------
 
