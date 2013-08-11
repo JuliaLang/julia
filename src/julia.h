@@ -113,7 +113,7 @@ typedef struct {
     */
     unsigned short how:2;
     unsigned short isshared:1;  // data is shared by multiple Arrays
-    unsigned short isaligned:1; // data allocated with memalign
+    unsigned short isaligned:1; // data allocated with mem
     uint16_t elsize;
     uint32_t offset;  // for 1-d only. does not need to get big.
 
@@ -707,7 +707,7 @@ DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *spar
 jl_tuple_t *jl_tuple(size_t n, ...);
 jl_tuple_t *jl_tuple1(void *a);
 jl_tuple_t *jl_tuple2(void *a, void *b);
-jl_tuple_t *jl_alloc_tuple(size_t n);
+DLLEXPORT jl_tuple_t *jl_alloc_tuple(size_t n);
 jl_tuple_t *jl_alloc_tuple_uninit(size_t n);
 jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b);
 jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v);
@@ -1127,6 +1127,7 @@ void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned);
 void jl_gc_free_array(jl_array_t *a);
 void jl_gc_track_malloced_array(jl_array_t *a);
 void jl_gc_run_all_finalizers();
+void *alloc_1w(void);
 void *alloc_2w(void);
 void *alloc_3w(void);
 void *alloc_4w(void);

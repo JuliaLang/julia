@@ -37,7 +37,7 @@ namespace JL_I {
         // pointer access
         pointerref, pointerset, pointertoref,
         // c interface
-        ccall, cglobal, jl_alloca
+        ccall, cglobal, jl_alloca, llvmcall
     };
 };
 
@@ -163,7 +163,7 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
 }
 
 // emit code to unpack a raw value from a box
-static Value *emit_unbox(Type *to, Type *pto, Value *x)
+static Value *emit_unbox(Type *to, Type *pto, Value *x, jl_value_t *jt)
 {
     Type *ty = x->getType();
     if (ty != jl_pvalue_llvmt) {
@@ -184,6 +184,38 @@ static Value *emit_unbox(Type *to, Type *pto, Value *x)
             return UndefValue::get(to);
         }
         return x;
+    }
+    if (jt != NULL && jl_is_tuple(jt))
+    {
+        if (to->isStructTy())
+        {
+            StructType *st = dyn_cast<StructType>(to);
+            // This is a tuple type
+            size_t n = st->getNumElements();
+            assert(n == jl_tuple_len(jt));
+            Value *tpl = UndefValue::get(to);
+            for(size_t i = 0; i < n; ++i) {
+                Type *ety = st->getElementType(i);
+                Value *elt = emit_unbox(ety,PointerType::get(ety,0),
+                    emit_tupleref(x,ConstantInt::get(T_size,i+1),jt,NULL),jl_tupleref(jt,i));
+                tpl = builder.CreateInsertValue(tpl,elt,ArrayRef<unsigned>(i));
+            }
+            return tpl;
+        } else {
+            assert(to->isVectorTy());
+            VectorType *vt = dyn_cast<VectorType>(to);
+            // This is a tuple type
+            size_t n = vt->getNumElements();
+            assert(n == jl_tuple_len(jt));
+            Value *tpl = UndefValue::get(to);
+            Type *ety = vt->getElementType();
+            for (size_t i = 0; i < n; ++i) {
+                Value *elt = emit_unbox(ety,PointerType::get(ety,0),
+                    emit_tupleref(x,ConstantInt::get(T_size,i+1),jt,NULL),jl_tupleref(jt,i));
+                tpl = builder.CreateInsertElement(tpl,elt,ConstantInt::get(T_int32,i));
+            }
+            return tpl;       
+        }
     }
     Value *p = data_pointer(x);
     if (to == T_int1) {
@@ -225,7 +257,10 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
         unsigned int nb = jl_datatype_size(bt)*8;
         to = IntegerType::get(jl_LLVMContext, nb);
     }
-    return emit_unbox(to, PointerType::get(to, 0), v);
+    if (to == T_void) {
+        return NULL;
+    }
+    return emit_unbox(to, PointerType::get(to, 0), v, bt);
 }
 
 // figure out how many bits a bitstype has at compile time, or -1
@@ -255,7 +290,7 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         jl_value_t *p = jl_tparam0(et);
         if (jl_is_leaf_type(p)) {
             Type *to = julia_type_to_llvm(p);
-            return emit_unbox(to, PointerType::get(to,0), emit_unboxed(x,ctx));
+            return emit_unbox(to, PointerType::get(to,0), emit_unboxed(x,ctx), p);
         }
     }
     int nb = try_to_determine_bitstype_nbits(targ, ctx);
@@ -273,7 +308,7 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_datatype_size(bt)*8;
     }
     Type *to = IntegerType::get(jl_LLVMContext, nb);
-    return emit_unbox(to, PointerType::get(to, 0), emit_unboxed(x, ctx));
+    return emit_unbox(to, PointerType::get(to, 0), emit_unboxed(x, ctx), et);
 }
 
 static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
@@ -544,7 +579,7 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
         jl_error("pointerref: invalid index type");
     }
     Value *thePtr = auto_unbox(e,ctx);
-    Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx));
+    Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx), (jl_value_t*)jl_long_type);
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
     if (!jl_isbits(ety)) {
         if (ety == (jl_value_t*)jl_any_type)
@@ -585,7 +620,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
     }
     if ((jl_datatype_t*)expr_type(i, ctx) != jl_long_type)
         jl_error("pointerset: invalid index type");
-    Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx));
+    Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx),(jl_value_t*)jl_long_type);
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
     Value *thePtr = auto_unbox(e,ctx);
     if (!jl_isbits(ety) && ety != (jl_value_t*)jl_any_type) {
@@ -614,6 +649,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     switch (f) {
     case ccall: return emit_ccall(args, nargs, ctx);
     case cglobal: return emit_cglobal(args, nargs, ctx);
+    case llvmcall: return emit_llvmcall(args, nargs, ctx);
 
     HANDLE(box,2)         return generic_box(args[1], args[2], ctx);
     HANDLE(unbox,2)       return generic_unbox(args[1], args[2], ctx);
@@ -1161,4 +1197,5 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(nan_dom_err);
     ADD_I(ccall); ADD_I(cglobal);
     ADD_I(jl_alloca);
+    ADD_I(llvmcall);
 }
