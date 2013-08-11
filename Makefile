@@ -172,7 +172,7 @@ distclean: cleanall
 	rm -fr usr
 
 .PHONY: default debug release julia-debug julia-release \
-	test testall test-* clean distclean cleanall \
+	test testall testall1 test-* clean distclean cleanall \
 	run-julia run-julia-debug run-julia-release run \
 	install dist
 
@@ -181,6 +181,9 @@ test: release
 
 testall: release
 	@$(MAKE) $(QUIET_MAKE) -C test all
+
+testall1: release
+	@env JULIA_CPU_CORES=1 $(MAKE) $(QUIET_MAKE) -C test all
 
 test-%: release
 	@$(MAKE) $(QUIET_MAKE) -C test $*
