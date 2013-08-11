@@ -66,6 +66,35 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
 {
     if (jt == (jl_value_t*)jl_bool_type) return T_int1;
     if (jt == (jl_value_t*)jl_bottom_type) return T_void;
+    if (jl_is_tuple(jt)) {
+        // Represent tuples as anonymous structs
+        size_t ntypes = jl_tuple_len(jt);
+        if (ntypes == 0)
+            return T_void;
+        bool purebits = true;
+        bool isvector = true;
+        Type *type = NULL;
+        for (size_t i = 0; i < ntypes; ++i) {
+            jl_value_t *elt = jl_tupleref(jt,i);
+            purebits &= jl_isbits(elt);
+            Type *newtype = julia_struct_to_llvm(elt);
+            if (type != NULL && type != newtype)
+                isvector = false;
+            type = newtype;
+            if (!purebits && !isvector)
+                break;
+        }
+        if (purebits) {
+            if (isvector) {
+                return VectorType::get(type,ntypes);
+            } else {
+                Type *types[ntypes];
+                for (size_t i = 0; i < ntypes; ++i)
+                    types[i] = julia_struct_to_llvm(jl_tupleref(jt,i));
+                return StructType::get(jl_LLVMContext,ArrayRef<Type*>(&types[0],ntypes));
+            }
+        }
+    }
     if (!jl_is_leaf_type(jt))
         return jl_pvalue_llvmt;
     if (jl_is_cpointer_type(jt)) {
@@ -114,10 +143,9 @@ static Type *julia_struct_to_llvm(jl_value_t *jt)
         if (jst->struct_decl == NULL) {
             size_t ntypes = jl_tuple_len(jst->types);
             if (ntypes == 0)
-                return NULL;
+                return T_void;
             StructType *structdecl = StructType::create(getGlobalContext(), jst->name->name->name);
             jst->struct_decl = structdecl;
-
             std::vector<Type *> latypes(0);
             size_t i;
             for(i = 0; i < ntypes; i++) {
@@ -195,8 +223,9 @@ static jl_value_t *jl_typeid_to_type(int i)
 
 static bool has_julia_type(Value *v)
 {
-    return ((dyn_cast<Instruction>(v) != NULL) &&
-            ((Instruction*)v)->getMetadata("julia_type")!=NULL);
+    Instruction *inst = (dyn_cast<Instruction>(v));
+    return (inst != NULL) &&
+            (inst->getMetadata("julia_type")!=NULL);
 }
 
 static jl_value_t *julia_type_of_without_metadata(Value *v, bool err=true)
@@ -346,7 +375,7 @@ static void null_pointer_check(Value *v, jl_codectx_t *ctx)
                            jlundeferr_var, ctx);
 }
 
-static Value *boxed(Value *v, jl_value_t *jt=NULL);
+static Value *boxed(Value *v, jl_codectx_t *ctx, jl_value_t *jt=NULL);
 
 static void emit_type_error(Value *x, jl_value_t *type, const std::string &msg,
                             jl_codectx_t *ctx)
@@ -359,7 +388,7 @@ static void emit_type_error(Value *x, jl_value_t *type, const std::string &msg,
                                        ArrayRef<Value*>(zeros));
     builder.CreateCall4(jltypeerror_func,
                         fname_val, msg_val,
-                        literal_pointer_val(type), boxed(x));
+                        literal_pointer_val(type), boxed(x,ctx));
 }
 
 static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
@@ -460,7 +489,7 @@ static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
     return mark_julia_type(elt, jltype);
 }
 
-static Value *emit_unbox(Type *to, Type *pto, Value *x);
+static Value *emit_unbox(Type *to, Type *pto, Value *x, jl_value_t *jt);
 
 static Value *typed_store(Value *ptr, Value *idx_0based, Value *rhs,
                           jl_value_t *jltype, jl_codectx_t *ctx)
@@ -469,9 +498,9 @@ static Value *typed_store(Value *ptr, Value *idx_0based, Value *rhs,
     assert(elty != NULL);
     if (elty==T_int1) { elty = T_int8; }
     if (jl_isbits(jltype) && ((jl_datatype_t*)jltype)->size > 0)
-        rhs = emit_unbox(elty, PointerType::get(elty,0), rhs);
+        rhs = emit_unbox(elty, PointerType::get(elty,0), rhs, jltype);
     else
-        rhs = boxed(rhs);
+        rhs = boxed(rhs,ctx);
     Value *data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
     return builder.CreateStore(rhs, builder.CreateGEP(data, idx_0based));
 }
@@ -559,15 +588,106 @@ type_of_constant:
 
 static Value *emit_tuplelen(Value *t)
 {
-#ifdef OVERLAP_TUPLE_LEN
-    Value *lenbits = emit_nthptr(t, (size_t)0);
-    return builder.CreateLShr(builder.CreatePtrToInt(lenbits, T_int64),
-                              ConstantInt::get(T_int32, 52));
-#else
-    Value *lenbits = emit_nthptr(t, 1);
-    return builder.CreatePtrToInt(lenbits, T_size);
-#endif
+    if (t == NULL)
+        return ConstantInt::get(T_size,0);
+    Type *ty = t->getType();
+    if (ty == jl_pvalue_llvmt) //boxed
+    {
+    #ifdef OVERLAP_TUPLE_LEN
+        Value *lenbits = emit_nthptr(t, (size_t)0);
+        return builder.CreateLShr(builder.CreatePtrToInt(lenbits, T_int64),
+                                  ConstantInt::get(T_int32, 52));
+    #else
+        Value *lenbits = emit_nthptr(t, 1);
+        return builder.CreatePtrToInt(lenbits, T_size);
+    #endif
+    } else { //unboxed
+        if (ty->isStructTy()) {
+            StructType *st = dyn_cast<StructType>(ty);
+            return ConstantInt::get(T_size,st->getNumElements());
+        } else {
+            assert(ty->isVectorTy());
+            VectorType *vt = dyn_cast<VectorType>(ty);
+            return ConstantInt::get(T_size,vt->getNumElements());
+        }
+    }
 }
+
+static Value *emit_tupleset(Value *tuple, Value *i, Value *x)
+{
+#ifdef OVERLAP_TUPLE_LENCreateS
+    Value *slot = builder.CreateGEP(builder.CreateBitCast(tuple, jl_ppvalue_llvmt),
+                             i);
+#else
+    Value *slot = builder.CreateGEP(builder.CreateBitCast(tuple, jl_ppvalue_llvmt),
+                             builder.CreateAdd(ConstantInt::get(T_size,1),i));
+#endif
+    return builder.CreateStore(x,slot);
+}
+
+// Julia semantics
+static Value *emit_tupleref(Value *tuple, Value *i, jl_value_t *jt, jl_codectx_t *ctx)
+{
+    if (tuple == NULL) {
+        // A typecheck must have caught this one
+        //builder.CreateUnreachable();
+        return NULL;
+    }
+    Type *ty = tuple->getType();
+    if (ty == jl_pvalue_llvmt) //boxed
+    {
+#ifdef OVERLAP_TUPLE_LEN
+        Value *slot = builder.CreateGEP(builder.CreateBitCast(tuple, jl_ppvalue_llvmt),i);
+#else
+        Value *slot = builder.CreateGEP(builder.CreateBitCast(tuple, jl_ppvalue_llvmt),
+                                 builder.CreateAdd(ConstantInt::get(T_size,1),i));
+#endif
+        return builder.CreateLoad(slot);
+    } else {
+        if (ty->isVectorTy()) {
+            Type *ity = i->getType();
+            assert(ity->isIntegerTy());
+            IntegerType *iity = dyn_cast<IntegerType>(ity);
+            // ExtractElement needs i32 *sigh*
+            if(iity->getBitWidth() > 32)
+                i = builder.CreateTrunc(i,T_int32);
+            else if(iity->getBitWidth() < 32)
+                i = builder.CreateZExt(i,T_int32);
+            return builder.CreateExtractElement(tuple,builder.CreateSub(i,ConstantInt::get(T_int32,1)));
+        }
+        ConstantInt *idx = dyn_cast<ConstantInt>(i);
+        if (idx != 0)
+            return builder.CreateExtractValue(tuple,ArrayRef<unsigned>((unsigned)idx->getZExtValue()-1));
+        else
+        {
+            assert(ty->isStructTy());
+            StructType *st = dyn_cast<StructType>(ty);
+            size_t n = st->getNumElements();
+            Value *ret = builder.CreateAlloca(jl_ppvalue_llvmt);
+            BasicBlock *after = BasicBlock::Create(getGlobalContext(),"after_switch",ctx->f);
+            BasicBlock *deflt = BasicBlock::Create(getGlobalContext(),"default_case",ctx->f);
+            // Create the switch
+            builder.CreateSwitch(i,deflt,n);
+            // Anything else is a bounds error
+            builder.SetInsertPoint(deflt);
+            builder.CreateCall2(jlthrow_line_func, jlboundserr_var,
+                        ConstantInt::get(T_int32, ctx->lineno));
+            builder.CreateUnreachable();
+            // Now for the cases
+            for (size_t i = 1; i <= n; ++i) {
+                BasicBlock *blk = BasicBlock::Create(getGlobalContext(),"case",ctx->f);
+                builder.SetInsertPoint(blk);
+                Value *val = boxed(builder.CreateExtractValue(tuple,ArrayRef<unsigned>(i-1)),ctx,jl_tupleref(jt,i));
+                builder.CreateStore(val,ret);
+                builder.CreateBr(after);
+            }
+            builder.SetInsertPoint(after);
+            return builder.CreateLoad(ret);
+        }
+    }
+}
+
+
 
 // emit length of vararg tuple
 static Value *emit_n_varargs(jl_codectx_t *ctx)
@@ -706,7 +826,7 @@ static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_
     }
 #endif
     for(size_t k=0; k < nidxs; k++) {
-        Value *ii = emit_unbox(T_size, T_psize, emit_unboxed(args[k], ctx));
+        Value *ii = emit_unbox(T_size, T_psize, emit_unboxed(args[k], ctx), NULL);
         ii = builder.CreateSub(ii, ConstantInt::get(T_size, 1));
         i = builder.CreateAdd(i, builder.CreateMul(ii, stride));
         if (k < nidxs-1) {
@@ -776,19 +896,61 @@ static Value *allocate_box_dynamic(Value *jlty, int nb, Value *v)
     return init_bits_value(newv, jlty, v->getType(), v);
 }
 
+bool isGhostType(jl_value_t*);
+
 // this is used to wrap values for generic contexts, where a
 // dynamically-typed value is required (e.g. argument to unknown function).
 // if it's already a pointer it's left alone.
-static Value *boxed(Value *v, jl_value_t *jt)
+static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
 {
+    if (v == NULL || dyn_cast<UndefValue>(v) != 0) {
+        if (jl_is_datatype(jt)) {
+            jl_datatype_t *jb = (jl_datatype_t*)jb;
+            if (jb->instance == NULL)
+                jl_new_struct_uninit(jb);
+            assert(jb->instance != NULL);
+            return literal_pointer_val((jl_value_t*)jb->instance);
+        }
+        else if (jl_is_tuple(jt)) {
+            assert(jl_tuple_len(jt) == 0);
+            return literal_pointer_val((jl_value_t*)jl_null);
+        }
+        // Type information might not be good enough, 
+        if (v == NULL)
+            return literal_pointer_val((jl_value_t*)jl_null);
+        else
+            jt = julia_type_of(v);
+        assert(jl_is_datatype(jt));
+        assert(isGhostType(jt));
+        return literal_pointer_val((jl_value_t*)((jl_datatype_t*)jt)->instance);  
+    }
     Type *t = v->getType();
     if (t == jl_pvalue_llvmt)
         return v;
     if (t == T_void)
         return literal_pointer_val((jl_value_t*)jl_nothing);
     if (t == T_int1) return julia_bool(v);
-    if (jt == NULL)
+    if (jt == NULL || jl_is_uniontype(jt) || jl_is_abstracttype(jt))
         jt = julia_type_of(v);
+    if jl_is_tuple(jt) {
+        size_t n = jl_tuple_len(jt);
+        Value *tpl = builder.CreateCall(jl_alloc_tuple_func,ConstantInt::get(T_size,n));
+        make_gcroot(tpl,ctx);
+        for (size_t i = 0; i < n; ++i)
+        {
+            jl_value_t *jti = jl_tupleref(jt,i);
+            Value *vi;
+            if (v->getType()->isStructTy()) {
+                vi = builder.CreateExtractValue(v,ArrayRef<unsigned>((unsigned)i));
+            } else {
+                assert(v->getType()->isVectorTy());
+                vi = builder.CreateExtractElement(v,ConstantInt::get(T_int32,i));
+            }
+            emit_tupleset(tpl,ConstantInt::get(T_size,i+1),boxed(vi,ctx,jti));
+        }
+        ctx->argDepth--;
+        return tpl;
+    }
     jl_datatype_t *jb = (jl_datatype_t*)jt;
     assert(jl_is_datatype(jb));
     if (jb == jl_int8_type)

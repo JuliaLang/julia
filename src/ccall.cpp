@@ -243,7 +243,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
 {
     Type *vt = jv->getType();
     if (ty == jl_pvalue_llvmt) {
-        return boxed(jv);
+        return boxed(jv,ctx);
     }
     else if (ty == vt && !addressOf) {
         return jv;
@@ -269,7 +269,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
             }
         }
         // error. box for error handling.
-        jv = boxed(jv);
+        jv = boxed(jv,ctx);
     }
     else if (jl_is_cpointer_type(jt)) {
         assert(ty->isPointerTy());
@@ -353,7 +353,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
                                "cglobal: first argument not a pointer or valid constant expression",
                                ctx);
         }
-        jl_ptr = emit_unbox(T_size, T_psize, arg1);
+        jl_ptr = emit_unbox(T_size, T_psize, arg1, ptr_ty);
     }
 
     void *fptr=NULL;
@@ -489,6 +489,163 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     JL_GC_POP();
     return mark_julia_type(res, rt);
+}
+
+// llvmcall(ir, (rettypes...), (argtypes...), args...)
+static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
+{
+    JL_NARGSV(llvmcall, 3)
+    jl_value_t *rt = NULL, *at = NULL;
+    JL_GC_PUSH2(&rt, &at);
+    {
+    JL_TRY {
+        at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
+                                            &jl_tupleref(ctx->sp,0),
+                                            jl_tuple_len(ctx->sp)/2);
+    }
+    JL_CATCH {
+        jl_rethrow_with_add("error interpreting llvmcall return type");
+    }
+    }
+    {
+    JL_TRY {
+        rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
+                                            &jl_tupleref(ctx->sp,0),
+                                            jl_tuple_len(ctx->sp)/2);
+    }
+    JL_CATCH {
+        jl_rethrow_with_add("error interpreting ccall argument tuple");
+    }
+    }
+    JL_TYPECHK(llvmcall, type, rt);
+    JL_TYPECHK(llvmcall, tuple, at);
+    JL_TYPECHK(llvmcall, type, at);
+    int i = 1;
+    // Make sure to find a unique name
+    std::string ir_name;
+    while(true) {
+        std::stringstream name;
+        name << (ctx->f->getName().str()) << i++;
+        ir_name = name.str();
+        if(jl_Module->getFunction(ir_name) == NULL) 
+            break;
+    }
+    jl_value_t *ir = static_eval(args[1], ctx, true);
+    if (!jl_is_byte_string(ir))
+    {
+        jl_error("First argument to llvmcall must be a string");
+    }
+
+    std::stringstream ir_stream;
+
+    // Generate arguments
+    std::string arguments;
+    llvm::raw_string_ostream argstream(arguments);
+    jl_tuple_t *tt = (jl_tuple_t*)at;
+    size_t nargt = jl_tuple_len(tt);
+    Value *argvals[nargt];
+    /* 
+     * Semantics for arguments are as follows:
+     * If the argument type is immutable (including bitstype), we pass the loaded llvm value
+     * type. Otherwise we pass a pointer to a jl_value_t.
+     */
+    for (size_t i = 0; i < nargt; ++i)
+    {
+        jl_value_t *tti = jl_tupleref(tt,i);
+        Type *t = julia_struct_to_llvm(tti);
+        t->print(argstream);
+        argstream << " ";
+        jl_value_t *argi = args[4+2*i];
+        Value *arg;
+        bool needroot = false;
+        if (t == jl_pvalue_llvmt || !jl_isbits(tti)) {
+            arg = emit_expr(argi, ctx, true);
+            if (t == jl_pvalue_llvmt && arg->getType() != jl_pvalue_llvmt) {
+                arg = boxed(arg, ctx);
+                needroot = true;
+            }
+        }
+        else {
+            arg = emit_unboxed(argi, ctx);
+            if (jl_is_bitstype(expr_type(argi, ctx))) {
+                arg = emit_unbox(t, PointerType::get(t,0), arg, tti);
+            }
+        }
+
+#ifdef JL_GC_MARKSWEEP
+        // make sure args are rooted
+        if (t == jl_pvalue_llvmt && (needroot || might_need_root(argi))) {
+            make_gcroot(arg, ctx);
+        }
+#endif
+        /*
+        static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
+                          jl_value_t *argex, bool addressOf,
+                          int argn, jl_codectx_t *ctx,
+                          bool *mightNeedTempSpace) */
+        bool mightNeedTempSpace = false;
+        argvals[i] = julia_to_native(t,tti,arg,argi,false,i,ctx,&mightNeedTempSpace);
+        if ((i+1) != nargt)
+            argstream << ",";
+    }
+
+    Type *rettype;
+    std::string rstring;
+    llvm::raw_string_ostream rtypename(rstring);
+    // Construct return type
+    if (!jl_is_tuple(rt)) {
+        rettype = julia_struct_to_llvm(rt);
+        rettype->print(rtypename);
+    } else
+    {
+        size_t nret = jl_tuple_len(rt);
+        if (nret == 0) {
+            rettype = T_void;
+            rettype->print(rtypename);
+        } else {
+            Type *rettypes[nret];
+            rtypename << "{";
+            for (size_t i = 0; i < nret; ++i) {
+                rettypes[i] = julia_struct_to_llvm(jl_tupleref(rt,i));
+                rettypes[i]->print(rtypename);
+                if ((i+1) != nret)
+                    rtypename << ",";
+            }
+            rtypename << "}";
+            rettype = StructType::get(jl_LLVMContext,ArrayRef<Type*>(&rettypes[0],nret));
+        }
+    }
+
+    ir_stream << "; Number of arguments: " << nargt << "\n"
+    << "define "<<rtypename.str()<<" @" << ir_name << "("<<argstream.str()<<") {\n"
+    << jl_string_data(ir) << "\n}";
+    SMDiagnostic Err = SMDiagnostic();
+    std::string ir_string = ir_stream.str();
+    JL_PUTS((char*)ir_string.data(),JL_STDERR);
+    Module *m = ParseAssemblyString(ir_string.data(),jl_Module,Err,jl_LLVMContext);
+    if (m == NULL) {
+        std::string message = "Failed to parse LLVM Assembly: \n";
+        llvm::raw_string_ostream stream(message);
+        Err.print("julia",stream,true);
+        jl_error(stream.str().c_str());
+    }
+    Function *f = m->getFunction(ir_name);
+    /*
+     * It might be tempting to just try to set the Always inline attribute on the function
+     * and hope for the best. However, this doesn't work since that would require an inlining
+     * pass (which is a Call Graph pass and cannot be managed by a FunctionPassManager). Instead
+     * We are sneaky and call the inliner directly. This also has the benefit of looking exactly
+     * like we cut/pasted it in in `code_llvm`
+     */
+    f->setLinkage(GlobalValue::LinkOnceODRLinkage);
+    f->dump();
+        // the actual call
+    CallInst *inst = builder.CreateCall(f,ArrayRef<Value*>(&argvals[0],nargt));
+    InlineFunctionInfo info;
+    if (!InlineFunction(inst,info))
+        jl_error("Failed to insert LLVM IR into function");
+
+    return literal_pointer_val(jl_nothing);
 }
 
 // --- code generator for ccall itself ---
@@ -670,7 +827,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             addressOf = true;
             argi = jl_exprarg(argi,0);
         }
-        Value *ary = boxed(emit_expr(argi, ctx));
+        Value *ary = boxed(emit_expr(argi, ctx),ctx);
         JL_GC_POP();
         return mark_julia_type(
                 builder.CreateBitCast(emit_nthptr_addr(ary, addressOf?1:0),lrt),
@@ -790,15 +947,13 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (largty == jl_pvalue_llvmt || largty->isStructTy()) {
             arg = emit_expr(argi, ctx, true);
             if (largty == jl_pvalue_llvmt && arg->getType() != jl_pvalue_llvmt) {
-                arg = boxed(arg);
+                arg = boxed(arg,ctx);
                 needroot = true;
             }
-        }
+        } 
         else {
             arg = emit_unboxed(argi, ctx);
             if (jl_is_bitstype(expr_type(argi, ctx))) {
-                Type *totype = addressOf ? largty->getContainedType(0) : largty;
-                Type *ptype  = addressOf ? largty : PointerType::get(largty,0);
                 Type *at = arg->getType();
                 if (at != jl_pvalue_llvmt && at != totype &&
                     !(at->isPointerTy() && jargty==(jl_value_t*)jl_voidpointer_type)) {
@@ -806,7 +961,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     arg = UndefValue::get(totype);
                 }
                 else {
-                    arg = emit_unbox(totype, ptype, arg);
+                    if (addressOf)
+                        arg = emit_unbox(largty->getContainedType(0), largty, arg, jargty);
+                    else
+                        arg = emit_unbox(largty, PointerType::get(largty,0), arg, jargty);
                 }
             }
         }
