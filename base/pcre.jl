@@ -108,9 +108,13 @@ study(re::Array{Uint8}) = study(re, int32(0))
 free_study(extra::Ptr{Void}) =
     ccall((:pcre_free_study, :libpcre), Void, (Ptr{Void},), extra)
 
+exec(regex::Array{Uint8}, extra::Ptr{Void}, str::SubString, offset::Integer, options::Integer, cap::Bool) =
+    exec(regex, extra, str.string, str.offset, offset, sizeof(str), options, cap)
+exec(regex::Array{Uint8}, extra::Ptr{Void}, str::ByteString, offset::Integer, options::Integer, cap::Bool) =
+    exec(regex, extra, str, 0, offset, sizeof(str), options, cap)
 function exec(regex::Array{Uint8}, extra::Ptr{Void},
-              str::ByteString, offset::Integer, options::Integer, cap::Bool)
-    if offset < 0 || length(str.data) < offset
+              str::ByteString, shift::Integer, offset::Integer, len::Integer, options::Integer, cap::Bool)
+    if offset < 0 || len < offset || len+shift > sizeof(str)
         error(BoundsError)
     end
     ncap = info(regex, extra, INFO_CAPTURECOUNT, Int32)
@@ -118,7 +122,7 @@ function exec(regex::Array{Uint8}, extra::Ptr{Void},
     n = ccall((:pcre_exec, :libpcre), Int32,
               (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32,
                Int32, Int32, Ptr{Int32}, Int32),
-              regex, extra, str, length(str.data),
+              regex, extra, pointer(str.data,shift+1), len,
               offset, options, ovec, length(ovec))
     if n < -1
         error("exec: error $n")

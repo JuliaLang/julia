@@ -153,7 +153,12 @@ begin
 # Include build number if we've got at least some distance from a tag (e.g. a release)
 prerelease = BUILD_INFO.prerelease ? "-prerelease" : ""
 build_number = BUILD_INFO.build_number != 0 ? "+$(BUILD_INFO.build_number)" : ""
-global const VERSION = convert( VersionNumber, "$(BUILD_INFO.version_string)$(prerelease)$(build_number)")
+try
+    global const VERSION = convert( VersionNumber, "$(BUILD_INFO.version_string)$(prerelease)$(build_number)")
+catch e
+    println("while creating Base.VERSION, ignoring error $e")
+    global const VERSION = VersionNumber(0)
+end
 branch_prefix = (BUILD_INFO.branch == "master") ? "" : "$(BUILD_INFO.branch)/"
 dirty_suffix = BUILD_INFO.dirty ? "*" : ""
 global const commit_string = (BUILD_INFO.commit == "") ? "" : "Commit $(branch_prefix)$(BUILD_INFO.commit_short)$(dirty_suffix) $(BUILD_INFO.date_string)"
