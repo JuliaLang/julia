@@ -2,11 +2,7 @@
 Punctuation
 -----------
 
-.. data:: punctuation
-
-Extended documentation for `mathematical symbols & functions is here`__
-
-.. __: base.html#mathematical-operators
+Extended documentation for mathematical symbols & functions is :ref:`here <mathematical-operators>`.
 
    =========   ================================================
    symbol      meaning
