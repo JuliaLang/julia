@@ -520,6 +520,8 @@ export
     nthperm!,
     nthperm,
     ones,
+    parent,
+    parentindexes,
     partitions,
     pascal,
     permute!,

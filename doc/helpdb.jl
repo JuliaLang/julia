@@ -136,6 +136,14 @@
 
 "),
 
+("Getting Around","Base","versioninfo","versioninfo([verbose::Bool])
+
+   Print information about the version of Julia in use. If the
+   \"verbose\" argument is true, detailed system information is shown
+   as well.
+
+"),
+
 ("All Objects","Base","is","is(x, y)
 
    Determine whether \"x\" and \"y\" are identical, in the sense that
@@ -743,7 +751,7 @@
 
 ("Iterable Collections","Base","map","map(f, c) -> collection
 
-   Transform collection or iterator \"c\" by applying \"f\" to each element.
+   Transform collection \"c\" by applying \"f\" to each element.
 
    **Example**: \"map((x) -> x * 2, [1, 2, 3]) = [2, 4, 6]\"
 
@@ -786,6 +794,13 @@
 
    Return an array of all items in a collection. For associative
    collections, returns (key, value) tuples.
+
+"),
+
+("Iterable Collections","Base","issubset","issubset(a, b)
+
+   Determine whether every element of \"a\" is also in \"b\", using
+   the \"contains\" function.
 
 "),
 
@@ -1609,6 +1624,18 @@
 
 "),
 
+("I/O","Base","isreadonly","isreadonly(stream)
+
+   Determine whether a stream is read-only.
+
+"),
+
+("I/O","Base","isopen","isopen(stream)
+
+   Determine whether a stream is open (i.e. has not been closed yet).
+
+"),
+
 ("I/O","Base","ntoh","ntoh(x)
 
    Converts the endianness of a value from Network byte order (big-
@@ -1712,7 +1739,19 @@
 
 ("Text I/O","Base","println","println(x)
 
-   Print (using \"print()\") \"x\" followed by a newline
+   Print (using \"print()\") \"x\" followed by a newline.
+
+"),
+
+("Text I/O","Base","info","info(msg)
+
+   Display an informational message.
+
+"),
+
+("Text I/O","Base","warn","warn(msg)
+
+   Display a warning.
 
 "),
 
@@ -1727,6 +1766,14 @@
 ("Text I/O","Base","@sprintf","@sprintf(\"%Fmt\", args...)
 
    Return \"@printf\" formatted output as string.
+
+"),
+
+("Text I/O","Base","sprint","sprint(f::Function, args...)
+
+   Call the given function with an I/O stream and the supplied extra
+   arguments. Everything written to this I/O stream is returned as a
+   string.
 
 "),
 
@@ -1864,10 +1911,10 @@ display(d::Display, mime, x)
    display objects of this type.
 
    There are also two variants with a \"mime\" argument (a MIME type
-   string, such as \"\"image/png\"\") attempt to display \"x\" using
-   the requesed MIME type *only*, throwing a \"MethodError\" if this
-   type is not supported by either the display(s) or by \"x\".   With
-   these variants, one can also supply the \"raw\" data in the
+   string, such as \"\"image/png\"\"), which attempt to display \"x\"
+   using the requesed MIME type *only*, throwing a \"MethodError\" if
+   this type is not supported by either the display(s) or by \"x\".
+   With these variants, one can also supply the \"raw\" data in the
    requested MIME type by passing \"x::String\" (for MIME types with
    text-based storage, such as text/html or application/postscript) or
    \"x::Vector{Uint8}\" (for binary MIME types).
@@ -3389,6 +3436,15 @@ popdisplay(d::Display)
 
 "),
 
+("Data Formats","Base","digits","digits(n[, base][, pad])
+
+   Returns an array of the digits of \"n\" in the given base,
+   optionally padded with zeros to a specified size. More significant
+   digits are at higher indexes, such that \"n ==
+   sum([digits[k]*base^(k-1) for k=1:length(digits)])\".
+
+"),
+
 ("Data Formats","Base","bits","bits(n)
 
    A string giving the literal bit representation of a number.
@@ -4164,6 +4220,20 @@ popdisplay(d::Display)
    Returns a SubArray, which stores the input \"A\" and \"inds\"
    rather than computing the result immediately. Calling \"getindex\"
    on a SubArray computes the indices on the fly.
+
+"),
+
+("Arrays","Base","parent","parent(A)
+
+   Returns the \"parent array\" of an array view type (e.g.,
+   SubArray), or the array itself if it is not a view
+
+"),
+
+("Arrays","Base","parentindexes","parentindexes(A)
+
+   From an array view \"A\", returns the corresponding indexes in the
+   parent
 
 "),
 
@@ -5144,10 +5214,10 @@ popdisplay(d::Display)
 
 ("Parallel Computing","Base","pmap","pmap(f, c)
 
-   Transform collection or iterator \"c\" by applying \"f\" to each 
-   element in parallel. If \"nprocs() > 1\", the calling process 
-   will be dedicated to assigning tasks. All other available 
-   processes will be used as parallel workers.
+   Transform collection \"c\" by applying \"f\" to each element in
+   parallel. If \"nprocs() > 1\", the calling process will be
+   dedicated to assigning tasks. All other available processes will be
+   used as parallel workers.
 
 "),
 
@@ -7861,9 +7931,6 @@ popdisplay(d::Display)
 
 "),
 
-("Punctuation","","punctuation","punctuation
-
-"),
 
 ("Sorting and Related Functions","Base","sort!","sort!(v, [dim,] [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
@@ -7937,6 +8004,22 @@ popdisplay(d::Display)
    \"rev\" keywords, assuming that \"a\" is already sorted in that
    order. Returns an empty range located at the insertion point if
    \"a\" does not contain values equal to \"x\".
+
+"),
+
+("Sorting and Related Functions","Base","searchsortedfirst","searchsortedfirst(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+   Returns the index of the first value in \"a\" greater than or equal
+   to \"x\", according to the specified order. Returns \"length(a)+1\"
+   if \"x\" is greater than all values in \"a\".
+
+"),
+
+("Sorting and Related Functions","Base","searchsortedlast","searchsortedlast(a, x, [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+   Returns the index of the last value in \"a\" less than or equal to
+   \"x\", according to the specified order. Returns \"0\" if \"x\" is
+   less than all values in \"a\".
 
 "),
 

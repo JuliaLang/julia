@@ -79,6 +79,7 @@ function sub(A::SubArray, i::RangeIndex...)
     SubArray{eltype(A),L,typeof(A.parent),typeof(ni)}(A.parent, ni)
 end
 
+
 function slice{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
     n = 0
     for j = i; if !isa(j, Int); n += 1; end; end
@@ -100,6 +101,11 @@ function slice(A::SubArray, i::RangeIndex...)
     end
     slice(A.parent, tuple(newindexes...))
 end
+
+# Generic fallback for Colon translation
+sub(A::AbstractArray, I...) = sub(A, ntuple(length(I), i-> isa(I[i], Colon) ? (1:size(A,i)) : I[i])...)
+slice(A::AbstractArray, I...) = slice(A, ntuple(length(I), i-> isa(I[i], Colon) ? (1:size(A,i)) : I[i])...)
+
 
 ### rename the old slice function ###
 ##squeeze all dimensions of length 1
@@ -147,6 +153,12 @@ end
 
 size(s::SubArray) = s.dims
 ndims{T,N}(s::SubArray{T,N}) = N
+
+parent(s::SubArray) = s.parent
+parentindexes(s::SubArray) = s.indexes
+
+parent(a::AbstractArray) = a
+parentindexes(a::AbstractArray) = ntuple(ndims(a), i->1:size(a,i))
 
 copy(s::SubArray) = copy!(similar(s.parent, size(s)), s)
 similar(s::SubArray, T, dims::Dims) = similar(s.parent, T, dims)
