@@ -589,3 +589,38 @@ required, since the threads are scheduled cooperatively and not
 preemptively. This means context switches only occur at well-defined
 points: in this case, when ``remotecall_fetch`` is called.
 
+
+ClusterManagers
+---------------
+
+Julia worker processes can also be spawned on arbitrary machines,
+enabling Julia's natural parallelism to function quite transparently
+in a cluster environment. The ``ClusterManager`` interface provides a
+way to specify a means to launch and manage worker processes, for
+example::
+
+    immutable SSHManager <: ClusterManager
+        launch::Function
+        manage::Function
+        machines::AbstractVector
+
+        SSHManager(; machines=[]) = new(launch_ssh_workers, manage_ssh_workers, machines)
+    end
+
+    function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
+        ...
+    end
+
+    function manage_ssh_workers(id::Integer, config::Dict, op::Symbol)
+        ...
+    end
+
+where ``launch_ssh_workers`` is responsible for instantiating new
+Julia processes and ``manage_ssh_workers`` provides a means to manage
+those processes, e.g. for sending interrupt signals. New processes can
+then be added at runtime using ``addprocs``::
+
+    addprocs(5, cman=LocalManager())
+
+which specifies a number of processes to add and a ``ClusterManager`` to
+use for launching those processes.
