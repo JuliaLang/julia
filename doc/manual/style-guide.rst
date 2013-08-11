@@ -52,20 +52,23 @@ Append `!` to names of functions which modify their arguments
 
 Instead of::
 
-    function double(a::AbstractArray{Real})
+    function double{T<:Number}(a::AbstractArray{T})
         for i = 1:endof(a); a[i] *= 2; end
+	a
     end
 
 use::
 
-    function double!(a::AbstractArray{Real})
+    function double!{T<:Number}(a::AbstractArray{T})
         for i = 1:endof(a); a[i] *= 2; end
+	a
     end
 
 The Julia standard library uses this convention throughout and
 contains examples of functions with both copying and modifying forms
 (e.g., ``sort`` and ``sort!``), and others which are just modifying
-(e.g., ``push!``, ``pop!``, ``splice!``).
+(e.g., ``push!``, ``pop!``, ``splice!``).  It is typical for
+such functions to also return the modified array for convenience.
 
 Avoid strange type Unions
 -------------------------
