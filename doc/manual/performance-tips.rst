@@ -26,6 +26,32 @@ at the point of use::
     global x
     y = f(x::Int + 1)
 
+Avoid abstract type parameterization of composite types
+-------------------------------------------------------
+
+When working with parameterized types, including arrays, it is best to
+avoid parameterizing with abstract types where possible.
+
+Consider the following::
+
+    a = Real[]    # typeof(a) = Array{Real,1}
+    if (f = rand()) < .8
+        push!(a, f)
+    end
+
+Because ``a`` is a an array of abstract type ``Real``, it must be able
+to hold any Real value.  Since ``Real`` objects can be of arbitrary
+size and structure, a must be represented as an array of pointers to
+individually allocated ``Real`` objects.  Because ``f`` will always be
+a ``Float64``, we should instead, use::
+
+    a = Float64[] # typeof(a) = Array{Float64,1}
+
+which will create a contiguous block of 64-bit floating-point values
+that can be manipulated efficiently.
+
+See also the discussion under :ref:`parametric-composite-types`.
+
 Type declarations
 -----------------
 
