@@ -174,9 +174,9 @@ a simple function
 using
 ::
 
-    disassemble(func,(MyType{Float64},))
-    disassemble(func,(MyType{FloatingPoint},))
-    disassemble(func,(MyType,))
+    code_llvm(func,(MyType{Float64},))
+    code_llvm(func,(MyType{FloatingPoint},))
+    code_llvm(func,(MyType,))
 
 For reasons of length the results are not shown here, but you may wish
 to try this yourself. Because the type is fully-specified in the first
