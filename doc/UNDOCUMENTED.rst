@@ -173,27 +173,10 @@ dequeues
 collections
 -----------
 
-
 strings and text output
 -----------------------
 
-.. function:: eachmatch(...)
-
-   UNDOCUMENTED
-
-.. function:: escape_string(s::String)
-
-   UNDOCUMENTED
-
 .. function:: first_utf8_byte(c::Char)
-
-   UNDOCUMENTED
-
-.. function:: float32_isvalid(...)
-
-   UNDOCUMENTED
-
-.. function:: float64_isvalid(...)
 
    UNDOCUMENTED
 
@@ -205,19 +188,7 @@ strings and text output
 
    UNDOCUMENTED
 
-.. function:: match(...)
-
-   UNDOCUMENTED
-
-.. function:: matchall(...)
-
-   UNDOCUMENTED
-
 .. function:: ndigits0z(...)
-
-   UNDOCUMENTED
-
-.. function:: print_escaped(io,s::String,esc::String)
 
    UNDOCUMENTED
 
@@ -229,31 +200,11 @@ strings and text output
 
    UNDOCUMENTED
 
-.. function:: print_quoted(io,s::String)
-
-   UNDOCUMENTED
-
-.. function:: print_quoted_literal(io,s::String)
-
-   UNDOCUMENTED
-
 .. function:: print_shortest(...)
 
    UNDOCUMENTED
 
-.. function:: print_unescaped(io,s::String)
-
-   UNDOCUMENTED
-
-.. function:: print_unescaped_chars(io,s::String,esc::String)
-
-   UNDOCUMENTED
-
 .. function:: print_with_color(...)
-
-   UNDOCUMENTED
-
-.. function:: repeat(...)
 
    UNDOCUMENTED
 
@@ -277,15 +228,15 @@ strings and text output
 
    UNDOCUMENTED
 
-.. function:: unescape_chars(s::String,esc::String)
-
-   UNDOCUMENTED
-
-.. function:: unescape_string(s::String)
-
-   UNDOCUMENTED
-
 .. function:: xdump(...)
+
+   UNDOCUMENTED
+   
+.. function:: print_quoted(io, s::String)
+
+   UNDOCUMENTED
+
+.. function:: print_quoted_literal(io, s::String)
 
    UNDOCUMENTED
 

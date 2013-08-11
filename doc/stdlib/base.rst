@@ -676,6 +676,10 @@ Set-Like Collections
 
    Intersects IntSets s1 and s2 and overwrites the set s1 with the result. If needed, s1 will be expanded to the size of s2.
 
+.. function:: issubset(A, S) -> Bool
+
+   True if ``A ⊆ S`` (A is a subset of or equal to S)
+
 Fully implemented by: ``IntSet``, ``Set``.
 
 Partially implemented by: ``Array``.
@@ -737,6 +741,10 @@ Strings
 .. function:: length(s)
 
    The number of characters in string ``s``.
+   
+.. function:: sizeof(s::String)
+
+   The number of bytes in string ``s``.
 
 .. function:: *(s, t)
 
@@ -794,9 +802,21 @@ Strings
 
    Returns true if the given char or integer is a valid Unicode code point.
 
-.. function:: ismatch(r::Regex, s::String)
+.. function:: ismatch(r::Regex, s::String) -> Bool
 
    Test whether a string contains a match of the given regular expression.
+
+.. function:: match(r::Regex, s::String[, idx::Integer[, addopts]])
+
+   Search for the first match of the regular expression ``r`` in ``s`` and return a RegexMatch object containing the match, or nothing if the match failed. The matching substring can be retrieved by accessing ``m.match`` and the captured sequences can be retrieved by accessing ``m.captures``
+
+.. function:: eachmatch(r::Regex, s::String[, overlap::Bool=false])
+
+   Search for all matches of a the regular expression ``r`` in ``s`` and return a iterator over the matches. If overlap is true, the matching sequences are allowed to overlap indices in the original string, otherwise they must be from distinct character ranges.
+
+.. function:: matchall(r::Regex, s::String[, overlap::Bool=false]) -> Vector{String}
+
+   Return a vector of the matching substrings from eachmatch.
 
 .. function:: lpad(string, n, p)
 
@@ -952,6 +972,19 @@ Strings
 
    Convert a string to a ``Symbol``.
 
+.. function:: escape_string(str::String) -> String
+
+   General escaping of traditional C and Unicode escape sequences. See :func:`print_escaped` for more general escaping.
+
+.. function:: unescape_string(s::String) -> String
+
+   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`. See also :func:`print_unescaped`.
+
+.. function:: unescape_chars(s::String, unescape::String) -> String
+
+   Bare minimum unescaping function unescapes only given characters. See also :func:`print_unescaped_chars`.
+
+      
 I/O
 ---
 
@@ -1112,6 +1145,19 @@ I/O
 .. function:: deserialize(stream)
 
    Read a value written by ``serialize``.
+   
+.. function:: print_escaped(io, str::String, esc::String)
+
+   General escaping of traditional C and Unicode escape sequences, plus any characters in esc are also escaped (with a backslash).
+
+.. function:: print_unescaped(io, s::String)
+
+   General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`print_escaped`.
+
+.. function:: print_unescaped_chars(io, s::String, unescape::String)
+
+   Bare minimum unescaping function unescapes only given characters.
+
 
 Network I/O
 -----------
@@ -2457,6 +2503,14 @@ Data Formats
 .. function:: float64(x)
 
    Convert a number or array to ``Float64`` data type
+
+.. function:: float32_isvalid(x, out::Vector{Float32}) -> Bool
+
+   Convert a number or array to ``Float32`` data type, returning true if successful. The result of the conversion is stored in ``out[1]``.
+
+.. function:: float64_isvalid(x, out::Vector{Float64}) -> Bool
+
+   Convert a number or array to ``Float64`` data type, returning true if successful. The result of the conversion is stored in ``out[1]``.
 
 .. function:: float(x)
 

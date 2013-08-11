@@ -1009,6 +1009,12 @@
 
 "),
 
+("Set-Like Collections","Base","issubset","issubset(A, S) -> Bool
+
+   True if \"A ⊆ S\" (A is a subset of or equal to S)
+
+"),
+
 ("Dequeues","Base","push!","push!(collection, item) -> collection
 
    Insert an item at the end of a collection.
@@ -1080,6 +1086,12 @@
 ("Strings","Base","length","length(s)
 
    The number of characters in string \"s\".
+
+"),
+
+("Strings","Base","sizeof","sizeof(s::String)
+
+   The number of bytes in string \"s\".
 
 "),
 
@@ -1172,10 +1184,35 @@
 
 "),
 
-("Strings","Base","ismatch","ismatch(r::Regex, s::String)
+("Strings","Base","ismatch","ismatch(r::Regex, s::String) -> Bool
 
    Test whether a string contains a match of the given regular
    expression.
+
+"),
+
+("Strings","Base","match","match(r::Regex, s::String[, idx::Integer[, addopts]])
+
+   Search for the first match of the regular expression \"r\" in \"s\"
+   and return a RegexMatch object containing the match, or nothing if
+   the match failed. The matching substring can be retrieved by
+   accessing \"m.match\" and the captured sequences can be retrieved
+   by accessing \"m.captures\"
+
+"),
+
+("Strings","Base","eachmatch","eachmatch(r::Regex, s::String[, overlap::Bool=false])
+
+   Search for all matches of a the regular expression \"r\" in \"s\"
+   and return a iterator over the matches. If overlap is true, the
+   matching sequences are allowed to overlap indices in the original
+   string, otherwise they must be from distinct character ranges.
+
+"),
+
+("Strings","Base","matchall","matchall(r::Regex, s::String[, overlap::Bool=false]) -> Vector{String}
+
+   Return a vector of the matching substrings from eachmatch.
 
 "),
 
@@ -1440,6 +1477,27 @@
 
 "),
 
+("Strings","Base","escape_string","escape_string(str::String) -> String
+
+   General escaping of traditional C and Unicode escape sequences. See
+   \"print_escaped()\" for more general escaping.
+
+"),
+
+("Strings","Base","unescape_string","unescape_string(s::String) -> String
+
+   General unescaping of traditional C and Unicode escape sequences.
+   Reverse of \"escape_string()\". See also \"print_unescaped()\".
+
+"),
+
+("Strings","Base","unescape_chars","unescape_chars(s::String, unescape::String) -> String
+
+   Bare minimum unescaping function unescapes only given characters.
+   See also \"print_unescaped_chars()\".
+
+"),
+
 ("I/O","Base","STDOUT","STDOUT
 
    Global variable referring to the standard out stream.
@@ -1686,6 +1744,26 @@
 ("I/O","Base","deserialize","deserialize(stream)
 
    Read a value written by \"serialize\".
+
+"),
+
+("I/O","Base","print_escaped","print_escaped(io, str::String, esc::String)
+
+   General escaping of traditional C and Unicode escape sequences,
+   plus any characters in esc are also escaped (with a backslash).
+
+"),
+
+("I/O","Base","print_unescaped","print_unescaped(io, s::String)
+
+   General unescaping of traditional C and Unicode escape sequences.
+   Reverse of \"print_escaped()\".
+
+"),
+
+("I/O","Base","print_unescaped_chars","print_unescaped_chars(io, s::String, unescape::String)
+
+   Bare minimum unescaping function unescapes only given characters.
 
 "),
 
@@ -3583,6 +3661,22 @@ popdisplay(d::Display)
 ("Data Formats","Base","float64","float64(x)
 
    Convert a number or array to \"Float64\" data type
+
+"),
+
+("Data Formats","Base","float32_isvalid","float32_isvalid(x, out::Vector{Float32}) -> Bool
+
+   Convert a number or array to \"Float32\" data type, returning true
+   if successful. The result of the conversion is stored in
+   \"out[1]\".
+
+"),
+
+("Data Formats","Base","float64_isvalid","float64_isvalid(x, out::Vector{Float64}) -> Bool
+
+   Convert a number or array to \"Float64\" data type, returning true
+   if successful. The result of the conversion is stored in
+   \"out[1]\".
 
 "),
 

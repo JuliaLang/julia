@@ -50,7 +50,7 @@ a ``Float64``, we should instead, use::
 which will create a contiguous block of 64-bit floating-point values
 that can be manipulated efficiently.
 
-See also the discussion under :ref:`parametric-composite-types`.
+See also the discussion under :ref:`man-parametric-types`.
 
 Type declarations
 -----------------
