@@ -92,7 +92,9 @@ ind = findin(a, b)
 
 # sub
 A = reshape(1:120, 3, 5, 8)
-sA = sub(A, 2, 1:5, 1:8)
+sA = sub(A, 2, 1:5, :)
+@test parent(sA) == A
+@test parentindexes(sA) == (2:2, 1:5, 1:8)
 @test Base.parentdims(sA) == 1:3
 @test size(sA) == (1, 5, 8)
 @test_throws sA[2, 1:8]
@@ -120,7 +122,9 @@ sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
 
 # slice
 A = reshape(1:120, 3, 5, 8)
-sA = slice(A, 2, 1:5, 1:8)
+sA = slice(A, 2, :, 1:8)
+@test parent(sA) == A
+@test parentindexes(sA) == (2, 1:5, 1:8)
 @test Base.parentdims(sA) == 2:3
 @test size(sA) == (5, 8)
 @test strides(sA) == (3,15)
@@ -139,6 +143,11 @@ sA = slice(A, 1:2:3, 3, 1:2:8)
 @test size(sA) == (2,4)
 @test strides(sA) == (2,30)
 @test sA[:] == A[sA.indexes...][:]
+
+a = [5:8]
+@test parent(a) == a
+@test parentindexes(a) == (1:4,)
+
 
 # get
 let

@@ -82,6 +82,6 @@ end
 rowval = int32([1,2,2,3,4,5,1,4,6,1,7,2,5,8,6,9,3,4,6,8,10,3,5,7,8,10,11])
 colval = int32([1,2,3,3,4,5,6,6,6,7,7,8,8,8,9,9,10,10,10,10,10,11,11,11,11,11,11])
 A = sparse(rowval, colval, ones(length(rowval)))
-parent,post = Base.LinAlg.etree(A, true)
-@assert parent == int32([6,3,8,6,8,7,9,10,10,11,0])
+P,post = Base.LinAlg.etree(A, true)
+@assert P == int32([6,3,8,6,8,7,9,10,10,11,0])
 @assert post == int32([2,3,5,8,1,4,6,7,9,10,11])

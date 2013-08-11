@@ -2875,6 +2875,14 @@ Indexing, Assignment, and Concatenation
 
    Returns a SubArray, which stores the input ``A`` and ``inds`` rather than computing the result immediately. Calling ``getindex`` on a SubArray computes the indices on the fly.
 
+.. function:: parent(A)
+
+   Returns the "parent array" of an array view type (e.g., SubArray), or the array itself if it is not a view
+
+.. function:: parentindexes(A)
+
+   From an array view ``A``, returns the corresponding indexes in the parent
+
 .. function:: slicedim(A, d, i)
 
    Return all the data of ``A`` where the index for dimension ``d`` equals ``i``. Equivalent to ``A[:,:,...,i,:,:,...]`` where ``i`` is in position ``d``.
