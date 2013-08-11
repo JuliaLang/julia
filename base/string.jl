@@ -599,7 +599,7 @@ promote_rule{T<:String}(::Type{RepString}, ::Type{T}) = RepString
 
 ## printing literal quoted string data ##
 
-# TODO: this is really the inverse of print_unbackslashed
+# this is the inverse of print_unescaped_chars(io, s, "\\\")
 
 function print_quoted_literal(io, s::String)
     print(io, '"')
