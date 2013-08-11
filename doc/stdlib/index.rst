@@ -20,6 +20,8 @@ Built-ins
    punctuation
    sort
 
+.. _built-in-modules:
+
 ****************
 Built-in Modules
 ****************
