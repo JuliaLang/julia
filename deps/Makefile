@@ -165,21 +165,16 @@ BUILD_LLVM_CLANG = 1
 endif
 
 ifeq ($(LLVM_DEBUG),1)
-ifeq ($(LLVM_ASSERTIONS), 1)
-LLVM_BUILDDIR = build/Debug+Asserts
-else 
-LLVM_BUILDDIR = build/Debug
-endif
+LLVM_BUILDTYPE = Debug
 else
-ifeq ($(LLVM_ASSERTIONS), 1)
-LLVM_BUILDDIR = build/Release+Asserts
-else 
-LLVM_BUILDDIR = build/Release
+LLVM_BUILDTYPE = Release
 endif
+ifeq ($(LLVM_ASSERTIONS),1)
+LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+Asserts
 endif
 
 LLVM_LIB_FILE = libLLVMJIT.a
-LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/$(LLVM_BUILDDIR)/lib/$(LLVM_LIB_FILE)
+LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/$(LLVM_BUILDTYPE)/lib/$(LLVM_LIB_FILE)
 LLVM_OBJ_TARGET = $(BUILD)/lib/$(LLVM_LIB_FILE)
 
 ifneq ($(LLVM_VER),svn)
@@ -296,22 +291,22 @@ ifeq ($(BUILD_LLDB), 1)
 endif
 	touch -c $@
 
-llvm-$(LLVM_VER)/build/config.status: llvm-$(LLVM_VER)/configure | $(llvm_python_workaround)
+llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status: llvm-$(LLVM_VER)/configure | $(llvm_python_workaround)
 	cd llvm-$(LLVM_VER) && \
-	mkdir -p build && cd build && \
+	mkdir -p build_$(LLVM_BUILDTYPE) && cd build_$(LLVM_BUILDTYPE) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	../configure $(CONFIGURE_COMMON) $(LLVM_FLAGS)
 	touch -c $@
 
-$(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/build/config.status | $(llvm_python_workaround)
-	cd llvm-$(LLVM_VER)/build && \
+$(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status | $(llvm_python_workaround)
+	cd llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) $(LLVM_MFLAGS)
 	touch -c $@
 
-llvm-$(LLVM_VER)/build/checked: $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
+llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/checked: $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 ifeq ($(OS),$(BUILD_OS))
-	cd llvm-$(LLVM_VER)/build && \
+	cd llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) $(LLVM_MFLAGS) check 
 endif
@@ -319,19 +314,19 @@ endif
 
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	$(MAKE) -C llvm-$(LLVM_VER)/build install
+	$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) install
 	touch -c $@
 
 clean-llvm:
-	-$(MAKE) -C llvm-$(LLVM_VER)/build clean
+	-$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) clean
 	-rm -f $(BUILD)/bin/llvm-config
 distclean-llvm:
 	-rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).tar.gz compiler-rt-$(LLVM_VER).src.tar.gz llvm-$(LLVM_VER)
 
 get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR)
-configure-llvm: llvm-$(LLVM_VER)/build/config.status
+configure-llvm: llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status
 compile-llvm: $(LLVM_OBJ_SOURCE)
-check-llvm: llvm-$(LLVM_VER)/build/checked
+check-llvm: llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/checked
 install-llvm: $(LLVM_OBJ_TARGET)
 #todo: LLVM make check target is broken on julia.mit.edu (and really slow elsewhere)
 
