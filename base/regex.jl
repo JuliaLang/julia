@@ -81,9 +81,10 @@ function show(io::IO, m::RegexMatch)
     print(io, ")")
 end
 
-# TODO: add ismatch with an offset.
-ismatch(r::Regex, s::String) =
-    PCRE.exec(r.regex, C_NULL, bytestring(s), 0, r.options & PCRE.EXECUTE_MASK, false)
+ismatch(r::Regex, s::String, offset::Integer=0) =
+    PCRE.exec(r.regex, C_NULL, bytestring(s), offset, r.options & PCRE.EXECUTE_MASK, false)
+ismatch(r::Regex, s::SubString, offset::Integer=0) =
+    PCRE.exec(r.regex, C_NULL, s, offset, r.options & PCRE.EXECUTE_MASK, false)
 
 function match(re::Regex, str::UTF8String, idx::Integer, add_opts::Uint32=uint32(0),
                extra::Ptr{Void}=C_NULL)
@@ -97,7 +98,7 @@ function match(re::Regex, str::UTF8String, idx::Integer, add_opts::Uint32=uint32
     RegexMatch(mat, cap, m[1]+1, off)
 end
 
-match(re::Regex, str::ByteString, idx::Integer, add_opts::Uint32=uint32(0)) =
+match(re::Regex, str::Union(ByteString,SubString), idx::Integer, add_opts::Uint32=uint32(0)) =
     match(re, utf8(str), idx, add_opts)
 
 match(r::Regex, s::String) = match(r, s, start(s))
@@ -144,10 +145,10 @@ function matchall(re::Regex, str::UTF8String, overlap::Bool=false)
     matches
 end
 
-matchall(re::Regex, str::ByteString, overlap::Bool=false) =
+matchall(re::Regex, str::Union(ByteString,SubString), overlap::Bool=false) =
     matchall(re, utf8(str), overlap)
 
-function search(str::ByteString, re::Regex, idx::Integer)
+function search(str::Union(ByteString,SubString), re::Regex, idx::Integer)
     if idx > nextind(str,endof(str))
         throw(BoundsError())
     end
