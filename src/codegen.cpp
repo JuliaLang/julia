@@ -117,6 +117,12 @@ static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
 static PassManager *PM;
 
+#ifdef LLVM32
+static DataLayout *jl_data_layout;
+#else
+static TargetData *jl_data_layout;
+#endif
+
 // types
 static Type *jl_value_llvmt;
 static Type *jl_pvalue_llvmt;
@@ -1359,13 +1365,35 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
         size_t i;
         for(i=0; i < nargs; i++) {
+            jl_value_t *it = (jl_value_t*)expr_type(args[i+1],ctx);
+            if (!jl_isbits(it))
+                break;
+        }
+        if (i >= nargs) {
+            // all arguments immutable; can be statically evaluated
+            jl_value_t *tt = (jl_value_t*)jl_alloc_tuple_uninit(nargs);
+            for(i=0; i < nargs; i++) {
+                jl_tupleset(tt, i, expr_type(args[i+1],ctx));
+            }
+            Value *tpl = UndefValue::get(julia_type_to_llvm(tt));
+            for (size_t i = 0; i < nargs; ++i) {
+                Type *ety = jl_llvmtuple_eltype(tpl->getType(),i);
+                Value *elt = emit_unbox(ety,PointerType::get(ety,0),
+                    emit_expr(args[i+1],ctx,false),jl_tupleref(tt,i));
+                tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,tt,ctx);
+            }
+            JL_GC_POP();
+            return tpl;
+        }
+
+        for(i=0; i < nargs; i++) {
             jl_value_t *it = (jl_value_t*)jl_typeof(args[i+1]);
             if (!(jl_is_immutable_datatype(it) &&
                   it!=(jl_value_t*)jl_quotenode_type && it!=(jl_value_t*)jl_topnode_type))
                 break;
         }
         if (i >= nargs) {
-            // all arguments immutable; can be statically evaluated
+            // all arguments constant; can be statically evaluated
             rt1 = (jl_value_t*)jl_alloc_tuple_uninit(nargs);
             for(i=0; i < nargs; i++) {
                 jl_tupleset(rt1, i, args[i+1]);
@@ -1714,7 +1742,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         unsigned idx = 0;
         for(size_t i=0; i < nargs; i++) {
             Type *at = cft->getParamType(idx);
-            Type *et = julia_type_to_llvm(expr_type(args[i+1],ctx));
+            Type *et = julia_type_to_llvm(jl_tupleref(f->linfo->specTypes,i));
             if(et == T_void) {
                 // Still emit the expression in case it has side effects
                 emit_expr(args[i+1], ctx);
@@ -1729,10 +1757,11 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
             else {
                 assert(at == et);
                 argvals[idx] = emit_unbox(at, PointerType::get(at,0),
-                                        emit_unboxed(args[i+1], ctx), NULL);
+                                        emit_unboxed(args[i+1], ctx), expr_type(args[i+1],ctx));
             }
             idx++;
         }
+        assert(idx == nfargs);
         result = builder.CreateCall(cf, ArrayRef<Value*>(&argvals[0],nfargs));
         if (result->getType() == T_void) {
             result = literal_pointer_val((jl_value_t*)jl_nothing);
@@ -1939,7 +1968,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                 rval = emit_unbox(vt->getContainedType(0), vt, emit_unboxed(r, ctx), rt);
             }
             else {
-                rval = boxed(emit_expr(r, ctx, true),ctx);
+                rval = boxed(emit_expr(r, ctx, true),ctx,rt);
             }
             if (builder.GetInsertBlock()->getTerminator() == NULL) {
                 builder.CreateStore(rval, bp, vi.isVolatile);
@@ -2606,10 +2635,17 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f)
     if (r->getType() != jl_pvalue_llvmt) {
         r = boxed(r, &ctx, jl_ast_rettype(lam, lam->ast));
     }
+
+    // gc pop. Usually this is done when we encounter the return statement
+    // but here we have to do it manually
+    Instruction *gcpop = (Instruction*)builder.CreateConstGEP1_32(ctx.gcframe, 1);
+    ctx.gc_frame_pops.push_back(gcpop);
+    builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
+                        jlpgcstack_var);
+
     finalize_gc_frame(&ctx);
     builder.CreateRet(r);
 
-    //w->dump();
     verifyFunction(*w);
 
     return w;
@@ -3066,6 +3102,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                 builder.CreateStore(emit_unbox(dyn_cast<AllocaInst>(lv)->getAllocatedType(),
                                                lv->getType(),
                                                theArg,
+                                               lam->specTypes == NULL ? NULL :
                                                jl_tupleref(lam->specTypes,i)),
                                     lv);
         }
@@ -3147,7 +3184,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             Value *retval;
             Type *retty = f->getReturnType();
             if (retty == jl_pvalue_llvmt) {
-                retval = boxed(emit_expr(jl_exprarg(ex,0), &ctx, true),&ctx);
+                retval = boxed(emit_expr(jl_exprarg(ex,0), &ctx, true),&ctx,expr_type(stmt,&ctx));
             }
             else if (retty != T_void) {
                 retval = emit_unbox(retty, PointerType::get(retty,0),
@@ -3523,11 +3560,13 @@ static void init_julia_llvm_env(Module *m)
     FPM = new FunctionPassManager(jl_Module);
     PM = new PassManager();
 
+    
 #ifdef LLVM32
-    FPM->add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
+    jl_data_layout = new DataLayout(*jl_ExecutionEngine->getDataLayout());
 #else 
-    FPM->add(new TargetData(*jl_ExecutionEngine->getTargetData()));
+    jl_data_layout = new TargetData(*jl_ExecutionEngine->getTargetData());
 #endif
+    FPM->add(jl_data_layout);
 
     // list of passes from vmkit
     FPM->add(createCFGSimplificationPass()); // Clean up disgusting code
