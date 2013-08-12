@@ -162,6 +162,19 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
     return emit_expr(e, ctx, false);
 }
 
+static Type *jl_llvmtuple_eltype(Type *tuple, size_t i)
+{
+    Type *ety = NULL;
+    if (tuple->isStructTy())
+        ety = dyn_cast<StructType>(tuple)->getElementType(i);
+    else if(tuple->isArrayTy())
+        ety = dyn_cast<ArrayType>(tuple)->getElementType();
+    else if(tuple->isVectorTy())
+        ety = dyn_cast<VectorType>(tuple)->getElementType();
+    else
+        assert(false);
+    return ety;
+}
 // emit code to unpack a raw value from a box
 static Value *emit_unbox(Type *to, Type *pto, Value *x, jl_value_t *jt)
 {
@@ -185,37 +198,29 @@ static Value *emit_unbox(Type *to, Type *pto, Value *x, jl_value_t *jt)
         }
         return x;
     }
-    if (jt != NULL && jl_is_tuple(jt))
+    if ( (jt != NULL && jl_is_tuple(jt)) || to->isVectorTy() || to->isArrayTy() ||
+        (to->isStructTy() && dyn_cast<StructType>(to)->isLiteral()) )
     {
+        assert(jt != 0);
+        assert(jl_is_tuple(jt));
+        Value *tpl = UndefValue::get(to);
+        size_t n;
         if (to->isStructTy())
-        {
-            StructType *st = dyn_cast<StructType>(to);
-            // This is a tuple type
-            size_t n = st->getNumElements();
-            assert(n == jl_tuple_len(jt));
-            Value *tpl = UndefValue::get(to);
-            for(size_t i = 0; i < n; ++i) {
-                Type *ety = st->getElementType(i);
-                Value *elt = emit_unbox(ety,PointerType::get(ety,0),
-                    emit_tupleref(x,ConstantInt::get(T_size,i+1),jt,NULL),jl_tupleref(jt,i));
-                tpl = builder.CreateInsertValue(tpl,elt,ArrayRef<unsigned>(i));
-            }
-            return tpl;
-        } else {
-            assert(to->isVectorTy());
-            VectorType *vt = dyn_cast<VectorType>(to);
-            // This is a tuple type
-            size_t n = vt->getNumElements();
-            assert(n == jl_tuple_len(jt));
-            Value *tpl = UndefValue::get(to);
-            Type *ety = vt->getElementType();
-            for (size_t i = 0; i < n; ++i) {
-                Value *elt = emit_unbox(ety,PointerType::get(ety,0),
-                    emit_tupleref(x,ConstantInt::get(T_size,i+1),jt,NULL),jl_tupleref(jt,i));
-                tpl = builder.CreateInsertElement(tpl,elt,ConstantInt::get(T_int32,i));
-            }
-            return tpl;       
+            n = dyn_cast<StructType>(to)->getNumElements();
+        else if(to->isArrayTy())
+            n = dyn_cast<ArrayType>(to)->getNumElements();
+        else if(to->isVectorTy())
+            n = dyn_cast<VectorType>(to)->getNumElements();
+        else
+            assert(false);
+        assert(n == jl_tuple_len(jt));
+        for (size_t i = 0; i < n; ++i) {
+            Type *ety = jl_llvmtuple_eltype(to,i);
+            Value *elt = emit_unbox(ety,PointerType::get(ety,0),
+                emit_tupleref(x,ConstantInt::get(T_size,i+1),jt,NULL),jl_tupleref(jt,i));
+            tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,jt,NULL);
         }
+        return tpl;
     }
     Value *p = data_pointer(x);
     if (to == T_int1) {
