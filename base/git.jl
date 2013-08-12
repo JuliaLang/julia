@@ -16,7 +16,7 @@ end
 
 function gitenv(cmd)
     @windows_only begin
-        env = Dict(zip(ENV...)...)
+        env = Dict{ByteString,ByteString}(zip(ENV...)...)
         env["HOME"] = ENV["USERPROFILE"]
         cmd = setenv(cmd, env)
     end
