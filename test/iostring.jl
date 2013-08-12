@@ -113,7 +113,13 @@ write(io,'e')
 skip(io,72)
 @assert takebuf_string(io) == "\0ab"
 @assert takebuf_string(io) == ""
+
+# issues 4021
+print(io, true)
+
 close(io)
 end
 
 @test isempty(readlines(IOBuffer()))
+
+
