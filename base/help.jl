@@ -212,8 +212,13 @@ function help(x)
     end
 end
 
+# check whether an expression is a qualified name, e.g. Base.FFTW.FORWARD
+isname(n::Symbol) = true
+isname(ex::Expr) = ((ex.head == :. && isname(ex.args[1]) && isname(ex.args[2]))
+                    || (ex.head == :quote && isname(ex.args[1])))
+
 macro help(ex)
-    if !isa(ex, Expr)
+    if !isa(ex, Expr) || isname(ex)
         return Expr(:call, :help, esc(ex))
     elseif ex.head == :macrocall && length(ex.args) == 1
         # e.g., "julia> @help @printf"
