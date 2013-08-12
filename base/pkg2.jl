@@ -43,6 +43,8 @@ function installed()
     return pkgs
 end
 
+installed(pkg) = get(installed(),pkg,nothing)
+
 status(io::IO=STDOUT) = Dir.cd() do
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
