@@ -304,23 +304,6 @@ Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  ,Unordered}(ks, vs)
 Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any,Unordered}(ks, vs)
 Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  ,Unordered}(ks, vs)
 
-# unordered dict
-
-type UnorderedDict{K,V} <: Associative{K,V}
-    UnorderedDict() = Dict{K,V,Unordered}()
-    UnorderedDict(ks,vs) = Dict{K,V,Unordered}(ks,vs)
-end
-
-UnorderedDict() = UnorderedDict{Any,Any}()
-
-UnorderedDict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = UnorderedDict{K,V}(ks,vs)
-UnorderedDict(ks, vs) = UnorderedDict{Any,Any}(ks, vs)
-
-# syntax entry points
-UnorderedDict{K,V}(ks::(K...), vs::(V...)) = UnorderedDict{K  ,V  }(ks, vs)
-UnorderedDict{K  }(ks::(K...), vs::Tuple ) = UnorderedDict{K  ,Any}(ks, vs)
-UnorderedDict{V  }(ks::Tuple , vs::(V...)) = UnorderedDict{Any,V  }(ks, vs)
-
 # ordered dict
 
 type OrderedDict{K,V} <: Associative{K,V}
