@@ -1379,7 +1379,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             for (size_t i = 0; i < nargs; ++i) {
                 Type *ety = jl_llvmtuple_eltype(tpl->getType(),i);
                 Value *elt = emit_unbox(ety,PointerType::get(ety,0),
-                    emit_expr(args[i+1],ctx,false),jl_tupleref(tt,i));
+                    emit_unboxed(args[i+1],ctx),jl_tupleref(tt,i));
                 tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,tt,ctx);
             }
             JL_GC_POP();
@@ -2579,6 +2579,17 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
     }
 }
 
+static bool jltupleisbits(jl_value_t *jt)
+{
+    if (!jl_is_tuple(jt))
+        return jl_isbits(jt);
+    size_t ntypes = jl_tuple_len(jt);
+    for (size_t i = 0; i < ntypes; ++i) 
+        if (!jltupleisbits(jl_tupleref(jt,i)))
+            return false;
+    return true; 
+}
+
 // generate a julia-callable function that calls f (AKA lam)
 static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f)
 {
@@ -2775,14 +2786,14 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             // no captured vars and not vararg
             // consider specialized signature
             for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
-                if (jl_isbits(jl_tupleref(lam->specTypes, i))) {
+                if (jltupleisbits(jl_tupleref(lam->specTypes, i))) {
                     specsig = true;
                     break;
                 }
             }
             if (jl_tuple_len(lam->specTypes) == 0)
                 specsig = true;
-            if (jl_isbits(jlrettype))
+            if (jltupleisbits(jlrettype))
                 specsig = true;
         }
     }
