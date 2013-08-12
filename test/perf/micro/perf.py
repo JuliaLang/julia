@@ -1,3 +1,4 @@
+from __future__ import division
 from numpy import *
 from numpy.linalg import *
 import sys
@@ -21,7 +22,7 @@ def qsort_kernel(a, lo, hi):
     i = lo
     j = hi
     while i < hi:
-        pivot = a[(lo+hi) // 2]
+        pivot = a[(lo+hi) / 2]
         while i <= j:
             while a[i] < pivot:
                 i += 1
