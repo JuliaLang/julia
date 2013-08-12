@@ -5,7 +5,8 @@ TESTS = all core keywordargs numbers strings unicode collections hashing	\
 	remote iostring arrayops linalg blas fft dsp sparse bitarray random	\
 	math functional bigint sorting statistics spawn parallel arpack file	\
 	git pkg pkg2 resolve resolve2 suitesparse complex version pollfd mpfr	\
-	broadcast socket floatapprox priorityqueue readdlm regex float16
+	broadcast socket floatapprox priorityqueue readdlm regex float16        \
+	combinations
 
 $(TESTS) ::
 	@$(PRINT_JULIA) $(call spawn,$(JULIA_EXECUTABLE)) ./runtests.jl $@

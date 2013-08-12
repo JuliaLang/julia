@@ -3108,20 +3108,27 @@ Combinatorics
 
    In-place version of :func:`shuffle`.
 
-.. function:: reverse(v)
+.. function:: reverse(v [, start=1 [, stop=length(v) ]] )
 
-   Reverse vector ``v``.
+   Reverse vector ``v``, optionally from start to stop.
 
-.. function:: reverse!(v) -> v
+.. function:: reverse!(v [, start=1 [, stop=length(v) ]]) -> v
 
    In-place version of :func:`reverse`.
 
-.. function:: combinations(array, n)
+.. function:: combinations(itr, n)
 
-   Generate all combinations of ``n`` elements from a given array. Because
-   the number of combinations can be very large, this function returns an
-   iterator object. Use ``collect(combinations(a,n))`` to get an array of all
-   combinations.
+   Generate all combinations of ``n`` elements from a given iterable
+   object.  Because the number of combinations can be very large, this
+   function returns an iterator object. Use
+   ``collect(combinations(a,n))`` to get an array of all combinations.
+
+.. function:: permutations(itr)
+
+   Generate all permutations of a given iterable object.  Because the
+   number of permutations can be very large, this function returns an
+   iterator object. Use ``collect(permutations(a,n))`` to get an array
+   of all permutations.
 
 .. function:: integer_partitions(n, m)
 

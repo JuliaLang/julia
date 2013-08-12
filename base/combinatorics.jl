@@ -186,6 +186,8 @@ immutable Combinations{T}
 end
 
 eltype(c::Combinations) = typeof(c.a)
+eltype{T}(c::Combinations{Range1{T}}) = Array{T,1}
+eltype{T}(c::Combinations{Range{T}}) = Array{T,1}
 
 function combinations(a, t::Integer)
     if t < 0
@@ -197,24 +199,56 @@ end
 
 start(c::Combinations) = [1:c.t]
 function next(c::Combinations, s)
+    comb = c.a[s]
     if c.t == 0
         # special case to generate 1 result for t==0
-        return (c.a[s],[length(c.a)+2])
+        return (comb,[length(c.a)+2])
     end
-    sn = copy(s)
-    for i = length(sn):-1:1
-        sn[i] += 1
-        if sn[i] > (length(c.a) - (length(sn)-i))
+    for i = length(s):-1:1
+        s[i] += 1
+        if s[i] > (length(c.a) - (length(s)-i))
             continue
         end
-        for j = i+1:endof(sn)
-            sn[j] = sn[j-1]+1
+        for j = i+1:endof(s)
+            s[j] = s[j-1]+1
         end
         break
     end
-    (c.a[s],sn)
+    (comb,s)
 end
 done(c::Combinations, s) = !isempty(s) && s[1] > length(c.a)-c.t+1
+
+immutable Permutations{T}
+    a::T
+end
+
+eltype(c::Permutations) = typeof(c.a)
+eltype{T}(c::Permutations{Range1{T}}) = Array{T,1}
+eltype{T}(c::Permutations{Range{T}}) = Array{T,1}
+
+permutations(a) = Permutations(a)
+
+start(p::Permutations) = [1:length(p.a)]
+function next(p::Permutations, s)
+    if length(p.a) == 0
+        # special case to generate 1 result for len==0
+        return (p.a,[1])
+    end
+    perm = p.a[s]
+    k = length(s)-1
+    while k > 0 && s[k] > s[k+1];  k -= 1;  end
+    if k == 0
+        s[1] = length(s)+1   # done
+    else
+        l = length(s)
+        while s[k] >= s[l];  l -= 1;  end
+        s[k],s[l] = s[l],s[k]
+        reverse!(s,k+1)
+    end
+    (perm,s)
+end
+done(p::Permutations, s) = !isempty(s) && s[1] > length(p.a)
+
 
 # Algorithm H from TAoCP 7.2.1.4
 # Partition n into m parts
