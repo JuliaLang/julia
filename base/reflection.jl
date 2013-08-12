@@ -96,6 +96,11 @@ function length(mt::MethodTable)
     n
 end
 
+start(mt::MethodTable) = mt.defs
+next(mt::MethodTable, m::Method) = (m,m.next)
+done(mt::MethodTable, m::Method) = false
+done(mt::MethodTable, i::()) = true
+
 uncompressed_ast(l::LambdaStaticData) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
