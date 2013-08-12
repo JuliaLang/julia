@@ -233,7 +233,7 @@ Plan{T<:fftwNumber}(plan::Ptr{Void}, X::StridedArray{T}) = Plan{T}(plan, size(X)
 # throw an informative error if not:
 function assert_applicable{T<:fftwNumber}(p::Plan{T}, X::StridedArray{T})
     if size(X) != p.sz
-        throw(ArgumentError("FFTW plan applied to wrong-size array"))
+        throw(ArgumentError("FFTW plan applied to wrong-size array (expected $(p.sz), got $(size(X))"))
     elseif strides(X) != p.istride
         throw(ArgumentError("FFTW plan applied to wrong-strides array"))
     elseif alignment_of(X) != p.ialign
