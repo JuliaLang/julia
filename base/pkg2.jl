@@ -33,17 +33,21 @@ edit(f::Function, pkg, args...) = Dir.cd() do
     info("REQUIRE updated.")
 end
 
-available() = sort!([keys(Pkg2.Dir.cd(Pkg2.Read.available))...], by=lowercase)
+available() = sort!([keys(Dir.cd(Read.available))...], by=lowercase)
 
 function installed()
     pkgs = Dict{String,VersionNumber}()
-    for (pkg,(ver,fix)) in Pkg2.Dir.cd(Pkg2.Read.installed)
+    for (pkg,(ver,fix)) in Dir.cd(Read.installed)
         pkgs[pkg] = ver
     end
     return pkgs
 end
-
-installed(pkg) = get(installed(),pkg,nothing)
+installed(pkg::String) = Dir.cd() do
+    avail = Read.available()
+    Read.isinstalled(pkg) ? Read.installed_version(pkg,avail) :
+        haskey(avail,pkg) ? nothing :
+            error("$pkg is neither installed nor registered")
+end
 
 status(io::IO=STDOUT) = Dir.cd() do
     reqs = Reqs.parse("REQUIRE")
