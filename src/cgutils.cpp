@@ -757,6 +757,7 @@ static Value *emit_tupleref(Value *tuple, Value *i, jl_value_t *jt, jl_codectx_t
             builder.CreateSwitch(i,deflt,n);
             // Anything else is a bounds error
             builder.SetInsertPoint(deflt);
+            jlthrow_line_func->dump();
             builder.CreateCall2(jlthrow_line_func, jlboundserr_var,
                         ConstantInt::get(T_int32, ctx->lineno));
             builder.CreateUnreachable();
