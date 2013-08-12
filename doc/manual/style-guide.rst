@@ -32,7 +32,7 @@ is passed that does not support any of the requisite operations.
 (This is known as `duck typing <http://en.wikipedia.org/wiki/Duck_typing>`_.)
 
 For example, consider the following definitions of a function
-``addone`` that returns one plus its argument:
+``addone`` that returns one plus its argument::
 
     addone(x::Int) = x + 1             # works only for Int
     addone(x::Integer) = x + one(x)    # any integer type
