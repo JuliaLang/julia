@@ -35,6 +35,14 @@ end
 
 available() = sort!([keys(Pkg2.Dir.cd(Pkg2.Read.available))...], by=lowercase)
 
+function installed()
+    pkgs = Dict{String,VersionNumber}()
+    for (pkg,(ver,fix)) in Pkg2.Dir.cd(Pkg2.Read.installed)
+        pkgs[pkg] = ver
+    end
+    return pkgs
+end
+
 status(io::IO=STDOUT) = Dir.cd() do
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
