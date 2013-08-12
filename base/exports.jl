@@ -524,6 +524,7 @@ export
     parentindexes,
     partitions,
     pascal,
+    permutations,
     permute!,
     permutedims,
     prod,
