@@ -315,6 +315,7 @@ let es = sum_kbn(z), es2 = sum_kbn(z[1:10^5])
     @test (es - cs[end]) < es * 1e-13
     @test (es2 - cs[10^5]) < es2 * 1e-13
 end
+@test sum(sin(z)) == sum(sin, z)
 
 ## large matrices transpose ##
 

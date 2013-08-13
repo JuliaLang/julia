@@ -151,6 +151,27 @@ function mapreduce(f::Callable, op::Function, v0, itr)
     return v
 end
 
+# mapreduce for associative operations, using pairwise recursive reduction
+# for improved accuracy (see sum_pairwise)
+function mr_pairwise(f::Callable, op::Function, A::AbstractArray, i1,n)
+    if n < 128
+        @inbounds v = f(A[i1])
+        for i = i1+1:i1+n-1
+            @inbounds v = op(v,f(A[i]))
+        end
+        return v
+    else
+        n2 = div(n,2)
+        return op(mr_pairwise(f,op,A, i1,n2), mr_pairwise(f,op,A, i1+n2,n-n2))
+    end
+end
+function mapreduce_associative(f::Callable, op::Function, A::AbstractArray)
+    n = length(A)
+    n == 0 ? op() : mr_pairwise(f,op,A, 1,n)
+end
+# can't easily do pairwise reduction without random access, so punt:
+mapreduce_associative(f::Callable, op::Function, itr) = mapreduce(f, op, itr)
+
 function any(itr)
     for x in itr
         if x
@@ -171,8 +192,8 @@ end
 
 max(f::Function, itr)   = mapreduce(f, max, itr)
 min(f::Function, itr)   = mapreduce(f, min, itr)
-sum(f::Function, itr)   = mapreduce(f, +  , itr)
-prod(f::Function, itr)  = mapreduce(f, *  , itr)
+sum(f::Function, itr)   = mapreduce_associative(f, +  , itr)
+prod(f::Function, itr)  = mapreduce_associative(f, *  , itr)
 
 function count(pred::Function, itr)
     s = 0
