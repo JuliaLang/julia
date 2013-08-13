@@ -51,22 +51,46 @@ function parseint(::Type{BigInt}, s::String, base::Integer=10)
     mpz_set_str(s, base)
 end
 
-function BigInt(x::Clong)
+function BigInt(x::Union(Clong,Int32))
     z = BigInt()
     ccall((:__gmpz_set_si, :libgmp), Void, (Ptr{BigInt}, Clong), &z, x)
     return z
 end
-function BigInt(x::Culong)
+function BigInt(x::Union(Culong,Uint32))
     z = BigInt()
     ccall((:__gmpz_set_ui, :libgmp), Void,(Ptr{BigInt}, Culong), &z, x)
     return z
 end
 
 BigInt(x::Bool) = BigInt(uint(x))
-BigInt(x::Integer) =
-    typemin(Clong) <= x <= typemax(Clong) ? BigInt(convert(Clong,x)) : BigInt(string(x))
-BigInt(x::Unsigned) =
-    x <= typemax(Culong) ? BigInt(convert(Culong,x)) : BigInt(string(x))
+
+function BigInt(x::Integer)
+    if x < 0
+        if typemin(Clong) <= x
+            return BigInt(convert(Clong,x))
+        end
+        b = BigInt(0)
+        shift = 0
+        while x < -1
+            b += BigInt(~uint32(x&0xffffffff))<<shift
+            x >>= 32
+            shift += 32
+        end
+        return -b-1
+    else
+        if x <= typemax(Culong)
+            return BigInt(convert(Culong,x))
+        end
+        b = BigInt(0)
+        shift = 0
+        while x > 0
+            b += BigInt(uint32(x&0xffffffff))<<shift
+            x >>>= 32
+            shift += 32
+        end
+        return b
+    end
+end
 
 convert(::Type{BigInt}, x::Integer) = BigInt(x)
 
