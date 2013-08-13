@@ -289,6 +289,13 @@ ifeq ($(BUILD_LLDB), 1)
 		git fetch))
 	cd llvm-$(LLVM_VER)/tools/lldb && git checkout origin/release_32
 endif
+ifeq ($(OS),WINNT)
+ifeq ($(ARCH),x86_64)
+ifeq ($(LLVM_VER),3.3)
+	patch -p0 < win64-int128.llvm-3.3.patch
+endif
+endif
+endif
 	touch -c $@
 
 llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status: llvm-$(LLVM_VER)/configure | $(llvm_python_workaround)
