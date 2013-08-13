@@ -314,6 +314,8 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         // //safe thing would be to also check that jl_typeof(aty)->size > sizeof(ty) here and/or at runtime
         Value *pjv = builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), PointerType::get(ty,0));
         return builder.CreateLoad(pjv, false);
+    } else if (jl_is_tuple(jt)) {
+        return emit_unbox(ty,jv,jt);
     }
     // TODO: error for & with non-pointer argument type
     assert(jl_is_bitstype(jt));
@@ -552,10 +554,10 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     for (size_t i = 0; i < nargt; ++i)
     {
         jl_value_t *tti = jl_tupleref(tt,i);
-        Type *t = julia_struct_to_llvm(tti);
+        Type *t = julia_type_to_llvm(tti);
         t->print(argstream);
         argstream << " ";
-        jl_value_t *argi = args[4+2*i];
+        jl_value_t *argi = args[4+i];
         Value *arg;
         bool needroot = false;
         if (t == jl_pvalue_llvmt || !jl_isbits(tti)) {
@@ -593,7 +595,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     std::string rstring;
     llvm::raw_string_ostream rtypename(rstring);
     // Construct return type
-    rettype = julia_struct_to_llvm(rt);
+    rettype = julia_type_to_llvm(rt);
     rettype->print(rtypename);
 
     ir_stream << "; Number of arguments: " << nargt << "\n"
