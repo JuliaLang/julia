@@ -12,6 +12,7 @@ function mean(iterable)
     end
     return total/count
 end
+mean(v::AbstractArray) = sum(v) / length(v)
 mean(v::AbstractArray, region) = sum(v, region) / prod(size(v)[region])
 
 function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
@@ -28,16 +29,26 @@ end
 median{T<:Real}(v::AbstractArray{T}; checknan::Bool=true) =
     median!(vec(copy(v)), checknan=checknan)
 
-## variance with known mean
-function varm(v::AbstractVector, m::Number)
+## variance with known mean, using pairwise summation
+function varm_pairwise(A::AbstractArray, m, i1,n) # see sum_pairwise
+    if n < 128
+        @inbounds s = abs2(A[i1] - m)
+        for i = i1+1:i1+n-1
+            @inbounds s += abs2(A[i] - m)
+        end
+        return s
+    else
+        n2 = div(n,2)
+        return varm_pairwise(A, m, i1, n2) + varm_pairwise(A, m, i1+n2, n-n2)
+    end
+end
+function varm(v::AbstractArray, m::Number)
     n = length(v)
     if n == 0 || n == 1
         return NaN
     end
-    x = v - m
-    return dot(x, x) / (n - 1)
+    return varm_pairwise(v, m, 1,n) / (n - 1)
 end
-varm(v::AbstractArray, m::Number) = varm(vec(v), m)
 varm(v::Ranges, m::Number) = var(v)
 
 ## variance
@@ -52,7 +63,7 @@ end
 var(v::AbstractArray) = varm(v, mean(v))
 function var(v::AbstractArray, region)
     x = v .- mean(v, region)
-    return sum(x.*x, region) / (prod(size(v)[region]) - 1)
+    return sum(abs2(x), region) / (prod(size(v)[region]) - 1)
 end
 
 ## standard deviation with known mean
