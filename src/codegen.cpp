@@ -1375,32 +1375,26 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             for(i=0; i < nargs; i++) {
                 jl_tupleset(tt, i, expr_type(args[i+1],ctx));
             }
-            Value *tpl = UndefValue::get(julia_type_to_llvm(tt));
+            Type *ty = julia_type_to_llvm(tt);
+            Value *tpl = NULL;
+            if (ty != T_void)
+                tpl = UndefValue::get(ty);
             for (size_t i = 0; i < nargs; ++i) {
-                Type *ety = jl_llvmtuple_eltype(tpl->getType(),i);
+                Type *ety = NULL;
+                if (tpl != NULL)
+                    ety = jl_llvmtuple_eltype(tpl->getType(),i);
+                if(tpl == NULL || ety == T_void)
+                {
+                    emit_expr(args[i+1],ctx); //for side effects (if any)
+                    continue;
+                }
+                assert(tpl != NULL);
                 Value *elt = emit_unbox(ety,
                     emit_unboxed(args[i+1],ctx),jl_tupleref(tt,i));
                 tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,tt,ctx);
             }
             JL_GC_POP();
             return tpl;
-        }
-
-        for(i=0; i < nargs; i++) {
-            jl_value_t *it = (jl_value_t*)jl_typeof(args[i+1]);
-            if (!(jl_is_immutable_datatype(it) &&
-                  it!=(jl_value_t*)jl_quotenode_type && it!=(jl_value_t*)jl_topnode_type))
-                break;
-        }
-        if (i >= nargs) {
-            // all arguments constant; can be statically evaluated
-            rt1 = (jl_value_t*)jl_alloc_tuple_uninit(nargs);
-            for(i=0; i < nargs; i++) {
-                jl_tupleset(rt1, i, args[i+1]);
-            }
-            jl_add_linfo_root(ctx->linfo, rt1);
-            JL_GC_POP();
-            return literal_pointer_val(rt1);
         }
 
         int last_depth = ctx->argDepth;
@@ -1749,7 +1743,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
                 continue;
             }
             if (at == jl_pvalue_llvmt) {
-                argvals[idx] = boxed(emit_expr(args[i+1], ctx),ctx);
+                argvals[idx] = boxed(emit_expr(args[i+1], ctx),ctx,expr_type(args[i+1],ctx));
                 if (might_need_root(args[i+1])) {
                     make_gcroot(argvals[idx], ctx);
                 }
@@ -1757,7 +1751,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
             else {
                 assert(at == et);
                 argvals[idx] = emit_unbox(at, 
-                                        emit_unboxed(args[i+1], ctx), expr_type(args[i+1],ctx));
+                                        emit_unboxed(args[i+1], ctx),jl_tupleref(f->linfo->specTypes,i));
             }
             idx++;
         }
@@ -1875,7 +1869,9 @@ static Value *ghostValue(jl_value_t *ty)
 {
     if (jl_is_datatype(ty))
     {
-        return UndefValue::get(julia_struct_to_llvm(ty));
+        Type *llvmty = julia_struct_to_llvm(ty);
+        assert(llvmty != T_void);
+        return UndefValue::get(llvmty);
     } else 
         return NULL;
 }
@@ -2237,6 +2233,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
             if (nf > 0) {
                 if (jl_isbits(sty)) {
                     Type *lt = julia_type_to_llvm(ty);
+                    assert(lt != T_void);
                     Value *strct = UndefValue::get(lt);
                     size_t na = nargs-1 < nf ? nargs-1 : nf;
                     unsigned idx = 0;
@@ -2520,7 +2517,9 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
         BasicBlock::iterator bbi = ctx->first_gcframe_inst;
         while (1) {
             Instruction &iii = *bbi;
-            iii.replaceAllUsesWith(UndefValue::get(iii.getType()));
+            Type *ty = iii.getType();
+            if (ty != T_void)
+                iii.replaceAllUsesWith(UndefValue::get(ty));
             if (bbi == ctx->last_gcframe_inst) break;
             bbi++;
         }
@@ -2529,7 +2528,9 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
             BasicBlock::iterator pi(pop);
             for(size_t j=0; j < 4; j++) {
                 Instruction &iii = *pi;
-                iii.replaceAllUsesWith(UndefValue::get(iii.getType()));
+                Type *ty = iii.getType();
+                if (ty != T_void)
+                    iii.replaceAllUsesWith(UndefValue::get(ty));
                 pi++;
             }
         }
@@ -2606,6 +2607,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f)
     builder.SetCurrentDebugLocation(noDbg);
 
     jl_codectx_t ctx;
+    ctx.linfo = lam;
     allocate_gc_frame(0,&ctx);
     ctx.argSpaceInits = &b0->back();
 
