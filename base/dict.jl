@@ -267,7 +267,7 @@ end
 typealias Unordered Nothing
 typealias Ordered   Int
 
-type Dict{K,V,O} <: Associative{K,V}
+type Dict{K,V,O<:Union(Ordered,Unordered)} <: Associative{K,V}
     slots::Array{Uint8,1}
     keys::Array{K,1}
     vals::Array{V,1}
@@ -278,9 +278,6 @@ type Dict{K,V,O} <: Associative{K,V}
     deleter::Function
 
     function Dict()
-        if !(O <: Union(Unordered, Ordered))
-            return Dict{K,V,Unordered}()
-        end
         n = 16
         new(zeros(Uint8,n), Array(K,n), Array(V,n), Array(O,n), Array(O,0), 0, 0, identity)
     end
