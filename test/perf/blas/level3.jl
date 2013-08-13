@@ -4,7 +4,7 @@ function matmultest(n, repeat)
 	a = rand(n,n)
 	b = similar(a)
 	for ct=1:repeat
-		b = a * a
+		A_mul_B(b, a, a)
 	end
 	b
 end
