@@ -87,6 +87,8 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
         if (purebits) {
             if (isvector) {
                 Type *ret = NULL;
+                if(type == T_void)
+                    return T_void;
                 if (type->isSingleValueType())
                     ret = VectorType::get(type,ntypes);
                 else
@@ -987,40 +989,59 @@ static Value *allocate_box_dynamic(Value *jlty, int nb, Value *v)
 
 bool isGhostType(jl_value_t*);
 
+static jl_value_t *static_void_instance(jl_value_t *jt)
+{
+    if (jl_is_datatype(jt)) {
+        jl_datatype_t *jb = (jl_datatype_t*)jt;
+        if (jb->instance == NULL)
+            jl_new_struct_uninit(jb);
+        assert(jb->instance != NULL);
+        return (jl_value_t*)jb->instance;
+    } else if (jt == jl_typeof(jl_nothing))
+    {
+        return (jl_value_t*)jl_nothing;
+    }
+    assert(jl_is_tuple(jt));
+    if (jl_tuple_len(jt) == 0)
+        return (jl_value_t*)jl_null;
+    size_t nargs = jl_tuple_len(jt);
+    jl_value_t *tpl = (jl_value_t*)jl_alloc_tuple_uninit(nargs);
+    JL_GC_PUSH(tpl);
+    for(size_t i=0; i < nargs; i++) {
+        jl_tupleset(tpl, i, static_void_instance(jl_tupleref(jt,i)));
+    }
+    JL_GC_POP();
+    return tpl;
+}
+
+
+static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val);
+
 // this is used to wrap values for generic contexts, where a
 // dynamically-typed value is required (e.g. argument to unknown function).
 // if it's already a pointer it's left alone.
 static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
 {
     if (v == NULL || dyn_cast<UndefValue>(v) != 0) {
-        if (jl_is_datatype(jt)) {
-            jl_datatype_t *jb = (jl_datatype_t*)jt;
-            if (jb->instance == NULL)
-                jl_new_struct_uninit(jb);
-            assert(jb->instance != NULL);
-            return literal_pointer_val((jl_value_t*)jb->instance);
-        }
-        else if (jl_is_tuple(jt)) {
-            assert(jl_tuple_len(jt) == 0);
-            return literal_pointer_val((jl_value_t*)jl_null);
-        }
-        // Type information might not be good enough, 
-        if (v == NULL)
-            return literal_pointer_val((jl_value_t*)jl_null);
-        else
+        if (jt == NULL || jl_is_uniontype(jt) || jl_is_abstracttype(jt))
             jt = julia_type_of(v);
-        assert(jl_is_datatype(jt));
-        assert(isGhostType(jt));
-        return literal_pointer_val((jl_value_t*)((jl_datatype_t*)jt)->instance);  
+        jl_value_t *s = static_void_instance(jt);
+        if(jl_is_tuple(jt) && jl_tuple_len(jt) > 0)
+            jl_add_linfo_root(ctx->linfo, s);
+        return literal_pointer_val(s);
     }
     Type *t = v->getType();
     if (t == jl_pvalue_llvmt)
         return v;
     if (t == T_void) {
-        if (jl_is_tuple(jt))
-            return literal_pointer_val((jl_value_t*)jl_null);
-        else 
-            return literal_pointer_val((jl_value_t*)jl_nothing);
+        if (jl_is_tuple(jt)) {
+            jl_value_t *s = static_void_instance(jt);
+            if(jl_is_tuple(jt) && jl_tuple_len(jt) > 0)
+                jl_add_linfo_root(ctx->linfo, s);
+            return literal_pointer_val(s);
+        } else {
+            return literal_pointer_val(jl_nothing);
+        }
     }
     if (t == T_int1) return julia_bool(v);
     if (jt == NULL || jl_is_uniontype(jt) || jl_is_abstracttype(jt))
