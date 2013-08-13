@@ -480,13 +480,14 @@ typedef struct {
     int lineno;
     std::vector<bool> boundsCheck;
 #ifdef JL_GC_MARKSWEEP
-    Instruction *gcframe = NULL;
-    Instruction *argSpaceInits = NULL;
-    StoreInst *storeFrameSize = NULL;
+    Instruction *gcframe ;
+    Instruction *argSpaceInits;
+    StoreInst *storeFrameSize;
 #endif
     BasicBlock::iterator first_gcframe_inst;
     BasicBlock::iterator last_gcframe_inst;
     std::vector<Instruction*> gc_frame_pops;
+    std::vector<CallInst*> to_inline;
 } jl_codectx_t;
 
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool boxed=true,
@@ -3233,6 +3234,13 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     // step 16. fix up size of stack root list
     //total_roots += (ctx.argSpaceOffs + ctx.maxDepth);
     finalize_gc_frame(&ctx);
+
+    // step 17, Apply LLVM level inlining
+    for(std::vector<CallInst*>::iterator it = ctx.to_inline.begin(); it != ctx.to_inline.end(); ++it) {
+        InlineFunctionInfo info;
+        if (!InlineFunction(*it,info))
+            jl_error("Inlining Pass failed");
+    }
 
     JL_GC_POP();
     return f;

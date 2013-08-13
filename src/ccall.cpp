@@ -593,28 +593,8 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     std::string rstring;
     llvm::raw_string_ostream rtypename(rstring);
     // Construct return type
-    if (!jl_is_tuple(rt)) {
-        rettype = julia_struct_to_llvm(rt);
-        rettype->print(rtypename);
-    } else
-    {
-        size_t nret = jl_tuple_len(rt);
-        if (nret == 0) {
-            rettype = T_void;
-            rettype->print(rtypename);
-        } else {
-            Type *rettypes[nret];
-            rtypename << "{";
-            for (size_t i = 0; i < nret; ++i) {
-                rettypes[i] = julia_struct_to_llvm(jl_tupleref(rt,i));
-                rettypes[i]->print(rtypename);
-                if ((i+1) != nret)
-                    rtypename << ",";
-            }
-            rtypename << "}";
-            rettype = StructType::get(jl_LLVMContext,ArrayRef<Type*>(&rettypes[0],nret));
-        }
-    }
+    rettype = julia_struct_to_llvm(rt);
+    rettype->print(rtypename);
 
     ir_stream << "; Number of arguments: " << nargt << "\n"
     << "define "<<rtypename.str()<<" @" << ir_name << "("<<argstream.str()<<") {\n"
@@ -634,18 +614,17 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
      * It might be tempting to just try to set the Always inline attribute on the function
      * and hope for the best. However, this doesn't work since that would require an inlining
      * pass (which is a Call Graph pass and cannot be managed by a FunctionPassManager). Instead
-     * We are sneaky and call the inliner directly. This also has the benefit of looking exactly
-     * like we cut/pasted it in in `code_llvm`
+     * We are sneaky and call the inliner directly. This however doesn't work until we've actually 
+     * generated the entire function, so we need to store it in the context until the end of the 
+     * function. This also has the benefit of looking exactly like we cut/pasted it in in `code_llvm`. 
      */
     f->setLinkage(GlobalValue::LinkOnceODRLinkage);
     f->dump();
         // the actual call
     CallInst *inst = builder.CreateCall(f,ArrayRef<Value*>(&argvals[0],nargt));
-    InlineFunctionInfo info;
-    if (!InlineFunction(inst,info))
-        jl_error("Failed to insert LLVM IR into function");
+    ctx->to_inline.push_back(inst);
 
-    return literal_pointer_val(jl_nothing);
+    return mark_julia_type(inst,rt);
 }
 
 // --- code generator for ccall itself ---
