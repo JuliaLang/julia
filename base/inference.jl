@@ -560,13 +560,9 @@ function abstract_call_gf(f, fargs, argtypes, e)
         end
     end
     for (m::Tuple) in x
+        linfo = m[3].func.code
         #print(m,"\n")
-        if isa(m[3],Type)
-            # constructor
-            rt = m[3]
-        else
-            (_tree,rt) = typeinf(m[3], m[1], m[2], m[3])
-        end
+        (_tree,rt) = typeinf(linfo, m[1], m[2], linfo)
         rettype = tmerge(rettype, rt)
         if is(rettype,Any)
             break
@@ -582,16 +578,17 @@ function invoke_tfunc(f, types, argtypes)
     if is(argtypes,None)
         return None
     end
-    applicable = methods(f, types)
+    applicable = _methods(f, types, -1)
     if isempty(applicable)
         return Any
     end
     for (m::Tuple) in applicable
+        linfo = m[3].func.code
         if typeseq(m[1],types)
             tvars = m[2][1:2:end]
             (ti, env) = ccall(:jl_match_method, Any, (Any,Any,Any),
                               argtypes, m[1], tvars)::(Any,Any)
-            (_tree,rt) = typeinf(m[3], ti, env, m[3])
+            (_tree,rt) = typeinf(linfo, ti, env, linfo)
             return rt
         end
     end
@@ -1696,8 +1693,8 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
         return NF
     end
 
-    meth = methods(f, atypes)
-    if length(meth) != 1
+    meth = _methods(f, atypes, 1)
+    if meth === false || length(meth) != 1
         return NF
     end
     meth = meth[1]::Tuple
@@ -1707,11 +1704,12 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     if !subtype(atypes, meth[1])
         return NF
     end
-    if !isa(meth[3],LambdaStaticData) || !is(meth[4],())
+    linfo = meth[3].func.code
+    if !isa(linfo,LambdaStaticData) || meth[3].func.env !== ()
         return NF
     end
     sp = meth[2]::Tuple
-    sp = tuple(sp..., meth[3].sparams...)
+    sp = tuple(sp..., linfo.sparams...)
     spvals = { sp[i] for i in 2:2:length(sp) }
     for i=1:length(spvals)
         if isa(spvals[i],TypeVar)
@@ -1721,13 +1719,13 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
             spvals[i] = qn(spvals[i])
         end
     end
-    (ast, ty) = typeinf(meth[3], meth[1], meth[2], meth[3])
+    (ast, ty) = typeinf(linfo, meth[1], meth[2], linfo)
     if is(ast,())
         return NF
     end
     needcopy = true
     if !isa(ast,Expr)
-        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), meth[3], ast)
+        ast = ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, ast)
         needcopy = false
     end
     ast = ast::Expr
@@ -1786,7 +1784,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     # ok, substitute argument expressions for argument names in the body
     spnames = { sp[i].name for i=1:2:length(sp) }
     if needcopy; expr = astcopy(expr); end
-    mfrom = meth[3].module; mto = (inference_stack::CallStack).mod
+    mfrom = linfo.module; mto = (inference_stack::CallStack).mod
     if !is(mfrom, mto)
         expr = resolve_globals(expr, mfrom, mto, args, spnames)
     end
@@ -2138,14 +2136,19 @@ function replace_tupleref(e::ANY, tupname, vals, sv, i0)
 end
 
 function code_typed(f::Callable, types)
-    x = methods(f,types)[1]
-    (tree, ty) = typeinf(x[3], x[1], x[2])
-    if !isa(tree,Expr)
-        return ccall(:jl_uncompress_ast, Any, (Any,Any), x[3], tree)
+    asts = {}
+    for x in _methods(f,types,-1)
+        linfo = x[3].func.code
+        (tree, ty) = typeinf(linfo, x[1], x[2])
+        if !isa(tree,Expr)
+            push!(asts, ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, tree))
+        else
+            push!(asts, tree)
+        end
     end
-    tree
+    asts
 end
 
-#tfunc(f,t) = (methods(f,t)[1][3]).tfunc
+#tfunc(f,t) = methods(f,t)[1].func.code.tfunc
 
 ccall(:jl_enable_inference, Void, ())

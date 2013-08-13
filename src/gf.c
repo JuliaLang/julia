@@ -1591,38 +1591,15 @@ DLLEXPORT jl_tuple_t *jl_match_method(jl_value_t *type, jl_value_t *sig,
     return result;
 }
 
-// returns a match as (argtypes, static_params, lambdainfo, cloenv)
-static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
-                                jl_tuple_t *sig, jl_tuple_t *tvars)
-{
-    jl_tuple_t *env = jl_null;
-    jl_value_t *ti=NULL;
-    JL_GC_PUSH2(&env, &ti);
-
-    ti = lookup_match(type, (jl_value_t*)sig, &env, tvars);
-    jl_tuple_t *result = NULL;
-    if (ti != (jl_value_t*)jl_bottom_type) {
-        assert(func->linfo);  // no builtin methods
-        jl_value_t *cenv;
-        if (func->env != NULL) {
-            cenv = func->env;
-        }
-        else {
-            cenv = (jl_value_t*)jl_null;
-        }
-        assert(jl_is_tuple(env));
-        result = jl_tuple(4, ti, env, func->linfo, cenv);
-    }
-    JL_GC_POP();
-    return result;
-}
-
+// returns a match as (argtypes, static_params, Method)
 static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_sym_t *name, int lim)
 {
     jl_array_t *t = (jl_array_t*)jl_an_empty_cell;
     jl_tuple_t *matc=NULL;
-    JL_GC_PUSH2(&t, &matc);
+    jl_tuple_t *env = jl_null;
+    jl_value_t *ti=NULL;
+    JL_GC_PUSH4(&t, &matc, &env, &ti);
     int len=0;
     while (ml != JL_NULL) {
         // a method is shadowed if type <: S <: m->sig where S is the
@@ -1631,13 +1608,17 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
           more generally, we can stop when the type is a subtype of the
           union of all the signatures examined so far.
         */
-        matc = match_method(type, ml->func, ml->sig, ml->tvars);
-        if (matc != NULL) {
+        env = jl_null;
+        ti = lookup_match(type, (jl_value_t*)ml->sig, &env, ml->tvars);
+        if (ti != (jl_value_t*)jl_bottom_type) {
+            assert(ml->func->linfo);  // no builtin methods
+            assert(jl_is_tuple(env));
             len++;
             if (lim >= 0 && len > lim) {
                 JL_GC_POP();
                 return jl_false;
             }
+            matc = jl_tuple(3, ti, env, ml);
             if (len == 1) {
                 t = jl_alloc_cell_1d(1);
                 jl_cellref(t,0) = (jl_value_t*)matc;
