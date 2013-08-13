@@ -115,7 +115,6 @@ static ExecutionEngine *jl_ExecutionEngine;
 static DIBuilder *dbuilder;
 static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
-static PassManager *PM;
 
 #ifdef LLVM32
 static DataLayout *jl_data_layout;
