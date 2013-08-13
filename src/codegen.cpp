@@ -3593,7 +3593,6 @@ static void init_julia_llvm_env(Module *m)
 
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);
-    PM = new PassManager();
 
     
 #ifdef LLVM32
