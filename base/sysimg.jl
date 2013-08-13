@@ -363,8 +363,8 @@ precompile(*, (ASCIIString, ASCIIString, ASCIIString))
 # inference code to cache an optimized version of it.
 begin
     local atypes = (LambdaStaticData, Tuple, (), LambdaStaticData, Bool)
-    local minf = methods(typeinf, atypes)
-    typeinf_ext(minf[1][3], atypes, (), minf[1][3])
+    local minf = _methods(typeinf, atypes, -1)
+    typeinf_ext(minf[1][3].func.code, atypes, (), minf[1][3].func.code)
 end
 
 end # baremodule Base

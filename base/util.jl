@@ -89,18 +89,16 @@ end
 # searching definitions
 
 function whicht(f, types)
-    for m = methods(f, types)
-        if isa(m[3],LambdaStaticData)
-            lsd = m[3]::LambdaStaticData
-            d = f.env.defs
-            while !is(d,())
-                if is(d.func.code, lsd)
-                    print(STDOUT, f.env.name)
-                    show(STDOUT, d); println(STDOUT)
-                    return
-                end
-                d = d.next
+    for m in methods(f, types)
+        lsd = m.func.code::LambdaStaticData
+        d = f.env.defs
+        while !is(d,())
+            if is(d.func.code, lsd)
+                print(STDOUT, f.env.name)
+                show(STDOUT, d); println(STDOUT)
+                return
             end
+            d = d.next
         end
     end
 end

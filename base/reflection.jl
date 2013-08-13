@@ -72,8 +72,8 @@ isgeneric(f::ANY) = (isa(f,Function)||isa(f,DataType)) && isa(f.env,MethodTable)
 
 function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 
-code_lowered(f::Function,t::Tuple) = methods(f,t)[1] 
-methods(f::ANY,t::ANY) = _methods(f,t,-1)::Array{Any,1}
+code_lowered(f::Function,t::Tuple) = map(m->m.func.code, methods(f,t))
+methods(f::ANY,t::ANY) = map(m->m[3], _methods(f,t,-1))::Array{Any,1}
 _methods(f::ANY,t::ANY,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
 
 function methods(f::Function)
@@ -104,20 +104,24 @@ done(mt::MethodTable, i::()) = true
 uncompressed_ast(l::LambdaStaticData) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
-code_llvm(f::Function, types::Tuple) = 
-    print(ccall(:jl_dump_function, Any, (Any,Any,Bool), f, types, false)::ByteString)
-code_native(f::Function,types::Tuple) = 
-    print(ccall(:jl_dump_function, Any, (Any,Any,Bool), f, types, true)::ByteString)
+function _dump_function(f, t::ANY, native)
+    str = ccall(:jl_dump_function, Any, (Any,Any,Bool), f, t, native)::ByteString
+    if str == ""
+        error("no method found for the specified argument types")
+    end
+    str
+end
+
+code_llvm  (f::Callable, types::Tuple) = print(_dump_function(f, types, false))
+code_native(f::Callable, types::Tuple) = print(_dump_function(f, types, true))
 
 function functionlocs(f::Function, types=(Any...))
     locs = Any[]
     for m in methods(f, types)
-        if isa(m[3],LambdaStaticData)
-            lsd = m[3]::LambdaStaticData
-            ln = lsd.line
-            if ln > 0
-                push!(locs, (find_source_file(string(lsd.file)), ln))
-            end
+        lsd = m.func.code::LambdaStaticData
+        ln = lsd.line
+        if ln > 0
+            push!(locs, (find_source_file(string(lsd.file)), ln))
         end
     end
     if length(locs) == 0
@@ -133,5 +137,5 @@ function function_module(f::Function, types=(Any...))
     if isempty(m)
         error("no matching methods")
     end
-    m[1][3].module
+    m[1].func.code.module
 end
