@@ -81,6 +81,8 @@ Library improvements
 
   * Fast primality testing (da670c4).
 
+  * `sum` and `cumsum` now use pairwise summation for better accuracy (#4039).
+
   * `isreadable`/`iswritable` functions added for more IO types (#3872).
 
   * `combinations` now returns an iterator instead of a task (#3989)
