@@ -563,7 +563,7 @@ function setindex!{K,V}(h::Dict{K,V}, v, key)
     while true
         if isslotempty(h,index)
             if avail > 0; index = avail; end
-            _setindex!(h, index, key, v)
+            return _setindex!(h, index, key, v)
         end
 
         if isslotmissing(h,index)
