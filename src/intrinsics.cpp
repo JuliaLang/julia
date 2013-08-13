@@ -176,7 +176,7 @@ static Type *jl_llvmtuple_eltype(Type *tuple, size_t i)
     return ety;
 }
 // emit code to unpack a raw value from a box
-static Value *emit_unbox(Type *to, Type *pto, Value *x, jl_value_t *jt)
+static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
 {
     Type *ty = x->getType();
     if (ty != jl_pvalue_llvmt) {
@@ -216,7 +216,7 @@ static Value *emit_unbox(Type *to, Type *pto, Value *x, jl_value_t *jt)
         assert(n == jl_tuple_len(jt));
         for (size_t i = 0; i < n; ++i) {
             Type *ety = jl_llvmtuple_eltype(to,i);
-            Value *elt = emit_unbox(ety,PointerType::get(ety,0),
+            Value *elt = emit_unbox(ety,
                 emit_tupleref(x,ConstantInt::get(T_size,i+1),jt,NULL),jl_tupleref(jt,i));
             tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,jt,NULL);
         }
@@ -234,7 +234,7 @@ static Value *emit_unbox(Type *to, Type *pto, Value *x, jl_value_t *jt)
         // empty struct - TODO - is this a good way to represent it?
         return UndefValue::get(to);
     }
-    return builder.CreateLoad(builder.CreateBitCast(p, pto), false);
+    return builder.CreateLoad(builder.CreateBitCast(p, to->getPointerTo()), false);
 }
 
 // unbox trying to determine type automatically
@@ -265,7 +265,7 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
     if (to == T_void) {
         return NULL;
     }
-    return emit_unbox(to, PointerType::get(to, 0), v, bt);
+    return emit_unbox(to, v, bt);
 }
 
 // figure out how many bits a bitstype has at compile time, or -1
@@ -295,7 +295,7 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         jl_value_t *p = jl_tparam0(et);
         if (jl_is_leaf_type(p)) {
             Type *to = julia_type_to_llvm(p);
-            return emit_unbox(to, PointerType::get(to,0), emit_unboxed(x,ctx), p);
+            return emit_unbox(to, emit_unboxed(x,ctx), p);
         }
     }
     int nb = try_to_determine_bitstype_nbits(targ, ctx);
@@ -313,7 +313,7 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_datatype_size(bt)*8;
     }
     Type *to = IntegerType::get(jl_LLVMContext, nb);
-    return emit_unbox(to, PointerType::get(to, 0), emit_unboxed(x, ctx), et);
+    return emit_unbox(to, emit_unboxed(x, ctx), et);
 }
 
 static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
@@ -584,7 +584,7 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
         jl_error("pointerref: invalid index type");
     }
     Value *thePtr = auto_unbox(e,ctx);
-    Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx), (jl_value_t*)jl_long_type);
+    Value *idx = emit_unbox(T_size, emit_unboxed(i, ctx), (jl_value_t*)jl_long_type);
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
     if (!jl_isbits(ety)) {
         if (ety == (jl_value_t*)jl_any_type)
@@ -625,7 +625,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
     }
     if ((jl_datatype_t*)expr_type(i, ctx) != jl_long_type)
         jl_error("pointerset: invalid index type");
-    Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx),(jl_value_t*)jl_long_type);
+    Value *idx = emit_unbox(T_size, emit_unboxed(i, ctx),(jl_value_t*)jl_long_type);
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
     Value *thePtr = auto_unbox(e,ctx);
     if (!jl_isbits(ety) && ety != (jl_value_t*)jl_any_type) {

@@ -1323,7 +1323,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         if (jl_is_tuple(tty) && ity==(jl_value_t*)jl_long_type) {
             if (ctx->vaStack && symbol_eq(args[1], ctx->vaName)) {
                 Value *valen = emit_n_varargs(ctx);
-                Value *idx = emit_unbox(T_size, T_psize,
+                Value *idx = emit_unbox(T_size, 
                                         emit_unboxed(args[2], ctx),ity);
                 idx = emit_bounds_check(idx, valen, ctx);
                 idx = builder.CreateAdd(idx, ConstantInt::get(T_size, ctx->nReqArgs));
@@ -1351,7 +1351,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 }
             }
             Value *tlen = emit_tuplelen(arg1);
-            Value *idx = emit_unbox(T_size, T_psize,
+            Value *idx = emit_unbox(T_size,
                                     emit_unboxed(args[2], ctx), ity);
             emit_bounds_check(idx, tlen, ctx);
             JL_GC_POP();
@@ -1378,7 +1378,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             Value *tpl = UndefValue::get(julia_type_to_llvm(tt));
             for (size_t i = 0; i < nargs; ++i) {
                 Type *ety = jl_llvmtuple_eltype(tpl->getType(),i);
-                Value *elt = emit_unbox(ety,PointerType::get(ety,0),
+                Value *elt = emit_unbox(ety,
                     emit_unboxed(args[i+1],ctx),jl_tupleref(tt,i));
                 tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,tt,ctx);
             }
@@ -1499,7 +1499,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     }
                 }
                 else {
-                    Value *idx = emit_unbox(T_size, T_psize,
+                    Value *idx = emit_unbox(T_size,
                                             emit_unboxed(args[2], ctx), ity);
                     error_unless(builder.CreateICmpSGT(idx,
                                                       ConstantInt::get(T_size,0)),
@@ -1756,7 +1756,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
             }
             else {
                 assert(at == et);
-                argvals[idx] = emit_unbox(at, PointerType::get(at,0),
+                argvals[idx] = emit_unbox(at, 
                                         emit_unboxed(args[i+1], ctx), expr_type(args[i+1],ctx));
             }
             idx++;
@@ -1965,7 +1965,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         if (bp != NULL) {
             Type *vt = bp->getType();
             if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt) {
-                rval = emit_unbox(vt->getContainedType(0), vt, emit_unboxed(r, ctx), rt);
+                rval = emit_unbox(vt->getContainedType(0), emit_unboxed(r, ctx), rt);
             }
             else {
                 rval = boxed(emit_expr(r, ctx, true),ctx,rt);
@@ -2245,7 +2245,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                         Type *fty = julia_type_to_llvm(jtype);
                         if(fty == T_void)
                             continue;
-                        Value *fval = emit_unbox(fty, PointerType::get(fty,0), emit_unboxed(args[i+1],ctx), jtype);
+                        Value *fval = emit_unbox(fty, emit_unboxed(args[i+1],ctx), jtype);
                         if (fty == T_int1)
                             fval = builder.CreateZExt(fval, T_int8);
                         strct = builder.
@@ -2626,7 +2626,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f)
             assert(lty != NULL);
             if (lty == T_void)
                 continue;
-            theArg = emit_unbox(lty, PointerType::get(lty,0), theArg, ty);
+            theArg = emit_unbox(lty, theArg, ty);
         } else if(jl_is_tuple(ty))
         {
             Type *lty = julia_struct_to_llvm(ty);
@@ -2634,7 +2634,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f)
             {
                 if (lty == T_void)
                     continue;
-                theArg = emit_unbox(lty, PointerType::get(lty,0), theArg, ty);
+                theArg = emit_unbox(lty, theArg, ty);
             }
         }
         args[idx] = theArg;
@@ -3111,7 +3111,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                 builder.CreateStore(boxed(theArg,&ctx), lv);
             else
                 builder.CreateStore(emit_unbox(dyn_cast<AllocaInst>(lv)->getAllocatedType(),
-                                               lv->getType(),
                                                theArg,
                                                lam->specTypes == NULL ? NULL :
                                                jl_tupleref(lam->specTypes,i)),
@@ -3198,7 +3197,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                 retval = boxed(emit_expr(jl_exprarg(ex,0), &ctx, true),&ctx,expr_type(stmt,&ctx));
             }
             else if (retty != T_void) {
-                retval = emit_unbox(retty, PointerType::get(retty,0),
+                retval = emit_unbox(retty, 
                                     emit_unboxed(jl_exprarg(ex,0), &ctx), jlrettype);
             }
             else {
