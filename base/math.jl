@@ -383,18 +383,18 @@ modf(x) = rem(x,one(x)), trunc(x)
 
 # special functions
 
-besselj0(x::Float64) = ccall((:j0,openlibm_extras),  Float64, (Float64,), x)
-besselj0(x::Float32) = ccall((:j0f,openlibm_extras), Float32, (Float32,), x)
+besselj0(x::Float64) = ccall((:j0,libm),  Float64, (Float64,), x)
+besselj0(x::Float32) = ccall((:j0f,libm), Float32, (Float32,), x)
 @vectorize_1arg Real besselj0
-besselj1(x::Float64) = ccall((:j1,openlibm_extras),  Float64, (Float64,), x)
-besselj1(x::Float32) = ccall((:j1f,openlibm_extras), Float32, (Float32,), x)
+besselj1(x::Float64) = ccall((:j1,libm),  Float64, (Float64,), x)
+besselj1(x::Float32) = ccall((:j1f,libm), Float32, (Float32,), x)
 @vectorize_1arg Real besselj1
 
-bessely0(x::Float64) = ccall((:y0,openlibm_extras),  Float64, (Float64,), x)
-bessely0(x::Float32) = ccall((:y0f,openlibm_extras), Float32, (Float32,), x)
+bessely0(x::Float64) = ccall((:y0,libm),  Float64, (Float64,), x)
+bessely0(x::Float32) = ccall((:y0f,libm), Float32, (Float32,), x)
 @vectorize_1arg Real bessely0
-bessely1(x::Float64) = ccall((:y1,openlibm_extras),  Float64, (Float64,), x)
-bessely1(x::Float32) = ccall((:y1f,openlibm_extras), Float32, (Float32,), x)
+bessely1(x::Float64) = ccall((:y1,libm),  Float64, (Float64,), x)
+bessely1(x::Float32) = ccall((:y1f,libm), Float32, (Float32,), x)
 @vectorize_1arg Real bessely1
 
 let
