@@ -189,6 +189,8 @@ eltype(c::Combinations) = typeof(c.a)
 eltype{T}(c::Combinations{Range1{T}}) = Array{T,1}
 eltype{T}(c::Combinations{Range{T}}) = Array{T,1}
 
+length(c::Combinations) = binomial(length(c.a),c.t)
+
 function combinations(a, t::Integer)
     if t < 0
         # generate 0 combinations for negative argument
@@ -225,6 +227,8 @@ end
 eltype(c::Permutations) = typeof(c.a)
 eltype{T}(c::Permutations{Range1{T}}) = Array{T,1}
 eltype{T}(c::Permutations{Range{T}}) = Array{T,1}
+
+length(c::Permutations) = factorial(length(c.a))
 
 permutations(a) = Permutations(a)
 
