@@ -84,7 +84,7 @@ end
 
 const valid_opts = [:has_header, :ignore_invalid_chars, :use_mmap]
 function val_opts(opts)
-    d = Dict{Symbol,Bool,Unordered}()
+    d = (Symbol=>Bool)[]
     for opt in opts
         !contains(valid_opts, opt[1]) && error("unknown option $(opt[1])")
         !isa(opt[2], Bool) && error("$(opt[1]) can only be boolean")

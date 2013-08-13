@@ -55,7 +55,7 @@ _d = {"a"=>0}
 
 # issue #1821
 let
-    d = Dict{UTF8String, Vector{Int}, Unordered}()
+    d = (UTF8String=>Vector{Int})[]
     d["a"] = [1, 2]
     @test_throws d["b"] = 1
     @test isa(repr(d), String)  # check that printable without error
@@ -105,7 +105,7 @@ end
 data_in = [ (rand(1:1000), randstring(2)) for _ in 1:1001 ]
 
 # Populate the first dict
-d1 = Dict{Int, String, Unordered}()
+d1 = (Int=>String)[]
 for (k,v) in data_in
     d1[k] = v
 end
@@ -117,7 +117,7 @@ for i in 1:length(data_in)
 end
 # Inserting data in different (shuffled) order should result in
 # equivalent dict.
-d2 = Dict{Int, String, Unordered}()
+d2 = (Int=>String)[]
 for (k,v) in data_in
     d2[k] = v
 end
@@ -141,7 +141,7 @@ d4[1001] = randstring(3)
 # are compared. This is not necessarily desirable. These tests are
 # descriptive rather than proscriptive.
 @test !isequal({1 => 2}, {"dog" => "bone"})
-@test isequal(Dict{Int, Int, Unordered}(), Dict{String, String, Unordered}())
+@test isequal((Int=>Int)[], (String=>String)[])
 
 # issue #2540
 d = {x => 1

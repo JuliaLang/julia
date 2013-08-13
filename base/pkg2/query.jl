@@ -277,7 +277,7 @@ function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}
         staged = staged_next
     end
 
-    sub_deps = Dict{ByteString,Dict{VersionNumber,Available},Unordered}()
+    sub_deps = (ByteString=>Dict{VersionNumber,Available})[]
     for p in allpkgs
         haskey(sub_deps, p) || (sub_deps[p] = (VersionNumber=>Available)[])
         sub_depsp = sub_deps[p]

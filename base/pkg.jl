@@ -227,7 +227,7 @@ required(pkg::String) = cd_pkgdir() do
 end
 
 installed() = cd_pkgdir() do
-    h = Dict{String,Union(VersionNumber,String),Unordered}()
+    h = (String=>Union(VersionNumber,String))[]
     for pkg in packages()
         isdir(pkg) || continue
         sha1 = cd(Git.head,pkg)
