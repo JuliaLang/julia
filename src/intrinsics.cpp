@@ -171,6 +171,8 @@ static Type *jl_llvmtuple_eltype(Type *tuple, size_t i)
         ety = dyn_cast<ArrayType>(tuple)->getElementType();
     else if(tuple->isVectorTy())
         ety = dyn_cast<VectorType>(tuple)->getElementType();
+    else if(tuple == T_void) 
+        ety = T_void;
     else
         assert(false);
     return ety;
@@ -203,6 +205,7 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
     {
         assert(jt != 0);
         assert(jl_is_tuple(jt));
+        assert(to != T_void);
         Value *tpl = UndefValue::get(to);
         size_t n = 0;
         if (to->isStructTy())
@@ -216,6 +219,8 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
         assert(n == jl_tuple_len(jt));
         for (size_t i = 0; i < n; ++i) {
             Type *ety = jl_llvmtuple_eltype(to,i);
+            if(ety == T_void)
+                continue;
             Value *elt = emit_unbox(ety,
                 emit_tupleref(x,ConstantInt::get(T_size,i+1),jt,NULL),jl_tupleref(jt,i));
             tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,jt,NULL);
@@ -232,6 +237,7 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
     }
     if (to->isStructTy() && !to->isSized()) {
         // empty struct - TODO - is this a good way to represent it?
+        assert(to != T_void);
         return UndefValue::get(to);
     }
     return builder.CreateLoad(builder.CreateBitCast(p, to->getPointerTo()), false);
