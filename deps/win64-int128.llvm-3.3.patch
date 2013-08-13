@@ -1,0 +1,228 @@
+diff -rupN llvm-3.3.src/lib/CodeGen/SelectionDAG/LegalizeDAG.cpp llvm-3.3/lib/CodeGen/SelectionDAG/LegalizeDAG.cpp
+--- llvm-3.3.src/lib/CodeGen/SelectionDAG/LegalizeDAG.cpp	2013-04-20 08:32:17.000000000 -0400
++++ llvm-3.3/lib/CodeGen/SelectionDAG/LegalizeDAG.cpp	2013-08-12 20:38:20.405908033 -0400
+@@ -1849,6 +1849,16 @@ SDValue SelectionDAGLegalize::ExpandBUIL
+ // and leave the Hi part unset.
+ SDValue SelectionDAGLegalize::ExpandLibCall(RTLIB::Libcall LC, SDNode *Node,
+                                             bool isSigned) {
++  Triple Trip(DAG.getTarget().getTargetTriple());
++  int Win64 = Trip.isArch64Bit() && Trip.isOSWindows();
++
++  // By default, the input chain to this libcall is the entry node of the
++  // function. If the libcall is going to be emitted as a tail call then
++  // TLI.isUsedByReturnOnly will change it to the right chain if the return
++  // node which is being folded has a non-entry input chain.
++  SDValue InChain = DAG.getEntryNode();
++  bool isTailCall = true;
++
+   TargetLowering::ArgListTy Args;
+   TargetLowering::ArgListEntry Entry;
+   for (unsigned i = 0, e = Node->getNumOperands(); i != e; ++i) {
+@@ -1857,6 +1867,20 @@ SDValue SelectionDAGLegalize::ExpandLibC
+     Entry.Node = Node->getOperand(i); Entry.Ty = ArgTy;
+     Entry.isSExt = isSigned;
+     Entry.isZExt = !isSigned;
++    if (Win64 && Entry.Node.getValueType().getSizeInBits() > 64) {
++      //printf("win64 libcall arg %d i128*\n", i);
++      SDValue StackPtr = DAG.CreateStackTemporary(Entry.Node.getValueType(), 16); 
++      int SPFI = cast<FrameIndexSDNode>(StackPtr.getNode())->getIndex();
++      MachinePointerInfo PtrInfo = MachinePointerInfo::getFixedStack(SPFI);
++      // Emit a store to the stack slot.
++      InChain = DAG.getStore(InChain, Node->getDebugLoc(), Entry.Node, StackPtr, PtrInfo,
++                                   false, false, 16); 
++      Entry.Node = StackPtr;
++      Entry.Ty = PointerType::get(Entry.Ty,0);
++      Entry.isSExt = false;
++      Entry.isZExt = false;
++      if (isTailCall) isTailCall = false;
++    }
+     Args.push_back(Entry);
+   }
+   SDValue Callee = DAG.getExternalSymbol(TLI.getLibcallName(LC),
+@@ -1864,18 +1888,14 @@ SDValue SelectionDAGLegalize::ExpandLibC
+ 
+   Type *RetTy = Node->getValueType(0).getTypeForEVT(*DAG.getContext());
+ 
+-  // By default, the input chain to this libcall is the entry node of the
+-  // function. If the libcall is going to be emitted as a tail call then
+-  // TLI.isUsedByReturnOnly will change it to the right chain if the return
+-  // node which is being folded has a non-entry input chain.
+-  SDValue InChain = DAG.getEntryNode();
+-
+-  // isTailCall may be true since the callee does not reference caller stack
+-  // frame. Check if it's in the right position.
+-  SDValue TCChain = InChain;
+-  bool isTailCall = TLI.isInTailCallPosition(DAG, Node, TCChain);
+-  if (isTailCall)
+-    InChain = TCChain;
++  if (isTailCall) {
++    // isTailCall may be true since the callee does not reference caller stack
++    // frame. Check if it's in the right position.
++    SDValue TCChain = InChain;
++    isTailCall = TLI.isInTailCallPosition(DAG, Node, TCChain);
++    if (isTailCall)
++      InChain = TCChain;
++  }
+ 
+   TargetLowering::
+   CallLoweringInfo CLI(InChain, RetTy, isSigned, !isSigned, false, false,
+@@ -1900,12 +1920,29 @@ SDValue SelectionDAGLegalize::ExpandLibC
+   TargetLowering::ArgListTy Args;
+   Args.reserve(NumOps);
+ 
++  Triple Trip(DAG.getTarget().getTargetTriple());
++  int Win64 = Trip.isArch64Bit() && Trip.isOSWindows();
++
++  SDValue InChain = DAG.getEntryNode();
+   TargetLowering::ArgListEntry Entry;
+   for (unsigned i = 0; i != NumOps; ++i) {
+     Entry.Node = Ops[i];
+     Entry.Ty = Entry.Node.getValueType().getTypeForEVT(*DAG.getContext());
+     Entry.isSExt = isSigned;
+     Entry.isZExt = !isSigned;
++    if (Win64 && Entry.Node.getValueType().getSizeInBits() > 64) {
++      //printf("win64 libcall arg %d i128*\n", i);
++      SDValue StackPtr = DAG.CreateStackTemporary(Entry.Node.getValueType(), 16); 
++      int SPFI = cast<FrameIndexSDNode>(StackPtr.getNode())->getIndex();
++      MachinePointerInfo PtrInfo = MachinePointerInfo::getFixedStack(SPFI);
++      // Emit a store to the stack slot.
++      InChain = DAG.getStore(InChain, dl, Entry.Node, StackPtr, PtrInfo,
++                                   false, false, 16); 
++      Entry.Node = StackPtr;
++      Entry.Ty = PointerType::get(Entry.Ty,0);
++      Entry.isSExt = false;
++      Entry.isZExt = false;
++    }
+     Args.push_back(Entry);
+   }
+   SDValue Callee = DAG.getExternalSymbol(TLI.getLibcallName(LC),
+@@ -1913,7 +1950,7 @@ SDValue SelectionDAGLegalize::ExpandLibC
+ 
+   Type *RetTy = RetVT.getTypeForEVT(*DAG.getContext());
+   TargetLowering::
+-  CallLoweringInfo CLI(DAG.getEntryNode(), RetTy, isSigned, !isSigned, false,
++  CallLoweringInfo CLI(InChain, RetTy, isSigned, !isSigned, false,
+                        false, 0, TLI.getLibcallCallingConv(LC),
+                        /*isTailCall=*/false,
+                   /*doesNotReturn=*/false, /*isReturnValueUsed=*/true,
+@@ -1931,6 +1968,9 @@ SelectionDAGLegalize::ExpandChainLibCall
+                                          bool isSigned) {
+   SDValue InChain = Node->getOperand(0);
+ 
++  Triple Trip(DAG.getTarget().getTargetTriple());
++  int Win64 = Trip.isArch64Bit() && Trip.isOSWindows();
++
+   TargetLowering::ArgListTy Args;
+   TargetLowering::ArgListEntry Entry;
+   for (unsigned i = 1, e = Node->getNumOperands(); i != e; ++i) {
+@@ -1940,6 +1980,19 @@ SelectionDAGLegalize::ExpandChainLibCall
+     Entry.Ty = ArgTy;
+     Entry.isSExt = isSigned;
+     Entry.isZExt = !isSigned;
++    if (Win64 && Entry.Node.getValueType().getSizeInBits() > 64) {
++      //printf("win64 libcall arg %d i128*\n", i);
++      SDValue StackPtr = DAG.CreateStackTemporary(Entry.Node.getValueType(), 16);
++      int SPFI = cast<FrameIndexSDNode>(StackPtr.getNode())->getIndex();
++      MachinePointerInfo PtrInfo = MachinePointerInfo::getFixedStack(SPFI);
++      // Emit a store to the stack slot.
++      InChain = DAG.getStore(InChain, Node->getDebugLoc(), Entry.Node, StackPtr, PtrInfo,
++                                   false, false, 16);
++      Entry.Node = StackPtr;
++      Entry.Ty = PointerType::get(Entry.Ty,0);
++      Entry.isSExt = false;
++      Entry.isZExt = false;
++    }
+     Args.push_back(Entry);
+   }
+   SDValue Callee = DAG.getExternalSymbol(TLI.getLibcallName(LC),
+@@ -2056,10 +2109,14 @@ SelectionDAGLegalize::ExpandDivRemLibCal
+   // Legalizing the call will automatically add the previous call to the
+   // dependence.
+   SDValue InChain = DAG.getEntryNode();
++  DebugLoc dl = Node->getDebugLoc();
+ 
+   EVT RetVT = Node->getValueType(0);
+   Type *RetTy = RetVT.getTypeForEVT(*DAG.getContext());
+ 
++  Triple Trip(DAG.getTarget().getTargetTriple());
++  int Win64 = Trip.isArch64Bit() && Trip.isOSWindows();
++
+   TargetLowering::ArgListTy Args;
+   TargetLowering::ArgListEntry Entry;
+   for (unsigned i = 0, e = Node->getNumOperands(); i != e; ++i) {
+@@ -2068,6 +2125,19 @@ SelectionDAGLegalize::ExpandDivRemLibCal
+     Entry.Node = Node->getOperand(i); Entry.Ty = ArgTy;
+     Entry.isSExt = isSigned;
+     Entry.isZExt = !isSigned;
++    if (Win64 && Entry.Node.getValueType().getSizeInBits() > 64) {
++      //printf("win64 libcall arg %d i128*\n", i);
++      SDValue StackPtr = DAG.CreateStackTemporary(Entry.Node.getValueType(), 16);
++      int SPFI = cast<FrameIndexSDNode>(StackPtr.getNode())->getIndex();
++      MachinePointerInfo PtrInfo = MachinePointerInfo::getFixedStack(SPFI);
++      // Emit a store to the stack slot.
++      InChain = DAG.getStore(InChain, dl, Entry.Node, StackPtr, PtrInfo,
++                                   false, false, 16);
++      Entry.Node = StackPtr;
++      Entry.Ty = PointerType::get(Entry.Ty,0);
++      Entry.isSExt = false;
++      Entry.isZExt = false;
++    }
+     Args.push_back(Entry);
+   }
+ 
+@@ -2082,7 +2152,6 @@ SelectionDAGLegalize::ExpandDivRemLibCal
+   SDValue Callee = DAG.getExternalSymbol(TLI.getLibcallName(LC),
+                                          TLI.getPointerTy());
+ 
+-  DebugLoc dl = Node->getDebugLoc();
+   TargetLowering::
+   CallLoweringInfo CLI(InChain, RetTy, isSigned, !isSigned, false, false,
+                     0, TLI.getLibcallCallingConv(LC), /*isTailCall=*/false,
+diff -rupN llvm-3.3.src/lib/CodeGen/SelectionDAG/TargetLowering.cpp llvm-3.3/lib/CodeGen/SelectionDAG/TargetLowering.cpp
+--- llvm-3.3.src/lib/CodeGen/SelectionDAG/TargetLowering.cpp	2013-02-12 16:21:59.000000000 -0500
++++ llvm-3.3/lib/CodeGen/SelectionDAG/TargetLowering.cpp	2013-08-12 20:39:27.697904752 -0400
+@@ -14,6 +14,7 @@
+ #include "llvm/Target/TargetLowering.h"
+ #include "llvm/ADT/BitVector.h"
+ #include "llvm/ADT/STLExtras.h"
++#include "llvm/ADT/Triple.h"
+ #include "llvm/CodeGen/Analysis.h"
+ #include "llvm/CodeGen/MachineFrameInfo.h"
+ #include "llvm/CodeGen/MachineFunction.h"
+@@ -74,19 +75,35 @@ SDValue TargetLowering::makeLibCall(Sele
+   TargetLowering::ArgListTy Args;
+   Args.reserve(NumOps);
+ 
++  Triple Trip(DAG.getTarget().getTargetTriple());
++  int Win64 = Trip.isArch64Bit() && Trip.isOSWindows();
++  SDValue InChain = DAG.getEntryNode();
+   TargetLowering::ArgListEntry Entry;
+   for (unsigned i = 0; i != NumOps; ++i) {
+     Entry.Node = Ops[i];
+     Entry.Ty = Entry.Node.getValueType().getTypeForEVT(*DAG.getContext());
+     Entry.isSExt = isSigned;
+     Entry.isZExt = !isSigned;
++    if (Win64 && Entry.Node.getValueType().getSizeInBits() > 64) {
++      //printf("win64 libcall arg %d i128*\n", i);
++      SDValue StackPtr = DAG.CreateStackTemporary(Entry.Node.getValueType(), 16); 
++      int SPFI = cast<FrameIndexSDNode>(StackPtr.getNode())->getIndex();
++      MachinePointerInfo PtrInfo = MachinePointerInfo::getFixedStack(SPFI);
++      // Emit a store to the stack slot.
++      InChain = DAG.getStore(InChain, dl, Entry.Node, StackPtr, PtrInfo,
++                                   false, false, 16); 
++      Entry.Node = StackPtr;
++      Entry.Ty = PointerType::get(Entry.Ty,0);
++      Entry.isSExt = false;
++      Entry.isZExt = false;
++    }
+     Args.push_back(Entry);
+   }
+   SDValue Callee = DAG.getExternalSymbol(getLibcallName(LC), getPointerTy());
+ 
+   Type *RetTy = RetVT.getTypeForEVT(*DAG.getContext());
+   TargetLowering::
+-  CallLoweringInfo CLI(DAG.getEntryNode(), RetTy, isSigned, !isSigned, false,
++  CallLoweringInfo CLI(InChain, RetTy, isSigned, !isSigned, false,
+                     false, 0, getLibcallCallingConv(LC),
+                     /*isTailCall=*/false,
+                     /*doesNotReturn=*/false, /*isReturnValueUsed=*/true,
