@@ -994,7 +994,7 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
 {
     if (v == NULL || dyn_cast<UndefValue>(v) != 0) {
         if (jl_is_datatype(jt)) {
-            jl_datatype_t *jb = (jl_datatype_t*)jb;
+            jl_datatype_t *jb = (jl_datatype_t*)jt;
             if (jb->instance == NULL)
                 jl_new_struct_uninit(jb);
             assert(jb->instance != NULL);

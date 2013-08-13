@@ -204,7 +204,7 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
         assert(jt != 0);
         assert(jl_is_tuple(jt));
         Value *tpl = UndefValue::get(to);
-        size_t n;
+        size_t n = 0;
         if (to->isStructTy())
             n = dyn_cast<StructType>(to)->getNumElements();
         else if(to->isArrayTy())
