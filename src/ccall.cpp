@@ -353,7 +353,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
                                "cglobal: first argument not a pointer or valid constant expression",
                                ctx);
         }
-        jl_ptr = emit_unbox(T_size, T_psize, arg1, ptr_ty);
+        jl_ptr = emit_unbox(T_size, arg1, ptr_ty);
     }
 
     void *fptr=NULL;
@@ -568,7 +568,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         else {
             arg = emit_unboxed(argi, ctx);
             if (jl_is_bitstype(expr_type(argi, ctx))) {
-                arg = emit_unbox(t, PointerType::get(t,0), arg, tti);
+                arg = emit_unbox(t, arg, tti);
             }
         }
 
@@ -962,9 +962,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 }
                 else {
                     if (addressOf)
-                        arg = emit_unbox(largty->getContainedType(0), largty, arg, jargty);
+                        arg = emit_unbox(largty->getContainedType(0), arg, jargty);
                     else
-                        arg = emit_unbox(largty, PointerType::get(largty,0), arg, jargty);
+                        arg = emit_unbox(largty, arg, jargty);
                 }
             }
         }

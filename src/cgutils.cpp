@@ -494,7 +494,7 @@ static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
     return mark_julia_type(elt, jltype);
 }
 
-static Value *emit_unbox(Type *to, Type *pto, Value *x, jl_value_t *jt);
+static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt);
 
 static Value *typed_store(Value *ptr, Value *idx_0based, Value *rhs,
                           jl_value_t *jltype, jl_codectx_t *ctx)
@@ -503,7 +503,7 @@ static Value *typed_store(Value *ptr, Value *idx_0based, Value *rhs,
     assert(elty != NULL);
     if (elty==T_int1) { elty = T_int8; }
     if (jl_isbits(jltype) && ((jl_datatype_t*)jltype)->size > 0)
-        rhs = emit_unbox(elty, PointerType::get(elty,0), rhs, jltype);
+        rhs = emit_unbox(elty, rhs, jltype);
     else
         rhs = boxed(rhs,ctx);
     Value *data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
@@ -915,7 +915,7 @@ static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_
     }
 #endif
     for(size_t k=0; k < nidxs; k++) {
-        Value *ii = emit_unbox(T_size, T_psize, emit_unboxed(args[k], ctx), NULL);
+        Value *ii = emit_unbox(T_size, emit_unboxed(args[k], ctx), NULL);
         ii = builder.CreateSub(ii, ConstantInt::get(T_size, 1));
         i = builder.CreateAdd(i, builder.CreateMul(ii, stride));
         if (k < nidxs-1) {
