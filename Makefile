@@ -76,7 +76,7 @@ PREFIX ?= julia-$(JULIA_COMMIT)
 install:
 	@$(MAKE) $(QUIET_MAKE) debug
 	@$(MAKE) $(QUIET_MAKE) release
-	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "include/julia" "share/julia/site/"$(VERSDIR) ; do \
+	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "share/man/man1" "include/julia" "share/julia/site/"$(VERSDIR) ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
 	cp -a $(BUILD)/bin $(PREFIX)
@@ -101,6 +101,8 @@ endif
 ifeq ($(OS), WINNT)
 	cp $(JULIAHOME)/contrib/windows/*.bat $(PREFIX)
 endif
+	# Copy in beautiful new man page!
+	cp $(BUILD)/share/man/man1/julia.1 $(PREFIX)/share/man/man1/
 
 
 dist:
