@@ -163,7 +163,7 @@ end
 canonicalize_config(file::String) = write_config(file, read_config(file))
 
 function config_sections(cfg::Dict)
-    sections = Set{ByteString}()
+    sections = Set{ByteString,Unordered}()
     for (key,_) in cfg
         m = match(r"^(.+)\.", key)
         if m != nothing add!(sections,m.captures[1]) end
@@ -177,7 +177,7 @@ function merge_configs(Bc::Dict, Lc::Dict, Rc::Dict)
     Ls = config_sections(Lc)
     Rs = config_sections(Rc)
     # expunge removed submodules from left and right sides
-    deleted = Set{ByteString}()
+    deleted = Set{ByteString,Unordered}()
     for section in Bs - Ls & Rs
         filter!((k,v)->!beginswith(k,"$section."),Lc)
         filter!((k,v)->!beginswith(k,"$section."),Rc)

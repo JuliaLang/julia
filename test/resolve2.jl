@@ -56,7 +56,7 @@ end
 # auxiliary functions
 
 function deps_from_data(deps_data)
-    deps = Dict{ByteString,Dict{VersionNumber,Available}}()
+    deps = (ByteString=>Dict{VersionNumber,Available})[]
     for d in deps_data
         p = d[1]; vn = d[2]; r = d[3:end]
         if !haskey(deps, p)

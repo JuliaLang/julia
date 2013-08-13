@@ -177,9 +177,9 @@ end
 
 const LPROC = LocalProcess(0)
 
-const map_pid_wrkr = Dict{Int, Union(Worker, LocalProcess)}()
-const map_sock_wrkr = Dict{Socket, Union(Worker, LocalProcess)}()
-const map_del_wrkr = Set{Int}()
+const map_pid_wrkr = (Int=>Union(Worker, LocalProcess))[]
+const map_sock_wrkr = (Socket=>Union(Worker, LocalProcess))[]
+const map_del_wrkr = Set{Int,Unordered}()
 
 let next_pid = 2    # 1 is reserved for the client (always)
     global get_next_pid
@@ -1315,7 +1315,7 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
     np = nprocs()
     retrycond = Condition()
 
-    results = Dict{Int,Any}()
+    results = (Int=>Any)[]
     function setresult(idx,v)
         results[idx] = v
         notify(retrycond)

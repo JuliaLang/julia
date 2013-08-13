@@ -36,7 +36,7 @@ end
 available() = sort!([keys(Dir.cd(Read.available))...], by=lowercase)
 
 function installed()
-    pkgs = Dict{String,VersionNumber}()
+    pkgs = (String=>VersionNumber)[]
     for (pkg,(ver,fix)) in Dir.cd(Read.installed)
         pkgs[pkg] = ver
     end

@@ -264,38 +264,61 @@ end
 
 # dict
 
-type Dict{K,V} <: Associative{K,V}
+typealias Unordered Nothing
+typealias Ordered   Int
+
+type Dict{K,V,O<:Union(Ordered,Unordered)} <: Associative{K,V}
     slots::Array{Uint8,1}
     keys::Array{K,1}
     vals::Array{V,1}
+    idxs::Array{O,1}
+    order::Array{O,1}
     ndel::Int
     count::Int
     deleter::Function
 
     function Dict()
         n = 16
-        new(zeros(Uint8,n), Array(K,n), Array(V,n), 0, 0, identity)
+        new(zeros(Uint8,n), Array(K,n), Array(V,n), Array(O,n), Array(O,0), 0, 0, identity)
     end
     function Dict(ks, vs)
         n = length(ks)
-        h = Dict{K,V}()
+        h = Dict{K,V,O}()
         for i=1:n
             h[ks[i]] = vs[i]
         end
         return h
     end
 end
-Dict() = Dict{Any,Any}()
 
-Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = Dict{K,V}(ks,vs)
-Dict(ks, vs) = Dict{Any,Any}(ks, vs)
+Dict() = Dict{Any,Any,Unordered}()
+
+Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = Dict{K,V,Unordered}(ks,vs)
+Dict(ks, vs) = Dict{Any,Any,Unordered}(ks, vs)
 
 # syntax entry points
-Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
-Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
-Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
+Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  ,Unordered}(ks, vs)
+Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any,Unordered}(ks, vs)
+Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  ,Unordered}(ks, vs)
 
-similar{K,V}(d::Dict{K,V}) = (K=>V)[]
+# ordered dict
+
+type OrderedDict{K,V} <: Associative{K,V}
+    OrderedDict() = Dict{K,V,Ordered}()
+    OrderedDict(ks,vs) = Dict{K,V,Ordered}(ks,vs)
+end
+
+OrderedDict() = OrderedDict{Any,Any}()
+
+OrderedDict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = OrderedDict{K,V}(ks,vs)
+OrderedDict(ks, vs) = OrderedDict{Any,Any}(ks, vs)
+
+OrderedDict{K,V}(ks::(K...), vs::(V...)) = OrderedDict{K  ,V  }(ks, vs)
+OrderedDict{K  }(ks::(K...), vs::Tuple ) = OrderedDict{K  ,Any}(ks, vs)
+OrderedDict{V  }(ks::Tuple , vs::(V...)) = OrderedDict{Any,V  }(ks, vs)
+
+
+similar{K,V,O}(d::Dict{K,V,O}) = Dict{K,V,O}()
 
 function serialize(s, t::Dict)
     serialize_type(s, typeof(t))
@@ -306,7 +329,7 @@ function serialize(s, t::Dict)
     end
 end
 
-function deserialize{K,V}(s, T::Type{Dict{K,V}})
+function deserialize{K,V,O}(s, T::Type{Dict{K,V,O}})
     n = read(s, Int32)
     t = T(); sizehint(t, n)
     for i = 1:n
@@ -323,7 +346,7 @@ isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
 isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
 isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
 
-function rehash{K,V}(h::Dict{K,V}, newsz)
+function rehash{K,V}(h::Dict{K,V,Unordered}, newsz)
     olds = h.slots
     oldk = h.keys
     oldv = h.vals
@@ -373,6 +396,95 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
     return h
 end
 
+function rehash{K,V}(h::Dict{K,V,Ordered}, newsz)
+    _compact_order(h)
+
+    olds = h.slots
+    oldk = h.keys
+    oldv = h.vals
+    oldi = h.idxs
+    oldo = h.order
+    sz = length(olds)
+    newsz = _tablesz(newsz)
+    if h.count == 0
+        resize!(h.slots, newsz)
+        fill!(h.slots, 0)
+        resize!(h.keys, newsz)
+        resize!(h.vals, newsz)
+        resize!(h.idxs, newsz)
+        resize!(h.order, 0)
+        h.ndel = 0
+        return h
+    end
+
+    slots = zeros(Uint8,newsz)
+    keys = Array(K, newsz)
+    vals = Array(V, newsz)
+    idxs = Array(Int, newsz)
+    order = Array(Int, h.count)
+    count0 = h.count
+    count = 0
+
+    for i = 1:sz
+        if olds[i] == 0x1
+            k = oldk[i]
+            v = oldv[i]
+            idx = oldi[i]
+            index = hashindex(k, newsz)
+            while slots[index] != 0
+                index = (index & (newsz-1)) + 1
+            end
+            slots[index] = 0x1
+            keys[index] = k
+            vals[index] = v
+            idxs[index] = idx
+            order[idx] = index
+            count += 1
+
+            if h.count != count0
+                # if items are removed by finalizers, retry
+                return rehash(h, newsz)
+            end
+        end
+    end
+
+    h.slots = slots
+    h.keys = keys
+    h.vals = vals
+    h.idxs = idxs
+    h.order = order
+    h.count = count
+    h.ndel = 0
+
+    return h
+end
+
+
+function _compact_order{K,V}(h::Dict{K,V,Ordered})
+    if h.count == length(h.order)
+        return
+    end
+
+    i = 1
+    while h.order[i] > 0;  i += 1; end
+
+    j = i+1
+    while h.order[j] == 0; j += 1; end
+
+    for k = j:length(h.order)
+        idx = h.order[k]
+        if idx > 0
+            h.order[i] = idx
+            h.idxs[idx] = i
+            i += 1
+        end
+    end
+
+    resize!(h.order, h.count)
+
+    nothing
+end
+
 function sizehint(d::Dict, newsz)
     oldsz = length(d.slots)
     if newsz <= oldsz
@@ -393,6 +505,36 @@ function empty!{K,V}(h::Dict{K,V})
     h.vals = Array(V, sz)
     h.ndel = 0
     h.count = 0
+    return h
+end
+
+function empty!{K,V}(h::Dict{K,V,Ordered})
+    sz = length(h.slots)
+    fill!(h.slots, 0x0)
+    h.keys = Array(K, sz)
+    h.vals = Array(V, sz)
+    h.idxs = Array(Int, sz)
+    h.order = Array(Int, 0)
+    h.ndel = 0
+    h.count = 0
+    return h
+end
+
+function _setindex!(h::Dict, index, key, v)
+    h.slots[index] = 0x1
+    h.keys[index] = key
+    h.vals[index] = v
+    h.count += 1
+    return h
+end
+
+function _setindex!{K,V}(h::Dict{K,V,Ordered}, index, key, v)
+    h.slots[index] = 0x1
+    h.keys[index] = key
+    h.vals[index] = v
+    push!(h.order, index)
+    h.idxs[index] = length(h.order)
+    h.count += 1
     return h
 end
 
@@ -418,11 +560,7 @@ function setindex!{K,V}(h::Dict{K,V}, v, key)
     while true
         if isslotempty(h,index)
             if avail > 0; index = avail; end
-            h.slots[index] = 0x1
-            h.keys[index] = key
-            h.vals[index] = v
-            h.count += 1
-            return h
+            return _setindex!(h, index, key, v)
         end
 
         if isslotmissing(h,index)
@@ -445,11 +583,7 @@ function setindex!{K,V}(h::Dict{K,V}, v, key)
 
     if avail>0
         index = avail
-        h.slots[index] = 0x1
-        h.keys[index] = key
-        h.vals[index] = v
-        h.count += 1
-        return h
+        return _setindex!(h, index, key, v)
     end
 
     rehash(h, h.count > 64000 ? sz*2 : sz*4)
@@ -512,6 +646,17 @@ function _delete!(h::Dict, index)
     return val
 end
 
+function _delete!{K,V}(h::Dict{K,V,Ordered}, index)
+    val = h.vals[index]
+    h.slots[index] = 0x2
+    ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
+    ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, index-1)
+    h.order[h.idxs[index]] = 0
+    h.ndel += 1
+    h.count -= 1
+    return val
+end
+
 function delete!(h::Dict, key)
     index = ht_keyindex(h, key)
     index > 0 ? _delete!(h, index) : throw(KeyError(key))
@@ -530,15 +675,29 @@ function skip_deleted(h::Dict, i)
     return i
 end
 
+function skip_deleted{K,V}(h::Dict{K,V,Ordered}, i)
+    L = length(h.order)
+    while i<=L && h.order[i] == 0
+        i += 1
+    end
+    return i
+end
+
 start(t::Dict) = skip_deleted(t, 1)
 done(t::Dict, i) = done(t.vals, i)
 next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t,i+1))
 
+done{K,V}(t::Dict{K,V,Ordered}, i) = done(t.order, i)
+next{K,V}(t::Dict{K,V,Ordered}, i) = ((t.keys[t.order[i]],t.vals[t.order[i]]), skip_deleted(t,i+1))
+
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-next{T<:Dict}(v::KeyIterator{T}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
-next{T<:Dict}(v::ValueIterator{T}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
+next(v::KeyIterator{Dict}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
+next(v::ValueIterator{Dict}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
+
+next{K,V}(v::KeyIterator{Dict{K,V,Ordered}}, i) = (v.dict.keys[v.dict.order[i]], skip_deleted(v.dict,i+1))
+next{K,V}(v::ValueIterator{Dict{K,V,Ordered}}, i) = (v.dict.vals[v.dict.order[i]], skip_deleted(v.dict,i+1))
 
 # weak key dictionaries
 
@@ -577,7 +736,7 @@ function add_weak_value(t::Dict, k, v)
 end
 
 type WeakKeyDict{K,V} <: Associative{K,V}
-    ht::Dict{Any,V}
+    ht::Dict{Any,V,Nothing}
 
     WeakKeyDict() = new((Any=>V)[])
 end

@@ -1,12 +1,14 @@
-type Set{T}
-    dict::Dict{T,Nothing}
+type Set{T,O}
+    dict::Dict{T,Nothing,O}
 
-    Set() = new(Dict{T,Nothing}())
-    Set(x...) = union!(new(Dict{T,Nothing}()), x)
+    Set() = new(Dict{T,Nothing,O}())
+    Set(x...) = union!(new(Dict{T,Nothing,O}()), x)
 end
-Set() = Set{Any}()
-Set(x...) = Set{Any}(x...)
-Set{T}(x::T...) = Set{T}(x...)
+Set(x...) = Set{Any,Unordered}(x...)
+Set{T}(x::T...) = Set{T,Unordered}(x...)
+
+OrderedSet(x...) = Set{Any,Ordered}(x...)
+OrderedSet{T}(x::T...) = Set{T,Ordered}(x...)
 
 show(io::IO, s::Set) = (show(io, typeof(s)); show_comma_array(io, s,'(',')'))
 
@@ -23,7 +25,7 @@ delete!(s::Set, x, deflt) = delete!(s.dict, x, deflt)
 union!(s::Set, xs) = (for x=xs; add!(s,x); end; s)
 setdiff!(s::Set, xs) = (for x=xs; delete!(s,x,nothing); end; s)
 
-similar{T}(s::Set{T}) = Set{T}()
+similar{T,O}(s::Set{T,O}) = Set{T,O}()
 copy(s::Set) = union!(similar(s), s)
 
 empty!{T}(s::Set{T}) = (empty!(s.dict); s)
@@ -31,14 +33,15 @@ empty!{T}(s::Set{T}) = (empty!(s.dict); s)
 start(s::Set)       = start(s.dict)
 done(s::Set, state) = done(s.dict, state)
 # NOTE: manually optimized to take advantage of Dict representation
-next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict,i+1))
+next(s::Set, i)                  = (s.dict.keys[i], skip_deleted(s.dict,i+1))
+next{T}(s::Set{T,Ordered}, i)     = (s.dict.keys[s.dict.order[i]], skip_deleted(s.dict,i+1))
 
 # TODO: simplify me?
 pop!(s::Set) = (val = s.dict.keys[start(s.dict)]; delete!(s.dict, val); val)
 
 union() = Set()
 union(s::Set) = copy(s)
-function union(s::Set, sets::Set...)
+function union{T,O}(s::Set{T,O}, sets::Set...)
     U = eltype(s)
     if U != Any
         for t in sets
@@ -47,7 +50,7 @@ function union(s::Set, sets::Set...)
                 subtype(U,T) ? T : Any # TODO: tigher upper bound
         end
     end
-    u = Set{U}()
+    u = Set{U,O}()
     union!(u,s)
     for t in sets
         union!(u,t)
@@ -92,15 +95,13 @@ function issubset(l, r)
 end
 
 function unique(C)
-    out = Array(eltype(C),0)
-    seen = Set{eltype(C)}()
+    seen = Set{eltype(C),Ordered}()
     for x in C
         if !contains(seen, x)
             add!(seen, x)
-            push!(out, x)
         end
     end
-    out
+    collect(seen)
 end
 
 function filter!(f::Function, s::Set)

@@ -8,7 +8,7 @@ url(pkg::String) = readstrip("METADATA", pkg, "url")
 sha1(pkg::String, ver::VersionNumber) = readstrip("METADATA", pkg, "versions", string(ver), "sha1")
 
 function available(names=readdir("METADATA"))
-    pkgs = Dict{ByteString,Dict{VersionNumber,Available}}()
+    pkgs = (ByteString=>Dict{VersionNumber,Available})[]
     for pkg in names
         isfile("METADATA", pkg, "url") || continue
         versdir = joinpath("METADATA", pkg, "versions")
@@ -96,20 +96,20 @@ end
 requires_dict(pkg::String, avail::Dict=available(pkg)) = Reqs.parse(requires_path(pkg,avail))
 
 function installed(avail::Dict=available())
-    pkgs = Dict{ByteString,(VersionNumber,Bool)}()
+    pkgs = (ByteString=>(VersionNumber,Bool))[]
     for pkg in readdir()
         isinstalled(pkg) || continue
-        ap = get(avail,pkg,Dict{VersionNumber,Available}())
+        ap = get(avail,pkg,(VersionNumber=>Available)[])
         pkgs[pkg] = (installed_version(pkg,ap),isfixed(pkg,ap))
     end
     return pkgs
 end
 
 function fixed(avail::Dict=available(), inst::Dict=installed(avail), julia_version::VersionNumber=VERSION)
-    pkgs = Dict{ByteString,Fixed}()
+    pkgs = (ByteString=>Fixed)[]
     for (pkg,(ver,fix)) in inst
         fix || continue
-        ap = get(avail,pkg,Dict{VersionNumber,Available}())
+        ap = get(avail,pkg,(VersionNumber=>Available)[])
         pkgs[pkg] = Fixed(ver,requires_dict(pkg,ap))
     end
     pkgs["julia"] = Fixed(julia_version)
@@ -117,7 +117,7 @@ function fixed(avail::Dict=available(), inst::Dict=installed(avail), julia_versi
 end
 
 function free(inst::Dict=installed())
-    pkgs = Dict{ByteString,VersionNumber}()
+    pkgs = (ByteString=>VersionNumber)[]
     for (pkg,(ver,fix)) in inst
         fix && continue
         pkgs[pkg] = ver

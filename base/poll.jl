@@ -162,9 +162,9 @@ let
         end 
     end
     @windows_only begin
-        local fdwatcher_array = Dict{WindowsRawSocket,FDWatcher}()
+        local fdwatcher_array = (WindowsRawSocket=>FDWatcher)[]
         function fdwatcher_reinit()
-            fdwatcher_array = Dict{WindowsRawSocket,FDWatcher}()
+            fdwatcher_array = (WindowsRawSocket=>FDWatcher)[]
         end
 
         function wait(fd::RawFD; readable=false, writable=false)
