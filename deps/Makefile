@@ -761,13 +761,13 @@ ifeq ($(OPENBLAS_DEBUG), 1)
 OPENBLAS_BUILD_OPTS += DEBUG=1
 endif
 
-openblas-$(OPENBLAS_VER).tar.gz: lapack-$(LAPACK_VER).tgz
+openblas-$(OPENBLAS_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) 
 openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
-	cp lapack-$(LAPACK_VER).tgz openblas-$(OPENBLAS_VER)
+	cd openblas-$(OPENBLAS_VER)/lapack-netlib/SRC && patch < ../../../dlasd4-lapack-3.4.2.patch && patch < ../../../slasd4-lapack-3.4.2.patch
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
 	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || (echo "*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***" && false)
@@ -891,6 +891,7 @@ lapack-$(LAPACK_VER).tgz:
 	$(JLDOWNLOAD) $@ http://www.netlib.org/lapack/$@
 lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 	tar zxf $<
+	cd lapack-$(LAPACK_VER)/SRC && patch < ../../../dlasd4-lapack-3.4.2.patch && patch < ../../../slasd4-lapack-3.4.2.patch
 	touch -c $@
 ifeq ($(USE_SYSTEM_BLAS), 0)
 lapack-$(LAPACK_VER)/liblapack.a: | $(OPENBLAS_OBJ_TARGET)

@@ -1,0 +1,229 @@
+--- openblas-v0.2.8/lapack-netlib/SRC/dlasd4.f	2013-08-01 21:23:12.000000000 +0530
++++ dlasd4.f.new	2013-08-13 11:54:28.000000000 +0530
+@@ -1,4 +1,4 @@
+-*> \brief \b DLASD4 computes the square root of the i-th updated eigenvalue of a positive symmetric rank-one modification to a positive diagonal matrix. Used by dbdsdc.
++*> \brief \b SLASD4 computes the square root of the i-th updated eigenvalue of a positive symmetric rank-one modification to a positive diagonal matrix. Used by sbdsdc.
+ *
+ *  =========== DOCUMENTATION ===========
+ *
+@@ -6,26 +6,26 @@
+ *            http://www.netlib.org/lapack/explore-html/
+ *
+ *> \htmlonly
+-*> Download DLASD4 + dependencies
+-*> <a href="http://www.netlib.org/cgi-bin/netlibfiles.tgz?format=tgz&filename=/lapack/lapack_routine/dlasd4.f">
++*> Download SLASD4 + dependencies
++*> <a href="http://www.netlib.org/cgi-bin/netlibfiles.tgz?format=tgz&filename=/lapack/lapack_routine/slasd4.f">
+ *> [TGZ]</a>
+-*> <a href="http://www.netlib.org/cgi-bin/netlibfiles.zip?format=zip&filename=/lapack/lapack_routine/dlasd4.f">
++*> <a href="http://www.netlib.org/cgi-bin/netlibfiles.zip?format=zip&filename=/lapack/lapack_routine/slasd4.f">
+ *> [ZIP]</a>
+-*> <a href="http://www.netlib.org/cgi-bin/netlibfiles.txt?format=txt&filename=/lapack/lapack_routine/dlasd4.f">
++*> <a href="http://www.netlib.org/cgi-bin/netlibfiles.txt?format=txt&filename=/lapack/lapack_routine/slasd4.f">
+ *> [TXT]</a>
+ *> \endhtmlonly
+ *
+ *  Definition:
+ *  ===========
+ *
+-*       SUBROUTINE DLASD4( N, I, D, Z, DELTA, RHO, SIGMA, WORK, INFO )
++*       SUBROUTINE SLASD4( N, I, D, Z, DELTA, RHO, SIGMA, WORK, INFO )
+ *
+ *       .. Scalar Arguments ..
+ *       INTEGER            I, INFO, N
+-*       DOUBLE PRECISION   RHO, SIGMA
++*       REAL               RHO, SIGMA
+ *       ..
+ *       .. Array Arguments ..
+-*       DOUBLE PRECISION   D( * ), DELTA( * ), WORK( * ), Z( * )
++*       REAL               D( * ), DELTA( * ), WORK( * ), Z( * )
+ *       ..
+ *
+ *
+@@ -69,20 +69,20 @@
+ *>
+ *> \param[in] D
+ *> \verbatim
+-*>          D is DOUBLE PRECISION array, dimension ( N )
++*>          D is REAL array, dimension ( N )
+ *>         The original eigenvalues.  It is assumed that they are in
+ *>         order, 0 <= D(I) < D(J)  for I < J.
+ *> \endverbatim
+ *>
+ *> \param[in] Z
+ *> \verbatim
+-*>          Z is DOUBLE PRECISION array, dimension ( N )
++*>          Z is REAL array, dimension ( N )
+ *>         The components of the updating vector.
+ *> \endverbatim
+ *>
+ *> \param[out] DELTA
+ *> \verbatim
+-*>          DELTA is DOUBLE PRECISION array, dimension ( N )
++*>          DELTA is REAL array, dimension ( N )
+ *>         If N .ne. 1, DELTA contains (D(j) - sigma_I) in its  j-th
+ *>         component.  If N = 1, then DELTA(1) = 1.  The vector DELTA
+ *>         contains the information necessary to construct the
+@@ -91,19 +91,19 @@
+ *>
+ *> \param[in] RHO
+ *> \verbatim
+-*>          RHO is DOUBLE PRECISION
++*>          RHO is REAL
+ *>         The scalar in the symmetric updating formula.
+ *> \endverbatim
+ *>
+ *> \param[out] SIGMA
+ *> \verbatim
+-*>          SIGMA is DOUBLE PRECISION
++*>          SIGMA is REAL
+ *>         The computed sigma_I, the I-th updated eigenvalue.
+ *> \endverbatim
+ *>
+ *> \param[out] WORK
+ *> \verbatim
+-*>          WORK is DOUBLE PRECISION array, dimension ( N )
++*>          WORK is REAL array, dimension ( N )
+ *>         If N .ne. 1, WORK contains (D(j) + sigma_I) in its  j-th
+ *>         component.  If N = 1, then WORK( 1 ) = 1.
+ *> \endverbatim
+@@ -151,7 +151,7 @@
+ *>     at Berkeley, USA
+ *>
+ *  =====================================================================
+-      SUBROUTINE DLASD4( N, I, D, Z, DELTA, RHO, SIGMA, WORK, INFO )
++      SUBROUTINE SLASD4( N, I, D, Z, DELTA, RHO, SIGMA, WORK, INFO )
+ *
+ *  -- LAPACK auxiliary routine (version 3.4.2) --
+ *  -- LAPACK is a software package provided by Univ. of Tennessee,    --
+@@ -160,10 +160,10 @@
+ *
+ *     .. Scalar Arguments ..
+       INTEGER            I, INFO, N
+-      DOUBLE PRECISION   RHO, SIGMA
++      REAL   RHO, SIGMA
+ *     ..
+ *     .. Array Arguments ..
+-      DOUBLE PRECISION   D( * ), DELTA( * ), WORK( * ), Z( * )
++      REAL   D( * ), DELTA( * ), WORK( * ), Z( * )
+ *     ..
+ *
+ *  =====================================================================
+@@ -171,28 +171,28 @@
+ *     .. Parameters ..
+       INTEGER            MAXIT
+       PARAMETER          ( MAXIT = 400 )
+-      DOUBLE PRECISION   ZERO, ONE, TWO, THREE, FOUR, EIGHT, TEN
+-      PARAMETER          ( ZERO = 0.0D+0, ONE = 1.0D+0, TWO = 2.0D+0,
+-     $                   THREE = 3.0D+0, FOUR = 4.0D+0, EIGHT = 8.0D+0,
+-     $                   TEN = 10.0D+0 )
++      REAL               ZERO, ONE, TWO, THREE, FOUR, EIGHT, TEN
++      PARAMETER          ( ZERO = 0.0E+0, ONE = 1.0E+0, TWO = 2.0E+0,
++     $                   THREE = 3.0E+0, FOUR = 4.0E+0, EIGHT = 8.0E+0,
++     $                   TEN = 10.0E+0 )
+ *     ..
+ *     .. Local Scalars ..
+       LOGICAL            ORGATI, SWTCH, SWTCH3, GEOMAVG
+       INTEGER            II, IIM1, IIP1, IP1, ITER, J, NITER
+-      DOUBLE PRECISION   A, B, C, DELSQ, DELSQ2, SQ2, DPHI, DPSI, DTIIM,
++      REAL               A, B, C, DELSQ, DELSQ2, SQ2, DPHI, DPSI, DTIIM,
+      $                   DTIIP, DTIPSQ, DTISQ, DTNSQ, DTNSQ1, DW, EPS,
+      $                   ERRETM, ETA, PHI, PREW, PSI, RHOINV, SGLB,
+      $                   SGUB, TAU, TAU2, TEMP, TEMP1, TEMP2, W
+ *     ..
+ *     .. Local Arrays ..
+-      DOUBLE PRECISION   DD( 3 ), ZZ( 3 )
++      REAL               DD( 3 ), ZZ( 3 )
+ *     ..
+ *     .. External Subroutines ..
+-      EXTERNAL           DLAED6, DLASD5
++      EXTERNAL           SLAED6, SLASD5
+ *     ..
+ *     .. External Functions ..
+-      DOUBLE PRECISION   DLAMCH
+-      EXTERNAL           DLAMCH
++      REAL               SLAMCH
++      EXTERNAL           SLAMCH
+ *     ..
+ *     .. Intrinsic Functions ..
+       INTRINSIC          ABS, MAX, MIN, SQRT
+@@ -215,14 +215,15 @@
+          RETURN
+       END IF
+       IF( N.EQ.2 ) THEN
+-         CALL DLASD5( I, D, Z, DELTA, RHO, SIGMA, WORK )
++         CALL SLASD5( I, D, Z, DELTA, RHO, SIGMA, WORK )
+          RETURN
+       END IF
+ *
+ *     Compute machine epsilon
+ *
+-      EPS = DLAMCH( 'Epsilon' )
++      EPS = SLAMCH( 'Epsilon' )
+       RHOINV = ONE / RHO
++      TAU2= ZERO
+ *
+ *     The case I = N
+ *
+@@ -275,6 +276,7 @@
+                ELSE
+                   TAU2 = ( A+SQRT( A*A+FOUR*B*C ) ) / ( TWO*C )
+                END IF
++               TAU = TAU2 / ( D( N )+SQRT( D( N )*D( N )+TAU2 ) )
+             END IF
+ *
+ *           It can be proved that
+@@ -293,6 +295,8 @@
+             ELSE
+                TAU2 = ( A+SQRT( A*A+FOUR*B*C ) ) / ( TWO*C )
+             END IF
++            TAU = TAU2 / ( D( N )+SQRT( D( N )*D( N )+TAU2 ) )
++
+ *
+ *           It can be proved that
+ *           D(N)^2 < D(N)^2+TAU2 < SIGMA(N)^2 < D(N)^2+RHO/2
+@@ -301,7 +305,7 @@
+ *
+ *        The following TAU is to approximate SIGMA_n - D( N )
+ *
+-         TAU = TAU2 / ( D( N )+SQRT( D( N )*D( N )+TAU2 ) )
++*         TAU = TAU2 / ( D( N )+SQRT( D( N )*D( N )+TAU2 ) )
+ *
+          SIGMA = D( N ) + TAU
+          DO 30 J = 1, N
+@@ -695,11 +699,11 @@
+             DD( 1 ) = DTIIM
+             DD( 2 ) = DELTA( II )*WORK( II )
+             DD( 3 ) = DTIIP
+-            CALL DLAED6( NITER, ORGATI, C, DD, ZZ, W, ETA, INFO )
++            CALL SLAED6( NITER, ORGATI, C, DD, ZZ, W, ETA, INFO )
+ *
+             IF( INFO.NE.0 ) THEN
+ *
+-*              If INFO is not 0, i.e., DLAED6 failed, switch back 
++*              If INFO is not 0, i.e., SLAED6 failed, switch back 
+ *              to 2 pole interpolation.
+ *
+                SWTCH3 = .FALSE.
+@@ -914,11 +918,11 @@
+                DD( 1 ) = DTIIM
+                DD( 2 ) = DELTA( II )*WORK( II )
+                DD( 3 ) = DTIIP
+-               CALL DLAED6( NITER, ORGATI, C, DD, ZZ, W, ETA, INFO )
++               CALL SLAED6( NITER, ORGATI, C, DD, ZZ, W, ETA, INFO )
+ *
+                IF( INFO.NE.0 ) THEN
+ *
+-*                 If INFO is not 0, i.e., DLAED6 failed, switch 
++*                 If INFO is not 0, i.e., SLAED6 failed, switch 
+ *                 back to two pole interpolation
+ *
+                   SWTCH3 = .FALSE.
+@@ -1052,6 +1056,6 @@
+   240 CONTINUE
+       RETURN
+ *
+-*     End of DLASD4
++*     End of SLASD4
+ *
+       END
