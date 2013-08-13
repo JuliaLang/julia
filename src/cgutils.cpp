@@ -665,7 +665,7 @@ static Value *emit_tupleset(Value *tuple, Value *i, Value *x, jl_value_t *jt, jl
                 builder.CreateStore(tuple,tempSpace);
                 Value *idxs[2];
                 idxs[0] = ConstantInt::get(T_size,0);
-                idxs[1] = i;
+                idxs[1] = builder.CreateSub(i,ConstantInt::get(T_size,1));
                 builder.CreateStore(x,builder.CreateGEP(tempSpace,ArrayRef<Value*>(&idxs[0],2)));
                 ret = builder.CreateLoad(tempSpace);
             }
@@ -678,10 +678,10 @@ static Value *emit_tupleset(Value *tuple, Value *i, Value *x, jl_value_t *jt, jl
                 BasicBlock *after = BasicBlock::Create(getGlobalContext(),"after_switch",ctx->f);
                 BasicBlock *deflt = BasicBlock::Create(getGlobalContext(),"default_case",ctx->f);
                 // Create the switch
-                builder.CreateSwitch(i,deflt,n);
+                SwitchInst *sw = builder.CreateSwitch(i,deflt,n);
                 // Anything else is a bounds error
                 builder.SetInsertPoint(deflt);
-                builder.CreateCall2(jlthrow_line_func, jlboundserr_var,
+                builder.CreateCall2(jlthrow_line_func, builder.CreateLoad(jlboundserr_var),
                             ConstantInt::get(T_int32, ctx->lineno));
                 builder.CreateUnreachable();
                 // Now for the cases
@@ -691,6 +691,7 @@ static Value *emit_tupleset(Value *tuple, Value *i, Value *x, jl_value_t *jt, jl
                     Value *newAgg = builder.CreateInsertValue(tuple,x,ArrayRef<unsigned>(i-1));
                     builder.CreateStore(newAgg,ret);
                     builder.CreateBr(after);
+                    sw->addCase(ConstantInt::get((IntegerType*)T_size,i),blk);
                 }
                 builder.SetInsertPoint(after);
                 ret = builder.CreateLoad(ret);
@@ -742,7 +743,7 @@ static Value *emit_tupleref(Value *tuple, Value *i, jl_value_t *jt, jl_codectx_t
             builder.CreateStore(tuple,tempSpace);
             Value *idxs[2];
             idxs[0] = ConstantInt::get(T_size,0);
-            idxs[1] = i;
+            idxs[1] = builder.CreateSub(i,ConstantInt::get(T_size,1));
             return builder.CreateLoad(builder.CreateGEP(tempSpace,ArrayRef<Value*>(&idxs[0],2)));
         }
         else
@@ -750,22 +751,22 @@ static Value *emit_tupleref(Value *tuple, Value *i, jl_value_t *jt, jl_codectx_t
             assert(ty->isStructTy());
             StructType *st = dyn_cast<StructType>(ty);
             size_t n = st->getNumElements();
-            Value *ret = builder.CreateAlloca(jl_ppvalue_llvmt);
+            Value *ret = builder.CreateAlloca(jl_pvalue_llvmt);
             BasicBlock *after = BasicBlock::Create(getGlobalContext(),"after_switch",ctx->f);
             BasicBlock *deflt = BasicBlock::Create(getGlobalContext(),"default_case",ctx->f);
             // Create the switch
-            builder.CreateSwitch(i,deflt,n);
+            SwitchInst *sw = builder.CreateSwitch(i,deflt,n);
             // Anything else is a bounds error
             builder.SetInsertPoint(deflt);
-            jlthrow_line_func->dump();
-            builder.CreateCall2(jlthrow_line_func, jlboundserr_var,
+            builder.CreateCall2(jlthrow_line_func, builder.CreateLoad(jlboundserr_var),
                         ConstantInt::get(T_int32, ctx->lineno));
             builder.CreateUnreachable();
             // Now for the cases
             for (size_t i = 1; i <= n; ++i) {
                 BasicBlock *blk = BasicBlock::Create(getGlobalContext(),"case",ctx->f);
+                sw->addCase(ConstantInt::get((IntegerType*)T_size,i),blk);
                 builder.SetInsertPoint(blk);
-                Value *val = boxed(builder.CreateExtractValue(tuple,ArrayRef<unsigned>(i-1)),ctx,jl_tupleref(jt,i));
+                Value *val = boxed(builder.CreateExtractValue(tuple,ArrayRef<unsigned>(i-1)),ctx,jl_tupleref(jt,i-1));
                 builder.CreateStore(val,ret);
                 builder.CreateBr(after);
             }
