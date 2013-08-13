@@ -186,12 +186,13 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
             return ((jl_array_t*)v)->data;
         if (jl_is_cpointer_type(jt)) {
             jl_array_t *ar = (jl_array_t*)v;
-            void **temp=(void**)alloc_temp_arg_space(jl_array_len(ar)*sizeof(void*));
+            void **temp=(void**)alloc_temp_arg_space((1+jl_array_len(ar))*sizeof(void*));
             size_t i;
             for(i=0; i < jl_array_len(ar); i++) {
                 temp[i] = jl_value_to_pointer(jl_tparam0(jt),
                                               jl_arrayref(ar, i), argn, 0);
             }
+            temp[i] = 0;
             return temp;
         }
     }

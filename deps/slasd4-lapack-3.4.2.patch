@@ -1,0 +1,36 @@
+--- openblas-v0.2.8/lapack-netlib/SRC/slasd4.f	2013-08-01 21:23:12.000000000 +0530
++++ slasd4.f.new	2013-08-13 11:58:06.000000000 +0530
+@@ -223,6 +223,7 @@
+ *
+       EPS = SLAMCH( 'Epsilon' )
+       RHOINV = ONE / RHO
++      TAU2= ZERO
+ *
+ *     The case I = N
+ *
+@@ -275,6 +276,7 @@
+                ELSE
+                   TAU2 = ( A+SQRT( A*A+FOUR*B*C ) ) / ( TWO*C )
+                END IF
++               TAU = TAU2 / ( D( N )+SQRT( D( N )*D( N )+TAU2 ) )
+             END IF
+ *
+ *           It can be proved that
+@@ -293,6 +295,8 @@
+             ELSE
+                TAU2 = ( A+SQRT( A*A+FOUR*B*C ) ) / ( TWO*C )
+             END IF
++            TAU = TAU2 / ( D( N )+SQRT( D( N )*D( N )+TAU2 ) )
++
+ *
+ *           It can be proved that
+ *           D(N)^2 < D(N)^2+TAU2 < SIGMA(N)^2 < D(N)^2+RHO/2
+@@ -301,7 +305,7 @@
+ *
+ *        The following TAU is to approximate SIGMA_n - D( N )
+ *
+-         TAU = TAU2 / ( D( N )+SQRT( D( N )*D( N )+TAU2 ) )
++*         TAU = TAU2 / ( D( N )+SQRT( D( N )*D( N )+TAU2 ) )
+ *
+          SIGMA = D( N ) + TAU
+          DO 30 J = 1, N
