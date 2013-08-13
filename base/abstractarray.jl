@@ -931,17 +931,28 @@ function (!=)(A::AbstractArray, B::AbstractArray)
     return false
 end
 
-for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
+for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
+                   (:cumprod, :cumprod_pairwise, :*) )
+    # in-place cumsum of c = s+v(i1:n), using pairwise summation as for sum
+    @eval function ($fp)(v::AbstractVector, c::AbstractVector, s, i1, n)
+        if n < 128
+            @inbounds c[i1] = ($op)(s, v[i1])
+            for i = i1+1:i1+n-1
+                @inbounds c[i] = $(op)(c[i-1], v[i])
+            end
+        else
+            n2 = div(n,2)
+            ($fp)(v, c, s, i1, n2)
+            ($fp)(v, c, c[(i1+n2)-1], i1+n2, n-n2)
+        end
+    end
+
     @eval function ($f)(v::AbstractVector)
         n = length(v)
         c = $(op===:+ ? (:(similar(v,typeof(+zero(eltype(v)))))) :
                         (:(similar(v))))
         if n == 0; return c; end
-
-        c[1] = v[1]
-        for i=2:n
-           c[i] = ($op)(c[i-1], v[i])
-        end
+        ($fp)(v, c, $(op==:+ ? :(zero(eltype(v))) : :(one(eltype(v)))), 1, n)
         return c
     end
 
@@ -1367,17 +1378,37 @@ prod(A::AbstractArray{Bool}) =
 prod(A::AbstractArray{Bool}, region) =
     error("use all() instead of prod() for boolean arrays")
 
-function sum{T}(A::AbstractArray{T})
-    if isempty(A)
-        return zero(T)
+# Pairwise (cascade) summation of A[i1:i1+n-1], which O(log n) error growth
+# [vs O(n) for a simple loop] with negligible performance cost if
+# the base case is large enough.  See, e.g.:
+#        http://en.wikipedia.org/wiki/Pairwise_summation
+#        Higham, Nicholas J. (1993), "The accuracy of floating point
+#        summation", SIAM Journal on Scientific Computing 14 (4): 783–799.
+# In fact, the root-mean-square error growth, assuming random roundoff
+# errors, is only O(sqrt(log n)), which is nearly indistinguishable from O(1)
+# in practice.  See:
+#        Manfred Tasche and Hansmartin Zeuner, Handbook of
+#        Analytic-Computational Methods in Applied Mathematics (2000).
+function sum_pairwise(A::AbstractArray, i1,n)
+    if n < 128
+        @inbounds s = A[i1]
+        for i = i1+1:i1+n-1
+            @inbounds s += A[i]
+        end
+        return s
+    else
+        n2 = div(n,2)
+        return sum_pairwise(A, i1, n2) + sum_pairwise(A, i1+n2, n-n2)
     end
-    v = A[1]
-    for i=2:length(A)
-        @inbounds v += A[i]
-    end
-    v
 end
 
+function sum{T}(A::AbstractArray{T})
+    n = length(A)
+    n == 0 ? zero(T) : sum_pairwise(A, 1, n)
+end
+
+# Kahan (compensated) summation: O(1) error growth, at the expense
+# of a considerable increase in computational expense.
 function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
     n = length(A)
     if (n == 0)
