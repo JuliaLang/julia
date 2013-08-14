@@ -1313,70 +1313,66 @@ pmap(f) = f()
 function pmap(f, lsts...; err_retry=true, err_stop=false)
     len = length(lsts)
     np = nprocs()
-    retrycond = Condition()
 
     results = Dict{Int,Any}()
-    function setresult(idx,v)
-        results[idx] = v
-        notify(retrycond)
-    end
 
     retryqueue = {}
-    function retry(idx,v,ex)
-        push!(retryqueue, (idx,v,ex))
-        notify(retrycond)
-    end
-
     task_in_err = false
     is_task_in_error() = task_in_err
     set_task_in_error() = (task_in_err = true)
 
     nextidx = 0
     getnextidx() = (nextidx += 1)
-    getcurridx() = nextidx
 
     states = [start(lsts[idx]) for idx in 1:len]
-    function producer()
-        while true
-            if (is_task_in_error() && err_stop)     
-                break
-            elseif !isempty(retryqueue)
-                produce(shift!(retryqueue)[1:2])
-            elseif all([!done(lsts[idx],states[idx]) for idx in 1:len])
-                nxts = [next(lsts[idx],states[idx]) for idx in 1:len]
-                map(idx->states[idx]=nxts[idx][2], 1:len)
-                nxtvals = [x[1] for x in nxts]
-                produce((getnextidx(), nxtvals))
-            elseif (length(results) == getcurridx())
-                break
-            else
-                wait(retrycond)
-            end
+    function getnext_tasklet()
+        if is_task_in_error() && err_stop
+            return nothing
+        elseif all([!done(lsts[idx],states[idx]) for idx in 1:len])
+            nxts = [next(lsts[idx],states[idx]) for idx in 1:len]
+            map(idx->states[idx]=nxts[idx][2], 1:len)
+            nxtvals = [x[1] for x in nxts]
+            return (getnextidx(), nxtvals)
+            
+        elseif !isempty(retryqueue)
+            return shift!(retryqueue)
+        else    
+            return nothing
         end
     end
 
-    pt = Task(producer)
     @sync begin
         for p=1:np
             wpid = PGRP.workers[p].id
             if wpid != myid() || np == 1
                 @async begin
-                    for (idx,nxtvals) in pt
+                    tasklet = getnext_tasklet()
+                    while (tasklet != nothing)
+                        (idx, fvals) = tasklet
                         try
-                            result = remotecall_fetch(wpid, f, nxtvals...)
-                            isa(result, Exception) ? ((wpid == myid()) ? rethrow(result) : throw(result)) : setresult(idx, result)
+                            result = remotecall_fetch(wpid, f, fvals...)
+                            if isa(result, Exception) 
+                                ((wpid == myid()) ? rethrow(result) : throw(result)) 
+                            else 
+                                results[idx] = result
+                            end
                         catch ex
-                            err_retry ? retry(idx,nxtvals,ex) : setresult(idx, ex)
+                            if err_retry 
+                                push!(retryqueue, (idx,fvals, ex))
+                            else
+                                results[idx] = ex
+                            end
                             set_task_in_error()
                             break # remove this worker from accepting any more tasks 
                         end
+                        
+                        tasklet = getnext_tasklet()
                     end
                 end
             end
         end
     end
 
-    !istaskdone(pt) && throwto(pt, InterruptException())
     for failure in retryqueue
         results[failure[1]] = failure[3]
     end

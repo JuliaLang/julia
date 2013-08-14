@@ -51,6 +51,46 @@ et=toq()
 @test isready(rr1)
 @test !isready(rr3)
 
-# make sure exceptions propagate when waiting on Tasks
-# TODO: should be enabled but the error is printed by the event loop
-#@test_throws (@sync (@async error("oops")))
+
+# TODO: The below block should be always enabled but the error is printed by the event loop
+
+# Hence in the event of any relevant changes to the parallel codebase,
+# please define an ENV variable PTEST_FULL and ensure that the below block is 
+# executed successfully before committing/merging
+
+if haskey(ENV, "PTEST_FULL")
+    println("START of parallel tests that print errors")
+
+    # make sure exceptions propagate when waiting on Tasks
+    @test_throws (@sync (@async error("oops")))
+
+    # pmap tests
+    # needs at least 4 processors (which are being created above for the @parallel tests)
+    s = "a"*"bcdefghijklmnopqrstuvwxyz"^100;
+    ups = "A"*"BCDEFGHIJKLMNOPQRSTUVWXYZ"^100;
+    @test ups == bytestring(Uint8[uint8(c) for c in pmap(x->uppercase(x), s)])
+    @test ups == bytestring(Uint8[uint8(c) for c in pmap(x->uppercase(char(x)), s.data)])
+
+    # retry, on error exit
+    res = pmap(x->(x=='a') ? error("test error. don't panic.") : uppercase(x), s; err_retry=true, err_stop=true);
+    @test length(res) < length(ups)
+    @test isa(res[1], Exception)
+
+    # no retry, on error exit
+    res = pmap(x->(x=='a') ? error("test error. don't panic.") : uppercase(x), s; err_retry=false, err_stop=true);
+    @test length(res) < length(ups)
+    @test isa(res[1], Exception)
+
+    # retry, on error continue
+    res = pmap(x->iseven(myid()) ? error("test error. don't panic.") : uppercase(x), s; err_retry=true, err_stop=false);
+    @test length(res) == length(ups)
+    @test ups == bytestring(Uint8[uint8(c) for c in res])
+
+    # no retry, on error continue
+    res = pmap(x->(x=='a') ? error("test error. don't panic.") : uppercase(x), s; err_retry=false, err_stop=false);
+    @test length(res) == length(ups)
+    @test isa(res[1], Exception)
+    
+    println("END of parallel tests that print errors")
+end
+
