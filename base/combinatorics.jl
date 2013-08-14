@@ -252,109 +252,198 @@ end
 done(p::Permutations, s) = !isempty(s) && s[1] > length(p.a)
 
 
+# Integer Partitions
+
+immutable IntegerPartitions
+    n::Int
+end
+
+length(p::IntegerPartitions) = npartitions(p.n)
+
+partitions(n::Integer) = IntegerPartitions(n)
+
+start(p::IntegerPartitions) = Int[]
+done(p::IntegerPartitions, xs) = length(xs) == p.n
+next(p::IntegerPartitions, xs) = (xs = nextpartition(p.n,xs); (xs,xs))
+
+function nextpartition(n, as)
+    if isempty(as);  return Int[n];  end
+
+    xs = similar(as,0)
+    sizehint(xs,length(as)+1)
+
+    for i = 1:length(as)-1
+        if as[i+1] == 1
+            x = as[i]-1
+            push!(xs, x)
+            n -= x
+            while n > x
+                push!(xs, x)
+                n -= x
+            end
+            push!(xs, n)
+
+            return xs
+        end
+        push!(xs, as[i])
+        n -= as[i]
+    end
+    push!(xs, as[end]-1)
+    push!(xs, 1)
+
+    xs
+end
+
+const _npartitions = (Int=>Int)[]
+function npartitions(n::Int)
+    if n < 0
+        0
+    elseif n < 2
+        1
+    elseif (np = get(_npartitions, n, 0)) > 0
+        np
+    else
+        np = 0
+        sgn = 1
+        for k = 1:n
+            np += sgn * (npartitions(n-k*(3k-1)>>1) + npartitions(n-k*(3k+1)>>1))
+            sgn = -sgn
+        end
+        _npartitions[n] = np
+    end
+end
+
+
 # Algorithm H from TAoCP 7.2.1.4
 # Partition n into m parts
-function integer_partitions{T<:Integer}(n::T, m::T)
-  if n < m || m < 2
-    throw("Require n >= m >= 2!")
-  end
-  # H1
-  a = [n - m + 1, ones(T, m), -1]
-  # H2
-  while true
-    produce(a[1:m])
-    if a[2] < a[1] - 1
-      # H3
-      a[1] = a[1] - 1
-      a[2] = a[2] + 1
-      continue # to H2
-    end
-    # H4
-    j = 3
-    s = a[1] + a[2] - 1
-    if a[j] >= a[1] - 1
-      while true
-        s = s + a[j]
-        j = j + 1
-        if a[j] < a[1] - 1
-          break # end loop
-        end
-      end
-    end
-    # H5
-    if j > m 
-      break # terminate
-    end
-    x = a[j] + 1
-    a[j] = x
-    j = j - 1
-    # H6
-    while j > 1
-      a[j] = x
-      s = s - x
-      j = j - 1
-    end
-    a[1] = s
-  end
+# in colex order (lexicographic by reflected sequence)
+
+immutable FixedPartitions
+    n::Int
+    m::Int
 end
+
+length(f::FixedPartitions) = npartitions(f.n,f.m)
+
+partitions(n::Integer, m::Integer) = (@assert 2 <= m <= n; FixedPartitions(n,m))
+
+start(f::FixedPartitions) = Int[]
+done(f::FixedPartitions, s::Vector{Int}) = !isempty(s) && s[1]-1 <= s[end]
+next(f::FixedPartitions, s::Vector{Int}) = (xs = nextfixedpartition(f.n,f.m,s); (xs,xs))
+
+function nextfixedpartition(n, m, bs)
+    as = copy(bs)
+    if isempty(as)
+        # First iteration
+        as = [n-m+1, ones(Int, m-1)]
+    elseif as[2] < as[1]-1
+        # Most common iteration
+        as[1] -= 1
+        as[2] += 1
+    else
+        # Iterate
+        local j
+        s = as[1]+as[2]-1
+        for j = 3:m
+            if as[j] < as[1]-1; break; end
+            s += as[j]
+        end
+        x = as[j] += 1
+        for k = j-1:-1:2
+            as[k] = x
+            s -= x
+        end
+        as[1] = s
+    end
+
+    return as
+end
+
+const _nipartitions = ((Int,Int)=>Int)[]
+function npartitions(n::Int,m::Int)
+    if n < m || m == 0
+        0
+    elseif n == m
+        1
+    elseif (np = get(_nipartitions, (n,m), 0)) > 0
+        np
+    else
+        _nipartitions[(n,m)] = npartitions(n-1,m-1) + npartitions(n-m,m)
+    end
+end
+
 
 # Algorithm H from TAoCP 7.2.1.5
 # Set partitions
-function partitions{T}(s::AbstractVector{T})
-  n = length(s)
-  n == 0 && return
-  if n == 1
-    produce(Array{T,1}[s])
-    return
-  end
 
-  # H1
-  a = zeros(Int,n)
-  b = ones(Int,n-1)
-  m = 1
-
-  while true
-    # H2
-    # convert from restricted growth string a[1:n] to set of sets
-    temp = [ Array(T,0) for k = 1:n ]
-    for k = 1:n
-      push!(temp[a[k]+1], s[k])
-    end
-    result = Array(Array{T,1},0)
-    for arr in temp
-      if !isempty(arr)
-        push!(result, arr)
-      end
-    end
-    #produce(a[1:n]) # this is the string representing set assignment
-    produce(result)
-
-    if a[n] != m
-      # H3
-      a[n] = a[n] + 1
-      continue # to H2
-    end
-    # H4
-    j = n - 1
-    while a[j] == b[j]
-      j = j - 1
-    end
-    # H5
-    if j == 1
-      break # terminate
-    end
-    a[j] = a[j] + 1
-    # H6
-    m = b[j] + (a[j] == b[j])
-    j = j + 1
-    while j < n
-      a[j] = 0
-      b[j] = m
-      j = j + 1
-    end
-    a[n] = 0
-  end
+immutable SetPartitions{T<:AbstractVector}
+    s::T
 end
+
+length(s::SetPartitions) = npartitions(s)
+
+partitions(s::AbstractVector) = SetPartitions(s)
+
+start(p::SetPartitions) = (n = length(p.s); (zeros(Int32, n), ones(Int32, n-1), n, 1))
+done(p::SetPartitions, s) = !isempty(s) && s[1][1] > 0
+next(p::SetPartitions, s) = nextsetpartition(p.s, s...)
+
+function nextsetpartition(s::AbstractVector, a, b, n, m)
+    function makeparts(s, a, m)
+        temp = [ similar(s,0) for k = 0:m ]
+        for i = 1:n
+            push!(temp[a[i]+1], s[i])
+        end
+        filter!(x->!isempty(x), temp)
+    end
+
+    if isempty(s);  return ({s}, ([1], Int[], n, 1));  end
+
+    part = makeparts(s,a,m)
+
+    if a[end] != m
+        a[end] += 1
+    else
+        local j
+        for j = n-1:-1:1
+            if a[j] != b[j]
+                break
+            end
+        end
+        a[j] += 1
+        m = b[j] + (a[j] == b[j])
+        for k = j+1:n-1
+            a[k] = 0
+            b[k] = m
+        end
+        a[end] = 0
+    end
+
+    return (part, (a,b,n,m))
+
+end
+
+
+npartitions(p::SetPartitions) = nsetpartitions(length(p.s))
+npartitions(v::AbstractVector) = nsetpartitions(length(v))
+
+const _nsetpartitions = (Int=>Int)[]
+function nsetpartitions(n::Int)
+    if n < 0
+        0
+    elseif n < 2
+        1
+    elseif (wn = get(_nsetpartitions, n, 0)) > 0
+        wn
+    else
+        wn = 0
+        for k = 0:n-1
+            wn += binomial(n-1,k)*nsetpartitions(n-1-k)
+        end
+        _nsetpartitions[n] = wn
+    end
+end
+
 
 # For a list of integers i1, i2, i3, find the smallest 
 #     i1^n1 * i2^n2 * i3^n3 >= x
