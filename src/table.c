@@ -121,7 +121,7 @@ jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt)
 }
 
 DLLEXPORT
-jl_value_t *jl_eqtable_del(jl_array_t *h, void *key, jl_value_t *deflt)
+jl_value_t *jl_eqtable_pop(jl_array_t *h, void *key, jl_value_t *deflt)
 {
     void **bp = jl_table_peek_bp(h, key);
     if (bp == NULL || *bp == NULL)

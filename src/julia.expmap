@@ -103,10 +103,10 @@
     jl_enq_send_req;
     jl_enter_handler;
     jl_environ;
-    jl_eqtable_del;
     jl_eqtable_get;
     jl_eqtable_next;
     jl_eqtable_put;
+    jl_eqtable_pop;
     jl_errno;
     jl_errorexception_type;
     jl_exception_in_transit;

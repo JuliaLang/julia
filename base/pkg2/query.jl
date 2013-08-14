@@ -16,7 +16,7 @@ function requirements(reqs::Dict, fix::Dict)
         merge_requires!(reqs, f1.requires)
     end
     for (p,f) in fix
-        delete!(reqs, p, nothing)
+        delete!(reqs, p)
     end
     reqs
 end
@@ -24,10 +24,10 @@ end
 function dependencies(avail::Dict, fix::Dict)
     avail = deepcopy(avail)
     for (fp,fx) in fix
-        delete!(avail, fp, nothing)
+        delete!(avail, fp)
         for (ap,av) in avail, (v,a) in copy(av)
             if satisfies(fp, fx.version, a.requires)
-                delete!(a.requires, fp, nothing)
+                delete!(a.requires, fp)
             else
                 delete!(av, v)
             end
@@ -125,7 +125,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
 
         # Store all dependencies seen so far for later use
         for a in uniqdepssets, r in a.requires
-            add!(alldeps, r)
+            push!(alldeps, r)
         end
 
         # If the package has just one version, it's uninteresting
@@ -270,7 +270,7 @@ function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}
         staged_next = Set{ByteString}()
         for p in staged, (_,a) in deps[p], (rp,_) in a.requires
             if !contains(allpkgs, rp)
-                add!(staged_next, rp)
+                push!(staged_next, rp)
             end
         end
         allpkgs = union(allpkgs, staged_next)

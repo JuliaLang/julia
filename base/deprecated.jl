@@ -33,7 +33,6 @@ end
 @deprecate  insert          insert!
 @deprecate  del             delete!
 @deprecate  del_all         empty!
-@deprecate  add             add!
 @deprecate  add_each        add_each!
 @deprecate  del_each        del_each!
 @deprecate  toggle          symdiff!
@@ -223,6 +222,9 @@ export PipeString
 @deprecate finfer                     code_typed
 @deprecate disassemble(f::Function,t::Tuple)           code_llvm(f,t)
 @deprecate disassemble(f::Function,t::Tuple,asm::Bool) (asm ? code_native(f,t) : code_llvm(f,t))
+@deprecate  add(s::Set, x)                  push!(s,x)
+@deprecate  add!(s::Set, x)                 push!(s,x)
+@deprecate  delete!(d::Dict, key, default)  pop!(d, key, default)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
@@ -379,3 +381,7 @@ function addprocs_sge(np::Integer)
     error("Base.addprocs_sge is discontinued - add package ClusterManagers and then use ClusterManagers.addprocs_sge instead.")
 end
 export addprocs_sge
+
+function integer_partitions(n,m)
+    error("integer_partitions(n,m) has been renamed to partitions(n,m), and is now an iterator.  Please update your code.")
+end

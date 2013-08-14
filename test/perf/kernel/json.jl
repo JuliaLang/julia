@@ -36,7 +36,7 @@ function parse_json(strng::String)
         if next_char != ']'
             while true
                 val = parse_value()
-                add!(object, val)
+                push!(object, val)
                 if next_char() == ']'
                     break
                 end

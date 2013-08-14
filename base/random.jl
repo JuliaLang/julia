@@ -106,6 +106,7 @@ rand(::Type{Float64}) = dsfmt_gv_genrand_close_open()
 rand() = dsfmt_gv_genrand_close_open()
 
 rand(::Type{Float32}) = float32(rand())
+rand(::Type{Float16}) = float16(rand())
 
 rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
 
@@ -141,7 +142,7 @@ rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
 
 for T in (:Uint8, :Uint16, :Uint32, :Uint64, :Uint128,
           :Int8,  :Int16,  :Int32,  :Int64,  :Int128,  
-          :Float32)
+          :Float32, :Float16)
     @eval begin
         function rand!(A::Array{$T})
             for i=1:length(A)

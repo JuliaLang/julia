@@ -9,6 +9,7 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     strides::Array{Int,1}  # for accessing parent with linear indexes
     first_index::Int
 
+    # Note: no bounds-checking on construction. See issue #4044
     #linear indexing constructor (scalar)
     if N == 0 && length(I) == 1 && A <: Array
         function SubArray(p::A, i::(Int,))
@@ -71,7 +72,9 @@ function sub(A::SubArray, i::RangeIndex...)
         if isa(A.indexes[k], Int)
             newindexes[k] = A.indexes[k]
         else
-            newindexes[k] = A.indexes[k][(isa(i[j],Int) && j<=L) ? (i[j]:i[j]) : i[j]]
+            r = A.indexes[k]
+            ri = (isa(i[j],Int) && j<=L) ? (i[j]:i[j]) : i[j]
+            newindexes[k] = first(r) + (ri-1)*step(r)
             j += 1
         end
     end
@@ -95,7 +98,8 @@ function slice(A::SubArray, i::RangeIndex...)
         if isa(A.indexes[k], Int)
             newindexes[k] = A.indexes[k]
         else
-            newindexes[k] = A.indexes[k][i[j]]
+            r = A.indexes[k]
+            newindexes[k] = first(r) + (i[j]-1)*step(r)
             j += 1
         end
     end

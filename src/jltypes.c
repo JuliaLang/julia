@@ -1518,7 +1518,12 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
 
 jl_value_t *jl_apply_type(jl_value_t *tc, jl_tuple_t *params)
 {
-    return jl_apply_type_(tc, &jl_tupleref(params,0), jl_tuple_len(params));
+    // NOTE: callers are supposed to root these arguments, but there are
+    // several uses that don't, so root here just to be safe.
+    JL_GC_PUSH1(&params);
+    jl_value_t *t = jl_apply_type_(tc, &jl_tupleref(params,0), jl_tuple_len(params));
+    JL_GC_POP();
+    return t;
 }
 
 static int typekey_compare(jl_datatype_t *tt, jl_value_t **key, size_t n)
