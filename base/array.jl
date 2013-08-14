@@ -1169,7 +1169,7 @@ rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
 rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
 
 reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] for i=1:n ])
-reverse(v::StridedVector, s=1, n=length(v)) = [[v[i] for i=1:s-1], [v[n-i] for i = 0:n-s], [v[i] for i = n+1:endof(v)]]
+reverse(v::StridedVector, s, n=length(v)) = reverse!(copy(v), s, n)
 function reverse!(v::AbstractVector, s=1, n=length(v))
     r = n
     for i=s:div(s+n-1,2)
