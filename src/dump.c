@@ -25,6 +25,7 @@ static const ptrint_t LiteralVal_tag = 26;
 static const ptrint_t SmallInt64_tag = 27;
 static const ptrint_t IdTable_tag    = 28;
 static const ptrint_t Int32_tag      = 29;
+static const ptrint_t Array1d_tag    = 30;
 static const ptrint_t Null_tag         = 253;
 static const ptrint_t ShortBackRef_tag = 254;
 static const ptrint_t BackRef_tag      = 255;
@@ -262,8 +263,13 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     }
     else if (jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
-        writetag(s, (jl_value_t*)jl_array_type);
+        if (ar->ndims == 1)
+            writetag(s, (jl_value_t*)Array1d_tag);
+        else
+            writetag(s, (jl_value_t*)jl_array_type);
         jl_serialize_value(s, jl_typeof(ar));
+        if (ar->ndims != 1)
+            write_uint16(s, ar->ndims);
         for (i=0; i < ar->ndims; i++)
             jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
         if (!ar->ptrarray) {
@@ -528,9 +534,14 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, s);
         return s;
     }
-    else if (vtag == (jl_value_t*)jl_array_type) {
+    else if (vtag == (jl_value_t*)jl_array_type ||
+             vtag == (jl_value_t*)Array1d_tag) {
         jl_value_t *aty = jl_deserialize_value(s);
-        int16_t ndims = jl_unbox_long(jl_tparam1(aty));
+        int16_t ndims;
+        if (vtag == (jl_value_t*)Array1d_tag)
+            ndims = 1;
+        else
+            ndims = read_uint16(s);
         size_t *dims = alloca(ndims*sizeof(size_t));
         for(i=0; i < ndims; i++)
             dims[i] = jl_unbox_long(jl_deserialize_value(s));
@@ -824,7 +835,11 @@ jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast)
     ios_mem(&src, 0);
     ios_setbuf(&src, bytes->data, jl_array_len(bytes), 0);
     src.size = jl_array_len(bytes);
+    int en = jl_gc_is_enabled();
+    jl_gc_disable();
     jl_value_t *rt = jl_deserialize_value(&src);
+    if (en)
+        jl_gc_enable();
     tree_literal_values = NULL;
     return rt;
 }
@@ -895,7 +910,7 @@ void jl_init_serializer(void)
                      jl_expr_type, (void*)LongSymbol_tag, (void*)LongTuple_tag,
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
                      (void*)SmallInt64_tag, (void*)IdTable_tag,
-                     (void*)Int32_tag,
+                     (void*)Int32_tag, (void*)Array1d_tag,
                      jl_module_type, jl_tvar_type, jl_lambda_info_type,
 
                      jl_null, jl_false, jl_true, jl_any_type, jl_symbol("Any"),
