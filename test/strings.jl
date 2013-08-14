@@ -785,3 +785,7 @@ bin_val = hex2bytes("07bf")
 
 # issue #3710
 @test prevind(SubString("{var}",2,4),4) == 3
+
+# printf
+@test (@sprintf "%7.2f" 1.2345) == "   1.23"
+@test (@sprintf "%d" typemax(Int64)) == "9223372036854775807"

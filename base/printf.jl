@@ -529,7 +529,7 @@ end
 
 function _decode_dec(x::Unsigned)
     @_handle_zero
-    POINT[1] = i = ndigits0z(x)
+    POINT[1] = i = Base.ndigits0z(x)
     while i > 0
         DIGITS[i] = '0'+rem(x,10)
         x = div(x,10)
@@ -704,7 +704,7 @@ function _sig_dec(x::Unsigned, n::Int)
         DIGITS[1] = '0'
         return
     end
-    k = ndigits0z(x)
+    k = Base.ndigits0z(x)
     if k <= n
         POINT[1] = k
         for i = k:-1:1
