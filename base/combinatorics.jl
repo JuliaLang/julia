@@ -376,8 +376,8 @@ end
 # Algorithm H from TAoCP 7.2.1.5
 # Set partitions
 
-immutable SetPartitions{T}
-    s::AbstractVector{T}
+immutable SetPartitions{T<:AbstractVector}
+    s::T
 end
 
 length(s::SetPartitions) = npartitions(s)
@@ -388,16 +388,13 @@ start(p::SetPartitions) = (n = length(p.s); (zeros(Int32, n), ones(Int32, n-1), 
 done(p::SetPartitions, s) = !isempty(s) && s[1][1] > 0
 next(p::SetPartitions, s) = nextsetpartition(p.s, s...)
 
-function nextsetpartition(s, a, b, n, m)
+function nextsetpartition(s::AbstractVector, a, b, n, m)
     function makeparts(s, a, m)
-        part = {}
-        for i = 0:m
-            ss = s[findin(a,i)]
-            if !isempty(ss)
-                push!(part, ss)
-            end
+        temp = [ similar(s,0) for k = 0:m ]
+        for i = 1:n
+            push!(temp[a[i]+1], s[i])
         end
-        part
+        filter!(x->!isempty(x), temp)
     end
 
     if isempty(s);  return ({s}, ([1], Int[], n, 1));  end
