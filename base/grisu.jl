@@ -2,7 +2,7 @@ module Grisu
 export print_shortest
 export @grisu_ccall, NEG, DIGITS, BUFLEN, LEN, POINT
 
-import Base.show, Base.showcompact
+import Base.show, Base.print, Base.showcompact
 
 const NEG    = Array(Bool,1)
 const DIGITS = Array(Uint8,309+17)
@@ -46,11 +46,18 @@ function grisu_sig(x::Real, n::Integer)
     grisu(float64(x), PRECISION, int32(n))
 end
 
-function _show(io::IO, x::FloatingPoint, mode::Int32, n::Int)
-    if isnan(x) return write(io, isa(x,Float32) ? "NaN32" : "NaN") end
+_show(io::IO, x::FloatingPoint, mode::Int32, n::Int) =
+    _show(io, x, mode, n, "NaN", "Inf")
+_show(io::IO, x::Float32, mode::Int32, n::Int) =
+    _show(io, x, mode, n, "NaN32", "Inf32")
+_show(io::IO, x::Float16, mode::Int32, n::Int) =
+    _show(io, x, mode, n, "NaN16", "Inf16")
+
+function _show(io::IO, x::FloatingPoint, mode::Int32, n::Int, nanstr, infstr)
+    if isnan(x) return write(io, nanstr); end
     if isinf(x)
         if x < 0 write(io,'-') end
-        write(io, isa(x,Float32) ? "Inf32" : "Inf")
+        write(io, infstr)
         return
     end
     @grisu_ccall x mode n
@@ -103,6 +110,7 @@ end
 
 show(io::IO, x::Float64) = _show(io, x, SHORTEST, 0)
 show(io::IO, x::Float32) = _show(io, x, SHORTEST_SINGLE, 0)
+print(io::IO, x::Float16) = _show(io, x, SHORTEST_SINGLE, 0)
 showcompact(io::IO, x::FloatingPoint) = _show(io, x, PRECISION, 6)
 
 # normal:
@@ -114,10 +122,17 @@ showcompact(io::IO, x::FloatingPoint) = _show(io, x, PRECISION, 6)
 #   pt <= 0             ########e-###       len+k+2
 #   0 < pt              ########e###        len+k+1
 
-function _print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode::Int32)
-    if isnan(x); return write(io, isa(x,Float32) ? "NaN32" : "NaN"); end
+_print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode::Int32) =
+    _print_shortest(io, x, dot, mode, "NaN", "Inf")
+_print_shortest(io::IO, x::Float32, dot::Bool, mode::Int32) =
+    _print_shortest(io, x, dot, mode, "NaN32", "Inf32")
+_print_shortest(io::IO, x::Float16, dot::Bool, mode::Int32) =
+    _print_shortest(io, x, dot, mode, "NaN16", "Inf16")
+
+function _print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode::Int32, nanstr, infstr)
+    if isnan(x); return write(io, nanstr); end
     if x < 0 write(io,'-') end
-    if isinf(x); return write(io, isa(x,Float32) ? "Inf32" : "Inf"); end
+    if isinf(x); return write(io, infstr); end
     @grisu_ccall x mode 0
     pdigits = pointer(DIGITS)
     len = int(LEN[1])
@@ -159,6 +174,7 @@ end
 
 print_shortest(io::IO, x::Float64, dot::Bool) = _print_shortest(io, x, dot, SHORTEST)
 print_shortest(io::IO, x::Float32, dot::Bool) = _print_shortest(io, x, dot, SHORTEST_SINGLE)
+print_shortest(io::IO, x::Float16, dot::Bool=false) = _print_shortest(io, x, dot, SHORTEST_SINGLE)
 print_shortest(io::IO, x::Union(FloatingPoint,Integer)) = print_shortest(io, float(x), false)
 
 end # module

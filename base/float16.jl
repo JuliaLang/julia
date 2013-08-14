@@ -83,3 +83,5 @@ function convert(::Type{Float16}, val::Float32)
     h = basetable[i] + ((f & 0x007fffff) >> shifttable[i])
     reinterpret(Float16, uint16(h))
 end
+
+==(x::Float16, y::Float16) = float32(x) == float32(y)
