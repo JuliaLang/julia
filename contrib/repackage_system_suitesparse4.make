@@ -7,6 +7,18 @@ all: default
 
 SS_LIB = $(shell dirname $(shell find $(shell eval $(JULIAHOME)/contrib/filterArgs.sh $(LDFLAGS)) /lib /usr/lib /usr/local/lib -name libsuitesparseconfig.a 2>/dev/null | head -n 1))
 
+ifeq ($(OS),Darwin)
+ifeq ($(USE_SYSTEM_BLAS),1)
+ifeq ($(USE_SYSTEM_LAPACK),0)
+
+$(BUILD)/lib/libgfortblas.dylib:
+	make -C ../deps/ $(BUILD)/lib/libgfortblas.dylib
+
+default: $(BUILD)/lib/libgfortblas.dylib
+endif
+endif
+endif
+
 default:
 	mkdir -p $(BUILD)/$(JL_LIBDIR)
 	mkdir -p $(JULIAHOME)/deps/SuiteSparse-SYSTEM/lib
