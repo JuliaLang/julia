@@ -80,7 +80,10 @@ Library improvements
     `SymTridiagonal`, `Tridiagonal` and `Bidiagonal` matrix types
     (#2606, #2608, #2609, #2611, #2678, #2713, #2720, #2725)
 
-  * Change to `isinteger`, `isreal`, etc.: now different than Matlab/Octave (#3071).
+  * Change `integer_valued`, `real_valued`, and so on to `isinteger`,
+    `isreal`, and so on, and semantics of the later are now value-based
+    rather than type-based, unlike Matlab/Octave (#3071).  `isbool` and
+    `iscomplex` are eliminated in favor of general `iseltype` function.
 
   * Transitive comparison of floats with rationals (#3102).
 
@@ -103,6 +106,9 @@ Library improvements
 Deprecated or removed
 ---------------------
 
+  * `ComplexPair` was renamed to `Complex` and made `immutable`, and
+    `Complex128` and so on are now aliases to the new `Complex` type.
+
   * `!` was added to the name of many mutating functions, e.g., `push` was
     renamed `push!` (#907).
 
@@ -110,8 +116,60 @@ Deprecated or removed
 
   * `writeable` renamed to `writable` (#3874).
 
-  * Many others ...
+  * `logb` and `ilogb` renamed to `exponent` (#2516).
 
+  * `quote_string` renamed to `repr`.
+
+  * `safe_char`, `check_ascii`, and `check_utf8` replaced by
+    `is_valid_char`, `is_valid_ascii`, and `is_valid_utf8`,
+    respectively.
+
+  * `each_line, `each_match`, `begins_with`, `ends_with`,
+    `parse_float`, `parse_int`, and `seek_end` replaced by: `eachline`,
+    `eachmatch`, and so on (`_` was removed) (#1539).
+
+  * `parse_bin(s)` replaced by `parseint(s,2)`; `parse_oct(s)`
+    replaced by `parseint(s,8)`; `parse_hex(s)` replaced by
+    `parseint(s,16)`.
+
+  * `findn_nzs` replaced by `findnz` (#1539).
+
+  * `DivideByZeroError` replaced by `DivideError`.
+
+  * `addprocs_ssh`, `addprocs_ssh_tunnel`, and `addprocs_local`
+    replaced by `addprocs` (with keyword options).
+
+  * `remote_call`, `remote_call_fetch`, and `remote_call_wait` replaced
+    by `remotecall`, `remotecall_fetch`, and `remotecall_wait`.
+
+  * `has` replaced by `contains` for sets and by `haskey` for dictionaries.
+
+  * `diagmm` and `diagmm!` replaced by `scale` and `scale!` (#2916).
+
+  * `unsafe_ref` and `unsafe_assign` replaced by `unsafe_load` and
+    `unsafe_store!`.
+
+  * `add_each!` and `del_each!` replaced by `union!` and `setdiff!`
+
+  * `isdenormal` renamed to `issubnormal` (#3105).
+
+  * `expr` replaced by direct call to `Expr` constructor.
+
+  * `|`, `&`, `$`, `-`, and `~` for sets replaced by `union`, `intersect`
+    `symdiff`, `setdiff`, and `complement` (#3272).
+
+  * `square` function removed.
+
+  * `add` and `add!` for `Set` replaced by `push` and `push!`.
+
+  * Deprecated `ls` function in favor of `readdir` or `; ls` in the REPL.
+
+  * `start_timer` now expects arguments in units of seconds, not milliseconds.
+
+  * Shell redirection operators `|`, `>`, and `<` were eliminated in favor
+    of a new operator `|>` (#3523).
+
+  * `amap` is deprecated in favor of new `mapslices` functionality.
 
 Bugfixes
 --------
