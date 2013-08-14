@@ -6,6 +6,7 @@ export  CPU_CORES,
         ARCH,
         MACHINE,
         cpu_info,
+        cpu_summary,
         uptime,
         loadavg,
         free_memory,
@@ -48,8 +49,7 @@ CPUinfo(info::UV_cpu_info_t) = CPUinfo(bytestring(info.model), info.speed,
     info.cpu_times!user, info.cpu_times!nice, info.cpu_times!sys,
     info.cpu_times!idle, info.cpu_times!irq)
 
-show(io::IO, cpu::CPUinfo) = show(io, cpu, true, "    ")
-function show(io::IO, info::CPUinfo, header::Bool, prefix::String)
+function show(io::IO, info::CPUinfo, header::Bool=true, prefix::String="    ")
     tck = SC_CLK_TCK
     if header
         println(io, info.model, ": ")
@@ -67,7 +67,8 @@ function show(io::IO, info::CPUinfo, header::Bool, prefix::String)
         @printf io "%5d MHz  %9d  %9d  %9d  %9d  %9d ticks" info.speed info.cpu_times!user info.cpu_times!nice info.cpu_times!sys info.cpu_times!idle info.cpu_times!irq
     end
 end
-function cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
+
+function _cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
     if j-i < 9
         header = true
         for x = i:j
@@ -90,18 +91,19 @@ function cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
         show(io,summary,true,"#1-$(count) ")
     end
 end
-function show(io::IO, cpu::Array{CPUinfo})
+
+function cpu_summary(io::IO=STDOUT, cpu::Array{CPUinfo}=cpu_info())
     model = cpu[1].model
     first = 1
     for i = 2:length(cpu)
         if model != cpu[i].model
-            cpu_summary(io,cpu,first,i-1)
+            _cpu_summary(io,cpu,first,i-1)
             first = i
         end
     end
-    cpu_summary(io,cpu,first,length(cpu))
+    _cpu_summary(io,cpu,first,length(cpu))
 end
-repl_show(io::IO, cpu::Array{CPUinfo}) = show(io, cpu)
+
 function cpu_info()
     UVcpus = Array(Ptr{UV_cpu_info_t},1)
     count = Array(Int32,1)
