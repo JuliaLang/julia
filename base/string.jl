@@ -434,6 +434,7 @@ nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
 prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 
 convert{T<:String}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
+convert{T}(::Type{Ptr{T}}, s::SubString) = convert(Ptr{T}, bytestring(s))
 
 function serialize{T}(s, ss::SubString{T})
     # avoid saving a copy of the parent string, keeping the type of ss
