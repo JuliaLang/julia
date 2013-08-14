@@ -381,3 +381,7 @@ function addprocs_sge(np::Integer)
     error("Base.addprocs_sge is discontinued - add package ClusterManagers and then use ClusterManagers.addprocs_sge instead.")
 end
 export addprocs_sge
+
+function integer_partitions(n,m)
+    error("integer_partitions(n,m) has been renamed to partitions(n,m), and is now an iterator.  Please update your code.")
+end
