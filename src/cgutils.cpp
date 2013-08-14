@@ -1014,6 +1014,56 @@ static jl_value_t *static_void_instance(jl_value_t *jt)
     return tpl;
 }
 
+static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
+{
+    assert(constant != NULL);
+
+    ConstantInt *cint = dyn_cast<ConstantInt>(constant);
+    if (cint != NULL) {
+        assert(jl_is_datatype(jt));
+        return jl_new_bits((jl_datatype_t*)jt,
+            const_cast<uint64_t *>(cint->getValue().getRawData()));
+    }
+
+    ConstantFP *cfp = dyn_cast<ConstantFP>(constant);
+    if (cfp != NULL) {
+        assert(jl_is_datatype(jt));
+        return jl_new_bits((jl_datatype_t*)jt,
+            const_cast<uint64_t *>(cfp->getValueAPF().bitcastToAPInt().getRawData()));
+    }
+
+    ConstantPointerNull *cpn = dyn_cast<ConstantPointerNull>(constant);
+    if (cpn != NULL) {
+        assert(jl_is_cpointer_type(jt));
+        uint64_t val = 0;
+        return jl_new_bits((jl_datatype_t*)jt,&val);
+    } 
+
+    assert(jl_is_tuple(jt));
+
+    size_t nargs = 0;
+    ConstantArray *carr = NULL;
+    ConstantStruct *cst = NULL;
+    ConstantVector *cvec = NULL;
+    if ((carr = dyn_cast<ConstantArray>(constant)) != NULL)
+        nargs = carr->getType()->getNumElements();
+    else if((cst = dyn_cast<ConstantStruct>(constant)) != NULL)
+        nargs = cst->getType()->getNumElements();
+    else if((cvec = dyn_cast<ConstantVector>(constant)) != NULL)
+        nargs = cvec->getType()->getNumElements();
+    else
+        assert(false && "Cannot process this type of constant");
+
+    jl_value_t *tpl = (jl_value_t*)jl_alloc_tuple_uninit(nargs);
+    JL_GC_PUSH(tpl);
+    for(size_t i=0; i < nargs; i++) {
+        jl_tupleset(tpl, i, static_constant_instance(
+            constant->getAggregateElement(i),jl_tupleref(jt,i)));
+    }
+    JL_GC_POP();
+    return tpl;
+}
+
 
 static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val);
 
@@ -1046,6 +1096,12 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
     if (t == T_int1) return julia_bool(v);
     if (jt == NULL || jl_is_uniontype(jt) || jl_is_abstracttype(jt))
         jt = julia_type_of(v);
+    Constant *c = NULL;
+    if((c = dyn_cast<Constant>(v)) != NULL) {
+        jl_value_t *s = static_constant_instance(c,jt);
+        jl_add_linfo_root(ctx->linfo, s);
+        return literal_pointer_val(s);
+    }
     if jl_is_tuple(jt) {
         size_t n = jl_tuple_len(jt);
         Value *tpl = builder.CreateCall(jl_alloc_tuple_func,ConstantInt::get(T_size,n));
@@ -1091,7 +1147,6 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
     if (jb == jl_uint32_type) return builder.CreateCall(box_uint32_func, v);
     if (jb == jl_uint64_type) return builder.CreateCall(box_uint64_func, v);
     if (jb == jl_char_type)   return builder.CreateCall(box_char_func, v);
-    // TODO: skip the call for constant arguments
     if (!jl_isbits(jt)) {
         assert("Don't know how to box this type" && false);
         return NULL;
