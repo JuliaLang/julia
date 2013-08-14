@@ -125,8 +125,8 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
     if (!dt->abstract)
         write_int32(s, dt->uid);
 
-    jl_serialize_value(s, dt->name);
     jl_serialize_value(s, dt->parameters);
+    jl_serialize_value(s, dt->name);
     jl_serialize_value(s, dt->super);
     jl_serialize_value(s, dt->ctor_factory);
     jl_serialize_value(s, dt->env);
@@ -451,8 +451,8 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
         dt->uid = read_int32(s);
     else
         dt->uid = 0;
-    dt->name = (jl_typename_t*)jl_deserialize_value(s);
     dt->parameters = (jl_tuple_t*)jl_deserialize_value(s);
+    dt->name = (jl_typename_t*)jl_deserialize_value(s);
     dt->super = (jl_datatype_t*)jl_deserialize_value(s);
     dt->ctor_factory = jl_deserialize_value(s);
     dt->env = jl_deserialize_value(s);
