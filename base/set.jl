@@ -16,12 +16,13 @@ eltype{T}(s::Set{T}) = T
 
 contains(s::Set, x) = haskey(s.dict, x)
 
-add!(s::Set, x) = (s.dict[x] = nothing; s)
-delete!(s::Set, x) = (delete!(s.dict, x); x)
-delete!(s::Set, x, deflt) = delete!(s.dict, x, deflt)
+push!(s::Set, x) = (s.dict[x] = nothing; s)
+pop!(s::Set, x) = (pop!(s.dict, x); x)
+pop!(s::Set, x, deflt) = pop!(s.dict, x, deflt) == deflt ? deflt : x
+delete!(s::Set, x) = (delete!(s.dict, x); s)
 
-union!(s::Set, xs) = (for x=xs; add!(s,x); end; s)
-setdiff!(s::Set, xs) = (for x=xs; delete!(s,x,nothing); end; s)
+union!(s::Set, xs) = (for x=xs; push!(s,x); end; s)
+setdiff!(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
 
 similar{T}(s::Set{T}) = Set{T}()
 copy(s::Set) = union!(similar(s), s)
@@ -60,8 +61,9 @@ function intersect(s::Set, sets::Set...)
     i = copy(s)
     for x in s
         for t in sets
-            if !contains(t,x) & contains(i,x)
+            if !contains(t,x)
                 delete!(i,x)
+                break
             end
         end
     end
@@ -71,9 +73,7 @@ end
 function setdiff(a::Set, b::Set)
     d = copy(a)
     for x in b
-        if contains(d, x)
-            delete!(d, x)
-        end
+        delete!(d, x)
     end
     d
 end
@@ -96,7 +96,7 @@ function unique(C)
     seen = Set{eltype(C)}()
     for x in C
         if !contains(seen, x)
-            add!(seen, x)
+            push!(seen, x)
             push!(out, x)
         end
     end

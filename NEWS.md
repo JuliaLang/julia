@@ -85,7 +85,9 @@ Library improvements
 
   * `isreadable`/`iswritable` functions added for more IO types (#3872).
 
-  * `combinations` now returns an iterator instead of a task (#3989)
+  * `combinations`, `permutations`, and `partitions` now return
+    iterators instead of a task. and `integer_partitions` has been
+    renamed to `partitions` (#3989 and #4055).
 
   * Documentation for writing packages (#2714, 2769, #2791) and linear algebra
     (#2807)

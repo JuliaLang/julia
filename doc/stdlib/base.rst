@@ -575,7 +575,11 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
 .. function:: delete!(collection, key)
 
-   Delete the mapping for the given key in a collection.
+   Delete the mapping for the given key in a collection, and return the colection.
+
+.. function:: pop!(collection, key[, default])
+
+   Delete and return the mapping for ``key`` if it exists in ``collection``, otherwise return ``default``, or throw an error if default is not specified.
 
 .. function:: keys(collection)
 
@@ -3172,7 +3176,7 @@ Combinatorics
 
 .. function:: reverse(v [, start=1 [, stop=length(v) ]] )
 
-   Reverse vector ``v``, optionally from start to stop.
+   Return a copy of ``v`` reversed from start to stop.
 
 .. function:: reverse!(v [, start=1 [, stop=length(v) ]]) -> v
 
@@ -3192,21 +3196,30 @@ Combinatorics
    iterator object. Use ``collect(permutations(a,n))`` to get an array
    of all permutations.
 
-.. function:: integer_partitions(n, m)
+.. function:: partitions(n)
+
+   Generate all integer arrays that sum to ``n``. Because the number of
+   partitions can be very large, this function returns an iterator
+   object. Use ``collect(partitions(n))`` to get an array of all
+   partitions. The number of partitions to generete can be efficiently
+   computed using ``length(partitions(n))``.
+
+.. function:: partitions(n, m)
 
    Generate all arrays of ``m`` integers that sum to ``n``. Because
-   the number of partitions can be very large, this function runs inside
-   a Task to produce values on demand. Write
-   ``c = @task integer_partitions(n,m)``, then iterate ``c`` or call
-   ``consume`` on it.
+   the number of partitions can be very large, this function returns an
+   iterator object. Use ``collect(partitions(n,m))`` to get an array of
+   all partitions. The number of partitions to generete can be efficiently
+   computed using ``length(partitions(n,m))``.
 
 .. function:: partitions(array)
 
-   Generate all set partitions of the elements of an array, represented as
-   arrays of arrays. Because the number of partitions can be very large, this
-   function runs inside a Task to produce values on demand. Write
-   ``c = @task partitions(a)``, then iterate ``c`` or call ``consume`` on it.
-
+   Generate all set partitions of the elements of an array,
+   represented as arrays of arrays. Because the number of partitions
+   can be very large, this function returns an iterator object. Use
+   ``collect(partitions(array))`` to get an array of all partitions.
+   The number of partitions to generete can be efficiently
+   computed using ``length(partitions(array))``.
 
 Statistics
 ----------
