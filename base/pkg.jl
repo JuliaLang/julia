@@ -293,7 +293,7 @@ function gather_repository_data(julia_version::VersionNumber=VERSION)
         p = d[2].package
         if haskey(fixed, p)
             if !contains(d[2], Version(p, fixed[p]))
-                add!(unsatisfiable, d[1])
+                push!(unsatisfiable, d[1])
             end
             false # drop
         else
@@ -304,7 +304,7 @@ function gather_repository_data(julia_version::VersionNumber=VERSION)
         !contains(unsatisfiable, v)
     end
     pkgs = Set{String}()
-    for v in vers add!(pkgs, v.package) end
+    for v in vers; push!(pkgs, v.package); end
     filter!(deps) do d
         contains(pkgs, d[1].package) && !contains(unsatisfiable, d[1])
     end
@@ -313,7 +313,7 @@ function gather_repository_data(julia_version::VersionNumber=VERSION)
         filter!(deps) do d
             p = d[2].package
             if !contains(pkgs, p)
-                add!(unsatisfiable, d[1])
+                push!(unsatisfiable, d[1])
                 false # drop
             else
                 true # keep
@@ -326,7 +326,7 @@ function gather_repository_data(julia_version::VersionNumber=VERSION)
             !contains(unsatisfiable, v)
         end
         empty!(pkgs)
-        for v in vers add!(pkgs, v.package) end
+        for v in vers; push!(pkgs, v.package); end
         filter!(deps) do d
             contains(pkgs, d[1].package) && !contains(unsatisfiable, d[1])
         end
