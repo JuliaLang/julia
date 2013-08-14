@@ -67,6 +67,11 @@ Library improvements
 
   * MPFR-based `BigFloat` (#2814), and many new `BigFloat` operations.
 
+  * `delete!(d::Dict, key)` has now been split into separate `pop!`
+    and `delete!` variants: the former returns the deleted value and
+    behaves like the old `delete!`, and the latter returns `d` and
+    does not throw an exception if `key` was not found (#3439).
+
   * Linear-algebra factorization routines (`lu`, `chol`, etc.) now
     return `Factorization` objects (and `lud`, `chold`, etc. are
     deprecated) (#2212).
