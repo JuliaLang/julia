@@ -1036,8 +1036,6 @@ end
 typeinf(linfo,atypes::ANY,sparams::ANY) = typeinf(linfo,atypes,sparams,linfo,true)
 typeinf(linfo,atypes::ANY,sparams::ANY,def) = typeinf(linfo,atypes,sparams,def,true)
 
-ast_rettype(ast) = ast.args[3].typ
-
 CYCLE_ID = 1
 
 # def is the original unspecialized version of a method. we aggregate all
