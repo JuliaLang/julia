@@ -3185,14 +3185,16 @@ Combinatorics
    Generate all integer arrays that sum to ``n``. Because the number of
    partitions can be very large, this function returns an iterator
    object. Use ``collect(partitions(n))`` to get an array of all
-   partitions.
+   partitions. The number of partitions to generete can be efficiently
+   computed using ``length(partitions(n))``.
 
 .. function:: partitions(n, m)
 
    Generate all arrays of ``m`` integers that sum to ``n``. Because
    the number of partitions can be very large, this function returns an
    iterator object. Use ``collect(partitions(n,m))`` to get an array of
-   all partitions.
+   all partitions. The number of partitions to generete can be efficiently
+   computed using ``length(partitions(n,m))``.
 
 .. function:: partitions(array)
 
@@ -3200,26 +3202,8 @@ Combinatorics
    represented as arrays of arrays. Because the number of partitions
    can be very large, this function returns an iterator object. Use
    ``collect(partitions(array))`` to get an array of all partitions.
-
-.. function:: npartitions(n)
-
-   Calculate the number of ways of writing the integer ``n`` as a sum
-   of positive integers.
-
-.. function:: npartitions(n, m)
-
-   Calculate the number of ways of writing the integer ``n`` as a sum
-   of ``m`` positive integers.
-
-.. function:: npartitions(array)
-
-   Calculate the number of ways to partition ``array``, assuming
-   unique elements.  Equivalent to ``nsetpartitions(length(array))``
-
-.. function:: nsetpartitions(n)
-
-   Calculate the number of ways to partition a set of size ``n``.
-
+   The number of partitions to generete can be efficiently
+   computed using ``length(partitions(array))``.
 
 Statistics
 ----------
