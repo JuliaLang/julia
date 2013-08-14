@@ -60,7 +60,7 @@ end
 
 function ReqsStruct(reqs::Vector{VersionSet}, vers::Vector{Version}, deps::Vector{(Version,VersionSet)})
     pkgs = Set{String}()
-    for v in vers add!(pkgs, v.package) end
+    for v in vers; push!(pkgs, v.package); end
 
     for r in reqs
         if !contains(pkgs, r.package)
@@ -1224,7 +1224,7 @@ function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vecto
             for w in pdeps[p0], vs in w
                 p1 = pdict[vs.package]
                 if !contains(pset, p1)
-                    add!(staged_next, p1)
+                    push!(staged_next, p1)
                 end
             end
         end

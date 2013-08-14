@@ -254,13 +254,12 @@ function dequeue!(pq::PriorityQueue)
 end
 
 function dequeue!(pq::PriorityQueue, key)
-     !haskey(pq.index, key) && throw(KeyError(key))
-     idx = delete!(pq.index, key)
-     splice!(pq.xs, idx)
-     for (k,v) in pq.index
-       (v >= idx) && (pq.index[k] = (v-1))
-     end
-     key
+    idx = pop!(pq.index, key)  # throws key error if missing
+    splice!(pq.xs, idx)
+    for (k,v) in pq.index
+        (v >= idx) && (pq.index[k] = (v-1))
+    end
+    key
 end
 
 

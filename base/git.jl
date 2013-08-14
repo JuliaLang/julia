@@ -166,7 +166,7 @@ function config_sections(cfg::Dict)
     sections = Set{ByteString}()
     for (key,_) in cfg
         m = match(r"^(.+)\.", key)
-        if m != nothing add!(sections,m.captures[1]) end
+        if m != nothing; push!(sections,m.captures[1]); end
     end
     sections
 end
@@ -181,7 +181,7 @@ function merge_configs(Bc::Dict, Lc::Dict, Rc::Dict)
     for section in Bs - Ls & Rs
         filter!((k,v)->!beginswith(k,"$section."),Lc)
         filter!((k,v)->!beginswith(k,"$section."),Rc)
-        add!(deleted, section)
+        push!(deleted, section)
     end
     # merge the remaining config key-value pairs
     cfg = Dict()
