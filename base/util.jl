@@ -279,7 +279,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         print(io,           "Load Avg: ")
         print_matrix(io,    Sys.loadavg()')
         println(io          )
-        println(io,         Sys.cpu_info())
+        Sys.cpu_summary(io)
     end
     if Base.libblas_name == "libopenblas" || blas_vendor() == :openblas
         openblas_config = openblas_get_config()
