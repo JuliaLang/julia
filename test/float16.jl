@@ -19,3 +19,9 @@ g = float16(1.)
 @test f/2. === 1.
 
 @test_approx_eq sin(f) sin(2f0)
+
+@test isnan(NaN16)
+@test NaN16 != NaN16
+@test isequal(NaN16, NaN16)
+@test sprint(showcompact, NaN16) == "NaN16"
+@test sprint(showcompact, Inf16) == "Inf16"
