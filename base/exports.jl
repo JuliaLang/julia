@@ -517,6 +517,8 @@ export
     ndims,
     nnz,
     nonzeros,
+    npartitions,
+    nsetpartitions,
     nthperm!,
     nthperm,
     ones,
