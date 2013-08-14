@@ -3160,7 +3160,7 @@ Combinatorics
 
 .. function:: reverse(v [, start=1 [, stop=length(v) ]] )
 
-   Reverse vector ``v``, optionally from start to stop.
+   Return a copy of ``v`` reversed from start to stop.
 
 .. function:: reverse!(v [, start=1 [, stop=length(v) ]]) -> v
 
@@ -3180,20 +3180,45 @@ Combinatorics
    iterator object. Use ``collect(permutations(a,n))`` to get an array
    of all permutations.
 
-.. function:: integer_partitions(n, m)
+.. function:: partitions(n)
+
+   Generate all integer arrays that sum to ``n``. Because the number of
+   partitions can be very large, this function returns an iterator
+   object. Use ``collect(partitions(n))`` to get an array of all
+   partitions.
+
+.. function:: partitions(n, m)
 
    Generate all arrays of ``m`` integers that sum to ``n``. Because
-   the number of partitions can be very large, this function runs inside
-   a Task to produce values on demand. Write
-   ``c = @task integer_partitions(n,m)``, then iterate ``c`` or call
-   ``consume`` on it.
+   the number of partitions can be very large, this function returns an
+   iterator object. Use ``collect(partitions(n,m))`` to get an array of
+   all partitions.
 
 .. function:: partitions(array)
 
-   Generate all set partitions of the elements of an array, represented as
-   arrays of arrays. Because the number of partitions can be very large, this
-   function runs inside a Task to produce values on demand. Write
-   ``c = @task partitions(a)``, then iterate ``c`` or call ``consume`` on it.
+   Generate all set partitions of the elements of an array,
+   represented as arrays of arrays. Because the number of partitions
+   can be very large, this function returns an iterator object. Use
+   ``collect(partitions(array))`` to get an array of all partitions.
+
+.. function:: npartitions(n)
+
+   Calculate the number of ways of writing the integer ``n`` as a sum
+   of positive integers.
+
+.. function:: npartitions(n, m)
+
+   Calculate the number of ways of writing the integer ``n`` as a sum
+   of ``m`` positive integers.
+
+.. function:: npartitions(array)
+
+   Calculate the number of ways to partition ``array``, assuming
+   unique elements.  Equivalent to ``nsetpartitions(length(array))``
+
+.. function:: nsetpartitions(n)
+
+   Calculate the number of ways to partition a set of size ``n``.
 
 
 Statistics
