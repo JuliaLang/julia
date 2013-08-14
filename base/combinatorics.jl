@@ -48,8 +48,6 @@ function binomial{T<:Integer}(n::T, k::T)
     sgn*iround(T,x)
 end
 
-pascal(n) = [binomial(i+j-2,i-1) for i=1:n,j=1:n]
-
 ## other ordering related functions ##
 
 function shuffle!(a::AbstractVector)

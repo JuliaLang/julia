@@ -121,10 +121,6 @@ arrays
 
    UNDOCUMENTED
 
-.. function:: pascal(n)
-
-   UNDOCUMENTED
-
 .. function:: promote_shape(...)
 
    UNDOCUMENTED
@@ -140,14 +136,6 @@ arrays
 
 linear algebra
 --------------
-
-.. function:: ldltd!(A::SymTridiagonal{T<:Union(Float64,Complex{Float32},Float32,Complex{Float64})})
-
-   UNDOCUMENTED
-
-.. function:: ldltd(A::SymTridiagonal{T<:Union(Float64,Complex{Float32},Float32,Complex{Float64})})
-
-   UNDOCUMENTED
 
 .. function:: solve(...)
 
@@ -196,10 +184,6 @@ strings and text output
 
    UNDOCUMENTED
 
-.. function:: print_matrix(...)
-
-   UNDOCUMENTED
-
 .. function:: print_shortest(...)
 
    UNDOCUMENTED
@@ -229,14 +213,6 @@ strings and text output
    UNDOCUMENTED
 
 .. function:: xdump(...)
-
-   UNDOCUMENTED
-   
-.. function:: print_quoted(io, s::String)
-
-   UNDOCUMENTED
-
-.. function:: print_quoted_literal(io, s::String)
 
    UNDOCUMENTED
 

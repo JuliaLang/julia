@@ -344,7 +344,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         Ts = SymTridiagonal(d, dl)
         Fs = full(Ts)
         invFsv = Fs\v
-        Tldlt = ldltd(Ts)
+        Tldlt = Base.ldltd(Ts)
         x = Tldlt\v
         @test_approx_eq x invFsv
                                         # eigenvalues/eigenvectors of symmetric tridiagonal

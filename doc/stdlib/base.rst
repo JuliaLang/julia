@@ -980,11 +980,7 @@ Strings
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`. See also :func:`print_unescaped`.
 
-.. function:: unescape_chars(s::String, unescape::String) -> String
 
-   Bare minimum unescaping function unescapes only given characters. See also :func:`print_unescaped_chars`.
-
-      
 I/O
 ---
 
@@ -1153,10 +1149,6 @@ I/O
 .. function:: print_unescaped(io, s::String)
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`print_escaped`.
-
-.. function:: print_unescaped_chars(io, s::String, unescape::String)
-
-   Bare minimum unescaping function unescapes only given characters.
 
 
 Network I/O
