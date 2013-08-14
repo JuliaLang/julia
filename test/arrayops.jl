@@ -148,6 +148,23 @@ a = [5:8]
 @test parent(a) == a
 @test parentindexes(a) == (1:4,)
 
+# Out-of-bounds construction. See #4044
+A = rand(7,7)
+rng = 1:4
+sA = sub(A, 2, rng-1)
+@test_throws sA[1,1]
+@test sA[1,2] == A[2,1]
+sA = sub(A, 2, rng)
+B = sub(sA, 1, rng-1)
+C = sub(B, 1, rng+1)
+@test C == sA
+sA = slice(A, 2, rng-1)
+@test_throws sA[1]
+@test sA[2] == A[2,1]
+sA = slice(A, 2, rng)
+B = slice(sA, rng-1)
+C = sub(B, rng+1)
+@test C == sA
 
 # get
 let
