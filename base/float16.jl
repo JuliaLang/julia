@@ -1,8 +1,8 @@
 function convert(::Type{Float32}, val::Float16)
-    val = uint32(reinterpret(Uint16, val))
-    sign = (val & 0x8000) >> 15
-    exp  = (val & 0x7c00) >> 10
-    sig  = (val & 0x3ff) >> 0
+    ival::Uint32 = reinterpret(Uint16, val)
+    sign::Uint32 = (ival & 0x8000) >> 15
+    exp::Uint32  = (ival & 0x7c00) >> 10
+    sig::Uint32  = (ival & 0x3ff) >> 0
     ret::Uint32
 
     if exp == 0
@@ -84,4 +84,20 @@ function convert(::Type{Float16}, val::Float32)
     reinterpret(Float16, uint16(h))
 end
 
-==(x::Float16, y::Float16) = float32(x) == float32(y)
+isnan(x::Float16) = reinterpret(Uint16,x)&0x7e00 == 0x7e00
+isinf(x::Float16) = reinterpret(Uint16,x)&0x7e00 == 0x7c00
+
+function ==(x::Float16, y::Float16)
+    ix = reinterpret(Uint16,x)
+    iy = reinterpret(Uint16,y)
+    if (ix|iy)&0x7e00 == 0x7e00 #isnan(x) || isnan(y)
+        return false
+    end
+    if (ix|iy)&0x7fff == 0x0000
+        return true
+    end
+    return ix == iy
+end
+
+<(x::Float16, y::Float16) = float32(x) < float32(y)
+isless(x::Float16, y::Float16) = isless(float32(x), float32(y))
