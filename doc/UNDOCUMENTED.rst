@@ -453,19 +453,11 @@ I/O and events
 
    UNDOCUMENTED
 
-.. function:: start_timer(...)
-
-   UNDOCUMENTED
-
 .. function:: start_watching(...)
 
    UNDOCUMENTED
 
 .. function:: stop_reading(stream::AsyncStream)
-
-   UNDOCUMENTED
-
-.. function:: stop_timer(timer::TimeoutAsyncWork)
 
    UNDOCUMENTED
 
@@ -488,10 +480,6 @@ multiprocessing
 
 distributed arrays
 ------------------
-
-.. function:: localpart(d::DArray{T,N,A})
-
-   UNDOCUMENTED
 
 
 paths and file names
@@ -597,14 +585,6 @@ external processes ## TODO: whittle down these exports.
 
    UNDOCUMENTED
 
-.. function:: process_status(s::Process)
-
-   UNDOCUMENTED
-
-.. function:: process_term_signal(s::Process)
-
-   UNDOCUMENTED
-
 .. function:: spawn_nostdin(...)
 
    UNDOCUMENTED
@@ -617,19 +597,11 @@ C interface
 
    UNDOCUMENTED
 
-.. function:: disable_sigint(f::Function)
-
-   UNDOCUMENTED
-
 .. function:: dlopen_e(...)
 
    UNDOCUMENTED
 
 .. function:: pointer_from_objref(x)
-
-   UNDOCUMENTED
-
-.. function:: reenable_sigint(f::Function)
 
    UNDOCUMENTED
 

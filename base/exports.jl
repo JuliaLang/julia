@@ -101,7 +101,7 @@ export
     Symmetric,
     SymTridiagonal,
     TcpSocket,
-    TimeoutAsyncWork,
+    Timer,
     TimSort,
     TmStruct,
     Triangular,

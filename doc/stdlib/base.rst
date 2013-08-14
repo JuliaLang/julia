@@ -3776,7 +3776,7 @@ Distributed Arrays
 
    Convert a local array to distributed
 
-.. function:: localize(d)
+.. function:: localpart(d)
 
    Get the local piece of a distributed array
 
@@ -4084,6 +4084,22 @@ C Interface
    ownership of the memory, calling ``free`` on the pointer when the array is no
    longer referenced.
 
+.. function:: disable_sigint(f::Function)
+
+   Disable Ctrl-C handler during execution of a function, for calling
+   external code that is not interrupt safe. Intended to be called using ``do``
+   block syntax as follows::
+
+    disable_sigint() do
+        # interrupt-unsafe code
+        ...
+    end
+
+.. function:: reenable_sigint(f::Function)
+
+   Re-enable Ctrl-C handler during execution of a function. Temporarily
+   reverses the effect of ``disable_sigint``.
+
 .. function:: find_library(names, locations)
 
    Searches for the first library in ``names`` in the paths in the ``locations`` list, ``DL_LOAD_PATH``, or system
@@ -4331,6 +4347,26 @@ Tasks
 .. function:: sleep(seconds)
 
    Block the current task for a specified number of seconds.
+
+Events
+------
+
+.. function:: Timer(f::Function)
+
+   Create a timer to call the given callback function. The callback
+   is passed two arguments: the timer object itself, and a status code,
+   which will be 0 unless an error occurs. The timer can be started and
+   stopped with ``start_timer`` and ``stop_timer``.
+
+.. function:: start_timer(t::Timer, delay, repeat)
+
+   Start invoking the callback for a ``Timer`` after the specified initial
+   delay, and then repeating with the given interval. Times are in seconds.
+   If ``repeat`` is ``0``, the timer is only triggered once.
+
+.. function:: stop_timer(t::Timer)
+
+   Stop invoking the callback for a timer.
 
 Reflection
 ----------

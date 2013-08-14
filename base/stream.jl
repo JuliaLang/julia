@@ -392,10 +392,10 @@ type IdleAsyncWork <: AsyncWork
     end
 end
 
-type TimeoutAsyncWork <: AsyncWork
+type Timer <: AsyncWork
     handle::Ptr{Void}
     cb::Function
-    function TimeoutAsyncWork(cb::Function)
+    function Timer(cb::Function)
         this = new(c_malloc(_sizeof_uv_timer), cb)
         err = ccall(:uv_timer_init,Cint,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)
         if err != 0 
@@ -408,7 +408,7 @@ type TimeoutAsyncWork <: AsyncWork
     end
 end
 
-close(t::TimeoutAsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
+close(t::Timer) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
 function _uv_hook_close(uv::Union(AsyncStream,UVServer))
     uv.handle = 0
@@ -424,7 +424,7 @@ _uv_hook_close(uv::AsyncWork) = (uv.handle = C_NULL; nothing)
 
 # This serves as a common callback for all async classes
 function _uv_hook_asynccb(async::AsyncWork, status::Int32)
-    if isa(async, TimeoutAsyncWork)
+    if isa(async, Timer)
         if ccall(:uv_timer_get_repeat, Uint64, (Ptr{Void},), async.handle) == 0
             # timer is stopped now
             disassociate_julia_struct(async.handle) # we want gc to be able to cleanup
@@ -444,21 +444,21 @@ function _uv_hook_asynccb(async::AsyncWork, status::Int32)
     nothing
 end
 
-function start_timer(timer::TimeoutAsyncWork, timeout::Real, repeat::Real)
+function start_timer(timer::Timer, timeout::Real, repeat::Real)
     associate_julia_struct(timer.handle, timer) # we don't want gc to cleanup
     ccall(:uv_update_time,Void,(Ptr{Void},),eventloop())
     ccall(:uv_timer_start,Cint,(Ptr{Void},Ptr{Void},Uint64,Uint64),
         timer.handle, uv_jl_asynccb::Ptr{Void}, uint64(round(timeout*1000))+1, uint64(round(repeat*1000)))
 end
 
-function stop_timer(timer::TimeoutAsyncWork)
+function stop_timer(timer::Timer)
     ccall(:uv_timer_stop,Cint,(Ptr{Void},),timer.handle)
     disassociate_julia_struct(timer.handle) # we want gc to be able to cleanup
 end
 
 function sleep(sec::Real)
     w = Condition()
-    timer = TimeoutAsyncWork(function (tmr,status)
+    timer = Timer(function (tmr,status)
         if status == 0
             notify(w)
         else 
