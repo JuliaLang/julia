@@ -778,7 +778,6 @@ export
     match,
     matchall,
     ndigits,
-    ndigits0z,
     nextind,
     oct,
     parsefloat,

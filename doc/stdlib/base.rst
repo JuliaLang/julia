@@ -830,6 +830,11 @@ Strings
 
    Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``. The return value is ``0:-1`` if there is no match.
 
+.. function:: rsearch(string, chars, [start])
+
+   Like ``search``, but starts at the end and moves towards the beginning of
+   ``string``.
+
 .. function:: replace(string, pat, r[, n])
 
    Search for the given pattern ``pat``, and replace each occurrence with ``r``. If ``n`` is provided, replace at most ``n`` occurrences.  As with search, the second argument may be a single character, a vector or a set of characters, a string, or a regular expression. If ``r`` is a function, each occurrence is replaced with ``r(s)`` where ``s`` is the matched substring.
@@ -1182,6 +1187,17 @@ Text I/O
 .. function:: show(x)
 
    Write an informative text representation of a value to the current output stream. New types should overload ``show(io, x)`` where the first argument is a stream.
+
+.. function:: showcompact(x)
+
+   Show a more compact representation of a value. This is used for printing
+   array elements. If a new type has a different compact representation, it
+   should overload ``showcompact(io, x)`` where the first argument is a stream.
+
+.. function:: summary(x)
+
+   Return a string giving a brief description of a value. By default returns
+   ``string(typeof(x))``. For arrays, returns strings like "2x2 Float64 Array".
 
 .. function:: print(x)
 
@@ -4440,16 +4456,16 @@ Internals
 
 .. function:: code_lowered(f, types)
 
-   Returns the lowered code for the method matching the given generic function and type signature
+   Returns an array of lowered ASTs for the methods matching the given generic function and type signature.
 
 .. function:: code_typed(f, types)
 
-   Returns the lowered and type-inferred code for the method matching the given generic function and type signature
+   Returns an array of lowered and type-inferred ASTs for the methods matching the given generic function and type signature.
 
 .. function:: code_llvm(f, types)
 
-   Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to STDOUT
+   Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to STDOUT.
 
 .. function:: code_native(f, types)
 
-   Prints the native assembly instructions generated for running the method matching the given generic function and type signature to STDOUT
+   Prints the native assembly instructions generated for running the method matching the given generic function and type signature to STDOUT.

@@ -176,10 +176,6 @@ strings and text output
 
    UNDOCUMENTED
 
-.. function:: ndigits0z(...)
-
-   UNDOCUMENTED
-
 .. function:: print_joined(...)
 
    UNDOCUMENTED
@@ -193,18 +189,6 @@ strings and text output
    UNDOCUMENTED
 
 .. function:: repl_show(...)
-
-   UNDOCUMENTED
-
-.. function:: rsearch(...)
-
-   UNDOCUMENTED
-
-.. function:: showcompact(...)
-
-   UNDOCUMENTED
-
-.. function:: summary(...)
 
    UNDOCUMENTED
 
