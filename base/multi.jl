@@ -1593,7 +1593,7 @@ function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     end
 
     if !testcb()
-        t = TimeoutAsyncWork(timercb)
+        t = Timer(timercb)
         start_timer(t, pollint, pollint)
         ret = fetch(done)
         stop_timer(t)
