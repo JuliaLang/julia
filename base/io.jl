@@ -171,7 +171,7 @@ readchomp(x) = chomp!(readall(x))
 function readbytes!(s::IO, b::AbstractArray{Uint8}, nb=length(b))
     olb = lb = length(b)
     nr = 0
-    while !eof(s) && nr < nb
+    while nr < nb && !eof(s)
         a = read(s, Uint8)
         nr += 1
         if nr > lb
