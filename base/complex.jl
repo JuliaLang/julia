@@ -7,9 +7,11 @@ Complex(x::Real) = Complex(x, zero(x))
 
 typealias Complex128 Complex{Float64}
 typealias Complex64  Complex{Float32}
+typealias Complex32  Complex{Float16}
 
 sizeof(::Type{Complex128}) = 16
 sizeof(::Type{Complex64}) = 8
+sizeof(::Type{Complex32}) = 4
 
 real(z::Complex) = z.re
 imag(z::Complex) = z.im
@@ -41,6 +43,9 @@ complex128(z) = complex128(real(z), imag(z))
 complex64(r::Float32, i::Float32) = Complex{Float32}(r, i)
 complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
 complex64(z) = complex64(real(z), imag(z))
+complex32(r::Float16, i::Float16) = Complex{Float16}(r, i)
+complex32(r::Real, i::Real) = complex32(float16(r),float16(i))
+complex32(z) = complex32(real(z), imag(z))
 
 for fn in _numeric_conversion_func_names
     @eval $fn(z::Complex) = complex($fn(real(z)),$fn(imag(z)))

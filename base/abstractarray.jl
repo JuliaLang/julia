@@ -18,6 +18,7 @@ isreal{T<:Real,n}(x::AbstractArray{T,n}) = true
 isfloat64(x::AbstractArray) = all(isfloat64,x)
 isfloat64{T<:Float64,n}(x::AbstractArray{T,n}) = true
 isfloat64{T<:Float32,n}(x::AbstractArray{T,n}) = true
+isfloat64{T<:Float16,n}(x::AbstractArray{T,n}) = true
 ndims{T,n}(::AbstractArray{T,n}) = n
 ndims{T,n}(::Type{AbstractArray{T,n}}) = n
 ndims{T<:AbstractArray}(::Type{T}) = ndims(super(T))
@@ -219,7 +220,8 @@ end
 bool(x::AbstractArray{Bool}) = x
 bool(x::AbstractArray) = copy!(similar(x,Bool), x)
 
-for (f,t) in ((:float32,    Float32),
+for (f,t) in ((:float16,    Float16),
+              (:float32,    Float32),
               (:float64,    Float64),
               (:complex64,  Complex64),
               (:complex128, Complex128))
