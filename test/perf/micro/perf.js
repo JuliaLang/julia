@@ -370,19 +370,42 @@
         return v;
     }
 
+    // Transpose mxn matrix.
+    function mattransp(A, m, n) {
+        var i, j, T;
+        T = new Float64Array(m * n);
+
+        for (i = 0; i < m; ++i) {
+            for (j = 0; j < n; ++j) {
+                T[j * m + i] = A[i * n + j];
+            }
+        }
+
+        return T;
+    }
+
     function matmul(A,B,m,l,n) {
         var C, i, j, k, total;
         C = new Array(m*n);
         i = 0;
         j = 0;
         k = 0;
+
+        // Use the transpose of B so that
+        // during the matrix multiplication
+        // we access consecutive memory locations.
+        // This is a fairer comparison of JS
+        // with the other languages which call on
+        // custom multiplication routines, which
+        // likely make use of such aligned memory.
+        B = mattransp(B,l,n);
         
         for (i = 0; i < m; i++) {
             for (j = 0; j < n; j++) {
-                total = 0;
+                total = 0.0;
                 
                 for (k = 0; k < l; k++) {
-                    total += A[i*l+k]*B[k*n+j];
+                    total += A[i*l+k]*B[j*l+k];
                 }
                 
                 C[i*n+j] = total;

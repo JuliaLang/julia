@@ -61,6 +61,12 @@ endif
 ifneq (,$(findstring MINGW,$(BUILD_OS)))
 override BUILD_OS := WINNT
 endif
+ifneq (,$(findstring MSYS,$(OS)))
+override OS := WINNT
+endif
+ifneq (,$(findstring MSYS,$(BUILD_OS)))
+override BUILD_OS := WINNT
+endif
 
 ifeq ($(OS), WINNT)
 fPIC = 
