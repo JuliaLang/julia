@@ -298,8 +298,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         end
         println(io          )
         println(io,         "Package Directory: ", Pkg.dir())
-        println(io,         "Packages Installed:")
-        Pkg2.status(io       )
+        Pkg.status(io)
     end
 end
 versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
