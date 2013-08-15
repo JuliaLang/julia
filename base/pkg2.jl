@@ -54,7 +54,7 @@ status(io::IO=STDOUT) = Dir.cd() do
     instd = Read.installed()
     println(io, "Required packages:")
     for pkg in sort!([keys(reqs)...])
-        ver,fix = delete!(instd,pkg)
+        ver,fix = pop!(instd,pkg)
         status(io,pkg,ver,fix)
     end
     println(io, "Additional packages:")
