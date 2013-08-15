@@ -35,15 +35,18 @@ New library functions
 
   * Sampling profiler (#2597).
 
+  * Functions for examining stages of the compiler's output:
+    `code_lowered`, `code_typed`, `code_llvm`, and `code_native`
+
   * Multimedia I/O API (display, writemime, etcetera) (#3932).
 
-  * Sort API changes (#3665 and others).
+  * MPFR-based `BigFloat` (#2814), and many new `BigFloat` operations.
 
   * New half-precision IEEE floating-point type, `Float16` (#3467).
 
-  * `mapslices` (#2204)
+  * `methodswith` shows all methods with an argument of specific type.
 
-  * `varm`, `stdm` (#2265)
+  * `mapslices` provides a general way to perform operations on slices of arrays  (#2204)
 
   * `Collections.PriorityQueue` type and `Collections.heap` functions (#2920).
 
@@ -51,31 +54,36 @@ New library functions
 
   * `erfinv` and `erfcinv` functions (#2987).
 
+  * `varm`, `stdm` (#2265)
+
+  * `logdet` (#3070)
+
   * names for C-compatible types: `Cchar`, `Clong`, etc (#2370).
 
   * `unsafe_pointer_to_objref` (#2468) and `pointer_from_objref` (#2515)
 
-  * Other new functions: `readandwrite`, `versioninfo`, `methodswith`, `logdet`
+  * `readandwrite` for external processes
 
-  * `readbytes` and `readbytes!` functions (#3878).
+  * I/O functions: `readbytes` and `readbytes!` functions (#3878).
 
   * `flush_cstdio` function (#3949).
+
+  * ClusterManager makes it possible to support different types of compute clusters (#3649, #4014).
 
   * `rmprocs` for removing processors from a parallel computing session. The
     system can also tolerate to some extent processors that die unexpectedly
     (#3050).
 
-  * `interrupt` for interrupting worker processes
+  * `interrupt` for interrupting worker processes (#3819).
 
   * `Condition` type with `wait` and `notify` functions for synchronizing `Task`s
 
-  * Functions for examining stages of the compiler's output:
-    `code_lowered`, `code_typed`, `code_llvm`, and `code_native`
+  * `versioninfo` provides detailed version information
 
 Library improvements
 --------------------
 
-  * MPFR-based `BigFloat` (#2814), and many new `BigFloat` operations.
+  * Sort API updates (#3665).
 
   * `delete!(d::Dict, key)` has now been split into separate `pop!`
     and `delete!` variants: the former returns the deleted value and
@@ -85,6 +93,9 @@ Library improvements
   * Linear-algebra factorization routines (`lu`, `chol`, etc.) now
     return `Factorization` objects (and `lud`, `chold`, etc. are
     deprecated) (#2212).
+
+  * A number of improvements to sparse matrix capabilities and sparse
+    linear algebra.
 
   * More linear algebra fixes and eigensolver hooks for
     `SymTridiagonal`, `Tridiagonal` and `Bidiagonal` matrix types
@@ -115,8 +126,6 @@ Library improvements
     (#2807)
 
   * Support optional RTLD flags in `dlopen` (#2380)
-
-  * Support for starting processes via custom cluster managers
 
   * Options in `pmap` for retrying or ignoring failed tasks
 
@@ -190,7 +199,7 @@ Deprecated or removed
 
   * `amap` is deprecated in favor of new `mapslices` functionality.
 
-Bugfixes
---------
+Bugfixes and performance updates
+--------------------------------
 
 Too numerous to mention.
