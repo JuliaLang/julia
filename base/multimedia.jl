@@ -1,7 +1,7 @@
 module Multimedia
 
 export Display, display, pushdisplay, popdisplay, displayable, redisplay,
-   MIME, @MIME, writemime, reprmime, stringmime, istext,
+   MIME, @MIME, @MIME_str, writemime, reprmime, stringmime, istext,
    mimewritable, TextDisplay, reinit_displays
 
 ###########################################################################
@@ -18,17 +18,20 @@ string{mime}(::MIME{mime}) = string(mime)
 
 # needs to be a macro so that we can use ::@mime(s) in type declarations
 macro MIME(s)
-    quote
-        MIME{symbol($s)}
+    if isa(s,String)
+        :(MIME{$(Expr(:quote, symbol(s)))})
+    else
+        :(MIME{symbol($s)})
     end
+end
+
+macro MIME_str(s)
+    :(MIME{$(Expr(:quote, symbol(s)))})
 end
 
 ###########################################################################
 # For any type T one can define writemime(io, ::@MIME(mime), x::T) = ...
 # in order to provide a way to export T as a given mime type.
-
-# We provide a fallback text/plain representation of any type:
-writemime(io, ::@MIME("text/plain"), x) = repl_show(io, x)
 
 mimewritable{mime}(::MIME{mime}, T::Type) =
   method_exists(writemime, (IO, MIME{mime}, T))

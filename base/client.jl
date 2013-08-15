@@ -71,7 +71,7 @@ display_error(er) = display_error(er, {})
 function display_error(er, bt)
     with_output_color(:red, STDERR) do io
         print(io, "ERROR: ")
-        error_show(io, er, bt)
+        show_error(io, er, bt)
         println(io)
     end
 end
@@ -94,7 +94,7 @@ function eval_user_input(ast::ANY, show_value)
                     if have_color
                         print(answer_color())
                     end
-                    try repl_show(value)
+                    try display(value)
                     catch err
                         println(STDERR, "Error showing value of type ", typeof(value), ":")
                         rethrow(err)

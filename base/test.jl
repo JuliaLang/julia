@@ -21,12 +21,12 @@ default_handler(r::Success) = nothing
 default_handler(r::Failure) = error("test failed: $(r.expr)")
 default_handler(r::Error)   = rethrow(r)
 
-import Base.error_show
+import Base.show_error
 
-error_show(io::IO, r::Error) = error_show(io, r, {})
-function error_show(io::IO, r::Error, bt)
+show_error(io::IO, r::Error) = show_error(io, r, {})
+function show_error(io::IO, r::Error, bt)
     println(io, "test error during $(r.expr)")
-    error_show(io, r.err, r.backtrace)
+    show_error(io, r.err, r.backtrace)
 end
 
 const handlers = [default_handler]

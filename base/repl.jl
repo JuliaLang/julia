@@ -1,37 +1,47 @@
-# called to show a REPL result
-repl_show(v::ANY) = repl_show(STDOUT, v)
-function repl_show(io::IO, v::ANY)
-    if !(isa(v,Function) && isgeneric(v))
-        if isa(v,AbstractVector) && !isa(v,Ranges)
-            print(io, summary(v))
-            if !isempty(v)
-                println(io, ":")
-                print_matrix(io, v)
-            end
-        else
-            show(io, v)
+# fallback text/plain representation of any type:
+writemime(io, ::MIME"text/plain", x) = show(io, x)
+
+function writemime(io, ::MIME"text/plain", v::Function)
+    if isgeneric(v)
+        show_method_table(io, methods(v), 5)
+    else
+        show(io, v)
+    end
+end
+
+function writemime(io, ::MIME"text/plain", v::AbstractVector)
+    if isa(v, Ranges)
+        show(io, v)
+    else
+        print(io, summary(v))
+        if !isempty(v)
+            println(io, ":")
+            print_matrix(io, v)
         end
     end
-    if isa(v,DataType)
-        methods(v)  # force constructor creation
-        if isgeneric(v)
-            if v === v.name.primary
-                name = string(v.name.name)
-            else
-                name = repr(v)
-            end
-            print(io, "  (use methods($name) to see constructors)")
+end
+
+function writemime(io, ::MIME"text/plain", v::DataType)
+    show(io, v)
+    methods(v)  # force constructor creation
+    if isgeneric(v)
+        if v === v.name.primary
+            name = string(v.name.name)
+        else
+            name = repr(v)
         end
-    elseif isgeneric(v)
-        show_method_table(io, methods(v), 5)
+        print(io, "  (use methods($name) to see constructors)")
     end
 end
 
 # showing exception objects as descriptive error messages
 
-error_show(io::IO, e) = show(io, e)
+show_error(io::IO, e) = show(io, e)
 
-function error_show(io::IO, e::TypeError)
+# deprecated, but not exported
+const error_show = show_error
+
+function show_error(io::IO, e::TypeError)
     ctx = isempty(e.context) ? "" : "in $(e.context), "
     if e.expected === Bool
         print(io, "type: non-boolean ($(typeof(e.got))) ",
@@ -48,30 +58,30 @@ function error_show(io::IO, e::TypeError)
     end
 end
 
-function error_show(io::IO, e, bt)
+function show_error(io::IO, e, bt)
     try
-        error_show(io, e)
+        show_error(io, e)
     finally 
         show_backtrace(io, bt)
     end
 end
 
-error_show(io::IO, e::LoadError) = error_show(io, e, {})
-function error_show(io::IO, e::LoadError, bt)
-    error_show(io, e.error, bt)
+show_error(io::IO, e::LoadError) = show_error(io, e, {})
+function show_error(io::IO, e::LoadError, bt)
+    show_error(io, e.error, bt)
     print(io, "\nat $(e.file):$(e.line)")
 end
 
-error_show(io::IO, e::SystemError) = print(io, "$(e.prefix): $(strerror(e.errnum))")
-error_show(io::IO, ::DivideError) = print(io, "integer division error")
-error_show(io::IO, ::StackOverflowError) = print(io, "stack overflow")
-error_show(io::IO, ::UndefRefError) = print(io, "access to undefined reference")
-error_show(io::IO, ::EOFError) = print(io, "read: end of file")
-error_show(io::IO, e::ErrorException) = print(io, e.msg)
-error_show(io::IO, e::KeyError) = print(io, "key not found: $(e.key)")
-error_show(io::IO, e::InterruptException) = print(io, "interrupt")
+show_error(io::IO, e::SystemError) = print(io, "$(e.prefix): $(strerror(e.errnum))")
+show_error(io::IO, ::DivideError) = print(io, "integer division error")
+show_error(io::IO, ::StackOverflowError) = print(io, "stack overflow")
+show_error(io::IO, ::UndefRefError) = print(io, "access to undefined reference")
+show_error(io::IO, ::EOFError) = print(io, "read: end of file")
+show_error(io::IO, e::ErrorException) = print(io, e.msg)
+show_error(io::IO, e::KeyError) = print(io, "key not found: $(e.key)")
+show_error(io::IO, e::InterruptException) = print(io, "interrupt")
 
-function error_show(io::IO, e::MethodError)
+function show_error(io::IO, e::MethodError)
     name = e.f.env.name
     if is(e.f,convert) && length(e.args)==2
         print(io, "no method $(name)(Type{$(e.args[1])},$(typeof(e.args[2])))")

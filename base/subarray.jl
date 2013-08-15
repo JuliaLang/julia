@@ -363,6 +363,3 @@ function pointer(s::SubArray, is::(Int...))
     end
     return pointer(s.parent, index)
 end
-
-summary(s::SubArray) =
-    string(dims2string(size(s)), " SubArray of ", summary(s.parent))
