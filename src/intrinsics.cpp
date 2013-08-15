@@ -177,9 +177,34 @@ static Type *jl_llvmtuple_eltype(Type *tuple, size_t i)
         assert(false);
     return ety;
 }
+
+static size_t jl_llvmtuple_nargs(Type *tuple)
+{
+    size_t n = 0;
+    if (tuple->isStructTy())
+        n = dyn_cast<StructType>(tuple)->getNumElements();
+    else if(tuple->isArrayTy())
+        n = dyn_cast<ArrayType>(tuple)->getNumElements();
+    else if(tuple->isVectorTy())
+        n = dyn_cast<VectorType>(tuple)->getNumElements();
+    else
+        assert(false);
+    return n;
+}
+
+static Value *ghostValue(jl_value_t *ty);
+
 // emit code to unpack a raw value from a box
 static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
 {
+    if (x == NULL) {
+        if (to == T_void) {
+            if (jt != NULL)
+                return ghostValue(jt);
+            return NULL;
+        }
+        return UndefValue::get(to);
+    }
     Type *ty = x->getType();
     if (ty != jl_pvalue_llvmt) {
         // bools are stored internally as int8 (for now)
