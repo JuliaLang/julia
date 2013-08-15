@@ -2414,13 +2414,28 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
 
 // --- allocating local variables ---
 
+static bool jltupleisbits(jl_value_t *jt, bool allow_unsized = true)
+{
+    if (!jl_is_tuple(jt))
+        return jl_isbits(jt) && (allow_unsized || 
+            ((jl_is_bitstype(jt) && jl_datatype_size(jt) > 0) || 
+                (jl_is_datatype(jt) && jl_tuple_len(((jl_datatype_t*)jt)->names)>0)));
+    size_t ntypes = jl_tuple_len(jt);
+    if (ntypes == 0)
+        return allow_unsized;
+    for (size_t i = 0; i < ntypes; ++i)
+        if (!jltupleisbits(jl_tupleref(jt,i),allow_unsized))
+            return false;
+    return true; 
+}
+
 static bool store_unboxed_p(jl_sym_t *s, jl_codectx_t *ctx)
 {
     jl_varinfo_t &vi = ctx->vars[s];
     jl_value_t *jt = vi.declType;
     // only store a variable unboxed if type inference has run, which
     // checks that the variable is not referenced undefined.
-    return (ctx->linfo->inferred && jl_isbits(jt) &&
+    return (ctx->linfo->inferred && jltupleisbits(jt,false) &&
             ((jl_datatype_t*)jt)->size > 0 &&
             // don't unbox intrinsics, since inference depends on their having
             // stable addresses for table lookup.
@@ -2432,8 +2447,8 @@ static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
     jl_varinfo_t &vi = ctx->vars[s];
     jl_value_t *jt = vi.declType;
     Value *lv = NULL;
-    Type *vtype=NULL;
-    if (store_unboxed_p(s, ctx))
+    Type *vtype = NULL;
+    if(store_unboxed_p(s,ctx) && s != ctx->vaName)
         vtype = julia_type_to_llvm(jt);
     if (vtype != T_void)
     {
@@ -2578,17 +2593,6 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
             instList.insertAfter(argTempi, after);
         }
     }
-}
-
-static bool jltupleisbits(jl_value_t *jt)
-{
-    if (!jl_is_tuple(jt))
-        return jl_isbits(jt);
-    size_t ntypes = jl_tuple_len(jt);
-    for (size_t i = 0; i < ntypes; ++i) 
-        if (!jltupleisbits(jl_tupleref(jt,i)))
-            return false;
-    return true; 
 }
 
 // generate a julia-callable function that calls f (AKA lam)
@@ -3111,6 +3115,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             }
             else if (dyn_cast<GetElementPtrInst>(lv) != NULL)
                 builder.CreateStore(boxed(theArg,&ctx), lv);
+            else if (dyn_cast<AllocaInst>(lv)->getAllocatedType() == jl_pvalue_llvmt)
+                builder.CreateStore(theArg,lv);
             else
                 builder.CreateStore(emit_unbox(dyn_cast<AllocaInst>(lv)->getAllocatedType(),
                                                theArg,
@@ -3132,19 +3138,26 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         if (!vi.escapes && !vi.isAssigned) {
             ctx.vaStack = true;
         }
-        else {
+        else if(!vi.isGhost) {
             // restarg = jl_f_tuple(NULL, &args[nreq], nargs-nreq)
-            Value *restTuple =
-                builder.CreateCall3(jltuple_func, V_null,
-                                    builder.CreateGEP(argArray,
-                                                      ConstantInt::get(T_size,nreq)),
-                                    builder.CreateSub(argCount,
-                                                      ConstantInt::get(T_int32,nreq)));
             Value *lv = vi.memvalue;
-            if (isBoxed(argname, &ctx))
-                builder.CreateStore(builder.CreateCall(jlbox_func, restTuple), lv);
-            else
-                builder.CreateStore(restTuple, lv);
+            if (dyn_cast<GetElementPtrInst>(lv) != NULL || dyn_cast<AllocaInst>(lv)->getAllocatedType() == jl_pvalue_llvmt)
+            {
+                Value *restTuple =
+                    builder.CreateCall3(jltuple_func, V_null,
+                                        builder.CreateGEP(argArray,
+                                                          ConstantInt::get(T_size,nreq)),
+                                        builder.CreateSub(argCount,
+                                                          ConstantInt::get(T_int32,nreq)));
+                if (isBoxed(argname, &ctx))
+                    builder.CreateStore(builder.CreateCall(jlbox_func, restTuple), lv);
+                else
+                    builder.CreateStore(restTuple, lv);
+            } else {
+                // TODO: Perhaps allow this in the future, but for now sice varargs are always unspecialized
+                // we don't
+                assert(false);
+            }
         }
     }
 

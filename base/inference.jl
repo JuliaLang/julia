@@ -2070,7 +2070,7 @@ function inlining_pass(e::Expr, sv, ast)
 end
 
 function add_variable(ast, name, typ)
-    vinf = {name,typ,2}
+    vinf = {name,typ,18}
     locllist = ast.args[2][1]::Array{Any,1}
     vinflist = ast.args[2][2]::Array{Any,1}
     push!(locllist, name)
