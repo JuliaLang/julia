@@ -14,7 +14,7 @@ export  CPU_CORES,
         shlib_ext
 
 import ..Base: WORD_SIZE, OS_NAME, ARCH, MACHINE
-import ..Base: show, repl_show
+import ..Base: show
 
 function init()
     # set CPU core count
