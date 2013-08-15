@@ -58,6 +58,7 @@ char * dirname(char *);
 #endif
 
 //#define MEMDEBUG
+//#define MEMDEBUG2
 
 #include "libsupport.h"
 #include "flisp.h"
@@ -361,10 +362,15 @@ static value_t mk_cons(void)
 {
     cons_t *c;
 
+#ifdef MEMDEBUG2
+    c = (cons_t*)((void**)malloc(3*sizeof(void*)) + 1);
+    ((void**)c)[-1] = 0;
+#else
     if (__unlikely(curheap > lim))
         gc(0);
     c = (cons_t*)curheap;
     curheap += sizeof(cons_t);
+#endif
     return tagptr(c, TAG_CONS);
 }
 
@@ -374,6 +380,10 @@ static value_t *alloc_words(int n)
 
     assert(n > 0);
     n = LLT_ALIGN(n, 2);   // only allocate multiples of 2 words
+#ifdef MEMDEBUG2
+    first = (value_t*)malloc((n+1)*sizeof(value_t)) + 1;
+    first[-1] = 0;
+#else
     if (__unlikely((value_t*)curheap > ((value_t*)lim)+2-n)) {
         gc(0);
         while ((value_t*)curheap > ((value_t*)lim)+2-n) {
@@ -382,16 +392,28 @@ static value_t *alloc_words(int n)
     }
     first = (value_t*)curheap;
     curheap += (n*sizeof(value_t));
+#endif
     return first;
 }
 
 // allocate n consecutive conses
+#ifndef MEMDEBUG2
 #define cons_reserve(n) tagptr(alloc_words((n)*2), TAG_CONS)
+#endif
 
+#ifndef MEMDEBUG2
 #define cons_index(c)  (((cons_t*)ptr(c))-((cons_t*)fromspace))
+#endif
+
+#ifndef MEMDEBUG2
 #define ismarked(c)    bitvector_get(consflags, cons_index(c))
 #define mark_cons(c)   bitvector_set(consflags, cons_index(c), 1)
 #define unmark_cons(c) bitvector_set(consflags, cons_index(c), 0)
+#else
+#define ismarked(c)    (((void**)ptr(c))[-1]!=((void*)0))
+#define mark_cons(c)   ((((void**)ptr(c))[-1])=((void*)1))
+#define unmark_cons(c) ((((void**)ptr(c))[-1])=((void*)0))
+#endif
 
 static value_t the_empty_vector;
 
@@ -546,6 +568,9 @@ static value_t memory_exception_value;
 
 void gc(int mustgrow)
 {
+#ifdef MEMDEBUG2
+    assert(0);
+#endif
     static int grew = 0;
     void *temp;
     uint32_t i, f, top;
@@ -716,6 +741,16 @@ value_t fl_listn(size_t n, ...)
         value_t a = va_arg(ap, value_t);
         PUSH(a);
     }
+#ifdef MEMDEBUG2
+    si = SP-1;
+    value_t l = NIL;
+    for(i=0; i < n; i++) {
+        l = fl_cons(Stack[si--], l);
+    }
+    POPN(n);
+    va_end(ap);
+    return l;
+#else
     cons_t *c = (cons_t*)alloc_words(n*2);
     cons_t *l = c;
     for(i=0; i < n; i++) {
@@ -724,14 +759,17 @@ value_t fl_listn(size_t n, ...)
         c++;
     }
     (c-1)->cdr = NIL;
-
     POPN(n);
     va_end(ap);
     return tagptr(l, TAG_CONS);
+#endif
 }
 
 value_t fl_list2(value_t a, value_t b)
 {
+#ifdef MEMDEBUG2
+    return fl_cons(a, fl_cons(b, NIL));
+#else
     PUSH(a);
     PUSH(b);
     cons_t *c = (cons_t*)alloc_words(4);
@@ -742,6 +780,7 @@ value_t fl_list2(value_t a, value_t b)
     c[1].car = b;
     c[1].cdr = NIL;
     return tagptr(c, TAG_CONS);
+#endif
 }
 
 value_t fl_cons(value_t a, value_t b)
@@ -779,8 +818,30 @@ int fl_isnumber(value_t v)
 static value_t _list(value_t *args, uint32_t nargs, int star)
 {
     cons_t *c;
-    uint32_t i;
+    int i;
     value_t v;
+#ifdef MEMDEBUG2
+    value_t n;
+    i = nargs-1;
+    if (star) {
+        n = mk_cons();
+        c = (cons_t*)ptr(n);
+        c->car = args[i-1];
+        c->cdr = args[i];
+        i -= 2;
+        v = n;
+    }
+    else {
+        v = NIL;
+    }
+    for(; i >= 0; i--) {
+        n = mk_cons();
+        c = (cons_t*)ptr(n);
+        c->car = args[i];
+        c->cdr = v;
+        v = n;
+    }
+#else
     v = cons_reserve(nargs);
     c = (cons_t*)ptr(v);
     for(i=0; i < nargs; i++) {
@@ -792,6 +853,7 @@ static value_t _list(value_t *args, uint32_t nargs, int star)
         (c-2)->cdr = (c-1)->car;
     else
         (c-1)->cdr = NIL;
+#endif
     return v;
 }
 
@@ -1294,10 +1356,14 @@ static value_t apply_cl(uint32_t nargs)
             Stack[SP-1] = (isvector(Stack[SP-1]) ? FL_T : FL_F); NEXT_OP;
 
         OP(OP_CONS)
+#ifdef MEMDEBUG2
+            c = (cons_t*)ptr(mk_cons());
+#else
             if (curheap > lim)
                 gc(0);
             c = (cons_t*)curheap;
             curheap += sizeof(cons_t);
+#endif
             c->car = Stack[SP-2];
             c->cdr = Stack[SP-1];
             Stack[SP-2] = tagptr(c, TAG_CONS);
@@ -1759,10 +1825,14 @@ static value_t apply_cl(uint32_t nargs)
             else {
                 PUSH(Stack[bp]); // env has already been captured; share
             }
+#ifdef MEMDEBUG2
+            pv = alloc_words(4);
+#else
             if (curheap > lim-2)
                 gc(0);
             pv = (value_t*)curheap;
             curheap += (4*sizeof(value_t));
+#endif
             e = Stack[SP-2];  // closure to copy
             assert(isfunction(e));
             pv[0] = ((value_t*)ptr(e))[0];
@@ -2139,7 +2209,13 @@ value_t fl_append(value_t *args, u_int32_t nargs)
                 first = lst;
             else
                 cdr_(lastcons) = lst;
+#ifdef MEMDEBUG2
+            lastcons = lst;
+            while (cdr_(lastcons) != NIL)
+                lastcons = cdr_(lastcons);
+#else
             lastcons = tagptr((((cons_t*)curheap)-1), TAG_CONS);
+#endif
         }
         else if (lst != NIL) {
             type_error("append", "cons", lst);
