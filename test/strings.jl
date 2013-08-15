@@ -787,5 +787,39 @@ bin_val = hex2bytes("07bf")
 @test prevind(SubString("{var}",2,4),4) == 3
 
 # printf
-@test (@sprintf "%7.2f" 1.2345) == "   1.23"
+# int
 @test (@sprintf "%d" typemax(Int64)) == "9223372036854775807"
+@test (@sprintf "%i" 42) == "42"
+@test (@sprintf "%u" 42) == "42"
+@test (@sprintf "Test: %i" 42) == "Test: 42"
+@test (@sprintf "%#x" 42) == "0x2a"
+@test (@sprintf "%#o" 42) == "052"
+@test (@sprintf "%X" 42) == "2A"
+@test (@sprintf "%X" 42) == "2A"
+@test (@sprintf "% i" 42) == " 42"
+@test (@sprintf "%+i" 42) == "+42"
+@test (@sprintf "%4i" 42) == "  42"
+@test (@sprintf "%-4i" 42) == "42  "
+# float
+@test (@sprintf "%7.2f" 1.2345) == "   1.23"
+@test (@sprintf "%-7.2f" 1.2345) == "1.23   "
+@test (@sprintf "%07.2f" 1.2345) == "0001.23"
+@test (@sprintf "%.0f" 1.2345) == "1"
+@test (@sprintf "%#.0f" 1.2345) == "1."
+# Inf / NaN handling
+@test (@sprintf "%f" Inf) == "Inf"
+@test (@sprintf "%f" NaN) == "NaN"
+# scientific notation
+@test (@sprintf "%.4e" 1.2345) == "1.2345e+00"
+@test (@sprintf "%.0e" 3e142) == "3e+142"
+@test (@sprintf "%#.0e" 3e142) == "3.e+142"
+# chars
+@test (@sprintf "%c" 65) == "A"
+@test (@sprintf "%c" 'A') == "A"
+@test (@sprintf "%c" 248) == "ø"
+@test (@sprintf "%c" 'ø') == "ø"
+# strings
+@test (@sprintf "%s" "test") == "test"
+@test (@sprintf "%s" "tést") == "tést"
+# reasonably complex
+@test (@sprintf "Test: %s%c%C%c%#-.0f." "t" 65 66 67 -42) == "Test: tABC-42.."
