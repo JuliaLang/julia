@@ -61,6 +61,16 @@ New library functions
 
   * `flush_cstdio` function (#3949).
 
+  * `rmprocs` for removing processors from a parallel computing session. The
+    system can also tolerate to some extent processors that die unexpectedly
+    (#3050).
+
+  * `interrupt` for interrupting worker processes
+
+  * `Condition` type with `wait` and `notify` functions for synchronizing `Task`s
+
+  * Functions for examining stages of the compiler's output:
+    `code_lowered`, `code_typed`, `code_llvm`, and `code_native`
 
 Library improvements
 --------------------
@@ -91,6 +101,10 @@ Library improvements
 
   * `sum` and `cumsum` now use pairwise summation for better accuracy (#4039).
 
+  * Dot operators (`.+`, `.*` etc.) now broadcast singleton dimensions of
+    array arguments. This behavior can be applied to any function using
+    `broadcast(f, ...)`.
+
   * `isreadable`/`iswritable` functions added for more IO types (#3872).
 
   * `combinations`, `permutations`, and `partitions` now return
@@ -102,6 +116,9 @@ Library improvements
 
   * Support optional RTLD flags in `dlopen` (#2380)
 
+  * Support for starting processes via custom cluster managers
+
+  * Options in `pmap` for retrying or ignoring failed tasks
 
 Deprecated or removed
 ---------------------
@@ -160,7 +177,9 @@ Deprecated or removed
 
   * `square` function removed.
 
-  * `add` and `add!` for `Set` replaced by `push` and `push!`.
+  * `pascal` function removed.
+
+  * `add` and `add!` for `Set` replaced by `push!`.
 
   * Deprecated `ls` function in favor of `readdir` or `; ls` in the REPL.
 

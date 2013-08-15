@@ -345,7 +345,6 @@ export
     int64,
     int8,
     integer,
-    integer_partitions,
     inv,
     invdigamma,
     invmod,
