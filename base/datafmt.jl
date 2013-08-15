@@ -197,9 +197,10 @@ readcsv(io, T::Type; opts...) = readdlm(io, ',', T; opts...)
 # todo: keyword argument for # of digits to print
 writedlm_cell(io::IO, elt::FloatingPoint) = print_shortest(io, elt)
 writedlm_cell(io::IO, elt) = print(io, elt)
-function writedlm(io::IO, a::Matrix, dlm::Char)
+function writedlm(io::IO, a::Union(AbstractMatrix,AbstractVector), dlm::Char)
     pb = PipeBuffer()
-    nr, nc = size(a)
+    nr = size(a,1)
+    nc = size(a,2)
     for i = 1:nr
         for j = 1:nc
             writedlm_cell(pb, a[i,j])
@@ -211,9 +212,7 @@ function writedlm(io::IO, a::Matrix, dlm::Char)
     nothing
 end
 
-writedlm(io::IO, a::Vector, dlm::Char) = writedlm(io, reshape(a,length(a),1), dlm)
-
-function writedlm(fname::String, a::Union(Vector,Matrix), dlm::Char)
+function writedlm(fname::String, a::Union(AbstractVector,AbstractMatrix), dlm::Char)
     open(fname, "w") do io
         writedlm(io, a, dlm)
     end
@@ -221,3 +220,6 @@ end
 
 writedlm(io, a) = writedlm(io, a, '\t')
 writecsv(io, a) = writedlm(io, a, ',')
+
+writemime(io::IO, ::@MIME("text/csv"), a::Union(AbstractVector,AbstractMatrix)) = writedlm(io, a, ',')
+writemime(io::IO, ::@MIME("text/tab-separated-values"), a::Union(AbstractVector,AbstractMatrix)) = writedlm(io, a, '\t')
