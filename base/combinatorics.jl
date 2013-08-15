@@ -380,7 +380,7 @@ immutable SetPartitions{T<:AbstractVector}
     s::T
 end
 
-length(s::SetPartitions) = npartitions(s)
+length(p::SetPartitions) = nsetpartitions(length(p.s))
 
 partitions(s::AbstractVector) = SetPartitions(s)
 
@@ -423,9 +423,6 @@ function nextsetpartition(s::AbstractVector, a, b, n, m)
 
 end
 
-
-npartitions(p::SetPartitions) = nsetpartitions(length(p.s))
-npartitions(v::AbstractVector) = nsetpartitions(length(v))
 
 const _nsetpartitions = (Int=>Int)[]
 function nsetpartitions(n::Int)
