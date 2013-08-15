@@ -385,3 +385,4 @@ export addprocs_sge
 function integer_partitions(n,m)
     error("integer_partitions(n,m) has been renamed to partitions(n,m), and is now an iterator.  Please update your code.")
 end
+export integer_partitions
