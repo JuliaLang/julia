@@ -610,16 +610,16 @@ dump(io::IO, x::DataType) = dump(io, x, 5, "")
 dump(io::IO, x::TypeVar, n::Int, indent) = println(io, x.name)
 
 
-showall(x) = showall(STDOUT::IO, x)
+#showall(x) = showall(STDOUT::IO, x)
 
-function showall{T}(io::IO, a::AbstractArray{T,1})
-    if is(T,Any)
-        opn = '{'; cls = '}'
-    else
-        opn = '['; cls = ']';
-    end
-    show_comma_array(io, a, opn, cls)
-end
+#function showall{T}(io::IO, a::AbstractArray{T,1})
+#    if is(T,Any)
+#        opn = '{'; cls = '}'
+#    else
+#        opn = '['; cls = ']';
+#    end
+#    show_comma_array(io, a, opn, cls)
+#end
 
 alignment(x::Any) = (0, length(sprint(showcompact, x)))
 alignment(x::Number) = (length(sprint(showcompact, x)), 0)
@@ -800,8 +800,8 @@ dims2string(d) = length(d) == 0 ? "0-dimensional" :
                  length(d) == 1 ? "$(d[1])-element" :
                  join(map(string,d), 'x')
 
-summary{T}(a::AbstractArray{T}) =
-    string(dims2string(size(a)), " ", T, " ", typeof(a).name)
+summary(a::AbstractArray) =
+    string(dims2string(size(a)), " ", typeof(a))
 
 function show_nd(io::IO, a::AbstractArray)
     if isempty(a)
@@ -869,33 +869,33 @@ function show(io::IO, X::AbstractArray)
     end
 end
 
-function showall(io::IO, X::AbstractMatrix)
-    print(io, summary(X))
-    if !isempty(X)
-        println(io, ":")
-        print_matrix(io, X, typemax(Int64), typemax(Int64))
-    end
-end
+# function showall(io::IO, X::AbstractMatrix)
+#     print(io, summary(X))
+#     if !isempty(X)
+#         println(io, ":")
+#         print_matrix(io, X, typemax(Int64), typemax(Int64))
+#     end
+# end
 
-function showall(io::IO, a::AbstractArray)
-    print(io, summary(a))
-    if isempty(a)
-        return
-    end
-    println(io, ":")
-    tail = size(a)[3:]
-    nd = ndims(a)-2
-    function print_slice(io, idxs...)
-        print(io, "[:, :, ")
-        for i = 1:(nd-1); print(io, "$(idxs[i]), "); end
-        println(io, idxs[end], "] =")
-        slice = a[:,:,idxs...]
-        print_matrix(io, reshape(slice, size(slice,1), size(slice,2)),
-                     typemax(Int64), typemax(Int64))
-        print(io, idxs == tail ? "" : "\n\n")
-    end
-    cartesianmap(print_slice, tail)
-end
+# function showall(io::IO, a::AbstractArray)
+#     print(io, summary(a))
+#     if isempty(a)
+#         return
+#     end
+#     println(io, ":")
+#     tail = size(a)[3:]
+#     nd = ndims(a)-2
+#     function print_slice(io, idxs...)
+#         print(io, "[:, :, ")
+#         for i = 1:(nd-1); print(io, "$(idxs[i]), "); end
+#         println(io, idxs[end], "] =")
+#         slice = a[:,:,idxs...]
+#         print_matrix(io, reshape(slice, size(slice,1), size(slice,2)),
+#                      typemax(Int64), typemax(Int64))
+#         print(io, idxs == tail ? "" : "\n\n")
+#     end
+#     cartesianmap(print_slice, tail)
+# end
 
 function show_vector(io::IO, v, opn, cls)
     show_delim_array(io, v, opn, ",", cls, false)
@@ -905,9 +905,6 @@ show(io::IO, v::AbstractVector{Any}) = show_vector(io, v, "{", "}")
 show(io::IO, v::AbstractVector)      = show_vector(io, v, "[", "]")
 
 # printing BitArrays
-
-summary(a::BitArray) =
-    string(dims2string(size(a)), " ", typeof(a).name)
 
 # (following functions not exported - mainly intended for debug)
 
