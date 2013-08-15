@@ -260,7 +260,10 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
         if (bt == NULL || !jl_is_bitstype(bt)) {
             // TODO: make sure this code is valid; hopefully it is
             // unreachable but it should still be well-formed.
-            return emit_error("auto_unbox: unable to determine argument type", ctx);
+            emit_error("auto_unbox: unable to determine argument type", ctx);
+            // This isn't correct but probably most likely to cause
+            // the least amount of trouble
+            return UndefValue::get(T_int64);
         }
     }
     Type *to = julia_type_to_llvm(bt);
@@ -598,7 +601,8 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
                         builder.CreateBitCast(thePtr, jl_ppvalue_llvmt),
                         im1));
         if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety)) {
-            return emit_error("pointerref: invalid pointer type", ctx);
+            emit_error("pointerref: invalid pointer type", ctx);
+            return NULL;
         }
         uint64_t size = ((jl_datatype_t*)ety)->size;
         Value *strct =
@@ -627,7 +631,8 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
         jl_error("pointerset: invalid pointer");
     jl_value_t *xty = expr_type(x, ctx);    
     if (!jl_subtype(xty, ety, 0)) {
-        return emit_error("pointerset: type mismatch in assign", ctx);
+        emit_error("pointerset: type mismatch in assign", ctx);
+        return NULL;
     }
     if ((jl_datatype_t*)expr_type(i, ctx) != jl_long_type)
         jl_error("pointerset: invalid index type");
@@ -636,7 +641,8 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
     Value *thePtr = auto_unbox(e,ctx);
     if (!jl_isbits(ety) && ety != (jl_value_t*)jl_any_type) {
         if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety)) {
-            return emit_error("pointerset: invalid pointer type", ctx);
+            emit_error("pointerset: invalid pointer type", ctx);
+            return NULL;
         }
         Value *val = emit_expr(x,ctx,true,true);
         assert(val->getType() == jl_pvalue_llvmt); //Boxed
