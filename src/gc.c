@@ -10,7 +10,7 @@
 
 // with MEMDEBUG, every object is allocated explicitly with malloc, and
 // filled with 0xbb before being freed.
-#define MEMDEBUG
+//#define MEMDEBUG
 
 // MEMPROFILE prints pool summary statistics after every GC
 //#define MEMPROFILE
