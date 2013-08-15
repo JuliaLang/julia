@@ -1232,9 +1232,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
             if (tp0 == jl_bottom_type) {
                 emit_expr(args[1], ctx);
-                Value *v = emit_error("reached code declared unreachable", ctx);
+                emit_error("reached code declared unreachable", ctx);
                 JL_GC_POP();
-                return v;
+                return NULL;
             }
             if (!jl_is_tuple(tp0) && jl_is_leaf_type(tp0)) {
                 Value *arg1 = emit_expr(args[1], ctx);

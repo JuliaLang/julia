@@ -324,13 +324,12 @@ static void just_emit_error(const std::string &txt, jl_codectx_t *ctx)
                                          ArrayRef<Value*>(zeros)));
 }
 
-static Value *emit_error(const std::string &txt, jl_codectx_t *ctx)
+static void emit_error(const std::string &txt, jl_codectx_t *ctx)
 {
     just_emit_error(txt, ctx);
-    Value *v = builder.CreateUnreachable();
+    builder.CreateUnreachable();
     BasicBlock *cont = BasicBlock::Create(getGlobalContext(),"after_error",ctx->f);
     builder.SetInsertPoint(cont);
-    return v;
 }
 
 static void error_unless(Value *cond, const std::string &msg, jl_codectx_t *ctx)
@@ -1006,7 +1005,7 @@ static jl_value_t *static_void_instance(jl_value_t *jt)
         return (jl_value_t*)jl_null;
     size_t nargs = jl_tuple_len(jt);
     jl_value_t *tpl = (jl_value_t*)jl_alloc_tuple_uninit(nargs);
-    JL_GC_PUSH(tpl);
+    JL_GC_PUSH1(&tpl);
     for(size_t i=0; i < nargs; i++) {
         jl_tupleset(tpl, i, static_void_instance(jl_tupleref(jt,i)));
     }
@@ -1055,7 +1054,7 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
         assert(false && "Cannot process this type of constant");
 
     jl_value_t *tpl = (jl_value_t*)jl_alloc_tuple_uninit(nargs);
-    JL_GC_PUSH(tpl);
+    JL_GC_PUSH1(&tpl);
     for(size_t i=0; i < nargs; i++) {
         jl_tupleset(tpl, i, static_constant_instance(
             constant->getAggregateElement(i),jl_tupleref(jt,i)));
