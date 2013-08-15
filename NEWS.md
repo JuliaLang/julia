@@ -116,11 +116,15 @@ Library improvements
     array arguments. This behavior can be applied to any function using
     `broadcast(f, ...)`.
 
-  * `isreadable`/`iswritable` functions added for more IO types (#3872).
-
   * `combinations`, `permutations`, and `partitions` now return
     iterators instead of a task. and `integer_partitions` has been
     renamed to `partitions` (#3989 and #4055).
+
+  * `isreadable`/`iswritable` functions added for more IO types (#3872).
+
+  * Much faster and improved `readdlm` and `writedlm` (#3350, #3468, #3483).
+
+  * Faster `matchall` (#3719), and a number of string and regex improvements.
 
   * Documentation for writing packages (#2714, 2769, #2791) and linear algebra
     (#2807)
