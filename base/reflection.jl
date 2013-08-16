@@ -74,7 +74,31 @@ function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 
 code_lowered(f::Function,t::Tuple) = map(m->uncompressed_ast(m.func.code), methods(f,t))
 methods(f::ANY,t::ANY) = map(m->m[3], _methods(f,t,-1))::Array{Any,1}
-_methods(f::ANY,t::ANY,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
+_methods(f::ANY,t::ANY,lim) = _methods(f,{(t::Tuple)...},length(t::Tuple),lim,{})
+function _methods(f::ANY,t::Array,i,lim::Integer,matching::Array{Any,1})
+    if i == 0
+        new = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, tuple(t...), lim)
+        if new === false
+            return false
+        end
+        append!(matching, new::Array{Any,1})
+    else
+        ti = t[i]
+        if isa(ti, UnionType)
+            for ty in (ti::UnionType).types
+                t[i] = ty
+                if _methods(f,t,i-1,lim,matching) === false
+                    t[i] = ty
+                    return false
+                end
+            end
+            t[i] = ti
+        else
+            return _methods(f,t,i-1,lim,matching)
+        end
+    end
+    matching
+end
 
 function methods(f::Function)
     if !isgeneric(f)
