@@ -263,13 +263,16 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     }
     else if (jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
-        if (ar->ndims == 1)
+        if (ar->ndims == 1 && ar->elsize < 128) {
             writetag(s, (jl_value_t*)Array1d_tag);
-        else
+            write_uint8(s, (ar->ptrarray<<7) | (ar->elsize & 0x7f));
+        }
+        else {
             writetag(s, (jl_value_t*)jl_array_type);
-        jl_serialize_value(s, jl_typeof(ar));
-        if (ar->ndims != 1)
             write_uint16(s, ar->ndims);
+            write_uint16(s, (ar->ptrarray<<15) | (ar->elsize & 0x7fff));
+        }
+        jl_serialize_value(s, jl_typeof(ar));
         for (i=0; i < ar->ndims; i++)
             jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
         if (!ar->ptrarray) {
@@ -536,16 +539,25 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
     }
     else if (vtag == (jl_value_t*)jl_array_type ||
              vtag == (jl_value_t*)Array1d_tag) {
-        jl_value_t *aty = jl_deserialize_value(s);
         int16_t ndims;
-        if (vtag == (jl_value_t*)Array1d_tag)
+        int isunboxed, elsize;
+        if (vtag == (jl_value_t*)Array1d_tag) {
             ndims = 1;
-        else
+            elsize = read_uint8(s);
+            isunboxed = !(elsize>>7);
+            elsize = elsize&0x7f;
+        }
+        else {
             ndims = read_uint16(s);
+            elsize = read_uint16(s);
+            isunboxed = !(elsize>>15);
+            elsize = elsize&0x7fff;
+        }
+        jl_value_t *aty = jl_deserialize_value(s);
         size_t *dims = alloca(ndims*sizeof(size_t));
         for(i=0; i < ndims; i++)
             dims[i] = jl_unbox_long(jl_deserialize_value(s));
-        jl_array_t *a = jl_new_array_((jl_value_t*)aty, ndims, dims);
+        jl_array_t *a = jl_new_array_for_deserialization((jl_value_t*)aty, ndims, dims, isunboxed, elsize);
         if (usetable)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (jl_value_t*)a);
         if (!a->ptrarray) {
