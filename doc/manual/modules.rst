@@ -109,7 +109,9 @@ contain ``using Base``, since this is needed in the vast majority of cases.
 Default top-level definitions and bare modules
 ----------------------------------------------
 
-In addition to ``using Base``, a module automatically contains a definition
+In addition to ``using Base``, all operators are explicitly imported,
+since one typically wants to extend operators rather than creating entirely
+new definitions of them. A module also automatically contains a definition
 of the ``eval`` function, which evaluates expressions within the context of
 that module.
 
@@ -118,10 +120,16 @@ keyword ``baremodule`` instead. In terms of ``baremodule``, a standard
 ``module`` looks like this::
 
     baremodule Mod
+
     using Base
+
+    importall Base.Operators
+
     eval(x) = Core.eval(Mod, x)
     eval(m,x) = Core.eval(m, x)
+
     ...
+
     end
 
 

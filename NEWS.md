@@ -64,7 +64,7 @@ New library functions
 
   * `readandwrite` for external processes
 
-  * I/O functions: `readbytes` and `readbytes!` functions (#3878).
+  * I/O functions `readbytes` and `readbytes!` (#3878).
 
   * `flush_cstdio` function (#3949).
 
