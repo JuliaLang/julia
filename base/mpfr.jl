@@ -11,8 +11,8 @@ export
 
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1,
-        bessely, bessely0, bessely1, ceil, cmp, convert, copysign, beta, exp, 
-        exp2, exponent, factorial, floor, hypot, isinteger, iround, isfinite,
+        bessely, bessely0, bessely1, ceil, cmp, convert, copysign, exp, exp2,
+        exponent, factorial, floor, hypot, isinteger, iround, isfinite,
         isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf, nextfloat,
         prevfloat, promote_rule, rem, round, show, showcompact, sum, sqrt,
         string, trunc, get_precision, exp10, expm1, gamma, lgamma, digamma,
@@ -558,18 +558,6 @@ function lgamma(x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_lgamma,:libmpfr), Cint, (Ptr{BigFloat}, Ptr{Cint}, Ptr{BigFloat}, Int32), &z, lgamma_signp, &x, ROUNDING_MODE[end])
     return z
-end
-
-# Beta function
-function beta(x::BigFloat, w::BigFloat)
-    sign = 1
-    yx = lgamma(x)
-    sign *= lgamma_signp[1]
-    yw = lgamma(w)
-    sign *= lgamma_signp[1]
-    yxw = lgamma(x+w)
-    sign *= lgamma_signp[1]
-    return sign*exp(yx + yw - yxw)
 end
 
 function atan2(y::BigFloat, x::BigFloat)
