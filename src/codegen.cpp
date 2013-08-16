@@ -809,7 +809,7 @@ static bool is_getfield_nonallocating(jl_datatype_t *ty, jl_value_t *fld)
     if (jl_is_quotenode(fld) && jl_is_symbol(jl_fieldref(fld,0))) {
         name = (jl_sym_t*)jl_fieldref(fld,0);
     }
-    for(int i=0; i < jl_tuple_len(ty->types); i++) {
+    for(size_t i=0; i < jl_tuple_len(ty->types); i++) {
         if (!(ty->fields[i].isptr ||
               (name && name != (jl_sym_t*)jl_tupleref(ty->names,i)))) {
             return false;

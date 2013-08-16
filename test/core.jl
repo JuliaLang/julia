@@ -898,3 +898,19 @@ function f3821()
     [x for x in p]
 end
 @test isa(f3821(), Array)
+
+# issue #4075
+immutable Foo4075
+    x::Int64
+    y::Float64
+end
+
+function foo4075(f::Foo4075, s::Symbol)
+    x = getfield(f,s)
+    gc()
+    x
+end
+
+@test isa(foo4075(Foo4075(1,2.0),:y), Float64)
+# very likely to segfault the second time if this is broken
+@test isa(foo4075(Foo4075(1,2.0),:y), Float64)
