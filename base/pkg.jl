@@ -113,10 +113,17 @@ release(pkg::String; force::Bool=false) = Dir.cd() do
     ispath(pkg,".git") || error("$pkg is not a git repo")
     avail = Dir.cd(Read.available)
     haskey(avail,pkg) || error("$pkg is not registered")
-    ver = max(keys(avail[pkg]))
-    sha1 = avail[pkg][ver].sha1
+    force || Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
     info("Releasing $pkg...")
-    checkout(pkg,sha1,force)
+    avail = avail[pkg]
+    vers = sort!([keys(avail)...], rev=true)
+    for ver in vers
+        sha1 = avail[ver].sha1
+        Git.iscommit(sha1, dir=pkg) || continue
+        return checkout(pkg,sha1,force)
+    end
+    Write.update(pkg,vers[1])
+    resolve()
 end
 
 update() = Dir.cd() do
