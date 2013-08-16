@@ -693,6 +693,7 @@ export
     filter!,
     filter,
     get,
+    get!,
     getindex,
     getkey,
     haskey,

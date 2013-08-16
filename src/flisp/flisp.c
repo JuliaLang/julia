@@ -269,7 +269,7 @@ static symbol_t *mk_symbol(char *str)
     symbol_t *sym;
     size_t len = strlen(str);
 
-    sym = (symbol_t*)malloc(sizeof(symbol_t)-sizeof(void*) + len + 1);
+    sym = (symbol_t*)malloc((sizeof(symbol_t)-sizeof(void*)+len+1+7)&-8);
     assert(((uptrint_t)sym & 0x7) == 0); // make sure malloc aligns 8
     sym->left = sym->right = NULL;
     sym->flags = 0;

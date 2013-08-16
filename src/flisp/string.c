@@ -134,6 +134,7 @@ value_t fl_string(value_t *args, u_int32_t nargs)
     if (nargs == 1 && fl_isstring(args[0]))
         return args[0];
     value_t arg, buf = fl_buffer(NULL, 0);
+    fl_gc_handle(&buf);
     ios_t *s = value2c(ios_t*,buf);
     uint32_t i;
     value_t oldpr = symbol_value(printreadablysym);
@@ -145,7 +146,6 @@ value_t fl_string(value_t *args, u_int32_t nargs)
     }
     set(printreadablysym, oldpr);
     set(printprettysym, oldpp);
-    fl_gc_handle(&buf);
     value_t outp = stream_to_string(&buf);
     fl_free_gc_handles(1);
     return outp;
