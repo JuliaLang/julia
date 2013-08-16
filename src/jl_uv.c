@@ -264,6 +264,7 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
         }
 
         uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
+        req->data = 0;
         int err = uv_shutdown(req, (uv_stream_t*)handle, &jl_uv_shutdownCallback);
         if (err != 0) {
             printf("shutdown err: %s\n", uv_strerror(err));
