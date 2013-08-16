@@ -26,8 +26,8 @@ at the point of use::
     global x
     y = f(x::Int + 1)
 
-Avoid abstract type parameterization of composite types
--------------------------------------------------------
+Avoid containers with abstract type parameters
+----------------------------------------------
 
 When working with parameterized types, including arrays, it is best to
 avoid parameterizing with abstract types where possible.
