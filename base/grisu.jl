@@ -46,20 +46,21 @@ function grisu_sig(x::Real, n::Integer)
     grisu(float64(x), PRECISION, int32(n))
 end
 
-_show(io::IO, x::FloatingPoint, mode::Int32, n::Int) =
-    _show(io, x, mode, n, "NaN", "Inf")
-_show(io::IO, x::Float32, mode::Int32, n::Int) =
-    _show(io, x, mode, n, "NaN32", "Inf32")
-_show(io::IO, x::Float16, mode::Int32, n::Int) =
-    _show(io, x, mode, n, "NaN16", "Inf16")
+_show(io::IO, x::FloatingPoint, mode::Int32, n::Int, t) =
+    _show(io, x, mode, n, t, "NaN", "Inf")
+_show(io::IO, x::Float32, mode::Int32, n::Int, t) =
+    _show(io, x, mode, n, t, "NaN32", "Inf32")
+_show(io::IO, x::Float16, mode::Int32, n::Int, t) =
+    _show(io, x, mode, n, t, "NaN16", "Inf16")
 
-function _show(io::IO, x::FloatingPoint, mode::Int32, n::Int, nanstr, infstr)
-    if isnan(x) return write(io, nanstr); end
+function _show(io::IO, x::FloatingPoint, mode::Int32, n::Int, typed, nanstr, infstr)
+    if isnan(x) return write(io, typed ? nanstr : "NaN"); end
     if isinf(x)
         if x < 0 write(io,'-') end
-        write(io, infstr)
+        write(io, typed ? infstr : "Inf")
         return
     end
+    if typed && isa(x,Float16) write(io, "float16("); end
     @grisu_ccall x mode n
     pdigits = pointer(DIGITS)
     neg = NEG[1]
@@ -80,8 +81,9 @@ function _show(io::IO, x::FloatingPoint, mode::Int32, n::Int, nanstr, infstr)
         else
             write(io, '0')
         end
-        write(io, isa(x,Float32) ? 'f' : 'e')
+        write(io, typed && isa(x,Float32) ? 'f' : 'e')
         write(io, dec(pt-1))
+        if typed && isa(x,Float16) write(io, ")"); end
         return
     elseif pt <= 0
         # => 0.00########
@@ -104,14 +106,20 @@ function _show(io::IO, x::FloatingPoint, mode::Int32, n::Int, nanstr, infstr)
         write(io, '.')
         write(io, pdigits+pt, len-pt)
     end
-    if isa(x,Float32) write(io, "f0") end
+    if typed && isa(x,Float32) write(io, "f0") end
+    if typed && isa(x,Float16) write(io, ")"); end
     nothing
 end
 
-show(io::IO, x::Float64) = _show(io, x, SHORTEST, 0)
-show(io::IO, x::Float32) = _show(io, x, SHORTEST_SINGLE, 0)
-print(io::IO, x::Float16) = _show(io, x, SHORTEST_SINGLE, 0)
-showcompact(io::IO, x::FloatingPoint) = _show(io, x, PRECISION, 6)
+show(io::IO, x::Float64) = _show(io, x, SHORTEST, 0, true)
+show(io::IO, x::Float32) = _show(io, x, SHORTEST_SINGLE, 0, true)
+show(io::IO, x::Float16) = _show(io, x, PRECISION, 4, true)
+
+print(io::IO, x::Float32) = _show(io, x, SHORTEST_SINGLE, 0, false)
+print(io::IO, x::Float16) = _show(io, x, PRECISION, 4, false)
+
+showcompact(io::IO, x::FloatingPoint) = _show(io, x, PRECISION, 6, false)
+showcompact(io::IO, x::Float16) = _show(io, x, PRECISION, 4, false)
 
 # normal:
 #   0 < pt < len        ####.####           len+1
@@ -122,18 +130,11 @@ showcompact(io::IO, x::FloatingPoint) = _show(io, x, PRECISION, 6)
 #   pt <= 0             ########e-###       len+k+2
 #   0 < pt              ########e###        len+k+1
 
-_print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode::Int32) =
-    _print_shortest(io, x, dot, mode, "NaN", "Inf")
-_print_shortest(io::IO, x::Float32, dot::Bool, mode::Int32) =
-    _print_shortest(io, x, dot, mode, "NaN32", "Inf32")
-_print_shortest(io::IO, x::Float16, dot::Bool, mode::Int32) =
-    _print_shortest(io, x, dot, mode, "NaN16", "Inf16")
-
-function _print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode::Int32, nanstr, infstr)
-    if isnan(x); return write(io, nanstr); end
+function _print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode::Int32, n::Int)
+    if isnan(x); return write(io, "NaN"); end
     if x < 0 write(io,'-') end
-    if isinf(x); return write(io, infstr); end
-    @grisu_ccall x mode 0
+    if isinf(x); return write(io, "Inf"); end
+    @grisu_ccall x mode n
     pdigits = pointer(DIGITS)
     len = int(LEN[1])
     pt  = int(POINT[1])
@@ -142,7 +143,7 @@ function _print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode::Int32, nanst
     if -pt > k+1 || e+dot > k+1
         # => ########e###
         write(io, pdigits+0, len)
-        write(io, isa(x,Float32) ? 'f' : 'e')
+        write(io, 'e')
         write(io, dec(e))
         return
     elseif pt <= 0
@@ -168,13 +169,12 @@ function _print_shortest(io::IO, x::FloatingPoint, dot::Bool, mode::Int32, nanst
         write(io, '.')
         write(io, pdigits+pt, len-pt)
     end
-    if isa(x,Float32) write(io, "f0") end
     nothing
 end
 
-print_shortest(io::IO, x::Float64, dot::Bool) = _print_shortest(io, x, dot, SHORTEST)
-print_shortest(io::IO, x::Float32, dot::Bool) = _print_shortest(io, x, dot, SHORTEST_SINGLE)
-print_shortest(io::IO, x::Float16, dot::Bool=false) = _print_shortest(io, x, dot, SHORTEST_SINGLE)
+print_shortest(io::IO, x::Float64, dot::Bool) = _print_shortest(io, x, dot, SHORTEST, 0)
+print_shortest(io::IO, x::Float32, dot::Bool) = _print_shortest(io, x, dot, SHORTEST_SINGLE, 0)
+print_shortest(io::IO, x::Float16, dot::Bool=false) = _print_shortest(io, x, dot, PRECISION, 4)
 print_shortest(io::IO, x::Union(FloatingPoint,Integer)) = print_shortest(io, float(x), false)
 
 end # module

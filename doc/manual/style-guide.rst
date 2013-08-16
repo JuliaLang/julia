@@ -72,8 +72,8 @@ use::
 This is better style because ``foo`` does not really accept numbers of all
 types; it really needs ``Int`` s.
 
-Append `!` to names of functions which modify their arguments
--------------------------------------------------------------
+Append `!` to names of functions that modify their arguments
+------------------------------------------------------------
 
 Instead of::
 

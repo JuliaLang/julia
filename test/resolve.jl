@@ -1,56 +1,119 @@
-using Base.Pkg.Metadata
+using Base.Pkg.Types
+using Base.Pkg.Query
+using Base.Pkg.Resolve
+using Base.Pkg.Resolve.VersionWeights
+
+# Check that VersionWeight keeps the same ordering as VersionNumber
+
+vlst = [
+    v"0.0.0",
+    v"0.0.1",
+    v"0.1.0",
+    v"0.1.1",
+    v"1.0.0",
+    v"1.0.1",
+    v"1.1.0",
+    v"1.1.1",
+    v"1.0.0-pre",
+    v"1.0.0-pre1",
+    v"1.0.1-pre",
+    v"1.0.0-0.pre.2",
+    v"1.0.0-0.pre.3",
+    v"1.0.0-0.pre1.tst",
+    v"1.0.0-pre.1+0.1",
+    v"1.0.0-pre.1+0.1plus",
+    v"1.0.0-pre.1-+0.1plus",
+    v"1.0.0-pre.1-+0.1Plus",
+    v"1.0.0-pre.1-+0.1pLUs",
+    v"1.0.0-pre.1-+0.1pluS",
+    v"1.0.0+0.1plus",
+    v"1.0.0+0.1plus-",
+    v"1.0.0+-",
+    v"1.0.0-",
+    v"1.0.0+",
+    v"1.0.0--",
+    v"1.0.0---",
+    v"1.0.0--+-",
+    v"1.0.0+--",
+    v"1.0.0+-.-",
+    v"1.0.0+0.-",
+    v"1.0.0+-.0",
+    v"1.0.0-a+--",
+    v"1.0.0-a+-.-",
+    v"1.0.0-a+0.-",
+    v"1.0.0-a+-.0"
+    ]
+
+for v1 in vlst, v2 in vlst
+    vw1 = VersionWeight(v1)
+    vw2 = VersionWeight(v2)
+    clt = v1 < v2
+    @test clt == (vw1 < vw2)
+    ceq = v1 == v2
+    @test ceq == (vw1 == vw2)
+end
+
+# auxiliary functions
 
 function deps_from_data(deps_data)
-    deps = Array((Version, VersionSet),0)
+    deps = Dict{ByteString,Dict{VersionNumber,Available}}()
     for d in deps_data
-        if length(d) < 3
-            continue
+        p = d[1]; vn = d[2]; r = d[3:end]
+        if !haskey(deps, p)
+            deps[p] = (VersionNumber=>Available)[]
         end
-        v = Version(d[1],VersionNumber(d[2]))
-        vs = VersionSet(d[3], [VersionNumber(w) for w=d[4:end]])
-        push!(deps, (v,vs))
+        if !haskey(deps[p], vn)
+            deps[p][vn] = Available("$(p)_$(vn)_sha1", (ByteString=>VersionSet)[])
+        end
+        isempty(r) && continue
+        rp = r[1]
+        if length(r) > 1
+            rvs = VersionSet(VersionNumber[r[2:end]...])
+        else
+            rvs = VersionSet()
+        end
+        deps[p][vn].requires[rp] = rvs
     end
     deps
 end
-vers_from_data(deps_data) = unique([Version(d[1], VersionNumber(d[2])) for d in deps_data])
 function reqs_from_data(reqs_data)
-    reqs = VersionSet[]
+    reqs = (ByteString=>VersionSet)[]
     for r in reqs_data
-        if length(r)==0
-            push!(reqs, VersionSet(r[1]))
-        else
-            push!(reqs, VersionSet(r[1], [VersionNumber(v) for v=r[2:end]]))
-        end
+        p = r[1]
+        reqs[p] = VersionSet(VersionNumber[r[2:end]...])
     end
     reqs
 end
-function sanity_tst(deps_data)
+function sanity_tst(deps_data, expected_result)
     deps = deps_from_data(deps_data)
-    vers = vers_from_data(deps_data)
+    #println("deps=$deps")
     #println()
-    #println("deps="); showall(deps); println()
-    #println("vers="); showall(vers); println()
-    Pkg.Resolve.sanity_check(vers, deps)
+    result = sanity_check(deps)
+    length(result) == length(expected_result) || return false
+    for (p, vn, pp) in result
+        contains(expected_result, (p, vn)) || return  false
+    end
     return true
 end
+sanity_tst(deps_data) = sanity_tst(deps_data, {})
+
 function resolve_tst(deps_data, reqs_data)
     deps = deps_from_data(deps_data)
-    vers = vers_from_data(deps_data)
     reqs = reqs_from_data(reqs_data)
 
     #println()
     #println("deps=$deps")
-    #println("vers=$vers")
     #println("reqs=$reqs")
-    want = Pkg.Resolve.resolve(reqs, vers, deps)
+    deps = Query.prune_dependencies(reqs, deps)
+    want = resolve(reqs, deps)
 end
 
 ## DEPENDENCY SCHEME 1: TWO PACKAGES, DAG
 deps_data = {
-    {"A", 1, "B", 1},
-    {"A", 2, "B", 2},
-    {"B", 1, },
-    {"B", 2, }
+    {"A", v"1", "B", v"1"},
+    {"A", v"2", "B", v"2"},
+    {"B", v"1"},
+    {"B", v"2"}
 }
 
 @test sanity_tst(deps_data)
@@ -61,22 +124,22 @@ reqs_data = {
 }
 
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["B"=>VersionNumber(2)]
+@test want == ["B"=>v"2"]
 
 # require just A: must bring in B
 reqs_data = {
     {"A"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["A"=>VersionNumber(2), "B"=>VersionNumber(2)]
+@test want == ["A"=>v"2", "B"=>v"2"]
 
 
 ## DEPENDENCY SCHEME 2: TWO PACKAGES, CYCLIC
 deps_data = {
-    {"A", 1, "B", 2},
-    {"A", 2, "B", 1},
-    {"B", 1, "A", 2},
-    {"B", 2, "A", 1}
+    {"A", v"1", "B", v"2"},
+    {"A", v"2", "B", v"1"},
+    {"B", v"1", "A", v"2"},
+    {"B", v"2", "A", v"1"}
 }
 
 @test sanity_tst(deps_data)
@@ -86,31 +149,31 @@ reqs_data = {
     {"A"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["A"=>VersionNumber(2), "B"=>VersionNumber(2)]
+@test want == ["A"=>v"2", "B"=>v"2"]
 
 # require just B, force lower version
 reqs_data = {
-    {"B", 1, 2}
+    {"B", v"1", v"2"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["A"=>VersionNumber(2), "B"=>VersionNumber(1)]
+@test want == ["A"=>v"2", "B"=>v"1"]
 
 # require just A, force lower version
 reqs_data = {
-    {"A", 1, 2}
+    {"A", v"1", v"2"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["A"=>VersionNumber(1), "B"=>VersionNumber(2)]
+@test want == ["A"=>v"1", "B"=>v"2"]
 
 
 ## DEPENDENCY SCHEME 3: THREE PACKAGES, CYCLIC, TWO MUTUALLY EXCLUSIVE SOLUTIONS
 deps_data = {
-    {"A", 1, "B", 2},
-    {"A", 2, "B", 1, 2},
-    {"B", 1, "C", 2},
-    {"B", 2, "C", 1, 2},
-    {"C", 1, "A", 1, 2},
-    {"C", 2, "A", 2}
+    {"A", v"1", "B", v"2"},
+    {"A", v"2", "B", v"1", v"2"},
+    {"B", v"1", "C", v"2"},
+    {"B", v"2", "C", v"1", v"2"},
+    {"C", v"1", "A", v"1", v"2"},
+    {"C", v"2", "A", v"2"}
 }
 
 @test sanity_tst(deps_data)
@@ -120,83 +183,84 @@ reqs_data = {
     {"A"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["A"=>VersionNumber(2), "B"=>VersionNumber(1), "C"=>VersionNumber(2)]
+@test want == ["A"=>v"2", "B"=>v"1", "C"=>v"2"]
 
 # require just B (must choose solution which has the highest version for B)
 reqs_data = {
     {"B"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["A"=>VersionNumber(1), "B"=>VersionNumber(2), "C"=>VersionNumber(1)]
+@test want == ["A"=>v"1", "B"=>v"2", "C"=>v"1"]
 
 # require just A, force lower version
 reqs_data = {
-    {"A", 1, 2}
+    {"A", v"1", v"2"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["A"=>VersionNumber(1), "B"=>VersionNumber(2), "C"=>VersionNumber(1)]
+@test want == ["A"=>v"1", "B"=>v"2", "C"=>v"1"]
 
 # require A and C, incompatible versions
 reqs_data = {
-    {"A", 1, 2},
-    {"C", 2}
+    {"A", v"1", v"2"},
+    {"C", v"2"}
 }
 @test_throws resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 4: TWO PACKAGES, DAG, WITH TRIVIAL INCONSISTENCY
 deps_data = {
-    {"A", 1, "B", 2},
-    {"B", 1}
+    {"A", v"1", "B", v"2"},
+    {"B", v"1"}
 }
 
-@test_throws sanity_tst(deps_data)
+@test sanity_tst(deps_data, {("A", v"1")})
 
 # require B (must not give errors)
 reqs_data = {
     {"B"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["B"=>VersionNumber(1)]
+@test want == ["B"=>v"1"]
 
 
 ## DEPENDENCY SCHEME 5: THREE PACKAGES, DAG, WITH IMPLICIT INCONSISTENCY
 deps_data = {
-    {"A", 1, "B", 2},
-    {"A", 1, "C", 2},
-    {"A", 2, "B", 1, 2},
-    {"A", 2, "C", 1, 2},
-    {"B", 1, "C", 2},
-    {"B", 2, "C", 2},
-    {"C", 1},
-    {"C", 2}
+    {"A", v"1", "B", v"2"},
+    {"A", v"1", "C", v"2"},
+    {"A", v"2", "B", v"1", v"2"},
+    {"A", v"2", "C", v"1", v"2"},
+    {"B", v"1", "C", v"2"},
+    {"B", v"2", "C", v"2"},
+    {"C", v"1"},
+    {"C", v"2"}
 }
 
-@test_throws sanity_tst(deps_data)
+@test sanity_tst(deps_data, {("A", v"2")})
 
 # require A, any version (must use the highest non-inconsistent)
 reqs_data = {
     {"A"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["A"=>VersionNumber(1), "B"=>VersionNumber(2), "C"=>VersionNumber(2)]
+@test want == ["A"=>v"1", "B"=>v"2", "C"=>v"2"]
 
 # require A, force highest version (impossible)
 reqs_data = {
-    {"A", 2}
+    {"A", v"2"}
 }
 @test_throws resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 6: TWO PACKAGES, CYCLIC, TOTALLY INCONSISTENT
 deps_data = {
-    {"A", 1, "B", 2},
-    {"A", 2, "B", 1, 2},
-    {"B", 1, "A", 1, 2},
-    {"B", 2, "A", 2}
+    {"A", v"1", "B", v"2"},
+    {"A", v"2", "B", v"1", v"2"},
+    {"B", v"1", "A", v"1", v"2"},
+    {"B", v"2", "A", v"2"}
 }
 
-@test_throws sanity_tst(deps_data)
+@test sanity_tst(deps_data, {("A", v"1"), ("A", v"2"),
+                             ("B", v"1"), ("B", v"2")})
 
 # require A (impossible)
 reqs_data = {
@@ -213,48 +277,51 @@ reqs_data = {
 
 ## DEPENDENCY SCHEME 7: THREE PACKAGES, CYCLIC, WITH INCONSISTENCY
 deps_data = {
-    {"A", 1, "B", 1, 2},
-    {"A", 2, "B", 2},
-    {"B", 1, "C", 1, 2},
-    {"B", 2, "C", 2},
-    {"C", 1, "A", 2},
-    {"C", 2, "A", 2},
+    {"A", v"1", "B", v"1", v"2"},
+    {"A", v"2", "B", v"2"},
+    {"B", v"1", "C", v"1", v"2"},
+    {"B", v"2", "C", v"2"},
+    {"C", v"1", "A", v"2"},
+    {"C", v"2", "A", v"2"},
 }
 
-@test_throws sanity_tst(deps_data)
+@test sanity_tst(deps_data, {("A", v"1"), ("B", v"1"),
+                             ("C", v"1")})
 
 # require A
 reqs_data = {
     {"A"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["A"=>VersionNumber(2), "B"=>VersionNumber(2), "C"=>VersionNumber(2)]
+@test want == ["A"=>v"2", "B"=>v"2", "C"=>v"2"]
 
 # require C
 reqs_data = {
     {"C"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["A"=>VersionNumber(2), "B"=>VersionNumber(2), "C"=>VersionNumber(2)]
+@test want == ["A"=>v"2", "B"=>v"2", "C"=>v"2"]
 
 # require C, lowest version (impossible)
 reqs_data = {
-    {"C", 1, 2}
+    {"C", v"1", v"2"}
 }
 @test_throws resolve_tst(deps_data, reqs_data)
 
 
 ## DEPENDENCY SCHEME 8: THREE PACKAGES, CYCLIC, TOTALLY INCONSISTENT
 deps_data = {
-    {"A", 1, "B", 1, 2},
-    {"A", 2, "B", 2},
-    {"B", 1, "C", 1, 2},
-    {"B", 2, "C", 2},
-    {"C", 1, "A", 2},
-    {"C", 2, "A", 1, 2},
+    {"A", v"1", "B", v"1", v"2"},
+    {"A", v"2", "B", v"2"},
+    {"B", v"1", "C", v"1", v"2"},
+    {"B", v"2", "C", v"2"},
+    {"C", v"1", "A", v"2"},
+    {"C", v"2", "A", v"1", v"2"},
 }
 
-@test_throws sanity_tst(deps_data)
+@test sanity_tst(deps_data, {("A", v"1"), ("A", v"2"),
+                             ("B", v"1"), ("B", v"2"),
+                             ("C", v"1"), ("C", v"2")})
 
 # require A (impossible)
 reqs_data = {
@@ -276,20 +343,20 @@ reqs_data = {
 
 ## DEPENDENCY SCHEME 9: SIX PACKAGES, DAG
 deps_data = {
-    {"A", 1},
-    {"A", 2},
-    {"A", 3},
-    {"B", 1, "A", 1, 2},
-    {"B", 2, "A"},
-    {"C", 1, "A", 2, 3},
-    {"C", 2, "A", 2},
-    {"D", 1, "B", 1},
-    {"D", 2, "B", 2},
-    {"E", 1, "D"},
-    {"F", 1, "A", 1, 3},
-    {"F", 1, "E"},
-    {"F", 2, "C", 2},
-    {"F", 2, "E"},
+    {"A", v"1"},
+    {"A", v"2"},
+    {"A", v"3"},
+    {"B", v"1", "A", v"1", v"2"},
+    {"B", v"2", "A"},
+    {"C", v"1", "A", v"2", v"3"},
+    {"C", v"2", "A", v"2"},
+    {"D", v"1", "B", v"1"},
+    {"D", v"2", "B", v"2"},
+    {"E", v"1", "D"},
+    {"F", v"1", "A", v"1", v"3"},
+    {"F", v"1", "E"},
+    {"F", v"2", "C", v"2"},
+    {"F", v"2", "E"},
 }
 
 @test sanity_tst(deps_data)
@@ -299,35 +366,114 @@ reqs_data = {
     {"F"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["A"=>VersionNumber(3), "B"=>VersionNumber(2), "C"=>VersionNumber(2), "D"=>VersionNumber(2), "E"=>VersionNumber(1), "F"=>VersionNumber(2)]
+@test want == ["A"=>v"3", "B"=>v"2", "C"=>v"2",
+               "D"=>v"2", "E"=>v"1", "F"=>v"2"]
 
 # require just F, lower version
 reqs_data = {
-    {"F", 1, 2}
+    {"F", v"1", v"2"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["A"=>VersionNumber(2), "B"=>VersionNumber(2), "D"=>VersionNumber(2), "E"=>VersionNumber(1), "F"=>VersionNumber(1)]
+@test want == ["A"=>v"2", "B"=>v"2", "D"=>v"2",
+               "E"=>v"1", "F"=>v"1"]
 
 # require F and B; force lower B version -> must bring down F, A, and D versions too
 reqs_data = {
     {"F"},
-    {"B", 1, 2}
+    {"B", v"1", v"2"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["A"=>VersionNumber(1), "B"=>VersionNumber(1), "D"=>VersionNumber(1), "E"=>VersionNumber(1), "F"=>VersionNumber(1)]
+@test want == ["A"=>v"1", "B"=>v"1", "D"=>v"1",
+               "E"=>v"1", "F"=>v"1"]
 
 # require F and D; force lower D version -> must not bring down F version
 reqs_data = {
     {"F"},
-    {"D", 1, 2}
+    {"D", v"1", v"2"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["A"=>VersionNumber(3), "B"=>VersionNumber(2), "C"=>VersionNumber(2), "D"=>VersionNumber(1), "E"=>VersionNumber(1), "F"=>VersionNumber(2)]
+@test want == ["A"=>v"3", "B"=>v"2", "C"=>v"2",
+               "D"=>v"1", "E"=>v"1", "F"=>v"2"]
 
 # require F and C; force lower C version -> must bring down F and A versions
 reqs_data = {
     {"F"},
-    {"C", 1, 2}
+    {"C", v"1", v"2"}
 }
 want = resolve_tst(deps_data, reqs_data)
-@test want == ["A"=>VersionNumber(2), "B"=>VersionNumber(2), "C"=>VersionNumber(1), "D"=>VersionNumber(2), "E"=>VersionNumber(1), "F"=>VersionNumber(1)]
+@test want == ["A"=>v"2", "B"=>v"2", "C"=>v"1",
+               "D"=>v"2", "E"=>v"1", "F"=>v"1"]
+
+## DEPENDENCY SCHEME 10: SIX PACKAGES, DAG, WITH PRERELEASE/BUILD VERSIONS
+deps_data = {
+    {"A", v"1"},
+    {"A", v"2-rc.1"},
+    {"A", v"2-rc.1+bld"},
+    {"A", v"2"},
+    {"A", v"2.1.0"},
+    {"B", v"1", "A", v"1", v"2-"},
+    {"B", v"1.0.1-beta", "A", v"2-rc"},
+    {"B", v"1.0.1", "A"},
+    {"C", v"1", "A", v"2-", v"2.1"},
+    {"C", v"1+BLD", "A", v"2-rc.1", v"2.1"},
+    {"C", v"2", "A", v"2-rc.1"},
+    {"D", v"1", "B", v"1"},
+    {"D", v"2", "B", v"1.0.1-"},
+    {"E", v"1-plztst", "D"},
+    {"E", v"1", "D"},
+    {"F", v"1.1", "A", v"1", v"2.1"},
+    {"F", v"1.1", "E", v"1"},
+    {"F", v"2-rc.1", "A", v"2-", v"2.1"},
+    {"F", v"2-rc.1", "C", v"1"},
+    {"F", v"2-rc.1", "E"},
+    {"F", v"2-rc.2", "A", v"2-", v"2.1"},
+    {"F", v"2-rc.2", "C", v"2"},
+    {"F", v"2-rc.2", "E"},
+    {"F", v"2", "C", v"2"},
+    {"F", v"2", "E"},
+}
+
+@test sanity_tst(deps_data)
+
+# require just F
+reqs_data = {
+    {"F"}
+}
+want = resolve_tst(deps_data, reqs_data)
+@test want == ["A"=>v"2.1", "B"=>v"1.0.1", "C"=>v"2",
+               "D"=>v"2", "E"=>v"1", "F"=>v"2"]
+
+# require just F, lower version
+reqs_data = {
+    {"F", v"1", v"2-"}
+}
+want = resolve_tst(deps_data, reqs_data)
+@test want == ["A"=>v"2", "B"=>v"1.0.1", "D"=>v"2",
+               "E"=>v"1", "F"=>v"1.1"]
+
+# require F and B; force lower B version -> must bring down F, A, and D versions too
+reqs_data = {
+    {"F"},
+    {"B", v"1", v"1.0.1-"}
+}
+want = resolve_tst(deps_data, reqs_data)
+@test want == ["A"=>v"1", "B"=>v"1", "D"=>v"1",
+               "E"=>v"1", "F"=>v"1.1"]
+
+# require F and D; force lower D version -> must not bring down F version
+reqs_data = {
+    {"F"},
+    {"D", v"1", v"2"}
+}
+want = resolve_tst(deps_data, reqs_data)
+@test want == ["A"=>v"2.1", "B"=>v"1.0.1", "C"=>v"2",
+               "D"=>v"1", "E"=>v"1", "F"=>v"2"]
+
+# require F and C; force lower C version -> must bring down F and A versions
+reqs_data = {
+    {"F"},
+    {"C", v"1", v"2"}
+}
+want = resolve_tst(deps_data, reqs_data)
+@test want == ["A"=>v"2", "B"=>v"1.0.1", "C"=>v"1+BLD",
+               "D"=>v"2", "E"=>v"1", "F"=>v"2-rc.1"]

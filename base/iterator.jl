@@ -91,8 +91,8 @@ done(i::Rest, st) = done(i.itr, st)
 
 # reverse
 
-type Reverse
-    itr
+immutable Reverse{I}
+    itr::I
 end
 reverse(itr) = Reverse(itr)
 
@@ -103,5 +103,3 @@ done(r::Reverse, i) = i < 1
 
 # TODO: a more general "reversible" interface; this only
 # works for objects that are indexable from 1 to length(itr)
-
-
