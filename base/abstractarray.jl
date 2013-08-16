@@ -573,6 +573,34 @@ function setindex!(A::AbstractMatrix, x, i1,i2,i3,i4...)
     A[i1,i2] = x
 end
 
+## get (getindex with a default value) ##
+
+typealias RangeVecIntList{A<:AbstractVector{Int}} Union((Union(Ranges, AbstractVector{Int})...), AbstractVector{Range1{Int}}, AbstractVector{Range{Int}}, AbstractVector{A})
+
+get(A::AbstractArray, i::Integer, default) = in_bounds(length(A), i) ? A[i] : default
+get(A::AbstractArray, I::(), default) = similar(A, typeof(default), 0)
+get(A::AbstractArray, I::Dims, default) = in_bounds(size(A), I...) ? A[I...] : default
+
+function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::Union(Ranges, AbstractVector{Int}), default::T)
+    ind = findin(I, 1:length(A))
+    X[ind] = A[I[ind]]
+    X[1:first(ind)-1] = default
+    X[last(ind)+1:length(X)] = default
+    X
+end
+
+get(A::AbstractArray, I::Ranges, default) = get!(similar(A, typeof(default), length(I)), A, I, default)
+
+function get!{T}(X::AbstractArray{T}, A::AbstractArray, I::RangeVecIntList, default::T)
+    fill!(X, default)
+    dst, src = indcopy(size(A), I)
+    X[dst...] = A[src...]
+    X
+end
+
+get(A::AbstractArray, I::RangeVecIntList, default) = get!(similar(A, typeof(default), map(length, I)...), A, I, default)
+
+
 ## Concatenation ##
 
 #TODO: ERROR CHECK

@@ -1,7 +1,6 @@
 # -*- mode: makefile-gmake -*-
 
 USE_MKL = 0
-#MKLROOT = /opt/intel/composerxe/mkl/
 MKLLIB = $(MKLROOT)/lib/intel64
 
 # include twice to pickup user definitions
@@ -96,9 +95,10 @@ endif
 ifeq ($(OS), Darwin)
 DARWINVER = $(shell uname -r | cut -b 1-2)
 OSXVER = $(shell sw_vers -productVersion | cut -b 1-4)
-ifeq ($(DARWINVER), 10)
+ifeq ($(DARWINVER), 10) # Snow Leopard specific configuration
 USEGCC = 1
 USECLANG = 0
+OPENBLAS_TARGET_ARCH=NEHALEM
 else
 USEGCC = 0
 USECLANG = 1
