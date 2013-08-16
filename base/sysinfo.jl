@@ -11,7 +11,8 @@ export  CPU_CORES,
         loadavg,
         free_memory,
         total_memory,
-        shlib_ext
+        shlib_ext,
+        shlib_list
 
 import ..Base: WORD_SIZE, OS_NAME, ARCH, MACHINE
 import ..Base: show, uv_error
@@ -138,6 +139,56 @@ elseif OS_NAME === :Windows
 else
     #assume OS_NAME === :Linux, or similar
     const shlib_ext = "so"
+end
+
+@linux_only begin
+    immutable dl_phdr_info
+        # Base address of object
+        addr::Cuint
+
+        # Null-terminated name of object
+        name::Ptr{Uint8}
+
+        # Pointer to array of ELF program headers for this object
+        phdr::Ptr{Void}
+
+        # Number of program headers for this object
+        phnum::Cshort
+    end
+
+    # This callback function called by dl_iterate_phdr() on Linux
+    function dl_phdr_info_callback( di_ptr::Ptr{dl_phdr_info}, size::Csize_t, dynamic_libraries_ptr::Ptr{Array{String,1}} )
+        di = unsafe_load(di_ptr)
+
+        # Skip over objects without a path (as they represent this own object)
+        name = bytestring(di.name)
+        if !isempty(name)
+            dynamic_libraries = unsafe_pointer_to_objref( dynamic_libraries_ptr )
+            push!(dynamic_libraries, name )
+        end
+        convert(Cint, 0)::Cint
+    end
+end #@linux_only
+
+function shlib_list()
+    dynamic_libraries = Array(String,0)
+
+    @linux_only begin
+        const callback = cfunction(dl_phdr_info_callback, Cint, (Ptr{dl_phdr_info}, Csize_t, Ptr{Array{String,1}} ))
+        ccall( cglobal("dl_iterate_phdr"), Cint, (Ptr{Void}, Ptr{Void}), callback, pointer_from_objref(dynamic_libraries) )
+    end
+
+    @osx_only begin
+        numImages = ccall( cglobal("_dyld_image_count"), Cint, (), )
+
+        # start at 1 instead of 0 to skip self
+        for i in 1:numImages-1
+            name = bytestring(ccall( cglobal("_dyld_get_image_name"), Ptr{Uint8}, (Uint32,), uint32(i)))
+            push!(dynamic_libraries, name)
+        end
+    end
+
+    dynamic_libraries
 end
 
 end
