@@ -891,7 +891,7 @@ lapack-$(LAPACK_VER).tgz:
 	$(JLDOWNLOAD) $@ http://www.netlib.org/lapack/$@
 lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 	tar zxf $<
-	cd lapack-$(LAPACK_VER)/SRC && patch < ../../../dlasd4-lapack-3.4.2.patch && patch < ../../../slasd4-lapack-3.4.2.patch
+	cd lapack-$(LAPACK_VER)/SRC && patch < ../../dlasd4-lapack-3.4.2.patch && patch < ../../slasd4-lapack-3.4.2.patch
 	touch -c $@
 ifeq ($(USE_SYSTEM_BLAS), 0)
 lapack-$(LAPACK_VER)/liblapack.a: | $(OPENBLAS_OBJ_TARGET)
