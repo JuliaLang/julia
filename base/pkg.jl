@@ -195,7 +195,7 @@ resolve(
                 Cache.prefetch(pkg, Read.url(pkg), vers)))
     end
     if !isempty(missing)
-        msg = "missing package versions (possible metadata misconfiguration):"
+        msg = "Missing package versions (possible metadata misconfiguration):"
         for (pkg,ver,sha1) in missing
             msg *= "  $pkg v$ver [$sha1[1:10]]\n"
         end
@@ -287,70 +287,70 @@ check_metadata(julia_version::VersionNumber=VERSION) = Dir.cd() do
 end
 check_metadata(julia_version::String) = check_metadata(convert(VersionNumber, julia_version))
 
-function _fixup(instlist,
-        avail=Dir.cd(Read.available),
-        inst::Dict=Dir.cd(()->Read.installed(avail)),
-        free::Dict=Dir.cd(()->Read.free(inst)),
-        fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));exclude = [])
-    
+function _fixup(
+    instlist,
+    avail=Dir.cd(Read.available),
+    inst::Dict=Dir.cd(()->Read.installed(avail)),
+    free::Dict=Dir.cd(()->Read.free(inst)),
+    fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));
+    exclude=[]
+)
     sort!(instlist, lt=function(a,b)
         c = contains(Read.alldependencies(a,avail,free,fixed),b) 
         nonordered = (!c && !contains(Read.alldependencies(b,avail,free,fixed),a))
         nonordered ? a < b : c
     end)
     for p in instlist
-        if contains(exclude,p)
-            continue
-        end
-        if !runbuildscript(p,["fixup"])
-            return
-        end
+        contains(exclude,p) && continue
+        runbuildscript(p,["fixup"]) || return
     end
-    info("SUCCESS!")
 end
 
-function fixup{T<:String}(pkg::Vector{T},
-        avail::Dict=Dir.cd(Read.available),
-        inst::Dict=Dir.cd(()->Read.installed(avail)),
-        free::Dict=Dir.cd(()->Read.free(inst)),
-        fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));exclude = []) 
+function fixup{T<:String}(
+    pkg::Vector{T},
+    avail::Dict=Dir.cd(Read.available),
+    inst::Dict=Dir.cd(()->Read.installed(avail)),
+    free::Dict=Dir.cd(()->Read.free(inst)),
+    fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));
+    exclude=[]
+)
     tofixup = copy(pkg)
     oldlength = length(tofixup)
     while true
         for (p,_) in inst
-            if !contains(tofixup,p) 
-                for pf in tofixup
-                    if contains(Read.alldependencies(p,avail,free,fixed),pf)
-                        push!(tofixup,p)
-                        break
-                    end
+            contains(tofixup,p) && continue
+            for pf in tofixup
+                if contains(Read.alldependencies(p,avail,free,fixed),pf)
+                    push!(tofixup,p)
+                    break
                 end
             end
         end
-        if oldlength == length(tofixup)
-            break
-        end
+        oldlength == length(tofixup) && break
         oldlength = length(tofixup)
     end
-    _fixup(tofixup,avail,inst,free,fixed; exclude = exclude)
+    _fixup(tofixup, avail, inst, free, fixed; exclude=exclude)
 end
 
-fixup(pkg::String,
+fixup(
+    pkg::String,
     avail::Dict=Dir.cd(Read.available),
     inst::Dict=Dir.cd(()->Read.installed(avail)),
     free::Dict=Dir.cd(()->Read.free(inst)),
-    fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));exclude = []) = 
-        fixup([pkg],avail,inst,free,fixed;exclude = exclude)
-
+    fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));
+    exclude = []
+) = fixup([pkg],avail,inst,free,fixed; exclude=exclude)
 
 function fixup(
-        avail::Dict=Dir.cd(Read.available),
-        inst::Dict=Dir.cd(()->Read.installed(avail)),
-        free::Dict=Dir.cd(()->Read.free(inst)),
-        fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));exclude = []) 
+    avail::Dict=Dir.cd(Read.available),
+    inst::Dict=Dir.cd(()->Read.installed(avail)),
+    free::Dict=Dir.cd(()->Read.free(inst)),
+    fixed::Dict=Dir.cd(()->Read.fixed(avail,inst));
+    exclude=[]
+)
     # TODO: Replace by proper toposorts
     instlist = [k for (k,v) in inst]
-    _fixup(instlist,avail,inst,free,fixed;exclude=exclude)
+    _fixup(instlist, avail, inst, free, fixed; exclude=exclude)
 end
 
 end # module
