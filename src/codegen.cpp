@@ -840,6 +840,30 @@ static bool is_getfield_nonallocating(jl_datatype_t *ty, jl_value_t *fld)
     return true;
 }
 
+static bool jltupleisbits(jl_value_t *jt, bool allow_unsized = true)
+{
+    if (!jl_is_tuple(jt))
+        return jl_isbits(jt) && (allow_unsized || 
+            ((jl_is_bitstype(jt) && jl_datatype_size(jt) > 0) || 
+                (jl_is_datatype(jt) && jl_tuple_len(((jl_datatype_t*)jt)->names)>0)));
+    size_t ntypes = jl_tuple_len(jt);
+    if (ntypes == 0)
+        return allow_unsized;
+    for (size_t i = 0; i < ntypes; ++i)
+        if (!jltupleisbits(jl_tupleref(jt,i),allow_unsized))
+            return false;
+    return true; 
+}
+
+static bool jl_tupleref_nonallocating(jl_value_t *ty, jl_value_t *idx)
+{
+    if (!jl_is_tuple(ty))
+        return false;
+    if (jltupleisbits(ty))
+        return false;
+    return true;
+}
+
 // does "ex" compute something that doesn't need a root over the whole function?
 static bool is_stable_expr(jl_value_t *ex, jl_codectx_t *ctx)
 {
@@ -866,7 +890,7 @@ static bool is_stable_expr(jl_value_t *ex, jl_codectx_t *ctx)
                     jl_value_t *ty = expr_type(jl_exprarg(e,1), ctx);
                     if ((fptr == &jl_f_get_field && jl_is_immutable_datatype(ty) &&
                          is_getfield_nonallocating((jl_datatype_t*)ty, jl_exprarg(e,2))) ||
-                        fptr == &jl_f_tupleref) {
+                        (fptr == &jl_f_tupleref && jl_tupleref_nonallocating(ty, jl_exprarg(e,2)))) {
                         if (is_stable_expr(jl_exprarg(e,1), ctx))
                             return true;
                     }
@@ -2413,21 +2437,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
 }
 
 // --- allocating local variables ---
-
-static bool jltupleisbits(jl_value_t *jt, bool allow_unsized = true)
-{
-    if (!jl_is_tuple(jt))
-        return jl_isbits(jt) && (allow_unsized || 
-            ((jl_is_bitstype(jt) && jl_datatype_size(jt) > 0) || 
-                (jl_is_datatype(jt) && jl_tuple_len(((jl_datatype_t*)jt)->names)>0)));
-    size_t ntypes = jl_tuple_len(jt);
-    if (ntypes == 0)
-        return allow_unsized;
-    for (size_t i = 0; i < ntypes; ++i)
-        if (!jltupleisbits(jl_tupleref(jt,i),allow_unsized))
-            return false;
-    return true; 
-}
 
 static bool store_unboxed_p(jl_sym_t *s, jl_codectx_t *ctx)
 {
