@@ -8,6 +8,9 @@
 #include "libsupport.h"
 #include "../../deps/libuv/include/uv.h"
 
+//#define MEMDEBUG
+//#define MEMDEBUG2
+
 typedef uptrint_t value_t;
 typedef int_t fixnum_t;
 #if NBITS==64
@@ -107,8 +110,12 @@ typedef struct {
 #define isconstant(s) ((s)->flags&0x1)
 #define iskeyword(s) ((s)->flags&0x2)
 #define symbol_value(s) (((symbol_t*)ptr(s))->binding)
+#ifdef MEMDEBUG2
+#define ismanaged(v) (!issymbol(v) && !isfixnum(v) && ((v)>(N_OPCODES<<3)))
+#else
 #define ismanaged(v) ((((unsigned char*)ptr(v)) >= fromspace) && \
                       (((unsigned char*)ptr(v)) < fromspace+heapsize))
+#endif
 #define isgensym(x)  (issymbol(x) && ismanaged(x))
 
 #define isfunction(x) (tag(x) == TAG_FUNCTION && (x) > (N_BUILTINS<<3))
