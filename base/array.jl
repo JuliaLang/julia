@@ -1394,22 +1394,25 @@ function findin(a, b)
 end
 
 # Copying subregions
-function indcopy(sz::Dims, I::RangeVecIntList)
+function indcopy(sz::Dims, I::Vector)
     n = length(I)
-    dst = Array(AbstractVector{Int}, n)
-    src = Array(AbstractVector{Int}, n)
-    for dim = 1:(n-1)
-        tmp = findin(I[dim], 1:sz[dim])
-        dst[dim] = tmp
-        src[dim] = I[dim][tmp]
-    end
     s = sz[n]
     for i = n+1:length(sz)
         s *= sz[i]
     end
-    tmp = findin(I[n], 1:s)
-    dst[n] = tmp
-    src[n] = I[n][tmp]
+    dst = eltype(I)[findin(I[i], i < n ? (1:sz[i]) : (1:s)) for i = 1:n]
+    src = eltype(I)[I[i][findin(I[i], i < n ? (1:sz[i]) : (1:s))] for i = 1:n]
+    dst, src
+end
+
+function indcopy(sz::Dims, I::(RangeIndex...))
+    n = length(I)
+    s = sz[n]
+    for i = n+1:length(sz)
+        s *= sz[i]
+    end
+    dst::typeof(I) = ntuple(n, i-> findin(I[i], i < n ? (1:sz[i]) : (1:s)))::typeof(I)
+    src::typeof(I) = ntuple(n, i-> I[i][findin(I[i], i < n ? (1:sz[i]) : (1:s))])::typeof(I)
     dst, src
 end
 
