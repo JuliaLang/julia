@@ -44,7 +44,7 @@ cosc{T<:Integer}(x::Complex{T}) = cosc(complex(float(real(x)),float(imag(x))))
 const pideg1 = 0.017453292501159012 # pi/180 truncated to 29 significant bits
 const pideg2 = 1.8784283451579438e-11 # pi/180 - pideg1
 const degpi1 = 57.29577946662903 # 180/pi to 29 significant bits
-const degpi2 = 4.645329255648566e-8 # 180/pi - degpi2
+const degpi2 = 4.645329255648566e-8 # 180/pi - degpi1
 
 radians2degrees(z::Real) = oftype(z, degpi1*z + degpi2*z)
 degrees2radians(z::Real) = oftype(z, pideg1*z + pideg2*z)
@@ -58,7 +58,7 @@ for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
         ($finv)(z) = 1 ./ (($f)(z))
     end
 end
-    
+
 for (fa, fainv) in ((:asec, :acos), (:acsc, :asin), (:acot, :atan),
                     (:asech, :acosh), (:acsch, :asinh), (:acoth, :atanh))
     @eval begin
@@ -123,9 +123,6 @@ function cosd(x::Real)
 end
 
 tand(x::Real) = sind(x) / cosd(x)
-
-
-
 
 for (fd, f) in ((:sind, :sin), (:cosd, :cos), (:tand, :tan))
     @eval begin
