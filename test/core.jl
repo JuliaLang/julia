@@ -916,3 +916,17 @@ end
 @test isa(foo4075(Foo4075(int64(1),2.0),:y), Float64)
 # very likely to segfault the second time if this is broken
 @test isa(foo4075(Foo4075(int64(1),2.0),:y), Float64)
+
+# issue #3167
+function foo(x)
+    ret=Array(typeof(x[1]), length(x))
+    for j = 1:length(x)
+        ret[j] = x[j]
+    end
+    return ret
+end
+x = Array(Union(Dict{Int64,String},Array{Int64,3},Number,String,Nothing), 3)
+x[1] = 1.0
+x[2] = 2.0
+x[3] = 3.0
+foo(x) == [1.0, 2.0, 3.0]
