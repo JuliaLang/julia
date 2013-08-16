@@ -61,8 +61,8 @@ function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
     # Sort packages topologically
     sort!(changes, lt=function(a,b)
         ((a,vera),(b,verb)) = (a,b)
-        c = contains(Pkg2.Read.alldependencies(a,avail,want,fixed),b) 
-        unnordered = (!c && !contains(Pkg2.Read.alldependencies(b,avail,want,fixed),a))
+        c = contains(Pkg.Read.alldependencies(a,avail,want,fixed),b) 
+        unnordered = (!c && !contains(Pkg.Read.alldependencies(b,avail,want,fixed),a))
         unnordered ? a < b : c
     end)
 
