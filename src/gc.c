@@ -797,7 +797,7 @@ static void gc_mark_uv_state(uv_loop_t *loop)
     QUEUE_FOREACH(q,&loop->active_reqs)
     {
         uv_req_t *req = QUEUE_DATA(q,uv_req_t,active_queue);
-        if(req->data)
+        if (req->data)
             gc_push_root((jl_value_t*)(req->data), 0);
     }
 }
