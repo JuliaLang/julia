@@ -41,18 +41,24 @@ cosc(x::Integer) = cosc(float(x))
 cosc{T<:Integer}(x::Complex{T}) = cosc(complex(float(real(x)),float(imag(x))))
 @vectorize_1arg Number cosc
 
-radians2degrees(z::Real) = oftype(z, (180/pi) * z)
-degrees2radians(z::Real) = oftype(z, (pi/180) * z)
-radians2degrees(z::Integer) = oftype(float(z), (180/pi) * z)
-degrees2radians(z::Integer) = oftype(float(z), (pi/180) * z)
+const pideg1 = 0.017453292501159012 # pi/180 truncated to 29 significant bits
+const pideg2 = 1.8784283451579438e-11 # pi/180 - pideg1
+const degpi1 = 57.29577946662903 # 180/pi to 29 significant bits
+const degpi2 = 4.645329255648566e-8 # 180/pi - degpi1
+
+radians2degrees(z::Real) = oftype(z, degpi1*z + degpi2*z)
+degrees2radians(z::Real) = oftype(z, pideg1*z + pideg2*z)
+radians2degrees(z::Integer) = radians2degrees(float(z))
+degrees2radians(z::Integer) = degrees2radians(float(z))
 
 for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
-                  (:sech, :cosh), (:csch, :sinh), (:coth, :tanh))
+                  (:sech, :cosh), (:csch, :sinh), (:coth, :tanh),
+                  (:secd, :cosd), (:cscd, :sind), (:cotd, :tand))
     @eval begin
         ($finv)(z) = 1 ./ (($f)(z))
     end
 end
-    
+
 for (fa, fainv) in ((:asec, :acos), (:acsc, :asin), (:acot, :atan),
                     (:asech, :acosh), (:acsch, :asinh), (:acoth, :atanh))
     @eval begin
@@ -60,8 +66,65 @@ for (fa, fainv) in ((:asec, :acos), (:acsc, :asin), (:acot, :atan),
     end
 end
 
-for (fd, f) in ((:sind, :sin), (:cosd, :cos), (:tand, :tan),
-                (:secd, :sec), (:cscd, :csc), (:cotd, :cot))
+function sind(x::Real)
+    if isinf(x)
+        return throw(DomainError())
+    elseif isnan(x)
+        return nan(x)
+    end
+
+    rx = rem(x,360.0)
+    arx = abs(rx)
+
+    if arx == 0.0
+        # return -0.0 iff x == -0.0
+        return x == 0.0 ? x : arx
+    elseif arx < 45.0
+        return sin(degrees2radians(rx))
+    elseif arx <= 135.0
+        arx = 90.0 - arx
+        return copysign(cos(degrees2radians(arx)),rx)
+    elseif arx < 225.0
+        rx = copysign(180.0,rx) - rx
+        return sin(degrees2radians(rx))
+    elseif arx <= 315.0
+        arx = 270.0 - arx
+        return -copysign(cos(degrees2radians(arx)),rx)
+    else
+        rx = rx - copysign(360.0,rx)
+        return sin(degrees2radians(rx))
+    end
+end
+
+function cosd(x::Real)
+    if isinf(x)
+        return throw(DomainError())
+    elseif isnan(x)
+        return nan(x)
+    end
+
+    rx = abs(rem(x,360.0))
+
+    if rx <= 45.0
+        return cos(degrees2radians(rx))
+    elseif rx < 135.0
+        rx = 90.0 - rx
+        return sin(degrees2radians(rx))
+    elseif rx <= 225.0
+        rx = 180.0 - rx
+        return -cos(degrees2radians(rx))
+    elseif rx < 315.0
+        rx = rx - 270.0
+        return sin(degrees2radians(rx))
+    else
+        rx = 360.0 - rx
+        return cos(degrees2radians(rx))
+    end
+end
+
+tand(x::Real) = sind(x) / cosd(x)
+
+for (fd, f) in ((:sind, :sin), (:cosd, :cos), (:tand, :tan))
     @eval begin
         ($fd)(z) = ($f)(degrees2radians(z))
     end

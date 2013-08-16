@@ -10,15 +10,18 @@ export
     with_bigfloat_rounding
 
 import
-    Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1,
-        bessely, bessely0, bessely1, ceil, cmp, convert, copysign, beta, exp, 
-        exp2, exponent, factorial, floor, hypot, isinteger, iround, isfinite,
-        isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf, nextfloat,
-        prevfloat, promote_rule, rem, round, show, showcompact, sum, sqrt,
-        string, trunc, get_precision, exp10, expm1, gamma, lgamma, digamma,
-        erf, erfc, zeta, log1p, airyai, iceil, ifloor, itrunc, eps, signbit,
-        sin, cos, tan, sec, csc, cot, acos, asin, atan, cosh, sinh, tanh,
-        sech, csch, coth, acosh, asinh, atanh, atan2, serialize, deserialize
+    Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1, bessely,
+        bessely0, bessely1, ceil, cmp, convert, copysign, degrees2radians,
+        exp, exp2, exponent, factorial, floor, hypot, isinteger, iround,
+        isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
+        nextfloat, prevfloat, promote_rule, radians2degrees, rem, round, show,
+        showcompact, sum, sqrt, string, trunc, get_precision, exp10, expm1,
+        gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
+        itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
+        cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
+        serialize, deserialize
+
+import Base.Math.lgamma_r
 
 const ROUNDING_MODE = [0]
 const DEFAULT_PRECISION = [256]
@@ -378,6 +381,10 @@ end
 
 sqrt(x::BigInt) = sqrt(BigFloat(x))
 
+radians2degrees(z::BigFloat) = 180/big(pi)*z
+degrees2radians(z::BigFloat) = big(pi)/180*z
+
+
 function ^(x::BigFloat, y::Unsigned)
     z = BigFloat()
     ccall((:mpfr_pow_ui, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Culong, Int32), &z, &x, y, ROUNDING_MODE[end])
@@ -560,17 +567,7 @@ function lgamma(x::BigFloat)
     return z
 end
 
-# Beta function
-function beta(x::BigFloat, w::BigFloat)
-    sign = 1
-    yx = lgamma(x)
-    sign *= lgamma_signp[1]
-    yw = lgamma(w)
-    sign *= lgamma_signp[1]
-    yxw = lgamma(x+w)
-    sign *= lgamma_signp[1]
-    return sign*exp(yx + yw - yxw)
-end
+lgamma_r(x::BigFloat) = (lgamma(x), lgamma_signp[1])
 
 function atan2(y::BigFloat, x::BigFloat)
     z = BigFloat()
