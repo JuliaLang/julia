@@ -359,74 +359,64 @@
 
     // random matrix multiply //
 
-    function randFloat64(n) {
-        var v, i;
-        v = new Float64Array(n);
-        
-        for (i = 0; i < n; i++) {
-            v[i] = Math.random();
+    // randmatmul implemented using BLAS
+    //
+    // Requirements:
+    //      1) npm install ffi
+    //      2) npm install ref
+    //      3) dynamically loadable libblas must be available aleady.
+    var ffi = require('ffi');
+    var ref = require('ref');
+    var doublePtr = ref.refType(ref.types.double);
+    var blas = new ffi.Library('libblas', {
+        'cblas_dgemm': ['void', [
+            'int', 'int', 'int', 'int', 'int', 'int',
+            'double', doublePtr, 'int', doublePtr,
+            'int', 'double', doublePtr, 'int'
+        ]]
+    });
+
+    var CblasRowMajor = 101;
+    var CblasNoTrans = 111;
+    var sizeofDouble = 8;
+
+    function blas_randmat(m, n) {
+        var M = new Buffer(m * n * sizeofDouble);
+
+        var i, mn = m * n, offset = 0;
+        for (i = 0; i < mn; ++i) {
+            M.writeDoubleLE(Math.random(), offset);
+            offset += sizeofDouble;
         }
-        
-        return v;
+
+        return M;
     }
 
-    // Transpose mxn matrix.
-    function mattransp(A, m, n) {
-        var i, j, T;
-        T = new Float64Array(m * n);
-
-        for (i = 0; i < m; ++i) {
-            for (j = 0; j < n; ++j) {
-                T[j * m + i] = A[i * n + j];
-            }
-        }
-
-        return T;
-    }
-
-    function matmul(A,B,m,l,n) {
-        var C, i, j, k, total;
-        C = new Array(m*n);
-        i = 0;
-        j = 0;
-        k = 0;
-
-        // Use the transpose of B so that
-        // during the matrix multiplication
-        // we access consecutive memory locations.
-        // This is a fairer comparison of JS
-        // with the other languages which call on
-        // custom multiplication routines, which
-        // likely make use of such aligned memory.
-        B = mattransp(B,l,n);
-        
-        for (i = 0; i < m; i++) {
-            for (j = 0; j < n; j++) {
-                total = 0.0;
-                
-                for (k = 0; k < l; k++) {
-                    total += A[i*l+k]*B[j*l+k];
-                }
-                
-                C[i*n+j] = total;
-            }
-        }
-        
+    function blas_matmul(A, B, m, l, n) {
+        var C = new Buffer(m * n * sizeofDouble);
+        blas.cblas_dgemm(
+                CblasRowMajor,
+                CblasNoTrans,
+                CblasNoTrans,
+                m, n, l,
+                1.0, A,
+                l, B, n,
+                0.0,
+                C, n);
         return C;
     }
+    
+    function blas_randmatmul(n) {
+        var A = blas_randmat(n, n);
+        var B = blas_randmat(n, n);
 
-    function randmatmul(n) {
-        var A, B;
-        A = randFloat64(n*n);
-        B = randFloat64(n*n);
-        
-        return matmul(A, B, n, n, n);
+        return blas_matmul(A, B, n, n, n);
     }
 
     tmin = Number.POSITIVE_INFINITY;
     t = (new Date()).getTime();
-    C = randmatmul(1000);
-    assert(0 <= C[0]);
+    C = blas_randmatmul(1000);
+    assert(0 <= C.readDoubleLE(0));
     t = (new Date()).getTime()-t;
     if (t < tmin) { tmin=t; }
     console.log("javascript,rand_mat_mul," + tmin);
