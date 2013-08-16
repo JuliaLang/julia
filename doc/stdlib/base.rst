@@ -432,6 +432,10 @@ Iterable Collections
 
    Reduce the given collection with the given operator, i.e. accumulate ``v = op(v,elt)`` for each element, where ``v`` starts as ``v0``. Reductions for certain commonly-used operators are available in a more convenient 1-argument form: ``max(itr)``, ``min(itr)``, ``sum(itr)``, ``prod(itr)``, ``any(itr)``, ``all(itr)``.
 
+   The associativity of the reduction is implementation-dependent; if you
+   need a particular associativity, e.g. left-to-right, you should write
+   your own loop.
+
 .. function:: max(itr)
 
    Returns the largest element in a collection
@@ -503,6 +507,10 @@ Iterable Collections
    Applies function ``f`` to each element in ``itr`` and then reduces the result using the binary function ``op``.
 
    **Example**: ``mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14``
+
+   The associativity of the reduction is implementation-dependent; if you
+   need a particular associativity, e.g. left-to-right, you should write
+   your own loop.
 
 .. function:: first(coll)
 
@@ -3088,6 +3096,10 @@ Array functions
    Reduce 2-argument function ``f`` along dimensions of ``A``. ``dims`` is a
    vector specifying the dimensions to reduce, and ``initial`` is the initial
    value to use in the reductions.
+
+   The associativity of the reduction is implementation-dependent; if you
+   need a particular associativity, e.g. left-to-right, you should write
+   your own loop.
 
 .. function:: mapslices(f, A, dims)
 

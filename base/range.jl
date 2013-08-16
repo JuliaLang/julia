@@ -247,7 +247,7 @@ function intersect(r::Ranges, s::Ranges...)
 end
 
 # findin (the index of intersection)
-function findin{T1<:Integer, T2<:Integer}(r::Ranges{T1}, span::Range1{T2})
+function _findin{T1<:Integer, T2<:Integer}(r::Ranges{T1}, span::Range1{T2})
     local ifirst
     local ilast
     fspan = first(span)
@@ -265,7 +265,17 @@ function findin{T1<:Integer, T2<:Integer}(r::Ranges{T1}, span::Range1{T2})
         ifirst = fr >= fspan ? 1 : length(r)+1
         ilast = fr <= lspan ? length(r) : 0
     end
+    ifirst, ilast
+end
+
+function findin{T1<:Integer, T2<:Integer}(r::Range1{T1}, span::Range1{T2})
+    ifirst, ilast = _findin(r, span)
     ifirst:ilast
+end
+
+function findin{T1<:Integer, T2<:Integer}(r::Range{T1}, span::Range1{T2})
+    ifirst, ilast = _findin(r, span)
+    ifirst:1:ilast
 end
 
 ## linear operations on ranges ##

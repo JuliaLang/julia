@@ -27,7 +27,8 @@ g = float16(1.)
 @test !isnan(float16(2.6))
 @test NaN16 != NaN16
 @test isequal(NaN16, NaN16)
-@test sprint(showcompact, NaN16) == "NaN16"
+@test repr(NaN16) == "NaN16"
+@test sprint(showcompact, NaN16) == "NaN"
 
 @test isinf(Inf16)
 @test isinf(-Inf16)
@@ -38,7 +39,8 @@ g = float16(1.)
 @test Inf16 != -Inf16
 @test -Inf16 < Inf16
 @test isequal(Inf16, Inf16)
-@test sprint(showcompact, Inf16) == "Inf16"
+@test repr(Inf16) == "Inf16"
+@test sprint(showcompact, Inf16) == "Inf"
 
 @test float16(0.0) == float16(0.0)
 @test float16(-0.0) == float16(0.0)
