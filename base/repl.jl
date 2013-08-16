@@ -38,9 +38,6 @@ end
 
 show_error(io::IO, e) = show(io, e)
 
-# deprecated, but not exported
-const error_show = show_error
-
 function show_error(io::IO, e::TypeError)
     ctx = isempty(e.context) ? "" : "in $(e.context), "
     if e.expected === Bool

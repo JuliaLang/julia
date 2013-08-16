@@ -227,6 +227,7 @@ export PipeString
 @deprecate  delete!(d::Dict, key, default)  pop!(d, key, default)
 @deprecate repl_show(io, x)  writemime(io, MIME"text/plain"(), x)
 @deprecate get(A::Array, B::Array, I, default) get!(A, B, I, default)
+@deprecate error_show  show_error
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
