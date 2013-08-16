@@ -2111,24 +2111,36 @@ function tuple_elim_pass(ast::Expr)
                 end
             end
             i += n_ins
-            replace_tupleref(bexpr, var, vals, sv, i)
+            replace_tupleref(ast, bexpr, var, vals, sv, i)
         else
             i += 1
         end
     end
 end
 
-function replace_tupleref(e::ANY, tupname, vals, sv, i0)
+function replace_tupleref(ast, e::ANY, tupname, vals, sv, i0)
     if !isa(e,Expr)
         return
     end
     for i = i0:length(e.args)
         a = e.args[i]
-        if isa(a,Expr) && is_known_call(a,tupleref, sv) &&
+        if isa(a,Expr) && is_known_call(a, tupleref, sv) &&
             symequal(a.args[2],tupname)
-            e.args[i] = vals[a.args[3]]
+            val = vals[a.args[3]]
+            if isa(val,SymbolNode) && a.typ <: val.typ && !typeseq(a.typ,val.typ)
+                # original expression might have better type info than
+                # the tuple element expression that's replacing it.
+                val.typ = a.typ
+                for vi in ast.args[2][2]::Array{Any,1}
+                    if vi[1] === val.name
+                        vi[2] = a.typ
+                        break
+                    end
+                end
+            end
+            e.args[i] = val
         else
-            replace_tupleref(a, tupname, vals, sv, 1)
+            replace_tupleref(ast, a, tupname, vals, sv, 1)
         end
     end
 end
