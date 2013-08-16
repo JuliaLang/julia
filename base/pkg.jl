@@ -44,7 +44,7 @@ function installed()
 end
 installed(pkg::String) = Dir.cd() do
     avail = Read.available()
-    Read.isinstalled(pkg) ? Read.installed_version(pkg,avail) :
+    Read.isinstalled(pkg) ? Read.installed_version(pkg,avail[pkg]) :
         haskey(avail,pkg) ? nothing :
             error("$pkg is neither installed nor registered")
 end
