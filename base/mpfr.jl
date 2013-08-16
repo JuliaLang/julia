@@ -20,6 +20,8 @@ import
         sin, cos, tan, sec, csc, cot, acos, asin, atan, cosh, sinh, tanh,
         sech, csch, coth, acosh, asinh, atanh, atan2, serialize, deserialize
 
+import Base.Math.lgamma_r
+
 const ROUNDING_MODE = [0]
 const DEFAULT_PRECISION = [256]
 
@@ -559,6 +561,8 @@ function lgamma(x::BigFloat)
     ccall((:mpfr_lgamma,:libmpfr), Cint, (Ptr{BigFloat}, Ptr{Cint}, Ptr{BigFloat}, Int32), &z, lgamma_signp, &x, ROUNDING_MODE[end])
     return z
 end
+
+lgamma_r(x::BigFloat) = (lgamma(x), lgamma_signp[1])
 
 function atan2(y::BigFloat, x::BigFloat)
     z = BigFloat()
