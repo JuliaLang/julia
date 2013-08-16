@@ -799,6 +799,25 @@ static Value *make_gcroot(Value *v, jl_codectx_t *ctx)
     return froot;
 }
 
+// test whether getting a field from the given type using the given
+// field expression would not allocate memory
+static bool is_getfield_nonallocating(jl_datatype_t *ty, jl_value_t *fld)
+{
+    if (!jl_is_leaf_type((jl_value_t*)ty))
+        return false;
+    jl_sym_t *name = NULL;
+    if (jl_is_quotenode(fld) && jl_is_symbol(jl_fieldref(fld,0))) {
+        name = (jl_sym_t*)jl_fieldref(fld,0);
+    }
+    for(int i=0; i < jl_tuple_len(ty->types); i++) {
+        if (!(ty->fields[i].isptr ||
+              (name && name != (jl_sym_t*)jl_tupleref(ty->names,i)))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 // does "ex" compute something that doesn't need a root over the whole function?
 static bool is_stable_expr(jl_value_t *ex, jl_codectx_t *ctx)
 {
@@ -823,7 +842,8 @@ static bool is_stable_expr(jl_value_t *ex, jl_codectx_t *ctx)
                 // something reached via getfield from a stable value is also stable.
                 if (jl_array_dim0(e->args) == 3) {
                     jl_value_t *ty = expr_type(jl_exprarg(e,1), ctx);
-                    if ((fptr == &jl_f_get_field && jl_is_immutable_datatype(ty)) ||
+                    if ((fptr == &jl_f_get_field && jl_is_immutable_datatype(ty) &&
+                         is_getfield_nonallocating((jl_datatype_t*)ty, jl_exprarg(e,2))) ||
                         fptr == &jl_f_tupleref) {
                         if (is_stable_expr(jl_exprarg(e,1), ctx))
                             return true;
