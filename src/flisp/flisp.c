@@ -57,9 +57,6 @@ char * dirname(char *);
 #include <libgen.h>
 #endif
 
-//#define MEMDEBUG
-//#define MEMDEBUG2
-
 #include "libsupport.h"
 #include "flisp.h"
 #include "opcodes.h"
@@ -270,7 +267,7 @@ static symbol_t *mk_symbol(char *str)
     symbol_t *sym;
     size_t len = strlen(str);
 
-    sym = (symbol_t*)malloc(sizeof(symbol_t)-sizeof(void*) + len + 1);
+    sym = (symbol_t*)malloc((sizeof(symbol_t)-sizeof(void*)+len+1+7)&-8);
     assert(((uptrint_t)sym & 0x7) == 0); // make sure malloc aligns 8
     sym->left = sym->right = NULL;
     sym->flags = 0;
@@ -321,6 +318,12 @@ static char gsname[2][16];
 static int gsnameno=0;
 value_t fl_gensym(value_t *args, uint32_t nargs)
 {
+#ifdef MEMDEBUG2
+    gsnameno = 1-gsnameno;
+    char *n = uint2str(gsname[gsnameno]+1, sizeof(gsname[0])-1, _gensym_ctr++, 10);
+    *(--n) = 'g';
+    return tagptr(mk_symbol(n), TAG_SYM);
+#else
     argcount("gensym", nargs, 0);
     (void)args;
     gensym_t *gs = (gensym_t*)alloc_words(sizeof(gensym_t)/sizeof(void*));
@@ -329,6 +332,7 @@ value_t fl_gensym(value_t *args, uint32_t nargs)
     gs->isconst = 0;
     gs->type = NULL;
     return tagptr(gs, TAG_SYM);
+#endif
 }
 
 int fl_isgensym(value_t v)
@@ -344,6 +348,7 @@ static value_t fl_gensymp(value_t *args, u_int32_t nargs)
 
 char *symbol_name(value_t v)
 {
+#ifndef MEMDEBUG2
     if (ismanaged(v)) {
         gensym_t *gs = (gensym_t*)ptr(v);
         gsnameno = 1-gsnameno;
@@ -351,6 +356,7 @@ char *symbol_name(value_t v)
         *(--n) = 'g';
         return n;
     }
+#endif
     return ((symbol_t*)ptr(v))->name;
 }
 
@@ -405,14 +411,14 @@ static value_t *alloc_words(int n)
 #define cons_index(c)  (((cons_t*)ptr(c))-((cons_t*)fromspace))
 #endif
 
-#ifndef MEMDEBUG2
-#define ismarked(c)    bitvector_get(consflags, cons_index(c))
-#define mark_cons(c)   bitvector_set(consflags, cons_index(c), 1)
-#define unmark_cons(c) bitvector_set(consflags, cons_index(c), 0)
-#else
+#ifdef MEMDEBUG2
 #define ismarked(c)    (((void**)ptr(c))[-1]!=((void*)0))
 #define mark_cons(c)   ((((void**)ptr(c))[-1])=((void*)1))
 #define unmark_cons(c) ((((void**)ptr(c))[-1])=((void*)0))
+#else
+#define ismarked(c)    bitvector_get(consflags, cons_index(c))
+#define mark_cons(c)   bitvector_set(consflags, cons_index(c), 1)
+#define unmark_cons(c) bitvector_set(consflags, cons_index(c), 0)
 #endif
 
 static value_t the_empty_vector;
@@ -1044,7 +1050,9 @@ static value_t apply_cl(uint32_t nargs)
     captured = 0;
     func = Stack[SP-nargs-1];
     ip = cv_data((cvalue_t*)ptr(fn_bcode(func)));
+#ifndef MEMDEBUG2
     assert(!ismanaged((uptrint_t)ip));
+#endif
     while (SP+GET_INT32(ip) > N_STACK) {
         grow_stack();
     }
