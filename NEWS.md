@@ -75,7 +75,9 @@ New library functions
     (#3050).
 
   * `interrupt` for interrupting worker processes (#3819).
-
+  
+  * `timedwait` does a polled wait for an event till a specified timeout.  
+  
   * `Condition` type with `wait` and `notify` functions for synchronizing `Task`s
 
   * `versioninfo` provides detailed version information
@@ -131,7 +133,7 @@ Library improvements
 
   * Support optional RTLD flags in `dlopen` (#2380)
 
-  * Options in `pmap` for retrying or ignoring failed tasks
+  * Options in `pmap` for retrying or ignoring failed tasks. Also `pmap` now works with any iterable.
 
 Deprecated or removed
 ---------------------
