@@ -4,6 +4,12 @@
 @test significand(12.8) == 1.6
 @test exponent(12.8) == 3
 
+# degree-based trig functions
+for x = -400:40:400
+    @test_approx_eq_eps sind(x) sin(pi/180*x) eps(pi/180*x)
+    @test_approx_eq_eps cosd(x) cos(pi/180*x) eps(pi/180*x)
+end
+
 # error functions
 @test_approx_eq erf(1) 0.84270079294971486934
 @test_approx_eq erfc(1) 0.15729920705028513066
