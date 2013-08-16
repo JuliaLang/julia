@@ -2436,7 +2436,6 @@ static bool store_unboxed_p(jl_sym_t *s, jl_codectx_t *ctx)
     // only store a variable unboxed if type inference has run, which
     // checks that the variable is not referenced undefined.
     return (ctx->linfo->inferred && jltupleisbits(jt,false) &&
-            ((jl_datatype_t*)jt)->size > 0 &&
             // don't unbox intrinsics, since inference depends on their having
             // stable addresses for table lookup.
             jt != (jl_value_t*)jl_intrinsic_type && !vi.isCaptured);
