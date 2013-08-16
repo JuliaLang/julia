@@ -230,8 +230,10 @@ function tree_aggregate{T<:Unsigned}(data::Vector{T})
     bt = Array(Vector{T}, 0)
     counts = Array(Int, 0)
     for (k,v) in treecount
-        push!(bt, k)
-        push!(counts, v)
+        if !isempty(k)
+            push!(bt, k)
+            push!(counts, v)
+        end
     end
     bt, counts
 end
