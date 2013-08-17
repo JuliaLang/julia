@@ -14,8 +14,8 @@ copy(A::Symmetric) = Symmetric(copy(A.S), A.uplo)
 size(A::Symmetric, args...) = size(A.S, args...)
 print_matrix(io::IO, A::Symmetric) = print_matrix(io, full(A))
 full(A::Symmetric) = A.S
-ishermitian{T<:Real}(A::Symmetric) = true
-ishermitian{T<:Complex}(A::Symmetric) = all(imag(A.S) .== 0)
+ishermitian{T<:Real}(A::Symmetric{T}) = true
+ishermitian{T<:Complex}(A::Symmetric{T}) = all(imag(A.S) .== 0)
 issym(A::Symmetric) = true
 transpose(A::Symmetric) = A
 
