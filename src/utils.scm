@@ -31,6 +31,8 @@
 	   (any (lambda (x) (contains p x))
 		expr))))
 
+(define (contains-eq x expr) (contains (lambda (y) (eq? y x)) expr))
+
 (define (butlast lst)
   (if (or (null? lst) (null? (cdr lst)))
       '()
