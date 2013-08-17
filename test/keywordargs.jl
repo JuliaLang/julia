@@ -98,3 +98,7 @@ kwf7{T}(x::T; k::T=1) = T
 @test kwf7(1.5;k=2.5) === Float64
 @test_throws kwf7(1.5)
 @test_throws kwf7(1.5;k=2)
+
+# try to confuse it with quoted symbol
+kwf8{T}(x::MIME{:T};k::T=0) = 0
+@test kwf8(MIME{:T}()) === 0

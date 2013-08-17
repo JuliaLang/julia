@@ -397,14 +397,14 @@
 	 (positional-sparams
 	  (filter (lambda (s)
 		    (let ((name (if (symbol? s) s (cadr s))))
-		      (or (contains-eq name pargl)
-			  (contains-eq name vararg)
-			  (not (contains-eq name argl)))))
+		      (or (expr-contains-eq name (cons 'list pargl))
+			  (and (pair? vararg) (expr-contains-eq name (car vararg)))
+			  (not (expr-contains-eq name (cons 'list kargl))))))
 		  sparams))
 	 (keyword-sparams
 	  (filter (lambda (s)
 		    (let ((name (if (symbol? s) s (cadr s))))
-		      (not (contains-eq name positional-sparams))))
+		      (not (expr-contains-eq name (cons 'list positional-sparams)))))
 		  sparams))
 	 (keyword-sparam-names
 	  (map (lambda (s) (if (symbol? s) s (cadr s))) keyword-sparams)))
@@ -447,7 +447,7 @@
 			   ;; the warning twice
 			   (lambda (s)
 			     (let ((name (if (symbol? s) s (cadr s))))
-			       (contains-eq name argl)))
+			       (expr-contains-eq name (cons 'list argl))))
 			   positional-sparams)
 	  `((:: ,kw (top Array)) ,@pargl ,@vararg)
 	  `(block
@@ -479,7 +479,7 @@
 				   ;; underlying method is called.
 				   (rval (if (and (decl? k)
 						  (not (any (lambda (s)
-							      (contains-eq s (caddr k)))
+							      (expr-contains-eq s (caddr k)))
 							    keyword-sparam-names)))
 					     `(call (top typeassert)
 						    ,rval0
@@ -736,7 +736,7 @@
 			;; parameters not mentioned in the field types. such a
 			;; constructor would not be callable anyway.
 			(every (lambda (sp)
-				 (contains-eq sp field-types))
+				 (expr-contains-eq sp (cons 'list field-types)))
 			       params))
 		   `(,(default-outer-ctor name field-names field-types
 			params bounds))
