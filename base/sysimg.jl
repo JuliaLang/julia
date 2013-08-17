@@ -7,6 +7,16 @@ include = Core.include
 
 include("exports.jl")
 
+if false
+    # simple print definitions for debugging. enable these if something
+    # goes wrong during bootstrap before printing code is available.
+    show(x::ANY) = ccall(:jl_static_show, Void, (Any,), x)
+    print(x::ANY) = show(x)
+    println(x::ANY) = ccall(:jl_, Void, (Any,), x)
+    print(a::ANY...) = for x=a; print(x); end
+end
+
+
 ## Load essential files and libraries
 
 include("base.jl")
