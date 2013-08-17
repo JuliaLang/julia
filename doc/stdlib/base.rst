@@ -100,7 +100,7 @@ All Objects
 
 .. function:: is(x, y)
 
-   Determine whether ``x`` and ``y`` are identical, in the sense that no program could distinguish them.
+   Determine whether ``x`` and ``y`` are identical, in the sense that no program could distinguish them. Compares mutable objects by address in memory, and compares immutable objects (such as numbers) by contents at the bit level. This function is sometimes called ``egal``. The ``===`` operator is an alias for this function.
 
 .. function:: isa(x, type)
 
@@ -108,11 +108,12 @@ All Objects
 
 .. function:: isequal(x, y)
 
-   True if and only if ``x`` and ``y`` have the same contents. Loosely speaking, this means ``x`` and ``y`` would look the same when printed.
+   True if and only if ``x`` and ``y`` have the same contents. Loosely speaking, this means ``x`` and ``y`` would look the same when printed. This is the default comparison function used by hash tables (``Dict``).
+   New types with a notion of equality should implement this function, except for numbers, which should implement ``==`` instead. However, numeric types with special values might need to implement ``isequal`` as well. For example, floating point ``NaN`` values are not ``==``, but are all equivalent in the sense of ``isequal``.
 
 .. function:: isless(x, y)
 
-   Test whether ``x`` is less than ``y``. Provides a total order consistent with ``isequal``. Values that are normally unordered, such as ``NaN``, are ordered in an arbitrary but consistent fashion. This is the default comparison used by ``sort``. Non-numeric types that can be ordered should implement this function.
+   Test whether ``x`` is less than ``y``. Provides a total order consistent with ``isequal``. Values that are normally unordered, such as ``NaN``, are ordered in an arbitrary but consistent fashion. This is the default comparison used by ``sort``. Non-numeric types that can be ordered should implement this function. Numeric types only need to implement it if they have special values such as ``NaN``.
 
 .. function:: typeof(x)
 
@@ -1677,12 +1678,15 @@ Mathematical Operators
 .. _==:
 .. function:: ==(x, y)
 
-   Equality comparison operator.
+   Numeric equality operator. Compares numbers and number-like values (e.g. arrays) by numeric value. True for numbers of different types that represent the same value (e.g. ``2`` and ``2.0``). Follows IEEE semantics for floating-point numbers.
+   New numeric types should implement this function for two arguments of the new type.
 
 .. _!=:
 .. function:: !=(x, y)
 
-   Not-equals comparison operator.
+   Not-equals comparison operator. Always gives the opposite answer as ``==``.
+   New types should generally not implement this, and rely on the fallback
+   definition ``!=(x,y) = !(x==y)`` instead.
 
 .. _===:
 .. function:: ===(x, y)
@@ -1697,7 +1701,8 @@ Mathematical Operators
 .. _<:
 .. function:: <(x, y)
 
-   Less-than comparison operator.
+   Less-than comparison operator. New numeric types should implement this function
+   for two arguments of the new type.
 
 .. _<=:
 .. function:: <=(x, y)
@@ -1707,7 +1712,8 @@ Mathematical Operators
 .. _>:
 .. function:: >(x, y)
 
-   Greater-than comparison operator.
+   Greater-than comparison operator. Generally, new types should implement ``<``
+   instead of this function, and rely on the fallback definition ``>(x,y) = y<x``.
 
 .. _>=:
 .. function:: >=(x, y)
