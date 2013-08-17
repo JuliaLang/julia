@@ -4,7 +4,9 @@ const (<:) = subtype
 
 super(T::DataType) = T.super
 
-==(T::Type, S::Type) = typeseq(T, S)
+# avoid ambiguity with isequal(::Tuple, ::Tuple)
+isequal(T::(Type...), S::(Type...)) = typeseq(T, S)
+isequal(T::Type, S::Type) = typeseq(T, S)
 
 ## comparison ##
 

@@ -243,8 +243,6 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 ==(x::Signed,   y::Unsigned) = (x >= 0) & (unsigned(x) == y)
 ==(x::Unsigned, y::Signed  ) = (y >= 0) & (x == unsigned(y))
-!=(x::Signed,   y::Unsigned) = (x <  0) | (unsigned(x) != y)
-!=(x::Unsigned, y::Signed  ) = (y <  0) | (x != unsigned(y))
 < (x::Signed,   y::Unsigned) = (x <  0) | (unsigned(x) <  y)
 < (x::Unsigned, y::Signed  ) = (y >  0) & (x <  unsigned(y))
 <=(x::Signed,   y::Unsigned) = (x <= 0) | (unsigned(x) <= y)
