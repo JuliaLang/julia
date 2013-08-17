@@ -702,7 +702,13 @@
 	   (scope-block
 	    (block
 	     (global ,@params)
-	     ,@(if (null? defs)
+	     ,@(if (and (null? defs)
+			;; don't generate an outer constructor if the type has
+			;; parameters not mentioned in the field types. such a
+			;; constructor would not be callable anyway.
+			(every (lambda (sp)
+				 (contains-eq sp field-types))
+			       params))
 		   `(,(default-outer-ctor name field-names field-types
 			params bounds))
 		   '())))
