@@ -47,6 +47,8 @@ let T = TypeVar(:T,true)
     f47{T}(x::Vector{Vector{T}}) = 0
     @test_throws f47(Array(Vector,0))
     @test f47(Array(Vector{Int},0)) == 0
+    @test typeintersect((T,T), (Union(Float64,Int64),Int64)) == (Int64,Int64)
+    @test typeintersect((T,T), (Int64,Union(Float64,Int64))) == (Int64,Int64)
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
