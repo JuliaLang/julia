@@ -87,3 +87,14 @@ extravagant_args(x,y=0,rest...;color="blue",kw...) =
 
 # passing junk kw container
 @test_throws extravagant_args(1; {[]}...)
+
+# keyword args with static parmeters
+kwf6{T}(x; k::T=1) = T
+@test kwf6(1) === Int
+@test kwf6(1;k=2.5) === Float64
+
+kwf7{T}(x::T; k::T=1) = T
+@test kwf7(2) === Int
+@test kwf7(1.5;k=2.5) === Float64
+@test_throws kwf7(1.5)
+@test_throws kwf7(1.5;k=2)
