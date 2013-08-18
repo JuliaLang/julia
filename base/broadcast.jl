@@ -63,7 +63,7 @@ function calc_loop_strides(shape::Dims, As::AbstractArray...)
     end
     nd = length(loopshape)
 
-    strides = [(size(A, d) > 1 ? stride(A, d) : 0) for A in As, d in dims]
+    strides = Int[(size(A, d) > 1 ? stride(A, d) : 0) for A in As, d in dims]
     # convert from regular strides to loop strides
     for k=(nd-1):-1:1, a=1:length(As)
         strides[a, k+1] -= strides[a, k]*loopshape[k]
