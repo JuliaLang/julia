@@ -336,14 +336,14 @@ function _fixup{T<:String}(
     __fixup(tofixup, avail, inst, free, fixed; exclude=exclude)
 end
 
-fixup(
+_fixup(
     pkg::String,
     avail :: Dict = Read.available(),
     inst  :: Dict = Read.installed(avail),
     free  :: Dict = Read.free(inst),
     fixed :: Dict = Read.fixed(avail,inst);
     exclude = []
-) = fixup([pkg], avail, inst, free, fixed; exclude=exclude)
+) = _fixup([pkg], avail, inst, free, fixed; exclude=exclude)
 
 function _fixup(
     avail :: Dict = Read.available(),
@@ -358,5 +358,6 @@ function _fixup(
 end
 
 fixup() = Dir.cd(_fixup)
+fixup(pkg) = Dir.cd(()->_fixup(pkg))
 
 end # module
