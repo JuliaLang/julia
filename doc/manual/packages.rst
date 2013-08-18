@@ -91,11 +91,7 @@ actual desired names.
 Creating a new Julia package
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Note: this documentation is out of date pending further development of version 2 of Julia's package management system – specifically its tools for package developers. For the time being, using Pkg1 (i.e. the first version of the package manager) tools for package development must suffice. In order to use Pkg1, you must load it::
-
-    include(joinpath(JULIA_HOME,"../../base/pkg1.jl"))
-
-With Pkg1 loaded, the following instructions document how to create new packages.
+Note: this documentation is out of date pending further development of version 2 of Julia's package management system – specifically its tools for package developers. For the time being, using Pkg1 (i.e. the first version of the package manager) tools for package development work.
 
 1. Check that your proposed package will not compete directly with an existing one
    by checking the list of  :ref:`available-packages`. If there is significant overlap
