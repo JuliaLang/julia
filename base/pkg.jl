@@ -362,4 +362,101 @@ end
 fixup() = Dir.cd(_fixup)
 fixup(pkg) = Dir.cd(()->_fixup(pkg))
 
+###########################################################################
+# Updating package METADATA:
+
+latest_version(pkg::String) =
+  max(keys(Dir.cd(() -> Pkg.Read.available(pkg))))
+
+version(pkg::String, ver::VersionNumber=v"0.0.0") = Dir.cd() do
+    ispath(pkg, ".git") || error("$pkg is not a git repo")
+    Git.dirty(dir=pkg) && error("$pkg has uncommitted changes")
+    sha1 = Git.readchomp(`rev-parse HEAD`, dir=pkg)
+    if isfile("METADATA", pkg, "url")
+        lver = latest_version(pkg)
+        if ver < lver || (ver == lver && ver != v"0.0.0")
+            println(STDERR, "Warning: latest $pkg version is $lver >= $ver.")
+        end
+        if sha1 == Pkg.Read.available(pkg)[lver].sha1
+            error("No changes to $pkg have been committed since $(string(lver)).")
+        end
+    else
+        url = Git.readchomp(`config remote.origin.url`, dir=pkg)
+    end
+
+    if ver > v"0.0.0"
+        Git.run(`tag $(string(ver)) HEAD`, dir=pkg)
+    end
+    requires = let REQUIRE = joinpath(pkg, "REQUIRE")
+        isfile(REQUIRE) ? readall(REQUIRE) : ""
+    end
+    
+    try
+        cd("METADATA") do 
+            Git.transact() do
+                if !isdir(pkg)
+                    mkdir(pkg)
+                end
+                cd(pkg) do
+                    if !isfile("url")
+                        open("url") do io
+                            println(io, url)
+                            if all(isspace, url)
+                                println(STDERR, "Warning: empty METADATA/$pkg/url -- edit before committing.")
+                            end
+                        end
+                    end
+                    if !isdir("versions") mkdir("versions") end
+                    cd("versions") do
+                        if !isdir(string(ver)) mkdir(string(ver)) end
+                        cd(string(ver)) do
+                            open("sha1", "w") do io
+                                println(io, sha1)
+                            end
+                            if !all(isspace, requires)
+                                open("requires", "w") do io
+                                    print(io, requires)
+                                end
+                            elseif isfile("requires")
+                                rm("requires")
+                            end
+                        end
+                    end
+                    # hashes directory is for Pkg1 compatibility only?
+                    if !isdir("hashes") mkdir("hashes") end
+                    open(joinpath("hashes", sha1), "w") do io
+                        println(io, ver)
+                    end
+                end
+            end
+        end
+        println(STDERR, "METADATA updated for $pkg $ver; please commit and send a pull request.")
+    catch
+        if ver > v"0.0.0"
+            Git.run(`tag -d $(string(ver))`, dir=pkg) # rm version tag
+        end
+        rethrow()
+    end
+end
+
+function patch(pkg)
+    lver = latest_version(pkg)
+    if lver > v"0.0.0"
+        version(pkg, VersionNumber(lver.major, lver.minor, lver.patch+1))
+    else
+        version(pkg, v"0.0.0")
+    end
+end
+function minor(pkg)
+    lver = latest_version(pkg)
+    version(pkg, VersionNumber(lver.major, lver.minor+1))
+end
+function major(pkg)
+    lver = latest_version(pkg)
+    version(pkg, VersionNumber(lver.major+1))
+end
+
+
+###########################################################################
+
 end # module

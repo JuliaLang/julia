@@ -91,7 +91,7 @@ actual desired names.
 Creating a new Julia package
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Note: this documentation is out of date pending further development of version 2 of Julia's package management system – specifically its tools for package developers. For the time being, using Pkg1 (i.e. the first version of the package manager) tools for package development work.
+Note: this documentation is out of date pending further development of version 2 of Julia's package management system – specifically, its tools for package developers.
 
 1. Check that your proposed package will not compete directly with an existing one
    by checking the list of  :ref:`available-packages`. If there is significant overlap
@@ -99,7 +99,7 @@ Note: this documentation is out of date pending further development of version 2
    to improve the existing package rather than creating a new, competing package.
    See ref:`contrib-existing`_.
 
-2. Initialize your package in Julia by running::
+2. Initialize your package in Julia by running (using ``Pkg1``, the first version of the package manager, for now)::
 
     Pkg1.new("MY_PACKAGE_NAME")
 
@@ -234,13 +234,12 @@ Distributing a new package or new version of an existing package
 
 2. Populate the local METADATA by running in Julia: ::
 
-    Pkg1.pkg_origin("MY_PACKAGE_NAME")
-    Pkg1.patch("MY_PACKAGE_NAME")
+    Pkg.patch("MY_PACKAGE_NAME")
 
 3. Update the local METADATA.::
 
     cd $HOME/.julia/METADATA
-    git add MY_PACKAGE_NAME #Ensure that only the latest hash is committed
+    git add MY_PACKAGE_NAME # Ensure that only the latest hash is committed
     git commit
 
 4. Push to the remote METADATA repository::
