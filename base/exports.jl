@@ -803,6 +803,7 @@ export
     search,
     show,
     showcompact,
+    showerror,
     split,
     sprint,
     string,

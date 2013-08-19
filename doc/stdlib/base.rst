@@ -1241,9 +1241,9 @@ Text I/O
    Call the given function with an I/O stream and the supplied extra arguments.
    Everything written to this I/O stream is returned as a string.
 
-.. function:: showall(x)
+.. function:: showerror(io, e)
 
-   Show x, printing all elements of arrays
+   Show a descriptive representation of an exception object.
 
 .. function:: dump(x)
 
