@@ -256,6 +256,7 @@ type TcpSocket <: Socket
 end
 function TcpSocket()
     this = TcpSocket(c_malloc(_sizeof_uv_tcp))
+    associate_julia_struct(this.handle, this)
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0 
@@ -263,7 +264,6 @@ function TcpSocket()
         this.handle = C_NULL
         error(UVError("Failed to create tcp socket",err))
     end
-    associate_julia_struct(this.handle, this)
     this.status = StatusInit
     this
 end
@@ -283,6 +283,7 @@ type TcpServer <: UVServer
 end
 function TcpServer()
     this = TcpServer(c_malloc(_sizeof_uv_tcp))
+    associate_julia_struct(this.handle, this)
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0 
@@ -290,7 +291,6 @@ function TcpServer()
         this.handle = C_NULL
         error(UVError("Failed to create tcp server",err))
     end
-    associate_julia_struct(this.handle, this)
     this.status = StatusInit
     this
 end

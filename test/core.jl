@@ -47,6 +47,8 @@ let T = TypeVar(:T,true)
     f47{T}(x::Vector{Vector{T}}) = 0
     @test_throws f47(Array(Vector,0))
     @test f47(Array(Vector{Int},0)) == 0
+    @test typeintersect((T,T), (Union(Float64,Int64),Int64)) == (Int64,Int64)
+    @test typeintersect((T,T), (Int64,Union(Float64,Int64))) == (Int64,Int64)
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
@@ -911,6 +913,6 @@ function foo4075(f::Foo4075, s::Symbol)
     x
 end
 
-@test isa(foo4075(Foo4075(1,2.0),:y), Float64)
+@test isa(foo4075(Foo4075(int64(1),2.0),:y), Float64)
 # very likely to segfault the second time if this is broken
-@test isa(foo4075(Foo4075(1,2.0),:y), Float64)
+@test isa(foo4075(Foo4075(int64(1),2.0),:y), Float64)

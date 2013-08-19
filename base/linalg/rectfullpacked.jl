@@ -38,7 +38,7 @@ function cholfact!{T<:BlasFloat}(A::SymmetricRFP{T})
     C, info = LAPACK.pftrf!(A.transr, A.uplo, copy(A.data))
     return CholeskyDenseRFP(C, A.transr, A.uplo)
 end
-cholfact{T<:BlasFloat}(A::SymmetricRFP) = cholfact!(copy(A))
+cholfact{T<:BlasFloat}(A::SymmetricRFP{T}) = cholfact!(copy(A))
 
 copy(A::SymmetricRFP) = SymmetricRFP(copy(A.data), A.transr, A.uplo)
 

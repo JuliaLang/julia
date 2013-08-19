@@ -514,6 +514,26 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 extern int jl_boot_file_loaded;
 void jl_add_constructors(jl_datatype_t *t);
 
+static int type_contains(jl_value_t *ty, jl_value_t *x)
+{
+    if (ty == x) return 1;
+    if (jl_is_tuple(ty)) {
+        size_t i, l=jl_tuple_len(ty);
+        for(i=0; i < l; i++) {
+            jl_value_t *e = jl_tupleref(ty,i);
+            if (e==x || type_contains(e, x))
+                return 1;
+        }
+    }
+    if (jl_is_uniontype(ty))
+        return type_contains(jl_fieldref(ty,0), x);
+    if (jl_is_datatype(ty))
+        return type_contains((jl_value_t*)((jl_datatype_t*)ty)->parameters, x);
+    return 0;
+}
+
+void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
+
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f, jl_tuple_t *t)
 {
@@ -559,10 +579,17 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
         }
     }
 
+    int ishidden = !!strchr(name->name, '#');
     for(size_t i=0; i < jl_tuple_len(t); i++) {
-        if (!jl_is_typevar(jl_tupleref(t,i)))
-            jl_type_error_rt(name->name, "method definition",
-                             (jl_value_t*)jl_tvar_type, jl_tupleref(t,i));
+        jl_value_t *tv = jl_tupleref(t,i);
+        if (!jl_is_typevar(tv))
+            jl_type_error_rt(name->name, "method definition", (jl_value_t*)jl_tvar_type, tv);
+        if (!ishidden && !type_contains((jl_value_t*)argtypes, tv)) {
+            JL_PRINTF(JL_STDERR, "Warning: static parameter %s does not occur in signature for %s",
+                      ((jl_tvar_t*)tv)->name->name, name->name);
+            print_func_loc(JL_STDERR, f->linfo);
+            JL_PRINTF(JL_STDERR, ".\nThe method will not be callable.\n");
+        }
     }
     jl_add_method((jl_function_t*)gf, argtypes, f, t);
     if (jl_boot_file_loaded &&
