@@ -13,6 +13,37 @@ endif
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
+# Figure out OS and architecture
+BUILD_OS := $(shell uname)
+OS := $(BUILD_OS)
+
+ifneq (,$(findstring MINGW,$(OS)))
+override OS := WINNT
+endif
+ifneq (,$(findstring MINGW,$(BUILD_OS)))
+override BUILD_OS := WINNT
+endif
+ifneq (,$(findstring MSYS,$(OS)))
+override OS := WINNT
+endif
+ifneq (,$(findstring MSYS,$(BUILD_OS)))
+override BUILD_OS := WINNT
+endif
+
+# Workaround for broken abspath
+
+ifneq ($(BUILD_OS),WINNT)
+define myabspath
+$(abspath $(1))
+endef
+else
+define myabspath
+$(subst /c/c,/c,$(abspath $(1)))
+endef
+endif
+
+JULIAHOME := $(call myabspath,$(JULIAHOME))
+
 LLVMROOT = $(BUILD)
 BUILD = $(JULIAHOME)/usr
 # Directories where said libraries get installed to
@@ -49,23 +80,6 @@ endif
 endif
 
 JLDOWNLOAD = $(JULIAHOME)/deps/jldownload
-
-# Figure out OS and architecture
-BUILD_OS := $(shell uname)
-OS := $(BUILD_OS)
-
-ifneq (,$(findstring MINGW,$(OS)))
-override OS := WINNT
-endif
-ifneq (,$(findstring MINGW,$(BUILD_OS)))
-override BUILD_OS := WINNT
-endif
-ifneq (,$(findstring MSYS,$(OS)))
-override OS := WINNT
-endif
-ifneq (,$(findstring MSYS,$(BUILD_OS)))
-override BUILD_OS := WINNT
-endif
 
 ifeq ($(OS), WINNT)
 fPIC = 
@@ -414,33 +428,33 @@ endif
 # Make tricks
 
 define dir_target
-$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(1))): $$(abspath $(1))
-$$(abspath $(1)): 
+$$(subst $$(call myabspath,$(JULIAHOME))/,,$$(call myabspath,$(1))): $$(call myabspath,$(1))
+$$(call myabspath,$(1)): 
 	@mkdir -p $$@
 endef
 
 ifeq ($(BUILD_OS), WINNT)
 define mingw_to_dos
-$(subst /,\\,$(subst $(shell $(2) pwd),$(shell $(2) cmd //C cd),$(abspath $(1))))
+$(subst /,\\,$(subst $(shell $(2) pwd),$(shell $(2) cmd //C cd),$(call myabspath,$(1))))
 endef
 endif
 
 define symlink_target
 CLEAN_TARGETS += clean-$(2)/$(1)
-clean-$$(abspath $(2)/$(1)): 
+clean-$$(call myabspath,$(2)/$(1)): 
 ifeq ($(BUILD_OS), WINNT)
 	@-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&)
 else
-	@-rm $$(abspath $(2)/$(1))
+	@-rm $$(call myabspath,$(2)/$(1))
 endif
-$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
-$$(abspath $(2)/$(1)): | $$(abspath $(2))
+$$(subst $$(call myabspath,$(JULIAHOME))/,,$$(call myabspath,$(2)/$(1))): $$(call myabspath,$(2)/$(1))
+$$(call myabspath,$(2)/$(1)): | $$(call myabspath,$(2))
 ifeq ($(BUILD_OS), WINNT)
 	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&) $$(call mingw_to_dos,$(1),)
 else ifdef JULIA_VAGRANT_BUILD
-	@cp -R $$(abspath $(1)) $$@
+	@cp -R $$(call myabspath,$(1)) $$@
 else
-	@ln -sf $$(abspath $(1)) $$@
+	@ln -sf $$(call myabspath,$(1)) $$@
 endif
 endef
 
@@ -488,7 +502,7 @@ BINCOLOR="\033[37;1m"
 JULCOLOR="\033[34;1m"
 ENDCOLOR="\033[0m"
 
-GOAL=$(subst $(abspath $(JULIAHOME))/,,$(abspath $@))
+GOAL=$(subst $(call myabspath,$(JULIAHOME))/,,$(call myabspath,$@))
 
 PRINT_CC = printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR);
 PRINT_LINK = printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);

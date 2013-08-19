@@ -11,9 +11,9 @@ BUILD_LLDB = 0
 
 ## high-level setup ##
 
-JULIAHOME = $(abspath ..)
+JULIAHOME = ..
 include $(JULIAHOME)/Make.inc
-CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) F77="$(FC)" CC="$(CC)" CXX="$(CXX)" --build=$(BUILD_MACHINE)
+CONFIGURE_COMMON = --prefix=$(call myabspath,$(BUILD)) F77="$(FC)" CC="$(CC)" CXX="$(CXX)" --build=$(BUILD_MACHINE)
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
@@ -102,7 +102,7 @@ endif
 ifeq ($(USE_SYSTEM_MPFR), 0)
 STAGE2_DEPS += mpfr
 ifeq ($(USE_SYSTEM_GMP), 0)
-MPFR_OPTS = --with-gmp=$(abspath $(BUILD))
+MPFR_OPTS = --with-gmp=$(call myabspath,$(BUILD))
 endif
 endif
 ifeq ($(BUILD_OS),WINNT)
@@ -301,26 +301,26 @@ endif
 llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status: llvm-$(LLVM_VER)/configure | $(llvm_python_workaround)
 	cd llvm-$(LLVM_VER) && \
 	mkdir -p build_$(LLVM_BUILDTYPE) && cd build_$(LLVM_BUILDTYPE) && \
-	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
+	export PATH=$(call myabspath,llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	../configure $(CONFIGURE_COMMON) $(LLVM_FLAGS)
 	touch -c $@
 
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status | $(llvm_python_workaround)
 	cd llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) && \
-	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
+	export PATH=$(call myabspath,llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) $(LLVM_MFLAGS)
 	touch -c $@
 
 llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/checked: $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
 ifeq ($(OS),$(BUILD_OS))
 	cd llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) && \
-	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
+	export PATH=$(call myabspath,llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) $(LLVM_MFLAGS) check 
 endif
 	echo 1 > $@
 
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
-	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
+	export PATH=$(call myabspath,llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) install
 	touch -c $@
 
@@ -346,7 +346,7 @@ READLINE_OBJ_TARGET = $(BUILD)/lib/libreadline.a
 READLINE_OBJ_SOURCE = readline-$(READLINE_VER)/libreadline.a
 READLINE_URL = https://github.com/JuliaLang/readline/tarball/master
 READLINE_OPTS = --disable-shared --enable-static --with-curses
-READLINE_CFLAGS = LOCAL_DEFS="-include $(abspath .)/readline-win.h"
+READLINE_CFLAGS = LOCAL_DEFS="-include $(call myabspath,.)/readline-win.h"
 readline-$(READLINE_VER).tar.gz:
 	$(JLDOWNLOAD) $@ $(READLINE_URL)
 	touch -c $@
@@ -1409,7 +1409,7 @@ ifeq ($(OS), WINNT)
 	cp win32/Makefile.gcc Makefile
 else
 	cd zlib-$(ZLIB_VER) && \
-	$(ZLIB_CONFIGFLAGS) ./configure --prefix=$(abspath $(BUILD)) #not an autoconf script
+	$(ZLIB_CONFIGFLAGS) ./configure --prefix=$(call myabspath,$(BUILD)) #not an autoconf script
 endif
 	echo 1 > $@
 $(ZLIB_SRC_TARGET): zlib-$(ZLIB_VER)/config.status
