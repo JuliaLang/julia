@@ -8,6 +8,7 @@ include("pkg/read.jl")
 include("pkg/query.jl")
 include("pkg/resolve.jl")
 include("pkg/write.jl")
+include("pkg/scaffold.jl")
 
 using Base.Git, .Types
 
