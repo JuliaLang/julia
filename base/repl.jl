@@ -36,9 +36,9 @@ end
 
 # showing exception objects as descriptive error messages
 
-show_error(io::IO, e) = show(io, e)
+showerror(io::IO, e) = show(io, e)
 
-function show_error(io::IO, e::TypeError)
+function showerror(io::IO, e::TypeError)
     ctx = isempty(e.context) ? "" : "in $(e.context), "
     if e.expected === Bool
         print(io, "type: non-boolean ($(typeof(e.got))) ",
@@ -55,30 +55,30 @@ function show_error(io::IO, e::TypeError)
     end
 end
 
-function show_error(io::IO, e, bt)
+function showerror(io::IO, e, bt)
     try
-        show_error(io, e)
+        showerror(io, e)
     finally 
         show_backtrace(io, bt)
     end
 end
 
-show_error(io::IO, e::LoadError) = show_error(io, e, {})
-function show_error(io::IO, e::LoadError, bt)
-    show_error(io, e.error, bt)
+showerror(io::IO, e::LoadError) = showerror(io, e, {})
+function showerror(io::IO, e::LoadError, bt)
+    showerror(io, e.error, bt)
     print(io, "\nat $(e.file):$(e.line)")
 end
 
-show_error(io::IO, e::SystemError) = print(io, "$(e.prefix): $(strerror(e.errnum))")
-show_error(io::IO, ::DivideError) = print(io, "integer division error")
-show_error(io::IO, ::StackOverflowError) = print(io, "stack overflow")
-show_error(io::IO, ::UndefRefError) = print(io, "access to undefined reference")
-show_error(io::IO, ::EOFError) = print(io, "read: end of file")
-show_error(io::IO, e::ErrorException) = print(io, e.msg)
-show_error(io::IO, e::KeyError) = print(io, "key not found: $(e.key)")
-show_error(io::IO, e::InterruptException) = print(io, "interrupt")
+showerror(io::IO, e::SystemError) = print(io, "$(e.prefix): $(strerror(e.errnum))")
+showerror(io::IO, ::DivideError) = print(io, "integer division error")
+showerror(io::IO, ::StackOverflowError) = print(io, "stack overflow")
+showerror(io::IO, ::UndefRefError) = print(io, "access to undefined reference")
+showerror(io::IO, ::EOFError) = print(io, "read: end of file")
+showerror(io::IO, e::ErrorException) = print(io, e.msg)
+showerror(io::IO, e::KeyError) = print(io, "key not found: $(e.key)")
+showerror(io::IO, e::InterruptException) = print(io, "interrupt")
 
-function show_error(io::IO, e::MethodError)
+function showerror(io::IO, e::MethodError)
     name = e.f.env.name
     if is(e.f,convert) && length(e.args)==2
         print(io, "no method $(name)(Type{$(e.args[1])},$(typeof(e.args[2])))")

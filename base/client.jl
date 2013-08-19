@@ -71,7 +71,7 @@ display_error(er) = display_error(er, {})
 function display_error(er, bt)
     with_output_color(:red, STDERR) do io
         print(io, "ERROR: ")
-        show_error(io, er, bt)
+        showerror(io, er, bt)
         println(io)
     end
 end
