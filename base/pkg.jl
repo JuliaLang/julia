@@ -13,6 +13,7 @@ include("pkg/scaffold.jl")
 using Base.Git, .Types
 
 const dir = Dir.path
+const scaffold = Scaffold.scaffold
 
 rm(pkg::String) = edit(Reqs.rm, pkg)
 add(pkg::String, vers::VersionSet) = edit(Reqs.add, pkg, vers)
