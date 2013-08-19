@@ -11,13 +11,14 @@ export Display, display, pushdisplay, popdisplay, displayable, redisplay,
 
 immutable MIME{mime} end
 
-import Base: show, string, convert
+import Base: show, print, string, convert
 MIME(s) = MIME{symbol(s)}()
 show{mime}(io::IO, ::MIME{mime}) = print(io, "MIME type ", string(mime))
-string{mime}(::MIME{mime}) = string(mime)
+print{mime}(io::IO, ::MIME{mime}) = print(io, mime)
 
 # needs to be a macro so that we can use ::@mime(s) in type declarations
 macro MIME(s)
+    warn_once("@MIME(\"\") is deprecated, use MIME\"\" instead.")
     if isa(s,String)
         :(MIME{$(Expr(:quote, symbol(s)))})
     else
@@ -30,7 +31,7 @@ macro MIME_str(s)
 end
 
 ###########################################################################
-# For any type T one can define writemime(io, ::@MIME(mime), x::T) = ...
+# For any type T one can define writemime(io, ::MIME"type", x::T) = ...
 # in order to provide a way to export T as a given mime type.
 
 mimewritable{mime}(::MIME{mime}, T::Type) =
@@ -55,16 +56,16 @@ mimewritable(m::String, T::Type) = mimewritable(MIME(m), T)
 # passed to display(m::MIME, x).
 
 for mime in ["text/vnd.graphviz", "text/latex", "text/calendar", "text/n3", "text/richtext", "text/x-setext", "text/sgml", "text/tab-separated-values", "text/x-vcalendar", "text/x-vcard", "text/cmd", "text/css", "text/csv", "text/html", "text/javascript", "text/plain", "text/vcard", "text/xml", "application/atom+xml", "application/ecmascript", "application/json", "application/rdf+xml", "application/rss+xml", "application/xml-dtd", "application/postscript", "image/svg+xml", "application/x-latex", "application/xhtml+xml", "application/javascript", "application/xml", "model/x3d+xml", "model/x3d+vrml", "model/vrml"]
-    @eval begin
-        istext(::@MIME($mime)) = true
-        reprmime(m::@MIME($mime), x::String) = x
-        reprmime(m::@MIME($mime), x) = sprint(writemime, m, x)
-        stringmime(m::@MIME($mime), x) = reprmime(m, x)
-        # avoid method ambiguities with definitions below:
-        # (Q: should we treat Vector{Uint8} as a bytestring?)
-        reprmime(m::@MIME($mime), x::Vector{Uint8}) = sprint(writemime, m, x)
-        stringmime(m::@MIME($mime), x::Vector{Uint8}) = reprmime(m, x)
-    end
+    mimeT = MIME{symbol(mime)}
+    global istext, reprmime, stringmime
+    istext(::mimeT) = true
+    reprmime(m::mimeT, x::String) = x
+    reprmime(m::mimeT, x) = sprint(writemime, m, x)
+    stringmime(m::mimeT, x) = reprmime(m, x)
+    # avoid method ambiguities with definitions below:
+    # (Q: should we treat Vector{Uint8} as a bytestring?)
+    reprmime(m::mimeT, x::Vector{Uint8}) = sprint(writemime, m, x)
+    stringmime(m::mimeT, x::Vector{Uint8}) = reprmime(m, x)
 end
 
 istext(::MIME) = false
@@ -105,7 +106,7 @@ displayable(mime::String) = displayable(MIME(mime))
 immutable TextDisplay <: Display
     io::IO
 end
-display(d::TextDisplay, ::@MIME("text/plain"), x) =
+display(d::TextDisplay, ::MIME"text/plain", x) =
     writemime(d.io, MIME("text/plain"), x)
 display(d::TextDisplay, x) = display(d, MIME("text/plain"), x)
 

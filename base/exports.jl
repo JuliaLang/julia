@@ -1122,6 +1122,7 @@ export
     istext,
     MIME,
     @MIME,
+    @MIME_str,
     reprmime,
     stringmime,
     writemime,
