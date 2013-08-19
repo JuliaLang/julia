@@ -264,7 +264,7 @@ macro setup_stdio()
             if stdios[2].handle==C_NULL
                 out = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
                 #out = c_malloc(_sizeof_uv_named_pipe)
-                link_pipe(stdios[2],false,out,true)
+                link_pipe(stdios[2],true,out,false)
                 close_out = true
             end
         elseif isa(stdios[2],FileRedirect)
@@ -275,7 +275,7 @@ macro setup_stdio()
             if stdios[3].handle==C_NULL
                 err = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
                 #err = c_malloc(_sizeof_uv_named_pipe)
-                link_pipe(stdios[3],false,err,true)
+                link_pipe(stdios[3],true,err,false)
                 close_err = true
             end
         elseif isa(stdios[3],FileRedirect)

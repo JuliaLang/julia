@@ -27,6 +27,17 @@ endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[1]
 last(a::AbstractArray) = a[end]
 
+function stride(a::AbstractArray, i::Integer)
+    if i > ndims(a)
+        return length(a)
+    end
+    s = 1
+    for n=1:(i-1)
+        s *= size(a, n)
+    end
+    return s
+end
+
 strides(a::AbstractArray) = ntuple(ndims(a), i->stride(a,i))::Dims
 
 function isassigned(a::AbstractArray, i::Int...)

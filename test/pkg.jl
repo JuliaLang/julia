@@ -1,20 +1,15 @@
 ENV["JULIA_PKGDIR"] = string("tmp.",randstring())
 @test !isdir(Pkg.dir())
 try # ensure directory removal
+	Pkg.init()
+	@test isdir(Pkg.dir())
+	Pkg.resolve()
 
-@test_throws Pkg.cd_pkgdir()
-Pkg.init()
-@test isdir(Pkg.dir())
-Pkg.resolve()
-
-@test length(Pkg.required()) == 0
-Pkg.add("Example")
-@test length(Pkg.required()) == 1
-@test Pkg.required()[1].package == "Example"
-Pkg.rm("Example")
-@test length(Pkg.required()) == 0
-
-# delete temporary Pkg directory
+	@test isempty(Pkg.installed())
+	Pkg.add("Example")
+	@test [keys(Pkg.installed())...] == ["Example"]
+	Pkg.rm("Example")
+	@test isempty(Pkg.installed())
 finally
-run(`rm -rf $(Pkg.dir())`)
+	run(`rm -rf $(Pkg.dir())`)
 end

@@ -19,16 +19,6 @@ function sizeof{T}(a::Array{T})
     (isbits(T) ? sizeof(eltype(a)) : sizeof(Ptr)) * length(a)
 end
 
-function stride(a::Array, i::Integer)
-    s = 1
-    if i > ndims(a)
-        return length(a)
-    end
-    for n=1:(i-1)
-        s *= size(a, n)
-    end
-    return s
-end
 strides{T}(a::Array{T,1}) = (1,)
 strides{T}(a::Array{T,2}) = (1, size(a,1))
 strides{T}(a::Array{T,3}) = (1, size(a,1), size(a,1)*size(a,2))

@@ -621,7 +621,7 @@ function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, thin::Bool)
     return SVD(u,s,vt)
 end
 svdfact!(A::StridedVecOrMat, args...) = svdfact!(float(A), args...)
-svdfact!{T<:BlasFloat}(a::Vector, thin::Bool) = svdfact!(reshape(a, length(a), 1), thin)
+svdfact!{T<:BlasFloat}(a::Vector{T}, thin::Bool) = svdfact!(reshape(a, length(a), 1), thin)
 svdfact!{T<:BlasFloat}(A::StridedVecOrMat{T}) = svdfact!(A, true)
 svdfact{T<:BlasFloat}(A::StridedVecOrMat{T}, args...) = svdfact!(copy(A), args...)
 svdfact(A::StridedVecOrMat, args...) = svdfact!(float(A), args...)
