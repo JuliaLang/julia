@@ -128,7 +128,7 @@ end
 
 # Parsing
 
-function parse_ipv4(str)
+function parseipv4(str)
     fields = split(str,'.')
     i = 1
     ret = 0
@@ -167,7 +167,7 @@ function parse_ipv4(str)
     IPv4(ret)
 end
 
-function parse_ipv6fields(fields,num_fields)
+function parseipv6fields(fields,num_fields)
     if length(fields) > num_fields
         error("Too many fields in IPv6 address")
     end
@@ -187,19 +187,19 @@ function parse_ipv6fields(fields,num_fields)
     end
     ret
 end
-parse_ipv6fields(fields) = parse_ipv6fields(fields,8)
+parseipv6fields(fields) = parseipv6fields(fields,8)
 
-function parse_ipv6(str)
+function parseipv6(str)
     fields = split(str,':')
     if length(fields) > 8
         error("Too many fields in IPv6 address")
     elseif length(fields) == 8
-        return IPv6(parse_ipv6fields(fields))
+        return IPv6(parseipv6fields(fields))
     elseif contains(fields[end],'.')
-        return IPv6((parse_ipv6fields(fields[1:(end-1)],6))
-            | parse_ipv4(fields[end]).host )
+        return IPv6((parseipv6fields(fields[1:(end-1)],6))
+            | parseipv4(fields[end]).host )
     else
-        return IPv6(parse_ipv6fields(fields))
+        return IPv6(parseipv6fields(fields))
     end
 end
 
@@ -208,14 +208,19 @@ end
 # separated formats. Most other common formats use a standard integer encoding
 # of the appropriate size and should use the appropriate constructor
 #
-macro ip_str(str)
+
+function parseip(str)
     if contains(str,':')
         # IPv6 Address
-        return parse_ipv6(str)
+        return parseipv6(str)
     else
         # IPv4 Address
-        return parse_ipv4(str)
+        return parseipv4(str)
     end
+end
+
+macro ip_str(str)
+    return parseip(str)
 end
 
 type InetAddr
