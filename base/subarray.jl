@@ -364,6 +364,11 @@ function setindex!{T,S<:Integer}(s::SubArray{T,1}, v, I::AbstractVector{S})
     setindex!(s.parent, v, t)
 end
 
+# to avoid ambiguity warning
+function setindex!(s::SubArray, v, I::Real)
+    newindexes = translate_indexes(s, (I,))
+    setindex!(s.parent, v, newindexes...)
+end
 function setindex!(s::SubArray, v, I::Union(Real,AbstractArray)...)
     newindexes = translate_indexes(s, I...)
     setindex!(s.parent, v, newindexes...)
