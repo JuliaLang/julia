@@ -4,21 +4,26 @@ using Base.Git, ..Dir, ..Read
 
 function scaffold(
     pkg::String;
-    license = nothing,
+    dir::String = "",
+    license::String = "",
     years::Union(Int,String) = readchomp(`date +%Y`),
     authors::String = Git.readchomp(`config --global --get user.name`),
 )
-    license === nothing && error("""
-    No license chosen -- you must choose a license, e.g.:
+    isempty(license) && error("""
+        No license chosen -- you must choose a license, e.g.:
 
-        julia> Pkg.scaffold("$pkg", license="MIT")
-    """)
+            julia> Pkg.scaffold("$pkg", license="MIT")
+        """)
     haskey(LICENSES,license) ||
         error("$license is not a known license choice.")
-    avail = Dir.cd(Read.available)
-    haskey(avail,pkg) &&
-        error("$pkg is already a registered package name.")
-    d = Dir.path(pkg)
+    d = if isempty(dir)
+        avail = Dir.cd(Read.available)
+        haskey(avail,pkg) &&
+            error("$pkg is already a registered package name.")
+        Dir.path(pkg)
+    else
+        joinpath(dir,pkg)
+    end
     ispath(d) &&
         error("$d exists, refusing to overwrite.")
     mkpath(d)
