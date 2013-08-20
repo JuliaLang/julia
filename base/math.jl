@@ -2,7 +2,8 @@ module Math
 
 export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot, 
-       sech, csch, coth, asech, acsch, acoth, sinc, cosc, 
+       sech, csch, coth, asech, acsch, acoth, 
+       sinpi, cospi, sinc, cosc, 
        cosd, cotd, cscd, secd, sind, tand,
        acosd, acotd, acscd, asecd, asind, atand, atan2,
        radians2degrees, degrees2radians,
@@ -32,13 +33,101 @@ clamp{T<:Real}(x::AbstractArray{T,2}, lo::Real, hi::Real) =
 clamp{T<:Real}(x::AbstractArray{T}, lo::Real, hi::Real) =
     reshape([clamp(xx, lo, hi) for xx in x], size(x))
 
-sinc(x::Number) = x==0 ? one(x)  : (pix=pi*x; oftype(x,sin(pix)/pix))
+
+function sinpi(x::Real)
+    if isinf(x)
+        return throw(DomainError())
+    elseif isnan(x)
+        return nan(x)
+    end
+
+    rx = rem(x,2.0)
+    arx = abs(rx)
+
+    if arx == 0.0
+        # return -0.0 iff x == -0.0
+        return x == 0.0 ? x : arx
+    elseif arx < 0.25
+        return sin(pi*rx)
+    elseif arx <= 0.75
+        arx = 0.5 - arx
+        return copysign(cos(pi*arx),rx)
+    elseif arx < 1.25
+        rx = copysign(1.0,rx) - rx
+        return sin(pi*rx)
+    elseif arx <= 1.75
+        arx = 1.5 - arx
+        return -copysign(cos(pi*arx),rx)
+    else
+        rx = rx - copysign(2.0,rx)
+        return sin(pi*rx)
+    end
+end
+
+function cospi(x::Real)
+    if isinf(x)
+        return throw(DomainError())
+    elseif isnan(x)
+        return nan(x)
+    end
+
+    rx = abs(rem(x,2.0))
+
+    if rx <= 0.25
+        return cos(pi*rx)
+    elseif rx < 0.75
+        rx = 0.5 - rx
+        return sin(pi*rx)
+    elseif rx <= 1.25
+        rx = 1.0 - rx
+        return -cos(pi*rx)
+    elseif rx < 1.75
+        rx = rx - 1.5
+        return sin(pi*rx)
+    else
+        rx = 2.0 - rx
+        return cos(pi*rx)
+    end
+end
+
+sinpi(x::Integer) = zero(x)
+cospi(x::Integer) = isodd(x) ? -one(x) : one(x)
+
+function sinpi(z::Complex)
+    zr, zi = reim(z)
+    if !isfinite(zi) && zr == 0 return complex(zr, zi) end
+    if isnan(zr) && !isfinite(zi) return complex(zr, zi) end
+    if !isfinite(zr) && zi == 0 return complex(oftype(zr, NaN), zi) end
+    if !isfinite(zr) && isfinite(zi) return complex(oftype(zr, NaN), oftype(zi, NaN)) end
+    if !isfinite(zr) && !isfinite(zi) return complex(zr, oftype(zi, NaN)) end
+    pizi = pi*zi
+    complex(sinpi(zr)*cosh(pizi), cospi(zr)*sinh(pizi))
+end
+
+function cospi(z::Complex)
+    zr, zi = reim(z)
+    if !isfinite(zi) && zr == 0
+        return complex(isnan(zi) ? zi : oftype(zi, Inf),
+                       isnan(zi) ? zr : zr*-sign(zi))
+    end
+    if !isfinite(zr) && isinf(zi)
+        return complex(oftype(zr, Inf), oftype(zi, NaN))
+    end
+    if isinf(zr)
+        return complex(oftype(zr, NaN), zi==0 ? -copysign(zi, zr) : oftype(zi, NaN))
+    end
+    if isnan(zr) && zi==0 return complex(zr, abs(zi)) end
+    pizi = pi*zi
+    complex(cospi(zr)*cosh(pizi), -sinpi(zr)*sinh(pizi))
+end
+
+sinc(x::Number) = x==0 ? one(x)  : oftype(x,sinpi(x)/(pi*x))
 sinc(x::Integer) = x==0 ? one(x) : zero(x)
-sinc{T<:Integer}(x::Complex{T}) = sinc(complex(float(real(x)),float(imag(x))))
+sinc{T<:Integer}(x::Complex{T}) = sinc(float(x))
 @vectorize_1arg Number sinc
-cosc(x::Number) = x==0 ? zero(x) : (pix=pi*x; oftype(x,cos(pix)/x-sin(pix)/(pix*x)))
+cosc(x::Number) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
 cosc(x::Integer) = cosc(float(x))
-cosc{T<:Integer}(x::Complex{T}) = cosc(complex(float(real(x)),float(imag(x))))
+cosc{T<:Integer}(x::Complex{T}) = cosc(float(x))
 @vectorize_1arg Number cosc
 
 const pideg1 = 0.017453292501159012 # pi/180 truncated to 29 significant bits
@@ -423,7 +512,7 @@ let
     function besselh(nu::Float64, k::Integer, z::Complex128)
         if nu < 0
             s = (k == 1) ? 1 : -1
-            return _besselh(-nu, k, z) * exp(-s*nu*im*pi)
+            return _besselh(-nu, k, z) * complex(cospi(nu),-s*sinpi(nu))
         end
         return _besselh(nu, k, z)
     end
@@ -431,7 +520,7 @@ let
     global besseli
     function besseli(nu::Float64, z::Complex128)
         if nu < 0
-            return _besseli(-nu,z) - 2_besselk(-nu,z)sin(pi*nu)/pi
+            return _besseli(-nu,z) - 2_besselk(-nu,z)*sinpi(nu)/pi
         else
             return _besseli(nu, z)
         end
@@ -440,7 +529,7 @@ let
     global besselj
     function besselj(nu::Float64, z::Complex128)
         if nu < 0
-            return _besselj(-nu,z)cos(pi*nu) + _bessely(-nu,z)sin(pi*nu)
+            return _besselj(-nu,z)cos(pi*nu) + _bessely(-nu,z)*sinpi(nu)
         else
             return _besselj(nu, z)
         end
@@ -467,7 +556,7 @@ let
     global bessely
     function bessely(nu::Float64, z::Complex128)
         if nu < 0
-            return _bessely(-nu,z)cos(pi*nu) - _besselj(-nu,z)sin(pi*nu)
+            return _bessely(-nu,z)*cospi(nu) - _besselj(-nu,z)*sinpi(nu)
         else
             return _bessely(nu, z)
         end
@@ -553,7 +642,7 @@ end
 function lgamma(z::Complex)
     if real(z) <= 0.5
         a = clgamma_lanczos(1-z)
-        b = log(sin(pi * z))
+        b = log(sinpi(z))
         logpi = 1.14472988584940017
         z = logpi - b - a
     else
@@ -959,7 +1048,7 @@ function eta(z::Union(Float64,Complex128))
         
         b = b/f/piz
         
-        return s * gamma(z) * b * cos(pi/2*z)
+        return s * gamma(z) * b * cospi(z/2)
     end
     return s
 end
