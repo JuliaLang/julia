@@ -154,7 +154,25 @@ will be sent over the network. It is also useful to execute a statement on all p
 A file can also be preloaded on multiple processes at startup, and a driver script can be used to drive the computation::
 
     julia -p <n> -L file1.jl -L file2.jl driver.jl
+    
+Each process has an associated identifier. The process providing the interactive julia REPL prompt, 
+always has an id equal to 1. As also would the the julia process running the driver script in the 
+example above. All the other processes (also known as worker processes, or just workers) have their 
+own unique ids. Workers are defined as all processes other than the driving process(id of 1). When 
+no additional processes are started, the driving process is also deemed to be a worker.
 
+The base Julia installation has in-built support for two types of clusters: 
+
+    - A local cluster specified with the ``-p`` option as shown above.  
+    
+    - And a cluster spanning machines using the ``--machinefile`` option. This uses ``ssh`` to start 
+      the worker processes on the specified machines.
+    
+Functions ``addprocs``, ``rmprocs``, ``workers`` and others, are available as a programmatic means of 
+adding, removing and querying the processes in a cluster.
+
+Other types of clusters can be supported by writing your own custom ClusterManager. See section on 
+ClusterManagers.
 
 Data Movement
 -------------
@@ -596,8 +614,8 @@ ClusterManagers
 Julia worker processes can also be spawned on arbitrary machines,
 enabling Julia's natural parallelism to function quite transparently
 in a cluster environment. The ``ClusterManager`` interface provides a
-way to specify a means to launch and manage worker processes, for
-example::
+way to specify a means to launch and manage worker processes. For
+example, ``ssh`` clusters are also implemented using a ``ClusterManager``::
 
     immutable SSHManager <: ClusterManager
         launch::Function
