@@ -21,7 +21,6 @@ add(pkg::String, vers::VersionNumber...) = add(pkg, VersionSet(vers...))
 init(meta::String=Dir.DEFAULT_META) = Dir.init(meta)
 
 edit(f::Function, pkg, args...) = Dir.cd() do
-    msg = ""
     r = Reqs.read("REQUIRE")
     reqs = Reqs.parse(r)
     avail = Read.available()
@@ -29,10 +28,7 @@ edit(f::Function, pkg, args...) = Dir.cd() do
         error("unknown package $pkg")
     end
     r_ = f(r,pkg,args...)
-    r_ == r && begin
-        if (f == Reqs.rm) msg = " Cannot remove yet: $pkg is required by installed package." end
-        return info("Nothing to be done.$msg")
-        end
+    r_ == r && return info("Nothing to be done.")
     reqs_ = Reqs.parse(r_)
     reqs_ != reqs && _resolve(reqs_,avail)
     Reqs.write("REQUIRE",r_)
