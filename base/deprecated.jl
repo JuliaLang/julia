@@ -254,6 +254,8 @@ end
 @deprecate <(a::AbstractCmd,b::String) (b|>a)
 @deprecate |(x, f::Function) (x|>f)
 
+@deprecate  SpawnNullStream() DevNull()
+
 @deprecate memio(args...)  IOBuffer()
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
