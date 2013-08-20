@@ -6,7 +6,7 @@ function scaffold(
     pkg::String;
     license = nothing,
     years::Union(Int,String) = readchomp(`date +%Y`),
-    authors::String = readchomp(`git config --global --get user.name`),
+    authors::String = Git.readchomp(`config --global --get user.name`),
 )
     license === nothing && error("""
     No license chosen -- you must choose a license, e.g.:
@@ -35,7 +35,7 @@ function scaffold(
             end
             mkdir("src")
             open("src/$pkg.jl", "w") do f
-                # TODO: add some content?
+                print(f, "module $pkg\n\nend # module\n")
             end
             info("Initial commit of $pkg")
             Git.run(`add LICENSE.md README.md src/$pkg.jl`)
