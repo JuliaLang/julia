@@ -204,42 +204,8 @@ strings and text output
 random numbers
 --------------
 
-.. function:: randn!(A::Array{Float64,N})
-
-   UNDOCUMENTED
-
-
 bigfloat & precision
 --------------------
-
-.. function:: get_precision(...)
-
-   UNDOCUMENTED
-
-.. function:: get_bigfloat_precision()
-
-   UNDOCUMENTED
-
-.. function:: set_bigfloat_precision(x::Int64)
-
-   UNDOCUMENTED
-
-.. function:: with_bigfloat_precision(f::Function,precision::Integer)
-
-   UNDOCUMENTED
-
-.. function:: get_bigfloat_rounding()
-
-   UNDOCUMENTED
-
-.. function:: set_bigfloat_rounding(x::Int64)
-
-   UNDOCUMENTED
-
-.. function:: with_bigfloat_rounding(f::Function,rounding::Integer)
-
-   UNDOCUMENTED
-
 
 statistics
 ----------
@@ -272,10 +238,6 @@ iteration
 object identity and equality
 ----------------------------
 
-.. function:: deepcopy_internal(...)
-
-   UNDOCUMENTED
-
 
 tasks and conditions
 --------------------
@@ -306,10 +268,6 @@ help and reflection
    UNDOCUMENTED
 
 .. function:: less(...)
-
-   UNDOCUMENTED
-
-.. function:: whicht(f,types)
 
    UNDOCUMENTED
 
@@ -373,18 +331,6 @@ I/O and events
    UNDOCUMENTED
 
 .. function:: readdir(...)
-
-   UNDOCUMENTED
-
-.. function:: start_reading(...)
-
-   UNDOCUMENTED
-
-.. function:: start_watching(...)
-
-   UNDOCUMENTED
-
-.. function:: stop_reading(stream::AsyncStream)
 
    UNDOCUMENTED
 
