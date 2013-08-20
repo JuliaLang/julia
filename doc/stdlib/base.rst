@@ -2808,30 +2808,32 @@ Integers
 
 BigFloats
 ---------
+The `BigFloat` type implements arbitrary-precision floating-point aritmetic using the `GNU MPFR library <http://www.mpfr.org/>`_.
 
 .. function:: get_precision(num::FloatingPoint)
 
-   Get the precision of a floating point number as, as defined by the effective number of bits in the mantissa.
+   Get the precision of a floating point number, as defined by the effective number of bits in the mantissa.
 
 .. function:: get_bigfloat_precision()
 
-   Get the precision currently used for BigFloat arithmetic.
+   Get the precision (in bits) currently used for BigFloat arithmetic.
 
 .. function:: set_bigfloat_precision(x::Int64)
 
-   Set the precision to be used to BigFloat arithmetic.
+   Set the precision (in bits) to be used to BigFloat arithmetic.
 
 .. function:: with_bigfloat_precision(f::Function,precision::Integer)
 
-   Change the bigfloat arithmetic precision for the duration of f. Is logically equivalent to
-   old = get_bigfloat_precision()
-   set_bigfloat_precision(precision)
-   f()
-   set_bigfloat_precision(old)
+   Change the BigFloat arithmetic precision (in bits) for the duration of ``f``. It is logically equivalent to::
+
+       old = get_bigfloat_precision()
+       set_bigfloat_precision(precision)
+       f()
+       set_bigfloat_precision(old)
 
 .. function:: get_bigfloat_rounding()
 
-   Get the current BigFloat rounding mode. Valid modes are const RoundToNearest, RoundToZero, RoundUp, RoundDown, RoundAwayZero
+   Get the current BigFloat rounding mode. Valid modes are ``RoundToNearest``, ``RoundToZero``, ``RoundUp``, ``RoundDown``, ``RoundAwayZero``
 
 .. function:: set_bigfloat_rounding(mode)
 
@@ -2839,8 +2841,7 @@ BigFloats
 
 .. function:: with_bigfloat_rounding(f::Function,mode)
 
-   Change the bigfloat arithmetic precision for the duration of f. See get_bigfloat_rounding for available rounding modes. Also
-   see with_bigfloat_precision.
+   Change the BigFloat rounding mode for the duration of ``f``. See ``get_bigfloat_rounding`` for available rounding modes; see also ``with_bigfloat_precision``.
 
 Random Numbers
 --------------
