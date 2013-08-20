@@ -2963,7 +2963,7 @@ BigFloats
 ---------
 The `BigFloat` type implements arbitrary-precision floating-point aritmetic using the `GNU MPFR library <http://www.mpfr.org/>`_.
 
-.. function:: get_precision(num::FloatingPoint)
+.. function:: precision(num::FloatingPoint)
 
    Get the precision of a floating point number, as defined by the effective number of bits in the mantissa.
 
