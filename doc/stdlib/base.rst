@@ -1168,6 +1168,31 @@ I/O
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`print_escaped`.
 
+.. function:: fd(stream)
+
+   Returns the file descriptor backing the stream or file. Note that this function only applies to synchronous `File`'s and `IOStream`'s
+   not to any of the asynchronous streams.
+
+.. function:: redirect_stdout()
+
+   Create a pipe to which all C and Julia level STDOUT output will be redirected. Returns a tuple (rd,wr) 
+   representing the pipe ends. Data written to STDOUT may now be read from the rd end of the pipe. The 
+   wr end is given for convenience in case the old STDOUT object was cached by the user and needs to be
+   replaced elsewhere. 
+
+.. function:: redirect_stdout(stream)
+
+   Replace STDOUT by stream for all C and julia level output to STDOUT. Note that `stream` must be a TTY, a Pipe or a
+   TcpSocket.
+
+.. function:: redirect_stderr([stream])
+
+   Like redirect_stdout, but for STDERR
+
+.. function:: redirect_stderr([stream])
+
+   Like redirect_stdout, but for STDIN. Note that the order of the return tuple is still (rd,wr), i.e. data to be read
+   from STDIN, may be written to wr.
 
 Network I/O
 -----------
@@ -1193,6 +1218,44 @@ Network I/O
 
    Gets the IP address of the ``host`` (may have to do a DNS lookup)
 
+.. function:: parseip(addr)
+
+   Parse a string specifying an IPv4 or IPv6 ip address. 
+
+.. function:: nb_available(stream)
+
+   Returns the number of bytes available for reading before a read from this stream or buffer will block.
+
+.. function:: accept(server[,client])
+
+   Accepts a connection on the given server and returns a connection to the client. An uninitialized client 
+   stream may be given as a paramter and if given, if be used instead of creating a new stream.
+
+.. function:: bind(server[,addr...])
+
+   Binds a server to the given address (where the address may be any of the argument usually passed to listen).
+   Note that you must still call listen to be able to accept connections on this server.
+
+.. function:: listen(sever) -> PipeServer
+
+   Starts listening on a server that has been previously bound to an address by bing
+
+.. function:: open_any_tcp_port(hint) -> (Uint16,TcpServer)
+
+   Create a TcpServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server
+   was created on and the server itself. 
+
+.. function:: poll_fd(fd, seconds::Real; readable=false, writable=false)
+
+   Poll a file descriptor fd for changes in the read or write availability and with a timeout given by the second argument.
+   If the timeout is not needed, use `wait(fd)` instead. The keyword arguments determine which of read and/or write status
+   should be monitored and at least one of them needs to be set to true. The return code is 0 on timeout and an OR'd bitfield
+   of UV_READABLE and UV_WRITABLE otherwise, indicating which event was triggered. 
+
+.. function:: poll_file(s, interval_seconds::Real, seconds::Real)
+   
+   Monitor a file for changes by polling every `interval_seconds` seconds for `seconds` seconds. A return value of true indicates
+   the file changed, a return value of false indicates a timeout. 
 
 Text I/O
 --------
@@ -3706,9 +3769,15 @@ Parallel Computing
 
    Get the id of the current processor.
 
-.. function:: pmap(f, c)
+.. function:: pmap(f, lsts...; err_retry=true, err_stop=false)
 
-   Transform collection ``c`` by applying ``f`` to each element in parallel. If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks. All other available processes will be used as parallel workers.
+   Transform collections ``lsts`` by applying ``f`` to each element in parallel. 
+   If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks. 
+   All other available processes will be used as parallel workers.
+   
+   If ``err_retry`` is true, it retries a failed application of ``f`` on a different worker.
+   If ``err_stop`` is true, it takes precedence over the value of ``err_retry`` and ``pmap`` stops execution on the first error.
+   
 
 .. function:: remotecall(id, func, args...)
 
@@ -3726,6 +3795,8 @@ Parallel Computing
    * ``Process``: Wait for a process or process chain to exit. The ``exitcode`` field of a process can be used to determine success or failure.
 
    * ``Task``: Wait for a ``Task`` to finish, returning its result value.
+
+   * ``RawFD``: Wait for changes on a file descriptor (see `poll_fd` for keyword arguments and return code)
 
 .. function:: fetch(RemoteRef)
 
@@ -4500,3 +4571,7 @@ Internals
 .. function:: code_native(f, types)
 
    Prints the native assembly instructions generated for running the method matching the given generic function and type signature to STDOUT.
+
+.. function:: precompile(f,args::(Any...,))
+
+   Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it. 

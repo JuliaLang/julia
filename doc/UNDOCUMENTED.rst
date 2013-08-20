@@ -321,15 +321,6 @@ loading source files
 RTS internals
 -------------
 
-.. function:: gc_bytes()
-
-   UNDOCUMENTED
-
-.. function:: precompile(f,args::(Any...,))
-
-   UNDOCUMENTED
-
-
 misc
 ----
 
@@ -345,25 +336,9 @@ misc
 IP address stuff
 ----------------
 
-.. function:: parse_ipv4(str)
-
-   UNDOCUMENTED
-
-.. function:: parse_ipv6(str)
-
-   UNDOCUMENTED
-
 
 I/O and events
 --------------
-
-.. function:: accept(...)
-
-   UNDOCUMENTED
-
-.. function:: bind(...)
-
-   UNDOCUMENTED
 
 .. function:: countlines(...)
 
@@ -377,10 +352,6 @@ I/O and events
 
    UNDOCUMENTED
 
-.. function:: fd(...)
-
-   UNDOCUMENTED
-
 .. function:: mmap_grow(len::Integer,prot::Integer,flags::Integer,fd::Integer,offset::Int64)
 
    UNDOCUMENTED
@@ -389,23 +360,7 @@ I/O and events
 
    UNDOCUMENTED
 
-.. function:: nb_available(...)
-
-   UNDOCUMENTED
-
-.. function:: open_any_tcp_port(...)
-
-   UNDOCUMENTED
-
 .. function:: PipeBuffer(...)
-
-   UNDOCUMENTED
-
-.. function:: poll_fd(s,seconds::Real)
-
-   UNDOCUMENTED
-
-.. function:: poll_file(s,interval_seconds::Real,seconds::Real)
 
    UNDOCUMENTED
 
@@ -418,18 +373,6 @@ I/O and events
    UNDOCUMENTED
 
 .. function:: readdir(...)
-
-   UNDOCUMENTED
-
-.. function:: redirect_stderr(...)
-
-   UNDOCUMENTED
-
-.. function:: redirect_stdin(...)
-
-   UNDOCUMENTED
-
-.. function:: redirect_stdout(...)
 
    UNDOCUMENTED
 
@@ -446,10 +389,6 @@ I/O and events
    UNDOCUMENTED
 
 .. function:: truncate(...)
-
-   UNDOCUMENTED
-
-.. function:: uv_error(...)
 
    UNDOCUMENTED
 
@@ -566,10 +505,6 @@ external processes ## TODO: whittle down these exports.
 -------------------------------------------------------
 
 .. function:: process_signaled(s::Process)
-
-   UNDOCUMENTED
-
-.. function:: spawn_nostdin(...)
 
    UNDOCUMENTED
 

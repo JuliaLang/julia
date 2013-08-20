@@ -181,10 +181,12 @@ end
 
 # note that uv_is_readable/writable work for any subtype of
 # uv_stream_t, including uv_tty_t and uv_pipe_t
-isreadable(io::Union(Pipe,PipeServer,TTY)) =
+isreadable(io::Union(Pipe,TTY)) =
     bool(ccall(:uv_is_readable, Cint, (Ptr{Void},), io.handle))
-iswritable(io::Union(Pipe,PipeServer,TTY)) =
+iswritable(io::Union(Pipe,TTY)) =
     bool(ccall(:uv_is_writable, Cint, (Ptr{Void},), io.handle))
+
+nb_available(stream::UVStream) = nb_available(stream.buffer)
 
 show(io::IO,stream::TTY) = print(io,"TTY(",uv_status_string(stream),", ",
     nb_available(stream.buffer)," bytes waiting)")
