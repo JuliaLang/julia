@@ -214,18 +214,20 @@ export PipeString
 @deprecate  (&)(s::IntSet, s2::IntSet)   intersect(s, s2)
 @deprecate  -(a::IntSet, b::IntSet)      setdiff(a,b)
 @deprecate  ~(s::IntSet)                 complement(s)
-@deprecate openblas_set_num_threads      blas_set_num_threads
-@deprecate check_openblas                check_blas
-@deprecate msync(A::Array, flags::Int)    msync(A)
-@deprecate msync(A::BitArray, flags::Int) msync(A)
-@deprecate square(x::Number)          x*x
-@deprecate finfer                     code_typed
-@deprecate disassemble(f::Function,t::Tuple)           code_llvm(f,t)
-@deprecate disassemble(f::Function,t::Tuple,asm::Bool) (asm ? code_native(f,t) : code_llvm(f,t))
+@deprecate  openblas_set_num_threads      blas_set_num_threads
+@deprecate  check_openblas                check_blas
+@deprecate  msync(A::Array, flags::Int)    msync(A)
+@deprecate  msync(A::BitArray, flags::Int) msync(A)
+@deprecate  square(x::Number)          x*x
+@deprecate  finfer                     code_typed
+@deprecate  disassemble(f::Function,t::Tuple)           code_llvm(f,t)
+@deprecate  disassemble(f::Function,t::Tuple,asm::Bool) (asm ? code_native(f,t) : code_llvm(f,t))
 @deprecate  add(s::Set, x)                  push!(s,x)
 @deprecate  add!(s::Set, x)                 push!(s,x)
+@deprecate  add(s::IntSet, x)               push!(s,x)
+@deprecate  add!(s::IntSet, x)              push!(s,x)
 @deprecate  delete!(d::Dict, key, default)  pop!(d, key, default)
-@deprecate get(A::Array, B::Array, I, default) get!(A, B, I, default)
+@deprecate  get(A::Array, B::Array, I, default) get!(A, B, I, default)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
