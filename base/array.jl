@@ -295,8 +295,10 @@ function getindex(A::Array, I::Range1{Int})
     return X
 end
 
-# note: this is also useful for Ranges
-function getindex{T<:Real}(A::AbstractArray, I::AbstractVector{T})
+function getindex{T<:Real}(A::Array, I::AbstractVector{T})
+    return [ A[i] for i in indices(I) ]
+end
+function getindex{T<:Real}(A::Ranges, I::AbstractVector{T})
     return [ A[i] for i in indices(I) ]
 end
 
