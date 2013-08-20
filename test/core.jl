@@ -930,3 +930,10 @@ x[1] = 1.0
 x[2] = 2.0
 x[3] = 3.0
 foo(x) == [1.0, 2.0, 3.0]
+
+# issue #4115
+type Foo4115
+end
+typealias Foo4115s NTuple{3,Union(Foo4115,Type{Foo4115})}
+baz4115(x::Foo4115s) = x
+@test baz4115((Foo4115,Foo4115,Foo4115())) === (Foo4115,Foo4115,Foo4115())

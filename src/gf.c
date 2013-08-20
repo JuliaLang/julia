@@ -1274,8 +1274,11 @@ static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
         if (jl_is_type(args[i])) {
             a = (jl_value_t*)jl_wrap_Type(args[i]);
         }
+        else if (!jl_is_tuple(args[i])) {
+            a = jl_typeof(args[i]);
+        }
         else {
-            a = (jl_value_t*)jl_full_type(args[i]);
+            a = (jl_value_t*)arg_type_tuple(&jl_tupleref(args[i],0), jl_tuple_len(args[i]));
         }
         jl_tupleset(tt, i, a);
     }
