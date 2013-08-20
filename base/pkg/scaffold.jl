@@ -30,19 +30,20 @@ function scaffold(
     try cd(d) do
             info("Initializing $pkg repo")
             Git.run(`init -q`)
-            info("Generating $pkg/LICENSE.md")
-            open("LICENSE.md","w") do f
-                print(f, LICENSES[license](pkg, string(years), authors))
-            end
             info("Generating $pkg/README.md")
             open("README.md","w") do f
                 # TODO: add some content?
             end
+            info("Generating $pkg/LICENSE.md")
+            open("LICENSE.md","w") do f
+                print(f, LICENSES[license](pkg, string(years), authors))
+            end
+            info("Generating $pkg/src/$pkg.jl")
             mkdir("src")
             open("src/$pkg.jl", "w") do f
                 print(f, "module $pkg\n\nend # module\n")
             end
-            info("Initial commit of $pkg")
+            info("Committing initial version of $pkg")
             Git.run(`add LICENSE.md README.md src/$pkg.jl`)
             Git.run(`commit -q -m "$pkg.jl scaffold with $license license."`)
         end
@@ -50,6 +51,7 @@ function scaffold(
         run(`rm -rf $d`)
         rethrow()
     end
+    info("$pkg package created: $d")
 end
 
 mit(pkg::String, years::String, authors::String) = """
