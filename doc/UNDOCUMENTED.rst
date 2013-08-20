@@ -204,42 +204,41 @@ strings and text output
 random numbers
 --------------
 
-.. function:: randn!(A::Array{Float64,N})
-
-   UNDOCUMENTED
-
-
 bigfloat & precision
 --------------------
 
-.. function:: get_precision(...)
+.. function:: get_precision(num::FloatingPoint)
 
-   UNDOCUMENTED
+   Get the precision of a floating point number as, as defined by the effective number of bits in the mantissa.
 
 .. function:: get_bigfloat_precision()
 
-   UNDOCUMENTED
+   Get the precision currently used for BigFloat arithmetic.
 
 .. function:: set_bigfloat_precision(x::Int64)
 
-   UNDOCUMENTED
+   Set the precision to be used to BigFloat arithmetic.
 
 .. function:: with_bigfloat_precision(f::Function,precision::Integer)
 
-   UNDOCUMENTED
+   Change the bigfloat arithmetic precision for the duration of f. Is logically equivalent to
+   old = get_bigfloat_precision()
+   set_bigfloat_precision(precision)
+   f()
+   set_bigfloat_precision(old)
 
 .. function:: get_bigfloat_rounding()
 
-   UNDOCUMENTED
+   Get the current BigFloat rounding mode. Valid modes are const RoundToNearest, RoundToZero, RoundUp, RoundDown, RoundAwayZero
 
-.. function:: set_bigfloat_rounding(x::Int64)
+.. function:: set_bigfloat_rounding(mode)
 
-   UNDOCUMENTED
+   Set the BigFloat rounding mode. See get_bigfloat_rounding for available modes
 
-.. function:: with_bigfloat_rounding(f::Function,rounding::Integer)
+.. function:: with_bigfloat_rounding(f::Function,mode)
 
-   UNDOCUMENTED
-
+   Change the bigfloat arithmetic precision for the duration of f. See get_bigfloat_rounding for available rounding modes. Also
+   see with_bigfloat_precision.
 
 statistics
 ----------
@@ -272,10 +271,6 @@ iteration
 object identity and equality
 ----------------------------
 
-.. function:: deepcopy_internal(...)
-
-   UNDOCUMENTED
-
 
 tasks and conditions
 --------------------
@@ -306,10 +301,6 @@ help and reflection
    UNDOCUMENTED
 
 .. function:: less(...)
-
-   UNDOCUMENTED
-
-.. function:: whicht(f,types)
 
    UNDOCUMENTED
 
@@ -373,18 +364,6 @@ I/O and events
    UNDOCUMENTED
 
 .. function:: readdir(...)
-
-   UNDOCUMENTED
-
-.. function:: start_reading(...)
-
-   UNDOCUMENTED
-
-.. function:: start_watching(...)
-
-   UNDOCUMENTED
-
-.. function:: stop_reading(stream::AsyncStream)
 
    UNDOCUMENTED
 
