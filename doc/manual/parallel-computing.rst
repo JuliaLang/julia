@@ -155,10 +155,10 @@ A file can also be preloaded on multiple processes at startup, and a driver scri
 
     julia -p <n> -L file1.jl -L file2.jl driver.jl
     
-Each process has an associated identifier. The process providing the interactive julia REPL prompt, 
-always has an id equal to 1. As also would the the julia process running the driver script in the 
-example above. All the other processes (also known as worker processes, or just workers) have their 
-own unique ids. Workers are defined as all processes other than the driving process(id of 1). When 
+Each process has an associated identifier. The process providing the interactive julia prompt
+always has an id equal to 1, as would the the julia process running the driver script in the
+example above. All other processes (also known as worker processes, or just workers) have their
+own unique ids. Workers are defined as all processes other than the driving process (id of 1). When
 no additional processes are started, the driving process is also deemed to be a worker.
 
 The base Julia installation has in-built support for two types of clusters: 
