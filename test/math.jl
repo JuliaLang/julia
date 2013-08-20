@@ -10,6 +10,12 @@ for x = -400:40:400
     @test_approx_eq_eps cosd(x) cos(pi/180*x) eps(pi/180*x)
 end
 
+for x = -3:0.3:3
+    @test_approx_eq_eps sinpi(x) sin(pi*x) eps(pi*x)
+    @test_approx_eq_eps cospi(x) cos(pi*x) eps(pi*x)
+end
+
+
 # error functions
 @test_approx_eq erf(1) 0.84270079294971486934
 @test_approx_eq erfc(1) 0.15729920705028513066
