@@ -66,8 +66,8 @@ end
 length(l::Nil) = 0
 length(l::Cons) = 1 + length(tail(l))
 
-map(f, l::Nil) = l
-map(f, l::Cons) = cons(f(head(l)), map(f, tail(l)))
+map(f::Base.Callable, l::Nil) = l
+map(f::Base.Callable, l::Cons) = cons(f(head(l)), map(f, tail(l)))
 
 copylist(l::Nil) = l
 copylist(l::Cons) = cons(head(l), copylist(tail(l)))

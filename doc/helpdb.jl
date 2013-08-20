@@ -1392,82 +1392,94 @@
 
 "),
 
-("Strings","Base","isalnum","isalnum(c::Char)
+("Strings","Base","isalnum","isalnum(c::Union(Char,String))
 
-   Tests whether a character is alphanumeric.
-
-"),
-
-("Strings","Base","isalpha","isalpha(c::Char)
-
-   Tests whether a character is alphabetic.
+   Tests whether a character is alphanumeric, or whether this
+   is true for all elements of a string.
 
 "),
 
-("Strings","Base","isascii","isascii(c::Char)
+("Strings","Base","isalpha","isalpha(c::Union(Char,String))
 
-   Tests whether a character belongs to the ASCII character set.
-
-"),
-
-("Strings","Base","isblank","isblank(c::Char)
-
-   Tests whether a character is a tab or space.
+   Tests whether a character is alphabetic, or whether this
+   is true for all elements of a string.
 
 "),
 
-("Strings","Base","iscntrl","iscntrl(c::Char)
+("Strings","Base","isascii","isascii(c::Union(Char,String))
 
-   Tests whether a character is a control character.
-
-"),
-
-("Strings","Base","isdigit","isdigit(c::Char)
-
-   Tests whether a character is a numeric digit (0-9).
+   Tests whether a character belongs to the ASCII character set, or whether this
+   is true for all elements of a string.
 
 "),
 
-("Strings","Base","isgraph","isgraph(c::Char)
+("Strings","Base","isblank","isblank(c::Union(Char,String))
 
-   Tests whether a character is printable, and not a space.
-
-"),
-
-("Strings","Base","islower","islower(c::Char)
-
-   Tests whether a character is a lowercase letter.
+   Tests whether a character is a tab or space, or whether this
+   is true for all elements of a string.
 
 "),
 
-("Strings","Base","isprint","isprint(c::Char)
+("Strings","Base","iscntrl","iscntrl(c::Union(Char,String))
 
-   Tests whether a character is printable, including space.
+   Tests whether a character is a control character, or whether this
+   is true for all elements of a string.
 
 "),
 
-("Strings","Base","ispunct","ispunct(c::Char)
+("Strings","Base","isdigit","isdigit(c::Union(Char,String))
+
+   Tests whether a character is a numeric digit (0-9), or whether this
+   is true for all elements of a string.
+
+"),
+
+("Strings","Base","isgraph","isgraph(c::Union(Char,String))
+
+   Tests whether a character is printable, and not a space, or whether this
+   is true for all elements of a string.
+
+"),
+
+("Strings","Base","islower","islower(c::Union(Char,String))
+
+   Tests whether a character is a lowercase letter, or whether this
+   is true for all elements of a string.
+
+"),
+
+("Strings","Base","isprint","isprint(c::Union(Char,String))
+
+   Tests whether a character is printable, including space, or whether this
+   is true for all elements of a string.
+
+"),
+
+("Strings","Base","ispunct","ispunct(c::Union(Char,String))
 
    Tests whether a character is printable, and not a space or
-   alphanumeric.
+   alphanumeric, or whether this is true for all elements of a string.
 
 "),
 
-("Strings","Base","isspace","isspace(c::Char)
+("Strings","Base","isspace","isspace(c::Union(Char,String))
 
-   Tests whether a character is any whitespace character.
-
-"),
-
-("Strings","Base","isupper","isupper(c::Char)
-
-   Tests whether a character is an uppercase letter.
+   Tests whether a character is any whitespace character, or whether this
+   is true for all elements of a string.
 
 "),
 
-("Strings","Base","isxdigit","isxdigit(c::Char)
+("Strings","Base","isupper","isupper(c::Union(Char,String))
 
-   Tests whether a character is a valid hexadecimal digit.
+   Tests whether a character is an uppercase letter, or whether this
+   is true for all elements of a string.
+
+"),
+
+("Strings","Base","isxdigit","isxdigit(c::Union(Char,String))
+
+   Tests whether a character is a valid hexadecimal digit, or whether this
+   is true for all elements of a string.
 
 "),
 

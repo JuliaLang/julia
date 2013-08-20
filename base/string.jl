@@ -348,9 +348,11 @@ for name = ("alnum", "alpha", "cntrl", "digit", "graph",
             "lower", "print", "punct", "space", "upper")
     f = symbol(string("is",name))
     @eval ($f)(c::Char) = bool(ccall($(string("isw",name)), Int32, (Cwchar_t,), c))
+    @eval $f(s::String) = all($f, s)
 end
 
 isblank(c::Char) = c==' ' || c=='\t'
+isblank(s::String) = all(isblank, s)
 
 ## generic string uses only endof and next ##
 
@@ -613,6 +615,7 @@ escape_nul(s::String, i::Int) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? "\\x00" : "\\0"
 
 isxdigit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
+isxdigit(s::String) = all(isxdigit, s)
 need_full_hex(s::String, i::Int) = !done(s,i) && isxdigit(next(s,i)[1])
 
 function print_escaped(io, s::String, esc::String)
