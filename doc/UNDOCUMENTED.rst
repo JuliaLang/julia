@@ -207,39 +207,6 @@ random numbers
 bigfloat & precision
 --------------------
 
-.. function:: get_precision(num::FloatingPoint)
-
-   Get the precision of a floating point number as, as defined by the effective number of bits in the mantissa.
-
-.. function:: get_bigfloat_precision()
-
-   Get the precision currently used for BigFloat arithmetic.
-
-.. function:: set_bigfloat_precision(x::Int64)
-
-   Set the precision to be used to BigFloat arithmetic.
-
-.. function:: with_bigfloat_precision(f::Function,precision::Integer)
-
-   Change the bigfloat arithmetic precision for the duration of f. Is logically equivalent to
-   old = get_bigfloat_precision()
-   set_bigfloat_precision(precision)
-   f()
-   set_bigfloat_precision(old)
-
-.. function:: get_bigfloat_rounding()
-
-   Get the current BigFloat rounding mode. Valid modes are const RoundToNearest, RoundToZero, RoundUp, RoundDown, RoundAwayZero
-
-.. function:: set_bigfloat_rounding(mode)
-
-   Set the BigFloat rounding mode. See get_bigfloat_rounding for available modes
-
-.. function:: with_bigfloat_rounding(f::Function,mode)
-
-   Change the bigfloat arithmetic precision for the duration of f. See get_bigfloat_rounding for available rounding modes. Also
-   see with_bigfloat_precision.
-
 statistics
 ----------
 
