@@ -130,13 +130,8 @@ cosc(x::Integer) = cosc(float(x))
 cosc{T<:Integer}(x::Complex{T}) = cosc(float(x))
 @vectorize_1arg Number cosc
 
-const pideg1 = 0.017453292501159012 # pi/180 truncated to 29 significant bits
-const pideg2 = 1.8784283451579438e-11 # pi/180 - pideg1
-const degpi1 = 57.29577946662903 # 180/pi to 29 significant bits
-const degpi2 = 4.645329255648566e-8 # 180/pi - degpi1
-
-radians2degrees(z::Real) = oftype(z, degpi1*z + degpi2*z)
-degrees2radians(z::Real) = oftype(z, pideg1*z + pideg2*z)
+radians2degrees(z::Real) = oftype(z, 57.29577951308232*z)
+degrees2radians(z::Real) = oftype(z, 0.017453292519943295*z)
 radians2degrees(z::Integer) = radians2degrees(float(z))
 degrees2radians(z::Integer) = degrees2radians(float(z))
 
