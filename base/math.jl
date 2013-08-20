@@ -41,7 +41,7 @@ function sinpi(x::Real)
         return nan(x)
     end
 
-    rx = rem(x,2.0)
+    rx = float(rem(x,2))
     arx = abs(rx)
 
     if arx == 0.0
@@ -71,7 +71,7 @@ function cospi(x::Real)
         return nan(x)
     end
 
-    rx = abs(rem(x,2.0))
+    rx = abs(float(rem(x,2)))
 
     if rx <= 0.25
         return cos(pi*rx)
