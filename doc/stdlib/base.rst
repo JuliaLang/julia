@@ -934,57 +934,70 @@ Strings
 
    Gives the number of columns needed to print a string.
 
-.. function:: isalnum(c::Char)
+.. function:: isalnum(c::Union(Char,String))
 
-   Tests whether a character is alphanumeric.
+   Tests whether a character is alphanumeric, or whether this
+   is true for all elements of a string.
 
-.. function:: isalpha(c::Char)
+.. function:: isalpha(c::Union(Char,String))
 
-   Tests whether a character is alphabetic.
+   Tests whether a character is alphabetic, or whether this
+   is true for all elements of a string.
 
-.. function:: isascii(c::Char)
+.. function:: isascii(c::Union(Char,String))
 
-   Tests whether a character belongs to the ASCII character set.
+   Tests whether a character belongs to the ASCII character set, or whether this
+   is true for all elements of a string.
 
-.. function:: isblank(c::Char)
+.. function:: isblank(c::Union(Char,String))
 
-   Tests whether a character is a tab or space.
+   Tests whether a character is a tab or space, or whether this
+   is true for all elements of a string.
 
-.. function:: iscntrl(c::Char)
+.. function:: iscntrl(c::Union(Char,String))
 
-   Tests whether a character is a control character.
+   Tests whether a character is a control character, or whether this
+   is true for all elements of a string.
 
-.. function:: isdigit(c::Char)
+.. function:: isdigit(c::Union(Char,String))
 
-   Tests whether a character is a numeric digit (0-9).
+   Tests whether a character is a numeric digit (0-9), or whether this
+   is true for all elements of a string.
 
-.. function:: isgraph(c::Char)
+.. function:: isgraph(c::Union(Char,String))
 
-   Tests whether a character is printable, and not a space.
+   Tests whether a character is printable, and not a space, or whether this
+   is true for all elements of a string.
 
-.. function:: islower(c::Char)
+.. function:: islower(c::Union(Char,String))
 
-   Tests whether a character is a lowercase letter.
+   Tests whether a character is a lowercase letter, or whether this
+   is true for all elements of a string.
 
-.. function:: isprint(c::Char)
+.. function:: isprint(c::Union(Char,String))
 
-   Tests whether a character is printable, including space.
+   Tests whether a character is printable, including space, or whether this
+   is true for all elements of a string.
 
-.. function:: ispunct(c::Char)
+.. function:: ispunct(c::Union(Char,String))
 
-   Tests whether a character is printable, and not a space or alphanumeric.
+   Tests whether a character is printable, and not a space or
+   alphanumeric, or whether this is true for all elements of a string.
 
-.. function:: isspace(c::Char)
+.. function:: isspace(c::Union(Char,String))
 
-   Tests whether a character is any whitespace character.
+   Tests whether a character is any whitespace character, or whether this
+   is true for all elements of a string.
 
-.. function:: isupper(c::Char)
+.. function:: isupper(c::Union(Char,String))
 
-   Tests whether a character is an uppercase letter.
+   Tests whether a character is an uppercase letter, or whether this
+   is true for all elements of a string.
 
-.. function:: isxdigit(c::Char)
+.. function:: isxdigit(c::Union(Char,String))
 
-   Tests whether a character is a valid hexadecimal digit.
+   Tests whether a character is a valid hexadecimal digit, or whether this
+   is true for all elements of a string.
 
 .. function:: symbol(str)
 
