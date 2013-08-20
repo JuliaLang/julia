@@ -36,7 +36,7 @@ export File,
        S_IROTH, S_IWOTH, S_IXOTH, S_IRWXO
 
 import Base: uvtype, uvhandle, eventloop, fd, position, stat, close, write, read, readbytes, isopen,
-            _sizeof_uv_fs
+            _sizeof_uv_fs, uv_error
 
 include("file_constants.jl")
 
