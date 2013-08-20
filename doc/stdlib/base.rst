@@ -1051,9 +1051,23 @@ I/O
 
    **Example**: ``open(readall, "file.txt")``
 
-.. function:: IOBuffer([size]) -> IOBuffer
+.. function:: IOBuffer() -> IOBuffer
 
-   Create an in-memory I/O stream, optionally specifying how much initial space is needed.
+   Create an in-memory I/O stream.
+
+.. function:: IOBuffer(size::Int)
+
+   Create a fixed sized IOBuffer. Note that the buffer will not grow dynamically in this case.
+
+.. function:: IOBuffer(string)
+
+   Create a read-only IOBuffer on the data underlying the given string
+
+.. function:: IOBuffer([data,],[readable,writable,[maxsize]])
+
+   Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, 
+   they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable
+   but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown. 
 
 .. function:: takebuf_array(b::IOBuffer)
 
@@ -1206,6 +1220,132 @@ I/O
 
    Like redirect_stdout, but for STDIN. Note that the order of the return tuple is still (rd,wr), i.e. data to be read
    from STDIN, may be written to wr.
+
+.. function:: readchomp(x)
+
+   Read the entirety of x as a string but remove trailing newlines. Equivalent to chomp(readall(x)).
+
+.. function:: readdir([dir]) -> Vector{ByteString}
+
+   Returns the files and directories in the directory `dir` (or the current working directory if not given).
+
+.. function:: truncate(file,n)
+
+   Resize the file or buffer given by the first argument to exactly `n` bytes, filling previously unallocated space with '\0'
+   if the file or buffer is grown
+
+.. function:: eatwspace(stream)
+
+   Advance the stream until before the first non-whitespace character (if the next character is not a whitespace character, the
+   stream will not be advanced).
+
+.. function:: eatwspace_comment(stream,cmt::Char)
+
+   Like ``eatwspace``, but also skips lines which have `cmt` as the first character of the line.
+
+.. function:: countlines(io,[eol::Char])
+
+   Read io until the end of the stream/file and count the number of non-empty lines. To specify a file pass the filename as the first
+   argument. EOL markers other than '\n' are supported by passing them as the second argument.
+
+.. function:: PipeBuffer()
+
+   An IOBuffer that only allows reading/writing (but not seeking/appending/truncating). See IOBuffer for the available constructors. 
+
+.. function:: PipeBuffer(data::Vector{Uint8},[maxsize])
+
+   Create a PipeBuffer to operate on the data vector, optionally specifying a size beyond which the underlying Array may not be 
+   grown. 
+
+.. function:: readavailable(stream)
+
+   Read all available data on the stream, blocking the task only if no data is available. 
+
+.. function:: stat(file)
+
+   Returns a structure whose fields contain information about the file. In partiuclar, the fields of the structure are:
+
+   ========= ======================================================================
+    size      The size (in bytes) of the file
+    device    ID of the device that contains the file 
+    inode     The inode number of the file
+    mode      The protection mode of the file
+    nlink     The number of hard links to the file
+    uid       The user id of the owner of the file
+    gid       The group id of the file owner
+    rdev      If this file refers to a device, the ID of the device it refers to 
+    blksize   The file-system preffered block size for the file
+    blocks    The number of such blocks allocated
+    mtime     Unix timestamp of when the file was last modified
+    ctime     Unix timestamp of when the file was created
+   ========= ======================================================================
+
+.. function:: lstat(file)
+
+   Like stat, but for symbolic links get the info for the link itself rather than the file it refers to. Note also that
+   because of that, this function must be called on a file path rather than a file object or a file descriptor. 
+
+.. function:: ctime(file)
+
+   Equivalent to stat(file).ctime
+
+.. function:: mtime(file)
+
+   Equivalent to stat(file).mtime
+
+.. function:: filemode(file)
+
+   Equivalent to stat(file).mode
+
+.. function:: filesize(path...)
+
+   Equivalent to stat(file).size
+
+.. function:: uperm(file)
+
+   Gets the permissions of the owner of the file as bitfield of
+
+   ==== =====================
+    01   Execute Permission
+    02   Write Permission
+    04   Read Permission
+   ==== =====================
+
+   For allowed arguments, see the stat method
+
+.. function:: gperm(file)
+
+   Like uperm but gets the permissions of the group owning the file
+
+.. function:: operm(file)
+
+   Like uperm but gets the permissions for people who neither own the file nor are a 
+   member of the group owning the file
+
+.. function:: cp(src::String,dst::String)
+
+   Copy a file from `src` to `dest`.
+
+.. function:: download(url,[localfile])
+
+   Download a file from the given url, optionally renaming it to the given local file name.
+   Note that this function relies on the availability of external tools such as ``curl``, 
+   ``wget`` or ``fetch`` to download the file and is provided for convenience. For production
+   use or situations in which more options are need, please use a package that provides the
+   desired functionality instead. 
+
+.. function:: mv(src::String,dst::String)
+
+   Move a file from `src` to `dst`.
+
+.. function:: rm(path::String)
+
+   Delete the file at the given path. Note that this does not work on directories.
+
+.. function:: touch(path::String)
+
+   Update the last-modified timestamp on a file to the current time.
+
 
 Network I/O
 -----------

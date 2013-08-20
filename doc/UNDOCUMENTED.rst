@@ -259,7 +259,6 @@ syntax
 ------
 
 
-
 help and reflection
 -------------------
 
@@ -298,43 +297,11 @@ IP address stuff
 I/O and events
 --------------
 
-.. function:: countlines(...)
-
-   UNDOCUMENTED
-
-.. function:: eatwspace(s::IOStream)
-
-   UNDOCUMENTED
-
-.. function:: eatwspace_comment(s::IOStream,cmt::Char)
-
-   UNDOCUMENTED
-
 .. function:: mmap_grow(len::Integer,prot::Integer,flags::Integer,fd::Integer,offset::Int64)
 
    UNDOCUMENTED
 
 .. function:: mmap_stream_settings(s::IO)
-
-   UNDOCUMENTED
-
-.. function:: PipeBuffer(...)
-
-   UNDOCUMENTED
-
-.. function:: readavailable(this::AsyncStream)
-
-   UNDOCUMENTED
-
-.. function:: readchomp(x)
-
-   UNDOCUMENTED
-
-.. function:: readdir(...)
-
-   UNDOCUMENTED
-
-.. function:: truncate(...)
 
    UNDOCUMENTED
 
@@ -385,66 +352,6 @@ paths and file names
 
 filesystem operations
 ---------------------
-
-.. function:: cp(src::String,dst::String)
-
-   UNDOCUMENTED
-
-.. function:: ctime(path...)
-
-   UNDOCUMENTED
-
-.. function:: download(...)
-
-   UNDOCUMENTED
-
-.. function:: filemode(path...)
-
-   UNDOCUMENTED
-
-.. function:: filesize(path...)
-
-   UNDOCUMENTED
-
-.. function:: gperm(...)
-
-   UNDOCUMENTED
-
-.. function:: ls(args...)
-
-   UNDOCUMENTED
-
-.. function:: lstat(...)
-
-   UNDOCUMENTED
-
-.. function:: mtime(path...)
-
-   UNDOCUMENTED
-
-.. function:: mv(src::String,dst::String)
-
-   UNDOCUMENTED
-
-.. function:: operm(...)
-
-   UNDOCUMENTED
-
-.. function:: rm(path::String)
-
-   UNDOCUMENTED
-
-.. function:: stat(...)
-
-   UNDOCUMENTED
-
-.. function:: touch(path::String)
-
-   UNDOCUMENTED
-
-.. function:: uperm(...)
-
-   UNDOCUMENTED
 
 
 external processes ## TODO: whittle down these exports.
