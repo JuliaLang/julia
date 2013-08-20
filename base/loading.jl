@@ -13,6 +13,7 @@ function find_in_path(name::String)
         base = name[1:end-3]
     else
         name = string(base,".jl")
+        isfile(name) && return abspath(name)
     end
     for prefix in [Pkg.dir(), LOAD_PATH]
         path = joinpath(prefix, name)
