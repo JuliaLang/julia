@@ -1562,8 +1562,12 @@ static jl_value_t *lookup_type(jl_typename_t *tn, jl_value_t **key, size_t n)
     }
     for(size_t i=0; i < cl; i++) {
         jl_datatype_t *tt = (jl_datatype_t*)data[i];
-        if (typekey_compare(tt, key, n))
+        if (typekey_compare(tt, key, n)) {
+            if (tn == jl_type_type->name &&
+                (jl_is_typector(key[0]) != jl_is_typector(jl_tupleref(tt->parameters,0))))
+                continue;
             return (jl_value_t*)tt;
+        }
     }
     return NULL;
 }
