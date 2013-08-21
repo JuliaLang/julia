@@ -1517,6 +1517,7 @@
    (pattern-lambda (^= a b)     (expand-update-operator '^ a b))
    (pattern-lambda (.^= a b)    (expand-update-operator '.^ a b))
    (pattern-lambda (%= a b)     (expand-update-operator '% a b))
+   (pattern-lambda (.%= a b)    (expand-update-operator '.% a b))
    (pattern-lambda (|\|=| a b)  (expand-update-operator '|\|| a b))
    (pattern-lambda (&= a b)     (expand-update-operator '& a b))
    (pattern-lambda ($= a b)     (expand-update-operator '$ a b))
