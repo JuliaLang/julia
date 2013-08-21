@@ -1455,9 +1455,9 @@ Text I/O
    Call the given function with an I/O stream and the supplied extra arguments.
    Everything written to this I/O stream is returned as a string.
 
-.. function:: showall(x)
+.. function:: showerror(io, e)
 
-   Show x, printing all elements of arrays
+   Show a descriptive representation of an exception object.
 
 .. function:: dump(x)
 
@@ -1576,7 +1576,7 @@ Julia environments (such as the IPython-based IJulia notebook).
               redisplay(mime, x)
               redisplay(d::Display, mime, x)
 
-   By default, the `redisplay` functions simply call ``display``.  However,
+   By default, the ``redisplay`` functions simply call ``display``.  However,
    some display backends may override ``redisplay`` to modify an existing
    display of ``x`` (if any).   Using ``redisplay`` is also a hint to the
    backend that ``x`` may be redisplayed several times, and the backend
@@ -1597,19 +1597,21 @@ Julia environments (such as the IPython-based IJulia notebook).
    ``stream`` (usually a memory buffer), if possible.  In order to
    provide a rich multimedia representation of a user-defined type
    ``T``, it is only necessary to define a new ``writemime`` method for
-   ``T``, via: ``writemime(stream, ::@MIME(mime), x::T) = ...``, where
+   ``T``, via: ``writemime(stream, ::MIME"mime", x::T) = ...``, where
    ``mime`` is a MIME-type string and the function body calls
    ``write`` (or similar) to write that representation of ``x`` to
-   ``stream``.
+   ``stream``. (Note that the ``MIME""`` notation only supports literal
+   strings; to construct ``MIME`` types in a more flexible manner use
+   ``MIME{symbol("")}``.)
 
    For example, if you define a ``MyImage`` type and know how to write
    it to a PNG file, you could define a function ``writemime(stream,
-   ::@MIME("image/png"), x::MyImage) = ...``` to allow your images to
+   ::MIME"image/png", x::MyImage) = ...``` to allow your images to
    be displayed on any PNG-capable ``Display`` (such as IJulia).
    As usual, be sure to ``import Base.writemime`` in order to add
    new methods to the built-in Julia function ``writemime``.
 
-   Technically, the ``@MIME(mime)`` macro defines a singleton type for
+   Technically, the ``MIME"mime"`` macro defines a singleton type for
    the given ``mime`` string, which allows us to exploit Julia's
    dispatch mechanisms in determining how to display objects of any
    given type.
@@ -1645,14 +1647,14 @@ Julia environments (such as the IPython-based IJulia notebook).
 
 As mentioned above, one can also define new display backends. For
 example, a module that can display PNG images in a window can register
-this capability with Julia, so that calling `display(x)` on types
+this capability with Julia, so that calling ``display(x)`` on types
 with PNG representations will automatically display the image using
 the module's window.
 
 In order to define a new display backend, one should first create a
 subtype ``D`` of the abstract class ``Display``.  Then, for each MIME
 type (``mime`` string) that can be displayed on ``D``, one should
-define a function ``display(d::D, ::@MIME(mime), x) = ...`` that
+define a function ``display(d::D, ::MIME"mime", x) = ...`` that
 displays ``x`` as that MIME type, usually by calling ``reprmime(mime,
 x)``.  A ``MethodError`` should be thrown if ``x`` cannot be displayed
 as that MIME type; this is automatic if one calls ``reprmime``.
