@@ -832,7 +832,7 @@ export
     srand,
 
 # bigfloat & precision
-    get_precision,
+    precision,
     get_bigfloat_precision,
     set_bigfloat_precision,
     with_bigfloat_precision,

@@ -4,6 +4,7 @@
 /dist-extras
 /julia
 /usr
+/Make.user
 
 *.exe
 *.dll

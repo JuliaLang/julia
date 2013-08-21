@@ -120,6 +120,9 @@ function cospi(z::Complex)
     pizi = pi*zi
     complex(cospi(zr)*cosh(pizi), -sinpi(zr)*sinh(pizi))
 end
+@vectorize_1arg Number sinpi
+@vectorize_1arg Number cospi
+
 
 sinc(x::Number) = x==0 ? one(x)  : oftype(x,sinpi(x)/(pi*x))
 sinc(x::Integer) = x==0 ? one(x) : zero(x)
@@ -179,6 +182,7 @@ function sind(x::Real)
         return sin(degrees2radians(rx))
     end
 end
+@vectorize_1arg Real sind
 
 function cosd(x::Real)
     if isinf(x)
@@ -205,8 +209,10 @@ function cosd(x::Real)
         return cos(degrees2radians(rx))
     end
 end
+@vectorize_1arg Real cosd
 
 tand(x::Real) = sind(x) / cosd(x)
+@vectorize_1arg Real tand
 
 for (fd, f) in ((:sind, :sin), (:cosd, :cos), (:tand, :tan))
     @eval begin
@@ -383,18 +389,18 @@ modf(x) = rem(x,one(x)), trunc(x)
 
 # special functions
 
-besselj0(x::Float64) = ccall((:j0,openlibm_extras),  Float64, (Float64,), x)
-besselj0(x::Float32) = ccall((:j0f,openlibm_extras), Float32, (Float32,), x)
+besselj0(x::Float64) = ccall((:j0,libm),  Float64, (Float64,), x)
+besselj0(x::Float32) = ccall((:j0f,libm), Float32, (Float32,), x)
 @vectorize_1arg Real besselj0
-besselj1(x::Float64) = ccall((:j1,openlibm_extras),  Float64, (Float64,), x)
-besselj1(x::Float32) = ccall((:j1f,openlibm_extras), Float32, (Float32,), x)
+besselj1(x::Float64) = ccall((:j1,libm),  Float64, (Float64,), x)
+besselj1(x::Float32) = ccall((:j1f,libm), Float32, (Float32,), x)
 @vectorize_1arg Real besselj1
 
-bessely0(x::Float64) = ccall((:y0,openlibm_extras),  Float64, (Float64,), x)
-bessely0(x::Float32) = ccall((:y0f,openlibm_extras), Float32, (Float32,), x)
+bessely0(x::Float64) = ccall((:y0,libm),  Float64, (Float64,), x)
+bessely0(x::Float32) = ccall((:y0f,libm), Float32, (Float32,), x)
 @vectorize_1arg Real bessely0
-bessely1(x::Float64) = ccall((:y1,openlibm_extras),  Float64, (Float64,), x)
-bessely1(x::Float32) = ccall((:y1f,openlibm_extras), Float32, (Float32,), x)
+bessely1(x::Float64) = ccall((:y1,libm),  Float64, (Float64,), x)
+bessely1(x::Float32) = ccall((:y1f,libm), Float32, (Float32,), x)
 @vectorize_1arg Real bessely1
 
 let
@@ -712,7 +718,7 @@ function psifn(x::Float64, n::Int, kode::Int, m::Int)
 #-----------------------------------------------------------------------
 #     compute xmin and the number of terms of the series, fln+1
 #-----------------------------------------------------------------------
-    rln = r1m5 * get_precision(x)
+    rln = r1m5 * precision(x)
     rln = min(rln, 18.06)
     fln = max(rln, 3.0) - 3.0
     yint = 3.50 + 0.40*fln
@@ -1059,7 +1065,7 @@ function zeta(z::Number)
 end
 @vectorize_1arg Number zeta
 
-if WORD_SIZE == 64
+@unix_only if WORD_SIZE == 64
 # TODO: complex return only on 64-bit for now
 for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
     fname = (f === :Dawson) ? :dawson : f

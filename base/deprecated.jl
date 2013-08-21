@@ -197,6 +197,7 @@ export PipeString
 @deprecate  integer_valued      isinteger
 @deprecate  float64_valued      isfloat64
 @deprecate  isdenormal          issubnormal
+@deprecate  get_precision       precision
 @deprecate  expr(hd, a...)              Expr(hd, a...)
 @deprecate  expr(hd, a::Array{Any,1})   Expr(hd, a...)
 @deprecate  readdir(cmd::Cmd)           readdir(string(cmd)[2:end-1])
