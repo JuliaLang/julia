@@ -4118,6 +4118,11 @@ System
 
    Run a command object asynchronously, returning the resulting ``Process`` object.
 
+.. function:: DevNull()
+
+   Used in a stream redirect to discard all data written to it. Essentially equivalent to /dev/null on Unix or NUL on Windows.
+   Usage: run(`cat test.txt` |> DevNull)
+
 .. function:: success(command)
 
    Run a command object, constructed with backticks, and tell whether it was successful (exited with a code of 0). An exception is raised if the process cannot be started.

@@ -25,12 +25,12 @@ out = readall(`echo hello` & `echo world`)
 @test (run(`printf "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
-@unix_only @test (run(yes|>`head`|>SpawnNullStream()); true)
+@unix_only @test (run(yes|>`head`|>DevNull); true)
 
 a = Base.Condition()
 
 @schedule begin
-    p = spawn(yes|>SpawnNullStream())
+    p = spawn(yes|>DevNull)
     Base.notify(a,p)
     @test !success(p)
 end
