@@ -11,3 +11,5 @@
 *.o
 *.dylib
 *.dSYM
+
+/Make.user
