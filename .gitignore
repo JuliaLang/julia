@@ -4,6 +4,7 @@
 /dist-extras
 /julia
 /usr
+/Make.user
 
 *.exe
 *.dll
@@ -11,5 +12,3 @@
 *.o
 *.dylib
 *.dSYM
-
-/Make.user
