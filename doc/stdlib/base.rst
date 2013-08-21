@@ -2119,6 +2119,14 @@ Mathematical Functions
 
    Compute tangent of ``x``, where ``x`` is in degrees
 
+.. function:: sinpi(x)
+
+   Compute accurate :math:`\sin(\pi x)`
+
+.. function:: cospi(x)
+
+   Compute accurate :math:`\cos(\pi x)`
+
 .. function:: sinh(x)
 
    Compute hyperbolic sine of ``x``
