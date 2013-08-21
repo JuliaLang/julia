@@ -2121,11 +2121,11 @@ Mathematical Functions
 
 .. function:: sinpi(x)
 
-   Compute accurate :math:`\sin(\pi x)`
+   Compute :math:`\sin(\pi x)` more accurately than ``sin(pi*x)``, especially for large ``x``.
 
 .. function:: cospi(x)
 
-   Compute accurate :math:`\cos(\pi x)`
+   Compute :math:`\cos(\pi x)` more accurately than ``cos(pi*x)``, especially for large ``x``.
 
 .. function:: sinh(x)
 
