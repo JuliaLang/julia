@@ -48,7 +48,8 @@ static DWORD WINAPI profile_bt( LPVOID lparam ) {
                 fputs("failed to resume main thread! aborting.",stderr);
                 abort();
             }
-        } else {
+        }
+        else {
             SuspendThread(GetCurrentThread());
         }
     }
@@ -66,7 +67,8 @@ DLLEXPORT int profile_start_timer(void) {
             0,                      // use default creation flags
             0);                     // returns the thread identifier
         (void)SetThreadPriority(hBtThread,THREAD_PRIORITY_ABOVE_NORMAL);
-    } else {
+    }
+    else {
         if ((DWORD)-1 == ResumeThread(hBtThread)) {
             fputs("failed to resume profiling thread.",stderr);
             return -2;

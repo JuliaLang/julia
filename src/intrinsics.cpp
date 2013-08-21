@@ -60,15 +60,15 @@ using namespace JL_I;
 static Type *FTnbits(size_t nb)
 {
 #ifndef DISABLE_FLOAT16
-    if(nb == 16)
+    if (nb == 16)
         return Type::getHalfTy(jl_LLVMContext);
     else
 #endif
-    if(nb == 32)
+    if (nb == 32)
         return Type::getFloatTy(jl_LLVMContext);
-    else if(nb == 64)
+    else if (nb == 64)
         return Type::getDoubleTy(jl_LLVMContext);
-    else if(nb == 128)
+    else if (nb == 128)
         return Type::getFP128Ty(jl_LLVMContext);
     else 
         jl_error("Unsupported Float Size");
@@ -170,8 +170,15 @@ static Value *emit_unbox(Type *to, Type *pto, Value *x)
             return builder.CreatePtrToInt(x, to);
         if (!ty->isPointerTy() && to->isPointerTy())
             return builder.CreateIntToPtr(x, to);
-        if (ty != to)
-            jl_error("unbox: T != typeof(x)");
+        if (ty != to) {
+            // this can happen when a branch yielding a different type ends
+            // up being dead code, and type inference knows that the other
+            // branch's type is the only one that matters.
+#ifdef DEBUG
+            JL_PRINTF(JL_STDERR, "warning: unbox: T != typeof(x)\n");
+#endif
+            return UndefValue::get(to);
+        }
         return x;
     }
     Value *p = data_pointer(x);
@@ -583,7 +590,8 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
         uint64_t size = ((jl_datatype_t*)ety)->size;
         builder.CreateMemCpy(builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1),
             builder.CreateBitCast(emit_nthptr_addr(val, (size_t)1),T_pint8),  size, 1);
-    } else {
+    }
+    else {
         (void)typed_store(thePtr, im1, ety == (jl_value_t*)jl_any_type ? emit_expr(x,ctx) : emit_unboxed(x,ctx), 
             ety, ctx);
     }

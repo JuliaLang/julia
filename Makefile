@@ -111,7 +111,11 @@ ifneq ($(OPENBLAS_DYNAMIC_ARCH),1)
 	@echo OpenBLAS must be rebuilt with OPENBLAS_DYNAMIC_ARCH=1 to use dist target
 	@false
 endif
+ifneq ($(PREFIX),julia-$(JULIA_COMMIT))
+	$(error PREFIX must not be set for make dist)
+endif
 	@$(MAKE) install
+	cp LICENSE.md julia-$(JULIA_COMMIT)
 ifeq ($(OS), Darwin)
 	-./contrib/mac/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif

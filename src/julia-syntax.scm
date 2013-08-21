@@ -393,7 +393,21 @@
 		   (list (cadr body))
 		   '()))
 	 ;; body statements, minus line number node
-	 (stmts (if (null? lno) (cdr body) (cddr body))))
+	 (stmts (if (null? lno) (cdr body) (cddr body)))
+	 (positional-sparams
+	  (filter (lambda (s)
+		    (let ((name (if (symbol? s) s (cadr s))))
+		      (or (expr-contains-eq name (cons 'list pargl))
+			  (and (pair? vararg) (expr-contains-eq name (car vararg)))
+			  (not (expr-contains-eq name (cons 'list kargl))))))
+		  sparams))
+	 (keyword-sparams
+	  (filter (lambda (s)
+		    (let ((name (if (symbol? s) s (cadr s))))
+		      (not (expr-contains-eq name (cons 'list positional-sparams)))))
+		  sparams))
+	 (keyword-sparam-names
+	  (map (lambda (s) (if (symbol? s) s (cadr s))) keyword-sparams)))
     (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy)) (rkw (gensy))
 	  (mangled (symbol
 		    (string (if (symbol? name)
@@ -413,7 +427,7 @@
 
 	;; call with no keyword args
 	,(method-def-expr-
-	  name sparams (append pargl vararg)
+	  name positional-sparams (append pargl vararg)
 	  `(block
 	    ,(if (null? lno)
 		 `(line 0 || ||)
@@ -428,7 +442,13 @@
 
 	;; call with unsorted keyword args. this sorts and re-dispatches.
 	,(method-def-expr-
-	  (list 'kw name) sparams
+	  (list 'kw name) (filter
+			   ;; remove sparams that don't occur, to avoid printing
+			   ;; the warning twice
+			   (lambda (s)
+			     (let ((name (if (symbol? s) s (cadr s))))
+			       (expr-contains-eq name (cons 'list argl))))
+			   positional-sparams)
 	  `((:: ,kw (top Array)) ,@pargl ,@vararg)
 	  `(block
 	    (line 0 || ||)
@@ -451,7 +471,16 @@
 			    (let* ((k    (car kvf))
 				   (rval0 `(call (top arrayref) ,kw
 						 (call (top +) ,ii 1)))
-				   (rval (if (decl? k)
+				   ;; note: if the "declared" type of a KW arg
+				   ;; includes something from keyword-sparam-names,
+				   ;; then don't assert it here, since those static
+				   ;; parameters don't have values yet.
+				   ;; instead, the type will be picked up when the
+				   ;; underlying method is called.
+				   (rval (if (and (decl? k)
+						  (not (any (lambda (s)
+							      (expr-contains-eq s (caddr k)))
+							    keyword-sparam-names)))
 					     `(call (top typeassert)
 						    ,rval0
 						    ,(caddr k))
@@ -702,7 +731,13 @@
 	   (scope-block
 	    (block
 	     (global ,@params)
-	     ,@(if (null? defs)
+	     ,@(if (and (null? defs)
+			;; don't generate an outer constructor if the type has
+			;; parameters not mentioned in the field types. such a
+			;; constructor would not be callable anyway.
+			(every (lambda (sp)
+				 (expr-contains-eq sp (cons 'list field-types)))
+			       params))
 		   `(,(default-outer-ctor name field-names field-types
 			params bounds))
 		   '())))

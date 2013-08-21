@@ -132,7 +132,7 @@ end
 function find_source_file(file)
     if file[1]!='/' && !is_file_readable(file)
         file2 = find_in_path(file)
-        if is_file_readable(file2)
+        if file2 != nothing
             return file2
         else
             file2 = "$JULIA_HOME/../share/julia/base/$file"

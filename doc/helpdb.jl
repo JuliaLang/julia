@@ -147,7 +147,10 @@
 ("All Objects","Base","is","is(x, y)
 
    Determine whether \"x\" and \"y\" are identical, in the sense that
-   no program could distinguish them.
+   no program could distinguish them. Compares mutable objects by
+   address in memory, and compares immutable objects (such as numbers)
+   by contents at the bit level. This function is sometimes called
+   \"egal\". The \"===\" operator is an alias for this function.
 
 "),
 
@@ -161,7 +164,13 @@
 
    True if and only if \"x\" and \"y\" have the same contents. Loosely
    speaking, this means \"x\" and \"y\" would look the same when
-   printed.
+   printed. This is the default comparison function used by hash
+   tables (\"Dict\"). New types with a notion of equality should
+   implement this function, except for numbers, which should implement
+   \"==\" instead. However, numeric types with special values might
+   need to implement \"isequal\" as well. For example, floating point
+   \"NaN\" values are not \"==\", but are all equivalent in the sense
+   of \"isequal\".
 
 "),
 
@@ -172,6 +181,8 @@
    such as \"NaN\", are ordered in an arbitrary but consistent
    fashion. This is the default comparison used by \"sort\". Non-
    numeric types that can be ordered should implement this function.
+   Numeric types only need to implement it if they have special values
+   such as \"NaN\".
 
 "),
 
@@ -659,6 +670,10 @@
    \"min(itr)\", \"sum(itr)\", \"prod(itr)\", \"any(itr)\",
    \"all(itr)\".
 
+   The associativity of the reduction is implementation-dependent; if
+   you need a particular associativity, e.g. left-to-right, you should
+   write your own loop.
+
 "),
 
 ("Iterable Collections","Base","max","max(itr)
@@ -770,6 +785,10 @@
 
    **Example**: \"mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14\"
 
+   The associativity of the reduction is implementation-dependent; if
+   you need a particular associativity, e.g. left-to-right, you should
+   write your own loop.
+
 "),
 
 ("Iterable Collections","Base","first","first(coll)
@@ -848,7 +867,16 @@
 
 ("Associative Collections","Base","delete!","delete!(collection, key)
 
-   Delete the mapping for the given key in a collection.
+   Delete the mapping for the given key in a collection, and return
+   the colection.
+
+"),
+
+("Associative Collections","Base","pop!","pop!(collection, key[, default])
+
+   Delete and return the mapping for \"key\" if it exists in
+   \"collection\", otherwise return \"default\", or throw an error if
+   default is not specified.
 
 "),
 
@@ -1243,6 +1271,13 @@
 
 "),
 
+("Strings","Base","rsearch","rsearch(string, chars[, start])
+
+   Like \"search\", but starts at the end and moves towards the
+   beginning of \"string\".
+
+"),
+
 ("Strings","Base","replace","replace(string, pat, r[, n])
 
    Search for the given pattern \"pat\", and replace each occurrence
@@ -1392,82 +1427,94 @@
 
 "),
 
-("Strings","Base","isalnum","isalnum(c::Char)
+("Strings","Base","isalnum","isalnum(c::Union(Char, String))
 
-   Tests whether a character is alphanumeric.
-
-"),
-
-("Strings","Base","isalpha","isalpha(c::Char)
-
-   Tests whether a character is alphabetic.
+   Tests whether a character is alphanumeric, or whether this is true
+   for all elements of a string.
 
 "),
 
-("Strings","Base","isascii","isascii(c::Char)
+("Strings","Base","isalpha","isalpha(c::Union(Char, String))
 
-   Tests whether a character belongs to the ASCII character set.
-
-"),
-
-("Strings","Base","isblank","isblank(c::Char)
-
-   Tests whether a character is a tab or space.
+   Tests whether a character is alphabetic, or whether this is true
+   for all elements of a string.
 
 "),
 
-("Strings","Base","iscntrl","iscntrl(c::Char)
+("Strings","Base","isascii","isascii(c::Union(Char, String))
 
-   Tests whether a character is a control character.
-
-"),
-
-("Strings","Base","isdigit","isdigit(c::Char)
-
-   Tests whether a character is a numeric digit (0-9).
+   Tests whether a character belongs to the ASCII character set, or
+   whether this is true for all elements of a string.
 
 "),
 
-("Strings","Base","isgraph","isgraph(c::Char)
+("Strings","Base","isblank","isblank(c::Union(Char, String))
 
-   Tests whether a character is printable, and not a space.
-
-"),
-
-("Strings","Base","islower","islower(c::Char)
-
-   Tests whether a character is a lowercase letter.
+   Tests whether a character is a tab or space, or whether this is
+   true for all elements of a string.
 
 "),
 
-("Strings","Base","isprint","isprint(c::Char)
+("Strings","Base","iscntrl","iscntrl(c::Union(Char, String))
 
-   Tests whether a character is printable, including space.
+   Tests whether a character is a control character, or whether this
+   is true for all elements of a string.
 
 "),
 
-("Strings","Base","ispunct","ispunct(c::Char)
+("Strings","Base","isdigit","isdigit(c::Union(Char, String))
+
+   Tests whether a character is a numeric digit (0-9), or whether this
+   is true for all elements of a string.
+
+"),
+
+("Strings","Base","isgraph","isgraph(c::Union(Char, String))
+
+   Tests whether a character is printable, and not a space, or whether
+   this is true for all elements of a string.
+
+"),
+
+("Strings","Base","islower","islower(c::Union(Char, String))
+
+   Tests whether a character is a lowercase letter, or whether this is
+   true for all elements of a string.
+
+"),
+
+("Strings","Base","isprint","isprint(c::Union(Char, String))
+
+   Tests whether a character is printable, including space, or whether
+   this is true for all elements of a string.
+
+"),
+
+("Strings","Base","ispunct","ispunct(c::Union(Char, String))
 
    Tests whether a character is printable, and not a space or
-   alphanumeric.
+   alphanumeric, or whether this is true for all elements of a string.
 
 "),
 
-("Strings","Base","isspace","isspace(c::Char)
+("Strings","Base","isspace","isspace(c::Union(Char, String))
 
-   Tests whether a character is any whitespace character.
-
-"),
-
-("Strings","Base","isupper","isupper(c::Char)
-
-   Tests whether a character is an uppercase letter.
+   Tests whether a character is any whitespace character, or whether
+   this is true for all elements of a string.
 
 "),
 
-("Strings","Base","isxdigit","isxdigit(c::Char)
+("Strings","Base","isupper","isupper(c::Union(Char, String))
 
-   Tests whether a character is a valid hexadecimal digit.
+   Tests whether a character is an uppercase letter, or whether this
+   is true for all elements of a string.
+
+"),
+
+("Strings","Base","isxdigit","isxdigit(c::Union(Char, String))
+
+   Tests whether a character is a valid hexadecimal digit, or whether
+   this is true for all elements of a string.
 
 "),
 
@@ -1488,13 +1535,6 @@
 
    General unescaping of traditional C and Unicode escape sequences.
    Reverse of \"escape_string()\". See also \"print_unescaped()\".
-
-"),
-
-("Strings","Base","unescape_chars","unescape_chars(s::String, unescape::String) -> String
-
-   Bare minimum unescaping function unescapes only given characters.
-   See also \"print_unescaped_chars()\".
 
 "),
 
@@ -1556,10 +1596,33 @@
 
 "),
 
-("I/O","Base","IOBuffer","IOBuffer([size]) -> IOBuffer
+("I/O","Base","IOBuffer","IOBuffer() -> IOBuffer
 
-   Create an in-memory I/O stream, optionally specifying how much
-   initial space is needed.
+   Create an in-memory I/O stream.
+
+"),
+
+("I/O","Base","IOBuffer","IOBuffer(size::Int)
+
+   Create a fixed sized IOBuffer. Note that the buffer will not grow
+   dynamically in this case.
+
+"),
+
+("I/O","Base","IOBuffer","IOBuffer(string)
+
+   Create a read-only IOBuffer on the data underlying the given string
+
+"),
+
+("I/O","Base","IOBuffer","IOBuffer([data][, readable, writable[, maxsize]])
+
+   Create an IOBuffer, which may optionally operate on a pre-existing
+   array. If the readable/writable arguments are given, they restrict
+   whether or not the buffer may be read from or written to
+   respectively. By default the buffer is readable but not writable.
+   The last argument optionally specifies a size beyond which the
+   buffer may not be grown.
 
 "),
 
@@ -1761,9 +1824,242 @@
 
 "),
 
-("I/O","Base","print_unescaped_chars","print_unescaped_chars(io, s::String, unescape::String)
+("I/O","Base","fd","fd(stream)
 
-   Bare minimum unescaping function unescapes only given characters.
+   Returns the file descriptor backing the stream or file. Note that
+   this function only applies to synchronous *File*'s and *IOStream*'s
+   not to any of the asynchronous streams.
+
+"),
+
+("I/O","Base","redirect_stdout","redirect_stdout()
+
+   Create a pipe to which all C and Julia level STDOUT output will be
+   redirected. Returns a tuple (rd,wr) representing the pipe ends.
+   Data written to STDOUT may now be read from the rd end of the pipe.
+   The wr end is given for convenience in case the old STDOUT object
+   was cached by the user and needs to be replaced elsewhere.
+
+"),
+
+("I/O","Base","redirect_stdout","redirect_stdout(stream)
+
+   Replace STDOUT by stream for all C and julia level output to
+   STDOUT. Note that *stream* must be a TTY, a Pipe or a TcpSocket.
+
+"),
+
+("I/O","Base","redirect_stderr","redirect_stderr([stream])
+
+   Like redirect_stdout, but for STDERR
+
+"),
+
+("I/O","Base","redirect_stderr","redirect_stderr([stream])
+
+   Like redirect_stdout, but for STDIN. Note that the order of the
+   return tuple is still (rd,wr), i.e. data to be read from STDIN, may
+   be written to wr.
+
+"),
+
+("I/O","Base","readchomp","readchomp(x)
+
+   Read the entirety of x as a string but remove trailing newlines.
+   Equivalent to chomp(readall(x)).
+
+"),
+
+("I/O","Base","readdir","readdir([dir]) -> Vector{ByteString}
+
+   Returns the files and directories in the directory *dir* (or the
+   current working directory if not given).
+
+"),
+
+("I/O","Base","truncate","truncate(file, n)
+
+   Resize the file or buffer given by the first argument to exactly
+   *n* bytes, filling previously unallocated space with '0' if the
+   file or buffer is grown
+
+"),
+
+("I/O","Base","eatwspace","eatwspace(stream)
+
+   Advance the stream until before the first non-whitespace character
+   (if the next character is not a whitespace character, the stream
+   will not be advanced).
+
+"),
+
+("I/O","Base","eatwspace_comment","eatwspace_comment(stream, cmt::Char)
+
+   Like \"eatwspace\", but also skips lines which have *cmt* as the
+   first character of the line.
+
+"),
+
+("I/O","Base","countlines","countlines(io[, eol::Char])
+
+   Read io until the end of the stream/file and count the number of
+   non-empty lines. To specify a file pass the filename as the first
+   argument. EOL markers other than 'n' are supported by passing them
+   as the second argument.
+
+"),
+
+("I/O","Base","PipeBuffer","PipeBuffer()
+
+   An IOBuffer that only allows reading/writing (but not
+   seeking/appending/truncating). See IOBuffer for the available
+   constructors.
+
+"),
+
+("I/O","Base","PipeBuffer","PipeBuffer(data::Vector{Uint8}[, maxsize])
+
+   Create a PipeBuffer to operate on the data vector, optionally
+   specifying a size beyond which the underlying Array may not be
+   grown.
+
+"),
+
+("I/O","Base","readavailable","readavailable(stream)
+
+   Read all available data on the stream, blocking the task only if no
+   data is available.
+
+"),
+
+("I/O","Base","stat","stat(file)
+
+   Returns a structure whose fields contain information about the
+   file. In partiuclar, the fields of the structure are:
+
+   +-----------+------------------------------------------------------------------------+
+   | size      | The size (in bytes) of the file                                        |
+   +-----------+------------------------------------------------------------------------+
+   | device    | ID of the device that contains the file                                |
+   +-----------+------------------------------------------------------------------------+
+   | inode     | The inode number of the file                                           |
+   +-----------+------------------------------------------------------------------------+
+   | mode      | The protection mode of the file                                        |
+   +-----------+------------------------------------------------------------------------+
+   | nlink     | The number of hard links to the file                                   |
+   +-----------+------------------------------------------------------------------------+
+   | uid       | The user id of the owner of the file                                   |
+   +-----------+------------------------------------------------------------------------+
+   | gid       | The group id of the file owner                                         |
+   +-----------+------------------------------------------------------------------------+
+   | rdev      | If this file refers to a device, the ID of the device it refers to     |
+   +-----------+------------------------------------------------------------------------+
+   | blksize   | The file-system preffered block size for the file                      |
+   +-----------+------------------------------------------------------------------------+
+   | blocks    | The number of such blocks allocated                                    |
+   +-----------+------------------------------------------------------------------------+
+   | mtime     | Unix timestamp of when the file was last modified                      |
+   +-----------+------------------------------------------------------------------------+
+   | ctime     | Unix timestamp of when the file was created                            |
+   +-----------+------------------------------------------------------------------------+
+
+"),
+
+("I/O","Base","lstat","lstat(file)
+
+   Like stat, but for symbolic links get the info for the link itself
+   rather than the file it refers to. Note also that because of that,
+   this function must be called on a file path rather than a file
+   object or a file descriptor.
+
+"),
+
+("I/O","Base","ctime","ctime(file)
+
+   Equivalent to stat(file).ctime
+
+"),
+
+("I/O","Base","mtime","mtime(file)
+
+   Equivalent to stat(file).mtime
+
+"),
+
+("I/O","Base","filemode","filemode(file)
+
+   Equivalent to stat(file).mode
+
+"),
+
+("I/O","Base","filesize","filesize(path...)
+
+   Equivalent to stat(file).size
+
+"),
+
+("I/O","Base","uperm","uperm(file)
+
+   Gets the permissions of the owner of the file as bitfield of
+
+   +------+-----------------------+
+   | 01   | Execute Permission    |
+   +------+-----------------------+
+   | 02   | Write Permission      |
+   +------+-----------------------+
+   | 04   | Read Permission       |
+   +------+-----------------------+
+
+   For allowed arguments, see the stat method
+
+"),
+
+("I/O","Base","gperm","gperm(file)
+
+   Like uperm but gets the permissions of the group owning the file
+
+"),
+
+("I/O","Base","operm","operm(file)
+
+   Like uperm but gets the permissions for people who neither own the
+   file nor are a member of the group owning the file
+
+"),
+
+("I/O","Base","cp","cp(src::String, dst::String)
+
+   Copy a file from *src* to *dest*.
+
+"),
+
+("I/O","Base","download","download(url[, localfile])
+
+   Download a file from the given url, optionally renaming it to the
+   given local file name. Note that this function relies on the
+   availability of external tools such as \"curl\", \"wget\" or
+   \"fetch\" to download the file and is provided for convenience. For
+   production use or situations in which more options are need, please
+   use a package that provides the desired functionality instead.
+
+"),
+
+("I/O","Base","mv","mv(src::String, dst::String)
+
+   Move a file from *src* to *dst*.
+
+"),
+
+("I/O","Base","rm","rm(path::String)
+
+   Delete the file at the given path. Note that this does not work on
+   directories.
+
+"),
+
+("I/O","Base","touch","touch(path::String)
+
+   Update the last-modified timestamp on a file to the current time.
 
 "),
 
@@ -1799,11 +2095,92 @@
 
 "),
 
+("Network I/O","Base","parseip","parseip(addr)
+
+   Parse a string specifying an IPv4 or IPv6 ip address.
+
+"),
+
+("Network I/O","Base","nb_available","nb_available(stream)
+
+   Returns the number of bytes available for reading before a read
+   from this stream or buffer will block.
+
+"),
+
+("Network I/O","Base","accept","accept(server[, client])
+
+   Accepts a connection on the given server and returns a connection
+   to the client. An uninitialized client stream may be given as a
+   paramter and if given, if be used instead of creating a new stream.
+
+"),
+
+("Network I/O","Base","bind","bind(server[, addr...])
+
+   Binds a server to the given address (where the address may be any
+   of the argument usually passed to listen). Note that you must still
+   call listen to be able to accept connections on this server.
+
+"),
+
+("Network I/O","Base","listen","listen(sever) -> PipeServer
+
+   Starts listening on a server that has been previously bound to an
+   address by bing
+
+"),
+
+("Network I/O","Base","open_any_tcp_port","open_any_tcp_port(hint) -> (Uint16, TcpServer)
+
+   Create a TcpServer on any port, using hint as a starting point.
+   Returns a tuple of the actual port that the server was created on
+   and the server itself.
+
+"),
+
+("Network I/O","Base","poll_fd","poll_fd(fd, seconds::Real; readable=false, writable=false)
+
+   Poll a file descriptor fd for changes in the read or write
+   availability and with a timeout given by the second argument. If
+   the timeout is not needed, use *wait(fd)* instead. The keyword
+   arguments determine which of read and/or write status should be
+   monitored and at least one of them needs to be set to true. The
+   return code is 0 on timeout and an OR'd bitfield of UV_READABLE and
+   UV_WRITABLE otherwise, indicating which event was triggered.
+
+"),
+
+("Network I/O","Base","poll_file","poll_file(s, interval_seconds::Real, seconds::Real)
+
+   Monitor a file for changes by polling every *interval_seconds*
+   seconds for *seconds* seconds. A return value of true indicates the
+   file changed, a return value of false indicates a timeout.
+
+"),
+
 ("Text I/O","Base","show","show(x)
 
    Write an informative text representation of a value to the current
    output stream. New types should overload \"show(io, x)\" where the
    first argument is a stream.
+
+"),
+
+("Text I/O","Base","showcompact","showcompact(x)
+
+   Show a more compact representation of a value. This is used for
+   printing array elements. If a new type has a different compact
+   representation, it should overload \"showcompact(io, x)\" where the
+   first argument is a stream.
+
+"),
+
+("Text I/O","Base","summary","summary(x)
+
+   Return a string giving a brief description of a value. By default
+   returns \"string(typeof(x))\". For arrays, returns strings like
+   \"2x2 Float64 Array\".
 
 "),
 
@@ -2383,13 +2760,19 @@ popdisplay(d::Display)
 
 ("Mathematical Operators","Base","==","==(x, y)
 
-   Equality comparison operator.
+   Numeric equality operator. Compares numbers and number-like values
+   (e.g. arrays) by numeric value. True for numbers of different types
+   that represent the same value (e.g. \"2\" and \"2.0\"). Follows
+   IEEE semantics for floating-point numbers. New numeric types should
+   implement this function for two arguments of the new type.
 
 "),
 
 ("Mathematical Operators","Base","!=","!=(x, y)
 
-   Not-equals comparison operator.
+   Not-equals comparison operator. Always gives the opposite answer as
+   \"==\". New types should generally not implement this, and rely on
+   the fallback definition \"!=(x,y) = !(x==y)\" instead.
 
 "),
 
@@ -2407,7 +2790,8 @@ popdisplay(d::Display)
 
 ("Mathematical Operators","Base","<","<(x, y)
 
-   Less-than comparison operator.
+   Less-than comparison operator. New numeric types should implement
+   this function for two arguments of the new type.
 
 "),
 
@@ -2419,7 +2803,9 @@ popdisplay(d::Display)
 
 ("Mathematical Operators","Base",">",">(x, y)
 
-   Greater-than comparison operator.
+   Greater-than comparison operator. Generally, new types should
+   implement \"<\" instead of this function, and rely on the fallback
+   definition \">(x,y) = y<x\".
 
 "),
 
@@ -3988,6 +4374,60 @@ popdisplay(d::Display)
 
 "),
 
+("BigFloats","Base","precision","precision(num::FloatingPoint)
+
+   Get the precision of a floating point number, as defined by the
+   effective number of bits in the mantissa.
+
+"),
+
+("BigFloats","Base","get_bigfloat_precision","get_bigfloat_precision()
+
+   Get the precision (in bits) currently used for BigFloat arithmetic.
+
+"),
+
+("BigFloats","Base","set_bigfloat_precision","set_bigfloat_precision(x::Int64)
+
+   Set the precision (in bits) to be used to BigFloat arithmetic.
+
+"),
+
+("BigFloats","Base","with_bigfloat_precision","with_bigfloat_precision(f::Function, precision::Integer)
+
+   Change the BigFloat arithmetic precision (in bits) for the duration
+   of \"f\". It is logically equivalent to:
+
+      old = get_bigfloat_precision()
+      set_bigfloat_precision(precision)
+      f()
+      set_bigfloat_precision(old)
+
+"),
+
+("BigFloats","Base","get_bigfloat_rounding","get_bigfloat_rounding()
+
+   Get the current BigFloat rounding mode. Valid modes are
+   \"RoundToNearest\", \"RoundToZero\", \"RoundUp\", \"RoundDown\",
+   \"RoundAwayZero\"
+
+"),
+
+("BigFloats","Base","set_bigfloat_rounding","set_bigfloat_rounding(mode)
+
+   Set the BigFloat rounding mode. See get_bigfloat_rounding for
+   available modes
+
+"),
+
+("BigFloats","Base","with_bigfloat_rounding","with_bigfloat_rounding(f::Function, mode)
+
+   Change the BigFloat rounding mode for the duration of \"f\". See
+   \"get_bigfloat_rounding\" for available rounding modes; see also
+   \"with_bigfloat_precision\".
+
+"),
+
 ("Random Numbers","Base","srand","srand([rng], seed)
 
    Seed the RNG with a \"seed\", which may be an unsigned integer or a
@@ -4067,6 +4507,13 @@ popdisplay(d::Display)
    Generate a normally-distributed random number with mean 0 and
    standard deviation 1. Optionally generate an array of normally-
    distributed random numbers.
+
+"),
+
+("Random Numbers","Base","randn!","randn!(A::Array{Float64, N})
+
+   Fill the array A with normally-distributed (mean 0, standard
+   deviation 1) random numbers. Also see the rand function.
 
 "),
 
@@ -4548,6 +4995,10 @@ popdisplay(d::Display)
    \"dims\" is a vector specifying the dimensions to reduce, and
    \"initial\" is the initial value to use in the reductions.
 
+   The associativity of the reduction is implementation-dependent; if
+   you need a particular associativity, e.g. left-to-right, you should
+   write your own loop.
+
 "),
 
 ("Arrays","Base","mapslices","mapslices(f, A, dims)
@@ -4665,7 +5116,7 @@ popdisplay(d::Display)
 
 ("Combinatorics","Base","reverse","reverse(v[, start=1[, stop=length(v)]])
 
-   Reverse vector \"v\", optionally from start to stop.
+   Return a copy of \"v\" reversed from start to stop.
 
 "),
 
@@ -4693,13 +5144,23 @@ popdisplay(d::Display)
 
 "),
 
-("Combinatorics","Base","integer_partitions","integer_partitions(n, m)
+("Combinatorics","Base","partitions","partitions(n)
+
+   Generate all integer arrays that sum to \"n\". Because the number
+   of partitions can be very large, this function returns an iterator
+   object. Use \"collect(partitions(n))\" to get an array of all
+   partitions. The number of partitions to generete can be efficiently
+   computed using \"length(partitions(n))\".
+
+"),
+
+("Combinatorics","Base","partitions","partitions(n, m)
 
    Generate all arrays of \"m\" integers that sum to \"n\". Because
-   the number of partitions can be very large, this function runs
-   inside a Task to produce values on demand. Write \"c = @task
-   integer_partitions(n,m)\", then iterate \"c\" or call \"consume\"
-   on it.
+   the number of partitions can be very large, this function returns
+   an iterator object. Use \"collect(partitions(n,m))\" to get an
+   array of all partitions. The number of partitions to generete can
+   be efficiently computed using \"length(partitions(n,m))\".
 
 "),
 
@@ -4707,9 +5168,10 @@ popdisplay(d::Display)
 
    Generate all set partitions of the elements of an array,
    represented as arrays of arrays. Because the number of partitions
-   can be very large, this function runs inside a Task to produce
-   values on demand. Write \"c = @task partitions(a)\", then iterate
-   \"c\" or call \"consume\" on it.
+   can be very large, this function returns an iterator object. Use
+   \"collect(partitions(array))\" to get an array of all partitions.
+   The number of partitions to generete can be efficiently computed
+   using \"length(partitions(array))\".
 
 "),
 
@@ -5315,12 +5777,17 @@ popdisplay(d::Display)
 
 "),
 
-("Parallel Computing","Base","pmap","pmap(f, c)
+("Parallel Computing","Base","pmap","pmap(f, lsts...; err_retry=true, err_stop=false)
 
-   Transform collection \"c\" by applying \"f\" to each element in
+   Transform collections \"lsts\" by applying \"f\" to each element in
    parallel. If \"nprocs() > 1\", the calling process will be
    dedicated to assigning tasks. All other available processes will be
    used as parallel workers.
+
+   If \"err_retry\" is true, it retries a failed application of \"f\"
+   on a different worker. If \"err_stop\" is true, it takes precedence
+   over the value of \"err_retry\" and \"pmap\" stops execution on the
+   first error.
 
 "),
 
@@ -5347,6 +5814,9 @@ popdisplay(d::Display)
 
    * \"Task\": Wait for a \"Task\" to finish, returning its result
      value.
+
+   * \"RawFD\": Wait for changes on a file descriptor (see *poll_fd*
+     for keyword arguments and return code)
 
 "),
 
@@ -5502,7 +5972,7 @@ popdisplay(d::Display)
 
 "),
 
-("Distributed Arrays","Base","localize","localize(d)
+("Distributed Arrays","Base","localpart","localpart(d)
 
    Get the local piece of a distributed array
 
@@ -6006,6 +6476,26 @@ popdisplay(d::Display)
 
 "),
 
+("C Interface","Base","disable_sigint","disable_sigint(f::Function)
+
+   Disable Ctrl-C handler during execution of a function, for calling
+   external code that is not interrupt safe. Intended to be called
+   using \"do\" block syntax as follows:
+
+      disable_sigint() do
+          # interrupt-unsafe code
+          ...
+      end
+
+"),
+
+("C Interface","Base","reenable_sigint","reenable_sigint(f::Function)
+
+   Re-enable Ctrl-C handler during execution of a function.
+   Temporarily reverses the effect of \"disable_sigint\".
+
+"),
+
 ("C Interface","Base","find_library","find_library(names, locations)
 
    Searches for the first library in \"names\" in the paths in the
@@ -6382,6 +6872,30 @@ popdisplay(d::Display)
 
 "),
 
+("Events","Base","Timer","Timer(f::Function)
+
+   Create a timer to call the given callback function. The callback is
+   passed two arguments: the timer object itself, and a status code,
+   which will be 0 unless an error occurs. The timer can be started
+   and stopped with \"start_timer\" and \"stop_timer\".
+
+"),
+
+("Events","Base","start_timer","start_timer(t::Timer, delay, repeat)
+
+   Start invoking the callback for a \"Timer\" after the specified
+   initial delay, and then repeating with the given interval. Times
+   are in seconds. If \"repeat\" is \"0\", the timer is only triggered
+   once.
+
+"),
+
+("Events","Base","stop_timer","stop_timer(t::Timer)
+
+   Stop invoking the callback for a timer.
+
+"),
+
 ("Reflection","Base","module_name","module_name(m::Module) -> Symbol
 
    Get the name of a module as a symbol.
@@ -6484,22 +6998,22 @@ popdisplay(d::Display)
 
 ("Internals","Base","code_lowered","code_lowered(f, types)
 
-   Returns the lowered code for the method matching the given generic
-   function and type signature
+   Returns an array of lowered ASTs for the methods matching the given
+   generic function and type signature.
 
 "),
 
 ("Internals","Base","code_typed","code_typed(f, types)
 
-   Returns the lowered and type-inferred code for the method matching
-   the given generic function and type signature
+   Returns an array of lowered and type-inferred ASTs for the methods
+   matching the given generic function and type signature.
 
 "),
 
 ("Internals","Base","code_llvm","code_llvm(f, types)
 
    Prints the LLVM bitcodes generated for running the method matching
-   the given generic function and type signature to STDOUT
+   the given generic function and type signature to STDOUT.
 
 "),
 
@@ -6507,7 +7021,14 @@ popdisplay(d::Display)
 
    Prints the native assembly instructions generated for running the
    method matching the given generic function and type signature to
-   STDOUT
+   STDOUT.
+
+"),
+
+("Internals","Base","precompile","precompile(f, args::(Any..., ))
+
+   Compile the given function *f* for the argument tuple (of types)
+   *args*, but do not execute it.
 
 "),
 

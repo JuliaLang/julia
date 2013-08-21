@@ -655,7 +655,7 @@ void NORETURN throw_internal(jl_value_t *e)
         if (jl_current_task == jl_root_task) {
             JL_PRINTF(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
             // Special case on ErrorException, as that's what's thrown by jl_errorf() on bootstrap errors
-            if( jl_typeof(e) == (jl_value_t*)jl_errorexception_type )
+            if (jl_typeof(e) == (jl_value_t*)jl_errorexception_type)
                 JL_PRINTF(JL_STDERR, "%s\n", jl_string_data(jl_fieldref(e,0)));
             exit(1);
         }

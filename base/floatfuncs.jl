@@ -37,9 +37,9 @@ isfloat64(::Float64) = true
 isfloat64(::Float32) = true
 
 ## precision, as defined by the effective number of bits in the mantissa ##
-get_precision(::Float16) = 11
-get_precision(::Float32) = 24
-get_precision(::Float64) = 53
+precision(::Float16) = 11
+precision(::Float32) = 24
+precision(::Float64) = 53
 
 num2hex(x::Float16) = hex(reinterpret(Uint16,x), 4)
 num2hex(x::Float32) = hex(box(Uint32,unbox(Float32,x)),8)
