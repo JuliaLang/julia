@@ -165,19 +165,19 @@ prevfloat(y)
 # precision
 old_precision = get_bigfloat_precision()
 x = BigFloat(0)
-@test get_precision(x) == old_precision
+@test precision(x) == old_precision
 set_bigfloat_precision(256)
 x = BigFloat(0)
-@test get_precision(x) == 256
+@test precision(x) == 256
 set_bigfloat_precision(old_precision)
 z = with_bigfloat_precision(240) do
     z = x + 20
     return z
 end
 @test float(z) == 20.
-@test get_precision(z) == 240
+@test precision(z) == 240
 x = BigFloat(12)
-@test get_precision(x) == old_precision
+@test precision(x) == old_precision
 @test_throws set_bigfloat_precision(1)
 
 # isinteger

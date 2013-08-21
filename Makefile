@@ -204,7 +204,9 @@ perf-%: release
 .PHONY: win-extras, wine_path
 win-extras:
 	[ -d dist-extras ] || mkdir dist-extras
+ifneq ($(BUILD_OS),WINNT)
 	cp /usr/lib/p7zip/7z /usr/lib/p7zip/7z.so dist-extras
+endif
 ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd dist-extras && \
 	wget -O 7z920.exe http://downloads.sourceforge.net/sevenzip/7z920.exe && \

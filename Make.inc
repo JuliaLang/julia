@@ -99,6 +99,7 @@ ifeq ($(DARWINVER), 10) # Snow Leopard specific configuration
 USEGCC = 1
 USECLANG = 0
 OPENBLAS_TARGET_ARCH=NEHALEM
+OPENBLAS_DYNAMIC_ARCH=0
 else
 USEGCC = 0
 USECLANG = 1
