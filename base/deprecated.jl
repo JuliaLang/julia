@@ -232,7 +232,6 @@ export PipeString
 
 @deprecate repl_show(io, x)  writemime(io, MIME"text/plain"(), x)
 @deprecate error_show  showerror
-@deprecate showall     show
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)

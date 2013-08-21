@@ -875,6 +875,10 @@ end
 
 show(io::IO, X::AbstractArray) = showarray(io, X)
 
+showall(x) = showall(STDOUT, x)
+showall(io::IO, x) = show(io, x)
+showall(io::IO, x::AbstractArray) = showarray(io, x, limit=false)
+
 function show_vector(io::IO, v, opn, cls)
     show_delim_array(io, v, opn, ",", cls, false)
 end

@@ -804,6 +804,7 @@ export
     rstrip,
     search,
     show,
+    showall,
     showcompact,
     showerror,
     split,
