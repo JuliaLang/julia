@@ -170,8 +170,15 @@ static Value *emit_unbox(Type *to, Type *pto, Value *x)
             return builder.CreatePtrToInt(x, to);
         if (!ty->isPointerTy() && to->isPointerTy())
             return builder.CreateIntToPtr(x, to);
-        if (ty != to)
-            jl_error("unbox: T != typeof(x)");
+        if (ty != to) {
+            // this can happen when a branch yielding a different type ends
+            // up being dead code, and type inference knows that the other
+            // branch's type is the only one that matters.
+#ifdef DEBUG
+            JL_PRINTF(JL_STDERR, "warning: unbox: T != typeof(x)\n");
+#endif
+            return UndefValue::get(to);
+        }
         return x;
     }
     Value *p = data_pointer(x);
