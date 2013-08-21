@@ -120,6 +120,9 @@ function cospi(z::Complex)
     pizi = pi*zi
     complex(cospi(zr)*cosh(pizi), -sinpi(zr)*sinh(pizi))
 end
+@vectorize_1arg Number sinpi
+@vectorize_1arg Number cospi
+
 
 sinc(x::Number) = x==0 ? one(x)  : oftype(x,sinpi(x)/(pi*x))
 sinc(x::Integer) = x==0 ? one(x) : zero(x)
@@ -179,6 +182,7 @@ function sind(x::Real)
         return sin(degrees2radians(rx))
     end
 end
+@vectorize_1arg Real sind
 
 function cosd(x::Real)
     if isinf(x)
@@ -205,8 +209,10 @@ function cosd(x::Real)
         return cos(degrees2radians(rx))
     end
 end
+@vectorize_1arg Real cosd
 
 tand(x::Real) = sind(x) / cosd(x)
+@vectorize_1arg Real tand
 
 for (fd, f) in ((:sind, :sin), (:cosd, :cos), (:tand, :tan))
     @eval begin
