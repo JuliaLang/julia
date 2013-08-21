@@ -66,20 +66,22 @@ run(`echo hello world` |> file)
 @test readall(file |> `cat`) == "hello world\n"
 
 # Stream Redirection
-@async begin
-    server = listen(2326)
-    client = accept(server)
-    @test readall(client |> `cat`) == "hello world\n"
-    close(server)
-end
-@async begin
-    sock = connect(2326)
-    run(`echo hello world` |> sock)
-    close(sock)
+@unix_only begin
+    @async begin
+        server = listen(2326)
+        client = accept(server)
+        @test readall(client |> `cat`) == "hello world\n"
+        close(server)
+    end
+    @async begin
+        sock = connect(2326)
+        run(`echo hello world` |> sock)
+        close(sock)
+    end
 end
 
-readall(setenv(`sh -c 'echo \$TEST'`,["TEST=Hello World"])) == "Hello World\n"
-readall(setenv(`sh -c 'echo \$TEST'`,["TEST"=>"Hello World"])) == "Hello World\n"
+readall(setenv(`sh -c "echo \$TEST"`,["TEST=Hello World"])) == "Hello World\n"
+readall(setenv(`sh -c "echo \$TEST"`,["TEST"=>"Hello World"])) == "Hello World\n"
 
 # Here we test that if we close a stream with pending writes, we don't lose the writes.
 str = ""
