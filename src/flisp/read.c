@@ -431,9 +431,6 @@ static value_t read_vector(value_t label, u_int32_t closer)
 {
     value_t v=the_empty_vector, elt;
     u_int32_t i=0;
-#ifdef MEMDEBUG2
-    v = alloc_vector(1024, 1);
-#endif
     PUSH(v);
     if (label != UNBOUND)
         ptrhash_put(&readstate->backrefs, (void*)label, (void*)v);
@@ -442,9 +439,6 @@ static value_t read_vector(value_t label, u_int32_t closer)
             lerror(ParseError, "read: unexpected end of input");
         v = Stack[SP-1]; // reload after possible alloc in peek()
         if (i >= vector_size(v)) {
-#ifdef MEMDEBUG2
-            assert(0);
-#endif
             v = Stack[SP-1] = vector_grow(v);
             if (label != UNBOUND)
                 ptrhash_put(&readstate->backrefs, (void*)label, (void*)v);
@@ -455,9 +449,7 @@ static value_t read_vector(value_t label, u_int32_t closer)
         i++;
     }
     take();
-#ifndef MEMDEBUG2
     if (i > 0)
-#endif
         vector_setsize(v, i);
     return POP();
 }
