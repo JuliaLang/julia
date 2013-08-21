@@ -25,7 +25,7 @@ out = readall(`echo hello` & `echo world`)
 @test (run(`printf "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
-@test (run(yes|>`head`|>SpawnNullStream()); true)
+@unix_only @test (run(yes|>`head`|>SpawnNullStream()); true)
 
 a = Base.Condition()
 
