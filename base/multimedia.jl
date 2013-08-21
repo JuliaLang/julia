@@ -18,7 +18,7 @@ print{mime}(io::IO, ::MIME{mime}) = print(io, mime)
 
 # needs to be a macro so that we can use ::@mime(s) in type declarations
 macro MIME(s)
-    warn_once("@MIME(\"\") is deprecated, use MIME\"\" instead.")
+    Base.warn_once("@MIME(\"\") is deprecated, use MIME\"\" instead.")
     if isa(s,String)
         :(MIME{$(Expr(:quote, symbol(s)))})
     else
