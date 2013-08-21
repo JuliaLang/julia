@@ -1206,6 +1206,7 @@ export
     readandwrite,
     readsfrom,
     run,
+    setenv,
     spawn,
     spawn_nostdin,
     success,
