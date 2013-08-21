@@ -1034,7 +1034,7 @@ static int is_va_tuple(jl_tuple_t *t)
     return (jl_tuple_len(t)>0 && jl_is_vararg_type(jl_tupleref(t,jl_tuple_len(t)-1)));
 }
 
-static void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
+void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
 /*
   warn about ambiguous method priorities
@@ -1274,8 +1274,11 @@ static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
         if (jl_is_type(args[i])) {
             a = (jl_value_t*)jl_wrap_Type(args[i]);
         }
+        else if (!jl_is_tuple(args[i])) {
+            a = jl_typeof(args[i]);
+        }
         else {
-            a = (jl_value_t*)jl_full_type(args[i]);
+            a = (jl_value_t*)arg_type_tuple(&jl_tupleref(args[i],0), jl_tuple_len(args[i]));
         }
         jl_tupleset(tt, i, a);
     }
@@ -1499,7 +1502,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
     return jl_apply(mfunc, args, nargs);
 }
 
-static void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li)
+void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li)
 {
     long lno = li->line;
     if (lno > 0) {

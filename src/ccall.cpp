@@ -808,12 +808,12 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     attr_type attributes;
 #ifdef LLVM33
     for(i = 0; i < nargt+sret; ++i)
-        if(paramattrs[i].hasAttributes()) 
+        if (paramattrs[i].hasAttributes())
             attributes = attributes.addAttributes(jl_LLVMContext,i+1,
                     AttributeSet::get(jl_LLVMContext,i+1,paramattrs[i]));
 #elif LLVM32
     for(i = 0; i < nargt+sret; ++i)
-        if(paramattrs[i].hasAttributes()) 
+        if (paramattrs[i].hasAttributes())
             attrs.push_back(AttributeWithIndex::get(i+1, Attributes::get(jl_LLVMContext,paramattrs[i])));
     attributes = AttrListPtr::get(getGlobalContext(), ArrayRef<AttributeWithIndex>(attrs));
 #else

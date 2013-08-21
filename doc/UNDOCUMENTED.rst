@@ -204,42 +204,8 @@ strings and text output
 random numbers
 --------------
 
-.. function:: randn!(A::Array{Float64,N})
-
-   UNDOCUMENTED
-
-
 bigfloat & precision
 --------------------
-
-.. function:: get_precision(...)
-
-   UNDOCUMENTED
-
-.. function:: get_bigfloat_precision()
-
-   UNDOCUMENTED
-
-.. function:: set_bigfloat_precision(x::Int64)
-
-   UNDOCUMENTED
-
-.. function:: with_bigfloat_precision(f::Function,precision::Integer)
-
-   UNDOCUMENTED
-
-.. function:: get_bigfloat_rounding()
-
-   UNDOCUMENTED
-
-.. function:: set_bigfloat_rounding(x::Int64)
-
-   UNDOCUMENTED
-
-.. function:: with_bigfloat_rounding(f::Function,rounding::Integer)
-
-   UNDOCUMENTED
-
 
 statistics
 ----------
@@ -272,10 +238,6 @@ iteration
 object identity and equality
 ----------------------------
 
-.. function:: deepcopy_internal(...)
-
-   UNDOCUMENTED
-
 
 tasks and conditions
 --------------------
@@ -297,7 +259,6 @@ syntax
 ------
 
 
-
 help and reflection
 -------------------
 
@@ -309,10 +270,6 @@ help and reflection
 
    UNDOCUMENTED
 
-.. function:: whicht(f,types)
-
-   UNDOCUMENTED
-
 
 loading source files
 --------------------
@@ -320,15 +277,6 @@ loading source files
 
 RTS internals
 -------------
-
-.. function:: gc_bytes()
-
-   UNDOCUMENTED
-
-.. function:: precompile(f,args::(Any...,))
-
-   UNDOCUMENTED
-
 
 misc
 ----
@@ -345,111 +293,15 @@ misc
 IP address stuff
 ----------------
 
-.. function:: parse_ipv4(str)
-
-   UNDOCUMENTED
-
-.. function:: parse_ipv6(str)
-
-   UNDOCUMENTED
-
 
 I/O and events
 --------------
-
-.. function:: accept(...)
-
-   UNDOCUMENTED
-
-.. function:: bind(...)
-
-   UNDOCUMENTED
-
-.. function:: countlines(...)
-
-   UNDOCUMENTED
-
-.. function:: eatwspace(s::IOStream)
-
-   UNDOCUMENTED
-
-.. function:: eatwspace_comment(s::IOStream,cmt::Char)
-
-   UNDOCUMENTED
-
-.. function:: fd(...)
-
-   UNDOCUMENTED
 
 .. function:: mmap_grow(len::Integer,prot::Integer,flags::Integer,fd::Integer,offset::Int64)
 
    UNDOCUMENTED
 
 .. function:: mmap_stream_settings(s::IO)
-
-   UNDOCUMENTED
-
-.. function:: nb_available(...)
-
-   UNDOCUMENTED
-
-.. function:: open_any_tcp_port(...)
-
-   UNDOCUMENTED
-
-.. function:: PipeBuffer(...)
-
-   UNDOCUMENTED
-
-.. function:: poll_fd(s,seconds::Real)
-
-   UNDOCUMENTED
-
-.. function:: poll_file(s,interval_seconds::Real,seconds::Real)
-
-   UNDOCUMENTED
-
-.. function:: readavailable(this::AsyncStream)
-
-   UNDOCUMENTED
-
-.. function:: readchomp(x)
-
-   UNDOCUMENTED
-
-.. function:: readdir(...)
-
-   UNDOCUMENTED
-
-.. function:: redirect_stderr(...)
-
-   UNDOCUMENTED
-
-.. function:: redirect_stdin(...)
-
-   UNDOCUMENTED
-
-.. function:: redirect_stdout(...)
-
-   UNDOCUMENTED
-
-.. function:: start_reading(...)
-
-   UNDOCUMENTED
-
-.. function:: start_watching(...)
-
-   UNDOCUMENTED
-
-.. function:: stop_reading(stream::AsyncStream)
-
-   UNDOCUMENTED
-
-.. function:: truncate(...)
-
-   UNDOCUMENTED
-
-.. function:: uv_error(...)
 
    UNDOCUMENTED
 
@@ -501,75 +353,11 @@ paths and file names
 filesystem operations
 ---------------------
 
-.. function:: cp(src::String,dst::String)
-
-   UNDOCUMENTED
-
-.. function:: ctime(path...)
-
-   UNDOCUMENTED
-
-.. function:: download(...)
-
-   UNDOCUMENTED
-
-.. function:: filemode(path...)
-
-   UNDOCUMENTED
-
-.. function:: filesize(path...)
-
-   UNDOCUMENTED
-
-.. function:: gperm(...)
-
-   UNDOCUMENTED
-
-.. function:: ls(args...)
-
-   UNDOCUMENTED
-
-.. function:: lstat(...)
-
-   UNDOCUMENTED
-
-.. function:: mtime(path...)
-
-   UNDOCUMENTED
-
-.. function:: mv(src::String,dst::String)
-
-   UNDOCUMENTED
-
-.. function:: operm(...)
-
-   UNDOCUMENTED
-
-.. function:: rm(path::String)
-
-   UNDOCUMENTED
-
-.. function:: stat(...)
-
-   UNDOCUMENTED
-
-.. function:: touch(path::String)
-
-   UNDOCUMENTED
-
-.. function:: uperm(...)
-
-   UNDOCUMENTED
-
 
 external processes ## TODO: whittle down these exports.
 -------------------------------------------------------
 
 .. function:: process_signaled(s::Process)
-
-   UNDOCUMENTED
-
-.. function:: spawn_nostdin(...)
 
    UNDOCUMENTED
 

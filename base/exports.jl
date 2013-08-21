@@ -7,6 +7,7 @@ export
     Operators,
     Order,
     Pkg,
+    Pkg1,
     Pkg2,
     Profile,
     Sys,
@@ -292,6 +293,7 @@ export
     cosc,
     cosd,
     cosh,
+    cospi,
     cot,
     cotd,
     coth,
@@ -414,6 +416,7 @@ export
     sinc,
     sind,
     sinh,
+    sinpi,
     sqrt,
     tan,
     tand,
@@ -829,7 +832,7 @@ export
     srand,
 
 # bigfloat & precision
-    get_precision,
+    precision,
     get_bigfloat_precision,
     set_bigfloat_precision,
     with_bigfloat_precision,
@@ -902,7 +905,6 @@ export
 # object identity and equality
     copy,
     deepcopy,
-    deepcopy_internal,
     hash,
     identity,
     isbits,
@@ -986,7 +988,6 @@ export
     names,
     versioninfo,
     which,
-    whicht,
     whos,
 
 # loading source files
@@ -999,7 +1000,6 @@ export
 # RTS internals
     finalizer,
     gc,
-    gc_bytes,
     gc_disable,
     gc_enable,
     precompile,
@@ -1016,8 +1016,7 @@ export
     @ip_str,
     IPv4,
     IPv6,
-    parse_ipv4,
-    parse_ipv6,
+    parseip,
 
 # I/O and events
     accept,
@@ -1086,7 +1085,6 @@ export
     takebuf_array,
     takebuf_string,
     truncate,
-    uv_error,
     UV_READABLE,
     UV_WRITABLE,
     WindowsRawSocket,

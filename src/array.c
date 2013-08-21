@@ -32,11 +32,11 @@ typedef uint64_t wideint_t;
 
 #define MAXINTVAL (((size_t)-1)>>1)
 
-static jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
+static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
+                               int isunboxed, int elsz)
 {
     size_t i, tot, nel=1;
     wideint_t prod;
-    int isunboxed=0, elsz;
     void *data;
     jl_array_t *a;
 
@@ -46,11 +46,8 @@ static jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
             jl_error("invalid Array dimensions");
         nel = prod;
     }
-    jl_value_t *el_type = jl_tparam0(atype);
 
-    isunboxed = store_unboxed(el_type);
     if (isunboxed) {
-        elsz = jl_datatype_size(el_type);
         prod = (wideint_t)elsz * (wideint_t)nel;
         if (prod > (wideint_t) MAXINTVAL)
             jl_error("invalid Array size");
@@ -61,7 +58,6 @@ static jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
         }
     }
     else {
-        elsz = sizeof(void*);
         prod = (wideint_t)sizeof(void*) * (wideint_t)nel;
         if (prod > (wideint_t) MAXINTVAL)
             jl_error("invalid Array size");
@@ -122,6 +118,22 @@ static jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
     }
 
     return a;
+}
+
+static inline jl_array_t *_new_array(jl_value_t *atype, uint32_t ndims, size_t *dims)
+{
+    int isunboxed=0, elsz=sizeof(void*);
+    jl_value_t *el_type = jl_tparam0(atype);
+    isunboxed = store_unboxed(el_type);
+    if (isunboxed)
+        elsz = jl_datatype_size(el_type);
+    return _new_array_(atype, ndims, dims, isunboxed, elsz);
+}
+
+jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
+                                             int isunboxed, int elsz)
+{
+    return _new_array_(atype, ndims, dims, isunboxed, elsz);
 }
 
 jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_tuple_t *dims)
@@ -275,11 +287,6 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_tuple_t *dims,
         }
     }
     return a;
-}
-
-jl_array_t *jl_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims)
-{
-    return _new_array(atype, ndims, dims);
 }
 
 jl_array_t *jl_new_array(jl_value_t *atype, jl_tuple_t *dims)

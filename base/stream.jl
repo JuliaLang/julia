@@ -169,9 +169,11 @@ end
 
 function TTY(fd::RawFD; readable::Bool = false)
     handle = c_malloc(_sizeof_uv_tty)
-    uv_error("TTY",ccall(:uv_tty_init,Int32,(Ptr{Void},Ptr{Void},Int32,Int32),eventloop(),handle,fd.fd,readable))
     ret = TTY(handle)
     associate_julia_struct(handle,ret)
+    # This needs to go after associate_julia_struct so that there 
+    # is no garbage in the ->data field
+    uv_error("TTY",ccall(:uv_tty_init,Int32,(Ptr{Void},Ptr{Void},Int32,Int32),eventloop(),handle,fd.fd,readable))
     ret.status = StatusOpen
     ret.line_buffered = false
     ret
@@ -179,10 +181,12 @@ end
 
 # note that uv_is_readable/writable work for any subtype of
 # uv_stream_t, including uv_tty_t and uv_pipe_t
-isreadable(io::Union(Pipe,PipeServer,TTY)) =
+isreadable(io::Union(Pipe,TTY)) =
     bool(ccall(:uv_is_readable, Cint, (Ptr{Void},), io.handle))
-iswritable(io::Union(Pipe,PipeServer,TTY)) =
+iswritable(io::Union(Pipe,TTY)) =
     bool(ccall(:uv_is_writable, Cint, (Ptr{Void},), io.handle))
+
+nb_available(stream::UVStream) = nb_available(stream.buffer)
 
 show(io::IO,stream::TTY) = print(io,"TTY(",uv_status_string(stream),", ",
     nb_available(stream.buffer)," bytes waiting)")
@@ -370,8 +374,8 @@ type SingleAsyncWork <: AsyncWork
     cb::Function
     function SingleAsyncWork(cb::Function)
         this = new(c_malloc(_sizeof_uv_async), cb)
-        err = ccall(:uv_async_init,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),eventloop(),this.handle,uv_jl_asynccb::Ptr{Void})
         associate_julia_struct(this.handle, this)
+        err = ccall(:uv_async_init,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),eventloop(),this.handle,uv_jl_asynccb::Ptr{Void})
         this
     end
 end
@@ -381,6 +385,7 @@ type IdleAsyncWork <: AsyncWork
     cb::Function
     function IdleAsyncWork(cb::Function)
         this = new(c_malloc(_sizeof_uv_idle), cb)
+        disassociate_julia_struct(this)
         err = ccall(:uv_idle_init,Cint,(Ptr{Void},Ptr{Void}),eventloop(),this)
         if err != 0
             c_free(this.handle)
@@ -397,6 +402,10 @@ type Timer <: AsyncWork
     cb::Function
     function Timer(cb::Function)
         this = new(c_malloc(_sizeof_uv_timer), cb)
+        # We don't want to set a julia struct, but we also
+        # want to make sure there's no garbage data in the
+        # ->data field
+        disassociate_julia_struct(this.handle)
         err = ccall(:uv_timer_init,Cint,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)
         if err != 0 
             c_free(this.handle)
@@ -831,6 +840,7 @@ end
 function connect!(sock::Pipe, path::ByteString)
     @assert sock.status == StatusInit
     req = c_malloc(_sizeof_uv_connect)
+    uv_req_set_data(req,C_NULL)
     ccall(:uv_pipe_connect, Void, (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Ptr{Void}), req, sock.handle, path, uv_jl_connectcb::Ptr{Void})
     sock.status = StatusConnecting
     sock
