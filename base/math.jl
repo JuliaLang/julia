@@ -1059,7 +1059,7 @@ function zeta(z::Number)
 end
 @vectorize_1arg Number zeta
 
-if WORD_SIZE == 64
+@unix_only if WORD_SIZE == 64
 # TODO: complex return only on 64-bit for now
 for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
     fname = (f === :Dawson) ? :dawson : f
