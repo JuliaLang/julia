@@ -395,7 +395,7 @@ JL_CALLABLE(jl_f_isdefined)
             if (!jl_is_datatype(vt)) {
                 jl_type_error("isdefined", (jl_value_t*)jl_datatype_type, args[0]);
             }
-            return jl_field_isdefined(args[0], s, 1) ? jl_true : jl_false;
+            return jl_field_isdefined(args[0], s, 0) ? jl_true : jl_false;
         }
         JL_TYPECHK(isdefined, module, args[0]);
         m = (jl_module_t*)args[0];

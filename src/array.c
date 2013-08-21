@@ -447,11 +447,30 @@ JL_CALLABLE(jl_f_arrayref)
     return jl_arrayref(a, i);
 }
 
-int jl_array_isdefined(jl_value_t **args, int nargs)
+int jl_array_isdefined(jl_value_t **args0, int nargs)
 {
-    assert(jl_is_array(args[0]));
-    jl_array_t *a = (jl_array_t*)args[0];
-    size_t i = array_nd_index(a, &args[1], nargs-1, "isdefined");
+    assert(jl_is_array(args0[0]));
+    jl_array_t *a = (jl_array_t*)args0[0];
+    jl_value_t **args = &args0[1];
+    size_t nidxs = nargs-1;
+    size_t i=0;
+    size_t k, stride=1;
+    size_t nd = jl_array_ndims(a);
+    for(k=0; k < nidxs; k++) {
+        if (!jl_is_long(args[k]))
+            jl_type_error("isdefined", (jl_value_t*)jl_long_type, args[k]);
+        size_t ii = jl_unbox_long(args[k])-1;
+        i += ii * stride;
+        size_t d = k>=nd ? 1 : jl_array_dim(a, k);
+        if (k < nidxs-1 && ii >= d)
+            return 0;
+        stride *= d;
+    }
+    for(; k < nd; k++)
+        stride *= jl_array_dim(a, k);
+    if (i >= stride)
+        return 0;
+
     if (a->ptrarray)
         return ((jl_value_t**)jl_array_data(a))[i] != NULL;
     return 1;

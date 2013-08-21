@@ -369,15 +369,15 @@ begin
     a = Array(Float64,1)
     @test isdefined(a,1)
     @test isdefined(a)
-    @test_throws isdefined(a,2)
+    @test !isdefined(a,2)
 
     @test isdefined("a",:data)
     a = UndefField()
     @test !isdefined(a, :field)
-    @test_throws isdefined(a, :foo)
+    @test !isdefined(a, :foo)
+    @test !isdefined(2, :a)
 
     @test_throws isdefined(2)
-    @test_throws isdefined(2, :a)
     @test_throws isdefined("a", 2)
 end
 
