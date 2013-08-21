@@ -1057,7 +1057,7 @@ I/O
 
 .. function:: IOBuffer(size::Int)
 
-   Create a fixed sized IOBuffer. Note that the buffer will not grow dynamically in this case.
+   Create a fixed size IOBuffer. The buffer will not grow dynamically.
 
 .. function:: IOBuffer(string)
 
@@ -1067,7 +1067,7 @@ I/O
 
    Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, 
    they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable
-   but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown. 
+   but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
 
 .. function:: takebuf_array(b::IOBuffer)
 
@@ -1250,12 +1250,11 @@ I/O
 
 .. function:: PipeBuffer()
 
-   An IOBuffer that only allows reading/writing (but not seeking/appending/truncating). See IOBuffer for the available constructors. 
+   An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors. 
 
 .. function:: PipeBuffer(data::Vector{Uint8},[maxsize])
 
-   Create a PipeBuffer to operate on the data vector, optionally specifying a size beyond which the underlying Array may not be 
-   grown. 
+   Create a PipeBuffer to operate on a data vector, optionally specifying a size beyond which the underlying Array may not be grown.
 
 .. function:: readavailable(stream)
 
@@ -1263,7 +1262,7 @@ I/O
 
 .. function:: stat(file)
 
-   Returns a structure whose fields contain information about the file. In partiuclar, the fields of the structure are:
+   Returns a structure whose fields contain information about the file. The fields of the structure are:
 
    ========= ======================================================================
     size      The size (in bytes) of the file
@@ -1282,8 +1281,7 @@ I/O
 
 .. function:: lstat(file)
 
-   Like stat, but for symbolic links get the info for the link itself rather than the file it refers to. Note also that
-   because of that, this function must be called on a file path rather than a file object or a file descriptor. 
+   Like stat, but for symbolic links gets the info for the link itself rather than the file it refers to. This function must be called on a file path rather than a file object or a file descriptor. 
 
 .. function:: ctime(file)
 
@@ -1303,7 +1301,7 @@ I/O
 
 .. function:: uperm(file)
 
-   Gets the permissions of the owner of the file as bitfield of
+   Gets the permissions of the owner of the file as a bitfield of
 
    ==== =====================
     01   Execute Permission
@@ -1311,7 +1309,7 @@ I/O
     04   Read Permission
    ==== =====================
 
-   For allowed arguments, see the stat method
+   For allowed arguments, see the stat method.
 
 .. function:: gperm(file)
 
@@ -1382,16 +1380,16 @@ Network I/O
 .. function:: accept(server[,client])
 
    Accepts a connection on the given server and returns a connection to the client. An uninitialized client 
-   stream may be given as a paramter and if given, if be used instead of creating a new stream.
+   stream may be provided, in which case it will be used instead of creating a new stream.
 
 .. function:: bind(server[,addr...])
 
-   Binds a server to the given address (where the address may be any of the argument usually passed to listen).
+   Binds a server to the given address (which may be any of the arguments accepted by listen).
    Note that you must still call listen to be able to accept connections on this server.
 
 .. function:: listen(sever) -> PipeServer
 
-   Starts listening on a server that has been previously bound to an address by bing
+   Starts listening on a server that has been previously bound to an address by ``bind``.
 
 .. function:: open_any_tcp_port(hint) -> (Uint16,TcpServer)
 
