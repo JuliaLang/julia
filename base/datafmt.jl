@@ -221,5 +221,5 @@ end
 writedlm(io, a) = writedlm(io, a, '\t')
 writecsv(io, a) = writedlm(io, a, ',')
 
-writemime(io::IO, ::@MIME("text/csv"), a::Union(AbstractVector,AbstractMatrix)) = writedlm(io, a, ',')
-writemime(io::IO, ::@MIME("text/tab-separated-values"), a::Union(AbstractVector,AbstractMatrix)) = writedlm(io, a, '\t')
+writemime(io::IO, ::MIME"text/csv", a::Union(AbstractVector,AbstractMatrix)) = writedlm(io, a, ',')
+writemime(io::IO, ::MIME"text/tab-separated-values", a::Union(AbstractVector,AbstractMatrix)) = writedlm(io, a, '\t')
