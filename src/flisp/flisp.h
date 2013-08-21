@@ -111,7 +111,7 @@ typedef struct {
 #define iskeyword(s) ((s)->flags&0x2)
 #define symbol_value(s) (((symbol_t*)ptr(s))->binding)
 #ifdef MEMDEBUG2
-#define ismanaged(v) (!issymbol(v) && !isfixnum(v) && ((v)>(N_OPCODES<<3)))
+#define ismanaged(v) (!issymbol(v) && !isfixnum(v) && ((v)>(N_OPCODES<<3)) && !iscbuiltin(v))
 #else
 #define ismanaged(v) ((((unsigned char*)ptr(v)) >= fromspace) && \
                       (((unsigned char*)ptr(v)) < fromspace+heapsize))

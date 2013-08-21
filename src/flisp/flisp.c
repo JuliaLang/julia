@@ -357,6 +357,12 @@ char *symbol_name(value_t v)
 
 // conses ---------------------------------------------------------------------
 
+#ifdef MEMDEBUG2
+static void *tochain=NULL;
+static long long n_allocd=0;
+#define GC_INTERVAL 100000
+#endif
+
 void gc(int mustgrow);
 
 static value_t mk_cons(void)
@@ -364,8 +370,12 @@ static value_t mk_cons(void)
     cons_t *c;
 
 #ifdef MEMDEBUG2
+    if (n_allocd > GC_INTERVAL)
+        gc(0);
     c = (cons_t*)((void**)malloc(3*sizeof(void*)) + 1);
-    ((void**)c)[-1] = 0;
+    ((void**)c)[-1] = tochain;
+    tochain = c;
+    n_allocd += sizeof(cons_t);
 #else
     if (__unlikely(curheap > lim))
         gc(0);
@@ -382,8 +392,12 @@ static value_t *alloc_words(int n)
     assert(n > 0);
     n = LLT_ALIGN(n, 2);   // only allocate multiples of 2 words
 #ifdef MEMDEBUG2
+    if (n_allocd > GC_INTERVAL)
+        gc(0);
     first = (value_t*)malloc((n+1)*sizeof(value_t)) + 1;
-    first[-1] = 0;
+    first[-1] = (value_t)tochain;
+    tochain = first;
+    n_allocd += (n*sizeof(value_t));
 #else
     if (__unlikely((value_t*)curheap > ((value_t*)lim)+2-n)) {
         gc(0);
@@ -407,9 +421,9 @@ static value_t *alloc_words(int n)
 #endif
 
 #ifdef MEMDEBUG2
-#define ismarked(c)    (((void**)ptr(c))[-1]!=((void*)0))
-#define mark_cons(c)   ((((void**)ptr(c))[-1])=((void*)1))
-#define unmark_cons(c) ((((void**)ptr(c))[-1])=((void*)0))
+#define ismarked(c)    ((((value_t*)ptr(c))[-1]&1) != 0)
+#define mark_cons(c)   ((((value_t*)ptr(c))[-1]) |= 1)
+#define unmark_cons(c) ((((value_t*)ptr(c))[-1]) &= (~(value_t)1))
 #else
 #define ismarked(c)    bitvector_get(consflags, cons_index(c))
 #define mark_cons(c)   bitvector_set(consflags, cons_index(c), 1)
@@ -472,8 +486,12 @@ static value_t relocate(value_t v)
                 *pcdr = cdr_(v);
                 return first;
             }
+#ifdef MEMDEBUG2
+            *pcdr = nc = mk_cons();
+#else
             *pcdr = nc = tagptr((cons_t*)curheap, TAG_CONS);
             curheap += sizeof(cons_t);
+#endif
             d = cdr_(v);
             car_(v) = TAG_FWD; cdr_(v) = nc;
             car_(nc) = relocate(a);
@@ -569,19 +587,22 @@ static value_t memory_exception_value;
 
 void gc(int mustgrow)
 {
-#ifdef MEMDEBUG2
-    assert(0);
-#endif
-    static int grew = 0;
     void *temp;
     uint32_t i, f, top;
     fl_readstate_t *rs;
+#ifdef MEMDEBUG2
+    temp = tochain;
+    tochain = NULL;
+    n_allocd = -100000000000LL;
+#else
+    static int grew = 0;
     size_t hsz = grew ? heapsize*2 : heapsize;
 #ifdef MEMDEBUG
     tospace = LLT_ALLOC(hsz);
 #endif
     curheap = tospace;
     lim = curheap + hsz - sizeof(cons_t);
+#endif
 
     if (fl_throwing_frame > curr_frame) {
         top = fl_throwing_frame - 4;
@@ -617,10 +638,19 @@ void gc(int mustgrow)
 
     sweep_finalizers();
 
+#ifdef MEMDEBUG2
+    while (temp != NULL) {
+        void *next = ((void**)temp)[-1];
+        free(&((void**)temp)[-1]);
+        temp = next;
+    }
+    n_allocd = 0;
+#else
 #ifdef VERBOSEGC
     printf("GC: found %d/%d live conses\n",
            (curheap-tospace)/sizeof(cons_t), heapsize/sizeof(cons_t));
 #endif
+
     temp = tospace;
     tospace = fromspace;
     fromspace = temp;
@@ -654,6 +684,7 @@ void gc(int mustgrow)
 #endif
     if (curheap > lim)  // all data was live
         gc(0);
+#endif
 }
 
 static void grow_stack(void)
@@ -768,11 +799,14 @@ value_t fl_listn(size_t n, ...)
 
 value_t fl_list2(value_t a, value_t b)
 {
-#ifdef MEMDEBUG2
-    return fl_cons(a, fl_cons(b, NIL));
-#else
     PUSH(a);
     PUSH(b);
+#ifdef MEMDEBUG2
+    Stack[SP-1] = fl_cons(b, NIL);
+    a = fl_cons(Stack[SP-2], Stack[SP-1]);
+    POPN(2);
+    return a;
+#else
     cons_t *c = (cons_t*)alloc_words(4);
     b = POP();
     a = POP();
@@ -835,13 +869,15 @@ static value_t _list(value_t *args, uint32_t nargs, int star)
     else {
         v = NIL;
     }
+    PUSH(v);
     for(; i >= 0; i--) {
         n = mk_cons();
         c = (cons_t*)ptr(n);
         c->car = args[i];
-        c->cdr = v;
-        v = n;
+        c->cdr = Stack[SP-1];
+        Stack[SP-1] = n;
     }
+    v = POP();
 #else
     v = cons_reserve(nargs);
     c = (cons_t*)ptr(v);
