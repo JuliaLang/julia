@@ -1,12 +1,9 @@
 #############################################
 # Create some temporary files & directories #
 #############################################
-# This first section may not run for non-UNIX people.
-# If so, create the directories and files manually, and comment out this section
-# (Or fix up the code to support such operations on Windows!)
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")
-touch(file)
+close(open(file,"w")) # like touch, but lets the operating system update the timestamp for greater precision on some platforms (windows)
 
 #######################################################################
 # This section tests some of the features of the stat-based file info #
@@ -33,7 +30,7 @@ end
 @unix_only begin
     @test filesize(dir) > 0
 end
-@test mtime(file) >= mtime(dir)
+@test int(time()) >= int(mtime(file)) >= int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 
 # rename file
 newfile = joinpath(dir, "bfile.txt")
