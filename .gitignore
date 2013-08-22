@@ -1,14 +1,10 @@
-*~
-*#
-.DS_Store
-
 /*.tar.gz
 /tmp
-/dist*
-
+/dist
+/dist-extras
 /julia
-/julia-*
-/h2j
+/usr
+/Make.user
 
 *.exe
 *.dll
@@ -16,16 +12,3 @@
 *.o
 *.dylib
 *.dSYM
-
-*.out
-
-*.files
-*.config
-*.includes
-*.creator
-*.user
-*.orig
-*.swp
-*.kate-swp
-
-/usr

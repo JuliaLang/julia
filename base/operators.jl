@@ -4,7 +4,9 @@ const (<:) = subtype
 
 super(T::DataType) = T.super
 
-==(T::Type, S::Type) = typeseq(T, S)
+# avoid ambiguity with isequal(::Tuple, ::Tuple)
+isequal(T::(Type...), S::(Type...)) = typeseq(T, S)
+isequal(T::Type, S::Type) = typeseq(T, S)
 
 ## comparison ##
 
@@ -84,6 +86,7 @@ fld{T<:Real}(x::T, y::T) = convert(T,floor((x-mod(x,y))/y))
 
 # operator alias
 const % = rem
+.%(x::Real, y::Real) = x%y
 
 # mod returns in [0,y) whereas mod1 returns in (0,y]
 mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
@@ -257,6 +260,7 @@ export
     !==,
     $,
     %,
+    .%,
     &,
     *,
     +,
@@ -294,7 +298,7 @@ export
     <|,
     ~
 
-import Base: !, !=, $, %, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
+import Base: !, !=, $, %, .%, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
     <|, |>, \, ^, |, ~, !==, >:
 

@@ -765,7 +765,8 @@ int jl_field_isdefined(jl_value_t *v, jl_sym_t *fld, int err);
 // arrays
 DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_tuple_t *dims);
 DLLEXPORT jl_array_t *jl_new_arrayv(jl_value_t *atype, ...);
-jl_array_t *jl_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims);
+jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
+                                             int isunboxed, int elsz);
 DLLEXPORT jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
                                        jl_tuple_t *dims);
 DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data,

@@ -610,17 +610,6 @@ dump(io::IO, x::DataType) = dump(io, x, 5, "")
 dump(io::IO, x::TypeVar, n::Int, indent) = println(io, x.name)
 
 
-showall(x) = showall(STDOUT::IO, x)
-
-function showall{T}(io::IO, a::AbstractArray{T,1})
-    if is(T,Any)
-        opn = '{'; cls = '}'
-    else
-        opn = '['; cls = ']';
-    end
-    show_comma_array(io, a, opn, cls)
-end
-
 alignment(x::Any) = (0, length(sprint(showcompact, x)))
 alignment(x::Number) = (length(sprint(showcompact, x)), 0)
 alignment(x::Integer) = (length(sprint(showcompact, x)), 0)
@@ -800,32 +789,34 @@ dims2string(d) = length(d) == 0 ? "0-dimensional" :
                  length(d) == 1 ? "$(d[1])-element" :
                  join(map(string,d), 'x')
 
-summary{T}(a::AbstractArray{T}) =
-    string(dims2string(size(a)), " ", T, " ", typeof(a).name)
+summary(a::AbstractArray) =
+    string(dims2string(size(a)), " ", typeof(a))
 
-function show_nd(io::IO, a::AbstractArray)
+function show_nd(io::IO, a::AbstractArray, limit, rows, cols)
     if isempty(a)
         return
     end
     tail = size(a)[3:]
     nd = ndims(a)-2
-    function print_slice(io::IO, idxs...)
-        for i = 1:nd
-            ii = idxs[i]
-            if size(a,i+2) > 10
-                if ii == 4 && all(x->x==1,idxs[1:i-1])
-                    for j=i+1:nd
-                        szj = size(a,j+2)
-                        if szj>10 && 3 < idxs[j] <= szj-3
-                            return
+    function print_slice(idxs...)
+        if limit
+            for i = 1:nd
+                ii = idxs[i]
+                if size(a,i+2) > 10
+                    if ii == 4 && all(x->x==1,idxs[1:i-1])
+                        for j=i+1:nd
+                            szj = size(a,j+2)
+                            if szj>10 && 3 < idxs[j] <= szj-3
+                                return
+                            end
                         end
+                        #println(io, idxs)
+                        print(io, "...\n\n")
+                        return
                     end
-                    #println(io, idxs)
-                    print(io, "...\n\n")
-                    return
-                end
-                if 3 < ii <= size(a,i+2)-3
-                    return
+                    if 3 < ii <= size(a,i+2)-3
+                        return
+                    end
                 end
             end
         end
@@ -833,10 +824,10 @@ function show_nd(io::IO, a::AbstractArray)
         for i = 1:(nd-1); print(io, "$(idxs[i]), "); end
         println(io, idxs[end], "] =")
         slice = sub(a, 1:size(a,1), 1:size(a,2), idxs...)
-        print_matrix(io, slice)
+        print_matrix(io, slice, rows, cols)
         print(io, idxs == tail ? "" : "\n\n")
     end
-    cartesianmap((idxs...)->print_slice(io,idxs...), tail)
+    cartesianmap(print_slice, tail)
 end
 
 function whos(m::Module, pattern::Regex)
@@ -861,41 +852,32 @@ function show{T}(io::IO, x::AbstractArray{T,0})
     print(io, sx)
 end
 
-function show(io::IO, X::AbstractArray)
-    print(io, summary(X))
+# NOTE: this is a possible, so-far-unexported function, providing control of
+# array output. Not sure I want to do it this way.
+showarray(X::AbstractArray; kw...) = showarray(STDOUT, X; kw...)
+function showarray(io::IO, X::AbstractArray; header=true, limit=true, rows=tty_rows()-4, cols=tty_cols())
+    header && print(io, summary(X))
     if !isempty(X)
-        println(io, ":")
-        ndims(X)==2 ? print_matrix(io, X) : show_nd(io, X)
+        header && println(io, ":")
+        if ndims(X) == 0
+            return showcompact(io, X[])
+        end
+        if !limit
+            rows = cols = typemax(Int)
+        end
+        if ndims(X)<=2
+            print_matrix(io, X, rows, cols)
+        else
+            show_nd(io, X, limit, rows, cols)
+        end
     end
 end
 
-function showall(io::IO, X::AbstractMatrix)
-    print(io, summary(X))
-    if !isempty(X)
-        println(io, ":")
-        print_matrix(io, X, typemax(Int64), typemax(Int64))
-    end
-end
+show(io::IO, X::AbstractArray) = showarray(io, X)
 
-function showall(io::IO, a::AbstractArray)
-    print(io, summary(a))
-    if isempty(a)
-        return
-    end
-    println(io, ":")
-    tail = size(a)[3:]
-    nd = ndims(a)-2
-    function print_slice(io, idxs...)
-        print(io, "[:, :, ")
-        for i = 1:(nd-1); print(io, "$(idxs[i]), "); end
-        println(io, idxs[end], "] =")
-        slice = a[:,:,idxs...]
-        print_matrix(io, reshape(slice, size(slice,1), size(slice,2)),
-                     typemax(Int64), typemax(Int64))
-        print(io, idxs == tail ? "" : "\n\n")
-    end
-    cartesianmap(print_slice, tail)
-end
+showall(x) = showall(STDOUT, x)
+showall(io::IO, x) = show(io, x)
+showall(io::IO, x::AbstractArray) = showarray(io, x, limit=false)
 
 function show_vector(io::IO, v, opn, cls)
     show_delim_array(io, v, opn, ",", cls, false)
@@ -905,9 +887,6 @@ show(io::IO, v::AbstractVector{Any}) = show_vector(io, v, "{", "}")
 show(io::IO, v::AbstractVector)      = show_vector(io, v, "[", "]")
 
 # printing BitArrays
-
-summary(a::BitArray) =
-    string(dims2string(size(a)), " ", typeof(a).name)
 
 # (following functions not exported - mainly intended for debug)
 

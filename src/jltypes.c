@@ -687,6 +687,16 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
             extend((jl_value_t*)a, b, eqc);
         }
         else {
+            int i;
+            for(i=0; i < penv->n; i+=2) {
+                if (penv->data[i] == (jl_value_t*)a && !jl_is_typevar(penv->data[i+1])) {
+                    jl_value_t *ti = jl_type_intersection(b, penv->data[i+1]);
+                    if (ti == (jl_value_t*)jl_bottom_type)
+                        return ti;
+                    penv->data[i+1] = ti;
+                    return (jl_value_t*)a;
+                }
+            }
             extend((jl_value_t*)a, b, penv);
         }
     }
@@ -1552,8 +1562,12 @@ static jl_value_t *lookup_type(jl_typename_t *tn, jl_value_t **key, size_t n)
     }
     for(size_t i=0; i < cl; i++) {
         jl_datatype_t *tt = (jl_datatype_t*)data[i];
-        if (typekey_compare(tt, key, n))
+        if (typekey_compare(tt, key, n)) {
+            if (tn == jl_type_type->name &&
+                (jl_is_typector(key[0]) != jl_is_typector(jl_tupleref(tt->parameters,0))))
+                continue;
             return (jl_value_t*)tt;
+        }
     }
     return NULL;
 }
@@ -1841,15 +1855,18 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
 {
     size_t ci=0, pi=0;
     int mode = 0;
-    while(1) {
+    while (1) {
         int cseq = !ta && (ci<cl) && jl_is_vararg_type(child[ci]);
         int pseq = (pi<pl) && jl_is_vararg_type(parent[pi]);
-        if ((!morespecific||mode) && cseq && !pseq)
-            return mode;
+        if (!morespecific && cseq && !pseq)
+            return 0;
         if (ci >= cl)
             return (pi>=pl || pseq);
-        if (pi >= pl)
+        if (pi >= pl) {
+            if (mode && cseq && !pseq)
+                return 1;
             return 0;
+        }
         jl_value_t *ce = child[ci];
         jl_value_t *pe = parent[pi];
         if (cseq) ce = jl_tparam0(ce);
@@ -1857,6 +1874,9 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
 
         if (!jl_subtype_le(ce, pe, ta, morespecific, invariant))
             return 0;
+
+        if (mode && cseq && !pseq)
+            return 1;
 
         if (morespecific) {
             // stop as soon as one element is strictly more specific

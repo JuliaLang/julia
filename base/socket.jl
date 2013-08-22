@@ -128,7 +128,7 @@ end
 
 # Parsing
 
-function parse_ipv4(str)
+function parseipv4(str)
     fields = split(str,'.')
     i = 1
     ret = 0
@@ -167,7 +167,7 @@ function parse_ipv4(str)
     IPv4(ret)
 end
 
-function parse_ipv6fields(fields,num_fields)
+function parseipv6fields(fields,num_fields)
     if length(fields) > num_fields
         error("Too many fields in IPv6 address")
     end
@@ -187,19 +187,19 @@ function parse_ipv6fields(fields,num_fields)
     end
     ret
 end
-parse_ipv6fields(fields) = parse_ipv6fields(fields,8)
+parseipv6fields(fields) = parseipv6fields(fields,8)
 
-function parse_ipv6(str)
+function parseipv6(str)
     fields = split(str,':')
     if length(fields) > 8
         error("Too many fields in IPv6 address")
     elseif length(fields) == 8
-        return IPv6(parse_ipv6fields(fields))
+        return IPv6(parseipv6fields(fields))
     elseif contains(fields[end],'.')
-        return IPv6((parse_ipv6fields(fields[1:(end-1)],6))
-            | parse_ipv4(fields[end]).host )
+        return IPv6((parseipv6fields(fields[1:(end-1)],6))
+            | parseipv4(fields[end]).host )
     else
-        return IPv6(parse_ipv6fields(fields))
+        return IPv6(parseipv6fields(fields))
     end
 end
 
@@ -208,14 +208,19 @@ end
 # separated formats. Most other common formats use a standard integer encoding
 # of the appropriate size and should use the appropriate constructor
 #
-macro ip_str(str)
+
+function parseip(str)
     if contains(str,':')
         # IPv6 Address
-        return parse_ipv6(str)
+        return parseipv6(str)
     else
         # IPv4 Address
-        return parse_ipv4(str)
+        return parseipv4(str)
     end
+end
+
+macro ip_str(str)
+    return parseip(str)
 end
 
 type InetAddr
@@ -256,6 +261,7 @@ type TcpSocket <: Socket
 end
 function TcpSocket()
     this = TcpSocket(c_malloc(_sizeof_uv_tcp))
+    associate_julia_struct(this.handle, this)
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0 
@@ -263,7 +269,6 @@ function TcpSocket()
         this.handle = C_NULL
         error(UVError("Failed to create tcp socket",err))
     end
-    associate_julia_struct(this.handle, this)
     this.status = StatusInit
     this
 end
@@ -283,6 +288,7 @@ type TcpServer <: UVServer
 end
 function TcpServer()
     this = TcpServer(c_malloc(_sizeof_uv_tcp))
+    associate_julia_struct(this.handle, this)
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0 
@@ -290,7 +296,6 @@ function TcpServer()
         this.handle = C_NULL
         error(UVError("Failed to create tcp server",err))
     end
-    associate_julia_struct(this.handle, this)
     this.status = StatusInit
     this
 end
@@ -513,19 +518,17 @@ end
 
 ## Utility functions
 
-function open_any_tcp_port(cb::Callback,default_port)
+function listenany(default_port)
     addr = InetAddr(IPv4(uint32(0)),default_port)
     while true
         sock = TcpServer()
-        sock.ccb = cb
-        if (bind(sock,addr) && _listen(sock) == 0)
+        if bind(sock,addr) && _listen(sock) == 0
             return (addr.port,sock)
         end
         close(sock)
-	    addr.port += 1
-        if (addr.port==default_port)
-            error("Not a single port is available.")
+	addr.port += 1
+        if addr.port==default_port
+            error("no ports available")
         end
     end
 end
-open_any_tcp_port(default_port) = open_any_tcp_port(false,default_port)

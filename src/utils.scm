@@ -31,6 +31,13 @@
 	   (any (lambda (x) (contains p x))
 		expr))))
 
+(define (expr-contains-eq x expr)
+  (or (eq? expr x)
+      (and (pair? expr)
+	   (not (quoted? expr))
+	   (any (lambda (y) (expr-contains-eq x y))
+		(cdr expr)))))
+
 (define (butlast lst)
   (if (or (null? lst) (null? (cdr lst)))
       '()

@@ -45,6 +45,7 @@
     ios_write;
     ios_write_direct;
     iswprint;
+    jl_;
     jl_print_type;
     jl_alloc_array_1d;
     jl_alloc_array_2d;
@@ -68,6 +69,7 @@
     jl_backtrace_type;
     jl_base_module;
     jl_boundp;
+    jl_breakpoint;
     jl_defines_or_exports_p;
     jl_box_int32;
     jl_box_int64;
@@ -300,6 +302,7 @@
     jl_stat_rdev;
     jl_stat_size;
     jl_stat_uid;
+    jl_static_show;
     jl_stderr_obj;
     jl_stderr_stream;
     jl_stdin_callback;

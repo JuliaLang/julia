@@ -1,5 +1,5 @@
 (define ops-by-prec
-  '#((= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= %= |\|=| &= $= => <<= >>= >>>= ~ |.+=| |.-=|)
+  '#((= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= %= .%= |\|=| &= $= => <<= >>= >>>= ~ |.+=| |.-=|)
      (?)
      (|\|\||)
      (&&)
@@ -12,7 +12,7 @@
      (: |..|)
      (+ - |.+| |.-| |\|| $)
      (<< >> >>> |.<<| |.>>| |.>>>|)
-     (* / |./| % & |.*| |\\| |.\\|)
+     (* / |./| % |.%| & |.*| |\\| |.\\|)
      (// .//)
      (^ |.^|)
      (|::|)
@@ -88,7 +88,7 @@
 
 ; operators that are special forms, not function names
 (define syntactic-operators
-  '(= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= %= |\|=| &= $= =>
+  '(= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= %= .%= |\|=| &= $= =>
       <<= >>= >>>= -> --> |\|\|| && |::| |.| ...))
 (define syntactic-unary-operators '($ &))
 
@@ -1058,12 +1058,12 @@
 
 (define (parse-do s)
   (set! expect-end-current-line (input-port-line (ts:port s)))
-  (let ((doargs (if (eqv? (peek-token s) #\newline)
-		    '()
-		    (parse-comma-separated-assignments s))))
-    `(-> (tuple ,@doargs)
-	 ,(without-whitespace-newline
-	   (begin0 (parse-block s)
+  (without-whitespace-newline
+   (let ((doargs (if (eqv? (peek-token s) #\newline)
+		     '()
+		     (parse-comma-separated-assignments s))))
+     `(-> (tuple ,@doargs)
+	  ,(begin0 (parse-block s)
 		   (expect-end- s 'do))))))
 
 (define (macrocall-to-atsym e)

@@ -132,7 +132,7 @@ end
 function find_source_file(file)
     if file[1]!='/' && !is_file_readable(file)
         file2 = find_in_path(file)
-        if is_file_readable(file2)
+        if file2 != nothing
             return file2
         else
             file2 = "$JULIA_HOME/../share/julia/base/$file"
@@ -268,7 +268,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
         lsb = ""
-        @linux_only try lsb = readchomp(`lsb_release -ds` .> SpawnNullStream()) end
+        @linux_only try lsb = readchomp(`lsb_release -ds` .> DevNull) end
         @windows_only try lsb = strip(readall(`$(ENV["COMSPEC"]) /c ver`)) end
         if lsb != ""
             println(io,     "           ", lsb)

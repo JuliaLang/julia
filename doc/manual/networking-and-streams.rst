@@ -11,7 +11,77 @@ usually unnecessary to think about the underlying asynchronous operation. This
 is achieved by making heavy use of Julia cooperative threading (coroutine) 
 functionality.
 
-So, let's jump right in with a simple example involving Tcp Sockets. To do, let's first create a simple server:: 
+Basic Stream I/O
+----------------
+
+All Julia streams expose at least a `read` and a `write` method, taking the stream as their first argument, e.g.::
+
+    julia> write(STDOUT,"Hello World")
+    Hello World
+    
+    julia> read(STDIN,Char)
+
+    '\n'
+
+Note that I pressed enter again so that Julia would read the newline. Now, as you can see from this example, the
+`write` method takes the data to write as its second argument, while the read method takes the type of the
+data to be read as the second argument. For example, to read a simply byte array, we could do::
+
+    julia> x = zeros(Uint8,4)
+    4-element Uint8 Array:
+     0x00
+     0x00
+     0x00
+     0x00
+
+    julia> read(STDIN,x)
+    abcd 
+    4-element Uint8 Array:
+     0x61
+     0x62
+     0x63
+     0x64
+
+However, since this is slightly cumbersome, there are several convenience methods provided. For example, we could have written the
+above as::
+    
+    julia> readbytes(STDIN,4)
+    abcd 
+    4-element Uint8 Array:
+     0x61
+     0x62
+     0x63
+     0x64   
+
+or if we had wanted to read the entire line instead::
+
+    julia> readline(STDIN)
+    abcd
+    "abcd\n"
+
+Note that depending on your terminal settings, your TTY may be line buffered and might thus require an additional enter before the data
+is sent to julia.
+
+Text I/O
+--------
+
+Note that the write method mentioned above operates on binary streams. In particular, values do not get converted to any canoncical text 
+representation but are written out as is::
+    
+    julia> write(STDOUT,0x61)
+    a
+
+For Text I/O, use the `print` or `show` methods, depending on your needs (see the standard library reference for a detailed discussion of
+the difference between the two)::
+
+    julia> print(STDOUT,0x61)
+    97
+
+
+A simple TCP example
+--------------------
+
+Let's jump right in with a simple example involving Tcp Sockets. To do, let's first create a simple server:: 
 
     julia> @async begin
              server = listen(2000)

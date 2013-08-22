@@ -1,6 +1,6 @@
 # require
 
-function is_file_readable(path)
+function is_file_readable(path::String)
     s = stat(bytestring(path))
     return isfile(s) && isreadable(s)
 end
@@ -13,6 +13,7 @@ function find_in_path(name::String)
         base = name[1:end-3]
     else
         name = string(base,".jl")
+        isfile(name) && return abspath(name)
     end
     for prefix in [Pkg.dir(), LOAD_PATH]
         path = joinpath(prefix, name)
@@ -22,7 +23,7 @@ function find_in_path(name::String)
         path = joinpath(prefix, name, "src", name)
         is_file_readable(path) && return abspath(path)
     end
-    return abspath(name)
+    return nothing
 end
 
 find_in_node1_path(name) = myid()==1 ?
@@ -35,13 +36,14 @@ package_locks = (ByteString=>Any)[]
 require(fname::String) = require(bytestring(fname))
 require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 
-function require(name::ByteString)
+function require(name::String)
     if myid() == 1 
         @sync for p in filter(x -> x != 1, procs())
             @spawnat p require(name)
         end
     end
     path = find_in_node1_path(name)
+    path == nothing && error("$name not found")
     if haskey(package_list,path)
         wait(package_locks[path])
     else
@@ -52,11 +54,13 @@ end
 
 function reload(name::String)
     if myid() == 1
-        @sync for p in filter(x -> x != 1, procs())
+        @sync for p in filter(x->x!=1, procs())
             @spawnat p reload(name)
         end
     end
-    reload_path(find_in_node1_path(name))
+    path = find_in_node1_path(name)
+    path == nothing && error("$name not found")
+    reload_path(path)
 end
 
 # remote/parallel load
@@ -66,7 +70,7 @@ include_string(txt::ByteString, fname::ByteString) =
 
 include_string(txt::ByteString) = include_string(txt, "string")
 
-function source_path(default)
+function source_path(default::Union(String,Nothing))
     t = current_task()
     while true
         s = t.storage
@@ -81,7 +85,7 @@ function source_path(default)
 end
 source_path() = source_path("")
 
-function include_from_node1(path)
+function include_from_node1(path::String)
     prev = source_path(nothing)
     path = (prev == nothing) ? abspath(path) : joinpath(dirname(prev),path)
     tls = task_local_storage()
@@ -105,7 +109,7 @@ function include_from_node1(path)
     result
 end
 
-function reload_path(path)
+function reload_path(path::String)
     had = haskey(package_list, path)
     if !had
         package_locks[path] = RemoteRef()
