@@ -101,7 +101,6 @@ export
     SVD,
     Symmetric,
     SymTridiagonal,
-    TcpSocket,
     Timer,
     TimSort,
     TmStruct,
@@ -1020,7 +1019,6 @@ export
 
 # I/O and events
     accept,
-    bind,
     close,
     connect,
     countlines,
