@@ -142,7 +142,7 @@ function download(url::String, filename::String)
     global downloadcmd
     if downloadcmd === nothing
         for checkcmd in (:curl, :wget, :fetch)
-            if success(`which $checkcmd` |> SpawnNullStream())
+            if success(`which $checkcmd` |> DevNull)
                 downloadcmd = checkcmd
                 break
             end
