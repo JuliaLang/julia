@@ -1234,14 +1234,9 @@ I/O
    Resize the file or buffer given by the first argument to exactly `n` bytes, filling previously unallocated space with '\0'
    if the file or buffer is grown
 
-.. function:: eatwspace(stream)
+.. function:: skipchars(stream, predicate; linecomment::Char)
 
-   Advance the stream until before the first non-whitespace character (if the next character is not a whitespace character, the
-   stream will not be advanced).
-
-.. function:: eatwspace_comment(stream,cmt::Char)
-
-   Like ``eatwspace``, but also skips lines which have `cmt` as the first character of the line.
+   Advance the stream until before the first character for which ``predicate`` returns false. For example ``skipchars(stream, isspace)`` will skip all whitespace. If keyword argument ``linecomment`` is specified, characters from that character through the end of a line will also be skipped.
 
 .. function:: countlines(io,[eol::Char])
 
@@ -1391,7 +1386,7 @@ Network I/O
 
    Starts listening on a server that has been previously bound to an address by ``bind``.
 
-.. function:: open_any_tcp_port(hint) -> (Uint16,TcpServer)
+.. function:: listenany(port_hint) -> (Uint16,TcpServer)
 
    Create a TcpServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server
    was created on and the server itself. 

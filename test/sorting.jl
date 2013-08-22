@@ -106,7 +106,7 @@ for n in [0:10, 100, 101, 1000, 1001]
     v = rand(1:10,n)
     h = hist(v,r)
 
-    for ord in [Order.Forward, Order.Reverse]
+    for ord in [Base.Order.Forward, Base.Order.Reverse]
         # insertion sort (stable) as reference
         pi = sortperm(v, alg=InsertionSort, order=ord)
         @test isperm(pi)
@@ -145,7 +145,7 @@ for n in [0:10, 100, 101, 1000, 1001]
     end
 
     v = randn_with_nans(n,0.1)
-    for ord in [Order.Forward, Order.Reverse],
+    for ord in [Base.Order.Forward, Base.Order.Reverse],
         alg in [InsertionSort, QuickSort, MergeSort, TimSort, HeapSort, RadixSort]
         # test float sorting with NaNs
         s = sort(v, alg=alg, order=ord)
