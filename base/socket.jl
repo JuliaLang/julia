@@ -518,19 +518,17 @@ end
 
 ## Utility functions
 
-function open_any_tcp_port(cb::Callback,default_port)
+function listenany(default_port)
     addr = InetAddr(IPv4(uint32(0)),default_port)
     while true
         sock = TcpServer()
-        sock.ccb = cb
-        if (bind(sock,addr) && _listen(sock) == 0)
+        if bind(sock,addr) && _listen(sock) == 0
             return (addr.port,sock)
         end
         close(sock)
-	    addr.port += 1
-        if (addr.port==default_port)
-            error("Not a single port is available.")
+	addr.port += 1
+        if addr.port==default_port
+            error("no ports available")
         end
     end
 end
-open_any_tcp_port(default_port) = open_any_tcp_port(false,default_port)

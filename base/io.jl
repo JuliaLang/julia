@@ -494,18 +494,10 @@ function peek(s::IOStream)
     ccall(:ios_peekc, Int32, (Ptr{Void},), s)
 end
 
-function eatwspace(s::IOStream)
+function skipchars(s::IOStream, pred; linecomment::Char=char(0xffffffff))
     ch = peekchar(s); status = int(ch)
-    while status >= 0 && isspace(ch)
-        read(s, Char)  # advance one character
-        ch = peekchar(s); status = int(ch)
-    end
-end
-
-function eatwspace_comment(s::IOStream, cmt::Char)
-    ch = peekchar(s); status = int(ch)
-    while status >= 0 && (isspace(ch) || ch == cmt)
-        if ch == cmt
+    while status >= 0 && (pred(ch) || ch == linecomment)
+        if ch == linecomment
             readline(s)
         else
             read(s, Char)  # advance one character

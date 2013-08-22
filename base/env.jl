@@ -76,7 +76,7 @@ contains(::KeyIterator{EnvHash}, k::String) = _hasenv(k)
 pop!(::EnvHash, k::String) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvHash, k::String, def) = haskey(ENV,k) ? pop!(ENV,k) : def
 function delete!(::EnvHash, k::String)
-    warn_once("delete!(h::EnvHash,key) now returns the modified environment.\nUse pop!(h::EnvHash,key) to retrieve the value instead.\n")
+    warn_once("delete!(ENV,key) now returns the modified environment.\nUse pop!(ENV,key) to retrieve the value instead.\n")
     _unsetenv(k)
     ENV
 end

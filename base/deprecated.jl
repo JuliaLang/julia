@@ -229,9 +229,11 @@ export PipeString
 @deprecate  add!(s::IntSet, x)              push!(s,x)
 @deprecate  delete!(d::Dict, key, default)  pop!(d, key, default)
 @deprecate  get(A::Array, B::Array, I, default) get!(A, B, I, default)
-
 @deprecate repl_show(io, x)  writemime(io, MIME"text/plain"(), x)
 @deprecate error_show  showerror
+@deprecate eatwspace(io)  skipchars(io, isspace)
+@deprecate eatwspace_comment(io, cmt)  skipchars(io, isspace, linecomment=cmt)
+@deprecate open_any_tcp_port listenany
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
