@@ -1,7 +1,7 @@
 include Versions.make
 
 ## optional packages and options #
-LLVM_ASSERTIONS = 1
+LLVM_ASSERTIONS = 0
 LLVM_DEBUG = 0
 # set to 1 to get clang and compiler-rt
 BUILD_LLVM_CLANG = 0
