@@ -112,7 +112,7 @@ end
 ## Constructors
 
 copy(S::SparseMatrixCSC) =
-    SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), deepcopy(S.nzval))
+    SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), copy(S.nzval))
 
 similar(S::SparseMatrixCSC, Tv::NonTupleType) =
     SparseMatrixCSC(S.m, S.n, similar(S.colptr), similar(S.rowval), Array(Tv, length(S.rowval)))

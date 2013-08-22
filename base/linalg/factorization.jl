@@ -450,6 +450,8 @@ type HessenbergQ{T} <: AbstractMatrix{T}
 end
 HessenbergQ(A::Hessenberg) = HessenbergQ(A.hh, A.tau)
 size(A::HessenbergQ, args...) = size(A.hh, args...)
+getindex(A::HessenbergQ, i::Real) = getindex(full(A), i)
+getindex(A::HessenbergQ, i::AbstractArray) = getindex(full(A), i)
 getindex(A::HessenbergQ, args...) = getindex(full(A), args...)
 
 function getindex(A::Hessenberg, d::Symbol)
@@ -621,10 +623,16 @@ function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, thin::Bool)
     return SVD(u,s,vt)
 end
 svdfact!(A::StridedVecOrMat, args...) = svdfact!(float(A), args...)
-svdfact!{T<:BlasFloat}(a::Vector, thin::Bool) = svdfact!(reshape(a, length(a), 1), thin)
+svdfact!{T<:BlasFloat}(a::Vector{T}, thin::Bool) = svdfact!(reshape(a, length(a), 1), thin)
 svdfact!{T<:BlasFloat}(A::StridedVecOrMat{T}) = svdfact!(A, true)
-svdfact{T<:BlasFloat}(A::StridedVecOrMat{T}, args...) = svdfact!(copy(A), args...)
-svdfact(A::StridedVecOrMat, args...) = svdfact!(float(A), args...)
+function svdfact(A::StridedVecOrMat, args...)
+    if eltype(A) <: BlasFloat
+        A = copy(A)
+    else
+        A = float(A)
+    end
+    svdfact!(A, args...)
+end
 svdfact(x::Number, thin::Bool) = SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
 svdfact(x::Integer, thin::Bool) = svdfact(float(x), thin)
 svdfact(x::Number) = svdfact(x, true)

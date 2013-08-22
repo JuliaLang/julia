@@ -27,6 +27,17 @@ endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[1]
 last(a::AbstractArray) = a[end]
 
+function stride(a::AbstractArray, i::Integer)
+    if i > ndims(a)
+        return length(a)
+    end
+    s = 1
+    for n=1:(i-1)
+        s *= size(a, n)
+    end
+    return s
+end
+
 strides(a::AbstractArray) = ntuple(ndims(a), i->stride(a,i))::Dims
 
 function isassigned(a::AbstractArray, i::Int...)
@@ -1082,8 +1093,8 @@ function hvcat(rows::(Int...), as...)
     vcat(rs...)
 end
 
-function repmat(a::AbstractMatrix, m::Int, n::Int)
-    o,p = size(a)
+function repmat(a::Union(AbstractVector,AbstractMatrix), m::Int, n::Int=1)
+    o, p = size(a,1), size(a,2)
     b = similar(a, o*m, p*n)
     for j=1:n
         d = (j-1)*p+1
@@ -1095,7 +1106,16 @@ function repmat(a::AbstractMatrix, m::Int, n::Int)
     end
     return b
 end
-repmat(a::AbstractVector, m::Int, n::Int) = repmat(reshape(a, length(a), 1), m, n)
+
+function repmat(a::AbstractVector, m::Int)
+    o = length(a)
+    b = similar(a, o*m)
+    for i=1:m
+        c = (i-1)*o+1
+        b[c:c+o-1] = a
+    end
+    return b
+end
 
 sub2ind(dims) = 1
 sub2ind(dims, i::Integer) = int(i)

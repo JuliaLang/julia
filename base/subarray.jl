@@ -170,11 +170,18 @@ similar(s::SubArray, T, dims::Dims) = similar(s.parent, T, dims)
 getindex{T}(s::SubArray{T,0,AbstractArray{T,0}}) = s.parent[]
 getindex{T}(s::SubArray{T,0}) = s.parent[s.first_index]
 
-getindex{T}(s::SubArray{T,1}, i::Integer) = s.parent[s.first_index + (i-1)*s.strides[1]]
+getindex{T}(s::SubArray{T,1}, i::Integer) =
+    s.parent[s.first_index + (i-1)*s.strides[1]]
 getindex{T}(s::SubArray{T,1}, i::Integer, j::Integer) =
     j==1 ? s.parent[s.first_index + (i-1)*s.strides[1]] : throw(BoundsError())
 getindex{T}(s::SubArray{T,2}, i::Integer, j::Integer) =
     s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2]]
+getindex{T}(s::SubArray{T,3}, i::Integer, j::Integer, k::Integer) =
+    s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2] + (k-1)*s.strides[3]]
+getindex{T}(s::SubArray{T,4}, i::Integer, j::Integer, k::Integer, l::Integer) =
+    s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2] + (k-1)*s.strides[3] + (l-1)*s.strides[4]]
+getindex{T}(s::SubArray{T,5}, i::Integer, j::Integer, k::Integer, l::Integer, m::Integer) =
+    s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2] + (k-1)*s.strides[3] + (l-1)*s.strides[4] + (m-1)*s.strides[5]]
 
 getindex(s::SubArray, i::Real) = getindex(s, to_index(i))
 getindex(s::SubArray, i0::Real, i1::Real) =
@@ -183,8 +190,12 @@ getindex(s::SubArray, i0::Real, i1::Real, i2::Real) =
     getindex(s, to_index(i0), to_index(i1), to_index(i2))
 getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real) =
     getindex(s, to_index(i0), to_index(i1), to_index(i2), to_index(i3))
-getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real, is::Int...) =
-    getindex(s, to_index(i0), to_index(i1), to_index(i2), to_index(i3), is...)
+getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real) =
+    getindex(s, to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4))
+getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real) =
+    getindex(s, to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(i5))
+getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real, is::Int...) =
+    getindex(s, to_index(i0), to_index(i1), to_index(i2), to_index(i3), to_index(i4), to_index(5), is...)
 
 getindex(s::SubArray, i::Integer) = s[ind2sub(size(s), i)...]
 
@@ -330,6 +341,15 @@ setindex!{T}(s::SubArray{T,1}, v, i::Integer) =
 setindex!{T}(s::SubArray{T,2}, v, i::Integer, j::Integer) =
     setindex!(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2])
 
+setindex!{T}(s::SubArray{T,3}, v, i::Integer, j::Integer, k::Integer) =
+    setindex!(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]+(k-1)*s.strides[3])
+
+setindex!{T}(s::SubArray{T,4}, v, i::Integer, j::Integer, k::Integer, l::Integer) =
+    setindex!(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]+(k-1)*s.strides[3]+(l-1)*s.strides[4])
+
+setindex!{T}(s::SubArray{T,5}, v, i::Integer, j::Integer, k::Integer, l::Integer, m::Integer) =
+    setindex!(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]+(k-1)*s.strides[3]+(l-1)*s.strides[4]+(m-1)*s.strides[5])
+
 setindex!{T}(s::SubArray{T,1}, v, I::Range1{Int}) =
     setindex!(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
 
@@ -344,6 +364,11 @@ function setindex!{T,S<:Integer}(s::SubArray{T,1}, v, I::AbstractVector{S})
     setindex!(s.parent, v, t)
 end
 
+# to avoid ambiguity warning
+function setindex!(s::SubArray, v, I::Real)
+    newindexes = translate_indexes(s, (I,))
+    setindex!(s.parent, v, newindexes...)
+end
 function setindex!(s::SubArray, v, I::Union(Real,AbstractArray)...)
     newindexes = translate_indexes(s, I...)
     setindex!(s.parent, v, newindexes...)
@@ -363,6 +388,3 @@ function pointer(s::SubArray, is::(Int...))
     end
     return pointer(s.parent, index)
 end
-
-summary(s::SubArray) =
-    string(dims2string(size(s)), " SubArray of ", summary(s.parent))

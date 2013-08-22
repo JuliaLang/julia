@@ -59,6 +59,8 @@ New library functions
   * `logdet` (#3070)
 
   * names for C-compatible types: `Cchar`, `Clong`, etc (#2370).
+  
+  * `cglobal` to access global variables (#1815)
 
   * `unsafe_pointer_to_objref` (#2468) and `pointer_from_objref` (#2515)
 

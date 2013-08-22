@@ -63,7 +63,7 @@ function calc_loop_strides(shape::Dims, As::AbstractArray...)
     end
     nd = length(loopshape)
 
-    strides = [(size(A, d) > 1 ? stride(A, d) : 0) for A in As, d in dims]
+    strides = Int[(size(A, d) > 1 ? stride(A, d) : 0) for A in As, d in dims]
     # convert from regular strides to loop strides
     for k=(nd-1):-1:1, a=1:length(As)
         strides[a, k+1] -= strides[a, k]*loopshape[k]
@@ -257,6 +257,7 @@ end
 const broadcast_add = broadcast_function(+)
 const broadcast_sub = broadcast_function(-)
 const broadcast_mul = broadcast_function(*)
+const broadcast_rem = broadcast_function(%)
 const broadcast_div_T  = broadcast_T_function(/)
 const broadcast_rdiv_T = broadcast_T_function(\)
 const broadcast_pow_T  = broadcast_T_function(^)
@@ -264,6 +265,7 @@ const broadcast_pow_T  = broadcast_T_function(^)
 .+(As::StridedArray...) = broadcast_add(As...)
 .*(As::StridedArray...) = broadcast_mul(As...)
 .-(A::StridedArray, B::StridedArray) = broadcast_sub(A, B)
+.%(A::StridedArray, B::StridedArray) = broadcast_rem(A, B)
 
 type_div(T,S) = promote_type(T,S)
 type_div{T<:Integer,S<:Integer}(::Type{T},::Type{S}) = typeof(one(T)/one(S))

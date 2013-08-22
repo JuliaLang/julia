@@ -544,7 +544,7 @@ void darwin_stack_overflow_handler(unw_context_t *uc)
 }
 
 #define HANDLE_MACH_ERROR(msg, retval) \
-    if(retval!=KERN_SUCCESS) { mach_error(msg ":", (retval)); jl_exit(1); }
+    if (retval!=KERN_SUCCESS) { mach_error(msg ":", (retval)); jl_exit(1); }
 
 //exc_server uses dlsym to find symbol
 DLLEXPORT kern_return_t catch_exception_raise

@@ -142,7 +142,7 @@ function help_for(fname::String, obj)
     if !found
         if isa(obj, DataType)
             print("DataType   : ")
-            repl_show(obj)
+            writemime(STDOUT, "text/plain", obj)
             println()
             println("  supertype: ", super(obj))
             if obj.abstract
@@ -157,7 +157,7 @@ function help_for(fname::String, obj)
                 println("  fields   : ", obj.names)
             end
         elseif isgeneric(obj)
-            repl_show(obj); println()
+            writemime(STDOUT, "text/plain", obj); println()
         else
             println("No help information found.")
         end

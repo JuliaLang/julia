@@ -2,7 +2,8 @@ module Math
 
 export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot, 
-       sech, csch, coth, asech, acsch, acoth, sinc, cosc, 
+       sech, csch, coth, asech, acsch, acoth, 
+       sinpi, cospi, sinc, cosc, 
        cosd, cotd, cscd, secd, sind, tand,
        acosd, acotd, acscd, asecd, asind, atand, atan2,
        radians2degrees, degrees2radians,
@@ -32,27 +33,119 @@ clamp{T<:Real}(x::AbstractArray{T,2}, lo::Real, hi::Real) =
 clamp{T<:Real}(x::AbstractArray{T}, lo::Real, hi::Real) =
     reshape([clamp(xx, lo, hi) for xx in x], size(x))
 
-sinc(x::Number) = x==0 ? one(x)  : (pix=pi*x; oftype(x,sin(pix)/pix))
+
+function sinpi(x::Real)
+    if isinf(x)
+        return throw(DomainError())
+    elseif isnan(x)
+        return nan(x)
+    end
+
+    rx = float(rem(x,2))
+    arx = abs(rx)
+
+    if arx == 0.0
+        # return -0.0 iff x == -0.0
+        return x == 0.0 ? x : arx
+    elseif arx < 0.25
+        return sin(pi*rx)
+    elseif arx <= 0.75
+        arx = 0.5 - arx
+        return copysign(cos(pi*arx),rx)
+    elseif arx < 1.25
+        rx = copysign(1.0,rx) - rx
+        return sin(pi*rx)
+    elseif arx <= 1.75
+        arx = 1.5 - arx
+        return -copysign(cos(pi*arx),rx)
+    else
+        rx = rx - copysign(2.0,rx)
+        return sin(pi*rx)
+    end
+end
+
+function cospi(x::Real)
+    if isinf(x)
+        return throw(DomainError())
+    elseif isnan(x)
+        return nan(x)
+    end
+
+    rx = abs(float(rem(x,2)))
+
+    if rx <= 0.25
+        return cos(pi*rx)
+    elseif rx < 0.75
+        rx = 0.5 - rx
+        return sin(pi*rx)
+    elseif rx <= 1.25
+        rx = 1.0 - rx
+        return -cos(pi*rx)
+    elseif rx < 1.75
+        rx = rx - 1.5
+        return sin(pi*rx)
+    else
+        rx = 2.0 - rx
+        return cos(pi*rx)
+    end
+end
+
+sinpi(x::Integer) = zero(x)
+cospi(x::Integer) = isodd(x) ? -one(x) : one(x)
+
+function sinpi(z::Complex)
+    zr, zi = reim(z)
+    if !isfinite(zi) && zr == 0 return complex(zr, zi) end
+    if isnan(zr) && !isfinite(zi) return complex(zr, zi) end
+    if !isfinite(zr) && zi == 0 return complex(oftype(zr, NaN), zi) end
+    if !isfinite(zr) && isfinite(zi) return complex(oftype(zr, NaN), oftype(zi, NaN)) end
+    if !isfinite(zr) && !isfinite(zi) return complex(zr, oftype(zi, NaN)) end
+    pizi = pi*zi
+    complex(sinpi(zr)*cosh(pizi), cospi(zr)*sinh(pizi))
+end
+
+function cospi(z::Complex)
+    zr, zi = reim(z)
+    if !isfinite(zi) && zr == 0
+        return complex(isnan(zi) ? zi : oftype(zi, Inf),
+                       isnan(zi) ? zr : zr*-sign(zi))
+    end
+    if !isfinite(zr) && isinf(zi)
+        return complex(oftype(zr, Inf), oftype(zi, NaN))
+    end
+    if isinf(zr)
+        return complex(oftype(zr, NaN), zi==0 ? -copysign(zi, zr) : oftype(zi, NaN))
+    end
+    if isnan(zr) && zi==0 return complex(zr, abs(zi)) end
+    pizi = pi*zi
+    complex(cospi(zr)*cosh(pizi), -sinpi(zr)*sinh(pizi))
+end
+@vectorize_1arg Number sinpi
+@vectorize_1arg Number cospi
+
+
+sinc(x::Number) = x==0 ? one(x)  : oftype(x,sinpi(x)/(pi*x))
 sinc(x::Integer) = x==0 ? one(x) : zero(x)
-sinc{T<:Integer}(x::Complex{T}) = sinc(complex(float(real(x)),float(imag(x))))
+sinc{T<:Integer}(x::Complex{T}) = sinc(float(x))
 @vectorize_1arg Number sinc
-cosc(x::Number) = x==0 ? zero(x) : (pix=pi*x; oftype(x,cos(pix)/x-sin(pix)/(pix*x)))
+cosc(x::Number) = x==0 ? zero(x) : oftype(x,(cospi(x)-sinpi(x)/(pi*x))/x)
 cosc(x::Integer) = cosc(float(x))
-cosc{T<:Integer}(x::Complex{T}) = cosc(complex(float(real(x)),float(imag(x))))
+cosc{T<:Integer}(x::Complex{T}) = cosc(float(x))
 @vectorize_1arg Number cosc
 
-radians2degrees(z::Real) = oftype(z, (180/pi) * z)
-degrees2radians(z::Real) = oftype(z, (pi/180) * z)
-radians2degrees(z::Integer) = oftype(float(z), (180/pi) * z)
-degrees2radians(z::Integer) = oftype(float(z), (pi/180) * z)
+radians2degrees(z::Real) = oftype(z, 57.29577951308232*z)
+degrees2radians(z::Real) = oftype(z, 0.017453292519943295*z)
+radians2degrees(z::Integer) = radians2degrees(float(z))
+degrees2radians(z::Integer) = degrees2radians(float(z))
 
 for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
-                  (:sech, :cosh), (:csch, :sinh), (:coth, :tanh))
+                  (:sech, :cosh), (:csch, :sinh), (:coth, :tanh),
+                  (:secd, :cosd), (:cscd, :sind), (:cotd, :tand))
     @eval begin
         ($finv)(z) = 1 ./ (($f)(z))
     end
 end
-    
+
 for (fa, fainv) in ((:asec, :acos), (:acsc, :asin), (:acot, :atan),
                     (:asech, :acosh), (:acsch, :asinh), (:acoth, :atanh))
     @eval begin
@@ -60,8 +153,68 @@ for (fa, fainv) in ((:asec, :acos), (:acsc, :asin), (:acot, :atan),
     end
 end
 
-for (fd, f) in ((:sind, :sin), (:cosd, :cos), (:tand, :tan),
-                (:secd, :sec), (:cscd, :csc), (:cotd, :cot))
+function sind(x::Real)
+    if isinf(x)
+        return throw(DomainError())
+    elseif isnan(x)
+        return nan(x)
+    end
+
+    rx = rem(x,360.0)
+    arx = abs(rx)
+
+    if arx == 0.0
+        # return -0.0 iff x == -0.0
+        return x == 0.0 ? x : arx
+    elseif arx < 45.0
+        return sin(degrees2radians(rx))
+    elseif arx <= 135.0
+        arx = 90.0 - arx
+        return copysign(cos(degrees2radians(arx)),rx)
+    elseif arx < 225.0
+        rx = copysign(180.0,rx) - rx
+        return sin(degrees2radians(rx))
+    elseif arx <= 315.0
+        arx = 270.0 - arx
+        return -copysign(cos(degrees2radians(arx)),rx)
+    else
+        rx = rx - copysign(360.0,rx)
+        return sin(degrees2radians(rx))
+    end
+end
+@vectorize_1arg Real sind
+
+function cosd(x::Real)
+    if isinf(x)
+        return throw(DomainError())
+    elseif isnan(x)
+        return nan(x)
+    end
+
+    rx = abs(rem(x,360.0))
+
+    if rx <= 45.0
+        return cos(degrees2radians(rx))
+    elseif rx < 135.0
+        rx = 90.0 - rx
+        return sin(degrees2radians(rx))
+    elseif rx <= 225.0
+        rx = 180.0 - rx
+        return -cos(degrees2radians(rx))
+    elseif rx < 315.0
+        rx = rx - 270.0
+        return sin(degrees2radians(rx))
+    else
+        rx = 360.0 - rx
+        return cos(degrees2radians(rx))
+    end
+end
+@vectorize_1arg Real cosd
+
+tand(x::Real) = sind(x) / cosd(x)
+@vectorize_1arg Real tand
+
+for (fd, f) in ((:sind, :sin), (:cosd, :cos), (:tand, :tan))
     @eval begin
         ($fd)(z) = ($f)(degrees2radians(z))
     end
@@ -236,18 +389,18 @@ modf(x) = rem(x,one(x)), trunc(x)
 
 # special functions
 
-besselj0(x::Float64) = ccall((:j0,openlibm_extras),  Float64, (Float64,), x)
-besselj0(x::Float32) = ccall((:j0f,openlibm_extras), Float32, (Float32,), x)
+besselj0(x::Float64) = ccall((:j0,libm),  Float64, (Float64,), x)
+besselj0(x::Float32) = ccall((:j0f,libm), Float32, (Float32,), x)
 @vectorize_1arg Real besselj0
-besselj1(x::Float64) = ccall((:j1,openlibm_extras),  Float64, (Float64,), x)
-besselj1(x::Float32) = ccall((:j1f,openlibm_extras), Float32, (Float32,), x)
+besselj1(x::Float64) = ccall((:j1,libm),  Float64, (Float64,), x)
+besselj1(x::Float32) = ccall((:j1f,libm), Float32, (Float32,), x)
 @vectorize_1arg Real besselj1
 
-bessely0(x::Float64) = ccall((:y0,openlibm_extras),  Float64, (Float64,), x)
-bessely0(x::Float32) = ccall((:y0f,openlibm_extras), Float32, (Float32,), x)
+bessely0(x::Float64) = ccall((:y0,libm),  Float64, (Float64,), x)
+bessely0(x::Float32) = ccall((:y0f,libm), Float32, (Float32,), x)
 @vectorize_1arg Real bessely0
-bessely1(x::Float64) = ccall((:y1,openlibm_extras),  Float64, (Float64,), x)
-bessely1(x::Float32) = ccall((:y1f,openlibm_extras), Float32, (Float32,), x)
+bessely1(x::Float64) = ccall((:y1,libm),  Float64, (Float64,), x)
+bessely1(x::Float32) = ccall((:y1f,libm), Float32, (Float32,), x)
 @vectorize_1arg Real bessely1
 
 let
@@ -360,7 +513,7 @@ let
     function besselh(nu::Float64, k::Integer, z::Complex128)
         if nu < 0
             s = (k == 1) ? 1 : -1
-            return _besselh(-nu, k, z) * exp(-s*nu*im*pi)
+            return _besselh(-nu, k, z) * complex(cospi(nu),-s*sinpi(nu))
         end
         return _besselh(nu, k, z)
     end
@@ -368,7 +521,7 @@ let
     global besseli
     function besseli(nu::Float64, z::Complex128)
         if nu < 0
-            return _besseli(-nu,z) - 2_besselk(-nu,z)sin(pi*nu)/pi
+            return _besseli(-nu,z) - 2_besselk(-nu,z)*sinpi(nu)/pi
         else
             return _besseli(nu, z)
         end
@@ -377,7 +530,7 @@ let
     global besselj
     function besselj(nu::Float64, z::Complex128)
         if nu < 0
-            return _besselj(-nu,z)cos(pi*nu) + _bessely(-nu,z)sin(pi*nu)
+            return _besselj(-nu,z)cos(pi*nu) + _bessely(-nu,z)*sinpi(nu)
         else
             return _besselj(nu, z)
         end
@@ -404,7 +557,7 @@ let
     global bessely
     function bessely(nu::Float64, z::Complex128)
         if nu < 0
-            return _bessely(-nu,z)cos(pi*nu) - _besselj(-nu,z)sin(pi*nu)
+            return _bessely(-nu,z)*cospi(nu) - _besselj(-nu,z)*sinpi(nu)
         else
             return _bessely(nu, z)
         end
@@ -490,7 +643,7 @@ end
 function lgamma(z::Complex)
     if real(z) <= 0.5
         a = clgamma_lanczos(1-z)
-        b = log(sin(pi * z))
+        b = log(sinpi(z))
         logpi = 1.14472988584940017
         z = logpi - b - a
     else
@@ -565,7 +718,7 @@ function psifn(x::Float64, n::Int, kode::Int, m::Int)
 #-----------------------------------------------------------------------
 #     compute xmin and the number of terms of the series, fln+1
 #-----------------------------------------------------------------------
-    rln = r1m5 * get_precision(x)
+    rln = r1m5 * precision(x)
     rln = min(rln, 18.06)
     fln = max(rln, 3.0) - 3.0
     yint = 3.50 + 0.40*fln
@@ -896,7 +1049,7 @@ function eta(z::Union(Float64,Complex128))
         
         b = b/f/piz
         
-        return s * gamma(z) * b * cos(pi/2*z)
+        return s * gamma(z) * b * cospi(z/2)
     end
     return s
 end
@@ -912,7 +1065,7 @@ function zeta(z::Number)
 end
 @vectorize_1arg Number zeta
 
-if WORD_SIZE == 64
+@unix_only if WORD_SIZE == 64
 # TODO: complex return only on 64-bit for now
 for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
     fname = (f === :Dawson) ? :dawson : f

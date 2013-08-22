@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 #ifdef _OS_WINDOWS_
 #include <ws2tcpip.h>
@@ -109,6 +110,7 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
     va_list argp;
     va_start(argp,count);
     int i;
+    assert(val != 0);
     argv[0]=val;
     for(i=((val==0)?0:1); i<count; ++i) {
         switch(va_arg(argp,int)) {
@@ -264,6 +266,7 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
         }
 
         uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
+        req->data = 0;
         int err = uv_shutdown(req, (uv_stream_t*)handle, &jl_uv_shutdownCallback);
         if (err != 0) {
             printf("shutdown err: %s\n", uv_strerror(err));

@@ -910,8 +910,8 @@ function start_worker(out::IO)
     if !isdefined(Base,:bind_addr)
         bind_addr = getipaddr()
     end
-    default_port = uint16(9009)
-    (actual_port,sock) = open_any_tcp_port(accept_handler,default_port) 
+    (actual_port,sock) = listenany(uint16(9009))
+    sock.ccb = accept_handler
     print(out, "julia_worker:")  # print header
     print(out, "$(dec(actual_port))#") # print port
     print(out, bind_addr)      #TODO: print hostname

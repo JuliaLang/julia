@@ -14,7 +14,7 @@ function eachline(cmd::AbstractCmd,stdin)
     # implicitly close after reading lines, since we opened
     EachLine(out, ()->close(out))
 end
-eachline(cmd::AbstractCmd) = eachline(cmd,SpawnNullStream())
+eachline(cmd::AbstractCmd) = eachline(cmd,DevNull)
 
 type OrCmds <: AbstractCmd
     a::AbstractCmd
@@ -87,9 +87,23 @@ const STDERR_NO = 2
 immutable FileRedirect
     filename::String
     append::Bool
+    function FileRedirect(filename,append)
+        if lowercase(filename) == (@unix? "/dev/null" : "nul")
+            warn_once("For portability use the DevNull type instead of a file redirect!")
+        end
+        new(filename,append)
+    end
 end
 
-typealias Redirectable Union(UVStream,FS.File,FileRedirect)
+type DevNull <: AsyncStream end
+copy(::DevNull) = DevNull
+uvhandle(::DevNull) = C_NULL
+uvhandle(::Type{DevNull}) = C_NULL
+uvhandle(x::Ptr) = x
+uvtype(::Ptr) = UV_STREAM
+uvtype(::Type{DevNull}) = UV_STREAM
+
+typealias Redirectable Union(UVStream,FS.File,FileRedirect,Type{DevNull})
 
 type CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
@@ -137,8 +151,8 @@ setenv(cmd::Cmd, env::Associative) = (cmd.env = ByteString[string(k)*"="*string(
 (.>>)(src::AbstractCmd,dest::String) = CmdRedirect(src,FileRedirect(dest,true),STDERR_NO)
 
 
-typealias RawOrBoxedHandle Union(UVHandle,UVStream,FS.File,FileRedirect)
-typealias StdIOSet (RawOrBoxedHandle, RawOrBoxedHandle, RawOrBoxedHandle)
+typealias RawOrBoxedHandle Union(UVHandle,UVStream,Redirectable)
+typealias StdIOSet NTuple{3,RawOrBoxedHandle}
 
 type Process
     cmd::Cmd
@@ -153,14 +167,14 @@ type Process
     closecb::Callback
     closenotify::Condition
     function Process(cmd::Cmd,handle::Ptr{Void},in::RawOrBoxedHandle,out::RawOrBoxedHandle,err::RawOrBoxedHandle)
-        if !isa(in,AsyncStream)
-            in=null_handle
+        if !isa(in,AsyncStream) || in === DevNull
+            in=DevNull()
         end
-        if !isa(out,AsyncStream)
-            out=null_handle
+        if !isa(out,AsyncStream) || out === DevNull
+            out=DevNull()
         end
-        if !isa(err,AsyncStream)
-            err=null_handle
+        if !isa(err,AsyncStream) || err === DevNull
+            err=DevNull()
         end
         new(cmd,handle,in,out,err,typemin(Int32),typemin(Int32),false,Condition(),false,Condition())
     end
@@ -174,15 +188,6 @@ type ProcessChain
     ProcessChain(stdios::StdIOSet) = new(Process[],stdios[1],stdios[2],stdios[3])
 end
 typealias ProcessChainOrNot Union(Bool,ProcessChain)
-
-#SpawnNullStream is Singleton
-type SpawnNullStream <: AsyncStream end
-const null_handle = SpawnNullStream()
-SpawnNullStream() = null_handle
-copy(::SpawnNullStream) = null_handle
-uvhandle(::SpawnNullStream) = C_NULL
-uvhandle(x::Ptr) = x
-uvtype(::Ptr) = UV_STREAM
 
 function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::Process,
                    in, out, err)
@@ -227,7 +232,7 @@ function spawn(pc::ProcessChainOrNot,cmds::OrCmds,stdios::StdIOSet,exitcb::Callb
     in_pipe = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
     #out_pipe = c_malloc(_sizeof_uv_named_pipe)
     #in_pipe = c_malloc(_sizeof_uv_named_pipe)
-    link_pipe(in_pipe,false,out_pipe,false,null_handle,null_handle)
+    link_pipe(in_pipe,false,out_pipe,false)
     if pc == false
         pc = ProcessChain(stdios)
     end
@@ -264,7 +269,7 @@ macro setup_stdio()
             if stdios[2].handle==C_NULL
                 out = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
                 #out = c_malloc(_sizeof_uv_named_pipe)
-                link_pipe(stdios[2],false,out,true)
+                link_pipe(stdios[2],true,out,false)
                 close_out = true
             end
         elseif isa(stdios[2],FileRedirect)
@@ -275,7 +280,7 @@ macro setup_stdio()
             if stdios[3].handle==C_NULL
                 err = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
                 #err = c_malloc(_sizeof_uv_named_pipe)
-                link_pipe(stdios[3],false,err,true)
+                link_pipe(stdios[3],true,err,false)
                 close_err = true
             end
         elseif isa(stdios[3],FileRedirect)
@@ -346,13 +351,13 @@ end
 # |       \ The function to be called once the process exits
 # \ A set of up to 256 stdio instructions, where each entry can be either:
 #   | - An AsyncStream to be passed to the child
-#   | - null_handle to pass /dev/null
+#   | - DevNull() to pass /dev/null
 #   | - An FS.File object to redirect the output to
 #   \ - An ASCIIString specifying a filename to be opened
 
 spawn_opts_swallow(stdios::StdIOSet,exitcb::Callback=false,closecb::Callback=false) =
     (stdios,exitcb,closecb)
-spawn_opts_swallow(in::Redirectable=null_handle,out::Redirectable=null_handle,err::Redirectable=null_handle,args...) = 
+spawn_opts_swallow(in::Redirectable=DevNull(),out::Redirectable=DevNull(),err::Redirectable=DevNull(),args...) = 
     (tuple(in,out,err,args...),false,false)
 spawn_opts_inherit(stdios::StdIOSet,exitcb::Callback=false,closecb::Callback=false) =
     (stdios,exitcb,closecb)
@@ -362,11 +367,8 @@ spawn_opts_inherit(in::Redirectable=STDIN,out::Redirectable=STDOUT,err::Redirect
 spawn(pc::ProcessChainOrNot,cmds::AbstractCmd,args...) = spawn(pc,cmds,spawn_opts_swallow(args...)...)
 spawn(cmds::AbstractCmd,args...) = spawn(false,cmds,spawn_opts_swallow(args...)...)
 
-spawn_nostdin(pc::ProcessChainOrNot,cmd::AbstractCmd,out::UVStream) = spawn(pc,cmd,(null_handle,out,null_handle),false,false)
-spawn_nostdin(cmd::AbstractCmd,out::UVStream) = spawn(false,cmd,(null_handle,out,null_handle),false,false)
-
 #returns a pipe to read from the last command in the pipelines
-readsfrom(cmds::AbstractCmd) = readsfrom(cmds, null_handle)
+readsfrom(cmds::AbstractCmd) = readsfrom(cmds, DevNull())
 function readsfrom(cmds::AbstractCmd, stdin::AsyncStream)
     out = Pipe(C_NULL)
     processes = spawn(false, cmds, (stdin,out,STDERR))
@@ -374,10 +376,10 @@ function readsfrom(cmds::AbstractCmd, stdin::AsyncStream)
     (out, processes)
 end
 
-writesto(cmds::AbstractCmd) = writesto(cmds, null_handle)
+writesto(cmds::AbstractCmd) = writesto(cmds, DevNull())
 function writesto(cmds::AbstractCmd, stdout::UVStream)
     in = Pipe(C_NULL)
-    processes = spawn(false, cmds, (in,stdout,null_handle))
+    processes = spawn(false, cmds, (in,stdout,DevNull()))
     (in, processes)
 end
 
@@ -387,7 +389,7 @@ function readandwrite(cmds::AbstractCmd)
     return (out, in, processes)
 end
 
-readall(cmd::AbstractCmd) = readall(cmd, null_handle)
+readall(cmd::AbstractCmd) = readall(cmd, DevNull())
 function readall(cmd::AbstractCmd,stdin::AsyncStream)
     (out,pc) = readsfrom(cmd, stdin)
     if !success(pc)
@@ -397,7 +399,7 @@ function readall(cmd::AbstractCmd,stdin::AsyncStream)
     return takebuf_string(out.buffer)
 end
 
-writeall(cmd::AbstractCmd, stdin::String) = writeall(cmd, stdin, null_handle)
+writeall(cmd::AbstractCmd, stdin::String) = writeall(cmd, stdin, DevNull())
 function writeall(cmd::AbstractCmd, stdin::String, stdout::AsyncStream)
     (in,pc) = writesto(cmd, stdout)
     write(in, stdin)

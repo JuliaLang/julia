@@ -10,7 +10,7 @@ let
     serialize(f, a)
     seek(f, 0)
     @test deserialize(f) == a
-    f = IOString()
+    f = IOBuffer()
     serialize(f, a)
     seek(f, 0)
     @test deserialize(f) == a

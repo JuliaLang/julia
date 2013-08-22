@@ -19,16 +19,6 @@ function sizeof{T}(a::Array{T})
     (isbits(T) ? sizeof(eltype(a)) : sizeof(Ptr)) * length(a)
 end
 
-function stride(a::Array, i::Integer)
-    s = 1
-    if i > ndims(a)
-        return length(a)
-    end
-    for n=1:(i-1)
-        s *= size(a, n)
-    end
-    return s
-end
 strides{T}(a::Array{T,1}) = (1,)
 strides{T}(a::Array{T,2}) = (1, size(a,1))
 strides{T}(a::Array{T,3}) = (1, size(a,1), size(a,1)*size(a,2))
@@ -305,8 +295,10 @@ function getindex(A::Array, I::Range1{Int})
     return X
 end
 
-# note: this is also useful for Ranges
-function getindex{T<:Real}(A::AbstractArray, I::AbstractVector{T})
+function getindex{T<:Real}(A::Array, I::AbstractVector{T})
+    return [ A[i] for i in indices(I) ]
+end
+function getindex{T<:Real}(A::Ranges, I::AbstractVector{T})
     return [ A[i] for i in indices(I) ]
 end
 
@@ -929,7 +921,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
         end
     end
 end
-for f in (:+, :-, :.*, :./, :div, :mod, :rem, :&, :|, :$)
+for f in (:+, :-, :.*, :./, :.%, :div, :mod, :rem, :&, :|, :$)
     @eval begin
         function ($f){T}(A::Number, B::StridedArray{T})
             F = similar(B, promote_array_type(typeof(A),T))

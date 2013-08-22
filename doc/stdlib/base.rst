@@ -100,7 +100,7 @@ All Objects
 
 .. function:: is(x, y)
 
-   Determine whether ``x`` and ``y`` are identical, in the sense that no program could distinguish them.
+   Determine whether ``x`` and ``y`` are identical, in the sense that no program could distinguish them. Compares mutable objects by address in memory, and compares immutable objects (such as numbers) by contents at the bit level. This function is sometimes called ``egal``. The ``===`` operator is an alias for this function.
 
 .. function:: isa(x, type)
 
@@ -108,11 +108,12 @@ All Objects
 
 .. function:: isequal(x, y)
 
-   True if and only if ``x`` and ``y`` have the same contents. Loosely speaking, this means ``x`` and ``y`` would look the same when printed.
+   True if and only if ``x`` and ``y`` have the same contents. Loosely speaking, this means ``x`` and ``y`` would look the same when printed. This is the default comparison function used by hash tables (``Dict``).
+   New types with a notion of equality should implement this function, except for numbers, which should implement ``==`` instead. However, numeric types with special values might need to implement ``isequal`` as well. For example, floating point ``NaN`` values are not ``==``, but are all equivalent in the sense of ``isequal``.
 
 .. function:: isless(x, y)
 
-   Test whether ``x`` is less than ``y``. Provides a total order consistent with ``isequal``. Values that are normally unordered, such as ``NaN``, are ordered in an arbitrary but consistent fashion. This is the default comparison used by ``sort``. Non-numeric types that can be ordered should implement this function.
+   Test whether ``x`` is less than ``y``. Provides a total order consistent with ``isequal``. Values that are normally unordered, such as ``NaN``, are ordered in an arbitrary but consistent fashion. This is the default comparison used by ``sort``. Non-numeric types that can be ordered should implement this function. Numeric types only need to implement it if they have special values such as ``NaN``.
 
 .. function:: typeof(x)
 
@@ -933,57 +934,70 @@ Strings
 
    Gives the number of columns needed to print a string.
 
-.. function:: isalnum(c::Char)
+.. function:: isalnum(c::Union(Char,String))
 
-   Tests whether a character is alphanumeric.
+   Tests whether a character is alphanumeric, or whether this
+   is true for all elements of a string.
 
-.. function:: isalpha(c::Char)
+.. function:: isalpha(c::Union(Char,String))
 
-   Tests whether a character is alphabetic.
+   Tests whether a character is alphabetic, or whether this
+   is true for all elements of a string.
 
-.. function:: isascii(c::Char)
+.. function:: isascii(c::Union(Char,String))
 
-   Tests whether a character belongs to the ASCII character set.
+   Tests whether a character belongs to the ASCII character set, or whether this
+   is true for all elements of a string.
 
-.. function:: isblank(c::Char)
+.. function:: isblank(c::Union(Char,String))
 
-   Tests whether a character is a tab or space.
+   Tests whether a character is a tab or space, or whether this
+   is true for all elements of a string.
 
-.. function:: iscntrl(c::Char)
+.. function:: iscntrl(c::Union(Char,String))
 
-   Tests whether a character is a control character.
+   Tests whether a character is a control character, or whether this
+   is true for all elements of a string.
 
-.. function:: isdigit(c::Char)
+.. function:: isdigit(c::Union(Char,String))
 
-   Tests whether a character is a numeric digit (0-9).
+   Tests whether a character is a numeric digit (0-9), or whether this
+   is true for all elements of a string.
 
-.. function:: isgraph(c::Char)
+.. function:: isgraph(c::Union(Char,String))
 
-   Tests whether a character is printable, and not a space.
+   Tests whether a character is printable, and not a space, or whether this
+   is true for all elements of a string.
 
-.. function:: islower(c::Char)
+.. function:: islower(c::Union(Char,String))
 
-   Tests whether a character is a lowercase letter.
+   Tests whether a character is a lowercase letter, or whether this
+   is true for all elements of a string.
 
-.. function:: isprint(c::Char)
+.. function:: isprint(c::Union(Char,String))
 
-   Tests whether a character is printable, including space.
+   Tests whether a character is printable, including space, or whether this
+   is true for all elements of a string.
 
-.. function:: ispunct(c::Char)
+.. function:: ispunct(c::Union(Char,String))
 
-   Tests whether a character is printable, and not a space or alphanumeric.
+   Tests whether a character is printable, and not a space or
+   alphanumeric, or whether this is true for all elements of a string.
 
-.. function:: isspace(c::Char)
+.. function:: isspace(c::Union(Char,String))
 
-   Tests whether a character is any whitespace character.
+   Tests whether a character is any whitespace character, or whether this
+   is true for all elements of a string.
 
-.. function:: isupper(c::Char)
+.. function:: isupper(c::Union(Char,String))
 
-   Tests whether a character is an uppercase letter.
+   Tests whether a character is an uppercase letter, or whether this
+   is true for all elements of a string.
 
-.. function:: isxdigit(c::Char)
+.. function:: isxdigit(c::Union(Char,String))
 
-   Tests whether a character is a valid hexadecimal digit.
+   Tests whether a character is a valid hexadecimal digit, or whether this
+   is true for all elements of a string.
 
 .. function:: symbol(str)
 
@@ -1037,9 +1051,23 @@ I/O
 
    **Example**: ``open(readall, "file.txt")``
 
-.. function:: IOBuffer([size]) -> IOBuffer
+.. function:: IOBuffer() -> IOBuffer
 
-   Create an in-memory I/O stream, optionally specifying how much initial space is needed.
+   Create an in-memory I/O stream.
+
+.. function:: IOBuffer(size::Int)
+
+   Create a fixed size IOBuffer. The buffer will not grow dynamically.
+
+.. function:: IOBuffer(string)
+
+   Create a read-only IOBuffer on the data underlying the given string
+
+.. function:: IOBuffer([data,],[readable,writable,[maxsize]])
+
+   Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, 
+   they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable
+   but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
 
 .. function:: takebuf_array(b::IOBuffer)
 
@@ -1167,6 +1195,150 @@ I/O
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`print_escaped`.
 
+.. function:: fd(stream)
+
+   Returns the file descriptor backing the stream or file. Note that this function only applies to synchronous `File`'s and `IOStream`'s
+   not to any of the asynchronous streams.
+
+.. function:: redirect_stdout()
+
+   Create a pipe to which all C and Julia level STDOUT output will be redirected. Returns a tuple (rd,wr) 
+   representing the pipe ends. Data written to STDOUT may now be read from the rd end of the pipe. The 
+   wr end is given for convenience in case the old STDOUT object was cached by the user and needs to be
+   replaced elsewhere. 
+
+.. function:: redirect_stdout(stream)
+
+   Replace STDOUT by stream for all C and julia level output to STDOUT. Note that `stream` must be a TTY, a Pipe or a
+   TcpSocket.
+
+.. function:: redirect_stderr([stream])
+
+   Like redirect_stdout, but for STDERR
+
+.. function:: redirect_stderr([stream])
+
+   Like redirect_stdout, but for STDIN. Note that the order of the return tuple is still (rd,wr), i.e. data to be read
+   from STDIN, may be written to wr.
+
+.. function:: readchomp(x)
+
+   Read the entirety of x as a string but remove trailing newlines. Equivalent to chomp(readall(x)).
+
+.. function:: readdir([dir]) -> Vector{ByteString}
+
+   Returns the files and directories in the directory `dir` (or the current working directory if not given).
+
+.. function:: truncate(file,n)
+
+   Resize the file or buffer given by the first argument to exactly `n` bytes, filling previously unallocated space with '\0'
+   if the file or buffer is grown
+
+.. function:: skipchars(stream, predicate; linecomment::Char)
+
+   Advance the stream until before the first character for which ``predicate`` returns false. For example ``skipchars(stream, isspace)`` will skip all whitespace. If keyword argument ``linecomment`` is specified, characters from that character through the end of a line will also be skipped.
+
+.. function:: countlines(io,[eol::Char])
+
+   Read io until the end of the stream/file and count the number of non-empty lines. To specify a file pass the filename as the first
+   argument. EOL markers other than '\n' are supported by passing them as the second argument.
+
+.. function:: PipeBuffer()
+
+   An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors. 
+
+.. function:: PipeBuffer(data::Vector{Uint8},[maxsize])
+
+   Create a PipeBuffer to operate on a data vector, optionally specifying a size beyond which the underlying Array may not be grown.
+
+.. function:: readavailable(stream)
+
+   Read all available data on the stream, blocking the task only if no data is available. 
+
+.. function:: stat(file)
+
+   Returns a structure whose fields contain information about the file. The fields of the structure are:
+
+   ========= ======================================================================
+    size      The size (in bytes) of the file
+    device    ID of the device that contains the file 
+    inode     The inode number of the file
+    mode      The protection mode of the file
+    nlink     The number of hard links to the file
+    uid       The user id of the owner of the file
+    gid       The group id of the file owner
+    rdev      If this file refers to a device, the ID of the device it refers to 
+    blksize   The file-system preffered block size for the file
+    blocks    The number of such blocks allocated
+    mtime     Unix timestamp of when the file was last modified
+    ctime     Unix timestamp of when the file was created
+   ========= ======================================================================
+
+.. function:: lstat(file)
+
+   Like stat, but for symbolic links gets the info for the link itself rather than the file it refers to. This function must be called on a file path rather than a file object or a file descriptor. 
+
+.. function:: ctime(file)
+
+   Equivalent to stat(file).ctime
+
+.. function:: mtime(file)
+
+   Equivalent to stat(file).mtime
+
+.. function:: filemode(file)
+
+   Equivalent to stat(file).mode
+
+.. function:: filesize(path...)
+
+   Equivalent to stat(file).size
+
+.. function:: uperm(file)
+
+   Gets the permissions of the owner of the file as a bitfield of
+
+   ==== =====================
+    01   Execute Permission
+    02   Write Permission
+    04   Read Permission
+   ==== =====================
+
+   For allowed arguments, see the stat method.
+
+.. function:: gperm(file)
+
+   Like uperm but gets the permissions of the group owning the file
+
+.. function:: operm(file)
+
+   Like uperm but gets the permissions for people who neither own the file nor are a 
+   member of the group owning the file
+
+.. function:: cp(src::String,dst::String)
+
+   Copy a file from `src` to `dest`.
+
+.. function:: download(url,[localfile])
+
+   Download a file from the given url, optionally renaming it to the given local file name.
+   Note that this function relies on the availability of external tools such as ``curl``, 
+   ``wget`` or ``fetch`` to download the file and is provided for convenience. For production
+   use or situations in which more options are need, please use a package that provides the
+   desired functionality instead. 
+
+.. function:: mv(src::String,dst::String)
+
+   Move a file from `src` to `dst`.
+
+.. function:: rm(path::String)
+
+   Delete the file at the given path. Note that this does not work on directories.
+
+.. function:: touch(path::String)
+
+   Update the last-modified timestamp on a file to the current time.
+
 
 Network I/O
 -----------
@@ -1192,6 +1364,44 @@ Network I/O
 
    Gets the IP address of the ``host`` (may have to do a DNS lookup)
 
+.. function:: parseip(addr)
+
+   Parse a string specifying an IPv4 or IPv6 ip address. 
+
+.. function:: nb_available(stream)
+
+   Returns the number of bytes available for reading before a read from this stream or buffer will block.
+
+.. function:: accept(server[,client])
+
+   Accepts a connection on the given server and returns a connection to the client. An uninitialized client 
+   stream may be provided, in which case it will be used instead of creating a new stream.
+
+.. function:: bind(server[,addr...])
+
+   Binds a server to the given address (which may be any of the arguments accepted by listen).
+   Note that you must still call listen to be able to accept connections on this server.
+
+.. function:: listen(sever) -> PipeServer
+
+   Starts listening on a server that has been previously bound to an address by ``bind``.
+
+.. function:: listenany(port_hint) -> (Uint16,TcpServer)
+
+   Create a TcpServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server
+   was created on and the server itself. 
+
+.. function:: poll_fd(fd, seconds::Real; readable=false, writable=false)
+
+   Poll a file descriptor fd for changes in the read or write availability and with a timeout given by the second argument.
+   If the timeout is not needed, use `wait(fd)` instead. The keyword arguments determine which of read and/or write status
+   should be monitored and at least one of them needs to be set to true. The return code is 0 on timeout and an OR'd bitfield
+   of UV_READABLE and UV_WRITABLE otherwise, indicating which event was triggered. 
+
+.. function:: poll_file(s, interval_seconds::Real, seconds::Real)
+   
+   Monitor a file for changes by polling every `interval_seconds` seconds for `seconds` seconds. A return value of true indicates
+   the file changed, a return value of false indicates a timeout. 
 
 Text I/O
 --------
@@ -1240,9 +1450,9 @@ Text I/O
    Call the given function with an I/O stream and the supplied extra arguments.
    Everything written to this I/O stream is returned as a string.
 
-.. function:: showall(x)
+.. function:: showerror(io, e)
 
-   Show x, printing all elements of arrays
+   Show a descriptive representation of an exception object.
 
 .. function:: dump(x)
 
@@ -1361,7 +1571,7 @@ Julia environments (such as the IPython-based IJulia notebook).
               redisplay(mime, x)
               redisplay(d::Display, mime, x)
 
-   By default, the `redisplay` functions simply call ``display``.  However,
+   By default, the ``redisplay`` functions simply call ``display``.  However,
    some display backends may override ``redisplay`` to modify an existing
    display of ``x`` (if any).   Using ``redisplay`` is also a hint to the
    backend that ``x`` may be redisplayed several times, and the backend
@@ -1382,19 +1592,21 @@ Julia environments (such as the IPython-based IJulia notebook).
    ``stream`` (usually a memory buffer), if possible.  In order to
    provide a rich multimedia representation of a user-defined type
    ``T``, it is only necessary to define a new ``writemime`` method for
-   ``T``, via: ``writemime(stream, ::@MIME(mime), x::T) = ...``, where
+   ``T``, via: ``writemime(stream, ::MIME"mime", x::T) = ...``, where
    ``mime`` is a MIME-type string and the function body calls
    ``write`` (or similar) to write that representation of ``x`` to
-   ``stream``.
+   ``stream``. (Note that the ``MIME""`` notation only supports literal
+   strings; to construct ``MIME`` types in a more flexible manner use
+   ``MIME{symbol("")}``.)
 
    For example, if you define a ``MyImage`` type and know how to write
    it to a PNG file, you could define a function ``writemime(stream,
-   ::@MIME("image/png"), x::MyImage) = ...``` to allow your images to
+   ::MIME"image/png", x::MyImage) = ...``` to allow your images to
    be displayed on any PNG-capable ``Display`` (such as IJulia).
    As usual, be sure to ``import Base.writemime`` in order to add
    new methods to the built-in Julia function ``writemime``.
 
-   Technically, the ``@MIME(mime)`` macro defines a singleton type for
+   Technically, the ``MIME"mime"`` macro defines a singleton type for
    the given ``mime`` string, which allows us to exploit Julia's
    dispatch mechanisms in determining how to display objects of any
    given type.
@@ -1430,14 +1642,14 @@ Julia environments (such as the IPython-based IJulia notebook).
 
 As mentioned above, one can also define new display backends. For
 example, a module that can display PNG images in a window can register
-this capability with Julia, so that calling `display(x)` on types
+this capability with Julia, so that calling ``display(x)`` on types
 with PNG representations will automatically display the image using
 the module's window.
 
 In order to define a new display backend, one should first create a
 subtype ``D`` of the abstract class ``Display``.  Then, for each MIME
 type (``mime`` string) that can be displayed on ``D``, one should
-define a function ``display(d::D, ::@MIME(mime), x) = ...`` that
+define a function ``display(d::D, ::MIME"mime", x) = ...`` that
 displays ``x`` as that MIME type, usually by calling ``reprmime(mime,
 x)``.  A ``MethodError`` should be thrown if ``x`` cannot be displayed
 as that MIME type; this is automatic if one calls ``reprmime``.
@@ -1677,12 +1889,15 @@ Mathematical Operators
 .. _==:
 .. function:: ==(x, y)
 
-   Equality comparison operator.
+   Numeric equality operator. Compares numbers and number-like values (e.g. arrays) by numeric value. True for numbers of different types that represent the same value (e.g. ``2`` and ``2.0``). Follows IEEE semantics for floating-point numbers.
+   New numeric types should implement this function for two arguments of the new type.
 
 .. _!=:
 .. function:: !=(x, y)
 
-   Not-equals comparison operator.
+   Not-equals comparison operator. Always gives the opposite answer as ``==``.
+   New types should generally not implement this, and rely on the fallback
+   definition ``!=(x,y) = !(x==y)`` instead.
 
 .. _===:
 .. function:: ===(x, y)
@@ -1697,7 +1912,8 @@ Mathematical Operators
 .. _<:
 .. function:: <(x, y)
 
-   Less-than comparison operator.
+   Less-than comparison operator. New numeric types should implement this function
+   for two arguments of the new type.
 
 .. _<=:
 .. function:: <=(x, y)
@@ -1707,7 +1923,8 @@ Mathematical Operators
 .. _>:
 .. function:: >(x, y)
 
-   Greater-than comparison operator.
+   Greater-than comparison operator. Generally, new types should implement ``<``
+   instead of this function, and rely on the fallback definition ``>(x,y) = y<x``.
 
 .. _>=:
 .. function:: >=(x, y)
@@ -1898,6 +2115,14 @@ Mathematical Functions
 .. function:: tand(x)
 
    Compute tangent of ``x``, where ``x`` is in degrees
+
+.. function:: sinpi(x)
+
+   Compute :math:`\sin(\pi x)` more accurately than ``sin(pi*x)``, especially for large ``x``.
+
+.. function:: cospi(x)
+
+   Compute :math:`\cos(\pi x)` more accurately than ``cos(pi*x)``, especially for large ``x``.
 
 .. function:: sinh(x)
 
@@ -2737,6 +2962,42 @@ Integers
 
    **Example**: ``iseven(1) -> false``
 
+BigFloats
+---------
+The `BigFloat` type implements arbitrary-precision floating-point aritmetic using the `GNU MPFR library <http://www.mpfr.org/>`_.
+
+.. function:: precision(num::FloatingPoint)
+
+   Get the precision of a floating point number, as defined by the effective number of bits in the mantissa.
+
+.. function:: get_bigfloat_precision()
+
+   Get the precision (in bits) currently used for BigFloat arithmetic.
+
+.. function:: set_bigfloat_precision(x::Int64)
+
+   Set the precision (in bits) to be used to BigFloat arithmetic.
+
+.. function:: with_bigfloat_precision(f::Function,precision::Integer)
+
+   Change the BigFloat arithmetic precision (in bits) for the duration of ``f``. It is logically equivalent to::
+
+       old = get_bigfloat_precision()
+       set_bigfloat_precision(precision)
+       f()
+       set_bigfloat_precision(old)
+
+.. function:: get_bigfloat_rounding()
+
+   Get the current BigFloat rounding mode. Valid modes are ``RoundToNearest``, ``RoundToZero``, ``RoundUp``, ``RoundDown``, ``RoundAwayZero``
+
+.. function:: set_bigfloat_rounding(mode)
+
+   Set the BigFloat rounding mode. See get_bigfloat_rounding for available modes
+
+.. function:: with_bigfloat_rounding(f::Function,mode)
+
+   Change the BigFloat rounding mode for the duration of ``f``. See ``get_bigfloat_rounding`` for available rounding modes; see also ``with_bigfloat_precision``.
 
 Random Numbers
 --------------
@@ -2786,6 +3047,10 @@ Random number generateion in Julia uses the `Mersenne Twister library <http://ww
 .. function:: randn(dims or [dims...])
 
    Generate a normally-distributed random number with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers.
+
+.. function:: randn!(A::Array{Float64,N})
+
+   Fill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.
 
 .. function:: randsym(n)
 
@@ -3700,9 +3965,15 @@ Parallel Computing
 
    Get the id of the current processor.
 
-.. function:: pmap(f, c)
+.. function:: pmap(f, lsts...; err_retry=true, err_stop=false)
 
-   Transform collection ``c`` by applying ``f`` to each element in parallel. If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks. All other available processes will be used as parallel workers.
+   Transform collections ``lsts`` by applying ``f`` to each element in parallel. 
+   If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks. 
+   All other available processes will be used as parallel workers.
+   
+   If ``err_retry`` is true, it retries a failed application of ``f`` on a different worker.
+   If ``err_stop`` is true, it takes precedence over the value of ``err_retry`` and ``pmap`` stops execution on the first error.
+   
 
 .. function:: remotecall(id, func, args...)
 
@@ -3720,6 +3991,8 @@ Parallel Computing
    * ``Process``: Wait for a process or process chain to exit. The ``exitcode`` field of a process can be used to determine success or failure.
 
    * ``Task``: Wait for a ``Task`` to finish, returning its result value.
+
+   * ``RawFD``: Wait for changes on a file descriptor (see `poll_fd` for keyword arguments and return code)
 
 .. function:: fetch(RemoteRef)
 
@@ -3839,6 +4112,11 @@ System
 .. function:: spawn(command)
 
    Run a command object asynchronously, returning the resulting ``Process`` object.
+
+.. function:: DevNull()
+
+   Used in a stream redirect to discard all data written to it. Essentially equivalent to /dev/null on Unix or NUL on Windows.
+   Usage: run(`cat test.txt` |> DevNull)
 
 .. function:: success(command)
 
@@ -4494,3 +4772,7 @@ Internals
 .. function:: code_native(f, types)
 
    Prints the native assembly instructions generated for running the method matching the given generic function and type signature to STDOUT.
+
+.. function:: precompile(f,args::(Any...,))
+
+   Compile the given function `f` for the argument tuple (of types) `args`, but do not execute it. 

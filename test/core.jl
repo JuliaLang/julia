@@ -47,6 +47,8 @@ let T = TypeVar(:T,true)
     f47{T}(x::Vector{Vector{T}}) = 0
     @test_throws f47(Array(Vector,0))
     @test f47(Array(Vector{Int},0)) == 0
+    @test typeintersect((T,T), (Union(Float64,Int64),Int64)) == (Int64,Int64)
+    @test typeintersect((T,T), (Int64,Union(Float64,Int64))) == (Int64,Int64)
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
@@ -367,15 +369,15 @@ begin
     a = Array(Float64,1)
     @test isdefined(a,1)
     @test isdefined(a)
-    @test_throws isdefined(a,2)
+    @test !isdefined(a,2)
 
     @test isdefined("a",:data)
     a = UndefField()
     @test !isdefined(a, :field)
-    @test_throws isdefined(a, :foo)
+    @test !isdefined(a, :foo)
+    @test !isdefined(2, :a)
 
     @test_throws isdefined(2)
-    @test_throws isdefined(2, :a)
     @test_throws isdefined("a", 2)
 end
 
@@ -911,6 +913,27 @@ function foo4075(f::Foo4075, s::Symbol)
     x
 end
 
-@test isa(foo4075(Foo4075(1,2.0),:y), Float64)
+@test isa(foo4075(Foo4075(int64(1),2.0),:y), Float64)
 # very likely to segfault the second time if this is broken
-@test isa(foo4075(Foo4075(1,2.0),:y), Float64)
+@test isa(foo4075(Foo4075(int64(1),2.0),:y), Float64)
+
+# issue #3167
+function foo(x)
+    ret=Array(typeof(x[1]), length(x))
+    for j = 1:length(x)
+        ret[j] = x[j]
+    end
+    return ret
+end
+x = Array(Union(Dict{Int64,String},Array{Int64,3},Number,String,Nothing), 3)
+x[1] = 1.0
+x[2] = 2.0
+x[3] = 3.0
+foo(x) == [1.0, 2.0, 3.0]
+
+# issue #4115
+type Foo4115
+end
+typealias Foo4115s NTuple{3,Union(Foo4115,Type{Foo4115})}
+baz4115(x::Foo4115s) = x
+@test baz4115((Foo4115,Foo4115,Foo4115())) === (Foo4115,Foo4115,Foo4115())

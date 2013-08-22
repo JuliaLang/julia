@@ -934,12 +934,13 @@ ifeq ($(USE_BLAS64), 1)
 ARPACK_FFLAGS += -fdefault-integer-8
 endif
 
-ARPACK_OBJ_TARGET = $(BUILD)/lib/libarpack.$(SHLIB_EXT)
 ifeq ($(OS),WINNT)
-ARPACK_OBJ_SOURCE = arpack-ng-$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
+ARPACK_OBJ_SOURCE = arpack-ng-$(ARPACK_VER)/.libs/libarpack-2.$(SHLIB_EXT)
 else
 ARPACK_OBJ_SOURCE = arpack-ng-$(ARPACK_VER)/.libs/libarpack.$(SHLIB_EXT)
 endif
+ARPACK_OBJ_TARGET = $(BUILD)/lib/libarpack.$(SHLIB_EXT)
+
 ARPACK_MFLAGS = F77="$(FC)" MPIF77="$(FC)"
 ARPACK_OPTS = $(FFLAGS) $(JFFLAGS)
 ARPACK_FLAGS = --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)"
@@ -965,44 +966,29 @@ arpack-ng-$(ARPACK_VER)/config.status: | $(LAPACK_OBJ_SOURCE)
 endif
 
 arpack-ng-$(ARPACK_VER)/config.status: arpack-ng-$(ARPACK_VER)/configure
-ifeq ($(OS),WINNT)
-	cd arpack-ng-$(ARPACK_VER) && \
-	rm -f UTIL/second_NONE.f
-	echo 1 > $@
-else
 	cd arpack-ng-$(ARPACK_VER) && \
 	./configure $(CONFIGURE_COMMON) $(ARPACK_FLAGS)
-endif
 	touch -c $@
 $(ARPACK_OBJ_SOURCE): arpack-ng-$(ARPACK_VER)/config.status
-ifeq ($(OS),WINNT)
-	cd arpack-ng-$(ARPACK_VER) && \
-	$(FC) -shared $(ARPACK_OPTS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o libarpack.$(SHLIB_EXT)
-else
 	cd arpack-ng-$(ARPACK_VER) && \
 	$(MAKE) $(ARPACK_MFLAGS)
-endif
 	touch -c $@
 arpack-ng-$(ARPACK_VER)/checked: $(ARPACK_OBJ_SOURCE)
-ifneq ($(OS),WINNT)
 	cd arpack-ng-$(ARPACK_VER) && \
 	$(MAKE) check $(ARPACK_MFLAGS) && \
-	cd TESTS && ./dnsimp
-endif
+	cd TESTS && $(call spawn,./dnsimp$(EXE))
 	echo 1 > $@
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) arpack-ng-$(ARPACK_VER)/checked | $(BUILD)/lib
-ifeq ($(OS),WINNT)
-	cd arpack-ng-$(ARPACK_VER) && \
-	cp libarpack.$(SHLIB_EXT) $(BUILD)/lib/libarpack.$(SHLIB_EXT)
-else
 	cd arpack-ng-$(ARPACK_VER) && \
 	$(MAKE) install $(ARPACK_MFLAGS)
+ifeq ($(OS), WINNT)
+	mv $(BUILD)/bin/libarpack-2.dll $@
+endif
 	$(INSTALL_NAME_CMD)libarpack.$(SHLIB_EXT) $(BUILD)/lib/libarpack.$(SHLIB_EXT)
 ifeq ($(OS), Linux)
 	for filename in $(BUILD)/lib/libarpack.so* ; do \
 		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
 	done
-endif
 endif
 	touch -c $@
 
