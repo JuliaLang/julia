@@ -1561,7 +1561,7 @@
                          (ncols (length a)))
                      `(block
                        (if (call (top !) (call (top isa) ,t Type))
-                           (call error "invalid array index"))
+                           (call (top error) "invalid array index"))
                        (= ,result (call (top Array) ,t 1 ,ncols))
                        ,@(map (lambda (x i) `(call (top setindex!) ,result ,x ,i))
                               a (cdr (iota (+ ncols 1))))
@@ -1577,7 +1577,7 @@
                (error "invalid array literal")
                `(block
                  (if (call (top !) (call (top isa) ,t Type))
-                     (call error "invalid array index"))
+                     (call (top error) "invalid array index"))
                  (= ,result (call (top Array) ,t ,nrows ,ncols))
                  ,@(apply nconc
                      (map
