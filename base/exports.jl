@@ -1199,6 +1199,7 @@ export
     readandwrite,
     readsfrom,
     run,
+    setenv,
     spawn,
     success,
     writesto,
