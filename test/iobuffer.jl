@@ -1,6 +1,6 @@
-ioslength(io::IOString) = (io.seekable ? io.size : nb_available(io))
+ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 
-let io = IOString()
+let io = IOBuffer()
 @assert eof(io)
 @assert try read(io,Uint8); false; catch e; isa(e,EOFError); end
 @assert write(io,"abc") == 3
@@ -40,7 +40,7 @@ close(io)
 @assert eof(io)
 end
 
-let io = IOString("hamster\nguinea pig\nturtle")
+let io = IOBuffer("hamster\nguinea pig\nturtle")
 @assert position(io) == 0
 @assert readline(io) == "hamster\n"
 @assert readall(io) == "guinea pig\nturtle"
@@ -55,7 +55,7 @@ let io = IOString("hamster\nguinea pig\nturtle")
 close(io)
 end
 
-let io = PipeString()
+let io = PipeBuffer()
 @assert try read(io,Uint8); false; catch e; isa(e,EOFError); end
 @assert write(io,"pancakes\nwaffles\nblueberries\n") > 0
 @assert position(io) == 0
