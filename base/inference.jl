@@ -118,7 +118,7 @@ t_func[eval(Core.Intrinsics,:cglobal)] =
     (1, 2, (fptr, t...)->(isempty(t) ? Ptr{Void} :
                           isType(t[1]) ? Ptr{t[1].parameters[1]} : Ptr))
 t_func[is] = (2, 2, cmp_tfunc)
-t_func[subtype] = (2, 2, cmp_tfunc)
+t_func[issubtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
 t_func[isdefined] = (1, 2, (args...)->Bool)
 t_func[Union] = (0, Inf,
@@ -131,7 +131,7 @@ t_func[method_exists] = (2, 2, cmp_tfunc)
 t_func[applicable] = (1, Inf, (f, args...)->Bool)
 t_func[tuplelen] = (1, 1, x->Int)
 t_func[arraylen] = (1, 1, x->Int)
-#t_func[arrayref] = (2,Inf,(a,i...)->(isa(a,DataType) && subtype(a,Array) ?
+#t_func[arrayref] = (2,Inf,(a,i...)->(isa(a,DataType) && issubtype(a,Array) ?
 #                                     a.parameters[1] : Any))
 #t_func[arrayset] = (3, Inf, (a,v,i...)->a)
 #arraysize_tfunc(a, d) = Int
@@ -139,7 +139,7 @@ arraysize_tfunc = function (a, d...)
     if !is(d,())
         return Int
     end
-    if isa(a,DataType) && subtype(a,Array)
+    if isa(a,DataType) && issubtype(a,Array)
         N = a.parameters[2]
         return isa(N,Int) ? NTuple{N,Int} : (Int...)
     else
@@ -147,7 +147,7 @@ arraysize_tfunc = function (a, d...)
     end
 end
 t_func[arraysize] = (1, 2, arraysize_tfunc)
-t_func[pointerref] = (2,2,(a,i)->(isa(a,DataType)&&subtype(a,Ptr) ? a.parameters[1] : Any))
+t_func[pointerref] = (2,2,(a,i)->(isa(a,DataType) && issubtype(a,Ptr) ? a.parameters[1] : Any))
 t_func[pointerset] = (3, 3, (a,v,i)->a)
 
 function static_convert(to::ANY, from::ANY)
@@ -155,7 +155,7 @@ function static_convert(to::ANY, from::ANY)
         if isa(to,TypeVar)
             return to
         end
-        if subtype(from, to)
+        if issubtype(from, to)
             return from
         end
         t = typeintersect(from,to)
@@ -379,7 +379,7 @@ function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
             return None
         end
         a = argtypes[1]
-        return (isa(a,DataType) && subtype(a,Array) ?
+        return (isa(a,DataType) && issubtype(a,Array) ?
                 a.parameters[1] : Any)
     elseif is(f,Expr)
         if length(argtypes) < 1
@@ -773,7 +773,7 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
         t0 = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
         t = typeintersect(t0, Any)
-        if is(t,None) && subtype(Undef,t0)
+        if is(t,None) && issubtype(Undef,t0)
             # the first time we see this statement the variable will probably
             # be Undef; return None so this doesn't contribute to the type
             # we eventually pick.
@@ -914,7 +914,7 @@ function abstract_interpret(e::Expr, vtypes, sv::StaticVarInfo)
     return vtypes
 end
 
-tchanged(n::ANY, o::ANY) = is(o,NF) || (!is(n,NF) && !subtype(n,o))
+tchanged(n::ANY, o::ANY) = is(o,NF) || (!is(n,NF) && !issubtype(n,o))
 
 function stchanged(new::Union(StateUpdate,VarTable), old, vars)
     if is(old,())
@@ -959,17 +959,17 @@ function tmerge(typea::ANY, typeb::ANY)
     if is(typeb,NF)
         return typea
     end
-    if subtype(typea,typeb)
+    if issubtype(typea,typeb)
         return typeb
     end
-    if subtype(typeb,typea)
+    if issubtype(typeb,typea)
         return typea
     end
     u = Union(typea, typeb)
     if length(u.types) > MAX_TYPEUNION_LEN || type_too_complex(u, 0)
         # don't let type unions get too big
         # TODO: something smarter, like a common supertype
-        return subtype(Undef,u) ? Top : Any
+        return issubtype(Undef,u) ? Top : Any
     end
     return u
 end
@@ -1244,7 +1244,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                         # type_goto provides a special update rule for the
                         # listed vars: it feeds types directly to the
                         # target statement as long as they are *different*,
-                        # not !subtype like usual. this is because we want
+                        # not !issubtype like usual. this is because we want
                         # the specific type inferred at the point of the
                         # type_goto, not just any type containing it.
                         # Otherwise "None" doesn't work; see issue #3821
@@ -1370,7 +1370,7 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo)
         e = e::SymbolNode
         curtype = e.typ
         t = abstract_eval(e.name, vtypes, sv)
-        if !subtype(curtype, t) || typeseq(curtype, t)
+        if !issubtype(curtype, t) || typeseq(curtype, t)
             record_var_type(e.name, t, decls)
             e.typ = t
         end
@@ -1658,7 +1658,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     if is(f, convert_default) && length(atypes)==3
         # builtin case of convert. convert(T,x::S) => x, when S<:T
         if isType(atypes[1]) && isleaftype(atypes[1]) &&
-            subtype(atypes[2],atypes[1].parameters[1])
+            issubtype(atypes[2],atypes[1].parameters[1])
             # todo: if T expression has side effects??!
             return (e.args[3],())
         end
@@ -1699,7 +1699,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     # when 1 method matches the inferred types, there is still a chance
     # of a no-method error at run time, unless the inferred types are a
     # subset of the method signature.
-    if !subtype(atypes, meth[1])
+    if !issubtype(atypes, meth[1])
         return NF
     end
     linfo = meth[3].func.code
