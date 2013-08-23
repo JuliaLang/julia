@@ -15,7 +15,7 @@ import
         exp, exp2, exponent, factorial, floor, hypot, isinteger, iround,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, radians2degrees, rem, round, show,
-        showcompact, sum, sqrt, string, trunc, precision, exp10, expm1,
+        showcompact, sum, sqrt, string, print, trunc, precision, exp10, expm1,
         gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
@@ -666,6 +666,8 @@ function prevfloat(x::BigFloat)
     return z
 end
 
+eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
+
 function with_bigfloat_precision(f::Function, precision::Integer)
     old_precision = get_bigfloat_precision()
     set_bigfloat_precision(precision)
@@ -707,9 +709,8 @@ function string(x::BigFloat)
     end
 end
 
-eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
-
-show(io::IO, b::BigFloat) = print(io, string(b) * " with $(precision(b)) bits of precision")
+print(io::IO, b::BigFloat) = print(io, string(b))
+show(io::IO, b::BigFloat) = print(io, string(b), " with $(precision(b)) bits of precision")
 showcompact(io::IO, b::BigFloat) = print(io, string(b))
 
 end #module
