@@ -477,16 +477,18 @@ const limit_tuple_depth_ = function (t,d::Int)
     map(x->limit_tuple_depth_(x,d+1), t)
 end
 
-const limit_tuple_type = function (t::Tuple)
+limit_tuple_type = t -> limit_tuple_type_n(t, MAX_TUPLETYPE_LEN)
+
+const limit_tuple_type_n = function (t::Tuple, lim::Int)
     n = length(t)
-    if n > MAX_TUPLETYPE_LEN
+    if n > lim
         last = t[n]
         if isvarargtype(last)
             last = last.parameters[1]
         end
-        tail = tuple(t[MAX_TUPLETYPE_LEN:(n-1)]..., last)
+        tail = tuple(t[lim:(n-1)]..., last)
         tail = typeintersect(reduce(tmerge, None, tail), Any)
-        return tuple(t[1:(MAX_TUPLETYPE_LEN-1)]..., Vararg{tail})
+        return tuple(t[1:(lim-1)]..., Vararg{tail})
     end
     return t
 end
@@ -561,8 +563,16 @@ function abstract_call_gf(f, fargs, argtypes, e)
     end
     for (m::Tuple) in x
         linfo = m[3].func.code
+        sig = m[1]
+        lsig = length(m[3].sig)
+        # limit argument type tuple based on size of definition signature.
+        # for example, given function f(T, Any...), limit to 3 arguments
+        # instead of the default (MAX_TUPLETYPE_LEN)
+        if length(sig) > lsig+1
+            sig = limit_tuple_type_n(sig, lsig+1)
+        end
         #print(m,"\n")
-        (_tree,rt) = typeinf(linfo, m[1], m[2], linfo)
+        (_tree,rt) = typeinf(linfo, sig, m[2], linfo)
         rettype = tmerge(rettype, rt)
         if is(rettype,Any)
             break
