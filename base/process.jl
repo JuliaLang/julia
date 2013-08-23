@@ -1,11 +1,11 @@
 abstract AbstractCmd
 
 type Cmd <: AbstractCmd
-    exec::Executable
+    exec::Vector{ByteString}
     ignorestatus::Bool
     detach::Bool
     env::Union(Array{ByteString},Nothing)
-    Cmd(exec::Executable) = new(exec,false,false,nothing)
+    Cmd(exec::Vector{ByteString}) = new(exec,false,false,nothing)
 end
 
 function eachline(cmd::AbstractCmd,stdin)
