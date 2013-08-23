@@ -937,3 +937,26 @@ end
 typealias Foo4115s NTuple{3,Union(Foo4115,Type{Foo4115})}
 baz4115(x::Foo4115s) = x
 @test baz4115((Foo4115,Foo4115,Foo4115())) === (Foo4115,Foo4115,Foo4115())
+
+# issue #4129
+type Foo4129; end
+
+abstract Bar4129
+
+type Bar41291 <: Bar4129
+    f::Foo4129
+end
+type Bar41292 <: Bar4129
+    f::Foo4129
+end
+
+type Baz4129
+    b::Bar4129
+end
+
+foo4129(a::Baz4129,c::Foo4129,b::Bar4129,x::ANY,y) = (a,b,c,x,y)
+foo4129(a::Baz4129,b::Bar41291,args...) = foo4129(a,b.f,b,args...)
+foo4129(a::Baz4129,b::Bar41292,args...) = foo4129(a,b.f,b,args...)
+foo4129(a::Baz4129,args...)         = foo4129(a,a.b,args...)
+
+@test isa(foo4129(Baz4129(Bar41291(Foo4129())),1,2), (Baz4129,Bar4129,Foo4129,Int,Int))
