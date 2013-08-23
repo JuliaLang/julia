@@ -19,7 +19,7 @@ import
         gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        serialize, deserialize
+        serialize, deserialize, inf, nan
 
 import Base.Math.lgamma_r
 
@@ -641,7 +641,6 @@ end
 
 iround(x::BigFloat) = itrunc(round(x))
 
-isfinite(x::BigFloat) = !isinf(x)
 function isinf(x::BigFloat)
     return ccall((:mpfr_inf_p, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 end
@@ -649,6 +648,11 @@ end
 function isnan(x::BigFloat)
     return ccall((:mpfr_nan_p, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 end
+
+isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
+
+@eval inf(::Type{BigFloat}) = $(BigFloat(Inf))
+@eval nan(::Type{BigFloat}) = $(BigFloat(NaN))
 
 function nextfloat(x::BigFloat)
     z = BigFloat()
