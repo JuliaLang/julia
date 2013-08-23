@@ -22,9 +22,8 @@ isequal(x,y) = is(x,y)
 .> (x,y) = y.<x
 .>=(x,y) = y.<=x
 
-# these definitions allow Number types to implement
-# == and < instead of isequal and isless, which is more idiomatic:
-isequal(x::Number, y::Number) = x==y
+# this definition allows Number types to implement < instead of isless,
+# which is more idiomatic:
 isless(x::Real, y::Real) = x<y
 
 max(x,y) = y < x ? x : y

@@ -45,7 +45,7 @@ s4 = 4
 
 b1 = randbool(n1, n2)
 @test isequal(bitpack(bitunpack(b1)), b1)
-i1 = rand(1:2, n1, n2) - 1
+i1 = rand(false:true, n1, n2)
 @test isequal(bitunpack(bitpack(i1)), i1)
 
 timesofar("conversions")

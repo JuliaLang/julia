@@ -218,28 +218,13 @@ function hash(x::Integer)
     return h
 end
 
-@eval function hash(x::FloatingPoint)
-    if trunc(x) == x
-        # hash as integer if equal to some integer. note the result of
-        # float to int conversion is only defined for in-range values.
-        if x < 0
-            if $(float64(typemin(Int64))) <= x
-                return hash(int64(x))
-            end
-        else
-            # note: float64(typemax(Uint64)) == 2^64
-            if x < $(float64(typemax(Uint64)))
-                return hash(uint64(x))
-            end
-        end
-    end
-    isnan(x) ? $(hash64(NaN)) : hash64(float64(x))
-end
+hash(x::Float32) = hash(reinterpret(Uint32, isnan(x) ? NaN32 : x))
+hash(x::Float64) = hash(reinterpret(Uint64, isnan(x) ? NaN   : x))
 
 function hash(t::Tuple)
     h = int(0)
     for i=1:length(t)
-        h = bitmix(h,int(hash(t[i])))
+        h = bitmix(h,int(hash(t[i]))+42)
     end
     return uint(h)
 end
@@ -251,6 +236,9 @@ function hash(a::Array)
     end
     return uint(h)
 end
+
+# make sure Array{Bool} and BitArray can be equivalent
+hash(a::Array{Bool}) = hash(bitpack(a))
 
 hash(x::ANY) = object_id(x)
 
@@ -267,6 +255,8 @@ else
         ccall(:memhash32_seed, Uint32, (Ptr{Void}, Int, Uint32),
               s.data, length(s.data), uint32(seed))
 end
+
+hash(s::String) = hash(bytestring(s))
 
 
 # dict

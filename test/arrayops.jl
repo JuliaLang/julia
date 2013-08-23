@@ -200,8 +200,8 @@ v = pop!(l)
 @test length(l)==2
 
 # concatenation
-@test isequal([ones(2,2)  2*ones(2,1)], [1 1 2; 1 1 2])
-@test isequal([ones(2,2), 2*ones(1,2)], [1 1; 1 1; 2 2])
+@test isequal([ones(2,2)  2*ones(2,1)], [1. 1 2; 1 1 2])
+@test isequal([ones(2,2), 2*ones(1,2)], [1. 1; 1 1; 2 2])
 
 # typed array literals
 X = Float64[1 2 3]

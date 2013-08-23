@@ -286,8 +286,6 @@ end
 isequal(a::String, b::String) = cmp(a,b) == 0
 isless(a::String, b::String)  = cmp(a,b) <  0
 
-hash(s::String) = hash(bytestring(s))
-
 # begins with and ends with predicates
 
 function beginswith(a::String, b::String)

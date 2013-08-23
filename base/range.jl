@@ -150,9 +150,6 @@ done(r::Ranges, i) = (length(r) <= i)
 
 ==(r::Ranges, s::Ranges) = (r.start==s.start) & (step(r)==step(s)) & (r.len==s.len)
 ==(r::Range1, s::Range1) = (r.start==s.start) & (r.len==s.len)
-isequal(r::Ranges, s::Ranges) =
-    isequal(r.start,s.start) & isequal(step(r),step(s)) & (r.len==s.len)
-isequal(r::Range1, s::Range1) = isequal(r.start,s.start) & (r.len==s.len)
 
 # TODO: isless?
 

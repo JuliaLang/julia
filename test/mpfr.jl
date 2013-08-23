@@ -377,7 +377,7 @@ with_bigfloat_precision(53) do
         end
     end
     for f in (:sin,:cos,:tan,:sec,:csc,:cot,:cosh,:sinh,:tanh,
-            :sech,:csch,:coth,:acosh,:asinh),
+              :sech,:csch,:coth,:acosh,:asinh),
         j in (1., 1.5, 1.9)
         @eval begin
             @test_approx_eq ($f)(BigFloat($j)) ($f)($j)
@@ -393,7 +393,7 @@ end
 
 # atan2
 with_bigfloat_precision(53) do
-    @test isequal(atan2(12,2), atan2(BigFloat(12), BigFloat(2)))
+    @test atan2(12,2) == atan2(BigFloat(12), BigFloat(2))
 end
 
 # ldexp
