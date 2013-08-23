@@ -563,6 +563,7 @@ DLLEXPORT kern_return_t catch_exception_raise
     //memset(&state,0,sizeof(x86_thread_state64_t));
     //memset(&exc_state,0,sizeof(x86_exception_state64_t));
     ret = thread_get_state(thread,x86_EXCEPTION_STATE64,(thread_state_t)&exc_state,&exc_count);
+    HANDLE_MACH_ERROR("thread_get_state(1)",ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
     if (
 #ifdef COPY_STACKS
@@ -576,7 +577,7 @@ DLLEXPORT kern_return_t catch_exception_raise
         ) 
     {
         ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
-        HANDLE_MACH_ERROR("thread_get_state",ret);
+        HANDLE_MACH_ERROR("thread_get_state(2)",ret);
         old_state = state;
         // memset(&state,0,sizeof(x86_thread_state64_t));
         // Setup libunwind information

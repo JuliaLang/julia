@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stddef.h>
+#include <stdio.h>
 #include "julia.h"
 
 static volatile ptrint_t* bt_data_prof = NULL;
@@ -81,9 +82,144 @@ DLLEXPORT void profile_stop_timer(void) {
 }
 #else
 #include <signal.h>
-#if defined (__APPLE__) || defined(__FreeBSD___)
+#if defined (__APPLE__) 
 //
-// BSD/OSX
+// OS X
+//
+#include <mach/mach_traps.h>
+#include <mach/task.h>
+#include <mach/mig_errors.h>
+#include <mach/clock.h>
+#include <mach/clock_types.h>
+#include <mach/clock_reply.h>
+
+#define HANDLE_MACH_ERROR(msg, retval) \
+    if (retval!=KERN_SUCCESS) { mach_error(msg ":", (retval)); jl_exit(1); }
+
+static pthread_t profiler_thread;
+static mach_port_t main_thread;
+clock_serv_t clk;
+static int profile_started = 0;
+static mach_port_t profile_port = 0;
+volatile static int running = 0;
+mach_timespec_t timerprof;
+
+kern_return_t clock_alarm_reply
+(
+    clock_reply_t alarm_port,
+    mach_msg_type_name_t alarm_portPoly,
+    kern_return_t alarm_code,
+    alarm_type_t alarm_type,
+    mach_timespec_t alarm_time
+)
+{
+    HANDLE_MACH_ERROR("clock_alarm_reply",alarm_code);
+    
+
+
+    return KERN_SUCCESS;
+}
+
+extern boolean_t clock_alarm_reply_server(mach_msg_header_t *, mach_msg_header_t *);
+
+void * mach_profile_listener(void *arg)
+{
+    (void) arg;
+    int max_size = 512;
+    mig_reply_error_t *bufRequest = (mig_reply_error_t *) malloc(max_size);
+    while (1) {
+        kern_return_t ret = mach_msg(&bufRequest->Head, MACH_RCV_MSG,
+              0, max_size, profile_port,
+              MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
+        HANDLE_MACH_ERROR("mach_msg",ret)
+        if (bt_size_cur < bt_size_max) {
+            kern_return_t ret;
+            // Suspend the thread so we may safely sample it
+            ret = thread_suspend(main_thread);
+            HANDLE_MACH_ERROR("thread_suspend",ret);
+
+            // Do the actual sampling
+            unsigned int count = MACHINE_THREAD_STATE_COUNT;
+            x86_thread_state64_t state;
+
+            // Get the state of the suspended thread
+            ret = thread_get_state(main_thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
+            HANDLE_MACH_ERROR("thread_get_state",ret);
+
+            // Initialize the unwind context with the suspend thread's state
+            unw_context_t uc; 
+            memset(&uc,0,sizeof(unw_context_t));
+            memcpy(&uc,&state,sizeof(x86_thread_state64_t));
+
+            // Save the backtrace
+            bt_size_cur += rec_backtrace_ctx((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &uc);
+            // Mark the end of this block with 0
+            bt_data_prof[bt_size_cur] = 0;
+            bt_size_cur++;
+
+            // We're done! Resume the thread. 
+            thread_resume(main_thread);
+            HANDLE_MACH_ERROR("thread_resume",ret)
+
+            if (running) {
+                // Reset the alarm
+                ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
+                HANDLE_MACH_ERROR("clock_alarm",ret)
+            }
+        }
+    }
+}
+
+DLLEXPORT int profile_start_timer(void)
+{
+    kern_return_t ret;
+    if (!profile_started)
+    {
+        mach_port_t self = mach_task_self();
+        main_thread = mach_thread_self();
+
+        ret = host_get_clock_service(mach_host_self(), SYSTEM_CLOCK, (clock_serv_t *)&clk);
+        HANDLE_MACH_ERROR("host_get_clock_service", ret);
+
+        ret = mach_port_allocate(self,MACH_PORT_RIGHT_RECEIVE,&profile_port);
+        HANDLE_MACH_ERROR("mach_port_allocate",ret);
+
+        // Alright, create a thread to serve as the listener for exceptions
+        pthread_attr_t attr;
+        if (pthread_attr_init(&attr) != 0)
+        {
+            JL_PRINTF(JL_STDERR, "pthread_attr_init failed");
+            jl_exit(1);  
+        }
+        pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
+        if (pthread_create(&profiler_thread,&attr,mach_profile_listener,NULL) != 0)
+        {
+            JL_PRINTF(JL_STDERR, "pthread_create failed");
+            jl_exit(1);  
+        }     
+        pthread_attr_destroy(&attr);
+
+        profile_started = 1;
+    }
+
+    timerprof.tv_sec = 0;
+    timerprof.tv_nsec = nsecprof;
+
+    running = 1;
+    ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
+    HANDLE_MACH_ERROR("clock_alarm",ret)
+
+    return 0;
+}
+
+DLLEXPORT void profile_stop_timer(void)
+{
+    running = 0;
+}
+
+#elif defined(__FreeBSD___)
+//
+// BSD
 //
 #include <sys/time.h>
 struct itimerval timerprof;
