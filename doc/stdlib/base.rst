@@ -109,7 +109,8 @@ All Objects
 .. function:: isequal(x, y)
 
    True if and only if ``x`` and ``y`` have the same contents. Loosely speaking, this means ``x`` and ``y`` would look the same when printed. This is the default comparison function used by hash tables (``Dict``).
-   New types with a notion of equality should implement this function, except for numbers, which should implement ``==`` instead. However, numeric types with special values might need to implement ``isequal`` as well. For example, floating point ``NaN`` values are not ``==``, but are all equivalent in the sense of ``isequal``.
+   New types with a notion of equality should implement this function, except for numbers, which should implement ``==`` instead. However, numeric types with special values might need to implement ``isequal`` as well. For example, floating point ``NaN`` values are not ``==``, but are all equivalent in the sense of ``isequal``. Numbers of different types are considered unequal.
+   Mutable containers should generally implement ``isequal`` by calling ``isequal`` recursively on all contents.
 
 .. function:: isless(x, y)
 

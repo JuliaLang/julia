@@ -29,8 +29,4 @@ for T=types, S=types, x=vals
     # end
 end
 
-f = prevfloat(float64(typemax(Uint64)))
-@test hash(f) == hash(0xfffffffffffff800)
-@test hash(f) == hash(-2048)
-
 @test hash(RopeString("1","2")) == hash("12")

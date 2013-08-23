@@ -118,10 +118,8 @@ convert(::Type{Complex}, x::Real) = complex(x)
 ==(x::Real, z::Complex) = isreal(z) && real(z) == x
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
-isequal(z::Complex, x::Real) = isreal(z) && isequal(real(z),x)
-isequal(x::Real, z::Complex) = isreal(z) && isequal(real(z),x)
 
-hash(z::Complex) = (r = hash(real(z)); isreal(z) ? r : bitmix(r,hash(imag(z))))
+hash(z::Complex) = bitmix(hash(real(z)),hash(imag(z)))
 
 conj(z::Complex) = complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))

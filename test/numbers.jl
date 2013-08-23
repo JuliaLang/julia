@@ -346,8 +346,8 @@
 @test !isequal(+1.0,-1.0)
 @test !isequal(+Inf,-Inf)
 
-@test  isequal(-0.0f0,-0.0)
-@test  isequal( 0.0f0, 0.0)
+@test !isequal(-0.0f0,-0.0)
+@test !isequal( 0.0f0, 0.0)
 @test !isequal(-0.0f0, 0.0)
 @test !isequal(0.0f0 ,-0.0)
 
@@ -423,8 +423,8 @@
 @test !isless(+NaN,-NaN)
 @test !isless(+NaN,+NaN)
 
-@test  isequal(   0, 0.0)
-@test  isequal( 0.0,   0)
+@test !isequal(   0, 0.0)
+@test !isequal( 0.0,   0)
 @test !isequal(   0,-0.0)
 @test !isequal(-0.0,   0)
 @test   isless(-0.0,   0)

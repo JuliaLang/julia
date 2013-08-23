@@ -101,3 +101,5 @@ end
 
 <(x::Float16, y::Float16) = float32(x) < float32(y)
 isless(x::Float16, y::Float16) = isless(float32(x), float32(y))
+
+hash(x::Float16) = hash(reinterpret(Uint16, isnan(x) ? NaN16 : x))

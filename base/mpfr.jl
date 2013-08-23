@@ -19,7 +19,7 @@ import
         gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        serialize, deserialize, inf, nan
+        serialize, deserialize, inf, nan, hash
 
 import Base.Math.lgamma_r
 
@@ -716,5 +716,22 @@ end
 print(io::IO, b::BigFloat) = print(io, string(b))
 show(io::IO, b::BigFloat) = print(io, string(b), " with $(precision(b)) bits of precision")
 showcompact(io::IO, b::BigFloat) = print(io, string(b))
+
+function hash(x::BigFloat)
+    if isnan(x)
+        return hash(NaN)
+    end
+    if isinf(x)
+        return hash(float64(x))
+    end
+    n = ceil(precision(x)/53)
+    h::Uint = signbit(x)
+    for i=1:n
+        f64 = float64(x)
+        h = bitmix(h, hash(f64)$11111)
+        x -= f64
+    end
+    h
+end
 
 end #module
