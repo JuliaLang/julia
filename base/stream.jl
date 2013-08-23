@@ -2,7 +2,6 @@
 include("uv_constants.jl")
 
 ## types ##
-typealias Executable Union(Vector{ByteString},Function)
 typealias Callback Union(Function,Bool)
 
 abstract AsyncStream <: IO
