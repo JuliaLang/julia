@@ -289,15 +289,13 @@ eof(s::IOStream) = bool(ccall(:jl_ios_eof, Int32, (Ptr{Void},), s.ios))
 ## constructing and opening streams ##
 
 # "own" means the descriptor will be closed with the IOStream
-function fdio(name::String, fd::Integer, own::Bool)
+function fdio(name::String, fd::Integer, own::Bool=false)
     s = IOStream(name)
     ccall(:ios_fd, Ptr{Void}, (Ptr{Void}, Clong, Int32, Int32),
           s.ios, fd, 0, own);
     return s
 end
-fdio(name::String, fd::Integer) = fdio(name, fd, false)
-fdio(fd::Integer, own::Bool) = fdio(string("<fd ",fd,">"), fd, own)
-fdio(fd::Integer) = fdio(fd, false)
+fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 
 function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     s = IOStream(string("<file ",fname,">"))

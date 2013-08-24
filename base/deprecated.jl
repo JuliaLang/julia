@@ -140,7 +140,7 @@ end
 @deprecate <(a::AbstractCmd,b::String) (b|>a)
 @deprecate |(x, f::Function) (x|>f)
 
-@deprecate  SpawnNullStream() DevNull()
+@deprecate  SpawnNullStream() DevNull
 
 @deprecate memio(args...)  IOBuffer()
 
