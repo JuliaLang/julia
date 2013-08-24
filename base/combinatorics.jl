@@ -264,12 +264,12 @@ partitions(n::Integer; copy::Bool=false) = IntegerPartitions{int(copy)}(n)
 
 start(p::IntegerPartitions) = (as = Int[]; sizehint(as, p.n); as)
 done(p::IntegerPartitions, xs) = length(xs) == p.n
-next(p::IntegerPartitions{0}, xs) = (xs = nextpartition(p.n,xs); (xs,xs))
-next(p::IntegerPartitions{1}, xs) = (xs = nextpartition(p.n,xs); (copy(xs),xs))
+next(p::IntegerPartitions{0}, xs) = (xs = nextpartition!(p.n,xs); (xs,xs))
+next(p::IntegerPartitions{1}, xs) = (xs = nextpartition!(p.n,xs); (copy(xs),xs))
 
 collect(p::IntegerPartitions{0}) = collect(IntegerPartitions{1}(p.n))
 
-function nextpartition(n, as)
+function nextpartition!(n, as)
     if isempty(as);  return push!(as,n);  end
 
     for i = 1:length(as)-1
@@ -336,12 +336,12 @@ partitions(n::Integer, m::Integer; copy::Bool=false) = (@assert 2 <= m <= n; Fix
 
 start(f::FixedPartitions) = (as = Int[]; sizehint(as, f.m); as)
 done(f::FixedPartitions, s::Vector{Int}) = !isempty(s) && s[1]-1 <= s[end]
-next(f::FixedPartitions{0}, s::Vector{Int}) = (xs = nextfixedpartition(f.n,f.m,s); (xs,xs))
-next(f::FixedPartitions{1}, s::Vector{Int}) = (xs = nextfixedpartition(f.n,f.m,s); (copy(xs),xs))
+next(f::FixedPartitions{0}, s::Vector{Int}) = (xs = nextfixedpartition!(f.n,f.m,s); (xs,xs))
+next(f::FixedPartitions{1}, s::Vector{Int}) = (xs = nextfixedpartition!(f.n,f.m,s); (copy(xs),xs))
 
 collect(f::FixedPartitions{0}) = collect(FixedPartitions{1}(f.n,f.m))
 
-function nextfixedpartition(n, m, as)
+function nextfixedpartition!(n, m, as)
     if isempty(as)
         # First iteration
         push!(as, n-m+1)
