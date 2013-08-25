@@ -66,7 +66,7 @@ function filt{T<:Number}(b::Union(AbstractVector{T}, T),a::Union(AbstractVector{
     return y
 end
 
-function deconv{T}(b::Vector{T}, a::Vector{T})
+function deconv{T}(b::StridedVector{T}, a::StridedVector{T})
     lb = size(b,1)
     la = size(a,1)
     if lb < la
@@ -78,7 +78,7 @@ function deconv{T}(b::Vector{T}, a::Vector{T})
     filt(b, a, x)
 end
 
-function conv{T<:Base.LinAlg.BlasFloat}(u::Vector{T}, v::Vector{T})
+function conv{T<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{T})
     nu = length(u)
     nv = length(v)
     n = nu + nv - 1
@@ -94,11 +94,11 @@ function conv{T<:Base.LinAlg.BlasFloat}(u::Vector{T}, v::Vector{T})
     end
     return y[1:n]
 end
-conv{T<:Integer}(u::Vector{T}, v::Vector{T}) = conv(float(u), float(v))
-conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::Vector{T}, v::Vector{S}) = conv(float(u), v)
-conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::Vector{S}, v::Vector{T}) = conv(u, float(v))
+conv{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}) = conv(float(u), float(v))
+conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{S}) = conv(float(u), v)
+conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::StridedVector{S}, v::StridedVector{T}) = conv(u, float(v))
 
-function conv2{T}(u::Vector{T}, v::Vector{T}, A::Matrix{T})
+function conv2{T}(u::StridedVector{T}, v::StridedVector{T}, A::StridedMatrix{T})
     m = length(u)+size(A,1)-1
     n = length(v)+size(A,2)-1
     B = zeros(T, m, n)
@@ -112,7 +112,7 @@ function conv2{T}(u::Vector{T}, v::Vector{T}, A::Matrix{T})
     return C
 end
 
-function conv2{T}(A::Matrix{T}, B::Matrix{T})
+function conv2{T}(A::StridedMatrix{T}, B::StridedMatrix{T})
     sa, sb = size(A), size(B)
     At = zeros(T, sa[1]+sb[1]-1, sa[2]+sb[2]-1)
     Bt = zeros(T, sa[1]+sb[1]-1, sa[2]+sb[2]-1)
