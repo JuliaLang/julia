@@ -120,6 +120,7 @@ s = open(file, "r")
 str = readline(s)
 close(s)
 @test beginswith(str, "Hellx World")
+c=nothing; gc(); gc(); # cause munmap finalizer to run & free resources
 
 #######################################################################
 # This section tests temporary file and directory creation.           #

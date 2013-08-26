@@ -181,12 +181,13 @@ function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, o
         error("Could not create mapping view")
     end
     A = pointer_to_array(pointer(T, viewhandle), dims)
-    finalizer(A, x->munmap(viewhandle))
+    finalizer(A, x->munmap(viewhandle, mmaphandle))
     return A
 end
 
-function munmap(viewhandle::Ptr)
+function munmap(viewhandle::Ptr, mmaphandle::Ptr)
     status = bool(ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle))
+    status |= bool(ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), mmaphandle))
     if !status
         error("Could not unmap view")
     end
