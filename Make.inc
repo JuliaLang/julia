@@ -213,7 +213,11 @@ endif
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
 else
+ifeq ($(OS),Darwin)
+LIBUNWIND=$(BUILD)/lib/libosxunwind.a
+else
 LIBUNWIND=$(BUILD)/lib/libunwind-generic.a $(BUILD)/lib/libunwind.a
+endif
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
@@ -353,7 +357,7 @@ INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
 INSTALL_NAME_CHANGE_CMD = install_name_tool -change
 RPATH = -Wl,-rpath,'@executable_path/../$(JL_LIBDIR)' -Wl,-rpath,'@executable_path/../$(JL_PRIVATE_LIBDIR)'
 SHLIB_EXT = dylib
-OSLIBS += -ldl -Wl,-w -framework CoreFoundation -framework CoreServices
+OSLIBS += -ldl -Wl,-w -framework CoreFoundation -framework CoreServices $(LIBUNWIND)
 WHOLE_ARCHIVE = -Xlinker -all_load
 NO_WHOLE_ARCHIVE =
 JLDFLAGS =
