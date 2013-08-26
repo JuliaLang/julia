@@ -25,7 +25,7 @@ function toq()
     if is(timers,())
         error("toc() without tic()")
     end
-    t0 = timers[1]
+    t0 = timers[1]::Uint64
     task_local_storage(:TIMERS, timers[2])
     (t1-t0)/1e9
 end
