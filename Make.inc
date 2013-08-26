@@ -3,18 +3,29 @@
 USE_MKL = 0
 MKLLIB = $(MKLROOT)/lib/intel64
 
-# include twice to pickup user definitions
+# we include twice to pickup user definitions better
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user 
 endif
 
+# disable automatic Makefile rules
 .SUFFIXES:
 
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
+# LLVM Options
 LLVMROOT = $(BUILD)
+LLVM_ASSERTIONS = 0
+LLVM_DEBUG = 0
+# set to 1 to get clang and compiler-rt
+BUILD_LLVM_CLANG = 0
+# set to 1 to get lldb (often does not work, no chance with llvm3.2 and earlier)
+# see http://lldb.llvm.org/build.html for dependancies
+BUILD_LLDB = 0
+
 BUILD = $(JULIAHOME)/usr
+
 # Directories where said libraries get installed to
 JL_PRIVATE_LIBDIR = lib/julia
 JL_LIBDIR = lib
