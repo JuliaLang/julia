@@ -389,6 +389,16 @@ function readandwrite(cmds::AbstractCmd)
     return (out, in, processes)
 end
 
+readbytes(cmd::AbstractCmd) = readbytes(cmd, DevNull)
+function readbytes(cmd::AbstractCmd,stdin::AsyncStream)
+    (out,pc) = readsfrom(cmd, stdin)
+    if !success(pc)
+        pipeline_error(pc)
+    end
+    wait_close(out)
+    return takebuf_array(out.buffer)
+end
+
 readall(cmd::AbstractCmd) = readall(cmd, DevNull)
 function readall(cmd::AbstractCmd,stdin::AsyncStream)
     (out,pc) = readsfrom(cmd, stdin)
