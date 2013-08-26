@@ -389,8 +389,7 @@ function readandwrite(cmds::AbstractCmd)
     return (out, in, processes)
 end
 
-readbytes(cmd::AbstractCmd) = readbytes(cmd, DevNull)
-function readbytes(cmd::AbstractCmd,stdin::AsyncStream)
+function readbytes(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
     (out,pc) = readsfrom(cmd, stdin)
     if !success(pc)
         pipeline_error(pc)
@@ -399,14 +398,8 @@ function readbytes(cmd::AbstractCmd,stdin::AsyncStream)
     return takebuf_array(out.buffer)
 end
 
-readall(cmd::AbstractCmd) = readall(cmd, DevNull)
-function readall(cmd::AbstractCmd,stdin::AsyncStream)
-    (out,pc) = readsfrom(cmd, stdin)
-    if !success(pc)
-        pipeline_error(pc)
-    end
-    wait_close(out)
-    return takebuf_string(out.buffer)
+function readall(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
+    return bytestring(readbytes(cmd, stdin))
 end
 
 writeall(cmd::AbstractCmd, stdin::String) = writeall(cmd, stdin, DevNull)
