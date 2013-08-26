@@ -1,18 +1,8 @@
-include Versions.make
-
-## optional packages and options #
-LLVM_ASSERTIONS = 0
-LLVM_DEBUG = 0
-# set to 1 to get clang and compiler-rt
-BUILD_LLVM_CLANG = 0
-# set to 1 to get lldb (does not work with llvm3.1 and earlier)
-# see http://lldb.llvm.org/build.html for dependancies
-BUILD_LLDB = 0
-
 ## high-level setup ##
-
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
+include Versions.make
+
 CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) F77="$(FC)" CC="$(CC)" CXX="$(CXX)" --build=$(BUILD_MACHINE)
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
@@ -700,8 +690,6 @@ OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS)
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
 OPENBLAS_BUILD_OPTS += USE_THREAD=1
-endif
-
 # Maximum number of threads for parallelism
 ifneq ($(ARCH),x86_64)
 # Assume we can't address much memory to spawn many threads
@@ -716,6 +704,9 @@ OPENBLAS_BUILD_OPTS += NUM_THREADS=24
 else
 # On linux, try to provision for the largest possible machine currently
 OPENBLAS_BUILD_OPTS += NUM_THREADS=128
+endif
+else
+OPENBLAS_BUILD_OPTS += USE_THREAD=0
 endif
 
 # don't touch scheduler affinity since we manage this ourselves
@@ -767,7 +758,11 @@ openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
-	cd openblas-$(OPENBLAS_VER)/lapack-netlib/SRC && patch < ../../../dlasd4-lapack-3.4.2.patch && patch < ../../../slasd4-lapack-3.4.2.patch
+ifeq  ($(OPENBLAS_VER),v0.2.8)
+	cd openblas-$(OPENBLAS_VER)/lapack-netlib/SRC && \
+		patch < ../../../dlasd4-lapack-3.4.2.patch && \
+		patch < ../../../slasd4-lapack-3.4.2.patch
+endif
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
 	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || (echo "*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***" && false)
