@@ -76,6 +76,18 @@ function isequal(t1::Tuple, t2::Tuple)
     return true
 end
 
+function ==(t1::Tuple, t2::Tuple)
+    if length(t1) != length(t2)
+        return false
+    end
+    for i = 1:length(t1)
+        if !(t1[i] == t2[i])
+            return false
+        end
+    end
+    return true
+end
+
 function isless(t1::Tuple, t2::Tuple)
     n1, n2 = length(t1), length(t2)
     for i = 1:min(n1, n2)
