@@ -1226,13 +1226,8 @@ let nextidx = 1
             end
         end
         if p == -1
-            if nextidx > nprocs()
-               p = PGRP.workers[1].id
-               nextidx = 2
-            else 
-               p = PGRP.workers[nextidx].id
-               nextidx += 1
-            end
+            p = workers()[(nextidx % nworkers()) + 1]
+            nextidx += 1
         end
         p
     end
@@ -1312,7 +1307,6 @@ pmap(f) = f()
 # pmap(eig, L);
 function pmap(f, lsts...; err_retry=true, err_stop=false)
     len = length(lsts)
-    np = nprocs()
 
     results = Dict{Int,Any}()
 
@@ -1342,32 +1336,29 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
     end
 
     @sync begin
-        for p=1:np
-            wpid = PGRP.workers[p].id
-            if wpid != myid() || np == 1
-                @async begin
-                    tasklet = getnext_tasklet()
-                    while (tasklet != nothing)
-                        (idx, fvals) = tasklet
-                        try
-                            result = remotecall_fetch(wpid, f, fvals...)
-                            if isa(result, Exception) 
-                                ((wpid == myid()) ? rethrow(result) : throw(result)) 
-                            else 
-                                results[idx] = result
-                            end
-                        catch ex
-                            if err_retry 
-                                push!(retryqueue, (idx,fvals, ex))
-                            else
-                                results[idx] = ex
-                            end
-                            set_task_in_error()
-                            break # remove this worker from accepting any more tasks 
+        for wpid in workers()
+            @async begin
+                tasklet = getnext_tasklet()
+                while (tasklet != nothing)
+                    (idx, fvals) = tasklet
+                    try
+                        result = remotecall_fetch(wpid, f, fvals...)
+                        if isa(result, Exception) 
+                            ((wpid == myid()) ? rethrow(result) : throw(result)) 
+                        else 
+                            results[idx] = result
                         end
-                        
-                        tasklet = getnext_tasklet()
+                    catch ex
+                        if err_retry 
+                            push!(retryqueue, (idx,fvals, ex))
+                        else
+                            results[idx] = ex
+                        end
+                        set_task_in_error()
+                        break # remove this worker from accepting any more tasks 
                     end
+                    
+                    tasklet = getnext_tasklet()
                 end
             end
         end
@@ -1399,7 +1390,7 @@ function splitrange(N::Int, np::Int)
 end
 
 function preduce(reducer, f, N::Int)
-    chunks = splitrange(N, nprocs())
+    chunks = splitrange(N, nworkers())
     results = cell(length(chunks))
     for i in 1:length(chunks)
         results[i] = @spawn f(first(chunks[i]), last(chunks[i]))
@@ -1408,7 +1399,7 @@ function preduce(reducer, f, N::Int)
 end
 
 function pfor(f, N::Int)
-    for c in splitrange(N, nprocs())
+    for c in splitrange(N, nworkers())
         @spawn f(first(c), last(c))
     end
     nothing
