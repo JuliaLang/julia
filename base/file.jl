@@ -65,7 +65,7 @@ end
 
 # The following use Unix command line facilites
 
-rm(path::String) = run(`rm $path`)
+rm(path::String) = FS.unlink(path)
 cp(src::String, dst::String) = run(`cp $src $dst`)
 mv(src::String, dst::String) = run(`mv $src $dst`)
 touch(path::String) = run(`touch $path`)
