@@ -254,44 +254,51 @@ done(p::Permutations, s) = !isempty(s) && s[1] > length(p.a)
 
 # Integer Partitions
 
-immutable IntegerPartitions
+immutable IntegerPartitions{COPY}
     n::Int
 end
 
 length(p::IntegerPartitions) = npartitions(p.n)
 
-partitions(n::Integer) = IntegerPartitions(n)
+partitions(n::Integer; copy::Bool=false) = IntegerPartitions{int(copy)}(n)
 
-start(p::IntegerPartitions) = Int[]
+start(p::IntegerPartitions) = (as = Int[]; sizehint(as, p.n); as)
 done(p::IntegerPartitions, xs) = length(xs) == p.n
-next(p::IntegerPartitions, xs) = (xs = nextpartition(p.n,xs); (xs,xs))
+next(p::IntegerPartitions{0}, xs) = (xs = nextpartition!(p.n,xs); (xs,xs))
+next(p::IntegerPartitions{1}, xs) = (xs = nextpartition!(p.n,xs); (copy(xs),xs))
 
-function nextpartition(n, as)
-    if isempty(as);  return Int[n];  end
+collect(p::IntegerPartitions{0}) = collect(IntegerPartitions{1}(p.n))
 
-    xs = similar(as,0)
-    sizehint(xs,length(as)+1)
+function nextpartition!(n, as)
+    if isempty(as);  return push!(as,n);  end
 
     for i = 1:length(as)-1
         if as[i+1] == 1
-            x = as[i]-1
-            push!(xs, x)
+            x = as[i] -= 1
             n -= x
-            while n > x
-                push!(xs, x)
+            for j = i+1:length(as)
+                if n <= x
+                    as[j] = n
+                    resize!(as, j)
+                    return as
+                end
+                as[j] = x
                 n -= x
             end
-            push!(xs, n)
+            while n > x
+                push!(as, x)
+                n -= x
+            end
+            push!(as, n)
 
-            return xs
+            return as
         end
-        push!(xs, as[i])
         n -= as[i]
     end
-    push!(xs, as[end]-1)
-    push!(xs, 1)
+    as[end] -= 1
+    push!(as, 1)
 
-    xs
+    as
 end
 
 const _npartitions = (Int=>Int)[]
@@ -318,45 +325,46 @@ end
 # Partition n into m parts
 # in colex order (lexicographic by reflected sequence)
 
-immutable FixedPartitions
+immutable FixedPartitions{COPY}
     n::Int
     m::Int
 end
 
 length(f::FixedPartitions) = npartitions(f.n,f.m)
 
-partitions(n::Integer, m::Integer) = (@assert 2 <= m <= n; FixedPartitions(n,m))
+partitions(n::Integer, m::Integer; copy::Bool=false) = (@assert 2 <= m <= n; FixedPartitions{int(copy)}(n,m))
 
-start(f::FixedPartitions) = Int[]
+start(f::FixedPartitions) = (as = Int[]; sizehint(as, f.m); as)
 done(f::FixedPartitions, s::Vector{Int}) = !isempty(s) && s[1]-1 <= s[end]
-next(f::FixedPartitions, s::Vector{Int}) = (xs = nextfixedpartition(f.n,f.m,s); (xs,xs))
+next(f::FixedPartitions{0}, s::Vector{Int}) = (xs = nextfixedpartition!(f.n,f.m,s); (xs,xs))
+next(f::FixedPartitions{1}, s::Vector{Int}) = (xs = nextfixedpartition!(f.n,f.m,s); (copy(xs),xs))
 
-function nextfixedpartition(n, m, bs)
-    as = copy(bs)
+collect(f::FixedPartitions{0}) = collect(FixedPartitions{1}(f.n,f.m))
+
+function nextfixedpartition!(n, m, as)
     if isempty(as)
         # First iteration
-        as = [n-m+1, ones(Int, m-1)]
+        push!(as, n-m+1)
+        append!(as, ones(Int, m-1))
     elseif as[2] < as[1]-1
         # Most common iteration
         as[1] -= 1
         as[2] += 1
     else
         # Iterate
-        local j
         s = as[1]+as[2]-1
         for j = 3:m
-            if as[j] < as[1]-1; break; end
+            if as[j] < as[1]-1
+                x = as[j] += 1
+                as[2:j-1] = x
+                as[1] = s - x*(j-2)
+                break
+            end
             s += as[j]
         end
-        x = as[j] += 1
-        for k = j-1:-1:2
-            as[k] = x
-            s -= x
-        end
-        as[1] = s
     end
 
-    return as
+    as
 end
 
 const _nipartitions = ((Int,Int)=>Int)[]
