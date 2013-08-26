@@ -52,12 +52,6 @@
 		   (whitespace-newline #f))
 		  ,@body))
 
-(define-macro (with-inside-ref . body)
-  `(with-bindings ((space-sensitive #f)
-		   (inside-vec #t)
-		   (whitespace-newline #t))
-		  ,@body))
-
 (define-macro (with-end-symbol . body)
   `(with-bindings ((end-symbol #t))
 		  ,@body))
@@ -74,9 +68,6 @@
 
 (define (assignment? e)
   (and (pair? e) (eq? (car e) '=)))
-
-(define (typedecl? e)
-  (and (length= e 3) (eq? (car e) |::|) (symbol? (cadr e))))
 
 (define (kwarg? e)
   (and (pair? e) (eq? (car e) 'kw)))
@@ -340,12 +331,6 @@
 	  ((opchar? c)  (read-operator port (read-char port)))
 
 	  ((identifier-char? c) (accum-julia-symbol c port))
-
-	  #;((eqv? c #\")
-	   (with-exception-catcher
-	    (lambda (e)
-	      (error "invalid string literal"))
-	    (lambda () (read port))))
 
 	  (else (error (string "invalid character " (read-char port)))))))
 
@@ -833,8 +818,6 @@
 		       ex))
 		  (else ex))))))))
 
-;(define (parse-dot s)  (parse-LtoR s parse-atom (prec-ops 14)))
-
 (define expect-end-current-line 0)
 
 (define (expect-end- s word)
@@ -1115,9 +1098,7 @@
     (if (not (symbol? (car path)))
 	(error (string "invalid " word " statement: expected identifier")))
     (let ((nxt (peek-token s)))
-      (cond #;((eq? nxt '|.*|)
-       (take-token s)
-       `(importall ,@(reverse path)))
+      (cond
        ((eq? nxt '|.|)
 	(take-token s)
 	(loop (cons (macrocall-to-atsym (parse-atom s)) path)))
