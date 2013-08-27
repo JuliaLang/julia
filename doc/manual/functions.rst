@@ -162,6 +162,28 @@ This also means that you can assign and pass around operators such as
 Under the name ``f``, the function does not support infix notation,
 however.
 
+Operators With Special Names
+----------------------------
+
+A few special expressions correspond to calls to functions with non-obvious
+names. These are::
+
+=================== ==============
+Expression          Calls
+=================== ==============
+``[A B C ...]``     ``hcat``
+``[A, B, C, ...]``  ``vcat``
+``[A B; C D; ...]`` ``hvcat``
+``A'``              ``ctranspose``
+``A.'``             ``transpose``
+``1:n``             ``colon``
+``A[i]``            ``getindex``
+``A[i]=x``          ``setindex!``
+=================== ==============
+
+These functions are included in the ``Base.Operators`` module even
+though they do not have operator-like names.
+
 .. _man-anonymous-functions:
 
 Anonymous Functions

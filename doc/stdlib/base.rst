@@ -889,6 +889,14 @@ Strings
 
    Returns ``string`` with all characters converted to lowercase.
 
+.. function:: ucfirst(string)
+
+   Returns ``string`` with the first character converted to uppercase.
+
+.. function:: lcfirst(string)
+
+   Returns ``string`` with the first character converted to lowercase.
+
 .. function:: join(strings, delim)
 
    Join an array of strings into a single string, inserting the given delimiter between adjacent strings.
@@ -1196,6 +1204,14 @@ I/O
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`print_escaped`.
 
+.. function:: print_joined(io, items, delim, [last])
+
+   Print elements of ``items`` to ``io`` with ``delim`` between them. If ``last`` is specified, it is used as the final delimiter instead of ``delim``.
+
+.. function:: print_shortest(io, x)
+
+   Print the shortest possible representation of number ``x`` as a floating point number, ensuring that it would parse to the exact same number.
+
 .. function:: fd(stream)
 
    Returns the file descriptor backing the stream or file. Note that this function only applies to synchronous `File`'s and `IOStream`'s
@@ -1378,15 +1394,6 @@ Network I/O
    Accepts a connection on the given server and returns a connection to the client. An uninitialized client 
    stream may be provided, in which case it will be used instead of creating a new stream.
 
-.. function:: bind(server[,addr...])
-
-   Binds a server to the given address (which may be any of the arguments accepted by listen).
-   Note that you must still call listen to be able to accept connections on this server.
-
-.. function:: listen(sever) -> PipeServer
-
-   Starts listening on a server that has been previously bound to an address by ``bind``.
-
 .. function:: listenany(port_hint) -> (Uint16,TcpServer)
 
    Create a TcpServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server
@@ -1410,6 +1417,7 @@ Text I/O
 .. function:: show(x)
 
    Write an informative text representation of a value to the current output stream. New types should overload ``show(io, x)`` where the first argument is a stream.
+   The representation used by ``show`` generally includes Julia-specific formatting and type information.
 
 .. function:: showcompact(x)
 
@@ -1425,6 +1433,7 @@ Text I/O
 .. function:: print(x)
 
    Write (to the default output stream) a canonical (un-decorated) text representation of a value if there is one, otherwise call ``show``.
+   The representation used by ``print`` includes minimal formatting and tries to avoid Julia-specific details.
 
 .. function:: println(x)
 
@@ -1457,7 +1466,7 @@ Text I/O
 
 .. function:: dump(x)
 
-   Write a thorough text representation of a value to the current output stream.
+   Show the full structure of a value, including all fields of objects.
 
 .. function:: readall(stream)
 
@@ -2772,10 +2781,6 @@ Data Formats
 
    Get the exponent of a normalized floating-point number.
 
-.. function:: isfloat64(x::Rational)
-
-   Tests whether ``x`` or all its elements can be losslessly represented as a ``Float64`` data type
-
 .. function:: complex64(r,i)
 
    Convert to ``r+i*im`` represented as a ``Complex64`` data type
@@ -3380,6 +3385,16 @@ Array functions
 
    Returns the sum of all array elements, using the Kahan-Babuska-Neumaier compensated summation algorithm for additional accuracy.
 
+.. function:: cartesianmap(f, dims)
+
+   Given a ``dims`` tuple of integers ``(m, n, ...)``, call ``f`` on all combinations of
+   integers in the ranges ``1:m``, ``1:n``, etc. Example::
+
+   julia> cartesianmap(println, (2,2))
+   11
+   21
+   12
+   22
 
 BitArrays
 ~~~~~~~~~
@@ -4403,6 +4418,18 @@ C Interface
    the array element type. ``own`` optionally specifies whether Julia should take
    ownership of the memory, calling ``free`` on the pointer when the array is no
    longer referenced.
+
+.. function:: pointer_from_objref(obj)
+
+   Get the memory address of a Julia object as a ``Ptr``. The existence of the resulting
+   ``Ptr`` will not protect the object from garbage collection, so you must ensure
+   that the object remains referenced for the whole time that the ``Ptr`` will be used.
+
+.. function:: unsafe_pointer_to_objref(p::Ptr)
+
+   Convert a ``Ptr`` to an object reference. Assumes the pointer refers to a
+   valid heap-allocated Julia object. If this is not the case, undefined behavior
+   results, hence this function is considered "unsafe" and should be used with care.
 
 .. function:: disable_sigint(f::Function)
 

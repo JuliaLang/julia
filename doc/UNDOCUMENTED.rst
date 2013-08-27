@@ -97,10 +97,6 @@ arrays
 
    UNDOCUMENTED
 
-.. function:: cartesianmap(...)
-
-   UNDOCUMENTED
-
 .. function:: checkbounds(...)
 
    UNDOCUMENTED
@@ -164,35 +160,11 @@ collections
 strings and text output
 -----------------------
 
-.. function:: first_utf8_byte(c::Char)
-
-   UNDOCUMENTED
-
 .. function:: is_utf8_start(byte::Uint8)
 
    UNDOCUMENTED
 
-.. function:: lcfirst(...)
-
-   UNDOCUMENTED
-
-.. function:: print_joined(...)
-
-   UNDOCUMENTED
-
-.. function:: print_shortest(...)
-
-   UNDOCUMENTED
-
 .. function:: print_with_color(...)
-
-   UNDOCUMENTED
-
-.. function:: repl_show(...)
-
-   UNDOCUMENTED
-
-.. function:: ucfirst(...)
 
    UNDOCUMENTED
 
@@ -373,15 +345,7 @@ C interface
 
    UNDOCUMENTED
 
-.. function:: pointer_from_objref(x)
-
-   UNDOCUMENTED
-
 .. function:: unsafe_copy!(...)
-
-   UNDOCUMENTED
-
-.. function:: unsafe_pointer_to_objref(p::Ptr{T})
 
    UNDOCUMENTED
 

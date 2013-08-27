@@ -568,8 +568,22 @@ function abstract_call_gf(f, fargs, argtypes, e)
         # limit argument type tuple based on size of definition signature.
         # for example, given function f(T, Any...), limit to 3 arguments
         # instead of the default (MAX_TUPLETYPE_LEN)
-        if length(sig) > lsig+1
-            sig = limit_tuple_type_n(sig, lsig+1)
+        ls = length(sig)
+        if ls > lsig+1
+            fst = sig[lsig+1]
+            allsame = true
+            # allow specializing on longer arglists if all the trailing
+            # arguments are the same, since there is no exponential
+            # blowup in this case.
+            for i = lsig+2:ls
+                if sig[i] != fst
+                    allsame = false
+                    break
+                end
+            end
+            if !allsame
+                sig = limit_tuple_type_n(sig, lsig+1)
+            end
         end
         #print(m,"\n")
         (_tree,rt) = typeinf(linfo, sig, m[2], linfo)

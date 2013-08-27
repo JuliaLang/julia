@@ -249,7 +249,7 @@ macro vectorize_2arg(S,f)
 end
 
 # some operators not defined yet
-global //, .>>, .<<, >:, <|, |>
+global //, .>>, .<<, >:, <|, |>, hcat, hvcat
 
 module Operators
 
@@ -295,10 +295,19 @@ export
     |,
     |>,
     <|,
-    ~
+    ~,
+    colon,
+    hcat,
+    vcat,
+    hvcat,
+    getindex,
+    setindex!,
+    transpose,
+    ctranspose
 
 import Base: !, !=, $, %, .%, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
-    <|, |>, \, ^, |, ~, !==, >:
+    <|, |>, \, ^, |, ~, !==, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
+    transpose, ctranspose
 
 end

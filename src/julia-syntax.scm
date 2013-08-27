@@ -219,21 +219,21 @@
 
 ; translate index x from colons to ranges
 (define (expand-index-colon x)
-  (cond ((eq? x ':) `(call (top colon) 1 end))
+  (cond ((eq? x ':) `(call colon 1 end))
 	((and (pair? x)
 	      (eq? (car x) ':))
 	 (cond ((length= x 3)
 		(if (eq? (caddr x) ':)
 		    ;; (: a :) a:
-		    `(call (top colon) ,(cadr x) end)
+		    `(call colon ,(cadr x) end)
 		    ;; (: a b)
-		    `(call (top colon) ,(cadr x) ,(caddr x))))
+		    `(call colon ,(cadr x) ,(caddr x))))
 	       ((length= x 4)
 		(if (eq? (cadddr x) ':)
 		    ;; (: a b :) a:b:
-		    `(call (top colon) ,(cadr x) ,(caddr x) end)
+		    `(call colon ,(cadr x) ,(caddr x) end)
 		    ;; (: a b c)
-		    `(call (top colon) ,@(cdr x))))
+		    `(call colon ,@(cdr x))))
 	       (else x)))
 	(else x)))
 
@@ -520,6 +520,10 @@
 	,name))))
 
 (define (optional-positional-defs name sparams req opt dfl body overall-argl . kw)
+  (let ((lno  (if (and (pair? (cdr body))
+		       (pair? (cadr body)) (eq? (caadr body) 'line))
+		  (list (cadr body))
+		  '())))
   `(block
     ,@(map (lambda (n)
 	     (let* ((passed (append req (list-head opt n)))
@@ -544,12 +548,16 @@
 					  defaultv))
 			      vals)
 			 ;; then add only one next argument
-			 `(block (call ,name ,@kw ,@(map arg-name passed) ,(car vals)))
+			 `(block
+			   ,@lno
+			   (call ,name ,@kw ,@(map arg-name passed) ,(car vals)))
 			 ;; otherwise add all
-			 `(block (call ,name ,@kw ,@(map arg-name passed) ,@vals)))))
+			 `(block
+			   ,@lno
+			   (call ,name ,@kw ,@(map arg-name passed) ,@vals)))))
 	       (method-def-expr name sp (append kw passed) body)))
 	   (iota (length opt)))
-    ,(method-def-expr name sparams overall-argl body)))
+    ,(method-def-expr name sparams overall-argl body))))
 
 (define (method-def-expr name sparams argl body)
   (if (any kwarg? argl)
@@ -1532,14 +1540,14 @@
    (pattern-lambda (: c)            (error "invalid ':' outside indexing"))
 
    (pattern-lambda (: a b c)
-		   `(call (top colon) ,a ,b ,c))
+		   `(call colon ,a ,b ,c))
 
    (pattern-lambda (: a b)
-		   `(call (top colon) ,a ,b))
+		   `(call colon ,a ,b))
 
    ;; hcat, vcat
    (pattern-lambda (hcat . a)
-		   `(call (top hcat) ,@a))
+		   `(call hcat ,@a))
 
    (pattern-lambda (vcat . a)
 		   (if (any (lambda (x)
@@ -1551,10 +1559,10 @@
 					      (cdr x)
 					      (list x)))
 					a)))
-			 `(call (top hvcat)
+			 `(call hvcat
 				(tuple ,@(map length rows))
 				,@(apply nconc rows)))
-		       `(call (top vcat) ,@a)))
+		       `(call vcat ,@a)))
 
    (pattern-lambda (typed_hcat t . a)
                    (let ((result (gensy))
