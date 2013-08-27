@@ -121,7 +121,7 @@ kern_return_t profiler_segv_handler
 
     // Not currently unwinding. Raise regular segfault
     if (forceDwarf == -2)
-        return -309; 
+        return KERN_INVALID_ARGUMENT; 
 
     if (forceDwarf == 0)
         forceDwarf = 1;

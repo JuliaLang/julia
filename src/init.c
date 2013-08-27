@@ -611,7 +611,7 @@ DLLEXPORT kern_return_t catch_exception_raise
         return KERN_SUCCESS;
     }
     else {
-        return -309;
+        return KERN_INVALID_ARGUMENT;
     }
 }
 
