@@ -520,6 +520,10 @@
 	,name))))
 
 (define (optional-positional-defs name sparams req opt dfl body overall-argl . kw)
+  (let ((lno  (if (and (pair? (cdr body))
+		       (pair? (cadr body)) (eq? (caadr body) 'line))
+		  (list (cadr body))
+		  '())))
   `(block
     ,@(map (lambda (n)
 	     (let* ((passed (append req (list-head opt n)))
@@ -544,12 +548,16 @@
 					  defaultv))
 			      vals)
 			 ;; then add only one next argument
-			 `(block (call ,name ,@kw ,@(map arg-name passed) ,(car vals)))
+			 `(block
+			   ,@lno
+			   (call ,name ,@kw ,@(map arg-name passed) ,(car vals)))
 			 ;; otherwise add all
-			 `(block (call ,name ,@kw ,@(map arg-name passed) ,@vals)))))
+			 `(block
+			   ,@lno
+			   (call ,name ,@kw ,@(map arg-name passed) ,@vals)))))
 	       (method-def-expr name sp (append kw passed) body)))
 	   (iota (length opt)))
-    ,(method-def-expr name sparams overall-argl body)))
+    ,(method-def-expr name sparams overall-argl body))))
 
 (define (method-def-expr name sparams argl body)
   (if (any kwarg? argl)
