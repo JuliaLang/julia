@@ -36,6 +36,7 @@ edit(f::Function, pkg, args...) = Dir.cd() do
 end
 
 available() = sort!([keys(Dir.cd(Read.available))...], by=lowercase)
+available(pkg::String) = sort!([keys(Dir.cd(()->Read.available(pkg)))...])
 
 function installed()
     pkgs = Dict{String,VersionNumber}()
