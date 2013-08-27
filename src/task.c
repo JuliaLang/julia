@@ -558,14 +558,35 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, unw_context_t
     size_t n=0;
     
     unw_init_local(&cursor, uc);
-    while (unw_step(&cursor) > 0 && n < maxsize) {
+    do {
+        if (n >= maxsize)
+            break;
         if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0) {
             break;
         }
         data[n++] = ip;
-    }
+    } while (unw_step(&cursor) > 0);
     return n;
 }
+#ifdef _OS_DARWIN_
+size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, unw_context_t *uc)
+{
+    unw_cursor_t cursor;
+    unw_word_t ip;
+    size_t n=0;
+    
+    unw_init_local_dwarf(&cursor, uc);
+    do {
+        if (n >= maxsize)
+            break;
+        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0) {
+            break;
+        }
+        data[n++] = ip;
+    } while (unw_step(&cursor) > 0);
+    return n;
+}
+#endif
 #endif
 
 static void record_backtrace(void)
