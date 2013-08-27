@@ -37,20 +37,6 @@ end
 wait(c)
 @test readall(connect(2134)) == "Hello World\n"
 
-c = Base.Condition()
-@async begin
-	server = Base.TcpServer()
-	bind(server,IPv4(0),2135)
-	listen(server)
-	Base.notify(c)
-	sock = accept(server)
-	write(sock,"Hello World\n")
-	close(server)
-	close(sock)
-end
-wait(c)
-@test readall(connect(2135)) == "Hello World\n"
-
 isfile("testsocket") && Base.FS.unlink("testsocket")
 @async begin
 	s = listen("testsocket")

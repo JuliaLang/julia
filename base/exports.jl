@@ -97,7 +97,6 @@ export
     SVD,
     Symmetric,
     SymTridiagonal,
-    TcpSocket,
     Timer,
     TimSort,
     TmStruct,
@@ -350,7 +349,6 @@ export
     iseltype,
     iseven,
     isfinite,
-    isfloat64,
     isinf,
     isinteger,
     isnan,
@@ -1014,7 +1012,6 @@ export
 
 # I/O and events
     accept,
-    bind,
     close,
     connect,
     countlines,

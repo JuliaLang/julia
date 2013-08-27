@@ -79,7 +79,6 @@ export PipeString
 @deprecate  del_each!           setdiff!
 @deprecate  real_valued         isreal
 @deprecate  integer_valued      isinteger
-@deprecate  float64_valued      isfloat64
 @deprecate  isdenormal          issubnormal
 @deprecate  get_precision       precision
 @deprecate  expr(hd, a...)              Expr(hd, a...)

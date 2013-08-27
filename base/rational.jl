@@ -103,7 +103,6 @@ typemin{T<:Integer}(::Type{Rational{T}}) = -one(T)//zero(T)
 typemax{T<:Integer}(::Type{Rational{T}}) = one(T)//zero(T)
 
 isinteger(x::Rational) = x.den == 1
-isfloat64(x::Rational) = ispow2(x.den) & (abs(x.num) <= x.den*maxintfloat(Float64))
 
 hash(x::Rational) = bitmix(hash(x.num), ~hash(x.den))
 

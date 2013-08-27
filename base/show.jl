@@ -36,6 +36,8 @@ end
 function show(io::IO, f::Function)
     if isgeneric(f)
         print(io, f.env.name)
+    elseif isdefined(f, :env) && isa(f.env,Symbol)
+        print(io, f.env)
     else
         print(io, "# function")
     end
@@ -874,6 +876,8 @@ function showarray(io::IO, X::AbstractArray; header=true, limit=true, rows=tty_r
 end
 
 show(io::IO, X::AbstractArray) = showarray(io, X)
+
+print(io::IO, X::AbstractArray) = writedlm(io, X)
 
 showall(x) = showall(STDOUT, x)
 showall(io::IO, x) = show(io, x)

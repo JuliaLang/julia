@@ -1193,7 +1193,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
             }
         }
         else {
-            if (jl_has_typevars_(S,1)) {
+            if (jl_is_typevar(S)) {
                 if (*tvar_lookup(soln, &S) != T)
                     extend(T, S, soln);
             }
@@ -1205,6 +1205,8 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                 else {
                     assert(jl_is_typevar(T));
                     v = meet(S, T, covariant);
+                    if (v == NULL)
+                        return 0;
                     if (!jl_is_typevar(v)) {
                         v = (jl_value_t*)
                             jl_new_typevar(underscore_sym,
