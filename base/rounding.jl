@@ -2,17 +2,17 @@ module Rounding
 include("fenv_constants.jl")
 
 export
-    RoundingMode, RoundToNearest, RoundToZero, RoundUp, RoundDown,
+    RoundingMode, RoundNearest, RoundToZero, RoundUp, RoundDown,
     get_rounding, set_rounding, with_rounding
 
 ## rounding modes ##
 abstract RoundingMode
-type RoundToNearest <: RoundingMode end
+type RoundNearest <: RoundingMode end
 type RoundToZero <: RoundingMode end
 type RoundUp <: RoundingMode end
 type RoundDown <: RoundingMode end
 
-set_rounding(::Type{RoundToNearest}) = ccall(:fesetround, Cint, (Cint, ), JL_FE_TONEAREST)
+set_rounding(::Type{RoundNearest}) = ccall(:fesetround, Cint, (Cint, ), JL_FE_TONEAREST)
 set_rounding(::Type{RoundToZero}) = ccall(:fesetround, Cint, (Cint, ), JL_FE_TOWARDZERO)
 set_rounding(::Type{RoundUp}) = ccall(:fesetround, Cint, (Cint, ), JL_FE_UPWARD)
 set_rounding(::Type{RoundDown}) = ccall(:fesetround, Cint, (Cint, ), JL_FE_DOWNWARD)
@@ -20,7 +20,7 @@ set_rounding(::Type{RoundDown}) = ccall(:fesetround, Cint, (Cint, ), JL_FE_DOWNW
 function get_rounding()
     r = ccall(:fegetround, Cint, ())
     if r == JL_FE_TONEAREST
-        return RoundToNearest
+        return RoundNearest
     elseif r == JL_FE_DOWNWARD
         return RoundDown
     elseif r == JL_FE_UPWARD
