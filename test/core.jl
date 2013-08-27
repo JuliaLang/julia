@@ -960,3 +960,11 @@ foo4129(a::Baz4129,b::Bar41292,args...) = foo4129(a,b.f,b,args...)
 foo4129(a::Baz4129,args...)         = foo4129(a,a.b,args...)
 
 @test isa(foo4129(Baz4129(Bar41291(Foo4129())),1,2), (Baz4129,Bar4129,Foo4129,Int,Int))
+
+# issue #4141
+type Vertex4141{N,T}; end
+type Face4141{V}; end
+type Hull4141{F<:Face4141}; end
+
+g4141(N,T) = Hull4141{Face4141{Vertex4141{N,T}}}()
+@test isa(g4141(4,Int), Hull4141{Face4141{Vertex4141{4,Int}}})
