@@ -328,7 +328,7 @@ const apply_type_tfunc = function (A, args...)
         return Any
     end
     headtype = args[1].parameters[1]
-    if isa(headtype,UnionType) || isa(headtype,Tuple)
+    if isa(headtype,UnionType) || isa(headtype,Tuple) || isa(headtype,TypeVar)
         return args[1]
     end
     tparams = ()
@@ -358,7 +358,7 @@ const apply_type_tfunc = function (A, args...)
         uncertain = true
     end
     if type_too_complex(appl,0)
-        return args[1]
+        return Type{TypeVar(:_,headtype)}
     end
     uncertain ? Type{TypeVar(:_,appl)} : Type{appl}
 end
