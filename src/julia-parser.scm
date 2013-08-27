@@ -1081,7 +1081,7 @@
 				 (if (eqv? (peek-token s) #\newline)
 				     (take-token s))))
 		      #f)))
-	 (rest  (if (or (eqv? (peek-token s) #\newline)
+	 (rest  (if (or (memv (peek-token s) '(#\newline #\;))
 			(eof-object? (peek-token s)))
 		    '()
 		    (parse-comma-separated s (lambda (s)
