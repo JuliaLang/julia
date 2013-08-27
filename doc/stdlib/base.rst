@@ -889,6 +889,14 @@ Strings
 
    Returns ``string`` with all characters converted to lowercase.
 
+.. function:: ucfirst(string)
+
+   Returns ``string`` with the first character converted to uppercase.
+
+.. function:: lcfirst(string)
+
+   Returns ``string`` with the first character converted to lowercase.
+
 .. function:: join(strings, delim)
 
    Join an array of strings into a single string, inserting the given delimiter between adjacent strings.
@@ -1195,6 +1203,14 @@ I/O
 .. function:: print_unescaped(io, s::String)
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`print_escaped`.
+
+.. function:: print_joined(io, items, delim, [last])
+
+   Print elements of ``items`` to ``io`` with ``delim`` between them. If ``last`` is specified, it is used as the final delimiter instead of ``delim``.
+
+.. function:: print_shortest(io, x)
+
+   Print the shortest possible representation of number ``x`` as a floating point number, ensuring that it would parse to the exact same number.
 
 .. function:: fd(stream)
 
@@ -3373,6 +3389,16 @@ Array functions
 
    Returns the sum of all array elements, using the Kahan-Babuska-Neumaier compensated summation algorithm for additional accuracy.
 
+.. function:: cartesianmap(f, dims)
+
+   Given a ``dims`` tuple of integers ``(m, n, ...)``, call ``f`` on all combinations of
+   integers in the ranges ``1:m``, ``1:n``, etc. Example::
+
+   julia> cartesianmap(println, (2,2))
+   11
+   21
+   12
+   22
 
 BitArrays
 ~~~~~~~~~
@@ -4396,6 +4422,18 @@ C Interface
    the array element type. ``own`` optionally specifies whether Julia should take
    ownership of the memory, calling ``free`` on the pointer when the array is no
    longer referenced.
+
+.. function:: pointer_from_objref(obj)
+
+   Get the memory address of a Julia object as a ``Ptr``. The existence of the resulting
+   ``Ptr`` will not protect the object from garbage collection, so you must ensure
+   that the object remains referenced for the whole time that the ``Ptr`` will be used.
+
+.. function:: unsafe_pointer_to_objref(p::Ptr)
+
+   Convert a ``Ptr`` to an object reference. Assumes the pointer refers to a
+   valid heap-allocated Julia object. If this is not the case, undefined behavior
+   results, hence this function is considered "unsafe" and should be used with care.
 
 .. function:: disable_sigint(f::Function)
 
