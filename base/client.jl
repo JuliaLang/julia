@@ -230,6 +230,7 @@ function process_options(args::Array{Any,1})
             i+=1
             if i > length(args) || !isdigit(args[i][1])
                 np = Sys.CPU_CORES
+                i -= 1
             else
                 np = int(args[i])
             end
