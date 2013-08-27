@@ -3,7 +3,6 @@ include ../Make.inc
 
 PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
 
-<<<<<<< HEAD
 # These are all the values needed for the RawVersionInfo struct
 version_string = $(shell cat ../VERSION)
 commit = $(shell git rev-parse HEAD 2>/dev/null)
