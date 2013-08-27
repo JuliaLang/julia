@@ -349,7 +349,6 @@ export
     iseltype,
     iseven,
     isfinite,
-    isfloat64,
     isinf,
     isinteger,
     isnan,
