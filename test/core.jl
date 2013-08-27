@@ -968,3 +968,16 @@ type Hull4141{F<:Face4141}; end
 
 g4141(N,T) = Hull4141{Face4141{Vertex4141{N,T}}}()
 @test isa(g4141(4,Int), Hull4141{Face4141{Vertex4141{4,Int}}})
+
+# issue #4154
+type MyType4154{T}
+    a1::T
+    a2
+end
+
+foo4154(x) = MyType4154(x, {})
+h4154() = typeof(foo4154(rand(2,2,2)))
+g4154() = typeof(foo4154(rand(2,2,2,2,2,2,2,2,2)))
+
+@test h4154() === MyType4154{Array{Float64,3}}
+@test g4154() === MyType4154{Array{Float64,9}}
