@@ -1378,15 +1378,6 @@ Network I/O
    Accepts a connection on the given server and returns a connection to the client. An uninitialized client 
    stream may be provided, in which case it will be used instead of creating a new stream.
 
-.. function:: bind(server[,addr...])
-
-   Binds a server to the given address (which may be any of the arguments accepted by listen).
-   Note that you must still call listen to be able to accept connections on this server.
-
-.. function:: listen(sever) -> PipeServer
-
-   Starts listening on a server that has been previously bound to an address by ``bind``.
-
 .. function:: listenany(port_hint) -> (Uint16,TcpServer)
 
    Create a TcpServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server
