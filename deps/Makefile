@@ -35,6 +35,8 @@ ifeq ($(OS), Linux)
 STAGE1_DEPS += unwind
 else ifeq ($(OS), FreeBSD)
 STAGE1_DEPS += unwind
+else ifeq ($(OS), Darwin)
+STAGE1_DEPS += osxunwind
 endif
 endif
 
@@ -139,7 +141,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf $(BUILD)
-getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-gmp get-mpfr get-zlib get-patchelf
+getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf
 
 ## PATHS ##
 DIRS = $(addprefix $(BUILD)/,lib include bin share etc)
@@ -1279,6 +1281,39 @@ compile-unwind: $(LIBUNWIND_TARGET_SOURCE)
 check-unwind: libunwind-$(UNWIND_VER)/checked
 install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
+## OS X Unwind ##
+
+OSXUNWIND_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) CFLAGS="-ggdb3 -O0" CXXFLAGS="-ggdb3 -O0" SFLAGS="-ggdb3"
+
+OSXUNWIND_OBJ_TARGET = $(BUILD)/lib/libosxunwind.$(SHLIB_EXT)
+OSXUNWIND_OBJ_SOURCE = libosxunwind-$(OSXUNWIND_VER)/libosxunwind.$(SHLIB_EXT)
+
+libosxunwind-$(OSXUNWIND_VER).tar.gz: 
+	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/libosxunwind/archive/v$(OSXUNWIND_VER).tar.gz
+
+libosxunwind-$(OSXUNWIND_VER)/Makefile: libosxunwind-$(OSXUNWIND_VER).tar.gz
+	tar xfz $<
+	touch -c $@
+
+$(OSXUNWIND_OBJ_SOURCE): libosxunwind-$(OSXUNWIND_VER)/Makefile
+	$(MAKE) -C libosxunwind-$(OSXUNWIND_VER) $(OSXUNWIND_FLAGS)
+	touch -c $@
+$(OSXUNWIND_OBJ_TARGET): $(OSXUNWIND_OBJ_SOURCE) | $(BUILD)/lib
+	cp libosxunwind-$(OSXUNWIND_VER)/libosxunwind.a $(BUILD)/lib/libosxunwind.a
+	cp $< $@
+	cp -R libosxunwind-$(OSXUNWIND_VER)/include/* $(BUILD)/include
+	$(INSTALL_NAME_CMD)libosxunwind.$(SHLIB_EXT) $@
+
+clean-osxunwind:
+	-$(MAKE) -C libosxunwind-$(OSXUNWIND_VER) distclean $(OSXUNWIND_FLAGS)
+	-rm $(OPENLIBM_OBJ_TARGET)
+distclean-osxunwind: clean-osxunwind
+
+get-osxunwind: libosxunwind-$(OSXUNWIND_VER)/Makefile
+configure-osxunwind: get-osxunwind
+compile-osxunwind: $(OSXUNWIND_OBJ_SOURCE)
+check-osxunwind: compile-osxunwind
+install-osxunwind: $(OSXUNWIND_OBJ_TARGET) 
 
 ## GMP ##
 
