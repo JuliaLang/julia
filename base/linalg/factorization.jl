@@ -276,7 +276,7 @@ function full{T<:BlasFloat}(A::QRPackedQ{T}, thin::Bool)
 end
 full(A::QRPackedQ) = full(A, true)
 
-print_matrix(io::IO, A::QRPackedQ) = print_matrix(io, full(A))
+print_matrix(io::IO, A::QRPackedQ, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
 
 ## Multiplication by Q from the QR decomposition
 function *{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T})
@@ -392,7 +392,7 @@ function full{T<:BlasFloat}(A::QRPivotedQ{T}, thin::Bool)
 end
 
 full(A::QRPivotedQ) = full(A, true)
-print_matrix(io::IO, A::QRPivotedQ) = print_matrix(io, full(A))
+print_matrix(io::IO, A::QRPivotedQ, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
 
 ## Multiplication by Q from the Pivoted QR decomposition
 function *{T<:BlasFloat}(A::QRPivotedQ{T}, B::StridedVecOrMat{T})
