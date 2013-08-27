@@ -57,20 +57,21 @@ end
 function installed_version(pkg::String, avail::Dict=available(pkg))
     ispath(pkg,".git") || return typemin(VersionNumber)
     head = Git.head(dir=pkg)
-    for (ver,info) in avail
-        head == info.sha1 && return ver
-    end
+    vers = [keys(filter((ver,info)->info.sha1==head, avail))...]
+    !isempty(vers) && return max(vers)
     cache = Cache.path(pkg)
     cache_has_head = isdir(cache) && Git.iscommit(head, dir=cache)
     lo = typemin(VersionNumber)
     hi = typemin(VersionNumber)
     for (ver,info) in avail
-        base =
-            cache_has_head && Git.iscommit(info.sha1, dir=cache) ?
-                Git.readchomp(`merge-base $head $(info.sha1)`, dir=cache) :
-            Git.iscommit(info.sha1, dir=pkg) ?
-                Git.readchomp(`merge-base $head $(info.sha1)`, dir=pkg) :
+        base = if cache_has_head && Git.iscommit(info.sha1, dir=cache)
+            Git.readchomp(`merge-base $head $(info.sha1)`, dir=cache)
+        elseif Git.iscommit(info.sha1, dir=pkg)
+            Git.readchomp(`merge-base $head $(info.sha1)`, dir=pkg)
+        else
             Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package cache")
+            nothing # guaranteed not to equal `head`
+        end
         if base == head # head is_ancestor_of info.sha1
             lo = max(lo,ver)
         elseif base == info.sha1 # info.sha1 is_ancestor_of head
