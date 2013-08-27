@@ -160,12 +160,6 @@ function serialize(s, m::Module)
     serialize(s, fullname(m))
 end
 
-function lambda_number(l::LambdaStaticData)
-    # a hash function that always gives the same number to the same
-    # object on the same machine, and is unique over all machines.
-    hash(uint64(object_id(l))+(uint64(myid())<<44))
-end
-
 function serialize(s, f::Function)
     writetag(s, Function)
     name = false
@@ -204,6 +198,21 @@ function serialize(s, f::Function)
         serialize(s, f.env)
         serialize(s, linfo)
     end
+end
+
+const lambda_numbers = WeakKeyDict()
+lnumber_salt = 0
+function lambda_number(l::LambdaStaticData)
+    global lnumber_salt, lambda_numbers
+    if haskey(lambda_numbers, l)
+        return lambda_numbers[l]
+    end
+    # a hash function that always gives the same number to the same
+    # object on the same machine, and is unique over all machines.
+    ln = hash(lnumber_salt+(uint64(myid())<<44))
+    lnumber_salt += 1
+    lambda_numbers[l] = ln
+    return ln
 end
 
 function serialize(s, linfo::LambdaStaticData)
