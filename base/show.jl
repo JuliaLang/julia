@@ -36,6 +36,8 @@ end
 function show(io::IO, f::Function)
     if isgeneric(f)
         print(io, f.env.name)
+    elseif isdefined(f, :env) && isa(f.env,Symbol)
+        print(io, f.env)
     else
         print(io, "# function")
     end
