@@ -103,7 +103,7 @@ uvhandle(x::Ptr) = x
 uvtype(::Ptr) = UV_STREAM
 uvtype(::DevNullStream) = UV_STREAM
 
-typealias Redirectable Union(UVStream,FS.File,FileRedirect,DevNullStream)
+typealias Redirectable Union(UVStream,FS.File,FileRedirect,DevNullStream,IOStream)
 
 type CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
@@ -151,7 +151,7 @@ setenv(cmd::Cmd, env::Associative) = (cmd.env = ByteString[string(k)*"="*string(
 (.>>)(src::AbstractCmd,dest::String) = CmdRedirect(src,FileRedirect(dest,true),STDERR_NO)
 
 
-typealias RawOrBoxedHandle Union(UVHandle,UVStream,Redirectable)
+typealias RawOrBoxedHandle Union(UVHandle,UVStream,Redirectable,IOStream)
 typealias StdIOSet NTuple{3,RawOrBoxedHandle}
 
 type Process
@@ -264,6 +264,8 @@ macro setup_stdio()
         elseif isa(stdios[1],FileRedirect)
             in = FS.open(stdios[1].filename,JL_O_RDONLY)
             close_in = true
+        elseif isa(stdios[1],IOStream)
+            in = FS.File(RawFD(fd(stdios[1])))
         end
         if isa(stdios[2],Pipe)
             if stdios[2].handle==C_NULL
@@ -275,6 +277,8 @@ macro setup_stdio()
         elseif isa(stdios[2],FileRedirect)
             out = FS.open(stdios[2].filename,JL_O_WRONLY|JL_O_CREAT|(stdios[2].append?JL_O_APPEND:JL_O_TRUNC),S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
             close_out = true
+        elseif isa(stdios[2],IOStream)
+            out = FS.File(RawFD(fd(stdios[2])))
         end
         if isa(stdios[3],Pipe)
             if stdios[3].handle==C_NULL
@@ -286,6 +290,8 @@ macro setup_stdio()
         elseif isa(stdios[3],FileRedirect)
             err = FS.open(stdios[3].filename,JL_O_WRONLY|JL_O_CREAT|(stdios[3].append?JL_O_APPEND:JL_O_TRUNC),S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
             close_err = true
+        elseif isa(stdios[3],IOStream)
+            err = FS.File(RawFD(fd(stdios[3])))
         end
     end)
 end
