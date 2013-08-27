@@ -85,6 +85,13 @@ function showerror(io::IO, e::MethodError)
     else
         print(io, "no method $(name)$(typeof(e.args))")
     end
+    if isdefined(Base,name)
+        f = eval(Base,name)
+        if isgeneric(f) && applicable(f,e.args...)
+            println(io)
+            print(io, "you may have intended to import Base.$(name)")
+        end
+    end
 end
 
 function show_trace_entry(io, fname, file, line, n)
