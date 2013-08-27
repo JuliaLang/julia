@@ -1410,6 +1410,7 @@ Text I/O
 .. function:: show(x)
 
    Write an informative text representation of a value to the current output stream. New types should overload ``show(io, x)`` where the first argument is a stream.
+   The representation used by ``show`` generally includes Julia-specific formatting and type information.
 
 .. function:: showcompact(x)
 
@@ -1425,6 +1426,7 @@ Text I/O
 .. function:: print(x)
 
    Write (to the default output stream) a canonical (un-decorated) text representation of a value if there is one, otherwise call ``show``.
+   The representation used by ``print`` includes minimal formatting and tries to avoid Julia-specific details.
 
 .. function:: println(x)
 
@@ -1457,7 +1459,7 @@ Text I/O
 
 .. function:: dump(x)
 
-   Write a thorough text representation of a value to the current output stream.
+   Show the full structure of a value, including all fields of objects.
 
 .. function:: readall(stream)
 
