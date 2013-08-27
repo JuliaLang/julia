@@ -9,7 +9,7 @@ b = 0.5
 c = 0x1p-54
 d = prevfloat(1.)
 
-# Default rounding direction, RoundToNearest
+# Default rounding direction, RoundNearest
 @test a + b === 1.
 @test - a - b === -1.
 @test a - b === -c
@@ -23,7 +23,7 @@ with_rounding(RoundToZero) do
     @test b - a === c
 end
 
-# Sanity check to see if we have returned to RoundToNearest
+# Sanity check to see if we have returned to RoundNearest
 @test a + b === 1.
 @test - a - b === -1.
 @test a - b == -c
@@ -52,7 +52,7 @@ b32 = 0.5f0
 c32 = (1.f0 - prevfloat(1.f0))/2
 d32 = prevfloat(1.0f0)
 
-# Default rounding direction, RoundToNearest
+# Default rounding direction, RoundNearest
 @test a32 + b32 === 1.0f0
 @test - a32 - b32 === -1.0f0
 @test a32 - b32 === -c32
@@ -66,7 +66,7 @@ with_rounding(RoundToZero) do
     @test b32 - a32 === c32
 end
 
-# Sanity check to see if we have returned to RoundToNearest
+# Sanity check to see if we have returned to RoundNearest
 @test a32 + b32 === 1.0f0
 @test - a32 - b32 === -1.0f0
 @test a32 - b32 == -c32
