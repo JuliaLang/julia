@@ -212,7 +212,18 @@ function writedlm(io::IO, a::Union(AbstractMatrix,AbstractVector), dlm::Char)
     nothing
 end
 
-function writedlm(fname::String, a::Union(AbstractVector,AbstractMatrix), dlm::Char)
+function writedlm(io::IO, a::AbstractArray, dlm::Char)
+    tail = size(a)[3:]
+    function print_slice(idxs...)
+        writedlm(io, sub(a, 1:size(a,1), 1:size(a,2), idxs...), dlm)
+        if idxs != tail
+            print("\n")
+        end
+    end
+    cartesianmap(print_slice, tail)
+end
+
+function writedlm(fname::String, a, dlm::Char)
     open(fname, "w") do io
         writedlm(io, a, dlm)
     end

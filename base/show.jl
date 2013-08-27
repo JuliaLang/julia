@@ -877,6 +877,8 @@ end
 
 show(io::IO, X::AbstractArray) = showarray(io, X)
 
+print(io::IO, X::AbstractArray) = writedlm(io, X)
+
 showall(x) = showall(STDOUT, x)
 showall(io::IO, x) = show(io, x)
 showall(io::IO, x::AbstractArray) = showarray(io, x, limit=false)
