@@ -546,6 +546,9 @@ void darwin_stack_overflow_handler(unw_context_t *uc)
 #define HANDLE_MACH_ERROR(msg, retval) \
     if (retval!=KERN_SUCCESS) { mach_error(msg ":", (retval)); jl_exit(1); }
 
+extern kern_return_t profiler_segv_handler(mach_port_t,mach_port_t,mach_port_t,exception_type_t,exception_data_t,mach_msg_type_number_t);
+extern volatile mach_port_t mach_profiler_thread;
+
 //exc_server uses dlsym to find symbol
 DLLEXPORT kern_return_t catch_exception_raise
                 (mach_port_t                          exception_port,
@@ -562,6 +565,10 @@ DLLEXPORT kern_return_t catch_exception_raise
     kern_return_t ret;
     //memset(&state,0,sizeof(x86_thread_state64_t));
     //memset(&exc_state,0,sizeof(x86_exception_state64_t));
+    if (thread == mach_profiler_thread)
+    {
+        return profiler_segv_handler(exception_port,thread,task,exception,code,code_count);
+    }
     ret = thread_get_state(thread,x86_EXCEPTION_STATE64,(thread_state_t)&exc_state,&exc_count);
     HANDLE_MACH_ERROR("thread_get_state(1)",ret);
     uint64_t fault_addr = exc_state.__faultvaddr;

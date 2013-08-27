@@ -92,6 +92,7 @@ DLLEXPORT void profile_stop_timer(void) {
 #include <mach/clock.h>
 #include <mach/clock_types.h>
 #include <mach/clock_reply.h>
+#include <assert.h>
 
 #define HANDLE_MACH_ERROR(msg, retval) \
     if (retval!=KERN_SUCCESS) { mach_error(msg ":", (retval)); jl_exit(1); }
@@ -102,30 +103,59 @@ clock_serv_t clk;
 static int profile_started = 0;
 static mach_port_t profile_port = 0;
 volatile static int running = 0;
+volatile static int forceDwarf = -2;
+volatile mach_port_t mach_profiler_thread = 0;
 mach_timespec_t timerprof;
+static unw_context_t profiler_uc;
 
-kern_return_t clock_alarm_reply
-(
-    clock_reply_t alarm_port,
-    mach_msg_type_name_t alarm_portPoly,
-    kern_return_t alarm_code,
-    alarm_type_t alarm_type,
-    mach_timespec_t alarm_time
-)
+kern_return_t profiler_segv_handler
+                (mach_port_t                          exception_port,
+                 mach_port_t                                  thread,
+                 mach_port_t                                    task,
+                 exception_type_t                          exception,
+                 exception_data_t                               code,
+                 mach_msg_type_number_t                   code_count)
 {
-    HANDLE_MACH_ERROR("clock_alarm_reply",alarm_code);
-    
+    assert(thread == mach_profiler_thread);
+    x86_thread_state64_t state;
 
+    // Not currently unwinding. Raise regular segfault
+    if (forceDwarf == -2)
+        return -309; 
+
+    if (forceDwarf == 0)
+        forceDwarf = 1;
+    else
+        forceDwarf = -1;
+
+    unsigned int count = MACHINE_THREAD_STATE_COUNT;
+
+    thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
+
+    // don't change cs fs gs rflags
+    uint64_t cs = state.__cs;
+    uint64_t fs = state.__fs;
+    uint64_t gs = state.__gs;
+    uint64_t rflags = state.__rflags;
+
+    memcpy(&state,&profiler_uc,sizeof(x86_thread_state64_t));
+
+    state.__cs = cs;
+    state.__fs = fs;
+    state.__gs = gs;
+    state.__rflags = rflags;
+
+    kern_return_t ret = thread_set_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,count);
+    HANDLE_MACH_ERROR("thread_set_state",ret);
 
     return KERN_SUCCESS;
 }
-
-extern boolean_t clock_alarm_reply_server(mach_msg_header_t *, mach_msg_header_t *);
 
 void * mach_profile_listener(void *arg)
 {
     (void) arg;
     int max_size = 512;
+    mach_profiler_thread = mach_thread_self();
     mig_reply_error_t *bufRequest = (mig_reply_error_t *) malloc(max_size);
     while (1) {
         kern_return_t ret = mach_msg(&bufRequest->Head, MACH_RCV_MSG,
@@ -151,14 +181,40 @@ void * mach_profile_listener(void *arg)
             memset(&uc,0,sizeof(unw_context_t));
             memcpy(&uc,&state,sizeof(x86_thread_state64_t));
 
-            // Save the backtrace
-            bt_size_cur += rec_backtrace_ctx((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &uc);
+            /*
+             *  Unfortunately compact unwind info is incorrectly generated for quite a number of  
+             *  libraries by quite a large number of compilers. We can fall back to DWARF unwind info 
+             *  in some cases, but in quite a number of cases (especially libraries not compiled in debug
+             *  mode, only the compact unwind info may be available). Even more unfortunately, there is no
+             *  way to detect such bogus compact unwind info (other than noticing the resulting segfault).
+             *  What we do here is ugly, but necessary until the compact unwind info situation improves.
+             *  We try to use the compact unwind info and if that results in a segfault, we retry with DWARF info.
+             *  Note that in a small number of cases this may result in bogus stack traces, but at least the topmost
+             *  entry will always be correct, and the number of cases in which this is an issue is rather small. 
+             *  Other than that, this implementation is not incorrect as the other thread is paused while we are profiling
+             *  and during stack unwinding we only ever read memory, but never write it. 
+             */
+
+            forceDwarf = 0;
+            unw_getcontext(&profiler_uc);
+
+            if (forceDwarf == 0) {
+                // Save the backtrace
+                bt_size_cur += rec_backtrace_ctx((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &uc);
+            } else if(forceDwarf == 1) {
+                bt_size_cur += rec_backtrace_ctx_dwarf((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &uc);
+            } else if (forceDwarf == -1) {
+                JL_PRINTF(JL_STDERR, "Warning: Profiler attempt to access an invalid memory location\n");
+            }
+
+            forceDwarf = -2;
+
             // Mark the end of this block with 0
             bt_data_prof[bt_size_cur] = 0;
             bt_size_cur++;
 
             // We're done! Resume the thread. 
-            thread_resume(main_thread);
+            ret = thread_resume(main_thread);
             HANDLE_MACH_ERROR("thread_resume",ret)
 
             if (running) {
