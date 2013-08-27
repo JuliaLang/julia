@@ -2781,10 +2781,6 @@ Data Formats
 
    Get the exponent of a normalized floating-point number.
 
-.. function:: isfloat64(x::Rational)
-
-   Tests whether ``x`` or all its elements can be losslessly represented as a ``Float64`` data type
-
 .. function:: complex64(r,i)
 
    Convert to ``r+i*im`` represented as a ``Complex64`` data type
