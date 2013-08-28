@@ -848,6 +848,8 @@ ios_t *ios_fd(ios_t *s, long fd, int isfile, int own)
     s->ownfd = own;
     if (fd == STDERR_FILENO)
         s->bm = bm_none;
+    if (fd == STDOUT_FILENO)
+        s->bm = bm_line;
     return s;
 }
 
