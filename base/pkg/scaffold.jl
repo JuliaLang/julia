@@ -10,9 +10,11 @@ function scaffold(
     authors::String = Git.readchomp(`config --global --get user.name`),
 )
     isempty(license) && error("""
-        No license chosen -- you must choose a license, e.g.:
+        You must choose a license, e.g.:
 
             julia> Pkg.scaffold("$pkg", license="MIT")
+
+        Predefined licenses: $(join(sort!([keys(LICENSES)...], by=lowercase), ", ", " and ")).
         """)
     haskey(LICENSES,license) ||
         error("$license is not a known license choice.")
