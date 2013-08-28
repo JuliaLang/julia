@@ -94,40 +94,36 @@ clone(url::String, pkg::String=urlpkg(url); opts::Cmd=``) = Dir.cd() do
     _resolve()
 end
 
-function _checkout(pkg::String, what::String, merge::Bool, force::Bool)
+function _checkout(pkg::String, what::String, merge::Bool=false)
     Git.transact(dir=pkg) do
-        if force
-            Git.run(`checkout -q -f $what`, dir=pkg)
-        else
-            Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
-            Git.run(`checkout -q $what`, dir=pkg)
-        end
+        Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
+        Git.run(`checkout -q $what`, dir=pkg)
         merge && Git.run(`merge -q --ff-only $what`, dir=pkg)
         _resolve()
     end
 end
 
-checkout(pkg::String, branch::String="master"; force::Bool=false, merge::Bool=true) = Dir.cd() do
+checkout(pkg::String, branch::String="master"; merge::Bool=true) = Dir.cd() do
     ispath(pkg,".git") || error("$pkg is not a git repo")
     info("Checking out $pkg $branch...")
-    _checkout(pkg,branch,merge,force)
+    _checkout(pkg,branch,merge)
 end
 
-release(pkg::String; force::Bool=false) = Dir.cd() do
-    ispath(pkg,".git") || error("$pkg is not a git repo")
-    avail = Dir.cd(Read.available)
-    haskey(avail,pkg) || error("$pkg is not registered")
-    force || Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
+release(pkg::String) = Dir.cd() do
+    Read.isinstalled(pkg) || error("$pkg cannot be released – not an installed package")
+    avail = Read.available(pkg)
+    isempty(avail) && error("$pkg cannot be released – not a registered package")
+    Git.dirty(dir=pkg) && error("$pkg cannot be released – repo is dirty")
     info("Releasing $pkg...")
-    avail = avail[pkg]
     vers = sort!([keys(avail)...], rev=true)
     while true
         for ver in vers
             sha1 = avail[ver].sha1
             Git.iscommit(sha1, dir=pkg) || continue
-            return _checkout(pkg,sha1,false,force)
+            return _checkout(pkg,sha1)
         end
-        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])
+        isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
+        error("can't find any registered versions of $pkg to checkout")
     end
 end
 
