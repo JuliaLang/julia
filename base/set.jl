@@ -44,8 +44,8 @@ function union(s::Set, sets::Set...)
     if U != Any
         for t in sets
             T = eltype(t)
-            U = issubtype(T,U) ? U :
-                issubtype(U,T) ? T : Any # TODO: tigher upper bound
+            U = T<:U ? U :
+                U<:T ? T : Any # TODO: tigher upper bound
         end
     end
     u = Set{U}()
