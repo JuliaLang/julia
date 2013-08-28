@@ -2,12 +2,21 @@ module Scaffold
 
 using Base.Git, ..Dir, ..Read
 
+function generate(f::Function, path::String)
+    info("Generating $path")
+    mkpath(dirname(path))
+    open(f, path, "w")
+    Git.run(`add $path`)
+end
+
 function scaffold(
     pkg::String;
     dir::String = "",
     license::String = "",
     years::Union(Int,String) = readchomp(`date +%Y`),
     authors::String = Git.readchomp(`config --global --get user.name`),
+    github::Bool = Git.success(`config --get github.user`),
+    travis::Bool = Git.success(`config --get github.user`),
 )
     isempty(license) && error("""
         You must choose a license, e.g.:
@@ -32,28 +41,51 @@ function scaffold(
     try cd(d) do
             info("Initializing $pkg repo")
             Git.run(`init -q`)
-            info("Generating $pkg/README.md")
-            open("README.md","w") do f
-                # TODO: add some content?
+            Git.run(`commit -q --allow-empty -m "initial empty commit"`)
+            generate("README.md") do io
+                if travis
+                    user = Git.readchomp(`config --get github.user`)
+                    url = "https://travis-ci.org/$user/$pkg.jl"
+                    print(io, "[![Build Status]($url.png)]($url)")
+                end
             end
-            info("Generating $pkg/LICENSE.md")
-            open("LICENSE.md","w") do f
-                print(f, LICENSES[license](pkg, string(years), authors))
+            generate("LICENSE.md") do io
+                print(io, LICENSES[license](pkg, string(years), authors))
             end
-            info("Generating $pkg/src/$pkg.jl")
-            mkdir("src")
-            open("src/$pkg.jl", "w") do f
-                print(f, "module $pkg\n\nend # module\n")
+            generate("src/$pkg.jl") do io
+                print(io, "module $pkg\n\nend # module\n")
             end
-            info("Committing initial version of $pkg")
-            Git.run(`add LICENSE.md README.md src/$pkg.jl`)
+            travis && generate(".travis.yml") do io
+                print(io, """
+                    language: cpp
+                    compiler:
+                        - clang
+                    notifications:
+                        email: false
+                    before_install:
+                        - sudo add-apt-repository ppa:staticfloat/julia-deps -y
+                        - sudo add-apt-repository ppa:staticfloat/julianightlies -y
+                        - sudo apt-get update -qq -y
+                        - sudo apt-get install libpcre3-dev julia -y
+                    script:
+                        - julia -e 'Pkg.init(); run(`ln -s \$(pwd()) \$(Pkg.dir())/`); Pkg.resolve()'
+                        - julia -e 'using $pkg; @assert isdefined(:$pkg); @assert typeof($pkg) === Module'
+                    """)
+            end
+            info("Committing scaffold")
             Git.run(`commit -q -m "$pkg.jl scaffold with $license license."`)
+            if github
+                user = Git.readchomp(`config --get github.user`)
+                url = "git@github.com:$user/$pkg.jl.git"
+                info("Setting URL: $url")
+                Git.run(`config remote.origin.url $url`)
+            end
         end
     catch
         run(`rm -rf $d`)
         rethrow()
     end
-    info("$pkg package created: $d")
+    info("Package $pkg created: $d")
 end
 
 mit(pkg::String, years::String, authors::String) = """

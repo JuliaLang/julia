@@ -181,13 +181,13 @@ Types
 
    Return the supertype of DataType T
 
-.. function:: subtype(type1, type2)
+.. function:: issubtype(type1, type2)
 
    True if and only if all values of ``type1`` are also of ``type2``. Can also be written using the ``<:`` infix operator as ``type1 <: type2``.
 
 .. function:: <:(T1, T2)
 
-   Subtype operator, equivalent to ``subtype(T1,T2)``.
+   Subtype operator, equivalent to ``issubtype(T1,T2)``.
 
 .. function:: subtypes(T::DataType)
 
