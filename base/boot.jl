@@ -138,7 +138,7 @@ export
     setfield, yieldto, throw, tuple, tuplelen, tupleref, is, ===, isdefined,
     convert_default, convert_tuple, kwcall,
     # type reflection
-    subtype, typeassert, typeof, apply_type, isa,
+    issubtype, typeassert, typeof, apply_type, isa,
     # method reflection
     applicable, invoke, method_exists,
     # constants
