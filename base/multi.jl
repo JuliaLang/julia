@@ -916,6 +916,7 @@ function start_worker(out::IO)
     print(out, "$(dec(actual_port))#") # print port
     print(out, bind_addr)      #TODO: print hostname
     print(out, '\n')
+    flush(out)
     # close STDIN; workers will not use it
     #close(STDIN)
 
@@ -958,13 +959,6 @@ function start_cluster_workers(np::Integer, config::Dict, cman::ClusterManager)
         read_cb_response(inst) = (inst[1], inst[2], inst[3], inst[2], inst[4])
     elseif insttype == :host_port
         read_cb_response(inst) = (nothing, inst[1], inst[2], inst[1], inst[3])
-    elseif insttype == :cmd
-        read_cb_response(inst) = 
-        begin
-            io,_ = readsfrom(detach(inst[1]))
-            (host, port) = read_worker_host_port(io)
-            io, host, port, host, inst[2]
-        end
     else
         error("Unsupported format from Cluster Manager callback")
     end
@@ -1036,6 +1030,10 @@ function create_worker(privhost, port, pubhost, stream, config, manage)
             end)
         end
     end
+
+    # install a finalizer to perform cleanup if necessary
+    finalizer(w, (w)->if myid() == 1 w.manage(w.id, w.config, :finalize) end)
+
     w
 end
 
