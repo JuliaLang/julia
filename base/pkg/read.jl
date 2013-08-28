@@ -61,26 +61,32 @@ function installed_version(pkg::String, avail::Dict=available(pkg))
     !isempty(vers) && return max(vers)
     cache = Cache.path(pkg)
     cache_has_head = isdir(cache) && Git.iscommit(head, dir=cache)
-    lo = typemin(VersionNumber)
-    hi = typemin(VersionNumber)
+    ancestors = VersionNumber[]
+    descendants = VersionNumber[]
     for (ver,info) in avail
-        base = if cache_has_head && Git.iscommit(info.sha1, dir=cache)
-            Git.readchomp(`merge-base $head $(info.sha1)`, dir=cache)
-        elseif Git.iscommit(info.sha1, dir=pkg)
-            Git.readchomp(`merge-base $head $(info.sha1)`, dir=pkg)
+        sha1 = info.sha1
+        base = if cache_has_head && Git.iscommit(sha1, dir=cache)
+            Git.readchomp(`merge-base $head $sha1`, dir=cache)
+        elseif Git.iscommit(sha1, dir=pkg)
+            Git.readchomp(`merge-base $head $sha1`, dir=pkg)
         else
-            Base.warn_once("unknown $pkg commit $(info.sha1[1:8]), metadata may be ahead of package cache")
-            nothing # guaranteed not to equal `head`
+            Base.warn_once("unknown $pkg commit $(sha1[1:8]), metadata may be ahead of package cache")
+            continue
         end
-        if base == head # head is_ancestor_of info.sha1
-            lo = max(lo,ver)
-        elseif base == info.sha1 # info.sha1 is_ancestor_of head
-            hi = max(hi,ver)
-        end
+        base == sha1 && push!(ancestors,ver)
+        base == head && push!(descendants,ver)
     end
-    typemin(VersionNumber) < lo ?
-        VersionNumber(lo.major, lo.minor, lo.patch, ("",), ()) :
-        VersionNumber(hi.major, hi.minor, hi.patch, (), ("",))
+    both = sort!(intersect(ancestors,descendants))
+    isempty(both) || warn("$pkg: some versions are both ancestors and descendants of head: $both")
+    if !isempty(descendants)
+        v = min(descendants)
+        return VersionNumber(v.major, v.minor, v.patch, ("",), ())
+    elseif !isempty(ancestors)
+        v = max(ancestors)
+        return VersionNumber(v.major, v.minor, v.patch, (), ("",))
+    else
+        return typemin(VersionNumber)
+    end
 end
 
 function requires_path(pkg::String, avail::Dict=available(pkg))
