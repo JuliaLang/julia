@@ -127,7 +127,8 @@ release(pkg::String; force::Bool=false) = Dir.cd() do
             Git.iscommit(sha1, dir=pkg) || continue
             return _checkout(pkg,sha1,false,force)
         end
-        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])
+        isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
+        error("can't find any registered versions of $pkg to checkout")
     end
 end
 
