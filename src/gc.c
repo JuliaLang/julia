@@ -923,6 +923,7 @@ void jl_gc_collect(void)
 #ifdef GCTIME
         JL_PRINTF(JL_STDERR, "sweep time %.3f ms\n", (clock_now()-t0)*1000);
 #endif
+        int nfinal = to_finalize.len;
         run_finalizers();
         jl_in_gc = 0;
         JL_SIGATOMIC_END();
@@ -949,6 +950,10 @@ void jl_gc_collect(void)
             collect_interval = default_collect_interval;
         }
         freed_bytes = 0;
+        // if a lot of objects were finalized, re-run GC to finish freeing
+        // their storage if possible.
+        if (nfinal > 100000)
+            jl_gc_collect();
     }
 }
 
