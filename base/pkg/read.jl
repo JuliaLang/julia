@@ -10,16 +10,16 @@ sha1(pkg::String, ver::VersionNumber) = readstrip("METADATA", pkg, "versions", s
 function available(names=readdir("METADATA"))
     pkgs = Dict{ByteString,Dict{VersionNumber,Available}}()
     for pkg in names
-        isfile("METADATA", pkg, "url") || continue
-        versdir = joinpath("METADATA", pkg, "versions")
+        pkgs[pkg] = eltype(pkgs)[2]()
+        isfile("METADATA",pkg,"url") || continue
+        versdir = joinpath("METADATA",pkg,"versions")
         isdir(versdir) || continue
         for ver in readdir(versdir)
             ismatch(Base.VERSION_REGEX, ver) || continue
             isfile(versdir, ver, "sha1") || continue
-            haskey(pkgs,pkg) || (pkgs[pkg] = eltype(pkgs)[2]())
             pkgs[pkg][convert(VersionNumber,ver)] = Available(
-                readchomp(joinpath(versdir, ver, "sha1")),
-                Reqs.parse(joinpath(versdir, ver, "requires"))
+                readchomp(joinpath(versdir,ver,"sha1")),
+                Reqs.parse(joinpath(versdir,ver,"requires"))
             )
         end
     end
