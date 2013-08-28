@@ -117,6 +117,7 @@ export PipeString
 @deprecate eatwspace(io)  skipchars(io, isspace)
 @deprecate eatwspace_comment(io, cmt)  skipchars(io, isspace, linecomment=cmt)
 @deprecate open_any_tcp_port listenany
+@deprecate  subtype             issubtype
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)

@@ -1021,7 +1021,7 @@ void jl_init_primitives(void)
 {
     add_builtin_func("is", jl_f_is);
     add_builtin_func("typeof", jl_f_typeof);
-    add_builtin_func("subtype", jl_f_subtype);
+    add_builtin_func("issubtype", jl_f_subtype);
     add_builtin_func("isa", jl_f_isa);
     add_builtin_func("typeassert", jl_f_typeassert);
     add_builtin_func("apply", jl_f_apply);
