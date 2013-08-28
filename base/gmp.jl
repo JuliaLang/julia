@@ -15,7 +15,7 @@ type BigInt <: Integer
     function BigInt()
         b = new(zero(Cint), zero(Cint), C_NULL)
         ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &b)
-        finalizer(b, BigInt_clear)
+        finalizer(b, _gmp_clear_func)
         return b
     end
 end
@@ -24,7 +24,12 @@ function BigInt_clear(mpz::BigInt)
     ccall((:__gmpz_clear, :libgmp), Void, (Ptr{BigInt},), &mpz)
 end
 
+_gmp_clear_func = C_NULL
+_mpfr_clear_func = C_NULL
+
 function gmp_init()
+    global _gmp_clear_func = cglobal((:__gmpz_clear, :libgmp))
+    global _mpfr_clear_func = cglobal((:mpfr_clear, :libmpfr))
     ccall((:__gmp_set_memory_functions, :libgmp), Void,
           (Ptr{Void},Ptr{Void},Ptr{Void}),
           cglobal(:jl_gc_counted_malloc),
