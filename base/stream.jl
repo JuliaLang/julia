@@ -238,7 +238,7 @@ function reinit_stdio()
     reinit_displays() # since Multimedia.displays uses STDOUT as fallback
 end
 
-flush(::TTY) = nothing
+flush(::Union(Pipe,TTY)) = nothing
 
 function isopen(x)
     if !(x.status != StatusUninit && x.status != StatusInit)
