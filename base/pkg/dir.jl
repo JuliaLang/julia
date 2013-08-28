@@ -30,7 +30,10 @@ end
 
 function init(meta::String=DEFAULT_META)
     d = path()
-    isdir(joinpath(d,"METADATA")) && error("Package directory $d is already initialized.")
+    if isdir(joinpath(d,"METADATA"))
+        warn("Package directory $d is already initialized.")
+        return
+    end
     try
         run(`mkdir -p $d`)
         cd() do
