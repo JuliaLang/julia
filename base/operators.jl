@@ -1,6 +1,6 @@
 ## types ##
 
-const (<:) = subtype
+const (<:) = issubtype
 
 super(T::DataType) = T.super
 

@@ -39,7 +39,7 @@ isbits(x) = isbits(typeof(x))
 isleaftype(t::ANY) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 
 typeintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
-typeseq(a::ANY,b::ANY) = subtype(a,b)&&subtype(b,a)
+typeseq(a::ANY,b::ANY) = issubtype(a,b) && issubtype(b,a)
 
 function fieldoffsets(x::DataType)
     offsets = Array(Int, length(x.names))
