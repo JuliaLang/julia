@@ -12,7 +12,7 @@ VersionInterval() = VersionInterval(typemin(VersionNumber))
 
 Base.show(io::IO, i::VersionInterval) = print(io, "[$(i.lower),$(i.upper))")
 Base.isempty(i::VersionInterval) = i.upper <= i.lower
-Base.contains(i::VersionInterval, v::VersionNumber) = i.lower <= v < i.upper
+Base.in(v::VersionNumber, i::VersionInterval) = i.lower <= v < i.upper
 Base.intersect(a::VersionInterval, b::VersionInterval) = VersionInterval(max(a.lower,b.lower), min(a.upper,b.upper))
 Base.isequal(a::VersionInterval, b::VersionInterval) = (a.lower == b.lower) & (a.upper == b.upper)
 
@@ -35,7 +35,7 @@ VersionSet(versions::VersionNumber...) = VersionSet(VersionNumber[versions...])
 
 Base.show(io::IO, s::VersionSet) = print_joined(io, s.intervals, " ∪ ")
 Base.isempty(s::VersionSet) = all(i->isempty(i), s.intervals)
-Base.contains(s::VersionSet, v::VersionNumber) = any(i->contains(i,v), s.intervals)
+Base.in(v::VersionNumber, s::VersionSet) = any(i->in(v,i), s.intervals)
 function Base.intersect(A::VersionSet, B::VersionSet)
     ivals = vec([ intersect(a,b) for a in A.intervals, b in B.intervals ])
     filter!(i->!isempty(i), ivals)
@@ -55,7 +55,7 @@ function merge_requires!(A::Requires, B::Requires)
 end
 
 satisfies(pkg::String, ver::VersionNumber, reqs::Requires) =
-    !haskey(reqs, pkg) || contains(reqs[pkg], ver)
+    !haskey(reqs, pkg) || in(ver, reqs[pkg])
 
 immutable Available
     sha1::ASCIIString

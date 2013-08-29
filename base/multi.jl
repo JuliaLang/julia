@@ -276,7 +276,7 @@ type ProcessExitedException <: Exception end
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)
 #   Processes with pids > ours, have to connect to us. May not have happened. Wait for some time.
-    if contains(map_del_wrkr, i)
+    if in(i, map_del_wrkr)
         throw(ProcessExitedException())
     end
     if myid()==1 && !haskey(map_pid_wrkr,i)
@@ -330,7 +330,7 @@ function deregister_worker(pg, pid)
     ids = {}
     tonotify = {}
     for (id,rv) in pg.refs
-        if contains(rv.clientset,pid)
+        if in(pid,rv.clientset)
             push!(ids, id)
         end
         if rv.waitingfor == pid
@@ -465,7 +465,7 @@ function send_del_client(rr::RemoteRef)
     if rr.where == myid()
         del_client(rr2id(rr), myid())
     else
-        if contains(map_del_wrkr, rr.where)
+        if in(rr.where, map_del_wrkr)
             # for a removed worker, don't bother
             return
         end
@@ -883,7 +883,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
             
             if (myid() == 1) 
                 global rmprocset
-                if contains(rmprocset, iderr)
+                if in(iderr, rmprocset)
                     delete!(rmprocset, iderr)
                 else
                     println("Worker $iderr terminated.") 

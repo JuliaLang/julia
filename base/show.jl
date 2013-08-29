@@ -194,7 +194,7 @@ show(io::IO, ex::Expr) = show_indented(io, ex)
 function show_indented(io::IO, ex::Expr, indent::Int)
     if is(ex.head, :block) || is(ex.head, :body)
         show_block(io, "quote", ex, indent); print(io, "end")
-    elseif contains((:tuple, :vcat, :cell1), ex.head)
+    elseif in(ex.head, (:tuple, :vcat, :cell1))
         print(io, ':'); show_unquoted(io, ex, indent + indent_width)        
     else
         default_show_quoted(io, ex, indent)
@@ -202,7 +202,7 @@ function show_indented(io::IO, ex::Expr, indent::Int)
 end
 const paren_quoted_syms = Set{Symbol}(:(:),:(::),:(:=),:(=),:(==),:(===),:(=>))
 function show_indented(io::IO, sym::Symbol, indent::Int)
-    if contains(paren_quoted_syms, sym)
+    if in(sym, paren_quoted_syms)
         print(io, ":($sym)")
     else
         print(io, ":$sym")
@@ -291,9 +291,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
             show_unquoted(io, args[2], indent + indent_width)
             print(io, ')')
         end                  
-    elseif (contains(_expr_infix, head) && nargs==2) || (is(head,:(:)) && nargs==3)
+    elseif (in(head, _expr_infix) && nargs==2) || (is(head,:(:)) && nargs==3)
         show_list(io, args, head, indent)
-    elseif contains(_expr_infix_wide, head) && nargs == 2
+    elseif in(head, _expr_infix_wide) && nargs == 2
         show_list(io, args, " $head ", indent)
     elseif is(head, symbol("::")) && nargs == 1
         print(io, "::")        
@@ -313,8 +313,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
     elseif is(head, :(...)) && nargs == 1
         show_unquoted(io, args[1], indent)
         print(io, "...")
-    elseif (nargs == 1 && contains((:return, :abstract, :const), head)) ||
-                          contains((:local,  :global), head)
+    elseif (nargs == 1 && in(head, (:return, :abstract, :const))) ||
+                          in(head, (:local,  :global))
         print(io, head, ' ')
         show_list(io, args, ",", indent)
     elseif is(head, :macrocall) && nargs >= 1
@@ -338,7 +338,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
         show_block(io, "let", args[2:end], args[1], indent); print(io, "end")
     elseif is(head, :block) || is(head, :body)
         show_block(io, "begin", ex, indent); print(io, "end")
-    elseif contains((:for,:while,:function,:if,:type,:module),head) && nargs==2
+    elseif in(head,(:for,:while,:function,:if,:type,:module)) && nargs==2
         show_block(io, head, args[1], args[2], indent); print(io, "end")
     elseif is(head, :quote) && nargs == 1
         show_indented(io, args[1], indent)
@@ -928,7 +928,6 @@ function show_vector(io::IO, v, opn, cls)
         show_delim_array(io, v[1:10], opn, ",", "", false)
         print(io, "  \u2026  ")
         show_delim_array(io, v[end-9:end], "", ",", cls, false)
-        #print_matrix(io, X, 1, tty_cols(), opn, ", ", cls, "  \u2026  ", "\u22ee", "  \u22f1  ", 5, 5)
     else
         show_delim_array(io, v, opn, ",", cls, false)
     end

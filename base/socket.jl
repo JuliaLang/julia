@@ -195,7 +195,7 @@ function parseipv6(str)
         error("Too many fields in IPv6 address")
     elseif length(fields) == 8
         return IPv6(parseipv6fields(fields))
-    elseif contains(fields[end],'.')
+    elseif in('.',fields[end])
         return IPv6((parseipv6fields(fields[1:(end-1)],6))
             | parseipv4(fields[end]).host )
     else
@@ -210,7 +210,7 @@ end
 #
 
 function parseip(str)
-    if contains(str,':')
+    if in(':',str)
         # IPv6 Address
         return parseipv6(str)
     else

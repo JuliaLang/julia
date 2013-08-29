@@ -14,7 +14,7 @@ isempty(s::Set) = isempty(s.dict)
 length(s::Set)  = length(s.dict)
 eltype{T}(s::Set{T}) = T
 
-contains(s::Set, x) = haskey(s.dict, x)
+in(x, s::Set) = haskey(s.dict, x)
 
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
@@ -61,7 +61,7 @@ function intersect(s::Set, sets::Set...)
     i = copy(s)
     for x in s
         for t in sets
-            if !contains(t,x)
+            if !in(x,t)
                 delete!(i,x)
                 break
             end
@@ -84,7 +84,7 @@ isless(l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
 
 function issubset(l, r)
     for elt in l
-        if !contains(r, elt)
+        if !in(elt, r)
             return false
         end
     end
@@ -95,7 +95,7 @@ function unique(C)
     out = Array(eltype(C),0)
     seen = Set{eltype(C)}()
     for x in C
-        if !contains(seen, x)
+        if !in(x, seen)
             push!(seen, x)
             push!(out, x)
         end

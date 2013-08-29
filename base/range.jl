@@ -393,9 +393,9 @@ function map(f::Callable, r::Ranges)
     map!(f, Array(typeof(first), length(r)), r)
 end
 
-function contains(r::Ranges, x)
+function in(x, r::Ranges)
     n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1
     n >= 1 && n <= length(r) && r[n] == x
 end
 
-contains{T<:Integer}(r::Ranges{T}, x) = isinteger(x) && x>=min(r) && x<=max(r) && (step(r)==0 || mod(int(x)-first(r),step(r))==0)
+in{T<:Integer}(x, r::Ranges{T}) = isinteger(x) && x>=min(r) && x<=max(r) && (step(r)==0 || mod(int(x)-first(r),step(r))==0)

@@ -56,7 +56,7 @@ function packages(reqs::Vector{VersionSet})
         #       this is just union!(pkgs, map(r->r.package, parse_requires(reqfile)))
         isfile(reqfile) || continue
         for r in sort!(parse_requires(reqfile))
-            if !contains(pkgs,r.package) && isdir(r.package)
+            if !in(r.package,pkgs) && isdir(r.package)
                 push!(pkgs,r.package)
             end
         end
@@ -144,7 +144,7 @@ add(pkgs::Vector{VersionSet}) = cd_pkgdir() do
     run(`git add REQUIRE`)
     try
         for pkg in pkgs
-            if !contains(Metadata.packages(),pkg.package)
+            if !in(pkg.package,Metadata.packages())
                 error("Unknown package $(pkg.package); Perhaps you need to Pkg.update() for new metadata?")
             end
             reqs = parse_requires("REQUIRE")
@@ -179,7 +179,7 @@ rm(pkgs::Vector{String}) = cd_pkgdir() do
     run(`git add REQUIRE`)
     try
         for pkg in pkgs
-            if !contains(Metadata.packages(),pkg)
+            if !in(pkg,Metadata.packages())
                 error("Invalid package: $pkg")
             end
             reqs = parse_requires("REQUIRE")
@@ -274,7 +274,7 @@ function gather_repository_data(julia_version::VersionNumber=VERSION)
     deps = Metadata.dependencies(union(pkgs,keys(fixed)))
     filter!(reqs) do r
         if haskey(fixed, r.package)
-            if !contains(r, Version(r.package,fixed[r.package]))
+            if !in(Version(r.package,fixed[r.package]), r)
                 warn("$(r.package) is fixed at $(repr(fixed[r.package])) which doesn't satisfy $(r.versions).")
             end
             false # drop
@@ -292,7 +292,7 @@ function gather_repository_data(julia_version::VersionNumber=VERSION)
     filter!(deps) do d
         p = d[2].package
         if haskey(fixed, p)
-            if !contains(d[2], Version(p, fixed[p]))
+            if !in(Version(p, fixed[p]), d[2])
                 push!(unsatisfiable, d[1])
             end
             false # drop
@@ -301,18 +301,18 @@ function gather_repository_data(julia_version::VersionNumber=VERSION)
         end
     end
     filter!(vers) do v
-        !contains(unsatisfiable, v)
+        !in(v, unsatisfiable)
     end
     pkgs = Set{String}()
     for v in vers; push!(pkgs, v.package); end
     filter!(deps) do d
-        contains(pkgs, d[1].package) && !contains(unsatisfiable, d[1])
+        in(d[1].package, pkgs) && !in(d[1], unsatisfiable)
     end
     while true
         empty!(unsatisfiable)
         filter!(deps) do d
             p = d[2].package
-            if !contains(pkgs, p)
+            if !in(p, pkgs)
                 push!(unsatisfiable, d[1])
                 false # drop
             else
@@ -323,12 +323,12 @@ function gather_repository_data(julia_version::VersionNumber=VERSION)
             break
         end
         filter!(vers) do v
-            !contains(unsatisfiable, v)
+            !in(v, unsatisfiable)
         end
         empty!(pkgs)
         for v in vers; push!(pkgs, v.package); end
         filter!(deps) do d
-            contains(pkgs, d[1].package) && !contains(unsatisfiable, d[1])
+            in(d[1].package, pkgs) && !in(d[1], unsatisfiable)
         end
     end
 

@@ -225,13 +225,18 @@ function all(pred::Function, itr)
     return true
 end
 
-function contains(itr, x)
+function in(x, itr)
     for y in itr
         if isequal(y,x)
             return true
         end
     end
     return false
+end
+
+function contains(itr, x)
+    warn_once("contains(collection, item) is deprecated, use in(item, collection) instead")
+    in(x, itr)
 end
 
 function contains(eq::Function, itr, x)

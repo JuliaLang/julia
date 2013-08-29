@@ -61,8 +61,8 @@ function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
     # Sort packages topologically
     sort!(changes, lt=function(a,b)
         ((a,vera),(b,verb)) = (a,b)
-        c = contains(Pkg.Read.alldependencies(a,avail,want,fixed),b) 
-        unnordered = (!c && !contains(Pkg.Read.alldependencies(b,avail,want,fixed),a))
+        c = in(b,Pkg.Read.alldependencies(a,avail,want,fixed))
+        unnordered = (!c && !in(a,Pkg.Read.alldependencies(b,avail,want,fixed)))
         unnordered ? a < b : c
     end)
 
@@ -93,7 +93,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         allowed[p] = (VersionNumber=>Bool)[]
         allowedp = allowed[p]
         for (vn,_) in deps[p]
-            allowedp[vn] = contains(vs, vn)
+            allowedp[vn] = in(vn, vs)
         end
         @assert !isempty(allowedp)
         any([a for (_,a) in allowedp]) ||
@@ -162,7 +162,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         @assert haskey(vmask, p)
         vmaskp = vmask[p]
         for (vn,vm) in vmaskp
-            push!(vm, contains(vs, vn))
+            push!(vm, in(vn, vs))
         end
     end
 
@@ -227,7 +227,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         new_deps[p] = (VersionNumber=>Available)[]
         pruned_versp = pruned_vers[p]
         for (vn,a) in depsp
-            contains(pruned_versp, vn) || continue
+            in(vn, pruned_versp) || continue
             new_deps[p][vn] = a
         end
     end
@@ -269,7 +269,7 @@ function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}
     while !isempty(staged)
         staged_next = Set{ByteString}()
         for p in staged, (_,a) in deps[p], (rp,_) in a.requires
-            if !contains(allpkgs, rp)
+            if !in(rp, allpkgs)
                 push!(staged_next, rp)
             end
         end

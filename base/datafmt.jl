@@ -86,7 +86,7 @@ const valid_opts = [:has_header, :ignore_invalid_chars, :use_mmap]
 function val_opts(opts)
     d = Dict{Symbol,Bool}()
     for opt in opts
-        !contains(valid_opts, opt[1]) && error("unknown option $(opt[1])")
+        !in(opt[1], valid_opts) && error("unknown option $(opt[1])")
         !isa(opt[2], Bool) && error("$(opt[1]) can only be boolean")
         d[opt[1]] = opt[2]
     end
@@ -148,7 +148,7 @@ function dlm_offsets(sbuff::UTF8String, dlm, eol, offsets::Array{Int,2})
     idx = 1
     while(idx <= length(sbuff.data))
         val,idx = next(sbuff, idx)
-        (val != eol) && ((dlm == invalid_dlm) ? !contains(_default_delims, val) : (val != dlm)) && continue
+        (val != eol) && ((dlm == invalid_dlm) ? !in(val, _default_delims) : (val != dlm)) && continue
         col += 1
         offsets[row,col] = idx-2
         (row >= maxrow) && (col == maxcol) && break
@@ -164,7 +164,7 @@ function dlm_offsets(dbuff::Vector{Uint8}, dlm::Uint8, eol::Uint8, offsets::Arra
     offsets[maxrow,maxcol] = length(dbuff)
     for idx in 1:length(dbuff)
         val = dbuff[idx]
-        (val != eol) && ((dlm == invalid_dlm) ? !contains(_default_delims, val) : (val != dlm)) && continue
+        (val != eol) && ((dlm == invalid_dlm) ? !in(val, _default_delims) : (val != dlm)) && continue
         col += 1
         offsets[row,col] = idx-1
         (row >= maxrow) && (col == maxcol) && break
@@ -178,7 +178,7 @@ function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D)
     ncols = nrows = col = 0
     try
         for val in dbuff
-            (val != eol) && ((dlm == invalid_dlm) ? !contains(_default_delims, val) : (val != dlm)) && continue
+            (val != eol) && ((dlm == invalid_dlm) ? !in(val, _default_delims) : (val != dlm)) && continue
             col += 1
             (val == eol) && (nrows += 1; ncols = max(ncols, col); col = 0)
         end

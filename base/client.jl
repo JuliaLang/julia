@@ -256,10 +256,10 @@ function process_options(args::Array{Any,1})
                 global have_color = true
             elseif args[i][8] == '='
                 val = args[i][9:]
-                if contains(("no","0","false"), val)
+                if in(val, ("no","0","false"))
                     color_set = true
                     global have_color = false
-                elseif contains(("yes","1","true"), val)
+                elseif in(val, ("yes","1","true"))
                     color_set = true
                     global have_color = true
                 end
