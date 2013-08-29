@@ -533,3 +533,54 @@ your program's syntax tree.
 Reflection
 ----------
 
+In addition to the syntax-level introspection utilized in metaprogramming,
+Julia provides several other runtime reflection capabilities.
+
+**Type fields** The names of data type fields (or module members) may be interrogated
+using the `names` command. For example, given the following type::
+
+	type Point
+		x::FloatingPoint
+		y
+	end
+
+`names(Point)` will return the array: `Any[ :x :y ]`. Note that the type of
+each field in a `Point` is stored in the `types` field of the Point object::
+
+	julia> typeof(Point)
+	DataType
+	julia> Point.types
+	(FloatingPoint,Any)
+
+**Subtypes** The *direct* subtypes of any DataType may be listed using
+``subtypes(t::DataType)``. For example, the abstract DataType `FloatingPoint`
+has four (concrete) subtypes::
+	
+	julia> subtypes(FloatingPoint)
+	5-element Array{Any,1}:
+	 BigFloat
+	 Float16
+	 Float32
+	 Float64
+
+Any abstract subtype will also be included in this list, but further subtypes
+thereof will not; recursive applications of ``subtypes`` allow to build the
+full type tree.
+
+**Type internals** The internal representation of types is critically important
+when interfacing with C code. ``isbits(T::DataType)`` returns true if `T` is
+stored with C-compatible aligment. The offsets of each field may be listed
+using ``fieldoffsets(T::DataType)``.
+
+**Function methods** The methods of any function may be listed using
+``methods(f::Function)``. 
+
+**Function representations** Functions may be introspected at several levels
+of representation. The lowered form of a function is available
+using ``code_lowered(f::Function, (Args...))``, and the type-inferred lowered form
+is available using ``code_typed(f::Function, (Args...))``.
+
+Closer to the machine, the LLVM Intermediate Representation of a function is
+printed by ``code_llvm(f::Function, (Args...))``, and finally the resulting
+assembly instructions (after JIT'ing step) are available using
+``code_native(f::Function, (Args...)``.
