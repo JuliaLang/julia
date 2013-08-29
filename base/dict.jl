@@ -95,7 +95,7 @@ filter(f::Function, d::Associative) = filter!(f,copy(d))
 eltype{K,V}(a::Associative{K,V}) = (K,V)
 
 function hash(d::Associative)
-    h = 0
+    h::Uint = 0
     for (k,v) in d
         h $= bitmix(hash(k),~hash(v))
     end
@@ -222,19 +222,19 @@ hash(x::Float32) = hash(reinterpret(Uint32, isnan(x) ? NaN32 : x))
 hash(x::Float64) = hash(reinterpret(Uint64, isnan(x) ? NaN   : x))
 
 function hash(t::Tuple)
-    h = int(0)
+    h::Uint = 0
     for i=1:length(t)
         h = bitmix(h,int(hash(t[i]))+42)
     end
-    return uint(h)
+    return h
 end
 
 function hash(a::Array)
-    h = hash(size(a))+1
+    h::Uint = hash(size(a))+1
     for i=1:length(a)
         h = bitmix(h,int(hash(a[i])))
     end
-    return uint(h)
+    return h
 end
 
 # make sure Array{Bool} and BitArray can be equivalent
