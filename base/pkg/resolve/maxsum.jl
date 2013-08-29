@@ -137,7 +137,7 @@ type Graph
                     end
 
                     for v1 = 1:length(pvers[p1])
-                        if !contains(rvs, pvers[p1][v1])
+                        if !in(pvers[p1][v1], rvs)
                             bm[v1, v0] = false
                             bmt[v0, v1] = false
                         end
@@ -200,7 +200,7 @@ type Messages
             fld0 = fld[p0]
             for v0 = 1:spp[p0]-1
                 vn = pvers0[v0]
-                if !contains(rvs, vn)
+                if !in(vn, rvs)
                     # the state is forbidden by requirements
                     fld0[v0] = FieldValue(-1)
                 else

@@ -88,7 +88,7 @@ begin
         if id > 0
             x = xs[id]
             push!(s, x)
-            @test contains(s, x)                 # check that x can be found
+            @test in(x, s)                 # check that x can be found
         else
             delete!(s, xs[-id])
         end
@@ -187,13 +187,13 @@ for i in 1:1000
     @test (length(s) == i)
 end
 
-# delete!, has, contains
+# delete!, has, in
 for i in 1:2:1000
     delete!(s, i)
 end
 for i in 1:2:1000
-    @test !contains(s, i)
-    @test  contains(s, i+1)
+    @test !in(i  , s)
+    @test  in(i+1, s)
 end
 
 # elements
@@ -201,8 +201,10 @@ data_in = (1,"banana", ())
 s = Set(data_in...)
 data_out = collect(s)
 @test is(typeof(data_out), Array{Any,1})
-@test all(map(d->contains(data_out,d), data_in))
-@test all(map(data_in) do d contains(data_out, d) end)
+@test all(map(d->in(d,data_out), data_in))
+@test all(map(data_in) do d
+              in(d,data_out)
+          end)
 @test length(data_out) == length(data_in)
 
 # homogeneous sets
@@ -303,8 +305,8 @@ c = copy(s)
 @test isequal(s,c)
 push!(s,100)
 push!(c,200)
-@test !contains(c, 100)
-@test !contains(s, 200)
+@test !in(100, c)
+@test !in(200, s)
 
 # start, done, next
 for data_in in ((7,8,4,5),
@@ -320,7 +322,7 @@ for data_in in ((7,8,4,5),
     t = tuple(s...)
     @test length(t) == length(s)
     for e in t
-        @test contains(s,e)
+        @test in(e,s)
     end
 end
 
@@ -340,8 +342,8 @@ origs = Set(1,2,3,"apple")
 s = copy(origs)
 for i in 1:length(origs)
     el = pop!(s)
-    @test !contains(s, el)
-    @test contains(origs, el)
+    @test !in(el, s)
+    @test in(el, origs)
 end
 @test isempty(s)
 # isequal
@@ -378,9 +380,9 @@ s = IntSet(0,1,10,20,200,300,1000,10000,10002)
 @test length(s) == 8
 @test shift!(s) == 0
 @test length(s) == 7
-@test !contains(s,0)
-@test !contains(s,10002)
-@test contains(s,10000)
+@test !in(0,s)
+@test !in(10002,s)
+@test in(10000,s)
 @test_throws first(IntSet())
 @test_throws last(IntSet())
 

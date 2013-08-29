@@ -91,7 +91,7 @@ function sanity_tst(deps_data, expected_result)
     result = sanity_check(deps)
     length(result) == length(expected_result) || return false
     for (p, vn, pp) in result
-        contains(expected_result, (p, vn)) || return  false
+        in((p, vn), expected_result) || return  false
     end
     return true
 end

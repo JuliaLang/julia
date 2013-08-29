@@ -72,7 +72,7 @@ const ENV = EnvHash()
 
 getindex(::EnvHash, k::String) = @accessEnv k throw(KeyError(k))
 get(::EnvHash, k::String, def) = @accessEnv k (return def)
-contains(::KeyIterator{EnvHash}, k::String) = _hasenv(k)
+in(k::String, ::KeyIterator{EnvHash}) = _hasenv(k)
 pop!(::EnvHash, k::String) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvHash, k::String, def) = haskey(ENV,k) ? pop!(ENV,k) : def
 function delete!(::EnvHash, k::String)

@@ -146,7 +146,7 @@ function alldependencies(pkg::String,avail::Dict=available(),free::Dict=free(ins
     deps = [ k for (k,v) in dependencies(pkg,avail,free,fix) ]
     alldeps = copy(deps)
     for dep in deps
-        dep != "julia" && !contains(alldeps,dep) && append!(alldeps,[ k for (k,v) in alldependencies(dep,avail,free,fix) ])
+        dep != "julia" && !in(dep,alldeps) && append!(alldeps,[ k for (k,v) in alldependencies(dep,avail,free,fix) ])
     end
     alldeps
 end

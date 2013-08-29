@@ -135,7 +135,7 @@ function show_backtrace(io::IO, top_function::Symbol, t, set)
         if i == 1 && fname == :error; continue; end
         if fname == top_function; break; end
         count += 1
-        if !contains(set, count); continue; end
+        if !in(count, set); continue; end
         if file != lastfile || line != lastline || fname != lastname
             if lastline != -11
                 show_trace_entry(io, lastname, lastfile, lastline, n)

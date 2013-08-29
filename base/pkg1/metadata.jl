@@ -1,6 +1,6 @@
 module Metadata
 
-import Base: Git, isequal, isless, contains, hash
+import Base: Git, isequal, isless, in, hash
 
 export parse_requires, Version, VersionSet, packages, versions, dependencies
 
@@ -114,7 +114,7 @@ isequal(a::VersionSet, b::VersionSet) =
     a.package == b.package && a.versions == b.versions
 isless(a::VersionSet, b::VersionSet) = a.package < b.package
 
-function contains(s::VersionSet, v::Version)
+function in(v::Version, s::VersionSet)
     (s.package != v.package) && return false
     for i in length(s.versions):-1:1
         (v.version >= s.versions[i]) && return isodd(i)
@@ -150,7 +150,7 @@ function dependencies(pkgs)
             file = "$dir/requires"
             if isfile(file)
                 for d in parse_requires("$dir/requires")
-                    if !contains(pkgs,d.package)
+                    if !in(d.package,pkgs)
                         error("unknown dependency for $pkg: $(d.package)")
                     end
                     push!(deps,(v,d))

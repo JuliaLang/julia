@@ -177,7 +177,7 @@ function search(s::String, c::Chars, i::Integer)
     i = nextind(s,i-1)
     while !done(s,i)
         d, j = next(s,i)
-        if contains(c,d)
+        if in(d,c)
             return i
         end
         i = j
@@ -186,7 +186,7 @@ function search(s::String, c::Chars, i::Integer)
 end
 search(s::String, c::Chars) = search(s,c,start(s))
 
-contains(s::String, c::Char) = (search(s,c)!=0)
+in(c::Char, s::String) = (search(s,c)!=0)
 
 function _search(s, t, i)
     if isempty(t)
@@ -264,7 +264,7 @@ rsearch(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int
 rsearch(s::String, t::String, i::Integer) = _rsearch(s,t,i)
 rsearch(s::String, t::String) = (isempty(s) && isempty(t)) ? (1:0) : rsearch(s,t,endof(s))
 
-contains(::String, ::String) = error("use search() to look for substrings")
+contains(a::String, b::String) = search(a,b)!=0:-1
 
 function cmp(a::String, b::String)
     if a === b
@@ -623,7 +623,7 @@ function print_escaped(io, s::String, esc::String)
         c == '\0'       ? print(io, escape_nul(s,j)) :
         c == '\e'       ? print(io, "\\e") :
         c == '\\'       ? print(io, "\\\\") :
-        contains(esc,c) ? print(io, '\\', c) :
+        in(c,esc)       ? print(io, '\\', c) :
         7 <= c <= 13    ? print(io, '\\', "abtnvfr"[int(c-6)]) :
         isprint(c)      ? print(io, c) :
         c <= '\x7f'     ? print(io, "\\x", hex(c, 2)) :
@@ -643,13 +643,13 @@ end
 # bare minimum unescaping function unescapes only given characters
 
 function print_unescaped_chars(io, s::String, esc::String)
-    if !contains(esc,'\\')
+    if !in('\\',esc)
         esc = string("\\", esc)
     end
     i = start(s)
     while !done(s,i)
         c, i = next(s,i)
-        if c == '\\' && !done(s,i) && contains(esc,s[i])
+        if c == '\\' && !done(s,i) && in(s[i],esc)
             c, i = next(s,i)
         end
         print(io, c)
@@ -1175,7 +1175,7 @@ function lstrip(s::String, chars::Chars=_default_delims)
     i = start(s)
     while !done(s,i)
         c, j = next(s,i)
-        if !contains(chars, c)
+        if !in(c, chars)
             return s[i:end]
         end
         i = j
@@ -1188,7 +1188,7 @@ function rstrip(s::String, chars::Chars=_default_delims)
     i = start(r)
     while !done(r,i)
         c, j = next(r,i)
-        if !contains(chars, c)
+        if !in(c, chars)
             return s[1:end-i+1]
         end
         i = j

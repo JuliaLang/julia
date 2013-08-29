@@ -63,7 +63,7 @@ function ReqsStruct(reqs::Vector{VersionSet}, vers::Vector{Version}, deps::Vecto
     for v in vers; push!(pkgs, v.package); end
 
     for r in reqs
-        if !contains(pkgs, r.package)
+        if !in(r.package, pkgs)
             throw(MetadataError("required package $(r.package) has no version compatible with fixed requirements"))
         end
     end
@@ -224,7 +224,7 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
             allowed0 = allowed[p0]
             for v0 = 1:spp[p0]-1
                 v = pvers0[v0]
-                allowed0[v0] = contains(r, Version(p, v))
+                allowed0[v0] = in(Version(p, v), r)
             end
         end
         for p0 = 1:np
@@ -321,7 +321,7 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
         for v0 = 1:spp[p0]-1
             v = pvers0[v0]
             vm = vmask0[v0]
-            vm[end] = contains(r, Version(p, v))
+            vm[end] = in(Version(p, v), r)
         end
     end
 
@@ -384,7 +384,7 @@ function prune_versions!(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, prune_req
     for d0 = 1:length(deps)
         d = deps[d0]
         p0, v0 = vdict[d[1]]
-        if !contains(pruned_vers_id[p0], v0)
+        if !in(v0, pruned_vers_id[p0])
             continue
         end
         push!(new_deps, d)
@@ -638,7 +638,7 @@ type Graph
             end
 
             for v1 = 1:length(pvers[p1])
-                if !contains(vs, Version(vs.package, pvers[p1][v1]))
+                if !in(Version(vs.package, pvers[p1][v1]), vs)
                     bm[v1, v0] = false
                     bmt[v0, v1] = false
                 end
@@ -701,7 +701,7 @@ type Messages
         reqmsk = [ falses(spp[p0]) for p0 = 1:np ]
 
         for r in reqs, v in vers
-            if contains(r, v)
+            if in(v, r)
                 p0, v0 = vdict[v]
                 reqps[p0] = true
                 reqmsk[p0][v0] = true
@@ -1030,7 +1030,7 @@ function verify_sol(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Vector{In
         p0 = pdict[p]
         @assert sol[p0] != spp[p0]
         v = pvers[p0][sol[p0]]
-        @assert contains(r, Version(p, v))
+        @assert in(Version(p, v), r)
     end
 
     # verify dependencies
@@ -1042,7 +1042,7 @@ function verify_sol(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::Vector{In
             p1 = pdict[p]
             @assert sol[p1] != spp[p1]
             v = pvers[p1][sol[p1]]
-            @assert contains(vs, Version(p, v))
+            @assert in(Version(p, v), vs)
         end
     end
 
@@ -1097,7 +1097,7 @@ function enforce_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::V
                         continue
                     end
                     v = pvers[p0][s0+1]
-                    if !contains(r, Version(p, v))
+                    if !in(Version(p, v), r)
                         viol = true
                         break
                     end
@@ -1118,7 +1118,7 @@ function enforce_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::V
                     break
                 end
                 v = pvers[p1][sol[p1]]
-                if !contains(vs, Version(p, v))
+                if !in(Version(p, v), vs)
                     # the dependency is violated because
                     # the other package version is invalid
                     viol = true
@@ -1138,7 +1138,7 @@ function enforce_optimality(reqsstruct::ReqsStruct, pkgstruct::PkgStruct, sol::V
                 end
                 p = vs.package
                 v = pvers[p0][s0+1]
-                if !contains(vs, Version(p, v))
+                if !in(Version(p, v), vs)
                     # bumping the version would violate
                     # the dependency
                     viol = true
@@ -1223,7 +1223,7 @@ function substructs(reqsstruct0::ReqsStruct, pkgstruct0::PkgStruct, pdeps::Vecto
         for p0 in staged
             for w in pdeps[p0], vs in w
                 p1 = pdict[vs.package]
-                if !contains(pset, p1)
+                if !in(p1, pset)
                     push!(staged_next, p1)
                 end
             end

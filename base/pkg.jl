@@ -303,12 +303,12 @@ function __fixup(
     exclude = []
 )
     sort!(instlist, lt=function(a,b)
-        c = contains(Read.alldependencies(a,avail,free,fixed),b) 
-        nonordered = (!c && !contains(Read.alldependencies(b,avail,free,fixed),a))
+        c = in(b,Read.alldependencies(a,avail,free,fixed))
+        nonordered = (!c && !in(a,Read.alldependencies(b,avail,free,fixed)))
         nonordered ? a < b : c
     end)
     for p in instlist
-        contains(exclude,p) && continue
+        in(p,exclude) && continue
         build(p,["fixup"]) || return
     end
 end
@@ -325,9 +325,9 @@ function _fixup{T<:String}(
     oldlength = length(tofixup)
     while true
         for (p,_) in inst
-            contains(tofixup,p) && continue
+            in(p,tofixup) && continue
             for pf in tofixup
-                if contains(Read.alldependencies(p,avail,free,fixed),pf)
+                if in(pf,Read.alldependencies(p,avail,free,fixed))
                     push!(tofixup,p)
                     break
                 end

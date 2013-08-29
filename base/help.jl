@@ -67,7 +67,7 @@ function init_help()
             if !haskey(MODULE_DICT, func)
                 MODULE_DICT[func] = {}
             end
-            if !contains(MODULE_DICT[func], mod)
+            if !in(mod, MODULE_DICT[func])
                 push!(MODULE_DICT[func], mod)
             end
         end

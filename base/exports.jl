@@ -693,6 +693,7 @@ export
     getindex,
     getkey,
     haskey,
+    in,
     intersect!,
     intersect,
     isempty,

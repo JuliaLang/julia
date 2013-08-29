@@ -4,9 +4,9 @@ abstract Associative{K,V}
 
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
-haskey(d::Associative, k) = contains(keys(d),k)
+haskey(d::Associative, k) = in(k,keys(d))
 
-function contains(a::Associative, p::(Any,Any))
+function in(p::(Any,Any), a::Associative)
     v = get(a,p[1],secret_table_token)
     !is(v, secret_table_token) && isequal(v, p[2])
 end
@@ -58,8 +58,8 @@ function next(v::ValueIterator, state)
     n[1][2], n[2]
 end
 
-contains(v::KeyIterator, k) = !is(get(v.dict, k, secret_table_token),
-                                  secret_table_token)
+in(k, v::KeyIterator) = !is(get(v.dict, k, secret_table_token),
+                            secret_table_token)
 
 keys(a::Associative) = KeyIterator(a)
 values(a::Associative) = ValueIterator(a)
@@ -495,7 +495,7 @@ function get{K,V}(h::Dict{K,V}, key, deflt)
 end
 
 haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
-contains{T<:Dict}(v::KeyIterator{T}, key) = (ht_keyindex(v.dict, key) >= 0)
+in{T<:Dict}(key, v::KeyIterator{T}) = (ht_keyindex(v.dict, key) >= 0)
 
 function getkey{K,V}(h::Dict{K,V}, key, deflt)
     index = ht_keyindex(h, key)

@@ -1378,7 +1378,7 @@ function findin(a, b)
     ind = Array(Int, 0)
     bset = union!(Set(), b)
     for i = 1:length(a)
-        if contains(bset, a[i])
+        if in(a[i], bset)
             push!(ind, i)
         end
     end
@@ -1424,7 +1424,7 @@ function gen_reducedim_func(n, f)
     rvars = { symbol(string("r",i)) for i=1:n }
     setlims = { quote
         # each dim of reduction is either 1:sizeA or ivar:ivar
-        if contains(region,$i)
+        if in($i,region)
             $(lo[i]) = 1
             $(hi[i]) = size(A,$i)
         else
@@ -1573,7 +1573,7 @@ function intersect(vs...)
     for v_elem in vs[1]
         inall = true
         for i = 2:length(vs)
-            if !contains(vs[i], v_elem)
+            if !in(v_elem, vs[i])
                 inall=false; break
             end
         end
@@ -1589,7 +1589,7 @@ function union(vs...)
     seen = Set()
     for v in vs
         for v_elem in v
-            if !contains(seen, v_elem)
+            if !in(v_elem, seen)
                 push!(ret, v_elem)
                 push!(seen, v_elem)
             end
@@ -1604,7 +1604,7 @@ function setdiff(a, b)
     ret = Array(args_type,0)
     seen = Set()
     for a_elem in a
-        if !contains(seen, a_elem) && !contains(bset, a_elem)
+        if !in(a_elem, seen) && !in(a_elem, bset)
             push!(ret, a_elem)
             push!(seen, a_elem)
         end

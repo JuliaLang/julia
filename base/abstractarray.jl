@@ -157,7 +157,7 @@ vec(a::AbstractVector) = a
 function squeeze(A::AbstractArray, dims)
     d = ()
     for i in 1:ndims(A)
-        if contains(dims,i)
+        if in(i,dims)
             if size(A,i) != 1
                 error("squeezed dims must all be size 1")
             end
@@ -1397,12 +1397,12 @@ function nnz{T}(a::AbstractArray{T})
 end
 
 # for reductions that expand 0 dims to 1
-reduced_dims(A, region) = ntuple(ndims(A), i->(contains(region, i) ? 1 :
+reduced_dims(A, region) = ntuple(ndims(A), i->(in(i, region) ? 1 :
                                                size(A,i)))
 
 # keep 0 dims in place
 reduced_dims0(A, region) = ntuple(ndims(A), i->(size(A,i)==0 ? 0 :
-                                                contains(region, i) ? 1 :
+                                                in(i, region) ? 1 :
                                                 size(A,i)))
 
 reducedim(f::Function, A, region, v0) =
