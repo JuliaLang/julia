@@ -69,23 +69,11 @@ Operators
 scalar math
 -----------
 
-.. function:: invdigamma(...)
-
-   UNDOCUMENTED
-
-.. function:: trigamma(...)
-
-   UNDOCUMENTED
-
 
 specfun
 -------
 
 .. function:: besselh(...)
-
-   UNDOCUMENTED
-
-.. function:: polygamma(...)
 
    UNDOCUMENTED
 
@@ -98,10 +86,6 @@ arrays
    UNDOCUMENTED
 
 .. function:: checkbounds(...)
-
-   UNDOCUMENTED
-
-.. function:: findnext(...)
 
    UNDOCUMENTED
 
@@ -159,14 +143,6 @@ collections
 
 strings and text output
 -----------------------
-
-.. function:: is_utf8_start(byte::Uint8)
-
-   UNDOCUMENTED
-
-.. function:: print_with_color(...)
-
-   UNDOCUMENTED
 
 .. function:: xdump(...)
 
@@ -281,10 +257,6 @@ I/O and events
 multiprocessing
 ---------------
 
-.. function:: isready(rr::RemoteRef)
-
-   UNDOCUMENTED
-
 
 distributed arrays
 ------------------
@@ -292,22 +264,6 @@ distributed arrays
 
 paths and file names
 --------------------
-
-.. function:: expanduser(path::String)
-
-   UNDOCUMENTED
-
-.. function:: isdirpath(path::String)
-
-   UNDOCUMENTED
-
-.. function:: normpath(...)
-
-   UNDOCUMENTED
-
-.. function:: realpath(path::String)
-
-   UNDOCUMENTED
 
 .. function:: splitdir(...)
 
@@ -336,18 +292,6 @@ external processes ## TODO: whittle down these exports.
 
 C interface
 -----------
-
-.. function:: c_malloc(size::Integer)
-
-   UNDOCUMENTED
-
-.. function:: dlopen_e(...)
-
-   UNDOCUMENTED
-
-.. function:: unsafe_copy!(...)
-
-   UNDOCUMENTED
 
 
 Macros

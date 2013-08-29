@@ -75,6 +75,10 @@ Filesystem
 
    Determines whether a path is absolute (begins at the root directory).
 
+.. function:: isdirpath(path::String) -> Bool
+
+   Determines whether a path refers to a directory (for example, ends with a path separator).
+
 .. function:: joinpath(parts...) -> String
 
    Join path components into a full path. If some argument is an absolute
@@ -84,6 +88,19 @@ Filesystem
 
    Convert a path to an absolute path by adding the current directory if
    necessary.
+
+.. function:: normpath(path::String) -> String
+
+   Normalize a path, removing "." and ".." entries.
+
+.. function:: realpath(path::String) -> String
+
+   Canonicalize a path by expanding symbolic links and removing "." and ".." entries.
+
+.. function:: expanduser(path::String) -> String
+
+   On Unix systems, replace a tilde character at the start of a path with the
+   current user's home directory.
 
 .. function:: tempname()
 
