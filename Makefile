@@ -107,9 +107,11 @@ endif
 
 dist:
 	rm -fr julia-*.tar.gz julia-*.exe julia-$(JULIA_COMMIT)
+ifeq ($(USE_SYSTEM_BLAS),0)
 ifneq ($(OPENBLAS_DYNAMIC_ARCH),1)
 	@echo OpenBLAS must be rebuilt with OPENBLAS_DYNAMIC_ARCH=1 to use dist target
 	@false
+endif
 endif
 ifneq ($(PREFIX),julia-$(JULIA_COMMIT))
 	$(error PREFIX must not be set for make dist)

@@ -7,7 +7,7 @@ include ../../../Make.inc
 
 JULIA_PKGDIR=$(shell echo $$JULIA_PKGDIR)
 ifeq ($(JULIA_PKGDIR),)
-	JULIA_PKGDIR=$(shell echo ~)
+	JULIA_PKGDIR=$(shell echo ~)/.julia
 endif
 
 all: clean dmg
