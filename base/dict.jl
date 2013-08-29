@@ -456,6 +456,12 @@ end
 
 # get the index where a key is stored, or -1 if not present
 function ht_keyindex{K,V}(h::Dict{K,V}, key)
+    try
+        key = convert(K, key)
+    catch
+        return -1
+    end
+
     sz = length(h.keys)
     iter = 0
     maxprobe = max(16, sz>>6)
