@@ -1082,6 +1082,13 @@ end
 @test signed(fld(typemax(Uint),typemin(Int)>>1))     == -4
 @test signed(fld(typemax(Uint),(typemin(Int)>>1)+1)) == -5
 
+# issue #4156
+@test fld(1.4,0.35667494393873234) == 3.0
+@test div(1.4,0.35667494393873234) == 3.0
+@test fld(0.3,0.01) == 29.0
+@test div(0.3,0.01) == 29.0
+# see https://github.com/JuliaLang/julia/issues/3127
+
 # issue #3046
 @test mod(int64(2),typemax(Int64)) == 2
 
