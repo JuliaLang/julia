@@ -131,7 +131,7 @@ t_func[method_exists] = (2, 2, cmp_tfunc)
 t_func[applicable] = (1, Inf, (f, args...)->Bool)
 t_func[tuplelen] = (1, 1, x->Int)
 t_func[arraylen] = (1, 1, x->Int)
-#t_func[arrayref] = (2,Inf,(a,i...)->(isa(a,DataType) && issubtype(a,Array) ?
+#t_func[arrayref] = (2,Inf,(a,i...)->(isa(a,DataType) && a<:Array ?
 #                                     a.parameters[1] : Any))
 #t_func[arrayset] = (3, Inf, (a,v,i...)->a)
 #arraysize_tfunc(a, d) = Int
@@ -139,7 +139,7 @@ arraysize_tfunc = function (a, d...)
     if !is(d,())
         return Int
     end
-    if isa(a,DataType) && issubtype(a,Array)
+    if isa(a,DataType) && a<:Array
         N = a.parameters[2]
         return isa(N,Int) ? NTuple{N,Int} : (Int...)
     else
@@ -147,7 +147,7 @@ arraysize_tfunc = function (a, d...)
     end
 end
 t_func[arraysize] = (1, 2, arraysize_tfunc)
-t_func[pointerref] = (2,2,(a,i)->(isa(a,DataType) && issubtype(a,Ptr) ? a.parameters[1] : Any))
+t_func[pointerref] = (2,2,(a,i)->(isa(a,DataType) && a<:Ptr ? a.parameters[1] : Any))
 t_func[pointerset] = (3, 3, (a,v,i)->a)
 
 function static_convert(to::ANY, from::ANY)
@@ -155,7 +155,7 @@ function static_convert(to::ANY, from::ANY)
         if isa(to,TypeVar)
             return to
         end
-        if issubtype(from, to)
+        if from <: to
             return from
         end
         t = typeintersect(from,to)
@@ -379,7 +379,7 @@ function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
             return None
         end
         a = argtypes[1]
-        return (isa(a,DataType) && issubtype(a,Array) ?
+        return (isa(a,DataType) && a<:Array ?
                 a.parameters[1] : Any)
     elseif is(f,Expr)
         if length(argtypes) < 1
@@ -797,7 +797,7 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
         t0 = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
         t = typeintersect(t0, Any)
-        if is(t,None) && issubtype(Undef,t0)
+        if is(t,None) && Undef<:t0
             # the first time we see this statement the variable will probably
             # be Undef; return None so this doesn't contribute to the type
             # we eventually pick.
@@ -938,7 +938,7 @@ function abstract_interpret(e::Expr, vtypes, sv::StaticVarInfo)
     return vtypes
 end
 
-tchanged(n::ANY, o::ANY) = is(o,NF) || (!is(n,NF) && !issubtype(n,o))
+tchanged(n::ANY, o::ANY) = is(o,NF) || (!is(n,NF) && !(n <: o))
 
 function stchanged(new::Union(StateUpdate,VarTable), old, vars)
     if is(old,())
@@ -983,17 +983,17 @@ function tmerge(typea::ANY, typeb::ANY)
     if is(typeb,NF)
         return typea
     end
-    if issubtype(typea,typeb)
+    if typea <: typeb
         return typeb
     end
-    if issubtype(typeb,typea)
+    if typeb <: typea
         return typea
     end
     u = Union(typea, typeb)
     if length(u.types) > MAX_TYPEUNION_LEN || type_too_complex(u, 0)
         # don't let type unions get too big
         # TODO: something smarter, like a common supertype
-        return issubtype(Undef,u) ? Top : Any
+        return Undef<:u ? Top : Any
     end
     return u
 end
@@ -1394,7 +1394,7 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo)
         e = e::SymbolNode
         curtype = e.typ
         t = abstract_eval(e.name, vtypes, sv)
-        if !issubtype(curtype, t) || typeseq(curtype, t)
+        if !(curtype <: t) || typeseq(curtype, t)
             record_var_type(e.name, t, decls)
             e.typ = t
         end
@@ -1682,7 +1682,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     if is(f, convert_default) && length(atypes)==3
         # builtin case of convert. convert(T,x::S) => x, when S<:T
         if isType(atypes[1]) && isleaftype(atypes[1]) &&
-            issubtype(atypes[2],atypes[1].parameters[1])
+            atypes[2] <: atypes[1].parameters[1]
             # todo: if T expression has side effects??!
             return (e.args[3],())
         end
@@ -1723,7 +1723,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     # when 1 method matches the inferred types, there is still a chance
     # of a no-method error at run time, unless the inferred types are a
     # subset of the method signature.
-    if !issubtype(atypes, meth[1])
+    if !(atypes <: meth[1])
         return NF
     end
     linfo = meth[3].func.code
@@ -2070,7 +2070,7 @@ function occurs_outside_tupleref(e::ANY, sym::ANY, sv::StaticVarInfo, tuplen::In
         e = e::Expr
         if is_known_call(e, tupleref, sv) && symequal(e.args[2],sym)
             targ = e.args[2]
-            if !(exprtype(targ)<:Tuple)
+            if !(exprtype(targ) <: Tuple)
                 return true
             end
             idx = e.args[3]
