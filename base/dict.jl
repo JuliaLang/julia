@@ -393,9 +393,12 @@ function empty!{K,V}(h::Dict{K,V})
     return h
 end
 
-function setindex!{K,V}(h::Dict{K,V}, v, key)
-    key = convert(K,key)
-    v   = convert(V,  v)
+function setindex!{K,V}(h::Dict{K,V}, v0, key0)
+    key = convert(K,key0)
+    if !isequal(key,key0)
+        error(key0, " is not a valid key for type ", K)
+    end
+    v   = convert(V,  v0)
 
     sz = length(h.keys)
 

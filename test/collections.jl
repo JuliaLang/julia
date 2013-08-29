@@ -207,7 +207,7 @@ data_out = collect(s)
 
 # homogeneous sets
 @test is(typeof(Set(1,2,3)), Set{Int})
-@test is(typeof(Set{Int}(1.0, 4//2, 3)), Set{Int})
+@test is(typeof(Set{Int}(3)), Set{Int})
 
 # eltype
 @test is(eltype(Set(1,"hello")), Any)
@@ -292,7 +292,7 @@ setdiff!(s,(3,5))
 s = similar(Set(1,"Banana"))
 @test length(s) == 0
 @test typeof(s) == Set{Any}
-s = similar(Set{Float32}(2,3,4))
+s = similar(Set{Float32}(2.0f0,3.0f0,4.0f0))
 @test length(s) == 0
 @test typeof(s) == Set{Float32}
 
