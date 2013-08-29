@@ -12,7 +12,7 @@ SHIPFLAGS += $(FLAGS)
 JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(call exec,$(LLVM_CONFIG) --ldflags) $(OSLIBS) $(RPATH)
 
 julia-release: julia-readline julia-basic
-julia-debug: julia-debug-readline julia-debug-readline
+julia-debug: julia-debug-readline julia-debug-basic
 
 release debug:
 	$(MAKE) julia-$@
