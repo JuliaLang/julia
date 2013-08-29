@@ -29,16 +29,16 @@ dirty = $(shell [ -z "$(shell git status --porcelain 2>/dev/null)" ] && echo "fa
 all: pcre_h.jl errno_h.jl build_h.jl.phony file_constants.jl uv_constants.jl
 
 pcre_h.jl:
-	@$(PRINT_PERL) $(CPP) -dM $(shell $(PCRE_CONFIG) --prefix)/include/pcre.h | perl -nle '/^\s*#define\s+PCRE_(\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "const $$1 = uint32($$2)"' | sort > $@
+	@$(call PRINT_PERL, $(CPP) -dM $(shell $(PCRE_CONFIG) --prefix)/include/pcre.h | perl -nle '/^\s*#define\s+PCRE_(\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "const $$1 = uint32($$2)"' | sort > $@)
 
 errno_h.jl:
-	@$(PRINT_PERL) echo '#include "errno.h"' | $(CPP) -dM - | perl -nle 'print "const $$1 = int32($$2)" if /^#define\s+(E\w+)\s+(\d+)\s*$$/' | sort > $@
+	@$(call PRINT_PERL, echo '#include "errno.h"' | $(CPP) -dM - | perl -nle 'print "const $$1 = int32($$2)" if /^#define\s+(E\w+)\s+(\d+)\s*$$/' | sort > $@)
 
 file_constants.jl: ../src/file_constants.h
-	@$(PRINT_PERL) $(CPP) -P -DJULIA ../src/file_constants.h | perl -nle 'print "$$1 0o$$2" if /^(\s*const\s+[A-z_]+\s+=)\s+(0[0-9]*)\s*$$/; print "$$1" if /^\s*(const\s+[A-z_]+\s+=\s+([1-9]|0x)[0-9A-z]*)\s*$$/' > $@
+	@$(call PRINT_PERL, $(CPP) -P -DJULIA ../src/file_constants.h | perl -nle 'print "$$1 0o$$2" if /^(\s*const\s+[A-z_]+\s+=)\s+(0[0-9]*)\s*$$/; print "$$1" if /^\s*(const\s+[A-z_]+\s+=\s+([1-9]|0x)[0-9A-z]*)\s*$$/' > $@)
 
 uv_constants.jl: ../src/uv_constants.h
-	@$(PRINT_PERL) $(CPP) -P "-I$(LIBUV_INC)" -DJULIA ../src/uv_constants.h | tail -n 16 > $@
+	@$(call PRINT_PERL, $(CPP) -P "-I$(LIBUV_INC)" -DJULIA ../src/uv_constants.h | tail -n 16 > $@)
 
 build_h.jl.phony:
 	@$(CC) -E -P build.h -I../src/support | grep . > $@
@@ -83,7 +83,7 @@ endif
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible
 	@if ! cmp -s $@ build_h.jl; then \
-		$(PRINT_PERL) \
+		$(call PRINT_PERL,) \
 		mv $@ build_h.jl; \
 	else \
 		rm -f $@; \

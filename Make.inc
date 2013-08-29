@@ -485,11 +485,11 @@ JULIA_EXECUTABLE = $(JULIAHOME)/julia
 endif
 
 # Colors for make
-ifndef USE_QUIET
-USE_QUIET = 1
+ifndef VERBOSE
+VERBOSE = 0
 endif
 
-ifeq ($(USE_QUIET), 1)
+ifeq ($(VERBOSE), 0)
 
 QUIET_MAKE = -s
 
@@ -506,19 +506,18 @@ ENDCOLOR="\033[0m"
 
 GOAL=$(subst $(abspath $(JULIAHOME))/,,$(abspath $@))
 
-PRINT_CC = printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR);
-PRINT_LINK = printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
-PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
-PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
-PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
+PRINT_CC = printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_LINK = printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 
 else
-
 QUIET_MAKE =
-PRINT_CC =
-PRINT_LINK =
-PRINT_PERL =
-PRINT_FLISP =
-PRINT_JULIA =
+PRINT_CC = echo $(1); $(1)
+PRINT_LINK = echo $(1); $(1)
+PRINT_PERL = echo $(1); $(1)
+PRINT_FLISP = echo $(1); $(1)
+PRINT_JULIA = echo $(1); $(1)
 
 endif

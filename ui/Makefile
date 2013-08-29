@@ -17,9 +17,9 @@ release debug:
 	$(MAKE) julia-$@
 
 %.o: %.c repl.h
-	@$(PRINT_CC) $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@)
 %.do: %.c repl.h
-	@$(PRINT_CC) $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 ifeq ($(OS),WINNT)
 $(BUILD)/bin/julia.bat: ${JULIAHOME}/contrib/windows/*.bat
@@ -33,14 +33,14 @@ julia-release-readline: $(BUILD)/bin/julia-release-readline$(EXE)
 julia-debug-readline: $(BUILD)/bin/julia-debug-readline$(EXE)
 
 $(BUILD)/bin/julia-release-basic$(EXE): repl.o repl-basic.o
-	@$(PRINT_LINK) $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-release
+	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-release)
 $(BUILD)/bin/julia-debug-basic$(EXE): repl.do repl-basic.do
-	@$(PRINT_LINK) $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-debug
+	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-debug)
 
 $(BUILD)/bin/julia-release-readline$(EXE): repl.o repl-readline.o
-	@$(PRINT_LINK) $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-release || echo "*** Please ensure that the ncurses-devel package is installed on your OS, and try again. ***"
+	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-release) || echo "*** Please ensure that the ncurses-devel package is installed on your OS, and try again. ***"
 $(BUILD)/bin/julia-debug-readline$(EXE): repl.do repl-readline.do
-	@$(PRINT_LINK) $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-debug
+	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-debug)
 
 clean: | $(CLEAN_TARGETS)
 	rm -f *.o *.do
