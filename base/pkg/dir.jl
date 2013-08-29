@@ -1,5 +1,7 @@
 module Dir
 
+using Base.Git
+
 const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
 
 @unix_only const DIR_NAME = ".julia"
@@ -39,6 +41,7 @@ function init(meta::String=DEFAULT_META)
         cd() do
             info("Cloning METADATA from $meta")
             run(`git clone -q -b devel $meta METADATA`)
+            Git.set_remote_url(meta, dir="METADATA")
             run(`touch REQUIRE`)
         end
     catch e

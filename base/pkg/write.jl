@@ -16,7 +16,7 @@ function fetch(pkg::String, sha1::String)
 end
 
 function checkout(pkg::String, sha1::String)
-    Git.run(`config remote.origin.url $(Read.url(pkg))`, dir=pkg)
+    Git.set_remote_url(Read.url(pkg), dir=pkg)
     Git.run(`checkout -q $sha1`, dir=pkg)
 end
 

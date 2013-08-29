@@ -79,17 +79,19 @@ function status(io::IO, pkg::String, ver::VersionNumber, fix::Bool)
     println(io)
 end
 
-urlpkg(url::String) = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$", url).captures[1]
+url2pkg(url::String) = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$", url).captures[1]
 
-clone(url::String, pkg::String=urlpkg(url); opts::Cmd=``) = Dir.cd() do
+clone(url::String, pkg::String=url2pkg(url); opts::Cmd=``) = Dir.cd() do
     info("Cloning $pkg from $url")
     ispath(pkg) && error("$pkg already exists")
-    try Git.run(`clone $opts $url $pkg`)
+    try
+        Git.run(`clone $opts $url $pkg`)
+        Git.set_remote_url(url, dir=pkg)
     catch
         run(`rm -rf $pkg`)
         rethrow()
     end
-    isempty(Reqs.parse("$pkg/REQUIRE")) && return info("Nothing to be done.")
+    isempty(Reqs.parse("$pkg/REQUIRE")) && return
     info("Computing changes...")
     _resolve()
 end
