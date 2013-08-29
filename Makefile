@@ -67,7 +67,7 @@ run:
 	@$(call spawn,$(cmd))
 
 # public libraries, that are installed in $(PREFIX)/lib
-JL_LIBS = julia-release julia-debug
+JL_LIBS = julia julia-debug
 
 # private libraries, that are installed in $(PREFIX)/lib/julia
 JL_PRIVATE_LIBS = amd arpack camd ccolamd cholmod colamd \

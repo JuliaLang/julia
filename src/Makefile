@@ -78,7 +78,7 @@ libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 libjulia-debug: $(BUILD)/$(JL_LIBDIR)/libjulia-debug.$(SHLIB_EXT)
 
 ifeq ($(SHLIB_EXT), so)
-  SONAME = -Wl,-soname=libjulia-release.so
+  SONAME = -Wl,-soname=libjulia.so
 else
   SONAME =
 endif
