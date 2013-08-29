@@ -46,30 +46,38 @@ function scaffold(
                 if travis
                     user = Git.readchomp(`config --get github.user`)
                     url = "https://travis-ci.org/$user/$pkg.jl"
-                    print(io, "[![Build Status]($url.png)]($url)")
+                    print(io, """
+                        [![Build Status]($url.png)]($url)
+                        """)
                 end
             end
             generate("LICENSE.md") do io
                 print(io, LICENSES[license](pkg, string(years), authors))
             end
             generate("src/$pkg.jl") do io
-                print(io, "module $pkg\n\nend # module\n")
+                print(io, """
+                    module $pkg
+
+                    # package code goes here
+
+                    end # module
+                    """)
             end
             travis && generate(".travis.yml") do io
                 print(io, """
                     language: cpp
                     compiler:
-                        - clang
+                      - clang
                     notifications:
-                        email: false
+                      email: false
                     before_install:
-                        - sudo add-apt-repository ppa:staticfloat/julia-deps -y
-                        - sudo add-apt-repository ppa:staticfloat/julianightlies -y
-                        - sudo apt-get update -qq -y
-                        - sudo apt-get install libpcre3-dev julia -y
+                      - sudo add-apt-repository ppa:staticfloat/julia-deps -y
+                      - sudo add-apt-repository ppa:staticfloat/julianightlies -y
+                      - sudo apt-get update -qq -y
+                      - sudo apt-get install libpcre3-dev julia -y
                     script:
-                        - julia -e 'Pkg.init(); run(`ln -s \$(pwd()) \$(Pkg.dir())/`); Pkg.resolve()'
-                        - julia -e 'using $pkg; @assert isdefined(:$pkg); @assert typeof($pkg) === Module'
+                      - julia -e 'Pkg.init(); run(`ln -s \$(pwd()) \$(Pkg.dir())/`); Pkg.resolve()'
+                      - julia -e 'using $pkg; @assert isdefined(:$pkg); @assert typeof($pkg) === Module'
                     """)
             end
             info("Committing scaffold")
