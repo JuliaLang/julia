@@ -32,7 +32,11 @@ julia-debug julia-release:
 	@$(MAKE) $(QUIET_MAKE) -C ui $@
 ifneq ($(OS),WINNT)
 ifndef JULIA_VAGRANT_BUILD
+ifeq ($@,debug)
 	@ln -sf $(BUILD)/bin/$@-$(DEFAULT_REPL) julia
+else
+	@ln -sf $(BUILD)/bin/julia-$(DEFAULT_REPL) julia
+endif
 endif
 endif
 
@@ -63,7 +67,7 @@ run:
 	@$(call spawn,$(cmd))
 
 # public libraries, that are installed in $(PREFIX)/lib
-JL_LIBS = julia-release julia-debug
+JL_LIBS = julia julia-debug
 
 # private libraries, that are installed in $(PREFIX)/lib/julia
 JL_PRIVATE_LIBS = amd arpack camd ccolamd cholmod colamd \
@@ -81,7 +85,7 @@ install:
 	done
 	cp -a $(BUILD)/bin $(PREFIX)
 ifneq ($(OS),WINNT)
-	cd $(PREFIX)/bin && ln -sf julia-release-$(DEFAULT_REPL) julia
+	cd $(PREFIX)/bin && ln -sf julia-$(DEFAULT_REPL) julia
 endif
 	-for suffix in $(JL_LIBS) ; do \
 		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
@@ -158,10 +162,9 @@ clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C base clean
 	@$(MAKE) -C src clean
 	@$(MAKE) -C ui clean
-	@for buildtype in "release" "debug" ; do \
-		for repltype in "basic" "readline"; do \
-			rm -f julia-$${buildtype}-$${repltype}; \
-		done \
+	for repltype in "basic" "readline"; do \
+		rm -f julia-debug-$${repltype}; \
+		rm -f julia-$${repltype}; \
 	done
 	@rm -f julia
 	@rm -f *~ *# *.tar.gz
