@@ -23,6 +23,12 @@ debug release: | $(DIRS) $(BUILD)/share/julia/base $(BUILD)/share/julia/test $(B
 	@export JL_PRIVATE_LIBDIR=$(JL_PRIVATE_LIBDIR) && \
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(BUILD)/lib:$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji
 
+julia-debug-symlink:
+	@ln -sf $(BUILD)/bin/julia-debug-$(DEFAULT_REPL) julia
+
+julia-release-symlink:
+	@ln -sf $(BUILD)/bin/julia-$(DEFAULT_REPL) julia
+
 julia-debug julia-release:
 	@-git submodule init --quiet
 	@-git submodule update
@@ -32,11 +38,7 @@ julia-debug julia-release:
 	@$(MAKE) $(QUIET_MAKE) -C ui $@
 ifneq ($(OS),WINNT)
 ifndef JULIA_VAGRANT_BUILD
-ifeq ($@,debug)
-	@ln -sf $(BUILD)/bin/$@-$(DEFAULT_REPL) julia
-else
-	@ln -sf $(BUILD)/bin/julia-$(DEFAULT_REPL) julia
-endif
+	@$(MAKE) $(QUIET_MAKE) $@-symlink
 endif
 endif
 
@@ -163,8 +165,8 @@ clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C src clean
 	@$(MAKE) -C ui clean
 	for repltype in "basic" "readline"; do \
-		rm -f julia-debug-$${repltype}; \
-		rm -f julia-$${repltype}; \
+		rm -f usr/bin/julia-debug-$${repltype}; \
+		rm -f usr/bin/julia-$${repltype}; \
 	done
 	@rm -f julia
 	@rm -f *~ *# *.tar.gz
