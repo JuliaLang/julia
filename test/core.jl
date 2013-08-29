@@ -17,20 +17,20 @@
 @test !(Array{Int8,1} <: Array{Any,1})
 @test !(Array{Any,1} <: Array{Int8,1})
 @test Array{Int8,1} <: Array{Int8,1}
-@test !issubtype(Type{None}, Type{Int32})
-@test !issubtype(Vector{Float64},Vector{Union(Float64,Float32)})
+@test !(Type{None} <: Type{Int32})
+@test !(Vector{Float64} <: Vector{Union(Float64,Float32)})
 @test is(None, typeintersect(Vector{Float64},Vector{Union(Float64,Float32)}))
 
 @test !isa(Array,Type{Any})
-@test issubtype(Type{Complex},DataType)
+@test Type{Complex} <: DataType
 @test isa(Complex,Type{Complex})
-@test !issubtype(Type{Ptr{None}},Type{Ptr})
-@test !issubtype(Type{Rational{Int}}, Type{Rational})
+@test !(Type{Ptr{None}} <: Type{Ptr})
+@test !(Type{Rational{Int}} <: Type{Rational})
 let T = TypeVar(:T,true)
     @test !is(None, typeintersect(Array{None},AbstractArray{T}))
     @test  is(None, typeintersect((Type{Ptr{Uint8}},Ptr{None}),
                                   (Type{Ptr{T}},Ptr{T})))
-    @test !issubtype(Type{T},TypeVar)
+    @test !(Type{T} <: TypeVar)
 
     @test isequal(typeintersect((Range{Int},(Int,Int)),(AbstractArray{T},Dims)),
                   (Range{Int},(Int,Int)))
@@ -67,11 +67,11 @@ let N = TypeVar(:N,true)
 end
 @test is(None, typeintersect(Type{Any},Type{Complex}))
 @test is(None, typeintersect(Type{Any},Type{TypeVar(:T,Real)}))
-@test !issubtype(Type{Array{Integer}},Type{AbstractArray{Integer}})
-@test !issubtype(Type{Array{Integer}},Type{Array{TypeVar(:T,Integer)}})
+@test !(Type{Array{Integer}} <: Type{AbstractArray{Integer}})
+@test !(Type{Array{Integer}} <: Type{Array{TypeVar(:T,Integer)}})
 @test is(None, typeintersect(Type{Function},UnionType))
 @test is(Type{Int32}, typeintersect(Type{Int32},DataType))
-@test !issubtype(Type,TypeVar)
+@test !(Type <: TypeVar)
 @test !is(None, typeintersect(DataType, Type))
 @test !is(None, typeintersect(UnionType, Type))
 @test !is(None, typeintersect(DataType, Type{Int}))
@@ -80,22 +80,22 @@ end
 
 @test isa(Int,Type{TypeVar(:T,Number)})
 @test !isa(DataType,Type{TypeVar(:T,Number)})
-@test issubtype(DataType,Type{TypeVar(:T,Type)})
+@test DataType <: Type{TypeVar(:T,Type)}
 
 @test isa((),Type{()})
-@test issubtype((DataType,),Type{TypeVar(:T,Tuple)})
-@test !issubtype((Int,),Type{TypeVar(:T,Tuple)})
+@test (DataType,) <: Type{TypeVar(:T,Tuple)}
+@test !((Int,) <: Type{TypeVar(:T,Tuple)})
 @test isa((Int,),Type{TypeVar(:T,Tuple)})
 
 @test !isa(Type{(Int,Int)},Tuple)
-@test issubtype(Type{(Int,Int)},Tuple)
-@test issubtype(Type{(Int,)}, (DataType,))
+@test Type{(Int,Int)} <: Tuple
+@test Type{(Int,)} <: (DataType,)
 
 # this is fancy: know that any type T<:Number must be either a DataType or a UnionType
-@test issubtype(Type{TypeVar(:T,Number)},Union(DataType,UnionType))
-@test !issubtype(Type{TypeVar(:T,Number)},DataType)
-@test issubtype(Type{TypeVar(:T,Tuple)},Union(Tuple,UnionType))
-@test !issubtype(Type{TypeVar(:T,Tuple)},Union(DataType,UnionType))
+@test Type{TypeVar(:T,Number)} <: Union(DataType,UnionType)
+@test !(Type{TypeVar(:T,Number)} <: DataType)
+@test Type{TypeVar(:T,Tuple)} <: Union(Tuple,UnionType)
+@test !(Type{TypeVar(:T,Tuple)} <: Union(DataType,UnionType))
 
 @test !is(None, typeintersect((DataType,DataType),Type{TypeVar(:T,(Number,Number))}))
 @test !is(None, typeintersect((DataType,UnionType),Type{(Number,None)}))
@@ -140,14 +140,14 @@ nttest1{n}(x::NTuple{n,Int}) = n
 abstract Sup_{A,B}
 abstract Qux_{T} <: Sup_{Qux_{Int},T}
 
-@test issubtype(Qux_{Int}.super, Sup_)
+@test Qux_{Int}.super <: Sup_
 @test is(Qux_{Int}, Qux_{Int}.super.parameters[1])
 @test is(Qux_{Int}.super.parameters[2], Int)
-@test issubtype(Qux_{Char}.super, Sup_)
+@test Qux_{Char}.super <: Sup_
 @test is(Qux_{Int}, Qux_{Char}.super.parameters[1])
 @test is(Qux_{Char}.super.parameters[2], Char)
 
-@test issubtype(Qux_.super.parameters[1].super, Sup_)
+@test Qux_.super.parameters[1].super <: Sup_
 @test is(Qux_{Int}, Qux_.super.parameters[1].super.parameters[1])
 @test is(Int, Qux_.super.parameters[1].super.parameters[2])
 
