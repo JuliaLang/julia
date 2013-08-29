@@ -8,7 +8,7 @@
 
 set SYS_PATH=%PATH%
 set PATH=%~dp0bin;%~dp0usr\bin;%~dp0..\usr\bin;%~dp0..\..\usr\bin;%SYS_PATH%
-set JULIA_EXE=julia-release-readline.exe
+set JULIA_EXE=julia-readline.exe
 for %%A in (%JULIA_EXE%) do set JULIA_HOME=%%~dp$PATH:A
 set JULIA=%JULIA_HOME%%JULIA_EXE%
 set PATH=%JULIA_HOME%;%JULIA_HOME%..\lib\julia;%JULIA_HOME%..\lib;.;%SYS_PATH%;%~dp0\Git\bin;C:\MinGW\msys\1.0\bin;C:\MinGW\bin;C:\Program Files\Git\bin;C:\Program Files (x86)\Git\bin;C:\Python27;C:\Python26;C:\Python25

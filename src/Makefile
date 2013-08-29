@@ -78,18 +78,18 @@ libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 libjulia-debug: $(BUILD)/$(JL_LIBDIR)/libjulia-debug.$(SHLIB_EXT)
 
 ifeq ($(SHLIB_EXT), so)
-  SONAME = -Wl,-soname=libjulia-release.so
+  SONAME = -Wl,-soname=libjulia.so
 else
   SONAME =
 endif
 
-$(BUILD)/$(JL_LIBDIR)/libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a $(LIBUV)
+$(BUILD)/$(JL_LIBDIR)/libjulia.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a $(LIBUV)
 	@$(call PRINT_LINK, $(CXX) $(SHIPFLAGS) $(OBJS) $(RPATH_ORIGIN) -shared -o $@ $(LDFLAGS) $(LIBS) $(SONAME))
-	$(INSTALL_NAME_CMD)libjulia-release.$(SHLIB_EXT) $@
-libjulia-release.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
+	$(INSTALL_NAME_CMD)libjulia.$(SHLIB_EXT) $@
+libjulia.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	@$(call PRINT_LINK, ar -rcs $@ $(OBJS))
-libjulia-release: $(BUILD)/$(JL_LIBDIR)/libjulia-release.$(SHLIB_EXT)
+libjulia-release: $(BUILD)/$(JL_LIBDIR)/libjulia.$(SHLIB_EXT)
 
 clean:
 	-rm -f $(BUILD)/$(JL_LIBDIR)/libjulia*
