@@ -182,6 +182,10 @@ distclean: cleanall
 	run-julia run-julia-debug run-julia-release run \
 	install dist
 
+ifeq ($(VERBOSE),1)
+.SILENT:
+endif
+
 test: release
 	@$(MAKE) $(QUIET_MAKE) -C test default
 
