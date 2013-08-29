@@ -47,6 +47,8 @@ function scaffold(
                     user = Git.readchomp(`config --get github.user`)
                     url = "https://travis-ci.org/$user/$pkg.jl"
                     print(io, """
+                        # $pkg
+
                         [![Build Status]($url.png)]($url)
                         """)
                 end
