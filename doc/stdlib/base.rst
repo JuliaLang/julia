@@ -812,6 +812,10 @@ Strings
 
    Returns true if the string or byte vector is valid UTF-8, false otherwise.
 
+.. function:: is_utf8_start(byte) -> Bool
+
+   Determine whether a byte can start a valid UTF-8 character sequence.
+
 .. function:: is_valid_char(c) -> Bool
 
    Returns true if the given char or integer is a valid Unicode code point.
@@ -1425,6 +1429,10 @@ Text I/O
    array elements. If a new type has a different compact representation, it
    should overload ``showcompact(io, x)`` where the first argument is a stream.
 
+.. function:: showall(x)
+
+   Similar to ``show``, except shows all elements of arrays.
+
 .. function:: summary(x)
 
    Return a string giving a brief description of a value. By default returns
@@ -1438,6 +1446,10 @@ Text I/O
 .. function:: println(x)
 
    Print (using :func:`print`) ``x`` followed by a newline.
+
+.. function:: print_with_color(color::Symbol, [io], strings...)
+
+   Print strings in a color specified as a symbol, for example ``:red`` or ``:blue``.
 
 .. function:: info(msg)
 
@@ -1696,6 +1708,10 @@ stack with:
    to the given I/O stream.  (The text representation is the same
    as the way an object is printed in the Julia REPL.)
 
+.. function:: istext(m::MIME)
+
+   Determine whether a MIME type is text data.
+
 Memory-mapped I/O
 -----------------
 
@@ -1851,6 +1867,10 @@ Mathematical Operators
 .. function:: mod1(x,m)
 
    Modulus after division, returning in the range (0,m]
+
+.. function:: rem1(x,m)
+
+   Remainder after division, returning in the range (0,m]
 
 .. _//:
 .. function:: //(num, den)
@@ -2553,6 +2573,18 @@ Mathematical Functions
 
    Compute the digamma function of ``x`` (the logarithmic derivative of ``gamma(x)``)
 
+.. function:: invdigamma(x)
+
+   Compute the inverse digamma function of ``x``.
+
+.. function:: trigamma(x)
+
+   Compute the trigamma function of ``x`` (the logarithmic second derivative of ``gamma(x)``)
+
+.. function:: polygamma(m, x)
+
+   Compute the polygamma function of order ``m`` of argument ``x`` (the ``(m+1)th`` derivative of the logarithm of ``gamma(x)``)
+
 .. function:: airy(k,x)
 
    kth derivative of the Airy function :math:`\operatorname{Ai}(x)`.
@@ -2751,6 +2783,10 @@ Data Formats
 
    Convert a number or array to ``Uint128`` data type
 
+.. function:: float16(x)
+
+   Convert a number or array to ``Float16`` data type
+
 .. function:: float32(x)
 
    Convert a number or array to ``Float32`` data type
@@ -2841,6 +2877,10 @@ Numbers
 
    The constant e
 
+:: data:: catalan
+
+   Catalan's constant
+
 .. data:: Inf
 
    Positive infinity of type Float64
@@ -2849,6 +2889,10 @@ Numbers
 
    Positive infinity of type Float32
 
+.. data:: Inf16
+
+   Positive infinity of type Float16
+
 .. data:: NaN
 
    A not-a-number value of type Float64
@@ -2856,6 +2900,10 @@ Numbers
 .. data:: NaN32
 
    A not-a-number value of type Float32
+
+.. data:: NaN16
+
+   A not-a-number value of type Float16
 
 .. function:: issubnormal(f) -> Bool
 
@@ -3306,6 +3354,20 @@ Indexing, Assignment, and Concatenation
 .. function:: findfirst(predicate, A)
 
    Return the index of the first element that satisfies the given predicate in ``A``.
+
+.. function:: findnext(A, i)
+
+   Find the next index >= ``i`` of a non-zero element of ``A``, or ``0`` if not found.
+
+.. function:: findnext(predicate, A, i)
+
+   Find the next index >= ``i`` of an element of ``A`` satisfying the given predicate,
+   or ``0`` if not found.
+
+.. function:: findnext(A, v, i)
+
+   Find the next index >= ``i`` of an element of ``A`` equal to ``v`` (using ``==``),
+   or ``0`` if not found.
 
 .. function:: permutedims(A,perm)
 
@@ -4030,6 +4092,13 @@ Parallel Computing
 
    Fetch the value of a remote reference, removing it so that the reference is empty again.
 
+.. function:: isready(RemoteRef)
+
+   Determine whether a ``RemoteRef`` has a value stored to it. Note that this function
+   can easily cause race conditions, since by the time you receive its result it may
+   no longer be true. It is recommended that this function only be used on a
+   ``RemoteRef`` that is assigned once.
+
 .. function:: RemoteRef()
 
    Make an uninitialized remote reference on the local machine.
@@ -4172,6 +4241,12 @@ System
    Mark a command object so that it will be run in a new process group,
    allowing it to outlive the julia process, and not have Ctrl-C interrupts
    passed to it.
+
+.. function:: setenv(command, env)
+
+   Set environment variables to use when running the given command. ``env`` is either
+   a dictionary mapping strings to strings, or an array of strings of the form
+   ``"var=val"``.
 
 .. function:: |>(command, command)
               |>(command, filename)
@@ -4347,6 +4422,10 @@ C Interface
    symbols to be available for usage in other shared libraries, in
    situations where there are dependencies between shared libraries.
 
+.. function:: dlopen_e(libfile::String [, flags::Integer])
+
+   Similar to ``dlopen``, except returns a NULL pointer instead of raising errors.
+
 .. data:: RTLD_DEEPBIND
 
    Enum constant for dlopen. See your platform man page for details, if applicable.
@@ -4391,9 +4470,13 @@ C Interface
 
    Close shared library referenced by handle.
 
+.. function:: c_malloc(size::Integer)
+
+   Call ``malloc`` from the C standard library.
+
 .. function:: c_free(addr::Ptr)
 
-   Call free() from C standard library.
+   Call ``free`` from the C standard library.
 
 .. function:: unsafe_load(p::Ptr{T},i::Integer)
 
@@ -4402,6 +4485,16 @@ C Interface
 .. function:: unsafe_store!(p::Ptr{T},x,i::Integer)
 
    Assign to the pointer ``p[i] = x`` or ``*p = x``, making a copy of object x into the memory at p.
+
+.. function:: unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
+
+   Copy ``N`` elements from a source pointer to a destination, with no checking. The
+   size of an element is determined by the type of the pointers.
+
+.. function:: unsafe_copy!(dest::Array, do, src::Array, so, N)
+
+   Copy ``N`` elements from a source array to a destination, starting at offset ``so``
+   in the source and ``do`` in the destination.
 
 .. function:: pointer(a[, index])
 

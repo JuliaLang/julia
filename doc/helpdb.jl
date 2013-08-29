@@ -299,7 +299,7 @@
 
 "),
 
-("Types","Base","subtype","subtype(type1, type2)
+("Types","Base","issubtype","issubtype(type1, type2)
 
    True if and only if all values of \"type1\" are also of \"type2\".
    Can also be written using the \"<:\" infix operator as \"type1 <:
@@ -309,7 +309,7 @@
 
 ("Types","Base","<:","<:(T1, T2)
 
-   Subtype operator, equivalent to \"subtype(T1,T2)\".
+   Subtype operator, equivalent to \"issubtype(T1,T2)\".
 
 "),
 
@@ -1207,6 +1207,13 @@
 
 "),
 
+("Strings","Base","is_utf8_start","is_utf8_start(byte) -> Bool
+
+   Determine whether a byte can start a valid UTF-8 character
+   sequence.
+
+"),
+
 ("Strings","Base","is_valid_char","is_valid_char(c) -> Bool
 
    Returns true if the given char or integer is a valid Unicode code
@@ -1356,6 +1363,18 @@
 ("Strings","Base","lowercase","lowercase(string)
 
    Returns \"string\" with all characters converted to lowercase.
+
+"),
+
+("Strings","Base","ucfirst","ucfirst(string)
+
+   Returns \"string\" with the first character converted to uppercase.
+
+"),
+
+("Strings","Base","lcfirst","lcfirst(string)
+
+   Returns \"string\" with the first character converted to lowercase.
 
 "),
 
@@ -1825,6 +1844,22 @@
 
 "),
 
+("I/O","Base","print_joined","print_joined(io, items, delim[, last])
+
+   Print elements of \"items\" to \"io\" with \"delim\" between them.
+   If \"last\" is specified, it is used as the final delimiter instead
+   of \"delim\".
+
+"),
+
+("I/O","Base","print_shortest","print_shortest(io, x)
+
+   Print the shortest possible representation of number \"x\" as a
+   floating point number, ensuring that it would parse to the exact
+   same number.
+
+"),
+
 ("I/O","Base","fd","fd(stream)
 
    Returns the file descriptor backing the stream or file. Note that
@@ -2111,21 +2146,6 @@
 
 "),
 
-("Network I/O","Base","bind","bind(server[, addr...])
-
-   Binds a server to the given address (which may be any of the
-   arguments accepted by listen). Note that you must still call listen
-   to be able to accept connections on this server.
-
-"),
-
-("Network I/O","Base","listen","listen(sever) -> PipeServer
-
-   Starts listening on a server that has been previously bound to an
-   address by \"bind\".
-
-"),
-
 ("Network I/O","Base","listenany","listenany(port_hint) -> (Uint16, TcpServer)
 
    Create a TcpServer on any port, using hint as a starting point.
@@ -2158,7 +2178,8 @@
 
    Write an informative text representation of a value to the current
    output stream. New types should overload \"show(io, x)\" where the
-   first argument is a stream.
+   first argument is a stream. The representation used by \"show\"
+   generally includes Julia-specific formatting and type information.
 
 "),
 
@@ -2168,6 +2189,12 @@
    printing array elements. If a new type has a different compact
    representation, it should overload \"showcompact(io, x)\" where the
    first argument is a stream.
+
+"),
+
+("Text I/O","Base","showall","showall(x)
+
+   Similar to \"show\", except shows all elements of arrays.
 
 "),
 
@@ -2183,13 +2210,21 @@
 
    Write (to the default output stream) a canonical (un-decorated)
    text representation of a value if there is one, otherwise call
-   \"show\".
+   \"show\". The representation used by \"print\" includes minimal
+   formatting and tries to avoid Julia-specific details.
 
 "),
 
 ("Text I/O","Base","println","println(x)
 
    Print (using \"print()\") \"x\" followed by a newline.
+
+"),
+
+("Text I/O","Base","print_with_color","print_with_color(color::Symbol[, io], strings...)
+
+   Print strings in a color specified as a symbol, for example
+   \":red\" or \":blue\".
 
 "),
 
@@ -2235,8 +2270,8 @@
 
 ("Text I/O","Base","dump","dump(x)
 
-   Write a thorough text representation of a value to the current
-   output stream.
+   Show the full structure of a value, including all fields of
+   objects.
 
 "),
 
@@ -2484,6 +2519,12 @@ popdisplay(d::Display)
 
 "),
 
+("Multimedia I/O","Base","istext","istext(m::MIME)
+
+   Determine whether a MIME type is text data.
+
+"),
+
 ("Memory-mapped I/O","Base","mmap_array","mmap_array(type, dims, stream[, offset])
 
    Create an \"Array\" whose values are linked to a file, using
@@ -2695,6 +2736,12 @@ popdisplay(d::Display)
 ("Mathematical Operators","Base","mod1","mod1(x, m)
 
    Modulus after division, returning in the range (0,m]
+
+"),
+
+("Mathematical Operators","Base","rem1","rem1(x, m)
+
+   Remainder after division, returning in the range (0,m]
 
 "),
 
@@ -3736,6 +3783,26 @@ popdisplay(d::Display)
 
 "),
 
+("Mathematical Functions","Base","invdigamma","invdigamma(x)
+
+   Compute the inverse digamma function of \"x\".
+
+"),
+
+("Mathematical Functions","Base","trigamma","trigamma(x)
+
+   Compute the trigamma function of \"x\" (the logarithmic second
+   derivative of \"gamma(x)\")
+
+"),
+
+("Mathematical Functions","Base","polygamma","polygamma(m, x)
+
+   Compute the polygamma function of order \"m\" of argument \"x\"
+   (the \"(m+1)th\" derivative of the logarithm of \"gamma(x)\")
+
+"),
+
 ("Mathematical Functions","Base","airy","airy(k, x)
 
    kth derivative of the Airy function \\operatorname{Ai}(x).
@@ -4049,6 +4116,12 @@ popdisplay(d::Display)
 
 "),
 
+("Data Formats","Base","float16","float16(x)
+
+   Convert a number or array to \"Float16\" data type
+
+"),
+
 ("Data Formats","Base","float32","float32(x)
 
    Convert a number or array to \"Float32\" data type
@@ -4098,13 +4171,6 @@ popdisplay(d::Display)
 ("Data Formats","Base","exponent","exponent(x) -> Int
 
    Get the exponent of a normalized floating-point number.
-
-"),
-
-("Data Formats","Base","isfloat64","isfloat64(x::Rational)
-
-   Tests whether \"x\" or all its elements can be losslessly
-   represented as a \"Float64\" data type
 
 "),
 
@@ -4211,6 +4277,12 @@ popdisplay(d::Display)
 
 "),
 
+("Numbers","Base","Inf16","Inf16
+
+   Positive infinity of type Float16
+
+"),
+
 ("Numbers","Base","NaN","NaN
 
    A not-a-number value of type Float64
@@ -4220,6 +4292,12 @@ popdisplay(d::Display)
 ("Numbers","Base","NaN32","NaN32
 
    A not-a-number value of type Float32
+
+"),
+
+("Numbers","Base","NaN16","NaN16
+
+   A not-a-number value of type Float16
 
 "),
 
@@ -4917,6 +4995,27 @@ popdisplay(d::Display)
 
 "),
 
+("Arrays","Base","findnext","findnext(A, i)
+
+   Find the next index >= \"i\" of a non-zero element of \"A\", or
+   \"0\" if not found.
+
+"),
+
+("Arrays","Base","findnext","findnext(predicate, A, i)
+
+   Find the next index >= \"i\" of an element of \"A\" satisfying the
+   given predicate, or \"0\" if not found.
+
+"),
+
+("Arrays","Base","findnext","findnext(A, v, i)
+
+   Find the next index >= \"i\" of an element of \"A\" equal to \"v\"
+   (using \"==\"), or \"0\" if not found.
+
+"),
+
 ("Arrays","Base","permutedims","permutedims(A, perm)
 
    Permute the dimensions of array \"A\". \"perm\" is a vector
@@ -5028,6 +5127,16 @@ popdisplay(d::Display)
 
    Returns the sum of all array elements, using the Kahan-Babuska-
    Neumaier compensated summation algorithm for additional accuracy.
+
+"),
+
+("Arrays","Base","cartesianmap","cartesianmap(f, dims)
+
+   Given a \"dims\" tuple of integers \"(m, n, ...)\", call \"f\" on
+   all combinations of integers in the ranges \"1:m\", \"1:n\", etc.
+   Example:
+
+   julia> cartesianmap(println, (2,2)) 11 21 12 22
 
 "),
 
@@ -5864,6 +5973,16 @@ popdisplay(d::Display)
 
 "),
 
+("Parallel Computing","Base","isready","isready(RemoteRef)
+
+   Determine whether a \"RemoteRef\" has a value stored to it. Note
+   that this function can easily cause race conditions, since by the
+   time you receive its result it may no longer be true. It is
+   recommended that this function only be used on a \"RemoteRef\" that
+   is assigned once.
+
+"),
+
 ("Parallel Computing","Base","RemoteRef","RemoteRef()
 
    Make an uninitialized remote reference on the local machine.
@@ -6087,6 +6206,14 @@ popdisplay(d::Display)
    Mark a command object so that it will be run in a new process
    group, allowing it to outlive the julia process, and not have
    Ctrl-C interrupts passed to it.
+
+"),
+
+("System","Base","setenv","setenv(command, env)
+
+   Set environment variables to use when running the given command.
+   \"env\" is either a dictionary mapping strings to strings, or an
+   array of strings of the form \"\"var=val\"\".
 
 "),
 
@@ -6375,6 +6502,13 @@ popdisplay(d::Display)
 
 "),
 
+("C Interface","Base","dlopen_e","dlopen_e(libfile::String[, flags::Integer])
+
+   Similar to \"dlopen\", except returns a NULL pointer instead of
+   raising errors.
+
+"),
+
 ("C Interface","Base","RTLD_DEEPBIND","RTLD_DEEPBIND
 
    Enum constant for dlopen. See your platform man page for details,
@@ -6451,9 +6585,15 @@ popdisplay(d::Display)
 
 "),
 
+("C Interface","Base","c_malloc","c_malloc(size::Integer)
+
+   Call \"malloc\" from the C standard library.
+
+"),
+
 ("C Interface","Base","c_free","c_free(addr::Ptr)
 
-   Call free() from C standard library.
+   Call \"free\" from the C standard library.
 
 "),
 
@@ -6468,6 +6608,21 @@ popdisplay(d::Display)
 
    Assign to the pointer \"p[i] = x\" or \"*p = x\", making a copy of
    object x into the memory at p.
+
+"),
+
+("C Interface","Base","unsafe_copy!","unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
+
+   Copy \"N\" elements from a source pointer to a destination, with no
+   checking. The size of an element is determined by the type of the
+   pointers.
+
+"),
+
+("C Interface","Base","unsafe_copy!","unsafe_copy!(dest::Array, do, src::Array, so, N)
+
+   Copy \"N\" elements from a source array to a destination, starting
+   at offset \"so\" in the source and \"do\" in the destination.
 
 "),
 
@@ -6492,6 +6647,24 @@ popdisplay(d::Display)
    specifies whether Julia should take ownership of the memory,
    calling \"free\" on the pointer when the array is no longer
    referenced.
+
+"),
+
+("C Interface","Base","pointer_from_objref","pointer_from_objref(obj)
+
+   Get the memory address of a Julia object as a \"Ptr\". The
+   existence of the resulting \"Ptr\" will not protect the object from
+   garbage collection, so you must ensure that the object remains
+   referenced for the whole time that the \"Ptr\" will be used.
+
+"),
+
+("C Interface","Base","unsafe_pointer_to_objref","unsafe_pointer_to_objref(p::Ptr)
+
+   Convert a \"Ptr\" to an object reference. Assumes the pointer
+   refers to a valid heap-allocated Julia object. If this is not the
+   case, undefined behavior results, hence this function is considered
+   \"unsafe\" and should be used with care.
 
 "),
 
@@ -7267,6 +7440,13 @@ popdisplay(d::Display)
 
 "),
 
+("Filesystem","Base","isdirpath","isdirpath(path::String) -> Bool
+
+   Determines whether a path refers to a directory (for example, ends
+   with a path separator).
+
+"),
+
 ("Filesystem","Base","joinpath","joinpath(parts...) -> String
 
    Join path components into a full path. If some argument is an
@@ -7278,6 +7458,26 @@ popdisplay(d::Display)
 
    Convert a path to an absolute path by adding the current directory
    if necessary.
+
+"),
+
+("Filesystem","Base","normpath","normpath(path::String) -> String
+
+   Normalize a path, removing \".\" and \"..\" entries.
+
+"),
+
+("Filesystem","Base","realpath","realpath(path::String) -> String
+
+   Canonicalize a path by expanding symbolic links and removing \".\"
+   and \"..\" entries.
+
+"),
+
+("Filesystem","Base","expanduser","expanduser(path::String) -> String
+
+   On Unix systems, replace a tilde character at the start of a path
+   with the current user's home directory.
 
 "),
 
