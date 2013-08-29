@@ -11,7 +11,8 @@ DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(call exec,$(LLVM_CONFIG) --ldflags) $(OSLIBS) $(RPATH)
 
-julia-release julia-debug: %: %-basic %-readline
+julia-release: julia-readline julia-basic
+julia-debug: julia-debug-readline julia-debug-readline
 
 release debug:
 	$(MAKE) julia-$@
@@ -27,18 +28,18 @@ $(BUILD)/bin/julia.bat: ${JULIAHOME}/contrib/windows/*.bat
 julia-release julia-debug: $(BUILD)/bin/julia.bat
 endif 
 
-julia-release-basic: $(BUILD)/bin/julia-release-basic$(EXE)
+julia-basic: $(BUILD)/bin/julia-basic$(EXE)
 julia-debug-basic: $(BUILD)/bin/julia-debug-basic$(EXE)
-julia-release-readline: $(BUILD)/bin/julia-release-readline$(EXE)
+julia-readline: $(BUILD)/bin/julia-readline$(EXE)
 julia-debug-readline: $(BUILD)/bin/julia-debug-readline$(EXE)
 
-$(BUILD)/bin/julia-release-basic$(EXE): repl.o repl-basic.o
-	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-release)
+$(BUILD)/bin/julia-basic$(EXE): repl.o repl-basic.o
+	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia)
 $(BUILD)/bin/julia-debug-basic$(EXE): repl.do repl-basic.do
 	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-debug)
 
-$(BUILD)/bin/julia-release-readline$(EXE): repl.o repl-readline.o
-	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-release) || echo "*** Please ensure that the ncurses-devel package is installed on your OS, and try again. ***"
+$(BUILD)/bin/julia-readline$(EXE): repl.o repl-readline.o
+	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia) || echo "*** Please ensure that the ncurses-devel package is installed on your OS, and try again. ***"
 $(BUILD)/bin/julia-debug-readline$(EXE): repl.do repl-readline.do
 	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-debug)
 
