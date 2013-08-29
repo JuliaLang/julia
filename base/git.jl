@@ -85,6 +85,16 @@ function is_ancestor_of(a::String, b::String; dir="")
     readchomp(`merge-base $A $b`, dir=dir) == A
 end
 
+const GITHUB_REGEX = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
+
+function set_remote_url(url::String; remote::String="origin", dir="")
+    run(`config remote.$remote.url $url`, dir=dir)
+    m = match(GITHUB_REGEX,url)
+    m == nothing && return
+    push = "git@github.com:$(m.captures[1])"
+    push != url && run(`config remote.$remote.pushurl $push`, dir=dir)
+end
+
 ## below here to be retired ##
 
 function each_tagged_version()
@@ -201,8 +211,6 @@ function merge_configs(Bc::Dict, Lc::Dict, Rc::Dict)
     end
     return cfg, conflicts, deleted
 end
-
-const GITHUB_REGEX = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
 
 # setup a repo's push URL intelligently
 

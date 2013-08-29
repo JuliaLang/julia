@@ -86,7 +86,7 @@ function scaffold(
                 user = Git.readchomp(`config --get github.user`)
                 url = "git@github.com:$user/$pkg.jl.git"
                 info("Setting URL: $url")
-                Git.run(`config remote.origin.url $url`)
+                Git.set_remote_url(url)
             end
         end
     catch
