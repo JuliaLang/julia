@@ -33,12 +33,13 @@ end
 function init(meta::String=DEFAULT_META)
     d = path()
     if isdir(joinpath(d,"METADATA"))
-        warn("Package directory $d is already initialized.")
+        info("Package directory $d is already initialized.")
+        Git.set_remote_url(meta, dir=joinpath(d,"METADATA"))
         return
     end
     try
         run(`mkdir -p $d`)
-        cd() do
+        cd(d) do
             info("Cloning METADATA from $meta")
             run(`git clone -q -b devel $meta METADATA`)
             Git.set_remote_url(meta, dir="METADATA")
