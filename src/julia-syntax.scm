@@ -1221,6 +1221,8 @@
    (pattern-lambda (|.| a b)
 		   `(call (top getfield) ,a ,b))
 
+   (pattern-lambda (in a b) `(call in ,a ,b))
+
    (pattern-lambda (= (|.| a b) rhs)
 		   (let ((aa (if (atom? a) a (gensy)))
 			 (bb (if (or (atom? b) (quoted? b)) b (gensy))))
