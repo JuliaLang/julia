@@ -503,7 +503,9 @@ function xdump(fn::Function, io::IO, x::Array{Any}, n::Int, indent)
 end
 xdump(fn::Function, io::IO, x::Symbol, n::Int, indent) = println(io, typeof(x), " ", x)
 xdump(fn::Function, io::IO, x::Function, n::Int, indent) = println(io, x)
-xdump(fn::Function, io::IO, x::Array, n::Int, indent) = println(io, "Array($(eltype(x)),$(size(x)))", " ", x)
+xdump(fn::Function, io::IO, x::Array, n::Int, indent) =
+               (print(io, "Array($(eltype(x)),$(size(x))) ");
+                show(io, x); println(io))
 
 # Types
 xdump(fn::Function, io::IO, x::UnionType, n::Int, indent) = println(io, x)
@@ -579,15 +581,17 @@ xdump(fn::Function, io::IO, x, n::Int) = xdump(xdump, io, x, n, "")
 xdump(fn::Function, io::IO, args...) = error("invalid arguments to xdump")
 xdump(fn::Function, args...) = xdump(fn, STDOUT::IO, args...)
 xdump(io::IO, args...) = xdump(xdump, io, args...)
-xdump(args...) = xdump(xdump, STDOUT::IO, args...)
+xdump(args...) = with_output_limit(()->xdump(xdump, STDOUT::IO, args...), true)
 
 # Here are methods specifically for dump:
 dump(io::IO, x, n::Int) = dump(io, x, n, "")
 dump(io::IO, x) = dump(io, x, 5, "")  # default is 5 levels
-dump(io::IO, x::String, n::Int, indent) = println(io, typeof(x), " \"", x, "\"")
+dump(io::IO, x::String, n::Int, indent) =
+               (print(io, typeof(x), " ");
+                show(io, x); println(io))
 dump(io::IO, x, n::Int, indent) = xdump(dump, io, x, n, indent)
 dump(io::IO, args...) = error("invalid arguments to dump")
-dump(args...) = dump(STDOUT::IO, args...)
+dump(args...) = with_output_limit(()->dump(STDOUT::IO, args...), true)
 
 function dump(io::IO, x::Dict, n::Int, indent)
     println(typeof(x), " len ", length(x))
@@ -854,10 +858,17 @@ function show{T}(io::IO, x::AbstractArray{T,0})
     print(io, sx)
 end
 
+# global flag for limiting output
+# TODO: this should be replaced with a better mechanism. currently it is only
+# for internal use in showing arrays.
+_limit_output = false
+
 # NOTE: this is a possible, so-far-unexported function, providing control of
 # array output. Not sure I want to do it this way.
 showarray(X::AbstractArray; kw...) = showarray(STDOUT, X; kw...)
-function showarray(io::IO, X::AbstractArray; header=true, limit=true, rows=tty_rows()-4, cols=tty_cols())
+function showarray(io::IO, X::AbstractArray;
+                   header::Bool=true, limit::Bool=_limit_output,
+                   rows = tty_rows()-4, cols = tty_cols())
     header && print(io, summary(X))
     if !isempty(X)
         header && println(io, ":")
@@ -879,12 +890,48 @@ show(io::IO, X::AbstractArray) = showarray(io, X)
 
 print(io::IO, X::AbstractArray) = writedlm(io, X)
 
+function with_output_limit(thk, lim=true)
+    global _limit_output
+    last = _limit_output
+    _limit_output = lim
+    try
+        thk()
+    finally
+        _limit_output = last
+    end
+end
+
 showall(x) = showall(STDOUT, x)
-showall(io::IO, x) = show(io, x)
-showall(io::IO, x::AbstractArray) = showarray(io, x, limit=false)
+function showall(io::IO, x)
+    if _limit_output==false
+        show(io, x)
+    else
+        with_output_limit(false) do
+            show(io, x)
+        end
+    end
+end
+
+showlimited(x) = showlimited(STDOUT, x)
+function showlimited(io::IO, x)
+    if _limit_output==true
+        show(io, x)
+    else
+        with_output_limit(true) do
+            show(io, x)
+        end
+    end
+end
 
 function show_vector(io::IO, v, opn, cls)
-    show_delim_array(io, v, opn, ",", cls, false)
+    if _limit_output && length(v) > 20
+        show_delim_array(io, v[1:10], opn, ",", "", false)
+        print(io, "  \u2026  ")
+        show_delim_array(io, v[end-9:end], "", ",", cls, false)
+        #print_matrix(io, X, 1, tty_cols(), opn, ", ", cls, "  \u2026  ", "\u22ee", "  \u22f1  ", 5, 5)
+    else
+        show_delim_array(io, v, opn, ",", cls, false)
+    end
 end
 
 show(io::IO, v::AbstractVector{Any}) = show_vector(io, v, "{", "}")
