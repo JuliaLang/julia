@@ -403,7 +403,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
 {
     jl_handler_t __eh;
     size_t i=start;
-    assert(!toplevel || nl==0);
+
     while (1) {
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_gotonode(stmt)) {
@@ -484,7 +484,7 @@ jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
         locals[i*2]   = loc[(i-llength)*2];
         locals[i*2+1] = loc[(i-llength)*2+1];
     }
-    r = eval_body(stmts, locals, nl, 0, 0);
+    r = eval_body(stmts, locals, nl, 0, 1);
     JL_GC_POP();
     return r;
 }
