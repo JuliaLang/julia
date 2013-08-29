@@ -383,7 +383,7 @@
 			     (not (eqv? (peek-char (ts:port s)) #\ )))
 			(ts:put-back! s t)
 			ex)
-		       ((syntactic-op? t)
+		       ((or (syntactic-op? t) (eq? t 'in))
 			(loop (list t ex (down s))))
 		       (else
 			(loop (list 'call t ex (down s))))))))))
@@ -613,8 +613,10 @@
 
 (define (parse-pipes s)    (parse-LtoR s parse-range (prec-ops 6)))
 
+(define (parse-in s)       (parse-LtoR s parse-pipes '(in)))
+
 (define (parse-comparison s ops)
-  (let loop ((ex (parse-pipes s))
+  (let loop ((ex (parse-in s))
 	     (first #t))
     (let ((t (peek-token s)))
       (if (not (memq t ops))
@@ -1131,9 +1133,8 @@
 		      r)
 		     ((eq? r ':)
 		      r)
-		     ((eq? (peek-token s) 'in)
-		      (begin (take-token s)
-			     `(= ,r ,(parse-eq* s))))
+		     ((and (pair? r) (eq? (car r) 'in))
+		      `(= ,(cadr r) ,(caddr r)))
 		     (else
 		      (error "invalid iteration specification")))))
 	(case (peek-token s)
