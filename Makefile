@@ -32,7 +32,11 @@ julia-debug julia-release:
 	@$(MAKE) $(QUIET_MAKE) -C ui $@
 ifneq ($(OS),WINNT)
 ifndef JULIA_VAGRANT_BUILD
+ifeq ($@,debug)
 	@ln -sf $(BUILD)/bin/$@-$(DEFAULT_REPL) julia
+else
+	@ln -sf $(BUILD)/bin/julia-$(DEFAULT_REPL) julia
+endif
 endif
 endif
 
