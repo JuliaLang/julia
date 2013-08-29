@@ -476,7 +476,7 @@ wine_pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(shell printf %s\n '
 pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 
 JULIA_EXECUTABLE_debug = $(BUILD)/bin/julia-debug-$(DEFAULT_REPL)$(EXE)
-JULIA_EXECUTABLE_release = $(BUILD)/bin/julia-release-$(DEFAULT_REPL)$(EXE)
+JULIA_EXECUTABLE_release = $(BUILD)/bin/julia-$(DEFAULT_REPL)$(EXE)
 
 ifeq ($(OS), WINNT)
 JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
