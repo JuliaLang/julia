@@ -725,7 +725,10 @@ function hash(x::BigFloat)
         return hash(float64(x))
     end
     n = ceil(precision(x)/53)
+    e = exponent(x)
     h::Uint = signbit(x)
+    h = h<<30 + e
+    x = ldexp(x, -e)
     for i=1:n
         f64 = float64(x)
         h = bitmix(h, hash(f64)$11111)
