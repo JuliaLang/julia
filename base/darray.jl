@@ -164,7 +164,7 @@ end
 function convert{S,T,N}(::Type{Array{S,N}}, s::SubDArray{T,N})
     I = s.indexes
     d = s.parent
-    if isa(I,(Range1{Int}...)) && issubtype(S,T) && issubtype(T,S)
+    if isa(I,(Range1{Int}...)) && S<:T && T<:S
         l = locate(d, map(first, I)...)
         if isequal(d.indexes[l...], I)
             # SubDArray corresponds to a chunk
