@@ -389,19 +389,18 @@ modf(x) = rem(x,one(x)), trunc(x)
 
 # special functions
 
-besselj0(x::Float64) = ccall((:j0,libm),  Float64, (Float64,), x)
-besselj0(x::Float32) = ccall((:j0f,libm), Float32, (Float32,), x)
-@vectorize_1arg Real besselj0
-besselj1(x::Float64) = ccall((:j1,libm),  Float64, (Float64,), x)
-besselj1(x::Float32) = ccall((:j1f,libm), Float32, (Float32,), x)
-@vectorize_1arg Real besselj1
-
-bessely0(x::Float64) = ccall((:y0,libm),  Float64, (Float64,), x)
-bessely0(x::Float32) = ccall((:y0f,libm), Float32, (Float32,), x)
-@vectorize_1arg Real bessely0
-bessely1(x::Float64) = ccall((:y1,libm),  Float64, (Float64,), x)
-bessely1(x::Float32) = ccall((:y1f,libm), Float32, (Float32,), x)
-@vectorize_1arg Real bessely1
+for (jy,nu) in (("j",0), ("j",1), ("y",0), ("y",1))
+    jynu = Expr(:quote, symbol(string(jy,nu)))
+    jynuf = Expr(:quote, symbol(string(jy,nu,"f")))
+    bjynu = symbol(string("bessel",jy,nu))
+    @eval begin
+        $bjynu(x::Float64) = ccall(($jynu,libm),  Float64, (Float64,), x)
+        $bjynu(x::Float32) = ccall(($jynuf,libm), Float32, (Float32,), x)
+        $bjynu(x::Real) = $bjynu(float(x))
+        $bjynu(x::Complex) = besselj($nu,x)
+        @vectorize_1arg Number $bjynu
+    end
+end
 
 let
     const ai::Array{Float64,1} = Array(Float64,2)
