@@ -71,6 +71,16 @@ function::
 The ``apply`` function applies its first argument — a function object —
 to its remaining arguments.
 
+Argument Passing Behavior
+-------------------------
+
+Julia function arguments follow a convention sometimes called "pass-by-sharing",
+which means that values are not copied when they are passed to functions.
+Function arguments themselves act as new variable *bindings* (new locations that
+can refer to values), but the values they refer to are identical to the passed
+values. Modifications to mutable values (such as Arrays) made within a function
+will be visible to the caller.
+
 .. _man-return-keyword:
 
 The ``return`` Keyword
