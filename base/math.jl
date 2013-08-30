@@ -397,7 +397,7 @@ for (jy,nu) in (("j",0), ("j",1), ("y",0), ("y",1))
         $bjynu(x::Float64) = ccall(($jynu,libm),  Float64, (Float64,), x)
         $bjynu(x::Float32) = ccall(($jynuf,libm), Float32, (Float32,), x)
         $bjynu(x::Real) = $bjynu(float(x))
-        $bjynu(x::Complex) = besselj($nu,x)
+        $bjynu(x::Complex) = $(symbol(string("bessel",jy)))($nu,x)
         @vectorize_1arg Number $bjynu
     end
 end
