@@ -81,15 +81,7 @@ specfun
 arrays
 ------
 
-.. function:: checkbounds(...)
-
-   UNDOCUMENTED
-
 .. function:: gradient(...)
-
-   UNDOCUMENTED
-
-.. function:: slice(...)
 
    UNDOCUMENTED
 
@@ -138,18 +130,6 @@ bigfloat & precision
 statistics
 ----------
 
-.. function:: hist2d(...)
-
-   UNDOCUMENTED
-
-.. function:: median!(v::AbstractArray{T<:Real,1})
-
-   UNDOCUMENTED
-
-.. function:: quantile!(v::AbstractArray{T,1},q::AbstractArray{T,1})
-
-   UNDOCUMENTED
-
 
 signal processing
 -----------------
@@ -189,10 +169,6 @@ syntax
 
 help and reflection
 -------------------
-
-.. function:: less(...)
-
-   UNDOCUMENTED
 
 
 loading source files
