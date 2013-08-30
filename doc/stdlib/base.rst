@@ -3357,6 +3357,10 @@ Indexing, Assignment, and Concatenation
 
    Return a vector of indexes for each dimension giving the locations of the non-zeros in ``A``.
 
+.. function:: findnz(A)
+
+   Return a tuple ``(I, J, V)`` where ``I`` and ``J`` are the row and column indexes of the non-zero values in matrix ``A``, and ``V`` is a vector of the non-zero values.
+
 .. function:: nonzeros(A)
 
    Return a vector of the non-zero values in array ``A``.
@@ -3402,6 +3406,11 @@ Indexing, Assignment, and Concatenation
 .. function:: vec(Array) -> Vector
 
    Vectorize an array using column-major convention.
+
+.. function:: promote_shape(s1, s2)
+
+   Check two array shapes for compatibility, allowing trailing singleton dimensions,
+   and return whichever shape has more dimensions.
 
 Array functions
 ~~~~~~~~~~~~~~~
@@ -4871,6 +4880,10 @@ Reflection
 .. function:: functionloc(f::Function, types)
 
    Returns a tuple ``(filename,line)`` giving the location of a method definition.
+
+.. function:: functionlocs(f::Function, types)
+
+   Returns an array of the results of ``functionloc`` for all matching definitions.
 
 Internals
 ---------

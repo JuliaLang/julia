@@ -536,7 +536,6 @@ export
     searchsortedlast,
     select!,
     select,
-    setindex_shape_check,
     shuffle,
     shuffle!,
     size,
@@ -999,8 +998,6 @@ export
     exit,
     ntuple,
     quit,
-    tty_cols,
-    tty_rows,
 
 # IP address stuff
     @ip_str,
