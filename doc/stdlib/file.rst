@@ -102,6 +102,21 @@ Filesystem
    On Unix systems, replace a tilde character at the start of a path with the
    current user's home directory.
 
+.. function:: splitdir(path::String) -> (String,String)
+
+   Split a path into a tuple of the directory name and file name.
+
+.. function:: splitdrive(path::String) -> (String,String)
+
+   On Windows, split a path into the drive letter part and the path part. On Unix
+   systems, the first component is always the empty string.
+
+.. function:: splitext(path::String) -> (String,String)
+
+   If the last component of a path contains a dot, split the path into everything
+   before the dot and everything including and after the dot. Otherwise, return
+   a tuple of the argument unmodified and the empty string.
+
 .. function:: tempname()
 
    Generate a unique temporary filename.

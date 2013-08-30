@@ -85,19 +85,7 @@ arrays
 
    UNDOCUMENTED
 
-.. function:: findnz(...)
-
-   UNDOCUMENTED
-
 .. function:: gradient(...)
-
-   UNDOCUMENTED
-
-.. function:: promote_shape(...)
-
-   UNDOCUMENTED
-
-.. function:: setindex_shape_check(X::AbstractArray{T,N},I...)
 
    UNDOCUMENTED
 
@@ -202,10 +190,6 @@ syntax
 help and reflection
 -------------------
 
-.. function:: functionlocs(...)
-
-   UNDOCUMENTED
-
 .. function:: less(...)
 
    UNDOCUMENTED
@@ -220,15 +204,6 @@ RTS internals
 
 misc
 ----
-
-.. function:: tty_cols()
-
-   UNDOCUMENTED
-
-.. function:: tty_rows()
-
-   UNDOCUMENTED
-
 
 IP address stuff
 ----------------
@@ -256,18 +231,6 @@ distributed arrays
 
 paths and file names
 --------------------
-
-.. function:: splitdir(...)
-
-   UNDOCUMENTED
-
-.. function:: splitdrive(path::String)
-
-   UNDOCUMENTED
-
-.. function:: splitext(path::String)
-
-   UNDOCUMENTED
 
 
 filesystem operations
