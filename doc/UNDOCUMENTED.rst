@@ -81,10 +81,6 @@ specfun
 arrays
 ------
 
-.. function:: bsxfun(...)
-
-   UNDOCUMENTED
-
 .. function:: checkbounds(...)
 
    UNDOCUMENTED
@@ -94,10 +90,6 @@ arrays
    UNDOCUMENTED
 
 .. function:: gradient(...)
-
-   UNDOCUMENTED
-
-.. function:: index_shape(...)
 
    UNDOCUMENTED
 

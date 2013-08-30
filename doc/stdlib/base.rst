@@ -813,10 +813,6 @@ Strings
 
    Returns true if the string or byte vector is valid UTF-8, false otherwise.
 
-.. function:: is_utf8_start(byte) -> Bool
-
-   Determine whether a byte can start a valid UTF-8 character sequence.
-
 .. function:: is_valid_char(c) -> Bool
 
    Returns true if the given char or integer is a valid Unicode code point.
