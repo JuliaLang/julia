@@ -476,6 +476,8 @@ rsearch(s::String, t::String) = rsearch(s,t,endof(s))
 
 contains(a::String, b::String) = search(a,b)!=0:-1
 
+in(::String, ::String) = error("use contains(x,y) for string containment")
+
 function cmp(a::String, b::String)
     if a === b
         return 0
