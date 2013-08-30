@@ -36,7 +36,14 @@ edit(f::Function, pkg, args...) = Dir.cd() do
 end
 
 available() = sort!([keys(Dir.cd(Read.available))...], by=lowercase)
-available(pkg::String) = sort!([keys(Dir.cd(()->Read.available(pkg)))...])
+
+available(pkg::String) = Dir.cd() do
+    avail = Read.available(pkg)
+    if !isempty(avail) || Read.isinstalled(pkg)
+        return sort!([keys(avail)...])
+    end
+    error("$pkg is neither installed nor registered")
+end
 
 function installed()
     pkgs = Dict{String,VersionNumber}()
@@ -45,6 +52,7 @@ function installed()
     end
     return pkgs
 end
+
 installed(pkg::String) = Dir.cd() do
     avail = Read.available(pkg)
     Read.isinstalled(pkg) && return Read.installed_version(pkg,avail)

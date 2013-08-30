@@ -10,13 +10,13 @@ sha1(pkg::String, ver::VersionNumber) = readstrip("METADATA", pkg, "versions", s
 function available(names=readdir("METADATA"))
     pkgs = Dict{ByteString,Dict{VersionNumber,Available}}()
     for pkg in names
-        pkgs[pkg] = eltype(pkgs)[2]()
-        isfile("METADATA",pkg,"url") || continue
-        versdir = joinpath("METADATA",pkg,"versions")
+        isfile("METADATA", pkg, "url") || continue
+        versdir = joinpath("METADATA", pkg, "versions")
         isdir(versdir) || continue
         for ver in readdir(versdir)
             ismatch(Base.VERSION_REGEX, ver) || continue
             isfile(versdir, ver, "sha1") || continue
+            haskey(pkgs,pkg) || (pkgs[pkg] = eltype(pkgs)[2]())
             pkgs[pkg][convert(VersionNumber,ver)] = Available(
                 readchomp(joinpath(versdir,ver,"sha1")),
                 Reqs.parse(joinpath(versdir,ver,"requires"))
@@ -25,7 +25,7 @@ function available(names=readdir("METADATA"))
     end
     return pkgs
 end
-available(pkg::String) = available([pkg])[pkg]
+available(pkg::String) = get(available([pkg]),pkg,Dict{VersionNumber,Available}())
 
 isinstalled(pkg::String) =
     pkg != "METADATA" && pkg != "REQUIRE" && pkg[1] != '.' && isdir(pkg)
