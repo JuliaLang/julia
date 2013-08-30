@@ -12,7 +12,7 @@ Hermitian(A::Matrix) = Hermitian(A, :U)
 
 copy(A::Hermitian) = Hermitian(copy(A.S), A.uplo)
 size(A::Hermitian, args...) = size(A.S, args...)
-print_matrix(io::IO, A::Hermitian) = print_matrix(io, full(A))
+print_matrix(io::IO, A::Hermitian, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
 full(A::Hermitian) = A.S
 ishermitian(A::Hermitian) = true
 issym{T<:Real}(A::Hermitian{T}) = true

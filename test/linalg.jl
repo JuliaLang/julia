@@ -53,7 +53,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq q*full(q, false)' eye(elty, n)
         @test_approx_eq q*r a
         @test_approx_eq a*(qra\b) b
-        
+
         qrpa  = factorize(a[1:5,:])                 # (Automatic) Fat pivoted QR decomposition
         q,r,p = qrpa[:Q], qrpa[:R], qrpa[:p]
         @test_approx_eq q'*full(q, false) eye(elty, 5)
