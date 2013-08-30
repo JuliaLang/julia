@@ -7,7 +7,7 @@
 static std::map<std::string, std::string> sonameMap;
 static bool got_sonames = false;
 
-static void read_sonames()
+extern "C" DLLEXPORT void read_sonames()
 {
     char *line=NULL;
     size_t sz=0;
@@ -22,10 +22,10 @@ static void read_sonames()
             while (isspace(line[++i])) ;
             char *name = &line[i];
             char *dot = strstr(name, ".so");
-            char *nxt = strchr(name, ' ');
-            if (dot != NULL && nxt != NULL) {
+            char *abslibpath = strrchr(line+sz, ' ');
+            if (dot != NULL && abslibpath != NULL) {
                 std::string pfx(name, dot - name);
-                std::string soname(name, nxt - name);
+                std::string soname(abslibpath, line+sz-abslibpath);
                 sonameMap[pfx] = soname;
             }
         }

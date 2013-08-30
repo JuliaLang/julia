@@ -935,6 +935,9 @@ enum JL_RTLD_CONSTANT {
      /* MacOS X 10.5+: */ JL_RTLD_FIRST=64U
 };
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
+#ifdef _OS_LINUX_
+DLLEXPORT void read_sonames();
+#endif
 DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname, unsigned flags);
 DLLEXPORT uv_lib_t *jl_load_dynamic_library_e(char *fname, unsigned flags);
 DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol);
