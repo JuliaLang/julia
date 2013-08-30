@@ -10,6 +10,9 @@ New language features
 
   * Triple-quoted string literals (#70).
 
+  * New infix operator `in` (e.g. `x in S`), and corresponding function
+    `in(x,S)`, replacing `contains(S,x)` function (#2703).
+
   * New variable bindings on each for loop and comprehension iteration (#1571).
     For example, before this change:
 
@@ -27,7 +30,9 @@ New language features
          2
          3
 
-  * Explicit relative importing (#2375)
+  * Explicit relative importing (#2375).
+
+  * A semicolon is now allowed after an `import` or `using` statement (#4130).
 
 
 New library functions
@@ -87,6 +92,9 @@ New library functions
 Library improvements
 --------------------
 
+  * Rewritten `Pkg` system for much greater robustness in case of failures,
+    versioned dependencies, and many other enhancements.
+
   * Sort API updates (#3665).
 
   * `delete!(d::Dict, key)` has now been split into separate `pop!`
@@ -136,6 +144,9 @@ Library improvements
   * Support optional RTLD flags in `dlopen` (#2380)
 
   * Options in `pmap` for retrying or ignoring failed tasks. Also `pmap` now works with any iterable.
+
+  * New `sinpi(x)` and `cospi(x)` functions to compute sine and cosine
+    of `pi*x` more accurately (#4112).
 
 Deprecated or removed
 ---------------------
@@ -206,6 +217,12 @@ Deprecated or removed
     of a new operator `|>` (#3523).
 
   * `amap` is deprecated in favor of new `mapslices` functionality.
+
+Miscellaneous changes
+--------------------------------
+
+  * `julia-release-*` executables renamed to `julia-*`, and
+    `libjulia-release` renamed to `libjulia` (#4177).
 
 Bugfixes and performance updates
 --------------------------------
