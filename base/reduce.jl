@@ -234,6 +234,8 @@ function in(x, itr)
     return false
 end
 
+in(x::String, y::String) = contains(y, x)
+
 function contains(itr, x)
     warn_once("contains(collection, item) is deprecated, use in(item, collection) instead")
     in(x, itr)
