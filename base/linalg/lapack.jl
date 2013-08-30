@@ -271,13 +271,15 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
             if m < n throw(DimensionMismatch("Matrix cannot have less rows than columns")) end
             lda = max(1, stride(A, 2))
             T = Array($elty, n, n)
-            info = Array(BlasInt, 1)
-            ccall(($(string(geqrt3)), liblapack), Void, 
-                (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                 Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                &m, &n, A, &lda,
-                T, &n, info)
-            if info[1] < 0 throw(LAPACKException(info[1])) end
+            if n > 0
+                info = Array(BlasInt, 1)
+                ccall(($(string(geqrt3)), liblapack), Void, 
+                    (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                     Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                     &m, &n, A, &lda,
+                     T, &n, info)
+                if info[1] < 0 throw(LAPACKException(info[1])) end
+            end
             return A, T
         end
         ## Several variants of geqrf! could be defined.
@@ -1390,6 +1392,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             m = size(C, 1)
             n = size(C, 2)
             k = size(T, 1)
+            if k == 0 return C end
             if side == 'L'
                 ldv = max(1, m)
                 wss = n*k

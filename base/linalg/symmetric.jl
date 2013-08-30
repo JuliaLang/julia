@@ -12,7 +12,7 @@ Symmetric(A::StridedMatrix) = Symmetric(A, :U)
 
 copy(A::Symmetric) = Symmetric(copy(A.S), A.uplo)
 size(A::Symmetric, args...) = size(A.S, args...)
-print_matrix(io::IO, A::Symmetric) = print_matrix(io, full(A))
+print_matrix(io::IO, A::Symmetric, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
 full(A::Symmetric) = A.S
 ishermitian{T<:Real}(A::Symmetric{T}) = true
 ishermitian{T<:Complex}(A::Symmetric{T}) = all(imag(A.S) .== 0)
