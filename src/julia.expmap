@@ -254,6 +254,7 @@
     jl_get_backtrace;
     jl_backtrace_from_here;
     jl_lookup_code_address;
+    read_sonames;
     rec_backtrace;
     profile_init;
     profile_get_data;
