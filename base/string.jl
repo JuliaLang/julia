@@ -188,15 +188,15 @@ search(s::String, c::Chars) = search(s,c,start(s))
 
 in(c::Char, s::String) = (search(s,c)!=0)
 
-function _search(s, t, i)
+function _searchindex(s, t, i)
     if isempty(t)
-        return 1 <= i <= nextind(s,endof(s)) ? (i:i-1) :
+        return 1 <= i <= nextind(s,endof(s)) ? i :
                error(BoundsError)
     end
     t1, j2 = next(t,start(t))
     while true
         i = search(s,t1,i)
-        if i == 0 return (0:-1) end
+        if i == 0 return 0 end
         c, ii = next(s,i)
         j = j2; k = ii
         matched = true
@@ -213,22 +213,130 @@ function _search(s, t, i)
             end
         end
         if matched
-            return i:prevind(s,k)
+            return i
         end
         i = ii
     end
 end
 
-search(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _search(s,t,i)
-search(s::String, t::String, i::Integer) = _search(s,t,i)
+
+function _search_bloom_mask(c)
+    uint64(1) << (c & 63)
+end
+
+
+function _searchindex(s::Array, t::Array, i)
+    n = length(t)
+    m = length(s)
+
+    if n == 0
+        return 1 <= i <= m+1 ? max(1, i) : 0
+    elseif m == 0
+        return 0
+    elseif n == 1
+        return search(s, t[1], i)
+    end
+
+    w = m - n
+    if w < 0 || i - 1 > w
+        return 0
+    end
+
+    bloom_mask = uint64(0)
+    skip = n - 1
+    tlast = t[end]
+    for j in 1:n
+        bloom_mask |= _search_bloom_mask(t[j])
+        if t[j] == tlast && j < n
+            skip = n - j - 1
+        end
+    end
+
+    i -= 1
+    while i <= w
+        if s[i+n] == tlast
+            # check candidate
+            j = 0
+            while j < n - 1
+                if s[i+j+1] != t[j+1]
+                    break
+                end
+                j += 1
+            end
+
+            # match found
+            if j == n - 1
+                return i+1
+            end
+
+            # no match, try to rule out the next character
+            if i < w && bloom_mask & _search_bloom_mask(s[i+n+1]) == 0
+                i += n
+            else
+                i += skip
+            end
+        elseif i < w
+            if bloom_mask & _search_bloom_mask(s[i+n+1]) == 0
+                i += n
+            end
+        end
+        i += 1
+    end
+
+    0
+end
+
+
+searchindex(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _searchindex(s,t,i)
+searchindex(s::String, t::String, i::Integer) = _searchindex(s,t,i)
+searchindex(s::String, t::String) = searchindex(s,t,start(s))
+
+
+function searchindex(s::ByteString, t::ByteString)
+    if length(t) == 1
+        search(s, t[1])
+    else
+        searchindex(s.data, t.data, 1)
+    end
+end
+
+
+function searchindex(s::ByteString, t::ByteString, i::Integer)
+    if length(t) == 1
+        search(s, t[1], i)
+    else
+        searchindex(s.data, t.data, i)
+    end
+end
+
+
+function search(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i)
+    idx = searchindex(s,t,i)
+    if isempty(t)
+        idx:idx-1
+    else
+        idx:(idx > 0 ? idx + endof(t) - 1 : -1)
+    end
+end
+
+function search(s::String, t::String, i::Integer)
+    idx = searchindex(s,t,i)
+    if isempty(t)
+        idx:idx-1
+    else
+        idx:(idx > 0 ? idx + endof(t) - 1 : -1)
+    end
+end
+
 search(s::String, t::String) = search(s,t,start(s))
 
 
 rsearch(s::String, c::Chars) = rsearch(s,c,endof(s))
 
-function _rsearch(s, t, i)
+
+function _rsearchindex(s, t, i)
     if isempty(t)
-        return 1 <= i <= nextind(s,endof(s)) ? (i:i-1) :
+        return 1 <= i <= nextind(s,endof(s)) ? i :
                error(BoundsError)
     end
     t = reverse(t)
@@ -237,7 +345,7 @@ function _rsearch(s, t, i)
     t1, j2 = next(t,start(t))
     while true
         i = rsearch(s,t1,i)
-        if i == 0 return (0:-1) end
+        if i == 0 return 0 end
         c, ii = next(rs,l-i+1)
         j = j2; k = ii
         matched = true
@@ -254,15 +362,117 @@ function _rsearch(s, t, i)
             end
         end
         if matched
-            fst = nextind(s,l-k+1)
-            return fst:i
+            return nextind(s,l-k+1)
         end
         i = l-ii+1
     end
 end
-rsearch(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _rsearch(s,t,i)
-rsearch(s::String, t::String, i::Integer) = _rsearch(s,t,i)
-rsearch(s::String, t::String) = (isempty(s) && isempty(t)) ? (1:0) : rsearch(s,t,endof(s))
+
+
+function _rsearchindex(s::Array, t::Array, k)
+    n = length(t)
+    m = length(s)
+
+    if n == 0
+        return 0 <= k <= m ? max(k, 1) : 0
+    elseif m == 0
+        return 0
+    elseif n == 1
+        return rsearch(s, t[1], k)
+    end
+
+    w = m - n
+    if w < 0 || k <= 0
+        return 0
+    end
+
+    bloom_mask = uint64(0)
+    skip = n - 1
+    tfirst = t[1]
+    for j in n:-1:1
+        bloom_mask |= _search_bloom_mask(t[j])
+        if t[j] == tfirst && j > 1
+            skip = j - 2
+        end
+    end
+
+    i = min(k - n + 1, w + 1)
+    while i > 0
+        if s[i] == tfirst
+            # check candidate
+            j = 1
+            while j < n
+                if s[i+j] != t[j+1]
+                    break
+                end
+                j += 1
+            end
+
+            # match found
+            if j == n
+                return i
+            end
+
+            # no match, try to rule out the next character
+            if i > 1 && bloom_mask & _search_bloom_mask(s[i-1]) == 0
+                i -= n
+            else
+                i -= skip
+            end
+        elseif i > 1
+            if bloom_mask & _search_bloom_mask(s[i-1]) == 0
+                i -= n
+            end
+        end
+        i -= 1
+    end
+
+    0
+end
+
+
+rsearchindex(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _rsearchindex(s,t,i)
+rsearchindex(s::String, t::String, i::Integer) = _rsearchindex(s,t,i)
+rsearchindex(s::String, t::String) = (isempty(s) && isempty(t)) ? 1 : rsearchindex(s,t,endof(s))
+
+
+function rsearchindex(s::ByteString, t::ByteString)
+    if length(t) == 1
+        rsearch(s, t[1])
+    else
+        rsearchindex(s.data, t.data, length(s.data))
+    end
+end
+
+
+function rsearchindex(s::ByteString, t::ByteString, i::Integer)
+    if length(t) == 1
+        rsearch(s, t[1], i)
+    else
+        rsearchindex(s.data, t.data, i)
+    end
+end
+
+
+function rsearch(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i)
+    idx = rsearchindex(s,t,i)
+    if isempty(t)
+        idx:idx-1
+    else
+        idx:(idx > 0 ? idx + endof(t) - 1 : -1)
+    end
+end
+
+function rsearch(s::String, t::String, i::Integer)
+    idx = rsearchindex(s,t,i)
+    if isempty(t)
+        idx:idx-1
+    else
+        idx:(idx > 0 ? idx + endof(t) - 1 : -1)
+    end
+end
+
+rsearch(s::String, t::String) = rsearch(s,t,endof(s))
 
 contains(a::String, b::String) = search(a,b)!=0:-1
 
