@@ -277,6 +277,17 @@ static jl_module_t *eval_import_path(jl_array_t *args)
 
 jl_value_t *jl_toplevel_eval_body(jl_array_t *stmts);
 
+int jl_is_toplevel_only_expr(jl_value_t *e)
+{
+    return jl_is_expr(e) &&
+        (((jl_expr_t*)e)->head == module_sym ||
+         ((jl_expr_t*)e)->head == importall_sym ||
+         ((jl_expr_t*)e)->head == import_sym ||
+         ((jl_expr_t*)e)->head == using_sym ||
+         ((jl_expr_t*)e)->head == export_sym ||
+         ((jl_expr_t*)e)->head == toplevel_sym);
+}
+
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 {
     //jl_show(ex);
@@ -383,6 +394,9 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         else {
             if (ex->head == body_sym) {
                 result = jl_toplevel_eval_body(ex->args);
+            }
+            else if (jl_is_toplevel_only_expr((jl_value_t*)ex)) {
+                result = jl_toplevel_eval((jl_value_t*)ex);
             }
             else {
                 result = jl_interpret_toplevel_expr((jl_value_t*)ex);
