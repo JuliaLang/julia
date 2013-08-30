@@ -362,7 +362,7 @@ function string(x::BigInt)
     lng = ndigits(x) + 2
     z = Array(Uint8, lng)
     lng = ccall((:__gmp_snprintf,:libgmp), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigInt}...), z, lng, "%Zd", &x)
-    return bytestring(convert(Ptr{Uint8}, z[1:lng]))
+    return bytestring(z[1:lng])
 end
 
 function show(io::IO, x::BigInt)

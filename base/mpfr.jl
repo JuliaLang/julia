@@ -705,10 +705,10 @@ end
 function string(x::BigFloat)
     lng = 128
     for i = 1:2
-        z = Array(Uint8, lng)
-        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigFloat}...), z, lng, "%.Re", &x) + 1
+        z = Array(Uint8, lng + 1)
+        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigFloat}...), z, lng + 1, "%.Re", &x)
         if lng < 128 || i == 2
-            return bytestring(convert(Ptr{Uint8}, z[1:lng]))
+            return bytestring(z[1:lng])
         end
     end
 end
