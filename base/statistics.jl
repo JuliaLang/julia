@@ -159,7 +159,9 @@ hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
 hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
 
 function hist2d(v::AbstractMatrix, edg1::AbstractVector, edg2::AbstractVector)
-    @assert size(v,2) == 2
+    if size(v,2) != 2
+        error("hist2d requires an Nx2 matrix")
+    end
     n = length(edg1)-1
     m = length(edg2)-1
     h = zeros(Int, n, m)

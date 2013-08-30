@@ -38,11 +38,19 @@ Getting Around
 
 .. function:: edit(file::String, [line])
 
-   Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor. If the file name ends in ".jl" it is reloaded when the editor closes the file.
+   Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor.
 
 .. function:: edit(function, [types])
 
-   Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit. When the editor exits, the source file containing the definition is reloaded.
+   Edit the definition of a function, optionally specifying a tuple of types to indicate which method to edit.
+
+.. function:: less(file::String, [line])
+
+   Show a file using the default pager, optionally providing a starting line number. Returns to the julia prompt when you quit the pager.
+
+.. function:: less(function, [types])
+
+   Show the definition of a function using the default pager, optionally specifying a tuple of types to indicate which method to see.
 
 .. function:: require(file::String...)
 
@@ -3298,6 +3306,11 @@ Indexing, Assignment, and Concatenation
 
    Return all the data of ``A`` where the index for dimension ``d`` equals ``i``. Equivalent to ``A[:,:,...,i,:,:,...]`` where ``i`` is in position ``d``.
 
+.. function:: slice(A, inds...)
+
+   Create a view of the given indexes of array ``A``, dropping dimensions indexed with
+   scalars.
+
 .. function:: setindex!(A, X, inds...)
 
    Store values from array ``X`` within some subset of ``A`` as specified by ``inds``.
@@ -3411,6 +3424,10 @@ Indexing, Assignment, and Concatenation
 
    Check two array shapes for compatibility, allowing trailing singleton dimensions,
    and return whichever shape has more dimensions.
+
+.. function:: checkbounds(array, indexes...)
+
+   Throw an error if the specified indexes are not in bounds for the given array.
 
 Array functions
 ~~~~~~~~~~~~~~~
@@ -3626,9 +3643,14 @@ Statistics
 
    Compute the sample variance of a vector ``v`` with known mean ``m``.
 
-.. function:: median(v)
+.. function:: median(v; checknan::Bool=true)
 
-   Compute the median of a vector ``v``.
+   Compute the median of a vector ``v``. If keyword argument ``checknan`` is true
+   (the default), an error is raised for data containing NaN values.
+
+.. function:: median!(v; checknan::Bool=true)
+
+   Like ``median``, but may overwrite the input vector.
 
 .. function:: hist(v[, n]) -> e, counts
 
@@ -3642,6 +3664,15 @@ Statistics
    Compute the histogram of ``v`` using a vector/range ``e`` as the edges for
    the bins. The result will be a vector of length ``length(e) - 1``, such that the
    element at location ``i`` satisfies ``sum(e[i] .< v .<= e[i+1])``.
+
+.. function:: hist2d(M, e1, e2) -> (edge1, edge2, counts)
+
+   Compute a "2d histogram" of a set of N points specified by N-by-2 matrix ``M``.
+   Arguments ``e1`` and ``e2`` are bins for each dimension, specified either as
+   integer bin counts or vectors of bin edges. The result is a tuple of
+   ``edge1`` (the bin edges used in the first dimension), ``edge2`` (the bin edges
+   used in the second dimension), and ``counts``, a histogram matrix of size
+   ``(length(edge1)-1, length(edge2)-1)``.
 
 .. function:: histrange(v, n)
 
@@ -3661,6 +3692,10 @@ Statistics
 .. function:: quantile(v)
 
    Compute the quantiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
+
+.. function:: quantile!(v, [p])
+
+   Like ``quantile``, but overwrites the input vector.
 
 .. function:: cov(v1[, v2])
 
