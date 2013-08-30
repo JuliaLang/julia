@@ -121,8 +121,11 @@ end
 
 function nextind(s::String, i::Integer)
     e = endof(s)
-    if i < 1 || e == 0
+    if i < 1
         return 1
+    end
+    if i > e
+        return i+1
     end
     for j = i+1:e
         if isvalid(s,j)

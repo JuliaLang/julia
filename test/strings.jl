@@ -825,3 +825,7 @@ bin_val = hex2bytes("07bf")
 @test (@sprintf "%s" "tést") == "tést"
 # reasonably complex
 @test (@sprintf "Test: %s%c%C%c%#-.0f." "t" 65 66 67 -42) == "Test: tABC-42.."
+
+# issue #4183
+@test split(SubString(ascii("x"), 2, 0), "y") == String[""]
+@test split(SubString(utf8("x"), 2, 0), "y") == String[""]
