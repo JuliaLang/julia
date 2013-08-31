@@ -284,6 +284,9 @@ int jl_errno(void) { return errno; }
 
 #ifdef _OS_WINDOWS_
 typedef DWORD (WINAPI *GAPC)(WORD);
+typedef BOOL (WINAPI *GLPI)(
+    PSYSTEM_LOGICAL_PROCESSOR_INFORMATION, 
+    PDWORD);
 #ifndef ALL_PROCESSOR_GROUPS
 #define ALL_PROCESSOR_GROUPS 0xffff
 #endif
@@ -305,6 +308,37 @@ DLLEXPORT int jl_cpu_cores(void)
 #elif defined(_SC_NPROCESSORS_ONLN)
     return sysconf(_SC_NPROCESSORS_ONLN);
 #elif defined(_OS_WINDOWS_)
+	GLPI glpi = (GLPI) jl_dlsym_e(
+		jl_kernel32_handle,
+		"GetLogicalProcessorInformation"
+	);
+
+	if( glpi ) {
+		PSYSTEM_LOGICAL_PROCESSOR_INFORMATION buffer = NULL, ptr = NULL;
+		DWORD bufferLength = 0;
+		int cores = 0;
+		
+		// Call once to get buffer length
+		glpi(buffer, &bufferLength);
+		if( GetLastError() == ERROR_INSUFFICIENT_BUFFER ) {
+			buffer = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION) malloc(bufferLength);
+		} else
+			return 0;
+
+		// Call again once we have the proper buffer length
+		glpi(buffer, &bufferLength);
+
+		ptr = buffer;
+		while( ptr < ((char *)buffer) + bufferLength ) {
+			if( ptr->Relationship == RelationProcessorCore ) {
+				cores++;
+			}
+			ptr++;
+		}
+
+		return cores;
+	}
+
     //Try to get WIN7 API method
     GAPC gapc = (GAPC) jl_dlsym_e(
         jl_kernel32_handle,
