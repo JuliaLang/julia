@@ -50,13 +50,13 @@ wait(c)
 @test readall(connect("testsocket")) == "Hello World\n"
 
 try 
-    getaddrinfo("foo.invalid")
+    getaddrinfo(".invalid")
 catch e
     @test typeof(e) == Base.UVError # E.g. not method error
 end
 
 try 
-    connect("foo.invalid",80)
+    connect(".invalid",80)
 catch e
     @test typeof(e) == Base.UVError
 end
