@@ -216,10 +216,6 @@ filesystem operations
 external processes ## TODO: whittle down these exports.
 -------------------------------------------------------
 
-.. function:: process_signaled(s::Process)
-
-   UNDOCUMENTED
-
 
 C interface
 -----------
