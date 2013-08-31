@@ -327,7 +327,7 @@ DLLEXPORT int jl_cpu_cores(void)
         glpi(buffer, &bufferLength);
 
         ptr = buffer;
-        while (ptr < ((char *)buffer) + bufferLength) {
+        while (((char *)ptr) < ((char *)buffer) + bufferLength) {
             if (ptr->Relationship == RelationProcessorCore) {
                 cores++;
             }
