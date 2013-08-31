@@ -81,6 +81,8 @@ include("env.jl")
 include("errno.jl")
 using .Errno
 include("path.jl")
+include("intfuncs.jl")
+
 
 # I/O
 include("task.jl")
@@ -103,7 +105,6 @@ importall .Printf
 include("file.jl")
 
 # core math functions
-include("intfuncs.jl")
 include("floatfuncs.jl")
 include("math.jl")
 importall .Math
