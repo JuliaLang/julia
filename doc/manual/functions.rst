@@ -79,7 +79,8 @@ which means that values are not copied when they are passed to functions.
 Function arguments themselves act as new variable *bindings* (new locations that
 can refer to values), but the values they refer to are identical to the passed
 values. Modifications to mutable values (such as Arrays) made within a function
-will be visible to the caller.
+will be visible to the caller. This is the same behavior found in Scheme, most
+Lisps, Python, Ruby and Perl, among other dynamic languages.
 
 .. _man-return-keyword:
 
