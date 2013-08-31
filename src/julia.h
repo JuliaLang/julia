@@ -936,7 +936,7 @@ enum JL_RTLD_CONSTANT {
 };
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
 #ifdef _OS_LINUX_
-DLLEXPORT void read_sonames();
+DLLEXPORT void jl_read_sonames();
 #endif
 DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname, unsigned flags);
 DLLEXPORT uv_lib_t *jl_load_dynamic_library_e(char *fname, unsigned flags);
