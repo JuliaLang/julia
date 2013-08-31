@@ -472,6 +472,12 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 // something else other than a GlobalVariable, so return
                 // whatever it is.
                 res = nv;
+                if (res->getType() != lrt) {
+                    // if you attempt to access a cglobal multiple times with
+                    // different types, the type of the cached global might be
+                    // wrong.
+                    res = builder.CreateBitCast(res, lrt);
+                }
             }
             else {
                 res = jl_Module->getOrInsertGlobal(sym.f_name,
