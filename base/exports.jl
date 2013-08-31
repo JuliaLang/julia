@@ -1187,7 +1187,6 @@ export
     kill,
     process_exited,
     process_running,
-    process_signaled,
     readandwrite,
     readsfrom,
     run,
