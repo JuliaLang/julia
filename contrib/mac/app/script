@@ -33,12 +33,6 @@ osascript 2>&1>/dev/null <<EOF
   end tell
 EOF
 
-# Quit the Julia.application immediately after startup (ie. quitting
-# it in the taskbar) because once it is started it cannot be restarted
-# a second time. If Julia.app stays (eg. because of a crash) opened
-# then restarting is not possible.
-osascript 2>&1>/dev/null <<EOF
-  tell application "julia"
-    quit
-  end tell
-EOF
+# The app quits immediately after startup, as the app is completely 
+# separate from the actual Julia process. Something it would be neat to
+# change, once we're not just using the .app to tell Terminal what to do
