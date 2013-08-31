@@ -176,7 +176,7 @@ Operators With Special Names
 ----------------------------
 
 A few special expressions correspond to calls to functions with non-obvious
-names. These are::
+names. These are:
 
 =================== ==============
 Expression          Calls
