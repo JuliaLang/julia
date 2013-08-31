@@ -30,7 +30,7 @@ end
 
 clear() = ccall(:profile_clear_data, Void, ())
 
-function print{T<:Unsigned}(io::IO = STDOUT, data::Vector{T} = fetch(); format = :tree, C = false, combine = true, cols = tty_cols())
+function print{T<:Unsigned}(io::IO = STDOUT, data::Vector{T} = fetch(); format = :tree, C = false, combine = true, cols = Base.tty_cols())
     if format == :tree
         tree(io, data, C, combine, cols)
     elseif format == :flat
@@ -41,7 +41,7 @@ function print{T<:Unsigned}(io::IO = STDOUT, data::Vector{T} = fetch(); format =
 end
 print{T<:Unsigned}(data::Vector{T} = fetch(); kwargs...) = print(STDOUT, data; kwargs...)
 
-function print{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
+function print{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict; format = :tree, combine = true, cols = Base.tty_cols())
     if format == :tree
         tree(io, data, lidict, combine, cols)
     elseif format == :flat
