@@ -2903,7 +2903,7 @@ Numbers
 
    The constant e
 
-:: data:: catalan
+.. data:: catalan
 
    Catalan's constant
 

@@ -30,12 +30,12 @@ extern "C" DLLEXPORT void jl_read_sonames()
             int j = i;
             while (!isspace(dot[++j])) ;
             char *arch = strstr(dot+i,"x86-64");
-            if (arch != NULL && arch < dot + j)
-            {
+            if (arch != NULL && arch < dot + j) {
 #ifdef _P32
                 continue;
 #endif
-            } else {
+            }
+            else {
 #ifdef _P64
                 continue;
 #endif

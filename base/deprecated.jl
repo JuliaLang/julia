@@ -127,6 +127,8 @@ function ls(args...)
     warn_once("ls() is deprecated, use readdir() instead. If you are at the repl prompt, consider `;ls`.")
     deprecated_ls(args...)
 end
+export ls
+
 function start_timer(timer::Timer, timeout::Int, repeat::Int)
     warn_once("start_timer now expects arguments in units of seconds. you may need to update your code")
     invoke(start_timer, (Timer,Real,Real), timer, timeout, repeat)

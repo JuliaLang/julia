@@ -93,10 +93,6 @@ linear algebra
 
    UNDOCUMENTED
 
-.. function:: symmetrize!(...)
-
-   UNDOCUMENTED
-
 
 sparse
 ------

@@ -259,10 +259,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``scale!(A,B)`` overwrites the input array with the scaled result.
 
-.. function:: symmetrize!(A[, UL])
+.. function:: symmetrize!(A[, UL::Char])
 
    ``symmetrize!(A)`` converts from the BLAS/LAPACK symmetric storage
-   format, in which only the ``UL`` ("U"pper or "L"ower, default "U")
+   format, in which only the ``UL`` ('U'pper or 'L'ower, default 'U')
    triangle is used, to a full symmetric matrix.
 
 .. function:: Tridiagonal(dl, d, du)
