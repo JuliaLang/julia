@@ -7,7 +7,7 @@
 static std::map<std::string, std::string> sonameMap;
 static bool got_sonames = false;
 
-extern "C" DLLEXPORT void read_sonames()
+extern "C" DLLEXPORT void jl_read_sonames()
 {
     char *line=NULL;
     size_t sz=0;
@@ -22,10 +22,30 @@ extern "C" DLLEXPORT void read_sonames()
             while (isspace(line[++i])) ;
             char *name = &line[i];
             char *dot = strstr(name, ".so");
-            char *abslibpath = strrchr(line+sz, ' ');
+            i=0;
+
+            // Detect if this entry is for the current architecture
+            while (!isspace(dot[++i])) ;
+            while (isspace(dot[++i])) ;
+            int j = i;
+            while (!isspace(dot[++j])) ;
+            char *arch = strstr(dot+i,"x86-64");
+            if (arch != NULL && arch < dot + j)
+            {
+#ifdef _P32
+                continue;
+#endif
+            } else {
+#ifdef _P64
+                continue;
+#endif
+            }
+
+            char *abslibpath = strrchr(line, ' ');
             if (dot != NULL && abslibpath != NULL) {
                 std::string pfx(name, dot - name);
-                std::string soname(abslibpath, line+sz-abslibpath);
+                // Do not include ' ' in front and '\n' at the end
+                std::string soname(abslibpath+1, line+n-(abslibpath+1)-1);
                 sonameMap[pfx] = soname;
             }
         }
@@ -38,7 +58,7 @@ extern "C" DLLEXPORT void read_sonames()
 extern "C" const char *jl_lookup_soname(char *pfx, size_t n)
 {
     if (!got_sonames) {
-        read_sonames();
+        jl_read_sonames();
         got_sonames = true;
     }
     std::string str(pfx, n);
