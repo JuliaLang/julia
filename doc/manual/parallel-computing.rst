@@ -20,7 +20,7 @@ multiprocessing environment based on message passing to allow programs
 to run on multiple processes in separate memory domains at once.
 
 Julia's implementation of message passing is different from other
-environments such as MPI. Communication in Julia is generally
+environments such as MPI [#mpi2rma]_. Communication in Julia is generally
 "one-sided", meaning that the programmer needs to explicitly manage only
 one process in a two-process operation. Furthermore, these
 operations typically do not look like "message send" and "message
@@ -570,3 +570,7 @@ then be added at runtime using ``addprocs``::
 
 which specifies a number of processes to add and a ``ClusterManager`` to
 use for launching those processes.
+
+.. rubric:: Footnotes
+
+.. [#mpi2rma] In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access (RMA). The motivation for adding RMA to the MPI standard was to facilitate one-sided communication patterns. For additional information on the latest MPI standard, see http://www.mpi-forum.org/docs.
