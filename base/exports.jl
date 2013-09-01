@@ -1030,8 +1030,6 @@ export
     mmap,
     mmap_array,
     mmap_bitarray,
-    mmap_grow,
-    mmap_stream_settings,
     msync,
     nb_available,
     ntoh,
