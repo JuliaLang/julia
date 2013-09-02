@@ -2,6 +2,7 @@ module MPFR
 
 export
     BigFloat,
+    RoundFromZero,
     get_bigfloat_precision,
     set_bigfloat_precision,
     with_bigfloat_precision,
@@ -19,7 +20,9 @@ import
         gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        serialize, deserialize, inf, nan, hash
+        serialize, deserialize, inf, nan, hash,
+        RoundingMode, RoundDown, RoundingMode, RoundNearest, RoundToZero, 
+        RoundUp
 
 import Base.Math.lgamma_r
 
@@ -27,11 +30,7 @@ const ROUNDING_MODE = [0]
 const DEFAULT_PRECISION = [256]
 
 # Rounding modes
-const RoundToNearest = 0
-const RoundToZero = 1
-const RoundUp = 2
-const RoundDown = 3
-const RoundAwayZero = 4
+type RoundFromZero <: RoundingMode end
 
 # Basic type and initialization definitions
 
@@ -98,7 +97,7 @@ for to in (Int8, Int16, Int32, Int64)
         function convert(::Type{$to}, x::BigFloat)
             (isinteger(x) && (typemin($to) <= x <= typemax($to))) || throw(InexactError())
             convert($to, ccall((:mpfr_get_si,:libmpfr),
-                               Clong, (Ptr{BigFloat}, Int32), &x, RoundToZero))
+                               Clong, (Ptr{BigFloat}, Int32), &x, 0))
         end
     end
 end
@@ -108,7 +107,7 @@ for to in (Uint8, Uint16, Uint32, Uint64)
         function convert(::Type{$to}, x::BigFloat)
             (isinteger(x) && (typemin($to) <= x <= typemax($to))) || throw(InexactError())
             convert($to, ccall((:mpfr_get_ui,:libmpfr),
-                               Culong, (Ptr{BigFloat}, Int32), &x, RoundToZero))
+                               Culong, (Ptr{BigFloat}, Int32), &x, 0))
         end
     end
 end
@@ -597,13 +596,26 @@ function set_bigfloat_precision(x::Int)
     DEFAULT_PRECISION[end] = x
 end
 
-get_bigfloat_rounding() = ROUNDING_MODE[end]
-function set_bigfloat_rounding(x::Int)
-    if x < 0 || x > 4
-        throw(DomainError())
+function get_bigfloat_rounding()
+    if ROUNDING_MODE[end] == 0
+        return RoundNearest
+    elseif ROUNDING_MODE[end] == 1
+        return RoundToZero
+    elseif ROUNDING_MODE[end] == 2
+        return RoundUp
+    elseif ROUNDING_MODE[end] == 3
+        return RoundDown
+    elseif ROUNDING_MODE[end] == 4
+        return RoundFromZero
+    else
+        error("Invalid rounding mode")
     end
-    ROUNDING_MODE[end] = x
 end
+set_bigfloat_rounding(::Type{RoundNearest}) = ROUNDING_MODE[end] = 0
+set_bigfloat_rounding(::Type{RoundToZero}) = ROUNDING_MODE[end] = 1
+set_bigfloat_rounding(::Type{RoundUp}) = ROUNDING_MODE[end] = 2
+set_bigfloat_rounding(::Type{RoundDown}) = ROUNDING_MODE[end] = 3
+set_bigfloat_rounding(::Type{RoundFromZero}) = ROUNDING_MODE[end] = 4
 
 function copysign(x::BigFloat, y::BigFloat)
     z = BigFloat()
@@ -635,7 +647,7 @@ end
 
 function itrunc(x::BigFloat)
     z = BigInt()
-    ccall((:mpfr_get_z, :libmpfr), Int32, (Ptr{BigInt}, Ptr{BigFloat}, Int32), &z, &x, RoundToZero)
+    ccall((:mpfr_get_z, :libmpfr), Int32, (Ptr{BigInt}, Ptr{BigFloat}, Int32), &z, &x, 0)
     return z
 end
 
@@ -682,7 +694,7 @@ function with_bigfloat_precision(f::Function, precision::Integer)
     end
 end
 
-function with_bigfloat_rounding(f::Function, rounding::Integer)
+function with_bigfloat_rounding{T<:RoundingMode}(f::Function, rounding::Type{T})
     old_rounding = get_bigfloat_rounding()
     set_bigfloat_rounding(rounding)
     try
