@@ -454,12 +454,18 @@ static int is_keyword(char *s)
     return 0;
 }
 
+static int name_visible(char *name, const char *prefix)
+{
+    return !strchr(name,'#');
+}
+
 static void symtab_search(jl_sym_t *tree, int *pcount, ios_t *result,
                           jl_module_t *module, const char *str,
                           const char *prefix, int plen)
 {
     do {
         if (common_prefix(prefix, tree->name) == plen &&
+            name_visible(tree->name, prefix) &&
             (module ? jl_defines_or_exports_p(module, tree) : (jl_boundp(jl_current_module, tree) ||
                                                                is_keyword(tree->name)))) {
             ios_puts(str, result);

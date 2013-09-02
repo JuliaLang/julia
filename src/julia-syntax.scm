@@ -409,11 +409,13 @@
 	 (keyword-sparam-names
 	  (map (lambda (s) (if (symbol? s) s (cadr s))) keyword-sparams)))
     (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy)) (rkw (gensy))
-	  (mangled (symbol
-		    (string (if (symbol? name)
-				name
-				(cadr (caddr name)))
-			    "#" (gensym))))
+	  (mangled (symbol (string "__"
+				   (if (symbol? name)
+				       name
+				       (cadr (caddr name)))
+				   "#"
+				   (string.sub (string (gensym)) 1)
+				   "__")))
 	  (flags (map (lambda (x) (gensy)) vals)))
       `(block
 	;; call with keyword args pre-sorted - original method code goes here
