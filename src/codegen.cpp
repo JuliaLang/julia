@@ -1149,7 +1149,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     if (f->fptr == &jl_apply_generic) {
         *theFptr = jlapplygeneric_func;
         *theF = f;
-        if (ctx->linfo->specTypes != NULL) {
+        if (ctx->linfo->inferred) {
             jl_tuple_t *aty = call_arg_types(&args[1], nargs, ctx);
             rt1 = (jl_value_t*)aty;
             // attempt compile-time specialization for inferred types
