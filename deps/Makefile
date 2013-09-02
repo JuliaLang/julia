@@ -959,7 +959,7 @@ endif
 ifeq ($(USE_SYSTEM_BLAS), 0)
 arpack-ng-$(ARPACK_VER)/config.status: | $(OPENBLAS_OBJ_TARGET)
 else ifeq ($(USE_SYSTEM_LAPACK), 0)
-arpack-ng-$(ARPACK_VER)/config.status: | $(LAPACK_OBJ_SOURCE)
+arpack-ng-$(ARPACK_VER)/config.status: | $(LAPACK_OBJ_TARGET)
 endif
 
 arpack-ng-$(ARPACK_VER)/config.status: arpack-ng-$(ARPACK_VER)/configure
@@ -1169,7 +1169,7 @@ endif
 ifeq ($(USE_SYSTEM_BLAS), 0)
 $(SUITESPARSE_OBJ_SOURCE): | $(OPENBLAS_OBJ_TARGET)
 else ifeq ($(USE_SYSTEM_LAPACK), 0)
-$(SUITESPARSE_OBJ_SOURCE): | $(LAPACK_OBJ_SOURCE)
+$(SUITESPARSE_OBJ_SOURCE): | $(LAPACK_OBJ_TARGET)
 endif
 $(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
