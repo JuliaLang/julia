@@ -1041,9 +1041,9 @@ macro mstr(s...); triplequoted(s...); end
 ## shell-like command parsing ##
 
 function shell_parse(raw::String, interp::Bool)
-
     s = strip(raw)
-    isempty(s) && return interp ? Expr(:tuple,:()) : {}
+    last_parse = 0:-1
+    isempty(s) && return interp ? (Expr(:tuple,:()),last_parse) : ({},last_parse)
 
     in_single_quotes = false
     in_double_quotes = false
@@ -1086,7 +1086,9 @@ function shell_parse(raw::String, interp::Bool)
             if isspace(s[k])
                 error("space not allowed right after \$")
             end
+            stpos = j
             ex, j = parse(s,j,false)
+            last_parse = stpos:j
             update_arg(esc(ex)); i = j
         else
             if !in_double_quotes && c == '\''
@@ -1123,7 +1125,7 @@ function shell_parse(raw::String, interp::Bool)
     append_arg()
 
     if !interp
-        return args
+        return (args,last_parse)
     end
 
     # construct an expression
@@ -1131,12 +1133,12 @@ function shell_parse(raw::String, interp::Bool)
     for arg in args
         push!(ex.args, Expr(:tuple, arg...))
     end
-    ex
+    (ex,last_parse)
 end
 shell_parse(s::String) = shell_parse(s,true)
 
 function shell_split(s::String)
-    parsed = shell_parse(s,false)
+    parsed = shell_parse(s,false)[1]
     args = String[]
     for arg in parsed
        push!(args, string(arg...))
