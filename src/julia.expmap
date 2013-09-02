@@ -150,6 +150,7 @@
     jl_gc_counted_malloc;
     jl_gc_counted_free;
     jl_gc_counted_realloc;
+    jl_gc_counted_realloc_with_old_size;
     jl_gensym;
     jl_get_binding;
     jl_get_current_module;
