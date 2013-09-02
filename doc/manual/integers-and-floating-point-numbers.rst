@@ -447,6 +447,26 @@ argument respectively: ::
 This example highlights the general principle that the adjacent representable
 floating-point numbers also have adjacent binary integer representations.
 
+Rounding modes
+~~~~~~~~~~~~~~
+
+If a number doesn't have an exact floating-point representation, it must be
+rounded to an appropriate representable value, however, if wanted, the manner
+in which this rounding is done can be changed according to the rounding modes
+presented in the `IEEE 754 standard <http://en.wikipedia.org/wiki/IEEE_754-2008>`_::
+    
+
+    julia> 1.1 + 0.1
+    1.2000000000000002
+
+    julia> with_rounding(RoundDown) do
+           1.1 + 0.1
+           end
+    1.2
+
+The default mode used is always ``RoundNearest``, which rounds to the nearest
+representable value, with ties rounded towards the nearest value with an even
+least significant bit.
 
 Background and References
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -503,10 +523,10 @@ Once created, they participate in arithmetic with all other numeric types thanks
     123456789012345678901234567891
 
     julia> BigFloat("1.23456789012345678901")
-    1.23456789012345678901
+    1.234567890123456789010000000000000000000000000000000000000000000000000000000004e+00 with 256 bits of precision
 
     julia> BigFloat(2.0^66) / 3
-    24595658764946068821.3
+    2.459565876494606882133333333333333333333333333333333333333333333333333333333344e+19 with 256 bits of precision
 
     julia> factorial(BigInt(40))
     815915283247897734345611269596115894272000000000
@@ -531,6 +551,27 @@ However, type promotion between the primitive types above and
     
     julia> typeof(y)
     BigInt
+
+The default precision (in number of bits of the significand) and rounding
+mode of `BigFloat` operations can be changed, and all further calculations 
+will take these changes in account::
+
+    julia> with_bigfloat_rounding(RoundUp) do
+           BigFloat(1) + BigFloat("0.1")
+           end
+    1.100000000000000000000000000000000000000000000000000000000000000000000000000003e+00 with 256 bits of precision
+
+    julia> with_bigfloat_rounding(RoundDown) do
+           BigFloat(1) + BigFloat("0.1")
+           end
+    1.099999999999999999999999999999999999999999999999999999999999999999999999999986e+00 with 256 bits of precision
+
+    julia> with_bigfloat_precision(40) do
+           BigFloat(1) + BigFloat("0.1")
+           end
+    1.0999999999985e+00 with 40 bits of precision
+
+
    
 .. _man-numeric-literal-coefficients:
 
