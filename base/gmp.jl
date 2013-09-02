@@ -28,7 +28,7 @@ function gmp_init()
     ccall((:__gmp_set_memory_functions, :libgmp), Void,
           (Ptr{Void},Ptr{Void},Ptr{Void}),
           cglobal(:jl_gc_counted_malloc),
-          cglobal(:jl_gc_counted_realloc),
+          cglobal(:jl_gc_counted_realloc_with_old_size),
           cglobal(:jl_gc_counted_free))
 end
 

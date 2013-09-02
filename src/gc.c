@@ -129,9 +129,8 @@ static inline void *malloc_a16(size_t sz)
 
 DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
-    if (allocd_bytes > collect_interval) {
+    if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    }
     allocd_bytes += sz;
     void *b = malloc(sz);
     if (b == NULL)
@@ -145,11 +144,21 @@ DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
     freed_bytes += sz;
 }
 
-DLLEXPORT void *jl_gc_counted_realloc(void *p, size_t old, size_t sz)
+DLLEXPORT void *jl_gc_counted_realloc(void *p, size_t sz)
 {
-    if (allocd_bytes > collect_interval) {
+    if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    }
+    allocd_bytes += ((sz+1)/2);  // NOTE: wild guess at growth amount
+    void *b = realloc(p, sz);
+    if (b == NULL)
+        jl_throw(jl_memory_exception);
+    return b;
+}
+
+DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+{
+    if (allocd_bytes > collect_interval)
+        jl_gc_collect();
     if (sz > old)
         allocd_bytes += (sz-old);
     void *b = realloc(p, sz);
@@ -160,9 +169,8 @@ DLLEXPORT void *jl_gc_counted_realloc(void *p, size_t old, size_t sz)
 
 void *jl_gc_managed_malloc(size_t sz)
 {
-    if (allocd_bytes > collect_interval) {
+    if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    }
     sz = (sz+15) & -16;
     void *b = malloc_a16(sz);
     if (b == NULL)
@@ -173,9 +181,8 @@ void *jl_gc_managed_malloc(size_t sz)
 
 void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned)
 {
-    if (allocd_bytes > collect_interval) {
+    if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    }
     sz = (sz+15) & -16;
     void *b;
 #ifdef _P64
@@ -338,9 +345,8 @@ static bigval_t *big_objects = NULL;
 
 static void *alloc_big(size_t sz)
 {
-    if (allocd_bytes > collect_interval) {
+    if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    }
     size_t offs = BVOFFS*sizeof(void*);
     if (sz+offs+15 < offs+15)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
@@ -477,9 +483,8 @@ static void add_page(pool_t *p)
 
 static inline void *pool_alloc(pool_t *p)
 {
-    if (allocd_bytes > collect_interval) {
+    if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    }
     allocd_bytes += p->osize;
     if (p->freelist == NULL) {
         add_page(p);
