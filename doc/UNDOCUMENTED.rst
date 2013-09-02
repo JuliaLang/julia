@@ -89,10 +89,6 @@ arrays
 linear algebra
 --------------
 
-.. function:: solve(...)
-
-   UNDOCUMENTED
-
 
 sparse
 ------
@@ -183,14 +179,6 @@ IP address stuff
 
 I/O and events
 --------------
-
-.. function:: mmap_grow(len::Integer,prot::Integer,flags::Integer,fd::Integer,offset::Int64)
-
-   UNDOCUMENTED
-
-.. function:: mmap_stream_settings(s::IO)
-
-   UNDOCUMENTED
 
 
 multiprocessing

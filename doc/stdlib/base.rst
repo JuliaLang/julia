@@ -1263,7 +1263,7 @@ I/O
 
    Like redirect_stdout, but for STDERR
 
-.. function:: redirect_stderr([stream])
+.. function:: redirect_stdin([stream])
 
    Like redirect_stdout, but for STDIN. Note that the order of the return tuple is still (rd,wr), i.e. data to be read
    from STDIN, may be written to wr.
