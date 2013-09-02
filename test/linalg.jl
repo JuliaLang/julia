@@ -333,9 +333,9 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test_approx_eq T*v F*v
         invFv = F\v
         @test_approx_eq T\v invFv
-        @test_approx_eq solve(T,v) invFv
+        @test_approx_eq Base.solve(T,v) invFv
         B = convert(Matrix{elty}, B)
-        @test_approx_eq solve(T, B) F\B
+        @test_approx_eq Base.solve(T, B) F\B
         Tlu = factorize(T)
         x = Tlu\v
         @test_approx_eq x invFv
