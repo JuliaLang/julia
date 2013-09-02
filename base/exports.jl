@@ -82,6 +82,12 @@ export
     Reverse,
     RevString,
     RopeString,
+    RoundFromZero,
+    RoundDown,
+    RoundingMode,
+    RoundNearest,
+    RoundToZero,
+    RoundUp,
     Schur,
     Set,
     SparseMatrixCSC,
@@ -828,6 +834,9 @@ export
     get_bigfloat_rounding,
     set_bigfloat_rounding,
     with_bigfloat_rounding,
+    get_rounding,
+    set_rounding,
+    with_rounding,
 
 # statistics
     cor,

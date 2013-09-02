@@ -2981,6 +2981,25 @@ Numbers
    Create an arbitrary precision floating point number. ``x`` may be an ``Integer``, a ``Float64``, a ``String`` or a ``BigInt``. The
    usual mathematical operators are defined for this type, and results are promoted to a ``BigFloat``.
 
+.. function:: get_rounding()
+
+   Get the current floating point rounding mode. Valid modes are ``RoundNearest``, ``RoundToZero``, ``RoundUp`` and ``RoundDown``.
+
+.. function:: set_rounding(mode)
+
+   Set the floating point rounding mode. See ``get_rounding`` for available modes
+
+.. function:: with_rounding(f::Function,mode)
+
+   Change the floating point rounding mode for the duration of ``f``. It is logically equivalent to::
+
+       old = get_rounding()
+       set_rounding(mode)
+       f()
+       set_rounding(old)
+
+   See ``get_rounding`` for available rounding modes.
+
 Integers
 ~~~~~~~~
 
@@ -3069,7 +3088,7 @@ The `BigFloat` type implements arbitrary-precision floating-point aritmetic usin
 
 .. function:: get_bigfloat_rounding()
 
-   Get the current BigFloat rounding mode. Valid modes are ``RoundToNearest``, ``RoundToZero``, ``RoundUp``, ``RoundDown``, ``RoundAwayZero``
+   Get the current BigFloat rounding mode. Valid modes are ``RoundNearest``, ``RoundToZero``, ``RoundUp``, ``RoundDown``, ``RoundFromZero``
 
 .. function:: set_bigfloat_rounding(mode)
 

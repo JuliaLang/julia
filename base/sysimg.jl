@@ -182,6 +182,10 @@ include("fftw.jl")
 include("dsp.jl")
 importall .DSP
 
+# rounding utilities
+include("rounding.jl")
+importall .Rounding
+
 # BigInts and BigFloats
 include("gmp.jl")
 importall .GMP
