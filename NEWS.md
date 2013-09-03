@@ -32,6 +32,9 @@ New language features
 
   * Explicit relative importing (#2375).
 
+  * Methods can be added to functions in other modules using dot syntax,
+    as in `Foo.bar(x) = 0`.
+
   * A semicolon is now allowed after an `import` or `using` statement (#4130).
 
 
@@ -48,6 +51,8 @@ New library functions
   * MPFR-based `BigFloat` (#2814), and many new `BigFloat` operations.
 
   * New half-precision IEEE floating-point type, `Float16` (#3467).
+
+  * Support for setting floating-point rounding modes (#3149).
 
   * `methodswith` shows all methods with an argument of specific type.
 
@@ -89,8 +94,16 @@ New library functions
 
   * `versioninfo` provides detailed version information
 
+  * `detach` for running child processes in a separate process group
+
+  * `setenv` for passing environment variables to child processes
+
 Library improvements
 --------------------
+
+  * `isequal` now returns `false` for numbers of different types. This makes it
+    easier to define hash functions for new numeric types. Uses of `Dict` with
+    numeric keys might need to change to account for this increased strictness.
 
   * Rewritten `Pkg` system for much greater robustness in case of failures,
     versioned dependencies, and many other enhancements.
