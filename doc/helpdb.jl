@@ -1940,7 +1940,7 @@
 
 "),
 
-("I/O","Base","redirect_stderr","redirect_stderr([stream])
+("I/O","Base","redirect_stdin","redirect_stdin([stream])
 
    Like redirect_stdout, but for STDIN. Note that the order of the
    return tuple is still (rd,wr), i.e. data to be read from STDIN, may
@@ -2319,8 +2319,13 @@
 
 ("Text I/O","Base","dump","dump(x)
 
-   Show the full structure of a value, including all fields of
-   objects.
+   Show all user-visible structure of a value.
+
+"),
+
+("Text I/O","Base","xdump","xdump(x)
+
+   Show all structure of a value, including all fields of objects.
 
 "),
 
@@ -3936,6 +3941,14 @@ popdisplay(d::Display)
 
 "),
 
+("Mathematical Functions","Base","besselh","besselh(nu, k, x)
+
+   Bessel function of the third kind of order \"nu\" (Hankel
+   function). \"k\" is either 1 or 2, selecting \"hankelh1\" or
+   \"hankelh2\", respectively.
+
+"),
+
 ("Mathematical Functions","Base","besseli","besseli(nu, x)
 
    Modified Bessel function of the first kind of order \"nu\",
@@ -4438,6 +4451,34 @@ popdisplay(d::Display)
 
 "),
 
+("Numbers","Base","get_rounding","get_rounding()
+
+   Get the current floating point rounding mode. Valid modes are
+   \"RoundNearest\", \"RoundToZero\", \"RoundUp\" and \"RoundDown\".
+
+"),
+
+("Numbers","Base","set_rounding","set_rounding(mode)
+
+   Set the floating point rounding mode. See \"get_rounding\" for
+   available modes
+
+"),
+
+("Numbers","Base","with_rounding","with_rounding(f::Function, mode)
+
+   Change the floating point rounding mode for the duration of \"f\".
+   It is logically equivalent to:
+
+      old = get_rounding()
+      set_rounding(mode)
+      f()
+      set_rounding(old)
+
+   See \"get_rounding\" for available rounding modes.
+
+"),
+
 ("Numbers","Base","count_ones","count_ones(x::Integer) -> Integer
 
    Number of ones in the binary representation of \"x\".
@@ -4552,8 +4593,8 @@ popdisplay(d::Display)
 ("BigFloats","Base","get_bigfloat_rounding","get_bigfloat_rounding()
 
    Get the current BigFloat rounding mode. Valid modes are
-   \"RoundToNearest\", \"RoundToZero\", \"RoundUp\", \"RoundDown\",
-   \"RoundAwayZero\"
+   \"RoundNearest\", \"RoundToZero\", \"RoundUp\", \"RoundDown\",
+   \"RoundFromZero\"
 
 "),
 
@@ -5163,6 +5204,13 @@ popdisplay(d::Display)
 ("Arrays","Base","diff","diff(A[, dim])
 
    Finite difference operator of matrix or vector.
+
+"),
+
+("Arrays","Base","gradient","gradient(F[, h])
+
+   Compute differences along vector \"F\", using \"h\" as the spacing
+   between points. The default spacing is one.
 
 "),
 

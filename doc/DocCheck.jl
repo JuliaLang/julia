@@ -107,7 +107,7 @@ function _undocumented_rst()
                   isdeprecated(m,s) && continue
                   havecount+=1; total+=1; continue
                end
-               add!(undoc_exports, line)
+               push!(undoc_exports, line)
                if line[1]=='@'; line = line[2:end] end
                line=string("- [ ] ", line)
                total+=1

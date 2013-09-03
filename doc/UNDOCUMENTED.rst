@@ -73,17 +73,9 @@ scalar math
 specfun
 -------
 
-.. function:: besselh(...)
-
-   UNDOCUMENTED
-
 
 arrays
 ------
-
-.. function:: gradient(...)
-
-   UNDOCUMENTED
 
 
 linear algebra
@@ -107,10 +99,6 @@ collections
 
 strings and text output
 -----------------------
-
-.. function:: xdump(...)
-
-   UNDOCUMENTED
 
 
 random numbers
