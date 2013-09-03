@@ -2,23 +2,37 @@ module Rounding
 include("fenv_constants.jl")
 
 export
-    RoundingMode, RoundNearest, RoundToZero, RoundUp, RoundDown,
+    RoundingMode, RoundNearest, RoundToZero, RoundUp, RoundDown, RoundFromZero,
     get_rounding, set_rounding, with_rounding
 
 ## rounding modes ##
-abstract RoundingMode
-type RoundNearest <: RoundingMode end
-type RoundToZero <: RoundingMode end
-type RoundUp <: RoundingMode end
-type RoundDown <: RoundingMode end
+immutable RoundingMode
+    code::Int
+    RoundingMode(c::Integer) = new(c)
+end
+const RoundNearest = RoundingMode(0)
+const RoundToZero = RoundingMode(1)
+const RoundUp = RoundingMode(2)
+const RoundDown = RoundingMode(3)
+const RoundFromZero = RoundingMode(4)
 
-set_rounding(::Type{RoundNearest}) = ccall(:fesetround, Cint, (Cint, ), JL_FE_TONEAREST)
-set_rounding(::Type{RoundToZero}) = ccall(:fesetround, Cint, (Cint, ), JL_FE_TOWARDZERO)
-set_rounding(::Type{RoundUp}) = ccall(:fesetround, Cint, (Cint, ), JL_FE_UPWARD)
-set_rounding(::Type{RoundDown}) = ccall(:fesetround, Cint, (Cint, ), JL_FE_DOWNWARD)
+function to_fenv(r::RoundingMode)
+    if r === RoundNearest
+        JL_FE_TONEAREST
+    elseif r === RoundToZero
+        JL_FE_TOWARDZERO
+    elseif r === RoundUp
+        JL_FE_UPWARD
+    elseif r === RoundDown
+        JL_FE_DOWNWARD
+    elseif r === RoundFromZero
+        error("unsupported rounding mode")
+    else
+        error("invalid rounding mode")
+    end
+end
 
-function get_rounding()
-    r = ccall(:fegetround, Cint, ())
+function from_fenv(r::Integer)
     if r == JL_FE_TONEAREST
         return RoundNearest
     elseif r == JL_FE_DOWNWARD
@@ -28,11 +42,14 @@ function get_rounding()
     elseif r == JL_FE_TOWARDZERO
         return RoundToZero
     else
-        error()
+        error("invalid rounding mode code")
     end
 end
 
-function with_rounding{T<:RoundingMode}(f::Function, rounding::Type{T})
+set_rounding(r::RoundingMode) = ccall(:fesetround, Cint, (Cint,), to_fenv(r))
+get_rounding() = from_fenv(ccall(:fegetround, Cint, ()))
+
+function with_rounding(f::Function, rounding::RoundingMode)
     old_rounding = get_rounding()
     set_rounding(rounding)
     try
