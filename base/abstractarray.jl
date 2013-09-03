@@ -198,15 +198,6 @@ isempty(a::AbstractArray) = (length(a) == 0)
 
 ## Conversions ##
 
-function iround_to{T}(dest::AbstractArray{T}, src)
-    i = 1
-    for x in src
-        dest[i] = iround(T,x)
-        i += 1
-    end
-    return dest
-end
-
 for (f,t) in ((:char,   Char),
               (:int,    Int),
               (:int8,   Int8),
@@ -220,8 +211,36 @@ for (f,t) in ((:char,   Char),
               (:uint32, Uint32),
               (:uint64, Uint64),
               (:uint128,Uint128))
-    @eval ($f)(x::AbstractArray{$t}) = x
-    @eval ($f)(x::AbstractArray) = iround_to(similar(x,$t), x)
+    @eval begin
+        ($f)(x::AbstractArray{$t}) = x
+
+        function ($f)(x::AbstractArray)
+            y = similar(x,$t)
+            i = 1
+            for e in x
+                y[i] = ($f)(e)
+                i += 1
+            end
+            y
+        end
+    end
+end
+
+for (f,t) in ((:integer, Integer),
+              (:unsigned, Unsigned))
+    @eval begin
+        ($f){T<:$t}(x::AbstractArray{T}) = x
+
+        function ($f)(x::AbstractArray)
+            y = similar(x,typeof(($f)(one(eltype(x)))))
+            i = 1
+            for e in x
+                y[i] = ($f)(e)
+                i += 1
+            end
+            y
+        end
+    end
 end
 
 bool(x::AbstractArray{Bool}) = x
@@ -236,13 +255,9 @@ for (f,t) in ((:float16,    Float16),
     @eval ($f)(x::AbstractArray) = copy!(similar(x,$t), x)
 end
 
-integer{T<:Integer}(x::AbstractArray{T}) = x
-unsigned{T<:Unsigned}(x::AbstractArray{T}) = x
 float{T<:FloatingPoint}(x::AbstractArray{T}) = x
 complex{T<:Complex}(x::AbstractArray{T}) = x
 
-integer (x::AbstractArray) = iround_to(similar(x,typeof(integer(one(eltype(x))))), x)
-unsigned(x::AbstractArray) = iround_to(similar(x,typeof(unsigned(one(eltype(x))))), x)
 float   (x::AbstractArray) = copy!(similar(x,typeof(float(one(eltype(x))))), x)
 complex (x::AbstractArray) = copy!(similar(x,typeof(complex(one(eltype(x))))), x)
 
