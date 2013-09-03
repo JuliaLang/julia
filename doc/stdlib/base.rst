@@ -1504,7 +1504,11 @@ Text I/O
 
 .. function:: dump(x)
 
-   Show the full structure of a value, including all fields of objects.
+   Show all user-visible structure of a value.
+
+.. function:: xdump(x)
+
+   Show all structure of a value, including all fields of objects.
 
 .. function:: readall(stream)
 
@@ -2667,6 +2671,11 @@ Mathematical Functions
 
    Bessel function of the third kind of order ``nu``, :math:`H^{(2)}_\nu(x)`.
 
+.. function:: besselh(nu, k, x)
+
+   Bessel function of the third kind of order ``nu`` (Hankel function).
+   ``k`` is either 1 or 2, selecting ``hankelh1`` or ``hankelh2``, respectively.
+
 .. function:: besseli(nu, x)
 
    Modified Bessel function of the first kind of order ``nu``, :math:`I_\nu(x)`.
@@ -3474,6 +3483,11 @@ Array functions
 .. function:: diff(A, [dim])
 
    Finite difference operator of matrix or vector.
+
+.. function:: gradient(F, [h])
+
+   Compute differences along vector ``F``, using ``h`` as the spacing between points.
+   The default spacing is one.
 
 .. function:: rot180(A)
 
