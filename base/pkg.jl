@@ -33,6 +33,7 @@ edit(f::Function, pkg, args...) = Dir.cd() do
     reqs_ != reqs && _resolve(reqs_,avail)
     Reqs.write("REQUIRE",r_)
     info("REQUIRE updated.")
+    #4082 TODO: some call to fixup should go here
 end
 
 available() = sort!([keys(Dir.cd(Read.available))...], by=lowercase)
@@ -102,6 +103,7 @@ clone(url::String, pkg::String=url2pkg(url); opts::Cmd=``) = Dir.cd() do
     isempty(Reqs.parse("$pkg/REQUIRE")) && return
     info("Computing changes...")
     _resolve()
+    #4082 TODO: some call to fixup should go here
 end
 
 function _checkout(pkg::String, what::String, merge::Bool=false)
@@ -110,6 +112,7 @@ function _checkout(pkg::String, what::String, merge::Bool=false)
         Git.run(`checkout -q $what`, dir=pkg)
         merge && Git.run(`merge -q --ff-only $what`, dir=pkg)
         _resolve()
+        #4082 TODO: some call to fixup should go here
     end
 end
 
@@ -174,6 +177,7 @@ update() = Dir.cd() do
     end
     info("Computing changes...")
     _resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
+    #4082 TODO: some call to fixup should go here
 end
 
 function _resolve(
@@ -252,13 +256,13 @@ function _resolve(
         rethrow()
     end
 
-    installed
     # Since we just changed a lot of things, it's probably better to reread
     # the state, so only pass avail
     _fixup(String[pkg for (pkg,_) in filter(x->x[2][2]!=nothing,changes)], avail)
+    #4082 TODO: this call to fixup should no longer go here
 end
 
-resolve() = Dir.cd(_resolve)
+resolve() = Dir.cd(_resolve) #4082 TODO: some call to fixup should go here
 
 function build(pkg::String, args=[])
     try 
