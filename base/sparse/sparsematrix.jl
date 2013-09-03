@@ -19,7 +19,7 @@ nnz(S::SparseMatrixCSC) = int(S.colptr[end]-1)
 function show(io::IO, S::SparseMatrixCSC)
     println(io, S.m, "x", S.n, " sparse matrix with ", nnz(S), " ", eltype(S), " nonzeros:")
 
-    half_screen_rows = div(tty_rows() - 8, 2)
+    half_screen_rows = div(Base.tty_rows() - 8, 2)
     pad = ndigits(max(S.m,S.n))
     k = 0
     for col = 1:S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
