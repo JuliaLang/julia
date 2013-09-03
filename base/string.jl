@@ -295,16 +295,7 @@ searchindex(s::String, t::String, i::Integer) = _searchindex(s,t,i)
 searchindex(s::String, t::String) = searchindex(s,t,start(s))
 
 
-function searchindex(s::ByteString, t::ByteString)
-    if length(t) == 1
-        search(s, t[1])
-    else
-        searchindex(s.data, t.data, 1)
-    end
-end
-
-
-function searchindex(s::ByteString, t::ByteString, i::Integer)
+function searchindex(s::ByteString, t::ByteString, i::Integer=1)
     if length(t) == 1
         search(s, t[1], i)
     else
@@ -477,7 +468,7 @@ end
 
 rsearch(s::String, t::String) = rsearch(s,t,endof(s))
 
-contains(a::String, b::String) = search(a,b)!=0:-1
+contains(a::String, b::String) = searchindex(a,b)!=0
 
 in(::String, ::String) = error("use contains(x,y) for string containment")
 
