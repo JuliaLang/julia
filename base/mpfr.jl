@@ -2,7 +2,6 @@ module MPFR
 
 export
     BigFloat,
-    RoundFromZero,
     get_bigfloat_precision,
     set_bigfloat_precision,
     with_bigfloat_precision,
@@ -20,17 +19,12 @@ import
         gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        serialize, deserialize, inf, nan, hash,
-        RoundingMode, RoundDown, RoundingMode, RoundNearest, RoundToZero, 
-        RoundUp
+        serialize, deserialize, inf, nan, hash
 
 import Base.Math.lgamma_r
 
 const ROUNDING_MODE = [0]
 const DEFAULT_PRECISION = [256]
-
-# Rounding modes
-type RoundFromZero <: RoundingMode end
 
 # Basic type and initialization definitions
 
@@ -596,26 +590,23 @@ function set_bigfloat_precision(x::Int)
     DEFAULT_PRECISION[end] = x
 end
 
-function get_bigfloat_rounding()
-    if ROUNDING_MODE[end] == 0
-        return RoundNearest
-    elseif ROUNDING_MODE[end] == 1
-        return RoundToZero
-    elseif ROUNDING_MODE[end] == 2
-        return RoundUp
-    elseif ROUNDING_MODE[end] == 3
-        return RoundDown
-    elseif ROUNDING_MODE[end] == 4
-        return RoundFromZero
-    else
-        error("Invalid rounding mode")
+function to_mpfr(r::RoundingMode)
+    c = r.code
+    if !(0 <= c <= 4)
+        error("invalid BigFloat rounding mode")
     end
+    c
 end
-set_bigfloat_rounding(::Type{RoundNearest}) = ROUNDING_MODE[end] = 0
-set_bigfloat_rounding(::Type{RoundToZero}) = ROUNDING_MODE[end] = 1
-set_bigfloat_rounding(::Type{RoundUp}) = ROUNDING_MODE[end] = 2
-set_bigfloat_rounding(::Type{RoundDown}) = ROUNDING_MODE[end] = 3
-set_bigfloat_rounding(::Type{RoundFromZero}) = ROUNDING_MODE[end] = 4
+
+function from_mpfr(c::Integer)
+    if !(0 <= c <= 4)
+        error("invalid MPFR rounding mode code")
+    end
+    RoundingMode(c)
+end
+
+get_bigfloat_rounding() = from_mpfr(ROUNDING_MODE[end])
+set_bigfloat_rounding(r::RoundingMode) = ROUNDING_MODE[end] = to_mpfr(r)
 
 function copysign(x::BigFloat, y::BigFloat)
     z = BigFloat()
@@ -694,7 +685,7 @@ function with_bigfloat_precision(f::Function, precision::Integer)
     end
 end
 
-function with_bigfloat_rounding{T<:RoundingMode}(f::Function, rounding::Type{T})
+function with_bigfloat_rounding(f::Function, rounding::RoundingMode)
     old_rounding = get_bigfloat_rounding()
     set_bigfloat_rounding(rounding)
     try
