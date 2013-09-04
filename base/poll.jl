@@ -24,8 +24,12 @@ function close(t::FileMonitor)
     end
 end
 
+# Polling event flags
 const UV_READABLE = 1
 const UV_WRITABLE = 2
+# Non-polling event flags
+const UV_RENAME = 1
+const UV_CHANGE = 2
 
 convert(::Type{Int32},fd::RawFD) = fd.fd 
 
@@ -237,14 +241,14 @@ function stop_watching(t::PollingFileWatcher)
 end
 
 function _uv_hook_fseventscb(t::FileMonitor,filename::Ptr,events::Int32,status::Int32)
+    fname = bytestring(convert(Ptr{Uint8},filename)) # seems broken at the moment - got NULL
     if isa(t.cb,Function)
-        # bytestring(convert(Ptr{Uint8},filename)) - seems broken at the moment - got NULL
-        t.cb(status, events, status)
-        if status == -1
-            notify_error(t.notify,UVError("FileMonitor",status))
-        else
-            notify(t.notify,events)
-        end
+        t.cb(fname, events, status)
+    end
+    if status < 0
+        notify_error(t.notify,(UVError("FileMonitor",status), fname, events))
+    else
+        notify(t.notify,(status, fname, events))
     end
 end
 
@@ -282,6 +286,7 @@ function poll_file(s, interval_seconds::Real, seconds::Real)
     wait(wt) == :poll
 end
 
+watch_file(s; poll=false) = watch_file(false, s, poll=poll)
 function watch_file(cb, s; poll=false)
     if poll
         pfw = PollingFileWatcher(cb,s)
