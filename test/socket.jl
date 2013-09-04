@@ -55,6 +55,14 @@ catch e
     @test typeof(e) == Base.UVError # E.g. not method error
 end
 
+try
+    # This should be an invalid port
+    connect("localhost",21452)
+    @test false
+catch e
+    @test typeof(e) == Base.UVError
+end
+
 try 
     connect(".invalid",80)
 catch e
