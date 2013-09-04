@@ -654,8 +654,11 @@
 		       (pattern-lambda
 			(call (-/ new) . args)
 			(new-call (if (null? params)
-				      Tname
-				      `(curly ,Tname ,@params))
+				      ;; be careful to avoid possible conflicts
+				      ;; with local & arg names
+				      `(|.| ,(current-julia-module) ',Tname)
+				      `(curly (|.| ,(current-julia-module) ',Tname)
+					      ,@params))
 				  args
 				  field-names
 				  field-types

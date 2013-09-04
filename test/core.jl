@@ -981,3 +981,13 @@ g4154() = typeof(foo4154(rand(2,2,2,2,2,2,2,2,2)))
 
 @test h4154() === MyType4154{Array{Float64,3}}
 @test g4154() === MyType4154{Array{Float64,9}}
+
+# issue #4208
+type a4208
+    a4208
+end
+@test isa(a4208(5),a4208)
+type b4208
+    b4208() = (local b4208=1;new())
+end
+@test isa(b4208(),b4208)
