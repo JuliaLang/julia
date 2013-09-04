@@ -1013,7 +1013,7 @@
 	     (if (eq? word 'module)
 		 (list* 'block
 			;; add definitions for module-local eval
-			(let ((x (gensym)))
+			(let ((x (if (eq? name 'x) 'y 'x)))
 			  `(= (call eval ,x)
 			      (call (|.| (top Core) 'eval) ,name ,x)))
 			`(= (call eval m x)

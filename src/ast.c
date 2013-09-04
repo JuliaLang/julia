@@ -40,6 +40,13 @@ value_t fl_defined_julia_global(value_t *args, uint32_t nargs)
     return (b != HT_NOTFOUND && b->owner==jl_current_module) ? FL_T : FL_F;
 }
 
+value_t fl_current_julia_module(value_t *args, uint32_t nargs)
+{
+    value_t opaque = cvalue(jvtype, sizeof(void*));
+    *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = (jl_value_t*)jl_current_module;
+    return opaque;
+}
+
 value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
 {
     if (nargs < 1)
@@ -91,6 +98,7 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
 static builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global },
     { "invoke-julia-macro", fl_invoke_julia_macro },
+    { "current-julia-module", fl_current_julia_module },
     { NULL, NULL }
 };
 
