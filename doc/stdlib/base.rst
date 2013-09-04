@@ -1429,6 +1429,10 @@ Network I/O
    Create a TcpServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server
    was created on and the server itself. 
 
+.. function:: watch_file(cb=false, s; poll=false)
+
+   Watch file or directory ``s`` and run callback ``cb`` when ``s`` is modified. The ``poll`` parameter specifies whether to use file system event monitoring or polling. The callback function ``cb`` should accept 3 arguments: ``(filename, events, status)`` where ``filename`` is the name of file that was modified, ``events`` can be ``UV_CHANGE`` or ``UV_RENAME`` when using file system event monitoring, or ``UV_READABLE`` or ``UV_WRITABLE`` when using polling, and ``status`` is always 0. Pass ``false`` for ``cb`` to not use a callback function.
+
 .. function:: poll_fd(fd, seconds::Real; readable=false, writable=false)
 
    Poll a file descriptor fd for changes in the read or write availability and with a timeout given by the second argument.
