@@ -282,7 +282,7 @@ wait_close(x) = if isopen(x) wait(x.closenotify); end
 #from `connect`
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
     @assert sock.status == StatusConnecting
-    if status != -1
+    if status >= 0
         sock.status = StatusOpen
         err = ()
     else
@@ -298,7 +298,7 @@ end
 #from `listen`
 function _uv_hook_connectioncb(sock::UVServer, status::Int32)
     local err
-    if status != -1
+    if status >= 0
         err = ()
     else
         err = UVError("connection",status)
@@ -553,7 +553,7 @@ function link_pipe(read_end::Pipe,readable_julia_only::Bool,write_end::Pipe,writ
 end
 close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),handle)
 
-_uv_hook_isopen(stream) = int32(isopen(stream))
+_uv_hook_isopen(stream) = int32(stream.status != StatusUninit && stream.status != StatusInit && isopen(stream))
 
 function close(stream::Union(AsyncStream,UVServer))
     if isopen(stream) && stream.status != StatusClosing
@@ -685,7 +685,7 @@ end
 write!(s::AsyncStream, string::ByteString) = write!(s,string.data)
 
 function _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32)
-    status == -1 && close(s)
+    status < 0 && close(s)
     nothing
 end
 
