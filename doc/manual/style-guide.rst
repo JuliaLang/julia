@@ -8,6 +8,16 @@ The following sections explain a few aspects of idiomatic Julia coding style.
 None of these rules are absolute; they are only suggestions to help familiarize
 you with the language and to help you choose among alternative designs.
 
+Write functions, not just scripts
+---------------------------------
+
+Writing code as a series of steps at the top level is a quick way to get
+started solving a problem, but you should try to divide a program into
+functions as soon as possible. Functions are more reusable and testable,
+and clarify what steps are being done and what their inputs and outputs are.
+Furthermore, code inside functions tends to run much faster than top level
+code, due to how Julia's compiler works.
+
 Avoid writing overly-specific types
 -----------------------------------
 
