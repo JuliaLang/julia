@@ -2310,8 +2310,17 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         // some expression types are metadata and can be ignored
         if (valuepos || !(head == line_sym || head == type_goto_sym)) {
-            jl_errorf("unsupported or misplaced expression %s in function %s",
-                      head->name, ctx->linfo->name->name);
+            if (head == abstracttype_sym || head == compositetype_sym ||
+                head == bitstype_sym) {
+                jl_errorf("type definition not allowed inside a local scope");
+            }
+            else if (head == macro_sym) {
+                jl_errorf("macro definition not allowed inside a local scope");
+            }
+            else {
+                jl_errorf("unsupported or misplaced expression %s in function %s",
+                          head->name, ctx->linfo->name->name);
+            }
         }
     }
     return NULL;
