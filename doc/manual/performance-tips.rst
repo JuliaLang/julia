@@ -15,6 +15,9 @@ at any point. This makes it difficult for the compiler to optimize code
 using global variables. Variables should be local, or passed as
 arguments to functions, whenever possible.
 
+Any code that is performance-critical or being benchmarked should be
+inside a function.
+
 We find that global names are frequently constants, and declaring them
 as such greatly improves performance::
 
@@ -25,6 +28,10 @@ at the point of use::
 
     global x
     y = f(x::Int + 1)
+
+Writing functions is better style. It leads to more reusable code and
+clarifies what steps are being done, and what their inputs and outputs
+are.
 
 Avoid containers with abstract type parameters
 ----------------------------------------------
