@@ -90,6 +90,19 @@ function test_monitor(slval)
     close(fm)
 end
 
+function test_monitor_wait(tval)
+    fm = watch_file(file)
+    @async begin
+        sleep(tval/10_000)
+        f = open(file,"a")
+        write(f,"Hello World\n")
+        close(f)
+    end
+    fname, events = wait(fm)
+    @test fname == basename(file)
+    @test events == UV_CHANGE
+end
+
 # Commented out the tests below due to issues 3015, 3016 and 3020 
 test_timeout(0.1)
 test_timeout(1)
@@ -97,6 +110,7 @@ test_touch(0.1)
 test_touch(1)
 test_monitor(1)
 test_monitor(0.1)
+test_monitor_wait(0.1)
 
 ##########
 #  mmap  #
