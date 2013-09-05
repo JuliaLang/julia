@@ -236,7 +236,7 @@ Concatenation
 -------------
 
 Arrays can be concatenated along any dimension using the following
-functions::
+functions:
 
 ================ ======================================================
 Function         Description
@@ -247,7 +247,7 @@ Function         Description
 ``hvcat(A...)``
 ================ ======================================================
 
-Concatenation operators may also be used for concatenating arrays::
+Concatenation operators may also be used for concatenating arrays:
 
 =================== =========
 Expression          Calls
