@@ -79,7 +79,7 @@ function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool
     has_header = get(optsd, :has_header, false)
     cells = Array(T, has_header ? nrows-1 : nrows, ncols)
     dlm_offsets(sbuff, dlm, eol, offsets)
-    has_header ? (dlm_fill(cells, offsets, sbuff, auto, 1), dlm_fill(Array(String, 1, ncols), offsets, sbuff, auto, 0)) : dlm_fill(cells, offsets, sbuff, auto, 0)
+    has_header ? (dlm_fill(cells, offsets, sbuff, auto, 1, eol), dlm_fill(Array(String, 1, ncols), offsets, sbuff, auto, 0, eol)) : dlm_fill(cells, offsets, sbuff, auto, 0, eol)
 end
 
 const valid_opts = [:has_header, :ignore_invalid_chars, :use_mmap]
@@ -102,7 +102,7 @@ function dlm_col_begin(ncols::Int, offsets::Array{Int,2}, row::Int, col::Int)
     (ret == 0) ? dlm_col_begin(ncols, offsets, pp_row, pp_col) : (ret+2)
 end
 
-function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, auto::Bool, row_offset::Int)
+function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, auto::Bool, row_offset::Int, eol::Char)
     maxrow,maxcol = size(cells)
     tmp64 = Array(Float64,1)
 
@@ -111,9 +111,11 @@ function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, au
         for col in 1:maxcol
             start_pos = dlm_col_begin(maxcol, offsets, row, col)
             end_pos = offsets[row,col]
-            sval = SubString(sbuff, start_pos,
-                             prevind(sbuff, nextind(sbuff,end_pos)))
-
+            
+            end_idx = prevind(sbuff, nextind(sbuff,end_pos))
+            (col == maxcol) && ('\n' == eol) && ('\r' == sbuff[end_idx]) && (end_idx = prevind(sbuff, end_idx))
+            sval = SubString(sbuff, start_pos, end_idx)
+            
             if T <: Char
                 (length(sval) != 1) && error("file entry \"$(sval)\" is not a Char")
                 cells[cell_row,col] = next(sval,1)[1]
@@ -121,7 +123,7 @@ function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, au
                 if float64_isvalid(sval, tmp64)
                     cells[cell_row,col] = tmp64[1]
                 elseif auto
-                    return dlm_fill(Array(Any,maxrow,maxcol), offsets, sbuff, false, row_offset)
+                    return dlm_fill(Array(Any,maxrow,maxcol), offsets, sbuff, false, row_offset, eol)
                 else
                     cells[cell_row,col] = NaN
                 end
