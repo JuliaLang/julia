@@ -78,7 +78,7 @@ function scaffold(
                       - sudo apt-get update -qq -y
                       - sudo apt-get install libpcre3-dev julia -y
                     script:
-                      - julia -e 'Pkg.init(); run(`ln -s \$(pwd()) \$(Pkg.dir())/`); Pkg.resolve()'
+                      - julia -e 'Pkg.init(); run(`ln -s \$(pwd()) \$(Pkg.dir())/$pkg`); Pkg.resolve()'
                       - julia -e 'using $pkg; @assert isdefined(:$pkg); @assert typeof($pkg) === Module'
                     """)
             end
