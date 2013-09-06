@@ -65,6 +65,10 @@ type UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
 end
 
 function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
+    if S.m != S.n
+	error("Input matrix must be square")
+    end
+
     zerobased = S.colptr[1] == 0
     res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
                     zerobased ? copy(S.colptr) : decrement(S.colptr),
@@ -75,6 +79,10 @@ function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
 end
 
 function lufact!{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
+    if S.m != S.n
+	error("Input matrix must be square")
+    end
+
     zerobased = S.colptr[1] == 0
     res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
                     zerobased ? S.colptr : decrement!(S.colptr),
