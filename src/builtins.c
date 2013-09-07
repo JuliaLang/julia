@@ -1216,6 +1216,12 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) {
         n += JL_PRINTF(out, "Union");
         n += jl_static_show(out, (jl_value_t*)((jl_uniontype_t*)v)->types);
     }
+    else if (jl_is_typector(v)) {
+        n += jl_static_show(out, ((jl_typector_t*)v)->body);
+    }
+    else if (jl_is_typevar(v)) {
+        n += jl_static_show(out, (jl_value_t*)((jl_tvar_t*)v)->name);
+    }
     else if (jl_is_module(v)) {
         jl_module_t *m = (jl_module_t*)v;
         if (m->parent != m) {
@@ -1292,6 +1298,20 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) {
                n += JL_PRINTF(out, ", ");
         }
         n += JL_PRINTF(out, "]");
+    }
+    else if (jl_typeis(v,jl_loaderror_type)) {
+        n += JL_PRINTF(out, "LoadError(at ");
+        n += jl_static_show(out, jl_fieldref(v, 0));
+        n += JL_PRINTF(out, " line ");
+        n += jl_static_show(out, jl_fieldref(v, 1));
+        n += JL_PRINTF(out, ": ");
+        n += jl_static_show(out, jl_fieldref(v, 2));
+        n += JL_PRINTF(out, ")");
+    }
+    else if (jl_typeis(v,jl_errorexception_type)) {
+        n += JL_PRINTF(out, "ErrorException(");
+        n += jl_static_show(out, jl_fieldref(v, 0));
+        n += JL_PRINTF(out, ")");
     }
     else {
         n += JL_PRINTF(out, "<?::");
