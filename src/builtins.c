@@ -1341,9 +1341,17 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) {
     return n;
 }
 
+int in_jl_ = 0;
 DLLEXPORT void jl_(void *jl_value) {
-    (void)jl_static_show(JL_STDOUT, (jl_value_t*)jl_value);
-    JL_PRINTF(JL_STDOUT,"\n");
+    in_jl_++;
+    JL_TRY {
+        (void)jl_static_show(JL_STDOUT, (jl_value_t*)jl_value);
+        JL_PRINTF(JL_STDOUT,"\n");
+    }
+    JL_CATCH {
+        JL_PRINTF(JL_STDOUT, "\n!!! ERROR in jl_ -- ABORTING !!!\n");
+    }
+    in_jl_--;
 }
 
 DLLEXPORT void jl_breakpoint(jl_value_t* v) {
