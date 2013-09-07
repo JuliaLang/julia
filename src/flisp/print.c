@@ -536,7 +536,9 @@ static void print_string(ios_t *f, char *str, size_t sz)
 
 static numerictype_t sym_to_numtype(value_t type);
 #ifndef _OS_WINDOWS_
+#define __USE_GNU
 #include <dlfcn.h>
+#undef __USE_GNU
 #endif
 
 // 'weak' means we don't need to accurately reproduce the type, so
@@ -637,8 +639,10 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
             static value_t jl_sym = 0;
             if (init == 0) {
                 init = 1;
-#ifdef RTLD_SELF
+#if defined(RTLD_SELF)
                 jl_static_print = dlsym(RTLD_SELF, "jl_static_show");
+#elif defined(RTLD_DEFAULT)
+                jl_static_print = dlsym(RTLD_DEFAULT, "jl_static_show");
 #endif
                 jl_sym = symbol("julia_value");
             }
