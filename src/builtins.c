@@ -1313,6 +1313,26 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) {
         n += jl_static_show(out, jl_fieldref(v, 0));
         n += JL_PRINTF(out, ")");
     }
+    else if (jl_is_datatype(jl_typeof(v))) {
+        jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
+        n += jl_static_show(out, (jl_value_t*)t);
+        n += JL_PRINTF(out, "(");
+        size_t i, tlen = jl_tuple_len(t->names);
+        for (i = 0; i < tlen; i++) {
+            n += JL_PRINTF(out, ((jl_sym_t*)jl_tupleref(t->names, i))->name);
+            jl_fielddesc_t f = t->fields[i];
+            if (f.isptr) {
+                n += JL_PRINTF(out, "=");
+                n += jl_static_show(out, *((jl_value_t**)jl_data_ptr(v)+f.offset/sizeof(void*)));
+            } else {
+                n += JL_PRINTF(out, "::");
+                n += jl_static_show(out, jl_tupleref(t->types, i));
+            }
+            if (i != tlen-1)
+                n += JL_PRINTF(out, ", ");
+        }
+        n += JL_PRINTF(out, ")");
+    }
     else {
         n += JL_PRINTF(out, "<?::");
         n += jl_static_show(out, jl_typeof(v));
