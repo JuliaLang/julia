@@ -96,7 +96,7 @@ function eval_user_input(ast::ANY, show_value)
                     end
                     try display(value)
                     catch err
-                        println(STDERR, "Error showing value of type ", typeof(value), ":")
+                        println(STDERR, "Evaluation succeeded, but an error occurred while showing value of type ", typeof(value), ":")
                         rethrow(err)
                     end
                     println()

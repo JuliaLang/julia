@@ -1525,6 +1525,13 @@ function event_loop(isclient)
                 end
             end
         catch err
+            if iserr
+                ccall(:jl_, Void, (Any,), (
+                    "\n!!!An ERROR occurred while printing the last error!!!\n",
+                    lasterr,
+                    bt
+                ))
+            end
             iserr, lasterr = true, err
             bt = catch_backtrace()
             if isclient && isa(err,InterruptException)
