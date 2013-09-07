@@ -1101,203 +1101,208 @@ void jl_init_primitives(void)
 
 // toys for debugging -----------------------------------------------------------------------
 
-DLLEXPORT void jl_static_show(jl_value_t *v) {
+DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) {
     // mimic jl_show, but never calling a julia method
+    size_t n = 0;
     if (v == NULL) {
-        JL_PRINTF(JL_STDOUT, "<null>");
+        n += JL_PRINTF(out, "<null>");
     }
     else if (jl_is_lambda_info(v)) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
-        jl_static_show((jl_value_t*)li->module);
-        JL_PRINTF(JL_STDOUT, ".%s", li->name->name);
+        n += jl_static_show(out, (jl_value_t*)li->module);
+        n += JL_PRINTF(out, ".%s", li->name->name);
         if (li->specTypes) {
-            jl_static_show((jl_value_t*)li->specTypes);
+            n += jl_static_show(out, (jl_value_t*)li->specTypes);
         }
         else {
-            JL_PRINTF(JL_STDOUT, "(?)");
+            n += JL_PRINTF(out, "(?)");
         }
     }
     else if (jl_is_tuple(v)) {
         jl_tuple_t *t = (jl_tuple_t*)v;
         size_t i, len = jl_tuple_len(t);
-        JL_PRINTF(JL_STDOUT, "(");
+        n += JL_PRINTF(out, "(");
         for (i = 0; i < len; i++) {
             jl_value_t *v = jl_tupleref(t,i);
-            jl_static_show(v);
-            if (i == 0 || i != len-1) JL_PRINTF(JL_STDOUT, ", ");
+            n += jl_static_show(out, v);
+            if (i == 0 || i != len-1)
+                n += JL_PRINTF(out, ", ");
         }
-        JL_PRINTF(JL_STDOUT, ")");
+        n += JL_PRINTF(out, ")");
     }
     else if (jl_is_vararg_type(v)) {
-        jl_static_show(jl_tparam0(v));
-        JL_PRINTF(JL_STDOUT, "...");
+        n += jl_static_show(out, jl_tparam0(v));
+        n += JL_PRINTF(out, "...");
     }
     else if (jl_is_datatype(v)) {
         jl_datatype_t *dv = (jl_datatype_t*)v;
-        jl_static_show((jl_value_t*)dv->name->module);
-        JL_PRINTF(JL_STDOUT, ".%s", dv->name->name->name);
+        n += jl_static_show(out, (jl_value_t*)dv->name->module);
+        n += JL_PRINTF(out, ".%s", dv->name->name->name);
         if (dv->parameters) {
             size_t j, tlen = jl_tuple_len(dv->parameters);
             if (tlen > 0) {
-                JL_PRINTF(JL_STDOUT, "{");
+                n += JL_PRINTF(out, "{");
                 for (j = 0; j < tlen; j++) {
                     jl_value_t *p = jl_tupleref(dv->parameters,j);
-                    jl_static_show(p);
-                    if (j != tlen-1) JL_PRINTF(JL_STDOUT, ", ");
+                    n += jl_static_show(out, p);
+                    if (j != tlen-1)
+                        n += JL_PRINTF(out, ", ");
                 }
-                JL_PRINTF(JL_STDOUT, "}");
+                n += JL_PRINTF(out, "}");
             }
         }
     }
     else if (jl_is_func(v)) {
         if (jl_is_gf(v)) {
-            JL_PRINTF(JL_STDOUT, "%s", jl_gf_name(v)->name);
+            n += JL_PRINTF(out, "%s", jl_gf_name(v)->name);
         }
         else {
-            JL_PRINTF(JL_STDOUT, "<# function>");
+            n += JL_PRINTF(out, "<# function>");
         }
     }
     else if (jl_typeis(v, jl_intrinsic_type)) {
-        JL_PRINTF(JL_STDOUT, "<# intrinsic function %d>", *(uint32_t*)jl_data_ptr(v));
+        n += JL_PRINTF(out, "<# intrinsic function %d>", *(uint32_t*)jl_data_ptr(v));
     }
     else if (jl_is_int64(v)) {
-        JL_PRINTF(JL_STDOUT, "%d", jl_unbox_int64(v));
+        n += JL_PRINTF(out, "%d", jl_unbox_int64(v));
     }
     else if (jl_is_int32(v)) {
-        JL_PRINTF(JL_STDOUT, "%d", jl_unbox_int32(v));
+        n += JL_PRINTF(out, "%d", jl_unbox_int32(v));
     }
     else if (jl_typeis(v,jl_int16_type)) {
-        JL_PRINTF(JL_STDOUT, "%d", jl_unbox_int16(v));
+        n += JL_PRINTF(out, "%d", jl_unbox_int16(v));
     }
     else if (jl_typeis(v,jl_int8_type)) {
-        JL_PRINTF(JL_STDOUT, "%d", jl_unbox_int8(v));
+        n += JL_PRINTF(out, "%d", jl_unbox_int8(v));
     }
     else if (jl_is_uint64(v)) {
-        JL_PRINTF(JL_STDOUT, "0x%016x", jl_unbox_uint64(v));
+        n += JL_PRINTF(out, "0x%016x", jl_unbox_uint64(v));
     }
     else if (jl_is_uint32(v)) {
-        JL_PRINTF(JL_STDOUT, "0x%08x", jl_unbox_uint32(v));
+        n += JL_PRINTF(out, "0x%08x", jl_unbox_uint32(v));
     }
     else if (jl_typeis(v,jl_uint16_type)) {
-        JL_PRINTF(JL_STDOUT, "0x%04x", jl_unbox_uint16(v));
+        n += JL_PRINTF(out, "0x%04x", jl_unbox_uint16(v));
     }
     else if (jl_typeis(v,jl_uint8_type)) {
-        JL_PRINTF(JL_STDOUT, "0x%02x", jl_unbox_uint8(v));
+        n += JL_PRINTF(out, "0x%02x", jl_unbox_uint8(v));
     }
     else if (jl_is_cpointer(v)) {
 #ifdef _P64
-        JL_PRINTF(JL_STDOUT, "0x%016x", jl_unbox_voidpointer(v));
+        n += JL_PRINTF(out, "0x%016x", jl_unbox_voidpointer(v));
 #else
-        JL_PRINTF(JL_STDOUT, "0x%08x", jl_unbox_voidpointer(v));
+        n += JL_PRINTF(out, "0x%08x", jl_unbox_voidpointer(v));
 #endif
     }
     else if (jl_is_float32(v)) {
-        JL_PRINTF(JL_STDOUT, "%g", jl_unbox_float32(v));
+        n += JL_PRINTF(out, "%g", jl_unbox_float32(v));
     }
     else if (jl_is_float64(v)) {
-        JL_PRINTF(JL_STDOUT, "%g", jl_unbox_float64(v));
+        n += JL_PRINTF(out, "%g", jl_unbox_float64(v));
     }
     else if (v == jl_true) {
-        JL_PRINTF(JL_STDOUT, "true");
+        n += JL_PRINTF(out, "true");
     }
     else if (v == jl_false) {
-        JL_PRINTF(JL_STDOUT, "false");
+        n += JL_PRINTF(out, "false");
     }
     else if (jl_is_byte_string(v)) {
-        JL_PRINTF(JL_STDOUT, "\"%s\"", jl_iostr_data(v));
+        n += JL_PRINTF(out, "\"%s\"", jl_iostr_data(v));
     }
     else if (v == jl_bottom_type) {
-        JL_PRINTF(JL_STDOUT, "Void");
+        n += JL_PRINTF(out, "Void");
     }
     else if (jl_is_uniontype(v)) {
-        JL_PRINTF(JL_STDOUT, "Union");
-        jl_static_show((jl_value_t*)((jl_uniontype_t*)v)->types);
+        n += JL_PRINTF(out, "Union");
+        n += jl_static_show(out, (jl_value_t*)((jl_uniontype_t*)v)->types);
     }
     else if (jl_is_module(v)) {
         jl_module_t *m = (jl_module_t*)v;
         if (m->parent != m) {
-            jl_static_show((jl_value_t*)m->parent);
-            JL_PRINTF(JL_STDOUT, ".");
+            n += jl_static_show(out, (jl_value_t*)m->parent);
+            n += JL_PRINTF(out, ".");
         }
-        JL_PRINTF(JL_STDOUT, "%s", m->name->name);
+        n += JL_PRINTF(out, "%s", m->name->name);
     }
     else if (jl_is_symbol(v)) {
-        JL_PRINTF(JL_STDOUT, ":%s", ((jl_sym_t*)v)->name);
+        n += JL_PRINTF(out, ":%s", ((jl_sym_t*)v)->name);
     }
     else if (jl_is_symbolnode(v)) {
-        JL_PRINTF(JL_STDOUT, "%s::", jl_symbolnode_sym(v)->name);
-        jl_static_show(jl_symbolnode_type(v));
+        n += JL_PRINTF(out, "%s::", jl_symbolnode_sym(v)->name);
+        n += jl_static_show(out, jl_symbolnode_type(v));
     }
     else if (jl_is_getfieldnode(v)) {
-        jl_static_show(jl_getfieldnode_val(v));
-        JL_PRINTF(JL_STDOUT, ".%s", jl_getfieldnode_name(v)->name);
-        JL_PRINTF(JL_STDOUT, "::");
-        jl_static_show(jl_getfieldnode_type(v));
+        n += jl_static_show(out, jl_getfieldnode_val(v));
+        n += JL_PRINTF(out, ".%s", jl_getfieldnode_name(v)->name);
+        n += JL_PRINTF(out, "::");
+        n += jl_static_show(out, jl_getfieldnode_type(v));
     }
     else if (jl_is_labelnode(v)) {
-        JL_PRINTF(JL_STDOUT, "%d:", jl_labelnode_label(v));
+        n += JL_PRINTF(out, "%d:", jl_labelnode_label(v));
     }
     else if (jl_is_gotonode(v)) {
-        JL_PRINTF(JL_STDOUT, "goto %d", jl_gotonode_label(v));
+        n += JL_PRINTF(out, "goto %d", jl_gotonode_label(v));
     }
     else if (jl_is_quotenode(v)) {
-        JL_PRINTF(JL_STDOUT, "quote ");
-        jl_static_show(jl_fieldref(v,0));
-        JL_PRINTF(JL_STDOUT, " end");
+        n += JL_PRINTF(out, "quote ");
+        n += jl_static_show(out, jl_fieldref(v,0));
+        n += JL_PRINTF(out, " end");
     }
     else if (jl_is_newvarnode(v)) {
-        JL_PRINTF(JL_STDOUT, "<newvar ");
-        jl_static_show(jl_fieldref(v,0));
-        JL_PRINTF(JL_STDOUT, ">");
+        n += JL_PRINTF(out, "<newvar ");
+        n += jl_static_show(out, jl_fieldref(v,0));
+        n += JL_PRINTF(out, ">");
     }
     else if (jl_is_topnode(v)) {
-        JL_PRINTF(JL_STDOUT, "top(");
-        jl_static_show(jl_fieldref(v,0));
-        JL_PRINTF(JL_STDOUT, ")");
+        n += JL_PRINTF(out, "top(");
+        n += jl_static_show(out, jl_fieldref(v,0));
+        n += JL_PRINTF(out, ")");
     }
     else if (jl_is_linenode(v)) {
-        JL_PRINTF(JL_STDOUT, "# line %d", jl_linenode_line(v));
+        n += JL_PRINTF(out, "# line %d", jl_linenode_line(v));
     }
     else if (jl_is_expr(v)) {
         jl_expr_t *e = (jl_expr_t*)v;
         if (e->head == assign_sym && jl_array_len(e->args) == 2) {
-            jl_static_show(jl_exprarg(e,0));
-            JL_PRINTF(JL_STDOUT, " = ");
-            jl_static_show(jl_exprarg(e,1));
+            n += jl_static_show(out, jl_exprarg(e,0));
+            n += JL_PRINTF(out, " = ");
+            n += jl_static_show(out, jl_exprarg(e,1));
         }
         else {
             char sep = ' ';
             if (e->head == body_sym)
                 sep = '\n';
-            JL_PRINTF(JL_STDOUT, "Expr(:%s", e->head->name);
+            n += JL_PRINTF(out, "Expr(:%s", e->head->name);
             size_t i, len = jl_array_len(e->args);
             for (i = 0; i < len; i++) {
-                JL_PRINTF(JL_STDOUT, ",%c", sep);
-                jl_static_show(jl_exprarg(e,i));
+                n += JL_PRINTF(out, ",%c", sep);
+                n += jl_static_show(out, jl_exprarg(e,i));
             }
-            JL_PRINTF(JL_STDOUT, ")::");
-            jl_static_show(e->etype);
+            n += JL_PRINTF(out, ")::");
+            n += jl_static_show(out, e->etype);
         }
     }
     else if (jl_is_array(v)) {
-        jl_static_show(jl_typeof(v));
-        JL_PRINTF(JL_STDOUT, "[");
+        n += jl_static_show(out, jl_typeof(v));
+        n += JL_PRINTF(out, "[");
         size_t j, tlen = jl_array_len(v);
         for (j = 0; j < tlen; j++) {
-            jl_static_show(jl_arrayref((jl_array_t*)v,j));
-            if (j != tlen-1) JL_PRINTF(JL_STDOUT, ", ");
+            n += jl_static_show(out, jl_arrayref((jl_array_t*)v,j));
+            if (j != tlen-1)
+               n += JL_PRINTF(out, ", ");
         }
-        JL_PRINTF(JL_STDOUT, "]");
+        n += JL_PRINTF(out, "]");
     }
     else {
-        JL_PRINTF(JL_STDOUT, "<?::");
-        jl_static_show(jl_typeof(v));
-        JL_PRINTF(JL_STDOUT, ">");
+        n += JL_PRINTF(out, "<?::");
+        n += jl_static_show(out, jl_typeof(v));
+        n += JL_PRINTF(out, ">");
     }
+    return n;
 }
 
 DLLEXPORT void jl_(void *jl_value) {
-    jl_static_show((jl_value_t*)jl_value);
+    (void)jl_static_show(JL_STDOUT, (jl_value_t*)jl_value);
     JL_PRINTF(JL_STDOUT,"\n");
 }
 
