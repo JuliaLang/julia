@@ -364,56 +364,6 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
     return jl_method_list_insert(pml, type, method, jl_null, 0)->func;
 }
 
-static void print_tuple_elts(JL_STREAM *s, jl_tuple_t *v)
-{
-    for(size_t i=0; i < jl_tuple_len(v); i++) {
-        if (i > 0) JL_PRINTF(s, ", ");
-        jl_debug_print_type(s, jl_tupleref(v,i));
-    }
-}
-
-void jl_debug_print_type(JL_STREAM *s, jl_value_t *v)
-{
-    if (jl_is_tuple(v)) {
-        JL_PUTC('(', s);
-        print_tuple_elts(s, (jl_tuple_t*)v);
-        JL_PUTC(')', s);
-    }
-    else if (jl_is_symbol(v)) {
-        JL_PRINTF(s, "%s", ((jl_sym_t*)v)->name);
-    }
-    else if (jl_is_long(v)) {
-        JL_PRINTF(s, "%lld", jl_unbox_long(v));
-    }
-    else if (jl_is_datatype(v)) {
-        jl_datatype_t *dt = (jl_datatype_t*)v;
-        JL_PRINTF(s, "%s", dt->name->name->name);
-        if (jl_tuple_len(dt->parameters) > 0) {
-            JL_PUTC('{', s);
-            print_tuple_elts(s, dt->parameters);
-            JL_PUTC('}', s);
-        }
-    }
-    else if (jl_is_typector(v)) {
-        jl_debug_print_type(s, ((jl_typector_t*)v)->body);
-    }
-    else if (jl_is_uniontype(v)) {
-        JL_PRINTF(s, "Union");
-        jl_debug_print_type(s, (jl_value_t*)((jl_uniontype_t*)v)->types);
-    }
-    else if (jl_is_typevar(v)) {
-        JL_PRINTF(s, ((jl_tvar_t*)v)->name->name);
-    }
-    else {
-        JL_PRINTF(s, "<Unknown Type>");
-    }
-}
-
-DLLEXPORT void jl_print_type(jl_value_t *v)
-{
-    jl_debug_print_type(JL_STDERR, v);
-}
-
 extern jl_function_t *jl_typeinf_func;
 
 /*
@@ -440,7 +390,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
         fargs[3] = (jl_value_t*)def;
 #ifdef TRACE_INFERENCE
         JL_PRINTF(JL_STDERR,"inference on %s", li->name->name);
-        jl_debug_print_type(JL_STDERR, (jl_value_t*)argtypes);
+        jl_static_show(JL_STDERR, (jl_value_t*)argtypes);
         JL_PRINTF(JL_STDERR, "\n");
 #endif
 #ifdef ENABLE_INFERENCE
@@ -1346,7 +1296,7 @@ static void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
     JL_PRINTF(JL_STDOUT, "%s(",  jl_gf_name(F)->name);
     for(size_t i=0; i < nargs; i++) {
         if (i > 0) JL_PRINTF(JL_STDOUT, ", ");
-        jl_debug_print_type(JL_STDOUT, jl_typeof(args[i]));
+        jl_static_show(JL_STDOUT, jl_typeof(args[i]));
     }
     JL_PRINTF(JL_STDOUT, ")\n");
 }
