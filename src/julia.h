@@ -896,7 +896,7 @@ DLLEXPORT jl_value_t *jl_stdout_obj();
 DLLEXPORT jl_value_t *jl_stderr_obj();
 DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b);
 DLLEXPORT uptrint_t jl_object_id(jl_value_t *v);
-void jl_debug_print_type(JL_STREAM *s, jl_value_t *v);
+DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v);
 
 // modules
 extern DLLEXPORT jl_module_t *jl_main_module;
