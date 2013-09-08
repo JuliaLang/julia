@@ -1087,6 +1087,9 @@ extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
 
 #define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)
 
+// GC_FINAL_STATS prints total GC stats at exit
+//#define GC_FINAL_STATS
+
 #ifdef GC_FINAL_STATS
 void jl_print_gc_stats(JL_STREAM *s);
 #endif
