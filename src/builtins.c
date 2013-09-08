@@ -1101,7 +1101,8 @@ void jl_init_primitives(void)
 
 // toys for debugging -----------------------------------------------------------------------
 
-DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) {
+DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
+{
     // mimic jl_show, but never calling a julia method
     size_t n = 0;
     if (v == NULL) {
@@ -1324,7 +1325,8 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) {
             if (f.isptr) {
                 n += JL_PRINTF(out, "=");
                 n += jl_static_show(out, *((jl_value_t**)jl_data_ptr(v)+f.offset/sizeof(void*)));
-            } else {
+            }
+            else {
                 n += JL_PRINTF(out, "::");
                 n += jl_static_show(out, jl_tupleref(t->types, i));
             }
@@ -1342,7 +1344,8 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) {
 }
 
 int in_jl_ = 0;
-DLLEXPORT void jl_(void *jl_value) {
+DLLEXPORT void jl_(void *jl_value)
+{
     in_jl_++;
     JL_TRY {
         (void)jl_static_show(JL_STDOUT, (jl_value_t*)jl_value);
@@ -1354,6 +1357,7 @@ DLLEXPORT void jl_(void *jl_value) {
     in_jl_--;
 }
 
-DLLEXPORT void jl_breakpoint(jl_value_t* v) {
+DLLEXPORT void jl_breakpoint(jl_value_t* v)
+{
     // put a breakpoint in you debugger here
 }
