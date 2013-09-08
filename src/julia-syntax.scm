@@ -109,7 +109,7 @@
 (define (expand-update-operator op lhs rhs)
   (if (and (pair? lhs) (eq? (car lhs) 'ref))
       ;; expand indexing inside op= first, to remove "end" and ":"
-      (let* ((ex (apply-patterns patterns lhs))
+      (let* ((ex (partially-expand-ref lhs))
 	     (stmts (butlast (cdr ex)))
 	     (refex (last    (cdr ex)))
 	     (nuref `(ref ,(caddr refex) ,@(cdddr refex))))
@@ -118,6 +118,24 @@
       (expand-update-operator- op lhs rhs)))
 
 (define (dotop? o) (and (symbol? o) (eqv? (string.char (string o) 0) #\.)))
+
+(define (partially-expand-ref e)
+  (let ((a    (cadr e))
+	(idxs (cddr e)))
+    (let* ((reuse (and (pair? a)
+		       (contains (lambda (x)
+				   (or (eq? x 'end)
+				       (eq? x ':)
+				       (and (pair? x)
+					    (eq? (car x) ':))))
+				 idxs)))
+	   (arr   (if reuse (gensy) a))
+	   (stmts (if reuse `((= ,arr ,a)) '())))
+      (receive
+       (new-idxs stuff) (process-indexes arr idxs)
+       `(block
+	 ,@(append stmts stuff)
+	 (call getindex ,arr ,@new-idxs))))))
 
 ;; accumulate a series of comparisons, with the given "and" constructor,
 ;; exit criteria, and "take" function that consumes part of a list,
@@ -197,7 +215,7 @@
 				  (iota (- n 1)))))
 	  `(call (top size) ,a ,n))
       (let ((dimno `(call (top +) ,(- n (length tuples))
-			  ,@(map (lambda (t) `(call (top length) ,t))
+			  ,.(map (lambda (t) `(call (top length) ,t))
 				 tuples))))
 	(if last
 	    `(call (top trailingsize) ,a ,dimno)
@@ -363,6 +381,8 @@
 		    ,body)))))))
 
 (define (vararg? x) (and (pair? x) (eq? (car x) '...)))
+(define (trans?  x) (and (pair? x) (eq? (car x) '|.'|)))
+(define (ctrans? x) (and (pair? x) (eq? (car x) '|'|)))
 
 (define (const-default? x)
   (or (number? x) (string? x) (char? x) (and (pair? x) (eq? (car x) 'quote))))
@@ -856,156 +876,190 @@
 		 (break ,bb)))
 	(else (map (lambda (x) (replace-return x bb ret retval)) e))))
 
-;; patterns that introduce lambdas
-(define binding-form-patterns
-  (pattern-set
-   ;; function with static parameters
-   (pattern-lambda (function (call (curly name . sparams) . argl) body)
-		   (method-def-expr name sparams (fix-arglist argl) body))
+(define (expand-binding-forms e)
+  (cond
+   ((atom? e) e)
+   ((quoted? e) e)
+   (else
+    (case (car e)
+      ((function)
+       (if (pair? (cadr e))
+	   (if (eq? (car (cadr e)) 'call)
+	       (expand-binding-forms
+		(if (and (pair? (cadr (cadr e)))
+			 (eq? (car (cadr (cadr e))) 'curly))
+		    (method-def-expr
+		     (cadr (cadr (cadr e)))
+		     (cddr (cadr (cadr e)))
+		     (fix-arglist (cddr (cadr e)))
+		     (caddr e))
+		    (method-def-expr
+		     (cadr (cadr e))
+		     '()
+		     (fix-arglist (cddr (cadr e)))
+		     (caddr e))))
+	       (if (eq? (car (cadr e)) 'tuple)
+		   (expand-binding-forms
+		    `(-> ,(cadr e) ,(caddr e)))
+		   e))
+	   e))
 
-   ;; function definition
-   (pattern-lambda (function (call name . argl) body)
-		   (method-def-expr name '() (fix-arglist argl) body))
+      ((->)
+       (let ((a (cadr e))
+	     (b (caddr e)))
+	 (let ((a (if (and (pair? a)
+			   (eq? (car a) 'tuple))
+		      (cdr a)
+		      (list a))))
+	   (expand-binding-forms
+	    (function-expr (fix-arglist a)
+			   `(block
+			     ,.(map (lambda (d)
+				      `(= ,(cadr d)
+					  (typeassert ,@(cdr d))))
+				    (filter decl? a))
+			     ,b))))))
 
-   (pattern-lambda (function (tuple . args) body)
-		   `(-> (tuple ,@args) ,body))
+      ((let)
+       (let ((ex (cadr e))
+	     (binds (cddr e)))
+	 (expand-binding-forms
+	  (if
+	   (null? binds)
+	   `(scope-block (block ,ex))
+	   (let loop ((binds (reverse binds))
+		      (blk   ex))
+	     (if (null? binds)
+		 blk
+		 (cond
+		  ((or (symbol? (car binds)) (decl? (car binds)))
+		   ;; just symbol -> add local
+		   (loop (cdr binds)
+			 `(scope-block
+			   (block
+			    (local ,(car binds))
+			    (newvar ,(decl-var (car binds)))
+			    ,blk))))
+		  ((and (length= (car binds) 3)
+			(eq? (caar binds) '=))
+		   ;; some kind of assignment
+		   (cond
+		    ((or (symbol? (cadar binds))
+			 (decl?   (cadar binds)))
+		     (let ((vname (decl-var (cadar binds))))
+		       (loop (cdr binds)
+			     (if (contains (lambda (x) (eq? x vname))
+					   (caddar binds))
+				 (let ((tmp (gensy)))
+				   `(scope-block
+				     (block
+				      (local (= ,tmp ,(caddar binds)))
+				      (scope-block
+				       (block
+					(local ,(cadar binds))
+					(newvar ,vname)
+					(= ,vname ,tmp)
+					,blk)))))
+				 `(scope-block
+				   (block
+				    (local ,(cadar binds))
+				    (newvar ,vname)
+				    (= ,vname ,(caddar binds))
+				    ,blk))))))
+		    ((and (pair? (cadar binds))
+			  (eq? (caadar binds) 'call))
+		     ;; f()=c
+		     (let ((asgn (cadr (julia-expand0 (car binds)))))
+		       (loop (cdr binds)
+			     `(scope-block
+			       (block
+				(local ,(cadr asgn))
+				(newvar ,(cadr asgn))
+				,asgn
+				,blk)))))
+		    (else (error "invalid let syntax"))))
+		  (else (error "invalid let syntax")))))))))
 
-   ;; expression form function definition
-   (pattern-lambda (= (call (curly name . sparams) . argl) body)
-		   `(function (call (curly ,name . ,sparams) . ,argl) ,body))
-   (pattern-lambda (= (call name . argl) body)
-		   `(function (call ,name ,@argl) ,body))
+      ((macro)
+       (if (and (pair? (cadr e))
+		(eq? (car (cadr e)) 'call))
+	   `(macro ,(symbol (string #\@ (cadr (cadr e))))
+	      ,(expand-binding-forms
+		`(-> (tuple ,@(cddr (cadr e)))
+		     ,(caddr e))))
+	   e))
 
-   ;; anonymous function
-   (pattern-lambda (-> a b)
-		   (let ((a (if (and (pair? a)
-				     (eq? (car a) 'tuple))
-				(cdr a)
-				(list a))))
-		     (function-expr (fix-arglist a)
-				    `(block
-				      ,@(map (lambda (d)
-					       `(= ,(cadr d)
-						   (typeassert ,@(cdr d))))
-					     (filter decl? a))
-				      ,b))))
+      ((type)
+       (let ((mut (cadr e))
+	     (sig (caddr e))
+	     (fields (cdr (cadddr e))))
+	 (expand-binding-forms
+	  (receive (name params super) (analyze-type-sig sig)
+		   (struct-def-expr name params super fields mut)))))
 
-   ;; let
-   (pattern-lambda (let ex . binds)
-		   (if
-		    (null? binds)
-		    `(scope-block (block ,ex))
-		    (let loop ((binds (reverse binds))
-			       (blk   ex))
-		      (if (null? binds)
-			  blk
-			  (cond
-			   ((or (symbol? (car binds)) (decl? (car binds)))
-			    ;; just symbol -> add local
-			    (loop (cdr binds)
-				  `(scope-block
-				    (block
-				     (local ,(car binds))
-				     (newvar ,(decl-var (car binds)))
-				     ,blk))))
-			   ((and (length= (car binds) 3)
-				 (eq? (caar binds) '=))
-			    ;; some kind of assignment
-			    (cond
-			     ((or (symbol? (cadar binds))
-				  (decl?   (cadar binds)))
-			      (let ((vname (decl-var (cadar binds))))
-				(loop (cdr binds)
-				      (if (contains (lambda (x) (eq? x vname))
-						    (caddar binds))
-					  (let ((tmp (gensy)))
-					    `(scope-block
-					      (block
-					       (local (= ,tmp ,(caddar binds)))
-					       (scope-block
-						(block
-						 (local ,(cadar binds))
-						 (newvar ,vname)
-						 (= ,vname ,tmp)
-						 ,blk)))))
-					  `(scope-block
-					    (block
-					     (local ,(cadar binds))
-					     (newvar ,vname)
-					     (= ,vname ,(caddar binds))
-					     ,blk))))))
-			     ((and (pair? (cadar binds))
-				   (eq? (caadar binds) 'call))
-			      ;; f()=c
-			      (let ((asgn (cadr (julia-expand0 (car binds)))))
-				(loop (cdr binds)
-				      `(scope-block
-					(block
-					 (local ,(cadr asgn))
-					 (newvar ,(cadr asgn))
-					 ,asgn
-					 ,blk)))))
-			     (else (error "invalid let syntax"))))
-			   (else (error "invalid let syntax")))))))
+      ((try)
+       (if (length= e 5)
+	   (let ((tryb (cadr e))
+		 (var  (caddr e))
+		 (catchb (cadddr e))
+		 (finalb (cadddr (cdr e))))
+	     (let ((hasret (or (contains return? tryb)
+			       (contains return? catchb))))
+	       (let ((err (gensy))
+		     (ret (and hasret
+			       (or (not (block-returns? tryb))
+				   (and catchb
+					(not (block-returns? catchb))))
+			       (gensy)))
+		     (retval (gensy))
+		     (bb  (gensy))
+		     (val (gensy)))
+		 (let ((tryb   (replace-return tryb bb ret retval))
+		       (catchb (replace-return catchb bb ret retval)))
+		   (expand-binding-forms
+		    `(scope-block
+		      (block
+		       (local ,retval)
+		       (local ,val)
+		       (= ,err false)
+		       ,@(if ret `((= ,ret false)) '())
+		       (break-block
+			,bb
+			(try (= ,val
+				,(if catchb
+				     `(try ,tryb ,var ,catchb)
+				     tryb))
+			     #f
+			     (= ,err true)))
+		       ,finalb
+		       (if ,err (ccall 'jl_rethrow Void (tuple)))
+		       ,(if hasret
+			    (if ret
+				`(if ,ret (return ,retval) ,val)
+				`(return ,retval))
+			    val))))))))
+	   (if (length= e 4)
+	       (let ((tryb (cadr e))
+		     (var  (caddr e))
+		     (catchb (cadddr e)))
+		 (expand-binding-forms
+		  (if (symbol? var)
+		      `(trycatch (scope-block ,tryb)
+				 (scope-block
+				  (block (= ,var (the_exception))
+					 ,catchb)))
+		      `(trycatch (scope-block ,tryb)
+				 (scope-block ,catchb)))))
+	       (map expand-binding-forms e))))
 
-   ;; macro definition
-   (pattern-lambda (macro (call name . argl) body)
-		   `(macro ,(symbol (string #\@ name))
-		      (-> (tuple ,@argl) ,body)))
+      ((=)
+       (if (and (pair? (cadr e))
+		(eq? (car (cadr e)) 'call))
+	   (expand-binding-forms (cons 'function (cdr e)))
+	   (map expand-binding-forms e)))
 
-   ;; type definition
-   (pattern-lambda (type mut sig (block . fields))
-		   (receive (name params super) (analyze-type-sig sig)
-			    (struct-def-expr name params super fields mut)))
-
-   ;; try with finally
-   (pattern-lambda (try tryb var catchb finalb)
-		   (let ((hasret (or (contains return? tryb)
-				     (contains return? catchb))))
-		   (let ((err (gensy))
-			 (ret (and hasret
-				   (or (not (block-returns? tryb))
-				       (and catchb
-					    (not (block-returns? catchb))))
-				   (gensy)))
-			 (retval (gensy))
-			 (bb  (gensy))
-			 (val (gensy)))
-		     (let ((tryb   (replace-return tryb bb ret retval))
-			   (catchb (replace-return catchb bb ret retval)))
-		       `(scope-block
-			 (block
-			  (local ,retval)
-			  (local ,val)
-			  (= ,err false)
-			  ,@(if ret `((= ,ret false)) '())
-			  (break-block
-			   ,bb
-			   (try (= ,val
-				   ,(if catchb
-					`(try ,tryb ,var ,catchb)
-					tryb))
-				#f
-				(= ,err true)))
-			  ,finalb
-			  (if ,err (ccall 'jl_rethrow Void (tuple)))
-			  ,(if hasret
-			       (if ret
-				   `(if ,ret (return ,retval) ,val)
-				   `(return ,retval))
-			       val)))))))
-
-   ;; try - catch
-   (pattern-lambda (try tryb var catchb)
-		   (if (symbol? var)
-		       `(trycatch (scope-block ,tryb)
-				  (scope-block
-				   (block (= ,var (the_exception))
-					  ,catchb)))
-		       `(trycatch (scope-block ,tryb)
-				  (scope-block ,catchb))))
-
-   )) ; binding-form-patterns
+      (else
+       (map expand-binding-forms e))))))
 
 ;; a copy of the above patterns, but returning the names of vars
 ;; introduced by the forms, instead of their transformations.
@@ -1100,8 +1154,8 @@
 		 (length= vars 1))
 	    `(,what ,(car vars))
 	    `(block
-	      ,@(map (lambda (x) `(,what ,x)) vars)
-	      ,@(reverse assigns)))
+	      ,.(map (lambda (x) `(,what ,x)) vars)
+	      ,.(reverse assigns)))
 	(let ((x (car b)))
 	  (cond ((and (pair? x) (memq (car x) assignment-ops))
 		 (loop (cdr b)
@@ -1218,602 +1272,567 @@
 		 (call (top kwcall) ,f ,(length keys) ,@keyargs
 		       ,container ,@pa))))))))
 
-(define patterns
-  (pattern-set
-   (pattern-lambda (block)
-		   `(block (null)))
+(define (expand-transposed-op e ops)
+  (let ((a (caddr e))
+	(b (cadddr e)))
+    (cond ((ctrans? a)
+	   (if (ctrans? b)
+	       `(call ,(aref ops 0) #;Ac_mul_Bc ,(expand-forms (cadr a))
+		      ,(expand-forms (cadr b)))
+	       `(call ,(aref ops 1) #;Ac_mul_B ,(expand-forms (cadr a))
+		      ,(expand-forms b))))
+	  ((trans? a)
+	   (if (trans? b)
+	       `(call ,(aref ops 2) #;At_mul_Bt ,(expand-forms (cadr a))
+		      ,(expand-forms (cadr b)))
+	       `(call ,(aref ops 3) #;At_mul_B ,(expand-forms (cadr a))
+		      ,(expand-forms b))))
+	  ((ctrans? b)
+	   `(call ,(aref ops 4) #;A_mul_Bc ,(expand-forms a)
+		  ,(expand-forms (cadr b))))
+	  ((trans? b)
+	   `(call ,(aref ops 5) #;A_mul_Bt ,(expand-forms a)
+		  ,(expand-forms (cadr b))))
+	  (else
+	   `(call ,(cadr e) ,(expand-forms a) ,(expand-forms b))))))
 
-   (pattern-lambda (|.| a b)
-		   `(call (top getfield) ,a ,b))
+(define (lower-update-op e)
+  (expand-forms
+   (expand-update-operator
+    (let ((str (string (car e))))
+      (symbol (string.sub str 0 (- (length str) 1))))
+    (cadr e)
+    (caddr e))))
 
-   (pattern-lambda (in a b) `(call in ,a ,b))
+(define (map-expand-forms e) (map expand-forms e))
 
-   (pattern-lambda (= (|.| a b) rhs)
-		   (let ((aa (if (atom? a) a (gensy)))
-			 (bb (if (or (atom? b) (quoted? b)) b (gensy))))
-		     `(block
-		       ,@(if (eq? aa a) '() `((= ,aa ,a)))
-		       ,@(if (eq? bb b) '() `((= ,bb ,b)))
-		       (call (top setfield) ,aa ,bb
-			     (call (top convert)
-				   (call (top fieldtype) ,aa ,bb)
-				   ,rhs)))))
+(define (expand-forms e)
+  (if (atom? e)
+      e
+      ((get expand-table (car e) map-expand-forms) e)))
 
-   (pattern-lambda (abstract sig)
-		   (receive (name params super) (analyze-type-sig sig)
-			    (abstract-type-def-expr name params super)))
+(define expand-table
+  (table
+   'quote identity
+   'top   identity
+   'line  identity
 
-   (pattern-lambda (bitstype n sig)
-		   (receive (name params super) (analyze-type-sig sig)
-			    (bits-def-expr n name params super)))
+   'lambda
+   (lambda (e) (list* 'lambda (map expand-forms (cadr e)) (map expand-forms (cddr e))))
 
-   ; typealias is an assignment; should be const when that exists
-   (pattern-lambda (typealias (-- name (-s)) type-ex)
-		   `(const (= ,name ,type-ex)))
-   (pattern-lambda (typealias (curly (-- name (-s)) . params) type-ex)
+   'block
+   (lambda (e)
+     (if (null? (cdr e))
+	 '(block (null))
+	 (map expand-forms e)))
+
+   '|.|
+   (lambda (e)
+     `(call (top getfield) ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
+
+   'in
+   (lambda (e)
+     `(call in ,(expand-forms (cadr e)) ,(expand-forms (caddr e))))
+
+   '=
+   (lambda (e)
+     (if (atom? (cadr e))
+	 `(= ,(cadr e) ,(expand-forms (caddr e)))
+	 (case (car (cadr e))
+	   ((|.|)
+	    ;; a.b =
+	    (let ((a (cadr (cadr e)))
+		  (b (caddr (cadr e)))
+		  (rhs (caddr e)))
+	      (let ((aa (if (atom? a) a (gensy)))
+		    (bb (if (or (atom? b) (quoted? b)) b (gensy))))
+		`(block
+		  ,.(if (eq? aa a) '() `((= ,aa ,(expand-forms a))))
+		  ,.(if (eq? bb b) '() `((= ,bb ,(expand-forms b))))
+		  (call (top setfield) ,aa ,bb
+			(call (top convert)
+			      (call (top fieldtype) ,aa ,bb)
+			      ,(expand-forms rhs)))))))
+
+	   ((tuple)
+	    ;; multiple assignment
+	    (let ((lhss (cdr (cadr e)))
+		  (x    (caddr e)))
+	      (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
+		       (length= lhss (length (cdr x))))
+		  ;; (a, b, ...) = (x, y, ...)
+		  (expand-forms
+		   (tuple-to-assignments lhss x))
+		  ;; (a, b, ...) = other
+		  (let* ((xx  (if (and (symbol? x) (not (memq x lhss)))
+				  x (gensy)))
+			 (ini (if (eq? x xx) '() `((= ,xx ,(expand-forms x)))))
+			 (st  (gensy)))
+		    `(block
+		      ,@ini
+		      (= ,st (call (top start) ,xx))
+		      ,.(map (lambda (i lhs)
+			       (expand-forms
+				(lower-tuple-assignment
+				 (list lhs st)
+				 `(call (|.| (top Base) (quote indexed_next))
+					,xx ,(+ i 1) ,st))))
+			     (iota (length lhss))
+			     lhss)
+		      ,xx)))))
+
+	   ((typed_hcat)
+	    (error "invalid spacing in left side of indexed assignment"))
+	   ((typed_vcat)
+	    (error "unexpected ; in left side of indexed assignment"))
+
+	   ((ref)
+	    ;; (= (ref a . idxs) rhs)
+	    (let ((a    (cadr (cadr e)))
+		  (idxs (cddr (cadr e)))
+		  (rhs  (caddr e)))
+	      (let* ((reuse (and (pair? a)
+				 (contains (lambda (x)
+					     (or (eq? x 'end)
+						 (and (pair? x)
+						      (eq? (car x) ':))))
+					   idxs)))
+		     (arr   (if reuse (gensy) a))
+		     (stmts (if reuse `((= ,arr ,(expand-forms a))) '())))
+		(let* ((rrhs (and (pair? rhs) (not (quoted? rhs))))
+		       (r    (if rrhs (gensy) rhs))
+		       (rini (if rrhs `((= ,r ,(expand-forms rhs))) '())))
+		  (receive
+		   (new-idxs stuff) (process-indexes arr idxs)
+		   `(block
+		     ,@stmts
+		     ,.(map expand-forms stuff)
+		     ,@rini
+		     ,(expand-forms
+		       `(call setindex! ,arr ,r ,@new-idxs))
+		     ,r))))))
+
+	   ((|::|)
+	    ;; (= (|::| x T) rhs)
+	    (let ((x (cadr (cadr e)))
+		  (T (caddr (cadr e)))
+		  (rhs (caddr e)))
+	      (let ((e (remove-argument-side-effects x)))
+		`(block ,.(map expand-forms (cdr e))
+			(|::| ,(car e) ,(expand-forms T))
+			(= ,(car e) ,(expand-forms rhs))))))
+
+	   ((vcat)
+	    ;; (= (vcat . args) rhs)
+	    (error "use \"(a, b) = ...\" to assign multiple values"))
+
+	   (else
+	    (error "invalid assignment location")))))
+
+   'abstract
+   (lambda (e)
+     (let ((sig (cadr e)))
+       (expand-forms
+	(receive (name params super) (analyze-type-sig sig)
+		 (abstract-type-def-expr name params super)))))
+
+   'bitstype
+   (lambda (e)
+     (let ((n (cadr e))
+	   (sig (caddr e)))
+       (expand-forms
+	(receive (name params super) (analyze-type-sig sig)
+		 (bits-def-expr n name params super)))))
+
+   'typealias
+   (lambda (e)
+     (if (and (pair? (cadr e))
+	      (eq? (car (cadr e)) 'curly))
+	 (let ((name (cadr (cadr e)))
+	       (params (cddr (cadr e)))
+	       (type-ex (caddr e)))
+	   (receive
+	    (params bounds)
+	    (sparam-name-bounds params '() '())
+	    `(call (lambda ,params
+		     (block
+		      (const ,name)
+		      (= ,name (call (top TypeConstructor)
+				     (call (top tuple) ,@params)
+				     ,(expand-forms type-ex)))))
+		   ,@(symbols->typevars params bounds #t))))
+	 (expand-forms
+	  `(const (= ,(cadr e) ,(caddr e))))))
+
+   'comparison
+   (lambda (e)
+     (expand-forms (expand-compare-chain (cdr e))))
+
+   'ref
+   (lambda (e)
+     (expand-forms (partially-expand-ref e)))
+
+   'curly
+   (lambda (e)
+     (expand-forms
+      `(call (top apply_type) ,@(cdr e))))
+
+   'call
+   (lambda (e)
+     (if (length> e 2)
+	 (let ((f (cadr e)))
+	   (cond ((and (pair? (caddr e))
+		       (eq? (car (caddr e)) 'parameters))
+		  ;; (call f (parameters . kwargs) ...)
+		  (expand-forms
 		   (receive
-		    (params bounds)
-		    (sparam-name-bounds params '() '())
-		    `(call (lambda ,params
-			     (const
-			      (= ,name (call (top TypeConstructor)
-					     (tuple ,@params) ,type-ex))))
-			   ,@(symbols->typevars params bounds #t))))
-
-   (pattern-lambda (comparison . chain) (expand-compare-chain chain))
-
-   ;; multiple value assignment a,b = x
-   (pattern-lambda
-    (= (tuple . lhss) x)
-    (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
-	     (length= lhss (length (cdr x))))
-	;; (a, b, ...) = (x, y, ...)
-	(tuple-to-assignments lhss x)
-	;; (a, b, ...) = other
-	(let* ((xx  (if (and (symbol? x) (not (memq x lhss)))
-			x (gensy)))
-	       (ini (if (eq? x xx) '() `((= ,xx ,x))))
-	       (st  (gensy)))
-	  `(block
-	    ,@ini
-	    (= ,st (call (top start) ,xx))
-	    ,.(map (lambda (i lhs)
-		     (lower-tuple-assignment
-		      (list lhs st)
-		      `(call (|.| (top Base) (quote indexed_next)) ,xx ,(+ i 1) ,st)))
-		   (iota (length lhss))
-		   lhss)
-	    ,xx))))
-
-   (pattern-lambda (= (ref a . idxs) rhs)
-		   (let* ((reuse (and (pair? a)
-				      (contains (lambda (x)
-						  (or (eq? x 'end)
-						      (and (pair? x)
-							   (eq? (car x) ':))))
-						idxs)))
-			  (arr   (if reuse (gensy) a))
-			  (stmts (if reuse `((= ,arr ,a)) '())))
-		     (let* ((rrhs (and (pair? rhs) (not (quoted? rhs))))
-			    (r    (if rrhs (gensy) rhs))
-			    (rini (if rrhs `((= ,r ,rhs)) '())))
-		       (receive
-			(new-idxs stuff) (process-indexes arr idxs)
-			`(block
-			  ,@stmts
-			  ,@stuff
-			  ,@rini
-			  (call setindex! ,arr ,r ,@new-idxs)
-			  ,r)))))
-
-   (pattern-lambda (= (typed_hcat . any) rhs)
-		   (error "invalid spacing in left side of indexed assignment"))
-   (pattern-lambda (= (typed_vcat . any) rhs)
-		   (error "unexpected ; in left side of indexed assignment"))
-
-   (pattern-lambda (ref a . idxs)
-		   (let* ((reuse (and (pair? a)
-				      (contains (lambda (x)
-						  (or (eq? x 'end)
-						      (eq? x ':)
-						      (and (pair? x)
-							   (eq? (car x) ':))))
-						idxs)))
-			  (arr   (if reuse (gensy) a))
-			  (stmts (if reuse `((= ,arr ,a)) '())))
-		     (receive
-		      (new-idxs stuff) (process-indexes arr idxs)
-		      `(block
-			,@(append stmts stuff)
-			(call getindex ,arr ,@new-idxs)))))
-
-   (pattern-lambda (curly type . elts)
-		   `(call (top apply_type) ,type ,@elts))
-
-   ;; call with keywords
-   (pattern-lambda (call f (parameters . kwargs) ...)
+		    (kws args) (separate kwarg? (cdddr e))
+		    (lower-kw-call f (append kws (cdr (caddr e))) args))))
+		 ((any kwarg? (cddr e))
+		  ;; (call f ... (kw a b) ...)
+		  (expand-forms
 		   (receive
-		    (kws args) (separate kwarg? (cdddr __))
-		    (lower-kw-call f (append kws kwargs) args)))
-   (pattern-lambda (call f ... (kw a b) ...)
-		   (receive
-		    (kws args) (separate kwarg? (cddr __))
-		    (lower-kw-call f kws args)))
+		    (kws args) (separate kwarg? (cddr e))
+		    (lower-kw-call f kws args))))
+		 ((any vararg? (cddr e))
+		  ;; call with splat
+		  (let ((argl (cddr e)))
+		    ;; wrap sequences of non-... arguments in tuple()
+		    (define (tuple-wrap a run)
+		      (if (null? a)
+			  (if (null? run) '()
+			      (list `(call (top tuple) ,.(reverse run))))
+			  (let ((x (car a)))
+			    (if (and (length= x 2)
+				     (eq? (car x) '...))
+				(if (null? run)
+				    (list* (cadr x)
+					   (tuple-wrap (cdr a) '()))
+				    (list* `(call (top tuple) ,.(reverse run))
+					   (cadr x)
+					   (tuple-wrap (cdr a) '())))
+				(tuple-wrap (cdr a) (cons x run))))))
+		    (expand-forms
+		     `(call (top apply) ,f ,@(tuple-wrap argl '())))))
 
-   ;; call with splat
-   (pattern-lambda (call f ... (... _) ...)
-		   (let ((argl (cddr __)))
-		     ; wrap sequences of non-... arguments in tuple()
-		     (define (tuple-wrap a run)
-		       (if (null? a)
-			   (if (null? run) '()
-			       (list `(call (top tuple) ,@(reverse run))))
-			   (let ((x (car a)))
-			     (if (and (length= x 2)
-				      (eq? (car x) '...))
-				 (if (null? run)
-				     (list* (cadr x)
-					    (tuple-wrap (cdr a) '()))
-				     (list* `(call (top tuple) ,@(reverse run))
-					    (cadr x)
-					    (tuple-wrap (cdr a) '())))
-				 (tuple-wrap (cdr a) (cons x run))))))
-		     `(call (top apply) ,f ,@(tuple-wrap argl '()))))
+		 ((and (eq? (cadr e) '*) (length= e 4))
+		  (expand-transposed-op
+		   e
+		   #(Ac_mul_Bc Ac_mul_B At_mul_Bt At_mul_B A_mul_Bc A_mul_Bt)))
+		 ((and (eq? (cadr e) '/) (length= e 4))
+		  (expand-transposed-op
+		   e
+		   #(Ac_rdiv_Bc Ac_rdiv_B At_rdiv_Bt At_rdiv_B A_rdiv_Bc A_rdiv_Bt)))
+		 ((and (eq? (cadr e) '\\) (length= e 4))
+		  (expand-transposed-op
+		   e
+		   #(Ac_ldiv_Bc Ac_ldiv_B At_ldiv_Bt At_ldiv_B A_ldiv_Bc A_ldiv_Bt)))
+		 (else
+		  (map expand-forms e))))
+	 (map expand-forms e)))
 
-   ; tuple syntax (a, b...)
-   ; note, directly inside tuple ... means Vararg type
-   (pattern-lambda (tuple . args)
-		   `(call (top tuple)
-			  ,@(map (lambda (x)
-				   (if (and (length= x 2)
-					    (eq? (car x) '...))
-				       `(curly Vararg ,(cadr x))
-				       x))
-				 args)))
+   'tuple
+   (lambda (e)
+     `(call (top tuple)
+	    ,.(map (lambda (x)
+		     (expand-forms
+		      (if (vararg? x)
+			  `(curly Vararg ,(cadr x))
+			  x)))
+		   (cdr e))))
 
-   ;; dict syntax
-   (pattern-lambda (dict . args)
-		   `(call (top Dict)
-			  (tuple ,@(map cadr  args))
-			  (tuple ,@(map caddr args))))
+   'dict
+   (lambda (e)
+     `(call (top Dict)
+	    (call (top tuple)
+		  ,.(map (lambda (x) (expand-forms (cadr  x))) (cdr e)))
+	    (call (top tuple)
+		  ,.(map (lambda (x) (expand-forms (caddr x))) (cdr e)))))
 
-   ;; typed dict syntax
-   (pattern-lambda (typed_dict atypes . args)
-		   (if (and (length= atypes 3)
-			    (eq? (car atypes) '=>))
-		       `(call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))
-			      (tuple ,@(map cadr  args))
-			      (tuple ,@(map caddr args)))
-		       (error (string "invalid typed_dict syntax " atypes))))
+   'typed_dict
+   (lambda (e)
+     (let ((atypes (cadr e))
+	   (args   (cddr e)))
+       (if (and (length= atypes 3)
+		(eq? (car atypes) '=>))
+	   `(call (call (top apply_type) (top Dict)
+			,(expand-forms (cadr atypes))
+			,(expand-forms (caddr atypes)))
+		  (call (top tuple)
+			,.(map (lambda (x) (expand-forms (cadr  x))) args))
+		  (call (top tuple)
+			,.(map (lambda (x) (expand-forms (caddr x))) args)))
+	   (error (string "invalid typed_dict syntax " atypes)))))
 
-   ;; cell array syntax
-   (pattern-lambda (cell1d . args)
-		   (cond ((any (lambda (e) (and (pair? e) (eq? (car e) '...)))
+   'cell1d
+   (lambda (e)
+     (let ((args (cdr e)))
+       (cond ((any vararg? args)
+	      (expand-forms
+	       `(call (top cell_1d) ,@args)))
+	     (else
+	      (let ((name (gensy)))
+		`(block (= ,name (call (top Array) (top Any)
+				       ,(length args)))
+			,.(map (lambda (i elt)
+				 `(call (top arrayset) ,name
+					,(expand-forms elt) ,(+ 1 i)))
+			       (iota (length args))
 			       args)
-			  `(call (top cell_1d) ,@args))
-			 (else
-			  (let ((name (gensy)))
-			    `(block (= ,name (call (top Array) (top Any)
-						   ,(length args)))
-				    ,@(map (lambda (i elt)
-					     `(call (top arrayset) ,name
-						    ,elt ,(+ 1 i)))
-					   (iota (length args))
-					   args)
-				    ,name)))))
+			,name))))))
 
-   (pattern-lambda (cell2d nr nc . args)
-		   (if (any (lambda (e) (and (pair? e) (eq? (car e) '...)))
+   'cell2d
+   (lambda (e)
+     (let ((nr (cadr e))
+	   (nc (caddr e))
+	   (args (cdddr e)))
+       (if (any vararg? args)
+	   (expand-forms
+	    `(call (top cell_2d) ,nr ,nc ,@args))
+	   (let ((name (gensy)))
+	     `(block (= ,name (call (top Array) (top Any)
+				    ,nr ,nc))
+		     ,.(map (lambda (i elt)
+			      `(call (top arrayset) ,name
+				     ,(expand-forms elt) ,(+ 1 i)))
+			    (iota (* nr nc))
 			    args)
-		       `(call (top cell_2d) ,nr ,nc ,@args)
-		       (let ((name (gensy)))
-			 `(block (= ,name (call (top Array) (top Any)
-						,nr ,nc))
-				 ,@(map (lambda (i elt)
-					  `(call (top arrayset) ,name
-						 ,elt ,(+ 1 i)))
-					(iota (* nr nc))
-					args)
-				 ,name))))
+		     ,name)))))
 
-   ;; string interpolations
-   (pattern-lambda (string . exprs) `(call (top string) ,@exprs))
+   'string
+   (lambda (e) (expand-forms `(call (top string) ,@(cdr e))))
 
-   ;; expand anything but "local x" with one symbol
-   ;; local x,y,z => local x;local y;local z
-   (pattern-lambda (local (-s)) __)
-   (pattern-lambda (local . binds)
-		   (expand-decls 'local binds))
+   'local
+   (lambda (e)
+     (if (and (symbol? (cadr e)) (length= e 2))
+	 e
+	 (expand-forms
+	  (expand-decls 'local (cdr e)))))
 
-   ;; global x,y,z => global x;global y;global z
-   (pattern-lambda (global (-s)) __)
-   (pattern-lambda (global . binds)
-		   (expand-decls 'global binds))
+   'global
+   (lambda (e)
+     (if (and (symbol? (cadr e)) (length= e 2))
+	 e
+	 (expand-forms
+	  (expand-decls 'global (cdr e)))))
 
-   ; x::T = rhs => x::T; x = rhs
-   (pattern-lambda (= (|::| x T) rhs)
-		   (let ((e (remove-argument-side-effects x)))
-		     `(block ,@(cdr e)
-			     (|::| ,(car e) ,T)
-			     (= ,(car e) ,rhs))))
+   '|::|
+   (lambda (e)
+     (if (and (length= e 3) (not (symbol? (cadr e))))
+	 `(call (top typeassert)
+		,(expand-forms (cadr e)) ,(expand-forms (caddr e)))
+	 (map expand-forms e)))
 
-   ; <expr>::T => typeassert(expr, T)
-   (pattern-lambda (|::| (-- expr (-^ (-s))) T)
-		   `(call (top typeassert) ,expr ,T))
+   'const
+   (lambda (e)
+     (if (atom? (cadr e))
+	 e
+	 (case (car (cadr e))
+	   ((global local)
+	    (expand-forms
+	     (qualified-const-expr (cdr (cadr e)) e)))
+	   ((=)
+	    (let ((lhs (cadr (cadr e)))
+		  (rhs (caddr (cadr e))))
+	      (let ((vars (if (and (pair? lhs) (eq? (car lhs) 'tuple))
+			      (cdr lhs)
+			      (list lhs))))
+		`(block
+		  ,.(map (lambda (v)
+			   `(const ,(const-check-symbol (decl-var v))))
+			 vars)
+		  ,(expand-forms `(= ,lhs ,rhs))))))
+	   (else
+	    e))))
 
-   ;; ::T outside arg list syntax error
-   (pattern-lambda (|::| _)
-		   (error "invalid :: syntax"))
+   'while
+   (lambda (e)
+     `(scope-block
+       (break-block loop-exit
+		    (_while ,(expand-forms (cadr e))
+			    (break-block loop-cont
+					 ,(expand-forms (caddr e)))))))
 
-   ;; constant definition
-   (pattern-lambda (const (= lhs rhs))
-		   (let ((vars (if (and (pair? lhs) (eq? (car lhs) 'tuple))
-				   (cdr lhs)
-				   (list lhs))))
-		     `(block
-		       ,@(map (lambda (v)
-				`(const ,(const-check-symbol (decl-var v))))
-			      vars)
-		       (= ,lhs ,rhs))))
-   (pattern-lambda (const (global . binds))
-		   (qualified-const-expr binds __))
-   (pattern-lambda (const (local . binds))
-		   (qualified-const-expr binds __))
+   'break
+   (lambda (e)
+     (if (pair? (cdr e))
+	 e
+	 '(break loop-exit)))
 
-   ;; incorrect multiple return syntax [a, b, ...] = foo
-   (pattern-lambda (= (vcat . args) rhs)
-		   (error "use \"(a, b) = ...\" to assign multiple values"))
+   'continue (lambda (e) '(break loop-cont))
 
-   ; adding break/continue support to while loop
-   (pattern-lambda (while cnd body)
-		   `(scope-block
-		     (break-block loop-exit
-				  (_while ,cnd
-					  (break-block loop-cont
-						       ,body)))))
+   'for
+   (lambda (e)
+     (let ((X (caddr (cadr e)))
+	   (lhs (cadr (cadr e)))
+	   (body (caddr e)))
+       (if
+	(and (pair? X) (eq? (car X) ':) (length= X 3))
+	;; (for (= lhs (: a b)) body)
+	(let* ((cnt (gensy))
+	       (a (cadr X))
+	       (b (caddr X))
+	       (lim (if (number? b) b (gensy))))
+	  `(scope-block
+	    (block
+	     (= ,cnt ,(expand-forms a))
+	     ,.(if (eq? lim b) '() `((= ,lim ,(expand-forms b))))
+	     (break-block loop-exit
+			  (_while (call (top <=) ,cnt ,lim)
+				  (scope-block
+				   (block
+				    ;; NOTE: enable this to force loop-local var
+				    #;(local ,lhs)
+				    (= ,lhs ,cnt)
+				    (break-block loop-cont
+						 ,(expand-forms body))
+				    (= ,cnt (call (top convert)
+						  (call (top typeof) ,cnt)
+						  (call (top +) 1 ,cnt))))))))))
 
-   (pattern-lambda (break) '(break loop-exit))
-   (pattern-lambda (continue) '(break loop-cont))
+	;; (for (= lhs X) body)
+	(let ((coll  (gensy))
+	      (state (gensy)))
+	  `(scope-block
+	    (block (= ,coll ,(expand-forms X))
+		   (= ,state (call (top start) ,coll))
+		   ,(expand-forms
+		     `(while
+		       (call (top !) (call (top done) ,coll ,state))
+		       (scope-block
+			(block
+			 ;; NOTE: enable this to force loop-local var
+			 #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
+			 ,(lower-tuple-assignment (list lhs state)
+						  `(call (top next) ,coll ,state))
+			 ,body))))))))))
 
-   ;; for loops
+   '+=     lower-update-op
+   '-=     lower-update-op
+   '*=     lower-update-op
+   '.*=    lower-update-op
+   '/=     lower-update-op
+   './=    lower-update-op
+   '//=    lower-update-op
+   './/=   lower-update-op
+   '|\\=|  lower-update-op
+   '|.\\=| lower-update-op
+   '|.+=|  lower-update-op
+   '|.-=|  lower-update-op
+   '^=     lower-update-op
+   '.^=    lower-update-op
+   '%=     lower-update-op
+   '.%=    lower-update-op
+   '|\|=|  lower-update-op
+   '&=     lower-update-op
+   '$=     lower-update-op
+   '<<=    lower-update-op
+   '>>=    lower-update-op
+   '>>>=   lower-update-op
 
-   (pattern-lambda
-    (for (= lhs (: a b)) body)
-    (begin
-      (let ((cnt (gensy))
-	    (lim (if (number? b) b (gensy))))
-	`(scope-block
-	  (block
-	   (= ,cnt ,a)
-	   ,@(if (eq? lim b) '() `((= ,lim ,b)))
-	   (break-block loop-exit
-			(_while (call (top <=) ,cnt ,lim)
-				(scope-block
-				 (block
-				  ;; NOTE: enable this to force loop-local var
-				  #;(local ,lhs)
-				  (= ,lhs ,cnt)
-				  (break-block loop-cont
-					       ,body)
-				  (= ,cnt (call (top convert)
-						(call (top typeof) ,cnt)
-						(call (top +) 1 ,cnt))))))))))))
+   ':
+   (lambda (e)
+     `(call colon ,.(map expand-forms (cdr e))))
 
-   ; for loop over arbitrary vectors
-   (pattern-lambda
-    (for (= lhs X) body)
-    (let ((coll  (gensy))
-	  (state (gensy)))
-      `(scope-block
-	(block (= ,coll ,X)
-	       (= ,state (call (top start) ,coll))
-	       (while (call (top !) (call (top done) ,coll ,state))
-		      (scope-block
-		       (block
-			;; NOTE: enable this to force loop-local var
-			#;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
-			,(lower-tuple-assignment (list lhs state)
-						 `(call (top next) ,coll ,state))
-			,body)))))))
+   'hcat
+   (lambda (e) `(call hcat ,.(map expand-forms (cdr e))))
 
-   ;; update operators
-   (pattern-lambda (+= a b)     (expand-update-operator '+ a b))
-   (pattern-lambda (-= a b)     (expand-update-operator '- a b))
-   (pattern-lambda (*= a b)     (expand-update-operator '* a b))
-   (pattern-lambda (.*= a b)    (expand-update-operator '.* a b))
-   (pattern-lambda (/= a b)     (expand-update-operator '/ a b))
-   (pattern-lambda (./= a b)    (expand-update-operator './ a b))
-   (pattern-lambda (//= a b)    (expand-update-operator '// a b))
-   (pattern-lambda (.//= a b)   (expand-update-operator '.// a b))
-   (pattern-lambda (|\\=| a b)  (expand-update-operator '|\\| a b))
-   (pattern-lambda (|.\\=| a b) (expand-update-operator '|.\\| a b))
-   (pattern-lambda (|.+=| a b)  (expand-update-operator '|.+| a b))
-   (pattern-lambda (|.-=| a b)  (expand-update-operator '|.-| a b))
-   (pattern-lambda (^= a b)     (expand-update-operator '^ a b))
-   (pattern-lambda (.^= a b)    (expand-update-operator '.^ a b))
-   (pattern-lambda (%= a b)     (expand-update-operator '% a b))
-   (pattern-lambda (.%= a b)    (expand-update-operator '.% a b))
-   (pattern-lambda (|\|=| a b)  (expand-update-operator '|\|| a b))
-   (pattern-lambda (&= a b)     (expand-update-operator '& a b))
-   (pattern-lambda ($= a b)     (expand-update-operator '$ a b))
-   (pattern-lambda (<<= a b)    (expand-update-operator '<< a b))
-   (pattern-lambda (>>= a b)    (expand-update-operator '>> a b))
-   (pattern-lambda (>>>= a b)   (expand-update-operator '>>> a b))
+   'vcat
+   (lambda (e)
+     (let ((a (cdr e)))
+       (expand-forms
+	(if (any (lambda (x)
+		   (and (pair? x) (eq? (car x) 'row)))
+		 a)
+	    ;; convert nested hcat inside vcat to hvcat
+	    (let ((rows (map (lambda (x)
+			       (if (and (pair? x) (eq? (car x) 'row))
+				   (cdr x)
+				   (list x)))
+			     a)))
+	      `(call hvcat
+		     (tuple ,.(map length rows))
+		     ,.(apply nconc rows)))
+	    `(call vcat ,@a)))))
 
-   (pattern-lambda (: a (-/ :))     (error "invalid ':' outside indexing"))
-   (pattern-lambda (: a b (-/ :))   (error "invalid ':' outside indexing"))
-   (pattern-lambda (: (: b (-/ :))) (error "invalid ':' outside indexing"))
-   (pattern-lambda (: (: b c))      (error "invalid ':' outside indexing"))
-   (pattern-lambda (: c)            (error "invalid ':' outside indexing"))
+   'typed_hcat
+   (lambda (e)
+     (let ((t (cadr e))
+	   (a (cddr e)))
+       (let ((result (gensy))
+	     (ncols (length a)))
+	 `(block
+	   #;(if (call (top !) (call (top isa) ,t Type))
+	   (call (top error) "invalid array index"))
+	   (= ,result (call (top Array) ,(expand-forms t) 1 ,ncols))
+	   ,.(map (lambda (x i) `(call (top setindex!) ,result
+				       ,(expand-forms x) ,i))
+		  a (cdr (iota (+ ncols 1))))
+	   ,result))))
 
-   (pattern-lambda (: a b c)
-		   `(call colon ,a ,b ,c))
+   'typed_vcat
+   (lambda (e)
+     (let ((t (cadr e))
+	   (rows (cddr e)))
+       (if (any (lambda (x) (not (and (pair? x) (eq? 'row (car x))))) rows)
+	   (error "invalid array literal")
+	   (let ((result (gensy))
+		 (nrows (length rows))
+		 (ncols (length (cdar rows))))
+	     (if (any (lambda (x) (not (= (length (cdr x)) ncols))) rows)
+		 (error "invalid array literal")
+		 `(block
+		   #;(if (call (top !) (call (top isa) ,t Type))
+		   (call (top error) "invalid array index"))
+		   (= ,result (call (top Array) ,(expand-forms t) ,nrows ,ncols))
+		   ,.(apply nconc
+			    (map
+			     (lambda (row i)
+			       (map
+				(lambda (x j)
+				  `(call (top setindex!) ,result
+					 ,(expand-forms x) ,i ,j))
+				(cdr row)
+				(cdr (iota (+ ncols 1)))))
+			     rows
+			     (cdr (iota (+ nrows 1)))))
+		   ,result))))))
 
-   (pattern-lambda (: a b)
-		   `(call colon ,a ,b))
+   '|'|  (lambda (e) `(call ctranspose ,(expand-forms (cadr e))))
+   '|.'| (lambda (e) `(call  transpose ,(expand-forms (cadr e))))
 
-   ;; hcat, vcat
-   (pattern-lambda (hcat . a)
-		   `(call hcat ,@a))
+   'ccall
+   (lambda (e)
+     (let ((name (cadr e))
+	   (RT   (caddr e))
+	   (argtypes (cadddr e))
+	   (args (cddddr e)))
+       (begin
+	 (if (not (and (pair? argtypes)
+		       (eq? (car argtypes) 'tuple)))
+	     (error "ccall argument types must be a tuple; try (T,)"))
+	 (expand-forms
+	  (lower-ccall name RT (cdr argtypes) args)))))
 
-   (pattern-lambda (vcat . a)
-		   (if (any (lambda (x)
-			      (and (pair? x) (eq? (car x) 'row)))
-			    a)
-		       ;; convert nested hcat inside vcat to hvcat
-		       (let ((rows (map (lambda (x)
-					  (if (and (pair? x) (eq? (car x) 'row))
-					      (cdr x)
-					      (list x)))
-					a)))
-			 `(call hvcat
-				(tuple ,@(map length rows))
-				,@(apply nconc rows)))
-		       `(call vcat ,@a)))
+   'comprehension
+   (lambda (e)
+     (expand-forms (lower-comprehension (cadr e) (cddr e))))
 
-   (pattern-lambda (typed_hcat t . a)
-                   (let ((result (gensy))
-                         (ncols (length a)))
-                     `(block
-                       (if (call (top !) (call (top isa) ,t Type))
-                           (call (top error) "invalid array index"))
-                       (= ,result (call (top Array) ,t 1 ,ncols))
-                       ,@(map (lambda (x i) `(call (top setindex!) ,result ,x ,i))
-                              a (cdr (iota (+ ncols 1))))
-                       ,result)))
+   'typed_comprehension
+   (lambda (e)
+     (expand-forms (lower-typed-comprehension (cadr e) (caddr e) (cdddr e))))
 
-   (pattern-lambda (typed_vcat t . rows)
-     (if (any (lambda (x) (not (and (pair? x) (eq? 'row (car x))))) rows)
-         (error "invalid array literal")
-         (let ((result (gensy))
-               (nrows (length rows))
-               (ncols (length (cdar rows))))
-           (if (any (lambda (x) (not (= (length (cdr x)) ncols))) rows)
-               (error "invalid array literal")
-               `(block
-                 (if (call (top !) (call (top isa) ,t Type))
-                     (call (top error) "invalid array index"))
-                 (= ,result (call (top Array) ,t ,nrows ,ncols))
-                 ,@(apply nconc
-                     (map
-                       (lambda (row i)
-                         (map
-                           (lambda (x j) `(call (top setindex!) ,result ,x ,i ,j))
-                           (cdr row)
-                           (cdr (iota (+ ncols 1)))))
-                       rows
-                       (cdr (iota (+ nrows 1)))))
-                 ,result)))))
+   'dict_comprehension
+   (lambda (e)
+     (expand-forms (lower-dict-comprehension (cadr e) (cddr e))))
 
-   ;; transpose operator
-   (pattern-lambda (|'| a) `(call ctranspose ,a))
-   (pattern-lambda (|.'| a) `(call transpose ,a))
-
-   ;; transposed multiply
-   (pattern-lambda (call (-/ *) (|'| a) (|'| b))   `(call Ac_mul_Bc ,a ,b))
-   (pattern-lambda (call (-/ *) (|.'| a) (|.'| b)) `(call At_mul_Bt ,a ,b))
-   (pattern-lambda (call (-/ *) (|'| a) b)  `(call Ac_mul_B ,a ,b))
-   (pattern-lambda (call (-/ *) a (|'| b))  `(call A_mul_Bc ,a ,b))
-   (pattern-lambda (call (-/ *) (|.'| a) b) `(call At_mul_B ,a ,b))
-   (pattern-lambda (call (-/ *) a (|.'| b)) `(call A_mul_Bt ,a ,b))
-
-   ;; transposed divide
-   (pattern-lambda (call (-/ /) (|'| a) (|'| b))   `(call Ac_rdiv_Bc ,a ,b))
-   (pattern-lambda (call (-/ /) (|.'| a) (|.'| b)) `(call At_rdiv_Bt ,a ,b))
-   (pattern-lambda (call (-/ /) (|'| a) b)  `(call Ac_rdiv_B ,a ,b))
-   (pattern-lambda (call (-/ /) a (|'| b))  `(call A_rdiv_Bc ,a ,b))
-   (pattern-lambda (call (-/ /) (|.'| a) b) `(call At_rdiv_B ,a ,b))
-   (pattern-lambda (call (-/ /) a (|.'| b)) `(call A_rdiv_Bt ,a ,b))
-
-   (pattern-lambda (call (-/ \\) (|'| a) (|'| b))   `(call Ac_ldiv_Bc ,a ,b))
-   (pattern-lambda (call (-/ \\) (|.'| a) (|.'| b)) `(call At_ldiv_Bt ,a ,b))
-   (pattern-lambda (call (-/ \\) (|'| a) b)  `(call Ac_ldiv_B ,a ,b))
-   (pattern-lambda (call (-/ \\) a (|'| b))  `(call A_ldiv_Bc ,a ,b))
-   (pattern-lambda (call (-/ \\) (|.'| a) b) `(call At_ldiv_B ,a ,b))
-   (pattern-lambda (call (-/ \\) a (|.'| b)) `(call A_ldiv_Bt ,a ,b))
-
-   (pattern-lambda (ccall name RT argtypes . args)
-		   (begin
-		     (if (not (and (pair? argtypes)
-				   (eq? (car argtypes) 'tuple)))
-			 (error "ccall argument types must be a tuple; try (T,)"))
-		     (lower-ccall name RT (cdr argtypes) args)))
-
-   ;; comprehensions
-   (pattern-lambda
-    (comprehension expr . ranges)
-    (if (any (lambda (x) (eq? x ':)) ranges)
-	(lower-nd-comprehension '() expr ranges)
-    (let ((result    (gensy))
-	  (ri        (gensy))
-	  (initlabl  (gensy))
-	  (oneresult (gensy))
-	  (rv        (map (lambda (x) (gensy)) ranges)))
-
-      ;; compute the dimensions of the result
-      (define (compute-dims ranges)
-	(map (lambda (r) `(call (top length) ,(caddr r)))
-	     ranges))
-
-      ;; construct loops to cycle over all dimensions of an n-d comprehension
-      (define (construct-loops ranges)
-	(if (null? ranges)
-	    `(block (= ,oneresult ,expr)
-		    (type_goto ,initlabl ,oneresult)
-		    (boundscheck false)
-		    (call (top setindex!) ,result ,oneresult ,ri)
-		    (boundscheck pop)
-		    (= ,ri (call (top +) ,ri 1)))
-	    `(for ,(car ranges)
-		  (block
-		   ;; *** either this or force all for loop vars local
-		   ,@(map (lambda (r) `(local ,r))
-			  (lhs-vars (cadr (car ranges))))
-		   ,(construct-loops (cdr ranges))))))
-
-      ;; Evaluate the comprehension
-      (let ((loopranges
-	     (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
-	`(block
-	  ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
-	  (scope-block
-	   (block
-	   (local ,oneresult)
-	   #;,@(map (lambda (r) `(local ,r))
-		  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
-	   (label ,initlabl)
-	   (= ,result (call (top Array)
-			    (static_typeof ,oneresult)
-			    ,@(compute-dims loopranges)))
-	   (= ,ri 1)
-	   ,(construct-loops (reverse loopranges))
-	   ,result)))))))
-
-   ;; typed array comprehensions
-   (pattern-lambda
-    (typed_comprehension atype expr . ranges)
-    (if (any (lambda (x) (eq? x ':)) ranges)
-	(lower-nd-comprehension atype expr ranges)
-    (let ((result    (gensy))
-	  (oneresult (gensy))
-	  (ri (gensy))
-	  (rs (map (lambda (x) (gensy)) ranges)) )
-
-      ;; compute the dimensions of the result
-      (define (compute-dims ranges)
-	(map (lambda (r) `(call (top length) ,r))
-	     ranges))
-
-      ;; construct loops to cycle over all dimensions of an n-d comprehension
-      (define (construct-loops ranges rs)
-	(if (null? ranges)
-	    `(block (= ,oneresult ,expr)
-		    (boundscheck false)
-                    (call (top setindex!) ,result ,oneresult ,ri)
-		    (boundscheck pop)
-		    (= ,ri (call (top +) ,ri 1)))
-	    `(for (= ,(cadr (car ranges)) ,(car rs))
-		  (block
-		   ;; *** either this or force all for loop vars local
-		   ,@(map (lambda (r) `(local ,r))
-			  (lhs-vars (cadr (car ranges))))
-		   ,(construct-loops (cdr ranges) (cdr rs))))))
-
-      ;; Evaluate the comprehension
-      `(block
-	,@(map make-assignment rs (map caddr ranges))
-	(local ,result)
-	(= ,result (call (top Array) ,atype ,@(compute-dims rs)))
-	(scope-block
-	(block
-	 #;,@(map (lambda (r) `(local ,r))
-		(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
-	 (= ,ri 1)
-	 ,(construct-loops (reverse ranges) (reverse rs))
-	 ,result))))))
-
-   ;; dict comprehensions
-   (pattern-lambda
-    (dict_comprehension expr . ranges)
-    (if (any (lambda (x) (eq? x ':)) ranges)
-	(error "invalid iteration syntax")
-    (let ((result   (gensy))
-	  (initlabl (gensy))
-	  (onekey   (gensy))
-	  (oneval   (gensy))
-	  (rv         (map (lambda (x) (gensy)) ranges)))
-
-      ;; construct loops to cycle over all dimensions of an n-d comprehension
-      (define (construct-loops ranges)
-	(if (null? ranges)
-	    `(block (= ,onekey ,(cadr expr))
-		    (= ,oneval ,(caddr expr))
-		    (type_goto ,initlabl ,onekey ,oneval)
-		    (call (top setindex!) ,result ,oneval ,onekey))
-	    `(for ,(car ranges)
-		  (block
-		   ;; *** either this or force all for loop vars local
-		   ,@(map (lambda (r) `(local ,r))
-			  (lhs-vars (cadr (car ranges))))
-		   ,(construct-loops (cdr ranges))))))
-
-      ;; Evaluate the comprehension
-      (let ((loopranges
-	     (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
-	`(block
-	  ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
-	  (scope-block
-	   (block
-	   (local ,onekey)
-	   (local ,oneval)
-	   #;,@(map (lambda (r) `(local ,r))
-		  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
-	   (label ,initlabl)
-	   (= ,result (call (curly (top Dict)
-				   (static_typeof ,onekey)
-				   (static_typeof ,oneval))))
-	   ,(construct-loops (reverse loopranges))
-	   ,result)))))))
-
-   ;; typed dict comprehensions
-   (pattern-lambda
-    (typed_dict_comprehension atypes expr . ranges)
-    (if (any (lambda (x) (eq? x ':)) ranges)
-	(error "invalid iteration syntax")
-    (if (not (and (length= atypes 3)
-		  (eq? (car atypes) '=>)))
-	(error "invalid typed_dict_comprehension syntax")
-    (let ( (result (gensy))
-	   (rs (map (lambda (x) (gensy)) ranges)) )
-
-      ;; construct loops to cycle over all dimensions of an n-d comprehension
-      (define (construct-loops ranges rs)
-	(if (null? ranges)
-	    `(call (top setindex!) ,result ,(caddr expr) ,(cadr expr))
-	    `(for (= ,(cadr (car ranges)) ,(car rs))
-		  (block
-		   ;; *** either this or force all for loop vars local
-		   ,@(map (lambda (r) `(local ,r))
-			  (lhs-vars (cadr (car ranges))))
-		   ,(construct-loops (cdr ranges) (cdr rs))))))
-
-      ;; Evaluate the comprehension
-      `(block
-	,@(map make-assignment rs (map caddr ranges))
-	(local ,result)
-	(= ,result (call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))))
-	(scope-block
-	(block
-	 #;,@(map (lambda (r) `(local ,r))
-		(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
-	 ,(construct-loops (reverse ranges) (reverse rs))
-	 ,result)))))))
-
-   )) ; patterns
+   'typed_dict_comprehension
+   (lambda (e)
+     (expand-forms (lower-typed-dict-comprehension (cadr e) (caddr e) (cdddr e))))))
 
 (define (lower-nd-comprehension atype expr ranges)
   (let ((result    (gensy))
-	(ri        (gensy))
+        (ri        (gensy))
 	(oneresult (gensy)))
     ;; evaluate one expression to figure out type and size
     ;; compute just one value by inserting a break inside loops
@@ -1853,8 +1872,8 @@
 
     (define (get-eltype)
       (if (null? atype)
-	`((call (top eltype) ,oneresult))
-	`(,atype)))
+	  `((call (top eltype) ,oneresult))
+	  `(,atype)))
 
     ;; Evaluate the comprehension
     `(scope-block
@@ -1866,6 +1885,164 @@
        (= ,ri 1)
        ,(construct-loops (reverse ranges) (list) 1)
        ,result ))))
+
+(define (lower-comprehension expr ranges)
+  (if (any (lambda (x) (eq? x ':)) ranges)
+      (lower-nd-comprehension '() expr ranges)
+  (let ((result    (gensy))
+	(ri        (gensy))
+	(initlabl  (gensy))
+	(oneresult (gensy))
+	(rv        (map (lambda (x) (gensy)) ranges)))
+
+    ;; compute the dimensions of the result
+    (define (compute-dims ranges)
+      (map (lambda (r) `(call (top length) ,(caddr r)))
+	   ranges))
+
+    ;; construct loops to cycle over all dimensions of an n-d comprehension
+    (define (construct-loops ranges)
+      (if (null? ranges)
+	  `(block (= ,oneresult ,expr)
+		  (type_goto ,initlabl ,oneresult)
+		  (boundscheck false)
+		  (call (top setindex!) ,result ,oneresult ,ri)
+		  (boundscheck pop)
+		  (= ,ri (call (top +) ,ri 1)))
+	  `(for ,(car ranges)
+		(block
+		 ;; *** either this or force all for loop vars local
+		 ,.(map (lambda (r) `(local ,r))
+			(lhs-vars (cadr (car ranges))))
+		 ,(construct-loops (cdr ranges))))))
+
+    ;; Evaluate the comprehension
+    (let ((loopranges
+	   (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
+      `(block
+	,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
+	(scope-block
+	 (block
+	  (local ,oneresult)
+	  #;,@(map (lambda (r) `(local ,r))
+	  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
+	  (label ,initlabl)
+	  (= ,result (call (top Array)
+			   (static_typeof ,oneresult)
+			   ,@(compute-dims loopranges)))
+	  (= ,ri 1)
+	  ,(construct-loops (reverse loopranges))
+	  ,result)))))))
+
+(define (lower-typed-comprehension atype expr ranges)
+  (if (any (lambda (x) (eq? x ':)) ranges)
+      (lower-nd-comprehension atype expr ranges)
+  (let ((result    (gensy))
+	(oneresult (gensy))
+	(ri (gensy))
+	(rs (map (lambda (x) (gensy)) ranges)) )
+
+    ;; compute the dimensions of the result
+    (define (compute-dims ranges)
+      (map (lambda (r) `(call (top length) ,r))
+	   ranges))
+
+    ;; construct loops to cycle over all dimensions of an n-d comprehension
+    (define (construct-loops ranges rs)
+      (if (null? ranges)
+	  `(block (= ,oneresult ,expr)
+		  (boundscheck false)
+		  (call (top setindex!) ,result ,oneresult ,ri)
+		  (boundscheck pop)
+		  (= ,ri (call (top +) ,ri 1)))
+	  `(for (= ,(cadr (car ranges)) ,(car rs))
+		(block
+		 ;; *** either this or force all for loop vars local
+		 ,.(map (lambda (r) `(local ,r))
+			(lhs-vars (cadr (car ranges))))
+		 ,(construct-loops (cdr ranges) (cdr rs))))))
+
+    ;; Evaluate the comprehension
+    `(block
+      ,.(map make-assignment rs (map caddr ranges))
+      (local ,result)
+      (= ,result (call (top Array) ,atype ,@(compute-dims rs)))
+      (scope-block
+       (block
+	#;,@(map (lambda (r) `(local ,r))
+	(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
+	(= ,ri 1)
+	,(construct-loops (reverse ranges) (reverse rs))
+	,result))))))
+
+(define (lower-dict-comprehension expr ranges)
+  (let ((result   (gensy))
+	(initlabl (gensy))
+	(onekey   (gensy))
+	(oneval   (gensy))
+	(rv         (map (lambda (x) (gensy)) ranges)))
+
+    ;; construct loops to cycle over all dimensions of an n-d comprehension
+    (define (construct-loops ranges)
+      (if (null? ranges)
+	  `(block (= ,onekey ,(cadr expr))
+		  (= ,oneval ,(caddr expr))
+		  (type_goto ,initlabl ,onekey ,oneval)
+		  (call (top setindex!) ,result ,oneval ,onekey))
+	  `(for ,(car ranges)
+		(block
+		 ;; *** either this or force all for loop vars local
+		 ,.(map (lambda (r) `(local ,r))
+			(lhs-vars (cadr (car ranges))))
+		 ,(construct-loops (cdr ranges))))))
+
+    ;; Evaluate the comprehension
+    (let ((loopranges
+	   (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
+      `(block
+	,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
+	(scope-block
+	 (block
+	  (local ,onekey)
+	  (local ,oneval)
+	  #;,@(map (lambda (r) `(local ,r))
+	  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
+	  (label ,initlabl)
+	  (= ,result (call (curly (top Dict)
+				  (static_typeof ,onekey)
+				  (static_typeof ,oneval))))
+	  ,(construct-loops (reverse loopranges))
+	  ,result))))))
+
+(define (lower-typed-dict-comprehension atypes expr ranges)
+  (if (not (and (length= atypes 3)
+		(eq? (car atypes) '=>)))
+      (error "invalid typed_dict_comprehension syntax")
+      (let ( (result (gensy))
+	     (rs (map (lambda (x) (gensy)) ranges)) )
+
+	;; construct loops to cycle over all dimensions of an n-d comprehension
+	(define (construct-loops ranges rs)
+	  (if (null? ranges)
+	      `(call (top setindex!) ,result ,(caddr expr) ,(cadr expr))
+	      `(for (= ,(cadr (car ranges)) ,(car rs))
+		    (block
+		     ;; *** either this or force all for loop vars local
+		     ,.(map (lambda (r) `(local ,r))
+			    (lhs-vars (cadr (car ranges))))
+		     ,(construct-loops (cdr ranges) (cdr rs))))))
+
+	;; Evaluate the comprehension
+	`(block
+	  ,.(map make-assignment rs (map caddr ranges))
+	  (local ,result)
+	  (= ,result (call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))))
+	  (scope-block
+	   (block
+	    #;,@(map (lambda (r) `(local ,r))
+	    (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
+	    ,(construct-loops (reverse ranges) (reverse rs))
+	    ,result))))))
 
 (define (lhs-vars e)
   (cond ((symbol? e) (list e))
@@ -2281,7 +2458,7 @@ So far only the second case can actually occur.
 			      `(,(car body) ,@(cddr body)))))
 	       `(scope-block ,@lineno
 			     ;; place local decls after initial line node
-			     ,@(map (lambda (v) `(local ,v))
+			     ,.(map (lambda (v) `(local ,v))
 				    vars)
 			     ,(remove-local-decls body))))
 	    (else
@@ -2704,7 +2881,7 @@ So far only the second case can actually occur.
 	((not (any (lambda (x)
 		     (match '($ (tuple (... x))) x))
 		   e))
-	 `(call (top Expr) ,@(map expand-backquote e)))
+	 `(call (top Expr) ,.(map expand-backquote e)))
 	(else
 	 (let loop ((p (cdr e)) (q '()))
 	   (if (null? p)
@@ -2780,7 +2957,7 @@ So far only the second case can actually occur.
 	 (case (car e)
 	   ((escape) (cadr e))
 	   ((macrocall)
-	    `(macrocall ,@(map (lambda (x)
+	    `(macrocall ,.(map (lambda (x)
 				 (resolve-expansion-vars- x env m))
 			       (cdr e))))
 	   ((type)
@@ -2879,13 +3056,13 @@ So far only the second case can actually occur.
 
 (define (julia-expand01 ex)
   (to-LFF
-   (pattern-expand patterns
-    (pattern-expand binding-form-patterns ex))))
+   (expand-forms
+    (expand-binding-forms ex))))
 
 (define (julia-expand0 ex)
   (let ((e (julia-expand-macros ex)))
     (if (and (pair? e) (eq? (car e) 'toplevel))
-	`(toplevel ,@(map julia-expand01 (cdr e)))
+	`(toplevel ,.(map julia-expand01 (cdr e)))
 	(julia-expand01 e))))
 
 (define (julia-expand ex)
