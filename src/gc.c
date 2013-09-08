@@ -894,7 +894,7 @@ static void print_obj_profile(void)
     for(int i=0; i < obj_counts.size; i+=2) {
         if (obj_counts.table[i+1] != HT_NOTFOUND) {
             jl_printf(JL_STDERR, "%d ", obj_counts.table[i+1]-1);
-            jl_debug_print_type(JL_STDERR, (jl_value_t*)obj_counts.table[i]);
+            jl_static_show(JL_STDERR, (jl_value_t*)obj_counts.table[i]);
             jl_printf(JL_STDERR, "\n");
         }
     }
