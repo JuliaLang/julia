@@ -239,6 +239,48 @@ end
     end
 end
 
+@windows_only begin
+	function clipboard(x)
+		#determine number of bytes needed to allocate
+		x = string(x)
+		bytes = length(x)
+
+		#Open the clipboard
+		ccall( (:OpenClipboard, "user32"), stdcall, Bool, (Ptr{Void},), C_NULL) 
+		#Empty the clipboard
+		ccall( (:EmptyClipboard, "user32"), stdcall, Bool, () )
+		#Allocate and lock space on the system for copying
+		ptr = ccall( (:GlobalAlloc, "kernel32"), stdcall,
+						Ptr{Void}, (Uint16,Int32), 2, bytes+1)
+		ptr = ccall( (:GlobalLock, "kernel32"), stdcall,
+						Ptr{Void}, (Ptr{Void},), ptr)
+
+		#Copy data to allocated space
+		r = ccall(:memcpy, Ptr{Void}, (Ptr{Void},Ptr{Uint8},Int32), ptr, x, length(x) + 1 )
+
+		ccall( (:GlobalUnlock, "kernel32"), stdcall,
+				Void, (Ptr{Void},), ptr)
+		#Set clipboard data type: 13 is unicode text/string
+		ptr = ccall( (:SetClipboardData, "user32"), stdcall,
+						Ptr{Void}, (Uint32, Ptr{Void}), 13, ptr)
+
+		ccall( (:CloseClipboard, "user32"), stdcall,
+				Void, (), )
+	end
+
+	function clipboard()
+		#open clipboard
+		ccall( (:OpenClipboard, "user32"), stdcall, Bool, (Ptr{Void},), C_NULL)
+		#return pointer to clipboard data
+		ptr = ccall( (:GetClipboardData, "user32"), stdcall,
+						Ptr{Uint8}, (Uint32,), 1)
+		ptr = bytestring(ptr)
+		ccall( (:CloseClipboard, "user32"), stdcall,
+				Void, (), )
+		return ptr
+	end
+end
+
 # print a warning only once
 
 const have_warned = (ByteString=>Bool)[]
