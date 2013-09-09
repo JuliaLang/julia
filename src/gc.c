@@ -19,7 +19,7 @@
 //#define GCTIME
 
 // GC_FINAL_STATS prints total GC stats at exit
-//#define GC_FINAL_STATS
+// set in julia.h
 
 // OBJPROFILE counts objects by type
 //#define OBJPROFILE
@@ -894,7 +894,7 @@ static void print_obj_profile(void)
     for(int i=0; i < obj_counts.size; i+=2) {
         if (obj_counts.table[i+1] != HT_NOTFOUND) {
             jl_printf(JL_STDERR, "%d ", obj_counts.table[i+1]-1);
-            jl_debug_print_type(JL_STDERR, (jl_value_t*)obj_counts.table[i]);
+            jl_static_show(JL_STDERR, (jl_value_t*)obj_counts.table[i]);
             jl_printf(JL_STDERR, "\n");
         }
     }
@@ -1036,12 +1036,12 @@ void jl_print_gc_stats(JL_STREAM *s)
     double ptime = clock_now()-process_t0;
     jl_printf(s, "exec time\t%.5f sec\n", ptime);
     jl_printf(s, "gc time  \t%.5f sec (%2.1f%%)\n", total_gc_time,
-               (total_gc_time/ptime)*100);
+              (total_gc_time/ptime)*100);
     struct mallinfo mi = mallinfo();
     jl_printf(s, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
     jl_printf(s, "total freed\t%llu b\n", total_freed_bytes);
     jl_printf(s, "free rate\t%.1f MB/sec\n",
-               (total_freed_bytes/total_gc_time)/1024/1024);
+              (total_freed_bytes/total_gc_time)/1024/1024);
 }
 #endif
 

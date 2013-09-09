@@ -147,6 +147,37 @@ end
 
 hash(v::VersionNumber) = hash([v.(n) for n in VersionNumber.names])
 
+lowerbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, ("",), ())
+upperbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, (), ("",))
+
+thispatch(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch)
+thisminor(v::VersionNumber) = VersionNumber(v.major, v.minor, 0)
+thismajor(v::VersionNumber) = VersionNumber(v.major, 0, 0)
+
+nextpatch(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch+1)
+nextminor(v::VersionNumber) = VersionNumber(v.major, v.minor+1, 0)
+nextmajor(v::VersionNumber) = VersionNumber(v.major+1, 0, 0)
+
+function check_new_version(existing::Vector{VersionNumber}, ver::VersionNumber)
+    @assert issorted(existing)
+    if isempty(existing)
+        for v in [v"0", v"0.0.1", v"0.1", v"1"]
+            lowerbound(v) <= ver <= v && return 1
+        end
+        error("$ver is not a valid initial version (try 0.0.0, 0.0.1, 0.1 or 1.0)")
+    end
+    idx = searchsortedlast(existing,ver)
+    prv = existing[idx]
+    ver == prv && error("version $ver already exists")
+    nxt = thismajor(ver) != thismajor(prv) ? nextmajor(prv) :
+          thisminor(ver) != thisminor(prv) ? nextminor(prv) : nextpatch(prv)
+    ver <= nxt || error("$ver skips over $nxt")
+    thispatch(prv) < thispatch(ver) && # not a build release
+        idx < length(existing) && thispatch(existing[idx+1]) <= nxt &&
+            error("$ver is a pre-release of existing version $(existing[idx+1])")
+    return idx
+end
+
 ## julia version info
 
 begin

@@ -113,11 +113,12 @@ void fpe_handler(int arg)
 
 #ifndef _OS_WINDOWS_
 #if defined(_OS_LINUX_)
+extern int in_jl_;
 void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
 
-    if (
+    if ( in_jl_ || (
 #ifdef COPY_STACKS
         (char*)info->si_addr > (char*)jl_stack_lo-3000000 &&
         (char*)info->si_addr < (char*)jl_stack_hi
@@ -126,7 +127,7 @@ void segv_handler(int sig, siginfo_t *info, void *context)
         (char*)info->si_addr <
         (char*)jl_current_task->stack+jl_current_task->ssize
 #endif
-        ) {
+        )) {
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);

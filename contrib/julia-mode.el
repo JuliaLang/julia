@@ -258,6 +258,7 @@ Do not move back beyond MIN."
 	))
   (set (make-local-variable 'indent-line-function) 'julia-indent-line)
   (set (make-local-variable 'julia-basic-offset) 4)
+  (setq indent-tabs-mode nil)
   (setq imenu-generic-expression julia-imenu-generic-expression)
   (imenu-add-to-menubar "Imenu"))
 
