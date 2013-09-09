@@ -198,6 +198,23 @@ edit(f::Function, t) = edit(functionloc(f,t)...)
 less(f::Function)    = less(functionloc(f)...)
 less(f::Function, t) = less(functionloc(f,t)...)
 
+# clipboard copy and paste
+
+function clipboard(x)
+    @osx_only return begin
+        w,p = writesto(`pbcopy`)
+        print(w,x)
+        close(w)
+        wait(p)
+    end
+    error("clipboard not yet supported for $OS_NAME")
+end
+
+function clipboard()
+    @osx_only return readall(`pbpaste`)
+    error("clipboard not yet supported for $OS_NAME")
+end
+
 # print a warning only once
 
 const have_warned = (ByteString=>Bool)[]
