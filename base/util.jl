@@ -214,15 +214,11 @@ end
     _clipboardcmd = nothing
     function clipboardcmd()
         global _clipboardcmd
-        if _clipboardcmd === nothing
-            for cmd in (:xclip, :xsel)
-                if success(`which $cmd` |> DevNull)
-                    _clipboardcmd = cmd
-                    break
-                end
-            end
+        _clipboardcmd !== nothing && return _clipboardcmd
+        for cmd in (:xclip, :xsel)
+            success(`which $cmd` |> DevNull) && return _clipboardcmd = cmd
         end
-        return _clipboardcmd
+        error("no clipboard command found, please install xsel or xclip")
     end
     function clipboard(x)
         c = clipboardcmd()
