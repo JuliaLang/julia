@@ -240,45 +240,30 @@ end
 end
 
 @windows_only begin
-	function clipboard(x)
-		#determine number of bytes needed to allocate
-		x = string(x)
-		bytes = length(x)
+    function clipboard(x::ByteString)
+        ccall((:OpenClipboard, "user32"), stdcall, Bool, (Ptr{Void},), C_NULL)
+        ccall((:EmptyClipboard, "user32"), stdcall, Bool, ())
+        p = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{Void}, (Uint16,Int32), 2, length(x)+1)
+        p = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{Void}, (Ptr{Void},), p)
+        # write data to locked, allocated space
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void},Ptr{Uint8},Int32), p, x, length(x)+1)
+        ccall( (:GlobalUnlock, "kernel32"), stdcall, Void, (Ptr{Void},), p)
+        # set clipboard data type to 13 for Unicode text/string
+        p = ccall((:SetClipboardData, "user32"), stdcall, Ptr{Void}, (Uint32, Ptr{Void}), 13, p)
+        ccall((:CloseClipboard, "user32"), stdcall, Void, ())
+    end
+    clipboard(x) = clipboard(sprint(io->print(io,x))::ByteString)
 
-		#Open the clipboard
-		ccall( (:OpenClipboard, "user32"), stdcall, Bool, (Ptr{Void},), C_NULL) 
-		#Empty the clipboard
-		ccall( (:EmptyClipboard, "user32"), stdcall, Bool, () )
-		#Allocate and lock space on the system for copying
-		ptr = ccall( (:GlobalAlloc, "kernel32"), stdcall,
-						Ptr{Void}, (Uint16,Int32), 2, bytes+1)
-		ptr = ccall( (:GlobalLock, "kernel32"), stdcall,
-						Ptr{Void}, (Ptr{Void},), ptr)
+    function clipboard()
+        ccall((:OpenClipboard, "user32"), stdcall, Bool, (Ptr{Void},), C_NULL)
+        s = bytestring(ccall( (:GetClipboardData, "user32"), stdcall, Ptr{Uint8}, (Uint32,), 1))
+        ccall((:CloseClipboard, "user32"), stdcall, Void, ())
+        return s
+    end
+end
 
-		#Copy data to allocated space
-		r = ccall(:memcpy, Ptr{Void}, (Ptr{Void},Ptr{Uint8},Int32), ptr, x, length(x) + 1 )
-
-		ccall( (:GlobalUnlock, "kernel32"), stdcall,
-				Void, (Ptr{Void},), ptr)
-		#Set clipboard data type: 13 is unicode text/string
-		ptr = ccall( (:SetClipboardData, "user32"), stdcall,
-						Ptr{Void}, (Uint32, Ptr{Void}), 13, ptr)
-
-		ccall( (:CloseClipboard, "user32"), stdcall,
-				Void, (), )
-	end
-
-	function clipboard()
-		#open clipboard
-		ccall( (:OpenClipboard, "user32"), stdcall, Bool, (Ptr{Void},), C_NULL)
-		#return pointer to clipboard data
-		ptr = ccall( (:GetClipboardData, "user32"), stdcall,
-						Ptr{Uint8}, (Uint32,), 1)
-		ptr = bytestring(ptr)
-		ccall( (:CloseClipboard, "user32"), stdcall,
-				Void, (), )
-		return ptr
-	end
+if !isdefined(:clipboard)
+    clipboard(x="") = error("clipboard functionality not implemented for $OS_NAME")
 end
 
 # print a warning only once
