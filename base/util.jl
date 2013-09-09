@@ -247,16 +247,16 @@ end
         p = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{Void}, (Ptr{Void},), p)
         # write data to locked, allocated space
         ccall(:memcpy, Ptr{Void}, (Ptr{Void},Ptr{Uint8},Int32), p, x, length(x)+1)
-        ccall( (:GlobalUnlock, "kernel32"), stdcall, Void, (Ptr{Void},), p)
+        ccall((:GlobalUnlock, "kernel32"), stdcall, Void, (Ptr{Void},), p)
         # set clipboard data type to 13 for Unicode text/string
-        p = ccall((:SetClipboardData, "user32"), stdcall, Ptr{Void}, (Uint32, Ptr{Void}), 13, p)
+        p = ccall((:SetClipboardData, "user32"), stdcall, Ptr{Void}, (Uint32, Ptr{Void}), 1, p)
         ccall((:CloseClipboard, "user32"), stdcall, Void, ())
     end
     clipboard(x) = clipboard(sprint(io->print(io,x))::ByteString)
 
     function clipboard()
         ccall((:OpenClipboard, "user32"), stdcall, Bool, (Ptr{Void},), C_NULL)
-        s = bytestring(ccall( (:GetClipboardData, "user32"), stdcall, Ptr{Uint8}, (Uint32,), 1))
+        s = bytestring(ccall((:GetClipboardData, "user32"), stdcall, Ptr{Uint8}, (Uint32,), 1))
         ccall((:CloseClipboard, "user32"), stdcall, Void, ())
         return s
     end
