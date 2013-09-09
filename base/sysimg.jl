@@ -207,7 +207,6 @@ importall .QuadGK
 include("deprecated.jl")
 
 # git utils & package manager
-include("setupenv.jl")
 include("git.jl")
 include("pkg.jl")
 include("pkg1.jl")
