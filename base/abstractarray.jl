@@ -1013,7 +1013,7 @@ for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
         c = $(op===:+ ? (:(similar(v,typeof(+zero(eltype(v)))))) :
                         (:(similar(v))))
         if n == 0; return c; end
-        ($fp)(v, c, $(op==:+ ? :(zero(eltype(v))) : :(one(eltype(v)))), 1, n)
+        ($fp)(v, c, $(op==:+ ? :(zero(v[1])) : :(one(v[1]))), 1, n)
         return c
     end
 
