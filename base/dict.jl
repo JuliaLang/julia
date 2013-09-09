@@ -119,6 +119,19 @@ function isequal(l::Associative, r::Associative)
     true
 end
 
+function ==(l::Associative, r::Associative)
+    if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
+        return false
+    end
+    if length(l) != length(r) return false end
+    for (key, value) in l
+        if value != get(r, key, _MISSING)
+            return false
+        end
+    end
+    true
+end
+
 # some support functions
 
 _tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
