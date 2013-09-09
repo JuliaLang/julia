@@ -305,6 +305,15 @@ imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 .^(x::Number,y::AbstractArray )         = throw(MethodError(.^, (x,y)))
 .^(x::AbstractArray, y::Number)         = throw(MethodError(.^, (x,y)))
 
+# eye
+function eye{T}(x::AbstractMatrix{T})
+    if issparse(x)
+        return speye(T, size(x, 1), size(x, 2))
+    else
+        return eye(T, size(x, 1), size(x, 2))
+    end
+end
+
 ## code generator for specializing on the number of dimensions ##
 
 #otherbodies are the bodies that reside between loops, if its a 2 dimension array.
