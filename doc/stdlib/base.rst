@@ -52,6 +52,14 @@ Getting Around
 
    Show the definition of a function using the default pager, optionally specifying a tuple of types to indicate which method to see.
 
+.. function:: clipboard(x)
+
+   Send a printed form of ``x`` to the operating system clipboard ("copy").
+
+.. function:: clipboard() -> String
+
+   Return the contents of the operating system clipboard ("paste").
+
 .. function:: require(file::String...)
 
    Load source files once, in the context of the ``Main`` module, on every active node, searching the system-wide ``LOAD_PATH`` for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.

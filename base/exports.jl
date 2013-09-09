@@ -1002,6 +1002,7 @@ export
 
 # misc
     atexit,
+    clipboard,
     exit,
     ntuple,
     quit,
