@@ -200,19 +200,47 @@ less(f::Function, t) = less(functionloc(f,t)...)
 
 # clipboard copy and paste
 
-function clipboard(x)
-    @osx_only return begin
+@osx_only begin
+    function clipboard(x)
         w,p = writesto(`pbcopy`)
         print(w,x)
         close(w)
         wait(p)
     end
-    error("clipboard not yet supported for $OS_NAME")
+    clipboard() = readall(`pbpaste`)
 end
 
-function clipboard()
-    @osx_only return readall(`pbpaste`)
-    error("clipboard not yet supported for $OS_NAME")
+@linux_only begin
+    _clipboardcmd = nothing
+    function clipboardcmd()
+        global _clipboardcmd
+        if _clipboardcmd === nothing
+            for cmd in (:xclip, :xsel)
+                if success(`which $cmd` |> DevNull)
+                    _clipboardcmd = cmd
+                    break
+                end
+            end
+        end
+        return _clipboardcmd
+    end
+    function clipboard(x)
+        c = clipboardcmd()
+        cmd = c == :xsel  ? `xsel --nodetach --input --clipboard` :
+              c == :xclip ? `xclip -quiet -in -selection clipboard` :
+            error("unexpected clipboard command: $c")
+        w,p = writesto(cmd)
+        print(w,x)
+        close(w)
+        wait(p)
+    end
+    function clipboard()
+        c = clipboardcmd()
+        cmd = c == :xsel  ? `xsel --nodetach --output --clipboard` :
+              c == :xclip ? `xclip -quiet -out -selection clipboard` :
+            error("unexpected clipboard command: $c")
+        readall(cmd)
+    end
 end
 
 # print a warning only once
