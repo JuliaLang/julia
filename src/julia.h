@@ -896,7 +896,7 @@ DLLEXPORT jl_value_t *jl_stdout_obj();
 DLLEXPORT jl_value_t *jl_stderr_obj();
 DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b);
 DLLEXPORT uptrint_t jl_object_id(jl_value_t *v);
-void jl_debug_print_type(JL_STREAM *s, jl_value_t *v);
+DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v);
 
 // modules
 extern DLLEXPORT jl_module_t *jl_main_module;
@@ -1086,6 +1086,9 @@ extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
   jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2])
 
 #define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)
+
+// GC_FINAL_STATS prints total GC stats at exit
+//#define GC_FINAL_STATS
 
 #ifdef GC_FINAL_STATS
 void jl_print_gc_stats(JL_STREAM *s);
