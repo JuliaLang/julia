@@ -248,8 +248,8 @@ end
         # write data to locked, allocated space
         ccall(:memcpy, Ptr{Void}, (Ptr{Void},Ptr{Uint8},Int32), p, x, length(x)+1)
         ccall( (:GlobalUnlock, "kernel32"), stdcall, Void, (Ptr{Void},), p)
-        # set clipboard data type to 13 for Unicode text/string
-        p = ccall((:SetClipboardData, "user32"), stdcall, Ptr{Void}, (Uint32, Ptr{Void}), 13, p)
+        # set clipboard data type to 1 for ascii text/string
+        p = ccall((:SetClipboardData, "user32"), stdcall, Ptr{Void}, (Uint32, Ptr{Void}), 1, p)
         ccall((:CloseClipboard, "user32"), stdcall, Void, ())
     end
     clipboard(x) = clipboard(sprint(io->print(io,x))::ByteString)
