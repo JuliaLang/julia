@@ -2327,7 +2327,7 @@ Mathematical Functions
 
 .. function:: hypot(x, y)
 
-   Compute the :math:`\sqrt{x^2+y^2}` without undue overflow or underflow
+   Compute the :math:`\sqrt{x^2+y^2}` avoiding overflow and underflow
 
 .. function:: log(x)
 
@@ -2571,21 +2571,21 @@ Mathematical Functions
 
    Previous power of ``a`` not greater than ``n``
 
-.. function:: nextprod([a,b,c], n)
+.. function:: nextprod([k_1,k_2,...], n)
 
-   Next integer not less than ``n`` that can be written ``a^i1 * b^i2 * c^i3`` for integers ``i1``, ``i2``, ``i3``.
+   Next integer not less than ``n`` that can be written as :math:`\prod k_i^{p_i}` for integers :math:`p_1`, :math:`p_2`, etc.
 
-.. function:: prevprod([a,b,c], n)
+.. function:: prevprod([k_1,k_2,...], n)
 
-   Previous integer not greater than ``n`` that can be written ``a^i1 * b^i2 * c^i3`` for integers ``i1``, ``i2``, ``i3``.
+   Previous integer not greater than ``n`` that can be written as :math:`\prod k_i^{p_i}` for integers :math:`p_1`, :math:`p_2`, etc.
 
 .. function:: invmod(x,m)
 
-   Inverse of ``x``, modulo ``m``
+   Take the inverse of ``x`` modulo ``m``: `y` such that :math:`xy = 1 \pmod m`
 
 .. function:: powermod(x, p, m)
 
-   Compute ``mod(x^p, m)``
+   Compute :math:`x^p \pmod m`
 
 .. function:: gamma(x)
 
