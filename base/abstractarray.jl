@@ -1492,7 +1492,7 @@ function prod{T}(A::AbstractArray{T})
     v
 end
 
-function min(A::AbstractArray)
+function min{T<:Real}(A::AbstractArray{T})
     if isempty(A); error("min: argument is empty"); end
     v = A[1]
     for i=2:length(A)
@@ -1504,7 +1504,7 @@ function min(A::AbstractArray)
     v
 end
 
-function max(A::AbstractArray)
+function max{T<:Real}(A::AbstractArray{T})
     if isempty(A); error("max: argument is empty"); end
     v = A[1]
     for i=2:length(A)
