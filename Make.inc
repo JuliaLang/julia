@@ -5,7 +5,7 @@ MKLLIB = $(MKLROOT)/lib/intel64
 
 # we include twice to pickup user definitions better
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
-include $(JULIAHOME)/Make.user 
+include $(JULIAHOME)/Make.user
 endif
 
 # disable automatic Makefile rules
@@ -79,7 +79,7 @@ override BUILD_OS := WINNT
 endif
 
 ifeq ($(OS), WINNT)
-fPIC = 
+fPIC =
 ifeq ($(BUILD_OS), WINNT)
 PATH := ${PATH}:${BUILD}/lib:${BUILD}/lib/julia:/c/Program Files/7-zip
 endif
@@ -227,7 +227,7 @@ LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config
 endif
 
 ifeq ($(USE_SYSTEM_READLINE), 1)
-READLINE = -lreadline 
+READLINE = -lreadline
 else
 READLINE = $(BUILD)/lib/libreadline.a
 endif
@@ -305,8 +305,8 @@ ifeq ($(OS), Darwin)
   INSTALL_NAME_CHANGE_CMD = install_name_tool -change
 else
   INSTALL_NAME_ID_DIR =
-  INSTALL_NAME_CMD = true -ignore 
-  INSTALL_NAME_CHANGE_CMD = true -ignore 
+  INSTALL_NAME_CMD = true -ignore
+  INSTALL_NAME_CHANGE_CMD = true -ignore
 endif
 
 # shared library runtime paths
@@ -431,7 +431,7 @@ endif
 
 define dir_target
 $$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(1))): $$(abspath $(1))
-$$(abspath $(1)): 
+$$(abspath $(1)):
 	@mkdir -p $$@
 endef
 
@@ -443,7 +443,7 @@ endif
 
 define symlink_target
 CLEAN_TARGETS += clean-$(2)/$(1)
-clean-$$(abspath $(2)/$(1)): 
+clean-$$(abspath $(2)/$(1)):
 ifeq ($(BUILD_OS), WINNT)
 	@-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&)
 else
@@ -479,6 +479,8 @@ JULIA_EXECUTABLE_debug = $(BUILD)/bin/julia-debug-$(DEFAULT_REPL)$(EXE)
 JULIA_EXECUTABLE_release = $(BUILD)/bin/julia-$(DEFAULT_REPL)$(EXE)
 
 ifeq ($(OS), WINNT)
+JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
+else ifdef JULIA_VAGRANT_BUILD
 JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
 else
 JULIA_EXECUTABLE = $(JULIAHOME)/julia
