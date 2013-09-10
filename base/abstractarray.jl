@@ -1001,9 +1001,9 @@ for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
 
     @eval function ($f)(v::AbstractVector)
         n = length(v)
-        c = $(op===:+ ? (:(similar(v,typeof(+zero(eltype(v)))))) :
+        if n == 0; return similar(v); end
+        c = $(op===:+ ? (:(similar(v,typeof(+zero(v[1]))))) :
                         (:(similar(v))))
-        if n == 0; return c; end
         ($fp)(v, c, $(op==:+ ? :(zero(v[1])) : :(one(v[1]))), 1, n)
         return c
     end
@@ -1017,12 +1017,12 @@ for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
             axis_stride *= size(A,i)
         end
 
-        B = $(op===:+ ? (:(similar(A,typeof(+zero(eltype(A)))))) :
-                        (:(similar(A))))
-
         if axis_size < 1
-            return B
+            return similar(A)
         end
+
+        B = $(op===:+ ? (:(similar(A,typeof(+zero(A[1]))))) :
+                        (:(similar(A))))
 
         for i = 1:length(A)
             if div(i-1, axis_stride) % axis_size == 0
