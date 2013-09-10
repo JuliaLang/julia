@@ -43,7 +43,7 @@ available(pkg::String) = Dir.cd() do
     if !isempty(avail) || Read.isinstalled(pkg)
         return sort!([keys(avail)...])
     end
-    error("$pkg is neither installed nor registered")
+    error("$pkg is not a package (not registered or installed)")
 end
 
 function installed()
@@ -57,7 +57,7 @@ end
 installed(pkg::String) = Dir.cd() do
     avail = Read.available(pkg)
     Read.isinstalled(pkg) && return Read.installed_version(pkg,avail)
-    isempty(avail) && error("$pkg is neither installed nor registered")
+    isempty(avail) && error("$pkg is not a package (not registered or installed)")
     return nothing # registered but not installed
 end
 
@@ -263,6 +263,38 @@ function _resolve(
 end
 
 resolve() = Dir.cd(_resolve) #4082 TODO: some call to fixup should go here
+
+tag(pkg::String, ver::VersionNumber; msg::String="", commit::String="") = Dir.cd() do
+    ispath(pkg,".git") || error("$pkg is not a git repo")
+    isempty(msg) && (msg = "$pkg v$ver")
+    isempty(commit) && (commit = Git.head(dir=pkg))
+    registered = isfile("METADATA",pkg,"url")
+    existing = registered ?
+        [ keys(Read.available(pkg))... ] :
+        [ convert(VersionNumber,v) for v in
+            filter!(v->ismatch(Base.VERSION_REGEX,v),
+                split(Git.readall(`tag -l v*`, dir=pkg))) ]
+    sort!(existing)
+    Base.check_new_version(existing,ver)
+    info("Tagging $pkg v$ver")
+    Git.run(`tag -m $msg v$ver $commit`, dir=pkg)
+    registered || return
+    try
+        reqs = Reqs.parse(joinpath(pkg,"REQUIRE"))
+        cd("METADATA") do
+            Git.transact() do
+                d = joinpath(pkg,"versions",string(ver))
+                mkpath(d)
+                open(io->println(io,commit), joinpath(d,"sha1"), "w")
+                isempty(reqs) || Reqs.write(joinpath(d,"requires"), reqs)
+                Git.run(`add $d`)
+            end
+        end
+    catch
+        Git.run(`tag -d v$ver`, dir=pkg)
+        rethrow()
+    end
+end
 
 function build(pkg::String, args=[])
     try 
