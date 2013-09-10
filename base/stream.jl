@@ -852,16 +852,6 @@ function connect!(sock::Pipe, path::ByteString)
 end
 connect!(sock::Pipe, path::String) = connect(sock,bytestring(path))
 
-function connect(cb::Function,sock::AsyncStream,args...)
-    sock.ccb = cb
-    connect!(sock,args...)
-end
-
-function connect(cb::Function,args...)
-    sock.ccb = cb
-    connect(args...)
-end
-
 function connect(sock::AsyncStream, args...)
     connect!(sock,args...)
     wait_connected(sock)
