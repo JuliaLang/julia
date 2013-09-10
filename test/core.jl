@@ -991,3 +991,7 @@ type b4208
     b4208() = (local b4208=1;new())
 end
 @test isa(b4208(),b4208)
+
+# make sure convert_default error isn't swallowed by typeof()
+convert_default_should_fail_here() = similar([1],typeof(zero(typeof(rand(2,2)))))
+@test_throws convert_default_should_fail_here()

@@ -158,8 +158,7 @@ function static_convert(to::ANY, from::ANY)
         if from <: to
             return from
         end
-        t = typeintersect(from,to)
-        return is(t,None) ? to : t
+        return typeintersect(from,to)
     end
     if is(to,Tuple)
         return from
