@@ -699,3 +699,7 @@ end
 @test reverse!([1:10],6,10) == [1,2,3,4,5,10,9,8,7,6]
 
 
+# issue 4228
+A = [[i i; i i] for i=1:2]
+@test cumsum(A) == Any[[1 1; 1 1], [3 3; 3 3]]
+@test cumprod(A) == Any[[1 1; 1 1], [4 4; 4 4]]
