@@ -983,6 +983,9 @@ function (!=)(A::AbstractArray, B::AbstractArray)
     return false
 end
 
+_cumsum_type{T<:Number}(v::AbstractArray{T}) = typeof(+zero(T))
+_cumsum_type(v) = typeof(v[1]+v[1])
+
 for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
                    (:cumprod, :cumprod_pairwise, :*) )
     # in-place cumsum of c = s+v(i1:n), using pairwise summation as for sum
@@ -1001,7 +1004,7 @@ for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
 
     @eval function ($f)(v::AbstractVector)
         n = length(v)
-        c = $(op===:+ ? (:(similar(v,typeof(+zero(eltype(v)))))) :
+        c = $(op===:+ ? (:(similar(v,_cumsum_type(v)))) :
                         (:(similar(v))))
         if n == 0; return c; end
         ($fp)(v, c, $(op==:+ ? :(zero(v[1])) : :(one(v[1]))), 1, n)
@@ -1017,7 +1020,7 @@ for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
             axis_stride *= size(A,i)
         end
 
-        B = $(op===:+ ? (:(similar(A,typeof(+zero(eltype(A)))))) :
+        B = $(op===:+ ? (:(similar(A,_cumsum_type(A)))) :
                         (:(similar(A))))
 
         if axis_size < 1
