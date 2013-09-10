@@ -24,12 +24,37 @@ function close(t::FileMonitor)
     end
 end
 
-# Polling event flags
+immutable FileEvent
+    readable::Bool
+    writable::Bool
+    renamed::Bool
+    changed::Bool
+    timeout::Bool
+end
+
+function |(FileEvent e1, FileEvent e2)
+    FileEvent(
+        e1.readable || e2.readable,
+        e1.writable || e2.writable,
+        e1.renamed || e2.renamed,
+        e1.changed || e2.changed,
+        e1.timeout || e2.timeout)
+end
+
+# libuv polling event flags
 const UV_READABLE = 1
 const UV_WRITABLE = 2
-# Non-polling event flags
-const UV_RENAME = 1
-const UV_CHANGE = 2
+function pollevent(events)
+    timeout = (events & (UV_READABLE | UV_WRITABLE) == 0)
+    FileEvent((events & UV_READABLE) != 0, (events & UV_WRITABLE) != 0, false, false, timeout)
+end
+
+function monitorevent(events)
+    # Non-polling event flags
+    const UV_RENAME = 1
+    const UV_CHANGE = 2
+    FileEvent(false, false, (events & UV_RENAME) != 0, (events & UV_CHANGE) != 0, false)
+end
 
 convert(::Type{Int32},fd::RawFD) = fd.fd 
 
@@ -111,7 +136,7 @@ function fdw_wait_cb(fdw::FDWatcher,status,events)
     if status == -1
         notify_error(fdw.notify,UVError("FDWatcher",status))
     else
-        notify(fdw.notify,events)
+        notify(fdw.notify,pollevent(events))
     end
 end
 
@@ -128,8 +153,7 @@ function _wait(fdw::FDWatcher,readable,writable)
     end
     while true
         events = wait(fdw.notify)
-        if (readable && (events & UV_READABLE) != 0) ||
-            (writable && (events & UV_WRITABLE) != 0)
+        if (readable && events.readable) || (writable && events.writable)
             break
         end
     end
@@ -241,22 +265,24 @@ function stop_watching(t::PollingFileWatcher)
 end
 
 function _uv_hook_fseventscb(t::FileMonitor,filename::Ptr,events::Int32,status::Int32)
-    fname = bytestring(convert(Ptr{Uint8},filename)) # seems broken at the moment - got NULL
+    fname = bytestring(convert(Ptr{Uint8},filename))
+    fileEvent = monitorevent(events)
     if isa(t.cb,Function)
-        t.cb(fname, events, status)
+        t.cb(fname, fileEvent, status)
     end
     if status < 0
-        notify_error(t.notify,(UVError("FileMonitor",status), fname, events))
+        notify_error(t.notify,(UVError("FileMonitor",status), fname, fileEvent))
     else
-        notify(t.notify,(status, fname, events))
+        notify(t.notify,(status, fname, fileEvent))
     end
 end
 
 function _uv_hook_pollcb(t::FDWatcher,status::Int32,events::Int32)
     if isa(t.cb,Function)
-        t.cb(t,status, events)
+        t.cb(t, pollevent(events), status)
     end
 end
+
 function _uv_hook_fspollcb(t::PollingFileWatcher,status::Int32,prev::Ptr,cur::Ptr)
     if isa(t.cb,Function)
         t.cb(t, status, Stat(convert(Ptr{Uint8},prev)), Stat(convert(Ptr{Uint8},cur)))
