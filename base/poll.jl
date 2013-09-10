@@ -25,37 +25,50 @@ function close(t::FileMonitor)
 end
 
 immutable FileEvent
-    readable::Bool
-    writable::Bool
     renamed::Bool
     changed::Bool
     timeout::Bool
 end
 
-function |(FileEvent e1, FileEvent e2)
+immutable FDEvent
+    readable::Bool
+    writable::Bool
+    timeout::Bool
+end
+FDEvent() = FDEvent(false, false, false)
+
+function fileevent(events)
+    # libuv file watching event flags
+    const UV_RENAME = 1
+    const UV_CHANGE = 2
+    timeout = (events & (UV_RENAME | UV_CHANGE) == 0)
+    FileEvent((events & UV_RENAME) != 0, (events & UV_CHANGE) != 0, timeout)
+end
+
+function (|)(e1::FileEvent, e2::FileEvent)
     FileEvent(
-        e1.readable || e2.readable,
-        e1.writable || e2.writable,
         e1.renamed || e2.renamed,
         e1.changed || e2.changed,
         e1.timeout || e2.timeout)
 end
 
-# libuv polling event flags
+# libuv file descriptor event flags
 const UV_READABLE = 1
 const UV_WRITABLE = 2
-function pollevent(events)
+function fdevent(events)
     timeout = (events & (UV_READABLE | UV_WRITABLE) == 0)
-    FileEvent((events & UV_READABLE) != 0, (events & UV_WRITABLE) != 0, false, false, timeout)
+    FDEvent((events & UV_READABLE) != 0, (events & UV_WRITABLE) != 0, timeout)
 end
 
-function monitorevent(events)
-    # Non-polling event flags
-    const UV_RENAME = 1
-    const UV_CHANGE = 2
-    FileEvent(false, false, (events & UV_RENAME) != 0, (events & UV_CHANGE) != 0, false)
-end
+fdtimeout() = FDEvent(false, false, true)
 
+function (|)(e1::FDEvent, e2::FDEvent)
+    FDEvent(
+        e1.readable || e2.readable,
+        e1.writable || e2.writable,
+        e1.timeout || e2.timeout)
+end
+convert(::Type{Int32}, e::FDEvent) = e.readable*UV_READABLE + e.writable*UV_WRITABLE
 convert(::Type{Int32},fd::RawFD) = fd.fd 
 
 #Wrapper for an OS file descriptor (for Windows)
@@ -98,9 +111,9 @@ type FDWatcher <: UVPollingWatcher
     open::Bool
     notify::Condition
     cb::Callback
-    events::Int32
-    FDWatcher(handle::Ptr,fd,open::Bool,notify::Condition,cb::Callback,events::Integer) =
-        new(handle,_get_osfhandle(fd),open,notify,cb,int32(events))
+    events::FDEvent
+    FDWatcher(handle::Ptr,fd,open::Bool,notify::Condition,cb::Callback,events::FDEvent) =
+        new(handle,_get_osfhandle(fd),open,notify,cb,events)
 end
 function FDWatcher(fd::RawFD)
     handle = c_malloc(_sizeof_uv_poll)
@@ -113,7 +126,7 @@ function FDWatcher(fd::RawFD)
         c_free(handle)
         throw(UVError("FDWatcher",err))
     end
-    this = FDWatcher(handle,fd,false,Condition(),false,0)
+    this = FDWatcher(handle,fd,false,Condition(),false,FDEvent())
     associate_julia_struct(handle,this)
     finalizer(this,close)
     this
@@ -126,24 +139,23 @@ end
         c_free(handle)
         throw(UVError("FDWatcher",err))
     end
-    this = FDWatcher(handle,fd,false,Condition(),false,0)
+    this = FDWatcher(handle,fd,false,Condition(),false,FDEvent())
     associate_julia_struct(handle,this)
     finalizer(this,close)
     this
 end
 
-function fdw_wait_cb(fdw::FDWatcher,status,events)
+function fdw_wait_cb(fdw::FDWatcher, events::FDEvent, status)
     if status == -1
         notify_error(fdw.notify,UVError("FDWatcher",status))
     else
-        notify(fdw.notify,pollevent(events))
+        notify(fdw.notify,events)
     end
 end
 
 function _wait(fdw::FDWatcher,readable,writable)
-    events = (readable ? UV_READABLE : 0) | 
-             (writable ? UV_WRITABLE : 0)
-    if events == 0
+    events = FDEvent(readable, writable, false)
+    if !readable && ! writable
         error("Must be watching for at least one event")
     end
     events |= fdw.events
@@ -153,7 +165,7 @@ function _wait(fdw::FDWatcher,readable,writable)
     end
     while true
         events = wait(fdw.notify)
-        if (readable && events.readable) || (writable && events.writable)
+        if isa(events, FDEvent) && ((events.readable == readable) || (events.writable == writable))
             break
         end
     end
@@ -170,7 +182,7 @@ end
 
 let
     global fdwatcher_reinit
-    const empty_watcher = FDWatcher(C_NULL,RawFD(-1),false,Condition(),false,0)
+    const empty_watcher = FDWatcher(C_NULL,RawFD(-1),false,Condition(),false,FDEvent())
     @unix_only begin
         local fdwatcher_array = Array(FDWatcher,0)
         function fdwatcher_reinit()
@@ -208,7 +220,7 @@ let
     end
 end
 
-function pfw_wait_cb(pfw::PollingFileWatcher, status, prev, cur)
+function pfw_wait_cb(pfw::PollingFileWatcher, prev, cur, status)
     if status < 0
         notify_error(pfw.notify,UVError("PollingFileWatcher",status))
     else
@@ -235,15 +247,15 @@ end
 
 close(t::UVPollingWatcher) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
-function start_watching(t::FDWatcher, events)
+function start_watching(t::FDWatcher, events::FDEvent)
     associate_julia_struct(t.handle, t)
     @unix_only if ccall(:jl_uv_unix_fd_is_watched,Int32,(Int32,Ptr{Void},Ptr{Void}),t.fd,t.handle,eventloop()) == 1
         error("Cannot watch an FD more than once on Unix")
     end
     uv_error("start_watching (FD)",
-        ccall(:jl_poll_start,Int32,(Ptr{Void},Int32),t.handle,events))
+        ccall(:jl_poll_start,Int32,(Ptr{Void},Int32),t.handle,int32(events)))
 end
-start_watching(f::Function, t::FDWatcher, events) = (t.cb = f; start_watching(t,events))
+start_watching(f::Function, t::FDWatcher, events::FDEvent) = (t.cb = f; start_watching(t,events))
 
 function start_watching(t::PollingFileWatcher, interval)
     associate_julia_struct(t.handle, t)
@@ -266,7 +278,7 @@ end
 
 function _uv_hook_fseventscb(t::FileMonitor,filename::Ptr,events::Int32,status::Int32)
     fname = bytestring(convert(Ptr{Uint8},filename))
-    fileEvent = monitorevent(events)
+    fileEvent = fileevent(events)
     if isa(t.cb,Function)
         t.cb(fname, fileEvent, status)
     end
@@ -279,13 +291,13 @@ end
 
 function _uv_hook_pollcb(t::FDWatcher,status::Int32,events::Int32)
     if isa(t.cb,Function)
-        t.cb(t, pollevent(events), status)
+        t.cb(t, fdevent(events), status)
     end
 end
 
 function _uv_hook_fspollcb(t::PollingFileWatcher,status::Int32,prev::Ptr,cur::Ptr)
     if isa(t.cb,Function)
-        t.cb(t, status, Stat(convert(Ptr{Uint8},prev)), Stat(convert(Ptr{Uint8},cur)))
+        t.cb(t, Stat(convert(Ptr{Uint8},prev)), Stat(convert(Ptr{Uint8},cur)), status)
     end
 end
 
@@ -296,7 +308,7 @@ function poll_fd(s, seconds::Real; readable=false, writable=false)
     wt = Condition()
 
     @schedule (args = wait(s; readable=readable, writable=writable); notify(wt,(:poll,args)))
-    @schedule (sleep(seconds); notify(wt,(:timeout,0)))
+    @schedule (sleep(seconds); notify(wt,(:timeout,fdtimeout())))
 
     _, ret = wait(wt)
 
