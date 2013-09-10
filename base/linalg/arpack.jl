@@ -9,7 +9,7 @@ function aupd_wrapper(T, linop::Function, n::Integer,
                       nev::Integer, which::ASCIIString, 
                       tol, maxiter::Integer, mode::Integer)
 
-    ncv = min(max(nev*2, 20), n)
+    ncv = min(max(2*nev+2, 20), n)
 
     bmat   = "I"
     lworkl = cmplx ? ncv * (3*ncv + 5) : ( lworkl = sym ? ncv * (ncv + 8) :  ncv * (3*ncv + 6) )

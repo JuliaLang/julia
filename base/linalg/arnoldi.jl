@@ -5,7 +5,7 @@ using .ARPACK
 function eigs{T<:BlasFloat}(A::AbstractMatrix{T};
                             nev::Integer=6, which::ASCIIString="LM", 
                             tol=0.0, maxiter::Integer=1000, sigma=0,
-                            ritzvec::Bool=true, op_part::Symbol=:real)
+                            ritzvec::Bool=true, complexOP::Bool=false)
     (m, n) = size(A)
     if m != n; error("Input must be square"); end
     if n <= 6 && nev > n-1; nev = n-1; end
@@ -16,19 +16,17 @@ function eigs{T<:BlasFloat}(A::AbstractMatrix{T};
         mode = 1
         linop(x) = A * x
     else
-        C = lufact(A - sigma*speye(T,n))
+        C = lufact(A - sigma*eye(T,n))
         if cmplx
             mode = 3
             linop(x) = C\x
         else
-            if op_part == :real
+            if !complexOP
                 mode = 3
                 linop(x) = real(C\x)
-            elseif op_part == :imag
+            else
                 mode = 4
                 linop(x) = imag(C\x)
-            else
-                error("op_part must be either :real or :imag")
             end
         end     
     end
