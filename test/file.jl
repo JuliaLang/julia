@@ -54,7 +54,7 @@ function test_timeout(tval)
     tr = take(channel)
     t_elapsed = toq()
 
-    @test tr == 0
+    @test tr == false
 
     tdiff = t_elapsed * 1000
     @test tval <= tdiff
@@ -72,7 +72,7 @@ function test_touch(slval)
 
     tr = take(channel)
 
-    # @test tr == 1
+    @test tr == true
 end
 
 
@@ -85,7 +85,7 @@ function test_monitor(slval)
     f = open(file,"a")
     write(f,"Hello World\n")
     close(f)
-    sleep(9slval/10_000)
+    sleep(slval/10_000)
     @test FsMonitorPassed
     close(fm)
 end
