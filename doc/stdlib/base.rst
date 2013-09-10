@@ -576,9 +576,11 @@ Dicts can be created using a literal syntax: ``{"A"=>1, "B"=>2}``. Use of curly 
 As with arrays, ``Dicts`` may be created with comprehensions. For example,
 ``{i => f(i) for i = 1:10}``.
 
-.. function:: Dict{K,V}()
+.. function:: Dict()
 
-   Construct a hashtable with keys of type K and values of type V
+   ``Dict{K,V}()`` constructs a hashtable with keys of type K and values of type V.
+   The literal syntax is ``{"A"=>1, "B"=>2}`` for a ``Dict{Any,Any}``, or
+   ``["A"=>1, "B"=>2]`` for a ``Dict`` of inferred type.
 
 .. function:: haskey(collection, key)
 
