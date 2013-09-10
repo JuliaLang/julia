@@ -157,7 +157,7 @@
   largc lvargc vargc argc compile-in lastcdr caddr ret values #fn(function)
   encode-byte-code bcode:code const-to-idx-vec]) filter keyword-arg?])
   #fn(length)]) #fn(length)]) make-code-emitter lastcdr lambda-vars filter #.pair?
-  lambda])] #0=[#:g695 ()])
+  lambda])] #0=[#:g679 ()])
 	  compile-for #fn(":000r5e0g4316X0e1|}^g2342e1|}^g3342e1|}^g4342e2|c342;e4c541;" [1arg-lambda?
   compile-in emit for error "for: third form must be a 1-argument lambda"] compile-for)
 	  compile-if #fn("<000r4c0qe1|31e1|31g3\x84e2g331e3g331F6;0e4g331560e53045;" [#fn(";000r5g2]\x82>0e0~\x7fi02g344;g2^\x82>0e0~\x7fi02g444;e0~\x7f^g2342e1~c2|332e0~\x7fi02g3342i026<0e1~c3325:0e1~c4}332e5~|322e0~\x7fi02g4342e5~}42;" [compile-in
@@ -383,25 +383,12 @@
 	  string.join #fn("7000r2|\x8550c0;c1qc23041;" ["" #fn("8000r1c0|~M322e1c2q~N322c3|41;" [#fn(io.write)
   for-each #fn("8000r1c0~i11322c0~|42;" [#fn(io.write)])
   #fn(io.tostring!)]) #fn(buffer)] string.join)
-	  string.lpad #fn(";000r3c0e1g2}c2|31x32|42;" [#fn(string) string.rep
-						       #fn(string.count)] string.lpad)
 	  string.map #fn("9000r2c0qc130c2}3142;" [#fn("7000r2c0q`312c1|41;" [#fn(";000r1]|\x7fX6S02c0~i10c1i11|3231322c2i11|32m05\v/;" [#fn(io.putc)
   #fn(string.char) #fn(string.inc)]) #fn(io.tostring!)])
 						  #fn(buffer)
 						  #fn(length)] string.map)
-	  string.rep #fn(";000r2}b4X6`0e0}`32650c1;}aW680c2|41;}b2W690c2||42;c2|||43;e3}316@0c2|e4|}ax3242;e4c2||32}b2U242;" [<=
-  "" #fn(string) odd? string.rep] string.rep)
-	  string.rpad #fn("<000r3c0|e1g2}c2|31x3242;" [#fn(string) string.rep
-						       #fn(string.count)] string.rpad)
 	  string.tail #fn(";000r2c0|c1|`}3342;" [#fn(string.sub)
 						 #fn(string.inc)] string.tail)
-	  string.trim #fn("8000r3c0q]]42;" [#fn("8000r2c0qm02c1qm12c2qc3~3141;" [#fn(";000r4g2g3X16?02c0}c1|g232326A0~|}c2|g232g344;g2;" [#fn(string.find)
-  #fn(string.char) #fn(string.inc)] trim-start)
-  #fn("<000r3e0g2`3216D02c1}c2|c3|g23232326?0\x7f|}c3|g23243;g2;" [> #fn(string.find)
-								   #fn(string.char)
-								   #fn(string.dec)] trim-end)
-  #fn("<000r1c0i10~i10i11`|34\x7fi10i12|3343;" [#fn(string.sub)])
-  #fn(length)])] string.trim)
 	  symbol-syntax #fn("9000r1c0e1|^43;" [#fn(get)
 					       *syntax-environment*] symbol-syntax)
 	  table.foreach #fn("9000r2c0c1q_}43;" [#fn(table.foldl)
