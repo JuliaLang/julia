@@ -87,7 +87,7 @@ function showerror(io::IO, e::MethodError)
     end
     if isdefined(Base,name)
         f = eval(Base,name)
-        if isgeneric(f) && applicable(f,e.args...)
+        if f !== e.f && isgeneric(f) && applicable(f,e.args...)
             println(io)
             print(io, "you may have intended to import Base.$(name)")
         end
