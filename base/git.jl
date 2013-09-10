@@ -23,10 +23,11 @@ function gitenv(cmd)
     cmd
 end
 
-run(args::Cmd; dir="", out=STDOUT) = Base.run(gitenv(`$(git(dir)) $args`) |> out)
-success(args::Cmd; dir="") = Base.success(gitenv(`$(git(dir)) $args`))
-readall(args::Cmd; dir="") = Base.readall(gitenv(`$(git(dir)) $args`))
-readchomp(args::Cmd; dir="") = Base.readchomp(gitenv(`$(git(dir)) $args`))
+cmd(args::Cmd; dir="") = `$(git(dir)) $args`
+run(args::Cmd; dir="", out=STDOUT) = Base.run(gitenv(cmd(args,dir=dir)) |> out)
+success(args::Cmd; dir="") = Base.success(gitenv(cmd(args,dir=dir)))
+readall(args::Cmd; dir="") = Base.readall(gitenv(cmd(args,dir=dir)))
+readchomp(args::Cmd; dir="") = Base.readchomp(gitenv(cmd(args,dir=dir)))
 
 modules(args::Cmd; dir="") = readchomp(`config -f .gitmodules $args`, dir=dir)
 different(verA::String, verB::String, path::String; dir="") =
