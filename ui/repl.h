@@ -31,7 +31,7 @@ extern int ends_with_semicolon(const char *input);
 extern char *ios_readline(ios_t *s);
 DLLEXPORT extern void repl_callback_enable(char *prompt);
 DLLEXPORT extern void jl_stdin_callback();
-DLLEXPORT extern void jl_readBuffer(char *base, ssize_t nread);
+DLLEXPORT extern void jl_readBuffer(unsigned char *base, ssize_t nread);
 DLLEXPORT extern void jl_clear_input(void);
 
 #endif // JL_REPL_H

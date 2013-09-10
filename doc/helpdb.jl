@@ -64,6 +64,19 @@
 
 "),
 
+("Getting Around","Base","clipboard","clipboard(x)
+
+   Send a printed form of \"x\" to the operating system clipboard
+   (\"copy\").
+
+"),
+
+("Getting Around","Base","clipboard","clipboard() -> String
+
+   Return the contents of the operating system clipboard (\"paste\").
+
+"),
+
 ("Getting Around","Base","require","require(file::String...)
 
    Load source files once, in the context of the \"Main\" module, on
@@ -3403,7 +3416,7 @@ popdisplay(d::Display)
 
 ("Mathematical Functions","Base","hypot","hypot(x, y)
 
-   Compute the \\sqrt{x^2+y^2} without undue overflow or underflow
+   Compute the \\sqrt{x^2+y^2} avoiding overflow and underflow
 
 "),
 
@@ -3786,29 +3799,30 @@ popdisplay(d::Display)
 
 "),
 
-("Mathematical Functions","Base","nextprod","nextprod([a, b, c], n)
+("Mathematical Functions","Base","nextprod","nextprod([k_1, k_2, ...], n)
 
-   Next integer not less than \"n\" that can be written \"a^i1 * b^i2
-   * c^i3\" for integers \"i1\", \"i2\", \"i3\".
+   Next integer not less than \"n\" that can be written as \\prod
+   k_i^{p_i} for integers p_1, p_2, etc.
 
 "),
 
-("Mathematical Functions","Base","prevprod","prevprod([a, b, c], n)
+("Mathematical Functions","Base","prevprod","prevprod([k_1, k_2, ...], n)
 
-   Previous integer not greater than \"n\" that can be written \"a^i1
-   * b^i2 * c^i3\" for integers \"i1\", \"i2\", \"i3\".
+   Previous integer not greater than \"n\" that can be written as
+   \\prod k_i^{p_i} for integers p_1, p_2, etc.
 
 "),
 
 ("Mathematical Functions","Base","invmod","invmod(x, m)
 
-   Inverse of \"x\", modulo \"m\"
+   Take the inverse of \"x\" modulo \"m\": *y* such that xy = 1 \\pmod
+   m
 
 "),
 
 ("Mathematical Functions","Base","powermod","powermod(x, p, m)
 
-   Compute \"mod(x^p, m)\"
+   Compute x^p \\pmod m
 
 "),
 
