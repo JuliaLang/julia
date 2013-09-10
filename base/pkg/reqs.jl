@@ -52,9 +52,12 @@ function write(io::IO, lines::Vector{Line})
         println(io, line.content)
     end
 end
-write(file::String, lines::Vector{Line}) = open(file, "w") do io
-    write(io, lines)
+function write(io::IO, reqs::Requires)
+    for pkg in sort!([keys(reqs)...], by=lowercase)
+        println(io, Requirement(pkg, reqs[pkg]).content)
+    end
 end
+write(file::String, r::Union(Vector{Line},Requires)) = open(io->write(io,r), file, "w")
 
 function parse(lines::Vector{Line})
     reqs = Requires()
