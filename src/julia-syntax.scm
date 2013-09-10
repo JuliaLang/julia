@@ -883,26 +883,25 @@
    (else
     (case (car e)
       ((function)
-       (if (pair? (cadr e))
-	   (if (eq? (car (cadr e)) 'call)
-	       (expand-binding-forms
-		(if (and (pair? (cadr (cadr e)))
-			 (eq? (car (cadr (cadr e))) 'curly))
-		    (method-def-expr
-		     (cadr (cadr (cadr e)))
-		     (cddr (cadr (cadr e)))
-		     (fix-arglist (cddr (cadr e)))
-		     (caddr e))
-		    (method-def-expr
-		     (cadr (cadr e))
-		     '()
-		     (fix-arglist (cddr (cadr e)))
-		     (caddr e))))
-	       (if (eq? (car (cadr e)) 'tuple)
-		   (expand-binding-forms
-		    `(-> ,(cadr e) ,(caddr e)))
-		   e))
-	   e))
+       (let ((name (cadr e)))
+	 (if (pair? name)
+	     (if (eq? (car name) 'call)
+		 (expand-binding-forms
+		  (if (and (pair? (cadr name))
+			   (eq? (car (cadr name)) 'curly))
+		      (method-def-expr (cadr (cadr name))
+				       (cddr (cadr name))
+				       (fix-arglist (cddr name))
+				       (caddr e))
+		      (method-def-expr (cadr name)
+				       '()
+				       (fix-arglist (cddr name))
+				       (caddr e))))
+		 (if (eq? (car name) 'tuple)
+		     (expand-binding-forms
+		      `(-> ,name ,(caddr e)))
+		     e))
+	     e)))
 
       ((->)
        (let ((a (cadr e))
@@ -1618,6 +1617,8 @@
 
    '|::|
    (lambda (e)
+     (if (length= e 2)
+	 (error "invalid :: syntax"))
      (if (and (length= e 3) (not (symbol? (cadr e))))
 	 `(call (top typeassert)
 		,(expand-forms (cadr e)) ,(expand-forms (caddr e)))
@@ -1732,6 +1733,12 @@
 
    ':
    (lambda (e)
+     (if (or (length= e 2)
+	     (and (length= e 3)
+		  (eq? (caddr e) ':))
+	     (and (length= e 4)
+		  (eq? (cadddr e) ':)))
+	 (error "invalid ':' outside indexing"))
      `(call colon ,.(map expand-forms (cdr e))))
 
    'hcat
