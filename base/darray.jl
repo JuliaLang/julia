@@ -115,8 +115,22 @@ end
 
 localpartindex(d::DArray) = localpartindex(d.pmap)
 
-localpart{T,N,A}(d::DArray{T,N,A}) = fetch(d.chunks[localpartindex(d)])::A
-myindexes(d::DArray) = d.indexes[localpartindex(d)]
+function localpart{T,N,A}(d::DArray{T,N,A})
+    lpidx = localpartindex(d)
+    if lpidx == 0
+        convert(A, Array(T, ntuple(N,i->0)))::A
+    else
+        fetch(d.chunks[lpidx])::A
+    end
+end
+function myindexes(d::DArray)
+    lpidx = localpartindex(d)
+    if lpidx == 0
+        ntuple(ndims(d), i->1:0)
+    else
+        d.indexes[lpidx]
+    end
+end
 
 # find which piece holds index (I...)
 function locate(d::DArray, I::Int...)
