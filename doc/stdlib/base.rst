@@ -52,6 +52,14 @@ Getting Around
 
    Show the definition of a function using the default pager, optionally specifying a tuple of types to indicate which method to see.
 
+.. function:: clipboard(x)
+
+   Send a printed form of ``x`` to the operating system clipboard ("copy").
+
+.. function:: clipboard() -> String
+
+   Return the contents of the operating system clipboard ("paste").
+
 .. function:: require(file::String...)
 
    Load source files once, in the context of the ``Main`` module, on every active node, searching the system-wide ``LOAD_PATH`` for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
@@ -2329,7 +2337,7 @@ Mathematical Functions
 
 .. function:: hypot(x, y)
 
-   Compute the :math:`\sqrt{x^2+y^2}` without undue overflow or underflow
+   Compute the :math:`\sqrt{x^2+y^2}` avoiding overflow and underflow
 
 .. function:: log(x)
 
@@ -2573,21 +2581,21 @@ Mathematical Functions
 
    Previous power of ``a`` not greater than ``n``
 
-.. function:: nextprod([a,b,c], n)
+.. function:: nextprod([k_1,k_2,...], n)
 
-   Next integer not less than ``n`` that can be written ``a^i1 * b^i2 * c^i3`` for integers ``i1``, ``i2``, ``i3``.
+   Next integer not less than ``n`` that can be written as :math:`\prod k_i^{p_i}` for integers :math:`p_1`, :math:`p_2`, etc.
 
-.. function:: prevprod([a,b,c], n)
+.. function:: prevprod([k_1,k_2,...], n)
 
-   Previous integer not greater than ``n`` that can be written ``a^i1 * b^i2 * c^i3`` for integers ``i1``, ``i2``, ``i3``.
+   Previous integer not greater than ``n`` that can be written as :math:`\prod k_i^{p_i}` for integers :math:`p_1`, :math:`p_2`, etc.
 
 .. function:: invmod(x,m)
 
-   Inverse of ``x``, modulo ``m``
+   Take the inverse of ``x`` modulo ``m``: `y` such that :math:`xy = 1 \pmod m`
 
 .. function:: powermod(x, p, m)
 
-   Compute ``mod(x^p, m)``
+   Compute :math:`x^p \pmod m`
 
 .. function:: gamma(x)
 
