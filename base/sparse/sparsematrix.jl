@@ -358,6 +358,7 @@ speye(n::Integer) = speye(Float64, n)
 speye(T::Type, n::Integer) = speye(T, n, n)
 speye(m::Integer, n::Integer) = speye(Float64, m, n)
 speye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S, 1), size(S, 2))
+eye(S::SparseMatrixCSC) = speye(S)
 
 function speye(T::Type, m::Integer, n::Integer)
     x = min(m,n)
