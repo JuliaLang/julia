@@ -213,6 +213,7 @@ end
 eye(m::Int, n::Int) = eye(Float64, m, n)
 eye(T::Type, n::Int) = eye(T, n, n)
 eye(n::Int) = eye(Float64, n)
+eye{T}(x::AbstractMatrix{T}) = eye(T, size(x, 1), size(x, 2))
 
 function one{T}(x::AbstractMatrix{T})
     m,n = size(x)
