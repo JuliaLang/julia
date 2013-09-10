@@ -115,8 +115,9 @@ end
 
 localpartindex(d::DArray) = localpartindex(d.pmap)
 
-localpart{T,N,A}(d::DArray{T,N,A}) = fetch(d.chunks[localpartindex(d)])::A
-myindexes(d::DArray) = d.indexes[localpartindex(d)]
+localpart{T,N,A}(d::DArray{T,N,A}) = (lpidx = localpartindex(d)) == 0 ? [] : fetch(d.chunks[lpidx])::A
+myindexes(d::DArray) = (lpidx = localpartindex(d)) == 0 ? () : d.indexes[lpidx]
+    
 
 # find which piece holds index (I...)
 function locate(d::DArray, I::Int...)
