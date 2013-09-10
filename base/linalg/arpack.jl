@@ -7,7 +7,7 @@ import ..LinAlg: BlasInt, blas_int, ARPACKException
 function aupd_wrapper(T, linop::Function, n::Integer,
                       sym::Bool, cmplx::Bool, bmat::ASCIIString,
                       nev::Integer, which::ASCIIString, 
-                      tol, maxiter::Integer)
+                      tol, maxiter::Integer, mode::Integer)
 
     ncv = min(max(nev*2, 20), n)
 
@@ -29,7 +29,7 @@ function aupd_wrapper(T, linop::Function, n::Integer,
 
     iparam[1] = blas_int(1)       # ishifts
     iparam[3] = blas_int(maxiter) # maxiter
-    iparam[7] = blas_int(1)       # mode 1
+    iparam[7] = blas_int(mode)    # mode
 
     zernm1 = 0:(n-1)
 
@@ -54,7 +54,7 @@ end
 
 function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
                       nev::Integer, which::ASCIIString, ritzvec::Bool,
-                      tol, resid, ncv, v, ldv, iparam, ipntr,
+                      tol, resid, ncv, v, ldv, sigma, iparam, ipntr,
                       workd, workl, lworkl, rwork)
 
     howmny = "A"
@@ -66,7 +66,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
     if cmplx
 
         d = Array(T, nev+1)
-        sigma = zeros(T, 1)
+        sigma = ones(T, 1)*sigma
         workev = Array(T, 2ncv)
         neupd(ritzvec, howmny, select, d, v, ldv, sigma, workev,
               bmat, n, which, nev, tol, resid, ncv, v, ldv,
@@ -77,7 +77,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
     elseif sym
 
         d = Array(T, nev)
-        sigma = zeros(T, 1)
+        sigma = ones(T, 1)*sigma
         seupd(ritzvec, howmny, select, d, v, ldv, sigma,
               bmat, n, which, nev, tol, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, info) 
@@ -88,8 +88,8 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
 
         dr     = Array(T, nev+1)
         di     = Array(T, nev+1)
-        sigmar = zeros(T, 1)
-        sigmai = zeros(T, 1)
+        sigmar = ones(T, 1)*real(sigma)
+        sigmai = ones(T, 1)*imag(sigma)
         workev = Array(T, 3*ncv)
         neupd(ritzvec, howmny, select, dr, di, v, ldv, sigmar, sigmai,
               workev, bmat, n, which, nev, tol, resid, ncv, v, ldv,

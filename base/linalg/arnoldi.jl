@@ -4,22 +4,42 @@ using .ARPACK
 
 function eigs{T<:BlasFloat}(A::AbstractMatrix{T};
                             nev::Integer=6, which::ASCIIString="LM", 
-                            tol=0.0, maxiter::Integer=1000,
-                            ritzvec::Bool=true)
+                            tol=0.0, maxiter::Integer=1000, sigma=0,
+                            ritzvec::Bool=true, op_part::Symbol=:real)
     (m, n) = size(A)
     if m != n; error("Input must be square"); end
     if n <= 6 && nev > n-1; nev = n-1; end
     sym   = issym(A)
     cmplx = iseltype(A,Complex)
     bmat  = "I"
-
+    if sigma == 0
+        mode = 1
+        linop(x) = A * x
+    else
+        C = lufact(A - sigma*speye(T,n))
+        if cmplx
+            mode = 3
+            linop(x) = C\x
+        else
+            if op_part == :real
+                mode = 3
+                linop(x) = real(C\x)
+            elseif op_part == :imag
+                mode = 4
+                linop(x) = imag(C\x)
+            else
+                error("op_part must be either :real or :imag")
+            end
+        end     
+    end
+        
     # Compute the Ritz values and Ritz vectors
     (resid, ncv, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork) = 
-       ARPACK.aupd_wrapper(T, (x) -> A * x, n, sym, cmplx, bmat, nev, which, tol, maxiter)
+       ARPACK.aupd_wrapper(T, linop, n, sym, cmplx, bmat, nev, which, tol, maxiter, mode)
     
     # Postprocessing to get eigenvalues and eigenvectors
     return ARPACK.eupd_wrapper(T, n, sym, cmplx, bmat, nev, which, ritzvec,
-                               tol, resid, ncv, v, ldv, iparam, ipntr, 
+                               tol, resid, ncv, v, ldv, sigma, iparam, ipntr, 
                                workd, workl, lworkl, rwork)
 
 end
@@ -41,15 +61,17 @@ function svds{T<:Union(Float64,Float32)}(A::AbstractMatrix{T};
     cmplx = false
     bmat  = "I"
     At = isa(A, StridedMatrix) ? BLAS.syrk('U','T',1.0,A) : A'
+    sigma = 0
+    mode = 1
 
     # Compute the Ritz values and Ritz vectors
     (resid, ncv, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork) = 
          ARPACK.aupd_wrapper(T, (x) -> sarupdate(A, At, x), n, sym, cmplx, bmat, 
-                             nsv, which, tol, maxiter)
+                             nsv, which, tol, maxiter, mode)
 
     # Postprocessing to get eigenvalues and eigenvectors
     (svals, svecs) = ARPACK.eupd_wrapper(T, n, sym, cmplx, bmat, nsv, which, ritzvec, 
-                                         tol, resid, ncv, v, ldv, iparam, ipntr, 
+                                         tol, resid, ncv, v, ldv, sigma, iparam, ipntr, 
                                          workd, workl, lworkl, rwork)
     
     svals = sqrt(svals)
