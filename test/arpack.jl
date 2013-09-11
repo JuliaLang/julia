@@ -13,11 +13,11 @@ begin
 
 	(d,v) = eigs(asym, nev=3)
 	Test.@test_approx_eq asym*v[:,1] d[1]*v[:,1]
-        Test.@test_approx_eq eigs(asym; nev=1, sigma=d[3])[1][1] d[3]
+#        Test.@test_approx_eq eigs(asym; nev=1, sigma=d[3])[1][1] d[3]
 
 	(d,v) = eigs(apd, nev=3)
 	Test.@test_approx_eq apd*v[:,3] d[3]*v[:,3]
-        Test.@test_approx_eq eigs(apd; nev=1, sigma=d[3])[1][1] d[3]
+#        Test.@test_approx_eq eigs(apd; nev=1, sigma=d[3])[1][1] d[3]
     end
 end
 
