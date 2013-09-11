@@ -2844,4 +2844,5 @@ void jl_init_types(void)
     dot_sym = jl_symbol(".");
     boundscheck_sym = jl_symbol("boundscheck");
     newvar_sym = jl_symbol("newvar");
+    copyast_sym = jl_symbol("copyast");
 }

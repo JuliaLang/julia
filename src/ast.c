@@ -687,6 +687,41 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
     return expr;
 }
 
+DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
+{
+    if (jl_is_expr(expr)) {
+        jl_expr_t *e = (jl_expr_t*)expr;
+        size_t i, l = jl_array_len(e->args);
+        jl_expr_t *ne = NULL;
+        JL_GC_PUSH2(&ne, &expr);
+        ne = jl_exprn(e->head, l);
+        for(i=0; i < l; i++)
+            jl_exprarg(ne, i) = jl_copy_ast(jl_exprarg(e,i));
+        JL_GC_POP();
+        return (jl_value_t*)ne;
+    }
+    else if (jl_typeis(expr,jl_array_any_type)) {
+        jl_array_t *a = (jl_array_t*)expr;
+        size_t i, l = jl_array_len(a);
+        jl_array_t *na = NULL;
+        JL_GC_PUSH2(&na, &expr);
+        na = jl_alloc_cell_1d(l);
+        for(i=0; i < l; i++)
+            jl_cellset(na, i, jl_copy_ast(jl_cellref(a,i)));
+        JL_GC_POP();
+        return (jl_value_t*)na;
+    }
+    else if (jl_is_quotenode(expr)) {
+        jl_value_t *q = NULL;
+        JL_GC_PUSH2(&q, &expr);
+        q = jl_copy_ast(jl_fieldref(expr,0));
+        jl_value_t *v = jl_new_struct(jl_quotenode_type, q);
+        JL_GC_POP();
+        return v;
+    }
+    return expr;
+}
+
 static jl_value_t *dont_copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
 {
     if (jl_is_symbol(expr) || jl_is_lambda_info(expr)) {

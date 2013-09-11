@@ -169,6 +169,7 @@ static Function *jltypeerror_func;
 static Function *jlcheckassign_func;
 static Function *jldeclareconst_func;
 static Function *jltopeval_func;
+static Function *jlcopyast_func;
 static Function *jltuple_func;
 static Function *jlntuple_func;
 static Function *jlapplygeneric_func;
@@ -2299,6 +2300,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         if (valuepos)
             return literal_pointer_val((jl_value_t*)jl_nothing);
     }
+    else if (head == copyast_sym) {
+        return builder.CreateCall(jlcopyast_func, emit_expr(args[0], ctx));
+    }
     else {
         if (!strcmp(head->name, "$"))
             jl_error("syntax: prefix $ in non-quoted expression");
@@ -3293,6 +3297,12 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_toplevel_eval", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jltopeval_func, (void*)&jl_toplevel_eval);
+
+    jlcopyast_func =
+        Function::Create(FunctionType::get(jl_pvalue_llvmt, args3, false),
+                         Function::ExternalLinkage,
+                         "jl_copy_ast", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlcopyast_func, (void*)&jl_copy_ast);
 
     std::vector<Type*> args4(0);
     args4.push_back(T_pint8);
