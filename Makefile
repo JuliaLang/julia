@@ -13,7 +13,19 @@ VERSDIR = v`cut -d. -f1-2 < VERSION`
 all: default
 default: release
 
-DIRS = $(BUILD)/bin $(BUILD)/lib $(BUILD)/$(JL_PRIVATE_LIBDIR) $(BUILD)/share/julia $(BUILD)/share/julia/man/man1
+DIRS = $(BUILD)/bin $(BUILD)/lib $(BUILD)/share/julia $(BUILD)/share/julia/man/man1
+ifneq ($(JL_LIBDIR),bin)
+ifneq ($(JL_LIBDIR),lib)
+DIRS += $(BUILD)/$(JL_LIBDIR)
+endif
+endif
+ifneq ($(JL_PRIVATE_LIBDIR),bin)
+ifneq ($(JL_PRIVATE_LIBDIR),lib)
+ifneq ($(JL_PRIVATE_LIBDIR),$(JL_LIBDIR))
+DIRS += $(BUILD)/$(JL_PRIVATE_LIBDIR)
+endif
+endif
+endif
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,base test doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
@@ -93,7 +105,7 @@ endif
 		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 	-for suffix in $(JL_PRIVATE_LIBS) ; do \
-		cp -a $(BUILD)/lib/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
+		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 ifeq ($(USE_SYSTEM_LIBUV),0)
 	cp -a $(BUILD)/lib/libuv.a $(PREFIX)/$(JL_PRIVATE_LIBDIR)
