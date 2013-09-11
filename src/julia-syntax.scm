@@ -1,4 +1,4 @@
-(define (quoted? e) (memq (car e) '(quote top line break)))
+(define (quoted? e) (memq (car e) '(quote top line break inert)))
 
 (define (lam:args x) (cadr x))
 (define (lam:vars x) (llist-vars (lam:args x)))
@@ -2878,16 +2878,23 @@ So far only the second case can actually occur.
 
 ;; macro expander
 
+(define (splice-expr? e)
+  ;; ($ (tuple (... x)))
+  (and (length= e 2)          (eq? (car e)   '$)
+       (length= (cadr e) 2)   (eq? (caadr e) 'tuple)
+       (vararg? (cadadr e))))
+
 (define (expand-backquote e)
   (cond ((or (eq? e 'true) (eq? e 'false))  e)
 	((symbol? e)          `(quote ,e))
 	((not (pair? e))      e)
 	((eq? (car e) '$)     (cadr e))
+	((eq? (car e) 'inert) e)
 	((and (eq? (car e) 'quote) (pair? (cadr e)))
 	 (expand-backquote (expand-backquote (cadr e))))
-	((not (any (lambda (x)
-		     (match '($ (tuple (... x))) x))
-		   e))
+	((not (contains (lambda (e) (and (pair? e) (eq? (car e) '$))) e))
+	 `(copyast (inert ,e)))
+	((not (any splice-expr? e))
 	 `(call (top Expr) ,.(map expand-backquote e)))
 	(else
 	 (let loop ((p (cdr e)) (q '()))
@@ -2896,18 +2903,27 @@ So far only the second case can actually occur.
 		 `(call (top splicedexpr) ,(expand-backquote (car e))
 			(call (top append_any) ,@forms)))
 	       ;; look for splice inside backquote, e.g. (a,$(x...),b)
-	       (if (match '($ (tuple (... x))) (car p))
+	       (if (splice-expr? (car p))
 		   (loop (cdr p)
 			 (cons (cadr (cadadr (car p))) q))
 		   (loop (cdr p)
 			 (cons `(cell1d ,(expand-backquote (car p)))
 			       q))))))))
 
+(define (inert->quote e)
+  (cond ((atom? e)  e)
+	((eq? (car e) 'inert)
+	 (cons 'quote (map inert->quote (cdr e))))
+	(else  (map inert->quote e))))
+
 (define (julia-expand-macros e)
+  (inert->quote (julia-expand-macros- e)))
+
+(define (julia-expand-macros- e)
   (cond ((not (pair? e))     e)
 	((and (eq? (car e) 'quote) (pair? (cadr e)))
 	 ;; backquote is essentially a built-in macro at the moment
-	 (julia-expand-macros (expand-backquote (cadr e))))
+	 (julia-expand-macros- (expand-backquote (cadr e))))
 	((eq? (car e) 'macrocall)
 	 ;; expand macro
 	 (let ((form
@@ -2919,10 +2935,10 @@ So far only the second case can actually occur.
 	   (let ((form (car form))
 		 (m    (cdr form)))
 	     ;; m is the macro's def module, or #f if def env === use env
-	     (julia-expand-macros
+	     (julia-expand-macros-
 	      (resolve-expansion-vars form m)))))
 	(else
-	 (map julia-expand-macros e))))
+	 (map julia-expand-macros- e))))
 
 (define (pair-with-gensyms v)
   (map (lambda (s)

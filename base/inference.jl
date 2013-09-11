@@ -825,6 +825,8 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
         end
     elseif is(e.head,:method)
         t = Function
+    elseif is(e.head,:copyast)
+        t = abstract_eval(e.args[1], vtypes, sv)
     else
         t = Any
     end

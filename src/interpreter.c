@@ -252,6 +252,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         JL_GC_POP();
         return *bp;
     }
+    else if (ex->head == copyast_sym) {
+        return jl_copy_ast(eval(args[0], locals, nl));
+    }
     else if (ex->head == const_sym) {
         jl_value_t *sym = args[0];
         for (size_t i=0; i < nl; i++) {

@@ -449,7 +449,7 @@ extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
 extern jl_sym_t *compositetype_sym; extern jl_sym_t *type_goto_sym;
 extern jl_sym_t *global_sym;  extern jl_sym_t *tuple_sym;
-extern jl_sym_t *boundscheck_sym;
+extern jl_sym_t *boundscheck_sym; extern jl_sym_t *copyast_sym;
 
 
 #ifdef _P64
@@ -991,6 +991,7 @@ jl_sym_t *jl_decl_var(jl_value_t *ex);
 DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
 DLLEXPORT jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams);
+DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr);
 
 DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);
 DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data);

@@ -114,6 +114,7 @@
     jl_exit;
     jl_expand;
     jl_expr_type;
+    jl_copy_ast;
     jl_eval_string;
     jl_exception_occurred;
     jl_exception_clear;
