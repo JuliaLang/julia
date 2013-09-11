@@ -267,17 +267,26 @@ end
 
 resolve() = Dir.cd(_resolve) #4082 TODO: some call to fixup should go here
 
-tag(pkg::String, ver::VersionNumber; msg::String="", commit::String="") = Dir.cd() do
+tag(pkg::String, ver::Union(Symbol,VersionNumber)=:patch;
+    msg::String="", commit::String="") = Dir.cd() do
     ispath(pkg,".git") || error("$pkg is not a git repo")
+    Git.dirty(dir=pkg) && error("$pkg is dirty – stash changes to tag")
+    registered = isfile("METADATA",pkg,"url")
+    existing = VersionNumber[(
+        registered ? keys(Read.available(pkg)) :
+        filter!(v->ismatch(Base.VERSION_REGEX,v), split(Git.readall(`tag -l v*`, dir=pkg)))
+    )...]
+    sort!(existing)
+    if isa(ver,Symbol)
+        ver = (ver == :patch) ? Base.nextpatch(max([v"0",existing])) :
+              (ver == :minor) ? Base.nextminor(max([v"0",existing])) :
+              (ver == :major) ? Base.nextmajor(max([v"0",existing])) :
+                                error("invalid version selector: $ver")
+    end
+    Base.check_new_version(existing,ver)
     isempty(msg) && (msg = "$pkg v$ver")
     isempty(commit) && (commit = Git.head(dir=pkg))
-    registered = isfile("METADATA",pkg,"url")
-    existing = registered ?
-        VersionNumber[ keys(Read.available(pkg))... ] :
-        VersionNumber[ filter!(v->ismatch(Base.VERSION_REGEX,v),
-                       split(Git.readall(`tag -l v*`, dir=pkg))) ]
-    sort!(existing)
-    Base.check_new_version(existing,ver)
+    # TODO: check that SHA1 isn't the same as another version
     info("Tagging $pkg v$ver")
     Git.run(`tag -m $msg v$ver $commit`, dir=pkg)
     registered || return
