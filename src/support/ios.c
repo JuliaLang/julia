@@ -44,6 +44,9 @@ DLLEXPORT void *memrchr(const void *s, int c, size_t n)
 #else
 extern void *memrchr(const void *s, int c, size_t n);
 #endif
+#if defined(__WINDOWS__)
+#define lseek _lseek
+#endif
 
 /*
 static int _fd_available(long fd)
