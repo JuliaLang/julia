@@ -268,6 +268,27 @@ end
 
 resolve() = Dir.cd(_resolve) #4082 TODO: some call to fixup should go here
 
+register(pkg::String, url::String) = Dir.cd() do
+    ispath(pkg,".git") || error("$pkg is not a git repo")
+    isfile("METADATA",pkg,"url") && error("$pkg already registered")
+    cd("METADATA") do
+        Git.transact() do
+            info("Registering $pkg at $url")
+            mkdir(pkg)
+            path = joinpath(pkg,"url")
+            open(io->println(io,url), path, "w")
+            Git.run(`add $path`)
+        end
+    end
+end
+
+function register(pkg::String)
+    d = dir(pkg)
+    Git.success(`config remote.origin.url`, dir=d) || error("$pkg: no URL configured")
+    url = Git.readchomp(`config remote.origin.url`, dir=d)
+    register(pkg,url)
+end
+
 tag(pkg::String, ver::Union(Symbol,VersionNumber)=:bump;
     commit::String="", msg::String="") = Dir.cd() do
     ispath(pkg,".git") || error("$pkg is not a git repo")
