@@ -81,9 +81,12 @@ function status(io::IO, pkg::String, ver::VersionNumber, fix::Bool)
     @printf io "%-19s" ver
     if ispath(Dir.path(pkg,".git"))
         print(io, Git.attached(dir=pkg) ? Git.branch(dir=pkg) : Git.head(dir=pkg)[1:8])
-        Git.dirty(dir=pkg) && print(io, " (dirty)")
+        attrs = String[]
+        isfile("METADATA",pkg,"url") || push!(attrs,"unregistered")
+        Git.dirty(dir=pkg) && push!(attrs,"dirty")
+        isempty(attrs) || print(io, " (",join(attrs,", "),")")
     else
-        print(io, "non-repo")
+        print(io, "non-repo (unregistered)")
     end
     println(io)
 end
