@@ -289,6 +289,14 @@ function register(pkg::String)
     register(pkg,url)
 end
 
+function isrewritable(v::VersionNumber)
+    thispatch(v)==v"0" ||
+    length(v.prerelease)==1 && isempty(v.prerelease[1]) ||
+    length(v.build)==1 && isempty(v.build[1])
+end
+
+nextbump(v::VersionNumber) = isrewritable(v) ? v : nextpatch(v)
+
 tag(pkg::String, ver::Union(Symbol,VersionNumber)=:bump;
     commit::String="", msg::String="") = Dir.cd() do
     ispath(pkg,".git") || error("$pkg is not a git repo")
@@ -298,16 +306,17 @@ tag(pkg::String, ver::Union(Symbol,VersionNumber)=:bump;
         registered ? keys(Read.available(pkg)) :
         filter!(v->ismatch(Base.VERSION_REGEX,v), split(Git.readall(`tag -l v*`, dir=pkg)))
     )...]
+    # TODO: filter to only ancestor commits?
     sort!(existing)
     if isa(ver,Symbol)
         prv = isempty(existing) ? v"0" : max(existing)
-        ver = (ver == :bump ) ? (prv==v"0" ? v"0" : nextpatch(prv)) :
+        ver = (ver == :bump ) ? nextbump(prv)  :
               (ver == :patch) ? nextpatch(prv) :
               (ver == :minor) ? nextminor(prv) :
               (ver == :major) ? nextmajor(prv) :
                                 error("invalid version selector: $ver")
     end
-    rewritable = thispatch(ver)==v"0"
+    rewritable = isrewritable(ver)
     rewritable && filter!(v->v!=ver,existing)
     check_new_version(existing,ver)
     isempty(commit) && (commit = Git.head(dir=pkg))
