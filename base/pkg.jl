@@ -273,10 +273,9 @@ tag(pkg::String, ver::VersionNumber; msg::String="", commit::String="") = Dir.cd
     isempty(commit) && (commit = Git.head(dir=pkg))
     registered = isfile("METADATA",pkg,"url")
     existing = registered ?
-        [ keys(Read.available(pkg))... ] :
-        [ convert(VersionNumber,v) for v in
-            filter!(v->ismatch(Base.VERSION_REGEX,v),
-                split(Git.readall(`tag -l v*`, dir=pkg))) ]
+        VersionNumber[ keys(Read.available(pkg))... ] :
+        VersionNumber[ filter!(v->ismatch(Base.VERSION_REGEX,v),
+                       split(Git.readall(`tag -l v*`, dir=pkg))) ]
     sort!(existing)
     Base.check_new_version(existing,ver)
     info("Tagging $pkg v$ver")
