@@ -11,6 +11,7 @@ include("pkg/write.jl")
 include("pkg/scaffold.jl")
 
 using Base.Git, .Types
+import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
 
 const dir = Dir.path
 const scaffold = Scaffold.scaffold
@@ -267,8 +268,8 @@ end
 
 resolve() = Dir.cd(_resolve) #4082 TODO: some call to fixup should go here
 
-tag(pkg::String, ver::Union(Symbol,VersionNumber)=:patch;
-    msg::String="", commit::String="") = Dir.cd() do
+tag(pkg::String, ver::Union(Symbol,VersionNumber)=:bump;
+    commit::String="", msg::String="") = Dir.cd() do
     ispath(pkg,".git") || error("$pkg is not a git repo")
     Git.dirty(dir=pkg) && error("$pkg is dirty – stash changes to tag")
     registered = isfile("METADATA",pkg,"url")
@@ -278,17 +279,22 @@ tag(pkg::String, ver::Union(Symbol,VersionNumber)=:patch;
     )...]
     sort!(existing)
     if isa(ver,Symbol)
-        ver = (ver == :patch) ? Base.nextpatch(max([v"0",existing])) :
-              (ver == :minor) ? Base.nextminor(max([v"0",existing])) :
-              (ver == :major) ? Base.nextmajor(max([v"0",existing])) :
+        prv = isempty(existing) ? v"0" : max(existing)
+        ver = (ver == :bump ) ? (prv==v"0" ? v"0" : nextpatch(prv)) :
+              (ver == :patch) ? nextpatch(prv) :
+              (ver == :minor) ? nextminor(prv) :
+              (ver == :major) ? nextmajor(prv) :
                                 error("invalid version selector: $ver")
     end
-    Base.check_new_version(existing,ver)
-    isempty(msg) && (msg = "$pkg v$ver")
+    rewritable = thispatch(ver)==v"0"
+    rewritable && filter!(v->v!=ver,existing)
+    check_new_version(existing,ver)
     isempty(commit) && (commit = Git.head(dir=pkg))
+    isempty(msg) && (msg = "$pkg v$ver [$(commit[1:10])]")
     # TODO: check that SHA1 isn't the same as another version
+    opts = rewritable ? `--force` : `--annotate --message $msg`
     info("Tagging $pkg v$ver")
-    Git.run(`tag -m $msg v$ver $commit`, dir=pkg)
+    Git.run(`tag $opts v$ver $commit`, dir=pkg, out=DevNull)
     registered || return
     try
         reqs = Reqs.parse(joinpath(pkg,"REQUIRE"))
