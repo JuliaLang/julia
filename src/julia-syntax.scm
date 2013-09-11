@@ -2390,7 +2390,7 @@ So far only the second case can actually occur.
 	((lambda scope-block)  '())
 	((method)
 	 (let ((v (decl-var (method-expr-name e))))
-	   (if (memq v env)
+	   (if (or (not (symbol? v)) (memq v env))
 	       '()
 	       (list v))))
 	((=)
