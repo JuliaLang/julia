@@ -154,7 +154,7 @@ function _wait(fdw::FDWatcher,readable,writable)
     end
     while true
         events = wait(fdw.notify)
-        if isa(events, FDEvent) && ((isreadable(events) == readable) || (iswritable(events) == writable))
+        if isa(events, FDEvent) && ((readable && isreadable(events)) || (writable && iswritable(events)))
             break
         end
     end
