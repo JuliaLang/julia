@@ -25,51 +25,40 @@ function close(t::FileMonitor)
 end
 
 immutable FileEvent
-    renamed::Bool
-    changed::Bool
-    timeout::Bool
+    flags::Int32
 end
+# libuv file watching event flags
+const UV_RENAME = 1
+const UV_CHANGE = 2
+const FE_TIMEDOUT = 4
+renamed(f::FileEvent) = (f.flags & UV_RENAME) != 0
+changed(f::FileEvent) = (f.flags & UV_CHANGE) != 0
+timedout(f::FileEvent) = (f.flags & FE_TIMEDOUT) != 0
+FileEvent() = FileEvent(0)
+FileEvent(flags::Integer) = FileEvent(int32(flags))
+FileEvent(renamed, changed, timedout) = FileEvent(renamed*UV_RENAME + changed*UV_CHANGE + timedout*FE_TIMEDOUT)
 
 immutable FDEvent
-    readable::Bool
-    writable::Bool
-    timeout::Bool
+    flags::Int32
 end
-FDEvent() = FDEvent(false, false, false)
-
-function fileevent(events)
-    # libuv file watching event flags
-    const UV_RENAME = 1
-    const UV_CHANGE = 2
-    timeout = (events & (UV_RENAME | UV_CHANGE) == 0)
-    FileEvent((events & UV_RENAME) != 0, (events & UV_CHANGE) != 0, timeout)
-end
-
-function (|)(e1::FileEvent, e2::FileEvent)
-    FileEvent(
-        e1.renamed || e2.renamed,
-        e1.changed || e2.changed,
-        e1.timeout || e2.timeout)
-end
-
 # libuv file descriptor event flags
 const UV_READABLE = 1
 const UV_WRITABLE = 2
-function fdevent(events)
-    timeout = (events & (UV_READABLE | UV_WRITABLE) == 0)
-    FDEvent((events & UV_READABLE) != 0, (events & UV_WRITABLE) != 0, timeout)
-end
+const FD_TIMEDOUT = 4
+isreadable(f::FDEvent) = (f.flags & UV_READABLE) != 0
+iswritable(f::FDEvent) = (f.flags & UV_WRITABLE) != 0
+timedout(f::FDEvent) = (f.flags & FD_TIMEDOUT) != 0
+FDEvent() = FDEvent(0)
+FDEvent(flags::Integer) = FDEvent(int32(flags))
+FDEvent(isreadable, iswritable, timedout) = FDEvent(isreadable*UV_READABLE + iswritable*UV_WRITABLE + timedout*FD_TIMEDOUT)
+fdtimeout() = FDEvent(FD_TIMEDOUT)
 
-fdtimeout() = FDEvent(false, false, true)
+(|)(a::FileEvent, b::FileEvent) = FileEvent(a.flags | b.flags)
+(|)(a::FDEvent, b::FDEvent) = FDEvent(a.flags | b.flags)
 
-function (|)(e1::FDEvent, e2::FDEvent)
-    FDEvent(
-        e1.readable || e2.readable,
-        e1.writable || e2.writable,
-        e1.timeout || e2.timeout)
-end
-convert(::Type{Int32}, e::FDEvent) = e.readable*UV_READABLE + e.writable*UV_WRITABLE
-convert(::Type{Int32},fd::RawFD) = fd.fd 
+convert(::Type{Int32}, e::FileEvent) = int32(e.flags)
+convert(::Type{Int32}, e::FDEvent) = int32(e.flags)
+convert(::Type{Int32}, fd::RawFD) = fd.fd 
 
 #Wrapper for an OS file descriptor (for Windows)
 @windows_only immutable WindowsRawSocket
@@ -165,7 +154,7 @@ function _wait(fdw::FDWatcher,readable,writable)
     end
     while true
         events = wait(fdw.notify)
-        if isa(events, FDEvent) && ((events.readable == readable) || (events.writable == writable))
+        if isa(events, FDEvent) && ((isreadable(events) == readable) || (iswritable(events) == writable))
             break
         end
     end
@@ -278,20 +267,20 @@ end
 
 function _uv_hook_fseventscb(t::FileMonitor,filename::Ptr,events::Int32,status::Int32)
     fname = bytestring(convert(Ptr{Uint8},filename))
-    fileEvent = fileevent(events)
+    fe = FileEvent(events)
     if isa(t.cb,Function)
-        t.cb(fname, fileEvent, status)
+        t.cb(fname, fe, status)
     end
     if status < 0
-        notify_error(t.notify,(UVError("FileMonitor",status), fname, fileEvent))
+        notify_error(t.notify,(UVError("FileMonitor",status), fname, fe))
     else
-        notify(t.notify,(status, fname, fileEvent))
+        notify(t.notify,(status, fname, fe))
     end
 end
 
 function _uv_hook_pollcb(t::FDWatcher,status::Int32,events::Int32)
     if isa(t.cb,Function)
-        t.cb(t, fdevent(events), status)
+        t.cb(t, FDEvent(events), status)
     end
 end
 
