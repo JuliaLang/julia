@@ -372,39 +372,33 @@
 
 ; parse left-to-right binary operator
 ; produces structures like (+ (+ (+ 2 3) 4) 5)
-(define (parse-LtoR s down ops)
-  (let loop ((ex (down s)))
-    (let ((t   (peek-token s))
-	  #;(spc (ts:space? s)))
-      (if (not (memq t ops))
-	  ex
-	  (begin (take-token s)
-		 (cond #;((and space-sensitive spc (memq t unary-and-binary-ops)
-			     (not (eqv? (peek-char (ts:port s)) #\ )))
-			(ts:put-back! s t)
-			ex)
-		       ((or (syntactic-op? t) (eq? t 'in))
-			(loop (list t ex (down s))))
-		       (else
-			(loop (list 'call t ex (down s))))))))))
+(define-macro (parse-LtoR s down ops)
+  `(let loop ((ex (,down ,s))
+	      (t  (peek-token ,s)))
+     (if (not (memq t ,ops))
+	 ex
+	 (begin (take-token ,s)
+		(if (or (syntactic-op? t) (eq? t 'in))
+		    (loop (list t ex (,down ,s)) (peek-token ,s))
+		    (loop (list 'call t ex (,down ,s)) (peek-token ,s)))))))
 
 ; parse right-to-left binary operator
 ; produces structures like (= a (= b (= c d)))
 (define (parse-RtoL s down ops)
-  (let ((ex (down s)))
-    (let ((t   (peek-token s))
-	  (spc (ts:space? s)))
-      (if (not (memq t ops))
-	  ex
-	  (begin (take-token s)
-		 (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
-			     (not (eqv? (peek-char (ts:port s)) #\ )))
-			(ts:put-back! s t)
-			ex)
-		       ((syntactic-op? t)
-			(list t ex (parse-RtoL s down ops)))
-		       (else
-			(list 'call t ex (parse-RtoL s down ops)))))))))
+  (let ((ex (down s))
+	(t   (peek-token s))
+	(spc (ts:space? s)))
+    (if (not (memq t ops))
+	ex
+	(begin (take-token s)
+	       (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
+			   (not (eqv? (peek-char (ts:port s)) #\ )))
+		      (ts:put-back! s t)
+		      ex)
+		     ((syntactic-op? t)
+		      (list t ex (parse-RtoL s down ops)))
+		     (else
+		      (list 'call t ex (parse-RtoL s down ops))))))))
 
 (define (parse-cond s)
   (let ((ex (parse-or s)))
@@ -463,31 +457,31 @@
 			    ;; note: line-number must happen before (down s)
 			    (list (down s) loc))
 			  (list (down s)))))
-		 (first? #t))
-	(let ((t (peek-token s)))
-	  (if (not (memv t ops))
-	      (begin
-		(if (not (or (eof-object? t) (eqv? t #\newline) (memv #\, ops)
-			     (memv t closers)))
-		    (error (string "extra token \"" t "\" after end of expression")))
-		(if (or (null? ex) (pair? (cdr ex)) (not first?))
-		    ;; () => (head)
-		    ;; (ex2 ex1) => (head ex1 ex2)
-		    ;; (ex1) if operator appeared => (head ex1) (handles "x;")
-		    (cons head (reverse ex))
-		    ;; (ex1) => ex1
-		    (car ex)))
-	      (begin (take-token s)
-		     ; allow input to end with the operator, as in a;b;
-		     (if (or (eof-object? (peek-token s))
-			     (memv (peek-token s) closers)
-			     (and allow-empty
-				  (memv (peek-token s) ops)))
-			 (loop ex #f)
-			 (if (memv #\newline ops)
-			     (let ((loc (line-number-node s)))
-			       (loop (list* (down s) loc ex) #f))
-			     (loop (cons (down s) ex) #f)))))))))
+		 (first? #t)
+		 (t (peek-token s)))
+	(if (not (memv t ops))
+	    (begin
+	      (if (not (or (eof-object? t) (eqv? t #\newline) (memv #\, ops)
+			   (memv t closers)))
+		  (error (string "extra token \"" t "\" after end of expression")))
+	      (if (or (null? ex) (pair? (cdr ex)) (not first?))
+		  ;; () => (head)
+		  ;; (ex2 ex1) => (head ex1 ex2)
+		  ;; (ex1) if operator appeared => (head ex1) (handles "x;")
+		  (cons head (reverse ex))
+		  ;; (ex1) => ex1
+		  (car ex)))
+	    (begin (take-token s)
+		   ;; allow input to end with the operator, as in a;b;
+		   (if (or (eof-object? (peek-token s))
+			   (memv (peek-token s) closers)
+			   (and allow-empty
+				(memv (peek-token s) ops)))
+		       (loop ex #f (peek-token s))
+		       (if (memv #\newline ops)
+			   (let ((loc (line-number-node s)))
+			     (loop (list* (down s) loc ex) #f (peek-token s)))
+			   (loop (cons (down s) ex) #f (peek-token s)))))))))
 
 ; parse ranges and postfix ...
 ; colon is strange; 3 arguments with 2 colons yields one call:
@@ -563,51 +557,51 @@
 
 ; parse left to right, combining chains of certain operators into 1 call
 ; e.g. a+b+c => (call + a b c)
+(define expr-ops (prec-ops 8))
 (define (parse-expr s)
-  (let ((ops (prec-ops 8)))
-    (let loop ((ex       (parse-shift s))
-	       (chain-op #f))
-      (let* ((t   (peek-token s))
-	     (spc (ts:space? s)))
-	(if (not (memq t ops))
-	    ex
-	    (begin
-	      (take-token s)
-	      (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
-			  (not (eqv? (peek-char (ts:port s)) #\ )))
-		     ;; here we have "x -y"
-		     (ts:put-back! s t)
-		     ex)
-		    ((eq? t chain-op)
-		     (loop (append ex (list (parse-shift s)))
-			   chain-op))
-		    (else
-		     (loop (list 'call t ex (parse-shift s))
-			   (and (eq? t '+) t))))))))))
+  (let loop ((ex       (parse-shift s))
+	     (chain-op #f))
+    (let* ((t   (peek-token s))
+	   (spc (ts:space? s)))
+      (if (not (memq t expr-ops))
+	  ex
+	  (begin
+	    (take-token s)
+	    (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
+			(not (eqv? (peek-char (ts:port s)) #\ )))
+		   ;; here we have "x -y"
+		   (ts:put-back! s t)
+		   ex)
+		  ((eq? t chain-op)
+		   (loop (append ex (list (parse-shift s)))
+			 chain-op))
+		  (else
+		   (loop (list 'call t ex (parse-shift s))
+			 (and (eq? t '+) t)))))))))
 
 (define (parse-shift s) (parse-LtoR s parse-term (prec-ops 9)))
 
+(define term-ops (prec-ops 10))
 (define (parse-term s)
-  (let ((ops (prec-ops 10)))
-    (let loop ((ex       (parse-rational s))
-	       (chain-op #f))
-      (let ((t   (peek-token s))
-	    (spc (ts:space? s)))
-	(cond ((not (memq t ops))
-	       ex)
-	      ;; TODO: maybe parse 2x*y as (call * 2 x y)
-	      ((eq? t chain-op)
-	       (begin (take-token s)
-		      (loop (append ex (list (parse-rational s)))
-			    chain-op)))
-	      (else
-	       (begin (take-token s)
-		      (if (and space-sensitive spc (memq t unary-and-binary-ops)
-			       (not (eqv? (peek-char (ts:port s)) #\ )))
-			  (begin (ts:put-back! s t)
-				 ex)
-			  (loop (list 'call t ex (parse-rational s))
-				(and (eq? t '*) t))))))))))
+  (let loop ((ex       (parse-rational s))
+	     (chain-op #f))
+    (let ((t   (peek-token s))
+	  (spc (ts:space? s)))
+      (cond ((not (memq t term-ops))
+	     ex)
+	    ;; TODO: maybe parse 2x*y as (call * 2 x y)
+	    ((eq? t chain-op)
+	     (begin (take-token s)
+		    (loop (append ex (list (parse-rational s)))
+			  chain-op)))
+	    (else
+	     (begin (take-token s)
+		    (if (and space-sensitive spc (memq t unary-and-binary-ops)
+			     (not (eqv? (peek-char (ts:port s)) #\ )))
+			(begin (ts:put-back! s t)
+			       ex)
+			(loop (list 'call t ex (parse-rational s))
+			      (and (eq? t '*) t)))))))))
 
 (define (parse-rational s) (parse-LtoR s parse-unary (prec-ops 11)))
 
@@ -697,13 +691,13 @@
 
 ; handle ^ and .^
 (define (parse-factor-h s down ops)
-  (let ((ex (down s)))
-    (let ((t (peek-token s)))
-      (cond ((not (memq t ops))
-	     ex)
-	    (else
-	     (list 'call
-		   (take-token s) ex (parse-factor-h s parse-unary ops)))))))
+  (let ((ex (down s))
+	(t (peek-token s)))
+    (cond ((not (memq t ops))
+	   ex)
+	  (else
+	   (list 'call
+		 (take-token s) ex (parse-factor-h s parse-unary ops))))))
 
 ; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
 ; and parse-unary from then on (to handle 2^-3)
@@ -1328,26 +1322,25 @@
 	     (nxt first))
     (if (assignment? nxt)
 	(error "invalid syntax in tuple"))
-    (let ((t (require-token s)))
-      (case t
-	((#\))
-	 (take-token s)
-	 (cons 'tuple (reverse (cons nxt lst))))
-	((#\,)
-	 (take-token s)
-	 (if (eqv? (require-token s) #\))
-	     ;; allow ending with ,
-	     (begin (take-token s)
-		    (cons 'tuple (reverse (cons nxt lst))))
-	     (loop (cons nxt lst) (parse-eq* s))))
-	((#\;)
-	 (error "unexpected semicolon in tuple"))
-	#;((#\newline)
-	 (error "unexpected line break in tuple"))
-	((#\] #\})
-	 (error (string "unexpected " t " in tuple")))
-	(else
-	 (error "missing separator in tuple"))))))
+    (case (require-token s)
+      ((#\))
+       (take-token s)
+       (cons 'tuple (reverse (cons nxt lst))))
+      ((#\,)
+       (take-token s)
+       (if (eqv? (require-token s) #\))
+	   ;; allow ending with ,
+	   (begin (take-token s)
+		  (cons 'tuple (reverse (cons nxt lst))))
+	   (loop (cons nxt lst) (parse-eq* s))))
+      ((#\;)
+       (error "unexpected semicolon in tuple"))
+      #;((#\newline)
+      (error "unexpected line break in tuple"))
+      ((#\] #\})
+       (error (string "unexpected " (peek-token s) " in tuple")))
+      (else
+       (error "missing separator in tuple")))))
 
 (define (not-eof-2 c)
   (if (eof-object? c)
@@ -1473,9 +1466,8 @@
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)
   (let ((ex (parse-atom- s)))
-    (if (and (symbol? ex)
-	     (or (memq ex syntactic-operators)
-		 (eq? ex '....)))
+    (if (or (memq ex syntactic-operators)
+	    (eq? ex '....))
 	(error (string "invalid identifier name " ex)))
     ex))
 
@@ -1518,8 +1510,7 @@
 	   (take-token s)
 	   (if (closing-token? (peek-token s))
 	       ':
-	       (let ((ex (parse-atom- s)))
-		 (list 'quote ex))))
+	       (list 'quote (parse-atom- s))))
 
 	  ;; misplaced =
 	  ((eq? t '=) (error "unexpected ="))
@@ -1683,8 +1674,7 @@
 	 (let skip-loop ((tok (peek-token s)))
 	   (if (or (eqv? tok #\newline) )
 	       (begin (take-token s) (skip-loop (peek-token s)))))
-	 (let ((t (peek-token s)))
-	   (if (eof-object? t)
-	       t
-	       ((if (null? production) parse-stmts (car production))
-		s))))))
+	 (if (eof-object? (peek-token s))
+	     (eof-object)
+	     ((if (null? production) parse-stmts (car production))
+	      s)))))
