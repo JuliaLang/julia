@@ -39,7 +39,7 @@ function scaffold(
         error("$d exists, refusing to overwrite.")
     mkpath(d)
     try cd(d) do
-            info("Initializing $pkg repo")
+            info("Initializing $pkg repo: $d")
             Git.run(`init -q`)
             Git.run(`commit -q --allow-empty -m "initial empty commit"`)
             generate("README.md") do io
@@ -86,7 +86,7 @@ function scaffold(
             Git.run(`commit -q -m "$pkg.jl scaffold with $license license."`)
             if github
                 user = Git.readchomp(`config --get github.user`)
-                url = "git@github.com:$user/$pkg.jl.git"
+                url = "git://github.com/$user/$pkg.jl.git"
                 info("Setting URL: $url")
                 Git.set_remote_url(url)
             end
@@ -95,7 +95,6 @@ function scaffold(
         run(`rm -rf $d`)
         rethrow()
     end
-    info("Package $pkg created: $d")
 end
 
 mit(pkg::String, years::String, authors::String) = """
