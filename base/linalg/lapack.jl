@@ -139,6 +139,12 @@ end
 # geqrt3! - recursive algorithm producing compact WY representation of Q
 # gerqf - unpivoted RQ decomposition
 # getrf - LU decomposition
+#
+# These mutating functions take as arguments all the values they
+# return, even if the value of the function does not depend on them
+# (e.g. the tau argument).  This is so that a factorization can be
+# updated in place.  The condensed mutating functions, usually a
+# function of A only, are defined after this block.
 for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty) in
     ((:dgebrd_,:dgelqf_,:dgeqlf_,:dgeqrf_,:dgeqp3_,:dgeqrt_,:dgeqrt3_,:dgerqf_,:dgetrf_,:Float64,:Float64),
      (:sgebrd_,:sgelqf_,:sgeqlf_,:sgeqrf_,:sgeqp3_,:sgeqrt_,:sgeqrt3_,:sgerqf_,:sgetrf_,:Float32,:Float32),
@@ -175,19 +181,20 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                     work = Array($elty, lwork)
                 end
             end
+            tauq, taup
         end
         # SUBROUTINE DGELQF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function gelqf!(A::StridedMatrix{$elty})
+        function gelqf!(A::StridedMatrix{$elty}, tau::Vector{$elty})
             chkstride1(A)
             info  = Array(BlasInt, 1)
             m     = blas_int(size(A, 1))
             n     = blas_int(size(A, 2))
             lda   = blas_int(max(1,stride(A, 2)))
-            tau   = Array($elty, n)
+            if length(tau) != min(m,n) throw(DimensionMismatch("gelqf!")) end
             lwork = blas_int(-1)
             work  = Array($elty, (1,))
             for i in 1:2                # first call returns lwork as work[1]
@@ -208,13 +215,13 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         #       INTEGER            INFO, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function geqlf!(A::StridedMatrix{$elty})
+        function geqlf!(A::StridedMatrix{$elty}, tau::Vector{$elty})
             chkstride1(A)
             info  = Array(BlasInt, 1)
             m     = blas_int(size(A, 1))
             n     = blas_int(size(A, 2))
             lda   = blas_int(max(1,stride(A, 2)))
-            tau   = Array($elty, n)
+            if length(tau) != min(m,n) throw(DimensionMismatch("geqlf!")) end
             lwork = blas_int(-1)
             work  = Array($elty, (1,))
             for i in 1:2                # first call returns lwork as work[1]
@@ -236,11 +243,10 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         # *     .. Array Arguments ..
         #       INTEGER            JPVT( * )
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function geqp3!(A::StridedMatrix{$elty})
+        function geqp3!(A::StridedMatrix{$elty}, jpvt::Vector{BlasInt}, tau::Vector{$elty})
             chkstride1(A)
             m, n  = size(A)
-            jpvt  = zeros(BlasInt, n)
-            tau   = Array($elty, min(m,n))
+            if length(tau) != min(m,n) || length(jpvt) != n throw(DimensionMismatch("geqp3!")) end
             lda   = max(1,stride(A,2))
             if lda == 0 return A, tau, jpvt end # Early exit
             work  = Array($elty, 1)
@@ -295,35 +301,32 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             end
             A, T
         end
-        function geqrt3!(A::StridedMatrix{$elty})
-            chkstride1(A)
-            m, n = size(A)
-            if m < n throw(DimensionMismatch("matrix cannot have fewer rows than columns")) end
-            lda = max(1, stride(A, 2))
-            T = Array($elty, n, n)
+        function geqrt3!(A::StridedMatrix{$elty}, T::Matrix{$elty})
+            chkstride1(A); chkstride1(T)
+            m, n = size(A); p, q = size(T)
+            if m < n throw(DimensionMismatch("input matrix cannot have fewer rows than columns")) end
+            if p < n || q < n throw(DimensionMismatch("block reflector")) end
             if n > 0
                 info = Array(BlasInt, 1)
                 ccall(($(string(geqrt3)), liblapack), Void, 
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                     &m, &n, A, &lda,
-                     T, &n, info)
+                     &m, &n, A, &max(1, stride(A, 2)),
+                     T, &max(1,stride(T,2)), info)
                 @lapackerror
             end
             A, T
         end
-        ## Several variants of geqrf! could be defined.
-        ## geqrfp! - positive elements on diagonal of R
-        ## geqrt!  - compact WY representation of Q (blocked algorithm)
+        ## geqrfp! - positive elements on diagonal of R - not defined yet
         # SUBROUTINE DGEQRF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function geqrf!(A::StridedMatrix{$elty})
+        function geqrf!(A::StridedMatrix{$elty}, tau::Vector{$elty})
             chkstride1(A)
             m, n  = size(A)
-            tau   = Array($elty, n)
+            if length(tau) != min(m,n) throw(DimensionMismatch("geqrf!")) end
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
@@ -345,11 +348,11 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         #       INTEGER            INFO, LDA, LWORK, M, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function gerqf!(A::StridedMatrix{$elty})
+        function gerqf!(A::StridedMatrix{$elty},tau::Vector{$elty})
             chkstride1(A)
             info  = Array(BlasInt, 1)
             m, n  = size(A)
-            tau   = Array($elty, n)
+            if length(tau) != min(m,n) throw(DimensionMismatch("gerqf!")) end
             lwork = blas_int(-1)
             work  = Array($elty, 1)
             for i in 1:2                # first call returns lwork as work[1]
@@ -385,6 +388,21 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             A, ipiv, info[1] #Error code is stored in LU factorization type
         end
     end
+end
+
+gelqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gelqf!(A,Array(T,min(m,n))))
+geqlf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqlf!(A,Array(T,min(m,n))))
+geqrt3!{T<:BlasFloat}(A::StridedMatrix{T}) = (n=size(A,2); geqrt3!(A,Array(T,n,n)))
+geqrf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqrf!(A,Array(T,min(m,n))))
+gerqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gerqf!(A,Array(T,min(m,n))))
+
+function geqp3!{T<:BlasFloat}(A::StridedMatrix{T},jpvt::Vector{BlasInt})
+    m,n = size(A)
+    geqp3!(A,jpvt,Array(T,min(m,n)))
+end
+function geqp3!{T<:BlasFloat}(A::StridedMatrix{T})
+    m,n=size(A)
+    geqp3!(A,zeros(BlasInt,n),Array(T,min(m,n)))
 end
 
 ## Complete orthogonaliztion tools
