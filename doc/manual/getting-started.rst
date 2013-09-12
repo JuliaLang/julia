@@ -92,6 +92,7 @@ those available for the ``perl`` and ``ruby`` programs::
      --no-history             Don't load or save history
      -f --no-startup          Don't load ~/.juliarc.jl
      -F                       Load ~/.juliarc.jl, then handle remaining inputs
+     --color=yes|no           Enable or disable color text
 
      -h --help                Print this message
 
