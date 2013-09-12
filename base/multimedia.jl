@@ -59,7 +59,9 @@ for mime in ["text/vnd.graphviz", "text/latex", "text/calendar", "text/n3", "tex
     mimeT = MIME{symbol(mime)}
     global istext, reprmime, stringmime
     istext(::mimeT) = true
-    reprmime(m::mimeT, x::String) = x
+    if mime != "text/plain" # strings are shown escaped for text/plain
+        reprmime(m::mimeT, x::String) = x
+    end
     reprmime(m::mimeT, x) = sprint(writemime, m, x)
     stringmime(m::mimeT, x) = reprmime(m, x)
     # avoid method ambiguities with definitions below:
