@@ -695,8 +695,13 @@ DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         jl_expr_t *ne = NULL;
         JL_GC_PUSH2(&ne, &expr);
         ne = jl_exprn(e->head, l);
-        for(i=0; i < l; i++)
-            jl_exprarg(ne, i) = jl_copy_ast(jl_exprarg(e,i));
+        if (l == 0) {
+            ne->args = jl_alloc_cell_1d(0);
+        }
+        else {
+            for(i=0; i < l; i++)
+                jl_exprarg(ne, i) = jl_copy_ast(jl_exprarg(e,i));
+        }
         JL_GC_POP();
         return (jl_value_t*)ne;
     }
@@ -712,6 +717,8 @@ DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         return (jl_value_t*)na;
     }
     else if (jl_is_quotenode(expr)) {
+        if (jl_is_symbol(jl_fieldref(expr,0)))
+            return expr;
         jl_value_t *q = NULL;
         JL_GC_PUSH2(&q, &expr);
         q = jl_copy_ast(jl_fieldref(expr,0));
