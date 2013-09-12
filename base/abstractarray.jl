@@ -175,6 +175,7 @@ function reshape(A::AbstractArray, dims::(Union(Int,  Colon)...))
     reshape(A, new_dims...)
 end
 
+reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 reshape(a::AbstractArray, dims::Union(Int, Colon)...) = reshape(a, dims)
 
 vec(a::AbstractArray) = reshape(a,length(a))
