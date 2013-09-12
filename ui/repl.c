@@ -31,7 +31,8 @@ static const char *opts =
 
     " --no-history             Don't load or save history\n"
     " -f --no-startup          Don't load ~/.juliarc.jl\n"
-    " -F                       Load ~/.juliarc.jl, then handle remaining inputs\n\n"
+    " -F                       Load ~/.juliarc.jl, then handle remaining inputs\n"
+    " --color=yes|no           Enable or disable color text\n\n"
 
     " -h --help                Print this message\n";
 
