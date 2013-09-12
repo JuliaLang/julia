@@ -90,6 +90,30 @@ JL_PRIVATE_LIBS = amd arpack camd ccolamd cholmod colamd \
                   random Rmath spqr suitesparse_wrapper \
                   umfpack z openblas mpfr gfortblas
 
+ifeq ($(OS),WINNT)
+define std_dll
+debug release: | $$(BUILD)/$$(JL_LIBDIR)/$(1).dll
+$$(BUILD)/$$(JL_LIBDIR)/$(1).dll: | $$(BUILD)/$$(JL_LIBDIR)
+ifeq ($$(BUILD_OS),$$(OS))
+	cp $$(call pathsearch,$(1).dll,$$(PATH)) $$(BUILD)/$$(JL_LIBDIR) ;
+else
+	cp $$(call wine_pathsearch,$(1).dll,$$(STD_LIB_PATH)) $$(BUILD)/$$(JL_LIBDIR) ;
+endif
+JL_LIBS += $(1)
+endef
+$(eval $(call std_dll,libgfortran-3))
+$(eval $(call std_dll,libquadmath-0))
+$(eval $(call std_dll,libstdc++-6))
+ifeq ($(ARCH),i686)
+$(eval $(call std_dll,libgcc_s_sjlj-1))
+else
+$(eval $(call std_dll,libgcc_s_seh-1))
+endif
+ifneq ($(BUILD_OS),WINNT)
+$(eval $(call std_dll,libssp-0))
+endif
+endif
+
 PREFIX ?= julia-$(JULIA_COMMIT)
 install:
 	@$(MAKE) $(QUIET_MAKE) debug
@@ -144,27 +168,6 @@ ifeq ($(OS), WINNT)
    		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll ../$(PREFIX)/bin && \
 	    mkdir ../$(PREFIX)/Git && \
 	    7z x PortableGit.7z -o"../$(PREFIX)/Git" )
-ifeq ($(BUILD_OS),WINNT)
-	cp $(call pathsearch,libgfortran-3.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-	cp $(call pathsearch,libquadmath-0.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-ifeq ($(ARCH),i686)
-	cp $(call pathsearch,libgcc_s_sjlj-1.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-else
-	cp $(call pathsearch,libgcc_s_seh-1.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-endif
-	cp $(call pathsearch,libstdc++-6.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-	#cp $(call pathsearch,libssp-0.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-else
-	cp $(call wine_pathsearch,libgfortran-3.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-	cp $(call wine_pathsearch,libquadmath-0.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-ifeq ($(ARCH),i686)
-	cp $(call wine_pathsearch,libgcc_s_sjlj-1.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-else
-	cp $(call wine_pathsearch,libgcc_s_seh-1.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-endif
-	cp $(call wine_pathsearch,libstdc++-6.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-	cp $(call wine_pathsearch,libssp-0.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-endif
 	cd $(PREFIX)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 	./dist-extras/7z a -mx9 -sfx7z.sfx julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).exe julia-$(JULIA_COMMIT)
 else

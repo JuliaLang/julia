@@ -50,12 +50,11 @@ override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
-JL_PRIVATE_LIBDIR = bin
-JL_LIBDIR = bin
-export WINE_PATH := $(shell winepath -w $(BUILD)/bin);$(shell winepath -w $(BUILD)/$(JL_LIBDIR));$(shell winepath -w $(BUILD)/$(JL_PRIVATE_LIBDIR))
-export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
-export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
-export WINE_PATH := $(WINE_PATH);C:\MinGW\\bin;C:\MinGW\msys\1.0\bin;$(shell winepath -w $(BUILD)/Git/bin)
+# assume that JL_LIBDIR and JL_PRIVATE_LIBDIR are already in the path, this will work if the user doesn't try to force it to something
+export WINE_PATH := $(shell winepath -w $(BUILD)/bin);C:\MinGW\\bin;C:\MinGW\msys\1.0\bin;$(shell winepath -w $(BUILD)/Git/bin)
+export STD_LIB_PATH := $(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
+export STD_LIB_PATH := $(STD_LIB_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
+export STD_LIB_PATH := $(STD_LIB_PATH);$(WINE_PATH)
 else
 $(error "unknown XC_HOST variable set")
 endif
@@ -377,6 +376,8 @@ ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
 UNTRUSTED_SYSTEM_LIBM = 1
+JL_PRIVATE_LIBDIR = bin
+JL_LIBDIR = bin
 endif
 
 ifeq ($(USE_SYSTEM_LIBM),0)
