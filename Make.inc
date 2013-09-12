@@ -50,11 +50,8 @@ override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
-# assume that JL_LIBDIR and JL_PRIVATE_LIBDIR are already in the path, this will work if the user doesn't try to force it to something
-export WINE_PATH := $(shell winepath -w $(BUILD)/bin);C:\MinGW\\bin;C:\MinGW\msys\1.0\bin;$(shell winepath -w $(BUILD)/Git/bin)
 export STD_LIB_PATH := $(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
 export STD_LIB_PATH := $(STD_LIB_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
-export STD_LIB_PATH := $(STD_LIB_PATH);$(WINE_PATH)
 else
 $(error "unknown XC_HOST variable set")
 endif
@@ -222,9 +219,9 @@ endif
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
-LLVM_CONFIG ?= llvm-config
+LLVM_CONFIG ?= llvm-config$(EXE)
 else
-LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config
+LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config$(EXE)
 endif
 
 ifeq ($(USE_SYSTEM_READLINE), 1)
@@ -467,7 +464,7 @@ ifeq ($(BUILD_OS), WINNT)
 spawn = $(1)
 else
 ifeq ($(OS), WINNT)
-spawn = wine cmd /c "set PATH=$(WINE_PATH)&& $$(exec winepath -w '$(1)')"
+spawn = wine $(1)
 else
 spawn = $(1)
 endif
