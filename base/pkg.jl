@@ -301,15 +301,26 @@ tag(pkg::String, ver::Union(Symbol,VersionNumber)=:bump;
     commit::String="", msg::String="") = Dir.cd() do
     ispath(pkg,".git") || error("$pkg is not a git repo")
     Git.dirty(dir=pkg) && error("$pkg is dirty – stash changes to tag")
+    isempty(commit) && (commit = Git.head(dir=pkg))
     registered = isfile("METADATA",pkg,"url")
-    existing = VersionNumber[(
-        registered ? keys(Read.available(pkg)) :
-        filter!(v->ismatch(Base.VERSION_REGEX,v), split(Git.readall(`tag -l v*`, dir=pkg)))
-    )...]
-    # TODO: filter to only ancestor commits?
+    if registered
+        avail = Read.available(pkg)
+        existing = [keys(Read.available(pkg))...]
+        ancestors = filter(v->Git.is_ancestor_of(avail[v].sha1,commit,dir=pkg), existing)
+    else
+        tags = split(Git.readall(`tag -l v*`, dir=pkg))
+        filter!(tag->ismatch(Base.VERSION_REGEX,tag), tags)
+        existing = VersionNumber[tags...]
+        filter!(tags) do tag
+            sha1 = Git.readchomp(`rev-parse --verify $tag^{commit}`, dir=pkg)
+            Git.is_ancestor_of(sha1,commit,dir=pkg)
+        end
+        ancestors = VersionNumber[tags...]
+    end
     sort!(existing)
     if isa(ver,Symbol)
-        prv = isempty(existing) ? v"0" : max(existing)
+        prv = isempty(existing) ? v"0" :
+              isempty(ancestors) ? max(existing) : max(ancestors)
         ver = (ver == :bump ) ? nextbump(prv)  :
               (ver == :patch) ? nextpatch(prv) :
               (ver == :minor) ? nextminor(prv) :
@@ -319,7 +330,6 @@ tag(pkg::String, ver::Union(Symbol,VersionNumber)=:bump;
     rewritable = isrewritable(ver)
     rewritable && filter!(v->v!=ver,existing)
     check_new_version(existing,ver)
-    isempty(commit) && (commit = Git.head(dir=pkg))
     isempty(msg) && (msg = "$pkg v$ver [$(commit[1:10])]")
     # TODO: check that SHA1 isn't the same as another version
     opts = rewritable ? `--force` : `--annotate --message $msg`
@@ -327,6 +337,7 @@ tag(pkg::String, ver::Union(Symbol,VersionNumber)=:bump;
     Git.run(`tag $opts v$ver $commit`, dir=pkg, out=DevNull)
     registered || return
     try
+        info("Writing METADATA for $pkg v$ver")
         reqs = Reqs.parse(joinpath(pkg,"REQUIRE"))
         cd("METADATA") do
             Git.transact() do
