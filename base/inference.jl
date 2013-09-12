@@ -729,7 +729,7 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
         if isa(called, LambdaStaticData)
             # called lambda expression (let)
             (_, result) = typeinf(called, argtypes, called.sparams, called,
-                                  false)
+                                  true)
             return result
         end
         ft = abstract_eval(called, vtypes, sv)
@@ -1444,6 +1444,14 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo)
         if !(isa(subex,Number) || isa(subex,String))
             e.args[i] = eval_annotate(subex, vtypes, sv, decls, clo)
         end
+    end
+    if (head === :call || head === :call1) && isa(e.args[1],LambdaStaticData)
+        called = e.args[1]
+        fargs = e.args[2:]
+        argtypes = tuple([abstract_eval_arg(a, vtypes, sv) for a in fargs]...)
+        # recur inside inner functions once we have all types
+        tr,ty = typeinf(called, argtypes, called.sparams, called, false)
+        called.ast = tr
     end
     e
 end
