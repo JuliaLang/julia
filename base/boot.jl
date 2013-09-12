@@ -80,23 +80,23 @@
 #    typ::Any
 #end
 
-#type LineNumberNode
+#immutable LineNumberNode
 #    line::Int
 #end
 
-#type LabelNode
+#immutable LabelNode
 #    label::Int
 #end
 
-#type GotoNode
+#immutable GotoNode
 #    label::Int
 #end
 
-#type QuoteNode
+#immutable QuoteNode
 #    value
 #end
 
-#type TopNode
+#immutable TopNode
 #    name::Symbol
 #end
 

@@ -1810,16 +1810,18 @@
 
    'ccall
    (lambda (e)
-     (let ((name (cadr e))
-	   (RT   (caddr e))
-	   (argtypes (cadddr e))
-	   (args (cddddr e)))
-       (begin
-	 (if (not (and (pair? argtypes)
-		       (eq? (car argtypes) 'tuple)))
-	     (error "ccall argument types must be a tuple; try (T,)"))
-	 (expand-forms
-	  (lower-ccall name RT (cdr argtypes) args)))))
+     (if (length> e 3)
+	 (let ((name (cadr e))
+	       (RT   (caddr e))
+	       (argtypes (cadddr e))
+	       (args (cddddr e)))
+	   (begin
+	     (if (not (and (pair? argtypes)
+			   (eq? (car argtypes) 'tuple)))
+		 (error "ccall argument types must be a tuple; try (T,)"))
+	     (expand-forms
+	      (lower-ccall name RT (cdr argtypes) args))))
+	 e))
 
    'comprehension
    (lambda (e)
@@ -2924,6 +2926,8 @@ So far only the second case can actually occur.
 	((and (eq? (car e) 'quote) (pair? (cadr e)))
 	 ;; backquote is essentially a built-in macro at the moment
 	 (julia-expand-macros- (expand-backquote (cadr e))))
+	((eq? (car e) 'inert)
+	 e)
 	((eq? (car e) 'macrocall)
 	 ;; expand macro
 	 (let ((form
