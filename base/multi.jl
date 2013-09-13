@@ -1503,6 +1503,11 @@ function yield(args...)
     return v
 end
 
+function pause()
+    @unix_only    ccall(:pause, Void, ())
+    @windows_only ccall(:Sleep,stdcall, Void, (Uint32,), 0xffffffff)
+end
+
 function event_loop(isclient)
     iserr, lasterr, bt = false, nothing, {}
     while true
@@ -1517,7 +1522,12 @@ function event_loop(isclient)
                         if any_gc_flag
                             flush_gc_msgs()
                         end
-                        process_events(true)
+                        c = process_events(true)
+                        if c==0 && eventloop()!=C_NULL && isempty(Workqueue) && !any_gc_flag
+                            # if there are no active handles and no runnable tasks, just
+                            # wait for signals.
+                            pause()
+                        end
                     else
                         perform_work()
                         process_events(false)
