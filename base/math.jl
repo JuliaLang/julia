@@ -451,115 +451,108 @@ airy(k::Number, z::Complex64) = complex64(airy(k, complex128(z)))
 airy(k::Number, z::Complex) = airy(convert(Int,k), complex128(z))
 @vectorize_2arg Number airy
 
-let
-    const cy::Array{Float64,1} = Array(Float64,2)
-    const ae::Array{Int32,1} = Array(Int32,2)
-    const wrk::Array{Float64,1} = Array(Float64,2)
+const cy = Array(Float64,2)
+const ae = Array(Int32,2)
+const wrk = Array(Float64,2)
 
-    function _besselh(nu::Float64, k::Integer, z::Complex128)
-        ccall((:zbesh_,openlibm_extras), Void,
-              (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
-               Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              &real(z), &imag(z), &nu, &1, &k, &1,
-              pointer(cy,1), pointer(cy,2),
-              pointer(ae,1), pointer(ae,2))
-        return complex(cy[1],cy[2])
+function _besselh(nu::Float64, k::Integer, z::Complex128)
+    ccall((:zbesh_,openlibm_extras), Void,
+          (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
+           Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
+          &real(z), &imag(z), &nu, &1, &k, &1,
+          pointer(cy,1), pointer(cy,2),
+          pointer(ae,1), pointer(ae,2))
+    return complex(cy[1],cy[2])
+end
+
+function _besseli(nu::Float64, z::Complex128)
+    ccall((:zbesi_,openlibm_extras), Void,
+          (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
+           Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
+          &real(z), &imag(z), &nu, &1, &1,
+          pointer(cy,1), pointer(cy,2),
+          pointer(ae,1), pointer(ae,2))
+    return complex(cy[1],cy[2])
+end
+
+function _besselj(nu::Float64, z::Complex128)
+    ccall((:zbesj_,openlibm_extras), Void,
+          (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
+           Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
+          &real(z), &imag(z), &nu, &1, &1,
+          pointer(cy,1), pointer(cy,2),
+          pointer(ae,1), pointer(ae,2))
+    return complex(cy[1],cy[2])
+end
+
+function _besselk(nu::Float64, z::Complex128)
+    ccall((:zbesk_,openlibm_extras), Void,
+          (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
+           Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
+          &real(z), &imag(z), &nu, &1, &1,
+          pointer(cy,1), pointer(cy,2),
+          pointer(ae,1), pointer(ae,2))
+    return complex(cy[1],cy[2])
+end
+
+function _bessely(nu::Float64, z::Complex128)
+    ccall((:zbesy_,openlibm_extras), Void,
+          (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
+           Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
+           Ptr{Float64}, Ptr{Float64}, Ptr{Int32}),
+          &real(z), &imag(z), &nu, &1, &1,
+          pointer(cy,1), pointer(cy,2),
+          pointer(ae,1), pointer(wrk,1),
+          pointer(wrk,2), pointer(ae,2))
+    return complex(cy[1],cy[2])
+end
+
+function besselh(nu::Float64, k::Integer, z::Complex128)
+    if nu < 0
+        s = (k == 1) ? 1 : -1
+        return _besselh(-nu, k, z) * complex(cospi(nu),-s*sinpi(nu))
     end
+    return _besselh(nu, k, z)
+end
 
-    function _besseli(nu::Float64, z::Complex128)
-        ccall((:zbesi_,openlibm_extras), Void,
-              (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
-               Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              &real(z), &imag(z), &nu, &1, &1,
-              pointer(cy,1), pointer(cy,2),
-              pointer(ae,1), pointer(ae,2))
-        return complex(cy[1],cy[2])
+function besseli(nu::Float64, z::Complex128)
+    if nu < 0
+        return _besseli(-nu,z) - 2_besselk(-nu,z)*sinpi(nu)/pi
+    else
+        return _besseli(nu, z)
     end
+end
 
-    function _besselj(nu::Float64, z::Complex128)
-        ccall((:zbesj_,openlibm_extras), Void,
-              (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
-               Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              &real(z), &imag(z), &nu, &1, &1,
-              pointer(cy,1), pointer(cy,2),
-              pointer(ae,1), pointer(ae,2))
-        return complex(cy[1],cy[2])
+function besselj(nu::Float64, z::Complex128)
+    if nu < 0
+        return _besselj(-nu,z)cos(pi*nu) + _bessely(-nu,z)*sinpi(nu)
+    else
+        return _besselj(nu, z)
     end
+end
 
-    function _besselk(nu::Float64, z::Complex128)
-        ccall((:zbesk_,openlibm_extras), Void,
-              (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
-               Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              &real(z), &imag(z), &nu, &1, &1,
-              pointer(cy,1), pointer(cy,2),
-              pointer(ae,1), pointer(ae,2))
-        return complex(cy[1],cy[2])
+function besselj(nu::Integer, x::FloatingPoint)
+    if x == 0
+        return (nu == 0) ? one(x) : zero(x)
     end
-
-    function _bessely(nu::Float64, z::Complex128)
-        ccall((:zbesy_,openlibm_extras), Void,
-              (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
-               Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
-               Ptr{Float64}, Ptr{Float64}, Ptr{Int32}),
-              &real(z), &imag(z), &nu, &1, &1,
-              pointer(cy,1), pointer(cy,2),
-              pointer(ae,1), pointer(wrk,1),
-              pointer(wrk,2), pointer(ae,2))
-        return complex(cy[1],cy[2])
+    if nu < 0
+        nu = -nu
+        x = -x
     end
-
-    global besselh
-    function besselh(nu::Float64, k::Integer, z::Complex128)
-        if nu < 0
-            s = (k == 1) ? 1 : -1
-            return _besselh(-nu, k, z) * complex(cospi(nu),-s*sinpi(nu))
-        end
-        return _besselh(nu, k, z)
+    ans = _besselj(float64(nu), complex128(abs(x)))
+    if (x < 0) && isodd(nu)
+        ans = -ans
     end
+    oftype(x, real(ans))
+end
 
-    global besseli
-    function besseli(nu::Float64, z::Complex128)
-        if nu < 0
-            return _besseli(-nu,z) - 2_besselk(-nu,z)*sinpi(nu)/pi
-        else
-            return _besseli(nu, z)
-        end
-    end
+besselk(nu::Float64, z::Complex128) = _besselk(abs(nu), z)
 
-    global besselj
-    function besselj(nu::Float64, z::Complex128)
-        if nu < 0
-            return _besselj(-nu,z)cos(pi*nu) + _bessely(-nu,z)*sinpi(nu)
-        else
-            return _besselj(nu, z)
-        end
-    end
-
-    function besselj(nu::Integer, x::FloatingPoint)
-        if x == 0
-            return (nu == 0) ? one(x) : zero(x)
-        end
-        if nu < 0
-            nu = -nu
-            x = -x
-        end
-        ans = _besselj(float64(nu), complex128(abs(x)))
-        if (x < 0) && isodd(nu)
-            ans = -ans
-        end
-        oftype(x, real(ans))
-    end
-
-    global besselk
-    besselk(nu::Float64, z::Complex128) = _besselk(abs(nu), z)
-
-    global bessely
-    function bessely(nu::Float64, z::Complex128)
-        if nu < 0
-            return _bessely(-nu,z)*cospi(nu) - _besselj(-nu,z)*sinpi(nu)
-        else
-            return _bessely(nu, z)
-        end
+function bessely(nu::Float64, z::Complex128)
+    if nu < 0
+        return _bessely(-nu,z)*cospi(nu) - _besselj(-nu,z)*sinpi(nu)
+    else
+        return _bessely(nu, z)
     end
 end
 
@@ -571,27 +564,47 @@ besselh(nu::Real, k::Integer, x::Real) = besselh(float64(nu), k, complex128(x))
 
 besseli(nu::Real, z::Complex64) = complex64(bessely(float64(nu), complex128(z)))
 besseli(nu::Real, z::Complex) = besseli(float64(nu), complex128(z))
-besseli(nu::Real, x::Real) = besseli(float64(nu), complex128(x))
+besseli(nu::Real, x::Integer) = besseli(nu, float64(x))
+function besseli(nu::Real, x::FloatingPoint)
+    if x < 0 && !isinteger(nu)
+        throw(DomainError())
+    end
+    oftype(x, real(besseli(float64(nu), complex128(x))))
+end
 @vectorize_2arg Number besseli
 
 function besselj(nu::FloatingPoint, x::FloatingPoint)
-    ans = besselj(float64(nu), complex128(x))
-    (x > 0) ? oftype(x, real(ans)) : ans
+    if x < 0 && !isinteger(nu)
+        throw(DomainError())
+    end
+    oftype(x, real(besselj(float64(nu), complex128(x))))
 end
 
 besselj(nu::Real, z::Complex64) = complex64(besselj(float64(nu), complex128(z)))
 besselj(nu::Real, z::Complex) = besselj(float64(nu), complex128(z))
-besselj(nu::Integer, x::Integer) = besselj(nu, float(x))
+besselj(nu::Real, x::Integer) = besselj(nu, float(x))
 @vectorize_2arg Number besselj
 
 besselk(nu::Real, z::Complex64) = complex64(besselk(float64(nu), complex128(z)))
 besselk(nu::Real, z::Complex) = besselk(float64(nu), complex128(z))
-besselk(nu::Real, x::Real) = besselk(float64(nu), complex128(x))
+besselk(nu::Real, x::Integer) = besselk(nu, float64(x))
+function besselk(nu::Real, x::FloatingPoint)
+    if x < 0
+        throw(DomainError())
+    end
+    oftype(x, real(besselk(float64(nu), complex128(x))))
+end
 @vectorize_2arg Number besselk
 
 bessely(nu::Real, z::Complex64) = complex64(bessely(float64(nu), complex128(z)))
 bessely(nu::Real, z::Complex) = bessely(float64(nu), complex128(z))
-bessely(nu::Real, x::Real) = bessely(float64(nu), complex128(x))
+bessely(nu::Real, x::Integer) = bessely(nu, float64(x))
+function bessely(nu::Real, x::FloatingPoint)
+    if x < 0
+        throw(DomainError())
+    end
+    oftype(x, real(bessely(float64(nu), complex128(x))))
+end
 @vectorize_2arg Number bessely
 
 hankelh1(nu, z) = besselh(nu, 1, z)
