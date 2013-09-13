@@ -1078,6 +1078,7 @@ export
     truncate,
     UV_READABLE,
     UV_WRITABLE,
+    watch_file,
     WindowsRawSocket,
     write,
     writecsv,
