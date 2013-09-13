@@ -16,6 +16,8 @@ immutable RawFD
     RawFD(fd::Integer) = new(int32(fd))
 end
 
+convert(::Type{Int32}, fd::RawFD) = fd.fd
+
 function uv_sizeof_handle(handle)
     if !(UV_UNKNOWN_HANDLE < handle < UV_HANDLE_TYPE_MAX)
         throw(DomainError())

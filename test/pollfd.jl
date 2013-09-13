@@ -15,7 +15,7 @@ function test_timeout(tval)
     tr = consume(t)
     t_elapsed = toq()
 
-    @test timedout(tr) == true
+    @test tr.timedout
 
     tdiff = t_elapsed * 1000
     @test tval <= tdiff
