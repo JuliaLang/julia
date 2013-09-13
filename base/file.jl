@@ -13,7 +13,7 @@ function cd(dir::String)
     @windows_only systemerror("chdir $dir", ccall(:_chdir,Int32,(Ptr{Uint8},),dir) == -1)
     @unix_only systemerror("chdir $dir", ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
 end
-cd() = cd(ENV["HOME"])
+cd() = cd(user_home())
 
 # do stuff in a directory, then return to current directory
 
@@ -39,7 +39,7 @@ end
     end
 end
 
-cd(f::Function) = cd(f, ENV["HOME"])
+cd(f::Function) = cd(f, user_home())
 
 function mkdir(path::String, mode::Unsigned=0o777)
     @unix_only ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)

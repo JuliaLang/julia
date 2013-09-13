@@ -12,7 +12,6 @@ set JULIA_EXE=julia-readline.exe
 for %%A in (%JULIA_EXE%) do set JULIA_HOME=%%~dp$PATH:A
 set JULIA=%JULIA_HOME%%JULIA_EXE%
 set PATH=%JULIA_HOME%;%JULIA_HOME%..\lib\julia;%JULIA_HOME%..\lib;.;%SYS_PATH%;%~dp0\Git\bin;C:\MinGW\msys\1.0\bin;C:\MinGW\bin;C:\Program Files\Git\bin;C:\Program Files (x86)\Git\bin;C:\Python27;C:\Python26;C:\Python25
-set HOME=%APPDATA%\julia
 set JL_PRIVATE_LIBDIR=lib\julia
 set JULIA_EDITOR=start
 
