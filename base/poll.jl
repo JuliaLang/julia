@@ -25,40 +25,36 @@ function close(t::FileMonitor)
 end
 
 immutable FileEvent
-    flags::Int32
+    renamed::Bool
+    changed::Bool
+    timedout::Bool
 end
 # libuv file watching event flags
 const UV_RENAME = 1
 const UV_CHANGE = 2
 const FE_TIMEDOUT = 4
-renamed(f::FileEvent) = (f.flags & UV_RENAME) != 0
-changed(f::FileEvent) = (f.flags & UV_CHANGE) != 0
-timedout(f::FileEvent) = (f.flags & FE_TIMEDOUT) != 0
-FileEvent() = FileEvent(0)
-FileEvent(flags::Integer) = FileEvent(int32(flags))
-FileEvent(renamed, changed, timedout) = FileEvent(renamed*UV_RENAME + changed*UV_CHANGE + timedout*FE_TIMEDOUT)
+FileEvent() = FileEvent(false,false,false)
+FileEvent(flags::Integer) = FileEvent((flags & UV_RENAME) != 0,
+                                      (flags & UV_CHANGE) != 0,
+                                      (flags & FE_TIMEDOUT) != 0)
 
 immutable FDEvent
-    flags::Int32
+    readable::Bool
+    writable::Bool
+    timedout::Bool
 end
 # libuv file descriptor event flags
 const UV_READABLE = 1
 const UV_WRITABLE = 2
 const FD_TIMEDOUT = 4
-isreadable(f::FDEvent) = (f.flags & UV_READABLE) != 0
-iswritable(f::FDEvent) = (f.flags & UV_WRITABLE) != 0
-timedout(f::FDEvent) = (f.flags & FD_TIMEDOUT) != 0
-FDEvent() = FDEvent(0)
-FDEvent(flags::Integer) = FDEvent(int32(flags))
-FDEvent(isreadable, iswritable, timedout) = FDEvent(isreadable*UV_READABLE + iswritable*UV_WRITABLE + timedout*FD_TIMEDOUT)
-fdtimeout() = FDEvent(FD_TIMEDOUT)
 
-(|)(a::FileEvent, b::FileEvent) = FileEvent(a.flags | b.flags)
-(|)(a::FDEvent, b::FDEvent) = FDEvent(a.flags | b.flags)
-
-convert(::Type{Int32}, e::FileEvent) = int32(e.flags)
-convert(::Type{Int32}, e::FDEvent) = int32(e.flags)
-convert(::Type{Int32}, fd::RawFD) = fd.fd 
+isreadable(f::FDEvent) = f.readable
+iswritable(f::FDEvent) = f.writable
+FDEvent() = FDEvent(false,false,false)
+FDEvent(flags::Integer) = FDEvent((flags & UV_READABLE) != 0,
+                                  (flags & UV_WRITABLE) != 0,
+                                  (flags & FD_TIMEDOUT) != 0)
+fdtimeout() = FDEvent(false,false,true)
 
 #Wrapper for an OS file descriptor (for Windows)
 @windows_only immutable WindowsRawSocket
@@ -143,18 +139,20 @@ function fdw_wait_cb(fdw::FDWatcher, events::FDEvent, status)
 end
 
 function _wait(fdw::FDWatcher,readable,writable)
-    events = FDEvent(readable, writable, false)
-    if !readable && ! writable
+    if !readable && !writable
         error("Must be watching for at least one event")
     end
-    events |= fdw.events
+    events = FDEvent(readable | fdw.events.readable,
+                     writable | fdw.events.writable,
+                     fdw.events.timedout)
     if !fdw.open || (events != fdw.events)
         # (re)initialize fdw
         start_watching(fdw_wait_cb,fdw,events)
     end
     while true
         events = wait(fdw.notify)
-        if isa(events, FDEvent) && ((readable && isreadable(events)) || (writable && iswritable(events)))
+        if isa(events, FDEvent) &&
+            ((readable && isreadable(events)) || (writable && iswritable(events)))
             break
         end
     end
@@ -242,7 +240,8 @@ function start_watching(t::FDWatcher, events::FDEvent)
         error("Cannot watch an FD more than once on Unix")
     end
     uv_error("start_watching (FD)",
-        ccall(:jl_poll_start,Int32,(Ptr{Void},Int32),t.handle,int32(events)))
+        ccall(:jl_poll_start, Int32, (Ptr{Void},Int32), t.handle,
+              events.readable*UV_READABLE + events.writable*UV_WRITABLE + events.timedout*FD_TIMEDOUT))
 end
 start_watching(f::Function, t::FDWatcher, events::FDEvent) = (t.cb = f; start_watching(t,events))
 

@@ -100,7 +100,7 @@ function test_monitor_wait(tval)
     end
     fname, events = wait(fm)
     @test fname == basename(file)
-    @test changed(events) == true
+    @test events.changed
 end
 
 # Commented out the tests below due to issues 3015, 3016 and 3020 
