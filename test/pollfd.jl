@@ -15,7 +15,7 @@ function test_timeout(tval)
     tr = consume(t)
     t_elapsed = toq()
 
-    @test tr == 0
+    @test timedout(tr) == true
 
     tdiff = t_elapsed * 1000
     @test tval <= tdiff
@@ -32,7 +32,7 @@ function test_read(slval)
     tr = consume(t)
     t_elapsed = toq()
 
-    @test tr == UV_READABLE || (UV_READABLE | UV_WRITABLE)
+    @test isreadable(tr) || iswritable(tr)
 
     dout = Array(Uint8, 1)
     @test 1 == ccall(:read, Csize_t, (Cint, Ptr{Uint8},Csize_t), pipe_fds[1], dout, 1)

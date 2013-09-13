@@ -54,7 +54,7 @@ function test_timeout(tval)
     tr = take(channel)
     t_elapsed = toq()
 
-    @test tr == 0
+    @test tr == false
 
     tdiff = t_elapsed * 1000
     @test tval <= tdiff
@@ -72,7 +72,7 @@ function test_touch(slval)
 
     tr = take(channel)
 
-    # @test tr == 1
+    @test tr == true
 end
 
 
@@ -85,9 +85,22 @@ function test_monitor(slval)
     f = open(file,"a")
     write(f,"Hello World\n")
     close(f)
-    sleep(9slval/10_000)
+    sleep(slval/10_000)
     @test FsMonitorPassed
     close(fm)
+end
+
+function test_monitor_wait(tval)
+    fm = watch_file(file)
+    @async begin
+        sleep(tval/10_000)
+        f = open(file,"a")
+        write(f,"Hello World\n")
+        close(f)
+    end
+    fname, events = wait(fm)
+    @test fname == basename(file)
+    @test changed(events) == true
 end
 
 # Commented out the tests below due to issues 3015, 3016 and 3020 
@@ -97,6 +110,7 @@ test_touch(0.1)
 test_touch(1)
 test_monitor(1)
 test_monitor(0.1)
+test_monitor_wait(0.1)
 
 ##########
 #  mmap  #
