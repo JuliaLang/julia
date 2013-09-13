@@ -219,21 +219,27 @@ DLLEXPORT void jl_uv_fseventscb(uv_fs_event_t* handle, const char* filename, int
 
 DLLEXPORT int jl_run_once(uv_loop_t *loop)
 {
-    loop->stop_flag = 0;
-    if (loop) return uv_run(loop,UV_RUN_ONCE);
+    if (loop) {
+        loop->stop_flag = 0;
+        return uv_run(loop,UV_RUN_ONCE);
+    }
     else return 0;
 }
 
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
 {
-    loop->stop_flag = 0;
-    if (loop) uv_run(loop,UV_RUN_DEFAULT);
+    if (loop) {
+        loop->stop_flag = 0;
+        uv_run(loop,UV_RUN_DEFAULT);
+    }
 }
 
 DLLEXPORT int jl_process_events(uv_loop_t *loop)
 {
-    loop->stop_flag = 0;
-    if (loop) return uv_run(loop,UV_RUN_NOWAIT);
+    if (loop) {
+        loop->stop_flag = 0;
+        return uv_run(loop,UV_RUN_NOWAIT);
+    }
     else return 0;
 }
 
