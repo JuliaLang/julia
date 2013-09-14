@@ -338,14 +338,21 @@ tag(pkg::String, ver::Union(Symbol,VersionNumber)=:bump;
     registered || return
     try
         info("Writing METADATA for $pkg v$ver")
-        reqs = Reqs.parse(joinpath(pkg,"REQUIRE"))
+        reqs = Reqs.parse(Git.cmd(`cat-file blob $commit:REQUIRE`,dir=pkg))
         cd("METADATA") do
             Git.transact() do
                 d = joinpath(pkg,"versions",string(ver))
                 mkpath(d)
-                open(io->println(io,commit), joinpath(d,"sha1"), "w")
-                isempty(reqs) || Reqs.write(joinpath(d,"requires"), reqs)
-                Git.run(`add $d`)
+                sha1file = joinpath(d,"sha1")
+                open(io->println(io,commit), sha1file, "w")
+                Git.run(`add $sha1file`)
+                reqsfile = joinpath(d,"requires")
+                if isempty(reqs)
+                    ispath(reqsfile) && Git.run(`rm -f -q $reqsfile`)
+                else
+                    Reqs.write(reqsfile,reqs)
+                    Git.run(`add $reqsfile`)
+                end
             end
         end
     catch
