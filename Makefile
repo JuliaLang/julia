@@ -84,7 +84,7 @@ run:
 JL_LIBS = julia julia-debug
 
 # private libraries, that are installed in $(PREFIX)/lib/julia
-JL_PRIVATE_LIBS = random suitesparse_wrapper
+JL_PRIVATE_LIBS = random suitesparse_wrapper grisu
 ifeq ($(USE_SYSTEM_FFTW),0)
 JL_PRIVATE_LIBS += fftw3 fftw3f fftw3_threads fftw3f_threads
 endif
@@ -117,9 +117,6 @@ endif
 #ifeq ($(USE_SYSTEM_ZLIB),0)
 #JL_PRIVATE_LIBS += z
 #endif
-ifeq ($(USE_SYSTEM_GRISU),0)
-JL_PRIVATE_LIBS += grisu
-endif
 ifeq ($(USE_SYSTEM_RMATH),0)
 JL_PRIVATE_LIBS += Rmath
 endif
@@ -133,25 +130,25 @@ endif
 
 ifeq ($(OS),WINNT)
 define std_dll
-debug release: | $$(BUILD)/$$(JL_LIBDIR)/$(1).dll
-$$(BUILD)/$$(JL_LIBDIR)/$(1).dll: | $$(BUILD)/$$(JL_LIBDIR)
+debug release: | $$(BUILD)/$$(JL_LIBDIR)/lib$(1).dll
+$$(BUILD)/$$(JL_LIBDIR)/lib$(1).dll: | $$(BUILD)/$$(JL_LIBDIR)
 ifeq ($$(BUILD_OS),$$(OS))
-	cp $$(call pathsearch,$(1).dll,$$(PATH)) $$(BUILD)/$$(JL_LIBDIR) ;
+	cp $$(call pathsearch,lib$(1).dll,$$(PATH)) $$(BUILD)/$$(JL_LIBDIR) ;
 else
-	cp $$(call wine_pathsearch,$(1).dll,$$(STD_LIB_PATH)) $$(BUILD)/$$(JL_LIBDIR) ;
+	cp $$(call wine_pathsearch,lib$(1).dll,$$(STD_LIB_PATH)) $$(BUILD)/$$(JL_LIBDIR) ;
 endif
 JL_LIBS += $(1)
 endef
-$(eval $(call std_dll,libgfortran-3))
-$(eval $(call std_dll,libquadmath-0))
-$(eval $(call std_dll,libstdc++-6))
+$(eval $(call std_dll,gfortran-3))
+$(eval $(call std_dll,quadmath-0))
+$(eval $(call std_dll,stdc++-6))
 ifeq ($(ARCH),i686)
-$(eval $(call std_dll,libgcc_s_sjlj-1))
+$(eval $(call std_dll,gcc_s_sjlj-1))
 else
-$(eval $(call std_dll,libgcc_s_seh-1))
+$(eval $(call std_dll,gcc_s_seh-1))
 endif
 ifneq ($(BUILD_OS),WINNT)
-$(eval $(call std_dll,libssp-0))
+$(eval $(call std_dll,ssp-0))
 endif
 endif
 

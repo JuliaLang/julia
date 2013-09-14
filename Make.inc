@@ -227,7 +227,11 @@ endif
 ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline
 else
+ifeq ($(OS),WINNT)
+READLINE = $(BUILD)/lib/libreadline.a
+else
 READLINE = $(BUILD)/$(JL_LIBDIR)/libreadline.a
+endif
 endif
 
 ifeq ($(OS),WINNT)
