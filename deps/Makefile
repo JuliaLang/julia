@@ -9,6 +9,8 @@ CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
 ifeq ($(OS),WINNT)
 CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
+else ifneq ($(JL_LIBDIR),lib)
+CONFIGURE_COMMON += --libdir=$(abspath $(BUILD)/$(JL_LIBDIR))
 endif
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr patchelf uv
@@ -374,8 +376,11 @@ readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	touch -c $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE) readline-$(READLINE_VER)/checked
 	$(MAKE) -C readline-$(READLINE_VER) install
-	chmod +w $(BUILD)/lib/libreadline.* $(BUILD)/lib/libhistory.* \
-		$(BUILD)/$(JL_LIBDIR)/libreadline.* $(BUILD)/$(JL_LIBDIR)/libhistory.*
+ifeq ($(OS),WINNT)
+	chmod +w $(BUILD)/lib/libreadline.* $(BUILD)/lib/libhistory.*
+else
+	chmod +w $(BUILD)/$(JL_LIBDIR)/libreadline.* $(BUILD)/$(JL_LIBDIR)/libhistory.*
+endif
 ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CMD)libreadline.$(SHLIB_EXT) $(BUILD)/$(JL_LIBDIR)/libreadline.$(SHLIB_EXT)
 	$(INSTALL_NAME_CMD)libhistory.dylib $(BUILD)/$(JL_LIBDIR)/libhistory.dylib
@@ -417,7 +422,11 @@ install-readline: $(READLINE_OBJ_TARGET)
 ## LIBUV ##
 
 UV_SRC_TARGET = libuv/.libs/libuv.a
+ifeq ($(OS),WINNT)
 UV_OBJ_TARGET = $(BUILD)/lib/libuv.a
+else
+UV_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libuv.a
+endif
 
 libuv/configure:
 	(cd .. && git submodule init && git submodule update)
@@ -572,7 +581,11 @@ $(OPENLIBMEXT_OBJ_SOURCE): openlibm/Makefile.extras
 	$(MAKE) -C openlibm -f Makefile.extras $(OPENLIBM_FLAGS)
 	touch -c $@
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(BUILD)/lib
+ifeq ($(OS),WINNT)
 	cp openlibm/libopenlibm.a $(BUILD)/lib/libopenlibm.a
+else
+	cp openlibm/libopenlibm.a $(BUILD)/$(JL_LIBDIR)/libopenlibm.a
+endif
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
 $(OPENLIBMEXT_OBJ_TARGET): $(OPENLIBMEXT_OBJ_SOURCE) | $(BUILD)/lib
@@ -1234,7 +1247,7 @@ install-suitesparse-wrapper: $(BUILD)/$(JL_LIBDIR)/libsuitesparse_wrapper.$(SHLI
 
 ## UNWIND ##
 
-LIBUNWIND_TARGET_OBJ = $(BUILD)/lib/libunwind.a
+LIBUNWIND_TARGET_OBJ = $(BUILD)/$(JL_LIBDIR)/libunwind.a
 LIBUNWIND_TARGET_SOURCE = libunwind-$(UNWIND_VER)/src/.libs/libunwind.a
 LIBUNWIND_CFLAGS = $(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)
 

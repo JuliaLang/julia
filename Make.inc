@@ -212,9 +212,9 @@ ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
 else
 ifeq ($(OS),Darwin)
-LIBUNWIND=$(BUILD)/lib/libosxunwind.a
+LIBUNWIND=$(BUILD)/$(JL_LIBDIR)/libosxunwind.a
 else
-LIBUNWIND=$(BUILD)/lib/libunwind-generic.a $(BUILD)/lib/libunwind.a
+LIBUNWIND=$(BUILD)/$(JL_LIBDIR)/libunwind-generic.a $(BUILD)/$(JL_LIBDIR)/libunwind.a
 endif
 endif
 
@@ -227,13 +227,13 @@ endif
 ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline
 else
-READLINE = $(BUILD)/lib/libreadline.a
+READLINE = $(BUILD)/$(JL_LIBDIR)/libreadline.a
 endif
 
-ifneq ($(OS),WINNT)
-READLINE += -lncurses
-else
+ifeq ($(OS),WINNT)
 READLINE += $(BUILD)/lib/libhistory.a
+else
+READLINE += -lncurses
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -289,7 +289,11 @@ ifeq ($(USE_SYSTEM_LIBUV), 1)
   LIBUV = /usr/lib/libuv-julia.a
   LIBUV_INC = /usr/include
 else
+ifeq ($(OS),WINNT)
   LIBUV = $(BUILD)/lib/libuv.a
+else
+  LIBUV = $(BUILD)/$(JL_LIBDIR)/libuv.a
+endif
   LIBUV_INC = $(JULIAHOME)/deps/libuv/include
 endif
 
@@ -379,7 +383,11 @@ endif
 
 ifeq ($(USE_SYSTEM_LIBM),0)
 ifneq ($(UNTRUSTED_SYSTEM_LIBM),0)
+ifeq ($(OS),WINNT)
 OSLIBS += $(WHOLE_ARCHIVE) $(BUILD)/lib/libopenlibm.a $(NO_WHOLE_ARCHIVE)
+else
+OSLIBS += $(WHOLE_ARCHIVE) $(BUILD)/$(JL_LIBDIR)/libopenlibm.a $(NO_WHOLE_ARCHIVE)
+endif
 endif
 endif
 
@@ -414,7 +422,7 @@ endif
 # or installed to usr/lib/libatlas from some another source (built as
 # a shared library, for your platform, single threaded)
 USE_ATLAS = 0
-ATLAS_LIBDIR = $(BUILD)/lib
+ATLAS_LIBDIR = $(BUILD)/$(JL_LIBDIR)
 #or ATLAS_LIBDIR = /path/to/system/atlas/lib
 
 ifeq ($(USE_ATLAS), 1)
