@@ -13,7 +13,19 @@ VERSDIR = v`cut -d. -f1-2 < VERSION`
 all: default
 default: release
 
-DIRS = $(BUILD)/bin $(BUILD)/lib $(BUILD)/$(JL_PRIVATE_LIBDIR) $(BUILD)/share/julia $(BUILD)/share/julia/man/man1
+DIRS = $(BUILD)/bin $(BUILD)/lib $(BUILD)/share/julia $(BUILD)/share/julia/man/man1
+ifneq ($(JL_LIBDIR),bin)
+ifneq ($(JL_LIBDIR),lib)
+DIRS += $(BUILD)/$(JL_LIBDIR)
+endif
+endif
+ifneq ($(JL_PRIVATE_LIBDIR),bin)
+ifneq ($(JL_PRIVATE_LIBDIR),lib)
+ifneq ($(JL_PRIVATE_LIBDIR),$(JL_LIBDIR))
+DIRS += $(BUILD)/$(JL_PRIVATE_LIBDIR)
+endif
+endif
+endif
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,base test doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
@@ -78,6 +90,30 @@ JL_PRIVATE_LIBS = amd arpack camd ccolamd cholmod colamd \
                   random Rmath spqr suitesparse_wrapper \
                   umfpack z openblas mpfr gfortblas
 
+ifeq ($(OS),WINNT)
+define std_dll
+debug release: | $$(BUILD)/$$(JL_LIBDIR)/$(1).dll
+$$(BUILD)/$$(JL_LIBDIR)/$(1).dll: | $$(BUILD)/$$(JL_LIBDIR)
+ifeq ($$(BUILD_OS),$$(OS))
+	cp $$(call pathsearch,$(1).dll,$$(PATH)) $$(BUILD)/$$(JL_LIBDIR) ;
+else
+	cp $$(call wine_pathsearch,$(1).dll,$$(STD_LIB_PATH)) $$(BUILD)/$$(JL_LIBDIR) ;
+endif
+JL_LIBS += $(1)
+endef
+$(eval $(call std_dll,libgfortran-3))
+$(eval $(call std_dll,libquadmath-0))
+$(eval $(call std_dll,libstdc++-6))
+ifeq ($(ARCH),i686)
+$(eval $(call std_dll,libgcc_s_sjlj-1))
+else
+$(eval $(call std_dll,libgcc_s_seh-1))
+endif
+ifneq ($(BUILD_OS),WINNT)
+$(eval $(call std_dll,libssp-0))
+endif
+endif
+
 PREFIX ?= julia-$(JULIA_COMMIT)
 install:
 	@$(MAKE) $(QUIET_MAKE) debug
@@ -93,7 +129,7 @@ endif
 		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 	-for suffix in $(JL_PRIVATE_LIBS) ; do \
-		cp -a $(BUILD)/lib/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
+		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 ifeq ($(USE_SYSTEM_LIBUV),0)
 	cp -a $(BUILD)/lib/libuv.a $(PREFIX)/$(JL_PRIVATE_LIBDIR)
@@ -132,27 +168,6 @@ ifeq ($(OS), WINNT)
    		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll ../$(PREFIX)/bin && \
 	    mkdir ../$(PREFIX)/Git && \
 	    7z x PortableGit.7z -o"../$(PREFIX)/Git" )
-ifeq ($(BUILD_OS),WINNT)
-	cp $(call pathsearch,libgfortran-3.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-	cp $(call pathsearch,libquadmath-0.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-ifeq ($(ARCH),i686)
-	cp $(call pathsearch,libgcc_s_sjlj-1.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-else
-	cp $(call pathsearch,libgcc_s_seh-1.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-endif
-	cp $(call pathsearch,libstdc++-6.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-	#cp $(call pathsearch,libssp-0.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-else
-	cp $(call wine_pathsearch,libgfortran-3.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-	cp $(call wine_pathsearch,libquadmath-0.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-ifeq ($(ARCH),i686)
-	cp $(call wine_pathsearch,libgcc_s_sjlj-1.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-else
-	cp $(call wine_pathsearch,libgcc_s_seh-1.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-endif
-	cp $(call wine_pathsearch,libstdc++-6.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-	cp $(call wine_pathsearch,libssp-0.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-endif
 	cd $(PREFIX)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 	./dist-extras/7z a -mx9 -sfx7z.sfx julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).exe julia-$(JULIA_COMMIT)
 else
@@ -243,8 +258,3 @@ endif
 	7z x -y mingw-zlib.rpm -so > mingw-zlib.cpio && \
 	7z e -y mingw-zlib.cpio && \
 	wget -O PortableGit.7z http://msysgit.googlecode.com/files/PortableGit-1.8.3-preview20130601.7z
-
-wine_path:
-	$(info $(WINE_PATH))
-	@echo "wine cmd /c \"set \$$PATH=...\";%PATH% && program"
-	@echo

@@ -50,10 +50,8 @@ override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
-export WINE_PATH := $(shell winepath -w $(BUILD)/bin);$(shell winepath -w $(BUILD)/lib/julia);$(shell winepath -w $(BUILD)/lib)
-export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
-export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
-export WINE_PATH := $(WINE_PATH);C:\MinGW\\bin;C:\MinGW\msys\1.0\bin;$(shell winepath -w $(BUILD)/Git/bin)
+export STD_LIB_PATH := $(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
+export STD_LIB_PATH := $(STD_LIB_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
 else
 $(error "unknown XC_HOST variable set")
 endif
@@ -81,7 +79,7 @@ endif
 ifeq ($(OS), WINNT)
 fPIC =
 ifeq ($(BUILD_OS), WINNT)
-PATH := ${PATH}:${BUILD}/lib:${BUILD}/lib/julia:/c/Program Files/7-zip
+PATH := ${PATH}:${BUILD}/${JL_LIBDIR}:${BUILD}/${JL_PRIVATE_LIBDIR}:/c/Program Files/7-zip
 endif
 EXE = .exe
 else
@@ -221,9 +219,9 @@ endif
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
-LLVM_CONFIG ?= llvm-config
+LLVM_CONFIG ?= llvm-config$(EXE)
 else
-LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config
+LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config$(EXE)
 endif
 
 ifeq ($(USE_SYSTEM_READLINE), 1)
@@ -253,14 +251,14 @@ ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 USE_BLAS64 = 0
 USE_SYSTEM_LAPACK = 0
-LIBBLAS = -L$(BUILD)/lib -lgfortblas
+LIBBLAS = -L$(BUILD)/$(JL_LIBDIR) -lgfortblas
 LIBBLASNAME = libgfortblas
 else
 LIBBLAS ?= -lblas
 LIBBLASNAME ?= libblas
 endif
 else
-LIBBLAS = -L$(BUILD)/lib -lopenblas
+LIBBLAS = -L$(BUILD)/$(JL_LIBDIR) -lopenblas
 LIBBLASNAME = libopenblas
 endif
 
@@ -274,7 +272,7 @@ ifeq ($(USE_SYSTEM_LAPACK), 1)
 LIBLAPACK = -llapack
 LIBLAPACKNAME = liblapack
 else
-LIBLAPACK = -L$(BUILD)/lib -llapack $(LIBBLAS)
+LIBLAPACK = -L$(BUILD)/$(JL_LIBDIR) -llapack $(LIBBLAS)
 LIBLAPACKNAME = liblapack
 endif
 endif
@@ -375,6 +373,8 @@ ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
 UNTRUSTED_SYSTEM_LIBM = 1
+JL_PRIVATE_LIBDIR = bin
+JL_LIBDIR = bin
 endif
 
 ifeq ($(USE_SYSTEM_LIBM),0)
@@ -464,7 +464,7 @@ ifeq ($(BUILD_OS), WINNT)
 spawn = $(1)
 else
 ifeq ($(OS), WINNT)
-spawn = wine cmd /c "set PATH=$(WINE_PATH)&& $$(exec winepath -w '$(1)')"
+spawn = wine $(1)
 else
 spawn = $(1)
 endif
