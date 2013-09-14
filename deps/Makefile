@@ -661,7 +661,7 @@ RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
 
 RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
 			   OS="$(OS)" ARCH="$(ARCH)" \
-			   USE_LIBRANDOM=1 LIBRANDOM_PATH="$(BUILD)/lib"
+			   USE_LIBRANDOM=1 LIBRANDOM_PATH="$(BUILD)/$(JL_LIBDIR)"
 
 Rmath/Make.inc:
 	(cd .. && git submodule init && git submodule update)

@@ -279,8 +279,8 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd dist-extras && \
 	wget -O 7z920.exe http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll 7z.sfx && \
-	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP2/noarch/mingw32-libexpat-2.0.1-4.16.noarch.rpm && \
-	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP2/noarch/mingw32-zlib-1.2.7-1.17.noarch.rpm
+	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP2/noarch/mingw32-libexpat-2.0.1-4.17.noarch.rpm && \
+	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP2/noarch/mingw32-zlib-1.2.7-1.18.noarch.rpm
 else ifeq ($(ARCH),x86_64)
 	cd dist-extras && \
 	wget -O 7z920-x64.msi http://downloads.sourceforge.net/sevenzip/7z920-x64.msi && \
@@ -289,7 +289,7 @@ else ifeq ($(ARCH),x86_64)
 	mv _7z.exe 7z.exe && \
 	mv _7z.sfx 7z.sfx && \
 	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-libexpat-2.0.1-3.16.noarch.rpm && \
-	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-zlib-1.2.7-1.20.noarch.rpm
+	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-zlib-1.2.7-1.21.noarch.rpm
 else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif
