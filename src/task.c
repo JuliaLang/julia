@@ -652,7 +652,10 @@ DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int doCframes)
     const char *func_name;
     int line_num;
     const char *file_name;
-    int fromC = frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, doCframes);
+#ifdef _OS_WINDOWS_
+    int fromC =
+#endif
+        frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, doCframes);
     if (func_name != NULL) {
         jl_value_t *r = (jl_value_t*)jl_alloc_tuple(3);
         JL_GC_PUSH1(&r);
