@@ -1065,7 +1065,7 @@ ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CMD)libfftw3f_threads.$(SHLIB_EXT) $(BUILD)/$(JL_LIBDIR)/libfftw3f_threads.$(SHLIB_EXT)
 	$(INSTALL_NAME_CHANGE_CMD) $(BUILD)/$(JL_LIBDIR)/libfftw3f.3.dylib $(INSTALL_NAME_ID_DIR)libfftw3f.dylib $(BUILD)/$(JL_LIBDIR)/libfftw3f_threads.dylib
 else ifeq ($(OS), WINNT)
-	mv -f $(BUILD)/$(JL_LIBDIR)/libfftw3-3.dll $@
+	mv -f $(BUILD)/$(JL_LIBDIR)/libfftw3f-3.dll $@
 else ifeq ($(OS), Linux)
 	for filename in $(BUILD)/$(JL_LIBDIR)/libfftw3f_threads.so* ; do \
 		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
@@ -1102,7 +1102,7 @@ ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CMD)libfftw3_threads.$(SHLIB_EXT) $(BUILD)/$(JL_LIBDIR)/libfftw3_threads.$(SHLIB_EXT)
 	$(INSTALL_NAME_CHANGE_CMD) $(BUILD)/$(JL_LIBDIR)/libfftw3.3.dylib $(INSTALL_NAME_ID_DIR)libfftw3.dylib $(BUILD)/$(JL_LIBDIR)/libfftw3_threads.dylib
 else ifeq ($(OS), WINNT)
-	mv -f $(BUILD)/$(JL_LIBDIR)/libfftw3f-3.dll $@
+	mv -f $(BUILD)/$(JL_LIBDIR)/libfftw3-3.dll $@
 else ifeq ($(OS), Linux)
 	for filename in $(BUILD)/$(JL_LIBDIR)/libfftw3_threads.so* ; do \
 		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
