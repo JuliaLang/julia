@@ -507,7 +507,8 @@ function abstract_call_gf(f, fargs, argtypes, e)
             return (tupleref_tfunc(fargs, argtypes[1], argtypes[2]), Int)
         end
     end
-    if f === Main.Base.promote_type || f === Main.Base.typejoin
+    if (isdefined(Main.Base,:promote_type) && f === Main.Base.promote_type) ||
+       (isdefined(Main.Base,:typejoin) && f === Main.Base.typejoin)
         la = length(argtypes)
         c = cell(la)
         for i = 1:la
@@ -1079,12 +1080,13 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         for i = 1:3:length(tfarr)
             if typeseq(tfarr[i],atypes)
                 code = tfarr[i+1]
-                curtype = ccall(:jl_ast_rettype, Any, (Any,Any), def, code)
                 if tfarr[i+2]
                     redo = true
                     tfunc_idx = i+1
+                    curtype = code
                     break
                 end
+                curtype = ccall(:jl_ast_rettype, Any, (Any,Any), def, code)
                 return (code, curtype)
             end
         end
@@ -1356,10 +1358,12 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             def.tfunc = {}
         end
         push!(def.tfunc::Array{Any,1}, atypes)
-        push!(def.tfunc::Array{Any,1}, fulltree)
+        # in the "rec" state this tree will not be used again, so store
+        # just the return type in place of it.
+        push!(def.tfunc::Array{Any,1}, rec ? frame.result : fulltree)
         push!(def.tfunc::Array{Any,1}, rec)
     else
-        def.tfunc[tfunc_idx] = fulltree
+        def.tfunc[tfunc_idx] = rec ? frame.result : fulltree
         def.tfunc[tfunc_idx+1] = rec
     end
     

@@ -230,10 +230,10 @@ end
 
 ## actual functions for broadcast and broadcast! ##
 
-broadcastfuns = (Function=>NTuple{3,Function})[]
+broadcastfuns = ObjectIdDict()
 function broadcast_functions(op::Function)
     (haskey(broadcastfuns, op) ? broadcastfuns[op] :
-        (broadcastfuns[op] = eval(code_broadcasts(string(op), quot(op)))))
+     (broadcastfuns[op] = eval(code_broadcasts(string(op), quot(op)))))::NTuple{3,Function}
 end
 
 broadcast_function(op::Function)   = broadcast_functions(op)[1]
