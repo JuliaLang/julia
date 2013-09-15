@@ -792,6 +792,7 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
 // internal functions ---------------------------------------------------------
 
 extern int jl_in_inference;
+extern int jl_boot_file_loaded;
 int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops);
 
 JL_CALLABLE(jl_trampoline)
@@ -813,6 +814,9 @@ JL_CALLABLE(jl_trampoline)
     jl_compile(f);
     assert(f->fptr == &jl_trampoline);
     jl_generate_fptr(f);
+    if (jl_boot_file_loaded && jl_is_expr(f->linfo->ast)) {
+        f->linfo->ast = jl_compress_ast(f->linfo, f->linfo->ast);
+    }
     return jl_apply(f, args, nargs);
 }
 

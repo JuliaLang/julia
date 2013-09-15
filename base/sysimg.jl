@@ -21,11 +21,11 @@ end
 
 include("base.jl")
 include("reflection.jl")
-include("promotion.jl") # We need promote_type() before we can use composite types
 include("build_h.jl")
 include("c.jl")
 
 # core operations & types
+include("promotion.jl")
 include("range.jl")
 include("tuple.jl")
 include("cell.jl")
@@ -374,6 +374,12 @@ precompile(isslotempty, (Dict{Any,Any}, Int))
 precompile(setindex!, (Array{Uint8,1}, Uint8, Int))
 precompile(get, (Dict{Any,Any}, Symbol, ASCIIString))
 precompile(*, (ASCIIString, ASCIIString, ASCIIString))
+precompile(chop, (ASCIIString,))
+precompile(ismatch, (Regex, ASCIIString))
+precompile(!=, (Bool, Bool))
+precompile(nextind, (ASCIIString, Int))
+precompile(delete_var!, (Expr, Symbol))
+precompile(close, (IOStream,))
 
 # invoke type inference, running the existing inference code on the new
 # inference code to cache an optimized version of it.
