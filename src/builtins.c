@@ -1126,7 +1126,9 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         for (i = 0; i < len; i++) {
             jl_value_t *v = jl_tupleref(t,i);
             n += jl_static_show(out, v);
-            if (i == 0 || i != len-1)
+            if (len == 1)
+                n += JL_PRINTF(out, ",");
+            else if (i != len-1)
                 n += JL_PRINTF(out, ", ");
         }
         n += JL_PRINTF(out, ")");
@@ -1137,8 +1139,11 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
     }
     else if (jl_is_datatype(v)) {
         jl_datatype_t *dv = (jl_datatype_t*)v;
-        n += jl_static_show(out, (jl_value_t*)dv->name->module);
-        n += JL_PRINTF(out, ".%s", dv->name->name->name);
+        if (dv->name->module != jl_core_module) {
+            n += jl_static_show(out, (jl_value_t*)dv->name->module);
+            JL_PUTS(".", out); n += 1;
+        }
+        n += JL_PRINTF(out, "%s", dv->name->name->name);
         if (dv->parameters) {
             size_t j, tlen = jl_tuple_len(dv->parameters);
             if (tlen > 0) {
@@ -1221,11 +1226,11 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         n += jl_static_show(out, ((jl_typector_t*)v)->body);
     }
     else if (jl_is_typevar(v)) {
-        n += jl_static_show(out, (jl_value_t*)((jl_tvar_t*)v)->name);
+        n += JL_PRINTF(out, "%s", ((jl_tvar_t*)v)->name->name);
     }
     else if (jl_is_module(v)) {
         jl_module_t *m = (jl_module_t*)v;
-        if (m->parent != m) {
+        if (m->parent != m && m->parent != jl_main_module) {
             n += jl_static_show(out, (jl_value_t*)m->parent);
             n += JL_PRINTF(out, ".");
         }
