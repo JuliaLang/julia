@@ -62,6 +62,7 @@ end
 
 @unix_only _get_osfhandle(fd::RawFD) = fd
 @windows_only _get_osfhandle(fd::RawFD) = WindowsRawSocket(ccall(:_get_osfhandle,Ptr{Void},(Cint,),fd.fd))
+@windows_only _get_osfhandle(fd::WindowsRawSocket) = fd
 
 type FDWatcher <: UVPollingWatcher
     handle::Ptr{Void}
@@ -172,10 +173,10 @@ let
         end
 
         function wait(socket::WindowsRawSocket; readable=false, writable=false)
-            if !has(fdwatcher_array,socket.handle)
-                fdwatcher_array[fd.handle] = FDWatcher(socket)
+            if !haskey(fdwatcher_array,socket.handle)
+                fdwatcher_array[socket] = FDWatcher(socket)
             end
-            _wait(fdwatcher_array[fd.handle],readable,writable)
+            _wait(fdwatcher_array[socket],readable,writable)
         end 
     end
 end
