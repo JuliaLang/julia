@@ -14,6 +14,7 @@
 #include <io.h>
 #include <fcntl.h>
 #define fileno _fileno
+//#define lseek _lseek
 #else
 #include <unistd.h>
 #include <sys/time.h>
@@ -43,9 +44,6 @@ DLLEXPORT void *memrchr(const void *s, int c, size_t n)
 }
 #else
 extern void *memrchr(const void *s, int c, size_t n);
-#endif
-#if defined(__WINDOWS__)
-#define lseek _lseek
 #endif
 
 /*

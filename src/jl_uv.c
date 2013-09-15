@@ -279,6 +279,10 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
             uv_close(handle, &jl_uv_closeHandle);
         }
     }
+    else if (handle->type == UV_FILE) {
+        uv_fs_t req;
+        uv_fs_close(handle->loop, &req, ((jl_uv_file_t*)handle)->file, NULL);
+    }
     else {
         uv_close(handle,&jl_uv_closeHandle);
     }
