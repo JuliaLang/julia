@@ -50,10 +50,8 @@ void __cdecl fpreset (void);
 #define _FPE_STACKUNDERFLOW 0x8b
 #define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
 #include <windows.h>
-#if defined(_CPU_X86_64_)
 #include <dbghelp.h>
 extern int needsSymRefreshModuleList;
-#endif
 #endif
 #if defined(__linux__)
 //#define _GNU_SOURCE
@@ -354,56 +352,27 @@ DLLEXPORT void uv_atexit_hook()
     struct uv_shutdown_queue_item *item = queue.first;
     while (item) {
         uv_handle_t *handle = item->h;
-        if (uv_is_closing(handle)) {
+        if (handle->type != UV_FILE && uv_is_closing(handle)) {
             item = item->next;
             continue;
         }
         switch(handle->type) {
-        case UV_FILE:
-            free(handle);
-            break;
         case UV_TTY:
         case UV_UDP:
-//#ifndef _OS_WINDOWS_ // unix only supports shutdown on TCP and NAMED_PIPE
-// but uv_shutdown doesn't seem to be particularly reliable, so we'll avoid it in general
-            jl_close_uv(handle);
-            break;
-//#endif
         case UV_TCP:
         case UV_NAMED_PIPE:
-            // These will be shut down in jl_close_uv.
-            jl_close_uv(handle);
-            break;
-        //Don't close these directly, but rather let the GC take care of it
         case UV_POLL:
-            uv_poll_stop((uv_poll_t*)handle);
-            handle->data = NULL;
-            uv_unref(handle);
-            break;
         case UV_TIMER:
-            uv_timer_stop((uv_timer_t*)handle);
-            handle->data = NULL;
-            uv_unref(handle);
-            break;
-        case UV_IDLE:
-            uv_idle_stop((uv_idle_t*)handle);
         case UV_ASYNC:
-            handle->data = NULL;
-            uv_unref(handle);
-            break;
         case UV_FS_EVENT:
-            handle->data = NULL;
-            uv_unref(handle);
-            break;
         case UV_FS_POLL:
-            uv_fs_poll_stop((uv_fs_poll_t*)handle);
-            handle->data = NULL;
-            uv_unref(handle);
-            break;
+        case UV_IDLE:
         case UV_PREPARE:
         case UV_CHECK:
         case UV_SIGNAL:
         case UV_PROCESS:
+        case UV_FILE:
+            // These will be shutdown as appropriate by jl_close_uv
             jl_close_uv(handle);
             break;
         case UV_HANDLE:
@@ -450,12 +419,12 @@ void *init_stdio_handle(uv_file fd,int readable)
     jl_uv_file_t *file;
 #ifndef _OS_WINDOWS_    
     // Duplicate the file descritor so we can later dup it over if we want to redirect
-    // STDIO without having to worry about closing the associated libuv object. 
-    // On windows however, libuv objects remember streams by their HANDLE, so this is 
-    // unnessecary. 
+    // STDIO without having to worry about closing the associated libuv object.
+    // On windows however, libuv objects remember streams by their HANDLE, so this is
+    // unnessecary.
     fd = dup(fd);
 #endif
-    //printf("%d: %d -- %d\n", fd, type);
+    //printf("%d: %d -- %d\n", fd, type, 0);
     switch(type)
     {
         case UV_TTY:
@@ -634,11 +603,9 @@ void julia_init(char *imageFile)
         TRUE, DUPLICATE_SAME_ACCESS )) {
         JL_PRINTF(JL_STDERR, "Couldn't access handle to main thread\n");
     }
-#if defined(_CPU_X86_64_)
-    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
     SymInitialize(GetCurrentProcess(), NULL, 1);
     needsSymRefreshModuleList = 0;
-#endif
 #endif
     jl_io_loop = uv_default_loop(); //this loop will internal events (spawining process etc.)
     init_stdio();
