@@ -8,7 +8,7 @@
 
     splitdrive(path::String) = ("",path)
     user_homedir() = ENV["HOME"]
-    user_prefdir() = user_home()
+    user_prefdir() = user_homedir()
 end
 @windows_only begin
     const path_separator    = "\\"
