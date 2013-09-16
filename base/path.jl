@@ -7,6 +7,8 @@
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
     splitdrive(path::String) = ("",path)
+    user_homedir() = ENV["HOME"]
+    user_prefdir() = user_home()
 end
 @windows_only begin
     const path_separator    = "\\"
@@ -20,6 +22,8 @@ end
         m = match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path)
         bytestring(m.captures[1]), bytestring(m.captures[2])
     end
+    user_homedir() = get(ENV,"HOME",joinpath(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
+    user_prefdir() = get(ENV,"HOME",joinpath(ENV["AppData"],"Julia"))
 end
 
 isabspath(path::String) = ismatch(path_absolute_re, path)

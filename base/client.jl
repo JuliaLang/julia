@@ -248,7 +248,7 @@ function process_options(args::Array{Any,1})
             startup = false
         elseif args[i] == "-F"
             # load juliarc now before processing any more options
-            try_include(abspath(ENV["HOME"],".juliarc.jl"))
+            try_include(abspath(user_prefdir(),".juliarc.jl"))
             startup = false
         elseif beginswith(args[i], "--color")
             if args[i] == "--color"
@@ -340,7 +340,6 @@ function _start()
     @windows_only begin
         user_data_dir = abspath(ENV["AppData"],"julia")
         isdir(user_data_dir) || mkdir(user_data_dir)
-        haskey(ENV,"HOME") || (ENV["HOME"] = user_data_dir)
     end
 
     #atexit(()->flush(STDOUT))
@@ -349,7 +348,7 @@ function _start()
         any(a->(a=="--worker"), ARGS) || init_head_sched()
         init_load_path()
         (quiet,repl,startup,color_set) = process_options(ARGS)
-        repl && startup && try_include(abspath(ENV["HOME"],".juliarc.jl"))
+        repl && startup && try_include(abspath(user_prefdir(),".juliarc.jl"))
 
         if repl
             if isa(STDIN,File)

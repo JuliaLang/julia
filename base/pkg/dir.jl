@@ -8,7 +8,7 @@ const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
 @windows_only const DIR_NAME = "packages"
 
 function path()
-    b = abspath(get(ENV,"JULIA_PKGDIR",joinpath(ENV["HOME"],DIR_NAME)))
+    b = abspath(get(ENV,"JULIA_PKGDIR",joinpath(Base.user_prefdir(),DIR_NAME)))
     x, y = VERSION.major, VERSION.minor
     d = joinpath(b,"v$x.$y")
     isdir(d) && return d
