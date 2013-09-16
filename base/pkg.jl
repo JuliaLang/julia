@@ -153,7 +153,7 @@ update() = Dir.cd() do
             Git.run(`branch -f devel refs/remotes/origin/devel`)
             Git.run(`checkout -q devel`)
         end
-        Git.run(`pull -q`)
+        Git.run(`pull -q -m`)
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
