@@ -99,7 +99,7 @@ function slice(A::SubArray, i::RangeIndex...)
             newindexes[k] = A.indexes[k]
         else
             r = A.indexes[k]
-            newindexes[k] = first(r) + (i[j]-1)*step(r)
+            newindexes[k] = step(r) == 1 ? (first(r)-1) + i[j] : first(r) + (i[j]-1)*step(r)
             j += 1
         end
     end
