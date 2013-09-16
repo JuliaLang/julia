@@ -42,6 +42,7 @@ function aupd_wrapper(T, linop::Function, n::Integer,
             naupd(ido, bmat, n, which, nev, tol, resid, ncv, v, n, 
                   iparam, ipntr, workd, workl, lworkl, info)
         end
+        if info[1] == 3; warn("Try eigs/svds with a larger value for ncv."); end
         if info[1] != 0; throw(ARPACKException(info[1])); end
         if (ido[1] != -1 && ido[1] != 1); break; end
         workd[ipntr[2]+zernm1] = linop(getindex(workd, ipntr[1]+zernm1))
