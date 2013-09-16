@@ -74,7 +74,7 @@ function sub(A::SubArray, i::RangeIndex...)
         else
             r = A.indexes[k]
             ri = (isa(i[j],Int) && j<=L) ? (i[j]:i[j]) : i[j]
-            newindexes[k] = first(r) + (ri-1)*step(r)
+            newindexes[k] = step(r) == 1 ? (first(r)-1) + ri : first(r) + (ri-1)*step(r)
             j += 1
         end
     end
