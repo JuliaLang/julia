@@ -332,7 +332,7 @@ function _start()
     global const CPU_CORES = Sys.CPU_CORES
     init_profiler()
 
-    @windows_only ENV["PATH"] = ENV["PATH"]*";"*joinpath(JULIA_HOME,"Git","bin")*
+    @windows_only ENV["PATH"] = JULIA_HOME*";"*ENV["PATH"]*";"*joinpath(JULIA_HOME,"..","Git","bin")*
         ";C:\\Program Files\\Git\\bin;C:\\Program Files (x86)\\Git\\bin"*
         ";C:\\MinGW\\bin;C:\\MinGW\\msys\\1.0\\bin"*
         ";C:\\Python27;C:\\Python26;C:\\Python25"
