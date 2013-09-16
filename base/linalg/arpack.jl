@@ -6,10 +6,8 @@ import ..LinAlg: BlasInt, blas_int, ARPACKException
 
 function aupd_wrapper(T, linop::Function, n::Integer,
                       sym::Bool, cmplx::Bool, bmat::ASCIIString,
-                      nev::Integer, which::ASCIIString, 
+                      nev::Integer, ncv::Integer, which::ASCIIString, 
                       tol, maxiter::Integer, mode::Integer)
-
-    ncv = min(max(2*nev+2, 20), n)
 
     bmat   = "I"
     lworkl = cmplx ? ncv * (3*ncv + 5) : ( lworkl = sym ? ncv * (ncv + 8) :  ncv * (3*ncv + 6) )
@@ -49,12 +47,12 @@ function aupd_wrapper(T, linop::Function, n::Integer,
         workd[ipntr[2]+zernm1] = linop(getindex(workd, ipntr[1]+zernm1))
     end
     
-    return (resid, ncv, v, n, iparam, ipntr, workd, workl, lworkl, rwork)
+    return (resid, v, n, iparam, ipntr, workd, workl, lworkl, rwork)
 end
 
 function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
                       nev::Integer, which::ASCIIString, ritzvec::Bool,
-                      tol, resid, ncv, v, ldv, sigma, iparam, ipntr,
+                      tol, resid, ncv::Integer, v, ldv, sigma, iparam, ipntr,
                       workd, workl, lworkl, rwork)
 
     howmny = "A"
