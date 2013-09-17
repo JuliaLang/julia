@@ -75,7 +75,7 @@ showerror(io::IO, ::StackOverflowError) = print(io, "stack overflow")
 showerror(io::IO, ::UndefRefError) = print(io, "access to undefined reference")
 showerror(io::IO, ::EOFError) = print(io, "read: end of file")
 showerror(io::IO, e::ErrorException) = print(io, e.msg)
-showerror(io::IO, e::KeyError) = print(io, "key not found: $(e.key)")
+showerror(io::IO, e::KeyError) = (print(io, "key not found: "); show(io, e.key))
 showerror(io::IO, e::InterruptException) = print(io, "interrupt")
 
 function showerror(io::IO, e::MethodError)
