@@ -31,6 +31,7 @@ export PipeString
 
 # 0.2
 
+@deprecate  strchr              search
 @deprecate  iswriteable         iswritable
 @deprecate  localize            localpart
 @deprecate  logb                exponent
