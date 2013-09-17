@@ -14,7 +14,7 @@ function git(d)
     `git --git-dir=$work_tree` : `git --work-tree=$work_tree --git-dir=$git_dir`
 end
 
-cmd(args::Cmd; dir="") = `$(git(dir)) $args`
+cmd(args::Cmd; dir="") = gitenv(`$(git(dir)) $args`)
 run(args::Cmd; dir="", out=STDOUT) = Base.run(cmd(args,dir=dir) |> out)
 success(args::Cmd; dir="") = Base.success(cmd(args,dir=dir))
 readall(args::Cmd; dir="") = Base.readall(cmd(args,dir=dir))
