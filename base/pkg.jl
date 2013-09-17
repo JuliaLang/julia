@@ -10,8 +10,8 @@ include("pkg/resolve.jl")
 include("pkg/write.jl")
 include("pkg/scaffold.jl")
 
-using Base.Git, .Types
-import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
+using .Types
+import Base: Git, thispatch, nextpatch, nextminor, nextmajor, check_new_version
 
 const dir = Dir.path
 const scaffold = Scaffold.scaffold
@@ -131,6 +131,7 @@ checkout(pkg::String, branch::String="master"; merge::Bool=true, pull::Bool=fals
 end
 
 release(pkg::String) = Dir.cd() do
+    ispath(pkg,".git") || error("$pkg is not a git repo")
     Read.isinstalled(pkg) || error("$pkg cannot be released – not an installed package")
     avail = Read.available(pkg)
     isempty(avail) && error("$pkg cannot be released – not a registered package")
@@ -146,6 +147,27 @@ release(pkg::String) = Dir.cd() do
         isempty(Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail])) && continue
         error("can't find any registered versions of $pkg to checkout")
     end
+end
+
+fix(pkg::String, head::String=Git.head(dir=dir(pkg))) = Dir.cd() do
+    ispath(pkg,".git") || error("$pkg is not a git repo")
+    branch = "fixed-$(head[1:8])"
+    rslv = (head != Git.head(dir=pkg))
+    info("Creating $pkg branch $branch...")
+    Git.run(`checkout -q -B $branch $head`, dir=pkg)
+    rslv ? _resolve() : nothing
+end
+
+function fix(pkg::String, ver::VersionNumber)
+    head = Dir.cd() do
+        ispath(pkg,".git") || error("$pkg is not a git repo")
+        Read.isinstalled(pkg) || error("$pkg cannot be fixed – not an installed package")
+        avail = Read.available(pkg)
+        isempty(avail) && error("$pkg cannot be fixed – not a registered package")
+        haskey(avail,ver) || error("$pkg – $ver is not a registered version")
+        avail[ver].sha1
+    end
+    fix(pkg,head) # to avoid nested Dir.cd() call
 end
 
 update() = Dir.cd() do
