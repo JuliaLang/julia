@@ -18,6 +18,9 @@ and clarify what steps are being done and what their inputs and outputs are.
 Furthermore, code inside functions tends to run much faster than top level
 code, due to how Julia's compiler works.
 
+It is also worth emphasizing that functions should take arguments, instead
+of operating directly on global variables (aside from constants like ``pi``).
+
 Avoid writing overly-specific types
 -----------------------------------
 
@@ -182,3 +185,66 @@ If ``T`` is used, it can be replaced with ``typeof(x)`` if convenient.
 There is no performance difference.
 Note that this is not a general caution against static parameters, just
 against uses where they are not needed.
+
+Avoid confusion about whether something is an instance or a type
+----------------------------------------------------------------
+
+Sets of definitions like the following are confusing::
+
+    foo(::Type{MyType}) = ...
+    foo(::MyType) = foo(MyType)
+
+Decide whether the concept in question will be written as ``MyType`` or
+``MyType()``, and stick to it.
+
+The preferred style is to use instances by default, and only add
+methods involving ``Type{MyType}`` later if they become necessary
+to solve some problem.
+
+If a type is effectively an enumeration, it should be defined as a single
+(ideally ``immutable``) type, with the enumeration values being instances
+of it. Constructors and conversions can check whether values are valid.
+This design is preferred over making the enumeration an abstract type,
+with the ``values`` as subtypes.
+
+Don't overuse macros
+--------------------
+
+Be aware of when a macro could really be a function instead.
+
+Calling ``eval`` inside a macro is a particularly dangerous warning sign;
+it means the macro will only work when called at the top level. If such
+a macro is written as a function instead, it will naturally have access
+to the run-time values it needs.
+
+Don't expose unsafe operations at the interface level
+-----------------------------------------------------
+
+If you have a type that uses a native pointer::
+
+    type NativeType
+        p::Ptr{Uint8}
+        ...
+    end
+
+don't write definitions like the following::
+
+    getindex(x::NativeType, i) = unsafe_load(x.p, i)
+
+The problem is that users of this type can write ``x[i]`` without realizing
+that the operation is unsafe, and then be susceptible to memory bugs.
+
+Such a function should either check the operation to ensure it is safe, or
+have ``unsafe`` somewhere in its name to alert callers.
+
+Don't overload methods of base container types
+----------------------------------------------
+
+It is possible to write definitions like the following::
+
+    show(io::IO, v::Vector{MyType}) = ...
+
+This would provide custom showing of vectors with a specific new element type.
+While tempting, this should be avoided. The trouble is that users will expect
+a well-known type like ``Vector`` to behave in a certain way, and overly
+customizing its behavior can make it harder to work with.
