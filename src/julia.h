@@ -249,10 +249,9 @@ typedef struct {
 } jl_weakref_t;
 
 typedef struct {
-    // not first-class
+    JL_DATA_TYPE
     jl_sym_t *name;
     jl_value_t *value;
-    jl_value_t *type;
     struct _jl_module_t *owner;  // for individual imported bindings
     unsigned constp:1;
     unsigned exportp:1;
@@ -877,6 +876,7 @@ void jl_init_serializer(void);
 
 DLLEXPORT void jl_save_system_image(char *fname);
 DLLEXPORT void jl_restore_system_image(char *fname);
+DLLEXPORT const char *jl_get_llvm_gv(jl_value_t *p);
 
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str);
