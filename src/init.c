@@ -336,7 +336,13 @@ DLLEXPORT void uv_atexit_hook()
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f!=NULL && jl_is_function(f)) {
-            jl_apply((jl_function_t*)f, NULL, 0);
+            JL_TRY {
+                jl_apply((jl_function_t*)f, NULL, 0);
+            }
+            JL_CATCH {
+                JL_PRINTF(JL_STDERR, "\natexit hook threw an error: ");
+                jl_show(jl_stderr_obj(),jl_exception_in_transit);
+            }
         }
     }
 
@@ -351,40 +357,51 @@ DLLEXPORT void uv_atexit_hook()
     jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stderr, &queue);
     struct uv_shutdown_queue_item *item = queue.first;
     while (item) {
-        uv_handle_t *handle = item->h;
-        if (handle->type != UV_FILE && uv_is_closing(handle)) {
+        JL_TRY {
+            while (item) {
+                uv_handle_t *handle = item->h;
+                if (handle->type != UV_FILE && uv_is_closing(handle)) {
+                    item = item->next;
+                    continue;
+                }
+                switch(handle->type) {
+                case UV_TTY:
+                case UV_UDP:
+                case UV_TCP:
+                case UV_NAMED_PIPE:
+                case UV_POLL:
+                case UV_TIMER:
+                case UV_ASYNC:
+                case UV_FS_EVENT:
+                case UV_FS_POLL:
+                case UV_IDLE:
+                case UV_PREPARE:
+                case UV_CHECK:
+                case UV_SIGNAL:
+                case UV_PROCESS:
+                case UV_FILE:
+                    // These will be shutdown as appropriate by jl_close_uv
+                    jl_close_uv(handle);
+                    break;
+                case UV_HANDLE:
+                case UV_STREAM:
+                case UV_UNKNOWN_HANDLE:
+                case UV_HANDLE_TYPE_MAX:
+                case UV_RAW_FD:
+                case UV_RAW_HANDLE:
+                default:
+                    assert(0);
+                }
+                item = item->next;
+            }
+        }
+        JL_CATCH {
+            //error handling -- continue cleanup, as much as possible
+            uv_unref(item->h);
+            jl_printf(JL_STDERR, "error during exit cleanup: close: ");
+            jl_static_show(JL_STDERR, jl_exception_in_transit);
             item = item->next;
-            continue;
         }
-        switch(handle->type) {
-        case UV_TTY:
-        case UV_UDP:
-        case UV_TCP:
-        case UV_NAMED_PIPE:
-        case UV_POLL:
-        case UV_TIMER:
-        case UV_ASYNC:
-        case UV_FS_EVENT:
-        case UV_FS_POLL:
-        case UV_IDLE:
-        case UV_PREPARE:
-        case UV_CHECK:
-        case UV_SIGNAL:
-        case UV_PROCESS:
-        case UV_FILE:
-            // These will be shutdown as appropriate by jl_close_uv
-            jl_close_uv(handle);
-            break;
-        case UV_HANDLE:
-        case UV_STREAM:
-        case UV_UNKNOWN_HANDLE:
-        case UV_HANDLE_TYPE_MAX:
-        case UV_RAW_FD:
-        case UV_RAW_HANDLE:
-        default:
-            assert(0);
-        }
-        item = item->next;
     }
     uv_run(loop,UV_RUN_DEFAULT); //let libuv spin until everything has finished closing
 }
