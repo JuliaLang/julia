@@ -4,28 +4,17 @@
 #include "platform.h"
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include <stdarg.h>
 #include <setjmp.h>
 #include <assert.h>
 #include <sys/types.h>
 #include <errno.h>
-#include <fcntl.h>
 #if defined(_OS_WINDOWS_)
 #include <malloc.h>
-#if defined(_COMPILER_INTEL_)
-#include <mathimf.h>
 #else
-#include <math.h>
-#endif
-#else
-#include <math.h>
 #include <unistd.h>
 #endif
-#include <ctype.h>
 #include "julia.h"
-#include <sys/stat.h>
 #include "builtin_proto.h"
 
 DLLEXPORT char *julia_home = NULL;
