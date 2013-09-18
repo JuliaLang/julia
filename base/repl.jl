@@ -76,7 +76,7 @@ function showerror(io::IO, e::DomainError, bt)
         if length(code) == 3
             if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
                 print(io, "\n", code[1],
-                      " will only return a complex result if called width a complex argument.",
+                      " will only return a complex result if called with a complex argument.",
                       "\ntry ", code[1], "(complex(x))")
             end
             break
