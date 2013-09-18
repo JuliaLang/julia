@@ -517,6 +517,12 @@ end
 slicedim(A::AbstractArray, d::Integer, i) =
     A[[ n==d ? i : (1:size(A,n)) for n in 1:ndims(A) ]...]
 
+function flipdim(A::AbstractVector, d::Integer)
+    d > 0 || error("dimension out of range")
+    d == 1 || return copy(A)
+    reverse(A)
+end
+
 function flipdim(A::AbstractArray, d::Integer)
     nd = ndims(A)
     sd = d > nd ? 1 : size(A, d)
