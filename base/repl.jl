@@ -70,20 +70,19 @@ function showerror(io::IO, e::LoadError, bt)
 end
 
 function showerror(io::IO, e::DomainError, bt)
-    try
-        print(io, "DomainError")
-        for b in bt
-            code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Int32), b, 0)
-            if length(code) == 3
-                if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
-                    print(io, "\n       ", code[1]," will only return complex result if called width a complex argument. Eg: ", code[1], "(complex(x))")
-                end
-                break
+    print(io, "DomainError")
+    for b in bt
+        code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Int32), b, 0)
+        if length(code) == 3
+            if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
+                print(io, "\n", code[1],
+                      " will only return a complex result if called width a complex argument.",
+                      "\ntry ", code[1], "(complex(x))")
             end
+            break
         end
-    finally
-        show_backtrace(io, bt)
     end
+    show_backtrace(io, bt)
 end
 
 showerror(io::IO, e::SystemError) = print(io, "$(e.prefix): $(strerror(e.errnum))")

@@ -2345,7 +2345,7 @@ Mathematical Functions
 
 .. function:: log(x)
 
-   Compute the natural logarithm of ``x``. Throws ``DomainError`` for negative ``Real`` arguments. Use ``Complex`` negative arguments instead.
+   Compute the natural logarithm of ``x``. Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.
 
 .. function:: log2(x)
 
@@ -2357,7 +2357,7 @@ Mathematical Functions
 
 .. function:: log1p(x)
 
-   Accurate natural logarithm of ``1+x``.  Throws ``DomainError`` for negative ``Real`` arguments.
+   Accurate natural logarithm of ``1+x``.  Throws ``DomainError`` for ``Real`` arguments less than -1.
 
 .. function:: frexp(val, exp)
 
@@ -2463,7 +2463,7 @@ Mathematical Functions
 
 .. function:: sqrt(x)
 
-   Return :math:`\sqrt{x}`. Throws ``DomainError`` for negative ``Real`` arguments. Use ``Complex`` negative arguments instead.
+   Return :math:`\sqrt{x}`. Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.
 
 .. function:: isqrt(x)
 
