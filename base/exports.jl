@@ -1012,6 +1012,7 @@ export
 
 # I/O and events
     accept,
+    changed,
     close,
     connect,
     countlines,
@@ -1059,6 +1060,7 @@ export
     redirect_stderr,
     redirect_stdin,
     redirect_stdout,
+    renamed,
     seek,
     seekend,
     seekstart,
@@ -1072,9 +1074,9 @@ export
     stop_timer,
     takebuf_array,
     takebuf_string,
+    timedout,
     truncate,
-    UV_READABLE,
-    UV_WRITABLE,
+    watch_file,
     WindowsRawSocket,
     write,
     writecsv,
