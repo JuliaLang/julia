@@ -370,7 +370,8 @@ JLDFLAGS =
 endif
 
 ifeq ($(OS), WINNT)
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
+	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -lssp
 JCFLAGS += -D_WIN32_WINNT=0x0600
 JCXXFLAGS += -D_WIN32_WINNT=0x0600
 JLDFLAGS = -Wl,--stack,8388608
@@ -380,16 +381,6 @@ endif
 UNTRUSTED_SYSTEM_LIBM = 1
 JL_PRIVATE_LIBDIR = bin
 JL_LIBDIR = bin
-endif
-
-ifeq ($(USE_SYSTEM_LIBM),0)
-ifneq ($(UNTRUSTED_SYSTEM_LIBM),0)
-ifeq ($(OS),WINNT)
-OSLIBS += $(WHOLE_ARCHIVE) $(BUILD)/lib/libopenlibm.a $(NO_WHOLE_ARCHIVE)
-else
-OSLIBS += $(WHOLE_ARCHIVE) $(BUILD)/$(JL_LIBDIR)/libopenlibm.a $(NO_WHOLE_ARCHIVE)
-endif
-endif
 endif
 
 # Intel libraries

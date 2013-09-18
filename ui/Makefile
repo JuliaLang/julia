@@ -11,6 +11,16 @@ DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(call exec,$(LLVM_CONFIG) --ldflags) $(OSLIBS) $(RPATH)
 
+ifeq ($(USE_SYSTEM_LIBM),0)
+ifneq ($(UNTRUSTED_SYSTEM_LIBM),0)
+ifeq ($(OS),WINNT)
+JLDFLAGS += $(WHOLE_ARCHIVE) $(BUILD)/lib/libopenlibm.a $(NO_WHOLE_ARCHIVE)
+else
+JLDFLAGS += $(WHOLE_ARCHIVE) $(BUILD)/$(JL_LIBDIR)/libopenlibm.a $(NO_WHOLE_ARCHIVE)
+endif
+endif
+endif
+
 julia-release: julia-readline julia-basic
 julia-debug: julia-debug-readline julia-debug-basic
 
