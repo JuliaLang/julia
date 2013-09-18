@@ -747,7 +747,10 @@ void jl_save_system_image(char *fname)
     jl_gc_disable();
     htable_reset(&backref_table, 50000);
     ios_t f;
-    ios_file(&f, fname, 1, 1, 1, 1);
+    if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
+        JL_PRINTF(JL_STDERR, "cannot open system image file for writing\n");
+        exit(1);
+    }
 
     // orphan old Base module if present
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base"));
