@@ -37,9 +37,9 @@ end
 
 # general machinery for parsing REQUIRE files
 
-function read(io::IO)
+function read(readable::Union(IO,Base.AbstractCmd))
     lines = Line[]
-    for line in eachline(io)
+    for line in eachline(readable)
         line = chomp(line)
         push!(lines, ismatch(r"^\s*(?:#|$)", line) ? Comment(line) : Requirement(line))
     end

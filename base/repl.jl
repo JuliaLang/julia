@@ -75,7 +75,7 @@ showerror(io::IO, ::StackOverflowError) = print(io, "stack overflow")
 showerror(io::IO, ::UndefRefError) = print(io, "access to undefined reference")
 showerror(io::IO, ::EOFError) = print(io, "read: end of file")
 showerror(io::IO, e::ErrorException) = print(io, e.msg)
-showerror(io::IO, e::KeyError) = print(io, "key not found: $(e.key)")
+showerror(io::IO, e::KeyError) = (print(io, "key not found: "); show(io, e.key))
 showerror(io::IO, e::InterruptException) = print(io, "interrupt")
 
 function showerror(io::IO, e::MethodError)
@@ -149,5 +149,5 @@ function show_backtrace(io::IO, top_function::Symbol, t, set)
     if n > 1 || lastline != -11
         show_trace_entry(io, lastname, lastfile, lastline, n)
     end
-    @windows_only if WORD_SIZE == 64 warn_once("\nbacktraces on your platform are often misleading or partially incorrect") end
+    @windows_only if WORD_SIZE == 64; println(); warn_once("backtraces on your platform are often misleading or partially incorrect") end
 end

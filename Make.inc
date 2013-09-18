@@ -50,10 +50,8 @@ override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
-export WINE_PATH := $(shell winepath -w $(BUILD)/bin);$(shell winepath -w $(BUILD)/lib/julia);$(shell winepath -w $(BUILD)/lib)
-export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
-export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
-export WINE_PATH := $(WINE_PATH);C:\MinGW\\bin;C:\MinGW\msys\1.0\bin;$(shell winepath -w $(BUILD)/Git/bin)
+export STD_LIB_PATH := $(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
+export STD_LIB_PATH := $(STD_LIB_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
 else
 $(error "unknown XC_HOST variable set")
 endif
@@ -81,7 +79,7 @@ endif
 ifeq ($(OS), WINNT)
 fPIC =
 ifeq ($(BUILD_OS), WINNT)
-PATH := ${PATH}:${BUILD}/lib:${BUILD}/lib/julia:/c/Program Files/7-zip
+PATH := ${PATH}:${BUILD}/${JL_LIBDIR}:${BUILD}/${JL_PRIVATE_LIBDIR}:/c/Program Files/7-zip
 endif
 EXE = .exe
 else
@@ -214,28 +212,32 @@ ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
 else
 ifeq ($(OS),Darwin)
-LIBUNWIND=$(BUILD)/lib/libosxunwind.a
+LIBUNWIND=$(BUILD)/$(JL_LIBDIR)/libosxunwind.a
 else
-LIBUNWIND=$(BUILD)/lib/libunwind-generic.a $(BUILD)/lib/libunwind.a
+LIBUNWIND=$(BUILD)/$(JL_LIBDIR)/libunwind-generic.a $(BUILD)/$(JL_LIBDIR)/libunwind.a
 endif
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
-LLVM_CONFIG ?= llvm-config
+LLVM_CONFIG ?= llvm-config$(EXE)
 else
-LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config
+LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config$(EXE)
 endif
 
 ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline
 else
+ifeq ($(OS),WINNT)
 READLINE = $(BUILD)/lib/libreadline.a
+else
+READLINE = $(BUILD)/$(JL_LIBDIR)/libreadline.a
+endif
 endif
 
-ifneq ($(OS),WINNT)
-READLINE += -lncurses
-else
+ifeq ($(OS),WINNT)
 READLINE += $(BUILD)/lib/libhistory.a
+else
+READLINE += -lncurses
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -253,14 +255,14 @@ ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 USE_BLAS64 = 0
 USE_SYSTEM_LAPACK = 0
-LIBBLAS = -L$(BUILD)/lib -lgfortblas
+LIBBLAS = -L$(BUILD)/$(JL_LIBDIR) -lgfortblas
 LIBBLASNAME = libgfortblas
 else
 LIBBLAS ?= -lblas
 LIBBLASNAME ?= libblas
 endif
 else
-LIBBLAS = -L$(BUILD)/lib -lopenblas
+LIBBLAS = -L$(BUILD)/$(JL_LIBDIR) -lopenblas
 LIBBLASNAME = libopenblas
 endif
 
@@ -274,7 +276,7 @@ ifeq ($(USE_SYSTEM_LAPACK), 1)
 LIBLAPACK = -llapack
 LIBLAPACKNAME = liblapack
 else
-LIBLAPACK = -L$(BUILD)/lib -llapack $(LIBBLAS)
+LIBLAPACK = -L$(BUILD)/$(JL_LIBDIR) -llapack $(LIBBLAS)
 LIBLAPACKNAME = liblapack
 endif
 endif
@@ -291,7 +293,11 @@ ifeq ($(USE_SYSTEM_LIBUV), 1)
   LIBUV = /usr/lib/libuv-julia.a
   LIBUV_INC = /usr/include
 else
+ifeq ($(OS),WINNT)
   LIBUV = $(BUILD)/lib/libuv.a
+else
+  LIBUV = $(BUILD)/$(JL_LIBDIR)/libuv.a
+endif
   LIBUV_INC = $(JULIAHOME)/deps/libuv/include
 endif
 
@@ -364,10 +370,8 @@ JLDFLAGS =
 endif
 
 ifeq ($(OS), WINNT)
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm
-ifeq ($(ARCH),x86_64)
-OSLIBS += -ldbghelp
-endif
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
+	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -lssp
 JCFLAGS += -D_WIN32_WINNT=0x0600
 JCXXFLAGS += -D_WIN32_WINNT=0x0600
 JLDFLAGS = -Wl,--stack,8388608
@@ -375,12 +379,8 @@ ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
 UNTRUSTED_SYSTEM_LIBM = 1
-endif
-
-ifeq ($(USE_SYSTEM_LIBM),0)
-ifneq ($(UNTRUSTED_SYSTEM_LIBM),0)
-OSLIBS += $(WHOLE_ARCHIVE) $(BUILD)/lib/libopenlibm.a $(NO_WHOLE_ARCHIVE)
-endif
+JL_PRIVATE_LIBDIR = bin
+JL_LIBDIR = bin
 endif
 
 # Intel libraries
@@ -414,7 +414,7 @@ endif
 # or installed to usr/lib/libatlas from some another source (built as
 # a shared library, for your platform, single threaded)
 USE_ATLAS = 0
-ATLAS_LIBDIR = $(BUILD)/lib
+ATLAS_LIBDIR = $(BUILD)/$(JL_LIBDIR)
 #or ATLAS_LIBDIR = /path/to/system/atlas/lib
 
 ifeq ($(USE_ATLAS), 1)
@@ -464,7 +464,7 @@ ifeq ($(BUILD_OS), WINNT)
 spawn = $(1)
 else
 ifeq ($(OS), WINNT)
-spawn = wine cmd /c "set PATH=$(WINE_PATH)&& $$(exec winepath -w '$(1)')"
+spawn = wine $(1)
 else
 spawn = $(1)
 endif

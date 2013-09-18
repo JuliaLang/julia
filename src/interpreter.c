@@ -111,8 +111,11 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             return jl_f_get_field(NULL, gfargs, 2);
         }
         if (jl_is_lambda_info(e)) {
-            return (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null,
-                                               (jl_lambda_info_t*)e);
+            jl_lambda_info_t *li = (jl_lambda_info_t*)e;
+            if (jl_boot_file_loaded && li->ast && jl_is_expr(li->ast)) {
+                li->ast = jl_compress_ast(li, li->ast);
+            }
+            return (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null, li);
         }
         if (jl_is_linenode(e)) {
             jl_lineno = jl_linenode_line(e);

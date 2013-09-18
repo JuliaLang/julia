@@ -10,8 +10,8 @@ include("pkg/resolve.jl")
 include("pkg/write.jl")
 include("pkg/scaffold.jl")
 
-using Base.Git, .Types
-import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
+using .Types
+import Base: Git, thispatch, nextpatch, nextminor, nextmajor, check_new_version
 
 const dir = Dir.path
 const scaffold = Scaffold.scaffold
@@ -110,23 +110,28 @@ clone(url::String, pkg::String=url2pkg(url); opts::Cmd=``) = Dir.cd() do
     #4082 TODO: some call to fixup should go here
 end
 
-function _checkout(pkg::String, what::String, merge::Bool=false)
+function _checkout(pkg::String, what::String, merge::Bool=false, pull::Bool=false)
     Git.transact(dir=pkg) do
         Git.dirty(dir=pkg) && error("$pkg is dirty, bailing")
         Git.run(`checkout -q $what`, dir=pkg)
         merge && Git.run(`merge -q --ff-only $what`, dir=pkg)
+        if pull
+            info("Pulling $pkg latest $what...")
+            Git.run(`pull -q --ff-only`, dir=pkg)
+        end
         _resolve()
         #4082 TODO: some call to fixup should go here
     end
 end
 
-checkout(pkg::String, branch::String="master"; merge::Bool=true) = Dir.cd() do
+checkout(pkg::String, branch::String="master"; merge::Bool=true, pull::Bool=false) = Dir.cd() do
     ispath(pkg,".git") || error("$pkg is not a git repo")
     info("Checking out $pkg $branch...")
-    _checkout(pkg,branch,merge)
+    _checkout(pkg,branch,merge,pull)
 end
 
 release(pkg::String) = Dir.cd() do
+    ispath(pkg,".git") || error("$pkg is not a git repo")
     Read.isinstalled(pkg) || error("$pkg cannot be released – not an installed package")
     avail = Read.available(pkg)
     isempty(avail) && error("$pkg cannot be released – not a registered package")
@@ -144,6 +149,27 @@ release(pkg::String) = Dir.cd() do
     end
 end
 
+fix(pkg::String, head::String=Git.head(dir=dir(pkg))) = Dir.cd() do
+    ispath(pkg,".git") || error("$pkg is not a git repo")
+    branch = "fixed-$(head[1:8])"
+    rslv = (head != Git.head(dir=pkg))
+    info("Creating $pkg branch $branch...")
+    Git.run(`checkout -q -B $branch $head`, dir=pkg)
+    rslv ? _resolve() : nothing
+end
+
+function fix(pkg::String, ver::VersionNumber)
+    head = Dir.cd() do
+        ispath(pkg,".git") || error("$pkg is not a git repo")
+        Read.isinstalled(pkg) || error("$pkg cannot be fixed – not an installed package")
+        avail = Read.available(pkg)
+        isempty(avail) && error("$pkg cannot be fixed – not a registered package")
+        haskey(avail,ver) || error("$pkg – $ver is not a registered version")
+        avail[ver].sha1
+    end
+    fix(pkg,head) # to avoid nested Dir.cd() call
+end
+
 update() = Dir.cd() do
     info("Updating METADATA...")
     cd("METADATA") do
@@ -153,7 +179,7 @@ update() = Dir.cd() do
             Git.run(`branch -f devel refs/remotes/origin/devel`)
             Git.run(`checkout -q devel`)
         end
-        Git.run(`pull -q`)
+        Git.run(`pull -q -m`)
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
@@ -268,16 +294,47 @@ end
 
 resolve() = Dir.cd(_resolve) #4082 TODO: some call to fixup should go here
 
+function write_tag_metadata(pkg::String, ver::VersionNumber, commit::String)
+    info("Writing METADATA for $pkg v$ver")
+    cmd = Git.cmd(`cat-file blob $commit:REQUIRE`, dir=pkg)
+    reqs = success(cmd) ? Reqs.parse(cmd) : Requires()
+    cd("METADATA") do
+        d = joinpath(pkg,"versions",string(ver))
+        mkpath(d)
+        sha1file = joinpath(d,"sha1")
+        open(io->println(io,commit), sha1file, "w")
+        Git.run(`add $sha1file`)
+        reqsfile = joinpath(d,"requires")
+        if isempty(reqs)
+            ispath(reqsfile) && Git.run(`rm -f -q $reqsfile`)
+        else
+            Reqs.write(reqsfile,reqs)
+            Git.run(`add $reqsfile`)
+        end
+    end
+    return nothing
+end
+
 register(pkg::String, url::String) = Dir.cd() do
     ispath(pkg,".git") || error("$pkg is not a git repo")
     isfile("METADATA",pkg,"url") && error("$pkg already registered")
-    cd("METADATA") do
-        Git.transact() do
+    tags = split(Git.readall(`tag -l v*`, dir=pkg))
+    filter!(tag->ismatch(Base.VERSION_REGEX,tag), tags)
+    versions = [
+        convert(VersionNumber,tag) =>
+        Git.readchomp(`rev-parse --verify $tag^{commit}`, dir=pkg)
+        for tag in tags
+    ]
+    Git.transact(dir="METADATA") do
+        cd("METADATA") do
             info("Registering $pkg at $url")
             mkdir(pkg)
             path = joinpath(pkg,"url")
             open(io->println(io,url), path, "w")
             Git.run(`add $path`)
+        end
+        for (ver,commit) in versions
+            write_tag_metadata(pkg,ver,commit)
         end
     end
 end
@@ -301,7 +358,8 @@ tag(pkg::String, ver::Union(Symbol,VersionNumber)=:bump;
     commit::String="", msg::String="") = Dir.cd() do
     ispath(pkg,".git") || error("$pkg is not a git repo")
     Git.dirty(dir=pkg) && error("$pkg is dirty – stash changes to tag")
-    isempty(commit) && (commit = Git.head(dir=pkg))
+    commit = isempty(commit) ? Git.head(dir=pkg) :
+        Git.readchomp(`rev-parse $commit`, dir=pkg)
     registered = isfile("METADATA",pkg,"url")
     if registered
         avail = Read.available(pkg)
@@ -337,16 +395,8 @@ tag(pkg::String, ver::Union(Symbol,VersionNumber)=:bump;
     Git.run(`tag $opts v$ver $commit`, dir=pkg, out=DevNull)
     registered || return
     try
-        info("Writing METADATA for $pkg v$ver")
-        reqs = Reqs.parse(joinpath(pkg,"REQUIRE"))
-        cd("METADATA") do
-            Git.transact() do
-                d = joinpath(pkg,"versions",string(ver))
-                mkpath(d)
-                open(io->println(io,commit), joinpath(d,"sha1"), "w")
-                isempty(reqs) || Reqs.write(joinpath(d,"requires"), reqs)
-                Git.run(`add $d`)
-            end
+        Git.transact(dir="METADATA") do
+            write_tag_metadata(pkg,ver,commit)
         end
     catch
         Git.run(`tag -d v$ver`, dir=pkg)

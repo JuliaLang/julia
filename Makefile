@@ -13,7 +13,19 @@ VERSDIR = v`cut -d. -f1-2 < VERSION`
 all: default
 default: release
 
-DIRS = $(BUILD)/bin $(BUILD)/lib $(BUILD)/$(JL_PRIVATE_LIBDIR) $(BUILD)/share/julia $(BUILD)/share/julia/man/man1
+DIRS = $(BUILD)/bin $(BUILD)/lib $(BUILD)/share/julia $(BUILD)/share/julia/man/man1
+ifneq ($(JL_LIBDIR),bin)
+ifneq ($(JL_LIBDIR),lib)
+DIRS += $(BUILD)/$(JL_LIBDIR)
+endif
+endif
+ifneq ($(JL_PRIVATE_LIBDIR),bin)
+ifneq ($(JL_PRIVATE_LIBDIR),lib)
+ifneq ($(JL_PRIVATE_LIBDIR),$(JL_LIBDIR))
+DIRS += $(BUILD)/$(JL_PRIVATE_LIBDIR)
+endif
+endif
+endif
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,base test doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
@@ -72,11 +84,73 @@ run:
 JL_LIBS = julia julia-debug
 
 # private libraries, that are installed in $(PREFIX)/lib/julia
-JL_PRIVATE_LIBS = amd arpack camd ccolamd cholmod colamd \
-                  fftw3 fftw3f fftw3_threads fftw3f_threads \
-                  gmp grisu openlibm openlibm-extras pcre \
-                  random Rmath spqr suitesparse_wrapper \
-                  umfpack z openblas mpfr gfortblas
+JL_PRIVATE_LIBS = random suitesparse_wrapper grisu
+ifeq ($(USE_SYSTEM_FFTW),0)
+JL_PRIVATE_LIBS += fftw3 fftw3f fftw3_threads fftw3f_threads
+endif
+ifeq ($(USE_SYSTEM_PCRE),0)
+JL_PRIVATE_LIBS += pcre
+endif
+ifeq ($(USE_SYSTEM_OPENLIBM),0)
+JL_PRIVATE_LIBS += openlibm-extras
+ifeq ($(USE_SYSTEM_LIBM),0)
+JL_PRIVATE_LIBS += openlibm
+endif
+endif
+ifeq ($(USE_SYSTEM_BLAS),0)
+JL_PRIVATE_LIBS += openblas
+else ifeq ($(USE_SYSTEM_LAPACK),0)
+JL_PRIVATE_LIBS += lapack
+endif
+ifeq ($(USE_SYSTEM_GMP),0)
+JL_PRIVATE_LIBS += gmp
+endif
+ifeq ($(USE_SYSTEM_MPFR),0)
+JL_PRIVATE_LIBS += mpfr
+endif
+ifeq ($(USE_SYSTEM_ARPACK),0)
+JL_PRIVATE_LIBS += arpack
+endif
+ifeq ($(USE_SYSTEM_SUITESPARSE),0)
+JL_PRIVATE_LIBS += amd camd ccolamd cholmod colamd umfpack spqr
+endif
+#ifeq ($(USE_SYSTEM_ZLIB),0)
+#JL_PRIVATE_LIBS += z
+#endif
+ifeq ($(USE_SYSTEM_RMATH),0)
+JL_PRIVATE_LIBS += Rmath
+endif
+ifeq ($(OS),Darwin)
+ifeq ($(USE_SYSTEM_BLAS),1)
+ifeq ($(USE_SYSTEM_LAPACK),0)
+JL_PRIVATE_LIBS += gfortblas
+endif
+endif
+endif
+
+ifeq ($(OS),WINNT)
+define std_dll
+debug release: | $$(BUILD)/$$(JL_LIBDIR)/lib$(1).dll
+$$(BUILD)/$$(JL_LIBDIR)/lib$(1).dll: | $$(BUILD)/$$(JL_LIBDIR)
+ifeq ($$(BUILD_OS),$$(OS))
+	cp $$(call pathsearch,lib$(1).dll,$$(PATH)) $$(BUILD)/$$(JL_LIBDIR) ;
+else
+	cp $$(call wine_pathsearch,lib$(1).dll,$$(STD_LIB_PATH)) $$(BUILD)/$$(JL_LIBDIR) ;
+endif
+JL_LIBS += $(1)
+endef
+$(eval $(call std_dll,gfortran-3))
+$(eval $(call std_dll,quadmath-0))
+$(eval $(call std_dll,stdc++-6))
+ifeq ($(ARCH),i686)
+$(eval $(call std_dll,gcc_s_sjlj-1))
+else
+$(eval $(call std_dll,gcc_s_seh-1))
+endif
+ifneq ($(BUILD_OS),WINNT)
+$(eval $(call std_dll,ssp-0))
+endif
+endif
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install:
@@ -89,14 +163,18 @@ install:
 ifneq ($(OS),WINNT)
 	cd $(PREFIX)/bin && ln -sf julia-$(DEFAULT_REPL) julia
 endif
-	-for suffix in $(JL_LIBS) ; do \
+	for suffix in $(JL_LIBS) ; do \
 		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
-	-for suffix in $(JL_PRIVATE_LIBS) ; do \
-		cp -a $(BUILD)/lib/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
+	for suffix in $(JL_PRIVATE_LIBS) ; do \
+		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 ifeq ($(USE_SYSTEM_LIBUV),0)
+ifeq ($(OS),WINNT)
 	cp -a $(BUILD)/lib/libuv.a $(PREFIX)/$(JL_PRIVATE_LIBDIR)
+else
+	cp -a $(BUILD)/$(JL_LIBDIR)/libuv.a $(PREFIX)/$(JL_PRIVATE_LIBDIR)
+endif
 	cp -a $(BUILD)/include/uv* $(PREFIX)/include/julia
 endif
 	cp -a src/julia.h src/support/*.h $(PREFIX)/include/julia
@@ -132,27 +210,6 @@ ifeq ($(OS), WINNT)
    		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll ../$(PREFIX)/bin && \
 	    mkdir ../$(PREFIX)/Git && \
 	    7z x PortableGit.7z -o"../$(PREFIX)/Git" )
-ifeq ($(BUILD_OS),WINNT)
-	cp $(call pathsearch,libgfortran-3.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-	cp $(call pathsearch,libquadmath-0.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-ifeq ($(ARCH),i686)
-	cp $(call pathsearch,libgcc_s_sjlj-1.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-else
-	cp $(call pathsearch,libgcc_s_seh-1.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-endif
-	cp $(call pathsearch,libstdc++-6.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-	#cp $(call pathsearch,libssp-0.dll,$(PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-else
-	cp $(call wine_pathsearch,libgfortran-3.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-	cp $(call wine_pathsearch,libquadmath-0.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-ifeq ($(ARCH),i686)
-	cp $(call wine_pathsearch,libgcc_s_sjlj-1.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-else
-	cp $(call wine_pathsearch,libgcc_s_seh-1.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-endif
-	cp $(call wine_pathsearch,libstdc++-6.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-	cp $(call wine_pathsearch,libssp-0.dll,$(WINE_PATH)) $(PREFIX)/$(JL_LIBDIR) ;
-endif
 	cd $(PREFIX)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 	./dist-extras/7z a -mx9 -sfx7z.sfx julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).exe julia-$(JULIA_COMMIT)
 else
@@ -177,6 +234,9 @@ clean: | $(CLEAN_TARGETS)
 cleanall: clean
 	@$(MAKE) -C src clean-flisp clean-support
 	@rm -fr $(BUILD)/$(JL_LIBDIR)
+ifeq ($(OS),WINNT)
+	@rm -rf $(BUILD)/lib
+endif
 	@$(MAKE) -C deps clean-uv
 
 distclean: cleanall
@@ -222,8 +282,8 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd dist-extras && \
 	wget -O 7z920.exe http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll 7z.sfx && \
-	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP2/noarch/mingw32-libexpat-2.0.1-4.16.noarch.rpm && \
-	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP2/noarch/mingw32-zlib-1.2.7-1.17.noarch.rpm
+	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP2/noarch/mingw32-libexpat-2.0.1-4.17.noarch.rpm && \
+	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP2/noarch/mingw32-zlib-1.2.7-1.18.noarch.rpm
 else ifeq ($(ARCH),x86_64)
 	cd dist-extras && \
 	wget -O 7z920-x64.msi http://downloads.sourceforge.net/sevenzip/7z920-x64.msi && \
@@ -232,7 +292,7 @@ else ifeq ($(ARCH),x86_64)
 	mv _7z.exe 7z.exe && \
 	mv _7z.sfx 7z.sfx && \
 	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-libexpat-2.0.1-3.16.noarch.rpm && \
-	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-zlib-1.2.7-1.20.noarch.rpm
+	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-zlib-1.2.7-1.21.noarch.rpm
 else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif
@@ -243,8 +303,3 @@ endif
 	7z x -y mingw-zlib.rpm -so > mingw-zlib.cpio && \
 	7z e -y mingw-zlib.cpio && \
 	wget -O PortableGit.7z http://msysgit.googlecode.com/files/PortableGit-1.8.3-preview20130601.7z
-
-wine_path:
-	$(info $(WINE_PATH))
-	@echo "wine cmd /c \"set \$$PATH=...\";%PATH% && program"
-	@echo

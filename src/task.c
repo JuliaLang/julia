@@ -16,6 +16,7 @@
 #include <winbase.h>
 #include <malloc.h>
 #include <dbghelp.h>
+static volatile int in_stackwalk = 0;
 #else
 #include <unistd.h>
 // This gives unwind only local unwinding options ==> faster code
@@ -459,9 +460,50 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
     if (*func_name == NULL && doCframes) {
         fromC = 1;
 #if defined(_OS_WINDOWS_)
-        *func_name = name_unknown;   // FIXME
-        *file_name = name_unknown;
-        *line_num = 0;
+        if (in_stackwalk) {
+            *func_name = name_unknown;
+            *file_name = name_unknown;
+            *line_num = ip;
+        }
+        else {
+            in_stackwalk = 1;
+            DWORD64 dwDisplacement64 = 0;
+            DWORD64 dwAddress = ip;
+
+            char buffer[sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR)];
+            PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)buffer;
+            pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+            pSymbol->MaxNameLen = MAX_SYM_NAME;
+
+            if (SymFromAddr(GetCurrentProcess(), dwAddress, &dwDisplacement64, pSymbol)) {
+                // SymFromAddr returned success
+                *func_name = strdup(pSymbol->Name);
+            }
+            else {
+                *func_name = name_unknown;
+                // SymFromAddr failed
+                //DWORD error = GetLastError();
+                //printf("SymFromAddr returned error : %d\n", error);
+            }
+
+            IMAGEHLP_LINE64 line;
+            DWORD dwDisplacement = 0;
+            line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+
+            if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &line)) {
+                // SymGetLineFromAddr64 returned success
+                *file_name = strdup(line.FileName);
+                *line_num = line.LineNumber;
+            }
+            else {
+                *file_name = name_unknown;
+                *line_num = ip;
+                // SymGetLineFromAddr64 failed
+                //DWORD error = GetLastError();
+                //printf("SymGetLineFromAddr64 returned error : %d\n", error);
+            }
+            in_stackwalk = 0;
+        }
 #else
         Dl_info dlinfo;
         if (dladdr((void*) ip, &dlinfo) != 0) {
@@ -479,7 +521,7 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
         else {
             *func_name = name_unknown;
             *file_name = name_unknown;
-            *line_num = 0;
+            *line_num = ip;
         }
 #endif
     }
@@ -487,10 +529,7 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
 }
 
 #if defined(_OS_WINDOWS_)
-#if defined(_CPU_X86_64_)
 extern int needsSymRefreshModuleList;
-#endif
-static volatile int in_stackwalk = 0;
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize) {
     CONTEXT Context;
     memset(&Context, 0, sizeof(Context));
@@ -506,13 +545,13 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
     STACKFRAME64 stk;
     memset(&stk, 0, sizeof(stk));
 
-#if defined(_CPU_X86_64_) 
     if (needsSymRefreshModuleList) {
         in_stackwalk = 1;
         SymRefreshModuleList(GetCurrentProcess());
         in_stackwalk = 0;
         needsSymRefreshModuleList = 0;
     }
+#if defined(_CPU_X86_64_) 
     DWORD MachineType = IMAGE_FILE_MACHINE_AMD64;
     stk.AddrPC.Offset = Context->Rip;
     stk.AddrStack.Offset = Context->Rsp;
@@ -613,13 +652,20 @@ DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int doCframes)
     const char *func_name;
     int line_num;
     const char *file_name;
-    (void)frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, doCframes);
+#ifdef _OS_WINDOWS_
+    int fromC =
+#endif
+        frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, doCframes);
     if (func_name != NULL) {
         jl_value_t *r = (jl_value_t*)jl_alloc_tuple(3);
         JL_GC_PUSH1(&r);
         jl_tupleset(r, 0, jl_symbol(func_name));
         jl_tupleset(r, 1, jl_symbol(file_name));
         jl_tupleset(r, 2, jl_box_long(line_num));
+#ifdef _OS_WINDOWS_
+        if (fromC && func_name != name_unknown) free((void*)func_name);
+        if (fromC && file_name != name_unknown) free((void*)file_name);
+#endif
         JL_GC_POP();
         return r;
     }
@@ -649,6 +695,10 @@ DLLEXPORT void gdblookup(ptrint_t ip)
             ios_printf(ios_stderr, "%s at %s: offset %x\n", func_name, file_name, line_num);
         else
             ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
+#ifdef _OS_WINDOWS_
+        if (fromC && func_name != name_unknown) free((void*)func_name);
+        if (fromC && file_name != name_unknown) free((void*)file_name);
+#endif
     }
 }
 

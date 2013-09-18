@@ -1,0 +1,33 @@
+#include <winver.h>
+1 VERSIONINFO
+FILEVERSION     JLVER
+PRODUCTVERSION  JLVER
+/*
+FILEFLAGSMASK  	VS_FF_PRERELEASE
+FILEFLAGS      	VS_FF_PRERELEASE
+*/
+FILEOS         	VOS_DOS_WINDOWS32
+FILETYPE       	VFT_APP
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904E4"
+    BEGIN
+      VALUE "CompanyName", "JuliaLang"
+      VALUE "FileDescription", "The Julia Programming Language"
+      VALUE "FileVersion", JLVER_STR
+      VALUE "InternalName", "julia"
+      VALUE "LegalCopyright", "MIT Licensed"
+      VALUE "OriginalFilename", "julia.exe"
+      VALUE "ProductName", "Julia"
+      VALUE "ProductVersion", JLVER_STR
+    END
+  END
+
+  BLOCK "VarFileInfo"
+  BEGIN
+    /* US English, Unicode */
+    VALUE "Translation", 0x409, 1200
+  END
+END
+2 ICON "julia.ico"

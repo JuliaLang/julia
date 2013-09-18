@@ -653,6 +653,13 @@ function getindex(s::String, r::Range1{Int})
     SubString(s, first(r), last(r))
 end
 
+function convert{P<:Union(Int8,Uint8),T<:ByteString}(::Type{Ptr{P}}, s::SubString{T})
+    if s.offset+s.endof < endof(s.string)
+        error("a SubString must coincide with the end of the original string to be convertible to pointer")
+    end
+    convert(Ptr{P}, s.string.data) + s.offset
+end
+
 ## efficient representation of repeated strings ##
 
 immutable RepString <: String

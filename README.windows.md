@@ -13,7 +13,7 @@ ___________________________________________________
 Binary Downloads
 ================
 
-Download the latest version of Julia from the downloads page at https://code.google.com/p/julialang/downloads/list
+Download the latest version of Julia from the downloads page at http://julialang.org/downloads/
 
 Unzip the download to a folder. Do not attempt to run Julia without extracting the zip archive first (hint: it won't work). Double-click the file Julia.BAT to launch Julia.
 

@@ -1,17 +1,6 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-DLLEXPORT int double_exponent(double d);
-void snprint_real(char *s, size_t cnt, double r,
-                  int width,    // printf field width, or 0
-                  int dec,      // # decimal digits desired, recommend 16
-                  // # of zeros in .00...0x before using scientific notation
-                  // recommend 3-4 or so
-                  int max_digs_rt,
-                  // # of digits left of decimal before scientific notation
-                  // recommend 10
-                  int max_digs_lf);
-
 DLLEXPORT char *uint2str(char *dest, size_t len, uint64_t num, uint32_t base);
 int str2int(char *str, size_t len, int64_t *res, uint32_t base);
 int isdigit_base(char c, int base);

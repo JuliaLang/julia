@@ -6,9 +6,7 @@ import
     Base.sort,
     Base.sort!,
     Base.issorted,
-    Base.sortperm,
-    Base.Collections.heapify!,
-    Base.Collections.percolate_down!
+    Base.sortperm
 
 export # also exported by Base
     # order-only:
@@ -27,10 +25,7 @@ export # also exported by Base
     # algorithms:
     InsertionSort,
     QuickSort,
-    MergeSort,
-    TimSort,
-    HeapSort,
-    RadixSort
+    MergeSort
 
 export # not exported by Base
     Algorithm,
@@ -231,17 +226,11 @@ abstract Algorithm
 
 immutable InsertionSortAlg <: Algorithm end
 immutable QuickSortAlg     <: Algorithm end
-immutable HeapSortAlg      <: Algorithm end
 immutable MergeSortAlg     <: Algorithm end
-immutable TimSortAlg       <: Algorithm end
-immutable RadixSortAlg     <: Algorithm end
 
 const InsertionSort = InsertionSortAlg()
 const QuickSort     = QuickSortAlg()
-const HeapSort      = HeapSortAlg()
 const MergeSort     = MergeSortAlg()
-const TimSort       = TimSortAlg()
-const RadixSort     = RadixSortAlg()
 
 const DEFAULT_UNSTABLE = QuickSort
 const DEFAULT_STABLE   = MergeSort
@@ -283,23 +272,6 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering
     return v
 end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::HeapSortAlg, o::Ordering)
-    if lo > 1 || hi < length(v)
-        return sort!(sub(v, lo:hi), 1, length(v), a, o)
-    end
-    r = ReverseOrdering(o)
-    heapify!(v, r)
-    for i = length(v):-1:2
-        # Swap the root with i, the last unsorted position
-        x = v[i]
-        v[i] = v[1]
-        # The heap portion now ends at position i-1, but needs fixing up
-        # starting with the root
-        percolate_down!(v,1,x,r,i-1)
-    end
-    v
-end
-
 function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering, t=similar(v))
     if lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
@@ -335,72 +307,6 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering
 
     return v
 end
-
-const RADIX_SIZE = 11
-const RADIX_MASK = 0x7FF
-
-function sort!(vs::AbstractVector, lo::Int, hi::Int, ::RadixSortAlg, o::Ordering, ts=similar(vs))
-    # Input checking
-    if lo >= hi;  return vs;  end
-
-    # Make sure we're sorting a bits type
-    T = ordtype(o, vs)
-    if !isbits(T)
-        error("Radix sort only sorts bits types (got $T)")
-    end
-
-    # Init
-    iters = iceil(sizeof(T)*8/RADIX_SIZE)
-    bin = zeros(Uint32, 2^RADIX_SIZE, iters)
-    if lo > 1;  bin[1,:] = lo-1;  end
-
-    # Histogram for each element, radix
-    for i = lo:hi
-        v = uint_mapping(o, vs[i])
-        for j = 1:iters
-            idx = int((v >> (j-1)*RADIX_SIZE) & RADIX_MASK)+1
-            @inbounds bin[idx,j] += 1
-        end
-    end
-
-    # Sort!
-    swaps = 0
-    len = hi-lo+1
-    for j = 1:iters
-        # Unroll first data iteration, check for degenerate case
-        v = uint_mapping(o, vs[hi])
-        idx = int((v >> (j-1)*RADIX_SIZE) & RADIX_MASK)+1
-
-        # are all values the same at this radix?
-        if bin[idx,j] == len;  continue;  end
-
-        cbin = cumsum(bin[:,j])
-        ci = cbin[idx]
-        ts[ci] = vs[hi]
-        cbin[idx] -= 1
-
-        # Finish the loop...
-        @inbounds for i in hi-1:-1:lo
-            v = uint_mapping(o, vs[i])
-            idx = int((v >> (j-1)*RADIX_SIZE) & RADIX_MASK)+1
-            ci = cbin[idx]
-            ts[ci] = vs[i]
-            cbin[idx] -= 1
-        end
-        vs,ts = ts,vs
-        swaps += 1
-    end
-
-    if isodd(swaps)
-        vs,ts = ts,vs
-        for i = lo:hi
-            vs[i] = ts[i]
-        end
-    end
-    vs
-end
-
-include("timsort.jl")
 
 ## generic sorting methods ##
 
@@ -532,11 +438,6 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     sort!(v, lo, j,  a, left(o))
     sort!(v, i,  hi, a, right(o))
     return v
-end
-
-function fpsort!(v::AbstractVector, ::Base.Sort.RadixSortAlg, o::Ordering)
-    lo, hi = nans2end!(v,o)
-    sort!(v, lo, hi, RadixSort, o)
 end
 
 sort!{T<:Floats}(v::AbstractVector{T}, a::Algorithm, o::DirectOrdering) = fpsort!(v,a,o)
