@@ -147,4 +147,4 @@ Finally, the build and install process for Julia:
 4. `make dist`
 6. move the julia-* directory / zip file to the target machine
 
-If you are building for 64-bit windows. The steps are essentially the same. Just replace i686 in XC_HOST with x86_64. (note: on Mac, wine only runs in 32-bit mode)
+If you are building for 64-bit windows, the steps are essentially the same. Just replace i686 in XC_HOST with x86_64. (note: on Mac, wine only runs in 32-bit mode)
