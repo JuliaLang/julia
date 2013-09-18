@@ -5,6 +5,7 @@
 /julia
 /usr
 /Make.user
+/julia-*
 
 *.exe
 *.dll

@@ -654,6 +654,10 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
         // been evaluated.
         JL_GC_PUSH1(&li);
         li = jl_add_static_parameters(li, sp);
+        // inner lambda does not need the "def" link. it leads to excess object
+        // retention, for example pointing to the original uncompressed AST
+        // of a top-level thunk that gets type inferred.
+        li->def = li;
         li->ast = jl_prepare_ast(li, li->sparams);
         JL_GC_POP();
         return (jl_value_t*)li;

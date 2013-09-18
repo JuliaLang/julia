@@ -8,12 +8,6 @@
 
 #include "platform.h"
 
-#if defined(_OS_WINDOWS_) && defined(_COMPILER_INTEL_)
-#include <mathimf.h>
-#else
-#include <math.h>
-#endif /* _OS_WINDOWS_ && _COMPILER_INTEL_ */
-
 #if defined(_OS_WINDOWS_)
 
 #include <stdio.h>

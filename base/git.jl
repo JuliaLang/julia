@@ -14,20 +14,11 @@ function git(d)
     `git --git-dir=$work_tree` : `git --work-tree=$work_tree --git-dir=$git_dir`
 end
 
-function gitenv(cmd)
-    @windows_only begin
-        env = Dict{ByteString,ByteString}(zip(ENV...)...)
-        env["HOME"] = ENV["USERPROFILE"]
-        cmd = setenv(cmd, env)
-    end
-    cmd
-end
-
 cmd(args::Cmd; dir="") = `$(git(dir)) $args`
-run(args::Cmd; dir="", out=STDOUT) = Base.run(gitenv(cmd(args,dir=dir)) |> out)
-success(args::Cmd; dir="") = Base.success(gitenv(cmd(args,dir=dir)))
-readall(args::Cmd; dir="") = Base.readall(gitenv(cmd(args,dir=dir)))
-readchomp(args::Cmd; dir="") = Base.readchomp(gitenv(cmd(args,dir=dir)))
+run(args::Cmd; dir="", out=STDOUT) = Base.run(cmd(args,dir=dir) |> out)
+success(args::Cmd; dir="") = Base.success(cmd(args,dir=dir))
+readall(args::Cmd; dir="") = Base.readall(cmd(args,dir=dir))
+readchomp(args::Cmd; dir="") = Base.readchomp(cmd(args,dir=dir))
 
 modules(args::Cmd; dir="") = readchomp(`config -f .gitmodules $args`, dir=dir)
 different(verA::String, verB::String, path::String; dir="") =

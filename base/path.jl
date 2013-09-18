@@ -7,6 +7,8 @@
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
     splitdrive(path::String) = ("",path)
+    user_homedir() = ENV["HOME"]
+    user_prefdir() = user_homedir()
 end
 @windows_only begin
     const path_separator    = "\\"
@@ -18,8 +20,10 @@ end
 
     function splitdrive(path::String)
         m = match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path)
-        m.captures[1], m.captures[2]
+        bytestring(m.captures[1]), bytestring(m.captures[2])
     end
+    user_homedir() = get(ENV,"HOME",joinpath(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
+    user_prefdir() = get(ENV,"HOME",joinpath(ENV["AppData"],"Julia"))
 end
 
 isabspath(path::String) = ismatch(path_absolute_re, path)
@@ -30,7 +34,7 @@ function splitdir(path::ByteString)
     m = match(path_dir_splitter,b)
     m == nothing && return (a,b)
     a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
-    a, m.captures[3]
+    a, bytestring(m.captures[3])
 end
 splitdir(path::String) = splitdir(bytestring(path))
 
@@ -41,7 +45,7 @@ function splitext(path::String)
     a, b = splitdrive(path)
     m = match(path_ext_splitter, b)
     m == nothing && return (path,"")
-    a*m.captures[1], m.captures[2]
+    a*m.captures[1], bytestring(m.captures[2])
 end
 
 function pathsep(paths::String...)

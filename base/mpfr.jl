@@ -695,16 +695,6 @@ function with_bigfloat_rounding(f::Function, rounding::RoundingMode)
     end
 end
 
-function round(x::BigFloat, prec::Integer)
-    if prec < 1
-        throw(DomainError())
-    end
-    prec = int(ceil(log2(10^prec)))
-    z = BigFloat(x)
-    ccall((:mpfr_prec_round, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Int32), &z, prec, ROUNDING_MODE[end])
-    return z
-end
-
 function string(x::BigFloat)
     lng = 128
     for i = 1:2

@@ -268,7 +268,7 @@ end
 
 # print a warning only once
 
-const have_warned = (ByteString=>Bool)[]
+const have_warned = Dict()
 function warn_once(msg::String...; depth=0)
     msg = bytestring(msg...)
     haskey(have_warned,msg) && return

@@ -4,7 +4,7 @@ include $(JULIAHOME)/Make.inc
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 
-OBJS = hashing.o timefuncs.o dblprint.o ptrhash.o operators.o \
+OBJS = hashing.o timefuncs.o ptrhash.o operators.o \
 	utf8.o ios.o htable.o bitvector.o \
 	int2str.o libsupportinit.o arraylist.o
 
@@ -44,7 +44,7 @@ HEADERS = $(wildcard *.h) $(JULIAHOME)/deps/libuv/include/uv.h
 %.o: %.S
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@)
 %.do: %.S
-	@$(calll PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 release debug: libsupport.a
 

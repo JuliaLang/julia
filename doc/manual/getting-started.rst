@@ -114,11 +114,13 @@ functional differences. The following are some noteworthy
 differences that may trip up Julia users accustomed to MATLAB:
 
 -  Arrays are indexed with square brackets, ``A[i,j]``.
+-  Arrays are assigned by reference. After ``A=B``, assigning into ``B``
+   will modify ``A`` as well.
+-  Values are passed and assigned by reference. If a function modifies
+   an array, the changes will be visible in the caller.
 -  The imaginary unit ``sqrt(-1)`` is represented in julia with ``im``.
 -  Multiple values are returned and assigned with parentheses,
    ``return (a, b)`` and ``(a, b) = f(x)``.
--  Values are passed and assigned by reference. If a function modifies
-   an array, the changes will be visible in the caller.
 -  Julia has 1-dimensional arrays. Column vectors are of size ``N``, not
    ``Nx1``. For example, ``rand(N)`` makes a 1-dimensional array.
 -  Concatenating scalars and arrays with the syntax ``[x,y,z]``
@@ -155,6 +157,7 @@ differences that may trip up Julia users accustomed to MATLAB:
    using ``...``, as in ``xs=[1,2]; f(xs...)``.
 -  Julia's ``svd`` returns singular values as a vector instead of as a
    full diagonal matrix.
+-  In Julia, ``...`` is not used to continue lines of code.
 
 Noteworthy differences from R
 -----------------------------

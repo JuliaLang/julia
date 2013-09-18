@@ -20,7 +20,7 @@ FLAGS = -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
 	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) $(LIBDIRS:%=-L%) \
         -fvisibility=hidden
 LIBFILES = $(LLT)
-LIBS = $(LIBFILES) -lm
+LIBS = $(LIBFILES)
 ifneq ($(OS),WINNT)
 LIBS += -lpthread
 endif
