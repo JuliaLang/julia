@@ -34,6 +34,11 @@ static const char *opts =
     " -F                       Load ~/.juliarc.jl, then handle remaining inputs\n"
     " --color=yes|no           Enable or disable color text\n\n"
 
+    " --package-<pkgname> var val\n"
+    "                          set package configuration parameter\n"
+    " --package pkgname        loads package pkgname\n"
+    " --env var val            set environment variable\n\n"
+    
     " -h --help                Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {
