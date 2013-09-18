@@ -591,7 +591,7 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
         else { d = *(double*)data; }
         if (!DFINITE(d)) {
             char *rep;
-            if (isnan(d))
+            if (DNAN(d))
                 rep = sign_bit(d) ? "-nan.0" : "+nan.0";
             else
                 rep = sign_bit(d) ? "-inf.0" : "+inf.0";
