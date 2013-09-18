@@ -79,13 +79,13 @@ action::
     julia> convert(Uint8, x)
     12
 
-    julia> typeof(ans)
+    julia> typeof(x)
     Uint8
 
     julia> convert(FloatingPoint, x)
     12.0
 
-    julia> typeof(ans)
+    julia> typeof(x)
     Float64
 
 Conversion isn't always possible, in which case a no method error is
