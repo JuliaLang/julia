@@ -234,6 +234,9 @@ clean: | $(CLEAN_TARGETS)
 cleanall: clean
 	@$(MAKE) -C src clean-flisp clean-support
 	@rm -fr $(BUILD)/$(JL_LIBDIR)
+ifeq ($(OS),WINNT)
+	@rm -rf $(BUILD)/lib
+endif
 	@$(MAKE) -C deps clean-uv
 
 distclean: cleanall
