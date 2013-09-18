@@ -587,9 +587,8 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
     else if (type == floatsym || type == doublesym) {
         char buf[64];
         double d;
-        int ndec;
-        if (type == floatsym) { d = (double)*(float*)data; ndec = 8; }
-        else { d = *(double*)data; ndec = 16; }
+        if (type == floatsym) { d = (double)*(float*)data; }
+        else { d = *(double*)data; }
         if (!DFINITE(d)) {
             char *rep;
             if (isnan(d))
@@ -610,7 +609,16 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
                 outc('f', f);
         }
         else {
-            snprint_real(buf, sizeof(buf), d, 0, ndec, 3, 10);
+            double ad = d < 0 ? -d : d;
+            if ((long)d == d && ad < 1e6 && ad >= 1e-4) {
+                snprintf(buf, sizeof(buf), "%g", d);
+            }
+            else {
+                if (type == floatsym)
+                    snprintf(buf, sizeof(buf), "%.8g", d);
+                else
+                    snprintf(buf, sizeof(buf), "%.16g", d);
+            }
             int hasdec = (strpbrk(buf, ".eE") != NULL);
             outs(buf, f);
             if (!hasdec) outsn(".0", f, 2);
