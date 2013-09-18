@@ -44,7 +44,7 @@ HEADERS = $(wildcard *.h) $(JULIAHOME)/deps/libuv/include/uv.h
 %.o: %.S
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@)
 %.do: %.S
-	@$(calll PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 release debug: libsupport.a
 
