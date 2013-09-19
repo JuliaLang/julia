@@ -3474,15 +3474,15 @@ popdisplay(d::Display)
 
 ("Mathematical Functions","Base","log2","log2(x)
 
-   Compute the natural logarithm of \"x\" to base 2. Throws
-   \"DomainError\" for negative \"Real\" arguments.
+   Compute the logarithm of \"x\" to base 2. Throws \"DomainError\"
+   for negative \"Real\" arguments.
 
 "),
 
 ("Mathematical Functions","Base","log10","log10(x)
 
-   Compute the natural logarithm of \"x\" to base 10. Throws
-   \"DomainError\" for negative \"Real\" arguments.
+   Compute the logarithm of \"x\" to base 10. Throws \"DomainError\"
+   for negative \"Real\" arguments.
 
 "),
 
