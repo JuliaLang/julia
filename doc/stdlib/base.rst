@@ -4097,14 +4097,25 @@ some built-in integration support in Julia.
 Parallel Computing
 ------------------
 
-.. function:: addprocs(n) -> List of process identifiers
+.. function:: addprocs(n; cman::ClusterManager=LocalManager()) -> List of process identifiers
 
-   Add processes on the local machine. Can be used to take advantage of multiple cores.
+   ``addprocs(4)`` will add 4 processes on the local machine. This can be used to take 
+   advantage of multiple cores.
+   
+   Keyword argument ``cman`` can be used to provide a custom cluster manager to start workers. 
+   For example Beowulf clusters are  supported via a custom cluster manager implemented 
+   in  package ``ClusterManagers``.
+   
+   See the documentation for package ``ClusterManagers`` for more information on how to 
+   write a custom cluster manager.
 
-.. function:: addprocs({"host1","host2",...}; tunnel=false, dir=JULIA_HOME, sshflags::Cmd=``, cman::ClusterManager) -> List of process identifiers
+.. function:: addprocs(machines; tunnel=false, dir=JULIA_HOME, sshflags::Cmd=``) -> List of process identifiers
 
-   Add processes on remote machines via SSH or a custom cluster manager. 
+   Add processes on remote machines via SSH. 
    Requires julia to be installed in the same location on each node, or to be available via a shared file system.
+   
+   ``machines`` is a vector of host definitions of the form ``[user@]host[:port]``. A worker is started
+   for each such definition.
    
    Keyword arguments:
 
@@ -4114,13 +4125,6 @@ Parallel Computing
 
    ``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\`` .
 
-   ``cman`` : Workers are started using the specified cluster manager. 
-
-   For example Beowulf clusters are  supported via a custom cluster manager implemented 
-   in  package ``ClusterManagers``.
-   
-   See the documentation for package ``ClusterManagers`` for more information on how to 
-   write a custom cluster manager.
    
 .. function:: nprocs()
 
