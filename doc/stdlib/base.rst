@@ -2372,11 +2372,11 @@ Mathematical Functions
 
 .. function:: log2(x)
 
-   Compute the natural logarithm of ``x`` to base 2. Throws ``DomainError`` for negative ``Real`` arguments.
+   Compute the logarithm of ``x`` to base 2. Throws ``DomainError`` for negative ``Real`` arguments.
 
 .. function:: log10(x)
 
-   Compute the natural logarithm of ``x`` to base 10. Throws ``DomainError`` for negative ``Real`` arguments.
+   Compute the logarithm of ``x`` to base 10. Throws ``DomainError`` for negative ``Real`` arguments.
 
 .. function:: log1p(x)
 
