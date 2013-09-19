@@ -87,6 +87,13 @@ function write(s::IO, c::Char)
     end
 end
 
+function write(s::IO, p::Ptr, n::Integer)
+    for i=1:n
+        write(s, unsafe_load(p, i))
+    end
+    n
+end
+
 # all subtypes should implement this
 read(s::IO, x::Type{Uint8}) = error(typeof(s)," does not support byte I/O")
 
