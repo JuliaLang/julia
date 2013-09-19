@@ -870,9 +870,12 @@
 
 "),
 
-("Associative Collections","Base","Dict{K,V}","Dict{K,V}()
+("Associative Collections","Base","Dict","Dict()
 
-   Construct a hashtable with keys of type K and values of type V
+   \"Dict{K,V}()\" constructs a hashtable with keys of type K and
+   values of type V. The literal syntax is \"{\"A\"=>1, \"B\"=>2}\"
+   for a \"Dict{Any,Any}\", or \"[\"A\"=>1, \"B\"=>2]\" for a \"Dict\"
+   of inferred type.
 
 "),
 
@@ -2216,6 +2219,20 @@
 
 "),
 
+("Network I/O","Base","watch_file","watch_file(cb=false, s; poll=false)
+
+   Watch file or directory \"s\" and run callback \"cb\" when \"s\" is
+   modified. The \"poll\" parameter specifies whether to use file
+   system event monitoring or polling. The callback function \"cb\"
+   should accept 3 arguments: \"(filename, events, status)\" where
+   \"filename\" is the name of file that was modified, \"events\" is
+   an object with boolean fields \"changed\" and \"renamed\" when
+   using file system event monitoring, or \"readable\" and
+   \"writable\" when using polling, and \"status\" is always 0. Pass
+   \"false\" for \"cb\" to not use a callback function.
+
+"),
+
 ("Network I/O","Base","poll_fd","poll_fd(fd, seconds::Real; readable=false, writable=false)
 
    Poll a file descriptor fd for changes in the read or write
@@ -2598,20 +2615,47 @@ popdisplay(d::Display)
    memory-mapping. This provides a convenient way of working with data
    too large to fit in the computer's memory.
 
-   The type determines how the bytes of the array are interpreted (no
-   format conversions are possible), and dims is a tuple containing
-   the size of the array.
+   The type determines how the bytes of the array are interpreted.
+   Note that the file must be stored in binary format, and no format
+   conversions are possible (this is a limitation of operating
+   systems, not Julia).
 
-   The file is specified via the stream.  When you initialize the
-   stream, use \"\"r\"\" for a \"read-only\" array, and \"\"w+\"\" to
-   create a new array used to write values to disk. Optionally, you
-   can specify an offset (in bytes) if, for example, you want to skip
-   over a header in the file.
+   dims is a tuple specifying the size of the array.
 
-   **Example**:  \"A = mmap_array(Int64, (25,30000), s)\"
+   The file is passed via the stream argument.  When you initialize
+   the stream, use \"\"r\"\" for a \"read-only\" array, and \"\"w+\"\"
+   to create a new array used to write values to disk.
 
-   This would create a 25-by-30000 \"Array{Int64}\", linked to the
-   file associated with stream \"s\".
+   Optionally, you can specify an offset (in bytes) if, for example,
+   you want to skip over a header in the file. The default value for
+   the offset is the current stream position.
+
+   **Example**:
+
+      # Create a file for mmapping
+      # (you could alternatively use mmap_array to do this step, too)
+      A = rand(1:20, 5, 30)
+      s = open(\"/tmp/mmap.bin\", \"w+\")
+      # We'll write the dimensions of the array as the first two Ints in the file
+      write(s, size(A,1))
+      write(s, size(A,2))
+      # Now write the data
+      write(s, A)
+      close(s)
+
+      # Test by reading it back in
+      s = open(\"/tmp/mmap.bin\")   # default is read-only
+      m = read(s, Int)
+      n = read(s, Int)
+      A2 = mmap_array(Int, (m,n), s)
+
+   This would create a m-by-n \"Matrix{Int}\", linked to the file
+   associated with stream \"s\".
+
+   A more portable file would need to encode the word size---32 bit or
+   64 bit---and endianness information in the header. In practice,
+   consider encoding binary data using standard formats like HDF5
+   (which can be used with memory-mapping).
 
 "),
 
@@ -3422,25 +3466,30 @@ popdisplay(d::Display)
 
 ("Mathematical Functions","Base","log","log(x)
 
-   Compute the natural logarithm of \"x\"
+   Compute the natural logarithm of \"x\". Throws \"DomainError\" for
+   negative \"Real\" arguments. Use complex negative arguments
+   instead.
 
 "),
 
 ("Mathematical Functions","Base","log2","log2(x)
 
-   Compute the natural logarithm of \"x\" to base 2
+   Compute the logarithm of \"x\" to base 2. Throws \"DomainError\"
+   for negative \"Real\" arguments.
 
 "),
 
 ("Mathematical Functions","Base","log10","log10(x)
 
-   Compute the natural logarithm of \"x\" to base 10
+   Compute the logarithm of \"x\" to base 10. Throws \"DomainError\"
+   for negative \"Real\" arguments.
 
 "),
 
 ("Mathematical Functions","Base","log1p","log1p(x)
 
-   Accurate natural logarithm of \"1+x\"
+   Accurate natural logarithm of \"1+x\".  Throws \"DomainError\" for
+   \"Real\" arguments less than -1.
 
 "),
 
@@ -3614,7 +3663,8 @@ popdisplay(d::Display)
 
 ("Mathematical Functions","Base","sqrt","sqrt(x)
 
-   Return \\sqrt{x}
+   Return \\sqrt{x}. Throws \"DomainError\" for negative \"Real\"
+   arguments. Use complex negative arguments instead.
 
 "),
 
@@ -6223,7 +6273,11 @@ popdisplay(d::Display)
    a tuple of index ranges. This function should allocate a local
    chunk of the distributed array and initialize it for the specified
    indices. \"dims\" is the overall size of the distributed array.
-   \"procs\" optionally specifies a vector of processor IDs to use.
+   \"procs\" optionally specifies a vector of processor IDs to use. If
+   unspecified, the array is distributed over all worker processes
+   only. Typically, when runnning in distributed mode, i.e.,
+   \"nprocs() > 1\", this would mean that no chunk of the distributed
+   array exists on the process hosting the interactive julia prompt.
    \"dist\" is an integer vector specifying how many chunks the
    distributed array should be divided into in each dimension.
 
@@ -6277,13 +6331,16 @@ popdisplay(d::Display)
 
 ("Distributed Arrays","Base","localpart","localpart(d)
 
-   Get the local piece of a distributed array
+   Get the local piece of a distributed array. Returns an empty array
+   if no local part exists on the calling process.
 
 "),
 
 ("Distributed Arrays","Base","myindexes","myindexes(d)
 
-   A tuple describing the indexes owned by the local processor
+   A tuple describing the indexes owned by the local processor.
+   Returns a tuple with empty ranges if no local part exists on the
+   calling process.
 
 "),
 
@@ -8477,7 +8534,7 @@ popdisplay(d::Display)
    element of \"inner\" specifies the number of times that the
    individual entries of the i-th dimension of \"A\" should be
    repeated. The i-th element of \"outer\" specifies the number of
-   times that a slice along the i-th dimension of >>``<<A` should be
+   times that a slice along the i-th dimension of \"A\" should be
    repeated.
 
 "),
@@ -8556,7 +8613,7 @@ popdisplay(d::Display)
 
 "),
 
-("Linear Algebra","Base","eigs","eigs(A; nev=6, which=\"LM\", tol=0.0, maxiter=1000, ritzvec=true)
+("Linear Algebra","Base","eigs","eigs(A; nev=6, which=\"LM\", tol=0.0, maxiter=1000, sigma=0, ritzvec=true, op_part=:real)
 
    \"eigs\" computes the eigenvalues of A using Arnoldi factorization.
    The following keyword arguments are supported:
@@ -8569,8 +8626,14 @@ popdisplay(d::Display)
 
       * \"maxiter\": Maximum number of iterations
 
+      * \"sigma\": find eigenvalues close to \"sigma\" using shift and
+        invert
+
       * \"ritzvec\": Returns the Ritz vectors (eigenvectors) if
         \"true\"
+
+      * \"op_part\": which part of linear operator to use for real A
+        (:real, :imag)
 
 "),
 
