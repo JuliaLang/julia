@@ -108,6 +108,8 @@ rand() = dsfmt_gv_genrand_close_open()
 rand(::Type{Float32}) = float32(rand())
 rand(::Type{Float16}) = float16(rand())
 
+rand{T<:Real}(::Type{Complex{T}}) = complex(rand(T),rand(T))
+
 rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
 
 ## random integers
@@ -140,20 +142,14 @@ rand!(r::MersenneTwister, A::Array{Float64}) = dsfmt_fill_array_close_open!(r.st
 rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
 rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
 
-for T in (:Uint8, :Uint16, :Uint32, :Uint64, :Uint128,
-          :Int8,  :Int16,  :Int32,  :Int64,  :Int128,  
-          :Float32, :Float16)
-    @eval begin
-        function rand!(A::Array{$T})
-            for i=1:length(A)
-                A[i] = rand($T)
-            end
-            A
-        end
-        rand(::Type{$T}, dims::Dims) = rand!(Array($T, dims))
-        rand(::Type{$T}, dims::Int...) = rand($T, dims)
+function rand!{T}(A::Array{T})
+    for i=1:length(A)
+        A[i] = rand(T)
     end
+    A
 end
+rand(T::Type, dims::Dims) = rand!(Array(T, dims))
+rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
 
 function randu{T<:Union(Uint32,Uint64,Uint128)}(k::T)
     # generate an unsigned integer in 0:k-1
