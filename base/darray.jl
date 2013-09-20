@@ -47,6 +47,9 @@ function DArray(init, dims, procs)
 end
 DArray(init, dims) = DArray(init, dims, workers()[1:min(nworkers(),max(dims))])
 
+# new DArray similar to an existing one
+DArray(init, d::DArray) = DArray(init, size(d), procs(d), [size(d.chunks)...])
+
 size(d::DArray) = d.dims
 procs(d::DArray) = d.pmap
 
@@ -289,3 +292,11 @@ setindex!(a::Array{Any}, d::SubOrDArray, i::Int) = arrayset(a, d, i)
 
 setindex!(a::Array, d::SubOrDArray, I::Union(Int,Range1{Int})...) =
     setindex!(a, d, [isa(i,Int) ? (i:i) : i for i in I ]...)
+
+## higher-order functions ##
+
+map(f::Callable, d::DArray) = DArray(I->map(f, localpart(d)), d)
+
+reduce(f::Function, d::DArray) =
+    mapreduce(fetch, f,
+              { @spawnat p reduce(f, localpart(d)) for p in procs(d) })
