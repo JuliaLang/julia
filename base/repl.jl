@@ -98,6 +98,8 @@ function showerror(io::IO, e::MethodError)
     name = e.f.env.name
     if is(e.f,convert) && length(e.args)==2
         print(io, "no method $(name)(Type{$(e.args[1])},$(typeof(e.args[2])))")
+    elseif isa(e.f, DataType)
+        print(io, "no method $(e.f)$(typeof(e.args))")
     else
         print(io, "no method $(name)$(typeof(e.args))")
     end
