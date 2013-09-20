@@ -96,7 +96,7 @@ for f in (:round, :ceil, :floor, :trunc)
     @eval begin
         function ($f)(x, digits::Integer, base::Integer=10)
             x = float(x)
-            og = oftype(x,base)^digits
+            og = oftype(eltype(x),base)^digits
             ($f)(x * og) / og
         end
     end
