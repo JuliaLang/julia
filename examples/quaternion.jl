@@ -1,3 +1,5 @@
+import Base: promote_rule, convert
+
 immutable Quaternion{T<:Real} <: Number
     q0::T
     q1::T
@@ -73,3 +75,11 @@ inv(z::Quaternion) = conj(z)/abs2(z)
                                                z.q0*w.q2 - z.q1*w.q3 + z.q2*w.q0 + z.q3*w.q1,
                                                z.q0*w.q3 + z.q1*w.q2 - z.q2*w.q1 + z.q3*w.q0)
 (/)(z::Quaternion, w::Quaternion) = z*inv(w)
+
+q = Quaternion(1,0,0,0)
+x = Quaternion(0,1,1,1)
+
+println("q = $q")
+println("q*2.0+2 = $(q*2.0+2)")
+println("abs((-q+x*2)/4) = $repr(abs((-q+x*2)/4))")
+
