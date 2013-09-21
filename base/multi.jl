@@ -1119,10 +1119,17 @@ function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
     configs = cell(np)
 
     # start the processes first...
-    sshflags = config[:sshflags]
 
     for i in 1:np
-        io, pobj = readsfrom(detach(`ssh -n $sshflags $(cman.machines[i]) "sh -l -c \"cd $dir && $exename $exeflags\""`))
+        # machine could be of the format [user@]host[:port]
+        machine_def = split(cman.machines[i], ':')
+        portopt = length(machine_def) == 2 ? ` -p $(machine_def[2]) ` : ``
+        config[:sshflags] = `$(config[:sshflags]) $portopt`
+        
+        sshflags = config[:sshflags]
+        cman.machines[i] = machine_def[1]
+        
+        io, pobj = readsfrom(detach(`ssh -n $sshflags $(machine_def[1]) "sh -l -c \"cd $dir && $exename $exeflags\""`))
         io_objs[i] = io
         configs[i] = merge(config, {:machine => cman.machines[i]})
     end
