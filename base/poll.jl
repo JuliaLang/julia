@@ -307,11 +307,16 @@ end
 
 function poll_file(s, interval_seconds::Real, seconds::Real)
     wt = Condition()
+    pfw = PollingFileWatcher(s)
 
-    @schedule (wait(PollingFileWatcher(s);interval=interval_seconds); notify(wt,(:poll)))
+    @schedule (wait(pfw;interval=interval_seconds); notify(wt,(:poll)))
     @schedule (sleep(seconds); notify(wt,(:timeout)))
 
-    wait(wt) == :poll
+    result = wait(wt)
+    if result == :timeout
+        stop_watching(pfw)
+    end
+    result == :poll
 end
 
 watch_file(s; poll=false) = watch_file(false, s, poll=poll)
