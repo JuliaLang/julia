@@ -1,11 +1,13 @@
 # fallback text/plain representation of any type:
 writemime(io, ::MIME"text/plain", x) = showlimited(io, x)
 
-function writemime(io, ::MIME"text/plain", v::Function)
-    if isgeneric(v)
-        show_method_table(io, methods(v), 5)
+function writemime(io, ::MIME"text/plain", f::Function)
+    if isgeneric(f)
+        n = length(f.env)
+        m = n==1 ? "method" : "methods"
+        print(io, "$(f.env.name) (generic function with $n $m)")
     else
-        show(io, v)
+        show(io, f)
     end
 end
 
@@ -23,14 +25,11 @@ end
 
 function writemime(io, ::MIME"text/plain", v::DataType)
     show(io, v)
-    methods(v)  # force constructor creation
+    methods(v) # force constructor creation
     if isgeneric(v)
-        if v === v.name.primary
-            name = string(v.name.name)
-        else
-            name = repr(v)
-        end
-        print(io, "  (use methods($name) to see constructors)")
+        n = length(v.env)
+        m = n==1 ? "method" : "methods"
+        print(io, " (constructor with $n $m)")
     end
 end
 
