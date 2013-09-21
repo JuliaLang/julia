@@ -1446,9 +1446,10 @@ Network I/O
 .. function:: poll_fd(fd, seconds::Real; readable=false, writable=false)
 
    Poll a file descriptor fd for changes in the read or write availability and with a timeout given by the second argument.
-   If the timeout is not needed, use `wait(fd)` instead. The keyword arguments determine which of read and/or write status
-   should be monitored and at least one of them needs to be set to true. The return code is 0 on timeout and an OR'd bitfield
-   of UV_READABLE and UV_WRITABLE otherwise, indicating which event was triggered. 
+   If the timeout is not needed, use ``wait(fd)`` instead. The keyword arguments determine which of read and/or write status
+   should be monitored and at least one of them needs to be set to true.
+   The returned value is an object with boolean fields ``readable``, ``writable``, and
+   ``timedout``, giving the result of the polling.
 
 .. function:: poll_file(s, interval_seconds::Real, seconds::Real)
    
