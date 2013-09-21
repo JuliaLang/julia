@@ -89,6 +89,9 @@ function slice{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
     SubArray{T,n,typeof(A),typeof(i)}(A, i)
 end
 
+# Throw error on slice dimension mismatch
+slice{T,N,M}(A::AbstractArray{T,N}, i::NTuple{M,RangeIndex}) = throw(BoundsError())
+
 slice(A::AbstractArray, i::RangeIndex...) = slice(A, i)
 
 function slice(A::SubArray, i::RangeIndex...)
