@@ -148,6 +148,11 @@ a = [5:8]
 @test parent(a) == a
 @test parentindexes(a) == (1:4,)
 
+# 4335
+@test_throws slice(A, 1:2)
+@test_throws slice(A, 1:2, 3:4)
+@test_throws slice(A, 1:2, 3:4, 5:6, 7:8)
+
 # Out-of-bounds construction. See #4044
 A = rand(7,7)
 rng = 1:4
