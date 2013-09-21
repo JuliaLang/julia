@@ -42,8 +42,8 @@ file = newfile
 #######################################################################
 # This section tests file watchers.                                   #
 #######################################################################
-function test_file_poll(channel,timeout_ms)
-    rc = poll_file(file, iround(timeout_ms/10), timeout_ms)
+function test_file_poll(channel,timeout_s)
+    rc = poll_file(file, iround(timeout_s/10), timeout_s)
     put(channel,rc)
 end
 
@@ -56,16 +56,15 @@ function test_timeout(tval)
 
     @test tr == false
 
-    tdiff = t_elapsed * 1000
-    @test tval <= tdiff
+    @test tval <= t_elapsed
 end
 
 function test_touch(slval)
-    tval = slval+100
+    tval = slval*1.1
     channel = RemoteRef()
-    @async test_file_poll(channel,iround(tval))
+    @async test_file_poll(channel, tval)
 
-    sleep(slval/10_000) # ~one poll period
+    sleep(tval/10)  # ~ one poll period
     f = open(file,"a")
     write(f,"Hello World\n")
     close(f)
@@ -81,11 +80,11 @@ function test_monitor(slval)
     fm = FileMonitor(file) do args...
         FsMonitorPassed = true
     end
-    sleep(slval/10_000)
+    sleep(slval)
     f = open(file,"a")
     write(f,"Hello World\n")
     close(f)
-    sleep(slval/10_000)
+    sleep(slval)
     @test FsMonitorPassed
     close(fm)
 end
@@ -93,7 +92,7 @@ end
 function test_monitor_wait(tval)
     fm = watch_file(file)
     @async begin
-        sleep(tval/10_000)
+        sleep(tval)
         f = open(file,"a")
         write(f,"Hello World\n")
         close(f)

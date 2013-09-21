@@ -216,7 +216,7 @@ function pfw_wait_cb(pfw::PollingFileWatcher, prev, cur, status)
     end
 end
 
-function wait(pfw::PollingFileWatcher; interval=3.0)
+function wait(pfw::PollingFileWatcher; interval=2.0)
     if !pfw.open
         start_watching(pfw_wait_cb,pfw,interval)
     end
@@ -249,7 +249,8 @@ start_watching(f::Function, t::FDWatcher, events::FDEvent) = (t.cb = f; start_wa
 function start_watching(t::PollingFileWatcher, interval)
     associate_julia_struct(t.handle, t)
     uv_error("start_watching (File)",
-        ccall(:jl_fs_poll_start,Int32,(Ptr{Void},Ptr{Uint8},Uint32),t.handle,t.file,interval))
+             ccall(:jl_fs_poll_start, Int32, (Ptr{Void},Ptr{Uint8},Uint32),
+                   t.handle, t.file, iround(interval*1000)))
 end
 start_watching(f::Function, t::PollingFileWatcher, interval) = (t.cb = f;start_watching(t,interval))
 
