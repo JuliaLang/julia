@@ -492,7 +492,7 @@ values. ``sparse(I,J,V)`` constructs a sparse matrix such that
 
     julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
-    julia> sparse(I,J,V)
+    julia> S = sparse(I,J,V)
     5x18 sparse matrix with 4 nonzeros:
          [1 ,  4]  =  1
          [4 ,  7]  =  2
