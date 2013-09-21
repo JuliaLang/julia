@@ -248,3 +248,11 @@ This would provide custom showing of vectors with a specific new element type.
 While tempting, this should be avoided. The trouble is that users will expect
 a well-known type like ``Vector`` to behave in a certain way, and overly
 customizing its behavior can make it harder to work with.
+
+Be careful with type equality
+-----------------------------
+
+You generally want to use ``isa`` and ``<:`` (``subtype``) for testing types,
+not ``==``. Checking types for exact equality typically only makes sense
+when comparing to a known concrete type (e.g. ``T == Float64``), or if you
+*really, really* know what you're doing.
