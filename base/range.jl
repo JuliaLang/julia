@@ -119,7 +119,7 @@ function getindex(r::Range1, s::Range1{Int})
         end
         Range1(r[s.start], s.len)
     else
-        Range1(r.start, s.len)
+        Range1(r.start + s.start-1, s.len)
     end
 end
 
@@ -130,7 +130,7 @@ function getindex(r::Ranges, s::Ranges{Int})
         end
         Range(r[s.start], step(r)*step(s), s.len)
     else
-        Range(r.start, step(r)*step(s), s.len)
+        Range(r.start + (s.start-1)*step(r), step(r)*step(s), s.len)
     end
 end
 
