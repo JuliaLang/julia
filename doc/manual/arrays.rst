@@ -507,7 +507,7 @@ retrieves the inputs used to create the sparse matrix.
     julia> findn(S)
     ([1, 4, 5, 3],[4, 7, 9, 18])
 
-    julia> findn_nzs(S)
+    julia> findnz(S)
     ([1, 4, 5, 3],[4, 7, 9, 18],[1, 2, 3, -5])
 
 Another way to create sparse matrices is to convert a dense matrix
