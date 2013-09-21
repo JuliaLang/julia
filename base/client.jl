@@ -64,7 +64,7 @@ end
 
 function repl_hook(input::String)
     return Expr(:call, :(Base.repl_cmd),
-        macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
+                macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
 end
 
 display_error(er) = display_error(er, {})

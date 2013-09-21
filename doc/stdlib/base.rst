@@ -3338,7 +3338,10 @@ All mathematical operations and functions are supported for arrays
 
 .. function:: broadcast!(f, dest, As...)
 
-   Like ``broadcast``, but store the result in the ``dest`` array.
+   Like ``broadcast``, but store the result of ``broadcast(f, As...)`` in the ``dest`` array.
+   Note that ``dest`` is only used to store the result, and does not supply arguments to
+   ``f`` unless it is also listed in the ``As``, as in ``broadcast!(f, A, A, B)`` to perform
+   ``A[:] = broadcast(f, A, B)``.
 
 .. function:: broadcast_function(f)
 
