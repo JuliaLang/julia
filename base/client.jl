@@ -234,7 +234,7 @@ function process_options(args::Array{Any,1})
             else
                 np = int(args[i])
             end
-            addprocs(np-1)
+            addprocs(np)
         elseif args[i]=="--machinefile"
             i+=1
             machines = split(readall(args[i]), '\n', false)
