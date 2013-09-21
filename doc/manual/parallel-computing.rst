@@ -39,7 +39,7 @@ wait for a remote call to finish by calling ``wait`` on its remote
 reference, and you can obtain the full value of the result using
 ``fetch``.
 
-Let's try this out. Starting with ``julia -p n`` provides ``n``
+Let's try this out. Starting with ``julia -p n`` provides ``n`` worker
 processes on the local machine. Generally it makes sense for ``n`` to
 equal the number of CPU cores on the machine.
 
