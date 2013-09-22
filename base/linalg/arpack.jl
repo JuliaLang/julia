@@ -71,7 +71,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
               bmat, n, which, nev, tol, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, rwork, info)
         if info[1] != 0; throw(ARPACKException(info[1])); end
-        return ritzvec ? (d, v[1:n, 1:nev]) : d
+        return ritzvec ? (d[1:nev], v[1:n, 1:nev]) : d
 
     elseif sym
 

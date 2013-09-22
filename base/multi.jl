@@ -252,9 +252,13 @@ function rmprocs(args...; waitfor = 0.0)
     empty!(rmprocset)
     
     for i in [args...]
-        if haskey(map_pid_wrkr, i)
-            push!(rmprocset, i)
-            remote_do(i, exit)
+        if i == 1
+            warn("rmprocs: process 1 not removed")
+        else
+            if haskey(map_pid_wrkr, i)
+                push!(rmprocset, i)
+                remote_do(i, exit)
+            end
         end
     end
     
