@@ -38,7 +38,9 @@ There are a few environments you can use to build julia. Making this easy requir
 Important Build Errata
 ----------------------
 
+- You must use win32 threads version of MinGW. **Do not** use a POSIX threads version of MinGW.
 - Do not use GCC 4.6 or earlier or gcc-dw2, stuff will be broken
+- Julia uses a [patched version](http://github.com/JuliaLang/readline/tarball/master) of GNU Readline 5.0
 
 
 Native Compile
