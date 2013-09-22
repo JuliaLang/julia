@@ -80,7 +80,7 @@ function test_monitor(slval)
     fm = FileMonitor(file) do args...
         FsMonitorPassed = true
     end
-    sleep(slval)
+    sleep(slval/2)
     f = open(file,"a")
     write(f,"Hello World\n")
     close(f)
@@ -107,9 +107,9 @@ test_timeout(0.1)
 test_timeout(1)
 # the 0.1 second tests are too optimistic
 #test_touch(0.1)
-test_touch(1)
+test_touch(2)
 #test_monitor(0.1)
-test_monitor(1)
+test_monitor(2)
 test_monitor_wait(0.1)
 
 ##########
