@@ -48,6 +48,9 @@ function mkdir(path::String, mode::Unsigned=0o777)
 end
 
 function mkpath(path::String, mode::Unsigned=0o777)
+    if path[end] == pathsep()[1]
+        path = path[1:prevind(path,end)]
+    end
     dir = dirname(path)
     (path == dir || isdir(path)) && return
     mkpath(dir, mode)
