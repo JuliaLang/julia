@@ -21,7 +21,8 @@ ndims{T<:AbstractArray}(::Type{T}) = ndims(super(T))
 length(t::AbstractArray) = prod(size(t))::Int
 endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[1]
-last(a::AbstractArray) = a[end]
+first(a) = next(a,start(a))[1]
+last(a) = a[end]
 
 function stride(a::AbstractArray, i::Integer)
     if i > ndims(a)
