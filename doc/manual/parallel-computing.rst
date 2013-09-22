@@ -157,9 +157,10 @@ A file can also be preloaded on multiple processes at startup, and a driver scri
     
 Each process has an associated identifier. The process providing the interactive julia prompt
 always has an id equal to 1, as would the julia process running the driver script in the
-example above. All other processes (also known as worker processes, or just workers) have their
-own unique ids. Workers are defined as all processes other than the driving process (id of 1). When
-no additional processes are started, the driving process is also deemed to be a worker.
+example above.
+The processors used by default for parallel operations are referred to as ``workers``.
+When there is only one process, process 1 is considered a worker. Otherwise, workers are
+considered to be all processes other than process 1.
 
 The base Julia installation has in-built support for two types of clusters: 
 
