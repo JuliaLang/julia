@@ -533,11 +533,12 @@ Iterable Collections
 
 .. function:: first(coll)
 
-   Get the first element of an ordered collection.
+   Get the first element of an iterable collection.
 
 .. function:: last(coll)
 
-   Get the last element of an ordered collection.
+   Get the last element of an ordered collection, if it can be computed in O(1) time.
+   This is accomplished by calling ``endof`` to get the last index.
 
 .. function:: step(r)
 
