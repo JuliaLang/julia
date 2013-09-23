@@ -760,10 +760,13 @@ end
 @test B2365{Int}(0).v === 0
 
 # issue #2352
-Sum=0.0; for n=1:2:10000
-Sum += -1/n + 1/(n+1)
+begin
+    local Sum, n
+    Sum=0.0; for n=1:2:10000
+        Sum += -1/n + 1/(n+1)
+    end
+    @test Sum < -0.69
 end
-@test Sum < -0.69
 
 include("test_sourcepath.jl")
 
@@ -995,3 +998,6 @@ end
 # make sure convert_default error isn't swallowed by typeof()
 convert_default_should_fail_here() = similar([1],typeof(zero(typeof(rand(2,2)))))
 @test_throws convert_default_should_fail_here()
+
+# issue #4343
+@test_throws Array{Float64}{Int, 2}
