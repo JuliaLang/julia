@@ -53,16 +53,16 @@ Phi=CPM(Q)
 Test.@test_approx_eq d[1] 1. # largest eigenvalue should be 1.
 v=reshape(v,(50,50)) # reshape to matrix
 v=v/trace(v) # factor out arbitrary phase
-Test.@test_approx_eq normfro(imag(v)) 0. # it should be real
+Test.@test isapprox(normfro(imag(v)),0.) # it should be real
 v=real(v)
-#Test.@test_approx_eq normfro(v-v') 0. # it shoul be Hermitian
-# Comparison to 0. is way to strict for this to work!
+# Test.@test isapprox(normfro(v-v')/2,0.) # it should be Hermitian
+# Since this fails sometimes (numerical precision error),this test is commented out
 v=(v+v')/2
 Test.@test isposdef(v)
 
 # Repeat with starting vector
-(d2,v2,numiter,numop,resid) = eigs(Phi,nev=1,which="LM",v0=reshape(v,(2500,)))
-v2=reshape(v,(50,50))
-Test.@test numiter==1
+(d2,v2,numiter2,numop2,resid2) = eigs(Phi,nev=1,which="LM",v0=reshape(v,(2500,)))
+v2=reshape(v2,(50,50))
+v2=v2/trace(v2)
+Test.@test numiter2<numiter
 Test.@test_approx_eq v v2
-
