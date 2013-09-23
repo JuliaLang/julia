@@ -1205,30 +1205,33 @@
 				      " in argument list"))))))))))
 
 ; parse [] concatenation expressions and {} cell expressions
-(define (parse-vcat s first closer)
+(define (parse-vcat s first closer newline-separator?)
+  (define (separator? c) (or (eqv? c #\,) (and newline-separator? (or (eqv? c #\;) (eqv? c #\newline)))))
   (let loop ((lst '())
 	     (nxt first))
-    (let ((t (require-token s)))
+    (let ((t (if (and (eqv? (peek-token s) #\newline) newline-separator?)
+		 #\newline
+		 (require-token s))))
       (if (eqv? t closer)
 	  (begin (take-token s)
 		 (cons 'vcat (reverse (cons nxt lst))))
-	  (case t
-	    ((#\,)
+	  (cond
+	    ((separator? t)
 	     (take-token s)
 	     (if (eqv? (require-token s) closer)
 		 ;; allow ending with ,
 		 (begin (take-token s)
 			(cons 'vcat (reverse (cons nxt lst))))
 		 (loop (cons nxt lst) (parse-eq* s))))
-	    ((#\;)
+	    ((eqv? t #\;)
 	     (error "unexpected semicolon in array expression"))
-	    ((#\] #\})
+	    ((or (eqv? t #\]) (eqv? t #\}))
 	     (error (string "unexpected " t)))
 	    (else
-	     (error "missing separator in array expression")))))))
+	     (error (string "missing separator in array expression (got " t " instead)"))))))))
 
 (define (parse-dict s first closer)
-  (let ((v (parse-vcat s first closer)))
+  (let ((v (parse-vcat s first closer #t)))
     (if (any dict-literal? (cdr v))
         (if (every dict-literal? (cdr v))
             `(dict ,@(cdr v))
@@ -1283,11 +1286,13 @@
 	    (else
 	     (loop (cons (parse-eq* s) vec) outer)))))))
 
-(define (peek-non-newline-token s)
+(define (peek-non-newline-token s keep?)
   (let loop ((t (peek-token s)))
     (if (newline? t)
-        (begin (take-token s)
-               (loop (peek-token s)))
+        (let ((pre (take-token s))
+	      (res (loop (peek-token s))))
+	  (if keep? (ts:put-back! s pre))
+	  res)
         t)))
 
 (define (parse-cat s closer)
@@ -1298,15 +1303,17 @@
                '())
 	(let ((first (parse-eq* s)))
           (if (dict-literal? first)
-              (case (peek-non-newline-token s)
+              (case (peek-non-newline-token s #t)
                 ((for)
+		 (peek-non-newline-token s #f)
                  (take-token s)
                  (parse-dict-comprehension s first closer))
                 (else
+;		 (ts:put-back! s #\newline)
                  (parse-dict s first closer)))
               (case (peek-token s)
                 ((#\,)
-                 (parse-vcat s first closer))
+                 (parse-vcat s first closer #f))
                 ((for)
                  (take-token s)
                  (parse-comprehension s first closer))
