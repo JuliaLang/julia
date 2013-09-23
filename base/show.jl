@@ -39,12 +39,12 @@ function show(io::IO, f::Function)
     elseif isdefined(f, :env) && isa(f.env,Symbol)
         print(io, f.env)
     else
-        print(io, "# function")
+        print(io, "(anonymous function)")
     end
 end
 
 function show(io::IO, x::IntrinsicFunction)
-    print(io, "# intrinsic function ", box(Int32,unbox(IntrinsicFunction,x)))
+    print(io, "(intrinsic function #", box(Int32,unbox(IntrinsicFunction,x)), ")")
 end
 
 function show(io::IO, x::UnionType)
@@ -418,7 +418,9 @@ end
 
 function show_method_table(io::IO, mt::MethodTable, max::Int=-1)
     name = mt.name
-    print(io, "# methods for generic function ", name)
+    n = length(mt)
+    m = n==1 ? "method" : "methods"
+    print(io, "# $n $m for generic function \"$name\":")
     d = mt.defs
     n = rest = 0
     while !is(d,())
