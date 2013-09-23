@@ -21,4 +21,48 @@ begin
     end
 end
 
+# Example from Quantum Information Theory
+import Base: size, issym, ishermitian
+
+type CPM{T<:Base.LinAlg.BlasFloat}<:AbstractMatrix{T} # completely positive map
+	kraus::Array{T,3} # kraus operator representation
+end
+
+size(Phi::CPM)=(size(Phi.kraus,1)^2,size(Phi.kraus,3)^2)
+issym(Phi::CPM)=false
+ishermitian(Phi::CPM)=false
+
+function *{T<:Base.LinAlg.BlasFloat}(Phi::CPM{T},rho::Vector{T})
+	rho=reshape(rho,(size(Phi.kraus,3),size(Phi.kraus,3)))
+	rho2=zeros(T,(size(Phi.kraus,1),size(Phi.kraus,1)))
+	for s=1:size(Phi.kraus,2)
+		As=slice(Phi.kraus,:,s,:)
+		rho2+=As*rho*As'
+	end
+	return reshape(rho2,(size(Phi.kraus,1)^2,))
+end
+# Generate random isometry
+(Q,R)=qr(randn(100,50))
+Q=reshape(Q,(50,2,50))
+# Construct trace-preserving completely positive map from this
+Phi=CPM(Q)
+(d,v,numiter,numop,resid) = eigs(Phi,nev=1,which="LM")
+# Properties: largest eigenvalue should be 1, largest eigenvector, when reshaped as matrix
+# should be a Hermitian positive definite matrix (up to an arbitrary phase)
+
+Test.@test_approx_eq d[1] 1. # largest eigenvalue should be 1.
+v=reshape(v,(50,50)) # reshape to matrix
+v=v/trace(v) # factor out arbitrary phase
+Test.@test_approx_eq normfro(imag(v)) 0. # it should be real
+v=real(v)
+#Test.@test_approx_eq normfro(v-v') 0. # it shoul be Hermitian
+# Comparison to 0. is way to strict for this to work!
+v=(v+v')/2
+Test.@test isposdef(v)
+
+# Repeat with starting vector
+(d2,v2,numiter,numop,resid) = eigs(Phi,nev=1,which="LM",v0=reshape(v,(2500,)))
+v2=reshape(v,(50,50))
+Test.@test numiter==1
+Test.@test_approx_eq v v2
 
