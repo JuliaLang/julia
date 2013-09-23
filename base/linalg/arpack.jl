@@ -7,7 +7,7 @@ import ..LinAlg: BlasInt, blas_int, ARPACKException
 function aupd_wrapper(T, linop::Function, n::Integer,
                       sym::Bool, cmplx::Bool, bmat::ASCIIString,
                       nev::Integer, ncv::Integer, which::ASCIIString, 
-                      tol, maxiter::Integer, mode::Integer)
+                      tol, maxiter::Integer, mode::Integer, v0::Vector)
 
     bmat   = "I"
     lworkl = cmplx ? ncv * (3*ncv + 5) : ( lworkl = sym ? ncv * (ncv + 8) :  ncv * (3*ncv + 6) )
@@ -18,12 +18,18 @@ function aupd_wrapper(T, linop::Function, n::Integer,
     workd  = Array(T, 3*n)
     workl  = Array(T, lworkl)
     rwork  = cmplx ? Array(TR, ncv) : Array(TR, 0)
-    resid  = Array(T, n)
+
+	if isempty(v0)
+    	resid  = Array(T, n)
+    	info   = zeros(BlasInt, 1)
+	else
+		resid  = deepcopy(v0)
+    	info   = ones(BlasInt, 1)
+	end
     iparam = zeros(BlasInt, 11)
     ipntr  = zeros(BlasInt, 14)
 
     ido    = zeros(BlasInt, 1)
-    info   = zeros(BlasInt, 1)
 
     iparam[1] = blas_int(1)       # ishifts
     iparam[3] = blas_int(maxiter) # maxiter
@@ -71,7 +77,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
               bmat, n, which, nev, tol, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, rwork, info)
         if info[1] != 0; throw(ARPACKException(info[1])); end
-        return ritzvec ? (d[1:nev], v[1:n, 1:nev]) : d
+        return ritzvec ? (d[1:nev], v[1:n, 1:nev],iparam[3],iparam[9],resid) : (d[1:nev],iparam[3],iparam[9],resid)
 
     elseif sym
 
@@ -81,7 +87,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
               bmat, n, which, nev, tol, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, info) 
         if info[1] != 0; throw(ARPACKException(info[1])); end
-        return ritzvec ? (d, v[1:n, 1:nev]) : d
+        return ritzvec ? (d, v[1:n, 1:nev],iparam[3],iparam[9],resid) : (d,iparam[3],iparam[9],resid)
 
     else
 
@@ -107,7 +113,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
             j += 1
         end
         d = complex(dr[1:nev],di[1:nev])
-        return ritzvec ? (d, evec[1:n, 1:nev]) : d
+        return ritzvec ? (d, evec[1:n, 1:nev],iparam[3],iparam[9],resid) : (d,iparam[3],iparam[9],resid)
     end
     
 end
