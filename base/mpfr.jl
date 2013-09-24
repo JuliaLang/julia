@@ -19,7 +19,7 @@ import
         gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        serialize, deserialize, inf, nan, hash
+        serialize, deserialize, inf, nan, hash, cbrt
 
 import Base.Math.lgamma_r
 
@@ -397,7 +397,7 @@ function ^(x::BigFloat, y::BigInt)
 end
 
 for f in (:exp, :exp2, :exp10, :expm1, :digamma, :erf, :erfc, :zeta,
-          :cosh,:sinh,:tanh,:sech,:csch,:coth,)
+          :cosh,:sinh,:tanh,:sech,:csch,:coth, :cbrt)
     @eval function $f(x::BigFloat)
         z = BigFloat()
         ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
