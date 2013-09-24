@@ -210,6 +210,13 @@ endif
 ifeq ($(OS), Darwin)
 	-./contrib/mac/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
+	# Copy in juliarc.jl files per-platform for binary distributions as well
+ifeq ($(OS), Darwin)
+	-cat ./contrib/mac/juliarc.jl >> $(PREFIX)/etc/julia/juliarc.jl
+else ifeq ($(OS), WINNT)
+	-cat ./contrib/windows/juliarc.jl >> $(PREFIX)/etc/julia/juliarc.jl
+endif
+
 ifeq ($(OS), WINNT)
 	[ ! -d dist-extras ] || ( cd dist-extras && \
    		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll ../$(PREFIX)/bin && \
