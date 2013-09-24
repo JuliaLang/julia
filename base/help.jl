@@ -1,6 +1,6 @@
 module Help
 
-export help, apropos, @help
+export help, apropos, @help, @methods
 
 CATEGORY_LIST = nothing
 CATEGORY_DICT = nothing
@@ -223,6 +223,14 @@ macro help(ex)
     elseif ex.head == :macrocall && length(ex.args) == 1
         # e.g., "julia> @help @printf"
         return Expr(:call, :help, string(ex.args[1]))
+    else
+        return Expr(:macrocall, symbol("@which"), esc(ex))
+    end
+end
+
+macro methods(ex)
+    if !isa(ex, Expr) || isname(ex)
+        return Expr(:call, :methods, esc(ex))
     else
         return Expr(:macrocall, symbol("@which"), esc(ex))
     end

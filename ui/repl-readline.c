@@ -188,9 +188,10 @@ static jl_value_t* repl_parse_input_line(char *buf) {
         JL_GC_POP();
         return result;
     }
-    else if (buf[0] == '?') {
+    else if (buf[0] == '?' || buf[0] == ')') {
         char *tmpbuf;
-        asprintf(&tmpbuf, "@Base.help %s", buf+1);
+        asprintf(&tmpbuf, buf[0] == '?' ? "@Base.help %s" :
+                                          "@Base.methods %s", buf+1);
         jl_value_t *v = jl_parse_input_line(tmpbuf);
         free(tmpbuf);
         return v;
