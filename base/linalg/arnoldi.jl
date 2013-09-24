@@ -4,10 +4,11 @@ using .ARPACK
 
 function eigs{T<:BlasFloat}(A::AbstractMatrix{T};
                             nev::Integer=6, ncv::Integer=20, which::ASCIIString="LM", 
-                            tol=0.0, maxiter::Integer=1000, sigma=0,
+                            tol=0.0, maxiter::Integer=1000, sigma=0,v0::Vector{T}=Array(T,(0,)),
                             ritzvec::Bool=true, complexOP::Bool=false)
     (m, n) = size(A)
     if m != n; error("Input must be square"); end
+	if !isempty(v0) && length(v0)!=n; error("Starting vector must have length $n"); end
     if n <= 6 && nev > n-1; nev = n-1; end
     ncv = blas_int(min(max(2*nev+2, ncv), n))
     bmat   = "I"
@@ -35,7 +36,7 @@ function eigs{T<:BlasFloat}(A::AbstractMatrix{T};
         
     # Compute the Ritz values and Ritz vectors
     (resid, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork) = 
-       ARPACK.aupd_wrapper(T, linop, n, sym, cmplx, bmat, nev, ncv, which, tol, maxiter, mode)
+       ARPACK.aupd_wrapper(T, linop, n, sym, cmplx, bmat, nev, ncv, which, tol, maxiter, mode, v0)
     
     # Postprocessing to get eigenvalues and eigenvectors
     return ARPACK.eupd_wrapper(T, n, sym, cmplx, bmat, nev, which, ritzvec,
