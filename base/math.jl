@@ -258,6 +258,13 @@ for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :
     end
 end
 
+# fallback definitions to prevent infinite loop from $f(x::Real) def above
+cbrt(x::FloatingPoint) = x^(1//3)
+exp2(x::FloatingPoint) = 2^x
+for f in (:sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :expm1)
+    @eval ($f)(x::FloatingPoint) = error("not implemented for ", typeof(x))
+end
+
 # TODO: GNU libc has exp10 as an extension; should openlibm?
 exp10(x::Float64) = 10.0^x
 exp10(x::Float32) = 10.0f0^x
