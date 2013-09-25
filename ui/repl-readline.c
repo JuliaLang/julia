@@ -631,10 +631,13 @@ static char **julia_completion(const char *text, int start, int end)
         // is a word break character, so to complete method tables we
         // extract the token preceding the (
         int tokenstart = end-2;
-        while (tokenstart>=0 && jl_word_char(rl_line_buffer[tokenstart])) {
+
+        while (tokenstart>=0 && (jl_word_char(rl_line_buffer[tokenstart]) ||
+                                 rl_line_buffer[tokenstart] == '!')) {
             tokenstart--;
         }
         tokenstart++;
+        tokenstart += rl_line_buffer[tokenstart] == '!';
 
         int tokenlen = end-tokenstart;
         char *token = malloc(tokenlen+1);
