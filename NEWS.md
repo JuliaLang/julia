@@ -86,7 +86,7 @@ New library functions
 
   * `rmprocs` for removing processors from a parallel computing session.
     The system can also tolerate to some extent processors that die unexpectedly
-	(#3050).
+    (#3050).
 
   * `interrupt` for interrupting worker processes (#3819).
   
@@ -121,14 +121,14 @@ Library improvements
 
   * Linear-algebra factorization routines (`lu`, `chol`, etc.)
     now return `Factorization` objects (and `lud`, `chold`, etc. are deprecated)
-	(#2212).
+    (#2212).
 
   * A number of improvements to sparse matrix capabilities
     and sparse linear algebra.
 
   * More linear algebra fixes and eigensolver hooks
     for `SymTridiagonal`, `Tridiagonal` and `Bidiagonal` matrix types
-	(#2606, #2608, #2609, #2611, #2678, #2713, #2720, #2725)
+    (#2606, #2608, #2609, #2611, #2678, #2713, #2720, #2725)
 
   * Change `integer_valued`, `real_valued`, and so on
     to `isinteger`, `isreal`, and so on,
@@ -190,7 +190,7 @@ Deprecated or removed
 
   * `each_line, `each_match`, `begins_with`, `ends_with`, `parse_float`,
     `parse_int`, and `seek_end` replaced by: `eachline`, `eachmatch`, and so on
-	(`_` was removed) (#1539).
+    (`_` was removed) (#1539).
 
   * `parse_bin(s)` replaced by `parseint(s,2)`;
     `parse_oct(s)` replaced by `parseint(s,8)`;
