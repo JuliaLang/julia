@@ -407,7 +407,12 @@ function show(io::IO, m::Method)
     li = m.func.code
     e = uncompressed_ast(li)
     argnames = e.args[1]
-    decls = map(argtype_decl_string, argnames, {m.sig...})
+    if length(argnames) != length(m.sig)
+        s = symbol("?")
+        decls = map(argtype_decl_string, { s for i=1:length(m.sig) }, {m.sig...})
+    else
+        decls = map(argtype_decl_string, argnames, {m.sig...})
+    end
     print(io, "(")
     print_joined(io, decls, ",", ",")
     print(io, ")")
