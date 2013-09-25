@@ -33,6 +33,7 @@ int prompt_length;
 int disable_history;
 static char *history_file = NULL;
 static jl_value_t *rl_ast = NULL;
+static char *strtok_saveptr;
 
 // yes, readline uses inconsistent indexing internally.
 #define history_rem(n) remove_history(n-history_base)
@@ -243,6 +244,47 @@ static int space_callback(int count, int key)
     return 0;
 }
 
+#define MAX_METHODS 100
+int complete_method_table() {
+    if (rl_point < 2 || rl_line_buffer[rl_point-1] != '(') return 0;
+
+    // extract the token preceding the (
+    int tokenstart = rl_point-2;
+
+    while (tokenstart>=0 && (jl_word_char(rl_line_buffer[tokenstart]) ||
+           rl_line_buffer[tokenstart] == '!')) {
+        tokenstart--;
+    }
+    tokenstart++;
+    tokenstart += rl_line_buffer[tokenstart] == '!';
+
+    jl_value_t* result = call_jl_function_with_string("repl_methods",
+                                                      &rl_line_buffer[tokenstart],
+                                                      rl_point-tokenstart-1);
+
+    if (!jl_is_byte_string(result)) return 0;
+    char *completions = jl_string_data(result);
+    char *methods[MAX_METHODS+1];
+
+    methods[0] = NULL;
+    methods[1] = strtok_r(completions, "\n", &strtok_saveptr);
+    if (methods[1] == NULL) return 0;
+    int maxlen = strlen(methods[1]);
+    int nmethods = 1;
+    char *method;
+    while (nmethods < MAX_METHODS &&
+           (method = strtok_r(NULL, "\n", &strtok_saveptr))) {
+        int len = strlen(method);
+        if (len > maxlen) maxlen = len;
+        methods[nmethods+1] = method;
+        nmethods++;
+    }
+
+    rl_display_match_list(methods, nmethods, maxlen);
+    rl_forced_update_display();
+    return 1;
+}
+
 static int tab_callback(int count, int key)
 {
     if (!rl_point) {
@@ -254,11 +296,12 @@ static int tab_callback(int count, int key)
         if (rl_line_buffer[i] != ' ') {
             // do tab completion
             i = rl_point;
-            // just show method table for foo(
-            rl_complete_internal(rl_line_buffer[rl_point-1] == '(' ? '?' : '!');
-            if (i < rl_point && rl_line_buffer[rl_point-1] == ' ') {
-                rl_delete_text(rl_point-1, rl_point);
-                rl_point = rl_point-1;
+            if(!complete_method_table()) {
+                rl_complete_internal('!');
+                if (i < rl_point && rl_line_buffer[rl_point-1] == ' ') {
+                    rl_delete_text(rl_point-1, rl_point);
+                    rl_point = rl_point-1;
+                }
             }
             return 0;
         }
@@ -495,8 +538,6 @@ static jl_module_t *find_submodule_named(jl_module_t *module, const char *name)
     return (jl_is_module(b->value)) ? (jl_module_t *)b->value : NULL;
 }
 
-static char *strtok_saveptr;
-
 #if defined(_WIN32)
 char *strtok_r(char *str, const char *delim, char **save)
 {
@@ -578,14 +619,6 @@ int tab_complete(const char *line, char **answer, int *plen)
 {
     int len = *plen;
 
-    if(line[len] == '(') {
-        // method table completion
-        jl_value_t* result = call_jl_function_with_string("repl_methods", line, strlen(line)-1);
-        if (!jl_is_byte_string(result)) return 0;
-        *answer = strdup(jl_string_data(result));
-        return 1;
-    }
-
     while (len>=0) {
         if (!jl_word_char(line[len])) {
             break;
@@ -624,33 +657,6 @@ static char *do_completions(const char *ch, int c)
     return ptr ? strdup(ptr) : NULL;
 }
 
-static char **julia_completion(const char *text, int start, int end)
-{
-    if (end >= 2 && rl_line_buffer[end-1] == '(') {
-        // completion of function names after a ( won't work unless (
-        // is a word break character, so to complete method tables we
-        // extract the token preceding the (
-        int tokenstart = end-2;
-
-        while (tokenstart>=0 && (jl_word_char(rl_line_buffer[tokenstart]) ||
-                                 rl_line_buffer[tokenstart] == '!')) {
-            tokenstart--;
-        }
-        tokenstart++;
-        tokenstart += rl_line_buffer[tokenstart] == '!';
-
-        int tokenlen = end-tokenstart;
-        char *token = malloc(tokenlen+1);
-        strncpy(token, &rl_line_buffer[tokenstart], tokenlen);
-        token[tokenlen] = '\0';
-
-        char **ret = rl_completion_matches(token, do_completions);
-        free(token);
-        return ret;
-    }
-
-    return NULL;
-}
 #ifdef __WIN32__
 int repl_sigint_handler_installed = 0;
 BOOL WINAPI repl_sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
@@ -711,7 +717,7 @@ static void init_rl(void)
 {
     rl_readline_name = "julia";
     rl_completion_entry_function = do_completions;
-    rl_attempted_completion_function = julia_completion;
+    rl_sort_completion_matches = 0;
     for(size_t i=0; lang_keywords[i]; i++) {
         // make sure keywords are in symbol table
         (void)jl_symbol(lang_keywords[i]);
