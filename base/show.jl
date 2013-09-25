@@ -416,11 +416,13 @@ function show(io::IO, m::Method)
     end
 end
 
-function show_method_table(io::IO, mt::MethodTable, max::Int=-1)
+function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header=true)
     name = mt.name
     n = length(mt)
-    m = n==1 ? "method" : "methods"
-    print(io, "# $n $m for generic function \"$name\":")
+    if header
+        m = n==1 ? "method" : "methods"
+        print(io, "# $n $m for generic function \"$name\":")
+    end
     d = mt.defs
     n = rest = 0
     while !is(d,())
