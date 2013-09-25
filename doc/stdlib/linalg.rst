@@ -378,16 +378,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    The conjugate transpose operator (``'``).
 
-.. function:: eigs(A; nev=6, which="LM", tol=0.0, maxiter=1000, sigma=0, ritzvec=true, op_part=:real)
+.. function:: eigs(A; nev=6, which="LM", tol=0.0, maxiter=1000, sigma=0, ritzvec=true, op_part=:real,v0=zeros((0,))) -> (d,[v,]niter,nmult,resid)
 
-   ``eigs`` computes the eigenvalues of A using Arnoldi factorization. The following keyword arguments are supported:
+   ``eigs`` computes eigenvalues ``d`` of A using Arnoldi factorization. The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
     * ``which``: type of eigenvalues ("LM", "SM")
     * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
     * ``maxiter``: Maximum number of iterations
     * ``sigma``: find eigenvalues close to ``sigma`` using shift and invert
-    * ``ritzvec``: Returns the Ritz vectors (eigenvectors) if ``true``
+    * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
     * ``op_part``: which part of linear operator to use for real A (:real, :imag)
+    * ``v0``: starting vector from which to start the Arnoldi iteration
+   ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.
+    
 
 .. function:: svds(A; nev=6, which="LA", tol=0.0, maxiter=1000, ritzvec=true)
 
