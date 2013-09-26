@@ -251,7 +251,7 @@ int complete_method_table() {
     int tokenstart = rl_point-2;
 
     // check for special operators
-    if (strchr("\\><=|&+-*/%^~!", rl_line_buffer[tokenstart])){
+    if (strchr("\\><=|&+-*/%^~", rl_line_buffer[tokenstart])){
         while (tokenstart>0 && strchr("<>=!", rl_line_buffer[tokenstart-1])){
             tokenstart--;
         }
@@ -263,7 +263,10 @@ int complete_method_table() {
             tokenstart--;
         }
         tokenstart++;
-        tokenstart += rl_line_buffer[tokenstart] == '!';
+        // ! can't be the first character of a function, unless is not the only
+        if (tokenstart != rl_point-2 && rl_line_buffer[tokenstart] == '!'){
+            tokenstart ++;
+        }
     }
 
     jl_value_t* result = call_jl_function_with_string("repl_methods",
