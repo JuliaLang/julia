@@ -166,6 +166,8 @@ differences that may trip up Julia users accustomed to MATLAB:
 -  Julia's ``svd`` returns singular values as a vector instead of as a
    full diagonal matrix.
 -  In Julia, ``...`` is not used to continue lines of code.
+-  The variable "ans" is set to the value of the last expression issued on
+   the command line, but not in a script.
 
 Noteworthy differences from R
 -----------------------------
@@ -198,3 +200,13 @@ One of Julia's goals is to provide an effective language for data analysis and s
 - Unlike R, there is no delayed evaluation in Julia. For most users, this means that there are very few unquoted expressions or column names.
 - Julia does not support the ``NULL`` type.
 - There is no equivalent of R's ``assign`` or ``get`` in Julia.
+
+Noteworthy differences from Python
+----------------------------------
+
+- Indexing in Julia is unit offset, not zero offset
+- The last element of a list or array is indexed with "end" in Julia, not -1 as in Python.
+- Comprehensions in Julia do not have the optional if clause found in Python.
+- For, if, while, etc. blocks in Julia are terminated by "end".  Lines in Julia do not have to
+  have the characteristic indentation pattern found in Python
+- Julia has no line continuation syntax, other than a carriage return
