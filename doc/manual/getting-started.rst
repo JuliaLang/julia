@@ -34,7 +34,8 @@ hits enter, the interactive session evaluates the expression and shows
 its value. If an expression is entered into an interactive session
 with a trailing semicolon, its value is not shown. The variable
 ``ans`` is bound to the value of the last evaluated expression whether
-it is shown or not.
+it is shown or not. The ``ans`` variable is only bound in interactive
+sessions, not when Julia code is run in other ways.
 
 To evaluate expressions written in a source file ``file.jl``, write
 ``include("file.jl")``.
@@ -166,8 +167,9 @@ differences that may trip up Julia users accustomed to MATLAB:
 -  Julia's ``svd`` returns singular values as a vector instead of as a
    full diagonal matrix.
 -  In Julia, ``...`` is not used to continue lines of code.
--  The variable "ans" is set to the value of the last expression issued on
-   the command line, but not in a script.
+-  The variable ``ans`` is set to the value of the last expression issued
+   in an interactive session, but not set when Julia code is run in other
+   ways.
 
 Noteworthy differences from R
 -----------------------------
@@ -204,9 +206,10 @@ One of Julia's goals is to provide an effective language for data analysis and s
 Noteworthy differences from Python
 ----------------------------------
 
-- Indexing in Julia is unit offset, not zero offset
-- The last element of a list or array is indexed with "end" in Julia, not -1 as in Python.
-- Comprehensions in Julia do not have the optional if clause found in Python.
-- For, if, while, etc. blocks in Julia are terminated by "end".  Lines in Julia do not have to
-  have the characteristic indentation pattern found in Python
-- Julia has no line continuation syntax, other than a carriage return
+- Indexing of arays, strings, etc. in Julia is 1-based not 0-based.
+- The last element of a list or array is indexed with ``end`` in Julia, not -1 as in Python.
+- Comprehensions in Julia do not (yet) have the optional if clause found in Python.
+- For, if, while, etc. blocks in Julia are terminated by ``end``; indentation is not significant.
+- Julia has no line continuation syntax: if, at the end of a line, the input so far is a complete
+  expression, it is considered done; otherwise the input continues. One way to force an expression
+  to continue is to wrap it in parentheses.
