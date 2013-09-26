@@ -156,9 +156,9 @@ hex literals for integer values, one typically is using them to
 represent a fixed numeric byte sequence, rather than just an integer
 value.
 
-Recall that the variable ``ans`` is set to the value of the value of the last
-expression evaluated in an interactive session. This does not occur when Julia
-code is run in other ways.
+Recall that the variable ``ans`` is set to the value of the last expression
+evaluated in an interactive session. This does not occur when Julia code is
+run in other ways.
 
 Binary and octal literals are also supported::
 
