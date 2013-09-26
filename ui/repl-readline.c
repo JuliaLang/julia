@@ -244,7 +244,6 @@ static int space_callback(int count, int key)
     return 0;
 }
 
-#define MAX_METHODS 100
 int complete_method_table() {
     if (rl_point < 2 || rl_line_buffer[rl_point-1] != '(') return 0;
 
@@ -264,15 +263,20 @@ int complete_method_table() {
 
     if (!jl_is_byte_string(result)) return 0;
     char *completions = jl_string_data(result);
-    char *methods[MAX_METHODS+1];
 
+    int nallocmethods = 0;
+    size_t nchars = strlen(completions);
+    for (size_t i=0; i<nchars; i++) nallocmethods += completions[i] == '\n';
+
+    char **methods = malloc(sizeof(char *)*(nallocmethods+1));
     methods[0] = NULL;
     methods[1] = strtok_r(completions, "\n", &strtok_saveptr);
     if (methods[1] == NULL) return 0;
     int maxlen = strlen(methods[1]);
     int nmethods = 1;
+
     char *method;
-    while (nmethods < MAX_METHODS &&
+    while (nmethods < nallocmethods &&
            (method = strtok_r(NULL, "\n", &strtok_saveptr))) {
         int len = strlen(method);
         if (len > maxlen) maxlen = len;
@@ -281,6 +285,7 @@ int complete_method_table() {
     }
 
     rl_display_match_list(methods, nmethods, maxlen);
+    free(methods);
     rl_forced_update_display();
     return 1;
 }
