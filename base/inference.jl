@@ -1928,47 +1928,55 @@ function inlining_pass(e::Expr, sv, ast)
             end
         end
 
-        res = inlineable(f, e, sv, ast)
-        if isa(res,Tuple)
-            if isa(res[2],Array)
-                append!(stmts,res[2])
-            end
-            return (res[1],stmts)
-        elseif !is(res,NF)
-            return (res,stmts)
-        end
-
-        if is(f,apply)
-            na = length(e.args)
-            newargs = cell(na-2)
-            for i = 3:na
-                aarg = e.args[i]
-                t = exprtype(aarg)
-                if isa(aarg,Expr) && is_known_call(aarg, tuple, sv)
-                    # apply(f,tuple(x,y,...)) => f(x,y,...)
-                    newargs[i-2] = aarg.args[2:]
-                elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg)
-                    # apply(f,t::(x,y)) => f(t[1],t[2])
-                    newargs[i-2] = { mk_tupleref(aarg,j) for j=1:length(t) }
-                else
-                    # not all args expandable
-                    return (e,stmts)
-                end
-            end
-            e.args = [{e.args[2]}, newargs...]
-
-            # now try to inline the simplified call
-            res = inlineable(_ieval(e.args[1]), e, sv, ast)
+        for ninline = 1:100
+            res = inlineable(f, e, sv, ast)
             if isa(res,Tuple)
                 if isa(res[2],Array)
                     append!(stmts,res[2])
                 end
-                return (res[1],stmts)
-            elseif !is(res,NF)
-                return (res,stmts)
+                res = res[1]
             end
 
-            return (e,stmts)
+            if !is(res,NF)
+                # iteratively inline apply(f, tuple(...), tuple(...), ...) in order
+                # to simplify long vararg lists as in multi-arg +
+                if isa(res,Expr) && is_known_call(res, apply, sv)
+                    e = res
+                    f = apply
+                else
+                    return (res,stmts)
+                end
+            end
+
+            if is(f,apply)
+                na = length(e.args)
+                newargs = cell(na-2)
+                for i = 3:na
+                    aarg = e.args[i]
+                    t = exprtype(aarg)
+                    if isa(aarg,Expr) && is_known_call(aarg, tuple, sv)
+                        # apply(f,tuple(x,y,...)) => f(x,y,...)
+                        newargs[i-2] = aarg.args[2:]
+                    elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg)
+                        # apply(f,t::(x,y)) => f(t[1],t[2])
+                        newargs[i-2] = { mk_tupleref(aarg,j) for j=1:length(t) }
+                    else
+                        # not all args expandable
+                        return (e,stmts)
+                    end
+                end
+                e.args = [{e.args[2]}, newargs...]
+
+                # now try to inline the simplified call
+
+                f = isconstantfunc(e.args[1], sv)
+                if f===false
+                    return (e,stmts)
+                end
+                f = _ieval(f)
+            else
+                return (e,stmts)
+            end
         end
     end
     return (e,stmts)
