@@ -156,6 +156,10 @@ hex literals for integer values, one typically is using them to
 represent a fixed numeric byte sequence, rather than just an integer
 value.
 
+Note that the variable "ans", while set to the value of the last evaluated
+expression on the command line as shown here, is not automatically set at all
+during script execution, for efficiency(?).
+
 Binary and octal literals are also supported::
 
     julia> 0b10
