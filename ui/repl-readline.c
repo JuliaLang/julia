@@ -263,7 +263,7 @@ int complete_method_table() {
             tokenstart--;
         }
         tokenstart++;
-        // ! can't be the first character of a function, unless is not the only
+        // ! can't be the first character of a function, unless is's the only
         if (tokenstart != rl_point-2 && rl_line_buffer[tokenstart] == '!'){
             tokenstart ++;
         }
