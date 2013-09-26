@@ -669,7 +669,7 @@
 	     `(block ,stmt ,@(cdr body))))
       body))
 
-(define (rewrite-ctor ctor Tname params field-names field-types mutabl)
+(define (rewrite-ctor ctor Tname params field-names field-types mutabl iname)
   (define (ctor-body body)
     (prepend-stmt
      `(global ,Tname)
@@ -690,14 +690,18 @@
   (let ((ctor2
 	 (pattern-replace
 	  (pattern-set
-	   (pattern-lambda (function (call name . sig) body)
-			   `(function ,(cadr __) ,(ctor-body body)))
-	   (pattern-lambda (= (call name . sig) body)
-			   `(= ,(cadr __) ,(ctor-body body)))
 	   (pattern-lambda (function (call (curly name . p) . sig) body)
-			   `(function ,(cadr __) ,(ctor-body body)))
+			   `(function (call (curly ,(if (eq? name Tname) iname name) ,@p) ,@sig)
+				      ,(ctor-body body)))
+	   (pattern-lambda (function (call name . sig) body)
+			   `(function (call ,(if (eq? name Tname) iname name) ,@sig)
+				      ,(ctor-body body)))
 	   (pattern-lambda (= (call (curly name . p) . sig) body)
-			   `(= ,(cadr __) ,(ctor-body body))))
+			   `(= (curly ,(if (eq? name Tname) iname name) ,@p)
+			       ,(ctor-body body)))
+	   (pattern-lambda (= (call name . sig) body)
+			   `(= (call ,(if (eq? name Tname) iname name) ,@sig)
+			       ,(ctor-body body))))
 	  ctor)))
     ctor2))
 
@@ -737,7 +741,7 @@
 	       (block
 		(global ,name)
 		,@(map (lambda (c)
-			 (rewrite-ctor c name '() field-names field-types mut))
+			 (rewrite-ctor c name '() field-names field-types mut name))
 		       defs2)))))
 	   (null))
 	 ;; parametric case
@@ -750,18 +754,19 @@
 	     ,@(map make-assignment params (symbols->typevars params bounds #t))
 	     (composite_type ,name (tuple ,@params)
 			     (tuple ,@(map (lambda (x) `',x) field-names))
-			     (lambda (,name)
-			       (scope-block
-				;; don't capture params; in here they are static
-				;; parameters
-				(block
-				 (global ,@params)
-				 ,@(map
-				    (lambda (c)
-				      (rewrite-ctor c name params field-names
-						    field-types mut))
-				    defs2)
-				 ,name)))
+			     ,(let ((instantiation-name (gensy)))
+				`(lambda (,instantiation-name)
+				   (scope-block
+				    ;; don't capture params; in here they are static
+				    ;; parameters
+				    (block
+				     (global ,@params)
+				     ,@(map
+					(lambda (c)
+					  (rewrite-ctor c name params field-names
+							field-types mut instantiation-name))
+					defs2)
+				     ,name))))
 			     ,super (tuple ,@field-types)
 			     ,mut)))
 	   (scope-block

@@ -1001,3 +1001,12 @@ convert_default_should_fail_here() = similar([1],typeof(zero(typeof(rand(2,2))))
 
 # issue #4343
 @test_throws Array{Float64}{Int, 2}
+
+type Foo4376{T}
+    x
+    Foo4376(x::T) = new(x)
+    Foo4376(a::Foo4376{Int}) = new(a.x)
+end
+
+@test isa(Foo4376{Float32}(Foo4376{Int}(2)), Foo4376{Float32})
+@test_throws Foo4376{Float32}(Foo4376{Float32}(2.0f0))
