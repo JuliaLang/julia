@@ -332,10 +332,11 @@ const apply_type_tfunc = function (A, args...)
     end
     tparams = ()
     uncertain = false
-    for i=2:length(A)
+    lA = length(A)
+    for i=2:max(lA,length(args))
         if isType(args[i])
             tparams = tuple(tparams..., args[i].parameters[1])
-        elseif isa(A[i],Int)
+        elseif i<=lA && isa(A[i],Int)
             tparams = tuple(tparams..., A[i])
         else
             if i-1 > length(headtype.parameters)
