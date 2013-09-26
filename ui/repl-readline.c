@@ -250,12 +250,21 @@ int complete_method_table() {
     // extract the token preceding the (
     int tokenstart = rl_point-2;
 
-    while (tokenstart>=0 && (jl_word_char(rl_line_buffer[tokenstart]) ||
-           rl_line_buffer[tokenstart] == '!')) {
-        tokenstart--;
+    // check for special operators
+    if (strchr("\\><=|&+-*/%^~!", rl_line_buffer[tokenstart])){
+        while (tokenstart>0 && strchr("<>=!", rl_line_buffer[tokenstart-1])){
+            tokenstart--;
+        }
     }
-    tokenstart++;
-    tokenstart += rl_line_buffer[tokenstart] == '!';
+    else{
+        // check for functions that might contain ! but not start with !
+        while (tokenstart>=0 && (jl_word_char(rl_line_buffer[tokenstart]) ||
+              rl_line_buffer[tokenstart] == '!')) {
+            tokenstart--;
+        }
+        tokenstart++;
+        tokenstart += rl_line_buffer[tokenstart] == '!';
+    }
 
     jl_value_t* result = call_jl_function_with_string("repl_methods",
                                                       &rl_line_buffer[tokenstart],
