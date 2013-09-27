@@ -8,8 +8,8 @@ if codespeed
         Pkg.add("JSON")
         Pkg.add("Curl")
     end
-    usingmodule("JSON")
-    usingmodule("Curl")
+    using JSON
+    using Curl
 
     # Ensure that we've got the environment variables we want:
     if !haskey(ENV, "JULIA_FLAVOR")
@@ -30,7 +30,7 @@ end
 # Takes in the raw array of values in vals, along with the benchmark name, description, unit and whether less is better
 function submit_to_codespeed(vals,name,desc,unit,test_group,lessisbetter=true)
     # Points to the server 
-    codespeed_host = "128.52.160.154"
+    codespeed_host = "julia-codespeed.csail.mit.edu"
 
     csdata["benchmark"] = name
     csdata["description"] = desc
@@ -44,6 +44,7 @@ function submit_to_codespeed(vals,name,desc,unit,test_group,lessisbetter=true)
 
     println( "$name: $(mean(vals))" )
     ret = Curl.post( "http://$codespeed_host/result/add/json/", {:json => json([csdata])} )
+    println( ret )
     if( !ismatch(r".*202 ACCEPTED.*", ret.headers[1][1]) )
         error("Error submitting $name, dumping headers and text: $(ret.headers[1])\n$(ret.text)\n\n")
         return false
