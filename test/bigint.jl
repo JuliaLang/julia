@@ -3,6 +3,7 @@ b = BigInt("123456789012345678901234567891")
 
 @test typeof(a+1) == BigInt
 @test a+1 == b
+@test isequal(a+1, b)
 @test b == a+1
 @test !(b == a)
 @test b > a
