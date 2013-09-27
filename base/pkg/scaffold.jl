@@ -9,6 +9,8 @@ function generate(f::Function, path::String)
     Git.run(`add $path`)
 end
 
+# TODO: make sure dir functionality works or delete it
+
 function scaffold(
     pkg::String;
     dir::String = "",
@@ -28,7 +30,7 @@ function scaffold(
     haskey(LICENSES,license) ||
         error("$license is not a known license choice.")
     d = if isempty(dir)
-        avail = Dir.cd(Read.available)
+        avail = Read.available()
         haskey(avail,pkg) &&
             error("$pkg is already a registered package name.")
         Dir.path(pkg)
