@@ -4,14 +4,14 @@ require("testdefs.jl")
 pipe_fds = Array(Cint,2)
 @test 0 == ccall(:pipe, Cint, (Ptr{Cint},), pipe_fds)
 
-function test_poll(timeout_s)
+function test_poll_fd(timeout_s)
     rc = poll_fd(RawFD(pipe_fds[1]), timeout_s; readable=true)
     produce(rc)
 end
 
-function test_timeout(tval)
+function test_timeout_fd(tval)
     tic()
-    t = Task(()->test_poll(tval))
+    t = Task(()->test_poll_fd(tval))
     tr = consume(t)
     t_elapsed = toq()
 
@@ -23,7 +23,7 @@ end
 function test_read(slval)
     tval = slval * 1.1
     tic()
-    t = Task(()->test_poll(tval))
+    t = Task(()->test_poll_fd(tval))
 
     sleep(slval)
     @test 1 == ccall(:write, Csize_t, (Cint, Ptr{Uint8},Csize_t), pipe_fds[2], bytestring("A"), 1)
@@ -40,8 +40,8 @@ function test_read(slval)
     @test slval <= t_elapsed
 end
 
-test_timeout(.1)
-test_timeout(1)
+test_timeout_fd(.1)
+test_timeout_fd(1)
 test_read(.1)
 test_read(1)
 
