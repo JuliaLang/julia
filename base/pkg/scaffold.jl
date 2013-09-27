@@ -9,16 +9,14 @@ function generate(f::Function, path::String)
     Git.run(`add $path`)
 end
 
-# TODO: make sure dir functionality works or delete it
-
 function scaffold(
-    pkg::String;
-    dir::String = "",
-    license::String = "",
-    years::Union(Int,String) = readchomp(`date +%Y`),
-    authors::String = Git.readchomp(`config --global --get user.name`),
-    github::Bool = Git.success(`config --get github.user`),
-    travis::Bool = Git.success(`config --get github.user`),
+    pkg::String,
+    dir::String,
+    license::String,
+    years::Union(Int,String),
+    authors::String,
+    github::Bool,
+    travis::Bool,
 )
     isempty(license) && error("""
         You must choose a license, e.g.:
