@@ -787,7 +787,7 @@ DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
 
 DLLEXPORT int jl_uv_unix_fd_is_watched(int fd, uv_poll_t *handle, uv_loop_t *loop)
 {
-    if (fd > loop->nwatchers)
+    if (fd >= loop->nwatchers)
         return 0;
     if (loop->watchers[fd] == NULL)
         return 0;
