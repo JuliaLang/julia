@@ -6,7 +6,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
-             serialize, deserialize, bin, oct, dec, hex
+             serialize, deserialize, bin, oct, dec, hex, isequal
 
 type BigInt <: Integer
     alloc::Cint
@@ -353,6 +353,7 @@ end
 binomial(n::BigInt, k::Integer) = k<0 ? throw(DomainError()) : binomial(n, uint(k))
 
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
+isequal(x::BigInt, y::BigInt) = cmp(x,y) == 0
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0
 >=(x::BigInt, y::BigInt) = cmp(x,y) >= 0
 <(x::BigInt, y::BigInt) = cmp(x,y) < 0
