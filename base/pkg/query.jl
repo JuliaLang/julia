@@ -1,5 +1,6 @@
 module Query
 
+import ...Pkg
 using ..Types
 
 function requirements(reqs::Dict, fix::Dict)
