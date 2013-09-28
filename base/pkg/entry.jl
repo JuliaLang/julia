@@ -317,6 +317,8 @@ function register(pkg::String, url::String)
         for (ver,commit) in versions
             write_tag_metadata(pkg,ver,commit)
         end
+        info("Checking METADATA sanity")
+        check_metadata()
     end
 end
 
@@ -377,6 +379,8 @@ function tag(pkg::String, ver::Union(Symbol,VersionNumber), commit::String, msg:
     try
         Git.transact(dir="METADATA") do
             write_tag_metadata(pkg,ver,commit)
+            info("Checking METADATA sanity")
+            check_metadata()
         end
     catch
         Git.run(`tag -d v$ver`, dir=pkg)
@@ -407,24 +411,22 @@ function build(pkg::String, args=[])
 end
 
 # Metadata sanity check
-function check_metadata(julia_version::VersionNumber=VERSION)
+function check_metadata()
     avail = Read.available()
     instd = Read.installed(avail)
-    fixed = Read.fixed(avail,instd,julia_version)
+    fixed = Read.fixed(avail,instd,VERSION)
     deps  = Query.dependencies(avail,fixed)
 
     problematic = Resolve.sanity_check(deps)
     if !isempty(problematic)
-        warning = "Packages with unsatisfiable requirements found:\n"
+        msg = "Packages with unsatisfiable requirements found:\n"
         for (p, vn, rp) in problematic
-            warning *= "    $p v$vn : no valid versions exist for package $rp\n"
+            msg *= "    $p v$vn : no valid versions exist for package $rp\n"
         end
-        warn(warning)
-        return false
+        error(msg)
     end
-    return true
+    return
 end
-check_metadata(julia_version::String) = check_metadata(convert(VersionNumber, julia_version))
 
 function __fixup(
     instlist,
