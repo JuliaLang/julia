@@ -388,6 +388,23 @@ function tag(pkg::String, ver::Union(Symbol,VersionNumber), commit::String, msg:
     end
 end
 
+function check_metadata()
+    avail = Read.available()
+    instd = Read.installed(avail)
+    fixed = Read.fixed(avail,instd,VERSION)
+    deps  = Query.dependencies(avail,fixed)
+
+    problematic = Resolve.sanity_check(deps)
+    if !isempty(problematic)
+        msg = "Packages with unsatisfiable requirements found:\n"
+        for (p, vn, rp) in problematic
+            msg *= "    $p v$vn : no valid versions exist for package $rp\n"
+        end
+        error(msg)
+    end
+    return
+end
+
 function build(pkg::String, args=[])
     try 
         path = abspath(pkg,"deps","build.jl")
@@ -408,24 +425,6 @@ function build(pkg::String, args=[])
         rethrow()
     end
     true
-end
-
-# Metadata sanity check
-function check_metadata()
-    avail = Read.available()
-    instd = Read.installed(avail)
-    fixed = Read.fixed(avail,instd,VERSION)
-    deps  = Query.dependencies(avail,fixed)
-
-    problematic = Resolve.sanity_check(deps)
-    if !isempty(problematic)
-        msg = "Packages with unsatisfiable requirements found:\n"
-        for (p, vn, rp) in problematic
-            msg *= "    $p v$vn : no valid versions exist for package $rp\n"
-        end
-        error(msg)
-    end
-    return
 end
 
 function __fixup(
