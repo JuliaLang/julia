@@ -8,37 +8,32 @@ function pwd()
     bytestring(p)
 end
 
-
 function cd(dir::String) 
     @windows_only systemerror("chdir $dir", ccall(:_chdir,Int32,(Ptr{Uint8},),dir) == -1)
     @unix_only systemerror("chdir $dir", ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
 end
 cd() = cd(user_homedir())
 
-# do stuff in a directory, then return to current directory
-
-@unix_only function cd(f::Function, dir::String)
+@unix_only function cd(f::Function, dir::String, args...)
     fd = ccall(:open,Int32,(Ptr{Uint8},Int32),".",0)
     systemerror(:open, fd == -1)
     try
         cd(dir)
-        f()
+        f(args...)
     finally
         systemerror(:fchdir, ccall(:fchdir,Int32,(Int32,),fd) != 0)
         systemerror(:close, ccall(:close,Int32,(Int32,),fd) != 0)
     end
 end
-
-@windows_only function cd(f::Function, dir::String)
+@windows_only function cd(f::Function, dir::String, args...)
     old = pwd()
     try
         cd(dir)
-        f()
+        f(args...)
    finally
         cd(old)
     end
 end
-
 cd(f::Function) = cd(f, user_homedir())
 
 function mkdir(path::String, mode::Unsigned=0o777)
