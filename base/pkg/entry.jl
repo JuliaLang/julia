@@ -48,15 +48,24 @@ end
 function status(io::IO)
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
-    println(io, "Required packages:")
-    for pkg in sort!([keys(reqs)...])
-        ver,fix = pop!(instd,pkg)
-        status(io,pkg,ver,fix)
+    required = sort!([keys(reqs)...])
+    if !isempty(required)
+        println(io, "Required packages:")
+        for pkg in required
+            ver,fix = pop!(instd,pkg)
+            status(io,pkg,ver,fix)
+        end
     end
-    println(io, "Additional packages:")
-    for pkg in sort!([keys(instd)...])
-        ver,fix = instd[pkg]
-        status(io,pkg,ver,fix)
+    additional = sort!([keys(instd)...])
+    if !isempty(additional)
+        println(io, "Additional packages:")
+        for pkg in additional
+            ver,fix = instd[pkg]
+            status(io,pkg,ver,fix)
+        end
+    end
+    if isempty(required) && isempty(additional)
+        println(io, "No packages installed.")
     end
 end
 # TODO: status(io::IO, pkg::String)
@@ -418,10 +427,10 @@ function build(pkg::String, args=[])
         end
     catch
         warn("""
-             An exception occured while building binary dependencies.
-             You may have to take manual steps to complete the installation, see the error message below.
-             To reattempt the installation, run Pkg.fixup("$pkg").
-             """)
+        An exception occured while building binary dependencies.
+        You may have to take manual steps to complete the installation, see the error message below.
+        To reattempt the installation, run Pkg.fixup("$pkg").
+        """)
         rethrow()
     end
     true
