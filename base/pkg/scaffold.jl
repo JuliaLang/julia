@@ -10,13 +10,13 @@ function generate(f::Function, path::String)
 end
 
 function scaffold(
-    pkg::String;
-    dir::String = "",
-    license::String = "",
-    years::Union(Int,String) = readchomp(`date +%Y`),
-    authors::String = Git.readchomp(`config --global --get user.name`),
-    github::Bool = Git.success(`config --get github.user`),
-    travis::Bool = Git.success(`config --get github.user`),
+    pkg::String,
+    dir::String,
+    license::String,
+    years::Union(Int,String),
+    authors::String,
+    github::Bool,
+    travis::Bool,
 )
     isempty(license) && error("""
         You must choose a license, e.g.:
@@ -28,7 +28,7 @@ function scaffold(
     haskey(LICENSES,license) ||
         error("$license is not a known license choice.")
     d = if isempty(dir)
-        avail = Dir.cd(Read.available)
+        avail = Read.available()
         haskey(avail,pkg) &&
             error("$pkg is already a registered package name.")
         Dir.path(pkg)
