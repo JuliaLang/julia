@@ -22,6 +22,7 @@ export File,
        unlink,
        rename,
        sendfile,
+       symlink,
        JL_O_WRONLY,
        JL_O_RDONLY,
        JL_O_RDWR,
@@ -148,6 +149,17 @@ function sendfile(src::String, dst::String)
         close(dst_file)
     end
 end
+
+@windows_only const UV_FS_SYMLINK_DIR = 0x0001
+@non_windowsxp_only function symlink(p::String, np::String)
+    flags = 0
+    @windows_only if isdir(p); flags |= UV_FS_SYMLINK_DIR; end
+    err = ccall(:jl_fs_symlink, Int32, (Ptr{Uint8}, Ptr{Uint8}, Cint), 
+                bytestring(p), bytestring(np), flags)
+    uv_error("symlink",err)
+end
+@windowsxp_only symlink(p::String, np::String) = 
+    error("WindowsXP does not support soft symlinks")
 
 function write(f::File, buf::Ptr{Uint8}, len::Integer, offset::Integer=-1)
     if !f.open

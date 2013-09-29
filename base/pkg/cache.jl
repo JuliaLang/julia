@@ -18,7 +18,7 @@ function mkcachedir()
             if !isdir(rootcache)
                 mkdir(rootcache)
             end
-            run(`ln -s $rootcache $cache`)
+            symlink(rootcache, cache)
             return
         end
         mkdir(cache)
