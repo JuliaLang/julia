@@ -195,7 +195,7 @@ function center(x::AbstractMatrix)
     for j in 1:n
         colmean = mean(x[:,j])
         for i in 1:m
-            res[i,j] = x[i,j] - colmean 
+            res[i,j] = x[i,j] - colmean
         end
     end
     res
@@ -205,7 +205,7 @@ function center(x::AbstractVector)
     colmean = mean(x)
     res = Array(promote_type(eltype(x),Float64), size(x))
     for i in 1:length(x)
-        res[i] = x[i] - colmean 
+        res[i] = x[i] - colmean
     end
     res
 end
@@ -235,7 +235,7 @@ function cor(x::AbstractVecOrMat, y::AbstractVecOrMat)
 end
 cor(x::AbstractVector, y::AbstractVector) =
     cov(x, y) / std(x) / std(y)
-    
+
 
 function cor(x::AbstractVecOrMat)
     res = cov(x)
@@ -243,12 +243,12 @@ function cor(x::AbstractVecOrMat)
     scale = 1 / sqrt(diag(res))
     for j in 1:n
         for i in 1 : j - 1
-            res[i,j] *= scale[i] * scale[j] 
+            res[i,j] *= scale[i] * scale[j]
             res[j,i] = res[i,j]
         end
         res[j,j] = 1.0
     end
-    res 
+    res
 end
 cor(x::AbstractVector) = cor(x'')[1]
 
@@ -286,4 +286,29 @@ function bound_quantiles(qs::AbstractVector)
         error("quantiles out of [0,1] range")
     end
     [min(1,max(0,q)) for q = qs]
+end
+
+function rms{T<:Real}(s::Array{T,1})
+   sumsqs = zero(T)
+   for si in s
+       sumsqs += si * si
+   end
+   return sqrt(sumsqs/length(s))
+end
+
+function rms{T1<:Real, T2<:Real}(s1::Array{T1, 1}, s2::Array{T2, 1}, norma::Integer=0)
+    if length(s1) != length(s2)
+        error("Data series must have equal lengths")
+    end
+    dsi = zero(T1)
+    sumsqds = zero(T1)
+    for i = 1:length(s2)
+        dsi = s1[i] - s2[i]
+        sumsqds += dsi * dsi
+    end
+    if norma == 0
+        return sqrt(sumsqds/length(s2))
+    else
+        return sqrt(sumsqds/length(s2)) / (max(s2) - min(s2))
+    end
 end
