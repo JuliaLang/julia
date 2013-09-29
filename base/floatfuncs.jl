@@ -73,11 +73,11 @@ iround{T<:Integer,R<:Real}(::Type{T}, x::AbstractArray{R}) = reshape([ iround(T,
 
 function _signif_og(x, digits, base)
     if base == 10
-        10. ^ floor(log10(abs(x)) - digits + 1.)
+        oftype(x, 10. ^ floor(log10(abs(x)) - digits + 1.))
     elseif base == 2
-        2. ^ floor(log2(abs(x)) - digits + 1.)
+        oftype(x, 2. ^ floor(log2(abs(x)) - digits + 1.))
     else
-        float(base) ^ floor(log2(abs(x))/log2(base) - digits + 1.)
+        oftype(x, float(base) ^ floor(log2(abs(x))/log2(base) - digits + 1.))
     end
 end
 
@@ -85,11 +85,12 @@ function signif(x, digits::Integer, base::Integer=10)
     if digits < 0
         throw(DomainError())
     end
+    x = float(x)
     if x==0 || !isfinite(x)
         return x
     end
-    og = _signif_og(float(x), digits, base)
-    round(float(x)/og) * og
+    og = _signif_og(x, digits, base)
+    round(x/og) * og
 end
 
 for f in (:round, :ceil, :floor, :trunc)
