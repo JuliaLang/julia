@@ -849,6 +849,7 @@ export
     stdm,
     var,
     varm,
+    rms,
 
 # signal processing
     bfft!,
