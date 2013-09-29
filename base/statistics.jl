@@ -288,18 +288,24 @@ function bound_quantiles(qs::AbstractVector)
     [min(1,max(0,q)) for q = qs]
 end
 
+<<<<<<< HEAD
 function rms{T<:Real}(s::Array{T,1})
    sumsqs = zero(T)
    for si in s
        sumsqs += si * si
    end
    return sqrt(sumsqs/length(s))
+=======
+function rms{T<:Real}(s::Array{T, 1})
+    return sqrt(mean(.*(s, s)))
+>>>>>>> ef609e8ab887a8a60c4a0e917a07a464c3292910
 end
 
 function rms{T1<:Real, T2<:Real}(s1::Array{T1, 1}, s2::Array{T2, 1}, norma::Integer=0)
     if length(s1) != length(s2)
         error("Data series must have equal lengths")
     end
+<<<<<<< HEAD
     dsi = zero(T1)
     sumsqds = zero(T1)
     for i = 1:length(s2)
@@ -310,5 +316,12 @@ function rms{T1<:Real, T2<:Real}(s1::Array{T1, 1}, s2::Array{T2, 1}, norma::Inte
         return sqrt(sumsqds/length(s2))
     else
         return sqrt(sumsqds/length(s2)) / (max(s2) - min(s2))
+=======
+    ds = s1 - s2
+    if norma == 0
+        return sqrt(mean(.*(ds, ds)))
+    else
+        return sqrt(mean(.*(ds, ds))) / (max(s2) - min(s2))
+>>>>>>> ef609e8ab887a8a60c4a0e917a07a464c3292910
     end
 end
