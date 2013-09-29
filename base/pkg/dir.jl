@@ -16,9 +16,10 @@ function path()
     isdir(d) && return d
     return b
 end
-path(pkg::String...) = joinpath(path(),pkg...)
+path(pkg::String...) = normpath(path(),pkg...)
 
-function cd(f::Function, args...; dir::String=path())
+function cd(f::Function, args...; kws...)
+    dir = path()
     if !isdir(dir)
         if haskey(ENV,"JULIA_PKGDIR")
             error("package directory $dir doesn't exist; run Pkg.init() to create it.")
@@ -27,26 +28,26 @@ function cd(f::Function, args...; dir::String=path())
             init()
         end
     end
-    Base.cd(f,dir,args...)
+    Base.cd(()->f(args...; kws...), dir)
 end
 
 function init(meta::String=DEFAULT_META)
-    d = path()
-    if isdir(joinpath(d,"METADATA"))
-        info("Package directory $d is already initialized.")
-        Git.set_remote_url(meta, dir=joinpath(d,"METADATA"))
+    dir = path()
+    if isdir(joinpath(dir,"METADATA"))
+        info("Package directory $dir is already initialized.")
+        Git.set_remote_url(meta, dir=joinpath(dir,"METADATA"))
         return
     end
     try
-        mkpath(d)
-        Base.cd(d) do
+        mkpath(dir)
+        Base.cd(dir) do
             info("Cloning METADATA from $meta")
             run(`git clone -q -b devel $meta METADATA`)
             Git.set_remote_url(meta, dir="METADATA")
             run(`touch REQUIRE`)
         end
     catch e
-        run(`rm -rf $d`)
+        run(`rm -rf $dir`)
         rethrow(e)
     end
 end

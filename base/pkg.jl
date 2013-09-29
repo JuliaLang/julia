@@ -1,6 +1,6 @@
 module Pkg
 import Base.Git
-for file in split("dir types reqs cache read query resolve write scaffold entry")
+for file in split("dir types reqs cache read query resolve write generate entry")
     include("pkg/$file.jl")
 end
 using .Types
@@ -46,17 +46,6 @@ tag(pkg::String, ver::VersionNumber; commit::String="", msg::String="") =
 fixup() = cd(Entry.fixup)
 fixup(pkg::String) = cd(Entry.fixup,pkg)
 
-function scaffold(
-    pkg::String;
-    dir::String = "",
-    license::String = "",
-    years::Union(Int,String) = readchomp(`date +%Y`),
-    authors::String = Git.readchomp(`config --global --get user.name`),
-    github::Bool = Git.success(`config --global --get github.user`),
-    travis::Bool = Git.success(`config --global --get github.user`),
-)
-    dir = isempty(dir) ? dir : abspath(dir)
-    cd(Scaffold.scaffold,pkg,dir,license,years,authors,github,travis)
-end
+generate(pkg::String, license::String) = cd(Generate.package,pkg,license)
 
 end # module
