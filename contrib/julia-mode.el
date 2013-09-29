@@ -22,7 +22,7 @@
 (defvar julia-mode-syntax-table
   (let ((table (make-syntax-table)))
     (modify-syntax-entry ?_ "w" table)   ; underscores in words
-    (modify-syntax-entry ?@ "_" table)
+    (modify-syntax-entry ?@ "w" table)
     (modify-syntax-entry ?. "_" table)
     (modify-syntax-entry ?# "<" table)   ; #  single-line comment start
     (modify-syntax-entry ?\n ">" table)  ; \n single-line comment end
