@@ -206,7 +206,7 @@ One of Julia's goals is to provide an effective language for data analysis and s
 Noteworthy differences from Python
 ----------------------------------
 
-- Indexing of arays, strings, etc. in Julia is 1-based not 0-based.
+- Indexing of arrays, strings, etc. in Julia is 1-based not 0-based.
 - The last element of a list or array is indexed with ``end`` in Julia, not -1 as in Python.
 - Comprehensions in Julia do not (yet) have the optional if clause found in Python.
 - For, if, while, etc. blocks in Julia are terminated by ``end``; indentation is not significant.
