@@ -287,3 +287,19 @@ function bound_quantiles(qs::AbstractVector)
     end
     [min(1,max(0,q)) for q = qs]
 end
+
+function rms{T<:Real}(s::Array{T, 1})
+    return sqrt(mean(.*(s, s)))
+end
+
+function rms{T1<:Real, T2<:Real}(s1::Array{T1, 1}, s2::Array{T2, 1}, norma::Integer=0)
+    if length(s1) != length(s2)
+        error("Data series must have equal lengths")
+    end
+    ds = s1 - s2
+    if norma == 0
+        return sqrt(mean(.*(ds, ds)))
+    else
+        return sqrt(mean(.*(ds, ds))) / (max(s2) - min(s2))
+    end
+end
