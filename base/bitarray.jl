@@ -2009,7 +2009,8 @@ global permutedims
 function permutedims(B::Union(BitArray,StridedArray), perm)
     dimsB = size(B)
     ndimsB = length(dimsB)
-    dimsP = ntuple(ndimsB, i->dimsB[perm[i]])
+    ndimsB == length(perm) || error("permutedims: invalid dimensions")
+    dimsP = ntuple(ndimsB, i->dimsB[perm[i]])::typeof(dimsB)
     P = similar(B, dimsP)
     ranges = ntuple(ndimsB, i->(1:dimsP[i]))
     while length(stridenames) < ndimsB
