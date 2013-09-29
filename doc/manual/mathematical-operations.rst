@@ -335,26 +335,26 @@ Function          Description
 Powers, logs and roots
 ~~~~~~~~~~~~~~~~~~~~~~
 
-============== ==============================================================================
-Function       Description
-============== ==============================================================================
-``sqrt(x)``    the square root of ``x``
-``cbrt(x)``    the cube root of ``x``
-``hypot(x,y)`` hypotenuse of right-angled triangle with other sides of length ``x`` and ``y``
-``exp(x)``     the natural exponential function at ``x``
-``expm1(x)``   accurate ``exp(x)-1`` for ``x`` near zero
-``ldexp(x,n)`` ``x*2^n`` computed efficiently for integer values of ``n``
-``log(x)``     the natural logarithm of ``x``
-``log(b,x)``   the base ``b`` logarithm of ``x``
-``log2(x)``    the base 2 logarithm of ``x``
-``log10(x)``   the base 10 logarithm of ``x``
-``log1p(x)``   accurate ``log(1+x)`` for ``x`` near zero
-``logb(x)``    returns the binary exponent of ``x``
-``erf(x)``     the `error function <http://en.wikipedia.org/wiki/Error_function>`_ at ``x``
-``erfc(x)``    the complementary error function ``1-erf(x)``
-``gamma(x)``   the `gamma function <http://en.wikipedia.org/wiki/Gamma_function>`_ at ``x``
-``lgamma(x)``  accurate ``log(gamma(x))`` for large ``x``
-============== ==============================================================================
+================ ==============================================================================
+Function         Description
+================ ==============================================================================
+``sqrt(x)``      the square root of ``x``
+``cbrt(x)``      the cube root of ``x``
+``hypot(x,y)``   hypotenuse of right-angled triangle with other sides of length ``x`` and ``y``
+``exp(x)``       the natural exponential function at ``x``
+``expm1(x)``     accurate ``exp(x)-1`` for ``x`` near zero
+``ldexp(x,n)``   ``x*2^n`` computed efficiently for integer values of ``n``
+``log(x)``       the natural logarithm of ``x``
+``log(b,x)``     the base ``b`` logarithm of ``x``
+``log2(x)``      the base 2 logarithm of ``x``
+``log10(x)``     the base 10 logarithm of ``x``
+``log1p(x)``     accurate ``log(1+x)`` for ``x`` near zero
+``exponent(x)``  returns the binary exponent of ``x``
+``erf(x)``       the `error function <http://en.wikipedia.org/wiki/Error_function>`_ at ``x``
+``erfc(x)``      the complementary error function ``1-erf(x)``
+``gamma(x)``     the `gamma function <http://en.wikipedia.org/wiki/Gamma_function>`_ at ``x``
+``lgamma(x)``    accurate ``log(gamma(x))`` for large ``x``
+================ ==============================================================================
 
 For an overview of why functions like ``hypot``, ``expm1``, ``log1p``,
 and ``erfc`` are necessary and useful, see John D. Cook's excellent pair
