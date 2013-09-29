@@ -459,6 +459,14 @@ DLLEXPORT int jl_fs_sendfile(int src_fd, int dst_fd,
     return ret;
 }
 
+DLLEXPORT int jl_fs_symlink(char *path, char *new_path, int flags)
+{
+    uv_fs_t req;
+    int ret = uv_fs_symlink(jl_io_loop, &req, path, new_path, flags, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
 DLLEXPORT int jl_fs_write(int handle, char *data, size_t len, size_t offset)
 {
     uv_fs_t req;
