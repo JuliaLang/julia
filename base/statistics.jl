@@ -310,4 +310,5 @@ function rms{T1<:Real, T2<:Real}(s1::Array{T1, 1}, s2::Array{T2, 1}, norma::Inte
         return sqrt(sumsqds/length(s2))
     else
         return sqrt(sumsqds/length(s2)) / (max(s2) - min(s2))
+    end
 end
