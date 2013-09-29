@@ -361,7 +361,7 @@ global getindex
 function getindex(A::Array, I::Union(Real,AbstractVector)...)
     checkbounds(A, I...)
     I = indices(I)
-    X = similar(A, index_shape(I...))
+    X = similar(A, eltype(A), index_shape(I...))
 
     if is(getindex_cache,nothing)
         getindex_cache = Dict()
