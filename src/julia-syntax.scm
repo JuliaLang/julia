@@ -697,7 +697,7 @@
 			   `(function (call ,(if (eq? name Tname) iname name) ,@sig)
 				      ,(ctor-body body)))
 	   (pattern-lambda (= (call (curly name . p) . sig) body)
-			   `(= (curly ,(if (eq? name Tname) iname name) ,@p)
+			   `(= (call (curly ,(if (eq? name Tname) iname name) ,@p) ,@sig)
 			       ,(ctor-body body)))
 	   (pattern-lambda (= (call name . sig) body)
 			   `(= (call ,(if (eq? name Tname) iname name) ,@sig)
