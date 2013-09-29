@@ -213,6 +213,8 @@ const typeof_tfunc = function (t)
         else
             Type{typeof(t)}
         end
+    elseif isvarargtype(t)
+        Vararg{typeof_tfunc(t.parameters[1])}
     elseif isa(t,DataType)
         if isleaftype(t)
             Type{t}
