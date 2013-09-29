@@ -1679,12 +1679,12 @@ Julia environments (such as the IPython-based IJulia notebook).
    dispatch mechanisms in determining how to display objects of any
    given type.
 
-.. function:: mimewritable(mime, T::Type)
+.. function:: mimewritable(mime, x)
 
-   Returns a boolean value indicating whether or not objects of type
-   ``T`` can be written as the given ``mime`` type.  (By default, this
+   Returns a boolean value indicating whether or not the object ``x``
+   can be written as the given ``mime`` type.  (By default, this
    is determined automatically by the existence of the corresponding
-   ``writemime`` function.)
+   ``writemime`` function for ``typeof(x)``.)
 
 .. function:: reprmime(mime, x)
 
