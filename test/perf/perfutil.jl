@@ -44,7 +44,6 @@ function submit_to_codespeed(vals,name,desc,unit,test_group,lessisbetter=true)
 
     println( "$name: $(mean(vals))" )
     ret = Curl.post( "http://$codespeed_host/result/add/json/", {:json => json([csdata])} )
-    println( ret )
     if( !ismatch(r".*202 ACCEPTED.*", ret.headers[1][1]) )
         error("Error submitting $name, dumping headers and text: $(ret.headers[1])\n$(ret.text)\n\n")
         return false
