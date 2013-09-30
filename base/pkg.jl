@@ -9,9 +9,9 @@ const dir = Dir.path
 
 init(meta::String=Dir.DEFAULT_META) = Dir.init(meta)
 
-rm(pkg::String) = cd(Entry.edit,Reqs.rm,pkg)
-add(pkg::String, vers::VersionSet) = cd(Entry.edit,Reqs.add,pkg,vers)
-add(pkg::String, vers::VersionNumber...) = add(pkg, VersionSet(vers...))
+rm(pkg::String) = cd(Entry.rm,pkg)
+add(pkg::String, vers::VersionSet) = cd(Entry.add,pkg,vers)
+add(pkg::String, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 available() = cd(Entry.available)
 available(pkg::String) = cd(Entry.available,pkg)
