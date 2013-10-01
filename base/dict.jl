@@ -271,6 +271,8 @@ end
 
 hash(s::String) = hash(bytestring(s))
 
+hash(x::Expr) = bitmix(hash(x.head),hash(x.args)+43)
+
 
 # dict
 
