@@ -3486,9 +3486,13 @@ extern "C" void jl_init_codegen(void)
 #ifdef __APPLE__
     options.JITExceptionHandling = 1;
 #endif
+    // Temporarily disable Haswell BMI2 features due to LLVM bug.
+    const char *mattr[] = {"-bmi2", "-avx2"};
+    std::vector<std::string> attrvec (mattr, mattr+2);
     jl_ExecutionEngine = EngineBuilder(jl_Module)
         .setEngineKind(EngineKind::JIT)
         .setTargetOptions(options)
+        .setMAttrs(attrvec)
         .create();
 #endif // LLVM VERSION
     
