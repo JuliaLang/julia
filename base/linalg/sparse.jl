@@ -8,19 +8,21 @@ function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{Tv
     return A * B
 end
 
+(*){TvA,TiA}(A::SparseMatrixCSC{TvA,TiA}, X::BitArray{1}) = invoke(*, (SparseMatrixCSC, AbstractVector), A, X)
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
-function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Vector{T2})
+function (*){TvA,TiA,TX}(A::SparseMatrixCSC{TvA,TiA}, X::AbstractVector{TX})
     if A.n != length(X); error("mismatched dimensions"); end
-    Y = zeros(promote_type(T1,T2), A.m)
+    Y = zeros(promote_type(TvA,TX), A.m)
     for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
         Y[A.rowval[k]] += A.nzval[k] * X[col]
     end
     return Y
 end
 
+(*)(X::BitArray{1}, A::SparseMatrixCSC) = invoke(*, (AbstractVector, SparseMatrixCSC), X, A)
 # In vector-matrix multiplication, the correct orientation of the vector is assumed.
 # XXX: this is wrong (i.e. not what Arrays would do)!!
-function (*){T1,T2}(X::Vector{T1}, A::SparseMatrixCSC{T2})
+function (*){T1,T2}(X::AbstractVector{T1}, A::SparseMatrixCSC{T2})
     if A.m != length(X); error("mismatched dimensions"); end
     Y = zeros(promote_type(T1,T2), A.n)
     for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
@@ -29,10 +31,11 @@ function (*){T1,T2}(X::Vector{T1}, A::SparseMatrixCSC{T2})
     return Y
 end
 
-function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Matrix{T2})
+(*){TvA,TiA}(A::SparseMatrixCSC{TvA,TiA}, X::BitArray{2}) = invoke(*, (SparseMatrixCSC, AbstractMatrix), A, X)
+function (*){TvA,TiA,TX}(A::SparseMatrixCSC{TvA,TiA}, X::AbstractMatrix{TX})
     mX, nX = size(X)
     if A.n != mX; error("mismatched dimensions"); end
-    Y = zeros(promote_type(T1,T2), A.m, nX)
+    Y = zeros(promote_type(TvA,TX), A.m, nX)
     for multivec_col = 1:nX
         for col = 1 : A.n
             for k = A.colptr[col] : (A.colptr[col+1]-1)
@@ -43,10 +46,11 @@ function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Matrix{T2})
     return Y
 end
 
-function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
+(*){TvA,TiA}(X::BitArray{2}, A::SparseMatrixCSC{TvA,TiA}) = invoke(*, (AbstractMatrix, SparseMatrixCSC), X, A)
+function (*){TX,TvA,TiA}(X::AbstractMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
     mX, nX = size(X)
     if nX != A.m; error("mismatched dimensions"); end
-    Y = zeros(promote_type(T1,T2), mX, A.n)
+    Y = zeros(promote_type(TX,TvA), mX, A.n)
     for multivec_row = 1:mX
         for col = 1 : A.n
             for k = A.colptr[col] : (A.colptr[col+1]-1)
