@@ -30,3 +30,5 @@ for T=types, S=types, x=vals
 end
 
 @test hash(RopeString("1","2")) == hash("12")
+@test hash(:(X.x)) == hash(:(X.x))
+@test hash(:(X.x)) != hash(:(X.y))
