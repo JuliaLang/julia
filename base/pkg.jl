@@ -43,8 +43,8 @@ tag(pkg::String, sym::Symbol=:bump; commit::String="", msg::String="") =
 tag(pkg::String, ver::VersionNumber; commit::String="", msg::String="") =
     cd(Entry.tag,pkg,ver,commit,msg)
 
-fixup() = cd(Entry.fixup)
-fixup(pkg::String) = cd(Entry.fixup,pkg)
+fixup() = cd(Entry._fixup)
+fixup(pkg::String) = cd(Entry._fixup,pkg)
 
 generate(pkg::String, license::String) = cd(Generate.package,pkg,license)
 
