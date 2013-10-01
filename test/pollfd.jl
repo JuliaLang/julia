@@ -4,7 +4,7 @@
 
 # This script does the following
 # Sets up n unix pipes
-# For the odd pipes, a byte is written to the write end at times defined in intvls
+# For the odd pipes, a byte is written to the write end at intervals specified in intvls
 # Nothing is written into the even numbered pipes
 # Odd numbered pipes are tested for reads
 # Even numbered pipes are tested for timeouts
@@ -25,7 +25,7 @@ function pfd_tst_reads(idx)
         tic()
         evt = poll_fd(RawFD(pipe_fds[idx][1]), intvl * 10.0; readable=true, writable=true)
         t_elapsed = toq()
-        @test isreadable(evt) && !iswritable(evt) && !(evt.timedout)
+        @test evt.readable && !(evt.writable) && !(evt.timedout)
 
         # ignore the first one, everyone is just getting setup and synchronized
         if i > 1
@@ -46,7 +46,7 @@ function pfd_tst_timeout(idx)
     for intvl in intvls
         tic()
         evt = poll_fd(RawFD(pipe_fds[idx][1]), intvl; readable=true, writable=true)
-        @test !isreadable(evt) && !iswritable(evt) && evt.timedout
+        @test !(evt.readable) && !(evt.writable) && evt.timedout
         t_elapsed = toq()
 
         @test (intvl <= t_elapsed) && (t_elapsed <= (intvl + 0.2))
@@ -69,7 +69,7 @@ end
         # tickle only the odd ones, but test for writablity for everyone
         for idx in 1:n
             evt = poll_fd(RawFD(pipe_fds[idx][2]), 0.0; readable=true, writable=true)
-            @test !isreadable(evt) && iswritable(evt) && !(evt.timedout)
+            @test !(evt.readable) && evt.writable && !(evt.timedout)
 
             if isodd(idx)
                 @test 1 == ccall(:write, Csize_t, (Cint, Ptr{Uint8},Csize_t), pipe_fds[idx][2], bytestring("A"), 1)
