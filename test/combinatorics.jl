@@ -1,7 +1,11 @@
 @test factorial(7) == 5040
 @test factorial(7,3) == 7*6*5*4
 @test binomial(5,3) == 10
-@test isperm(shuffle([1:1000]))
+p = shuffle([1:1000])
+@test isperm(p)
+@test all(invperm(invperm(p)) .== p)
+push!(p, 1)
+@test !isperm(p)
 a = randcycle(10)
 @test ipermute!(permute!([1:10], a),a) == [1:10]
 @test collect(combinations("abc",2)) == ["ab","ac","bc"]
