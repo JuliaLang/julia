@@ -800,8 +800,7 @@ function accept(server::UVServer, client::AsyncStream)
     if server.status != StatusActive 
         error("accept: Server not connected. Did you `listen`?")
     end
-    @assert client.status == StatusInit
-    while true
+    while isopen(server)
         err = accept_nonblock(server,client)
         if err == 0
             return client
@@ -810,6 +809,7 @@ function accept(server::UVServer, client::AsyncStream)
         end
         wait(server.connectnotify)
     end
+    error("accept: Server was closed while attempting to accept a client.")
 end
 
 const BACKLOG_DEFAULT = 511
