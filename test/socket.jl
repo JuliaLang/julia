@@ -63,6 +63,17 @@ catch e
     @test typeof(e) == Base.UVError
 end
 
+server = listen(2134)
+@async @test_throws accept(server);
+sleep(0.1)
+close(server)
+
+server = listen(2134)
+@async connect("localhost",2134)
+s1 = accept(server)
+@test_throws accept(server,s_1)
+close(server)
+
 try 
     connect(".invalid",80)
 catch e
