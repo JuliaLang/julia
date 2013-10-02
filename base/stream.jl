@@ -784,6 +784,10 @@ show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrornam
 ## server functions ##
 
 function accept_nonblock(server::PipeServer,client::Pipe)
+    if client.status != StatusInit
+        error(client.status == StatusUninit ? "accept: client is not initialized" : 
+                "accept: client is already in use or has been closed.")
+    end
     err = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server.handle,client.handle)
     if err == 0
         client.status = StatusOpen
