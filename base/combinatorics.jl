@@ -125,9 +125,13 @@ function invperm(a::AbstractVector)
     return b
 end
 
-function isperm(a::AbstractVector)
-    b = _invperm(a)
-    return isempty(b) || b[1]!=0
+function isperm(A::AbstractVector)
+    n = length(A)
+    used = falses(n)
+    for a in A
+        (0 < a <= n) && (used[a] $= true) || return false
+    end
+    true
 end
 
 function permute!!(a, p::AbstractVector{Int})
