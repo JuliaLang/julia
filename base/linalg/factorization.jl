@@ -142,7 +142,7 @@ lufact(x::Number) = LU(fill(x, 1, 1), [1], x == 0 ? 1 : 0)
 
 function lu(A::Union(Number, AbstractMatrix))
     F = lufact(A)
-    return (F[:L], F[:U], F[:P])
+    return (F[:L], F[:U], F[:p])
 end
 
 size(A::LU) = size(A.factors)
