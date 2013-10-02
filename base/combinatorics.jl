@@ -102,27 +102,16 @@ function nthperm!(a::AbstractVector, k::Integer)
 end
 nthperm(a::AbstractVector, k::Integer) = nthperm!(copy(a),k)
 
-# invert a permutation
-function _invperm(a::AbstractVector)
+function invperm(a::AbstractVector)
     b = zero(a) # similar vector of zeros
     n = length(a)
     for i = 1:n
         j = a[i]
-        if !(1 <= j <= n) || b[j] != 0
-            b[1] = 0
-            break
-        end
+        ((1 <= j <= n) && b[j] == 0) ||
+            error("invperm: input is not a permutation")
         b[j] = i
     end
-    return b
-end
-
-function invperm(a::AbstractVector)
-    b = _invperm(a)
-    if !isempty(b) && b[1] == 0
-        error("invperm: input is not a permutation")
-    end
-    return b
+    b
 end
 
 function isperm(A::AbstractVector)
