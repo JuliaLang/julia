@@ -1068,7 +1068,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
     JL_GC_POP();
 
     int argStart = ctx->argDepth;
-    Value *arg1 = boxed(emit_expr(expr, ctx),ctx);
+    Value *arg1 = boxed(emit_expr(expr, ctx),ctx,expr_type(expr,ctx));
     // TODO: generic getfield func with more efficient calling convention
     make_gcroot(arg1, ctx);
     Value *arg2 = literal_pointer_val((jl_value_t*)name);
@@ -2604,7 +2604,7 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
 }
 
 // generate a julia-callable function that calls f (AKA lam)
-static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f)
+static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Function *f)
 {
     Function *w = Function::Create(jl_func_sig, Function::ExternalLinkage,
                                    f->getName(), jl_Module);
@@ -2658,7 +2658,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f)
     // wrappers can be reused for different functions of the same type.
     Value *r = builder.CreateCall(f, ArrayRef<Value*>(&args[0], nfargs));
     if (r->getType() != jl_pvalue_llvmt) {
-        r = boxed(r, &ctx, jl_ast_rettype(lam, lam->ast));
+        r = boxed(r, &ctx, jl_ast_rettype(lam, (jl_value_t*)ast));
     }
 
     // gc pop. Usually this is done when we encounter the return statement
@@ -2833,7 +2833,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             lam->cFunctionObject = (void*)f;
         }
         if (lam->functionObject == NULL) {
-            lam->functionObject = (void*)gen_jlcall_wrapper(lam, f);
+            lam->functionObject = (void*)gen_jlcall_wrapper(lam, ast, f);
         }
     }
     else {

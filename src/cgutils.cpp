@@ -996,7 +996,7 @@ static jl_value_t *static_void_instance(jl_value_t *jt)
             jl_new_struct_uninit(jb);
         assert(jb->instance != NULL);
         return (jl_value_t*)jb->instance;
-    } else if (jt == jl_typeof(jl_nothing))
+    } else if (jt == jl_typeof(jl_nothing) || jt == jl_bottom_type)
     {
         return (jl_value_t*)jl_nothing;
     }
@@ -1083,14 +1083,10 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
     if (t == jl_pvalue_llvmt)
         return v;
     if (t == T_void) {
-        if (jl_is_tuple(jt)) {
-            jl_value_t *s = static_void_instance(jt);
-            if(jl_is_tuple(jt) && jl_tuple_len(jt) > 0)
-                jl_add_linfo_root(ctx->linfo, s);
-            return literal_pointer_val(s);
-        } else {
-            return literal_pointer_val(jl_nothing);
-        }
+        jl_value_t *s = static_void_instance(jt);
+        if(jl_is_tuple(jt) && jl_tuple_len(jt) > 0)
+            jl_add_linfo_root(ctx->linfo, s);
+        return literal_pointer_val(s);
     }
     if (t == T_int1) return julia_bool(v);
     if (jt == NULL || jl_is_uniontype(jt) || jl_is_abstracttype(jt))
