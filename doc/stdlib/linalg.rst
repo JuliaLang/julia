@@ -43,9 +43,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``factorize!`` is the same as :func:`factorize`, but saves space by overwriting the input A, instead of creating a copy.
 
-.. function:: lu(A) -> L, U, P
+.. function:: lu(A) -> L, U, p
 
-   Compute the LU factorization of ``A``, such that ``P*A = L*U``.
+   Compute the LU factorization of ``A``, such that ``A[p,:] = L*U``.
 
 .. function:: lufact(A) -> LU
 
