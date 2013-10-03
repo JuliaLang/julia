@@ -298,7 +298,7 @@ end
 function write_tag_metadata(pkg::String, ver::VersionNumber, commit::String)
     info("Writing METADATA for $pkg v$ver")
     cmd = Git.cmd(`cat-file blob $commit:REQUIRE`, dir=pkg)
-    reqs = success(cmd) ? Reqs.parse(cmd) : Requires()
+    reqs = success(cmd) ? Reqs.read(cmd) : Reqs.Line[]
     cd("METADATA") do
         d = joinpath(pkg,"versions",string(ver))
         mkpath(d)
