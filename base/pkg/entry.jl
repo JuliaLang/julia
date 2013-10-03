@@ -10,7 +10,7 @@ function edit(f::Function, pkg::String, args...)
     avail = Read.available()
     !haskey(avail,pkg) && !haskey(reqs,pkg) && return false
     r_ = f(r,pkg,args...)
-    r_ == r && return info("Nothing to be done.")
+    r_ == r && return false
     reqs_ = Reqs.parse(r_)
     reqs_ != reqs && _resolve(reqs_,avail)
     Reqs.write("REQUIRE",r_)
