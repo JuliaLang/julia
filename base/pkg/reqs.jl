@@ -37,11 +37,25 @@ end
 
 # general machinery for parsing REQUIRE files
 
+function parse_line(line::String)
+    if ismatch(r"^\s*(?:#|$)", line)
+        return Comment(line)
+    elseif beginswith(line, "@")
+        os,req = match(r"@(windows|osx|linux)\s*(.*)", line).captures
+        @windows ? (if (os == "windows") return Requirement(req) end) : nothing
+        @osx     ? (if (os == "osx")     return Requirement(req) end) : nothing
+        @linux   ? (if (os == "linux")   return Requirement(req) end) : nothing
+        return Comment(line)
+    else
+        return Requirement(line)
+    end
+end
+
 function read(readable::Union(IO,Base.AbstractCmd))
     lines = Line[]
     for line in eachline(readable)
         line = chomp(line)
-        push!(lines, ismatch(r"^\s*(?:#|$)", line) ? Comment(line) : Requirement(line))
+        push!(lines, parse_line(line))
     end
     return lines
 end
