@@ -229,6 +229,7 @@ function next(p::Permutations, s)
         # special case to generate 1 result for len==0
         return (p.a,[1])
     end
+    s = copy(s)
     perm = p.a[s]
     k = length(s)-1
     while k > 0 && s[k] > s[k+1];  k -= 1;  end
