@@ -1014,3 +1014,15 @@ end
 type _0_test_ctor_syntax_
     _0_test_ctor_syntax_{T<:String}(files::Vector{T},step) = 0
 end
+
+# issue #4413
+type A4413 end
+type B4413 end
+type C4413 end
+f4413(::Union(A4413, B4413, C4413)) = "ABC"
+f4413(::Union(A4413, B4413)) = "AB"
+g4413(::Union(A4413, C4413)) = "AC"
+g4413(::Union(A4413, B4413, C4413)) = "ABC"
+
+@test f4413(A4413()) == "AB" && f4413(B4413()) == "AB"
+@test g4413(A4413()) == "AC" && g4413(C4413()) == "AC"
