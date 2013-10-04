@@ -14,4 +14,10 @@ let
     serialize(f, a)
     seek(f, 0)
     @test deserialize(f) == a
+
+    # issue #4414
+    seek(f,0)
+    serialize(f, :β)
+    seek(f,0)
+    @test deserialize(f) === :β
 end

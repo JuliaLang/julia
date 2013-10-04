@@ -10,7 +10,7 @@ function edit(f::Function, pkg::String, args...)
     avail = Read.available()
     !haskey(avail,pkg) && !haskey(reqs,pkg) && return false
     r_ = f(r,pkg,args...)
-    r_ == r && return info("Nothing to be done.")
+    r_ == r && return false
     reqs_ = Reqs.parse(r_)
     reqs_ != reqs && _resolve(reqs_,avail)
     Reqs.write("REQUIRE",r_)
@@ -298,7 +298,7 @@ end
 function write_tag_metadata(pkg::String, ver::VersionNumber, commit::String)
     info("Writing METADATA for $pkg v$ver")
     cmd = Git.cmd(`cat-file blob $commit:REQUIRE`, dir=pkg)
-    reqs = success(cmd) ? Reqs.parse(cmd) : Requires()
+    reqs = success(cmd) ? Reqs.read(cmd) : Reqs.Line[]
     cd("METADATA") do
         d = joinpath(pkg,"versions",string(ver))
         mkpath(d)

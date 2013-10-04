@@ -197,6 +197,7 @@ function next(c::Combinations, s)
         # special case to generate 1 result for t==0
         return (comb,[length(c.a)+2])
     end
+    s = copy(s)
     for i = length(s):-1:1
         s[i] += 1
         if s[i] > (length(c.a) - (length(s)-i))
@@ -229,6 +230,7 @@ function next(p::Permutations, s)
         # special case to generate 1 result for len==0
         return (p.a,[1])
     end
+    s = copy(s)
     perm = p.a[s]
     k = length(s)-1
     while k > 0 && s[k] > s[k+1];  k -= 1;  end

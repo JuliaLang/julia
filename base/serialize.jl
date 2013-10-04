@@ -80,13 +80,13 @@ function serialize(s, x::Symbol)
         return write_as_tag(s, x)
     end
     name = string(x)
-    ln = length(name)
+    ln = sizeof(name)
     if ln <= 255
         writetag(s, Symbol)
         write(s, uint8(ln))
     else
         writetag(s, LongSymbol)
-        write(s, int32(length(name)))
+        write(s, int32(ln))
     end
     write(s, name)
 end
