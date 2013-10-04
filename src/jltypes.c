@@ -1923,6 +1923,23 @@ static int tuple_all_subtype(jl_tuple_t *t, jl_value_t *super,
     return 1;
 }
 
+static int partially_morespecific(jl_value_t *a, jl_value_t *b, int invariant)
+{
+    if (jl_is_uniontype(b)) {
+        jl_tuple_t *bp = ((jl_uniontype_t*)b)->types;
+        size_t i, l=jl_tuple_len(bp);
+        for(i=0; i < l; i++) {
+            jl_value_t *bi = jl_tupleref(bp,i);
+            if (jl_subtype_le(a, bi, 0, 1, invariant) &&
+                !jl_subtype_le(bi, a, 0, 1, invariant)) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+    return jl_subtype_le(a, b, 0, 1, invariant);
+}
+
 /*
   ta specifies whether typeof() should be implicitly applied to a.
   this is used for tuple types to avoid allocating them explicitly.
@@ -1944,7 +1961,7 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
         // None <: None
         return 1;
     }
-    size_t i, j;
+    size_t i;
     if (jl_is_tuple(a)) {
         if ((jl_tuple_t*)b == jl_tuple_type) return 1;
         if (jl_is_datatype(b) &&
@@ -1963,19 +1980,25 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
 
     if (!ta && jl_is_uniontype(a)) {
         jl_tuple_t *ap = ((jl_uniontype_t*)a)->types;
+        size_t l_ap = jl_tuple_len(ap);
         if (morespecific) {
+            if (jl_subtype_le(b, a, 0, 0, invariant)) {
+                // fixes issue #4413
+                if (!jl_subtype_le(a, b, 0, 0, invariant))
+                    return 0;
+            }
+            else if (jl_subtype_le(a, b, 0, 0, invariant)) {
+                return 1;
+            }
             // Union a is more specific than b if some element of a is
             // more specific than b, and b is not more specific than any
             // element of a.
-            for(i=0; i < jl_tuple_len(ap); i++) {
-                if (jl_subtype_le(jl_tupleref(ap,i), b, 0, 1, invariant) &&
-                    !jl_subtype_le(b, jl_tupleref(ap,i), 0, 1, invariant)) {
-                    for(j=0; j < jl_tuple_len(ap); j++) {
-                        if (jl_subtype_le(b, jl_tupleref(ap,j), 0, 1, invariant) &&
-                            !jl_subtype_le(jl_tupleref(ap,j), b, 0, 1, invariant)) {
-                            return 0;
-                        }
-                    }
+            for(i=0; i < l_ap; i++) {
+                jl_value_t *ai = jl_tupleref(ap,i);
+                if (partially_morespecific(ai, b, invariant) &&
+                    !jl_subtype_le(b, ai, 0, 1, invariant)) {
+                    if (partially_morespecific(b, a, invariant))
+                        return 0;
                     return 1;
                 }
             }
@@ -1986,7 +2009,7 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
             if (invariant && !jl_is_typevar(b)) {
                 return jl_subtype_le(a,b,0,0,0) && jl_subtype_le(b,a,0,0,0);
             }
-            for(i=0; i < jl_tuple_len(ap); i++) {
+            for(i=0; i < l_ap; i++) {
                 if (!jl_subtype_le(jl_tupleref(ap,i), b, 0, morespecific,
                                    invariant))
                     return 0;
