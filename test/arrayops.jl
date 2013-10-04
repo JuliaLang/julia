@@ -103,6 +103,8 @@ sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
 @test strides(sA) == (1,3,15)
+@test stride(sA,3) == 15
+@test stride(sA,4) == 120
 sA = sub(A, 1:3, 1:5, 5)
 @test Base.parentdims(sA) == 1:2
 sA[1:3,1:5] = -2

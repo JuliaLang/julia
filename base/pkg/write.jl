@@ -39,7 +39,6 @@ end
 
 function remove(pkg::String)
     isdir(".trash") || mkdir(".trash")
-    # this shouldn't happen in the course of normal operation:
     ispath(".trash/$pkg") && run(`rm -rf .trash/$pkg`)
     run(`mv $pkg .trash/`)
 end

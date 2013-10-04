@@ -12,18 +12,20 @@ immutable Requirement <: Line
     content::String
     package::String
     versions::VersionSet
+    system::String
 
     function Requirement(content::String)
         fields = split(replace(content, r"#.*$", ""))
+        system = fields[1][1] == '@' ? shift!(fields)[2:end] : ""
         package = shift!(fields)
         all(field->ismatch(Base.VERSION_REGEX, field), fields) ||
             error("invalid requires entry for $package: $fields")
         versions = [ convert(VersionNumber, field) for field in fields ]
         issorted(versions) || error("invalid requires entry for $package: $versions")
-        new(content, package, VersionSet(versions))
+        new(content, package, VersionSet(versions), system)
     end
-    function Requirement(package::String, versions::VersionSet)
-        content = package
+    function Requirement(package::String, versions::VersionSet, system::String="")
+        content = isempty(system) ? package : "$system $package"
         if versions != VersionSet()
             for ival in versions.intervals
                 (content *= " $(ival.lower)")
@@ -31,7 +33,7 @@ immutable Requirement <: Line
                 (content *= " $(ival.upper)")
             end
         end
-        new(content, package, versions)
+        new(content, package, versions, system)
     end
 end
 
@@ -63,6 +65,14 @@ function parse(lines::Vector{Line})
     reqs = Requires()
     for line in lines
         if isa(line,Requirement)
+            if !isempty(line.system)
+                applies = false
+                @windows_only applies |= (line.system == "windows")
+                @unix_only    applies |= (line.system == "unix")
+                @osx_only     applies |= (line.system == "osx")
+                @linux_only   applies |= (line.system == "linux")
+                applies || continue
+            end
             reqs[line.package] = haskey(reqs, line.package) ?
                 intersect(reqs[line.package], line.versions) : line.versions
         end

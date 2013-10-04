@@ -4,20 +4,31 @@ using ..Types
 import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write
 import Base: Git, thispatch, nextpatch, nextminor, nextmajor, check_new_version
 
-function edit(f::Function, pkg, args...)
+function edit(f::Function, pkg::String, args...)
     r = Reqs.read("REQUIRE")
     reqs = Reqs.parse(r)
     avail = Read.available()
-    if !haskey(avail,pkg) && !haskey(reqs,pkg)
-        error("unknown package $pkg")
-    end
+    !haskey(avail,pkg) && !haskey(reqs,pkg) && return false
     r_ = f(r,pkg,args...)
-    r_ == r && return info("Nothing to be done.")
+    r_ == r && return false
     reqs_ = Reqs.parse(r_)
     reqs_ != reqs && _resolve(reqs_,avail)
     Reqs.write("REQUIRE",r_)
     info("REQUIRE updated.")
-    #4082 TODO: some call to fixup should go here
+    return true
+end
+
+function add(pkg::String, vers::VersionSet)
+    edit(Reqs.add,pkg,vers) && return
+    ispath(pkg) || error("unknown package $pkg")
+    info("Nothing to be done.")
+end
+
+function rm(pkg::String)
+    edit(Reqs.rm,pkg) && return
+    ispath(pkg) || return info("Nothing to be done.")
+    info("Removing $pkg (unregistered)")
+    Write.remove(pkg)
 end
 
 available() = sort!([keys(Read.available())...], by=lowercase)
@@ -287,7 +298,7 @@ end
 function write_tag_metadata(pkg::String, ver::VersionNumber, commit::String)
     info("Writing METADATA for $pkg v$ver")
     cmd = Git.cmd(`cat-file blob $commit:REQUIRE`, dir=pkg)
-    reqs = success(cmd) ? Reqs.parse(cmd) : Requires()
+    reqs = success(cmd) ? Reqs.read(cmd) : Reqs.Line[]
     cd("METADATA") do
         d = joinpath(pkg,"versions",string(ver))
         mkpath(d)

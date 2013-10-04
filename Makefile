@@ -13,7 +13,7 @@ VERSDIR = v`cut -d. -f1-2 < VERSION`
 all: default
 default: release
 
-DIRS = $(BUILD)/bin $(BUILD)/lib $(BUILD)/share/julia $(BUILD)/share/julia/man/man1
+DIRS = $(BUILD)/bin $(BUILD)/etc/julia $(BUILD)/lib $(BUILD)/share/julia $(BUILD)/share/julia/man/man1
 ifneq ($(JL_LIBDIR),bin)
 ifneq ($(JL_LIBDIR),lib)
 DIRS += $(BUILD)/$(JL_LIBDIR)
@@ -30,7 +30,7 @@ endif
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,base test doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
 
-debug release: | $(DIRS) $(BUILD)/share/julia/base $(BUILD)/share/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples
+debug release: | $(DIRS) $(BUILD)/share/julia/base $(BUILD)/share/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples $(BUILD)/etc/julia/juliarc.jl
 	@$(MAKE) $(QUIET_MAKE) julia-$@
 	@export JL_PRIVATE_LIBDIR=$(JL_PRIVATE_LIBDIR) && \
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(BUILD)/lib:$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji
@@ -59,6 +59,9 @@ $(BUILD)/share/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/share/julia
 
 $(BUILD)/share/man/man1/julia.1: doc/man/julia.1 | $(BUILD)/share/julia
 	@mkdir -p $(BUILD)/share/man/man1
+	@cp $< $@
+
+$(BUILD)/etc/julia/juliarc.jl: etc/juliarc.jl | $(BUILD)/etc/julia
 	@cp $< $@
 
 # use sys.ji if it exists, otherwise run two stages
@@ -156,7 +159,7 @@ PREFIX ?= julia-$(JULIA_COMMIT)
 install:
 	@$(MAKE) $(QUIET_MAKE) debug
 	@$(MAKE) $(QUIET_MAKE) release
-	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "share/man/man1" "include/julia" "share/julia/site/"$(VERSDIR) ; do \
+	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "share/man/man1" "include/julia" "share/julia/site/"$(VERSDIR) "etc/julia" ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
 	cp -a $(BUILD)/bin $(PREFIX)
@@ -187,6 +190,8 @@ ifeq ($(OS), WINNT)
 endif
 	# Copy in beautiful new man page!
 	cp $(BUILD)/share/man/man1/julia.1 $(PREFIX)/share/man/man1/
+	# Copy in etc/julia directory for things like juliarc.jl
+	cp -R $(BUILD)/etc/julia $(PREFIX)/etc/
 
 
 dist:
@@ -205,6 +210,13 @@ endif
 ifeq ($(OS), Darwin)
 	-./contrib/mac/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
+	# Copy in juliarc.jl files per-platform for binary distributions as well
+ifeq ($(OS), Darwin)
+	-cat ./contrib/mac/juliarc.jl >> $(PREFIX)/etc/julia/juliarc.jl
+else ifeq ($(OS), WINNT)
+	-cat ./contrib/windows/juliarc.jl >> $(PREFIX)/etc/julia/juliarc.jl
+endif
+
 ifeq ($(OS), WINNT)
 	[ ! -d dist-extras ] || ( cd dist-extras && \
    		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll ../$(PREFIX)/bin && \
@@ -272,7 +284,7 @@ perf-%: release
 	@$(MAKE) $(QUIET_MAKE) -C test/perf $*
 
 # download target for some hardcoded windows dependencies
-.PHONY: win-extras, wine_path
+.PHONY: win-extras wine_path
 win-extras:
 	[ -d dist-extras ] || mkdir dist-extras
 ifneq ($(BUILD_OS),WINNT)
@@ -291,8 +303,8 @@ else ifeq ($(ARCH),x86_64)
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
 	mv _7z.sfx 7z.sfx && \
-	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-libexpat-2.0.1-3.16.noarch.rpm && \
-	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-zlib-1.2.7-1.21.noarch.rpm
+	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-libexpat-2.0.1-4.1.noarch.rpm && \
+	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-zlib-1.2.7-2.2.noarch.rpm
 else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif

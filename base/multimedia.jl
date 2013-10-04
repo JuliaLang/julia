@@ -34,12 +34,12 @@ end
 # For any type T one can define writemime(io, ::MIME"type", x::T) = ...
 # in order to provide a way to export T as a given mime type.
 
-mimewritable{mime}(::MIME{mime}, T::Type) =
-  method_exists(writemime, (IO, MIME{mime}, T))
+mimewritable{mime}(::MIME{mime}, x) =
+  method_exists(writemime, (IO, MIME{mime}, typeof(x)))
 
 # it is convenient to accept strings instead of ::MIME
 writemime(io, m::String, x) = writemime(io, MIME(m), x)
-mimewritable(m::String, T::Type) = mimewritable(MIME(m), T)
+mimewritable(m::String, x) = mimewritable(MIME(m), x)
 
 ###########################################################################
 # MIME types are assumed to be binary data except for a set of types known

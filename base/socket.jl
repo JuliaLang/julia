@@ -20,7 +20,7 @@ function IPv4(host::Integer)
     if host < 0
         error("IP address may not be negative")
     elseif typemax(typeof(host)) > typemax(Uint32) && host > typemax(Uint32) 
-        error("Number to large for IP Address")
+        error("Number too large for IP Address")
     else
         return IPv4(uint32(host))
     end
@@ -61,7 +61,7 @@ function IPv6(host::Integer)
     # We allow passing bigger integer types, but need to be careful to avoid overflow
     # Let's hope promotion rules are sensible
     elseif typemax(typeof(host)) > typemax(Uint128) && host > typemax(Uint128) 
-        error("Number to large for IP Address")
+        error("Number too large for IP Address")
     else
         return IPv6(uint128(host))
     end
