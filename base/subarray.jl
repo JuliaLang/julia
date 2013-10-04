@@ -377,7 +377,7 @@ function setindex!(s::SubArray, v, I::Union(Real,AbstractArray)...)
     setindex!(s.parent, v, newindexes...)
 end
 
-stride(s::SubArray, i::Integer) = s.strides[i]
+stride(s::SubArray, i::Integer) = i <= length(s.strides) ? s.strides[i] : s.strides[end]*s.dims[end]
 
 convert{T}(::Type{Ptr{T}}, x::SubArray{T}) =
     pointer(x.parent) + (x.first_index-1)*sizeof(T)

@@ -1,6 +1,6 @@
 module Pkg
 import Base.Git
-for file in split("dir types reqs cache read query resolve write scaffold entry")
+for file in split("dir types reqs cache read query resolve write generate entry")
     include("pkg/$file.jl")
 end
 using .Types
@@ -9,9 +9,9 @@ const dir = Dir.path
 
 init(meta::String=Dir.DEFAULT_META) = Dir.init(meta)
 
-rm(pkg::String) = cd(Entry.edit,Reqs.rm,pkg)
-add(pkg::String, vers::VersionSet) = cd(Entry.edit,Reqs.add,pkg,vers)
-add(pkg::String, vers::VersionNumber...) = add(pkg, VersionSet(vers...))
+rm(pkg::String) = cd(Entry.rm,pkg)
+add(pkg::String, vers::VersionSet) = cd(Entry.add,pkg,vers)
+add(pkg::String, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 available() = cd(Entry.available)
 available(pkg::String) = cd(Entry.available,pkg)
@@ -43,20 +43,9 @@ tag(pkg::String, sym::Symbol=:bump; commit::String="", msg::String="") =
 tag(pkg::String, ver::VersionNumber; commit::String="", msg::String="") =
     cd(Entry.tag,pkg,ver,commit,msg)
 
-fixup() = cd(Entry.fixup)
-fixup(pkg::String) = cd(Entry.fixup,pkg)
+fixup() = cd(Entry._fixup)
+fixup(pkg::String) = cd(Entry._fixup,pkg)
 
-function scaffold(
-    pkg::String;
-    dir::String = "",
-    license::String = "",
-    years::Union(Int,String) = readchomp(`date +%Y`),
-    authors::String = Git.readchomp(`config --global --get user.name`),
-    github::Bool = Git.success(`config --global --get github.user`),
-    travis::Bool = Git.success(`config --global --get github.user`),
-)
-    dir = isempty(dir) ? dir : abspath(dir)
-    cd(Scaffold.scaffold,pkg,dir,license,years,authors,github,travis)
-end
+generate(pkg::String, license::String) = cd(Generate.package,pkg,license)
 
 end # module
