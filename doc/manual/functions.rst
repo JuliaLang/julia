@@ -453,6 +453,7 @@ where each ``key`` is a symbol. Such collections can be passed as named
 arguments using a semicolon in a call, ``f(x; k...)``. Dictionaries
 can be used for this purpose.
 
+.. _man-block-syntax-for-func-args:
 
 Block Syntax for Function Arguments
 -----------------------------------
