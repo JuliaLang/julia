@@ -1379,6 +1379,92 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
     [results[x] for x in 1:nextidx]
 end
 
+type ipmap
+    f::Function
+    lsts
+    err_retry
+    err_stop
+    #timeout?
+    state::Int
+    results::Dict{Int, RemoteRef}
+
+    function ipmap(f::Function, lsts, err_retry::Bool, err_stop::Bool, state::Int, results::Dict{Int, RemoteRef})
+        len = length(lsts)
+
+        retryqueue = {}
+        task_in_err = false
+        is_task_in_error() = task_in_err
+        set_task_in_error() = (task_in_err = true)
+
+        nextidx = 0
+        getnextidx() = (nextidx += 1)
+
+        states = [start(lsts[idx]) for idx in 1:len]
+        function getnext_tasklet()
+            if is_task_in_error() && err_stop
+                return nothing
+            elseif all([!done(lsts[idx],states[idx]) for idx in 1:len])
+                nxts = [next(lsts[idx],states[idx]) for idx in 1:len]
+                map(idx->states[idx]=nxts[idx][2], 1:len)
+                nxtvals = [x[1] for x in nxts]
+                return (getnextidx(), nxtvals)
+                
+            elseif !isempty(retryqueue)
+                return shift!(retryqueue)
+            else    
+                return nothing
+            end
+        end
+
+        for wpid in workers()
+            @async begin
+                tasklet = getnext_tasklet()
+                while (tasklet != nothing)
+                    (idx, fvals) = tasklet
+                    try
+                        result = remotecall_wait(wpid, f, fvals...)
+                        if isa(result, Exception) 
+                            ((wpid == myid()) ? rethrow(result) : throw(result)) 
+                        else 
+                            results[idx] = result
+                        end
+                    catch ex
+                        if err_retry 
+                            push!(retryqueue, (idx,fvals, ex))
+                        else
+                            results[idx] = ex
+                        end
+                        set_task_in_error()
+                        break # remove this worker from accepting any more tasks 
+                    end
+                    
+                    tasklet = getnext_tasklet()
+                end
+            end
+        end
+
+        for failure in retryqueue
+            results[failure[1]] = failure[3]
+        end
+
+        new(f, lsts, err_retry, err_stop, state, results)
+    end
+end
+
+ipmap(w,x) = ipmap(w, x, true, false, 1, Dict{Int, RemoteRef}())
+ipmap(w,x,y) = ipmap(w, x, y, false, 1, Dict{Int, RemoteRef}())
+ipmap(w,x,y,z) = ipmap(w, x, y, z, 1, Dict{Int, RemoteRef}())
+start(x::ipmap) = x.state
+done(x::ipmap, state::Int) = (state <= length(x.lsts[1])) ? false : true
+
+function next(x::ipmap, state::Int)
+    x.state+=1
+    while !haskey(x.results, x.state-1)
+        t=time();  while (time()-t)<1;  end
+    end
+    fetch(x.results[x.state-1]), x.state
+end
+
 # Statically split range [1,N] into equal sized chunks for np processors
 function splitrange(N::Int, np::Int)
     each = div(N,np)
