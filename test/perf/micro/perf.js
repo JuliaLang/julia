@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    var tmin, i, j, t, n, m, s, a, sum, a0, v, r, C;
+    var tmin, i, j, t, n, m, s, a, sum, a0, v, r, C, additionalCycles;
 
     function assert(t) { if (!t) { throw new Error("assertion failed"); } }
 
@@ -13,22 +13,24 @@
     }
 
     tmin = Number.POSITIVE_INFINITY;
+    additionalCycles = 1000;
     for (i=0; i < 5; i++) {
         t = (new Date()).getTime();
-        for (j=0; j < 1000; j++) {
+        for (j=0; j < additionalCycles; j++) {
             assert(fib(20) === 6765);
         }
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin = t; }
     }
-    console.log("javascript,fib," + tmin/1000);
+    console.log("javascript,fib," + tmin/additionalCycles);
 
     // parse int //
 
     tmin = Number.POSITIVE_INFINITY;
+    additionalCycles = 1000;
     for (i=0; i < 5; i++) {
         t = (new Date()).getTime();
-        for (j=0; j < 1000*1000; j++) {
+        for (j=0; j < additionalCycles*1000; j++) {
             n = Math.floor(4294967295*Math.random());
             s = n.toString(16);
             m = parseInt(s,16);
@@ -37,7 +39,7 @@
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin = t; }
     }
-    console.log("javascript,parse_int," + tmin/1000);
+    console.log("javascript,parse_int," + tmin/additionalCycles);
 
     // mandelbrot set //
 
@@ -91,16 +93,17 @@
     a0 = a[0];
 
     tmin = Number.POSITIVE_INFINITY;
+    additionalCycles = 1000;    
     for (i=0; i < 5; i++) {
         t = (new Date()).getTime();
-        for (j=0; j < 1000; j++) {
+        for (j=0; j < additionalCycles; j++) {
             a = mandelperf();
             assert(a[0] === a0);
         }
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin=t; }
     }
-    console.log("javascript,mandel," + tmin/1000);
+    console.log("javascript,mandel," + tmin/additionalCycles);
 
     // numeric vector sort //
 
@@ -151,16 +154,17 @@
     } 
 
     tmin = Number.POSITIVE_INFINITY;
+    additionalCycles = 100;
     for (i=0; i < 5; i++) {
         t = (new Date()).getTime();
-        for (j=0; j < 100; j++) {
+        for (j=0; j < additionalCycles; j++) {
             v = sortperf(5000);
             assert(a[0] < 0.99);
         }
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin=t; }
     }
-    console.log("javascript,quicksort," + tmin/100);
+    console.log("javascript,quicksort," + tmin/additionalCycles);
 
     // slow pi series //
 
@@ -177,15 +181,16 @@
     }
 
     tmin = Number.POSITIVE_INFINITY;
+    additionalCycles = 10;
     for (i=0; i < 5; i++) {
         t = (new Date()).getTime();
-        for (j=0; j < 10; j++) {
+        for (j=0; j < additionalCycles; j++) {
             assert(Math.abs(pisum()-1.644834071848065) < 1e-12);
         }
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin=t; }
     }
-    console.log("javascript,pi_sum," + tmin/10);
+    console.log("javascript,pi_sum," + tmin/additionalCycles);
 
     // random matrix statistics //
 
@@ -345,9 +350,10 @@
     }
 
     tmin = Number.POSITIVE_INFINITY;
+    additionalCycles = 10;
     for (i=0; i < 5; i++) {
         t = (new Date()).getTime();
-        for (j=0; j < 10; j++) {
+        for (j=0; j < additionalCycles; j++) {
             r = randmatstat(1000);
             // assert(0.5 < r.s1 < 1.0);
             //        assert(0.5 < r.s2 < 1.0);
@@ -355,7 +361,7 @@
         t = (new Date()).getTime()-t;
         if (t < tmin) { tmin=t; }
     }
-    console.log("javascript,rand_mat_stat," + tmin/10);
+    console.log("javascript,rand_mat_stat," + tmin/additionalCycles);
 
     // random matrix multiply //
 
