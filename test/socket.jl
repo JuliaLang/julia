@@ -71,7 +71,7 @@ close(server)
 server = listen(2134)
 @async connect("localhost",2134)
 s1 = accept(server)
-@test_throws accept(server,s_1)
+@test_throws accept(server,s1)
 close(server)
 
 try 
