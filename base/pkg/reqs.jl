@@ -12,20 +12,28 @@ immutable Requirement <: Line
     content::String
     package::String
     versions::VersionSet
-    system::String
+    system::Vector{String}
 
     function Requirement(content::String)
         fields = split(replace(content, r"#.*$", ""))
-        system = fields[1][1] == '@' ? shift!(fields)[2:end] : ""
+        system = String[]
+        while !isempty(fields) && fields[1][1] == '@'
+            push!(system,shift!(fields)[2:end])
+        end
+        isempty(fields) && error("invalid requires entry: $content")
         package = shift!(fields)
         all(field->ismatch(Base.VERSION_REGEX, field), fields) ||
-            error("invalid requires entry for $package: $fields")
+            error("invalid requires entry for $package: $content")
         versions = [ convert(VersionNumber, field) for field in fields ]
-        issorted(versions) || error("invalid requires entry for $package: $versions")
+        issorted(versions) || error("invalid requires entry for $package: $content")
         new(content, package, VersionSet(versions), system)
     end
-    function Requirement(package::String, versions::VersionSet, system::String="")
-        content = isempty(system) ? package : "$system $package"
+    function Requirement(package::String, versions::VersionSet, system::Vector{String}=String[])
+        content = ""
+        for os in system
+            content *= "@$os "
+        end
+        content *= package
         if versions != VersionSet()
             for ival in versions.intervals
                 (content *= " $(ival.lower)")
@@ -67,10 +75,14 @@ function parse(lines::Vector{Line})
         if isa(line,Requirement)
             if !isempty(line.system)
                 applies = false
-                @windows_only applies |= (line.system == "windows")
-                @unix_only    applies |= (line.system == "unix")
-                @osx_only     applies |= (line.system == "osx")
-                @linux_only   applies |= (line.system == "linux")
+                @windows_only applies |=  ("windows"  in line.system)
+                @unix_only    applies |=  ("unix"     in line.system)
+                @osx_only     applies |=  ("osx"      in line.system)
+                @linux_only   applies |=  ("linux"    in line.system)
+                @windows_only applies &= !("!windows" in line.system)
+                @unix_only    applies &= !("!unix"    in line.system)
+                @osx_only     applies &= !("!osx"     in line.system)
+                @linux_only   applies &= !("!linux"   in line.system)
                 applies || continue
             end
             reqs[line.package] = haskey(reqs, line.package) ?
@@ -86,9 +98,11 @@ parse(x) = parse(read(x))
 function add(lines::Vector{Line}, pkg::String, versions::VersionSet=VersionSet())
     v = VersionSet[]
     filtered = filter(lines) do line
-        (isa(line,Comment) || line.package != pkg) && return true
-        push!(v, line.versions)
-        return false
+        if !isa(line,Comment) && line.package == pkg && isempty(line.system)
+            push!(v, line.versions)
+            return false
+        end
+        return true
     end
     length(v) == 1 && v[1] == intersect(v[1],versions) && return copy(lines)
     versions = reduce(intersect, versions, v)
