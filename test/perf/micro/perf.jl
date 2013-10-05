@@ -136,6 +136,21 @@ end
 
 @timeit rand(1000,1000)*rand(1000,1000) "rand_mat_mul" "Multiplication of random matrices"
 
+## sinc_sum ##
+
+function sinc_sum( n)
+		total = 0
+		for i=1:n
+			f= pi*i
+			sinc = sin(f)/f
+			total+=sinc
+		end
+		return total	
+end		
+	
+@timeit  sinc_sum(1000) "sinc_sym" "Sum of sync function results" 
+
+
 ## printfd ##
 
 @unix_only begin
