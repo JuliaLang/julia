@@ -162,34 +162,21 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
     return emit_expr(e, ctx, false);
 }
 
-static Type *jl_llvmtuple_eltype(Type *tuple, size_t i)
+static Type *jl_llvmtuple_eltype(Type *tuple, jl_value_t *jt, size_t i)
 {
     Type *ety = NULL;
-    if (tuple->isStructTy())
-        ety = dyn_cast<StructType>(tuple)->getElementType(i);
-    else if(tuple->isArrayTy())
+    if(tuple->isArrayTy())
         ety = dyn_cast<ArrayType>(tuple)->getElementType();
     else if(tuple->isVectorTy())
         ety = dyn_cast<VectorType>(tuple)->getElementType();
     else if(tuple == T_void) 
         ety = T_void;
+    else if (tuple->isStructTy()) {
+        ety = julia_type_to_llvm(jl_tupleref((jl_tuple_t*)jt,i));
+    }
     else
         assert(false);
     return ety;
-}
-
-static size_t jl_llvmtuple_nargs(Type *tuple)
-{
-    size_t n = 0;
-    if (tuple->isStructTy())
-        n = dyn_cast<StructType>(tuple)->getNumElements();
-    else if(tuple->isArrayTy())
-        n = dyn_cast<ArrayType>(tuple)->getNumElements();
-    else if(tuple->isVectorTy())
-        n = dyn_cast<VectorType>(tuple)->getNumElements();
-    else
-        assert(false);
-    return n;
 }
 
 static Value *ghostValue(jl_value_t *ty);
@@ -197,15 +184,15 @@ static Value *ghostValue(jl_value_t *ty);
 // emit code to unpack a raw value from a box
 static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
 {
-    if (x == NULL) {
+    Type *ty = (x == NULL) ? NULL : x->getType();
+    if (x == NULL || ty == NoopType) {
         if (to == T_void) {
             if (jt != NULL)
-                return ghostValue(jt);
+                return (ty == NoopType && julia_type_of(x) == jt) ? x : ghostValue(jt);
             return NULL;
         }
         return UndefValue::get(to);
     }
-    Type *ty = x->getType();
     if (ty != jl_pvalue_llvmt) {
         // bools are stored internally as int8 (for now)
         if (ty == T_int1 && to == T_int8)
@@ -232,22 +219,12 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
         assert(jl_is_tuple(jt));
         assert(to != T_void);
         Value *tpl = UndefValue::get(to);
-        size_t n = 0;
-        if (to->isStructTy())
-            n = dyn_cast<StructType>(to)->getNumElements();
-        else if(to->isArrayTy())
-            n = dyn_cast<ArrayType>(to)->getNumElements();
-        else if(to->isVectorTy())
-            n = dyn_cast<VectorType>(to)->getNumElements();
-        else
-            assert(false);
-        assert(n == jl_tuple_len(jt));
-        for (size_t i = 0; i < n; ++i) {
-            Type *ety = jl_llvmtuple_eltype(to,i);
+        for (size_t i = 0; i < jl_tuple_len(jt); ++i) {
+            Type *ety = jl_llvmtuple_eltype(to,jt,i);
             if(ety == T_void)
                 continue;
-            Value *elt = emit_unbox(ety,
-                emit_tupleref(x,ConstantInt::get(T_size,i+1),jt,NULL),jl_tupleref(jt,i));
+            Value *ref = emit_tupleref(x,ConstantInt::get(T_size,i+1),jt,NULL);
+            Value *elt = emit_unbox(ety,ref,julia_type_of(ref));
             tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,jt,NULL);
         }
         return tpl;

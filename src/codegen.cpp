@@ -215,6 +215,9 @@ static Function *jlputs_func;
 static Function *resetstkoflw_func;
 #endif
 
+// NoopType
+static Type *NoopType;
+
 static void jl_rethrow_with_add(const char *fmt, ...)
 {
     if (jl_typeis(jl_exception_in_transit, jl_errorexception_type)) {
@@ -294,9 +297,9 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         if (li->cFunctionObject != NULL)
             (void)jl_ExecutionEngine->getPointerToFunction((Function*)li->cFunctionObject);
         JL_SIGATOMIC_END();
-        llvmf->deleteBody();
-        if (li->cFunctionObject != NULL)
-            ((Function*)li->cFunctionObject)->deleteBody();
+        //llvmf->deleteBody();
+        //if (li->cFunctionObject != NULL)
+            //((Function*)li->cFunctionObject)->deleteBody();
     }
     f->fptr = li->fptr;
 }
@@ -365,35 +368,12 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 #include "debuginfo.cpp"
 #include "disasm.cpp"
 
-extern "C" DLLEXPORT
-const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dumpasm)
+const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
 {
-    if (!jl_is_function(f) || !jl_is_gf(f))
-        return jl_cstr_to_string(const_cast<char*>(""));
-    jl_function_t *sf = jl_get_specialization(f, types);
-    if (sf == NULL || sf->linfo == NULL) {
-        sf = jl_method_lookup_by_type(jl_gf_mtable(f), types, 0, 0);
-        if (sf == jl_bottom_func)
-            return jl_cstr_to_string(const_cast<char*>(""));
-        JL_PRINTF(JL_STDERR,
-                  "Warning: Returned code may not match what actually runs.\n");
-    }
     std::string code;
     llvm::raw_string_ostream stream(code);
     llvm::formatted_raw_ostream fstream(stream);
-    Function *llvmf;
-    if (sf->linfo->functionObject == NULL) {
-        jl_compile(sf);
-    }
-    if (sf->fptr == &jl_trampoline) {
-        if (sf->linfo->cFunctionObject != NULL)
-            llvmf = (Function*)sf->linfo->cFunctionObject;
-        else
-            llvmf = (Function*)sf->linfo->functionObject;
-    }
-    else {
-        llvmf = to_function(sf->linfo, false);
-    }
+    Function *llvmf = (Function*)f;
     if (dumpasm == false) {
         llvmf->print(stream);
     }
@@ -411,6 +391,39 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dum
     }
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
 }
+
+extern "C" DLLEXPORT
+const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dumpasm, bool dumpwrapper)
+{
+    jl_function_t *sf = f;
+    if (types != NULL) {
+        if (!jl_is_function(f) || !jl_is_gf(f))
+            return jl_cstr_to_string(const_cast<char*>(""));
+        sf = jl_get_specialization(f, types);
+    }
+    if (sf == NULL || sf->linfo == NULL) {
+        sf = jl_method_lookup_by_type(jl_gf_mtable(f), types, 0, 0);
+        if (sf == jl_bottom_func)
+            return jl_cstr_to_string(const_cast<char*>(""));
+        JL_PRINTF(JL_STDERR,
+                  "Warning: Returned code may not match what actually runs.\n");
+    }
+    Function *llvmf;
+    if (sf->linfo->functionObject == NULL) {
+        jl_compile(sf);
+    }
+    if (sf->fptr == &jl_trampoline) {
+        if (!dumpwrapper && sf->linfo->cFunctionObject != NULL)
+            llvmf = (Function*)sf->linfo->cFunctionObject;
+        else
+            llvmf = (Function*)sf->linfo->functionObject;
+    }
+    else {
+        llvmf = to_function(sf->linfo, false);
+    }
+    return jl_dump_llvmf(llvmf,dumpasm);
+}
+
 
 // --- code generation ---
 
@@ -1321,7 +1334,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             else {
                 Value *arg1 = emit_expr(args[1], ctx);
                 JL_GC_POP();
-                return emit_tuplelen(arg1);
+                return emit_tuplelen(arg1,aty);
             }
         }
     }
@@ -1374,7 +1387,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     return V_null;
                 }
             }
-            Value *tlen = emit_tuplelen(arg1);
+            Value *tlen = emit_tuplelen(arg1,tty);
             Value *idx = emit_unbox(T_size,
                                     emit_unboxed(args[2], ctx), ity);
             emit_bounds_check(idx, tlen, ctx);
@@ -1406,7 +1419,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             for (size_t i = 0; i < nargs; ++i) {
                 Type *ety = NULL;
                 if (tpl != NULL)
-                    ety = jl_llvmtuple_eltype(tpl->getType(),i);
+                    ety = jl_llvmtuple_eltype(tpl->getType(),tt,i);
                 if(tpl == NULL || ety == T_void)
                 {
                     emit_expr(args[i+1],ctx); //for side effects (if any)
@@ -1768,6 +1781,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
             }
             if (at == jl_pvalue_llvmt) {
                 argvals[idx] = boxed(emit_expr(args[i+1], ctx),ctx,expr_type(args[i+1],ctx));
+                assert(dyn_cast<UndefValue>(argvals[idx]) == 0);
                 if (might_need_root(args[i+1])) {
                     make_gcroot(argvals[idx], ctx);
                 }
@@ -1776,6 +1790,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
                 assert(at == et);
                 argvals[idx] = emit_unbox(at, 
                                         emit_unboxed(args[i+1], ctx),jl_tupleref(f->linfo->specTypes,i));
+                assert(dyn_cast<UndefValue>(argvals[idx]) == 0);
             }
             idx++;
         }
@@ -1897,7 +1912,7 @@ static Value *ghostValue(jl_value_t *ty)
         assert(llvmty != T_void);
         return UndefValue::get(llvmty);
     } else 
-        return NULL;
+        return mark_julia_type(UndefValue::get(NoopType),ty);
 }
 
 static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool isboxed)
@@ -2633,6 +2648,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
         Value *argPtr = builder.CreateGEP(argArray,
                                           ConstantInt::get(T_size, argIdx));
         Value *theArg = builder.CreateLoad(argPtr, false);
+        Value *theNewArg = theArg;
         argIdx++;
         if ((jl_is_leaf_type(ty) && jl_isbits(ty) &&
             ((jl_datatype_t*)ty)->size > 0)) {
@@ -2640,7 +2656,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
             assert(lty != NULL);
             if (lty == T_void)
                 continue;
-            theArg = emit_unbox(lty, theArg, ty);
+            theNewArg = emit_unbox(lty, theArg, ty);
         } else if(jl_is_tuple(ty))
         {
             Type *lty = julia_struct_to_llvm(ty);
@@ -2648,10 +2664,11 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
             {
                 if (lty == T_void)
                     continue;
-                theArg = emit_unbox(lty, theArg, ty);
+                theNewArg = emit_unbox(lty, theArg, ty);
             }
         }
-        args[idx] = theArg;
+        assert(dyn_cast<UndefValue>(theNewArg) == NULL);
+        args[idx] = theNewArg;
         idx++;
     }
     // TODO: consider pulling the function pointer out of fArg so these
@@ -3325,6 +3342,10 @@ static void init_julia_llvm_env(Module *m)
     T_float64 = Type::getDoubleTy(getGlobalContext());
     T_pfloat64 = PointerType::get(T_float64, 0);
     T_void = Type::getVoidTy(jl_LLVMContext);
+
+    // This type is used to create undef Values which carry
+    // metadata.
+    NoopType = StructType::create("NOOP",T_int1,NULL);
 
     // add needed base definitions to our LLVM environment
     StructType *valueSt = StructType::create(getGlobalContext(), "jl_value_t");
