@@ -33,6 +33,7 @@ int prompt_length;
 int disable_history;
 static char *history_file = NULL;
 static jl_value_t *rl_ast = NULL;
+static char *strtok_saveptr;
 
 // yes, readline uses inconsistent indexing internally.
 #define history_rem(n) remove_history(n-history_base)
@@ -176,17 +177,21 @@ static int newline_callback(int count, int key)
     return 0;
 }
 
+static jl_value_t* call_jl_function_with_string(const char *fname, const char *arg, size_t arglen) {
+    jl_value_t *f = jl_get_global(jl_base_module,jl_symbol(fname));
+    assert(f);
+    jl_value_t **fargs;
+    JL_GC_PUSHARGS(fargs, 1);
+    fargs[0] = jl_pchar_to_string((char*)arg, arglen);
+    jl_value_t *result = jl_apply((jl_function_t*)f, fargs, 1);
+    JL_GC_POP();
+    return result;
+}
+
 static jl_value_t* repl_parse_input_line(char *buf) {
     if (buf[0] == ';') {
         buf++;
-        jl_value_t *f = jl_get_global(jl_base_module,jl_symbol("repl_hook"));
-        assert(f);
-        jl_value_t **fargs;
-        JL_GC_PUSHARGS(fargs, 1);
-        fargs[0] = jl_pchar_to_string((char*)buf, strlen(buf));
-        jl_value_t *result = jl_apply((jl_function_t*)f, fargs, 1);
-        JL_GC_POP();
-        return result;
+        return call_jl_function_with_string("repl_hook", buf, strlen(buf));
     }
     else if (buf[0] == '?') {
         char *tmpbuf;
@@ -239,6 +244,64 @@ static int space_callback(int count, int key)
     return 0;
 }
 
+int complete_method_table() {
+    if (rl_point < 2 || rl_line_buffer[rl_point-1] != '(') return 0;
+
+    // extract the token preceding the (
+    int tokenstart = rl_point-2;
+
+    // check for special operators
+    if (strchr("\\><=|&+-*/%^~", rl_line_buffer[tokenstart])){
+        while (tokenstart>0 && strchr("<>=!", rl_line_buffer[tokenstart-1])){
+            tokenstart--;
+        }
+    }
+    else{
+        // check for functions that might contain ! but not start with !
+        while (tokenstart>=0 && (jl_word_char(rl_line_buffer[tokenstart]) ||
+              rl_line_buffer[tokenstart] == '!')) {
+            tokenstart--;
+        }
+        tokenstart++;
+        // ! can't be the first character of a function, unless it's the only character
+        if (tokenstart != rl_point-2 && rl_line_buffer[tokenstart] == '!'){
+            tokenstart ++;
+        }
+    }
+
+    jl_value_t* result = call_jl_function_with_string("repl_methods",
+                                                      &rl_line_buffer[tokenstart],
+                                                      rl_point-tokenstart-1);
+
+    if (!jl_is_byte_string(result)) return 0;
+    char *completions = jl_string_data(result);
+
+    int nallocmethods = 0;
+    size_t nchars = strlen(completions);
+    for (size_t i=0; i<nchars; i++) nallocmethods += completions[i] == '\n';
+
+    char **methods = malloc(sizeof(char *)*(nallocmethods+1));
+    methods[0] = NULL;
+    methods[1] = strtok_r(completions, "\n", &strtok_saveptr);
+    if (methods[1] == NULL) return 0;
+    int maxlen = strlen(methods[1]);
+    int nmethods = 1;
+
+    char *method;
+    while (nmethods < nallocmethods &&
+           (method = strtok_r(NULL, "\n", &strtok_saveptr))) {
+        int len = strlen(method);
+        if (len > maxlen) maxlen = len;
+        methods[nmethods+1] = method;
+        nmethods++;
+    }
+
+    rl_display_match_list(methods, nmethods, maxlen);
+    free(methods);
+    rl_forced_update_display();
+    return 1;
+}
+
 static int tab_callback(int count, int key)
 {
     if (!rl_point) {
@@ -250,10 +313,12 @@ static int tab_callback(int count, int key)
         if (rl_line_buffer[i] != ' ') {
             // do tab completion
             i = rl_point;
-            rl_complete_internal('!');
-            if (i < rl_point && rl_line_buffer[rl_point-1] == ' ') {
-                rl_delete_text(rl_point-1, rl_point);
-                rl_point = rl_point-1;
+            if(!complete_method_table()) {
+                rl_complete_internal('!');
+                if (i < rl_point && rl_line_buffer[rl_point-1] == ' ') {
+                    rl_delete_text(rl_point-1, rl_point);
+                    rl_point = rl_point-1;
+                }
             }
             return 0;
         }
@@ -490,8 +555,6 @@ static jl_module_t *find_submodule_named(jl_module_t *module, const char *name)
     return (jl_is_module(b->value)) ? (jl_module_t *)b->value : NULL;
 }
 
-static char *strtok_saveptr;
-
 #if defined(_WIN32)
 char *strtok_r(char *str, const char *delim, char **save)
 {
@@ -611,10 +674,6 @@ static char *do_completions(const char *ch, int c)
     return ptr ? strdup(ptr) : NULL;
 }
 
-static char **julia_completion(const char *text, int start, int end)
-{
-    return rl_completion_matches(text, do_completions);
-}
 #ifdef __WIN32__
 int repl_sigint_handler_installed = 0;
 BOOL WINAPI repl_sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
@@ -674,7 +733,8 @@ void repl_sigint_handler(int sig, siginfo_t *info, void *context)
 static void init_rl(void)
 {
     rl_readline_name = "julia";
-    rl_attempted_completion_function = julia_completion;
+    rl_completion_entry_function = do_completions;
+    rl_sort_completion_matches = 0;
     for(size_t i=0; lang_keywords[i]; i++) {
         // make sure keywords are in symbol table
         (void)jl_symbol(lang_keywords[i]);
