@@ -177,7 +177,8 @@ static int newline_callback(int count, int key)
     return 0;
 }
 
-static jl_value_t* call_jl_function_with_string(const char *fname, const char *arg, size_t arglen) {
+static jl_value_t* call_jl_function_with_string(const char *fname, const char *arg, size_t arglen)
+{
     jl_value_t *f = jl_get_global(jl_base_module,jl_symbol(fname));
     assert(f);
     jl_value_t **fargs;
@@ -188,7 +189,8 @@ static jl_value_t* call_jl_function_with_string(const char *fname, const char *a
     return result;
 }
 
-static jl_value_t* repl_parse_input_line(char *buf) {
+static jl_value_t* repl_parse_input_line(char *buf)
+{
     if (buf[0] == ';') {
         buf++;
         return call_jl_function_with_string("repl_hook", buf, strlen(buf));
@@ -244,7 +246,8 @@ static int space_callback(int count, int key)
     return 0;
 }
 
-int complete_method_table() {
+int complete_method_table()
+{
     if (rl_point < 2 || rl_line_buffer[rl_point-1] != '(') return 0;
 
     // extract the token preceding the (
@@ -313,7 +316,7 @@ static int tab_callback(int count, int key)
         if (rl_line_buffer[i] != ' ') {
             // do tab completion
             i = rl_point;
-            if(!complete_method_table()) {
+            if (!complete_method_table()) {
                 rl_complete_internal('!');
                 if (i < rl_point && rl_line_buffer[rl_point-1] == ' ') {
                     rl_delete_text(rl_point-1, rl_point);
