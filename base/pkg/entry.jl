@@ -1,7 +1,7 @@
 module Entry
 
 using ..Types
-import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write
+import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir.META_BRANCH
 import Base: Git, thispatch, nextpatch, nextminor, nextmajor, check_new_version
 
 function edit(f::Function, pkg::String, args...)
@@ -176,11 +176,11 @@ end
 function update()
     info("Updating METADATA...")
     cd("METADATA") do
-        if Git.branch() != "devel"
+        if Git.branch() != META_BRANCH
             Git.run(`fetch -q --all`)
             Git.run(`checkout -q HEAD^0`)
-            Git.run(`branch -f devel refs/remotes/origin/devel`)
-            Git.run(`checkout -q devel`)
+            Git.run(`branch -f $META_BRANCH refs/remotes/origin/$META_BRANCH`)
+            Git.run(`checkout -q $META_BRANCH`)
         end
         Git.run(`pull -q -m`)
     end

@@ -1,7 +1,12 @@
 ## type aliases ##
 
-typealias SmallSigned Union(Int8,Int16,Int32,Int)
-typealias SmallUnsigned Union(Uint8,Uint16,Uint32,Uint)
+if Int === Int32
+typealias SmallSigned Union(Int8,Int16)
+typealias SmallUnsigned Union(Uint8,Uint16)
+else
+typealias SmallSigned Union(Int8,Int16,Int32)
+typealias SmallUnsigned Union(Uint8,Uint16,Uint32)
+end
 
 ## integer arithmetic ##
 

@@ -1,5 +1,34 @@
 # -*- mode: makefile-gmake -*-
 
+## Note:
+##   It is generally preferable to change these options, for
+##   your local machine, in a file named `Make.user` in this directory
+
+# OPENBLAS build options
+OPENBLAS_DYNAMIC_ARCH=1
+OPENBLAS_USE_THREAD=1
+OPENBLAS_TARGET_ARCH=
+
+# Use libraries available on the system instead of building them
+USE_SYSTEM_LLVM=0
+USE_SYSTEM_LIBUNWIND=0
+USE_SYSTEM_READLINE=0
+USE_SYSTEM_PCRE=0
+USE_SYSTEM_LIBM=0
+USE_SYSTEM_OPENLIBM=0
+UNTRUSTED_SYSTEM_LIBM=0
+USE_SYSTEM_BLAS=0
+USE_SYSTEM_LAPACK=0
+USE_SYSTEM_FFTW=0
+USE_SYSTEM_GMP=0
+USE_SYSTEM_MPFR=0
+USE_SYSTEM_ARPACK=0
+USE_SYSTEM_SUITESPARSE=0
+USE_SYSTEM_ZLIB=0
+USE_SYSTEM_GRISU=0
+USE_SYSTEM_RMATH=0
+USE_SYSTEM_LIBUV=0
+
 USE_MKL = 0
 MKLLIB = $(MKLROOT)/lib/intel64
 
@@ -109,6 +138,7 @@ USEGCC = 1
 USECLANG = 0
 OPENBLAS_TARGET_ARCH=NEHALEM
 OPENBLAS_DYNAMIC_ARCH=0
+USE_SYSTEM_LIBUNWIND=1
 else
 USEGCC = 0
 USECLANG = 1
@@ -149,32 +179,6 @@ RANLIB := $(CROSS_COMPILE)ranlib
 # if not absolute, then relative to JULIA_HOME
 JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../$(JL_PRIVATE_LIBDIR)/sys.ji"'
 
-# OPENBLAS build options
-OPENBLAS_DYNAMIC_ARCH=1
-OPENBLAS_USE_THREAD=1
-OPENBLAS_TARGET_ARCH=
-
-# Use libraries available on the system instead of building them
-
-USE_SYSTEM_LLVM=0
-USE_SYSTEM_LIBUNWIND=0
-USE_SYSTEM_READLINE=0
-USE_SYSTEM_PCRE=0
-USE_SYSTEM_LIBM=0
-USE_SYSTEM_OPENLIBM=0
-UNTRUSTED_SYSTEM_LIBM=0
-USE_SYSTEM_BLAS=0
-USE_SYSTEM_LAPACK=0
-USE_SYSTEM_FFTW=0
-USE_SYSTEM_GMP=0
-USE_SYSTEM_MPFR=0
-USE_SYSTEM_ARPACK=0
-USE_SYSTEM_SUITESPARSE=0
-USE_SYSTEM_ZLIB=0
-USE_SYSTEM_GRISU=0
-USE_SYSTEM_RMATH=0
-USE_SYSTEM_LIBUV=0
-
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
 endif
@@ -209,10 +213,13 @@ endif
 endif
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
+ifneq ($(OS),Darwin)
 LIBUNWIND=-lunwind-generic -lunwind
+endif
 else
 ifeq ($(OS),Darwin)
 LIBUNWIND=$(BUILD)/$(JL_LIBDIR)/libosxunwind.a
+JCFLAGS+=-DLIBOSXUNWIND
 else
 LIBUNWIND=$(BUILD)/$(JL_LIBDIR)/libunwind-generic.a $(BUILD)/$(JL_LIBDIR)/libunwind.a
 endif
