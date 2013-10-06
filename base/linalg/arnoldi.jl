@@ -4,7 +4,7 @@ using .ARPACK
 
 function eigs{T<:BlasFloat}(A::AbstractMatrix{T};
                             nev::Integer=6, ncv::Integer=20, which::ASCIIString="LM", 
-                            tol=0.0, maxiter::Integer=1000, sigma=0,v0::Vector{T}=Array(T,(0,)),
+                            tol::Real=0.0, maxiter::Integer=1000, sigma::Number=0,v0::Vector{T}=Array(T,(0,)),
                             ritzvec::Bool=true, complexOP::Bool=false)
     (m, n) = size(A)
     if m != n; error("Input must be square"); end
