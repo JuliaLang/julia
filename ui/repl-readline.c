@@ -246,6 +246,27 @@ static int space_callback(int count, int key)
     return 0;
 }
 
+#if defined(_WIN32)
+char *strtok_r(char *str, const char *delim, char **save)
+{
+    char *res, *last;
+
+    if (!save)
+        return strtok(str, delim);
+    if (!str && !(str = *save))
+        return NULL;
+    last = str + strlen(str);
+    if ((*save = res = strtok(str, delim))) {
+        *save += strlen(res);
+        if (*save < last)
+            (*save)++;
+        else
+            *save = NULL;
+    }
+    return res;
+}
+#endif
+
 int complete_method_table()
 {
     if (rl_point < 2 || rl_line_buffer[rl_point-1] != '(') return 0;
@@ -558,27 +579,6 @@ static jl_module_t *find_submodule_named(jl_module_t *module, const char *name)
     return (jl_is_module(b->value)) ? (jl_module_t *)b->value : NULL;
 }
 
-#if defined(_WIN32)
-char *strtok_r(char *str, const char *delim, char **save)
-{
-    char *res, *last;
-
-    if (!save)
-        return strtok(str, delim);
-    if (!str && !(str = *save))
-        return NULL;
-    last = str + strlen(str);
-    if ((*save = res = strtok(str, delim))) {
-        *save += strlen(res);
-        if (*save < last)
-            (*save)++;
-        else
-            *save = NULL;
-    }
-    return res;
-}
-#endif
-
 static int symtab_get_matches(jl_sym_t *tree, const char *str, char **answer)
 {
     int x, plen, count=0;
@@ -737,7 +737,9 @@ static void init_rl(void)
 {
     rl_readline_name = "julia";
     rl_completion_entry_function = do_completions;
+#if !defined(_WIN32)
     rl_sort_completion_matches = 0;
+#endif
     for(size_t i=0; lang_keywords[i]; i++) {
         // make sure keywords are in symbol table
         (void)jl_symbol(lang_keywords[i]);

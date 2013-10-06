@@ -55,8 +55,7 @@ v=reshape(v,(50,50)) # reshape to matrix
 v=v/trace(v) # factor out arbitrary phase
 Test.@test isapprox(normfro(imag(v)),0.) # it should be real
 v=real(v)
-# Test.@test isapprox(normfro(v-v')/2,0.) # it should be Hermitian
-# Since this fails sometimes (numerical precision error),this test is commented out
+Test.@test isapprox(normfro(v-v')/2,0.) # it should be Hermitian
 v=(v+v')/2
 Test.@test isposdef(v)
 
@@ -66,3 +65,5 @@ v2=reshape(v2,(50,50))
 v2=v2/trace(v2)
 Test.@test numiter2<numiter
 Test.@test_approx_eq v v2
+
+Test.@test_approx_eq eigs(speye(50), nev=10)[1] ones(10) #Issue 4246

@@ -101,9 +101,8 @@ trace(x::Number) = x
 #kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
 
 #det(a::AbstractMatrix)
-inv(a::AbstractMatrix) = a \ one(a)
 
-inv(a::AbstractVector) = inv(reshape(a, length(a), 1))
+inv(a::AbstractVector) = error("Input must be a square matrix")
 
 \(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
 (/)(A::AbstractVector, B::AbstractVector) = (B' \ A')'
