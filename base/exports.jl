@@ -6,7 +6,6 @@ export
     Meta,
     Operators,
     Pkg,
-    Pkg1,
     Pkg2,
     Profile,
     Sys,
