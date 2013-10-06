@@ -154,9 +154,20 @@ void restore_signals()
 {
     SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
 }
-static void __fastcall win_raise_exception(void* excpt)
-{ //why __fastcall? because the first two arguments are passed in registers, making this easier
-    jl_throw(excpt);
+void jl_throw_in_ctx(jl_value_t* excpt, CONTEXT *ctxThread, int bt) {
+    bt_size = bt ? rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ctxThread) : 0;
+    jl_exception_in_transit = excpt;
+#if defined(_CPU_X86_64_)
+    ctxThread->Rip = (DWORD64)&jl_rethrow;
+    ctxThread->Rsp &= (DWORD64)-16;
+    ctxThread->Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
+#elif defined(_CPU_X86_)
+    ctxThread->Eip = (DWORD)&jl_rethrow;
+    ctxThread->Esp &= (DWORD)-16;
+    ctxThread->Esp -= 4; //fix up the stack pointer
+#else
+#error WIN16 not supported :P
+#endif
 }
 volatile HANDLE hMainThread = NULL;
 DLLEXPORT void jlbacktrace();
@@ -189,19 +200,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
             fputs("error: GetThreadContext failed\n",stderr);
             return 0;
         }
-#if defined(_CPU_X86_64_)
-        ctxThread.Rip = (DWORD64)&win_raise_exception;
-        ctxThread.Rcx = (DWORD64)jl_interrupt_exception;
-        ctxThread.Rsp &= (DWORD64)-16;
-        ctxThread.Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
-#elif defined(_CPU_X86_)
-        ctxThread.Eip = (DWORD)&win_raise_exception;
-        ctxThread.Ecx = (DWORD)jl_interrupt_exception;
-        ctxThread.Esp &= (DWORD)-16;
-        ctxThread.Esp -= 4; //fix up the stack pointer
-#else
-#error WIN16 not supported :P
-#endif
+        jl_throw_in_ctx(jl_interrupt_exception, &ctxThread, 1);
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (!SetThreadContext(hMainThread,&ctxThread)) {
             fputs("error: SetThreadContext failed\n",stderr);
@@ -220,19 +219,7 @@ static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) 
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
         case EXCEPTION_STACK_OVERFLOW:
-#if defined(_CPU_X86_64_)
-            ExceptionInfo->ContextRecord->Rip = (DWORD64)&win_raise_exception;
-            ExceptionInfo->ContextRecord->Rcx = (DWORD64)jl_stackovf_exception;
-            ExceptionInfo->ContextRecord->Rsp &= (DWORD64)-16;
-            ExceptionInfo->ContextRecord->Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
-#elif defined(_CPU_X86_)
-            ExceptionInfo->ContextRecord->Eip = (DWORD)&win_raise_exception;
-            ExceptionInfo->ContextRecord->Ecx = (DWORD)jl_stackovf_exception;
-            ExceptionInfo->ContextRecord->Esp &= (DWORD)-16;
-            ExceptionInfo->ContextRecord->Esp -= 4; //fix up the stack pointer
-#else
-#error WIN16 not supported :P
-#endif
+            jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord, 0);
             return EXCEPTION_CONTINUE_EXECUTION;
         default:
             ios_puts("Please submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ", ios_stderr);

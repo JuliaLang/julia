@@ -862,7 +862,11 @@ Strings
 
 .. function:: search(string, chars, [start])
 
-   Search for the first occurance of the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``. The return value is ``0:-1`` if there is no match.
+   Search for the first occurance of the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``:
+   
+   `search(string, "substring")` = `start:end` such that ``string[start:end] == "substring"``, or `0:-1` if unmatched.
+   
+   `search(string, 'c')`         = `index` such that ``string[index] == 'c'``, or `0` if unmatched.
 
 .. function:: rsearch(string, chars, [start])
 
@@ -870,21 +874,16 @@ Strings
 
 .. function:: index(string, chars, [start])
 
-    Similar to ``search``, but return only the start index at which the characters were found, or 0 if they were not.
+   Similar to ``search``, but return only the start index at which the characters were found, or 0 if they were not.
 
 .. function:: rindex(string, chars, [start])
 
-    Similar to ``rsearch``, but return only the start index at which the characters were found, or 0 if they were not.
+   Similar to ``rsearch``, but return only the start index at which the characters were found, or 0 if they were not.
 
-    Similar to ``search``, but return only the start index at which the
-    characters were found, or 0 if they were not.
+   Similar to ``search``, but return only the start index at which the
+   characters were found, or 0 if they were not.
 
    Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``. The return value is ``0:-1`` if there is no match.
-
-.. function:: rsearch(string, chars, [start])
-
-   Like ``search``, but starts at the end and moves towards the beginning of
-   ``string``.
 
 .. function:: contains(haystack, needle)
 
