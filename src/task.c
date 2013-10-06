@@ -569,16 +569,19 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
     stk.AddrFrame.Mode = AddrModeFlat;
     
     size_t n = 0;
+    intptr_t lastsp = stk.AddrStack.Offset;
     while (n < maxsize) {
         in_stackwalk = 1;
         BOOL result = StackWalk64(MachineType, GetCurrentProcess(), hMainThread,
             &stk, Context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL);
         in_stackwalk = 0;
-        data[n++] = (ptrint_t)stk.AddrPC.Offset;
-        if (stk.AddrReturn.Offset == 0)
+        data[n++] = (intptr_t)stk.AddrPC.Offset;
+        intptr_t sp = (intptr_t)stk.AddrStack.Offset;
+        if (!result || sp == 0 || 
+            (_stack_grows_up ? sp < lastsp : sp > lastsp) ||
+            stk.AddrReturn.Offset == 0)
             break;
-        if (!result)
-            break;
+        lastsp = sp;
     }
     return n;
 }
