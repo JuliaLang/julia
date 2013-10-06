@@ -1,9 +1,7 @@
 module Dir
 
-using Base.Git
-
-const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
-const META_BRANCH = "devel"
+import Base.Git
+import ..Pkg: DEFAULT_META, META_BRANCH
 
 @unix_only const DIR_NAME = ".julia"
 @windows_only const DIR_NAME = "packages"
@@ -32,7 +30,7 @@ function cd(f::Function, args...; kws...)
     Base.cd(()->f(args...; kws...), dir)
 end
 
-function init(meta::String=DEFAULT_META)
+function init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
     dir = path()
     if isdir(joinpath(dir,"METADATA"))
         info("Package directory $dir is already initialized.")
@@ -43,7 +41,7 @@ function init(meta::String=DEFAULT_META)
         mkpath(dir)
         Base.cd(dir) do
             info("Cloning METADATA from $meta")
-            run(`git clone -q -b $META_BRANCH $meta METADATA`)
+            run(`git clone -q -b $branch $meta METADATA`)
             Git.set_remote_url(meta, dir="METADATA")
             run(`touch REQUIRE`)
         end
