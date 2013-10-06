@@ -11,7 +11,7 @@ function eigs{T<:BlasFloat}(A::AbstractMatrix{T};
 	if !isempty(v0) && length(v0)!=n; error("Starting vector must have length $n"); end
     if n <= 6 && nev > n-1; nev = n-1; end
     ncv = blas_int(min(max(2*nev+2, ncv), n))
-    bmat   = "I"
+
     sym   = issym(A)
     cmplx = iseltype(A,Complex)
     bmat  = "I"
@@ -35,12 +35,12 @@ function eigs{T<:BlasFloat}(A::AbstractMatrix{T};
     end
         
     # Compute the Ritz values and Ritz vectors
-    (resid, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork) = 
+    (resid, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork, TOL) = 
        ARPACK.aupd_wrapper(T, linop, n, sym, cmplx, bmat, nev, ncv, which, tol, maxiter, mode, v0)
     
     # Postprocessing to get eigenvalues and eigenvectors
     return ARPACK.eupd_wrapper(T, n, sym, cmplx, bmat, nev, which, ritzvec,
-                               tol, resid, ncv, v, ldv, sigma, iparam, ipntr, 
+                               TOL, resid, ncv, v, ldv, sigma, iparam, ipntr, 
                                workd, workl, lworkl, rwork)
 
 end
