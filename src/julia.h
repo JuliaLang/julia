@@ -1241,7 +1241,7 @@ extern ptrint_t bt_data[MAX_BT_SIZE+1];
 extern size_t bt_size;
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize);
 DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, bt_context_t ctx);
-#ifdef _OS_DARWIN_
+#ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, bt_context_t ctx);
 #endif
 

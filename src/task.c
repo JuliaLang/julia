@@ -607,7 +607,7 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, unw_context_t
     } while (unw_step(&cursor) > 0);
     return n;
 }
-#ifdef _OS_DARWIN_
+#ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, unw_context_t *uc)
 {
     unw_cursor_t cursor;
