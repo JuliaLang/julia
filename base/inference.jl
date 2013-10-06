@@ -23,7 +23,7 @@ type CallStack
     mod::Module
     types::Tuple
     recurred::Bool
-    cycleid
+    cycleid::Int
     result
     prev::Union(EmptyCallStack,CallStack)
     sv::StaticVarInfo
@@ -1694,7 +1694,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
         return NF
     end
     argexprs = e.args[2:]
-    atypes = limit_tuple_type(tuple(map(exprtype, argexprs)...))
+    atypes = tuple(map(exprtype, argexprs)...)
 
     if is(f, convert_default) && length(atypes)==3
         # builtin case of convert. convert(T,x::S) => x, when S<:T
@@ -1737,16 +1737,40 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
         return NF
     end
     meth = meth[1]::Tuple
+    linfo = meth[3].func.code
+
+    if length(atypes) > MAX_TUPLETYPE_LEN
+        # check call stack to see if this argument list is growing
+        st = inference_stack
+        while !isa(st, EmptyCallStack)
+            if st.ast === linfo.def.ast && length(atypes) > length(st.types)
+                atypes = limit_tuple_type(atypes)
+                meth = _methods(f, atypes, 1)
+                if meth === false || length(meth) != 1
+                    return NF
+                end
+                meth = meth[1]::Tuple
+                linfo2 = meth[3].func.code
+                if linfo2 !== linfo
+                    return NF
+                end
+                linfo = linfo2
+                break
+            end
+            st = st.prev
+        end
+    end
+
     # when 1 method matches the inferred types, there is still a chance
     # of a no-method error at run time, unless the inferred types are a
     # subset of the method signature.
     if !(atypes <: meth[1])
         return NF
     end
-    linfo = meth[3].func.code
     if !isa(linfo,LambdaStaticData) || meth[3].func.env !== ()
         return NF
     end
+
     sp = meth[2]::Tuple
     sp = tuple(sp..., linfo.sparams...)
     spvals = { sp[i] for i in 2:2:length(sp) }
@@ -1783,13 +1807,28 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     assert(is(body[1].head,:return), "inference.jl:1051")
     # check for vararg function
     args = f_argnames(ast)
-    na = length(args)
-    if na>0 && is_rest_arg(ast.args[1][na])
-        # construct tuple-forming expression for argument tail
-        vararg = mk_tuplecall(argexprs[na:end])
-        argexprs = {argexprs[1:(na-1)]..., vararg}
-    end
     expr = body[1].args[1]
+    na = length(args)
+
+    if na>0 && is_rest_arg(ast.args[1][na])
+        vaname = args[na]
+        len_argexprs = length(argexprs)
+        valen = len_argexprs-na+1
+        if valen>0 && !occurs_outside_tupleref(expr, vaname, sv, valen)
+            # argument tuple is not used as a whole, so convert function body
+            # to one accepting the exact number of arguments we have.
+            newnames = unique_names(ast,valen)
+            if needcopy
+                expr = astcopy(expr); needcopy = false
+            end
+            replace_tupleref!(ast, Expr(:return, expr), vaname, newnames, sv, 1)
+            args = vcat(args[1:na-1], newnames)
+        else
+            # construct tuple-forming expression for argument tail
+            vararg = mk_tuplecall(argexprs[na:end])
+            argexprs = {argexprs[1:(na-1)]..., vararg}
+        end
+    end
 
     # avoid capture if the function has free variables with the same name
     # as our vars
@@ -2011,6 +2050,27 @@ function unique_name(ast)
     g
 end
 
+function unique_names(ast, n)
+    ns = {}
+    locllist = ast.args[2][1]::Array{Any,1}
+    for g in some_names
+        if !contains_is(locllist, g)
+            push!(ns, g)
+            if length(ns)==n
+                return ns
+            end
+        end
+    end
+    while length(ns)<n
+        g = gensym()
+        while contains_is(locllist, g) || contains_is(ns, g)
+            g = gensym()
+        end
+        push!(ns, g)
+    end
+    ns
+end
+
 function is_known_call(e::Expr, func, sv)
     if !(is(e.head,:call) || is(e.head,:call1))
         return false
@@ -2160,14 +2220,14 @@ function tuple_elim_pass(ast::Expr)
                 end
             end
             i += n_ins
-            replace_tupleref(ast, bexpr, var, vals, sv, i)
+            replace_tupleref!(ast, bexpr, var, vals, sv, i)
         else
             i += 1
         end
     end
 end
 
-function replace_tupleref(ast, e::ANY, tupname, vals, sv, i0)
+function replace_tupleref!(ast, e::ANY, tupname, vals, sv, i0)
     if !isa(e,Expr)
         return
     end
@@ -2189,7 +2249,7 @@ function replace_tupleref(ast, e::ANY, tupname, vals, sv, i0)
             end
             e.args[i] = val
         else
-            replace_tupleref(ast, a, tupname, vals, sv, 1)
+            replace_tupleref!(ast, a, tupname, vals, sv, 1)
         end
     end
 end

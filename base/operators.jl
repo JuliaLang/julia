@@ -45,9 +45,10 @@ min(x,y) = x < y ? x : y
 
 for op = (:+, :*, :&, :|, :$, :min, :max)
     @eval begin
-        ($op)(a,b,c) = ($op)(($op)(a,b),c)
-        ($op)(a,b,c,d) = ($op)(($op)(($op)(a,b),c),d)
-        ($op)(a,b,c,d,e) = ($op)(($op)(($op)(($op)(a,b),c),d),e)
+        # note: these definitions must not cause a dispatch loop when +(a,b) is
+        # not defined, and must only try to call 2-argument definitions, so
+        # that defining +(a,b) is sufficient for full functionality.
+        ($op)(a, b, c)        = ($op)(($op)(a,b),c)
         ($op)(a, b, c, xs...) = ($op)(($op)(($op)(a,b),c), xs...)
     end
 end
