@@ -7,7 +7,7 @@ import ..LinAlg: BlasInt, blas_int, ARPACKException
 function aupd_wrapper(T, linop::Function, n::Integer,
                       sym::Bool, cmplx::Bool, bmat::ASCIIString,
                       nev::Integer, ncv::Integer, which::ASCIIString, 
-                      tol, maxiter::Integer, mode::Integer, v0::Vector)
+                      tol::Real, maxiter::Integer, mode::Integer, v0::Vector)
 
     lworkl = cmplx ? ncv * (3*ncv + 5) : ( lworkl = sym ? ncv * (ncv + 8) :  ncv * (3*ncv + 6) )
     TR = cmplx ? T.types[1] : T
@@ -59,7 +59,7 @@ end
 
 function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
                       nev::Integer, which::ASCIIString, ritzvec::Bool,
-                      tol::Array, resid, ncv::Integer, v, ldv, sigma, iparam, ipntr,
+                      TOL::Array, resid, ncv::Integer, v, ldv, sigma, iparam, ipntr,
                       workd, workl, lworkl, rwork)
 
     howmny = "A"
@@ -72,7 +72,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
         sigma = ones(T, 1)*sigma
         workev = Array(T, 2ncv)
         neupd(ritzvec, howmny, select, d, v, ldv, sigma, workev,
-              bmat, n, which, nev, tol, resid, ncv, v, ldv,
+              bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, rwork, info)
         if info[1] != 0; throw(ARPACKException(info[1])); end
         return ritzvec ? (d[1:nev], v[1:n, 1:nev],iparam[3],iparam[9],resid) : (d[1:nev],iparam[3],iparam[9],resid)
@@ -82,7 +82,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
         d = Array(T, nev)
         sigma = ones(T, 1)*sigma
         seupd(ritzvec, howmny, select, d, v, ldv, sigma,
-              bmat, n, which, nev, tol, resid, ncv, v, ldv,
+              bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, info) 
         if info[1] != 0; throw(ARPACKException(info[1])); end
         return ritzvec ? (d, v[1:n, 1:nev],iparam[3],iparam[9],resid) : (d,iparam[3],iparam[9],resid)
@@ -95,7 +95,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
         sigmai = ones(T, 1)*imag(sigma)
         workev = Array(T, 3*ncv)
         neupd(ritzvec, howmny, select, dr, di, v, ldv, sigmar, sigmai,
-              workev, bmat, n, which, nev, tol, resid, ncv, v, ldv,
+              workev, bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, info)
         if info[1] != 0; throw(ARPACKException(info[1])); end
         evec = complex(zeros(T, n, nev+1), zeros(T, n, nev+1))
@@ -121,19 +121,19 @@ for (T, saupd_name, seupd_name, naupd_name, neupd_name) in
      (:Float32, :ssaupd_, :sseupd_, :snaupd_, :sneupd_))
     @eval begin
 
-        function naupd(ido, bmat, n, evtype, nev, tol::Array{$T}, resid::Array{$T}, ncv, v::Array{$T}, ldv,
+        function naupd(ido, bmat, n, evtype, nev, TOL::Array{$T}, resid::Array{$T}, ncv, v::Array{$T}, ldv,
                        iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, info)
             
             ccall(($(string(naupd_name)), :libarpack), Void,
                   (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
                    Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt}, Clong, Clong),
-                  ido, bmat, &n, evtype, &nev, tol, resid, &ncv, v, &ldv,
+                  ido, bmat, &n, evtype, &nev, TOL, resid, &ncv, v, &ldv,
                   iparam, ipntr, workd, workl, &lworkl, info, sizeof(bmat), sizeof(evtype))
         end
 
         function neupd(rvec, howmny, select, dr, di, z, ldz, sigmar, sigmai,
-                  workev::Array{$T}, bmat, n, evtype, nev, tol::Array{$T}, resid::Array{$T}, ncv, v, ldv,
+                  workev::Array{$T}, bmat, n, evtype, nev, TOL::Array{$T}, resid::Array{$T}, ncv, v, ldv,
                   iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, info)
 
             ccall(($(string(neupd_name)), :libarpack), Void,
@@ -143,25 +143,25 @@ for (T, saupd_name, seupd_name, naupd_name, neupd_name) in
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T},
                    Ptr{BlasInt}, Ptr{BlasInt}, Clong, Clong, Clong),
                   &rvec, howmny, select, dr, di, z, &ldz, sigmar, sigmai,
-                  workev, bmat, &n, evtype, &nev, tol, resid, &ncv, v, &ldv,
+                  workev, bmat, &n, evtype, &nev, TOL, resid, &ncv, v, &ldv,
                   iparam, ipntr, workd, workl, &lworkl, info,
                   sizeof(howmny), sizeof(bmat), sizeof(evtype))
         end
 
-        function saupd(ido, bmat, n, which, nev, tol::Array{$T}, resid::Array{$T}, ncv, v::Array{$T}, ldv, 
+        function saupd(ido, bmat, n, which, nev, TOL::Array{$T}, resid::Array{$T}, ncv, v::Array{$T}, ldv, 
                        iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, info)
             
             ccall(($(string(saupd_name)), :libarpack), Void,
                   (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
                    Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt}, Clong, Clong),
-                  ido, bmat, &n, which, &nev, tol, resid, &ncv, v, &ldv,
+                  ido, bmat, &n, which, &nev, TOL, resid, &ncv, v, &ldv,
                   iparam, ipntr, workd, workl, &lworkl, info, sizeof(bmat), sizeof(which))
 
         end
 
         function seupd(rvec, howmny, select, d, z, ldz, sigma,
-                       bmat, n, evtype, nev, tol::Array{$T}, resid::Array{$T}, ncv, v::Array{$T}, ldv,
+                       bmat, n, evtype, nev, TOL::Array{$T}, resid::Array{$T}, ncv, v::Array{$T}, ldv,
                        iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, info) 
 
             ccall(($(string(seupd_name)), :libarpack), Void,
@@ -170,7 +170,7 @@ for (T, saupd_name, seupd_name, naupd_name, neupd_name) in
                    Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt}, Clong, Clong, Clong),
                   &rvec, howmny, select, d, z, &ldz, sigma,
-                  bmat, &n, evtype, &nev, tol, resid, &ncv, v, &ldv,
+                  bmat, &n, evtype, &nev, TOL, resid, &ncv, v, &ldv,
                   iparam, ipntr, workd, workl, &lworkl, info, sizeof(howmny), sizeof(bmat), sizeof(evtype))
         end
 
@@ -182,7 +182,7 @@ for (T, TR, naupd_name, neupd_name) in
      (:Complex64,  :Float32, :cnaupd_, :cneupd_))
     @eval begin
 
-        function naupd(ido, bmat, n, evtype, nev, tol::Array{$TR}, resid::Array{$T}, ncv, v::Array{$T}, ldv,
+        function naupd(ido, bmat, n, evtype, nev, TOL::Array{$TR}, resid::Array{$T}, ncv, v::Array{$T}, ldv,
                        iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, 
                        rwork::Array{$TR}, info)
             
@@ -191,13 +191,13 @@ for (T, TR, naupd_name, neupd_name) in
                    Ptr{$TR}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt},
                    Ptr{$TR}, Ptr{BlasInt}),
-                  ido, bmat, &n, evtype, &nev, tol, resid, &ncv, v, &ldv,
+                  ido, bmat, &n, evtype, &nev, TOL, resid, &ncv, v, &ldv,
                   iparam, ipntr, workd, workl, &lworkl, rwork, info)
 
         end
 
         function neupd(rvec, howmny, select, d, z, ldz, sigma, workev::Array{$T},
-                       bmat, n, evtype, nev, tol::Array{$TR}, resid::Array{$T}, ncv, v::Array{$T}, ldv,
+                       bmat, n, evtype, nev, TOL::Array{$TR}, resid::Array{$T}, ncv, v::Array{$T}, ldv,
                        iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, 
                        rwork::Array{$TR}, info)
 
@@ -207,7 +207,7 @@ for (T, TR, naupd_name, neupd_name) in
                    Ptr{$TR}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$TR}, Ptr{BlasInt}),
                   &rvec, howmny, select, d, z, &ldz, sigma, workev,
-                  bmat, &n, evtype, &nev, tol, resid, &ncv, v, &ldv,
+                  bmat, &n, evtype, &nev, TOL, resid, &ncv, v, &ldv,
                   iparam, ipntr, workd, workl, &lworkl, rwork, info) 
 
         end
