@@ -336,8 +336,11 @@ const apply_type_tfunc = function (A, args...)
     uncertain = false
     lA = length(A)
     for i=2:max(lA,length(args))
-        if isType(args[i])
-            tparams = tuple(tparams..., args[i].parameters[1])
+        ai = args[i]
+        if isType(ai)
+            tparams = tuple(tparams..., ai.parameters[1])
+        elseif isa(ai,Tuple) && all(isType,ai)
+            tparams = tuple(tparams..., map(t->t.parameters[1], ai))
         elseif i<=lA && isa(A[i],Int)
             tparams = tuple(tparams..., A[i])
         else
