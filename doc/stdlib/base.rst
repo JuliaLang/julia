@@ -483,6 +483,10 @@ Iterable Collections
 
    Returns the sum of all elements in a collection
 
+.. function:: sum(A, dims)
+
+   Sum elements of an array over the given dimensions.
+
 .. function:: sum(f, itr)
 
    Sum the results of calling function ``f`` on each element of ``itr``.
@@ -491,13 +495,25 @@ Iterable Collections
 
    Returns the product of all elements of a collection
 
+.. function:: prod(A, dims)
+
+   Multiply elements of an array over the given dimensions.
+
 .. function:: any(itr) -> Bool
 
    Test whether any elements of a boolean collection are true
 
+.. function:: any(A, dims)
+
+   Test whether any values along the given dimensions of an array are true.
+
 .. function:: all(itr) -> Bool
 
    Test whether all elements of a boolean collection are true
+
+.. function:: all(A, dims)
+
+   Test whether all values along the given dimensions of an array are true.
 
 .. function:: count(p, itr) -> Integer
 

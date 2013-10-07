@@ -1363,8 +1363,8 @@ min{T}(A::AbstractArray{T}, b::(), region) =
 sum{T}(A::AbstractArray{T}, region)  = reducedim(+,A,region,zero(T))
 prod{T}(A::AbstractArray{T}, region) = reducedim(*,A,region,one(T))
 
-all(A::AbstractArray{Bool}, region) = reducedim(all,A,region,true)
-any(A::AbstractArray{Bool}, region) = reducedim(any,A,region,false)
+all(A::AbstractArray{Bool}, region) = reducedim(&,A,region,true)
+any(A::AbstractArray{Bool}, region) = reducedim(|,A,region,false)
 sum(A::AbstractArray{Bool}, region) = reducedim(+,A,region,0,similar(A,Int,reduced_dims(A,region)))
 sum(A::AbstractArray{Bool}) = sum(A, [1:ndims(A)])[1]
 prod(A::AbstractArray{Bool}) =
