@@ -1695,6 +1695,9 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     end
     argexprs = e.args[2:]
     atypes = tuple(map(exprtype, argexprs)...)
+    if length(atypes) > MAX_TUPLETYPE_LEN
+        atypes = limit_tuple_type(atypes)
+    end
 
     if is(f, convert_default) && length(atypes)==3
         # builtin case of convert. convert(T,x::S) => x, when S<:T
@@ -1739,27 +1742,31 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     meth = meth[1]::Tuple
     linfo = meth[3].func.code
 
-    if length(atypes) > MAX_TUPLETYPE_LEN
-        # check call stack to see if this argument list is growing
-        st = inference_stack
-        while !isa(st, EmptyCallStack)
-            if st.ast === linfo.def.ast && length(atypes) > length(st.types)
-                atypes = limit_tuple_type(atypes)
-                meth = _methods(f, atypes, 1)
-                if meth === false || length(meth) != 1
-                    return NF
-                end
-                meth = meth[1]::Tuple
-                linfo2 = meth[3].func.code
-                if linfo2 !== linfo
-                    return NF
-                end
-                linfo = linfo2
-                break
-            end
-            st = st.prev
-        end
-    end
+    ## This code tries to limit the argument list length only when it is
+    ## growing due to recursion.
+    ## It might be helpful for some things, but turns out not to be
+    ## necessary to get max performance from recursive varargs functions.
+    # if length(atypes) > MAX_TUPLETYPE_LEN
+    #     # check call stack to see if this argument list is growing
+    #     st = inference_stack
+    #     while !isa(st, EmptyCallStack)
+    #         if st.ast === linfo.def.ast && length(atypes) > length(st.types)
+    #             atypes = limit_tuple_type(atypes)
+    #             meth = _methods(f, atypes, 1)
+    #             if meth === false || length(meth) != 1
+    #                 return NF
+    #             end
+    #             meth = meth[1]::Tuple
+    #             linfo2 = meth[3].func.code
+    #             if linfo2 !== linfo
+    #                 return NF
+    #             end
+    #             linfo = linfo2
+    #             break
+    #         end
+    #         st = st.prev
+    #     end
+    # end
 
     # when 1 method matches the inferred types, there is still a chance
     # of a no-method error at run time, unless the inferred types are a

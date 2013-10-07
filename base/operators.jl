@@ -50,6 +50,9 @@ for op = (:+, :*, :&, :|, :$, :min, :max)
         # that defining +(a,b) is sufficient for full functionality.
         ($op)(a, b, c)        = ($op)(($op)(a,b),c)
         ($op)(a, b, c, xs...) = ($op)(($op)(($op)(a,b),c), xs...)
+        # a further concern is that it's easy for a type like (Int,Int...)
+        # to match many definitions, so we need to keep the number of
+        # definitions down to avoid losing type information.
     end
 end
 
