@@ -1,17 +1,18 @@
 module Pkg
-import Base.Git
+
+const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
+const META_BRANCH = "devel"
+
 for file in split("dir types reqs cache read query resolve write generate entry")
     include("pkg/$file.jl")
 end
-using .Types
 const cd = Dir.cd
 const dir = Dir.path
 
-init(meta::String=Dir.DEFAULT_META) = Dir.init(meta)
+init(meta::String=DEFAULT_META, branch::String=META_BRANCH) = Dir.init(meta,branch)
 
 rm(pkg::String) = cd(Entry.rm,pkg)
-add(pkg::String, vers::VersionSet) = cd(Entry.add,pkg,vers)
-add(pkg::String, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
+add(pkg::String, vers::VersionNumber...) = cd(Entry.add,pkg,vers...)
 
 available() = cd(Entry.available)
 available(pkg::String) = cd(Entry.available,pkg)
@@ -32,7 +33,7 @@ release(pkg::String) = cd(Entry.release,pkg)
 fix(pkg::String) = cd(Entry.fix,pkg)
 fix(pkg::String, ver::VersionNumber) = cd(Entry.fix,pkg,ver)
 
-update() = cd(Entry.update)
+update() = cd(Entry.update,META_BRANCH)
 resolve() = cd(Entry._resolve)
 
 register(pkg::String) = cd(Entry.register,pkg)

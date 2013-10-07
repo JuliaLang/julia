@@ -93,7 +93,7 @@ function parse(lines::Vector{Line})
 end
 parse(x) = parse(read(x))
 
-# add & rm: intended to be used with Write.update_file
+# add & rm – edit the content a requires file
 
 function add(lines::Vector{Line}, pkg::String, versions::VersionSet=VersionSet())
     v = VersionSet[]

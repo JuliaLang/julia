@@ -1,7 +1,7 @@
 module Entry
 
 using ..Types
-import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..Dir.META_BRANCH
+import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write
 import Base: Git, thispatch, nextpatch, nextminor, nextmajor, check_new_version
 
 function edit(f::Function, pkg::String, args...)
@@ -23,6 +23,7 @@ function add(pkg::String, vers::VersionSet)
     ispath(pkg) || error("unknown package $pkg")
     info("Nothing to be done.")
 end
+add(pkg::String, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 function rm(pkg::String)
     edit(Reqs.rm,pkg) && return
@@ -173,14 +174,14 @@ function fix(pkg::String, ver::VersionNumber)
     fix(pkg,avail[ver].sha1)
 end
 
-function update()
+function update(branch::String)
     info("Updating METADATA...")
     cd("METADATA") do
-        if Git.branch() != META_BRANCH
+        if Git.branch() != branch
             Git.run(`fetch -q --all`)
             Git.run(`checkout -q HEAD^0`)
-            Git.run(`branch -f $META_BRANCH refs/remotes/origin/$META_BRANCH`)
-            Git.run(`checkout -q $META_BRANCH`)
+            Git.run(`branch -f $branch refs/remotes/origin/$branch`)
+            Git.run(`checkout -q $branch`)
         end
         Git.run(`pull -q -m`)
     end
