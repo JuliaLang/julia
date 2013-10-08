@@ -1442,7 +1442,15 @@ Network I/O
 
 .. function:: parseip(addr)
 
-   Parse a string specifying an IPv4 or IPv6 ip address. 
+   Parse a string specifying an IPv4 or IPv6 ip address.
+   
+.. function:: IPv4(host::Integer) -> IPv4
+
+   Returns IPv4 object from ip address formatted as Integer
+
+.. function:: IPv6(host::Integer) -> IPv6
+
+   Returns IPv6 object from ip address formatted as Integer  
 
 .. function:: nb_available(stream)
 
