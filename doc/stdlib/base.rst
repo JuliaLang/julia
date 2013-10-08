@@ -1206,7 +1206,9 @@ I/O
    Tests whether an I/O stream is at end-of-file. If the stream is not yet
    exhausted, this function will block to wait for more data if necessary, and
    then return ``false``. Therefore it is always safe to read one byte after
-   seeing ``eof`` return ``false``.
+   seeing ``eof`` return ``false``. ``eof`` will return ``false`` as long
+   as buffered data is still available, even if the remote end of a
+   connection is closed.
 
 .. function:: isreadonly(stream)
 
@@ -1217,7 +1219,7 @@ I/O
    Determine whether a stream is open (i.e. has not been closed yet).
    If the connection has been closed remotely (in case of e.g. a socket),
    ``isopen`` will return ``false`` even though buffered data may still be
-   available. Use ``nb_available`` to check if necessary.
+   available. Use ``eof`` to check if necessary.
 
 .. function:: ntoh(x)
 
