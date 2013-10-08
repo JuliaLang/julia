@@ -408,6 +408,19 @@ function readall(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
     return bytestring(readbytes(cmd, stdin))
 end
 
+function readerr(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
+    out = Pipe(C_NULL)
+    err = Pipe(C_NULL)
+    proc = spawn(false, cmd, (stdin, out, err)
+    start_reading(out)
+    start_reading(err)
+    wait_close(out)
+    wait_close(err)
+    b_out = takebuf_array(out.buffer)
+    b_err = takebuf_array(err.buffer)
+    return (bytestring(b_out), bytestring(b_err))
+end
+
 writeall(cmd::AbstractCmd, stdin::String) = writeall(cmd, stdin, DevNull)
 function writeall(cmd::AbstractCmd, stdin::String, stdout::AsyncStream)
     (in,pc) = writesto(cmd, stdout)
