@@ -26,7 +26,7 @@ function IPv4(host::Integer)
     end
 end
 
-show(io::IO,ip::IPv4) = print(io,"IPv4(",ip,")")
+show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
 print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
                                   dec((ip.host&(0xFF0000))>>16),".",
                                   dec((ip.host&(0xFF00))>>8),".",
@@ -78,7 +78,7 @@ function ipv6_field(ip::IPv6,i)
     uint16(ip.host&(uint128(0xFFFF)<<(i*16))>>(i*16))
 end
 
-show(io::IO, ip::IPv6) = print(io,"IPv6(",ip,")")
+show(io::IO, ip::IPv6) = print(io,"ip\"",ip,"\"")
 # RFC 5952 compliant show function
 # http://tools.ietf.org/html/rfc5952
 function print(io::IO,ip::IPv6)
