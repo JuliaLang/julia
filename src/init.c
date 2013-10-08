@@ -706,31 +706,11 @@ void julia_init(char *imageFile)
         JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
-#if defined(_OS_LINUX_)
-    stack_t ss;
-    ss.ss_flags = 0;
-    ss.ss_size = SIGSTKSZ;
-    ss.ss_sp = signal_stack;
-    if (sigaltstack(&ss, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "sigaltstack: %s\n", strerror(errno));
-        jl_exit(1);
-    }
-
-    struct sigaction act;
-    memset(&act, 0, sizeof(struct sigaction));
-    sigemptyset(&act.sa_mask);
-    act.sa_sigaction = segv_handler;
-    act.sa_flags = SA_ONSTACK | SA_SIGINFO;
-    if (sigaction(SIGSEGV, &act, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
-        jl_exit(1);
-    }
-
     if (signal(SIGPIPE,SIG_IGN) == SIG_ERR) {
         JL_PRINTF(JL_STDERR, "Couldn't set SIGPIPE\n");
         jl_exit(1);
     }
-#elif defined (_OS_DARWIN_)
+#if defined (_OS_DARWIN_)
     kern_return_t ret;
     mach_port_t self = mach_task_self();
     ret = mach_port_allocate(self,MACH_PORT_RIGHT_RECEIVE,&segv_port);
@@ -756,8 +736,27 @@ void julia_init(char *imageFile)
 
     ret = task_set_exception_ports(self,EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
     HANDLE_MACH_ERROR("task_set_exception_ports",ret);
-#endif
-#else
+#else // defined(_OS_DARWIN_)
+    stack_t ss;
+    ss.ss_flags = 0;
+    ss.ss_size = SIGSTKSZ;
+    ss.ss_sp = signal_stack;
+    if (sigaltstack(&ss, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaltstack: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+
+    struct sigaction act;
+    memset(&act, 0, sizeof(struct sigaction));
+    sigemptyset(&act.sa_mask);
+    act.sa_sigaction = segv_handler;
+    act.sa_flags = SA_ONSTACK | SA_SIGINFO;
+    if (sigaction(SIGSEGV, &act, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+#endif // defined(_OS_DARWIN_)
+#else // defined(_OS_WINDOWS_)
     if (signal(SIGFPE, (void (__cdecl *)(int))fpe_handler) == SIG_ERR) {
         JL_PRINTF(JL_STDERR, "Couldn't set SIGFPE\n");
         jl_exit(1);
