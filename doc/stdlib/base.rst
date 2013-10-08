@@ -1215,6 +1215,9 @@ I/O
 .. function:: isopen(stream)
 
    Determine whether a stream is open (i.e. has not been closed yet).
+   If the connection has been closed remotely (in case of e.g. a socket),
+   ``isopen`` will return ``false`` even though buffered data may still be
+   available. Use ``nb_available`` to check if necessary.
 
 .. function:: ntoh(x)
 
