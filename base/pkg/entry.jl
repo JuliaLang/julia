@@ -297,7 +297,6 @@ function _resolve(
 end
 
 function write_tag_metadata(pkg::String, ver::VersionNumber, commit::String)
-    info("Writing METADATA for $pkg v$ver")
     cmd = Git.cmd(`cat-file blob $commit:REQUIRE`, dir=pkg)
     reqs = success(cmd) ? Reqs.read(cmd) : Reqs.Line[]
     cd("METADATA") do
@@ -336,8 +335,16 @@ function register(pkg::String, url::String)
             Git.run(`add $path`)
         end
         for (ver,commit) in versions
+            info("Tagging $pkg v$ver")
             write_tag_metadata(pkg,ver,commit)
         end
+        info("Committing METADATA for $pkg")
+        msg = "Register $pkg"
+        if !isempty(versions)
+            vers = map(v->"v$v", sort!([keys(versions)...]))
+            msg *= ": $(join(vers,", "))"
+        end
+        Git.run(`commit -q -m $msg -- $pkg`, dir="METADATA")
         info("Checking METADATA sanity")
         check_metadata()
     end
@@ -360,13 +367,16 @@ nextbump(v::VersionNumber) = isrewritable(v) ? v : nextpatch(v)
 
 function tag(pkg::String, ver::Union(Symbol,VersionNumber), commit::String, msg::String)
     ispath(pkg,".git") || error("$pkg is not a git repo")
-    Git.dirty(dir=pkg) && error("$pkg is dirty – stash changes to tag")
+    Git.dirty(dir=pkg) &&
+        error("$pkg is dirty – commit or stash changes to tag")
+    Git.dirty(pkg, dir="METADATA") &&
+        error("METADATA/$pkg is dirty – commit or stash changes to tag")
     commit = isempty(commit) ? Git.head(dir=pkg) :
         Git.readchomp(`rev-parse $commit`, dir=pkg)
     registered = isfile("METADATA",pkg,"url")
     if registered
         avail = Read.available(pkg)
-        existing = [keys(Read.available(pkg))...]
+        existing = VersionNumber[keys(Read.available(pkg))...]
         ancestors = filter(v->Git.is_ancestor_of(avail[v].sha1,commit,dir=pkg), existing)
     else
         tags = split(Git.readall(`tag -l v*`, dir=pkg))
@@ -400,6 +410,8 @@ function tag(pkg::String, ver::Union(Symbol,VersionNumber), commit::String, msg:
     try
         Git.transact(dir="METADATA") do
             write_tag_metadata(pkg,ver,commit)
+            info("Committing METADATA for $pkg")
+            Git.run(`commit -q -m "Tag $pkg v$ver" -- $pkg`, dir="METADATA")
             info("Checking METADATA sanity")
             check_metadata()
         end
