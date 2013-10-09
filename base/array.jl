@@ -1467,8 +1467,8 @@ function reducedim(f::Function, A, region, v0, R)
         (is(f,*)     && (fname=:*;true)) ||
         (is(f,max)   && (fname=:max;true)) ||
         (is(f,min)   && (fname=:min;true)) ||
-        (is(f,any)   && (fname=:any;true)) ||
-        (is(f,all)   && (fname=:all;true))
+        (is(f,&)     && (fname=:&;true)) ||
+        (is(f,|)     && (fname=:|;true))
         key = (fname, ndimsA)
     end
 

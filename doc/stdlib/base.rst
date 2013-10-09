@@ -483,6 +483,10 @@ Iterable Collections
 
    Returns the sum of all elements in a collection
 
+.. function:: sum(A, dims)
+
+   Sum elements of an array over the given dimensions.
+
 .. function:: sum(f, itr)
 
    Sum the results of calling function ``f`` on each element of ``itr``.
@@ -491,13 +495,25 @@ Iterable Collections
 
    Returns the product of all elements of a collection
 
+.. function:: prod(A, dims)
+
+   Multiply elements of an array over the given dimensions.
+
 .. function:: any(itr) -> Bool
 
    Test whether any elements of a boolean collection are true
 
+.. function:: any(A, dims)
+
+   Test whether any values along the given dimensions of an array are true.
+
 .. function:: all(itr) -> Bool
 
    Test whether all elements of a boolean collection are true
+
+.. function:: all(A, dims)
+
+   Test whether all values along the given dimensions of an array are true.
 
 .. function:: count(p, itr) -> Integer
 
@@ -1190,7 +1206,9 @@ I/O
    Tests whether an I/O stream is at end-of-file. If the stream is not yet
    exhausted, this function will block to wait for more data if necessary, and
    then return ``false``. Therefore it is always safe to read one byte after
-   seeing ``eof`` return ``false``.
+   seeing ``eof`` return ``false``. ``eof`` will return ``false`` as long
+   as buffered data is still available, even if the remote end of a
+   connection is closed.
 
 .. function:: isreadonly(stream)
 
@@ -1199,6 +1217,9 @@ I/O
 .. function:: isopen(stream)
 
    Determine whether a stream is open (i.e. has not been closed yet).
+   If the connection has been closed remotely (in case of e.g. a socket),
+   ``isopen`` will return ``false`` even though buffered data may still be
+   available. Use ``eof`` to check if necessary.
 
 .. function:: ntoh(x)
 
@@ -1423,7 +1444,15 @@ Network I/O
 
 .. function:: parseip(addr)
 
-   Parse a string specifying an IPv4 or IPv6 ip address. 
+   Parse a string specifying an IPv4 or IPv6 ip address.
+   
+.. function:: IPv4(host::Integer) -> IPv4
+
+   Returns IPv4 object from ip address formatted as Integer
+
+.. function:: IPv6(host::Integer) -> IPv6
+
+   Returns IPv6 object from ip address formatted as Integer  
 
 .. function:: nb_available(stream)
 
