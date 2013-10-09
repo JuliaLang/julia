@@ -178,12 +178,15 @@ function update(branch::String)
     info("Updating METADATA...")
     cd("METADATA") do
         if Git.branch() != branch
+            Git.dirty() && error("METADATA is not on $branch and dirty")
+            Git.attached() || error("METADATA is not on $branch and detached")
             Git.run(`fetch -q --all`)
             Git.run(`checkout -q HEAD^0`)
             Git.run(`branch -f $branch refs/remotes/origin/$branch`)
             Git.run(`checkout -q $branch`)
         end
-        Git.run(`pull -q -m`)
+        # TODO: handle merge conflicts
+        Git.run(`pull -q --no-edit`)
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
@@ -212,6 +215,51 @@ function update(branch::String)
     info("Computing changes...")
     _resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
     #4082 TODO: some call to fixup should go here
+end
+
+function publish(branch::String)
+    Git.branch(dir="METADATA") == branch ||
+        error("METADATA must be on $branch to publish changes")
+    Git.success(`push -q -n`, dir="METADATA") ||
+        error("METADATA is behind origin/$branch – run Pkg.update() before publishing")
+    Git.run(`fetch -q`, dir="METADATA")
+    info("Checking METADATA")
+    check_metadata()
+    cmd = Git.cmd(`diff --name-only --diff-filter=AMR origin/$branch HEAD --`, dir="METADATA")
+    tags = Dict{ASCIIString,Vector{ASCIIString}}()
+    for line in eachline(cmd)
+        m = match(r"^(.+?)/versions/([^/]+)/sha1$", line)
+        m != nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
+        pkg, ver = m.captures; ver = convert(VersionNumber,ver)
+        sha1 = readchomp(joinpath("METADATA",chomp(line)))
+        any(split(Git.readall(`tag --points-at $sha1`, dir=pkg))) do tag
+            ver == convert(VersionNumber,tag) || return false
+            haskey(tags,pkg) || (tags[pkg] = ASCIIString[])
+            push!(tags[pkg], tag)
+            return true
+        end || error("$pkg v$ver is incorrectly tagged – $sha1 expected")
+    end
+    isempty(tags) && return info("No new package versions to publish.")
+    for pkg in sort!([keys(tags)...])
+        forced = ASCIIString[]
+        unforced = ASCIIString[]
+        for tag in tags[pkg]
+            ver = convert(VersionNumber,tag)
+            push!(isrewritable(ver) ? forced : unforced, tag)
+        end
+        if !isempty(forced)
+            info("Pushing $pkg temporary tags: ", join(forced,", "))
+            refspecs = ["refs/tags/$tag:refs/tags/$tag" for tag in forced]
+            Git.run(`push -q --force origin $refspecs`, dir=pkg)
+        end
+        if !isempty(unforced)
+            info("Pushing $pkg permanent tags: ", join(unforced,", "))
+            refspecs = ["refs/tags/$tag:refs/tags/$tag" for tag in unforced]
+            Git.run(`push -q origin $refspecs`, dir=pkg)
+        end
+    end
+    info("Pushing METADATA changes")
+    Git.run(`push -q`, dir="METADATA")
 end
 
 function _resolve(
@@ -345,8 +393,6 @@ function register(pkg::String, url::String)
             msg *= ": $(join(vers,", "))"
         end
         Git.run(`commit -q -m $msg -- $pkg`, dir="METADATA")
-        info("Checking METADATA sanity")
-        check_metadata()
     end
 end
 
@@ -412,8 +458,6 @@ function tag(pkg::String, ver::Union(Symbol,VersionNumber), commit::String, msg:
             write_tag_metadata(pkg,ver,commit)
             info("Committing METADATA for $pkg")
             Git.run(`commit -q -m "Tag $pkg v$ver" -- $pkg`, dir="METADATA")
-            info("Checking METADATA sanity")
-            check_metadata()
         end
     catch
         Git.run(`tag -d v$ver`, dir=pkg)
@@ -429,9 +473,9 @@ function check_metadata()
 
     problematic = Resolve.sanity_check(deps)
     if !isempty(problematic)
-        msg = "Packages with unsatisfiable requirements found:\n"
+        msg = "packages with unsatisfiable requirements found:\n"
         for (p, vn, rp) in problematic
-            msg *= "    $p v$vn : no valid versions exist for package $rp\n"
+            msg *= "    $p v$vn – no valid versions exist for package $rp\n"
         end
         error(msg)
     end
