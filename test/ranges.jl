@@ -100,3 +100,9 @@ r = (-4*int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
 @test_throws (3:6)[5]
 @test (0:2:10)[7:6] == 12:2:10
 @test_throws (0:2:10)[7:7]
+
+# map on ranges should evaluate first value only once (#4453)
+let io=IOBuffer(3)
+    map(x->print(io,x), 1:2)
+    @test takebuf_string(io)=="12"
+end
