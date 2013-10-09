@@ -1602,7 +1602,7 @@ end
 
 
 ## 1 argument
-function map_to2(f::Callable, first, dest::AbstractArray, A::AbstractArray)
+function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray)
     dest[1] = first
     for i=2:length(A)
         dest[i] = f(A[i])
@@ -1614,11 +1614,11 @@ function map(f::Callable, A::AbstractArray)
     if isempty(A); return {}; end
     first = f(A[1])
     dest = similar(A, typeof(first))
-    return map_to2(f, first, dest, A)
+    return map_to!(f, first, dest, A)
 end
 
 ## 2 argument
-function map_to2(f::Callable, first, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
+function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
     dest[1] = first
     for i=2:length(A)
         dest[i] = f(A[i], B[i])
@@ -1633,11 +1633,11 @@ function map(f::Callable, A::AbstractArray, B::AbstractArray)
     end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first), shp)
-    return map_to2(f, first, dest, A, B)
+    return map_to!(f, first, dest, A, B)
 end
 
 ## N argument
-function map_to2(f::Callable, first, dest::AbstractArray, As::AbstractArray...)
+function map_to!(f::Callable, first, dest::AbstractArray, As::AbstractArray...)
     n = length(As[1])
     i = 1
     ith = a->a[i]
@@ -1655,5 +1655,5 @@ function map(f::Callable, As::AbstractArray...)
     end
     first = f(map(a->a[1], As)...)
     dest = similar(As[1], typeof(first), shape)
-    return map_to2(f, first, dest, As...)
+    return map_to!(f, first, dest, As...)
 end
