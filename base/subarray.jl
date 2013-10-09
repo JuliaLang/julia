@@ -203,7 +203,7 @@ getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real
 getindex(s::SubArray, i::Integer) = s[ind2sub(size(s), i)...]
 
 function getindex{T}(s::SubArray{T,2}, ind::Integer)
-    strd2 = size(s,1)
+    @inbounds strd2 = s.dims[1]
     ind -= 1
     i2 = div(ind,strd2)
     i1 = ind-i2*strd2
@@ -211,8 +211,8 @@ function getindex{T}(s::SubArray{T,2}, ind::Integer)
 end
 
 function getindex{T}(s::SubArray{T,3}, ind::Integer)
-    strd2 = size(s,1)
-    strd3 = strd2*size(s,2)
+    @inbounds strd2 = s.dims[1]
+    @inbounds strd3 = strd2*s.dims[2]
     ind -= 1
     i3 = div(ind,strd3)
     ind -= i3*strd3
@@ -222,9 +222,9 @@ function getindex{T}(s::SubArray{T,3}, ind::Integer)
 end
 
 function getindex{T}(s::SubArray{T,4}, ind::Integer)
-    strd2 = size(s,1)
-    strd3 = strd2*size(s,2)
-    strd4 = strd3*size(s,3)
+    @inbounds strd2 = s.dims[1]
+    @inbounds strd3 = strd2*s.dims[2]
+    @inbounds strd4 = strd3*s.dims[3]
     ind -= 1
     i4 = div(ind,strd4)
     ind -= i4*strd4
@@ -236,10 +236,10 @@ function getindex{T}(s::SubArray{T,4}, ind::Integer)
 end
 
 function getindex{T}(s::SubArray{T,5}, ind::Integer)
-    strd2 = size(s,1)
-    strd3 = strd2*size(s,2)
-    strd4 = strd3*size(s,3)
-    strd5 = strd4*size(s,4)
+    @inbounds strd2 = s.dims[1]
+    @inbounds strd3 = strd2*s.dims[2]
+    @inbounds strd4 = strd3*s.dims[3]
+    @inbounds strd5 = strd4*s.dims[4]
     ind -= 1
     i5 = div(ind,strd5)
     ind -= i5*strd5
@@ -360,7 +360,7 @@ end
 setindex!(s::SubArray, v, i::Integer) = setindex!(s, v, ind2sub(size(s), i)...)
 
 function setindex!{T}(s::SubArray{T,2}, v, ind::Integer)
-    strd2 = size(s,1)
+    @inbounds strd2 = s.dims[1]
     ind -= 1
     i2 = div(ind,strd2)
     i1 = ind-i2*strd2
@@ -369,8 +369,8 @@ function setindex!{T}(s::SubArray{T,2}, v, ind::Integer)
 end
 
 function setindex!{T}(s::SubArray{T,3}, v, ind::Integer)
-    strd2 = size(s,1)
-    strd3 = strd2*size(s,2)
+    @inbounds strd2 = s.dims[1]
+    @inbounds strd3 = strd2*s.dims[2]
     ind -= 1
     i3 = div(ind,strd3)
     ind -= i3*strd3
@@ -381,9 +381,9 @@ function setindex!{T}(s::SubArray{T,3}, v, ind::Integer)
 end
 
 function setindex!{T}(s::SubArray{T,4}, v, ind::Integer)
-    strd2 = size(s,1)
-    strd3 = strd2*size(s,2)
-    strd4 = strd3*size(s,3)
+    @inbounds strd2 = s.dims[1]
+    @inbounds strd3 = strd2*s.dims[2]
+    @inbounds strd4 = strd3*s.dims[3]
     ind -= 1
     i4 = div(ind,strd4)
     ind -= i4*strd4
@@ -396,10 +396,10 @@ function setindex!{T}(s::SubArray{T,4}, v, ind::Integer)
 end
 
 function setindex!{T}(s::SubArray{T,5}, v, ind::Integer)
-    strd2 = size(s,1)
-    strd3 = strd2*size(s,2)
-    strd4 = strd3*size(s,3)
-    strd5 = strd4*size(s,4)
+    @inbounds strd2 = s.dims[1]
+    @inbounds strd3 = strd2*s.dims[2]
+    @inbounds strd4 = strd3*s.dims[3]
+    @inbounds strd5 = strd4*s.dims[4]
     ind -= 1
     i5 = div(ind,strd5)
     ind -= i5*strd5
