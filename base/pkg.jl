@@ -1,5 +1,8 @@
 module Pkg
 
+export dir, init, rm, add, available, installed, status, clone, checkout,
+       release, fix, update, resolve, register, tag, publish, generate
+
 const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "devel"
 

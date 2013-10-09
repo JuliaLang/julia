@@ -186,7 +186,7 @@ function update(branch::String)
             Git.run(`checkout -q $branch`)
         end
         # TODO: handle merge conflicts
-        Git.run(`pull -q --no-edit`)
+        Git.run(`pull -q --no-edit`, out=DevNull)
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
