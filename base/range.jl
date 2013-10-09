@@ -383,14 +383,22 @@ end
 
 function map!(f::Callable, dest, r::Ranges)
     i = 1
-    for ri in r dest[i] = f(ri); i+=1; end
+    for ri in r; dest[i] = f(ri); i+=1; end
     dest
 end
 
 function map(f::Callable, r::Ranges)
     if isempty(r); return {}; end
-    first = f(r[1])
-    map!(f, Array(typeof(first), length(r)), r)
+    (ri, s) = next(r, start(r))
+    first = f(ri)
+    dest = Array(typeof(first), length(r))
+    dest[1] = first
+    i = 2
+    while !done(r, s)
+        (ri, s) = next(r, s)
+        dest[i] = f(ri)
+        i+=1
+    end
 end
 
 function in(x, r::Ranges)
