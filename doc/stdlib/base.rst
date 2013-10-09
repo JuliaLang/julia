@@ -2361,7 +2361,7 @@ Mathematical Functions
 
 .. function:: atanh(x)
 
-   Compute the inverse hyperbolic cotangent of ``x``
+   Compute the inverse hyperbolic tangent of ``x``
 
 .. function:: asech(x)
 
