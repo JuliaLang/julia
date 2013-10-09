@@ -44,6 +44,8 @@ tag(pkg::String, sym::Symbol=:bump; commit::String="", msg::String="") =
 tag(pkg::String, ver::VersionNumber; commit::String="", msg::String="") =
     cd(Entry.tag,pkg,ver,commit,msg)
 
+publish() = cd(Entry.publish,META_BRANCH)
+
 fixup() = cd(Entry._fixup)
 fixup(pkg::String) = cd(Entry._fixup,pkg)
 
