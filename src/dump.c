@@ -748,7 +748,7 @@ void jl_save_system_image(char *fname)
     htable_reset(&backref_table, 50000);
     ios_t f;
     if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
-        JL_PRINTF(JL_STDERR, "cannot open system image file for writing\n");
+        JL_PRINTF(JL_STDERR, "Cannot open system image file \"%s\" for writing.\n", fname);
         exit(1);
     }
 
@@ -792,7 +792,7 @@ void jl_restore_system_image(char *fname)
     ios_t f;
     char *fpath = fname;
     if (ios_file(&f, fpath, 1, 0, 0, 0) == NULL) {
-        JL_PRINTF(JL_STDERR, "system image file not found\n");
+        JL_PRINTF(JL_STDERR, "System image file \"%s\" not found\n", fname);
         exit(1);
     }
 #ifdef JL_GC_MARKSWEEP

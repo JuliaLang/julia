@@ -341,6 +341,12 @@ let es = sum_kbn(z), es2 = sum_kbn(z[1:10^5])
 end
 @test sum(sin(z)) == sum(sin, z)
 
+@test any([true false; false false], 2) == [true false]'
+@test any([true false; false false], 1) == [true false]
+
+@test all([true true; false true], 2) == [true false]'
+@test all([true false; false true], 1) == [false false]
+
 ## large matrices transpose ##
 
 for i = 1 : 3
@@ -701,10 +707,22 @@ end
 @test reverse([1:10],1,4) == [4,3,2,1,5,6,7,8,9,10]
 @test reverse([1:10],3,6) == [1,2,6,5,4,3,7,8,9,10]
 @test reverse([1:10],6,10) == [1,2,3,4,5,10,9,8,7,6]
+@test reverse(1:10,1,4) == [4,3,2,1,5,6,7,8,9,10]
+@test reverse(1:10,3,6) == [1,2,6,5,4,3,7,8,9,10]
+@test reverse(1:10,6,10) == [1,2,3,4,5,10,9,8,7,6]
 @test reverse!([1:10],1,4) == [4,3,2,1,5,6,7,8,9,10]
 @test reverse!([1:10],3,6) == [1,2,6,5,4,3,7,8,9,10]
 @test reverse!([1:10],6,10) == [1,2,3,4,5,10,9,8,7,6]
 
+# flipdim
+@test isequal(flipdim([2,3,1], 1), [1,3,2])
+@test isequal(flipdim([2,3,1], 2), [2,3,1])
+@test isequal(flipdim([2 3 1], 1), [2 3 1])
+@test isequal(flipdim([2 3 1], 2), [1 3 2])
+@test_throws flipdim([2,3,1] -1)
+@test isequal(flipdim(1:10, 1), 10:-1:1)
+@test isequal(flipdim(1:10, 2), 1:10)
+@test_throws flipdim(1:10, -1)
 
 # issue 4228
 A = [[i i; i i] for i=1:2]
