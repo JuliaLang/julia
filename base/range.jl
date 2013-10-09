@@ -387,10 +387,23 @@ function map!(f::Callable, dest, r::Ranges)
     dest
 end
 
+function map_range_to(f::Callable, dest, r::Ranges, state, first)
+    dest[1] = first
+    i = 2
+    while !done(r, state)
+        ri, state = next(r, state)
+        dest[i] = f(ri)
+        i += 1
+    end
+    dest
+end
+
 function map(f::Callable, r::Ranges)
     if isempty(r); return {}; end
-    first = f(r[1])
-    map!(f, Array(typeof(first), length(r)), r)
+    state = start(r)
+    (ri, state) = next(r, state)
+    first = f(ri)
+    map_range_to(f, Array(typeof(first), length(r)), r, state, first)
 end
 
 function in(x, r::Ranges)
