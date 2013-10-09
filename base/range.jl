@@ -387,7 +387,7 @@ function map!(f::Callable, dest, r::Ranges)
     dest
 end
 
-function map_range_to(f::Callable, dest, r::Ranges, state, first)
+function map_range_to!(f::Callable, first, dest, r::Ranges, state)
     dest[1] = first
     i = 2
     while !done(r, state)
@@ -403,7 +403,7 @@ function map(f::Callable, r::Ranges)
     state = start(r)
     (ri, state) = next(r, state)
     first = f(ri)
-    map_range_to(f, Array(typeof(first), length(r)), r, state, first)
+    map_range_to!(f, first, Array(typeof(first), length(r)), r, state)
 end
 
 function in(x, r::Ranges)
