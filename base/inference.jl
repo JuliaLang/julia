@@ -323,6 +323,8 @@ end
 t_func[fieldtype] = (2, 2, fieldtype_tfunc)
 t_func[Box] = (1, 1, (a,)->Box)
 
+valid_tparam(x::ANY) = isa(x,Int) || isa(x,Symbol) || isa(x,Bool)
+
 # TODO: handle e.g. apply_type(T, R::Union(Type{Int32},Type{Float64}))
 const apply_type_tfunc = function (A, args...)
     if !isType(args[1])
@@ -341,9 +343,30 @@ const apply_type_tfunc = function (A, args...)
             tparams = tuple(tparams..., ai.parameters[1])
         elseif isa(ai,Tuple) && all(isType,ai)
             tparams = tuple(tparams..., map(t->t.parameters[1], ai))
-        elseif i<=lA && isa(A[i],Int)
+        elseif i<=lA && (isa(A[i],Int) || isa(A[i],Bool))
             tparams = tuple(tparams..., A[i])
+        elseif i<=lA && isa(A[i],QuoteNode) && valid_tparam(A[i].value)
+            tparams = tuple(tparams..., A[i].value)
         else
+            if i<=lA && isa(A[i],Symbol) && isa(inference_stack,CallStack)
+                sp = inference_stack.sv.sp
+                s = A[i]
+                found = false
+                for j=1:2:length(sp)
+                    if is(sp[j].name,s)
+                        # static parameter
+                        val = sp[j+1]
+                        if valid_tparam(val)
+                            tparams = tuple(tparams..., val)
+                            found = true
+                            break
+                        end
+                    end
+                end
+                if found
+                    continue
+                end
+            end
             if i-1 > length(headtype.parameters)
                 # too many parameters for type
                 return None
