@@ -216,8 +216,12 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
         while (1) {
             var = (jl_sym_t*)jl_cellref(args,i);
             i++;
-            if (var != dot_sym)
-                break;
+            if (var != dot_sym) {
+                if (i == jl_array_len(args))
+                    return m;
+                else
+                    break;
+            }
             m = m->parent;
         }
     }
