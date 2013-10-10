@@ -229,7 +229,8 @@ end
 
 log(b,x) = log(x)/log(b)
 
-function hypot(x::Real, y::Real)
+hypot(x::Real, y::Real) = hypot(promote(x,y)...)
+function hypot{T<:Real}(x::T, y::T)
     x = abs(x)
     y = abs(y)
     if x < y
@@ -296,10 +297,8 @@ round(x::Float32) = ccall((:roundf, libm), Float32, (Float32,), x)
 floor(x::Float32) = ccall((:floorf, libm), Float32, (Float32,), x)
 @vectorize_1arg Real floor
 
-atan2(x::Real, y::Real) = atan2(float(x), float(y))
-
-hypot(x::Float32, y::Float64) = hypot(float64(x), y)
-hypot(x::Float64, y::Float32) = hypot(x, float64(y))
+atan2(x::Real, y::Real) = atan2(promote(float(x),float(y))...)
+atan2{T<:FloatingPoint}(x::T, y::T) = Base.no_op_err("atan2", T)
 
 for f in (:atan2, :hypot)
     @eval begin
