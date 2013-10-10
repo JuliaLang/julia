@@ -529,7 +529,7 @@
 					<key>comments</key>
 					<string>Matches a typed variable, such as 'id::String'</string>
 					<key>match</key>
-					<string>([a-zA-Z0-9_]+)(::[a-zA-Z0-9_{}]+)</string>
+					<string>([a-zA-Z0-9_]+)(::([a-zA-Z0-9_]+|\(.*\))(\{.*\})?)</string>
 					<key>name</key>
 					<string>other.typed-variable.julia</string>
 				</dict>
