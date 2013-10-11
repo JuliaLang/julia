@@ -1,3 +1,11 @@
+function regionsize(a, region)
+    s = 1
+    for d in region
+        s *= size(a,d)
+    end
+    s
+end
+
 function mean(iterable)
     state = start(iterable)
     if done(iterable, state)
@@ -13,7 +21,7 @@ function mean(iterable)
     return total/count
 end
 mean(v::AbstractArray) = sum(v) / length(v)
-mean(v::AbstractArray, region) = sum(v, region) / prod(size(v)[region])
+mean(v::AbstractArray, region) = sum(v, region) / regionsize(v, region)
 
 function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
     isempty(v) && error("median of an empty array is undefined")
@@ -63,7 +71,7 @@ end
 var(v::AbstractArray) = varm(v, mean(v))
 function var(v::AbstractArray, region)
     x = v .- mean(v, region)
-    return sum(abs2(x), region) / (prod(size(v)[region]) - 1)
+    return sum(abs2(x), region) / (regionsize(v,region) - 1)
 end
 
 ## standard deviation with known mean
