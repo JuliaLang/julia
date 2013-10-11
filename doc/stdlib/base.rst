@@ -1142,6 +1142,17 @@ I/O
 
    Obtain the contents of an ``IOBuffer`` as a string, without copying.
 
+.. function:: alloc_request(b::IOBuffer, size)
+
+   Request a block of memory at the end of an ``IOBuffer``.
+   Allows external functions to write data directly to the buffer, and then call ``notify_filled()``.
+   Returns a tuple containing a pointer to the block and the actual size available.
+
+.. function:: notify_filled(b::IOBuffer, nbytes)
+
+   Notify an ``IOBuffer`` that it has been extended and filled with ``nbytes`` of data by an external function.  
+   Called after an ``alloc_reqest()``.
+
 .. function:: fdio([name::String, ]fd::Integer[, own::Bool]) -> IOStream
 
    Create an ``IOStream`` object from an integer file descriptor. If ``own`` is true, closing this object will close the underlying descriptor. By default, an ``IOStream`` is closed when it is garbage collected. ``name`` allows you to associate the descriptor with a named file.

@@ -313,24 +313,12 @@ end
 
 ## BUFFER ##
 ## Allocate a simple buffer
-function alloc_request(buffer::IOBuffer, recommended_size::Int32)
-    ensureroom(buffer, int(recommended_size))
-    ptr = buffer.append ? buffer.size + 1 : buffer.ptr
-    return (pointer(buffer.data, ptr), length(buffer.data)-ptr+1)
-end
 function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Int32)
     (buf,size) = alloc_request(stream.buffer, recommended_size)
     @assert size>0 # because libuv requires this (TODO: possibly stop reading too if it fails)
     (buf,int32(size))
 end
 
-function notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Void}, len::Int32)
-    if buffer.append
-        buffer.size += nread
-    else
-        buffer.ptr += nread
-    end
-end
 function notify_filled(stream::AsyncStream, nread::Int)
     more = true
     while more
@@ -359,7 +347,7 @@ function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr{Void}, len::
             notify(stream.readnotify)
         end
     else
-        notify_filled(stream.buffer, nread, base, len)
+        notify_filled(stream.buffer, nread)
         notify_filled(stream, nread)
         notify(stream.readnotify)
     end

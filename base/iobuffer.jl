@@ -10,8 +10,9 @@ type IOBuffer <: IO
     size::Int
     maxsize::Int # pre-allocated, fixed array size
     ptr::Int # read (and maybe write) pointer
+    alloc_req::Int
     IOBuffer(data::Vector{Uint8},readable::Bool,writable::Bool,seekable::Bool,append::Bool,maxsize::Int) = 
-        new(data,readable,writable,seekable,append,length(data),maxsize,1)
+        new(data,readable,writable,seekable,append,length(data),maxsize,1, 0)
 end
 
 function copy(b::IOBuffer) 
@@ -120,6 +121,7 @@ function compact(io::IOBuffer)
     io.ptr = 1
     return true
 end
+
 function ensureroom(io::IOBuffer, nshort::Int)
     if !io.writable error("ensureroom failed") end
     if !io.seekable
@@ -141,6 +143,32 @@ function ensureroom(io::IOBuffer, nshort::Int)
     end
     return io
 end
+
+function alloc_request(io::IOBuffer, recommended_size::Integer)
+    if !io.writable error("alloc_request failed: IOBuffer not writable") end
+    ensureroom(io, int(recommended_size))
+    io.writable = false
+    ptr = io.append ? io.size + 1 : io.ptr
+    io.alloc_req = length(io.data)-ptr+1
+    return (pointer(io.data, ptr), io.alloc_req)
+end
+
+function notify_filled(io::IOBuffer, nread::Int)
+    if io.alloc_req == 0     error("notify_filled failed: no alloc request in progress") end
+    if io.writable           error("notify_filled: Error: io was writable during allocation request!") end
+    if io.alloc_req < nread  error("notify_filled: Critical Error: IOBuffer filled beyond allocated size!") end
+
+    if io.append
+        io.size += nread
+    else
+        io.ptr += nread
+    end
+
+    io.alloc_req = 0
+    io.writable = true
+end
+notify_filled(io::IOBuffer, nread::Int, base::Ptr{Void}, len::Int32) = notify_filled(io, nread)
+
 eof(io::IOBuffer) = (io.ptr-1 == io.size)
 function close(io::IOBuffer)
     if io.writable
