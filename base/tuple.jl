@@ -120,27 +120,14 @@ prod(x::NTuple{2}) = x[1] * x[2]
 prod(x::NTuple{3}) = x[1] * x[2] * x[3]
 prod(x::NTuple{4}) = x[1] * x[2] * x[3] * x[4]
 
-max(x::()) = error("max: argument is empty")
-max(x::NTuple{1}) = x[1]
-max(x::NTuple{2}) = max(x[1], x[2])
-max(x::NTuple{3}) = max(max(x[1], x[2]), x[3])
-max(x::NTuple{4}) = max(max(max(x[1], x[2]), x[3]), x[4])
-
-min(x::()) = error("min: argument is empty")
-min(x::NTuple{1}) = x[1]
-min(x::NTuple{2}) = min(x[1], x[2])
-min(x::NTuple{3}) = min(min(x[1], x[2]), x[3])
-min(x::NTuple{4}) = min(min(min(x[1], x[2]), x[3]), x[4])
-
 all(x::()) = true
 all(x::NTuple{1,Bool}) = x[1]
-all(x::NTuple{2,Bool}) = x[1] && x[2]
-all(x::NTuple{3,Bool}) = x[1] && x[2] && x[3]
-all(x::NTuple{4,Bool}) = x[1] && x[2] && x[3] && x[4]
+all(x::NTuple{2,Bool}) = x[1] & x[2]
+all(x::NTuple{3,Bool}) = x[1] & x[2] & x[3]
+all(x::NTuple{4,Bool}) = x[1] & x[2] & x[3] & x[4]
 
 any(x::()) = false
 any(x::NTuple{1,Bool}) = x[1]
-any(x::NTuple{2,Bool}) = x[1] || x[2]
-any(x::NTuple{3,Bool}) = x[1] || x[2] || x[3]
-any(x::NTuple{4,Bool}) = x[1] || x[2] || x[3] || x[4]
-
+any(x::NTuple{2,Bool}) = x[1] | x[2]
+any(x::NTuple{3,Bool}) = x[1] | x[2] | x[3]
+any(x::NTuple{4,Bool}) = x[1] | x[2] | x[3] | x[4]

@@ -1852,8 +1852,8 @@ function any(B::BitArray)
     return false
 end
 
-min(B::BitArray) = isempty(B) ? error("min: argument is empty") : all(B)
-max(B::BitArray) = isempty(B) ? error("max: argument is empty") : any(B)
+minimum(B::BitArray) = isempty(B) ? error("minimum: argument is empty") : all(B)
+maximum(B::BitArray) = isempty(B) ? error("maximum: argument is empty") : any(B)
 
 ## map over bitarrays ##
 
@@ -2176,7 +2176,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
     end
     dimsX = map((a->isa(a,BitArray) ? size(a) : (1,)), X)
     ndimsX = map((a->isa(a,BitArray) ? ndims(a) : 1), X)
-    d_max = max(ndimsX)
+    d_max = maximum(ndimsX)
 
     if catdim > d_max + 1
         for i=1:nargs

@@ -257,7 +257,7 @@ qr(A::Union(Number, AbstractMatrix)) = qr(A, true)
 size(A::QR, args::Integer...) = size(A.vs, args...)
 
 function getindex(A::QR, d::Symbol)
-    if d == :R; return triu(A.vs[1:min(size(A)),:]); end;
+    if d == :R; return triu(A.vs[1:minimum(size(A)),:]); end;
     if d == :Q; return QRPackedQ(A); end
     error("No such type field")
 end
@@ -330,7 +330,7 @@ qrp(A::AbstractMatrix) = qrp(A, false)
 size(A::QRPivoted, args::Integer...) = size(A.hh, args...)
 
 function getindex{T<:BlasFloat}(A::QRPivoted{T}, d::Symbol)
-    if d == :R; return triu(A.hh[1:min(size(A)),:]); end;
+    if d == :R; return triu(A.hh[1:minimum(size(A)),:]); end;
     if d == :Q; return QRPivotedQ(A); end
     if d == :p; return A.jpvt; end
     if d == :P
@@ -347,7 +347,7 @@ end
 
 # Julia implementation similarly to xgelsy
 function (\){T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
-    nr = min(size(A.hh))
+    nr = minimum(size(A.hh))
     nrhs = size(B, 2)
     if nr == 0 return zeros(0, nrhs), 0 end
     ar = abs(A.hh[1])
@@ -531,11 +531,11 @@ eigvals(x::Number) = [one(x)]
 #Computes maximum and minimum eigenvalue
 function eigmax(A::Union(Number, AbstractMatrix))
     v = eigvals(A)
-    iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : max(v)
+    iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : maximum(v)
 end
 function eigmin(A::Union(Number, AbstractMatrix))
     v = eigvals(A)
-    iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : min(v)
+    iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : minimum(v)
 end
 
 inv(A::Eigen) = scale(A.vectors, 1.0/A.values)*A.vectors'

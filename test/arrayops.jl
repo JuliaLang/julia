@@ -59,7 +59,7 @@ tmp = A[:,7:-3:1,5]
 tmp = A[:,3:9]
 @test tmp == reshape(11:45,5,7)
 rng = (2,2:3,2:2:5)
-tmp = zeros(Int,map(max,rng)...)
+tmp = zeros(Int,map(maximum,rng)...)
 tmp[rng...] = A[rng...]
 @test  tmp == cat(3,zeros(Int,2,3),[0 0 0; 0 47 52],zeros(Int,2,3),[0 0 0; 0 127 132])
 

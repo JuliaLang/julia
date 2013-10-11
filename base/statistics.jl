@@ -86,7 +86,7 @@ function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
     if length(v) == 0
         return Range(0.0,1.0,1)
     end
-    lo, hi = min(v), max(v)
+    lo, hi = minimum(v), maximum(v)
     if hi == lo
         step = 1.0
     else
@@ -109,7 +109,7 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
     if length(v) == 0
         return Range(0,1,1)
     end
-    lo, hi = min(v), max(v)
+    lo, hi = minimum(v), maximum(v)
     if hi == lo
         step = 1
     else

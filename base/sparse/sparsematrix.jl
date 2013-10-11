@@ -179,7 +179,7 @@ sparsevec{K<:Integer,V}(d::Dict{K,V}) = sparsevec(collect(keys(d)), collect(valu
 
 sparsevec(I::AbstractVector, V, m::Integer) = sparsevec(I, V, m, +)
 
-sparsevec(I::AbstractVector, V) = sparsevec(I, V, max(I), +)
+sparsevec(I::AbstractVector, V) = sparsevec(I, V, maximum(I), +)
 
 function sparsevec(I::AbstractVector, V, m::Integer, combine::Function)
     nI = length(I)
@@ -257,9 +257,9 @@ end
 
 ## sparse() can take its inputs in unsorted order (the parent method is now in jlsparse.jl)
 
-sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)), int(max(I)), int(max(J)), +)
+sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)), int(maximum(I)), int(maximum(J)), +)
 
-sparse(I,J,V::AbstractVector) = sparse(I, J, V, int(max(I)), int(max(J)), +)
+sparse(I,J,V::AbstractVector) = sparse(I, J, V, int(maximum(I)), int(maximum(J)), +)
 
 sparse(I,J,v::Number,m,n) = sparse(I, J, fill(v,length(I)), int(m), int(n), +)
 
@@ -581,14 +581,14 @@ function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
     end
 end
 
-max{T}(A::SparseMatrixCSC{T}) =
-    isempty(A) ? error("max: argument is empty") : reducedim(max,A,(1,2),typemin(T))
-max{T}(A::SparseMatrixCSC{T}, b::(), region) =
+maximum{T}(A::SparseMatrixCSC{T}) =
+    isempty(A) ? error("maximum: argument is empty") : reducedim(max,A,(1,2),typemin(T))
+maximum{T}(A::SparseMatrixCSC{T}, region) =
     isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(max,A,region,typemin(T))
 
-min{T}(A::SparseMatrixCSC{T}) =
-    isempty(A) ? error("min: argument is empty") : reducedim(min,A,(1,2),typemax(T))
-min{T}(A::SparseMatrixCSC{T}, b::(), region) =
+minimum{T}(A::SparseMatrixCSC{T}) =
+    isempty(A) ? error("minimum: argument is empty") : reducedim(min,A,(1,2),typemax(T))
+minimum{T}(A::SparseMatrixCSC{T}, region) =
     isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(min,A,region,typemax(T))
 
 sum{T}(A::SparseMatrixCSC{T}) = reducedim(+,A,(1,2),zero(T))
@@ -1335,7 +1335,7 @@ type SpDiagIterer{Tv,Ti}
     A::SparseMatrixCSC{Tv,Ti}
     n::Int
 end
-SpDiagIterer(A::SparseMatrixCSC) = SpDiagIterer(A,min(size(A)))
+SpDiagIterer(A::SparseMatrixCSC) = SpDiagIterer(A,minimum(size(A)))
 
 length(d::SpDiagIterer) = d.n
 start(d::SpDiagIterer) = 1

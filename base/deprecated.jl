@@ -120,6 +120,12 @@ export PipeString
 @deprecate open_any_tcp_port listenany
 @deprecate  subtype             issubtype
 @deprecate  bsxfun              broadcast
+@deprecate max(x)              maximum(x)
+@deprecate min(x)              minimum(x)
+@deprecate max(f::Function,x)  maximum(f,x)
+@deprecate min(f::Function,x)  minimum(f,x)
+@deprecate max(x,_::(),d)      maximum(x,d)
+@deprecate min(x,_::(),d)      minimum(x,d)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
