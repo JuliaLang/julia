@@ -653,8 +653,26 @@ vcat() = Array(None, 0)
 hcat() = Array(None, 0)
 
 ## cat: special cases
-hcat{T}(X::T...) = T[ X[j] for i=1, j=1:length(X) ]
-vcat{T}(X::T...) = T[ X[i] for i=1:length(X) ]
+hcat{T}(X::T...)         = T[ X[j] for i=1, j=1:length(X) ]
+hcat{T<:Number}(X::T...) = T[ X[j] for i=1, j=1:length(X) ]
+vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
+vcat{T<:Number}(X::T...) = T[ X[i] for i=1:length(X) ]
+
+function vcat(X::Number...)
+    T = None
+    for x in X
+        T = promote_type(T,typeof(x))
+    end
+    hvcat_fill(Array(T,length(X)), X)
+end
+
+function hcat(X::Number...)
+    T = None
+    for x in X
+        T = promote_type(T,typeof(x))
+    end
+    hvcat_fill(Array(T,1,length(X)), X)
+end
 
 function hcat{T}(V::AbstractVector{T}...)
     height = length(V[1])
@@ -927,7 +945,7 @@ end
 
 function hvcat_fill(a, xs)
     k = 1
-    nr, nc = size(a)
+    nr, nc = size(a,1), size(a,2)
     for i=1:nr
         for j=1:nc
             a[i,j] = xs[k]
