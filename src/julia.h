@@ -1100,7 +1100,7 @@ void jl_gc_setmark(jl_value_t *v);
 DLLEXPORT void jl_gc_enable(void);
 DLLEXPORT void jl_gc_disable(void);
 DLLEXPORT int jl_gc_is_enabled(void);
-DLLEXPORT size_t jl_gc_total_bytes(void);
+DLLEXPORT int64_t jl_gc_total_bytes(void);
 void jl_gc_ephemeral_on(void);
 void jl_gc_ephemeral_off(void);
 DLLEXPORT void jl_gc_collect(void);
