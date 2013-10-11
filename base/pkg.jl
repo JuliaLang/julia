@@ -4,7 +4,7 @@ export dir, init, rm, add, available, installed, status, clone, checkout,
        release, fix, update, resolve, register, tag, publish, generate
 
 const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
-const META_BRANCH = "devel"
+const META_BRANCH = "release-0.2"
 
 for file in split("dir types reqs cache read query resolve write generate entry")
     include("pkg/$file.jl")
