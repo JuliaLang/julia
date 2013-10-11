@@ -353,6 +353,13 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     end
     println(io,             "Platform Info:")
     println(io,             "  System: ", Sys.OS_NAME, " (", Sys.MACHINE, ")")
+
+    cpu = ""
+    @osx_only cpu = try readchomp(`sysctl -n machdep.cpu.brand_string`) end
+    @linux_only cpu = try split(readchomp(`grep "model name" -m 1 /proc/cpuinfo`),": ")[2] end
+    if cpu != ""
+        println(io,         "  CPU: ", cpu)
+    end
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
         lsb = ""
