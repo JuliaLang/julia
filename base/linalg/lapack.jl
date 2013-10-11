@@ -2457,7 +2457,7 @@ for (syev, syevr, sygvd, elty, relty) in
                 ccall(($(string(syev)),liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                       Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
-                      &jobz, &uplo, &n, A, &max(stride(A,2)), W, work, &lwork, rwork, info)
+                      &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, rwork, info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))

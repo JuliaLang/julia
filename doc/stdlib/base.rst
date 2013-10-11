@@ -455,13 +455,21 @@ Iterable Collections
    need a particular associativity, e.g. left-to-right, you should write
    your own loop.
 
-.. function:: max(itr)
+.. function:: maximum(itr)
 
    Returns the largest element in a collection
 
-.. function:: min(itr)
+.. function:: maximum(A, dims)
+
+   Compute the maximum value of an array over the given dimensions
+
+.. function:: minimum(itr)
 
    Returns the smallest element in a collection
+
+.. function:: minimum(A, dims)
+
+   Compute the minimum value of an array over the given dimensions
 
 .. function:: indmax(itr) -> Integer
 
@@ -2478,13 +2486,13 @@ Mathematical Functions
 
    Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``.
 
-.. function:: min(x, y)
+.. function:: min(x, y, ...)
 
-   Return the minimum of ``x`` and ``y``
+   Return the minimum of the arguments. Operates elementwise over arrays.
 
-.. function:: max(x, y)
+.. function:: max(x, y, ...)
 
-   Return the maximum of ``x`` and ``y``
+   Return the maximum of the arguments. Operates elementwise over arrays.
 
 .. function:: clamp(x, lo, hi)
 

@@ -3,7 +3,7 @@
 @test rand(Uint32) >= 0
 @test -10 <= rand(-10:-5) <= -5
 @test -10 <= rand(-10:5) <= 5
-@test min([rand(int32(1):int32(7^7)) for i = 1:100000]) > 0
+@test minimum([rand(int32(1):int32(7^7)) for i = 1:100000]) > 0
 @test(typeof(rand(false:true)) == Bool)
 
 for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128, Char, BigInt)

@@ -188,7 +188,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         eqclassp = eq_classes[p]
         for cl in classes
             if !isempty(cl)
-                vtop = max(cl)
+                vtop = maximum(cl)
                 push!(prunedp, vtop)
                 @assert !haskey(eqclassp, vtop)
                 eqclassp[vtop] = cl

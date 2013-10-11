@@ -2,16 +2,16 @@
 
 function reduce(op::Function, itr) # this is a left fold
     if is(op,max)
-        return max(itr)
+        return maximum(itr)
     elseif is(op,min)
-        return min(itr)
+        return minimum(itr)
     elseif is(op,+)
         return sum(itr)
     elseif is(op,*)
         return prod(itr)
-    elseif is(op,any)
+    elseif is(op,|)
         return any(itr)
-    elseif is(op,all)
+    elseif is(op,&)
         return all(itr)
     end
     s = start(itr)
@@ -26,10 +26,10 @@ function reduce(op::Function, itr) # this is a left fold
     return v
 end
 
-function max(itr)
+function maximum(itr)
     s = start(itr)
     if done(itr, s)
-        error("max: argument is empty")
+        error("maximum: argument is empty")
     end
     (v, s) = next(itr, s)
     while !done(itr, s)
@@ -39,10 +39,10 @@ function max(itr)
     return v
 end
 
-function min(itr)
+function minimum(itr)
     s = start(itr)
     if done(itr, s)
-        error("min: argument is empty")
+        error("minimum: argument is empty")
     end
     (v, s) = next(itr, s)
     while !done(itr, s)
@@ -192,10 +192,10 @@ function all(itr)
     return true
 end
 
-max(f::Function, itr)   = mapreduce(f, max, itr)
-min(f::Function, itr)   = mapreduce(f, min, itr)
-sum(f::Function, itr)   = mapreduce(f, +  , itr)
-prod(f::Function, itr)  = mapreduce(f, *  , itr)
+maximum(f::Function, itr) = mapreduce(f, max, itr)
+minimum(f::Function, itr) = mapreduce(f, min, itr)
+sum(f::Function, itr)     = mapreduce(f, +  , itr)
+prod(f::Function, itr)    = mapreduce(f, *  , itr)
 
 function count(pred::Function, itr)
     s = 0

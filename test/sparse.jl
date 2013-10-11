@@ -65,7 +65,7 @@ s116[p, p] = reshape(1:9, 3, 3)
 for i = 1:5
     a = sprand(10, 5, 0.5)
     b = sprand(5, 10, 0.1)
-    @test max(abs(a*b - dense(a)*dense(b))) < 100*eps()
+    @test maximum(abs(a*b - dense(a)*dense(b))) < 100*eps()
 end
 
 # reductions
