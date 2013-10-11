@@ -37,7 +37,7 @@ fix(pkg::String) = cd(Entry.fix,pkg)
 fix(pkg::String, ver::VersionNumber) = cd(Entry.fix,pkg,ver)
 
 update() = cd(Entry.update,META_BRANCH)
-resolve() = cd(Entry._resolve)
+resolve() = cd(Entry.resolve)
 
 register(pkg::String) = cd(Entry.register,pkg)
 register(pkg::String, url::String) = cd(Entry.register,pkg,url)

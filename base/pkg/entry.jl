@@ -12,7 +12,7 @@ function edit(f::Function, pkg::String, args...)
     r_ = f(r,pkg,args...)
     r_ == r && return false
     reqs_ = Reqs.parse(r_)
-    reqs_ != reqs && _resolve(reqs_,avail)
+    reqs_ != reqs && resolve(reqs_,avail)
     Reqs.write("REQUIRE",r_)
     info("REQUIRE updated.")
     return true
@@ -112,8 +112,7 @@ function clone(url::String, pkg::String, opts::Cmd=``)
     end
     isempty(Reqs.parse("$pkg/REQUIRE")) && return
     info("Computing changes...")
-    _resolve()
-    #4082 TODO: some call to fixup should go here
+    resolve()
 end
 
 function _checkout(pkg::String, what::String, merge::Bool=false, pull::Bool=false)
@@ -125,8 +124,7 @@ function _checkout(pkg::String, what::String, merge::Bool=false, pull::Bool=fals
             info("Pulling $pkg latest $what...")
             Git.run(`pull -q --ff-only`, dir=pkg)
         end
-        _resolve()
-        #4082 TODO: some call to fixup should go here
+        resolve()
     end
 end
 
@@ -161,7 +159,7 @@ function fix(pkg::String, head::String)
     rslv = (head != Git.head(dir=pkg))
     info("Creating $pkg branch $branch...")
     Git.run(`checkout -q -B $branch $head`, dir=pkg)
-    rslv ? _resolve() : nothing
+    rslv ? resolve() : nothing
 end
 fix(pkg::String) = fix(pkg,Git.head(dir=pkg))
 
@@ -213,8 +211,7 @@ function update(branch::String)
         end
     end
     info("Computing changes...")
-    _resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
-    #4082 TODO: some call to fixup should go here
+    resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
 end
 
 function publish(branch::String)
@@ -262,7 +259,7 @@ function publish(branch::String)
     Git.run(`push -q`, dir="METADATA")
 end
 
-function _resolve(
+function resolve(
     reqs  :: Dict = Reqs.parse("REQUIRE"),
     avail :: Dict = Read.available(),
     instd :: Dict = Read.installed(avail),
