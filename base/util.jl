@@ -11,7 +11,7 @@ time() = ccall(:clock_now, Float64, ())
 time_ns() = ccall(:jl_hrtime, Uint64, ())
 
 # total number of bytes allocated so far
-gc_bytes() = ccall(:jl_gc_total_bytes, Csize_t, ())
+gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 
 function tic()
     t0 = time_ns()
