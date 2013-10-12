@@ -184,7 +184,7 @@ function update(branch::String)
             Git.run(`checkout -q $branch`)
         end
         # TODO: handle merge conflicts
-        with_env("GIT_MERGE_AUTOEDIT","no") do
+        Base.with_env("GIT_MERGE_AUTOEDIT","no") do
             Git.run(`pull -q`, out=DevNull)
         end
     end
