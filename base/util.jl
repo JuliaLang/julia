@@ -44,7 +44,7 @@ macro time(ex)
         local val = $(esc(ex))
         local t1 = time_ns()
         local b1 = gc_bytes()
-        println("elapsed time: ", (t1-t0)/1e9, " seconds (", int(b1-b0), " bytes allocated)")
+        println("elapsed time: ", (t1-t0)/1e9, " seconds (", b1-b0, " bytes allocated)")
         val
     end
 end
@@ -67,7 +67,7 @@ macro allocated(ex)
                 b0 = gc_bytes()
                 $(esc(ex))
                 b1 = gc_bytes()
-                int(b1-b0)
+                b1-b0
             end
             f()
         end
@@ -82,7 +82,7 @@ macro timed(ex)
         local val = $(esc(ex))
         local t1 = time_ns()
         local b1 = gc_bytes()
-        val, (t1-t0)/1e9, int(b1-b0)
+        val, (t1-t0)/1e9, b1-b0
     end
 end
 

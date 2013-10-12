@@ -104,13 +104,13 @@ for n in [0:10, 100, 101, 1000, 1001]
     v = rand(1:10,n)
     h = hist(v,r)
 
-    for ord in [Base.Order.Forward, Base.Order.Reverse]
+    for rev in [false,true]
         # insertion sort (stable) as reference
-        pi = sortperm(v, alg=InsertionSort, order=ord)
+        pi = sortperm(v, alg=InsertionSort, rev=rev)
         @test isperm(pi)
         si = v[pi]
         @test hist(si,r) == h
-        @test issorted(si, order=ord)
+        @test issorted(si, rev=rev)
         @test all(issorted,[pi[si.==x] for x in r])
         c = copy(v)
         permute!(c, pi)
@@ -120,7 +120,7 @@ for n in [0:10, 100, 101, 1000, 1001]
 
         # stable algorithms
         for alg in [MergeSort]
-            p = sortperm(v, alg=alg, order=ord)
+            p = sortperm(v, alg=alg, rev=rev)
             @test p == pi
             s = copy(v)
             permute!(s, p)
@@ -131,7 +131,7 @@ for n in [0:10, 100, 101, 1000, 1001]
 
         # unstable algorithms
         for alg in [QuickSort]
-            p = sortperm(v, alg=alg, order=ord)
+            p = sortperm(v, alg=alg, rev=rev)
             @test isperm(p)
             @test v[p] == si
             s = copy(v)
@@ -143,15 +143,15 @@ for n in [0:10, 100, 101, 1000, 1001]
     end
 
     v = randn_with_nans(n,0.1)
-    for ord in [Base.Order.Forward, Base.Order.Reverse],
-        alg in [InsertionSort, QuickSort, MergeSort]
+    for alg in [InsertionSort, QuickSort, MergeSort],
+        rev in [false,true]
         # test float sorting with NaNs
-        s = sort(v, alg=alg, order=ord)
-        @test issorted(s, order=ord)
+        s = sort(v, alg=alg, rev=rev)
+        @test issorted(s, rev=rev)
         @test reinterpret(Uint64,v[isnan(v)]) == reinterpret(Uint64,s[isnan(s)])
 
         # test float permutation with NaNs
-        p = sortperm(v, alg=alg, order=ord)
+        p = sortperm(v, alg=alg, rev=rev)
         @test isperm(p)
         vp = v[p]
         @test isequal(vp,s)

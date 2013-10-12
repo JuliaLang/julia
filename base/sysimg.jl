@@ -378,6 +378,7 @@ precompile(!=, (Bool, Bool))
 precompile(nextind, (ASCIIString, Int))
 precompile(delete_var!, (Expr, Symbol))
 precompile(close, (IOStream,))
+precompile(haskey, (ObjectIdDict, Symbol))
 
 # invoke type inference, running the existing inference code on the new
 # inference code to cache an optimized version of it.
