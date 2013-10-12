@@ -181,26 +181,27 @@ end function
 integer function mandel(z0) result(r)
 complex(dp), intent(in) :: z0
 complex(dp) :: c, z
-integer :: n
+integer :: n, maxiter
+maxiter = 80
 z = z0
 c = z0
-do n = 0, 78
+do n = 1, maxiter
     if (abs(z) > 2) then
-        r = n
+        r = n-1
         return
     end if
     z = z**2 + c
 end do
-r = 79
+r = maxiter
 end function
 
 integer function mandelperf() result(mandel_sum)
 real(dp) :: re, im
 mandel_sum = 0
-re = -2
-do while (re < 0.49_dp)
-    im = -1
-    do while (im < 0.99)
+re = -2._dp
+do while (re <= 0.5_dp)
+    im = -1._dp
+    do while (im <= 1._dp)
         mandel_sum = mandel_sum + mandel(cmplx(re, im, dp))
         im = im + 0.1_dp
     end do
@@ -241,9 +242,9 @@ end subroutine
 
 real(dp) function pisum() result(s)
 integer :: j, k
-do j = 1, 499
+do j = 1, 500
     s = 0
-    do k = 1, 9999
+    do k = 1, 10000
         s = s + 1._dp / k**2
     end do
 end do
