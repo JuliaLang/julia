@@ -1034,3 +1034,12 @@ g4413(::Union(A4413, B4413, C4413)) = "ABC"
 f4482{T}(x::T) = T
 @test f4482((Ptr,Ptr)) === (DataType,DataType)
 @test f4482((Ptr,))    === (DataType,)
+
+# issue #4486
+try
+    # note: this test expression must run at the top level,
+    # in the interpreter.
+    (function() end)(1)
+    # should throw an argument count error
+    @test false
+end
