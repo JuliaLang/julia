@@ -226,6 +226,7 @@ export
     |,
     ~,
     :,
+    A_ldiv_B!,
     A_ldiv_Bc,
     A_ldiv_Bt,
     A_mul_B,
