@@ -69,16 +69,15 @@ func randmatmul(n int) matrix.MatrixRO {
 // mandelbrot 
 
 func mandel(z complex128) int {
+	maxiter := 80
 	c := z
-	var n int
-	for n = 0; n < 79; n++ {
+	for n := 0; n < maxiter; n++ {
 		if cmplx.Abs(z) > 2 {
-			n -= 1
-			break
+			return n
 		}
 		z = z*z + c
 	}
-	return n + 1
+	return maxiter
 }
 
 func mandelperf() int {

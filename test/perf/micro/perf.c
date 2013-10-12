@@ -56,16 +56,15 @@ double *matmul_aat(int n, double *b) {
 }
 
 int mandel(double complex z) {
-    int n = 0;
+    int maxiter = 80;
     double complex c = z;
-    for (n=0; n<=79; ++n) {
+    for (int n=0; n<maxiter; ++n) {
         if (cabs(z) > 2.0) {
-            n -= 1;
-            break;
+            return n;
         }
         z = cpow(z,2)+c;
     }
-    return n+1;
+    return maxiter;
 }
 
 int mandelperf() {
