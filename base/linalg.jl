@@ -116,9 +116,11 @@ export
 # Operators
     \,
     /,
+    A_ldiv_B!,
     A_ldiv_Bc,
     A_ldiv_Bt,
     A_mul_B,
+    A_mul_B!,
     A_mul_Bc,
     A_mul_Bt,
     A_rdiv_Bc,
@@ -136,7 +138,6 @@ export
     At_mul_Bt,
     At_rdiv_B,
     At_rdiv_Bt
-
 
 typealias BlasFloat Union(Float64,Float32,Complex128,Complex64)
 typealias BlasReal Union(Float64,Float32)

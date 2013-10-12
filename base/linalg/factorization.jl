@@ -2,6 +2,8 @@
 
 abstract Factorization{T}
 
+(\)(F::Factorization, b::Union(AbstractVector, AbstractMatrix)) = A_ldiv_B!(F, copy(b))
+
 type Cholesky{T<:BlasFloat} <: Factorization{T}
     UL::Matrix{T}
     uplo::Char
@@ -35,8 +37,8 @@ function getindex(C::Cholesky, d::Symbol)
     error("No such type field")
 end
 
-\{T<:BlasFloat}(C::Cholesky{T}, B::StridedVecOrMat{T}) =
-    LAPACK.potrs!(C.uplo, C.UL, copy(B))
+A_ldiv_B!{T<:BlasFloat}(C::Cholesky{T}, B::StridedVecOrMat{T}) =
+    LAPACK.potrs!(C.uplo, C.UL, B)
 
 function det{T}(C::Cholesky{T})
     dd = one(T)
@@ -96,14 +98,22 @@ function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
     error("No such type field")
 end
 
-function \{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedVector{T})
+function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedVector{T})
     if C.rank < size(C.UL, 1); throw(RankDeficientException(C.info)); end
-    LAPACK.potrs!(C.uplo, C.UL, copy(B)[C.piv])[invperm(C.piv)]
+    ipermute!(LAPACK.potrs!(C.uplo, C.UL, permute!(B, C.piv)), C.piv)
 end
 
-function \{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
+function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
     if C.rank < size(C.UL, 1); throw(RankDeficientException(C.info)); end
-    LAPACK.potrs!(C.uplo, C.UL, copy(B)[C.piv,:])[invperm(C.piv),:]
+    n = size(C, 1)
+    for i = 1:size(B, 2)
+        permute!(sub(B, 1:n, i), C.piv)
+    end
+    LAPACK.potrs!(C.uplo, C.UL, B)
+    for i = 1:size(B, 2)
+        ipermute!(sub(B, 1:n, i), C.piv)
+    end
+    return B
 end
 
 rank(C::CholeskyPivoted) = C.rank
