@@ -31,6 +31,7 @@ pointer{T}(x::AbstractArray{T}, i::Int) = convert(Ptr{T},x) + (i-1)*sizeof(T)
 # unsafe pointer to array conversions
 pointer_to_array(p, dims::Dims) = pointer_to_array(p, dims, false)
 pointer_to_array(p, d::Int, own=false) = pointer_to_array(p, (d,), own)
+pointer_to_array(p, d::Integer, own=false) = pointer_to_array(p, (int(d),), own)
 function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Int}, own::Bool)
     ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{T}, Any, Int32),
           Array{T,N}, p, dims, own)
