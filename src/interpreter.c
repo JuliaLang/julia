@@ -147,7 +147,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                     return jl_interpret_toplevel_thunk(li);
                 jl_array_t *formals = jl_lam_args((jl_expr_t*)li->ast);
                 size_t nreq = jl_array_len(formals);
-                if (!jl_is_rest_arg(jl_cellref(formals,nreq-1))) {
+                if (nreq==0 || !jl_is_rest_arg(jl_cellref(formals,nreq-1))) {
                     jl_value_t **ar;
                     JL_GC_PUSHARGS(ar, na*2);
                     for(int i=0; i < na*2; i++) {
