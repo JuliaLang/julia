@@ -407,6 +407,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    If the keyword argument ``parallel`` is set to ``true``, ``peakflops`` is run in parallel on all the worker processors. The flop rate of the entire parallel computer is returned. When running in parallel, only 1 BLAS thread is used. The argument ``n`` still refers to the size of the problem that is solved on each processor.
 
+.. function:: durbin(r)
+
+   ``durbin`` solves the Yule-Walker equations ``Ty=-r``. It is assumed that ``T`` has unit diagonal.
+
+.. function:: levinson(r,b)
+   
+   ``levinson`` solves the real and positive definite Toeplitz system ``Tx=b``.
+
 BLAS Functions
 --------------
 

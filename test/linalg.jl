@@ -501,7 +501,6 @@ for elty in (Float32, Float64, Complex64, Complex128)
     end
 end
 
-
 # Test gglse
 for elty in (Float32, Float64, Complex64, Complex128)
     A = convert(Array{elty, 2}, [1 1 1 1; 1 3 1 1; 1 -1 3 1; 1 1 1 3; 1 1 1 -1])
@@ -511,6 +510,19 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_approx_eq LinAlg.LAPACK.gglse!(A, c, B, d)[1] convert(Array{elty}, [0.5, -0.5, 1.5, 0.5])
 end
 
+# Test Levinson and Durbin algorithms
+A = [0.4 0.3; 1 0]
+B = [1.6317016317016317 0.9324009324009325; 0.9324009324009325 1.6317016317016317]
+for elty in (Float32, Float64)
+    as = convert(Vector{elty}, Float64[(A^i*B)[1]/B[1] for i = 0:9])
+    bs = convert(Vector{elty}, [0.4, 0.3, zeros(7)])
+    al = convert(Vector{elty}, Float64[(A^i*B)[1]/B[1] for i = 0:999])
+    bl = convert(Vector{elty}, [0.4, 0.3, zeros(997)])
+    @test_approx_eq durbin(sub(as,2:10)) levinson(sub(as,1:9),-sub(as,2:10))
+    @test_approx_eq durbin(sub(as,2:10)) -bs
+    @test_approx_eq durbin(sub(al,2:1000)) levinson(sub(al,1:999),-sub(al,2:1000))
+    @test_approx_eq durbin(sub(al,2:1000)) -bl
+end
 
 ## Issue related tests
 # issue 1447
