@@ -69,6 +69,8 @@ show(io::IO, s::String) = print_quoted(io, s)
 
 sizeof(s::String) = error("type $(typeof(s)) has no canonical binary representation")
 
+eltype(::String) = Char
+
 (*)(s::String...) = string(s...)
 (^)(s::String, r::Integer) = repeat(s,r)
 
