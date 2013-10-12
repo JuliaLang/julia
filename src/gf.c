@@ -520,19 +520,21 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                 // for T..., intersect with T
                 if (jl_is_vararg_type(declt))
                     declt = jl_tparam0(declt);
-                if (declt == (jl_value_t*)jl_tuple_type ||
-                    jl_subtype((jl_value_t*)jl_tuple_type, declt, 0)) {
-                    // don't specialize args that matched (Any...) or Any
-                    jl_tupleset(type, i, (jl_value_t*)jl_tuple_type);
-                    might_need_guard = 1;
-                }
-                else {
-                    declt = jl_type_intersection(declt,
-                                                 (jl_value_t*)jl_tuple_type);
-                    if (jl_tuple_len(elt) > 3 ||
-                        tuple_all_Any((jl_tuple_t*)declt)) {
-                        jl_tupleset(type, i, declt);
+                if (!jl_has_typevars(declt)) {
+                    if (declt == (jl_value_t*)jl_tuple_type ||
+                        jl_subtype((jl_value_t*)jl_tuple_type, declt, 0)) {
+                        // don't specialize args that matched (Any...) or Any
+                        jl_tupleset(type, i, (jl_value_t*)jl_tuple_type);
                         might_need_guard = 1;
+                    }
+                    else {
+                        declt = jl_type_intersection(declt,
+                                                     (jl_value_t*)jl_tuple_type);
+                        if (jl_tuple_len(elt) > 3 ||
+                            tuple_all_Any((jl_tuple_t*)declt)) {
+                            jl_tupleset(type, i, declt);
+                            might_need_guard = 1;
+                        }
                     }
                 }
             }
