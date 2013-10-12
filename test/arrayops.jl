@@ -645,20 +645,20 @@ begin
     local a = rand(3,3)
 
     asr = sortrows(a)
-    @test isless(asr[1,:],asr[2,:])
-    @test isless(asr[2,:],asr[3,:])
+    @test cmp(asr[1,:],asr[2,:])<0
+    @test cmp(asr[2,:],asr[3,:])<0
 
     asc = sortcols(a)
-    @test isless(asc[:,1],asc[:,2])
-    @test isless(asc[:,2],asc[:,3])
+    @test cmp(asc[:,1],asc[:,2])<0
+    @test cmp(asc[:,2],asc[:,3])<0
 
     asr = sortrows(a, rev=true)
-    @test isless(asr[2,:],asr[1,:])
-    @test isless(asr[3,:],asr[2,:])
+    @test cmp(asr[2,:],asr[1,:])<0
+    @test cmp(asr[3,:],asr[2,:])<0
 
     asc = sortcols(a, rev=true)
-    @test isless(asc[:,2],asc[:,1])
-    @test isless(asc[:,3],asc[:,2])
+    @test cmp(asc[:,2],asc[:,1])<0
+    @test cmp(asc[:,3],asc[:,2])<0
 
     as = sort(a, 1)
     @test issorted(as[:,1])

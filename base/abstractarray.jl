@@ -996,8 +996,6 @@ function cmp(A::AbstractArray, B::AbstractArray)
     return cmp(nA, nB)
 end
 
-isless(A::AbstractArray, B::AbstractArray) = cmp(A,B)<0
-
 function (==)(A::AbstractArray, B::AbstractArray)
     if size(A) != size(B)
         return false
@@ -1008,18 +1006,6 @@ function (==)(A::AbstractArray, B::AbstractArray)
         end
     end
     return true
-end
-
-function (!=)(A::AbstractArray, B::AbstractArray)
-    if size(A) != size(B)
-        return true
-    end
-    for i = 1:length(A)
-        if A[i]!=B[i]
-            return true
-        end
-    end
-    return false
 end
 
 _cumsum_type{T<:Number}(v::AbstractArray{T}) = typeof(+zero(T))
@@ -1395,9 +1381,9 @@ reducedim(f::Function, A, region, v0) =
     reducedim(f, A, region, v0, similar(A, reduced_dims(A, region)))
 
 maximum{T}(A::AbstractArray{T}, region) =
-    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(max,A,region,typemin(T))
+    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(scalarmax,A,region,typemin(T))
 minimum{T}(A::AbstractArray{T}, region) =
-    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(min,A,region,typemax(T))
+    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(scalarmin,A,region,typemax(T))
 sum{T}(A::AbstractArray{T}, region)  = reducedim(+,A,region,zero(T))
 prod{T}(A::AbstractArray{T}, region) = reducedim(*,A,region,one(T))
 

@@ -3,9 +3,9 @@ module Order
 ## notions of element ordering ##
 
 export # not exported by Base
-    Ordering, Forward, 
+    Ordering, Forward, Lexicographic,
     By, Lt, Perm,
-    ReverseOrdering, ForwardOrdering,
+    ReverseOrdering, ForwardOrdering, LexicographicOrdering,
     DirectOrdering,
     lt, uint_mapping, ord, ordtype
     # Reverse, # TODO: clashes with Reverse iterator
@@ -25,6 +25,9 @@ typealias DirectOrdering Union(ForwardOrdering,ReverseOrdering{ForwardOrdering})
 const Forward = ForwardOrdering()
 const Reverse = ReverseOrdering(Forward)
 
+immutable LexicographicOrdering <: Ordering end
+const Lexicographic = LexicographicOrdering()
+
 immutable By <: Ordering
     by::Function
 end
@@ -43,6 +46,7 @@ lt(o::ForwardOrdering, a, b) = isless(a,b)
 lt(o::ReverseOrdering, a, b) = lt(o.fwd,b,a)
 lt(o::By,              a, b) = isless(o.by(a),o.by(b))
 lt(o::Lt,              a, b) = o.lt(a,b)
+lt(o::LexicographicOrdering, a, b) = cmp(a,b) < 0
 lt(p::Perm, a, b) = lt(p.order, p.data[a], p.data[b])
 
 # Map a bits-type to an unsigned int, maintaining sort order
@@ -78,7 +82,7 @@ ordtype   (o::By,              vs::AbstractArray) = try typeof(o.by(vs[1])) catc
 ordtype{T}(o::Ordering,        vs::AbstractArray{T}) = T
 
 function ord(lt::Function, by::Function, rev::Bool, order::Ordering=Forward)
-    order == Forward ||
+    order == Forward || order == Lexicographic ||
         Base.warn_once("the `order` keyword is deprecated, use `lt`, `by` and `rev` instead.")
     o = (lt===isless) & (by===identity) ? order  :
         (lt===isless) & (by!==identity) ? By(by) :

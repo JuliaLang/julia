@@ -29,6 +29,16 @@ isless(x::Real, y::Real) = x<y
 max(x,y) = y < x ? x : y
 min(x,y) = x < y ? x : y
 
+scalarmax(x,y) = max(x,y)
+scalarmax(x::AbstractArray, y::AbstractArray) = error("max: ordering is not well-defined for arrays")
+scalarmax(x               , y::AbstractArray) = error("max: ordering is not well-defined for arrays")
+scalarmax(x::AbstractArray, y               ) = error("max: ordering is not well-defined for arrays")
+
+scalarmin(x,y) = min(x,y)
+scalarmin(x::AbstractArray, y::AbstractArray) = error("min: ordering is not well-defined for arrays")
+scalarmin(x               , y::AbstractArray) = error("min: ordering is not well-defined for arrays")
+scalarmin(x::AbstractArray, y               ) = error("min: ordering is not well-defined for arrays")
+
 ## definitions providing basic traits of arithmetic operators ##
 
 +() = 0
