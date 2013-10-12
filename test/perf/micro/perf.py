@@ -64,24 +64,24 @@ def randmatmul(n):
 ## mandelbrot ##
 
 def mandel(z):
+    maxiter = 80
     c = z
-    for n in range(0,79):
+    for n in range(maxiter):
         if abs(z) > 2:
-            n -= 1
-            break
+            return n
         z = z*z + c
-    return n + 1
+    return maxiter
 
 def mandelperf():
-    r1 = numpy.arange(-2.0, 0.5, 0.1)
-    r2 = numpy.arange(-1.0, 1.0, 0.1)
+    r1 = numpy.linspace(-2.0, 0.5, 26)
+    r2 = numpy.linspace(-1.0, 1.0, 21)
     return [mandel(complex(r, i)) for r in r1 for i in r2]
 
 def pisum():
     sum = 0.0
-    for j in range(1, 500):
+    for j in range(1, 501):
         sum = 0.0
-        for k in range(1, 10000):
+        for k in range(1, 10001):
             sum += 1.0/(k*k)
     return sum
 
@@ -118,7 +118,7 @@ if __name__=="__main__":
         if t < tmin: tmin = t
     print_perf ("parse_int", tmin)
 
-    assert sum(mandelperf()) == 14304
+    assert sum(mandelperf()) == 14791
     tmin = float('inf')
     for i in range(5):
         t = time.time()
