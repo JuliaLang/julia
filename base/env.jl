@@ -141,6 +141,18 @@ function show(io::IO, ::EnvHash)
     end
 end
 
+# temporarily set and then restore an environment value
+function with_env(f::Function, key::String, val)
+    old = get(ENV,key,nothing)
+    val != nothing ? (ENV[key]=val) : _unsetenv(key)
+    try f()
+    finally
+        old != nothing ? (ENV[key]=old) : _unsetenv(key)
+    catch
+        rethrow()
+    end
+end
+
 ## misc environment-related functionality ##
 
 tty_cols() = parseint(Int32, get(ENV,"COLUMNS","80"), 10)

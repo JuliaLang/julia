@@ -184,7 +184,9 @@ function update(branch::String)
             Git.run(`checkout -q $branch`)
         end
         # TODO: handle merge conflicts
-        Git.run(`pull -q --no-edit`, out=DevNull)
+        with_env("GIT_MERGE_AUTOEDIT","no") do
+            Git.run(`pull -q`, out=DevNull)
+        end
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
