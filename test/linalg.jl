@@ -9,9 +9,9 @@ for elty in (Float32, Float64, Complex64, Complex128)
         apd   = a'*a                    # symmetric positive-definite
         b     = convert(Vector{elty}, b)
 
-        capd  = factorize(apd)              # (Automatic) upper Cholesky factor
-        r     = capd[:U]
-        @test_approx_eq r'*r apd
+        capd  = factorize(apd);              # (Automatic) upper Cholesky factor
+        r     = capd[:U];
+        @test_approx_eq r'*r apd;
         @test_approx_eq b apd * (capd\b)
         @test_approx_eq apd * inv(capd) eye(elty, n)
         @test_approx_eq a*(capd\(a'*b)) b # least squares soln for square a
@@ -220,10 +220,10 @@ B = rand(1:20, 5, 5) - 10
 @test A_mul_Bt(A, B) == A*B'
                                         # Preallocated
 C = Array(Int, size(A, 1), size(B, 2))
-@test A_mul_B!(C, A, B) == A*B
-@test At_mul_B!(C, A, B) == A'*B
-@test A_mul_Bt!(C, A, B) == A*B'
-@test At_mul_Bt!(C, A, B) == A'*B'
+@test A_mul_B!(1, A, B, 0, C) == A*B
+@test At_mul_B!(1, A, B, 0, C) == A'*B
+@test A_mul_Bt!(1, A, B, 0, C) == A*B'
+@test At_mul_Bt!(1, A, B, 0, C) == A'*B'
                                         # matrix algebra with subarrays of floats (stride != 1)
 A = reshape(float64(1:20),5,4)
 Aref = A[1:2:end,1:2:end]

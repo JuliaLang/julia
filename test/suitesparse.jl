@@ -29,7 +29,7 @@ x = lua'\b
 
 #4523 - complex sparse \
 x = speye(2) + im * speye(2)
-@test_approx_eq ((lufact(x) \ ones(2)) * x) (complex(ones(2)))
+@test_approx_eq lufact(x)\ones(2) full(x)\ones(2)
 
 using Base.LinAlg.CHOLMOD
 

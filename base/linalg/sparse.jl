@@ -8,7 +8,6 @@ function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{Tv
     return A * B
 end
 
-(*){TvA,TiA}(A::SparseMatrixCSC{TvA,TiA}, X::BitArray{1}) = invoke(*, (SparseMatrixCSC, AbstractVector), A, X)
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 function A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number, y::AbstractVector)
     A.n == length(x) || throw(DimensionMismatch(""))
@@ -19,48 +18,113 @@ function A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number,
     end
     return y
 end
-(*){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx}) = A_mul_B!(1, A, x, 0, zeros(promote_type(TA,Tx), A.m))
-
-(*)(X::BitArray{1}, A::SparseMatrixCSC) = invoke(*, (AbstractVector, SparseMatrixCSC), X, A)
-# In vector-matrix multiplication, the correct orientation of the vector is assumed.
-# XXX: this is wrong (i.e. not what Arrays would do)!!
-function (*){T1,T2}(X::AbstractVector{T1}, A::SparseMatrixCSC{T2})
-    if A.m != length(X); error("mismatched dimensions"); end
-    Y = zeros(promote_type(T1,T2), A.n)
+function Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number, y::AbstractVector)
+    (A.m == length(x) && A.n == length(y)) || throw(DimensionMismatch(""))
+    for i = 1:length(y); y[i] *= β; end
     for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
-        Y[col] += X[A.rowval[k]] * A.nzval[k]
+        y[col] += α*conj(A.nzval[k])*x[A.rowval[k]]
     end
-    return Y
+    y
+end
+function At_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number, y::AbstractVector)
+    (A.m == length(x) && A.n == length(y)) || throw(DimensionMismatch(""))
+    for i = 1:length(y); y[i] *= β; end
+    for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
+        y[col] += α*A.nzval[k]*x[A.rowval[k]]
+    end
+    y
+end
+
+(*){TvA,TiA}(A::SparseMatrixCSC{TvA,TiA}, X::BitArray{1}) = invoke(*, (SparseMatrixCSC, AbstractVector), A, X)
+function (*){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx})
+    oneTA, oneTx = one(TA), one(Tx)
+    Ty = typeof(oneTA*oneTx + oneTA*oneTx)
+    A_mul_B!(one(Ty), A, x, zero(Ty), zeros(Ty, A.m))
+end
+function Ac_mul_B{TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx})
+    oneTA, oneTx = one(TA), one(Tx)
+    Ty = typeof(oneTA*oneTx + oneTA*oneTx)
+    Ac_mul_B!(one(Ty), A, x, zero(Ty), zeros(Ty, A.n))
+end
+function At_mul_B{TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx})
+    oneTA, oneTx = one(TA), one(Tx)
+    Ty = typeof(oneTA*oneTx + oneTA*oneTx)
+    At_mul_B!(one(Ty), A, x, zero(Ty), zeros(Ty, A.n))
+end
+
+# Matrix-matrix
+A_mul_B!(α::Number, A::SparseMatrixCSC, B::SparseMatrixCSC, β::Number, C::AbstractMatrix) = error("Not handled yet!")
+function A_mul_B!(α::Number, A::SparseMatrixCSC, B::AbstractMatrix, β::Number, C::AbstractMatrix)
+    mB, nB = size(B)
+    A.m == size(C,1) || throw(DimensionMismatch(""))
+    A.n == mB || throw(DimensionMismatch(""))
+    for i = 1:length(C); C[i] *= β; end
+    for multivec_col = 1:nB
+        for col = 1 : A.n
+            for k = A.colptr[col] : (A.colptr[col+1]-1)
+                C[A.rowval[k], multivec_col] += α*A.nzval[k]*B[col, multivec_col]
+            end
+        end
+    end
+    return C
+end
+function Ac_mul_B!(α::Number, A::SparseMatrixCSC, B::AbstractMatrix, β::Number, C::AbstractMatrix)
+    mB, nB = size(B); A.m == mB || throw(DimensionMismatch(""))
+    for i = 1:length(C); C[i] *= β; end
+    for multivec_col = 1:nB
+         for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
+             C[col, multivec_col] += α*conj(A.nzval[k])*B[A.rowval[col], multivec_col]
+         end
+    end
+    C
+end
+function At_mul_B!(α::Number, A::SparseMatrixCSC, B::AbstractMatrix, β::Number, C::AbstractMatrix)
+    mB, nB = size(B); A.m == mB || throw(DimensionMismatch(""))
+    for i = 1:length(C); C[i] *= β; end
+    for multivec_col = 1:nB
+         for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
+             C[col, multivec_col] += α*A.nzval[k]*B[A.rowval[k], multivec_col]
+         end
+    end
+    C
 end
 
 (*){TvA,TiA}(A::SparseMatrixCSC{TvA,TiA}, X::BitArray{2}) = invoke(*, (SparseMatrixCSC, AbstractMatrix), A, X)
-function (*){TvA,TiA,TX}(A::SparseMatrixCSC{TvA,TiA}, X::AbstractMatrix{TX})
-    mX, nX = size(X)
-    if A.n != mX; error("mismatched dimensions"); end
-    Y = zeros(promote_type(TvA,TX), A.m, nX)
-    for multivec_col = 1:nX
+function (*){TA,S,TB}(A::SparseMatrixCSC{TA,S}, B::AbstractMatrix{TB})
+    oneTA, oneTB = one(TA), one(TB)
+    TC = typeof(oneTA*oneTB + oneTA*oneTB)
+    A_mul_B!(one(TC), A, B, zero(TC), zeros(TC, size(A,1), size(B,2)))
+end
+function Ac_mul_B{TA,S,TB}(A::SparseMatrixCSC{TA,S}, B::AbstractMatrix{TB})
+    oneTA, oneTB = one(TA), one(TB)
+    TC = typeof(oneTA*oneTB + oneTA*oneTB)
+    A_mul_B!(one(TC), A, B, zero(TC), zeros(TC, size(A,2), size(B,2)))
+end
+function At_mul_B{TA,S,TB}(A::SparseMatrixCSC{TA,S}, B::AbstractMatrix{TB})
+    oneTA, oneTB = one(TA), one(TB)
+    TC = typeof(oneTA*oneTB + oneTA*oneTB)
+    A_mul_B!(one(TC), A, B, zero(TC), zeros(TC, size(A,2), size(B,2)))
+end
+
+function A_mul_B!(α::Number, B::AbstractMatrix, A::SparseMatrixCSC, β::Number, C::AbstractMatrix)
+    mB, nB = size(B)
+    if nB != A.m; throw(DimensionMismatch("")); end
+    for i = 1:length(C); C[i] *= β; end
+    for multivec_row = 1:mB
         for col = 1 : A.n
             for k = A.colptr[col] : (A.colptr[col+1]-1)
-                Y[A.rowval[k], multivec_col] += A.nzval[k] * X[col, multivec_col]
+                C[multivec_row, col] += α*B[multivec_row, A.rowval[k]] * A.nzval[k]
             end
         end
     end
-    return Y
+    return C
 end
 
 (*){TvA,TiA}(X::BitArray{2}, A::SparseMatrixCSC{TvA,TiA}) = invoke(*, (AbstractMatrix, SparseMatrixCSC), X, A)
-function (*){TX,TvA,TiA}(X::AbstractMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
-    mX, nX = size(X)
-    if nX != A.m; error("mismatched dimensions"); end
-    Y = zeros(promote_type(TX,TvA), mX, A.n)
-    for multivec_row = 1:mX
-        for col = 1 : A.n
-            for k = A.colptr[col] : (A.colptr[col+1]-1)
-                Y[multivec_row, col] += X[multivec_row, A.rowval[k]] * A.nzval[k]
-            end
-        end
-    end
-    return Y
+function (*){TA,S,TB}(B::AbstractMatrix{TB}, A::SparseMatrixCSC{TA,S})
+    oneTA, oneTB = one(TA), one(TB)
+    TC = typeof(oneTA*oneTB + oneTA*oneTB)
+    A_mul_B!(one(TC), B, A, zero(TC), zeros(TC, size(B,1), size(A,2)))
 end
 
 # Sparse matrix multiplication as described in [Gustavson, 1978]:

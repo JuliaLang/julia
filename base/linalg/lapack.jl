@@ -395,8 +395,8 @@ for (tzrzf, ormrz, elty) in
  #   27 *       COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
         function tzrzf!(A::StridedMatrix{$elty})
             m, n = size(A)
-            if n < m throw(DimensionMismatch("Matrix cannot have fewer columns than rows")) end
-            lda = max(1, m)
+            n >= m || throw(DimensionMismatch("Matrix cannot have fewer columns than rows"))
+            lda = max(1, stride(A, 2))
             tau = Array($elty, m)
             work = Array($elty, 1)
             lwork = -1
@@ -428,8 +428,8 @@ for (tzrzf, ormrz, elty) in
             m, n = size(C)
             k = length(tau)
             l = size(A, 2) - size(A, 1)
-            lda = max(1, k)
-            ldc = max(1, m)
+            lda = max(1, stride(A,2))
+            ldc = max(1, stride(C,2))
             work = Array($elty, 1)
             lwork = -1
             info = Array(BlasInt, 1)
@@ -622,8 +622,8 @@ for (gelsd, gelsy, elty) in
             nrhs = size(B, 2)
             if m != size(B, 1) throw(DimensionMismatch("left and right hand sides must have same number of rows")) end
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
-            lda = max(1, m)
-            ldb = max(1, m, n)
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
             jpvt = Array(BlasInt, n)
             rcond = convert($elty, rcond)
             rnk = Array(BlasInt, 1)
@@ -715,8 +715,8 @@ for (gelsd, gelsy, elty, relty) in
             nrhs = size(B, 2)
             if m != size(B, 1) throw(DimensionMismatch("left and right hand sides must have same number of rows")) end
             newB = [B; zeros($elty, max(0, n - size(B, 1)), size(B, 2))]
-            lda = max(1, m)
-            ldb = max(1, m, n)
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
             jpvt = Array(BlasInt, n)
             rcond = convert($relty, rcond)
             rnk = Array(BlasInt, 1)
@@ -1057,8 +1057,8 @@ for (ggev, elty) in
             n = size(A, 1)
             if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("matrices must be square")) end
             if size(B, 1) != n throw(DimensionMismatch("matrices must have same size")) end
-            lda = max(1, n)
-            ldb = max(1, n)
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
             alphar = Array($elty, n)
             alphai = Array($elty, n)
             beta = Array($elty, n)
@@ -1111,8 +1111,8 @@ for (ggev, elty, relty) in
             n = size(A, 1)
             if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("matrices must be square")) end
             if size(B, 1) != n throw(DimensionMismatch("matrices must have same size")) end
-            lda = max(1, n)
-            ldb = max(1, n)
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
             alpha = Array($elty, n)
             beta = Array($elty, n)
             ldvl = jobvl == 'V' ? n : 1
@@ -1414,15 +1414,12 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             m = size(C, 1)
             n = size(C, 2)
             nb, k = size(T)
+            ldv = max(1, stride(V, 2))
             if k == 0 return C end
             if side == 'L'
-                0 <= k <= m || error("Wrong value for k")
-                ldv = max(1, m)
                 wss = n*k
                 # if m != size(V, 1) throw(DimensionMismatch("")) end
             elseif side == 'R'
-                0 <= k <= n || error("Wrong value for k")
-                ldv = max(1, n)
                 wss = m*k
                 # if n != size(V, 1) throw(DimensionMismatch("")) end
             else
@@ -2425,8 +2422,8 @@ for (syev, syevr, sygvd, elty) in
             n = size(A, 1)
             if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("Matrices must be square")) end
             if size(B, 1) != n throw(DimensionMismatch("Matrices must have same size")) end
-            lda = max(1, n)
-            ldb = max(1, n)
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
             w = Array($elty, n)
             work = Array($elty, 1)
             lwork = -one(BlasInt)
@@ -2576,8 +2573,8 @@ for (syev, syevr, sygvd, elty, relty) in
             n = size(A, 1)
             if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("Matrices must be square")) end
             if size(B, 1) != n throw(DimensionMismatch("Matrices must have same size")) end
-            lda = max(1, n)
-            ldb = max(1, n)
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
             w = Array($relty, n)
             work = Array($elty, 1)
             lwork = -one(BlasInt)
@@ -2728,7 +2725,7 @@ for (gecon, elty) in
 #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
             chkstride1(A)
             n = size(A, 2)
-            lda = max(1, size(A, 1))
+            lda = max(1, stride(A, 2))
             rcond = Array($elty, 1)
             work = Array($elty, 4n)
             iwork = Array(BlasInt, n)
@@ -2762,7 +2759,7 @@ for (gecon, elty, relty) in
 #       COMPLEX*16         A( LDA, * ), WORK( * )
             chkstride1(A)
             n = size(A, 2)
-            lda = max(1, size(A, 1))
+            lda = max(1, stride(A, 2))
             rcond = Array($relty, 1)
             work = Array($elty, 2n)
             rwork = Array($relty, 2n)
