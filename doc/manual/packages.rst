@@ -91,7 +91,7 @@ actual desired names.
 Creating a new Julia package
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Note: this documentation is out of date pending further development of version 2 of Julia's package management system – specifically its tools for package developers. For the time being, using Pkg1 (i.e. the first version of the package manager) tools for package development work.
+Note: this documentation is out of date pending further development of version 2 of Julia's package management system – specifically its tools for package developers.
 
 1. Check that your proposed package will not compete directly with an existing one
    by checking the list of  :ref:`available-packages`. If there is significant overlap
@@ -101,7 +101,7 @@ Note: this documentation is out of date pending further development of version 2
 
 2. Initialize your package in Julia by running::
 
-    Pkg1.new("MY_PACKAGE_NAME")
+    Pkg.generate("MyPackageName", "MIT") # or change MIT to BSD
 
    This will initialize a skeleton for a new package in ``$HOME/.julia/MY_PACKAGE_NAME``.
 
