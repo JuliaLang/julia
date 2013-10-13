@@ -100,7 +100,15 @@ function requires_path(pkg::String, avail::Dict=available(pkg))
     end
     joinpath(pkg, "REQUIRE")
 end
-requires_dict(pkg::String, avail::Dict=available(pkg)) = Reqs.parse(requires_path(pkg,avail))
+
+function requires_list(pkg::String, avail::Dict=available(pkg))
+    reqs = filter!(Reqs.read(requires_path(pkg,avail))) do line
+        isa(line,Reqs.Requirement)
+    end
+    map(req->req.package, reqs)
+end
+requires_dict(pkg::String, avail::Dict=available(pkg)) =
+    Reqs.parse(requires_path(pkg,avail))
 
 function installed(avail::Dict=available())
     pkgs = Dict{ByteString,(VersionNumber,Bool)}()
@@ -112,7 +120,8 @@ function installed(avail::Dict=available())
     return pkgs
 end
 
-function fixed(avail::Dict=available(), inst::Dict=installed(avail), julia_version::VersionNumber=VERSION)
+function fixed(avail::Dict=available(), inst::Dict=installed(avail),
+    julia_version::VersionNumber=VERSION)
     pkgs = Dict{ByteString,Fixed}()
     for (pkg,(ver,fix)) in inst
         fix || continue
@@ -130,25 +139,6 @@ function free(inst::Dict=installed())
         pkgs[pkg] = ver
     end
     return pkgs
-end
-
-function dependencies(pkg::String,avail::Dict,free::Dict,fix::Dict)
-    if haskey(free,pkg)
-        return avail[pkg][free[pkg]].requires
-    elseif haskey(fix,pkg)
-        return fix[pkg].requires
-    else 
-        error("$pkg is neither fixed nor free (this shouldn't happen)")
-    end
-end
-
-function alldependencies(pkg::String,avail::Dict=available(),free::Dict=free(installed(avail)),fix::Dict=fixed(avail,installed(avail)))
-    deps = [ k for (k,v) in dependencies(pkg,avail,free,fix) ]
-    alldeps = copy(deps)
-    for dep in deps
-        dep != "julia" && !in(dep,alldeps) && append!(alldeps,[ k for (k,v) in alldependencies(dep,avail,free,fix) ])
-    end
-    alldeps
 end
 
 end # module

@@ -336,11 +336,8 @@ function resolve(
         end
         rethrow()
     end
-
-    # Since we just changed a lot of things, it's probably better to reread
-    # the state, so only pass avail
-    _fixup(String[pkg for (pkg,_) in filter(x->x[2][2]!=nothing,changes)], avail)
-    #4082 TODO: this call to fixup should no longer go here
+    # re/build all updated/installed packages
+    build(map(x->x[1],filter(x->x[2][2]!=nothing,changes)))
 end
 
 function write_tag_metadata(pkg::String, ver::VersionNumber, commit::String)
@@ -481,92 +478,44 @@ function check_metadata()
     return
 end
 
-function build(pkg::String, args=[])
-    try 
+function warnbanner(msg...; label="[ WARNING ]", prefix="")
+    warn(prefix="", Base.cpad(label,Base.tty_cols(),"="))
+    println(STDERR)
+    warn(prefix=prefix, msg...)
+    println(STDERR)
+    warn(prefix="", "="^Base.tty_cols())
+end
+
+function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
+    for pkg in pkgs
+        pkg in seen && continue
+        build!(Read.requires_list(pkg),errs,push!(seen,pkg))
         path = abspath(pkg,"deps","build.jl")
-        if isfile(path)
-            info("Running build script for package $pkg")
-            cd(dirname(path)) do
-                m = Module(:__anon__)
-                body = Expr(:toplevel,:(ARGS=$args),:(include($path)))
-                eval(m,body)
+        isfile(path) || continue
+        info("Building $pkg")
+        cd(dirname(path)) do
+            try eval(Module(),Expr(:toplevel,:(ARGS={}),:(include($path))))
+            catch err
+                warnbanner(err, label="[ ERROR: $pkg ]")
+                errs[pkg] = err
             end
         end
-    catch
-        warn("""
-        An exception occured while building binary dependencies.
-        You may have to take manual steps to complete the installation, see the error message below.
-        To reattempt the installation, run Pkg.fixup("$pkg").
-        """)
-        rethrow()
-    end
-    true
-end
-
-function __fixup(
-    instlist,
-    avail :: Dict = Read.available(),
-    inst  :: Dict = Read.installed(avail),
-    free  :: Dict = Read.free(inst),
-    fixed :: Dict = Read.fixed(avail,inst);
-    exclude = []
-)
-    sort!(instlist, lt=function(a,b)
-        c = in(b,Read.alldependencies(a,avail,free,fixed))
-        nonordered = (!c && !in(a,Read.alldependencies(b,avail,free,fixed)))
-        nonordered ? a < b : c
-    end)
-    for p in instlist
-        in(p,exclude) && continue
-        build(p,["fixup"]) || return
     end
 end
 
-function _fixup{T<:String}(
-    pkg::Vector{T},
-    avail :: Dict = Read.available(),
-    inst  :: Dict = Read.installed(avail),
-    free  :: Dict = Read.free(inst),
-    fixed :: Dict = Read.fixed(avail,inst);
-    exclude = []
-)
-    tofixup = copy(pkg)
-    oldlength = length(tofixup)
-    while true
-        for (p,_) in inst
-            in(p,tofixup) && continue
-            for pf in tofixup
-                if in(pf,Read.alldependencies(p,avail,free,fixed))
-                    push!(tofixup,p)
-                    break
-                end
-            end
-        end
-        oldlength == length(tofixup) && break
-        oldlength = length(tofixup)
-    end
-    __fixup(tofixup, avail, inst, free, fixed; exclude=exclude)
-end
+function build(pkgs::Vector)
+    errs = Dict()
+    build!(pkgs,errs)
+    isempty(errs) && return
+    println(STDERR)
+    warnbanner(label="[ BUILD ERRORS ]", """
+    WARNING: $(join(map(x->x[1],errs),", "," and ")) had build errors.
 
-_fixup(
-    pkg::String,
-    avail :: Dict = Read.available(),
-    inst  :: Dict = Read.installed(avail),
-    free  :: Dict = Read.free(inst),
-    fixed :: Dict = Read.fixed(avail,inst);
-    exclude = []
-) = _fixup([pkg], avail, inst, free, fixed; exclude=exclude)
-
-function _fixup(
-    avail :: Dict = Read.available(),
-    inst  :: Dict = Read.installed(avail),
-    free  :: Dict = Read.free(inst),
-    fixed :: Dict = Read.fixed(avail,inst);
-    exclude = []
-)
-    # TODO: Replace by proper toposorts
-    instlist = [k for (k,v) in inst]
-    _fixup(instlist, avail, inst, free, fixed; exclude=exclude)
+     - packages with build errors remain installed in $(pwd())
+     - build a package and all its dependencies with `Pkg.build(pkg)`
+     - build a single package by running its `deps/build.jl` script
+    """)
 end
+build() = build(sort!([keys(installed())...]))
 
 end # module
