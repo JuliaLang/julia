@@ -269,11 +269,11 @@ end
 # print a warning only once
 
 const have_warned = Dict()
-function warn_once(msg::String...; depth=0)
+function warn_once(msg::String...)
     msg = bytestring(msg...)
     haskey(have_warned,msg) && return
     have_warned[msg] = true
-    warn(msg; depth=depth+1)
+    warn(msg)
 end
 
 # BLAS utility routines

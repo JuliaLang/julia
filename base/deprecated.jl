@@ -5,7 +5,7 @@ macro deprecate(old,new)
         Expr(:toplevel,
             Expr(:export,esc(old)),
             :(function $(esc(old))(args...)
-                  warn_once(string($oldname," is deprecated, use ",$newname," instead."); depth=1)
+                  warn_once(string($oldname," is deprecated, use ",$newname," instead."))
                   $(esc(new))(args...)
               end))
     elseif isa(old,Expr) && old.head == :call
@@ -14,7 +14,7 @@ macro deprecate(old,new)
         Expr(:toplevel,
             Expr(:export,esc(old.args[1])),
             :($(esc(old)) = begin
-                  warn_once(string($oldcall," is deprecated, use ",$newcall," instead."); depth=1)
+                  warn_once(string($oldcall," is deprecated, use ",$newcall," instead."))
                   $(esc(new))
               end))
     else

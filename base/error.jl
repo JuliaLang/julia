@@ -63,25 +63,13 @@ print_with_color(color::Symbol, msg::String...) =
 
 # use colors to print messages and warnings in the REPL
 
-function info(msg::String...; depth=0)
-    #stack::Range1{Int} = 3 +
-    #    if isa(depth,Int)
-    #        depth:depth
-    #    else
-    #        depth
-    #    end
-    with_output_color(print, :blue, STDERR, "INFO: ", msg...)
-    #with_output_color(show_backtrace, :blue, STDERR, backtrace(), stack)
+function info(msg::String...; prefix="INFO: ")
+    with_output_color(print, :blue, STDERR, prefix, chomp(string(msg...)))
     println(STDERR)
 end
-function warn(msg::String...; depth=0)
-    stack::Range1{Int} = 2 +
-        if isa(depth,Int)
-            depth:depth
-        else
-            depth
-        end
-    with_output_color(print, :red,  STDERR, "WARNING: ", msg...)
-    with_output_color(show_backtrace, :red, STDERR, backtrace(), stack)
+function warn(msg::String...; prefix="WARNING: ")
+    with_output_color(print, :red,  STDERR, prefix, chomp(string(msg...)))
     println(STDERR)
 end
+warn(err::Exception; prefix="ERROR: ") =
+    warn(sprint(io->showerror(io,err)), prefix=prefix)
