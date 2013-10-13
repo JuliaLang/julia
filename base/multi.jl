@@ -727,6 +727,7 @@ function take(rv::RemoteValue)
     wait_full(rv)
     val = rv.result
     rv.done = false
+    rv.result = nothing
     notify_empty(rv)
     val
 end
