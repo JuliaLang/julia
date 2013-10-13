@@ -1216,10 +1216,10 @@ end
 
 ## miscellaneous string functions ##
 
-function lpad(s::String, n::Integer, p::String)
-    m = n - length(s)
+function lpad(s::String, n::Integer, p::String=" ")
+    m = n - strwidth(s)
     if m <= 0; return s; end
-    l = length(p)
+    l = strwidth(p)
     if l==1
         return bytestring(p^m * s)
     end
@@ -1228,10 +1228,10 @@ function lpad(s::String, n::Integer, p::String)
     bytestring(p^q*p[1:chr2ind(p,r)]*s)
 end
 
-function rpad(s::String, n::Integer, p::String)
-    m = n - length(s)
+function rpad(s::String, n::Integer, p::String=" ")
+    m = n - strwidth(s)
     if m <= 0; return s; end
-    l = length(p)
+    l = strwidth(p)
     if l==1
         return bytestring(s * p^m)
     end
@@ -1240,11 +1240,9 @@ function rpad(s::String, n::Integer, p::String)
     bytestring(s*p^q*p[1:chr2ind(p,r)])
 end
 
-lpad(s, n::Integer, p) = lpad(string(s), n, string(p))
-rpad(s, n::Integer, p) = rpad(string(s), n, string(p))
-
-lpad(s, n::Integer) = lpad(string(s), n, " ")
-rpad(s, n::Integer) = rpad(string(s), n, " ")
+lpad(s, n::Integer, p=" ") = lpad(string(s),n,string(p))
+rpad(s, n::Integer, p=" ") = rpad(string(s),n,string(p))
+cpad(s, n::Integer, p=" ") = rpad(lpad(s,div(n+strwidth(s),2),p),n,p)
 
 # splitter can be a Char, Vector{Char}, String, Regex, ...
 # any splitter that provides search(s::String, splitter)
