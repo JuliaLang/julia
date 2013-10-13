@@ -171,6 +171,10 @@ Library improvements
 Deprecated or removed
 ---------------------
 
+  * Methods of `min` and `max` that do reductions were renamed to
+    `minimum` and `maximum`. `min(x)` is now `minimum(x)`, and
+    `min(x,(),dim)` is now `minimum(x,dim)`. ([#4235])
+
   * `ComplexPair` was renamed to `Complex` and made `immutable`,
     and `Complex128` and so on are now aliases to the new `Complex` type.
 
@@ -188,7 +192,7 @@ Deprecated or removed
   * `safe_char`, `check_ascii`, and `check_utf8` replaced by
     `is_valid_char`, `is_valid_ascii`, and `is_valid_utf8`, respectively.
 
-  * `each_line, `each_match`, `begins_with`, `ends_with`, `parse_float`,
+  * `each_line`, `each_match`, `begins_with`, `ends_with`, `parse_float`,
     `parse_int`, and `seek_end` replaced by: `eachline`, `eachmatch`, and so on
     (`_` was removed) ([#1539]).
 
@@ -315,3 +319,4 @@ Too numerous to mention.
 [#4112]: https://github.com/JuliaLang/julia/issues/4112
 [#4130]: https://github.com/JuliaLang/julia/issues/4130
 [#4177]: https://github.com/JuliaLang/julia/issues/4177
+[#4235]: https://github.com/JuliaLang/julia/issues/4235
