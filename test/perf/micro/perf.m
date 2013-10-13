@@ -76,10 +76,11 @@ function n = mandel(z)
     c = z;
     for n=0:79
         if abs(z)>2
-            break
+            return
         end
         z = z^2+c;
     end
+    n = 80;
 end
 
 mandel(complex(-.53,.68));
@@ -94,7 +95,7 @@ function M = mandelperf(ignore)
     end
   end
 end
-assert(sum(sum(mandelperf(true))) == 14628)
+assert(sum(sum(mandelperf(true))) == 14791)
 timeit('mandel', @mandelperf, true)
 
 %% numeric vector quicksort %%
