@@ -26,6 +26,10 @@ isequal(x,y) = is(x,y)
 # which is more idiomatic:
 isless(x::Real, y::Real) = x<y
 
+cmp(x,y) = isless(x,y) ? -1 : isless(y,x) ? 1 : 0
+lexcmp(x,y) = cmp(x,y)
+lexless(x,y) = lexcmp(x,y)<0
+
 max(x,y) = y < x ? x : y
 min(x,y) = x < y ? x : y
 

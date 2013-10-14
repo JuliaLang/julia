@@ -46,7 +46,7 @@ lt(o::ForwardOrdering, a, b) = isless(a,b)
 lt(o::ReverseOrdering, a, b) = lt(o.fwd,b,a)
 lt(o::By,              a, b) = isless(o.by(a),o.by(b))
 lt(o::Lt,              a, b) = o.lt(a,b)
-lt(o::LexicographicOrdering, a, b) = cmp(a,b) < 0
+lt(o::LexicographicOrdering, a, b) = lexcmp(a,b) < 0
 lt(p::Perm, a, b) = lt(p.order, p.data[a], p.data[b])
 
 # Map a bits-type to an unsigned int, maintaining sort order

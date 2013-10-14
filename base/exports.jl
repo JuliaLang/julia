@@ -905,6 +905,8 @@ export
     isequal,
     isimmutable,
     isless,
+    lexless,
+    lexcmp,
     object_id,
     sizeof,
 
