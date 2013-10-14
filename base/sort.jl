@@ -333,14 +333,14 @@ sort(A::AbstractArray, dim::Integer; kws...) = mapslices(a->sort(a; kws...), A, 
 function sortrows(A::AbstractMatrix; kws...)
     c = 1:size(A,2)
     rows = [ sub(A,i,c) for i=1:size(A,1) ]
-    p = sortperm(rows; kws...)
+    p = sortperm(rows; kws..., order=Lexicographic)
     A[p,:]
 end
 
 function sortcols(A::AbstractMatrix; kws...)
     r = 1:size(A,1)
     cols = [ sub(A,r,i) for i=1:size(A,2) ]
-    p = sortperm(cols; kws...)
+    p = sortperm(cols; kws..., order=Lexicographic)
     A[:,p]
 end
 

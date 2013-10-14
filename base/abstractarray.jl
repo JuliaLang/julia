@@ -71,7 +71,7 @@ function checkbounds(sz::Int, I::AbstractVector{Bool})
 end
 
 function checkbounds{T<:Integer}(sz::Int, I::Ranges{T})
-    if !isempty(I) && (min(I) < 1 || max(I) > sz)
+    if !isempty(I) && (minimum(I) < 1 || maximum(I) > sz)
         throw(BoundsError())
     end
 end
@@ -755,7 +755,7 @@ function cat(catdim::Integer, X...)
     nargs = length(X)
     dimsX = map((a->isa(a,AbstractArray) ? size(a) : (1,)), X)
     ndimsX = map((a->isa(a,AbstractArray) ? ndims(a) : 1), X)
-    d_max = max(ndimsX)
+    d_max = maximum(ndimsX)
 
     if catdim > d_max + 1
         for i=1:nargs
@@ -823,7 +823,7 @@ function cat_t(catdim::Integer, typeC, A::AbstractArray...)
     nargs = length(A)
     dimsA = map(size, A)
     ndimsA = map(ndims, A)
-    d_max = max(ndimsA)
+    d_max = maximum(ndimsA)
 
     if catdim > d_max + 1
         for i=1:nargs
@@ -985,7 +985,7 @@ function isequal(A::AbstractArray, B::AbstractArray)
     return true
 end
 
-function cmp(A::AbstractArray, B::AbstractArray)
+function lexcmp(A::AbstractArray, B::AbstractArray)
     nA, nB = length(A), length(B)
     for i = 1:min(nA, nB)
         a, b = A[i], B[i]
@@ -995,8 +995,6 @@ function cmp(A::AbstractArray, B::AbstractArray)
     end
     return cmp(nA, nB)
 end
-
-isless(A::AbstractArray, B::AbstractArray) = cmp(A,B)<0
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if size(A) != size(B)
@@ -1008,18 +1006,6 @@ function (==)(A::AbstractArray, B::AbstractArray)
         end
     end
     return true
-end
-
-function (!=)(A::AbstractArray, B::AbstractArray)
-    if size(A) != size(B)
-        return true
-    end
-    for i = 1:length(A)
-        if A[i]!=B[i]
-            return true
-        end
-    end
-    return false
 end
 
 _cumsum_type{T<:Number}(v::AbstractArray{T}) = typeof(+zero(T))
@@ -1394,10 +1380,10 @@ reduced_dims0(A, region) = ntuple(ndims(A), i->(size(A,i)==0 ? 0 :
 reducedim(f::Function, A, region, v0) =
     reducedim(f, A, region, v0, similar(A, reduced_dims(A, region)))
 
-max{T}(A::AbstractArray{T}, b::(), region) =
-    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(max,A,region,typemin(T))
-min{T}(A::AbstractArray{T}, b::(), region) =
-    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(min,A,region,typemax(T))
+maximum{T}(A::AbstractArray{T}, region) =
+    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(scalarmax,A,region,typemin(T))
+minimum{T}(A::AbstractArray{T}, region) =
+    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(scalarmin,A,region,typemax(T))
 sum{T}(A::AbstractArray{T}, region)  = reducedim(+,A,region,zero(T))
 prod{T}(A::AbstractArray{T}, region) = reducedim(*,A,region,one(T))
 
@@ -1531,8 +1517,8 @@ function prod{T}(A::AbstractArray{T})
     v
 end
 
-function min{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("min: argument is empty"); end
+function minimum{T<:Real}(A::AbstractArray{T})
+    if isempty(A); error("minimum: argument is empty"); end
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]
@@ -1543,8 +1529,8 @@ function min{T<:Real}(A::AbstractArray{T})
     v
 end
 
-function max{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("max: argument is empty"); end
+function maximum{T<:Real}(A::AbstractArray{T})
+    if isempty(A); error("maximum: argument is empty"); end
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]

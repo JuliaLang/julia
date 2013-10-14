@@ -20,7 +20,7 @@ isposdef(x::Number) = imag(x)==0 && real(x) > 0
 norm{T<:BlasFloat}(x::Vector{T}) = BLAS.nrm2(length(x), x, 1)
 
 function norm{T<:BlasFloat, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}))
-    if min(rx) < 1 || max(rx) > length(x)
+    if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError())
     end
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
@@ -35,14 +35,14 @@ function norm{T<:BlasFloat}(x::Vector{T}, p::Number)
     elseif p == 1
         BLAS.asum(n, x, 1)
     elseif p == Inf
-        max(abs(x))  
+        maximum(abs(x))
     elseif p == -Inf
-        min(abs(x))
+        minimum(abs(x))
     elseif p == 0
         convert(T, nnz(x))
     else
         absx = abs(x)
-        dx = max(absx)
+        dx = maximum(absx)
         if dx != zero(T)
             scale!(absx, 1/dx)
             a = dx * (sum(absx.^p).^(1/p))
@@ -135,7 +135,7 @@ function trace{T}(A::Matrix{T})
         error("expected square matrix")
     end
     t = zero(T)
-    for i=1:min(size(A))
+    for i=1:minimum(size(A))
         t += A[i,i]
     end
     return t
@@ -526,7 +526,7 @@ function pinv{T<:BlasFloat}(A::StridedMatrix{T})
     if m == 0 || n == 0 return Array(T, n, m) end
     SVD         = svdfact(A, true)
     Sinv        = zeros(T, length(SVD[:S]))
-    index       = SVD[:S] .> eps(real(one(T)))*max(m,n)*max(SVD[:S])
+    index       = SVD[:S] .> eps(real(one(T)))*max(m,n)*maximum(SVD[:S])
     Sinv[index] = 1.0 ./ SVD[:S][index]
     SVD[:Vt]'scale(Sinv, SVD[:U]')
 end
@@ -540,7 +540,7 @@ function null{T<:BlasFloat}(A::StridedMatrix{T})
     if m == 0 || n == 0 return eye(T, n) end
     SVD = svdfact(A, false)
     if m == 0; return eye(T, n); end
-    indstart = sum(SVD[:S] .> max(m,n)*max(SVD[:S])*eps(eltype(SVD[:S]))) + 1
+    indstart = sum(SVD[:S] .> max(m,n)*maximum(SVD[:S])*eps(eltype(SVD[:S]))) + 1
     SVD[:V][:,indstart:]
 end
 null{T<:Integer}(A::StridedMatrix{T}) = null(float(A))
@@ -549,8 +549,8 @@ null(a::StridedVector) = null(reshape(a, length(a), 1))
 function cond(A::StridedMatrix, p) 
     if p == 2
         v = svdvals(A)
-        maxv = max(v)
-        return maxv == 0.0 ? Inf : maxv / min(v)
+        maxv = maximum(v)
+        return maxv == 0.0 ? Inf : maxv / minimum(v)
     elseif p == 1 || p == Inf
         m, n = size(A)
         if m != n; error("Use 2-norm for non-square matrices"); end

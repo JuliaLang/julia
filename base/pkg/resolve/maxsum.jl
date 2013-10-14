@@ -215,7 +215,7 @@ type Messages
         end
         # normalize fields
         for p0 = 1:np
-            m = max(fld[p0])
+            m = maximum(fld[p0])
             for v0 = 1:spp[p0]
                 fld[p0][v0] -= m
             end
@@ -303,7 +303,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         # compute the new message by passing cavmsg
         # through the constraint encoded in the bitmask
         # (nearly equivalent to:
-        #    newmsg = [ max(cavmsg[bm1[:,v1]]) for v1 = 1:spp1 ]
+        #    newmsg = [ maximum(cavmsg[bm1[:,v1]]) for v1 = 1:spp1 ]
         #  except for the gnrg term)
         m = FieldValue(-1)
         for v1 = 1:spp1
@@ -330,7 +330,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         end
 
         diff = newmsg - oldmsg
-        maxdiff = max(maxdiff, max(abs(diff)))
+        maxdiff = max(maxdiff, maximum(abs(diff)))
 
         # update the field of p1
         fld1 = fld[p1]

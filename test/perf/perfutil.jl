@@ -36,8 +36,8 @@ function submit_to_codespeed(vals,name,desc,unit,test_group,lessisbetter=true)
     csdata["description"] = desc
     csdata["result_value"] = mean(vals)
     csdata["std_dev"] = std(vals)
-    csdata["min"] = min(vals)
-    csdata["max"] = max(vals)
+    csdata["min"] = minimum(vals)
+    csdata["max"] = maximum(vals)
     csdata["units"] = unit
     csdata["units_title"] = test_group
     csdata["lessisbetter"] = lessisbetter
@@ -58,7 +58,7 @@ macro output_timings(t,name,desc,group)
         if codespeed
             submit_to_codespeed( $t, $name, $desc, "seconds", test_group )
         elseif print_output
-            @printf "julia,%s,%f,%f,%f,%f\n" $name min($t) max($t) mean($t) std($t)
+            @printf "julia,%s,%f,%f,%f,%f\n" $name minimum($t) maximum($t) mean($t) std($t)
         end
         gc()        
     end
