@@ -2,19 +2,25 @@ using .ARPACK
 
 ## eigs
 
-function eigs{T<:BlasFloat}(A::AbstractMatrix{T};
-                            nev::Integer=6, ncv::Integer=20, which::ASCIIString="LM", 
-                            tol=0.0, maxiter::Integer=1000, sigma=0,v0::Vector{T}=Array(T,(0,)),
-                            ritzvec::Bool=true, complexOP::Bool=false)
+function eigs(A;nev::Integer=6, ncv::Integer=20, which::ASCIIString="LM",
+				tol=0.0, maxiter::Integer=1000, sigma=0,v0::Vector=zeros((0,)),
+				ritzvec::Bool=true, complexOP::Bool=false)
     (m, n) = size(A)
     if m != n; error("Input must be square"); end
-	if !isempty(v0) && length(v0)!=n; error("Starting vector must have length $n"); end
     if n <= 6 && nev > n-1; nev = n-1; end
     ncv = blas_int(min(max(2*nev+2, ncv), n))
     bmat   = "I"
     sym   = issym(A)
-    cmplx = iseltype(A,Complex)
+    T = eltype(A)
+    cmplx = T<:Complex
     bmat  = "I"
+	if !isempty(v0)
+		if length(v0)!=n; error("Starting vector must have length $n"); end
+		if eltype(v0)!=T; error("Starting vector must have eltype $T"); end
+	else
+		v0=zeros(T,(0,))
+	end
+
     if sigma == 0
         mode = 1
         linop(x) = A * x
