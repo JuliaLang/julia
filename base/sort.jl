@@ -371,14 +371,14 @@ lt{T<:Floats}(::Right, x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
 isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])
 
-@inbounds function nans2left!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
+function nans2left!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
     hi < lo && return lo, hi
     i = lo
-    while (i < hi) & isnan(o, v[i])
+    @inbounds while (i < hi) & isnan(o, v[i])
         i += 1
     end
     r = 0
-    while true
+    @inbounds while true
         if isnan(o, v[i])
             i += 1
         else
@@ -392,14 +392,14 @@ isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])
     end
     return i, hi
 end
-@inbounds function nans2right!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
+function nans2right!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
     hi < lo && return lo, hi
     i = hi
-    while (i > lo) & isnan(o, v[i])
+    @inbounds while (i > lo) & isnan(o, v[i])
         i -= 1
     end
     r = 0
-    while true
+    @inbounds while true
         if isnan(o, v[i])
             i -= 1
         else

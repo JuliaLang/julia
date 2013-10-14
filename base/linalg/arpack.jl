@@ -49,7 +49,8 @@ function aupd_wrapper(T, linop::Function, n::Integer,
                   iparam, ipntr, workd, workl, lworkl, info)
         end
         if info[1] == 3; warn("Try eigs/svds with a larger value for ncv."); end
-        if info[1] != 0; throw(ARPACKException(info[1])); end
+        if info[1] == 1; warn("Maximum number of iterations taken. Check nconv for number of converged eigenvalues."); end
+        if info[1] < 0; throw(ARPACKException(info[1])); end
         if (ido[1] != -1 && ido[1] != 1); break; end
         workd[ipntr[2]+zernm1] = linop(getindex(workd, ipntr[1]+zernm1))
     end
@@ -75,7 +76,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
               bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, rwork, info)
         if info[1] != 0; throw(ARPACKException(info[1])); end
-        return ritzvec ? (d[1:nev], v[1:n, 1:nev],iparam[3],iparam[9],resid) : (d[1:nev],iparam[3],iparam[9],resid)
+        return ritzvec ? (d[1:nev], v[1:n, 1:nev],iparam[5],iparam[3],iparam[9],resid) : (d[1:nev],iparam[5],iparam[3],iparam[9],resid)
 
     elseif sym
 
@@ -85,7 +86,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
               bmat, n, which, nev, TOL, resid, ncv, v, ldv,
               iparam, ipntr, workd, workl, lworkl, info) 
         if info[1] != 0; throw(ARPACKException(info[1])); end
-        return ritzvec ? (d, v[1:n, 1:nev],iparam[3],iparam[9],resid) : (d,iparam[3],iparam[9],resid)
+        return ritzvec ? (d, v[1:n, 1:nev],iparam[5],iparam[3],iparam[9],resid) : (d,iparam[5],iparam[3],iparam[9],resid)
 
     else
 
@@ -111,7 +112,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
             j += 1
         end
         d = complex(dr[1:nev],di[1:nev])
-        return ritzvec ? (d, evec[1:n, 1:nev],iparam[3],iparam[9],resid) : (d,iparam[3],iparam[9],resid)
+        return ritzvec ? (d, evec[1:n, 1:nev],iparam[5],iparam[3],iparam[9],resid) : (d,iparam[5],iparam[3],iparam[9],resid)
     end
     
 end

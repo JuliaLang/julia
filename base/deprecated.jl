@@ -31,6 +31,14 @@ export PipeString
 
 # 0.2
 
+@deprecate  A_mul_B(A,B,C)      A_mul_B!(A,B,C)
+@deprecate  A_mul_Bt(A,B,C)     A_mul_Bt!(A,B,C)
+@deprecate  At_mul_B(A,B,C)     At_mul_B!(A,B,C)
+@deprecate  At_mul_Bt(A,B,C)    At_mul_Bt!(A,B,C)
+@deprecate  Ac_mul_B(A,B,C)     Ac_mul_B!(A,B,C)
+@deprecate  A_mul_Bc(A,B,C)     A_mul_Bc!(A,B,C) 
+@deprecate  Ac_mul_Bc(A,B,C)    Ac_mul_Bc!(A,B,C)
+@deprecate  Ac_mul_Bt(A,B,C)    Ac_mul_Bt!(A,B,C)
 @deprecate  strchr              search
 @deprecate  iswriteable         iswritable
 @deprecate  localize            localpart
