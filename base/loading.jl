@@ -36,31 +36,51 @@ package_locks = (ByteString=>Any)[]
 require(fname::String) = require(bytestring(fname))
 require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 
+# only broadcast top-level (not nested) requires and reloads
+toplevel_load = true
+
 function require(name::String)
-    if myid() == 1 
-        @sync for p in filter(x -> x != 1, procs())
-            @spawnat p require(name)
-        end
-    end
     path = find_in_node1_path(name)
     path == nothing && error("$name not found")
-    if haskey(package_list,path)
-        wait(package_locks[path])
+
+    if myid() == 1 && toplevel_load
+        refs = { @spawnat p _require(path) for p in filter(x->x!=1, procs()) }
+        _require(path)
+        for r in refs; wait(r); end
     else
-        reload_path(path)
+        _require(path)
     end
     nothing
 end
 
-function reload(name::String)
-    if myid() == 1
-        @sync for p in filter(x->x!=1, procs())
-            @spawnat p reload(name)
-        end
+function _require(path)
+    global toplevel_load
+    if haskey(package_list,path)
+        wait(package_locks[path])
+    else
+        last = toplevel_load
+        toplevel_load = false
+        reload_path(path)
+        toplevel_load = last
     end
+end
+
+function reload(name::String)
+    global toplevel_load
     path = find_in_node1_path(name)
     path == nothing && error("$name not found")
+    refs = nothing
+    if myid() == 1 && toplevel_load
+        refs = { @spawnat p reload_path(path) for p in filter(x->x!=1, procs()) }
+    end
+    last = toplevel_load
+    toplevel_load = false
     reload_path(path)
+    toplevel_load = last
+    if refs !== nothing
+        for r in refs; wait(r); end
+    end
+    nothing
 end
 
 # remote/parallel load
@@ -93,7 +113,10 @@ function include_from_node1(path::String)
     local result
     try
         if myid()==1
+            # sleep a bit to process file requests from other nodes
+            nprocs()>1 && sleep(0.005)
             result = Core.include(path)
+            nprocs()>1 && sleep(0.005)
         else
             include_string(remotecall_fetch(1, readall, path), path)
             # don't bother sending last value for remote include
