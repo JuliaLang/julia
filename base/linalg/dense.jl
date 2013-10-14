@@ -109,8 +109,7 @@ function gradient(F::Vector, h::Vector)
     return g
 end
 
-function diagind(A::Matrix,k::Integer=0)
-    m,n = size(A)
+function diagind(m::Integer, n::Integer, k::Integer=0)
     if 0 < k < n
         return Range(k*m+1,m+1,min(m,n-k))
     elseif 0 <= -k <= m
@@ -118,6 +117,8 @@ function diagind(A::Matrix,k::Integer=0)
     end
     throw(BoundsError())
 end
+
+diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
 
 diag(A::Matrix, k::Integer=0) = A[diagind(A,k)]
 
