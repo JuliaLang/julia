@@ -1288,37 +1288,20 @@ function istril(A::SparseMatrixCSC)
     return true
 end
 
-function spdiagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
+function spdiagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}), k::Integer=0)
     if isa(v, AbstractMatrix)
         if (size(v,1) != 1 && size(v,2) != 1)
             error("Input should be nx1 or 1xn")
         end
     end
 
-    n = length(v)
-    numnz = nnz(v)
-    colptr = Array(Int, n+1)
-    rowval = Array(Int, numnz)
-    nzval = Array(T, numnz)
+    nv = length(v)
+    nr = nc = nv + abs(k)
 
-    colptr[1] = 1
+    x = diagind(nr, nc, k)
+    I, J = ind2sub((nr,nc), x)
 
-    z = zero(T)
-
-    ptr = 1
-    for col=1:n
-        x = v[col]
-        if x != z
-            colptr[col+1] = colptr[col] + 1
-            rowval[ptr] = col
-            nzval[ptr] = x
-            ptr += 1
-        else
-            colptr[col+1] = colptr[col]
-        end
-    end
-
-    return SparseMatrixCSC(n, n, colptr, rowval, nzval)
+    sparse(I,J,v,nr,nc)
 end
 
 ## expand a colptr or rowptr into a dense index vector
