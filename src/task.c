@@ -781,7 +781,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->done = 0;
     t->runnable = 1;
     t->start = start;
-    t->result = NULL;
+    t->result = jl_nothing;
     t->donenotify = jl_nothing;
     t->exception = jl_nothing;
     // there is no active exception handler available on this stack yet
@@ -875,7 +875,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_task_type = jl_new_datatype(jl_symbol("Task"),
                                    jl_any_type,
                                    jl_null,
-                                   jl_tuple(9,
+                                   jl_tuple(10,
                                             jl_symbol("parent"),
                                             jl_symbol("last"),
                                             jl_symbol("storage"),
@@ -884,13 +884,14 @@ void jl_init_tasks(void *stack, size_t ssize)
                                             jl_symbol("runnable"),
                                             jl_symbol("result"),
                                             jl_symbol("donenotify"),
-                                            jl_symbol("exception")),
-                                   jl_tuple(9,
+                                            jl_symbol("exception"),
+                                            jl_symbol("code")),
+                                   jl_tuple(10,
                                             jl_any_type, jl_any_type,
                                             jl_any_type, jl_any_type,
                                             jl_bool_type, jl_bool_type,
                                             jl_any_type, jl_any_type,
-                                            jl_any_type),
+                                            jl_any_type, jl_function_type),
                                    0, 1);
     jl_tupleset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
     jl_task_type->fptr = jl_f_task;

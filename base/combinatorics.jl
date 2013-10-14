@@ -123,7 +123,7 @@ function isperm(A::AbstractVector)
     true
 end
 
-function permute!!(a, p::AbstractVector{Int})
+function permute!!{T<:Integer}(a, p::AbstractVector{T})
     count = 0
     start = 0
     while count < length(a)
@@ -144,9 +144,9 @@ function permute!!(a, p::AbstractVector{Int})
     a
 end
 
-permute!(a, p::AbstractVector{Int}) = permute!!(a, copy(p))
+permute!(a, p::AbstractVector) = permute!!(a, copy(p))
 
-function ipermute!!(a, p::AbstractVector{Int})
+function ipermute!!{T<:Integer}(a, p::AbstractVector{T})
     count = 0
     start = 0
     while count < length(a)
@@ -169,7 +169,7 @@ function ipermute!!(a, p::AbstractVector{Int})
     a
 end
 
-ipermute!(a, p::AbstractVector{Int}) = ipermute!!(a, copy(p))
+ipermute!(a, p::AbstractVector) = ipermute!!(a, copy(p))
 
 immutable Combinations{T}
     a::T

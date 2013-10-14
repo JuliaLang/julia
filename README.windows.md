@@ -42,6 +42,7 @@ Important Build Errata
 - Do not use GCC 4.6 or earlier or gcc-dw2, stuff will be broken.
 - Julia uses a [patched version](http://github.com/JuliaLang/readline/tarball/master)
   of GNU Readline (this should be downloaded automatically by the build script).
+- Run `make win-extras` to download additional runtime dependencies not provided by default in MinGW.
 
 
 Native Compile
