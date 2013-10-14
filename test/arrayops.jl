@@ -645,20 +645,20 @@ begin
     local a = rand(3,3)
 
     asr = sortrows(a)
-    @test cmp(asr[1,:],asr[2,:])<0
-    @test cmp(asr[2,:],asr[3,:])<0
+    @test lexless(asr[1,:],asr[2,:])
+    @test lexless(asr[2,:],asr[3,:])
 
     asc = sortcols(a)
-    @test cmp(asc[:,1],asc[:,2])<0
-    @test cmp(asc[:,2],asc[:,3])<0
+    @test lexless(asc[:,1],asc[:,2])
+    @test lexless(asc[:,2],asc[:,3])
 
     asr = sortrows(a, rev=true)
-    @test cmp(asr[2,:],asr[1,:])<0
-    @test cmp(asr[3,:],asr[2,:])<0
+    @test lexless(asr[2,:],asr[1,:])
+    @test lexless(asr[3,:],asr[2,:])
 
     asc = sortcols(a, rev=true)
-    @test cmp(asc[:,2],asc[:,1])<0
-    @test cmp(asc[:,3],asc[:,2])<0
+    @test lexless(asc[:,2],asc[:,1])
+    @test lexless(asc[:,3],asc[:,2])
 
     as = sort(a, 1)
     @test issorted(as[:,1])

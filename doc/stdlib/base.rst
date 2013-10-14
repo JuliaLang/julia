@@ -132,6 +132,15 @@ All Objects
 
    Test whether ``x`` is less than ``y``. Provides a total order consistent with ``isequal``. Values that are normally unordered, such as ``NaN``, are ordered in an arbitrary but consistent fashion. This is the default comparison used by ``sort``. Non-numeric types that can be ordered should implement this function. Numeric types only need to implement it if they have special values such as ``NaN``.
 
+.. function:: lexcmp(x, y)
+
+   Compare ``x`` and ``y`` lexicographically and return -1, 0, or 1 depending on whether ``x`` is less than, equal to, or greater than ``y``, respectively.
+   This function should be defined for lexicographically comparable types, and ``lexless`` will call ``lexcmp`` by default.
+
+.. function:: lexless(x, y)
+
+   Determine whether ``x`` is lexicographically less than ``y``.
+
 .. function:: typeof(x)
 
    Get the concrete type of ``x``.
@@ -2098,7 +2107,7 @@ Mathematical Operators
 
 .. function:: cmp(x,y)
 
-   Return -1, 0, or 1 depending on whether ``x<y``, ``x==y``, or ``x>y``, respectively
+   Return -1, 0, or 1 depending on whether ``x<y``, ``x==y``, or ``x>y``, respectively.
 
 .. _~:
 .. function:: ~(x)
