@@ -2,6 +2,7 @@ show(io::IO, t::Task) = print(io, "Task")
 
 current_task() = ccall(:jl_get_current_task, Any, ())::Task
 istaskdone(t::Task) = t.done
+istaskstarted(t::Task) = isdefined(t,:parent)
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, exc)

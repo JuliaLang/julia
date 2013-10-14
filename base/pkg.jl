@@ -49,9 +49,11 @@ tag(pkg::String, ver::VersionNumber; commit::String="", msg::String="") =
 
 publish() = cd(Entry.publish,META_BRANCH)
 
-fixup() = cd(Entry._fixup)
-fixup(pkg::String) = cd(Entry._fixup,pkg)
+build() = cd(Entry.build)
+build(pkgs::String...) = cd(Entry.build,[pkgs...])
 
 generate(pkg::String, license::String) = cd(Generate.package,pkg,license)
+
+@deprecate fixup build
 
 end # module

@@ -1173,6 +1173,7 @@ typedef struct _jl_task_t {
     jl_value_t *result;
     jl_value_t *donenotify;
     jl_value_t *exception;
+    jl_function_t *start;
     jl_jmp_buf ctx;
     union {
         void *stackbase;
@@ -1182,7 +1183,7 @@ typedef struct _jl_task_t {
     size_t bufsz;
     void *stkbuf;
     size_t ssize;
-    jl_function_t *start;
+
     // current exception handler
     jl_handler_t *eh;
     // saved gc stack top for context switches

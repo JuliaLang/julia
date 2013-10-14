@@ -122,13 +122,13 @@ end
 
 function flush_gc_msgs(w::Worker)
     w.gcflag = false
-    msgs = w.add_msgs
+    msgs = copy(w.add_msgs)
     if !isempty(msgs)
         empty!(w.add_msgs)
         remote_do(w, add_clients, msgs...)
     end
 
-    msgs = w.del_msgs
+    msgs = copy(w.del_msgs)
     if !isempty(msgs)
         empty!(w.del_msgs)
         #print("sending delete of $msgs\n")
@@ -178,7 +178,7 @@ end
 const LPROC = LocalProcess(0)
 
 const map_pid_wrkr = Dict{Int, Union(Worker, LocalProcess)}()
-const map_sock_wrkr = Dict{Socket, Union(Worker, LocalProcess)}()
+const map_sock_wrkr = ObjectIdDict()
 const map_del_wrkr = Set{Int}()
 
 let next_pid = 2    # 1 is reserved for the client (always)
@@ -313,7 +313,10 @@ register_worker(w) = register_worker(PGRP, w)
 function register_worker(pg, w)
     push!(pg.workers, w)
     map_pid_wrkr[w.id] = w
-    if isa(w, Worker) map_sock_wrkr[w.socket] = w end
+    if isa(w, Worker)
+        map_sock_wrkr[w.socket] = w
+        map_sock_wrkr[w.sendbuf] = w
+    end
 end
 
 deregister_worker(pid) = deregister_worker(PGRP, pid)
@@ -321,7 +324,8 @@ function deregister_worker(pg, pid)
     pg.workers = filter(x -> !(x.id == pid), pg.workers)
     w = pop!(map_pid_wrkr, pid, nothing)
     if isa(w, Worker) 
-        pop!(map_sock_wrkr, w.socket) 
+        pop!(map_sock_wrkr, w.socket)
+        pop!(map_sock_wrkr, w.sendbuf)
         
         # Notify the cluster manager of this workers death
         if myid() == 1
@@ -481,6 +485,7 @@ function send_del_client(rr::RemoteRef)
 end
 
 function add_client(id, client)
+    #println("$(myid()) adding client $client to $id")
     rv = lookup_ref(id)
     push!(rv.clientset, client)
     nothing
@@ -500,6 +505,7 @@ function send_add_client(rr::RemoteRef, i)
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
         w = worker_from_id(rr.where)
+        #println("$(myid()) adding $((rr2id(rr), i)) for $(rr.where)")
         push!(w.add_msgs, (rr2id(rr), i))
         w.gcflag = true
         global any_gc_flag = true
@@ -508,7 +514,9 @@ end
 
 function serialize(s, rr::RemoteRef)
     i = worker_id_from_socket(s)
+    #println("$(myid()) serializing $rr to $i")
     if i != -1
+        #println("send add $rr to $i")
         send_add_client(rr, i)
     end
     invoke(serialize, (Any, Any), s, rr)
@@ -719,6 +727,7 @@ function take(rv::RemoteValue)
     wait_full(rv)
     val = rv.result
     rv.done = false
+    rv.result = nothing
     notify_empty(rv)
     val
 end
@@ -738,7 +747,7 @@ function perform_work()
 end
 
 function perform_work(t::Task)
-    if !isdefined(t, :result)
+    if !istaskstarted(t)
         # starting new task
         yieldto(t)
     else
