@@ -1,8 +1,8 @@
-import Base.Sort: QuickSort, MergeSort, TimSort, InsertionSort
+import Base.Sort: QuickSort, MergeSort, InsertionSort
 
 include("../perfutil.jl")
 
-sorts = [QuickSort, MergeSort, TimSort, InsertionSort]
+sorts = [QuickSort, MergeSort, InsertionSort]
 
 randstr_fn!(str_len::Int) = d -> (for i = 1:length(d); d[i] = randstring(str_len); end; d)
 randint_fn!(m::Int) = d -> rand!(1:m,d)

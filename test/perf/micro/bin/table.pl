@@ -19,21 +19,36 @@ our @benchmarks = qw(
   rand_mat_mul
 );
 
-our $julia_ver = `julia -e 'print(Base.VERSION_COMMIT[1:9])'`;
+
+our $julia_ver       = `../../../julia -e 'print(Base.VERSION)'`;
+our $python_ver      = `python -c "import sys; print sys.version.split(' ')[0]"`;
+our $rbase_ver       = ( split /\s/,`R --version`)[2];
+our $js_ver          = `node -e "'v8 '+console.log(process.versions.v8);"`;
+our $fortran_ver     = ( split /\s/,`gfortran --version`)[4];
+our $octave_ver      = ( split /\s/,`octave --version`)[3];
+our $go_ver          = `go version`;
+our $java_ver        = "7";## Java not writing version to std out
+our $matlab_ver      = "unknown";
+our $mathematica_ver = "unknown";
+
+
 
 our %systems = (
-  "fortran"    => ["Fortran"     , "GCC 4.5.1"  ],
-  "julia"      => ["Julia"       , $julia_ver   ],
-  "python"     => ["Python"      , "2.7.3"      ],
-  "matlab"     => ["Matlab"      , "R2011a"     ],
-  "octave"     => ["Octave"      , "3.4"        ],
-  "r"          => ["R"           , "2.14.2"     ],
-  "javascript" => ["JavaScript"  , "V8 3.6.6.11"],
-  "go"         => ["Go"          , "1.0.3"      ],
-  "mathematica"=> ["Mathematica" , "9.0.1"      ],
+  "fortran"    => ["Fortran"     , $fortran_ver     ],
+  "julia"      => ["Julia"       , $julia_ver       ],
+  "java"       => ["Java"        , $java_ver        ],
+  "javascript" => ["JavaScript"  , $js_ver          ],
+  "python"     => ["Python"      , $python_ver      ],
+  "octave"     => ["Octave"      , $octave_ver      ],
+  "r"          => ["R"           , $rbase_ver       ],
+  "go"         => ["Go"          , $go_ver          ],
+  "matlab"     => ["Matlab"      , $matlab_ver      ],
+  "mathematica"=> ["Mathematica" , $mathematica_ver ],
 );
 
-our @systems = qw(fortran julia python matlab octave r javascript go mathematica);
+
+ ##go matlab mathematica
+our @systems = qw(fortran julia java javascript python octave r);
 
 print qq[<table class="benchmarks">\n];
 print qq[<colgroup>\n];

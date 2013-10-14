@@ -206,6 +206,18 @@ double *randmatmul(int n) {
     return C;
 }
 
+double sync_sum(int n) {
+
+	double total = 0;
+	for (int i=0; i < n; i++) {
+		double f = 3.1415926535*i;
+		double sinc = sin(f)/f;
+		total+=sinc;
+	}
+	return total;
+}
+
+
 void printfd(int n) {
     FILE *f = fopen("/dev/null", "w");
     long i = 0;
@@ -286,7 +298,7 @@ int main() {
         t = clock_now()-t;
         if (t < tmin) tmin = t;
     }
-    assert(mandel_sum == 14719);
+    assert(mandel_sum == 14720);
     print_perf("mandel", tmin);
 
     // sort

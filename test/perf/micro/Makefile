@@ -21,10 +21,14 @@ perf.h: $(JULIAHOME)/deps/Versions.make
 	echo '#include "$(JULIAHOME)/deps/random/dsfmt-$(DSFMT_VER)/dSFMT.c"' >> $@
 
 bin/perf%: perf.c perf.h
-	$(CC) -std=c99 -O$* $< -o $@ $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.a -lpthread
+	$(CC) -std=c99 -O$* $< -o $@ $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.a -lpthread -lm
 
 bin/fperf%: perf.f90
 	$(FC) -static-libgfortran -O$* -fexternal-blas $< -o $@ $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.a -lpthread
+
+bin/Perf.class: Perf.java
+	javac Perf.java -d ./bin -cp ./lib/ejml-0.23.jar:./lib/jblas-1.2.3.jar 
+	
 
 benchmarks/c.csv: \
 	benchmarks/c0.csv \
@@ -40,47 +44,70 @@ benchmarks/fortran.csv: \
 	benchmarks/fortran3.csv
 	cat $^ > $@
 
+
+
+#requires java7 install from http://www.oracle.com/technetwork/java/javase/downloads/index.html
+#Can be installed with puppet. https://github.com/objectcomputing/puppet-java
+benchmarks/java.csv: ./bin/Perf.class
+	for t in 1 2 3 4 5; do java -cp ./bin:./lib/ejml-0.23.jar:./lib/jblas-1.2.3.jar Perf $<; done >$@
+
 benchmarks/c%.csv: bin/perf%
 	for t in 1 2 3 4 5; do $<; done >$@
 
 benchmarks/fortran%.csv: bin/fperf%
 	for t in 1 2 3 4 5; do $<; done >$@
 
+#sudo add-apt-repository ppa:duh/golang
+#sudo apt-get update
+#sudo apt-get install golang
 benchmarks/go.csv: perf.go
 	for t in 1 2 3 4 5; do go run $<; done >$@
 
 benchmarks/julia.csv: perf.jl
-	for t in 1 2 3 4 5; do ../../julia $<; done >$@
-
+	for t in 1 2 3 4 5; do ../../../julia $<; done >$@
+	
+##sudo apt-get install python-numpy
 benchmarks/python.csv: perf.py
 	for t in 1 2 3 4 5; do python $<; done >$@
-
+	
+##needs matlab
 benchmarks/matlab.csv: perf.m
 	for t in 1 2 3 4 5; do matlab -nosplash -nodesktop -nojvm -r 'perf;exit' 2>/dev/null | grep '^matlab,'; done >$@
 
+##sudo apt-add-repository -y ppa:picaso/octave
+##sudo apt-get update 
+##sudo apt-get install octave
+##sudo apt-get install liboctave-dev 
 benchmarks/octave.csv: perf.m
 	for t in 1 2 3 4 5; do octave -q --eval perf 2>/dev/null; done >$@
 
+
+##sudo apt-get install r-base 
 benchmarks/r.csv: perf.R
 	for t in 1 2 3 4 5; do cat $< | R --vanilla --slave 2>/dev/null; done >$@
 
+
+##sudo apt-get install nodejs
 benchmarks/javascript.csv: perf.js
 	for t in 1 2 3 4 5; do node $<; done >$@
 
+##needs mathematica
 benchmarks/mathematica.csv: perf.nb
 	for t in 1 2 3 4 5; do $(MATHEMATICABIN) -noprompt -run "<<$<; Exit[]"; done >$@
 
 BENCHMARKS = \
-	benchmarks/c.csv \
 	benchmarks/fortran.csv \
-	benchmarks/go.csv \
+	benchmarks/c.csv \
 	benchmarks/julia.csv \
+	benchmarks/java.csv\
 	benchmarks/python.csv \
-	benchmarks/matlab.csv \
-	benchmarks/octave.csv \
 	benchmarks/r.csv \
-	benchmarks/javascript.csv \
-	benchmarks/mathematica.csv
+	benchmarks/octave.csv \
+	benchmarks/javascript.csv 
+
+#	benchmarks/go.csv \
+#	benchmarks/mathematica.csv \
+#	benchmarks/matlab.csv \
 
 benchmarks.csv: bin/collect.pl $(BENCHMARKS)
 	@$(call PRINT_PERL, $^ >$@)
