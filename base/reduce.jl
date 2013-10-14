@@ -1,17 +1,13 @@
 ## reductions ##
 
 function reduce(op::Function, itr) # this is a left fold
-    if is(op,max)
-        return max(itr)
-    elseif is(op,min)
-        return min(itr)
-    elseif is(op,+)
+    if is(op,+)
         return sum(itr)
     elseif is(op,*)
         return prod(itr)
-    elseif is(op,any)
+    elseif is(op,|)
         return any(itr)
-    elseif is(op,all)
+    elseif is(op,&)
         return all(itr)
     end
     s = start(itr)
@@ -26,28 +22,28 @@ function reduce(op::Function, itr) # this is a left fold
     return v
 end
 
-function max(itr)
+function maximum(itr)
     s = start(itr)
     if done(itr, s)
-        error("max: argument is empty")
+        error("maximum: argument is empty")
     end
     (v, s) = next(itr, s)
     while !done(itr, s)
         (x, s) = next(itr, s)
-        v = max(v,x)
+        v = scalarmax(v,x)
     end
     return v
 end
 
-function min(itr)
+function minimum(itr)
     s = start(itr)
     if done(itr, s)
-        error("min: argument is empty")
+        error("minimum: argument is empty")
     end
     (v, s) = next(itr, s)
     while !done(itr, s)
         (x, s) = next(itr, s)
-        v = min(v,x)
+        v = scalarmin(v,x)
     end
     return v
 end
@@ -80,15 +76,7 @@ end
 
 function reduce(op::Function, v0, itr)
     v = v0
-    if is(op,max)
-        for x in itr
-            v = max(v,x)
-        end
-    elseif is(op,min)
-        for x in itr
-            v = min(v,x)
-        end
-    elseif is(op,+)
+    if is(op,+)
         for x in itr
             v = v+x
         end
@@ -192,10 +180,10 @@ function all(itr)
     return true
 end
 
-max(f::Function, itr)   = mapreduce(f, max, itr)
-min(f::Function, itr)   = mapreduce(f, min, itr)
-sum(f::Function, itr)   = mapreduce(f, +  , itr)
-prod(f::Function, itr)  = mapreduce(f, *  , itr)
+maximum(f::Function, itr) = mapreduce(f, scalarmax, itr)
+minimum(f::Function, itr) = mapreduce(f, scalarmin, itr)
+sum(f::Function, itr)     = mapreduce(f, +        , itr)
+prod(f::Function, itr)    = mapreduce(f, *        , itr)
 
 function count(pred::Function, itr)
     s = 0

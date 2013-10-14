@@ -45,7 +45,7 @@ function DArray(init, dims, procs)
     end
     DArray(init, dims, procs, defaultdist(dims,procs))
 end
-DArray(init, dims) = DArray(init, dims, workers()[1:min(nworkers(),max(dims))])
+DArray(init, dims) = DArray(init, dims, workers()[1:min(nworkers(),maximum(dims))])
 
 # new DArray similar to an existing one
 DArray(init, d::DArray) = DArray(init, size(d), procs(d), [size(d.chunks)...])

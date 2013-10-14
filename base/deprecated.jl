@@ -31,6 +31,14 @@ export PipeString
 
 # 0.2
 
+@deprecate  A_mul_B(A,B,C)      A_mul_B!(A,B,C)
+@deprecate  A_mul_Bt(A,B,C)     A_mul_Bt!(A,B,C)
+@deprecate  At_mul_B(A,B,C)     At_mul_B!(A,B,C)
+@deprecate  At_mul_Bt(A,B,C)    At_mul_Bt!(A,B,C)
+@deprecate  Ac_mul_B(A,B,C)     Ac_mul_B!(A,B,C)
+@deprecate  A_mul_Bc(A,B,C)     A_mul_Bc!(A,B,C) 
+@deprecate  Ac_mul_Bc(A,B,C)    Ac_mul_Bc!(A,B,C)
+@deprecate  Ac_mul_Bt(A,B,C)    Ac_mul_Bt!(A,B,C)
 @deprecate  strchr              search
 @deprecate  iswriteable         iswritable
 @deprecate  localize            localpart
@@ -120,6 +128,12 @@ export PipeString
 @deprecate open_any_tcp_port listenany
 @deprecate  subtype             issubtype
 @deprecate  bsxfun              broadcast
+@deprecate max(x)              maximum(x)
+@deprecate min(x)              minimum(x)
+@deprecate max(f::Function,x)  maximum(f,x)
+@deprecate min(f::Function,x)  minimum(f,x)
+@deprecate max(x,_::(),d)      maximum(x,d)
+@deprecate min(x,_::(),d)      minimum(x,d)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)

@@ -433,7 +433,7 @@ function tag(pkg::String, ver::Union(Symbol,VersionNumber), commit::String, msg:
     sort!(existing)
     if isa(ver,Symbol)
         prv = isempty(existing) ? v"0" :
-              isempty(ancestors) ? max(existing) : max(ancestors)
+              isempty(ancestors) ? maximum(existing) : maximum(ancestors)
         ver = (ver == :bump ) ? nextbump(prv)  :
               (ver == :patch) ? nextpatch(prv) :
               (ver == :minor) ? nextminor(prv) :

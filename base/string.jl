@@ -527,7 +527,7 @@ endswith(a::String, c::Char) = !isempty(a) && a[end] == c
 
 # faster comparisons for byte strings
 
-cmp(a::ByteString, b::ByteString)     = cmp(a.data, b.data)
+cmp(a::ByteString, b::ByteString)     = lexcmp(a.data, b.data)
 isequal(a::ByteString, b::ByteString) = endof(a)==endof(b) && cmp(a,b)==0
 beginswith(a::ByteString, b::ByteString) = beginswith(a.data, b.data)
 
