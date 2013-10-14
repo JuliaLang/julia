@@ -747,7 +747,7 @@ function perform_work()
 end
 
 function perform_work(t::Task)
-    if !isdefined(t, :result)
+    if !istaskstarted(t)
         # starting new task
         yieldto(t)
     else
