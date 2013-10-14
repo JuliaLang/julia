@@ -773,10 +773,20 @@ function deliver_result(sock::IO, msg, oid, value)
     end
     try
         send_msg_now(sock, :result, oid, val)
-    catch err
-        # send exception in case of serialization error; otherwise
-        # request side would hang.
-        send_msg_now(sock, :result, oid, err)
+    catch e
+        # terminate connection in case of serialization error
+        # otherwise the reading end would hang
+        print(STDERR, "fatal error on ", myid(), ": ")
+        display_error(e, catch_backtrace())
+        wid = worker_id_from_socket(sock)
+        close(sock)
+        if myid()==1
+            rmprocs(wid)
+        elseif wid == 1
+            exit(1)
+        else
+            remote_do(1, rmprocs, wid)
+        end
     end
 end
 
@@ -881,7 +891,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
             # If error occured talking to pid 1, commit harakiri
             if iderr == 1
                 if isopen(sock)
-                    print(STDERR, "exception on ", myid(), ": ")
+                    print(STDERR, "fatal error on ", myid(), ": ")
                     display_error(e, catch_backtrace())
                 end
                 exit(1)
@@ -920,6 +930,15 @@ end
 start_worker() = start_worker(STDOUT)
 function start_worker(out::IO)
     global bind_addr
+
+    # we only explicitly monitor worker STDOUT on the console, so redirect
+    # stderr to stdout so we can see the output.
+    # at some point we might want some or all worker output to go to log
+    # files instead.
+    # Currently disabled since this caused processes to spin instead of
+    # exit when process 1 shut down. Don't yet know why.
+    #redirect_stderr(STDOUT)
+
     if !isdefined(Base,:bind_addr)
         bind_addr = getipaddr()
     end
