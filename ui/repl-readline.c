@@ -21,6 +21,7 @@
 #ifdef __WIN32__
 # define WIN32_LEAN_AND_MEAN
 # include <windows.h>
+# include <shlobj.h>
 #endif
 
 extern int asprintf(char **strp, const char *fmt, ...);
@@ -58,9 +59,10 @@ static void init_history(void)
             if (!home) return;
             asprintf(&history_file, "%s/.julia_history", home);
 #else
-            char *home = getenv("AppData");
-            if (!home) return;
-            asprintf(&history_file, "%s/julia/history", home);
+            char *homedrive = getenv("HOMEDRIVE");
+            char *homepath = getenv("HOMEPATH");
+            if (!homedrive || !homepath) return;
+            asprintf(&history_file, "%s/%s/.julia_history", homedrive, homepath);
 #endif
         }
     }
