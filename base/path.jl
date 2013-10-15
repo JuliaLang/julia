@@ -9,6 +9,7 @@
     splitdrive(path::String) = ("",path)
     user_homedir() = ENV["HOME"]
     user_prefdir() = user_homedir()
+    user_documentsdir() = @osx ? joinpath(user_homedir(),"Documents") : user_homedir()
 end
 @windows_only begin
     const path_separator    = "\\"
@@ -23,7 +24,18 @@ end
         bytestring(m.captures[1]), bytestring(m.captures[2])
     end
     user_homedir() = get(ENV,"HOME",joinpath(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
-    user_prefdir() = get(ENV,"HOME",joinpath(ENV["AppData"],"Julia"))
+    user_prefdir() = user_homedir()
+    function user_documentsdir()
+        #HRESULT result = SHGetFolderPath(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, my_documents);
+        path = Array(Uint8,260)
+        result = ccall((:SHGetFolderPathA,:shell32),stdcall,Cint,
+            (Ptr{Void},Cint,Ptr{Void},Cint,Ptr{Uint8}),0,0x0005,0,0,path)
+        if result == 0
+            return bytestring(path[1:findfirst(path,0)-1])
+        else
+            return user_homedir()
+        end
+    end
 end
 
 isabspath(path::String) = ismatch(path_absolute_re, path)
