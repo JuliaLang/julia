@@ -24,8 +24,7 @@ end
         bytestring(m.captures[1]), bytestring(m.captures[2])
     end
     user_homedir() = get(ENV,"HOME",joinpath(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
-    #user_prefdir() = get(ENV,"HOME",joinpath(ENV["AppData"],"Julia"))
-    user_prefdir() = joinpath(user_documentsdir(),"Julia")
+    user_prefdir() = user_homedir()
     function user_documentsdir()
         #HRESULT result = SHGetFolderPath(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, my_documents);
         path = Array(Uint8,260)
