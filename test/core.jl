@@ -1043,3 +1043,9 @@ try
     # should throw an argument count error
     @test false
 end
+
+# issue #4526
+f4526(x) = isa(x.a, Nothing)
+@test_throws f4526(1)
+@test_throws f4526(im)
+@test_throws f4526(1+2im)
