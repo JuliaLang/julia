@@ -19,18 +19,15 @@ path(pkg::String...) = normpath(path(),pkg...)
 function cd(f::Function, args...; kws...)
     dir = path()
     if !isdir(dir)
-        if haskey(ENV,"JULIA_PKGDIR")
+        !haskey(ENV,"JULIA_PKGDIR") ? init() :
             error("package directory $dir doesn't exist; run Pkg.init() to create it.")
-        else
-            info("Initializing package repository $dir")
-            init()
-        end
     end
     Base.cd(()->f(args...; kws...), dir)
 end
 
 function init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
     dir = path()
+    info("Initializing package repository $dir")
     if isdir(joinpath(dir,"METADATA"))
         info("Package directory $dir is already initialized.")
         Git.set_remote_url(meta, dir=joinpath(dir,"METADATA"))
