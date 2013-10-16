@@ -153,23 +153,23 @@ function release(pkg::String)
     end
 end
 
-function fix(pkg::String, head::String)
+function pin(pkg::String, head::String)
     ispath(pkg,".git") || error("$pkg is not a git repo")
-    branch = "fixed-$(head[1:8])"
+    branch = "pinned.$(head[1:8]).tmp"
     rslv = (head != Git.head(dir=pkg))
     info("Creating $pkg branch $branch...")
     Git.run(`checkout -q -B $branch $head`, dir=pkg)
     rslv ? resolve() : nothing
 end
-fix(pkg::String) = fix(pkg,Git.head(dir=pkg))
+pin(pkg::String) = pin(pkg,Git.head(dir=pkg))
 
-function fix(pkg::String, ver::VersionNumber)
+function pin(pkg::String, ver::VersionNumber)
     ispath(pkg,".git") || error("$pkg is not a git repo")
-    Read.isinstalled(pkg) || error("$pkg cannot be fixed – not an installed package")
+    Read.isinstalled(pkg) || error("$pkg cannot be pinned – not an installed package".tmp)
     avail = Read.available(pkg)
-    isempty(avail) && error("$pkg cannot be fixed – not a registered package")
+    isempty(avail) && error("$pkg cannot be pinned – not a registered package".tmp)
     haskey(avail,ver) || error("$pkg – $ver is not a registered version")
-    fix(pkg,avail[ver].sha1)
+    pin(pkg,avail[ver].sha1)
 end
 
 function update(branch::String)
