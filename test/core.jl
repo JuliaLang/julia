@@ -1049,3 +1049,12 @@ f4526(x) = isa(x.a, Nothing)
 @test_throws f4526(1)
 @test_throws f4526(im)
 @test_throws f4526(1+2im)
+
+# issue #4528
+function f4528(A, B)
+    if A
+        reinterpret(Uint64, B)
+    end
+end
+@test f4528(false, int32(12)) === nothing
+@test_throws f4528(true, int32(12))
