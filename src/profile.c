@@ -7,7 +7,7 @@ static volatile ptrint_t* bt_data_prof = NULL;
 static volatile size_t bt_size_max = 0;
 static volatile size_t bt_size_cur = 0;
 static volatile u_int64_t nsecprof = 0;
-
+static volatile int running = 0;
 /////////////////////////////////////////
 // Timers to take samples at intervals //
 /////////////////////////////////////////
@@ -16,7 +16,6 @@ static volatile u_int64_t nsecprof = 0;
 // Windows
 //
 volatile HANDLE hBtThread = 0;
-volatile int running = 0;
 static DWORD WINAPI profile_bt( LPVOID lparam ) {
     TIMECAPS tc;
     if (MMSYSERR_NOERROR!=timeGetDevCaps(&tc, sizeof(tc))) {
@@ -102,7 +101,6 @@ static mach_port_t main_thread;
 clock_serv_t clk;
 static int profile_started = 0;
 static mach_port_t profile_port = 0;
-volatile static int running = 0;
 volatile static int forceDwarf = -2;
 volatile mach_port_t mach_profiler_thread = 0;
 static unw_context_t profiler_uc;
@@ -279,7 +277,6 @@ DLLEXPORT void profile_stop_timer(void)
 //
 #include <sys/time.h>
 struct itimerval timerprof;
-volatile int running;
 
 // The handler function, called whenever the profiling timer elapses
 static void profile_bt(int dummy)
@@ -373,12 +370,15 @@ DLLEXPORT int profile_start_timer(void)
     if (timer_settime(timerprof, 0, &itsprof, NULL) == -1)
         return -3;
 
+    running = 1;
     return 0;
 }
 
 DLLEXPORT void profile_stop_timer(void)
 {
-    timer_delete(timerprof);
+    if (running)
+        timer_delete(timerprof);
+    running = 0;
 }
 #endif
 #endif
@@ -418,4 +418,9 @@ DLLEXPORT size_t profile_maxlen_data(void)
 DLLEXPORT void profile_clear_data(void)
 {
     bt_size_cur = 0;
+}
+
+DLLEXPORT int profile_is_running(void)
+{
+    return running;
 }
