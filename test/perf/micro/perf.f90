@@ -196,16 +196,16 @@ r = maxiter
 end function
 
 integer function mandelperf() result(mandel_sum)
-real(dp) :: re, im
+integer :: re, im
 mandel_sum = 0
-re = -2._dp
-do while (re <= 0.5_dp)
-    im = -1._dp
-    do while (im <= 1._dp)
-        mandel_sum = mandel_sum + mandel(cmplx(re, im, dp))
-        im = im + 0.1_dp
+re = -20
+do while (re <= 5)
+    im = -10
+    do while (im <= 10)
+        mandel_sum = mandel_sum + mandel(cmplx(re/10._dp, im/10._dp, dp))
+        im = im + 1
     end do
-    re = re + 0.1_dp
+    re = re + 1
 end do
 end function
 
@@ -346,9 +346,7 @@ do i = 1, 5
     call cpu_time(t2)
     if (t2-t1 < tmin) tmin = t2-t1
 end do
-! This number is processor dependent, as it can differ a bit depending on the
-! floating point rounding errors:
-!call assert(f == 14307)
+call assert(f == 14791)
 print "('fortran,mandel,',f0.6)", tmin*1000._dp / NRUNS
 
 tmin = 1e9_dp

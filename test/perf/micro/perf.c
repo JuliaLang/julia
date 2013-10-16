@@ -62,16 +62,16 @@ int mandel(double complex z) {
         if (cabs(z) > 2.0) {
             return n;
         }
-        z = cpow(z,2)+c;
+        z = z*z+c;
     }
     return maxiter;
 }
 
 int mandelperf() {
     int mandel_sum = 0;
-    for (double re=-2.0; re<=0.5; re+=0.1) {
-        for (double im=-1.0; im<=1.0; im+=0.1) {
-            int m = mandel(re+im*I);
+    for (int re=-20; re<=5; re+=1) {
+        for (int im=-10; im<=10; im+=1) {
+            int m = mandel(re/10.0+I*im/10.0);
             mandel_sum += m;
         }
     }
@@ -286,7 +286,7 @@ int main() {
         t = clock_now()-t;
         if (t < tmin) tmin = t;
     }
-    assert(mandel_sum == 14719);
+    assert(mandel_sum == 14791);
     print_perf("mandel", tmin);
 
     // sort
