@@ -1230,6 +1230,7 @@ export
     unsafe_store!,
 
 # Macros
+    @__FILE__,
     @b_str,
     @r_str,
     @v_str,
