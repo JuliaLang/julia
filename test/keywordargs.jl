@@ -102,3 +102,27 @@ kwf7{T}(x::T; k::T=1) = T
 # try to confuse it with quoted symbol
 kwf8{T}(x::MIME{:T};k::T=0) = 0
 @test kwf8(MIME{:T}()) === 0
+
+# issue #4538
+macro TEST4538()
+    quote
+        function $(esc(:test4538))(x=1)
+            return x
+        end
+    end
+end
+@TEST4538
+@test test4538() == 1
+@test test4538(2) == 2
+
+macro TEST4538_2()
+    quote
+        function $(esc(:test4538_2))(;x=1)
+            return x
+        end
+    end
+end
+@TEST4538_2
+@test test4538_2() == 1
+@test_throws test4538_2(2)
+@test test4538_2(x=2) == 2
