@@ -132,8 +132,9 @@ end
 macro boundscheck(yesno,blk)
     quote
         $(Expr(:boundscheck,yesno))
-        $(esc(blk))
+        local val = $(esc(blk))
         $(Expr(:boundscheck,:pop))
+        val
     end
 end
 
