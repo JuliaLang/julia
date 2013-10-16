@@ -33,8 +33,8 @@ checkout(pkg::String, branch::String="master"; merge::Bool=true, pull::Bool=fals
 
 release(pkg::String) = cd(Entry.release,pkg)
 
-fix(pkg::String) = cd(Entry.fix,pkg)
-fix(pkg::String, ver::VersionNumber) = cd(Entry.fix,pkg,ver)
+pin(pkg::String) = cd(Entry.pin,pkg)
+pin(pkg::String, ver::VersionNumber) = cd(Entry.pin,pkg,ver)
 
 update() = cd(Entry.update,META_BRANCH)
 resolve() = cd(Entry.resolve)
@@ -55,5 +55,6 @@ build(pkgs::String...) = cd(Entry.build,[pkgs...])
 generate(pkg::String, license::String) = cd(Generate.package,pkg,license)
 
 @deprecate fixup build
+@deprecate fix pin
 
 end # module
