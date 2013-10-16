@@ -27,6 +27,10 @@ x = lua'\b
 
 @test norm(A'*x-b,1) < eps(1e4)
 
+#4523 - complex sparse \
+x = speye(2) + im * speye(2)
+@test_approx_eq ((lufact(x) \ ones(2)) * x) (complex(ones(2)))
+
 using Base.LinAlg.CHOLMOD
 
 # based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/
