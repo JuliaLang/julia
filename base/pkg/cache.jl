@@ -23,6 +23,6 @@ function prefetch{S<:String}(pkg::String, url::String, sha1s::Vector{S})
 	end
     filter(sha1->!Git.iscommit(sha1, dir=cache), sha1s)
 end
-prefetch(pkg::String, url::String, sha1::String...) = prefetch(pkg, url, [sha1...])
+prefetch(pkg::String, url::String, sha1::String...) = prefetch(pkg, url, String[sha1...])
 
 end # module

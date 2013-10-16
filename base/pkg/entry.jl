@@ -98,13 +98,11 @@ function status(io::IO, pkg::String, ver::VersionNumber, fix::Bool)
     println(io)
 end
 
-url2pkg(url::String) = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$", url).captures[1]
-
-function clone(url::String, pkg::String, opts::Cmd=``)
+function clone(url::String, pkg::String)
     info("Cloning $pkg from $url")
     ispath(pkg) && error("$pkg already exists")
     try
-        Git.run(`clone $opts $url $pkg`)
+        Git.run(`clone $url $pkg`)
         Git.set_remote_url(url, dir=pkg)
     catch
         run(`rm -rf $pkg`)
@@ -113,6 +111,21 @@ function clone(url::String, pkg::String, opts::Cmd=``)
     isempty(Reqs.parse("$pkg/REQUIRE")) && return
     info("Computing changes...")
     resolve()
+end
+
+function clone(url_or_pkg::String)
+    urlpath = joinpath("METADATA",url_or_pkg,"url")
+    if isfile(urlpath)
+        pkg = url_or_pkg
+        url = readchomp(urlpath)
+        Cache.prefetch(pkg,url)
+    else
+        url = url_or_pkg
+        m = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$", url)
+        m != nothing || error("can't determine package name from URL: $url")
+        pkg = m.captures[1]
+    end
+    clone(url,pkg)
 end
 
 function _checkout(pkg::String, what::String, merge::Bool=false, pull::Bool=false)
@@ -140,7 +153,7 @@ function release(pkg::String)
     avail = Read.available(pkg)
     isempty(avail) && error("$pkg cannot be released – not a registered package")
     Git.dirty(dir=pkg) && error("$pkg cannot be released – repo is dirty")
-    info("Releasing $pkg...")
+    info("Releasing $pkg")
     vers = sort!([keys(avail)...], rev=true)
     while true
         for ver in vers
@@ -157,7 +170,7 @@ function pin(pkg::String, head::String)
     ispath(pkg,".git") || error("$pkg is not a git repo")
     branch = "pinned.$(head[1:8]).tmp"
     rslv = (head != Git.head(dir=pkg))
-    info("Creating $pkg branch $branch...")
+    info("Creating $pkg branch $branch")
     Git.run(`checkout -q -B $branch $head`, dir=pkg)
     rslv ? resolve() : nothing
 end

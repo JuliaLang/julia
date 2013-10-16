@@ -25,8 +25,8 @@ installed(pkg::String) = cd(Entry.installed,pkg)
 
 status(io::IO=STDOUT) = cd(Entry.status,io)
 
-clone(url::String, pkg::String=Entry.url2pkg(url); opts::Cmd=``) =
-    cd(Entry.clone,url,pkg,opts)
+clone(url_or_pkg::String) = cd(Entry.clone,url_or_pkg)
+clone(url::String, pkg::String) = cd(Entry.clone,url,pkg)
 
 checkout(pkg::String, branch::String="master"; merge::Bool=true, pull::Bool=false) =
     cd(Entry.checkout,pkg,branch,merge,pull)
