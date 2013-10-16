@@ -82,9 +82,9 @@ func mandel(z complex128) int {
 
 func mandelperf() int {
 	mandel_sum := 0
-	for re := -2.0; re <= 0.5; re += 0.1 {
-		for im := -1.0; im <= 1.0; im += 0.1 {
-			m := mandel(complex(re, im))
+	for re := -20; re <= 5; re += 1 {
+		for im := -10; im <= 10; im += 1 {
+			m := mandel(complex(float64(re)/10, float64(im)/10))
 			mandel_sum += m
 		}
 	}
@@ -145,8 +145,7 @@ func main() {
 	}
 	print_perf("parse_int", tmin)
 
-	// fmt.Println(mandelperf())
-	// FIXME: assert(mandelperf() == 14791)
+	assert(mandelperf() == 14791)
 	tmin = float64(math.MaxFloat64)
 	for i := 0; i < 5; i++ {
 		t := time.Now()
