@@ -26,7 +26,7 @@
 	 (error (string "malformed function arguments " v)))
 	(else
 	 (case (car v)
-	   ((...)         (decl-var (cadr v)))
+	   ((... kw)      (decl-var (cadr v)))
 	   ((|::|)        (decl-var v))
 	   (else (error (string "malformed function argument " v)))))))
 
@@ -2968,7 +2968,7 @@ So far only the second case can actually occur.
   (if (symbol? e) e
       (cadr e)))
 
-(define (resolve-expansion-vars-with-new-env x env m)
+(define (resolve-expansion-vars-with-new-env x env m inkw)
   (resolve-expansion-vars-
    x
    (append!
@@ -2976,9 +2976,9 @@ So far only the second case can actually occur.
 	      (not (assq (car x) env)))
 	    (pair-with-gensyms (vars-introduced-by x)))
     env)
-   m))
+   m inkw))
 
-(define (resolve-expansion-vars- e env m)
+(define (resolve-expansion-vars- e env m inkw)
   (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))
 	 e)
 	((symbol? e)
@@ -2993,36 +2993,47 @@ So far only the second case can actually occur.
 	   ((escape) (cadr e))
 	   ((macrocall)
 	    `(macrocall ,.(map (lambda (x)
-				 (resolve-expansion-vars- x env m))
+				 (resolve-expansion-vars- x env m inkw))
 			       (cdr e))))
 	   ((type)
-	    `(type ,(cadr e) ,(resolve-expansion-vars- (caddr e) env m)
+	    `(type ,(cadr e) ,(resolve-expansion-vars- (caddr e) env m inkw)
 		   ;; type has special behavior: identifiers inside are
 		   ;; field names, not expressions.
 		   ,(map (lambda (x)
 			   (cond ((atom? x) x)
 				 ((and (pair? x) (eq? (car x) '|::|))
 				  `(|::| ,(cadr x)
-				    ,(resolve-expansion-vars- (caddr x) env m)))
+				    ,(resolve-expansion-vars- (caddr x) env m inkw)))
 				 (else
-				  (resolve-expansion-vars-with-new-env x env m))))
+				  (resolve-expansion-vars-with-new-env x env m inkw))))
 			 (cadddr e))))
+
+	   ((parameters)
+	    (cons 'parameters
+		  (map (lambda (x)
+			 ;; in keyword arg A=B, don't transform "A"
+			 (resolve-expansion-vars- x env m #t))
+		       (cdr e))))
+
 	   ((kw)
-	    ;; in keyword arg A=B, don't transform "A"
 	    (if (and (pair? (cadr e))
 		     (eq? (caadr e) '|::|))
 		`(kw (|::|
-		      ,(cadr (cadr e))
-		      ,(resolve-expansion-vars- (caddr (cadr e)) env m))
-		     ,(resolve-expansion-vars- (caddr e) env m))
-		`(kw ,(cadr e)
-		     ,(resolve-expansion-vars- (caddr e) env m))))
+		      ,(if inkw
+			   (cadr (cadr e))
+			   (resolve-expansion-vars- (cadr (cadr e)) env m inkw))
+		      ,(resolve-expansion-vars- (caddr (cadr e)) env m inkw))
+		     ,(resolve-expansion-vars- (caddr e) env m inkw))
+		`(kw ,(if inkw
+			  (cadr e)
+			  (resolve-expansion-vars- (cadr e) env m inkw))
+		     ,(resolve-expansion-vars- (caddr e) env m inkw))))
 
 	   ;; todo: trycatch
 	   (else
 	    (cons (car e)
 		  (map (lambda (x)
-			 (resolve-expansion-vars-with-new-env x env m))
+			 (resolve-expansion-vars-with-new-env x env m inkw))
 		       (cdr e))))))))
 
 ;; decl-var that also identifies f in f()=...
@@ -3079,7 +3090,7 @@ So far only the second case can actually occur.
   ;; expand binding form patterns
   ;; keep track of environment, rename locals to gensyms
   ;; and wrap globals in (getfield module var) for macro's home module
-  (resolve-expansion-vars- e (env-for-expansion e) m))
+  (resolve-expansion-vars- e (env-for-expansion e) m #f))
 
 ;; expander entry point
 
