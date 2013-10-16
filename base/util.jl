@@ -105,8 +105,14 @@ end
 
 which(f, args...) = whicht(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
 
-macro which(ex)
-    ex = expand(ex)
+macro which(ex0)
+    if isa(ex0,Expr) &&
+        any(a->(Meta.isexpr(a,:kw) || Meta.isexpr(a,:parameters)), ex0.args)
+        # keyword args not used in dispatch, so just remove them
+        args = filter(a->!(Meta.isexpr(a,:kw) || Meta.isexpr(a,:parameters)), ex0.args)
+        return Expr(:call, :which, map(esc, args)...)
+    end
+    ex = expand(ex0)
     exret = Expr(:call, :error, "expression is not a function call")
     if !isa(ex, Expr)
         # do nothing -> error
