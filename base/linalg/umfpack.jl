@@ -123,7 +123,7 @@ for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz,get_num_r,get_num_z,it
         function umfpack_symbolic!{Tv<:Complex128,Ti<:$itype}(U::UmfpackLU{Tv,Ti})
             if U.symbolic != C_NULL return U end
             tmp = Array(Ptr{Void},1)
-            status = ccall(($sym_r, :libumfpack), Ti,
+            status = ccall(($sym_c, :libumfpack), Ti,
                            (Ti, Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Float64}, Ptr{Void},
                             Ptr{Float64}, Ptr{Float64}),
                            U.m, U.n, U.colptr, U.rowval, real(U.nzval), imag(U.nzval), tmp,
@@ -150,7 +150,7 @@ for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz,get_num_r,get_num_z,it
             if U.numeric != C_NULL return U end
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
             tmp = Array(Ptr{Void}, 1)
-            status = ccall(($num_r, :libumfpack), Ti,
+            status = ccall(($num_c, :libumfpack), Ti,
                            (Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Void}, 
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, real(U.nzval), imag(U.nzval), U.symbolic, tmp,
@@ -181,7 +181,7 @@ for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz,get_num_r,get_num_z,it
                             Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
                            typ, lu.colptr, lu.rowval, real(lu.nzval), imag(lu.nzval),
                            xr, xi, real(b), imag(b),
-                           lu.num, umf_ctrl, umf_info)
+                           lu.numeric, umf_ctrl, umf_info)
             if status != UMFPACK_OK; error("Error code $status from umfpack_solve"); end
             return complex(xr,xi)
         end
