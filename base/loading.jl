@@ -105,6 +105,8 @@ function source_path(default::Union(String,Nothing))
 end
 source_path() = source_path("")
 
+macro __FILE__() source_path() end
+
 function include_from_node1(path::String)
     prev = source_path(nothing)
     path = (prev == nothing) ? abspath(path) : joinpath(dirname(prev),path)
