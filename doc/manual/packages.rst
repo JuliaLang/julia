@@ -49,7 +49,7 @@ In particular, this means that if some package had been installed because it was
 Your package requirements are in the file ``~/.julia/REQUIRE``.
 You can edit this file by hand and then call ``Pkg.resolve()`` to install, upgrade or remove packages to optimally satisfy the requirements, but most of the time, you will manipulate this file using the ``Pkg.add`` and ``Pkg.rm`` commands, which add or remove a single requirement to ``REQUIRE`` and call ``Pkg.resolve()`` afterwards automatically for you, so we'll start with those.
 
-You can add a package to the list of requirements with the ``Pkg.add`` function, and the package and all the pacakges that it depends on will be installed::
+You can add a package to the list of requirements with the ``Pkg.add`` function, and the package and all the packages that it depends on will be installed::
 
     julia> Pkg.status()
     No packages installed.
@@ -236,7 +236,7 @@ If you want to pin a package at a specific version so that calling ``Pkg.update(
      - Stats                         0.2.7              pinned.47c198b1.tmp
 
 After this, the ``Stats`` package will remain pinned at version ``0.2.7`` – or more specifically, at commit ``47c198b1``, but since versions are permanently associated a given git hash, this is the same thing.
-``Pkg.pin`` works is by creating a throw-away branch for the commit you want to pin the package at and then checking that branch out.
+``Pkg.pin`` works by creating a throw-away branch for the commit you want to pin the package at and then checking that branch out.
 By default, it pins a package at the current commit, but you can choose a different version by passing a second argument::
 
     julia> Pkg.pin("Stats",v"0.2.5")
