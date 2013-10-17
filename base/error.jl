@@ -39,37 +39,8 @@ systemerror(p, b::Bool) = b ? throw(SystemError(string(p))) : nothing
 
 ## assertion functions and macros ##
 
-assert(x) = assert(x,'?')
-assert(x,labl) = x ? nothing : error("assertion failed: ", labl)
-macro assert(ex)
-    :($(esc(ex)) ? nothing : error("assertion failed: ", string($(Expr(:quote,ex)))))
+assert(x) = x ? nothing : error("assertion failed")
+macro assert(ex,msg...)
+    msg = isempty(msg) ? :(string($(Expr(:quote,ex)))) : esc(msg[1])
+    :($(esc(ex)) ? nothing : error("assertion failed: ", $msg))
 end
-
-## printing with color ##
-
-function with_output_color(f::Function, color::Symbol, io::IO, args...)
-    have_color || return f(io, args...)
-    print(io, get(text_colors, color, color_normal))
-    try f(io, args...)
-    finally
-        print(io, color_normal)
-    end
-end
-
-print_with_color(color::Symbol, io::IO, msg::String...) =
-    with_output_color(print, color, io, msg...)
-print_with_color(color::Symbol, msg::String...) =
-    print_with_color(color, STDOUT, msg...)
-
-# use colors to print messages and warnings in the REPL
-
-function info(msg::String...; prefix="INFO: ")
-    with_output_color(print, :blue, STDERR, prefix, chomp(string(msg...)))
-    println(STDERR)
-end
-function warn(msg::String...; prefix="WARNING: ")
-    with_output_color(print, :red,  STDERR, prefix, chomp(string(msg...)))
-    println(STDERR)
-end
-warn(err::Exception; prefix="ERROR: ") =
-    warn(sprint(io->showerror(io,err)), prefix=prefix)

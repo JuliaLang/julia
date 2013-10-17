@@ -51,9 +51,9 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    Create a sparse identity matrix of specified type of size ``m x m``. In case ``n`` is supplied, create a sparse identity matrix of size ``m x n``.
 
-.. function:: spdiagm(v)
+.. function:: spdiagm(B, d[, m, n])
 
-   Construct a sparse diagonal matrix and place "v" on the diagonal.
+   Construct a sparse diagonal matrix. ``B`` is a tuple of vectors containing the diagonals and ``d`` is a tuple containing the positions of the diagonals. In the case the input contains only one diagonaly, ``B`` can be a vector (instead of a tuple) and ``d`` can be the diagonal position (instead of a tuple). Optionally, ``m`` and ``n`` specify the size of the resulting sparse matrix.
 
 .. function:: sprand(m,n,density[,rng])
 

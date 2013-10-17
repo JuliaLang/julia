@@ -75,7 +75,7 @@ What this is doing is first adding ``Distributions`` to your ``~/.julia/REQUIRE`
     $ cat ~/.julia/REQUIRE
     Distributions
 
-It then runs ``Pkg.resolve()`` using these new requirements, which leads to the conclusion that the ``Distributions`` package is should be installed since it is required but not installed.
+It then runs ``Pkg.resolve()`` using these new requirements, which leads to the conclusion that the ``Distributions`` package should be installed since it is required but not installed.
 As stated before, you can accomplish the same thing by editing your ``~/.julia/REQUIRE`` file by hand and then running ``Pkg.resolve()`` yourself::
 
     $ echo UTF16 >> ~/.julia/REQUIRE
@@ -375,10 +375,10 @@ This creates a commit in the ``~/.julia/METADATA`` repo::
 
 This commit is only locally visible, however.
 In order to make it visible to the world, you need to merge your local ``METADATA`` upstream into the offical repo.
-If you have push access to that repository (which we give to all package maintainters), then you can do so easily with the ``Pkg.publish()`` command, which pulishes your local metadata changes.
-If you don't have push access to ``METADATA``, you'll have to make a pull request on GitHub, but is `not difficult <https://help.github.com/articles/creating-a-pull-request>`_.
+If you have push access to that repository (which we give to all package maintainters), then you can do so easily with the ``Pkg.publish()`` command, which publishes your local metadata changes.
+If you don't have push access to ``METADATA``, you'll have to make a pull request on GitHub, which is `not difficult <https://help.github.com/articles/creating-a-pull-request>`_.
 
-Once the package URL for ``FooBar`` is registered in the official ``METADATA`` repo, people know where clone the package from, but there still aren't any registered versions available.
+Once the package URL for ``FooBar`` is registered in the official ``METADATA`` repo, people know where to clone the package from, but there still aren't any registered versions available.
 This means that ``Pkg.add("FooBar")`` won't work yet since it only installs official versions.
 People can, however, clone the package with just ``Pkg.clone("FooBar")`` without having to specify a URL for it.
 Moreover, when they run ``Pkg.update()``, they will get the latest version of ``FooBar`` that you've pushed to the repo.
