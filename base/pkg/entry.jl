@@ -235,7 +235,7 @@ function publish(branch::String)
     Git.success(`push -q -n`, dir="METADATA") ||
         error("METADATA is behind origin/$branch – run Pkg.update() before publishing")
     Git.run(`fetch -q`, dir="METADATA")
-    info("Checking METADATA")
+    info("Validating METADATA")
     check_metadata()
     cmd = Git.cmd(`diff --name-only --diff-filter=AMR origin/$branch HEAD --`, dir="METADATA")
     tags = Dict{ASCIIString,Vector{ASCIIString}}()
@@ -251,7 +251,7 @@ function publish(branch::String)
             return true
         end || error("$pkg v$ver is incorrectly tagged – $sha1 expected")
     end
-    isempty(tags) && return info("No new package versions to publish.")
+    isempty(tags) && info("No new package versions to publish.")
     for pkg in sort!([keys(tags)...])
         forced = ASCIIString[]
         unforced = ASCIIString[]
