@@ -93,7 +93,7 @@ As stated before, you can accomplish the same thing by editing your ``~/.julia/R
      - Stats                         0.2.6
 
 This is functionally equivalent to calling ``Pkg.add("UTF16")``, except that ``Pkg.add`` doesn't change ``REQUIRE`` until *after* installation has completed, so if there are problems, ``REQUIRE`` will be left as it was before calling ``Pkg.add``.
-The format of the ``REQUIRE`` file is described below;
+The format of the ``REQUIRE`` file is described in `Requirements`_;
 it allows, among other things, requiring specific ranges of versions of packages.
 
 When you decide that you don't want to have a package around any more, you can use ``Pkg.rm`` to remove the requirement for it from the ``REQUIRE`` file::
@@ -411,3 +411,62 @@ When you fix the requirements in ``METADATA`` for a previous version of a packag
 .. [3] Installing and using GitHub's `"hub" tool <https://github.com/github/hub>`_ is highly recommended. It allows you to do things like run ``hub create`` in the package repo and have it automatically created via GitHub's API.
 
 .. [4] In the future, ``Pkg`` will automatically create pull requests when you don't have push permissions, but that feature has not yet been implemented.
+
+Requirements
+------------
+
+The ``~/.julia/REQUIRE`` file and ``REQUIRE`` files inside of packages use a simple line-based format to express what ranges of package versions are needed.
+Here's how these files are parsed and interpreted.
+Everything after a ``#`` mark is stripped from each line as a comment.
+If nothing but whitespace is left, the line is ignored;
+if there non-whitespace remains, it is a requirement and the line is split on whitespace into words.
+The simplest possible requirement is just the name of a package on a line by itself::
+
+    Distributions
+
+The name of a package can, however, be followed by one or more version numbers.
+These indicate intervals of versions of the package, which will satisfy the requirement.
+One version opens an interval, the next closes it, the next opens a new interval, etc.
+If an even number of version numbers are given, the last one is the largest version that will satisfy;
+if an odd number of version numbers are given, then arbitrarily large versions will do.
+For example, the line::
+
+    Distributions 0.1
+
+is satisfied by any version of ``Distributions`` greater than or equal to ``0.1.0``.
+This requirement entry::
+
+    Distributions 0.1 0.2.5
+
+is satisfied by versions from ``0.1.0`` up to, but not including ``0.2.5``.
+If you want to indicate that any ``1.x`` version will do, you will want to write
+
+    Distributions 0.1 0.2-
+
+The ``0.2-`` "pseudo-version" is less than all real version numbers that start with ``0.2``
+If you want to start accepting versions after ``0.2.7``, you can write::
+
+    Distributions 0.1 0.2- 0.2.7
+
+If a requirement line has leading words that begin with ``@``, it is a system-dependent requirement.
+If your system matches these system conditionals, the requirement is included, if not, the requirement is ignored.
+For example::
+
+    @osx Homebrew
+
+will require the ``Homebrew`` package only on systems where the operating system is OS X.
+The system conditions that are currently supported are::
+
+    @windows
+    @unix
+    @osx
+    @linux
+
+The ``@unix`` condition is satisfied on all UNIX systems, including OS X, Linux and FreeBSD.
+Negated system conditionals are also supported by adding a ``!`` after the leading ``@``.
+Examples::
+
+    @!windows
+    @unix @!osx
+
+The first condition applies to any system but Windows and the second condition applies to any UNIX besides OS X.
