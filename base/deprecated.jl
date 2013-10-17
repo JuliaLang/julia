@@ -134,6 +134,7 @@ export PipeString
 @deprecate min(f::Function,x)  minimum(f,x)
 @deprecate max(x,_::(),d)      maximum(x,d)
 @deprecate min(x,_::(),d)      minimum(x,d)
+@deprecate assert(x,y)         (@assert x y)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)

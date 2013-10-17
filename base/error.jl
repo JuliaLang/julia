@@ -39,10 +39,10 @@ systemerror(p, b::Bool) = b ? throw(SystemError(string(p))) : nothing
 
 ## assertion functions and macros ##
 
-assert(x) = assert(x,'?')
-assert(x,labl) = x ? nothing : error("assertion failed: ", labl)
-macro assert(ex)
-    :($(esc(ex)) ? nothing : error("assertion failed: ", string($(Expr(:quote,ex)))))
+assert(x) = x ? nothing : error("assertion failed")
+macro assert(ex,msg...)
+    msg = isempty(msg) ? :(string($(Expr(:quote,ex)))) : esc(msg[1])
+    :($(esc(ex)) ? nothing : error("assertion failed: ", $msg))
 end
 
 ## printing with color ##

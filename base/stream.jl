@@ -608,7 +608,7 @@ function readall(stream::AsyncStream)
 end
 
 function read{T}(this::AsyncStream, a::Array{T})
-    assert(isbits(T),"Read from Buffer only supports bits types or arrays of bits types")
+    isbits(T) || error("Read from Buffer only supports bits types or arrays of bits types")
     nb = length(a)*sizeof(T)
     buf = this.buffer
     @assert buf.seekable == false
