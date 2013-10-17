@@ -1,270 +1,413 @@
-==============
-Julia Packages
-==============
+.. _man-packages:
 
-Julia features an extensive list of packages which significantly extend the
-base functionality of the language.
+**********
+ Packages
+**********
 
-Where to find Julia packages
+Julia has a built-in package manager for installing add-on functionality written in Julia.
+It can also install external libraries using your operating system's standard system for doing so, or by compiling from source.
+The list of registered Julia packages can be found at :ref:`available-packages`.
+All package manager commands are found in the ``Pkg`` module, included in Julia's Base install.
+
+Package Status
+--------------
+
+The ``Pkg.status()`` function prints out a summary of the state of packages you have installed.
+Initially, you'll have no packages installed::
+
+    julia> Pkg.status()
+    INFO: Initializing package repository /home/USERNAME/.julia
+    INFO: Cloning METADATA from git://github.com/JuliaLang/METADATA.jl
+    No packages installed.
+
+Your package directory is automatically initialized the first time you run a ``Pkg`` command that expects it to exist – which includes ``Pkg.status()``.
+Here's an example non-trivial set of required and additional packages::
+
+    julia> Pkg.status()
+    Required packages:
+     - Distributions                 0.2.8
+     - UTF16                         0.2.0
+    Additional packages:
+     - NumericExtensions             0.2.17
+     - Stats                         0.2.6
+
+These packages are all on registered versions, managed by ``Pkg``.
+Packages can be in more complicated states, indicated by annotations to the right of the installed package version; we will explain these states and annotations as we encounter them.
+For programmatic usage, ``Pkg.installed()`` returns a dictionary, mapping installed package names to the version of that package which is installed::
+
+    julia> Pkg.installed()
+    ["Distributions"=>v"0.2.8","Stats"=>v"0.2.6","UTF16"=>v"0.2.0","NumericExtensions"=>v"0.2.17"]
+
+Adding and Removing Packages
 ----------------------------
 
-- An official list of Julia packages is available at :ref:`available-packages`.
+Julia's package manager is a little unusual in that it is declarative rather than imperative.
+This means that you tell it what you want and it figures out what versions to install (or remove) to satisfy those requirements optimally – and minimally.
+So rather than installing a package, you just add it to the list of requirements and then "resolve" what needs to be installed.
+In particular, this means that if some package had been installed because it was needed by a previous version of something you wanted, but a newer version doesn't have that requirement anymore, updating can actually automatically remove packages.
 
-- Announcements of new packages can also be found on the `julia-users Google
-  Groups <https://groups.google.com/forum/?fromgroups=#!forum/julia-users>`_.
+Your package requirements are in the file ``.julia/REQUIRE``.
+You can edit this file by hand and then call ``Pkg.resolve()`` to install, upgrade or remove packages to optimally satisfy the requirements, but most of the time, you will manipulate this file using the ``Pkg.add`` and ``Pkg.rm`` commands, which add or remove a single requirement to ``REQUIRE``, calling ``Pkg.resolve()`` afterwards automatically for you, so we'll start with those.
 
-.. _pkg-install:
+You can add a package to the list of requirements with the ``Pkg.add`` function, and the package and all the uninstalled pacakges that it depends on will be installed::
 
-How to use Julia packages
--------------------------
+    julia> Pkg.status()
+    No packages installed.
 
-The ``Pkg`` module in Julia provides tools for installing and managing third
-party packages. It also manages the dependencies while installing packages.
+    julia> Pkg.add("Distributions")
+    INFO: Cloning cache of Distributions from git://github.com/JuliaStats/Distributions.jl.git
+    INFO: Cloning cache of NumericExtensions from git://github.com/lindahua/NumericExtensions.jl.git
+    INFO: Cloning cache of Stats from git://github.com/JuliaStats/Stats.jl.git
+    INFO: Installing Distributions v0.2.7
+    INFO: Installing NumericExtensions v0.2.17
+    INFO: Installing Stats v0.2.6
+    INFO: REQUIRE updated.
 
-Update the list of packages and currently installed packages with::
+    julia> Pkg.status()
+    Required packages:
+     - Distributions                 0.2.7
+    Additional packages:
+     - NumericExtensions             0.2.17
+     - Stats                         0.2.6
 
-    Pkg.update()
+What this is doing is adding ``Distributions`` to your ``~/.julia/REQUIRE`` file::
 
-In order to install a package, use ``Pkg.add()``, where ``MY_PACKAGE_NAME`` is
-replaced with the actual package name::
+    $ cat ~/.julia/REQUIRE
+    Distributions
 
-   Pkg.add("MY_PACKAGE_NAME")
+It also runs ``Pkg.resolve()`` using these new requirements, which leads to the conclusion that the ``Distributions`` package is should be installed since it is required but not installed.
+As stated before, you can accomplish the same thing by editing your ``~/.julia/REQUIRE`` file by hand and then running ``Pkg.resolve()`` yourself::
 
-This installs the package to ``$HOME/.julia/MY_PACKAGE_NAME`` . In order to
-remove a package, do::
+    $ echo UTF16 >> ~/.julia/REQUIRE
 
-   Pkg.rm("MY_PACKAGE_NAME")
+    julia> Pkg.resolve()
+    INFO: Cloning cache of UTF16 from git://github.com/nolta/UTF16.jl.git
+    INFO: Installing UTF16 v0.2.0
 
-The package system is still under active development. Sometimes, it
-can get into an inconsistent state. Deleting the ``$HOME/.julia``
-directory will wipe everything related to the package system. Repeat
-all the steps listed here to start from a clean slate.
+    julia> Pkg.status()
+    Required packages:
+     - Distributions                 0.2.7
+     - UTF16                         0.2.0
+    Additional packages:
+     - NumericExtensions             0.2.17
+     - Stats                         0.2.6
 
-If the package needs a library which, on your system, is installed but is not
-found in a typical system location on your system, you may need to add the
-path to the library to the ``DL_LOAD_PATH`` variable. The paths in this list will
-be searched, in order, before searching the system locations. It is often easiest to
-add this line to your ~/.juliarc.jl configuration script. For example, if we want to
-use libraries in ``/opt/local/lib``, we can run the following statement (before
-loading the module)::
+This is functionally equivalent to calling ``Pkg.add("UTF16")``, except that ``Pkg.add`` doesn't change ``REQUIRE`` until *after* installation has completed, so if there are problems, ``REQUIRE`` will be left as it was before calling ``Pkg.add``.
+The format of the ``REQUIRE`` file is described below;
+it allows, among other things, requiring specific ranges of versions of packages.
 
-    push!(DL_LOAD_PATH,"/opt/local/lib")
+When you decide that you don't want to have a package around any more, you can use ``Pkg.rm`` to remove the requirement for it from the ``REQUIRE`` file::
 
-.. _contrib-existing:
+    julia> Pkg.rm("Distributions")
+    INFO: Removing Distributions v0.2.7
+    INFO: Removing Stats v0.2.6
+    INFO: Removing NumericExtensions v0.2.17
+    INFO: REQUIRE updated.
 
-Contributing to an existing Julia package
------------------------------------------
+    julia> Pkg.status()
+    Required packages:
+     - UTF16                         0.2.0
 
-The list of :ref:`available-packages` contains direct links to the homepage of each
-individual package, where further instructions on how to contribute to them may be
-found. You may be interested in addressing open issues for individual packages, or
-alternatively contribute code that you already have to an existing package.
+     julia> Pkg.rm("UTF16")
+    INFO: Removing UTF16 v0.2.0
+    INFO: REQUIRE updated.
 
-For packages hosted on Github, please ensure that pull requests go directly
-to the individual package repositories and not the main Julia repository.
+    julia> Pkg.status()
+    No packages installed.
 
-Contributing a new Julia package
+Once again, this is equivalent to editing the ``REQUIRE`` file to remove the line with each package name on it then running ``Pkg.resolve()`` to update the set of installed packages to match.
+While ``Pkg.add`` and ``Pkg.rm`` are convenient for adding and removing requirements for a single package, when you want to add or remove multiple packages, manually editing ``REQUIRE`` and calling ``Pkg.resolve`` is often faster and easier.
+
+Installing Unregistered Packages
 --------------------------------
 
-Internally, every Julia package is a ``git`` repository, and Julia uses ``git``
-for its package management.
+Julia packages are simply git repositories, clonable via any of the `protocols <https://www.kernel.org/pub/software/scm/git/docs/git-clone.html#URLS>`_ that git supports, and containing Julia code that follows certain layout conventions.
+Official Julia packages are registered in the `METADATA.jl <https://github.com/JuliaLang/METADATA.jl>`_ repository, available at a well-known location [1]_.
+The ``Pkg.add`` and ``Pkg.rm`` commands in the previous section interact with registered packages, but the package manager can install and work with unregistered packages too.
+To install an unregisted package, use ``Pkg.clone(url)``, where ``url`` is a git URL from which the package can be cloned::
 
-.. caution::
-   The following instructions are provided in the hopes that most package
-   developers will be able to use them with minimal fuss.
-   Contributors who are new to ``git`` are **strongly** encouraged to work
-   through at least `a tutorial <http://try.github.io/levels/1/challenges/1>`_ to
-   become familiar with how to use ``git`` and to understand the various issues
-   that may arise.
-   
-   As individual situations may vary, contributors should bear in mind that
-   these instructions are meant as guidelines and not absolute commandments.
-   Contributors, especially those new to ``git``, are encouraged to seek help
-   from `the Julia community <http://julialang.org/community>`_ and to
-   `file issues <https://github.com/JuliaLang/julia/issues>`_ with suggestions
-   for improving these instructions or documenting situations in which they do
-   not work.
+    julia> Pkg.clone("git://example.com/path/to/Package.jl.git")
+    INFO: Cloning Package from git://example.com/path/to/Package.jl.git
+    Cloning into 'Package'...
+    remote: Counting objects: 22, done.
+    remote: Compressing objects: 100% (10/10), done.
+    remote: Total 22 (delta 8), reused 22 (delta 8)
+    Receiving objects: 100% (22/22), 2.64 KiB, done.
+    Resolving deltas: 100% (8/8), done.
 
-In the following, replace ``MY_PACKAGE_NAME``, ``MY_GITHUB_USER``, etc. with the
-actual desired names.
+By convention, Julia repository names end with ``.jl`` (the additional ``.git`` indicates a "bare" git repository), which keeps them from colliding with repositories for other languages, and also makes Julia packages easy to find in search engines.
+When packages are installed in your ``.julia`` directory, however, the extension is redundant so we leave it off.
 
-Creating a new Julia package
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+If unregistered packages contain a ``REQUIRE`` file at the top of their source tree, that file will be used to determine which registered packages the unregistered package depends on, and they will automatically be installed.
+Unregisted packages participate in the same version resolution logic as registered packages, so installed package versions will be adjusted as necessary to satisfy the requirements of both registered and unregistered packages.
 
-Note: this documentation is out of date pending further development of version 2 of Julia's package management system – specifically its tools for package developers.
+.. [1] The official set of packages is at https://github.com/JuliaLang/METADATA.jl, but individuals and organizations can easily use a different metadata repository. This allows control which packages are available for automatic installation. One can allow only audited and approved package versions, and make private packages or forks available.
 
-1. Check that your proposed package will not compete directly with an existing one
-   by checking the list of  :ref:`available-packages`. If there is significant overlap
-   in scope, we strongly encourage that you work with the existing package maintainers
-   to improve the existing package rather than creating a new, competing package.
-   See ref:`contrib-existing`_.
+Updating Packages
+-----------------
 
-2. Initialize your package in Julia by running::
+When package developers publish new registered versions of packages that you're using, you will, of course, want the new shiny versions.
+To get the latest and greatest versions of all your packages, just do ``Pkg.update()``::
 
-    Pkg.generate("MyPackageName", "MIT") # or change MIT to BSD
+    julia> Pkg.update()
+    INFO: Updating METADATA...
+    INFO: Computing changes...
+    INFO: Upgrading Distributions: v0.2.8 => v0.2.10
+    INFO: Upgrading Stats: v0.2.7 => v0.2.8
 
-   This will initialize a skeleton for a new package in ``$HOME/.julia/MY_PACKAGE_NAME``.
+The first step of updating packages is to pull new changes to ``~/.julia/METADATA`` and see if any new registered package versions have been published.
+After this, ``Pkg.update()`` attempts to update packages that are checked out on a branch and not dirty (i.e. no changes have been made to files tracked by git) by pulling changes from the package's upstream repository.
+Upstream changes will only be applied if no merging or rebasing is necessary – i.e. if the branch can be `"fast-forwarded" <http://git-scm.com/book/en/Git-Branching-Basic-Branching-and-Merging>`_.
+If the branch cannot be fast-forwarded, it is assumed that you're working on it and will update the repository yourself.
 
-.. note::
-   This will overwrite any existing files and git repository in ``$HOME/.julia/MY_PACKAGE_NAME``.
+Finally, the update process recomputes an optimal set of package versions to have installed to satisfy your top-level requirements and the requirements of "fixed" packages.
+A package is considered fixed if it is one of the following:
 
-3. If you have already created a repository for your package, overwrite the
-skeleton by copying or symlinking over it. For example,::
+1. **Unregistered:** the package is not in ``METADATA`` – you installed it with ``Pkg.clone``.
+2. **Checked out:** the package repo is on a development branch.
+3. **Dirty:** changes have been made to files in the repo.
 
-    rm -r $HOME/.julia/MY_PACKAGE_NAME
-    ln -s /path/to/existing/repo/MY_PACKAGE_NAME $HOME/.julia/MY_PACKAGE_NAME
+If any of these are the case, the package manager cannot freely change the installed version of the package, so its requirements must be satisfied by whatever other package versions it picks.
+The combination of top-level requirements in ``~/.julia/REQUIRE`` and the requiremenst of fixed packages are used to determine what should be installed.
 
-4. In ``REQUIRE``, list the names of all packages used by your new package. One
-package per line.
+Checkout, Pin, and Release
+--------------------------
 
-5. Populate the package by filling out ``README.md`` and ``LICENSE.md``, source
-code in ``src/``, and tests in ``test/``. Ensure that each test file contains these
-lines near the beginning::
+You may want to use the ``master`` version of a package rather than one of its registered versions.
+There might be fixes or functionality on master that you need that aren't yet published in any regsitered versions, or you may be a developer of the package and need to make changes on ``master`` or some other development branch.
+In such cases, you can do ``Pkg.checkout(pkg)`` to checkout the ``master`` branch of ``pkg`` or ``Pkg.checkout(pkg,branch)`` to checkout some other branch::
 
-    using Base.Test
-    using MY_PACKAGE_NAME
+    julia> Pkg.add("Distributions")
+    INFO: Installing Distributions v0.2.9
+    INFO: Installing NumericExtensions v0.2.17
+    INFO: Installing Stats v0.2.7
+    INFO: REQUIRE updated.
 
-6. Add a publicly accessible remote repository URL, if your package doesn't
-already have one. For example, create a new repository called
-``MY_PACKAGE_NAME.jl`` on Github and then run::
+    julia> Pkg.status()
+    Required packages:
+     - Distributions                 0.2.9
+    Additional packages:
+     - NumericExtensions             0.2.17
+     - Stats                         0.2.7
 
-    cd $HOME/.julia/MY_PACKAGE_NAME
-    git remote add github https://github.com/MY_GITHUB_USER/MY_PACKAGE_NAME.jl
- 
-7. Add at least one git commit and push it to the remote repository::
+    julia> Pkg.checkout("Distributions")
+    INFO: Checking out Distributions master...
+    INFO: No packages to install, update or remove.
 
-    # Do some stuff
-    git add #list of files goes here
-    #Alternatively, to add all new and changed files, use
-    #git add -A
-    git commit
-    git push -u github master
+    julia> Pkg.status()
+    Required packages:
+     - Distributions                 0.2.9+             master
+    Additional packages:
+     - NumericExtensions             0.2.17
+     - Stats                         0.2.7
 
-Setting up continuous integration testing with Travis
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Immediately after installing ``Distributions`` with ``Pkg.add`` it is on the current most recent registered version – ``0.2.9`` at the time of writing this.
+Then after running ``Pkg.checkout("Distributions")``, you can see from the output of ``Pkg.status()`` that ``Distributions`` is on an unregistered version greater than ``0.2.9``, indicated by the "pseudo-version" number ``0.2.9+``.
 
-The `Travis <https://travis-ci.org>`_ continuous integration service provides
-convenient testing for open source projects on the `Ubuntu
-Linux <http://ubuntu.com>`_ platform.
+When you checkout an unregisted version of a package, the copy of the ``REQUIRE`` file in the package repo takes precedence over any requirements registered in ``METADATA``, so it is important that developers keep this file accurate and up-to-date, reflecting the actual requirements of the current version of the package.
+If the ``REQUIRE`` file in the package repo is incorrect or missing, dependencies may be removed when the package is checked out.
+This file is also used to populate newly published versions of the package if you use the API that ``Pkg`` provides for this (described below).
 
-To set up testing for your package, see the `Getting
-Started <http://about.travis-ci.org/docs/user/getting-started/>`_ section of the
-Travis manual. Make sure that you enable the Travis service hook for your package on github. Check out the [Example.jl](https://github.com/JuliaLang/Example.jl) package to see this in action.
+When you decide that you no longer want to have a package checked out on a branch, you can "release" it back to the control of the package manager with ``Pkg.release(pkg)``::
 
-Here is a sample `.travis.yml` that runs all tests until one fails::
+    julia> Pkg.release("Distributions")
+    INFO: Releasing Distributions...
+    INFO: No packages to install, update or remove.
 
-    language: cpp
-    compiler: 
-        - clang
-    notifications:
-        email: false
-    before_install:
-        - sudo add-apt-repository ppa:staticfloat/julia-deps -y
-        - sudo add-apt-repository ppa:staticfloat/julianightlies -y
-        - sudo apt-get update -qq -y
-	- sudo apt-get install libpcre3-dev julia -y
-        - git config --global user.name "Travis User"
-        - git config --global user.email "travis@example.net"
-    script:
-        - julia -e "Pkg.init()"
-        - mkdir -p ~/.julia/MY_PACKAGE_NAME
-        - cp -R ./* ~/.julia/MY_PACKAGE_NAME/
-        - julia ~/.julia/MY_PACKAGE_NAME/test/test.jl
+    julia> Pkg.status()
+    Required packages:
+     - Distributions                 0.2.9
+    Additional packages:
+     - NumericExtensions             0.2.17
+     - Stats                         0.2.7
 
-Be sure to install `Ubuntu packages <http://packages.ubuntu.com>`_ for all
-necessary binary dependencies as well as any Julia package dependencies within
-Julia.
+After this, since the package is on a registered version and not on a branch, its version will be updated as new registered versions of the package are published.
 
-Distributing a Julia package
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+If you want to pin a package at a specific version so that calling ``Pkg.update()`` won't change the version the package is on, you can use the ``Pkg.pin`` function::
 
-Information about Julia packages is distributed through the
-`METADATA.jl repository on GitHub <https://github.com/JuliaLang/METADATA.jl>`_,
-which serves as a master list for available packages. Contributors are
-encouraged to register their packages by updating this repository, so that their
-packages will work with Julia's built-in package handling mechanism as described
-in :ref:`pkg-install`.
+    julia> Pkg.pin("Stats")
+    INFO: Creating Stats branch pinned.47c198b1.tmp
 
-Currently, updates are only accepted via the ``devel`` branch. Contributors
-should ensure that their local METADATA has the ``devel`` branch checked out and
-that the latest developments are on this branch.
+    julia> Pkg.status()
+    Required packages:
+     - Distributions                 0.2.9
+    Additional packages:
+     - NumericExtensions             0.2.17
+     - Stats                         0.2.7              pinned.47c198b1.tmp
 
-One-time setup (once per user)
-------------------------------
-1. Fork a copy of METADATA.jl, if you haven't done so already.
-   To do so, go to the `master METADATA.jl repository on GitHub <https://github.com/JuliaLang/METADATA.jl>`_
-   in your web browser and click on the `Fork` button.
+After this, the ``Stats`` package will remain pinned at version ``0.2.7`` – or more specifically, at commit ``47c198b1``, but since versions are permanently associated a given git hash, this is the same thing.
+``Pkg.pin`` works is by creating a throw-away branch for the commit you want to pin the package at and then checking that branch out.
+By default, it pins a package at the current commit, but you can choose a different version by passing a second argument::
 
-.. image:: ../images/github_metadata_fork.png
-   
-The forked repository URL should look like `https://github.com/MY_GITHUB_USER/METADATA.jl`.
+    julia> Pkg.pin("Stats",v"0.2.5")
+    INFO: Creating Stats branch pinned.1fd0983b.tmp
+    INFO: No packages to install, update or remove.
 
-2. Update the local METADATA with the URL of your forked repository.::
+    julia> Pkg.status()
+    Required packages:
+     - Distributions                 0.2.9
+    Additional packages:
+     - NumericExtensions             0.2.17
+     - Stats                         0.2.5              pinned.1fd0983b.tmp
 
-    cd $HOME/.julia/METADATA
-    git remote add github https://github.com/MY_GITHUB_USER/METADATA.jl
+Now the ``Stats`` package is pinned at commit ``1fd0983b``, which corresponds to version ``0.2.5``.
+When you decide to "unpin" a package and let the package manager update it again, you can use ``Pkg.release`` like you would to move off of any branch::
 
-3. If you have started development based off of the ``master`` branch, you will
-need to migrate the changes to the ``devel`` branch. Try this instead of Step 1
-of the next section.::
+    julia> Pkg.release("Stats")
+    INFO: Releasing Stats...
+    INFO: No packages to install, update or remove.
 
-    cd $HOME/.julia/METADATA
-    git stash                          #Save any local changes
-    git branch -m old-master           #Move local master branch 
-    git reset --hard origin/master     #Get a fresh copy of the master branch
-    git checkout -b MY_PACKAGE_NAME devel #Start a new branch to work on from devel
-    git rebase --onto MY_PACKAGE_NAME old-master #Migrate commits from old local master
-    git stash pop                      #Apply any local changes
+    julia> Pkg.status()
+    Required packages:
+     - Distributions                 0.2.9
+    Additional packages:
+     - NumericExtensions             0.2.17
+     - Stats                         0.2.7
 
-Distributing a new package or new version of an existing package
-----------------------------------------------------------------
+After this, the ``Stats`` package is managed by the package mangager again, and future calls to ``Pkg.update()`` will upgrade it to newer versions when they are published.
+The throw-away ``pinned.1fd0983b.tmp`` branch remains in your local ``Stats`` repo, but since git branches are extremely lightweight, this doesn't really matter;
+if you feel like cleaning them up, you can go into the repo and delete those branches.
 
-1. Ensure that both your forked METADATA.jl on Github and your local METADATA
-   repository are current. If you haven't done so already, create a new branch
-   with your latest updates.::
+.. [2] Packages that aren't on branches will also be marked as dirty if you make changes in the repo, but that's a less common thing to do.
 
-    cd $HOME/.julia/METADATA
-    git stash                          #Save any local changes
-    git fetch --all                 #Get the latest updates but don't apply them yet
-    git checkout devel              #Change to devel branch
-    git rebase origin/devel         #Updates local working repo
-    git push github devel           #Update remote forked repo
-    git checkout -b MY_PACKAGE_NAME devel #Put all existing and new development in its own branch
-    git stash pop                      #Apply any local changes
+Package Development
+-------------------
 
-2. Populate the local METADATA by running in Julia: ::
+Julia's package manager is designed so that when you have package installed, you are already in a position to look at its source code and full development history.
+You are already in a position to modify a package and easily contribute fixes upstream.
+Similarly, the system is designed so that if you want to create a new package, the easiest way to do so is within the infrastructure provided by the package manager.
 
-    Pkg1.pkg_origin("MY_PACKAGE_NAME")
-    Pkg1.patch("MY_PACKAGE_NAME")
+Although it isn't necessary to use `GitHub <https://github.com/>`_ to create or publish Julia packages, most Julia packages as of writing this are hosted on GitHub and the package manager knows how to format origin URLs correctly and otherwise work with the service smoothly.
+Accordingly, we recommend that you create a `free account <https://github.com/signup/free>`_ and then do::
 
-3. Update the local METADATA.::
+    $ git config --global github.user USERNAME
 
-    cd $HOME/.julia/METADATA
-    git add MY_PACKAGE_NAME #Ensure that only the latest hash is committed
-    git commit
+so that the package manager knows your GitHub user name and can configure things appropriately.
+In the future, we will make this extensible and support other common git hosting options like `BitBucket <https://bitbucket.org>`_ and allow developers to choose their prefered hosting service.
 
-4. Push to the remote METADATA repository::
+Suppose you want to create a new Julia package called ``FooBar``.
+To get started, do ``Pkg.generate(pkg,license)`` where ``pkg`` is the new package name and ``license`` is the name of a license::
 
-    git push github MY_PACKAGE_NAME
+    julia> Pkg.generate("FooBar","MIT")
+    INFO: Initializing FooBar repo: /home/USERNAME/.julia/FooBar
+    INFO: Origin: git://github.com/USERNAME/FooBar.jl.git
+    INFO: Generating LICENSE.md
+    INFO: Generating README.md
+    INFO: Generating src/FooBar.jl
+    INFO: Generating .travis.yml
+    INFO: Committing FooBar generated files
 
-5. Go to `https://github.com/MY_GITHUB_USER/METADATA.jl/tree/MY_PACKAGE_NAME`
-in your web browser. Click the 'Pull Request' button.
+This creates the directory ``~/.julia/FooBar``, initializes it as a git repository, generates a bunch of files that all packages should have, and commits them to the repository::
 
-.. image:: ../images/github_metadata_pullrequest.png
+    $ cd ~/.julia/FooBar && git show --stat
 
-6. Submit a new pull request. Ensure that the pull request goes to the
-devel branch and not master.
+    commit 84b8e266dae6de30ab9703150b3bf771ec7b6285
+    Author: Stefan Karpinski <stefan@karpinski.org>
+    Date:   Wed Oct 16 17:57:58 2013 -0400
 
-.. image:: ../images/github_metadata_develbranch.png
+        FooBar.jl generated files.
 
-7. When the pull request is accepted, announce your new package to the
-Julia community on the `julia-users Google Groups <https://groups.google.com/forum/?fromgroups=#!forum/julia-users>`_.
+            license: MIT
+            authors: Stefan Karpinski
+            years:   2013
+            github:  true
+            travis:  true
 
-8. The newly made branch ``MY_PACKAGE_NAME`` can now be safely deleted.::
+        Julia Version 0.2.0-rc1+23 [2039ec61a5]
 
-    cd $HOME/.julia/METADATA
-    git checkout devel      #Change back to devel branch
-    git branch -d MY_PACKAGE_NAME
-    git pull --rebase       #Update local METADATA
+     .travis.yml   | 13 +++++++++++++
+     LICENSE.md    | 23 +++++++++++++++++++++++
+     README.md     |  3 +++
+     src/FooBar.jl |  5 +++++
+     4 files changed, 44 insertions(+)
 
-9. The list of :ref:`available-packages` is auto-generated. No action is required on your part to get your package listed in there. The script that generates the list is run manually and hence it may take a week or two before your package shows up. 
+At the moment, the package manager knows about the MIT "Expat" License, indicated by ``"MIT"``, and the Simplified BSD License, indicated by ``"BSD"``.
+If you want to use a different license, you can ask us to add it to the package generator, or just pick one of these two and then modify the ``~/.julia/PACKAGE/LICENSE.md`` file after it has been generated.
+
+If you created a GitHub account and configured git to know about it, ``Pkg.generate`` will set an appropriate origin URL for you.
+It will also automatically generate a ``.travis.yml`` file for using the `Travis <https://travis-ci.org>`_ automated testing service.
+You will have to enable testing on the Travis website for your package, but once you've done that, your stub package should already have working tests as soon as you push it to GitHub after that.
+All the default testing does is verify that ``using FooBar`` in Julia works.
+
+Once you've you're happy about how  ``FooBar`` is working, you may want to announce it to people so they can try it out.
+First you'll need to create the remote repository and push your code to it;
+we don't yet automatically do this for you, but we will in the future and it's not too hard to figure out [3]_.
+Once you've done this, letting people try out your code is as simple as sending them the URL of the published repo – in this case ``git://github.com/USERNAME/FooBar.jl.git``, where ``USERNAME`` is your GitHub user name.
+They can use ``Pkg.clone`` to install the package and try it out.
+
+Once you've decided that ``FooBar`` is ready to be registered as an official package, you can add it to your local copy of ``METADATA`` using ``Pkg.register``::
+
+    julia> Pkg.register("FooBar")
+    INFO: Registering FooBar at git://github.com/StefanKarpinski/FooBar.jl.git
+    INFO: Committing METADATA for FooBar
+
+This creates a commit in the ``~/.julia/METADATA`` repo::
+
+    $ cd ~/.julia/METADATA && git show
+
+    commit 9f71f4becb05cadacb983c54a72eed744e5c019d
+    Author: Stefan Karpinski <stefan@karpinski.org>
+    Date:   Wed Oct 16 18:46:02 2013 -0400
+
+        Register FooBar
+
+    diff --git a/FooBar/url b/FooBar/url
+    new file mode 100644
+    index 0000000..30e525e
+    --- /dev/null
+    +++ b/FooBar/url
+    @@ -0,0 +1 @@
+    +git://github.com/StefanKarpinski/FooBar.jl.git
+
+This commit is only locally visible, however – in order to make it visible to the world, you need to merger them upstream into the offical ``METADATA`` repo.
+If you have push access to that repository (which we give to all package maintainters), then you can do so easily with the ``Pkg.publish()`` command, which pulishes your local metadata changes.
+If you don't have push access to ``METADATA``, you'll have to make a pull request on GitHub, which is `not difficult <https://help.github.com/articles/creating-a-pull-request>`_.
+
+Once the package URL for ``FooBar`` is registered in the official ``METADATA`` repo, people know where clone the package from, but there still aren't any registered versions available.
+This means that ``Pkg.add("FooBar")`` won't work yet since it only installs official versions.
+People can, however, clone the package with ``Pkg.clone("FooBar")`` without having to specify a URL for it.
+Moreover, when they run ``Pkg.update()``, they will get the latest version of ``FooBar`` that you've pushed to the repo.
+This is a good way to have people test out your packages as you work on them, before they're ready for an official release.
+
+Once you are ready to make an official version your package, you can tag and register an official version using the ``Pkg.tag`` command::
+
+    julia> Pkg.tag("FooBar")
+    INFO: Tagging FooBar v0.0.0
+    INFO: Committing METADATA for FooBar
+
+This tags ``v0.0.0`` in the ``FooBar`` repo::
+
+    $ cd ~/.julia/FooBar && git tag
+    v0.0.0
+
+It also creates a new version entry in your local ``METADATA`` repo for ``FooBar``::
+
+    $ cd ~/.julia/FooBar && git show
+    commit de77ee4dc0689b12c5e8b574aef7f70e8b311b0e
+    Author: Stefan Karpinski <stefan@karpinski.org>
+    Date:   Wed Oct 16 23:06:18 2013 -0400
+
+        Tag FooBar v0.0.0
+
+    diff --git a/FooBar/versions/0.0.0/sha1 b/FooBar/versions/0.0.0/sha1
+    new file mode 100644
+    index 0000000..c1cb1c1
+    --- /dev/null
+    +++ b/FooBar/versions/0.0.0/sha1
+    @@ -0,0 +1 @@
+    +84b8e266dae6de30ab9703150b3bf771ec7b6285
+
+Again, these changes to ``METADATA`` aren't available to anyone else until they've been included upstream.
+Again, if you have push access to the official ``METADATA`` repo, you can use the ``Pkg.publish()`` command, which first makes sure that individual package repos have been tagged, pushes them if they haven't already been, and then pushes ``METADATA`` to the origin.
+If you don't have push access to ``METADATA``, you'll have to open a pull request for the last bit [4]_.
+
+If there is a ``REQUIRE`` file in your package repo, then it will be copied into the appropriate spot in ``METADATA`` when you tag a version.
+Package developers should make sure that the ``REQUIRE`` file in their packages correctly reflect the requirements of their package, which will automatically flow into the official metadata.
+If they need to fix the registered requirements of an already-published package version, they can do so just by editing the metadata for that version, which will still have the same commit hash – remember, the hash associated with a version is permanent.
+Since the commit hash stays the same, the contents of the ``REQUIRE`` file that will be checked out in the repo will **not** match the requirements in ``METADATA`` after such a change;
+this is unavoidable.
+When you fix the requirements in ``METADATA`` for a previous version of a package, you should also fix the ``REQUIRE`` file in the current version of the package.
+
+.. [3] Installing and using GitHub's `"hub" tool <https://github.com/github/hub>`_ is highly recommended. It allows you to do things like run ``hub create`` in the package repo and have it automatically created via GitHub's API.
+
+.. [4] In the future, ``Pkg`` will automatically create pull requests when you don't have push permissions, but that feature has not yet been implemented.
