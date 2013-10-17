@@ -215,6 +215,22 @@
 
 "),
 
+("All Objects","Base","lexcmp","lexcmp(x, y)
+
+   Compare \"x\" and \"y\" lexicographically and return -1, 0, or 1
+   depending on whether \"x\" is less than, equal to, or greater than
+   \"y\", respectively. This function should be defined for
+   lexicographically comparable types, and \"lexless\" will call
+   \"lexcmp\" by default.
+
+"),
+
+("All Objects","Base","lexless","lexless(x, y)
+
+   Determine whether \"x\" is lexicographically less than \"y\".
+
+"),
+
 ("All Objects","Base","typeof","typeof(x)
 
    Get the concrete type of \"x\".
@@ -707,15 +723,27 @@
 
 "),
 
-("Iterable Collections","Base","max","max(itr)
+("Iterable Collections","Base","maximum","maximum(itr)
 
    Returns the largest element in a collection
 
 "),
 
-("Iterable Collections","Base","min","min(itr)
+("Iterable Collections","Base","maximum","maximum(A, dims)
+
+   Compute the maximum value of an array over the given dimensions
+
+"),
+
+("Iterable Collections","Base","minimum","minimum(itr)
 
    Returns the smallest element in a collection
+
+"),
+
+("Iterable Collections","Base","minimum","minimum(A, dims)
+
+   Compute the minimum value of an array over the given dimensions
 
 "),
 
@@ -749,6 +777,12 @@
 
 "),
 
+("Iterable Collections","Base","sum","sum(A, dims)
+
+   Sum elements of an array over the given dimensions.
+
+"),
+
 ("Iterable Collections","Base","sum","sum(f, itr)
 
    Sum the results of calling function \"f\" on each element of
@@ -762,15 +796,35 @@
 
 "),
 
+("Iterable Collections","Base","prod","prod(A, dims)
+
+   Multiply elements of an array over the given dimensions.
+
+"),
+
 ("Iterable Collections","Base","any","any(itr) -> Bool
 
    Test whether any elements of a boolean collection are true
 
 "),
 
+("Iterable Collections","Base","any","any(A, dims)
+
+   Test whether any values along the given dimensions of an array are
+   true.
+
+"),
+
 ("Iterable Collections","Base","all","all(itr) -> Bool
 
    Test whether all elements of a boolean collection are true
+
+"),
+
+("Iterable Collections","Base","all","all(A, dims)
+
+   Test whether all values along the given dimensions of an array are
+   true.
 
 "),
 
@@ -824,13 +878,15 @@
 
 ("Iterable Collections","Base","first","first(coll)
 
-   Get the first element of an ordered collection.
+   Get the first element of an iterable collection.
 
 "),
 
 ("Iterable Collections","Base","last","last(coll)
 
-   Get the last element of an ordered collection.
+   Get the last element of an ordered collection, if it can be
+   computed in O(1) time. This is accomplished by calling \"endof\" to
+   get the last index.
 
 "),
 
@@ -1301,7 +1357,13 @@
    such as ASCII or UTF-8 strings). The third argument optionally
    specifies a starting index. The return value is a range of indexes
    where the matching sequence is found, such that \"s[search(s,x)] ==
-   x\". The return value is \"0:-1\" if there is no match.
+   x\":
+
+   *search(string, \"substring\")* = *start:end* such that
+   \"string[start:end] == \"substring\"\", or *0:-1* if unmatched.
+
+   *search(string, 'c')*         = *index* such that \"string[index]
+   == 'c'\", or *0* if unmatched.
 
 "),
 
@@ -1322,11 +1384,11 @@
 
 ("Strings","Base","rindex","rindex(string, chars[, start])
 
-      Similar to \"rsearch\", but return only the start index at which
-      the characters were found, or 0 if they were not.
+   Similar to \"rsearch\", but return only the start index at which
+   the characters were found, or 0 if they were not.
 
-      Similar to \"search\", but return only the start index at which
-      the characters were found, or 0 if they were not.
+   Similar to \"search\", but return only the start index at which the
+   characters were found, or 0 if they were not.
 
    Search for the given characters within the given string. The second
    argument may be a single character, a vector or a set of
@@ -1336,13 +1398,6 @@
    starting index. The return value is a range of indexes where the
    matching sequence is found, such that \"s[search(s,x)] == x\". The
    return value is \"0:-1\" if there is no match.
-
-"),
-
-("Strings","Base","rsearch","rsearch(string, chars[, start])
-
-   Like \"search\", but starts at the end and moves towards the
-   beginning of \"string\".
 
 "),
 
@@ -1826,7 +1881,9 @@
    Tests whether an I/O stream is at end-of-file. If the stream is not
    yet exhausted, this function will block to wait for more data if
    necessary, and then return \"false\". Therefore it is always safe
-   to read one byte after seeing \"eof\" return \"false\".
+   to read one byte after seeing \"eof\" return \"false\". \"eof\"
+   will return \"false\" as long as buffered data is still available,
+   even if the remote end of a connection is closed.
 
 "),
 
@@ -1839,6 +1896,9 @@
 ("I/O","Base","isopen","isopen(stream)
 
    Determine whether a stream is open (i.e. has not been closed yet).
+   If the connection has been closed remotely (in case of e.g. a
+   socket), \"isopen\" will return \"false\" even though buffered data
+   may still be available. Use \"eof\" to check if necessary.
 
 "),
 
@@ -2196,6 +2256,18 @@
 
 "),
 
+("Network I/O","Base","IPv4","IPv4(host::Integer) -> IPv4
+
+   Returns IPv4 object from ip address formatted as Integer
+
+"),
+
+("Network I/O","Base","IPv6","IPv6(host::Integer) -> IPv6
+
+   Returns IPv6 object from ip address formatted as Integer
+
+"),
+
 ("Network I/O","Base","nb_available","nb_available(stream)
 
    Returns the number of bytes available for reading before a read
@@ -2237,11 +2309,11 @@
 
    Poll a file descriptor fd for changes in the read or write
    availability and with a timeout given by the second argument. If
-   the timeout is not needed, use *wait(fd)* instead. The keyword
+   the timeout is not needed, use \"wait(fd)\" instead. The keyword
    arguments determine which of read and/or write status should be
    monitored and at least one of them needs to be set to true. The
-   return code is 0 on timeout and an OR'd bitfield of UV_READABLE and
-   UV_WRITABLE otherwise, indicating which event was triggered.
+   returned value is an object with boolean fields \"readable\",
+   \"writable\", and \"timedout\", giving the result of the polling.
 
 "),
 
@@ -2542,12 +2614,12 @@ displayable(d::Display, mime)
 
 "),
 
-("Multimedia I/O","Base","mimewritable","mimewritable(mime, T::Type)
+("Multimedia I/O","Base","mimewritable","mimewritable(mime, x)
 
-   Returns a boolean value indicating whether or not objects of type
-   \"T\" can be written as the given \"mime\" type.  (By default, this
-   is determined automatically by the existence of the corresponding
-   \"writemime\" function.)
+   Returns a boolean value indicating whether or not the object \"x\"
+   can be written as the given \"mime\" type.  (By default, this is
+   determined automatically by the existence of the corresponding
+   \"writemime\" function for \"typeof(x)\".)
 
 "),
 
@@ -3009,7 +3081,7 @@ popdisplay(d::Display)
 ("Mathematical Operators","Base","cmp","cmp(x, y)
 
    Return -1, 0, or 1 depending on whether \"x<y\", \"x==y\", or
-   \"x>y\", respectively
+   \"x>y\", respectively.
 
 "),
 
@@ -3411,7 +3483,7 @@ popdisplay(d::Display)
 
 ("Mathematical Functions","Base","atanh","atanh(x)
 
-   Compute the inverse hyperbolic cotangent of \"x\"
+   Compute the inverse hyperbolic tangent of \"x\"
 
 "),
 
@@ -3603,15 +3675,17 @@ popdisplay(d::Display)
 
 "),
 
-("Mathematical Functions","Base","min","min(x, y)
+("Mathematical Functions","Base","min","min(x, y, ...)
 
-   Return the minimum of \"x\" and \"y\"
+   Return the minimum of the arguments. Operates elementwise over
+   arrays.
 
 "),
 
-("Mathematical Functions","Base","max","max(x, y)
+("Mathematical Functions","Base","max","max(x, y, ...)
 
-   Return the maximum of \"x\" and \"y\"
+   Return the maximum of the arguments. Operates elementwise over
+   arrays.
 
 "),
 
@@ -4980,7 +5054,11 @@ popdisplay(d::Display)
 
 ("Arrays","Base","broadcast!","broadcast!(f, dest, As...)
 
-   Like \"broadcast\", but store the result in the \"dest\" array.
+   Like \"broadcast\", but store the result of \"broadcast(f, As...)\"
+   in the \"dest\" array. Note that \"dest\" is only used to store the
+   result, and does not supply arguments to \"f\" unless it is also
+   listed in the \"As\", as in \"broadcast!(f, A, A, B)\" to perform
+   \"A[:] = broadcast(f, A, B)\".
 
 "),
 
@@ -6041,18 +6119,30 @@ popdisplay(d::Display)
 
 "),
 
-("Parallel Computing","Base","addprocs","addprocs(n) -> List of process identifiers
+("Parallel Computing","Base","addprocs","addprocs(n; cman::ClusterManager=LocalManager()) -> List of process identifiers
 
-   Add processes on the local machine. Can be used to take advantage
-   of multiple cores.
+   \"addprocs(4)\" will add 4 processes on the local machine. This can
+   be used to take advantage of multiple cores.
+
+   Keyword argument \"cman\" can be used to provide a custom cluster
+   manager to start workers. For example Beowulf clusters are
+   supported via a custom cluster manager implemented in  package
+   \"ClusterManagers\".
+
+   See the documentation for package \"ClusterManagers\" for more
+   information on how to write a custom cluster manager.
 
 "),
 
-("Parallel Computing","Base","addprocs","addprocs({\"host1\", \"host2\", ...}; tunnel=false, dir=JULIA_HOME, sshflags::Cmd=``, cman::ClusterManager) -> List of process identifiers
+("Parallel Computing","Base","addprocs","addprocs(machines; tunnel=false, dir=JULIA_HOME, sshflags::Cmd=``) -> List of process identifiers
 
-   Add processes on remote machines via SSH or a custom cluster
-   manager. Requires julia to be installed in the same location on
-   each node, or to be available via a shared file system.
+   Add processes on remote machines via SSH. Requires julia to be
+   installed in the same location on each node, or to be available via
+   a shared file system.
+
+   \"machines\" is a vector of host definitions of the form
+   \"[user@]host[:port]\". A worker is started for each such
+   definition.
 
    Keyword arguments:
 
@@ -6064,14 +6154,6 @@ popdisplay(d::Display)
 
    \"sshflags\" : specifies additional ssh options, e.g.
    \"sshflags=`-i /home/foo/bar.pem`\" .
-
-   \"cman\" : Workers are started using the specified cluster manager.
-
-   For example Beowulf clusters are  supported via a custom cluster
-   manager implemented in  package \"ClusterManagers\".
-
-   See the documentation for package \"ClusterManagers\" for more
-   information on how to write a custom cluster manager.
 
 "),
 
@@ -7482,6 +7564,13 @@ popdisplay(d::Display)
 
 "),
 
+("Collections and Data Structures","Base.Collections","peek","peek(pq)
+
+   Return the lowest priority key from a priority queue without
+   removing that key from the queue.
+
+"),
+
 ("Collections and Data Structures","Base.Collections","heapify","heapify(v[, ord])
 
    Return a new vector in binary heap order, optionally using the
@@ -7970,9 +8059,9 @@ popdisplay(d::Display)
 
 "),
 
-("Linear Algebra","Base","lu","lu(A) -> L, U, P
+("Linear Algebra","Base","lu","lu(A) -> L, U, p
 
-   Compute the LU factorization of \"A\", such that \"P*A = L*U\".
+   Compute the LU factorization of \"A\", such that \"A[p,:] = L*U\".
 
 "),
 
@@ -8613,10 +8702,10 @@ popdisplay(d::Display)
 
 "),
 
-("Linear Algebra","Base","eigs","eigs(A; nev=6, which=\"LM\", tol=0.0, maxiter=1000, sigma=0, ritzvec=true, op_part=:real)
+("Linear Algebra","Base","eigs","eigs(A; nev=6, which=\"LM\", tol=0.0, maxiter=1000, sigma=0, ritzvec=true, op_part=:real, v0=zeros((0, ))) -> (d[, v], nconv, niter, nmult, resid)
 
-   \"eigs\" computes the eigenvalues of A using Arnoldi factorization.
-   The following keyword arguments are supported:
+   \"eigs\" computes eigenvalues \"d\" of A using Arnoldi
+   factorization. The following keyword arguments are supported:
       * \"nev\": Number of eigenvalues
 
       * \"which\": type of eigenvalues (\"LM\", \"SM\")
@@ -8629,11 +8718,20 @@ popdisplay(d::Display)
       * \"sigma\": find eigenvalues close to \"sigma\" using shift and
         invert
 
-      * \"ritzvec\": Returns the Ritz vectors (eigenvectors) if
+      * \"ritzvec\": Returns the Ritz vectors \"v\" (eigenvectors) if
         \"true\"
 
       * \"op_part\": which part of linear operator to use for real A
         (:real, :imag)
+
+      * \"v0\": starting vector from which to start the Arnoldi
+        iteration
+
+   \"eigs\" returns the \"nev\" requested eigenvalues in \"d\", the
+   corresponding Ritz vectors \"v\" (only if \"ritzvec=true\"), the
+   number of converged eigenvalues \"nconv\", the number of iterations
+   \"niter\" and the number of matrix vector multiplications
+   \"nmult\", as well as the final residual vector \"resid\".
 
 "),
 
@@ -9245,9 +9343,14 @@ popdisplay(d::Display)
 
 "),
 
-("Sparse Matrices","Base","spdiagm","spdiagm(v)
+("Sparse Matrices","Base","spdiagm","spdiagm(B, d[, m, n])
 
-   Construct a sparse diagonal matrix and place \"v\" on the diagonal.
+   Construct a sparse diagonal matrix. \"B\" is a tuple of vectors
+   containing the diagonals and \"d\" is a tuple containing the
+   positions of the diagonals. In the case the input contains only one
+   diagonaly, \"B\" can be a vector (instead of a tuple) and \"d\" can
+   be the diagonal position (instead of a tuple). Optionally, \"m\"
+   and \"n\" specify the size of the resulting sparse matrix.
 
 "),
 

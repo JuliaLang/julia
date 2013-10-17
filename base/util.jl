@@ -272,16 +272,6 @@ if !isdefined(:clipboard)
     clipboard(x="") = error("clipboard functionality not implemented for $OS_NAME")
 end
 
-# print a warning only once
-
-const have_warned = Dict()
-function warn_once(msg::String...)
-    msg = bytestring(msg...)
-    haskey(have_warned,msg) && return
-    have_warned[msg] = true
-    warn(msg)
-end
-
 # BLAS utility routines
 function blas_vendor()
     try
@@ -412,3 +402,50 @@ function methodswith(io::IO, t::Type, showparents::Bool)
         end
     end
 end
+
+## printing with color ##
+
+function with_output_color(f::Function, color::Symbol, io::IO, args...)
+    have_color || return f(io, args...)
+    print(io, get(text_colors, color, color_normal))
+    try f(io, args...)
+    finally
+        print(io, color_normal)
+    end
+end
+
+print_with_color(color::Symbol, io::IO, msg::String...) =
+    with_output_color(print, color, io, msg...)
+print_with_color(color::Symbol, msg::String...) =
+    print_with_color(color, STDOUT, msg...)
+
+## warnings and messages ##
+
+function info(msg::String...; prefix="INFO: ")
+    with_output_color(print, :blue, STDERR, prefix, chomp(string(msg...)))
+    println(STDERR)
+end
+
+# print a warning only once
+
+const have_warned = Set()
+warn_once(msg::String...) = warn(msg..., once=true)
+
+function warn(msg::String...; prefix="WARNING: ", once=false, key=nothing, bt=nothing)
+    str = chomp(bytestring(msg...))
+    if once
+        if key === nothing
+            key = str
+        end
+        (key in have_warned) && return
+        push!(have_warned, key)
+    end
+    with_output_color(print, :red,  STDERR, prefix, str)
+    if bt !== nothing
+        show_backtrace(STDERR, bt)
+    end
+    println(STDERR)
+end
+
+warn(err::Exception; prefix="ERROR: ", kw...) =
+    warn(sprint(io->showerror(io,err)), prefix=prefix; kw...)

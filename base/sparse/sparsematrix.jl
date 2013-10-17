@@ -1288,21 +1288,58 @@ function istril(A::SparseMatrixCSC)
     return true
 end
 
-function spdiagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}), k::Integer=0)
-    if isa(v, AbstractMatrix)
-        if (size(v,1) != 1 && size(v,2) != 1)
-            error("Input should be nx1 or 1xn")
+# Create a sparse diagonal matrix by specifying multiple diagonals 
+# packed into a tuple, alongside their diagonal offsets and matrix shape
+
+function spdiagm_int(B::Tuple, d::Tuple)
+    ndiags = length(d)
+    if length(B) != ndiags; throw(ArgumentError); end
+    ncoeffs = 0
+    for vec in B
+        ncoeffs += length(vec)
+    end
+    I = Array(Int, ncoeffs)
+    J = Array(Int, ncoeffs)
+    V = Array(eltype(B[1]), ncoeffs)
+    id = 0
+    i = 0
+    for vec in B
+        id += 1
+        diag = d[id]
+        numel = length(vec)
+        if diag < 0
+            row = -diag
+            col = 0
+        elseif diag > 0
+            row = 0
+            col = diag
+        else
+            row = 0
+            col = 0
         end
+        range = 1+i:numel+i
+        I[range] = row+1:row+numel
+        J[range] = col+1:col+numel
+        copy!(sub(V, range), vec)
+        i += numel
     end
 
-    nv = length(v)
-    nr = nc = nv + abs(k)
-
-    x = diagind(nr, nc, k)
-    I, J = ind2sub((nr,nc), x)
-
-    sparse(I,J,v,nr,nc)
+    return (I,J,V)
 end
+
+function spdiagm(B::Tuple, d::Tuple, m::Integer, n::Integer)
+    (I,J,V) = spdiagm_int(B, d)
+    return sparse(I,J,V,m,n)
+end
+
+function spdiagm(B::Tuple, d::Tuple)
+    (I,J,V) = spdiagm_int(B, d)
+    return sparse(I,J,V)
+end
+
+spdiagm(B::AbstractVector, d::Number, m, n) = spdiagm((B,), (d,), m, n)
+
+spdiagm(B::AbstractVector, d::Number) = spdiagm((B,), (d,))
 
 ## expand a colptr or rowptr into a dense index vector
 function expandptr{T<:Integer}(V::Vector{T})

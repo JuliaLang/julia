@@ -5,21 +5,50 @@ macro deprecate(old,new)
         Expr(:toplevel,
             Expr(:export,esc(old)),
             :(function $(esc(old))(args...)
-                  warn_once(string($oldname," is deprecated, use ",$newname," instead."))
+                  depwarn(string($oldname," is deprecated, use ",$newname," instead."),
+                          $oldname)
                   $(esc(new))(args...)
               end))
     elseif isa(old,Expr) && old.head == :call
         oldcall = sprint(io->show_unquoted(io,old))
         newcall = sprint(io->show_unquoted(io,new))
+        oldname = Expr(:quote, old.args[1])
         Expr(:toplevel,
             Expr(:export,esc(old.args[1])),
             :($(esc(old)) = begin
-                  warn_once(string($oldcall," is deprecated, use ",$newcall," instead."))
+                  depwarn(string($oldcall," is deprecated, use ",$newcall," instead."),
+                          $oldname)
                   $(esc(new))
               end))
     else
         error("invalid usage of @deprecate")
     end
+end
+
+function depwarn(msg, funcsym)
+    bt = backtrace()
+    caller = firstcaller(bt, funcsym)
+    warn(msg, once=(caller!=C_NULL), key=caller, bt=bt)
+end
+
+function firstcaller(bt::Array{Ptr{None},1}, funcsym::Symbol)
+    # Identify the calling line
+    i = 1
+    while i <= length(bt)
+        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Int32), bt[i], 0)
+        i += 1
+        if lkup === ()
+            continue
+        end
+        fname, file, line = lkup
+        if fname == funcsym
+            break
+        end
+    end
+    if i <= length(bt)
+        return bt[i]
+    end
+    return C_NULL
 end
 
 # 0.1
@@ -134,18 +163,19 @@ export PipeString
 @deprecate min(f::Function,x)  minimum(f,x)
 @deprecate max(x,_::(),d)      maximum(x,d)
 @deprecate min(x,_::(),d)      minimum(x,d)
+@deprecate assert(x,y)         (@assert x y)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
 deprecated_ls(args::String...) = run(`ls -l $args`)
 function ls(args...)
-    warn_once("ls() is deprecated, use readdir() instead. If you are at the repl prompt, consider `;ls`.")
+    depwarn("ls() is deprecated, use readdir() instead. If you are at the repl prompt, consider `;ls`.", :ls)
     deprecated_ls(args...)
 end
 export ls
 
 function start_timer(timer::Timer, timeout::Int, repeat::Int)
-    warn_once("start_timer now expects arguments in units of seconds. you may need to update your code")
+    depwarn("start_timer now expects arguments in units of seconds. you may need to update your code", :start_timer)
     invoke(start_timer, (Timer,Real,Real), timer, timeout, repeat)
 end
 
@@ -250,7 +280,7 @@ export ComplexPair
 @deprecate sortcols(v::AbstractMatrix,o::Ordering,a::Algorithm) sortcols(v,alg=a,order=o)
 
 function amap(f::Function, A::AbstractArray, axis::Integer)
-    warn_once("amap is deprecated, use mapslices(f, A, dims) instead")
+    depwarn("amap is deprecated, use mapslices(f, A, dims) instead", :amap)
     dimsA = size(A)
     ndimsA = ndims(A)
     axis_size = dimsA[axis]
@@ -274,11 +304,11 @@ end
 
 # Conditional usage of packages and modules
 function usingmodule(names::Symbol...)
-    warn_once("usingmodule is deprecated, use using instead")
+    depwarn("usingmodule is deprecated, use using instead", :usingmodule)
     eval(current_module(), Expr(:toplevel, Expr(:using, names...)))
 end
 function usingmodule(names::String)
-    warn_once("usingmodule is deprecated, use using instead")
+    depwarn("usingmodule is deprecated, use using instead", :usingmodule)
     usingmodule([symbol(name) for name in split(names,".")]...)
 end
 export usingmodule
