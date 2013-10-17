@@ -118,7 +118,7 @@ function clone(url_or_pkg::String)
     if isfile(urlpath)
         pkg = url_or_pkg
         url = readchomp(urlpath)
-        Cache.prefetch(pkg,url)
+        # TODO: Cache.prefetch(pkg,url)
     else
         url = url_or_pkg
         m = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$", url)
