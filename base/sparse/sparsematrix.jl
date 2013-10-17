@@ -1304,6 +1304,41 @@ function spdiagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}), k::Integer=0)
     sparse(I,J,v,nr,nc)
 end
 
+## extend spdiagm by specifying multiple diagonals packed into a tuple alongside their diagonal offsets and matrix shape
+function spdiagm{T<:Integer}(B, d::Array{T, 1}, m::Integer, n::Integer)
+    ndiags = length(d)
+    ncoeffs = 0
+    for vec in B
+        ncoeffs += length(vec)
+    end
+    I = Array(T, ncoeffs)
+    J = Array(T, ncoeffs)
+    V = Array(Float64, ncoeffs)
+    id = 0
+    i = 0
+    for vec in B
+        id += 1
+        diag = d[id]
+        numel = length(vec)
+        if diag < 0
+            row = -diag
+            col = 0
+        elseif diag > 0
+            row = 0
+            col = diag
+        else
+            row = 0
+            col = 0
+        end
+        range = 1+i:numel+i
+        I[range] = row+1:row+numel
+        J[range] = col+1:col+numel
+        V[range] = vec[1:numel]
+        i += numel
+    end
+    return sparse(I, J, V, m, n)
+end
+
 ## expand a colptr or rowptr into a dense index vector
 function expandptr{T<:Integer}(V::Vector{T})
     if V[1] != 1 error("expandptr: first index must be one") end
