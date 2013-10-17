@@ -6,6 +6,15 @@ symbol(s::UTF8String) = symbol(s.data)
 symbol(a::Array{Uint8,1}) =
     ccall(:jl_symbol_n, Any, (Ptr{Uint8}, Int32), a, length(a))::Symbol
 symbol(x::Char) = symbol(string(x))
+function symbol(f::Function)
+    if isgeneric(f)
+        return f.env.name
+    elseif isdefined(f, :env) && isa(f.env,Symbol)
+        return f.env
+    else
+        return :anonymous
+    end
+end
 
 gensym() = ccall(:jl_gensym, Any, ())::Symbol
 
