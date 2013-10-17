@@ -520,19 +520,21 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                 // for T..., intersect with T
                 if (jl_is_vararg_type(declt))
                     declt = jl_tparam0(declt);
-                if (declt == (jl_value_t*)jl_tuple_type ||
-                    jl_subtype((jl_value_t*)jl_tuple_type, declt, 0)) {
-                    // don't specialize args that matched (Any...) or Any
-                    jl_tupleset(type, i, (jl_value_t*)jl_tuple_type);
-                    might_need_guard = 1;
-                }
-                else {
-                    declt = jl_type_intersection(declt,
-                                                 (jl_value_t*)jl_tuple_type);
-                    if (jl_tuple_len(elt) > 3 ||
-                        tuple_all_Any((jl_tuple_t*)declt)) {
-                        jl_tupleset(type, i, declt);
+                if (!jl_has_typevars(declt)) {
+                    if (declt == (jl_value_t*)jl_tuple_type ||
+                        jl_subtype((jl_value_t*)jl_tuple_type, declt, 0)) {
+                        // don't specialize args that matched (Any...) or Any
+                        jl_tupleset(type, i, (jl_value_t*)jl_tuple_type);
                         might_need_guard = 1;
+                    }
+                    else {
+                        declt = jl_type_intersection(declt,
+                                                     (jl_value_t*)jl_tuple_type);
+                        if (jl_tuple_len(elt) > 3 ||
+                            tuple_all_Any((jl_tuple_t*)declt)) {
+                            jl_tupleset(type, i, declt);
+                            might_need_guard = 1;
+                        }
                     }
                 }
             }
@@ -1566,26 +1568,43 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
         if (ti != (jl_value_t*)jl_bottom_type) {
             assert(ml->func->linfo);  // no builtin methods
             assert(jl_is_tuple(env));
-            len++;
-            if (lim >= 0 && len > lim) {
-                JL_GC_POP();
-                return jl_false;
+
+            int skip = 0;
+            if (lim >= 0) {
+                // we can skip this match if the types are already covered
+                // by a prior (more specific) match. but only do this in
+                // the "limited" mode used by type inference.
+                int i;
+                for(i=0; i < jl_array_len(t); i++) {
+                    jl_value_t *prior_ti = jl_t0(jl_cellref(t,i));
+                    if (jl_is_leaf_type(prior_ti) && jl_subtype(ti, prior_ti, 0)) {
+                        skip = 1;
+                        break;
+                    }
+                }
             }
-            matc = jl_tuple(3, ti, env, ml);
-            if (len == 1) {
-                t = jl_alloc_cell_1d(1);
-                jl_cellref(t,0) = (jl_value_t*)matc;
-            }
-            else {
-                jl_cell_1d_push(t, (jl_value_t*)matc);
-            }
-            // (type ∩ ml->sig == type) ⇒ (type ⊆ ml->sig)
-            // NOTE: jl_subtype check added in case the intersection is
-            // over-approximated.
-            if (jl_types_equal(jl_t0(matc), type) &&
-                jl_subtype(type, (jl_value_t*)ml->sig, 0)) {
-                JL_GC_POP();
-                return (jl_value_t*)t;
+            if (!skip) {
+                len++;
+                if (lim >= 0 && len > lim) {
+                    JL_GC_POP();
+                    return jl_false;
+                }
+                matc = jl_tuple(3, ti, env, ml);
+                if (len == 1) {
+                    t = jl_alloc_cell_1d(1);
+                    jl_cellref(t,0) = (jl_value_t*)matc;
+                }
+                else {
+                    jl_cell_1d_push(t, (jl_value_t*)matc);
+                }
+                // (type ∩ ml->sig == type) ⇒ (type ⊆ ml->sig)
+                // NOTE: jl_subtype check added in case the intersection is
+                // over-approximated.
+                if (jl_types_equal(jl_t0(matc), type) &&
+                    jl_subtype(type, (jl_value_t*)ml->sig, 0)) {
+                    JL_GC_POP();
+                    return (jl_value_t*)t;
+                }
             }
         }
         ml = ml->next;

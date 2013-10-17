@@ -59,7 +59,7 @@ tmp = A[:,7:-3:1,5]
 tmp = A[:,3:9]
 @test tmp == reshape(11:45,5,7)
 rng = (2,2:3,2:2:5)
-tmp = zeros(Int,map(max,rng)...)
+tmp = zeros(Int,map(maximum,rng)...)
 tmp[rng...] = A[rng...]
 @test  tmp == cat(3,zeros(Int,2,3),[0 0 0; 0 47 52],zeros(Int,2,3),[0 0 0; 0 127 132])
 
@@ -340,6 +340,12 @@ let es = sum_kbn(z), es2 = sum_kbn(z[1:10^5])
     @test (es2 - cs[10^5]) < es2 * 1e-13
 end
 @test sum(sin(z)) == sum(sin, z)
+
+@test any([true false; false false], 2) == [true false]'
+@test any([true false; false false], 1) == [true false]
+
+@test all([true true; false true], 2) == [true false]'
+@test all([true false; false true], 1) == [false false]
 
 ## large matrices transpose ##
 
@@ -639,20 +645,20 @@ begin
     local a = rand(3,3)
 
     asr = sortrows(a)
-    @test isless(asr[1,:],asr[2,:])
-    @test isless(asr[2,:],asr[3,:])
+    @test lexless(asr[1,:],asr[2,:])
+    @test lexless(asr[2,:],asr[3,:])
 
     asc = sortcols(a)
-    @test isless(asc[:,1],asc[:,2])
-    @test isless(asc[:,2],asc[:,3])
+    @test lexless(asc[:,1],asc[:,2])
+    @test lexless(asc[:,2],asc[:,3])
 
     asr = sortrows(a, rev=true)
-    @test isless(asr[2,:],asr[1,:])
-    @test isless(asr[3,:],asr[2,:])
+    @test lexless(asr[2,:],asr[1,:])
+    @test lexless(asr[3,:],asr[2,:])
 
     asc = sortcols(a, rev=true)
-    @test isless(asc[:,2],asc[:,1])
-    @test isless(asc[:,3],asc[:,2])
+    @test lexless(asc[:,2],asc[:,1])
+    @test lexless(asc[:,3],asc[:,2])
 
     as = sort(a, 1)
     @test issorted(as[:,1])
@@ -701,10 +707,22 @@ end
 @test reverse([1:10],1,4) == [4,3,2,1,5,6,7,8,9,10]
 @test reverse([1:10],3,6) == [1,2,6,5,4,3,7,8,9,10]
 @test reverse([1:10],6,10) == [1,2,3,4,5,10,9,8,7,6]
+@test reverse(1:10,1,4) == [4,3,2,1,5,6,7,8,9,10]
+@test reverse(1:10,3,6) == [1,2,6,5,4,3,7,8,9,10]
+@test reverse(1:10,6,10) == [1,2,3,4,5,10,9,8,7,6]
 @test reverse!([1:10],1,4) == [4,3,2,1,5,6,7,8,9,10]
 @test reverse!([1:10],3,6) == [1,2,6,5,4,3,7,8,9,10]
 @test reverse!([1:10],6,10) == [1,2,3,4,5,10,9,8,7,6]
 
+# flipdim
+@test isequal(flipdim([2,3,1], 1), [1,3,2])
+@test isequal(flipdim([2,3,1], 2), [2,3,1])
+@test isequal(flipdim([2 3 1], 1), [2 3 1])
+@test isequal(flipdim([2 3 1], 2), [1 3 2])
+@test_throws flipdim([2,3,1] -1)
+@test isequal(flipdim(1:10, 1), 10:-1:1)
+@test isequal(flipdim(1:10, 2), 1:10)
+@test_throws flipdim(1:10, -1)
 
 # issue 4228
 A = [[i i; i i] for i=1:2]

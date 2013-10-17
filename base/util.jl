@@ -11,7 +11,7 @@ time() = ccall(:clock_now, Float64, ())
 time_ns() = ccall(:jl_hrtime, Uint64, ())
 
 # total number of bytes allocated so far
-gc_bytes() = ccall(:jl_gc_total_bytes, Csize_t, ())
+gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 
 function tic()
     t0 = time_ns()
@@ -44,7 +44,7 @@ macro time(ex)
         local val = $(esc(ex))
         local t1 = time_ns()
         local b1 = gc_bytes()
-        println("elapsed time: ", (t1-t0)/1e9, " seconds (", int(b1-b0), " bytes allocated)")
+        println("elapsed time: ", (t1-t0)/1e9, " seconds (", b1-b0, " bytes allocated)")
         val
     end
 end
@@ -67,7 +67,7 @@ macro allocated(ex)
                 b0 = gc_bytes()
                 $(esc(ex))
                 b1 = gc_bytes()
-                int(b1-b0)
+                b1-b0
             end
             f()
         end
@@ -82,7 +82,7 @@ macro timed(ex)
         local val = $(esc(ex))
         local t1 = time_ns()
         local b1 = gc_bytes()
-        val, (t1-t0)/1e9, int(b1-b0)
+        val, (t1-t0)/1e9, b1-b0
     end
 end
 
@@ -105,8 +105,14 @@ end
 
 which(f, args...) = whicht(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
 
-macro which(ex)
-    ex = expand(ex)
+macro which(ex0)
+    if isa(ex0,Expr) &&
+        any(a->(Meta.isexpr(a,:kw) || Meta.isexpr(a,:parameters)), ex0.args)
+        # keyword args not used in dispatch, so just remove them
+        args = filter(a->!(Meta.isexpr(a,:kw) || Meta.isexpr(a,:parameters)), ex0.args)
+        return Expr(:call, :which, map(esc, args)...)
+    end
+    ex = expand(ex0)
     exret = Expr(:call, :error, "expression is not a function call")
     if !isa(ex, Expr)
         # do nothing -> error
@@ -266,16 +272,6 @@ if !isdefined(:clipboard)
     clipboard(x="") = error("clipboard functionality not implemented for $OS_NAME")
 end
 
-# print a warning only once
-
-const have_warned = Dict()
-function warn_once(msg::String...; depth=0)
-    msg = bytestring(msg...)
-    haskey(have_warned,msg) && return
-    have_warned[msg] = true
-    warn(msg; depth=depth+1)
-end
-
 # BLAS utility routines
 function blas_vendor()
     try
@@ -406,3 +402,50 @@ function methodswith(io::IO, t::Type, showparents::Bool)
         end
     end
 end
+
+## printing with color ##
+
+function with_output_color(f::Function, color::Symbol, io::IO, args...)
+    have_color || return f(io, args...)
+    print(io, get(text_colors, color, color_normal))
+    try f(io, args...)
+    finally
+        print(io, color_normal)
+    end
+end
+
+print_with_color(color::Symbol, io::IO, msg::String...) =
+    with_output_color(print, color, io, msg...)
+print_with_color(color::Symbol, msg::String...) =
+    print_with_color(color, STDOUT, msg...)
+
+## warnings and messages ##
+
+function info(msg::String...; prefix="INFO: ")
+    with_output_color(print, :blue, STDERR, prefix, chomp(string(msg...)))
+    println(STDERR)
+end
+
+# print a warning only once
+
+const have_warned = Set()
+warn_once(msg::String...) = warn(msg..., once=true)
+
+function warn(msg::String...; prefix="WARNING: ", once=false, key=nothing, bt=nothing)
+    str = chomp(bytestring(msg...))
+    if once
+        if key === nothing
+            key = str
+        end
+        (key in have_warned) && return
+        push!(have_warned, key)
+    end
+    with_output_color(print, :red,  STDERR, prefix, str)
+    if bt !== nothing
+        show_backtrace(STDERR, bt)
+    end
+    println(STDERR)
+end
+
+warn(err::Exception; prefix="ERROR: ", kw...) =
+    warn(sprint(io->showerror(io,err)), prefix=prefix; kw...)

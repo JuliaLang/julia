@@ -987,7 +987,7 @@ end
 findnz(L::CholmodFactor) = findnz(CholmodSparse(L))
 
 function diag{Tv}(A::CholmodSparse{Tv})
-    minmn = min(size(A))
+    minmn = minimum(size(A))
     res = zeros(Tv,minmn)
     cp0 = A.colptr0
     rv0 = A.rowval0

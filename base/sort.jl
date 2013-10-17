@@ -54,7 +54,7 @@ issorted(itr;
 
 function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
     lo <= k <= hi || error("select index $k is out of range $lo:$hi")
-    while lo < hi
+    @inbounds while lo < hi
         if hi-lo == 1
             if lt(o, v[hi], v[lo])
                 v[lo], v[hi] = v[hi], v[lo]
@@ -84,7 +84,7 @@ end
 function select!(v::AbstractVector, r::Range1, lo::Int, hi::Int, o::Ordering)
     a, b = first(r), last(r)
     lo <= a <= b <= hi || error("select index $k is out of range $lo:$hi")
-    while true
+    @inbounds while true
         if lo == a && hi == b
             sort!(v, lo, hi, DEFAULT_UNSTABLE, o)
             return v[r]
@@ -126,7 +126,7 @@ select(v::AbstractVector, k::Union(Int,Range1); kws...) = select!(copy(v), k; kw
 function searchsortedfirst(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
     lo = lo-1
     hi = hi+1
-    while lo < hi-1
+    @inbounds while lo < hi-1
         m = (lo+hi)>>>1
         if lt(o, v[m], x)
             lo = m
@@ -142,7 +142,7 @@ end
 function searchsortedlast(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
     lo = lo-1
     hi = hi+1
-    while lo < hi-1
+    @inbounds while lo < hi-1
         m = (lo+hi)>>>1
         if lt(o, x, v[m])
             hi = m
@@ -159,7 +159,7 @@ end
 function searchsorted(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
     lo = lo-1
     hi = hi+1
-    while lo < hi-1
+    @inbounds while lo < hi-1
         m = (lo+hi)>>>1
         if lt(o, v[m], x)
             lo = m
@@ -238,7 +238,7 @@ const SMALL_ALGORITHM  = InsertionSort
 const SMALL_THRESHOLD  = 20
 
 function sort!(v::AbstractVector, lo::Int, hi::Int, ::InsertionSortAlg, o::Ordering)
-    for i = lo+1:hi
+    @inbounds for i = lo+1:hi
         j = i
         x = v[i]
         while j > lo
@@ -255,7 +255,7 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, ::InsertionSortAlg, o::Order
 end
 
 function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering)
-    while lo < hi
+    @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         pivot = v[(lo+hi)>>>1]
         i, j = lo, hi
@@ -273,7 +273,7 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering
 end
 
 function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering, t=similar(v))
-    if lo < hi
+    @inbounds if lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
         m = (lo+hi)>>>1
@@ -333,14 +333,14 @@ sort(A::AbstractArray, dim::Integer; kws...) = mapslices(a->sort(a; kws...), A, 
 function sortrows(A::AbstractMatrix; kws...)
     c = 1:size(A,2)
     rows = [ sub(A,i,c) for i=1:size(A,1) ]
-    p = sortperm(rows; kws...)
+    p = sortperm(rows; kws..., order=Lexicographic)
     A[p,:]
 end
 
 function sortcols(A::AbstractMatrix; kws...)
     r = 1:size(A,1)
     cols = [ sub(A,r,i) for i=1:size(A,2) ]
-    p = sortperm(cols; kws...)
+    p = sortperm(cols; kws..., order=Lexicographic)
     A[:,p]
 end
 
@@ -374,11 +374,11 @@ isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])
 function nans2left!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
     hi < lo && return lo, hi
     i = lo
-    while (i < hi) & isnan(o, v[i])
+    @inbounds while (i < hi) & isnan(o, v[i])
         i += 1
     end
     r = 0
-    while true
+    @inbounds while true
         if isnan(o, v[i])
             i += 1
         else
@@ -395,11 +395,11 @@ end
 function nans2right!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
     hi < lo && return lo, hi
     i = hi
-    while (i > lo) & isnan(o, v[i])
+    @inbounds while (i > lo) & isnan(o, v[i])
         i -= 1
     end
     r = 0
-    while true
+    @inbounds while true
         if isnan(o, v[i])
             i -= 1
         else
@@ -424,7 +424,7 @@ issignleft(o::Perm, i::Int) = issignleft(o.order, o.data[i])
 
 function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     i, j = lo, hi = nans2end!(v,o)
-    while true
+    @inbounds while true
         while i <= j &&  issignleft(o,v[i]); i += 1; end
         while i <= j && !issignleft(o,v[j]); j -= 1; end
         if i <= j

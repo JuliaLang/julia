@@ -78,7 +78,7 @@ gradient(F::BitVector, h::BitVector) = gradient(bitunpack(F), bitunpack(h))
 ## diag and related
 
 function diag(B::BitMatrix)
-    n = min(size(B))
+    n = minimum(size(B))
     v = similar(B, n)
     for i = 1:n
         v[i] = B[i,i]

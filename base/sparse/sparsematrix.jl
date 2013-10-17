@@ -179,7 +179,7 @@ sparsevec{K<:Integer,V}(d::Dict{K,V}) = sparsevec(collect(keys(d)), collect(valu
 
 sparsevec(I::AbstractVector, V, m::Integer) = sparsevec(I, V, m, +)
 
-sparsevec(I::AbstractVector, V) = sparsevec(I, V, max(I), +)
+sparsevec(I::AbstractVector, V) = sparsevec(I, V, maximum(I), +)
 
 function sparsevec(I::AbstractVector, V, m::Integer, combine::Function)
     nI = length(I)
@@ -257,9 +257,9 @@ end
 
 ## sparse() can take its inputs in unsorted order (the parent method is now in jlsparse.jl)
 
-sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)), int(max(I)), int(max(J)), +)
+sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)), int(maximum(I)), int(maximum(J)), +)
 
-sparse(I,J,V::AbstractVector) = sparse(I, J, V, int(max(I)), int(max(J)), +)
+sparse(I,J,V::AbstractVector) = sparse(I, J, V, int(maximum(I)), int(maximum(J)), +)
 
 sparse(I,J,v::Number,m,n) = sparse(I, J, fill(v,length(I)), int(m), int(n), +)
 
@@ -581,15 +581,15 @@ function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
     end
 end
 
-max{T}(A::SparseMatrixCSC{T}) =
-    isempty(A) ? error("max: argument is empty") : reducedim(max,A,(1,2),typemin(T))
-max{T}(A::SparseMatrixCSC{T}, b::(), region) =
-    isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(max,A,region,typemin(T))
+maximum{T}(A::SparseMatrixCSC{T}) =
+    isempty(A) ? error("maximum: argument is empty") : reducedim(scalarmax,A,(1,2),typemin(T))
+maximum{T}(A::SparseMatrixCSC{T}, region) =
+    isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(scalarmax,A,region,typemin(T))
 
-min{T}(A::SparseMatrixCSC{T}) =
-    isempty(A) ? error("min: argument is empty") : reducedim(min,A,(1,2),typemax(T))
-min{T}(A::SparseMatrixCSC{T}, b::(), region) =
-    isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(min,A,region,typemax(T))
+minimum{T}(A::SparseMatrixCSC{T}) =
+    isempty(A) ? error("minimum: argument is empty") : reducedim(scalarmin,A,(1,2),typemax(T))
+minimum{T}(A::SparseMatrixCSC{T}, region) =
+    isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(scalarmin,A,region,typemax(T))
 
 sum{T}(A::SparseMatrixCSC{T}) = reducedim(+,A,(1,2),zero(T))
 sum{T}(A::SparseMatrixCSC{T}, region)  = reducedim(+,A,region,zero(T))
@@ -1288,38 +1288,58 @@ function istril(A::SparseMatrixCSC)
     return true
 end
 
-function spdiagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
-    if isa(v, AbstractMatrix)
-        if (size(v,1) != 1 && size(v,2) != 1)
-            error("Input should be nx1 or 1xn")
-        end
+# Create a sparse diagonal matrix by specifying multiple diagonals 
+# packed into a tuple, alongside their diagonal offsets and matrix shape
+
+function spdiagm_int(B::Tuple, d::Tuple)
+    ndiags = length(d)
+    if length(B) != ndiags; throw(ArgumentError); end
+    ncoeffs = 0
+    for vec in B
+        ncoeffs += length(vec)
     end
-
-    n = length(v)
-    numnz = nnz(v)
-    colptr = Array(Int, n+1)
-    rowval = Array(Int, numnz)
-    nzval = Array(T, numnz)
-
-    colptr[1] = 1
-
-    z = zero(T)
-
-    ptr = 1
-    for col=1:n
-        x = v[col]
-        if x != z
-            colptr[col+1] = colptr[col] + 1
-            rowval[ptr] = col
-            nzval[ptr] = x
-            ptr += 1
+    I = Array(Int, ncoeffs)
+    J = Array(Int, ncoeffs)
+    V = Array(eltype(B[1]), ncoeffs)
+    id = 0
+    i = 0
+    for vec in B
+        id += 1
+        diag = d[id]
+        numel = length(vec)
+        if diag < 0
+            row = -diag
+            col = 0
+        elseif diag > 0
+            row = 0
+            col = diag
         else
-            colptr[col+1] = colptr[col]
+            row = 0
+            col = 0
         end
+        range = 1+i:numel+i
+        I[range] = row+1:row+numel
+        J[range] = col+1:col+numel
+        copy!(sub(V, range), vec)
+        i += numel
     end
 
-    return SparseMatrixCSC(n, n, colptr, rowval, nzval)
+    return (I,J,V)
 end
+
+function spdiagm(B::Tuple, d::Tuple, m::Integer, n::Integer)
+    (I,J,V) = spdiagm_int(B, d)
+    return sparse(I,J,V,m,n)
+end
+
+function spdiagm(B::Tuple, d::Tuple)
+    (I,J,V) = spdiagm_int(B, d)
+    return sparse(I,J,V)
+end
+
+spdiagm(B::AbstractVector, d::Number, m, n) = spdiagm((B,), (d,), m, n)
+
+spdiagm(B::AbstractVector, d::Number) = spdiagm((B,), (d,))
 
 ## expand a colptr or rowptr into a dense index vector
 function expandptr{T<:Integer}(V::Vector{T})
@@ -1335,7 +1355,7 @@ type SpDiagIterer{Tv,Ti}
     A::SparseMatrixCSC{Tv,Ti}
     n::Int
 end
-SpDiagIterer(A::SparseMatrixCSC) = SpDiagIterer(A,min(size(A)))
+SpDiagIterer(A::SparseMatrixCSC) = SpDiagIterer(A,minimum(size(A)))
 
 length(d::SpDiagIterer) = d.n
 start(d::SpDiagIterer) = 1

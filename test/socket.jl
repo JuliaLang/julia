@@ -19,11 +19,11 @@
 
 # RFC 5952 Compliance
 
-@test repr(ip"2001:db8:0:0:0:0:2:1") == "IPv6(2001:db8::2:1)"
-@test repr(ip"2001:0db8::0001") == "IPv6(2001:db8::1)"
-@test repr(ip"2001:db8::1:1:1:1:1") == "IPv6(2001:db8:0:1:1:1:1:1)"
-@test repr(ip"2001:db8:0:0:1:0:0:1") == "IPv6(2001:db8::1:0:0:1)"
-@test repr(ip"2001:0:0:1:0:0:0:1") == "IPv6(2001:0:0:1::1)"
+@test repr(ip"2001:db8:0:0:0:0:2:1") == "ip\"2001:db8::2:1\""
+@test repr(ip"2001:0db8::0001") == "ip\"2001:db8::1\""
+@test repr(ip"2001:db8::1:1:1:1:1") == "ip\"2001:db8:0:1:1:1:1:1\""
+@test repr(ip"2001:db8:0:0:1:0:0:1") == "ip\"2001:db8::1:0:0:1\""
+@test repr(ip"2001:0:0:1:0:0:0:1") == "ip\"2001:0:0:1::1\""
 
 c = Base.Condition()
 @async begin
@@ -62,6 +62,17 @@ try
 catch e
     @test typeof(e) == Base.UVError
 end
+
+server = listen(2134)
+@async @test_throws accept(server);
+sleep(0.1)
+close(server)
+
+server = listen(2134)
+@async connect("localhost",2134)
+s1 = accept(server)
+@test_throws accept(server,s1)
+close(server)
 
 try 
     connect(".invalid",80)

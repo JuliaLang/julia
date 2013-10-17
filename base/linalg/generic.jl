@@ -36,12 +36,12 @@ function norm{T}(x::AbstractVector{T}, p::Number)
     if length(x) == 0
         a = zero(T)
     elseif p == Inf
-        a = max(abs(x))
+        a = maximum(abs(x))
     elseif p == -Inf
-        a = min(abs(x))
+        a = minimum(abs(x))
     else
         absx = abs(x)
-        dx = max(absx)
+        dx = maximum(absx)
         if dx != zero(T)
             scale!(absx, 1/dx)
             a = dx * (sum(absx.^p).^(1/p))
@@ -61,11 +61,11 @@ function norm(A::AbstractMatrix, p::Number)
     elseif m == 1 || n == 1
         a = norm(reshape(A, length(A)), p)
     elseif p == 1
-        a = max(sum(abs(A),1))
+        a = maximum(sum(abs(A),1))
     elseif p == 2
-        a = max(svdvals(A))
+        a = maximum(svdvals(A))
     elseif p == Inf
-        a = max(sum(abs(A),2))
+        a = maximum(sum(abs(A),2))
     else
         error("invalid parameter p given to compute matrix norm")
     end
@@ -85,7 +85,7 @@ function rank(A::AbstractMatrix)
     m,n = size(A)
     if m == 0 || n == 0; return 0; end
     sv = svdvals(A)
-    sum(sv .> max(size(A))*eps(sv[1]))
+    sum(sv .> maximum(size(A))*eps(sv[1]))
 end
 rank(x::Number) = x == 0 ? 0 : 1
 
@@ -101,9 +101,8 @@ trace(x::Number) = x
 #kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
 
 #det(a::AbstractMatrix)
-inv(a::AbstractMatrix) = a \ one(a)
 
-inv(a::AbstractVector) = inv(reshape(a, length(a), 1))
+inv(a::AbstractVector) = error("Input must be a square matrix")
 
 \(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
 (/)(A::AbstractVector, B::AbstractVector) = (B' \ A')'

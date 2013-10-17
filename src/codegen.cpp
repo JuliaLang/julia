@@ -1248,7 +1248,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         jl_value_t *ty  = expr_type(args[2], ctx); rt2 = ty;
         if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
             jl_value_t *tp0 = jl_tparam0(ty);
-            if (jl_subtype(arg, tp0, 0)) {
+            if (arg != jl_bottom_type && jl_subtype(arg, tp0, 0)) {
                 JL_GC_POP();
                 return ConstantInt::get(T_int1,1);
             }

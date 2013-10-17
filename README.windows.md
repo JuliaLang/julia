@@ -42,6 +42,7 @@ Important Build Errata
 - Do not use GCC 4.6 or earlier or gcc-dw2, stuff will be broken.
 - Julia uses a [patched version](http://github.com/JuliaLang/readline/tarball/master)
   of GNU Readline (this should be downloaded automatically by the build script).
+- Run `make win-extras` to download additional runtime dependencies not provided by default in MinGW.
 
 
 Native Compile
@@ -84,7 +85,7 @@ If you prefer to cross-compile, the following steps should get you started.
 
 First, you will need to ensure your system has the required dependencies. We need wine, a system compiler, and some downloaders.
 
-On Ubuntu: ```apt-get install wine subversion cvs gcc wget```
+On Ubuntu: ```apt-get install wine subversion cvs gcc wget p7zip-full```
 
 On Mac: Install XCode, XCode command line tools, X11 (now [XQuartz](http://xquartz.macosforge.org/)),
 and [MacPorts](http://www.macports.org/install.php) or [Homebrew](http://mxcl.github.io/homebrew/).
@@ -146,7 +147,7 @@ Finally, the build and install process for Julia:
 2. `echo override XC_HOST = i686-w64-mingw32 >> Make.user`
 3. `echo override DEFAULT_REPL = basic >> Make.user`
 4. `make`
-5. `make win-extras` (optional step: prepares "batteries" for make dist target)
+5. `make win-extras` (Necessary before running `make dist`p)
 4. `make dist`
 6. move the julia-* directory / zip file to the target machine
 

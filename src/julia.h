@@ -1100,7 +1100,7 @@ void jl_gc_setmark(jl_value_t *v);
 DLLEXPORT void jl_gc_enable(void);
 DLLEXPORT void jl_gc_disable(void);
 DLLEXPORT int jl_gc_is_enabled(void);
-DLLEXPORT size_t jl_gc_total_bytes(void);
+DLLEXPORT int64_t jl_gc_total_bytes(void);
 void jl_gc_ephemeral_on(void);
 void jl_gc_ephemeral_off(void);
 DLLEXPORT void jl_gc_collect(void);
@@ -1173,6 +1173,7 @@ typedef struct _jl_task_t {
     jl_value_t *result;
     jl_value_t *donenotify;
     jl_value_t *exception;
+    jl_function_t *start;
     jl_jmp_buf ctx;
     union {
         void *stackbase;
@@ -1182,7 +1183,7 @@ typedef struct _jl_task_t {
     size_t bufsz;
     void *stkbuf;
     size_t ssize;
-    jl_function_t *start;
+
     // current exception handler
     jl_handler_t *eh;
     // saved gc stack top for context switches
@@ -1241,7 +1242,7 @@ extern ptrint_t bt_data[MAX_BT_SIZE+1];
 extern size_t bt_size;
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize);
 DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, bt_context_t ctx);
-#ifdef _OS_DARWIN_
+#ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, bt_context_t ctx);
 #endif
 

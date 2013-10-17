@@ -1,7 +1,7 @@
 # fallback text/plain representation of any type:
 writemime(io, ::MIME"text/plain", x) = showlimited(io, x)
 
-function writemime(io, ::MIME"text/plain", f::Function)
+function writemime(io::IO, ::MIME"text/plain", f::Function)
     if isgeneric(f)
         n = length(f.env)
         m = n==1 ? "method" : "methods"
@@ -11,7 +11,7 @@ function writemime(io, ::MIME"text/plain", f::Function)
     end
 end
 
-function writemime(io, ::MIME"text/plain", v::AbstractVector)
+function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
     if isa(v, Ranges)
         show(io, v)
     else
@@ -23,7 +23,7 @@ function writemime(io, ::MIME"text/plain", v::AbstractVector)
     end
 end
 
-function writemime(io, ::MIME"text/plain", v::DataType)
+function writemime(io::IO, ::MIME"text/plain", v::DataType)
     show(io, v)
     methods(v) # force constructor creation
     if isgeneric(v)

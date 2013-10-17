@@ -178,7 +178,7 @@ function axpy!{T,Ta<:Number,Ti<:Integer}(alpha::Ta, x::Array{T}, rx::Union(Range
         error("Ranges should be of the same length")
     end
 
-    if min(rx) < 1 || max(rx) > length(x) || min(ry) < 1 || max(ry) > length(y)
+    if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError())
     end
     axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T),
@@ -590,7 +590,7 @@ end
 
 function copy!{T<:BlasFloat,Ti<:Integer}(dest::Array{T}, rdest::Union(Range1{Ti},Range{Ti}), 
                                          src::Array{T}, rsrc::Union(Range1{Ti},Range{Ti}))
-    if min(rdest) < 1 || max(rdest) > length(dest) || min(rsrc) < 1 || max(rsrc) > length(src)
+    if minimum(rdest) < 1 || maximum(rdest) > length(dest) || minimum(rsrc) < 1 || maximum(rsrc) > length(src)
         throw(BoundsError())
     end
     if length(rdest) != length(rsrc)

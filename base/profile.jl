@@ -192,7 +192,7 @@ function print_flat(io::IO, lilist::Vector{LineInfo}, n::Vector{Int}, combine::B
         n = n[keep]
         lilist = lilist[keep]
     end
-    wcounts = max(6, ndigits(max(n)))
+    wcounts = max(6, ndigits(maximum(n)))
     maxline = 0
     maxfile = 0
     maxfunc = 0
@@ -243,8 +243,8 @@ tree_format_linewidth(x::LineInfo) = ndigits(x.line)+6
 
 function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, cols::Integer)
     nindent = min(ifloor(cols/2), level)
-    ndigcounts = ndigits(max(counts))
-    ndigline = max([tree_format_linewidth(x) for x in lilist])
+    ndigcounts = ndigits(maximum(counts))
+    ndigline = maximum([tree_format_linewidth(x) for x in lilist])
     ntext = cols-nindent-ndigcounts-ndigline-5
     widthfile = ifloor(0.4ntext)
     widthfunc = ifloor(0.6ntext)

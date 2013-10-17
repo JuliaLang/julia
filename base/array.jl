@@ -1003,8 +1003,8 @@ function complex{T<:Real}(A::Array{T}, B::Real)
     return F
 end
 
-# use memcmp for cmp on byte arrays
-function cmp(a::Array{Uint8,1}, b::Array{Uint8,1})
+# use memcmp for lexcmp on byte arrays
+function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
     c = ccall(:memcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint),
               a, b, min(length(a),length(b)))
     c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
@@ -1465,10 +1465,10 @@ function reducedim(f::Function, A, region, v0, R)
 
     if  (is(f,+)     && (fname=:+;true)) ||
         (is(f,*)     && (fname=:*;true)) ||
-        (is(f,max)   && (fname=:max;true)) ||
-        (is(f,min)   && (fname=:min;true)) ||
-        (is(f,any)   && (fname=:any;true)) ||
-        (is(f,all)   && (fname=:all;true))
+        (is(f,scalarmax)   && (fname=:scalarmax;true)) ||
+        (is(f,scalarmin)   && (fname=:scalarmin;true)) ||
+        (is(f,&)     && (fname=:&;true)) ||
+        (is(f,|)     && (fname=:|;true))
         key = (fname, ndimsA)
     end
 

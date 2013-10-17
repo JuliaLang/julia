@@ -328,7 +328,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
             }
             else {
                 if (vx->getType()->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits()) {
-                    jl_error("box: argument is of incorrect size");
+                    return emit_error("box: argument is of incorrect size", ctx);
                 }
                 vx = builder.CreateBitCast(vx, llvmt);
             }

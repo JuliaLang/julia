@@ -560,12 +560,12 @@ timesofar("nnz&find")
 b1 = randbool(s1, s2, s3, s4)
 m1 = 1
 m2 = 3
-@check_bit_operation max BitArray{4} (b1, (), (m1, m2))
-@check_bit_operation min BitArray{4} (b1, (), (m1, m2))
+@check_bit_operation maximum BitArray{4} (b1, (m1, m2))
+@check_bit_operation minimum BitArray{4} (b1, (m1, m2))
 @check_bit_operation sum Array{Int,4} (b1, (m1, m2))
 
-@check_bit_operation max Bool (b1,)
-@check_bit_operation min Bool (b1,)
+@check_bit_operation maximum Bool (b1,)
+@check_bit_operation minimum Bool (b1,)
 @check_bit_operation any Bool (b1,)
 @check_bit_operation all Bool (b1,)
 @check_bit_operation sum Int (b1,)

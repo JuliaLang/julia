@@ -7,6 +7,12 @@
 @test isequal(map(i->sqrt(i), 1:5), [sqrt(i) for i in 1:5])
 @test isequal(map(i->sqrt(i), 2:6), [sqrt(i) for i in 2:6])
 
+# map on ranges should evaluate first value only once (#4453)
+let io=IOBuffer(3)
+    map(x->print(io,x), 1:2)
+    @test takebuf_string(io)=="12"
+end
+
 # maps of tuples (formerly in test/core.jl) -- tuple.jl
 @test map((x,y)->x+y,(1,2,3),(4,5,6)) == (5,7,9)
 @test map((x,y)->x+y,

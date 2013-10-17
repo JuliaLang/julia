@@ -12,7 +12,7 @@ function edit(f::Function, pkg::String, args...)
     r_ = f(r,pkg,args...)
     r_ == r && return false
     reqs_ = Reqs.parse(r_)
-    reqs_ != reqs && _resolve(reqs_,avail)
+    reqs_ != reqs && resolve(reqs_,avail)
     Reqs.write("REQUIRE",r_)
     info("REQUIRE updated.")
     return true
@@ -23,6 +23,7 @@ function add(pkg::String, vers::VersionSet)
     ispath(pkg) || error("unknown package $pkg")
     info("Nothing to be done.")
 end
+add(pkg::String, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 function rm(pkg::String)
     edit(Reqs.rm,pkg) && return
@@ -97,13 +98,11 @@ function status(io::IO, pkg::String, ver::VersionNumber, fix::Bool)
     println(io)
 end
 
-url2pkg(url::String) = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$", url).captures[1]
-
-function clone(url::String, pkg::String, opts::Cmd=``)
+function clone(url::String, pkg::String)
     info("Cloning $pkg from $url")
     ispath(pkg) && error("$pkg already exists")
     try
-        Git.run(`clone $opts $url $pkg`)
+        Git.run(`clone $url $pkg`)
         Git.set_remote_url(url, dir=pkg)
     catch
         run(`rm -rf $pkg`)
@@ -111,8 +110,22 @@ function clone(url::String, pkg::String, opts::Cmd=``)
     end
     isempty(Reqs.parse("$pkg/REQUIRE")) && return
     info("Computing changes...")
-    _resolve()
-    #4082 TODO: some call to fixup should go here
+    resolve()
+end
+
+function clone(url_or_pkg::String)
+    urlpath = joinpath("METADATA",url_or_pkg,"url")
+    if isfile(urlpath)
+        pkg = url_or_pkg
+        url = readchomp(urlpath)
+        # TODO: Cache.prefetch(pkg,url)
+    else
+        url = url_or_pkg
+        m = match(r"/(\w+?)(?:\.jl)?(?:\.git)?$", url)
+        m != nothing || error("can't determine package name from URL: $url")
+        pkg = m.captures[1]
+    end
+    clone(url,pkg)
 end
 
 function _checkout(pkg::String, what::String, merge::Bool=false, pull::Bool=false)
@@ -124,8 +137,7 @@ function _checkout(pkg::String, what::String, merge::Bool=false, pull::Bool=fals
             info("Pulling $pkg latest $what...")
             Git.run(`pull -q --ff-only`, dir=pkg)
         end
-        _resolve()
-        #4082 TODO: some call to fixup should go here
+        resolve()
     end
 end
 
@@ -141,7 +153,7 @@ function release(pkg::String)
     avail = Read.available(pkg)
     isempty(avail) && error("$pkg cannot be released – not a registered package")
     Git.dirty(dir=pkg) && error("$pkg cannot be released – repo is dirty")
-    info("Releasing $pkg...")
+    info("Releasing $pkg")
     vers = sort!([keys(avail)...], rev=true)
     while true
         for ver in vers
@@ -154,35 +166,40 @@ function release(pkg::String)
     end
 end
 
-function fix(pkg::String, head::String)
+function pin(pkg::String, head::String)
     ispath(pkg,".git") || error("$pkg is not a git repo")
-    branch = "fixed-$(head[1:8])"
+    branch = "pinned.$(head[1:8]).tmp"
     rslv = (head != Git.head(dir=pkg))
-    info("Creating $pkg branch $branch...")
+    info("Creating $pkg branch $branch")
     Git.run(`checkout -q -B $branch $head`, dir=pkg)
-    rslv ? _resolve() : nothing
+    rslv ? resolve() : nothing
 end
-fix(pkg::String) = fix(pkg,Git.head(dir=pkg))
+pin(pkg::String) = pin(pkg,Git.head(dir=pkg))
 
-function fix(pkg::String, ver::VersionNumber)
+function pin(pkg::String, ver::VersionNumber)
     ispath(pkg,".git") || error("$pkg is not a git repo")
-    Read.isinstalled(pkg) || error("$pkg cannot be fixed – not an installed package")
+    Read.isinstalled(pkg) || error("$pkg cannot be pinned – not an installed package".tmp)
     avail = Read.available(pkg)
-    isempty(avail) && error("$pkg cannot be fixed – not a registered package")
+    isempty(avail) && error("$pkg cannot be pinned – not a registered package".tmp)
     haskey(avail,ver) || error("$pkg – $ver is not a registered version")
-    fix(pkg,avail[ver].sha1)
+    pin(pkg,avail[ver].sha1)
 end
 
-function update()
+function update(branch::String)
     info("Updating METADATA...")
     cd("METADATA") do
-        if Git.branch() != "devel"
+        if Git.branch() != branch
+            Git.dirty() && error("METADATA is not on $branch and dirty")
+            Git.attached() || error("METADATA is not on $branch and detached")
             Git.run(`fetch -q --all`)
             Git.run(`checkout -q HEAD^0`)
-            Git.run(`branch -f devel refs/remotes/origin/devel`)
-            Git.run(`checkout -q devel`)
+            Git.run(`branch -f $branch refs/remotes/origin/$branch`)
+            Git.run(`checkout -q $branch`)
         end
-        Git.run(`pull -q -m`)
+        # TODO: handle merge conflicts
+        Base.with_env("GIT_MERGE_AUTOEDIT","no") do
+            Git.run(`pull -q`, out=DevNull)
+        end
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
@@ -209,11 +226,55 @@ function update()
         end
     end
     info("Computing changes...")
-    _resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
-    #4082 TODO: some call to fixup should go here
+    resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
 end
 
-function _resolve(
+function publish(branch::String)
+    Git.branch(dir="METADATA") == branch ||
+        error("METADATA must be on $branch to publish changes")
+    Git.success(`push -q -n`, dir="METADATA") ||
+        error("METADATA is behind origin/$branch – run Pkg.update() before publishing")
+    Git.run(`fetch -q`, dir="METADATA")
+    info("Validating METADATA")
+    check_metadata()
+    cmd = Git.cmd(`diff --name-only --diff-filter=AMR origin/$branch HEAD --`, dir="METADATA")
+    tags = Dict{ASCIIString,Vector{ASCIIString}}()
+    for line in eachline(cmd)
+        m = match(r"^(.+?)/versions/([^/]+)/sha1$", line)
+        m != nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
+        pkg, ver = m.captures; ver = convert(VersionNumber,ver)
+        sha1 = readchomp(joinpath("METADATA",chomp(line)))
+        any(split(Git.readall(`tag --points-at $sha1`, dir=pkg))) do tag
+            ver == convert(VersionNumber,tag) || return false
+            haskey(tags,pkg) || (tags[pkg] = ASCIIString[])
+            push!(tags[pkg], tag)
+            return true
+        end || error("$pkg v$ver is incorrectly tagged – $sha1 expected")
+    end
+    isempty(tags) && info("No new package versions to publish.")
+    for pkg in sort!([keys(tags)...])
+        forced = ASCIIString[]
+        unforced = ASCIIString[]
+        for tag in tags[pkg]
+            ver = convert(VersionNumber,tag)
+            push!(isrewritable(ver) ? forced : unforced, tag)
+        end
+        if !isempty(forced)
+            info("Pushing $pkg temporary tags: ", join(forced,", "))
+            refspecs = ["refs/tags/$tag:refs/tags/$tag" for tag in forced]
+            Git.run(`push -q --force origin $refspecs`, dir=pkg)
+        end
+        if !isempty(unforced)
+            info("Pushing $pkg permanent tags: ", join(unforced,", "))
+            refspecs = ["refs/tags/$tag:refs/tags/$tag" for tag in unforced]
+            Git.run(`push -q origin $refspecs`, dir=pkg)
+        end
+    end
+    info("Pushing METADATA changes")
+    Git.run(`push -q`, dir="METADATA")
+end
+
+function resolve(
     reqs  :: Dict = Reqs.parse("REQUIRE"),
     avail :: Dict = Read.available(),
     instd :: Dict = Read.installed(avail),
@@ -288,15 +349,11 @@ function _resolve(
         end
         rethrow()
     end
-
-    # Since we just changed a lot of things, it's probably better to reread
-    # the state, so only pass avail
-    _fixup(String[pkg for (pkg,_) in filter(x->x[2][2]!=nothing,changes)], avail)
-    #4082 TODO: this call to fixup should no longer go here
+    # re/build all updated/installed packages
+    build(map(x->x[1],filter(x->x[2][2]!=nothing,changes)))
 end
 
 function write_tag_metadata(pkg::String, ver::VersionNumber, commit::String)
-    info("Writing METADATA for $pkg v$ver")
     cmd = Git.cmd(`cat-file blob $commit:REQUIRE`, dir=pkg)
     reqs = success(cmd) ? Reqs.read(cmd) : Reqs.Line[]
     cd("METADATA") do
@@ -335,10 +392,16 @@ function register(pkg::String, url::String)
             Git.run(`add $path`)
         end
         for (ver,commit) in versions
+            info("Tagging $pkg v$ver")
             write_tag_metadata(pkg,ver,commit)
         end
-        info("Checking METADATA sanity")
-        check_metadata()
+        info("Committing METADATA for $pkg")
+        msg = "Register $pkg"
+        if !isempty(versions)
+            vers = map(v->"v$v", sort!([keys(versions)...]))
+            msg *= ": $(join(vers,", "))"
+        end
+        Git.run(`commit -q -m $msg -- $pkg`, dir="METADATA")
     end
 end
 
@@ -359,13 +422,16 @@ nextbump(v::VersionNumber) = isrewritable(v) ? v : nextpatch(v)
 
 function tag(pkg::String, ver::Union(Symbol,VersionNumber), commit::String, msg::String)
     ispath(pkg,".git") || error("$pkg is not a git repo")
-    Git.dirty(dir=pkg) && error("$pkg is dirty – stash changes to tag")
+    Git.dirty(dir=pkg) &&
+        error("$pkg is dirty – commit or stash changes to tag")
+    Git.dirty(pkg, dir="METADATA") &&
+        error("METADATA/$pkg is dirty – commit or stash changes to tag")
     commit = isempty(commit) ? Git.head(dir=pkg) :
         Git.readchomp(`rev-parse $commit`, dir=pkg)
     registered = isfile("METADATA",pkg,"url")
     if registered
         avail = Read.available(pkg)
-        existing = [keys(Read.available(pkg))...]
+        existing = VersionNumber[keys(Read.available(pkg))...]
         ancestors = filter(v->Git.is_ancestor_of(avail[v].sha1,commit,dir=pkg), existing)
     else
         tags = split(Git.readall(`tag -l v*`, dir=pkg))
@@ -380,7 +446,7 @@ function tag(pkg::String, ver::Union(Symbol,VersionNumber), commit::String, msg:
     sort!(existing)
     if isa(ver,Symbol)
         prv = isempty(existing) ? v"0" :
-              isempty(ancestors) ? max(existing) : max(ancestors)
+              isempty(ancestors) ? maximum(existing) : maximum(ancestors)
         ver = (ver == :bump ) ? nextbump(prv)  :
               (ver == :patch) ? nextpatch(prv) :
               (ver == :minor) ? nextminor(prv) :
@@ -399,8 +465,8 @@ function tag(pkg::String, ver::Union(Symbol,VersionNumber), commit::String, msg:
     try
         Git.transact(dir="METADATA") do
             write_tag_metadata(pkg,ver,commit)
-            info("Checking METADATA sanity")
-            check_metadata()
+            info("Committing METADATA for $pkg")
+            Git.run(`commit -q -m "Tag $pkg v$ver" -- $pkg`, dir="METADATA")
         end
     catch
         Git.run(`tag -d v$ver`, dir=pkg)
@@ -416,101 +482,53 @@ function check_metadata()
 
     problematic = Resolve.sanity_check(deps)
     if !isempty(problematic)
-        msg = "Packages with unsatisfiable requirements found:\n"
+        msg = "packages with unsatisfiable requirements found:\n"
         for (p, vn, rp) in problematic
-            msg *= "    $p v$vn : no valid versions exist for package $rp\n"
+            msg *= "    $p v$vn – no valid versions exist for package $rp\n"
         end
         error(msg)
     end
     return
 end
 
-function build(pkg::String, args=[])
-    try 
+function warnbanner(msg...; label="[ WARNING ]", prefix="")
+    warn(prefix="", Base.cpad(label,Base.tty_cols(),"="))
+    println(STDERR)
+    warn(prefix=prefix, msg...)
+    println(STDERR)
+    warn(prefix="", "="^Base.tty_cols())
+end
+
+function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
+    for pkg in pkgs
+        pkg in seen && continue
+        build!(Read.requires_list(pkg),errs,push!(seen,pkg))
         path = abspath(pkg,"deps","build.jl")
-        if isfile(path)
-            info("Running build script for package $pkg")
-            cd(dirname(path)) do
-                m = Module(:__anon__)
-                body = Expr(:toplevel,:(ARGS=$args),:(include($path)))
-                eval(m,body)
+        isfile(path) || continue
+        info("Building $pkg")
+        cd(dirname(path)) do
+            try eval(Module(),Expr(:toplevel,:(ARGS={}),:(include($path))))
+            catch err
+                warnbanner(err, label="[ ERROR: $pkg ]")
+                errs[pkg] = err
             end
         end
-    catch
-        warn("""
-        An exception occured while building binary dependencies.
-        You may have to take manual steps to complete the installation, see the error message below.
-        To reattempt the installation, run Pkg.fixup("$pkg").
-        """)
-        rethrow()
-    end
-    true
-end
-
-function __fixup(
-    instlist,
-    avail :: Dict = Read.available(),
-    inst  :: Dict = Read.installed(avail),
-    free  :: Dict = Read.free(inst),
-    fixed :: Dict = Read.fixed(avail,inst);
-    exclude = []
-)
-    sort!(instlist, lt=function(a,b)
-        c = in(b,Read.alldependencies(a,avail,free,fixed))
-        nonordered = (!c && !in(a,Read.alldependencies(b,avail,free,fixed)))
-        nonordered ? a < b : c
-    end)
-    for p in instlist
-        in(p,exclude) && continue
-        build(p,["fixup"]) || return
     end
 end
 
-function _fixup{T<:String}(
-    pkg::Vector{T},
-    avail :: Dict = Read.available(),
-    inst  :: Dict = Read.installed(avail),
-    free  :: Dict = Read.free(inst),
-    fixed :: Dict = Read.fixed(avail,inst);
-    exclude = []
-)
-    tofixup = copy(pkg)
-    oldlength = length(tofixup)
-    while true
-        for (p,_) in inst
-            in(p,tofixup) && continue
-            for pf in tofixup
-                if in(pf,Read.alldependencies(p,avail,free,fixed))
-                    push!(tofixup,p)
-                    break
-                end
-            end
-        end
-        oldlength == length(tofixup) && break
-        oldlength = length(tofixup)
-    end
-    __fixup(tofixup, avail, inst, free, fixed; exclude=exclude)
-end
+function build(pkgs::Vector)
+    errs = Dict()
+    build!(pkgs,errs)
+    isempty(errs) && return
+    println(STDERR)
+    warnbanner(label="[ BUILD ERRORS ]", """
+    WARNING: $(join(map(x->x[1],errs),", "," and ")) had build errors.
 
-_fixup(
-    pkg::String,
-    avail :: Dict = Read.available(),
-    inst  :: Dict = Read.installed(avail),
-    free  :: Dict = Read.free(inst),
-    fixed :: Dict = Read.fixed(avail,inst);
-    exclude = []
-) = _fixup([pkg], avail, inst, free, fixed; exclude=exclude)
-
-function _fixup(
-    avail :: Dict = Read.available(),
-    inst  :: Dict = Read.installed(avail),
-    free  :: Dict = Read.free(inst),
-    fixed :: Dict = Read.fixed(avail,inst);
-    exclude = []
-)
-    # TODO: Replace by proper toposorts
-    instlist = [k for (k,v) in inst]
-    _fixup(instlist, avail, inst, free, fixed; exclude=exclude)
+     - packages with build errors remain installed in $(pwd())
+     - build a package and all its dependencies with `Pkg.build(pkg)`
+     - build a single package by running its `deps/build.jl` script
+    """)
 end
+build() = build(sort!([keys(installed())...]))
 
 end # module

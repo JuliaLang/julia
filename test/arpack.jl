@@ -46,7 +46,7 @@ end
 Q=reshape(Q,(50,2,50))
 # Construct trace-preserving completely positive map from this
 Phi=CPM(Q)
-(d,v,numiter,numop,resid) = eigs(Phi,nev=1,which="LM")
+(d,v,nconv,numiter,numop,resid) = eigs(Phi,nev=1,which="LM")
 # Properties: largest eigenvalue should be 1, largest eigenvector, when reshaped as matrix
 # should be a Hermitian positive definite matrix (up to an arbitrary phase)
 
@@ -61,8 +61,10 @@ v=(v+v')/2
 Test.@test isposdef(v)
 
 # Repeat with starting vector
-(d2,v2,numiter2,numop2,resid2) = eigs(Phi,nev=1,which="LM",v0=reshape(v,(2500,)))
+(d2,v2,nconv2,numiter2,numop2,resid2) = eigs(Phi,nev=1,which="LM",v0=reshape(v,(2500,)))
 v2=reshape(v2,(50,50))
 v2=v2/trace(v2)
 Test.@test numiter2<numiter
 Test.@test_approx_eq v v2
+
+Test.@test_approx_eq eigs(speye(50), nev=10)[1] ones(10) #Issue 4246

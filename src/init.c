@@ -154,9 +154,20 @@ void restore_signals()
 {
     SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
 }
-static void __fastcall win_raise_exception(void* excpt)
-{ //why __fastcall? because the first two arguments are passed in registers, making this easier
-    jl_throw(excpt);
+void jl_throw_in_ctx(jl_value_t* excpt, CONTEXT *ctxThread, int bt) {
+    bt_size = bt ? rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ctxThread) : 0;
+    jl_exception_in_transit = excpt;
+#if defined(_CPU_X86_64_)
+    ctxThread->Rip = (DWORD64)&jl_rethrow;
+    ctxThread->Rsp &= (DWORD64)-16;
+    ctxThread->Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
+#elif defined(_CPU_X86_)
+    ctxThread->Eip = (DWORD)&jl_rethrow;
+    ctxThread->Esp &= (DWORD)-16;
+    ctxThread->Esp -= 4; //fix up the stack pointer
+#else
+#error WIN16 not supported :P
+#endif
 }
 volatile HANDLE hMainThread = NULL;
 DLLEXPORT void jlbacktrace();
@@ -189,19 +200,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
             fputs("error: GetThreadContext failed\n",stderr);
             return 0;
         }
-#if defined(_CPU_X86_64_)
-        ctxThread.Rip = (DWORD64)&win_raise_exception;
-        ctxThread.Rcx = (DWORD64)jl_interrupt_exception;
-        ctxThread.Rsp &= (DWORD64)-16;
-        ctxThread.Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
-#elif defined(_CPU_X86_)
-        ctxThread.Eip = (DWORD)&win_raise_exception;
-        ctxThread.Ecx = (DWORD)jl_interrupt_exception;
-        ctxThread.Esp &= (DWORD)-16;
-        ctxThread.Esp -= 4; //fix up the stack pointer
-#else
-#error WIN16 not supported :P
-#endif
+        jl_throw_in_ctx(jl_interrupt_exception, &ctxThread, 1);
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (!SetThreadContext(hMainThread,&ctxThread)) {
             fputs("error: SetThreadContext failed\n",stderr);
@@ -220,19 +219,7 @@ static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) 
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
         case EXCEPTION_STACK_OVERFLOW:
-#if defined(_CPU_X86_64_)
-            ExceptionInfo->ContextRecord->Rip = (DWORD64)&win_raise_exception;
-            ExceptionInfo->ContextRecord->Rcx = (DWORD64)jl_stackovf_exception;
-            ExceptionInfo->ContextRecord->Rsp &= (DWORD64)-16;
-            ExceptionInfo->ContextRecord->Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
-#elif defined(_CPU_X86_)
-            ExceptionInfo->ContextRecord->Eip = (DWORD)&win_raise_exception;
-            ExceptionInfo->ContextRecord->Ecx = (DWORD)jl_stackovf_exception;
-            ExceptionInfo->ContextRecord->Esp &= (DWORD)-16;
-            ExceptionInfo->ContextRecord->Esp -= 4; //fix up the stack pointer
-#else
-#error WIN16 not supported :P
-#endif
+            jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord, 0);
             return EXCEPTION_CONTINUE_EXECUTION;
         default:
             ios_puts("Please submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ", ios_stderr);
@@ -533,8 +520,10 @@ void darwin_stack_overflow_handler(unw_context_t *uc)
 #define HANDLE_MACH_ERROR(msg, retval) \
     if (retval!=KERN_SUCCESS) { mach_error(msg ":", (retval)); jl_exit(1); }
 
+#ifdef LIBOSXUNWIND
 extern kern_return_t profiler_segv_handler(mach_port_t,mach_port_t,mach_port_t,exception_type_t,exception_data_t,mach_msg_type_number_t);
 extern volatile mach_port_t mach_profiler_thread;
+#endif
 
 //exc_server uses dlsym to find symbol
 DLLEXPORT kern_return_t catch_exception_raise
@@ -552,10 +541,12 @@ DLLEXPORT kern_return_t catch_exception_raise
     kern_return_t ret;
     //memset(&state,0,sizeof(x86_thread_state64_t));
     //memset(&exc_state,0,sizeof(x86_exception_state64_t));
+#ifdef LIBOSXUNWIND
     if (thread == mach_profiler_thread)
     {
         return profiler_segv_handler(exception_port,thread,task,exception,code,code_count);
     }
+#endif
     ret = thread_get_state(thread,x86_EXCEPTION_STATE64,(thread_state_t)&exc_state,&exc_count);
     HANDLE_MACH_ERROR("thread_get_state(1)",ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
@@ -715,31 +706,11 @@ void julia_init(char *imageFile)
         JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
-#if defined(_OS_LINUX_)
-    stack_t ss;
-    ss.ss_flags = 0;
-    ss.ss_size = SIGSTKSZ;
-    ss.ss_sp = signal_stack;
-    if (sigaltstack(&ss, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "sigaltstack: %s\n", strerror(errno));
-        jl_exit(1);
-    }
-
-    struct sigaction act;
-    memset(&act, 0, sizeof(struct sigaction));
-    sigemptyset(&act.sa_mask);
-    act.sa_sigaction = segv_handler;
-    act.sa_flags = SA_ONSTACK | SA_SIGINFO;
-    if (sigaction(SIGSEGV, &act, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
-        jl_exit(1);
-    }
-
     if (signal(SIGPIPE,SIG_IGN) == SIG_ERR) {
         JL_PRINTF(JL_STDERR, "Couldn't set SIGPIPE\n");
         jl_exit(1);
     }
-#elif defined (_OS_DARWIN_)
+#if defined (_OS_DARWIN_)
     kern_return_t ret;
     mach_port_t self = mach_task_self();
     ret = mach_port_allocate(self,MACH_PORT_RIGHT_RECEIVE,&segv_port);
@@ -765,8 +736,27 @@ void julia_init(char *imageFile)
 
     ret = task_set_exception_ports(self,EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
     HANDLE_MACH_ERROR("task_set_exception_ports",ret);
-#endif
-#else
+#else // defined(_OS_DARWIN_)
+    stack_t ss;
+    ss.ss_flags = 0;
+    ss.ss_size = SIGSTKSZ;
+    ss.ss_sp = signal_stack;
+    if (sigaltstack(&ss, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaltstack: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+
+    struct sigaction act;
+    memset(&act, 0, sizeof(struct sigaction));
+    sigemptyset(&act.sa_mask);
+    act.sa_sigaction = segv_handler;
+    act.sa_flags = SA_ONSTACK | SA_SIGINFO;
+    if (sigaction(SIGSEGV, &act, NULL) < 0) {
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
+    }
+#endif // defined(_OS_DARWIN_)
+#else // defined(_OS_WINDOWS_)
     if (signal(SIGFPE, (void (__cdecl *)(int))fpe_handler) == SIG_ERR) {
         JL_PRINTF(JL_STDERR, "Couldn't set SIGFPE\n");
         jl_exit(1);
@@ -854,6 +844,7 @@ void jl_get_builtin_hooks(void)
     jl_root_task->consumers = jl_nothing;
     jl_root_task->donenotify = jl_nothing;
     jl_root_task->exception = jl_nothing;
+    jl_root_task->result = jl_nothing;
 
     jl_char_type    = (jl_datatype_t*)core("Char");
     jl_int8_type    = (jl_datatype_t*)core("Int8");

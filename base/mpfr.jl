@@ -443,18 +443,27 @@ function besselj(n::Integer, x::BigFloat)
 end
 
 function bessely0(x::BigFloat)
+    if x < 0
+        throw(DomainError())
+    end
     z = BigFloat()
     ccall((:mpfr_y0, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
 function bessely1(x::BigFloat)
+    if x < 0
+        throw(DomainError())
+    end
     z = BigFloat()
     ccall((:mpfr_y1, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
 function bessely(n::Integer, x::BigFloat)
+    if x < 0
+        throw(DomainError())
+    end
     z = BigFloat()
     ccall((:mpfr_yn, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, n, &x, ROUNDING_MODE[end])
     return z

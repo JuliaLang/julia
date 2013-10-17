@@ -26,8 +26,22 @@ isequal(x,y) = is(x,y)
 # which is more idiomatic:
 isless(x::Real, y::Real) = x<y
 
+cmp(x,y) = isless(x,y) ? -1 : isless(y,x) ? 1 : 0
+lexcmp(x,y) = cmp(x,y)
+lexless(x,y) = lexcmp(x,y)<0
+
 max(x,y) = y < x ? x : y
 min(x,y) = x < y ? x : y
+
+scalarmax(x,y) = max(x,y)
+scalarmax(x::AbstractArray, y::AbstractArray) = error("max: ordering is not well-defined for arrays")
+scalarmax(x               , y::AbstractArray) = error("max: ordering is not well-defined for arrays")
+scalarmax(x::AbstractArray, y               ) = error("max: ordering is not well-defined for arrays")
+
+scalarmin(x,y) = min(x,y)
+scalarmin(x::AbstractArray, y::AbstractArray) = error("min: ordering is not well-defined for arrays")
+scalarmin(x               , y::AbstractArray) = error("min: ordering is not well-defined for arrays")
+scalarmin(x::AbstractArray, y               ) = error("min: ordering is not well-defined for arrays")
 
 ## definitions providing basic traits of arithmetic operators ##
 
@@ -45,10 +59,14 @@ min(x,y) = x < y ? x : y
 
 for op = (:+, :*, :&, :|, :$, :min, :max)
     @eval begin
-        ($op)(a,b,c) = ($op)(($op)(a,b),c)
-        ($op)(a,b,c,d) = ($op)(($op)(($op)(a,b),c),d)
-        ($op)(a,b,c,d,e) = ($op)(($op)(($op)(($op)(a,b),c),d),e)
+        # note: these definitions must not cause a dispatch loop when +(a,b) is
+        # not defined, and must only try to call 2-argument definitions, so
+        # that defining +(a,b) is sufficient for full functionality.
+        ($op)(a, b, c)        = ($op)(($op)(a,b),c)
         ($op)(a, b, c, xs...) = ($op)(($op)(($op)(a,b),c), xs...)
+        # a further concern is that it's easy for a type like (Int,Int...)
+        # to match many definitions, so we need to keep the number of
+        # definitions down to avoid losing type information.
     end
 end
 

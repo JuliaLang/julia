@@ -338,7 +338,7 @@ for bitstypes or other pointer-free (``isbits``) immutable types.
 Any operation that throws an error is probably currently unimplemented
 and should be posted as a bug so that it can be resolved.
 
-If the pointer of interest is a plan-data array (bitstype or immutable), the
+If the pointer of interest is a plain-data array (bitstype or immutable), the
 function ``pointer_to_array(ptr,dims,[own])`` may be more more useful. The final
 parameter should be true if Julia should "take ownership" of the underlying
 buffer and call ``free(ptr)`` when the returned ``Array`` object is finalized.

@@ -65,7 +65,7 @@ s116[p, p] = reshape(1:9, 3, 3)
 for i = 1:5
     a = sprand(10, 5, 0.5)
     b = sprand(5, 10, 0.1)
-    @test max(abs(a*b - dense(a)*dense(b))) < 100*eps()
+    @test maximum(abs(a*b - dense(a)*dense(b))) < 100*eps()
 end
 
 # reductions
@@ -75,6 +75,10 @@ end
 @test prod(se33)[1] == 0.0
 @test prod(se33, 1) == [0.0 0.0 0.0]
 @test prod(se33, 2) == [0.0 0.0 0.0]'
+
+# spdiagm
+@test full(spdiagm((ones(2), ones(2)), (0, -1), 3, 3)) ==  
+                       [1.0  0.0  0.0; 1.0  1.0  0.0;  0.0  1.0  0.0]
 
 # elimination tree
 ## upper triangle of the pattern test matrix from Figure 4.2 of

@@ -71,7 +71,7 @@ function checkbounds(sz::Int, I::AbstractVector{Bool})
 end
 
 function checkbounds{T<:Integer}(sz::Int, I::Ranges{T})
-    if !isempty(I) && (min(I) < 1 || max(I) > sz)
+    if !isempty(I) && (minimum(I) < 1 || maximum(I) > sz)
         throw(BoundsError())
     end
 end
@@ -518,6 +518,26 @@ end
 slicedim(A::AbstractArray, d::Integer, i) =
     A[[ n==d ? i : (1:size(A,n)) for n in 1:ndims(A) ]...]
 
+function reverse(A::AbstractVector, s=1, n=length(A))
+    B = similar(A)
+    for i = 1:s-1
+        B[i] = A[i]
+    end
+    for i = s:n
+        B[i] = A[n+s-i]
+    end
+    for i = n+1:length(A)
+        B[i] = A[i]
+    end
+    B
+end
+
+function flipdim(A::AbstractVector, d::Integer)
+    d > 0 || error("dimension out of range")
+    d == 1 || return copy(A)
+    reverse(A)
+end
+
 function flipdim(A::AbstractArray, d::Integer)
     nd = ndims(A)
     sd = d > nd ? 1 : size(A, d)
@@ -633,8 +653,26 @@ vcat() = Array(None, 0)
 hcat() = Array(None, 0)
 
 ## cat: special cases
-hcat{T}(X::T...) = T[ X[j] for i=1, j=1:length(X) ]
-vcat{T}(X::T...) = T[ X[i] for i=1:length(X) ]
+hcat{T}(X::T...)         = T[ X[j] for i=1, j=1:length(X) ]
+hcat{T<:Number}(X::T...) = T[ X[j] for i=1, j=1:length(X) ]
+vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
+vcat{T<:Number}(X::T...) = T[ X[i] for i=1:length(X) ]
+
+function vcat(X::Number...)
+    T = None
+    for x in X
+        T = promote_type(T,typeof(x))
+    end
+    hvcat_fill(Array(T,length(X)), X)
+end
+
+function hcat(X::Number...)
+    T = None
+    for x in X
+        T = promote_type(T,typeof(x))
+    end
+    hvcat_fill(Array(T,1,length(X)), X)
+end
 
 function hcat{T}(V::AbstractVector{T}...)
     height = length(V[1])
@@ -717,7 +755,7 @@ function cat(catdim::Integer, X...)
     nargs = length(X)
     dimsX = map((a->isa(a,AbstractArray) ? size(a) : (1,)), X)
     ndimsX = map((a->isa(a,AbstractArray) ? ndims(a) : 1), X)
-    d_max = max(ndimsX)
+    d_max = maximum(ndimsX)
 
     if catdim > d_max + 1
         for i=1:nargs
@@ -785,7 +823,7 @@ function cat_t(catdim::Integer, typeC, A::AbstractArray...)
     nargs = length(A)
     dimsA = map(size, A)
     ndimsA = map(ndims, A)
-    d_max = max(ndimsA)
+    d_max = maximum(ndimsA)
 
     if catdim > d_max + 1
         for i=1:nargs
@@ -907,7 +945,7 @@ end
 
 function hvcat_fill(a, xs)
     k = 1
-    nr, nc = size(a)
+    nr, nc = size(a,1), size(a,2)
     for i=1:nr
         for j=1:nc
             a[i,j] = xs[k]
@@ -947,7 +985,7 @@ function isequal(A::AbstractArray, B::AbstractArray)
     return true
 end
 
-function cmp(A::AbstractArray, B::AbstractArray)
+function lexcmp(A::AbstractArray, B::AbstractArray)
     nA, nB = length(A), length(B)
     for i = 1:min(nA, nB)
         a, b = A[i], B[i]
@@ -957,8 +995,6 @@ function cmp(A::AbstractArray, B::AbstractArray)
     end
     return cmp(nA, nB)
 end
-
-isless(A::AbstractArray, B::AbstractArray) = cmp(A,B)<0
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if size(A) != size(B)
@@ -970,18 +1006,6 @@ function (==)(A::AbstractArray, B::AbstractArray)
         end
     end
     return true
-end
-
-function (!=)(A::AbstractArray, B::AbstractArray)
-    if size(A) != size(B)
-        return true
-    end
-    for i = 1:length(A)
-        if A[i]!=B[i]
-            return true
-        end
-    end
-    return false
 end
 
 _cumsum_type{T<:Number}(v::AbstractArray{T}) = typeof(+zero(T))
@@ -1356,15 +1380,15 @@ reduced_dims0(A, region) = ntuple(ndims(A), i->(size(A,i)==0 ? 0 :
 reducedim(f::Function, A, region, v0) =
     reducedim(f, A, region, v0, similar(A, reduced_dims(A, region)))
 
-max{T}(A::AbstractArray{T}, b::(), region) =
-    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(max,A,region,typemin(T))
-min{T}(A::AbstractArray{T}, b::(), region) =
-    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(min,A,region,typemax(T))
+maximum{T}(A::AbstractArray{T}, region) =
+    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(scalarmax,A,region,typemin(T))
+minimum{T}(A::AbstractArray{T}, region) =
+    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(scalarmin,A,region,typemax(T))
 sum{T}(A::AbstractArray{T}, region)  = reducedim(+,A,region,zero(T))
 prod{T}(A::AbstractArray{T}, region) = reducedim(*,A,region,one(T))
 
-all(A::AbstractArray{Bool}, region) = reducedim(all,A,region,true)
-any(A::AbstractArray{Bool}, region) = reducedim(any,A,region,false)
+all(A::AbstractArray{Bool}, region) = reducedim(&,A,region,true)
+any(A::AbstractArray{Bool}, region) = reducedim(|,A,region,false)
 sum(A::AbstractArray{Bool}, region) = reducedim(+,A,region,0,similar(A,Int,reduced_dims(A,region)))
 sum(A::AbstractArray{Bool}) = sum(A, [1:ndims(A)])[1]
 prod(A::AbstractArray{Bool}) =
@@ -1493,8 +1517,8 @@ function prod{T}(A::AbstractArray{T})
     v
 end
 
-function min{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("min: argument is empty"); end
+function minimum{T<:Real}(A::AbstractArray{T})
+    if isempty(A); error("minimum: argument is empty"); end
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]
@@ -1505,8 +1529,8 @@ function min{T<:Real}(A::AbstractArray{T})
     v
 end
 
-function max{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("max: argument is empty"); end
+function maximum{T<:Real}(A::AbstractArray{T})
+    if isempty(A); error("maximum: argument is empty"); end
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]
@@ -1582,7 +1606,7 @@ end
 
 
 ## 1 argument
-function map_to2(f::Callable, first, dest::AbstractArray, A::AbstractArray)
+function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray)
     dest[1] = first
     for i=2:length(A)
         dest[i] = f(A[i])
@@ -1594,11 +1618,11 @@ function map(f::Callable, A::AbstractArray)
     if isempty(A); return {}; end
     first = f(A[1])
     dest = similar(A, typeof(first))
-    return map_to2(f, first, dest, A)
+    return map_to!(f, first, dest, A)
 end
 
 ## 2 argument
-function map_to2(f::Callable, first, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
+function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
     dest[1] = first
     for i=2:length(A)
         dest[i] = f(A[i], B[i])
@@ -1613,11 +1637,11 @@ function map(f::Callable, A::AbstractArray, B::AbstractArray)
     end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first), shp)
-    return map_to2(f, first, dest, A, B)
+    return map_to!(f, first, dest, A, B)
 end
 
 ## N argument
-function map_to2(f::Callable, first, dest::AbstractArray, As::AbstractArray...)
+function map_to!(f::Callable, first, dest::AbstractArray, As::AbstractArray...)
     n = length(As[1])
     i = 1
     ith = a->a[i]
@@ -1635,5 +1659,5 @@ function map(f::Callable, As::AbstractArray...)
     end
     first = f(map(a->a[1], As)...)
     dest = similar(As[1], typeof(first), shape)
-    return map_to2(f, first, dest, As...)
+    return map_to!(f, first, dest, As...)
 end

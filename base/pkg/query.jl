@@ -43,31 +43,22 @@ end
 typealias PackageState Union(Nothing,VersionNumber) 
 
 function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
-    changes = Array((ByteString,(PackageState,PackageState)),0)
-    removed = Array((ByteString,(PackageState,PackageState)),0)
+    change = Array((ByteString,(PackageState,PackageState)),0)
+    remove = Array((ByteString,(PackageState,PackageState)),0)
 
     for pkg in collect(union(keys(have),keys(want)))
         h, w = haskey(have,pkg), haskey(want,pkg)
         if h && w
             if have[pkg] != want[pkg]
-                push!(changes, (pkg,(have[pkg], want[pkg])))
+                push!(change, (pkg,(have[pkg], want[pkg])))
             end
         elseif h
-            push!(removed, (pkg,(have[pkg],nothing)))
+            push!(remove, (pkg,(have[pkg],nothing)))
         elseif w
-            push!(changes, (pkg,(nothing,want[pkg])))
+            push!(change, (pkg,(nothing,want[pkg])))
         end
     end
-
-    # Sort packages topologically
-    sort!(changes, lt=function(a,b)
-        ((a,vera),(b,verb)) = (a,b)
-        c = in(b,Pkg.Read.alldependencies(a,avail,want,fixed))
-        unnordered = (!c && !in(a,Pkg.Read.alldependencies(b,avail,want,fixed)))
-        unnordered ? a < b : c
-    end)
-
-    append!(changes, removed)
+    append!(sort!(change), sort!(remove))
 end
 
 # Reduce the number of versions by creating equivalence classes, and retaining
@@ -188,7 +179,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         eqclassp = eq_classes[p]
         for cl in classes
             if !isempty(cl)
-                vtop = max(cl)
+                vtop = maximum(cl)
                 push!(prunedp, vtop)
                 @assert !haskey(eqclassp, vtop)
                 eqclassp[vtop] = cl

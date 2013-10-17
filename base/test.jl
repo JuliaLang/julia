@@ -72,7 +72,7 @@ macro test_fails(ex)
 end
 
 function test_approx_eq(va, vb, Eps, astr, bstr)
-    diff = max(abs(va - vb))
+    diff = maximum(abs(va - vb))
     if diff > Eps
         sdiff = string("|", astr, " - ", bstr, "| <= ", Eps)
         error("assertion failed: ", sdiff,
@@ -83,7 +83,7 @@ function test_approx_eq(va, vb, Eps, astr, bstr)
 end
 
 test_approx_eq(va, vb, astr, bstr) =
-    test_approx_eq(va, vb, 10^4*length(va)*eps(max(max(abs(va)), max(abs(vb)))), astr, bstr)
+    test_approx_eq(va, vb, 10^4*length(va)*eps(max(maximum(abs(va)), maximum(abs(vb)))), astr, bstr)
 
 macro test_approx_eq_eps(a, b, c)
     :(test_approx_eq($(esc(a)), $(esc(b)), $(esc(c)), $(string(a)), $(string(b))))

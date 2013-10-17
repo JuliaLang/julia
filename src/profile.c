@@ -82,7 +82,7 @@ DLLEXPORT void profile_stop_timer(void) {
 }
 #else
 #include <signal.h>
-#if defined (__APPLE__) 
+#ifdef LIBOSXUNWIND
 //
 // OS X
 //
@@ -105,8 +105,8 @@ static mach_port_t profile_port = 0;
 volatile static int running = 0;
 volatile static int forceDwarf = -2;
 volatile mach_port_t mach_profiler_thread = 0;
-mach_timespec_t timerprof;
 static unw_context_t profiler_uc;
+mach_timespec_t timerprof;
 
 kern_return_t profiler_segv_handler
                 (mach_port_t                          exception_port,
@@ -121,7 +121,7 @@ kern_return_t profiler_segv_handler
 
     // Not currently unwinding. Raise regular segfault
     if (forceDwarf == -2)
-        return KERN_INVALID_ARGUMENT; 
+        return KERN_INVALID_ARGUMENT;
 
     if (forceDwarf == 0)
         forceDwarf = 1;
@@ -182,17 +182,17 @@ void * mach_profile_listener(void *arg)
             memcpy(&uc,&state,sizeof(x86_thread_state64_t));
 
             /*
-             *  Unfortunately compact unwind info is incorrectly generated for quite a number of  
-             *  libraries by quite a large number of compilers. We can fall back to DWARF unwind info 
+             *  Unfortunately compact unwind info is incorrectly generated for quite a number of
+             *  libraries by quite a large number of compilers. We can fall back to DWARF unwind info
              *  in some cases, but in quite a number of cases (especially libraries not compiled in debug
              *  mode, only the compact unwind info may be available). Even more unfortunately, there is no
              *  way to detect such bogus compact unwind info (other than noticing the resulting segfault).
              *  What we do here is ugly, but necessary until the compact unwind info situation improves.
              *  We try to use the compact unwind info and if that results in a segfault, we retry with DWARF info.
              *  Note that in a small number of cases this may result in bogus stack traces, but at least the topmost
-             *  entry will always be correct, and the number of cases in which this is an issue is rather small. 
+             *  entry will always be correct, and the number of cases in which this is an issue is rather small.
              *  Other than that, this implementation is not incorrect as the other thread is paused while we are profiling
-             *  and during stack unwinding we only ever read memory, but never write it. 
+             *  and during stack unwinding we only ever read memory, but never write it.
              */
 
             forceDwarf = 0;
@@ -273,9 +273,9 @@ DLLEXPORT void profile_stop_timer(void)
     running = 0;
 }
 
-#elif defined(__FreeBSD___)
+#elif defined(__FreeBSD__) || defined(__APPLE__)
 //
-// BSD
+// BSD / Apple-System
 //
 #include <sys/time.h>
 struct itimerval timerprof;

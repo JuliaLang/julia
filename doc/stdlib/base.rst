@@ -132,6 +132,15 @@ All Objects
 
    Test whether ``x`` is less than ``y``. Provides a total order consistent with ``isequal``. Values that are normally unordered, such as ``NaN``, are ordered in an arbitrary but consistent fashion. This is the default comparison used by ``sort``. Non-numeric types that can be ordered should implement this function. Numeric types only need to implement it if they have special values such as ``NaN``.
 
+.. function:: lexcmp(x, y)
+
+   Compare ``x`` and ``y`` lexicographically and return -1, 0, or 1 depending on whether ``x`` is less than, equal to, or greater than ``y``, respectively.
+   This function should be defined for lexicographically comparable types, and ``lexless`` will call ``lexcmp`` by default.
+
+.. function:: lexless(x, y)
+
+   Determine whether ``x`` is lexicographically less than ``y``.
+
 .. function:: typeof(x)
 
    Get the concrete type of ``x``.
@@ -455,13 +464,21 @@ Iterable Collections
    need a particular associativity, e.g. left-to-right, you should write
    your own loop.
 
-.. function:: max(itr)
+.. function:: maximum(itr)
 
    Returns the largest element in a collection
 
-.. function:: min(itr)
+.. function:: maximum(A, dims)
+
+   Compute the maximum value of an array over the given dimensions
+
+.. function:: minimum(itr)
 
    Returns the smallest element in a collection
+
+.. function:: minimum(A, dims)
+
+   Compute the minimum value of an array over the given dimensions
 
 .. function:: indmax(itr) -> Integer
 
@@ -483,6 +500,10 @@ Iterable Collections
 
    Returns the sum of all elements in a collection
 
+.. function:: sum(A, dims)
+
+   Sum elements of an array over the given dimensions.
+
 .. function:: sum(f, itr)
 
    Sum the results of calling function ``f`` on each element of ``itr``.
@@ -491,13 +512,25 @@ Iterable Collections
 
    Returns the product of all elements of a collection
 
+.. function:: prod(A, dims)
+
+   Multiply elements of an array over the given dimensions.
+
 .. function:: any(itr) -> Bool
 
    Test whether any elements of a boolean collection are true
 
+.. function:: any(A, dims)
+
+   Test whether any values along the given dimensions of an array are true.
+
 .. function:: all(itr) -> Bool
 
    Test whether all elements of a boolean collection are true
+
+.. function:: all(A, dims)
+
+   Test whether all values along the given dimensions of an array are true.
 
 .. function:: count(p, itr) -> Integer
 
@@ -862,7 +895,11 @@ Strings
 
 .. function:: search(string, chars, [start])
 
-   Search for the first occurance of the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``. The return value is ``0:-1`` if there is no match.
+   Search for the first occurance of the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``:
+   
+   `search(string, "substring")` = `start:end` such that ``string[start:end] == "substring"``, or `0:-1` if unmatched.
+   
+   `search(string, 'c')`         = `index` such that ``string[index] == 'c'``, or `0` if unmatched.
 
 .. function:: rsearch(string, chars, [start])
 
@@ -870,21 +907,16 @@ Strings
 
 .. function:: index(string, chars, [start])
 
-    Similar to ``search``, but return only the start index at which the characters were found, or 0 if they were not.
+   Similar to ``search``, but return only the start index at which the characters were found, or 0 if they were not.
 
 .. function:: rindex(string, chars, [start])
 
-    Similar to ``rsearch``, but return only the start index at which the characters were found, or 0 if they were not.
+   Similar to ``rsearch``, but return only the start index at which the characters were found, or 0 if they were not.
 
-    Similar to ``search``, but return only the start index at which the
-    characters were found, or 0 if they were not.
+   Similar to ``search``, but return only the start index at which the
+   characters were found, or 0 if they were not.
 
    Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``. The return value is ``0:-1`` if there is no match.
-
-.. function:: rsearch(string, chars, [start])
-
-   Like ``search``, but starts at the end and moves towards the beginning of
-   ``string``.
 
 .. function:: contains(haystack, needle)
 
@@ -1191,7 +1223,9 @@ I/O
    Tests whether an I/O stream is at end-of-file. If the stream is not yet
    exhausted, this function will block to wait for more data if necessary, and
    then return ``false``. Therefore it is always safe to read one byte after
-   seeing ``eof`` return ``false``.
+   seeing ``eof`` return ``false``. ``eof`` will return ``false`` as long
+   as buffered data is still available, even if the remote end of a
+   connection is closed.
 
 .. function:: isreadonly(stream)
 
@@ -1200,6 +1234,9 @@ I/O
 .. function:: isopen(stream)
 
    Determine whether a stream is open (i.e. has not been closed yet).
+   If the connection has been closed remotely (in case of e.g. a socket),
+   ``isopen`` will return ``false`` even though buffered data may still be
+   available. Use ``eof`` to check if necessary.
 
 .. function:: ntoh(x)
 
@@ -1424,7 +1461,15 @@ Network I/O
 
 .. function:: parseip(addr)
 
-   Parse a string specifying an IPv4 or IPv6 ip address. 
+   Parse a string specifying an IPv4 or IPv6 ip address.
+   
+.. function:: IPv4(host::Integer) -> IPv4
+
+   Returns IPv4 object from ip address formatted as Integer
+
+.. function:: IPv6(host::Integer) -> IPv6
+
+   Returns IPv6 object from ip address formatted as Integer  
 
 .. function:: nb_available(stream)
 
@@ -2062,7 +2107,7 @@ Mathematical Operators
 
 .. function:: cmp(x,y)
 
-   Return -1, 0, or 1 depending on whether ``x<y``, ``x==y``, or ``x>y``, respectively
+   Return -1, 0, or 1 depending on whether ``x<y``, ``x==y``, or ``x>y``, respectively.
 
 .. _~:
 .. function:: ~(x)
@@ -2333,7 +2378,7 @@ Mathematical Functions
 
 .. function:: atanh(x)
 
-   Compute the inverse hyperbolic cotangent of ``x``
+   Compute the inverse hyperbolic tangent of ``x``
 
 .. function:: asech(x)
 
@@ -2450,13 +2495,13 @@ Mathematical Functions
 
    Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``.
 
-.. function:: min(x, y)
+.. function:: min(x, y, ...)
 
-   Return the minimum of ``x`` and ``y``
+   Return the minimum of the arguments. Operates elementwise over arrays.
 
-.. function:: max(x, y)
+.. function:: max(x, y, ...)
 
-   Return the maximum of ``x`` and ``y``
+   Return the maximum of the arguments. Operates elementwise over arrays.
 
 .. function:: clamp(x, lo, hi)
 

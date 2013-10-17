@@ -60,7 +60,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
     vers = Array((ByteString,VersionNumber,VersionNumber), 0)
     for (p,d) in deps, vn in keys(d)
         lvns = VersionNumber[filter(vn2->(vn2>vn), keys(d))...]
-        nvn = isempty(lvns) ? typemax(VersionNumber) : min(lvns)
+        nvn = isempty(lvns) ? typemax(VersionNumber) : minimum(lvns)
         push!(vers, (p,vn,nvn))
     end
     sort!(vers, by=pvn->(-ndeps[pvn[1]][pvn[2]]))

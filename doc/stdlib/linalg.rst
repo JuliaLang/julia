@@ -7,7 +7,7 @@ Linear Algebra
 
 .. currentmodule:: Base
 
-Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http:://www.suitesparse.com/>`_.
+Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http://www.suitesparse.com/>`_.
 
 .. function:: *(A, B)
    :noindex:
@@ -378,7 +378,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    The conjugate transpose operator (``'``).
 
-.. function:: eigs(A; nev=6, which="LM", tol=0.0, maxiter=1000, sigma=0, ritzvec=true, op_part=:real,v0=zeros((0,))) -> (d,[v,]niter,nmult,resid)
+.. function:: eigs(A; nev=6, which="LM", tol=0.0, maxiter=1000, sigma=0, ritzvec=true, op_part=:real,v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
    ``eigs`` computes eigenvalues ``d`` of A using Arnoldi factorization. The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
@@ -389,7 +389,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
     * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
     * ``op_part``: which part of linear operator to use for real A (:real, :imag)
     * ``v0``: starting vector from which to start the Arnoldi iteration
-   ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.
+   ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.
     
 
 .. function:: svds(A; nev=6, which="LA", tol=0.0, maxiter=1000, ritzvec=true)

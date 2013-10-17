@@ -569,16 +569,19 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
     stk.AddrFrame.Mode = AddrModeFlat;
     
     size_t n = 0;
+    intptr_t lastsp = stk.AddrStack.Offset;
     while (n < maxsize) {
         in_stackwalk = 1;
         BOOL result = StackWalk64(MachineType, GetCurrentProcess(), hMainThread,
             &stk, Context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL);
         in_stackwalk = 0;
-        data[n++] = (ptrint_t)stk.AddrPC.Offset;
-        if (stk.AddrReturn.Offset == 0)
+        data[n++] = (intptr_t)stk.AddrPC.Offset;
+        intptr_t sp = (intptr_t)stk.AddrStack.Offset;
+        if (!result || sp == 0 || 
+            (_stack_grows_up ? sp < lastsp : sp > lastsp) ||
+            stk.AddrReturn.Offset == 0)
             break;
-        if (!result)
-            break;
+        lastsp = sp;
     }
     return n;
 }
@@ -607,7 +610,7 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, unw_context_t
     } while (unw_step(&cursor) > 0);
     return n;
 }
-#ifdef _OS_DARWIN_
+#ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, unw_context_t *uc)
 {
     unw_cursor_t cursor;
@@ -778,7 +781,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->done = 0;
     t->runnable = 1;
     t->start = start;
-    t->result = NULL;
+    t->result = jl_nothing;
     t->donenotify = jl_nothing;
     t->exception = jl_nothing;
     // there is no active exception handler available on this stack yet
@@ -872,7 +875,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_task_type = jl_new_datatype(jl_symbol("Task"),
                                    jl_any_type,
                                    jl_null,
-                                   jl_tuple(9,
+                                   jl_tuple(10,
                                             jl_symbol("parent"),
                                             jl_symbol("last"),
                                             jl_symbol("storage"),
@@ -881,13 +884,14 @@ void jl_init_tasks(void *stack, size_t ssize)
                                             jl_symbol("runnable"),
                                             jl_symbol("result"),
                                             jl_symbol("donenotify"),
-                                            jl_symbol("exception")),
-                                   jl_tuple(9,
+                                            jl_symbol("exception"),
+                                            jl_symbol("code")),
+                                   jl_tuple(10,
                                             jl_any_type, jl_any_type,
                                             jl_any_type, jl_any_type,
                                             jl_bool_type, jl_bool_type,
                                             jl_any_type, jl_any_type,
-                                            jl_any_type),
+                                            jl_any_type, jl_function_type),
                                    0, 1);
     jl_tupleset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
     jl_task_type->fptr = jl_f_task;
