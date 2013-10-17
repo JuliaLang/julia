@@ -16,7 +16,7 @@ The ``Pkg.status()`` function prints out a summary of the state of packages you 
 Initially, you'll have no packages installed::
 
     julia> Pkg.status()
-    INFO: Initializing package repository /home/USERNAME/.julia
+    INFO: Initializing package repository /Users/stefan/.julia
     INFO: Cloning METADATA from git://github.com/JuliaLang/METADATA.jl
     No packages installed.
 
@@ -273,24 +273,25 @@ if you feel like cleaning them up, you can go into the repo and delete those bra
 Package Development
 -------------------
 
-Julia's package manager is designed so that when you have package installed, you are already in a position to look at its source code and full development history.
+Julia's package manager is designed so that when you have a package installed, you are already in a position to look at its source code and full development history.
 You are able to make changes to it, commit them, and easily contribute fixes upstream.
 Similarly, the system is designed so that if you want to create a new package, the simplest way to do so is within the infrastructure provided by the package manager.
 
 Although it isn't necessary to use `GitHub <https://github.com/>`_ to create or publish Julia packages, most Julia packages as of writing this are hosted on GitHub and the package manager knows how to format origin URLs correctly and otherwise work with the service smoothly.
-Accordingly, we recommend that you create a `free account <https://github.com/signup/free>`_ and then do::
+We recommend that you create a `free account <https://github.com/signup/free>`_ and then do::
 
     $ git config --global github.user USERNAME
 
-so that the package manager knows your GitHub user name and can configure things appropriately.
-In the future, we will make this extensible and support other common git hosting options like `BitBucket <https://bitbucket.org>`_ and allow developers to choose their prefered hosting service.
+where ``USERNAME`` is your actual GitHub user name.
+Once you do this, the package manager knows your GitHub user name and can configure things accordingly.
+In the future, we will make this system extensible and support other common git hosting options like `BitBucket <https://bitbucket.org>`_ and allow developers to choose their prefered hosting service.
 
 Suppose you want to create a new Julia package called ``FooBar``.
-To get started, do ``Pkg.generate(pkg,license)`` where ``pkg`` is the new package name and ``license`` is the name of a license::
+To get started, do ``Pkg.generate(pkg,license)`` where ``pkg`` is the new package name and ``license`` is the name of a license that the package generator knows about::
 
     julia> Pkg.generate("FooBar","MIT")
-    INFO: Initializing FooBar repo: /home/USERNAME/.julia/FooBar
-    INFO: Origin: git://github.com/USERNAME/FooBar.jl.git
+    INFO: Initializing FooBar repo: /Users/stefan/.julia/FooBar
+    INFO: Origin: git://github.com/StefanKarpinski/FooBar.jl.git
     INFO: Generating LICENSE.md
     INFO: Generating README.md
     INFO: Generating src/FooBar.jl
@@ -326,14 +327,27 @@ If you want to use a different license, you can ask us to add it to the package 
 
 If you created a GitHub account and configured git to know about it, ``Pkg.generate`` will set an appropriate origin URL for you.
 It will also automatically generate a ``.travis.yml`` file for using the `Travis <https://travis-ci.org>`_ automated testing service.
-You will have to enable testing on the Travis website for your package, but once you've done that, your stub package should already have working tests as soon as you push it to GitHub after that.
-All the default testing does is verify that ``using FooBar`` in Julia works.
+You will have to enable testing on the Travis website for your package repository, but once you've done that, it will already have working tests.
+Of course, all the default testing does is verify that ``using FooBar`` in Julia works.
 
-Once you've you're happy about how  ``FooBar`` is working, you may want to announce it to people so they can try it out.
+Once you've made some commits and you're happy with how ``FooBar`` is working, you may want to get some other people to try it out.
 First you'll need to create the remote repository and push your code to it;
 we don't yet automatically do this for you, but we will in the future and it's not too hard to figure out [3]_.
-Once you've done this, letting people try out your code is as simple as sending them the URL of the published repo – in this case ``git://github.com/USERNAME/FooBar.jl.git``, where ``USERNAME`` is your GitHub user name.
-They can use ``Pkg.clone`` to install the package and try it out.
+Once you've done this, letting people try out your code is as simple as sending them the URL of the published repo – in this case::
+
+    git://github.com/StefanKarpinski/FooBar.jl.git
+
+For your package, it will be your GitHub user name and the name of your package, but you get the idea.
+People you send this URL to can use ``Pkg.clone`` to install the package and try it out::
+
+    julia> Pkg.clone("git://github.com/StefanKarpinski/FooBar.jl.git")
+    INFO: Cloning FooBar from git://github.com/StefanKarpinski/FooBar.jl.git
+    Cloning into 'FooBar'...
+    remote: Counting objects: 22, done.
+    remote: Compressing objects: 100% (12/12), done.
+    remote: Total 22 (delta 7), reused 21 (delta 6)
+    Receiving objects: 100% (22/22), done.
+    Resolving deltas: 100% (7/7), done.
 
 Once you've decided that ``FooBar`` is ready to be registered as an official package, you can add it to your local copy of ``METADATA`` using ``Pkg.register``::
 
@@ -359,17 +373,18 @@ This creates a commit in the ``~/.julia/METADATA`` repo::
     @@ -0,0 +1 @@
     +git://github.com/StefanKarpinski/FooBar.jl.git
 
-This commit is only locally visible, however – in order to make it visible to the world, you need to merger them upstream into the offical ``METADATA`` repo.
+This commit is only locally visible, however.
+In order to make it visible to the world, you need to merge your local ``METADATA`` upstream into the offical repo.
 If you have push access to that repository (which we give to all package maintainters), then you can do so easily with the ``Pkg.publish()`` command, which pulishes your local metadata changes.
-If you don't have push access to ``METADATA``, you'll have to make a pull request on GitHub, which is `not difficult <https://help.github.com/articles/creating-a-pull-request>`_.
+If you don't have push access to ``METADATA``, you'll have to make a pull request on GitHub, but is `not difficult <https://help.github.com/articles/creating-a-pull-request>`_.
 
 Once the package URL for ``FooBar`` is registered in the official ``METADATA`` repo, people know where clone the package from, but there still aren't any registered versions available.
 This means that ``Pkg.add("FooBar")`` won't work yet since it only installs official versions.
-People can, however, clone the package with ``Pkg.clone("FooBar")`` without having to specify a URL for it.
+People can, however, clone the package with just ``Pkg.clone("FooBar")`` without having to specify a URL for it.
 Moreover, when they run ``Pkg.update()``, they will get the latest version of ``FooBar`` that you've pushed to the repo.
 This is a good way to have people test out your packages as you work on them, before they're ready for an official release.
 
-Once you are ready to make an official version your package, you can tag and register an official version using the ``Pkg.tag`` command::
+Once you are ready to make an official version your package, you can tag and register it with the ``Pkg.tag`` command::
 
     julia> Pkg.tag("FooBar")
     INFO: Tagging FooBar v0.0.0
@@ -397,20 +412,21 @@ It also creates a new version entry in your local ``METADATA`` repo for ``FooBar
     @@ -0,0 +1 @@
     +84b8e266dae6de30ab9703150b3bf771ec7b6285
 
-Again, these changes to ``METADATA`` aren't available to anyone else until they've been included upstream.
-Again, if you have push access to the official ``METADATA`` repo, you can use the ``Pkg.publish()`` command, which first makes sure that individual package repos have been tagged, pushes them if they haven't already been, and then pushes ``METADATA`` to the origin.
-If you don't have push access to ``METADATA``, you'll have to open a pull request for the last bit [4]_.
+The ``Pkg.tag`` command takes an optional second argument that is either an explicit version number object like ``v"0.0.1"`` or one of the symbols ``:patch``, ``:minor`` or ``:major``.
+These increment the patch, minor or major version number of your package intelligently.
 
-If there is a ``REQUIRE`` file in your package repo, then it will be copied into the appropriate spot in ``METADATA`` when you tag a version.
-Package developers should make sure that the ``REQUIRE`` file in their packages correctly reflect the requirements of their package, which will automatically flow into the official metadata.
-If they need to fix the registered requirements of an already-published package version, they can do so just by editing the metadata for that version, which will still have the same commit hash – remember, the hash associated with a version is permanent.
+These changes to ``METADATA`` aren't available to anyone else until they've been included upstream.
+If you have push access to the official ``METADATA`` repo, you can use the ``Pkg.publish()`` command, which first makes sure that individual package repos have been tagged, pushes them if they haven't already been, and then pushes ``METADATA`` to the origin.
+If you don't have push access to ``METADATA``, you'll have to open a pull request for the last bit, although we're planning on automatically opening pull requests for you in the future.
+
+If there is a ``REQUIRE`` file in your package repo, it will be copied into the appropriate spot in ``METADATA`` when you tag a version.
+Package developers should make sure that the ``REQUIRE`` file in their package correctly reflects the requirements of their package, which will automatically flow into the official metadata if you're using ``Pkg.tag``.
+If you need to fix the registered requirements of an already-published package version, you can do so just by editing the metadata for that version, which will still have the same commit hash – the hash associated with a version is permanent.
 Since the commit hash stays the same, the contents of the ``REQUIRE`` file that will be checked out in the repo will **not** match the requirements in ``METADATA`` after such a change;
 this is unavoidable.
-When you fix the requirements in ``METADATA`` for a previous version of a package, you should also fix the ``REQUIRE`` file in the current version of the package.
+When you fix the requirements in ``METADATA`` for a previous version of a package, however, you should also fix the ``REQUIRE`` file in the current version of the package.
 
 .. [3] Installing and using GitHub's `"hub" tool <https://github.com/github/hub>`_ is highly recommended. It allows you to do things like run ``hub create`` in the package repo and have it automatically created via GitHub's API.
-
-.. [4] In the future, ``Pkg`` will automatically create pull requests when you don't have push permissions, but that feature has not yet been implemented.
 
 Requirements
 ------------
@@ -419,16 +435,16 @@ The ``~/.julia/REQUIRE`` file and ``REQUIRE`` files inside of packages use a sim
 Here's how these files are parsed and interpreted.
 Everything after a ``#`` mark is stripped from each line as a comment.
 If nothing but whitespace is left, the line is ignored;
-if there non-whitespace remains, it is a requirement and the line is split on whitespace into words.
-The simplest possible requirement is just the name of a package on a line by itself::
+if there are non-whitespace characters remaining, the line is a requirement and the is split on whitespace into words.
+The simplest possible requirement is just the name of a package name on a line by itself::
 
     Distributions
 
-The name of a package can, however, be followed by one or more version numbers.
-These indicate intervals of versions of the package, which will satisfy the requirement.
-One version opens an interval, the next closes it, the next opens a new interval, etc.
-If an even number of version numbers are given, the last one is the largest version that will satisfy;
-if an odd number of version numbers are given, then arbitrarily large versions will do.
+This requirement is satisfied by any version of the ``Distributions`` package.
+The package name can be followed by zero or more version numbers in ascending order, indicating acceptable intervals of versions of that package.
+One version opens an interval, while the next closes it, and the next opens a new interval, and so on;
+if an odd number of version numbers are given, then arbitrarily large versions will satisfy;
+if an even number of version numbers are given, the last one is an upper limit on acceptable version numbers.
 For example, the line::
 
     Distributions 0.1
@@ -443,7 +459,7 @@ If you want to indicate that any ``1.x`` version will do, you will want to write
 
     Distributions 0.1 0.2-
 
-The ``0.2-`` "pseudo-version" is less than all real version numbers that start with ``0.2``
+The ``0.2-`` "pseudo-version" is less than all real version numbers that start with ``0.2``.
 If you want to start accepting versions after ``0.2.7``, you can write::
 
     Distributions 0.1 0.2- 0.2.7
@@ -469,4 +485,4 @@ Examples::
     @!windows
     @unix @!osx
 
-The first condition applies to any system but Windows and the second condition applies to any UNIX besides OS X.
+The first condition applies to any system but Windows and the second condition applies to any UNIX system besides OS X.
