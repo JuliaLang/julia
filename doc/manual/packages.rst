@@ -274,17 +274,24 @@ Package Development
 -------------------
 
 Julia's package manager is designed so that when you have a package installed, you are already in a position to look at its source code and full development history.
-You are able to make changes to it, commit them, and easily contribute fixes upstream.
+You are also able to make changes to packages, commit them using git, and easily contribute fixes and enhancements upstream.
 Similarly, the system is designed so that if you want to create a new package, the simplest way to do so is within the infrastructure provided by the package manager.
 
-Although it isn't necessary to use `GitHub <https://github.com/>`_ to create or publish Julia packages, most Julia packages as of writing this are hosted on GitHub and the package manager knows how to format origin URLs correctly and otherwise work with the service smoothly.
-We recommend that you create a `free account <https://github.com/signup/free>`_ and then do::
+Since packages are git repositories, before doing any package development you should setup the following standard global git configuration settings::
 
-    $ git config --global github.user USERNAME
+    $ git config --global user.name "FULL NAME"
+    $ git config --global user.email "EMAIL"
+
+where ``FULL NAME`` is your actual full name (spaces are allowed between the double quotes) and ``EMAIL`` is your actual email address.
+Although it isn't necessary to use `GitHub <https://github.com/>`_ to create or publish Julia packages, most Julia packages as of writing this are hosted on GitHub and the package manager knows how to format origin URLs correctly and otherwise work with the service smoothly.
+We recommend that you create a `free account <https://github.com/signup/free>`_ on GitHub and then do::
+
+    $ git config --global github.user "USERNAME"
 
 where ``USERNAME`` is your actual GitHub user name.
 Once you do this, the package manager knows your GitHub user name and can configure things accordingly.
-In the future, we will make this system extensible and support other common git hosting options like `BitBucket <https://bitbucket.org>`_ and allow developers to choose their prefered hosting service.
+You should also `upload <https://github.com/settings/ssh>`_ your public SSH key to GitHub and set up an `SSH agent <http://linux.die.net/man/1/ssh-agent>`_ on your development machine so that you can push changes with minimal hassle.
+In the future, we will make this system extensible and support other common git hosting options like `BitBucket <https://bitbucket.org>`_ and allow developers to choose their favorite.
 
 Suppose you want to create a new Julia package called ``FooBar``.
 To get started, do ``Pkg.generate(pkg,license)`` where ``pkg`` is the new package name and ``license`` is the name of a license that the package generator knows about::
