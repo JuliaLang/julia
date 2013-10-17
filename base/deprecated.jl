@@ -5,16 +5,17 @@ macro deprecate(old,new)
         Expr(:toplevel,
             Expr(:export,esc(old)),
             :(function $(esc(old))(args...)
-                  warn_once(string($oldname," is deprecated, use ",$newname," instead."))
+                  warn_once(string($oldname," is deprecated, use ",$newname," instead."), backtrace(), symbol($old))
                   $(esc(new))(args...)
               end))
     elseif isa(old,Expr) && old.head == :call
         oldcall = sprint(io->show_unquoted(io,old))
         newcall = sprint(io->show_unquoted(io,new))
+        funcsym = old.args[1]
         Expr(:toplevel,
             Expr(:export,esc(old.args[1])),
             :($(esc(old)) = begin
-                  warn_once(string($oldcall," is deprecated, use ",$newcall," instead."))
+                  warn_once(string($oldcall," is deprecated, use ",$newcall," instead."), backtrace(), symbol($funcsym))
                   $(esc(new))
               end))
     else

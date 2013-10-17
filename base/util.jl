@@ -282,6 +282,30 @@ function warn_once(msg::String...)
     warn(msg)
 end
 
+function warn_once(msg::String, bt::Array{Ptr{None},1}, funcsym::Symbol)
+    # Identify the calling line
+    i = 1
+    while i <= length(bt)
+        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Int32), bt[i], 0)
+        i += 1
+        if lkup === ()
+            continue
+        end
+        fname, file, line = lkup
+        if fname == funcsym
+            break
+        end
+    end
+    if i <= length(bt)
+        caller = bt[i]
+        haskey(have_warned, caller) && return
+        have_warned[caller] = true
+    end
+    warn(msg)
+    show_backtrace(STDOUT, bt)
+    println()
+end
+
 # BLAS utility routines
 function blas_vendor()
     try
