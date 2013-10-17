@@ -126,3 +126,12 @@ end
 @test test4538_2() == 1
 @test_throws test4538_2(2)
 @test test4538_2(x=2) == 2
+
+f4538_3(;x=1) = x
+macro TEST4538_3()
+    quote
+        x = 2
+        f4538_3(x=3)
+    end
+end
+@test (@TEST4538_3) == 3
