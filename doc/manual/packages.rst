@@ -46,10 +46,10 @@ This means that you tell it what you want and it figures out what versions to in
 So rather than installing a package, you just add it to the list of requirements and then "resolve" what needs to be installed.
 In particular, this means that if some package had been installed because it was needed by a previous version of something you wanted, but a newer version doesn't have that requirement anymore, updating can actually automatically remove packages.
 
-Your package requirements are in the file ``.julia/REQUIRE``.
-You can edit this file by hand and then call ``Pkg.resolve()`` to install, upgrade or remove packages to optimally satisfy the requirements, but most of the time, you will manipulate this file using the ``Pkg.add`` and ``Pkg.rm`` commands, which add or remove a single requirement to ``REQUIRE``, calling ``Pkg.resolve()`` afterwards automatically for you, so we'll start with those.
+Your package requirements are in the file ``~/.julia/REQUIRE``.
+You can edit this file by hand and then call ``Pkg.resolve()`` to install, upgrade or remove packages to optimally satisfy the requirements, but most of the time, you will manipulate this file using the ``Pkg.add`` and ``Pkg.rm`` commands, which add or remove a single requirement to ``REQUIRE`` and call ``Pkg.resolve()`` afterwards automatically for you, so we'll start with those.
 
-You can add a package to the list of requirements with the ``Pkg.add`` function, and the package and all the uninstalled pacakges that it depends on will be installed::
+You can add a package to the list of requirements with the ``Pkg.add`` function, and the package and all the pacakges that it depends on will be installed::
 
     julia> Pkg.status()
     No packages installed.
@@ -70,12 +70,12 @@ You can add a package to the list of requirements with the ``Pkg.add`` function,
      - NumericExtensions             0.2.17
      - Stats                         0.2.6
 
-What this is doing is adding ``Distributions`` to your ``~/.julia/REQUIRE`` file::
+What this is doing is first adding ``Distributions`` to your ``~/.julia/REQUIRE`` file::
 
     $ cat ~/.julia/REQUIRE
     Distributions
 
-It also runs ``Pkg.resolve()`` using these new requirements, which leads to the conclusion that the ``Distributions`` package is should be installed since it is required but not installed.
+It then runs ``Pkg.resolve()`` using these new requirements, which leads to the conclusion that the ``Distributions`` package is should be installed since it is required but not installed.
 As stated before, you can accomplish the same thing by editing your ``~/.julia/REQUIRE`` file by hand and then running ``Pkg.resolve()`` yourself::
 
     $ echo UTF16 >> ~/.julia/REQUIRE
