@@ -223,7 +223,7 @@ function in(x, itr)
 end
 
 function contains(itr, x)
-    warn_once("contains(collection, item) is deprecated, use in(item, collection) instead")
+    depwarn("contains(collection, item) is deprecated, use in(item, collection) instead", :contains)
     in(x, itr)
 end
 
