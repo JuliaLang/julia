@@ -75,7 +75,7 @@ What this is doing is adding ``Distributions`` to your ``~/.julia/REQUIRE`` file
     $ cat ~/.julia/REQUIRE
     Distributions
 
-It also runs ``Pkg.resolve()`` using these new requirements, which leads to the conclusion that the ``Distributions`` package is should be installed since it is required but not installed.
+It also runs ``Pkg.resolve()`` using these new requirements, which leads to the conclusion that the ``Distributions`` package should be installed since it is required but not installed.
 As stated before, you can accomplish the same thing by editing your ``~/.julia/REQUIRE`` file by hand and then running ``Pkg.resolve()`` yourself::
 
     $ echo UTF16 >> ~/.julia/REQUIRE
