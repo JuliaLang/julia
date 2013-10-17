@@ -170,8 +170,8 @@ A package is considered fixed if it is one of the following:
 If any of these are the case, the package manager cannot freely change the installed version of the package, so its requirements must be satisfied by whatever other package versions it picks.
 The combination of top-level requirements in ``~/.julia/REQUIRE`` and the requiremenst of fixed packages are used to determine what should be installed.
 
-Checkout, Pin, and Release
---------------------------
+Checkout, Pin and Release
+-------------------------
 
 You may want to use the ``master`` version of a package rather than one of its registered versions.
 There might be fixes or functionality on master that you need that aren't yet published in any regsitered versions, or you may be a developer of the package and need to make changes on ``master`` or some other development branch.
@@ -274,8 +274,8 @@ Package Development
 -------------------
 
 Julia's package manager is designed so that when you have package installed, you are already in a position to look at its source code and full development history.
-You are already in a position to modify a package and easily contribute fixes upstream.
-Similarly, the system is designed so that if you want to create a new package, the easiest way to do so is within the infrastructure provided by the package manager.
+You are able to make changes to it, commit them, and easily contribute fixes upstream.
+Similarly, the system is designed so that if you want to create a new package, the simplest way to do so is within the infrastructure provided by the package manager.
 
 Although it isn't necessary to use `GitHub <https://github.com/>`_ to create or publish Julia packages, most Julia packages as of writing this are hosted on GitHub and the package manager knows how to format origin URLs correctly and otherwise work with the service smoothly.
 Accordingly, we recommend that you create a `free account <https://github.com/signup/free>`_ and then do::
