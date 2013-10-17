@@ -76,6 +76,10 @@ end
 @test prod(se33, 1) == [0.0 0.0 0.0]
 @test prod(se33, 2) == [0.0 0.0 0.0]'
 
+# spdiagm
+@test full(spdiagm((ones(2), ones(2)), (0, -1), 3, 3)) ==  
+                       [1.0  0.0  0.0; 1.0  1.0  0.0;  0.0  1.0  0.0]
+
 # elimination tree
 ## upper triangle of the pattern test matrix from Figure 4.2 of
 ## "Direct Methods for Sparse Linear Systems" by Tim Davis, SIAM, 2006
