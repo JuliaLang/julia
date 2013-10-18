@@ -120,7 +120,17 @@ normpath(a::String, b::String...) = normpath(joinpath(a,b...))
 abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
 abspath(a::String, b::String...) = abspath(joinpath(a,b...))
 
-function realpath(path::String)
+@windows_only function realpath(path::String)
+    buflength = length(path)+1
+    buf = zeros(Uint8,buflength)
+    p = ccall((:GetFullPathNameA, "Kernel32"), stdcall, 
+        Uint32, (Ptr{Uint8}, Uint32, Ptr{Uint8}, Ptr{Void}), 
+        path, buflength, buf, C_NULL)
+    systemerror(:realpath, p == 0 || buf[1] == '\0')
+    return bytestring(buf)[1:end-1]
+end
+
+@unix_only function realpath(path::String)
     p = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), path, C_NULL)
     systemerror(:realpath, p == C_NULL)
     s = bytestring(p)
