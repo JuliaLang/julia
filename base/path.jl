@@ -126,7 +126,13 @@ abspath(a::String, b::String...) = abspath(joinpath(a,b...))
     p = ccall((:GetFullPathNameA, "Kernel32"), stdcall, 
         Uint32, (Ptr{Uint8}, Uint32, Ptr{Uint8}, Ptr{Void}), 
         path, buflength, buf, C_NULL)
-    systemerror(:realpath, p == 0 || buf[1] == '\0')
+    if p > buflength
+        buf = zeros(Uint8,p)
+        p = ccall((:GetFullPathNameA, "Kernel32"), stdcall, 
+            Uint32, (Ptr{Uint8}, Uint32, Ptr{Uint8}, Ptr{Void}), 
+            path, p, buf, C_NULL)
+    end
+    systemerror(:realpath, p == 0)
     return bytestring(buf)[1:end-1]
 end
 
