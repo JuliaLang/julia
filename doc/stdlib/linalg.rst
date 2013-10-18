@@ -81,19 +81,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qr(A, [thin]) -> Q, R
 
-   Compute the QR factorization of ``A`` such that ``A = Q*R``. Also see ``qrfact``. The default is to compute a thin factorization.
+   Compute the QR factorization of ``A`` such that ``A = Q*R``. Also see ``qrfact``. The default is to compute a thin factorization. Note that `R` is not extended with zeros when the full `Q` is requested. 
 
 .. function:: qrfact(A)
 
-   Compute the QR factorization of ``A`` and return a ``QR`` object. The coomponents of the factorization ``F`` can be accessed as follows: the orthogonal matrix ``Q`` can be extracted with ``F[:Q]`` and the triangular matrix ``R`` with ``F[:R]``. The following functions are available for ``QR`` objects: ``size``, ``\``. When ``Q`` is extracted, the resulting type is the ``QRPackedQ`` object, and has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``.
+   Compute the QR factorization of ``A`` and return a ``QR`` object. The components of the factorization ``F`` can be accessed as follows: the orthogonal matrix ``Q`` can be extracted with ``F[:Q]`` and the triangular matrix ``R`` with ``F[:R]``. The following functions are available for ``QR`` objects: ``size``, ``\``. When ``Q`` is extracted, the resulting type is the ``QRPackedQ`` object, and has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``.
 
 .. function:: qrfact!(A)
 
    ``qrfact!`` is the same as :func:`qrfact`, but saves space by overwriting the input A, instead of creating a copy.
 
-.. function:: qrp(A, [thin]) -> Q, R, P
+.. function:: qrp(A, [thin]) -> Q, R, p
 
-   Compute the QR factorization of ``A`` with pivoting, such that ``A*P = Q*R``, Also see ``qrpfact``. The default is to compute a thin factorization.
+   Compute the QR factorization of ``A`` with pivoting, such that ``A[:,p] = Q*R``, Also see ``qrpfact``. The default is to compute a thin factorization.
 
 .. function:: qrpfact(A) -> QRPivoted
 
