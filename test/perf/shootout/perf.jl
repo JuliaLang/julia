@@ -7,12 +7,7 @@ include("fannkuch.jl")
 @timeit fannkuch(7) "fannkuch" "Indexed-access to tiny integer-sequence"
 
 include("fasta.jl")
-n = 100
-@timeit begin
-    repeat_fasta(alu, 2n)
-    random_fasta(iub[1], iub[2], 3n)
-    random_fasta(homosapiens[1], homosapiens[2], 5n)
-end "fasta" "Generate and write random DNA sequences"
+@timeit fasta(100) "fasta" "Generate and write random DNA sequences"
 
 include("k_nucleotide.jl")
 @timeit k_nucleotide("shootout/knucleotide-input.txt") "k_nucleotide" "Hashtable update and k-nucleotide strings"
