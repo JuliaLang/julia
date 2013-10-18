@@ -913,6 +913,7 @@ export
     isequal,
     isimmutable,
     isless,
+    ifelse,
     lexless,
     lexcmp,
     object_id,
