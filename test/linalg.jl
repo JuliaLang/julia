@@ -487,17 +487,19 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test ctranspose(ctranspose(T)) == T
 
         if (elty <: Real)
-            #XXX If I run either of these tests separately, by themselves, things are OK.
-            # Enabling BOTH tests results in segfault.
-            # Where is the memory corruption???
-
+            #Test singular values/vectors
             @test_approx_eq svdvals(full(T)) svdvals(T)
             u1, d1, v1 = svd(full(T))
             u2, d2, v2 = svd(T)
             @test_approx_eq d1 d2
             test_approx_eq_vecs(u1, u2)
             test_approx_eq_vecs(v1, v2)
+        
+            #Test eigenvalues/vectors
+            @test_approx_eq eigvals(full(T)) eigvals(T)
+            test_approx_eq_vecs eigvecs(full(T)) eigvecs(T)
         end
+
     end
 end
 
