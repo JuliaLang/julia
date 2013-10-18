@@ -189,8 +189,8 @@ function update(branch::String)
     info("Updating METADATA...")
     cd("METADATA") do
         if Git.branch() != branch
-            Git.dirty() && error("METADATA is not on $branch and dirty")
-            Git.attached() || error("METADATA is not on $branch and detached")
+            Git.dirty() && error("METADATA is dirty and not on $branch, bailing")
+            Git.attached() || error("METADATA is detached not on $branch, bailing")
             Git.run(`fetch -q --all`)
             Git.run(`checkout -q HEAD^0`)
             Git.run(`branch -f $branch refs/remotes/origin/$branch`)
