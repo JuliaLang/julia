@@ -477,6 +477,7 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign);
 static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx);
 static bool might_need_root(jl_value_t *ex);
+static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx);
 
 // --- utilities ---
 
@@ -1930,6 +1931,25 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 
 // --- convert expression to code ---
 
+static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx)
+{
+    Value *condV = emit_unboxed(cond, ctx);
+#ifdef CONDITION_REQUIRES_BOOL
+    if (expr_type(cond, ctx) != (jl_value_t*)jl_bool_type &&
+        condV->getType() != T_int1) {
+        emit_typecheck(condV, (jl_value_t*)jl_bool_type, msg, ctx);
+    }
+#endif
+    if (condV->getType() == T_int1) {
+        return builder.CreateXor(condV, ConstantInt::get(T_int1,1));
+    }
+    else if (condV->getType() == jl_pvalue_llvmt) {
+        return builder.CreateICmpEQ(condV, literal_pointer_val(jl_false));
+    }
+    // not a boolean
+    return ConstantInt::get(T_int1,0);
+}
+
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                         bool valuepos)
 {
@@ -2044,25 +2064,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     if (head == goto_ifnot_sym) {
         jl_value_t *cond = args[0];
         int labelname = jl_unbox_long(args[1]);
-        Value *condV = emit_unboxed(cond, ctx);
-#ifdef CONDITION_REQUIRES_BOOL
-        if (expr_type(cond, ctx) != (jl_value_t*)jl_bool_type &&
-            condV->getType() != T_int1) {
-            emit_typecheck(condV, (jl_value_t*)jl_bool_type, "if", ctx);
-        }
-#endif
-        Value *isfalse;
-        if (condV->getType() == T_int1) {
-            isfalse = builder.CreateXor(condV, ConstantInt::get(T_int1,1));
-        }
-        else if (condV->getType() == jl_pvalue_llvmt) {
-            isfalse =
-                builder.CreateICmpEQ(condV, literal_pointer_val(jl_false));
-        }
-        else {
-            // not a boolean
-            isfalse = ConstantInt::get(T_int1,0);
-        }
+        Value *isfalse = emit_condition(cond, "if", ctx);
         BasicBlock *ifso = BasicBlock::Create(getGlobalContext(), "if", ctx->f);
         BasicBlock *ifnot = (*ctx->labels)[labelname];
         assert(ifnot);

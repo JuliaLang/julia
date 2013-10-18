@@ -132,6 +132,11 @@ All Objects
 
    Test whether ``x`` is less than ``y``. Provides a total order consistent with ``isequal``. Values that are normally unordered, such as ``NaN``, are ordered in an arbitrary but consistent fashion. This is the default comparison used by ``sort``. Non-numeric types that can be ordered should implement this function. Numeric types only need to implement it if they have special values such as ``NaN``.
 
+.. function:: ifelse(condition::Bool, x, y)
+
+   Return ``x`` if ``condition`` is true, otherwise return ``y``. This differs from ``?`` or
+   ``if`` in that it is an ordinary function, so all the arguments are evaluated first.
+
 .. function:: lexcmp(x, y)
 
    Compare ``x`` and ``y`` lexicographically and return -1, 0, or 1 depending on whether ``x`` is less than, equal to, or greater than ``y``, respectively.
