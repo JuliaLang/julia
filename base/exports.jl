@@ -6,10 +6,11 @@ export
     Meta,
     Operators,
     Pkg,
-    Pkg2,
     Profile,
     Sys,
     Test,
+    BLAS,
+    LAPACK,
 
 # Types
     AbstractMatrix,
