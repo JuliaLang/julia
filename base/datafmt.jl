@@ -214,6 +214,8 @@ function writedlm(io::IO, a::Union(AbstractMatrix,AbstractVector), dlm::Char)
     nothing
 end
 
+writedlm{T}(io::IO, a::AbstractArray{T,0}, dlm::Char) = writedlm(io, reshape(a,1), dlm)
+
 function writedlm(io::IO, a::AbstractArray, dlm::Char)
     tail = size(a)[3:]
     function print_slice(idxs...)
