@@ -585,6 +585,7 @@ endof(s::CharString) = length(s.chars)
 length(s::CharString) = length(s.chars)
 
 convert(::Type{CharString}, s::String) = CharString(Char[c for c in s])
+convert{T<:String}(::Type{T}, v::Vector{Char}) = convert(T, CharString(v))
 
 ## substrings reference original strings ##
 
