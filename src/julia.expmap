@@ -264,6 +264,7 @@
     profile_clear_data;
     profile_start_timer;
     profile_stop_timer;
+    profile_is_running;
     jl_reshape_array;
     jl_restore_system_image;
     jl_run_event_loop;

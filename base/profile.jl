@@ -79,6 +79,8 @@ start_timer() = ccall(:profile_start_timer, Cint, ())
 
 stop_timer() = ccall(:profile_stop_timer, Void, ())
 
+is_running() = bool(ccall(:profile_is_running, Cint, ()))
+
 get_data_pointer() = convert(Ptr{Uint}, ccall(:profile_get_data, Ptr{Uint8}, ()))
 
 len_data() = convert(Int, ccall(:profile_len_data, Csize_t, ()))
