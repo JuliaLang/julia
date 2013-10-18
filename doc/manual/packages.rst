@@ -124,7 +124,7 @@ Installing Unregistered Packages
 Julia packages are simply git repositories, clonable via any of the `protocols <https://www.kernel.org/pub/software/scm/git/docs/git-clone.html#URLS>`_ that git supports, and containing Julia code that follows certain layout conventions.
 Official Julia packages are registered in the `METADATA.jl <https://github.com/JuliaLang/METADATA.jl>`_ repository, available at a well-known location [1]_.
 The ``Pkg.add`` and ``Pkg.rm`` commands in the previous section interact with registered packages, but the package manager can install and work with unregistered packages too.
-To install an unregisted package, use ``Pkg.clone(url)``, where ``url`` is a git URL from which the package can be cloned::
+To install an unregistered package, use ``Pkg.clone(url)``, where ``url`` is a git URL from which the package can be cloned::
 
     julia> Pkg.clone("git://example.com/path/to/Package.jl.git")
     INFO: Cloning Package from git://example.com/path/to/Package.jl.git
@@ -139,7 +139,7 @@ By convention, Julia repository names end with ``.jl`` (the additional ``.git`` 
 When packages are installed in your ``.julia`` directory, however, the extension is redundant so we leave it off.
 
 If unregistered packages contain a ``REQUIRE`` file at the top of their source tree, that file will be used to determine which registered packages the unregistered package depends on, and they will automatically be installed.
-Unregisted packages participate in the same version resolution logic as registered packages, so installed package versions will be adjusted as necessary to satisfy the requirements of both registered and unregistered packages.
+Unregistered packages participate in the same version resolution logic as registered packages, so installed package versions will be adjusted as necessary to satisfy the requirements of both registered and unregistered packages.
 
 .. [1] The official set of packages is at https://github.com/JuliaLang/METADATA.jl, but individuals and organizations can easily use a different metadata repository. This allows control which packages are available for automatic installation. One can allow only audited and approved package versions, and make private packages or forks available.
 
@@ -168,7 +168,7 @@ A package is considered fixed if it is one of the following:
 3. **Dirty:** changes have been made to files in the repo.
 
 If any of these are the case, the package manager cannot freely change the installed version of the package, so its requirements must be satisfied by whatever other package versions it picks.
-The combination of top-level requirements in ``~/.julia/REQUIRE`` and the requiremenst of fixed packages are used to determine what should be installed.
+The combination of top-level requirements in ``~/.julia/REQUIRE`` and the requirement of fixed packages are used to determine what should be installed.
 
 Checkout, Pin and Release
 -------------------------
@@ -204,7 +204,7 @@ In such cases, you can do ``Pkg.checkout(pkg)`` to checkout the ``master`` branc
 Immediately after installing ``Distributions`` with ``Pkg.add`` it is on the current most recent registered version – ``0.2.9`` at the time of writing this.
 Then after running ``Pkg.checkout("Distributions")``, you can see from the output of ``Pkg.status()`` that ``Distributions`` is on an unregistered version greater than ``0.2.9``, indicated by the "pseudo-version" number ``0.2.9+``.
 
-When you checkout an unregisted version of a package, the copy of the ``REQUIRE`` file in the package repo takes precedence over any requirements registered in ``METADATA``, so it is important that developers keep this file accurate and up-to-date, reflecting the actual requirements of the current version of the package.
+When you checkout an unregistered version of a package, the copy of the ``REQUIRE`` file in the package repo takes precedence over any requirements registered in ``METADATA``, so it is important that developers keep this file accurate and up-to-date, reflecting the actual requirements of the current version of the package.
 If the ``REQUIRE`` file in the package repo is incorrect or missing, dependencies may be removed when the package is checked out.
 This file is also used to populate newly published versions of the package if you use the API that ``Pkg`` provides for this (described below).
 
@@ -264,7 +264,7 @@ When you decide to "unpin" a package and let the package manager update it again
      - NumericExtensions             0.2.17
      - Stats                         0.2.7
 
-After this, the ``Stats`` package is managed by the package mangager again, and future calls to ``Pkg.update()`` will upgrade it to newer versions when they are published.
+After this, the ``Stats`` package is managed by the package manager again, and future calls to ``Pkg.update()`` will upgrade it to newer versions when they are published.
 The throw-away ``pinned.1fd0983b.tmp`` branch remains in your local ``Stats`` repo, but since git branches are extremely lightweight, this doesn't really matter;
 if you feel like cleaning them up, you can go into the repo and delete those branches.
 
@@ -381,8 +381,8 @@ This creates a commit in the ``~/.julia/METADATA`` repo::
     +git://github.com/StefanKarpinski/FooBar.jl.git
 
 This commit is only locally visible, however.
-In order to make it visible to the world, you need to merge your local ``METADATA`` upstream into the offical repo.
-If you have push access to that repository (which we give to all package maintainters), then you can do so easily with the ``Pkg.publish()`` command, which publishes your local metadata changes.
+In order to make it visible to the world, you need to merge your local ``METADATA`` upstream into the official repo.
+If you have push access to that repository (which we give to all package maintainers), then you can do so easily with the ``Pkg.publish()`` command, which publishes your local metadata changes.
 If you don't have push access to ``METADATA``, you'll have to make a pull request on GitHub, which is `not difficult <https://help.github.com/articles/creating-a-pull-request>`_.
 
 Once the package URL for ``FooBar`` is registered in the official ``METADATA`` repo, people know where to clone the package from, but there still aren't any registered versions available.
