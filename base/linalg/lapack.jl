@@ -1899,20 +1899,13 @@ for (trcon, elty, relty) in
         # DOUBLE PRECISION   T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
         #$                   WORK( * )
         function trevc!(side::BlasChar, howmny::BlasChar,
-            select::StridedMatrix{Bool}, A::StridedMatrix{$elty},
+            select::Vector{Bool}, A::StridedMatrix{$elty},
             VL::StridedMatrix{$elty}, VR::StridedMatrix{$elty})
           chkstride1(A)
           chksquare(A)
-          if !(side in ['R', 'L', 'B']) error("Unsupported value of side") end
-          if !(howmny in ['A', 'B', 'S']) error("Unsupported value of howmny") end
           ldt, n = size(A)
-          if n!=length(select) error("Wrong size of select array") end
-          if ldt < max(1,n) error("Wrong dimension 1 of A") end
           ldvl, mm = size(VL)
-          if ldvl < side=='A' ? 1 : n error("Wrong dimension 1 of VL") end
-          ldvr, mm2= size(VR)
-          if mm!=mm2 error("VL and VR have different dimension 2s") end
-          if ldvr < side=='A' ? 1 : n error("Wrong dimension 1 of VR") end
+          ldvr, mm = size(VR)
           m = Array(BlasInt, 1)
           work = Array($elty, 3n)
           info = Array(BlasInt, 1)
@@ -1920,27 +1913,27 @@ for (trcon, elty, relty) in
             (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Bool}, Ptr{BlasInt}, Ptr{$elty},
             Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
             Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-            &side, &howmny, &select, &n, &A, &ldt, &VL, &ldvl, &VR, &ldvr, &mm,
-            &m, &work, &info
+            &side, &howmny, select, &n, A, &ldt, VL, &ldvl, VR, &ldvr, &mm,
+            m, work, info
           )
           if info[1] < 0 throw(LAPACKException(info[1])) end
 
           #Decide what exactly to return
           if howmny=='S' #compute selected eigenvectors
             if side=='L' #left eigenvectors only
-              return select, VL[:,1:m]
+              return select, VL[:,1:m[1]]
             elseif side=='R' #right eigenvectors only
-              return select, VR[:,1:m]
+              return select, VR[:,1:m[1]]
             else #side=='B' #both eigenvectors
-              return select, VL[:,1:m], VR[:,1:m]
+              return select, VL[:,1:m[1]], VR[:,1:m[1]]
             end
           else #compute all eigenvectors
             if side=='L' #left eigenvectors only
-              return VL[:,1:m]
+              return VL[:,1:m[1]]
             elseif side=='R' #right eigenvectors only
-              return VR[:,1:m]
+              return VR[:,1:m[1]]
             else #side=='B' #both eigenvectors
-              return VL[:,1:m], VR[:,1:m]
+              return VL[:,1:m[1]], VR[:,1:m[1]]
             end
           end
         end

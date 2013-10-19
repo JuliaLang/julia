@@ -57,16 +57,20 @@ end
 # Generic routines #
 ####################
 
+size(A::Triangular, args...) = size(A.UL, args...)
+
+print_matrix(io::IO, A::Triangular, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
+
+convert(::Type{Matrix}, A::Triangular) = full(A)
 full(A::Triangular) = (istril(A) ? tril! : triu!)(A.UL)
 getindex{T}(A::Triangular{T}, i::Integer, j::Integer) = i == j ? A.UL[i,j] : ((A.uplo == 'U') == (i < j) ? getindex(A.UL, i, j) : zero(T))
 
 istril(A::Triangular) = A.uplo == 'L' || istriu(A.UL)
 istriu(A::Triangular) = A.uplo == 'U' || istril(A.UL)
 
-size(A::Triangular, args...) = size(A.UL, args...)
-
 transpose(A::Triangular) = Triangular(A.UL, A.uplo=='U':'L':'U', A.unitdiag)
 ctranspose(A::Triangular) = conj(transpose(A))
+diag(A::Triangular) = diag(A.UL)
 
 #Generic solver using naive substitution
 function naivesub!(A::Triangular, b::AbstractVector, x::AbstractVector=b)
@@ -98,6 +102,7 @@ function naivesub!(A::Triangular, b::AbstractVector, x::AbstractVector=b)
 	end
     x
 end
+
 \{T<:Number}(A::Triangular{T}, b::AbstractVector{T}) = naivesub!(A, b, similar(b))
 \{T<:Number}(A::Triangular{T}, B::AbstractMatrix{T}) = hcat([naivesub!(A, B[:,i], similar(B[:,i])) for i=1:size(B,2)]...)
 
@@ -148,3 +153,38 @@ function eigvecs{T}(A::Triangular{T})
 end
 
 eigfact(A::Triangular) = Eigen(eigvals(A), eigvecs(A))
+
+#######################
+# Eigenvalues/vectors #
+#######################
+
+eigvals(A::Triangular) = A.uplo=='U' ? diag(A) : reverse(diag(A))
+function eigvecs{T<:BlasFloat}(A::Triangular{T})
+  V = LAPACK.trevc!('R', 'A', Array(Bool,1), A.uplo=='U' ? A.UL : transpose(A.UL),
+    Array(T,size(A)), Array(T, size(A)))
+  if A.uplo=='L' #This is the transpose of the Schur form
+    #The eigenvectors must be transformed
+    VV = inv(Triangular(transpose(V)))
+    N = size(V,2)
+    for i=1:N #Reorder eigenvectors to follow LAPACK convention
+      V[:,i]=VV[:,N+1-i]
+    end
+  end
+  #Need to normalize
+  for i=1:size(V,2)
+    V[:,i] /= norm(V[:,i])
+  end
+  V
+end
+eig(M::Triangular) = eigvals(M), eigvecs(M)
+eigfact(M::Triangular) = Eigen(eigvals(M), eigvecs(M))
+
+#############################
+# Singular values / vectors #
+#############################
+
+svd(M::Triangular) = svd(full(M))
+svdfact(M::Triangular) = svdfact(full(M))
+svdfact!(M::Triangular) = svdfact!(full(M))
+svdvals(M::Triangular) = svdvals(full(M))
+svdvecs(M::Triangular) = svdvecs(full(M))
