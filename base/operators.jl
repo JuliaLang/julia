@@ -268,6 +268,27 @@ macro vectorize_2arg(S,f)
     end
 end
 
+# vectorized ifelse
+
+function ifelse(c::AbstractArray{Bool}, x, y)
+    reshape([ifelse(ci, x, y) for ci in c], size(c))
+end
+
+function ifelse(c::AbstractArray{Bool}, x::AbstractArray, y::AbstractArray)
+    shp = promote_shape(size(c), promote_shape(size(x), size(y)))
+    reshape([ifelse(c[i], x[i], y[i]) for i = 1 : length(c)], shp)
+end
+
+function ifelse(c::AbstractArray{Bool}, x::AbstractArray, y)
+    shp = promote_shape(size(c), size(c))
+    reshape([ifelse(c[i], x[i], y) for i = 1 : length(c)], shp)
+end
+
+function ifelse(c::AbstractArray{Bool}, x, y::AbstractArray)
+    shp = promote_shape(size(c), size(y))
+    reshape([ifelse(c[i], x, y[i]) for i = 1 : length(c)], shp)
+end
+
 # some operators not defined yet
 global //, .>>, .<<, >:, <|, |>, hcat, hvcat
 
