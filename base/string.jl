@@ -1089,7 +1089,7 @@ function shell_parse(raw::String, interp::Bool)
                 error("space not allowed right after \$")
             end
             stpos = j
-            ex, j = parse(s,j,false)
+            ex, j = parse(s,j,greedy=false)
             last_parse = stpos:j
             update_arg(esc(ex)); i = j
         else
@@ -1191,16 +1191,16 @@ shell_escape(args::String...) = sprint(print_shell_escaped, args...)
 
 ## interface to parser ##
 
-function parse(str::String, pos::Int, greedy::Bool=true, err::Bool=true)
+function parse(str::String, pos::Int; greedy::Bool=true, raise::Bool=true)
     # returns (expr, end_pos). expr is () in case of parse error.
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{Uint8}, Int32, Int32),
                     str, pos-1, greedy ? 1:0)
-    if err && isa(ex,Expr) && is(ex.head,:error)
+    if raise && isa(ex,Expr) && is(ex.head,:error)
         throw(ParseError(ex.args[1]))
     end
     if ex == ()
-        if err
+        if raise
             throw(ParseError("end of input"))
         else
             ex = Expr(:error, "end of input")
@@ -1209,8 +1209,8 @@ function parse(str::String, pos::Int, greedy::Bool=true, err::Bool=true)
     ex, pos+1 # C is zero-based, Julia is 1-based
 end
 
-function parse(str::String)
-    ex, pos = parse(str, start(str))
+function parse(str::String; raise::Bool=true)
+    ex, pos = parse(str, start(str), greedy=true, raise=raise)
     done(str, pos) || error("syntax: extra token after end of expression")
     return ex
 end
