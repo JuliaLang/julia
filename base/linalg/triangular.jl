@@ -42,6 +42,30 @@ A_rdiv_Bc{T<:BlasComplex}(A::StridedVecOrMat{T}, B::Triangular{T}) = BLAS.trsm!(
 
 inv{T<:BlasFloat}(A::Triangular{T}) = LAPACK.trtri!(A.uplo, A.unitdiag, copy(A.UL))
 
+#Eigensystems
+#reorders eigenvalues and vectors
+eigvals(A::Triangular) = A.uplo=='U' ? diag(A) : reverse(diag(A))
+function eigvecs{T<:BlasFloat}(A::Triangular{T})
+    if A.uplo=='U'
+        V = LAPACK.trevc!('R', 'A', Array(Bool,1), A.UL)
+    else #A.uplo=='L'
+        V = LAPACK.trevc!('L', 'A', Array(Bool,1), A.UL')
+    end
+  # if A.uplo=='L' #This is the transpose of the Schur form
+  #   #The eigenvectors must be transformed
+  #   VV = inv(Triangular(transpose(V)))
+  #   N = size(V,2)
+  #   for i=1:N #Reorder eigenvectors to follow LAPACK convention
+  #     V[:,i]=VV[:,N+1-i]
+  #   end
+  # end
+  # #Need to normalize
+  # for i=1:size(V,2)
+  #   V[:,i] /= norm(V[:,i])
+  # end
+  # V
+end
+
 function cond{T<:BlasFloat}(A::Triangular{T}, p::Real=2)
 	chksquare(A)
 	if p==1
