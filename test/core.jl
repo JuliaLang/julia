@@ -1058,3 +1058,8 @@ function f4528(A, B)
 end
 @test f4528(false, int32(12)) === nothing
 @test_throws f4528(true, int32(12))
+
+# issue #4518
+f4518(x, y::Union(Int32,Int64)) = 0
+f4518(x::ASCIIString, y::Union(Int32,Int64)) = 1
+@test f4518("",1) == 1
