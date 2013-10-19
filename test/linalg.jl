@@ -601,7 +601,29 @@ function test_approx_eq_vecs(a, b)
     end
 end
 
-#LAPACK tests for symmetric tridiagonal matrices
+##############################
+# Tests for special matrices #
+##############################
+
+#Triangular matrices
+n=5
+for elty in (Float32, Float64)
+  AUfull = convert(Matrix{elty}, sum([diagm(randn(n-i), i) for i=0:n-1]))
+  for Afull in {AUfull, AUfull'} #Test upper and lower triangular
+    A = Triangular(Afull)
+    #Test eigenvalues/vectors against dense routines
+    d1, d2 = eigvals(A), eigvals(Afull)
+    v1, v2 = eigvecs(A), eigvecs(Afull)
+    @test_approx_eq d1 d2
+    test_approx_eq_vecs(v1, v2)
+    #Test spectral decomposition
+    #XXX This is not the correct error bound
+    @test_approx_eq_eps 0 norm(v1 * diagm(d1) * inv(v1) - Afull) sqrt(eps(elty))
+    @test_approx_eq_eps 0 norm(v2 * diagm(d2) * inv(v2) - Afull) sqrt(eps(elty))
+  end
+end
+
+#SymTridiagonal (symmetric tridiagonal) matrices
 n=5
 Ainit = randn(n)
 Binit = randn(n-1)
@@ -630,7 +652,7 @@ for elty in (Float32, Float64)
 end
 
 
-#Test bidiagonal matrices and their SVDs
+#Bidiagonal matrices
 dv = randn(n)
 ev = randn(n-1)
 for elty in (Float32, Float64, Complex64, Complex128)
@@ -653,16 +675,22 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test ctranspose(ctranspose(T)) == T
 
         if (elty <: Real)
-            #XXX If I run either of these tests separately, by themselves, things are OK.
-            # Enabling BOTH tests results in segfault.
-            # Where is the memory corruption???
-
-            @test_approx_eq svdvals(full(T)) svdvals(T)
-            u1, d1, v1 = svd(full(T))
+            Tfull = full(T)
+            #Test singular values/vectors
+            @test_approx_eq svdvals(Tfull) svdvals(T)
+            u1, d1, v1 = svd(Tfull)
             u2, d2, v2 = svd(T)
             @test_approx_eq d1 d2
-            test_approx_eq_vecs(u1, u2)
-            test_approx_eq_vecs(v1, v2)
+            test_approx_eq_vecs(u1, u2) 
+            test_approx_eq_vecs(v1, v2) 
+     
+            #Test eigenvalues/vectors
+            d1, v1 = eig(Tfull)
+            d2, v2 = eigvals(T), eigvecs(T)
+            @test_approx_eq d1 d2
+            test_approx_eq_vecs(v1, v2) 
+            @test_approx_eq_eps 0 norm(v1 * diagm(d1) * inv(v1) - Tfull) eps(elty)*n*(n+1)
+            @test_approx_eq_eps 0 norm(v2 * diagm(d2) * inv(v2) - Tfull) eps(elty)*n*(n+1)
         end
     end
 end

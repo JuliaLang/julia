@@ -43,27 +43,16 @@ A_rdiv_Bc{T<:BlasComplex}(A::StridedVecOrMat{T}, B::Triangular{T}) = BLAS.trsm!(
 inv{T<:BlasFloat}(A::Triangular{T}) = LAPACK.trtri!(A.uplo, A.unitdiag, copy(A.UL))
 
 #Eigensystems
-#reorders eigenvalues and vectors
-eigvals(A::Triangular) = A.uplo=='U' ? diag(A) : reverse(diag(A))
 function eigvecs{T<:BlasFloat}(A::Triangular{T})
     if A.uplo=='U'
         V = LAPACK.trevc!('R', 'A', Array(Bool,1), A.UL)
     else #A.uplo=='L'
         V = LAPACK.trevc!('L', 'A', Array(Bool,1), A.UL')
     end
-  # if A.uplo=='L' #This is the transpose of the Schur form
-  #   #The eigenvectors must be transformed
-  #   VV = inv(Triangular(transpose(V)))
-  #   N = size(V,2)
-  #   for i=1:N #Reorder eigenvectors to follow LAPACK convention
-  #     V[:,i]=VV[:,N+1-i]
-  #   end
-  # end
-  # #Need to normalize
-  # for i=1:size(V,2)
-  #   V[:,i] /= norm(V[:,i])
-  # end
-  # V
+    for i=1:size(V,2) #Normalize
+        V[:,i] /= norm(V[:,i])
+    end
+    V
 end
 
 function cond{T<:BlasFloat}(A::Triangular{T}, p::Real=2)
@@ -81,16 +70,28 @@ end
 # Generic routines #
 ####################
 
-full(A::Triangular) = (istril(A) ? tril! : triu!)(A.UL)
+size(A::Triangular, args...) = size(A.UL, args...)
+convert(::Type{Matrix}, A::Triangular) = full(A)
+full(A::Triangular) = A.UL
+
 getindex{T}(A::Triangular{T}, i::Integer, j::Integer) = i == j ? A.UL[i,j] : ((A.uplo == 'U') == (i < j) ? getindex(A.UL, i, j) : zero(T))
+
+print_matrix(io::IO, A::Triangular, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
 
 istril(A::Triangular) = A.uplo == 'L' || istriu(A.UL)
 istriu(A::Triangular) = A.uplo == 'U' || istril(A.UL)
 
-size(A::Triangular, args...) = size(A.UL, args...)
-
 transpose(A::Triangular) = Triangular(A.UL, A.uplo=='U':'L':'U', A.unitdiag)
 ctranspose(A::Triangular) = conj(transpose(A))
+diag(A::Triangular) = diag(A.UL)
+
+#Generic multiplication
+for func in (:*, :Ac_mul_B, :A_mul_Bc, :Ac_ldiv_B, :/, :A_rdiv_Bc)
+    @eval begin
+        ($func){T}(A::Triangular{T}, B::AbstractVector{T}) = ($func)(full(A), B)
+        #($func){T}(A::AbstractArray{T}, B::Triangular{T}) = ($func)(full(A), B)
+    end
+end
 
 #Generic solver using naive substitution
 function naivesub!(A::Triangular, b::AbstractVector, x::AbstractVector=b)
@@ -122,6 +123,7 @@ function naivesub!(A::Triangular, b::AbstractVector, x::AbstractVector=b)
 	end
     x
 end
+
 \{T<:Number}(A::Triangular{T}, b::AbstractVector{T}) = naivesub!(A, b, similar(b))
 \{T<:Number}(A::Triangular{T}, B::AbstractMatrix{T}) = hcat([naivesub!(A, B[:,i], similar(B[:,i])) for i=1:size(B,2)]...)
 
@@ -172,3 +174,10 @@ function eigvecs{T}(A::Triangular{T})
 end
 
 eigfact(A::Triangular) = Eigen(eigvals(A), eigvecs(A))
+
+#Generic singular systems
+for func in (:svd, :svdfact, :svdfact!, :svdvals, :svdvecs)
+    @eval begin
+        ($func)(A::Triangular) = ($func)(full(A))
+    end
+end
