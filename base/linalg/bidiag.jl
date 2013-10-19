@@ -122,44 +122,6 @@ function \{T<:BlasFloat}(M::Bidiagonal{T}, rhs::StridedVecOrMat{T})
     solve(M, rhs)  # use the Julia "fallback"
 end
 
-
-
-#######################
-# Eigenvalues/vectors #
-#######################
-
-eigvals{T<:Number}(M::Bidiagonal{T}) = M.dv
-function eigvecs{T<:Number}(M::Bidiagonal{T})
-  n = length(M.dv)
-  Q=zeros(T, n, n)
-  v=zeros(T, n)
-  if M.isupper
-    for i=1:n #index of eigenvector
-      v[1] = convert(T, 1.0)
-      for j=1:i-1 #Starting from j=i, eigenvector elements will be 0
-        v[j+1] = (M.dv[i]-M.dv[j])/M.ev[j] * v[j]
-      end
-      v /= norm(v)
-      Q[:,i] = v
-    end
-  else
-    for i=n:-1:1 #index of eigenvector
-      v[n] = convert(T, 1.0)
-      for j=(n-1):-1:max(1,(i-1)) #Starting from j=i-1, eigenvector elements will be 0
-        v[j] = (M.dv[i]-M.dv[j+1])/M.ev[j] * v[j+1]
-      end
-      v /= norm(v)
-      Q[:,n+1-i] = v
-    end
-  end
-  Q
-end
-
-eigfact{T<:Number}(M::Bidiagonal{T}) = Eigen{T,T}(eigvals(M), eigvecs(M))
-
-###################
-# Singular values #
-###################
 #Wrap bdsdc to compute singular values and vectors
 svdvals{T<:Real}(M::Bidiagonal{T})=LAPACK.bdsdc!(M.isupper?'U':'L', 'N', copy(M.dv), copy(M.ev))
 svd    {T<:Real}(M::Bidiagonal{T})=LAPACK.bdsdc!(M.isupper?'U':'L', 'I', copy(M.dv), copy(M.ev))
