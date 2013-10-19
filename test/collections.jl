@@ -346,6 +346,15 @@ for i in 1:length(origs)
     @test in(el, origs)
 end
 @test isempty(s)
+
+# hash
+s1 = Set{ASCIIString}("bar", "foo")
+s2 = Set{ASCIIString}("foo", "bar")
+s3 = Set{ASCIIString}("baz")
+@test hash(s1) == hash(s2)
+@test hash(s1) != hash(s3)
+
+
 # isequal
 @test  isequal(Set(), Set())
 @test !isequal(Set(), Set(1))
