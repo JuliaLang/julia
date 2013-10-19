@@ -661,8 +661,16 @@ for elty in (Float32, Float64, Complex64, Complex128)
             u1, d1, v1 = svd(full(T))
             u2, d2, v2 = svd(T)
             @test_approx_eq d1 d2
-            test_approx_eq_vecs(u1, u2)
-            test_approx_eq_vecs(v1, v2)
+            test_approx_eq_vecs(u1, u2) 
+            test_approx_eq_vecs(v1, v2) 
+     
+            #Test eigenvalues/vectors
+            d1, v1 = eig(full(T))
+            d2, v2 = eigvals(T), eigvecs(T)
+            @test_approx_eq d1 d2
+            test_approx_eq_vecs(v1, v2) 
+            @test_approx_eq_eps 0 norm(v1 * diagm(d1) * inv(v1) - full(T)) 1e-14
+            @test_approx_eq_eps 0 norm(v2 * diagm(d2) * inv(v2) - full(T)) 1e-14
         end
     end
 end
