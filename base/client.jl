@@ -144,6 +144,9 @@ function run_repl()
         while !eof(STDIN)
             read(STDIN, buf)
             ccall(:jl_readBuffer,Void,(Ptr{Void},Cssize_t),buf,1)
+            if _repl_enough_stdin
+                yield()
+            end
         end
         put(repl_channel,(nothing,-1))
     end
