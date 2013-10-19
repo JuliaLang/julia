@@ -1209,8 +1209,8 @@ function parse(str::String, pos::Int; greedy::Bool=true, raise::Bool=true)
     ex, pos+1 # C is zero-based, Julia is 1-based
 end
 
-function parse(str::String; greedy::Bool=true, raise::Bool=true)
-    ex, pos = parse(str, start(str), greedy=greedy, raise=raise)
+function parse(str::String; raise::Bool=true)
+    ex, pos = parse(str, start(str), greedy=true, raise=raise)
     done(str, pos) || error("syntax: extra token after end of expression")
     return ex
 end
