@@ -279,6 +279,9 @@ export ComplexPair
 @deprecate sortcols(v::AbstractMatrix,a::Algorithm,o::Ordering) sortcols(v,alg=a,order=o)
 @deprecate sortcols(v::AbstractMatrix,o::Ordering,a::Algorithm) sortcols(v,alg=a,order=o)
 
+@deprecate parse(str::String, pos::Int, greedy::Bool, raise::Bool) parse(str,pos,greedy=greedy,raise=raise)
+@deprecate parse(str::String, pos::Int, greedy::Bool) parse(str,pos,greedy=greedy)
+
 function amap(f::Function, A::AbstractArray, axis::Integer)
     depwarn("amap is deprecated, use mapslices(f, A, dims) instead", :amap)
     dimsA = size(A)
