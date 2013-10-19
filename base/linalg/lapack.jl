@@ -1774,11 +1774,11 @@ for (pttrs, elty, relty) in
 end
 
 ## (TR) triangular matrices: solver and inverse
-for (trtri, trtrs, elty) in
-    ((:dtrtri_,:dtrtrs_,:Float64),
-     (:strtri_,:strtrs_,:Float32),
-     (:ztrtri_,:ztrtrs_,:Complex128),
-     (:ctrtri_,:ctrtrs_,:Complex64))
+for (trtri, trtrs, trevc, elty) in
+    ((:dtrtri_,:dtrtrs_,:dtrevc_,:Float64),
+     (:strtri_,:strtrs_,:strevc_,:Float32),
+     (:ztrtri_,:ztrtrs_,:ztrevc_,:Complex128),
+     (:ctrtri_,:ctrtrs_,:ctrevc_,:Complex64))
     @eval begin
         #     SUBROUTINE DTRTRI( UPLO, DIAG, N, A, LDA, INFO )
         #*     .. Scalar Arguments ..
@@ -1885,6 +1885,64 @@ for (trcon, elty, relty) in
                   A, &max(1,stride(A,2)), rcond, work, rwork, info)
             @lapackerror
             rcond[1]
+        end
+
+        # SUBROUTINE DTREVC( SIDE, HOWMNY, SELECT, N, T, LDT, VL, LDVL, VR,
+        #                    LDVR, MM, M, WORK, INFO )
+        #
+        # .. Scalar Arguments ..
+        # CHARACTER          HOWMNY, SIDE
+        # INTEGER            INFO, LDT, LDVL, LDVR, M, MM, N
+        # ..
+        # .. Array Arguments ..
+        # LOGICAL            SELECT( * )
+        # DOUBLE PRECISION   T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
+        #$                   WORK( * )
+        function trevc!(side::BlasChar, howmny::BlasChar,
+            select::StridedMatrix{Bool}, A::StridedMatrix{$elty},
+            VL::StridedMatrix{$elty}, VR::StridedMatrix{$elty})
+          chkstride1(A)
+          chksquare(A)
+          if !(side in ['R', 'L', 'B']) error("Unsupported value of side") end
+          if !(howmny in ['A', 'B', 'S']) error("Unsupported value of howmny") end
+          ldt, n = size(A)
+          if n!=length(select) error("Wrong size of select array") end
+          if ldt < max(1,n) error("Wrong dimension 1 of A") end
+          ldvl, mm = size(VL)
+          if ldvl < side=='A' ? 1 : n error("Wrong dimension 1 of VL") end
+          ldvr, mm2= size(VR)
+          if mm!=mm2 error("VL and VR have different dimension 2s") end
+          if ldvr < side=='A' ? 1 : n error("Wrong dimension 1 of VR") end
+          m = Array(BlasInt, 1)
+          work = Array($elty, 3n)
+          info = Array(BlasInt, 1)
+          ccall(($(string(trevc)),liblapack), Void,
+            (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Bool}, Ptr{BlasInt}, Ptr{$elty},
+            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+            Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+            &side, &howmny, &select, &n, &A, &ldt, &VL, &ldvl, &VR, &ldvr, &mm,
+            &m, &work, &info
+          )
+          if info[1] < 0 throw(LAPACKException(info[1])) end
+
+          #Decide what exactly to return
+          if howmny=='S' #compute selected eigenvectors
+            if side=='L' #left eigenvectors only
+              return select, VL[:,1:m]
+            elseif side=='R' #right eigenvectors only
+              return select, VR[:,1:m]
+            else #side=='B' #both eigenvectors
+              return select, VL[:,1:m], VR[:,1:m]
+            end
+          else #compute all eigenvectors
+            if side=='L' #left eigenvectors only
+              return VL[:,1:m]
+            elseif side=='R' #right eigenvectors only
+              return VR[:,1:m]
+            else #side=='B' #both eigenvectors
+              return VL[:,1:m], VR[:,1:m]
+            end
+          end
         end
     end
 end
