@@ -541,6 +541,8 @@ strwidth(s::ByteString) = int(ccall(:u8_strwidth, Csize_t, (Ptr{Uint8},), s.data
 ## libc character class predicates ##
 
 isascii(c::Char) = c < 0x80
+isascii(s::String) = all(isascii, s)
+isascii(s::ASCIIString) = true
 
 for name = ("alnum", "alpha", "cntrl", "digit", "graph",
             "lower", "print", "punct", "space", "upper")
@@ -655,6 +657,8 @@ function convert{P<:Union(Int8,Uint8),T<:ByteString}(::Type{Ptr{P}}, s::SubStrin
     convert(Ptr{P}, s.string.data) + s.offset
 end
 
+isascii(s::SubString{ASCIIString}) = true
+
 ## efficient representation of repeated strings ##
 
 immutable RepString <: String
@@ -713,6 +717,8 @@ end
 
 reverse(s::String) = RevString(s)
 reverse(s::RevString) = s.string
+
+isascii(s::RevString{ASCIIString}) = true
 
 ## ropes for efficient concatenation, etc. ##
 
