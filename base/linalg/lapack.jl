@@ -608,18 +608,18 @@ for (gesvx, elty) in
           &ldb, X, &n, rcond, ferr, berr, work, iwork, info)
         if info[1] < 0 throw(LAPACKException(info[1])) end
         if info[1] == n+1 warn("Matrix is singular to working precision.") end
-        if 0 < info[1] <= n warn(string("gesvx!: In LU decomposition, U(",info[1],",",info[1]," is zero. Matrix is singular.")) end
+        if 0 < info[1] <= n error(string("SingularError: gesvx!: In LU decomposition, U(",info[1],",",info[1],") = 0. Matrix is singular. No solution was computed")) end
         #WORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
         return X, equed, R, C, B, rcond[1], ferr, berr, work[1]
       end
+      #Wrapper for the no-equilibration, no-transpose calculation
+      function gesvx!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
+        n=size(A,1)
+        X, equed, R, C, B, rcond, ferr, berr, rpgf = gesvx!('N', 'N', A, Array($elty, n, n), Array(BlasInt, n), 'N', Array($elty, n),  Array($elty, n), B)
+        return X, rcond, ferr, berr, rpgf
+      end
     end
-    #Wrapper for the no-equilibration, no-transpose calculation
-    function gesvx!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
-      n=size(A,1)
-      X, equed, R, C, B, rcond, ferr, berr, rpgf = gesvx!('N', 'N', Array($elty, n, n), Array(Blasint, n), 'N', Array($relty, n),  Array($relty, n))
-      return X, rcond, ferr, berr, rpgf
-    end
- end
+end
 for (gesvx, elty, relty) in
     ((:zgesvx_,:Complex128,:Float64),
      (:cgesvx_,:Complex64 ,:Float32))
@@ -666,16 +666,16 @@ for (gesvx, elty, relty) in
           &ldb, X, &n, rcond, ferr, berr, work, rwork, info)
         if info[1] < 0 throw(LAPACKException(info[1])) end
         if info[1] == n+1 warn("Matrix is singular to working precision.") end
-        if 0 < info[1] <= n warn(string("gesvx!: In LU decomposition, U(",info[1],",",info[1]," is zero. Matrix is singular.")) end
+        if 0 < info[1] <= n error(string("SingularError: gesvx!: In LU decomposition, U(",info[1],",",info[1],") is zero. Matrix is singular. No solution was computed.")) end
         #RWORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
         return X, equed, R, C, B, rcond[1], ferr, berr, rwork[1]
       end
-    end
-    #Wrapper for the no-equilibration, no-transpose calculation
-    function gesvx!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
-      n=size(A,1)
-      X, equed, R, C, B, rcond, ferr, berr, rpgf = gesvx!('N', 'N', Array($elty, n, n), Array(Blasint, n), 'N', Array($relty, n),  Array($relty, n))
-      return X, rcond, ferr, berr, rpgf
+      #Wrapper for the no-equilibration, no-transpose calculation
+      function gesvx!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
+        n=size(A,1)
+        X, equed, R, C, B, rcond, ferr, berr, rpgf = gesvx!('N', 'N', A, Array($elty, n, n), Array(BlasInt, n), 'N', Array($relty, n),  Array($relty, n), B)
+        return X, rcond, ferr, berr, rpgf
+      end
     end
  end
 
