@@ -158,24 +158,30 @@ eigfact(A::Triangular) = Eigen(eigvals(A), eigvecs(A))
 # Eigenvalues/vectors #
 #######################
 
+#A is in Schur form (or its transpose), so its eigenvalues are simply the
+#diagonal elements.
+#The reverse ordering for lower triangular follows LAPACK's convention
 eigvals(A::Triangular) = A.uplo=='U' ? diag(A) : reverse(diag(A))
+
+#Calculate eigenvectors, taking advantage of the fact that A is already in
+#Schur form (or its transpose)
 function eigvecs{T<:BlasFloat}(A::Triangular{T})
-  V = LAPACK.trevc!('R', 'A', Array(Bool,1), A.uplo=='U' ? A.UL : transpose(A.UL),
-    Array(T,size(A)), Array(T, size(A)))
-  if A.uplo=='L' #This is the transpose of the Schur form
-    #The eigenvectors must be transformed
-    VV = inv(Triangular(transpose(V)))
-    N = size(V,2)
+  N = size(A,2)
+  VL, VR = Array(T,N,N), Array(T,N,N)
+  if A.uplo=='U' #Schur form; compute right eigenvectors
+    VR = LAPACK.trevc!('R', 'A', Array(Bool,1), A.UL, VL, VR)
+  else # A.uplo=='L' #Transpose of Schur form; compute left eigenvectors
+    VL = LAPACK.trevc!('L', 'A', Array(Bool,1), transpose(A.UL), VL, VR)
     for i=1:N #Reorder eigenvectors to follow LAPACK convention
-      V[:,i]=VV[:,N+1-i]
+      VR[:,i]=VL[:,N+1-i]
     end
   end
-  #Need to normalize
-  for i=1:size(V,2)
-    V[:,i] /= norm(V[:,i])
+  for i=1:N #Normalize eigenvectors
+    VR[:,i] /= norm(VR[:,i])
   end
-  V
+  VR
 end
+
 eig(M::Triangular) = eigvals(M), eigvecs(M)
 eigfact(M::Triangular) = Eigen(eigvals(M), eigvecs(M))
 
