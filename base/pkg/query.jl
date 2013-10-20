@@ -129,8 +129,8 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         @assert !haskey(allowed, p)
         allowed[p] = (VersionNumber=>Bool)[]
         allowedp = allowed[p]
-        for (vn,_) in deps[p]
-            allowedp[vn] = in(vn, vs)
+        for vn in keys(deps[p])
+            allowedp[vn] = vn in vs
         end
         @assert !isempty(allowedp)
         @assert any(collect(values(allowedp)))
@@ -157,7 +157,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
 
         # Extract unique dependencies lists (aka classes), thereby
         # assigning an index to each class.
-        uniqdepssets = unique([a for (_,a) in fdepsp])
+        uniqdepssets = unique(values(fdepsp))
 
         # Store all dependencies seen so far for later use
         for a in uniqdepssets, r in a.requires
@@ -174,7 +174,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         @assert !haskey(vmask, p)
         vmask[p] = (VersionNumber=>BitVector)[]
         vmaskp = vmask[p]
-        for (vn,_) in fdepsp
+        for vn in keys(fdepsp)
             vmaskp[vn] = falses(luds)
         end
         for (vn,a) in fdepsp
@@ -207,7 +207,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
     pruned_vers = (ByteString=>Vector{VersionNumber})[]
     eq_classes = (ByteString=>Dict{VersionNumber,Vector{VersionNumber}})[]
     for (p, vmaskp) in vmask
-        vmask0_uniq = unique([vm for (_,vm) in vmaskp])
+        vmask0_uniq = unique(values(vmaskp))
         nc = length(vmask0_uniq)
         classes = [ VersionNumber[] for c0 = 1:nc ]
         for (vn,vm) in vmaskp
@@ -245,7 +245,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         haskey(eq_classes, p) && continue
         eq_classes[p] = (VersionNumber=>Vector{VersionNumber})[]
         eqclassp = eq_classes[p]
-        for (vn,_) in depsp
+        for vn in keys(depsp)
             eqclassp[vn] = [vn]
         end
     end
@@ -304,8 +304,8 @@ function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}
     allpkgs = pkgs
     while !isempty(staged)
         staged_next = Set{ByteString}()
-        for p in staged, (_,a) in deps[p], (rp,_) in a.requires
-            if !in(rp, allpkgs)
+        for p in staged, a in values(deps[p]), rp in keys(a.requires)
+            if !(rp in allpkgs)
                 push!(staged_next, rp)
             end
         end
