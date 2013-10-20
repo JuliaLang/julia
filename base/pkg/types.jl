@@ -3,7 +3,7 @@ module Types
 export VersionInterval, VersionSet, Requires, Available, Fixed,
        merge_requires!, satisfies, @recover
 
-import Base: show, isempty, in, intersect, isequal, hash
+import Base: show, isempty, in, intersect, isequal, hash, deepcopy_internal
 
 immutable VersionInterval
     lower::VersionNumber
@@ -47,6 +47,7 @@ function intersect(A::VersionSet, B::VersionSet)
 end
 isequal(A::VersionSet, B::VersionSet) = (A.intervals == B.intervals)
 hash(s::VersionSet) = hash(s.intervals)
+deepcopy_internal(vs::VersionSet, ::ObjectIdDict) = VersionSet(copy(vs.intervals))
 
 typealias Requires Dict{ByteString,VersionSet}
 
