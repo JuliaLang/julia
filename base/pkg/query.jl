@@ -15,7 +15,7 @@ function requirements(reqs::Dict, fix::Dict, avail::Dict)
                 warn("$p1 is fixed at $(f1.version) conflicting with requirement for $p2: $(f2.requires[p1])")
         end
     end
-    reqs = copy(reqs)
+    reqs = deepcopy(reqs)
     for (p1,f1) in fix
         merge_requires!(reqs, f1.requires)
     end
