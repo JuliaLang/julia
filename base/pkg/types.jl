@@ -40,6 +40,7 @@ isempty(s::VersionSet) = all(i->isempty(i), s.intervals)
 in(v::VersionNumber, s::VersionSet) = any(i->in(v,i), s.intervals)
 function intersect(A::VersionSet, B::VersionSet)
     ivals = vec([ intersect(a,b) for a in A.intervals, b in B.intervals ])
+    ivals = copy(ivals) # temporary bandaid for issue #4592
     filter!(i->!isempty(i), ivals)
     sort!(ivals, by=i->i.lower)
     VersionSet(ivals)
