@@ -281,7 +281,7 @@ function resolve(
     fixed :: Dict = Read.fixed(avail,instd),
     have  :: Dict = Read.free(instd),
 )
-    reqs = Query.requirements(reqs,fixed)
+    reqs = Query.requirements(reqs,fixed,avail)
     deps = Query.dependencies(avail,fixed)
 
     incompatible = {}
