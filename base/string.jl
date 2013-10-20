@@ -225,11 +225,9 @@ function _searchindex(s, t, i)
     end
 end
 
-
 function _search_bloom_mask(c)
     uint64(1) << (c & 63)
 end
-
 
 function _searchindex(s::Array, t::Array, i)
     n = length(t)
@@ -292,11 +290,9 @@ function _searchindex(s::Array, t::Array, i)
     0
 end
 
-
 searchindex(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _searchindex(s,t,i)
 searchindex(s::String, t::String, i::Integer) = _searchindex(s,t,i)
 searchindex(s::String, t::String) = searchindex(s,t,start(s))
-
 
 function searchindex(s::ByteString, t::ByteString, i::Integer=1)
     if length(t) == 1
@@ -305,7 +301,6 @@ function searchindex(s::ByteString, t::ByteString, i::Integer=1)
         searchindex(s.data, t.data, i)
     end
 end
-
 
 function search(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i)
     idx = searchindex(s,t,i)
@@ -327,9 +322,10 @@ end
 
 search(s::String, t::String) = search(s,t,start(s))
 
+rsearch(s::String, c::Chars, i::Integer) =
+    endof(s)-search(RevString(s), c, endof(s)-i+1)+1
 
 rsearch(s::String, c::Chars) = rsearch(s,c,endof(s))
-
 
 function _rsearchindex(s, t, i)
     if isempty(t)
@@ -364,7 +360,6 @@ function _rsearchindex(s, t, i)
         i = l-ii+1
     end
 end
-
 
 function _rsearchindex(s::Array, t::Array, k)
     n = length(t)
@@ -427,11 +422,9 @@ function _rsearchindex(s::Array, t::Array, k)
     0
 end
 
-
 rsearchindex(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _rsearchindex(s,t,i)
 rsearchindex(s::String, t::String, i::Integer) = _rsearchindex(s,t,i)
 rsearchindex(s::String, t::String) = (isempty(s) && isempty(t)) ? 1 : rsearchindex(s,t,endof(s))
-
 
 function rsearchindex(s::ByteString, t::ByteString)
     if length(t) == 1
@@ -441,7 +434,6 @@ function rsearchindex(s::ByteString, t::ByteString)
     end
 end
 
-
 function rsearchindex(s::ByteString, t::ByteString, i::Integer)
     if length(t) == 1
         rsearch(s, t[1], i)
@@ -449,7 +441,6 @@ function rsearchindex(s::ByteString, t::ByteString, i::Integer)
         rsearchindex(s.data, t.data, i)
     end
 end
-
 
 function rsearch(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i)
     idx = rsearchindex(s,t,i)
@@ -707,8 +698,8 @@ end
 
 ## reversed strings without data movement ##
 
-immutable RevString <: String
-    string::String
+immutable RevString{T<:String} <: String
+    string::T
 end
 
 endof(s::RevString) = endof(s.string)
