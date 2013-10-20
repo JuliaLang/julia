@@ -24,13 +24,11 @@ function gen_random()
 end
 function repeat_fasta(src, n)
     k = length(src)
-    @inbounds s = string(src, src, src[1:n % k])
-    return s
+    return string(src, src, src[1:n % k])
 end
 function choose_char(cs)
     k = length(cs)
     r = gen_random()
-    @inbounds begin
     r < cs[1] && return 1
     a = 1
     b = k
@@ -38,21 +36,18 @@ function choose_char(cs)
         c = fld(a + b, 2)
         if r < cs[c]; b = c; else a = c; end
     end
-    end
     b
 end
 function random_fasta(symb, pr, n)
     cs = cumsum(pr)
     line = Array(Uint8, line_width)
     k = n
-    @inbounds begin
     while k > 0
         m = min(k, line_width)
         for i = 1:m
             line[i] = symb[choose_char(cs)]
         end
         k -= line_width
-    end
     end
 end
 
