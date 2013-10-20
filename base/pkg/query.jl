@@ -27,20 +27,41 @@ end
 
 function dependencies(avail::Dict, fix::Dict)
     avail = deepcopy(avail)
+    conflicts = (ByteString=>Set{ByteString})[]
     for (fp,fx) in fix
         delete!(avail, fp)
         for (ap,av) in avail, (v,a) in copy(av)
             if satisfies(fp, fx.version, a.requires)
                 delete!(a.requires, fp)
             else
+                haskey(conflicts, ap) || (conflicts[ap] = Set{ByteString}())
+                push!(conflicts[ap], fp)
                 delete!(av, v)
             end
         end
     end
-    for (ap,av) in avail
-        isempty(av) && delete!(avail, ap)
+    again = true
+    while again
+        again = false
+        deleted_pkgs = ByteString[]
+        for (ap,av) in avail
+            if isempty(av)
+                delete!(avail, ap)
+                push!(deleted_pkgs, ap)
+                again = true
+            end
+        end
+        for dp in deleted_pkgs
+            for (ap,av) in avail, (v,a) in copy(av)
+                if haskey(a.requires, dp)
+                    haskey(conflicts, ap) || (conflicts[ap] = Set{ByteString}())
+                    union!(conflicts[ap], conflicts[dp])
+                    delete!(av, v)
+                end
+            end
+        end
     end
-    avail
+    avail, conflicts
 end
 
 typealias PackageState Union(Nothing,VersionNumber) 
