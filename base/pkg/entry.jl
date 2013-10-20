@@ -282,15 +282,14 @@ function resolve(
     have  :: Dict = Read.free(instd),
 )
     reqs = Query.requirements(reqs,fixed,avail)
-    deps = Query.dependencies(avail,fixed)
+    deps, conflicts = Query.dependencies(avail,fixed)
 
-    incompatible = {}
     for pkg in keys(reqs)
-        haskey(deps,pkg) || push!(incompatible,pkg)
+        if !haskey(deps,pkg)
+            error("$pkg's requirements can't be satisfied because of the following fixed packages: ",
+                   join(conflicts[pkg], ", ", " and "))
+        end
     end
-    isempty(incompatible) ||
-        error("The following packages are incompatible with fixed requirements: ",
-              join(incompatible, ", ", " and "))
 
     deps = Query.prune_dependencies(reqs,deps)
     want = Resolve.resolve(reqs,deps)
