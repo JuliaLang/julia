@@ -291,6 +291,8 @@ function resolve(
         end
     end
 
+    Query.check_requirements(reqs,deps,fixed)
+
     deps = Query.prune_dependencies(reqs,deps)
     want = Resolve.resolve(reqs,deps)
 

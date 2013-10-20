@@ -85,6 +85,27 @@ function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
     append!(sort!(change), sort!(remove))
 end
 
+function check_requirements(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}}, fix::Dict)
+    for (p,vs) in reqs
+        if !any([(vn in vs) for vn in keys(deps[p])])
+            remaining_vs = VersionSet()
+            err_msg = "fixed packages introduce conflicting requirements for $p: \n"
+            for (p1,f1) in fix
+                f1r = f1.requires
+                haskey(f1r, p) || continue
+                err_msg *= "         $p1 requires versions $(f1r[p])\n"
+                remaining_vs = intersect(remaining_vs, f1r[p])
+            end
+            if isempty(remaining_vs)
+                err_msg *= "       intersection is empty"
+            else
+                err_msg *= "       intersection is $remaining_vs; available versions are $(join(sort(collect(keys(deps[p]))), ", ", " and "))"
+            end
+            error(err_msg)
+        end
+    end
+end
+
 # Reduce the number of versions by creating equivalence classes, and retaining
 # only the highest version for each equivalence class.
 # Two versions are equivalent if:
@@ -112,8 +133,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
             allowedp[vn] = in(vn, vs)
         end
         @assert !isempty(allowedp)
-        any([a for (_,a) in allowedp]) ||
-            error("Invalid requirements: no version allowed for package $p")
+        @assert any(collect(values(allowedp)))
     end
 
     filtered_deps = (ByteString=>Dict{VersionNumber,Available})[]
