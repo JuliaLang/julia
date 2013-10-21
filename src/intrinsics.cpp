@@ -33,7 +33,7 @@ namespace JL_I {
         checked_smul, checked_umul,
         nan_dom_err,
         // functions
-        abs_float, copysign_float, flipsign_int,
+        abs_float, copysign_float, flipsign_int, select_value,
         // pointer access
         pointerref, pointerset, pointertoref,
         // c interface
@@ -311,15 +311,18 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         llvmt = IntegerType::get(jl_LLVMContext, nb);
 
     Value *vx = auto_unbox(x, ctx);
+    Type *vxt = vx->getType();
     //if (vx->getType()->getPrimitiveSizeInBits() != (unsigned)nb)
     //    jl_errorf("box: expected argument with %d bits, got %d", nb,
     //              vx->getType()->getPrimitiveSizeInBits());
 
-    if (vx->getType() != llvmt) {
-        if (vx->getType()->isPointerTy() && !llvmt->isPointerTy()) {
+    if (vxt != llvmt) {
+        if (vxt == T_void)
+            return builder.CreateUnreachable();
+        if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
             vx = builder.CreatePtrToInt(vx, llvmt);
         }
-        else if (!vx->getType()->isPointerTy() && llvmt->isPointerTy()) {
+        else if (!vxt->isPointerTy() && llvmt->isPointerTy()) {
             vx = builder.CreateIntToPtr(vx, llvmt);
         }
         else {
@@ -327,7 +330,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
                 vx = builder.CreateTrunc(vx, llvmt);
             }
             else {
-                if (vx->getType()->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits()) {
+                if (vxt->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits()) {
                     return emit_error("box: argument is of incorrect size", ctx);
                 }
                 vx = builder.CreateBitCast(vx, llvmt);
@@ -645,6 +648,28 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateFPExt(builder.CreateLoad(builder.CreateBitCast(jlfloattemp_var,FT(x->getType())->getPointerTo()), true),
                                    FTnbits(try_to_determine_bitstype_nbits(args[1],ctx)));
     }
+    HANDLE(select_value,3) {
+        Value *isfalse = emit_condition(args[1], "select_value", ctx);
+        jl_value_t *t1 = expr_type(args[2], ctx);
+        Type *llt1 = julia_type_to_llvm(t1);
+        jl_value_t *t2 = expr_type(args[3], ctx);
+        Type *llt2 = julia_type_to_llvm(t2);
+        if (llt1 == jl_pvalue_llvmt && llt2 == jl_pvalue_llvmt) {
+            return builder.CreateSelect(isfalse,
+                                        emit_expr(args[3], ctx, false),
+                                        emit_expr(args[2], ctx, false));
+        }
+        else if (t1 == t2 && llt1 == llt2 && llt1 != jl_pvalue_llvmt) {
+            return builder.CreateSelect(isfalse,
+                                        auto_unbox(args[3], ctx),
+                                        auto_unbox(args[2], ctx));
+        }
+        else {
+            return builder.CreateSelect(isfalse,
+                                        boxed(emit_expr(args[3], ctx, false)),
+                                        boxed(emit_expr(args[2], ctx, false)));
+        }
+    }
     default: ;
     }
 
@@ -655,6 +680,9 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         y = auto_unbox(args[2], ctx);
     }
     Type *t = x->getType();
+    if (t == T_void || (y && y->getType() == T_void))
+        return builder.CreateUnreachable();
+
     Value *fy;
     Value *den;
     Value *typemin;
@@ -1120,7 +1148,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(uitofp); ADD_I(sitofp);
     ADD_I(fptrunc); ADD_I(fpext);
     ADD_I(abs_float); ADD_I(copysign_float);
-    ADD_I(flipsign_int);
+    ADD_I(flipsign_int); ADD_I(select_value);
     ADD_I(pointerref); ADD_I(pointerset); ADD_I(pointertoref);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);

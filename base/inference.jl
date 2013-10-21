@@ -117,6 +117,9 @@ t_func[eval(Core.Intrinsics,:ccall)] =
 t_func[eval(Core.Intrinsics,:cglobal)] =
     (1, 2, (fptr, t...)->(isempty(t) ? Ptr{Void} :
                           isType(t[1]) ? Ptr{t[1].parameters[1]} : Ptr))
+t_func[eval(Core.Intrinsics,:select_value)] =
+    # TODO: return None if cnd is definitely not a Bool
+    (3, 3, (cnd, x, y)->Union(x,y))
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[issubtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
