@@ -155,6 +155,8 @@ function getindex(T::NonTupleType, vals...)
     return a
 end
 
+getindex(T::(Type...)) = Array(T,0)
+
 # T[a:b] and T[a:s:b] also contruct typed ranges
 function getindex{T<:Number}(::Type{T}, r::Ranges)
     copy!(Array(T,length(r)), r)
@@ -646,9 +648,12 @@ setindex!{T<:Real}(A::Array, x, I::AbstractVector{Bool}, J::AbstractVector{T}) =
 
 ## Dequeue functionality ##
 
+const _grow_none_errmsg =
+    "[] cannot grow. Instead, initialize the array with \"T[]\", where T is the desired element type."
+
 function push!{T}(a::Array{T,1}, item)
     if is(T,None)
-        error("[] cannot grow. Instead, initialize the array with \"T[]\".")
+        error(_grow_none_errmsg)
     end
     # convert first so we don't grow the array if the assignment won't work
     item = convert(T, item)
@@ -665,7 +670,7 @@ end
 
 function append!{T}(a::Array{T,1}, items::Vector)
     if is(T,None)
-        error("[] cannot grow. Instead, initialize the array with \"T[]\".")
+        error(_grow_none_errmsg)
     end
     n = length(items)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
@@ -675,7 +680,7 @@ end
 
 function prepend!{T}(a::Array{T,1}, items::Array{T,1})
     if is(T,None)
-        error("[] cannot grow. Instead, initialize the array with \"T[]\".")
+        error(_grow_none_errmsg)
     end
     n = length(items)
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, n)
@@ -712,7 +717,7 @@ end
 
 function unshift!{T}(a::Array{T,1}, item)
     if is(T,None)
-        error("[] cannot grow. Instead, initialize the array with \"T[]\".")
+        error(_grow_none_errmsg)
     end
     item = convert(T, item)
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, 1)

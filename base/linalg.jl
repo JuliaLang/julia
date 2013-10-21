@@ -4,6 +4,10 @@ importall Base
 import Base.USE_BLAS64, Base.size, Base.copy, Base.copy_transpose!, Base.power_by_squaring, Base.print_matrix
 
 export 
+# Modules
+    LAPACK,
+    BLAS,
+
 # Types
     BunchKaufman,
     SymTridiagonal,
@@ -116,6 +120,7 @@ export
 # Operators
     \,
     /,
+    A_ldiv_B!,
     A_ldiv_Bc,
     A_ldiv_Bt,
     A_mul_B,
@@ -143,7 +148,6 @@ export
     At_mul_Bt!,
     At_rdiv_B,
     At_rdiv_Bt
-
 
 typealias BlasFloat Union(Float64,Float32,Complex128,Complex64)
 typealias BlasReal Union(Float64,Float32)

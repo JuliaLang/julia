@@ -189,8 +189,8 @@ function update(branch::String)
     info("Updating METADATA...")
     cd("METADATA") do
         if Git.branch() != branch
-            Git.dirty() && error("METADATA is not on $branch and dirty")
-            Git.attached() || error("METADATA is not on $branch and detached")
+            Git.dirty() && error("METADATA is dirty and not on $branch, bailing")
+            Git.attached() || error("METADATA is detached not on $branch, bailing")
             Git.run(`fetch -q --all`)
             Git.run(`checkout -q HEAD^0`)
             Git.run(`branch -f $branch refs/remotes/origin/$branch`)
@@ -281,16 +281,17 @@ function resolve(
     fixed :: Dict = Read.fixed(avail,instd),
     have  :: Dict = Read.free(instd),
 )
-    reqs = Query.requirements(reqs,fixed)
-    deps = Query.dependencies(avail,fixed)
+    reqs = Query.requirements(reqs,fixed,avail)
+    deps, conflicts = Query.dependencies(avail,fixed)
 
-    incompatible = {}
     for pkg in keys(reqs)
-        haskey(deps,pkg) || push!(incompatible,pkg)
+        if !haskey(deps,pkg)
+            error("$pkg's requirements can't be satisfied because of the following fixed packages: ",
+                   join(conflicts[pkg], ", ", " and "))
+        end
     end
-    isempty(incompatible) ||
-        error("The following packages are incompatible with fixed requirements: ",
-              join(incompatible, ", ", " and "))
+
+    Query.check_requirements(reqs,deps,fixed)
 
     deps = Query.prune_dependencies(reqs,deps)
     want = Resolve.resolve(reqs,deps)

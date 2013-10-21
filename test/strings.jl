@@ -829,3 +829,7 @@ bin_val = hex2bytes("07bf")
 # issue #4183
 @test split(SubString(ascii("x"), 2, 0), "y") == String[""]
 @test split(SubString(utf8("x"), 2, 0), "y") == String[""]
+
+# issue #4586
+@test rsplit(RevString("ailuj"),'l') == {"ju","ia"}
+@test_throws float64(RevString("64"))

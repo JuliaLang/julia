@@ -132,6 +132,11 @@ All Objects
 
    Test whether ``x`` is less than ``y``. Provides a total order consistent with ``isequal``. Values that are normally unordered, such as ``NaN``, are ordered in an arbitrary but consistent fashion. This is the default comparison used by ``sort``. Non-numeric types that can be ordered should implement this function. Numeric types only need to implement it if they have special values such as ``NaN``.
 
+.. function:: ifelse(condition::Bool, x, y)
+
+   Return ``x`` if ``condition`` is true, otherwise return ``y``. This differs from ``?`` or
+   ``if`` in that it is an ordinary function, so all the arguments are evaluated first.
+
 .. function:: lexcmp(x, y)
 
    Compare ``x`` and ``y`` lexicographically and return -1, 0, or 1 depending on whether ``x`` is less than, equal to, or greater than ``y``, respectively.
@@ -361,9 +366,9 @@ Syntax
 
    Generates a gensym symbol for a variable. For example, `@gensym x y` is transformed into `x = gensym("x"); y = gensym("y")`.
 
-.. function:: parse(str, [start, [greedy, [err]]])
+.. function:: parse(str, [start]; greedy=true, raise=false)
 
-   Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing (default is 1). If greedy is true (default), parse will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid token. If err is true (default), parse errors will raise an error; otherwise, it will return the error as a normal expression.
+   Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing (default is 1). If greedy is true (default), parse will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid token. If raise is true (default), parse errors will raise an error; otherwise, parse will return the error as an expression object.
 
 Iteration
 ---------

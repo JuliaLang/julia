@@ -264,6 +264,7 @@
     profile_clear_data;
     profile_start_timer;
     profile_stop_timer;
+    profile_is_running;
     jl_reshape_array;
     jl_restore_system_image;
     jl_run_event_loop;
@@ -370,6 +371,7 @@
     u8_isvalid;
     u8_strlen;
     u8_strwidth;
+    u8_reverse;
     wcwidth;
     uv_*;
     add_library_mapping;
