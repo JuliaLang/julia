@@ -89,17 +89,5 @@ start(i::Rest) = i.st
 next(i::Rest, st) = next(i.itr, st)
 done(i::Rest, st) = done(i.itr, st)
 
-# reverse
 
-immutable Reverse{I}
-    itr::I
-end
-reverse(itr) = Reverse(itr)
-
-length(r::Reverse) = length(r.itr)
-start(r::Reverse) = length(r.itr)
-next(r::Reverse, i) = (r.itr[i], i-1)
-done(r::Reverse, i) = i < 1
-
-# TODO: a more general "reversible" interface; this only
-# works for objects that are indexable from 1 to length(itr)
+# TODO: a general "reversible" interface
