@@ -100,6 +100,9 @@ New library functions
 
   * `setenv` for passing environment variables to child processes
 
+  * `ifelse` eagerly-evaluated conditional function, especially useful for
+    vectorized conditionals
+
 Library improvements
 --------------------
 
@@ -240,6 +243,8 @@ Deprecated or removed
     were eliminated in favor of a new operator `|>` ([#3523]).
 
   * `amap` is deprecated in favor of new `mapslices` functionality.
+
+  * The `Reverse` iterator was removed since it did not work in many cases.
 
 Miscellaneous changes
 --------------------------------
