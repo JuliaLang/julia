@@ -332,8 +332,8 @@ function _rsearchindex(s, t, i)
         return 1 <= i <= nextind(s,endof(s)) ? i :
                error(BoundsError)
     end
-    t = reverse(t)
-    rs = reverse(s)
+    t = RevString(t)
+    rs = RevString(s)
     l = endof(s)
     t1, j2 = next(t,start(t))
     while true
@@ -579,6 +579,8 @@ length(s::CharString) = length(s.chars)
 
 convert(::Type{CharString}, s::String) = CharString(Char[c for c in s])
 convert{T<:String}(::Type{T}, v::Vector{Char}) = convert(T, CharString(v))
+
+reverse(s::CharString) = CharString(reverse(s.chars))
 
 ## substrings reference original strings ##
 
@@ -996,7 +998,7 @@ function triplequoted(args...)
     sx = { isa(arg,ByteString) ? arg : esc(arg) for arg in args }
 
     indent = 0
-    rlines = split(reverse(sx[end]), '\n', 2)
+    rlines = split(RevString(sx[end]), '\n', 2)
     last_line = rlines[1]
     if length(rlines) > 1 && lstrip(last_line) == ""
         indent,_ = indentation(last_line)
@@ -1398,7 +1400,7 @@ function lstrip(s::String, chars::Chars=_default_delims)
 end
 
 function rstrip(s::String, chars::Chars=_default_delims)
-    r = reverse(s)
+    r = RevString(s)
     i = start(r)
     while !done(r,i)
         c, j = next(r,i)
