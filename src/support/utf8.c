@@ -708,7 +708,7 @@ int u8_isvalid(const char *str, size_t length)
     return ret;
 }
 
-int u8_reverse(char *dest, char * src, size_t len)
+int u8_reverse(char *dest, char *src, size_t len)
 {
     size_t si=0, di=len;
     unsigned char c;
