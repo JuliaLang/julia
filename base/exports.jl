@@ -1101,6 +1101,7 @@ export
     nprocs,
     nworkers,
     pmap,
+    ipmap,
     procs,
     put,
     remotecall,

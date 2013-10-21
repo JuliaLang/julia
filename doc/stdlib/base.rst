@@ -4243,7 +4243,10 @@ Parallel Computing
    If ``err_retry`` is true, it retries a failed application of ``f`` on a different worker.
    If ``err_stop`` is true, it takes precedence over the value of ``err_retry`` and ``pmap`` stops execution on the first error.
    
+.. function:: ipmap()
 
+   Same as pmap(), but does not block the command line, and returns an iterable collection
+   
 .. function:: remotecall(id, func, args...)
 
    Call a function asynchronously on the given arguments on the specified processor. Returns a ``RemoteRef``.

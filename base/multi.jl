@@ -19,6 +19,8 @@
 ## pmap(func, lst) -
 ##     call a function on each element of lst (some 1-d thing), in
 ##     parallel.
+## ipmap - same as pmap, but does not block the command line, and returns
+##     an iterable collection
 ##
 ## RemoteRef() - create an uninitialized RemoteRef on the local processor
 ##
@@ -1405,6 +1407,82 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
         results[failure[1]] = failure[3]
     end
     [results[x] for x in 1:nextidx]
+end
+
+type ipmap
+    results::Dict{Int, RemoteRef}
+    n::Int
+    retryqueue
+end
+
+start(x::ipmap) = 1
+done(x::ipmap, state::Int) = (state <= x.n) ? false : true
+function next(x::ipmap, state::Int)
+    while !haskey(x.results, state)
+        for failure in x.retryqueue
+            x.results[failure[1]] = failure[3]
+        end
+        yield()
+    end
+    fetch(x.results[state]), state+1
+end
+
+function ipmap(f::Function, lsts...; err_retry=true, err_stop=false)
+    len = length(lsts)
+    ret_val = ipmap(Dict{Int, RemoteRef}(), length(lsts[1]), {})
+
+    task_in_err = false
+    is_task_in_error() = task_in_err
+    set_task_in_error() = (task_in_err = true)
+
+    nextidx = 0
+    getnextidx() = (nextidx += 1)
+
+    states = [start(lsts[idx]) for idx in 1:len]
+    function getnext_tasklet()
+        if is_task_in_error() && err_stop
+            return nothing
+        elseif all([!done(lsts[idx],states[idx]) for idx in 1:len])
+            nxts = [next(lsts[idx],states[idx]) for idx in 1:len]
+            map(idx->states[idx]=nxts[idx][2], 1:len)
+            nxtvals = [x[1] for x in nxts]
+            return (getnextidx(), nxtvals)
+            
+        elseif !isempty(ret_val.retryqueue)
+            return shift!(ret_val.retryqueue)
+        else    
+            return nothing
+        end
+    end
+
+    for wpid in workers()
+        @async begin
+            tasklet = getnext_tasklet()
+            while (tasklet != nothing)
+                (idx, fvals) = tasklet
+                try
+                    result = remotecall_wait(wpid, f, fvals...)
+                    if isa(result, Exception) 
+                        ((wpid == myid()) ? rethrow(result) : throw(result)) 
+                    else 
+                        ret_val.results[idx] = result
+                    end
+                catch ex
+                    if err_retry 
+                        push!(ret_val.retryqueue, (idx,fvals, ex))
+                    else
+                        results[idx] = ex
+                    end
+                    set_task_in_error()
+                    break # remove this worker from accepting any more tasks 
+                end
+                
+                tasklet = getnext_tasklet()
+            end
+        end
+    end
+
+    return ret_val
 end
 
 # Statically split range [1,N] into equal sized chunks for np processors
