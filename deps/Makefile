@@ -211,11 +211,14 @@ else
 LLVM_FLAGS += --enable-optimized
 endif
 ifeq ($(OS), WINNT)
-LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared --with-intel-jitevents
+LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared
 LLVM_MFLAGS += CPPFLAGS="-D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE"
 endif
-ifneq ($(and $(findstring Linux,$(OS)),$(findstring $(ARCH),"i386 i486 i686 x86_64")),)
+ifeq ($(USE_INTEL_JITEVENTS), 1)
 LLVM_FLAGS += --with-intel-jitevents
+ifeq ($(OS), WINNT)
+LLVM_FLAGS += --disable-threads
+endif
 else
 LLVM_FLAGS += --disable-threads
 endif
