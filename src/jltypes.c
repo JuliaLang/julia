@@ -1877,8 +1877,10 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
         if (cseq) ce = jl_tparam0(ce);
         if (pseq) pe = jl_tparam0(pe);
 
-        if (!jl_subtype_le(ce, pe, ta, morespecific, invariant))
-            return 0;
+        if (!jl_subtype_le(ce, pe, ta, morespecific, invariant)) {
+            if (!mode || !type_eqv_(ce, pe))
+                return 0;
+        }
 
         if (mode && cseq && !pseq)
             return 1;

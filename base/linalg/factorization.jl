@@ -2,6 +2,8 @@
 
 abstract Factorization{T}
 
+(\)(F::Factorization, b::Union(AbstractVector, AbstractMatrix)) = A_ldiv_B!(F, copy(b))
+
 type Cholesky{T<:BlasFloat} <: Factorization{T}
     UL::Matrix{T}
     uplo::Char
@@ -35,8 +37,8 @@ function getindex(C::Cholesky, d::Symbol)
     error("No such type field")
 end
 
-\{T<:BlasFloat}(C::Cholesky{T}, B::StridedVecOrMat{T}) =
-    LAPACK.potrs!(C.uplo, C.UL, copy(B))
+A_ldiv_B!{T<:BlasFloat}(C::Cholesky{T}, B::StridedVecOrMat{T}) =
+    LAPACK.potrs!(C.uplo, C.UL, B)
 
 function det{T}(C::Cholesky{T})
     dd = one(T)
@@ -96,14 +98,22 @@ function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
     error("No such type field")
 end
 
-function \{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedVector{T})
+function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedVector{T})
     if C.rank < size(C.UL, 1); throw(RankDeficientException(C.info)); end
-    LAPACK.potrs!(C.uplo, C.UL, copy(B)[C.piv])[invperm(C.piv)]
+    ipermute!(LAPACK.potrs!(C.uplo, C.UL, permute!(B, C.piv)), C.piv)
 end
 
-function \{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
+function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
     if C.rank < size(C.UL, 1); throw(RankDeficientException(C.info)); end
-    LAPACK.potrs!(C.uplo, C.UL, copy(B)[C.piv,:])[invperm(C.piv),:]
+    n = size(C, 1)
+    for i = 1:size(B, 2)
+        permute!(sub(B, 1:n, i), C.piv)
+    end
+    LAPACK.potrs!(C.uplo, C.UL, B)
+    for i = 1:size(B, 2)
+        ipermute!(sub(B, 1:n, i), C.piv)
+    end
+    return B
 end
 
 rank(C::CholeskyPivoted) = C.rank
@@ -239,12 +249,12 @@ type QR{S<:BlasFloat} <: Factorization{S}
     vs::Matrix{S}                     # the elements on and above the diagonal contain the N-by-N upper triangular matrix R; the elements below the diagonal are the columns of V
     T::Matrix{S}                      # upper triangular factor of the block reflector.
 end
-QR{T<:BlasFloat}(A::StridedMatrix{T}) = QR(LAPACK.geqrt3!(A)...)
+QR{T<:BlasFloat}(A::StridedMatrix{T}, nb::Integer = min(minimum(size(A)), 36)) = QR(LAPACK.geqrt!(A, nb)...)
 
-qrfact!{T<:BlasFloat}(A::StridedMatrix{T}) = QR(A)
-qrfact!(A::StridedMatrix) = qrfact!(float(A))
-qrfact{T<:BlasFloat}(A::StridedMatrix{T}) = qrfact!(copy(A))
-qrfact(A::StridedMatrix) = qrfact!(float(A))
+qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, args::Integer...) = QR(A, args...)
+qrfact!(A::StridedMatrix, args::Integer...) = qrfact!(float(A), args...)
+qrfact{T<:BlasFloat}(A::StridedMatrix{T}, args::Integer...) = qrfact!(copy(A), args...)
+qrfact(A::StridedMatrix, args::Integer...) = qrfact!(float(A), args...)
 qrfact(x::Integer) = qrfact(float(x))
 qrfact(x::Number) = QR(fill(one(x), 1, 1), fill(x, 1, 1))
 
@@ -262,7 +272,7 @@ function getindex(A::QR, d::Symbol)
     error("No such type field")
 end
 
-type QRPackedQ{S}  <: AbstractMatrix{S} 
+type QRPackedQ{S} <: AbstractMatrix{S} 
     vs::Matrix{S}                      
     T::Matrix{S}                       
 end
@@ -271,7 +281,7 @@ QRPackedQ(A::QR) = QRPackedQ(A.vs, A.T)
 size(A::QRPackedQ, args::Integer...) = size(A.vs, args...)
 
 function full{T<:BlasFloat}(A::QRPackedQ{T}, thin::Bool)
-    if thin return A * eye(T, size(A.T, 1)) end
+    if thin return A * eye(T, size(A.T, 2)) end
     return A * eye(T, size(A, 1))
 end
 full(A::QRPackedQ) = full(A, true)
@@ -323,7 +333,7 @@ qrpfact(A::StridedMatrix) = qrpfact!(float(A))
 
 function qrp(A::AbstractMatrix, thin::Bool)
     F = qrpfact(A)
-    return full(F[:Q], thin), F[:R], F[:P]
+    return full(F[:Q], thin), F[:R], F[:p]
 end
 qrp(A::AbstractMatrix) = qrp(A, false)
 

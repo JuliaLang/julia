@@ -371,6 +371,7 @@
     u8_isvalid;
     u8_strlen;
     u8_strwidth;
+    u8_reverse;
     wcwidth;
     uv_*;
     add_library_mapping;

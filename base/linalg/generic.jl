@@ -104,7 +104,9 @@ trace(x::Number) = x
 
 inv(a::AbstractVector) = error("Input must be a square matrix")
 
-\(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
+(\)(A::AbstractMatrix, b::AbstractVector) = A_ldiv_B!(A, copy(b))
+(\)(A::AbstractMatrix, B::AbstractMatrix) = A_ldiv_B!(A, copy(B))
+(\)(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
 (/)(A::AbstractVector, B::AbstractVector) = (B' \ A')'
 (/)(A::AbstractVector, B::AbstractMatrix) = (B' \ A')'
 (/)(A::AbstractMatrix, B::AbstractVector) = (B' \ A')'

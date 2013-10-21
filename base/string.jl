@@ -225,11 +225,9 @@ function _searchindex(s, t, i)
     end
 end
 
-
 function _search_bloom_mask(c)
     uint64(1) << (c & 63)
 end
-
 
 function _searchindex(s::Array, t::Array, i)
     n = length(t)
@@ -292,11 +290,9 @@ function _searchindex(s::Array, t::Array, i)
     0
 end
 
-
 searchindex(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _searchindex(s,t,i)
 searchindex(s::String, t::String, i::Integer) = _searchindex(s,t,i)
 searchindex(s::String, t::String) = searchindex(s,t,start(s))
-
 
 function searchindex(s::ByteString, t::ByteString, i::Integer=1)
     if length(t) == 1
@@ -305,7 +301,6 @@ function searchindex(s::ByteString, t::ByteString, i::Integer=1)
         searchindex(s.data, t.data, i)
     end
 end
-
 
 function search(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i)
     idx = searchindex(s,t,i)
@@ -327,17 +322,18 @@ end
 
 search(s::String, t::String) = search(s,t,start(s))
 
+rsearch(s::String, c::Chars, i::Integer) =
+    endof(s)-search(RevString(s), c, endof(s)-i+1)+1
 
 rsearch(s::String, c::Chars) = rsearch(s,c,endof(s))
-
 
 function _rsearchindex(s, t, i)
     if isempty(t)
         return 1 <= i <= nextind(s,endof(s)) ? i :
                error(BoundsError)
     end
-    t = reverse(t)
-    rs = reverse(s)
+    t = RevString(t)
+    rs = RevString(s)
     l = endof(s)
     t1, j2 = next(t,start(t))
     while true
@@ -364,7 +360,6 @@ function _rsearchindex(s, t, i)
         i = l-ii+1
     end
 end
-
 
 function _rsearchindex(s::Array, t::Array, k)
     n = length(t)
@@ -427,11 +422,9 @@ function _rsearchindex(s::Array, t::Array, k)
     0
 end
 
-
 rsearchindex(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _rsearchindex(s,t,i)
 rsearchindex(s::String, t::String, i::Integer) = _rsearchindex(s,t,i)
 rsearchindex(s::String, t::String) = (isempty(s) && isempty(t)) ? 1 : rsearchindex(s,t,endof(s))
-
 
 function rsearchindex(s::ByteString, t::ByteString)
     if length(t) == 1
@@ -441,7 +434,6 @@ function rsearchindex(s::ByteString, t::ByteString)
     end
 end
 
-
 function rsearchindex(s::ByteString, t::ByteString, i::Integer)
     if length(t) == 1
         rsearch(s, t[1], i)
@@ -449,7 +441,6 @@ function rsearchindex(s::ByteString, t::ByteString, i::Integer)
         rsearchindex(s.data, t.data, i)
     end
 end
-
 
 function rsearch(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i)
     idx = rsearchindex(s,t,i)
@@ -550,6 +541,8 @@ strwidth(s::ByteString) = int(ccall(:u8_strwidth, Csize_t, (Ptr{Uint8},), s.data
 ## libc character class predicates ##
 
 isascii(c::Char) = c < 0x80
+isascii(s::String) = all(isascii, s)
+isascii(s::ASCIIString) = true
 
 for name = ("alnum", "alpha", "cntrl", "digit", "graph",
             "lower", "print", "punct", "space", "upper")
@@ -585,6 +578,9 @@ endof(s::CharString) = length(s.chars)
 length(s::CharString) = length(s.chars)
 
 convert(::Type{CharString}, s::String) = CharString(Char[c for c in s])
+convert{T<:String}(::Type{T}, v::Vector{Char}) = convert(T, CharString(v))
+
+reverse(s::CharString) = CharString(reverse(s.chars))
 
 ## substrings reference original strings ##
 
@@ -663,6 +659,8 @@ function convert{P<:Union(Int8,Uint8),T<:ByteString}(::Type{Ptr{P}}, s::SubStrin
     convert(Ptr{P}, s.string.data) + s.offset
 end
 
+isascii(s::SubString{ASCIIString}) = true
+
 ## efficient representation of repeated strings ##
 
 immutable RepString <: String
@@ -706,8 +704,8 @@ end
 
 ## reversed strings without data movement ##
 
-immutable RevString <: String
-    string::String
+immutable RevString{T<:String} <: String
+    string::T
 end
 
 endof(s::RevString) = endof(s.string)
@@ -721,6 +719,8 @@ end
 
 reverse(s::String) = RevString(s)
 reverse(s::RevString) = s.string
+
+isascii(s::RevString{ASCIIString}) = true
 
 ## ropes for efficient concatenation, etc. ##
 
@@ -998,7 +998,7 @@ function triplequoted(args...)
     sx = { isa(arg,ByteString) ? arg : esc(arg) for arg in args }
 
     indent = 0
-    rlines = split(reverse(sx[end]), '\n', 2)
+    rlines = split(RevString(sx[end]), '\n', 2)
     last_line = rlines[1]
     if length(rlines) > 1 && lstrip(last_line) == ""
         indent,_ = indentation(last_line)
@@ -1088,7 +1088,7 @@ function shell_parse(raw::String, interp::Bool)
                 error("space not allowed right after \$")
             end
             stpos = j
-            ex, j = parse(s,j,false)
+            ex, j = parse(s,j,greedy=false)
             last_parse = stpos:j
             update_arg(esc(ex)); i = j
         else
@@ -1190,16 +1190,16 @@ shell_escape(args::String...) = sprint(print_shell_escaped, args...)
 
 ## interface to parser ##
 
-function parse(str::String, pos::Int, greedy::Bool=true, err::Bool=true)
+function parse(str::String, pos::Int; greedy::Bool=true, raise::Bool=true)
     # returns (expr, end_pos). expr is () in case of parse error.
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{Uint8}, Int32, Int32),
                     str, pos-1, greedy ? 1:0)
-    if err && isa(ex,Expr) && is(ex.head,:error)
+    if raise && isa(ex,Expr) && is(ex.head,:error)
         throw(ParseError(ex.args[1]))
     end
     if ex == ()
-        if err
+        if raise
             throw(ParseError("end of input"))
         else
             ex = Expr(:error, "end of input")
@@ -1208,8 +1208,8 @@ function parse(str::String, pos::Int, greedy::Bool=true, err::Bool=true)
     ex, pos+1 # C is zero-based, Julia is 1-based
 end
 
-function parse(str::String)
-    ex, pos = parse(str, start(str))
+function parse(str::String; raise::Bool=true)
+    ex, pos = parse(str, start(str), greedy=true, raise=raise)
     done(str, pos) || error("syntax: extra token after end of expression")
     return ex
 end
@@ -1400,7 +1400,7 @@ function lstrip(s::String, chars::Chars=_default_delims)
 end
 
 function rstrip(s::String, chars::Chars=_default_delims)
-    r = reverse(s)
+    r = RevString(s)
     i = start(r)
     while !done(r,i)
         c, j = next(r,i)
