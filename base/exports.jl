@@ -77,7 +77,6 @@ export
     RegexMatch,
     RemoteRef,
     RepString,
-    Reverse,
     RevString,
     RopeString,
     RoundFromZero,
