@@ -311,15 +311,18 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         llvmt = IntegerType::get(jl_LLVMContext, nb);
 
     Value *vx = auto_unbox(x, ctx);
+    Type *vxt = vx->getType();
     //if (vx->getType()->getPrimitiveSizeInBits() != (unsigned)nb)
     //    jl_errorf("box: expected argument with %d bits, got %d", nb,
     //              vx->getType()->getPrimitiveSizeInBits());
 
-    if (vx->getType() != llvmt) {
-        if (vx->getType()->isPointerTy() && !llvmt->isPointerTy()) {
+    if (vxt != llvmt) {
+        if (vxt == T_void)
+            return builder.CreateUnreachable();
+        if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
             vx = builder.CreatePtrToInt(vx, llvmt);
         }
-        else if (!vx->getType()->isPointerTy() && llvmt->isPointerTy()) {
+        else if (!vxt->isPointerTy() && llvmt->isPointerTy()) {
             vx = builder.CreateIntToPtr(vx, llvmt);
         }
         else {
@@ -327,7 +330,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
                 vx = builder.CreateTrunc(vx, llvmt);
             }
             else {
-                if (vx->getType()->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits()) {
+                if (vxt->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits()) {
                     return emit_error("box: argument is of incorrect size", ctx);
                 }
                 vx = builder.CreateBitCast(vx, llvmt);
@@ -677,6 +680,9 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         y = auto_unbox(args[2], ctx);
     }
     Type *t = x->getType();
+    if (t == T_void || (y && y->getType() == T_void))
+        return builder.CreateUnreachable();
+
     Value *fy;
     Value *den;
     Value *typemin;
