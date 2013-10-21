@@ -832,3 +832,4 @@ bin_val = hex2bytes("07bf")
 
 # issue #4586
 @test rsplit(RevString("ailuj"),'l') == {"ju","ia"}
+@test_throws float64(RevString("64"))
