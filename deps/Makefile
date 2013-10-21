@@ -176,7 +176,6 @@ LLVM_TAR=llvm-$(LLVM_VER).tar.gz
 else
 LLVM_TAR=llvm-$(LLVM_VER).src.tar.gz
 endif
-endif
 
 ifeq ($(BUILD_LLVM_CLANG),1)
 ifeq ($(LLVM_VER), 3.0)
@@ -192,6 +191,7 @@ endif
 else
 LLVM_CLANG_TAR=
 LLVM_COMPILER_RT_TAR=
+endif
 endif
 
 LLVM_TARGET_FLAGS= --enable-targets=host
@@ -228,6 +228,7 @@ ifeq ($(ARCH), ppc64)
   LLVM_MFLAGS += CXXFLAGS=-mminimal-toc
 endif
 
+ifneq ($(LLVM_VER),svn)
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR):
 	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
@@ -236,7 +237,6 @@ ifneq ($(LLVM_COMPILER_RT_TAR),)
 $(LLVM_COMPILER_RT_TAR):
 	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
 endif
-ifneq ($(LLVM_VER),svn)
 $(LLVM_TAR):
 	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
 endif
@@ -265,9 +265,18 @@ else
 		(cd llvm-$(LLVM_VER) && \
 		git pull --ff-only)
 endif
+ifneq ($(LLVM_VER),svn)
 ifneq ($(LLVM_CLANG_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/tools/clang && \
 	tar -C llvm-$(LLVM_VER)/tools/clang --strip-components 1 -xf $(LLVM_CLANG_TAR)
+endif
+else
+ifneq ($(BUILD_LLVM_CLANG),)
+	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
+		git clone http://llvm.org/git/clang.git llvm-$(LLVM_VER)/tools/clang  ) || \
+		(cd llvm-$(LLVM_VER)/tools/clang  && \
+		git pull --ff-only)	
+endif
 endif
 ifneq ($(LLVM_COMPILER_RT_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/projects/compiler-rt && \
