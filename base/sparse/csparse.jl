@@ -296,29 +296,26 @@ end
 # form A[p,p] for a symmetric A stored in the upper triangle
 function csc_symperm{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti})
     m,n = size(A); Ap = A.colptr; Ai = A.rowval; Ax = A.nzval
-    if m != n || length(pinv) != m
-        error("A must be square, size(A) = $(size(A)), length(pinv) = $(length(pinv))")
-    end
-    if !isperm(pinv) error("Both pinv must be a permutation") end
+    isperm(pinv) || error("perm must be a permutation")
+    m == n == length(pinv) || error("Dimension mismatch")
     C = copy(A); Cp = C.colptr; Ci = C.rowval; Cx = C.nzval
-    w = Array(Ti,n)
+    w = zeros(Ti,n)
     for j in 1:n                   # count entries in each column of C
         j2 = pinv[j]
-        for p = Ap[j]:(Ap[j+1]-1)
-            i = Ai[p]
-            if i > j continue end
-            w[pinv[i]] += one(Ti)
+        for p in Ap[j]:(Ap[j+1]-1)
+            (i = Ai[p]) > j || (w[max(pinv[i],j2)] += one(Ti))
         end
     end
     Cp[:] = cumsum(vcat(one(Ti),w))
+    copy!(w,Cp[1:n])          # needed to be consistent with cs_cumsum
     for j in 1:n
         j2 = pinv[j]
         for p = Ap[j]:(Ap[j+1]-1)
-            i = Ai[p]
-            if i > j continue end
+            (i = Ai[p]) > j && continue
             i2 = pinv[i]
-            q = w[max(i2,j2)]
-            Ci[q] = min(i2,j2)
+            ind = max(i2,j2)
+            Ci[q = w[ind]] = min(i2,j2)
+            w[ind] += 1
             Cx[q] = Ax[p]
         end
     end
