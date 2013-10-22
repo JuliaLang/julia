@@ -232,11 +232,11 @@ end
 function publish(branch::String)
     Git.branch(dir="METADATA") == branch ||
         error("METADATA must be on $branch to publish changes")
-    Git.success(`push -q -n`, dir="METADATA") ||
+    Git.success(`push -q -n origin $branch`, dir="METADATA") ||
         error("METADATA is behind origin/$branch – run Pkg.update() before publishing")
     Git.run(`fetch -q`, dir="METADATA")
-    info("Validating METADATA")
-    check_metadata()
+    # info("Validating METADATA")
+    # check_metadata()
     cmd = Git.cmd(`diff --name-only --diff-filter=AMR origin/$branch HEAD --`, dir="METADATA")
     tags = Dict{ASCIIString,Vector{ASCIIString}}()
     for line in eachline(cmd)
@@ -271,7 +271,7 @@ function publish(branch::String)
         end
     end
     info("Pushing METADATA changes")
-    Git.run(`push -q`, dir="METADATA")
+    Git.run(`push -q origin $branch`, dir="METADATA")
 end
 
 function resolve(
