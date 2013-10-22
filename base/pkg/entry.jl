@@ -479,7 +479,7 @@ function check_metadata()
     avail = Read.available()
     instd = Read.installed(avail)
     fixed = Read.fixed(avail,instd,VERSION)
-    deps  = Query.dependencies(avail,fixed)
+    deps,conflict  = Query.dependencies(avail,fixed)
 
     problematic = Resolve.sanity_check(deps)
     if !isempty(problematic)
