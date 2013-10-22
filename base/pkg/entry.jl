@@ -235,8 +235,8 @@ function publish(branch::String)
     Git.success(`push -q -n origin $branch`, dir="METADATA") ||
         error("METADATA is behind origin/$branch – run Pkg.update() before publishing")
     Git.run(`fetch -q`, dir="METADATA")
-    # info("Validating METADATA")
-    # check_metadata()
+    info("Validating METADATA")
+    check_metadata()
     cmd = Git.cmd(`diff --name-only --diff-filter=AMR origin/$branch HEAD --`, dir="METADATA")
     tags = Dict{ASCIIString,Vector{ASCIIString}}()
     for line in eachline(cmd)
@@ -477,9 +477,11 @@ end
 
 function check_metadata()
     avail = Read.available()
-    instd = Read.installed(avail)
-    fixed = Read.fixed(avail,instd,VERSION)
-    deps,conflict  = Query.dependencies(avail,fixed)
+    deps, conflicts = Query.dependencies(avail)
+
+    for (dp,dv) in deps, (v,a) in dv, p in keys(a.requires)
+        haskey(deps, p) || error("package $dp v$v requires a non-registered package: $p")
+    end
 
     problematic = Resolve.sanity_check(deps)
     if !isempty(problematic)
