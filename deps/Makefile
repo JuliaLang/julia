@@ -195,7 +195,7 @@ LLVM_COMPILER_RT_TAR=
 endif
 
 LLVM_TARGET_FLAGS= --enable-targets=host
-LLVM_FLAGS =  --disable-threads --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
+LLVM_FLAGS = --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
 LLVM_MFLAGS =
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_FLAGS += --enable-assertions 
@@ -213,6 +213,14 @@ endif
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared
 LLVM_MFLAGS += CPPFLAGS="-D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE"
+endif
+ifeq ($(USE_INTEL_JITEVENTS), 1)
+LLVM_FLAGS += --with-intel-jitevents
+ifeq ($(OS), WINNT)
+LLVM_FLAGS += --disable-threads
+endif
+else
+LLVM_FLAGS += --disable-threads
 endif
 
 ifeq ($(BUILD_LLDB),1)

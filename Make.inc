@@ -32,6 +32,9 @@ USE_SYSTEM_LIBUV=0
 USE_MKL = 0
 MKLLIB = $(MKLROOT)/lib/intel64
 
+# Set to 1 to enable profiling with Intel VTune Amplifier
+USE_INTEL_JITEVENTS = 0
+
 # we include twice to pickup user definitions better
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
