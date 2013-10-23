@@ -90,7 +90,7 @@ include_string(txt::ByteString, fname::ByteString) =
 
 include_string(txt::ByteString) = include_string(txt, "string")
 
-function source_path(default::Union(String,Nothing))
+function source_path(default::Union(String,Nothing)="")
     t = current_task()
     while true
         s = t.storage
@@ -103,7 +103,6 @@ function source_path(default::Union(String,Nothing))
         t = t.parent
     end
 end
-source_path() = source_path("")
 
 macro __FILE__() source_path() end
 
