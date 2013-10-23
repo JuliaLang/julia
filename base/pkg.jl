@@ -42,10 +42,14 @@ resolve() = cd(Entry.resolve)
 register(pkg::String) = cd(Entry.register,pkg)
 register(pkg::String, url::String) = cd(Entry.register,pkg,url)
 
-tag(pkg::String, sym::Symbol=:bump; commit::String="", msg::String="") =
-    cd(Entry.tag,pkg,sym,commit,msg)
-tag(pkg::String, ver::VersionNumber; commit::String="", msg::String="") =
-    cd(Entry.tag,pkg,ver,commit,msg)
+tag(pkg::String, sym::Symbol=:bump; force::Bool=false) =
+	cd(Entry.tag,pkg,sym,force)
+tag(pkg::String, ver::VersionNumber; force::Bool=false) =
+	cd(Entry.tag,pkg,ver,force)
+tag(pkg::String, sym::Symbol, commit::String; force::Bool=false) =
+	cd(Entry.tag,pkg,sym,force,commit)
+tag(pkg::String, ver::VersionNumber, commit::String; force::Bool=false) =
+	cd(Entry.tag,pkg,ver,force,commit)
 
 publish() = cd(Entry.publish,META_BRANCH)
 

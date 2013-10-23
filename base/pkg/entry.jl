@@ -358,13 +358,18 @@ function resolve(
     build(map(x->x[1],filter(x->x[2][2]!=nothing,changes)))
 end
 
-function write_tag_metadata(pkg::String, ver::VersionNumber, commit::String)
+function write_tag_metadata(pkg::String, ver::VersionNumber, commit::String, force::Bool=false)
     cmd = Git.cmd(`cat-file blob $commit:REQUIRE`, dir=pkg)
     reqs = success(cmd) ? Reqs.read(cmd) : Reqs.Line[]
     cd("METADATA") do
         d = joinpath(pkg,"versions",string(ver))
         mkpath(d)
         sha1file = joinpath(d,"sha1")
+        if !force && ispath(sha1file)
+            current = readchomp(sha1file)
+            current == commit ||
+                error("$pkg v$ver is already registered as $current, bailing")
+        end
         open(io->println(io,commit), sha1file, "w")
         Git.run(`add $sha1file`)
         reqsfile = joinpath(d,"requires")
@@ -396,17 +401,21 @@ function register(pkg::String, url::String)
             open(io->println(io,url), path, "w")
             Git.run(`add $path`)
         end
-        for (ver,commit) in versions
+        vers = sort!([keys(versions)...])
+        for ver in vers
             info("Tagging $pkg v$ver")
-            write_tag_metadata(pkg,ver,commit)
+            write_tag_metadata(pkg,ver,versions[ver])
         end
-        info("Committing METADATA for $pkg")
-        msg = "Register $pkg"
-        if !isempty(versions)
-            vers = map(v->"v$v", sort!([keys(versions)...]))
-            msg *= ": $(join(vers,", "))"
+        if Git.staged(dir="METADATA")
+            info("Committing METADATA for $pkg")
+            msg = "Register $pkg"
+            if !isempty(versions)
+                msg *= ": $(join(map(v->"v$v", vers),", "))"
+            end
+            Git.run(`commit -q -m $msg -- $pkg`, dir="METADATA")
+        else
+            info("No METADATA changes to commit")
         end
-        Git.run(`commit -q -m $msg -- $pkg`, dir="METADATA")
     end
 end
 
@@ -425,53 +434,62 @@ end
 
 nextbump(v::VersionNumber) = isrewritable(v) ? v : nextpatch(v)
 
-function tag(pkg::String, ver::Union(Symbol,VersionNumber), commit::String, msg::String)
+function tag(pkg::String, ver::Union(Symbol,VersionNumber), force::Bool, commit::String="HEAD")
     ispath(pkg,".git") || error("$pkg is not a git repo")
     Git.dirty(dir=pkg) &&
         error("$pkg is dirty – commit or stash changes to tag")
     Git.dirty(pkg, dir="METADATA") &&
         error("METADATA/$pkg is dirty – commit or stash changes to tag")
-    commit = isempty(commit) ? Git.head(dir=pkg) :
-        Git.readchomp(`rev-parse $commit`, dir=pkg)
+    commit = Git.readchomp(`rev-parse $commit`, dir=pkg)
     registered = isfile("METADATA",pkg,"url")
-    if registered
-        avail = Read.available(pkg)
-        existing = VersionNumber[keys(Read.available(pkg))...]
-        ancestors = filter(v->Git.is_ancestor_of(avail[v].sha1,commit,dir=pkg), existing)
-    else
-        tags = split(Git.readall(`tag -l v*`, dir=pkg))
-        filter!(tag->ismatch(Base.VERSION_REGEX,tag), tags)
-        existing = VersionNumber[tags...]
-        filter!(tags) do tag
-            sha1 = Git.readchomp(`rev-parse --verify $tag^{commit}`, dir=pkg)
-            Git.is_ancestor_of(sha1,commit,dir=pkg)
+    if !force
+        if registered
+            avail = Read.available(pkg)
+            existing = VersionNumber[keys(Read.available(pkg))...]
+            ancestors = filter(v->Git.is_ancestor_of(avail[v].sha1,commit,dir=pkg), existing)
+        else
+            tags = split(Git.readall(`tag -l v*`, dir=pkg))
+            filter!(tag->ismatch(Base.VERSION_REGEX,tag), tags)
+            existing = VersionNumber[tags...]
+            filter!(tags) do tag
+                sha1 = Git.readchomp(`rev-parse --verify $tag^{commit}`, dir=pkg)
+                Git.is_ancestor_of(sha1,commit,dir=pkg)
+            end
+            ancestors = VersionNumber[tags...]
         end
-        ancestors = VersionNumber[tags...]
+        sort!(existing)
+        if isa(ver,Symbol)
+            prv = isempty(existing) ? v"0" :
+                  isempty(ancestors) ? maximum(existing) : maximum(ancestors)
+            ver = (ver == :bump ) ? nextbump(prv)  :
+                  (ver == :patch) ? nextpatch(prv) :
+                  (ver == :minor) ? nextminor(prv) :
+                  (ver == :major) ? nextmajor(prv) :
+                                    error("invalid version selector: $ver")
+        end
+        isrewritable(ver) && filter!(v->v!=ver,existing)
+        check_new_version(existing,ver)
     end
-    sort!(existing)
-    if isa(ver,Symbol)
-        prv = isempty(existing) ? v"0" :
-              isempty(ancestors) ? maximum(existing) : maximum(ancestors)
-        ver = (ver == :bump ) ? nextbump(prv)  :
-              (ver == :patch) ? nextpatch(prv) :
-              (ver == :minor) ? nextminor(prv) :
-              (ver == :major) ? nextmajor(prv) :
-                                error("invalid version selector: $ver")
-    end
-    rewritable = isrewritable(ver)
-    rewritable && filter!(v->v!=ver,existing)
-    check_new_version(existing,ver)
-    isempty(msg) && (msg = "$pkg v$ver [$(commit[1:10])]")
     # TODO: check that SHA1 isn't the same as another version
-    opts = rewritable ? `--force` : `--annotate --message $msg`
     info("Tagging $pkg v$ver")
+    opts = ``
+    if force || isrewritable(ver)
+        opts = `$opts --force`
+    end
+    if !isrewritable(ver)
+        opts = `$opts --annotate --message "$pkg v$ver [$(commit[1:10])]"`
+    end
     Git.run(`tag $opts v$ver $commit`, dir=pkg, out=DevNull)
     registered || return
     try
         Git.transact(dir="METADATA") do
-            write_tag_metadata(pkg,ver,commit)
-            info("Committing METADATA for $pkg")
-            Git.run(`commit -q -m "Tag $pkg v$ver" -- $pkg`, dir="METADATA")
+            write_tag_metadata(pkg,ver,commit,force)
+            if Git.staged(dir="METADATA")
+                info("Committing METADATA for $pkg")
+                Git.run(`commit -q -m "Tag $pkg v$ver" -- $pkg`, dir="METADATA")
+            else
+                info("No METADATA changes to commit")
+            end
         end
     catch
         Git.run(`tag -d v$ver`, dir=pkg)
