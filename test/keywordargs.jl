@@ -30,6 +30,12 @@ kwf4(;a=1,b=2) = (a,b)
 @test isequal(kwf4(), (1,2))
 @test isequal(kwf4(b=10), (1,10))
 
+# in-order evaluation of keyword args
+kwf9(;read=true,write=!read) = (read,write)
+@test kwf9() === (true,false)
+@test kwf9(read=false) === (false,true)
+@test kwf9(write=true) === (true,true)
+
 # rest keywords
 kwdelegator(ones;kw...) = kwf1(ones;kw...)
 @test kwdelegator(4,hundreds=8) == 804
