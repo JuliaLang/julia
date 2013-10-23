@@ -27,8 +27,6 @@ function task_local_storage(body::Function, key, val)
     try body()
     finally
         hadkey ? (tls[key] = old) : delete!(tls,key)
-    catch
-        rethrow()
     end
 end
 
