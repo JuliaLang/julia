@@ -246,7 +246,7 @@ function publish(branch::String)
         m != nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
         pkg, ver = m.captures; ver = convert(VersionNumber,ver)
         sha1 = readchomp(joinpath("METADATA",chomp(line)))
-        any(split(Git.readall(`tag --points-at $sha1`, dir=pkg))) do tag
+        any(split(Git.readall(`tag --contains $sha1`, dir=pkg))) do tag
             ver == convert(VersionNumber,tag) || return false
             haskey(tags,pkg) || (tags[pkg] = ASCIIString[])
             push!(tags[pkg], tag)
