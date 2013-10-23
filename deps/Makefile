@@ -210,6 +210,9 @@ LLVM_FLAGS += --disable-optimized
 else
 LLVM_FLAGS += --enable-optimized
 endif
+ifeq ($(USE_LIBCPP), 1)
+LLVM_FLAGS += --enable-libcpp
+endif
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared
 LLVM_MFLAGS += CPPFLAGS="-D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE"
@@ -370,7 +373,7 @@ READLINE_OPTS = --enable-shared --enable-static --with-curses
 READLINE_CFLAGS = 
 readline-$(READLINE_VER).tar.gz:
 	$(JLDOWNLOAD) readline62-001 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-001
-	$(JLDOWNLOAD) readline62-002 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-002
+	#$(JLDOWNLOAD) readline62-002 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-002
 	$(JLDOWNLOAD) readline62-003 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-003
 	$(JLDOWNLOAD) readline62-004 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-004
 	$(JLDOWNLOAD) $@ http://ftp.gnu.org/gnu/readline/$@
@@ -704,7 +707,7 @@ install-Rmath: $(RMATH_OBJ_TARGET)
 OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT)
 OPENBLAS_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libopenblas.$(SHLIB_EXT)
 
-OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH)
+OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH) FEXTRALIB="-L/usr/local/lib -lgfortran"
 
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
