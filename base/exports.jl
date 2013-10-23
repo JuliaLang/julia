@@ -661,6 +661,7 @@ export
     sprandbool,
     sprandn,
     spzeros,
+    symperm,
 
 # bitarrays
     bitpack,
