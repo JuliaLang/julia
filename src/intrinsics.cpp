@@ -318,7 +318,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 
     if (vxt != llvmt) {
         if (vxt == T_void)
-            return builder.CreateUnreachable();
+            return vx;
         if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
             vx = builder.CreatePtrToInt(vx, llvmt);
         }
@@ -681,7 +681,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
     Type *t = x->getType();
     if (t == T_void || (y && y->getType() == T_void))
-        return builder.CreateUnreachable();
+        return t == T_void ? x : y;
 
     Value *fy;
     Value *den;
