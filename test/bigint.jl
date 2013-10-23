@@ -232,23 +232,24 @@ function mul(a::Vector{BigInt}, b::Vector{BigInt})
 end
 
 function bigfib(n)
-   if n == 0
-      BigInt(1)
-   elseif n == 1
-      BigInt(1)
-   else
-      r = [BigInt(1), BigInt(1), BigInt(0)]
-      s = [BigInt(1), BigInt(0), BigInt(1)]
-      while n != 0
-         if (n & 1) == 1
-            s = mul(s,r)
-         end
-         n >>= 1
-         if n != 0
-            r = mul(r,r)
-         end
-      end
-      s[1]
-   end
+    n == 0 && return BigInt(0)
+    n -= 1
+    r = [BigInt(1), BigInt(1), BigInt(0)]
+    s = [BigInt(1), BigInt(0), BigInt(1)]
+    while true
+       (n & 1) == 1 && (s = mul(s,r))
+       (n >>= 1) == 0 && return s[1]
+       r = mul(r,r)
+    end
 end
-@test length(string(bigfib(1000000))) == 208988
+@test [bigfib(n) for n=0:10] == [0,1,1,2,3,5,8,13,21,34,55]
+
+n = bigfib(1000001)
+@test ndigits(n) == 208988
+@test mod(n,10^15) == 359244926937501
+@test div(n,big(10)^208973) == 316047687386689
+
+s = string(n)
+@test length(s) == 208988
+@test endswith(s, "359244926937501")
+@test beginswith(s, "316047687386689")
