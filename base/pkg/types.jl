@@ -3,7 +3,7 @@ module Types
 export VersionInterval, VersionSet, Requires, Available, Fixed,
        merge_requires!, satisfies, @recover
 
-import Base: show, isempty, in, intersect, isequal, hash
+import Base: show, isempty, in, intersect, isequal, hash, deepcopy_internal
 
 immutable VersionInterval
     lower::VersionNumber
@@ -40,12 +40,14 @@ isempty(s::VersionSet) = all(i->isempty(i), s.intervals)
 in(v::VersionNumber, s::VersionSet) = any(i->in(v,i), s.intervals)
 function intersect(A::VersionSet, B::VersionSet)
     ivals = vec([ intersect(a,b) for a in A.intervals, b in B.intervals ])
+    ivals = copy(ivals) # temporary bandaid for issue #4592
     filter!(i->!isempty(i), ivals)
     sort!(ivals, by=i->i.lower)
     VersionSet(ivals)
 end
 isequal(A::VersionSet, B::VersionSet) = (A.intervals == B.intervals)
 hash(s::VersionSet) = hash(s.intervals)
+deepcopy_internal(vs::VersionSet, ::ObjectIdDict) = VersionSet(copy(vs.intervals))
 
 typealias Requires Dict{ByteString,VersionSet}
 

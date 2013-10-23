@@ -11,14 +11,15 @@ end
 (*){TvA,TiA}(A::SparseMatrixCSC{TvA,TiA}, X::BitArray{1}) = invoke(*, (SparseMatrixCSC, AbstractVector), A, X)
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 function A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number, y::AbstractVector)
-    if A.n != length(x); throw(DimensionMismatch()); end
-    for i = 1:A.n; y[i] *= β; end
+    A.n == length(x) || throw(DimensionMismatch(""))
+    A.m == length(y) || throw(DimensionMismatch(""))
+    for i = 1:A.m; y[i] *= β; end
     for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
         y[A.rowval[k]] += α*A.nzval[k]*x[col]
     end
     return y
 end
-(*){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx}) = A_mul_B!(1, A, x, 0, zeros(promote_type(TA,Tx), length(x)))
+(*){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx}) = A_mul_B!(1, A, x, 0, zeros(promote_type(TA,Tx), A.m))
 
 (*)(X::BitArray{1}, A::SparseMatrixCSC) = invoke(*, (AbstractVector, SparseMatrixCSC), X, A)
 # In vector-matrix multiplication, the correct orientation of the vector is assumed.
