@@ -203,26 +203,28 @@ function update(branch::String)
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
-    for pkg in filter!(Read.isinstalled,[keys(avail)...])
-        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+    @sync for pkg in filter!(Read.isinstalled,[keys(avail)...])
+        @async Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
     instd = Read.installed(avail)
     free = Read.free(instd)
-    for (pkg,ver) in free
-        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+    @sync for (pkg,ver) in free
+        @async Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
     fixed = Read.fixed(avail,instd)
-    for (pkg,ver) in fixed
+    @sync for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
-        if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
-            info("Updating $pkg...")
-            @recover begin
-                Git.run(`fetch -q --all`, dir=pkg)
-                Git.success(`pull -q --ff-only`, dir=pkg) # suppress output
+        @async begin
+            if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
+                info("Updating $pkg...")
+                @recover begin
+                    Git.run(`fetch -q --all`, dir=pkg)
+                    Git.success(`pull -q --ff-only`, dir=pkg) # suppress output
+                end
             end
-        end
-        if haskey(avail,pkg)
-            Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+            if haskey(avail,pkg)
+                Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+            end
         end
     end
     info("Computing changes...")
@@ -252,22 +254,24 @@ function publish(branch::String)
         end || error("$pkg v$ver is incorrectly tagged – $sha1 expected")
     end
     isempty(tags) && info("No new package versions to publish.")
-    for pkg in sort!([keys(tags)...])
-        forced = ASCIIString[]
-        unforced = ASCIIString[]
-        for tag in tags[pkg]
-            ver = convert(VersionNumber,tag)
-            push!(isrewritable(ver) ? forced : unforced, tag)
-        end
-        if !isempty(forced)
-            info("Pushing $pkg temporary tags: ", join(forced,", "))
-            refspecs = ["refs/tags/$tag:refs/tags/$tag" for tag in forced]
-            Git.run(`push -q --force origin $refspecs`, dir=pkg)
-        end
-        if !isempty(unforced)
-            info("Pushing $pkg permanent tags: ", join(unforced,", "))
-            refspecs = ["refs/tags/$tag:refs/tags/$tag" for tag in unforced]
-            Git.run(`push -q origin $refspecs`, dir=pkg)
+    @sync for pkg in sort!([keys(tags)...])
+        @async begin
+            forced = ASCIIString[]
+            unforced = ASCIIString[]
+            for tag in tags[pkg]
+                ver = convert(VersionNumber,tag)
+                push!(isrewritable(ver) ? forced : unforced, tag)
+            end
+            if !isempty(forced)
+                info("Pushing $pkg temporary tags: ", join(forced,", "))
+                refspecs = ["refs/tags/$tag:refs/tags/$tag" for tag in forced]
+                Git.run(`push -q --force origin $refspecs`, dir=pkg)
+            end
+            if !isempty(unforced)
+                info("Pushing $pkg permanent tags: ", join(unforced,", "))
+                refspecs = ["refs/tags/$tag:refs/tags/$tag" for tag in unforced]
+                Git.run(`push -q origin $refspecs`, dir=pkg)
+            end
         end
     end
     info("Pushing METADATA changes")
