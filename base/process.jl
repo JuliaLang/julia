@@ -28,9 +28,11 @@ type AndCmds <: AbstractCmd
     AndCmds(a::AbstractCmd, b::AbstractCmd) = new(a,b)
 end
 
+shell_escape(cmd::Cmd) = shell_escape(cmd.exec...)
+
 function show(io::IO, cmd::Cmd)
     if isa(cmd.exec,Vector{ByteString})
-        esc = shell_escape(cmd.exec...)
+        esc = shell_escape(cmd)
         print(io,'`')
         for c in esc
             if c == '`'
