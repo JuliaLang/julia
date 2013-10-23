@@ -20,6 +20,18 @@ end
 task_local_storage(key) = task_local_storage()[key]
 task_local_storage(key, val) = (task_local_storage()[key] = val)
 
+function task_local_storage(body::Function, key, val)
+    tls = task_local_storage()
+    hadkey = haskey(tls,key)
+    old = get(tls,key,nothing)
+    try body()
+    finally
+        hadkey ? (tls[key] = old) : delete!(tls,key)
+    catch
+        rethrow()
+    end
+end
+
 # NOTE: you can only wait for scheduled tasks
 function wait(t::Task)
     if is(t.donenotify, nothing)
