@@ -496,7 +496,7 @@ function factorize!{T}(A::Matrix{T})
         end
         return lufact!(A)
     end
-    return qrpfact!(A)
+    return qrfact!(A, true)
 end
 
 factorize(A::AbstractMatrix) = factorize!(copy(A))
@@ -517,7 +517,7 @@ function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
         if istriu(A) return \(Triangular(A, :U),B) end
         return \(lufact(A),B)
     end
-    return qrpfact(A)\B
+    return qrfact(A, true)\B
 end
 
 ## Moore-Penrose inverse

@@ -168,6 +168,10 @@ export PipeString
 #   copy!(dest::AbstractArray, doffs::Integer, src::Integer)
 # in abstractarray.jl
 @deprecate copy!(dest::AbstractArray, src, doffs::Integer)  copy!(dest, doffs, src)
+@deprecate qrpfact!(A)         qrfact!(A, true)
+@deprecate qrpfact(A)          qrfact(A, true)
+@deprecate qrp(A, thin)        qr(A, thin, true)
+@deprecate qrp(A)              qr(A, true)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)

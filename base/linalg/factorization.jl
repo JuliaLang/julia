@@ -244,106 +244,61 @@ end
 
 cond(A::LU, p) = 1.0/LinAlg.LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm(A[:L][A[:p],:]*A[:U], p))
 
-## QR decomposition without column pivots. By the faster geqrt3
+####################
+# QR factorization #
+####################
+
 type QR{S<:BlasFloat} <: Factorization{S}
     vs::Matrix{S}                     # the elements on and above the diagonal contain the N-by-N upper triangular matrix R; the elements below the diagonal are the columns of V
     T::Matrix{S}                      # upper triangular factor of the block reflector.
 end
+
+# QR decomposition without column pivots. By the faster geqrt3
 QR{T<:BlasFloat}(A::StridedMatrix{T}, nb::Integer = min(minimum(size(A)), 36)) = QR(LAPACK.geqrt!(A, nb)...)
 
-qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, args::Integer...) = QR(A, args...)
-qrfact!(A::StridedMatrix, args::Integer...) = qrfact!(float(A), args...)
-qrfact{T<:BlasFloat}(A::StridedMatrix{T}, args::Integer...) = qrfact!(copy(A), args...)
-qrfact(A::StridedMatrix, args::Integer...) = qrfact!(float(A), args...)
-qrfact(x::Integer) = qrfact(float(x))
-qrfact(x::Number) = QR(fill(one(x), 1, 1), fill(x, 1, 1))
-
-function qr(A::Union(Number, AbstractMatrix), thin::Bool)
-    F = qrfact(A)
-    return (full(F[:Q], thin), F[:R])
-end
-qr(A::Union(Number, AbstractMatrix)) = qr(A, true)
-
-size(A::QR, args::Integer...) = size(A.vs, args...)
-
-function getindex(A::QR, d::Symbol)
-    if d == :R; return triu(A.vs[1:minimum(size(A)),:]); end;
-    if d == :Q; return QRPackedQ(A); end
-    error("No such type field")
-end
-
 type QRPackedQ{S} <: AbstractMatrix{S} 
-    vs::Matrix{S}                      
-    T::Matrix{S}                       
+    vs::Matrix{S}
+    T::Matrix{S}
 end
 QRPackedQ(A::QR) = QRPackedQ(A.vs, A.T)
-
-size(A::QRPackedQ, args::Integer...) = size(A.vs, args...)
-
-function full{T<:BlasFloat}(A::QRPackedQ{T}, thin::Bool)
-    if thin return A * eye(T, size(A.T, 2)) end
-    return A * eye(T, size(A, 1))
-end
-full(A::QRPackedQ) = full(A, true)
-
-print_matrix(io::IO, A::QRPackedQ, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
-
-## Multiplication by Q from the QR decomposition
-function *{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T})
-    m = size(B, 1)
-    n = size(B, 2)
-    if m == size(A.vs, 1)
-        Bc = copy(B)
-    elseif m == size(A.vs, 2)
-        Bc = [B; zeros(T, size(A.vs, 1) - m, n)]
-    else
-        throw(DimensionMismatch(""))
-    end
-    LAPACK.gemqrt!('L', 'N', A.vs, A.T, Bc)
-end
-Ac_mul_B{T<:BlasReal}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','T',A.vs,A.T,copy(B))
-Ac_mul_B{T<:BlasComplex}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','C',A.vs,A.T,copy(B))
-*{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.gemqrt!('R', 'N', B.vs, B.T, copy(A))
-function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T})
-    m = size(A, 1)
-    n = size(A, 2)
-    if n == size(B.vs, 1)
-        Ac = copy(A)
-    elseif n == size(B.vs, 2)
-        Ac = [B zeros(T, m, size(B.vs, 1) - n)]
-    else
-        throw(DimensionMismatch(""))
-    end
-    LAPACK.gemqrt!('R', iseltype(B.vs,Complex) ? 'C' : 'T', B.vs, B.T, Ac)
-end
-## Least squares solution.  Should be more careful about cases with m < n
-(\)(A::QR, B::StridedVector) = Triangular(A[:R], :U)\(A[:Q]'B)[1:size(A, 2)]
-(\)(A::QR, B::StridedMatrix) = Triangular(A[:R], :U)\(A[:Q]'B)[1:size(A, 2),:]
 
 type QRPivoted{T} <: Factorization{T}
     hh::Matrix{T}
     tau::Vector{T}
-    jpvt::Vector{BlasInt}
+    pivots::Vector{BlasInt}
 end
 
-qrpfact!{T<:BlasFloat}(A::StridedMatrix{T}) = QRPivoted{T}(LAPACK.geqp3!(A)...)
-qrpfact!(A::StridedMatrix) = qrpfact!(float(A))
-qrpfact{T<:BlasFloat}(A::StridedMatrix{T}) = qrpfact!(copy(A))
-qrpfact(A::StridedMatrix) = qrpfact!(float(A))
-
-function qrp(A::AbstractMatrix, thin::Bool)
-    F = qrpfact(A)
-    return full(F[:Q], thin), F[:R], F[:p]
+type QRPivotedQ{T} <: AbstractMatrix{T}
+    hh::Matrix{T}                      # Householder transformations and R
+    tau::Vector{T}                     # Scalar factors of transformations
 end
-qrp(A::AbstractMatrix) = qrp(A, false)
+QRPivotedQ(A::QRPivoted) = QRPivotedQ(A.hh, A.tau)
 
-size(A::QRPivoted, args::Integer...) = size(A.hh, args...)
+function qr(A::Union(Number, AbstractMatrix), thin::Bool=true, pivoted::Bool=false)
+  F = qrfact(A, pivoted)
+  return pivoted ? (full(F[:Q], thin), F[:R], F[:p]) : (full(F[:Q], thin), F[:R])
+end
+
+qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, pivoted::Bool=false, args::Integer...) = pivoted ? QRPivoted{T}(LAPACK.geqp3!(A)...) : QR(A, args...) 
+qrfact!(A::StridedMatrix, pivoted::Bool=false) = qrfact!(float(A), pivoted)
+qrfact{T<:BlasFloat}(A::StridedMatrix{T}, pivoted::Bool=false, args::Integer...) = qrfact!(copy(A), pivoted, args...)
+qrfact(A::StridedMatrix, pivoted::Bool=false, args::Integer...) = qrfact!(float(A), pivoted, args...)
+qrfact(x::Integer, pivoted::Bool=false) = qrfact(float(x), pivoted)
+qrfact(x::Number, pivoted::Bool=false) = pivoted ? error("Not implemented") : QR(fill(one(x), 1, 1), fill(x, 1, 1))
+size(A::Union(QR,        QRPackedQ ), args::Integer...) = size(A.vs, args...)
+size(A::Union(QRPivoted, QRPivotedQ), args::Integer...) = size(A.hh, args...)
+
+function getindex(A::QR, d::Symbol)
+    if d == :R return triu(A.vs[1:minimum(size(A)),:])
+    elseif d == :Q return QRPackedQ(A)
+    else error("No such type field") end
+end
 
 function getindex{T<:BlasFloat}(A::QRPivoted{T}, d::Symbol)
-    if d == :R; return triu(A.hh[1:minimum(size(A)),:]); end;
-    if d == :Q; return QRPivotedQ(A); end
-    if d == :p; return A.jpvt; end
-    if d == :P
+    if d == :R return triu(A.hh[1:minimum(size(A)),:])
+    elseif d == :Q return QRPivotedQ(A)
+    elseif d == :p return A.pivots
+    elseif d == :P #The permutation matrix for the pivot
         p = A[:p]
         n = length(p)
         P = zeros(T, n, n)
@@ -355,74 +310,57 @@ function getindex{T<:BlasFloat}(A::QRPivoted{T}, d::Symbol)
     error("No such type field")
 end
 
-# Julia implementation similarly to xgelsy
-function (\){T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
-    nr = minimum(size(A.hh))
-    nrhs = size(B, 2)
-    if nr == 0 return zeros(0, nrhs), 0 end
-    ar = abs(A.hh[1])
-    if ar == 0 return zeros(nr, nrhs), 0 end
-    rnk = 1
-    xmin = ones(T, nr)
-    xmax = ones(T, nr)
-    tmin = ar
-    tmax = ar
-    while rnk < nr
-        tmin, smin, cmin = LAPACK.laic1!(2, sub(xmin, 1:rnk), tmin, sub(A.hh, 1:rnk, rnk + 1), A.hh[rnk + 1, rnk + 1])
-        tmax, smax, cmax = LAPACK.laic1!(1, sub(xmax, 1:rnk), tmax, sub(A.hh, 1:rnk, rnk + 1), A.hh[rnk + 1, rnk + 1])
-        if tmax*rcond > tmin break end
-        xmin[1:rnk + 1] = [smin*sub(xmin, 1:rnk), cmin]
-        xmax[1:rnk + 1] = [smax*sub(xmin, 1:rnk), cmax]
-        rnk += 1
-        # if cond(r[1:rnk, 1:rnk])*rcond < 1 break end
-    end
-    C, tau = LAPACK.tzrzf!(A.hh[1:rnk,:])
-    X = [Triangular(C[1:rnk,1:rnk],:U)\(A[:Q]'B)[1:rnk,:]; zeros(T, size(A.hh, 2) - rnk, nrhs)]
-    LAPACK.ormrz!('L', iseltype(B, Complex) ? 'C' : 'T', C, tau, X)
-    return X[invperm(A[:p]),:], rnk
-end
-(\)(A::QRPivoted, B::StridedMatrix) = (\)(A, B, sqrt(eps(typeof(real(B[1])))))[1]
-(\)(A::QRPivoted, B::StridedVector) = (\)(A, reshape(B, length(B), 1))[:]
-
-type QRPivotedQ{T} <: AbstractMatrix{T}
-    hh::Matrix{T}                       # Householder transformations and R
-    tau::Vector{T}                      # Scalar factors of transformations
-end
-QRPivotedQ(A::QRPivoted) = QRPivotedQ(A.hh, A.tau)
-
-size(A::QRPivotedQ, args...) = size(A.hh, args...)
-
-function full{T<:BlasFloat}(A::QRPivotedQ{T}, thin::Bool)
+full{T<:BlasFloat}(A::QRPackedQ{T}, thin::Bool) = A * eye(T, thin ? size(A.T, 2) : size(A, 1))
+function full{T<:BlasFloat}(A::QRPivotedQ{T}, thin::Bool=true)
     m, n = size(A.hh)
-    if !thin
-        B = [A.hh zeros(T, m, max(0, m - n))]
-        return LAPACK.orgqr!(B, A.tau)
-    end
-    return LAPACK.orgqr!(copy(A.hh), A.tau)
+    return LAPACK.orgqr!(thin ? copy(A.hh) : [A.hh zeros(T, m, max(0, m-n))], A.tau)
 end
 
-full(A::QRPivotedQ) = full(A, true)
-print_matrix(io::IO, A::QRPivotedQ, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
+print_matrix(io::IO, A::Union(QRPackedQ, QRPivotedQ), rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
 
-## Multiplication by Q from the Pivoted QR decomposition
+## Multiplication by Q from the QR decomposition
+function *{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T})
+    m, n = size(B)
+    if m == size(A.vs, 1)
+        Bc = copy(B)
+    elseif m == size(A.vs, 2)
+        Bc = [B; zeros(T, size(A.vs,1)-m, n)]
+    else
+        throw(DimensionMismatch(""))
+    end
+    LAPACK.gemqrt!('L', 'N', A.vs, A.T, Bc)
+end
+*{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.gemqrt!('R', 'N', B.vs, B.T, copy(A))
 function *{T<:BlasFloat}(A::QRPivotedQ{T}, B::StridedVecOrMat{T})
-    m = size(B, 1)
-    n = size(B, 2)
+    m, n = size(B)
     if m == size(A.hh, 1)
         Bc = copy(B)
     elseif m == size(A.hh, 2)
-        Bc = [B; zeros(T, size(A.hh, 1) - m, n)]
+        Bc = [B; zeros(T, size(A.hh,1)-m, n)]
     else
         throw(DimensionMismatch(""))
     end
     LAPACK.ormqr!('L', 'N', A.hh, A.tau, Bc)
 end
-Ac_mul_B{T<:BlasReal}(A::QRPivotedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','T',A.hh,A.tau,copy(B))
-Ac_mul_B{T<:BlasComplex}(A::QRPivotedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','C',A.hh,A.tau,copy(B))
 *(A::StridedVecOrMat, B::QRPivotedQ) = LAPACK.ormqr!('R', 'N', B.hh, B.tau, copy(A))
+
+Ac_mul_B{T<:BlasReal   }(A::QRPackedQ{T},  B::StridedVecOrMat) = LAPACK.gemqrt!('L','T',A.vs,A.T,  copy(B))
+Ac_mul_B{T<:BlasComplex}(A::QRPackedQ{T},  B::StridedVecOrMat) = LAPACK.gemqrt!('L','C',A.vs,A.T,  copy(B))
+Ac_mul_B{T<:BlasReal   }(A::QRPivotedQ{T}, B::StridedVecOrMat) = LAPACK.ormqr! ('L','T',A.hh,A.tau,copy(B))
+Ac_mul_B{T<:BlasComplex}(A::QRPivotedQ{T}, B::StridedVecOrMat) = LAPACK.ormqr! ('L','C',A.hh,A.tau,copy(B))
+function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T})
+    m, n = size(A)
+    if n == size(B.vs, 1)
+        Ac = copy(A)
+    elseif n == size(B.vs, 2)
+        Ac = [B zeros(T, m, size(B.vs, 1) - n)]
+    else
+        throw(DimensionMismatch(""))
+    end
+    LAPACK.gemqrt!('R', iseltype(B.vs,Complex) ? 'C' : 'T', B.vs, B.T, Ac)
+end
 function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPivotedQ{T})
-    m = size(A, 1)
-    n = size(A, 2)
+    m, n = size(A)
     if n == size(B.hh, 1)
         Ac = copy(A)
     elseif n == size(B.hh, 2)
@@ -433,9 +371,44 @@ function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPivotedQ{T})
     LAPACK.ormqr!('R', iseltype(B.hh,Complex) ? 'C' : 'T', B.hh, B.tau, Ac)
 end
 
+## Least squares solution.
+#XXX Should be more careful about cases with m < n
+(\)(A::QR, B::StridedVector) = Triangular(A[:R], :U)\(A[:Q]'B)[1:size(A, 2)]
+(\)(A::QR, B::StridedMatrix) = Triangular(A[:R], :U)\(A[:Q]'B)[1:size(A, 2),:]
+# Julia implementation similarly to xgelsy
+function (\){T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
+    nr, nrhs = minimum(size(A.hh)), size(B, 2)
+    if nr == 0 return zeros(0, nrhs), 0 end
+    ar = abs(A.hh[1])
+    if ar < eps(typeof(ar)) return zeros(nr, nrhs), 0 end
+    rnk = 1
+    xmin, xmax = ones(T, nr), ones(T, nr)
+    tmin, tmax = ar, ar
+    while rnk < nr
+        Ahh = sub(A.hh, 1:rnk, rnk+1), A.hh[rnk+1, rnk+1]
+        tmin, smin, cmin = LAPACK.laic1!(2, sub(xmin, 1:rnk), tmin, Ahh...)
+        tmax, smax, cmax = LAPACK.laic1!(1, sub(xmax, 1:rnk), tmax, Ahh...)
+        if tmax*rcond > tmin break end
+        xmin[1:rnk+1] = [smin*sub(xmin, 1:rnk), cmin]
+        xmax[1:rnk+1] = [smax*sub(xmin, 1:rnk), cmax] #XXX should this be xmax?
+        rnk += 1
+        # if cond(r[1:rnk, 1:rnk])*rcond < 1 break end
+    end
+    C, tau = LAPACK.tzrzf!(A.hh[1:rnk,:])
+    X = [Triangular(C[1:rnk,1:rnk],:U)\(A[:Q]'B)[1:rnk,:]; zeros(T, size(A.hh,2)-rnk, nrhs)]
+    LAPACK.ormrz!('L', iseltype(B, Complex) ? 'C' : 'T', C, tau, X)
+    return X[invperm(A[:p]),:], rnk
+end
+(\)(A::QRPivoted, B::StridedMatrix) = (\)(A, B, sqrt(eps(typeof(real(B[1])))))[1]
+(\)(A::QRPivoted, B::StridedVector) = (\)(A, reshape(B, length(B), 1))[:]
+
 ##TODO:  Add methods for rank(A::QRP{T}) and adjust the (\) method accordingly
 ##       Add rcond methods for Cholesky, LU, QR and QRP types
 ## Lower priority: Add LQ, QL and RQ factorizations
+
+############################
+# Hessenberg factorization #
+############################
 
 # FIXME! Should add balancing option through xgebal
 type Hessenberg{T} <: Factorization{T}
