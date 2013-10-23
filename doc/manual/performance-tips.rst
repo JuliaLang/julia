@@ -240,6 +240,14 @@ Functions like ``strange_twos`` occur when dealing with data of
 uncertain type, for example data loaded from an input file that might
 contain either integers, floats, strings, or something else.
 
+Fix deprecation warnings
+------------------------
+
+A deprecated function internally performs a lookup in order to
+print a relevant warning only once. This extra lookup can cause a
+significant slowdown, so all uses of deprecated functions should be
+modified as suggested by the warnings.
+
 Tweaks
 ------
 

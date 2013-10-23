@@ -2,9 +2,15 @@ module Git
 #
 # some utility functions for working with git repos
 #
+import Base: shell_escape
 
-dir(d) = cd(dir,d)
-dir() = Base.readchomp(`git rev-parse --git-dir`)
+function dir(d)
+    g = joinpath(d,".git")
+    isdir(g) && return g
+    c = `git rev-parse --git-dir`
+    isempty(d) || (c = `sh -c "cd $(shell_escape(d)) && $(shell_escape(c))"`)
+    normpath(d,Base.readchomp(c))
+end
 
 function git(d)
     isempty(d) && return `git`
