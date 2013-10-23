@@ -294,7 +294,7 @@ end
 
 # based on cs_symperm p. 21, "Direct Methods for Sparse Linear Systems"
 # form A[p,p] for a symmetric A stored in the upper triangle
-function csc_symperm{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti})
+function symperm{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti})
     m,n = size(A); Ap = A.colptr; Ai = A.rowval; Ax = A.nzval
     isperm(pinv) || error("perm must be a permutation")
     m == n == length(pinv) || error("Dimension mismatch")
