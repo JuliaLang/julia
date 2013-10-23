@@ -35,6 +35,8 @@ MKLLIB = $(MKLROOT)/lib/intel64
 # Set to 1 to enable profiling with Intel VTune Amplifier
 USE_INTEL_JITEVENTS = 0
 
+USE_LIBCPP = 0
+
 # we include twice to pickup user definitions better
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
@@ -143,12 +145,22 @@ OPENBLAS_TARGET_ARCH=NEHALEM
 OPENBLAS_DYNAMIC_ARCH=0
 USE_SYSTEM_LIBUNWIND=1
 else
+ifeq ($(DARWINVER),13)
+USE_LIBCPP = 1
+else 
+USE_LIBCPP = 0
+endif
 USEGCC = 0
 USECLANG = 1
 endif
 endif
 
+FC = $(CROSS_COMPILE)gfortran
+
 ifeq ($(USEGCC),1)
+ifeq ($(USE_LIBCPP),1)
+$(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
+endif
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
@@ -162,17 +174,27 @@ CC = $(CROSS_COMPILE)clang
 CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
+ifeq ($(USE_LIBCPP),1)
+CXX += -stdlib=libc++
+else
+CXX += -stdlib=stdlibc++
+endif
 DEBUGFLAGS = -O0 -g -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3
 ifeq ($(OS), Darwin)
+ifeq ($(USE_LIBCPP), 1)
+CC += -mmacosx-version-min=10.7
+CXX += -mmacosx-version-min=10.7
+FC += -mmacosx-version-min=10.7
+else
 CC += -mmacosx-version-min=10.6
 CXX += -mmacosx-version-min=10.6
+endif
 JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
 
-FC = $(CROSS_COMPILE)gfortran
-JFFLAGS = -O2 $(fPIC)
+JFFLAGS = -O2 $(fPIC) -mmacosx-version-min=10.8
 CPP = $(CC) -E
 AR := $(CROSS_COMPILE)ar
 AS := $(CROSS_COMPILE)as
