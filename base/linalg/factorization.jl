@@ -210,19 +210,19 @@ function logdet{T<:Complex}(A::LU{T})
 end
 
 
-function (\){T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T})
+function A_ldiv_B!{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T})
     if A.info > 0; throw(SingularException(A.info)); end
-    LAPACK.getrs!('N', A.factors, A.ipiv, copy(B))
+    LAPACK.getrs!('N', A.factors, A.ipiv, B)
 end
 
-function At_ldiv_B{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T})
+function At_ldiv_B!{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T})
     if A.info > 0; throw(SingularException(A.info)); end
-    LAPACK.getrs!('T', A.factors, A.ipiv, copy(B))
+    LAPACK.getrs!('T', A.factors, A.ipiv, B)
 end
 
-function Ac_ldiv_B{T<:BlasComplex}(A::LU{T}, B::StridedVecOrMat{T})
+function Ac_ldiv_B!{T<:BlasComplex}(A::LU{T}, B::StridedVecOrMat{T})
     if A.info > 0; throw(SingularException(A.info)); end
-    LAPACK.getrs!('C', A.factors, A.ipiv, copy(B))
+    LAPACK.getrs!('C', A.factors, A.ipiv, B)
 end
 
 function At_ldiv_Bt{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T})
@@ -317,8 +317,11 @@ function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T})
     LAPACK.gemqrt!('R', iseltype(B.vs,Complex) ? 'C' : 'T', B.vs, B.T, Ac)
 end
 ## Least squares solution.  Should be more careful about cases with m < n
-(\)(A::QR, B::StridedVector) = Triangular(A[:R], :U)\(A[:Q]'B)[1:size(A, 2)]
-(\)(A::QR, B::StridedMatrix) = Triangular(A[:R], :U)\(A[:Q]'B)[1:size(A, 2),:]
+function A_ldiv_B!(A::QR, B::StridedVecOrMat)
+    LAPACK.gemqrt!('L', iseltype(A.vs,Complex) ? 'C' : 'T', A.vs, A.T, B)
+    LAPACK.trtrs!('U', 'N', 'N', A.vs, B)
+    return B
+end
 
 type QRPivoted{T} <: Factorization{T}
     hh::Matrix{T}
@@ -356,8 +359,11 @@ function getindex{T<:BlasFloat}(A::QRPivoted{T}, d::Symbol)
 end
 
 # Julia implementation similarly to xgelsy
-function (\){T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
-    nr = minimum(size(A.hh))
+function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real = sqrt(eps(typeof(real(B[1])))))
+    mA, nA = size(A.hh)
+    nr = min(mA, nA)
+    mB = size(B, 1)
+    mB == max(mA, nA) || throw(DimensionMismatch(""))
     nrhs = size(B, 2)
     if nr == 0 return zeros(0, nrhs), 0 end
     ar = abs(A.hh[1])
@@ -377,12 +383,28 @@ function (\){T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
         # if cond(r[1:rnk, 1:rnk])*rcond < 1 break end
     end
     C, tau = LAPACK.tzrzf!(A.hh[1:rnk,:])
-    X = [Triangular(C[1:rnk,1:rnk],:U)\(A[:Q]'B)[1:rnk,:]; zeros(T, size(A.hh, 2) - rnk, nrhs)]
-    LAPACK.ormrz!('L', iseltype(B, Complex) ? 'C' : 'T', C, tau, X)
-    return X[invperm(A[:p]),:], rnk
+    LAPACK.ormqr!('L', iseltype(B, Complex) ? 'C' : 'T', A.hh, A.tau, sub(B, 1:mA, 1:nrhs))
+    LAPACK.trtrs!('U', 'N', 'N', C[:,1:rnk], sub(B, 1:rnk, 1:nrhs))
+    # X = [Triangular(C[1:rnk,1:rnk],:U)\B[1:rnk,:]; zeros(T, size(A.hh, 2) - rnk, nrhs)]
+    LAPACK.ormrz!('L', iseltype(B, Complex) ? 'C' : 'T', C, tau, sub(B, 1:nA, 1:nrhs))
+    for j = 1:nrhs
+        for i = 1:nA
+            C[getindex(A.jpvt,i)] = B[i,j]
+        end
+        copy!(B, (1:nA) + mB*(j - 1), C, 1:nA)
+    end
+    return B, rnk
 end
-(\)(A::QRPivoted, B::StridedMatrix) = (\)(A, B, sqrt(eps(typeof(real(B[1])))))[1]
-(\)(A::QRPivoted, B::StridedVector) = (\)(A, reshape(B, length(B), 1))[:]
+function (\){T}(A::QRPivoted, B::StridedMatrix{T})
+    m, n = size(A)
+    if m < n 
+        Bc = [B;zeros(T, n - m, size(B, 2))]
+    else
+        Bc = copy(B)
+    end
+    return A_ldiv_B!(A, Bc)[1][1:n,:]
+end
+(\)(A::QRPivoted, B::StridedVector) = vec((\)(A, reshape(copy(B), length(B), 1)))
 
 type QRPivotedQ{T} <: AbstractMatrix{T}
     hh::Matrix{T}                       # Householder transformations and R
