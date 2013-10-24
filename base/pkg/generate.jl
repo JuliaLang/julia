@@ -9,21 +9,27 @@ github_user() = readchomp(ignorestatus(Git.cmd(`config --global --get github.use
 function package(
     pkg::String,
     license::String;
+    force::Bool = false,
     authors::String = copyright_name(),
     years::Union(Int,String) = copyright_year(),
     username::String = github_user(),
 )
-    ispath(pkg) && error("$pkg exists, refusing to overwrite.")
+    isnew = !ispath(pkg)
+    if !isnew
+        force || error("$pkg exists, refusing to overwrite.")
+        Git.dirty(dir=pkg) && error("$pkg is dirty – commit or stash your changes")
+    end
     try
-        Generate.init(pkg,username)
+        url = isempty(username) ? "" : "git://github.com/$username/$pkg.jl.git"
+        Generate.init(pkg,url)
+
         Generate.license(pkg,license,years,authors)
         Generate.readme(pkg,username)
         Generate.entrypoint(pkg)
         Generate.travis(pkg)
 
-        info("Committing $pkg generated files")
         msg = """
-        $pkg.jl generated files.
+        $pkg.jl $(isnew ? "generated" : "regenerated") files.
 
             license:  $license
             authors:  $authors
@@ -32,20 +38,30 @@ function package(
 
         Julia Version $VERSION [$(Base.BUILD_INFO.commit[1:10])]
         """
-        Git.run(`commit -q -m $msg`, dir=pkg)
+
+        if isnew
+            info("Committing $pkg generated files")
+            Git.run(`commit -q -m $msg`, dir=pkg)
+        elseif Git.staged(dir=pkg)
+            Git.run(`reset -q --`, dir=pkg)
+            info("Regenerated files left unstaged, use `git add -p` to select")
+            open(io->print(io,msg), joinpath(Git.dir(pkg),"MERGE_MSG"), "w")
+        else
+            info("Regenerated files are unchanged")
+        end
     catch
-        run(`rm -rf $pkg`)
+        isnew ? run(`rm -rf $pkg`) : Git.run(`checkout -q -f`)
         rethrow()
     end
 end
 
-function init(pkg::String, username::String="")
-    ispath(pkg) && error("$pkg exists, refusing to overwrite.")
-    info("Initializing $pkg repo: $(abspath(pkg))")
-    Git.run(`init -q $pkg`)
-    Git.run(`commit -q --allow-empty -m "initial empty commit"`, dir=pkg)
-    isempty(username) && return
-    url = "git://github.com/$username/$pkg.jl.git"
+function init(pkg::String, url::String="")
+    if !ispath(pkg)
+        info("Initializing $pkg repo: $(abspath(pkg))")
+        Git.run(`init -q $pkg`)
+        Git.run(`commit -q --allow-empty -m "initial empty commit"`, dir=pkg)
+    end
+    isempty(url) && return
     info("Origin: $url")
     Git.set_remote_url(url,dir=pkg)
 end

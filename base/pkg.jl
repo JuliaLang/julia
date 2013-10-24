@@ -56,7 +56,8 @@ publish() = cd(Entry.publish,META_BRANCH)
 build() = cd(Entry.build)
 build(pkgs::String...) = cd(Entry.build,[pkgs...])
 
-generate(pkg::String, license::String) = cd(Generate.package,pkg,license)
+generate(pkg::String, license::String; force::Bool=false) =
+	cd(Generate.package,pkg,license,force=force)
 
 @deprecate release free
 @deprecate fixup build
