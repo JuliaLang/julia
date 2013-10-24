@@ -135,6 +135,8 @@ USEGCC = 1
 USECLANG = 0
 endif
 
+STDLIBCPP_FLAG = 
+
 ifeq ($(OS), Darwin)
 DARWINVER = $(shell uname -r | cut -b 1-2)
 OSXVER = $(shell sw_vers -productVersion | cut -b 1-4)
@@ -147,6 +149,7 @@ USE_SYSTEM_LIBUNWIND=1
 else
 ifeq ($(DARWINVER),13)
 USE_LIBCPP = 1
+STDLIBCPP_FLAG = -stdlib=libstdc++
 else 
 USE_LIBCPP = 0
 endif
@@ -182,8 +185,8 @@ CC += -stdlib=libc++ -mmacosx-version-min=10.7
 CXX += -stdlib=libc++ -mmacosx-version-min=10.7
 FC += -mmacosx-version-min=10.7
 else
-CC += -stdlib=stdlibc++ -mmacosx-version-min=10.6
-CXX += -stdlib=stdlibc++ -mmacosx-version-min=10.6
+CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
+CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
 endif
 JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
