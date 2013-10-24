@@ -1,14 +1,7 @@
-<a name="banner"/>
-
-                   _
-       _       _ _(_)_     |
-      (_)     | (_) (_)    |   A fresh approach to technical computing
-       _ _   _| |_  __ _   |
-      | | | | | | |/ _` |  |          http://julialang.org
-      | | |_| | | | (_| |  |       julia-users@googlegroups.com
-     _/ |\__'_|_|_|\__'_|  |           #julia on freenode
-    |__/                   |
-
+<a name="logo"/>
+<div align="center">
+<a href="/"><img src="http://julialang.org/images/logo_hires.png" alt="Julia Logo" width="210" height="142"></img></a>
+</div>
 
 [![Build Status](https://api.travis-ci.org/JuliaLang/julia.png?branch=master)](https://travis-ci.org/JuliaLang/julia)
 
