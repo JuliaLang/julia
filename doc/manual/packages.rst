@@ -170,8 +170,8 @@ A package is considered fixed if it is one of the following:
 If any of these are the case, the package manager cannot freely change the installed version of the package, so its requirements must be satisfied by whatever other package versions it picks.
 The combination of top-level requirements in ``~/.julia/REQUIRE`` and the requirement of fixed packages are used to determine what should be installed.
 
-Checkout, Pin and Release
--------------------------
+Checkout, Pin and Free
+----------------------
 
 You may want to use the ``master`` version of a package rather than one of its registered versions.
 There might be fixes or functionality on master that you need that aren't yet published in any regsitered versions, or you may be a developer of the package and need to make changes on ``master`` or some other development branch.
@@ -208,10 +208,10 @@ When you checkout an unregistered version of a package, the copy of the ``REQUIR
 If the ``REQUIRE`` file in the package repo is incorrect or missing, dependencies may be removed when the package is checked out.
 This file is also used to populate newly published versions of the package if you use the API that ``Pkg`` provides for this (described below).
 
-When you decide that you no longer want to have a package checked out on a branch, you can "release" it back to the control of the package manager with ``Pkg.release(pkg)``::
+When you decide that you no longer want to have a package checked out on a branch, you can "free" it back to the control of the package manager with ``Pkg.free(pkg)``::
 
-    julia> Pkg.release("Distributions")
-    INFO: Releasing Distributions...
+    julia> Pkg.free("Distributions")
+    INFO: Freeing Distributions...
     INFO: No packages to install, update or remove.
 
     julia> Pkg.status()
@@ -251,10 +251,10 @@ By default, it pins a package at the current commit, but you can choose a differ
      - Stats                         0.2.5              pinned.1fd0983b.tmp
 
 Now the ``Stats`` package is pinned at commit ``1fd0983b``, which corresponds to version ``0.2.5``.
-When you decide to "unpin" a package and let the package manager update it again, you can use ``Pkg.release`` like you would to move off of any branch::
+When you decide to "unpin" a package and let the package manager update it again, you can use ``Pkg.free`` like you would to move off of any branch::
 
-    julia> Pkg.release("Stats")
-    INFO: Releasing Stats...
+    julia> Pkg.free("Stats")
+    INFO: Freeing Stats...
     INFO: No packages to install, update or remove.
 
     julia> Pkg.status()
