@@ -19,10 +19,9 @@ function package(
         force || error("$pkg exists, refusing to overwrite.")
         Git.dirty(dir=pkg) && error("$pkg is dirty – commit or stash your changes")
     end
+    url = isempty(username) ? "" : "git://github.com/$username/$pkg.jl.git"
     try
-        url = isempty(username) ? "" : "git://github.com/$username/$pkg.jl.git"
         Generate.init(pkg,url)
-
         Generate.license(pkg,license,years,authors)
         Generate.readme(pkg,username)
         Generate.entrypoint(pkg)
