@@ -28,7 +28,7 @@ status(io::IO=STDOUT) = cd(Entry.status,io)
 clone(url_or_pkg::String) = cd(Entry.clone,url_or_pkg)
 clone(url::String, pkg::String) = cd(Entry.clone,url,pkg)
 
-checkout(pkg::String, branch::String="master"; merge::Bool=true, pull::Bool=false) =
+checkout(pkg::String, branch::String="master"; merge::Bool=true, pull::Bool=true) =
     cd(Entry.checkout,pkg,branch,merge,pull)
 
 free(pkg::String) = cd(Entry.free,pkg)
