@@ -4,33 +4,31 @@ using Base.Git, ..Read
 
 copyright_year() = readchomp(`date +%Y`)
 copyright_name() = Git.readchomp(`config --global --get user.name`)
-enable_github() = Git.success(`config --global --get github.user`)
-enable_travis() = Git.success(`config --global --get github.user`)
+github_user() = readchomp(ignorestatus(Git.cmd(`config --global --get github.user`)))
 
 function package(
     pkg::String,
     license::String;
     authors::String = copyright_name(),
     years::Union(Int,String) = copyright_year(),
-    github::Bool = enable_github(),
-    travis::Bool = enable_travis(),
+    username::String = github_user(),
 )
     ispath(pkg) && error("$pkg exists, refusing to overwrite.")
     try
-        Generate.init(pkg,github=github)
-        Generate.license(pkg,license,years=years,authors=authors)
-        Generate.readme(pkg,travis=travis)
+        Generate.init(pkg,username)
+        Generate.license(pkg,license,years,authors)
+        Generate.readme(pkg,username)
         Generate.entrypoint(pkg)
-        travis && Generate.travis(pkg)
+        Generate.travis(pkg)
+
         info("Committing $pkg generated files")
         msg = """
         $pkg.jl generated files.
 
-            license: $license
-            authors: $authors
-            years:   $years
-            github:  $github
-            travis:  $travis
+            license:  $license
+            authors:  $authors
+            years:    $years
+            username: $username
 
         Julia Version $VERSION [$(Base.BUILD_INFO.commit[1:10])]
         """
@@ -41,22 +39,18 @@ function package(
     end
 end
 
-function init(pkg::String; github::Bool=enable_github())
+function init(pkg::String, username::String="")
     ispath(pkg) && error("$pkg exists, refusing to overwrite.")
     info("Initializing $pkg repo: $(abspath(pkg))")
     Git.run(`init -q $pkg`)
     Git.run(`commit -q --allow-empty -m "initial empty commit"`, dir=pkg)
-    github || return
-    user = Git.readchomp(`config --get github.user`)
-    url = "git://github.com/$user/$pkg.jl.git"
+    isempty(username) && return
+    url = "git://github.com/$username/$pkg.jl.git"
     info("Origin: $url")
     Git.set_remote_url(url,dir=pkg)
 end
 
-function license(pkg::String, license::String;
-    years::Union(Int,String) = copyright_year(),
-    authors::String = copyright_name(),
-)
+function license(pkg::String, license::String, years::Union(Int,String), authors::String)
     if !haskey(LICENSES,license)
         licenses = join(sort!([keys(LICENSES)...], by=lowercase), ", ")
         error("$license is not a known license choice, choose one of: $licenses.")
@@ -66,12 +60,11 @@ function license(pkg::String, license::String;
     end
 end
 
-function readme(pkg::String; travis::Bool=enable_travis())
+function readme(pkg::String, username::String="")
     genfile(pkg,"README.md") do io
         println(io, "# $pkg")
-        travis || return
-        user = Git.readchomp(`config --get github.user`)
-        url = "https://travis-ci.org/$user/$pkg.jl"
+        isempty(username) && return
+        url = "https://travis-ci.org/$username/$pkg.jl"
         println(io, "\n[![Build Status]($url.png)]($url)")
     end
 end
