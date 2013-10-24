@@ -132,7 +132,7 @@ type Graph
                         bmt = gmsk[p1][j1]
                         if gdir[p0][j0] == -1
                             gdir[p0][j0] = 0
-                            gdir[p1][j0] = 0
+                            gdir[p1][j1] = 0
                         end
                     end
 
