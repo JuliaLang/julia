@@ -36,6 +36,7 @@ function isfixed(pkg::String, avail::Dict=available(pkg))
     ispath(pkg, ".git") || return true
     Git.dirty(dir=pkg) && return true
     Git.attached(dir=pkg) && return true
+    !Git.success(`cat-file -e HEAD:REQUIRE`, dir=pkg) && isfile(pkg,"REQUIRE") && return true
     head = Git.head(dir=pkg)
     for (ver,info) in avail
         head == info.sha1 && return false
@@ -90,15 +91,17 @@ function installed_version(pkg::String, avail::Dict=available(pkg))
 end
 
 function requires_path(pkg::String, avail::Dict=available(pkg))
-    ispath(pkg,".git") || return joinpath(pkg, "REQUIRE")
-    Git.dirty("REQUIRE", dir=pkg) && return joinpath(pkg, "REQUIRE")
+    pkgreq = joinpath(pkg,"REQUIRE")
+    ispath(pkg,".git") || return pkgreq
+    Git.dirty("REQUIRE", dir=pkg) && return pkgreq
+    !Git.success(`cat-file -e HEAD:REQUIRE`, dir=pkg) && isfile(pkgreq) && return pkgreq
     head = Git.head(dir=pkg)
     for (ver,info) in avail
         if head == info.sha1
             return joinpath("METADATA", pkg, "versions", string(ver), "requires")
         end
     end
-    joinpath(pkg, "REQUIRE")
+    return pkgreq
 end
 
 function requires_list(pkg::String, avail::Dict=available(pkg))
