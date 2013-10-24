@@ -242,10 +242,15 @@ function publish(branch::String)
     cmd = Git.cmd(`diff --name-only --diff-filter=AMR origin/$branch HEAD --`, dir="METADATA")
     tags = Dict{ASCIIString,Vector{ASCIIString}}()
     for line in eachline(cmd)
-        m = match(r"^(.+?)/versions/([^/]+)/sha1$", line)
+        path = chomp(line)
+        m = match(r"^(.+?)/versions/([^/]+)/sha1$", path)
         m != nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
         pkg, ver = m.captures; ver = convert(VersionNumber,ver)
-        sha1 = readchomp(joinpath("METADATA",chomp(line)))
+        sha1 = readchomp(joinpath("METADATA",path))
+        if Git.success(`cat-file -e origin/$branch:$path`, dir="METADATA")
+            old = Git.readchomp(`cat-file blob origin/$branch:$path`, dir="METADATA")
+            old == sha1 || error("$pkg v$ver SHA1 changed in METADATA – refusing to push")
+        end
         any(split(Git.readall(`tag --contains $sha1`, dir=pkg))) do tag
             ver == convert(VersionNumber,tag) || return false
             haskey(tags,pkg) || (tags[pkg] = ASCIIString[])
