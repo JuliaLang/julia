@@ -22,9 +22,14 @@ end
 
 cmd(args::Cmd; dir="") = `$(git(dir)) $args`
 run(args::Cmd; dir="", out=STDOUT) = Base.run(cmd(args,dir=dir) |> out)
-success(args::Cmd; dir="") = Base.success(cmd(args,dir=dir))
 readall(args::Cmd; dir="") = Base.readall(cmd(args,dir=dir))
 readchomp(args::Cmd; dir="") = Base.readchomp(cmd(args,dir=dir))
+
+function success(args::Cmd; dir="")
+    g = git(dir)
+    @windows_only Base.run(`$g update-index --really-refresh`)
+    Base.success(`$g $args`)
+end
 
 modules(args::Cmd; dir="") = readchomp(`config -f .gitmodules $args`, dir=dir)
 different(verA::String, verB::String, path::String; dir="") =
