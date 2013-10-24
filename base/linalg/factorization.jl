@@ -4,61 +4,15 @@ abstract Factorization{T}
 
 (\)(F::Factorization, b::Union(AbstractVector, AbstractMatrix)) = A_ldiv_B!(F, copy(b))
 
+##########################
+# Cholesky factorization #
+##########################
+
 type Cholesky{T<:BlasFloat} <: Factorization{T}
     UL::Matrix{T}
     uplo::Char
 end
 
-function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol)
-    uplochar = string(uplo)[1]
-    C, info = LAPACK.potrf!(uplochar, A)
-    if info > 0 throw(PosDefException(info)) end
-    Cholesky(C, uplochar)
-end
-cholfact!(A::StridedMatrix, args...) = cholfact!(float(A), args...)
-cholfact!{T<:BlasFloat}(A::StridedMatrix{T}) = cholfact!(A, :U)
-cholfact{T<:BlasFloat}(A::StridedMatrix{T}, args...) = cholfact!(copy(A), args...)
-cholfact(A::StridedMatrix, args...) = cholfact!(float(A), args...)
-cholfact(x::Number) = imag(x) == 0 && real(x) > 0 ? Cholesky(fill(sqrt(x), 1, 1), :U) : throw(PosDefException(1))
-
-chol(A::Union(Number, AbstractMatrix), uplo::Symbol) = cholfact(A, uplo)[uplo]
-chol(A::Union(Number, AbstractMatrix)) = cholfact(A, :U)[:U]
-
-size(C::Cholesky) = size(C.UL)
-size(C::Cholesky,d::Integer) = size(C.UL,d)
-
-function getindex(C::Cholesky, d::Symbol)
-    C.uplo == 'U' ? triu!(C.UL) : tril!(C.UL)
-    if d == :U || d == :L
-        return symbol(C.uplo) == d ? C.UL : C.UL'
-    elseif d == :UL
-        return Triangular(C.UL, C.uplo)
-    end
-    error("No such type field")
-end
-
-A_ldiv_B!{T<:BlasFloat}(C::Cholesky{T}, B::StridedVecOrMat{T}) =
-    LAPACK.potrs!(C.uplo, C.UL, B)
-
-function det{T}(C::Cholesky{T})
-    dd = one(T)
-    for i in 1:size(C.UL,1) dd *= abs2(C.UL[i,i]) end
-    dd
-end
-
-function logdet{T}(C::Cholesky{T})
-    dd = zero(T)
-    for i in 1:size(C.UL,1) dd += log(C.UL[i,i]) end
-    dd + dd # instead of 2.0dd which can change the type
-end
-
-function inv(C::Cholesky)
-    Ci, info = LAPACK.potri!(C.uplo, copy(C.UL))
-    if info != 0; throw(SingularException(info)); end 
-    symmetrize_conj!(Ci, C.uplo)
-end
-
-## Pivoted Cholesky
 type CholeskyPivoted{T<:BlasFloat} <: Factorization{T}
     UL::Matrix{T}
     uplo::Char
@@ -67,44 +21,70 @@ type CholeskyPivoted{T<:BlasFloat} <: Factorization{T}
     tol::Real
     info::BlasInt
 end
+
 function CholeskyPivoted{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Char, tol::Real)
     A, piv, rank, info = LAPACK.pstrf!(uplo, A, tol)
-    CholeskyPivoted{T}(uplo == 'U' ? triu!(A) : tril!(A), uplo, piv, rank, tol, info)
+    CholeskyPivoted{T}(uplo=='U' ? triu!(A) : tril!(A), uplo, piv, rank, tol, info)
 end
-cholpfact!(A::StridedMatrix, args...) = cholpfact!(float(A), args...)
-cholpfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol, tol::Real) = CholeskyPivoted(A, string(uplo)[1], tol)
-cholpfact!{T<:BlasFloat}(A::StridedMatrix{T}, tol::Real) = cholpfact!(A, :U, tol)
-cholpfact!{T<:BlasFloat}(A::StridedMatrix{T}) = cholpfact!(A, -1.)
-cholpfact{T<:BlasFloat}(A::StridedMatrix{T}, args...) = cholpfact!(copy(A), args...)
-cholpfact(A::StridedMatrix, args...) = cholpfact!(float(A), args...)
 
-size(C::CholeskyPivoted) = size(C.UL)
-size(C::CholeskyPivoted,d::Integer) = size(C.UL,d)
+function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U, pivoted::Bool=false,
+      tol::Real=-1.0)
+  if pivoted
+    CholeskyPivoted(A, string(uplo)[1], tol)
+  else
+    uplochar = string(uplo)[1]
+    C, info = LAPACK.potrf!(uplochar, A)
+    info==0 ? Cholesky(C, uplochar) : throw(PosDefException(info))
+  end
+end
 
+cholfact!(A::StridedMatrix, uplo::Symbol=:U, pivoted::Bool=false, args...) = cholfact!(float(A), uplo, pivoted, args...)
+cholfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U, pivoted::Bool=false, args...) = cholfact!(copy(A), uplo, pivoted, args...)
+cholfact(A::StridedMatrix, uplo::Symbol=:U, pivoted::Bool=false, args...) = cholfact!(float(A), uplo, pivoted, args...)
+cholfact(A::StridedMatrix, pivoted::Bool=false, args...) = cholfact(float(A), :U, pivoted, args...)
+cholfact(x::Number, pivoted::Bool=false) = imag(x) == 0 && real(x) > 0 ? Cholesky(fill(sqrt(x), 1, 1), :U) : throw(PosDefException(1))
+
+chol(A::Union(Number, AbstractMatrix), uplo::Symbol=:U) = cholfact(A, uplo)[uplo]
+
+function getindex(C::Cholesky, d::Symbol)
+    C.uplo == 'U' ? triu!(C.UL) : tril!(C.UL)
+    if d == :U || d == :L return symbol(C.uplo) == d ? C.UL : C.UL'
+    elseif d == :UL return Triangular(C.UL, C.uplo)
+    else error("No such type field")
+    end
+end
 getindex(C::CholeskyPivoted) = C.UL, C.piv
 function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
-    if d == :U || d == :L
-        return symbol(C.uplo) == d ? C.UL : C.UL'
+    if d == :U || d == :L return symbol(C.uplo) == d ? C.UL : C.UL'
+    elseif d == :p return C.piv 
+    elseif d == :P return perm_matrix(C.piv, T)
+    else error("No such type field")
     end
-    if d == :p return C.piv end
-    if d == :P
-        n = size(C, 1)
-        P = zeros(T, n, n)
-        for i in 1:n
-            P[C.piv[i],i] = one(T)
-        end
-        return P
-    end
-    error("No such type field")
 end
 
+#Generate permutation matrix from a permutation
+function perm_matrix{T<:Integer}(A::Vector{T}, output_type::Type=T)
+    n = length(A)
+    P = zeros(output_type, n, n)
+    for i=1:n
+        P[A[i], i] = one(output_type)
+    end
+    P
+end
+
+size(C::Union(Cholesky,CholeskyPivoted)) = size(C.UL)
+size(C::Union(Cholesky,CholeskyPivoted),d::Integer) = size(C.UL,d)
+
+rank(C::CholeskyPivoted) = C.rank
+rank(C::Cholesky) = size(C.UL, 1) #full rank
+
+A_ldiv_B!{T<:BlasFloat}(C::Cholesky{T}, B::StridedVecOrMat{T}) = LAPACK.potrs!(C.uplo, C.UL, B)
 function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedVector{T})
-    if C.rank < size(C.UL, 1); throw(RankDeficientException(C.info)); end
+    C.rank < size(C.UL, 1) ? throw(RankDeficientException(C.info)) :
     ipermute!(LAPACK.potrs!(C.uplo, C.UL, permute!(B, C.piv)), C.piv)
 end
-
 function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
-    if C.rank < size(C.UL, 1); throw(RankDeficientException(C.info)); end
+    C.rank < size(C.UL, 1) ? throw(RankDeficientException(C.info)) : nothing
     n = size(C, 1)
     for i = 1:size(B, 2)
         permute!(sub(B, 1:n, i), C.piv)
@@ -113,19 +93,19 @@ function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
     for i = 1:size(B, 2)
         ipermute!(sub(B, 1:n, i), C.piv)
     end
-    return B
+    B
 end
 
-rank(C::CholeskyPivoted) = C.rank
+det{T}(C::Cholesky{T}) = prod(abs2(diag(C.UL)))
+det{T}(C::CholeskyPivoted{T}) = C.rank < size(C.UL, 1) ? real(zero(T)) : prod(abs2(diag(C.UL)))
 
-function det{T}(C::CholeskyPivoted{T})
-    if C.rank < size(C.UL, 1) 
-        return real(zero(T))
-    else 
-        return prod(abs2(diag(C.UL)))
-    end
+logdet{T}(C::Cholesky{T}) = 2sum(log(diag(C.UL)))
+logdet{T}(C::CholeskyPivoted{T}) = C.rank < size(C.UL, 1) ? real(convert(T, -Inf)) : 2sum(log(diag(C.UL)))
+
+function inv(C::Cholesky)
+    Ci, info = LAPACK.potri!(C.uplo, copy(C.UL))
+    info == 0 ? symmetrize_conj!(Ci, C.uplo) : throw(SingularException(info))
 end
-    
 function inv(C::CholeskyPivoted)
     if C.rank < size(C.UL, 1) throw(RankDeficientException(C.info)) end
     Ci, info = LAPACK.potri!(C.uplo, copy(C.UL))
@@ -134,15 +114,18 @@ function inv(C::CholeskyPivoted)
     (symmetrize!(Ci, C.uplo))[ipiv, ipiv]
 end
 
-## LU
+####################
+# LU factorization #
+####################
+
 type LU{T<:BlasFloat} <: Factorization{T}
     factors::Matrix{T}
-    ipiv::Vector{BlasInt}
+    pivots::Vector{BlasInt}
     info::BlasInt
 end
 function LU{T<:BlasFloat}(A::StridedMatrix{T})
-    factors, ipiv, info = LAPACK.getrf!(A)
-    LU{T}(factors, ipiv, info)
+    factors, pivots, info = LAPACK.getrf!(A)
+    LU{T}(factors, pivots, info)
 end
 lufact!(A::StridedMatrix) = lufact!(float(A))
 lufact!{T<:BlasFloat}(A::StridedMatrix{T}) = LU(A)
@@ -160,18 +143,17 @@ size(A::LU,n) = size(A.factors,n)
 
 function getindex{T}(A::LU{T}, d::Symbol)
     m, n = size(A)
-    if d == :L; return tril(A.factors[1:m, 1:min(m,n)], -1) + eye(T, m, min(m,n)); end;
-    if d == :U; return triu(A.factors[1:min(m,n),1:n]); end;
-    if d == :p
+    if d == :L return tril(A.factors[1:m, 1:min(m,n)], -1) + eye(T, m, min(m,n))
+    elseif d == :U return triu(A.factors[1:min(m,n),1:n])
+    elseif d == :p
         p = [1:m]
-        for i in 1:length(A.ipiv)
+        for i in 1:length(A.pivots)
             tmp = p[i]
-            p[i] = p[A.ipiv[i]]
-            p[A.ipiv[i]] = tmp
+            p[i] = p[A.pivots[i]]
+            p[A.pivots[i]] = tmp
         end
         return p
-    end
-    if d == :P
+    elseif d == :P
         p = A[:p]
         P = zeros(T, m, m)
         for i in 1:m
@@ -186,13 +168,13 @@ function det{T}(A::LU{T})
     m, n = size(A)
     if m != n throw(DimensionMismatch("Matrix must be square")) end
     if A.info > 0; return zero(typeof(A.factors[1])); end
-    prod(diag(A.factors)) * (bool(sum(A.ipiv .!= 1:n) % 2) ? -one(T) : one(T))
+    prod(diag(A.factors)) * (bool(sum(A.pivots .!= 1:n) % 2) ? -one(T) : one(T))
 end
 
 function logdet2{T<:Real}(A::LU{T})  # return log(abs(det)) and sign(det)
     m, n = size(A); if m!=n error("matrix must be square") end
     dg = diag(A.factors)
-    s = (bool(sum(A.ipiv .!= 1:n) % 2) ? -one(T) : one(T)) * prod(sign(dg))
+    s = (bool(sum(A.pivots .!= 1:n) % 2) ? -one(T) : one(T)) * prod(sign(dg))
     return sum(log(abs(dg))) , s 
 end
 
@@ -204,7 +186,7 @@ end
 
 function logdet{T<:Complex}(A::LU{T})
     m, n = size(A); if m!=n error("matrix must be square") end
-    s = sum(log(diag(A.factors))) + (bool(sum(A.ipiv .!= 1:n) % 2) ? complex(0,pi) : 0) 
+    s = sum(log(diag(A.factors))) + (bool(sum(A.pivots .!= 1:n) % 2) ? complex(0,pi) : 0) 
     r,a = reim(s); a = a % 2pi; if a>pi a -=2pi elseif a<=-pi a+=2pi end
     return complex(r,a)    
 end
@@ -212,34 +194,34 @@ end
 
 function (\){T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T})
     if A.info > 0; throw(SingularException(A.info)); end
-    LAPACK.getrs!('N', A.factors, A.ipiv, copy(B))
+    LAPACK.getrs!('N', A.factors, A.pivots, copy(B))
 end
 
 function At_ldiv_B{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T})
     if A.info > 0; throw(SingularException(A.info)); end
-    LAPACK.getrs!('T', A.factors, A.ipiv, copy(B))
+    LAPACK.getrs!('T', A.factors, A.pivots, copy(B))
 end
 
 function Ac_ldiv_B{T<:BlasComplex}(A::LU{T}, B::StridedVecOrMat{T})
     if A.info > 0; throw(SingularException(A.info)); end
-    LAPACK.getrs!('C', A.factors, A.ipiv, copy(B))
+    LAPACK.getrs!('C', A.factors, A.pivots, copy(B))
 end
 
 function At_ldiv_Bt{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T})
     if A.info > 0; throw(SingularException(A.info)); end
-    LAPACK.getrs!('T', A.factors, A.ipiv, transpose(B))
+    LAPACK.getrs!('T', A.factors, A.pivots, transpose(B))
 end
 
 function Ac_ldiv_Bc{T<:BlasComplex}(A::LU{T}, B::StridedVecOrMat{T})
     if A.info > 0; throw(SingularException(A.info)); end
-    LAPACK.getrs!('C', A.factors, A.ipiv, ctranspose(B))
+    LAPACK.getrs!('C', A.factors, A.pivots, ctranspose(B))
 end
 
 (/){T}(B::Matrix{T},A::LU{T}) = At_ldiv_Bt(A,B).'
 
 function inv(A::LU)
     if A.info > 0; return throw(SingularException(A.info)); end
-    LAPACK.getri!(copy(A.factors), A.ipiv)
+    LAPACK.getri!(copy(A.factors), A.pivots)
 end
 
 cond(A::LU, p) = 1.0/LinAlg.LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm(A[:L][A[:p],:]*A[:U], p))
@@ -298,14 +280,7 @@ function getindex{T<:BlasFloat}(A::QRPivoted{T}, d::Symbol)
     if d == :R return triu(A.hh[1:minimum(size(A)),:])
     elseif d == :Q return QRPivotedQ(A)
     elseif d == :p return A.pivots
-    elseif d == :P #The permutation matrix for the pivot
-        p = A[:p]
-        n = length(p)
-        P = zeros(T, n, n)
-        for i in 1:n
-            P[p[i],i] = one(T)
-        end
-        return P
+    elseif d == :P return perm_matrix(A.pivots, T) #The permutation matrix for the pivot
     end
     error("No such type field")
 end
