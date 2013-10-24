@@ -31,7 +31,7 @@ clone(url::String, pkg::String) = cd(Entry.clone,url,pkg)
 checkout(pkg::String, branch::String="master"; merge::Bool=true, pull::Bool=false) =
     cd(Entry.checkout,pkg,branch,merge,pull)
 
-release(pkg::String) = cd(Entry.release,pkg)
+free(pkg::String) = cd(Entry.free,pkg)
 
 pin(pkg::String) = cd(Entry.pin,pkg)
 pin(pkg::String, ver::VersionNumber) = cd(Entry.pin,pkg,ver)
@@ -58,6 +58,7 @@ build(pkgs::String...) = cd(Entry.build,[pkgs...])
 
 generate(pkg::String, license::String) = cd(Generate.package,pkg,license)
 
+@deprecate release free
 @deprecate fixup build
 @deprecate fix pin
 

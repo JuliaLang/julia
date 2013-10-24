@@ -147,13 +147,13 @@ function checkout(pkg::String, branch::String, merge::Bool, pull::Bool)
     _checkout(pkg,branch,merge,pull)
 end
 
-function release(pkg::String)
+function free(pkg::String)
     ispath(pkg,".git") || error("$pkg is not a git repo")
-    Read.isinstalled(pkg) || error("$pkg cannot be released – not an installed package")
+    Read.isinstalled(pkg) || error("$pkg cannot be freed – not an installed package")
     avail = Read.available(pkg)
-    isempty(avail) && error("$pkg cannot be released – not a registered package")
-    Git.dirty(dir=pkg) && error("$pkg cannot be released – repo is dirty")
-    info("Releasing $pkg")
+    isempty(avail) && error("$pkg cannot be freed – not a registered package")
+    Git.dirty(dir=pkg) && error("$pkg cannot be freed – repo is dirty")
+    info("Freeing $pkg")
     vers = sort!([keys(avail)...], rev=true)
     while true
         for ver in vers
