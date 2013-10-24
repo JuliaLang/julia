@@ -50,7 +50,7 @@ function package(
             info("Regenerated files are unchanged")
         end
     catch
-        isnew ? run(`rm -rf $pkg`) : Git.run(`checkout -q -f`)
+        isnew ? run(`rm -rf $pkg`) : Git.run(`checkout -q -f`, dir=pkg)
         rethrow()
     end
 end
