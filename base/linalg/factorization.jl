@@ -301,8 +301,8 @@ function *{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T})
     end
     LAPACK.gemqrt!('L', 'N', A.vs, A.T, Bc)
 end
-Ac_mul_B{T<:BlasReal}(A::QRPackedQ{T}, B::StridedVecOrMat) = LAPACK.gemqrt!('L','T',A.vs,A.T,copy(B))
-Ac_mul_B{T<:BlasComplex}(A::QRPackedQ{T}, B::StridedVecOrMat) = LAPACK.gemqrt!('L','C',A.vs,A.T,copy(B))
+Ac_mul_B{T<:BlasReal}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','T',A.vs,A.T,copy(B))
+Ac_mul_B{T<:BlasComplex}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','C',A.vs,A.T,copy(B))
 *{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.gemqrt!('R', 'N', B.vs, B.T, copy(A))
 function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T})
     m = size(A, 1)
@@ -417,8 +417,8 @@ function *{T<:BlasFloat}(A::QRPivotedQ{T}, B::StridedVecOrMat{T})
     end
     LAPACK.ormqr!('L', 'N', A.hh, A.tau, Bc)
 end
-Ac_mul_B{T<:BlasReal}(A::QRPivotedQ{T}, B::StridedVecOrMat) = LAPACK.ormqr!('L','T',A.hh,A.tau,copy(B))
-Ac_mul_B{T<:BlasComplex}(A::QRPivotedQ{T}, B::StridedVecOrMat) = LAPACK.ormqr!('L','C',A.hh,A.tau,copy(B))
+Ac_mul_B{T<:BlasReal}(A::QRPivotedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','T',A.hh,A.tau,copy(B))
+Ac_mul_B{T<:BlasComplex}(A::QRPivotedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','C',A.hh,A.tau,copy(B))
 *(A::StridedVecOrMat, B::QRPivotedQ) = LAPACK.ormqr!('R', 'N', B.hh, B.tau, copy(A))
 function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPivotedQ{T})
     m = size(A, 1)

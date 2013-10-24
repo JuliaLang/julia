@@ -407,6 +407,11 @@
          (vals     (map caddr kargl))
 	 ;; just the keyword names
 	 (keynames (map decl-var vars))
+	 ;; do some default values depend on other keyword arguments?
+	 (ordered-defaults (any (lambda (v) (contains
+					     (lambda (x) (eq? x v))
+					     vals))
+				keynames))
 	 ;; 1-element list of function's line number node, or empty if none
 	 (lno  (if (and (pair? (cdr body))
 			(pair? (cadr body)) (eq? (caadr body) 'line))
@@ -454,9 +459,12 @@
 	    ,(if (null? lno)
 		 `(line 0 || ||)
 		 (append (car lno) '(||)))
+	    ,@(if (not ordered-defaults)
+		  '()
+		  (map make-assignment keynames vals))
 	    ;; call mangled(vals..., [rest_kw ,]pargs..., [vararg]...)
 	    (return (call ,mangled
-			  ,@vals
+			  ,@(if ordered-defaults keynames vals)
 			  ,@(if (null? restkw) '() '((cell1d)))
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
