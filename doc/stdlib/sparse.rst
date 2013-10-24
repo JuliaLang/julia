@@ -71,4 +71,8 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    Compute the elimination tree of a symmetric sparse matrix ``A`` from ``triu(A)`` and, optionally, its post-ordering permutation.
 
+.. function:: symperm(A, p)
+
+   Return the symmetric permutation of A, which is ``A[p,p]``.
+
 
