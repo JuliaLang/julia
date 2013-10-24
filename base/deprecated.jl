@@ -172,6 +172,10 @@ export PipeString
 @deprecate qrpfact(A)          qrfact(A, true)
 @deprecate qrp(A, thin)        qr(A, thin, true)
 @deprecate qrp(A)              qr(A, true)
+@deprecate cholpfact!(A)            cholfact!(A, :U, true)
+@deprecate cholpfact!(A,tol)        cholfact!(A, :U, true, tol)
+@deprecate cholpfact!(A,uplo,tol)   cholfact!(A, uplo, true, tol)
+@deprecate cholpfact(A)             cholfact(A, :U, true)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
