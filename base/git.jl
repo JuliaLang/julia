@@ -27,7 +27,7 @@ readchomp(args::Cmd; dir="") = Base.readchomp(cmd(args,dir=dir))
 
 function success(args::Cmd; dir="")
     g = git(dir)
-    @windows_only Base.success(`$g rev-parse --is-bare-repository`) ||
+    @windows_only Base.readchomp(`$g rev-parse --is-bare-repository`) == "false" &&
         Base.run(`$g update-index --really-refresh`)
     Base.success(`$g $args`)
 end
