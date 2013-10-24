@@ -507,10 +507,8 @@ void *allocobj(size_t sz);
 #define jl_is_datatype(v)    jl_typeis(v,jl_datatype_type)
 #define jl_datatype_size(t)  (((jl_datatype_t*)t)->size)
 #define jl_is_pointerfree(t) (((jl_datatype_t*)t)->pointerfree)
-#define jl_ismutable(t)      (((jl_datatype_t*)t)->mutabl)
 #define jl_is_mutable(t)     (((jl_datatype_t*)t)->mutabl)
 #define jl_is_mutable_datatype(t) (jl_is_datatype(t) && (((jl_datatype_t*)t)->mutabl))
-#define jl_isimmutable(t)    (!((jl_datatype_t*)t)->mutabl)
 #define jl_is_immutable(t)   (!((jl_datatype_t*)t)->mutabl)
 #define jl_is_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->mutabl))
 #define jl_is_uniontype(v)   jl_typeis(v,jl_uniontype_type)
@@ -564,7 +562,7 @@ void *allocobj(size_t sz);
 
 static inline int jl_is_bitstype(void *v)
 {
-    return (jl_is_datatype(v) && jl_isimmutable(v) &&
+    return (jl_is_datatype(v) && jl_is_immutable(v) &&
             jl_tuple_len(((jl_datatype_t*)(v))->names)==0 &&
             !((jl_datatype_t*)(v))->abstract &&
             ((jl_datatype_t*)(v))->size > 0);
