@@ -52,13 +52,14 @@ function repl_cmd(cmd)
         if length(cmd.exec) > 2
             error("cd method only takes one argument")
         elseif length(cmd.exec) == 2
-            cd(readchomp(`$shell -c "echo $(shell_escape(cmd.exec[2]))"`))
+            dir = cmd.exec[2]
+            cd(@windows? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
         else
             cd()
         end
         println(pwd())
     else
-        run(detach(`$shell -i -c "$(shell_escape(cmd))"`))
+        run(@windows? cmd : detach(`$shell -i -c "$(shell_escape(cmd))"`))
     end
     nothing
 end
