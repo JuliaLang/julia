@@ -668,23 +668,27 @@ function push!(a::Array{Any,1}, item::ANY)
     return a
 end
 
-function append!{T}(a::Array{T,1}, items::Vector)
+function append!{T}(a::Array{T,1}, items::AbstractVector)
     if is(T,None)
         error(_grow_none_errmsg)
     end
     n = length(items)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
-    a[end-n+1:end] = items
+    copy!(a, length(a)-n+1, items, 1, n)
     return a
 end
 
-function prepend!{T}(a::Array{T,1}, items::Array{T,1})
+function prepend!{T}(a::Array{T,1}, items::AbstractVector)
     if is(T,None)
         error(_grow_none_errmsg)
     end
     n = length(items)
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, n)
-    a[1:n] = items
+    if a === items
+        copy!(a, 1, items, n+1, n)
+    else
+        copy!(a, 1, items, 1, n)
+    end
     return a
 end
 
