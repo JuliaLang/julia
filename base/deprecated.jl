@@ -164,6 +164,10 @@ export PipeString
 @deprecate max(x,_::(),d)      maximum(x,d)
 @deprecate min(x,_::(),d)      minimum(x,d)
 @deprecate assert(x,y)         (@assert x y)
+# NOTE: when this deprecation is removed, also remove
+#   copy!(dest::AbstractArray, doffs::Integer, src::Integer)
+# in abstractarray.jl
+@deprecate copy!(dest::AbstractArray, src, doffs::Integer)  copy!(dest, doffs, src)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)

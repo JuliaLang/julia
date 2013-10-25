@@ -38,13 +38,13 @@ function unsafe_copy!{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
         unsafe_copy!(pointer(dest, dsto), pointer(src, so), N)
     else
         for i=0:N-1
-            arrayset(dest, src[i+so], i+dsto)
+            @inbounds arrayset(dest, src[i+so], i+dsto)
         end
     end
     return dest
 end
 
-function copy!{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
+function copy!{T}(dest::Array{T}, dsto::Integer, src::Array{T}, so::Integer, N::Integer)
     if so+N-1 > length(src) || dsto+N-1 > length(dest) || dsto < 1 || so < 1
         throw(BoundsError())
     end
@@ -165,10 +165,10 @@ end
 function getindex{T<:Number}(::Type{T}, r1::Ranges, rs::Ranges...)
     a = Array(T,length(r1)+sum(length,rs))
     o = 1
-    copy!(a, r1, o)
+    copy!(a, o, r1)
     o += length(r1)
     for r in rs
-        copy!(a, r, o)
+        copy!(a, o, r)
         o += length(r)
     end
     return a
