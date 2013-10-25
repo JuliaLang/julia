@@ -656,6 +656,42 @@ for k = -max(n1,n2) : max(n1,n2)
     @check_bit_operation triu BitMatrix (b1, k)
 end
 
+b1 = randbool(n1, n1)
+@check_bit_operation istril Bool (b1,)
+b1 = randbool(n1, n2)
+@check_bit_operation istril Bool (b1,)
+b1 = randbool(n2, n1)
+@check_bit_operation istril Bool (b1,)
+
+b1 = tril(randbool(n1, n1))
+@check_bit_operation istril Bool (b1,)
+b1 = tril(randbool(n1, n2))
+@check_bit_operation istril Bool (b1,)
+b1 = tril(randbool(n2, n1))
+@check_bit_operation istril Bool (b1,)
+
+b1 = randbool(n1, n1)
+@check_bit_operation istriu Bool (b1,)
+b1 = randbool(n1, n2)
+@check_bit_operation istriu Bool (b1,)
+b1 = randbool(n2, n1)
+@check_bit_operation istriu Bool (b1,)
+
+b1 = triu(randbool(n1, n1))
+@check_bit_operation istriu Bool (b1,)
+b1 = triu(randbool(n1, n2))
+@check_bit_operation istriu Bool (b1,)
+b1 = triu(randbool(n2, n1))
+@check_bit_operation istriu Bool (b1,)
+
+b1 = randbool(n1)
+b2 = randbool(n2)
+@check_bit_operation kron BitVector (b1, b2)
+
+b1 = randbool(s1, s2)
+b2 = randbool(s3, s4)
+@check_bit_operation kron BitMatrix (b1, b2)
+
 #b1 = randbool(v1)
 #@check_bit_operation diff Vector{Int} (b1,)
 #b1 = randbool(n1, n2)
