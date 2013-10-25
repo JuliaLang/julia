@@ -668,7 +668,7 @@ function push!(a::Array{Any,1}, item::ANY)
     return a
 end
 
-function append!{T}(a::Array{T,1}, items::Vector)
+function append!{T}(a::Array{T,1}, items::AbstractVector)
     if is(T,None)
         error(_grow_none_errmsg)
     end
@@ -679,7 +679,7 @@ function append!{T}(a::Array{T,1}, items::Vector)
     return a
 end
 
-function prepend!{T}(a::Array{T,1}, items::Array{T,1})
+function prepend!{T}(a::Array{T,1}, items::AbstractVector)
     if is(T,None)
         error(_grow_none_errmsg)
     end
