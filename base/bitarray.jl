@@ -61,10 +61,12 @@ size{N}(B::BitArray{N}, d) = (d>N ? 1 : B.dims[d])
 get_chunks_id(i::Integer) = @_div64(int(i)-1)+1, @_mod64(int(i)-1)
 
 function glue_src_bitchunks(src::Vector{Uint64}, k::Int, ks1::Int, msk_s0::Uint64, ls0::Int)
-    chunk = ((src[k] & msk_s0) >>> ls0)
-    if ks1 > k && ls0 > 0
-        chunk_n = (src[k + 1] & ~msk_s0)
-        chunk |= (chunk_n << (64 - ls0))
+    @inbounds begin
+        chunk = ((src[k] & msk_s0) >>> ls0)
+        if ks1 > k && ls0 > 0
+            chunk_n = (src[k + 1] & ~msk_s0)
+            chunk |= (chunk_n << (64 - ls0))
+        end
     end
     return chunk
 end
@@ -231,15 +233,17 @@ function copy!(dest::BitArray, src::BitArray)
     if nc == 0
         return dest
     end
-    for i = 1 : nc - 1
-        destc[i] = srcc[i]
-    end
-    if length(src) >= length(dest)
-        destc[nc] = srcc[nc]
-    else
-        msk_s = @_msk_end length(src)
-        msk_d = ~msk_s
-        destc[nc] = (msk_d & destc[nc]) | (msk_s & srcc[nc])
+    @inbounds begin
+        for i = 1 : nc - 1
+            destc[i] = srcc[i]
+        end
+        if length(src) >= length(dest)
+            destc[nc] = srcc[nc]
+        else
+            msk_s = @_msk_end length(src)
+            msk_d = ~msk_s
+            destc[nc] = (msk_d & destc[nc]) | (msk_s & srcc[nc])
+        end
     end
     return dest
 end
@@ -286,28 +290,30 @@ function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
         return B
     end
     ind = 1
-    for i = 1:length(Bc)-1
+    @inbounds begin
+        for i = 1:length(Bc)-1
+            u = uint64(1)
+            c = uint64(0)
+            for j = 0:63
+                if bool(A[ind])
+                    c |= u
+                end
+                ind += 1
+                u <<= 1
+            end
+            Bc[i] = c
+        end
         u = uint64(1)
         c = uint64(0)
-        for j = 0:63
+        for j = 0:@_mod64(l-1)
             if bool(A[ind])
                 c |= u
             end
             ind += 1
             u <<= 1
         end
-        Bc[i] = c
+        Bc[end] = c
     end
-    u = uint64(1)
-    c = uint64(0)
-    for j = 0:@_mod64(l-1)
-        if bool(A[ind])
-            c |= u
-        end
-        ind += 1
-        u <<= 1
-    end
-    Bc[end] = c
     return B
 end
 
@@ -522,10 +528,12 @@ getindex(B::BitArray, I::AbstractArray{Bool}) = getindex_bool_1d(B, I)
 function setindex_unchecked(Bc::Array{Uint64}, x::Bool, i::Int)
     i1, i2 = get_chunks_id(i)
     u = uint64(1) << i2
-    if x
-        Bc[i1] |= u
-    else
-        Bc[i1] &= ~u
+    @inbounds begin
+        if x
+            Bc[i1] |= u
+        else
+            Bc[i1] &= ~u
+        end
     end
 end
 
@@ -591,7 +599,7 @@ let setindex_cache = nothing
         stride_lst = Array(Int, nI)
         stride = 1
         ind = f0
-        for k = 1 : nI - 1
+        @inbounds for k = 1 : nI - 1
             stride *= size(B, k)
             stride_lst[k] = stride
             ind += stride * (first(I[k]) - 1)
@@ -915,21 +923,23 @@ function shift!(B::BitVector)
     if isempty(B)
         error("shift!: BitArray is empty")
     end
-    item = B[1]
+    @inbounds begin
+        item = B[1]
 
-    Bc = B.chunks
+        Bc = B.chunks
 
-    for i = 1 : length(Bc) - 1
-        Bc[i] = (Bc[i] >>> 1) | (Bc[i+1] << 63)
+        for i = 1 : length(Bc) - 1
+            Bc[i] = (Bc[i] >>> 1) | (Bc[i+1] << 63)
+        end
+
+        l = @_mod64 length(B)
+        if l == 1
+            ccall(:jl_array_del_end, Void, (Any, Uint), Bc, 1)
+        else
+            Bc[end] >>>= 1
+        end
+        B.len -= 1
     end
-
-    l = @_mod64 length(B)
-    if l == 1
-        ccall(:jl_array_del_end, Void, (Any, Uint), Bc, 1)
-    else
-        Bc[end] >>>= 1
-    end
-    B.len -= 1
 
     return item
 end
@@ -982,21 +992,23 @@ function splice!(B::BitVector, i::Integer)
 
     Bc = B.chunks
 
-    Bc[k] = (msk_bef & Bc[k]) | ((msk_aft & Bc[k]) >> 1)
-    if length(Bc) > k
-        Bc[k] |= (Bc[k + 1] << 63)
-    end
+    @inbounds begin
+        Bc[k] = (msk_bef & Bc[k]) | ((msk_aft & Bc[k]) >> 1)
+        if length(Bc) > k
+            Bc[k] |= (Bc[k + 1] << 63)
+        end
 
-    for t = k + 1 : length(Bc) - 1
-        Bc[t] = (Bc[t] >>> 1) | (Bc[t + 1] << 63)
-    end
+        for t = k + 1 : length(Bc) - 1
+            Bc[t] = (Bc[t] >>> 1) | (Bc[t + 1] << 63)
+        end
 
-    l = @_mod64 length(B)
+        l = @_mod64 length(B)
 
-    if l == 1
-        ccall(:jl_array_del_end, Void, (Any, Uint), Bc, 1)
-    elseif length(Bc) > k
-        Bc[end] >>>= 1
+        if l == 1
+            ccall(:jl_array_del_end, Void, (Any, Uint), Bc, 1)
+        elseif length(Bc) > k
+            Bc[end] >>>= 1
+        end
     end
 
     B.len -= 1
@@ -1111,7 +1123,7 @@ end
 
 function flipbits!(B::BitArray)
     Bc = B.chunks
-    if !isempty(Bc)
+    @inbounds if !isempty(Bc)
         for i = 1:length(B.chunks) - 1
             Bc[i] = ~Bc[i]
         end
@@ -1425,11 +1437,13 @@ for (f, cachef, scalarf) in ((:.==, :bitcache_eq , :(==)),
         @eval begin
             function ($cachef)(A::$sigA, B::$sigB, l::Int, ind::Int, C::Vector{Bool})
                 left = l - ind + 1
-                for j = 1:min(bitcache_size, left)
-                    C[j] = ($scalarf)($expA, $expB)
-                    ind += 1
+                @inbounds begin
+                    for j = 1:min(bitcache_size, left)
+                        C[j] = ($scalarf)($expA, $expB)
+                        ind += 1
+                    end
+                    C[left+1:bitcache_size] = false
                 end
-                C[left+1:bitcache_size] = false
                 return ind
             end
             function ($f)(A::$sigA, B::$sigB)
@@ -1657,7 +1671,7 @@ end
 function nnz(B::BitArray)
     n = 0
     Bc = B.chunks
-    for i = 1:length(Bc)
+    @inbounds for i = 1:length(Bc)
         n += count_ones(Bc[i])
     end
     return n
@@ -1676,13 +1690,15 @@ function findnext(B::BitArray, start::Integer)
     within_chunk_start = @_mod64(start-1)
     mask = _msk64 << within_chunk_start
 
-    if Bc[chunk_start] & mask != 0
-        return (chunk_start-1) << 6 + trailing_zeros(Bc[chunk_start] & mask) + 1
-    end
+    @inbounds begin
+        if Bc[chunk_start] & mask != 0
+            return (chunk_start-1) << 6 + trailing_zeros(Bc[chunk_start] & mask) + 1
+        end
 
-    for i = chunk_start+1:length(Bc)
-        if Bc[i] != 0
-            return (i-1) << 6 + trailing_zeros(Bc[i]) + 1
+        for i = chunk_start+1:length(Bc)
+            if Bc[i] != 0
+                return (i-1) << 6 + trailing_zeros(Bc[i]) + 1
+            end
         end
     end
     return 0
@@ -1707,16 +1723,18 @@ function findnextnot(B::BitArray, start::Integer)
     within_chunk_start = @_mod64(start-1)
     mask = ~(_msk64 << within_chunk_start)
 
-    if Bc[chunk_start] | mask != _msk64
-        return (chunk_start-1) << 6 + trailing_ones(Bc[chunk_start] | mask) + 1
-    end
-
-    for i = chunk_start+1:l-1
-        if Bc[i] != _msk64
-            return (i-1) << 6 + trailing_ones(Bc[i]) + 1
+    @inbounds begin
+        if Bc[chunk_start] | mask != _msk64
+            return (chunk_start-1) << 6 + trailing_ones(Bc[chunk_start] | mask) + 1
         end
+
+        for i = chunk_start+1:l-1
+            if Bc[i] != _msk64
+                return (i-1) << 6 + trailing_ones(Bc[i]) + 1
+            end
+        end
+        ce = Bc[end]
     end
-    ce = Bc[end]
     if ce != @_msk_end length(B)
         return (l-1) << 6 + trailing_ones(ce) + 1
     end
@@ -1851,13 +1869,15 @@ sum(B::BitArray) = nnz(B)
 function all(B::BitArray)
     length(B) == 0 && return true
     Bc = B.chunks
-    for i = 1:length(Bc)-1
-        if Bc[i] != _msk64
+    @inbounds begin
+        for i = 1:length(Bc)-1
+            if Bc[i] != _msk64
+                return false
+            end
+        end
+        if Bc[end] != @_msk_end length(B)
             return false
         end
-    end
-    if Bc[end] != @_msk_end length(B)
-        return false
     end
     return true
 end
@@ -1865,9 +1885,11 @@ end
 function any(B::BitArray)
     length(B) == 0 && return false
     Bc = B.chunks
-    for i = 1:length(Bc)
-        if Bc[i] != 0
-            return true
+    @inbounds begin
+        for i = 1:length(Bc)
+            if Bc[i] != 0
+                return true
+            end
         end
     end
     return false
