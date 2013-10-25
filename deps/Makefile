@@ -784,6 +784,8 @@ ifeq  ($(OPENBLAS_VER),v0.2.8)
 	cd openblas-$(OPENBLAS_VER)/lapack-netlib/SRC && \
 		patch < ../../../dlasd4-lapack-3.4.2.patch && \
 		patch < ../../../slasd4-lapack-3.4.2.patch
+	cd openblas-$(OPENBLAS_VER)/exports && \
+		patch < ../../openblas-link-osx109.patch
 endif
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
