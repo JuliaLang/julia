@@ -826,6 +826,33 @@ end
 append!(B::BitVector, items::AbstractVector{Bool}) = append!(B, bitpack(items))
 append!(A::Vector{Bool}, items::BitVector) = append!(A, bitunpack(items))
 
+function prepend!(B::BitVector, items::BitVector)
+    n0 = length(B)
+    n1 = length(items)
+    if n1 == 0
+        return B
+    end
+    Bc = B.chunks
+    k0 = length(Bc)
+    k1 = num_bit_chunks(n0 + n1)
+    if k1 > k0
+        ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, k1 - k0)
+        Bc[end] = uint64(0)
+    end
+    B.len += n1
+    copy_chunks(Bc, 1 + n1, Bc, 1, n0)
+    copy_chunks(Bc, 1, items.chunks, 1, n1)
+    return B
+end
+
+prepend!(B::BitVector, items::AbstractVector{Bool}) = prepend!(B, bitpack(items))
+prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, bitunpack(items))
+
+function sizehint(B::BitVector, sz::Integer)
+    ccall(:jl_array_sizehint, Void, (Any, Uint), B.chunks, num_bit_chunks(sz))
+    return B
+end
+
 function resize!(B::BitVector, n::Integer)
     if n < 0
         throw(BoundsError())

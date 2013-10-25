@@ -126,6 +126,16 @@ for m1 = 0 : v1
     end
 end
 
+for m1 = 0 : v1
+    for m2 = [0, 1, 63, 64, 65, 127, 128, 129]
+        b1 = randbool(m1)
+        b2 = randbool(m2)
+        i1 = bitunpack(b1)
+        i2 = bitunpack(b2)
+        @test isequal(bitunpack(prepend!(b1, b2)), prepend!(i1, i2))
+    end
+end
+
 b1 = randbool(v1)
 i1 = bitunpack(b1)
 for m = 1 : v1
