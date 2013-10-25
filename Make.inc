@@ -32,9 +32,13 @@ USE_SYSTEM_LIBUV=0
 USE_MKL = 0
 MKLLIB = $(MKLROOT)/lib/intel64
 
+# Link to the LLVM shared library
+USE_LLVM_SHLIB = 0
+
 # Set to 1 to enable profiling with Intel VTune Amplifier
 USE_INTEL_JITEVENTS = 0
 
+# libc++ is standard on OS X 10.9, but not for earlier releases
 USE_LIBCPP = 0
 
 # we include twice to pickup user definitions better
