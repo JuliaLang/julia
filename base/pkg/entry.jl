@@ -239,9 +239,9 @@ function publish(branch::String)
     Git.run(`fetch -q`, dir="METADATA")
     info("Validating METADATA")
     check_metadata()
-    cmd = Git.cmd(`diff --name-only --diff-filter=AMR origin/$branch HEAD --`, dir="METADATA")
     tags = Dict{ASCIIString,Vector{ASCIIString}}()
-    for line in eachline(cmd)
+    cmd = `diff-tree --name-only --diff-filter=AMR origin/$branch HEAD --`
+    for line in eachline(Git.cmd(cmd, dir="METADATA"))
         path = chomp(line)
         m = match(r"^(.+?)/versions/([^/]+)/sha1$", path)
         m != nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
