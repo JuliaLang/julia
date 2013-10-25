@@ -476,7 +476,9 @@
 		   (if (or (eof-object? (peek-token s))
 			   (memv (peek-token s) closers)
 			   (and allow-empty
-				(memv (peek-token s) ops)))
+				(memv (peek-token s) ops))
+			   (and (equal? ops '(#\,))
+				(eq? (peek-token s) '=)))
 		       (loop ex #f (peek-token s))
 		       (if (memv #\newline ops)
 			   (let ((loc (line-number-node s)))
