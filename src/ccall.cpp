@@ -626,6 +626,8 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     CallInst *inst = builder.CreateCall(f,ArrayRef<Value*>(&argvals[0],nargt));
     ctx->to_inline.push_back(inst);
 
+    JL_GC_POP();
+
     return mark_julia_type(inst,rt);
 }
 
