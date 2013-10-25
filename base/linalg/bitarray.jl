@@ -122,13 +122,13 @@ qr(A::BitMatrix) = qr(float(A))
 function kron(a::BitVector, b::BitVector)
     m = length(a)
     n = length(b)
-    R = falses(n, m)
+    R = falses(n * m)
     Rc = R.chunks
     bc = b.chunks
     for j = 1:m
         a[j] && Base.copy_chunks(Rc, (j-1)*n+1, bc, 1, n)
     end
-    return vec(R)
+    return R
 end
 
 function kron(a::BitMatrix, b::BitMatrix)
