@@ -1609,10 +1609,9 @@ reverse(v::BitVector) = reverse!(copy(v))
 
 function (<<)(B::BitVector, i::Int64)
     n = length(B)
-    i %= n
-    if i == 0; return copy(B); end
-    A = falses(n);
-    copy_chunks(A.chunks, 1, B.chunks, i+1, n-i)
+    i == 0 && return copy(B)
+    A = falses(n)
+    i < n && copy_chunks(A.chunks, 1, B.chunks, i+1, n-i)
     return A
 end
 (<<)(B::BitVector, i::Int32) = B << int64(i)
@@ -1620,10 +1619,9 @@ end
 
 function (>>>)(B::BitVector, i::Int64)
     n = length(B)
-    i %= n
-    if i == 0; return copy(B); end
-    A = falses(n);
-    copy_chunks(A.chunks, i+1, B.chunks, 1, n-i)
+    i == 0 && return copy(B)
+    A = falses(n)
+    i < n && copy_chunks(A.chunks, i+1, B.chunks, 1, n-i)
     return A
 end
 (>>>)(B::BitVector, i::Int32) = B >>> int64(i)
@@ -1635,8 +1633,8 @@ end
 function rol(B::BitVector, i::Integer)
     n = length(B)
     i %= n
-    if i == 0; return copy(B); end
-    A = BitArray(n);
+    i == 0 && return copy(B)
+    A = BitArray(n)
     copy_chunks(A.chunks, 1, B.chunks, i+1, n-i)
     copy_chunks(A.chunks, n-i+1, B.chunks, 1, i)
     return A
@@ -1645,8 +1643,8 @@ end
 function ror(B::BitVector, i::Integer)
     n = length(B)
     i %= n
-    if i == 0; return copy(B); end
-    A = BitArray(n);
+    i == 0 && return copy(B)
+    A = BitArray(n)
     copy_chunks(A.chunks, i+1, B.chunks, 1, n-i)
     copy_chunks(A.chunks, 1, B.chunks, n-i+1, i)
     return A
@@ -1851,9 +1849,7 @@ sum(A::BitArray, region) = reducedim(+,A,region,0,Array(Int,reduced_dims(A,regio
 sum(B::BitArray) = nnz(B)
 
 function all(B::BitArray)
-    if length(B) == 0
-        return true
-    end
+    length(B) == 0 && return true
     Bc = B.chunks
     for i = 1:length(Bc)-1
         if Bc[i] != _msk64
@@ -1867,9 +1863,7 @@ function all(B::BitArray)
 end
 
 function any(B::BitArray)
-    if length(B) == 0
-        return false
-    end
+    length(B) == 0 && return false
     Bc = B.chunks
     for i = 1:length(Bc)
         if Bc[i] != 0
@@ -1952,7 +1946,7 @@ function transpose8x8(x::Uint64)
     return y $ t $ (t << 28)
 end
 
-function form_8x8_chunk(B::BitMatrix, i1::Int, i2::Int, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::Uint64)
+function form_8x8_chunk(Bc::Vector{Uint64}, i1::Int, i2::Int, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::Uint64)
     x = uint64(0)
 
     k, l = get_chunks_id(i1 + (i2 - 1) * m)
@@ -1961,10 +1955,10 @@ function form_8x8_chunk(B::BitMatrix, i1::Int, i2::Int, m::Int, cgap::Int, cinc:
         if k > nc
             break
         end
-        x |= ((B.chunks[k] >>> l) & msk8) << r
+        x |= ((Bc[k] >>> l) & msk8) << r
         if l + 8 >= 64 && nc > k
             r0 = 8 - (@_mod64 (l + 8))
-            x |= (B.chunks[k + 1] & (msk8 >>> r0)) << (r + r0)
+            x |= (Bc[k + 1] & (msk8 >>> r0)) << (r + r0)
         end
         k += cgap + (l + cinc >= 64 ? 1 : 0)
         l = @_mod64 (l + cinc)
@@ -1974,17 +1968,17 @@ function form_8x8_chunk(B::BitMatrix, i1::Int, i2::Int, m::Int, cgap::Int, cinc:
 end
 
 # note: assumes B is filled with 0's
-function put_8x8_chunk(B::BitMatrix, i1::Int, i2::Int, x::Uint64, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::Uint64)
+function put_8x8_chunk(Bc::Vector{Uint64}, i1::Int, i2::Int, x::Uint64, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::Uint64)
     k, l = get_chunks_id(i1 + (i2 - 1) * m)
     r = 0
     for j = 1 : 8
         if k > nc
             break
         end
-        B.chunks[k] |= ((x >>> r) & msk8) << l
+        Bc[k] |= ((x >>> r) & msk8) << l
         if l + 8 >= 64 && nc > k
             r0 = 8 - (@_mod64 (l + 8))
-            B.chunks[k + 1] |= ((x >>> (r + r0)) & (msk8 >>> r0))
+            Bc[k + 1] |= ((x >>> (r + r0)) & (msk8 >>> r0))
         end
         k += cgap + (l + cinc >= 64 ? 1 : 0)
         l = @_mod64 (l + cinc)
@@ -2003,7 +1997,11 @@ function transpose(B::BitMatrix)
 
     cgap2 = @_div64 l2
     cinc2 = @_mod64 l2
-    nc = length(B.chunks)
+
+    Bc = B.chunks
+    Btc = Bt.chunks
+
+    nc = length(Bc)
 
     for i = 1 : 8 : l1
 
@@ -2013,7 +2011,7 @@ function transpose(B::BitMatrix)
         end
 
         for j = 1 : 8 : l2
-            x = form_8x8_chunk(B, i, j, l1, cgap1, cinc1, nc, msk8_1)
+            x = form_8x8_chunk(Bc, i, j, l1, cgap1, cinc1, nc, msk8_1)
             x = transpose8x8(x)
 
             msk8_2 = uint64(0xff)
@@ -2021,7 +2019,7 @@ function transpose(B::BitMatrix)
                 msk8_2 >>>= j + 7 - l2
             end
 
-            put_8x8_chunk(Bt, j, i, x, l2, cgap2, cinc2, nc, msk8_2)
+            put_8x8_chunk(Btc, j, i, x, l2, cgap2, cinc2, nc, msk8_2)
         end
     end
     return Bt
@@ -2115,7 +2113,7 @@ end # let
 function hcat(B::BitVector...)
     height = length(B[1])
     for j = 2:length(B)
-        if length(B[j]) != height; error("hcat: mismatched dimensions"); end
+        length(B[j]) == height || error("hcat: mismatched dimensions")
     end
     M = BitArray(height, length(B))
     for j = 1:length(B)
@@ -2170,12 +2168,14 @@ function vcat(A::BitMatrix...)
         if size(A[j], 2) != ncols; error("vcat: mismatched dimensions"); end
     end
     B = BitArray(nrows, ncols)
+    Bc = B.chunks
     nrowsA = [size(a, 1) for a in A]
+    Ac = [a.chunks for a in A]
     pos_d = 1
     pos_s = ones(Int, nargs)
     for j = 1:ncols
-        for k=1:nargs
-            copy_chunks(B.chunks, pos_d, A[k].chunks, pos_s[k], nrowsA[k])
+        for k = 1:nargs
+            copy_chunks(Bc, pos_d, Ac[k], pos_s[k], nrowsA[k])
             pos_s[k] += nrowsA[k]
             pos_d += nrowsA[k]
         end
@@ -2198,9 +2198,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
         end
     end
     # just integers and no BitArrays -> general case
-    if !has_bitarray
-        return invoke(cat, (Integer, Any...), catdim, X...)
-    end
+    has_bitarray || return invoke(cat, (Integer, Any...), catdim, X...)
     dimsX = map((a->isa(a,BitArray) ? size(a) : (1,)), X)
     ndimsX = map((a->isa(a,BitArray) ? ndims(a) : 1), X)
     d_max = maximum(ndimsX)
@@ -2251,7 +2249,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
     end
 
     range = 1
-    for k=1:nargs
+    for k = 1:nargs
         nextrange = range+cat_ranges[k]
         cat_one = ntuple(ndimsC, i->(i != catdim ?
                                      (1:dimsC[i]) : (range:nextrange-1) ))
