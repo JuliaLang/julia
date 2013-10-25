@@ -73,6 +73,6 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
 .. function:: symperm(A, p)
 
-   Return the symmetric permutation of A, which is ``A[p,p]``.
+   Return the symmetric permutation of A, which is ``A[p,p]``. A should be symmetric and sparse, where only the upper triangular part of the matrix is stored. This algorithm ignores the lower triangular part of the matrix. Only the upper triangular part of the result is returned as well.
 
 
