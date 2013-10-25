@@ -26,6 +26,8 @@
 
 extern int asprintf(char **strp, const char *fmt, ...);
 
+static void jl_clear_input(void);
+
 #define USE_READLINE_STATIC
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -515,12 +517,6 @@ void jl_input_line_callback(char *input)
     rl_ast = NULL;
 }
 
-char *read_expr(char *prompt)
-{
-    rl_ast = NULL;
-    return readline(prompt);
-}
-
 static int common_prefix(const char *s1, const char *s2)
 {
     int i = 0;
@@ -680,8 +676,8 @@ static char *do_completions(const char *ch, int c)
 }
 
 #ifdef __WIN32__
-int repl_sigint_handler_installed = 0;
-BOOL WINAPI repl_sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
+static int repl_sigint_handler_installed = 0;
+static BOOL WINAPI repl_sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
     if (callback_en) {
         JL_WRITE(jl_uv_stdout, "^C", 2);
@@ -714,7 +710,7 @@ void sigcont_handler(int arg)
 
 struct sigaction jl_sigint_act = {{0}};
 
-void repl_sigint_handler(int sig, siginfo_t *info, void *context)
+static void repl_sigint_handler(int sig, siginfo_t *info, void *context)
 {
     if (callback_en) {
         JL_WRITE(jl_uv_stdout, "^C", 2);
@@ -819,15 +815,9 @@ void jl_deprep_terminal ()
 #endif
 }
 
-void init_repl_environment(int argc, char *argv[])
+void jl_init_repl(int history)
 {
-    disable_history = 0;
-    for (int i = 0; i < argc; i++) {
-        if (!strcmp(argv[i], "--no-history")) {
-            disable_history = 1;
-            break;
-        }
-    }
+    disable_history = !history;
 
 #ifdef __WIN32__
     rl_outstream=(void*)jl_uv_stdout;
@@ -869,12 +859,7 @@ void jl_readBuffer(unsigned char *base, ssize_t nread)
     rl_callback_read_char();
 }
 
-void restart(void)
-{
-    rl_on_new_line();
-}
-
-DLLEXPORT void jl_clear_input(void)
+static void jl_clear_input(void)
 {
     //todo: how to do this better / the correct way / ???
     //move the cursor to a clean line:
