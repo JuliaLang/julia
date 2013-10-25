@@ -3462,6 +3462,8 @@ Indexing, Assignment, and Concatenation
    concatenate in each block row.
    For example, ``[a b;c d e]`` calls ``hvcat((2,3),a,b,c,d,e)``.
 
+   If the first argument is a single integer ``n``, then all block rows are assumed to have ``n`` block columns.
+
 .. function:: flipdim(A, d)
 
    Reverse ``A`` in dimension ``d``.
