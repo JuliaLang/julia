@@ -927,6 +927,16 @@ hcat(A::AbstractArray...) = cat(2, A...)
 
 # 2d horizontal and vertical concatenation
 
+function hvcat(nbc::Integer, as...)
+    # nbc = # of block columns
+    n = length(as)
+    if mod(n,nbc) != 0
+        error("hvcat: not all rows have the same number of block columns")
+    end
+    nbr = div(n,nbc)
+    hvcat(ntuple(nbr, i->nbc), as...)
+end
+
 function hvcat{T}(rows::(Int...), as::AbstractMatrix{T}...)
     nbr = length(rows)  # number of block rows
 
