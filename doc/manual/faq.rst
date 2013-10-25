@@ -1,7 +1,7 @@
 .. _man-faq:
 
 ****************************
- Frequently-Asked Questions
+ Frequently Asked Questions
 ****************************
 
 Sessions and the REPL

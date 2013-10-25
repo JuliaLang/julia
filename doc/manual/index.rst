@@ -34,3 +34,4 @@
    performance-tips
    style-guide
    faq
+   noteworthy-differences
