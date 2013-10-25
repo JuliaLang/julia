@@ -45,26 +45,28 @@ function repl_callback(ast::ANY, show_value)
 end
 
 function repl_cmd(cmd)
+    shell = get(ENV,"SHELL","/bin/sh")
     if isempty(cmd.exec)
         error("no cmd to execute")
     elseif cmd.exec[1] == "cd"
         if length(cmd.exec) > 2
             error("cd method only takes one argument")
         elseif length(cmd.exec) == 2
-            cd(cmd.exec[2])
+            dir = cmd.exec[2]
+            cd(@windows? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
         else
             cd()
         end
         println(pwd())
     else
-        run(cmd)
+        run(@windows? cmd : detach(`$shell -i -c "$(shell_escape(cmd))"`))
     end
     nothing
 end
 
 function repl_hook(input::String)
-    return Expr(:call, :(Base.repl_cmd),
-                macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
+    Expr(:call, :(Base.repl_cmd),
+         macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
 end
 
 function repl_methods(input::String)
