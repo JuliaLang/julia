@@ -113,14 +113,11 @@ qr(A::BitMatrix) = qr(float(A))
 function kron(a::BitVector, b::BitVector)
     m = length(a)
     n = length(b)
-    R = BitArray(m, n)
-    zS = zero(S)
-    for j = 1:n
-        if b[j] != zS
-            Base.copy_chunks(R.chunks, (j-1)*m+1, a.chunks, 1, m)
-        end
+    R = falses(n, m)
+    for j = 1:m
+        a[j] && Base.copy_chunks(R.chunks, (j-1)*n+1, b.chunks, 1, n)
     end
-    return R
+    return vec(R)
 end
 
 function kron(a::BitMatrix, b::BitMatrix)
@@ -152,8 +149,8 @@ ishermitian(A::BitMatrix) = issym(A)
 
 function nonzero_chunks(chunks::Vector{Uint64}, pos0::Int, pos1::Int)
 
-    k0, l0 = get_chunks_id(pos0)
-    k1, l1 = get_chunks_id(pos1)
+    k0, l0 = Base.get_chunks_id(pos0)
+    k1, l1 = Base.get_chunks_id(pos1)
 
     delta_k = k1 - k0
 
