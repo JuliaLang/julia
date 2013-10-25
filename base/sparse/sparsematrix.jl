@@ -1339,7 +1339,7 @@ end
 
 spdiagm(B::AbstractVector, d::Number, m, n) = spdiagm((B,), (d,), m, n)
 
-spdiagm(B::AbstractVector, d::Number) = spdiagm((B,), (d,))
+spdiagm(B::AbstractVector, d::Number=0) = spdiagm((B,), (d,))
 
 ## expand a colptr or rowptr into a dense index vector
 function expandptr{T<:Integer}(V::Vector{T})

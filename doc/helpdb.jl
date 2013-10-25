@@ -9349,8 +9349,8 @@ popdisplay(d::Display)
    containing the diagonals and \"d\" is a tuple containing the
    positions of the diagonals. In the case the input contains only one
    diagonaly, \"B\" can be a vector (instead of a tuple) and \"d\" can
-   be the diagonal position (instead of a tuple). Optionally, \"m\"
-   and \"n\" specify the size of the resulting sparse matrix.
+   be the diagonal position (instead of a tuple), defaulting to 0 (diagonal).
+   Optionally, \"m\" and \"n\" specify the size of the resulting sparse matrix.
 
 "),
 
