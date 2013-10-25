@@ -57,14 +57,15 @@ function repl_cmd(cmd)
         end
         println(pwd())
     else
-        run(cmd)
+        shell = get(ENV,"SHELL","/bin/sh")
+        run(detach(`$shell -i -c "$(shell_escape(cmd))"`))
     end
     nothing
 end
 
 function repl_hook(input::String)
-    return Expr(:call, :(Base.repl_cmd),
-                macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
+    Expr(:call, :(Base.repl_cmd),
+         macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
 end
 
 function repl_methods(input::String)
