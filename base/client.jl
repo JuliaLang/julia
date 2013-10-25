@@ -131,7 +131,7 @@ function eval_user_input(ast::ANY, show_value)
             bt = catch_backtrace()
         end
     end
-    println()
+    isa(STDIN,TTY) && println()
 end
 
 function readBuffer(stream::AsyncStream, nread)
@@ -160,6 +160,8 @@ end
 
 function run_repl()
     global const repl_channel = RemoteRef()
+
+    ccall(:jl_init_repl, Void, (Cint,), _use_history)
 
     # install Ctrl-C interrupt handler (InterruptException)
     ccall(:jl_install_sigint_handler, Void, ())
@@ -200,6 +202,17 @@ function parse_input_line(s::String)
     ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), s)
 end
 
+function parse_input_line(io::IO)
+    s = ""
+    while !eof(io)
+        s = s*readline(io)
+        e = parse_input_line(s)
+        if !(isa(e,Expr) && e.head === :continue)
+            return e
+        end
+    end
+end
+
 # try to include() a file, ignoring if not found
 function try_include(f::String)
     if is_file_readable(f)
@@ -213,6 +226,7 @@ function process_options(args::Array{Any,1})
     repl = true
     startup = true
     color_set = false
+    history = true
     i = 1
     while i <= length(args)
         if args[i]=="-q" || args[i]=="--quiet"
@@ -259,7 +273,7 @@ function process_options(args::Array{Any,1})
             println("julia version ", VERSION)
             exit(0)
         elseif args[i]=="--no-history"
-            # see repl-readline.c
+            history = false
         elseif args[i] == "-f" || args[i] == "--no-startup"
             startup = false
         elseif args[i] == "-F"
@@ -295,7 +309,7 @@ function process_options(args::Array{Any,1})
         end
         i += 1
     end
-    return (quiet,repl,startup,color_set)
+    return (quiet,repl,startup,color_set,history)
 end
 
 const roottask = current_task()
@@ -368,13 +382,30 @@ function _start()
         init_sched()
         any(a->(a=="--worker"), ARGS) || init_head_sched()
         init_load_path()
-        (quiet,repl,startup,color_set) = process_options(ARGS)
+        (quiet,repl,startup,color_set,history) = process_options(ARGS)
+        global _use_history = history
         repl && startup && load_juliarc()
 
         if repl
-            if isa(STDIN,File)
-                global is_interactive = false
-                eval(parse_input_line(readall(STDIN)))
+            if !isa(STDIN,TTY)
+                if !color_set
+                    global have_color = false
+                end
+                # note: currently IOStream is used for file STDIN
+                if isa(STDIN,File) || isa(STDIN,IOStream)
+                    # reading from a file, behave like include
+                    global is_interactive = false
+                    eval(parse_input_line(readall(STDIN)))
+                else
+                    # otherwise behave repl-like
+                    global is_interactive = true
+                    while !eof(STDIN)
+                        eval_user_input(parse_input_line(STDIN), true)
+                    end
+                end
+                if have_color
+                    print(color_normal)
+                end
                 quit()
             end
 
