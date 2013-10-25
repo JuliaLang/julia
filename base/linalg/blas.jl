@@ -32,7 +32,7 @@ for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
                       (:zcopy_,:Complex128), (:ccopy_,:Complex64))
     @eval begin
         # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
-        function copy!(n::Integer, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer,
+        function blascopy!(n::Integer, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer,
                        DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
             ccall(($(string(fname)),libblas), Void,
                   (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
@@ -570,24 +570,6 @@ end
 
 end # module
 
-# Use BLAS copy for small arrays where it is faster than memcpy, and for strided copying
-
-function copy!{T<:BlasFloat}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
-    if n < 200
-        BLAS.copy!(n, src, 1, dest, 1)
-    else
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
-    end
-    return dest
-end
-
-function copy!{T<:BlasFloat}(dest::Array{T}, src::Array{T})
-    n = length(src)
-    if n > length(dest); throw(BoundsError()); end
-    copy!(pointer(dest), pointer(src), n)
-    return dest
-end
-
 function copy!{T<:BlasFloat,Ti<:Integer}(dest::Array{T}, rdest::Union(Range1{Ti},Range{Ti}), 
                                          src::Array{T}, rsrc::Union(Range1{Ti},Range{Ti}))
     if minimum(rdest) < 1 || maximum(rdest) > length(dest) || minimum(rsrc) < 1 || maximum(rsrc) > length(src)
@@ -596,7 +578,7 @@ function copy!{T<:BlasFloat,Ti<:Integer}(dest::Array{T}, rdest::Union(Range1{Ti}
     if length(rdest) != length(rsrc)
         error("Ranges must be of the same length")
     end
-    BLAS.copy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
-              pointer(dest)+(first(rdest)-1)*sizeof(T), step(rdest))
+    BLAS.blascopy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
+                   pointer(dest)+(first(rdest)-1)*sizeof(T), step(rdest))
     return dest
 end
