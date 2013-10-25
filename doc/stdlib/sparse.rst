@@ -53,7 +53,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
 .. function:: spdiagm(B, d[, m, n])
 
-   Construct a sparse diagonal matrix. ``B`` is a tuple of vectors containing the diagonals and ``d`` is a tuple containing the positions of the diagonals. In the case the input contains only one diagonaly, ``B`` can be a vector (instead of a tuple) and ``d`` can be the diagonal position (instead of a tuple). Optionally, ``m`` and ``n`` specify the size of the resulting sparse matrix.
+   Construct a sparse diagonal matrix. ``B`` is a tuple of vectors containing the diagonals and ``d`` is a tuple containing the positions of the diagonals. In the case the input contains only one diagonaly, ``B`` can be a vector (instead of a tuple) and ``d`` can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, ``m`` and ``n`` specify the size of the resulting sparse matrix.
 
 .. function:: sprand(m,n,density[,rng])
 
