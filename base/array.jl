@@ -673,6 +673,7 @@ function append!{T}(a::Array{T,1}, items::Vector)
         error(_grow_none_errmsg)
     end
     n = length(items)
+    a === items && (items = copy(items))
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
     a[end-n+1:end] = items
     return a
@@ -683,6 +684,7 @@ function prepend!{T}(a::Array{T,1}, items::Array{T,1})
         error(_grow_none_errmsg)
     end
     n = length(items)
+    a === items && (items = copy(items))
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, n)
     a[1:n] = items
     return a
