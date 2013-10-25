@@ -1,8 +1,13 @@
 function dot(x::BitVector, y::BitVector)
     # simplest way to mimic Array dot behavior
+    if length(x) != length(y)
+        error("argument dimensions do not match")
+    end
     s = 0
-    for i = 1 : length(x.chunks)
-        s += count_ones(x.chunks[i] & y.chunks[i])
+    xc = x.chunks
+    yc = y.chunks
+    for i = 1 : length(xc)
+        s += count_ones(xc[i] & yc[i])
     end
     return s
 end
@@ -40,9 +45,11 @@ end
 function triu(B::BitMatrix, k::Int)
     m,n = size(B)
     A = falses(m,n)
+    Ac = A.chunks
+    Bc = B.chunks
     for i = max(k+1,1):n
         j = clamp((i - 1) * m + 1, 1, i * m)
-        Base.copy_chunks(A.chunks, j, B.chunks, j, min(i-k, m))
+        Base.copy_chunks(Ac, j, Bc, j, min(i-k, m))
     end
     return A
 end
@@ -51,9 +58,11 @@ triu(B::BitMatrix, k::Integer) = triu(B, int(k))
 function tril(B::BitMatrix, k::Int)
     m,n = size(B)
     A = falses(m, n)
+    Ac = A.chunks
+    Bc = B.chunks
     for i = 1:min(n, m+k)
         j = clamp((i - 1) * m + i - k, 1, i * m)
-        Base.copy_chunks(A.chunks, j, B.chunks, j, max(m-i+k+1, 0))
+        Base.copy_chunks(Ac, j, Bc, j, max(m-i+k+1, 0))
     end
     return A
 end
@@ -114,8 +123,10 @@ function kron(a::BitVector, b::BitVector)
     m = length(a)
     n = length(b)
     R = falses(n, m)
+    Rc = R.chunks
+    bc = b.chunks
     for j = 1:m
-        a[j] && Base.copy_chunks(R.chunks, (j-1)*n+1, b.chunks, 1, n)
+        a[j] && Base.copy_chunks(Rc, (j-1)*n+1, bc, 1, n)
     end
     return vec(R)
 end
@@ -216,8 +227,9 @@ function findmax(a::BitArray)
     m = false
     mi = 1
     ti = 1
-    for i=1:length(a.chunks)
-        k = trailing_zeros(a.chunks[i])
+    ac = a.chunks
+    for i=1:length(ac)
+        k = trailing_zeros(ac[i])
         ti += k
         if k != 64
             m = true
@@ -235,8 +247,9 @@ function findmin(a::BitArray)
     m = true
     mi = 1
     ti = 1
-    for i=1:length(a.chunks) - 1
-        k = trailing_ones(a.chunks[i])
+    ac = a.chunks
+    for i = 1:length(ac)-1
+        k = trailing_ones(ac[i])
         ti += k
         if k != 64
             return (false, ti)
@@ -244,7 +257,7 @@ function findmin(a::BitArray)
     end
     l = (Base.@_mod64 (length(a)-1)) + 1
     msk = Base.@_mskr l
-    k = trailing_ones(a.chunks[end] & msk)
+    k = trailing_ones(ac[end] & msk)
     ti += k
     if k != l
         m = false
