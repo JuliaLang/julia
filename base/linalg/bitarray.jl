@@ -6,7 +6,7 @@ function dot(x::BitVector, y::BitVector)
     s = 0
     xc = x.chunks
     yc = y.chunks
-    for i = 1 : length(xc)
+    @inbounds for i = 1 : length(xc)
         s += count_ones(xc[i] & yc[i])
     end
     return s
@@ -174,22 +174,24 @@ function nonzero_chunks(chunks::Vector{Uint64}, pos0::Int, pos1::Int)
         msk_1 = ~(u << l1 << 1)
     end
 
-    if (chunks[k0] & msk_0) != z
-        return true
-    end
-
-    if delta_k == 0
-        return false
-    end
-
-    for i = k0 + 1 : k1 - 1
-        if chunks[i] != z
+    @inbounds begin
+        if (chunks[k0] & msk_0) != z
             return true
         end
-    end
 
-    if (chunks[k1] & msk_1) != z
-        return true
+        if delta_k == 0
+            return false
+        end
+
+        for i = k0 + 1 : k1 - 1
+            if chunks[i] != z
+                return true
+            end
+        end
+
+        if (chunks[k1] & msk_1) != z
+            return true
+        end
     end
 
     return false
@@ -229,7 +231,7 @@ function findmax(a::BitArray)
     ti = 1
     ac = a.chunks
     for i=1:length(ac)
-        k = trailing_zeros(ac[i])
+        @inbounds k = trailing_zeros(ac[i])
         ti += k
         if k != 64
             m = true
@@ -249,7 +251,7 @@ function findmin(a::BitArray)
     ti = 1
     ac = a.chunks
     for i = 1:length(ac)-1
-        k = trailing_ones(ac[i])
+        @inbounds k = trailing_ones(ac[i])
         ti += k
         if k != 64
             return (false, ti)
@@ -257,7 +259,7 @@ function findmin(a::BitArray)
     end
     l = (Base.@_mod64 (length(a)-1)) + 1
     msk = Base.@_mskr l
-    k = trailing_ones(ac[end] & msk)
+    @inbounds k = trailing_ones(ac[end] & msk)
     ti += k
     if k != l
         m = false
