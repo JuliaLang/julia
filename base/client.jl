@@ -45,19 +45,19 @@ function repl_callback(ast::ANY, show_value)
 end
 
 function repl_cmd(cmd)
+    shell = get(ENV,"SHELL","/bin/sh")
     if isempty(cmd.exec)
         error("no cmd to execute")
     elseif cmd.exec[1] == "cd"
         if length(cmd.exec) > 2
             error("cd method only takes one argument")
         elseif length(cmd.exec) == 2
-            cd(cmd.exec[2])
+            cd(readchomp(`$shell -c "echo $(shell_escape(cmd.exec[2]))"`))
         else
             cd()
         end
         println(pwd())
     else
-        shell = get(ENV,"SHELL","/bin/sh")
         run(detach(`$shell -i -c "$(shell_escape(cmd))"`))
     end
     nothing
