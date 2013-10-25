@@ -553,6 +553,7 @@ function link_pipe(read_end::Pipe,readable_julia_only::Bool,write_end::Pipe,writ
     read_end.status = StatusOpen
     nothing
 end
+close_pipe_sync(p::Pipe) = (ccall(:uv_pipe_close_sync,Void,(Ptr{Void},),p.handle); p.status = StatusClosed)
 close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),handle)
 
 _uv_hook_isopen(stream) = int32(stream.status != StatusUninit && stream.status != StatusInit && isopen(stream))
