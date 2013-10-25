@@ -210,6 +210,9 @@ LLVM_FLAGS += --disable-optimized
 else
 LLVM_FLAGS += --enable-optimized
 endif
+ifeq ($(USE_LIBCPP), 1)
+LLVM_FLAGS += --enable-libcpp
+endif
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared
 LLVM_MFLAGS += CPPFLAGS="-D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE"
@@ -370,7 +373,7 @@ READLINE_OPTS = --enable-shared --enable-static --with-curses
 READLINE_CFLAGS = 
 readline-$(READLINE_VER).tar.gz:
 	$(JLDOWNLOAD) readline62-001 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-001
-	$(JLDOWNLOAD) readline62-002 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-002
+	#$(JLDOWNLOAD) readline62-002 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-002
 	$(JLDOWNLOAD) readline62-003 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-003
 	$(JLDOWNLOAD) readline62-004 http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-004
 	$(JLDOWNLOAD) $@ http://ftp.gnu.org/gnu/readline/$@
@@ -781,6 +784,8 @@ ifeq  ($(OPENBLAS_VER),v0.2.8)
 	cd openblas-$(OPENBLAS_VER)/lapack-netlib/SRC && \
 		patch < ../../../dlasd4-lapack-3.4.2.patch && \
 		patch < ../../../slasd4-lapack-3.4.2.patch
+	cd openblas-$(OPENBLAS_VER)/exports && \
+		patch < ../../openblas-link-osx109.patch
 endif
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
@@ -1298,7 +1303,7 @@ install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
 ## OS X Unwind ##
 
-OSXUNWIND_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) CFLAGS="-ggdb3 -O0 -mmacosx-version-min=10.6" CXXFLAGS="-ggdb3 -O0 -mmacosx-version-min=10.6" SFLAGS="-ggdb3" LDFLAGS="-Wl,-macosx_version_min,10.6"
+OSXUNWIND_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) CFLAGS="-ggdb3 -O0" CXXFLAGS="-ggdb3 -O0" SFLAGS="-ggdb3" LDFLAGS="-Wl,-macosx_version_min,10.7"
 
 OSXUNWIND_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libosxunwind.$(SHLIB_EXT)
 OSXUNWIND_OBJ_SOURCE = libosxunwind-$(OSXUNWIND_VER)/libosxunwind.$(SHLIB_EXT)
