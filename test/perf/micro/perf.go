@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	matrix "github.com/skelterjohn/go.matrix"
+	//matrix "github.com/skelterjohn/go.matrix" //XXX BROKEN
 	"math"
 	"math/cmplx"
 	"math/rand"
@@ -54,17 +54,18 @@ func qsort_kernel(a []float64, lo, hi int) []float64 {
 
 // randmatmul
 
-func randmatmul(n int) matrix.MatrixRO {
-	a := matrix.Zeros(n, n)
-	b := matrix.Zeros(n, n)
-	for i := 0; i < n; i++ {
-		for k := 0; k < n; k++ {
-			a.Set(i, k, rand.Float64())
-			b.Set(i, k, rand.Float64())
-		}
-	}
-	return matrix.Product(a, b)
-}
+//XXX BROKEN
+//func randmatmul(n int) matrix.MatrixRO {
+//	a := matrix.Zeros(n, n)
+//	b := matrix.Zeros(n, n)
+//	for i := 0; i < n; i++ {
+//		for k := 0; k < n; k++ {
+//			a.Set(i, k, rand.Float64())
+//			b.Set(i, k, rand.Float64())
+//		}
+//	}
+//	return matrix.Product(a, b)
+//}
 
 // mandelbrot 
 
@@ -186,15 +187,16 @@ func main() {
 
 	// randmatstat not implemented
 
-	tmin = float64(math.MaxFloat64)
-	for i := 0; i < 5; i++ {
-		t := time.Now()
-		c := randmatmul(1000)
-		assert(c.Get(0, 0) >= 0)
-		d := float64(time.Since(t).Seconds())
-		if d < tmin {
-			tmin = d
-		}
-	}
-	print_perf("rand_mat_mul", tmin)
+	//XXX BROKEN
+	//tmin = float64(math.MaxFloat64)
+	//for i := 0; i < 5; i++ {
+	//	t := time.Now()
+	//	c := randmatmul(1000)
+	//	assert(c.Get(0, 0) >= 0)
+	//	d := float64(time.Since(t).Seconds())
+	//	if d < tmin {
+	//		tmin = d
+	//	}
+	//}
+	//print_perf("rand_mat_mul", tmin)
 }

@@ -21,10 +21,11 @@ perf.h: $(JULIAHOME)/deps/Versions.make
 	echo '#include "$(JULIAHOME)/deps/random/dsfmt-$(DSFMT_VER)/dSFMT.c"' >> $@
 
 bin/perf%: perf.c perf.h
-	$(CC) -std=c99 -O$* $< -o $@ $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.a -lpthread
+	$(CC) -std=c99 -O$* $< -o $@ $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.a -lpthread -lm
 
 bin/fperf%: perf.f90
-	$(FC) -static-libgfortran -O$* -fexternal-blas $< -o $@ $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.a -lpthread
+	mkdir -p mods/$@ #Modules for each binary 
+	$(FC) -g -static-libgfortran -Jmods/$@ -O$* -fexternal-blas $< -o $@ $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.a -lpthread
 
 benchmarks/c.csv: \
 	benchmarks/c0.csv \
@@ -50,7 +51,7 @@ benchmarks/go.csv: perf.go
 	for t in 1 2 3 4 5; do go run $<; done >$@
 
 benchmarks/julia.csv: perf.jl
-	for t in 1 2 3 4 5; do ../../julia $<; done >$@
+	for t in 1 2 3 4 5; do ../../../julia $<; done >$@
 
 benchmarks/python.csv: perf.py
 	for t in 1 2 3 4 5; do python $<; done >$@
@@ -89,6 +90,6 @@ benchmarks.html: bin/table.pl benchmarks.csv
 	@$(call PRINT_PERL, $^ >$@)
 
 clean:
-	@rm -rf perf.h bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv *.mod *~
+	@rm -rf perf.h bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv mods *~
 
 .PHONY: all perf clean
