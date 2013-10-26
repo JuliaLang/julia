@@ -51,6 +51,10 @@ function showerror(io::IO, e::TypeError)
         print(io, "type: $(e.func): ",
                   "$(ctx)expected $(e.expected), ",
                   "got $tstr")
+        if e.func === :apply && e.expected <: Function && isa(e.got,AbstractArray)
+            println(io)
+            print(io, "Use square brackets [] for indexing.")
+        end
     end
 end
 
