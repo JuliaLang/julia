@@ -295,7 +295,7 @@ print_matrix(io::IO, A::Union(QRPackedQ, QRPivotedQ), rows::Integer, cols::Integ
 
 ## Multiplication by Q from the QR decomposition
 function *{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T})
-    m, n = size(B)
+    m, n = size(B, 1), ndims(B)==1 ? 1 : size(B, 2)
     if m == size(A.vs, 1)
         Bc = copy(B)
     elseif m == size(A.vs, 2)
@@ -307,7 +307,7 @@ function *{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T})
 end
 *{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.gemqrt!('R', 'N', B.vs, B.T, copy(A))
 function *{T<:BlasFloat}(A::QRPivotedQ{T}, B::StridedVecOrMat{T})
-    m, n = size(B)
+    m, n = size(B, 1), ndims(B)==1 ? 1 : size(B, 2)
     if m == size(A.hh, 1)
         Bc = copy(B)
     elseif m == size(A.hh, 2)
@@ -324,7 +324,7 @@ Ac_mul_B{T<:BlasComplex}(A::QRPackedQ{T},  B::StridedVecOrMat) = LAPACK.gemqrt!(
 Ac_mul_B{T<:BlasReal   }(A::QRPivotedQ{T}, B::StridedVecOrMat) = LAPACK.ormqr! ('L','T',A.hh,A.tau,copy(B))
 Ac_mul_B{T<:BlasComplex}(A::QRPivotedQ{T}, B::StridedVecOrMat) = LAPACK.ormqr! ('L','C',A.hh,A.tau,copy(B))
 function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T})
-    m, n = size(A)
+    m, n = size(A, 1), ndims(A)==1 ? 1 : size(A, 2)
     if n == size(B.vs, 1)
         Ac = copy(A)
     elseif n == size(B.vs, 2)
@@ -335,7 +335,7 @@ function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T})
     LAPACK.gemqrt!('R', iseltype(B.vs,Complex) ? 'C' : 'T', B.vs, B.T, Ac)
 end
 function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPivotedQ{T})
-    m, n = size(A)
+    m, n = size(A, 1), ndims(A)==1 ? 1 : size(A, 2)
     if n == size(B.hh, 1)
         Ac = copy(A)
     elseif n == size(B.hh, 2)
@@ -355,7 +355,7 @@ function (\){T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
     nr, nrhs = minimum(size(A.hh)), size(B, 2)
     if nr == 0 return zeros(0, nrhs), 0 end
     ar = abs(A.hh[1])
-    if ar < eps(typeof(ar)) return zeros(nr, nrhs), 0 end
+    if ar == 0 return zeros(nr, nrhs), 0 end #XXX is 0 the correct underflow threshold?
     rnk = 1
     xmin, xmax = ones(T, nr), ones(T, nr)
     tmin, tmax = ar, ar
