@@ -1,8 +1,6 @@
 module Types
 
-export VersionInterval, VersionSet, Requires, Available, Fixed,
-       merge_requires!, satisfies, @recover
-
+export VersionInterval, VersionSet, Requires, Available, Fixed, merge_requires!, satisfies
 import Base: show, isempty, in, intersect, isequal, hash, deepcopy_internal
 
 immutable VersionInterval
@@ -87,14 +85,5 @@ show(io::IO, f::Fixed) = isempty(f.requires) ?
 # TODO: Available & Fixed are almost the same – merge them?
 # Free could include the same information too, it just isn't
 # required by anything that processes these things.
-
-macro recover(ex)
-    quote
-        try $(esc(ex))
-        catch err
-            show(err)
-        end
-    end
-end
 
 end # module

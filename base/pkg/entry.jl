@@ -4,6 +4,15 @@ using ..Types
 import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write
 import Base: Git, thispatch, nextpatch, nextminor, nextmajor, check_new_version
 
+macro recover(ex)
+    quote
+        try $(esc(ex))
+        catch err
+            show(err)
+        end
+    end
+end
+
 function edit(f::Function, pkg::String, args...)
     r = Reqs.read("REQUIRE")
     reqs = Reqs.parse(r)
@@ -240,7 +249,8 @@ function publish(branch::String)
     info("Validating METADATA")
     check_metadata()
     tags = Dict{ASCIIString,Vector{ASCIIString}}()
-    cmd = `diff-tree --name-only --diff-filter=AMR origin/$branch HEAD --`
+    Git.run(`update-index -q --really-refresh`, dir="METADATA")
+    cmd = `diff --name-only --diff-filter=AMR origin/$branch HEAD --`
     for line in eachline(Git.cmd(cmd, dir="METADATA"))
         path = chomp(line)
         m = match(r"^(.+?)/versions/([^/]+)/sha1$", path)
