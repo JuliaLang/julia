@@ -1219,6 +1219,14 @@ end
 @test isa(0o1111111111,Uint32)
 @test isa(0o11111111111,Uint32)
 
+# "-" is not part of unsigned literals
+@test -0x10 == -(0x10)
+@test -0b10 == -(0b10)
+@test -0o10 == -(0o10)
+@test -0x0010 == -(0x0010)
+@test -0b0010 == -(0b0010)
+@test -0o0010 == -(0o0010)
+
 # float32 literals
 @test isa(1f0,Float32)
 @test isa(1.f0,Float32)
