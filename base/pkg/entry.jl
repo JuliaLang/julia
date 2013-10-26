@@ -18,13 +18,26 @@ function edit(f::Function, pkg::String, args...)
     reqs = Reqs.parse(r)
     avail = Read.available()
     !haskey(avail,pkg) && !haskey(reqs,pkg) && return false
-    r_ = f(r,pkg,args...)
-    r_ == r && return false
-    reqs_ = Reqs.parse(r_)
-    reqs_ != reqs && resolve(reqs_,avail)
-    Reqs.write("REQUIRE",r_)
+    rʹ = f(r,pkg,args...)
+    rʹ == r && return false
+    reqsʹ = Reqs.parse(rʹ)
+    reqsʹ != reqs && resolve(reqsʹ,avail)
+    Reqs.write("REQUIRE",rʹ)
     info("REQUIRE updated.")
     return true
+end
+
+function edit()
+    editor = get(ENV,"VISUAL",get(ENV,"EDITOR",nothing))
+    editor != nothing ||
+        error("set the EDITOR environment variable to an edit command")
+    editor = Base.shell_split(editor)
+    reqs = Reqs.parse("REQUIRE")
+    run(`$editor REQUIRE`)
+    reqsʹ = Reqs.parse("REQUIRE")
+    reqs == reqsʹ && return info("Nothing to be done.")
+    info("Computing changes...")
+    resolve(reqsʹ)
 end
 
 function add(pkg::String, vers::VersionSet)

@@ -14,6 +14,7 @@ const dir = Dir.path
 
 init(meta::String=DEFAULT_META, branch::String=META_BRANCH) = Dir.init(meta,branch)
 
+edit() = cd(Entry.edit)
 rm(pkg::String) = cd(Entry.rm,pkg)
 add(pkg::String, vers::VersionNumber...) = cd(Entry.add,pkg,vers...)
 
