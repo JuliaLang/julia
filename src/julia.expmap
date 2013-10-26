@@ -83,6 +83,7 @@
     jl_forceclose_uv;
     jl_compile_hint;
     jl_compress_ast;
+    jl_send_to;
     jl_connect_raw;
     jl_continue_sym;
     jl_core_module;

@@ -770,6 +770,23 @@ DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr_storage *addr)
     return -2; //error! Only IPv4 and IPv6 are implemented atm
 }
 
+DLLEXPORT int jl_send_to(uv_loop_t *loop, char *value, uint32_t size, uint32_t host, uint16_t port)
+{
+    uv_udp_t *handle = malloc(sizeof(uv_udp_t));
+    handle->data = 0;
+    uv_udp_init(loop, handle);
+    struct sockaddr_in addr;
+    uv_udp_send_t *req = malloc(sizeof(uv_udp_send_t));
+    req->data = 0;
+    memset(&addr, 0, sizeof(struct sockaddr_in));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = host;
+    addr.sin_port = port;
+
+    uv_buf_t buf[]  = {{.base = value,.len=size}};
+    return uv_udp_send(req, handle, buf, 1, addr, NULL);
+}
+
 DLLEXPORT char *jl_ios_buf_base(ios_t *ios)
 {
     return ios->buf;

@@ -2276,6 +2276,12 @@
 
 "),
 
+("Network I/O","Base","sendto","sendto(data, host::IPv4, port)
+
+   Send UDP packet containing data to the host port combination
+
+"),
+
 ("Network I/O","Base","nb_available","nb_available(stream)
 
    Returns the number of bytes available for reading before a read

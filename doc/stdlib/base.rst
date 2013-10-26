@@ -1476,6 +1476,10 @@ Network I/O
 
    Returns IPv6 object from ip address formatted as Integer  
 
+.. function:: sendto(data, host::IPv4, port)
+
+   Send UDP packet containing data to the host port combination
+
 .. function:: nb_available(stream)
 
    Returns the number of bytes available for reading before a read from this stream or buffer will block.
