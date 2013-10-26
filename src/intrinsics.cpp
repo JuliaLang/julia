@@ -386,7 +386,8 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
             }
             else {
                 if (vxt->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits()) {
-                    return emit_error("box: argument is of incorrect size", ctx);
+                    emit_error("box: argument is of incorrect size", ctx);
+                    return vx;
                 }
                 vx = builder.CreateBitCast(vx, llvmt);
             }
@@ -725,8 +726,8 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         }
         else {
             return builder.CreateSelect(isfalse,
-                                        boxed(emit_expr(args[3], ctx, false)),
-                                        boxed(emit_expr(args[2], ctx, false)));
+                                        boxed(emit_expr(args[3], ctx, false),ctx,expr_type(args[3],ctx)),
+                                        boxed(emit_expr(args[2], ctx, false),ctx,expr_type(args[2],ctx)));
         }
     }
     default: ;
