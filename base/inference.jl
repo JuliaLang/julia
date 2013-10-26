@@ -1634,10 +1634,10 @@ function occurs_more(e::ANY, pred, n)
         end
         return c
     end
-    if isa(e,SymbolNode)
-        e = e.name
+    if pred(e) || (isa(e,SymbolNode) && pred(e.name))
+        return 1
     end
-    return pred(e) ? 1 : 0
+    return 0
 end
 
 function exprtype(x::ANY)
@@ -2137,17 +2137,27 @@ end
 # and not assigned.
 # "sa" is the result of find_sa_vars
 function remove_redundant_temp_vars(ast, sa)
+    varinfo = ast.args[2][2]
     for (v,init) in sa
         if ((isa(init,Symbol) || isa(init,SymbolNode)) &&
-            any(vi->symequal(vi[1],init), ast.args[2][2]) &&
+            any(vi->symequal(vi[1],init), varinfo) &&
             !is_var_assigned(ast, init))
 
-            delete_var!(ast, v)
-            sym_replace(ast.args[3], {v}, {}, {init}, {})
+            if !occurs_undef(v, ast.args[3])
+                # this transformation is not valid for vars used before def.
+                # we need to preserve the point of assignment to know where to
+                # throw errors (issue #4645).
+                delete_var!(ast, v)
+                sym_replace(ast.args[3], {v}, {}, {init}, {})
+            end
         end
     end
     ast
 end
+
+occurs_undef(var, expr) =
+    occurs_more(expr,
+                e->(isa(e,SymbolNode) && symequal(var,e) && issubtype(Undef,e.typ)), 0)>0
 
 # compute set of vars assigned once
 function find_sa_vars(ast)
