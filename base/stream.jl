@@ -569,6 +569,9 @@ end
 ## stream functions ##
 function start_reading(stream::AsyncStream)
     if stream.status == StatusOpen
+        if !isreadable(stream)
+            error("Tried to read a stream that is not readable!")
+        end
         ret = ccall(:uv_read_start,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),
             handle(stream),uv_jl_alloc_buf::Ptr{Void},uv_jl_readcb::Ptr{Void})
         stream.status = StatusActive
