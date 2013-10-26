@@ -1291,7 +1291,7 @@ end
 # Create a sparse diagonal matrix by specifying multiple diagonals 
 # packed into a tuple, alongside their diagonal offsets and matrix shape
 
-function spdiagm_int(B::Tuple, d::Tuple)
+function spdiagm_internal(B, d)
     ndiags = length(d)
     if length(B) != ndiags; throw(ArgumentError); end
     ncoeffs = 0
@@ -1327,13 +1327,13 @@ function spdiagm_int(B::Tuple, d::Tuple)
     return (I,J,V)
 end
 
-function spdiagm(B::Tuple, d::Tuple, m::Integer, n::Integer)
-    (I,J,V) = spdiagm_int(B, d)
+function spdiagm(B, d, m::Integer, n::Integer)
+    (I,J,V) = spdiagm_internal(B, d)
     return sparse(I,J,V,m,n)
 end
 
-function spdiagm(B::Tuple, d::Tuple)
-    (I,J,V) = spdiagm_int(B, d)
+function spdiagm(B, d)
+    (I,J,V) = spdiagm_internal(B, d)
     return sparse(I,J,V)
 end
 
