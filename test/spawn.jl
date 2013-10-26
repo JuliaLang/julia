@@ -27,15 +27,16 @@ out = readall(`echo hello` & `echo world`)
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
 @unix_only @test (run(yes|>`head`|>DevNull); true)
 
-a = Base.Condition()
-
-@schedule begin
-    p = spawn(yes|>DevNull)
-    Base.notify(a,p)
-    @test !success(p)
+begin
+    a = Base.Condition()
+    @schedule begin
+        p = spawn(yes|>DevNull)
+        Base.notify(a,p)
+        @test !success(p)
+    end
+    p = wait(a)
+    kill(p)
 end
-p = wait(a)
-kill(p)
 
 @test_throws run(`foo`)
 
