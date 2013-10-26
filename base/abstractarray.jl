@@ -150,7 +150,34 @@ function reshape(a::AbstractArray, dims::Dims)
     end
     copy!(similar(a, dims), a)
 end
+
+function reshape(A::AbstractArray, dims::(Union(Int,  Colon)...))
+    new_dims = Array(Int, length(dims))
+    dim_product = 1.
+    missing_dim_idx = -1
+    colon = Colon()
+    for i = 1:length(dims)
+        if dims[i] != colon
+            new_dims[i] = dims[i]
+            dim_product *= dims[i]
+        else
+            if missing_dim_idx == -1
+                missing_dim_idx = i
+            else
+                error("reshape: only one implicit dimension allowed")
+            end
+        end
+    end
+    missing_dim_value, remainder = divrem(length(A), dim_product)
+    if remainder != 0
+        error("reshape: invalid dimensions")
+    end
+    new_dims[missing_dim_idx] = missing_dim_value
+    reshape(A, new_dims...)
+end
+
 reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
+reshape(a::AbstractArray, dims::Union(Int, Colon)...) = reshape(a, dims)
 
 vec(a::AbstractArray) = reshape(a,length(a))
 vec(a::AbstractVector) = a
