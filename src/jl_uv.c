@@ -178,6 +178,12 @@ DLLEXPORT void jl_uv_connectcb(uv_connect_t *connect, int status)
     (void)ret;
 }
 
+DLLEXPORT void jl_uv_send_tocb(uv_udp_send_t *req, int status)
+{
+    uv_close((uv_handle_t*) req->handle, &jl_uv_closeHandle);
+    free(req);
+}
+
 DLLEXPORT void jl_uv_connectioncb(uv_stream_t *stream, int status)
 {
     JULIA_CB(connectioncb,stream->data,1,CB_INT32,status);
@@ -784,7 +790,7 @@ DLLEXPORT int jl_send_to(uv_loop_t *loop, char *value, uint32_t size, uint32_t h
     addr.sin_port = port;
 
     uv_buf_t buf[]  = {{.base = value,.len=size}};
-    return uv_udp_send(req, handle, buf, 1, addr, NULL);
+    return uv_udp_send(req, handle, buf, 1, addr, &jl_uv_send_tocb);
 }
 
 DLLEXPORT char *jl_ios_buf_base(ios_t *ios)
