@@ -1337,7 +1337,7 @@ function spdiagm(B, d)
     return sparse(I,J,V)
 end
 
-spdiagm(B::AbstractVector, d::Number, m, n) = spdiagm((B,), (d,), m, n)
+spdiagm(B::AbstractVector, d::Number, m::Integer, n::Integer) = spdiagm((B,), (d,), m, n)
 
 spdiagm(B::AbstractVector, d::Number=0) = spdiagm((B,), (d,))
 
