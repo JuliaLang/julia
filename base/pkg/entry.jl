@@ -4,6 +4,15 @@ using ..Types
 import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write
 import Base: Git, thispatch, nextpatch, nextminor, nextmajor, check_new_version
 
+macro recover(ex)
+    quote
+        try $(esc(ex))
+        catch err
+            show(err)
+        end
+    end
+end
+
 function edit(f::Function, pkg::String, args...)
     r = Reqs.read("REQUIRE")
     reqs = Reqs.parse(r)
