@@ -268,17 +268,26 @@
 		    ((eq? pred char-oct?) 8)
 		    ((eq? pred char-bin?) 2)
 		    (else 10)))
-	   (n (string-to-number s r)))
+	   (n (string-to-number
+	       ;; for an unsigned literal starting with -, remove the - and
+	       ;; parse instead as a call to unary -
+	       (if (and neg (not (= r 10)))
+		   (string.sub s 1)
+		   s)
+	       r)))
       (if n
 	  (cond (is-hex-float-literal (double n))
-	  	((eq? pred char-hex?) (sized-uint-literal n s 4))
-		((eq? pred char-oct?) (sized-uint-oct-literal n s))
-		((eq? pred char-bin?) (sized-uint-literal n s 1))
+		((eq? pred char-hex?) (fix-uint-neg neg (sized-uint-literal n s 4)))
+		((eq? pred char-oct?) (fix-uint-neg neg (sized-uint-oct-literal n s)))
+		((eq? pred char-bin?) (fix-uint-neg neg (sized-uint-literal n s 1)))
                 (is-float32-literal   (float n))
 		(else (if (and (integer? n) (> n 9223372036854775807))
 			  (error (string "invalid numeric constant " s))
 			  n)))
 	  (error (string "invalid numeric constant " s))))))
+
+(define (fix-uint-neg neg n)
+  (if neg `(call - ,n) n))
 
 (define (sized-uint-literal n s b)
   (let ((l (* (- (length s) 2) b)))
