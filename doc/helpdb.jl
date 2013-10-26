@@ -215,6 +215,14 @@
 
 "),
 
+("All Objects","Base","ifelse","ifelse(condition::Bool, x, y)
+
+   Return \"x\" if \"condition\" is true, otherwise return \"y\". This
+   differs from \"?\" or \"if\" in that it is an ordinary function, so
+   all the arguments are evaluated first.
+
+"),
+
 ("All Objects","Base","lexcmp","lexcmp(x, y)
 
    Compare \"x\" and \"y\" lexicographically and return -1, 0, or 1
@@ -599,15 +607,15 @@
 
 "),
 
-("Syntax","Base","parse","parse(str[, start[, greedy[, err]]])
+("Syntax","Base","parse","parse(str, [start]; greedy=true, raise=false)
 
    Parse the expression string and return an expression (which could
    later be passed to eval for execution). Start is the index of the
    first character to start parsing (default is 1). If greedy is true
    (default), parse will try to consume as much input as it can;
    otherwise, it will stop as soon as it has parsed a valid token. If
-   err is true (default), parse errors will raise an error; otherwise,
-   it will return the error as a normal expression.
+   raise is true (default), parse errors will raise an error;
+   otherwise, parse will return the error as an expression object.
 
 "),
 
@@ -4873,8 +4881,7 @@ popdisplay(d::Display)
 
 ("Arrays","Base","length","length(A) -> Integer
 
-   Returns the number of elements in A (note that this differs from
-   MATLAB where \"length(A)\" is the largest dimension of \"A\")
+   Returns the number of elements in A
 
 "),
 
@@ -5167,6 +5174,9 @@ popdisplay(d::Display)
    called for block matrix syntax. The first argument specifies the
    number of arguments to concatenate in each block row. For example,
    \"[a b;c d e]\" calls \"hvcat((2,3),a,b,c,d,e)\".
+
+   If the first argument is a single integer \"n\", then all block
+   rows are assumed to have \"n\" block columns.
 
 "),
 
@@ -8162,13 +8172,15 @@ popdisplay(d::Display)
 
    Compute the QR factorization of \"A\" such that \"A = Q*R\". Also
    see \"qrfact\". The default is to compute a thin factorization.
+   Note that *R* is not extended with zeros when the full *Q* is
+   requested.
 
 "),
 
 ("Linear Algebra","Base","qrfact","qrfact(A)
 
    Compute the QR factorization of \"A\" and return a \"QR\" object.
-   The coomponents of the factorization \"F\" can be accessed as
+   The components of the factorization \"F\" can be accessed as
    follows: the orthogonal matrix \"Q\" can be extracted with
    \"F[:Q]\" and the triangular matrix \"R\" with \"F[:R]\". The
    following functions are available for \"QR\" objects: \"size\",
@@ -8185,10 +8197,10 @@ popdisplay(d::Display)
 
 "),
 
-("Linear Algebra","Base","qrp","qrp(A[, thin]) -> Q, R, P
+("Linear Algebra","Base","qrp","qrp(A[, thin]) -> Q, R, p
 
    Compute the QR factorization of \"A\" with pivoting, such that
-   \"A*P = Q*R\", Also see \"qrpfact\". The default is to compute a
+   \"A[:,p] = Q*R\", Also see \"qrpfact\". The default is to compute a
    thin factorization.
 
 "),
@@ -9349,8 +9361,9 @@ popdisplay(d::Display)
    containing the diagonals and \"d\" is a tuple containing the
    positions of the diagonals. In the case the input contains only one
    diagonaly, \"B\" can be a vector (instead of a tuple) and \"d\" can
-   be the diagonal position (instead of a tuple), defaulting to 0 (diagonal).
-   Optionally, \"m\" and \"n\" specify the size of the resulting sparse matrix.
+   be the diagonal position (instead of a tuple), defaulting to 0
+   (diagonal). Optionally, \"m\" and \"n\" specify the size of the
+   resulting sparse matrix.
 
 "),
 
@@ -9379,6 +9392,16 @@ popdisplay(d::Display)
 
    Compute the elimination tree of a symmetric sparse matrix \"A\"
    from \"triu(A)\" and, optionally, its post-ordering permutation.
+
+"),
+
+("Sparse Matrices","Base","symperm","symperm(A, p)
+
+   Return the symmetric permutation of A, which is \"A[p,p]\". A
+   should be symmetric and sparse, where only the upper triangular
+   part of the matrix is stored. This algorithm ignores the lower
+   triangular part of the matrix. Only the upper triangular part of
+   the result is returned as well.
 
 "),
 
