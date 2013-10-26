@@ -66,20 +66,16 @@ include("raytracer.jl")
 function cmp_with_func(x::Vector, f::Function)
     count::Int = 0
     for i = 1:length(x)-1
-        if f(x[i], x[i+1])
-            count += 1
-        end
+      if f(x[i], x[i+1]) count += 1 end
     end
-    return count
+    count
 end
 
 x = randn(200_000)
 @timeit (for n in 1:10; count = cmp_with_func(x, isless) end) "funarg" "Function argument benchmark"
 
 
-function arith_vectorized(b,c,d)
-    a = b.*c + d + 1.0
-end
+arith_vectorized(b,c,d) = b.*c + d + 1.0
 
 len = 1_000_000
 b = randn(len)
@@ -93,10 +89,10 @@ open("random.csv","w") do io
 end
 
 function parsecsv()
-    file = EachLine(open("random.csv"))
-    for line in file
-        line = split(line, ',')
-    end
+    tokens = String[]
+    for line in EachLine(open("random.csv"))
+    append!(tokens, split(line, ','))
+  end
 end
 
 @timeit parsecsv() "splitline" "CSV parsing"
