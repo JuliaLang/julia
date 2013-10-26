@@ -1073,3 +1073,7 @@ let
     @test ys !== xs
     @test ys == xs
 end
+
+# issue #4645
+i4645(x) = (println(zz); zz = x; zz)
+@test_throws i4645(4)
