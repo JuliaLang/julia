@@ -741,3 +741,11 @@ B = reshape(A, 4)
 @test pop!(B) == 5
 C = reshape(B, 1, 4)
 @test_throws push!(C, 5)
+
+A = [NaN]; B = [NaN]
+@test !(A==A)
+@test isequal(A,A)
+@test A===A
+@test !(A==B)
+@test isequal(A,B)
+@test A!==B
