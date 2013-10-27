@@ -1306,16 +1306,6 @@ function ind2sub!{T<:Integer}(sub::Array{T}, dims::Array{T}, ind::T)
     return
 end
 
-indices(I) = I
-indices(I::Int) = I
-indices(I::Real) = convert(Int, I)
-indices(I::AbstractArray{Bool,1}) = find(I)
-indices(I::(Any,))            = (indices(I[1]), )
-indices(I::(Any,Any,))        = (indices(I[1]), indices(I[2]))
-indices(I::(Any,Any,Any))     = (indices(I[1]), indices(I[2]), indices(I[3]))
-indices(I::(Any,Any,Any,Any)) = (indices(I[1]), indices(I[2]), indices(I[3]), indices(I[4]))
-indices(I::Tuple) = map(indices, I)
-
 # Generalized repmat
 function repeat{T}(A::Array{T};
                    inner::Array{Int} = ones(Int, ndims(A)),
