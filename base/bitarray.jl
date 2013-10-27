@@ -372,20 +372,53 @@ getindex(B::BitArray) = getindex(B, 1)
 # 0d bitarray
 getindex(B::BitArray{0}) = getindex_unchecked(B.chunks, 1)
 
-getindex(B::BitArray, i0::Real, i1::Real) = B[to_index(i0) + size(B,1)*(to_index(i1)-1)]
-getindex(B::BitArray, i0::Real, i1::Real, i2::Real) =
-    B[to_index(i0) + size(B,1)*((to_index(i1)-1) + size(B,2)*(to_index(i2)-1))]
-getindex(B::BitArray, i0::Real, i1::Real, i2::Real, i3::Real) =
-    B[to_index(i0) + size(B,1)*((to_index(i1)-1) + size(B,2)*((to_index(i2)-1) + size(B,3)*(to_index(i3)-1)))]
+function getindex(B::BitArray, i1::Real, i2::Real)
+    #checkbounds(B, i0, i1) # manually inlined for performance
+    i1, i2 = to_index(i1, i2)
+    l1 = size(B,1)
+    1 <= i1 <= l1 || throw(BoundsError)
+    return B[i1 + l1*(i2-1)]
+end
+function getindex(B::BitArray, i1::Real, i2::Real, i3::Real)
+    #checkbounds(B, i0, i1, i2) # manually inlined for performance
+    i1, i2, i3 = to_index(i1, i2, i3)
+    l1 = size(B,1)
+    1 <= i1 <= l1 || throw(BoundsError)
+    l2 = size(B,2)
+    1 <= i2 <= l2 || throw(BoundsError)
+    return B[i1 + l1*((i2-1) + l2*(i3-1))]
+end
+function getindex(B::BitArray, i1::Real, i2::Real, i3::Real, i4::Real)
+    #checkbounds(B, i1, i2, i3, i4)
+    i1, i2, i3, i4 = to_index(i1, i2, i3, i4)
+    l1 = size(B,1)
+    1 <= i1 <= l1 || throw(BoundsError)
+    l2 = size(B,2)
+    1 <= i2 <= l2 || throw(BoundsError)
+    l3 = size(B,3)
+    1 <= i3 <= l3 || throw(BoundsError)
+    return B[i1 + l1*((i2-1) + l2*((i3-1) + l3*(i4-1)))]
+end
 
 function getindex(B::BitArray, I::Real...)
+    #checkbounds(B, I...) # inlined for performance
+    #I = to_index(I) # inlined for performance
     ndims = length(I)
-    index = to_index(I[1])
+    i = to_index(I[1])
+    l = size(B,1)
+    1 <= i <= l || throw(BoundsError)
+    index = i
     stride = 1
-    for k=2:ndims
-        stride *= size(B, k - 1)
-        index += (to_index(I[k]) - 1) * stride
+    for k = 2:ndims-1
+        stride *= l
+        i = to_index(I[k])
+        l = size(B,k)
+        1 <= i <= l || throw(BoundsError)
+        index += (i-1) * stride
     end
+    stride *= l
+    i = to_index(I[ndims])
+    index += (i-1) * stride
     return B[index]
 end
 
@@ -468,9 +501,7 @@ function getindex{T<:Real}(B::BitArray, I::AbstractVector{T})
     for i in I
         # faster X[ind] = B[i]
         i = to_index(i)
-        if i < 1 || i > lB
-            throw(BoundsError())
-        end
+        1 <= i <= lB || throw(BoundsError())
         setindex_unchecked(Xc, getindex_unchecked(Bc, i), ind)
         ind += 1
     end
@@ -480,6 +511,7 @@ end
 let getindex_cache = nothing
     global getindex
     function getindex(B::BitArray, I::Union(Real,AbstractVector)...)
+        checkbounds(B, I...)
         I = to_index(I)
         X = BitArray(index_shape(I...))
         Xc = X.chunks
@@ -549,22 +581,58 @@ setindex!(B::BitArray, x) = setindex!(B, x, 1)
 
 setindex!(B::BitArray, x, i::Real) = setindex!(B, convert(Bool,x), to_index(i))
 
-setindex!(B::BitArray, x, i0::Real, i1::Real) =
-    B[to_index(i0) + size(B,1)*(to_index(i1)-1)] = x
+function setindex!(B::BitArray, x, i1::Real, i2::Real)
+    #checkbounds(B, i0, i1) # manually inlined for performance
+    i1, i2 = to_index(i1, i2)
+    l1 = size(B,1)
+    1 <= i1 <= l1 || throw(BoundsError)
+    B[i1 + l1*(i2-1)] = x
+    return B
+end
 
-setindex!(B::BitArray, x, i0::Real, i1::Real, i2::Real) =
-    B[to_index(i0) + size(B,1)*((to_index(i1)-1) + size(B,2)*(to_index(i2)-1))] = x
+function setindex!(B::BitArray, x, i1::Real, i2::Real, i3::Real)
+    #checkbounds(B, i1, i2, i3) # manually inlined for performance
+    i1, i2, i3 = to_index(i1, i2, i3)
+    l1 = size(B,1)
+    1 <= i1 <= l1 || throw(BoundsError)
+    l2 = size(B,2)
+    1 <= i2 <= l2 || throw(BoundsError)
+    B[i1 + l1*((i2-1) + l2*(i3-1))] = x
+    return B
+end
 
-setindex!(B::BitArray, x, i0::Real, i1::Real, i2::Real, i3::Real) =
-    B[to_index(i0) + size(B,1)*((to_index(i1)-1) + size(B,2)*((to_index(i2)-1) + size(B,3)*(to_index(i3)-1)))] = x
+function setindex!(B::BitArray, x, i1::Real, i2::Real, i3::Real, i4::Real)
+    #checkbounds(B, i1, i2, i3, i4) # manually inlined for performance
+    i1, i2, i3, i4 = to_index(i1, i2, i3, i4)
+    l1 = size(B,1)
+    1 <= i1 <= l1 || throw(BoundsError)
+    l2 = size(B,2)
+    1 <= i2 <= l2 || throw(BoundsError)
+    l3 = size(B,3)
+    1 <= i3 <= l3 || throw(BoundsError)
+    B[i1 + l1*((i2-1) + l2*((i3-1) + l3*(i4-1)))] = x
+    return B
+end
 
-function setindex!(B::BitArray, x, I0::Real, I::Real...)
-    index = to_index(I0)
+function setindex!(B::BitArray, x, i::Real, I::Real...)
+    #checkbounds(B, I...) # inlined for performance
+    #I = to_index(I) # inlined for performance
+    ndims = length(I) + 1
+    i = to_index(i)
+    l = size(B,1)
+    1 <= i <= l || throw(BoundsError)
+    index = i
     stride = 1
-    for k = 1:length(I)
-        stride = stride * size(B, k)
-        index += (to_index(I[k]) - 1) * stride
+    for k = 2:ndims-1
+        stride *= l
+        l = size(B,k)
+        i = to_index(I[k-1])
+        1 <= i <= l || throw(BoundsError)
+        index += (i-1) * stride
     end
+    stride *= l
+    i = to_index(I[ndims-1])
+    index += (i-1) * stride
     B[index] = x
     return B
 end
@@ -638,8 +706,9 @@ end
 # note: we can gain some performance if the first dimension is a range;
 #       currently this is mainly indended for the general cat case
 # TODO: extend to I:Indices... (i.e. not necessarily contiguous)
-function setindex!(B::BitArray, X::BitArray, I0::Range1{Int}, I::Union(Integer, Range1{Int})...)
-    I = map(x->(isa(x,Integer) ? (x:x) : x), I)
+function setindex!(B::BitArray, X::BitArray, I0::Range1{Int}, I::Union(Real, Range1{Int})...)
+    checkbounds(B, I0, I...)
+    I = map(x->(isa(x,Real) ? (to_index(x):to_index(x)) : x), I)
     setindex_array2bitarray_ranges(B, X, I0, I...)
 end
 
@@ -705,6 +774,7 @@ let setindex_cache = nothing
 end
 
 function setindex!{T<:Real}(B::BitArray, x, I::AbstractVector{T})
+    x = convert(Bool, x)
     for i in I
         B[i] = x
     end
@@ -714,6 +784,8 @@ end
 let setindex_cache = nothing
     global setindex!
     function setindex!(B::BitArray, x, I::Union(Real,AbstractArray)...)
+        x = convert(Bool, x)
+        checkbounds(B, I...)
         I = to_index(I)
         if is(setindex_cache,nothing)
             setindex_cache = Dict()

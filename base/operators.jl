@@ -227,7 +227,13 @@ end
 to_index(i)       = i
 to_index(i::Real) = convert(Int, i)
 to_index(i::Int)  = i
+to_index(r::Range1{Int}) = r
+to_index{T}(r::Range1{T}) = to_index(first(r)):to_index(last(r))
 to_index(I::AbstractArray{Bool,1}) = find(I)
+to_index(i1, i2)         = to_index(i1), to_index(i2)
+to_index(i1, i2, i3)     = to_index(i1), to_index(i2), to_index(i3)
+to_index(i1, i2, i3, i4) = to_index(i1), to_index(i2), to_index(i3), to_index(i4)
+to_index(I...) = to_index(I)
 to_index(I::(Any,))            = (to_index(I[1]), )
 to_index(I::(Any,Any,))        = (to_index(I[1]), to_index(I[2]))
 to_index(I::(Any,Any,Any))     = (to_index(I[1]), to_index(I[2]), to_index(I[3]))
