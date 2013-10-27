@@ -98,11 +98,7 @@ end
 
 function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray))
     checkbounds(size(A,1), I)
-    sz = size(A,2)
-    for i = 3:ndims(A)
-        sz *= size(A, i) # TODO: sync. with decision on issue #1030
-    end
-    checkbounds(sz, J)
+    checkbounds(trailingsize(A,2), J)
 end
 
 function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
@@ -111,11 +107,7 @@ function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
         for dim = 1:(n-1)
             checkbounds(size(A,dim), I[dim])
         end
-        sz = size(A,n)
-        for i = n+1:ndims(A)
-            sz *= size(A,i)     # TODO: sync. with decision on issue #1030
-        end
-        checkbounds(sz, I[n])
+        checkbounds(trailingsize(A,n), I[n])
     end
 end
 
