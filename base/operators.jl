@@ -227,6 +227,12 @@ end
 to_index(i)       = i
 to_index(i::Real) = convert(Int, i)
 to_index(i::Int)  = i
+to_index(I::AbstractArray{Bool,1}) = find(I)
+to_index(I::(Any,))            = (to_index(I[1]), )
+to_index(I::(Any,Any,))        = (to_index(I[1]), to_index(I[2]))
+to_index(I::(Any,Any,Any))     = (to_index(I[1]), to_index(I[2]), to_index(I[3]))
+to_index(I::(Any,Any,Any,Any)) = (to_index(I[1]), to_index(I[2]), to_index(I[3]), to_index(I[4]))
+to_index(I::Tuple) = map(to_index, I)
 
 # vectorization
 

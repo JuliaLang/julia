@@ -403,7 +403,7 @@ let getindex_cache = nothing
         X = BitArray(index_shape(I0, I...))
         nI = 1 + length(I)
 
-        I = map(x->(isa(x,Real) ? (to_index(x):to_index(x)) : indices(x)), I[1:nI-1])
+        I = map(x->(isa(x,Real) ? (to_index(x):to_index(x)) : to_index(x)), I[1:nI-1])
 
         f0 = first(I0)
         l0 = length(I0)
@@ -480,7 +480,7 @@ end
 let getindex_cache = nothing
     global getindex
     function getindex(B::BitArray, I::Union(Real,AbstractVector)...)
-        I = indices(I)
+        I = to_index(I)
         X = BitArray(index_shape(I...))
         Xc = X.chunks
 
@@ -677,7 +677,7 @@ end
 let setindex_cache = nothing
     global setindex!
     function setindex!(B::BitArray, X::AbstractArray, I::Union(Real,AbstractArray)...)
-        I = indices(I)
+        I = to_index(I)
         nel = 1
         for idx in I
             nel *= length(idx)
@@ -714,7 +714,7 @@ end
 let setindex_cache = nothing
     global setindex!
     function setindex!(B::BitArray, x, I::Union(Real,AbstractArray)...)
-        I = indices(I)
+        I = to_index(I)
         if is(setindex_cache,nothing)
             setindex_cache = Dict()
         end
