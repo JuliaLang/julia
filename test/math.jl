@@ -149,7 +149,7 @@ end
 # invdigamma
 for elty in (Float32, Float64)
     for val in [0.001, 0.01, 0.1, 1.0, 10.0]
-        @assert abs(invdigamma(digamma(convert(elty, val))) - convert(elty, val)) < 1e-8
+        @test abs(invdigamma(digamma(convert(elty, val))) - convert(elty, val)) < 1e-8
     end
 end
 

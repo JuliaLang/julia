@@ -481,7 +481,7 @@ function test_approx_eq_vecs(a, b)
     n = size(a)[1]
     @test n==size(b)[1]
     elty = typeof(a[1])
-    @assert elty==typeof(b[1])
+    @test elty==typeof(b[1])
     for i=1:n
         ev1, ev2 = a[:,i], b[:,i]
         deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
