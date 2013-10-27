@@ -45,7 +45,7 @@ function repl_callback(ast::ANY, show_value)
 end
 
 function repl_cmd(cmd)
-    shell = get(ENV,"SHELL","/bin/sh")
+    shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
     if isempty(cmd.exec)
         error("no cmd to execute")
     elseif cmd.exec[1] == "cd"
