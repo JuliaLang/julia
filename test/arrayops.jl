@@ -733,3 +733,11 @@ A = [[i i; i i] for i=1:2]
 A = [1,2]
 @test append!(A, A) == [1,2,1,2]
 @test prepend!(A, A) == [1,2,1,2,1,2,1,2]
+
+# cases where shared arrays can/can't be grown
+A = [1 3;2 4]
+B = reshape(A, 4)
+@test push!(B,5) == [1,2,3,4,5]
+@test pop!(B) == 5
+C = reshape(B, 1, 4)
+@test_throws push!(C, 5)
