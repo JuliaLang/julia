@@ -33,16 +33,9 @@ function hermitianeigtest(n, iter)
     d,v
 end
 
-for (testfunc, testname, longtestname) in [
-        (realeigtest, "realeig", "Real matrix eigenfactorization"),
-        (symeigtest, "symeig", "Symmetric matrix eigenfactorization"),
-        (hermitianeigtest, "hermitianeig", "Hermitian matrix eigenfactorization")]
-    for (n, t, size) in [(2  , 10^4, "tiny"),
-                         (2^4, 10^3, "small"),
-                         (2^6, 10^2, "medium"),
-                         (2^8, 5   , "large"),
-                         (2^10,1   , "huge")]
-      @timeit apply(testfunc, n, t) string(testname, "_", size) string(uppercase(size[1]), size[2:end], " ", longtestname, " test")
-    end
-end
+problemsizes = [(2, 10^4, "tiny"), (2^4, 10^3, "small"), (2^6, 10^2, "medium"), (2^8, 5, "large"), (2^10, 1, "huge")]
+testdata = [(realeigtest, "realeig", "Real matrix eigenfactorization", problemsizes),
+            (symeigtest, "symeig", "Symmetric matrix eigenfactorization", problemsizes),
+            (hermitianeigtest, "hermitianeig", "Hermitian matrix eigenfactorization", problemsizes)]
+include("../perfgeneric.jl")
 

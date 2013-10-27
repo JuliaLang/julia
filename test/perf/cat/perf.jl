@@ -81,18 +81,14 @@ function catnd_perf2(n, iter)
     end
 end
 
-for (testfunc, testname, longtestname) in [
-        (cat2d_perf,  "hvcat",        "horizontal/vertical matrix concatenation"),
-        (cat2d_perf2, "hvcat_setind", "horizontal/vertical matrix concatenation using setindex"),
-        (hcat_perf,   "hcat",         "horizontal matrix concatenation"),
-        (hcat_perf2,  "hcat_setind",  "horizontal matrix concatenation using setindex"),
-        (vcat_perf,   "vcat",         "vertical matrix concatenation"),
-        (vcat_perf2,  "vcat_setind",  "vertical matrix concatenation using setindex"),
-        (catnd_perf,  "catnd",        "N-dimensional matrix concatenation"),
-        (catnd_perf2, "catnd_setind", "N-dimensional matrix concatenation using setindex")]
-    for (n, t, size) in [(5  , 20000, "small"),
-                         (500, 2,     "large")]
-      @timeit apply(testfunc, n, t) string(testname, "_", size) string(uppercase(size[1]), size[2:end], " ", longtestname, " test")
-    end
-end
+problemsizes = [(5, 20000, "small"), (500, 2, "large")]
+testdata = [(cat2d_perf,  "hvcat",        "horizontal/vertical matrix concatenation", problemsizes),
+            (cat2d_perf2, "hvcat_setind", "horizontal/vertical matrix concatenation using setindex", problemsizes),
+            (hcat_perf,   "hcat",         "horizontal matrix concatenation", problemsizes),
+            (hcat_perf2,  "hcat_setind",  "horizontal matrix concatenation using setindex", problemsizes),
+            (vcat_perf,   "vcat",         "vertical matrix concatenation", problemsizes),
+            (vcat_perf2,  "vcat_setind",  "vertical matrix concatenation using setindex", problemsizes),
+            (catnd_perf,  "catnd",        "N-dimensional matrix concatenation", problemsizes),
+            (catnd_perf2, "catnd_setind", "N-dimensional matrix concatenation using setindex", problemsizes)] 
+include("../perfgeneric.jl")
 
