@@ -337,6 +337,14 @@ function integer_partitions(n,m)
 end
 export integer_partitions
 
+function mmread(file)
+    error("mmread(file) is discontinued - add package MatrixMarket and use MatrixMarket.mmread instead.")
+end
+
+function mmread(file, infoonly)
+    error("mmread(file, infoonly) is discontinued - add package MatrixMarket and use MatrixMarket.mmread instead.")
+end
+export mmread
 
 # 0.3 deprecations
 

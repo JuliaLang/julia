@@ -171,7 +171,6 @@ push!(I18n.CALLBACKS, Help.clear_cache)
 # sparse matrices and linear algebra
 include("sparse.jl")
 importall .SparseMatrix
-include("matrixmarket.jl")
 include("linalg.jl")
 importall .LinAlg
 include("broadcast.jl")
