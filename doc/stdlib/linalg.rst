@@ -85,7 +85,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qrfact(A)
 
-   Compute the QR factorization of ``A`` and return a ``QR`` object. The components of the factorization ``F`` can be accessed as follows: the orthogonal matrix ``Q`` can be extracted with ``F[:Q]`` and the triangular matrix ``R`` with ``F[:R]``. The following functions are available for ``QR`` objects: ``size``, ``\``. When ``Q`` is extracted, the resulting type is the ``QRPackedQ`` object, and has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``.
+   Compute the QR factorization of ``A`` and return a ``QR`` object. The components of the factorization ``F`` can be accessed as follows: the orthogonal matrix ``Q`` can be extracted with ``F[:Q]`` and the triangular matrix ``R`` with ``F[:R]``. The following functions are available for ``QR`` objects: ``size``, ``\``. When ``Q`` is extracted, the resulting type is the ``QRPackedQ`` object, and has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``. It is automatically assessed whether multiplicationen is with respect to the thin or full ``Q``, i.e. both ``F[:Q]*F[:R]`` and ``F[:Q]*A`` is supperted. A ``QRPackedQ`` matrix can be converted into a regular matrix with ``full``.
 
 .. function:: qrfact!(A)
 
@@ -97,7 +97,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qrpfact(A) -> QRPivoted
 
-   Compute the QR factorization of ``A`` with pivoting and return a ``QRPivoted`` object. The components of the factorization ``F`` can be accessed as follows: the orthogonal matrix ``Q`` can be extracted with ``F[:Q]``, the triangular matrix ``R`` with ``F[:R]``, and the permutation with ``F[:P]`` or ``F[:p]``. The following functions are available for ``QRPivoted`` objects: ``size``, ``\``. When ``Q`` is extracted, the resulting type is the ``QRPivotedQ`` object, and has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``. A ``QRPivotedQ`` matrix can be converted into a regular matrix with ``full``.
+   Compute the QR factorization of ``A`` with pivoting and return a ``QRPivoted`` object. The components of the factorization ``F`` can be accessed as follows: the orthogonal matrix ``Q`` can be extracted with ``F[:Q]``, the triangular matrix ``R`` with ``F[:R]``, and the permutation with ``F[:P]`` or ``F[:p]``. The following functions are available for ``QRPivoted`` objects: ``size``, ``\``. When ``Q`` is extracted, the resulting type is the ``QRPivotedQ`` object, and has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``. It is automatically assessed whether multiplicationen is with respect to the thin or full ``Q``, i.e. both ``F[:Q]*F[:R]`` and ``F[:Q]*A`` is supperted. A ``QRPivotedQ`` matrix can be converted into a regular matrix with ``full``.
 
 .. function:: qrpfact!(A) -> QRPivoted
 
