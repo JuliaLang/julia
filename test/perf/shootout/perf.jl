@@ -1,5 +1,8 @@
 include("../perfutil.jl")
 
+#If running from .. directory, include "shootout/" path to data file
+rpath(filename::String) = string(contains(pwd(), "shootout") ? "" : "shootout/", filename)
+
 include("binary_trees.jl")
 @timeit binary_trees(10) "binary_trees" "Allocate and deallocate many many binary trees"
 
@@ -10,10 +13,10 @@ include("fasta.jl")
 @timeit fasta(100) "fasta" "Generate and write random DNA sequences"
 
 include("k_nucleotide.jl")
-@timeit k_nucleotide("knucleotide-input.txt") "k_nucleotide" "Hashtable update and k-nucleotide strings"
+@timeit k_nucleotide(rpath("knucleotide-input.txt")) "k_nucleotide" "Hashtable update and k-nucleotide strings"
 
 include("mandelbrot.jl")
-@timeit mandelbrot(200, "mandelbrot-output-julia.txt") "mandelbrot" "Generate Mandelbrot set portable bitmap file"
+@timeit mandelbrot(200, rpath("mandelbrot-output-julia.txt")) "mandelbrot" "Generate Mandelbrot set portable bitmap file"
 
 include("meteor_contest.jl")
 @timeit1 meteor_contest() "meteor_contest" "Search for solutions to shape packing puzzle"
@@ -31,10 +34,10 @@ include("pidigits.jl")
 @timeit pidigits(1000) "pidigits" "Streaming arbitrary-precision arithmetic"
 
 include("regex_dna.jl")
-@timeit regex_dna("regexdna-input.txt") "regex_dna" "Match DNA 8-mers and substitute nucleotides for IUB codes"
+@timeit regex_dna(rpath("regexdna-input.txt")) "regex_dna" "Match DNA 8-mers and substitute nucleotides for IUB codes"
 
 include("revcomp.jl")
-@timeit revcomp("revcomp-input.txt") "revcomp" "Read DNA sequences - write their reverse-complement"
+@timeit revcomp(rpath("revcomp-input.txt")) "revcomp" "Read DNA sequences - write their reverse-complement"
 
 include("spectralnorm.jl")
 @timeit spectralnorm() "spectralnorm" "Eigenvalue using the power method"
