@@ -1031,6 +1031,7 @@ end
 ## Reductions and scans ##
 
 function isequal(A::AbstractArray, B::AbstractArray)
+    if A === B return true end
     if size(A) != size(B)
         return false
     end
@@ -1054,6 +1055,7 @@ function lexcmp(A::AbstractArray, B::AbstractArray)
 end
 
 function (==)(A::AbstractArray, B::AbstractArray)
+    if A === B return true end
     if size(A) != size(B)
         return false
     end
