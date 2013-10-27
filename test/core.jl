@@ -1067,7 +1067,7 @@ f4518(x::ASCIIString, y::Union(Int32,Int64)) = 1
 # issue #4581
 bitstype 64 Date4581{T}
 let
-    x = Intrinsics.box(Date4581{Int}, Intrinsics.unbox(Int,1234))
+    x = Intrinsics.box(Date4581{Int}, Intrinsics.unbox(Int64,int64(1234)))
     xs = Date4581[x]
     ys = copy(xs)
     @test ys !== xs
