@@ -27,7 +27,11 @@ function aupd_wrapper(T, linop::Function, n::Integer,
     	info   = ones(BlasInt, 1)
     end
     iparam = zeros(BlasInt, 11)
-    ipntr  = zeros(BlasInt, 14)
+    if sym && !cmplx
+        ipntr = zeros(BlasInt, 11)
+    else
+        ipntr = zeros(BlasInt, 14)
+    end
 
     ido    = zeros(BlasInt, 1)
 
