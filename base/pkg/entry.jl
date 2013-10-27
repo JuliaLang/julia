@@ -451,7 +451,7 @@ function register(pkg::String)
     Git.success(`config remote.origin.url`, dir=pkg) ||
         error("$pkg: no URL configured")
     url = Git.readchomp(`config remote.origin.url`, dir=pkg)
-    register(pkg,url)
+    register(pkg,Git.normalize_url(url))
 end
 
 function isrewritable(v::VersionNumber)

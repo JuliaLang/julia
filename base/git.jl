@@ -89,14 +89,20 @@ function is_ancestor_of(a::String, b::String; dir="")
     readchomp(`merge-base $A $b`, dir=dir) == A
 end
 
-const GITHUB_REGEX = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
+const GITHUB_REGEX =
+    r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*?)(?:\.git)?$"i
 
 function set_remote_url(url::String; remote::String="origin", dir="")
     run(`config remote.$remote.url $url`, dir=dir)
     m = match(GITHUB_REGEX,url)
     m == nothing && return
-    push = "git@github.com:$(m.captures[1])"
+    push = "git@github.com:$(m.captures[1]).git"
     push != url && run(`config remote.$remote.pushurl $push`, dir=dir)
+end
+
+function normalize_url(url::String)
+    m = match(GITHUB_REGEX,url)
+    m == nothing ? url : "git://github.com/$(m.captures[1]).git"
 end
 
 end # module
