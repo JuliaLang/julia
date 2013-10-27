@@ -1,118 +1,118 @@
 ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 
 let io = IOBuffer()
-@assert eof(io)
-@assert try read(io,Uint8); false; catch e; isa(e,EOFError); end
-@assert write(io,"abc") == 3
-@assert ioslength(io) == 3
-@assert position(io) == 3
-@assert eof(io)
-@assert seek(io, 0)
-@assert read(io, Uint8) == 'a'
+@test eof(io)
+@test try read(io,Uint8); false; catch e; isa(e,EOFError); end
+@test write(io,"abc") == 3
+@test ioslength(io) == 3
+@test position(io) == 3
+@test eof(io)
+@test seek(io, 0)
+@test read(io, Uint8) == 'a'
 a = Array(Uint8, 2)
-@assert read(io, a) == a
-@assert a == ['b','c']
-@assert bytestring(io) == "abc"
-@assert seek(io, 1)
-@assert truncate(io, 2)
-@assert position(io) == 1
-@assert !eof(io)
-@assert seekend(io)
-@assert position(io) == 2
-@assert truncate(io, 0)
-@assert position(io) == 0
-@assert truncate(io, 10)
-@assert position(io) == 0
-@assert all(io.data .== 0)
-@assert write(io,Int16[1,2,3,4,5,6]) == 12
-@assert seek(io,2)
-@assert truncate(io, 10)
-@assert ioslength(io) == 10
+@test read(io, a) == a
+@test a == ['b','c']
+@test bytestring(io) == "abc"
+@test seek(io, 1)
+@test truncate(io, 2)
+@test position(io) == 1
+@test !eof(io)
+@test seekend(io)
+@test position(io) == 2
+@test truncate(io, 0)
+@test position(io) == 0
+@test truncate(io, 10)
+@test position(io) == 0
+@test all(io.data .== 0)
+@test write(io,Int16[1,2,3,4,5,6]) == 12
+@test seek(io,2)
+@test truncate(io, 10)
+@test ioslength(io) == 10
 io.readable = false
-@assert try read(io,Uint8[0]); false; catch e; true; end
-@assert truncate(io, 0)
-@assert write(io,"boston\ncambridge\n") > 0
-@assert takebuf_string(io) == "boston\ncambridge\n"
-@assert takebuf_string(io) == ""
+@test try read(io,Uint8[0]); false; catch e; true; end
+@test truncate(io, 0)
+@test write(io,"boston\ncambridge\n") > 0
+@test takebuf_string(io) == "boston\ncambridge\n"
+@test takebuf_string(io) == ""
 close(io)
-@assert try write(io,Uint8[0]); false; catch e; true; end
-@assert try seek(io,0); false; catch e; true; end
-@assert eof(io)
+@test try write(io,Uint8[0]); false; catch e; true; end
+@test try seek(io,0); false; catch e; true; end
+@test eof(io)
 end
 
 let io = IOBuffer("hamster\nguinea pig\nturtle")
-@assert position(io) == 0
-@assert readline(io) == "hamster\n"
-@assert readall(io) == "guinea pig\nturtle"
-@assert try read(io,Uint8); false; catch e; isa(e,EOFError); end
-@assert seek(io,0)
-@assert read(io,Uint8) == 'h'
-@assert try truncate(io,0); false; catch e; true; end
-@assert try write(io,uint8(0)); false; catch e; true; end
-@assert try write(io,Uint8[0]); false; catch e; true; end
-@assert takebuf_string(io) == "hamster\nguinea pig\nturtle"
-@assert takebuf_string(io) == "hamster\nguinea pig\nturtle" #should be unchanged
+@test position(io) == 0
+@test readline(io) == "hamster\n"
+@test readall(io) == "guinea pig\nturtle"
+@test try read(io,Uint8); false; catch e; isa(e,EOFError); end
+@test seek(io,0)
+@test read(io,Uint8) == 'h'
+@test try truncate(io,0); false; catch e; true; end
+@test try write(io,uint8(0)); false; catch e; true; end
+@test try write(io,Uint8[0]); false; catch e; true; end
+@test takebuf_string(io) == "hamster\nguinea pig\nturtle"
+@test takebuf_string(io) == "hamster\nguinea pig\nturtle" #should be unchanged
 close(io)
 end
 
 let io = PipeBuffer()
-@assert try read(io,Uint8); false; catch e; isa(e,EOFError); end
-@assert write(io,"pancakes\nwaffles\nblueberries\n") > 0
-@assert position(io) == 0
-@assert readline(io) == "pancakes\n"
+@test try read(io,Uint8); false; catch e; isa(e,EOFError); end
+@test write(io,"pancakes\nwaffles\nblueberries\n") > 0
+@test position(io) == 0
+@test readline(io) == "pancakes\n"
 Base.compact(io)
-@assert readline(io) == "waffles\n"
-@assert write(io,"whipped cream\n") > 0
-@assert readline(io) == "blueberries\n"
-@assert try seek(io,0); false; catch e; true; end
-@assert try truncate(io,0); false; catch e; true; end
-@assert readline(io) == "whipped cream\n"
+@test readline(io) == "waffles\n"
+@test write(io,"whipped cream\n") > 0
+@test readline(io) == "blueberries\n"
+@test try seek(io,0); false; catch e; true; end
+@test try truncate(io,0); false; catch e; true; end
+@test readline(io) == "whipped cream\n"
 Base.compact(io)
-@assert position(io) == 0
-@assert ioslength(io) == 0
+@test position(io) == 0
+@test ioslength(io) == 0
 Base.ensureroom(io,50)
-@assert position(io) == 0
-@assert ioslength(io) == 0
-@assert length(io.data) == 50
+@test position(io) == 0
+@test ioslength(io) == 0
+@test length(io.data) == 50
 Base.ensureroom(io,10)
-@assert ioslength(io) == 0
-@assert length(io.data) == 50
+@test ioslength(io) == 0
+@test length(io.data) == 50
 io.maxsize = 75
 Base.ensureroom(io,100)
-@assert ioslength(io) == 0
-@assert length(io.data) == 75
-@assert seekend(io)
-@assert ioslength(io) == 0
-@assert position(io) == 0
+@test ioslength(io) == 0
+@test length(io.data) == 75
+@test seekend(io)
+@test ioslength(io) == 0
+@test position(io) == 0
 write(io,zeros(Uint8,200))
-@assert ioslength(io) == 75
-@assert length(io.data) == 75
+@test ioslength(io) == 75
+@test length(io.data) == 75
 write(io,1)
-@assert ioslength(io) == 75
-@assert length(io.data) == 75
+@test ioslength(io) == 75
+@test length(io.data) == 75
 write(io,[1,2,3])
-@assert ioslength(io) == 75
-@assert length(io.data) == 75
+@test ioslength(io) == 75
+@test length(io.data) == 75
 skip(io,1)
-@assert write(io,uint8(104)) == 1
+@test write(io,uint8(104)) == 1
 skip(io,3)
-@assert write(io,"apples".data) == 3
+@test write(io,"apples".data) == 3
 skip(io,71)
-@assert write(io,'y') == 1
-@assert readall(io) == "happy"
-@assert eof(io)
+@test write(io,'y') == 1
+@test readall(io) == "happy"
+@test eof(io)
 write(io,zeros(Uint8,73))
 write(io,'a')
 write(io,'b')
 write(io,'c')
 write(io,'d')
 write(io,'e')
-@assert ioslength(io) == 75
-@assert length(io.data) == 75
-@assert position(io) == 0
+@test ioslength(io) == 75
+@test length(io.data) == 75
+@test position(io) == 0
 skip(io,72)
-@assert takebuf_string(io) == "\0ab"
-@assert takebuf_string(io) == ""
+@test takebuf_string(io) == "\0ab"
+@test takebuf_string(io) == ""
 
 # issues 4021
 print(io, true)
@@ -121,5 +121,3 @@ close(io)
 end
 
 @test isempty(readlines(IOBuffer()))
-
-
