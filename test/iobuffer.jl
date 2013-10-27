@@ -2,41 +2,41 @@ ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 
 let io = IOBuffer()
 @test eof(io)
-@test try read(io,Uint8); false; catch e; isa(e,EOFError); end
+@test_throws read(io,Uint8)
 @test write(io,"abc") == 3
 @test ioslength(io) == 3
 @test position(io) == 3
 @test eof(io)
-@test seek(io, 0)
-@test read(io, Uint8) == 'a'
+seek(io, 0)
+@test read(io,Uint8) == 'a'
 a = Array(Uint8, 2)
 @test read(io, a) == a
 @test a == ['b','c']
 @test bytestring(io) == "abc"
-@test seek(io, 1)
-@test truncate(io, 2)
+seek(io, 1)
+truncate(io, 2)
 @test position(io) == 1
 @test !eof(io)
-@test seekend(io)
+seekend(io)
 @test position(io) == 2
-@test truncate(io, 0)
+truncate(io, 0)
 @test position(io) == 0
-@test truncate(io, 10)
+truncate(io, 10)
 @test position(io) == 0
 @test all(io.data .== 0)
 @test write(io,Int16[1,2,3,4,5,6]) == 12
-@test seek(io,2)
-@test truncate(io, 10)
+seek(io, 2)
+truncate(io, 10)
 @test ioslength(io) == 10
 io.readable = false
-@test try read(io,Uint8[0]); false; catch e; true; end
-@test truncate(io, 0)
+@test_throws read(io,Uint8[0])
+truncate(io, 0)
 @test write(io,"boston\ncambridge\n") > 0
 @test takebuf_string(io) == "boston\ncambridge\n"
 @test takebuf_string(io) == ""
 close(io)
-@test try write(io,Uint8[0]); false; catch e; true; end
-@test try seek(io,0); false; catch e; true; end
+@test_throws write(io,Uint8[0])
+@test_throws seek(io,0)
 @test eof(io)
 end
 
@@ -44,19 +44,19 @@ let io = IOBuffer("hamster\nguinea pig\nturtle")
 @test position(io) == 0
 @test readline(io) == "hamster\n"
 @test readall(io) == "guinea pig\nturtle"
-@test try read(io,Uint8); false; catch e; isa(e,EOFError); end
-@test seek(io,0)
+@test_throws read(io,Uint8)
+seek(io,0)
 @test read(io,Uint8) == 'h'
-@test try truncate(io,0); false; catch e; true; end
-@test try write(io,uint8(0)); false; catch e; true; end
-@test try write(io,Uint8[0]); false; catch e; true; end
+@test_throws truncate(io,0)
+@test_throws write(io,uint8(0))
+@test_throws write(io,Uint8[0])
 @test takebuf_string(io) == "hamster\nguinea pig\nturtle"
 @test takebuf_string(io) == "hamster\nguinea pig\nturtle" #should be unchanged
 close(io)
 end
 
 let io = PipeBuffer()
-@test try read(io,Uint8); false; catch e; isa(e,EOFError); end
+@test_throws read(io,Uint8)
 @test write(io,"pancakes\nwaffles\nblueberries\n") > 0
 @test position(io) == 0
 @test readline(io) == "pancakes\n"
@@ -64,8 +64,8 @@ Base.compact(io)
 @test readline(io) == "waffles\n"
 @test write(io,"whipped cream\n") > 0
 @test readline(io) == "blueberries\n"
-@test try seek(io,0); false; catch e; true; end
-@test try truncate(io,0); false; catch e; true; end
+@test_throws seek(io,0)
+@test_throws truncate(io,0)
 @test readline(io) == "whipped cream\n"
 Base.compact(io)
 @test position(io) == 0
@@ -81,7 +81,7 @@ io.maxsize = 75
 Base.ensureroom(io,100)
 @test ioslength(io) == 0
 @test length(io.data) == 75
-@test seekend(io)
+seekend(io)
 @test ioslength(io) == 0
 @test position(io) == 0
 write(io,zeros(Uint8,200))
@@ -116,7 +116,6 @@ skip(io,72)
 
 # issues 4021
 print(io, true)
-
 close(io)
 end
 
