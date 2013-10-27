@@ -165,8 +165,14 @@ Binary and octal literals are also supported::
     julia> 0b10
     0x02
 
+    julia> typeof(ans)
+    Uint8
+
     julia> 0o10
     0x08
+
+    julia> typeof(ans)
+    Uint8
 
 The minimum and maximum representable values of primitive numeric types
 such as integers are given by the ``typemin`` and ``typemax`` functions::
