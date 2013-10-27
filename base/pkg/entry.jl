@@ -124,7 +124,7 @@ function clone(url::String, pkg::String)
     info("Cloning $pkg from $url")
     ispath(pkg) && error("$pkg already exists")
     try
-        Git.run(`clone $url $pkg`)
+        Git.run(`clone -q $url $pkg`)
         Git.set_remote_url(url, dir=pkg)
     catch
         run(`rm -rf $pkg`)
