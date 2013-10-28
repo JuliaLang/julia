@@ -27,7 +27,7 @@ extern DLLEXPORT char *julia_home;
 extern void handle_input(jl_value_t *ast, int end, int show_value);
 extern int ends_with_semicolon(const char *input);
 DLLEXPORT extern void repl_callback_enable(char *prompt);
-DLLEXPORT extern void jl_readBuffer(unsigned char *base, ssize_t nread);
+DLLEXPORT extern void jl_read_buffer(unsigned char *base, ssize_t nread);
 DLLEXPORT extern void jl_init_repl(int history);
 
 #endif // JL_REPL_H

@@ -153,7 +153,7 @@ static void basic_stdin_callback(void)
     jl_input_line_callback(stdin_buf);
 }
 
-void jl_readBuffer(unsigned char* base, ssize_t nread)
+void jl_read_buffer(unsigned char* base, ssize_t nread)
 {
     unsigned char *start = base;
     int esc = 0;
