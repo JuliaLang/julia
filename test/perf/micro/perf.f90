@@ -288,9 +288,7 @@ real(dp), allocatable :: A(:, :), B(:, :)
 allocate(A(n, n), B(n, n), C(n, n))
 call random_number(A)
 call random_number(B)
-print *, "Bone"
 C = matmul(A, B)
-print *, "Done"
 end subroutine
 
 end module
