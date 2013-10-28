@@ -278,9 +278,13 @@ element-wise::
     abs abs2 angle cbrt
     airy airyai airyaiprime airybi airybiprime airyprime
     acos acosh asin asinh atan atan2 atanh
+    acsc acsch asec asech acot acoth
     cos  cosh  sin  sinh  tan  tanh  sinc  cosc
+    csc  csch  sec  sech  cot  coth
+    acosd asind atand asecd acscd acotd
+    cosd  sind  tand  secd  cscd  cotd
     besselh besseli besselj besselj0 besselj1 besselk bessely bessely0 bessely1
-    exp  erf  erfc  exp2  expm1
+    exp  erf  erfc  erfinv erfcinv exp2  expm1
     beta dawson digamma erfcx erfi
     exponent eta zeta gamma
     hankelh1 hankelh2
