@@ -4641,11 +4641,12 @@ result of `getrf!` and `anorm` is the norm of `A` in the relevant norm.
 """
 gecon!(normtype::Char, A::StridedMatrix, anorm)
 
-for (gehrd, elty) in
-    ((:dgehrd_,:Float64),
-     (:sgehrd_,:Float32),
-     (:zgehrd_,:Complex128),
-     (:cgehrd_,:Complex64))
+# Hessenberg form
+for (   gehrd ,  hsein , elty) in
+    ((:dgehrd_,:dhsein_,:Float64),
+     (:sgehrd_,:shsein_,:Float32),
+     (:zgehrd_,:zhsein_,:Complex128),
+     (:cgehrd_,:chsein_,:Complex64))
     @eval begin
         function gehrd!(ilo::Integer, ihi::Integer, A::StridedMatrix{$elty})
 #                 .. Scalar Arguments ..
@@ -4689,6 +4690,168 @@ the factorization.
 """
 gehrd!(ilo::Integer, ihi::Integer, A::StridedMatrix)
 
+for (   hsein ,    elty,   celty) in
+    ((:dhsein_,:Float64,:Complex128),
+     (:shsein_,:Float32,:Complex64))
+    @eval begin
+        function hsein!(side::BlasChar, eigsrc::BlasChar, initv::BlasChar, select::Vector{Bool},
+            H::StridedMatrix{$elty}, w::Vector{$celty}, vl::StridedMatrix{$elty},
+            vr::StridedMatrix{$elty})
+#       SUBROUTINE DHSEIN( SIDE, EIGSRC, INITV, SELECT, N, H, LDH, WR, WI,
+#      $                   VL, LDVL, VR, LDVR, MM, M, WORK, IFAILL,
+#      $                   IFAILR, INFO )
+# *
+# *     .. Scalar Arguments ..
+#       CHARACTER          EIGSRC, INITV, SIDE
+#       INTEGER            INFO, LDH, LDVL, LDVR, M, MM, N
+# *     ..
+# *     .. Array Arguments ..
+#       LOGICAL            SELECT( * )
+#       INTEGER            IFAILL( * ), IFAILR( * )
+#       DOUBLE PRECISION   H( LDH, * ), VL( LDVL, * ), VR( LDVR, * ),
+#      $                   WI( * ), WORK( * ), WR( * )
+         wr, wi = reim(w)
+         N, LDH = size(H)
+         LDVL, M = size(vl)
+         LDVR, MM= size(vr)
+         work = Array($elty, (N+2)*N)
+         ifaill = Array(BlasInt, MM)
+         ifailr = Array(BlasInt, MM)
+         info = Array(BlasInt, 1)
+
+         ccall(($(string(hsein)), liblapack), Void,
+             (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Bool}, Ptr{BlasInt}, Ptr{$elty},
+              Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+              Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+              Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+             &side, &eigsrc, &initv, &select, &N, &H,
+             &LDH, &wr, &wi, &vl, &LDVL,
+             &vr, &LDVR, &MM, &M, &work,
+             &ifaill, &ifailr, &info)
+         if info[1] < 0 throw(LAPACKException(info[1]))
+         elseif info[1] > 0
+             warn("Number of eigenvectors that failed to converge: $(info[1])")
+             if side == 'L' || side == 'B'
+                 for i=1:MM
+                     if ifaill[i] > 0
+                         warn("Column vl[:,$i] corresponding to left eigenvalue wl[$(ifaill[i])]=$(wl[ifaill[i]]) did not converge")
+                     end
+                 end
+             end
+             if side == 'R' || side == 'B'
+                 for i=1:MM
+                     if ifailr[i] > 0
+                         warn("Column vr[:,$i] corresponding to right eigenvalue wr[$(ifailr[i])]=$(wr[ifailr[i]]) did not converge")
+                     end
+                 end
+             end
+         end
+         #Massage eigenvectors
+         i=1
+         vls = Array[]
+         for we in w
+             push!(vls, vl[:,i])
+             i+=1
+             if imag(we) != 0.0
+                 vls[end]+=im*vl[:,i]
+                 i+=1
+             end
+         end
+         @assert i==M+1
+         i=1
+         vrs = Array[]
+         for we in w
+             push!(vrs, vr[:,i])
+             i+=1
+             if imag(we) != 0.0
+                 vrs[end]+=im*vr[:,i]
+                 i+=1
+             end
+         end
+         @assert i==M+1
+         #Decide what to output
+         if side == 'L'
+             return select, wr, vls
+         elseif side == 'R'
+             return select, wr, vrs
+         else #side=='B'
+             return select, wr, vls, vrs
+         end
+       end
+    end
+end
+
+for (   hsein ,       elty,    relty) in
+    ((:zhsein_,:Complex128, :Float64),
+     (:chsein_,:Complex64 , :Float32))
+    @eval begin
+        function hsein!(job::BlasChar, eigsrc::BlasChar, initv::BlasChar, select::Vector{Bool},
+            H::StridedMatrix{$elty}, wr::Vector{$elty}, wi::Vector{$elty}, vl::StridedMatrix{$elty},
+            vr::StridedMatrix{$elty})
+#       SUBROUTINE DHSEIN( SIDE, EIGSRC, INITV, SELECT, N, H, LDH, WR, WI,
+#      $                   VL, LDVL, VR, LDVR, MM, M, WORK, IFAILL,
+#      $                   IFAILR, INFO )
+# *
+# *     .. Scalar Arguments ..
+#       CHARACTER          EIGSRC, INITV, SIDE
+#       INTEGER            INFO, LDH, LDVL, LDVR, M, MM, N
+# *     ..
+# *     .. Array Arguments ..
+#       LOGICAL            SELECT( * )
+#       INTEGER            IFAILL( * ), IFAILR( * )
+#       DOUBLE PRECISION   H( LDH, * ), VL( LDVL, * ), VR( LDVR, * ),
+#      $                   WI( * ), WORK( * ), WR( * )
+         N, LDH = size(H)
+         LDVL, M = size(vl)
+         LDVR, MM= size(vr)
+         work = Array($elty, N*N)
+         rwork = Array($relty, N)
+         ifaill = Array(BlasInt, MM)
+         ifailr = Array(BlasInt, MM)
+         info = Array(BlasInt, 1)
+
+         ccall(($(string(hsein)), liblapack), Void,
+             (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Bool}, Ptr{BlasInt}, Ptr{$elty},
+              Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+              Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$relty},
+              Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+             &job, &eigsrc, &initv, &select, &N, &H,
+             &LDH, &w, &vl, &LDVL,
+             &vr, &LDVR, &MM, &M, &work, &rwork,
+             &ifaill, &ifailr, &info)
+         if info[1] < 0 throw(LAPACKException(info[1]))
+         elseif info[1] > 0
+             warn("Number of eigenvectors that failed to converge: $(info[1])")
+             if side == 'L' || side == 'B'
+                 for i=1:MM
+                     if ifaill[i] > 0
+                         warn("Column vl[:,$i] corresponding to left eigenvalue wl[$(ifaill[i])]=$(wl[ifaill[i]]) did not converge")
+                     end
+                 end
+             end
+             if side == 'R' || side == 'B'
+                 for i=1:MM
+                     if ifailr[i] > 0
+                         warn("Column vr[:,$i] corresponding to right eigenvalue wr[$(ifailr[i])]=$(wr[ifailr[i]]) did not converge")
+                     end
+                 end
+             end
+         end
+         #Decide what to output
+         if side == 'L'
+             return select, wr, vl[:,1:M]
+         elseif side == 'R'
+             return select, wr, vr[:,1:M]
+         else #side=='B'
+             return select, wr, vl[:,1:M], vr[:,1:M]
+         end
+       end
+    end
+end
+
+
+
+# construct Q from Hessenberg
 for (orghr, elty) in
     ((:dorghr_,:Float64),
      (:sorghr_,:Float32),
