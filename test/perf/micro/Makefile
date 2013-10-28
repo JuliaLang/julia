@@ -11,8 +11,11 @@ MATHEMATICABIN = math
 endif
 
 #Which BLAS library am I using?
-BLASDIR=$(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)
-BLASLIB=$(BLASDIR)/libopenblas.a
+ifeq ($(USE_SYSTEM_BLAS), 0)
+BLASDIR=$(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/
+LIBBLAS=$(BLASDIR)libopenblas.a
+endif
+
 FFLAGS=-fexternal-blas
 ifeq ($(findstring gfortran, $(FC)), gfortran)
 ifeq ($(USE_BLAS64), 1)
@@ -25,6 +28,14 @@ endif
 FFLAGS+= -static-libgfortran
 endif
 
+#Which libm library am I using?
+LIBMDIR = $(JULIAHOME)/deps/openlibm/
+ifeq ($(USE_SYSTEM_LIBM), 0)
+ifeq ($(USE_SYSTEM_OPENLIBM), 0)
+LIBM = $(LIBMDIR)libopenlibm.a
+endif
+endif
+
 default: benchmarks.html
 
 export OMP_NUM_THREADS=1
@@ -32,15 +43,15 @@ export GOTO_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 
 perf.h: $(JULIAHOME)/deps/Versions.make
-	echo '#include "$(BLASDIR)/cblas.h"' > $@
+	echo '#include "$(BLASDIR)cblas.h"' > $@
 	echo '#include "$(JULIAHOME)/deps/random/dsfmt-$(DSFMT_VER)/dSFMT.c"' >> $@
 
 bin/perf%: perf.c perf.h
-	$(CC) -std=c99 -O$* $< -o $@ $(BLASLIB) -lpthread -lm
+	$(CC) -std=c99 -O$* $< -o $@ -L$(BLASDIR) $(LIBBLAS) -L$(LIBMDIR) $(LIBM) -lpthread
 
 bin/fperf%: perf.f90
 	mkdir -p mods/$@ #Modules for each binary go in separate directories 
-	$(FC) $(FFLAGS) -Jmods/$@ -O$* $< -o $@ $(BLASLIB) -lpthread
+	$(FC) $(FFLAGS) -Jmods/$@ -O$* $< -o $@ -L$(BLASDIR) $(LIBBLAS) -L$(LIBMDIR) $(LIBM) -lpthread
 
 benchmarks/c.csv: \
 	benchmarks/c0.csv \
