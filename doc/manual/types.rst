@@ -806,11 +806,12 @@ same manner::
       y::T
     end
 
-To give a couple of real-world examples of how all this parametric type
+To give a real-world example of how all this parametric type
 machinery can be useful, here is the actual definition of Julia's
-``Rational`` type, representing an exact ratio of integers::
+``Rational`` immutable type (except that we omit the constructor here
+for simplicity), representing an exact ratio of integers::
 
-    type Rational{T<:Integer} <: Real
+    immutable Rational{T<:Integer} <: Real
       num::T
       den::T
     end
