@@ -136,18 +136,11 @@ end
 # source files, editing
 
 function find_source_file(file)
-    if file[1]!='/' && !is_file_readable(file)
-        file2 = find_in_path(file)
-        if file2 != nothing
-            return file2
-        else
-            file2 = "$JULIA_HOME/../share/julia/base/$file"
-            if is_file_readable(file2)
-                return file2
-            end
-        end
-    end
-    return file
+    (isabspath(file) || isfile(file)) && return file
+    file2 = find_in_path(file)
+    file2 != nothing && return file2
+    file2 = "$JULIA_HOME/../share/julia/base/$file"
+    isfile(file2) ? file2 : nothing
 end
 
 function edit(file::String, line::Integer)

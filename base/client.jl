@@ -216,11 +216,7 @@ function parse_input_line(io::IO)
 end
 
 # try to include() a file, ignoring if not found
-function try_include(f::String)
-    if is_file_readable(f)
-        include(f)
-    end
-end
+try_include(path::String) = isfile(path) && include(path)
 
 function process_options(args::Array{Any,1})
     global ARGS, bind_addr
