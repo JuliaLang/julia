@@ -2649,48 +2649,6 @@ ________________________________________________________
 
 ----
 
-`FastaRead <https://github.com/carlobaldassi/FastaRead.jl>`_ |FastaRead_build|
-____________________________________________________________
-
-  .. |FastaRead_build| image:: ../images/travis-icon.png
-     :height: 19
-     :width: 19
-     :target: https://travis-ci.org/carlobaldassi/FastaRead.jl
-
-  .. image:: https://0.gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
-     :height: 80px
-     :width: 80px
-     :align: right
-     :alt: Carlo Baldassi
-     :target: https://github.com/carlobaldassi
-
-  [DEPRECATED PACKAGE. USE FastaIO INSTEAD] 
-
-  Current Version: ``0.2.1``  (updated: 2013-05-22) 
-
-  Maintainer: `Carlo Baldassi <https://github.com/carlobaldassi>`_
-
-  Dependencies::
-
-      julia                    [0.2.0-,∞)
-      GZip                     [0.0.0-,∞)
-
-  Contributors:
-
-    .. image:: https://0.gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Carlo Baldassi
-        :target: https://github.com/carlobaldassi
-
-    .. image:: https://0.gravatar.com/avatar/42c8c4ab92de3390bcd2f637ef6ca16c?d=https%3A%2F%2Fidenticons.github.com%2Fd4828708b50b1ddbfbd546384eb34fd1.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Kevin Squire
-        :target: https://github.com/kmsquire
-
-----
-
 `FileFind <https://github.com/johnmyleswhite/FileFind.jl>`_
 ___________________________________________________________
 
@@ -5428,37 +5386,6 @@ _____________________________________________________
         :width: 40px
         :alt: Dahua Lin
         :target: https://github.com/lindahua
-
-----
-
-`LinProgGLPK <https://github.com/carlobaldassi/LinProgGLPK.jl>`_
-________________________________________________________________
-
-  .. image:: https://0.gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
-     :height: 80px
-     :width: 80px
-     :align: right
-     :alt: Carlo Baldassi
-     :target: https://github.com/carlobaldassi
-
-  [DEPRECATED PACKAGE - SUPERSEDED BY MathProgBase] 
-
-  Current Version: ``0.2.1``  (updated: 2013-05-23) 
-
-  Maintainer: `Carlo Baldassi <https://github.com/carlobaldassi>`_
-
-  Dependencies::
-
-      julia                    [0.2.0-,∞)
-      GLPK                     [0.0.0-,∞)
-
-  Contributors:
-
-    .. image:: https://0.gravatar.com/avatar/80502de63c1b21d8f3ba663d72ba5be2?d=https%3A%2F%2Fidenticons.github.com%2Fd454171c70136b2284d6a8cfe123eb29.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Carlo Baldassi
-        :target: https://github.com/carlobaldassi
 
 ----
 
