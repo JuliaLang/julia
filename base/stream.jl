@@ -128,8 +128,10 @@ type PipeServer <: UVServer
 end
 
 function init_pipe!(pipe::Union(Pipe,PipeServer);readable::Bool=false,writable=false,julia_only=true)
-    if pipe.handle == C_NULL || pipe.status != StatusUninit
-        error("Failed to initialize pipe")
+    if pipe.handle == C_NULL 
+        error("Cannot initialize pipe. UV object not allocated!")
+    elseif pipe.status != StatusUninit
+        error("Pipe is already initialized!")
     end
     uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), pipe.handle, writable,readable,julia_only,pipe))
     pipe.status = StatusInit
@@ -513,32 +515,39 @@ end
 
 ## pipe functions ##
 malloc_pipe() = c_malloc(_sizeof_uv_named_pipe)
+
+_link_pipe(read_end::Ptr{Void},write_end::Ptr{Void}) = uv_error("pipe_link",ccall(:uv_pipe_link, Int32, (Ptr{Void}, Ptr{Void}), read_end, write_end))
+
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{Void},writable_julia_only::Bool,readpipe::AsyncStream,writepipe::AsyncStream)
     #make the pipe an unbuffered stream for now
     #TODO: this is probably not freeing memory properly after errors
     uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), read_end, 0, 1, readable_julia_only, readpipe))
     uv_error("init_pipe(2)",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), write_end, 1, 0, writable_julia_only, writepipe))
-    uv_error("pipe_link",ccall(:uv_pipe_link, Int32, (Ptr{Void}, Ptr{Void}), read_end, write_end))
+    _link_pipe(read_end,write_end)
 end
 
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{Void},writable_julia_only::Bool)
     uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Ptr{Void}), read_end, 0, 1, readable_julia_only, C_NULL))
     uv_error("init_pipe(2)",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Ptr{Void}), write_end, 1, 0, writable_julia_only, C_NULL))
-    uv_error("pipe_link",ccall(:uv_pipe_link, Int32, (Ptr{Void}, Ptr{Void}), read_end, write_end))
+    _link_pipe(read_end,write_end)
 end
 
-function link_pipe(read_end2::Pipe,readable_julia_only::Bool,write_end::Ptr{Void},writable_julia_only::Bool)
-    if read_end2.handle == C_NULL
-        read_end2.handle = malloc_pipe()
+function link_pipe(read_end::Pipe,readable_julia_only::Bool,write_end::Ptr{Void},writable_julia_only::Bool)
+    if read_end.handle == C_NULL
+        read_end.handle = malloc_pipe()
     end
-    link_pipe(read_end2.handle,readable_julia_only,write_end,writable_julia_only,read_end2,read_end2)
-    read_end2.status = StatusOpen
+    init_pipe!(read_end; readable = true, writable = false, julia_only = readable_julia_only)
+    uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), write_end, 1, 0, writable_julia_only, read_end))
+    _link_pipe(read_end.handle,write_end)
+    read_end.status = StatusOpen
 end
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Pipe,writable_julia_only::Bool)
     if write_end.handle == C_NULL
         write_end.handle = malloc_pipe()
     end
-    link_pipe(read_end,readable_julia_only,write_end.handle,writable_julia_only,write_end,write_end)
+    uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), read_end, 0, 1, readable_julia_only, write_end))
+    init_pipe!(write_end; readable = false, writable = true, julia_only = writable_julia_only)
+    _link_pipe(read_end,write_end.handle)
     write_end.status = StatusOpen
 end
 function link_pipe(read_end::Pipe,readable_julia_only::Bool,write_end::Pipe,writable_julia_only::Bool)
@@ -548,7 +557,9 @@ function link_pipe(read_end::Pipe,readable_julia_only::Bool,write_end::Pipe,writ
     if read_end.handle == C_NULL
         read_end.handle = malloc_pipe()
     end
-    link_pipe(read_end.handle,readable_julia_only,write_end.handle,writable_julia_only,read_end,write_end)
+    init_pipe!(read_end; readable = true, writable = false, julia_only = readable_julia_only)
+    init_pipe!(write_end; readable = false, writable = true, julia_only = writable_julia_only)
+    _link_pipe(read_end.handle,write_end.handle)
     write_end.status = StatusOpen
     read_end.status = StatusOpen
     nothing
