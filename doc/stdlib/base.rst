@@ -3753,27 +3753,41 @@ Statistics
 .. function:: mean(v[, region])
 
    Compute the mean of whole array ``v``, or optionally along the dimensions in ``region``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
+   For applications requiring the handling of missing data, the ``DataArray``
+   package is recommended.
 
 .. function:: std(v[, region])
 
    Compute the sample standard deviation of a vector or array ``v``, optionally along dimensions in ``region``. The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v - mean(v)).^2) / (length(v) - 1))``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
+   For applications requiring the handling of missing data, the ``DataArray``
+   package is recommended.
 
 .. function:: stdm(v, m)
 
    Compute the sample standard deviation of a vector ``v`` with known mean ``m``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: var(v[, region])
 
    Compute the sample variance of a vector or array ``v``, optionally along dimensions in ``region``. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v - mean(v)).^2) / (length(v) - 1)``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
+   For applications requiring the handling of missing data, the ``DataArray``
+   package is recommended.
 
 .. function:: varm(v, m)
 
    Compute the sample variance of a vector ``v`` with known mean ``m``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: median(v; checknan::Bool=true)
 
    Compute the median of a vector ``v``. If keyword argument ``checknan`` is true
    (the default), an error is raised for data containing NaN values.
+   Note: Julia does not ignore ``NaN`` values in the computation.
+   For applications requiring the handling of missing data, the ``DataArray``
+   package is recommended.
 
 .. function:: median!(v; checknan::Bool=true)
 
@@ -3785,12 +3799,14 @@ Statistics
    bins. The return values are a range ``e``, which correspond to the
    edges of the bins, and ``counts`` containing the number of elements of
    ``v`` in each bin.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: hist(v, e) -> e, counts
 
    Compute the histogram of ``v`` using a vector/range ``e`` as the edges for
    the bins. The result will be a vector of length ``length(e) - 1``, such that the
    element at location ``i`` satisfies ``sum(e[i] .< v .<= e[i+1])``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: hist2d(M, e1, e2) -> (edge1, edge2, counts)
 
@@ -3800,25 +3816,30 @@ Statistics
    ``edge1`` (the bin edges used in the first dimension), ``edge2`` (the bin edges
    used in the second dimension), and ``counts``, a histogram matrix of size
    ``(length(edge1)-1, length(edge2)-1)``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: histrange(v, n)
 
    Compute *nice* bin ranges for the edges of a histogram of ``v``, using
    approximately ``n`` bins. The resulting step sizes will be 1, 2 or 5
    multiplied by a power of 10.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: midpoints(e)
 
    Compute the midpoints of the bins with edges ``e``. The result is a
    vector/range of length ``length(e) - 1``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: quantile(v, p)
 
    Compute the quantiles of a vector ``v`` at a specified set of probability values ``p``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: quantile(v)
 
    Compute the quantiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: quantile!(v, [p])
 
@@ -3829,12 +3850,14 @@ Statistics
    Compute the Pearson covariance between two vectors ``v1`` and ``v2``. If
    called with a single element ``v``, then computes covariance of columns of
    ``v``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: cor(v1[, v2])
 
    Compute the Pearson correlation between two vectors ``v1`` and ``v2``. If
    called with a single element ``v``, then computes correlation of columns of
    ``v``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 Signal Processing
 -----------------
