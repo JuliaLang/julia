@@ -80,8 +80,6 @@ Function                              Description
                                       specified element type
 ``rand(dims)``                        ``Array`` of ``Float64``\ s with random, iid[#]_ and uniformly
                                       distributed values in [0,1)
-``randf(dims)``                       ``Array`` of ``Float32``\ s with random, iid and uniformly
-                                      distributed values in [0,1)
 ``randn(dims)``                       ``Array`` of ``Float64``\ s with random, iid and standard normally
                                       distributed random values
 ``eye(n)``                            ``n``-by-``n`` identity matrix
