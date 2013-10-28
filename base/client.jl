@@ -136,7 +136,7 @@ function eval_user_input(ast::ANY, show_value)
     isa(STDIN,TTY) && println()
 end
 
-function readBuffer(stream::AsyncStream, nread)
+function read_buffer(stream::AsyncStream, nread)
     global _repl_enough_stdin::Bool
     while !_repl_enough_stdin && nb_available(stream.buffer) > 0
         nread = int(search(stream.buffer,'\n')) # never more than one line or readline explodes :O
@@ -155,7 +155,7 @@ function readBuffer(stream::AsyncStream, nread)
         ptr = pointer(stream.buffer.data,stream.buffer.ptr)
         skip(stream.buffer,nread)
         #println(STDERR,stream.buffer.data[stream.buffer.ptr-nread:stream.buffer.ptr-1])
-        ccall(:jl_readBuffer,Void,(Ptr{Void},Cssize_t),ptr,nread)
+        ccall(:jl_read_buffer,Void,(Ptr{Void},Cssize_t),ptr,nread)
     end
     return false
 end
@@ -177,7 +177,7 @@ function run_repl()
         end
         ccall(:repl_callback_enable, Void, (Ptr{Uint8},), prompt_string)
         global _repl_enough_stdin = false
-        start_reading(STDIN, readBuffer)
+        start_reading(STDIN, read_buffer)
         (ast, show_value) = take(repl_channel)
         if show_value == -1
             # exit flag

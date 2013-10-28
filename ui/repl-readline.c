@@ -848,7 +848,7 @@ void repl_callback_enable(char *prompt)
 
 #include "uv.h"
 
-void jl_readBuffer(unsigned char *base, ssize_t nread)
+void jl_read_buffer(unsigned char *base, ssize_t nread)
 {
     unsigned char *start = base;
     while(*start != 0 && nread > 0) {
