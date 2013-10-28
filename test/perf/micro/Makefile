@@ -10,6 +10,21 @@ else
 MATHEMATICABIN = math
 endif
 
+#Which BLAS library am I using?
+BLASDIR=$(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)
+BLASLIB=$(BLASDIR)/libopenblas.a
+FFLAGS=-fexternal-blas
+ifeq ($(findstring gfortran, $(FC)), gfortran)
+ifeq ($(USE_BLAS64), 1)
+echo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+echo WARNING: gfortran cannot multiply matrices using 64-bit external BLAS.
+echo          External BLAS usage is turned OFF.
+echo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FFLAGS=
+endif
+FFLAGS+= -static-libgfortran
+endif
+
 default: benchmarks.html
 
 export OMP_NUM_THREADS=1
@@ -17,15 +32,15 @@ export GOTO_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 
 perf.h: $(JULIAHOME)/deps/Versions.make
-	echo '#include "$(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/cblas.h"' > $@
+	echo '#include "$(BLASDIR)/cblas.h"' > $@
 	echo '#include "$(JULIAHOME)/deps/random/dsfmt-$(DSFMT_VER)/dSFMT.c"' >> $@
 
 bin/perf%: perf.c perf.h
-	$(CC) -std=c99 -O$* $< -o $@ $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.a -lpthread -lm
+	$(CC) -std=c99 -O$* $< -o $@ $(BLASLIB) -lpthread -lm
 
 bin/fperf%: perf.f90
-	mkdir -p mods/$@ #Modules for each binary 
-	$(FC) -g -static-libgfortran -Jmods/$@ -O$* -fexternal-blas $< -o $@ $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.a -lpthread
+	mkdir -p mods/$@ #Modules for each binary go in separate directories 
+	$(FC) $(FFLAGS) -Jmods/$@ -O$* $< -o $@ $(BLASLIB) -lpthread
 
 benchmarks/c.csv: \
 	benchmarks/c0.csv \
