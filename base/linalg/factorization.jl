@@ -278,43 +278,34 @@ type QRPackedQ{S} <: AbstractMatrix{S}
 end
 QRPackedQ(A::QR) = QRPackedQ(A.vs, A.T)
 
-size(A::QRPackedQ, args::Integer...) = size(A.vs, args...)
+size(A::QRPackedQ, dim::Integer) = 0 < dim ? (dim <= 2 ? size(A.vs, 1) : 1) : error("arraysize: dimension out of range")
+size(A::QRPackedQ) = size(A, 1), size(A, 2)
 
 function full{T<:BlasFloat}(A::QRPackedQ{T}, thin::Bool)
-    if thin return A * eye(T, size(A.T, 2)) end
-    return A * eye(T, size(A, 1))
+    if thin return A * eye(T, size(A.vs)...) end
+    return A * eye(T, size(A.vs, 1))
 end
 full(A::QRPackedQ) = full(A, true)
 
-print_matrix(io::IO, A::QRPackedQ, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
+print_matrix(io::IO, A::QRPackedQ, rows::Integer, cols::Integer) = print_matrix(io, full(A, false), rows, cols)
 
 ## Multiplication by Q from the QR decomposition
 function *{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T})
-    m = size(B, 1)
-    n = size(B, 2)
-    if m == size(A.vs, 1)
-        Bc = copy(B)
-    elseif m == size(A.vs, 2)
-        Bc = [B; zeros(T, size(A.vs, 1) - m, n)]
+    if size(B, 1) == size(A.vs, 2) 
+        return LAPACK.gemqrt!('L', 'N', A.vs, A.T, [B; zeros(T, size(A.vs, 1) - size(A.vs, 2), size(B, 2))])
     else
-        throw(DimensionMismatch(""))
+        return LAPACK.gemqrt!('L', 'N', A.vs, A.T, copy(B))
     end
-    LAPACK.gemqrt!('L', 'N', A.vs, A.T, Bc)
 end
 Ac_mul_B{T<:BlasReal}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','T',A.vs,A.T,copy(B))
 Ac_mul_B{T<:BlasComplex}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','C',A.vs,A.T,copy(B))
 *{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.gemqrt!('R', 'N', B.vs, B.T, copy(A))
 function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T})
-    m = size(A, 1)
-    n = size(A, 2)
-    if n == size(B.vs, 1)
-        Ac = copy(A)
-    elseif n == size(B.vs, 2)
-        Ac = [B zeros(T, m, size(B.vs, 1) - n)]
+    if size(A, 2) == size(B.vs, 2)
+        return LAPACK.gemqrt!('R', iseltype(B.vs,Complex) ? 'C' : 'T', B.vs, B.T, [A zeros(T, size(A, 1), size(B.vs, 1) - size(B.vs, 2))])
     else
-        throw(DimensionMismatch(""))
+        LAPACK.gemqrt!('R', iseltype(B.vs,Complex) ? 'C' : 'T', B.vs, B.T, copy(A))
     end
-    LAPACK.gemqrt!('R', iseltype(B.vs,Complex) ? 'C' : 'T', B.vs, B.T, Ac)
 end
 ## Least squares solution.  Should be more careful about cases with m < n
 (\)(A::QR, B::StridedVector) = Triangular(A[:R], :U)\(A[:Q]'B)[1:size(A, 2)]
@@ -390,7 +381,7 @@ type QRPivotedQ{T} <: AbstractMatrix{T}
 end
 QRPivotedQ(A::QRPivoted) = QRPivotedQ(A.hh, A.tau)
 
-size(A::QRPivotedQ, args...) = size(A.hh, args...)
+size(A::QRPivotedQ, dims::Integer) = dims > 0 ? (dims < 3 ? size(A.hh, 1) : 1) : error("arraysize: dimension out of range")
 
 function full{T<:BlasFloat}(A::QRPivotedQ{T}, thin::Bool)
     m, n = size(A.hh)
@@ -402,35 +393,25 @@ function full{T<:BlasFloat}(A::QRPivotedQ{T}, thin::Bool)
 end
 
 full(A::QRPivotedQ) = full(A, true)
-print_matrix(io::IO, A::QRPivotedQ, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
+print_matrix(io::IO, A::QRPivotedQ, rows::Integer, cols::Integer) = print_matrix(io, full(A, false), rows, cols)
 
 ## Multiplication by Q from the Pivoted QR decomposition
 function *{T<:BlasFloat}(A::QRPivotedQ{T}, B::StridedVecOrMat{T})
-    m = size(B, 1)
-    n = size(B, 2)
-    if m == size(A.hh, 1)
-        Bc = copy(B)
-    elseif m == size(A.hh, 2)
-        Bc = [B; zeros(T, size(A.hh, 1) - m, n)]
+    if size(A.hh, 2) == size(B, 1)
+        return LAPACK.ormqr!('L', 'N', A.hh, A.tau, [B; zeros(T, size(A.hh, 1) - size(A.hh, 2), size(B, 2))])
     else
-        throw(DimensionMismatch(""))
+        return LAPACK.ormqr!('L', 'N', A.hh, A.tau, copy(B))
     end
-    LAPACK.ormqr!('L', 'N', A.hh, A.tau, Bc)
 end
 Ac_mul_B{T<:BlasReal}(A::QRPivotedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','T',A.hh,A.tau,copy(B))
 Ac_mul_B{T<:BlasComplex}(A::QRPivotedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','C',A.hh,A.tau,copy(B))
 *(A::StridedVecOrMat, B::QRPivotedQ) = LAPACK.ormqr!('R', 'N', B.hh, B.tau, copy(A))
 function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPivotedQ{T})
-    m = size(A, 1)
-    n = size(A, 2)
-    if n == size(B.hh, 1)
-        Ac = copy(A)
-    elseif n == size(B.hh, 2)
-        Ac = [B zeros(T, m, size(B.hh, 1) - n)]
+    if size(A, 2) == size(B.hh, 2)
+        return LAPACK.ormqr!('R', iseltype(B.hh,Complex) ? 'C' : 'T', B.hh, B.tau, [A zeros(T, size(A, 1), size(B.hh, 1) - size(B.hh, 2))])
     else
-        throw(DimensionMismatch(""))
+        return LAPACK.ormqr!('R', iseltype(B.hh,Complex) ? 'C' : 'T', B.hh, B.tau, copy(A))
     end
-    LAPACK.ormqr!('R', iseltype(B.hh,Complex) ? 'C' : 'T', B.hh, B.tau, Ac)
 end
 
 ##TODO:  Add methods for rank(A::QRP{T}) and adjust the (\) method accordingly

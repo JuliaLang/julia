@@ -1417,14 +1417,16 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             if k == 0 return C end
             if side == 'L'
                 0 <= k <= m || error("Wrong value for k")
-                ldv = max(1, m)
+                m == size(V,1) || throw(DimensionMismatch(""))
+                ldv = stride(V,2)
+                ldv >= max(1, m) || throw(DimensionMismatch("Q and C don't fit"))
                 wss = n*k
-                # if m != size(V, 1) throw(DimensionMismatch("")) end
             elseif side == 'R'
                 0 <= k <= n || error("Wrong value for k")
-                ldv = max(1, n)
+                n == size(V,1) || throw(DimensionMismatch(""))
+                ldv = stride(V,2)
+                ldv >= max(1, n) || throw(DimensionMismatch("Stride error"))
                 wss = m*k
-                # if n != size(V, 1) throw(DimensionMismatch("")) end
             else
                 error("side must be either 'L' or 'R'")
             end
