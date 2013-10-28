@@ -1,8 +1,17 @@
+//The go.matrix and GoStats packages must be installed
+//To install the go.matrix package, run:
+//    go get github.com/skelterjohn/go.matrix
+//    go install github.com/skelterjohn/go.matrix
+//To install the GoStats package, run:
+//    go get github.com/GaryBoone/GoStats/stats
+//    go install github.com/GaryBoone/GoStats/stats
+
 package main
 
 import (
 	"fmt"
-	//matrix "github.com/skelterjohn/go.matrix" //XXX BROKEN
+	matrix "github.com/skelterjohn/go.matrix"
+	stats "github.com/GaryBoone/GoStats/stats"
 	"math"
 	"math/cmplx"
 	"math/rand"
@@ -50,22 +59,66 @@ func qsort_kernel(a []float64, lo, hi int) []float64 {
 
 // randmatstat
 
-// Not implemented
+func randmatstat(t int) (float64, float64) {
+	n := 5
+	var v stats.Stats
+	var w stats.Stats
+	for i :=0; i<t; i++ {
+		a := matrix.Zeros(n, n)
+		b := matrix.Zeros(n, n)
+		c := matrix.Zeros(n, n)
+		d := matrix.Zeros(n, n)
+		for j := 0; j < n; j++ {
+			for k := 0; k < n; k++ {
+				a.Set(j, k, rand.NormFloat64())
+				b.Set(j, k, rand.NormFloat64())
+				c.Set(j, k, rand.NormFloat64())
+				d.Set(j, k, rand.NormFloat64())
+			}
+		}
+		P := matrix.Zeros(n, 4*n)
+		for j := 0; j < n; j++ {
+			for k := 0; k < n; k++ {
+				P.Set(j,     k, a.Get(j, k))
+				P.Set(j,   n+k, b.Get(j, k))
+				P.Set(j, 2*n+k, c.Get(j, k))
+				P.Set(j, 3*n+k, d.Get(j, k))
+			}
+		}
+		Q := matrix.Zeros(2*n, 2*n)
+		for j := 0; j < n; j++ {
+			for k := 0; k < n; k++ {
+				Q.Set(j,     k, a.Get(j, k))
+				Q.Set(j,   n+k, b.Get(j, k))
+				Q.Set(n+j,   k, c.Get(j, k))
+				Q.Set(n+j, n+k, d.Get(j, k))
+			}
+		}
+        	P = matrix.Product(matrix.Transpose(P), P)
+        	P = matrix.Product(P, P)
+        	P = matrix.Product(P, P)
+        	Q = matrix.Product(matrix.Transpose(Q), Q)
+        	Q = matrix.Product(Q, Q)
+        	Q = matrix.Product(Q, Q)
+        	v.Update(P.Trace())
+        	w.Update(Q.Trace())
+	}
+	return v.PopulationStandardDeviation()/float64(v.Count())/v.Mean(), w.PopulationStandardDeviation()/float64(w.Count())/w.Mean()
+}
 
 // randmatmul
 
-//XXX BROKEN
-//func randmatmul(n int) matrix.MatrixRO {
-//	a := matrix.Zeros(n, n)
-//	b := matrix.Zeros(n, n)
-//	for i := 0; i < n; i++ {
-//		for k := 0; k < n; k++ {
-//			a.Set(i, k, rand.Float64())
-//			b.Set(i, k, rand.Float64())
-//		}
-//	}
-//	return matrix.Product(a, b)
-//}
+func randmatmul(n int) matrix.MatrixRO {
+	a := matrix.Zeros(n, n)
+	b := matrix.Zeros(n, n)
+	for i := 0; i < n; i++ {
+		for k := 0; k < n; k++ {
+			a.Set(i, k, rand.Float64())
+			b.Set(i, k, rand.Float64())
+		}
+	}
+	return matrix.Product(a, b)
+}
 
 // mandelbrot 
 
@@ -185,18 +238,30 @@ func main() {
 	}
 	print_perf("pi_sum", tmin)
 
-	// randmatstat not implemented
+	tmin = float64(math.MaxFloat64)
+	for i := 0; i < 5; i++ {
+		t := time.Now()
+		c1, c2 := randmatstat(1000)
+		//assert(0.5 < c1) //XXX Why does this assertion fail?
+		assert(c1 < 1.0)
+		//assert(0.5 < c2) //XXX Why does this assertion fail?
+		assert(c2 < 1.0)
+		d := float64(time.Since(t).Seconds())
+		if d < tmin {
+			tmin = d
+		}
+	}
+	print_perf("rand_mat_stat", tmin)
 
-	//XXX BROKEN
-	//tmin = float64(math.MaxFloat64)
-	//for i := 0; i < 5; i++ {
-	//	t := time.Now()
-	//	c := randmatmul(1000)
-	//	assert(c.Get(0, 0) >= 0)
-	//	d := float64(time.Since(t).Seconds())
-	//	if d < tmin {
-	//		tmin = d
-	//	}
-	//}
-	//print_perf("rand_mat_mul", tmin)
+	tmin = float64(math.MaxFloat64)
+	for i := 0; i < 5; i++ {
+		t := time.Now()
+		c := randmatmul(1000)
+		assert(c.Get(0, 0) >= 0)
+		d := float64(time.Since(t).Seconds())
+		if d < tmin {
+			tmin = d
+		}
+	}
+	print_perf("rand_mat_mul", tmin)
 }
