@@ -102,6 +102,8 @@ maximum(r::Range1) = (isempty(r)&&error("max: range is empty")) || last(r)
 minimum(r::Ranges) = (isempty(r)&&error("min: range is empty")) || (step(r) > 0 ? first(r) :  last(r))
 maximum(r::Ranges) = (isempty(r)&&error("max: range is empty")) || (step(r) > 0 ?  last(r) : first(r))
 
+ctranspose(r::Ranges) = [r]'
+
 # Ranges are intended to be immutable
 copy(r::Ranges) = r
 
