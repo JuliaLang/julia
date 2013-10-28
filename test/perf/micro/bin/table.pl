@@ -41,7 +41,7 @@ our %systems = (
   "mathematica"=> ["Mathematica" , $mathematica_ver ],
 );
 
-our @systems = qw(fortran julia python matlab octave r javascript go mathematica);
+our @systems = qw(fortran julia python r matlab octave mathematica javascript go);
 
 print qq[<table class="benchmarks">\n];
 print qq[<colgroup>\n];
