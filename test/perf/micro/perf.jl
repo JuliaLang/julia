@@ -60,8 +60,8 @@ function qsort!(a,lo,hi)
     while i < hi
         pivot = a[(lo+hi)>>>1]
         while i <= j
-            while a[i] < pivot; i = i+1; end
-            while a[j] > pivot; j = j-1; end
+            while a[i] < pivot; i += 1; end
+            while a[j] > pivot; j -= 1; end
             if i <= j
                 a[i], a[j] = a[j], a[i]
                 i, j = i+1, j-1
@@ -73,9 +73,7 @@ function qsort!(a,lo,hi)
     return a
 end
 
-function sortperf(n)
-    qsort!(rand(n), 1, n)
-end
+sortperf(n) = qsort!(rand(n), 1, n)
 @test issorted(sortperf(5000))
 @timeit sortperf(5000) "quicksort" "Sorting of random numbers using quicksort"
 
