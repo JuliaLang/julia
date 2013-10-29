@@ -8158,7 +8158,7 @@ popdisplay(d::Display)
    Compute the pivoted Cholesky factorization of a symmetric positive
    semi-definite matrix \"A\" and return a \"CholeskyPivoted\" object.
    \"LU\" may be 'L' for using the lower part or 'U' for the upper
-   part. The default is to use 'U'. The triangular factors containted
+   part. The default is to use 'U'. The triangular factors contained
    in the factorization \"F\" can be obtained with \"F[:L]\" and
    \"F[:U]\", whereas the permutation can be obtained with \"F[:P]\"
    or \"F[:p]\". The following functions are available for
@@ -8186,14 +8186,16 @@ popdisplay(d::Display)
 
 ("Linear Algebra","Base","qrfact","qrfact(A)
 
-   Compute the QR factorization of \"A\" and return a \"QR\" object.
-   The components of the factorization \"F\" can be accessed as
-   follows: the orthogonal matrix \"Q\" can be extracted with
-   \"F[:Q]\" and the triangular matrix \"R\" with \"F[:R]\". The
-   following functions are available for \"QR\" objects: \"size\",
-   \"\\\". When \"Q\" is extracted, the resulting type is the
-   \"QRPackedQ\" object, and has the \"*\" operator overloaded to
-   support efficient multiplication by \"Q\" and \"Q'\".
+   Computes the QR factorization of \"A\" and returns a \"QR\" type,
+   which is a \"Factorization\" \"F\" consisting of an orthogonal
+   matrix \"F[:Q]\" and a triangular matrix \"F[:R]\". The following
+   functions are available for \"QR\" objects: \"size\", \"\\\". The
+   orthogonal matrix \"Q=F[:Q]\" is a \"QRPackedQ\" type which has the
+   \"*\" operator overloaded to support efficient multiplication by
+   \"Q\" and \"Q'\". Multiplication with respect to either thin or
+   full \"Q\" is allowed, i.e. both \"F[:Q]*F[:R]\" and \"F[:Q]*A\"
+   are supported. A \"QRPackedQ\" matrix can be converted into a
+   regular matrix with \"full\".
 
 "),
 
@@ -8206,7 +8208,7 @@ popdisplay(d::Display)
 
 ("Linear Algebra","Base","qrp","qrp(A[, thin]) -> Q, R, p
 
-   Compute the QR factorization of \"A\" with pivoting, such that
+   Computes the QR factorization of \"A\" with pivoting, such that
    \"A[:,p] = Q*R\", Also see \"qrpfact\". The default is to compute a
    thin factorization.
 
@@ -8214,15 +8216,16 @@ popdisplay(d::Display)
 
 ("Linear Algebra","Base","qrpfact","qrpfact(A) -> QRPivoted
 
-   Compute the QR factorization of \"A\" with pivoting and return a
-   \"QRPivoted\" object. The components of the factorization \"F\" can
-   be accessed as follows: the orthogonal matrix \"Q\" can be
-   extracted with \"F[:Q]\", the triangular matrix \"R\" with
-   \"F[:R]\", and the permutation with \"F[:P]\" or \"F[:p]\". The
-   following functions are available for \"QRPivoted\" objects:
-   \"size\", \"\\\". When \"Q\" is extracted, the resulting type is
-   the \"QRPivotedQ\" object, and has the \"*\" operator overloaded to
-   support efficient multiplication by \"Q\" and \"Q'\". A
+   Computes the QR factorization of \"A\" with pivoting and returns a
+   \"QRPivoted\" object, which is a \"Factorization\" \"F\" consisting
+   of an orthogonal matrix \"F[:Q]\", a triangular matrix \"F[:R]\",
+   and a permutation \"F[:p]\" (or  its matrix representation
+   \"F[:P]\"). The following functions are available for \"QRPivoted\"
+   objects: \"size\", \"\\\". The orthogonal matrix \"Q=F[:Q]\" is a
+   \"QRPivotedQ\" type which has the \"*\" operator overloaded to
+   support efficient multiplication by \"Q\" and \"Q'\".
+   Multiplication with respect to either the thin or full \"Q\" is
+   allowed, i.e. both \"F[:Q]*F[:R]\" and \"F[:Q]*A\" are supperted. A
    \"QRPivotedQ\" matrix can be converted into a regular matrix with
    \"full\".
 
