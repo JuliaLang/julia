@@ -251,23 +251,23 @@ convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy!(similar(x,T), x)
 
-function collect{T}(itr::T)
-    if method_exists(length,(T,))
-        if !method_exists(eltype,(T,))
-            return [x for x in itr]
-        end
-        i, a = 0, Array(eltype(itr),length(itr))
+function collect{C}(T::Type, itr::C)
+    if method_exists(length,(C,))
+        a = Array(T,length(itr))
+        i = 0
         for x in itr
             a[i+=1] = x
         end
-        return a
     else
-        a = Array(eltype(itr),0)
+        a = Array(T,0)
         for x in itr
             push!(a,x)
         end
-        return a
     end
+    return a
+end
+function collect{C}(itr::C)
+    method_exists(eltype,(C,)) ? collect(eltype(itr),itr) : [x for x in itr]
 end
 
 ## Indexing: getindex ##
