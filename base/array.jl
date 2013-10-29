@@ -270,6 +270,22 @@ function collect{T}(itr::T)
     end
 end
 
+function collect{T}(element_type::Type, itr::T)
+    if method_exists(length,(T,))
+        i, a = 0, Array(element_type,length(itr))
+        for x in itr
+            a[i+=1] = x
+        end
+        return a
+    else
+        a = Array(element_type, 0)
+        for x in itr
+            push!(a,x)
+        end
+        return a
+    end
+end
+
 ## Indexing: getindex ##
 
 getindex(a::Array) = arrayref(a,1)

@@ -586,6 +586,10 @@ Iterable Collections
 
    Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
 
+.. function:: collect(element_type, collection)
+
+   Return an array of type ``Array{element_type,1}`` of all items in a collection.
+
 .. function:: issubset(a, b)
 
    Determine whether every element of ``a`` is also in ``b``, using the
