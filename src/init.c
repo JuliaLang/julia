@@ -109,8 +109,7 @@ void fpe_handler(int arg)
 #endif
 }
 
-#ifndef _OS_WINDOWS_
-#if defined(_OS_LINUX_)
+#if defined(__linux__) || defined(__FreeBSD__)
 extern int in_jl_;
 void segv_handler(int sig, siginfo_t *info, void *context)
 {
@@ -142,8 +141,6 @@ void segv_handler(int sig, siginfo_t *info, void *context)
             raise(sig);
     }
 }
-#endif
-
 #endif
 
 volatile sig_atomic_t jl_signal_pending = 0;
