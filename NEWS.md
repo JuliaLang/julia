@@ -1,6 +1,19 @@
 Julia v0.2.0 Release Notes
 ==========================
 
+The 0.2 release brings improvements to many areas of Julia. Among the
+most visible changes are support for 64-bit Windows, keyword arguments
+to functions, immutable types, a redesigned and polished package
+manager, a multimedia interface supporting usage of Julia in IPython,
+a built-in profiler, and major improvements to Julia's linear algebra,
+I/O, and parallel capabilities. These are accompanied by many other
+changes adding new features, enhancing the library's consistency,
+improving performance, increasing test coverage, easing installation,
+and expanding the documentation. While not part of Julia proper, the
+package ecosystem has also grown and matured considerably since the
+0.1 release. See below for more information about the long list of
+changes that improve Julia's usability and performance.
+
 New language features
 ---------------------
 
@@ -174,6 +187,12 @@ Library improvements
   * New implementations of elementary complex functions
     `sqrt`, `log`, `asin`, `acos`, `atan`, `tanh`, `asinh`, `acosh`, `atanh`
     which have correct branch cuts ([#2891]).
+
+  * Improved handling of SubArrays (01fe6bc, #4412, #4284, 50f37f1, beee4e2, #4044, 8bfb697, #3697, #3790, e392ec1, c84a058, 7eb374e, #3148, #2844, #2644)
+
+  * New convenience functions in graphics API
+
+  * Improved backtraces on Windows and OSX
 
 Deprecated or removed
 ---------------------
