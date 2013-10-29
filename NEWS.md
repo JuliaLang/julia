@@ -171,6 +171,10 @@ Library improvements
   * New `sinpi(x)` and `cospi(x)` functions
     to compute sine and cosine of `pi*x` more accurately ([#4112]).
 
+  * New implementations of elementary complex functions
+    `sqrt`, `log`, `asin`, `acos`, `atan`, `tanh`, `asinh`, `acosh`, `atanh`
+    which have correct branch cuts ([#2891]).
+
 Deprecated or removed
 ---------------------
 
