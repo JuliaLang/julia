@@ -3,6 +3,8 @@ Binary distribution notes
 
 Contained herein are notes for those wishing to compile a binary distribution of Julia for dispersal on various platforms.  We love users spreading Julia as far and wide as they can, trying it out on as wide an array of operating systems and hardware configurations as possible.  As each platform has specific gotchas and processes that must be followed in order to create a portable, working Julia distribution, we have separated most of the notes by OS.
 
+Note that while the code for Julia is [MIT-licensed](https://github.com/JuliaLang/julia/blob/master/LICENSE.md), the distribution created by the techniques described herein will be GPL licensed, as libraries and binaries such as `FFTW` and `git` are GPL licensed.
+
 
 Linux
 -----
