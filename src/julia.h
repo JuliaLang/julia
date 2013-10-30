@@ -707,8 +707,7 @@ void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name);
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
                    jl_tuple_t *tvars);
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
-                          jl_tuple_t *argtypes, jl_function_t *f,
-                          jl_tuple_t *tvars);
+                          jl_tuple_t *argtypes, jl_function_t *f);
 jl_value_t *jl_box_bool(int8_t x);
 jl_value_t *jl_box_int8(int32_t x);
 jl_value_t *jl_box_uint8(uint32_t x);

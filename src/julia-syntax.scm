@@ -373,12 +373,12 @@
      (let* ((types (llist-types argl))
 	    (body  (method-lambda-expr argl body)))
        (if (null? sparams)
-	   `(method ,name (tuple ,@types) ,body (tuple))
-	   (let ((f (gensy)))
-	     `(call (lambda (,@names ,f)
-		      (method ,name (tuple ,@types) ,f (tuple ,@names)))
-		    ,@(symbols->typevars names bounds #t)
-		    ,body)))))))
+	   `(method ,name (tuple (tuple ,@types) (tuple)) ,body)
+	   `(method ,name
+		    (call (lambda ,names
+			    (tuple (tuple ,@types) (tuple ,@names)))
+			  ,@(symbols->typevars names bounds #t))
+		    ,body))))))
 
 (define (vararg? x) (and (pair? x) (eq? (car x) '...)))
 (define (trans?  x) (and (pair? x) (eq? (car x) '|.'|)))
@@ -779,6 +779,7 @@
 			     ,mut)))
 	   (scope-block
 	    (block
+	     (global ,name)
 	     (global ,@params)
 	     ,@(if (and (null? defs)
 			;; don't generate an outer constructor if the type has
@@ -2740,8 +2741,7 @@ So far only the second case can actually occur.
 		     (vinfo:set-iasg! vi #t)))))
 	 `(method ,(cadr e)
 		  ,(analyze-vars (caddr  e) env captvars)
-		  ,(analyze-vars (cadddr e) env captvars)
-		  ,(cadddr (cdr e))))
+		  ,(analyze-vars (cadddr e) env captvars)))
 	(else (cons (car e)
 		    (map (lambda (x) (analyze-vars x env captvars))
 			 (cdr e))))))
