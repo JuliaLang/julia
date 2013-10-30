@@ -529,7 +529,8 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
 }
 
 #if defined(_OS_WINDOWS_)
-extern int needsSymRefreshModuleList;
+int needsSymRefreshModuleList;
+WINBOOL WINAPI (*hSymRefreshModuleList)(HANDLE);
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize) {
     CONTEXT Context;
     memset(&Context, 0, sizeof(Context));
@@ -545,9 +546,9 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
     STACKFRAME64 stk;
     memset(&stk, 0, sizeof(stk));
 
-    if (needsSymRefreshModuleList) {
+    if (needsSymRefreshModuleList && hSymRefreshModuleList != 0) {
         in_stackwalk = 1;
-        SymRefreshModuleList(GetCurrentProcess());
+        hSymRefreshModuleList(GetCurrentProcess());
         in_stackwalk = 0;
         needsSymRefreshModuleList = 0;
     }
