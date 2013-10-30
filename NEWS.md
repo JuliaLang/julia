@@ -156,7 +156,7 @@ Library improvements
 
   * Transitive comparison of floats with rationals ([#3102]).
 
-  * Fast primality testing (da670c4).
+  * Fast prime generation with `primes` and primality testing with `isprime`.
 
   * `sum` and `cumsum` now use pairwise summation for better accuracy ([#4039]).
 
