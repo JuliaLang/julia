@@ -427,11 +427,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
 .. currentmodule:: Base
 
-.. function:: copy!(n, X, incx, Y, incy)
-
-   Copy ``n`` elements of array ``X`` with stride ``incx`` to array
-   ``Y`` with stride ``incy``.  Returns ``Y``.
-
 .. function:: dot(n, X, incx, Y, incy)
 
    Dot product of two vectors consisting of ``n`` elements of array
@@ -442,6 +437,11 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 The following functions are defined within the ``Base.LinAlg.BLAS`` module.
 
 .. currentmodule:: Base.LinAlg.BLAS
+
+.. function:: blascopy!(n, X, incx, Y, incy)
+
+   Copy ``n`` elements of array ``X`` with stride ``incx`` to array
+   ``Y`` with stride ``incy``.  Returns ``Y``.
 
 .. function:: nrm2(n, X, incx)
 
