@@ -3840,12 +3840,12 @@ Statistics
    Compute the quantiles of a vector ``v`` at a specified set of probability values ``p``.
    Note: Julia does not ignore ``NaN`` values in the computation.
 
-.. function:: quantile(v)
+.. function:: quantile(v, p)
 
-   Compute the quantiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
+   Compute the quantile of a vector ``v`` at the probability ``p``.
    Note: Julia does not ignore ``NaN`` values in the computation.
 
-.. function:: quantile!(v, [p])
+.. function:: quantile!(v, p)
 
    Like ``quantile``, but overwrites the input vector.
 
