@@ -174,10 +174,9 @@ Library improvements
 
   * Faster `matchall` ([#3719]), and a number of string and regex improvements.
 
-  * Documentation for writing packages ([#2714], [#2769], [#2791])
-    and linear algebra ([#2807])
+  * Documentation of advanced linear algebra features ([#2807]).
 
-  * Support optional RTLD flags in `dlopen` ([#2380])
+  * Support optional RTLD flags in `dlopen` ([#2380]).
 
   * Options in `pmap` for retrying or ignoring failed tasks.
     Also `pmap` now works with any iterable.
@@ -189,11 +188,11 @@ Library improvements
     `sqrt`, `log`, `asin`, `acos`, `atan`, `tanh`, `asinh`, `acosh`, `atanh`
     which have correct branch cuts ([#2891]).
 
-  * Improved handling of SubArrays (01fe6bc, #4412, #4284, 50f37f1, beee4e2, #4044, 8bfb697, #3697, #3790, e392ec1, c84a058, 7eb374e, #3148, #2844, #2644)
+  * Improved behavior of `SubArray` ([#4412], [#4284], [#4044], [#3697], [#3790], [#3148], [#2844], [#2644] and various other fixes).
 
-  * New convenience functions in graphics API
+  * New convenience functions in graphics API.
 
-  * Improved backtraces on Windows and OSX
+  * Improved backtraces on Windows and OSX.
 
 Deprecated or removed
 ---------------------
@@ -237,7 +236,7 @@ Deprecated or removed
   * `remote_call`, `remote_call_fetch`, and `remote_call_wait`
     replaced by `remotecall`, `remotecall_fetch`, and `remotecall_wait`.
 
-  * `has` replaced by `contains` for sets and by `haskey` for dictionaries.
+  * `has` replaced by `in` for sets and by `haskey` for dictionaries.
 
   * `diagmm` and `diagmm!` replaced by `scale` and `scale!` ([#2916]).
 
@@ -305,6 +304,7 @@ Too numerous to mention.
 [#2608]: https://github.com/JuliaLang/julia/issues/2608
 [#2609]: https://github.com/JuliaLang/julia/issues/2609
 [#2611]: https://github.com/JuliaLang/julia/issues/2611
+[#2644]: https://github.com/JuliaLang/julia/issues/2644
 [#2678]: https://github.com/JuliaLang/julia/issues/2678
 [#2703]: https://github.com/JuliaLang/julia/issues/2703
 [#2713]: https://github.com/JuliaLang/julia/issues/2713
@@ -315,6 +315,8 @@ Too numerous to mention.
 [#2791]: https://github.com/JuliaLang/julia/issues/2791
 [#2807]: https://github.com/JuliaLang/julia/issues/2807
 [#2814]: https://github.com/JuliaLang/julia/issues/2814
+[#2844]: https://github.com/JuliaLang/julia/issues/2844
+[#2891]: https://github.com/JuliaLang/julia/issues/2891
 [#2916]: https://github.com/JuliaLang/julia/issues/2916
 [#2920]: https://github.com/JuliaLang/julia/issues/2920
 [#2987]: https://github.com/JuliaLang/julia/issues/2987
@@ -324,6 +326,7 @@ Too numerous to mention.
 [#3102]: https://github.com/JuliaLang/julia/issues/3102
 [#3105]: https://github.com/JuliaLang/julia/issues/3105
 [#3140]: https://github.com/JuliaLang/julia/issues/3140
+[#3148]: https://github.com/JuliaLang/julia/issues/3148
 [#3149]: https://github.com/JuliaLang/julia/issues/3149
 [#3272]: https://github.com/JuliaLang/julia/issues/3272
 [#3350]: https://github.com/JuliaLang/julia/issues/3350
@@ -334,7 +337,9 @@ Too numerous to mention.
 [#3523]: https://github.com/JuliaLang/julia/issues/3523
 [#3649]: https://github.com/JuliaLang/julia/issues/3649
 [#3665]: https://github.com/JuliaLang/julia/issues/3665
+[#3697]: https://github.com/JuliaLang/julia/issues/3697
 [#3719]: https://github.com/JuliaLang/julia/issues/3719
+[#3790]: https://github.com/JuliaLang/julia/issues/3790
 [#3819]: https://github.com/JuliaLang/julia/issues/3819
 [#3872]: https://github.com/JuliaLang/julia/issues/3872
 [#3874]: https://github.com/JuliaLang/julia/issues/3874
@@ -344,10 +349,13 @@ Too numerous to mention.
 [#3989]: https://github.com/JuliaLang/julia/issues/3989
 [#4014]: https://github.com/JuliaLang/julia/issues/4014
 [#4039]: https://github.com/JuliaLang/julia/issues/4039
+[#4044]: https://github.com/JuliaLang/julia/issues/4044
 [#4055]: https://github.com/JuliaLang/julia/issues/4055
 [#4112]: https://github.com/JuliaLang/julia/issues/4112
 [#4130]: https://github.com/JuliaLang/julia/issues/4130
 [#4177]: https://github.com/JuliaLang/julia/issues/4177
 [#4235]: https://github.com/JuliaLang/julia/issues/4235
+[#4284]: https://github.com/JuliaLang/julia/issues/4284
+[#4412]: https://github.com/JuliaLang/julia/issues/4412
 
 [packages chapter]: http://docs.julialang.org/en/latest/manual/packages/
