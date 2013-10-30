@@ -153,7 +153,11 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
                 return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEquad,val)),(jl_value_t*)bt);
             // If we have a floating point type that's not hardware supported, just treat it like an integer for LLVM purposes
         }
-        return mark_julia_type(ConstantInt::get(IntegerType::get(jl_LLVMContext,8*nb),val),(jl_value_t*)bt);
+        Constant *asInt = ConstantInt::get(IntegerType::get(jl_LLVMContext,8*nb),val);
+        if (jl_is_cpointer_type(bt)) {
+            return mark_julia_type(ConstantExpr::getIntToPtr(asInt, julia_type_to_llvm((jl_value_t*)bt)), (jl_value_t*)bt);
+        }
+        return mark_julia_type(asInt, (jl_value_t*)bt);
     }
     return emit_expr(e, ctx, false);
 }
