@@ -70,6 +70,17 @@ function show(io::IO, x::DataType)
     end
 end
 
+function showcompact{T<:Number}(io::IO, x::Vector{T})
+    if length(x) > 0
+        print(io, "[")
+        showcompact(io, x[1])
+        for j in 2:length(x)
+            print(io, ",")
+            showcompact(io, x[j])
+        end
+        print(io, "]")
+    end
+end
 showcompact(io::IO, x) = show(io, x)
 showcompact(x) = showcompact(STDOUT::IO, x)
 
