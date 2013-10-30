@@ -59,6 +59,7 @@ ifeq ($(USE_BLAS64), 1)
 else
 	@echo "const USE_BLAS64 = false" >> $@
 endif
+	@echo "const SYSCONFDIR = \"$(SYSCONFDIR)\"" >> $@
 
 	@echo "immutable BuildInfo" >> $@
 	@echo "    version_string::ASCIIString" >> $@
