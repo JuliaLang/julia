@@ -145,23 +145,24 @@ even though they have no instantiation because they are the backbone of
 the type system: they form the conceptual hierarchy which makes Julia's
 type system more than just a collection of object implementations.
 
-Recall that in :ref:`man-integers-and-floating-point-numbers`, we introduced a
-variety of concrete types of numeric values: ``Int8``, ``Uint8``,
-``Int16``, ``Uint16``, ``Int32``, ``Uint32``, ``Int64``, ``Uint64``,
-``Float32``, and ``Float64``. Although they have different
-representation sizes, ``Int8``, ``Int16``, ``Int32`` and ``Int64`` all
-have in common that they are signed integer types. Likewise ``Uint8``,
-``Uint16``, ``Uint32`` and ``Uint64`` are all unsigned integer types,
-while ``Float32`` and ``Float64`` are distinct in being floating-point
-types rather than integers. It is common for a piece of code to make
-sense, for example, only if its arguments are some kind of integer, but
-not really depend on what particular *kind* of integer.
-For example, the greatest common denominator algorithm works for all
-kinds of integers, but will not work for floating-point numbers.
-Abstract types allow the construction of a hierarchy of types,
-providing a context into which concrete types can fit. This allows you,
-for example, to easily program to any type that is an integer, without
-restricting an algorithm to a specific type of integer.
+Recall that in :ref:`man-integers-and-floating-point-numbers`, we
+introduced a variety of concrete types of numeric values: ``Int8``,
+``Uint8``, ``Int16``, ``Uint16``, ``Int32``, ``Uint32``, ``Int64``,
+``Uint64``, ``Int128``, ``Uint128``, ``Float16``, ``Float32``, and
+``Float64``.  Although they have different representation sizes, ``Int8``,
+``Int16``, ``Int32``, ``Int64``  and ``Int128`` all have in common that
+they are signed integer types. Likewise ``Uint8``, ``Uint16``, ``Uint32``,
+``Uint64`` and ``Uint128`` are all unsigned integer types, while
+``Float16``, ``Float32`` and ``Float64`` are distinct in being
+floating-point types rather than integers. It is common for a piece of code
+to make sense, for example, only if its arguments are some kind of integer,
+but not really depend on what particular *kind* of integer.  For example,
+the greatest common denominator algorithm works for all kinds of integers,
+but will not work for floating-point numbers.  Abstract types allow the
+construction of a hierarchy of types, providing a context into which
+concrete types can fit.  This allows you, for example, to easily program to
+any type that is an integer, without restricting an algorithm to a specific
+type of integer.
 
 Abstract types are declared using the ``abstract`` keyword. The general
 syntaxes for declaring an abstract type are::
@@ -229,20 +230,23 @@ Unlike most languages, Julia lets you declare your own bits types,
 rather than providing only a fixed set of built-in bits types. In fact,
 the standard bits types are all defined in the language itself::
 
+    bitstype 16 Float16 <: FloatingPoint
     bitstype 32 Float32 <: FloatingPoint
     bitstype 64 Float64 <: FloatingPoint
 
     bitstype 8  Bool <: Integer
     bitstype 32 Char <: Integer
 
-    bitstype 8  Int8   <: Signed
-    bitstype 8  Uint8  <: Unsigned
-    bitstype 16 Int16  <: Signed
-    bitstype 16 Uint16 <: Unsigned
-    bitstype 32 Int32  <: Signed
-    bitstype 32 Uint32 <: Unsigned
-    bitstype 64 Int64  <: Signed
-    bitstype 64 Uint64 <: Unsigned
+    bitstype 8  Int8     <: Signed
+    bitstype 8  Uint8    <: Unsigned
+    bitstype 16 Int16    <: Signed
+    bitstype 16 Uint16   <: Unsigned
+    bitstype 32 Int32    <: Signed
+    bitstype 32 Uint32   <: Unsigned
+    bitstype 64 Int64    <: Signed
+    bitstype 64 Uint64   <: Unsigned
+    bitstype 128 Int128  <: Signed
+    bitstype 128 Uint128 <: Unsigned
 
 The general syntaxes for declaration of a ``bitstype`` are::
 

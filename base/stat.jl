@@ -37,7 +37,7 @@ macro stat_call(sym,arg1type,arg)
     quote
         fill!(stat_buf,0)
         r = ccall($(Expr(:quote,sym)), Int32, ($arg1type,Ptr{Uint8}), $arg, stat_buf)
-        systemerror(:stat, r!=0 && r!=UV_ENOENT && r!=UV_ENOTDIR)
+        r==0 || r==UV_ENOENT || r==UV_ENOTDIR || throw(UVError("stat",r))
         st = Stat(stat_buf)
         if ispath(st) != (r==0)
             error("WTF: stat returned zero type for a valid path!?")
