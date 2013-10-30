@@ -125,7 +125,8 @@ Library improvements
     to account for this increased strictness.
 
   * Rewritten `Pkg` system for much greater robustness in case of failures,
-    versioned dependencies, and many other enhancements.
+    versioned dependencies, and many other enhancements
+    (see the new [packages chapter] in the manual).
 
   * Sort API updates ([#3665]).
 
@@ -348,3 +349,5 @@ Too numerous to mention.
 [#4130]: https://github.com/JuliaLang/julia/issues/4130
 [#4177]: https://github.com/JuliaLang/julia/issues/4177
 [#4235]: https://github.com/JuliaLang/julia/issues/4235
+
+[packages chapter]: http://docs.julialang.org/en/latest/manual/packages/
