@@ -1084,3 +1084,12 @@ let
     @test g4505(0) == 0
 end
 @test !isdefined(:g4505)
+
+# issue #4681
+# ccall should error if convert() returns something of the wrong type
+type Z4681
+    x::Ptr{Void}
+    Z4681() = new(C_NULL)
+end
+Base.convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
+@test_throws ccall(:printf,Int,(Ptr{Uint8},Ptr{Z4681}),"",Z4681())
