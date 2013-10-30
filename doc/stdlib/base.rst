@@ -4719,6 +4719,15 @@ C Interface
    Copy ``N`` elements from a source array to a destination, starting at offset ``so``
    in the source and ``do`` in the destination.
 
+.. function:: copy!(dest, src)
+
+   Copy all elements from collection ``src`` to array ``dest``.
+
+.. function:: copy!(dest, do, src, so, N)
+
+   Copy ``N`` elements from collection ``src`` starting at offset ``so``, to
+   array ``dest`` starting at offset ``do``.
+
 .. function:: pointer(a[, index])
 
    Get the native address of an array element. Be careful to ensure that a julia
