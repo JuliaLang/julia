@@ -190,8 +190,13 @@ ifeq ($(OS), WINNT)
 endif
 	# Copy in beautiful new man page!
 	cp $(BUILD)/share/man/man1/julia.1 $(PREFIX)/share/man/man1/
-	# Copy in etc/julia directory for things like juliarc.jl
+	# Copy etc/julia directory to SYSCONFIGDIR if it is set, otherwise to just $(PREFIX)/etc/
+ifneq ($(SYSCONFDIR),)
+	mkdir -p $(SYSCONFDIR)
+	cp -R $(BUILD)/etc/julia $(SYSCONFDIR)/
+else
 	cp -R $(BUILD)/etc/julia $(PREFIX)/etc/
+endif
 
 
 dist:
@@ -211,6 +216,8 @@ ifeq ($(OS), Darwin)
 	-./contrib/mac/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
 	# Copy in juliarc.jl files per-platform for binary distributions as well
+	# Note that we don't install to SYSCONFDIR: we always install to PREFIX/etc.
+	# If you want to make a distribution with a hardcoded path, you take care of installation
 ifeq ($(OS), Darwin)
 	-cat ./contrib/mac/juliarc.jl >> $(PREFIX)/etc/julia/juliarc.jl
 else ifeq ($(OS), WINNT)
