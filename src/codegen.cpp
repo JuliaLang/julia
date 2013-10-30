@@ -759,7 +759,6 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
             simple_escape_analysis(jl_exprarg(e,0), esc, ctx);
             simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
             simple_escape_analysis(jl_exprarg(e,2), esc, ctx);
-            simple_escape_analysis(jl_exprarg(e,3), esc, ctx);
         }
         else {
             size_t elen = jl_array_dim0(e->args);
@@ -2126,12 +2125,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         make_gcroot(a1, ctx);
         Value *a2 = boxed(emit_expr(args[2], ctx));
         make_gcroot(a2, ctx);
-        Value *a3 = boxed(emit_expr(args[3], ctx));
-        make_gcroot(a3, ctx);
-        Value *mdargs[6] = { name, bp, literal_pointer_val((void*)bnd),
-                             a1, a2, a3 };
+        Value *mdargs[5] = { name, bp, literal_pointer_val((void*)bnd), a1, a2 };
         ctx->argDepth = last_depth;
-        return builder.CreateCall(jlmethod_func, ArrayRef<Value*>(&mdargs[0], 6));
+        return builder.CreateCall(jlmethod_func, ArrayRef<Value*>(&mdargs[0], 5));
     }
     else if (head == const_sym) {
         jl_sym_t *sym = (jl_sym_t*)args[0];
@@ -3329,7 +3325,6 @@ static void init_julia_llvm_env(Module *m)
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_ppvalue_llvmt);
     mdargs.push_back(T_pint8);
-    mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
     jlmethod_func =

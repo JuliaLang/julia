@@ -1077,3 +1077,10 @@ end
 # issue #4645
 i4645(x) = (println(zz); zz = x; zz)
 @test_throws i4645(4)
+
+# issue #4505
+let
+    g4505{X}(::X) = 0
+    @test g4505(0) == 0
+end
+@test !isdefined(:g4505)
