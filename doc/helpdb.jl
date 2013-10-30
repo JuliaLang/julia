@@ -5590,7 +5590,9 @@ popdisplay(d::Display)
 ("Statistics","Base","mean","mean(v[, region])
 
    Compute the mean of whole array \"v\", or optionally along the
-   dimensions in \"region\".
+   dimensions in \"region\". Note: Julia does not ignore \"NaN\"
+   values in the computation. For applications requiring the handling
+   of missing data, the \"DataArray\" package is recommended.
 
 "),
 
@@ -5602,13 +5604,17 @@ popdisplay(d::Display)
    the assumption that each entry of \"v\" is an IID draw from that
    generative distribution. This computation is equivalent to
    calculating \"sqrt(sum((v - mean(v)).^2) / (length(v) - 1))\".
+   Note: Julia does not ignore \"NaN\" values in the computation. For
+   applications requiring the handling of missing data, the
+   \"DataArray\" package is recommended.
 
 "),
 
 ("Statistics","Base","stdm","stdm(v, m)
 
    Compute the sample standard deviation of a vector \"v\" with known
-   mean \"m\".
+   mean \"m\". Note: Julia does not ignore \"NaN\" values in the
+   computation.
 
 "),
 
@@ -5619,14 +5625,18 @@ popdisplay(d::Display)
    estimator of the generative distribution's variance under the
    assumption that each entry of \"v\" is an IID draw from that
    generative distribution. This computation is equivalent to
-   calculating \"sum((v - mean(v)).^2) / (length(v) - 1)\".
+   calculating \"sum((v - mean(v)).^2) / (length(v) - 1)\". Note:
+   Julia does not ignore \"NaN\" values in the computation. For
+   applications requiring the handling of missing data, the
+   \"DataArray\" package is recommended.
 
 "),
 
 ("Statistics","Base","varm","varm(v, m)
 
    Compute the sample variance of a vector \"v\" with known mean
-   \"m\".
+   \"m\". Note: Julia does not ignore \"NaN\" values in the
+   computation.
 
 "),
 
@@ -5634,7 +5644,9 @@ popdisplay(d::Display)
 
    Compute the median of a vector \"v\". If keyword argument
    \"checknan\" is true (the default), an error is raised for data
-   containing NaN values.
+   containing NaN values. Note: Julia does not ignore \"NaN\" values
+   in the computation. For applications requiring the handling of
+   missing data, the \"DataArray\" package is recommended.
 
 "),
 
@@ -5649,7 +5661,8 @@ popdisplay(d::Display)
    Compute the histogram of \"v\", optionally using approximately
    \"n\" bins. The return values are a range \"e\", which correspond
    to the edges of the bins, and \"counts\" containing the number of
-   elements of \"v\" in each bin.
+   elements of \"v\" in each bin. Note: Julia does not ignore \"NaN\"
+   values in the computation.
 
 "),
 
@@ -5658,7 +5671,8 @@ popdisplay(d::Display)
    Compute the histogram of \"v\" using a vector/range \"e\" as the
    edges for the bins. The result will be a vector of length
    \"length(e) - 1\", such that the element at location \"i\"
-   satisfies \"sum(e[i] .< v .<= e[i+1])\".
+   satisfies \"sum(e[i] .< v .<= e[i+1])\". Note: Julia does not
+   ignore \"NaN\" values in the computation.
 
 "),
 
@@ -5670,7 +5684,8 @@ popdisplay(d::Display)
    edges. The result is a tuple of \"edge1\" (the bin edges used in
    the first dimension), \"edge2\" (the bin edges used in the second
    dimension), and \"counts\", a histogram matrix of size
-   \"(length(edge1)-1, length(edge2)-1)\".
+   \"(length(edge1)-1, length(edge2)-1)\". Note: Julia does not ignore
+   \"NaN\" values in the computation.
 
 "),
 
@@ -5678,32 +5693,35 @@ popdisplay(d::Display)
 
    Compute *nice* bin ranges for the edges of a histogram of \"v\",
    using approximately \"n\" bins. The resulting step sizes will be 1,
-   2 or 5 multiplied by a power of 10.
+   2 or 5 multiplied by a power of 10. Note: Julia does not ignore
+   \"NaN\" values in the computation.
 
 "),
 
 ("Statistics","Base","midpoints","midpoints(e)
 
    Compute the midpoints of the bins with edges \"e\". The result is a
-   vector/range of length \"length(e) - 1\".
+   vector/range of length \"length(e) - 1\". Note: Julia does not
+   ignore \"NaN\" values in the computation.
 
 "),
 
 ("Statistics","Base","quantile","quantile(v, p)
 
    Compute the quantiles of a vector \"v\" at a specified set of
-   probability values \"p\".
+   probability values \"p\". Note: Julia does not ignore \"NaN\"
+   values in the computation.
 
 "),
 
-("Statistics","Base","quantile","quantile(v)
+("Statistics","Base","quantile","quantile(v, p)
 
-   Compute the quantiles of a vector \"v\" at the probability values
-   \"[.0, .2, .4, .6, .8, 1.0]\".
+   Compute the quantile of a vector \"v\" at the probability \"p\".
+   Note: Julia does not ignore \"NaN\" values in the computation.
 
 "),
 
-("Statistics","Base","quantile!","quantile!(v[, p])
+("Statistics","Base","quantile!","quantile!(v, p)
 
    Like \"quantile\", but overwrites the input vector.
 
@@ -5713,7 +5731,8 @@ popdisplay(d::Display)
 
    Compute the Pearson covariance between two vectors \"v1\" and
    \"v2\". If called with a single element \"v\", then computes
-   covariance of columns of \"v\".
+   covariance of columns of \"v\". Note: Julia does not ignore \"NaN\"
+   values in the computation.
 
 "),
 
@@ -5721,7 +5740,8 @@ popdisplay(d::Display)
 
    Compute the Pearson correlation between two vectors \"v1\" and
    \"v2\". If called with a single element \"v\", then computes
-   correlation of columns of \"v\".
+   correlation of columns of \"v\". Note: Julia does not ignore
+   \"NaN\" values in the computation.
 
 "),
 
@@ -6952,6 +6972,19 @@ popdisplay(d::Display)
 
    Copy \"N\" elements from a source array to a destination, starting
    at offset \"so\" in the source and \"do\" in the destination.
+
+"),
+
+("C Interface","Base","copy!","copy!(dest, src)
+
+   Copy all elements from collection \"src\" to array \"dest\".
+
+"),
+
+("C Interface","Base","copy!","copy!(dest, do, src, so, N)
+
+   Copy \"N\" elements from collection \"src\" starting at offset
+   \"so\", to array \"dest\" starting at offset \"do\".
 
 "),
 
@@ -8791,19 +8824,19 @@ popdisplay(d::Display)
 
 "),
 
-("BLAS Functions","Base","copy!","copy!(n, X, incx, Y, incy)
-
-   Copy \"n\" elements of array \"X\" with stride \"incx\" to array
-   \"Y\" with stride \"incy\".  Returns \"Y\".
-
-"),
-
 ("BLAS Functions","Base","dot","dot(n, X, incx, Y, incy)
 
    Dot product of two vectors consisting of \"n\" elements of array
    \"X\" with stride \"incx\" and \"n\" elements of array \"Y\" with
    stride \"incy\".  There are no \"dot\" methods for \"Complex\"
    arrays.
+
+"),
+
+("BLAS Functions","Base.LinAlg.BLAS","blascopy!","blascopy!(n, X, incx, Y, incy)
+
+   Copy \"n\" elements of array \"X\" with stride \"incx\" to array
+   \"Y\" with stride \"incy\".  Returns \"Y\".
 
 "),
 
