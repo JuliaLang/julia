@@ -25,10 +25,10 @@ end
 # reduce -- reduce.jl
 @test reduce((x,y)->"($x+$y)", [9:11]) == "((9+10)+11)"
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
-@test reduce(-, 1000, [1:5]) == (1000 - 1 - 2 - 3 - 4 - 5)
+@test reduce(+, 1000, [1:5]) == (1000 + 1 + 2 + 3 + 4 + 5)
 
 # mapreduce -- reduce.jl
-@test mapreduce(-, -, [-10 -9 -3]) == ((10 - 9) - 3)
+@test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
 @test mapreduce((x)->x[1:3], (x,y)->"($x+$y)", ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
 
 # filter -- array.jl
