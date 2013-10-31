@@ -14,19 +14,19 @@ Note that while the code for Julia is
 the distribution created by the techniques described herein will be
 GPL licensed, as various dependent libraries such as `FFTW`, `Rmath`,
 `SuiteSparse`, and `git` are GPL licensed. We do hope to have a
-non-GPL distribution Julia in the future.
+non-GPL distribution of Julia in the future.
 
 Linux
 -----
 
-`make dist` creates a tarball that contains a fully functional Julia
+On Linux, `make dist` creates a tarball that contains a fully functional Julia
 installation. If you wish to create a distribution package such as a
 `.deb`, or `.rpm`, some extra effort is needed. See the
 [julia-debian](http://github.com/staticfloat/julia-debian) repository
 for an example of what metadata is needed for creating `.deb` packages
 for Debian and Ubuntu-based systems. Although we have not yet experimented
-with it for julia, [Alien](https://wiki.debian.org/Alien) could be used to
-generate packages for various linux distributions.
+with it, [Alien](https://wiki.debian.org/Alien) could be used to
+generate Julia packages for various linux distributions.
 
 Julia looks for git versioning information when building.  If it does
 not find the git executable or the `.git/` directory is unreadable,
@@ -36,7 +36,7 @@ will be unavailable.  This is the case, for instance, on canonical's
 nightlies](https://launchpad.net/~staticfloat/+archive/julianightlies)
 are built.  Therefore, a workaround must be enacted, where the git
 versioning information [is encoded into the
-source](https://github.com/staticfloat/julia-nightly-packaging/blob/master/build_ubuntu.sh#L76-78)before upload for building, and the source is modified to [not attempt to look for it](https://github.com/staticfloat/julia-nightly-packaging/blob/master/nogit-workaround.patch) when building.
+source](https://github.com/staticfloat/julia-nightly-packaging/blob/master/build_ubuntu.sh#L76-78) before upload for building, and the source is modified to [not attempt to look for it](https://github.com/staticfloat/julia-nightly-packaging/blob/master/nogit-workaround.patch) when building.
 
 By default, Julia loads `$PREFIX/etc/julia/juliarc.jl` as an
 installation-wide initialization file. This file can be used by
@@ -53,13 +53,13 @@ check `/etc/julia/juliarc.jl` before trying
 OS X
 ----
 
-To create a binary distribution on OSX, first build Julia, then cd to
-`contrib/mac/app` and run `make` with the same makevars as were passed
-into the `make` process when building Julia proper.  This will then
+To create a binary distribution on OSX, build Julia first, then cd to
+`contrib/mac/app`, and run `make` with the same makevars that were used
+with `make` when building Julia proper.  This will then
 create a `.dmg` file in the `contrib/mac/app` directory holding a
 completely self-contained Julia.app.
 
-Note that if you want your .app to be able to run on OSX 10.6 Snow
+Note that if you want your `.app` to be able to run on OSX 10.6 Snow
 Leopard, you must pass `USE_SYSTEM_LIBUNWIND=1` as one of the make
 variables passed to both `make` processes.  This disables the use of
 `libosxunwind`, a more modern libunwind that relies on OS features
