@@ -16,7 +16,7 @@ const bitcache_size = 64 * bitcache_chunks # do not change this
 type BitArray{N} <: AbstractArray{Bool, N}
     chunks::Vector{Uint64}
     len::Int
-    dims::Vector{Int}
+    dims::NTuple{N,Int}
     function BitArray(dims::Int...)
         if length(dims) != N
             error("incorrect number of dimensions")
@@ -35,7 +35,7 @@ type BitArray{N} <: AbstractArray{Bool, N}
         end
         b = new(chunks, n)
         if N != 1
-            b.dims = Int[i for i in dims]
+            b.dims = dims
         end
         return b
     end
@@ -51,7 +51,7 @@ typealias BitMatrix BitArray{2}
 
 length(B::BitArray) = B.len
 size(B::BitVector) = (B.len,)
-size(B::BitArray) = tuple(B.dims...)
+size(B::BitArray) = B.dims
 
 size(B::BitVector, d) = (d==1 ? B.len : d>1 ? 1 : error("size: dimension out of range"))
 size{N}(B::BitArray{N}, d) = (d>N ? 1 : B.dims[d])
@@ -264,7 +264,7 @@ function reshape{N}(B::BitArray, dims::NTuple{N,Int})
     Br.chunks = B.chunks
     Br.len = prod(dims)
     if N != 1
-        Br.dims = Int[i for i in dims]
+        Br.dims = dims
     end
     return Br
 end
@@ -328,7 +328,7 @@ function reinterpret{N}(B::BitArray, dims::NTuple{N,Int})
     A.chunks = B.chunks
     A.len = prod(dims)
     if N != 1
-        A.dims = Int[i for i in dims]
+        A.dims = dims
     end
     return A
 end
