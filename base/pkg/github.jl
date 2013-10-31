@@ -20,25 +20,33 @@ end
 function curl(opts::Cmd, url::String, data=nothing)
     success(`which -s curl`) || error("using the GitHub API requires having `curl` installed")
     data == nothing || (opts = `$opts --data $(sprint(io->JSON.print(io,data)))`)
-    readall(`curl -s -S $opts $url`)
+    out, proc = readsfrom(`curl -i -s -S $opts $url`)
+    head = readline(out)
+    status = int(split(head,r"\s+",3)[2])
+    for line in eachline(out)
+        ismatch(r"^\s*$",line) || continue
+        wait(proc); return status, readall(out)
+    end
+    error("strangely formatted HTTP response")
 end
 curl(url::String, data=nothing) = curl(``,url,data)
 
 function token(user::String=Git.readchomp(`config --global github.user`))
     tokfile = Dir.path(".github","token")
     isfile(tokfile) && return strip(readchomp(tokfile))
-    r = curl(`-u $user`,"https://api.github.com/authorizations",AUTH_DATA)
-    r = json().parse(r)
-    haskey(r,"token") || error("curl: $(r["message"])")
-    tok = r["token"]
+    status, content = curl(`-u $user`,"https://api.github.com/authorizations",AUTH_DATA)
+    status == 200 || error("$status: $(r["message"])")
+    tok = json().parse(content)["token"]
     mkpath(dirname(tokfile))
     open(io->println(io,tok),tokfile,"w")
     return tok
 end
 
 function req(opts::Cmd, resource::String, data=nothing)
-    r = curl(`$opts -u $(token()):x-oauth-basic`,"https://api.github.com/$resource",data)
-    json().parse(r)
+    url = "https://api.github.com/$resource"
+    status, content = curl(`$opts -u $(token()):x-oauth-basic`,url,data)
+    response = json().parse(content)
+    status, response
 end
 req(resource::String, data=nothing) = req(``,resource,data)
 
