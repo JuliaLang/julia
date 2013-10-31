@@ -1093,3 +1093,9 @@ type Z4681
 end
 Base.convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
 @test_throws ccall(:printf,Int,(Ptr{Uint8},Ptr{Z4681}),"",Z4681())
+
+# issue #4479
+f4479(::Real,c) = 1
+f4479(::Int, ::Int, ::Bool) = 2
+f4479(::Int, x, a...) = 0
+@test f4479(1,1,true) == 2

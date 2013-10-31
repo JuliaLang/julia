@@ -1866,11 +1866,9 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
         if (!morespecific && cseq && !pseq)
             return 0;
         if (ci >= cl)
-            return (pi>=pl || pseq);
+            return mode || pi>=pl || pseq;
         if (pi >= pl) {
-            if (mode && cseq && !pseq)
-                return 1;
-            return 0;
+            return mode;
         }
         jl_value_t *ce = child[ci];
         jl_value_t *pe = parent[pi];
@@ -1886,7 +1884,7 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
             return 1;
 
         if (morespecific) {
-            // stop as soon as one element is strictly more specific
+            // at this point we know one element is strictly more specific
             if (!(jl_types_equal(ce,pe) ||
                   (jl_is_typevar(pe) &&
                    jl_types_equal(ce,((jl_tvar_t*)pe)->ub)))) {
