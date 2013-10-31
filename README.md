@@ -77,6 +77,10 @@ Now you should be able to run Julia like this:
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
 
+If you are building a Julia package for distribution on Linux, OS X,
+or Windows, take a look at the detailed notes in
+[DISTRIBUTING.md](https://github.com/JuliaLang/julia/blob/master/DISTRIBUTING.md).
+
 <a name="Uninstalling-Julia"/>
 ## Uninstalling Julia
 
