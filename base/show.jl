@@ -71,15 +71,15 @@ function show(io::IO, x::DataType)
 end
 
 function showcompact{T<:Number}(io::IO, x::Vector{T})
+    print(io, "[")
     if length(x) > 0
-        print(io, "[")
         showcompact(io, x[1])
         for j in 2:length(x)
             print(io, ",")
             showcompact(io, x[j])
         end
-        print(io, "]")
     end
+    print(io, "]")
 end
 showcompact(io::IO, x) = show(io, x)
 showcompact(x) = showcompact(STDOUT::IO, x)
@@ -125,25 +125,25 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one)
     newline = true
     first = true
     if !done(itr,state)
-	while true
+        while true
             if isa(itr,Array) && !isdefined(itr,state)
                 print(io, undef_ref_str)
                 state += 1
                 multiline = false
             else
-	        x, state = next(itr,state)
+                x, state = next(itr,state)
                 multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
                 if newline
                     if multiline; println(io); end
                 end
-	        show(io, x)
+                show(io, x)
             end
-	    if done(itr,state)
+            if done(itr,state)
                 if delim_one && first
                     print(io, delim)
                 end
-		break
-	    end
+                break
+            end
             first = false
             print(io, delim)
             if multiline
@@ -151,7 +151,7 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one)
             else
                 newline = true
             end
-	end
+        end
     end
     print(io, cl)
 end
