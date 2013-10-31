@@ -127,6 +127,16 @@ function help_for(fname::String, obj)
     if haskey(FUNCTION_DICT, fname)
         print_help_entries(FUNCTION_DICT[fname])
         found = true
+    elseif isgeneric(obj)
+        mod = Base
+        if !is(obj.env.defs, ())
+            mod = obj.env.defs.func.code.module
+        end
+        mfname = string(mod) * "." * fname
+        if haskey(FUNCTION_DICT, mfname)
+            print_help_entries(FUNCTION_DICT[mfname])
+            found = true
+        end
     else
         if haskey(MODULE_DICT, fname)
             allmods = MODULE_DICT[fname]
