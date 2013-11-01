@@ -136,6 +136,31 @@ close(s)
 @test beginswith(str, "Hellx World")
 c=nothing; gc(); gc(); # cause munmap finalizer to run & free resources
 
+s = open(file, "w")
+write(s, [0xffffffffffffffff,
+          0xffffffffffffffff,
+          0xffffffffffffffff,
+          0x000000001fffffff])
+close(s)
+s = open(file, "r")
+@test isreadonly(s) == true
+b = mmap_bitarray((17,13), s)
+@test b == trues(17,13)
+@test_throws mmap_bitarray((7,3), s)
+close(s)
+s = open(file, "r+")
+b = mmap_bitarray((17,19), s)
+rand!(b)
+msync(b)
+b0 = copy(b)
+close(s)
+s = open(file, "r")
+@test isreadonly(s) == true
+b = mmap_bitarray((17,19), s)
+@test b == b0
+close(s)
+b=nothing; b0=nothing; gc(); gc(); # cause munmap finalizer to run & free resources
+
 #######################################################################
 # This section tests temporary file and directory creation.           #
 #######################################################################
