@@ -53,4 +53,13 @@ function req(resource::String, data, opts::Cmd=``)
 end
 req(resource::String, opts::Cmd=``) = req(resource,nothing,opts)
 
+function pushable(owner::String, repo::String, user::String=user())
+    status, response = req("repos/$owner/$repo",`-I`)
+    status == 404 && error("GitHub repo $owner/$repo does not exist")
+    status, response = req("repos/$owner/$repo/collaborators/$user")
+    status == 204 && return true
+    status == 404 && return false
+    error("unexpected GitHub API status code: $status – $(response["message"])")
+end
+
 end # module
