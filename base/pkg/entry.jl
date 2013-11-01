@@ -54,7 +54,7 @@ function rm(pkg::String)
     Write.remove(pkg)
 end
 
-available() = sort!([keys(Read.available())...], by=lowercase)
+available() = sort!(ASCIIString[keys(Read.available())...], by=lowercase)
 
 function available(pkg::String)
     avail = Read.available(pkg)
@@ -65,7 +65,7 @@ function available(pkg::String)
 end
 
 function installed()
-    pkgs = Dict{String,VersionNumber}()
+    pkgs = Dict{ASCIIString,VersionNumber}()
     for (pkg,(ver,fix)) in Read.installed()
         pkgs[pkg] = ver
     end
