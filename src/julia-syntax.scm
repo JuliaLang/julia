@@ -1264,7 +1264,10 @@
   (receive
    (keys restkeys) (separate kwarg? kw)
    (let ((keyargs (apply append
-			 (map (lambda (a) `((quote ,(cadr a)) ,(caddr a)))
+			 (map (lambda (a)
+				(if (not (symbol? (cadr a)))
+				    (error (string "named argument is not a symbol: " (cadr a))))
+				`((quote ,(cadr a)) ,(caddr a)))
 			      keys))))
      (if (null? restkeys)
 	 `(call (top kwcall) ,f ,(length keys) ,@keyargs
