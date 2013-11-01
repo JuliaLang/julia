@@ -10,8 +10,8 @@ for file in split("dir types reqs cache read query resolve write generate entry"
     include("pkg/$file.jl")
 end
 const cd = Dir.cd
-const dir = Dir.path
 
+dir(path...) = Dir.path(path...)
 init(meta::String=DEFAULT_META, branch::String=META_BRANCH) = Dir.init(meta,branch)
 
 edit() = cd(Entry.edit)
@@ -43,12 +43,10 @@ resolve() = cd(Entry.resolve)
 register(pkg::String) = cd(Entry.register,pkg)
 register(pkg::String, url::String) = cd(Entry.register,pkg,url)
 
-tag(pkg::String, sym::Symbol=:bump; force::Bool=false) =
-	cd(Entry.tag,pkg,sym,force)
-tag(pkg::String, ver::VersionNumber; force::Bool=false) =
-	cd(Entry.tag,pkg,ver,force)
-tag(pkg::String, sym::Symbol, commit::String; force::Bool=false) =
-	cd(Entry.tag,pkg,sym,force,commit)
+tag(pkg::String, sym::Symbol=:patch) = cd(Entry.tag,pkg,sym)
+tag(pkg::String, sym::Symbol, commit::String) = cd(Entry.tag,pkg,sym,false,commit)
+
+tag(pkg::String, ver::VersionNumber; force::Bool=false) = cd(Entry.tag,pkg,ver,force)
 tag(pkg::String, ver::VersionNumber, commit::String; force::Bool=false) =
 	cd(Entry.tag,pkg,ver,force,commit)
 
