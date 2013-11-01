@@ -8,6 +8,8 @@ const AUTH_DATA = {
     "note_url" => "http://docs.julialang.org/en/latest/manual/packages/",
 }
 
+user() = Git.readchomp(`config --global github.user`)
+
 function json()
     isdefined(:JSON) || try require("JSON")
     catch err
@@ -17,9 +19,8 @@ function json()
     Main.JSON
 end
 
-function curl(opts::Cmd, url::String, data=nothing)
+function curl(url::String, opts::Cmd=``)
     success(`which -s curl`) || error("using the GitHub API requires having `curl` installed")
-    data == nothing || (opts = `$opts --data $(sprint(io->JSON.print(io,data)))`)
     out, proc = readsfrom(`curl -i -s -S $opts $url`)
     head = readline(out)
     status = int(split(head,r"\s+",3)[2])
@@ -29,12 +30,14 @@ function curl(opts::Cmd, url::String, data=nothing)
     end
     error("strangely formatted HTTP response")
 end
-curl(url::String, data=nothing) = curl(``,url,data)
+curl(url::String, data::Nothing, opts::Cmd=``) = curl(url,opts)
+curl(url::String, data, opts::Cmd=``) =
+    curl(url,`$opts --data $(sprint(io->json().print(io,data)))`)
 
-function token(user::String=Git.readchomp(`config --global github.user`))
+function token(user::String=user())
     tokfile = Dir.path(".github","token")
     isfile(tokfile) && return strip(readchomp(tokfile))
-    status, content = curl(`-u $user`,"https://api.github.com/authorizations",AUTH_DATA)
+    status, content = curl("https://api.github.com/authorizations",AUTH_DATA,`-u $user`)
     status == 200 || error("$status: $(r["message"])")
     tok = json().parse(content)["token"]
     mkpath(dirname(tokfile))
@@ -42,12 +45,12 @@ function token(user::String=Git.readchomp(`config --global github.user`))
     return tok
 end
 
-function req(opts::Cmd, resource::String, data=nothing)
+function req(resource::String, data, opts::Cmd=``)
     url = "https://api.github.com/$resource"
-    status, content = curl(`$opts -u $(token()):x-oauth-basic`,url,data)
+    status, content = curl(url,data,`$opts -u $(token()):x-oauth-basic`)
     response = json().parse(content)
     status, response
 end
-req(resource::String, data=nothing) = req(``,resource,data)
+req(resource::String, opts::Cmd=``) = req(resource,nothing,opts)
 
 end # module
