@@ -1040,7 +1040,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         print_func_loc(s, oldmeth->func->linfo);
         JL_PRINTF(s, ".\nTo fix, define \n    %s", n);
         jl_show(errstream, isect);
-        JL_PRINTF(s, "\nbefore New definition.\n");
+        JL_PRINTF(s, "\nbefore the new definition.\n");
     done_chk_amb:
         JL_GC_POP();
     }
