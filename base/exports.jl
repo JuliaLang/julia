@@ -636,7 +636,6 @@ export
     svd,
     svdfact!,
     svdfact,
-    svds,
     svdvals!,
     svdvals,
     symmetrize!,
@@ -971,7 +970,6 @@ export
     symbol,
 
 # help and reflection
-    ans,
     apropos,
     current_module,
     edit,
@@ -1087,7 +1085,6 @@ export
     takebuf_string,
     truncate,
     watch_file,
-    WindowsRawSocket,
     write,
     writecsv,
     writedlm,
