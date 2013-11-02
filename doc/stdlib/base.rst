@@ -611,7 +611,7 @@ Indexable Collections
    The syntax ``a[i,j,...] = x`` is converted by the compiler to
    ``setindex!(a, x, i, j, ...)``.
 
-Fully implemented by: ``Array``, ``DArray``, ``AbstractArray``, ``SubArray``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``String``.
+Fully implemented by: ``Array``, ``DArray``, ``BitArray``, ``AbstractArray``, ``SubArray``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``String``.
 
 Partially implemented by: ``Range``, ``Range1``, ``Tuple``.
 
@@ -687,7 +687,7 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
 Fully implemented by: ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``.
 
-Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``Array``.
+Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``Array``, ``BitArray``.
 
 Set-Like Collections
 --------------------
@@ -808,7 +808,7 @@ Dequeues
 
    Insert the elements of ``items`` to the beginning of a collection. ``prepend!([3],[1,2]) => [1,2,3]``
 
-Fully implemented by: ``Vector`` (aka 1-d ``Array``).
+Fully implemented by: ``Vector`` (aka 1-d ``Array``), ``BitVector`` (aka 1-d ``BitArray``).
 
 
 Strings
@@ -3341,11 +3341,11 @@ Constructors
 
 .. function:: trues(dims)
 
-   Create a Bool array with all values set to true
+   Create a ``BitArray`` with all values set to true
 
 .. function:: falses(dims)
 
-   Create a Bool array with all values set to false
+   Create a ``BitArray`` with all values set to false
 
 .. function:: fill(v, dims)
 
