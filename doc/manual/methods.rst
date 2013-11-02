@@ -302,7 +302,7 @@ arguments::
 
     julia> g(x, y::Float64) = x + 2y
     Warning: New definition g(Any,Float64) is ambiguous with g(Float64,Any).
-             Make sure g(Float64,Float64) is defined first.
+             To fix, define g(Float64,Float64) before the new definition.
 
     julia> g(2.0, 3)
     7.0
