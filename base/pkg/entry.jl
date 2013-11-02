@@ -462,7 +462,7 @@ end
 
 nextbump(v::VersionNumber) = isrewritable(v) ? v : nextpatch(v)
 
-function tag(pkg::String, ver::Union(Symbol,VersionNumber), force::Bool, commit::String="HEAD")
+function tag(pkg::String, ver::Union(Symbol,VersionNumber), force::Bool=false, commit::String="HEAD")
     ispath(pkg,".git") || error("$pkg is not a git repo")
     Git.dirty(dir=pkg) &&
         error("$pkg is dirty – commit or stash changes to tag")
