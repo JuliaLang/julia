@@ -61,6 +61,8 @@ fdtimeout() = FDEvent(false,false,true)
     handle::Ptr{Void}   # On Windows file descriptors are HANDLE's and 64-bit on 64-bit Windows...
 end
 
+@windows_only export WindowsRawSocket
+
 abstract UVPollingWatcher
 
 type PollingFileWatcher <: UVPollingWatcher
