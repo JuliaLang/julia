@@ -24,6 +24,7 @@ function task_local_storage(body::Function, key, val)
     tls = task_local_storage()
     hadkey = haskey(tls,key)
     old = get(tls,key,nothing)
+    tls[key] = val
     try body()
     finally
         hadkey ? (tls[key] = old) : delete!(tls,key)
