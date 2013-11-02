@@ -4987,6 +4987,12 @@ Tasks
 
    Assign a value to a symbol in the current task's task-local storage.
 
+.. function:: task_local_storage(body, symbol, value)
+
+   Call the function ``body`` with a modified task-local storage, in which
+   ``value`` is assigned to ``symbol``; the previous value of ``symbol``, or
+   lack thereof, is restored afterwards. Useful for emulating dynamic scoping.
+
 .. function:: Condition()
 
    Create an edge-triggered event source that tasks can wait for. Tasks
