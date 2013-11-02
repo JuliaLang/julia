@@ -9143,7 +9143,7 @@ popdisplay(d::Display)
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.dir() -> String
+("Package Manager Functions","Base.Pkg","dir","dir() -> String
 
    Returns the absolute path of the package directory. This defaults
    to \"joinpath(home(),\".julia\")\" on all platforms (i.e.
@@ -9154,7 +9154,7 @@ popdisplay(d::Display)
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.dir(names...) -> String
+("Package Manager Functions","Base.Pkg","dir","dir(names...) -> String
 
    Equivalent to \"normpath(Pkg.dir(),names...)\" – i.e. it appends
    path components to the package directory and normalizes the
@@ -9163,7 +9163,7 @@ popdisplay(d::Display)
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.init()
+("Package Manager Functions","Base.Pkg","init","init()
 
    Initialize \"Pkg.dir()\" as a package directory. This will be done
    automatically when the \"JULIA_PKGDIR\" is not set and
@@ -9171,7 +9171,7 @@ popdisplay(d::Display)
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.resolve()
+("Package Manager Functions","Base.Pkg","resolve","resolve()
 
    Determines an optimal, consistent set of package versions to
    install or upgrade to. The optimal set of package versions is based
@@ -9181,7 +9181,7 @@ popdisplay(d::Display)
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.edit()
+("Package Manager Functions","Base.Pkg","edit","edit()
 
    Opens \"Pkg.dir(\"REQUIRE\")\" in the editor specified by the
    \"VISUAL\" or \"EDITOR\" environment variables; when the editor
@@ -9190,7 +9190,7 @@ popdisplay(d::Display)
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.add(pkg, vers...)
+("Package Manager Functions","Base.Pkg","add","add(pkg, vers...)
 
    Add a requirement entry for \"pkg\" to \"Pkg.dir(\"REQUIRE\")\" and
    call \"Pkg.resolve()\". If \"vers\" are given, they must be
@@ -9199,14 +9199,14 @@ popdisplay(d::Display)
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.rm(pkg)
+("Package Manager Functions","Base.Pkg","rm","rm(pkg)
 
    Remove all requirement entries for \"pkg\" from
    \"Pkg.dir(\"REQUIRE\")\" and call \"Pkg.resolve()\".
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.clone(url[, pkg])
+("Package Manager Functions","Base.Pkg","clone","clone(url[, pkg])
 
    Clone a package directly from the git URL \"url\". The package does
    not need to be a registered in \"Pkg.dir(\"METADATA\")\". The
@@ -9215,7 +9215,7 @@ popdisplay(d::Display)
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.clone(pkg)
+("Package Manager Functions","Base.Pkg","clone","clone(pkg)
 
    If \"pkg\" has a URL registered in \"Pkg.dir(\"METADATA\")\", clone
    it from that URL on the default branch. The package does not need
@@ -9223,40 +9223,40 @@ popdisplay(d::Display)
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.available() -> Vector{ASCIIString}
+("Package Manager Functions","Base.Pkg","available","available() -> Vector{ASCIIString}
 
    Returns the names of available packages.
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.available(pkg) -> Vector{VersionNumber}
+("Package Manager Functions","Base.Pkg","available","available(pkg) -> Vector{VersionNumber}
 
    Returns the version numbers available for package \"pkg\".
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.installed() -> Dict{ASCIIString,VersionNumber}
+("Package Manager Functions","Base.Pkg","installed","installed() -> Dict{ASCIIString,VersionNumber}
 
    Returns a dictionary mapping installed package names to the
    installed version number of each package.
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.installed(pkg) -> Nothing | VersionNumber
+("Package Manager Functions","Base.Pkg","installed","installed(pkg) -> Nothing | VersionNumber
 
    If \"pkg\" is installed, return the installed version number,
    otherwise return \"nothing\".
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.status()
+("Package Manager Functions","Base.Pkg","status","status()
 
    Prints out a summary of what packages are installed and what
    version and state they're in.
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.update()
+("Package Manager Functions","Base.Pkg","update","update()
 
    Update package the metadata repo – kept in
    \"Pkg.dir(\"METADATA\")\" – then update any fixed packages that can
@@ -9265,26 +9265,26 @@ popdisplay(d::Display)
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.checkout(pkg[, branch=\"master\"])
+("Package Manager Functions","Base.Pkg","checkout","checkout(pkg[, branch=\"master\"])
 
    Checkout the \"Pkg.dir(pkg)\" repo to the branch \"branch\".
    Defaults to checking out the \"master\" branch.
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.pin(pkg)
+("Package Manager Functions","Base.Pkg","pin","pin(pkg)
 
    Pin \"pkg\" at the current version.
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.pin(pkg, version)
+("Package Manager Functions","Base.Pkg","pin","pin(pkg, version)
 
    Pin \"pkg\" at registered version \"version\".
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.free(pkg)
+("Package Manager Functions","Base.Pkg","free","free(pkg)
 
    Free the package \"pkg\" to be managed by the package manager
    again. It calls \"Pkg.resolve()\" to determine optimal package
@@ -9293,14 +9293,14 @@ popdisplay(d::Display)
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.build()
+("Package Manager Functions","Base.Pkg","build","build()
 
    Run the build scripts for all installed packages in depth-first
    recursive order.
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.build(pkgs...)
+("Package Manager Functions","Base.Pkg","build","build(pkgs...)
 
    Run the build scripts for each package in \"pkgs\" and all of their
    dependencies in depth-first recursive order. This is called
@@ -9309,7 +9309,7 @@ popdisplay(d::Display)
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.generate(pkg, license)
+("Package Manager Functions","Base.Pkg","generate","generate(pkg, license)
 
    Generate a new package named \"pkg\" with one of these license
    keys: \"\"MIT\"\" or \"\"BSD\"\". If you want to make a package
@@ -9320,14 +9320,14 @@ popdisplay(d::Display)
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.register(pkg[, url])
+("Package Manager Functions","Base.Pkg","register","register(pkg[, url])
 
    Register \"pkg\" at the git URL \"url\", defaulting to the
    configured origin URL of the git repo \"Pkg.dir(pkg)\".
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.tag(pkg[, ver[, commit]])
+("Package Manager Functions","Base.Pkg","tag","tag(pkg[, ver[, commit]])
 
    Tag \"commit\" as version \"ver\" of package \"pkg\" and create a
    version entry in \"METADATA\". If not provided, \"commit\" defaults
@@ -9338,7 +9338,7 @@ popdisplay(d::Display)
 
 "),
 
-("Package Manager Functions","Base.Pkg","Pkg","Pkg.publish()
+("Package Manager Functions","Base.Pkg","publish","publish()
 
    For each new package version tagged in \"METADATA\" not already
    published, make sure that the tagged package commits have been
