@@ -14,8 +14,13 @@ function A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number,
     A.n == length(x) || throw(DimensionMismatch(""))
     A.m == length(y) || throw(DimensionMismatch(""))
     for i = 1:A.m; y[i] *= β; end
-    for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
-        y[A.rowval[k]] += α*A.nzval[k]*x[col]
+    nzv = A.nzval
+    rv = A.rowval
+    for col = 1 : A.n
+        αx = α*x[col]
+        @inbounds for k = A.colptr[col] : (A.colptr[col+1]-1)
+            y[rv[k]] += nzv[k]*αx
+        end
     end
     return y
 end
