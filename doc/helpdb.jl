@@ -9146,7 +9146,7 @@ popdisplay(d::Display)
 ("Package Manager Functions","Base.Pkg","dir","dir() -> String
 
    Returns the absolute path of the package directory. This defaults
-   to \"joinpath(home(),\".julia\")\" on all platforms (i.e.
+   to \"joinpath(homedir(),\".julia\")\" on all platforms (i.e.
    \"~/.julia\" in UNIX shell syntax). If the \"JULIA_PKGDIR\"
    environment variable is set, that path is used instead. If
    \"JULIA_PKGDIR\" is a relative path, it is interpreted relative to
