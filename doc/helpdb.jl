@@ -7377,6 +7377,15 @@ popdisplay(d::Display)
 
 "),
 
+("Tasks","Base","task_local_storage","task_local_storage(body, symbol, value)
+
+   Call the function \"body\" with a modified task-local storage, in
+   which \"value\" is assigned to \"symbol\"; the previous value of
+   \"symbol\", or lack thereof, is restored afterwards. Useful for
+   emulating dynamic scoping.
+
+"),
+
 ("Tasks","Base","Condition","Condition()
 
    Create an edge-triggered event source that tasks can wait for.
@@ -9685,13 +9694,7 @@ popdisplay(d::Display)
 
 "),
 
-("Unit and Functional Testing","Base.Test","registerhandler","registerhandler(handler)
-
-   Change the handler function used globally to \"handler\".
-
-"),
-
-("Unit and Functional Testing","Base.Test","withhandler","withhandler(f, handler)
+("Unit and Functional Testing","Base.Test","with_handler","with_handler(f, handler)
 
    Run the function \"f\" using the \"handler\" as the handler.
 
