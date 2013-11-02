@@ -1143,6 +1143,7 @@ export
     basename,
     dirname,
     expanduser,
+    home,
     isabspath,
     isdirpath,
     joinpath,
