@@ -7,7 +7,7 @@
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
     splitdrive(path::String) = ("",path)
-    home() = ENV["HOME"]
+    homedir() = ENV["HOME"]
 end
 @windows_only begin
     const path_separator    = "\\"
@@ -21,7 +21,7 @@ end
         m = match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path)
         bytestring(m.captures[1]), bytestring(m.captures[2])
     end
-    home() = get(ENV,"HOME",joinpath(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
+    homedir() = get(ENV,"HOME",joinpath(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
 end
 
 isabspath(path::String) = ismatch(path_absolute_re, path)
@@ -135,8 +135,8 @@ end
     i = start(path)
     c, i = next(path,i)
     if c != '~' return path end
-    if done(path,i) return home() end
+    if done(path,i) return homedir() end
     c, j = next(path,i)
-    if c == '/' return home()*path[i:end] end
+    if c == '/' return homedir()*path[i:end] end
     error("~user tilde expansion not yet implemented")
 end

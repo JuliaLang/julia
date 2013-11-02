@@ -353,7 +353,7 @@ function load_juliarc()
     else
         try_include(abspath(JULIA_HOME,"..","etc","julia","juliarc.jl"))
     end
-    try_include(abspath(home(),".juliarc.jl"))
+    try_include(abspath(homedir(),".juliarc.jl"))
 end
 
 
