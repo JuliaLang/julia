@@ -1073,6 +1073,7 @@ export
     seek,
     seekend,
     seekstart,
+    sendto,
     serialize,
     skip,
     skipchars,

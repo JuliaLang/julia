@@ -337,6 +337,9 @@ accept(server::TcpServer) = accept(server, TcpSocket())
 accept(server::PipeServer) = accept(server, Pipe())
 
 ##
+sendto(data, host::IPv4, port::Uint16) =
+    ccall(:jl_send_to,Int32,(Ptr{Void},Ptr{Uint8},Uint32,Uint32, Uint16),
+    eventloop(),data,sizeof(data),hton(host.host),hton(port))
 
 bind(sock::TcpServer, addr::InetAddr) = bind(sock,addr.host,addr.port)
 bind(sock::TcpServer, host::IpAddr, port) = bind(sock, InetAddr(host,port))
