@@ -181,6 +181,11 @@ CC = $(CROSS_COMPILE)clang
 CXX = $(CROSS_COMPILE)clang++
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
+ifeq ($(USE_LIBCPP),1)
+CXX += -stdlib=libc++
+else
+CXX += -stdlib=stdlibc++
+endif
 DEBUGFLAGS = -O0 -g -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3
 ifeq ($(OS), Darwin)
