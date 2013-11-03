@@ -246,7 +246,7 @@ end
 
 n = bigfib(1000001)
 @test ndigits(n) == 208988
-@test mod(n,10^15) == 359244926937501
+@test mod(n,big(10)^15) == 359244926937501
 @test div(n,big(10)^208973) == 316047687386689
 
 s = string(n)
