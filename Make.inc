@@ -168,6 +168,9 @@ ifeq ($(USEGCC),1)
 ifeq ($(USE_LIBCPP),1)
 $(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
 endif
+ifeq ($(SANITIZE),1)
+$(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
+endif
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
@@ -213,6 +216,10 @@ JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../$(JL_PRIVATE_LIBDIR)/sys.ji"'
 
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
+endif
+
+ifeq ($(SANITIZE),1)
+CXX += -fsanitize=address
 endif
 
 # ===========================================================================
