@@ -593,7 +593,7 @@ Iterable Collections
 .. function:: issubset(a, b)
 
    Determine whether every element of ``a`` is also in ``b``, using the
-   ``contains`` function.
+   ``in`` function.
 
 
 Indexable Collections
@@ -914,18 +914,13 @@ Strings
 
    Similar to ``search``, but returning the last occurance of the given characters within the given string, searching in reverse from ``start.''.
 
-.. function:: index(string, chars, [start])
+.. function:: searchindex(string, substring, [start])
 
-   Similar to ``search``, but return only the start index at which the characters were found, or 0 if they were not.
+   Similar to ``search``, but return only the start index at which the substring is found, or 0 if it is not.
 
-.. function:: rindex(string, chars, [start])
+.. function:: rsearchindex(string, substring, [start])
 
-   Similar to ``rsearch``, but return only the start index at which the characters were found, or 0 if they were not.
-
-   Similar to ``search``, but return only the start index at which the
-   characters were found, or 0 if they were not.
-
-   Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``. The return value is ``0:-1`` if there is no match.
+   Similar to ``rsearch``, but return only the start index at which the substring is found, or 0 if it is not.
 
 .. function:: contains(haystack, needle)
 
