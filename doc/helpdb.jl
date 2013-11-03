@@ -921,7 +921,7 @@
 ("Iterable Collections","Base","issubset","issubset(a, b)
 
    Determine whether every element of \"a\" is also in \"b\", using
-   the \"contains\" function.
+   the \"in\" function.
 
 "),
 
@@ -1390,29 +1390,17 @@
 
 "),
 
-("Strings","Base","index","index(string, chars[, start])
+("Strings","Base","searchindex","searchindex(string, substring[, start])
 
    Similar to \"search\", but return only the start index at which the
-   characters were found, or 0 if they were not.
+   substring is found, or 0 if it is not.
 
 "),
 
-("Strings","Base","rindex","rindex(string, chars[, start])
+("Strings","Base","rsearchindex","rsearchindex(string, substring[, start])
 
    Similar to \"rsearch\", but return only the start index at which
-   the characters were found, or 0 if they were not.
-
-   Similar to \"search\", but return only the start index at which the
-   characters were found, or 0 if they were not.
-
-   Search for the given characters within the given string. The second
-   argument may be a single character, a vector or a set of
-   characters, a string, or a regular expression (though regular
-   expressions are only allowed on contiguous strings, such as ASCII
-   or UTF-8 strings). The third argument optionally specifies a
-   starting index. The return value is a range of indexes where the
-   matching sequence is found, such that \"s[search(s,x)] == x\". The
-   return value is \"0:-1\" if there is no match.
+   the substring is found, or 0 if it is not.
 
 "),
 
@@ -7803,6 +7791,12 @@ popdisplay(d::Display)
 
    Returns \"true\" if the current user has permission to write to
    \"path\", \"false\" otherwise.
+
+"),
+
+("Filesystem","Base","homedir","homedir() -> String
+
+   Return the current user's home directory.
 
 "),
 
