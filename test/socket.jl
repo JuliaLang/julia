@@ -79,3 +79,12 @@ try
 catch e
     @test typeof(e) == Base.UVError
 end
+
+
+#UDP Test
+server = bindudp(parseip("127.0.0.1"), uint16(2134))
+sendto("Hello UDP world\n", parseip("127.0.0.1"), uint16(2134))
+(data, sname, sport) = recv(server)
+@test ASCIIString(data) == "Hello UDP world\n"
+@test sname == parseip("127.0.0.1")
+close(server)

@@ -1025,6 +1025,7 @@ export
 
 # I/O and events
     accept,
+    bindudp,
     close,
     connect,
     countlines,
@@ -1069,6 +1070,7 @@ export
     readline,
     readlines,
     readuntil,
+    recv,
     redirect_stderr,
     redirect_stdin,
     redirect_stdout,

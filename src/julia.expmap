@@ -257,6 +257,7 @@
     jl_backtrace_from_here;
     jl_lookup_code_address;
     jl_read_sonames;
+    jl_recv;
     rec_backtrace;
     profile_init;
     profile_get_data;
@@ -330,6 +331,7 @@
     jl_tcp_bind6;
     jl_tcp_init;
     jl_test;
+    jl_udp_bind;
     jl_poll_start;
     jl_fs_poll_start;
     jl_fs_event_init;

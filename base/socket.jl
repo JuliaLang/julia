@@ -313,6 +313,39 @@ end
 #    closenotify::Condition
 #end
 
+type UdpServer <: UVServer
+    handle::Ptr{Void}
+    status::Int
+    ipv6::Bool
+    recvcb::Callback
+    recvnotify::Condition
+    closecb::Callback
+    closenotify::Condition
+    buffer::IOBuffer
+    sourceAddr::Union(IPv4,IPv6,Nothing)
+    sourcePort::Uint16
+    UdpServer(handle) = new(
+        handle,
+        StatusUninit,
+        false,
+        false,Condition(),
+        false,Condition(),
+        PipeBuffer(), nothing,0)
+end
+function UdpServer()
+    this = UdpServer(c_malloc(_sizeof_uv_udp))
+    associate_julia_struct(this.handle, this)
+    err = ccall(:uv_udp_init,Cint,(Ptr{Void},Ptr{Void}),
+                  eventloop(),this.handle)
+    if err != 0 
+        c_free(this.handle)
+        this.handle = C_NULL
+        error(UVError("Failed to create udp server",err))
+    end
+    this.status = StatusInit
+    this
+end
+
 
 show(io::IO,sock::TcpSocket) = print(io,"TcpSocket(",uv_status_string(sock),", ",
     nb_available(sock.buffer)," bytes waiting)")
@@ -321,6 +354,8 @@ show(io::IO,sock::TcpServer) = print(io,"TcpServer(",uv_status_string(sock),")")
 
 #show(io::IO,sock::UdpSocket) = print(io,"UdpSocket(",uv_status_string(sock),", ",
 #    nb_available(sock.buffer)," bytes waiting)")
+
+show(io::IO,sock::UdpServer) = print(io,"UdpServer(",uv_status_string(sock),")")
 
 ## VARIOUS METHODS TO BE MOVED TO BETTER LOCATION
 
@@ -341,6 +376,9 @@ sendto(data, host::IPv4, port::Uint16) =
 
 bind(sock::TcpServer, addr::InetAddr) = bind(sock,addr.host,addr.port)
 bind(sock::TcpServer, host::IpAddr, port) = bind(sock, InetAddr(host,port))
+
+bind(sock::UdpServer, addr::InetAddr) = bind(sock,addr.host,addr.port)
+bind(sock::UdpServer, host::IpAddr, port) = bind(sock, InetAddr(host,port))
 
 function bind(sock::TcpServer, host::IPv4, port::Uint16)
     @assert sock.status == StatusInit
@@ -370,6 +408,44 @@ function bind(sock::TcpServer, host::IPv6, port::Uint16)
     end
     sock.status = StatusOpen
     true
+end
+
+function bind(sock::UdpServer, host::IPv4, port::Uint16)
+    @assert sock.status == StatusInit
+    err = ccall(:jl_udp_bind, Int32, (Ptr{Void}, Uint16, Uint32),
+	        sock.handle, hton(port), hton(host.host))
+    sock.ipv6 = false
+    if err < 0
+        if err != UV_EADDRINUSE && err != UV_EACCES
+            error(UVError("bind",err))
+        else
+            return false
+        end
+    end
+    sock.status = StatusOpen
+    true
+end
+
+function bind(sock::UdpServer, host::IPv6, port::Uint16)
+    @assert sock.status == StatusInit
+    err = ccall(:jl_udp_bind6, Int32, (Ptr{Void}, Uint16, Ptr{Uint128}),
+            sock.handle, hton(port), &hton(host.host))
+    sock.ipv6 = true
+    if err < 0
+        if err != UV_EADDRINUSE && err != UV_EACCES
+            error(UVError("bind",err))
+        else
+            return false
+        end
+    end
+    sock.status = StatusOpen
+    true
+end
+
+function bindudp(host::Union(IPv4,IPv6), port::Uint16)
+    server = UdpServer()
+    bind(server, host, port)
+    server
 end
 
 callback_dict = ObjectIdDict()
@@ -534,4 +610,57 @@ function listenany(default_port)
             error("no ports available")
         end
     end
+end
+
+
+# Receive
+function recv(server::UdpServer)
+    ccall(:jl_recv, Int, (Ptr{Void}, Char), server.handle, server.ipv6)
+    wait(server.recvnotify)
+    (readbytes(server.buffer), server.sourceAddr, server.sourcePort)
+end
+
+function _uv_hook_recvcb(server::UdpServer, nread::Int, base::Ptr{Void},
+                         len::Int32, port::Int32, addr::Int32)
+    if nread < 0
+        if nread != UV_EOF
+            # This is a fatal connectin error. Shutdown requests as per the usual 
+            # close function won't work and libuv will fail with an assertion failure
+            ccall(:jl_forceclose_uv,Void,(Ptr{Void},),server.handle)
+            notify_error(server.recvnotify, UVError("recvcb",nread))
+        else
+            close(server)
+            notify(server.recvnotify)
+        end
+    else
+        notify_filled(server.buffer, nread, base, len)
+        server.sourceAddr = IPv4(hton(addr))
+        server.sourcePort = hton(port)
+        notify(server.recvnotify)
+    end
+end
+function _uv_hook_recvcb(server::UdpServer, nread::Int, base::Ptr{Void},
+                         len::Int32, port::Int32, addr::Int64)
+    if nread < 0
+        if nread != UV_EOF
+            # This is a fatal connectin error. Shutdown requests as per the usual 
+            # close function won't work and libuv will fail with an assertion failure
+            ccall(:jl_forceclose_uv,Void,(Ptr{Void},),server.handle)
+            notify_error(server.recvnotify, UVError("recvcb",nread))
+        else
+            close(server)
+            notify(server.recvnotify)
+        end
+    else
+        notify_filled(server.buffer, nread, base, len)
+        server.sourceAddr = IPv6(hton(addr))
+        server.sourcePort = hton(port)
+        notify(server.recvnotify)
+    end
+end
+
+function _uv_hook_alloc_buf(server::UdpServer, recommended_size::Int32)
+    (buf,size) = alloc_request(server.buffer, recommended_size)
+    @assert size>0 # because libuv requires this (TODO: possibly stop reading too if it fails)
+    (buf,int32(size))
 end

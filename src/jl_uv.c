@@ -57,7 +57,8 @@ extern "C" {
     XX(isopen) \
     XX(fseventscb) \
     XX(writecb) \
-    XX(writecb_task)
+    XX(writecb_task) \
+    XX(recvcb)
 //TODO add UDP and other missing callbacks
 
 #define JULIA_HOOK_(m,hook)  ((jl_function_t*)jl_get_global(m, jl_symbol("_uv_hook_" #hook)))
@@ -151,6 +152,37 @@ DLLEXPORT void jl_uv_return_spawn(uv_process_t *p, int exit_status, int term_sig
 {
     JULIA_CB(return_spawn,p->data,2,CB_INT32,exit_status,CB_INT32,term_signal);
     (void)ret;
+}
+
+//Add recv callback
+DLLEXPORT void jl_uv_recv4cb(uv_udp_t *handle, ssize_t nread, uv_buf_t buf, 
+        struct sockaddr *addr_, unsigned flags)
+{
+    struct sockaddr_in *addr = (struct sockaddr_in *)addr_;
+
+    if(flags&0x2)
+        jl_error("jl_uv_recvcb: UDP packet truncated");
+
+    JULIA_CB(recvcb,handle->data,5,CB_INT,nread,CB_PTR,(buf.base),CB_INT32,buf.len,
+             CB_INT32, addr->sin_port, CB_INT32, addr->sin_addr);
+    (void) ret;
+
+    uv_udp_recv_stop(handle);
+}
+
+DLLEXPORT void jl_uv_recv6cb(uv_udp_t *handle, ssize_t nread, uv_buf_t buf, 
+        struct sockaddr *addr_, unsigned flags)
+{
+    struct sockaddr_in6 *addr = (struct sockaddr_in6 *)addr_;
+
+    if(flags&0x2)
+        jl_error("jl_uv_recvcb: UDP packet truncated");
+
+    JULIA_CB(recvcb,handle->data,5,CB_INT,nread,CB_PTR,(buf.base),CB_INT32,buf.len,
+             CB_INT32, addr->sin6_port, CB_INT64, addr->sin6_addr);
+    (void)ret;
+    
+    uv_udp_recv_stop(handle);
 }
 
 DLLEXPORT void jl_uv_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
@@ -634,6 +666,24 @@ DLLEXPORT int jl_getpid()
 }
 
 //NOTE: These function expects port/host to be in network byte-order (Big Endian)
+DLLEXPORT int jl_udp_bind(uv_udp_t* handle, uint16_t port, uint32_t host)
+{
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(struct sockaddr_in));
+    addr.sin_port = port;
+    addr.sin_addr.s_addr = host;
+    addr.sin_family = AF_INET;
+    return uv_udp_bind(handle, addr, 0);
+}
+DLLEXPORT int jl_udp_bind6(uv_udp_t* handle, uint16_t port, void *host)
+{
+    struct sockaddr_in6 addr;
+    memset(&addr, 0, sizeof(struct sockaddr_in6));
+    addr.sin6_port = port;
+    memcpy(&addr.sin6_addr, host, 16);
+    addr.sin6_family = AF_INET6;
+    return uv_udp_bind6(handle, addr, 0);
+}
 DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host)
 {
     struct sockaddr_in addr;
@@ -791,6 +841,11 @@ DLLEXPORT int jl_send_to(uv_loop_t *loop, char *value, uint32_t size, uint32_t h
 
     uv_buf_t buf[]  = {{.base = value,.len=size}};
     return uv_udp_send(req, handle, buf, 1, addr, &jl_uv_send_tocb);
+}
+
+DLLEXPORT int jl_recv(uv_udp_t *handle, char ipv6)
+{
+    return uv_udp_recv_start(handle, jl_uv_alloc_buf, ipv6 ? jl_uv_recv6cb : jl_uv_recv4cb);
 }
 
 DLLEXPORT char *jl_ios_buf_base(ios_t *ios)
