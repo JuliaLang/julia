@@ -42,6 +42,8 @@ function done(z::Zip, state)
     return false
 end
 
+eltype(z::Zip) = tuple(map(eltype,z.itrs)...)
+
 # filter
 
 type Filter{I}
@@ -78,6 +80,8 @@ end
 
 done(f::Filter, s) = done(f.itr,s)
 
+eltype(f::Filter) = eltype(f.itr)
+
 # Rest -- iterate starting at the given state
 immutable Rest{I,S}
     itr::I
@@ -89,5 +93,6 @@ start(i::Rest) = i.st
 next(i::Rest, st) = next(i.itr, st)
 done(i::Rest, st) = done(i.itr, st)
 
+eltype(r::Rest) = eltype(r.itr)
 
 # TODO: a general "reversible" interface
