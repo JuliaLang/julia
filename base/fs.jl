@@ -20,6 +20,8 @@ export File,
        # close,
        write,
        unlink,
+       rename,
+       sendfile,
        JL_O_WRONLY,
        JL_O_RDONLY,
        JL_O_RDWR,
@@ -100,6 +102,51 @@ function unlink(f::File)
     end
     unlink(f.path)
     f
+end
+
+# For move command
+function rename(src::String, dst::String)
+    err = ccall(:jl_fs_rename, Int32, (Ptr{Uint8}, Ptr{Uint8}), bytestring(src),
+                bytestring(dst))
+
+    # on error, default to cp && rm
+    if err < 0
+        # first copy
+        err = sendfile(src, dst)
+        uv_error("sendfile when moving file", err)
+        
+        # then rm
+        err = unlink(src)
+        uv_error("removing when moving file", err)
+    end
+end
+
+# For copy command
+function sendfile(src::String, dst::String)
+    flags = JL_O_RDONLY
+    src_file = open(src, flags)
+    if !src_file.open
+        error("Src file is not open")
+    end
+
+    flags = JL_O_CREAT | JL_O_RDWR
+    mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH | S_IWOTH
+    dst_file = open(dst, flags, mode)
+    if !dst_file.open
+        error("Dst file is not open")
+    end
+
+    src_stat = stat(src_file)
+    err = ccall(:jl_fs_sendfile, Int32, (Int32, Int32, Int64, Csize_t),
+                fd(src_file), fd(dst_file), 0, src_stat.size)
+    uv_error("sendfile", err)
+
+    if src_file.open
+        close(src_file)
+    end
+    if dst_file.open
+        close(dst_file)
+    end
 end
 
 function write(f::File, buf::Ptr{Uint8}, len::Integer, offset::Integer=-1)

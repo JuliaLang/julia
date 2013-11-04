@@ -62,8 +62,8 @@ end
 # The following use Unix command line facilites
 
 rm(path::String) = FS.unlink(path)
-cp(src::String, dst::String) = run(`cp $src $dst`)
-mv(src::String, dst::String) = run(`mv $src $dst`)
+cp(src::String, dst::String) = FS.sendfile(src, dst)
+mv(src::String, dst::String) = FS.rename(src, dst)
 touch(path::String) = run(`touch $path`)
 
 # Obtain a temporary filename.
