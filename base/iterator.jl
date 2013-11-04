@@ -12,6 +12,8 @@ function next(e::Enumerate, state)
 end
 done(e::Enumerate, state) = done(e.itr, state[2])
 
+eltype(e::Enumerate) = (Int, eltype(e.itr))
+
 # zip
 
 immutable Zip{I<:Tuple}
@@ -38,6 +40,8 @@ function done(z::Zip, state)
     return false
 end
 
+eltype(z::Zip) = map(eltype, z.itrs)
+
 immutable Zip2{I1, I2}
     a::I1
     b::I2
@@ -49,6 +53,8 @@ start(z::Zip2) = (start(z.a), start(z.b))
 next(z::Zip2, st) = ((next(z.a,st[1])[1], next(z.b,st[2])[1]),
                      (next(z.a,st[1])[2], next(z.b,st[2])[2]))
 done(z::Zip2, st) = done(z.a,st[1]) | done(z.b,st[2])
+
+eltype(z::Zip2) = (eltype(z.a), eltype(z.b))
 
 # filter
 
@@ -86,6 +92,8 @@ end
 
 done(f::Filter, s) = done(f.itr,s)
 
+eltype(f::Filter) = eltype(f.itr)
+
 # Rest -- iterate starting at the given state
 immutable Rest{I,S}
     itr::I
@@ -97,5 +105,6 @@ start(i::Rest) = i.st
 next(i::Rest, st) = next(i.itr, st)
 done(i::Rest, st) = done(i.itr, st)
 
+eltype(r::Rest) = eltype(r.itr)
 
 # TODO: a general "reversible" interface
