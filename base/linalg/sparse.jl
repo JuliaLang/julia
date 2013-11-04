@@ -32,8 +32,12 @@ end
 function (*){T1,T2}(X::AbstractVector{T1}, A::SparseMatrixCSC{T2})
     if A.m != length(X); error("mismatched dimensions"); end
     Y = zeros(promote_type(T1,T2), A.n)
-    for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
-        Y[col] += X[A.rowval[k]] * A.nzval[k]
+    nzv = A.nzval
+    rv = A.rowval
+    for col = 1 : A.n
+        for k = A.colptr[col] : (A.colptr[col+1]-1)
+            Y[col] += X[rv[k]] * nzv[k]
+        end
     end
     return Y
 end
@@ -43,10 +47,14 @@ function (*){TvA,TiA,TX}(A::SparseMatrixCSC{TvA,TiA}, X::AbstractMatrix{TX})
     mX, nX = size(X)
     if A.n != mX; error("mismatched dimensions"); end
     Y = zeros(promote_type(TvA,TX), A.m, nX)
+    nzv = A.nzval
+    rv = A.rowval
+    colptr = A.colptr
     for multivec_col = 1:nX
         for col = 1 : A.n
-            for k = A.colptr[col] : (A.colptr[col+1]-1)
-                Y[A.rowval[k], multivec_col] += A.nzval[k] * X[col, multivec_col]
+            Xc = X[col, multivec_col]
+            @inbounds for k = colptr[col] : (colptr[col+1]-1)
+                Y[rv[k], multivec_col] += nzv[k] * Xc
             end
         end
     end
