@@ -1528,9 +1528,14 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
                     vi[2] = get(decls, vi[1], vi[2])
                 end
             end
-            na = length(a.args[1])
-            li.ast, _ = typeinf(li, ntuple(na+1, i->(i>na ? (Tuple)[1] : Any)),
-                                li.sparams, li, false)
+            # NOTE: this is disabled, as it leads to inlining too early.
+            # See issue #4688. We should wait until inner functions are called
+            # to optimize them; this will be done by the method cache or
+            # builtins.c:jl_trampoline. However if jl_trampoline is changed then
+            # this code will need to be restored.
+            #na = length(a.args[1])
+            #li.ast, _ = typeinf(li, ntuple(na+1, i->(i>na ? (Tuple)[1] : Any)),
+            #                    li.sparams, li, false)
         end
     end
 

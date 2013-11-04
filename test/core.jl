@@ -1099,3 +1099,14 @@ f4479(::Real,c) = 1
 f4479(::Int, ::Int, ::Bool) = 2
 f4479(::Int, x, a...) = 0
 @test f4479(1,1,true) == 2
+
+# issue #4688
+a4688(y) = "should be unreachable by calling b"
+b4688(y) = "not an Int"
+begin
+    a4688(y::Int) = "an Int"
+    let x = true
+        b4688(y::Int) = x == true ? a4688(y) : a4688(y)
+    end
+end
+@test b4688(1) == "an Int"
