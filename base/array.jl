@@ -1577,12 +1577,11 @@ ctranspose{T<:Number}(x::StridedMatrix{T}) = [ conj(x[j,i]) for i=1:size(x,2), j
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
 
-function intersect(vs...)
-    args_type = promote_type([eltype(v) for v in vs]...)
-    ret = Array(args_type,0)
-    for v_elem in vs[1]
+function intersect(v1, vs...)
+    ret = Array(eltype(v1),0)
+    for v_elem in v1
         inall = true
-        for i = 2:length(vs)
+        for i = 1:length(vs)
             if !in(v_elem, vs[i])
                 inall=false; break
             end
@@ -1593,9 +1592,12 @@ function intersect(vs...)
     end
     ret
 end
+
+promote_eltype() = None
+promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
+
 function union(vs...)
-    args_type = promote_type([eltype(v) for v in vs]...)
-    ret = Array(args_type,0)
+    ret = Array(promote_eltype(vs...),0)
     seen = Set()
     for v in vs
         for v_elem in v
