@@ -32,6 +32,8 @@ endif
 
 dirty = $(shell [ -z "$(shell git status --porcelain 2>/dev/null)" ] && echo "" || echo "*" )
 
+TAGGED_RELEASE_BANNER = ""
+
 
 all: pcre_h.jl errno_h.jl build_h.jl.phony fenv_constants.jl file_constants.jl uv_constants.jl
 
@@ -80,6 +82,7 @@ endif
 	@echo "    tagged_commit::Bool" >> $@
 	@echo "    fork_master_distance::Int" >> $@
 	@echo "    fork_master_timestamp::Int64" >> $@
+	@echo "    TAGGED_RELEASE_BANNER::String" >> $@
 	@echo "end" >> $@
 
 
@@ -94,6 +97,7 @@ endif
 			$(tagged_commit), \
 			$(fork_master_distance), \
 			$(fork_master_timestamp), \
+			'\"$(TAGGED_RELEASE_BANNER)\"' \
 			)" | xargs >> $@
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,

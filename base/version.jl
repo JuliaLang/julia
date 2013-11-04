@@ -190,7 +190,10 @@ catch e
     println("while creating Base.VERSION, ignoring error $e")
     global const VERSION = VersionNumber(0)
 end
-if !BUILD_INFO.tagged_commit
+
+if BUILD_INFO.tagged_commit
+    global const commit_string = BUILD_INFO.TAGGED_RELEASE_BANNER
+else
     local days = int(floor((ccall(:clock_now, Float64, ()) - BUILD_INFO.fork_master_timestamp) / (60 * 60 * 24)))
     if BUILD_INFO.fork_master_distance == 0
         global const commit_string = "Commit $(BUILD_INFO.commit_short) ($(days) days old master)"
