@@ -61,6 +61,13 @@ a116[p, p] = reshape(1:9, 3, 3)
 s116[p, p] = reshape(1:9, 3, 3)
 @test a116 == s116
 
+# check matrix-vector multiplication
+for i = 1:5
+    a = sprand(10, 5, 0.5)
+    b = rand(5)
+    @test maximum(abs(a*b - dense(a)*b)) < 100*eps()
+end
+
 # check matrix multiplication
 for i = 1:5
     a = sprand(10, 5, 0.5)
