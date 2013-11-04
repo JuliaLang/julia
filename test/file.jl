@@ -184,6 +184,24 @@ emptyf = open(emptyfile)
 close(emptyf)
 rm(emptyfile)
 
+# Test copy file
+afile = joinpath(dir, "a.txt")
+touch(afile)
+af = open(afile, "r+")
+write(af, "This is indeed a test")
+
+bfile = joinpath(dir, "b.txt")
+cp(afile, bfile)
+
+a_stat = stat(afile)
+b_stat = stat(bfile)
+@test a_stat.mode == b_stat.mode
+@test a_stat.size == b_stat.size
+
+close(af)
+rm(afile)
+rm(bfile)
+
 ############
 # Clean up #
 ############
