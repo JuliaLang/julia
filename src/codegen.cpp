@@ -2614,13 +2614,19 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     if (jl_is_linenode(stmt)) {
         lno = jl_linenode_line(stmt);
     }
-    else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
-        lno = jl_unbox_long(jl_exprarg(stmt, 0));
+    else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym &&
+             jl_array_dim0(((jl_expr_t*)stmt)->args) > 0) {
+        jl_value_t *a1 = jl_exprarg(stmt,0);
+        if (jl_is_long(a1))
+            lno = jl_unbox_long(a1);
         if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 1) {
-            assert(jl_is_symbol(jl_exprarg(stmt, 1)));
-            filename = ((jl_sym_t*)jl_exprarg(stmt, 1))->name;
+            a1 = jl_exprarg(stmt,1);
+            if (jl_is_symbol(a1))
+                filename = ((jl_sym_t*)a1)->name;
             if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 2) {
-                dbgFuncName = ((jl_sym_t*)jl_exprarg(stmt, 2))->name;
+                a1 = jl_exprarg(stmt,2);
+                if (jl_is_symbol(a1))
+                    dbgFuncName = ((jl_sym_t*)a1)->name;
             }
         }
     }

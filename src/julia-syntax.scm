@@ -69,6 +69,11 @@
 (define (effect-free? e)
   (or (not (pair? e)) (sym-dot? e) (quoted? e) (equal? e '(null))))
 
+(define (undot-name e)
+  (if (symbol? e)
+      e
+      (cadr (caddr e))))
+
 ; make an expression safe for multiple evaluation
 ; for example a[f(x)] => (temp=f(x); a[temp])
 ; retuns a pair (expr . assignments)
@@ -435,9 +440,7 @@
 	  (map (lambda (s) (if (symbol? s) s (cadr s))) keyword-sparams)))
     (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy)) (rkw (gensy))
 	  (mangled (symbol (string "__"
-				   (if (symbol? name)
-				       name
-				       (cadr (caddr name)))
+				   (undot-name name)
 				   "#"
 				   (string.sub (string (gensym)) 1)
 				   "__")))
@@ -449,7 +452,7 @@
 	  `(,@vars ,@restkw ,@pargl ,@vararg)
 	  `(block
 	    ,@(if (null? lno) '()
-		  (list (append (car lno) (list name))))
+		  (list (append (car lno) (list (undot-name name)))))
 	    ,@stmts))
 
 	;; call with no keyword args
