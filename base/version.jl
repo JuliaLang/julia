@@ -193,6 +193,8 @@ end
 
 if BUILD_INFO.tagged_commit
     global const commit_string = BUILD_INFO.TAGGED_RELEASE_BANNER
+elseif BUILD_INFO.commit == ""
+    global const commit_string = "Unknown commit"
 else
     local days = int(floor((ccall(:clock_now, Float64, ()) - BUILD_INFO.fork_master_timestamp) / (60 * 60 * 24)))
     if BUILD_INFO.fork_master_distance == 0
@@ -201,6 +203,7 @@ else
         global const commit_string = "$(BUILD_INFO.branch)/$(BUILD_INFO.commit_short) (fork: $(BUILD_INFO.fork_master_distance) commits, $(days) days)"
     end
 end
+commit_date = BUILD_INFO.date_string != "" ? " ($(BUILD_INFO.date_string))": ""
 
 const banner_plain =
 """
@@ -209,7 +212,7 @@ const banner_plain =
   (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
    _ _   _| |_  __ _   |  Type \"help()\" to list help topics
   | | | | | | |/ _` |  |
-  | | |_| | | | (_| |  |  Version $VERSION ($(BUILD_INFO.date_string))
+  | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
  _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
 |__/                   |  $(Sys.MACHINE)
 
@@ -226,7 +229,7 @@ const banner_color =
   $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: http://docs.julialang.org
    $(jl)_ _   _| |_  __ _$(tx)   |  Type \"help()\" to list help topics
   $(jl)| | | | | | |/ _` |$(tx)  |
-  $(jl)| | |_| | | | (_| |$(tx)  |  Version $VERSION ($(BUILD_INFO.date_string))
+  $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
  $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
 $(jl)|__/$(tx)                   |  $(Sys.MACHINE)
 

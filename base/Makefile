@@ -15,9 +15,9 @@ prerelease = $(shell [ -z "$(last_tag)" -o "$(last_tag)" = "v$(version_string)" 
 
 origin = $(shell [ -d ../.git/refs/remotes/origin ] && echo "origin/")
 
-build_number = $(shell git rev-list --count HEAD ^"$(last_tag)" 2>/dev/null)
-fork_master_distance = $(shell git rev-list --count HEAD ^"$(origin)master" 2>/dev/null)
-fork_master_timestamp = $(shell git show -s $$(git merge-base HEAD $(origin)master 2>/dev/null) --format=format:"%ct" 2>/dev/null)
+build_number = $(shell git rev-list --count HEAD ^"$(last_tag)" 2>/dev/null || echo 0)
+fork_master_distance = $(shell git rev-list --count HEAD ^"$(origin)master" 2>/dev/null || echo 0)
+fork_master_timestamp = $(shell git show -s $$(git merge-base HEAD $(origin)master 2>/dev/null) --format=format:"%ct" 2>/dev/null || echo 0)
 
 git_time = $(shell git log -1 --pretty=format:%ct 2>/dev/null)
 ifneq ($(git_time), )
