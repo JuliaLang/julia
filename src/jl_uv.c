@@ -815,6 +815,11 @@ DLLEXPORT uv_handle_type jl_uv_handle_type(uv_handle_t *handle)
     return handle->type;
 }
 
+DLLEXPORT uv_file jl_uv_file_handle(jl_uv_file_t *f)
+{
+    return f->file;
+}
+
 DLLEXPORT void jl_uv_req_set_data(uv_req_t *req, void *data)
 {
     req->data = data;
