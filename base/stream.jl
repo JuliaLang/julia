@@ -208,10 +208,10 @@ associate_julia_struct(handle::Ptr{Void},jlobj::ANY) =
 disassociate_julia_struct(handle::Ptr{Void}) = 
     ccall(:jl_uv_disassociate_julia_struct,Void,(Ptr{Void},),handle)
 
-function init_stdio(handle,fd)
+function init_stdio(handle)
     t = ccall(:jl_uv_handle_type,Int32,(Ptr{Void},),handle)
     if t == UV_FILE
-        return fdio(fd)
+        return fdio(ccall(:jl_uv_file_handle,Int32,(Ptr{Void},),handle))
     else
         if t == UV_TTY
             ret = TTY(handle)
@@ -236,9 +236,9 @@ function reinit_stdio()
     global uv_jl_writecb = cglobal(:jl_uv_writecb)
     global uv_jl_writecb_task = cglobal(:jl_uv_writecb_task)
     global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Void}, ())
-    global STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()),0)
-    global STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()),1)
-    global STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()),2)
+    global STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()))
+    global STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()))
+    global STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()))
     reinit_displays() # since Multimedia.displays uses STDOUT as fallback
 end
 
