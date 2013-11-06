@@ -7,28 +7,20 @@ immutable Quaternion{T<:Real} <: Number
     q3::T
 end
 
-function Quaternion{A<:Real,B<:Real,C<:Real,D<:Real}(q0::A,q1::B,q2::C,q3::D)
-  T = promote_type(A,B,C,D)
-  Quaternion{T}(convert(T,q0), convert(T,q1), convert(T,q2), convert(T,q3))
-end
+Quaternion{A<:Real,B<:Real,C<:Real,D<:Real}(q0::A,q1::B,q2::C,q3::D) =
+    Quaternion(promote(q0,q1,q2,q3)...)
 
 convert{T}(::Type{Quaternion{T}}, x::Real) =
     Quaternion(convert(T,x), convert(T,0), convert(T,0), convert(T,0))
-
 convert{T}(::Type{Quaternion{T}}, z::Complex) =
     Quaternion(convert(T,real(z)), convert(T,imag(z)), convert(T,0), convert(T,0))
-
 convert{T}(::Type{Quaternion{T}}, z::Quaternion) =
-    Quaternion(convert(T,z.q0), convert(T,z.q1),
-               convert(T,z.q2), convert(T,z.q3))
+    Quaternion(convert(T,z.q0), convert(T,z.q1), convert(T,z.q2), convert(T,z.q3))
 
-promote_rule{T,S}(::Type{Complex{T}}, ::Type{Quaternion{S}}) =
-    Quaternion{promote_type(T,S)}
+promote_rule{T,S}(::Type{Complex{T}}, ::Type{Quaternion{S}}) = Quaternion{promote_type(T,S)}
 promote_rule{S}(::Type{Bool}, ::Type{Quaternion{S}}) = Quaternion{S}
-promote_rule{T<:Real,S}(::Type{T}, ::Type{Quaternion{S}}) =
-    Quaternion{promote_type(T,S)}
-promote_rule{T,S}(::Type{Quaternion{T}}, ::Type{Quaternion{S}}) =
-    Quaternion{promote_type(T,S)}
+promote_rule{T<:Real,S}(::Type{T}, ::Type{Quaternion{S}}) = Quaternion{promote_type(T,S)}
+promote_rule{T,S}(::Type{Quaternion{T}}, ::Type{Quaternion{S}}) = Quaternion{promote_type(T,S)}
 
 function show(io::IO, z::Quaternion)
     show(io, z.q0)
