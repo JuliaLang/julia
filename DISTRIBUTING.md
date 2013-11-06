@@ -16,6 +16,14 @@ GPL licensed, as various dependent libraries such as `FFTW`, `Rmath`,
 `SuiteSparse`, and `git` are GPL licensed. We do hope to have a
 non-GPL distribution of Julia in the future.
 
+When compiling a tagged release in the git repository, we don't display the
+branch/commit hash info in the splash screen. This line can therefore, in less
+than 45 characters, be used to describe the release. To set this line you have
+to create a Make.user file containing:
+
+    override TAGGED_RELEASE_BANNER = "my-package-repository build"
+
+
 Linux
 -----
 
