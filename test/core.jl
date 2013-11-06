@@ -1118,3 +1118,11 @@ end
 import Base: promote_rule
 promote_rule{T,T2,S,S2}(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) = SIQ{promote_type(T,S)}
 @test_throws promote_type(SIQ{Int},SIQ{Float64})
+
+# issue #4675
+f4675(x::StridedArray...) = 1
+f4675{T}(x::StridedArray{T}...) = 2
+@test f4675(zeros(50,50), zeros(50,50)) == 2
+g4675{T}(x::StridedArray{T}...) = 2
+g4675(x::StridedArray...) = 1
+@test g4675(zeros(50,50), zeros(50,50)) == 2
