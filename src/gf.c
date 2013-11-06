@@ -953,7 +953,8 @@ static int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv)
 int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
 {
     int msp = jl_type_morespecific(a,b,0);
-    if (jl_has_typevars(b)) {
+    int btv = jl_has_typevars(b);
+    if (btv) {
         if (jl_type_match_morespecific(a,b) == (jl_value_t*)jl_false) {
             if (jl_has_typevars(a))
                 return 0;
@@ -974,9 +975,10 @@ int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
         int nmsp = jl_type_morespecific(b,a,0);
         if (nmsp && msp)
             return 1;
-        if (jl_type_match_morespecific(b,a) != (jl_value_t*)jl_false) {
+        if (!btv && jl_types_equal(a,b))
+            return 1;
+        if (jl_type_match_morespecific(b,a) != (jl_value_t*)jl_false)
             return 0;
-        }
     }
     return msp;
 }
