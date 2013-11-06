@@ -39,6 +39,24 @@ mv(file, newfile)
 @test isfile(newfile) == true
 file = newfile
 
+# Test renaming directories
+a_tmpdir = mktempdir()
+b_tmpdir = joinpath(dir, "b_tmpdir")
+
+# grab a_tmpdir's file info before renaming
+a_stat = stat(a_tmpdir)
+
+# rename, then make sure b_tmpdir does exist and a_tmpdir doesn't
+mv(a_tmpdir, b_tmpdir)
+@test isdir(b_tmpdir) == true
+@test isdir(a_tmpdir) == false
+
+# get b_tmpdir's file info and compare with a_tmpdir
+b_stat = stat(b_tmpdir)
+@test Base.samefile(a_stat, b_stat) == true
+
+rmdir(b_tmpdir)
+
 #######################################################################
 # This section tests file watchers.                                   #
 #######################################################################
