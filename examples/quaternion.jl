@@ -1,4 +1,4 @@
-import Base: promote_rule, convert
+import Base: convert, promote_rule, show, real, imag, conj, abs, abs2, inv, +, -, /, *
 
 immutable Quaternion{T<:Real} <: Number
     q0::T
