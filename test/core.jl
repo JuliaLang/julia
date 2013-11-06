@@ -1110,3 +1110,11 @@ begin
     end
 end
 @test b4688(1) == "an Int"
+
+# issue #4731
+type SIQ{A,B} <: Number
+    x::A
+end
+import Base: promote_rule
+promote_rule{T,T2,S,S2}(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) = SIQ{promote_type(T,S)}
+@test_throws promote_type(SIQ{Int},SIQ{Float64})
