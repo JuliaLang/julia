@@ -1188,6 +1188,7 @@ export
     pwd,
     rm,
     rmdir,
+    samefile,
     stat,
     tempdir,
     tempname,

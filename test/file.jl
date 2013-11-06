@@ -53,7 +53,7 @@ mv(a_tmpdir, b_tmpdir)
 
 # get b_tmpdir's file info and compare with a_tmpdir
 b_stat = stat(b_tmpdir)
-@test Base.samefile(a_stat, b_stat) == true
+@test samefile(a_stat, b_stat) == true
 
 rmdir(b_tmpdir)
 
