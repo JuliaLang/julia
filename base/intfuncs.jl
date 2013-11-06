@@ -175,7 +175,7 @@ ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
 const ndigits_max_mul = WORD_SIZE==32 ? 69000000 : 290000000000000000
 
-function ndigits0z(n::Unsigned, b::Integer)
+function ndigits0z(n::Unsigned, b::Int)
     b == 2  && return (sizeof(n)<<3-leading_zeros(n))
     b == 8  && return div((sizeof(n)<<3)-leading_zeros(n)+2,3)
     b == 16 && return (sizeof(n)<<1)-(leading_zeros(n)>>2)
@@ -202,7 +202,7 @@ ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
 
-function bin(x::Unsigned, pad::Integer, neg::Bool)
+function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
     a = Array(Uint8,i)
     while i > neg
@@ -214,7 +214,7 @@ function bin(x::Unsigned, pad::Integer, neg::Bool)
     ASCIIString(a)
 end
 
-function oct(x::Unsigned, pad::Integer, neg::Bool)
+function oct(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
     a = Array(Uint8,i)
     while i > neg
@@ -226,7 +226,7 @@ function oct(x::Unsigned, pad::Integer, neg::Bool)
     ASCIIString(a)
 end
 
-function dec(x::Unsigned, pad::Integer, neg::Bool)
+function dec(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,ndigits0z(x))
     a = Array(Uint8,i)
     while i > neg
@@ -240,7 +240,7 @@ end
 
 digit(x::Integer) = '0'+x+39*(x>9)
 
-function hex(x::Unsigned, pad::Integer, neg::Bool)
+function hex(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
     a = Array(Uint8,i)
     while i > neg
@@ -254,7 +254,7 @@ end
 
 num2hex(n::Integer) = hex(n, sizeof(n)*2)
 
-function base(b::Integer, x::Unsigned, pad::Integer, neg::Bool)
+function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
     if !(2 <= b <= 62) error("invalid base: $b") end
     i = neg + max(pad,ndigits0z(x,b))
     a = Array(Uint8,i)
@@ -271,10 +271,10 @@ base(b::Integer, n::Integer, pad::Integer=1) =
 
 for sym in (:bin, :oct, :dec, :hex)
     @eval begin
-        ($sym)(x::Unsigned, p::Integer) = ($sym)(x,p,false)
-        ($sym)(x::Unsigned)             = ($sym)(x,1,false)
-        ($sym)(x::Integer, p::Integer)  = ($sym)(unsigned(abs(x)),p,x<0)
-        ($sym)(x::Integer)              = ($sym)(unsigned(abs(x)),1,x<0)
+        ($sym)(x::Unsigned, p::Int) = ($sym)(x,p,false)
+        ($sym)(x::Unsigned)         = ($sym)(x,1,false)
+        ($sym)(x::Integer, p::Int)  = ($sym)(unsigned(abs(x)),p,x<0)
+        ($sym)(x::Integer)          = ($sym)(unsigned(abs(x)),1,x<0)
     end
 end
 
@@ -284,7 +284,7 @@ bits(x::Union(Char,Int32,Uint32,Float32)) = bin(reinterpret(Uint32,x),32)
 bits(x::Union(Int64,Uint64,Float64))      = bin(reinterpret(Uint64,x),64)
 bits(x::Union(Int128,Uint128))            = bin(reinterpret(Uint128,x),128)
 
-function digits{T<:Integer}(n::Integer, base::T=10, pad::Integer=1)
+function digits{T<:Integer}(n::Integer, base::T=10, pad::Int=1)
     2 <= base || error("invalid base: $base")
     m = max(pad,ndigits0z(n,base))
     a = zeros(T,m)
