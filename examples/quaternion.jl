@@ -81,5 +81,4 @@ x = Quaternion(0,1,1,1)
 
 println("q = $q")
 println("q*2.0+2 = $(q*2.0+2)")
-println("abs((-q+x*2)/4) = $repr(abs((-q+x*2)/4))")
-
+println("abs((-q+x*2)/4) = ", abs((-q+x*2)/4))
