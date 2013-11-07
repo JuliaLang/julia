@@ -191,7 +191,7 @@ function code_broadcasts(name::String, op)
         end
 
         function $fname(As::StridedArray...)
-            $fname_T(promote_type([eltype(A) for A in As]...), As...)
+            $fname_T(Base.promote_eltype(As...), As...)
         end
 
         function $fname{T}(As::StridedArray{T}...)
