@@ -79,6 +79,8 @@ New library functions
 
   * `mapslices` provides a general way to perform operations on slices of arrays ([#2204]).
 
+  * `repeat` function for constructing Arrays with repeated elements ([#3605]).
+
   * `Collections.PriorityQueue` type and `Collections.heap` functions ([#2920]).
 
   * `quadgk` 1d-integration routine ([#3140]).
@@ -86,6 +88,8 @@ New library functions
   * `erfinv` and `erfcinv` functions ([#2987]).
 
   * `varm`, `stdm` ([#2265]).
+
+  * `digamma`, `invdigamma`, `trigamma` and `polygamma` for calculating derivatives of `gamma` function ([#3233]). 
 
   * `logdet` ([#3070]).
 
