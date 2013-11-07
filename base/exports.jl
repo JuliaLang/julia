@@ -636,7 +636,6 @@ export
     svd,
     svdfact!,
     svdfact,
-    svds,
     svdvals!,
     svdvals,
     symmetrize!,
@@ -661,6 +660,7 @@ export
     sprandbool,
     sprandn,
     spzeros,
+    symperm,
 
 # bitarrays
     bitpack,
@@ -799,9 +799,11 @@ export
     repr,
     rpad,
     rsearch,
+    rsearchindex,
     rsplit,
     rstrip,
     search,
+    searchindex,
     show,
     showall,
     showcompact,
@@ -970,7 +972,6 @@ export
     symbol,
 
 # help and reflection
-    ans,
     apropos,
     current_module,
     edit,
@@ -1086,7 +1087,6 @@ export
     takebuf_string,
     truncate,
     watch_file,
-    WindowsRawSocket,
     write,
     writecsv,
     writedlm,
@@ -1145,6 +1145,7 @@ export
     basename,
     dirname,
     expanduser,
+    homedir,
     isabspath,
     isdirpath,
     joinpath,

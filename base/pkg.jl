@@ -10,10 +10,11 @@ for file in split("dir types reqs cache read query resolve write generate entry"
     include("pkg/$file.jl")
 end
 const cd = Dir.cd
-const dir = Dir.path
 
+dir(path...) = Dir.path(path...)
 init(meta::String=DEFAULT_META, branch::String=META_BRANCH) = Dir.init(meta,branch)
 
+edit() = cd(Entry.edit)
 rm(pkg::String) = cd(Entry.rm,pkg)
 add(pkg::String, vers::VersionNumber...) = cd(Entry.add,pkg,vers...)
 
@@ -28,10 +29,10 @@ status(io::IO=STDOUT) = cd(Entry.status,io)
 clone(url_or_pkg::String) = cd(Entry.clone,url_or_pkg)
 clone(url::String, pkg::String) = cd(Entry.clone,url,pkg)
 
-checkout(pkg::String, branch::String="master"; merge::Bool=true, pull::Bool=false) =
+checkout(pkg::String, branch::String="master"; merge::Bool=true, pull::Bool=true) =
     cd(Entry.checkout,pkg,branch,merge,pull)
 
-release(pkg::String) = cd(Entry.release,pkg)
+free(pkg::String) = cd(Entry.free,pkg)
 
 pin(pkg::String) = cd(Entry.pin,pkg)
 pin(pkg::String, ver::VersionNumber) = cd(Entry.pin,pkg,ver)
@@ -42,18 +43,22 @@ resolve() = cd(Entry.resolve)
 register(pkg::String) = cd(Entry.register,pkg)
 register(pkg::String, url::String) = cd(Entry.register,pkg,url)
 
-tag(pkg::String, sym::Symbol=:bump; commit::String="", msg::String="") =
-    cd(Entry.tag,pkg,sym,commit,msg)
-tag(pkg::String, ver::VersionNumber; commit::String="", msg::String="") =
-    cd(Entry.tag,pkg,ver,commit,msg)
+tag(pkg::String, sym::Symbol=:patch) = cd(Entry.tag,pkg,sym)
+tag(pkg::String, sym::Symbol, commit::String) = cd(Entry.tag,pkg,sym,false,commit)
+
+tag(pkg::String, ver::VersionNumber; force::Bool=false) = cd(Entry.tag,pkg,ver,force)
+tag(pkg::String, ver::VersionNumber, commit::String; force::Bool=false) =
+	cd(Entry.tag,pkg,ver,force,commit)
 
 publish() = cd(Entry.publish,META_BRANCH)
 
 build() = cd(Entry.build)
 build(pkgs::String...) = cd(Entry.build,[pkgs...])
 
-generate(pkg::String, license::String) = cd(Generate.package,pkg,license)
+generate(pkg::String, license::String; force::Bool=false) =
+	cd(Generate.package,pkg,license,force=force)
 
+@deprecate release free
 @deprecate fixup build
 @deprecate fix pin
 

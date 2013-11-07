@@ -45,26 +45,28 @@ function repl_callback(ast::ANY, show_value)
 end
 
 function repl_cmd(cmd)
+    shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
     if isempty(cmd.exec)
         error("no cmd to execute")
     elseif cmd.exec[1] == "cd"
         if length(cmd.exec) > 2
             error("cd method only takes one argument")
         elseif length(cmd.exec) == 2
-            cd(cmd.exec[2])
+            dir = cmd.exec[2]
+            cd(@windows? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
         else
             cd()
         end
         println(pwd())
     else
-        run(cmd)
+        run(@windows? cmd : `$shell -i -c "($(shell_escape(cmd))) && true"`)
     end
     nothing
 end
 
 function repl_hook(input::String)
-    return Expr(:call, :(Base.repl_cmd),
-                macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
+    Expr(:call, :(Base.repl_cmd),
+         macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
 end
 
 function repl_methods(input::String)
@@ -105,7 +107,7 @@ function eval_user_input(ast::ANY, show_value)
             else
                 ast = expand(ast)
                 value = eval(Main,ast)
-                global ans = value
+                eval(Main, :(ans = $(Expr(:quote, value))))
                 if !is(value,nothing) && show_value
                     if have_color
                         print(answer_color())
@@ -131,10 +133,10 @@ function eval_user_input(ast::ANY, show_value)
             bt = catch_backtrace()
         end
     end
-    println()
+    isa(STDIN,TTY) && println()
 end
 
-function readBuffer(stream::AsyncStream, nread)
+function read_buffer(stream::AsyncStream, nread)
     global _repl_enough_stdin::Bool
     while !_repl_enough_stdin && nb_available(stream.buffer) > 0
         nread = int(search(stream.buffer,'\n')) # never more than one line or readline explodes :O
@@ -153,13 +155,15 @@ function readBuffer(stream::AsyncStream, nread)
         ptr = pointer(stream.buffer.data,stream.buffer.ptr)
         skip(stream.buffer,nread)
         #println(STDERR,stream.buffer.data[stream.buffer.ptr-nread:stream.buffer.ptr-1])
-        ccall(:jl_readBuffer,Void,(Ptr{Void},Cssize_t),ptr,nread)
+        ccall(:jl_read_buffer,Void,(Ptr{Void},Cssize_t),ptr,nread)
     end
     return false
 end
 
 function run_repl()
     global const repl_channel = RemoteRef()
+
+    ccall(:jl_init_repl, Void, (Cint,), _use_history)
 
     # install Ctrl-C interrupt handler (InterruptException)
     ccall(:jl_install_sigint_handler, Void, ())
@@ -173,7 +177,7 @@ function run_repl()
         end
         ccall(:repl_callback_enable, Void, (Ptr{Uint8},), prompt_string)
         global _repl_enough_stdin = false
-        start_reading(STDIN, readBuffer)
+        start_reading(STDIN, read_buffer)
         (ast, show_value) = take(repl_channel)
         if show_value == -1
             # exit flag
@@ -200,12 +204,19 @@ function parse_input_line(s::String)
     ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), s)
 end
 
-# try to include() a file, ignoring if not found
-function try_include(f::String)
-    if is_file_readable(f)
-        include(f)
+function parse_input_line(io::IO)
+    s = ""
+    while !eof(io)
+        s = s*readline(io)
+        e = parse_input_line(s)
+        if !(isa(e,Expr) && e.head === :continue)
+            return e
+        end
     end
 end
+
+# try to include() a file, ignoring if not found
+try_include(path::String) = isfile(path) && include(path)
 
 function process_options(args::Array{Any,1})
     global ARGS, bind_addr
@@ -213,6 +224,7 @@ function process_options(args::Array{Any,1})
     repl = true
     startup = true
     color_set = false
+    history = true
     i = 1
     while i <= length(args)
         if args[i]=="-q" || args[i]=="--quiet"
@@ -259,7 +271,7 @@ function process_options(args::Array{Any,1})
             println("julia version ", VERSION)
             exit(0)
         elseif args[i]=="--no-history"
-            # see repl-readline.c
+            history = false
         elseif args[i] == "-f" || args[i] == "--no-startup"
             startup = false
         elseif args[i] == "-F"
@@ -295,7 +307,7 @@ function process_options(args::Array{Any,1})
         end
         i += 1
     end
-    return (quiet,repl,startup,color_set)
+    return (quiet,repl,startup,color_set,history)
 end
 
 const roottask = current_task()
@@ -334,8 +346,14 @@ function init_profiler()
 end
 
 function load_juliarc()
-    try_include(abspath(JULIA_HOME,"..","etc","julia","juliarc.jl"))
-    try_include(abspath(user_prefdir(),".juliarc.jl"))
+    # If the user built us with a specifi Base.SYSCONFDIR, check that location first for a juliarc.jl file
+    #   If it is not found, then continue on to the relative path based on JULIA_HOME
+    if !isempty(Base.SYSCONFDIR) && isfile(joinpath(Base.SYSCONFDIR,"julia","juliarc.jl"))
+        include(abspath(Base.SYSCONFDIR,"julia","juliarc.jl"))
+    else
+        try_include(abspath(JULIA_HOME,"..","etc","julia","juliarc.jl"))
+    end
+    try_include(abspath(homedir(),".juliarc.jl"))
 end
 
 
@@ -368,13 +386,30 @@ function _start()
         init_sched()
         any(a->(a=="--worker"), ARGS) || init_head_sched()
         init_load_path()
-        (quiet,repl,startup,color_set) = process_options(ARGS)
+        (quiet,repl,startup,color_set,history) = process_options(ARGS)
+        global _use_history = history
         repl && startup && load_juliarc()
 
         if repl
-            if isa(STDIN,File)
-                global is_interactive = false
-                eval(parse_input_line(readall(STDIN)))
+            if !isa(STDIN,TTY)
+                if !color_set
+                    global have_color = false
+                end
+                # note: currently IOStream is used for file STDIN
+                if isa(STDIN,File) || isa(STDIN,IOStream)
+                    # reading from a file, behave like include
+                    global is_interactive = false
+                    eval(parse_input_line(readall(STDIN)))
+                else
+                    # otherwise behave repl-like
+                    global is_interactive = true
+                    while !eof(STDIN)
+                        eval_user_input(parse_input_line(STDIN), true)
+                    end
+                end
+                if have_color
+                    print(color_normal)
+                end
                 quit()
             end
 

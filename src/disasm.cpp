@@ -152,19 +152,22 @@ void jl_dump_function_asm(void* Fptr, size_t Fsize,
     typedef std::vector<JITEvent_EmittedFunctionDetails::LineStart> LInfoVec;
     LInfoVec::iterator lineIter = lineinfo.begin();
     lineIter = lineinfo.begin();
-    uint64_t nextLineAddr = (*lineIter).Address;
-    
-    DISubprogram debugscope =
-        DISubprogram((*lineIter).Loc.getScope(jl_LLVMContext));
+    uint64_t nextLineAddr = -1;
+    DISubprogram debugscope;
 
-    stream << "Filename: " << debugscope.getFilename().data() << "\n";
-    stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
+    if (lineIter != lineinfo.end()) {
+        nextLineAddr = (*lineIter).Address;
+        debugscope = DISubprogram((*lineIter).Loc.getScope(jl_LLVMContext));
+
+        stream << "Filename: " << debugscope.getFilename().data() << "\n";
+        stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
+    }
     
     // Do the disassembly
     for (Index = 0, absAddr = (uint64_t)Fptr;
          Index < memoryObject.getExtent(); Index += Size, absAddr += Size) {
         
-        if (absAddr == nextLineAddr) {
+        if (nextLineAddr != (uint64_t)-1 && absAddr == nextLineAddr) {
             stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
             nextLineAddr = (*++lineIter).Address;
         }

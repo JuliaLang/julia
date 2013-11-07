@@ -6,7 +6,7 @@ import ..Pkg: DEFAULT_META, META_BRANCH
 const DIR_NAME = ".julia"
 
 function path()
-    b = abspath(get(ENV,"JULIA_PKGDIR",joinpath(Base.user_prefdir(),DIR_NAME)))
+    b = abspath(get(ENV,"JULIA_PKGDIR",joinpath(homedir(),DIR_NAME)))
     x, y = VERSION.major, VERSION.minor
     d = joinpath(b,"v$x.$y")
     isdir(d) && return d

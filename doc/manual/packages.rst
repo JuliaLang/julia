@@ -44,10 +44,11 @@ Adding and Removing Packages
 Julia's package manager is a little unusual in that it is declarative rather than imperative.
 This means that you tell it what you want and it figures out what versions to install (or remove) to satisfy those requirements optimally – and minimally.
 So rather than installing a package, you just add it to the list of requirements and then "resolve" what needs to be installed.
-In particular, this means that if some package had been installed because it was needed by a previous version of something you wanted, but a newer version doesn't have that requirement anymore, updating can actually automatically remove packages.
+In particular, this means that if some package had been installed because it was needed by a previous version of something you wanted, and a newer version doesn't have that requirement anymore, updating will actually remove that package.
 
 Your package requirements are in the file ``~/.julia/REQUIRE``.
-You can edit this file by hand and then call ``Pkg.resolve()`` to install, upgrade or remove packages to optimally satisfy the requirements, but most of the time, you will manipulate this file using the ``Pkg.add`` and ``Pkg.rm`` commands, which add or remove a single requirement to ``REQUIRE`` and call ``Pkg.resolve()`` afterwards automatically for you, so we'll start with those.
+You can edit this file by hand and then call ``Pkg.resolve()`` to install, upgrade or remove packages to optimally satisfy the requirements, or you can do ``Pkg.edit()``, which will open ``REQUIRE`` in your editor (configured via the ``EDITOR`` or ``VISUAL`` environment variables), and then automatically call ``Pkg.resolve()`` afterwards if necessary.
+If you only want to add or remove the requirement for a single package, you can also use the non-interactive ``Pkg.add`` and ``Pkg.rm`` commands, which add or remove a single requirement to ``REQUIRE`` and then call ``Pkg.resolve()``.
 
 You can add a package to the list of requirements with the ``Pkg.add`` function, and the package and all the packages that it depends on will be installed::
 
@@ -108,7 +109,7 @@ When you decide that you don't want to have a package around any more, you can u
     Required packages:
      - UTF16                         0.2.0
 
-     julia> Pkg.rm("UTF16")
+    julia> Pkg.rm("UTF16")
     INFO: Removing UTF16 v0.2.0
     INFO: REQUIRE updated.
 
@@ -116,7 +117,8 @@ When you decide that you don't want to have a package around any more, you can u
     No packages installed.
 
 Once again, this is equivalent to editing the ``REQUIRE`` file to remove the line with each package name on it then running ``Pkg.resolve()`` to update the set of installed packages to match.
-While ``Pkg.add`` and ``Pkg.rm`` are convenient for adding and removing requirements for a single package, when you want to add or remove multiple packages, manually editing ``REQUIRE`` and calling ``Pkg.resolve`` is often faster and easier.
+While ``Pkg.add`` and ``Pkg.rm`` are convenient for adding and removing requirements for a single package, when you want to add or remove multiple packages, you can call ``Pkg.edit()`` to manually change the contents of ``REQUIRE`` and then update your packages accordingly.
+``Pkg.edit()`` does not roll back the contents of ``REQUIRE`` if ``Pkg.resolve()`` fails – rather, you have to run ``Pkg.edit()`` again to fix the files contents yourself.
 
 Installing Unregistered Packages
 --------------------------------
@@ -170,11 +172,11 @@ A package is considered fixed if it is one of the following:
 If any of these are the case, the package manager cannot freely change the installed version of the package, so its requirements must be satisfied by whatever other package versions it picks.
 The combination of top-level requirements in ``~/.julia/REQUIRE`` and the requirement of fixed packages are used to determine what should be installed.
 
-Checkout, Pin and Release
--------------------------
+Checkout, Pin and Free
+----------------------
 
 You may want to use the ``master`` version of a package rather than one of its registered versions.
-There might be fixes or functionality on master that you need that aren't yet published in any regsitered versions, or you may be a developer of the package and need to make changes on ``master`` or some other development branch.
+There might be fixes or functionality on master that you need that aren't yet published in any registered versions, or you may be a developer of the package and need to make changes on ``master`` or some other development branch.
 In such cases, you can do ``Pkg.checkout(pkg)`` to checkout the ``master`` branch of ``pkg`` or ``Pkg.checkout(pkg,branch)`` to checkout some other branch::
 
     julia> Pkg.add("Distributions")
@@ -208,10 +210,10 @@ When you checkout an unregistered version of a package, the copy of the ``REQUIR
 If the ``REQUIRE`` file in the package repo is incorrect or missing, dependencies may be removed when the package is checked out.
 This file is also used to populate newly published versions of the package if you use the API that ``Pkg`` provides for this (described below).
 
-When you decide that you no longer want to have a package checked out on a branch, you can "release" it back to the control of the package manager with ``Pkg.release(pkg)``::
+When you decide that you no longer want to have a package checked out on a branch, you can "free" it back to the control of the package manager with ``Pkg.free(pkg)``::
 
-    julia> Pkg.release("Distributions")
-    INFO: Releasing Distributions...
+    julia> Pkg.free("Distributions")
+    INFO: Freeing Distributions...
     INFO: No packages to install, update or remove.
 
     julia> Pkg.status()
@@ -251,10 +253,10 @@ By default, it pins a package at the current commit, but you can choose a differ
      - Stats                         0.2.5              pinned.1fd0983b.tmp
 
 Now the ``Stats`` package is pinned at commit ``1fd0983b``, which corresponds to version ``0.2.5``.
-When you decide to "unpin" a package and let the package manager update it again, you can use ``Pkg.release`` like you would to move off of any branch::
+When you decide to "unpin" a package and let the package manager update it again, you can use ``Pkg.free`` like you would to move off of any branch::
 
-    julia> Pkg.release("Stats")
-    INFO: Releasing Stats...
+    julia> Pkg.free("Stats")
+    INFO: Freeing Stats...
     INFO: No packages to install, update or remove.
 
     julia> Pkg.status()

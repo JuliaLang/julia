@@ -1,9 +1,15 @@
 begin
     local n,a,asym,d,v
     n = 10
-    a = rand(n,n)
+    areal  = randn(n,n)
+    acmplx = complex(randn(n,n), randn(n,n))
 
     for elty in (Float32, Float64, Complex64, Complex128)
+        if elty == Complex64 || elty == Complex128
+            a = acmplx
+        else
+            a = areal
+        end
         a     = convert(Matrix{elty}, a)
         asym  = a' + a                  # symmetric indefinite
         apd   = a'*a                    # symmetric positive-definite

@@ -265,14 +265,14 @@ end
 @test isequal(a,findn(z))
 
 #argmin argmax
-@assert indmax([10,12,9,11]) == 2
-@assert indmin([10,12,9,11]) == 3
-@assert findmin([NaN,3.2,1.8]) == (1.8,3)
-@assert findmax([NaN,3.2,1.8]) == (3.2,2)
-@assert findmin([NaN,3.2,1.8,NaN]) == (1.8,3)
-@assert findmax([NaN,3.2,1.8,NaN]) == (3.2,2)
-@assert findmin([3.2,1.8,NaN,2.0]) == (1.8,2)
-@assert findmax([3.2,1.8,NaN,2.0]) == (3.2,1)
+@test indmax([10,12,9,11]) == 2
+@test indmin([10,12,9,11]) == 3
+@test findmin([NaN,3.2,1.8]) == (1.8,3)
+@test findmax([NaN,3.2,1.8]) == (3.2,2)
+@test findmin([NaN,3.2,1.8,NaN]) == (1.8,3)
+@test findmax([NaN,3.2,1.8,NaN]) == (3.2,2)
+@test findmin([3.2,1.8,NaN,2.0]) == (1.8,2)
+@test findmax([3.2,1.8,NaN,2.0]) == (3.2,1)
 
 ## permutedims ##
 
@@ -357,13 +357,13 @@ end
 
 ## cumsum, cummin, cummax
 
-@assert isequal(cummin([1, 2, 5, -1, 3, -2]), [1, 1, 1, -1, -1, -2])
-@assert isequal(cummax([1, 2, 5, -1, 3, -2]), [1, 2, 5, 5, 5, 5])
+@test isequal(cummin([1, 2, 5, -1, 3, -2]), [1, 1, 1, -1, -1, -2])
+@test isequal(cummax([1, 2, 5, -1, 3, -2]), [1, 2, 5, 5, 5, 5])
 
-@assert isequal(cummax([1 0; 0 1], 1), [1 0; 1 1])
-@assert isequal(cummax([1 0; 0 1], 2), [1 1; 0 1])
-@assert isequal(cummin([1 0; 0 1], 1), [1 0; 0 0])
-@assert isequal(cummin([1 0; 0 1], 2), [1 0; 0 0])
+@test isequal(cummax([1 0; 0 1], 1), [1 0; 1 1])
+@test isequal(cummax([1 0; 0 1], 2), [1 1; 0 1])
+@test isequal(cummin([1 0; 0 1], 1), [1 0; 0 0])
+@test isequal(cummin([1 0; 0 1], 2), [1 0; 0 0])
 
 @test sum_kbn([1,1e100,1,-1e100]) == 2
 
@@ -379,53 +379,53 @@ begin
     @test isequal(cumsum(A,3),A3)
 
     R = repeat([1, 2], inner = [1], outer = [1])
-    @assert R == [1, 2]
+    @test R == [1, 2]
     R = repeat([1, 2], inner = [2], outer = [1])
-    @assert R == [1, 1, 2, 2]
+    @test R == [1, 1, 2, 2]
     R = repeat([1, 2], inner = [1], outer = [2])
-    @assert R == [1, 2, 1, 2]
+    @test R == [1, 2, 1, 2]
     R = repeat([1, 2], inner = [2], outer = [2])
-    @assert R == [1, 1, 2, 2, 1, 1, 2, 2]
+    @test R == [1, 1, 2, 2, 1, 1, 2, 2]
     R = repeat([1, 2], inner = [1, 1], outer = [1, 1])
-    @assert R == [1, 2]''
+    @test R == [1, 2]''
     R = repeat([1, 2], inner = [2, 1], outer = [1, 1])
-    @assert R == [1, 1, 2, 2]''
+    @test R == [1, 1, 2, 2]''
     R = repeat([1, 2], inner = [1, 2], outer = [1, 1])
-    @assert R == [1 1; 2 2]
+    @test R == [1 1; 2 2]
     R = repeat([1, 2], inner = [1, 1], outer = [2, 1])
-    @assert R == [1, 2, 1, 2]''
+    @test R == [1, 2, 1, 2]''
     R = repeat([1, 2], inner = [1, 1], outer = [1, 2])
-    @assert R == [1 1; 2 2]
+    @test R == [1 1; 2 2]
 
     R = repeat([1 2;
                 3 4], inner = [1, 1], outer = [1, 1]) 
-    @assert R == [1 2;
+    @test R == [1 2;
                   3 4]
     R = repeat([1 2;
                 3 4], inner = [1, 1], outer = [2, 1])
-    @assert R == [1 2;
+    @test R == [1 2;
                   3 4;
                   1 2;
                   3 4]
     R = repeat([1 2;
                 3 4], inner = [1, 1], outer = [1, 2])
-    @assert R == [1 2 1 2;
+    @test R == [1 2 1 2;
                   3 4 3 4]
     R = repeat([1 2;
                 3 4], inner = [1, 1], outer = [2, 2])
-    @assert R == [1 2 1 2;
+    @test R == [1 2 1 2;
                   3 4 3 4;
                   1 2 1 2;
                   3 4 3 4]
     R = repeat([1 2;
                 3 4], inner = [2, 1], outer = [1, 1])
-    @assert R == [1 2;
+    @test R == [1 2;
                   1 2;
                   3 4;
                   3 4]
     R = repeat([1 2;
                 3 4], inner = [2, 1], outer = [2, 1])
-    @assert R == [1 2;
+    @test R == [1 2;
                   1 2;
                   3 4;
                   3 4;
@@ -435,13 +435,13 @@ begin
                   3 4]
     R = repeat([1 2;
                 3 4], inner = [2, 1], outer = [1, 2])
-    @assert R == [1 2 1 2;
+    @test R == [1 2 1 2;
                   1 2 1 2;
                   3 4 3 4;
                   3 4 3 4;]
     R = repeat([1 2;
                 3 4], inner = [2, 1], outer = [2, 2])
-    @assert R == [1 2 1 2;
+    @test R == [1 2 1 2;
                   1 2 1 2;
                   3 4 3 4;
                   3 4 3 4;
@@ -451,33 +451,33 @@ begin
                   3 4 3 4]
     R = repeat([1 2;
                 3 4], inner = [1, 2], outer = [1, 1])
-    @assert R == [1 1 2 2;
+    @test R == [1 1 2 2;
                   3 3 4 4]
     R = repeat([1 2;
                 3 4], inner = [1, 2], outer = [2, 1])
-    @assert R == [1 1 2 2;
+    @test R == [1 1 2 2;
                   3 3 4 4;
                   1 1 2 2;
                   3 3 4 4]
     R = repeat([1 2;
                 3 4], inner = [1, 2], outer = [1, 2])
-    @assert R == [1 1 2 2 1 1 2 2;
+    @test R == [1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4]
     R = repeat([1 2;
                 3 4], inner = [1, 2], outer = [2, 2])
-    @assert R == [1 1 2 2 1 1 2 2;
+    @test R == [1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4;
                   1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4]
     R = repeat([1 2;
                 3 4], inner = [2, 2], outer = [1, 1])
-    @assert R == [1 1 2 2;
+    @test R == [1 1 2 2;
                   1 1 2 2;
                   3 3 4 4;
                   3 3 4 4]
     R = repeat([1 2;
                 3 4], inner = [2, 2], outer = [2, 1])
-    @assert R == [1 1 2 2;
+    @test R == [1 1 2 2;
                   1 1 2 2;
                   3 3 4 4;
                   3 3 4 4;
@@ -487,13 +487,13 @@ begin
                   3 3 4 4]
     R = repeat([1 2;
                 3 4], inner = [2, 2], outer = [1, 2])
-    @assert R == [1 1 2 2 1 1 2 2;
+    @test R == [1 1 2 2 1 1 2 2;
                   1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4;
                   3 3 4 4 3 3 4 4]
     R = repeat([1 2;
                 3 4], inner = [2, 2], outer = [2, 2])
-    @assert R == [1 1 2 2 1 1 2 2;
+    @test R == [1 1 2 2 1 1 2 2;
                   1 1 2 2 1 1 2 2;
                   3 3 4 4 3 3 4 4;
                   3 3 4 4 3 3 4 4;
@@ -505,21 +505,21 @@ begin
     A = reshape([1:8], 2, 2, 2)
     R = repeat(A, inner = [1, 1, 2], outer = [1, 1, 1])
     T = reshape([1:4, 1:4, 5:8, 5:8], 2, 2, 4)
-    @assert R == T
+    @test R == T
     A = Array(Int, 2, 2, 2)
     A[:, :, 1] = [1 2;
                   3 4]
     A[:, :, 2] = [5 6;
                   7 8]
     R = repeat(A, inner = [2, 2, 2], outer = [2, 2, 2])
-    @assert R[1, 1, 1] == 1
-    @assert R[2, 2, 2] == 1
-    @assert R[3, 3, 3] == 8
-    @assert R[4, 4, 4] == 8
-    @assert R[5, 5, 5] == 1
-    @assert R[6, 6, 6] == 1
-    @assert R[7, 7, 7] == 8
-    @assert R[8, 8, 8] == 8
+    @test R[1, 1, 1] == 1
+    @test R[2, 2, 2] == 1
+    @test R[3, 3, 3] == 8
+    @test R[4, 4, 4] == 8
+    @test R[5, 5, 5] == 1
+    @test R[6, 6, 6] == 1
+    @test R[7, 7, 7] == 8
+    @test R[8, 8, 8] == 8
 
     A = rand(4,4)
     for s in {A[1:2:4, 1:2:4], sub(A, 1:2:4, 1:2:4)}
@@ -728,3 +728,24 @@ end
 A = [[i i; i i] for i=1:2]
 @test cumsum(A) == Any[[1 1; 1 1], [3 3; 3 3]]
 @test cumprod(A) == Any[[1 1; 1 1], [4 4; 4 4]]
+
+# PR #4627
+A = [1,2]
+@test append!(A, A) == [1,2,1,2]
+@test prepend!(A, A) == [1,2,1,2,1,2,1,2]
+
+# cases where shared arrays can/can't be grown
+A = [1 3;2 4]
+B = reshape(A, 4)
+@test push!(B,5) == [1,2,3,4,5]
+@test pop!(B) == 5
+C = reshape(B, 1, 4)
+@test_throws push!(C, 5)
+
+A = [NaN]; B = [NaN]
+@test !(A==A)
+@test isequal(A,A)
+@test A===A
+@test !(A==B)
+@test isequal(A,B)
+@test A!==B

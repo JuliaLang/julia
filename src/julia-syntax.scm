@@ -69,6 +69,11 @@
 (define (effect-free? e)
   (or (not (pair? e)) (sym-dot? e) (quoted? e) (equal? e '(null))))
 
+(define (undot-name e)
+  (if (symbol? e)
+      e
+      (cadr (caddr e))))
+
 ; make an expression safe for multiple evaluation
 ; for example a[f(x)] => (temp=f(x); a[temp])
 ; retuns a pair (expr . assignments)
@@ -373,12 +378,12 @@
      (let* ((types (llist-types argl))
 	    (body  (method-lambda-expr argl body)))
        (if (null? sparams)
-	   `(method ,name (tuple ,@types) ,body (tuple))
-	   (let ((f (gensy)))
-	     `(call (lambda (,@names ,f)
-		      (method ,name (tuple ,@types) ,f (tuple ,@names)))
-		    ,@(symbols->typevars names bounds #t)
-		    ,body)))))))
+	   `(method ,name (tuple (tuple ,@types) (tuple)) ,body)
+	   `(method ,name
+		    (call (lambda ,names
+			    (tuple (tuple ,@types) (tuple ,@names)))
+			  ,@(symbols->typevars names bounds #t))
+		    ,body))))))
 
 (define (vararg? x) (and (pair? x) (eq? (car x) '...)))
 (define (trans?  x) (and (pair? x) (eq? (car x) '|.'|)))
@@ -407,6 +412,11 @@
          (vals     (map caddr kargl))
 	 ;; just the keyword names
 	 (keynames (map decl-var vars))
+	 ;; do some default values depend on other keyword arguments?
+	 (ordered-defaults (any (lambda (v) (contains
+					     (lambda (x) (eq? x v))
+					     vals))
+				keynames))
 	 ;; 1-element list of function's line number node, or empty if none
 	 (lno  (if (and (pair? (cdr body))
 			(pair? (cadr body)) (eq? (caadr body) 'line))
@@ -430,9 +440,7 @@
 	  (map (lambda (s) (if (symbol? s) s (cadr s))) keyword-sparams)))
     (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy)) (rkw (gensy))
 	  (mangled (symbol (string "__"
-				   (if (symbol? name)
-				       name
-				       (cadr (caddr name)))
+				   (undot-name name)
 				   "#"
 				   (string.sub (string (gensym)) 1)
 				   "__")))
@@ -444,7 +452,7 @@
 	  `(,@vars ,@restkw ,@pargl ,@vararg)
 	  `(block
 	    ,@(if (null? lno) '()
-		  (list (append (car lno) (list name))))
+		  (list (append (car lno) (list (undot-name name)))))
 	    ,@stmts))
 
 	;; call with no keyword args
@@ -454,9 +462,12 @@
 	    ,(if (null? lno)
 		 `(line 0 || ||)
 		 (append (car lno) '(||)))
+	    ,@(if (not ordered-defaults)
+		  '()
+		  (map make-assignment keynames vals))
 	    ;; call mangled(vals..., [rest_kw ,]pargs..., [vararg]...)
 	    (return (call ,mangled
-			  ,@vals
+			  ,@(if ordered-defaults keynames vals)
 			  ,@(if (null? restkw) '() '((cell1d)))
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
@@ -771,6 +782,7 @@
 			     ,mut)))
 	   (scope-block
 	    (block
+	     (global ,name)
 	     (global ,@params)
 	     ,@(if (and (null? defs)
 			;; don't generate an outer constructor if the type has
@@ -1255,7 +1267,10 @@
   (receive
    (keys restkeys) (separate kwarg? kw)
    (let ((keyargs (apply append
-			 (map (lambda (a) `((quote ,(cadr a)) ,(caddr a)))
+			 (map (lambda (a)
+				(if (not (symbol? (cadr a)))
+				    (error (string "named argument is not a symbol: " (cadr a))))
+				`((quote ,(cadr a)) ,(caddr a)))
 			      keys))))
      (if (null? restkeys)
 	 `(call (top kwcall) ,f ,(length keys) ,@keyargs
@@ -2732,8 +2747,7 @@ So far only the second case can actually occur.
 		     (vinfo:set-iasg! vi #t)))))
 	 `(method ,(cadr e)
 		  ,(analyze-vars (caddr  e) env captvars)
-		  ,(analyze-vars (cadddr e) env captvars)
-		  ,(cadddr (cdr e))))
+		  ,(analyze-vars (cadddr e) env captvars)))
 	(else (cons (car e)
 		    (map (lambda (x) (analyze-vars x env captvars))
 			 (cdr e))))))

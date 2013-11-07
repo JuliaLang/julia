@@ -162,6 +162,27 @@ function mapreduce(f::Callable, op::Function, v0, A::AbstractArray)
     n == 0 ? v0 : op(v0, mr_pairwise(f,op,A, 1,n))
 end
 
+function r_pairwise(op::Function, A::AbstractArray, i1,n)
+    if n < 128
+        @inbounds v = A[i1]
+        for i = i1+1:i1+n-1
+            @inbounds v = op(v,A[i])
+        end
+        return v
+    else
+        n2 = div(n,2)
+        return op(r_pairwise(op,A, i1,n2), r_pairwise(op,A, i1+n2,n-n2))
+    end
+end
+function reduce(op::Function, A::AbstractArray)
+    n = length(A)
+    n == 0 ? op() : r_pairwise(op,A, 1,n)
+end
+function reduce(op::Function, v0, A::AbstractArray)
+    n = length(A)
+    n == 0 ? v0 : op(v0, r_pairwise(op,A, 1,n))
+end
+
 function any(itr)
     for x in itr
         if x

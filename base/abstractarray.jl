@@ -176,11 +176,58 @@ function fill!(A::AbstractArray, x)
     return A
 end
 
-function copy!(dest::AbstractArray, src, dsto::Integer=1)
-    i = dsto
+function copy!(dest::AbstractArray, src)
+    i = 1
     for x in src
         dest[i] = x
         i += 1
+    end
+    return dest
+end
+
+# copy with minimal requirements on src
+# if src is not an AbstractArray, moving to the offset might be O(n)
+function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer=1)
+    st = start(src)
+    for j = 1:(soffs-1)
+        _, st = next(src, st)
+    end
+    i = doffs
+    while !done(src,st)
+        val, st = next(src, st)
+        dest[i] = val
+        i += 1
+    end
+    return dest
+end
+
+# NOTE: this is to avoid ambiguity with the deprecation of
+#   copy!(dest::AbstractArray, src, doffs::Integer)
+# Remove this when that deprecation is removed.
+function copy!(dest::AbstractArray, doffs::Integer, src::Integer)
+    dest[doffs] = src
+    return dest
+end
+
+# this method must be separate from the above since src might not have a length
+function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer, n::Integer)
+    n == 0 && return dest
+    st = start(src)
+    for j = 1:(soffs-1)
+        _, st = next(src, st)
+    end
+    for i = doffs:(doffs+n-1)
+        done(src,st) && throw(BoundsError())
+        val, st = next(src, st)
+        dest[i] = val
+    end
+    return dest
+end
+
+# if src is an AbstractArray and a source offset is passed, use indexing
+function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray, soffs::Integer, n::Integer=length(src))
+    for i = 0:(n-1)
+        dest[doffs+i] = src[soffs+i]
     end
     return dest
 end
@@ -880,6 +927,16 @@ hcat(A::AbstractArray...) = cat(2, A...)
 
 # 2d horizontal and vertical concatenation
 
+function hvcat(nbc::Integer, as...)
+    # nbc = # of block columns
+    n = length(as)
+    if mod(n,nbc) != 0
+        error("hvcat: not all rows have the same number of block columns")
+    end
+    nbr = div(n,nbc)
+    hvcat(ntuple(nbr, i->nbc), as...)
+end
+
 function hvcat{T}(rows::(Int...), as::AbstractMatrix{T}...)
     nbr = length(rows)  # number of block rows
 
@@ -974,6 +1031,7 @@ end
 ## Reductions and scans ##
 
 function isequal(A::AbstractArray, B::AbstractArray)
+    if A === B return true end
     if size(A) != size(B)
         return false
     end
@@ -1252,6 +1310,10 @@ indices(I) = I
 indices(I::Int) = I
 indices(I::Real) = convert(Int, I)
 indices(I::AbstractArray{Bool,1}) = find(I)
+indices(I::(Any,))            = (indices(I[1]), )
+indices(I::(Any,Any,))        = (indices(I[1]), indices(I[2]))
+indices(I::(Any,Any,Any))     = (indices(I[1]), indices(I[2]), indices(I[3]))
+indices(I::(Any,Any,Any,Any)) = (indices(I[1]), indices(I[2]), indices(I[3]), indices(I[4]))
 indices(I::Tuple) = map(indices, I)
 
 # Generalized repmat

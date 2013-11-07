@@ -233,12 +233,12 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
             if (mb->owner == m || mb->imported) {
                 m = (jl_module_t*)mb->value;
                 if (m == NULL || !jl_is_module(m))
-                    jl_errorf("invalid module path");
+                    jl_errorf("invalid module path (%s does not name a module)", var->name);
                 break;
             }
         }
         if (m == jl_main_module) {
-            if (!retrying) {
+            if (!retrying && i==1) { // (i==1) => no require() for relative imports
                 if (require_func == NULL && jl_base_module != NULL)
                     require_func = jl_get_global(jl_base_module, jl_symbol("require"));
                 if (require_func != NULL) {
@@ -250,7 +250,13 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
                 }
             }
         }
-        jl_errorf("in module path: %s not defined", var->name);
+        if (retrying && require_func) {
+            JL_PRINTF(JL_STDERR, "Warning: requiring \"%s\" did not define a corresponding module.\n", var->name);
+            return NULL;
+        }
+        else {
+            jl_errorf("in module path: %s not defined", var->name);
+        }
     }
 
     for(; i < jl_array_len(args)-1; i++) {
@@ -301,6 +307,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     // handle import, using, importall, export toplevel-only forms
     if (ex->head == importall_sym) {
         jl_module_t *m = eval_import_path(ex->args);
+        if (m==NULL) return jl_nothing;
         jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
         assert(jl_is_symbol(name));
         m = (jl_module_t*)jl_eval_global_var(m, name);
@@ -312,6 +319,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 
     if (ex->head == using_sym) {
         jl_module_t *m = eval_import_path(ex->args);
+        if (m==NULL) return jl_nothing;
         jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
         assert(jl_is_symbol(name));
         jl_module_t *u = (jl_module_t*)jl_eval_global_var(m, name);
@@ -326,6 +334,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 
     if (ex->head == import_sym) {
         jl_module_t *m = eval_import_path(ex->args);
+        if (m==NULL) return jl_nothing;
         jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
         assert(jl_is_symbol(name));
         jl_module_import(jl_current_module, m, name);
@@ -542,8 +551,11 @@ static int type_contains(jl_value_t *ty, jl_value_t *x)
 void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
-                          jl_tuple_t *argtypes, jl_function_t *f, jl_tuple_t *t)
+                          jl_tuple_t *argtypes, jl_function_t *f)
 {
+    // argtypes is a tuple ((types...), (typevars...))
+    jl_tuple_t *t = (jl_tuple_t*)jl_t1(argtypes);
+    argtypes = (jl_tuple_t*)jl_t0(argtypes);
     jl_value_t *gf;
     if (bnd) {
         //jl_declare_constant(bnd);

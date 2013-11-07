@@ -63,6 +63,10 @@ Filesystem
    Returns ``true`` if the current user has permission to write to ``path``,
    ``false`` otherwise.
 
+.. function:: homedir() -> String
+
+   Return the current user's home directory.
+
 .. function:: dirname(path::String) -> String
 
    Get the directory part of a path.

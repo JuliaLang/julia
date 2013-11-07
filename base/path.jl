@@ -7,9 +7,7 @@
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
     splitdrive(path::String) = ("",path)
-    user_homedir() = ENV["HOME"]
-    user_prefdir() = user_homedir()
-    user_documentsdir() = @osx ? joinpath(user_homedir(),"Documents") : user_homedir()
+    homedir() = ENV["HOME"]
 end
 @windows_only begin
     const path_separator    = "\\"
@@ -23,19 +21,7 @@ end
         m = match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path)
         bytestring(m.captures[1]), bytestring(m.captures[2])
     end
-    user_homedir() = get(ENV,"HOME",joinpath(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
-    user_prefdir() = user_homedir()
-    function user_documentsdir()
-        #HRESULT result = SHGetFolderPath(NULL, CSIDL_PERSONAL, NULL, SHGFP_TYPE_CURRENT, my_documents);
-        path = Array(Uint8,260)
-        result = ccall((:SHGetFolderPathA,:shell32),stdcall,Cint,
-            (Ptr{Void},Cint,Ptr{Void},Cint,Ptr{Uint8}),0,0x0005,0,0,path)
-        if result == 0
-            return bytestring(path[1:findfirst(path,0)-1])
-        else
-            return user_homedir()
-        end
-    end
+    homedir() = get(ENV,"HOME",joinpath(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
 end
 
 isabspath(path::String) = ismatch(path_absolute_re, path)
@@ -149,8 +135,8 @@ end
     i = start(path)
     c, i = next(path,i)
     if c != '~' return path end
-    if done(path,i) return ENV["HOME"] end
+    if done(path,i) return homedir() end
     c, j = next(path,i)
-    if c == '/' return ENV["HOME"]*path[i:end] end
+    if c == '/' return homedir()*path[i:end] end
     error("~user tilde expansion not yet implemented")
 end

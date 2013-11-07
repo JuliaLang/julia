@@ -795,10 +795,17 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         else {
             arg = emit_unboxed(argi, ctx);
             if (jl_is_bitstype(expr_type(argi, ctx))) {
-                if (addressOf)
-                    arg = emit_unbox(largty->getContainedType(0), largty, arg);
-                else
-                    arg = emit_unbox(largty, PointerType::get(largty,0), arg);
+                Type *totype = addressOf ? largty->getContainedType(0) : largty;
+                Type *ptype  = addressOf ? largty : PointerType::get(largty,0);
+                Type *at = arg->getType();
+                if (at != jl_pvalue_llvmt && at != totype &&
+                    !(at->isPointerTy() && jargty==(jl_value_t*)jl_voidpointer_type)) {
+                    emit_type_error(arg, jargty, "ccall", ctx);
+                    arg = UndefValue::get(totype);
+                }
+                else {
+                    arg = emit_unbox(totype, ptype, arg);
+                }
             }
         }
 

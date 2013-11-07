@@ -37,18 +37,13 @@ next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict,i+1))
 # TODO: simplify me?
 pop!(s::Set) = (val = s.dict.keys[start(s.dict)]; delete!(s.dict, val); val)
 
+join_eltype() = None
+join_eltype(v1, vs...) = typejoin(eltype(v1), join_eltype(vs...))
+
 union() = Set()
 union(s::Set) = copy(s)
 function union(s::Set, sets::Set...)
-    U = eltype(s)
-    if U != Any
-        for t in sets
-            T = eltype(t)
-            U = T<:U ? U :
-                U<:T ? T : Any # TODO: tigher upper bound
-        end
-    end
-    u = Set{U}()
+    u = Set{join_eltype(s, sets...)}()
     union!(u,s)
     for t in sets
         union!(u,t)

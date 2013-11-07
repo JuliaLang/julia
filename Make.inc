@@ -32,8 +32,14 @@ USE_SYSTEM_LIBUV=0
 USE_MKL = 0
 MKLLIB = $(MKLROOT)/lib/intel64
 
+# Link to the LLVM shared library
+USE_LLVM_SHLIB = 0
+
 # Set to 1 to enable profiling with Intel VTune Amplifier
 USE_INTEL_JITEVENTS = 0
+
+# libc++ is standard on OS X 10.9, but not for earlier releases
+USE_LIBCPP = 0
 
 # we include twice to pickup user definitions better
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
@@ -133,6 +139,8 @@ USEGCC = 1
 USECLANG = 0
 endif
 
+STDLIBCPP_FLAG = 
+
 ifeq ($(OS), Darwin)
 DARWINVER = $(shell uname -r | cut -b 1-2)
 OSXVER = $(shell sw_vers -productVersion | cut -b 1-4)
@@ -143,12 +151,23 @@ OPENBLAS_TARGET_ARCH=NEHALEM
 OPENBLAS_DYNAMIC_ARCH=0
 USE_SYSTEM_LIBUNWIND=1
 else
+ifeq ($(DARWINVER),13)
+USE_LIBCPP = 1
+STDLIBCPP_FLAG = -stdlib=libstdc++
+else 
+USE_LIBCPP = 0
+endif
 USEGCC = 0
 USECLANG = 1
 endif
 endif
 
+FC = $(CROSS_COMPILE)gfortran
+
 ifeq ($(USEGCC),1)
+ifeq ($(USE_LIBCPP),1)
+$(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
+endif
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
@@ -165,13 +184,18 @@ JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -O0 -g -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3
 ifeq ($(OS), Darwin)
-CC += -mmacosx-version-min=10.6
-CXX += -mmacosx-version-min=10.6
+ifeq ($(USE_LIBCPP), 1)
+CC += -stdlib=libc++ -mmacosx-version-min=10.7
+CXX += -stdlib=libc++ -mmacosx-version-min=10.7
+FC += -mmacosx-version-min=10.7
+else
+CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
+CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
+endif
 JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
 
-FC = $(CROSS_COMPILE)gfortran
 JFFLAGS = -O2 $(fPIC)
 CPP = $(CC) -E
 AR := $(CROSS_COMPILE)ar

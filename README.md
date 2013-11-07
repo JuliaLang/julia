@@ -1,14 +1,9 @@
-<a name="banner"/>
-
-                   _
-       _       _ _(_)_     |
-      (_)     | (_) (_)    |   A fresh approach to technical computing
-       _ _   _| |_  __ _   |
-      | | | | | | |/ _` |  |          http://julialang.org
-      | | |_| | | | (_| |  |       julia-users@googlegroups.com
-     _/ |\__'_|_|_|\__'_|  |           #julia on freenode
-    |__/                   |
-
+<a name="logo"/>
+<div align="center">
+<a href="http://julialang.org/" target="_blank">
+<img src="http://julialang.org/images/logo_hires.png" alt="Julia Logo" width="210" height="142"></img>
+</a>
+</div>
 
 [![Build Status](https://api.travis-ci.org/JuliaLang/julia.png?branch=master)](https://travis-ci.org/JuliaLang/julia)
 
@@ -81,6 +76,10 @@ Now you should be able to run Julia like this:
 
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
+
+If you are building a Julia package for distribution on Linux, OS X,
+or Windows, take a look at the detailed notes in
+[DISTRIBUTING.md](https://github.com/JuliaLang/julia/blob/master/DISTRIBUTING.md).
 
 <a name="Uninstalling-Julia"/>
 ## Uninstalling Julia
