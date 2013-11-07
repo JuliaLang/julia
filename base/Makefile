@@ -81,7 +81,7 @@ endif
 	@echo "    prerelease::Bool" >> $@
 	@echo "    tagged_commit::Bool" >> $@
 	@echo "    fork_master_distance::Int" >> $@
-	@echo "    fork_master_timestamp::Int64" >> $@
+	@echo "    fork_master_timestamp::Int" >> $@
 	@echo "    TAGGED_RELEASE_BANNER::String" >> $@
 	@echo "end" >> $@
 
