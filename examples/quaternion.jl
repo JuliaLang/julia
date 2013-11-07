@@ -11,9 +11,9 @@ Quaternion{A<:Real,B<:Real,C<:Real,D<:Real}(q0::A,q1::B,q2::C,q3::D) =
     Quaternion(promote(q0,q1,q2,q3)...)
 
 convert{T}(::Type{Quaternion{T}}, x::Real) =
-    Quaternion(convert(T,x), convert(T,0), convert(T,0), convert(T,0))
+    Quaternion(convert(T,x), zero(T), zero(T), zero(T))
 convert{T}(::Type{Quaternion{T}}, z::Complex) =
-    Quaternion(convert(T,real(z)), convert(T,imag(z)), convert(T,0), convert(T,0))
+    Quaternion(convert(T,real(z)), convert(T,imag(z)), zero(T), zero(T))
 convert{T}(::Type{Quaternion{T}}, z::Quaternion) =
     Quaternion(convert(T,z.q0), convert(T,z.q1), convert(T,z.q2), convert(T,z.q3))
 
