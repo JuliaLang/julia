@@ -97,7 +97,7 @@ sA = sub(A, 2, 1:5, :)
 @test parentindexes(sA) == (2:2, 1:5, 1:8)
 @test Base.parentdims(sA) == 1:3
 @test size(sA) == (1, 5, 8)
-@test_throws sA[2, 1:8]
+@test_throws sA[2, 1:8] BoundsError
 @test sA[1, 2, 1:8][:] == 5:15:120
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
@@ -150,23 +150,23 @@ a = [5:8]
 @test parent(a) == a
 @test parentindexes(a) == (1:4,)
 
-# 4335
-@test_throws slice(A, 1:2)
-@test_throws slice(A, 1:2, 3:4)
-@test_throws slice(A, 1:2, 3:4, 5:6, 7:8)
+# 4336
+@test_throws slice(A, 1:2) BoundsError
+@test_throws slice(A, 1:2, 3:4) BoundsError
+@test_throws slice(A, 1:2, 3:4, 5:6, 7:8) BoundsError
 
 # Out-of-bounds construction. See #4044
 A = rand(7,7)
 rng = 1:4
 sA = sub(A, 2, rng-1)
-@test_throws sA[1,1]
+@test_throws sA[1,1] BoundsError
 @test sA[1,2] == A[2,1]
 sA = sub(A, 2, rng)
 B = sub(sA, 1, rng-1)
 C = sub(B, 1, rng+1)
 @test C == sA
 sA = slice(A, 2, rng-1)
-@test_throws sA[1]
+@test_throws sA[1] BoundsError
 @test sA[2] == A[2,1]
 sA = slice(A, 2, rng)
 B = slice(sA, rng-1)
@@ -699,7 +699,7 @@ end
 @test isequal([1,2,3], [a for (a,b) in enumerate(2:4)])
 @test isequal([2,3,4], [b for (a,b) in enumerate(2:4)])
 
-@test_throws (10.^[-1])[1] == 0.1
+@test_throws (10.^[-1])[1] == 0.1 DomainError
 @test (10.^[-1.])[1] == 0.1
 
 # reverse
@@ -719,10 +719,10 @@ end
 @test isequal(flipdim([2,3,1], 2), [2,3,1])
 @test isequal(flipdim([2 3 1], 1), [2 3 1])
 @test isequal(flipdim([2 3 1], 2), [1 3 2])
-@test_throws flipdim([2,3,1] -1)
+@test_throws flipdim([2,3,1] -1) MethodError
 @test isequal(flipdim(1:10, 1), 10:-1:1)
 @test isequal(flipdim(1:10, 2), 1:10)
-@test_throws flipdim(1:10, -1)
+@test_throws flipdim(1:10, -1) ErrorException
 
 # issue 4228
 A = [[i i; i i] for i=1:2]
@@ -740,7 +740,7 @@ B = reshape(A, 4)
 @test push!(B,5) == [1,2,3,4,5]
 @test pop!(B) == 5
 C = reshape(B, 1, 4)
-@test_throws push!(C, 5)
+@test_throws push!(C, 5) MethodError
 
 A = [NaN]; B = [NaN]
 @test !(A==A)

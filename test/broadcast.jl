@@ -33,7 +33,7 @@ for arr in (identity, as_sub)
 
     A = arr(eye(2)); @test broadcast!(+, A, A, arr([1, 4])) == arr([2 1; 4 5])
     A = arr(eye(2)); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4; 1 5])
-    A = arr([1  0]); @test_throws broadcast!(+, A, A, arr([1, 4]))
+    A = arr([1  0]); @test_throws broadcast!(+, A, A, arr([1, 4])) ErrorException
     A = arr([1  0]); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4])
 
     @test arr([ 1    2])   .* arr([3,   4])   == [ 3 6; 4 8]

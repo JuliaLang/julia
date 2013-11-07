@@ -40,12 +40,16 @@ function do_test(body,qex)
     end)
 end
 
-function do_test_throws(body,qex)
+function do_test_throws(body,qex,extype)
     handler()(try
         body()
         Failure(qex)
-    catch
-        Success(qex)
+    catch err
+        if isa(err,extype)
+            Success(qex)
+        else
+            rethrow()
+        end
     end)
 end
 
@@ -53,8 +57,8 @@ macro test(ex)
     :(do_test(()->($(esc(ex))),$(Expr(:quote,ex))))
 end
 
-macro test_throws(ex)
-    :(do_test_throws(()->($(esc(ex))),$(Expr(:quote,ex))))
+macro test_throws(ex,extype)
+    :(do_test_throws(()->($(esc(ex))),$(Expr(:quote,ex)),$(extype)))
 end
 macro test_fails(ex)
     Base.warn_once("@test_fails is deprecated, use @test_throws instead.")

@@ -62,7 +62,7 @@ if haskey(ENV, "PTEST_FULL")
     println("START of parallel tests that print errors")
 
     # make sure exceptions propagate when waiting on Tasks
-    @test_throws (@sync (@async error("oops")))
+    @test_throws (@sync (@async error("oops"))) ErrorException
 
     # pmap tests
     # needs at least 4 processors (which are being created above for the @parallel tests)
