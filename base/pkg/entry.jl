@@ -4,18 +4,40 @@ using ..Types
 import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write
 import Base: Git, thispatch, nextpatch, nextminor, nextmajor, check_new_version
 
+macro recover(ex)
+    quote
+        try $(esc(ex))
+        catch err
+            show(err)
+        end
+    end
+end
+
 function edit(f::Function, pkg::String, args...)
     r = Reqs.read("REQUIRE")
     reqs = Reqs.parse(r)
     avail = Read.available()
     !haskey(avail,pkg) && !haskey(reqs,pkg) && return false
-    r_ = f(r,pkg,args...)
-    r_ == r && return false
-    reqs_ = Reqs.parse(r_)
-    reqs_ != reqs && resolve(reqs_,avail)
-    Reqs.write("REQUIRE",r_)
+    rʹ = f(r,pkg,args...)
+    rʹ == r && return false
+    reqsʹ = Reqs.parse(rʹ)
+    reqsʹ != reqs && resolve(reqsʹ,avail)
+    Reqs.write("REQUIRE",rʹ)
     info("REQUIRE updated.")
     return true
+end
+
+function edit()
+    editor = get(ENV,"VISUAL",get(ENV,"EDITOR",nothing))
+    editor != nothing ||
+        error("set the EDITOR environment variable to an edit command")
+    editor = Base.shell_split(editor)
+    reqs = Reqs.parse("REQUIRE")
+    run(`$editor REQUIRE`)
+    reqsʹ = Reqs.parse("REQUIRE")
+    reqs == reqsʹ && return info("Nothing to be done.")
+    info("Computing changes...")
+    resolve(reqsʹ)
 end
 
 function add(pkg::String, vers::VersionSet)
@@ -32,7 +54,7 @@ function rm(pkg::String)
     Write.remove(pkg)
 end
 
-available() = sort!([keys(Read.available())...], by=lowercase)
+available() = sort!(ASCIIString[keys(Read.available())...], by=lowercase)
 
 function available(pkg::String)
     avail = Read.available(pkg)
@@ -43,7 +65,7 @@ function available(pkg::String)
 end
 
 function installed()
-    pkgs = Dict{String,VersionNumber}()
+    pkgs = Dict{ASCIIString,VersionNumber}()
     for (pkg,(ver,fix)) in Read.installed()
         pkgs[pkg] = ver
     end
@@ -102,7 +124,7 @@ function clone(url::String, pkg::String)
     info("Cloning $pkg from $url")
     ispath(pkg) && error("$pkg already exists")
     try
-        Git.run(`clone $url $pkg`)
+        Git.run(`clone -q $url $pkg`)
         Git.set_remote_url(url, dir=pkg)
     catch
         run(`rm -rf $pkg`)
@@ -147,13 +169,13 @@ function checkout(pkg::String, branch::String, merge::Bool, pull::Bool)
     _checkout(pkg,branch,merge,pull)
 end
 
-function release(pkg::String)
+function free(pkg::String)
     ispath(pkg,".git") || error("$pkg is not a git repo")
-    Read.isinstalled(pkg) || error("$pkg cannot be released – not an installed package")
+    Read.isinstalled(pkg) || error("$pkg cannot be freed – not an installed package")
     avail = Read.available(pkg)
-    isempty(avail) && error("$pkg cannot be released – not a registered package")
-    Git.dirty(dir=pkg) && error("$pkg cannot be released – repo is dirty")
-    info("Releasing $pkg")
+    isempty(avail) && error("$pkg cannot be freed – not a registered package")
+    Git.dirty(dir=pkg) && error("$pkg cannot be freed – repo is dirty")
+    info("Freeing $pkg")
     vers = sort!([keys(avail)...], rev=true)
     while true
         for ver in vers
@@ -203,26 +225,28 @@ function update(branch::String)
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
-    for pkg in filter!(Read.isinstalled,[keys(avail)...])
-        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+    @sync for pkg in filter!(Read.isinstalled,[keys(avail)...])
+        @async Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
     instd = Read.installed(avail)
     free = Read.free(instd)
-    for (pkg,ver) in free
-        Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+    @sync for (pkg,ver) in free
+        @async Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
     fixed = Read.fixed(avail,instd)
-    for (pkg,ver) in fixed
+    @sync for (pkg,ver) in fixed
         ispath(pkg,".git") || continue
-        if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
-            info("Updating $pkg...")
-            @recover begin
-                Git.run(`fetch -q --all`, dir=pkg)
-                Git.success(`pull -q --ff-only`, dir=pkg) # suppress output
+        @async begin
+            if Git.attached(dir=pkg) && !Git.dirty(dir=pkg)
+                info("Updating $pkg...")
+                @recover begin
+                    Git.run(`fetch -q --all`, dir=pkg)
+                    Git.success(`pull -q --ff-only`, dir=pkg) # suppress output
+                end
             end
-        end
-        if haskey(avail,pkg)
-            Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+            if haskey(avail,pkg)
+                Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
+            end
         end
     end
     info("Computing changes...")
@@ -232,19 +256,25 @@ end
 function publish(branch::String)
     Git.branch(dir="METADATA") == branch ||
         error("METADATA must be on $branch to publish changes")
-    Git.success(`push -q -n`, dir="METADATA") ||
+    Git.success(`push -q -n origin $branch`, dir="METADATA") ||
         error("METADATA is behind origin/$branch – run Pkg.update() before publishing")
     Git.run(`fetch -q`, dir="METADATA")
     info("Validating METADATA")
     check_metadata()
-    cmd = Git.cmd(`diff --name-only --diff-filter=AMR origin/$branch HEAD --`, dir="METADATA")
     tags = Dict{ASCIIString,Vector{ASCIIString}}()
-    for line in eachline(cmd)
-        m = match(r"^(.+?)/versions/([^/]+)/sha1$", line)
+    Git.run(`update-index -q --really-refresh`, dir="METADATA")
+    cmd = `diff --name-only --diff-filter=AMR origin/$branch HEAD --`
+    for line in eachline(Git.cmd(cmd, dir="METADATA"))
+        path = chomp(line)
+        m = match(r"^(.+?)/versions/([^/]+)/sha1$", path)
         m != nothing && ismatch(Base.VERSION_REGEX, m.captures[2]) || continue
         pkg, ver = m.captures; ver = convert(VersionNumber,ver)
-        sha1 = readchomp(joinpath("METADATA",chomp(line)))
-        any(split(Git.readall(`tag --points-at $sha1`, dir=pkg))) do tag
+        sha1 = readchomp(joinpath("METADATA",path))
+        if Git.success(`cat-file -e origin/$branch:$path`, dir="METADATA")
+            old = Git.readchomp(`cat-file blob origin/$branch:$path`, dir="METADATA")
+            old == sha1 || error("$pkg v$ver SHA1 changed in METADATA – refusing to push")
+        end
+        any(split(Git.readall(`tag --contains $sha1`, dir=pkg))) do tag
             ver == convert(VersionNumber,tag) || return false
             haskey(tags,pkg) || (tags[pkg] = ASCIIString[])
             push!(tags[pkg], tag)
@@ -252,26 +282,28 @@ function publish(branch::String)
         end || error("$pkg v$ver is incorrectly tagged – $sha1 expected")
     end
     isempty(tags) && info("No new package versions to publish.")
-    for pkg in sort!([keys(tags)...])
-        forced = ASCIIString[]
-        unforced = ASCIIString[]
-        for tag in tags[pkg]
-            ver = convert(VersionNumber,tag)
-            push!(isrewritable(ver) ? forced : unforced, tag)
-        end
-        if !isempty(forced)
-            info("Pushing $pkg temporary tags: ", join(forced,", "))
-            refspecs = ["refs/tags/$tag:refs/tags/$tag" for tag in forced]
-            Git.run(`push -q --force origin $refspecs`, dir=pkg)
-        end
-        if !isempty(unforced)
-            info("Pushing $pkg permanent tags: ", join(unforced,", "))
-            refspecs = ["refs/tags/$tag:refs/tags/$tag" for tag in unforced]
-            Git.run(`push -q origin $refspecs`, dir=pkg)
+    @sync for pkg in sort!([keys(tags)...])
+        @async begin
+            forced = ASCIIString[]
+            unforced = ASCIIString[]
+            for tag in tags[pkg]
+                ver = convert(VersionNumber,tag)
+                push!(isrewritable(ver) ? forced : unforced, tag)
+            end
+            if !isempty(forced)
+                info("Pushing $pkg temporary tags: ", join(forced,", "))
+                refspecs = ["refs/tags/$tag:refs/tags/$tag" for tag in forced]
+                Git.run(`push -q --force origin $refspecs`, dir=pkg)
+            end
+            if !isempty(unforced)
+                info("Pushing $pkg permanent tags: ", join(unforced,", "))
+                refspecs = ["refs/tags/$tag:refs/tags/$tag" for tag in unforced]
+                Git.run(`push -q origin $refspecs`, dir=pkg)
+            end
         end
     end
     info("Pushing METADATA changes")
-    Git.run(`push -q`, dir="METADATA")
+    Git.run(`push -q origin $branch`, dir="METADATA")
 end
 
 function resolve(
@@ -354,13 +386,18 @@ function resolve(
     build(map(x->x[1],filter(x->x[2][2]!=nothing,changes)))
 end
 
-function write_tag_metadata(pkg::String, ver::VersionNumber, commit::String)
+function write_tag_metadata(pkg::String, ver::VersionNumber, commit::String, force::Bool=false)
     cmd = Git.cmd(`cat-file blob $commit:REQUIRE`, dir=pkg)
     reqs = success(cmd) ? Reqs.read(cmd) : Reqs.Line[]
     cd("METADATA") do
         d = joinpath(pkg,"versions",string(ver))
         mkpath(d)
         sha1file = joinpath(d,"sha1")
+        if !force && ispath(sha1file)
+            current = readchomp(sha1file)
+            current == commit ||
+                error("$pkg v$ver is already registered as $current, bailing")
+        end
         open(io->println(io,commit), sha1file, "w")
         Git.run(`add $sha1file`)
         reqsfile = joinpath(d,"requires")
@@ -392,17 +429,21 @@ function register(pkg::String, url::String)
             open(io->println(io,url), path, "w")
             Git.run(`add $path`)
         end
-        for (ver,commit) in versions
+        vers = sort!([keys(versions)...])
+        for ver in vers
             info("Tagging $pkg v$ver")
-            write_tag_metadata(pkg,ver,commit)
+            write_tag_metadata(pkg,ver,versions[ver])
         end
-        info("Committing METADATA for $pkg")
-        msg = "Register $pkg"
-        if !isempty(versions)
-            vers = map(v->"v$v", sort!([keys(versions)...]))
-            msg *= ": $(join(vers,", "))"
+        if Git.staged(dir="METADATA")
+            info("Committing METADATA for $pkg")
+            msg = "Register $pkg"
+            if !isempty(versions)
+                msg *= ": $(join(map(v->"v$v", vers),", "))"
+            end
+            Git.run(`commit -q -m $msg -- $pkg`, dir="METADATA")
+        else
+            info("No METADATA changes to commit")
         end
-        Git.run(`commit -q -m $msg -- $pkg`, dir="METADATA")
     end
 end
 
@@ -410,7 +451,7 @@ function register(pkg::String)
     Git.success(`config remote.origin.url`, dir=pkg) ||
         error("$pkg: no URL configured")
     url = Git.readchomp(`config remote.origin.url`, dir=pkg)
-    register(pkg,url)
+    register(pkg,Git.normalize_url(url))
 end
 
 function isrewritable(v::VersionNumber)
@@ -421,53 +462,62 @@ end
 
 nextbump(v::VersionNumber) = isrewritable(v) ? v : nextpatch(v)
 
-function tag(pkg::String, ver::Union(Symbol,VersionNumber), commit::String, msg::String)
+function tag(pkg::String, ver::Union(Symbol,VersionNumber), force::Bool=false, commit::String="HEAD")
     ispath(pkg,".git") || error("$pkg is not a git repo")
     Git.dirty(dir=pkg) &&
         error("$pkg is dirty – commit or stash changes to tag")
     Git.dirty(pkg, dir="METADATA") &&
         error("METADATA/$pkg is dirty – commit or stash changes to tag")
-    commit = isempty(commit) ? Git.head(dir=pkg) :
-        Git.readchomp(`rev-parse $commit`, dir=pkg)
+    commit = Git.readchomp(`rev-parse $commit`, dir=pkg)
     registered = isfile("METADATA",pkg,"url")
-    if registered
-        avail = Read.available(pkg)
-        existing = VersionNumber[keys(Read.available(pkg))...]
-        ancestors = filter(v->Git.is_ancestor_of(avail[v].sha1,commit,dir=pkg), existing)
-    else
-        tags = split(Git.readall(`tag -l v*`, dir=pkg))
-        filter!(tag->ismatch(Base.VERSION_REGEX,tag), tags)
-        existing = VersionNumber[tags...]
-        filter!(tags) do tag
-            sha1 = Git.readchomp(`rev-parse --verify $tag^{commit}`, dir=pkg)
-            Git.is_ancestor_of(sha1,commit,dir=pkg)
+    if !force
+        if registered
+            avail = Read.available(pkg)
+            existing = VersionNumber[keys(Read.available(pkg))...]
+            ancestors = filter(v->Git.is_ancestor_of(avail[v].sha1,commit,dir=pkg), existing)
+        else
+            tags = split(Git.readall(`tag -l v*`, dir=pkg))
+            filter!(tag->ismatch(Base.VERSION_REGEX,tag), tags)
+            existing = VersionNumber[tags...]
+            filter!(tags) do tag
+                sha1 = Git.readchomp(`rev-parse --verify $tag^{commit}`, dir=pkg)
+                Git.is_ancestor_of(sha1,commit,dir=pkg)
+            end
+            ancestors = VersionNumber[tags...]
         end
-        ancestors = VersionNumber[tags...]
+        sort!(existing)
+        if isa(ver,Symbol)
+            prv = isempty(existing) ? v"0" :
+                  isempty(ancestors) ? maximum(existing) : maximum(ancestors)
+            ver = (ver == :bump ) ? nextbump(prv)  :
+                  (ver == :patch) ? nextpatch(prv) :
+                  (ver == :minor) ? nextminor(prv) :
+                  (ver == :major) ? nextmajor(prv) :
+                                    error("invalid version selector: $ver")
+        end
+        isrewritable(ver) && filter!(v->v!=ver,existing)
+        check_new_version(existing,ver)
     end
-    sort!(existing)
-    if isa(ver,Symbol)
-        prv = isempty(existing) ? v"0" :
-              isempty(ancestors) ? maximum(existing) : maximum(ancestors)
-        ver = (ver == :bump ) ? nextbump(prv)  :
-              (ver == :patch) ? nextpatch(prv) :
-              (ver == :minor) ? nextminor(prv) :
-              (ver == :major) ? nextmajor(prv) :
-                                error("invalid version selector: $ver")
-    end
-    rewritable = isrewritable(ver)
-    rewritable && filter!(v->v!=ver,existing)
-    check_new_version(existing,ver)
-    isempty(msg) && (msg = "$pkg v$ver [$(commit[1:10])]")
     # TODO: check that SHA1 isn't the same as another version
-    opts = rewritable ? `--force` : `--annotate --message $msg`
     info("Tagging $pkg v$ver")
+    opts = ``
+    if force || isrewritable(ver)
+        opts = `$opts --force`
+    end
+    if !isrewritable(ver)
+        opts = `$opts --annotate --message "$pkg v$ver [$(commit[1:10])]"`
+    end
     Git.run(`tag $opts v$ver $commit`, dir=pkg, out=DevNull)
     registered || return
     try
         Git.transact(dir="METADATA") do
-            write_tag_metadata(pkg,ver,commit)
-            info("Committing METADATA for $pkg")
-            Git.run(`commit -q -m "Tag $pkg v$ver" -- $pkg`, dir="METADATA")
+            write_tag_metadata(pkg,ver,commit,force)
+            if Git.staged(dir="METADATA")
+                info("Committing METADATA for $pkg")
+                Git.run(`commit -q -m "Tag $pkg v$ver" -- $pkg`, dir="METADATA")
+            else
+                info("No METADATA changes to commit")
+            end
         end
     catch
         Git.run(`tag -d v$ver`, dir=pkg)
@@ -477,9 +527,11 @@ end
 
 function check_metadata()
     avail = Read.available()
-    instd = Read.installed(avail)
-    fixed = Read.fixed(avail,instd,VERSION)
-    deps  = Query.dependencies(avail,fixed)
+    deps, conflicts = Query.dependencies(avail)
+
+    for (dp,dv) in deps, (v,a) in dv, p in keys(a.requires)
+        haskey(deps, p) || error("package $dp v$v requires a non-registered package: $p")
+    end
 
     problematic = Resolve.sanity_check(deps)
     if !isempty(problematic)

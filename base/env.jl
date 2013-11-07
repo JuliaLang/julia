@@ -70,6 +70,8 @@ end
 end
 const ENV = EnvHash()
 
+similar(::EnvHash) = Dict{ByteString,ByteString}()
+
 getindex(::EnvHash, k::String) = @accessEnv k throw(KeyError(k))
 get(::EnvHash, k::String, def) = @accessEnv k (return def)
 in(k::String, ::KeyIterator{EnvHash}) = _hasenv(k)

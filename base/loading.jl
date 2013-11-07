@@ -1,10 +1,5 @@
 # require
 
-function is_file_readable(path::String)
-    s = stat(bytestring(path))
-    return isfile(s) && isreadable(s)
-end
-
 function find_in_path(name::String)
     isabspath(name) && return name
     isfile(name) && return abspath(name)
@@ -17,11 +12,11 @@ function find_in_path(name::String)
     end
     for prefix in [Pkg.dir(), LOAD_PATH]
         path = joinpath(prefix, name)
-        is_file_readable(path) && return abspath(path)
+        isfile(path) && return abspath(path)
         path = joinpath(prefix, base, "src", name)
-        is_file_readable(path) && return abspath(path)
+        isfile(path) && return abspath(path)
         path = joinpath(prefix, name, "src", name)
-        is_file_readable(path) && return abspath(path)
+        isfile(path) && return abspath(path)
     end
     return nothing
 end
@@ -90,7 +85,7 @@ include_string(txt::ByteString, fname::ByteString) =
 
 include_string(txt::ByteString) = include_string(txt, "string")
 
-function source_path(default::Union(String,Nothing))
+function source_path(default::Union(String,Nothing)="")
     t = current_task()
     while true
         s = t.storage
@@ -103,7 +98,6 @@ function source_path(default::Union(String,Nothing))
         t = t.parent
     end
 end
-source_path() = source_path("")
 
 macro __FILE__() source_path() end
 

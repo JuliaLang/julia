@@ -19,15 +19,19 @@ function aupd_wrapper(T, linop::Function, n::Integer,
     workl  = Array(T, lworkl)
     rwork  = cmplx ? Array(TR, ncv) : Array(TR, 0)
 
-	if isempty(v0)
+    if isempty(v0)
     	resid  = Array(T, n)
     	info   = zeros(BlasInt, 1)
-	else
-		resid  = deepcopy(v0)
+    else
+	resid  = deepcopy(v0)
     	info   = ones(BlasInt, 1)
-	end
+    end
     iparam = zeros(BlasInt, 11)
-    ipntr  = zeros(BlasInt, 14)
+    if sym && !cmplx
+        ipntr = zeros(BlasInt, 11)
+    else
+        ipntr = zeros(BlasInt, 14)
+    end
 
     ido    = zeros(BlasInt, 1)
 

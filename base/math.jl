@@ -224,6 +224,7 @@ for (fd, f) in ((:asind, :asin), (:acosd, :acos), (:atand, :atan),
                 (:asecd, :asec), (:acscd, :acsc), (:acotd, :acot))
     @eval begin
         ($fd)(y) = radians2degrees(($f)(y))
+        @vectorize_1arg Real $fd
     end
 end
 

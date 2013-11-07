@@ -45,6 +45,9 @@ immutable Requirement <: Line
     end
 end
 
+# TODO: shouldn't be neccessary #4648
+Base.isequal(a::Line, b::Line) = (a.content == b.content)
+
 # general machinery for parsing REQUIRE files
 
 function read(readable::Union(IO,Base.AbstractCmd))

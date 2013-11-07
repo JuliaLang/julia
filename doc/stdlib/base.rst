@@ -586,10 +586,14 @@ Iterable Collections
 
    Return an array of all items in a collection. For associative collections, returns (key, value) tuples.
 
+.. function:: collect(element_type, collection)
+
+   Return an array of type ``Array{element_type,1}`` of all items in a collection.
+
 .. function:: issubset(a, b)
 
    Determine whether every element of ``a`` is also in ``b``, using the
-   ``contains`` function.
+   ``in`` function.
 
 
 Indexable Collections
@@ -607,7 +611,7 @@ Indexable Collections
    The syntax ``a[i,j,...] = x`` is converted by the compiler to
    ``setindex!(a, x, i, j, ...)``.
 
-Fully implemented by: ``Array``, ``DArray``, ``AbstractArray``, ``SubArray``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``String``.
+Fully implemented by: ``Array``, ``DArray``, ``BitArray``, ``AbstractArray``, ``SubArray``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``String``.
 
 Partially implemented by: ``Range``, ``Range1``, ``Tuple``.
 
@@ -683,7 +687,7 @@ As with arrays, ``Dicts`` may be created with comprehensions. For example,
 
 Fully implemented by: ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``.
 
-Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``Array``.
+Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``Array``, ``BitArray``.
 
 Set-Like Collections
 --------------------
@@ -804,7 +808,7 @@ Dequeues
 
    Insert the elements of ``items`` to the beginning of a collection. ``prepend!([3],[1,2]) => [1,2,3]``
 
-Fully implemented by: ``Vector`` (aka 1-d ``Array``).
+Fully implemented by: ``Vector`` (aka 1-d ``Array``), ``BitVector`` (aka 1-d ``BitArray``).
 
 
 Strings
@@ -910,18 +914,13 @@ Strings
 
    Similar to ``search``, but returning the last occurance of the given characters within the given string, searching in reverse from ``start.''.
 
-.. function:: index(string, chars, [start])
+.. function:: searchindex(string, substring, [start])
 
-   Similar to ``search``, but return only the start index at which the characters were found, or 0 if they were not.
+   Similar to ``search``, but return only the start index at which the substring is found, or 0 if it is not.
 
-.. function:: rindex(string, chars, [start])
+.. function:: rsearchindex(string, substring, [start])
 
-   Similar to ``rsearch``, but return only the start index at which the characters were found, or 0 if they were not.
-
-   Similar to ``search``, but return only the start index at which the
-   characters were found, or 0 if they were not.
-
-   Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``. The return value is ``0:-1`` if there is no match.
+   Similar to ``rsearch``, but return only the start index at which the substring is found, or 0 if it is not.
 
 .. function:: contains(haystack, needle)
 
@@ -2841,7 +2840,7 @@ Data Formats
 
 .. function:: big(x)
 
-   Convert a number to a maximum precision representation (typically ``BigInt`` or ``BigFloat``)
+   Convert a number to a maximum precision representation (typically ``BigInt`` or ``BigFloat``). See ``BigFloat`` for information about some pitfalls with floating-point numbers.
 
 .. function:: bool(x)
 
@@ -3076,8 +3075,13 @@ Numbers
 
 .. function:: BigFloat(x)
 
-   Create an arbitrary precision floating point number. ``x`` may be an ``Integer``, a ``Float64``, a ``String`` or a ``BigInt``. The
-   usual mathematical operators are defined for this type, and results are promoted to a ``BigFloat``.
+   Create an arbitrary precision floating point number. ``x`` may be
+   an ``Integer``, a ``Float64``, a ``String`` or a ``BigInt``. The
+   usual mathematical operators are defined for this type, and results
+   are promoted to a ``BigFloat``. Note that because floating-point
+   numbers are not exactly-representable in decimal notation,
+   ``BigFloat(2.1)`` may not yield what you expect. You may prefer to
+   initialize constants using strings, e.g., ``BigFloat("2.1")``.
 
 .. function:: get_rounding()
 
@@ -3277,7 +3281,7 @@ Basic functions
 
 .. function:: length(A) -> Integer
 
-   Returns the number of elements in A (note that this differs from MATLAB where ``length(A)`` is the largest dimension of ``A``)
+   Returns the number of elements in A
 
 .. function:: nnz(A)
 
@@ -3337,11 +3341,11 @@ Constructors
 
 .. function:: trues(dims)
 
-   Create a Bool array with all values set to true
+   Create a ``BitArray`` with all values set to true
 
 .. function:: falses(dims)
 
-   Create a Bool array with all values set to false
+   Create a ``BitArray`` with all values set to false
 
 .. function:: fill(v, dims)
 
@@ -3461,6 +3465,8 @@ Indexing, Assignment, and Concatenation
    block matrix syntax. The first argument specifies the number of arguments to
    concatenate in each block row.
    For example, ``[a b;c d e]`` calls ``hvcat((2,3),a,b,c,d,e)``.
+
+   If the first argument is a single integer ``n``, then all block rows are assumed to have ``n`` block columns.
 
 .. function:: flipdim(A, d)
 
@@ -3751,27 +3757,41 @@ Statistics
 .. function:: mean(v[, region])
 
    Compute the mean of whole array ``v``, or optionally along the dimensions in ``region``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
+   For applications requiring the handling of missing data, the ``DataArray``
+   package is recommended.
 
 .. function:: std(v[, region])
 
    Compute the sample standard deviation of a vector or array ``v``, optionally along dimensions in ``region``. The algorithm returns an estimator of the generative distribution's standard deviation under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sqrt(sum((v - mean(v)).^2) / (length(v) - 1))``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
+   For applications requiring the handling of missing data, the ``DataArray``
+   package is recommended.
 
 .. function:: stdm(v, m)
 
    Compute the sample standard deviation of a vector ``v`` with known mean ``m``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: var(v[, region])
 
    Compute the sample variance of a vector or array ``v``, optionally along dimensions in ``region``. The algorithm will return an estimator of the generative distribution's variance under the assumption that each entry of ``v`` is an IID draw from that generative distribution. This computation is equivalent to calculating ``sum((v - mean(v)).^2) / (length(v) - 1)``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
+   For applications requiring the handling of missing data, the ``DataArray``
+   package is recommended.
 
 .. function:: varm(v, m)
 
    Compute the sample variance of a vector ``v`` with known mean ``m``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: median(v; checknan::Bool=true)
 
    Compute the median of a vector ``v``. If keyword argument ``checknan`` is true
    (the default), an error is raised for data containing NaN values.
+   Note: Julia does not ignore ``NaN`` values in the computation.
+   For applications requiring the handling of missing data, the ``DataArray``
+   package is recommended.
 
 .. function:: median!(v; checknan::Bool=true)
 
@@ -3783,12 +3803,14 @@ Statistics
    bins. The return values are a range ``e``, which correspond to the
    edges of the bins, and ``counts`` containing the number of elements of
    ``v`` in each bin.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: hist(v, e) -> e, counts
 
    Compute the histogram of ``v`` using a vector/range ``e`` as the edges for
    the bins. The result will be a vector of length ``length(e) - 1``, such that the
    element at location ``i`` satisfies ``sum(e[i] .< v .<= e[i+1])``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: hist2d(M, e1, e2) -> (edge1, edge2, counts)
 
@@ -3798,27 +3820,32 @@ Statistics
    ``edge1`` (the bin edges used in the first dimension), ``edge2`` (the bin edges
    used in the second dimension), and ``counts``, a histogram matrix of size
    ``(length(edge1)-1, length(edge2)-1)``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: histrange(v, n)
 
    Compute *nice* bin ranges for the edges of a histogram of ``v``, using
    approximately ``n`` bins. The resulting step sizes will be 1, 2 or 5
    multiplied by a power of 10.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: midpoints(e)
 
    Compute the midpoints of the bins with edges ``e``. The result is a
    vector/range of length ``length(e) - 1``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: quantile(v, p)
 
    Compute the quantiles of a vector ``v`` at a specified set of probability values ``p``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
-.. function:: quantile(v)
+.. function:: quantile(v, p)
 
-   Compute the quantiles of a vector ``v`` at the probability values ``[.0, .2, .4, .6, .8, 1.0]``.
+   Compute the quantile of a vector ``v`` at the probability ``p``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
-.. function:: quantile!(v, [p])
+.. function:: quantile!(v, p)
 
    Like ``quantile``, but overwrites the input vector.
 
@@ -3827,12 +3854,14 @@ Statistics
    Compute the Pearson covariance between two vectors ``v1`` and ``v2``. If
    called with a single element ``v``, then computes covariance of columns of
    ``v``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 .. function:: cor(v1[, v2])
 
    Compute the Pearson correlation between two vectors ``v1`` and ``v2``. If
    called with a single element ``v``, then computes correlation of columns of
    ``v``.
+   Note: Julia does not ignore ``NaN`` values in the computation.
 
 Signal Processing
 -----------------
@@ -4694,6 +4723,15 @@ C Interface
    Copy ``N`` elements from a source array to a destination, starting at offset ``so``
    in the source and ``do`` in the destination.
 
+.. function:: copy!(dest, src)
+
+   Copy all elements from collection ``src`` to array ``dest``.
+
+.. function:: copy!(dest, do, src, so, N)
+
+   Copy ``N`` elements from collection ``src`` starting at offset ``so``, to
+   array ``dest`` starting at offset ``do``.
+
 .. function:: pointer(a[, index])
 
    Get the native address of an array element. Be careful to ensure that a julia
@@ -4948,6 +4986,12 @@ Tasks
 .. function:: task_local_storage(symbol, value)
 
    Assign a value to a symbol in the current task's task-local storage.
+
+.. function:: task_local_storage(body, symbol, value)
+
+   Call the function ``body`` with a modified task-local storage, in which
+   ``value`` is assigned to ``symbol``; the previous value of ``symbol``, or
+   lack thereof, is restored afterwards. Useful for emulating dynamic scoping.
 
 .. function:: Condition()
 

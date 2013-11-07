@@ -21,7 +21,7 @@ static char *extensions[] = { "", ".dylib" };
 #elif defined(_OS_WINDOWS_)
 static char *extensions[] = { "", ".dll" };
 #define N_EXTENSIONS 2
-int needsSymRefreshModuleList = 0;
+extern int needsSymRefreshModuleList;
 #else
 static char *extensions[] = { ".so", "" };
 #define N_EXTENSIONS 2

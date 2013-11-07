@@ -52,6 +52,7 @@ void __cdecl fpreset (void);
 #include <windows.h>
 #include <dbghelp.h>
 extern int needsSymRefreshModuleList;
+extern WINBOOL WINAPI (*hSymRefreshModuleList)(HANDLE);
 #endif
 #if defined(__linux__)
 //#define _GNU_SOURCE
@@ -109,8 +110,7 @@ void fpe_handler(int arg)
 #endif
 }
 
-#ifndef _OS_WINDOWS_
-#if defined(_OS_LINUX_)
+#if defined(__linux__) || defined(__FreeBSD__)
 extern int in_jl_;
 void segv_handler(int sig, siginfo_t *info, void *context)
 {
@@ -142,8 +142,6 @@ void segv_handler(int sig, siginfo_t *info, void *context)
             raise(sig);
     }
 }
-#endif
-
 #endif
 
 volatile sig_atomic_t jl_signal_pending = 0;
@@ -602,9 +600,9 @@ void julia_init(char *imageFile)
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
 #ifdef _OS_WINDOWS_
     uv_dlopen("ntdll.dll",jl_ntdll_handle); //bypass julia's pathchecking for system dlls
-    uv_dlopen("Kernel32.dll",jl_kernel32_handle);
+    uv_dlopen("kernel32.dll",jl_kernel32_handle);
     uv_dlopen("msvcrt.dll",jl_crtdll_handle);
-    uv_dlopen("Ws2_32.dll",jl_winsock_handle);
+    uv_dlopen("ws2_32.dll",jl_winsock_handle);
     _jl_exe_handle.handle = GetModuleHandleA(NULL);
     if (!DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
         GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
@@ -614,6 +612,9 @@ void julia_init(char *imageFile)
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
     SymInitialize(GetCurrentProcess(), NULL, 1);
     needsSymRefreshModuleList = 0;
+    uv_lib_t jl_dbghelp;
+    uv_dlopen("dbghelp.dll",&jl_dbghelp);
+    if (uv_dlsym(&jl_dbghelp,"SymRefreshModuleList",(void**)&hSymRefreshModuleList)) hSymRefreshModuleList = 0;
 #endif
     jl_io_loop = uv_default_loop(); //this loop will internal events (spawining process etc.)
     init_stdio();

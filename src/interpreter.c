@@ -245,13 +245,11 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                 bp = &b->value;
             }
         }
-        jl_value_t *atypes=NULL, *meth=NULL, *tvars=NULL;
-        JL_GC_PUSH3(&atypes, &meth, &tvars);
+        jl_value_t *atypes=NULL, *meth=NULL;
+        JL_GC_PUSH2(&atypes, &meth);
         atypes = eval(args[1], locals, nl);
         meth = eval(args[2], locals, nl);
-        tvars = eval(args[3], locals, nl);
-        jl_method_def(fname, bp, b, (jl_tuple_t*)atypes,
-                      (jl_function_t*)meth, (jl_tuple_t*)tvars);
+        jl_method_def(fname, bp, b, (jl_tuple_t*)atypes, (jl_function_t*)meth);
         JL_GC_POP();
         return *bp;
     }

@@ -313,6 +313,8 @@ end
 #    closenotify::Condition
 #end
 
+isreadable(io::TcpSocket) = true
+iswritable(io::TcpSocket) = true
 
 show(io::IO,sock::TcpSocket) = print(io,"TcpSocket(",uv_status_string(sock),", ",
     nb_available(sock.buffer)," bytes waiting)")

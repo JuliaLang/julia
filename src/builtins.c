@@ -801,6 +801,8 @@ JL_CALLABLE(jl_trampoline)
     jl_function_t *f = (jl_function_t*)F;
     assert(f->linfo != NULL);
     // to run inference on all thunks. slows down loading files.
+    // NOTE: if this call to inference is removed, type_annotate in inference.jl
+    // needs to be updated to infer inner functions.
     if (f->linfo->inferred == 0) {
         if (!jl_in_inference) {
             if (!jl_is_expr(f->linfo->ast)) {

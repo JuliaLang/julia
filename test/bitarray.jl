@@ -126,6 +126,16 @@ for m1 = 0 : v1
     end
 end
 
+for m1 = 0 : v1
+    for m2 = [0, 1, 63, 64, 65, 127, 128, 129]
+        b1 = randbool(m1)
+        b2 = randbool(m2)
+        i1 = bitunpack(b1)
+        i2 = bitunpack(b2)
+        @test isequal(bitunpack(prepend!(b1, b2)), prepend!(i1, i2))
+    end
+end
+
 b1 = randbool(v1)
 i1 = bitunpack(b1)
 for m = 1 : v1
@@ -655,6 +665,42 @@ for k = -max(n1,n2) : max(n1,n2)
     @check_bit_operation tril BitMatrix (b1, k)
     @check_bit_operation triu BitMatrix (b1, k)
 end
+
+b1 = randbool(n1, n1)
+@check_bit_operation istril Bool (b1,)
+b1 = randbool(n1, n2)
+@check_bit_operation istril Bool (b1,)
+b1 = randbool(n2, n1)
+@check_bit_operation istril Bool (b1,)
+
+b1 = tril(randbool(n1, n1))
+@check_bit_operation istril Bool (b1,)
+b1 = tril(randbool(n1, n2))
+@check_bit_operation istril Bool (b1,)
+b1 = tril(randbool(n2, n1))
+@check_bit_operation istril Bool (b1,)
+
+b1 = randbool(n1, n1)
+@check_bit_operation istriu Bool (b1,)
+b1 = randbool(n1, n2)
+@check_bit_operation istriu Bool (b1,)
+b1 = randbool(n2, n1)
+@check_bit_operation istriu Bool (b1,)
+
+b1 = triu(randbool(n1, n1))
+@check_bit_operation istriu Bool (b1,)
+b1 = triu(randbool(n1, n2))
+@check_bit_operation istriu Bool (b1,)
+b1 = triu(randbool(n2, n1))
+@check_bit_operation istriu Bool (b1,)
+
+b1 = randbool(n1)
+b2 = randbool(n2)
+@check_bit_operation kron BitVector (b1, b2)
+
+b1 = randbool(s1, s2)
+b2 = randbool(s3, s4)
+@check_bit_operation kron BitMatrix (b1, b2)
 
 #b1 = randbool(v1)
 #@check_bit_operation diff Vector{Int} (b1,)

@@ -55,19 +55,21 @@ mimewritable(m::String, x) = mimewritable(MIME(m), x)
 # format and is returned unmodified.  This is useful so that raw data can be
 # passed to display(m::MIME, x).
 
-for mime in ["text/vnd.graphviz", "text/latex", "text/calendar", "text/n3", "text/richtext", "text/x-setext", "text/sgml", "text/tab-separated-values", "text/x-vcalendar", "text/x-vcard", "text/cmd", "text/css", "text/csv", "text/html", "text/javascript", "text/plain", "text/vcard", "text/xml", "application/atom+xml", "application/ecmascript", "application/json", "application/rdf+xml", "application/rss+xml", "application/xml-dtd", "application/postscript", "image/svg+xml", "application/x-latex", "application/xhtml+xml", "application/javascript", "application/xml", "model/x3d+xml", "model/x3d+vrml", "model/vrml"]
-    mimeT = MIME{symbol(mime)}
-    global istext, reprmime, stringmime
-    istext(::mimeT) = true
-    if mime != "text/plain" # strings are shown escaped for text/plain
-        reprmime(m::mimeT, x::String) = x
+macro textmime(mime)
+    quote
+        mimeT = MIME{symbol($mime)}
+        # avoid method ambiguities with the general definitions below:
+        # (Q: should we treat Vector{Uint8} as a bytestring?)
+        Base.Multimedia.reprmime(m::mimeT, x::Vector{Uint8}) = sprint(writemime, m, x)
+        Base.Multimedia.stringmime(m::mimeT, x::Vector{Uint8}) = reprmime(m, x)
+
+        Base.Multimedia.istext(::mimeT) = true
+        if $(mime != "text/plain") # strings are shown escaped for text/plain
+            Base.Multimedia.reprmime(m::mimeT, x::String) = x
+        end
+        Base.Multimedia.reprmime(m::mimeT, x) = sprint(writemime, m, x)
+        Base.Multimedia.stringmime(m::mimeT, x) = reprmime(m, x)
     end
-    reprmime(m::mimeT, x) = sprint(writemime, m, x)
-    stringmime(m::mimeT, x) = reprmime(m, x)
-    # avoid method ambiguities with definitions below:
-    # (Q: should we treat Vector{Uint8} as a bytestring?)
-    reprmime(m::mimeT, x::Vector{Uint8}) = sprint(writemime, m, x)
-    stringmime(m::mimeT, x::Vector{Uint8}) = reprmime(m, x)
 end
 
 istext(::MIME) = false
@@ -84,6 +86,10 @@ stringmime(m::MIME, x::Vector{Uint8}) = base64(write, x)
 istext(m::String) = istext(MIME(m))
 reprmime(m::String, x) = reprmime(MIME(m), x)
 stringmime(m::String, x) = stringmime(MIME(m), x)
+
+for mime in ["text/vnd.graphviz", "text/latex", "text/calendar", "text/n3", "text/richtext", "text/x-setext", "text/sgml", "text/tab-separated-values", "text/x-vcalendar", "text/x-vcard", "text/cmd", "text/css", "text/csv", "text/html", "text/javascript", "text/plain", "text/vcard", "text/xml", "application/atom+xml", "application/ecmascript", "application/json", "application/rdf+xml", "application/rss+xml", "application/xml-dtd", "application/postscript", "image/svg+xml", "application/x-latex", "application/xhtml+xml", "application/javascript", "application/xml", "model/x3d+xml", "model/x3d+vrml", "model/vrml"]
+    @eval @textmime $mime
+end
 
 ###########################################################################
 # We have an abstract Display class that can be subclassed in order to

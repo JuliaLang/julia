@@ -1067,9 +1067,62 @@ f4518(x::ASCIIString, y::Union(Int32,Int64)) = 1
 # issue #4581
 bitstype 64 Date4581{T}
 let
-    x = Intrinsics.box(Date4581{Int}, Intrinsics.unbox(Int,1234))
+    x = Intrinsics.box(Date4581{Int}, Intrinsics.unbox(Int64,int64(1234)))
     xs = Date4581[x]
     ys = copy(xs)
     @test ys !== xs
     @test ys == xs
 end
+
+# issue #4645
+i4645(x) = (println(zz); zz = x; zz)
+@test_throws i4645(4)
+
+# issue #4505
+let
+    g4505{X}(::X) = 0
+    @test g4505(0) == 0
+end
+@test !isdefined(:g4505)
+
+# issue #4681
+# ccall should error if convert() returns something of the wrong type
+type Z4681
+    x::Ptr{Void}
+    Z4681() = new(C_NULL)
+end
+Base.convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
+@test_throws ccall(:printf,Int,(Ptr{Uint8},Ptr{Z4681}),"",Z4681())
+
+# issue #4479
+f4479(::Real,c) = 1
+f4479(::Int, ::Int, ::Bool) = 2
+f4479(::Int, x, a...) = 0
+@test f4479(1,1,true) == 2
+
+# issue #4688
+a4688(y) = "should be unreachable by calling b"
+b4688(y) = "not an Int"
+begin
+    a4688(y::Int) = "an Int"
+    let x = true
+        b4688(y::Int) = x == true ? a4688(y) : a4688(y)
+    end
+end
+@test b4688(1) == "an Int"
+
+# issue #4731
+type SIQ{A,B} <: Number
+    x::A
+end
+import Base: promote_rule
+promote_rule{T,T2,S,S2}(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) = SIQ{promote_type(T,S)}
+@test_throws promote_type(SIQ{Int},SIQ{Float64})
+
+# issue #4675
+f4675(x::StridedArray...) = 1
+f4675{T}(x::StridedArray{T}...) = 2
+@test f4675(zeros(50,50), zeros(50,50)) == 2
+g4675{T}(x::StridedArray{T}...) = 2
+g4675(x::StridedArray...) = 1
+@test g4675(zeros(50,50), zeros(50,50)) == 2

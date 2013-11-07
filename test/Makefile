@@ -8,6 +8,8 @@ TESTS = all core keywordargs numbers strings unicode collections hashing	\
 	socket floatapprox priorityqueue readdlm regex float16 combinatorics    \
 	sysinfo rounding ranges
 
+default: all
+
 $(TESTS) ::
 	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) ./runtests.jl $@)
 

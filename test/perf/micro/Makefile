@@ -10,6 +10,32 @@ else
 MATHEMATICABIN = math
 endif
 
+#Which BLAS library am I using?
+ifeq ($(USE_SYSTEM_BLAS), 0)
+BLASDIR=$(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/
+LIBBLAS=$(BLASDIR)libopenblas.a
+endif
+
+FFLAGS=-fexternal-blas
+ifeq ($(findstring gfortran, $(FC)), gfortran)
+ifeq ($(USE_BLAS64), 1)
+echo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+echo WARNING: gfortran cannot multiply matrices using 64-bit external BLAS.
+echo          External BLAS usage is turned OFF.
+echo !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+FFLAGS=
+endif
+FFLAGS+= -static-libgfortran
+endif
+
+#Which libm library am I using?
+LIBMDIR = $(JULIAHOME)/deps/openlibm/
+ifeq ($(USE_SYSTEM_LIBM), 0)
+ifeq ($(USE_SYSTEM_OPENLIBM), 0)
+LIBM = $(LIBMDIR)libopenlibm.a
+endif
+endif
+
 default: benchmarks.html
 
 export OMP_NUM_THREADS=1
@@ -17,14 +43,15 @@ export GOTO_NUM_THREADS=1
 export OPENBLAS_NUM_THREADS=1
 
 perf.h: $(JULIAHOME)/deps/Versions.make
-	echo '#include "$(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/cblas.h"' > $@
+	echo '#include "$(BLASDIR)cblas.h"' > $@
 	echo '#include "$(JULIAHOME)/deps/random/dsfmt-$(DSFMT_VER)/dSFMT.c"' >> $@
 
 bin/perf%: perf.c perf.h
-	$(CC) -std=c99 -O$* $< -o $@ $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.a -lpthread
+	$(CC) -std=c99 -O$* $< -o $@ -L$(BLASDIR) $(LIBBLAS) -L$(LIBMDIR) $(LIBM) -lpthread
 
 bin/fperf%: perf.f90
-	$(FC) -static-libgfortran -O$* -fexternal-blas $< -o $@ $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.a -lpthread
+	mkdir -p mods/$@ #Modules for each binary go in separate directories 
+	$(FC) $(FFLAGS) -Jmods/$@ -O$* $< -o $@ -L$(BLASDIR) $(LIBBLAS) -L$(LIBMDIR) $(LIBM) -lpthread
 
 benchmarks/c.csv: \
 	benchmarks/c0.csv \
@@ -50,7 +77,7 @@ benchmarks/go.csv: perf.go
 	for t in 1 2 3 4 5; do go run $<; done >$@
 
 benchmarks/julia.csv: perf.jl
-	for t in 1 2 3 4 5; do ../../julia $<; done >$@
+	for t in 1 2 3 4 5; do ../../../julia $<; done >$@
 
 benchmarks/python.csv: perf.py
 	for t in 1 2 3 4 5; do python $<; done >$@
@@ -89,6 +116,6 @@ benchmarks.html: bin/table.pl benchmarks.csv
 	@$(call PRINT_PERL, $^ >$@)
 
 clean:
-	@rm -rf perf.h bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv *.mod *~
+	@rm -rf perf.h bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv mods *~ octave-core
 
 .PHONY: all perf clean

@@ -1,6 +1,19 @@
 Julia v0.2.0 Release Notes
 ==========================
 
+The 0.2 release brings improvements to many areas of Julia. Among the
+most visible changes are support for 64-bit Windows, keyword arguments
+to functions, immutable types, a redesigned and polished package
+manager, a multimedia interface supporting usage of Julia in IPython,
+a built-in profiler, and major improvements to Julia's linear algebra,
+I/O, and parallel capabilities. These are accompanied by many other
+changes adding new features, enhancing the library's consistency,
+improving performance, increasing test coverage, easing installation,
+and expanding the documentation. While not part of Julia proper, the
+package ecosystem has also grown and matured considerably since the
+0.1 release. See below for more information about the long list of
+changes that improve Julia's usability and performance.
+
 New language features
 ---------------------
 
@@ -37,6 +50,14 @@ New language features
 
   * A semicolon is now allowed after an `import` or `using` statement ([#4130]).
 
+  * In an interactive session (REPL), you can use `;cmd` to run `cmd` via an interactive
+    shell. For example:
+
+        julia> ;ls
+        CONTRIBUTING.md  Makefile           VERSION      deps/      julia@  ui/
+        DISTRIBUTING.md  NEWS.md            Windows.inc  doc/       src/    usr/
+        LICENSE.md       README.md          base/        etc/       test/
+        Make.inc         README.windows.md  contrib/     examples/  tmp/
 
 New library functions
 ---------------------
@@ -44,7 +65,7 @@ New library functions
   * Sampling profiler ([#2597]).
 
   * Functions for examining stages of the compiler's output:
-    `code_lowered`, `code_typed`, `code_llvm`, and `code_native`
+    `code_lowered`, `code_typed`, `code_llvm`, and `code_native`.
 
   * Multimedia I/O API (display, writemime, etcetera) ([#3932]).
 
@@ -56,8 +77,9 @@ New library functions
 
   * `methodswith` shows all methods with an argument of specific type.
 
-  * `mapslices` provides a general way to perform operations on slices of arrays
-    ([#2204])
+  * `mapslices` provides a general way to perform operations on slices of arrays ([#2204]).
+
+  * `repeat` function for constructing Arrays with repeated elements ([#3605]).
 
   * `Collections.PriorityQueue` type and `Collections.heap` functions ([#2920]).
 
@@ -65,17 +87,19 @@ New library functions
 
   * `erfinv` and `erfcinv` functions ([#2987]).
 
-  * `varm`, `stdm` ([#2265])
+  * `varm`, `stdm` ([#2265]).
 
-  * `logdet` ([#3070])
+  * `digamma`, `invdigamma`, `trigamma` and `polygamma` for calculating derivatives of `gamma` function ([#3233]). 
 
-  * names for C-compatible types: `Cchar`, `Clong`, etc. ([#2370]).
+  * `logdet` ([#3070]).
+
+  * Names for C-compatible types: `Cchar`, `Clong`, etc. ([#2370]).
   
-  * `cglobal` to access global variables ([#1815])
+  * `cglobal` to access global variables ([#1815]).
 
-  * `unsafe_pointer_to_objref` ([#2468]) and `pointer_from_objref` ([#2515])
+  * `unsafe_pointer_to_objref` ([#2468]) and `pointer_from_objref` ([#2515]).
 
-  * `readandwrite` for external processes
+  * `readandwrite` for external processes.
 
   * I/O functions `readbytes` and `readbytes!` ([#3878]).
 
@@ -90,86 +114,95 @@ New library functions
 
   * `interrupt` for interrupting worker processes ([#3819]).
   
-  * `timedwait` does a polled wait for an event till a specified timeout.  
+  * `timedwait` does a polled wait for an event till a specified timeout.
   
-  * `Condition` type with `wait` and `notify` functions for synchronizing `Task`s
+  * `Condition` type with `wait` and `notify` functions for `Task` synchronization.
 
-  * `versioninfo` provides detailed version information
+  * `versioninfo` provides detailed version information, especially useful when
+    reporting and diagnosing bugs.
 
-  * `detach` for running child processes in a separate process group
+  * `detach` for running child processes in a separate process group.
 
-  * `setenv` for passing environment variables to child processes
+  * `setenv` for passing environment variables to child processes.
 
   * `ifelse` eagerly-evaluated conditional function, especially useful for
-    vectorized conditionals
+    vectorized conditionals.
 
 Library improvements
 --------------------
 
   * `isequal` now returns `false` for numbers of different types.
-    This makes it easier to define hash functions for new numeric types.
+    This makes it much easier to define hashing for new numeric types.
     Uses of `Dict` with numeric keys might need to change
     to account for this increased strictness.
 
-  * Rewritten `Pkg` system for much greater robustness in case of failures,
-    versioned dependencies, and many other enhancements.
+  * A redesigned and rewritten `Pkg` system is much more robust in case of problems.
+    The the basic interface to adding and removing package requirements remains the
+    same, but great deal of additional functionality for developing packages in-place
+    was added. See the new [packages chapter] in the manual for further details.
 
-  * Sort API updates ([#3665]).
+  * Sorting API updates ([#3665]) – see [sorting functions].
 
-  * `delete!(d::Dict, key)` has now been split
-    into separate `pop!` and `delete!` variants:
-    the former returns the deleted value and behaves like the old `delete!`,
-    and the latter returns `d`
-    and does not throw an exception if `key` was not found ([#3439]).
+  * The `delete!(d::Dict, key)` function has been split into separate `pop!`
+    and `delete!` functions ([#3439]).
+    `pop!(d,key)` removes `key` from `d` and returns the value that was associated with it;
+    it throws an exception if `d` does not contain `key`.
+    `delete!(d,key)` removes `key` from `d` and succeeds regardless of whether `d`
+    contained `key` or not, returning `d` itself in either case.
 
-  * Linear-algebra factorization routines (`lu`, `chol`, etc.)
-    now return `Factorization` objects (and `lud`, `chold`, etc. are deprecated)
-    ([#2212]).
+  * Linear-algebra factorization routines (`lu`, `chol`, etc.) now return
+    `Factorization` objects (and `lud`, `chold`, etc. are deprecated; [#2212]).
 
-  * A number of improvements to sparse matrix capabilities
-    and sparse linear algebra.
+  * A number of improvements to sparse matrix capabilities and sparse linear algebra.
 
   * More linear algebra fixes and eigensolver hooks
     for `SymTridiagonal`, `Tridiagonal` and `Bidiagonal` matrix types
-    ([#2606], [#2608], [#2609], [#2611], [#2678], [#2713], [#2720], [#2725])
+    ([#2606], [#2608], [#2609], [#2611], [#2678], [#2713], [#2720], [#2725]).
 
-  * Change `integer_valued`, `real_valued`, and so on
-    to `isinteger`, `isreal`, and so on,
-    and semantics of the later are now value-based rather than type-based,
-    unlike Matlab/Octave ([#3071]).
-    `isbool` and `iscomplex` are eliminated
-    in favor of general `iseltype` function.
+  * Change `integer_valued`, `real_valued`, and so on to `isinteger`, `isreal`,
+    and so on, and semantics of the later are now value-based rather than type-based,
+    unlike Matlab/Octave ([#3071]). `isbool` and `iscomplex` are eliminated in favor
+    of a general `iseltype` function.
 
   * Transitive comparison of floats with rationals ([#3102]).
 
-  * Fast primality testing (da670c4).
+  * Fast prime generation with `primes` and fast primality testing with `isprime`.
 
-  * `sum` and `cumsum` now use pairwise summation for better accuracy ([#4039]).
+  * `sum` and `cumsum` now use [pairwise summation] for better accuracy ([#4039]).
 
-  * Dot operators (`.+`, `.*` etc.)
-    now broadcast singleton dimensions of array arguments.
+  * Dot operators (`.+`, `.*` etc.) now broadcast singleton dimensions of array arguments.
     This behavior can be applied to any function using `broadcast(f, ...)`.
 
-  * `combinations`, `permutations`, and `partitions`
-    now return iterators instead of a task,
+  * `combinations`, `permutations`, and `partitions` now return iterators instead of a task,
     and `integer_partitions` has been renamed to `partitions` ([#3989], [#4055]).
 
-  * `isreadable`/`iswritable` functions added for more IO types ([#3872]).
+  * `isreadable`/`iswritable` methods added for more IO types ([#3872]).
 
   * Much faster and improved `readdlm` and `writedlm` ([#3350], [#3468], [#3483]).
 
-  * Faster `matchall` ([#3719]), and a number of string and regex improvements.
+  * Faster `matchall` ([#3719]), and various string and regex improvements.
 
-  * Documentation for writing packages ([#2714], [#2769], [#2791])
-    and linear algebra ([#2807])
+  * Documentation of advanced linear algebra features ([#2807]).
 
-  * Support optional RTLD flags in `dlopen` ([#2380])
+  * Support optional RTLD flags in `dlopen` ([#2380]).
+
+  * `pmap` now works with any iterable collection.
 
   * Options in `pmap` for retrying or ignoring failed tasks.
-    Also `pmap` now works with any iterable.
 
-  * New `sinpi(x)` and `cospi(x)` functions
-    to compute sine and cosine of `pi*x` more accurately ([#4112]).
+  * New `sinpi(x)` and `cospi(x)` functions to compute sine and cosine of `pi*x`
+    more accurately ([#4112]).
+
+  * New implementations of elementary complex functions
+    `sqrt`, `log`, `asin`, `acos`, `atan`, `tanh`, `asinh`, `acosh`, `atanh`
+    with correct branch cuts ([#2891]).
+
+  * Improved behavior of `SubArray` ([#4412], [#4284], [#4044], [#3697], [#3790],
+    [#3148], [#2844], [#2644] and various other fixes).
+
+  * New convenience functions in graphics API.
+
+  * Improved backtraces on Windows and OS X.
 
 Deprecated or removed
 ---------------------
@@ -190,7 +223,7 @@ Deprecated or removed
 
   * `logb` and `ilogb` renamed to `exponent` ([#2516]).
 
-  * `quote_string` renamed to `repr`.
+  * `quote_string` became a method of `repr`.
 
   * `safe_char`, `check_ascii`, and `check_utf8` replaced by
     `is_valid_char`, `is_valid_ascii`, and `is_valid_utf8`, respectively.
@@ -213,14 +246,13 @@ Deprecated or removed
   * `remote_call`, `remote_call_fetch`, and `remote_call_wait`
     replaced by `remotecall`, `remotecall_fetch`, and `remotecall_wait`.
 
-  * `has` replaced by `contains` for sets and by `haskey` for dictionaries.
+  * `has` replaced by `in` for sets and by `haskey` for dictionaries.
 
   * `diagmm` and `diagmm!` replaced by `scale` and `scale!` ([#2916]).
 
-  * `unsafe_ref` and `unsafe_assign`
-    replaced by `unsafe_load` and `unsafe_store!`.
+  * `unsafe_ref` and `unsafe_assign` replaced by `unsafe_load` and `unsafe_store!`.
 
-  * `add_each!` and `del_each!` replaced by `union!` and `setdiff!`
+  * `add_each!` and `del_each!` replaced by `union!` and `setdiff!`.
 
   * `isdenormal` renamed to `issubnormal` ([#3105]).
 
@@ -235,12 +267,12 @@ Deprecated or removed
 
   * `add` and `add!` for `Set` replaced by `push!`.
 
-  * Deprecated `ls` function in favor of `readdir` or `; ls` in the REPL.
+  * `ls` function deprecated in favor of `readdir` or `;ls` in the REPL.
 
   * `start_timer` now expects arguments in units of seconds, not milliseconds.
 
-  * Shell redirection operators `|`, `>`, and `<`
-    were eliminated in favor of a new operator `|>` ([#3523]).
+  * Shell redirection operators `|`, `>`, and `<` eliminated in favor of a new
+    operator `|>` ([#3523]).
 
   * `amap` is deprecated in favor of new `mapslices` functionality.
 
@@ -281,6 +313,7 @@ Too numerous to mention.
 [#2608]: https://github.com/JuliaLang/julia/issues/2608
 [#2609]: https://github.com/JuliaLang/julia/issues/2609
 [#2611]: https://github.com/JuliaLang/julia/issues/2611
+[#2644]: https://github.com/JuliaLang/julia/issues/2644
 [#2678]: https://github.com/JuliaLang/julia/issues/2678
 [#2703]: https://github.com/JuliaLang/julia/issues/2703
 [#2713]: https://github.com/JuliaLang/julia/issues/2713
@@ -291,6 +324,8 @@ Too numerous to mention.
 [#2791]: https://github.com/JuliaLang/julia/issues/2791
 [#2807]: https://github.com/JuliaLang/julia/issues/2807
 [#2814]: https://github.com/JuliaLang/julia/issues/2814
+[#2844]: https://github.com/JuliaLang/julia/issues/2844
+[#2891]: https://github.com/JuliaLang/julia/issues/2891
 [#2916]: https://github.com/JuliaLang/julia/issues/2916
 [#2920]: https://github.com/JuliaLang/julia/issues/2920
 [#2987]: https://github.com/JuliaLang/julia/issues/2987
@@ -300,6 +335,7 @@ Too numerous to mention.
 [#3102]: https://github.com/JuliaLang/julia/issues/3102
 [#3105]: https://github.com/JuliaLang/julia/issues/3105
 [#3140]: https://github.com/JuliaLang/julia/issues/3140
+[#3148]: https://github.com/JuliaLang/julia/issues/3148
 [#3149]: https://github.com/JuliaLang/julia/issues/3149
 [#3272]: https://github.com/JuliaLang/julia/issues/3272
 [#3350]: https://github.com/JuliaLang/julia/issues/3350
@@ -310,7 +346,9 @@ Too numerous to mention.
 [#3523]: https://github.com/JuliaLang/julia/issues/3523
 [#3649]: https://github.com/JuliaLang/julia/issues/3649
 [#3665]: https://github.com/JuliaLang/julia/issues/3665
+[#3697]: https://github.com/JuliaLang/julia/issues/3697
 [#3719]: https://github.com/JuliaLang/julia/issues/3719
+[#3790]: https://github.com/JuliaLang/julia/issues/3790
 [#3819]: https://github.com/JuliaLang/julia/issues/3819
 [#3872]: https://github.com/JuliaLang/julia/issues/3872
 [#3874]: https://github.com/JuliaLang/julia/issues/3874
@@ -320,8 +358,15 @@ Too numerous to mention.
 [#3989]: https://github.com/JuliaLang/julia/issues/3989
 [#4014]: https://github.com/JuliaLang/julia/issues/4014
 [#4039]: https://github.com/JuliaLang/julia/issues/4039
+[#4044]: https://github.com/JuliaLang/julia/issues/4044
 [#4055]: https://github.com/JuliaLang/julia/issues/4055
 [#4112]: https://github.com/JuliaLang/julia/issues/4112
 [#4130]: https://github.com/JuliaLang/julia/issues/4130
 [#4177]: https://github.com/JuliaLang/julia/issues/4177
 [#4235]: https://github.com/JuliaLang/julia/issues/4235
+[#4284]: https://github.com/JuliaLang/julia/issues/4284
+[#4412]: https://github.com/JuliaLang/julia/issues/4412
+
+[packages chapter]: http://docs.julialang.org/en/latest/manual/packages/
+[sorting functions]: http://docs.julialang.org/en/latest/stdlib/sort/
+[pairwise summation]: https://en.wikipedia.org/wiki/Pairwise_summation

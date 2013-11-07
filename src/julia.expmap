@@ -245,7 +245,7 @@
     jl_pututf8;
     jl_pututf8_copy;
     jl_pwrite;
-    jl_readBuffer;
+    jl_read_buffer;
     jl_readdir;
     jl_readuntil;
     jl_throw;
@@ -364,6 +364,7 @@
     memhash_seed;
     open_any_tcp_port;
     repl_callback_enable;
+    jl_init_repl;
     restore_signals;
     rl_clear_input;
     jl_SC_CLK_TCK;

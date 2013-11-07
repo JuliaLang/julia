@@ -12,7 +12,7 @@ function cd(dir::String)
     @windows_only systemerror("chdir $dir", ccall(:_chdir,Int32,(Ptr{Uint8},),dir) == -1)
     @unix_only systemerror("chdir $dir", ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
 end
-cd() = cd(user_homedir())
+cd() = cd(homedir())
 
 @unix_only function cd(f::Function, dir::String, args...)
     fd = ccall(:open,Int32,(Ptr{Uint8},Int32),".",0)
@@ -34,7 +34,7 @@ end
         cd(old)
     end
 end
-cd(f::Function) = cd(f, user_homedir())
+cd(f::Function) = cd(f, homedir())
 
 function mkdir(path::String, mode::Unsigned=0o777)
     @unix_only ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)

@@ -25,7 +25,7 @@ function requirements(reqs::Dict, fix::Dict, avail::Dict)
     reqs
 end
 
-function dependencies(avail::Dict, fix::Dict)
+function dependencies(avail::Dict, fix::Dict = (ByteString=>Fixed)["julia"=>Fixed(VERSION)])
     avail = deepcopy(avail)
     conflicts = (ByteString=>Set{ByteString})[]
     for (fp,fx) in fix

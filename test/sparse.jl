@@ -61,7 +61,34 @@ a116[p, p] = reshape(1:9, 3, 3)
 s116[p, p] = reshape(1:9, 3, 3)
 @test a116 == s116
 
-# check matrix multiplication
+# matrix-vector multiplication (non-square)
+for i = 1:5
+    a = sprand(10, 5, 0.5)
+    b = rand(5)
+    @test maximum(abs(a*b - dense(a)*b)) < 100*eps()
+end
+
+# complex matrix-vector multiplication and left-division
+for i = 1:5
+    a = speye(5) + 0.1*sprandn(5, 5, 0.2)
+    b = randn(5) + im*randn(5)
+    @test (maximum(abs(a*b - dense(a)*b)) < 100*eps())
+    @test (maximum(abs(a\b - dense(a)\b)) < 1000*eps())
+    @test (maximum(abs(a'\b - dense(a')\b)) < 1000*eps())
+    a = speye(5) + 0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2)
+    b = randn(5)
+    @test (maximum(abs(a*b - dense(a)*b)) < 100*eps())
+    @test (maximum(abs(a\b - dense(a)\b)) < 1000*eps())
+    @test (maximum(abs(a'\b - dense(a')\b)) < 1000*eps())
+    @test (maximum(abs(a.'\b - dense(a.')\b)) < 1000*eps())
+    b = randn(5) + im*randn(5)
+    @test (maximum(abs(a*b - dense(a)*b)) < 100*eps())
+    @test (maximum(abs(a\b - dense(a)\b)) < 1000*eps())
+    @test (maximum(abs(a'\b - dense(a')\b)) < 1000*eps())
+    @test (maximum(abs(a.'\b - dense(a.')\b)) < 1000*eps())
+end
+
+# matrix multiplication
 for i = 1:5
     a = sprand(10, 5, 0.5)
     b = sprand(5, 10, 0.1)
@@ -87,5 +114,5 @@ rowval = int32([1,2,2,3,4,5,1,4,6,1,7,2,5,8,6,9,3,4,6,8,10,3,5,7,8,10,11])
 colval = int32([1,2,3,3,4,5,6,6,6,7,7,8,8,8,9,9,10,10,10,10,10,11,11,11,11,11,11])
 A = sparse(rowval, colval, ones(length(rowval)))
 P,post = Base.LinAlg.etree(A, true)
-@assert P == int32([6,3,8,6,8,7,9,10,10,11,0])
-@assert post == int32([2,3,5,8,1,4,6,7,9,10,11])
+@test P == int32([6,3,8,6,8,7,9,10,10,11,0])
+@test post == int32([2,3,5,8,1,4,6,7,9,10,11])

@@ -164,6 +164,10 @@ export PipeString
 @deprecate max(x,_::(),d)      maximum(x,d)
 @deprecate min(x,_::(),d)      minimum(x,d)
 @deprecate assert(x,y)         (@assert x y)
+# NOTE: when this deprecation is removed, also remove
+#   copy!(dest::AbstractArray, doffs::Integer, src::Integer)
+# in abstractarray.jl
+@deprecate copy!(dest::AbstractArray, src, doffs::Integer)  copy!(dest, doffs, src)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
@@ -191,6 +195,10 @@ end
 @deprecate  SpawnNullStream() DevNull
 
 @deprecate memio(args...)  IOBuffer()
+
+@deprecate user_homedir homedir
+@deprecate user_prefdir homedir
+@deprecate user_documentsdir homedir
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
 
@@ -333,6 +341,14 @@ function integer_partitions(n,m)
 end
 export integer_partitions
 
+function mmread(file)
+    error("mmread(file) is discontinued - add package MatrixMarket and use MatrixMarket.mmread instead.")
+end
+
+function mmread(file, infoonly)
+    error("mmread(file, infoonly) is discontinued - add package MatrixMarket and use MatrixMarket.mmread instead.")
+end
+export mmread
 
 # 0.3 deprecations
 
