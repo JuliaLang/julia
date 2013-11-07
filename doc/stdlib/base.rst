@@ -2840,7 +2840,7 @@ Data Formats
 
 .. function:: big(x)
 
-   Convert a number to a maximum precision representation (typically ``BigInt`` or ``BigFloat``)
+   Convert a number to a maximum precision representation (typically ``BigInt`` or ``BigFloat``). See ``BigFloat`` for information about some pitfalls with floating-point numbers.
 
 .. function:: bool(x)
 
@@ -3075,8 +3075,13 @@ Numbers
 
 .. function:: BigFloat(x)
 
-   Create an arbitrary precision floating point number. ``x`` may be an ``Integer``, a ``Float64``, a ``String`` or a ``BigInt``. The
-   usual mathematical operators are defined for this type, and results are promoted to a ``BigFloat``.
+   Create an arbitrary precision floating point number. ``x`` may be
+   an ``Integer``, a ``Float64``, a ``String`` or a ``BigInt``. The
+   usual mathematical operators are defined for this type, and results
+   are promoted to a ``BigFloat``. Note that because floating-point
+   numbers are not exactly-representable in decimal notation,
+   ``BigFloat(2.1)`` may not yield what you expect. You may prefer to
+   initialize constants using strings, e.g., ``BigFloat("2.1")``.
 
 .. function:: get_rounding()
 
