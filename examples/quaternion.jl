@@ -23,34 +23,8 @@ promote_rule{T<:Real,S}(::Type{T}, ::Type{Quaternion{S}}) = Quaternion{promote_t
 promote_rule{T,S}(::Type{Quaternion{T}}, ::Type{Quaternion{S}}) = Quaternion{promote_type(T,S)}
 
 function show(io::IO, z::Quaternion)
-    show(io, z.q0)
-    i = z.q1
-    if sign(i) == -1
-        i = -i
-        print(io, " - ")
-    else
-        print(io, " + ")
-    end
-    show(io, i)
-    print(io, "i")
-    j = z.q2
-    if sign(j) == -1
-        j = -j
-        print(io, " - ")
-    else
-        print(io, " + ")
-    end
-    show(io, j)
-    print(io, "j")
-    k = z.q3
-    if sign(k) == -1
-        k = -k
-        print(io, " - ")
-    else
-        print(io, " + ")
-    end
-    show(io, k)
-    print(io, "k")
+    pm(x) = x < 0 ? " - $(-x)" : " + $x"
+    print(io, z.q0, pm(z.q1), "i", pm(z.q2), "j", pm(z.q3), "k")
 end
 
 real(z::Quaternion) = z.q0
