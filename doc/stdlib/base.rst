@@ -912,7 +912,7 @@ Strings
 
 .. function:: rsearch(string, chars, [start])
 
-   Similar to ``search``, but returning the last occurance of the given characters within the given string, searching in reverse from ``start.''.
+   Similar to ``search``, but returning the last occurance of the given characters within the given string, searching in reverse from ``start``.
 
 .. function:: searchindex(string, substring, [start])
 
@@ -1886,7 +1886,7 @@ Memory-mapped I/O
 Standard Numeric Types
 ----------------------
 
-``Bool`` ``Int8`` ``Uint8`` ``Int16`` ``Uint16`` ``Int32`` ``Uint32`` ``Int64`` ``Uint64`` ``Float32`` ``Float64`` ``Complex64`` ``Complex128``
+``Bool`` ``Int8`` ``Uint8`` ``Int16`` ``Uint16`` ``Int32`` ``Uint32`` ``Int64`` ``Uint64`` ``Int128`` ``Uint128`` ``Float16`` ``Float32`` ``Float64`` ``Complex64`` ``Complex128``
 
 .. _mathematical-operators:
 
@@ -3627,11 +3627,11 @@ Array functions
    Given a ``dims`` tuple of integers ``(m, n, ...)``, call ``f`` on all combinations of
    integers in the ranges ``1:m``, ``1:n``, etc. Example::
 
-   julia> cartesianmap(println, (2,2))
-   11
-   21
-   12
-   22
+       julia> cartesianmap(println, (2,2))
+       11
+       21
+       12
+       22
 
 BitArrays
 ~~~~~~~~~
@@ -4428,7 +4428,7 @@ System
 .. data:: DevNull
 
    Used in a stream redirect to discard all data written to it. Essentially equivalent to /dev/null on Unix or NUL on Windows.
-   Usage: run(`cat test.txt` |> DevNull)
+   Usage: ``run(`cat test.txt` |> DevNull)``
 
 .. function:: success(command)
 

@@ -1389,7 +1389,7 @@
 
    Similar to \"search\", but returning the last occurance of the
    given characters within the given string, searching in reverse from
-   >>``<<start.''.
+   \"start\".
 
 "),
 
@@ -5423,7 +5423,11 @@ popdisplay(d::Display)
    all combinations of integers in the ranges \"1:m\", \"1:n\", etc.
    Example:
 
-   julia> cartesianmap(println, (2,2)) 11 21 12 22
+      julia> cartesianmap(println, (2,2))
+      11
+      21
+      12
+      22
 
 "),
 
@@ -6483,7 +6487,7 @@ popdisplay(d::Display)
 
    Used in a stream redirect to discard all data written to it.
    Essentially equivalent to /dev/null on Unix or NUL on Windows.
-   Usage: run(*cat test.txt* >>|<<> DevNull)
+   Usage: \"run(`cat test.txt` |> DevNull)\"
 
 "),
 
