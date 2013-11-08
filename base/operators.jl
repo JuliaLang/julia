@@ -59,7 +59,7 @@ scalarmin(x::AbstractArray, y               ) = error("min: ordering is not well
 (|)(x::Integer) = x
 ($)(x::Integer) = x
 
-for op = (:+, :*, :&, :|, :$, :min, :max)
+for op = (:+, :*, :&, :|, :$, :min, :max, :kron)
     @eval begin
         # note: these definitions must not cause a dispatch loop when +(a,b) is
         # not defined, and must only try to call 2-argument definitions, so
