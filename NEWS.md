@@ -137,7 +137,7 @@ Library improvements
     to account for this increased strictness.
 
   * A redesigned and rewritten `Pkg` system is much more robust in case of problems.
-    The the basic interface to adding and removing package requirements remains the
+    The basic interface to adding and removing package requirements remains the
     same, but great deal of additional functionality for developing packages in-place
     was added. See the new [packages chapter] in the manual for further details.
 
@@ -161,7 +161,7 @@ Library improvements
 
   * Change `integer_valued`, `real_valued`, and so on to `isinteger`, `isreal`,
     and so on, and semantics of the later are now value-based rather than type-based,
-    unlike Matlab/Octave ([#3071]). `isbool` and `iscomplex` are eliminated in favor
+    unlike MATLAB/Octave ([#3071]). `isbool` and `iscomplex` are eliminated in favor
     of a general `iseltype` function.
 
   * Transitive comparison of floats with rationals ([#3102]).
