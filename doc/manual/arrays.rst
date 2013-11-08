@@ -301,18 +301,20 @@ argument (which is usually chosen to be to be the most general possible) and
 the name of the function to vectorize. Here is a simple example::
 
     julia> square(x) = x^2
-    # methods for generic function square
-    square(x) at none:1
-    
+    square (generic function with 1 method)
+
     julia> @vectorize_1arg Number square
-    # methods for generic function square
-    square{T<:Number}(x::AbstractArray{T<:Number,1}) at operators.jl:216
-    square{T<:Number}(x::AbstractArray{T<:Number,2}) at operators.jl:217
-    square{T<:Number}(x::AbstractArray{T<:Number,N}) at operators.jl:219
+    square (generic function with 4 methods)
+
+    julia> methods(square)
+    # 4 methods for generic function "square":
+    square{T<:Number}(x::AbstractArray{T<:Number,1}) at operators.jl:236
+    square{T<:Number}(x::AbstractArray{T<:Number,2}) at operators.jl:237
+    square{T<:Number}(x::AbstractArray{T<:Number,N}) at operators.jl:239
     square(x) at none:1
-    
+
     julia> square([1 2 4; 5 6 7])
-    2x3 Int64 Array:
+    2x3 Array{Int64,2}:
       1   4  16
      25  36  49
 
