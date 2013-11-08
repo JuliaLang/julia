@@ -1,7 +1,7 @@
 .. _man-control-flow:
 
 **************
- Control Flow  
+ Control Flow
 **************
 
 Julia provides a variety of control flow constructs:
@@ -94,6 +94,7 @@ true, the ``else`` block is evaluated. Here it is in action::
                println("x is equal to y")
              end
            end
+    test (generic function with 1 method)
 
     julia> test(1, 2)
     x is less than y
@@ -159,6 +160,7 @@ together::
 
     julia> test(x, y) = println(x < y ? "x is less than y"    :
                                 x > y ? "x is greater than y" : "x is equal to y")
+    test (generic function with 1 method)
 
     julia> test(1, 2)
     x is less than y
@@ -175,7 +177,9 @@ It is significant that like ``if``-``elseif``-``else``, the expressions
 before and after the ``:`` are only evaluated if the condition
 expression evaluates to ``true`` or ``false``, respectively::
 
-    v(x) = (println(x); x)
+    julia> v(x) = (println(x); x)
+    v (generic function with 1 method)
+
 
     julia> 1 < 2 ? v("yes") : v("no")
     yes
@@ -209,8 +213,11 @@ The reasoning is that ``a && b`` must be ``false`` if ``a`` is
 higher precedence than than ``||`` does. It's easy to experiment with
 this behavior::
 
-    t(x) = (println(x); true)
-    f(x) = (println(x); false)
+    julia> t(x) = (println(x); true)
+    t (generic function with 1 method)
+
+    julia> f(x) = (println(x); false)
+    f (generic function with 1 method)
 
     julia> t(1) && t(2)
     1
@@ -497,8 +504,7 @@ defined only for nonnegative numbers could be written to ``throw`` a ``DomainErr
 if the argument is negative. ::
 
     julia> f(x) = x>=0 ? exp(-x) : throw(DomainError())
-    # methods for generic function f
-    f(x) at none:1
+    f (generic function with 1 method)
     
     julia> f(1)
     0.36787944117144233
@@ -526,7 +532,8 @@ Suppose we want to stop execution immediately if the square root of a
 negative number is taken. To do this, we can define a fussy version of
 the ``sqrt`` function that raises an error if its argument is negative::
 
-    fussy_sqrt(x) = x >= 0 ? sqrt(x) : error("negative x not allowed")
+    julia> fussy_sqrt(x) = x >= 0 ? sqrt(x) : error("negative x not allowed")
+    fussy_sqrt (generic function with 1 method)
 
     julia> fussy_sqrt(2)
     1.4142135623730951
@@ -539,12 +546,13 @@ instead of trying to continue execution of the calling function, it
 returns immediately, displaying the error message in the interactive
 session::
 
-    function verbose_fussy_sqrt(x)
-      println("before fussy_sqrt")
-      r = fussy_sqrt(x)
-      println("after fussy_sqrt")
-      return r
-    end
+    julia> function verbose_fussy_sqrt(x)
+             println("before fussy_sqrt")
+             r = fussy_sqrt(x)
+             println("after fussy_sqrt")
+             return r
+           end
+    verbose_fussy_sqrt (generic function with 1 method)
 
     julia> verbose_fussy_sqrt(2)
     before fussy_sqrt
@@ -587,8 +595,7 @@ call either the real or complex square root method on demand using
            catch
              sqrt(complex(x, 0))
            end
-    # methods for generic function f
-    f(x) at none:1
+    f (generic function with 1 method)
     
     julia> f(1)
     1.0
@@ -612,11 +619,9 @@ assumes ``x`` is a real number and returns its square root::
                sqrt(complex(x[2], 0))
              elseif isa(y, BoundsError)
                sqrt(x)
-             end  
+             end
            end
-
-    # methods for generic function sqrt_second
-    sqrt_second(x) at none:1
+    sqrt_second (generic function with 1 method)
     
     julia> sqrt_second([1 4])
     2.0
@@ -631,7 +636,7 @@ assumes ``x`` is a real number and returns its square root::
     ERROR: DomainError()
      in sqrt at math.jl:117
      in sqrt_second at none:7
-     
+
 The power of the ``try/catch`` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling
 functions. There are situations where no error has occurred, but the ability to
