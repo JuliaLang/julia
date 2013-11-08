@@ -15,7 +15,7 @@ Binary Downloads
 
 Download the latest version of Julia from the downloads page at http://julialang.org/downloads/
 
-Unzip the download to a folder. Do not attempt to run Julia without extracting the zip archive first (hint: it won't work). Double-click the file Julia.BAT to launch Julia.
+Unzip the download to a folder. Do not attempt to run Julia without extracting the zip archive first (hint: it won't work). Double-click the file `julia.bat` to launch Julia.
 
 Explore and have fun!
 
@@ -63,7 +63,7 @@ Before proceeding, verify that python.exe from Python 2.7 is available in the MS
 
 If you plan to build Cairo (for graphics), you'll also need to install [CMake](http://www.cmake.org/cmake/resources/software.html).
 
-These sections assume you are familiar with building code. If you are not, you should stop reading now and go the the section on binaries. Regardless of which set of steps you followed above, you are now ready to compile julia. Open a unix shell by launching C:/MinGW/msys/1.0/msys.bat (or your favorite shortcut to that file). 
+These sections assume you are familiar with building code. If you are not, you should stop reading now and go to the section on binaries. Regardless of which set of steps you followed above, you are now ready to compile julia. Open a unix shell by launching C:/MinGW/msys/1.0/msys.bat (or your favorite shortcut to that file). 
 
 Run the following commands in your build directory ($HOME at C:/MinGW/msys/1.0/home/your_name is fine)
 
@@ -74,7 +74,7 @@ Run the following commands in your build directory ($HOME at C:/MinGW/msys/1.0/h
 Running julia can be done in two ways:
 
 1. `make run-julia[-release|-debug] [DEFAULT_REPL=(basic|readline)]` (e.g. `make run-julia`)
-2. Launching the julia.bat script in usr/bin
+2. Launching the `julia.bat` script in usr/bin
 
 Cross-Compile
 -------------
