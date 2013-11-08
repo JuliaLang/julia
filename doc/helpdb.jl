@@ -321,7 +321,10 @@
 
 ("All Objects","Base","convert","convert(type, x)
 
-   Try to convert \"x\" to the given type.
+   Try to convert \"x\" to the given type. Conversions from floating
+   point to integer, rational to integer, and complex to real will
+   raise an \"InexactError\" if \"x\" cannot be represented exactly in
+   the new type.
 
 "),
 
@@ -4213,7 +4216,8 @@ popdisplay(d::Display)
 ("Data Formats","Base","big","big(x)
 
    Convert a number to a maximum precision representation (typically
-   \"BigInt\" or \"BigFloat\")
+   \"BigInt\" or \"BigFloat\"). See \"BigFloat\" for information about
+   some pitfalls with floating-point numbers.
 
 "),
 
@@ -4588,7 +4592,10 @@ popdisplay(d::Display)
    Create an arbitrary precision floating point number. \"x\" may be
    an \"Integer\", a \"Float64\", a \"String\" or a \"BigInt\". The
    usual mathematical operators are defined for this type, and results
-   are promoted to a \"BigFloat\".
+   are promoted to a \"BigFloat\". Note that because floating-point
+   numbers are not exactly-representable in decimal notation,
+   \"BigFloat(2.1)\" may not yield what you expect. You may prefer to
+   initialize constants using strings, e.g., \"BigFloat(\"2.1\")\".
 
 "),
 
