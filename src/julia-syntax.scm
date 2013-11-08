@@ -1260,7 +1260,9 @@
 					      (vararg? x))))
 			 kw)))
     (if (pair? invalid)
-	(error (string "invalid named argument " (car invalid))))))
+	(if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
+	    (error "more than one semicolon in argument list")
+	    (error (string "invalid named argument " (car invalid)))))))
 
 (define (lower-kw-call f kw pa)
   (check-kw-args kw)
