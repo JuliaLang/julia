@@ -7,8 +7,7 @@ immutable Quaternion{T<:Real} <: Number
     q3::T
 end
 
-Quaternion{A<:Real,B<:Real,C<:Real,D<:Real}(q0::A,q1::B,q2::C,q3::D) =
-    Quaternion(promote(q0,q1,q2,q3)...)
+Quaternion(q0::Real,q1::Real,q2::Real,q3::Real) = Quaternion(promote(q0,q1,q2,q3)...)
 
 convert{T}(::Type{Quaternion{T}}, x::Real) =
     Quaternion(convert(T,x), zero(T), zero(T), zero(T))
