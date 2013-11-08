@@ -17,8 +17,8 @@ GPL licensed, as various dependent libraries such as `FFTW`, `Rmath`,
 non-GPL distribution of Julia in the future.
 
 When compiling a tagged release in the git repository, we don't display the
-branch/commit hash info in the splash screen. This line can therefore, in less
-than 45 characters, be used to describe the release. To set this line you have
+branch/commit hash info in the splash screen. You can use this line to show
+a release description of up to 45 characters. To set this line you have
 to create a Make.user file containing:
 
     override TAGGED_RELEASE_BANNER = "my-package-repository build"
