@@ -190,7 +190,7 @@ All Objects
 
 .. function:: convert(type, x)
 
-   Try to convert ``x`` to the given type.
+   Try to convert ``x`` to the given type. Conversions from floating point to integer, rational to integer, and complex to real will raise an ``InexactError`` if ``x`` cannot be represented exactly in the new type.
 
 .. function:: promote(xs...)
 
