@@ -263,6 +263,19 @@ function getindex(s::SubArray, is::Integer...)
     s.parent[index]
 end
 
+function getindex{T}(s::SubArray{T,1}, I::AbstractVector{Bool})
+    n = sum(I)
+    out = similar(s, n)
+    c = 1
+    for i = 1:length(I)
+        if I[i]
+            out[c] = s[i]
+            c += 1
+        end
+    end
+    out
+end
+
 getindex{T}(s::SubArray{T,1}, I::Range1{Int}) =
     getindex(s.parent, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
 
