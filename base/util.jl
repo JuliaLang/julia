@@ -147,7 +147,7 @@ function edit(file::String, line::Integer)
     if OS_NAME == :Windows || OS_NAME == :Darwin
         default_editor = "open"
     elseif isreadable("/etc/alternatives/editor")
-        default_editor = "/etc/alternatives/editor"
+        default_editor = splitdir(readall(`readlink -n /etc/alternatives/editor`))[end]
     else
         default_editor = "emacs"
     end
@@ -179,7 +179,7 @@ function edit(file::String, line::Integer)
     elseif editor == "kate"
         spawn(`kate $file -l $line`)
     elseif editor == "nano"
-        spawn(`nano +$line $file`)
+        run(`nano +$line $file`)
     else
         run(`$(shell_split(editor)) $file`)
     end
