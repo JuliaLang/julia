@@ -48,7 +48,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     jl_binding_t *b = jl_get_binding_wr(parent_module, name);
     jl_declare_constant(b);
     if (b->value != NULL) {
-        JL_PRINTF(JL_STDERR, "Warning: replacing module %s\n", name->name);
+        JL_PRINTF(JL_STDERR, "Warning: replacing module \"%s\"\n", name->name);
     }
     jl_module_t *newm = jl_new_module(name);
     newm->parent = parent_module;
@@ -233,7 +233,7 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
             if (mb->owner == m || mb->imported) {
                 m = (jl_module_t*)mb->value;
                 if (m == NULL || !jl_is_module(m))
-                    jl_errorf("invalid module path (%s does not name a module)", var->name);
+                    jl_errorf("invalid module path (\"%s\" does not name a module)", var->name);
                 break;
             }
         }
@@ -255,7 +255,7 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
             return NULL;
         }
         else {
-            jl_errorf("in module path: %s not defined", var->name);
+            jl_errorf("in module path: \"%s\" not defined", var->name);
         }
     }
 
@@ -312,7 +312,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         assert(jl_is_symbol(name));
         m = (jl_module_t*)jl_eval_global_var(m, name);
         if (!jl_is_module(m))
-	    jl_errorf("invalid %s statement: name exists but does not refer to a module", ex->head->name);
+	    jl_errorf("invalid \"%s\" statement: name exists but does not refer to a module", ex->head->name);
         jl_module_importall(jl_current_module, m);
         return jl_nothing;
     }
@@ -443,7 +443,7 @@ jl_value_t *jl_parse_eval_all(char *fname)
                 break;
             if (jl_is_expr(form)) {
                 if (((jl_expr_t*)form)->head == jl_continue_sym) {
-                    jl_errorf("syntax: %s", jl_string_data(jl_exprarg(form,0)));
+                    jl_errorf("syntax: \"%s\"", jl_string_data(jl_exprarg(form,0)));
                 }
                 if (((jl_expr_t*)form)->head == error_sym) {
                     jl_interpret_toplevel_expr(form);
@@ -477,10 +477,10 @@ jl_value_t *jl_load(const char *fname)
     char *fpath = (char*)fname;
     uv_stat_t stbuf;
     if (jl_stat(fpath, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
-        jl_errorf("could not open file %s", fpath);
+        jl_errorf("could not open file \"%s\"", fpath);
     }
     if (jl_start_parsing_file(fpath) != 0) {
-        jl_errorf("could not open file %s", fpath);
+        jl_errorf("could not open file \"%s\"", fpath);
     }
     jl_value_t *result = jl_parse_eval_all(fpath);
     if (fpath != fname) free(fpath);
@@ -516,7 +516,7 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
         !jl_is_abstracttype(super) ||
         jl_subtype(super,(jl_value_t*)jl_vararg_type,0) ||
         jl_subtype(super,(jl_value_t*)jl_type_type,0)) {
-        jl_errorf("invalid subtyping in definition of %s",tt->name->name->name);
+        jl_errorf("invalid subtyping in definition of \"%s\"",tt->name->name->name);
     }
     tt->super = (jl_datatype_t*)super;
     if (jl_tuple_len(tt->parameters) > 0) {
@@ -560,7 +560,7 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
     if (bnd) {
         //jl_declare_constant(bnd);
         if (bnd->value != NULL && !bnd->constp) {
-            jl_errorf("cannot define function %s; it already has a value",
+            jl_errorf("cannot define function \"%s\"; it already has a value",
                       bnd->name->name);
         }
         bnd->constp = 1;
@@ -590,7 +590,7 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
         jl_value_t *elt = jl_tupleref(argtypes,i);
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_lambda_info_t *li = f->linfo;
-            jl_errorf("invalid type for argument %s in method definition for %s at %s:%d",
+            jl_errorf("invalid type for argument \"%s\" in method definition for \"%s\" at %s:%d",
                       jl_is_expr(li->ast) ?
                       ((jl_sym_t*)jl_arrayref(jl_lam_args((jl_expr_t*)li->ast),i))->name :
                       "?",
@@ -604,7 +604,7 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
         if (!jl_is_typevar(tv))
             jl_type_error_rt(name->name, "method definition", (jl_value_t*)jl_tvar_type, tv);
         if (!ishidden && !type_contains((jl_value_t*)argtypes, tv)) {
-            JL_PRINTF(JL_STDERR, "Warning: static parameter %s does not occur in signature for %s",
+            JL_PRINTF(JL_STDERR, "Warning: static parameter \"%s\" does not occur in signature for \"%s\"",
                       ((jl_tvar_t*)tv)->name->name, name->name);
             print_func_loc(JL_STDERR, f->linfo);
             JL_PRINTF(JL_STDERR, ".\nThe method will not be callable.\n");

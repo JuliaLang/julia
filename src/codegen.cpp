@@ -248,7 +248,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
             builder.SetCurrentDebugLocation(olddl);
         }
         JL_SIGATOMIC_END();
-        jl_rethrow_with_add("error compiling %s", li->name->name);
+        jl_rethrow_with_add("error compiling \"%s\"", li->name->name);
     }
     assert(f != NULL);
     nested_compile = last_n_c;
@@ -328,16 +328,16 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
                 jl_lambda_info_t *li = ff->linfo;
                 jl_value_t *astrt = jl_ast_rettype(li, li->ast);
                 if (!jl_types_equal((jl_value_t*)li->specTypes, argt)) {
-                    jl_errorf("cfunction: type signature of %s does not match",
+                    jl_errorf("cfunction: type signature of \"%s\" does not match",
                               li->name->name);
                 }
                 if (!jl_types_equal(astrt, rt) &&
                     !(astrt==(jl_value_t*)jl_nothing->type && rt==(jl_value_t*)jl_bottom_type)) {
                     if (astrt == (jl_value_t*)jl_bottom_type) {
-                        jl_errorf("cfunction: %s does not return", li->name->name);
+                        jl_errorf("cfunction: \"%s\" does not return", li->name->name);
                     }
                     else {
-                        jl_errorf("cfunction: return type of %s does not match",
+                        jl_errorf("cfunction: return type of \"%s\" does not match",
                                   li->name->name);
                     }
                 }
@@ -1806,8 +1806,9 @@ static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx)
     builder.CreateCondBr(ok, ifok, err);
     builder.SetInsertPoint(err);
     std::string msg;
+    msg += "\"";
     msg += std::string(name->name);
-    msg += " not defined";
+    msg += "\" not defined";
     just_emit_error(msg, ctx);
     builder.CreateBr(ifok);
     ctx->f->getBasicBlockList().push_back(ifok);
@@ -2303,7 +2304,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     }
     else {
         if (!strcmp(head->name, "$"))
-            jl_error("syntax: prefix $ in non-quoted expression");
+            jl_error("syntax: prefix \"$\" in non-quoted expression");
         if (jl_is_toplevel_only_expr(expr) &&
             ctx->linfo->name == anonymous_sym && ctx->vars.empty() &&
             ctx->linfo->module == jl_current_module) {
@@ -2323,7 +2324,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                 jl_errorf("macro definition not allowed inside a local scope");
             }
             else {
-                jl_errorf("unsupported or misplaced expression %s in function %s",
+                jl_errorf("unsupported or misplaced expression \"%s\" in function \"%s\"",
                           head->name, ctx->linfo->name->name);
             }
         }

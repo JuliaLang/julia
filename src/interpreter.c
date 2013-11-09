@@ -63,7 +63,7 @@ jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
 {
     jl_value_t *v = jl_get_global(m, e);
     if (v == NULL)
-        jl_errorf("%s not defined", e->name);
+        jl_errorf("\"%s\" not defined", e->name);
     return v;
 }
 
@@ -87,7 +87,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             v = jl_get_global(jl_current_module, (jl_sym_t*)e);
         }
         if (v == NULL) {
-            jl_errorf("%s not defined", ((jl_sym_t*)e)->name);
+            jl_errorf("\"%s\" not defined", ((jl_sym_t*)e)->name);
         }
         return v;
     }
@@ -101,7 +101,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_sym_t *s = (jl_sym_t*)jl_fieldref(e,0);
         jl_value_t *v = jl_get_global(jl_base_relative_to(jl_current_module),s);
         if (v == NULL)
-            jl_errorf("%s not defined", s->name);
+            jl_errorf("\"%s\" not defined", s->name);
         return v;
     }
     if (!jl_is_expr(e)) {
@@ -297,10 +297,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         para = eval(args[1], locals, nl);
         vnb  = eval(args[2], locals, nl);
         if (!jl_is_long(vnb))
-            jl_errorf("invalid declaration of bits type %s", ((jl_sym_t*)name)->name);
+            jl_errorf("invalid declaration of bits type \"%s\"", ((jl_sym_t*)name)->name);
         int32_t nb = jl_unbox_long(vnb);
         if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
-            jl_errorf("invalid number of bits in type %s",
+            jl_errorf("invalid number of bits in type \"%s\"",
                       ((jl_sym_t*)name)->name);
         jl_datatype_t *dt =
             jl_new_bitstype(name, jl_any_type, (jl_tuple_t*)para, nb);
@@ -364,13 +364,13 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     }
     else if (ex->head == error_sym || ex->head == jl_continue_sym) {
         if (jl_is_byte_string(args[0]))
-            jl_errorf("syntax: %s", jl_string_data(args[0]));
+            jl_errorf("syntax: \"%s\"", jl_string_data(args[0]));
         jl_throw(args[0]);
     }
     else if (ex->head == boundscheck_sym) {
         return (jl_value_t*)jl_nothing;
     }
-    jl_errorf("unsupported or misplaced expression %s", ex->head->name);
+    jl_errorf("unsupported or misplaced expression \"%s\"", ex->head->name);
     return (jl_value_t*)jl_nothing;
 }
 

@@ -70,7 +70,7 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
         else if ((*bp)->owner != m) {
             // TODO: change this to an error soon
             jl_printf(JL_STDERR,
-                       "Warning: imported binding for %s overwritten in module %s\n", var->name, m->name->name);
+                       "Warning: imported binding for \"%s\" overwritten in module \"%s\"\n", var->name, m->name->name);
         }
         else {
             return *bp;
@@ -95,9 +95,9 @@ jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
         if (b->owner != m && b->owner != NULL) {
             jl_binding_t *b2 = jl_get_binding(b->owner, var);
             if (b2 == NULL)
-                jl_errorf("invalid method definition: imported function %s.%s does not exist", b->owner->name->name, var->name);
+                jl_errorf("invalid method definition: imported function \"%s.%s\" does not exist", b->owner->name->name, var->name);
             if (!b->imported)
-                jl_errorf("error in method definition: function %s.%s must be explicitly imported to be extended", b->owner->name->name, var->name);
+                jl_errorf("error in method definition: function \"%s.%s\" must be explicitly imported to be extended", b->owner->name->name, var->name);
             return b2;
         }
         b->owner = m;
@@ -174,7 +174,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
     jl_binding_t *b = jl_get_binding(from, s);
     if (b == NULL) {
         jl_printf(JL_STDERR,
-                  "Warning: could not import %s.%s into %s\n",
+                  "Warning: could not import \"%s.%s\" into \"%s\"\n",
                   from->name->name, s->name, to->name->name);
     }
     else {
@@ -197,7 +197,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                     return;
                 }
                 jl_printf(JL_STDERR,
-                          "Warning: ignoring conflicting import of %s.%s into %s\n",
+                          "Warning: ignoring conflicting import of \"%s.%s\" into \"%s\"\n",
                           from->name->name, s->name, to->name->name);
             }
             else if (bto->constp || bto->value) {
@@ -208,7 +208,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
                     return;
                 }
                 jl_printf(JL_STDERR,
-                          "Warning: import of %s.%s into %s conflicts with an existing identifier; ignored.\n",
+                          "Warning: import of \"%s.%s\" into \"%s\" conflicts with an existing identifier; ignored.\n",
                           from->name->name, s->name, to->name->name);
             }
             else {
@@ -271,7 +271,7 @@ void jl_module_using(jl_module_t *to, jl_module_t *from)
                     var != to->name &&
                     !eq_bindings(jl_get_binding(to,var), b)) {
                     jl_printf(JL_STDERR,
-                              "Warning: using %s.%s in module %s conflicts with an existing identifier.\n",
+                              "Warning: using \"%s.%s\" in module \"%s\" conflicts with an existing identifier.\n",
                               from->name->name, var->name, to->name->name);
                 }
             }
@@ -351,9 +351,9 @@ void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
         if (!jl_egal(rhs, b->value) &&
             (jl_typeof(rhs) != jl_typeof(b->value) ||
              jl_is_type(rhs) || jl_is_function(rhs) || jl_is_module(rhs))) {
-            jl_errorf("invalid redefinition of constant %s", b->name->name);
+            jl_errorf("invalid redefinition of constant \"%s\"", b->name->name);
         }
-        JL_PRINTF(JL_STDERR,"Warning: redefining constant %s\n",b->name->name);
+        JL_PRINTF(JL_STDERR,"Warning: redefining constant \"%s\"\n",b->name->name);
     }
     b->value = rhs;
 }
@@ -361,7 +361,7 @@ void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 void jl_declare_constant(jl_binding_t *b)
 {
     if (b->value != NULL && !b->constp) {
-        jl_errorf("cannot declare %s constant; it already has a value",
+        jl_errorf("cannot declare \"%s\" constant; it already has a value",
                   b->name->name);
     }
     b->constp = 1;
