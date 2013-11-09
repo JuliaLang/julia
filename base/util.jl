@@ -320,7 +320,9 @@ end
 
 function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "Julia Version $VERSION")
-    println(io,             commit_string)
+    if !isempty(BUILD_INFO.commit_short)
+      println(io,             "Commit $(BUILD_INFO.commit_short) ($(BUILD_INFO.date_string))")
+    end
     println(io,             "Platform Info:")
     println(io,             "  System: ", Sys.OS_NAME, " (", Sys.MACHINE, ")")
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
