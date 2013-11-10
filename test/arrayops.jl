@@ -124,8 +124,7 @@ sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
 
 # sub logical indexing #4763
 A = sub([1:10], 5:8)
-idx = map(x -> x < 7, A)
-@test A[idx] == [5, 6]
+@test A[A.<7] == [5, 6]
 
 # slice
 A = reshape(1:120, 3, 5, 8)
