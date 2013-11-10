@@ -58,7 +58,7 @@ include("iterator.jl")
 import Core.Undef  # used internally by compiler
 include("inference.jl")
 
-# For OS sprcific stuff in I/O
+# For OS specific stuff in I/O
 include("osutils.jl")
 
 const DL_LOAD_PATH = ByteString[]
