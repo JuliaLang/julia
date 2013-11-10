@@ -147,7 +147,7 @@ function edit(file::String, line::Integer)
     if OS_NAME == :Windows || OS_NAME == :Darwin
         default_editor = "open"
     elseif isreadable("/etc/alternatives/editor")
-        default_editor = splitdir(readall(`readlink -n /etc/alternatives/editor`))[end]
+        default_editor = basename(realpath("/etc/alternatives/editor"))
     else
         default_editor = "emacs"
     end
