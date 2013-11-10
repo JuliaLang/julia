@@ -305,14 +305,14 @@ JL_CALLABLE(jl_f_apply)
 JL_CALLABLE(jl_f_kwcall)
 {
     if (nargs < 3)
-        jl_error("internal error: malformed named argument call");
+        jl_error("internal error: malformed keyword argument call");
     JL_TYPECHK(apply, function, args[0]);
     jl_function_t *f = (jl_function_t*)args[0];
     if (!jl_is_gf(f))
-        jl_error("function does not accept named arguments");
+        jl_error("function does not accept keyword arguments");
     jl_function_t *sorter = ((jl_methtable_t*)f->env)->kwsorter;
     if (sorter == NULL) {
-        jl_errorf("function %s does not accept named arguments",
+        jl_errorf("function %s does not accept keyword arguments",
                   jl_gf_name(f)->name);
     }
 
