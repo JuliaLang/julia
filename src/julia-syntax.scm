@@ -3088,7 +3088,7 @@ So far only the second case can actually occur.
       '()
       (case (car e)
 	((escape)  '())
-	((= function)
+	((= function ->)
 	 (append! (filter
 		   symbol?
 		   (if (and (pair? (cadr e)) (eq? (car (cadr e)) 'tuple))
