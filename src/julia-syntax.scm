@@ -528,7 +528,7 @@
 				   ,else)))
 			  (if (null? restkw)
 			      ;; if no rest kw, give error for unrecognized
-			      `(call (top error) "unrecognized named argument " ,elt)
+			      `(call (top error) "unrecognized keyword argument " ,elt)
 			      ;; otherwise add to rest keywords
 			      `(ccall 'jl_cell_1d_push Void (tuple Any Any)
 				      ,rkw (tuple ,elt
@@ -1262,7 +1262,7 @@
     (if (pair? invalid)
 	(if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
 	    (error "more than one semicolon in argument list")
-	    (error (string "invalid named argument " (car invalid)))))))
+	    (error (string "invalid keyword argument " (car invalid)))))))
 
 (define (lower-kw-call f kw pa)
   (check-kw-args kw)
@@ -1271,7 +1271,7 @@
    (let ((keyargs (apply append
 			 (map (lambda (a)
 				(if (not (symbol? (cadr a)))
-				    (error (string "named argument is not a symbol: " (cadr a))))
+				    (error (string "keyword argument is not a symbol: " (cadr a))))
 				`((quote ,(cadr a)) ,(caddr a)))
 			      keys))))
      (if (null? restkeys)

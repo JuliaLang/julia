@@ -396,32 +396,31 @@ multiple method definitions with different numbers of arguments
 (see :ref:`man-methods`).
 
 
-Named Arguments
+Keyword Arguments
 ---------------
 
 Some functions need a large number of arguments, or have a large number of
-behaviors. Remembering how to call such functions can be difficult. Named
-arguments, also called keyword arguments, can make these complex interfaces
-easier to use and extend by allowing arguments to be identified by name
-instead of only by position.
+behaviors. Remembering how to call such functions can be difficult. Keyword
+arguments can make these complex interfaces easier to use and extend by
+allowing arguments to be identified by name instead of only by position.
 
 For example, consider a function ``plot`` that
 plots a line. This function might have many options, for controlling line
-style, width, color, and so on. If it accepts named arguments, a possible
+style, width, color, and so on. If it accepts keyword arguments, a possible
 call might look like ``plot(x, y, width=2)``, where we have chosen to
 specify only line width. Notice that this serves two purposes. The call is
 easier to read, since we can label an argument with its meaning. It also
 becomes possible to pass any subset of a large number of arguments, in
 any order.
 
-Functions with named arguments are defined using a semicolon in the
+Functions with keyword arguments are defined using a semicolon in the
 signature::
 
     function plot(x, y; style="solid", width=1, color="black")
         ###
     end
 
-Extra named arguments can be collected using ``...``, as in varargs
+Extra keyword arguments can be collected using ``...``, as in varargs
 functions::
 
     function f(x; args...)
@@ -429,7 +428,7 @@ functions::
     end
 
 Inside ``f``, ``args`` will be a collection of ``(key,value)`` tuples,
-where each ``key`` is a symbol. Such collections can be passed as named
+where each ``key`` is a symbol. Such collections can be passed as keyword
 arguments using a semicolon in a call, ``f(x; k...)``. Dictionaries
 can be used for this purpose.
 
