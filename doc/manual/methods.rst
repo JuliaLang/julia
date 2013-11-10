@@ -441,7 +441,7 @@ can also constrain type parameters of methods::
 The ``same_type_numeric`` function behaves much like the ``same_type``
 function defined above, but is only defined for pairs of numbers.
 
-Note on Optional and Named Arguments
+Note on Optional and keyword Arguments
 ------------------------------------
 
 As mentioned briefly in :ref:`man-functions`, optional arguments are
@@ -456,9 +456,9 @@ translates to the following three methods::
     f(a) = f(a,2)
     f() = f(1,2)
 
-Named arguments behave quite differently from ordinary positional arguments.
+Keyword arguments behave quite differently from ordinary positional arguments.
 In particular, they do not participate in method dispatch. Methods are
-dispatched based only on positional arguments, with named arguments processed
+dispatched based only on positional arguments, with keyword arguments processed
 after the matching method is identified.
 
 .. [Clarke61] Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.
