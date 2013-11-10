@@ -1126,3 +1126,14 @@ f4675{T}(x::StridedArray{T}...) = 2
 g4675{T}(x::StridedArray{T}...) = 2
 g4675(x::StridedArray...) = 1
 @test g4675(zeros(50,50), zeros(50,50)) == 2
+
+# issue #4771
+module Lib4771
+export @make_closure
+macro make_closure()
+    quote
+        f = (x)->1
+    end
+end
+end # module
+@test (Lib4771.@make_closure)(0) == 1
