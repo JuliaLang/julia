@@ -137,6 +137,8 @@ radians2degrees(z::Real) = oftype(z, 57.29577951308232*z)
 degrees2radians(z::Real) = oftype(z, 0.017453292519943295*z)
 radians2degrees(z::Integer) = radians2degrees(float(z))
 degrees2radians(z::Integer) = degrees2radians(float(z))
+@vectorize_1arg Real radians2degrees
+@vectorize_1arg Real degrees2radians
 
 for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
                   (:sech, :cosh), (:csch, :sinh), (:coth, :tanh),
