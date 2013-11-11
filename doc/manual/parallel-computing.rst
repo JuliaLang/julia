@@ -225,7 +225,7 @@ Parallel Map and Loops
 ----------------------
 
 Fortunately, many useful parallel computations do not require data
-movement. A common example is a monte carlo simulation, where multiple
+movement. A common example is a Monte Carlo simulation, where multiple
 processes can handle independent simulation trials simultaneously. We
 can use ``@spawn`` to flip coins on two processes. First, write the
 following function in ``count_heads.jl``::
