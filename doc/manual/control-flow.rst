@@ -210,7 +210,7 @@ The reasoning is that ``a && b`` must be ``false`` if ``a`` is
 ``false``, regardless of the value of ``b``, and likewise, the value of
 ``a || b`` must be true if ``a`` is ``true``, regardless of the value of
 ``b``. Both ``&&`` and ``||`` associate to the right, but ``&&`` has
-higher precedence than than ``||`` does. It's easy to experiment with
+higher precedence than ``||`` does. It's easy to experiment with
 this behavior::
 
     julia> t(x) = (println(x); true)
