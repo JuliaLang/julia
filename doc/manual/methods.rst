@@ -27,7 +27,7 @@ addition to their number, and more than a single method definition may
 be provided. When a function is applied to a particular tuple of
 arguments, the most specific method applicable to those arguments is
 applied. Thus, the overall behavior of a function is a patchwork of the
-behaviors of its various method defintions. If the patchwork is well
+behaviors of its various method definitions. If the patchwork is well
 designed, even though the implementations of the methods may be quite
 different, the outward behavior of the function will appear seamless and
 consistent.
