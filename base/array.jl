@@ -205,16 +205,16 @@ infs(dims...)               = fill!(Array(Float64, dims...), Inf)
 nans{T}(::Type{T}, dims...) = fill!(Array(T, dims...), nan(T))
 nans(dims...)               = fill!(Array(Float64, dims...), NaN)
 
-function eye(T::Type, m::Int, n::Int)
+function eye(T::Type, m::Integer, n::Integer)
     a = zeros(T,m,n)
     for i = 1:min(m,n)
         a[i,i] = one(T)
     end
     return a
 end
-eye(m::Int, n::Int) = eye(Float64, m, n)
-eye(T::Type, n::Int) = eye(T, n, n)
-eye(n::Int) = eye(Float64, n)
+eye(m::Integer, n::Integer) = eye(Float64, m, n)
+eye(T::Type, n::Integer) = eye(T, n, n)
+eye(n::Integer) = eye(Float64, n)
 eye{T}(x::AbstractMatrix{T}) = eye(T, size(x, 1), size(x, 2))
 
 function one{T}(x::AbstractMatrix{T})
