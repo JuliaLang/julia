@@ -70,11 +70,14 @@ In csh / tcsh:
 
     set path= ( $path $cwd )
 
+**Note:** Adding a soft link to the `julia` executable in /usr/local/bin might not be sufficient (results in error messages in OS X); adding the julia directory to the PATH is recommended.
+
 Now you should be able to run Julia like this:
 
     julia
 
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
+
 You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
 
 If you are building a Julia package for distribution on Linux, OS X,
@@ -129,7 +132,7 @@ Otherwise, install or contact your systems adminstrator to install a more recent
 
 It is essential to use a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in brew and macports work for building Julia. If you do not use brew or macports, you can download and install [gfortran and gcc from hpc.sf.net](http://hpc.sf.net/). The HPC gfortran requires HPC gcc to be installed to function properly. 
 
-Clang is now used by default to build Julia on OS X (10.7 and above). Make sure to update to at least Xcode 4.3.3, and update to the latest command line tools from the Xcode preferences. This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build Julia. On OS X 10.6, the Julia build will automatically use gcc.
+Clang is now used by default to build Julia on OS X (10.7 and above). Make sure to update to at least Xcode 4.3.3, and update to the latest command line tools from the Xcode preferences (on OS X 10.9 Mavericks, run `xcode-select --install` in the terminal). This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build Julia. On OS X 10.6, the Julia build will automatically use gcc.
 
 If you have set `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` in your .bashrc or equivalent, Julia may be unable to find various libraries that come bundled with it. These environment variables need to be unset for Julia to work.
 
