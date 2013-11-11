@@ -553,7 +553,7 @@ encountered in static parametric type systems can be relatively easily
 handled.
 
 All declared types (the ``DataType`` variety) can be parameterized, with
-the same syntax in each case. We will discuss them in in the following
+the same syntax in each case. We will discuss them in the following
 order: first, parametric composite types, then parametric abstract
 types, and finally parametric bits types.
 
