@@ -197,14 +197,19 @@ let
 end
 
 ## arrays as dequeues
-l = {1,2,3}
-push!(l,8)
+l = {1}
+push!(l,2,3,8)
 @test l[1]==1 && l[2]==2 && l[3]==3 && l[4]==8
 v = pop!(l)
 @test v == 8
 v = pop!(l)
 @test v == 3
 @test length(l)==2
+unshift!(l,4,7,5)
+@test l[1]==4 && l[2]==7 && l[3]==5 && l[4]==1 && l[5]==2
+v = shift!(l)
+@test v == 4
+@test length(l)==4
 
 # concatenation
 @test isequal([ones(2,2)  2*ones(2,1)], [1. 1 2; 1 1 2])
