@@ -518,7 +518,7 @@ process_running(s::ProcessChain) = process_running(s.processes)
 
 process_exited(s::Process) = !process_running(s)
 process_exited(s::Vector{Process}) = all(process_exited,s)
-process_exited(s::ProcessChain) = process_running(s.processes)
+process_exited(s::ProcessChain) = !process_running(s.processes)
 
 process_signaled(s::Process) = (s.termsignal > 0)
 
