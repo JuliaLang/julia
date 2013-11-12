@@ -1458,7 +1458,7 @@ prod(A::AbstractArray{Bool}) =
 prod(A::AbstractArray{Bool}, region) =
     error("use all() instead of prod() for boolean arrays")
 
-# Pairwise (cascade) summation of A[i1:i1+n-1], which O(log n) error growth
+# Pairwise (cascade) summation of A[i1:i1+n-1], which has O(log n) error growth
 # [vs O(n) for a simple loop] with negligible performance cost if
 # the base case is large enough.  See, e.g.:
 #        http://en.wikipedia.org/wiki/Pairwise_summation
