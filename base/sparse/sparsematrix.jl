@@ -257,9 +257,11 @@ end
 
 ## sparse() can take its inputs in unsorted order (the parent method is now in jlsparse.jl)
 
-sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)), int(maximum(I)), int(maximum(J)), +)
+dimlub(I) = length(I)==0 ? 0 : int(maximum(I)) #least upper bound on required sparse matrix dimension
 
-sparse(I,J,V::AbstractVector) = sparse(I, J, V, int(maximum(I)), int(maximum(J)), +)
+sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)), dimlub(I), dimlub(J), +)
+
+sparse(I,J,V::AbstractVector) = sparse(I, J, V, dimlub(I), dimlub(J), +)
 
 sparse(I,J,v::Number,m,n) = sparse(I, J, fill(v,length(I)), int(m), int(n), +)
 
