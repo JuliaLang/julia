@@ -60,21 +60,21 @@ If you need to build Julia in an environment that does not allow access to the o
 
 **Note:** the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
-Once it is built, you can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the Julia program from anywhere (in the current shell session):
+Once it is built, you can run the `julia` executable using its full path in the directory created above (the `julia` directory), or, to run it from anywhere,
 
-In bash:
+1. add a soft link to the `julia` executable in the `julia` directory to `/usr/local/bin` (or any suitable directory already in your path), or
 
-    export PATH="$(pwd):$PATH"
-    
-In csh / tcsh:
+2. add the `julia` directory to your executable path for this shell session (in bash: `export PATH="$(pwd):$PATH"` ; in csh or tcsh:
+`set path= ( $path $cwd )` ), or
 
-    set path= ( $path $cwd )
+3. add the `julia` directory to your executable path permanently (eg in `.bash_profile`).
 
 Now you should be able to run Julia like this:
 
-    julia
+    `julia`
 
-If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
+If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation. (Errors related to libraries might be caused by old, incompatible libraries sitting around in your PATH. In that case, try moving the `julia` directory earlier in the PATH).
+
 You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
 
 If you are building a Julia package for distribution on Linux, OS X,
@@ -128,8 +128,7 @@ Otherwise, install or contact your systems adminstrator to install a more recent
 ### OS X
 
 It is essential to use a 64-bit gfortran to compile Julia dependencies. The gfortran-4.7 (and newer) compilers in brew and macports work for building Julia. If you do not use brew or macports, you can download and install [gfortran and gcc from hpc.sf.net](http://hpc.sf.net/). The HPC gfortran requires HPC gcc to be installed to function properly. 
-
-Clang is now used by default to build Julia on OS X (10.7 and above). Make sure to update to at least Xcode 4.3.3, and update to the latest command line tools from the Xcode preferences. This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build Julia. On OS X 10.6, the Julia build will automatically use gcc.
+Clang is now used by default to build Julia on OS X (10.7 and above). It is recommended that you upgrade to the latest version of Xcode (at least 4.3.3.). You need to have the Xcode command line utlities installed (and updated): run `xcode-select --install` in the terminal (in Xcode prior to v5.0, you can alternatively go to Preferences -> Downloads and select the Command Line Utilities). This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build Julia. On OS X 10.6, the Julia build will automatically use gcc.
 
 If you have set `LD_LIBRARY_PATH` or `DYLD_LIBRARY_PATH` in your .bashrc or equivalent, Julia may be unable to find various libraries that come bundled with it. These environment variables need to be unset for Julia to work.
 
