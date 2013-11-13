@@ -1,7 +1,7 @@
 function dot(x::BitVector, y::BitVector)
     # simplest way to mimic Array dot behavior
     if length(x) != length(y)
-        error("argument dimensions do not match")
+        error("first argument length $(length(x)) does not match second argument length $(length(y))")
     end
     s = 0
     xc = x.chunks
@@ -98,7 +98,7 @@ end
 function diagm(v::Union(BitVector,BitMatrix))
     if isa(v, BitMatrix)
         if (size(v,1) != 1 && size(v,2) != 1)
-            error("Input should be nx1 or 1xn")
+            error("input should be nx1 or 1xn")
         end
     end
 
@@ -224,7 +224,7 @@ end
 
 function findmax(a::BitArray)
     if length(a) == 0
-        error("findmax: array is empty")
+        error("array must be non-empty")
     end
     m = false
     mi = 1
@@ -244,7 +244,7 @@ end
 
 function findmin(a::BitArray)
     if length(a) == 0
-        error("findmin: array is empty")
+        error("array must be non-empty")
     end
     m = true
     mi = 1

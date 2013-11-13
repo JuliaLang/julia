@@ -47,7 +47,7 @@ end
 function repl_cmd(cmd)
     shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
     if isempty(cmd.exec)
-        error("no cmd to execute")
+        error("No cmd to execute")
     elseif cmd.exec[1] == "cd"
         if length(cmd.exec) > 2
             error("cd method only takes one argument")

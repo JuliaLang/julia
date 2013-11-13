@@ -125,7 +125,7 @@ type PriorityQueue{K,V} <: Associative{K,V}
     function PriorityQueue(ks::AbstractArray{K}, vs::AbstractArray{V},
                            o::Ordering)
         if length(ks) != length(vs)
-            error("Key and value arrays have unequal lengths.")
+            error("key and value arrays must have equal lengths")
         end
 
         xs = Array((K, V), length(ks))
@@ -133,7 +133,7 @@ type PriorityQueue{K,V} <: Associative{K,V}
         for (i, (k, v)) in enumerate(zip(ks, vs))
             xs[i] = (k, v)
             if haskey(index, k)
-                error("PriorityQueue keys must be unique.")
+                error("PriorityQueue keys must be unique")
             end
             index[k] = i
         end
@@ -231,7 +231,7 @@ end
 
 function enqueue!{K,V}(pq::PriorityQueue{K,V}, key, value)
     if haskey(pq, key)
-        error("PriorityQueue keys must be unique.")
+        error("PriorityQueue keys must be unique")
     end
 
     push!(pq.xs, (key, value))

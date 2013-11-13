@@ -81,7 +81,7 @@ function export_wisdom(fname::String)
     f = ccall(:fopen, Ptr{Void}, (Ptr{Uint8},Ptr{Uint8}),
               bytestring(fname), bytestring("w"))
     if f == C_NULL
-        error("could not open wisdom file $fname")
+        error("export_wisdom: could not open wisdom file $fname")
     end
     ccall((:fftw_export_wisdom_to_file,libfftw), Void, (Ptr{Void},), f)
     ccall(:fputs, Int32, (Ptr{Uint8},Ptr{Void}), bytestring(" "^256), f)
@@ -93,11 +93,11 @@ function import_wisdom(fname::String)
     f = ccall(:fopen, Ptr{Void}, (Ptr{Uint8},Ptr{Uint8}),
               bytestring(fname), bytestring("r"))
     if f == C_NULL
-        error("could not open wisdom file $fname")
+        error("import_wisdom: could not open wisdom file $fname")
     end
     if ccall((:fftw_import_wisdom_from_file,libfftw),Int32,(Ptr{Void},),f)==0||
        ccall((:fftwf_import_wisdom_from_file,libfftwf),Int32,(Ptr{Void},),f)==0
-        error("failed to import wisdom from $fname")
+        error("import_wisdom: failed to import wisdom from $fname")
     end
     ccall(:fclose, Void, (Ptr{Void},), f)
 end
@@ -105,7 +105,7 @@ end
 function import_system_wisdom()
     if ccall((:fftw_import_system_wisdom,libfftw), Int32, ()) == 0 ||
        ccall((:fftwf_import_system_wisdom,libfftwf), Int32, ()) == 0
-        error("failed to import system wisdom")
+        error("import_system_wisdom: failed to import system wisdom")
     end
 end
 
