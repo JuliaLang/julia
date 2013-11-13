@@ -47,7 +47,7 @@ end
 function repl_cmd(cmd)
     shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
     if isempty(cmd.exec)
-        error("no cmd to execute")
+        error("No cmd to execute")
     elseif cmd.exec[1] == "cd"
         if length(cmd.exec) > 2
             error("cd method only takes one argument")
@@ -87,8 +87,8 @@ end
 
 display_error(er) = display_error(er, {})
 function display_error(er, bt)
-    with_output_color(:red, STDERR) do io
-        print(io, "ERROR: ")
+    with_output_color(:normal, STDERR) do io
+        print(io, "\033[1m\033[31mERROR:\033[0m ")
         showerror(io, er, bt)
         println(io)
     end

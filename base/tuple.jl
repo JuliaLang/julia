@@ -2,7 +2,7 @@
 
 length(t::Tuple) = tuplelen(t)
 endof(t::Tuple) = tuplelen(t)
-size(t::Tuple, d) = d==1 ? tuplelen(t) : error("size: invalid tuple dimension")
+size(t::Tuple, d) = d==1 ? tuplelen(t) : error("Invalid tuple dimension,")
 getindex(t::Tuple, i::Int) = tupleref(t, i)
 getindex(t::Tuple, i::Real) = tupleref(t, convert(Int, i))
 getindex(t::Tuple, r::AbstractArray) = tuple([t[ri] for ri in r]...)
@@ -56,7 +56,7 @@ function length_checked_equal(args...)
     n = length(args[1])
     for i=2:length(args)
         if length(args[i]) != n
-            error("argument dimensions must match")
+            error("Argument dimensions must match,")
         end
     end
     n

@@ -34,12 +34,12 @@ bytestring(s::Array{Uint8,1}) = bytestring(pointer(s),length(s))
 bytestring(s::String...) = print_to_string(s...)
 
 function bytestring(p::Union(Ptr{Uint8},Ptr{Int8}))
-    p == C_NULL ? error("cannot convert NULL to string") :
+    p == C_NULL ? error("Cannot convert NULL to string,") :
     ccall(:jl_cstr_to_string, ByteString, (Ptr{Uint8},), p)
 end
 
 function bytestring(p::Union(Ptr{Uint8},Ptr{Int8}),len::Integer)
-    p == C_NULL ? error("cannot convert NULL to string") :
+    p == C_NULL ? error("Cannot convert NULL to string,") :
     ccall(:jl_pchar_to_string, ByteString, (Ptr{Uint8},Int), p, len)
 end
 
@@ -67,7 +67,7 @@ print(io::IO, s::String) = write(io, s)
 write(io::IO, s::String) = for c in s write(io, c) end
 show(io::IO, s::String) = print_quoted(io, s)
 
-sizeof(s::String) = error("type $(typeof(s)) has no canonical binary representation")
+sizeof(s::String) = error("Type $(typeof(s)) has no canonical binary representation,")
 
 eltype(::String) = Char
 eltype{T<:String}(::Type{T}) = Char
