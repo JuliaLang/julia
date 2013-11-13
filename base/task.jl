@@ -107,7 +107,7 @@ end
 function wait(c::Condition)
     ct = current_task()
     if ct === Scheduler
-        error("cannot execute blocking function from scheduler")
+        error("wait: cannot execute blocking function from scheduler")
     end
 
     push!(c.waitq, ct)
@@ -124,7 +124,7 @@ end
 function wait()
     ct = current_task()
     if ct === Scheduler
-        error("cannot execute blocking function from scheduler")
+        error("wait: cannot execute blocking function from scheduler")
     end
     ct.runnable = false
     yield()
@@ -132,7 +132,7 @@ end
 
 function notify(t::Task, arg::ANY=nothing; error=false)
     if t.runnable == true
-        Base.error("tried to resume task that is not stopped")
+        Base.error("notify: tried to resume task that is not stopped")
     end
     if error
         t.exception = arg

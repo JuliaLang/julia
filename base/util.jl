@@ -218,13 +218,13 @@ end
         for cmd in (:xclip, :xsel)
             success(`which $cmd` |> DevNull) && return _clipboardcmd = cmd
         end
-        error("no clipboard command found, please install xsel or xclip")
+        error("clipboardcmd: no clipboard command found, please install xsel or xclip")
     end
     function clipboard(x)
         c = clipboardcmd()
         cmd = c == :xsel  ? `xsel --nodetach --input --clipboard` :
               c == :xclip ? `xclip -quiet -in -selection clipboard` :
-            error("unexpected clipboard command: $c")
+            error("clipboard: unexpected clipboard command: $c")
         w,p = writesto(cmd)
         print(w,x)
         close(w)
@@ -234,7 +234,7 @@ end
         c = clipboardcmd()
         cmd = c == :xsel  ? `xsel --nodetach --output --clipboard` :
               c == :xclip ? `xclip -quiet -out -selection clipboard` :
-            error("unexpected clipboard command: $c")
+            error("clipboard: unexpected clipboard command: $c")
         readall(cmd)
     end
 end

@@ -146,7 +146,7 @@ similar   (a::AbstractArray, T, dims::Int...) = similar(a, T, dims)
 
 function reshape(a::AbstractArray, dims::Dims)
     if prod(dims) != length(a)
-        error("reshape: invalid dimensions")
+        error("reshape: dimensions must be consistent with array size")
     end
     copy!(similar(a, dims), a)
 end
@@ -160,7 +160,7 @@ function squeeze(A::AbstractArray, dims)
     for i in 1:ndims(A)
         if in(i,dims)
             if size(A,i) != 1
-                error("squeezed dims must all be size 1")
+                error("squeeze: squeezed dims must all be size 1")
             end
         else
             d = tuple(d..., size(A,i))
@@ -549,7 +549,7 @@ end
 
 ## Indexing: getindex ##
 
-getindex(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(t))
+getindex(t::AbstractArray, i::Real) = error("getindex: indexing not defined for ", typeof(t))
 
 # linear indexing with a single multi-dimensional index
 function getindex(A::AbstractArray, I::AbstractArray)
@@ -580,7 +580,7 @@ function reverse(A::AbstractVector, s=1, n=length(A))
 end
 
 function flipdim(A::AbstractVector, d::Integer)
-    d > 0 || error("dimension out of range")
+    d > 0 || error("dimension must be positive")
     d == 1 || return copy(A)
     reverse(A)
 end
@@ -724,7 +724,7 @@ end
 function hcat{T}(V::AbstractVector{T}...)
     height = length(V[1])
     for j = 2:length(V)
-        if length(V[j]) != height; error("hcat: mismatched dimensions"); end
+        if length(V[j]) != height; error("hcat: lengths must match"); end
     end
     [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
@@ -756,7 +756,7 @@ function hcat{T}(A::Union(AbstractMatrix{T},AbstractVector{T})...)
         dense &= isa(Aj,Array)
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
-        if size(Aj, 1) != nrows; error("hcat: mismatched dimensions"); end
+        if size(Aj, 1) != nrows; error("hcat: number of rows must match"); end
     end
     B = similar(full(A[1]), nrows, ncols)
     pos = 1
@@ -783,7 +783,7 @@ function vcat{T}(A::AbstractMatrix{T}...)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
     for j = 2:nargs
-        if size(A[j], 2) != ncols; error("vcat: mismatched dimensions"); end
+        if size(A[j], 2) != ncols; error("vcat: number of columns must match"); end
     end
     B = similar(full(A[1]), nrows, ncols)
     pos = 1
@@ -931,7 +931,7 @@ function hvcat(nbc::Integer, as...)
     # nbc = # of block columns
     n = length(as)
     if mod(n,nbc) != 0
-        error("hvcat: not all rows have the same number of block columns")
+        error("hvcat: all rows must have the same number of block columns")
     end
     nbr = div(n,nbc)
     hvcat(ntuple(nbr, i->nbc), as...)
@@ -1326,7 +1326,7 @@ function repeat{T}(A::Array{T};
     ndims_out = max(ndims_in, length_inner, length_outer)
 
     if length_inner < ndims_in || length_outer < ndims_in
-        msg = "Inner/outer repetitions must be set for all input dimensions"
+        msg = "inner/outer repetitions must be set for all input dimensions"
         throw(ArgumentError(msg))
     end
 
@@ -1580,7 +1580,7 @@ function prod{T}(A::AbstractArray{T})
 end
 
 function minimum{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("minimum: argument is empty"); end
+    if isempty(A); error("minimum: argument must not be empty"); end
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]
@@ -1592,7 +1592,7 @@ function minimum{T<:Real}(A::AbstractArray{T})
 end
 
 function maximum{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("maximum: argument is empty"); end
+    if isempty(A); error("maximum: argument must not be empty"); end
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]
