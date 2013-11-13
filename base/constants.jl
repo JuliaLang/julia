@@ -72,6 +72,24 @@ const eu = e
 const eulergamma = γ
 const golden = φ
 
+# multiples of pi FIX FIX FIX - already defined somewhere? Naming?
+const pi1o2_bf = pi * BigFloat(1/2)
+const pi1o2_h  = convert(Float64, pi1o2_bf)
+const pi1o2_l  = convert(Float64, pi1o2_bf - pi1o2_h)
+
+const pi2o2_bf = pi * BigFloat(1)
+const pi2o2_h  = convert(Float64, pi2o2_bf)
+const pi2o2_l  = convert(Float64, pi2o2_bf - pi2o2_h)
+
+const pi3o2_bf = pi * BigFloat(3/2)
+const pi3o2_h  = convert(Float64, pi3o2_bf)
+const pi3o2_l  = convert(Float64, pi3o2_bf - pi3o2_h)
+
+const pi4o2_bf = pi * BigFloat(2)
+const pi4o2_h  = convert(Float64, pi4o2_bf)
+const pi4o2_l  = convert(Float64, pi4o2_bf - pi4o2_h)
+
+
 # special behaviors
 
 # use exp for e^x or e.^x, as in
@@ -87,3 +105,11 @@ end
 ^(::MathConst{:e}, x::AbstractMatrix) = expm(x)
 
 log(::MathConst{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
+
+mod(x::Float64, y::MathConst{:π}) = modpi(x)
+# Note: with this line above, we have:
+# mod(5706674932067741.0,pi)  == 4.237546464512562e-16 # correct, modpi called
+# mod(5706674932067741,pi)    == 0.2224559947753093    # first arg int: original "mod" called
+# mod(5706674932067741,pi*1)  == 0.2224559947753093    # second arg Float64: original "mod" called
+# mod(5706674932067741.0,pi*1)==0.2224559947753093     # second arg Float64: original "mod" called
+
