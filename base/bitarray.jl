@@ -258,7 +258,7 @@ end
 
 function reshape{N}(B::BitArray, dims::NTuple{N,Int})
     if prod(dims) != length(B)
-        error("reshape: invalid dimensions")
+        error("reshape: dimensions must be consistent with array size")
     end
     Br = BitArray{N}(ntuple(N,i->0)...)
     Br.chunks = B.chunks
@@ -322,7 +322,7 @@ convert{N}(::Type{BitArray{N}}, B::BitArray{N}) = B
 reinterpret{N}(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) = reinterpret(B, dims)
 function reinterpret{N}(B::BitArray, dims::NTuple{N,Int})
     if prod(dims) != length(B)
-        error("reinterpret: invalid dimensions")
+        error("reinterpret: array size must not change")
     end
     A = BitArray{N}(ntuple(N,i->0)...)
     A.chunks = B.chunks
