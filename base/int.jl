@@ -355,6 +355,16 @@ itrunc(x::Integer) = x
 ifloor(x::Integer) = x
  iceil(x::Integer) = x
 
+## integer construction ##
+
+macro int128_str(str)
+    :(int128($str))
+end
+
+macro uint128_str(str)
+    :(uint128($str))
+end
+
 ## system word size ##
 
 const WORD_SIZE = int(Int.size)*8
