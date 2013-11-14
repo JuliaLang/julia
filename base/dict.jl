@@ -144,6 +144,8 @@ function getindex(t::Associative, key)
     return v
 end
 
+getindex(t::Associative, keys...) = [getindex(t, key) for key in keys]
+
 push!(t::Associative, key, v) = setindex!(t, v, key)
 
 # hashing objects by identity
