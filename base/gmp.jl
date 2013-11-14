@@ -313,6 +313,9 @@ powermod(x::BigInt, p::Integer, m::BigInt) = powermod(x, BigInt(p), m)
 powermod(x::BigInt, p::Integer, m::Integer) = powermod(x, BigInt(p), BigInt(m))
 
 function gcdx(a::BigInt, b::BigInt)
+    if b == 0 # shortcut this to ensure consistent results with gcdx(a,b)
+        return a < 0 ? (-a,-one(BigInt),zero(BigInt)) : (a,one(BigInt),zero(BigInt))
+    end
     g = BigInt()
     s = BigInt()
     t = BigInt()
