@@ -278,6 +278,10 @@ Deprecated or removed
 
   * The `Reverse` iterator was removed since it did not work in many cases.
 
+  * The `gcd` function now returns a non-negative value regardless of
+    the argument signs, and various other sign problems with `invmod`,
+    `lcm`, `gcdx`, and `powermod` were fixed ([#4811]).
+
 Miscellaneous changes
 --------------------------------
 
