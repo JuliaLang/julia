@@ -1532,3 +1532,15 @@ for i = -10:10, p = 0:5, m = -10:10
         @test mod(i^p,m) == powermod(i,p,m) == mod(big(i)^p,big(m))
     end
 end
+
+# with m==1 should give 0
+@test powermod(1,0,1) == 0
+@test powermod(big(1),0,1) == 0
+@test powermod(1,0,-1) == 0
+@test powermod(big(1),0,-1) == 0
+# divide by zero error
+@test_throws powermod(1,0,0)
+@test_throws powermod(big(1),0,0)
+# negative power domain error
+@test_throws powermod(1,-2,1)
+@test_throws powermod(big(1),-2,1)

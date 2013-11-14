@@ -115,10 +115,10 @@ end
 # b^p mod m
 function powermod{T}(b::Integer, p::Integer, m::T)
     p < 0 && throw(DomainError())
-    p == 0 && return m == 0 ? throw(DivideError()) : m < 0 ? 
-    (m == -1 ? zero(promote_type(typeof(b),typeof(m))) : one(b)+m) :
-    (m == 1 ? zero(promote_type(typeof(b),typeof(m))) : one(promote_type(typeof(b),typeof(m))))
-    b = oftype(m,mod(b,m))
+    b = oftype(m,mod(b,m))  # this also checks for divide by zero
+    p == 0 && return mod(one(b),m)
+    (m == 1 || m == -1) && return zero(m)
+
     t = prevpow2(p)
     local r::T
     r = 1
