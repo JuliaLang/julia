@@ -59,12 +59,12 @@ void jl_errorf(const char *fmt, ...)
 void jl_too_few_args(const char *fname, int min)
 {
     // TODO: ArgumentError
-    jl_errorf("%s: too few arguments (expected %d)", fname, min);
+    jl_errorf("\"%s\": too few arguments (expected %d)", fname, min);
 }
 
 void jl_too_many_args(const char *fname, int max)
 {
-    jl_errorf("%s: too many arguments (expected %d)", fname, max);
+    jl_errorf("\"%s\": too many arguments (expected %d)", fname, max);
 }
 
 void jl_type_error_rt(const char *fname, const char *context,
@@ -316,7 +316,7 @@ JL_CALLABLE(jl_f_kwcall)
         jl_error("function does not accept keyword arguments");
     jl_function_t *sorter = ((jl_methtable_t*)f->env)->kwsorter;
     if (sorter == NULL) {
-        jl_errorf("function %s does not accept keyword arguments",
+        jl_errorf("function \"%s\" does not accept keyword arguments",
                   jl_gf_name(f)->name);
     }
 
@@ -474,7 +474,7 @@ JL_CALLABLE(jl_f_set_field)
         jl_type_error("setfield", (jl_value_t*)jl_datatype_type, v);
     jl_datatype_t *st = (jl_datatype_t*)vt;
     if (!st->mutabl)
-        jl_errorf("type %s is immutable", st->name->name->name);
+        jl_errorf("type \"%s\" is immutable", st->name->name->name);
     jl_sym_t *fld = (jl_sym_t*)args[1];
     size_t i = jl_field_index(st, fld, 1);
     jl_value_t *ft = jl_tupleref(st->types,i);
@@ -681,7 +681,7 @@ void jl_show(jl_value_t *stream, jl_value_t *v)
             jl_show_gf = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("show"));
         }
         if (jl_show_gf==NULL || stream==NULL) {
-            JL_PRINTF(JL_STDERR, " could not show value of type %s",
+            JL_PRINTF(JL_STDERR, " could not show value of type \"%s\"",
                       jl_is_tuple(v) ? "Tuple" : 
                       ((jl_datatype_t*)jl_typeof(v))->name->name->name);
             return;

@@ -1490,7 +1490,7 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
     }
     size_t ntp = jl_tuple_len(tp);
     if (n > ntp)
-        jl_errorf("too many parameters for type %s", tname);
+        jl_errorf("too many parameters for type \"%s\"", tname);
     jl_value_t **env;
     JL_GC_PUSHARGS(env, 2*ntp);
     memset(env, 0, 2 * ntp * sizeof(jl_value_t*));
@@ -1524,7 +1524,7 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
         ne++;
     }
     if (ne < n)
-        jl_errorf("too many parameters for type %s", tname);
+        jl_errorf("too many parameters for type \"%s\"", tname);
     if (jl_is_typector(tc)) tc = (jl_value_t*)((jl_typector_t*)tc)->body;
     jl_value_t *result = jl_instantiate_type_with((jl_value_t*)tc, env, ne);
     JL_GC_POP();

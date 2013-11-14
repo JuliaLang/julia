@@ -389,7 +389,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
         fargs[2] = (jl_value_t*)jl_null;
         fargs[3] = (jl_value_t*)def;
 #ifdef TRACE_INFERENCE
-        JL_PRINTF(JL_STDERR,"inference on %s", li->name->name);
+        JL_PRINTF(JL_STDERR,"inference on \"%s\"", li->name->name);
         jl_static_show(JL_STDERR, (jl_value_t*)argtypes);
         JL_PRINTF(JL_STDERR, "\n");
 #endif
@@ -1081,11 +1081,11 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                 jl_module_t *newmod = method->linfo->module;
                 jl_value_t *errstream = jl_stderr_obj();
                 JL_STREAM *s = JL_STDERR;
-                JL_PRINTF(s, "Warning: Method definition %s", method->linfo->name->name);
+                JL_PRINTF(s, "Warning: Method definition \"%s\"", method->linfo->name->name);
                 jl_show(errstream, (jl_value_t*)type);
-                JL_PRINTF(s, " in module %s", l->func->linfo->module->name->name);
+                JL_PRINTF(s, " in module \"%s\"", l->func->linfo->module->name->name);
                 print_func_loc(s, l->func->linfo);
-                JL_PRINTF(s, " overwritten in module %s", newmod->name->name);
+                JL_PRINTF(s, " overwritten in module \"%s\"", newmod->name->name);
                 print_func_loc(s, method->linfo);
                 JL_PRINTF(s, ".\n");
             }

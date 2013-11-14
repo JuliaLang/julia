@@ -95,7 +95,7 @@ void jl_dump_function_asm(void* Fptr, size_t Fsize,
 
     OwningPtr<const MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI));
     if (!DisAsm) {
-        JL_PRINTF(JL_STDERR, "error: no disassembler for target", TripleName.c_str(), "\n");
+        JL_PRINTF(JL_STDERR, "error: no disassembler for target \"", TripleName.c_str(), "\"\n");
         return;
     }
  

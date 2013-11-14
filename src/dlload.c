@@ -88,7 +88,7 @@ static uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int thr
         if (!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                                 (LPCSTR)(&jl_load_dynamic_library),
                                 &handle->handle))
-            jl_errorf("could not load base module", modname);
+            jl_errorf("could not load base module \"", modname, "\"");
 #else
         handle->handle = dlopen(NULL,RTLD_NOW);
 #endif
@@ -142,7 +142,7 @@ static uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int thr
 
     if (throw_err) {
         //JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
-        jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
+        jl_errorf("could not load module \"%s\": %s", modname, uv_dlerror(handle));
     }
     uv_dlclose(handle);
     free(handle);
@@ -174,7 +174,7 @@ DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol)
     void *ptr;
     int  error = uv_dlsym(handle, symbol, &ptr);
     if (error != 0) {
-        jl_printf(JL_STDERR, "symbol could not be found %s (%d): %s\n", symbol, error, uv_dlerror(handle));
+        jl_printf(JL_STDERR, "symbol could not be found \"%s\" (%d): %s\n", symbol, error, uv_dlerror(handle));
     }
     return ptr;
 }

@@ -110,7 +110,7 @@ static void *add_library_sym(char *name, char *lib)
             // able to resolve these in favor of openlibm, but this could
             // be an issue in the future (TODO).
             strcmp(lib,"libopenlibm")) {
-            ios_printf(ios_stderr, "Warning: Possible conflict in library symbol %s\n", name);
+            ios_printf(ios_stderr, "Warning: Possible conflict in library symbol \"%s\"\n", name);
         }
         sys::DynamicLibrary::AddSymbol(name, sval);
     }
@@ -284,7 +284,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         }
         if (jl_is_structtype(aty) && jl_is_leaf_type(aty) && !jl_is_array_type(aty)) {
             if (!addressOf) {
-                emit_error("ccall: expected & on argument", ctx);
+                emit_error("ccall: expected \"&\" on argument", ctx);
                 return literal_pointer_val(jl_nothing);
             }
             return builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), ty); // skip type tag field
@@ -298,7 +298,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
     }
     else if (jl_is_structtype(jt)) {
         if (addressOf)
-            jl_error("ccall: unexpected & on argument"); // the only "safe" thing to emit here is the expected struct
+            jl_error("ccall: unexpected \"&\" on argument"); // the only "safe" thing to emit here is the expected struct
         assert (ty->isStructTy() && (Type*)((jl_datatype_t*)jt)->struct_decl == ty);
         jl_value_t *aty = expr_type(argex, ctx);
         if (aty != jt) {
@@ -456,11 +456,13 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             symaddr = sys::DynamicLibrary::SearchForAddressOfSymbol(sym.f_name);
         if (symaddr == NULL) {
             std::stringstream msg;
-            msg << "cglobal: could not find symbol ";
+            msg << "cglobal: could not find symbol \"";
             msg << sym.f_name;
+            msg << "\"";
             if (sym.f_lib != NULL) {
-                msg << " in library ";
+                msg << " in library \"";
                 msg << sym.f_lib;
+                msg << "\"";
             }
             emit_error(msg.str(), ctx);
             res = literal_pointer_val(NULL, lrt);
@@ -529,7 +531,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         jl_error(msg.c_str());
     }
     if (rt == (jl_value_t*)jl_pointer_type)
-        jl_error("ccall: return type Ptr should have an element type, Ptr{T}");
+        jl_error("ccall: return type \"Ptr\" should have an element type, i.e. \"Ptr{T}\"");
 
     {
         JL_TRY {
@@ -572,7 +574,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 #endif
         jl_value_t *tti = jl_tupleref(tt,i);
         if (tti == (jl_value_t*)jl_pointer_type)
-            jl_error("ccall: argument type Ptr should have an element type, Ptr{T}");
+            jl_error("ccall: argument type \"Ptr\" should have an element type, i.e. \"Ptr{T}\"");
         if (jl_is_vararg_type(tti)) {
             isVa = true;
             tti = jl_tparam0(tti);
@@ -698,8 +700,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (symaddr == NULL) {
             JL_GC_POP();
             std::stringstream msg;
-            msg << "ccall: could not find function ";
+            msg << "ccall: could not find function \"";
             msg << f_name;
+            msg << "\"";
             if (f_lib != NULL) {
                 msg << " in library ";
                 msg << f_lib;
