@@ -6,7 +6,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
-             serialize, deserialize, bin, oct, dec, hex, isequal
+             serialize, deserialize, bin, oct, dec, hex, isequal, invmod
 
 type BigInt <: Integer
     alloc::Cint
@@ -152,7 +152,7 @@ deserialize(s, ::Type{BigInt}) = parseint(BigInt, deserialize(s), 62)
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
                  (:fld, :fdiv_q), (:div, :tdiv_q), (:mod, :fdiv_r), (:rem, :tdiv_r),
-                 (:gcd, :gcd), (:lcm, :lcm),
+                 (:gcd, :gcd), (:lcm, :lcm), (:invmod, :invert),
                  (:&, :and), (:|, :ior), (:$, :xor))
     @eval begin
         function ($fJ)(x::BigInt, y::BigInt)

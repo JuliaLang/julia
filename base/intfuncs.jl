@@ -52,21 +52,24 @@ gcd(a::Integer, b::Integer...) = gcd(a, gcd(b...))
 lcm(a::Integer, b::Integer...) = lcm(a, lcm(b...))
 
 # return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
-function gcdx(a, b)
-    if b == 0
-        (a, 1, 0)
-    else
-        m = rem(a, b)
-        k = div((a-m), b)
-        (g, x, y) = gcdx(b, m)
-        (g, y, x-k*y)
+function gcdx{T<:Integer}(a::T, b::T)
+    s0, s1 = one(T), zero(T)
+    t0, t1 = s1, s0
+    while b != 0
+        q = div(a, b)
+        a, b = b, rem(a, b)
+        s0, s1 = s1, s0 - q*s1
+        t0, t1 = t1, t0 - q*t1
     end
+    (a, s0, t0)
 end
+gcdx(a::Integer, b::Integer) = gcdx(promote(a,b)...)
 
-# multiplicative inverse of x mod m, error if none
+# multiplicative inverse of n mod m, error if none
 function invmod(n, m)
     g, x, y = gcdx(n, m)
-    g != 1 ? error("no inverse exists") : (x < 0 ? m + x : x)
+    g == 1 ? (x < 0 ? m + x : x) : 
+    g == -1 ? (x > 0 ? abs(m) - x : -x) : error("no inverse exists")
 end
 
 # ^ for any x supporting *
