@@ -102,17 +102,13 @@ function hash(d::Associative)
     h
 end
 
-# Used as default value arg to get in isequal: something that will
-# never be found in any dictionary.
-const _MISSING = gensym()
-
 function isequal(l::Associative, r::Associative)
     if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
         return false
     end
     if length(l) != length(r) return false end
     for (key, value) in l
-        if !isequal(value, get(r, key, _MISSING))
+        if !isequal(value, get(r, key, secret_table_token))
             return false
         end
     end
@@ -125,7 +121,7 @@ function ==(l::Associative, r::Associative)
     end
     if length(l) != length(r) return false end
     for (key, value) in l
-        if value != get(r, key, _MISSING)
+        if value != get(r, key, secret_table_token)
             return false
         end
     end

@@ -1530,7 +1530,8 @@ function transpose!{T<:Number}(B::Matrix{T}, A::Matrix{T})
     if size(B) != (n,m)
         error("Input and output must have same size,")
     end
-    blocksize = ifloor(sqrthalfcache/sizeof(T)/1.4) # /1.4 to avoid complete fill of cache
+    elsz = isbits(T) ? sizeof(T) : sizeof(Ptr)
+    blocksize = ifloor(sqrthalfcache/elsz/1.4) # /1.4 to avoid complete fill of cache
     if m*n <= 4*blocksize*blocksize
         # For small sizes, use a simple linear-indexing algorithm
         for i2 = 1:n
@@ -1571,8 +1572,8 @@ ctranspose(x::StridedVecOrMat) = transpose(x)
 transpose(x::StridedVector) = [ x[j] for i=1, j=1:size(x,1) ]
 transpose(x::StridedMatrix) = [ x[j,i] for i=1:size(x,2), j=1:size(x,1) ]
 
-ctranspose{T<:Number}(x::StridedVector{T}) = [ conj(x[j]) for i=1, j=1:size(x,1) ]
-ctranspose{T<:Number}(x::StridedMatrix{T}) = [ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
+ctranspose{T<:Number}(x::StridedVector{T}) = T[ conj(x[j]) for i=1, j=1:size(x,1) ]
+ctranspose{T<:Number}(x::StridedMatrix{T}) = T[ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
