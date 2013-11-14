@@ -3885,13 +3885,13 @@ popdisplay(d::Display)
 
 ("Mathematical Functions","Base","gcd","gcd(x, y)
 
-   Greatest common (positive) divisor
+   Greatest common (positive) divisor (or zero if x and y are both zero).
 
 "),
 
 ("Mathematical Functions","Base","lcm","lcm(x, y)
 
-   Least common (positive) multiple
+   Least common (non-negative) multiple.
 
 "),
 
