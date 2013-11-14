@@ -9,7 +9,7 @@ end
 function mean(iterable)
     state = start(iterable)
     if done(iterable, state)
-        error("mean of empty collection undefined: $(repr(iterable))")
+        error("The mean of an empty collection is undefined: $(repr(iterable))")
     end
     count = 1
     total, state = next(iterable, state)
@@ -24,8 +24,8 @@ mean(v::AbstractArray) = sum(v) / length(v)
 mean(v::AbstractArray, region) = sum(v, region) / regionsize(v, region)
 
 function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
-    isempty(v) && error("median of an empty array is undefined")
-    checknan && any(isnan,v) && error("median of an array with NaNs is undefined")
+    isempty(v) && error("The median of an empty array is undefined,")
+    checknan && any(isnan,v) && error("The median of an array with NaNs is undefined,")
     n = length(v)
     if isodd(n)
         return select!(v,div(n+1,2))
@@ -168,7 +168,7 @@ hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
 
 function hist2d(v::AbstractMatrix, edg1::AbstractVector, edg2::AbstractVector)
     if size(v,2) != 2
-        error("hist2d requires an Nx2 matrix")
+        error("hist2d requires an Nx2 matrix,")
     end
     n = length(edg1)-1
     m = length(edg2)-1
@@ -220,7 +220,7 @@ end
 
 function cov(x::AbstractVecOrMat, y::AbstractVecOrMat)
     if size(x, 1) != size(y, 1)
-        error("incompatible matrices")
+        error("Sizes must match,")
     end
     n = size(x, 1)
     xc = center(x)
@@ -265,8 +265,8 @@ cor(x::AbstractVector) = cor(x'')[1]
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7
 function quantile!(v::AbstractVector, q::AbstractVector)
-    isempty(v) && error("quantile: empty data array")
-    isempty(q) && error("quantile: empty quantile array")
+    isempty(v) && error("Empty data array,")
+    isempty(q) && error("Empty quantile array,")
 
     # make sure the quantiles are in [0,1]
     q = bound_quantiles(q)
@@ -278,7 +278,7 @@ function quantile!(v::AbstractVector, q::AbstractVector)
     lo = ifloor(index)
     hi = iceil(index)
     sort!(v)
-    isnan(v[end]) && error("quantiles are undefined in presence of NaNs")
+    isnan(v[end]) && error("Quantiles are undefined in presence of NaNs,")
     i = find(index .> lo)
     r = float(v[lo])
     h = (index-lo)[i]
@@ -291,7 +291,7 @@ quantile(v::AbstractVector, q::Number) = quantile(v,[q])[1]
 function bound_quantiles(qs::AbstractVector)
     epsilon = 100*eps()
     if (any(qs .< -epsilon) || any(qs .> 1+epsilon))
-        error("quantiles out of [0,1] range")
+        error("Quantiles out of [0,1] range")
     end
     [min(1,max(0,q)) for q = qs]
 end

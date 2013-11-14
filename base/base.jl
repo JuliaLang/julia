@@ -86,7 +86,7 @@ isequal(w, v::WeakRef) = isequal(w, v.value)
 
 function finalizer(o::ANY, f::Function)
     if isimmutable(o)
-        error("objects of type ", typeof(o), " cannot be finalized")
+        error("Objects of type ", typeof(o), " cannot be finalized,")
     end
     ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
 end

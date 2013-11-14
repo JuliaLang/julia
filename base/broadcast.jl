@@ -34,7 +34,7 @@ function broadcast_shape(As::AbstractArray...)
                 if bshape[d] == 1
                     bshape[d] = n
                 elseif bshape[d] != n
-                    error("arrays cannot be broadcast to a common size")
+                    error("Arrays cannot be broadcast to a common size")
                 end
             end
         end
@@ -46,12 +46,12 @@ end
 function check_broadcast_shape(shape::Dims, As::AbstractArray...)
     for A in As
         if ndims(A) > length(shape)
-            error("cannot broadcast array to have fewer dimensions")
+            error("Cannot broadcast array to have fewer dimensions,")
         end
         for k in 1:ndims(A)
             n, nA = shape[k], size(A, k)
             if n != nA != 1
-                error("array cannot be broadcast to match destination")
+                error("Array cannot be broadcast to match destination,")
             end
         end
     end

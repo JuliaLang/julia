@@ -19,12 +19,12 @@ type BitArray{N} <: AbstractArray{Bool, N}
     dims::NTuple{N,Int}
     function BitArray(dims::Int...)
         if length(dims) != N
-            error("incorrect number of dimensions")
+            error("Number of dimensions must be $N (got $(length(dims))),")
         end
         n = 1
         for d in dims
             if d < 0
-                error("invalid dimension size")
+                error("Dimension size must be nonnegative (got $d),")
             end
             n *= d
         end
@@ -53,7 +53,7 @@ length(B::BitArray) = B.len
 size(B::BitVector) = (B.len,)
 size(B::BitArray) = B.dims
 
-size(B::BitVector, d) = (d==1 ? B.len : d>1 ? 1 : error("size: dimension out of range"))
+size(B::BitVector, d) = (d==1 ? B.len : d>1 ? 1 : error("Dimensions should be positive (got $d),"))
 size{N}(B::BitArray{N}, d) = (d>N ? 1 : B.dims[d])
 
 ## Aux functions ##
@@ -258,7 +258,7 @@ end
 
 function reshape{N}(B::BitArray, dims::NTuple{N,Int})
     if prod(dims) != length(B)
-        error("reshape: dimensions must be consistent with array size")
+        error("New dimensions inconsistent with the array length,")
     end
     Br = BitArray{N}(ntuple(N,i->0)...)
     Br.chunks = B.chunks
@@ -322,7 +322,7 @@ convert{N}(::Type{BitArray{N}}, B::BitArray{N}) = B
 reinterpret{N}(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) = reinterpret(B, dims)
 function reinterpret{N}(B::BitArray, dims::NTuple{N,Int})
     if prod(dims) != length(B)
-        error("reinterpret: array size must not change")
+        error("New dimensions are inconsistent with the array length,")
     end
     A = BitArray{N}(ntuple(N,i->0)...)
     A.chunks = B.chunks
@@ -397,7 +397,7 @@ let getindex_cache = nothing
         # the < should become a != once
         # the stricter indexing behaviour is enforced
         if ndims(B) < 1 + length(I)
-            error("wrong number of dimensions in getindex")
+            error("Wrong number of dimensions,")
         end
         checkbounds(B, I0, I...)
         X = BitArray(index_shape(I0, I...))
@@ -574,14 +574,14 @@ let setindex_cache = nothing
     function setindex_array2bitarray_ranges(B::BitArray, X::BitArray, I0::Range1{Int}, I::Range1{Int}...)
         nI = 1 + length(I)
         if ndims(B) != nI
-            error("wrong number of dimensions in assigment")
+            error("Wrong number of dimensions in assigment,")
         end
         lI = length(I0)
         for r in I
             lI *= length(r)
         end
         if length(X) != lI
-            error("array assignment dimensions mismatch")
+            error("Array assignment dimensions mismatch,")
         end
         if lI == 0
             return B
@@ -644,7 +644,7 @@ function setindex!(B::BitArray, X::BitArray, I0::Range1{Int}, I::Union(Integer, 
 end
 
 function setindex!{T<:Real}(B::BitArray, X::AbstractArray, I::AbstractVector{T})
-    if length(X) != length(I); error("argument dimensions must match"); end
+    if length(X) != length(I); error("Argument dimensions must match,"); end
     count = 1
     for i in I
         B[i] = X[count]
@@ -655,21 +655,21 @@ end
 
 function setindex!(B::BitArray, X::AbstractArray, i0::Real)
     if length(X) != 1
-        error("argument dimensions must match")
+        error("Argument dimensions must match,")
     end
     return setindex!(B, X[1], i0)
 end
 
 function setindex!(B::BitArray, X::AbstractArray, i0::Real, i1::Real)
     if length(X) != 1
-        error("argument dimensions must match")
+        error("Argument dimensions must match,")
     end
     return setindex!(B, X[1], i0, i1)
 end
 
 function setindex!(B::BitArray, X::AbstractArray, I0::Real, I::Real...)
     if length(X) != 1
-        error("argument dimensions must match")
+        error("Argument dimensions must match,")
     end
     return setindex!(B, X[1], i0, I...)
 end
@@ -683,12 +683,12 @@ let setindex_cache = nothing
             nel *= length(idx)
         end
         if length(X) != nel
-            error("argument dimensions must match")
+            error("Argument dimensions must match,")
         end
         if ndims(X) > 1
             for i = 1:length(I)
                 if size(X,i) != length(I[i])
-                    error("argument dimensions must match")
+                    error("Argument dimensions must match,")
                 end
             end
         end
@@ -883,7 +883,7 @@ end
 
 function pop!(B::BitVector)
     if isempty(B)
-        error("pop!: BitArray is empty")
+        error("BitArray must not be empty,")
     end
     item = B[end]
     B[end] = false
@@ -921,7 +921,7 @@ end
 
 function shift!(B::BitVector)
     if isempty(B)
-        error("shift!: BitArray is empty")
+        error("BitArray must not be empty,")
     end
     @inbounds begin
         item = B[1]
@@ -1895,8 +1895,8 @@ function any(B::BitArray)
     return false
 end
 
-minimum(B::BitArray) = isempty(B) ? error("minimum: argument is empty") : all(B)
-maximum(B::BitArray) = isempty(B) ? error("maximum: argument is empty") : any(B)
+minimum(B::BitArray) = isempty(B) ? error("Argument must not be empty,") : all(B)
+maximum(B::BitArray) = isempty(B) ? error("Argument must not be empty,") : any(B)
 
 ## map over bitarrays ##
 
@@ -2056,7 +2056,7 @@ global permutedims
 function permutedims(B::Union(BitArray,StridedArray), perm)
     dimsB = size(B)
     ndimsB = length(dimsB)
-    ndimsB == length(perm) || error("permutedims: invalid dimensions")
+    ndimsB == length(perm) || error("Invalid dimensions,")
     dimsP = ntuple(ndimsB, i->dimsB[perm[i]])::typeof(dimsB)
     P = similar(B, dimsP)
     ranges = ntuple(ndimsB, i->(1:dimsP[i]))
@@ -2135,7 +2135,7 @@ end # let
 function hcat(B::BitVector...)
     height = length(B[1])
     for j = 2:length(B)
-        length(B[j]) == height || error("hcat: mismatched dimensions")
+        length(B[j]) == height || error("Dimensions must match,")
     end
     M = BitArray(height, length(B))
     for j = 1:length(B)
@@ -2167,7 +2167,7 @@ function hcat(A::Union(BitMatrix,BitVector)...)
         Aj = A[j]
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
-        if size(Aj, 1) != nrows; error("hcat: mismatched dimensions"); end
+        if size(Aj, 1) != nrows; error("Rows must match,"); end
     end
 
     B = BitArray(nrows, ncols)
@@ -2187,7 +2187,7 @@ function vcat(A::BitMatrix...)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
     for j = 2:nargs
-        if size(A[j], 2) != ncols; error("vcat: mismatched dimensions"); end
+        if size(A[j], 2) != ncols; error("Columns must match,"); end
     end
     B = BitArray(nrows, ncols)
     Bc = B.chunks
@@ -2228,7 +2228,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
     if catdim > d_max + 1
         for i=1:nargs
             if dimsX[1] != dimsX[i]
-                error("cat: all inputs must have same dimensions when concatenating along a higher dimension");
+                error("All inputs must have same dimensions when concatenating along a higher dimension,");
             end
         end
     elseif nargs >= 2
@@ -2237,7 +2237,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
             len = d <= ndimsX[1] ? dimsX[1][d] : 1
             for i = 2:nargs
                 if len != (d <= ndimsX[i] ? dimsX[i][d] : 1)
-                    error("cat: dimension mismatch on dimension ", d)
+                    error("Dimension mismatch on dimension ", d)
                 end
             end
         end

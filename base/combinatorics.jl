@@ -108,7 +108,7 @@ function invperm(a::AbstractVector)
     for i = 1:n
         j = a[i]
         ((1 <= j <= n) && b[j] == 0) ||
-            error("invperm: input is not a permutation")
+            error("Input is not a permutation,")
         b[j] = i
     end
     b
