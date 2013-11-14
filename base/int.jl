@@ -358,11 +358,11 @@ ifloor(x::Integer) = x
 ## integer construction ##
 
 macro int128_str(str)
-    :(int128($str))
+    int128(str)
 end
 
 macro uint128_str(str)
-    :(uint128($str))
+    uint128(str)
 end
 
 ## system word size ##
