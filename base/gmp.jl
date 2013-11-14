@@ -307,7 +307,7 @@ function powermod(x::BigInt, p::BigInt, m::BigInt)
     ccall((:__gmpz_powm, :libgmp), Void,
           (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}),
           &r, &x, &p, &m)
-    return r
+    return m < 0 && r > 0 ? r + m : r # choose sign conistent with mod(x^p, m)
 end
 powermod(x::BigInt, p::Integer, m::BigInt) = powermod(x, BigInt(p), m)
 powermod(x::BigInt, p::Integer, m::Integer) = powermod(x, BigInt(p), BigInt(m))
