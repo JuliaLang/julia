@@ -431,13 +431,17 @@ function setindex!{T<:Real}(A::Array, x, I::AbstractVector{T})
 end
 
 function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int})
-    if length(X) != length(I); error("argument dimensions must match"); end
+    if length(X) != length(I)
+        error("tried to assign $(length(X)) elements to $(length(I)) destinations");
+    end
     copy!(A, first(I), X, 1, length(I))
     return A
 end
 
 function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
-    if length(X) != length(I); error("argument dimensions must match"); end
+    if length(X) != length(I)
+        error("tried to assign $(length(X)) elements to $(length(I)) destinations");
+    end
     count = 1
     if is(X,A)
         X = copy(X)
@@ -459,7 +463,9 @@ function setindex!{T<:Real}(A::Array, x, i::Real, J::AbstractVector{T})
         end
     else
         X = x
-        if length(X) != length(J); error("argument dimensions must match"); end
+        if length(X) != length(J)
+            error("tried to assign $(length(X)) elements to $(length(J)) destinations");
+        end
         count = 1
         for j in J
             A[(j-1)*m + i] = X[count]
@@ -481,7 +487,9 @@ function setindex!{T<:Real}(A::Array, x, I::AbstractVector{T}, j::Real)
         end
     else
         X = x
-        if length(X) != length(I); error("argument dimensions must match"); end
+        if length(X) != length(I)
+            error("tried to assign $(length(X)) elements to $(length(I)) destinations");
+        end
         count = 1
         for i in I
             A[offset + i] = X[count]
@@ -494,7 +502,9 @@ end
 function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, j::Real)
     j = to_index(j)
     checkbounds(A, I, j)
-    if length(X) != length(I); error("argument dimensions must match"); end
+    if length(X) != length(I)
+        error("tried to assign $(length(X)) elements to $(length(I)) destinations");
+    end
     unsafe_copy!(A, first(I) + (j-1)*size(A,1), X, 1, length(I))
     return A
 end
@@ -504,7 +514,7 @@ function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, J::Range1{Int})
     nel = length(I)*length(J)
     if length(X) != nel ||
         (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
-        error("argument dimensions must match")
+        error("tried to assign $(size(X,1)) x $(size(X,2)) Array to $(length(I)) x $(length(J)) destination");
     end
     if length(I) == size(A,1)
         unsafe_copy!(A, first(I) + (first(J)-1)*size(A,1), X, 1, size(A,1)*length(J))
@@ -523,7 +533,7 @@ function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, J::AbstractVecto
     nel = length(I)*length(J)
     if length(X) != nel ||
         (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
-        error("argument dimensions must match")
+        error("tried to assign $(size(X)) Array to ($(length(I)),$(length(J))) destination");
     end
     refoffset = 1
     for j = J
@@ -548,7 +558,7 @@ function setindex!{T<:Real}(A::Array, x, I::AbstractVector{T}, J::AbstractVector
         nel = length(I)*length(J)
         if length(X) != nel ||
             (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
-            error("argument dimensions must match")
+            error("tried to assign $(size(X,1)) x $(size(X,2)) Array to $(length(I)) x $(length(J)) destination");
         end
         count = 1
         for j in J

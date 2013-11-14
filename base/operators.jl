@@ -36,14 +36,14 @@ max(x,y) = ifelse(y < x, x, y)
 min(x,y) = ifelse(x < y, x, y)
 
 scalarmax(x,y) = max(x,y)
-scalarmax(x::AbstractArray, y::AbstractArray) = error("max: ordering is not well-defined for arrays")
-scalarmax(x               , y::AbstractArray) = error("max: ordering is not well-defined for arrays")
-scalarmax(x::AbstractArray, y               ) = error("max: ordering is not well-defined for arrays")
+scalarmax(x::AbstractArray, y::AbstractArray) = error("ordering is not well-defined for arrays")
+scalarmax(x               , y::AbstractArray) = error("ordering is not well-defined for arrays")
+scalarmax(x::AbstractArray, y               ) = error("ordering is not well-defined for arrays")
 
 scalarmin(x,y) = min(x,y)
-scalarmin(x::AbstractArray, y::AbstractArray) = error("min: ordering is not well-defined for arrays")
-scalarmin(x               , y::AbstractArray) = error("min: ordering is not well-defined for arrays")
-scalarmin(x::AbstractArray, y               ) = error("min: ordering is not well-defined for arrays")
+scalarmin(x::AbstractArray, y::AbstractArray) = error("ordering is not well-defined for arrays")
+scalarmin(x               , y::AbstractArray) = error("ordering is not well-defined for arrays")
+scalarmin(x::AbstractArray, y               ) = error("ordering is not well-defined for arrays")
 
 ## definitions providing basic traits of arithmetic operators ##
 
@@ -145,10 +145,10 @@ oftype{T}(x::T,c) = convert(T,c)
 zero(x) = oftype(x,0)
 one(x)  = oftype(x,1)
 
-sizeof(T::Type) = error(string("Size of type ",T," unknown"))
-sizeof(T::DataType) = if isleaftype(T) T.size else error("Type does not have a native size") end
-sizeof(::Type{Symbol}) = error("Type does not have a native size")
-sizeof{T<:Array}(::Type{T}) = error("Type does not have a native size")
+sizeof(T::Type) = error(string("size of type ",T," unknown"))
+sizeof(T::DataType) = if isleaftype(T) T.size else error("type does not have a native size") end
+sizeof(::Type{Symbol}) = error("type does not have a native size")
+sizeof{T<:Array}(::Type{T}) = error("type $(T) does not have a native size")
 sizeof(x) = sizeof(typeof(x))
 
 # copying immutable things
@@ -162,14 +162,14 @@ copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
 
 function promote_shape(a::(Int,), b::(Int,))
     if a[1] != b[1]
-        error("Argument dimensions must match")
+        error("dimensions must match")
     end
     return a
 end
 
 function promote_shape(a::(Int,Int), b::(Int,))
     if a[1] != b[1] || a[2] != 1
-        error("Argument dimensions must match")
+        error("dimensions must match")
     end
     return a
 end
@@ -178,7 +178,7 @@ promote_shape(a::(Int,), b::(Int,Int)) = promote_shape(b, a)
 
 function promote_shape(a::(Int, Int), b::(Int, Int))
     if a[1] != b[1] || a[2] != b[2]
-        error("Argument dimensions must match")
+        error("dimensions must match")
     end
     return a
 end
@@ -189,12 +189,12 @@ function promote_shape(a::Dims, b::Dims)
     end
     for i=1:length(b)
         if a[i] != b[i]
-            error("Argument dimensions must match")
+            error("dimensions must match")
         end
     end
     for i=length(b)+1:length(a)
         if a[i] != 1
-            error("argument dimensions must match")
+            error("dimensions must match")
         end
     end
     return a
@@ -212,12 +212,12 @@ function setindex_shape_check(X::AbstractArray, I...)
         nel *= length(idx)
     end
     if length(X) != nel
-        error("argument dimensions must match")
+        error("dimensions must match")
     end
     if ndims(X) > 1
         for i = 1:length(I)
             if size(X,i) != length(I[i])
-                error("argument dimensions must match")
+                error("dimensions must match")
             end
         end
     end

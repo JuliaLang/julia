@@ -116,8 +116,7 @@ function showerror(io::IO, e::MethodError)
 end
 
 function show_trace_entry(io, fname, file, line, n)
-    print(io, "\n")
-    print(io, "  \033[0min \033[1m\033[31m", fname, " \033[0mat ", file)
+    print(io, "\n\033[0m  in \033[1m\033[31m", fname, "\033[0m at ", file)
     if line >= 1
         try
             print(io, ":", line)
