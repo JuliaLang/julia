@@ -33,16 +33,14 @@ abs(x::Signed) = flipsign(x,x)
 ## number-theoretic functions ##
 
 function gcd{T<:Integer}(a::T, b::T)
-    neg = a < 0
     while b != 0
         t = b
         b = rem(a, b)
         a = t
     end
-    g = abs(a)
-    neg ? -g : g
+    abs(a)
 end
-lcm{T<:Integer}(a::T, b::T) = a * div(b, gcd(b,a))
+lcm{T<:Integer}(a::T, b::T) = abs(a * div(b, gcd(b,a)))
 
 gcd(a::Integer) = a
 lcm(a::Integer) = a
@@ -61,15 +59,14 @@ function gcdx{T<:Integer}(a::T, b::T)
         s0, s1 = s1, s0 - q*s1
         t0, t1 = t1, t0 - q*t1
     end
-    (a, s0, t0)
+    a < 0 ? (-a, -s0, -t0) : (a, s0, t0)
 end
 gcdx(a::Integer, b::Integer) = gcdx(promote(a,b)...)
 
 # multiplicative inverse of n mod m, error if none
 function invmod(n, m)
     g, x, y = gcdx(n, m)
-    g == 1 ? (x < 0 ? m + x : x) : 
-    g == -1 ? (x > 0 ? abs(m) - x : -x) : error("no inverse exists")
+    g == 1 ? (x < 0 ? abs(m) + x : x) : error("no inverse exists")
 end
 
 # ^ for any x supporting *
