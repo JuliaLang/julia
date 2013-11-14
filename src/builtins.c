@@ -302,12 +302,16 @@ JL_CALLABLE(jl_f_apply)
 
 #include "newobj_internal.h"
 
+void jl_add_constructors(jl_datatype_t *t);
+
 JL_CALLABLE(jl_f_kwcall)
 {
     if (nargs < 3)
         jl_error("internal error: malformed keyword argument call");
     JL_TYPECHK(apply, function, args[0]);
     jl_function_t *f = (jl_function_t*)args[0];
+    if (f->fptr == jl_f_ctor_trampoline)
+        jl_add_constructors((jl_datatype_t*)f);
     if (!jl_is_gf(f))
         jl_error("function does not accept keyword arguments");
     jl_function_t *sorter = ((jl_methtable_t*)f->env)->kwsorter;
