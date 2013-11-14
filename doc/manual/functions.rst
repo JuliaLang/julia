@@ -397,7 +397,7 @@ multiple method definitions with different numbers of arguments
 
 
 Keyword Arguments
----------------
+-----------------
 
 Some functions need a large number of arguments, or have a large number of
 behaviors. Remembering how to call such functions can be difficult. Keyword
@@ -431,6 +431,31 @@ Inside ``f``, ``args`` will be a collection of ``(key,value)`` tuples,
 where each ``key`` is a symbol. Such collections can be passed as keyword
 arguments using a semicolon in a call, ``f(x; k...)``. Dictionaries
 can be used for this purpose.
+
+Keyword argument default values are evaluated only when necessary
+(when a corresponding keyword argument is not passed), and in
+left-to-right order. Therefore default expressions may refer to
+prior keyword arguments.
+
+
+Evaluation Scope of Default Values
+----------------------------------
+
+Optional and keyword arguments differ slightly in how their default
+values are evaluated. When optional argument default expressions are
+evaluated, only *previous* arguments are in scope. For example, given
+this definition::
+
+    function f(x, a=b, b=1)
+        ###
+    end
+
+the ``b`` in ``a=b`` refers to the ``b`` in an outer scope, not the
+subsequent argument ``b``. However, if ``a`` and ``b`` were keyword
+arguments instead, then both would be created in the same scope and
+``a=b`` would result in an undefined variable error (since the
+default expressions are evaluated left-to-right, and ``b`` has not
+been assigned yet).
 
 
 Block Syntax for Function Arguments
