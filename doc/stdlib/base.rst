@@ -2632,15 +2632,15 @@ Mathematical Functions
 
 .. function:: gcd(x,y)
 
-   Greatest common divisor
+   Greatest common (positive) divisor (or zero if x and y are both zero).
 
 .. function:: lcm(x,y)
 
-   Least common multiple
+   Least common (non-negative) multiple.
 
 .. function:: gcdx(x,y)
 
-   Greatest common divisor, also returning integer coefficients ``u`` and ``v`` that solve ``ux+vy == gcd(x,y)``
+   Greatest common (positive) divisor, also returning integer coefficients ``u`` and ``v`` that solve ``ux+vy == gcd(x,y)``
 
 .. function:: ispow2(n)
 

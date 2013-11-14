@@ -1511,3 +1511,24 @@ end
 # overflow in rational comparison
 @test 3//2 < typemax(Int)
 @test 3//2 <= typemax(Int)
+
+# check gcd and related functions against GMP
+for i = -20:20, j = -20:20
+    local d = gcd(i,j)
+    @test d >= 0
+    @test lcm(i,j) >= 0
+    local ib = big(i)
+    local jb = big(j)
+    @test d == gcd(ib,jb)
+    @test lcm(i,j) == lcm(ib,jb)
+    @test gcdx(i,j) == gcdx(ib,jb)
+    @test d != 1 || invmod(i,j) == invmod(ib,jb)
+end
+
+# check powermod function against GMP
+for i = -10:10, p = 0:5, m = -10:10
+    if m != 0
+        @test powermod(i,p,m) == powermod(i,p,big(m)) == powermod(big(i),big(p),big(m))
+        @test mod(i^p,m) == powermod(i,p,m) == mod(big(i)^p,big(m))
+    end
+end

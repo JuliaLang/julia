@@ -3885,19 +3885,19 @@ popdisplay(d::Display)
 
 ("Mathematical Functions","Base","gcd","gcd(x, y)
 
-   Greatest common divisor
+   Greatest common (positive) divisor (or zero if x and y are both zero).
 
 "),
 
 ("Mathematical Functions","Base","lcm","lcm(x, y)
 
-   Least common multiple
+   Least common (non-negative) multiple.
 
 "),
 
 ("Mathematical Functions","Base","gcdx","gcdx(x, y)
 
-   Greatest common divisor, also returning integer coefficients \"u\"
+   Greatest common (positive) divisor, also returning integer coefficients \"u\"
    and \"v\" that solve \"ux+vy == gcd(x,y)\"
 
 "),
