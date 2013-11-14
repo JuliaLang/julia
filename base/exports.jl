@@ -1237,6 +1237,8 @@ export
     @b_str,
     @r_str,
     @v_str,
+    @int128_str,
+    @uint128_str,
     @mstr,
     @unexpected,
     @assert,
