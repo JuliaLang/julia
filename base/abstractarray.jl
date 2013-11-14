@@ -146,7 +146,7 @@ similar   (a::AbstractArray, T, dims::Int...) = similar(a, T, dims)
 
 function reshape(a::AbstractArray, dims::Dims)
     if prod(dims) != length(a)
-        error("Dimensions must be consistent with array size,")
+        error("dimensions must be consistent with array size")
     end
     copy!(similar(a, dims), a)
 end
@@ -160,7 +160,7 @@ function squeeze(A::AbstractArray, dims)
     for i in 1:ndims(A)
         if in(i,dims)
             if size(A,i) != 1
-                error("Squeezed dims must all be size 1,")
+                error("squeezed dims must all be size 1")
             end
         else
             d = tuple(d..., size(A,i))
@@ -549,7 +549,7 @@ end
 
 ## Indexing: getindex ##
 
-getindex(t::AbstractArray, i::Real) = error("Indexing not defined for ", typeof(t))
+getindex(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(t))
 
 # linear indexing with a single multi-dimensional index
 function getindex(A::AbstractArray, I::AbstractArray)
@@ -580,7 +580,7 @@ function reverse(A::AbstractVector, s=1, n=length(A))
 end
 
 function flipdim(A::AbstractVector, d::Integer)
-    d > 0 || error("Dimension must be positive,")
+    d > 0 || error("dimension to flip must be positive")
     d == 1 || return copy(A)
     reverse(A)
 end
@@ -724,7 +724,7 @@ end
 function hcat{T}(V::AbstractVector{T}...)
     height = length(V[1])
     for j = 2:length(V)
-        if length(V[j]) != height; error("Lengths must match,"); end
+        if length(V[j]) != height; error("vector must have same lengths"); end
     end
     [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
@@ -756,7 +756,7 @@ function hcat{T}(A::Union(AbstractMatrix{T},AbstractVector{T})...)
         dense &= isa(Aj,Array)
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
-        if size(Aj, 1) != nrows; error("Number of rows must match,"); end
+        if size(Aj, 1) != nrows; error("number of rows must match"); end
     end
     B = similar(full(A[1]), nrows, ncols)
     pos = 1
@@ -783,7 +783,7 @@ function vcat{T}(A::AbstractMatrix{T}...)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
     for j = 2:nargs
-        if size(A[j], 2) != ncols; error("Number of columns must match,"); end
+        if size(A[j], 2) != ncols; error("number of columns must match"); end
     end
     B = similar(full(A[1]), nrows, ncols)
     pos = 1
@@ -807,7 +807,7 @@ function cat(catdim::Integer, X...)
     if catdim > d_max + 1
         for i=1:nargs
             if dimsX[1] != dimsX[i]
-                error("All inputs must have same dimensions when concatenating along a higher dimension,");
+                error("all inputs must have same dimensions when concatenating along a higher dimension");
             end
         end
     elseif nargs >= 2
@@ -875,7 +875,7 @@ function cat_t(catdim::Integer, typeC, A::AbstractArray...)
     if catdim > d_max + 1
         for i=1:nargs
             if dimsA[1] != dimsA[i]
-                error("All inputs must have same dimensions when concatenating along a higher dimension,");
+                error("all inputs must have same dimensions when concatenating along a higher dimension");
             end
         end
     elseif nargs >= 2
@@ -884,7 +884,7 @@ function cat_t(catdim::Integer, typeC, A::AbstractArray...)
             len = d <= ndimsA[1] ? dimsA[1][d] : 1
             for i = 2:nargs
                 if len != (d <= ndimsA[i] ? dimsA[i][d] : 1)
-                    error("Dimension mismatch on dimension ", d)
+                    error("dimension mismatch on dimension ", d)
                 end
             end
         end
@@ -931,7 +931,7 @@ function hvcat(nbc::Integer, as...)
     # nbc = # of block columns
     n = length(as)
     if mod(n,nbc) != 0
-        error("All rows must have the same number of block columns,")
+        error("all rows must have the same number of block columns")
     end
     nbr = div(n,nbc)
     hvcat(ntuple(nbr, i->nbc), as...)
@@ -963,16 +963,16 @@ function hvcat{T}(rows::(Int...), as::AbstractMatrix{T}...)
             Aj = as[a+j-1]
             szj = size(Aj,2)
             if size(Aj,1) != szi
-                error("Mismatched height in block row ", i)
+                error("mismatched height in block row ", i)
             end
             if c-1+szj > nc
-                error("Block row ", i, " has mismatched number of columns,")
+                error("block row ", i, " has mismatched number of columns")
             end
             out[r:r-1+szi, c:c-1+szj] = Aj
             c += szj
         end
         if c != nc+1
-            error("Block row ", i, " has mismatched number of columns,")
+            error("block row ", i, " has mismatched number of columns")
         end
         r += szi
         a += rows[i]
@@ -990,7 +990,7 @@ function hvcat{T<:Number}(rows::(Int...), xs::T...)
     k = 1
     for i=1:nr
         if nc != rows[i]
-            error("Row ", i, " has mismatched number of columns,")
+            error("row ", i, " has mismatched number of columns")
         end
         for j=1:nc
             a[i,j] = xs[k]
@@ -1018,7 +1018,7 @@ function hvcat(rows::(Int...), xs::Number...)
     #error check
     for i = 2:nr
         if nc != rows[i]
-            error("Row ", i, " has mismatched number of columns,")
+            error("row ", i, " has mismatched number of columns")
         end
     end
     T = typeof(xs[1])
@@ -1326,7 +1326,7 @@ function repeat{T}(A::Array{T};
     ndims_out = max(ndims_in, length_inner, length_outer)
 
     if length_inner < ndims_in || length_outer < ndims_in
-        msg = "Inner/outer repetitions must be set for all input dimensions,"
+        msg = "inner/outer repetitions must be set for all input dimensions"
         throw(ArgumentError(msg))
     end
 
@@ -1454,9 +1454,9 @@ any(A::AbstractArray{Bool}, region) = reducedim(|,A,region,false)
 sum(A::AbstractArray{Bool}, region) = reducedim(+,A,region,0,similar(A,Int,reduced_dims(A,region)))
 sum(A::AbstractArray{Bool}) = sum(A, [1:ndims(A)])[1]
 prod(A::AbstractArray{Bool}) =
-    error("Use all() instead of prod() for boolean arrays,")
+    error("use all() instead of prod() for boolean arrays")
 prod(A::AbstractArray{Bool}, region) =
-    error("Use all() instead of prod() for boolean arrays,")
+    error("use all() instead of prod() for boolean arrays")
 
 # Pairwise (cascade) summation of A[i1:i1+n-1], which has O(log n) error growth
 # [vs O(n) for a simple loop] with negligible performance cost if
@@ -1580,7 +1580,7 @@ function prod{T}(A::AbstractArray{T})
 end
 
 function minimum{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("Argument must not be empty,"); end
+    if isempty(A); error("argument must not be empty"); end
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]
@@ -1592,7 +1592,7 @@ function minimum{T<:Real}(A::AbstractArray{T})
 end
 
 function maximum{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("Argument must not be empty,"); end
+    if isempty(A); error("argument must not be empty"); end
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]

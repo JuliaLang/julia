@@ -50,8 +50,8 @@ function mkpath(path::String, mode::Unsigned=0o777)
     mkdir(path)
 end
 
-mkdir(path::String, mode::Signed) = error("Mode must be an unsigned integer -- perhaps 0o$mode?")
-mkpath(path::String, mode::Signed) = error("Mode must be an unsigned integer -- perhaps 0o$mode?")
+mkdir(path::String, mode::Signed) = error("mode must be an unsigned integer -- perhaps 0o$mode?")
+mkpath(path::String, mode::Signed) = error("mode must be an unsigned integer -- perhaps 0o$mode?")
 
 function rmdir(path::String)
     @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))

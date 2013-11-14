@@ -10,7 +10,7 @@ function countlines(filename::String, eol::Char)
 end
 function countlines(io::IO, eol::Char)
     if !isascii(eol)
-        error("Only ASCII line terminators are supported,")
+        error("only ASCII line terminators are supported")
     end
     a = Array(Uint8, 8192)
     nl = 0
@@ -86,7 +86,7 @@ const valid_opts = [:has_header, :ignore_invalid_chars, :use_mmap]
 function val_opts(opts)
     d = Dict{Symbol,Bool}()
     for opt in opts
-        !in(opt[1], valid_opts) && error("Unknown option $(opt[1])")
+        !in(opt[1], valid_opts) && error("unknown option $(opt[1])")
         !isa(opt[2], Bool) && error("$(opt[1]) can only be boolean")
         d[opt[1]] = opt[2]
     end
@@ -117,7 +117,7 @@ function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, au
             sval = SubString(sbuff, start_pos, end_idx)
             
             if T <: Char
-                (length(sval) != 1) && error("File entry \"$(sval)\" is not a Char")
+                (length(sval) != 1) && error("file entry \"$(sval)\" is not a Char")
                 cells[cell_row,col] = next(sval,1)[1]
             elseif T <: Number
                 if float64_isvalid(sval, tmp64)
@@ -132,7 +132,7 @@ function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, au
             elseif T == Any
                 cells[cell_row,col] = float64_isvalid(sval, tmp64) ? tmp64[1] : sval
             else
-                error("File entry \"$(sval)\" cannot be converted to $T")
+                error("file entry \"$(sval)\" cannot be converted to $T")
             end
         end
     end

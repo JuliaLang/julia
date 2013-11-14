@@ -60,7 +60,7 @@ function getindex(s::UTF8String, i::Int)
         end
         if 0 < j && i <= j+utf8_trailing[d[j]+1] <= length(d)
             # b is a continuation byte of a valid UTF-8 character
-            error("Invalid UTF-8 character index,")
+            error("invalid UTF-8 character index")
         end
         return '\ufffd'
     end
@@ -137,7 +137,7 @@ function reverse(s::UTF8String)
     out = similar(s.data)
     if ccall(:u8_reverse, Cint, (Ptr{Uint8}, Ptr{Uint8}, Csize_t),
              out, s.data, length(out)) == 1
-        error("Invalid UTF-8 data,")
+        error("invalid UTF-8 data")
     end
     UTF8String(out)
 end
@@ -152,7 +152,7 @@ write(io::IO, s::UTF8String) = write(io, s.data)
 utf8(x) = convert(UTF8String, x)
 convert(::Type{UTF8String}, s::UTF8String) = s
 convert(::Type{UTF8String}, s::ASCIIString) = UTF8String(s.data)
-convert(::Type{UTF8String}, a::Array{Uint8,1}) = is_valid_utf8(a) ? UTF8String(a) : error("Invalid UTF-8 sequence,")
+convert(::Type{UTF8String}, a::Array{Uint8,1}) = is_valid_utf8(a) ? UTF8String(a) : error("invalid UTF-8 sequence")
 function convert(::Type{UTF8String}, a::Array{Uint8,1}, invalids_as::String)
     l = length(a)
     idx = 1

@@ -41,7 +41,7 @@ end
 
 function DArray(init, dims, procs)
     if isempty(procs)
-        error("No processors!")
+        error("no processors")
     end
     DArray(init, dims, procs, defaultdist(dims,procs))
 end
