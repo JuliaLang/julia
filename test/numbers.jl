@@ -1524,3 +1524,11 @@ for i = -20:20, j = -20:20
     @test gcdx(i,j) == gcdx(ib,jb)
     @test d != 1 || invmod(i,j) == invmod(ib,jb)
 end
+
+# check powermod function against GMP
+for i = -10:10, p = 0:5, m = -10:10
+    if m != 0
+        @test powermod(i,p,m) == powermod(i,p,big(m)) == powermod(big(i),big(p),big(m))
+        @test mod(i^p,m) == powermod(i,p,m) == mod(big(i)^p,big(m))
+    end
+end
