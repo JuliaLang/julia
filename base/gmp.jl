@@ -6,7 +6,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
-             serialize, deserialize, bin, oct, dec, hex, isequal
+             serialize, deserialize, bin, oct, dec, hex, isequal, invmod
 
 type BigInt <: Integer
     alloc::Cint
@@ -152,7 +152,7 @@ deserialize(s, ::Type{BigInt}) = parseint(BigInt, deserialize(s), 62)
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
                  (:fld, :fdiv_q), (:div, :tdiv_q), (:mod, :fdiv_r), (:rem, :tdiv_r),
-                 (:gcd, :gcd), (:lcm, :lcm),
+                 (:gcd, :gcd), (:lcm, :lcm), (:invmod, :invert),
                  (:&, :and), (:|, :ior), (:$, :xor))
     @eval begin
         function ($fJ)(x::BigInt, y::BigInt)
@@ -314,6 +314,9 @@ powermod(x::BigInt, p::Integer, m::BigInt) = powermod(x, BigInt(p), m)
 powermod(x::BigInt, p::Integer, m::Integer) = powermod(x, BigInt(p), BigInt(m))
 
 function gcdx(a::BigInt, b::BigInt)
+    if b == 0 # shortcut this to ensure consistent results with gcdx(a,b)
+        return a < 0 ? (-a,-one(BigInt),zero(BigInt)) : (a,one(BigInt),zero(BigInt))
+    end
     g = BigInt()
     s = BigInt()
     t = BigInt()
