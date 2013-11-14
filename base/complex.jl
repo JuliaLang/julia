@@ -28,6 +28,7 @@ convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
                                            throw(InexactError()))
 
 promote_rule{T<:Real}(::Type{Complex{T}}, ::Type{T}) = Complex{T}
+promote_rule{T<:Real}(::Type{Complex}, ::Type{T}) = Complex
 promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{S}) =
     Complex{promote_type(T,S)}
 promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) =
