@@ -40,7 +40,9 @@ function gcd{T<:Integer}(a::T, b::T)
     end
     abs(a)
 end
-lcm{T<:Integer}(a::T, b::T) = abs(a * div(b, gcd(b,a)))
+
+# explicit a==0 test is to handle case of lcm(0,0) correctly
+lcm{T<:Integer}(a::T, b::T) = a == 0 ? a : abs(a * div(b, gcd(b,a)))
 
 gcd(a::Integer) = a
 lcm(a::Integer) = a
