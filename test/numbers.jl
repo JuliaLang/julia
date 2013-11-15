@@ -1522,7 +1522,13 @@ for i = -20:20, j = -20:20
     @test d == gcd(ib,jb)
     @test lcm(i,j) == lcm(ib,jb)
     @test gcdx(i,j) == gcdx(ib,jb)
-    @test d != 1 || invmod(i,j) == invmod(ib,jb)
+    if j > 1
+        @test d != 1 || invmod(i,j) == invmod(ib,jb)
+    end
+    if j == 0
+        @test_throws invmod(i,j)
+        @test_throws invmod(ib,jb)
+    end
 end
 
 # check powermod function against GMP
