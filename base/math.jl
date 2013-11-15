@@ -645,9 +645,9 @@ hankelh2(nu, z) = besselh(nu, 2, z)
 
 
 function angle_restrict_symm(theta)
-    P1 = 4 * 7.8539812564849853515625e-01
-    P2 = 4 * 3.7748947079307981766760e-08
-    P3 = 4 * 2.6951514290790594840552e-15
+    const P1 = 4 * 7.8539812564849853515625e-01
+    const P2 = 4 * 3.7748947079307981766760e-08
+    const P3 = 4 * 2.6951514290790594840552e-15
 
     y = 2*floor(theta/(2*pi))
     r = ((theta - y*P1) - y*P2) - y*P3
@@ -665,7 +665,7 @@ const clg_coeff = [76.18009172947146,
                    -0.5395239384953e-5]
 
 function clgamma_lanczos(z)
-    sqrt2pi = 2.5066282746310005
+    const sqrt2pi = 2.5066282746310005
     
     y = x = z
     temp = x + 5.5
@@ -686,7 +686,7 @@ function lgamma(z::Complex)
     if real(z) <= 0.5
         a = clgamma_lanczos(1-z)
         b = log(sinpi(z))
-        logpi = 1.14472988584940017
+        const logpi = 1.14472988584940017
         z = logpi - b - a
     else
         z = clgamma_lanczos(z)
@@ -1379,7 +1379,7 @@ function ieee754_rem_pio2(x::Float64)
 end
 
 
-# multiples of pi FIX FIX FIX - already defined somewhere? Naming?
+# multiples of pi/2, as double-double (ie with "tail")
 const pi1o2_h  = 1.5707963267948966     # convert(Float64, pi * BigFloat(1/2))
 const pi1o2_l  = 6.123233995736766e-17  # convert(Float64, pi * BigFloat(1/2) - pi1o2_h)
 
