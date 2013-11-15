@@ -87,8 +87,8 @@ end
 
 display_error(er) = display_error(er, {})
 function display_error(er, bt)
-    with_output_color(:normal, STDERR) do io
-        print(io, "\033[1m\033[31mERROR: ")
+    with_output_color(:red, STDERR) do io
+        print(io, "ERROR: ")
         showerror(io, er, bt)
         println(io)
     end
