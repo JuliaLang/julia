@@ -180,8 +180,6 @@ export
 # Mathematical constants
     im,
     π, pi,
-    pi1o2_bf, pi1o2_h, pi1o2_l, pi2o2_bf, pi2o2_h, pi2o2_l, 
-    pi3o2_bf, pi3o2_h, pi3o2_l, pi4o2_bf, pi4o2_h, pi4o2_l,
     e, eu,
     γ, eulergamma,
     catalan,
