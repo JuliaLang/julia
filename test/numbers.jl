@@ -1522,7 +1522,7 @@ for i = -20:20, j = -20:20
     @test d == gcd(ib,jb)
     @test lcm(i,j) == lcm(ib,jb)
     @test gcdx(i,j) == gcdx(ib,jb)
-    if abs(j) < 2
+    if j == 0
         @test_throws invmod(i,j)
         @test_throws invmod(ib,jb)
     elseif d == 1
