@@ -506,16 +506,19 @@ end
 #Calculates eigenvectors
 eigvecs(A::Union(Number, AbstractMatrix)) = eigfact(A)[:vectors]
 
-function eigvals{T<:BlasReal}(A::StridedMatrix{T})
-    if issym(A) return eigvals(Symmetric(A)) end
-    valsre, valsim, _, _ = LAPACK.geev!('N', 'N', copy(A))
+function eigvals!{T<:BlasReal}(A::StridedMatrix{T})
+    if issym(A) return eigvals!(Symmetric(A)) end
+    valsre, valsim, _, _ = LAPACK.geev!('N', 'N', A)
     if all(valsim .== 0) return valsre end
     return complex(valsre, valsim)
 end
-function eigvals{T<:BlasComplex}(A::StridedMatrix{T})
+function eigvals!{T<:BlasComplex}(A::StridedMatrix{T})
     if ishermitian(A) return eigvals(Hermitian(A)) end
-    LAPACK.geev!('N', 'N', copy(A))[1]
+    LAPACK.geev!('N', 'N', A)[1]
 end
+eigvals!(A::AbstractMatrix, args...) = eigvals!(float(A), args...)
+eigvals{T<:BlasFloat}(A::AbstractMatrix{T}) = eigvals!(copy(A))
+eigvals(A::AbstractMatrix, args...) = eigvals!(float(A), args...)
 
 eigvals(x::Number) = [one(x)]
 
@@ -647,6 +650,7 @@ function svdvals!{T<:BlasFloat}(A::StridedMatrix{T})
     if m == 0 || n == 0 return zeros(T, 0) end
     return LAPACK.gesdd!('N', A)[2]
 end
+svdvals!(A::StridedMatrix) = svdvals!(float(A))
 svdvals{T<:BlasFloat}(A::StridedMatrix{T}) = svdvals!(copy(A))
 svdvals(A::StridedMatrix) = svdvals!(float(A))
 svdvals(x::Number) = [abs(x)]
@@ -721,10 +725,13 @@ function getindex{T}(obj::GeneralizedSVD{T}, d::Symbol)
     error("No such type field")
 end
 
-function svdvals(A::StridedMatrix, B::StridedMatrix)
-    _, _, _, a, b, k, l, _ = LAPACK.ggsvd!('N', 'N', 'N', copy(A), copy(B))
+function svdvals!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
+    _, _, _, a, b, k, l, _ = LAPACK.ggsvd!('N', 'N', 'N', A, B)
     return a[1:k + l] ./ b[1:k + l]
 end
+svdvals!(A::StridedMatrix, StridedMatrix) = svdvals!(float(A), float(B))
+svdvals{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = svdvals!(copy(A), copy(B))
+svdvals(A::StridedMatrix, B::StridedMatrix) = svdvals!(float(A), float(B))
 
 type Schur{Ty<:BlasFloat} <: Factorization{Ty}
     T::Matrix{Ty}

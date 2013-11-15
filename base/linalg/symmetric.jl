@@ -10,7 +10,11 @@ function Symmetric{T<:Number}(S::Matrix{T}, uplo::Symbol)
 end
 Symmetric(A::StridedMatrix) = Symmetric(A, :U)
 
-copy(A::Symmetric) = Symmetric(copy(A.S), A.uplo)
+function copy!(A::Symmetric, B::Symmetric)
+    copy!(A.S, B.S)
+    A.uplo = B.uplo
+    return A
+end
 size(A::Symmetric, args...) = size(A.S, args...)
 print_matrix(io::IO, A::Symmetric, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
 full(A::Symmetric) = A.S
@@ -18,6 +22,7 @@ ishermitian{T<:Real}(A::Symmetric{T}) = true
 ishermitian{T<:Complex}(A::Symmetric{T}) = all(imag(A.S) .== 0)
 issym(A::Symmetric) = true
 transpose(A::Symmetric) = A
+similar(A::Symmetric, args...) = Symmetric(similar(A.S, args...), A.uplo)
 
 *(A::Symmetric, B::Symmetric) = *(full(A), full(B))
 *(A::Symmetric, B::StridedMatrix) = *(full(A), B)
@@ -29,9 +34,10 @@ factorize!{T<:Complex}(A::Symmetric{T}) = bkfact!(A.S, symbol(A.uplo), true)
 
 eigfact!{T<:BlasReal}(A::Symmetric{T}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)...)
 eigfact(A::Symmetric) = eigfact!(copy(A))
-eigvals{T<:BlasReal}(A::Symmetric{T}, il::Int, ih::Int) = LAPACK.syevr!('N', 'I', A.uplo, copy(A.S), 0.0, 0.0, il, ih, -1.0)[1]
-eigvals{T<:BlasReal}(A::Symmetric{T}, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, copy(A.S), vl, vh, 0, 0, -1.0)[1]
-eigvals(A::Symmetric) = eigvals(A, 1, size(A, 1))
+eigvals!{T<:BlasReal}(A::Symmetric{T}, il::Int, ih::Int) = LAPACK.syevr!('N', 'I', A.uplo, A.S, 0.0, 0.0, il, ih, -1.0)[1]
+eigvals!{T<:BlasReal}(A::Symmetric{T}, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, A.S, vl, vh, 0, 0, -1.0)[1]
+# eigvals!(A::Symmetric, args...) = eigvals!(float(A), args...)
+eigvals!(A::Symmetric) = eigvals!(A, 1, size(A, 1))
 eigmax(A::Symmetric) = eigvals(A, size(A, 1), size(A, 1))[1]
 eigmin(A::Symmetric) = eigvals(A, 1, 1)[1]
 
