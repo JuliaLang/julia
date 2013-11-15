@@ -68,7 +68,7 @@ gcdx(a::Integer, b::Integer) = gcdx(promote(a,b)...)
 # multiplicative inverse of n mod m, error if none
 function invmod(n, m)
     g, x, y = gcdx(n, m)
-    if g != 1 || m == 0 || m == 1 || m == -1
+    if g != 1 || m == 0
         error("no inverse exists")
     end
     x < 0 ? abs(m) + x : x
