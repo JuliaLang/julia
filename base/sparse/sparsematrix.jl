@@ -1295,7 +1295,7 @@ end
 
 function spdiagm_internal(B, d)
     ndiags = length(d)
-    if length(B) != ndiags; throw(ArgumentError); end
+    if length(B) != ndiags; throw(ArgumentError("first argument should be a tuple of length(d)=$ndiags arrays of diagonals")); end
     ncoeffs = 0
     for vec in B
         ncoeffs += length(vec)
