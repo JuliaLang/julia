@@ -1380,21 +1380,17 @@ end
 
 
 # multiples of pi FIX FIX FIX - already defined somewhere? Naming?
-const pi1o2_bf = pi * BigFloat(1/2)
-const pi1o2_h  = convert(Float64, pi1o2_bf)
-const pi1o2_l  = convert(Float64, pi1o2_bf - pi1o2_h)
+const pi1o2_h  = 1.5707963267948966     # convert(Float64, pi * BigFloat(1/2))
+const pi1o2_l  = 6.123233995736766e-17  # convert(Float64, pi * BigFloat(1/2) - pi1o2_h)
 
-const pi2o2_bf = pi * BigFloat(1)
-const pi2o2_h  = convert(Float64, pi2o2_bf)
-const pi2o2_l  = convert(Float64, pi2o2_bf - pi2o2_h)
+const pi2o2_h  = 3.141592653589793      # convert(Float64, pi * BigFloat(1))
+const pi2o2_l  = 1.2246467991473532e-16 # convert(Float64, pi * BigFloat(1) - pi2o2_h)
 
-const pi3o2_bf = pi * BigFloat(3/2)
-const pi3o2_h  = convert(Float64, pi3o2_bf)
-const pi3o2_l  = convert(Float64, pi3o2_bf - pi3o2_h)
+const pi3o2_h  = 4.71238898038469       # convert(Float64, pi * BigFloat(3/2))
+const pi3o2_l  = 1.8369701987210297e-16 # convert(Float64, pi * BigFloat(3/2) - pi3o2_h)
 
-const pi4o2_bf = pi * BigFloat(2)
-const pi4o2_h  = convert(Float64, pi4o2_bf)
-const pi4o2_l  = convert(Float64, pi4o2_bf - pi4o2_h)
+const pi4o2_h  = 6.283185307179586      # convert(Float64, pi * BigFloat(2))
+const pi4o2_l  = 2.4492935982947064e-16 # convert(Float64, pi * BigFloat(2) - pi4o2_h)
 
 
 function mod2pi(x::Float64) # or modtau(x)
@@ -1482,5 +1478,14 @@ function modpio2(x::Float64)
         return zh
     end
 end
+
+mod2pi(x::Int32) = mod2pi(float64(x))
+mod2pi(x::Int64) = if int(float(x))==x mod2pi(float64(x)) else error("Integer argument to mod2pi() is too large.") end
+
+modpi(x::Int32)  = modpi(float64(x))
+modpi(x::Int64)  = if int(float(x))==x modpi(float64(x)) else error("Integer argument to modpi() is too large.") end
+
+modpio2(x::Int32) = modpio2(float64(x))
+modpio2(x::Int64) = if int(float(x))==x modpio2(float64(x)) else error("Integer argument to modpio2() is too large.") end
 
 end # module

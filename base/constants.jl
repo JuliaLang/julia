@@ -89,8 +89,8 @@ end
 log(::MathConst{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
 
 mod(x::Float64, y::MathConst{:π}) = modpi(x)
-mod(x::Int32, y::MathConst{:π}) = modpi(float64(x))
-mod(x::Int64, y::MathConst{:π}) = if int(float(x))==x modpi(float64(x)) else error("Integer arguments to mod(_,pi) must be 'small enough', namely < 2^53") end
+mod(x::Int32, y::MathConst{:π})   = modpi(x)
+mod(x::Int64, y::MathConst{:π})   = modpi(x)
 # Note: with these 3 lines above, we have:
 # mod(5706674932067741.0,pi)  == 4.237546464512562e-16 # correct, modpi called
 # mod(5706674932067741,pi)    == 4.237546464512562e-16 # correct, modpi called
