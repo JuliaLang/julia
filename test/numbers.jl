@@ -1551,3 +1551,15 @@ end
 # negative power domain error
 @test_throws powermod(1,-2,1)
 @test_throws powermod(big(1),-2,1)
+
+# prevpow2/nextpow2:
+@test nextpow2(0) == prevpow2(0) == 0
+for i = -2:2
+    @test nextpow2(i) == prevpow2(i) == i
+end
+@test nextpow2(56789) == -nextpow2(-56789) == 65536
+@test prevpow2(56789) == -prevpow2(-56789) == 32768
+for i = -100:100
+    @test nextpow2(i) == nextpow2(big(i))
+    @test prevpow2(i) == prevpow2(big(i))
+end
