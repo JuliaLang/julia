@@ -78,9 +78,9 @@ function showerror(io::IO, e::DomainError, bt)
         code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Int32), b, 0)
         if length(code) == 3
             if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
-                print(io, "\n", code[1],
+                print(io, "\n  ", code[1],
                       " will only return a complex result if called with a complex argument.",
-                      "\ntry ", code[1], "(complex(x))")
+                      "\n  Try ", code[1], "(complex(x)) instead.")
             end
             break
         end
@@ -116,8 +116,7 @@ function showerror(io::IO, e::MethodError)
 end
 
 function show_trace_entry(io, fname, file, line, n)
-    print(io, "\n")
-    print(io, " in ", fname, " at ", file)
+    print(io, "  in ", fname, " at ", file)
     if line >= 1
         try
             print(io, ":", line)

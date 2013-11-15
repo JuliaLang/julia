@@ -9,7 +9,7 @@ end
 function mean(iterable)
     state = start(iterable)
     if done(iterable, state)
-        error("mean of empty collection undefined: $(repr(iterable))")
+        error("the mean of an empty collection is undefined: $(repr(iterable))")
     end
     count = 1
     total, state = next(iterable, state)
@@ -24,8 +24,8 @@ mean(v::AbstractArray) = sum(v) / length(v)
 mean(v::AbstractArray, region) = sum(v, region) / regionsize(v, region)
 
 function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
-    isempty(v) && error("median of an empty array is undefined")
-    checknan && any(isnan,v) && error("median of an array with NaNs is undefined")
+    isempty(v) && error("the median of an empty array is undefined")
+    checknan && any(isnan,v) && error("the median of an array with NaNs is undefined")
     n = length(v)
     if isodd(n)
         return select!(v,div(n+1,2))
@@ -220,7 +220,7 @@ end
 
 function cov(x::AbstractVecOrMat, y::AbstractVecOrMat)
     if size(x, 1) != size(y, 1)
-        error("incompatible matrices")
+        error("sizes must match")
     end
     n = size(x, 1)
     xc = center(x)
@@ -265,8 +265,8 @@ cor(x::AbstractVector) = cor(x'')[1]
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7
 function quantile!(v::AbstractVector, q::AbstractVector)
-    isempty(v) && error("quantile: empty data array")
-    isempty(q) && error("quantile: empty quantile array")
+    isempty(v) && error("empty data array")
+    isempty(q) && error("empty quantile array")
 
     # make sure the quantiles are in [0,1]
     q = bound_quantiles(q)
@@ -291,7 +291,7 @@ quantile(v::AbstractVector, q::Number) = quantile(v,[q])[1]
 function bound_quantiles(qs::AbstractVector)
     epsilon = 100*eps()
     if (any(qs .< -epsilon) || any(qs .> 1+epsilon))
-        error("quantiles out of [0,1] range")
+        error("Quantiles out of [0,1] range")
     end
     [min(1,max(0,q)) for q = qs]
 end

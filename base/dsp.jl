@@ -11,8 +11,8 @@ export FFTW, filt, deconv, conv, conv2, xcorr, fftshift, ifftshift,
        fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
 
 function filt{T<:Number}(b::Union(AbstractVector{T}, T),a::Union(AbstractVector{T}, T),x::AbstractVector{T})
-    if isempty(b); error("filt: b is empty"); end
-    if isempty(a); error("filt: a is empty"); end
+    if isempty(b); error("filt: b must be non-empty"); end
+    if isempty(a); error("filt: a must be non-empty"); end
     if a[1]==0; error("filt: a[1] must be nonzero"); end
 
     as = length(a)

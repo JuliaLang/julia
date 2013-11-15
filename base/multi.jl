@@ -245,7 +245,7 @@ rmprocset = Set()
 function rmprocs(args...; waitfor = 0.0)
     # Only pid 1 can add and remove processes
     if myid() != 1
-        error("only process 1 can add and remove processes")
+        error("rmprocs: only process 1 can add and remove processes")
     end
     
     global rmprocset
@@ -284,7 +284,7 @@ function worker_from_id(pg::ProcessGroup, i)
         throw(ProcessExitedException())
     end
     if myid()==1 && !haskey(map_pid_wrkr,i)
-        error("no process with id $i exists")
+        error("worker_from_id: no process with id $i exists")
     end
     start = time()
     while (!haskey(map_pid_wrkr, i) && ((time() - start) < 60.0))
@@ -799,7 +799,7 @@ notify_empty(rv::RemoteValue) = notify(rv.empty)
 # activity on accept fd
 function accept_handler(server::TcpServer, status::Int32)
     if status == -1
-        error("An error occured during the creation of the server")
+        error("accept_handler: an error occured during the creation of the server")
     end
     client = accept_nonblock(server)
     create_message_handler_loop(client)
@@ -992,7 +992,7 @@ function start_cluster_workers(np::Integer, config::Dict, cman::ClusterManager)
     elseif insttype == :host_port
         read_cb_response(inst) = (nothing, inst[1], inst[2], inst[1], inst[3])
     else
-        error("Unsupported format from Cluster Manager callback")
+        error("start_cluster_workers: unsupported format from Cluster Manager callback")
     end
     
     for i=1:np
@@ -1025,7 +1025,7 @@ function create_worker(privhost, port, pubhost, stream, config, manage)
         if haskey(ENV, "USER")
             user = ENV["USER"]
         elseif tunnel
-            error("USER must be specified either in the environment or as part of the hostname when tunnel option is used.")
+            error("create_worker: USER must be specified either in the environment or as part of the hostname when tunnel option is used.")
         end
     end
     
@@ -1090,7 +1090,7 @@ function ssh_tunnel(user, host, privhost, port, sshflags)
     end
     
     if localp >= 10000
-        error("Unable to assign a local tunnel port between 9201 and 10000")
+        error("ssh_tunnel: unable to assign a local tunnel port between 9201 and 10000")
     end
     
     tunnel_port = localp+1
@@ -1207,7 +1207,7 @@ addprocs(np::Integer; kwargs...) = addprocs_internal(np; kwargs...)
 function addprocs(machines::AbstractVector; kwargs...)
     cman_defined = any(x -> begin k,v = x; k==:cman end, kwargs)
     if cman_defined
-        error("custom cluster managers unsupported on the ssh interface")
+        error("addprocs: custom cluster managers unsupported on the ssh interface")
     else
         addprocs_internal(length(machines); cman=SSHManager(machines=machines), kwargs...)
     end

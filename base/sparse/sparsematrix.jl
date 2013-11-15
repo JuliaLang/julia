@@ -79,7 +79,7 @@ function reinterpret{T,Tv,Ti,N}(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTup
         error("SparseMatrixCSC reinterpret is only supported for element types of the same size")
     end
     if prod(dims) != length(a)
-        error("reinterpret: invalid dimensions")
+        error("Dimensions must be consistent with array size,")
     end
     mS,nS = dims
     mA,nA = size(a)
@@ -95,7 +95,7 @@ end
 
 function reshape{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{2,Int})
     if prod(dims) != length(a)
-        error("reshape: invalid dimensions")
+        error("Dimensions must be consistent with array size,")
     end
     mS,nS = dims
     mA,nA = size(a)
@@ -372,7 +372,7 @@ end
 
 function one{T}(S::SparseMatrixCSC{T})
     m,n = size(S)
-    if m != n; error("Multiplicative identity only defined for square matrices!"); end;
+    if m != n; error("Multiplicative identity is only defined for square matrices!"); end;
     speye(T, m)
 end
 
@@ -584,12 +584,12 @@ function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
 end
 
 maximum{T}(A::SparseMatrixCSC{T}) =
-    isempty(A) ? error("maximum: argument is empty") : reducedim(scalarmax,A,(1,2),typemin(T))
+    isempty(A) ? error("Argument must not be empty") : reducedim(scalarmax,A,(1,2),typemin(T))
 maximum{T}(A::SparseMatrixCSC{T}, region) =
     isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(scalarmax,A,region,typemin(T))
 
 minimum{T}(A::SparseMatrixCSC{T}) =
-    isempty(A) ? error("minimum: argument is empty") : reducedim(scalarmin,A,(1,2),typemax(T))
+    isempty(A) ? error("Argument must not be empty") : reducedim(scalarmin,A,(1,2),typemax(T))
 minimum{T}(A::SparseMatrixCSC{T}, region) =
     isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(scalarmin,A,region,typemax(T))
 
@@ -1034,7 +1034,7 @@ setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, S::Matrix, I::AbstractVec
 # A[I,J] = B
 function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::AbstractVector{T}, J::AbstractVector{T})
     if size(B,1) != length(I) || size(B,2) != length(J)
-        return("error in setindex!: mismatched dimensions")
+        return("Dimensions must match,")
     end
 
     issortedI = issorted(I)
@@ -1171,7 +1171,7 @@ function vcat(X::SparseMatrixCSC...)
     nX = [ size(x, 2) for x in X ]
     n = nX[1]
     for i = 2 : num
-        if nX[i] != n; error("error in vcat: mismatched dimensions"); end
+        if nX[i] != n; error("Dimensions must match,"); end
     end
     m = sum(mX)
 
@@ -1209,7 +1209,7 @@ function hcat(X::SparseMatrixCSC...)
     nX = [ size(x, 2) for x in X ]
     m = mX[1]
     for i = 2 : num
-        if mX[i] != m; error("error in hcat: mismatched dimensions"); end
+        if mX[i] != m; error("Dimensions must match,"); end
     end
     n = sum(nX)
 
@@ -1345,7 +1345,7 @@ spdiagm(B::AbstractVector, d::Number=0) = spdiagm((B,), (d,))
 
 ## expand a colptr or rowptr into a dense index vector
 function expandptr{T<:Integer}(V::Vector{T})
-    if V[1] != 1 error("expandptr: first index must be one") end
+    if V[1] != 1 error("First index must be one") end
     res = similar(V, (int64(V[end]-1),))
     for i in 1:(length(V)-1), j in V[i]:(V[i+1] - 1) res[j] = i end
     res
@@ -1382,7 +1382,7 @@ end
 
 function trace(A::SparseMatrixCSC)
     if size(A,1) != size(A,2)
-        error("expected square matrix")
+        error("Expected square matrix")
     end
     s = zero(eltype(A))
     for d in SpDiagIterer(A)
