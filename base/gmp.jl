@@ -165,7 +165,8 @@ end
 
 function invmod(x::BigInt, y::BigInt)
     z = BigInt()
-    if (y<=1 || ccall((:__gmpz_invert, :libgmp), Cint, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &x, &y) == 0)
+    y = abs(y)
+    if (y<2 || ccall((:__gmpz_invert, :libgmp), Cint, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &x, &y) == 0)
         error("no inverse exists")
     end
     return z

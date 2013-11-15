@@ -1522,12 +1522,13 @@ for i = -20:20, j = -20:20
     @test d == gcd(ib,jb)
     @test lcm(i,j) == lcm(ib,jb)
     @test gcdx(i,j) == gcdx(ib,jb)
-    if j > 1
-        @test d != 1 || invmod(i,j) == invmod(ib,jb)
-    end
-    if j == 0
+    if abs(j) < 2
         @test_throws invmod(i,j)
         @test_throws invmod(ib,jb)
+    elseif d == 1
+        n = invmod(i,j)
+        @test n == invmod(ib,jb)
+        @test mod(n*i,j) == mod(1,j)
     end
 end
 
