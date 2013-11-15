@@ -1374,12 +1374,27 @@ function ieee754_rem_pio2(x::Float64)
     # https://github.com/JuliaLang/openlibm/blob/master/src/e_rem_pio2.c?source=c
 
     y = [0.0,0.0]
-    n = ccall((:__ieee754_rem_pio2,Base.libm_name), Cint, (Float64,Ptr{Float64}),x,y)
-    # FIX FIX FIX: or :libm ?
-    # FIX FIX FIX: Int32 or Cint? 
-    # FIX FIX FIX: - make this a macro instead?
+    n = ccall(:__ieee754_rem_pio2, Cint, (Float64,Ptr{Float64}),x,y)
     return (n,y)
 end
+
+
+# multiples of pi FIX FIX FIX - already defined somewhere? Naming?
+const pi1o2_bf = pi * BigFloat(1/2)
+const pi1o2_h  = convert(Float64, pi1o2_bf)
+const pi1o2_l  = convert(Float64, pi1o2_bf - pi1o2_h)
+
+const pi2o2_bf = pi * BigFloat(1)
+const pi2o2_h  = convert(Float64, pi2o2_bf)
+const pi2o2_l  = convert(Float64, pi2o2_bf - pi2o2_h)
+
+const pi3o2_bf = pi * BigFloat(3/2)
+const pi3o2_h  = convert(Float64, pi3o2_bf)
+const pi3o2_l  = convert(Float64, pi3o2_bf - pi3o2_h)
+
+const pi4o2_bf = pi * BigFloat(2)
+const pi4o2_h  = convert(Float64, pi4o2_bf)
+const pi4o2_l  = convert(Float64, pi4o2_bf - pi4o2_h)
 
 
 function mod2pi(x::Float64) # or modtau(x)
