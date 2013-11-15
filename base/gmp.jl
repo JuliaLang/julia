@@ -152,7 +152,7 @@ deserialize(s, ::Type{BigInt}) = parseint(BigInt, deserialize(s), 62)
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
                  (:fld, :fdiv_q), (:div, :tdiv_q), (:mod, :fdiv_r), (:rem, :tdiv_r),
-                 (:gcd, :gcd), (:lcm, :lcm), (:invmod, :invert),
+                 (:gcd, :gcd), (:lcm, :lcm),
                  (:&, :and), (:|, :ior), (:$, :xor))
     @eval begin
         function ($fJ)(x::BigInt, y::BigInt)
@@ -161,6 +161,14 @@ for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
             return z
         end
     end
+end
+
+function invmod(x::BigInt, y::BigInt)
+    z = BigInt()
+    if (y<=1 || ccall((:__gmpz_invert, :libgmp), Cint, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &x, &y) == 0)
+        error("no inverse exists")
+    end
+    return z
 end
 
 # More efficient commutative operations
@@ -316,6 +324,10 @@ powermod(x::BigInt, p::Integer, m::Integer) = powermod(x, BigInt(p), BigInt(m))
 function gcdx(a::BigInt, b::BigInt)
     if b == 0 # shortcut this to ensure consistent results with gcdx(a,b)
         return a < 0 ? (-a,-one(BigInt),zero(BigInt)) : (a,one(BigInt),zero(BigInt))
+    end
+    if a == b
+        # work around a difference in some versions of GMP
+        return a < 0 ? (-a,zero(BigInt),-one(BigInt)) : (a,zero(BigInt),one(BigInt))
     end
     g = BigInt()
     s = BigInt()
