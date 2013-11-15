@@ -325,17 +325,21 @@ function gcdx(a::BigInt, b::BigInt)
     if b == 0 # shortcut this to ensure consistent results with gcdx(a,b)
         return a < 0 ? (-a,-one(BigInt),zero(BigInt)) : (a,one(BigInt),zero(BigInt))
     end
-    if a == b
-        # work around a difference in some versions of GMP
-        return a < 0 ? (-a,zero(BigInt),-one(BigInt)) : (a,zero(BigInt),one(BigInt))
-    end
     g = BigInt()
     s = BigInt()
     t = BigInt()
     ccall((:__gmpz_gcdext, :libgmp), Void,
         (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}),
         &g, &s, &t, &a, &b)
-    BigInt(g), BigInt(s), BigInt(t)
+    if t == 0
+        # work around a difference in some versions of GMP
+        if a == b
+            return g, t, s
+        elseif abs(a)==abs(b)
+            return g, t, -s
+        end
+    end
+    g, s, t
 end
 
 function sum(arr::AbstractArray{BigInt})
