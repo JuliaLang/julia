@@ -108,7 +108,7 @@ function invperm(a::AbstractVector)
     for i = 1:n
         j = a[i]
         ((1 <= j <= n) && b[j] == 0) ||
-            error("invperm: input is not a permutation")
+            error("input is not a permutation")
         b[j] = i
     end
     b
@@ -442,7 +442,7 @@ end
 # for integer n1, n2, n3
 function nextprod(a::Vector{Int}, x)
     if x > typemax(Int)
-        error("Unsafe for x bigger than typemax(Int)")
+        error("unsafe for x bigger than typemax(Int)")
     end
     k = length(a)
     v = ones(Int, k)            # current value of each counter
@@ -483,7 +483,7 @@ end
 # for integer n1, n2, n3
 function prevprod(a::Vector{Int}, x)
     if x > typemax(Int)
-        error("Unsafe for x bigger than typemax(Int)")
+        error("unsafe for x bigger than typemax(Int)")
     end
     k = length(a)
     v = ones(Int, k)            # current value of each counter
