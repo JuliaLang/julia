@@ -187,7 +187,7 @@ JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 ifeq ($(USE_LIBCPP),1)
 CXX += -stdlib=libc++
 else
-CXX += -stdlib=stdlibc++
+CXX += $(STDLIBCPP_FLAG)
 endif
 DEBUGFLAGS = -O0 -g -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3
