@@ -1374,7 +1374,7 @@ function ieee754_rem_pio2(x::Float64)
     # https://github.com/JuliaLang/openlibm/blob/master/src/e_rem_pio2.c?source=c
 
     y = [0.0,0.0]
-    n = ccall(:__ieee754_rem_pio2, Cint, (Float64,Ptr{Float64}),x,y)
+    n = ccall((:__ieee754_rem_pio2, libm), Cint, (Float64,Ptr{Float64}),x,y)
     return (n,y)
 end
 
