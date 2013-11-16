@@ -335,29 +335,26 @@ Function          Description
 Powers, logs and roots
 ~~~~~~~~~~~~~~~~~~~~~~
 
-============== ==============================================================================
-Function       Description
-============== ==============================================================================
-``sqrt(x)``    the square root of ``x``
-``cbrt(x)``    the cube root of ``x``
-``hypot(x,y)`` hypotenuse of right-angled triangle with other sides of length ``x`` and ``y``
-``exp(x)``     the natural exponential function at ``x``
-``expm1(x)``   accurate ``exp(x)-1`` for ``x`` near zero
-``ldexp(x,n)`` ``x*2^n`` computed efficiently for integer values of ``n``
-``log(x)``     the natural logarithm of ``x``
-``log(b,x)``   the base ``b`` logarithm of ``x``
-``log2(x)``    the base 2 logarithm of ``x``
-``log10(x)``   the base 10 logarithm of ``x``
-``log1p(x)``   accurate ``log(1+x)`` for ``x`` near zero
-``logb(x)``    returns the binary exponent of ``x``
-``erf(x)``     the `error function <http://en.wikipedia.org/wiki/Error_function>`_ at ``x``
-``erfc(x)``    the complementary error function ``1-erf(x)``
-``gamma(x)``   the `gamma function <http://en.wikipedia.org/wiki/Gamma_function>`_ at ``x``
-``lgamma(x)``  accurate ``log(gamma(x))`` for large ``x``
-============== ==============================================================================
+=================== ==============================================================================
+Function            Description
+=================== ==============================================================================
+``sqrt(x)``         the square root of ``x``
+``cbrt(x)``         the cube root of ``x``
+``hypot(x,y)``      hypotenuse of right-angled triangle with other sides of length ``x`` and ``y``
+``exp(x)``          the natural exponential function at ``x``
+``expm1(x)``        accurate ``exp(x)-1`` for ``x`` near zero
+``ldexp(x,n)``      ``x*2^n`` computed efficiently for integer values of ``n``
+``log(x)``          the natural logarithm of ``x``
+``log(b,x)``        the base ``b`` logarithm of ``x``
+``log2(x)``         the base 2 logarithm of ``x``
+``log10(x)``        the base 10 logarithm of ``x``
+``log1p(x)``        accurate ``log(1+x)`` for ``x`` near zero
+``exponent(x)``     returns the binary exponent of ``x``
+``significand(x)``  returns the binary significand (a.k.a. mantissa) of a floating-point number ``x``
+=================== ==============================================================================
 
-For an overview of why functions like ``hypot``, ``expm1``, ``log1p``,
-and ``erfc`` are necessary and useful, see John D. Cook's excellent pair
+For an overview of why functions like ``hypot``, ``expm1``, and ``log1p``
+are necessary and useful, see John D. Cook's excellent pair
 of blog posts on the subject: `expm1, log1p,
 erfc <http://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/>`_,
 and
@@ -371,7 +368,8 @@ All the standard trigonometric and hyperbolic functions are also defined::
     sin    cos    tan    cot    sec    csc
     sinh   cosh   tanh   coth   sech   csch
     asin   acos   atan   acot   asec   acsc
-    sinc   cosc   atan2  acoth  asech  acsch
+    asinh  acosh  atanh  acoth  asech  acsch
+    sinc   cosc   atan2
 
 These are all single-argument functions, with the exception of
 `atan2 <http://en.wikipedia.org/wiki/Atan2>`_, which gives the angle
@@ -387,3 +385,41 @@ The complete list of trigonometric functions with degree variants is::
     sind   cosd   tand   cotd   secd   cscd
     asind  acosd  atand  acotd  asecd  acscd
 
+Special functions
+~~~~~~~~~~~~~~~~~
+
+====================================== ==============================================================================
+Function                               Description
+====================================== ==============================================================================
+``erf(x)``                             the `error function <http://en.wikipedia.org/wiki/Error_function>`_ at ``x``
+``erfc(x)``                            the complementary error function, i.e. the accurate version of ``1-erf(x)`` for large ``x``
+``erfinv(x)``                          the inverse function to ``erf``
+``erfcinv(x)``                         the inverse function to ``erfc``
+``erfi(x)``                            the imaginary error function defined as ``-im * erf(x * im)``, where ``im`` is the imaginary unit
+``erfcx(x)``                           the scaled complementary error function, i.e. accurate ``exp(x^2) * erfc(x)`` for large ``x``
+``dawson(x)``                          the scaled imaginary error function, a.k.a. Dawson function, i.e. accurate ``exp(-x^2) * erfi(x) * sqrt(pi) / 2`` for large ``x``
+``gamma(x)``                           the `gamma function <http://en.wikipedia.org/wiki/Gamma_function>`_ at ``x``
+``lgamma(x)``                          accurate ``log(gamma(x))`` for large ``x``
+``lfact(x)``                           accurate ``log(factorial(x))`` for large ``x``; same as ``lgamma(x+1)`` for ``x > 1``, zero otherwise
+``digamma(x)``                         the `digamma function <http://en.wikipedia.org/wiki/Digamma_function>`_ (i.e. the derivative of ``lgamma``) at ``x``
+``beta(x,y)``                          the `beta function <http://en.wikipedia.org/wiki/Beta_function>`_ at ``x,y``
+``lbeta(x,y)``                         accurate ``log(beta(x,y))`` for large ``x`` or ``y``
+``eta(x)``                             the `Dirichlet eta function <http://en.wikipedia.org/wiki/Dirichlet_eta_function>`_ at ``x``
+``zeta(x)``                            the `Riemann zeta function <http://en.wikipedia.org/wiki/Riemann_zeta_function>`_ at ``x``
+``airy(x)``, ``airyai(x)``             the `Airy Ai function <http://en.wikipedia.org/wiki/Airy_function>`_ at ``x``
+``airyprime(x)``, ``airyaiprime(x)``   the derivative of the Airy Ai function at ``x``
+``airybi(x)``                          the `Airy Bi function <http://en.wikipedia.org/wiki/Airy_function>`_ at ``x``
+``airybiprime(x)``                     the derivative of the Airy Bi function at ``x``
+``airy(k,x)``                          the ``k``-th derivative of the Airy Ai function at ``x``
+``besselj(nu,z)``                      the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z``
+``besselj0(z)``                        ``besselj(0,z)``
+``besselj1(z)``                        ``besselj(1,z)``
+``bessely(nu,z)``                      the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``
+``bessely0(z)``                        ``bessely(0,z)``
+``bessely1(z)``                        ``bessely(1,z)``
+``besselh(nu,k,z)``                    the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the third kind (a.k.a. Hankel function) of order ``nu`` at ``z``; ``k`` must be either ``1`` or ``2``
+``hankelh1(nu,z)``                     ``besselh(nu, 1, z)``
+``hankelh2(nu,z)``                     ``besselh(nu, 2, z)``
+``besseli(nu,z)``                      the modified `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z``
+``besselk(nu,z)``                      the modified `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``
+====================================== ==============================================================================

@@ -39,7 +39,7 @@ function _parse(s::String)
         if c == '%'
             isempty(s[i:j-1]) || push!(list, s[i:j-1])
             flags, width, precision, conversion, k = _parse1(s,k)
-            contains(flags,'\'') && error("printf format flag ' not yet supported")
+            in('\'',flags) && error("printf format flag ' not yet supported")
             conversion == 'a'    && error("printf feature %a not yet supported")
             conversion == 'n'    && error("printf feature %n not supported")
             push!(list, conversion == '%' ? "%" : (flags,width,precision,conversion))
@@ -91,7 +91,7 @@ function _parse1(s::String, k::Integer)
         return "", width, precision, c, k
     end
     # parse flags
-    while contains("#0- + '", c)
+    while in(c, "#0- + '")
         c, k = _next_or_die(s,k)
     end
     flags = ascii(s[j:k-2])
@@ -118,11 +118,11 @@ function _parse1(s::String, k::Integer)
         if c == prev
             c, k = _next_or_die(s,k)
         end
-    elseif contains("Ljqtz",c)
+    elseif in(c,"Ljqtz")
         c, k = _next_or_die(s,k)
     end
     # validate conversion
-    if !contains("diouxXDOUeEfFgGaAcCsSpn", c)
+    if !in(c,"diouxXDOUeEfFgGaAcCsSpn")
         error("invalid printf format string: ", repr(s))
     end
     # TODO: warn about silly flag/conversion combinations
@@ -134,9 +134,9 @@ end
 function _special_handler(flags::ASCIIString, width::Int)
     @gensym x
     blk = Expr(:block)
-    pad = contains(flags,'-') ? rpad : lpad
-    pos = contains(flags,'+') ? "+" :
-          contains(flags,' ') ? " " : ""
+    pad = in('-',flags) ? rpad : lpad
+    pos = in('+',flags) ? "+" :
+          in(' ',flags) ? " " : ""
     abn = quote
         isnan($x) ? $(pad("NaN", width)) :
          $x < 0   ? $(pad("-Inf", width)) :
@@ -226,13 +226,13 @@ function _gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # interpret the number
     prefix = ""
     if lowercase(c)=='o'
-        f = contains(flags,'#') ? :_int_0ct : :_int_oct
+        f = in('#',flags) ? :_int_0ct : :_int_oct
         push!(blk.args, :(($f)($x)))
     elseif c=='x'
-        if contains(flags,'#'); prefix = "0x"; end
+        if in('#',flags); prefix = "0x"; end
         push!(blk.args, :(_int_hex($x)))
     elseif c=='X'
-        if contains(flags,'#'); prefix = "0X"; end
+        if in('#',flags); prefix = "0X"; end
         push!(blk.args, :(_int_HEX($x)))
     else
         push!(blk.args, :(_int_dec($x)))
@@ -241,13 +241,13 @@ function _gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     push!(blk.args, :(pt  = POINT[1]))
     # calculate padding
     width -= length(prefix)
-    space_pad = width > max(1,precision) && contains(flags,'-') ||
-                precision < 0 && width > 1 && !contains(flags,'0') ||
+    space_pad = width > max(1,precision) && in('-',flags) ||
+                precision < 0 && width > 1 && !in('0',flags) ||
                 precision >= 0 && width > precision
     padding = nothing
     if precision < 1; precision = 1; end
     if space_pad
-        if contains(flags,'+') || contains(flags,' ')
+        if in('+',flags) || in(' ',flags)
             width -= 1
             if width > precision
                 padding = :($width-(pt > $precision ? pt : $precision))
@@ -259,12 +259,12 @@ function _gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
         end
     end
     # print space padding
-    if padding != nothing && !contains(flags,'-')
+    if padding != nothing && !in('-',flags)
         push!(blk.args, _pad(width-precision, padding, ' '))
     end
     # print sign
-    contains(flags,'+') ? push!(blk.args, :(write(out, neg?'-':'+'))) :
-    contains(flags,' ') ? push!(blk.args, :(write(out, neg?'-':' '))) :
+    in('+',flags) ? push!(blk.args, :(write(out, neg?'-':'+'))) :
+    in(' ',flags) ? push!(blk.args, :(write(out, neg?'-':' '))) :
                           push!(blk.args, :(neg && write(out, '-')))
     # print prefix
     for ch in prefix
@@ -274,14 +274,14 @@ function _gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     if space_pad && precision > 1
         push!(blk.args, _pad(precision-1, :($precision-pt), '0'))
     elseif !space_pad && width > 1
-        zeros = contains(flags,'+') || contains(flags,' ') ?
+        zeros = in('+',flags) || in(' ',flags) ?
             :($(width-1)-pt) : :($width-neg-pt)
         push!(blk.args, _pad(width-1, zeros, '0'))
     end
     # print integer
     push!(blk.args, :(write(out, pointer(DIGITS), pt)))
     # print padding
-    if padding != nothing && contains(flags,'-')
+    if padding != nothing && in('-',flags)
         push!(blk.args, _pad(width-precision, padding, ' '))
     end
     # return arg, expr
@@ -308,10 +308,10 @@ function _gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     push!(blk.args, :(len = LEN[1]))
     # calculate padding
     padding = nothing
-    if precision > 0 || contains(flags,'#')
+    if precision > 0 || in('#',flags)
         width -= precision+1
     end
-    if contains(flags,'+') || contains(flags,' ')
+    if in('+',flags) || in(' ',flags)
         width -= 1
         if width > 1
             padding = :($width-(pt > 0 ? pt : 1))
@@ -322,15 +322,15 @@ function _gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
         end
     end
     # print space padding
-    if padding != nothing && !contains(flags,'-') && !contains(flags,'0')
+    if padding != nothing && !in('-',flags) && !in('0',flags)
         push!(blk.args, _pad(width-1, padding, ' '))
     end
     # print sign
-    contains(flags,'+') ? push!(blk.args, :(write(out, neg?'-':'+'))) :
-    contains(flags,' ') ? push!(blk.args, :(write(out, neg?'-':' '))) :
+    in('+',flags) ? push!(blk.args, :(write(out, neg?'-':'+'))) :
+    in(' ',flags) ? push!(blk.args, :(write(out, neg?'-':' '))) :
                           push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
-    if padding != nothing && !contains(flags,'-') && contains(flags,'0')
+    if padding != nothing && !in('-',flags) && in('0',flags)
         push!(blk.args, _pad(width-1, padding, '0'))
     end
     # print digits
@@ -339,10 +339,10 @@ function _gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     else
         push!(blk.args, :(write(out, pointer(DIGITS), len)))
         push!(blk.args, :(while pt >= (len+=1) write(out,'0') end))
-        contains(flags,'#') && push!(blk.args, :(write(out, '.')))
+        in('#',flags) && push!(blk.args, :(write(out, '.')))
     end
     # print space padding
-    if padding != nothing && contains(flags,'-')
+    if padding != nothing && in('-',flags)
         push!(blk.args, _pad(width-1, padding, ' '))
     end
     # return arg, expr
@@ -369,14 +369,14 @@ function _gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     push!(blk.args, :(neg = NEG[1]))
     push!(blk.args, :(exp = POINT[1]-1))
     expmark = c=='E' ? "E" : "e"
-    if precision==0 && contains(flags,'#')
+    if precision==0 && in('#',flags)
         expmark = string(".",expmark)
     end
     # calculate padding
     padding = nothing
     width -= precision+length(expmark)+(precision>0)+4
     # 4 = leading + expsign + 2 exp digits
-    if contains(flags,'+') || contains(flags,' ')
+    if in('+',flags) || in(' ',flags)
         width -= 1 # for the sign indicator
         if width > 0
             padding = :($width-((exp<=-100)|(100<=exp)))
@@ -387,15 +387,15 @@ function _gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
         end
     end
     # print space padding
-    if padding != nothing && !contains(flags,'-') && !contains(flags,'0')
+    if padding != nothing && !in('-',flags) && !in('0',flags)
         push!(blk.args, _pad(width, padding, ' '))
     end
     # print sign
-    contains(flags,'+') ? push!(blk.args, :(write(out, neg?'-':'+'))) :
-    contains(flags,' ') ? push!(blk.args, :(write(out, neg?'-':' '))) :
-                          push!(blk.args, :(neg && write(out, '-')))
+    in('+',flags) ? push!(blk.args, :(write(out, neg?'-':'+'))) :
+    in(' ',flags) ? push!(blk.args, :(write(out, neg?'-':' '))) :
+                    push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
-    if padding != nothing && !contains(flags,'-') && contains(flags,'0')
+    if padding != nothing && !in('-',flags) && in('0',flags)
         push!(blk.args, _pad(width, padding, '0'))
     end
     # print digits
@@ -413,7 +413,7 @@ function _gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     end
     push!(blk.args, :(_print_exp(out, exp)))
     # print space padding
-    if padding != nothing && contains(flags,'-')
+    if padding != nothing && in('-',flags)
         push!(blk.args, _pad(width, padding, ' '))
     end
     # return arg, expr
@@ -430,12 +430,12 @@ function _gen_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     #
     @gensym x
     blk = Expr(:block, :($x = char($x)))
-    if width > 1 && !contains(flags,'-')
-        p = contains(flags,'0') ? '0' : ' '
+    if width > 1 && !in('-',flags)
+        p = in('0',flags) ? '0' : ' '
         push!(blk.args, _pad(width-1, :($width-charwidth($x)), p))
     end
     push!(blk.args, :(write(out, $x)))
-    if width > 1 && contains(flags,'-')
+    if width > 1 && in('-',flags)
         push!(blk.args, _pad(width-1, :($width-charwidth($x)), ' '))
     end
     :(($x)::Integer), blk
@@ -452,20 +452,20 @@ function _gen_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
     @gensym x
     blk = Expr(:block)
     if width > 0
-        if !contains(flags,'#')
+        if !in('#',flags)
             push!(blk.args, :($x = string($x)))
         else
             push!(blk.args, :($x = repr($x)))
         end
-        if !contains(flags,'-')
+        if !in('-',flags)
             push!(blk.args, _pad(width, :($width-strwidth($x)), ' '))
         end
         push!(blk.args, :(write(out, $x)))
-        if contains(flags,'-')
+        if in('-',flags)
             push!(blk.args, _pad(width, :($width-strwidth($x)), ' '))
         end
     else
-        if !contains(flags,'#')
+        if !in('#',flags)
             push!(blk.args, :(print(out, $x)))
         else
             push!(blk.args, :(show(out, $x)))
@@ -484,13 +484,13 @@ function _gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
     blk = Expr(:block)
     ptrwidth = WORD_SIZE>>2
     width -= ptrwidth+2
-    if width > 0 && !contains(flags,'-')
+    if width > 0 && !in('-',flags)
         push!(blk.args, _pad(width, width, ' '))
     end
     push!(blk.args, :(write(out, '0')))
     push!(blk.args, :(write(out, 'x')))
     push!(blk.args, :(write(out, bytestring(hex(unsigned($x), $ptrwidth)))))
-    if width > 0 && contains(flags,'-')
+    if width > 0 && in('-',flags)
         push!(blk.args, _pad(width, width, ' '))
     end
     :(($x)::Ptr), blk

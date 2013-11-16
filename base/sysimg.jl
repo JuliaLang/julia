@@ -21,11 +21,11 @@ end
 
 include("base.jl")
 include("reflection.jl")
-include("promotion.jl") # We need promote_type() before we can use composite types
 include("build_h.jl")
 include("c.jl")
 
 # core operations & types
+include("promotion.jl")
 include("range.jl")
 include("tuple.jl")
 include("cell.jl")
@@ -58,7 +58,7 @@ include("iterator.jl")
 import Core.Undef  # used internally by compiler
 include("inference.jl")
 
-# For OS sprcific stuff in I/O
+# For OS specific stuff in I/O
 include("osutils.jl")
 
 const DL_LOAD_PATH = ByteString[]
@@ -81,6 +81,8 @@ include("env.jl")
 include("errno.jl")
 using .Errno
 include("path.jl")
+include("intfuncs.jl")
+
 
 # I/O
 include("task.jl")
@@ -103,7 +105,6 @@ importall .Printf
 include("file.jl")
 
 # core math functions
-include("intfuncs.jl")
 include("floatfuncs.jl")
 include("math.jl")
 importall .Math
@@ -170,7 +171,6 @@ push!(I18n.CALLBACKS, Help.clear_cache)
 # sparse matrices and linear algebra
 include("sparse.jl")
 importall .SparseMatrix
-include("matrixmarket.jl")
 include("linalg.jl")
 importall .LinAlg
 include("broadcast.jl")
@@ -180,6 +180,10 @@ importall .Broadcast
 include("fftw.jl")
 include("dsp.jl")
 importall .DSP
+
+# rounding utilities
+include("rounding.jl")
+importall .Rounding
 
 # BigInts and BigFloats
 include("gmp.jl")
@@ -204,8 +208,6 @@ include("deprecated.jl")
 # git utils & package manager
 include("git.jl")
 include("pkg.jl")
-include("pkg1.jl")
-const Pkg2 = Pkg
 
 # base graphics API
 include("graphics.jl")
@@ -349,14 +351,14 @@ precompile(println, (TTY,))
 precompile(print, (TTY,Char))
 precompile(==, (Bool,Bool))
 precompile(try_include, (ASCIIString,))
-precompile(is_file_readable, (ASCIIString,))
+precompile(isfile, (ASCIIString,))
 precompile(include_from_node1, (ASCIIString,))
 precompile(source_path, (Nothing,))
 precompile(task_local_storage, ())
 precompile(atexit, (Function,))
 precompile(print, (TTY, ASCIIString))
 precompile(close, (TTY,))
-precompile(readBuffer, (TTY,Int))
+precompile(read_buffer, (TTY,Int))
 precompile(put, (RemoteRef, Any))
 precompile(getpid, ())
 precompile(print, (IOStream, Int32))
@@ -369,6 +371,13 @@ precompile(isslotempty, (Dict{Any,Any}, Int))
 precompile(setindex!, (Array{Uint8,1}, Uint8, Int))
 precompile(get, (Dict{Any,Any}, Symbol, ASCIIString))
 precompile(*, (ASCIIString, ASCIIString, ASCIIString))
+precompile(chop, (ASCIIString,))
+precompile(ismatch, (Regex, ASCIIString))
+precompile(!=, (Bool, Bool))
+precompile(nextind, (ASCIIString, Int))
+precompile(delete_var!, (Expr, Symbol))
+precompile(close, (IOStream,))
+precompile(haskey, (ObjectIdDict, Symbol))
 
 # invoke type inference, running the existing inference code on the new
 # inference code to cache an optimized version of it.

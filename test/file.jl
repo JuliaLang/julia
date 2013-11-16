@@ -42,8 +42,8 @@ file = newfile
 #######################################################################
 # This section tests file watchers.                                   #
 #######################################################################
-function test_file_poll(channel,timeout_ms)
-    rc = poll_file(file, iround(timeout_ms/10), timeout_ms)
+function test_file_poll(channel,timeout_s)
+    rc = poll_file(file, iround(timeout_s/10), timeout_s)
     put(channel,rc)
 end
 
@@ -54,25 +54,24 @@ function test_timeout(tval)
     tr = take(channel)
     t_elapsed = toq()
 
-    @test tr == 0
+    @test tr == false
 
-    tdiff = t_elapsed * 1000
-    @test tval <= tdiff
+    @test tval <= t_elapsed
 end
 
 function test_touch(slval)
-    tval = slval+100
+    tval = slval*1.1
     channel = RemoteRef()
-    @async test_file_poll(channel,iround(tval))
+    @async test_file_poll(channel, tval)
 
-    sleep(slval/10_000) # ~one poll period
+    sleep(tval/10)  # ~ one poll period
     f = open(file,"a")
     write(f,"Hello World\n")
     close(f)
 
     tr = take(channel)
 
-    # @test tr == 1
+    @test tr == true
 end
 
 
@@ -81,22 +80,37 @@ function test_monitor(slval)
     fm = FileMonitor(file) do args...
         FsMonitorPassed = true
     end
-    sleep(slval/10_000)
+    sleep(slval/2)
     f = open(file,"a")
     write(f,"Hello World\n")
     close(f)
-    sleep(9slval/10_000)
+    sleep(slval)
     @test FsMonitorPassed
     close(fm)
+end
+
+function test_monitor_wait(tval)
+    fm = watch_file(file)
+    @async begin
+        sleep(tval)
+        f = open(file,"a")
+        write(f,"Hello World\n")
+        close(f)
+    end
+    fname, events = wait(fm)
+    @test fname == basename(file)
+    @test events.changed
 end
 
 # Commented out the tests below due to issues 3015, 3016 and 3020 
 test_timeout(0.1)
 test_timeout(1)
-test_touch(0.1)
-test_touch(1)
-test_monitor(1)
-test_monitor(0.1)
+# the 0.1 second tests are too optimistic
+#test_touch(0.1)
+test_touch(2)
+#test_monitor(0.1)
+test_monitor(2)
+test_monitor_wait(0.1)
 
 ##########
 #  mmap  #
@@ -120,6 +134,32 @@ s = open(file, "r")
 str = readline(s)
 close(s)
 @test beginswith(str, "Hellx World")
+c=nothing; gc(); gc(); # cause munmap finalizer to run & free resources
+
+s = open(file, "w")
+write(s, [0xffffffffffffffff,
+          0xffffffffffffffff,
+          0xffffffffffffffff,
+          0x000000001fffffff])
+close(s)
+s = open(file, "r")
+@test isreadonly(s) == true
+b = mmap_bitarray((17,13), s)
+@test b == trues(17,13)
+@test_throws mmap_bitarray((7,3), s)
+close(s)
+s = open(file, "r+")
+b = mmap_bitarray((17,19), s)
+rand!(b)
+msync(b)
+b0 = copy(b)
+close(s)
+s = open(file, "r")
+@test isreadonly(s) == true
+b = mmap_bitarray((17,19), s)
+@test b == b0
+close(s)
+b=nothing; b0=nothing; gc(); gc(); # cause munmap finalizer to run & free resources
 
 #######################################################################
 # This section tests temporary file and directory creation.           #

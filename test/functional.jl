@@ -7,6 +7,12 @@
 @test isequal(map(i->sqrt(i), 1:5), [sqrt(i) for i in 1:5])
 @test isequal(map(i->sqrt(i), 2:6), [sqrt(i) for i in 2:6])
 
+# map on ranges should evaluate first value only once (#4453)
+let io=IOBuffer(3)
+    map(x->print(io,x), 1:2)
+    @test takebuf_string(io)=="12"
+end
+
 # maps of tuples (formerly in test/core.jl) -- tuple.jl
 @test map((x,y)->x+y,(1,2,3),(4,5,6)) == (5,7,9)
 @test map((x,y)->x+y,
@@ -19,10 +25,10 @@
 # reduce -- reduce.jl
 @test reduce((x,y)->"($x+$y)", [9:11]) == "((9+10)+11)"
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
-@test reduce(-, 1000, [1:5]) == (1000 - 1 - 2 - 3 - 4 - 5)
+@test reduce(+, 1000, [1:5]) == (1000 + 1 + 2 + 3 + 4 + 5)
 
 # mapreduce -- reduce.jl
-@test mapreduce(-, -, [-10 -9 -3]) == ((10 - 9) - 3)
+@test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
 @test mapreduce((x)->x[1:3], (x,y)->"($x+$y)", ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
 
 # filter -- array.jl
@@ -30,3 +36,7 @@
 # TODO: @test_throws isequal(filter(x->x+1, [0 1 2 3 2 1 0]), [2, 3, 2])
 @test isequal(filter(x->(x>10), [0 1 2 3 2 1 0]), [])
 @test isequal(filter((ss)->length(ss)==3, ["abcd", "efg", "hij", "klmn", "opq"]), ["efg", "hij", "opq"])
+
+# zip and filter iterators
+# issue #4718
+@test collect(filter(x->x[1], zip([true, false, true, false],"abcd"))) == {(true,'a'),(true,'c')}

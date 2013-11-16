@@ -14,7 +14,7 @@ isempty(s::Set) = isempty(s.dict)
 length(s::Set)  = length(s.dict)
 eltype{T}(s::Set{T}) = T
 
-contains(s::Set, x) = haskey(s.dict, x)
+in(x, s::Set) = haskey(s.dict, x)
 
 push!(s::Set, x) = (s.dict[x] = nothing; s)
 pop!(s::Set, x) = (pop!(s.dict, x); x)
@@ -37,18 +37,13 @@ next(s::Set, i)     = (s.dict.keys[i], skip_deleted(s.dict,i+1))
 # TODO: simplify me?
 pop!(s::Set) = (val = s.dict.keys[start(s.dict)]; delete!(s.dict, val); val)
 
+join_eltype() = None
+join_eltype(v1, vs...) = typejoin(eltype(v1), join_eltype(vs...))
+
 union() = Set()
 union(s::Set) = copy(s)
 function union(s::Set, sets::Set...)
-    U = eltype(s)
-    if U != Any
-        for t in sets
-            T = eltype(t)
-            U = subtype(T,U) ? U :
-                subtype(U,T) ? T : Any # TODO: tigher upper bound
-        end
-    end
-    u = Set{U}()
+    u = Set{join_eltype(s, sets...)}()
     union!(u,s)
     for t in sets
         union!(u,t)
@@ -61,7 +56,7 @@ function intersect(s::Set, sets::Set...)
     i = copy(s)
     for x in s
         for t in sets
-            if !contains(t,x)
+            if !in(x,t)
                 delete!(i,x)
                 break
             end
@@ -84,7 +79,7 @@ isless(l::Set, r::Set) = (length(l) < length(r)) && (l <= r)
 
 function issubset(l, r)
     for elt in l
-        if !contains(r, elt)
+        if !in(elt, r)
             return false
         end
     end
@@ -95,7 +90,7 @@ function unique(C)
     out = Array(eltype(C),0)
     seen = Set{eltype(C)}()
     for x in C
-        if !contains(seen, x)
+        if !in(x, seen)
             push!(seen, x)
             push!(out, x)
         end
@@ -112,3 +107,5 @@ function filter!(f::Function, s::Set)
     return s
 end
 filter(f::Function, s::Set) = filter!(f, copy(s))
+
+hash(s::Set) = hash(sort(s.dict.keys[s.dict.slots .!= 0]))

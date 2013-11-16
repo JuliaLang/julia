@@ -38,8 +38,8 @@ function main()
     minstd = baseline[minname][4]/baseline[minname][3]
     maxstd = baseline[maxname][4]/baseline[maxname][3]
 
-    @printf "min %7.2f%% (std %7.2f%%) %s\n" min(change)*100 minstd*100 minname
-    @printf "max %7.2f%% (std %7.2f%%) %s\n" max(change)*100 maxstd*100 maxname
+    @printf "min %7.2f%% (std %7.2f%%) %s\n" minimum(change)*100 minstd*100 minname
+    @printf "max %7.2f%% (std %7.2f%%) %s\n" maximum(change)*100 maxstd*100 maxname
     @printf "avg %7.2f%%\n" mean(change)*100
 end
 

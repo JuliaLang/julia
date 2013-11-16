@@ -215,7 +215,7 @@ Let's discuss these arguments in order:
      @profile Profile.print(STDOUT, data) # Prints the previous results
      Profile.print()                      # Prints results from Profile.print()
 
-- The first named argument, ``format``, was introduced above. The
+- The first keyword argument, ``format``, was introduced above. The
   possible choices are ``:tree`` and ``:flat``.
 - ``C``, if set to ``true``, allows you to see even the calls to C
   code.  Try running the introductory example with ``Profile.print(C =

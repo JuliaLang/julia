@@ -34,7 +34,7 @@ start(x::Number) = false
 next(x::Number, state) = (x, true)
 done(x::Number, state) = state
 isempty(x::Number) = false
-contains(x::Number, y::Number) = x == y
+in(x::Number, y::Number) = x == y
 
 reinterpret{T<:Real}(::Type{T}, x::Real) = box(T,x)
 

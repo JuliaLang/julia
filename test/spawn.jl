@@ -27,15 +27,16 @@ out = readall(`echo hello` & `echo world`)
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
 @unix_only @test (run(yes|>`head`|>DevNull); true)
 
-a = Base.Condition()
-
-@schedule begin
-    p = spawn(yes|>DevNull)
-    Base.notify(a,p)
-    @test !success(p)
+begin
+    a = Base.Condition()
+    @schedule begin
+        p = spawn(yes|>DevNull)
+        Base.notify(a,p)
+        @test !success(p)
+    end
+    p = wait(a)
+    kill(p)
 end
-p = wait(a)
-kill(p)
 
 @test_throws run(`foo`)
 
@@ -115,3 +116,8 @@ Base.interrupt_waiting_task(t, InterruptException())
 yield()
 put(r,11)
 yield()
+
+
+# issue #4535
+exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia-basic":"julia-debug-basic"))
+@test readall(`$exename -e 'println(STDERR,"Hello World")'` .> `cat`) == "Hello World\n"

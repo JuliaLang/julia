@@ -124,36 +124,7 @@ function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, o
     return A
 end
 
-# Mmapped-bitarray constructor
-function mmap_bitarray{N,TInt<:Integer}(dims::NTuple{N,TInt}, s::IOStream, offset::FileOffset)
-    prot, flags, iswrite = mmap_stream_settings(s)
-    if length(dims) == 0
-        dims = 0
-    end
-    n = prod(dims)
-    nc = num_bit_chunks(n)
-    if nc > typemax(Int)
-        error("File is too large to memory-map on this platform")
-    end
-    chunks = mmap_array(Uint64, (nc,), s, offset)
-    if iswrite
-        chunks[end] &= @_msk_end n
-    else
-        if chunks[end] != chunks[end] & @_msk_end n
-            error("The given file does not contain a valid BitArray of size ", join(dims, 'x'), " (open with r+ to override)")
-        end
-    end
-    B = BitArray{N}(ntuple(N,i->0)...)
-    B.chunks = chunks
-    B.len = n
-    if N != 1
-        B.dims = Int[i for i in dims]
-    end
-    finalizer(B, x->munmap(pointer(B.chunks), length(B.chunks)*sizeof(Uint64)))
-    return B
 end
-end
-
 
 ### Windows implementation ###
 @windows_only begin
@@ -181,12 +152,13 @@ function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, o
         error("Could not create mapping view")
     end
     A = pointer_to_array(pointer(T, viewhandle), dims)
-    finalizer(A, x->munmap(viewhandle))
+    finalizer(A, x->munmap(viewhandle, mmaphandle))
     return A
 end
 
-function munmap(viewhandle::Ptr)
+function munmap(viewhandle::Ptr, mmaphandle::Ptr)
     status = bool(ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle))
+    status |= bool(ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), mmaphandle))
     if !status
         error("Could not unmap view")
     end
@@ -199,4 +171,35 @@ function msync(p::Ptr, len::Integer)
     end
 end
 
+end
+
+# Mmapped-bitarray constructor
+function mmap_bitarray{N,TInt<:Integer}(dims::NTuple{N,TInt}, s::IOStream, offset::FileOffset)
+    iswrite = !isreadonly(s)
+    n = 1
+    for d in dims
+        if d < 0
+            error("invalid dimension size")
+        end
+        n *= d
+    end
+    nc = num_bit_chunks(n)
+    if nc > typemax(Int)
+        error("File is too large to memory-map on this platform")
+    end
+    chunks = mmap_array(Uint64, (nc,), s, offset)
+    if iswrite
+        chunks[end] &= @_msk_end n
+    else
+        if chunks[end] != chunks[end] & @_msk_end n
+            error("The given file does not contain a valid BitArray of size ", join(dims, 'x'), " (open with \"r+\" mode to override)")
+        end
+    end
+    B = BitArray{N}(ntuple(N,i->0)...)
+    B.chunks = chunks
+    B.len = n
+    if N != 1
+        B.dims = dims
+    end
+    return B
 end

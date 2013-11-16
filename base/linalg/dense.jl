@@ -20,7 +20,7 @@ isposdef(x::Number) = imag(x)==0 && real(x) > 0
 norm{T<:BlasFloat}(x::Vector{T}) = BLAS.nrm2(length(x), x, 1)
 
 function norm{T<:BlasFloat, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}))
-    if min(rx) < 1 || max(rx) > length(x)
+    if minimum(rx) < 1 || maximum(rx) > length(x)
         throw(BoundsError())
     end
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
@@ -35,14 +35,14 @@ function norm{T<:BlasFloat}(x::Vector{T}, p::Number)
     elseif p == 1
         BLAS.asum(n, x, 1)
     elseif p == Inf
-        max(abs(x))  
+        maximum(abs(x))
     elseif p == -Inf
-        min(abs(x))
+        minimum(abs(x))
     elseif p == 0
         convert(T, nnz(x))
     else
         absx = abs(x)
-        dx = max(absx)
+        dx = maximum(absx)
         if dx != zero(T)
             scale!(absx, 1/dx)
             a = dx * (sum(absx.^p).^(1/p))
@@ -109,8 +109,7 @@ function gradient(F::Vector, h::Vector)
     return g
 end
 
-function diagind(A::Matrix,k::Integer=0)
-    m,n = size(A)
+function diagind(m::Integer, n::Integer, k::Integer=0)
     if 0 < k < n
         return Range(k*m+1,m+1,min(m,n-k))
     elseif 0 <= -k <= m
@@ -118,6 +117,8 @@ function diagind(A::Matrix,k::Integer=0)
     end
     throw(BoundsError())
 end
+
+diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
 
 diag(A::Matrix, k::Integer=0) = A[diagind(A,k)]
 
@@ -135,7 +136,7 @@ function trace{T}(A::Matrix{T})
         error("expected square matrix")
     end
     t = zero(T)
-    for i=1:min(size(A))
+    for i=1:minimum(size(A))
         t += A[i,i]
     end
     return t
@@ -419,7 +420,7 @@ det(x::Number) = x
 
 logdet(A::Matrix) = logdet(lufact(A))
 
-function inv(A::AbstractMatrix)
+function inv(A::Matrix)
     if istriu(A) return inv(Triangular(A, :U, false)) end
     if istril(A) return inv(Triangular(A, :L, false)) end
     return inv(lufact(A))
@@ -500,12 +501,10 @@ end
 
 factorize(A::AbstractMatrix) = factorize!(copy(A))
 
-(\){T1<:BlasReal, T2<:BlasReal}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) =
-    (\)(convert(Array{promote_type(T1,T2)},A), convert(Array{promote_type(T1,T2)},B))
 (\){T1<:BlasFloat, T2<:BlasFloat}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) =
     (\)(convert(Array{promote_type(T1,T2)},A), convert(Array{promote_type(T1,T2)},B))
-(\){T1<:BlasFloat, T2<:Real}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(A, convert(Array{T1}, B))
-(\){T1<:Real, T2<:BlasFloat}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(convert(Array{T2}, A), B)
+(\){T1<:BlasFloat, T2<:Number}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(A, convert(Array{T1}, B))
+(\){T1<:Number, T2<:BlasFloat}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(convert(Array{T2}, A), B)
 (\){T1<:Number, T2<:Number}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))
 (\)(a::Vector, B::StridedVecOrMat) = (\)(reshape(a, length(a), 1), B)
 function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
@@ -528,7 +527,7 @@ function pinv{T<:BlasFloat}(A::StridedMatrix{T})
     if m == 0 || n == 0 return Array(T, n, m) end
     SVD         = svdfact(A, true)
     Sinv        = zeros(T, length(SVD[:S]))
-    index       = SVD[:S] .> eps(real(one(T)))*max(m,n)*max(SVD[:S])
+    index       = SVD[:S] .> eps(real(one(T)))*max(m,n)*maximum(SVD[:S])
     Sinv[index] = 1.0 ./ SVD[:S][index]
     SVD[:Vt]'scale(Sinv, SVD[:U]')
 end
@@ -542,7 +541,7 @@ function null{T<:BlasFloat}(A::StridedMatrix{T})
     if m == 0 || n == 0 return eye(T, n) end
     SVD = svdfact(A, false)
     if m == 0; return eye(T, n); end
-    indstart = sum(SVD[:S] .> max(m,n)*max(SVD[:S])*eps(eltype(SVD[:S]))) + 1
+    indstart = sum(SVD[:S] .> max(m,n)*maximum(SVD[:S])*eps(eltype(SVD[:S]))) + 1
     SVD[:V][:,indstart:]
 end
 null{T<:Integer}(A::StridedMatrix{T}) = null(float(A))
@@ -551,8 +550,8 @@ null(a::StridedVector) = null(reshape(a, length(a), 1))
 function cond(A::StridedMatrix, p) 
     if p == 2
         v = svdvals(A)
-        maxv = max(v)
-        return maxv == 0.0 ? Inf : maxv / min(v)
+        maxv = maximum(v)
+        return maxv == 0.0 ? Inf : maxv / minimum(v)
     elseif p == 1 || p == Inf
         m, n = size(A)
         if m != n; error("Use 2-norm for non-square matrices"); end

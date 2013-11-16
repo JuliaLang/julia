@@ -7,9 +7,11 @@ static size_t stdin_buf_maxlen = 128;
 static char *given_prompt=NULL, *prompt_to_use=NULL;
 static int callback_en=0;
 
+static void jl_clear_input(void);
+
 #ifdef __WIN32__
-int repl_sigint_handler_installed = 0;
-BOOL WINAPI repl_sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
+static int repl_sigint_handler_installed = 0;
+static BOOL WINAPI repl_sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
     if (callback_en) {
         JL_WRITE(jl_uv_stdout, "^C", 2);
@@ -28,7 +30,7 @@ void sigcont_handler(int arg)
 }
 
 struct sigaction jl_sigint_act = {};
-void repl_sigint_handler(int sig, siginfo_t *info, void *context)
+static void repl_sigint_handler(int sig, siginfo_t *info, void *context)
 {
     if (callback_en) {
         JL_WRITE(jl_uv_stdout, "\n", 1);
@@ -49,7 +51,7 @@ void repl_sigint_handler(int sig, siginfo_t *info, void *context)
 }
 #endif
 
-void init_repl_environment(int argc, char *argv[])
+void jl_init_repl(int history)
 {
     stdin_buf = malloc(stdin_buf_maxlen);
     stdin_buf_len = 0;
@@ -151,9 +153,9 @@ static void basic_stdin_callback(void)
     jl_input_line_callback(stdin_buf);
 }
 
-void jl_readBuffer(char* base, ssize_t nread)
+void jl_read_buffer(unsigned char* base, ssize_t nread)
 {
-    char *start = base;
+    unsigned char *start = base;
     int esc = 0;
     int newline = 0;
     while (*start != 0 && nread > 0) {
@@ -210,7 +212,7 @@ void jl_readBuffer(char* base, ssize_t nread)
     if (newline) basic_stdin_callback();
 }
 
-void jl_clear_input(void)
+static void jl_clear_input(void)
 {
     stdin_buf_len = 0;
     stdin_buf[0] = 0;

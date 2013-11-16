@@ -2,6 +2,8 @@
 
 abstract Factorization{T}
 
+(\)(F::Factorization, b::Union(AbstractVector, AbstractMatrix)) = A_ldiv_B!(F, copy(b))
+
 type Cholesky{T<:BlasFloat} <: Factorization{T}
     UL::Matrix{T}
     uplo::Char
@@ -35,8 +37,8 @@ function getindex(C::Cholesky, d::Symbol)
     error("No such type field")
 end
 
-\{T<:BlasFloat}(C::Cholesky{T}, B::StridedVecOrMat{T}) =
-    LAPACK.potrs!(C.uplo, C.UL, copy(B))
+A_ldiv_B!{T<:BlasFloat}(C::Cholesky{T}, B::StridedVecOrMat{T}) =
+    LAPACK.potrs!(C.uplo, C.UL, B)
 
 function det{T}(C::Cholesky{T})
     dd = one(T)
@@ -96,14 +98,22 @@ function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
     error("No such type field")
 end
 
-function \{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedVector{T})
+function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedVector{T})
     if C.rank < size(C.UL, 1); throw(RankDeficientException(C.info)); end
-    LAPACK.potrs!(C.uplo, C.UL, copy(B)[C.piv])[invperm(C.piv)]
+    ipermute!(LAPACK.potrs!(C.uplo, C.UL, permute!(B, C.piv)), C.piv)
 end
 
-function \{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
+function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
     if C.rank < size(C.UL, 1); throw(RankDeficientException(C.info)); end
-    LAPACK.potrs!(C.uplo, C.UL, copy(B)[C.piv,:])[invperm(C.piv),:]
+    n = size(C, 1)
+    for i = 1:size(B, 2)
+        permute!(sub(B, 1:n, i), C.piv)
+    end
+    LAPACK.potrs!(C.uplo, C.UL, B)
+    for i = 1:size(B, 2)
+        ipermute!(sub(B, 1:n, i), C.piv)
+    end
+    return B
 end
 
 rank(C::CholeskyPivoted) = C.rank
@@ -142,7 +152,7 @@ lufact(x::Number) = LU(fill(x, 1, 1), [1], x == 0 ? 1 : 0)
 
 function lu(A::Union(Number, AbstractMatrix))
     F = lufact(A)
-    return (F[:L], F[:U], F[:P])
+    return (F[:L], F[:U], F[:p])
 end
 
 size(A::LU) = size(A.factors)
@@ -239,12 +249,12 @@ type QR{S<:BlasFloat} <: Factorization{S}
     vs::Matrix{S}                     # the elements on and above the diagonal contain the N-by-N upper triangular matrix R; the elements below the diagonal are the columns of V
     T::Matrix{S}                      # upper triangular factor of the block reflector.
 end
-QR{T<:BlasFloat}(A::StridedMatrix{T}) = QR(LAPACK.geqrt3!(A)...)
+QR{T<:BlasFloat}(A::StridedMatrix{T}, nb::Integer = min(minimum(size(A)), 36)) = QR(LAPACK.geqrt!(A, nb)...)
 
-qrfact!{T<:BlasFloat}(A::StridedMatrix{T}) = QR(A)
-qrfact!(A::StridedMatrix) = qrfact!(float(A))
-qrfact{T<:BlasFloat}(A::StridedMatrix{T}) = qrfact!(copy(A))
-qrfact(A::StridedMatrix) = qrfact!(float(A))
+qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, args::Integer...) = QR(A, args...)
+qrfact!(A::StridedMatrix, args::Integer...) = qrfact!(float(A), args...)
+qrfact{T<:BlasFloat}(A::StridedMatrix{T}, args::Integer...) = qrfact!(copy(A), args...)
+qrfact(A::StridedMatrix, args::Integer...) = qrfact!(float(A), args...)
 qrfact(x::Integer) = qrfact(float(x))
 qrfact(x::Number) = QR(fill(one(x), 1, 1), fill(x, 1, 1))
 
@@ -257,54 +267,45 @@ qr(A::Union(Number, AbstractMatrix)) = qr(A, true)
 size(A::QR, args::Integer...) = size(A.vs, args...)
 
 function getindex(A::QR, d::Symbol)
-    if d == :R; return triu(A.vs[1:min(size(A)),:]); end;
+    if d == :R; return triu(A.vs[1:minimum(size(A)),:]); end;
     if d == :Q; return QRPackedQ(A); end
     error("No such type field")
 end
 
-type QRPackedQ{S}  <: AbstractMatrix{S} 
+type QRPackedQ{S} <: AbstractMatrix{S} 
     vs::Matrix{S}                      
     T::Matrix{S}                       
 end
 QRPackedQ(A::QR) = QRPackedQ(A.vs, A.T)
 
-size(A::QRPackedQ, args::Integer...) = size(A.vs, args...)
+size(A::QRPackedQ, dim::Integer) = 0 < dim ? (dim <= 2 ? size(A.vs, 1) : 1) : error("arraysize: dimension out of range")
+size(A::QRPackedQ) = size(A, 1), size(A, 2)
 
 function full{T<:BlasFloat}(A::QRPackedQ{T}, thin::Bool)
-    if thin return A * eye(T, size(A.T, 1)) end
-    return A * eye(T, size(A, 1))
+    if thin return A * eye(T, size(A.vs)...) end
+    return A * eye(T, size(A.vs, 1))
 end
 full(A::QRPackedQ) = full(A, true)
 
-print_matrix(io::IO, A::QRPackedQ) = print_matrix(io, full(A))
+print_matrix(io::IO, A::QRPackedQ, rows::Integer, cols::Integer) = print_matrix(io, full(A, false), rows, cols)
 
 ## Multiplication by Q from the QR decomposition
 function *{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T})
-    m = size(B, 1)
-    n = size(B, 2)
-    if m == size(A.vs, 1)
-        Bc = copy(B)
-    elseif m == size(A.vs, 2)
-        Bc = [B; zeros(T, size(A.vs, 1) - m, n)]
+    if size(B, 1) == size(A.vs, 2) 
+        return LAPACK.gemqrt!('L', 'N', A.vs, A.T, [B; zeros(T, size(A.vs, 1) - size(A.vs, 2), size(B, 2))])
     else
-        throw(DimensionMismatch(""))
+        return LAPACK.gemqrt!('L', 'N', A.vs, A.T, copy(B))
     end
-    LAPACK.gemqrt!('L', 'N', A.vs, A.T, Bc)
 end
-Ac_mul_B{T<:BlasReal}(A::QRPackedQ{T}, B::StridedVecOrMat) = LAPACK.gemqrt!('L','T',A.vs,A.T,copy(B))
-Ac_mul_B{T<:BlasComplex}(A::QRPackedQ{T}, B::StridedVecOrMat) = LAPACK.gemqrt!('L','C',A.vs,A.T,copy(B))
+Ac_mul_B{T<:BlasReal}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','T',A.vs,A.T,copy(B))
+Ac_mul_B{T<:BlasComplex}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','C',A.vs,A.T,copy(B))
 *{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.gemqrt!('R', 'N', B.vs, B.T, copy(A))
 function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T})
-    m = size(A, 1)
-    n = size(A, 2)
-    if n == size(B.vs, 1)
-        Ac = copy(A)
-    elseif n == size(B.vs, 2)
-        Ac = [B zeros(T, m, size(B.vs, 1) - n)]
+    if size(A, 2) == size(B.vs, 2)
+        return LAPACK.gemqrt!('R', iseltype(B.vs,Complex) ? 'C' : 'T', B.vs, B.T, [A zeros(T, size(A, 1), size(B.vs, 1) - size(B.vs, 2))])
     else
-        throw(DimensionMismatch(""))
+        LAPACK.gemqrt!('R', iseltype(B.vs,Complex) ? 'C' : 'T', B.vs, B.T, copy(A))
     end
-    LAPACK.gemqrt!('R', iseltype(B.vs,Complex) ? 'C' : 'T', B.vs, B.T, Ac)
 end
 ## Least squares solution.  Should be more careful about cases with m < n
 (\)(A::QR, B::StridedVector) = Triangular(A[:R], :U)\(A[:Q]'B)[1:size(A, 2)]
@@ -323,14 +324,14 @@ qrpfact(A::StridedMatrix) = qrpfact!(float(A))
 
 function qrp(A::AbstractMatrix, thin::Bool)
     F = qrpfact(A)
-    return full(F[:Q], thin), F[:R], F[:P]
+    return full(F[:Q], thin), F[:R], F[:p]
 end
 qrp(A::AbstractMatrix) = qrp(A, false)
 
 size(A::QRPivoted, args::Integer...) = size(A.hh, args...)
 
 function getindex{T<:BlasFloat}(A::QRPivoted{T}, d::Symbol)
-    if d == :R; return triu(A.hh[1:min(size(A)),:]); end;
+    if d == :R; return triu(A.hh[1:minimum(size(A)),:]); end;
     if d == :Q; return QRPivotedQ(A); end
     if d == :p; return A.jpvt; end
     if d == :P
@@ -347,7 +348,7 @@ end
 
 # Julia implementation similarly to xgelsy
 function (\){T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
-    nr = min(size(A.hh))
+    nr = minimum(size(A.hh))
     nrhs = size(B, 2)
     if nr == 0 return zeros(0, nrhs), 0 end
     ar = abs(A.hh[1])
@@ -380,7 +381,7 @@ type QRPivotedQ{T} <: AbstractMatrix{T}
 end
 QRPivotedQ(A::QRPivoted) = QRPivotedQ(A.hh, A.tau)
 
-size(A::QRPivotedQ, args...) = size(A.hh, args...)
+size(A::QRPivotedQ, dims::Integer) = dims > 0 ? (dims < 3 ? size(A.hh, 1) : 1) : error("arraysize: dimension out of range")
 
 function full{T<:BlasFloat}(A::QRPivotedQ{T}, thin::Bool)
     m, n = size(A.hh)
@@ -392,35 +393,25 @@ function full{T<:BlasFloat}(A::QRPivotedQ{T}, thin::Bool)
 end
 
 full(A::QRPivotedQ) = full(A, true)
-print_matrix(io::IO, A::QRPivotedQ) = print_matrix(io, full(A))
+print_matrix(io::IO, A::QRPivotedQ, rows::Integer, cols::Integer) = print_matrix(io, full(A, false), rows, cols)
 
 ## Multiplication by Q from the Pivoted QR decomposition
 function *{T<:BlasFloat}(A::QRPivotedQ{T}, B::StridedVecOrMat{T})
-    m = size(B, 1)
-    n = size(B, 2)
-    if m == size(A.hh, 1)
-        Bc = copy(B)
-    elseif m == size(A.hh, 2)
-        Bc = [B; zeros(T, size(A.hh, 1) - m, n)]
+    if size(A.hh, 2) == size(B, 1)
+        return LAPACK.ormqr!('L', 'N', A.hh, A.tau, [B; zeros(T, size(A.hh, 1) - size(A.hh, 2), size(B, 2))])
     else
-        throw(DimensionMismatch(""))
+        return LAPACK.ormqr!('L', 'N', A.hh, A.tau, copy(B))
     end
-    LAPACK.ormqr!('L', 'N', A.hh, A.tau, Bc)
 end
-Ac_mul_B{T<:BlasReal}(A::QRPivotedQ{T}, B::StridedVecOrMat) = LAPACK.ormqr!('L','T',A.hh,A.tau,copy(B))
-Ac_mul_B{T<:BlasComplex}(A::QRPivotedQ{T}, B::StridedVecOrMat) = LAPACK.ormqr!('L','C',A.hh,A.tau,copy(B))
+Ac_mul_B{T<:BlasReal}(A::QRPivotedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','T',A.hh,A.tau,copy(B))
+Ac_mul_B{T<:BlasComplex}(A::QRPivotedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','C',A.hh,A.tau,copy(B))
 *(A::StridedVecOrMat, B::QRPivotedQ) = LAPACK.ormqr!('R', 'N', B.hh, B.tau, copy(A))
 function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPivotedQ{T})
-    m = size(A, 1)
-    n = size(A, 2)
-    if n == size(B.hh, 1)
-        Ac = copy(A)
-    elseif n == size(B.hh, 2)
-        Ac = [B zeros(T, m, size(B.hh, 1) - n)]
+    if size(A, 2) == size(B.hh, 2)
+        return LAPACK.ormqr!('R', iseltype(B.hh,Complex) ? 'C' : 'T', B.hh, B.tau, [A zeros(T, size(A, 1), size(B.hh, 1) - size(B.hh, 2))])
     else
-        throw(DimensionMismatch(""))
+        return LAPACK.ormqr!('R', iseltype(B.hh,Complex) ? 'C' : 'T', B.hh, B.tau, copy(A))
     end
-    LAPACK.ormqr!('R', iseltype(B.hh,Complex) ? 'C' : 'T', B.hh, B.tau, Ac)
 end
 
 ##TODO:  Add methods for rank(A::QRP{T}) and adjust the (\) method accordingly
@@ -515,27 +506,30 @@ end
 #Calculates eigenvectors
 eigvecs(A::Union(Number, AbstractMatrix)) = eigfact(A)[:vectors]
 
-function eigvals{T<:BlasReal}(A::StridedMatrix{T})
-    if issym(A) return eigvals(Symmetric(A)) end
-    valsre, valsim, _, _ = LAPACK.geev!('N', 'N', copy(A))
+function eigvals!{T<:BlasReal}(A::StridedMatrix{T})
+    if issym(A) return eigvals!(Symmetric(A)) end
+    valsre, valsim, _, _ = LAPACK.geev!('N', 'N', A)
     if all(valsim .== 0) return valsre end
     return complex(valsre, valsim)
 end
-function eigvals{T<:BlasComplex}(A::StridedMatrix{T})
+function eigvals!{T<:BlasComplex}(A::StridedMatrix{T})
     if ishermitian(A) return eigvals(Hermitian(A)) end
-    LAPACK.geev!('N', 'N', copy(A))[1]
+    LAPACK.geev!('N', 'N', A)[1]
 end
+eigvals!(A::AbstractMatrix, args...) = eigvals!(float(A), args...)
+eigvals{T<:BlasFloat}(A::AbstractMatrix{T}) = eigvals!(copy(A))
+eigvals(A::AbstractMatrix, args...) = eigvals!(float(A), args...)
 
 eigvals(x::Number) = [one(x)]
 
 #Computes maximum and minimum eigenvalue
 function eigmax(A::Union(Number, AbstractMatrix))
     v = eigvals(A)
-    iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : max(v)
+    iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : maximum(v)
 end
 function eigmin(A::Union(Number, AbstractMatrix))
     v = eigvals(A)
-    iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : min(v)
+    iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : minimum(v)
 end
 
 inv(A::Eigen) = scale(A.vectors, 1.0/A.values)*A.vectors'
@@ -656,6 +650,7 @@ function svdvals!{T<:BlasFloat}(A::StridedMatrix{T})
     if m == 0 || n == 0 return zeros(T, 0) end
     return LAPACK.gesdd!('N', A)[2]
 end
+svdvals!(A::StridedMatrix) = svdvals!(float(A))
 svdvals{T<:BlasFloat}(A::StridedMatrix{T}) = svdvals!(copy(A))
 svdvals(A::StridedMatrix) = svdvals!(float(A))
 svdvals(x::Number) = [abs(x)]
@@ -730,10 +725,13 @@ function getindex{T}(obj::GeneralizedSVD{T}, d::Symbol)
     error("No such type field")
 end
 
-function svdvals(A::StridedMatrix, B::StridedMatrix)
-    _, _, _, a, b, k, l, _ = LAPACK.ggsvd!('N', 'N', 'N', copy(A), copy(B))
+function svdvals!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
+    _, _, _, a, b, k, l, _ = LAPACK.ggsvd!('N', 'N', 'N', A, B)
     return a[1:k + l] ./ b[1:k + l]
 end
+svdvals!(A::StridedMatrix, StridedMatrix) = svdvals!(float(A), float(B))
+svdvals{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = svdvals!(copy(A), copy(B))
+svdvals(A::StridedMatrix, B::StridedMatrix) = svdvals!(float(A), float(B))
 
 type Schur{Ty<:BlasFloat} <: Factorization{Ty}
     T::Matrix{Ty}

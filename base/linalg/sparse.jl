@@ -8,45 +8,64 @@ function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{Tv
     return A * B
 end
 
+(*){TvA,TiA}(A::SparseMatrixCSC{TvA,TiA}, X::BitArray{1}) = invoke(*, (SparseMatrixCSC, AbstractVector), A, X)
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
-function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Vector{T2})
-    if A.n != length(X); error("mismatched dimensions"); end
-    Y = zeros(promote_type(T1,T2), A.m)
-    for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
-        Y[A.rowval[k]] += A.nzval[k] * X[col]
+function A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number, y::AbstractVector)
+    A.n == length(x) || throw(DimensionMismatch(""))
+    A.m == length(y) || throw(DimensionMismatch(""))
+    for i = 1:A.m; y[i] *= β; end
+    nzv = A.nzval
+    rv = A.rowval
+    for col = 1 : A.n
+        αx = α*x[col]
+        @inbounds for k = A.colptr[col] : (A.colptr[col+1]-1)
+            y[rv[k]] += nzv[k]*αx
+        end
     end
-    return Y
+    return y
 end
+(*){TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx}) = A_mul_B!(1, A, x, 0, zeros(promote_type(TA,Tx), A.m))
 
+(*)(X::BitArray{1}, A::SparseMatrixCSC) = invoke(*, (AbstractVector, SparseMatrixCSC), X, A)
 # In vector-matrix multiplication, the correct orientation of the vector is assumed.
 # XXX: this is wrong (i.e. not what Arrays would do)!!
-function (*){T1,T2}(X::Vector{T1}, A::SparseMatrixCSC{T2})
+function (*){T1,T2}(X::AbstractVector{T1}, A::SparseMatrixCSC{T2})
     if A.m != length(X); error("mismatched dimensions"); end
     Y = zeros(promote_type(T1,T2), A.n)
-    for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
-        Y[col] += X[A.rowval[k]] * A.nzval[k]
+    nzv = A.nzval
+    rv = A.rowval
+    for col = 1 : A.n
+        for k = A.colptr[col] : (A.colptr[col+1]-1)
+            Y[col] += X[rv[k]] * nzv[k]
+        end
     end
     return Y
 end
 
-function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Matrix{T2})
+(*){TvA,TiA}(A::SparseMatrixCSC{TvA,TiA}, X::BitArray{2}) = invoke(*, (SparseMatrixCSC, AbstractMatrix), A, X)
+function (*){TvA,TiA,TX}(A::SparseMatrixCSC{TvA,TiA}, X::AbstractMatrix{TX})
     mX, nX = size(X)
     if A.n != mX; error("mismatched dimensions"); end
-    Y = zeros(promote_type(T1,T2), A.m, nX)
+    Y = zeros(promote_type(TvA,TX), A.m, nX)
+    nzv = A.nzval
+    rv = A.rowval
+    colptr = A.colptr
     for multivec_col = 1:nX
         for col = 1 : A.n
-            for k = A.colptr[col] : (A.colptr[col+1]-1)
-                Y[A.rowval[k], multivec_col] += A.nzval[k] * X[col, multivec_col]
+            Xc = X[col, multivec_col]
+            @inbounds for k = colptr[col] : (colptr[col+1]-1)
+                Y[rv[k], multivec_col] += nzv[k] * Xc
             end
         end
     end
     return Y
 end
 
-function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
+(*){TvA,TiA}(X::BitArray{2}, A::SparseMatrixCSC{TvA,TiA}) = invoke(*, (AbstractMatrix, SparseMatrixCSC), X, A)
+function (*){TX,TvA,TiA}(X::AbstractMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
     mX, nX = size(X)
     if nX != A.m; error("mismatched dimensions"); end
-    Y = zeros(promote_type(T1,T2), mX, A.n)
+    Y = zeros(promote_type(TX,TvA), mX, A.n)
     for multivec_row = 1:mX
         for col = 1 : A.n
             for k = A.colptr[col] : (A.colptr[col+1]-1)
@@ -392,6 +411,8 @@ function kron{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti})
 end
 
 ## det, inv, cond
+
+inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be dense and can cause the computer to run out of memory. If you are sure you have enough memory, please convert your matrix to a dense matrix.")
 
 # TODO
 

@@ -87,6 +87,13 @@ function write(s::IO, c::Char)
     end
 end
 
+function write(s::IO, p::Ptr, n::Integer)
+    for i=1:n
+        write(s, unsafe_load(p, i))
+    end
+    n
+end
+
 # all subtypes should implement this
 read(s::IO, x::Type{Uint8}) = error(typeof(s)," does not support byte I/O")
 
@@ -264,23 +271,31 @@ isreadonly(s::IOStream) = bool(ccall(:ios_get_readonly, Cint, (Ptr{Void},), s.io
 iswritable(s::IOStream) = !isreadonly(s)
 isreadable(s::IOStream) = true
 
-truncate(s::IOStream, n::Integer) =
-    (ccall(:ios_trunc, Int32, (Ptr{Void}, Uint), s.ios, n)==0 ||
-     error("truncate failed"))
+function truncate(s::IOStream, n::Integer)
+    ccall(:ios_trunc, Int32, (Ptr{Void}, Uint), s.ios, n) == 0 ||
+        error("truncate failed")
+    return s
+end
 
-seek(s::IOStream, n::Integer) =
-    (ccall(:ios_seek, FileOffset, (Ptr{Void}, FileOffset), s.ios, n)==0 ||
-     error("seek failed"))
+function seek(s::IOStream, n::Integer)
+    ccall(:ios_seek, FileOffset, (Ptr{Void}, FileOffset), s.ios, n)==0 ||
+        error("seek failed")
+    return s
+end
 
-seekstart(s::IO) = seek(s, 0)
+seekstart(s::IO) = seek(s,0)
 
-seekend(s::IOStream) =
-    (ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios)==0 ||
-     error("seekend failed"))
+function seekend(s::IOStream)
+    ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios)==0 ||
+        error("seekend failed")
+    return s
+end
 
-skip(s::IOStream, delta::Integer) =
-    (ccall(:ios_skip, FileOffset, (Ptr{Void}, FileOffset), s.ios, delta)==0 ||
-     error("skip failed"))
+function skip(s::IOStream, delta::Integer)
+    ccall(:ios_skip, FileOffset, (Ptr{Void}, FileOffset), s.ios, delta)==0 ||
+        error("skip failed")
+    return s
+end
 
 position(s::IOStream) = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
 
@@ -289,15 +304,13 @@ eof(s::IOStream) = bool(ccall(:jl_ios_eof, Int32, (Ptr{Void},), s.ios))
 ## constructing and opening streams ##
 
 # "own" means the descriptor will be closed with the IOStream
-function fdio(name::String, fd::Integer, own::Bool)
+function fdio(name::String, fd::Integer, own::Bool=false)
     s = IOStream(name)
     ccall(:ios_fd, Ptr{Void}, (Ptr{Void}, Clong, Int32, Int32),
           s.ios, fd, 0, own);
     return s
 end
-fdio(name::String, fd::Integer) = fdio(name, fd, false)
-fdio(fd::Integer, own::Bool) = fdio(string("<fd ",fd,">"), fd, own)
-fdio(fd::Integer) = fdio(fd, false)
+fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 
 function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     s = IOStream(string("<file ",fname,">"))
@@ -504,6 +517,7 @@ function skipchars(s::IOStream, pred; linecomment::Char=char(0xffffffff))
         end
         ch = peekchar(s); status = int(ch)
     end
+    return s
 end
 
 # BitArray I/O
