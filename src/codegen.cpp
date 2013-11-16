@@ -3495,7 +3495,7 @@ extern "C" void jl_init_codegen(void)
 #ifdef __MINGW32__
     options.StackAlignmentOverride = 16;
 #endif
-#if defined(__APPLE__) && !defined(LLVM34)
+#ifdef __APPLE__
     options.JITExceptionHandling = 1;
 #endif
     // Temporarily disable Haswell BMI2 features due to LLVM bug.

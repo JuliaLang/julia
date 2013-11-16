@@ -3,17 +3,15 @@ JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 include Versions.make
 
-CONFIGURE_CC = F77="$(FC)" CC="$(CC)" CXX="$(CXX)" 
-CONFIGURE_OPTIONS = --prefix=$(abspath $(BUILD)) --build=$(BUILD_MACHINE)
+CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) F77="$(FC)" CC="$(CC)" CXX="$(CXX)" --build=$(BUILD_MACHINE)
 ifneq ($(XC_HOST),)
-CONFIGURE_OPTIONS += --host=$(XC_HOST)
+CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
 ifeq ($(OS),WINNT)
-CONFIGURE_OPTIONS += LDFLAGS=-Wl,--stack,8388608
+CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
 else ifneq ($(JL_LIBDIR),lib)
-CONFIGURE_OPTIONS += --libdir=$(abspath $(BUILD)/$(JL_LIBDIR))
+CONFIGURE_COMMON += --libdir=$(abspath $(BUILD)/$(JL_LIBDIR))
 endif
-CONFIGURE_COMMON = $(CONFIGURE_OPTIONS) $(CONFIGURE_CC)
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr patchelf uv
 #custom configure-driven script: zlib
@@ -167,13 +165,9 @@ endif
 ifeq ($(LLVM_ASSERTIONS),1)
 LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+Asserts
 endif
-LLVM_FLAVOR := $(LLVM_BUILDTYPE)
-ifeq ($(LLVM_SANITIZE),1)
-LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+Sanitize
-endif
 
 LLVM_LIB_FILE = libLLVMJIT.a
-LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/$(LLVM_FLAVOR)/lib/$(LLVM_LIB_FILE)
+LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/$(LLVM_BUILDTYPE)/lib/$(LLVM_LIB_FILE)
 LLVM_OBJ_TARGET = $(BUILD)/lib/$(LLVM_LIB_FILE)
 
 ifneq ($(LLVM_VER),svn)
@@ -181,6 +175,7 @@ ifeq ($(LLVM_VER), 3.0)
 LLVM_TAR=llvm-$(LLVM_VER).tar.gz
 else
 LLVM_TAR=llvm-$(LLVM_VER).src.tar.gz
+endif
 endif
 
 ifeq ($(BUILD_LLVM_CLANG),1)
@@ -190,17 +185,13 @@ LLVM_COMPILER_RT_TAR=
 else ifeq ($(LLVM_VER), 3.3)
 LLVM_CLANG_TAR=cfe-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
-LLVM_LIBCXX_TAR=libcxx-$(LLVM_VER).src.tar.gz
 else
 LLVM_CLANG_TAR=clang-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
-LLVM_LIBCXX_TAR=libcxx-$(LLVM_VER).src.tar.gz
 endif
 else
 LLVM_CLANG_TAR=
 LLVM_COMPILER_RT_TAR=
-LLVM_LIBCXX_TAR=
-endif
 endif
 
 LLVM_TARGET_FLAGS= --enable-targets=host
@@ -224,7 +215,7 @@ LLVM_FLAGS += --enable-libcpp
 endif
 ifeq ($(OS), WINNT)
 LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared
-LLVM_MFLAGS += CPPFLAGS="-D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE" 
+LLVM_MFLAGS += CPPFLAGS="-D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE"
 endif
 ifeq ($(USE_INTEL_JITEVENTS), 1)
 LLVM_FLAGS += --with-intel-jitevents
@@ -248,14 +239,6 @@ ifeq ($(ARCH), ppc64)
   LLVM_MFLAGS += CXXFLAGS=-mminimal-toc
 endif
 
-ifeq ($(LLVM_SANITIZE),1)
-LLVM_CC = FC="$(FC)" CC="$(CC) -fsanitize=address" CXX="$(CXX) -fsanitize=address" 
-LLVM_MFLAGS += TOOL_NO_EXPORTS= HAVE_LINK_VERSION_SCRIPT=0
-else
-LLVM_CC = $(CONFIGURE_CC)
-endif
-
-ifneq ($(LLVM_VER),svn)
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR):
 	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
@@ -264,10 +247,7 @@ ifneq ($(LLVM_COMPILER_RT_TAR),)
 $(LLVM_COMPILER_RT_TAR):
 	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
 endif
-ifneq ($(LLVM_LIBCXX_TAR),)
-$(LLVM_LIBCXX_TAR):
-	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
-endif
+ifneq ($(LLVM_VER),svn)
 $(LLVM_TAR):
 	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
 endif
@@ -286,7 +266,7 @@ llvm-$(LLVM_VER)/python2_path:
 llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
 
 
-llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
+llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR)
 ifneq ($(LLVM_VER),svn)
 	mkdir -p llvm-$(LLVM_VER) && \
 	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $(LLVM_TAR)
@@ -295,12 +275,7 @@ else
 		git clone http://llvm.org/git/llvm.git llvm-$(LLVM_VER) ) || \
 		(cd llvm-$(LLVM_VER) && \
 		git pull --ff-only)
-ifneq ($(LLVM_GIT_VER),)
-	(cd llvm-$(LLVM_VER) && \
-		git checkout $(LLVM_GIT_VER))
 endif
-endif
-ifneq ($(LLVM_VER),svn)
 ifneq ($(LLVM_CLANG_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/tools/clang && \
 	tar -C llvm-$(LLVM_VER)/tools/clang --strip-components 1 -xf $(LLVM_CLANG_TAR)
@@ -309,27 +284,6 @@ ifneq ($(LLVM_COMPILER_RT_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/projects/compiler-rt && \
 	tar -C llvm-$(LLVM_VER)/projects/compiler-rt --strip-components 1 -xf $(LLVM_COMPILER_RT_TAR)
 endif
-ifneq ($(LLVM_LIBCXX_TAR),)
-	mkdir -p llvm-$(LLVM_VER)/projects/libcxx && \
-	tar -C llvm-$(LLVM_VER)/projects/libcxx --strip-components 1 -xf $(LLVM_LIBCXX_TAR)
-endif
-else
-ifneq ($(BUILD_LLVM_CLANG),)
-	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
-		git clone http://llvm.org/git/clang.git llvm-$(LLVM_VER)/tools/clang  ) || \
-		(cd llvm-$(LLVM_VER)/tools/clang  && \
-		git pull --ff-only)
-	([ ! -d llvm-$(LLVM_VER)/projects/compiler-rt ] && \
-		git clone http://llvm.org/git/compiler-rt.git llvm-$(LLVM_VER)/tools/clang  ) || \
-		(cd llvm-$(LLVM_VER)/projects/compiler-rt  && \
-		git pull --ff-only)		
-ifneq ($(LLVM_CLANG_VER),)
-	(cd llvm-$(LLVM_VER) && \
-		git checkout $(LLVM_GIT_VER))
-endif
-endif
-endif
-
 ifeq ($(BUILD_LLDB), 1)
 	([ ! -d llvm-$(LLVM_VER)/tools/lldb ] && \
 		(cd llvm-$(LLVM_VER)/tools && \
@@ -352,7 +306,7 @@ llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status: llvm-$(LLVM_VER)/configu
 	cd llvm-$(LLVM_VER) && \
 	mkdir -p build_$(LLVM_BUILDTYPE) && cd build_$(LLVM_BUILDTYPE) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	../configure $(CONFIGURE_OPTIONS) $(LLVM_CC) $(LLVM_FLAGS)
+	../configure $(CONFIGURE_COMMON) $(LLVM_FLAGS)
 	touch -c $@
 
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status | $(llvm_python_workaround)
@@ -378,9 +332,9 @@ clean-llvm:
 	-$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) clean
 	-rm -f $(BUILD)/bin/llvm-config
 distclean-llvm:
-	-rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).tar.gz libcxx-$(LLVM_VER).src.tar.gz compiler-rt-$(LLVM_VER).src.tar.gz llvm-$(LLVM_VER)
+	-rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).tar.gz compiler-rt-$(LLVM_VER).src.tar.gz llvm-$(LLVM_VER)
 
-get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
+get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR)
 configure-llvm: llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status
 compile-llvm: $(LLVM_OBJ_SOURCE)
 check-llvm: llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/checked
@@ -753,7 +707,7 @@ install-Rmath: $(RMATH_OBJ_TARGET)
 OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT)
 OPENBLAS_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libopenblas.$(SHLIB_EXT)
 
-OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH) FEXTRALIB="-L/usr/local/lib -lgfortran"
+OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH)
 
 # Thread support
 ifeq ($(OPENBLAS_USE_THREAD), 1)
