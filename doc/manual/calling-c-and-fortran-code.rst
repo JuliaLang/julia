@@ -377,7 +377,7 @@ Non-constant Function Specifications
 
 A ``(name, library)`` function specification must be a constant expression.
 However, it is possible to use computed values as function names by staging
-through ``eval`` as follows:
+through ``eval`` as follows::
 
     @eval ccall(($(string("a","b")),"lib"), ...
 
