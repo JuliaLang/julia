@@ -1528,9 +1528,14 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
                     vi[2] = get(decls, vi[1], vi[2])
                 end
             end
-            na = length(a.args[1])
-            li.ast, _ = typeinf(li, ntuple(na+1, i->(i>na ? (Tuple)[1] : Any)),
-                                li.sparams, li, false)
+            # NOTE: this is disabled, as it leads to inlining too early.
+            # See issue #4688. We should wait until inner functions are called
+            # to optimize them; this will be done by the method cache or
+            # builtins.c:jl_trampoline. However if jl_trampoline is changed then
+            # this code will need to be restored.
+            #na = length(a.args[1])
+            #li.ast, _ = typeinf(li, ntuple(na+1, i->(i>na ? (Tuple)[1] : Any)),
+            #                    li.sparams, li, false)
         end
     end
 
@@ -1677,8 +1682,10 @@ function without_linenums(a::Array{Any,1})
     l
 end
 
+_pure_builtins = {getfield, tuple, tupleref, tuplelen, fieldtype}
+
 # detect some important side-effect-free calls
-function effect_free(e::ANY)
+function effect_free(e::ANY, sv)
     if isa(e,Symbol) || isa(e,SymbolNode) || isa(e,Number) || isa(e,String) ||
         isa(e,TopNode) || isa(e,QuoteNode)
         return true
@@ -1690,20 +1697,16 @@ function effect_free(e::ANY)
         ea = e.args
         if e.head === :call || e.head === :call1
             for a in ea
-                if !effect_free(a)
+                if !effect_free(a,sv)
                     return false
                 end
             end
-            if isa(ea[1],TopNode)
-                n = ea[1].name
-                if (n === :getfield || n === :tuple || n === :tupleref ||
-                    n === :tuplelen || n === :fieldtype)
-                    return true
-                end
+            if is_known_call(e, _pure_builtins, sv)
+                return true
             end
         elseif e.head === :new
             for a in ea
-                if !effect_free(a)
+                if !effect_free(a,sv)
                     return false
                 end
             end
@@ -1741,7 +1744,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
         return (e.args[3],())
     end
     if isdefined(Main.Base,:isbits) && is(f,Main.Base.isbits) &&
-        length(atypes)==1 && isType(atypes[1]) && effect_free(argexprs[1]) &&
+        length(atypes)==1 && isType(atypes[1]) && effect_free(argexprs[1],sv) &&
         isleaftype(atypes[1].parameters[1])
         return (isbits(atypes[1].parameters[1]),())
     end
@@ -1881,14 +1884,14 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
             aei = argexprs[i]; aeitype = exprtype(aei)
             # ok for argument to occur more than once if the actual argument
             # is a symbol or constant
-            if (!isa(aei,Symbol) && !isa(aei,Number) && !isa(aei,SymbolNode) && !isa(aei,String)) || (occ==0 && is(aeitype,None))
+            if !effect_free(aei,sv) || (occ==0 && is(aeitype,None))
                 # introduce variable for this argument
                 if occ > 1
                     vnew = unique_name(enclosing_ast)
                     add_variable(enclosing_ast, vnew, aeitype)
                     push!(stmts, Expr(:(=), vnew, aei))
                     argexprs[i] = aeitype===Any ? vnew : SymbolNode(vnew,aeitype)
-                elseif !isType(aeitype) && !effect_free(aei)
+                elseif !isType(aeitype) && !effect_free(aei,sv)
                     push!(stmts, aei)
                 end
             end
@@ -2034,7 +2037,7 @@ function inlining_pass(e::Expr, sv, ast)
                     if isa(aarg,Expr) && is_known_call(aarg, tuple, sv)
                         # apply(f,tuple(x,y,...)) => f(x,y,...)
                         newargs[i-2] = aarg.args[2:]
-                    elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg)
+                    elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg,sv)
                         # apply(f,t::(x,y)) => f(t[1],t[2])
                         newargs[i-2] = { mk_tupleref(aarg,j) for j=1:length(t) }
                     else
@@ -2113,6 +2116,14 @@ function is_known_call(e::Expr, func, sv)
     end
     f = isconstantfunc(e.args[1], sv)
     return !is(f,false) && is(_ieval(f), func)
+end
+
+function is_known_call(e::Expr, fs::Array, sv)
+    if !(is(e.head,:call) || is(e.head,:call1))
+        return false
+    end
+    f = isconstantfunc(e.args[1], sv)
+    return !is(f,false) && contains_is(fs, _ieval(f))
 end
 
 function is_var_assigned(ast, v)

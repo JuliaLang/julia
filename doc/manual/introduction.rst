@@ -86,7 +86,7 @@ and efficiency in a single language. In addition to the above, some
 advantages of Julia over comparable systems include:
 
 -  Free and open source (`MIT
-   licensed <https://github.com/JuliaLang/julia/blob/master/LICENSE>`_)
+   licensed <https://github.com/JuliaLang/julia/blob/master/LICENSE.md>`_)
 -  User-defined types are as fast and compact as built-ins
 -  No need to vectorize code for performance; devectorized code is fast
 -  Designed for parallelism and distributed computation

@@ -59,7 +59,7 @@ function repl_cmd(cmd)
         end
         println(pwd())
     else
-        run(@windows? cmd : detach(`$shell -i -c "$(shell_escape(cmd))"`))
+        run(@windows? cmd : `$shell -i -c "($(shell_escape(cmd))) && true"`)
     end
     nothing
 end

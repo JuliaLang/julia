@@ -33,13 +33,16 @@
          <block start="/(\bfor\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
          <block start="/(\bif\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
          <block start="/(\bwhile\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
-         <block start="/(\bswitch\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
          <block start="/(\btype\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
          <block start="/(\bimmutable\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
          <block start="/(\bmacro\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
          <block start="/(\bquote\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
          <block start="/(\bmodule\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
+         <block start="/(\bbaremodule\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
          <block start="/(\bdo\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
+         <block start="/(\blet\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
+         <block start="/(\bbegin\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
+         <block start="/(\btry\b)/" end="/(\bend\b)/" scheme="julia" region00="mlKeyWord" region01="PairStart" region10="mlKeyWord" region11="PairEnd"/>
 <!-- Symbols -->
          <keywords region="mlSymb">
             <symb name="+"/>
@@ -77,12 +80,9 @@
             <word name="else"/>
             <word name="elseif"/>
             <word name="break"/>
-            <word name="switch"/>
-            <word name="case"/>
-            <word name="otherwise"/>
             <word name="try"/>
             <word name="catch"/>
-            <word name="end"/>
+            <word name="finally"/>
             <word name="const"/>
             <word name="immutable"/>
             <word name="import"/>
@@ -101,6 +101,11 @@
             <word name="using"/>
             <word name="continue"/>
             <word name="do"/>
+            <word name="let"/>
+            <word name="begin"/>
+            <word name="local"/>
+            <word name="bitstype"/>
+            <word name="baremodule"/>
          </keywords>
 <!-- General types -->
          <keywords region="mlStdFunc">

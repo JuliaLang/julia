@@ -16,6 +16,14 @@ GPL licensed, as various dependent libraries such as `FFTW`, `Rmath`,
 `SuiteSparse`, and `git` are GPL licensed. We do hope to have a
 non-GPL distribution of Julia in the future.
 
+When compiling a tagged release in the git repository, we don't display the
+branch/commit hash info in the splash screen. You can use this line to show
+a release description of up to 45 characters. To set this line you have
+to create a Make.user file containing:
+
+    override TAGGED_RELEASE_BANNER = "my-package-repository build"
+
+
 Linux
 -----
 
@@ -26,13 +34,13 @@ installation. If you wish to create a distribution package such as a
 for an example of what metadata is needed for creating `.deb` packages
 for Debian and Ubuntu-based systems. Although we have not yet experimented
 with it, [Alien](https://wiki.debian.org/Alien) could be used to
-generate Julia packages for various linux distributions.
+generate Julia packages for various Linux distributions.
 
 Julia looks for git versioning information when building.  If it does
 not find the git executable or the `.git/` directory is unreadable,
 the build process will continue, however all versioning information
-will be unavailable.  This is the case, for instance, on canonical's
-`buildd` servers where the [Ubuntu
+will be unavailable.  This is the case, for instance, on Canonical's
+build servers where the [Ubuntu
 nightlies](https://launchpad.net/~staticfloat/+archive/julianightlies)
 are built.  Therefore, a workaround must be enacted, where the git
 versioning information [is encoded into the
@@ -42,7 +50,7 @@ By default, Julia loads `$PREFIX/etc/julia/juliarc.jl` as an
 installation-wide initialization file. This file can be used by
 distribution managers to provide paths to various binaries such as a
 bundled `git` executable (as we do on OS X), or to setup paths (as
-we do on Windows).  For linux distribution packages, if `$PREFIX` is
+we do on Windows).  For Linux distribution packages, if `$PREFIX` is
 set to `/usr`, there is no `/usr/etc` to look into. This requires
 the path to Julia's private `etc` directory to be changed.  This can
 be done via the `SYSCONFDIR` make variable when building.  Simply
@@ -70,10 +78,10 @@ Windows
 -------
 
 The best supported method of creating a Julia distribution on Windows
-is to cross-compile from a linux distribution such as Ubuntu. Indepth
+is to cross-compile from a Linux distribution such as Ubuntu. In-depth
 compilation instructions [are
 available](https://github.com/JuliaLang/julia/blob/master/README.windows.md).
-However the important steps for redistrubition are to ensure to `make
+However the important steps for redistribution are to ensure to `make
 win-extras` in between `make` and `make dist`.  After that process is
 completed, the `.zip` file created in the head Julia directory will
 hold a completely self-contained Julia.

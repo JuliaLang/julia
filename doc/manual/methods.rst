@@ -27,7 +27,7 @@ addition to their number, and more than a single method definition may
 be provided. When a function is applied to a particular tuple of
 arguments, the most specific method applicable to those arguments is
 applied. Thus, the overall behavior of a function is a patchwork of the
-behaviors of its various method defintions. If the patchwork is well
+behaviors of its various method definitions. If the patchwork is well
 designed, even though the implementations of the methods may be quite
 different, the outward behavior of the function will appear seamless and
 consistent.
@@ -302,7 +302,7 @@ arguments::
 
     julia> g(x, y::Float64) = x + 2y
     Warning: New definition g(Any,Float64) is ambiguous with g(Float64,Any).
-             Make sure g(Float64,Float64) is defined first.
+             To fix, define g(Float64,Float64) before the new definition.
 
     julia> g(2.0, 3)
     7.0
@@ -441,7 +441,7 @@ can also constrain type parameters of methods::
 The ``same_type_numeric`` function behaves much like the ``same_type``
 function defined above, but is only defined for pairs of numbers.
 
-Note on Optional and Named Arguments
+Note on Optional and keyword Arguments
 ------------------------------------
 
 As mentioned briefly in :ref:`man-functions`, optional arguments are
@@ -456,9 +456,9 @@ translates to the following three methods::
     f(a) = f(a,2)
     f() = f(1,2)
 
-Named arguments behave quite differently from ordinary positional arguments.
+Keyword arguments behave quite differently from ordinary positional arguments.
 In particular, they do not participate in method dispatch. Methods are
-dispatched based only on positional arguments, with named arguments processed
+dispatched based only on positional arguments, with keyword arguments processed
 after the matching method is identified.
 
 .. [Clarke61] Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.

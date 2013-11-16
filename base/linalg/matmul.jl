@@ -338,9 +338,11 @@ end
 #       strides != 1 cases in libalg_blas.jl
 (*){T,S}(A::StridedMatrix{T}, B::StridedVector{S}) = generic_matvecmul('N', A, B)
 
+arithtype(T) = T
+arithtype(::Type{Bool}) = Int
+
 function generic_matvecmul{T,S}(tA, A::StridedMatrix{T}, B::StridedVector{S})
-    x, y = one(T), one(S)
-    C = Array(typeof(x*y+x*y), size(A, tA=='N' ? 1 : 2))
+    C = Array(promote_type(arithtype(T),arithtype(S)), size(A, tA=='N' ? 1 : 2))
     generic_matvecmul(C, tA, A, B)
 end
 
@@ -393,8 +395,7 @@ end
 function generic_matmatmul{T,S}(tA, tB, A::StridedVecOrMat{T}, B::StridedMatrix{S})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
-    x, y = one(T), one(S)
-    C = Array(typeof(x*y+x*y), mA, nB)
+    C = Array(promote_type(arithtype(T),arithtype(S)), mA, nB)
     generic_matmatmul(C, tA, tB, A, B)
 end
 

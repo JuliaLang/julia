@@ -4,11 +4,11 @@
 @test ip"192.0xFFFF" == IPv4(192,0,255,255)
 @test ip"192.0xFFFFF" == IPv4(192,15,255,255)
 @test ip"192.0xFFFFFF" == IPv4(192,255,255,255)
-@test_throws Base.parse_ipv4("192.0xFFFFFFF")
+@test_throws Base.parseipv4("192.0xFFFFFFF")
 @test ip"022.0.0.1" == IPv4(18,0,0,1)
 
-@test_throws Base.parse_ipv4("192.0xFFFFFFFFF")
-@test_throws Base.parse_ipv4("192.")
+@test_throws Base.parseipv4("192.0xFFFFFFFFF")
+@test_throws Base.parseipv4("192.")
 
 @test ip"::1" == IPv6(1)
 @test ip"2605:2700:0:3::4713:93e3" == IPv6(parseint(Uint128,"260527000000000300000000471393e3",16))
