@@ -70,13 +70,18 @@ end
 end
 const ENV = EnvHash()
 
+similar(::EnvHash) = Dict{ByteString,ByteString}()
+
 getindex(::EnvHash, k::String) = @accessEnv k throw(KeyError(k))
 get(::EnvHash, k::String, def) = @accessEnv k (return def)
-contains(::KeyIterator{EnvHash}, k::String) = _hasenv(k)
+in(k::String, ::KeyIterator{EnvHash}) = _hasenv(k)
 pop!(::EnvHash, k::String) = (v = ENV[k]; _unsetenv(k); v)
 pop!(::EnvHash, k::String, def) = haskey(ENV,k) ? pop!(ENV,k) : def
 function delete!(::EnvHash, k::String)
-    warn_once("delete!(ENV,key) now returns the modified environment.\nUse pop!(ENV,key) to retrieve the value instead.\n")
+    warn_once("""
+        delete!(ENV,key) now returns the modified environment.
+        Use pop!(ENV,key) to retrieve the value instead.
+        """)
     _unsetenv(k)
     ENV
 end
@@ -135,6 +140,18 @@ end
 function show(io::IO, ::EnvHash)
     for (k,v) = ENV
         println(io, "$k=$v")
+    end
+end
+
+# temporarily set and then restore an environment value
+function with_env(f::Function, key::String, val)
+    old = get(ENV,key,nothing)
+    val != nothing ? (ENV[key]=val) : _unsetenv(key)
+    try f()
+    finally
+        old != nothing ? (ENV[key]=old) : _unsetenv(key)
+    catch
+        rethrow()
     end
 end
 

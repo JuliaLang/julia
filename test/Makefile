@@ -6,10 +6,12 @@ TESTS = all core keywordargs numbers strings unicode collections hashing	\
 	math functional bigint sorting statistics spawn parallel arpack file	\
 	git pkg resolve suitesparse complex version pollfd mpfr	broadcast       \
 	socket floatapprox priorityqueue readdlm regex float16 combinatorics    \
-	sysinfo
+	sysinfo rounding ranges
+
+default: all
 
 $(TESTS) ::
-	@$(PRINT_JULIA) $(call spawn,$(JULIA_EXECUTABLE)) ./runtests.jl $@
+	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) ./runtests.jl $@)
 
 perf:
 	@$(MAKE) -C perf all

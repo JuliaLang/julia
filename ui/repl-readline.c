@@ -21,9 +21,12 @@
 #ifdef __WIN32__
 # define WIN32_LEAN_AND_MEAN
 # include <windows.h>
+# include <shlobj.h>
 #endif
 
 extern int asprintf(char **strp, const char *fmt, ...);
+
+static void jl_clear_input(void);
 
 #define USE_READLINE_STATIC
 #include <readline/readline.h>
@@ -33,6 +36,7 @@ int prompt_length;
 int disable_history;
 static char *history_file = NULL;
 static jl_value_t *rl_ast = NULL;
+static char *strtok_saveptr;
 
 // yes, readline uses inconsistent indexing internally.
 #define history_rem(n) remove_history(n-history_base)
@@ -57,9 +61,10 @@ static void init_history(void)
             if (!home) return;
             asprintf(&history_file, "%s/.julia_history", home);
 #else
-            char *home = getenv("AppData");
-            if (!home) return;
-            asprintf(&history_file, "%s/julia/history", home);
+            char *homedrive = getenv("HOMEDRIVE");
+            char *homepath = getenv("HOMEPATH");
+            if (!homedrive || !homepath) return;
+            asprintf(&history_file, "%s/%s/.julia_history", homedrive, homepath);
 #endif
         }
     }
@@ -176,17 +181,23 @@ static int newline_callback(int count, int key)
     return 0;
 }
 
-static jl_value_t* repl_parse_input_line(char *buf) {
+static jl_value_t* call_jl_function_with_string(const char *fname, const char *arg, size_t arglen)
+{
+    jl_value_t *f = jl_get_global(jl_base_module,jl_symbol(fname));
+    assert(f);
+    jl_value_t **fargs;
+    JL_GC_PUSHARGS(fargs, 1);
+    fargs[0] = jl_pchar_to_string((char*)arg, arglen);
+    jl_value_t *result = jl_apply((jl_function_t*)f, fargs, 1);
+    JL_GC_POP();
+    return result;
+}
+
+static jl_value_t* repl_parse_input_line(char *buf)
+{
     if (buf[0] == ';') {
         buf++;
-        jl_value_t *f = jl_get_global(jl_base_module,jl_symbol("repl_hook"));
-        assert(f);
-        jl_value_t **fargs;
-        JL_GC_PUSHARGS(fargs, 1);
-        fargs[0] = jl_pchar_to_string((char*)buf, strlen(buf));
-        jl_value_t *result = jl_apply((jl_function_t*)f, fargs, 1);
-        JL_GC_POP();
-        return result;
+        return call_jl_function_with_string("repl_hook", buf, strlen(buf));
     }
     else if (buf[0] == '?') {
         char *tmpbuf;
@@ -239,6 +250,86 @@ static int space_callback(int count, int key)
     return 0;
 }
 
+#if defined(_WIN32)
+char *strtok_r(char *str, const char *delim, char **save)
+{
+    char *res, *last;
+
+    if (!save)
+        return strtok(str, delim);
+    if (!str && !(str = *save))
+        return NULL;
+    last = str + strlen(str);
+    if ((*save = res = strtok(str, delim))) {
+        *save += strlen(res);
+        if (*save < last)
+            (*save)++;
+        else
+            *save = NULL;
+    }
+    return res;
+}
+#endif
+
+int complete_method_table()
+{
+    if (rl_point < 2 || rl_line_buffer[rl_point-1] != '(') return 0;
+
+    // extract the token preceding the (
+    int tokenstart = rl_point-2;
+
+    // check for special operators
+    if (strchr("\\><=|&+-*/%^~", rl_line_buffer[tokenstart])){
+        while (tokenstart>0 && strchr("<>=!", rl_line_buffer[tokenstart-1])){
+            tokenstart--;
+        }
+    }
+    else{
+        // check for functions that might contain ! but not start with !
+        while (tokenstart>=0 && (jl_word_char(rl_line_buffer[tokenstart]) ||
+              rl_line_buffer[tokenstart] == '!')) {
+            tokenstart--;
+        }
+        tokenstart++;
+        // ! can't be the first character of a function, unless it's the only character
+        if (tokenstart != rl_point-2 && rl_line_buffer[tokenstart] == '!'){
+            tokenstart ++;
+        }
+    }
+
+    jl_value_t* result = call_jl_function_with_string("repl_methods",
+                                                      &rl_line_buffer[tokenstart],
+                                                      rl_point-tokenstart-1);
+
+    if (!jl_is_byte_string(result)) return 0;
+    char *completions = jl_string_data(result);
+
+    int nallocmethods = 0;
+    size_t nchars = strlen(completions);
+    for (size_t i=0; i<nchars; i++) nallocmethods += completions[i] == '\n';
+
+    char **methods = malloc(sizeof(char *)*(nallocmethods+1));
+    methods[0] = NULL;
+    methods[1] = strtok_r(completions, "\n", &strtok_saveptr);
+    if (methods[1] == NULL) return 0;
+    int maxlen = strlen(methods[1]);
+    int nmethods = 1;
+
+    char *method;
+    while (nmethods < nallocmethods &&
+           (method = strtok_r(NULL, "\n", &strtok_saveptr))) {
+        int len = strlen(method);
+        if (len > maxlen) maxlen = len;
+        methods[nmethods+1] = method;
+        nmethods++;
+    }
+
+    rl_display_match_list(methods, nmethods, maxlen);
+    free(methods);
+    rl_forced_update_display();
+    return 1;
+}
+
 static int tab_callback(int count, int key)
 {
     if (!rl_point) {
@@ -250,10 +341,12 @@ static int tab_callback(int count, int key)
         if (rl_line_buffer[i] != ' ') {
             // do tab completion
             i = rl_point;
-            rl_complete_internal('!');
-            if (i < rl_point && rl_line_buffer[rl_point-1] == ' ') {
-                rl_delete_text(rl_point-1, rl_point);
-                rl_point = rl_point-1;
+            if (!complete_method_table()) {
+                rl_complete_internal('!');
+                if (i < rl_point && rl_line_buffer[rl_point-1] == ' ') {
+                    rl_delete_text(rl_point-1, rl_point);
+                    rl_point = rl_point-1;
+                }
             }
             return 0;
         }
@@ -424,12 +517,6 @@ void jl_input_line_callback(char *input)
     rl_ast = NULL;
 }
 
-char *read_expr(char *prompt)
-{
-    rl_ast = NULL;
-    return readline(prompt);
-}
-
 static int common_prefix(const char *s1, const char *s2)
 {
     int i = 0;
@@ -454,12 +541,18 @@ static int is_keyword(char *s)
     return 0;
 }
 
+static int name_visible(char *name, const char *prefix)
+{
+    return !strchr(name,'#');
+}
+
 static void symtab_search(jl_sym_t *tree, int *pcount, ios_t *result,
                           jl_module_t *module, const char *str,
                           const char *prefix, int plen)
 {
     do {
         if (common_prefix(prefix, tree->name) == plen &&
+            name_visible(tree->name, prefix) &&
             (module ? jl_defines_or_exports_p(module, tree) : (jl_boundp(jl_current_module, tree) ||
                                                                is_keyword(tree->name)))) {
             ios_puts(str, result);
@@ -483,29 +576,6 @@ static jl_module_t *find_submodule_named(jl_module_t *module, const char *name)
 
     return (jl_is_module(b->value)) ? (jl_module_t *)b->value : NULL;
 }
-
-static char *strtok_saveptr;
-
-#if defined(_WIN32)
-char *strtok_r(char *str, const char *delim, char **save)
-{
-    char *res, *last;
-
-    if (!save)
-        return strtok(str, delim);
-    if (!str && !(str = *save))
-        return NULL;
-    last = str + strlen(str);
-    if ((*save = res = strtok(str, delim))) {
-        *save += strlen(res);
-        if (*save < last)
-            (*save)++;
-        else
-            *save = NULL;
-    }
-    return res;
-}
-#endif
 
 static int symtab_get_matches(jl_sym_t *tree, const char *str, char **answer)
 {
@@ -605,13 +675,9 @@ static char *do_completions(const char *ch, int c)
     return ptr ? strdup(ptr) : NULL;
 }
 
-static char **julia_completion(const char *text, int start, int end)
-{
-    return rl_completion_matches(text, do_completions);
-}
 #ifdef __WIN32__
-int repl_sigint_handler_installed = 0;
-BOOL WINAPI repl_sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
+static int repl_sigint_handler_installed = 0;
+static BOOL WINAPI repl_sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
     if (callback_en) {
         JL_WRITE(jl_uv_stdout, "^C", 2);
@@ -644,7 +710,7 @@ void sigcont_handler(int arg)
 
 struct sigaction jl_sigint_act = {{0}};
 
-void repl_sigint_handler(int sig, siginfo_t *info, void *context)
+static void repl_sigint_handler(int sig, siginfo_t *info, void *context)
 {
     if (callback_en) {
         JL_WRITE(jl_uv_stdout, "^C", 2);
@@ -668,7 +734,10 @@ void repl_sigint_handler(int sig, siginfo_t *info, void *context)
 static void init_rl(void)
 {
     rl_readline_name = "julia";
-    rl_attempted_completion_function = julia_completion;
+    rl_completion_entry_function = do_completions;
+#if !defined(_WIN32)
+    rl_sort_completion_matches = 0;
+#endif
     for(size_t i=0; lang_keywords[i]; i++) {
         // make sure keywords are in symbol table
         (void)jl_symbol(lang_keywords[i]);
@@ -746,15 +815,9 @@ void jl_deprep_terminal ()
 #endif
 }
 
-void init_repl_environment(int argc, char *argv[])
+void jl_init_repl(int history)
 {
-    disable_history = 0;
-    for (int i = 0; i < argc; i++) {
-        if (!strcmp(argv[i], "--no-history")) {
-            disable_history = 1;
-            break;
-        }
-    }
+    disable_history = !history;
 
 #ifdef __WIN32__
     rl_outstream=(void*)jl_uv_stdout;
@@ -785,9 +848,9 @@ void repl_callback_enable(char *prompt)
 
 #include "uv.h"
 
-void jl_readBuffer(char *base, ssize_t nread)
+void jl_read_buffer(unsigned char *base, ssize_t nread)
 {
-    char *start = base;
+    unsigned char *start = base;
     while(*start != 0 && nread > 0) {
         rl_stuff_char(*start);
         start++;
@@ -796,12 +859,7 @@ void jl_readBuffer(char *base, ssize_t nread)
     rl_callback_read_char();
 }
 
-void restart(void)
-{
-    rl_on_new_line();
-}
-
-DLLEXPORT void jl_clear_input(void)
+static void jl_clear_input(void)
 {
     //todo: how to do this better / the correct way / ???
     //move the cursor to a clean line:

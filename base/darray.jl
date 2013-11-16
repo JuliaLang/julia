@@ -45,7 +45,10 @@ function DArray(init, dims, procs)
     end
     DArray(init, dims, procs, defaultdist(dims,procs))
 end
-DArray(init, dims) = DArray(init, dims, workers()[1:min(nworkers(),max(dims))])
+DArray(init, dims) = DArray(init, dims, workers()[1:min(nworkers(),maximum(dims))])
+
+# new DArray similar to an existing one
+DArray(init, d::DArray) = DArray(init, size(d), procs(d), [size(d.chunks)...])
 
 size(d::DArray) = d.dims
 procs(d::DArray) = d.pmap
@@ -115,8 +118,22 @@ end
 
 localpartindex(d::DArray) = localpartindex(d.pmap)
 
-localpart{T,N,A}(d::DArray{T,N,A}) = fetch(d.chunks[localpartindex(d)])::A
-myindexes(d::DArray) = d.indexes[localpartindex(d)]
+function localpart{T,N,A}(d::DArray{T,N,A})
+    lpidx = localpartindex(d)
+    if lpidx == 0
+        convert(A, Array(T, ntuple(N,i->0)))::A
+    else
+        fetch(d.chunks[lpidx])::A
+    end
+end
+function myindexes(d::DArray)
+    lpidx = localpartindex(d)
+    if lpidx == 0
+        ntuple(ndims(d), i->1:0)
+    else
+        d.indexes[lpidx]
+    end
+end
 
 # find which piece holds index (I...)
 function locate(d::DArray, I::Int...)
@@ -164,7 +181,7 @@ end
 function convert{S,T,N}(::Type{Array{S,N}}, s::SubDArray{T,N})
     I = s.indexes
     d = s.parent
-    if isa(I,(Range1{Int}...)) && subtype(S,T) && subtype(T,S)
+    if isa(I,(Range1{Int}...)) && S<:T && T<:S
         l = locate(d, map(first, I)...)
         if isequal(d.indexes[l...], I)
             # SubDArray corresponds to a chunk
@@ -275,3 +292,11 @@ setindex!(a::Array{Any}, d::SubOrDArray, i::Int) = arrayset(a, d, i)
 
 setindex!(a::Array, d::SubOrDArray, I::Union(Int,Range1{Int})...) =
     setindex!(a, d, [isa(i,Int) ? (i:i) : i for i in I ]...)
+
+## higher-order functions ##
+
+map(f::Callable, d::DArray) = DArray(I->map(f, localpart(d)), d)
+
+reduce(f::Function, d::DArray) =
+    mapreduce(fetch, f,
+              { @spawnat p reduce(f, localpart(d)) for p in procs(d) })

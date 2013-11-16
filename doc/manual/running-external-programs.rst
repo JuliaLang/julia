@@ -35,7 +35,7 @@ Here's a simple example of actually running an external program::
     hello
 
 The ``hello`` is the output of the ``echo`` command, sent to stdout. 
-The run method itself returns ``Nothing``, and throws an ``ErrorException``
+The run method itself returns ``nothing``, and throws an ``ErrorException``
 if the external command fails to run successfully. 
 
 If you want to read the output of the external command, the ``readall`` method

@@ -14,26 +14,6 @@ is::
       x + y
     end
 
-This syntax is similar to MATLAB, but there are some significant
-differences:
-
--  In MATLAB, this definition must be saved in a file, named ``f.m``,
-   whereas in Julia, this expression can appear anywhere, including in
-   an interactive session.
--  In MATLAB, the closing ``end`` is optional, being implied by the end
-   of the file. In Julia, the terminating ``end`` is required.
--  In MATLAB, this function would print the value ``x + y`` but would
-   not return any value, whereas in Julia, the last expression evaluated
-   is a function's return value.
--  Expression values are never printed automatically except in
-   interactive sessions. Semicolons are only required to separate
-   expressions on the same line.
-
-In general, while the function definition syntax is reminiscent of
-MATLAB, the similarity is largely superficial. Therefore, rather than
-continually comparing the two, in what follows, we will simply describe
-the behavior of functions in Julia directly.
-
 There is a second, more terse syntax for defining a function in Julia.
 The traditional function declaration syntax demonstrated above is
 equivalent to the following compact "assignment form"::
@@ -70,6 +50,17 @@ function::
 
 The ``apply`` function applies its first argument — a function object —
 to its remaining arguments.
+
+Argument Passing Behavior
+-------------------------
+
+Julia function arguments follow a convention sometimes called "pass-by-sharing",
+which means that values are not copied when they are passed to functions.
+Function arguments themselves act as new variable *bindings* (new locations that
+can refer to values), but the values they refer to are identical to the passed
+values. Modifications to mutable values (such as Arrays) made within a function
+will be visible to the caller. This is the same behavior found in Scheme, most
+Lisps, Python, Ruby and Perl, among other dynamic languages.
 
 .. _man-return-keyword:
 
@@ -138,7 +129,7 @@ Operators Are Functions
 In Julia, most operators are just functions with support for special
 syntax. The exceptions are operators with special evaluation semantics
 like ``&&`` and ``||``. These operators cannot be functions since
-:ref:`short circuit evaluation <man-short-circuit-evaluation>` requires that
+:ref:`short-circuit evaluation <man-short-circuit-evaluation>` requires that
 their operands are not evaluated before evaluation of the operator.
 Accordingly, you can also apply them using parenthesized argument lists,
 just as you would any other function::
@@ -166,7 +157,7 @@ Operators With Special Names
 ----------------------------
 
 A few special expressions correspond to calls to functions with non-obvious
-names. These are::
+names. These are:
 
 =================== ==============
 Expression          Calls
@@ -405,32 +396,31 @@ multiple method definitions with different numbers of arguments
 (see :ref:`man-methods`).
 
 
-Named Arguments
----------------
+Keyword Arguments
+-----------------
 
 Some functions need a large number of arguments, or have a large number of
-behaviors. Remembering how to call such functions can be difficult. Named
-arguments, also called keyword arguments, can make these complex interfaces
-easier to use and extend by allowing arguments to be identified by name
-instead of only by position.
+behaviors. Remembering how to call such functions can be difficult. Keyword
+arguments can make these complex interfaces easier to use and extend by
+allowing arguments to be identified by name instead of only by position.
 
 For example, consider a function ``plot`` that
 plots a line. This function might have many options, for controlling line
-style, width, color, and so on. If it accepts named arguments, a possible
+style, width, color, and so on. If it accepts keyword arguments, a possible
 call might look like ``plot(x, y, width=2)``, where we have chosen to
 specify only line width. Notice that this serves two purposes. The call is
 easier to read, since we can label an argument with its meaning. It also
 becomes possible to pass any subset of a large number of arguments, in
 any order.
 
-Functions with named arguments are defined using a semicolon in the
+Functions with keyword arguments are defined using a semicolon in the
 signature::
 
     function plot(x, y; style="solid", width=1, color="black")
         ###
     end
 
-Extra named arguments can be collected using ``...``, as in varargs
+Extra keyword arguments can be collected using ``...``, as in varargs
 functions::
 
     function f(x; args...)
@@ -438,9 +428,34 @@ functions::
     end
 
 Inside ``f``, ``args`` will be a collection of ``(key,value)`` tuples,
-where each ``key`` is a symbol. Such collections can be passed as named
+where each ``key`` is a symbol. Such collections can be passed as keyword
 arguments using a semicolon in a call, ``f(x; k...)``. Dictionaries
 can be used for this purpose.
+
+Keyword argument default values are evaluated only when necessary
+(when a corresponding keyword argument is not passed), and in
+left-to-right order. Therefore default expressions may refer to
+prior keyword arguments.
+
+
+Evaluation Scope of Default Values
+----------------------------------
+
+Optional and keyword arguments differ slightly in how their default
+values are evaluated. When optional argument default expressions are
+evaluated, only *previous* arguments are in scope. For example, given
+this definition::
+
+    function f(x, a=b, b=1)
+        ###
+    end
+
+the ``b`` in ``a=b`` refers to the ``b`` in an outer scope, not the
+subsequent argument ``b``. However, if ``a`` and ``b`` were keyword
+arguments instead, then both would be created in the same scope and
+``a=b`` would result in an undefined variable error (since the
+default expressions are evaluated left-to-right, and ``b`` has not
+been assigned yet).
 
 
 Block Syntax for Function Arguments

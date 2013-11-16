@@ -51,6 +51,8 @@ DLLEXPORT void *jl_mmap(void *addr, size_t length, int prot, int flags,
                         int fd, off_t offset) {
     return mmap(addr, length, prot, flags, fd, offset);
 }
+#else
+DLLEXPORT off_t jl_lseek(int fd, off_t offset, int whence) { return _lseek(fd, offset, whence); }
 #endif
 DLLEXPORT int jl_sizeof_ios_t(void) { return sizeof(ios_t); }
 

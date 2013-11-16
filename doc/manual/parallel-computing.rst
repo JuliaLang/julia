@@ -20,7 +20,7 @@ multiprocessing environment based on message passing to allow programs
 to run on multiple processes in separate memory domains at once.
 
 Julia's implementation of message passing is different from other
-environments such as MPI. Communication in Julia is generally
+environments such as MPI [#mpi2rma]_. Communication in Julia is generally
 "one-sided", meaning that the programmer needs to explicitly manage only
 one process in a two-process operation. Furthermore, these
 operations typically do not look like "message send" and "message
@@ -37,9 +37,9 @@ return immediately; the process that made the call proceeds to its
 next operation while the remote call happens somewhere else. You can
 wait for a remote call to finish by calling ``wait`` on its remote
 reference, and you can obtain the full value of the result using
-``fetch``.
+``fetch``. You can store a value to a remote reference using ``put``.
 
-Let's try this out. Starting with ``julia -p n`` provides ``n``
+Let's try this out. Starting with ``julia -p n`` provides ``n`` worker
 processes on the local machine. Generally it makes sense for ``n`` to
 equal the number of CPU cores on the machine.
 
@@ -156,10 +156,11 @@ A file can also be preloaded on multiple processes at startup, and a driver scri
     julia -p <n> -L file1.jl -L file2.jl driver.jl
     
 Each process has an associated identifier. The process providing the interactive julia prompt
-always has an id equal to 1, as would the the julia process running the driver script in the
-example above. All other processes (also known as worker processes, or just workers) have their
-own unique ids. Workers are defined as all processes other than the driving process (id of 1). When
-no additional processes are started, the driving process is also deemed to be a worker.
+always has an id equal to 1, as would the julia process running the driver script in the
+example above.
+The processors used by default for parallel operations are referred to as ``workers``.
+When there is only one process, process 1 is considered a worker. Otherwise, workers are
+considered to be all processes other than process 1.
 
 The base Julia installation has in-built support for two types of clusters: 
 
@@ -224,7 +225,7 @@ Parallel Map and Loops
 ----------------------
 
 Fortunately, many useful parallel computations do not require data
-movement. A common example is a monte carlo simulation, where multiple
+movement. A common example is a Monte Carlo simulation, where multiple
 processes can handle independent simulation trials simultaneously. We
 can use ``@spawn`` to flip coins on two processes. First, write the
 following function in ``count_heads.jl``::
@@ -319,7 +320,11 @@ random matrices in parallel as follows::
 Julia's ``pmap`` is designed for the case where each function call does
 a large amount of work. In contrast, ``@parallel for`` can handle
 situations where each iteration is tiny, perhaps merely summing two
-numbers.
+numbers. Only worker processes are used by both ``pmap`` and ``@parallel for`` 
+for the parallel computation. In case of ``@parallel for``, the final reduction 
+is done on the calling process.
+
+
 
 Synchronization With Remote References
 --------------------------------------
@@ -424,10 +429,10 @@ value ``x``. These functions automatically pick a distribution for you.
 For more control, you can specify which processors to use, and how the
 data should be distributed::
 
-    dzeros((100,100), [1:4], [1,4])
+    dzeros((100,100), workers()[1:4], [1,4])
 
-The second argument specifies that the array should be created on processors
-1 through 4. When dividing data among a large number of processes,
+The second argument specifies that the array should be created on the first
+four workers. When dividing data among a large number of processes,
 one often sees diminishing returns in performance. Placing ``DArray``\ s
 on a subset of processes allows multiple ``DArray`` computations to
 happen at once, with a higher ratio of work to communication on each
@@ -570,3 +575,7 @@ then be added at runtime using ``addprocs``::
 
 which specifies a number of processes to add and a ``ClusterManager`` to
 use for launching those processes.
+
+.. rubric:: Footnotes
+
+.. [#mpi2rma] In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access (RMA). The motivation for adding RMA to the MPI standard was to facilitate one-sided communication patterns. For additional information on the latest MPI standard, see http://www.mpi-forum.org/docs.

@@ -71,6 +71,7 @@ static void **HTNAME##_lookup_bp(htable_t *h, void *key)                \
                                                                         \
     sz = hash_size(h);                                                  \
     maxprobe = max_probe(sz);                                           \
+    tab = h->table;                                                     \
                                                                         \
     goto retry_bp;                                                      \
                                                                         \

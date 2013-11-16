@@ -39,12 +39,12 @@ function show(io::IO, f::Function)
     elseif isdefined(f, :env) && isa(f.env,Symbol)
         print(io, f.env)
     else
-        print(io, "# function")
+        print(io, "(anonymous function)")
     end
 end
 
 function show(io::IO, x::IntrinsicFunction)
-    print(io, "# intrinsic function ", box(Int32,unbox(IntrinsicFunction,x)))
+    print(io, "(intrinsic function #", box(Int32,unbox(IntrinsicFunction,x)), ")")
 end
 
 function show(io::IO, x::UnionType)
@@ -70,6 +70,17 @@ function show(io::IO, x::DataType)
     end
 end
 
+function showcompact{T<:Number}(io::IO, x::Vector{T})
+    print(io, "[")
+    if length(x) > 0
+        showcompact(io, x[1])
+        for j in 2:length(x)
+            print(io, ",")
+            showcompact(io, x[j])
+        end
+    end
+    print(io, "]")
+end
 showcompact(io::IO, x) = show(io, x)
 showcompact(x) = showcompact(STDOUT::IO, x)
 
@@ -114,25 +125,25 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one)
     newline = true
     first = true
     if !done(itr,state)
-	while true
+        while true
             if isa(itr,Array) && !isdefined(itr,state)
                 print(io, undef_ref_str)
                 state += 1
                 multiline = false
             else
-	        x, state = next(itr,state)
+                x, state = next(itr,state)
                 multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
                 if newline
                     if multiline; println(io); end
                 end
-	        show(io, x)
+                show(io, x)
             end
-	    if done(itr,state)
+            if done(itr,state)
                 if delim_one && first
                     print(io, delim)
                 end
-		break
-	    end
+                break
+            end
             first = false
             print(io, delim)
             if multiline
@@ -140,7 +151,7 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one)
             else
                 newline = true
             end
-	end
+        end
     end
     print(io, cl)
 end
@@ -194,7 +205,7 @@ show(io::IO, ex::Expr) = show_indented(io, ex)
 function show_indented(io::IO, ex::Expr, indent::Int)
     if is(ex.head, :block) || is(ex.head, :body)
         show_block(io, "quote", ex, indent); print(io, "end")
-    elseif contains((:tuple, :vcat, :cell1), ex.head)
+    elseif in(ex.head, (:tuple, :vcat, :cell1))
         print(io, ':'); show_unquoted(io, ex, indent + indent_width)        
     else
         default_show_quoted(io, ex, indent)
@@ -202,7 +213,7 @@ function show_indented(io::IO, ex::Expr, indent::Int)
 end
 const paren_quoted_syms = Set{Symbol}(:(:),:(::),:(:=),:(=),:(==),:(===),:(=>))
 function show_indented(io::IO, sym::Symbol, indent::Int)
-    if contains(paren_quoted_syms, sym)
+    if in(sym, paren_quoted_syms)
         print(io, ":($sym)")
     else
         print(io, ":$sym")
@@ -291,9 +302,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
             show_unquoted(io, args[2], indent + indent_width)
             print(io, ')')
         end                  
-    elseif (contains(_expr_infix, head) && nargs==2) || (is(head,:(:)) && nargs==3)
+    elseif (in(head, _expr_infix) && nargs==2) || (is(head,:(:)) && nargs==3)
         show_list(io, args, head, indent)
-    elseif contains(_expr_infix_wide, head) && nargs == 2
+    elseif in(head, _expr_infix_wide) && nargs == 2
         show_list(io, args, " $head ", indent)
     elseif is(head, symbol("::")) && nargs == 1
         print(io, "::")        
@@ -313,8 +324,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
     elseif is(head, :(...)) && nargs == 1
         show_unquoted(io, args[1], indent)
         print(io, "...")
-    elseif (nargs == 1 && contains((:return, :abstract, :const), head)) ||
-                          contains((:local,  :global), head)
+    elseif (nargs == 1 && in(head, (:return, :abstract, :const))) ||
+                          in(head, (:local,  :global))
         print(io, head, ' ')
         show_list(io, args, ",", indent)
     elseif is(head, :macrocall) && nargs >= 1
@@ -338,7 +349,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
         show_block(io, "let", args[2:end], args[1], indent); print(io, "end")
     elseif is(head, :block) || is(head, :body)
         show_block(io, "begin", ex, indent); print(io, "end")
-    elseif contains((:for,:while,:function,:if,:type,:module),head) && nargs==2
+    elseif in(head,(:for,:while,:function,:if,:type,:module)) && nargs==2
         show_block(io, head, args[1], args[2], indent); print(io, "end")
     elseif is(head, :quote) && nargs == 1
         show_indented(io, args[1], indent)
@@ -349,6 +360,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
         show(io, args[1])
     elseif is(head, :null)
         print(io, "nothing")
+    elseif is(head, :kw)
+        show_unquoted(io, args[1], indent+indent_width)
+        print(io, '=')
+        show_unquoted(io, args[2], indent+indent_width)
     else
         print(io, "\$(Expr(")
         show_indented(io, ex.head, indent)
@@ -407,7 +422,12 @@ function show(io::IO, m::Method)
     li = m.func.code
     e = uncompressed_ast(li)
     argnames = e.args[1]
-    decls = map(argtype_decl_string, argnames, {m.sig...})
+    if length(argnames) != length(m.sig)
+        s = symbol("?")
+        decls = map(argtype_decl_string, { s for i=1:length(m.sig) }, {m.sig...})
+    else
+        decls = map(argtype_decl_string, argnames, {m.sig...})
+    end
     print(io, "(")
     print_joined(io, decls, ",", ",")
     print(io, ")")
@@ -416,9 +436,13 @@ function show(io::IO, m::Method)
     end
 end
 
-function show_method_table(io::IO, mt::MethodTable, max::Int=-1)
+function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header=true)
     name = mt.name
-    print(io, "# methods for generic function ", name)
+    n = length(mt)
+    if header
+        m = n==1 ? "method" : "methods"
+        print(io, "# $n $m for generic function \"$name\":")
+    end
     d = mt.defs
     n = rest = 0
     while !is(d,())
@@ -503,7 +527,9 @@ function xdump(fn::Function, io::IO, x::Array{Any}, n::Int, indent)
 end
 xdump(fn::Function, io::IO, x::Symbol, n::Int, indent) = println(io, typeof(x), " ", x)
 xdump(fn::Function, io::IO, x::Function, n::Int, indent) = println(io, x)
-xdump(fn::Function, io::IO, x::Array, n::Int, indent) = println(io, "Array($(eltype(x)),$(size(x)))", " ", x)
+xdump(fn::Function, io::IO, x::Array, n::Int, indent) =
+               (print(io, "Array($(eltype(x)),$(size(x))) ");
+                show(io, x); println(io))
 
 # Types
 xdump(fn::Function, io::IO, x::UnionType, n::Int, indent) = println(io, x)
@@ -579,15 +605,17 @@ xdump(fn::Function, io::IO, x, n::Int) = xdump(xdump, io, x, n, "")
 xdump(fn::Function, io::IO, args...) = error("invalid arguments to xdump")
 xdump(fn::Function, args...) = xdump(fn, STDOUT::IO, args...)
 xdump(io::IO, args...) = xdump(xdump, io, args...)
-xdump(args...) = xdump(xdump, STDOUT::IO, args...)
+xdump(args...) = with_output_limit(()->xdump(xdump, STDOUT::IO, args...), true)
 
 # Here are methods specifically for dump:
 dump(io::IO, x, n::Int) = dump(io, x, n, "")
 dump(io::IO, x) = dump(io, x, 5, "")  # default is 5 levels
-dump(io::IO, x::String, n::Int, indent) = println(io, typeof(x), " \"", x, "\"")
+dump(io::IO, x::String, n::Int, indent) =
+               (print(io, typeof(x), " ");
+                show(io, x); println(io))
 dump(io::IO, x, n::Int, indent) = xdump(dump, io, x, n, indent)
 dump(io::IO, args...) = error("invalid arguments to dump")
-dump(args...) = dump(STDOUT::IO, args...)
+dump(args...) = with_output_limit(()->dump(STDOUT::IO, args...), true)
 
 function dump(io::IO, x::Dict, n::Int, indent)
     println(typeof(x), " len ", length(x))
@@ -854,10 +882,17 @@ function show{T}(io::IO, x::AbstractArray{T,0})
     print(io, sx)
 end
 
+# global flag for limiting output
+# TODO: this should be replaced with a better mechanism. currently it is only
+# for internal use in showing arrays.
+_limit_output = false
+
 # NOTE: this is a possible, so-far-unexported function, providing control of
 # array output. Not sure I want to do it this way.
 showarray(X::AbstractArray; kw...) = showarray(STDOUT, X; kw...)
-function showarray(io::IO, X::AbstractArray; header=true, limit=true, rows=tty_rows()-4, cols=tty_cols())
+function showarray(io::IO, X::AbstractArray;
+                   header::Bool=true, limit::Bool=_limit_output,
+                   rows = tty_rows()-4, cols = tty_cols())
     header && print(io, summary(X))
     if !isempty(X)
         header && println(io, ":")
@@ -879,12 +914,47 @@ show(io::IO, X::AbstractArray) = showarray(io, X)
 
 print(io::IO, X::AbstractArray) = writedlm(io, X)
 
+function with_output_limit(thk, lim=true)
+    global _limit_output
+    last = _limit_output
+    _limit_output = lim
+    try
+        thk()
+    finally
+        _limit_output = last
+    end
+end
+
 showall(x) = showall(STDOUT, x)
-showall(io::IO, x) = show(io, x)
-showall(io::IO, x::AbstractArray) = showarray(io, x, limit=false)
+function showall(io::IO, x)
+    if _limit_output==false
+        show(io, x)
+    else
+        with_output_limit(false) do
+            show(io, x)
+        end
+    end
+end
+
+showlimited(x) = showlimited(STDOUT, x)
+function showlimited(io::IO, x)
+    if _limit_output==true
+        show(io, x)
+    else
+        with_output_limit(true) do
+            show(io, x)
+        end
+    end
+end
 
 function show_vector(io::IO, v, opn, cls)
-    show_delim_array(io, v, opn, ",", cls, false)
+    if _limit_output && length(v) > 20
+        show_delim_array(io, v[1:10], opn, ",", "", false)
+        print(io, "  \u2026  ")
+        show_delim_array(io, v[end-9:end], "", ",", cls, false)
+    else
+        show_delim_array(io, v, opn, ",", cls, false)
+    end
 end
 
 show(io::IO, v::AbstractVector{Any}) = show_vector(io, v, "{", "}")

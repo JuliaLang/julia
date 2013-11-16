@@ -520,7 +520,7 @@ static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, siz
     size_t oldoffsnb = a->offset * es;
     if (es == 1)
         nbytes++;
-    assert(!a->isshared);
+    assert(!a->isshared || a->how==3);
     char *newdata;
     if (a->how == 2) {
         // already malloc'd - use realloc
@@ -545,14 +545,25 @@ static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, siz
     }
 
     a->data = newdata + offsnb;
+    a->isshared = 0;
     if (a->ptrarray || es==1)
         memset(newdata+offsnb+oldnbytes, 0, nbytes-oldnbytes-offsnb);
     a->maxsize = newlen;
 }
 
+static void array_try_unshare(jl_array_t *a)
+{
+    if (a->isshared) {
+        if (a->how != 3)
+            jl_error("cannot resize array with shared data");
+        size_t len = jl_array_nrows(a);
+        array_resize_buffer(a, len, len, a->offset);
+    }
+}
+
 void jl_array_grow_end(jl_array_t *a, size_t inc)
 {
-    if (a->isshared) jl_error("cannot resize array with shared data");
+    if (a->isshared && a->how!=3) jl_error("cannot resize array with shared data");
     // optimized for the case of only growing and shrinking at the end
     size_t alen = jl_array_nrows(a);
     if ((alen + inc) > a->maxsize - a->offset) {
@@ -569,10 +580,10 @@ void jl_array_grow_end(jl_array_t *a, size_t inc)
 
 void jl_array_del_end(jl_array_t *a, size_t dec)
 {
-    if (a->isshared) jl_error("cannot resize array with shared data");
     if (dec == 0) return;
     if (dec > a->nrows)
         jl_throw(jl_bounds_exception);
+    if (a->isshared) array_try_unshare(a);
     char *ptail = (char*)a->data + (a->nrows-dec)*a->elsize;
     if (a->ptrarray)
         memset(ptail, 0, dec*a->elsize);
@@ -598,9 +609,9 @@ void jl_array_sizehint(jl_array_t *a, size_t sz)
 
 void jl_array_grow_beg(jl_array_t *a, size_t inc)
 {
-    if (a->isshared) jl_error("cannot resize array with shared data");
-    // designed to handle the case of growing and shrinking at both ends
     if (inc == 0) return;
+    // designed to handle the case of growing and shrinking at both ends
+    if (a->isshared) array_try_unshare(a);
     size_t es = a->elsize;
     size_t incnb = inc*es;
     if (a->offset >= inc) {
@@ -639,10 +650,10 @@ void jl_array_grow_beg(jl_array_t *a, size_t inc)
 
 void jl_array_del_beg(jl_array_t *a, size_t dec)
 {
-    if (a->isshared) jl_error("cannot resize array with shared data");
     if (dec == 0) return;
     if (dec > a->nrows)
         jl_throw(jl_bounds_exception);
+    if (a->isshared) array_try_unshare(a);
     size_t es = a->elsize;
     size_t nb = dec*es;
     memset(a->data, 0, nb);

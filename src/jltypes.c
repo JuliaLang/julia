@@ -647,14 +647,9 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
         }
     }
     else {
-        if (var == covariant) {
-            b = jl_type_intersect(a->ub, b, penv, eqc, var);
-            if (b == jl_bottom_type)
-                return b;
-        }
-        else if (!jl_is_typevar(b) || !((jl_tvar_t*)b)->bound) {
-            return (jl_value_t*)jl_bottom_type;
-        }
+        b = jl_type_intersect(a->ub, b, penv, eqc, var);
+        if (b == jl_bottom_type)
+            return b;
     }
     if (var == invariant && !jl_has_typevars_(b,0)) {
         int i;
@@ -1500,7 +1495,7 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
         if (!jl_is_typevar(tv))
             continue;
         env[ne*2+0] = (jl_value_t*)tv;
-        if (i >= n) {
+        if (ne >= n) {
             if (stprimary && stprimary->types == NULL) {
                 // during creation of type Foo{A,B}, fill in missing
                 // trailing parameters with copies for recursive
@@ -1515,13 +1510,16 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
         else {
             // NOTE: type checking deferred to inst_type_w_ to make sure
             // supertype parameters are checked recursively.
-            if (tc!=(jl_value_t*)jl_type_type && jl_is_typector(params[i]))
-                env[ne*2+1] = (jl_value_t*)((jl_typector_t*)params[i])->body;
+            jl_value_t *pi = params[ne];
+            if (tc!=(jl_value_t*)jl_type_type && jl_is_typector(pi))
+                env[ne*2+1] = (jl_value_t*)((jl_typector_t*)pi)->body;
             else
-                env[ne*2+1] = params[i];
+                env[ne*2+1] = pi;
         }
         ne++;
     }
+    if (ne < n)
+        jl_errorf("too many parameters for type %s", tname);
     if (jl_is_typector(tc)) tc = (jl_value_t*)((jl_typector_t*)tc)->body;
     jl_value_t *result = jl_instantiate_type_with((jl_value_t*)tc, env, ne);
     JL_GC_POP();
@@ -1863,25 +1861,25 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
         if (!morespecific && cseq && !pseq)
             return 0;
         if (ci >= cl)
-            return (pi>=pl || pseq);
+            return mode || pi>=pl || pseq;
         if (pi >= pl) {
-            if (mode && cseq && !pseq)
-                return 1;
-            return 0;
+            return mode;
         }
         jl_value_t *ce = child[ci];
         jl_value_t *pe = parent[pi];
         if (cseq) ce = jl_tparam0(ce);
         if (pseq) pe = jl_tparam0(pe);
 
-        if (!jl_subtype_le(ce, pe, ta, morespecific, invariant))
-            return 0;
+        if (!jl_subtype_le(ce, pe, ta, morespecific, invariant)) {
+            if (!mode || !type_eqv_(ce, pe))
+                return 0;
+        }
 
         if (mode && cseq && !pseq)
             return 1;
 
         if (morespecific) {
-            // stop as soon as one element is strictly more specific
+            // at this point we know one element is strictly more specific
             if (!(jl_types_equal(ce,pe) ||
                   (jl_is_typevar(pe) &&
                    jl_types_equal(ce,((jl_tvar_t*)pe)->ub)))) {
@@ -1920,6 +1918,23 @@ static int tuple_all_subtype(jl_tuple_t *t, jl_value_t *super,
     return 1;
 }
 
+static int partially_morespecific(jl_value_t *a, jl_value_t *b, int invariant)
+{
+    if (jl_is_uniontype(b)) {
+        jl_tuple_t *bp = ((jl_uniontype_t*)b)->types;
+        size_t i, l=jl_tuple_len(bp);
+        for(i=0; i < l; i++) {
+            jl_value_t *bi = jl_tupleref(bp,i);
+            if (jl_subtype_le(a, bi, 0, 1, invariant) &&
+                !jl_subtype_le(bi, a, 0, 1, invariant)) {
+                return 1;
+            }
+        }
+        return 0;
+    }
+    return jl_subtype_le(a, b, 0, 1, invariant);
+}
+
 /*
   ta specifies whether typeof() should be implicitly applied to a.
   this is used for tuple types to avoid allocating them explicitly.
@@ -1941,7 +1956,7 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
         // None <: None
         return 1;
     }
-    size_t i, j;
+    size_t i;
     if (jl_is_tuple(a)) {
         if ((jl_tuple_t*)b == jl_tuple_type) return 1;
         if (jl_is_datatype(b) &&
@@ -1960,19 +1975,25 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
 
     if (!ta && jl_is_uniontype(a)) {
         jl_tuple_t *ap = ((jl_uniontype_t*)a)->types;
+        size_t l_ap = jl_tuple_len(ap);
         if (morespecific) {
+            if (jl_subtype_le(b, a, 0, 0, invariant)) {
+                // fixes issue #4413
+                if (!jl_subtype_le(a, b, 0, 0, invariant))
+                    return 0;
+            }
+            else if (jl_subtype_le(a, b, 0, 0, invariant)) {
+                return 1;
+            }
             // Union a is more specific than b if some element of a is
             // more specific than b, and b is not more specific than any
             // element of a.
-            for(i=0; i < jl_tuple_len(ap); i++) {
-                if (jl_subtype_le(jl_tupleref(ap,i), b, 0, 1, invariant) &&
-                    !jl_subtype_le(b, jl_tupleref(ap,i), 0, 1, invariant)) {
-                    for(j=0; j < jl_tuple_len(ap); j++) {
-                        if (jl_subtype_le(b, jl_tupleref(ap,j), 0, 1, invariant) &&
-                            !jl_subtype_le(jl_tupleref(ap,j), b, 0, 1, invariant)) {
-                            return 0;
-                        }
-                    }
+            for(i=0; i < l_ap; i++) {
+                jl_value_t *ai = jl_tupleref(ap,i);
+                if (partially_morespecific(ai, b, invariant) &&
+                    !jl_subtype_le(b, ai, 0, 1, invariant)) {
+                    if (partially_morespecific(b, a, invariant))
+                        return 0;
                     return 1;
                 }
             }
@@ -1983,7 +2004,7 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
             if (invariant && !jl_is_typevar(b)) {
                 return jl_subtype_le(a,b,0,0,0) && jl_subtype_le(b,a,0,0,0);
             }
-            for(i=0; i < jl_tuple_len(ap); i++) {
+            for(i=0; i < l_ap; i++) {
                 if (!jl_subtype_le(jl_tupleref(ap,i), b, 0, morespecific,
                                    invariant))
                     return 0;
@@ -2844,4 +2865,5 @@ void jl_init_types(void)
     dot_sym = jl_symbol(".");
     boundscheck_sym = jl_symbol("boundscheck");
     newvar_sym = jl_symbol("newvar");
+    copyast_sym = jl_symbol("copyast");
 }

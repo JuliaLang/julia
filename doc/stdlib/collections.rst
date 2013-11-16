@@ -28,6 +28,10 @@ the priority of existing keys can be changed efficiently.
 
    Remove and return the lowest priority key from a priority queue.
 
+.. function:: peek(pq)
+
+   Return the lowest priority key from a priority queue without removing that key from the queue.
+
 ``PriorityQueue`` also behaves similarly to a ``Dict`` so that keys can be
 inserted and priorities accessed or changed using indexing notation::
 

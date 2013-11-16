@@ -83,6 +83,8 @@ function lowercase(s::ASCIIString)
     return s
 end
 
+reverse(s::ASCIIString) = ASCIIString(reverse(s.data))
+
 ## outputing ASCII strings ##
 
 print(io::IO, s::ASCIIString) = (write(io, s);nothing)

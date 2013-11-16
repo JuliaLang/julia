@@ -122,13 +122,13 @@ end
 
 function flush_gc_msgs(w::Worker)
     w.gcflag = false
-    msgs = w.add_msgs
+    msgs = copy(w.add_msgs)
     if !isempty(msgs)
         empty!(w.add_msgs)
         remote_do(w, add_clients, msgs...)
     end
 
-    msgs = w.del_msgs
+    msgs = copy(w.del_msgs)
     if !isempty(msgs)
         empty!(w.del_msgs)
         #print("sending delete of $msgs\n")
@@ -178,7 +178,7 @@ end
 const LPROC = LocalProcess(0)
 
 const map_pid_wrkr = Dict{Int, Union(Worker, LocalProcess)}()
-const map_sock_wrkr = Dict{Socket, Union(Worker, LocalProcess)}()
+const map_sock_wrkr = ObjectIdDict()
 const map_del_wrkr = Set{Int}()
 
 let next_pid = 2    # 1 is reserved for the client (always)
@@ -252,9 +252,13 @@ function rmprocs(args...; waitfor = 0.0)
     empty!(rmprocset)
     
     for i in [args...]
-        if haskey(map_pid_wrkr, i)
-            push!(rmprocset, i)
-            remote_do(i, exit)
+        if i == 1
+            warn("rmprocs: process 1 not removed")
+        else
+            if haskey(map_pid_wrkr, i)
+                push!(rmprocset, i)
+                remote_do(i, exit)
+            end
         end
     end
     
@@ -276,7 +280,7 @@ type ProcessExitedException <: Exception end
 worker_from_id(i) = worker_from_id(PGRP, i)
 function worker_from_id(pg::ProcessGroup, i)
 #   Processes with pids > ours, have to connect to us. May not have happened. Wait for some time.
-    if contains(map_del_wrkr, i)
+    if in(i, map_del_wrkr)
         throw(ProcessExitedException())
     end
     if myid()==1 && !haskey(map_pid_wrkr,i)
@@ -309,7 +313,10 @@ register_worker(w) = register_worker(PGRP, w)
 function register_worker(pg, w)
     push!(pg.workers, w)
     map_pid_wrkr[w.id] = w
-    if isa(w, Worker) map_sock_wrkr[w.socket] = w end
+    if isa(w, Worker)
+        map_sock_wrkr[w.socket] = w
+        map_sock_wrkr[w.sendbuf] = w
+    end
 end
 
 deregister_worker(pid) = deregister_worker(PGRP, pid)
@@ -317,7 +324,8 @@ function deregister_worker(pg, pid)
     pg.workers = filter(x -> !(x.id == pid), pg.workers)
     w = pop!(map_pid_wrkr, pid, nothing)
     if isa(w, Worker) 
-        pop!(map_sock_wrkr, w.socket) 
+        pop!(map_sock_wrkr, w.socket)
+        pop!(map_sock_wrkr, w.sendbuf)
         
         # Notify the cluster manager of this workers death
         if myid() == 1
@@ -330,7 +338,7 @@ function deregister_worker(pg, pid)
     ids = {}
     tonotify = {}
     for (id,rv) in pg.refs
-        if contains(rv.clientset,pid)
+        if in(pid,rv.clientset)
             push!(ids, id)
         end
         if rv.waitingfor == pid
@@ -465,7 +473,7 @@ function send_del_client(rr::RemoteRef)
     if rr.where == myid()
         del_client(rr2id(rr), myid())
     else
-        if contains(map_del_wrkr, rr.where)
+        if in(rr.where, map_del_wrkr)
             # for a removed worker, don't bother
             return
         end
@@ -477,6 +485,7 @@ function send_del_client(rr::RemoteRef)
 end
 
 function add_client(id, client)
+    #println("$(myid()) adding client $client to $id")
     rv = lookup_ref(id)
     push!(rv.clientset, client)
     nothing
@@ -496,6 +505,7 @@ function send_add_client(rr::RemoteRef, i)
         # to the processor that owns the remote ref. it will add_client
         # itself inside deserialize().
         w = worker_from_id(rr.where)
+        #println("$(myid()) adding $((rr2id(rr), i)) for $(rr.where)")
         push!(w.add_msgs, (rr2id(rr), i))
         w.gcflag = true
         global any_gc_flag = true
@@ -504,7 +514,9 @@ end
 
 function serialize(s, rr::RemoteRef)
     i = worker_id_from_socket(s)
+    #println("$(myid()) serializing $rr to $i")
     if i != -1
+        #println("send add $rr to $i")
         send_add_client(rr, i)
     end
     invoke(serialize, (Any, Any), s, rr)
@@ -715,6 +727,7 @@ function take(rv::RemoteValue)
     wait_full(rv)
     val = rv.result
     rv.done = false
+    rv.result = nothing
     notify_empty(rv)
     val
 end
@@ -734,7 +747,7 @@ function perform_work()
 end
 
 function perform_work(t::Task)
-    if !isdefined(t, :result)
+    if !istaskstarted(t)
         # starting new task
         yieldto(t)
     else
@@ -760,10 +773,20 @@ function deliver_result(sock::IO, msg, oid, value)
     end
     try
         send_msg_now(sock, :result, oid, val)
-    catch err
-        # send exception in case of serialization error; otherwise
-        # request side would hang.
-        send_msg_now(sock, :result, oid, err)
+    catch e
+        # terminate connection in case of serialization error
+        # otherwise the reading end would hang
+        print(STDERR, "fatal error on ", myid(), ": ")
+        display_error(e, catch_backtrace())
+        wid = worker_id_from_socket(sock)
+        close(sock)
+        if myid()==1
+            rmprocs(wid)
+        elseif wid == 1
+            exit(1)
+        else
+            remote_do(1, rmprocs, wid)
+        end
     end
 end
 
@@ -868,7 +891,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
             # If error occured talking to pid 1, commit harakiri
             if iderr == 1
                 if isopen(sock)
-                    print(STDERR, "exception on ", myid(), ": ")
+                    print(STDERR, "fatal error on ", myid(), ": ")
                     display_error(e, catch_backtrace())
                 end
                 exit(1)
@@ -883,7 +906,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
             
             if (myid() == 1) 
                 global rmprocset
-                if contains(rmprocset, iderr)
+                if in(iderr, rmprocset)
                     delete!(rmprocset, iderr)
                 else
                     println("Worker $iderr terminated.") 
@@ -907,6 +930,15 @@ end
 start_worker() = start_worker(STDOUT)
 function start_worker(out::IO)
     global bind_addr
+
+    # we only explicitly monitor worker STDOUT on the console, so redirect
+    # stderr to stdout so we can see the output.
+    # at some point we might want some or all worker output to go to log
+    # files instead.
+    # Currently disabled since this caused processes to spin instead of
+    # exit when process 1 shut down. Don't yet know why.
+    #redirect_stderr(STDOUT)
+
     if !isdefined(Base,:bind_addr)
         bind_addr = getipaddr()
     end
@@ -1119,10 +1151,17 @@ function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
     configs = cell(np)
 
     # start the processes first...
-    sshflags = config[:sshflags]
 
     for i in 1:np
-        io, pobj = readsfrom(detach(`ssh -n $sshflags $(cman.machines[i]) "sh -l -c \"cd $dir && $exename $exeflags\""`))
+        # machine could be of the format [user@]host[:port]
+        machine_def = split(cman.machines[i], ':')
+        portopt = length(machine_def) == 2 ? ` -p $(machine_def[2]) ` : ``
+        config[:sshflags] = `$(config[:sshflags]) $portopt`
+        
+        sshflags = config[:sshflags]
+        cman.machines[i] = machine_def[1]
+        
+        io, pobj = readsfrom(detach(`ssh -n $sshflags $(machine_def[1]) "sh -l -c \"cd $dir && $exename $exeflags\""`))
         io_objs[i] = io
         configs[i] = merge(config, {:machine => cman.machines[i]})
     end
@@ -1155,7 +1194,7 @@ end
 # to be mutually reachable without a tunnel, as is often the case in a cluster.
 function addprocs_internal(np::Integer;
                   tunnel=false, dir=JULIA_HOME,
-                  exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia-release-basic":"./julia-debug-basic"),
+                  exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia-basic":"./julia-debug-basic"),
                   sshflags::Cmd=``, cman=LocalManager(), exeflags=``)
                   
     config={:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags}
@@ -1503,6 +1542,11 @@ function yield(args...)
     return v
 end
 
+function pause()
+    @unix_only    ccall(:pause, Void, ())
+    @windows_only ccall(:Sleep,stdcall, Void, (Uint32,), 0xffffffff)
+end
+
 function event_loop(isclient)
     iserr, lasterr, bt = false, nothing, {}
     while true
@@ -1517,7 +1561,12 @@ function event_loop(isclient)
                         if any_gc_flag
                             flush_gc_msgs()
                         end
-                        process_events(true)
+                        c = process_events(true)
+                        if c==0 && eventloop()!=C_NULL && isempty(Workqueue) && !any_gc_flag
+                            # if there are no active handles and no runnable tasks, just
+                            # wait for signals.
+                            pause()
+                        end
                     else
                         perform_work()
                         process_events(false)
@@ -1525,6 +1574,13 @@ function event_loop(isclient)
                 end
             end
         catch err
+            if iserr
+                ccall(:jl_, Void, (Any,), (
+                    "\n!!!An ERROR occurred while printing the last error!!!\n",
+                    lasterr,
+                    bt
+                ))
+            end
             iserr, lasterr = true, err
             bt = catch_backtrace()
             if isclient && isa(err,InterruptException)

@@ -645,7 +645,7 @@
 			      8193 8194 8195 8196 8197 8198 8199 8200
 			      8201 8202 8232 8233 8239 8287 12288)))
 
-(define (string.trim s at-start at-end)
+#;(define (string.trim s at-start at-end)
   (define (trim-start s chars i L)
     (if (and (< i L)
 	     (string.find chars (string.char s i)))
@@ -670,7 +670,7 @@
 		    (set! i (string.inc s i)))))
     (io.tostring! b)))
 
-(define (string.rep s k)
+#;(define (string.rep s k)
   (cond ((< k 4)
 	 (cond ((<= k 0) "")
 	       ((=  k 1) (string s))
@@ -679,8 +679,8 @@
 	((odd? k) (string s (string.rep s (- k 1))))
 	(else     (string.rep (string s s) (/ k 2)))))
 
-(define (string.lpad s n c) (string (string.rep c (- n (string.count s))) s))
-(define (string.rpad s n c) (string s (string.rep c (- n (string.count s)))))
+#;(define (string.lpad s n c) (string (string.rep c (- n (string.count s))) s))
+#;(define (string.rpad s n c) (string s (string.rep c (- n (string.count s)))))
 
 (define (print-to-string v)
   (let ((b (buffer)))

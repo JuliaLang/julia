@@ -169,6 +169,7 @@ static Function *jltypeerror_func;
 static Function *jlcheckassign_func;
 static Function *jldeclareconst_func;
 static Function *jltopeval_func;
+static Function *jlcopyast_func;
 static Function *jltuple_func;
 static Function *jlntuple_func;
 static Function *jlapplygeneric_func;
@@ -476,6 +477,7 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign);
 static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx);
 static bool might_need_root(jl_value_t *ex);
+static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx);
 
 // --- utilities ---
 
@@ -757,7 +759,6 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
             simple_escape_analysis(jl_exprarg(e,0), esc, ctx);
             simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
             simple_escape_analysis(jl_exprarg(e,2), esc, ctx);
-            simple_escape_analysis(jl_exprarg(e,3), esc, ctx);
         }
         else {
             size_t elen = jl_array_dim0(e->args);
@@ -1149,7 +1150,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     if (f->fptr == &jl_apply_generic) {
         *theFptr = jlapplygeneric_func;
         *theF = f;
-        if (ctx->linfo->specTypes != NULL) {
+        if (ctx->linfo->inferred) {
             jl_tuple_t *aty = call_arg_types(&args[1], nargs, ctx);
             rt1 = (jl_value_t*)aty;
             // attempt compile-time specialization for inferred types
@@ -1247,7 +1248,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         jl_value_t *ty  = expr_type(args[2], ctx); rt2 = ty;
         if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
             jl_value_t *tp0 = jl_tparam0(ty);
-            if (jl_subtype(arg, tp0, 0)) {
+            if (arg != jl_bottom_type && jl_subtype(arg, tp0, 0)) {
                 JL_GC_POP();
                 return ConstantInt::get(T_int1,1);
             }
@@ -1929,6 +1930,25 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 
 // --- convert expression to code ---
 
+static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx)
+{
+    Value *condV = emit_unboxed(cond, ctx);
+#ifdef CONDITION_REQUIRES_BOOL
+    if (expr_type(cond, ctx) != (jl_value_t*)jl_bool_type &&
+        condV->getType() != T_int1) {
+        emit_typecheck(condV, (jl_value_t*)jl_bool_type, msg, ctx);
+    }
+#endif
+    if (condV->getType() == T_int1) {
+        return builder.CreateXor(condV, ConstantInt::get(T_int1,1));
+    }
+    else if (condV->getType() == jl_pvalue_llvmt) {
+        return builder.CreateICmpEQ(condV, literal_pointer_val(jl_false));
+    }
+    // not a boolean
+    return ConstantInt::get(T_int1,0);
+}
+
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                         bool valuepos)
 {
@@ -1960,6 +1980,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         jl_value_t *jv = jl_fieldref(expr,0);
         if (jl_is_bitstype(jl_typeof(jv))) {
             return emit_expr(jv, ctx, isboxed, valuepos);
+        }
+        if (!jl_is_symbol(jv)) {
+            jl_add_linfo_root(ctx->linfo, jv);
         }
         return literal_pointer_val(jv);
     }
@@ -2040,25 +2063,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     if (head == goto_ifnot_sym) {
         jl_value_t *cond = args[0];
         int labelname = jl_unbox_long(args[1]);
-        Value *condV = emit_unboxed(cond, ctx);
-#ifdef CONDITION_REQUIRES_BOOL
-        if (expr_type(cond, ctx) != (jl_value_t*)jl_bool_type &&
-            condV->getType() != T_int1) {
-            emit_typecheck(condV, (jl_value_t*)jl_bool_type, "if", ctx);
-        }
-#endif
-        Value *isfalse;
-        if (condV->getType() == T_int1) {
-            isfalse = builder.CreateXor(condV, ConstantInt::get(T_int1,1));
-        }
-        else if (condV->getType() == jl_pvalue_llvmt) {
-            isfalse =
-                builder.CreateICmpEQ(condV, literal_pointer_val(jl_false));
-        }
-        else {
-            // not a boolean
-            isfalse = ConstantInt::get(T_int1,0);
-        }
+        Value *isfalse = emit_condition(cond, "if", ctx);
         BasicBlock *ifso = BasicBlock::Create(getGlobalContext(), "if", ctx->f);
         BasicBlock *ifnot = (*ctx->labels)[labelname];
         assert(ifnot);
@@ -2120,12 +2125,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         make_gcroot(a1, ctx);
         Value *a2 = boxed(emit_expr(args[2], ctx));
         make_gcroot(a2, ctx);
-        Value *a3 = boxed(emit_expr(args[3], ctx));
-        make_gcroot(a3, ctx);
-        Value *mdargs[6] = { name, bp, literal_pointer_val((void*)bnd),
-                             a1, a2, a3 };
+        Value *mdargs[5] = { name, bp, literal_pointer_val((void*)bnd), a1, a2 };
         ctx->argDepth = last_depth;
-        return builder.CreateCall(jlmethod_func, ArrayRef<Value*>(&mdargs[0], 6));
+        return builder.CreateCall(jlmethod_func, ArrayRef<Value*>(&mdargs[0], 5));
     }
     else if (head == const_sym) {
         jl_sym_t *sym = (jl_sym_t*)args[0];
@@ -2296,6 +2298,18 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         if (valuepos)
             return literal_pointer_val((jl_value_t*)jl_nothing);
     }
+    else if (head == copyast_sym) {
+        jl_value_t *arg = args[0];
+        if (jl_is_quotenode(arg)) {
+            jl_value_t *arg1 = jl_fieldref(arg,0);
+            if (!((jl_is_expr(arg1) && ((jl_expr_t*)arg1)->head!=null_sym) ||
+                  jl_typeis(arg1,jl_array_any_type) || jl_is_quotenode(arg1))) {
+                // elide call to jl_copy_ast when possible
+                return emit_expr(arg, ctx);
+            }
+        }
+        return builder.CreateCall(jlcopyast_func, emit_expr(arg, ctx));
+    }
     else {
         if (!strcmp(head->name, "$"))
             jl_error("syntax: prefix $ in non-quoted expression");
@@ -2310,8 +2324,17 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         // some expression types are metadata and can be ignored
         if (valuepos || !(head == line_sym || head == type_goto_sym)) {
-            jl_errorf("unsupported or misplaced expression %s in function %s",
-                      head->name, ctx->linfo->name->name);
+            if (head == abstracttype_sym || head == compositetype_sym ||
+                head == bitstype_sym) {
+                jl_errorf("type definition not allowed inside a local scope");
+            }
+            else if (head == macro_sym) {
+                jl_errorf("macro definition not allowed inside a local scope");
+            }
+            else {
+                jl_errorf("unsupported or misplaced expression %s in function %s",
+                          head->name, ctx->linfo->name->name);
+            }
         }
     }
     return NULL;
@@ -2600,13 +2623,19 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     if (jl_is_linenode(stmt)) {
         lno = jl_linenode_line(stmt);
     }
-    else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
-        lno = jl_unbox_long(jl_exprarg(stmt, 0));
+    else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym &&
+             jl_array_dim0(((jl_expr_t*)stmt)->args) > 0) {
+        jl_value_t *a1 = jl_exprarg(stmt,0);
+        if (jl_is_long(a1))
+            lno = jl_unbox_long(a1);
         if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 1) {
-            assert(jl_is_symbol(jl_exprarg(stmt, 1)));
-            filename = ((jl_sym_t*)jl_exprarg(stmt, 1))->name;
+            a1 = jl_exprarg(stmt,1);
+            if (jl_is_symbol(a1))
+                filename = ((jl_sym_t*)a1)->name;
             if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 2) {
-                dbgFuncName = ((jl_sym_t*)jl_exprarg(stmt, 2))->name;
+                a1 = jl_exprarg(stmt,2);
+                if (jl_is_symbol(a1))
+                    dbgFuncName = ((jl_sym_t*)a1)->name;
             }
         }
     }
@@ -3282,6 +3311,12 @@ static void init_julia_llvm_env(Module *m)
                          "jl_toplevel_eval", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jltopeval_func, (void*)&jl_toplevel_eval);
 
+    jlcopyast_func =
+        Function::Create(FunctionType::get(jl_pvalue_llvmt, args3, false),
+                         Function::ExternalLinkage,
+                         "jl_copy_ast", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlcopyast_func, (void*)&jl_copy_ast);
+
     std::vector<Type*> args4(0);
     args4.push_back(T_pint8);
     args4.push_back(jl_pvalue_llvmt);
@@ -3305,7 +3340,6 @@ static void init_julia_llvm_env(Module *m)
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_ppvalue_llvmt);
     mdargs.push_back(T_pint8);
-    mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
     jlmethod_func =
@@ -3464,9 +3498,13 @@ extern "C" void jl_init_codegen(void)
 #ifdef __APPLE__
     options.JITExceptionHandling = 1;
 #endif
+    // Temporarily disable Haswell BMI2 features due to LLVM bug.
+    const char *mattr[] = {"-bmi2", "-avx2"};
+    std::vector<std::string> attrvec (mattr, mattr+2);
     jl_ExecutionEngine = EngineBuilder(jl_Module)
         .setEngineKind(EngineKind::JIT)
         .setTargetOptions(options)
+        .setMAttrs(attrvec)
         .create();
 #endif // LLVM VERSION
     
@@ -3476,6 +3514,12 @@ extern "C" void jl_init_codegen(void)
 
     jl_jit_events = new JuliaJITEventListener();
     jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
+#if LLVM_USE_INTEL_JITEVENTS
+    if( const char* jit_profiling = std::getenv("ENABLE_JITPROFILING") )
+        if( std::atoi(jit_profiling) )
+            jl_ExecutionEngine->RegisterJITEventListener(
+                JITEventListener::createIntelJITEventListener());
+#endif // LLVM_USE_INTEL_JITEVENTS
 
     BOX_F(int8,int32);  BOX_F(uint8,uint32);
     BOX_F(int16,int16); BOX_F(uint16,uint16);

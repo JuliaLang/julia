@@ -23,7 +23,7 @@ function full(A::Triangular)
         return triu(A.UL)
     end
 end
-print_matrix(io::IO, A::Triangular) = print_matrix(io, full(A))
+print_matrix(io::IO, A::Triangular, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
 
 istril(A::Triangular) = A.uplo == 'L'
 istriu(A::Triangular) = A.uplo == 'U'

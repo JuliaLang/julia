@@ -747,7 +747,10 @@ void jl_save_system_image(char *fname)
     jl_gc_disable();
     htable_reset(&backref_table, 50000);
     ios_t f;
-    ios_file(&f, fname, 1, 1, 1, 1);
+    if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
+        JL_PRINTF(JL_STDERR, "Cannot open system image file \"%s\" for writing.\n", fname);
+        exit(1);
+    }
 
     // orphan old Base module if present
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base"));
@@ -789,7 +792,7 @@ void jl_restore_system_image(char *fname)
     ios_t f;
     char *fpath = fname;
     if (ios_file(&f, fpath, 1, 0, 0, 0) == NULL) {
-        JL_PRINTF(JL_STDERR, "system image file not found\n");
+        JL_PRINTF(JL_STDERR, "System image file \"%s\" not found\n", fname);
         exit(1);
     }
 #ifdef JL_GC_MARKSWEEP
