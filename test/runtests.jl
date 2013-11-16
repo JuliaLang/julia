@@ -6,7 +6,8 @@ testnames = ["core", "keywordargs", "numbers", "strings", "unicode",
              "arpack", "file", "suitesparse", "version",
              "resolve", "pollfd", "mpfr", "broadcast", "complex",
              "socket", "floatapprox", "readdlm", "regex", "float16",
-             "combinatorics", "sysinfo", "rounding", "ranges"]
+             "combinatorics", "sysinfo", "rounding", "ranges",
+             "math-modpi"]
 
 tests = ARGS==["all"] ? testnames : ARGS
 
