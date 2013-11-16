@@ -22,6 +22,10 @@ import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul
 
 include("cholmod_h.jl")
 
+macro isok(A)
+    :($A==CHOLMOD_TRUE || throw(CholmodException))
+end
+
 const chm_ver    = Array(Cint, 3)
 if dlsym(dlopen("libcholmod"), :cholmod_version) != C_NULL
     ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), chm_ver)
@@ -35,15 +39,13 @@ const chm_l_com  = fill(0xff, chm_com_sz)
 ## to functions in libc.so, whose addresses can change             
 function cmn(::Type{Int32})
     if isnan(reinterpret(Float64,chm_com[1:8])[1])
-        status = ccall((:cholmod_start, :libcholmod), Cint, (Ptr{Uint8},), chm_com)
-        if status != CHOLMOD_TRUE throw(CholmodException) end
+        @isok ccall((:cholmod_start, :libcholmod), Cint, (Ptr{Uint8},), chm_com)
     end
     chm_com
 end
 function cmn(::Type{Int64})             
     if isnan(reinterpret(Float64,chm_l_com[1:8])[1])
-        status = ccall((:cholmod_l_start, :libcholmod), Cint, (Ptr{Uint8},), chm_l_com)
-        if status != CHOLMOD_TRUE throw(CholmodException) end
+        @isok ccall((:cholmod_l_start, :libcholmod), Cint, (Ptr{Uint8},), chm_l_com)
     end
     chm_l_com
 end
@@ -330,7 +332,7 @@ end
 function CholmodDense{T<:CHMVTypes}(c::Ptr{c_CholmodDense{T}})
     cp = unsafe_load(c)
     if cp.lda != cp.m || cp.nzmax != cp.m * cp.n
-        error("overallocated cholmod_dense returned object of size $(cp.m) by $(cp.n) with leading dim $(cp.lda) and nzmax $(cp.nzmax)")
+        throw(DimensionMismatch("overallocated cholmod_dense returned object of size $(cp.m) by $(cp.n) with leading dim $(cp.lda) and nzmax $(cp.nzmax)"))
     end
     ## the true in the call to pointer_to_array means Julia will free the memory
     val = CholmodDense(cp, pointer_to_array(cp.xpt, (cp.m,cp.n), true))
@@ -370,11 +372,10 @@ function chm_print{T<:CHMVTypes}(cd::CholmodDense{T}, lev::Integer, nm::ASCIIStr
     cm = cmn(Int32)
     orig = cm[chm_prt_inds]
     cm[chm_prt_inds] = reinterpret(Uint8, [int32(lev)])
-    status = ccall((:cholmod_print_dense, :libcholmod), Cint,
+    @isok ccall((:cholmod_print_dense, :libcholmod), Cint,
                    (Ptr{c_CholmodDense{T}}, Ptr{Uint8}, Ptr{Uint8}),
                    &cd.c, nm, cm)
     cm[chm_prt_inds] = orig
-    if status != CHOLMOD_TRUE throw(CholmodException) end
 end
 chm_print(cd::CholmodDense, lev::Integer) = chm_print(cd, lev, "")
 chm_print(cd::CholmodDense) = chm_print(cd, int32(4), "")
@@ -385,12 +386,11 @@ function copy{Tv<:CHMVTypes}(B::CholmodDense{Tv})
                        (Ptr{c_CholmodDense{Tv}},Ptr{Uint8}), &B.c, cmn(Int32)))
 end
 
-function norm{Tv<:CHMVTypes}(D::CholmodDense{Tv},p::Number)
+function norm{Tv<:CHMVTypes}(D::CholmodDense{Tv},p::Number=1)
     ccall((:cholmod_norm_dense, :libcholmod), Float64, 
           (Ptr{c_CholmodDense{Tv}}, Cint, Ptr{Uint8}),
-          &D.c, p == 1 ? 1 :(p == Inf ? 1 : error("p must be 1 or Inf")),cmn(Int32))
+          &D.c, p == 1 ? 1 :(p == Inf ? 1 : throw(ArgumentError("p must be 1 or Inf"))),cmn(Int32))
 end
-norm{Tv<:CHMVTypes}(D::CholmodDense{Tv}) = norm(D,1)
 
 function CholmodSparse!{Tv<:CHMVTypes,Ti<:CHMITypes}(colpt::Vector{Ti},
                                                      rowval::Vector{Ti},
@@ -399,19 +399,19 @@ function CholmodSparse!{Tv<:CHMVTypes,Ti<:CHMITypes}(colpt::Vector{Ti},
                                                      n::Integer,
                                                      stype::Signed)
     bb = colpt[1]
-    if bb != 0 && bb != 1 error("colpt[1] is $bb, must be 0 or 1") end
-    if any(diff(colpt) .< 0) error("elements of colpt must be non-decreasing") end
-    if length(colpt) != n + 1 error("length(colptr) = $(length(colpt)), should be $(n+1)") end
+    if bb != 0 && bb != 1 throw(DimensionMismatch("colpt[1] is $bb, must be 0 or 1")) end
+    if any(diff(colpt) .< 0) throw(ArgumentError("elements of colpt must be non-decreasing")) end
+    if length(colpt) != n + 1 throw(DimensionMismatch("length(colptr) = $(length(colpt)), should be $(n+1)")) end
     if bool(bb)                         # one-based 
         decrement!(colpt)
         decrement!(rowval)
     end
     nz = colpt[end]
     if length(rowval) != nz || length(nzval) != nz
-        error("length(rowval) = $(length(rowval)) and length(nzval) = $(length(nzval)) should be $nz")
+        throw(DimensionMismatch("length(rowval) = $(length(rowval)) and length(nzval) = $(length(nzval)) should be $nz"))
     end
     if any(rowval .< 0) || any(rowval .>= m)
-        error("all elements of rowval must be in the range [0,$(m-1)]")
+        throw(ArgumentError("all elements of rowval must be in the range [0,$(m-1)]"))
     end
     it = ityp(Ti)
     sort!(CholmodSparse(c_CholmodSparse{Tv,Ti}(m,n,int(nz),convert(Ptr{Ti},colpt),
@@ -494,11 +494,10 @@ for Ti in (:Int32,:Int64)
                               (Ptr{c_CholmodSparse{Tv,$Ti}},
                                Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Uint8}),
                               &A.c, aa[1], cmn($Ti))
-                status = ccall((@chm_nm "free_sparse" $Ti
+                @isok ccall((@chm_nm "free_sparse" $Ti
                                 ,:libcholmod), Cint,
                                (Ptr{Ptr{c_CholmodSparse{Tv,$Ti}}}, Ptr{Uint8}), aa, cm)
-                if status != CHOLMOD_TRUE throw(CholmodException) end
-                return CholmodSparse(aa[2])
+                CholmodSparse(aa[2])
             end
             ## The A*A' case is handled by cholmod_aat. Strangely the matrix returned by
             ## cholmod_aat is not marked as symmetric.  The code following the call to
@@ -514,10 +513,9 @@ for Ti in (:Int32,:Int64)
                            , :libcholmod), Ptr{c_CholmodSparse{Tv,$Ti}},
                           (Ptr{c_CholmodSparse{Tv,$Ti}}, Cint, Cint, Ptr{Uint8}),
                           aa[1], -1, 1, cm)
-            status = ccall((@chm_nm "free_sparse" $Ti
+            @isok ccall((@chm_nm "free_sparse" $Ti
                             , :libcholmod), Cint,
                            (Ptr{Ptr{c_CholmodSparse{Tv,$Ti}}}, Ptr{Uint8}), aa, cm)
-            if status != CHOLMOD_TRUE throw(CholmodException) end
             aa[1] = aa[2]
             r = unsafe_load(aa[1])
             ## Now transpose the lower triangle to the upper triangle to do the sorting
@@ -525,16 +523,14 @@ for Ti in (:Int32,:Int64)
                          ,:libcholmod),Ptr{c_CholmodSparse{Tv,$Ti}},
                         (Csize_t,Csize_t,Csize_t,Cint,Cint,Cint,Cint,Ptr{Cuchar}),
                         r.m,r.n,r.nzmax,r.sorted,r.packed,-r.stype,r.xtype,cm)
-            status = ccall((@chm_nm "transpose_sym" $Ti
+            @isok ccall((@chm_nm "transpose_sym" $Ti
                             ,:libcholmod),Cint,
                            (Ptr{c_CholmodSparse{Tv,$Ti}}, Cint, Ptr{$Ti},
                             Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Uint8}),
                            aa[1],1,C_NULL,rpt,cm)
-            if status != CHOLMOD_TRUE throw(CholmodException) end
-            status = ccall((@chm_nm "free_sparse" $Ti
+            @isok ccall((@chm_nm "free_sparse" $Ti
                             , :libcholmod), Cint,
                            (Ptr{Ptr{c_CholmodSparse{Tv,$Ti}}}, Ptr{Uint8}), aa, cm)
-            if status != CHOLMOD_TRUE throw(CholmodException) end
             CholmodSparse(rpt)
         end
         function Ac_mul_B{Tv<:Union(Float32,Float64)}(A::CholmodSparse{Tv,$Ti},
@@ -554,10 +550,9 @@ for Ti in (:Int32,:Int64)
                           (Ptr{c_CholmodSparse{Tv,$Ti}},
                            Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Uint8}),
                           aa[1],&B.c,cm)
-            status = ccall((@chm_nm "free_sparse" $Ti
+            @isok ccall((@chm_nm "free_sparse" $Ti
                             , :libcholmod), Cint,
                            (Ptr{Ptr{c_CholmodSparse{Tv,$Ti}}}, Ptr{Uint8}), aa, cm)
-            if status != CHOLMOD_TRUE throw(CholmodException) end
             CholmodSparse(aa[2])
         end
         function CholmodDense{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti})
@@ -584,20 +579,18 @@ for Ti in (:Int32,:Int64)
                           ,:libcholmod), Ptr{c_CholmodFactor{Tv,$Ti}},
                          (Ptr{c_CholmodFactor{Tv,$Ti}},Ptr{Uint8}),
                          &L.c,cm)
-            status = ccall((@chm_nm "change_factor" $Ti
+            @isok ccall((@chm_nm "change_factor" $Ti
                             ,:libcholmod), Cint,
                            (Cint,Cint,Cint,Cint,Cint,Ptr{c_CholmodFactor{Tv,$Ti}},Ptr{Uint8}),
                            L.c.xtype,true,L.c.is_super,true,true,Lcll,cm)
-            if status != CHOLMOD_TRUE throw(CholmodException) end
             val = CholmodSparse(ccall((@chm_nm "factor_to_sparse" $Ti
                                        ,:libcholmod), Ptr{c_CholmodSparse{Tv,$Ti}},
                                       (Ptr{c_CholmodFactor{Tv,$Ti}},Ptr{Uint8}),
                                       Lcll,cmn($Ti)))
-            status = ccall((@chm_nm "free_factor" $Ti
+            @isok ccall((@chm_nm "free_factor" $Ti
                             ,:libcholmod), Cint,
                            (Ptr{Ptr{c_CholmodFactor{Tv,$Ti}}},Ptr{Uint8}),
                            [Lcll],cm)
-            if status != CHOLMOD_TRUE throw(CholmodException) end
             val
         end
         function CholmodSparse{Tv<:CHMVTypes,Ti<:$Ti}(T::CholmodTriplet{Tv,Ti})
@@ -637,12 +630,11 @@ for Ti in (:Int32,:Int64)
             Lpt = ccall((@chm_nm "analyze" $Ti
                          ,:libcholmod), Ptr{c_CholmodFactor{Tv,$Ti}},
                         (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Uint8}), &A.c, cm)
-            status = ccall((@chm_nm "factorize" $Ti
+            @isok ccall((@chm_nm "factorize" $Ti
                             ,:libcholmod), Cint,
                            (Ptr{c_CholmodSparse{Tv,$Ti}},
                             Ptr{c_CholmodFactor{Tv,$Ti}}, Ptr{Uint8}),
                            &A.c, Lpt, cm)
-            if status != CHOLMOD_TRUE throw(CholmodException) end
             CholmodFactor(Lpt)
         end
         function cholfact{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti},beta::Tv,ll::Bool)
@@ -652,12 +644,11 @@ for Ti in (:Int32,:Int64)
             Lpt = ccall((@chm_nm "analyze" $Ti
                          ,:libcholmod), Ptr{c_CholmodFactor{Tv,$Ti}},
                         (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Uint8}), &A.c, cm)
-            status = ccall((@chm_nm "factorize_p" $Ti
+            @isok ccall((@chm_nm "factorize_p" $Ti
                             ,:libcholmod), Cint,
                            (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Tv}, Ptr{Cint}, Csize_t,
                             Ptr{c_CholmodFactor{Tv,$Ti}}, Ptr{Uint8}),
                            &A.c, &beta, C_NULL, zero(Csize_t), Lpt, cmn($Ti))
-            if status != CHOLMOD_TRUE throw(CholmodException) end
             CholmodFactor(Lpt)
         end
         function chm_analyze{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti})
@@ -666,62 +657,56 @@ for Ti in (:Int32,:Int64)
                                 (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Uint8}), &A.c, cmn($Ti)))
         end
         function cholfact!{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti},A::CholmodSparse{Tv,$Ti})
-            status = ccall((@chm_nm "factorize" $Ti
+            @isok ccall((@chm_nm "factorize" $Ti
                             ,:libcholmod), Cint,
                            (Ptr{c_CholmodSparse{Tv,$Ti}},
                             Ptr{c_CholmodFactor{Tv,$Ti}}, Ptr{Uint8}),
                            &A.c, &L.c, cmn($Ti))
-            if status != CHOLMOD_TRUE throw(CholmodException) end
             L
         end
         function cholfact!{Tv<:Float64}(L::CholmodFactor{Tv,$Ti},A::CholmodSparse{Tv,$Ti},
                                         beta::Tv)
-            status = ccall((@chm_nm "factorize_p" $Ti
+            @isok ccall((@chm_nm "factorize_p" $Ti
                             ,:libcholmod), Cint,
                            (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Tv}, Ptr{Cint}, Csize_t,
                             Ptr{c_CholmodFactor{Tv,$Ti}}, Ptr{Uint8}),
                            &A.c, &beta, C_NULL, zero(Csize_t), &L.c, cmn($Ti))
-            if status != CHOLMOD_TRUE throw(CholmodException) end
             L
         end
         function chm_pack!{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti})
-            status = ccall((@chm_nm "pack_factor" $Ti
+            @isok ccall((@chm_nm "pack_factor" $Ti
                             ,:libcholmod), Cint,
                            (Ptr{c_CholmodFactor{Tv,$Ti}}, Ptr{Uint8}),
                            &L.c,cmn($Ti))
-            if status != CHOLMOD_TRUE throw(CholmodException) end
             L
         end
         function chm_print{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti},lev,nm)
             cm = cmn($Ti)
             orig = cm[chm_prt_inds]
             cm[chm_prt_inds] = reinterpret(Uint8, [int32(lev)])
-            status = ccall((@chm_nm "print_factor" $Ti
+            @isok ccall((@chm_nm "print_factor" $Ti
                             ,:libcholmod), Cint,
                            (Ptr{c_CholmodFactor{Tv,$Ti}}, Ptr{Uint8}, Ptr{Uint8}),
                            &L.c, nm, cm)
             cm[chm_prt_inds] = orig
-            if status != CHOLMOD_TRUE throw(CholmodException) end
         end
         function chm_print{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti},lev,nm)
             cm = cmn($Ti)
             orig = cm[chm_prt_inds]
             cm[chm_prt_inds] = reinterpret(Uint8, [int32(lev)])
-            status = ccall((@chm_nm "print_sparse" $Ti
+            @isok ccall((@chm_nm "print_sparse" $Ti
                            ,:libcholmod), Cint,
                            (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Uint8}, Ptr{Uint8}),
                            &A.c, nm, cm)
             cm[chm_prt_inds] = orig
-            if status != CHOLMOD_TRUE throw(CholmodException) end
         end
         function chm_scale!{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti},
                                            S::CholmodDense{Tv},
                                            typ::Integer)
-            status = ccall((@chm_nm "scale" $Ti
+            @isok ccall((@chm_nm "scale" $Ti
                             ,:libcholmod), Cint,
                            (Ptr{c_CholmodDense{Tv}},Cint,Ptr{c_CholmodSparse{Tv,$Ti}},
                             Ptr{Uint8}), &S.c, typ, &A.c, cmn($Ti))
-            if status != CHOLMOD_TRUE throw(CholmodException) end
             A
         end
         function chm_sdmult{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti},
@@ -733,17 +718,16 @@ for Ti in (:Int32,:Int64)
             nc = trans ? m : n
             nr = trans ? n : m
             if nc != size(X,1)
-                error("incompatible dimensions, $nc and $(size(X,1)), in chm_sdmult")
+                throw(DimensionMismatch("Incompatible dimensions, $nc and $(size(X,1)), in chm_sdmult"))
             end
             aa = float64([alpha, 0.])
             bb = float64([beta, 0.])
             Y = CholmodDense(zeros(Tv,nr,size(X,2)))
-            status = ccall((@chm_nm "sdmult" $Ti
+            @isok ccall((@chm_nm "sdmult" $Ti
                             ,:libcholmod), Cint,
                            (Ptr{c_CholmodSparse{Tv,$Ti}},Cint,Ptr{Cdouble},Ptr{Cdouble},
                             Ptr{c_CholmodDense{Tv}}, Ptr{c_CholmodDense{Tv}}, Ptr{Uint8}),
                            &A.c,trans,aa,bb,&X.c,&Y.c,cmn($Ti))
-            if status != CHOLMOD_TRUE throw(CholmodException) end
             Y
         end
         function chm_speye{Tv<:CHMVTypes,Ti<:$Ti}(m::Ti, n::Ti, x::Tv)
@@ -782,11 +766,10 @@ for Ti in (:Int32,:Int64)
         end
         function etree{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti})
             tr = Array($Ti,size(A,2))
-            status = ccall((@chm_nm "etree" $Ti
+            @isok ccall((@chm_nm "etree" $Ti
                             ,:libcholmod), Cint,
                            (Ptr{c_CholmodSparse{Tv,$Ti}},Ptr{$Ti},Ptr{Uint8}),
                            &A.c,tr,cmn($Ti))
-            if status != CHOLMOD_TRUE throw(CholmodException) end
             tr
         end
         function hcat{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti},B::CholmodSparse{Tv,$Ti})
@@ -803,7 +786,7 @@ for Ti in (:Int32,:Int64)
             ccall((@chm_nm "norm_sparse" $Ti
                    , :libcholmod), Float64, 
                   (Ptr{c_CholmodSparse{Tv,$Ti}}, Cint, Ptr{Uint8}),
-                  &A.c,p == 1 ? 1 :(p == Inf ? 1 : error("p must be 1 or Inf")),cmn($Ti))
+                  &A.c,p == 1 ? 1 :(p == Inf ? 1 : throw(ArgumentError("p must be 1 or Inf"))),cmn($Ti))
         end
         function solve{Tv<:CHMVTypes}(L::CholmodFactor{Tv,$Ti},
                                       B::CholmodDense{Tv}, typ::Integer)
@@ -823,11 +806,10 @@ for Ti in (:Int32,:Int64)
                                 typ, &L.c, &B.c, cmn($Ti)))
         end
         function sort!{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti})
-            status = ccall((@chm_nm "sort" $Ti
+            @isok ccall((@chm_nm "sort" $Ti
                             ,:libcholmod), Cint,
                            (Ptr{c_CholmodSparse{Tv,$Ti}}, Ptr{Uint8}),
                            &A.c, cmn($Ti))
-            if status != CHOLMOD_TRUE throw(CholmodException) end
             A
         end
         function copysym{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti})
@@ -939,7 +921,7 @@ function size(A::CholmodSparse, d::Integer)
     d == 1 ? A.c.m : (d == 2 ? A.c.n : 1)
 end
 size(L::CholmodFactor) = (n = int(L.c.n); (n,n))
-size(L::CholmodFactor,d::Integer) = d < 1 ? error("dimension out of range") : (d <= 2 ? int(L.c.n) : 1)
+size(L::CholmodFactor,d::Integer) = d < 1 ? throw(BoundsError("Dimension $d out of range")) : (d <= 2 ? int(L.c.n) : 1)
 
 function solve{Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},
                                             B::SparseMatrixCSC{Tv,Ti},typ::Integer)

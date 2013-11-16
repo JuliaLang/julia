@@ -9,7 +9,7 @@ function aupd_wrapper(T, linop::Function, n::Integer,
                       nev::Integer, ncv::Integer, which::ASCIIString, 
                       tol::Real, maxiter::Integer, mode::Integer, v0::Vector)
 
-    lworkl = cmplx ? ncv * (3*ncv + 5) : ( lworkl = sym ? ncv * (ncv + 8) :  ncv * (3*ncv + 6) )
+    lworkl = cmplx ? ncv * (3*ncv + 5) : (sym ? ncv * (ncv + 8) :  ncv * (3*ncv + 6) )
     TR = cmplx ? T.types[1] : T
     TOL = Array(TR, 1)
     TOL[1] = tol
@@ -27,12 +27,7 @@ function aupd_wrapper(T, linop::Function, n::Integer,
     	info   = ones(BlasInt, 1)
     end
     iparam = zeros(BlasInt, 11)
-    if sym && !cmplx
-        ipntr = zeros(BlasInt, 11)
-    else
-        ipntr = zeros(BlasInt, 14)
-    end
-
+    ipntr  = zeros(BlasInt, (sym && !cmplx) ? 11 : 14)
     ido    = zeros(BlasInt, 1)
 
     iparam[1] = blas_int(1)       # ishifts

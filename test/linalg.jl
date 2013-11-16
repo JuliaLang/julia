@@ -498,11 +498,8 @@ for elty in (Float32, Float64)
     B = convert(Array{elty, 1}, Binit)
     zero, infinity = convert(elty, 0), convert(elty, Inf)
     #This tests eigenvalue and eigenvector computations using stebz! and stein!
-    (w, iblock, isplit, info) = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,A,B) 
-
-    (evecs, ifail, info)=LinAlg.LAPACK.stein!(A,B,w)
-    @test info==0
-    @test all(ifail .== 0)
+    w, iblock, isplit = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,A,B) 
+    evecs = LinAlg.LAPACK.stein!(A,B,w)
     
     (e, v)=eig(SymTridiagonal(A,B))
     @test_approx_eq e w
@@ -515,11 +512,8 @@ for elty in (Float32, Float64)
     end
 
     #Test stein! call using iblock and isplit
-    (w, iblock, isplit, info) = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,A,B) 
-    @test info==0
-    (evecs, ifail, info)=LinAlg.LAPACK.stein!(A, B, w, iblock, isplit)
-    @test info==0
-    @test all(ifail .== 0)
+    w, iblock, isplit = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,A,B) 
+    evecs = LinAlg.LAPACK.stein!(A, B, w, iblock, isplit)
     test_approx_eq_vecs(v, evecs)
 end
 

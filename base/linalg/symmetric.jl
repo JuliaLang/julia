@@ -5,15 +5,15 @@ type Symmetric{T<:Number} <: AbstractMatrix{T}
     uplo::Char
 end
 function Symmetric{T<:Number}(S::Matrix{T}, uplo::Symbol)
-    if size(S, 1) != size(S, 2) throw(DimensionMismatch("Matrix must be square")); end
-    return Symmetric(S, string(uplo)[1])
+    chksquare(S)
+    Symmetric(S, string(uplo)[1])
 end
 Symmetric(A::StridedMatrix) = Symmetric(A, :U)
 
 function copy!(A::Symmetric, B::Symmetric)
     copy!(A.S, B.S)
     A.uplo = B.uplo
-    return A
+    A
 end
 size(A::Symmetric, args...) = size(A.S, args...)
 print_matrix(io::IO, A::Symmetric, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
@@ -43,7 +43,7 @@ eigmin(A::Symmetric) = eigvals(A, 1, 1)[1]
 
 function eigfact!{T<:BlasReal}(A::Symmetric{T}, B::Symmetric{T})
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')
-    return GeneralizedEigen(vals, vecs)
+    GeneralizedEigen(vals, vecs)
 end
 eigfact(A::Symmetric, B::Symmetric) = eigfact!(copy(A), copy(B))
 eigvals!{T<:BlasReal}(A::Symmetric{T}, B::Symmetric{T}) = LAPACK.sygvd!(1, 'N', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')[1]
@@ -62,9 +62,5 @@ function sqrtm{T<:Real}(A::Symmetric{T}, cond::Bool)
         zc = complex(F[:vectors])
         retmat = symmetrize!(scale(zc, vsqrt) * zc')
     end
-    if cond
-        return retmat, norm(vsqrt, Inf)^2/norm(F[:values], Inf)
-    else
-        return retmat
-    end
+    cond ? (retmat, norm(vsqrt, Inf)^2/norm(F[:values], Inf)) : retmat
 end
