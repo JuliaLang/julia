@@ -504,19 +504,26 @@ end
 
 
 testModPi()
-@test_approx_eq mod2pi(355)    3.1416227979431572
-@test_approx_eq mod2pi(355.0)  3.1416227979431572
+@test_approx_eq mod2pi(355)         3.1416227979431572
+@test_approx_eq mod2pi(int32(355))  3.1416227979431572
+@test_approx_eq mod2pi(355.0)       3.1416227979431572
+@test_approx_eq mod2pi(355.0f0)     3.1416228f0
 @test mod2pi(2^60) == mod2pi(2.0^60)
 @test_throws mod2pi(2^60-1)
 
 
-@test_approx_eq mod(355,pi)    3.014435336405372e-5
-@test_approx_eq mod(355.0,pi)  3.014435336405372e-5
-@test_approx_eq modpi(355)     3.014435336405372e-5
-@test_approx_eq modpi(355.0)   3.014435336405372e-5
+@test_approx_eq mod(355,pi)         3.014435336405372e-5
+@test_approx_eq mod(int32(355),pi)  3.014435336405372e-5
+@test_approx_eq mod(355.0,pi)       3.014435336405372e-5
+@test_approx_eq mod(355.0f0,pi)     3.0144354f-5
+@test_approx_eq modpi(355)          3.014435336405372e-5
+@test_approx_eq modpi(int32(355))   3.014435336405372e-5
+@test_approx_eq modpi(355.0)        3.014435336405372e-5
+@test_approx_eq modpi(355.0f0)      3.0144354f-5
 @test modpi(2^60) == modpi(2.0^60)
-@test_throws mod2pi(2^60-1)
+@test_throws modpi(2^60-1)
 
-@test_approx_eq modpio2(355)   3.014435336405372e-5
-@test_approx_eq modpio2(355.0) 3.014435336405372e-5
-
+@test_approx_eq modpio2(355)        3.014435336405372e-5
+@test_approx_eq modpio2(int32(355)) 3.014435336405372e-5
+@test_approx_eq modpio2(355.0)      3.014435336405372e-5
+@test_approx_eq modpio2(355.0f0)    3.0144354f-5

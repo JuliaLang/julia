@@ -1479,7 +1479,7 @@ function modpio2(x::Float64)
     end
 end
 
-mod2pi(x::Float32)= Float32(mod2pi(Float64(x)))
+mod2pi(x::Float32)= float32(mod2pi(float64(x)))
 mod2pi(x::Int32)  = mod2pi(float64(x))
 function mod2pi(x::Int64)
   fx = float64(x)
@@ -1487,7 +1487,7 @@ function mod2pi(x::Int64)
   mod2pi(fx)
 end
 
-modpi(x::Float32) = Float32(modpi(Float64(x)))
+modpi(x::Float32) = float32(modpi(float64(x)))
 modpi(x::Int32)   = modpi(float64(x))
 function modpi(x::Int64)
   fx = float64(x)
@@ -1495,7 +1495,7 @@ function modpi(x::Int64)
   modpi(fx)
 end
 
-modpio2(x::Float32)= Float32(modpi2(Float64(x)))
+modpio2(x::Float32)= float32(modpio2(float64(x)))
 modpio2(x::Int32) = modpio2(float64(x))
 function modpio2(x::Int64)
   fx = float64(x)

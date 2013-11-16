@@ -89,6 +89,7 @@ end
 log(::MathConst{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
 
 mod(x::Float64, y::MathConst{:π}) = modpi(x)
+mod(x::Float32, y::MathConst{:π}) = modpi(x)
 mod(x::Int32, y::MathConst{:π})   = modpi(x)
 mod(x::Int64, y::MathConst{:π})   = modpi(x)
 # Note: with these 3 lines above, we have:
