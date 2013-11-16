@@ -38,7 +38,7 @@ function verify_tree(d::Dict, tree::String)
     end
     # check that nothing was missing from tree
     for (name, data) in d
-        @test is(data,nothing) || contains(seen,name)
+        @test is(data,nothing) || in(name,seen)
     end
 end
 

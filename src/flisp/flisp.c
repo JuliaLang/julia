@@ -45,11 +45,6 @@
 
 #include "platform.h"
 
-#if defined(_OS_WINDOWS_) && defined(_COMPILER_INTEL_)
-#include <mathimf.h>
-#else
-#include <math.h>
-#endif
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
 char * basename(char *);
 char * dirname(char *);

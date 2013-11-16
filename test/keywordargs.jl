@@ -30,6 +30,12 @@ kwf4(;a=1,b=2) = (a,b)
 @test isequal(kwf4(), (1,2))
 @test isequal(kwf4(b=10), (1,10))
 
+# in-order evaluation of keyword args
+kwf9(;read=true,write=!read) = (read,write)
+@test kwf9() === (true,false)
+@test kwf9(read=false) === (false,true)
+@test kwf9(write=true) === (true,true)
+
 # rest keywords
 kwdelegator(ones;kw...) = kwf1(ones;kw...)
 @test kwdelegator(4,hundreds=8) == 804
@@ -102,3 +108,42 @@ kwf7{T}(x::T; k::T=1) = T
 # try to confuse it with quoted symbol
 kwf8{T}(x::MIME{:T};k::T=0) = 0
 @test kwf8(MIME{:T}()) === 0
+
+# issue #4538
+macro TEST4538()
+    quote
+        function $(esc(:test4538))(x=1)
+            return x
+        end
+    end
+end
+@TEST4538
+@test test4538() == 1
+@test test4538(2) == 2
+
+macro TEST4538_2()
+    quote
+        function $(esc(:test4538_2))(;x=1)
+            return x
+        end
+    end
+end
+@TEST4538_2
+@test test4538_2() == 1
+@test_throws test4538_2(2)
+@test test4538_2(x=2) == 2
+
+f4538_3(;x=1) = x
+macro TEST4538_3()
+    quote
+        x = 2
+        f4538_3(x=3)
+    end
+end
+@test (@TEST4538_3) == 3
+
+# issue #4801
+type T4801{X}
+    T4801(;k=0) = new()
+end
+@test isa(T4801{Any}(k=0), T4801{Any})

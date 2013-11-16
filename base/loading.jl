@@ -1,10 +1,5 @@
 # require
 
-function is_file_readable(path::String)
-    s = stat(bytestring(path))
-    return isfile(s) && isreadable(s)
-end
-
 function find_in_path(name::String)
     isabspath(name) && return name
     isfile(name) && return abspath(name)
@@ -17,11 +12,11 @@ function find_in_path(name::String)
     end
     for prefix in [Pkg.dir(), LOAD_PATH]
         path = joinpath(prefix, name)
-        is_file_readable(path) && return abspath(path)
+        isfile(path) && return abspath(path)
         path = joinpath(prefix, base, "src", name)
-        is_file_readable(path) && return abspath(path)
+        isfile(path) && return abspath(path)
         path = joinpath(prefix, name, "src", name)
-        is_file_readable(path) && return abspath(path)
+        isfile(path) && return abspath(path)
     end
     return nothing
 end
@@ -36,31 +31,51 @@ package_locks = (ByteString=>Any)[]
 require(fname::String) = require(bytestring(fname))
 require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 
+# only broadcast top-level (not nested) requires and reloads
+toplevel_load = true
+
 function require(name::String)
-    if myid() == 1 
-        @sync for p in filter(x -> x != 1, procs())
-            @spawnat p require(name)
-        end
-    end
     path = find_in_node1_path(name)
     path == nothing && error("$name not found")
-    if haskey(package_list,path)
-        wait(package_locks[path])
+
+    if myid() == 1 && toplevel_load
+        refs = { @spawnat p _require(path) for p in filter(x->x!=1, procs()) }
+        _require(path)
+        for r in refs; wait(r); end
     else
-        reload_path(path)
+        _require(path)
     end
     nothing
 end
 
-function reload(name::String)
-    if myid() == 1
-        @sync for p in filter(x->x!=1, procs())
-            @spawnat p reload(name)
-        end
+function _require(path)
+    global toplevel_load
+    if haskey(package_list,path)
+        wait(package_locks[path])
+    else
+        last = toplevel_load
+        toplevel_load = false
+        reload_path(path)
+        toplevel_load = last
     end
+end
+
+function reload(name::String)
+    global toplevel_load
     path = find_in_node1_path(name)
     path == nothing && error("$name not found")
+    refs = nothing
+    if myid() == 1 && toplevel_load
+        refs = { @spawnat p reload_path(path) for p in filter(x->x!=1, procs()) }
+    end
+    last = toplevel_load
+    toplevel_load = false
     reload_path(path)
+    toplevel_load = last
+    if refs !== nothing
+        for r in refs; wait(r); end
+    end
+    nothing
 end
 
 # remote/parallel load
@@ -70,7 +85,7 @@ include_string(txt::ByteString, fname::ByteString) =
 
 include_string(txt::ByteString) = include_string(txt, "string")
 
-function source_path(default::Union(String,Nothing))
+function source_path(default::Union(String,Nothing)="")
     t = current_task()
     while true
         s = t.storage
@@ -83,7 +98,8 @@ function source_path(default::Union(String,Nothing))
         t = t.parent
     end
 end
-source_path() = source_path("")
+
+macro __FILE__() source_path() end
 
 function include_from_node1(path::String)
     prev = source_path(nothing)
@@ -93,7 +109,10 @@ function include_from_node1(path::String)
     local result
     try
         if myid()==1
+            # sleep a bit to process file requests from other nodes
+            nprocs()>1 && sleep(0.005)
             result = Core.include(path)
+            nprocs()>1 && sleep(0.005)
         else
             include_string(remotecall_fetch(1, readall, path), path)
             # don't bother sending last value for remote include

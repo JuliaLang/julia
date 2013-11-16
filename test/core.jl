@@ -17,20 +17,20 @@
 @test !(Array{Int8,1} <: Array{Any,1})
 @test !(Array{Any,1} <: Array{Int8,1})
 @test Array{Int8,1} <: Array{Int8,1}
-@test !subtype(Type{None}, Type{Int32})
-@test !subtype(Vector{Float64},Vector{Union(Float64,Float32)})
+@test !(Type{None} <: Type{Int32})
+@test !(Vector{Float64} <: Vector{Union(Float64,Float32)})
 @test is(None, typeintersect(Vector{Float64},Vector{Union(Float64,Float32)}))
 
 @test !isa(Array,Type{Any})
-@test subtype(Type{Complex},DataType)
+@test Type{Complex} <: DataType
 @test isa(Complex,Type{Complex})
-@test !subtype(Type{Ptr{None}},Type{Ptr})
-@test !subtype(Type{Rational{Int}}, Type{Rational})
+@test !(Type{Ptr{None}} <: Type{Ptr})
+@test !(Type{Rational{Int}} <: Type{Rational})
 let T = TypeVar(:T,true)
     @test !is(None, typeintersect(Array{None},AbstractArray{T}))
     @test  is(None, typeintersect((Type{Ptr{Uint8}},Ptr{None}),
                                   (Type{Ptr{T}},Ptr{T})))
-    @test !subtype(Type{T},TypeVar)
+    @test !(Type{T} <: TypeVar)
 
     @test isequal(typeintersect((Range{Int},(Int,Int)),(AbstractArray{T},Dims)),
                   (Range{Int},(Int,Int)))
@@ -67,11 +67,11 @@ let N = TypeVar(:N,true)
 end
 @test is(None, typeintersect(Type{Any},Type{Complex}))
 @test is(None, typeintersect(Type{Any},Type{TypeVar(:T,Real)}))
-@test !subtype(Type{Array{Integer}},Type{AbstractArray{Integer}})
-@test !subtype(Type{Array{Integer}},Type{Array{TypeVar(:T,Integer)}})
+@test !(Type{Array{Integer}} <: Type{AbstractArray{Integer}})
+@test !(Type{Array{Integer}} <: Type{Array{TypeVar(:T,Integer)}})
 @test is(None, typeintersect(Type{Function},UnionType))
 @test is(Type{Int32}, typeintersect(Type{Int32},DataType))
-@test !subtype(Type,TypeVar)
+@test !(Type <: TypeVar)
 @test !is(None, typeintersect(DataType, Type))
 @test !is(None, typeintersect(UnionType, Type))
 @test !is(None, typeintersect(DataType, Type{Int}))
@@ -80,22 +80,22 @@ end
 
 @test isa(Int,Type{TypeVar(:T,Number)})
 @test !isa(DataType,Type{TypeVar(:T,Number)})
-@test subtype(DataType,Type{TypeVar(:T,Type)})
+@test DataType <: Type{TypeVar(:T,Type)}
 
 @test isa((),Type{()})
-@test subtype((DataType,),Type{TypeVar(:T,Tuple)})
-@test !subtype((Int,),Type{TypeVar(:T,Tuple)})
+@test (DataType,) <: Type{TypeVar(:T,Tuple)}
+@test !((Int,) <: Type{TypeVar(:T,Tuple)})
 @test isa((Int,),Type{TypeVar(:T,Tuple)})
 
 @test !isa(Type{(Int,Int)},Tuple)
-@test subtype(Type{(Int,Int)},Tuple)
-@test subtype(Type{(Int,)}, (DataType,))
+@test Type{(Int,Int)} <: Tuple
+@test Type{(Int,)} <: (DataType,)
 
 # this is fancy: know that any type T<:Number must be either a DataType or a UnionType
-@test subtype(Type{TypeVar(:T,Number)},Union(DataType,UnionType))
-@test !subtype(Type{TypeVar(:T,Number)},DataType)
-@test subtype(Type{TypeVar(:T,Tuple)},Union(Tuple,UnionType))
-@test !subtype(Type{TypeVar(:T,Tuple)},Union(DataType,UnionType))
+@test Type{TypeVar(:T,Number)} <: Union(DataType,UnionType)
+@test !(Type{TypeVar(:T,Number)} <: DataType)
+@test Type{TypeVar(:T,Tuple)} <: Union(Tuple,UnionType)
+@test !(Type{TypeVar(:T,Tuple)} <: Union(DataType,UnionType))
 
 @test !is(None, typeintersect((DataType,DataType),Type{TypeVar(:T,(Number,Number))}))
 @test !is(None, typeintersect((DataType,UnionType),Type{(Number,None)}))
@@ -140,14 +140,14 @@ nttest1{n}(x::NTuple{n,Int}) = n
 abstract Sup_{A,B}
 abstract Qux_{T} <: Sup_{Qux_{Int},T}
 
-@test subtype(Qux_{Int}.super, Sup_)
+@test Qux_{Int}.super <: Sup_
 @test is(Qux_{Int}, Qux_{Int}.super.parameters[1])
 @test is(Qux_{Int}.super.parameters[2], Int)
-@test subtype(Qux_{Char}.super, Sup_)
+@test Qux_{Char}.super <: Sup_
 @test is(Qux_{Int}, Qux_{Char}.super.parameters[1])
 @test is(Qux_{Char}.super.parameters[2], Char)
 
-@test subtype(Qux_.super.parameters[1].super, Sup_)
+@test Qux_.super.parameters[1].super <: Sup_
 @test is(Qux_{Int}, Qux_.super.parameters[1].super.parameters[1])
 @test is(Int, Qux_.super.parameters[1].super.parameters[2])
 
@@ -760,10 +760,13 @@ end
 @test B2365{Int}(0).v === 0
 
 # issue #2352
-Sum=0.0; for n=1:2:10000
-Sum += -1/n + 1/(n+1)
+begin
+    local Sum, n
+    Sum=0.0; for n=1:2:10000
+        Sum += -1/n + 1/(n+1)
+    end
+    @test Sum < -0.69
 end
-@test Sum < -0.69
 
 include("test_sourcepath.jl")
 
@@ -981,3 +984,177 @@ g4154() = typeof(foo4154(rand(2,2,2,2,2,2,2,2,2)))
 
 @test h4154() === MyType4154{Array{Float64,3}}
 @test g4154() === MyType4154{Array{Float64,9}}
+
+# issue #4208
+type a4208
+    a4208
+end
+@test isa(a4208(5),a4208)
+type b4208
+    b4208() = (local b4208=1;new())
+end
+@test isa(b4208(),b4208)
+
+# make sure convert_default error isn't swallowed by typeof()
+convert_default_should_fail_here() = similar([1],typeof(zero(typeof(rand(2,2)))))
+@test_throws convert_default_should_fail_here()
+
+# issue #4343
+@test_throws Array{Float64}{Int, 2}
+
+type Foo4376{T}
+    x
+    Foo4376(x::T) = new(x)
+    Foo4376(a::Foo4376{Int}) = new(a.x)
+end
+
+@test isa(Foo4376{Float32}(Foo4376{Int}(2)), Foo4376{Float32})
+@test_throws Foo4376{Float32}(Foo4376{Float32}(2.0f0))
+
+type _0_test_ctor_syntax_
+    _0_test_ctor_syntax_{T<:String}(files::Vector{T},step) = 0
+end
+
+# issue #4413
+type A4413 end
+type B4413 end
+type C4413 end
+f4413(::Union(A4413, B4413, C4413)) = "ABC"
+f4413(::Union(A4413, B4413)) = "AB"
+g4413(::Union(A4413, C4413)) = "AC"
+g4413(::Union(A4413, B4413, C4413)) = "ABC"
+
+@test f4413(A4413()) == "AB" && f4413(B4413()) == "AB"
+@test g4413(A4413()) == "AC" && g4413(C4413()) == "AC"
+
+# issue #4482
+# what happens here: the method cache logic wants to widen the type of a
+# tuple argument, but it shouldn't do that for an argument that a static
+# parameter depends on.
+f4482{T}(x::T) = T
+@test f4482((Ptr,Ptr)) === (DataType,DataType)
+@test f4482((Ptr,))    === (DataType,)
+
+# issue #4486
+try
+    # note: this test expression must run at the top level,
+    # in the interpreter.
+    (function() end)(1)
+    # should throw an argument count error
+    @test false
+end
+
+# issue #4526
+f4526(x) = isa(x.a, Nothing)
+@test_throws f4526(1)
+@test_throws f4526(im)
+@test_throws f4526(1+2im)
+
+# issue #4528
+function f4528(A, B)
+    if A
+        reinterpret(Uint64, B)
+    end
+end
+@test f4528(false, int32(12)) === nothing
+@test_throws f4528(true, int32(12))
+
+# issue #4518
+f4518(x, y::Union(Int32,Int64)) = 0
+f4518(x::ASCIIString, y::Union(Int32,Int64)) = 1
+@test f4518("",1) == 1
+
+# issue #4581
+bitstype 64 Date4581{T}
+let
+    x = Intrinsics.box(Date4581{Int}, Intrinsics.unbox(Int64,int64(1234)))
+    xs = Date4581[x]
+    ys = copy(xs)
+    @test ys !== xs
+    @test ys == xs
+end
+
+# issue #4645
+i4645(x) = (println(zz); zz = x; zz)
+@test_throws i4645(4)
+
+# issue #4505
+let
+    g4505{X}(::X) = 0
+    @test g4505(0) == 0
+end
+@test !isdefined(:g4505)
+
+# issue #4681
+# ccall should error if convert() returns something of the wrong type
+type Z4681
+    x::Ptr{Void}
+    Z4681() = new(C_NULL)
+end
+Base.convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
+@test_throws ccall(:printf,Int,(Ptr{Uint8},Ptr{Z4681}),"",Z4681())
+
+# issue #4479
+f4479(::Real,c) = 1
+f4479(::Int, ::Int, ::Bool) = 2
+f4479(::Int, x, a...) = 0
+@test f4479(1,1,true) == 2
+
+# issue #4688
+a4688(y) = "should be unreachable by calling b"
+b4688(y) = "not an Int"
+begin
+    a4688(y::Int) = "an Int"
+    let x = true
+        b4688(y::Int) = x == true ? a4688(y) : a4688(y)
+    end
+end
+@test b4688(1) == "an Int"
+
+# issue #4731
+type SIQ{A,B} <: Number
+    x::A
+end
+import Base: promote_rule
+promote_rule{T,T2,S,S2}(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) = SIQ{promote_type(T,S)}
+@test_throws promote_type(SIQ{Int},SIQ{Float64})
+
+# issue #4675
+f4675(x::StridedArray...) = 1
+f4675{T}(x::StridedArray{T}...) = 2
+@test f4675(zeros(50,50), zeros(50,50)) == 2
+g4675{T}(x::StridedArray{T}...) = 2
+g4675(x::StridedArray...) = 1
+@test g4675(zeros(50,50), zeros(50,50)) == 2
+
+# issue #4771
+module Lib4771
+export @make_closure
+macro make_closure()
+    quote
+        f = (x)->1
+    end
+end
+end # module
+@test (Lib4771.@make_closure)(0) == 1
+
+# issue #4805
+abstract IT4805{N, T}
+
+let
+    T = TypeVar(:T,Int)
+    N = TypeVar(:N)
+    @test typeintersect(Type{IT4805{1,T}}, Type{TypeVar(:_,IT4805{N,Int})}) != None
+end
+
+let
+    test0{T <: Int64}(::Type{IT4805{1, T}}, x) = x
+    test1() = test0(IT4805{1, Int64}, 1)
+    test2() = test0(IT4805{1+0, Int64}, 1)
+    test3(n) = test0(IT4805{n, Int64}, 1)
+
+    @test test1() == 1
+    @test test2() == 1
+    @test test3(1) == 1
+    @test_throws test3(2)
+end

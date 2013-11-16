@@ -17,7 +17,7 @@ let i = 2
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
              LineNumberNode, SymbolNode, LabelNode, GotoNode,
              QuoteNode, TopNode, TypeVar, Box, LambdaStaticData,
-             Module, UndefRefTag, :reserved3, :reserved4,
+             Module, UndefRefTag, Task, :reserved4,
              :reserved5, :reserved6, :reserved7, :reserved8,
              :reserved9, :reserved10, :reserved11, :reserved12,
              
@@ -80,13 +80,13 @@ function serialize(s, x::Symbol)
         return write_as_tag(s, x)
     end
     name = string(x)
-    ln = length(name)
+    ln = sizeof(name)
     if ln <= 255
         writetag(s, Symbol)
         write(s, uint8(ln))
     else
         writetag(s, LongSymbol)
-        write(s, int32(length(name)))
+        write(s, int32(ln))
     end
     write(s, name)
 end
@@ -232,6 +232,19 @@ function serialize(s, linfo::LambdaStaticData)
     else
         serialize(s, nothing)
     end
+end
+
+function serialize(s, t::Task)
+    if istaskstarted(t) && !t.done
+        error("cannot serialize a running Task")
+    end
+    writetag(s, Task)
+    serialize(s, t.code)
+    serialize(s, t.storage)
+    serialize(s, t.done)
+    serialize(s, t.runnable)
+    serialize(s, t.result)
+    serialize(s, t.exception)
 end
 
 function serialize_type_data(s, t)
@@ -449,6 +462,16 @@ function deserialize(s, ::Type{DataType})
 end
 
 deserialize{T}(s, ::Type{Ptr{T}}) = pointer(T, 0)
+
+function deserialize(s, ::Type{Task})
+    t = Task(deserialize(s))
+    t.storage = deserialize(s)
+    t.done = deserialize(s)
+    t.runnable = deserialize(s)
+    t.result = deserialize(s)
+    t.exception = deserialize(s)
+    t
+end
 
 # default DataType deserializer
 function deserialize(s, t::DataType)

@@ -14,6 +14,7 @@
 #include <io.h>
 #include <fcntl.h>
 #define fileno _fileno
+//#define lseek _lseek
 #else
 #include <unistd.h>
 #include <sys/time.h>
@@ -619,6 +620,7 @@ static void _buf_init(ios_t *s, bufmode_t bm)
     }
     else {
         s->buf = NULL;
+        s->maxsize = 0;
         _buf_realloc(s, IOS_BUFSIZE);
     }
     s->size = s->bpos = 0;
@@ -638,7 +640,10 @@ char *ios_takebuf(ios_t *s, size_t *psize)
             memcpy(buf, s->buf, s->size);
     }
     else {
-        buf = s->buf;
+        if (s->buf == NULL)
+            buf = LLT_ALLOC(s->size+1);
+        else
+            buf = s->buf;
     }
     buf[s->size] = '\0';
 

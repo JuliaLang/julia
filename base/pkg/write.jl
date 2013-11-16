@@ -8,7 +8,7 @@ function prefetch(pkg::String, sha1::String)
 end
 
 function fetch(pkg::String, sha1::String)
-    refspec = "refs/heads/*:refs/remotes/cache/*"
+    refspec = "+refs/heads/*:refs/remotes/cache/*"
     Git.run(`fetch -q $(Cache.path(pkg)) $refspec`, dir=pkg)
     Git.iscommit(sha1, dir=pkg) && return
     f = Git.iscommit(sha1, dir=Cache.path(pkg)) ? "fetch" : "prefetch"
@@ -16,7 +16,7 @@ function fetch(pkg::String, sha1::String)
 end
 
 function checkout(pkg::String, sha1::String)
-    Git.run(`config remote.origin.url $(Read.url(pkg))`, dir=pkg)
+    Git.set_remote_url(Read.url(pkg), dir=pkg)
     Git.run(`checkout -q $sha1`, dir=pkg)
 end
 
@@ -39,7 +39,6 @@ end
 
 function remove(pkg::String)
     isdir(".trash") || mkdir(".trash")
-    # this shouldn't happen in the course of normal operation:
     ispath(".trash/$pkg") && run(`rm -rf .trash/$pkg`)
     run(`mv $pkg .trash/`)
 end

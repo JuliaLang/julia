@@ -65,6 +65,8 @@ type UmfpackLU{Tv<:UMFVTypes,Ti<:UMFITypes} <: Factorization{Tv}
 end
 
 function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
+    S.m == S.n || error("Input matrix must be square")
+
     zerobased = S.colptr[1] == 0
     res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
                     zerobased ? copy(S.colptr) : decrement(S.colptr),
@@ -75,6 +77,8 @@ function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
 end
 
 function lufact!{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
+    S.m == S.n || error("Input matrix must be square")
+
     zerobased = S.colptr[1] == 0
     res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
                     zerobased ? S.colptr : decrement!(S.colptr),
@@ -119,7 +123,7 @@ for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz,get_num_r,get_num_z,it
         function umfpack_symbolic!{Tv<:Complex128,Ti<:$itype}(U::UmfpackLU{Tv,Ti})
             if U.symbolic != C_NULL return U end
             tmp = Array(Ptr{Void},1)
-            status = ccall(($sym_r, :libumfpack), Ti,
+            status = ccall(($sym_c, :libumfpack), Ti,
                            (Ti, Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Float64}, Ptr{Void},
                             Ptr{Float64}, Ptr{Float64}),
                            U.m, U.n, U.colptr, U.rowval, real(U.nzval), imag(U.nzval), tmp,
@@ -146,7 +150,7 @@ for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz,get_num_r,get_num_z,it
             if U.numeric != C_NULL return U end
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
             tmp = Array(Ptr{Void}, 1)
-            status = ccall(($num_r, :libumfpack), Ti,
+            status = ccall(($num_c, :libumfpack), Ti,
                            (Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Void}, 
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, real(U.nzval), imag(U.nzval), U.symbolic, tmp,
@@ -177,7 +181,7 @@ for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz,get_num_r,get_num_z,it
                             Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
                            typ, lu.colptr, lu.rowval, real(lu.nzval), imag(lu.nzval),
                            xr, xi, real(b), imag(b),
-                           lu.num, umf_ctrl, umf_info)
+                           lu.numeric, umf_ctrl, umf_info)
             if status != UMFPACK_OK; error("Error code $status from umfpack_solve"); end
             return complex(xr,xi)
         end
@@ -243,23 +247,36 @@ end
 
 (\){T<:UMFVTypes}(fact::UmfpackLU{T}, b::Vector{T}) = solve(fact, b)
 (\){Ts<:UMFVTypes,Tb<:Number}(fact::UmfpackLU{Ts}, b::Vector{Tb}) = fact\convert(Vector{Ts},b)
+function (\){Tb<:Complex}(fact::UmfpackLU{Float64}, b::Vector{Tb})
+    r = fact\[convert(Float64,real(be)) for be in b]
+    i = fact\[convert(Float64,imag(be)) for be in b]
+    Complex128[r[k]+im*i[k] for k = 1:length(r)]
+end
 At_ldiv_B{T<:UMFVTypes}(fact::UmfpackLU{T}, b::Vector{T}) = solve(fact, b, UMFPACK_Aat)
 At_ldiv_B{Ts<:UMFVTypes,Tb<:Number}(fact::UmfpackLU{Ts}, b::Vector{Tb}) = fact.'\convert(Vector{Ts},b)
+At_ldiv_B{Tb<:Complex}(fact::UmfpackLU{Float64}, b::Vector{Tb}) = fact.'\b
 Ac_ldiv_B{T<:UMFVTypes}(fact::UmfpackLU{T}, b::Vector{T}) = solve(fact, b, UMFPACK_At)
 Ac_ldiv_B{Ts<:UMFVTypes,Tb<:Number}(fact::UmfpackLU{Ts}, b::Vector{Tb}) = fact'\convert(Vector{Ts},b)
+Ac_ldiv_B{Tb<:Complex}(fact::UmfpackLU{Float64}, b::Vector{Tb}) = fact'\b
 
 ### Solve directly with matrix
 
 (\)(S::SparseMatrixCSC, b::Vector) = lufact(S) \ b
 At_ldiv_B{T<:UMFVTypes}(S::SparseMatrixCSC{T}, b::Vector{T}) = solve(lufact(S), b, UMFPACK_Aat)
-function At_ldiv_B{Ts<:UMFVTypes,Tb<:Number}(S::SparseMatrixCSC{Ts}, b::Vector{Tb})
-    ## should be more careful here in case Ts<:Real and Tb<:Complex
-    At_ldiv_B(S, convert(Vector{Ts}, b))
+At_ldiv_B{Ts<:UMFVTypes,Tb<:Number}(S::SparseMatrixCSC{Ts}, b::Vector{Tb}) = At_ldiv_B(S, convert(Vector{Ts}, b))
+function At_ldiv_B{Tb<:Complex}(S::SparseMatrixCSC{Float64}, b::Vector{Tb})
+    F = lufact(S)
+    r = solve(F, [convert(Float64,real(be)) for be in b], UMFPACK_Aat)
+    i = solve(F, [convert(Float64,imag(be)) for be in b], UMFPACK_Aat)
+    Complex128[r[k]+im*i[k] for k = 1:length(r)]
 end
 Ac_ldiv_B{T<:UMFVTypes}(S::SparseMatrixCSC{T}, b::Vector{T}) = solve(lufact(S), b, UMFPACK_At)
-function Ac_ldiv_B{Ts<:UMFVTypes,Tb<:Number}(S::SparseMatrixCSC{Ts}, b::Vector{Tb})
-    ## should be more careful here in case Ts<:Real and Tb<:Complex
-    Ac_ldiv_B(S, convert(Vector{Ts}, b))
+Ac_ldiv_B{Ts<:UMFVTypes,Tb<:Number}(S::SparseMatrixCSC{Ts}, b::Vector{Tb}) = Ac_ldiv_B(S, convert(Vector{Ts}, b))
+function Ac_ldiv_B{Tb<:Complex}(S::SparseMatrixCSC{Float64}, b::Vector{Tb})
+    F = lufact(S)
+    r = solve(F, [convert(Float64,real(be)) for be in b], UMFPACK_At)
+    i = solve(F, [convert(Float64,imag(be)) for be in b], UMFPACK_At)
+    Complex128[r[k]+im*i[k] for k = 1:length(r)]
 end
 
 solve(lu::UmfpackLU, b::Vector) = solve(lu, b, UMFPACK_A)

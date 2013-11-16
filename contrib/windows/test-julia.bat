@@ -13,7 +13,7 @@ pushd %cd%
 setlocal enableextensions enabledelayedexpansion
 call "%~dp0prepare-julia-env.bat" %*
 cd "%JULIA_HOME%..\share\julia\test"
-call "%JULIA_HOME%julia-release-readline.exe" runtests.jl %*
+call "%JULIA_HOME%julia-readline.exe" runtests.jl %*
 endlocal
 popd
 pause

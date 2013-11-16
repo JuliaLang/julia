@@ -12,18 +12,28 @@ immutable Requirement <: Line
     content::String
     package::String
     versions::VersionSet
+    system::Vector{String}
 
     function Requirement(content::String)
         fields = split(replace(content, r"#.*$", ""))
+        system = String[]
+        while !isempty(fields) && fields[1][1] == '@'
+            push!(system,shift!(fields)[2:end])
+        end
+        isempty(fields) && error("invalid requires entry: $content")
         package = shift!(fields)
         all(field->ismatch(Base.VERSION_REGEX, field), fields) ||
-            error("invalid requires entry for $package: $fields")
+            error("invalid requires entry for $package: $content")
         versions = [ convert(VersionNumber, field) for field in fields ]
-        issorted(versions) || error("invalid requires entry for $package: $versions")
-        new(content, package, VersionSet(versions))
+        issorted(versions) || error("invalid requires entry for $package: $content")
+        new(content, package, VersionSet(versions), system)
     end
-    function Requirement(package::String, versions::VersionSet)
-        content = package
+    function Requirement(package::String, versions::VersionSet, system::Vector{String}=String[])
+        content = ""
+        for os in system
+            content *= "@$os "
+        end
+        content *= package
         if versions != VersionSet()
             for ival in versions.intervals
                 (content *= " $(ival.lower)")
@@ -31,15 +41,18 @@ immutable Requirement <: Line
                 (content *= " $(ival.upper)")
             end
         end
-        new(content, package, versions)
+        new(content, package, versions, system)
     end
 end
 
+# TODO: shouldn't be neccessary #4648
+Base.isequal(a::Line, b::Line) = (a.content == b.content)
+
 # general machinery for parsing REQUIRE files
 
-function read(io::IO)
+function read(readable::Union(IO,Base.AbstractCmd))
     lines = Line[]
-    for line in eachline(io)
+    for line in eachline(readable)
         line = chomp(line)
         push!(lines, ismatch(r"^\s*(?:#|$)", line) ? Comment(line) : Requirement(line))
     end
@@ -52,14 +65,29 @@ function write(io::IO, lines::Vector{Line})
         println(io, line.content)
     end
 end
-write(file::String, lines::Vector{Line}) = open(file, "w") do io
-    write(io, lines)
+function write(io::IO, reqs::Requires)
+    for pkg in sort!([keys(reqs)...], by=lowercase)
+        println(io, Requirement(pkg, reqs[pkg]).content)
+    end
 end
+write(file::String, r::Union(Vector{Line},Requires)) = open(io->write(io,r), file, "w")
 
 function parse(lines::Vector{Line})
     reqs = Requires()
     for line in lines
         if isa(line,Requirement)
+            if !isempty(line.system)
+                applies = false
+                @windows_only applies |=  ("windows"  in line.system)
+                @unix_only    applies |=  ("unix"     in line.system)
+                @osx_only     applies |=  ("osx"      in line.system)
+                @linux_only   applies |=  ("linux"    in line.system)
+                @windows_only applies &= !("!windows" in line.system)
+                @unix_only    applies &= !("!unix"    in line.system)
+                @osx_only     applies &= !("!osx"     in line.system)
+                @linux_only   applies &= !("!linux"   in line.system)
+                applies || continue
+            end
             reqs[line.package] = haskey(reqs, line.package) ?
                 intersect(reqs[line.package], line.versions) : line.versions
         end
@@ -68,14 +96,16 @@ function parse(lines::Vector{Line})
 end
 parse(x) = parse(read(x))
 
-# add & rm: intended to be used with Write.update_file
+# add & rm – edit the content a requires file
 
 function add(lines::Vector{Line}, pkg::String, versions::VersionSet=VersionSet())
     v = VersionSet[]
     filtered = filter(lines) do line
-        (isa(line,Comment) || line.package != pkg) && return true
-        push!(v, line.versions)
-        return false
+        if !isa(line,Comment) && line.package == pkg && isempty(line.system)
+            push!(v, line.versions)
+            return false
+        end
+        return true
     end
     length(v) == 1 && v[1] == intersect(v[1],versions) && return copy(lines)
     versions = reduce(intersect, versions, v)

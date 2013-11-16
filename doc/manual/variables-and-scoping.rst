@@ -249,7 +249,7 @@ For Loops and Comprehensions
 For loops and comprehensions have a special additional behavior: any
 new variables introduced in their body scopes are freshly allocated for
 each loop iteration. Therefore these constructs are similar to ``while``
-loops with ``let`` blocks inside:
+loops with ``let`` blocks inside::
 
     Fs = cell(2)
     for i = 1:2
@@ -262,7 +262,7 @@ loops with ``let`` blocks inside:
     julia> Fs[2]()
     2
 
-``for`` loops will reuse existing variables for iteration:
+``for`` loops will reuse existing variables for iteration::
 
     i = 0
     for i = 1:3
@@ -270,7 +270,7 @@ loops with ``let`` blocks inside:
     i  # here equal to 3
 
 However, comprehensions do not do this, and always freshly allocate their
-iteration variables:
+iteration variables::
 
     x = 0
     [ x for x=1:3 ]

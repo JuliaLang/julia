@@ -67,7 +67,7 @@ function init_help()
             if !haskey(MODULE_DICT, func)
                 MODULE_DICT[func] = {}
             end
-            if !contains(MODULE_DICT[func], mod)
+            if !in(mod, MODULE_DICT[func])
                 push!(MODULE_DICT[func], mod)
             end
         end
@@ -120,6 +120,8 @@ function print_help_entries(entries)
     end
 end
 
+func_expr_from_symbols(s::Vector{Symbol}) = length(s) == 1 ? s[1] : Expr(:., func_expr_from_symbols(s[1:end-1]), Expr(:quote, s[end]))
+
 help_for(s::String) = help_for(s, 0)
 function help_for(fname::String, obj)
     init_help()
@@ -127,17 +129,26 @@ function help_for(fname::String, obj)
     if haskey(FUNCTION_DICT, fname)
         print_help_entries(FUNCTION_DICT[fname])
         found = true
-    else
-        if haskey(MODULE_DICT, fname)
-            allmods = MODULE_DICT[fname]
-            alldesc = {}
-            for mod in allmods
-                mfname = isempty(mod) ? fname : mod * "." * fname
+    elseif haskey(MODULE_DICT, fname)
+        allmods = MODULE_DICT[fname]
+        alldesc = {}
+        for mod in allmods
+            mfname = isempty(mod) ? fname : mod * "." * fname
+            if isgeneric(obj)
+                mf = eval(func_expr_from_symbols(map(symbol, split(mfname, "."))))
+                if mf === obj
+                    append!(alldesc, FUNCTION_DICT[mfname])
+                    found = true
+                end
+            else
                 append!(alldesc, FUNCTION_DICT[mfname])
+                found = true
             end
-            print_help_entries(alldesc)
-            found = true
         end
+        found && print_help_entries(alldesc)
+    elseif haskey(FUNCTION_DICT, "Base." * fname)
+        print_help_entries(FUNCTION_DICT["Base." * fname])
+        found = true
     end
     if !found
         if isa(obj, DataType)

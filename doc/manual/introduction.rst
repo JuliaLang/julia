@@ -16,27 +16,23 @@ Julia programming language fills this role: it is a flexible dynamic
 language, appropriate for scientific and numerical computing, with
 performance comparable to traditional statically-typed languages.
 
-Julia features optional typing, multiple dispatch, and good performance,
-achieved using type inference and `just-in-time (JIT)
+Julia features optional typing, multiple dispatch, and good
+performance, achieved using type inference and `just-in-time (JIT)
 compilation <http://en.wikipedia.org/wiki/Just-in-time_compilation>`_,
-implemented using
-`LLVM <http://en.wikipedia.org/wiki/Low_Level_Virtual_Machine>`_. It is
+implemented using `LLVM
+<http://en.wikipedia.org/wiki/Low_Level_Virtual_Machine>`_. It is
 multi-paradigm, combining features of imperative, functional, and
-object-oriented programming. The syntax of Julia is similar to
-`MATLAB® <http://en.wikipedia.org/wiki/Matlab>`_ and consequently
-MATLAB programmers should feel immediately comfortable with Julia.
-While MATLAB is quite effective for prototyping and exploring numerical
-linear algebra, it has limitations for programming tasks outside of this
-relatively narrow scope. Julia keeps MATLAB's ease and expressiveness
-for high-level numerical computing, but transcends its general
-programming limitations. To achieve this, Julia builds upon the lineage
-of mathematical programming languages, but also borrows much from
-popular dynamic languages, including
-`Lisp <http://en.wikipedia.org/wiki/Lisp_(programming_language)>`_,
-`Perl <http://en.wikipedia.org/wiki/Perl_(programming_language)>`_,
-`Python <http://en.wikipedia.org/wiki/Python_(programming_language)>`_,
-`Lua <http://en.wikipedia.org/wiki/Lua_(programming_language)>`_, and
-`Ruby <http://en.wikipedia.org/wiki/Ruby_(programming_language)>`_.
+object-oriented programming. Julia provides ease and expressiveness
+for high-level numerical computing, in the same way as languages such
+as R, MATLAB, and Python, but transcends its general programming
+limitations. To achieve this, Julia builds upon the lineage of
+mathematical programming languages, but also borrows much from popular
+dynamic languages, including `Lisp
+<http://en.wikipedia.org/wiki/Lisp_(programming_language)>`_, `Perl
+<http://en.wikipedia.org/wiki/Perl_(programming_language)>`_, `Python
+<http://en.wikipedia.org/wiki/Python_(programming_language)>`_, `Lua
+<http://en.wikipedia.org/wiki/Lua_(programming_language)>`_, and `Ruby
+<http://en.wikipedia.org/wiki/Ruby_(programming_language)>`_.
 
 The most significant departures of Julia from typical dynamic languages
 are:
@@ -90,7 +86,7 @@ and efficiency in a single language. In addition to the above, some
 advantages of Julia over comparable systems include:
 
 -  Free and open source (`MIT
-   licensed <https://github.com/JuliaLang/julia/blob/master/LICENSE>`_)
+   licensed <https://github.com/JuliaLang/julia/blob/master/LICENSE.md>`_)
 -  User-defined types are as fast and compact as built-ins
 -  No need to vectorize code for performance; devectorized code is fast
 -  Designed for parallelism and distributed computation

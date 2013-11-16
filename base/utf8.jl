@@ -133,6 +133,15 @@ end
 ucfirst(s::UTF8String) = string(uppercase(s[1]), s[2:])
 lcfirst(s::UTF8String) = string(lowercase(s[1]), s[2:])
 
+function reverse(s::UTF8String)
+    out = similar(s.data)
+    if ccall(:u8_reverse, Cint, (Ptr{Uint8}, Ptr{Uint8}, Csize_t),
+             out, s.data, length(out)) == 1
+        error("invalid UTF-8 data")
+    end
+    UTF8String(out)
+end
+
 ## outputing UTF-8 strings ##
 
 print(io::IO, s::UTF8String) = (write(io, s.data);nothing)

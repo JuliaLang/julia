@@ -1,7 +1,7 @@
 .. _man-faq:
 
 ****************************
- Frequently-Asked Questions
+ Frequently Asked Questions
 ****************************
 
 Sessions and the REPL
@@ -23,7 +23,7 @@ collector runs; you can force this to happen with ``gc()``.
 How can I modify the declaration of a type/immutable in my session?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Perhaps you've defined a type and and then realize you need to add a
+Perhaps you've defined a type and then realize you need to add a
 new field.  If you try this at the REPL, you get the error::
 
     ERROR: invalid redefinition of constant MyType
@@ -329,6 +329,35 @@ To prevent this, we can add an inner constructor::
     ERROR: no method MyBetterContainer(Range1{Float64},)
 
 The inner constructor requires that the element type of ``A`` be ``T``.
+
+Nothingness and missing values
+------------------------------
+
+How does "null" or "nothingness" work in Julia?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Unlike many languages (for example, C and Java), Julia does not have a
+"null" value. When a reference (variable, object field, or array element)
+is uninitialized, accessing it will immediately throw an error. This
+situation can be detected using the ``isdefined`` function.
+
+Some functions are used only for their side effects, and do not need to
+return a value. In these cases, the convention is to return the value
+``nothing``, which is just a singleton object of type ``Nothing``. This
+is an ordinary type with no fields; there is nothing special about it
+except for this convention, and that the REPL does not print anything
+for it. Some language constructs that would not otherwise have a value
+also yield ``nothing``, for example ``if false; end``.
+
+Note that ``Nothing`` (uppercase) is the type of ``nothing``, and should
+only be used in a context where a type is required (e.g. a declaration).
+
+You may occasionally see ``None``, which is quite different. It is the
+empty (or "bottom") type, a type with no values and no subtypes (except
+itself). You will generally not need to use this type.
+
+The empty tuple (``()``) is another form of nothingness. But, it should not
+really be thought of as nothing but rather a tuple of zero values.
 
 Julia Releases
 ----------------

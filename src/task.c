@@ -16,6 +16,7 @@
 #include <winbase.h>
 #include <malloc.h>
 #include <dbghelp.h>
+static volatile int in_stackwalk = 0;
 #else
 #include <unistd.h>
 // This gives unwind only local unwinding options ==> faster code
@@ -459,9 +460,50 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
     if (*func_name == NULL && doCframes) {
         fromC = 1;
 #if defined(_OS_WINDOWS_)
-        *func_name = name_unknown;   // FIXME
-        *file_name = name_unknown;
-        *line_num = 0;
+        if (in_stackwalk) {
+            *func_name = name_unknown;
+            *file_name = name_unknown;
+            *line_num = ip;
+        }
+        else {
+            in_stackwalk = 1;
+            DWORD64 dwDisplacement64 = 0;
+            DWORD64 dwAddress = ip;
+
+            char buffer[sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR)];
+            PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)buffer;
+            pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+            pSymbol->MaxNameLen = MAX_SYM_NAME;
+
+            if (SymFromAddr(GetCurrentProcess(), dwAddress, &dwDisplacement64, pSymbol)) {
+                // SymFromAddr returned success
+                *func_name = strdup(pSymbol->Name);
+            }
+            else {
+                *func_name = name_unknown;
+                // SymFromAddr failed
+                //DWORD error = GetLastError();
+                //printf("SymFromAddr returned error : %d\n", error);
+            }
+
+            IMAGEHLP_LINE64 line;
+            DWORD dwDisplacement = 0;
+            line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+
+            if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &line)) {
+                // SymGetLineFromAddr64 returned success
+                *file_name = strdup(line.FileName);
+                *line_num = line.LineNumber;
+            }
+            else {
+                *file_name = name_unknown;
+                *line_num = ip;
+                // SymGetLineFromAddr64 failed
+                //DWORD error = GetLastError();
+                //printf("SymGetLineFromAddr64 returned error : %d\n", error);
+            }
+            in_stackwalk = 0;
+        }
 #else
         Dl_info dlinfo;
         if (dladdr((void*) ip, &dlinfo) != 0) {
@@ -479,7 +521,7 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
         else {
             *func_name = name_unknown;
             *file_name = name_unknown;
-            *line_num = 0;
+            *line_num = ip;
         }
 #endif
     }
@@ -487,10 +529,8 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
 }
 
 #if defined(_OS_WINDOWS_)
-#if defined(_CPU_X86_64_)
-extern int needsSymRefreshModuleList;
-#endif
-static volatile int in_stackwalk = 0;
+int needsSymRefreshModuleList;
+WINBOOL WINAPI (*hSymRefreshModuleList)(HANDLE);
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize) {
     CONTEXT Context;
     memset(&Context, 0, sizeof(Context));
@@ -506,13 +546,13 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
     STACKFRAME64 stk;
     memset(&stk, 0, sizeof(stk));
 
-#if defined(_CPU_X86_64_) 
-    if (needsSymRefreshModuleList) {
+    if (needsSymRefreshModuleList && hSymRefreshModuleList != 0) {
         in_stackwalk = 1;
-        SymRefreshModuleList(GetCurrentProcess());
+        hSymRefreshModuleList(GetCurrentProcess());
         in_stackwalk = 0;
         needsSymRefreshModuleList = 0;
     }
+#if defined(_CPU_X86_64_) 
     DWORD MachineType = IMAGE_FILE_MACHINE_AMD64;
     stk.AddrPC.Offset = Context->Rip;
     stk.AddrStack.Offset = Context->Rsp;
@@ -530,16 +570,19 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
     stk.AddrFrame.Mode = AddrModeFlat;
     
     size_t n = 0;
+    intptr_t lastsp = stk.AddrStack.Offset;
     while (n < maxsize) {
         in_stackwalk = 1;
         BOOL result = StackWalk64(MachineType, GetCurrentProcess(), hMainThread,
             &stk, Context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL);
         in_stackwalk = 0;
-        data[n++] = (ptrint_t)stk.AddrPC.Offset;
-        if (stk.AddrReturn.Offset == 0)
+        data[n++] = (intptr_t)stk.AddrPC.Offset;
+        intptr_t sp = (intptr_t)stk.AddrStack.Offset;
+        if (!result || sp == 0 || 
+            (_stack_grows_up ? sp < lastsp : sp > lastsp) ||
+            stk.AddrReturn.Offset == 0)
             break;
-        if (!result)
-            break;
+        lastsp = sp;
     }
     return n;
 }
@@ -568,7 +611,7 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, unw_context_t
     } while (unw_step(&cursor) > 0);
     return n;
 }
-#ifdef _OS_DARWIN_
+#ifdef LIBOSXUNWIND
 size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, unw_context_t *uc)
 {
     unw_cursor_t cursor;
@@ -613,13 +656,20 @@ DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int doCframes)
     const char *func_name;
     int line_num;
     const char *file_name;
-    (void)frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, doCframes);
+#ifdef _OS_WINDOWS_
+    int fromC =
+#endif
+        frame_info_from_ip(&func_name, &line_num, &file_name, (size_t)ip, doCframes);
     if (func_name != NULL) {
         jl_value_t *r = (jl_value_t*)jl_alloc_tuple(3);
         JL_GC_PUSH1(&r);
         jl_tupleset(r, 0, jl_symbol(func_name));
         jl_tupleset(r, 1, jl_symbol(file_name));
         jl_tupleset(r, 2, jl_box_long(line_num));
+#ifdef _OS_WINDOWS_
+        if (fromC && func_name != name_unknown) free((void*)func_name);
+        if (fromC && file_name != name_unknown) free((void*)file_name);
+#endif
         JL_GC_POP();
         return r;
     }
@@ -649,6 +699,10 @@ DLLEXPORT void gdblookup(ptrint_t ip)
             ios_printf(ios_stderr, "%s at %s: offset %x\n", func_name, file_name, line_num);
         else
             ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
+#ifdef _OS_WINDOWS_
+        if (fromC && func_name != name_unknown) free((void*)func_name);
+        if (fromC && file_name != name_unknown) free((void*)file_name);
+#endif
     }
 }
 
@@ -675,9 +729,8 @@ void NORETURN throw_internal(jl_value_t *e)
     else {
         if (jl_current_task == jl_root_task) {
             JL_PRINTF(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
-            // Special case on ErrorException, as that's what's thrown by jl_errorf() on bootstrap errors
-            if (jl_typeof(e) == (jl_value_t*)jl_errorexception_type)
-                JL_PRINTF(JL_STDERR, "%s\n", jl_string_data(jl_fieldref(e,0)));
+            jl_static_show(JL_STDERR, e);
+            JL_PRINTF(JL_STDERR, "\n");
             exit(1);
         }
         jl_task_t *cont = jl_current_task->parent;
@@ -729,7 +782,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->done = 0;
     t->runnable = 1;
     t->start = start;
-    t->result = NULL;
+    t->result = jl_nothing;
     t->donenotify = jl_nothing;
     t->exception = jl_nothing;
     // there is no active exception handler available on this stack yet
@@ -823,7 +876,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_task_type = jl_new_datatype(jl_symbol("Task"),
                                    jl_any_type,
                                    jl_null,
-                                   jl_tuple(9,
+                                   jl_tuple(10,
                                             jl_symbol("parent"),
                                             jl_symbol("last"),
                                             jl_symbol("storage"),
@@ -832,13 +885,14 @@ void jl_init_tasks(void *stack, size_t ssize)
                                             jl_symbol("runnable"),
                                             jl_symbol("result"),
                                             jl_symbol("donenotify"),
-                                            jl_symbol("exception")),
-                                   jl_tuple(9,
+                                            jl_symbol("exception"),
+                                            jl_symbol("code")),
+                                   jl_tuple(10,
                                             jl_any_type, jl_any_type,
                                             jl_any_type, jl_any_type,
                                             jl_bool_type, jl_bool_type,
                                             jl_any_type, jl_any_type,
-                                            jl_any_type),
+                                            jl_any_type, jl_function_type),
                                    0, 1);
     jl_tupleset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
     jl_task_type->fptr = jl_f_task;

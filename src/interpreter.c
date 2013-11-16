@@ -13,6 +13,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl);
 static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                              int start, int toplevel);
 jl_value_t *jl_eval_module_expr(jl_expr_t *ex);
+int jl_is_toplevel_only_expr(jl_value_t *e);
 
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
 {
@@ -110,8 +111,11 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             return jl_f_get_field(NULL, gfargs, 2);
         }
         if (jl_is_lambda_info(e)) {
-            return (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null,
-                                               (jl_lambda_info_t*)e);
+            jl_lambda_info_t *li = (jl_lambda_info_t*)e;
+            if (jl_boot_file_loaded && li->ast && jl_is_expr(li->ast)) {
+                li->ast = jl_compress_ast(li, li->ast);
+            }
+            return (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null, li);
         }
         if (jl_is_linenode(e)) {
             jl_lineno = jl_linenode_line(e);
@@ -143,7 +147,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                     return jl_interpret_toplevel_thunk(li);
                 jl_array_t *formals = jl_lam_args((jl_expr_t*)li->ast);
                 size_t nreq = jl_array_len(formals);
-                if (!jl_is_rest_arg(jl_cellref(formals,nreq-1))) {
+                if (nreq==0 || !jl_is_rest_arg(jl_cellref(formals,nreq-1))) {
                     jl_value_t **ar;
                     JL_GC_PUSHARGS(ar, na*2);
                     for(int i=0; i < na*2; i++) {
@@ -241,15 +245,16 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                 bp = &b->value;
             }
         }
-        jl_value_t *atypes=NULL, *meth=NULL, *tvars=NULL;
-        JL_GC_PUSH3(&atypes, &meth, &tvars);
+        jl_value_t *atypes=NULL, *meth=NULL;
+        JL_GC_PUSH2(&atypes, &meth);
         atypes = eval(args[1], locals, nl);
         meth = eval(args[2], locals, nl);
-        tvars = eval(args[3], locals, nl);
-        jl_method_def(fname, bp, b, (jl_tuple_t*)atypes,
-                      (jl_function_t*)meth, (jl_tuple_t*)tvars);
+        jl_method_def(fname, bp, b, (jl_tuple_t*)atypes, (jl_function_t*)meth);
         JL_GC_POP();
         return *bp;
+    }
+    else if (ex->head == copyast_sym) {
+        return jl_copy_ast(eval(args[0], locals, nl));
     }
     else if (ex->head == const_sym) {
         jl_value_t *sym = args[0];
@@ -387,23 +392,12 @@ jl_value_t *jl_toplevel_eval_body(jl_array_t *stmts)
     return eval_body(stmts, NULL, 0, 0, 1);
 }
 
-int jl_is_toplevel_only_expr(jl_value_t *e)
-{
-    return jl_is_expr(e) &&
-        (((jl_expr_t*)e)->head == module_sym ||
-         ((jl_expr_t*)e)->head == importall_sym ||
-         ((jl_expr_t*)e)->head == import_sym ||
-         ((jl_expr_t*)e)->head == using_sym ||
-         ((jl_expr_t*)e)->head == export_sym ||
-         ((jl_expr_t*)e)->head == toplevel_sym);
-}
-
 static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                              int start, int toplevel)
 {
     jl_handler_t __eh;
     size_t i=start;
-    assert(!toplevel || nl==0);
+
     while (1) {
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_gotonode(stmt)) {
@@ -484,7 +478,7 @@ jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
         locals[i*2]   = loc[(i-llength)*2];
         locals[i*2+1] = loc[(i-llength)*2+1];
     }
-    r = eval_body(stmts, locals, nl, 0, 0);
+    r = eval_body(stmts, locals, nl, 0, 1);
     JL_GC_POP();
     return r;
 }

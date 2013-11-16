@@ -402,27 +402,27 @@ operators::
     true
 
 You can search for the index of a particular character using the
-``strchr`` function::
+``search`` function::
 
-    julia> strchr("xylophone", 'x')
+    julia> search("xylophone", 'x')
     1
 
-    julia> strchr("xylophone", 'p')
+    julia> search("xylophone", 'p')
     5
 
-    julia> strchr("xylophone", 'z')
+    julia> search("xylophone", 'z')
     0
 
 You can start the search for a character at a given offset by providing
 a third argument::
 
-    julia> strchr("xylophone", 'o')
+    julia> search("xylophone", 'o')
     4
 
-    julia> strchr("xylophone", 'o', 5)
+    julia> search("xylophone", 'o', 5)
     7
 
-    julia> strchr("xylophone", 'o', 8)
+    julia> search("xylophone", 'o', 8)
     0
 
 Another handy string function is ``repeat``::

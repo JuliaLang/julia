@@ -8,8 +8,8 @@ if codespeed
         Pkg.add("JSON")
         Pkg.add("Curl")
     end
-    usingmodule("JSON")
-    usingmodule("Curl")
+    using JSON
+    using Curl
 
     # Ensure that we've got the environment variables we want:
     if !haskey(ENV, "JULIA_FLAVOR")
@@ -30,20 +30,20 @@ end
 # Takes in the raw array of values in vals, along with the benchmark name, description, unit and whether less is better
 function submit_to_codespeed(vals,name,desc,unit,test_group,lessisbetter=true)
     # Points to the server 
-    codespeed_host = "128.52.160.154"
+    codespeed_host = "julia-codespeed.csail.mit.edu"
 
     csdata["benchmark"] = name
     csdata["description"] = desc
     csdata["result_value"] = mean(vals)
     csdata["std_dev"] = std(vals)
-    csdata["min"] = min(vals)
-    csdata["max"] = max(vals)
+    csdata["min"] = minimum(vals)
+    csdata["max"] = maximum(vals)
     csdata["units"] = unit
     csdata["units_title"] = test_group
     csdata["lessisbetter"] = lessisbetter
 
     println( "$name: $(mean(vals))" )
-    ret = Curl.post( "http://$codespeed_host/result/add/json/", {:json => to_json([csdata])} )
+    ret = Curl.post( "http://$codespeed_host/result/add/json/", {:json => json([csdata])} )
     if( !ismatch(r".*202 ACCEPTED.*", ret.headers[1][1]) )
         error("Error submitting $name, dumping headers and text: $(ret.headers[1])\n$(ret.text)\n\n")
         return false
@@ -54,11 +54,11 @@ end
 macro output_timings(t,name,desc,group)
     quote
         # If we weren't given anything for the test group, infer off of file path!
-        test_group = length($group) == 0 ? basename(Base.source_path()) : $group[1]
+        test_group = length($group) == 0 ? basename(dirname(Base.source_path())) : $group[1]
         if codespeed
             submit_to_codespeed( $t, $name, $desc, "seconds", test_group )
         elseif print_output
-            @printf "julia,%s,%f,%f,%f,%f\n" $name min($t) max($t) mean($t) std($t)
+            @printf "julia,%s,%f,%f,%f,%f\n" $name minimum($t) maximum($t) mean($t) std($t)
         end
         gc()        
     end

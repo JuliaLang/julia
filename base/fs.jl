@@ -185,8 +185,8 @@ const SEEK_SET = int32(0)
 const SEEK_CUR = int32(1)
 const SEEK_END = int32(2)
 
-position(f::File) = ccall(:lseek,Coff_t,(Int32,Coff_t,Int32),f.handle,0,SEEK_CUR)
-
+position(f::File) = ccall(:jl_lseek, Coff_t,(Int32,Coff_t,Int32),f.handle,0,SEEK_CUR)
+ 
 fd(f::File) = RawFD(f.handle)
 stat(f::File) = stat(fd(f))
 

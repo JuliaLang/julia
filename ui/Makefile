@@ -11,36 +11,58 @@ DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 JLDFLAGS += $(LDFLAGS) $(NO_WHOLE_ARCHIVE) $(call exec,$(LLVM_CONFIG) --ldflags) $(OSLIBS) $(RPATH)
 
-julia-release julia-debug: %: %-basic %-readline
+ifeq ($(USE_SYSTEM_LIBM),0)
+ifneq ($(UNTRUSTED_SYSTEM_LIBM),0)
+ifeq ($(OS),WINNT)
+JLDFLAGS += $(WHOLE_ARCHIVE) $(BUILD)/lib/libopenlibm.a $(NO_WHOLE_ARCHIVE)
+else
+JLDFLAGS += $(WHOLE_ARCHIVE) $(BUILD)/$(JL_LIBDIR)/libopenlibm.a $(NO_WHOLE_ARCHIVE)
+endif
+endif
+endif
+
+julia-release: julia-readline julia-basic
+julia-debug: julia-debug-readline julia-debug-basic
 
 release debug:
 	$(MAKE) julia-$@
 
 %.o: %.c repl.h
-	@$(PRINT_CC) $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@)
 %.do: %.c repl.h
-	@$(PRINT_CC) $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 ifeq ($(OS),WINNT)
 $(BUILD)/bin/julia.bat: ${JULIAHOME}/contrib/windows/*.bat
 	cp ${JULIAHOME}/contrib/windows/*.bat ${BUILD}/bin
 julia-release julia-debug: $(BUILD)/bin/julia.bat
+julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc
+	JLVER=`cat ${JULIAHOME}/VERSION` && \
+	JLVERi=`echo $$JLVER | perl -nle \
+		'/^(\d+)\.?(\d*)\.?(\d*)/ && \
+		print int $$1,",",int $$2,",0,",int $$3'` && \
+	$(CROSS_COMPILE)windres $< -O coff -o $@ -DJLVER=$$JLVERi -DJLVER_STR=\\\"$$JLVER\\\"
+$(BUILD)/bin/julia-readline$(EXE): julia_res.o
+$(BUILD)/bin/julia-debug-readline$(EXE): julia_res.o
+$(BUILD)/bin/julia-basic$(EXE): julia_res.o
+$(BUILD)/bin/julia-debug-basic$(EXE): julia_res.o
+JLDFLAGS += julia_res.o
 endif 
 
-julia-release-basic: $(BUILD)/bin/julia-release-basic$(EXE)
+julia-basic: $(BUILD)/bin/julia-basic$(EXE)
 julia-debug-basic: $(BUILD)/bin/julia-debug-basic$(EXE)
-julia-release-readline: $(BUILD)/bin/julia-release-readline$(EXE)
+julia-readline: $(BUILD)/bin/julia-readline$(EXE)
 julia-debug-readline: $(BUILD)/bin/julia-debug-readline$(EXE)
 
-$(BUILD)/bin/julia-release-basic$(EXE): repl.o repl-basic.o
-	@$(PRINT_LINK) $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-release
+$(BUILD)/bin/julia-basic$(EXE): repl.o repl-basic.o
+	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) -ljulia $(JLDFLAGS))
 $(BUILD)/bin/julia-debug-basic$(EXE): repl.do repl-basic.do
-	@$(PRINT_LINK) $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-debug
+	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) -ljulia-debug $(JLDFLAGS))
 
-$(BUILD)/bin/julia-release-readline$(EXE): repl.o repl-readline.o
-	@$(PRINT_LINK) $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-release || echo "*** Please ensure that the ncurses-devel package is installed on your OS, and try again. ***"
+$(BUILD)/bin/julia-readline$(EXE): repl.o repl-readline.o
+	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) -ljulia $(JLDFLAGS)) || (echo "*** Please ensure that the ncurses-devel package is installed on your OS, and try again. ***" && false)
 $(BUILD)/bin/julia-debug-readline$(EXE): repl.do repl-readline.do
-	@$(PRINT_LINK) $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) $(JLDFLAGS) -ljulia-debug
+	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) -ljulia-debug $(JLDFLAGS))
 
 clean: | $(CLEAN_TARGETS)
 	rm -f *.o *.do

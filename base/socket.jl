@@ -20,13 +20,13 @@ function IPv4(host::Integer)
     if host < 0
         error("IP address may not be negative")
     elseif typemax(typeof(host)) > typemax(Uint32) && host > typemax(Uint32) 
-        error("Number to large for IP Address")
+        error("Number too large for IP Address")
     else
         return IPv4(uint32(host))
     end
 end
 
-show(io::IO,ip::IPv4) = print(io,"IPv4(",ip,")")
+show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
 print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
                                   dec((ip.host&(0xFF0000))>>16),".",
                                   dec((ip.host&(0xFF00))>>8),".",
@@ -61,7 +61,7 @@ function IPv6(host::Integer)
     # We allow passing bigger integer types, but need to be careful to avoid overflow
     # Let's hope promotion rules are sensible
     elseif typemax(typeof(host)) > typemax(Uint128) && host > typemax(Uint128) 
-        error("Number to large for IP Address")
+        error("Number too large for IP Address")
     else
         return IPv6(uint128(host))
     end
@@ -78,7 +78,7 @@ function ipv6_field(ip::IPv6,i)
     uint16(ip.host&(uint128(0xFFFF)<<(i*16))>>(i*16))
 end
 
-show(io::IO, ip::IPv6) = print(io,"IPv6(",ip,")")
+show(io::IO, ip::IPv6) = print(io,"ip\"",ip,"\"")
 # RFC 5952 compliant show function
 # http://tools.ietf.org/html/rfc5952
 function print(io::IO,ip::IPv6)
@@ -195,7 +195,7 @@ function parseipv6(str)
         error("Too many fields in IPv6 address")
     elseif length(fields) == 8
         return IPv6(parseipv6fields(fields))
-    elseif contains(fields[end],'.')
+    elseif in('.',fields[end])
         return IPv6((parseipv6fields(fields[1:(end-1)],6))
             | parseipv4(fields[end]).host )
     else
@@ -210,7 +210,7 @@ end
 #
 
 function parseip(str)
-    if contains(str,':')
+    if in(':',str)
         # IPv6 Address
         return parseipv6(str)
     else
@@ -313,6 +313,8 @@ end
 #    closenotify::Condition
 #end
 
+isreadable(io::TcpSocket) = true
+iswritable(io::TcpSocket) = true
 
 show(io::IO,sock::TcpSocket) = print(io,"TcpSocket(",uv_status_string(sock),", ",
     nb_available(sock.buffer)," bytes waiting)")

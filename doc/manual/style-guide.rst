@@ -8,6 +8,19 @@ The following sections explain a few aspects of idiomatic Julia coding style.
 None of these rules are absolute; they are only suggestions to help familiarize
 you with the language and to help you choose among alternative designs.
 
+Write functions, not just scripts
+---------------------------------
+
+Writing code as a series of steps at the top level is a quick way to get
+started solving a problem, but you should try to divide a program into
+functions as soon as possible. Functions are more reusable and testable,
+and clarify what steps are being done and what their inputs and outputs are.
+Furthermore, code inside functions tends to run much faster than top level
+code, due to how Julia's compiler works.
+
+It is also worth emphasizing that functions should take arguments, instead
+of operating directly on global variables (aside from constants like ``pi``).
+
 Avoid writing overly-specific types
 -----------------------------------
 
@@ -71,6 +84,11 @@ use::
 
 This is better style because ``foo`` does not really accept numbers of all
 types; it really needs ``Int`` s.
+
+One issue here is that if a function inherently requires integers, it
+might be better to force the caller to decide how non-integers should
+be converted (e.g. floor or ceiling). Another issue is that declaring
+more specific types leaves more "space" for future method definitions.
 
 Append `!` to names of functions that modify their arguments
 ------------------------------------------------------------
@@ -172,3 +190,83 @@ If ``T`` is used, it can be replaced with ``typeof(x)`` if convenient.
 There is no performance difference.
 Note that this is not a general caution against static parameters, just
 against uses where they are not needed.
+
+Avoid confusion about whether something is an instance or a type
+----------------------------------------------------------------
+
+Sets of definitions like the following are confusing::
+
+    foo(::Type{MyType}) = ...
+    foo(::MyType) = foo(MyType)
+
+Decide whether the concept in question will be written as ``MyType`` or
+``MyType()``, and stick to it.
+
+The preferred style is to use instances by default, and only add
+methods involving ``Type{MyType}`` later if they become necessary
+to solve some problem.
+
+If a type is effectively an enumeration, it should be defined as a single
+(ideally ``immutable``) type, with the enumeration values being instances
+of it. Constructors and conversions can check whether values are valid.
+This design is preferred over making the enumeration an abstract type,
+with the ``values`` as subtypes.
+
+Don't overuse macros
+--------------------
+
+Be aware of when a macro could really be a function instead.
+
+Calling ``eval`` inside a macro is a particularly dangerous warning sign;
+it means the macro will only work when called at the top level. If such
+a macro is written as a function instead, it will naturally have access
+to the run-time values it needs.
+
+Don't expose unsafe operations at the interface level
+-----------------------------------------------------
+
+If you have a type that uses a native pointer::
+
+    type NativeType
+        p::Ptr{Uint8}
+        ...
+    end
+
+don't write definitions like the following::
+
+    getindex(x::NativeType, i) = unsafe_load(x.p, i)
+
+The problem is that users of this type can write ``x[i]`` without realizing
+that the operation is unsafe, and then be susceptible to memory bugs.
+
+Such a function should either check the operation to ensure it is safe, or
+have ``unsafe`` somewhere in its name to alert callers.
+
+Don't overload methods of base container types
+----------------------------------------------
+
+It is possible to write definitions like the following::
+
+    show(io::IO, v::Vector{MyType}) = ...
+
+This would provide custom showing of vectors with a specific new element type.
+While tempting, this should be avoided. The trouble is that users will expect
+a well-known type like ``Vector`` to behave in a certain way, and overly
+customizing its behavior can make it harder to work with.
+
+Be careful with type equality
+-----------------------------
+
+You generally want to use ``isa`` and ``<:`` (``subtype``) for testing types,
+not ``==``. Checking types for exact equality typically only makes sense
+when comparing to a known concrete type (e.g. ``T == Float64``), or if you
+*really, really* know what you're doing.
+
+Do not write ``x->f(x)``
+------------------------
+
+Since higher-order functions are often called with anonymous functions, it
+is easy to conclude that this is desirable or even necessary.
+But any function can be passed directly, without being "wrapped" in an
+anonymous function. Instead of writing ``map(x->f(x), a)``, write
+``map(f, a)``.

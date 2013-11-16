@@ -7,6 +7,7 @@
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
     splitdrive(path::String) = ("",path)
+    homedir() = ENV["HOME"]
 end
 @windows_only begin
     const path_separator    = "\\"
@@ -18,8 +19,9 @@ end
 
     function splitdrive(path::String)
         m = match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path)
-        m.captures[1], m.captures[2]
+        bytestring(m.captures[1]), bytestring(m.captures[2])
     end
+    homedir() = get(ENV,"HOME",joinpath(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
 end
 
 isabspath(path::String) = ismatch(path_absolute_re, path)
@@ -30,7 +32,7 @@ function splitdir(path::ByteString)
     m = match(path_dir_splitter,b)
     m == nothing && return (a,b)
     a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
-    a, m.captures[3]
+    a, bytestring(m.captures[3])
 end
 splitdir(path::String) = splitdir(bytestring(path))
 
@@ -41,7 +43,7 @@ function splitext(path::String)
     a, b = splitdrive(path)
     m = match(path_ext_splitter, b)
     m == nothing && return (path,"")
-    a*m.captures[1], m.captures[2]
+    a*m.captures[1], bytestring(m.captures[2])
 end
 
 function pathsep(paths::String...)
@@ -104,7 +106,23 @@ normpath(a::String, b::String...) = normpath(joinpath(a,b...))
 abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
 abspath(a::String, b::String...) = abspath(joinpath(a,b...))
 
-function realpath(path::String)
+@windows_only function realpath(path::String)
+    buflength = length(path)+1
+    buf = zeros(Uint8,buflength)
+    p = ccall((:GetFullPathNameA, "Kernel32"), stdcall, 
+        Uint32, (Ptr{Uint8}, Uint32, Ptr{Uint8}, Ptr{Void}), 
+        path, buflength, buf, C_NULL)
+    if p > buflength
+        buf = zeros(Uint8,p)
+        p = ccall((:GetFullPathNameA, "Kernel32"), stdcall, 
+            Uint32, (Ptr{Uint8}, Uint32, Ptr{Uint8}, Ptr{Void}), 
+            path, p, buf, C_NULL)
+    end
+    systemerror(:realpath, p == 0)
+    return bytestring(buf)[1:end-1]
+end
+
+@unix_only function realpath(path::String)
     p = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), path, C_NULL)
     systemerror(:realpath, p == C_NULL)
     s = bytestring(p)
@@ -117,8 +135,8 @@ end
     i = start(path)
     c, i = next(path,i)
     if c != '~' return path end
-    if done(path,i) return ENV["HOME"] end
+    if done(path,i) return homedir() end
     c, j = next(path,i)
-    if c == '/' return ENV["HOME"]*path[i:end] end
+    if c == '/' return homedir()*path[i:end] end
     error("~user tilde expansion not yet implemented")
 end

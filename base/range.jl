@@ -97,10 +97,13 @@ last{T}(r::Range{T})  = oftype(T, r.start + (r.len-1)*r.step)
 step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
 
-min(r::Range1) = (isempty(r)&&error("min: range is empty")) || first(r)
-max(r::Range1) = (isempty(r)&&error("max: range is empty")) || last(r)
-min(r::Ranges) = (isempty(r)&&error("min: range is empty")) || (step(r) > 0 ? first(r) :  last(r))
-max(r::Ranges) = (isempty(r)&&error("max: range is empty")) || (step(r) > 0 ?  last(r) : first(r))
+minimum(r::Range1) = (isempty(r)&&error("min: range is empty")) || first(r)
+maximum(r::Range1) = (isempty(r)&&error("max: range is empty")) || last(r)
+minimum(r::Ranges) = (isempty(r)&&error("min: range is empty")) || (step(r) > 0 ? first(r) :  last(r))
+maximum(r::Ranges) = (isempty(r)&&error("max: range is empty")) || (step(r) > 0 ?  last(r) : first(r))
+
+ctranspose(r::Ranges) = [x for _=1, x=r]
+transpose(r::Ranges) = r'
 
 # Ranges are intended to be immutable
 copy(r::Ranges) = r
@@ -119,7 +122,7 @@ function getindex(r::Range1, s::Range1{Int})
         end
         Range1(r[s.start], s.len)
     else
-        Range1(r.start, s.len)
+        Range1(r.start + s.start-1, s.len)
     end
 end
 
@@ -130,7 +133,7 @@ function getindex(r::Ranges, s::Ranges{Int})
         end
         Range(r[s.start], step(r)*step(s), s.len)
     else
-        Range(r.start, step(r)*step(s), s.len)
+        Range(r.start + (s.start-1)*step(r), step(r)*step(s), s.len)
     end
 end
 
@@ -387,15 +390,28 @@ function map!(f::Callable, dest, r::Ranges)
     dest
 end
 
-function map(f::Callable, r::Ranges)
-    if isempty(r); return {}; end
-    first = f(r[1])
-    map!(f, Array(typeof(first), length(r)), r)
+function map_range_to!(f::Callable, first, dest, r::Ranges, state)
+    dest[1] = first
+    i = 2
+    while !done(r, state)
+        ri, state = next(r, state)
+        dest[i] = f(ri)
+        i += 1
+    end
+    dest
 end
 
-function contains(r::Ranges, x)
+function map(f::Callable, r::Ranges)
+    if isempty(r); return {}; end
+    state = start(r)
+    (ri, state) = next(r, state)
+    first = f(ri)
+    map_range_to!(f, first, Array(typeof(first), length(r)), r, state)
+end
+
+function in(x, r::Ranges)
     n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1
     n >= 1 && n <= length(r) && r[n] == x
 end
 
-contains{T<:Integer}(r::Ranges{T}, x) = isinteger(x) && x>=min(r) && x<=max(r) && (step(r)==0 || mod(int(x)-first(r),step(r))==0)
+in{T<:Integer}(x, r::Ranges{T}) = isinteger(x) && x>=minimum(r) && x<=maximum(r) && (step(r)==0 || mod(int(x)-first(r),step(r))==0)

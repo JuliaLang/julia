@@ -19,7 +19,7 @@
 //#define GCTIME
 
 // GC_FINAL_STATS prints total GC stats at exit
-//#define GC_FINAL_STATS
+// set in julia.h
 
 // OBJPROFILE counts objects by type
 //#define OBJPROFILE
@@ -74,7 +74,7 @@ typedef struct _bigval_t {
 
 // GC knobs and self-measurement variables
 static size_t allocd_bytes = 0;
-static size_t total_allocd_bytes = 0;
+static int64_t total_allocd_bytes = 0;
 static size_t freed_bytes = 0;
 #define default_collect_interval (3200*1024*sizeof(void*))
 static size_t collect_interval = default_collect_interval;
@@ -129,9 +129,8 @@ static inline void *malloc_a16(size_t sz)
 
 DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
-    if (allocd_bytes > collect_interval) {
+    if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    }
     allocd_bytes += sz;
     void *b = malloc(sz);
     if (b == NULL)
@@ -145,11 +144,21 @@ DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
     freed_bytes += sz;
 }
 
-DLLEXPORT void *jl_gc_counted_realloc(void *p, size_t old, size_t sz)
+DLLEXPORT void *jl_gc_counted_realloc(void *p, size_t sz)
 {
-    if (allocd_bytes > collect_interval) {
+    if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    }
+    allocd_bytes += ((sz+1)/2);  // NOTE: wild guess at growth amount
+    void *b = realloc(p, sz);
+    if (b == NULL)
+        jl_throw(jl_memory_exception);
+    return b;
+}
+
+DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+{
+    if (allocd_bytes > collect_interval)
+        jl_gc_collect();
     if (sz > old)
         allocd_bytes += (sz-old);
     void *b = realloc(p, sz);
@@ -160,9 +169,8 @@ DLLEXPORT void *jl_gc_counted_realloc(void *p, size_t old, size_t sz)
 
 void *jl_gc_managed_malloc(size_t sz)
 {
-    if (allocd_bytes > collect_interval) {
+    if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    }
     sz = (sz+15) & -16;
     void *b = malloc_a16(sz);
     if (b == NULL)
@@ -173,9 +181,8 @@ void *jl_gc_managed_malloc(size_t sz)
 
 void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned)
 {
-    if (allocd_bytes > collect_interval) {
+    if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    }
     sz = (sz+15) & -16;
     void *b;
 #ifdef _P64
@@ -339,9 +346,8 @@ static bigval_t *big_objects = NULL;
 
 static void *alloc_big(size_t sz)
 {
-    if (allocd_bytes > collect_interval) {
+    if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    }
     size_t offs = BVOFFS*sizeof(void*);
     if (sz+offs+15 < offs+15)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
@@ -478,9 +484,8 @@ static void add_page(pool_t *p)
 
 static inline void *pool_alloc(pool_t *p)
 {
-    if (allocd_bytes > collect_interval) {
+    if (allocd_bytes > collect_interval)
         jl_gc_collect();
-    }
     allocd_bytes += p->osize;
     if (p->freelist == NULL) {
         add_page(p);
@@ -882,7 +887,7 @@ DLLEXPORT void jl_gc_enable(void)    { is_gc_enabled = 1; }
 DLLEXPORT void jl_gc_disable(void)   { is_gc_enabled = 0; }
 DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
 
-DLLEXPORT size_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_bytes; }
+DLLEXPORT int64_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_bytes; }
 
 void jl_gc_ephemeral_on(void)  { pools = &ephe_pools[0]; }
 void jl_gc_ephemeral_off(void) { pools = &norm_pools[0]; }
@@ -898,7 +903,7 @@ static void print_obj_profile(void)
     for(int i=0; i < obj_counts.size; i+=2) {
         if (obj_counts.table[i+1] != HT_NOTFOUND) {
             jl_printf(JL_STDERR, "%d ", obj_counts.table[i+1]-1);
-            jl_debug_print_type(JL_STDERR, (jl_value_t*)obj_counts.table[i]);
+            jl_static_show(JL_STDERR, (jl_value_t*)obj_counts.table[i]);
             jl_printf(JL_STDERR, "\n");
         }
     }
@@ -932,6 +937,7 @@ void jl_gc_collect(void)
 #ifdef GCTIME
         JL_PRINTF(JL_STDERR, "sweep time %.3f ms\n", (clock_now()-t0)*1000);
 #endif
+        int nfinal = to_finalize.len;
         run_finalizers();
         jl_in_gc = 0;
         JL_SIGATOMIC_END();
@@ -958,6 +964,10 @@ void jl_gc_collect(void)
             collect_interval = default_collect_interval;
         }
         freed_bytes = 0;
+        // if a lot of objects were finalized, re-run GC to finish freeing
+        // their storage if possible.
+        if (nfinal > 100000)
+            jl_gc_collect();
     }
 }
 
@@ -1035,12 +1045,12 @@ void jl_print_gc_stats(JL_STREAM *s)
     double ptime = clock_now()-process_t0;
     jl_printf(s, "exec time\t%.5f sec\n", ptime);
     jl_printf(s, "gc time  \t%.5f sec (%2.1f%%)\n", total_gc_time,
-               (total_gc_time/ptime)*100);
+              (total_gc_time/ptime)*100);
     struct mallinfo mi = mallinfo();
     jl_printf(s, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
     jl_printf(s, "total freed\t%llu b\n", total_freed_bytes);
     jl_printf(s, "free rate\t%.1f MB/sec\n",
-               (total_freed_bytes/total_gc_time)/1024/1024);
+              (total_freed_bytes/total_gc_time)/1024/1024);
 }
 #endif
 

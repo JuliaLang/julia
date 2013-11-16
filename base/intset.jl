@@ -117,7 +117,7 @@ function copy!(to::IntSet, from::IntSet)
     union!(to, from)
 end
 
-function contains(s::IntSet, n::Integer)
+function in(n::Integer, s::IntSet)
     if n >= s.limit
         # max IntSet length is typemax(Int), so highest possible element is
         # typemax(Int)-1

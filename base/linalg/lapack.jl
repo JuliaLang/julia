@@ -127,14 +127,15 @@ end
 # geqlf - unpivoted QL decomposition
 # geqrf - unpivoted QR decomposition
 # gegp3 - pivoted QR decomposition
+# geqrt - unpivoted QR by WY representation
 # geqrt3! - recursive algorithm producing compact WY representation of Q
 # gerqf - unpivoted RQ decomposition
 # getrf - LU decomposition
-for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
-    ((:dgebrd_,:dgelqf_,:dgeqlf_,:dgeqrf_,:dgeqp3_,:dgeqrt3_,:dgerqf_,:dgetrf_,:Float64,:Float64),
-     (:sgebrd_,:sgelqf_,:sgeqlf_,:sgeqrf_,:sgeqp3_,:sgeqrt3_,:sgerqf_,:sgetrf_,:Float32,:Float32),
-     (:zgebrd_,:zgelqf_,:zgeqlf_,:zgeqrf_,:zgeqp3_,:zgeqrt3_,:zgerqf_,:zgetrf_,:Complex128,:Float64),
-     (:cgebrd_,:cgelqf_,:cgeqlf_,:cgeqrf_,:cgeqp3_,:cgeqrt3_,:cgerqf_,:cgetrf_,:Complex64,:Float32))
+for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty) in
+    ((:dgebrd_,:dgelqf_,:dgeqlf_,:dgeqrf_,:dgeqp3_,:dgeqrt_,:dgeqrt3_,:dgerqf_,:dgetrf_,:Float64,:Float64),
+     (:sgebrd_,:sgelqf_,:sgeqlf_,:sgeqrf_,:sgeqp3_,:sgeqrt_,:sgeqrt3_,:sgerqf_,:sgetrf_,:Float32,:Float32),
+     (:zgebrd_,:zgelqf_,:zgeqlf_,:zgeqrf_,:zgeqp3_,:zgeqrt_,:zgeqrt3_,:zgerqf_,:zgetrf_,:Complex128,:Float64),
+     (:cgebrd_,:cgelqf_,:cgeqlf_,:cgeqrf_,:cgeqp3_,:cgeqrt_,:cgeqrt3_,:cgerqf_,:cgetrf_,:Complex64,:Float32))
     @eval begin
         # SUBROUTINE DGEBRD( M, N, A, LDA, D, E, TAUQ, TAUP, WORK, LWORK,
         #                    INFO )
@@ -265,19 +266,42 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt3, gerqf, getrf, elty, relty) in
             end
             A, tau, jpvt
         end
+        function geqrt!(A::StridedMatrix{$elty}, nb::Integer)
+            chkstride1(A)
+            m, n = size(A)
+            minmn = min(m, n)
+            nb <= minmn || error("Block size too large")
+            lda = max(1, m)
+            T = Array($elty, nb, minmn)
+            work = Array($elty, nb*n)
+            if n > 0
+                info = Array(BlasInt, 1)
+                ccall(($(string(geqrt)), liblapack), Void, 
+                    (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, 
+                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                     Ptr{BlasInt}),
+                     &m, &n, &nb, A, 
+                     &lda, T, &nb, work,
+                     info)
+                if info[1] < 0 throw(LAPACKException(info[1])) end
+            end
+            return A, T
+        end
         function geqrt3!(A::StridedMatrix{$elty})
             chkstride1(A)
             m, n = size(A)
             if m < n throw(DimensionMismatch("Matrix cannot have less rows than columns")) end
             lda = max(1, stride(A, 2))
             T = Array($elty, n, n)
-            info = Array(BlasInt, 1)
-            ccall(($(string(geqrt3)), liblapack), Void, 
-                (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                 Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                &m, &n, A, &lda,
-                T, &n, info)
-            if info[1] < 0 throw(LAPACKException(info[1])) end
+            if n > 0
+                info = Array(BlasInt, 1)
+                ccall(($(string(geqrt3)), liblapack), Void, 
+                    (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                     Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                     &m, &n, A, &lda,
+                     T, &n, info)
+                if info[1] < 0 throw(LAPACKException(info[1])) end
+            end
             return A, T
         end
         ## Several variants of geqrf! could be defined.
@@ -1389,19 +1413,25 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             chkstride1(T, C)
             m = size(C, 1)
             n = size(C, 2)
-            k = size(T, 1)
+            nb, k = size(T)
+            if k == 0 return C end
             if side == 'L'
-                ldv = max(1, m)
+                0 <= k <= m || error("Wrong value for k")
+                m == size(V,1) || throw(DimensionMismatch(""))
+                ldv = stride(V,2)
+                ldv >= max(1, m) || throw(DimensionMismatch("Q and C don't fit"))
                 wss = n*k
-                if m != size(V, 1) throw(DimensionMismatch("")) end
             elseif side == 'R'
-                ldv = max(1, n)
+                0 <= k <= n || error("Wrong value for k")
+                n == size(V,1) || throw(DimensionMismatch(""))
+                ldv = stride(V,2)
+                ldv >= max(1, n) || throw(DimensionMismatch("Stride error"))
                 wss = m*k
-                if n != size(V, 1) throw(DimensionMismatch("")) end
             else
                 error("side must be either 'L' or 'R'")
             end
-            ldc = max(1, stride(C, 2))
+            1 <= nb <= k || error("Wrong value for nb")
+            ldc = max(1, m)
             work = Array($elty, wss)
             info = Array(BlasInt, 1)
             ccall(($(string(gemqrt)), liblapack), Void,
@@ -1410,8 +1440,8 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}),
                 &side, &trans, &m, &n,
-                &k, &k, V, &ldv,
-                T, &k, C, &ldc,
+                &k, &nb, V, &ldv,
+                T, &nb, C, &ldc,
                 work, info)
             if info[1] < 0 throw(LAPACKException(info[1])) end
             return C
@@ -2454,7 +2484,7 @@ for (syev, syevr, sygvd, elty, relty) in
                 ccall(($(string(syev)),liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                       Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
-                      &jobz, &uplo, &n, A, &max(stride(A,2)), W, work, &lwork, rwork, info)
+                      &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, rwork, info)
                 if info[1] != 0 throw(LAPACKException(info[1])) end
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
