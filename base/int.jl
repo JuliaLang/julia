@@ -1,7 +1,12 @@
 ## type aliases ##
 
-typealias SmallSigned Union(Int8,Int16,Int32,Int)
-typealias SmallUnsigned Union(Uint8,Uint16,Uint32,Uint)
+if Int === Int32
+typealias SmallSigned Union(Int8,Int16)
+typealias SmallUnsigned Union(Uint8,Uint16)
+else
+typealias SmallSigned Union(Int8,Int16,Int32)
+typealias SmallUnsigned Union(Uint8,Uint16,Uint32)
+end
 
 ## integer arithmetic ##
 
@@ -258,7 +263,7 @@ for to in _inttypes, from in _inttypes
         if to.size < from.size
             @eval convert(::Type{$to}, x::($from)) = box($to,trunc_int($to,unbox($from,x)))
         elseif from.size < to.size || from===Bool
-            if subtype(from, Signed)
+            if issubtype(from, Signed)
                 @eval convert(::Type{$to}, x::($from)) = box($to,sext_int($to,unbox($from,x)))
             else
                 @eval convert(::Type{$to}, x::($from)) = box($to,zext_int($to,unbox($from,x)))

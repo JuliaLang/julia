@@ -75,44 +75,31 @@ A handler is a function defined for three kinds of arguments: ``Success``, ``Fai
   default_handler(r::Failure) = error("test failed: $(r.expr)")
   default_handler(r::Error)   = rethrow(r)
 
-A different handler can be used for a block (with :func:`withhandler`)::
+A different handler can be used for a block (with :func:`with_handler`)::
 
-  julia> handler(r::Success) = println("Success on $(r.expr)")
-  # methods for generic function handler
-  handler(r::Success) at none:1
+  julia> using Base.Test
 
-  julia> handler(r::Failure) = error("Error on custom handler: $(r.expr)")
-  # methods for generic function handler
-  handler(r::Success) at none:1
-  handler(r::Failure) at none:1
+  julia> custom_handler(r::Test.Success) = println("Success on $(r.expr)")
+  custom_handler (generic function with 1 method)
 
-  julia> handler(r::Error)   = rethrow(r)
-  # methods for generic function handler
-  handler(r::Success) at none:1
-  handler(r::Failure) at none:1
-  handler(r::Error) at none:1
+  julia> custom_handler(r::Test.Failure) = error("Error on custom handler: $(r.expr)")
+  custom_handler (generic function with 2 methods)
 
-  julia> withhandler(handler) do
+  julia> custom_handler(r::Test.Error) = rethrow(r)
+  custom_handler (generic function with 3 methods)
+
+  julia> Test.with_handler(custom_handler) do
            @test 1 == 1
            @test 1 != 1
          end
   Success on :((1==1))
   ERROR: Error on custom handler: :((1!=1))
-   in handler at none:1
-   in do_test at test.jl:38
+   in error at error.jl:21
+   in custom_handler at none:1
+   in do_test at test.jl:39
    in anonymous at no file:3
-   in withhandler at test.jl:57
-
-or globally redefined (with :func:`registerhandler`)::
-
-  julia> registerhandler(handler)
-  # methods for generic function handler
-  handler(r::Success) at none:1
-  handler(r::Failure) at none:1
-  handler(r::Error) at none:1
-
-  julia> @test 1 == 1
-  Success on :((1==1))
+   in task_local_storage at task.jl:28
+   in with_handler at test.jl:24
 
 Macros
 ______
@@ -141,10 +128,6 @@ ______
 Functions
 _________
 
-.. function:: registerhandler(handler)
-
-   Change the handler function used globally to ``handler``.
-
-.. function:: withhandler(f, handler)
+.. function:: with_handler(f, handler)
 
    Run the function ``f`` using the ``handler`` as the handler.

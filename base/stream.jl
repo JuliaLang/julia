@@ -2,7 +2,6 @@
 include("uv_constants.jl")
 
 ## types ##
-typealias Executable Union(Vector{ByteString},Function)
 typealias Callback Union(Function,Bool)
 
 abstract AsyncStream <: IO
@@ -16,6 +15,8 @@ immutable RawFD
     fd::Int32
     RawFD(fd::Integer) = new(int32(fd))
 end
+
+convert(::Type{Int32}, fd::RawFD) = fd.fd
 
 function uv_sizeof_handle(handle)
     if !(UV_UNKNOWN_HANDLE < handle < UV_HANDLE_TYPE_MAX)
@@ -127,8 +128,10 @@ type PipeServer <: UVServer
 end
 
 function init_pipe!(pipe::Union(Pipe,PipeServer);readable::Bool=false,writable=false,julia_only=true)
-    if pipe.handle == C_NULL || pipe.status != StatusUninit
-        error("Failed to initialize pipe")
+    if pipe.handle == C_NULL 
+        error("Cannot initialize pipe. UV object not allocated!")
+    elseif pipe.status != StatusUninit
+        error("Pipe is already initialized!")
     end
     uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), pipe.handle, writable,readable,julia_only,pipe))
     pipe.status = StatusInit
@@ -205,10 +208,10 @@ associate_julia_struct(handle::Ptr{Void},jlobj::ANY) =
 disassociate_julia_struct(handle::Ptr{Void}) = 
     ccall(:jl_uv_disassociate_julia_struct,Void,(Ptr{Void},),handle)
 
-function init_stdio(handle,fd)
+function init_stdio(handle)
     t = ccall(:jl_uv_handle_type,Int32,(Ptr{Void},),handle)
     if t == UV_FILE
-        return File(RawFD(fd))
+        return fdio(ccall(:jl_uv_file_handle,Int32,(Ptr{Void},),handle))
     else
         if t == UV_TTY
             ret = TTY(handle)
@@ -233,13 +236,13 @@ function reinit_stdio()
     global uv_jl_writecb = cglobal(:jl_uv_writecb)
     global uv_jl_writecb_task = cglobal(:jl_uv_writecb_task)
     global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Void}, ())
-    global STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()),0)
-    global STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()),1)
-    global STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()),2)
+    global STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()))
+    global STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()))
+    global STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()))
     reinit_displays() # since Multimedia.displays uses STDOUT as fallback
 end
 
-flush(::TTY) = nothing
+flush(::AsyncStream) = nothing
 
 function isopen(x)
     if !(x.status != StatusUninit && x.status != StatusInit)
@@ -283,7 +286,7 @@ wait_close(x) = if isopen(x) wait(x.closenotify); end
 #from `connect`
 function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
     @assert sock.status == StatusConnecting
-    if status != -1
+    if status >= 0
         sock.status = StatusOpen
         err = ()
     else
@@ -299,7 +302,7 @@ end
 #from `listen`
 function _uv_hook_connectioncb(sock::UVServer, status::Int32)
     local err
-    if status != -1
+    if status >= 0
         err = ()
     else
         err = UVError("connection",status)
@@ -512,32 +515,39 @@ end
 
 ## pipe functions ##
 malloc_pipe() = c_malloc(_sizeof_uv_named_pipe)
+
+_link_pipe(read_end::Ptr{Void},write_end::Ptr{Void}) = uv_error("pipe_link",ccall(:uv_pipe_link, Int32, (Ptr{Void}, Ptr{Void}), read_end, write_end))
+
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{Void},writable_julia_only::Bool,readpipe::AsyncStream,writepipe::AsyncStream)
     #make the pipe an unbuffered stream for now
     #TODO: this is probably not freeing memory properly after errors
     uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), read_end, 0, 1, readable_julia_only, readpipe))
     uv_error("init_pipe(2)",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), write_end, 1, 0, writable_julia_only, writepipe))
-    uv_error("pipe_link",ccall(:uv_pipe_link, Int32, (Ptr{Void}, Ptr{Void}), read_end, write_end))
+    _link_pipe(read_end,write_end)
 end
 
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{Void},writable_julia_only::Bool)
     uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Ptr{Void}), read_end, 0, 1, readable_julia_only, C_NULL))
     uv_error("init_pipe(2)",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Ptr{Void}), write_end, 1, 0, writable_julia_only, C_NULL))
-    uv_error("pipe_link",ccall(:uv_pipe_link, Int32, (Ptr{Void}, Ptr{Void}), read_end, write_end))
+    _link_pipe(read_end,write_end)
 end
 
-function link_pipe(read_end2::Pipe,readable_julia_only::Bool,write_end::Ptr{Void},writable_julia_only::Bool)
-    if read_end2.handle == C_NULL
-        read_end2.handle = malloc_pipe()
+function link_pipe(read_end::Pipe,readable_julia_only::Bool,write_end::Ptr{Void},writable_julia_only::Bool)
+    if read_end.handle == C_NULL
+        read_end.handle = malloc_pipe()
     end
-    link_pipe(read_end2.handle,readable_julia_only,write_end,writable_julia_only,read_end2,read_end2)
-    read_end2.status = StatusOpen
+    init_pipe!(read_end; readable = true, writable = false, julia_only = readable_julia_only)
+    uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), write_end, 1, 0, writable_julia_only, read_end))
+    _link_pipe(read_end.handle,write_end)
+    read_end.status = StatusOpen
 end
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Pipe,writable_julia_only::Bool)
     if write_end.handle == C_NULL
         write_end.handle = malloc_pipe()
     end
-    link_pipe(read_end,readable_julia_only,write_end.handle,writable_julia_only,write_end,write_end)
+    uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), read_end, 0, 1, readable_julia_only, write_end))
+    init_pipe!(write_end; readable = false, writable = true, julia_only = writable_julia_only)
+    _link_pipe(read_end,write_end.handle)
     write_end.status = StatusOpen
 end
 function link_pipe(read_end::Pipe,readable_julia_only::Bool,write_end::Pipe,writable_julia_only::Bool)
@@ -547,14 +557,17 @@ function link_pipe(read_end::Pipe,readable_julia_only::Bool,write_end::Pipe,writ
     if read_end.handle == C_NULL
         read_end.handle = malloc_pipe()
     end
-    link_pipe(read_end.handle,readable_julia_only,write_end.handle,writable_julia_only,read_end,write_end)
+    init_pipe!(read_end; readable = true, writable = false, julia_only = readable_julia_only)
+    init_pipe!(write_end; readable = false, writable = true, julia_only = writable_julia_only)
+    _link_pipe(read_end.handle,write_end.handle)
     write_end.status = StatusOpen
     read_end.status = StatusOpen
     nothing
 end
+close_pipe_sync(p::Pipe) = (ccall(:uv_pipe_close_sync,Void,(Ptr{Void},),p.handle); p.status = StatusClosed)
 close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),handle)
 
-_uv_hook_isopen(stream) = int32(isopen(stream))
+_uv_hook_isopen(stream) = int32(stream.status != StatusUninit && stream.status != StatusInit && isopen(stream))
 
 function close(stream::Union(AsyncStream,UVServer))
     if isopen(stream) && stream.status != StatusClosing
@@ -567,6 +580,9 @@ end
 ## stream functions ##
 function start_reading(stream::AsyncStream)
     if stream.status == StatusOpen
+        if !isreadable(stream)
+            error("Tried to read a stream that is not readable!")
+        end
         ret = ccall(:uv_read_start,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),
             handle(stream),uv_jl_alloc_buf::Ptr{Void},uv_jl_readcb::Ptr{Void})
         stream.status = StatusActive
@@ -607,7 +623,7 @@ function readall(stream::AsyncStream)
 end
 
 function read{T}(this::AsyncStream, a::Array{T})
-    assert(isbits(T),"Read from Buffer only supports bits types or arrays of bits types")
+    isbits(T) || error("Read from Buffer only supports bits types or arrays of bits types")
     nb = length(a)*sizeof(T)
     buf = this.buffer
     @assert buf.seekable == false
@@ -686,7 +702,7 @@ end
 write!(s::AsyncStream, string::ByteString) = write!(s,string.data)
 
 function _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32)
-    status == -1 && close(s)
+    status < 0 && close(s)
     nothing
 end
 
@@ -783,6 +799,10 @@ show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrornam
 ## server functions ##
 
 function accept_nonblock(server::PipeServer,client::Pipe)
+    if client.status != StatusInit
+        error(client.status == StatusUninit ? "accept: client is not initialized" : 
+                "accept: client is already in use or has been closed.")
+    end
     err = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server.handle,client.handle)
     if err == 0
         client.status = StatusOpen
@@ -799,8 +819,7 @@ function accept(server::UVServer, client::AsyncStream)
     if server.status != StatusActive 
         error("accept: Server not connected. Did you `listen`?")
     end
-    @assert client.status == StatusInit
-    while true
+    while isopen(server)
         err = accept_nonblock(server,client)
         if err == 0
             return client
@@ -809,6 +828,7 @@ function accept(server::UVServer, client::AsyncStream)
         end
         wait(server.connectnotify)
     end
+    error("accept: Server was closed while attempting to accept a client.")
 end
 
 const BACKLOG_DEFAULT = 511
@@ -852,16 +872,6 @@ function connect!(sock::Pipe, path::ByteString)
     sock
 end
 connect!(sock::Pipe, path::String) = connect(sock,bytestring(path))
-
-function connect(cb::Function,sock::AsyncStream,args...)
-    sock.ccb = cb
-    connect!(sock,args...)
-end
-
-function connect(cb::Function,args...)
-    sock.ccb = cb
-    connect(args...)
-end
 
 function connect(sock::AsyncStream, args...)
     connect!(sock,args...)

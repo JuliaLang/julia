@@ -8,13 +8,24 @@ export broadcast_getindex, broadcast_setindex!
 
 ## Broadcasting utilities ##
 
+droparg1(a, args...) = args
+
+longer_tuple(x::(), retx::Tuple, y::(), rety::Tuple) = retx
+longer_tuple(x::(), retx::Tuple, y::Tuple, rety::Tuple) = rety
+longer_tuple(x::Tuple, retx::Tuple, y::(), rety::Tuple) = retx
+longer_tuple(x::Tuple, retx::Tuple, y::Tuple, rety::Tuple) =
+    longer_tuple(droparg1(x...), retx, droparg1(y...), rety)
+longer_tuple(x::Tuple, y::Tuple) = longer_tuple(x, x, y, y)
+
+longer_size(x::AbstractArray) = size(x)
+longer_size(x::AbstractArray, y::AbstractArray...) =
+    longer_tuple(size(x), longer_size(y...))
+
 # Calculate the broadcast shape of the arguments, or error if incompatible
 broadcast_shape() = ()
 function broadcast_shape(As::AbstractArray...)
-    nd = ndims(As[1])
-    for i = 2:length(As)
-        nd = max(nd, ndims(As[i]))
-    end
+    sz = longer_size(As...)
+    nd = length(sz)
     bshape = ones(Int, nd)
     for A in As
         for d = 1:ndims(A)
@@ -28,7 +39,7 @@ function broadcast_shape(As::AbstractArray...)
             end
         end
     end
-    return tuple(bshape...)
+    return tuple(bshape...)::typeof(sz)
 end
 
 # Check that all arguments are broadcast compatible with shape
@@ -180,7 +191,7 @@ function code_broadcasts(name::String, op)
         end
 
         function $fname(As::StridedArray...)
-            $fname_T(promote_type([eltype(A) for A in As]...), As...)
+            $fname_T(Base.promote_eltype(As...), As...)
         end
 
         function $fname{T}(As::StridedArray{T}...)
@@ -230,10 +241,10 @@ end
 
 ## actual functions for broadcast and broadcast! ##
 
-broadcastfuns = (Function=>NTuple{3,Function})[]
+broadcastfuns = ObjectIdDict()
 function broadcast_functions(op::Function)
     (haskey(broadcastfuns, op) ? broadcastfuns[op] :
-        (broadcastfuns[op] = eval(code_broadcasts(string(op), quot(op)))))
+     (broadcastfuns[op] = eval(code_broadcasts(string(op), quot(op)))))::NTuple{3,Function}
 end
 
 broadcast_function(op::Function)   = broadcast_functions(op)[1]

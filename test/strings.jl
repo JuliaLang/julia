@@ -398,6 +398,7 @@ end
 for i = 1:endof(u8str)
     @test search(u8str, "", i) == i:i-1
 end
+@test search("", "") == 1:0
 
 # string rsearch with a zero-char string
 for i = 1:endof(astr)
@@ -406,6 +407,7 @@ end
 for i = 1:endof(u8str)
     @test rsearch(u8str, "", i) == i:i-1
 end
+@test rsearch("", "") == 1:0
 
 # string search with a zero-char regex
 for i = 1:endof(astr)
@@ -823,3 +825,11 @@ bin_val = hex2bytes("07bf")
 @test (@sprintf "%s" "tést") == "tést"
 # reasonably complex
 @test (@sprintf "Test: %s%c%C%c%#-.0f." "t" 65 66 67 -42) == "Test: tABC-42.."
+
+# issue #4183
+@test split(SubString(ascii("x"), 2, 0), "y") == String[""]
+@test split(SubString(utf8("x"), 2, 0), "y") == String[""]
+
+# issue #4586
+@test rsplit(RevString("ailuj"),'l') == {"ju","ia"}
+@test_throws float64(RevString("64"))

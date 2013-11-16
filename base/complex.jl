@@ -28,6 +28,7 @@ convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
                                            throw(InexactError()))
 
 promote_rule{T<:Real}(::Type{Complex{T}}, ::Type{T}) = Complex{T}
+promote_rule{T<:Real}(::Type{Complex}, ::Type{T}) = Complex
 promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{S}) =
     Complex{promote_type(T,S)}
 promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) =
@@ -99,8 +100,8 @@ const im = ImaginaryUnit()
 convert{T<:Real}(::Type{Complex{T}}, ::ImaginaryUnit) = Complex{T}(zero(T),one(T))
 convert(::Type{Complex}, ::ImaginaryUnit) = Complex(real(im),imag(im))
 
-real(::ImaginaryUnit) = int32(0)
-imag(::ImaginaryUnit) = int32(1)
+real(::ImaginaryUnit) = int(0)
+imag(::ImaginaryUnit) = int(1)
 
 promote_rule{T<:Complex}(::Type{ImaginaryUnit}, ::Type{T}) = T
 promote_rule{T<:Real}(::Type{ImaginaryUnit}, ::Type{T}) = Complex{T}
@@ -118,10 +119,8 @@ convert(::Type{Complex}, x::Real) = complex(x)
 ==(x::Real, z::Complex) = isreal(z) && real(z) == x
 
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
-isequal(z::Complex, x::Real) = isreal(z) && isequal(real(z),x)
-isequal(x::Real, z::Complex) = isreal(z) && isequal(real(z),x)
 
-hash(z::Complex) = (r = hash(real(z)); isreal(z) ? r : bitmix(r,hash(imag(z))))
+hash(z::Complex) = bitmix(hash(real(z)),hash(imag(z)))
 
 conj(z::Complex) = complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))
@@ -129,6 +128,7 @@ abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
 inv(z::Complex)  = conj(z)/abs2(z)
 sign(z::Complex) = z/abs(z)
 
+(-)(::ImaginaryUnit) = complex(0, -1)
 -(z::Complex) = complex(-real(z), -imag(z))
 +(z::Complex, w::Complex) = complex(real(z) + real(w), imag(z) + imag(w))
 -(z::Complex, w::Complex) = complex(real(z) - real(w), imag(z) - imag(w))

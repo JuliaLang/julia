@@ -1,15 +1,17 @@
 # fallback text/plain representation of any type:
-writemime(io, ::MIME"text/plain", x) = show(io, x)
+writemime(io, ::MIME"text/plain", x) = showlimited(io, x)
 
-function writemime(io, ::MIME"text/plain", v::Function)
-    if isgeneric(v)
-        show_method_table(io, methods(v), 5)
+function writemime(io::IO, ::MIME"text/plain", f::Function)
+    if isgeneric(f)
+        n = length(f.env)
+        m = n==1 ? "method" : "methods"
+        print(io, "$(f.env.name) (generic function with $n $m)")
     else
-        show(io, v)
+        show(io, f)
     end
 end
 
-function writemime(io, ::MIME"text/plain", v::AbstractVector)
+function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
     if isa(v, Ranges)
         show(io, v)
     else
@@ -21,16 +23,13 @@ function writemime(io, ::MIME"text/plain", v::AbstractVector)
     end
 end
 
-function writemime(io, ::MIME"text/plain", v::DataType)
+function writemime(io::IO, ::MIME"text/plain", v::DataType)
     show(io, v)
-    methods(v)  # force constructor creation
+    methods(v) # force constructor creation
     if isgeneric(v)
-        if v === v.name.primary
-            name = string(v.name.name)
-        else
-            name = repr(v)
-        end
-        print(io, "  (use methods($name) to see constructors)")
+        n = length(v.env)
+        m = n==1 ? "method" : "methods"
+        print(io, " (constructor with $n $m)")
     end
 end
 
@@ -52,6 +51,10 @@ function showerror(io::IO, e::TypeError)
         print(io, "type: $(e.func): ",
                   "$(ctx)expected $(e.expected), ",
                   "got $tstr")
+        if e.func === :apply && e.expected <: Function && isa(e.got,AbstractArray)
+            println(io)
+            print(io, "Use square brackets [] for indexing.")
+        end
     end
 end
 
@@ -69,21 +72,46 @@ function showerror(io::IO, e::LoadError, bt)
     print(io, "\nat $(e.file):$(e.line)")
 end
 
+function showerror(io::IO, e::DomainError, bt)
+    print(io, "DomainError")
+    for b in bt
+        code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Int32), b, 0)
+        if length(code) == 3
+            if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
+                print(io, "\n", code[1],
+                      " will only return a complex result if called with a complex argument.",
+                      "\ntry ", code[1], "(complex(x))")
+            end
+            break
+        end
+    end
+    show_backtrace(io, bt)
+end
+
 showerror(io::IO, e::SystemError) = print(io, "$(e.prefix): $(strerror(e.errnum))")
 showerror(io::IO, ::DivideError) = print(io, "integer division error")
 showerror(io::IO, ::StackOverflowError) = print(io, "stack overflow")
 showerror(io::IO, ::UndefRefError) = print(io, "access to undefined reference")
 showerror(io::IO, ::EOFError) = print(io, "read: end of file")
 showerror(io::IO, e::ErrorException) = print(io, e.msg)
-showerror(io::IO, e::KeyError) = print(io, "key not found: $(e.key)")
+showerror(io::IO, e::KeyError) = (print(io, "key not found: "); show(io, e.key))
 showerror(io::IO, e::InterruptException) = print(io, "interrupt")
 
 function showerror(io::IO, e::MethodError)
     name = e.f.env.name
     if is(e.f,convert) && length(e.args)==2
         print(io, "no method $(name)(Type{$(e.args[1])},$(typeof(e.args[2])))")
+    elseif isa(e.f, DataType)
+        print(io, "no method $(e.f)$(typeof(e.args))")
     else
         print(io, "no method $(name)$(typeof(e.args))")
+    end
+    if isdefined(Base,name)
+        f = eval(Base,name)
+        if f !== e.f && isgeneric(f) && applicable(f,e.args...)
+            println(io)
+            print(io, "you may have intended to import Base.$(name)")
+        end
     end
 end
 
@@ -128,7 +156,7 @@ function show_backtrace(io::IO, top_function::Symbol, t, set)
         if i == 1 && fname == :error; continue; end
         if fname == top_function; break; end
         count += 1
-        if !contains(set, count); continue; end
+        if !in(count, set); continue; end
         if file != lastfile || line != lastline || fname != lastname
             if lastline != -11
                 show_trace_entry(io, lastname, lastfile, lastline, n)
@@ -142,5 +170,5 @@ function show_backtrace(io::IO, top_function::Symbol, t, set)
     if n > 1 || lastline != -11
         show_trace_entry(io, lastname, lastfile, lastline, n)
     end
-    @windows_only if WORD_SIZE == 64 warn_once("\nbacktraces on your platform are often misleading or partially incorrect") end
+    @windows_only if WORD_SIZE == 64; println(); warn_once("backtraces on your platform are often misleading or partially incorrect") end
 end

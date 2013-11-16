@@ -157,7 +157,7 @@ mod{T<:FloatingPoint}(x::T, y::T) = rem(y+rem(x,y),y)
 <=(x::Float32, y::Float32) = le_float(unbox(Float32,x),unbox(Float32,y))
 <=(x::Float64, y::Float64) = le_float(unbox(Float64,x),unbox(Float64,y))
 
-isequal(x::FloatingPoint, y::FloatingPoint) =
+isequal{T<:FloatingPoint}(x::T, y::T) =
     ((x==y) & (signbit(x)==signbit(y))) | (isnan(x)&isnan(y))
 
 isequal(x::Float32, y::Float32) = fpiseq(unbox(Float32,x),unbox(Float32,y))
@@ -165,8 +165,6 @@ isequal(x::Float64, y::Float64) = fpiseq(unbox(Float64,x),unbox(Float64,y))
 isless (x::Float32, y::Float32) = fpislt(unbox(Float32,x),unbox(Float32,y))
 isless (x::Float64, y::Float64) = fpislt(unbox(Float64,x),unbox(Float64,y))
 
-isequal(a::Integer, b::FloatingPoint) = (a==b) & isequal(float(a),b)
-isequal(a::FloatingPoint, b::Integer) = isequal(b, a)
 isless (a::Integer, b::FloatingPoint) = (a<b) | isless(float(a),b)
 isless (a::FloatingPoint, b::Integer) = (a<b) | isless(a,float(b))
 

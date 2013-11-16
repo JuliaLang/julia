@@ -143,7 +143,14 @@ DLLEXPORT void jl_uv_closeHandle(uv_handle_t* handle)
 
 DLLEXPORT void jl_uv_shutdownCallback(uv_shutdown_t* req, int status)
 {
-    uv_close((uv_handle_t*) req->handle, &jl_uv_closeHandle);
+    /*
+     * This happens if the remote machine closes the connecition while we're
+     * in the shutdown request (in that case we call uv_close, thus cancelling this)
+     * request.
+     */
+    if (status != UV__ECANCELED) {
+        uv_close((uv_handle_t*) req->handle, &jl_uv_closeHandle);
+    }
     free(req);
 }
 
@@ -219,21 +226,27 @@ DLLEXPORT void jl_uv_fseventscb(uv_fs_event_t* handle, const char* filename, int
 
 DLLEXPORT int jl_run_once(uv_loop_t *loop)
 {
-    loop->stop_flag = 0;
-    if (loop) return uv_run(loop,UV_RUN_ONCE);
+    if (loop) {
+        loop->stop_flag = 0;
+        return uv_run(loop,UV_RUN_ONCE);
+    }
     else return 0;
 }
 
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
 {
-    loop->stop_flag = 0;
-    if (loop) uv_run(loop,UV_RUN_DEFAULT);
+    if (loop) {
+        loop->stop_flag = 0;
+        uv_run(loop,UV_RUN_DEFAULT);
+    }
 }
 
 DLLEXPORT int jl_process_events(uv_loop_t *loop)
 {
-    loop->stop_flag = 0;
-    if (loop) return uv_run(loop,UV_RUN_NOWAIT);
+    if (loop) {
+        loop->stop_flag = 0;
+        return uv_run(loop,UV_RUN_NOWAIT);
+    }
     else return 0;
 }
 
@@ -267,10 +280,23 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 
         uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
         req->data = 0;
-        int err = uv_shutdown(req, (uv_stream_t*)handle, &jl_uv_shutdownCallback);
-        if (err != 0) {
-            printf("shutdown err: %s\n", uv_strerror(err));
-            uv_close(handle, &jl_uv_closeHandle);
+        /*
+         * We are explicity ignoring the error here for the following reason:
+         * There is only two scenarios in which this returns an error:
+         * a) In case the stream is already shut down, in which case we're likely
+         *    in the process of closing this stream (since there's no other call to
+         *    uv_shutdown).
+         * b) In case the stream is already closed, in which case uv_close would 
+         *    cause an assertion failure.
+         */
+        uv_shutdown(req, (uv_stream_t*)handle, &jl_uv_shutdownCallback);
+    }
+    else if (handle->type == UV_FILE) {
+        uv_fs_t req;
+        jl_uv_file_t *fd = (jl_uv_file_t*)handle;
+        if (fd->file != -1) {
+            uv_fs_close(handle->loop, &req, fd->file, NULL);
+            fd->file = -1;
         }
     }
     else {
@@ -773,7 +799,7 @@ DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
 
 DLLEXPORT int jl_uv_unix_fd_is_watched(int fd, uv_poll_t *handle, uv_loop_t *loop)
 {
-    if (fd > loop->nwatchers)
+    if (fd >= loop->nwatchers)
         return 0;
     if (loop->watchers[fd] == NULL)
         return 0;
@@ -787,6 +813,11 @@ DLLEXPORT int jl_uv_unix_fd_is_watched(int fd, uv_poll_t *handle, uv_loop_t *loo
 DLLEXPORT uv_handle_type jl_uv_handle_type(uv_handle_t *handle)
 {
     return handle->type;
+}
+
+DLLEXPORT uv_file jl_uv_file_handle(jl_uv_file_t *f)
+{
+    return f->file;
 }
 
 DLLEXPORT void jl_uv_req_set_data(uv_req_t *req, void *data)

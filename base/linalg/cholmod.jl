@@ -124,9 +124,9 @@ if (1000chm_ver[1]+chm_ver[2]) >= 2001 # CHOLMOD version 2.1.0 or later
     type c_CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}
         n::Int
         minor::Int
-        Perm::Ptr{Ti}        # this pointer was added in verison 2.1.0
+        Perm::Ptr{Ti}
         ColCount::Ptr{Ti}
-        IPerm::Ptr{Ti}
+        IPerm::Ptr{Ti}        # this pointer was added in verison 2.1.0
         nzmax::Int
         p::Ptr{Ti}
         i::Ptr{Ti}
@@ -194,8 +194,8 @@ else
     type c_CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}
         n::Int
         minor::Int
+        Perm::Ptr{Ti}
         ColCount::Ptr{Ti}
-        IPerm::Ptr{Ti}
         nzmax::Int
         p::Ptr{Ti}
         i::Ptr{Ti}
@@ -252,7 +252,7 @@ else
         pi = pointer_to_array(cfp.pi, (cfp.pi == C_NULL ? 0 : cfp.nsuper + 1,), true)
         px = pointer_to_array(cfp.px, (cfp.px == C_NULL ? 0 : cfp.nsuper + 1,), true)
         s = pointer_to_array(cfp.s, (cfp.s == C_NULL ? 0 : cfp.ssize + 1,), true)
-        cf = CholmodFactor{Tv,Ti}(cfp, Perm, ColCount, IPerm, p, i, x, nz, next, prev,
+        cf = CholmodFactor{Tv,Ti}(cfp, Perm, ColCount, p, i, x, nz, next, prev,
                                   super, pi, px, s)
         c_free(cp)
         cf
@@ -987,7 +987,7 @@ end
 findnz(L::CholmodFactor) = findnz(CholmodSparse(L))
 
 function diag{Tv}(A::CholmodSparse{Tv})
-    minmn = min(size(A))
+    minmn = minimum(size(A))
     res = zeros(Tv,minmn)
     cp0 = A.colptr0
     rv0 = A.rowval0

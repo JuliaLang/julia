@@ -1,3 +1,5 @@
+import Base: convert, promote_rule, show, real, imag, conj, abs, abs2, inv, +, -, /, *
+
 immutable Quaternion{T<:Real} <: Number
     q0::T
     q1::T
@@ -5,51 +7,23 @@ immutable Quaternion{T<:Real} <: Number
     q3::T
 end
 
+Quaternion(q0::Real,q1::Real,q2::Real,q3::Real) = Quaternion(promote(q0,q1,q2,q3)...)
+
 convert{T}(::Type{Quaternion{T}}, x::Real) =
-    Quaternion(convert(T,x), convert(T,0), convert(T,0), convert(T,0))
-
+    Quaternion(convert(T,x), zero(T), zero(T), zero(T))
 convert{T}(::Type{Quaternion{T}}, z::Complex) =
-    Quaternion(convert(T,real(z)), convert(T,imag(z)), convert(T,0), convert(T,0))
-
+    Quaternion(convert(T,real(z)), convert(T,imag(z)), zero(T), zero(T))
 convert{T}(::Type{Quaternion{T}}, z::Quaternion) =
-    Quaternion(convert(T,z.q0), convert(T,z.q1),
-               convert(T,z.q2), convert(T,z.q3))
+    Quaternion(convert(T,z.q0), convert(T,z.q1), convert(T,z.q2), convert(T,z.q3))
 
-promote_rule{T,S}(::Type{Complex{T}}, ::Type{Quaternion{S}}) =
-    Quaternion{promote_type(T,S)}
+promote_rule{T,S}(::Type{Complex{T}}, ::Type{Quaternion{S}}) = Quaternion{promote_type(T,S)}
 promote_rule{S}(::Type{Bool}, ::Type{Quaternion{S}}) = Quaternion{S}
-promote_rule{T<:Real,S}(::Type{T}, ::Type{Quaternion{S}}) =
-    Quaternion{promote_type(T,S)}
+promote_rule{T<:Real,S}(::Type{T}, ::Type{Quaternion{S}}) = Quaternion{promote_type(T,S)}
+promote_rule{T,S}(::Type{Quaternion{T}}, ::Type{Quaternion{S}}) = Quaternion{promote_type(T,S)}
 
 function show(io::IO, z::Quaternion)
-    show(io, z.q0)
-    i = z.q1
-    if sign(i) == -1
-        i = -i
-        print(io, " - ")
-    else
-        print(io, " + ")
-    end
-    show(io, i)
-    print(io, "i")
-    j = z.q2
-    if sign(j) == -1
-        j = -j
-        print(io, " - ")
-    else
-        print(io, " + ")
-    end
-    show(io, j)
-    print(io, "j")
-    k = z.q3
-    if sign(k) == -1
-        k = -k
-        print(io, " - ")
-    else
-        print(io, " + ")
-    end
-    show(io, k)
-    print(io, "k")
+    pm(x) = x < 0 ? " - $(-x)" : " + $x"
+    print(io, z.q0, pm(z.q1), "i", pm(z.q2), "j", pm(z.q3), "k")
 end
 
 real(z::Quaternion) = z.q0
@@ -73,3 +47,10 @@ inv(z::Quaternion) = conj(z)/abs2(z)
                                                z.q0*w.q2 - z.q1*w.q3 + z.q2*w.q0 + z.q3*w.q1,
                                                z.q0*w.q3 + z.q1*w.q2 - z.q2*w.q1 + z.q3*w.q0)
 (/)(z::Quaternion, w::Quaternion) = z*inv(w)
+
+q = Quaternion(1,0,0,0)
+x = Quaternion(0,1,1,1)
+
+println("q = $q")
+println("q*2.0+2 = $(q*2.0+2)")
+println("abs((-q+x*2)/4) = ", abs((-q+x*2)/4))

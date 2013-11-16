@@ -143,8 +143,8 @@
 							 #fn(length)] compile-arglist)
 	  compile-begin #fn(":000r4g3?6?0e0|}g2e13044;g3N?6>0e0|}g2g3M44;e0|}^g3M342e2|c3322e4|}g2g3N44;" [compile-in
   void emit pop compile-begin] compile-begin)
-	  compile-builtin-call #fn(":000r7c0qc1e2g5^3341;" [#fn("8000r1|16=02e0i03N|32@6=0e1i04|32530]2c2qi0541;" [length=
-  argc-error #fn(":000r1|c0\x82R0i16`W6<0e1i10c242;e1i10i15i1643;|c3\x82e0i16`W6<0e1i10c442;i16b2W6<0e1i10c542;e1i10i15i1643;|c6\x82v0i16`W6;0e7i14a42;i16aW6<0e1i10c842;i16b2W6<0e1i10c942;e1i10i15i1643;|c:\x82R0i16`W6<0e1i10c;42;e1i10i15i1643;|c<\x82Q0i16`W6;0e7i14a42;e1i10i15i1643;|c=\x82T0i16`W6>0e1i10c>c?43;e1i10i15i1643;|c@\x82]0i16b2X6<0e7i14b242;e1i10i12670cA540c@i1643;e1i10i1542;" [list
+	  compile-builtin-call #fn(":000r7c0qc1e2g4^3341;" [#fn("8000r1|16=02e0i03N|32@6=0e1i05|32530]2c2qi0541;" [length=
+  argc-error #fn(":000r1|c0\x82R0i16`W6<0e1i10c242;e1i10i15i1643;|c3\x82e0i16`W6<0e1i10c442;i16b2W6<0e1i10c542;e1i10i15i1643;|c6\x82v0i16`W6;0e7i15a42;i16aW6<0e1i10c842;i16b2W6<0e1i10c942;e1i10i15i1643;|c:\x82R0i16`W6<0e1i10c;42;e1i10i15i1643;|c<\x82Q0i16`W6;0e7i15a42;e1i10i15i1643;|c=\x82T0i16`W6>0e1i10c>c?43;e1i10i15i1643;|c@\x82]0i16b2X6<0e7i15b242;e1i10i12670cA540c@i1643;e1i10i1542;" [list
   emit loadnil + load0 add2 - argc-error neg sub2 * load1 / vector loadv []
   apply tapply])]) #fn(get) arg-counts] compile-builtin-call)
 	  compile-f #fn("8000r2e0c1qc242;" [call-with-values #fn("8000r0e0~\x7f42;" [compile-f-])
@@ -157,7 +157,7 @@
   largc lvargc vargc argc compile-in lastcdr caddr ret values #fn(function)
   encode-byte-code bcode:code const-to-idx-vec]) filter keyword-arg?])
   #fn(length)]) #fn(length)]) make-code-emitter lastcdr lambda-vars filter #.pair?
-  lambda])] #0=[#:g695 ()])
+  lambda])] #0=[#:g679 ()])
 	  compile-for #fn(":000r5e0g4316X0e1|}^g2342e1|}^g3342e1|}^g4342e2|c342;e4c541;" [1arg-lambda?
   compile-in emit for error "for: third form must be a 1-argument lambda"] compile-for)
 	  compile-if #fn("<000r4c0qe1|31e1|31g3\x84e2g331e3g331F6;0e4g331560e53045;" [#fn(";000r5g2]\x82>0e0~\x7fi02g344;g2^\x82>0e0~\x7fi02g444;e0~\x7f^g2342e1~c2|332e0~\x7fi02g3342i026<0e1~c3325:0e1~c4}332e5~|322e0~\x7fi02g4342e5~}42;" [compile-in
@@ -383,25 +383,12 @@
 	  string.join #fn("7000r2|\x8550c0;c1qc23041;" ["" #fn("8000r1c0|~M322e1c2q~N322c3|41;" [#fn(io.write)
   for-each #fn("8000r1c0~i11322c0~|42;" [#fn(io.write)])
   #fn(io.tostring!)]) #fn(buffer)] string.join)
-	  string.lpad #fn(";000r3c0e1g2}c2|31x32|42;" [#fn(string) string.rep
-						       #fn(string.count)] string.lpad)
 	  string.map #fn("9000r2c0qc130c2}3142;" [#fn("7000r2c0q`312c1|41;" [#fn(";000r1]|\x7fX6S02c0~i10c1i11|3231322c2i11|32m05\v/;" [#fn(io.putc)
   #fn(string.char) #fn(string.inc)]) #fn(io.tostring!)])
 						  #fn(buffer)
 						  #fn(length)] string.map)
-	  string.rep #fn(";000r2}b4X6`0e0}`32650c1;}aW680c2|41;}b2W690c2||42;c2|||43;e3}316@0c2|e4|}ax3242;e4c2||32}b2U242;" [<=
-  "" #fn(string) odd? string.rep] string.rep)
-	  string.rpad #fn("<000r3c0|e1g2}c2|31x3242;" [#fn(string) string.rep
-						       #fn(string.count)] string.rpad)
 	  string.tail #fn(";000r2c0|c1|`}3342;" [#fn(string.sub)
 						 #fn(string.inc)] string.tail)
-	  string.trim #fn("8000r3c0q]]42;" [#fn("8000r2c0qm02c1qm12c2qc3~3141;" [#fn(";000r4g2g3X16?02c0}c1|g232326A0~|}c2|g232g344;g2;" [#fn(string.find)
-  #fn(string.char) #fn(string.inc)] trim-start)
-  #fn("<000r3e0g2`3216D02c1}c2|c3|g23232326?0\x7f|}c3|g23243;g2;" [> #fn(string.find)
-								   #fn(string.char)
-								   #fn(string.dec)] trim-end)
-  #fn("<000r1c0i10~i10i11`|34\x7fi10i12|3343;" [#fn(string.sub)])
-  #fn(length)])] string.trim)
 	  symbol-syntax #fn("9000r1c0e1|^43;" [#fn(get)
 					       *syntax-environment*] symbol-syntax)
 	  table.foreach #fn("9000r2c0c1q_}43;" [#fn(table.foldl)

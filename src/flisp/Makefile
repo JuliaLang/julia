@@ -20,7 +20,7 @@ FLAGS = -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
 	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) $(LIBDIRS:%=-L%) \
         -fvisibility=hidden
 LIBFILES = $(LLT)
-LIBS = $(LIBFILES) -lm
+LIBS = $(LIBFILES)
 ifneq ($(OS),WINNT)
 LIBS += -lpthread
 endif
@@ -37,9 +37,9 @@ debug: $(EXENAME)-debug
 HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
 
 %.o: %.c $(HEADERS)
-	@$(PRINT_CC) $(CC) $(CPPFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@)
 %.do: %.c $(HEADERS)
-	@$(PRINT_CC) $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 flisp.o:   flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
 flisp.do:  flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
@@ -51,19 +51,19 @@ $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 
 $(LIBTARGET)-debug.a: $(DOBJS)
 	rm -rf $@
-	@$(PRINT_LINK) $(AR) -rcs $@ $(DOBJS)
+	@$(call PRINT_LINK, $(AR) -rcs $@ $(DOBJS))
 	ln -sf $@ $(LIBTARGET).a
 
 $(LIBTARGET).a: $(OBJS)
 	rm -rf $@
-	@$(PRINT_LINK) $(AR) -rcs $@ $(OBJS)
+	@$(call PRINT_LINK, $(AR) -rcs $@ $(OBJS))
 
 $(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
-	@$(PRINT_CC) $(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBTARGET).a $(LIBS) $(OSLIBS)
+	@$(call PRINT_CC, $(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBTARGET).a $(LIBS) $(OSLIBS))
 	$(call spawn,./$(EXENAME)-debug) unittest.lsp
 
 $(EXENAME): $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
-	@$(PRINT_CC) $(CC) $(SHIPFLAGS) $(OBJS) flmain.o $(LDFLAGS) -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS)
+	@$(call PRINT_CC, $(CC) $(SHIPFLAGS) $(OBJS) flmain.o $(LDFLAGS) -o $(EXENAME) $(LIBTARGET).a $(LIBS) $(OSLIBS))
 	$(call spawn,./$(EXENAME)) unittest.lsp
 
 clean:

@@ -79,14 +79,14 @@ function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool
     has_header = get(optsd, :has_header, false)
     cells = Array(T, has_header ? nrows-1 : nrows, ncols)
     dlm_offsets(sbuff, dlm, eol, offsets)
-    has_header ? (dlm_fill(cells, offsets, sbuff, auto, 1), dlm_fill(Array(String, 1, ncols), offsets, sbuff, auto, 0)) : dlm_fill(cells, offsets, sbuff, auto, 0)
+    has_header ? (dlm_fill(cells, offsets, sbuff, auto, 1, eol), dlm_fill(Array(String, 1, ncols), offsets, sbuff, auto, 0, eol)) : dlm_fill(cells, offsets, sbuff, auto, 0, eol)
 end
 
 const valid_opts = [:has_header, :ignore_invalid_chars, :use_mmap]
 function val_opts(opts)
     d = Dict{Symbol,Bool}()
     for opt in opts
-        !contains(valid_opts, opt[1]) && error("unknown option $(opt[1])")
+        !in(opt[1], valid_opts) && error("unknown option $(opt[1])")
         !isa(opt[2], Bool) && error("$(opt[1]) can only be boolean")
         d[opt[1]] = opt[2]
     end
@@ -102,7 +102,7 @@ function dlm_col_begin(ncols::Int, offsets::Array{Int,2}, row::Int, col::Int)
     (ret == 0) ? dlm_col_begin(ncols, offsets, pp_row, pp_col) : (ret+2)
 end
 
-function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, auto::Bool, row_offset::Int)
+function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, auto::Bool, row_offset::Int, eol::Char)
     maxrow,maxcol = size(cells)
     tmp64 = Array(Float64,1)
 
@@ -111,9 +111,11 @@ function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, au
         for col in 1:maxcol
             start_pos = dlm_col_begin(maxcol, offsets, row, col)
             end_pos = offsets[row,col]
-            sval = SubString(sbuff, start_pos,
-                             prevind(sbuff, nextind(sbuff,end_pos)))
-
+            
+            end_idx = prevind(sbuff, nextind(sbuff,end_pos))
+            (col == maxcol) && ('\n' == eol) && ('\r' == sbuff[end_idx]) && (end_idx = prevind(sbuff, end_idx))
+            sval = SubString(sbuff, start_pos, end_idx)
+            
             if T <: Char
                 (length(sval) != 1) && error("file entry \"$(sval)\" is not a Char")
                 cells[cell_row,col] = next(sval,1)[1]
@@ -121,7 +123,7 @@ function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, au
                 if float64_isvalid(sval, tmp64)
                     cells[cell_row,col] = tmp64[1]
                 elseif auto
-                    return dlm_fill(Array(Any,maxrow,maxcol), offsets, sbuff, false, row_offset)
+                    return dlm_fill(Array(Any,maxrow,maxcol), offsets, sbuff, false, row_offset, eol)
                 else
                     cells[cell_row,col] = NaN
                 end
@@ -148,7 +150,7 @@ function dlm_offsets(sbuff::UTF8String, dlm, eol, offsets::Array{Int,2})
     idx = 1
     while(idx <= length(sbuff.data))
         val,idx = next(sbuff, idx)
-        (val != eol) && ((dlm == invalid_dlm) ? !contains(_default_delims, val) : (val != dlm)) && continue
+        (val != eol) && ((dlm == invalid_dlm) ? !in(val, _default_delims) : (val != dlm)) && continue
         col += 1
         offsets[row,col] = idx-2
         (row >= maxrow) && (col == maxcol) && break
@@ -164,7 +166,7 @@ function dlm_offsets(dbuff::Vector{Uint8}, dlm::Uint8, eol::Uint8, offsets::Arra
     offsets[maxrow,maxcol] = length(dbuff)
     for idx in 1:length(dbuff)
         val = dbuff[idx]
-        (val != eol) && ((dlm == invalid_dlm) ? !contains(_default_delims, val) : (val != dlm)) && continue
+        (val != eol) && ((dlm == invalid_dlm) ? !in(val, _default_delims) : (val != dlm)) && continue
         col += 1
         offsets[row,col] = idx-1
         (row >= maxrow) && (col == maxcol) && break
@@ -178,7 +180,7 @@ function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D)
     ncols = nrows = col = 0
     try
         for val in dbuff
-            (val != eol) && ((dlm == invalid_dlm) ? !contains(_default_delims, val) : (val != dlm)) && continue
+            (val != eol) && ((dlm == invalid_dlm) ? !in(val, _default_delims) : (val != dlm)) && continue
             col += 1
             (val == eol) && (nrows += 1; ncols = max(ncols, col); col = 0)
         end
@@ -212,7 +214,20 @@ function writedlm(io::IO, a::Union(AbstractMatrix,AbstractVector), dlm::Char)
     nothing
 end
 
-function writedlm(fname::String, a::Union(AbstractVector,AbstractMatrix), dlm::Char)
+writedlm{T}(io::IO, a::AbstractArray{T,0}, dlm::Char) = writedlm(io, reshape(a,1), dlm)
+
+function writedlm(io::IO, a::AbstractArray, dlm::Char)
+    tail = size(a)[3:]
+    function print_slice(idxs...)
+        writedlm(io, sub(a, 1:size(a,1), 1:size(a,2), idxs...), dlm)
+        if idxs != tail
+            print("\n")
+        end
+    end
+    cartesianmap(print_slice, tail)
+end
+
+function writedlm(fname::String, a, dlm::Char)
     open(fname, "w") do io
         writedlm(io, a, dlm)
     end

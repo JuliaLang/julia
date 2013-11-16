@@ -35,7 +35,12 @@ isposdef(D::Diagonal) = all(D.diag .> 0)
 
 \(Da::Diagonal, Db::Diagonal) = Diagonal(Db.diag ./ Da.diag )
 /(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag )
-\(D::Diagonal, V::Vector) = V ./ D.diag
+function A_ldiv_B!(D::Diagonal, v::Vector)
+    for i in 1:length(D.diag)
+        v[i] /= D.diag[i]
+    end
+    return v
+end
 function \(D::Diagonal, A::Matrix)
     m, n = size(A)
     if m == 0 || n == 0 return A end

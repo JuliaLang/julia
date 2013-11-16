@@ -45,7 +45,7 @@ s4 = 4
 
 b1 = randbool(n1, n2)
 @test isequal(bitpack(bitunpack(b1)), b1)
-i1 = rand(1:2, n1, n2) - 1
+i1 = rand(false:true, n1, n2)
 @test isequal(bitunpack(bitpack(i1)), i1)
 
 timesofar("conversions")
@@ -123,6 +123,16 @@ for m1 = 0 : v1
         i1 = bitunpack(b1)
         i2 = bitunpack(b2)
         @test isequal(bitunpack(append!(b1, b2)), append!(i1, i2))
+    end
+end
+
+for m1 = 0 : v1
+    for m2 = [0, 1, 63, 64, 65, 127, 128, 129]
+        b1 = randbool(m1)
+        b2 = randbool(m2)
+        i1 = bitunpack(b1)
+        i2 = bitunpack(b2)
+        @test isequal(bitunpack(prepend!(b1, b2)), prepend!(i1, i2))
     end
 end
 
@@ -560,12 +570,12 @@ timesofar("nnz&find")
 b1 = randbool(s1, s2, s3, s4)
 m1 = 1
 m2 = 3
-@check_bit_operation max BitArray{4} (b1, (), (m1, m2))
-@check_bit_operation min BitArray{4} (b1, (), (m1, m2))
+@check_bit_operation maximum BitArray{4} (b1, (m1, m2))
+@check_bit_operation minimum BitArray{4} (b1, (m1, m2))
 @check_bit_operation sum Array{Int,4} (b1, (m1, m2))
 
-@check_bit_operation max Bool (b1,)
-@check_bit_operation min Bool (b1,)
+@check_bit_operation maximum Bool (b1,)
+@check_bit_operation minimum Bool (b1,)
 @check_bit_operation any Bool (b1,)
 @check_bit_operation all Bool (b1,)
 @check_bit_operation sum Int (b1,)
@@ -655,6 +665,42 @@ for k = -max(n1,n2) : max(n1,n2)
     @check_bit_operation tril BitMatrix (b1, k)
     @check_bit_operation triu BitMatrix (b1, k)
 end
+
+b1 = randbool(n1, n1)
+@check_bit_operation istril Bool (b1,)
+b1 = randbool(n1, n2)
+@check_bit_operation istril Bool (b1,)
+b1 = randbool(n2, n1)
+@check_bit_operation istril Bool (b1,)
+
+b1 = tril(randbool(n1, n1))
+@check_bit_operation istril Bool (b1,)
+b1 = tril(randbool(n1, n2))
+@check_bit_operation istril Bool (b1,)
+b1 = tril(randbool(n2, n1))
+@check_bit_operation istril Bool (b1,)
+
+b1 = randbool(n1, n1)
+@check_bit_operation istriu Bool (b1,)
+b1 = randbool(n1, n2)
+@check_bit_operation istriu Bool (b1,)
+b1 = randbool(n2, n1)
+@check_bit_operation istriu Bool (b1,)
+
+b1 = triu(randbool(n1, n1))
+@check_bit_operation istriu Bool (b1,)
+b1 = triu(randbool(n1, n2))
+@check_bit_operation istriu Bool (b1,)
+b1 = triu(randbool(n2, n1))
+@check_bit_operation istriu Bool (b1,)
+
+b1 = randbool(n1)
+b2 = randbool(n2)
+@check_bit_operation kron BitVector (b1, b2)
+
+b1 = randbool(s1, s2)
+b2 = randbool(s3, s4)
+@check_bit_operation kron BitMatrix (b1, b2)
 
 #b1 = randbool(v1)
 #@check_bit_operation diff Vector{Int} (b1,)

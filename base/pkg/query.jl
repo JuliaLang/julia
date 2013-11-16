@@ -1,9 +1,13 @@
 module Query
 
+import ...Pkg
 using ..Types
 
-function requirements(reqs::Dict, fix::Dict)
+function requirements(reqs::Dict, fix::Dict, avail::Dict)
     for (p1,f1) in fix
+        for p2 in keys(f1.requires)
+            haskey(avail, p2) || haskey(fix, p2) || error("unknown package $p2 required by $p1")
+        end
         satisfies(p1, f1.version, reqs) ||
             warn("$p1 is fixed at $(f1.version) conflicting with top-level requirement: $(reqs[p1])")
         for (p2,f2) in fix
@@ -11,7 +15,7 @@ function requirements(reqs::Dict, fix::Dict)
                 warn("$p1 is fixed at $(f1.version) conflicting with requirement for $p2: $(f2.requires[p1])")
         end
     end
-    reqs = copy(reqs)
+    reqs = deepcopy(reqs)
     for (p1,f1) in fix
         merge_requires!(reqs, f1.requires)
     end
@@ -21,52 +25,85 @@ function requirements(reqs::Dict, fix::Dict)
     reqs
 end
 
-function dependencies(avail::Dict, fix::Dict)
+function dependencies(avail::Dict, fix::Dict = (ByteString=>Fixed)["julia"=>Fixed(VERSION)])
     avail = deepcopy(avail)
+    conflicts = (ByteString=>Set{ByteString})[]
     for (fp,fx) in fix
         delete!(avail, fp)
         for (ap,av) in avail, (v,a) in copy(av)
             if satisfies(fp, fx.version, a.requires)
                 delete!(a.requires, fp)
             else
+                haskey(conflicts, ap) || (conflicts[ap] = Set{ByteString}())
+                push!(conflicts[ap], fp)
                 delete!(av, v)
             end
         end
     end
-    for (ap,av) in avail
-        isempty(av) && delete!(avail, ap)
+    again = true
+    while again
+        again = false
+        deleted_pkgs = ByteString[]
+        for (ap,av) in avail
+            if isempty(av)
+                delete!(avail, ap)
+                push!(deleted_pkgs, ap)
+                again = true
+            end
+        end
+        for dp in deleted_pkgs
+            for (ap,av) in avail, (v,a) in copy(av)
+                if haskey(a.requires, dp)
+                    haskey(conflicts, ap) || (conflicts[ap] = Set{ByteString}())
+                    union!(conflicts[ap], conflicts[dp])
+                    delete!(av, v)
+                end
+            end
+        end
     end
-    avail
+    avail, conflicts
 end
 
 typealias PackageState Union(Nothing,VersionNumber) 
 
 function diff(have::Dict, want::Dict, avail::Dict, fixed::Dict)
-    changes = Array((ByteString,(PackageState,PackageState)),0)
-    removed = Array((ByteString,(PackageState,PackageState)),0)
+    change = Array((ByteString,(PackageState,PackageState)),0)
+    remove = Array((ByteString,(PackageState,PackageState)),0)
 
     for pkg in collect(union(keys(have),keys(want)))
         h, w = haskey(have,pkg), haskey(want,pkg)
         if h && w
             if have[pkg] != want[pkg]
-                push!(changes, (pkg,(have[pkg], want[pkg])))
+                push!(change, (pkg,(have[pkg], want[pkg])))
             end
         elseif h
-            push!(removed, (pkg,(have[pkg],nothing)))
+            push!(remove, (pkg,(have[pkg],nothing)))
         elseif w
-            push!(changes, (pkg,(nothing,want[pkg])))
+            push!(change, (pkg,(nothing,want[pkg])))
         end
     end
+    append!(sort!(change), sort!(remove))
+end
 
-    # Sort packages topologically
-    sort!(changes, lt=function(a,b)
-        ((a,vera),(b,verb)) = (a,b)
-        c = contains(Pkg.Read.alldependencies(a,avail,want,fixed),b) 
-        unnordered = (!c && !contains(Pkg.Read.alldependencies(b,avail,want,fixed),a))
-        unnordered ? a < b : c
-    end)
-
-    append!(changes, removed)
+function check_requirements(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}}, fix::Dict)
+    for (p,vs) in reqs
+        if !any([(vn in vs) for vn in keys(deps[p])])
+            remaining_vs = VersionSet()
+            err_msg = "fixed packages introduce conflicting requirements for $p: \n"
+            for (p1,f1) in fix
+                f1r = f1.requires
+                haskey(f1r, p) || continue
+                err_msg *= "         $p1 requires versions $(f1r[p])\n"
+                remaining_vs = intersect(remaining_vs, f1r[p])
+            end
+            if isempty(remaining_vs)
+                err_msg *= "       intersection is empty"
+            else
+                err_msg *= "       intersection is $remaining_vs; available versions are $(join(sort(collect(keys(deps[p]))), ", ", " and "))"
+            end
+            error(err_msg)
+        end
+    end
 end
 
 # Reduce the number of versions by creating equivalence classes, and retaining
@@ -92,12 +129,11 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         @assert !haskey(allowed, p)
         allowed[p] = (VersionNumber=>Bool)[]
         allowedp = allowed[p]
-        for (vn,_) in deps[p]
-            allowedp[vn] = contains(vs, vn)
+        for vn in keys(deps[p])
+            allowedp[vn] = vn in vs
         end
         @assert !isempty(allowedp)
-        any([a for (_,a) in allowedp]) ||
-            error("Invalid requirements: no version allowed for package $p")
+        @assert any(collect(values(allowedp)))
     end
 
     filtered_deps = (ByteString=>Dict{VersionNumber,Available})[]
@@ -121,7 +157,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
 
         # Extract unique dependencies lists (aka classes), thereby
         # assigning an index to each class.
-        uniqdepssets = unique([a for (_,a) in fdepsp])
+        uniqdepssets = unique(values(fdepsp))
 
         # Store all dependencies seen so far for later use
         for a in uniqdepssets, r in a.requires
@@ -138,7 +174,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         @assert !haskey(vmask, p)
         vmask[p] = (VersionNumber=>BitVector)[]
         vmaskp = vmask[p]
-        for (vn,_) in fdepsp
+        for vn in keys(fdepsp)
             vmaskp[vn] = falses(luds)
         end
         for (vn,a) in fdepsp
@@ -162,7 +198,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         @assert haskey(vmask, p)
         vmaskp = vmask[p]
         for (vn,vm) in vmaskp
-            push!(vm, contains(vs, vn))
+            push!(vm, in(vn, vs))
         end
     end
 
@@ -171,7 +207,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
     pruned_vers = (ByteString=>Vector{VersionNumber})[]
     eq_classes = (ByteString=>Dict{VersionNumber,Vector{VersionNumber}})[]
     for (p, vmaskp) in vmask
-        vmask0_uniq = unique([vm for (_,vm) in vmaskp])
+        vmask0_uniq = unique(values(vmaskp))
         nc = length(vmask0_uniq)
         classes = [ VersionNumber[] for c0 = 1:nc ]
         for (vn,vm) in vmaskp
@@ -187,7 +223,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         eqclassp = eq_classes[p]
         for cl in classes
             if !isempty(cl)
-                vtop = max(cl)
+                vtop = maximum(cl)
                 push!(prunedp, vtop)
                 @assert !haskey(eqclassp, vtop)
                 eqclassp[vtop] = cl
@@ -209,7 +245,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         haskey(eq_classes, p) && continue
         eq_classes[p] = (VersionNumber=>Vector{VersionNumber})[]
         eqclassp = eq_classes[p]
-        for (vn,_) in depsp
+        for vn in keys(depsp)
             eqclassp[vn] = [vn]
         end
     end
@@ -227,7 +263,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         new_deps[p] = (VersionNumber=>Available)[]
         pruned_versp = pruned_vers[p]
         for (vn,a) in depsp
-            contains(pruned_versp, vn) || continue
+            in(vn, pruned_versp) || continue
             new_deps[p][vn] = a
         end
     end
@@ -268,8 +304,8 @@ function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}
     allpkgs = pkgs
     while !isempty(staged)
         staged_next = Set{ByteString}()
-        for p in staged, (_,a) in deps[p], (rp,_) in a.requires
-            if !contains(allpkgs, rp)
+        for p in staged, a in values(deps[p]), rp in keys(a.requires)
+            if !(rp in allpkgs)
                 push!(staged_next, rp)
             end
         end

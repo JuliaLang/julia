@@ -5,21 +5,50 @@ macro deprecate(old,new)
         Expr(:toplevel,
             Expr(:export,esc(old)),
             :(function $(esc(old))(args...)
-                  warn_once(string($oldname," is deprecated, use ",$newname," instead."); depth=1)
+                  depwarn(string($oldname," is deprecated, use ",$newname," instead."),
+                          $oldname)
                   $(esc(new))(args...)
               end))
     elseif isa(old,Expr) && old.head == :call
         oldcall = sprint(io->show_unquoted(io,old))
         newcall = sprint(io->show_unquoted(io,new))
+        oldname = Expr(:quote, old.args[1])
         Expr(:toplevel,
             Expr(:export,esc(old.args[1])),
             :($(esc(old)) = begin
-                  warn_once(string($oldcall," is deprecated, use ",$newcall," instead."); depth=1)
+                  depwarn(string($oldcall," is deprecated, use ",$newcall," instead."),
+                          $oldname)
                   $(esc(new))
               end))
     else
         error("invalid usage of @deprecate")
     end
+end
+
+function depwarn(msg, funcsym)
+    bt = backtrace()
+    caller = firstcaller(bt, funcsym)
+    warn(msg, once=(caller!=C_NULL), key=caller, bt=bt)
+end
+
+function firstcaller(bt::Array{Ptr{None},1}, funcsym::Symbol)
+    # Identify the calling line
+    i = 1
+    while i <= length(bt)
+        lkup = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Int32), bt[i], 0)
+        i += 1
+        if lkup === ()
+            continue
+        end
+        fname, file, line = lkup
+        if fname == funcsym
+            break
+        end
+    end
+    if i <= length(bt)
+        return bt[i]
+    end
+    return C_NULL
 end
 
 # 0.1
@@ -31,6 +60,15 @@ export PipeString
 
 # 0.2
 
+@deprecate  A_mul_B(A,B,C)      A_mul_B!(A,B,C)
+@deprecate  A_mul_Bt(A,B,C)     A_mul_Bt!(A,B,C)
+@deprecate  At_mul_B(A,B,C)     At_mul_B!(A,B,C)
+@deprecate  At_mul_Bt(A,B,C)    At_mul_Bt!(A,B,C)
+@deprecate  Ac_mul_B(A,B,C)     Ac_mul_B!(A,B,C)
+@deprecate  A_mul_Bc(A,B,C)     A_mul_Bc!(A,B,C) 
+@deprecate  Ac_mul_Bc(A,B,C)    Ac_mul_Bc!(A,B,C)
+@deprecate  Ac_mul_Bt(A,B,C)    Ac_mul_Bt!(A,B,C)
+@deprecate  strchr              search
 @deprecate  iswriteable         iswritable
 @deprecate  localize            localpart
 @deprecate  logb                exponent
@@ -79,7 +117,6 @@ export PipeString
 @deprecate  del_each!           setdiff!
 @deprecate  real_valued         isreal
 @deprecate  integer_valued      isinteger
-@deprecate  float64_valued      isfloat64
 @deprecate  isdenormal          issubnormal
 @deprecate  get_precision       precision
 @deprecate  expr(hd, a...)              Expr(hd, a...)
@@ -118,16 +155,31 @@ export PipeString
 @deprecate eatwspace(io)  skipchars(io, isspace)
 @deprecate eatwspace_comment(io, cmt)  skipchars(io, isspace, linecomment=cmt)
 @deprecate open_any_tcp_port listenany
+@deprecate  subtype             issubtype
+@deprecate  bsxfun              broadcast
+@deprecate max(x)              maximum(x)
+@deprecate min(x)              minimum(x)
+@deprecate max(f::Function,x)  maximum(f,x)
+@deprecate min(f::Function,x)  minimum(f,x)
+@deprecate max(x,_::(),d)      maximum(x,d)
+@deprecate min(x,_::(),d)      minimum(x,d)
+@deprecate assert(x,y)         (@assert x y)
+# NOTE: when this deprecation is removed, also remove
+#   copy!(dest::AbstractArray, doffs::Integer, src::Integer)
+# in abstractarray.jl
+@deprecate copy!(dest::AbstractArray, src, doffs::Integer)  copy!(dest, doffs, src)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
 deprecated_ls(args::String...) = run(`ls -l $args`)
 function ls(args...)
-    warn_once("ls() is deprecated, use readdir() instead. If you are at the repl prompt, consider `;ls`.")
+    depwarn("ls() is deprecated, use readdir() instead. If you are at the repl prompt, consider `;ls`.", :ls)
     deprecated_ls(args...)
 end
+export ls
+
 function start_timer(timer::Timer, timeout::Int, repeat::Int)
-    warn_once("start_timer now expects arguments in units of seconds. you may need to update your code")
+    depwarn("start_timer now expects arguments in units of seconds. you may need to update your code", :start_timer)
     invoke(start_timer, (Timer,Real,Real), timer, timeout, repeat)
 end
 
@@ -140,9 +192,13 @@ end
 @deprecate <(a::AbstractCmd,b::String) (b|>a)
 @deprecate |(x, f::Function) (x|>f)
 
-@deprecate  SpawnNullStream() DevNull()
+@deprecate  SpawnNullStream() DevNull
 
 @deprecate memio(args...)  IOBuffer()
+
+@deprecate user_homedir homedir
+@deprecate user_prefdir homedir
+@deprecate user_documentsdir homedir
 
 # note removed macros: str, B_str, I_str, E_str, L_str, L_mstr, I_mstr, E_mstr
 
@@ -231,8 +287,11 @@ export ComplexPair
 @deprecate sortcols(v::AbstractMatrix,a::Algorithm,o::Ordering) sortcols(v,alg=a,order=o)
 @deprecate sortcols(v::AbstractMatrix,o::Ordering,a::Algorithm) sortcols(v,alg=a,order=o)
 
+@deprecate parse(str::String, pos::Int, greedy::Bool, raise::Bool) parse(str,pos,greedy=greedy,raise=raise)
+@deprecate parse(str::String, pos::Int, greedy::Bool) parse(str,pos,greedy=greedy)
+
 function amap(f::Function, A::AbstractArray, axis::Integer)
-    warn_once("amap is deprecated, use mapslices(f, A, dims) instead")
+    depwarn("amap is deprecated, use mapslices(f, A, dims) instead", :amap)
     dimsA = size(A)
     ndimsA = ndims(A)
     axis_size = dimsA[axis]
@@ -256,11 +315,11 @@ end
 
 # Conditional usage of packages and modules
 function usingmodule(names::Symbol...)
-    warn_once("usingmodule is deprecated, use using instead")
+    depwarn("usingmodule is deprecated, use using instead", :usingmodule)
     eval(current_module(), Expr(:toplevel, Expr(:using, names...)))
 end
 function usingmodule(names::String)
-    warn_once("usingmodule is deprecated, use using instead")
+    depwarn("usingmodule is deprecated, use using instead", :usingmodule)
     usingmodule([symbol(name) for name in split(names,".")]...)
 end
 export usingmodule
@@ -282,6 +341,14 @@ function integer_partitions(n,m)
 end
 export integer_partitions
 
+function mmread(file)
+    error("mmread(file) is discontinued - add package MatrixMarket and use MatrixMarket.mmread instead.")
+end
+
+function mmread(file, infoonly)
+    error("mmread(file, infoonly) is discontinued - add package MatrixMarket and use MatrixMarket.mmread instead.")
+end
+export mmread
 
 # 0.3 deprecations
 

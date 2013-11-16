@@ -6,9 +6,7 @@ import
     Base.sort,
     Base.sort!,
     Base.issorted,
-    Base.sortperm,
-    Base.Collections.heapify!,
-    Base.Collections.percolate_down!
+    Base.sortperm
 
 export # also exported by Base
     # order-only:
@@ -27,10 +25,7 @@ export # also exported by Base
     # algorithms:
     InsertionSort,
     QuickSort,
-    MergeSort,
-    TimSort,
-    HeapSort,
-    RadixSort
+    MergeSort
 
 export # not exported by Base
     Algorithm,
@@ -59,7 +54,7 @@ issorted(itr;
 
 function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
     lo <= k <= hi || error("select index $k is out of range $lo:$hi")
-    while lo < hi
+    @inbounds while lo < hi
         if hi-lo == 1
             if lt(o, v[hi], v[lo])
                 v[lo], v[hi] = v[hi], v[lo]
@@ -89,7 +84,7 @@ end
 function select!(v::AbstractVector, r::Range1, lo::Int, hi::Int, o::Ordering)
     a, b = first(r), last(r)
     lo <= a <= b <= hi || error("select index $k is out of range $lo:$hi")
-    while true
+    @inbounds while true
         if lo == a && hi == b
             sort!(v, lo, hi, DEFAULT_UNSTABLE, o)
             return v[r]
@@ -131,7 +126,7 @@ select(v::AbstractVector, k::Union(Int,Range1); kws...) = select!(copy(v), k; kw
 function searchsortedfirst(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
     lo = lo-1
     hi = hi+1
-    while lo < hi-1
+    @inbounds while lo < hi-1
         m = (lo+hi)>>>1
         if lt(o, v[m], x)
             lo = m
@@ -147,7 +142,7 @@ end
 function searchsortedlast(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
     lo = lo-1
     hi = hi+1
-    while lo < hi-1
+    @inbounds while lo < hi-1
         m = (lo+hi)>>>1
         if lt(o, x, v[m])
             hi = m
@@ -164,7 +159,7 @@ end
 function searchsorted(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
     lo = lo-1
     hi = hi+1
-    while lo < hi-1
+    @inbounds while lo < hi-1
         m = (lo+hi)>>>1
         if lt(o, v[m], x)
             lo = m
@@ -231,17 +226,11 @@ abstract Algorithm
 
 immutable InsertionSortAlg <: Algorithm end
 immutable QuickSortAlg     <: Algorithm end
-immutable HeapSortAlg      <: Algorithm end
 immutable MergeSortAlg     <: Algorithm end
-immutable TimSortAlg       <: Algorithm end
-immutable RadixSortAlg     <: Algorithm end
 
 const InsertionSort = InsertionSortAlg()
 const QuickSort     = QuickSortAlg()
-const HeapSort      = HeapSortAlg()
 const MergeSort     = MergeSortAlg()
-const TimSort       = TimSortAlg()
-const RadixSort     = RadixSortAlg()
 
 const DEFAULT_UNSTABLE = QuickSort
 const DEFAULT_STABLE   = MergeSort
@@ -249,7 +238,7 @@ const SMALL_ALGORITHM  = InsertionSort
 const SMALL_THRESHOLD  = 20
 
 function sort!(v::AbstractVector, lo::Int, hi::Int, ::InsertionSortAlg, o::Ordering)
-    for i = lo+1:hi
+    @inbounds for i = lo+1:hi
         j = i
         x = v[i]
         while j > lo
@@ -266,7 +255,7 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, ::InsertionSortAlg, o::Order
 end
 
 function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering)
-    while lo < hi
+    @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
         pivot = v[(lo+hi)>>>1]
         i, j = lo, hi
@@ -283,25 +272,8 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering
     return v
 end
 
-function sort!(v::AbstractVector, lo::Int, hi::Int, a::HeapSortAlg, o::Ordering)
-    if lo > 1 || hi < length(v)
-        return sort!(sub(v, lo:hi), 1, length(v), a, o)
-    end
-    r = ReverseOrdering(o)
-    heapify!(v, r)
-    for i = length(v):-1:2
-        # Swap the root with i, the last unsorted position
-        x = v[i]
-        v[i] = v[1]
-        # The heap portion now ends at position i-1, but needs fixing up
-        # starting with the root
-        percolate_down!(v,1,x,r,i-1)
-    end
-    v
-end
-
 function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering, t=similar(v))
-    if lo < hi
+    @inbounds if lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
 
         m = (lo+hi)>>>1
@@ -336,72 +308,6 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering
     return v
 end
 
-const RADIX_SIZE = 11
-const RADIX_MASK = 0x7FF
-
-function sort!(vs::AbstractVector, lo::Int, hi::Int, ::RadixSortAlg, o::Ordering, ts=similar(vs))
-    # Input checking
-    if lo >= hi;  return vs;  end
-
-    # Make sure we're sorting a bits type
-    T = ordtype(o, vs)
-    if !isbits(T)
-        error("Radix sort only sorts bits types (got $T)")
-    end
-
-    # Init
-    iters = iceil(sizeof(T)*8/RADIX_SIZE)
-    bin = zeros(Uint32, 2^RADIX_SIZE, iters)
-    if lo > 1;  bin[1,:] = lo-1;  end
-
-    # Histogram for each element, radix
-    for i = lo:hi
-        v = uint_mapping(o, vs[i])
-        for j = 1:iters
-            idx = int((v >> (j-1)*RADIX_SIZE) & RADIX_MASK)+1
-            @inbounds bin[idx,j] += 1
-        end
-    end
-
-    # Sort!
-    swaps = 0
-    len = hi-lo+1
-    for j = 1:iters
-        # Unroll first data iteration, check for degenerate case
-        v = uint_mapping(o, vs[hi])
-        idx = int((v >> (j-1)*RADIX_SIZE) & RADIX_MASK)+1
-
-        # are all values the same at this radix?
-        if bin[idx,j] == len;  continue;  end
-
-        cbin = cumsum(bin[:,j])
-        ci = cbin[idx]
-        ts[ci] = vs[hi]
-        cbin[idx] -= 1
-
-        # Finish the loop...
-        @inbounds for i in hi-1:-1:lo
-            v = uint_mapping(o, vs[i])
-            idx = int((v >> (j-1)*RADIX_SIZE) & RADIX_MASK)+1
-            ci = cbin[idx]
-            ts[ci] = vs[i]
-            cbin[idx] -= 1
-        end
-        vs,ts = ts,vs
-        swaps += 1
-    end
-
-    if isodd(swaps)
-        vs,ts = ts,vs
-        for i = lo:hi
-            vs[i] = ts[i]
-        end
-    end
-    vs
-end
-
-include("timsort.jl")
-
 ## generic sorting methods ##
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
@@ -416,7 +322,7 @@ sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
 
 ## sortperm: the permutation to sort an array ##
 
-sortperm(v::AbstractVector; alg::Algorithm=defalg(v),
+sortperm(v::AbstractVector; alg::Algorithm=DEFAULT_STABLE,
     lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
     sort!([1:length(v)], alg, Perm(ord(lt,by,rev,order),v))
 
@@ -427,14 +333,14 @@ sort(A::AbstractArray, dim::Integer; kws...) = mapslices(a->sort(a; kws...), A, 
 function sortrows(A::AbstractMatrix; kws...)
     c = 1:size(A,2)
     rows = [ sub(A,i,c) for i=1:size(A,1) ]
-    p = sortperm(rows; kws...)
+    p = sortperm(rows; kws..., order=Lexicographic)
     A[p,:]
 end
 
 function sortcols(A::AbstractMatrix; kws...)
     r = 1:size(A,1)
     cols = [ sub(A,r,i) for i=1:size(A,2) ]
-    p = sortperm(cols; kws...)
+    p = sortperm(cols; kws..., order=Lexicographic)
     A[:,p]
 end
 
@@ -468,11 +374,11 @@ isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])
 function nans2left!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
     hi < lo && return lo, hi
     i = lo
-    while (i < hi) & isnan(o, v[i])
+    @inbounds while (i < hi) & isnan(o, v[i])
         i += 1
     end
     r = 0
-    while true
+    @inbounds while true
         if isnan(o, v[i])
             i += 1
         else
@@ -489,11 +395,11 @@ end
 function nans2right!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
     hi < lo && return lo, hi
     i = hi
-    while (i > lo) & isnan(o, v[i])
+    @inbounds while (i > lo) & isnan(o, v[i])
         i -= 1
     end
     r = 0
-    while true
+    @inbounds while true
         if isnan(o, v[i])
             i -= 1
         else
@@ -518,7 +424,7 @@ issignleft(o::Perm, i::Int) = issignleft(o.order, o.data[i])
 
 function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     i, j = lo, hi = nans2end!(v,o)
-    while true
+    @inbounds while true
         while i <= j &&  issignleft(o,v[i]); i += 1; end
         while i <= j && !issignleft(o,v[j]); j -= 1; end
         if i <= j
@@ -532,11 +438,6 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     sort!(v, lo, j,  a, left(o))
     sort!(v, i,  hi, a, right(o))
     return v
-end
-
-function fpsort!(v::AbstractVector, ::Base.Sort.RadixSortAlg, o::Ordering)
-    lo, hi = nans2end!(v,o)
-    sort!(v, lo, hi, RadixSort, o)
 end
 
 sort!{T<:Floats}(v::AbstractVector{T}, a::Algorithm, o::DirectOrdering) = fpsort!(v,a,o)

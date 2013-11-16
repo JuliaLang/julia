@@ -29,6 +29,7 @@ Built-in Modules
 .. toctree::
    :maxdepth: 1
 
+   pkg
    collections
    graphics
    test

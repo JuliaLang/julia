@@ -1,12 +1,12 @@
 module Dir
 
-const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
+import Base.Git
+import ..Pkg: DEFAULT_META, META_BRANCH
 
-@unix_only const DIR_NAME = ".julia"
-@windows_only const DIR_NAME = "packages"
+const DIR_NAME = ".julia"
 
 function path()
-    b = abspath(get(ENV,"JULIA_PKGDIR",joinpath(ENV["HOME"],DIR_NAME)))
+    b = abspath(get(ENV,"JULIA_PKGDIR",joinpath(homedir(),DIR_NAME)))
     x, y = VERSION.major, VERSION.minor
     d = joinpath(b,"v$x.$y")
     isdir(d) && return d
@@ -14,32 +14,35 @@ function path()
     isdir(d) && return d
     return b
 end
-path(pkg::String...) = joinpath(path(),pkg...)
+path(pkg::String...) = normpath(path(),pkg...)
 
-function cd(f::Function, d::String=path())
-    if !isdir(d)
-        if haskey(ENV,"JULIA_PKGDIR")
-            error("Package directory $d doesn't exist; run Pkg.init() to create it.")
-        else
-            info("Initializing package repository $d.")
-            init()
-        end
+function cd(f::Function, args...; kws...)
+    dir = path()
+    if !isdir(dir)
+        !haskey(ENV,"JULIA_PKGDIR") ? init() :
+            error("package directory $dir doesn't exist; run Pkg.init() to create it.")
     end
-    Base.cd(f,d)
+    Base.cd(()->f(args...; kws...), dir)
 end
 
-function init(meta::String=DEFAULT_META)
-    d = path()
-    isdir(joinpath(d,"METADATA")) && error("Package directory $d is already initialized.")
+function init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
+    dir = path()
+    info("Initializing package repository $dir")
+    if isdir(joinpath(dir,"METADATA"))
+        info("Package directory $dir is already initialized.")
+        Git.set_remote_url(meta, dir=joinpath(dir,"METADATA"))
+        return
+    end
     try
-        run(`mkdir -p $d`)
-        cd() do
+        mkpath(dir)
+        Base.cd(dir) do
             info("Cloning METADATA from $meta")
-            run(`git clone -q -b devel $meta METADATA`)
+            run(`git clone -q -b $branch $meta METADATA`)
+            Git.set_remote_url(meta, dir="METADATA")
             run(`touch REQUIRE`)
         end
     catch e
-        run(`rm -rf $d`)
+        run(`rm -rf $dir`)
         rethrow(e)
     end
 end
