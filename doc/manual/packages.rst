@@ -176,7 +176,7 @@ Checkout, Pin and Free
 ----------------------
 
 You may want to use the ``master`` version of a package rather than one of its registered versions.
-There might be fixes or functionality on master that you need that aren't yet published in any regsitered versions, or you may be a developer of the package and need to make changes on ``master`` or some other development branch.
+There might be fixes or functionality on master that you need that aren't yet published in any registered versions, or you may be a developer of the package and need to make changes on ``master`` or some other development branch.
 In such cases, you can do ``Pkg.checkout(pkg)`` to checkout the ``master`` branch of ``pkg`` or ``Pkg.checkout(pkg,branch)`` to checkout some other branch::
 
     julia> Pkg.add("Distributions")

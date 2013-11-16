@@ -1099,3 +1099,62 @@ f4479(::Real,c) = 1
 f4479(::Int, ::Int, ::Bool) = 2
 f4479(::Int, x, a...) = 0
 @test f4479(1,1,true) == 2
+
+# issue #4688
+a4688(y) = "should be unreachable by calling b"
+b4688(y) = "not an Int"
+begin
+    a4688(y::Int) = "an Int"
+    let x = true
+        b4688(y::Int) = x == true ? a4688(y) : a4688(y)
+    end
+end
+@test b4688(1) == "an Int"
+
+# issue #4731
+type SIQ{A,B} <: Number
+    x::A
+end
+import Base: promote_rule
+promote_rule{T,T2,S,S2}(A::Type{SIQ{T,T2}},B::Type{SIQ{S,S2}}) = SIQ{promote_type(T,S)}
+@test_throws promote_type(SIQ{Int},SIQ{Float64})
+
+# issue #4675
+f4675(x::StridedArray...) = 1
+f4675{T}(x::StridedArray{T}...) = 2
+@test f4675(zeros(50,50), zeros(50,50)) == 2
+g4675{T}(x::StridedArray{T}...) = 2
+g4675(x::StridedArray...) = 1
+@test g4675(zeros(50,50), zeros(50,50)) == 2
+
+# issue #4771
+module Lib4771
+export @make_closure
+macro make_closure()
+    quote
+        f = (x)->1
+    end
+end
+end # module
+@test (Lib4771.@make_closure)(0) == 1
+
+# issue #4805
+abstract IT4805{N, T}
+
+let
+    T = TypeVar(:T,Int)
+    N = TypeVar(:N)
+    @test typeintersect(Type{IT4805{1,T}}, Type{TypeVar(:_,IT4805{N,Int})}) != None
+end
+
+let
+    test0{T <: Int64}(::Type{IT4805{1, T}}, x) = x
+    test1() = test0(IT4805{1, Int64}, 1)
+    test2() = test0(IT4805{1+0, Int64}, 1)
+    test3(n) = test0(IT4805{n, Int64}, 1)
+
+    @test test1() == 1
+    @test test2() == 1
+    @test test3(1) == 1
+    @test_throws test3(2)
+end

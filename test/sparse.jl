@@ -61,7 +61,34 @@ a116[p, p] = reshape(1:9, 3, 3)
 s116[p, p] = reshape(1:9, 3, 3)
 @test a116 == s116
 
-# check matrix multiplication
+# matrix-vector multiplication (non-square)
+for i = 1:5
+    a = sprand(10, 5, 0.5)
+    b = rand(5)
+    @test maximum(abs(a*b - dense(a)*b)) < 100*eps()
+end
+
+# complex matrix-vector multiplication and left-division
+for i = 1:5
+    a = speye(5) + 0.1*sprandn(5, 5, 0.2)
+    b = randn(5) + im*randn(5)
+    @test (maximum(abs(a*b - dense(a)*b)) < 100*eps())
+    @test (maximum(abs(a\b - dense(a)\b)) < 1000*eps())
+    @test (maximum(abs(a'\b - dense(a')\b)) < 1000*eps())
+    a = speye(5) + 0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2)
+    b = randn(5)
+    @test (maximum(abs(a*b - dense(a)*b)) < 100*eps())
+    @test (maximum(abs(a\b - dense(a)\b)) < 1000*eps())
+    @test (maximum(abs(a'\b - dense(a')\b)) < 1000*eps())
+    @test (maximum(abs(a.'\b - dense(a.')\b)) < 1000*eps())
+    b = randn(5) + im*randn(5)
+    @test (maximum(abs(a*b - dense(a)*b)) < 100*eps())
+    @test (maximum(abs(a\b - dense(a)\b)) < 1000*eps())
+    @test (maximum(abs(a'\b - dense(a')\b)) < 1000*eps())
+    @test (maximum(abs(a.'\b - dense(a.')\b)) < 1000*eps())
+end
+
+# matrix multiplication
 for i = 1:5
     a = sprand(10, 5, 0.5)
     b = sprand(5, 10, 0.1)

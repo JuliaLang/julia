@@ -121,7 +121,7 @@ function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
     end
     nel = div(length(a)*sizeof(S),sizeof(T))
     if prod(dims) != nel
-        error("reinterpret: invalid dimensions")
+        error("reinterpret: array size must not change")
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
@@ -129,7 +129,7 @@ reinterpret(t::Type,x) = reinterpret(t,[x])[1]
 
 function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
     if prod(dims) != length(a)
-        error("reshape: invalid dimensions")
+        error("reshape: dimensions must be consistent with array size")
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
@@ -205,16 +205,16 @@ infs(dims...)               = fill!(Array(Float64, dims...), Inf)
 nans{T}(::Type{T}, dims...) = fill!(Array(T, dims...), nan(T))
 nans(dims...)               = fill!(Array(Float64, dims...), NaN)
 
-function eye(T::Type, m::Int, n::Int)
+function eye(T::Type, m::Integer, n::Integer)
     a = zeros(T,m,n)
     for i = 1:min(m,n)
         a[i,i] = one(T)
     end
     return a
 end
-eye(m::Int, n::Int) = eye(Float64, m, n)
-eye(T::Type, n::Int) = eye(T, n, n)
-eye(n::Int) = eye(Float64, n)
+eye(m::Integer, n::Integer) = eye(Float64, m, n)
+eye(T::Type, n::Integer) = eye(T, n, n)
+eye(n::Integer) = eye(Float64, n)
 eye{T}(x::AbstractMatrix{T}) = eye(T, size(x, 1), size(x, 2))
 
 function one{T}(x::AbstractMatrix{T})
@@ -1530,7 +1530,8 @@ function transpose!{T<:Number}(B::Matrix{T}, A::Matrix{T})
     if size(B) != (n,m)
         error("Size of output is incorrect")
     end
-    blocksize = ifloor(sqrthalfcache/sizeof(T)/1.4) # /1.4 to avoid complete fill of cache
+    elsz = isbits(T) ? sizeof(T) : sizeof(Ptr)
+    blocksize = ifloor(sqrthalfcache/elsz/1.4) # /1.4 to avoid complete fill of cache
     if m*n <= 4*blocksize*blocksize
         # For small sizes, use a simple linear-indexing algorithm
         for i2 = 1:n
@@ -1571,18 +1572,17 @@ ctranspose(x::StridedVecOrMat) = transpose(x)
 transpose(x::StridedVector) = [ x[j] for i=1, j=1:size(x,1) ]
 transpose(x::StridedMatrix) = [ x[j,i] for i=1:size(x,2), j=1:size(x,1) ]
 
-ctranspose{T<:Number}(x::StridedVector{T}) = [ conj(x[j]) for i=1, j=1:size(x,1) ]
-ctranspose{T<:Number}(x::StridedMatrix{T}) = [ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
+ctranspose{T<:Number}(x::StridedVector{T}) = T[ conj(x[j]) for i=1, j=1:size(x,1) ]
+ctranspose{T<:Number}(x::StridedMatrix{T}) = T[ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
 
-function intersect(vs...)
-    args_type = promote_type([eltype(v) for v in vs]...)
-    ret = Array(args_type,0)
-    for v_elem in vs[1]
+function intersect(v1, vs...)
+    ret = Array(eltype(v1),0)
+    for v_elem in v1
         inall = true
-        for i = 2:length(vs)
+        for i = 1:length(vs)
             if !in(v_elem, vs[i])
                 inall=false; break
             end
@@ -1593,9 +1593,12 @@ function intersect(vs...)
     end
     ret
 end
+
+promote_eltype() = None
+promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
+
 function union(vs...)
-    args_type = promote_type([eltype(v) for v in vs]...)
-    ret = Array(args_type,0)
+    ret = Array(promote_eltype(vs...),0)
     seen = Set()
     for v in vs
         for v_elem in v

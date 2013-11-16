@@ -52,6 +52,18 @@
     struct _jl_value_t *type;
 #endif
 
+#ifdef _MSC_VER
+#if _WIN64
+#define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) __declspec(align(8)) x
+#else
+#define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) __declspec(align(4)) x
+#endif
+#elif __GNUC__
+#define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) x __attribute__ ((aligned (sizeof(void*))))
+#else
+#define JL_ATTRIBUTE_ALIGN_PTRSIZE(x)
+#endif
+
 typedef struct _jl_value_t {
     JL_DATA_TYPE
 } jl_value_t;
@@ -61,7 +73,7 @@ typedef struct _jl_sym_t {
     struct _jl_sym_t *left;
     struct _jl_sym_t *right;
     uptrint_t hash;    // precomputed hash value
-    char name[] __attribute__ ((aligned (sizeof(void*))));
+    JL_ATTRIBUTE_ALIGN_PTRSIZE(char name[]);
 } jl_sym_t;
 
 typedef struct {

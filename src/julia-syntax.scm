@@ -69,6 +69,11 @@
 (define (effect-free? e)
   (or (not (pair? e)) (sym-dot? e) (quoted? e) (equal? e '(null))))
 
+(define (undot-name e)
+  (if (symbol? e)
+      e
+      (cadr (caddr e))))
+
 ; make an expression safe for multiple evaluation
 ; for example a[f(x)] => (temp=f(x); a[temp])
 ; retuns a pair (expr . assignments)
@@ -435,9 +440,7 @@
 	  (map (lambda (s) (if (symbol? s) s (cadr s))) keyword-sparams)))
     (let ((kw (gensy)) (i (gensy)) (ii (gensy)) (elt (gensy)) (rkw (gensy))
 	  (mangled (symbol (string "__"
-				   (if (symbol? name)
-				       name
-				       (cadr (caddr name)))
+				   (undot-name name)
 				   "#"
 				   (string.sub (string (gensym)) 1)
 				   "__")))
@@ -449,7 +452,7 @@
 	  `(,@vars ,@restkw ,@pargl ,@vararg)
 	  `(block
 	    ,@(if (null? lno) '()
-		  (list (append (car lno) (list name))))
+		  (list (append (car lno) (list (undot-name name)))))
 	    ,@stmts))
 
 	;; call with no keyword args
@@ -525,7 +528,7 @@
 				   ,else)))
 			  (if (null? restkw)
 			      ;; if no rest kw, give error for unrecognized
-			      `(call (top error) "unrecognized named argument " ,elt)
+			      `(call (top error) "unrecognized keyword argument " ,elt)
 			      ;; otherwise add to rest keywords
 			      `(ccall 'jl_cell_1d_push Void (tuple Any Any)
 				      ,rkw (tuple ,elt
@@ -1257,7 +1260,9 @@
 					      (vararg? x))))
 			 kw)))
     (if (pair? invalid)
-	(error (string "invalid named argument " (car invalid))))))
+	(if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
+	    (error "more than one semicolon in argument list")
+	    (error (string "invalid keyword argument " (car invalid)))))))
 
 (define (lower-kw-call f kw pa)
   (check-kw-args kw)
@@ -1266,7 +1271,7 @@
    (let ((keyargs (apply append
 			 (map (lambda (a)
 				(if (not (symbol? (cadr a)))
-				    (error (string "named argument is not a symbol: " (cadr a))))
+				    (error (string "keyword argument is not a symbol: " (cadr a))))
 				`((quote ,(cadr a)) ,(caddr a)))
 			      keys))))
      (if (null? restkeys)
@@ -3083,7 +3088,7 @@ So far only the second case can actually occur.
       '()
       (case (car e)
 	((escape)  '())
-	((= function)
+	((= function ->)
 	 (append! (filter
 		   symbol?
 		   (if (and (pair? (cadr e)) (eq? (car (cadr e)) 'tuple))

@@ -65,7 +65,7 @@ function from the standard C library::
     Int32
 
 ``clock`` takes no arguments and returns an ``Int32``. One common gotcha
-is that a 1-tuple must be written with with a trailing comma. For
+is that a 1-tuple must be written with a trailing comma. For
 example, to call the ``getenv`` function to get a pointer to the value
 of an environment variable, one makes a call like this::
 
@@ -339,7 +339,7 @@ Any operation that throws an error is probably currently unimplemented
 and should be posted as a bug so that it can be resolved.
 
 If the pointer of interest is a plain-data array (bitstype or immutable), the
-function ``pointer_to_array(ptr,dims,[own])`` may be more more useful. The final
+function ``pointer_to_array(ptr,dims,[own])`` may be more useful. The final
 parameter should be true if Julia should "take ownership" of the underlying
 buffer and call ``free(ptr)`` when the returned ``Array`` object is finalized.
 If the ``own`` parameter is omitted or false, the caller must ensure the
@@ -377,7 +377,7 @@ Non-constant Function Specifications
 
 A ``(name, library)`` function specification must be a constant expression.
 However, it is possible to use computed values as function names by staging
-through ``eval`` as follows:
+through ``eval`` as follows::
 
     @eval ccall(($(string("a","b")),"lib"), ...
 

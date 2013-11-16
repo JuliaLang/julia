@@ -172,9 +172,8 @@ The result X generally has dimensions
 ``(i_1, i_2, ..., i_n)`` of X containing the value
 ``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. Trailing dimensions indexed with
 scalars are dropped. For example, the dimensions of ``A[I, 1]`` will be
-``(length(I),)``. The size of a dimension indexed by a boolean vector
-will be the number of true values in the vector (they behave as if they were
-transformed with ``find``).
+``(length(I),)``. Boolean vectors are first transformed with ``find``; the size of
+a dimension indexed by a boolean vector will be the number of true values in the vector.
 
 Indexing syntax is equivalent to a call to ``getindex``::
 
@@ -208,9 +207,13 @@ where each I\_k may be:
 3. An arbitrary integer vector, including the empty vector ``[]``
 4. A boolean vector
 
-The size of X should be ``(length(I_1), length(I_2), ..., length(I_n))``, and
-the value in location ``(i_1, i_2, ..., i_n)`` of A is overwritten with
-the value ``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``.
+If ``X`` is an array, its size must be ``(length(I_1), length(I_2), ..., length(I_n))``,
+and the value in location ``i_1, i_2, ..., i_n`` of ``A`` is overwritten with
+the value ``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. If ``X`` is not an array, its
+value is written to all referenced locations of ``A``.
+
+A boolean vector used as an index behaves as in ``getindex`` (it is first transformed
+with ``find``).
 
 Index assignment syntax is equivalent to a call to ``setindex!``::
 
@@ -301,18 +304,20 @@ argument (which is usually chosen to be to be the most general possible) and
 the name of the function to vectorize. Here is a simple example::
 
     julia> square(x) = x^2
-    # methods for generic function square
-    square(x) at none:1
-    
+    square (generic function with 1 method)
+
     julia> @vectorize_1arg Number square
-    # methods for generic function square
-    square{T<:Number}(x::AbstractArray{T<:Number,1}) at operators.jl:216
-    square{T<:Number}(x::AbstractArray{T<:Number,2}) at operators.jl:217
-    square{T<:Number}(x::AbstractArray{T<:Number,N}) at operators.jl:219
+    square (generic function with 4 methods)
+
+    julia> methods(square)
+    # 4 methods for generic function "square":
+    square{T<:Number}(x::AbstractArray{T<:Number,1}) at operators.jl:236
+    square{T<:Number}(x::AbstractArray{T<:Number,2}) at operators.jl:237
+    square{T<:Number}(x::AbstractArray{T<:Number,N}) at operators.jl:239
     square(x) at none:1
-    
+
     julia> square([1 2 4; 5 6 7])
-    2x3 Int64 Array:
+    2x3 Array{Int64,2}:
       1   4  16
      25  36  49
 

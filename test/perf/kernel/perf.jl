@@ -89,10 +89,9 @@ open("random.csv","w") do io
 end
 
 function parsecsv()
-    tokens = String[]
     for line in EachLine(open("random.csv"))
-    append!(tokens, split(line, ','))
-  end
+        split(line, ',')
+    end
 end
 
 @timeit parsecsv() "splitline" "CSV parsing"

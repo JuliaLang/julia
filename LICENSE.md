@@ -1,6 +1,6 @@
 Julia is licensed under the MIT License:
 
-> Copyright (c) 2009-2012: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, 
+> Copyright (c) 2009-2013: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, 
 > and other contributors:
 > 
 > https://github.com/JuliaLang/julia/contributors
@@ -27,7 +27,7 @@ Julia is licensed under the MIT License:
 [`repl-readline.c`](https://github.com/JuliaLang/julia/blob/master/ui/repl-readline.c)
 is licensed under the GNU General Public License Version 2:
 
-> Copyright (c) 2009-2012: Jeff Bezanson, Stefan Karpinski, Viral B. Shah.
+> Copyright (c) 2009-2013: Jeff Bezanson, Stefan Karpinski, Viral B. Shah.
 > 
 > This program is free software; you can redistribute it and/or modify
 > it under the terms of the GNU General Public License as published by

@@ -403,7 +403,8 @@ Function                               Description
 ``lfact(x)``                           accurate ``log(factorial(x))`` for large ``x``; same as ``lgamma(x+1)`` for ``x > 1``, zero otherwise
 ``digamma(x)``                         the `digamma function <http://en.wikipedia.org/wiki/Digamma_function>`_ (i.e. the derivative of ``lgamma``) at ``x``
 ``beta(x,y)``                          the `beta function <http://en.wikipedia.org/wiki/Beta_function>`_ at ``x,y``
-``lbeta(x)``                           accurate ``log(beta(x,y))`` for large ``x`` or ``y``
+``lbeta(x,y)``                         accurate ``log(beta(x,y))`` for large ``x`` or ``y``
+``eta(x)``                             the `Dirichlet eta function <http://en.wikipedia.org/wiki/Dirichlet_eta_function>`_ at ``x``
 ``zeta(x)``                            the `Riemann zeta function <http://en.wikipedia.org/wiki/Riemann_zeta_function>`_ at ``x``
 ``airy(x)``, ``airyai(x)``             the `Airy Ai function <http://en.wikipedia.org/wiki/Airy_function>`_ at ``x``
 ``airyprime(x)``, ``airyaiprime(x)``   the derivative of the Airy Ai function at ``x``

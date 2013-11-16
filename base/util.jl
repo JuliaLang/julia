@@ -151,15 +151,14 @@ function edit(file::String, line::Integer)
     else
         default_editor = "emacs"
     end
-    envvar = haskey(ENV,"JULIA_EDITOR") ? "JULIA_EDITOR" : "EDITOR"
-    editor = get(ENV, envvar, default_editor)
+    editor = get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor)))
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
         file = find_source_file(file)
     end
     if editor == "emacs"
-        if issrc
-            jmode = "$JULIA_HOME/../../contrib/julia-mode.el"
+        jmode = joinpath(JULIA_HOME, "..", "..", "contrib", "julia-mode.el")
+        if issrc && isreadable(jmode)
             run(`emacs $file --eval "(progn
                                      (require 'julia-mode \"$jmode\")
                                      (julia-mode)
@@ -179,6 +178,8 @@ function edit(file::String, line::Integer)
         spawn(`open -t $file`)
     elseif editor == "kate"
         spawn(`kate $file -l $line`)
+    elseif editor == "nano"
+        spawn(`nano +$line $file`)
     else
         run(`$(shell_split(editor)) $file`)
     end
@@ -319,7 +320,9 @@ end
 
 function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "Julia Version $VERSION")
-    println(io,             commit_string)
+    if !isempty(BUILD_INFO.commit_short)
+      println(io,             "Commit $(BUILD_INFO.commit_short) ($(BUILD_INFO.date_string))")
+    end
     println(io,             "Platform Info:")
     println(io,             "  System: ", Sys.OS_NAME, " (", Sys.MACHINE, ")")
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)

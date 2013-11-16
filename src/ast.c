@@ -263,6 +263,8 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
             */
             size_t n = llength(e)-1;
             size_t i;
+            if (sym == null_sym && n == 0)
+                return jl_nothing;
             if (sym == lambda_sym) {
                 jl_expr_t *ex = jl_exprn(lambda_sym, n);
                 e = cdr_(e);

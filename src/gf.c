@@ -953,7 +953,8 @@ static int sigs_eq(jl_value_t *a, jl_value_t *b, int useenv)
 int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
 {
     int msp = jl_type_morespecific(a,b,0);
-    if (jl_has_typevars(b)) {
+    int btv = jl_has_typevars(b);
+    if (btv) {
         if (jl_type_match_morespecific(a,b) == (jl_value_t*)jl_false) {
             if (jl_has_typevars(a))
                 return 0;
@@ -974,9 +975,10 @@ int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
         int nmsp = jl_type_morespecific(b,a,0);
         if (nmsp && msp)
             return 1;
-        if (jl_type_match_morespecific(b,a) != (jl_value_t*)jl_false) {
+        if (!btv && jl_types_equal(a,b))
+            return 1;
+        if (jl_type_match_morespecific(b,a) != (jl_value_t*)jl_false)
             return 0;
-        }
     }
     return msp;
 }
@@ -1555,7 +1557,7 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
     jl_tuple_t *env = jl_null;
     jl_value_t *ti=NULL;
     JL_GC_PUSH4(&t, &matc, &env, &ti);
-    int len=0;
+    int len=0, i;
     while (ml != JL_NULL) {
         // a method is shadowed if type <: S <: m->sig where S is the
         // signature of another applicable method
@@ -1574,8 +1576,8 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                 // we can skip this match if the types are already covered
                 // by a prior (more specific) match. but only do this in
                 // the "limited" mode used by type inference.
-                int i;
-                for(i=0; i < jl_array_len(t); i++) {
+                size_t l = jl_array_len(t);
+                for(i=0; i < l; i++) {
                     jl_value_t *prior_ti = jl_t0(jl_cellref(t,i));
                     if (jl_is_leaf_type(prior_ti) && jl_subtype(ti, prior_ti, 0)) {
                         skip = 1;
@@ -1590,6 +1592,21 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                     return jl_false;
                 }
                 matc = jl_tuple(3, ti, env, ml);
+                /*
+                  Check whether all static parameters matched. If not, then we
+                  have an argument type like Vector{T{Int,_}}, and a signature like
+                  f{A,B}(::Vector{T{A,B}}). If "_" turns out to be a non-typevar
+                  at runtime then this method matches, otherwise it doesn't. So we
+                  have to look for more matches. This caused issue #4731.
+                */
+                int matched_all_typevars = 1;
+                size_t l = jl_tuple_len(env);
+                for(i=1; i < l; i+=2) {
+                    if (jl_is_typevar(jl_tupleref(env,i))) {
+                        matched_all_typevars = 0;
+                        break;
+                    }
+                }
                 if (len == 1) {
                     t = jl_alloc_cell_1d(1);
                     jl_cellref(t,0) = (jl_value_t*)matc;
@@ -1600,7 +1617,7 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                 // (type ∩ ml->sig == type) ⇒ (type ⊆ ml->sig)
                 // NOTE: jl_subtype check added in case the intersection is
                 // over-approximated.
-                if (jl_types_equal(jl_t0(matc), type) &&
+                if (matched_all_typevars && jl_types_equal(jl_t0(matc), type) &&
                     jl_subtype(type, (jl_value_t*)ml->sig, 0)) {
                     JL_GC_POP();
                     return (jl_value_t*)t;
