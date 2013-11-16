@@ -85,7 +85,9 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
                 break;
         }
         if (purebits) {
-            if (isvector) {
+            // Can't be bool due to 
+            // http://llvm.org/bugs/show_bug.cgi?id=12618
+            if (isvector && type != T_int1) {
                 Type *ret = NULL;
                 if(type == T_void)
                     return T_void;
@@ -694,10 +696,10 @@ static Value *emit_tupleset(Value *tuple, Value *i, Value *x, jl_value_t *jt, jl
                             ConstantInt::get(T_int32, ctx->lineno));
                 builder.CreateUnreachable();
                 // Now for the cases
-                for (size_t i = 1,j = 0; i <= n; ++i) {
+                for (size_t i = 0,j = 0; i < jl_tuple_len(jt); ++i) {
                     BasicBlock *blk = BasicBlock::Create(getGlobalContext(),"case",ctx->f);
                     builder.SetInsertPoint(blk);
-                    jl_value_t *jltype = jl_tupleref(jt,i-1);
+                    jl_value_t *jltype = jl_tupleref(jt,i);
                     Type *ty = julia_struct_to_llvm(jltype);
                     if (ty != T_void)
                     {
@@ -708,7 +710,7 @@ static Value *emit_tupleset(Value *tuple, Value *i, Value *x, jl_value_t *jt, jl
                         builder.CreateStore(tuple,ret);
                     }
                     builder.CreateBr(after);
-                    sw->addCase(ConstantInt::get((IntegerType*)T_size,i),blk);
+                    sw->addCase(ConstantInt::get((IntegerType*)T_size,i+1),blk);
                 }
                 builder.SetInsertPoint(after);
                 ret = builder.CreateLoad(ret);
@@ -719,7 +721,7 @@ static Value *emit_tupleset(Value *tuple, Value *i, Value *x, jl_value_t *jt, jl
 }
 
 // Julia semantics
-static Value *emit_tupleref(Value *tuple, Value *i, jl_value_t *jt, jl_codectx_t *ctx)
+static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codectx_t *ctx)
 {
     if (tuple == NULL) {
         // A typecheck must have caught this one
@@ -730,25 +732,25 @@ static Value *emit_tupleref(Value *tuple, Value *i, jl_value_t *jt, jl_codectx_t
     if (ty == jl_pvalue_llvmt) //boxed
     {
 #ifdef OVERLAP_TUPLE_LEN
-        Value *slot = builder.CreateGEP(builder.CreateBitCast(tuple, jl_ppvalue_llvmt),i);
+        Value *slot = builder.CreateGEP(builder.CreateBitCast(tuple, jl_ppvalue_llvmt),ival);
 #else
         Value *slot = builder.CreateGEP(builder.CreateBitCast(tuple, jl_ppvalue_llvmt),
-                                 builder.CreateAdd(ConstantInt::get(T_size,1),i));
+                                 builder.CreateAdd(ConstantInt::get(T_size,1),ival));
 #endif
         return builder.CreateLoad(slot);
     } else {
         if (ty->isVectorTy()) {
-            Type *ity = i->getType();
+            Type *ity = ival->getType();
             assert(ity->isIntegerTy());
             IntegerType *iity = dyn_cast<IntegerType>(ity);
             // ExtractElement needs i32 *sigh*
             if(iity->getBitWidth() > 32)
-                i = builder.CreateTrunc(i,T_int32);
+                ival = builder.CreateTrunc(ival,T_int32);
             else if(iity->getBitWidth() < 32)
-                i = builder.CreateZExt(i,T_int32);
-            return builder.CreateExtractElement(tuple,builder.CreateSub(i,ConstantInt::get(T_int32,1)));
+                ival = builder.CreateZExt(ival,T_int32);
+            return builder.CreateExtractElement(tuple,builder.CreateSub(ival,ConstantInt::get(T_int32,1)));
         }
-        ConstantInt *idx = dyn_cast<ConstantInt>(i);
+        ConstantInt *idx = dyn_cast<ConstantInt>(ival);
         if (idx != 0) {
             unsigned ci = (unsigned)idx->getZExtValue()-1;
             size_t n = jl_tuple_len(jt);
@@ -775,7 +777,7 @@ static Value *emit_tupleref(Value *tuple, Value *i, jl_value_t *jt, jl_codectx_t
             builder.CreateStore(tuple,tempSpace);
             Value *idxs[2];
             idxs[0] = ConstantInt::get(T_size,0);
-            idxs[1] = builder.CreateSub(i,ConstantInt::get(T_size,1));
+            idxs[1] = builder.CreateSub(ival,ConstantInt::get(T_size,1));
             return builder.CreateLoad(builder.CreateGEP(tempSpace,ArrayRef<Value*>(&idxs[0],2)));
         }
         else
@@ -787,18 +789,18 @@ static Value *emit_tupleref(Value *tuple, Value *i, jl_value_t *jt, jl_codectx_t
             BasicBlock *after = BasicBlock::Create(getGlobalContext(),"after_switch",ctx->f);
             BasicBlock *deflt = BasicBlock::Create(getGlobalContext(),"default_case",ctx->f);
             // Create the switch
-            SwitchInst *sw = builder.CreateSwitch(i,deflt,n);
+            SwitchInst *sw = builder.CreateSwitch(ival,deflt,n);
             // Anything else is a bounds error
             builder.SetInsertPoint(deflt);
             builder.CreateCall2(jlthrow_line_func, builder.CreateLoad(jlboundserr_var),
                         ConstantInt::get(T_int32, ctx->lineno));
             builder.CreateUnreachable();
             // Now for the cases
-            for (size_t i = 1, j = 0; i <= n; ++i) {
+            for (size_t i = 0, j = 0; i < jl_tuple_len(jt); ++i) {
                 BasicBlock *blk = BasicBlock::Create(getGlobalContext(),"case",ctx->f);
-                sw->addCase(ConstantInt::get((IntegerType*)T_size,i),blk);
+                sw->addCase(ConstantInt::get((IntegerType*)T_size,i+1),blk);
                 builder.SetInsertPoint(blk);
-                jl_value_t *jltype = jl_tupleref(jt,i-1);
+                jl_value_t *jltype = jl_tupleref(jt,i);
                 Type *ty = julia_struct_to_llvm(jltype);
                 Value *val;
                 if (ty != T_void)
