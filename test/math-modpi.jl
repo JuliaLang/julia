@@ -198,12 +198,11 @@ function testModPi()
 end
 
 
-println("hello ", mod(355.0,2pi) - mod2pi(355.0))
-println("hello ", mod(355.0,pi) - modpi(355.0))
-println("hello ", mod(355.0,pi/2) - modpio2(355.0))
 
 testModPi()
 # 2pi
+@test_approx_eq mod2pi(10)          mod(10,2pi)
+@test_approx_eq mod2pi(-10)         mod(-10,2pi)
 @test_approx_eq mod2pi(355)         3.1416227979431572
 @test_approx_eq mod2pi(int32(355))  3.1416227979431572
 @test_approx_eq mod2pi(355.0)       3.1416227979431572
@@ -211,7 +210,9 @@ testModPi()
 @test mod2pi(2^60) == mod2pi(2.0^60)
 @test_throws mod2pi(2^60-1)
 
-# pi - also test that mod(x,pi) == modpi(x)
+# pi
+@test_approx_eq modpi(10)           mod(10,pi)
+@test_approx_eq modpi(-10)          mod(-10,pi)
 @test_approx_eq modpi(355)          3.014435336405372e-5
 @test_approx_eq modpi(int32(355))   3.014435336405372e-5
 @test_approx_eq modpi(355.0)        3.014435336405372e-5
@@ -219,13 +220,14 @@ testModPi()
 @test modpi(2^60) == modpi(2.0^60)
 @test_throws modpi(2^60-1)
 
-@test modpi(355)         == mod(355,pi)
-@test modpi(int32(355))  == mod(int32(355),pi)
-@test modpi(355.0)       == mod(355.0,pi)
-@test modpi(355.0f0)     == mod(355.0f0,pi)
 
 # pi/2
+@test_approx_eq modpio2(10)         mod(10,pi/2)
+@test_approx_eq modpio2(-10)        mod(-10,pi/2)
 @test_approx_eq modpio2(355)        3.014435336405372e-5
 @test_approx_eq modpio2(int32(355)) 3.014435336405372e-5
 @test_approx_eq modpio2(355.0)      3.014435336405372e-5
 @test_approx_eq modpio2(355.0f0)    3.0144354f-5
+@test modpio2(2^60) == modpio2(2.0^60)
+@test_throws modpio2(2^60-1)
+
