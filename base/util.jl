@@ -147,41 +147,51 @@ function edit(file::String, line::Integer)
     if OS_NAME == :Windows || OS_NAME == :Darwin
         default_editor = "open"
     elseif isreadable("/etc/alternatives/editor")
-        default_editor = basename(realpath("/etc/alternatives/editor"))
+        default_editor = "/etc/alternatives/editor"
     else
         default_editor = "emacs"
     end
     editor = get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor)))
+    if ispath(editor)
+        if isreadable(editor)
+           edpath = realpath(editor)
+           edname = basename(edpath)
+        else
+           error("edit: can't find \"$editor\"")
+        end
+    else
+        edpath = edname = editor
+    end
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
         file = find_source_file(file)
     end
-    if editor == "emacs"
+    if edname == "emacs"
         jmode = joinpath(JULIA_HOME, "..", "..", "contrib", "julia-mode.el")
         if issrc && isreadable(jmode)
-            run(`emacs $file --eval "(progn
+            run(`$edpath $file --eval "(progn
                                      (require 'julia-mode \"$jmode\")
                                      (julia-mode)
                                      (goto-line $line))"`)
         else
-            run(`emacs $file --eval "(goto-line $line)"`)
+            run(`$edpath $file --eval "(goto-line $line)"`)
         end
-    elseif editor == "vim"
-        run(`vim $file +$line`)
-    elseif editor == "textmate" || editor == "mate"
-        spawn(`mate $file -l $line`)
-    elseif editor == "subl"
-        spawn(`subl $file:$line`)
-    elseif OS_NAME == :Windows && (editor == "start" || editor == "open")
+    elseif edname == "vim"
+        run(`$edpath $file +$line`)
+    elseif edname == "textmate" || edname == "mate"
+        spawn(`$edpath $file -l $line`)
+    elseif edname == "subl"
+        spawn(`$edpath $file:$line`)
+    elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
         spawn(`start /b $file`)
-    elseif OS_NAME == :Darwin && (editor == "start" || editor == "open")
+    elseif OS_NAME == :Darwin && (edname == "start" || edname == "open")
         spawn(`open -t $file`)
-    elseif editor == "kate"
-        spawn(`kate $file -l $line`)
-    elseif editor == "nano"
-        run(`nano +$line $file`)
+    elseif edname == "kate"
+        spawn(`$edpath $file -l $line`)
+    elseif edname == "nano"
+        run(`$edpath +$line $file`)
     else
-        run(`$(shell_split(editor)) $file`)
+        run(`$(shell_split(edpath)) $file`)
     end
     nothing
 end
