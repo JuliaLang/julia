@@ -195,15 +195,19 @@ fill(v, dims::Integer...) = fill!(Array(typeof(v), dims...), v)
 
 zeros{T}(::Type{T}, dims...) = fill!(Array(T, dims...), zero(T))
 zeros(dims...)               = fill!(Array(Float64, dims...), 0.0)
+zeros_like{T}(a::Array{T})   = fill!(Array(T, size(a)), zero(T))
 
 ones{T}(::Type{T}, dims...) = fill!(Array(T, dims...), one(T))
 ones(dims...)               = fill!(Array(Float64, dims...), 1.0)
+ones_like{T}(a::Array{T})   = fill!(Array(T, size(a)), one(T))
 
 infs{T}(::Type{T}, dims...) = fill!(Array(T, dims...), inf(T))
 infs(dims...)               = fill!(Array(Float64, dims...), Inf)
+infs_like{T<:FloatingPoint}(a::Array{T}) = fill!(Array(T, size(a)), inf(T))
 
 nans{T}(::Type{T}, dims...) = fill!(Array(T, dims...), nan(T))
 nans(dims...)               = fill!(Array(Float64, dims...), NaN)
+nans_like{T<:FloatingPoint}(a::Array{T}) = fill!(Array(T, size(a)), nan(T))
 
 function eye(T::Type, m::Integer, n::Integer)
     a = zeros(T,m,n)
