@@ -108,7 +108,7 @@ function showerror(io::IO, e::MethodError)
         if typeof(arg) == DataType
             print(io, "Type{$(arg)}")
         else
-            print(io, typeof(arg),)
+            print(io, typeof(arg))
         end
         i == length(e.args) || print(io,", ")
     end
