@@ -99,13 +99,20 @@ showerror(io::IO, e::InterruptException) = print(io, "interrupt")
 
 function showerror(io::IO, e::MethodError)
     name = e.f.env.name
-    if is(e.f,convert) && length(e.args)==2
-        print(io, "no method $(name)(Type{$(e.args[1])},$(typeof(e.args[2])))")
-    elseif isa(e.f, DataType)
-        print(io, "no method $(e.f)$(typeof(e.args))")
+    if isa(e.f, DataType)
+        print(io, "no method $(e.f)(")
     else
-        print(io, "no method $(name)$(typeof(e.args))")
+        print(io, "no method $(name)(")
     end
+    for (i, arg) in enumerate(e.args)
+        if typeof(arg) == DataType
+            print(io, "Type{$(arg)}")
+        else
+            print(io, typeof(arg),)
+        end
+        i == length(e.args) || print(io,", ")
+    end
+    print(io, ")")
     if isdefined(Base,name)
         f = eval(Base,name)
         if f !== e.f && isgeneric(f) && applicable(f,e.args...)
