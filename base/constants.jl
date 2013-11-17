@@ -87,13 +87,3 @@ end
 ^(::MathConst{:e}, x::AbstractMatrix) = expm(x)
 
 log(::MathConst{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
-
-mod(x::Float64, y::MathConst{:π}) = modpi(x)
-mod(x::Float32, y::MathConst{:π}) = modpi(x)
-mod(x::Int32, y::MathConst{:π})   = modpi(x)
-mod(x::Int64, y::MathConst{:π})   = modpi(x)
-# Note: with these 3 lines above, we have:
-# mod(5706674932067741.0,pi)  == 4.237546464512562e-16 # correct, modpi called
-# mod(5706674932067741,pi)    == 4.237546464512562e-16 # correct, modpi called
-# mod(5706674932067741,pi*1)  == 0.2224559947753093    # second arg Float64: original "mod" called
-# mod(5706674932067741.0,pi*1)== 0.2224559947753093    # second arg Float64: original "mod" called
