@@ -714,13 +714,8 @@ function getindex{T}(obj::GeneralizedSVD{T}, d::Symbol)
     end
     if d == :R return obj.R end
     if d == :R0
-        m = size(obj.U, 1)
         n = size(obj.Q, 1)
-        if m - obj.k - obj.l >= 0
-            return [zeros(T, obj.k + obj.l, n - obj.k - obj.l) obj.R]
-        else
-            return [zeros(T, obj.k + obj.l, n - obj.k - obj.l) obj.R]
-        end
+        return [zeros(T, obj.k + obj.l, n - obj.k - obj.l) obj.R]
     end
     error("No such type field")
 end
