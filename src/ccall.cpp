@@ -580,13 +580,8 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             make_gcroot(arg, ctx);
         }
 #endif
-        /*
-        static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
-                          jl_value_t *argex, bool addressOf,
-                          int argn, jl_codectx_t *ctx,
-                          bool *mightNeedTempSpace) */
         bool mightNeedTempSpace = false;
-        argvals[i] = julia_to_native(t,tti,arg,argi,false,i,ctx,&mightNeedTempSpace);
+        argvals[i] = julia_to_native(t,tti,arg,argi,false,i,ctx,&mightNeedTempSpace,&mightNeedTempSpace);
         if ((i+1) != nargt)
             argstream << ",";
     }
