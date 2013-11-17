@@ -562,6 +562,123 @@ for (gels, gesv, getrs, getri, elty) in
         end
     end
 end
+for (gesvx, elty) in
+    ((:dgesvx_,:Float64),
+     (:sgesvx_,:Float32))
+    @eval begin
+      #     SUBROUTINE DGESVX( FACT, TRANS, N, NRHS, A, LDA, AF, LDAF, IPIV,
+      #                        EQUED, R, C, B, LDB, X, LDX, RCOND, FERR, BERR,
+      #                        WORK, IWORK, INFO )
+      # 
+      #     .. Scalar Arguments ..
+      #     CHARACTER          EQUED, FACT, TRANS
+      #     INTEGER            INFO, LDA, LDAF, LDB, LDX, N, NRHS
+      #     DOUBLE PRECISION   RCOND
+      #     ..
+      #     .. Array Arguments ..
+      #     INTEGER            IPIV( * ), IWORK( * )
+      #     DOUBLE PRECISION   A( LDA, * ), AF( LDAF, * ), B( LDB, * ),
+      #    $                   BERR( * ), C( * ), FERR( * ), R( * ),
+      #    $                   WORK( * ), X( LDX, * 
+      #
+      function gesvx!(fact::BlasChar, trans::BlasChar, A::StridedMatrix{$elty},
+           AF::StridedMatrix{$elty}, ipiv::Vector{BlasInt}, equed::BlasChar,
+           R::Vector{$elty}, C::Vector{$elty}, B::StridedVecOrMat{$elty})
+        lda, n    = size(A)
+        ldaf, n   = size(AF)
+        if length(size(B)) == 2
+          ldb, nrhs = size(B)
+        else
+          ldb, nrhs = size(B, 1), 1
+        end
+        rcond     = Array($elty, 1)
+        ferr      = Array($elty, nrhs)
+        berr      = Array($elty, nrhs)
+        work      = Array($elty, 4n)
+        iwork     = Array($elty, n)
+        info      = Array(BlasInt, 1)
+        X = Array($elty, n, nrhs)
+        ccall(($(string(gesvx)),liblapack), Void,
+          (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
+           Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+           Ptr{BlasChar}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
+           Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
+           Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+          &fact, &trans, &n, &nrhs, A, &lda, AF, &ldaf, ipiv, &equed, R, C, B,
+          &ldb, X, &n, rcond, ferr, berr, work, iwork, info)
+        if info[1] < 0 throw(LAPACKException(info[1])) end
+        if info[1] == n+1 warn("Matrix is singular to working precision.") end
+        if 0 < info[1] <= n error(string("SingularError: gesvx!: In LU decomposition, U(",info[1],",",info[1],") = 0. Matrix is singular. No solution was computed")) end
+        #WORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
+        return X, equed, R, C, B, rcond[1], ferr, berr, work[1]
+      end
+      #Wrapper for the no-equilibration, no-transpose calculation
+      function gesvx!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
+        n=size(A,1)
+        X, equed, R, C, B, rcond, ferr, berr, rpgf = gesvx!('N', 'N', A, Array($elty, n, n), Array(BlasInt, n), 'N', Array($elty, n),  Array($elty, n), B)
+        return X, rcond, ferr, berr, rpgf
+      end
+    end
+end
+for (gesvx, elty, relty) in
+    ((:zgesvx_,:Complex128,:Float64),
+     (:cgesvx_,:Complex64 ,:Float32))
+    @eval begin
+      #     SUBROUTINE ZGESVX( FACT, TRANS, N, NRHS, A, LDA, AF, LDAF, IPIV,
+      #                        EQUED, R, C, B, LDB, X, LDX, RCOND, FERR, BERR,
+      #                        WORK, RWORK, INFO )
+      #
+      #     .. Scalar Arguments ..
+      #     CHARACTER          EQUED, FACT, TRANS
+      #     INTEGER            INFO, LDA, LDAF, LDB, LDX, N, NRHS
+      #     DOUBLE PRECISION   RCOND
+      #     ..
+      #     .. Array Arguments ..
+      #     INTEGER            IPIV( * )
+      #     DOUBLE PRECISION   BERR( * ), C( * ), FERR( * ), R( * ),
+      #    $                   RWORK( * )
+      #     COMPLEX*16         A( LDA, * ), AF( LDAF, * ), B( LDB, * ),
+      #    $                   WORK( * ), X( LDX, * )
+      function gesvx!(fact::BlasChar, trans::BlasChar, A::StridedMatrix{$elty},
+           AF::StridedMatrix{$elty}, ipiv::Vector{BlasInt}, equed::BlasChar,
+           R::Vector{$relty}, C::Vector{$relty}, B::StridedVecOrMat{$elty})
+        lda, n    = size(A)
+        ldaf, n   = size(AF)
+        if length(size(B)) == 2
+          ldb, nrhs = size(B)
+        else
+          ldb, nrhs = size(B, 1), 1
+        end
+        rcond     = Array($relty, 1)
+        ferr      = Array($relty, nrhs)
+        berr      = Array($relty, nrhs)
+        work      = Array($elty, 4n)
+        rwork     = Array($relty, 2n)
+        info      = Array(BlasInt, 1)
+        x = Array($elty, n, nrhs)
+        ccall(($(string(gesvx)),liblapack), Void,
+          (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
+           Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
+           Ptr{BlasChar}, Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
+           Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$relty}, Ptr{$relty},
+           Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
+          &fact, &trans, &n, &nrhs, A, &lda, AF, &ldaf, ipiv, &equed, R, C, B,
+          &ldb, X, &n, rcond, ferr, berr, work, rwork, info)
+        if info[1] < 0 throw(LAPACKException(info[1])) end
+        if info[1] == n+1 warn("Matrix is singular to working precision.") end
+        if 0 < info[1] <= n error(string("SingularError: gesvx!: In LU decomposition, U(",info[1],",",info[1],") is zero. Matrix is singular. No solution was computed.")) end
+        #RWORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
+        return X, equed, R, C, B, rcond[1], ferr, berr, rwork[1]
+      end
+      #Wrapper for the no-equilibration, no-transpose calculation
+      function gesvx!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
+        n=size(A,1)
+        X, equed, R, C, B, rcond, ferr, berr, rpgf = gesvx!('N', 'N', A, Array($elty, n, n), Array(BlasInt, n), 'N', Array($relty, n),  Array($relty, n), B)
+        return X, rcond, ferr, berr, rpgf
+      end
+    end
+ end
+
 for (gelsd, gelsy, elty) in 
     ((:dgelsd_,:dgelsy_,:Float64),
      (:sgelsd_,:sgelsy_,:Float32))
