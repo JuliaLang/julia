@@ -475,6 +475,7 @@ function rand!(r::Range1{BigInt}, A::Array{BigInt})
 end
 
 rand(r::Range1{BigInt}, dims::Dims) = rand!(r, Array(BigInt, dims))
+rand(r::Range1{BigInt}, dims::Int...) = rand!(r, Array(BigInt, dims...))
 
 function randu(randstate::BigRNG, k::BigInt)
     z = BigInt()
