@@ -305,6 +305,10 @@ p = permutedims(s, [2,1])
 @test p[1,1]==a[2,2] && p[1,2]==a[3,2]
 @test p[2,1]==a[2,3] && p[2,2]==a[3,3]
 
+a = [1:10]
+b = sub(a, 5:8)
+@test filter(x -> x < 7, b) == [5, 6]
+
 ## ipermutedims ##
 
 tensors = {rand(1,2,3,4),rand(2,2,2,2),rand(5,6,5,6),rand(1,1,1,1)}
