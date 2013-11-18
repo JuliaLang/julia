@@ -277,6 +277,16 @@ function getindex{T,S<:Integer}(s::SubArray{T,1}, I::AbstractVector{S})
     getindex(s.parent, t)
 end
 
+function getindex{T}(s::SubArray{T,1}, I::AbstractVector{Bool})
+    t = Array(T, 0)
+    for i = 1:length(I)
+        if I[i]
+            push!(t, s.parent[s.first_index + (i-1)*s.strides[1]])
+        end
+    end
+    t
+end
+
 function translate_indexes(s::SubArray, I::Union(Real,AbstractArray)...)
     n = length(I)
     newindexes = Any[s.indexes...]
