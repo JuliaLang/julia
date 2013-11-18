@@ -19,7 +19,7 @@ import
         gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        serialize, deserialize, inf, nan, hash, cbrt, rand, rand!
+        serialize, deserialize, inf, nan, hash, cbrt, rand, rand!, randn, randn!
 
 import Base.Math.lgamma_r
 
@@ -756,5 +756,24 @@ function rand!(r::BigRNG, A::Array{BigFloat})
     A
 end
 rand!(A::Array{BigFloat}) = rand!(Base.GMP.DEFAULT_BIGRNG, A)
+
+function randn(::Type{BigFloat}, randstate::BigRNG)
+    z = BigFloat()
+    ccall((:mpfr_grandom,:libmpfr), Int32,
+          (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigRNG}, Int32),
+           &z, C_NULL, &randstate, ROUNDING_MODE[end])
+    z
+end
+randn(::Type{BigFloat}) = randn(BigFloat, Base.GMP.DEFAULT_BIGRNG)
+randn(::Type{BigFloat}, dims::Dims) = randn!(Array(BigFloat, dims))
+randn(::Type{BigFloat}, dims::Int...) = randn!(Array(BigFloat, dims...))
+
+function randn!(r::BigRNG, A::Array{BigFloat})
+    for i = 1:length(A)
+        A[i] = randn(BigFloat, r)
+    end
+    A
+end
+randn!(A::Array{BigFloat}) = randn!(Base.GMP.DEFAULT_BIGRNG, A)
 
 end #module
