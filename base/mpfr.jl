@@ -19,7 +19,7 @@ import
         gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        serialize, deserialize, inf, nan, hash, cbrt
+        serialize, deserialize, inf, nan, hash, cbrt, rand, rand!
 
 import Base.Math.lgamma_r
 
@@ -738,5 +738,23 @@ function hash(x::BigFloat)
     end
     h
 end
+
+# RNG-related functions
+function rand(::Type{BigFloat}, randstate::BigRNG)
+    z = BigFloat()
+    ccall((:mpfr_urandom,:libmpfr), Int32,
+          (Ptr{BigFloat}, Ptr{BigRNG}, Int32),
+           &z, &randstate, ROUNDING_MODE[end])
+    z
+end
+rand(::Type{BigFloat}) = rand(BigFloat, Base.GMP.DEFAULT_BIGRNG)
+
+function rand!(r::BigRNG, A::Array{BigFloat})
+    for i = 1:length(A)
+        A[i] = rand(BigFloat, r)
+    end
+    A
+end
+rand!(A::Array{BigFloat}) = rand!(Base.GMP.DEFAULT_BIGRNG, A)
 
 end #module
