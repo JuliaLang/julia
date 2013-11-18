@@ -7,7 +7,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
              serialize, deserialize, bin, oct, dec, hex, isequal, invmod,
-             prevpow2, nextpow2, rand, srand
+             prevpow2, nextpow2, rand, rand!, srand
 
 type BigInt <: Integer
     alloc::Cint
@@ -462,12 +462,27 @@ function rand(::Type{BigInt}, randstate::BigRNG, n::Integer)
     randu(randstate, m)
 end
 
+function rand(r::Range1{BigInt})
+    ulen = convert(BigInt, length(r))
+    convert(BigInt, first(r) + randu(ulen))
+end
+
+function rand!(r::Range1{BigInt}, A::Array{BigInt})
+    for i = 1:length(A)
+        A[i] = rand(r)
+    end
+    A
+end
+
+rand(r::Range1{BigInt}, dims::Dims) = rand!(r, Array(BigInt, dims))
+
 function randu(randstate::BigRNG, k::BigInt)
     z = BigInt()
     ccall((:__gmpz_urandomm, :libgmp), Void,
       (Ptr{BigInt}, Ptr{BigRNG}, Ptr{BigInt}), &z, &randstate, &k)
     z
 end
+randu(k::BigInt) = randu(DEFAULT_BIGRNG, k)
 
 srand(r::BigRNG, seed) = srand(r, convert(BigInt, seed))
 function srand(randstate::BigRNG, seed::Vector{Uint32})
