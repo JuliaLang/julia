@@ -1,4 +1,4 @@
-addqueen(queens::Array{Vector{Int}}, queen::Vector{Int}) = push(copy(queens), queen)
+addqueen(queens::Array{Vector{Int}}, queen::Vector{Int}) = push!(copy(queens), queen)
 
 hitsany(queen::Vector{Int}, queens::Array{Vector{Int}}) = any(map((x) -> hits(queen, x), queens))
 hits(a::Array{Int}, b::Array{Int}) = any(a .== b) || abs(a-b)[1] == abs(a-b)[2]
