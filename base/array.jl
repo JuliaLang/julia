@@ -299,10 +299,10 @@ function getindex(A::Array, I::Range1{Int})
 end
 
 function getindex{T<:Real}(A::Array, I::AbstractVector{T})
-    return [ A[i] for i in indices(I) ]
+    return [ A[i] for i in to_index(I) ]
 end
 function getindex{T<:Real}(A::Ranges, I::AbstractVector{T})
-    return [ A[i] for i in indices(I) ]
+    return [ A[i] for i in to_index(I) ]
 end
 
 # 2d indexing
@@ -338,14 +338,14 @@ function getindex(A::Array, I::Range1{Int}, J::AbstractVector{Int})
     return X
 end
 
-getindex{T<:Real}(A::Array, I::AbstractVector{T}, j::Real) = [ A[i,j] for i=indices(I) ]
-getindex{T<:Real}(A::Array, I::Real, J::AbstractVector{T}) = [ A[i,j] for i=I,j=indices(J) ]
+getindex{T<:Real}(A::Array, I::AbstractVector{T}, j::Real) = [ A[i,j] for i=to_index(I) ]
+getindex{T<:Real}(A::Array, I::Real, J::AbstractVector{T}) = [ A[i,j] for i=I,j=to_index(J) ]
 
 # This next is a 2d specialization of the algorithm used for general
 # multidimensional indexing
 function getindex{T<:Real}(A::Array, I::AbstractVector{T}, J::AbstractVector{T})
     checkbounds(A, I, J)
-    I = indices(I); J = indices(J)
+    I = to_index(I); J = to_index(J)
     X = similar(A, index_shape(I, J))
     storeind = 1
     for j = J
@@ -362,7 +362,7 @@ let getindex_cache = nothing
 global getindex
 function getindex(A::Array, I::Union(Real,AbstractVector)...)
     checkbounds(A, I...)
-    I = indices(I)
+    I = to_index(I)
     X = similar(A, eltype(A), index_shape(I...))
 
     if is(getindex_cache,nothing)
@@ -566,7 +566,7 @@ let assign_cache = nothing, assign_scalar_cache = nothing
 global setindex!
 function setindex!(A::Array, x, I::Union(Real,AbstractArray)...)
     checkbounds(A, I...)
-    I = indices(I)
+    I = to_index(I)
     if !isa(x,AbstractArray)
         if is(assign_scalar_cache,nothing)
             assign_scalar_cache = Dict()
