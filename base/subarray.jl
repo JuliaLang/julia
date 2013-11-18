@@ -263,6 +263,25 @@ function getindex(s::SubArray, is::Integer...)
     s.parent[index]
 end
 
+function getindex_bool_1d(S::SubArray, I::AbstractArray{Bool})
+    n = sum(I)
+    out = similar(S, n)
+    c = 1
+    for i = 1:length(I)
+        if I[i]
+            out[c] = S[i]
+            c += 1
+        end
+    end
+    out
+end
+
+getindex{T}(S::SubArray{T,1}, I::AbstractArray{Bool,1}) = getindex_bool_1d(S, I)
+getindex{T}(S::SubArray{T,2}, I::AbstractArray{Bool,2}) = getindex_bool_1d(S, I)
+getindex{T}(S::SubArray{T,3}, I::AbstractArray{Bool,3}) = getindex_bool_1d(S, I)
+getindex{T}(S::SubArray{T,4}, I::AbstractArray{Bool,4}) = getindex_bool_1d(S, I)
+getindex{T}(S::SubArray{T,5}, I::AbstractArray{Bool,5}) = getindex_bool_1d(S, I)
+
 getindex{T}(s::SubArray{T,1}, I::Range1{Int}) =
     getindex(s.parent, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
 
