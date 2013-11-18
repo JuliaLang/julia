@@ -7,7 +7,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
              serialize, deserialize, bin, oct, dec, hex, isequal, invmod,
-             prevpow2, nextpow2, rand
+             prevpow2, nextpow2, rand, srand
 
 type BigInt <: Integer
     alloc::Cint
@@ -467,6 +467,34 @@ function randu(randstate::BigRNG, k::BigInt)
     ccall((:__gmpz_urandomm, :libgmp), Void,
       (Ptr{BigInt}, Ptr{BigRNG}, Ptr{BigInt}), &z, &randstate, &k)
     z
+end
+
+srand(r::BigRNG, seed) = srand(r, convert(BigInt, seed))
+function srand(randstate::BigRNG, seed::Vector{Uint32})
+    s = big(0)
+    for i in seed
+        s = s << 32 + i
+    end
+    srand(randstate, s)
+end
+function srand(randstate::BigRNG, seed::Uint64)
+    ccall((:__gmp_randseed_ui, :libgmp), Void, (Ptr{BigRNG}, Culong),
+      &randstate, seed)
+    return
+end
+function srand(randstate::BigRNG, seed::BigInt)
+    ccall((:__gmp_randseed, :libgmp), Void, (Ptr{BigRNG}, Ptr{BigInt}),
+      &randstate, &seed)
+    return
+end
+
+# Initialize the default BigRNG
+function rand_init()
+    s = big(0)
+    for i in Base.Random.RANDOM_SEED
+        s = s << 32 + i
+    end
+    global DEFAULT_BIGRNG = BigRNG(s)
 end
 
 end # module
