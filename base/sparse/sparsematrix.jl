@@ -157,11 +157,9 @@ function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, M::Matrix)
                              m, n)
 end
 
-convert(::Type{Matrix}, S::SparseMatrixCSC) = dense(S)
+convert(::Type{Matrix}, S::SparseMatrixCSC) = full(S)
 
-full(S::SparseMatrixCSC) = dense(S)
-
-function dense{Tv}(S::SparseMatrixCSC{Tv})
+function full{Tv}(S::SparseMatrixCSC{Tv})
     A = zeros(Tv, S.m, S.n)
     for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         A[S.rowval[k], col] = S.nzval[k]
@@ -502,11 +500,11 @@ for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing), (:.^, Nothi
     end # quote
 end # macro
 
-(+)(A::SparseMatrixCSC, B::Union(Array,Number)) = (+)(dense(A), B)
-(+)(A::Union(Array,Number), B::SparseMatrixCSC) = (+)(A, dense(B))
+(+)(A::SparseMatrixCSC, B::Union(Array,Number)) = (+)(full(A), B)
+(+)(A::Union(Array,Number), B::SparseMatrixCSC) = (+)(A, full(B))
 
-(-)(A::SparseMatrixCSC, B::Union(Array,Number)) = (-)(dense(A), B)
-(-)(A::Union(Array,Number), B::SparseMatrixCSC) = (-)(A, dense(B))
+(-)(A::SparseMatrixCSC, B::Union(Array,Number)) = (-)(full(A), B)
+(-)(A::Union(Array,Number), B::SparseMatrixCSC) = (-)(A, full(B))
 
 (.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
 (.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)
@@ -514,24 +512,24 @@ end # macro
 (.*)(A::Array, B::SparseMatrixCSC) = (.*)(sparse(A), B)
 
 (./)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval ./ B)
-(./)(A::Number, B::SparseMatrixCSC) = (./)(A, dense(B))
-(./)(A::SparseMatrixCSC, B::Array) = (./)(dense(A), B)
-(./)(A::Array, B::SparseMatrixCSC) = (./)(A, dense(B))
-(./)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (./)(dense(A), dense(B))
+(./)(A::Number, B::SparseMatrixCSC) = (./)(A, full(B))
+(./)(A::SparseMatrixCSC, B::Array) = (./)(full(A), B)
+(./)(A::Array, B::SparseMatrixCSC) = (./)(A, full(B))
+(./)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (./)(full(A), full(B))
 
-(.\)(A::SparseMatrixCSC, B::Number) = (.\)(dense(A), B)
+(.\)(A::SparseMatrixCSC, B::Number) = (.\)(full(A), B)
 (.\)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), B.nzval .\ A)
-(.\)(A::SparseMatrixCSC, B::Array) = (.\)(dense(A), B)
-(.\)(A::Array, B::SparseMatrixCSC) = (.\)(A, dense(B))
-(.\)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (.\)(dense(A), dense(B))
+(.\)(A::SparseMatrixCSC, B::Array) = (.\)(full(A), B)
+(.\)(A::Array, B::SparseMatrixCSC) = (.\)(A, full(B))
+(.\)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (.\)(full(A), full(B))
 
 (.^)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .^ B)
-(.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, dense(B))
-(.^)(A::SparseMatrixCSC, B::Array) = (.^)(dense(A), B)
-(.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, dense(B))
+(.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, full(B))
+(.^)(A::SparseMatrixCSC, B::Array) = (.^)(full(A), B)
+(.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
 
-(.<)(A::SparseMatrixCSC, B::Number) = (.<)(dense(A), B)
-(.<)(A::Number, B::SparseMatrixCSC) = (.<)(A, dense(B))
+(.<)(A::SparseMatrixCSC, B::Number) = (.<)(full(A), B)
+(.<)(A::Number, B::SparseMatrixCSC) = (.<)(A, full(B))
 
 # Reductions
 
@@ -1155,11 +1153,11 @@ setindex!(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVec
 setindex!{T<:Integer}(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = setindex!(A, sparse(x), I, find(J))
 setindex!{T<:Integer}(A::SparseMatrixCSC, x::Matrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = setindex!(A, sparse(x), find(I),J)
 
-setindex!(A::Matrix, x::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = setindex!(A, dense(x), I, find(J))
-setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = setindex!(A, dense(x), find(I), J)
-setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, dense(x), find(I), find(J))
-setindex!{T<:Integer}(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{Bool}) = setindex!(A, dense(x), I, find(J))
-setindex!{T<:Integer}(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{T}) = setindex!(A, dense(x), find(I), J)
+setindex!(A::Matrix, x::SparseMatrixCSC, I::Integer, J::AbstractVector{Bool}) = setindex!(A, full(x), I, find(J))
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::Integer) = setindex!(A, full(x), find(I), J)
+setindex!(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, full(x), find(I), find(J))
+setindex!{T<:Integer}(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{Bool}) = setindex!(A, full(x), I, find(J))
+setindex!{T<:Integer}(A::Matrix, x::SparseMatrixCSC, I::AbstractVector{Bool}, J::AbstractVector{T}) = setindex!(A, full(x), find(I), J)
 
 # Sparse concatenation
 

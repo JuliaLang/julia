@@ -647,7 +647,6 @@ export
     triu,
 
 # sparse
-    dense,
     etree,
     full,
     issparse,

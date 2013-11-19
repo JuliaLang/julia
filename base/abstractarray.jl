@@ -301,7 +301,6 @@ complex{T<:Complex}(x::AbstractArray{T}) = x
 float   (x::AbstractArray) = copy!(similar(x,typeof(float(one(eltype(x))))), x)
 complex (x::AbstractArray) = copy!(similar(x,typeof(complex(one(eltype(x))))), x)
 
-dense(x::AbstractArray) = x
 full(x::AbstractArray) = x
 
 ## range conversions ##

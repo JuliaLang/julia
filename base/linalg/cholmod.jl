@@ -17,7 +17,7 @@ import Base: (*), convert, copy, ctranspose, eltype, findnz, getindex, hcat,
              isvalid, nnz, show, size, sort!, transpose, vcat
 
 import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
-                 cholfact, cholfact!, copy, dense, det, diag,
+                 cholfact, cholfact!, copy, det, diag,
                  full, logdet, norm, scale, scale!, solve, sparse
 
 include("cholmod_h.jl")
@@ -1038,9 +1038,8 @@ end
 logdet(L::CholmodFactor) = logdet(L, 1:L.c.n)
 det(L::CholmodFactor) = exp(logdet(L))
 
-dense(A::CholmodSparse) = CholmodDense(A).mat
-dense(A::CholmodDense) = A.mat
-full(A::CholmodSparse) = dense(A)
+full(A::CholmodSparse) = CholmodDense(A).mat
+full(A::CholmodDense) = A.mat
 function sparse(A::CholmodSparse)
     if bool(A.c.stype) return sparse!(copysym(A)) end
     SparseMatrixCSC(A.c.m, A.c.n, increment(A.colptr0), increment(A.rowval0), copy(A.nzval))
