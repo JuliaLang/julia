@@ -137,7 +137,7 @@
 
 (define (read-operator port c)
   (if (and (eqv? c #\*) (eqv? (peek-char port) #\*))
-      (error "use ^ instead of **"))
+      (error "use \"^\" instead of \"**\""))
   (if (or (eof-object? (peek-char port)) (not (opchar? (peek-char port))))
       (symbol (string c)) ; 1-char operator
       (let loop ((str (string c))
@@ -203,16 +203,16 @@
 	  (begin (read-char port)
 		 (if (dot-opchar? (peek-char port))
 		     (io.ungetc port #\.)
-		     (error (string "invalid numeric constant "
-				    (get-output-string str) #\.))))))
+		     (error (string "invalid numeric constant \""
+				    (get-output-string str) #\. "\""))))))
     (define (read-digs lz)
       (let ((D (accum-digits (peek-char port) pred port lz)))
 	(let ((d  (car D))
 	      (ok (cdr D)))
 	  (if (not ok)
 	      (begin (display d str)
-		     (error (string "invalid numeric constant "
-				    (get-output-string str)))))
+		     (error (string "invalid numeric constant \""
+				    (get-output-string str) "\""))))
 	  (and (not (equal? d ""))
 	       (not (eof-object? d))
 	       (display d str)
@@ -261,8 +261,8 @@
 	  (if (and (or (eq? pred char-bin?) (eq? pred char-oct?))
 		   (not (eof-object? c))
 		   (char-numeric? c))
-	      (error (string "invalid numeric constant "
-			     (get-output-string str) c)))))
+	      (error (string "invalid numeric constant \""
+			     (get-output-string str) c "\"")))))
     (let* ((s (get-output-string str))
 	   (r (cond ((eq? pred char-hex?) 16)
 		    ((eq? pred char-oct?) 8)
@@ -282,9 +282,9 @@
 		((eq? pred char-bin?) (fix-uint-neg neg (sized-uint-literal n s 1)))
                 (is-float32-literal   (float n))
 		(else (if (and (integer? n) (> n 9223372036854775807))
-			  (error (string "invalid numeric constant " s))
+			  (error (string "invalid numeric constant \"" s "\""))
 			  n)))
-	  (error (string "invalid numeric constant " s))))))
+	  (error (string "invalid numeric constant \"" s "\""))))))
 
 (define (fix-uint-neg neg n)
   (if neg `(call - ,n) n))
@@ -333,7 +333,7 @@
 			((opchar? nextc)
 			 (let ((op (read-operator port c)))
 			   (if (and (eq? op '..) (opchar? (peek-char port)))
-			       (error (string "invalid operator " op (peek-char port))))
+			       (error (string "invalid operator \"" op (peek-char port) "\"")))
 			   op))
 			(else '|.|)))))
 
@@ -341,7 +341,7 @@
 
 	  ((identifier-char? c) (accum-julia-symbol c port))
 
-	  (else (error (string "invalid character " (read-char port)))))))
+	  (else (error (string "invalid character \"" (read-char port) "\""))))))
 
 ; --- parser ---
 
@@ -415,7 +415,7 @@
 	   (begin (take-token s)
 		  (let ((then (without-range-colon (parse-eq* s))))
 		    (if (not (eq? (take-token s) ':))
-			(error "colon expected in ? expression")
+			(error "colon expected in \"?\" expression")
 			(list 'if ex then (parse-cond s))))))
 	  #;((string? ex)
 	   (let loop ((args (list ex)))
@@ -454,7 +454,7 @@
 ; ow, my eyes!!
 (define (parse-Nary s down ops head closers allow-empty)
   (if (invalid-initial-token? (require-token s))
-      (error (string "unexpected " (peek-token s))))
+      (error (string "unexpected \"" (peek-token s) "\"")))
   (if (memv (require-token s) closers)
       (list head)  ; empty block
       (let loop ((ex
@@ -526,13 +526,13 @@
 			(cond ((closing-token? (peek-token s))
 			       ':)  ; missing last argument
 			      ((newline? (peek-token s))
-			       (error "line break in : expression"))
+			       (error "line break in \":\" expression"))
 			      (else
 			       (parse-expr s)))))
 		   (if (and (not (ts:space? s))
 			    (or (eq? argument '<) (eq? argument '>)))
-		       (error (string ': argument " found instead of "
-				      argument ':)))
+		       (error (string "\":" argument "\" found instead of \""
+				      argument ":\"")))
 		   (if first?
 		       (loop (list t ex argument) #f)
 		       (loop (append ex (list argument)) #t)))))
@@ -662,7 +662,7 @@
 		(not (ts:space? s)))
 	   (begin
 	     #;(if (and (number? ex) (= ex 0))
-		 (error "juxtaposition with literal 0"))
+		 (error "juxtaposition with literal \"0\""))
 	     `(call * ,ex ,(parse-unary s))))
 	  (else ex))))
 
@@ -683,8 +683,8 @@
 		   (if (memq (peek-token s) '(^ .^))
 		       ;; -2^x parsed as (- (^ 2 x))
 		       (begin (if (= num -9223372036854775808)
-				  (error (string "invalid numeric constant "
-						 (- num))))
+				  (error (string "invalid numeric constant \""
+						 (- num) "\"")))
 			      (ts:put-back! s (maybe-negate op num))
 			      (list 'call op (parse-factor s)))
 		       num))
@@ -839,13 +839,13 @@
   (let ((t (peek-token s)))
     (cond ((eq? t 'end) (take-token s))
 	  ((eof-object? t)
-	   (error (string "incomplete: " word " at "
+	   (error (string "incomplete: \"" word "\" at "
 			  current-filename ":" expect-end-current-line
 			  " requires end")))
 	  (else
-	   (error (string word " at "
+	   (error (string "\"" word "\" at "
 			  current-filename ":" expect-end-current-line
-			  " expected end, got " t))))))
+			  " expected \"end\", got \"" t "\""))))))
 
 (define (parse-subtype-spec s)
   (subtype-syntax (parse-ineq s)))
@@ -894,14 +894,14 @@
 	       (block ,(line-number-node s)
 		      ,(parse-resword s 'if))))
 	 ((else)    (list 'if test then (parse-resword s 'begin)))
-	 (else      (error (string "unexpected " nxt))))))
+	 (else      (error (string "unexpected \"" nxt "\""))))))
     ((let)
      (let ((binds (if (memv (peek-token s) '(#\newline #\;))
 		      '()
 		      (parse-comma-separated-assignments s))))
        (if (not (or (eof-object? (peek-token s))
 		    (memv (peek-token s) '(#\newline #\; end))))
-	   (error "let variables should end in ; or newline"))
+	   (error "let variables should end in \";\" or newline"))
        (let ((ex (parse-block s)))
 	 (expect-end s)
 	 `(let ,ex ,@binds))))
@@ -922,11 +922,11 @@
 			   ;; in "function (x)" the (x) is a tuple
 			   `(tuple ,sig)
 			   ;; function foo  =>  syntax error
-			   (error (string "expected ( in " word " definition")))
+			   (error (string "expected \"(\" in \"" word "\" definition")))
 		       (if (not (and (pair? sig)
 				     (or (eq? (car sig) 'call)
 					 (eq? (car sig) 'tuple))))
-			   (error (string "expected ( in " word " definition"))
+			   (error (string "expected \"(\" in \"" word "\" definition"))
 			   sig)))
 	    (loc   (begin (skip-ws-and-comments (ts:port s))
 			  (line-number-filename-node s)))
@@ -999,7 +999,7 @@
 		   catchb
 		   catchv
 		   fb)))
-	  (else    (error (string "unexpected " nxt)))))))
+	  (else    (error (string "unexpected \"" nxt "\"")))))))
     ((return)          (let ((t (peek-token s)))
 			 (if (or (eqv? t #\newline) (closing-token? t))
 			     (list 'return '(null))
@@ -1011,7 +1011,7 @@
 		     (or (eq? (car assgn) '=)
 			 (eq? (car assgn) 'global)
 			 (eq? (car assgn) 'local))))
-	   (error "expected assignment after const")
+	   (error "expected assignment after \"const\"")
 	   `(const ,assgn))))
     ((module baremodule)
      (let* ((name (parse-atom s))
@@ -1032,7 +1032,7 @@
      (let ((es (map macrocall-to-atsym
 		    (parse-comma-separated s parse-atom))))
        (if (not (every symbol? es))
-	   (error "invalid export statement"))
+	   (error "invalid \"export\" statement"))
        `(export ,@es)))
     ((import using importall)
      (let ((imports (parse-imports s word)))
@@ -1041,7 +1041,7 @@
 	   (cons 'toplevel imports))))
     ((ccall)
      (if (not (eqv? (peek-token s) #\())
-	 (error "invalid ccall syntax")
+	 (error "invalid \"ccall\" syntax")
 	 (begin
 	   (take-token s)
 	   (let ((al (parse-arglist s #\))))
@@ -1051,7 +1051,7 @@
 		 `(ccall ,(car al) ,@(cddr al) (,(cadr al)))
 		 `(ccall ,.al))))))
     ((do)
-     (error "invalid do syntax"))
+     (error "invalid \"do\" syntax"))
     (else (error "unhandled reserved word"))))))
 
 (define (parse-do s)
@@ -1111,7 +1111,7 @@
 (define (parse-import s word)
   (let loop ((path (parse-import-dots s)))
     (if (not (symbol? (car path)))
-	(error (string "invalid " word " statement: expected identifier")))
+	(error (string "invalid \"" word "\" statement: expected identifier")))
     (let ((nxt (peek-token s)))
       (cond
        ((eq? nxt '|.|)
@@ -1125,7 +1125,7 @@
 	(loop (cons (symbol (string.sub (string nxt) 1))
 		    path)))
        (else
-	(error (string "invalid " word " statement")))))))
+	(error (string "invalid \"" word "\" statement")))))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-comma-separated s what)
@@ -1213,7 +1213,7 @@
 		      #;((eqv? c #\newline)
 		       (error "unexpected line break in argument list"))
 		      ((memv c '(#\] #\}))
-		       (error (string "unexpected " c " in argument list")))
+		       (error (string "unexpected \"" c "\" in argument list")))
 		      (else
 		       (error (string "missing comma or " closer
 				      " in argument list"))))))))))
@@ -1237,7 +1237,7 @@
 	    ((#\;)
 	     (error "unexpected semicolon in array expression"))
 	    ((#\] #\})
-	     (error (string "unexpected " t)))
+	     (error (string "unexpected \"" t "\"")))
 	    (else
 	     (error "missing separator in array expression")))))))
 
@@ -1286,7 +1286,7 @@
 	    ((#\,)
 	     (error "unexpected comma in matrix expression"))
 	    ((#\] #\})
-	     (error (string "unexpected " t)))
+	     (error (string "unexpected \"" t "\"")))
 	    ((for)
 	     (if (and (not semicolon)
 		      (length= outer 1)
@@ -1352,13 +1352,13 @@
       #;((#\newline)
       (error "unexpected line break in tuple"))
       ((#\] #\})
-       (error (string "unexpected " (peek-token s) " in tuple")))
+       (error (string "unexpected \"" (peek-token s) "\" in tuple")))
       (else
        (error "missing separator in tuple")))))
 
 (define (not-eof-2 c)
   (if (eof-object? c)
-      (error "incomplete: invalid ` syntax")
+      (error "incomplete: invalid \"`\" syntax")
       c))
 
 (define (parse-backquote s)
@@ -1407,7 +1407,7 @@
                     (take-token s)
                     ex)
                    (else (error "invalid interpolation syntax")))))
-          (else (error (string "invalid interpolation syntax: " c))))))
+          (else (error (string "invalid interpolation syntax: \"" c "\""))))))
 
 (define (tostr custom io)
   (if custom
@@ -1482,7 +1482,7 @@
   (let ((ex (parse-atom- s)))
     (if (or (memq ex syntactic-operators)
 	    (eq? ex '....))
-	(error (string "invalid identifier name " ex)))
+	(error (string "invalid identifier name \"" ex "\"")))
     ex))
 
 (define (parse-atom- s)
@@ -1527,7 +1527,7 @@
 	       (list 'quote (parse-atom- s))))
 
 	  ;; misplaced =
-	  ((eq? t '=) (error "unexpected ="))
+	  ((eq? t '=) (error "unexpected \"=\""))
 
 	  ;; identifier
 	  ((symbol? t) (take-token s))
@@ -1545,7 +1545,7 @@
 	     ;; allow (=) etc.
 	     (let ((tok (take-token s)))
 	       (if (not (eqv? (require-token s) #\) ))
-		   (error (string "invalid identifier name " tok))
+		   (error (string "invalid identifier name \"" tok "\""))
 		   (take-token s))
 	       tok))
 	    (else
@@ -1581,7 +1581,7 @@
 		     #;((eqv? t #\newline)
 		        (error "unexpected line break in tuple"))
 		     ((memv t '(#\] #\}))
-		      (error (string "unexpected " t " in tuple")))
+		      (error (string "unexpected \"" t "\" in tuple")))
 		     (else
 		      (error "missing separator in tuple")))))))))
 
@@ -1660,7 +1660,7 @@
 	   (take-token s)
 	   (parse-backquote s))
 
-	  (else (error (string "invalid syntax: " (take-token s)))))))
+	  (else (error (string "invalid syntax: \"" (take-token s) "\""))))))
 
 (define (valid-modref? e)
   (and (length= e 3) (eq? (car e) '|.|) (pair? (caddr e))
@@ -1672,7 +1672,7 @@
   (cond ((symbol? e)  (symbol (string #\@ e)))
 	((valid-modref? e)  `(|.| ,(cadr e)
 			      (quote ,(macroify-name (cadr (caddr e))))))
-	(else (error (string "invalid macro use @" e)))))
+	(else (error (string "invalid macro use \"@" e "\"" )))))
 
 ; --- main entry point ---
 
