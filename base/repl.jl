@@ -69,7 +69,7 @@ end
 showerror(io::IO, e::LoadError) = showerror(io, e, {})
 function showerror(io::IO, e::LoadError, bt)
     showerror(io, e.error, bt)
-    print(io, "\nat $(e.file):$(e.line)")
+    print(io, "\nwhile loading $(e.file), in expression starting on line $(e.line)")
 end
 
 function showerror(io::IO, e::DomainError, bt)
