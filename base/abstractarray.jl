@@ -91,18 +91,14 @@ end
 
 checkbounds(A::AbstractArray, I) = checkbounds(length(A), I)
 
-function checkbounds(A::AbstractMatrix, I, J)
+function checkbounds(A::AbstractMatrix, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray))
     checkbounds(size(A,1), I)
     checkbounds(size(A,2), J)
 end
 
-function checkbounds(A::AbstractArray, I, J)
+function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray))
     checkbounds(size(A,1), I)
-    sz = size(A,2)
-    for i = 3:ndims(A)
-        sz *= size(A, i) # TODO: sync. with decision on issue #1030
-    end
-    checkbounds(sz, J)
+    checkbounds(trailingsize(A,2), J)
 end
 
 function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
@@ -111,11 +107,7 @@ function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
         for dim = 1:(n-1)
             checkbounds(size(A,dim), I[dim])
         end
-        sz = size(A,n)
-        for i = n+1:ndims(A)
-            sz *= size(A,i)     # TODO: sync. with decision on issue #1030
-        end
-        checkbounds(sz, I[n])
+        checkbounds(trailingsize(A,n), I[n])
     end
 end
 
@@ -1305,16 +1297,6 @@ function ind2sub!{T<:Integer}(sub::Array{T}, dims::Array{T}, ind::T)
     sub[1] = ind
     return
 end
-
-indices(I) = I
-indices(I::Int) = I
-indices(I::Real) = convert(Int, I)
-indices(I::AbstractArray{Bool,1}) = find(I)
-indices(I::(Any,))            = (indices(I[1]), )
-indices(I::(Any,Any,))        = (indices(I[1]), indices(I[2]))
-indices(I::(Any,Any,Any))     = (indices(I[1]), indices(I[2]), indices(I[3]))
-indices(I::(Any,Any,Any,Any)) = (indices(I[1]), indices(I[2]), indices(I[3]), indices(I[4]))
-indices(I::Tuple) = map(indices, I)
 
 # Generalized repmat
 function repeat{T}(A::Array{T};
