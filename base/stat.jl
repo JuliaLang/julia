@@ -40,7 +40,7 @@ macro stat_call(sym,arg1type,arg)
         r==0 || r==UV_ENOENT || r==UV_ENOTDIR || throw(UVError("stat",r))
         st = Stat(stat_buf)
         if ispath(st) != (r==0)
-            error("WTF: stat returned zero type for a valid path!?")
+            error("stat returned zero type for a valid path")
         end
         st
     end

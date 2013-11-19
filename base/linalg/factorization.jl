@@ -34,7 +34,7 @@ function getindex(C::Cholesky, d::Symbol)
     elseif d == :UL
         return Triangular(C.UL, C.uplo)
     end
-    error("No such type field")
+    error("no such type field")
 end
 
 A_ldiv_B!{T<:BlasFloat}(C::Cholesky{T}, B::StridedVecOrMat{T}) =
@@ -95,7 +95,7 @@ function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
         end
         return P
     end
-    error("No such type field")
+    error("no such type field")
 end
 
 function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedVector{T})
@@ -179,12 +179,12 @@ function getindex{T}(A::LU{T}, d::Symbol)
         end
         return P
     end
-    error("No such type field")
+    error("no such type field")
 end
 
 function det{T}(A::LU{T})
     m, n = size(A)
-    if m != n throw(DimensionMismatch("Matrix must be square")) end
+    if m != n throw(DimensionMismatch("matrix must be square")) end
     if A.info > 0; return zero(typeof(A.factors[1])); end
     prod(diag(A.factors)) * (bool(sum(A.ipiv .!= 1:n) % 2) ? -one(T) : one(T))
 end
@@ -198,7 +198,7 @@ end
 
 function logdet{T<:Real}(A::LU{T})
     d,s = logdet2(A)
-    if s<0 error("DomainError: determinant is negative") end
+    if s<0 error("determinant is negative") end
     return d
 end
 
@@ -269,7 +269,7 @@ size(A::QR, args::Integer...) = size(A.vs, args...)
 function getindex(A::QR, d::Symbol)
     if d == :R; return triu(A.vs[1:minimum(size(A)),:]); end;
     if d == :Q; return QRPackedQ(A); end
-    error("No such type field")
+    error("no such type field")
 end
 
 type QRPackedQ{S} <: AbstractMatrix{S} 
@@ -343,7 +343,7 @@ function getindex{T<:BlasFloat}(A::QRPivoted{T}, d::Symbol)
         end
         return P
     end
-    error("No such type field")
+    error("no such type field")
 end
 
 # Julia implementation similarly to xgelsy
@@ -448,7 +448,7 @@ getindex(A::HessenbergQ, args...) = getindex(full(A), args...)
 function getindex(A::Hessenberg, d::Symbol)
     if d == :Q; return HessenbergQ(A); end
     if d == :H; return triu(A.hh, -1); end
-    error("No such type field")
+    error("no such type field")
 end
 
 full(A::HessenbergQ) = LAPACK.orghr!(1, size(A.hh, 1), copy(A.hh), A.tau)
@@ -462,7 +462,7 @@ end
 function getindex(A::Eigen, d::Symbol)
     if d == :values return A.values end
     if d == :vectors return A.vectors end
-    error("No such type field")
+    error("no such type field")
 end
 
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T})
@@ -525,11 +525,11 @@ eigvals(x::Number) = [one(x)]
 #Computes maximum and minimum eigenvalue
 function eigmax(A::Union(Number, AbstractMatrix))
     v = eigvals(A)
-    iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : maximum(v)
+    iseltype(v,Complex) ? error("complex eigenvalues cannot be ordered") : maximum(v)
 end
 function eigmin(A::Union(Number, AbstractMatrix))
     v = eigvals(A)
-    iseltype(v,Complex) ? error("Complex eigenvalues cannot be ordered") : minimum(v)
+    iseltype(v,Complex) ? error("complex eigenvalues cannot be ordered") : minimum(v)
 end
 
 inv(A::Eigen) = scale(A.vectors, 1.0/A.values)*A.vectors'
@@ -544,7 +544,7 @@ end
 function getindex(A::GeneralizedEigen, d::Symbol)
     if d == :values return A.values end
     if d == :vectors return A.vectors end
-    error("No such type field")
+    error("no such type field")
 end
 
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T})
@@ -642,7 +642,7 @@ function getindex(F::SVD, d::Symbol)
     if d == :S return F.S end
     if d == :Vt return F.Vt end
     if d == :V return F.Vt' end
-    error("No such type field")
+    error("no such type field")
 end
 
 function svdvals!{T<:BlasFloat}(A::StridedMatrix{T})
@@ -717,7 +717,7 @@ function getindex{T}(obj::GeneralizedSVD{T}, d::Symbol)
         n = size(obj.Q, 1)
         return [zeros(T, obj.k + obj.l, n - obj.k - obj.l) obj.R]
     end
-    error("No such type field")
+    error("no such type field")
 end
 
 function svdvals!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
@@ -743,7 +743,7 @@ function getindex(F::Schur, d::Symbol)
     if d == :T || d == :Schur return F.T end
     if d == :Z || d == :vectors return F.Z end
     if d == :values return F.values end
-    error("No such type field")
+    error("no such type field")
 end
 
 function schur(A::AbstractMatrix)
@@ -773,7 +773,7 @@ function getindex(F::GeneralizedSchur, d::Symbol)
     if d == :values return F.alpha./F.beta end
     if d == :Q || d == :left return F.Q end
     if d == :Z || d == :right return F.Z end
-    error("No such type field")
+    error("no such type field")
 end
 
 function schur(A::AbstractMatrix, B::AbstractMatrix)

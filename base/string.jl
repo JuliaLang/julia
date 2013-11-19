@@ -788,7 +788,7 @@ function map(f::Function, s::String)
     for c in s
         c2 = f(c)
         if !isa(c2,Char)
-            error("map(f,s::String) requires f to return Char. Try map(f,collect(s)) or a comprehension instead.")
+            error("map(f,s::String) requires f to return Char; try map(f,collect(s)) or a comprehension instead")
         end
         write(out, c2::Char)
     end
@@ -1598,7 +1598,7 @@ end
 function hex2bytes(s::ASCIIString)
     len = length(s)
     if isodd(len)
-        error("Input string length should be even")
+        error("argument string length must be even")
     end
     arr = zeros(Uint8, div(len,2))
     i = j = 0
@@ -1607,11 +1607,11 @@ function hex2bytes(s::ASCIIString)
         c = s[i+=1]
         n = '0' <= c <= '9' ? c - '0' :
             'a' <= c <= 'f' ? c - 'a' + 10 :
-            'A' <= c <= 'F' ? c - 'A' + 10 : error("Input string isn't a hexadecimal string")
+            'A' <= c <= 'F' ? c - 'A' + 10 : error("argument isn't a hexadecimal string")
         c = s[i+=1]
         n = '0' <= c <= '9' ? n << 4 + c - '0' :
             'a' <= c <= 'f' ? n << 4 + c - 'a' + 10 :
-            'A' <= c <= 'F' ? n << 4 + c - 'A' + 10 : error("Input string isn't a hexadecimal string")
+            'A' <= c <= 'F' ? n << 4 + c - 'A' + 10 : error("argument isn't a hexadecimal string")
         arr[j+=1] = n
     end
     return arr

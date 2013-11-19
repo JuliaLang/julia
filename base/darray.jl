@@ -195,7 +195,7 @@ end
 
 function reshape{T,S<:Array}(A::DArray{T,1,S}, d::Dims)
     if prod(d) != length(A)
-        error("Dimensions must be consistent with array size.")
+        error("dimensions must be consistent with array size")
     end
     DArray(d) do I
         sz = map(length,I)

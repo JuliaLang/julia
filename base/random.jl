@@ -50,7 +50,7 @@ function librandom_init()
     try
         srand("/dev/urandom")
     catch
-        println(STDERR, "Entropy pool not available to seed RNG, using ad-hoc entropy sources.")
+        println(STDERR, "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
         seed = reinterpret(Uint64, time())
         seed = bitmix(seed, uint64(getpid()))
         try
@@ -149,7 +149,7 @@ function rand!{T}(A::Array{T})
     A
 end
 rand(T::Type, dims::Dims) = rand!(Array(T, dims))
-rand{T<:Number}(::Type{T}) = error("No random number generator for type $T. Try a more specific type.")
+rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try a more specific type")
 rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
 
 function randu{T<:Union(Uint32,Uint64,Uint128)}(k::T)

@@ -50,8 +50,8 @@ function mkpath(path::String, mode::Unsigned=0o777)
     mkdir(path)
 end
 
-mkdir(path::String, mode::Signed) = error("mkdir: mode must be an unsigned integer -- perhaps 0o$mode?")
-mkpath(path::String, mode::Signed) = error("mkpath: mode must be an unsigned integer -- perhaps 0o$mode?")
+mkdir(path::String, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
+mkpath(path::String, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
 
 function rmdir(path::String)
     @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
@@ -151,7 +151,7 @@ function download(url::String, filename::String)
     elseif downloadcmd == :fetch
         run(`fetch -f $filename $url`)
     else
-        error("No download agent available; install curl, wget, or fetch.")
+        error("no download agent available; install curl, wget, or fetch")
     end
     filename
 end
@@ -169,7 +169,7 @@ function readdir(path::String)
                        bytestring(path), uv_readdir_req)
 
     if file_count < 0
-        error("Unable to read directory $path.")
+        error("unable to read directory $path")
     end
 
     # The list of dir entries is returned as a contiguous sequence of null-terminated

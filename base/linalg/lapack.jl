@@ -270,7 +270,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             chkstride1(A)
             m, n = size(A)
             minmn = min(m, n)
-            nb <= minmn || error("Block size too large")
+            nb <= minmn || error("block size too large")
             lda = max(1, m)
             T = Array($elty, nb, minmn)
             work = Array($elty, nb*n)
@@ -290,7 +290,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         function geqrt3!(A::StridedMatrix{$elty})
             chkstride1(A)
             m, n = size(A)
-            if m < n throw(DimensionMismatch("Matrix cannot have less rows than columns")) end
+            if m < n throw(DimensionMismatch("matrix cannot have fewer rows than columns")) end
             lda = max(1, stride(A, 2))
             T = Array($elty, n, n)
             if n > 0
@@ -395,7 +395,7 @@ for (tzrzf, ormrz, elty) in
  #   27 *       COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
         function tzrzf!(A::StridedMatrix{$elty})
             m, n = size(A)
-            if n < m throw(DimensionMismatch("Matrix cannot have fewer columns than rows")) end
+            if n < m throw(DimensionMismatch("matrix cannot have fewer columns than rows")) end
             lda = max(1, m)
             tau = Array($elty, m)
             work = Array($elty, 1)
@@ -607,8 +607,8 @@ for (gesvx, elty) in
           &fact, &trans, &n, &nrhs, A, &lda, AF, &ldaf, ipiv, &equed, R, C, B,
           &ldb, X, &n, rcond, ferr, berr, work, iwork, info)
         if info[1] < 0 throw(LAPACKException(info[1])) end
-        if info[1] == n+1 warn("Matrix is singular to working precision.") end
-        if 0 < info[1] <= n error(string("SingularError: gesvx!: In LU decomposition, U(",info[1],",",info[1],") = 0. Matrix is singular. No solution was computed")) end
+        if info[1] == n+1 warn("matrix is singular to working precision") end
+        if 0 < info[1] <= n error(string("SingularError: gesvx!: in LU decomposition, U(",info[1],",",info[1],") = 0; matrix is singular and no solution was computed")) end
         #WORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
         return X, equed, R, C, B, rcond[1], ferr, berr, work[1]
       end
@@ -665,8 +665,8 @@ for (gesvx, elty, relty) in
           &fact, &trans, &n, &nrhs, A, &lda, AF, &ldaf, ipiv, &equed, R, C, B,
           &ldb, X, &n, rcond, ferr, berr, work, rwork, info)
         if info[1] < 0 throw(LAPACKException(info[1])) end
-        if info[1] == n+1 warn("Matrix is singular to working precision.") end
-        if 0 < info[1] <= n error(string("SingularError: gesvx!: In LU decomposition, U(",info[1],",",info[1],") is zero. Matrix is singular. No solution was computed.")) end
+        if info[1] == n+1 warn("matrix is singular to working precision") end
+        if 0 < info[1] <= n error(string("SingularError: gesvx!: In LU decomposition, U(",info[1],",",info[1],") is zero; matrix is singular and no solution was computed")) end
         #RWORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
         return X, equed, R, C, B, rcond[1], ferr, berr, rwork[1]
       end
@@ -1277,7 +1277,7 @@ for (laic1, elty) in
    # 28 *       DOUBLE PRECISION   W( J ), X( J )
         function laic1!(job::Integer, x::StridedVector{$elty}, sest::$elty, w::StridedVector{$elty}, gamma::$elty)
             j = length(x)
-            if j != length(w) error(DimensionMismatch("Vectors must have same length")) end
+            if j != length(w) error(DimensionMismatch("vectors must have same length")) end
             sestpr = Array($elty, 1)
             s = Array($elty, 1)
             c = Array($elty, 1)
@@ -1307,7 +1307,7 @@ for (laic1, elty, relty) in
    # 29 *       COMPLEX*16         W( J ), X( J )
         function laic1!(job::Integer, x::StridedVector{$elty}, sest::$relty, w::StridedVector{$elty}, gamma::$elty)
             j = length(x)
-            if j != length(w) error(DimensionMismatch("Vectors must have same length")) end
+            if j != length(w) error(DimensionMismatch("vectors must have same length")) end
             sestpr = Array($relty, 1)
             s = Array($elty, 1)
             c = Array($elty, 1)
@@ -1533,21 +1533,21 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             nb, k = size(T)
             if k == 0 return C end
             if side == 'L'
-                0 <= k <= m || error("Wrong value for k")
+                0 <= k <= m || error("incorrect value for k")
                 m == size(V,1) || throw(DimensionMismatch(""))
                 ldv = stride(V,2)
                 ldv >= max(1, m) || throw(DimensionMismatch("Q and C don't fit"))
                 wss = n*k
             elseif side == 'R'
-                0 <= k <= n || error("Wrong value for k")
+                0 <= k <= n || error("incorrect value for k")
                 n == size(V,1) || throw(DimensionMismatch(""))
                 ldv = stride(V,2)
-                ldv >= max(1, n) || throw(DimensionMismatch("Stride error"))
+                ldv >= max(1, n) || throw(DimensionMismatch("stride error"))
                 wss = m*k
             else
                 error("side must be either 'L' or 'R'")
             end
-            1 <= nb <= k || error("Wrong value for nb")
+            1 <= nb <= k || error("incorrect value for nb")
             ldc = max(1, m)
             work = Array($elty, wss)
             info = Array(BlasInt, 1)
@@ -2542,8 +2542,8 @@ for (syev, syevr, sygvd, elty) in
         function sygvd!(itype::Integer, jobz::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A,B)
             n = size(A, 1)
-            if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("Matrices must be square")) end
-            if size(B, 1) != n throw(DimensionMismatch("Matrices must have same size")) end
+            if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("matrices must be square")) end
+            if size(B, 1) != n throw(DimensionMismatch("matrices must have same size")) end
             lda = max(1, n)
             ldb = max(1, n)
             w = Array($elty, n)
@@ -2693,8 +2693,8 @@ for (syev, syevr, sygvd, elty, relty) in
         function sygvd!(itype::Integer, jobz::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
             chkstride1(A,B)
             n = size(A, 1)
-            if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("Matrices must be square")) end
-            if size(B, 1) != n throw(DimensionMismatch("Matrices must have same size")) end
+            if size(A, 2) != n | size(B, 1) != size(B, 2) throw(DimensionMismatch("matrices must be square")) end
+            if size(B, 1) != n throw(DimensionMismatch("matrices must have same size")) end
             lda = max(1, n)
             ldb = max(1, n)
             w = Array($relty, n)
@@ -2745,7 +2745,7 @@ for (bdsqr, relty, elty) in
         function bdsqr!(uplo::BlasChar, d::Vector{$relty}, e_::Vector{$relty},
             vt::StridedMatrix{$elty}, u::StridedMatrix{$elty}, c::StridedMatrix{$elty})
 
-            if uplo == 'U' || uplo == 'L' || error(string("Invalid UPLO: must be 'U' or 'L' but you said", uplo)) end
+            if uplo == 'U' || uplo == 'L' || error(string("UPLO argument must be 'U' or 'L' but you said ", uplo)) end
             n = length(d)
             if length(e_) != n-1 throw(DimensionMismatch("bdsqr!")) end
             ncvt, nru, ncc = size(vt, 2), size(u, 1), size(c, 2)
@@ -2784,7 +2784,7 @@ for (bdsdc, elty) in
         #      DOUBLE PRECISION   D( * ), E( * ), Q( * ), U( LDU, * ),
         #     $                   VT( LDVT, * ), WORK( * )
         function bdsdc!(uplo::BlasChar, compq::BlasChar, d::Vector{$elty}, e_::Vector{$elty})
-            if uplo == 'U' || uplo == 'L' || error(string("Invalid UPLO: must be 'U' or 'L' but you said", uplo)) end
+            if uplo == 'U' || uplo == 'L' || error(string("UPLO argument must be 'U' or 'L' but you said", uplo)) end
             n, ldiq, ldq, ldu, ldvt = length(d), 1, 1, 1, 1
             if compq == 'N'
                 lwork = 6n
@@ -2800,7 +2800,7 @@ for (bdsdc, elty) in
                 ldvt=ldu=max(1, n)
                 lwork=3*n^2 + 4n
             else
-                error(string("Invalid COMPQ. Valid choices are 'N', 'P' or 'I' but you said '",compq,"'"))
+                error(string("COMPQ argument must be 'N', 'P' or 'I' but you said '",compq,"'"))
             end
             u = Array($elty, (ldu,  n))
             vt= Array($elty, (ldvt, n))

@@ -23,7 +23,7 @@ function SymTridiagonal{Td<:Number,Te<:Number}(dv::Vector{Td}, ev::Vector{Te})
     SymTridiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev))
 end
 
-SymTridiagonal(M::AbstractMatrix) = diag(A,1)==diag(A,-1)?SymTridiagonal(diag(A), diag(A,1)):error("Matrix is not symmetric, cannot convert to SymTridiagonal")
+SymTridiagonal(M::AbstractMatrix) = diag(A,1)==diag(A,-1)?SymTridiagonal(diag(A), diag(A,1)):error("matrix is not symmetric; cannot convert to SymTridiagonal")
 full{T}(M::SymTridiagonal{T}) = convert(Matrix{T}, M)
 convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})=diagm(M.dv)+diagm(M.ev,-1)+conj(diagm(M.ev,1))
 
@@ -315,7 +315,7 @@ type LDLTTridiagonal{T<:BlasFloat,S<:BlasFloat} <: Factorization{T}
     D::Vector{S}
     E::Vector{T}
     function LDLTTridiagonal(D::Vector{S}, E::Vector{T})
-        if typeof(real(E[1])) != eltype(D) error("Wrong eltype") end
+        if typeof(real(E[1])) != eltype(D) error("element types do not match") end
         new(D, E)
     end
 end

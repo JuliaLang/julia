@@ -7,7 +7,7 @@ function eigs(A;nev::Integer=6, ncv::Integer=20, which::ASCIIString="LM",
 	      ritzvec::Bool=true, complexOP::Bool=false)
 
     (m, n) = size(A)
-    if m != n; error("Input must be square"); end
+    if m != n; error("matrix must be square"); end
     if n <= 6 && nev > n-1; nev = n-1; end
     ncv = blas_int(min(max(2*nev+2, ncv), n))
 
@@ -16,8 +16,8 @@ function eigs(A;nev::Integer=6, ncv::Integer=20, which::ASCIIString="LM",
     cmplx = T<:Complex
     bmat  = "I"
 	if !isempty(v0)
-		if length(v0)!=n; error("Starting vector must have length $n"); end
-		if eltype(v0)!=T; error("Starting vector must have eltype $T"); end
+		if length(v0)!=n; error("starting vector must have length $n"); end
+		if eltype(v0)!=T; error("starting vector must have eltype $T"); end
 	else
 		v0=zeros(T,(0,))
 	end

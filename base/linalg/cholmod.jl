@@ -733,7 +733,7 @@ for Ti in (:Int32,:Int64)
             nc = trans ? m : n
             nr = trans ? n : m
             if nc != size(X,1)
-                error("Incompatible dimensions, $nc and $(size(X,1)), in chm_sdmult")
+                error("incompatible dimensions, $nc and $(size(X,1)), in chm_sdmult")
             end
             aa = float64([alpha, 0.])
             bb = float64([beta, 0.])
@@ -977,7 +977,7 @@ function findnz{Tv,Ti}(A::CholmodSparse{Tv,Ti})
             ipos += 1
             count += 1
         else
-            println("Warning: sparse matrix contains explicitly stored zeros.")
+            println("warning: sparse matrix contains explicitly stored zeros")
         end
     end
     ind = ind[1:count]                  # ind is the indices of nonzeros in A.nzval

@@ -955,7 +955,7 @@ end
 
 function pop!(B::BitVector)
     if isempty(B)
-        error("BitArray must not be empty")
+        error("argument must not be empty")
     end
     item = B[end]
     B[end] = false
@@ -993,7 +993,7 @@ end
 
 function shift!(B::BitVector)
     if isempty(B)
-        error("BitArray must not be empty")
+        error("argument must not be empty")
     end
     @inbounds begin
         item = B[1]
@@ -2309,7 +2309,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
             len = d <= ndimsX[1] ? dimsX[1][d] : 1
             for i = 2:nargs
                 if len != (d <= ndimsX[i] ? dimsX[i][d] : 1)
-                    error("Dimension mismatch on dimension ", d)
+                    error("mismatch in dimension ", d)
                 end
             end
         end
