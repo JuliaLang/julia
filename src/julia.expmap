@@ -333,6 +333,8 @@
     jl_fs_poll_start;
     jl_fs_event_init;
     jl_fs_unlink;
+    jl_fs_rename;
+    jl_fs_sendfile;
     jl_fs_write;
     jl_fs_write_byte;
     jl_fs_read;
