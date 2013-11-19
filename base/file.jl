@@ -62,8 +62,8 @@ end
 # The following use Unix command line facilites
 
 rm(path::String) = FS.unlink(path)
-cp(src::String, dst::String) = run(`cp $src $dst`)
-mv(src::String, dst::String) = run(`mv $src $dst`)
+cp(src::String, dst::String) = FS.sendfile(src, dst)
+mv(src::String, dst::String) = FS.rename(src, dst)
 touch(path::String) = run(`touch $path`)
 
 # Obtain a temporary filename.
@@ -131,33 +131,6 @@ end
         systemerror(:mktempdir, errno()!=EEXIST)
         seed += 1
     end
-end
-
-downloadcmd = nothing
-function download(url::String, filename::String)
-    global downloadcmd
-    if downloadcmd === nothing
-        for checkcmd in (:curl, :wget, :fetch)
-            if success(`which $checkcmd` |> DevNull)
-                downloadcmd = checkcmd
-                break
-            end
-        end
-    end
-    if downloadcmd == :wget
-        run(`wget -O $filename $url`)
-    elseif downloadcmd == :curl
-        run(`curl -o $filename -L $url`)
-    elseif downloadcmd == :fetch
-        run(`fetch -f $filename $url`)
-    else
-        error("no download agent available; install curl, wget, or fetch")
-    end
-    filename
-end
-function download(url::String)
-    filename = tempname()
-    download(url, filename)
 end
 
 function readdir(path::String)
