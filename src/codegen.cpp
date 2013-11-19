@@ -190,7 +190,6 @@ static Function *jlenter_func;
 static Function *jlleave_func;
 static Function *jlegal_func;
 static Function *jlallocobj_func;
-static Function *jlalloc1w_func;
 static Function *jlalloc2w_func;
 static Function *jlalloc3w_func;
 static Function *jl_alloc_tuple_func;
@@ -267,14 +266,14 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     assert(f != NULL);
     nested_compile = last_n_c;
     //f->dump();
-    verifyFunction(*f);
+    //verifyFunction(*f);
     FPM->run(*f);
     //n_compile++;
     // print out the function's LLVM code
     //ios_printf(ios_stderr, "%s:%d\n",
     //           ((jl_sym_t*)li->file)->name, li->line);
     //f->dump();
-    verifyFunction(*f);
+    //verifyFunction(*f);
     if (old != NULL) {
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
@@ -297,9 +296,9 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         if (li->cFunctionObject != NULL)
             (void)jl_ExecutionEngine->getPointerToFunction((Function*)li->cFunctionObject);
         JL_SIGATOMIC_END();
-        //llvmf->deleteBody();
-        //if (li->cFunctionObject != NULL)
-            //((Function*)li->cFunctionObject)->deleteBody();
+        llvmf->deleteBody();
+        if (li->cFunctionObject != NULL)
+            ((Function*)li->cFunctionObject)->deleteBody();
     }
     f->fptr = li->fptr;
 }
@@ -1679,16 +1678,6 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     return NULL;
 }
 
-bool isGhostType(jl_value_t *jt)
-{
-    if (jl_is_tuple(jt) && jl_tuple_len(jt) == 0)
-        return true;
-    else if (jl_is_datatype(jt) && !jl_is_abstracttype(jt) && (jl_datatype_t*)(jt) != jl_sym_type &&
-          !jl_is_array_type(jt) && jl_datatype_size(jt) == 0 && jl_tuple_len(((jl_datatype_t*)(jt))->names) == 0)
-        return true;
-    return false;
-}
-
 static Value *emit_jlcall(Value *theFptr, Value *theF, jl_value_t **args,
                           size_t nargs, jl_codectx_t *ctx)
 {
@@ -1906,13 +1895,14 @@ static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx)
 
 static Value *ghostValue(jl_value_t *ty)
 {
-    if (jl_is_datatype(ty))
-    {
+    if (jl_is_datatype(ty)) {
         Type *llvmty = julia_struct_to_llvm(ty);
         assert(llvmty != T_void);
         return UndefValue::get(llvmty);
-    } else 
+    } 
+    else {
         return mark_julia_type(UndefValue::get(NoopType),ty);
+    }
 }
 
 static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool isboxed)
@@ -2477,8 +2467,7 @@ static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
     Type *vtype = NULL;
     if(store_unboxed_p(s,ctx) && s != ctx->vaName)
         vtype = julia_type_to_llvm(jt);
-    if (vtype != T_void)
-    {
+    if (vtype != T_void) {
         if (vtype == NULL)
             vtype = jl_pvalue_llvmt;
         lv = builder.CreateAlloca(vtype, 0, s->name);
@@ -2486,8 +2475,10 @@ static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
             mark_julia_type(lv, jt);
         vi.isGhost = false;
         assert(lv != NULL);
-    } else
+    } 
+    else {
         vi.isGhost = true;
+    }
     vi.memvalue = lv;
     return lv;
 }
@@ -2553,7 +2544,7 @@ static void allocate_gc_frame(size_t n_roots, jl_codectx_t *ctx)
 
 static void finalize_gc_frame(jl_codectx_t *ctx)
 {
-        if (ctx->argSpaceOffs + ctx->maxDepth == 0) {
+    if (ctx->argSpaceOffs + ctx->maxDepth == 0) {
         // 0 roots; remove gc frame entirely
         // replace instruction uses with Undef first to avoid LLVM assertion failures
         BasicBlock::iterator bbi = ctx->first_gcframe_inst;
@@ -2661,11 +2652,10 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
             if (lty == T_void)
                 continue;
             theNewArg = emit_unbox(lty, theArg, ty);
-        } else if(jl_is_tuple(ty))
-        {
+        } 
+        else if(jl_is_tuple(ty)) {
             Type *lty = julia_struct_to_llvm(ty);
-            if (lty != jl_pvalue_llvmt)
-            {
+            if (lty != jl_pvalue_llvmt) {
                 if (lty == T_void)
                     continue;
                 theNewArg = emit_unbox(lty, theArg, ty);
@@ -2841,8 +2831,9 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
             Type *ty = julia_type_to_llvm(jl_tupleref(lam->specTypes,i));
-            if (ty != T_void)
+            if (ty != T_void) {
                 fsig.push_back(ty);
+            }
             else {
                 ctx.vars[jl_decl_var(jl_cellref(largs,i))].isGhost = true;
             }
@@ -3126,7 +3117,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         if (lv == NULL) {
             if (ctx.vars[s].isGhost) {
                 ctx.vars[s].passedAs = NULL;
-            } else {
+            } 
+            else {
                 // if this argument hasn't been given space yet, we've decided
                 // to leave it in the input argument array.
                 ctx.vars[s].passedAs = theArg;
@@ -3182,7 +3174,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                     builder.CreateStore(builder.CreateCall(jlbox_func, restTuple), lv);
                 else
                     builder.CreateStore(restTuple, lv);
-            } else {
+            } 
+            else {
                 // TODO: Perhaps allow this in the future, but for now sice varargs are always unspecialized
                 // we don't
                 assert(false);
@@ -3586,12 +3579,6 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlallocobj_func, (void*)&allocobj);
 
     std::vector<Type*> empty_args(0);
-    jlalloc1w_func =
-        Function::Create(FunctionType::get(jl_pvalue_llvmt, empty_args, false),
-                         Function::ExternalLinkage,
-                         "alloc_1w", jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(jlalloc1w_func, (void*)&alloc_1w);
-
     jlalloc2w_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, empty_args, false),
                          Function::ExternalLinkage,
