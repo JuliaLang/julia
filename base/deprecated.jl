@@ -351,6 +351,7 @@ end
 export mmread
 
 # 0.3 deprecations
+@deprecate dense  full
 
 # 0.3 discontinued functions
 
