@@ -722,6 +722,9 @@ Set-Like Collections
 .. function:: setdiff(s1,s2)
 
    Construct the set of elements in ``s1`` but not ``s2``. Maintains order with arrays.
+   Note that both arguments must be collections, and both will be iterated over.
+   In particular, ``setdiff(set,element)`` where ``element`` is a potential member of
+   ``set``, will not work in general.
 
 .. function:: setdiff!(s, iterable)
 
