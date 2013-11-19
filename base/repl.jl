@@ -105,7 +105,7 @@ function showerror(io::IO, e::MethodError)
         print(io, "no method $(name)(")
     end
     for (i, arg) in enumerate(e.args)
-        if typeof(arg) == DataType
+        if isa(arg,Type) && arg != typeof(arg)
             print(io, "Type{$(arg)}")
         else
             print(io, typeof(arg))
