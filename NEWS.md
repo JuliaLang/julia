@@ -1,3 +1,26 @@
+Julia v0.3.0 Release Notes
+==========================
+
+New language features
+---------------------
+
+New library functions
+---------------------
+
+  * `GitHub` module for interacting with the GitHub API
+
+Library improvements
+--------------------
+
+  * `produce` and `consume` can now pass values in both directions ([#4775]).
+
+Deprecated or removed
+---------------------
+
+
+[#4775]: https://github.com/JuliaLang/julia/issues/4775
+
+
 Julia v0.2.0 Release Notes
 ==========================
 
@@ -283,7 +306,7 @@ Deprecated or removed
     `lcm`, `gcdx`, and `powermod` were fixed ([#4811]).
 
 Miscellaneous changes
---------------------------------
+---------------------
 
   * `julia-release-*` executables renamed to `julia-*`,
     and `libjulia-release` renamed to `libjulia` ([#4177]).
