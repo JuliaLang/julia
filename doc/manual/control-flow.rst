@@ -769,6 +769,63 @@ directly or by use of a convenience macro::
     # or, equivalently
     taskHdl = @task mytask(7)
 
-``produce`` and ``consume`` are intended for multitasking, and do not
-launch threads that can run on separate CPUs. True kernel threads are
-discussed under the topic of :ref:`man-parallel-computing`.
+``produce`` and ``consume`` do not launch threads that can run on separate CPUs.
+True kernel threads are discussed under the topic of :ref:`man-parallel-computing`.
+
+Core task operations
+~~~~~~~~~~~~~~~~~~~~
+
+While ``produce`` and ``consume`` illustrate the essential nature of tasks, they
+are actually implemented as library functions using a more primitive function,
+``yieldto``. ``yieldto(task,value)`` suspends the current task, switches
+to the specified ``task``, and causes that task's last ``yieldto`` call to return
+the specified ``value``. Notice that ``yieldto`` is the only operation required
+to use task-style control flow; instead of calling and returning we are always
+just switching to a different task. This is why this feature is also called
+"symmetric coroutines"; each task is switched to and from using the same mechanism.
+
+``yieldto`` is powerful, but most uses of tasks do not invoke it directly.
+Consider why this might be. If you switch away from the current task, you will
+probably want to switch back to it at some point, but knowing when to switch
+back, and knowing which task has the responsibility of switching back, can
+require considerable coordination. For example, ``produce`` needs to maintain
+some state to remember who the consumer is. Not needing to manually keep track
+of the consuming task is what makes ``produce`` easier to use than ``yieldto``.
+
+In addition to ``yieldto``, a few other basic functions are needed to use tasks
+effectively.
+``current_task()`` gets a reference to the currently-running task.
+``istaskdone(t)`` queries whether a task has exited.
+``istaskstarted(t)`` queries whether a task has run yet.
+``task_local_storage`` manipulates a key-value store specific to the current task.
+
+Tasks and events
+~~~~~~~~~~~~~~~~
+
+Most task switches occur as a result of waiting for events such as I/O
+requests, and are performed by a scheduler included in the standard library.
+The scheduler maintains a queue of runnable tasks, and executes an event loop
+that restarts tasks based on external events such as message arrival.
+
+The basic function for waiting for an event is ``wait``. Several objects
+implement ``wait``; for example, given a ``Process`` object, ``wait`` will
+wait for it to exit. ``wait`` is often implicit; for example, a ``wait``
+can happen inside a call to ``read`` to wait for data to be available.
+
+In all of these cases, ``wait`` ultimately operates on a ``Condition``
+object, which is in charge of queueing and restarting tasks. When a task
+calls ``wait`` on a ``Condition``, the task is marked as non-runnable, added
+to the condition's queue, and switches to the scheduler. The scheduler will
+then pick another task to run, or block waiting for external events.
+If all goes well, eventually an event handler will call ``notify`` on the
+condition, which causes tasks waiting for that condition to become runnable
+again.
+
+A task created explicitly by calling ``Task`` is initially not known to the
+scheduler. This allows you to manage tasks manually using ``yieldto`` if
+you wish. However, when such a task waits for an event, it still gets restarted
+automatically when the event happens, as you would expect. It is also
+possible to make the scheduler run a task whenever it can, without necessarily
+waiting for any events. This is done by calling ``schedule(task)``, or using
+the ``@schedule`` or ``@async`` macros (see :ref:`man-parallel-computing` for
+more details).
