@@ -343,7 +343,7 @@ function vcat{T}(r::Ranges{T})
     a = Array(T,n)
     i = 1
     for x in r
-        a[i] = x
+        @inbounds a[i] = x
         i += 1
     end
     return a
@@ -357,7 +357,7 @@ function vcat{T}(rs::Ranges{T}...)
     i = 1
     for r in rs
         for x in r
-            a[i] = x
+            @inbounds a[i] = x
             i += 1
         end
     end

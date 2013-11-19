@@ -26,8 +26,8 @@ include("c.jl")
 
 # core operations & types
 include("promotion.jl")
-include("range.jl")
 include("tuple.jl")
+include("range.jl")
 include("cell.jl")
 include("expr.jl")
 include("error.jl")
