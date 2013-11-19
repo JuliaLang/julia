@@ -747,7 +747,7 @@ function rand(::Type{BigFloat}, randstate::BigRNG)
            &z, &randstate, ROUNDING_MODE[end])
     z
 end
-rand(::Type{BigFloat}) = rand(BigFloat, Base.GMP.DEFAULT_BIGRNG)
+rand(::Type{BigFloat}) = rand(BigFloat, Base.Random.DEFAULT_BIGRNG)
 
 function rand!(r::BigRNG, A::Array{BigFloat})
     for i = 1:length(A)
@@ -755,7 +755,7 @@ function rand!(r::BigRNG, A::Array{BigFloat})
     end
     A
 end
-rand!(A::Array{BigFloat}) = rand!(Base.GMP.DEFAULT_BIGRNG, A)
+rand!(A::Array{BigFloat}) = rand!(Base.Random.DEFAULT_BIGRNG, A)
 
 function randn(::Type{BigFloat}, randstate::BigRNG)
     z = BigFloat()
@@ -764,7 +764,7 @@ function randn(::Type{BigFloat}, randstate::BigRNG)
            &z, C_NULL, &randstate, ROUNDING_MODE[end])
     z
 end
-randn(::Type{BigFloat}) = randn(BigFloat, Base.GMP.DEFAULT_BIGRNG)
+randn(::Type{BigFloat}) = randn(BigFloat, Base.Random.DEFAULT_BIGRNG)
 randn(::Type{BigFloat}, dims::Dims) = randn!(Array(BigFloat, dims))
 randn(::Type{BigFloat}, dims::Int...) = randn!(Array(BigFloat, dims...))
 
@@ -774,6 +774,6 @@ function randn!(r::BigRNG, A::Array{BigFloat})
     end
     A
 end
-randn!(A::Array{BigFloat}) = randn!(Base.GMP.DEFAULT_BIGRNG, A)
+randn!(A::Array{BigFloat}) = randn!(Base.Random.DEFAULT_BIGRNG, A)
 
 end #module

@@ -75,6 +75,12 @@ end
 function srand(seed::Vector{Uint32})
     global RANDOM_SEED = seed
     dsfmt_gv_init_by_array(seed)
+    s = big(0)
+    for i in Base.Random.RANDOM_SEED
+        s = s << 32 + i
+    end
+    global DEFAULT_BIGRNG = BigRNG(s)
+    return
 end
 srand(n::Integer) = srand(make_seed(n))
 
