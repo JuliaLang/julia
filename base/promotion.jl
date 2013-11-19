@@ -122,16 +122,17 @@ promote(x) = (x,)
 function promote{T,S}(x::T, y::S)
     (convert(promote_type(T,S),x), convert(promote_type(T,S),y))
 end
-function promote{T,S,U}(x::T, y::S, z::U)
-    R = promote_type(promote_type(T,S), U)
-    convert((R...), (x, y, z))
+promote_typeof(x) = typeof(x)
+promote_typeof(x, xs...) = promote_type(typeof(x), promote_typeof(xs...))
+function promote(x, y, z)
+    (convert(promote_typeof(x,y,z), x),
+     convert(promote_typeof(x,y,z), y),
+     convert(promote_typeof(x,y,z), z))
 end
-function promote{T,S}(x::T, y::S, zs...)
-    R = promote_type(T,S)
-    for z in zs
-        R = promote_type(R,typeof(z))
-    end
-    convert((R...), tuple(x,y,zs...))
+function promote(x, y, zs...)
+    tuple(convert(promote_typeof(x,y,zs...), x),
+          convert(promote_typeof(x,y,zs...), y),
+          convert((promote_typeof(x,y,zs...)...), zs)...)
 end
 # TODO: promote{T}(x::T, ys::T...) here to catch all circularities?
 
