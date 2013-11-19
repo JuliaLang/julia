@@ -769,17 +769,17 @@ Partially implemented by: ``Array``.
 Dequeues
 --------
 
-.. function:: push!(collection, item) -> collection
+.. function:: push!(collection, items...) -> collection
 
-   Insert an item at the end of a collection.
+   Insert items at the end of a collection.
 
 .. function:: pop!(collection) -> item
 
    Remove the last item in a collection and return it.
 
-.. function:: unshift!(collection, item) -> collection
+.. function:: unshift!(collection, items...) -> collection
 
-   Insert an item at the beginning of a collection.
+   Insert items at the beginning of a collection.
 
 .. function:: shift!(collection) -> item
 

@@ -1704,3 +1704,12 @@ function map(f::Callable, As::AbstractArray...)
     dest = similar(As[1], typeof(first), shape)
     return map_to!(f, first, dest, As...)
 end
+
+# multi-item push!, unshift! (built on top of type-specific 1-item version)
+# (note: must not cause a dispatch loop when 1-item case is not defined)
+push!(A) = A
+push!(A, a, b) = push!(push!(A, a), b)
+push!(A, a, b, c...) = push!(push!(A, a, b), c...)
+unshift!(A) = A
+unshift!(A, a, b) = unshift!(unshift!(A, b), a)
+unshift!(A, a, b, c...) = unshift!(unshift!(A, c...), a, b)
