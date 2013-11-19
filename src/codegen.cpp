@@ -1805,9 +1805,7 @@ static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx)
     BasicBlock *ifok = BasicBlock::Create(getGlobalContext(), "ok");
     builder.CreateCondBr(ok, ifok, err);
     builder.SetInsertPoint(err);
-    std::string msg;
-    msg += std::string(name->name);
-    msg += " not defined";
+    std::string msg = "local identifier \"" + std::string(name->name) + "\" referenced before assignment";
     just_emit_error(msg, ctx);
     builder.CreateBr(ifok);
     ctx->f->getBasicBlockList().push_back(ifok);
