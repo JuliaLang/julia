@@ -14,7 +14,7 @@ function bkfact!{T<:BlasReal}(A::StridedMatrix{T}, uplo::Symbol)
 end
 function bkfact!{T<:BlasReal}(A::StridedMatrix{T}, uplo::Symbol, symmetric::Bool)
 	if symmetric return bkfact!(A, uplo) end
-	error("The Bunch-Kaufman decomposition is only valid for symmetric matrices")
+	error("the Bunch-Kaufman decomposition is only valid for symmetric matrices")
 end
 function bkfact!{T<:BlasComplex}(A::StridedMatrix{T}, uplo::Symbol, symmetric::Bool)
     if symmetric

@@ -166,7 +166,7 @@ for (fname, elty) in ((:daxpy_,:Float64),
 end
 function axpy!{T,Ta<:Number}(alpha::Ta, x::Array{T}, y::Array{T})
     if length(x) != length(y)
-        error("Inputs should be of the same length")
+        error("arguments must be of the same length")
     end
     return axpy!(length(x), convert(T,alpha), x, 1, y, 1)
 end
@@ -175,7 +175,7 @@ function axpy!{T,Ta<:Number,Ti<:Integer}(alpha::Ta, x::Array{T}, rx::Union(Range
                                          y::Array{T}, ry::Union(Range1{Ti},Range{Ti}))
 
     if length(rx) != length(ry)
-        error("Ranges should be of the same length")
+        error("ranges must be of the same length")
     end
 
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
@@ -576,7 +576,7 @@ function copy!{T<:BlasFloat,Ti<:Integer}(dest::Array{T}, rdest::Union(Range1{Ti}
         throw(BoundsError())
     end
     if length(rdest) != length(rsrc)
-        error("Ranges must be of the same length")
+        error("ranges must be of the same length")
     end
     BLAS.blascopy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
                    pointer(dest)+(first(rdest)-1)*sizeof(T), step(rdest))

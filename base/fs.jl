@@ -78,7 +78,7 @@ open(f::String,flags) = open(f,flags,0)
 
 function close(f::File)
     if !f.open
-        error("File is already closed")
+        error("file is already closed")
     end
     err = ccall(:jl_fs_close, Int32, (Int32,), f.handle)
     uv_error("close",err)
@@ -93,7 +93,7 @@ function unlink(p::String)
 end
 function unlink(f::File)
     if isempty(f.path)
-      error("No path associated with this file")
+      error("no path associated with this file")
     end
     if f.open
         close(f)
@@ -104,7 +104,7 @@ end
 
 function write(f::File, buf::Ptr{Uint8}, len::Integer, offset::Integer=-1)
     if !f.open
-        error("File is not open")
+        error("file is not open")
     end
     err = ccall(:jl_fs_write, Int32, (Int32, Ptr{Uint8}, Csize_t, Csize_t),
                 f.handle, buf, len, offset)
@@ -114,7 +114,7 @@ end
 
 function write(f::File, c::Uint8)
     if !f.open
-        error("File is not open")
+        error("file is not open")
     end
     err = ccall(:jl_fs_write_byte, Int32, (Int32, Cchar), f.handle, c)
     uv_error("write",err)
@@ -140,7 +140,7 @@ end
 
 function read(f::File, ::Type{Uint8})
     if !f.open
-        error("File is not open")
+        error("file is not open")
     end
     ret = ccall(:jl_fs_read_byte, Int32, (Int32,), f.handle)
     uv_error("read", ret)

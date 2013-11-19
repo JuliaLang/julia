@@ -15,11 +15,11 @@ type Woodbury{T} <: AbstractMatrix{T}
         N = size(A, 1)
         k = size(U, 2)
         if size(A, 2) != N || size(U, 1) != N || size(V, 1) != k || size(V, 2) != N
-            error("Sizes do not match")
+            error("sizes do not match")
         end
         if k > 1
             if size(C, 1) != k || size(C, 2) != k
-                error("Size of C is incorrect")
+                error("size of C is incorrect")
             end
         end
         Cp = inv(inv(C) + V*(A\U))

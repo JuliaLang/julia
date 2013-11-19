@@ -27,7 +27,7 @@ gradient(F::AbstractVector) = gradient(F, [1:length(F)])
 gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F))])
 #gradient(F::AbstractVector, h::AbstractVector)
 
-diag(A::AbstractVector) = error("Perhaps you meant to use diagm().")
+diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagonal matrix")
 #diag(A::AbstractMatrix)
 
 #diagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
@@ -102,7 +102,7 @@ trace(x::Number) = x
 
 #det(a::AbstractMatrix)
 
-inv(a::AbstractVector) = error("Input must be a square matrix")
+inv(a::AbstractVector) = error("argument must be a square matrix")
 
 (\)(A::AbstractMatrix, b::AbstractVector) = A_ldiv_B!(A, copy(b))
 (\)(A::AbstractMatrix, B::AbstractMatrix) = A_ldiv_B!(A, copy(B))

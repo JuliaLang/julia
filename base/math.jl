@@ -741,7 +741,7 @@ function psifn(x::Float64, n::Int, kode::Int, m::Int)
 #-----------------------------------------------------------------------
     if abs(t) > elim
         if t <= 0.0 error("n too large") end
-        error("Overflow, x too small or n+m-1 too large or both")
+        error("overflow; x too small or n+m-1 too large or both")
     end
     if x < wdtol
         ans[1] = x^(-n - 1)
@@ -830,7 +830,7 @@ function psifn(x::Float64, n::Int, kode::Int, m::Int)
     t1 = xdmln + xdmln
     t2 = t + xdmln
     tk = max(abs(t), abs(t1), abs(t2))
-    if tk > elim error("Underflow") end
+    if tk > elim error("underflow") end
     tss = exp(-t)
     tt = 0.5/xdmy
     t1 = tt

@@ -240,7 +240,7 @@ rref(x::Number) = one(x)
 ## "Functions of Matrices: Theory and Computation", SIAM
 function expm!{T<:BlasFloat}(A::StridedMatrix{T})
     m, n = size(A)
-    if m != n error("expm!: Matrix A must be square") end
+    if m != n error("matrix must be square") end
     if m < 2 return exp(A) end
     ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = norm(A, 1)
@@ -554,9 +554,9 @@ function cond(A::StridedMatrix, p)
         return maxv == 0.0 ? Inf : maxv / minimum(v)
     elseif p == 1 || p == Inf
         m, n = size(A)
-        if m != n; error("Use 2-norm for non-square matrices"); end
+        if m != n; error("wse 2-norm for non-square matrices"); end
         return cond(lufact(A), p)
     end
-    error("Norm type must be 1, 2 or Inf")
+    error("norm type must be 1, 2, or Inf")
 end
 cond(A::StridedMatrix) = cond(A, 2)

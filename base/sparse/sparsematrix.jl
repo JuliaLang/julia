@@ -79,7 +79,7 @@ function reinterpret{T,Tv,Ti,N}(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTup
         error("SparseMatrixCSC reinterpret is only supported for element types of the same size")
     end
     if prod(dims) != length(a)
-        error("reinterpret: invalid dimensions")
+        error("new dimensions $(dims) must be consistent with array size $(length(a))")
     end
     mS,nS = dims
     mA,nA = size(a)
@@ -95,7 +95,7 @@ end
 
 function reshape{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{2,Int})
     if prod(dims) != length(a)
-        error("reshape: invalid dimensions")
+        error("new dimensions $(dims) must be consistent with array size $(length(a))")
     end
     mS,nS = dims
     mA,nA = size(a)
@@ -289,7 +289,7 @@ function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
             J[count] = col
             count += 1
         else
-            println("Warning: sparse matrix contains explicit stored zeros.")
+            println("warning: sparse matrix contains explicit stored zeros")
         end
     end
 
@@ -315,7 +315,7 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
             V[count] = S.nzval[k]
             count += 1
         else
-            println("Warning: sparse matrix contains explicit stored zeros.")
+            println("warning: sparse matrix contains explicit stored zeros")
         end
     end
 
@@ -372,7 +372,7 @@ end
 
 function one{T}(S::SparseMatrixCSC{T})
     m,n = size(S)
-    if m != n; error("Multiplicative identity only defined for square matrices!"); end;
+    if m != n; error("multiplicative identity only defined for square matrices"); end
     speye(T, m)
 end
 
@@ -409,7 +409,7 @@ for (op, restype) in ( (:+, Nothing), (:-, Nothing), (:.*, Nothing), (:.^, Nothi
 
         function ($op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
             if size(A,1) != size(B,1) || size(A,2) != size(B,2)
-                error("Incompatible sizes")
+                error("incompatible sizes")
             end
 
             (m, n) = size(A)
@@ -577,19 +577,17 @@ function reducedim{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region, v0)
         return [S]
 
     else
-
-        error("Invalid value for region")
-
+        error("invalid value for region; must be 1, 2, or (1,2)")
     end
 end
 
 maximum{T}(A::SparseMatrixCSC{T}) =
-    isempty(A) ? error("maximum: argument is empty") : reducedim(scalarmax,A,(1,2),typemin(T))
+    isempty(A) ? error("argument must not be empty") : reducedim(scalarmax,A,(1,2),typemin(T))
 maximum{T}(A::SparseMatrixCSC{T}, region) =
     isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(scalarmax,A,region,typemin(T))
 
 minimum{T}(A::SparseMatrixCSC{T}) =
-    isempty(A) ? error("minimum: argument is empty") : reducedim(scalarmin,A,(1,2),typemax(T))
+    isempty(A) ? error("argument must not be empty") : reducedim(scalarmin,A,(1,2),typemax(T))
 minimum{T}(A::SparseMatrixCSC{T}, region) =
     isempty(A) ? similar(A, reduced_dims0(A,region)) : reducedim(scalarmin,A,region,typemax(T))
 
@@ -1034,20 +1032,20 @@ setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, S::Matrix, I::AbstractVec
 # A[I,J] = B
 function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti}, I::AbstractVector{T}, J::AbstractVector{T})
     if size(B,1) != length(I) || size(B,2) != length(J)
-        return("error in setindex!: mismatched dimensions")
+        error("dimensions must match")
     end
 
     issortedI = issorted(I)
     issortedJ = issorted(J)
 
-    if ~issortedI && ~issortedJ
+    if !issortedI && !issortedJ
         pI = sortperm(I); I = I[pI]
         pJ = sortperm(J); J = J[pJ]
         B = B[pI, pJ]
-    elseif ~issortedI
+    elseif !issortedI
         pI = sortperm(I); I = I[pI]
         B = B[pI,:]
-    else ~issortedJ
+    else !issortedJ
         pJ = sortperm(J); J = J[pJ]
         B = B[:, pJ]
     end
@@ -1171,7 +1169,7 @@ function vcat(X::SparseMatrixCSC...)
     nX = [ size(x, 2) for x in X ]
     n = nX[1]
     for i = 2 : num
-        if nX[i] != n; error("error in vcat: mismatched dimensions"); end
+        if nX[i] != n; error("dimensions must match"); end
     end
     m = sum(mX)
 
@@ -1209,7 +1207,7 @@ function hcat(X::SparseMatrixCSC...)
     nX = [ size(x, 2) for x in X ]
     m = mX[1]
     for i = 2 : num
-        if mX[i] != m; error("error in hcat: mismatched dimensions"); end
+        if mX[i] != m; error("dimensions must match"); end
     end
     n = sum(nX)
 
@@ -1345,7 +1343,7 @@ spdiagm(B::AbstractVector, d::Number=0) = spdiagm((B,), (d,))
 
 ## expand a colptr or rowptr into a dense index vector
 function expandptr{T<:Integer}(V::Vector{T})
-    if V[1] != 1 error("expandptr: first index must be one") end
+    if V[1] != 1 error("first index must be one") end
     res = similar(V, (int64(V[end]-1),))
     for i in 1:(length(V)-1), j in V[i]:(V[i+1] - 1) res[j] = i end
     res
@@ -1395,7 +1393,7 @@ diag(A::SparseMatrixCSC) = [d for d in SpDiagIterer(A)]
 
 function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
     if (size(v,1) != 1 && size(v,2) != 1)
-        error("Input should be nx1 or 1xn")
+        error("input should be nx1 or 1xn")
     end
 
     n = length(v)

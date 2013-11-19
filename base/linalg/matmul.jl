@@ -168,7 +168,7 @@ Ac_mul_Bt!{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S})
 
 function symmetrize!(A::StridedMatrix, UL::BlasChar)
     m, n = size(A)
-    if m != n error("symmetrize: Matrix must be square") end
+    if m != n error("matrix must be square") end
     if UL == 'U'
         for i = 1:(n-1)
             for j = (i+1):n
@@ -191,7 +191,7 @@ symmetrize!(A) = symmetrize!(A, 'U')
 
 function symmetrize_conj!(A::StridedMatrix, UL::BlasChar)
     m, n = size(A)
-    if m != n error("symmetrize: Matrix must be square") end
+    if m != n error("matrix must be square") end
     if UL == 'U'
         for i = 1:(n-1)
             for j = (i+1):n

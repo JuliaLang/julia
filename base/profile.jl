@@ -24,7 +24,7 @@ end
 function init(n::Integer, delay::Float64)
     status = ccall(:profile_init, Cint, (Csize_t, Uint64), n, iround(10^9*delay))
     if status == -1
-        error("Could not allocate space for ", n, " instruction pointers")
+        error("could not allocate space for ", n, " instruction pointers")
     end
 end
 
@@ -36,7 +36,7 @@ function print{T<:Unsigned}(io::IO = STDOUT, data::Vector{T} = fetch(); format =
     elseif format == :flat
         flat(io, data, C, combine, cols)
     else
-        error("Output format ", format, " not recognized")
+        error("output format ", format, " not recognized")
     end
 end
 print{T<:Unsigned}(data::Vector{T} = fetch(); kwargs...) = print(STDOUT, data; kwargs...)
@@ -47,7 +47,7 @@ function print{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict; format = :tre
     elseif format == :flat
         flat(io, data, lidict, combine, cols)
     else
-        error("Output format ", format, " not recognized")
+        error("output format ", format, " not recognized")
     end
 end
 print{T<:Unsigned}(data::Vector{T}, lidict::Dict; kwargs...) = print(STDOUT, data, lidict; kwargs...)
@@ -97,15 +97,15 @@ function lookup(ip::Uint, doCframes::Bool)
 end
 
 error_codes = (Int=>ASCIIString)[
-    -1=>"Cannot specify signal action for profiling",
-    -2=>"Cannot create the timer for profiling",
-    -3=>"Cannot start the timer for profiling"]
+    -1=>"cannot specify signal action for profiling",
+    -2=>"cannot create the timer for profiling",
+    -3=>"cannot start the timer for profiling"]
 
 function fetch()
     len = len_data()
     maxlen = maxlen_data()
     if (len == maxlen)
-        warn("the profile data buffer is full; profiling probably terminated\nbefore your program finished. To profile for longer runs, call Profile.init()\nwith a larger buffer and/or larger delay.")
+        warn("The profile data buffer is full; profiling probably terminated\nbefore your program finished. To profile for longer runs, call Profile.init()\nwith a larger buffer and/or larger delay.")
     end
     pointer_to_array(get_data_pointer(), (len,))
 end

@@ -808,8 +808,7 @@ function cat(catdim::Integer, X...)
             len = d <= ndimsX[1] ? dimsX[1][d] : 1
             for i = 2:nargs
                 if len != (d <= ndimsX[i] ? dimsX[i][d] : 1)
-                    error("Dimension mismatch on dimension ", d)
-                    #error("lala $d")
+                    error("mismatch in dimension ", d)
                 end
             end
         end
@@ -876,7 +875,7 @@ function cat_t(catdim::Integer, typeC, A::AbstractArray...)
             len = d <= ndimsA[1] ? dimsA[1][d] : 1
             for i = 2:nargs
                 if len != (d <= ndimsA[i] ? dimsA[i][d] : 1)
-                    error("dimension mismatch on dimension ", d)
+                    error("mismatch in dimension ", d)
                 end
             end
         end
