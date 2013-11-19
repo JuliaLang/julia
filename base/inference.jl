@@ -1682,12 +1682,12 @@ function without_linenums(a::Array{Any,1})
     l
 end
 
-_pure_builtins = {getfield, tuple, tupleref, tuplelen, fieldtype}
+_pure_builtins = {getfield, tuple, tupleref, tuplelen, fieldtype, apply_type}
 
 # detect some important side-effect-free calls
 function effect_free(e::ANY, sv)
     if isa(e,Symbol) || isa(e,SymbolNode) || isa(e,Number) || isa(e,String) ||
-        isa(e,TopNode) || isa(e,QuoteNode)
+        isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type)
         return true
     end
     if isa(e,Expr)
@@ -1762,6 +1762,9 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
                 return (union,())
             end
         end
+    end
+    if is(f,tuple) && isa(e.typ,Tuple) && all(isType,e.typ) && isleaftype(e.typ) && effect_free(e,sv)
+        return (map(t->t.parameters[1], e.typ), ())
     end
     if isa(f,IntrinsicFunction)
         return NF
