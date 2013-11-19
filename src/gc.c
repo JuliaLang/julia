@@ -991,12 +991,6 @@ void *allocobj(size_t sz)
     return pool_alloc(&pools[szclass(sz)]);
 }
 
-void *alloc_1w(void)
-{
-    // For now
-    return allocobj(1);
-}
-
 void *alloc_2w(void)
 {
 #ifdef MEMDEBUG
