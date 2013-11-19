@@ -238,7 +238,7 @@ function hash(t::Tuple)
     return h
 end
 
-function hash(a::Array)
+function hash(a::AbstractArray)
     h::Uint = hash(size(a))+1
     for i=1:length(a)
         h = bitmix(h,int(hash(a[i])))
@@ -247,7 +247,7 @@ function hash(a::Array)
 end
 
 # make sure Array{Bool} and BitArray can be equivalent
-hash(a::Array{Bool}) = hash(bitpack(a))
+hash(a::AbstractArray{Bool}) = hash(bitpack(a))
 
 hash(x::ANY) = object_id(x)
 
