@@ -415,6 +415,35 @@ print_with_color(color::Symbol, io::IO, msg::String...) =
 print_with_color(color::Symbol, msg::String...) =
     print_with_color(color, STDOUT, msg...)
 
+## file downloading ##
+
+downloadcmd = nothing
+function download(url::String, filename::String)
+    global downloadcmd
+    if downloadcmd === nothing
+        for checkcmd in (:curl, :wget, :fetch)
+            if success(`which $checkcmd` |> DevNull)
+                downloadcmd = checkcmd
+                break
+            end
+        end
+    end
+    if downloadcmd == :wget
+        run(`wget -O $filename $url`)
+    elseif downloadcmd == :curl
+        run(`curl -o $filename -L $url`)
+    elseif downloadcmd == :fetch
+        run(`fetch -f $filename $url`)
+    else
+        error("no download agent available; install curl, wget, or fetch")
+    end
+    filename
+end
+function download(url::String)
+    filename = tempname()
+    download(url, filename)
+end
+
 ## warnings and messages ##
 
 function info(msg::String...; prefix="INFO: ")

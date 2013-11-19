@@ -133,33 +133,6 @@ end
     end
 end
 
-downloadcmd = nothing
-function download(url::String, filename::String)
-    global downloadcmd
-    if downloadcmd === nothing
-        for checkcmd in (:curl, :wget, :fetch)
-            if success(`which $checkcmd` |> DevNull)
-                downloadcmd = checkcmd
-                break
-            end
-        end
-    end
-    if downloadcmd == :wget
-        run(`wget -O $filename $url`)
-    elseif downloadcmd == :curl
-        run(`curl -o $filename -L $url`)
-    elseif downloadcmd == :fetch
-        run(`fetch -f $filename $url`)
-    else
-        error("no download agent available; install curl, wget, or fetch")
-    end
-    filename
-end
-function download(url::String)
-    filename = tempname()
-    download(url, filename)
-end
-
 function readdir(path::String)
     # Allocate space for uv_fs_t struct
     uv_readdir_req = zeros(Uint8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
