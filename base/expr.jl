@@ -24,8 +24,6 @@ macro gensym(names...)
     return blk
 end
 
-esc(e::ANY) = Expr(:escape, e)
-
 ## expressions ##
 
 splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
