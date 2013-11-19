@@ -1157,9 +1157,9 @@
 
 "),
 
-("Dequeues","Base","push!","push!(collection, item) -> collection
+("Dequeues","Base","push!","push!(collection, items...) -> collection
 
-   Insert an item at the end of a collection.
+   Insert items at the end of a collection.
 
 "),
 
@@ -1169,9 +1169,9 @@
 
 "),
 
-("Dequeues","Base","unshift!","unshift!(collection, item) -> collection
+("Dequeues","Base","unshift!","unshift!(collection, items...) -> collection
 
-   Insert an item at the beginning of a collection.
+   Insert items at the beginning of a collection.
 
 "),
 
