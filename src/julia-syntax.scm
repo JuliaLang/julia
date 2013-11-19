@@ -661,6 +661,10 @@
 		(call (curly ,name ,@params) ,@field-names)))))
 
 (define (new-call Texpr args field-names field-types mutabl)
+  (if (any vararg? args)
+      (error "... is not supported inside \"new\""))
+  (if (any kwarg? args)
+      (error "\"new\" does not accept keyword arguments"))
   (cond ((length> args (length field-names))
 	 `(call (top error) "new: too many arguments"))
 	(else
