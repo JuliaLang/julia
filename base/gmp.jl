@@ -483,7 +483,7 @@ function randu(randstate::BigRNG, k::BigInt)
       (Ptr{BigInt}, Ptr{BigRNG}, Ptr{BigInt}), &z, &randstate, &k)
     z
 end
-randu(k::BigInt) = randu(DEFAULT_BIGRNG, k)
+randu(k::BigInt) = randu(Base.Random.DEFAULT_BIGRNG, k)
 
 srand(r::BigRNG, seed) = srand(r, convert(BigInt, seed))
 function srand(randstate::BigRNG, seed::Vector{Uint32})
@@ -502,15 +502,6 @@ function srand(randstate::BigRNG, seed::BigInt)
     ccall((:__gmp_randseed, :libgmp), Void, (Ptr{BigRNG}, Ptr{BigInt}),
       &randstate, &seed)
     return
-end
-
-# Initialize the default BigRNG
-function rand_init()
-    s = big(0)
-    for i in Base.Random.RANDOM_SEED
-        s = s << 32 + i
-    end
-    global DEFAULT_BIGRNG = BigRNG(s)
 end
 
 end # module

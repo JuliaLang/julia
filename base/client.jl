@@ -368,7 +368,6 @@ function _start()
     LinAlg.init()
     Sys.init()
     GMP.gmp_init()
-    GMP.rand_init()
     global const CPU_CORES = Sys.CPU_CORES
     init_profiler()
 
