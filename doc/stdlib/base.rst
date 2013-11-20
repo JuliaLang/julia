@@ -642,6 +642,8 @@ Dicts can be created using a literal syntax: ``{"A"=>1, "B"=>2}``. Use of curly 
 As with arrays, ``Dicts`` may be created with comprehensions. For example,
 ``{i => f(i) for i = 1:10}``.
 
+Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if it exists) or throws an error, and ``D[x] = y`` stores the key-value pair ``x => y`` in ``D`` (replacing any existing value for the key ``x``).  Multiple arguments to ``D[...]`` are converted to tuples; for example, the syntax ``D[x,y]``  is equivalent to ``D[(x,y)]``, i.e. it refers to the value keyed by the tuple ``(x,y)``.
+
 .. function:: Dict()
 
    ``Dict{K,V}()`` constructs a hashtable with keys of type K and values of type V.
