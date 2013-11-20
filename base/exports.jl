@@ -180,10 +180,11 @@ export
 # Mathematical constants
     im,
     π, pi,
+    τ, tau,
     e, eu,
     γ, eulergamma,
-    catalan,
     φ, golden,
+    catalan,
 
 # Operators
     !,
