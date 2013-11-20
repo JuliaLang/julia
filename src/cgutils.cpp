@@ -629,7 +629,7 @@ static Value *emit_tupleset(Value *tuple, Value *i, Value *x, jl_value_t *jt, jl
     }
     Type *ty = tuple->getType();
     if (ty == jl_pvalue_llvmt) { //boxed
-    #ifdef OVERLAP_TUPLE_LENCreateS
+    #ifdef OVERLAP_TUPLE_LEN
         Value *slot = builder.CreateGEP(builder.CreateBitCast(tuple, jl_ppvalue_llvmt),
                                  i);
     #else
@@ -641,6 +641,8 @@ static Value *emit_tupleset(Value *tuple, Value *i, Value *x, jl_value_t *jt, jl
     } 
     else {
         Value *ret = NULL;
+        ConstantInt *idx = dyn_cast<ConstantInt>(i);
+        assert(idx != NULL && "tuplesets must use constant indices");
         if (ty->isVectorTy()) {
             Type *ity = i->getType();
             assert(ity->isIntegerTy());
@@ -653,65 +655,18 @@ static Value *emit_tupleset(Value *tuple, Value *i, Value *x, jl_value_t *jt, jl
             ret = builder.CreateInsertElement(tuple,x,builder.CreateSub(i,ConstantInt::get(T_int32,1)));
         } 
         else {
-            ConstantInt *idx = dyn_cast<ConstantInt>(i);
-            if (idx != 0) {
-                unsigned ci = (unsigned)idx->getZExtValue()-1;
-                size_t n = jl_tuple_len(jt);
-                for (size_t i=0,j = 0; i<n; ++i) {
-                    Type *ty = julia_struct_to_llvm(jl_tupleref(jt,i));
-                    if (ci == i) {
-                        if (ty == T_void)
-                            return tuple;
-                        else 
-                            ret = builder.CreateInsertValue(tuple,x,ArrayRef<unsigned>(j));
-                    }
-                    if(ty != T_void)
-                        ++j;
+            unsigned ci = (unsigned)idx->getZExtValue()-1;
+            size_t n = jl_tuple_len(jt);
+            for (size_t i=0,j = 0; i<n; ++i) {
+                Type *ty = julia_struct_to_llvm(jl_tupleref(jt,i));
+                if (ci == i) {
+                    if (ty == T_void)
+                        return tuple;
+                    else 
+                        ret = builder.CreateInsertValue(tuple,x,ArrayRef<unsigned>(j));
                 }
-            }
-            else if (ty->isArrayTy()) {
-                ArrayType *at = dyn_cast<ArrayType>(ty);
-                Value *tempSpace = builder.CreateAlloca(at);
-                builder.CreateStore(tuple,tempSpace);
-                Value *idxs[2];
-                idxs[0] = ConstantInt::get(T_size,0);
-                idxs[1] = builder.CreateSub(i,ConstantInt::get(T_size,1));
-                builder.CreateStore(x,builder.CreateGEP(tempSpace,ArrayRef<Value*>(&idxs[0],2)));
-                ret = builder.CreateLoad(tempSpace);
-            }
-            else {
-                assert(ty->isStructTy());
-                StructType *st = dyn_cast<StructType>(ty);
-                size_t n = st->getNumElements();
-                Value *ret = builder.CreateAlloca(st);
-                BasicBlock *after = BasicBlock::Create(getGlobalContext(),"after_switch",ctx->f);
-                BasicBlock *deflt = BasicBlock::Create(getGlobalContext(),"default_case",ctx->f);
-                // Create the switch
-                SwitchInst *sw = builder.CreateSwitch(i,deflt,n);
-                // Anything else is a bounds error
-                builder.SetInsertPoint(deflt);
-                builder.CreateCall2(jlthrow_line_func, builder.CreateLoad(jlboundserr_var),
-                            ConstantInt::get(T_int32, ctx->lineno));
-                builder.CreateUnreachable();
-                // Now for the cases
-                for (size_t i = 0,j = 0; i < jl_tuple_len(jt); ++i) {
-                    BasicBlock *blk = BasicBlock::Create(getGlobalContext(),"case",ctx->f);
-                    builder.SetInsertPoint(blk);
-                    jl_value_t *jltype = jl_tupleref(jt,i);
-                    Type *ty = julia_struct_to_llvm(jltype);
-                    if (ty != T_void) {
-                        Value *newAgg = builder.CreateInsertValue(tuple,x,ArrayRef<unsigned>(j));
-                        builder.CreateStore(newAgg,ret);
-                        j++;
-                    } 
-                    else {
-                        builder.CreateStore(tuple,ret);
-                    }
-                    builder.CreateBr(after);
-                    sw->addCase(ConstantInt::get((IntegerType*)T_size,i+1),blk);
-                }
-                builder.SetInsertPoint(after);
-                ret = builder.CreateLoad(ret);
+                if(ty != T_void)
+                    ++j;
             }
         }
         return mark_julia_type(ret,jt);
