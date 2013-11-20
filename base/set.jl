@@ -27,6 +27,7 @@ setdiff!(s::Set, xs) = (for x=xs; delete!(s,x); end; s)
 similar{T}(s::Set{T}) = Set{T}()
 copy(s::Set) = union!(similar(s), s)
 
+sizehint(s::Set, newsz) = sizehint(s.dict, newsz)
 empty!{T}(s::Set{T}) = (empty!(s.dict); s)
 
 start(s::Set)       = start(s.dict)
