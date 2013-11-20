@@ -1682,7 +1682,8 @@ function sym_replace(e::ANY, from1, from2, to1, to2)
         # remove_redundant_temp_vars can only handle Symbols
         # on the LHS of assignments, so we make sure not to put
         # something else there
-        e2 = _sym_repl(e.args[1]::Symbol, from1, from2, to1, to2, e.args[1])
+        @assert length(e.args) == 2
+        e2 = _sym_repl(e.args[1]::Symbol, from1, from2, to1, to2, e.args[1]::Symbol)
         if isa(e2, SymbolNode)
             e2 = e2.name
         end
@@ -1997,6 +1998,11 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         return NF
     end
 
+    spnames = { sp[i].name for i=1:2:length(sp) }
+    enc_vinflist = enclosing_ast.args[2][2]::Array{Any,1}
+    enc_locllist = enclosing_ast.args[2][1]::Array{Any,1}
+    locllist = ast.args[2][1]::Array{Any,1}
+
     # check for vararg function
     args = f_argnames(ast)
     na = length(args)
@@ -2016,6 +2022,21 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             replace_tupleref!(ast, body, vaname, newnames, sv, 1)
             args = vcat(args[1:na-1], newnames)
             na = length(args)
+
+            islocal = false # if the argument name is also used as a local variable,
+                            # we need to keep it around as a variable name
+            vnew = unique_name(enclosing_ast, ast)
+            for vi in vinflist
+                if vi[1] === vaname && vi[2] != 0
+                    islocal = true
+                    push!(enc_vinflist, {vnew, vi[2], vi[3]})
+                end
+            end
+            if islocal
+                push!(spnames, vaname)
+                push!(spvals, vnew)
+                push!(enc_locllist, vnew)
+            end
         else
             # construct tuple-forming expression for argument tail
             vararg = mk_tuplecall(argexprs[na:end])
@@ -2028,12 +2049,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         body = astcopy(body)
     end
 
-    spnames = { sp[i].name for i=1:2:length(sp) }
-
     # avoid capturing free variables in enclosing function with the same name as in our function
-    enc_vinflist = enclosing_ast.args[2][2]::Array{Any,1}
-    enc_locllist = enclosing_ast.args[2][1]::Array{Any,1}
-    locllist = ast.args[2][1]::Array{Any,1}
     for localval in locllist
         localval = localval::Symbol
         vnew = unique_name(enclosing_ast, ast)
