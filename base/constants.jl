@@ -50,9 +50,9 @@ macro math_const(sym, val, def)
         $bigconvert
         Base.convert(::Type{Float64}, ::MathConst{$qsym}) = $val
         Base.convert(::Type{Float32}, ::MathConst{$qsym}) = $(float32(val))
-        @assert isa(big($esym), BigFloat)
-        @assert float64($esym) == float64(big($esym))
-        @assert float32($esym) == float32(big($esym))
+        # @assert isa(big($esym), BigFloat)
+        # @assert float64($esym) == float64(big($esym))
+        # @assert float32($esym) == float32(big($esym))
     end
 end
 
@@ -61,6 +61,7 @@ big(x::MathConst) = convert(BigFloat,x)
 ## specific mathematical constants
 
 @math_const π        3.14159265358979323846  pi
+@math_const τ        6.28318530717958647693  2big(pi)
 @math_const e        2.71828182845904523536  exp(big(1))
 @math_const γ        0.57721566490153286061  euler
 @math_const catalan  0.91596559417721901505  catalan
@@ -68,6 +69,7 @@ big(x::MathConst) = convert(BigFloat,x)
 
 # aliases
 const pi = π
+const tau = τ
 const eu = e
 const eulergamma = γ
 const golden = φ
