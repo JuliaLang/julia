@@ -140,6 +140,11 @@ function getindex(t::Associative, key)
     return v
 end
 
+# t[k1,k2,ks...] is syntactic sugar for t[(k1,k2,ks...)].  (Note
+# that we need to avoid dispatch loops if setindex!(t,v,k) is not defined.)
+getindex(t::Associative, k1, k2, ks...) = getindex(t, tuple(k1,k2,ks...))
+setindex!(t::Associative, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...))
+
 push!(t::Associative, key, v) = setindex!(t, v, key)
 
 # hashing objects by identity
