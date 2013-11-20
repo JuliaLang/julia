@@ -20,7 +20,7 @@ CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = random double-conversion
+STAGE1_DEPS = random double-conversion libgit2
 STAGE2_DEPS =
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -144,7 +144,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf $(BUILD)
-getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-random get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf
+getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-random get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-libgit2
 
 ## PATHS ##
 DIRS = $(addprefix $(BUILD)/,lib include bin share etc)
@@ -486,6 +486,45 @@ compile-readline: $(READLINE_OBJ_SOURCE)
 check-readline: readline-$(READLINE_VER)/checked
 install-readline: $(READLINE_OBJ_TARGET) 
 
+## LIBGIT2 ##
+
+LIBGIT2_SRC_TARGET = libgit2/libgit2.so
+LIBGIT2_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libgit2.so
+
+libgit2/configure:
+	(cd .. && git submodule init && git submodule update)
+ifeq (exists, $(shell [ -d libgit2/.git ] && echo exists ))
+libgit2/config.status: libgit2/.git/HEAD
+endif
+ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/libgit2 ] && echo exists ))
+libgit2/config.status: $(JULIAHOME)/.git/modules/deps/libgit2/HEAD
+endif
+
+$(LIBGIT2_SRC_TARGET): libgit2/configure
+ifeq (exists, $(shell [ ! -d $(JULIAHOME)/deps/libgit2/build ] && echo exists ))
+	mkdir -p libgit2/build
+endif
+
+LIBGIT2_INSTALL_PREFIX = $(abspath $(BUILD))
+
+$(LIBGIT2_OBJ_TARGET): $(LIBGIT2_SRC_TARGET)
+	cd $(JULIAHOME)/deps/libgit2/build && \
+	cmake .. -DCMAKE_INSTALL_PREFIX:PATH=$(LIBGIT2_INSTALL_PREFIX) && \
+	cmake --build . --target install
+
+clean-libgit2:
+	-rm $(BUILD)/lib/libgit2.so*
+	-rm $(BUILD)/lib/pkgconfig/libgit2.pc
+	-rm -rf $(BUILD)/include/git2*
+	-rm -rf $(JULIAHOME)/deps/libgit2/build
+distclean-libgit2: clean-libgit2
+	-$(MAKE) -C libgit2 distclean
+
+get-libgit2: libgit2/configure
+configure-libgit2: libgit2/config.status
+compile-libgit2: $(LIBGIT2_SRC_TARGET)
+check-libgit2:
+install-libgit2: $(LIBGIT2_OBJ_TARGET)
 
 ## LIBUV ##
 
