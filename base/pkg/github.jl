@@ -32,7 +32,7 @@ function curl(url::String, opts::Cmd=``)
 end
 curl(url::String, data::Nothing, opts::Cmd=``) = curl(url,opts)
 curl(url::String, data, opts::Cmd=``) =
-    curl(url,`$opts --data $(sprint(io->json().print(io,data)))`)
+    curl(url,`--data $(sprint(io->json().print(io,data))) $opts`)
 
 function token(user::String=user())
     tokfile = Dir.path(".github","token")
@@ -47,19 +47,33 @@ end
 
 function req(resource::String, data, opts::Cmd=``)
     url = "https://api.github.com/$resource"
-    status, content = curl(url,data,`$opts -u $(token()):x-oauth-basic`)
+    status, content = curl(url,data,`-u $(token()):x-oauth-basic $opts`)
     response = json().parse(content)
     status, response
 end
-req(resource::String, opts::Cmd=``) = req(resource,nothing,opts)
+
+for m in (:GET,:HEAD,:PUT,:POST,:PATCH,:DELETE)
+    @eval begin
+        m = $(string(m))
+        $m(resource::String, data, opts::Cmd=``) = req(resource,data,`-X $m $opts`)
+        $m(resource::String, opts::Cmd=``) = $m(resource,nothing,opts)
+    end
+end
+GET(resource::String, data, opts::Cmd=``) = req(resource,data,opts)
 
 function pushable(owner::String, repo::String, user::String=user())
-    status, response = req("repos/$owner/$repo",`-I`)
-    status == 404 && error("GitHub repo $owner/$repo does not exist")
-    status, response = req("repos/$owner/$repo/collaborators/$user")
+    status, response = HEAD("repos/$owner/$repo")
+    status == 404 && error("repo $owner/$repo does not exist")
+    status, response = GET("repos/$owner/$repo/collaborators/$user")
     status == 204 && return true
     status == 404 && return false
-    error("unexpected GitHub API status code: $status – $(response["message"])")
+    error("unexpected API status code: $status – $(response["message"])")
+end
+
+function fork(owner::String, repo::String)
+    status, response = POST("repos/$owner/$repo/forks")
+    status == 202 || error("forking $owner/$repo failed: $(response["message"])")
+    return response["url"]
 end
 
 end # module
