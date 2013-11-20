@@ -11,8 +11,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        cbrt, sqrt, erf, erfc, erfcx, erfi, dawson,
        ceil, floor, trunc, round, significand, 
        lgamma, hypot, gamma, lfact, max, min, ldexp, frexp,
-       clamp, modf, ^, 
-       mod2pi, modpi, modpio2,
+       clamp, modf, ^, mod2pi,
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
        hankelh1, hankelh2, besseli, besselk, besselh,
@@ -1338,20 +1337,9 @@ end
 erfcinv(x::Integer) = erfcinv(float(x))
 @vectorize_1arg Real erfcinv
 
+## mod2pi-related calculations ##
 
-function add22Cond(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
-    # This algorithm,  due to Dekker [1], computes the sum of 
-    # two double-double numbers as a double-double, with a relative error smaller than 2^−103
-    # [1] http://gdz.sub.uni-goettingen.de/dms/load/img/?PPN=PPN362160546_0018&DMDID=DMDLOG_0023&LOGID=LOG_0023&PHYSID=PHYS_0232
-    # [2] http://ftp.nluug.nl/pub/os/BSD/FreeBSD/distfiles/crlibm/crlibm-1.0beta3.pdf
-    r = xh+yh
-    s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)
-    zh = r+s
-    zl = r-zh+s
-    return (zh,zl)
-end
-
-function add22Cond_h(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
+function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
     # as above, but only compute and return high double
     r = xh+yh
     s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)
@@ -1371,13 +1359,12 @@ function ieee754_rem_pio2(x::Float64)
     # (in other words, n might be off by a multiple of 4, or a multiple of 100)
 
     # this is just wrapping up 
-    # https://github.com/JuliaLang/openlibm/blob/master/src/e_rem_pio2.c?source=c
+    # https://github.com/JuliaLang/openlibm/blob/master/src/e_rem_pio2.c
 
     y = [0.0,0.0]
-    n = ccall((:__ieee754_rem_pio2, libm), Cint, (Float64,Ptr{Float64}),x,y)
+    n = ccall((:__ieee754_rem_pio2, libm), Cint, (Float64,Ptr{Float64}), x, y)
     return (n,y)
 end
-
 
 # multiples of pi/2, as double-double (ie with "tail")
 const pi1o2_h  = 1.5707963267948966     # convert(Float64, pi * BigFloat(1/2))
@@ -1392,7 +1379,6 @@ const pi3o2_l  = 1.8369701987210297e-16 # convert(Float64, pi * BigFloat(3/2) - 
 const pi4o2_h  = 6.283185307179586      # convert(Float64, pi * BigFloat(2))
 const pi4o2_l  = 2.4492935982947064e-16 # convert(Float64, pi * BigFloat(2) - pi4o2_h)
 
-
 function mod2pi(x::Float64) # or modtau(x)
 # with r = mod2pi(x)
 # a) 0 <= r < 2π  (note: boundary open or closed - a bit fuzzy, due to rem_pio2 implementation)
@@ -1404,7 +1390,7 @@ function mod2pi(x::Float64) # or modtau(x)
     if x < pi4o2_h
         if 0.0 <= x return x end
         if x > -pi4o2_h 
-            return add22Cond_h(x,0.0,pi4o2_h,pi4o2_l)
+            return add22condh(x,0.0,pi4o2_h,pi4o2_l)
         end
     end
 
@@ -1412,95 +1398,29 @@ function mod2pi(x::Float64) # or modtau(x)
 
     if iseven(n)
         if n & 2 == 2 # add pi
-            return add22Cond_h(y[1],y[2],pi2o2_h,pi2o2_l)
+            return add22condh(y[1],y[2],pi2o2_h,pi2o2_l)
         else # add 0 or 2pi
             if y[1] > 0.0
                 return y[1]
             else # else add 2pi
-                return add22Cond_h(y[1],y[2],pi4o2_h,pi4o2_l)
+                return add22condh(y[1],y[2],pi4o2_h,pi4o2_l)
             end
         end
     else # add pi/2 or 3pi/2
         if n & 2 == 2 # add 3pi/2
-            return add22Cond_h(y[1],y[2],pi3o2_h,pi3o2_l) 
+            return add22condh(y[1],y[2],pi3o2_h,pi3o2_l) 
         else # add pi/2
-            return add22Cond_h(y[1],y[2],pi1o2_h,pi1o2_l) 
+            return add22condh(y[1],y[2],pi1o2_h,pi1o2_l) 
         end
     end
 end
 
-function modpi(x::Float64)
-# with r = modpi(x)
-# a) 0 <= r < π  (note: boundary open or closed - a bit fuzzy, due to rem_pio2 implementation)
-# b) r-x = k*π with k integer
-    if x < pi2o2_h
-        if 0.0 <= x return x end
-        if x > -pi2o2_h 
-            return add22Cond_h(x,0.0,pi2o2_h,pi2o2_l)
-        end
-    end
-    (n,y) = ieee754_rem_pio2(x)
-    if iseven(n)
-        if y[1] > 0.0
-            return y[1]
-        else # else add pi
-            return add22Cond_h(y[1],y[2],pi2o2_h,pi2o2_l)
-        end
-    else # add pi/2
-        return add22Cond_h(y[1],y[2],pi1o2_h,pi1o2_l)
-    end
-end
-
-
-function modpio2(x::Float64)
-# with r = modpio2(x)
-# a) 0 <= r < π/2  (note: boundary open or closed - a bit fuzzy, due to rem_pio2 implementation)
-# b) r-x = k*π/2 with k integer
-
-# Note: we explicitly test for 0 <= values < pi/2, because 
-# ieee754_rem_pio2 behaves weirdly for arguments that are already
-# within -pi/4, pi/4 e.g. 
-# ieee754_rem_pio2(0.19633954084936206)  returns
-# (1,[-1.3744567859455346,-6.12323399538461e-17])
-# which does not add up to 0.19633954084936206
-    if x < pi1o2_h
-        if x >= 0.0 return x end
-        if x > -pi1o2_h
-            zh = add22Cond_h(x,0.0,pi1o2_h,pi1o2_l)
-            return zh
-        end
-    end
-    (n,y) = ieee754_rem_pio2(x)
-    if y[1] > 0.0
-        return y[1]
-    else
-        zh = add22Cond_h(y[1],y[2],pi1o2_h,pi1o2_l)
-        return zh
-    end
-end
-
-mod2pi(x::Float32)= float32(mod2pi(float64(x)))
-mod2pi(x::Int32)  = mod2pi(float64(x))
+mod2pi(x::Float32) = float32(mod2pi(float64(x)))
+mod2pi(x::Int32) = mod2pi(float64(x))
 function mod2pi(x::Int64)
   fx = float64(x)
   fx == x || error("Integer argument to mod2pi is too large: $x")
   mod2pi(fx)
-end
-
-modpi(x::Float32) = float32(modpi(float64(x)))
-modpi(x::Int32)   = modpi(float64(x))
-function modpi(x::Int64)
-  fx = float64(x)
-  fx == x || error("Integer argument to modpi is too large: $x")
-  modpi(fx)
-end
-
-modpio2(x::Float32)= float32(modpio2(float64(x)))
-modpio2(x::Int32) = modpio2(float64(x))
-function modpio2(x::Int64)
-  fx = float64(x)
-  fx == x || error("Integer argument to modpio2 is too large: $x")
-  modpio2(fx)
 end
 
 end # module
