@@ -1,5 +1,6 @@
 module Pkg
 
+export Dir, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry, GitHub
 export dir, init, rm, add, available, installed, status, clone, checkout,
        release, fix, update, resolve, register, tag, publish, generate
 
