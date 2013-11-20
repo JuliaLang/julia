@@ -14,9 +14,14 @@ Library improvements
 
   * `produce` and `consume` can now pass values in both directions ([#4775]).
 
+  * `big` is now vectorized ([#4766])
+
+  * `push!` and `unshift!` can push multiple arguments ([#4782])
+
 Deprecated or removed
 ---------------------
 
+  * `dense` is deprecated in favor of `full` ([#4759])
 
 [#4775]: https://github.com/JuliaLang/julia/issues/4775
 
