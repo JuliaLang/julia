@@ -17,8 +17,8 @@
 #include <errno.h>
 #include <signal.h>
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-char * basename(char *);
-char * dirname(char *);
+char *basename(char *);
+char *dirname(char *);
 #else
 #include <libgen.h>
 #endif
@@ -44,11 +44,13 @@ DLLEXPORT size_t jl_ios_size(ios_t *s) { return s->size; }
 DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
 #ifndef _OS_WINDOWS_
 DLLEXPORT off_t jl_lseek(int fd, off_t offset, int whence) { return lseek(fd, offset, whence); }
-DLLEXPORT ssize_t jl_pwrite(int fd, const void *buf, size_t count, off_t offset) {
+DLLEXPORT ssize_t jl_pwrite(int fd, const void *buf, size_t count, off_t offset)
+{
     return pwrite(fd, buf, count, offset);
 }
 DLLEXPORT void *jl_mmap(void *addr, size_t length, int prot, int flags,
-                        int fd, off_t offset) {
+                        int fd, off_t offset)
+{
     return mmap(addr, length, prot, flags, fd, offset);
 }
 #else

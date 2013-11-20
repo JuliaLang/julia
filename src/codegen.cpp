@@ -84,7 +84,7 @@ extern "C" {
 #include "julia.h"
 #include "builtin_proto.h"
 
-void * __stack_chk_guard = NULL;
+void *__stack_chk_guard = NULL;
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
 void __stack_chk_fail()
@@ -3467,7 +3467,6 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen(void)
 {
-    
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);
 
@@ -3515,8 +3514,8 @@ extern "C" void jl_init_codegen(void)
     jl_jit_events = new JuliaJITEventListener();
     jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
 #if LLVM_USE_INTEL_JITEVENTS
-    if( const char* jit_profiling = std::getenv("ENABLE_JITPROFILING") )
-        if( std::atoi(jit_profiling) )
+    if (const char* jit_profiling = std::getenv("ENABLE_JITPROFILING"))
+        if (std::atoi(jit_profiling))
             jl_ExecutionEngine->RegisterJITEventListener(
                 JITEventListener::createIntelJITEventListener());
 #endif // LLVM_USE_INTEL_JITEVENTS
