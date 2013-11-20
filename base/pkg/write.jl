@@ -1,6 +1,6 @@
 module Write
 
-using Base.Git, ..Cache, ..Read
+import ..Git, ..Cache, ..Read
 
 function prefetch(pkg::String, sha1::String)
     isempty(Cache.prefetch(pkg, Read.url(pkg), sha1)) && return

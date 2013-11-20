@@ -1,6 +1,7 @@
 module Cache
 
-using Base.Git, ..Types
+import ..Git
+using ..Types
 
 path(pkg::String) = abspath(".cache", pkg)
 

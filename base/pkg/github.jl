@@ -1,6 +1,6 @@
 module GitHub
 
-import Main, Base.Git, ..Dir
+import Main, ..Git, ..Dir
 
 const AUTH_DATA = {
     "scopes" => ["repo"],
