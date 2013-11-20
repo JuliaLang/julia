@@ -206,8 +206,7 @@ importall .QuadGK
 # deprecated functions
 include("deprecated.jl")
 
-# git utils & package manager
-include("git.jl")
+# package manager
 include("pkg.jl")
 
 # base graphics API

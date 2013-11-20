@@ -1,6 +1,6 @@
 module Generate
 
-using Base.Git, ..Read
+import ..Git, ..Read
 
 copyright_year() = readchomp(`date +%Y`)
 copyright_name() = Git.readchomp(`config --global --get user.name`)

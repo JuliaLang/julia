@@ -1,8 +1,8 @@
 module Entry
 
+import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
+import ..Git, ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write
 using ..Types
-import ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write
-import Base: Git, thispatch, nextpatch, nextminor, nextmajor, check_new_version
 
 macro recover(ex)
     quote
