@@ -182,10 +182,9 @@ end
 
 begin
 # Include build number if we've got at least some distance from a tag (e.g. a release)
-prerelease = BUILD_INFO.prerelease ? "-prerelease" : ""
 build_number = BUILD_INFO.build_number != 0 ? "+$(BUILD_INFO.build_number)" : ""
 try
-    global const VERSION = convert(VersionNumber, "$(BUILD_INFO.version_string)$(prerelease)$(build_number)")
+    global const VERSION = convert(VersionNumber, "$(BUILD_INFO.version_string)$(build_number)")
 catch e
     println("while creating Base.VERSION, ignoring error $e")
     global const VERSION = VersionNumber(0)
