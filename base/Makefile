@@ -79,7 +79,7 @@ endif
 	@echo "    date_string::String" >> $@
 	@echo "    tagged_commit::Bool" >> $@
 	@echo "    fork_master_distance::Int" >> $@
-	@echo "    fork_master_timestamp::Int" >> $@
+	@echo "    fork_master_timestamp::Float64" >> $@
 	@echo "    TAGGED_RELEASE_BANNER::String" >> $@
 	@echo "end" >> $@
 
@@ -93,7 +93,7 @@ endif
 			'\"$(date_string)\"', \
 			$(tagged_commit), \
 			$(fork_master_distance), \
-			$(fork_master_timestamp), \
+			$(fork_master_timestamp)., \
 			'\"$(TAGGED_RELEASE_BANNER)\"' \
 			)" | xargs >> $@
 
