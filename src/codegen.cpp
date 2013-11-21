@@ -1406,8 +1406,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 break;
         }
         if (i >= nargs) {
-            // all arguments immutable; can be statically evaluated
             jl_value_t *tt = (jl_value_t*)jl_alloc_tuple_uninit(nargs);
+            JL_GC_PUSH1(&tt);
             for(i=0; i < nargs; i++) {
                 jl_tupleset(tt, i, expr_type(args[i+1],ctx));
             }
@@ -1429,6 +1429,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     emit_unboxed(args[i+1],ctx),jl_tupleref(tt,i));
                 tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,tt,ctx);
             }
+            JL_GC_POP();
             JL_GC_POP();
             return tpl;
         }
@@ -2681,8 +2682,6 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
 
     finalize_gc_frame(&ctx);
     builder.CreateRet(r);
-
-    verifyFunction(*w);
 
     return w;
 }
