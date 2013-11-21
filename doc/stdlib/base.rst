@@ -4975,13 +4975,16 @@ Tasks
 
    Tell whether a task has exited.
 
-.. function:: consume(task)
+.. function:: consume(task, values...)
 
    Receive the next value passed to ``produce`` by the specified task.
+   Additional arguments may be passed, to be returned from the last ``produce`` call
+   in the producer.
 
 .. function:: produce(value)
 
    Send the given value to the last ``consume`` call, switching to the consumer task.
+   If the next ``consume`` call passes any values, they are returned by ``produce``.
 
 .. function:: yield()
 
