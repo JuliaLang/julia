@@ -154,10 +154,10 @@ function edit(file::String, line::Integer)
     editor = get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor)))
     if ispath(editor)
         if isreadable(editor)
-           edpath = realpath(editor)
-           edname = basename(edpath)
+            edpath = realpath(editor)
+            edname = basename(edpath)
         else
-           error("edit: can't find \"$editor\"")
+            error("edit: can't find \"$editor\"")
         end
     else
         edpath = edname = editor
@@ -166,7 +166,7 @@ function edit(file::String, line::Integer)
     if issrc
         file = find_source_file(file)
     end
-    if edname == "emacs"
+    if beginswith(edname, "emacs")
         jmode = joinpath(JULIA_HOME, "..", "..", "contrib", "julia-mode.el")
         if issrc && isreadable(jmode)
             run(`$edpath $file --eval "(progn
