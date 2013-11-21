@@ -713,6 +713,7 @@ export
     merge,
     #pop!,
     #push!,
+    push,
     reduce,
     setdiff!,
     setdiff,
