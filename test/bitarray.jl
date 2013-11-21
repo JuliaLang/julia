@@ -17,7 +17,7 @@ function check_bitop(func, RetT, args)
 end
 
 macro check_bit_operation(func, RetT, args)
-    :(check_bitop($func, $RetT, $args))
+    :(check_bitop($(esc(func)), $(esc(RetT)), $(esc(args))))
 end
 
 let t0 = time()
