@@ -20,6 +20,10 @@ indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
 indexed_next(a::Array, i::Int, state) = (a[i], i+1)
 indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state)
 
+# eltype
+
+eltype{T}(x::(T...)) = T
+
 ## mapping ##
 
 ntuple(n::Integer, f::Function) = ntuple(f, n) # TODO: deprecate this?
