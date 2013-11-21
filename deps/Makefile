@@ -20,9 +20,13 @@ CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = random double-conversion libgit2
+STAGE1_DEPS = random double-conversion
 STAGE2_DEPS =
 STAGE3_DEPS = suitesparse-wrapper
+
+ifeq ($(USE_SYSTEM_LIBGIT2), 0)
+STAGE1_DEPS += libgit2
+endif
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
 STAGE1_DEPS += uv
@@ -488,8 +492,8 @@ install-readline: $(READLINE_OBJ_TARGET)
 
 ## LIBGIT2 ##
 
-LIBGIT2_SRC_TARGET = libgit2/libgit2.so
-LIBGIT2_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libgit2.so
+LIBGIT2_SRC_TARGET = libgit2/libgit2.$(SHLIB_EXT)
+LIBGIT2_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libgit2.$(SHLIB_EXT)
 
 libgit2/configure:
 	(cd .. && git submodule init && git submodule update)
@@ -501,8 +505,8 @@ libgit2/config.status: $(JULIAHOME)/.git/modules/deps/libgit2/HEAD
 endif
 
 $(LIBGIT2_SRC_TARGET): libgit2/configure
-ifeq (exists, $(shell [ ! -d $(JULIAHOME)/deps/libgit2/build ] && echo exists ))
-	mkdir -p libgit2/build
+ifneq (exists, $(shell [ -d $(JULIAHOME)/deps/libgit2/build ] && echo exists ))
+	mkdir $(JULIAHOME)/deps/libgit2/build
 endif
 
 LIBGIT2_INSTALL_PREFIX = $(abspath $(BUILD))
