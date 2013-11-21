@@ -208,6 +208,7 @@ include("deprecated.jl")
 
 # package manager
 include("pkg.jl")
+const Git = Pkg.Git
 
 # base graphics API
 include("graphics.jl")
