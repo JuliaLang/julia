@@ -308,7 +308,7 @@ for i = 1:3
 end
 
 #permutes correctly
-@test isequal(z,permutedims(y,(3,1,2)))
+@test isequal(z,permutedims(y,[3,1,2]))
 
 # of a subarray
 a = rand(5,5)
@@ -364,7 +364,7 @@ end
 for i = 1 : 3
     a = rand(200, 300)
 
-    @test isequal(a', permutedims(a, (2, 1)))
+    @test isequal(a', permutedims(a, [2, 1]))
 end
 
 ## cumsum, cummin, cummax
