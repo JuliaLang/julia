@@ -12,11 +12,17 @@ New library functions
 Library improvements
 --------------------
 
+  * Multi-key dictionaries: `D[x,y...]` is now a synonym for `D[(x,y...)]`
+    for associations `D` ([#4870]).
+
   * `produce` and `consume` can now pass values in both directions ([#4775]).
 
   * `big` is now vectorized ([#4766])
 
   * `push!` and `unshift!` can push multiple arguments ([#4782])
+
+  * `consume(p)` extended to `consume(p, args...)`, allowing it
+    to optionally pass `args...` back to the producer ([#4775]).
 
 Deprecated or removed
 ---------------------
