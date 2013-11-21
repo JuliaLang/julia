@@ -1158,3 +1158,10 @@ let
     @test test3(1) == 1
     @test_throws test3(2)
 end
+
+# issue #4873
+macro myassert4873(ex)
+    :($ex ? nothing : error("Assertion failed: ", $(string(ex))))
+end
+x4873 = 1
+@myassert4873 (x -> x)(x4873) == 1

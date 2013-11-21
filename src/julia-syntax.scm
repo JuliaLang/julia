@@ -3037,13 +3037,13 @@ So far only the second case can actually occur.
 	   ((= function)
 	    (if (and (pair? (cadr e)) (eq? (caadr e) 'call))
 		;; in (kw x 1) inside an arglist, the x isn't actually a kwarg
-		`(,(car e) (call ,(resolve-expansion-vars- (cadadr e) env m inarg)
+		`(,(car e) (call ,(resolve-expansion-vars-with-new-env (cadadr e) env m inarg)
 				 ,@(map (lambda (x)
-					  (resolve-expansion-vars- x env m #t))
+					  (resolve-expansion-vars-with-new-env x env m #t))
 					(cddr (cadr e))))
-		  ,(resolve-expansion-vars- (caddr e) env m inarg))
+		  ,(resolve-expansion-vars-with-new-env (caddr e) env m inarg))
 		`(,(car e) ,@(map (lambda (x)
-				    (resolve-expansion-vars- x env m inarg))
+				    (resolve-expansion-vars-with-new-env x env m inarg))
 				  (cdr e)))))
 
 	   ((kw)
@@ -3092,7 +3092,7 @@ So far only the second case can actually occur.
       '()
       (case (car e)
 	((escape)  '())
-	((= function ->)
+	((= function)
 	 (append! (filter
 		   symbol?
 		   (if (and (pair? (cadr e)) (eq? (car (cadr e)) 'tuple))
