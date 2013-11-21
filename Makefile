@@ -95,7 +95,7 @@ ifeq ($(USE_SYSTEM_PCRE),0)
 JL_PRIVATE_LIBS += pcre
 endif
 ifeq ($(USE_SYSTEM_LIBGIT2),0)
-JL_PRIVATE_LIBS += libgit2
+JL_PRIVATE_LIBS += git2
 endif
 ifeq ($(USE_SYSTEM_OPENLIBM),0)
 JL_PRIVATE_LIBS += openlibm-extras
