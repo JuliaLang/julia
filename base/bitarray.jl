@@ -2124,13 +2124,15 @@ ctranspose(B::BitArray) = transpose(B)
 ## Permute array dims ##
 
 let permutedims_cache = nothing, stridenames::Array{Any,1} = {}
-global permutedims
-function permutedims(B::Union(BitArray,StridedArray), perm)
+global permutedims!
+function permutedims!{T<:Union(BitArray,StridedArray)}(P::T,B::T, perm)
     dimsB = size(B)
     ndimsB = length(dimsB)
-    ndimsB == length(perm) || error("invalid dimensions")
-    dimsP = ntuple(ndimsB, i->dimsB[perm[i]])::typeof(dimsB)
-    P = similar(B, dimsP)
+    (ndimsB == length(perm) && isperm(perm)) || error("no valid permutation of dimensions")
+	dimsP = size(P)
+	ndimsP = length(dimsP)
+    (dimsP==dimsB[perm]) || error("destination tensor of incorrect size")
+	
     ranges = ntuple(ndimsB, i->(1:dimsP[i]))
     while length(stridenames) < ndimsB
         push!(stridenames, gensym())
@@ -2201,6 +2203,16 @@ function permutedims(B::Union(BitArray,StridedArray), perm)
     return P
 end
 end # let
+
+function permutedims(B::Union(BitArray,StridedArray), perm)
+    dimsB = size(B)
+    ndimsB = length(dimsB)
+    (ndimsB == length(perm) && isperm(perm)) || error("no valid permutation of dimensions")
+    dimsP = ntuple(ndimsB, i->dimsB[perm[i]])::typeof(dimsB)
+    P = similar(B, dimsP)
+	permutedims!(P,B,perm)
+end
+
 
 ## Concatenation ##
 
