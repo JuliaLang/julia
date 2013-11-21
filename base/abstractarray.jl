@@ -1712,3 +1712,9 @@ push!(A, a, b, c...) = push!(push!(A, a, b), c...)
 unshift!(A) = A
 unshift!(A, a, b) = unshift!(unshift!(A, b), a)
 unshift!(A, a, b, c...) = unshift!(unshift!(A, c...), a, b)
+
+# multi-item push (built on top of deepcopy and type-specific 1-item push!)
+push(A) = deepcopy(A)
+push(A, a) = push!(deepcopy(A), a)
+push(A, a, b) = push!(push(A, a), b)
+push(A, a, b, c...) = push!(push(A, a, b), c...)
