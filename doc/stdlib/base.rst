@@ -2429,6 +2429,10 @@ Mathematical Functions
 
    Compute the natural logarithm of ``x``. Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.
 
+.. function:: log(b,x)
+
+   Compute the base ``b`` logarithm of ``x``. Throws ``DomainError`` for negative ``Real`` arguments.
+
 .. function:: log2(x)
 
    Compute the logarithm of ``x`` to base 2. Throws ``DomainError`` for negative ``Real`` arguments.
