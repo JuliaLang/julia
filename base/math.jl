@@ -230,7 +230,7 @@ for (fd, f) in ((:asind, :asin), (:acosd, :acos), (:atand, :atan),
     end
 end
 
-log(b,x) = log(x)/log(b)
+log(b,x) = log(x)./log(b)
 
 hypot(x::Real, y::Real) = hypot(promote(x,y)...)
 function hypot{T<:Real}(x::T, y::T)
