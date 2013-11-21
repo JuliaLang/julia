@@ -37,6 +37,14 @@
 				    (eq? (car a) 'parameters))))
 			lst)))
 
+(define (llist-keywords lst)
+  (apply append
+	 (map (lambda (a)
+		(if (and (pair? a) (eq? (car a) 'parameters))
+		    (map arg-name (cdr a))
+		    '()))
+	      lst)))
+
 (define (arg-type v)
   (cond ((symbol? v)  'Any)
 	((not (pair? v))
@@ -1164,6 +1172,20 @@
 		   (list 'varlist (cons (unescape tn) (unescape tn)) '(new . new)))
 
    )) ; vars-introduced-by-patterns
+
+(define keywords-introduced-by-patterns
+  (pattern-set
+   (pattern-lambda (function (call (curly name . sparams) . argl) body)
+		   (cons 'varlist (llist-keywords (fix-arglist argl))))
+
+   (pattern-lambda (function (call name . argl) body)
+		   (cons 'varlist (llist-keywords (fix-arglist argl))))
+
+   (pattern-lambda (= (call (curly name . sparams) . argl) body)
+		   `(function (call (curly ,name . ,sparams) . ,argl) ,body))
+   (pattern-lambda (= (call name . argl) body)
+		   `(function (call ,name ,@argl) ,body))
+   ))
 
 ; local x, y=2, z => local x;local y;local z;y = 2
 (define (expand-decls what binds)
@@ -2994,7 +3016,10 @@ So far only the second case can actually occur.
    (append!
     (filter (lambda (x)
 	      (not (assq (car x) env)))
-	    (pair-with-gensyms (vars-introduced-by x)))
+	    (append!
+	     (pair-with-gensyms (vars-introduced-by x))
+	     (map (lambda (s) (cons s s))
+		  (keywords-introduced-by x))))
     env)
    m inarg))
 
@@ -3108,15 +3133,25 @@ So far only the second case can actually occur.
 	(cdr v)
 	'())))
 
+(define (keywords-introduced-by e)
+  (let ((v (pattern-expand1 keywords-introduced-by-patterns e)))
+    (if (and (pair? v) (eq? (car v) 'varlist))
+	(cdr v)
+	'())))
+
 (define (env-for-expansion e)
-  (let ((v (diff (delete-duplicates
-		  (append! (find-declared-vars-in-expansion e 'local)
-			   (find-assigned-vars-in-expansion e)
-			   (map (lambda (x)
-				  (if (pair? x) (car x) x))
-				(vars-introduced-by e))))
-		 (find-declared-vars-in-expansion e 'global))))
-    (pair-with-gensyms v)))
+  (let ((globals (find-declared-vars-in-expansion e 'global)))
+    (let ((v (diff (delete-duplicates
+		    (append! (find-declared-vars-in-expansion e 'local)
+			     (find-assigned-vars-in-expansion e)
+			     (map (lambda (x)
+				    (if (pair? x) (car x) x))
+				  (vars-introduced-by e))))
+		   globals)))
+      (append!
+       (pair-with-gensyms v)
+       (map (lambda (s) (cons s s))
+	    (diff (keywords-introduced-by e) globals))))))
 
 (define (resolve-expansion-vars e m)
   ;; expand binding form patterns
