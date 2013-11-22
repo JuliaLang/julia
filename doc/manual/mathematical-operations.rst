@@ -42,7 +42,9 @@ Julia's promotion system makes arithmetic operations on mixtures of argument
 types "just work" naturally and automatically. See :ref:`man-conversion-and-promotion`
 for details of the promotion system.
 
-Here are some simple examples using arithmetic operators::
+Here are some simple examples using arithmetic operators:
+
+.. doctest::
 
     julia> 1 + 2 + 3
     6
@@ -75,7 +77,9 @@ Expression   Name
 ``x << y``   logical/arithmetic shift left
 ===========  =========================================================================
 
-Here are some examples with bitwise operators::
+Here are some examples with bitwise operators:
+
+.. doctest::
 
     julia> ~123
     -124
@@ -137,7 +141,9 @@ Operator Name
 ``>=``   greater than or equal to
 ======== ========================
 
-Here are some simple examples::
+Here are some simple examples:
+
+.. doctest::
 
     julia> 1 == 1
     true
@@ -183,7 +189,9 @@ standard <http://en.wikipedia.org/wiki/IEEE_754-2008>`_:
 -  ``NaN`` is not equal to, not less than, and not greater than anything,
    including itself.
 
-The last point is potentially surprising and thus worth noting::
+The last point is potentially surprising and thus worth noting:
+
+.. doctest::
 
     julia> NaN == NaN
     false
@@ -197,7 +205,9 @@ The last point is potentially surprising and thus worth noting::
     julia> NaN > NaN
     false
 
-and can cause especial headaches with :ref:`Arrays <man-arrays>`::
+and can cause especial headaches with :ref:`Arrays <man-arrays>`:
+
+.. doctest::
 
     julia> [1 NaN] == [1 NaN]
     false
@@ -214,7 +224,9 @@ Function          Tests if
 ``isnan(x)``      ``x`` is not a number
 ================= ==================================
 
-``isequal`` considers ``NaN``\ s equal to each other::
+``isequal`` considers ``NaN``\ s equal to each other:
+
+.. doctest::
 
     julia> isequal(NaN,NaN)
     true
@@ -225,7 +237,9 @@ Function          Tests if
     julia> isequal(NaN,NaN32)
     false
 
-``isequal`` can also be used to distinguish signed zeros::
+``isequal`` can also be used to distinguish signed zeros:
+
+.. doctest::
 
     julia> -0.0 == 0.0
     true
@@ -242,7 +256,9 @@ Chaining comparisons
 
 Unlike most languages, with the `notable exception of
 Python <http://en.wikipedia.org/wiki/Python_syntax_and_semantics#Comparison_operators>`_,
-comparisons can be arbitrarily chained::
+comparisons can be arbitrarily chained:
+
+.. doctest::
 
     julia> 1 < 2 <= 2 < 3 == 3 > 2 >= 1 == 1 < 3 != 5
     true

@@ -50,7 +50,9 @@ Unicode names (in UTF-8 encoding) are allowed:
 
     \end{CJK*}
 
-Julia will even let you redefine built-in constants and functions if needed::
+Julia will even let you redefine built-in constants and functions if needed:
+
+.. doctest::
 
     julia> pi
     π = 3.1415926535897...
@@ -79,7 +81,9 @@ contexts operators can be used just like variables; for example ``(+)`` refers
 to the addition function, and ``(+) = f`` will reassign it.
 
 The only explicitly disallowed names for variables are the names of built-in
-statements::
+statements:
+
+.. doctest::
 
     julia> else = false
     ERROR: syntax: unexpected else

@@ -27,13 +27,17 @@ function definitions are common in Julia. The short function syntax is
 accordingly quite idiomatic, considerably reducing both typing and
 visual noise.
 
-A function is called using the traditional parenthesis syntax::
+A function is called using the traditional parenthesis syntax:
+
+.. doctest::
 
     julia> f(2,3)
     5
 
 Without parentheses, the expression ``f`` refers to the function object,
-and can be passed around like any value::
+and can be passed around like any value:
+
+.. doctest::
 
     julia> g = f;
 
@@ -43,7 +47,9 @@ and can be passed around like any value::
 There are two other ways that functions can be applied: using special
 operator syntax for certain function names (see `Operators Are
 Functions <#operators-are-functions>`_ below), or with the ``apply``
-function::
+function:
+
+.. doctest::
 
     julia> apply(f,2,3)
     5
@@ -132,7 +138,9 @@ like ``&&`` and ``||``. These operators cannot be functions since
 :ref:`short-circuit evaluation <man-short-circuit-evaluation>` requires that
 their operands are not evaluated before evaluation of the operator.
 Accordingly, you can also apply them using parenthesized argument lists,
-just as you would any other function::
+just as you would any other function:
+
+.. doctest::
 
     julia> 1 + 2 + 3
     6
@@ -143,7 +151,9 @@ just as you would any other function::
 The infix form is exactly equivalent to the function application form —
 in fact the former is parsed to produce the function call internally.
 This also means that you can assign and pass around operators such as
-``+`` and ``*`` just like you would with other function values::
+``+`` and ``*`` just like you would with other function values:
+
+.. doctest::
 
     julia> f = +;
 
@@ -185,7 +195,9 @@ Functions in Julia are `first-class objects
 variables, called using the standard function call syntax from the
 variable they have been assigned to. They can be used as arguments, and
 they can be returned as values. They can also be created anonymously,
-without being given a name::
+without being given a name:
+
+.. doctest::
 
     julia> x -> x^2 + 2x - 1
     #<function>
@@ -195,7 +207,9 @@ value of the polynomial *x*\ ^2 + 2\ *x* - 1 at that value. The primary
 use for anonymous functions is passing them to functions which take
 other functions as arguments. A classic example is the ``map`` function,
 which applies a function to each value of an array and returns a new
-array containing the resulting values::
+array containing the resulting values:
+
+.. doctest::
 
     julia> map(round, [1.2,3.5,1.7])
     3-element Float64 Array:
@@ -207,7 +221,9 @@ This is fine if a named function effecting the transform one wants
 already exists to pass as the first argument to ``map``. Often, however,
 a ready-to-use, named function does not exist. In these situations, the
 anonymous function construct allows easy creation of a single-use
-function object without needing a name::
+function object without needing a name:
+
+.. doctest::
 
     julia> map(x -> x^2 + 2x - 1, [1,3,-1])
     3-element Int64 Array:
@@ -236,14 +252,18 @@ following function returns a pair of values::
     end
 
 If you call it in an interactive session without assigning the return
-value anywhere, you will see the tuple returned::
+value anywhere, you will see the tuple returned:
+
+.. doctest::
 
     julia> foo(2,3)
     (5,6)
 
 A typical usage of such a pair of return values, however, extracts each
 value into a variable. Julia supports simple tuple "destructuring" that
-facilitates this::
+facilitates this:
+
+.. doctest::
 
     julia> x, y = foo(2,3);
 
@@ -275,7 +295,9 @@ ellipsis::
 
 The variables ``a`` and ``b`` are bound to the first two argument values
 as usual, and the variable ``x`` is bound to an iterable collection of
-the zero or more values passed to ``bar`` after its first two arguments::
+the zero or more values passed to ``bar`` after its first two arguments:
+
+.. doctest::
 
     julia> bar(1,2)
     (1,2,())
@@ -294,7 +316,9 @@ passed to ``bar``.
 
 On the flip side, it is often handy to "splice" the values contained in
 an iterable collection into a function call as individual arguments. To
-do this, one also uses ``...`` but in the function call instead::
+do this, one also uses ``...`` but in the function call instead:
+
+.. doctest::
 
     julia> x = (3,4)
     (3,4)
@@ -304,7 +328,9 @@ do this, one also uses ``...`` but in the function call instead::
 
 In this case a tuple of values is spliced into a varargs call precisely
 where the variable number of arguments go. This need not be the case,
-however::
+however:
+
+.. doctest::
 
     julia> x = (2,3,4)
     (2,3,4)
@@ -319,7 +345,9 @@ however::
     (1,2,(3,4))
 
 Furthermore, the iterable object spliced into a function call need not
-be a tuple::
+be a tuple:
+
+.. doctest::
 
     julia> x = [3,4]
     2-element Int64 Array:
@@ -380,7 +408,9 @@ expressed concisely as::
 
 With this definition, the function can be called with either one or two
 arguments, and ``10`` is automatically passed when a second argument is not
-specified::
+specified:
+
+.. doctest::
 
     julia> parseint("12",10)
     12
