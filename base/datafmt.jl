@@ -187,7 +187,10 @@ function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D)
     catch ex
         error("at row $nrows, column $col : $ex)")
     end
-    (col > 0) && (nrows += 1) 
+    if col > 0 
+        nrows += 1
+        ncols = max(ncols, col+1)
+    end
     ncols = max(ncols, col, 1)
     nrows = max(nrows, 1)
     return (nrows, ncols)
