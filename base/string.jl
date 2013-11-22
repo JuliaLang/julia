@@ -1437,9 +1437,9 @@ function parseint{T<:Integer}(::Type{T}, s::String, base::Integer)
     base = convert(T,base)
     n::T = 0
     while true
-        d = '0' <= c <= '9' ? c-'0' :
-            'A' <= c <= 'Z' ? c-'A'+10 :
-            'a' <= c <= 'z' ? c-'a'+10 : typemax(Int)
+        d::T = '0' <= c <= '9' ? c-'0' :
+               'A' <= c <= 'Z' ? c-'A'+10 :
+               'a' <= c <= 'z' ? c-'a'+10 : typemax(T)
         if d >= base
             isspace(c) || error("invalid digit $(repr(c)): $(repr(s))")
             while !done(s,i)
@@ -1447,14 +1447,12 @@ function parseint{T<:Integer}(::Type{T}, s::String, base::Integer)
                 isspace(c) || error("extra characters after whitespace: $(repr(s))")
             end
         else
-            # TODO: overflow detection?
-            n = n*base + d
+            (T <: Signed) && (d *= sgn)
+            n = checked_mul(n,base)
+            n = checked_add(n,d)
         end
         done(s,i) && break
         c, i = next(s,i)
-    end
-    if T <: Signed
-        n = flipsign(n,sgn)
     end
     return n
 end
