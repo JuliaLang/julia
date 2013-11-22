@@ -2,7 +2,7 @@ if nprocs() < 4
     addprocs(4-nprocs())
 end
 
-@everywhere using SharedArrays
+@everywhere using Base.SharedArrays
 
 @everywhere function fillme!(A::AbstractArray)
     B = myarray(A)

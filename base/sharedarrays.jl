@@ -1,6 +1,7 @@
 module SharedArrays
 
 import Base: eltype, mmap_array, myindexes, ndims, serialize, size
+using Base.FS
 
 export AbstractSharedArray, SharedArray, cutdim, cutdim!, myarray, nchunks, nrefs, pcall, pcall_bw, proc, sharedsync
 
@@ -21,25 +22,19 @@ type SharedArray{T,N} <: AbstractSharedArray{T,N}
     sarray::SSharedArray{T,N}
 end
 
-function SharedArray{T}(::Type{T}, dims::Dims, procs = 1:nprocs(); filename::ASCIIString = joinpath(ramdisk(), string("julia", randstring(10))), offset::Integer = 0, mode::ASCIIString = "", cutdim::Integer = defaultcutdim(dims, length(procs)))
-    exists = isfile(filename)
-    if mode == ""
-        mode = exists ? "r" : "w+"
-    end
-    s = open(filename, mode)
-    data = mmap_array(T, dims, s, offset)
-    rd = mode == "r" || mode == "r+" || mode == "w+"
-    wr = mode == "w" || mode == "r+" || mode == "w+"
+function SharedArray{T}(::Type{T}, dims::Dims, procs = procs(); filename::ASCIIString = "/julia.base.sharedarray." * string(getpid()), mode::ASCIIString = "", cutdim::Integer = defaultcutdim(dims, length(procs)))
+    shm_unlink(filename) # Delete if found
+
+    data = shm_mmap_array(T, dims, filename)
     refs = Array(RemoteRef, 0)
     n = prod(dims)
     for p in procs
         if p != 1
-            push!(refs, remotecall_wait(p, mmap_array, T, dims, filename, rd, wr, offset))
+            push!(refs, remotecall_wait(p, shm_mmap_array, T, dims, filename))
         end
     end
-    if !exists
-        unlink(filename)  # so the file gets cleaned up automatically
-    end
+    
+    shm_unlink(filename)  # so the file gets cleaned up automatically
     S = SharedArray{T,length(dims)}(data, SSharedArray{T,length(dims)}(dims, refs, int(cutdim)))
 end
 
@@ -173,13 +168,18 @@ myarray(A::AbstractArray) = A
 myindexes(A::AbstractArray) = ntuple(ndims(A), i->1:size(A,i))
 
 # Utilities
-function mmap_array(T, dims, filename::String, rd::Bool, wr::Bool, offset)
-    s = open(filename, rd, wr, false, false, false)
-    mmap_array(T, dims, s, offset)
+function shm_mmap_array(T, dims, filename::String)
+    mode = (1 == myid() ? JL_O_CREAT | JL_O_RDWR : JL_O_RDWR)
+    
+    fd_mem = ccall(:shm_open, Int, (Ptr{Uint8}, Int, Int), filename, mode, S_IRUSR | S_IWUSR)
+    if !(fd_mem > 0) error("shm_open() failed") end
+
+    s = fdio(fd_mem, true)
+    mmap_array(T, dims, s, 0)
 end
 
-@linux_only ramdisk() = "/dev/shm"
-@unix_only unlink(filename) = ccall(:unlink, Cint, (Ptr{Uint8},), filename)
+@unix_only shm_unlink(filename) = ccall(:shm_unlink, Cint, (Ptr{Uint8},), filename)
+@unix_only shm_open(filename, oflags, permissions) = ccall(:shm_open, Int, (Ptr{Uint8}, Int, Int), filename, oflags, permissions)
 
 function defaultcutdim(dims, n)
     d = length(dims)
