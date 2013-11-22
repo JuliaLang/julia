@@ -219,9 +219,7 @@ function center(x::AbstractVector)
 end
 
 function cov(x::AbstractVecOrMat, y::AbstractVecOrMat)
-    if size(x, 1) != size(y, 1)
-        error("incompatible matrices")
-    end
+    size(x, 1)==size(y, 1) || throw(DimensionMismatch())
     n = size(x, 1)
     xc = center(x)
     yc = center(y)

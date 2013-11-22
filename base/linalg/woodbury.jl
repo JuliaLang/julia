@@ -15,11 +15,11 @@ type Woodbury{T} <: AbstractMatrix{T}
         N = size(A, 1)
         k = size(U, 2)
         if size(A, 2) != N || size(U, 1) != N || size(V, 1) != k || size(V, 2) != N
-            error("sizes do not match")
+            throw(DimensionMismatch(""))
         end
         if k > 1
             if size(C, 1) != k || size(C, 2) != k
-                error("size of C is incorrect")
+                throw(DimensionMismatch(""))
             end
         end
         Cp = inv(inv(C) + V*(A\U))
@@ -34,7 +34,6 @@ type Woodbury{T} <: AbstractMatrix{T}
 end
 
 Woodbury{T}(A::AbstractMatrix{T}, U::Matrix{T}, C, V::Matrix{T}) = Woodbury{T}(A, U, C, V)
-
 Woodbury{T}(A::AbstractMatrix{T}, U::Vector{T}, C, V::Matrix{T}) = Woodbury{T}(A, reshape(U, length(U), 1), C, V)
 
 size(W::Woodbury) = size(W.A)
@@ -55,34 +54,27 @@ function show(io::IO, W::Woodbury)
 end
 
 full{T}(W::Woodbury{T}) = convert(Matrix{T}, W)
-
 convert{T}(::Type{Matrix{T}}, W::Woodbury{T}) = full(W.A) + W.U*W.C*W.V
 
 function similar(W::Woodbury, T, dims::Dims)
-    if length(dims) != 2 || dims[1] != dims[2]
-        error("Woodbury matrices must be square")
-    end
+    (length(dims) == 2 && dims[1] == dims[2] ) || throw(DimensionMismatch(""))
     n = size(W, 1)
     k = size(W.U, 2)
-    return Woodbury{T}(similar(W.A), Array(T, n, k), Array(T, k, k), Array(T, k, n))
+    Woodbury{T}(similar(W.A), Array(T, n, k), Array(T, k, k), Array(T, k, n))
 end
 
 copy(W::Woodbury) = Woodbury(W.A, W.U, W.C, W.V)
 
 ## Woodbury matrix routines ##
 
-function *(W::Woodbury, B::StridedVecOrMat)
-    return W.A*B + W.U*(W.C*(W.V*B))
-end
+*(W::Woodbury, B::StridedVecOrMat)=W.A*B + W.U*(W.C*(W.V*B))
 
 function \(W::Woodbury, R::StridedVecOrMat)
     AinvR = W.A\R
-    return AinvR - W.A\(W.U*(W.Cp*(W.V*AinvR)))
+    AinvR - W.A\(W.U*(W.Cp*(W.V*AinvR)))
 end
 
-function det(W::Woodbury)
-    det(W.A)*det(W.C)/det(W.Cp)
-end
+det(W::Woodbury)=det(W.A)*det(W.C)/det(W.Cp)
 
 # Allocation-free solver for arbitrary strides (requires that W.A has a
 # non-aliasing "solve" routine, e.g., is Tridiagonal)
@@ -101,29 +93,17 @@ function solve(x::AbstractArray, xrng::Ranges{Int}, W::Woodbury, rhs::AbstractAr
 end
 
 solve(x::AbstractVector, W::Woodbury, rhs::AbstractVector) = solve(x, 1:length(x), W, rhs, 1:length(rhs))
-
-function solve(W::Woodbury, rhs::AbstractVector)
-    x = similar(rhs)
-    solve(x, W, rhs)
-end
-
+solve(W::Woodbury, rhs::AbstractVector) = solve(similar(rhs), W, rhs)
+solve(W::Woodbury, B::StridedMatrix)=solve(similar(B), W, B)
 function solve(X::StridedMatrix, W::Woodbury, B::StridedMatrix)
-    if size(B, 1) != size(W, 1)
-        error("dimension mismatch")
-    end
-    if size(X) != size(B)
-        error("dimension mismatch in output")
-    end
+    size(B, 1) == size(W, 1) || throw(DimensionMismatch(""))
+    size(X) == size(B) || throw(DimensionMismatch(""))
     m, n = size(B)
     r = 1:m
     for j = 1:n
         r.start = (j-1)*m+1
         solve(X, r, W, B, r)
     end
-    return X
+    X
 end
 
-function solve(W::Woodbury, B::StridedMatrix)
-    X = similar(B)
-    solve(X, W, B)
-end

@@ -15,15 +15,15 @@ begin
         apd   = a'*a                    # symmetric positive-definite
 
 	(d,v) = eigs(a, nev=3)
-	Test.@test_approx_eq a*v[:,2] d[2]*v[:,2]
+	@test_approx_eq a*v[:,2] d[2]*v[:,2]
 
 	(d,v) = eigs(asym, nev=3)
-	Test.@test_approx_eq asym*v[:,1] d[1]*v[:,1]
-#        Test.@test_approx_eq eigs(asym; nev=1, sigma=d[3])[1][1] d[3]
+	@test_approx_eq asym*v[:,1] d[1]*v[:,1]
+#        @test_approx_eq eigs(asym; nev=1, sigma=d[3])[1][1] d[3]
 
 	(d,v) = eigs(apd, nev=3)
-	Test.@test_approx_eq apd*v[:,3] d[3]*v[:,3]
-#        Test.@test_approx_eq eigs(apd; nev=1, sigma=d[3])[1][1] d[3]
+	@test_approx_eq apd*v[:,3] d[3]*v[:,3]
+#        @test_approx_eq eigs(apd; nev=1, sigma=d[3])[1][1] d[3]
     end
 end
 
@@ -56,21 +56,21 @@ Phi=CPM(Q)
 # Properties: largest eigenvalue should be 1, largest eigenvector, when reshaped as matrix
 # should be a Hermitian positive definite matrix (up to an arbitrary phase)
 
-Test.@test_approx_eq d[1] 1. # largest eigenvalue should be 1.
+@test_approx_eq d[1] 1. # largest eigenvalue should be 1.
 v=reshape(v,(50,50)) # reshape to matrix
-v=v/trace(v) # factor out arbitrary phase
-Test.@test isapprox(normfro(imag(v)),0.) # it should be real
+v/=trace(v) # factor out arbitrary phase
+@test isapprox(normfro(imag(v)),0.) # it should be real
 v=real(v)
-# Test.@test isapprox(normfro(v-v')/2,0.) # it should be Hermitian
+# @test isapprox(normfro(v-v')/2,0.) # it should be Hermitian
 # Since this fails sometimes (numerical precision error),this test is commented out
 v=(v+v')/2
-Test.@test isposdef(v)
+@test isposdef(v)
 
 # Repeat with starting vector
 (d2,v2,nconv2,numiter2,numop2,resid2) = eigs(Phi,nev=1,which="LM",v0=reshape(v,(2500,)))
 v2=reshape(v2,(50,50))
-v2=v2/trace(v2)
-Test.@test numiter2<numiter
-Test.@test_approx_eq v v2
+v2/=trace(v2)
+@test numiter2<numiter
+@test_approx_eq v v2
 
-Test.@test_approx_eq eigs(speye(50), nev=10)[1] ones(10) #Issue 4246
+@test_approx_eq eigs(speye(50), nev=10)[1] ones(10) #Issue 4246
