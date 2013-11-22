@@ -1418,35 +1418,21 @@ strip(s::String, chars::Chars) = lstrip(rstrip(s, chars), chars)
 ## string to integer functions ##
 
 function parseint{T<:Integer}(::Type{T}, s::String, base::Integer)
-    if !(2 <= base <= 36); error("invalid base: ",base); end
+    2 <= base <= 36 || error("invalid base: $base")
     i = start(s)
     while true
-        if done(s,i)
-            throw(ArgumentError(string(
-                "premature end of integer (in ", repr(s) ,")"
-            )))
-        end
-        c,i = next(s,i)
-        if !isspace(c)
-            break
-        end
+        done(s,i) && error("premature end of integer: $(repr(s))")
+        c, i = next(s,i)
+        isspace(c) || break
     end
     sgn = 1
     if T <: Signed && c == '-'
         sgn = -1
-        if done(s,i)
-            throw(ArgumentError(string(
-                "premature end of integer (in ", repr(s), ")"
-            )))
-        end
-        c,i = next(s,i)
+        done(s,i) && error("premature end of integer: $(repr(s))")
+        c, i = next(s,i)
     elseif c == '+'
-        if done(s,i)
-            throw(ArgumentError(string(
-                "premature end of integer (in ", repr(s), ")"
-            )))
-        end
-        c,i = next(s,i)
+        done(s,i) && error("premature end of integer: $(repr(s))")
+        c, i = next(s,i)
     end
     base = convert(T,base)
     n::T = 0
@@ -1455,27 +1441,17 @@ function parseint{T<:Integer}(::Type{T}, s::String, base::Integer)
             'A' <= c <= 'Z' ? c-'A'+10 :
             'a' <= c <= 'z' ? c-'a'+10 : typemax(Int)
         if d >= base
-            if !isspace(c)
-                throw(ArgumentError(string(
-                    repr(c)," is not a valid digit (in ", repr(s), ")"
-                )))
-            end
+            isspace(c) || error("invalid digit $(repr(c)): $(repr(s))")
             while !done(s,i)
-                c,i = next(s,i)
-                if !isspace(c)
-                    throw(ArgumentError(string(
-                        "extra characters after whitespace (in ", repr(s), ")"
-                    )))
-                end
+                c, i = next(s,i)
+                isspace(c) || error("extra characters after whitespace: $(repr(s))")
             end
         else
             # TODO: overflow detection?
             n = n*base + d
         end
-        if done(s,i)
-            break
-        end
-        c,i = next(s,i)
+        done(s,i) && break
+        c, i = next(s,i)
     end
     if T <: Signed
         n = flipsign(n,sgn)
