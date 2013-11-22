@@ -1417,22 +1417,37 @@ strip(s::String, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 ## string to integer functions ##
 
-function parseint{T<:Integer}(::Type{T}, s::String, base::Integer)
-    2 <= base <= 36 || error("invalid base: $base")
-    i = start(s)
-    while true
-        done(s,i) && error("premature end of integer: $(repr(s))")
-        c, i = next(s,i)
-        isspace(c) || break
+function parseint_next(s::String, i::Int=start(s))
+    done(s,i) && error("premature end of integer: $(repr(s))")
+    c, i = next(s,i)
+end
+
+function _parseint{T<:Integer}(::Type{T}, s::String, base::Int)
+    c, i = parseint_next(s)
+    while isspace(c)
+        c, i = parseint_next(s,i)
     end
     sgn = 1
-    if T <: Signed && c == '-'
-        sgn = -1
-        done(s,i) && error("premature end of integer: $(repr(s))")
-        c, i = next(s,i)
-    elseif c == '+'
-        done(s,i) && error("premature end of integer: $(repr(s))")
-        c, i = next(s,i)
+    if T <: Signed
+        if c == '-' || c == '+'
+            (c == '-') && (sgn = -1)
+            c, i = parseint_next(s,i)
+        end
+    end
+    while isspace(c)
+        c, i = parseint_next(s,i)
+    end
+    if base == 0
+        if c == '0'
+            done(s,i) && return zero(T)
+            c, i = next(s,i)
+            base = c=='b' ? 2 : c=='o' ? 8 : c=='x' ? 16 : 10
+            if base != 10
+                c, i = parseint_next(s,i)
+            end
+        else
+            base = 10
+        end
     end
     base = convert(T,base)
     n::T = 0
@@ -1441,10 +1456,10 @@ function parseint{T<:Integer}(::Type{T}, s::String, base::Integer)
                'A' <= c <= 'Z' ? c-'A'+10 :
                'a' <= c <= 'z' ? c-'a'+10 : typemax(T)
         if d >= base
-            isspace(c) || error("invalid digit $(repr(c)): $(repr(s))")
+            isspace(c) || error("invalid integer digit $(repr(c)) in $(repr(s))")
             while !done(s,i)
                 c, i = next(s,i)
-                isspace(c) || error("extra characters after whitespace: $(repr(s))")
+                isspace(c) || error("extra characters after whitespace in $(repr(s))")
             end
         else
             (T <: Signed) && (d *= sgn)
@@ -1457,9 +1472,13 @@ function parseint{T<:Integer}(::Type{T}, s::String, base::Integer)
     return n
 end
 
+function parseint(T::Type, s::String, base::Integer)
+    2 <= base <= 36 ? _parseint(T,s,base) : error("invalid base: $base")
+end
+
+parseint(T::Type, s::String)       = _parseint(T,s,0)
+parseint(s::String)                = _parseint(Int,s,0)
 parseint(s::String, base::Integer) = parseint(Int,s,base)
-parseint(T::Type, s::String)       = parseint(T,s,10)
-parseint(s::String)                = parseint(Int,s,10)
 
 integer (s::String) = int(s)
 unsigned(s::String) = uint(s)
