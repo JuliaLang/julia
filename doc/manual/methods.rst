@@ -79,13 +79,17 @@ operator, introduced in the section on :ref:`man-composite-types`::
     f(x::Float64, y::Float64) = 2x + y
 
 This function definition applies only to calls where ``x`` and ``y`` are
-both values of type ``Float64``::
+both values of type ``Float64``:
+
+.. doctest::
 
     julia> f(2.0, 3.0)
     7.0
 
 Applying it to any other types of arguments will result in a "no method"
-error::
+error:
+
+.. doctest::
 
     julia> f(2.0, 3)
     no method f(Float64,Int64)
@@ -130,7 +134,9 @@ the behavior for ``f`` over all pairs of instances of the abstract type
 ``Number`` — but with a different behavior specific to pairs of
 ``Float64`` values. If one of the arguments is a 64-bit float but the
 other one is not, then the ``f(Float64,Float64)`` method cannot be
-called and the more general ``f(Number,Number)`` method must be used::
+called and the more general ``f(Number,Number)`` method must be used:
+
+.. doctest::
 
     julia> f(2.0, 3.0)
     7.0
@@ -153,7 +159,9 @@ from magic. [Clarke61]_
 
 For non-numeric values, and for fewer or more than two arguments, the
 function ``f`` remains undefined, and applying it will still result in a
-"no method" error::
+"no method" error:
+
+.. doctest::
 
     julia> f("foo", 3)
     no method f(ASCIIString,Int64)
@@ -162,7 +170,9 @@ function ``f`` remains undefined, and applying it will still result in a
     no method f()
 
 You can easily see which methods exist for a function by entering the
-function object itself in an interactive session::
+function object itself in an interactive session:
+
+.. doctest::
 
     julia> f
     Methods for generic function f
@@ -176,7 +186,9 @@ one taking two ``Float64`` arguments and one taking arguments of type
 In the absence of a type declaration with ``::``, the type of a method
 parameter is ``Any`` by default, meaning that it is unconstrained since
 all values in Julia are instances of the abstract type ``Any``. Thus, we
-can define a catch-all method for ``f`` like so::
+can define a catch-all method for ``f`` like so:
+
+.. doctest::
 
     julia> f(x,y) = println("Whoa there, Nelly.")
 
@@ -189,7 +201,9 @@ pairs of arguments to which no other method definition applies.
 
 Although it seems a simple concept, multiple dispatch on the types of
 values is perhaps the single most powerful and central feature of the
-Julia language. Core operations typically have dozens of methods::
+Julia language. Core operations typically have dozens of methods:
+
+.. doctest::
 
     julia> methods(+)
     # 92 methods for generic function "+":
@@ -296,7 +310,9 @@ Method Ambiguities
 
 It is possible to define a set of function methods such that there is no
 unique most specific method applicable to some combinations of
-arguments::
+arguments:
+
+.. doctest::
 
     julia> g(x::Float64, y) = 2x + y
 
@@ -318,7 +334,9 @@ Here the call ``g(2.0, 3.0)`` could be handled by either the
 more specific than the other. In such cases, Julia warns you about this
 ambiguity, but allows you to proceed, arbitrarily picking a method. You
 should avoid method ambiguities by specifying an appropriate method for
-the intersection case::
+the intersection case:
+
+.. doctest::
 
     julia> g(x::Float64, y::Float64) = 2x + 2y
 
@@ -354,7 +372,9 @@ The first method applies whenever both arguments are of the same
 concrete type, regardless of what type that is, while the second method
 acts as a catch-all, covering all other cases. Thus, overall, this
 defines a boolean function that checks whether its two arguments are of
-the same type::
+the same type:
+
+.. doctest::
 
     julia> same_type(1, 2)
     true
@@ -380,7 +400,9 @@ to being used as the types of parameters: they can be used anywhere a
 value would be in the signature of the function or body of the function.
 Here's an example where the method type parameter ``T`` is used as the
 type parameter to the parametric type ``Vector{T}`` in the method
-signature::
+signature:
+
+.. doctest::
 
     julia> myappend{T}(v::Vector{T}, x::T) = [v..., x]
 
@@ -403,7 +425,9 @@ signature::
 As you can see, the type of the appended element must match the element
 type of the vector it is appended to, or a "no method" error is raised.
 In the following example, the method type parameter ``T`` is used as the
-return value::
+return value:
+
+.. doctest::
 
     julia> mytypeof{T}(x::T) = T
 

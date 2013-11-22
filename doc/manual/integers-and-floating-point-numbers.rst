@@ -69,7 +69,9 @@ naturally without explicit casting, thanks to a flexible, user-extensible
 Integers
 --------
 
-Literal integers are represented in the standard manner::
+Literal integers are represented in the standard manner:
+
+.. doctest::
 
     julia> 1
     1
@@ -125,7 +127,9 @@ regardless of the system type::
 
 Unsigned integers are input and output using the ``0x`` prefix and hexadecimal
 (base 16) digits ``0-9a-f`` (the capitalized digits ``A-F`` also work for input).
-The size of the unsigned value is determined by the number of hex digits used::
+The size of the unsigned value is determined by the number of hex digits used:
+
+.. doctest::
 
     julia> 0x1
     0x01
@@ -160,7 +164,9 @@ Recall that the variable ``ans`` is set to the value of the last expression
 evaluated in an interactive session. This does not occur when Julia code is
 run in other ways.
 
-Binary and octal literals are also supported::
+Binary and octal literals are also supported:
+
+.. doctest::
 
     julia> 0b10
     0x02
@@ -175,7 +181,9 @@ Binary and octal literals are also supported::
     Uint8
 
 The minimum and maximum representable values of primitive numeric types
-such as integers are given by the ``typemin`` and ``typemax`` functions::
+such as integers are given by the ``typemin`` and ``typemax`` functions:
+
+.. doctest::
 
     julia> (typemin(Int32), typemax(Int32))
     (-2147483648,2147483647)
@@ -207,7 +215,9 @@ Overflow behavior
 ~~~~~~~~~~~~~~~~~
 
 In Julia, exceeding the maximum representable value of a given type results in
-a wraparound behavior::
+a wraparound behavior:
+
+.. doctest::
 
     julia> x = typemax(Int64)
     9223372036854775807
@@ -228,7 +238,9 @@ in :ref:`man-arbitrary-precision-arithmetic` is recommended instead.
 Floating-Point Numbers
 ----------------------
 
-Literal floating-point numbers are represented in the standard formats::
+Literal floating-point numbers are represented in the standard formats:
+
+.. doctest::
 
     julia> 1.0
     1.0
@@ -252,7 +264,9 @@ Literal floating-point numbers are represented in the standard formats::
     0.00025
 
 The above results are all ``Float64`` values. Literal ``Float32`` values can
-be entered by writing an ``f`` in place of ``e``::
+be entered by writing an ``f`` in place of ``e``:
+
+.. doctest::
 
     julia> 0.5f0
     0.5f0
@@ -263,7 +277,9 @@ be entered by writing an ``f`` in place of ``e``::
     julia> 2.5f-4
     0.00025f0
 
-Values can be converted to ``Float32`` easily::
+Values can be converted to ``Float32`` easily:
+
+.. doctest::
 
     julia> float32(-1.5)
     -1.5f0
@@ -271,7 +287,9 @@ Values can be converted to ``Float32`` easily::
     julia> typeof(ans)
     Float32
 
-Hexadecimal floating-point literals are also valid, but only as ``Float64`` values::
+Hexadecimal floating-point literals are also valid, but only as ``Float64`` values:
+
+.. doctest::
 
     julia> 0x1p0
     1.0
@@ -286,7 +304,9 @@ Hexadecimal floating-point literals are also valid, but only as ``Float64`` valu
     Float64
 
 Half-precision floating-point numbers are also supported (``Float16``), but
-only as a storage format. In calculations they'll be converted to ``Float32``::
+only as a storage format. In calculations they'll be converted to ``Float32``:
+
+.. doctest::
 
     julia> sizeof(float16(4.))
     2
@@ -301,7 +321,9 @@ Floating-point zero
 Floating-point numbers have `two zeros
 <http://en.wikipedia.org/wiki/Signed_zero>`_, positive zero and negative zero.
 They are equal to each other but have different binary representations, as can
-be seen using the ``bits`` function: ::
+be seen using the ``bits`` function: :
+
+.. doctest::
 
     julia> 0.0 == -0.0
     true
@@ -334,7 +356,9 @@ For further discussion of how these non-finite floating-point values are
 ordered with respect to each other and other floats, see
 :ref:`man-numeric-comparisons`. By the
 `IEEE 754 standard <http://en.wikipedia.org/wiki/IEEE_754-2008>`_, these
-floating-point values are the results of certain arithmetic operations::
+floating-point values are the results of certain arithmetic operations:
+
+.. doctest::
 
     julia> 1/Inf
     0.0
@@ -373,7 +397,9 @@ floating-point values are the results of certain arithmetic operations::
     NaN
 
 The ``typemin`` and ``typemax`` functions also apply to floating-point
-types::
+types:
+
+.. doctest::
 
     julia> (typemin(Float16),typemax(Float16))
     (Float16(0xfc00),Float16(0x7c00))
@@ -394,7 +420,9 @@ adjacent representable floating-point numbers, which is often known as
 `machine epsilon <http://en.wikipedia.org/wiki/Machine_epsilon>`_.
 
 Julia provides the ``eps`` function, which gives the distance between ``1.0``
-and the next larger representable floating-point value::
+and the next larger representable floating-point value:
+
+.. doctest::
 
     julia> eps(Float32)
     1.192092896e-07
@@ -411,7 +439,9 @@ floating-point value as an argument, and gives the absolute difference
 between that value and the next representable floating point value. That
 is, ``eps(x)`` yields a value of the same type as ``x`` such that
 ``x + eps(x)`` is the next representable floating-point value larger
-than ``x``::
+than ``x``:
+
+.. doctest::
 
     julia> eps(1.0)
     2.22044604925031308e-16
@@ -434,7 +464,9 @@ from zero. By definition, ``eps(1.0)`` is the same as ``eps(Float64)`` since
 
 Julia also provides the ``nextfloat`` and ``prevfloat`` functions which return
 the next largest or smallest representable floating-point number to the
-argument respectively: ::
+argument respectively: :
+
+.. doctest::
 
     julia> x = 1.25f0
     1.25f0
@@ -524,7 +556,9 @@ integer and floating point numbers respectively.
 
 Constructors exist to create these types from primitive numerical types, or from ``String``. 
 Once created, they participate in arithmetic with all other numeric types thanks to Julia's 
-:ref:`type promotion and conversion mechanism <man-conversion-and-promotion>`. ::
+:ref:`type promotion and conversion mechanism <man-conversion-and-promotion>`. :
+
+.. doctest::
 
     julia> BigInt(typemax(Int64)) + 1
     9223372036854775808
@@ -542,7 +576,9 @@ Once created, they participate in arithmetic with all other numeric types thanks
     815915283247897734345611269596115894272000000000
 
 However, type promotion between the primitive types above and
-`BigInt`/`BigFloat` is not automatic and must be explicitly stated. ::
+`BigInt`/`BigFloat` is not automatic and must be explicitly stated. :
+
+.. doctest::
 
     julia> x = typemin(Int64)
     -9223372036854775808
@@ -564,7 +600,9 @@ However, type promotion between the primitive types above and
 
 The default precision (in number of bits of the significand) and rounding
 mode of `BigFloat` operations can be changed, and all further calculations 
-will take these changes in account::
+will take these changes in account:
+
+.. doctest::
 
     julia> with_bigfloat_rounding(RoundUp) do
            BigFloat(1) + BigFloat("0.1")
@@ -590,7 +628,9 @@ Numeric Literal Coefficients
 
 To make common numeric formulas and expressions clearer, Julia allows
 variables to be immediately preceded by a numeric literal, implying
-multiplication. This makes writing polynomial expressions much cleaner::
+multiplication. This makes writing polynomial expressions much cleaner:
+
+.. doctest::
 
     julia> x = 3
     3
@@ -601,7 +641,9 @@ multiplication. This makes writing polynomial expressions much cleaner::
     julia> 1.5x^2 - .5x + 1
     13.0
 
-It also makes writing exponential functions more elegant::
+It also makes writing exponential functions more elegant:
+
+.. doctest::
 
     julia> 2^2x
     64
@@ -611,20 +653,26 @@ operators such as negation. So ``2^3x`` is parsed as ``2^(3x)``, and
 ``2x^3`` is parsed as ``2*(x^3)``.
 
 Numeric literals also work as coefficients to parenthesized
-expressions::
+expressions:
+
+.. doctest::
 
     julia> 2(x-1)^2 - 3(x-1) + 1
     3
 
 Additionally, parenthesized expressions can be used as coefficients to
-variables, implying multiplication of the expression by the variable::
+variables, implying multiplication of the expression by the variable:
+
+.. doctest::
 
     julia> (x-1)x
     6
 
 Neither juxtaposition of two parenthesized expressions, nor placing a
 variable before a parenthesized expression, however, can be used to
-imply multiplication::
+imply multiplication:
+
+.. doctest::
 
     julia> (x-1)(x+1)
     type error: apply: expected Function, got Int64
@@ -682,7 +730,9 @@ Function     Description
 These functions are useful in :ref:`man-numeric-comparisons` to avoid overhead
 from unnecessary :ref:`type conversion <man-conversion-and-promotion>`.
 
-Examples::
+Examples:
+
+.. doctest::
 
     julia> zero(Float32)
     0.0f0

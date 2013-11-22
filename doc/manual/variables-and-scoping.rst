@@ -142,7 +142,9 @@ declarations is necessary, and definitions can be ordered arbitrarily.
 At the interactive prompt, variable scope works the same way as anywhere
 else. The prompt behaves as if there is scope block wrapped around
 everything you type, except that this scope block is identified with the
-global scope. This is especially evident in the case of assignments::
+global scope. This is especially evident in the case of assignments:
+
+.. doctest::
 
     julia> for i = 1:1; y = 10; end
 
@@ -218,7 +220,9 @@ behave identically. We can use ``let`` to create a new binding for
 
 Since the ``begin`` construct does not introduce a new scope, it can be
 useful to use a zero-argument ``let`` to just introduce a new scope
-block without creating any new bindings::
+block without creating any new bindings:
+
+.. doctest::
 
     julia> begin
              local x = 1

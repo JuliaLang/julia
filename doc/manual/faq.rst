@@ -66,7 +66,9 @@ does have a downside: for objects of type ``MyAmbiguousType``, the
 compiler will not be able to generate high-performance code.  The
 reason is that the compiler uses the types of objects, not their
 values, to determine how to build code. Unfortunately, very little can
-be inferred about an object of type ``MyAmbiguousType``::
+be inferred about an object of type ``MyAmbiguousType``:
+
+.. doctest::
 
     julia> b = MyAmbiguousType("Hello")
     MyAmbiguousType("Hello")
@@ -105,7 +107,9 @@ This is a better choice than
     end
 
 because the first version specifies the type of ``a`` from the type of
-the wrapper object.  For example::
+the wrapper object.  For example:
+
+.. doctest::
 
     julia> m = MyType(3.2)
     MyType{Float64}(3.2)
@@ -121,7 +125,9 @@ the wrapper object.  For example::
 
 The type of field ``a`` can be readily determined from the type of
 ``m``, but not from the type of ``t``.  Indeed, in ``t`` it's possible
-to change the type of field ``a``::
+to change the type of field ``a``:
+
+.. doctest::
 
     julia> typeof(t.a)
     Float64
@@ -133,7 +139,9 @@ to change the type of field ``a``::
     Float32
 
 In contrast, once ``m`` is constructed, the type of ``m.a`` cannot
-change::
+change:
+
+.. doctest::
 
     julia> m.a = 4.5f0
     4.5
@@ -148,7 +156,9 @@ not for objects like ``t``.
 
 Of course, all of this is true only if we construct ``m`` with a
 concrete type.  We can break this by explicitly constructing it with
-an abstract type::
+an abstract type:
+
+.. doctest::
 
     julia> m = MyType{FloatingPoint}(3.2)
     MyType{FloatingPoint}(3.2)
@@ -197,7 +207,9 @@ The same best practices that apply in the `previous section
         a::AbstractVector{T}
     end
 
-For example::
+For example:
+
+.. doctest::
 
     julia> c = MySimpleContainer(1:3);
 

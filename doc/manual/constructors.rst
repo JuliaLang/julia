@@ -108,7 +108,9 @@ not greater than the second one. One could declare it like this::
     end
 
 Now ``OrderedPair`` objects can only be constructed such that
-``x <= y``::
+``x <= y``:
+
+.. doctest::
 
     julia> OrderedPair(1,2)
     OrderedPair(1,2)
@@ -249,7 +251,9 @@ be returned::
     julia> z = Incomplete();
 
 While you are allowed to create objects with uninitialized fields, any
-access to an uninitialized field is an immediate error::
+access to an uninitialized field is an immediate error:
+
+.. doctest::
 
     julia> z.xx
     access to undefined reference
@@ -370,7 +374,9 @@ This method uses the ``convert`` function to explicitly convert ``x`` to
 ``Float64`` and then delegates construction to the general constructor
 for the case where both arguments are ``Float64``. With this method
 definition what was previously a "no method" error now successfully
-creates a point of type ``Point{Float64}``::
+creates a point of type ``Point{Float64}``:
+
+.. doctest::
 
     julia> Point(1,2.5)
     Point(1.0,2.5)
@@ -378,7 +384,9 @@ creates a point of type ``Point{Float64}``::
     julia> typeof(ans)
     Point{Float64}
 
-However, other similar calls still don't work::
+However, other similar calls still don't work:
+
+.. doctest::
 
     julia> Point(1.5,2)
     no method Point(Float64,Int64)
@@ -394,7 +402,9 @@ the following outer method definition to make all calls to the general
 The ``promote`` function converts all its arguments to a common type
 — in this case ``Float64``. With this method definition, the ``Point``
 constructor promotes its arguments the same way that numeric operators
-like ``+`` do, and works for all kinds of real numbers::
+like ``+`` do, and works for all kinds of real numbers:
+
+.. doctest::
 
     julia> Point(1.5,2)
     Point(1.5,2.0)
@@ -492,7 +502,9 @@ number, we construct a new rational for the resulting ratio slightly
 differently; this behavior is actually identical to division of a
 rational with an integer. Finally, applying ``//`` to complex integral
 values creates an instance of ``Complex{Rational}`` — a complex number
-whose real and imaginary parts are rationals::
+whose real and imaginary parts are rationals:
+
+.. doctest::
 
     julia> (1 + 2im)//(1 - 2im)
     -3//5 + 4//5im
