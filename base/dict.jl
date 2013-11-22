@@ -290,10 +290,18 @@ type Dict{K,V} <: Associative{K,V}
         new(zeros(Uint8,n), Array(K,n), Array(V,n), 0, 0, identity)
     end
     function Dict(ks, vs)
+        # TODO: eventually replace with a call to Dict(zip(ks,vs))
         n = length(ks)
         h = Dict{K,V}()
         for i=1:n
             h[ks[i]] = vs[i]
+        end
+        return h
+    end
+    function Dict(kv)
+        h = Dict{K,V}()
+        for (k,v) in kv
+            h[k] = v
         end
         return h
     end
@@ -307,6 +315,8 @@ Dict(ks, vs) = Dict{Any,Any}(ks, vs)
 Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
 Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
 Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
+
+Dict{K,V}(kv::Array{(K,V)}) = Dict{K,V}(kv)
 
 similar{K,V}(d::Dict{K,V}) = (K=>V)[]
 
