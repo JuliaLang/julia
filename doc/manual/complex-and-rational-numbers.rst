@@ -134,7 +134,7 @@ defined for complex numbers::
 
 Note that mathematical functions typically return real values when applied
 to real numbers and complex values when applied to complex numbers.
-For example, ``sqrt``, for example, behaves differently when applied to ``-1``
+For example, ``sqrt`` behaves differently when applied to ``-1``
 versus ``-1 + 0im`` even though ``-1 == -1 + 0im``::
 
     julia> sqrt(-1)
