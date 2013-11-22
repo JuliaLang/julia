@@ -149,7 +149,7 @@ global scope. This is especially evident in the case of assignments:
     julia> for i = 1:1; y = 10; end
 
     julia> y
-    y not defined
+    ERROR: y not defined
 
     julia> y = 0
     0
@@ -231,7 +231,7 @@ block without creating any new bindings:
              end
              x
            end
-    syntax error: local x declared twice
+    ERROR: syntax: local "x" declared twice
 
     julia> begin
              local x = 1

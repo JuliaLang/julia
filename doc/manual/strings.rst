@@ -223,20 +223,24 @@ a normal value:
     ' '
 
     julia> str[end/3]
-    'o'
+    ERROR: InexactError()
+     in getindex at string.jl:58
 
     julia> str[end/4]
-    'l'
+    ERROR: InexactError()
+     in getindex at string.jl:58
 
 Using an index less than 1 or greater than ``end`` raises an error:
 
 .. doctest::
 
     julia> str[0]
-    BoundsError()
+    ERROR: BoundsError()
+     in getindex at ascii.jl:11
 
     julia> str[end+1]
-    BoundsError()
+    ERROR: BoundsError()
+     in getindex at ascii.jl:11
 
 You can also extract a substring using range indexing:
 
@@ -291,10 +295,12 @@ such an invalid byte index, an error is thrown:
     '∀'
 
     julia> s[2]
-    invalid UTF-8 character index
+    ERROR: invalid UTF-8 character index
+     in getindex at utf8.jl:63
 
     julia> s[3]
-    invalid UTF-8 character index
+    ERROR: invalid UTF-8 character index
+     in getindex at utf8.jl:63
 
     julia> s[4]
     ' '
@@ -321,11 +327,11 @@ inefficient and verbose way to iterate through the characters of ``s``:
              end
            end
     ∀
-
+    <BLANKLINE>
     x
-
+    <BLANKLINE>
     ∃
-
+    <BLANKLINE>
     y
 
 The blank lines actually have spaces on them. Fortunately, the above
@@ -339,11 +345,11 @@ exception handling required:
              println(c)
            end
     ∀
-
+    <BLANKLINE>
     x
-
+    <BLANKLINE>
     ∃
-
+    <BLANKLINE>
     y
 
 UTF-8 is not the only encoding that Julia supports, and adding support
@@ -401,13 +407,13 @@ sessions:
 .. doctest::
 
     julia> v = [1,2,3]
-    3-element Int64 Array:
+    3-element Array{Int64,1}:
      1
      2
      3
 
     julia> "v: $v"
-    "v: [1, 2, 3]"
+    "v: 1\n2\n3\n"
 
 The ``string`` function is the identity for ``String`` and ``Char``
 values, so these are interpolated into strings as themselves, unquoted
@@ -536,7 +542,7 @@ any options turned on just uses ``r"..."``:
     r"^\s*(?:#|$)"
 
     julia> typeof(ans)
-    Regex
+    Regex (constructor with 3 methods)
 
 To check if a regex matches a string, use the ``ismatch`` function:
 
@@ -606,7 +612,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples:
     "acd"
 
     julia> m.captures
-    3-element Union(UTF8String,ASCIIString,Nothing) Array:
+    3-element Array{Union(Nothing,SubString{UTF8String}),1}:
      "a"
      "c"
      "d"
@@ -615,7 +621,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples:
     1
 
     julia> m.offsets
-    3-element Int64 Array:
+    3-element Array{Int64,1}:
      1
      2
      3
@@ -627,7 +633,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples:
     "ad"
 
     julia> m.captures
-    3-element Union(UTF8String,ASCIIString,Nothing) Array:
+    3-element Array{Union(Nothing,SubString{UTF8String}),1}:
      "a"
      nothing
      "d"
@@ -636,7 +642,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples:
     1
 
     julia> m.offsets
-    3-element Int64 Array:
+    3-element Array{Int64,1}:
      1
      0
      2
@@ -720,7 +726,15 @@ three:
 .. doctest::
 
     julia> b"DATA\xff\u2200"
-    [68,65,84,65,255,226,136,128]
+    8-element Array{Uint8,1}:
+     0x44
+     0x41
+     0x54
+     0x41
+     0xff
+     0xe2
+     0x88
+     0x80
 
 The ASCII string "DATA" corresponds to the bytes 68, 65, 84, 65.
 ``\xff`` produces the single byte 255. The Unicode escape ``\u2200`` is
@@ -732,7 +746,7 @@ error:
 .. doctest::
 
     julia> "DATA\xff\u2200"
-    syntax error: invalid UTF-8 sequence
+    ERROR: syntax: invalid UTF-8 sequence
 
 Also observe the significant distinction between ``\xff`` and ``\uff``:
 the former escape sequence encodes the *byte 255*, whereas the latter
@@ -742,11 +756,11 @@ bytes in UTF-8:
 .. doctest::
 
     julia> b"\xff"
-    1-element Uint8 Array:
+    1-element Array{Uint8,1}:
      0xff
 
     julia> b"\uff"
-    2-element Uint8 Array:
+    2-element Array{Uint8,1}:
      0xc3
      0xbf
 

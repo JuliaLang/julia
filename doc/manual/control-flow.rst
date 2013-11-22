@@ -128,7 +128,7 @@ conditional expression is anything but ``true`` or ``false``:
     julia> if 1
              println("true")
            end
-    type error: lambda: in if, expected Bool, got Int64
+    ERROR: type: non-boolean (Int64) used in boolean context
 
 This error indicates that the conditional was of the wrong type:
 ``Int64`` rather than the required ``Bool``.
@@ -300,7 +300,7 @@ values (``true`` or ``false``). Using a non-boolean value is an error:
 .. doctest::
 
     julia> 1 && 2
-    type error: lambda: in if, expected Bool, got Int64
+    ERROR: type: non-boolean (Int64) used in boolean context
 
 .. _man-loops:
 
@@ -367,7 +367,7 @@ different variable name to test this:
     5
 
     julia> j
-    j not defined
+    ERROR: j not defined
 
 See :ref:`man-variables-and-scoping` for a detailed
 explanation of variable scope and how it works in Julia.
@@ -531,8 +531,10 @@ negative real value:
 .. doctest::
 
     julia> sqrt(-1)
-    ERROR: DomainError()
-     in sqrt at math.jl:117
+    ERROR: DomainError
+    sqrt will only return a complex result if called with a complex argument.
+    try sqrt(complex(x))
+     in sqrt at math.jl:284
 
 The ``throw`` function
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -550,7 +552,7 @@ if the argument is negative. :
     0.36787944117144233
     
     julia> f(-1)
-    ERROR: DomainError()
+    ERROR: DomainError
      in f at none:1
 
 Note that ``DomainError`` without parentheses is not an exception, but a type of
@@ -583,7 +585,8 @@ the ``sqrt`` function that raises an error if its argument is negative:
     1.4142135623730951
 
     julia> fussy_sqrt(-1)
-    negative x not allowed
+    ERROR: negative x not allowed
+     in fussy_sqrt at none:1
 
 If ``fussy_sqrt`` is called with a negative value from another function,
 instead of trying to continue execution of the calling function, it
@@ -607,7 +610,8 @@ session:
 
     julia> verbose_fussy_sqrt(-1)
     before fussy_sqrt
-    negative x not allowed
+    ERROR: negative x not allowed
+     in fussy_sqrt at none:1
 
 Warnings and informational messages
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -619,7 +623,7 @@ execution.:
 .. doctest::
 
     julia> info("Hi"); 1+1
-    MESSAGE: Hi
+    INFO: Hi
     2
     
     julia> warn("Hi"); 1+1
@@ -629,6 +633,7 @@ execution.:
     julia> error("Hi"); 1+1
     ERROR: Hi
      in error at error.jl:21
+
 
 The ``try/catch`` statement
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -685,8 +690,10 @@ assumes ``x`` is a real number and returns its square root:
     3.0
     
     julia> sqrt_second(-9)
-    ERROR: DomainError()
-     in sqrt at math.jl:117
+    ERROR: DomainError
+    sqrt will only return a complex result if called with a complex argument.
+    try sqrt(complex(x))
+     in sqrt at math.jl:284
      in sqrt_second at none:7
 
 The power of the ``try/catch`` construct lies in the ability to unwind a deeply
@@ -756,15 +763,17 @@ they need to, passing values back and forth as necessary.
 
 Julia provides the functions ``produce`` and ``consume`` for solving
 this problem. A producer is a function that calls ``produce`` on each
-value it needs to produce::
+value it needs to produce:
 
-    function producer()
-      produce("start")
-      for n=1:4
-        produce(2n)
-      end
-      produce("stop")
-    end
+.. doctest::
+
+    julia> function producer()
+             produce("start")
+             for n=1:4
+               produce(2n)
+             end
+             produce("stop")
+           end;
 
 To consume values, first the producer is wrapped in a ``Task``, then
 ``consume`` is called repeatedly on that object:

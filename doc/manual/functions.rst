@@ -8,11 +8,18 @@ In Julia, a function is an object that maps a tuple of argument values
 to a return value. Julia functions are not pure mathematical functions,
 in the sense that functions can alter and be affected by the global
 state of the program. The basic syntax for defining functions in Julia
-is::
+is:
+
+.. testcode::
 
     function f(x,y)
       x + y
     end
+
+.. testoutput::
+    :hide:
+
+    f (generic function with 1 method)
 
 There is a second, more terse syntax for defining a function in Julia.
 The traditional function declaration syntax demonstrated above is
@@ -153,7 +160,7 @@ in fact the former is parsed to produce the function call internally.
 This also means that you can assign and pass around operators such as
 ``+`` and ``*`` just like you would with other function values:
 
-.. doctest::
+.. doctest:: f-plus
 
     julia> f = +;
 
@@ -200,7 +207,7 @@ without being given a name:
 .. doctest::
 
     julia> x -> x^2 + 2x - 1
-    #<function>
+    (anonymous function)
 
 This creates an unnamed function taking one argument *x* and returning the
 value of the polynomial *x*\ ^2 + 2\ *x* - 1 at that value. The primary
@@ -212,7 +219,7 @@ array containing the resulting values:
 .. doctest::
 
     julia> map(round, [1.2,3.5,1.7])
-    3-element Float64 Array:
+    3-element Array{Float64,1}:
      1.0
      4.0
      2.0
@@ -226,8 +233,8 @@ function object without needing a name:
 .. doctest::
 
     julia> map(x -> x^2 + 2x - 1, [1,3,-1])
-    3-element Int64 Array:
-     2
+    3-element Array{Int64,1}:
+      2
      14
      -2
 
@@ -245,11 +252,13 @@ In Julia, one returns a tuple of values to simulate returning multiple
 values. However, tuples can be created and destructured without needing
 parentheses, thereby providing an illusion that multiple values are
 being returned, rather than a single tuple value. For example, the
-following function returns a pair of values::
+following function returns a pair of values:
 
-    function foo(a,b)
-      a+b, a*b
-    end
+.. doctest::
+
+    julia> function foo(a,b)
+             a+b, a*b
+           end;
 
 If you call it in an interactive session without assigning the return
 value anywhere, you will see the tuple returned:
@@ -289,9 +298,12 @@ It is often convenient to be able to write functions taking an arbitrary
 number of arguments. Such functions are traditionally known as "varargs"
 functions, which is short for "variable number of arguments". You can
 define a varargs function by following the last argument with an
-ellipsis::
+ellipsis:
 
-    bar(a,b,x...) = (a,b,x)
+.. doctest::
+
+    julia> bar(a,b,x...) = (a,b,x)
+    bar (generic function with 1 method)
 
 The variables ``a`` and ``b`` are bound to the first two argument values
 as usual, and the variable ``x`` is bound to an iterable collection of
@@ -350,7 +362,7 @@ be a tuple:
 .. doctest::
 
     julia> x = [3,4]
-    2-element Int64 Array:
+    2-element Array{Int64,1}:
      3
      4
 
@@ -358,7 +370,7 @@ be a tuple:
     (1,2,(3,4))
 
     julia> x = [1,2,3,4]
-    4-element Int64 Array:
+    4-element Array{Int64,1}:
      1
      2
      3
@@ -373,7 +385,7 @@ function (although it often is)::
     baz(a,b) = a + b
 
     julia> args = [1,2]
-    2-element Int64 Array:
+    2-element Array{Int64,1}:
      1
      2
 
@@ -381,7 +393,7 @@ function (although it often is)::
     3
 
     julia> args = [1,2,3]
-    3-element Int64 Array:
+    3-element Array{Int64,1}:
      1
      2
      3

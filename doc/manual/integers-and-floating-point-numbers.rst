@@ -189,19 +189,18 @@ such as integers are given by the ``typemin`` and ``typemax`` functions:
     (-2147483648,2147483647)
 
     julia> for T = {Int8,Int16,Int32,Int64,Int128,Uint8,Uint16,Uint32,Uint64,Uint128}
-             println("$(lpad(T,6)): [$(typemin(T)),$(typemax(T))]")
+             println("$(lpad(T,7)): [$(typemin(T)),$(typemax(T))]")
            end
-
        Int8: [-128,127]
       Int16: [-32768,32767]
       Int32: [-2147483648,2147483647]
       Int64: [-9223372036854775808,9223372036854775807]
      Int128: [-170141183460469231731687303715884105728,170141183460469231731687303715884105727]
-      Uint8: [0x00,0xff]
-     Uint16: [0x0000,0xffff]
-     Uint32: [0x00000000,0xffffffff]
-     Uint64: [0x0000000000000000,0xffffffffffffffff]
-    Uint128: [0x00000000000000000000000000000000,0xffffffffffffffffffffffffffffffff]
+      Uint8: [0,255]
+     Uint16: [0,65535]
+     Uint32: [0,4294967295]
+     Uint64: [0,18446744073709551615]
+    Uint128: [0,340282366920938463463374607431768211455]
 
 The values returned by ``typemin`` and ``typemax`` are always of the
 given argument type. (The above expression uses several features we have
@@ -258,7 +257,7 @@ Literal floating-point numbers are represented in the standard formats:
     -1.23
 
     julia> 1e10
-    1e+10
+    1.0e10
 
     julia> 2.5e-4
     0.00025
@@ -402,7 +401,7 @@ types:
 .. doctest::
 
     julia> (typemin(Float16),typemax(Float16))
-    (Float16(0xfc00),Float16(0x7c00))
+    (-Inf16,Inf16)
 
     julia> (typemin(Float32),typemax(Float32))
     (-Inf32,Inf32)
@@ -425,13 +424,13 @@ and the next larger representable floating-point value:
 .. doctest::
 
     julia> eps(Float32)
-    1.192092896e-07
+    1.1920929f-7
 
     julia> eps(Float64)
-    2.22044604925031308e-16
+    2.220446049250313e-16
 
-    julia> eps() #Same as eps(Float64)
-    2.22044604925031308e-16
+    julia> eps() # same as eps(Float64)
+    2.220446049250313e-16
 
 These values are ``2.0^-23`` and ``2.0^-52`` as ``Float32`` and ``Float64``
 values, respectively. The ``eps`` function can also take a
@@ -444,13 +443,13 @@ than ``x``:
 .. doctest::
 
     julia> eps(1.0)
-    2.22044604925031308e-16
+    2.220446049250313e-16
 
     julia> eps(1000.)
-    1.13686837721616030e-13
+    1.1368683772161603e-13
 
     julia> eps(1e-27)
-    1.79366203433576585e-43
+    1.793662034335766e-43
 
     julia> eps(0.0)
     5.0e-324
@@ -596,7 +595,7 @@ However, type promotion between the primitive types above and
     -9223372036854775809
     
     julia> typeof(y)
-    BigInt
+    BigInt (constructor with 7 methods)
 
 The default precision (in number of bits of the significand) and rounding
 mode of `BigFloat` operations can be changed, and all further calculations 
@@ -617,10 +616,9 @@ will take these changes in account:
     julia> with_bigfloat_precision(40) do
            BigFloat(1) + BigFloat("0.1")
            end
-    1.0999999999985e+00 with 40 bits of precision
+    1.1000000000004e+00 with 40 bits of precision
 
 
-   
 .. _man-numeric-literal-coefficients:
 
 Numeric Literal Coefficients
@@ -675,10 +673,10 @@ imply multiplication:
 .. doctest::
 
     julia> (x-1)(x+1)
-    type error: apply: expected Function, got Int64
+    ERROR: type: apply: expected Function, got Int64
 
     julia> x(x+1)
-    type error: apply: expected Function, got Int64
+    ERROR: type: apply: expected Function, got Int64
 
 Both of these expressions are interpreted as function application: any
 expression that is not a numeric literal, when immediately followed by a
@@ -744,7 +742,5 @@ Examples:
     1
 
     julia> one(BigFloat)
-    1e+00
-    
-
+    1e+00 with 256 bits of precision
 

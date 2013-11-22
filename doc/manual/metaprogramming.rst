@@ -52,21 +52,21 @@ is an example of the short form used to quote an arithmetic expression:
 .. doctest::
 
     julia> ex = :(a+b*c+1)
-    +(a,*(b,c),1)
+    :(+(a,*(b,c),1))
 
     julia> typeof(ex)
     Expr
 
     julia> ex.head
-    call
+    :call
 
     julia> typeof(ans)
     Symbol
 
     julia> ex.args
-    4-element Any Array:
-      +        
-      a        
+    4-element Array{Any,1}:
+      :+       
+      :a       
       :(*(b,c))
      1         
 
@@ -93,15 +93,14 @@ quoting form:
 .. doctest::
 
     julia> quote
-         x = 1
-         y = 2
-         x + y
-       end
-
-    begin
-      x = 1
-      y = 2
-      +(x,y)
+             x = 1
+             y = 2
+             x + y
+           end
+    quote  # none, line 2:
+        x = 1 # line 3:
+        y = 2 # line 4:
+        +(x,y)
     end
 
 Symbols
@@ -113,7 +112,7 @@ instead of an ``Expr``:
 .. doctest::
 
     julia> :foo
-    foo
+    :foo
 
     julia> typeof(ans)
     Symbol
@@ -155,16 +154,16 @@ typing at the interactive prompt — using the ``eval`` function:
 .. doctest::
 
     julia> :(1 + 2)
-    +(1,2)
+    :(+(1,2))
 
     julia> eval(ans)
     3
 
     julia> ex = :(a + b)
-    +(a,b)
+    :(+(a,b))
 
     julia> eval(ex)
-    a not defined
+    ERROR: a not defined
 
     julia> a = 1; b = 2;
 
@@ -178,10 +177,10 @@ evaluation environment:
 .. doctest::
 
     julia> ex = :(x = 1)
-    x = 1
+    :(x = 1)
 
     julia> x
-    x not defined
+    ERROR: x not defined
 
     julia> eval(ex)
     1
@@ -235,7 +234,6 @@ clearly and concisely using interpolation:
 .. doctest::
 
     julia> a = 1;
-    1
 
     julia> ex = :($a + b)
     :(+(1,b))
@@ -295,7 +293,7 @@ cause a compile-time error:
 .. doctest::
 
     julia> $a + b
-    unsupported or misplaced expression $
+    ERROR: unsupported or misplaced expression $
 
 .. _man-macros:
 
@@ -344,7 +342,8 @@ This macro can be used like this:
     julia> @assert 1==1.0
 
     julia> @assert 1==0
-    Assertion failed: 1==0
+    ERROR: assertion failed: :((1==0))
+     in error at error.jl:21
 
 Macro calls are expanded so that the above calls are precisely
 equivalent to writing::

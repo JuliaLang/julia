@@ -111,27 +111,31 @@ scalar.
 The following example computes a weighted average of the current element
 and its left and right neighbor along a 1-d grid. :
 
-.. doctest::
+.. testsetup:: *
+
+    srand(314)
+
+.. doctest:: array-rand
 
     julia> const x = rand(8)
-    8-element Float64 Array:
-     0.276455
-     0.614847
-     0.0601373
-     0.896024
-     0.646236
-     0.143959
-     0.0462343
-     0.730987
+    8-element Array{Float64,1}:
+     0.843025
+     0.869052
+     0.365105
+     0.699456
+     0.977653
+     0.994953
+     0.41084 
+     0.809411
 
     julia> [ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
-    6-element Float64 Array:
-     0.391572
-     0.407786
-     0.624605
-     0.583114
-     0.245097
-     0.241854
+    6-element Array{Float64,1}:
+     0.736559
+     0.57468
+     0.685417
+     0.912429
+     0.8446  
+     0.656511
 
 .. note:: In the above example, ``x`` is declared as constant because type
   inference in Julia does not work as well on non-constant global
@@ -150,7 +154,7 @@ array of type ``Any``:
 .. doctest::
 
     julia> { i/2 for i = 1:3 }
-    3-element Any Array:
+    3-element Array{Any,1}:
      0.5
      1.0
      1.5
@@ -188,16 +192,17 @@ Example:
 .. doctest::
 
     julia> x = reshape(1:16, 4, 4)
-    4x4 Int64 Array
-    1 5  9 13
-    2 6 10 14
-    3 7 11 15
-    4 8 12 16
+    4x4 Array{Int64,2}:
+     1  5   9  13
+     2  6  10  14
+     3  7  11  15
+     4  8  12  16
+
 
     julia> x[2:3, 2:end-1]
-    2x2 Int64 Array
-    6 10
-    7 11
+    2x2 Array{Int64,2}:
+     6  10
+     7  11
 
 Assignment
 ----------
@@ -230,16 +235,19 @@ Example:
 .. doctest::
 
     julia> x = reshape(1:9, 3, 3)
-    3x3 Int64 Array
-    1 4 7
-    2 5 8
-    3 6 9
+    3x3 Array{Int64,2}:
+     1  4  7
+     2  5  8
+     3  6  9
 
     julia> x[1:2, 2:3] = -1
-    3x3 Int64 Array
-    1 -1 -1
-    2 -1 -1
-    3  6  9
+    -1
+
+    julia> x
+    3x3 Array{Int64,2}:
+     1  -1  -1
+     2  -1  -1
+     3   6   9
 
 Concatenation
 -------------
@@ -321,9 +329,9 @@ the name of the function to vectorize. Here is a simple example:
 
     julia> methods(square)
     # 4 methods for generic function "square":
-    square{T<:Number}(x::AbstractArray{T<:Number,1}) at operators.jl:236
-    square{T<:Number}(x::AbstractArray{T<:Number,2}) at operators.jl:237
-    square{T<:Number}(x::AbstractArray{T<:Number,N}) at operators.jl:239
+    square{T<:Number}(x::AbstractArray{T<:Number,1}) at operators.jl:248
+    square{T<:Number}(x::AbstractArray{T<:Number,2}) at operators.jl:249
+    square{T<:Number}(x::AbstractArray{T<:Number,N}) at operators.jl:251
     square(x) at none:1
 
     julia> square([1 2 4; 5 6 7])
@@ -495,13 +503,15 @@ you can use the same names with an ``sp`` prefix:
 .. doctest::
 
     julia> spzeros(3,5)
-    3x5 sparse matrix with 0 nonzeros:
+    3x5 sparse matrix with 0 Float64 nonzeros:
+    <BLANKLINE>
 
     julia> speye(3,5)
-    3x5 sparse matrix with 3 nonzeros:
-        [1, 1]  =  1.0
-        [2, 2]  =  1.0
-        [3, 3]  =  1.0
+    3x5 sparse matrix with 3 Float64 nonzeros:
+            [1, 1]  =  1.0
+            [2, 2]  =  1.0
+            [3, 3]  =  1.0
+    <BLANKLINE>
 
 The ``sparse`` function is often a handy way to construct sparse
 matrices. It takes as its input a vector ``I`` of row indices, a
@@ -514,11 +524,12 @@ values. ``sparse(I,J,V)`` constructs a sparse matrix such that
     julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
     julia> S = sparse(I,J,V)
-    5x18 sparse matrix with 4 nonzeros:
-         [1 ,  4]  =  1
-         [4 ,  7]  =  2
-         [5 ,  9]  =  3
-         [3 , 18]  =  -5
+    5x18 sparse matrix with 4 Int64 nonzeros:
+            [1 ,  4]  =  1
+            [4 ,  7]  =  2
+            [5 ,  9]  =  3
+            [3 , 18]  =  -5
+    <BLANKLINE>
 
 The inverse of the ``sparse`` function is ``findn``, which
 retrieves the inputs used to create the sparse matrix.
@@ -526,10 +537,10 @@ retrieves the inputs used to create the sparse matrix.
 .. doctest::
 
     julia> findn(S)
-    ([1, 4, 5, 3],[4, 7, 9, 18])
+    ([1,4,5,3],[4,7,9,18])
 
     julia> findnz(S)
-    ([1, 4, 5, 3],[4, 7, 9, 18],[1, 2, 3, -5])
+    ([1,4,5,3],[4,7,9,18],[1,2,3,-5])
 
 Another way to create sparse matrices is to convert a dense matrix
 into a sparse matrix using the ``sparse`` function:
@@ -537,12 +548,13 @@ into a sparse matrix using the ``sparse`` function:
 .. doctest::
 
     julia> sparse(eye(5))
-    5x5 sparse matrix with 5 nonzeros:
-        [1, 1]  =  1.0
-        [2, 2]  =  1.0
-        [3, 3]  =  1.0
-        [4, 4]  =  1.0
-        [5, 5]  =  1.0
+    5x5 sparse matrix with 5 Float64 nonzeros:
+            [1, 1]  =  1.0
+            [2, 2]  =  1.0
+            [3, 3]  =  1.0
+            [4, 4]  =  1.0
+            [5, 5]  =  1.0
+    <BLANKLINE>
 
 You can go in the other direction using the ``dense`` or the ``full``
 function. The ``issparse`` function can be used to query if a matrix
