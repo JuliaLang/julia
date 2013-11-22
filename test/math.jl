@@ -173,3 +173,7 @@ end
 # Ensure subnormal flags functions don't segfault
 @test any(ccall("jl_zero_subnormals", Uint8, (Uint8,), 1) .== [0x00 0x01])
 @test any(ccall("jl_zero_subnormals", Uint8, (Uint8,), 0) .== [0x00 0x01])
+
+# isqrt (issue #4884)
+@test isqrt(9223372030926249000) == 3037000498
+@test isqrt(typemax(Int128)) == int128("13043817825332782212")

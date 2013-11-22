@@ -161,6 +161,30 @@ else
     blas_int(x) = int32(x)
 end
 
+#Check that stride of matrix/vector is 1
+function chkstride1(A::StridedVecOrMat...)
+    for a in A 
+        stride(a,1)== 1 || error("Matrix does not have contiguous columns")
+    end  
+end
+
+#Check that matrix is square
+function chksquare(A...)
+    sizes=BlasInt[]
+    for a in A 
+        size(a,1)==size(a,2) || throw(DimensionMismatch("Matrix is not square: dimensions are $(size(a))"))
+        push!(sizes, size(a,1))
+    end
+    length(A)==1 ? sizes[1] : sizes
+end
+
+#Check that upper/lower (for special matrices) is correctly specified
+macro chkuplo()
+   :((uplo=='U' || uplo=='L') || throw(ArgumentError("""invalid uplo = $uplo
+            
+Valid choices are 'U' (upper) or 'L' (lower).""")))
+end
+
 include("linalg/exceptions.jl")
 include("linalg/generic.jl")
 
@@ -177,8 +201,8 @@ include("linalg/hermitian.jl")
 include("linalg/symmetric.jl")
 include("linalg/woodbury.jl")
 include("linalg/tridiag.jl")
-include("linalg/bidiag.jl")
 include("linalg/diagonal.jl")
+include("linalg/bidiag.jl")
 include("linalg/rectfullpacked.jl")
 
 include("linalg/bitarray.jl")
