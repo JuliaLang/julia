@@ -127,7 +127,7 @@ defined for complex numbers:
 
 .. doctest::
 
-    julia> sqrt(im)
+    julia> sqrt(1im)
     0.7071067811865476 + 0.7071067811865475im
 
     julia> sqrt(1 + 2im)
@@ -150,8 +150,10 @@ versus ``-1 + 0im`` even though ``-1 == -1 + 0im``:
 .. doctest::
 
     julia> sqrt(-1)
-    ERROR: DomainError()
-     in sqrt at math.jl:111
+    ERROR: DomainError
+    sqrt will only return a complex result if called with a complex argument.
+    try sqrt(complex(x))
+     in sqrt at math.jl:284
 
     julia> sqrt(-1 + 0im)
     0.0 + 1.0im
@@ -288,14 +290,16 @@ Constructing infinite rational values is acceptable:
     -Inf
 
     julia> typeof(ans)
-    Rational{Int64}
+    Rational{Int64} (constructor with 1 method)
 
 Trying to construct a ``NaN`` rational value, however, is not:
 
 .. doctest::
 
     julia> 0//0
-    invalid rational: 0//0
+    ERROR: invalid rational: 0//0
+     in Rational at rational.jl:7
+     in // at rational.jl:17
 
 As usual, the promotion system makes interactions with other numeric
 types effortless:
@@ -306,7 +310,7 @@ types effortless:
     8//5
 
     julia> 3//5 - 0.5
-    0.1
+    0.09999999999999998
 
     julia> 2//7 * (1 + 2im)
     2//7 + 4//7im
@@ -321,7 +325,7 @@ types effortless:
     1//2 + 2//1im
 
     julia> 1 + 2//3im
-    1//1 + 2//3im
+    1//1 - 2//3im
 
     julia> 0.5 == 1//2
     true

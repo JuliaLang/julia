@@ -86,10 +86,10 @@ statements:
 .. doctest::
 
     julia> else = false
-    ERROR: syntax: unexpected else
+    ERROR: syntax: unexpected "else"
     
     julia> try = "No"
-    ERROR: syntax: unexpected =
+    ERROR: syntax: unexpected "="
 
 
 Stylistic Conventions

@@ -79,7 +79,7 @@ action:
     Int64
 
     julia> convert(Uint8, x)
-    12
+    0x0c
 
     julia> typeof(ans)
     Uint8
@@ -97,7 +97,8 @@ requested conversion:
 .. doctest::
 
     julia> convert(FloatingPoint, "foo")
-    no method convert(Type{FloatingPoint},ASCIIString)
+    ERROR: no method convert(Type{FloatingPoint}, ASCIIString)
+     in convert at base.jl:11
 
 Some languages consider parsing strings as numbers or formatting
 numbers as strings to be conversions (many dynamic languages will even
@@ -130,7 +131,8 @@ to zero:
     false
 
     julia> convert(Bool, 1im)
-    true
+    ERROR: InexactError()
+     in convert at complex.jl:27
 
     julia> convert(Bool, 0im)
     false
@@ -285,7 +287,7 @@ This allows calls like the following to work:
     -3//1
 
     julia> typeof(ans)
-    Rational{Int64}
+    Rational{Int64} (constructor with 1 method)
 
 For most user-defined types, it is better practice to require
 programmers to supply the expected types to constructor functions

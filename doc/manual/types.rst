@@ -109,12 +109,13 @@ like a type declaration in a statically-typed language such as C. Every
 value assigned to the variable will be converted to the declared type
 using the ``convert`` function:
 
-.. doctest::
+.. doctest:: foo-func
 
     julia> function foo()
              x::Int8 = 1000
              x
            end
+    foo (generic function with 1 method)
 
     julia> foo()
     -24
@@ -317,13 +318,15 @@ beneficial aspect of the language design.
 Since composite types are the most common form of user-defined concrete
 type, they are simply introduced with the ``type`` keyword followed by a
 block of field names, optionally annotated with types using the ``::``
-operator::
+operator:
 
-    type Foo
-      bar
-      baz::Int
-      qux::Float64
-    end
+.. doctest::
+
+    julia> type Foo
+             bar
+             baz::Int
+             qux::Float64
+           end
 
 Fields with no type annotation default to ``Any``, and can accordingly
 hold any type of value.
@@ -337,7 +340,7 @@ New objects of composite type ``Foo`` are created by applying the
     Foo("Hello, world.",23,1.5)
 
     julia> typeof(foo)
-    Foo
+    Foo (constructor with 1 method)
 
 Since the ``bar`` field is unconstrained in type, any value will do; the
 value for ``baz`` must be an ``Int`` and ``qux`` must be a ``Float64``.
@@ -348,7 +351,7 @@ this implied type signature:
 .. doctest::
 
     julia> Foo((), 23.5, 1)
-    no method Foo((),Float64,Int64)
+    ERROR: no method Foo((), Float64, Int64)
 
 You can access the field values of a composite object using the
 traditional ``foo.bar`` notation:
@@ -530,7 +533,7 @@ instances of any of its argument types, constructed using the special
 .. doctest::
 
     julia> IntOrString = Union(Int,String)
-    Union(Int,String)
+    Union(Int64,String)
 
     julia> 1 :: IntOrString
     1
@@ -539,7 +542,7 @@ instances of any of its argument types, constructed using the special
     "Hello!"
 
     julia> 1.0 :: IntOrString
-    type error: typeassert: expected Union(Int,String), got Float64
+    ERROR: type: typeassert: expected Union(String,Int64), got Float64
 
 The compilers for many languages have an internal union construct for
 reasoning about types; Julia simply exposes it to the programmer. The
@@ -590,6 +593,14 @@ types, and finally parametric bits types.
 Parametric Composite Types
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+.. testsetup::
+
+    abstract Pointy{T}
+    type Point{T} <: Pointy{T}
+      x::T
+      y::T
+    end
+
 Type parameters are introduced immediately after the type name,
 surrounded by curly braces::
 
@@ -611,10 +622,10 @@ unlimited number of types: ``Point{Float64}``, ``Point{String}``,
 .. doctest::
 
     julia> Point{Float64}
-    Point{Float64}
+    Point{Float64} (constructor with 1 method)
 
     julia> Point{String}
-    Point{String}
+    Point{String} (constructor with 1 method)
 
 The type ``Point{Float64}`` is a point whose coordinates are 64-bit
 floating-point values, while the type ``Point{String}`` is a "point"
@@ -624,7 +635,7 @@ However, ``Point`` itself is also a valid type object:
 .. doctest::
 
     julia> Point
-    Point{T}
+    Point{T} (constructor with 1 method)
 
 Here the ``T`` is the dummy type symbol used in the original declaration
 of ``Point``. What does ``Point`` by itself mean? It is an abstract type
@@ -704,10 +715,10 @@ as a constructor accordingly:
 .. doctest::
 
     julia> Point{Float64}(1.0,2.0)
-    Point(1.0,2.0)
+    Point{Float64}(1.0,2.0)
 
     julia> typeof(ans)
-    Point{Float64}
+    Point{Float64} (constructor with 1 method)
 
 For the default constructor, exactly one argument must be supplied for
 each field:
@@ -715,10 +726,10 @@ each field:
 .. doctest::
 
     julia> Point{Float64}(1.0)
-    no method Point(Float64,)
+    ERROR: no method Point{Float64}(Float64)
 
     julia> Point{Float64}(1.0,2.0,3.0)
-    no method Point(Float64,Float64,Float64)
+    ERROR: no method Point{Float64}(Float64, Float64, Float64)
 
 The provided arguments need to match the field types exactly, in this
 case ``(Float64,Float64)``, as with all composite type default
@@ -733,16 +744,16 @@ implied value of the parameter type ``T`` is unambiguous:
 .. doctest::
 
     julia> Point(1.0,2.0)
-    Point(1.0,2.0)
+    Point{Float64}(1.0,2.0)
 
     julia> typeof(ans)
-    Point{Float64}
+    Point{Float64} (constructor with 1 method)
 
     julia> Point(1,2)
-    Point(1,2)
+    Point{Int64}(1,2)
 
     julia> typeof(ans)
-    Point{Int64}
+    Point{Int64} (constructor with 1 method)
 
 In the case of ``Point``, the type of ``T`` is unambiguously implied if
 and only if the two arguments to ``Point`` have the same type. When this
@@ -751,7 +762,7 @@ isn't the case, the constructor will fail with a no method error:
 .. doctest::
 
     julia> Point(1,2.5)
-    no method Point(Int64,Float64)
+    ERROR: no method Point{T}(Int64, Float64)
 
 Constructor methods to appropriately handle such mixed cases can be
 defined, but that will not be discussed until later on in
@@ -846,7 +857,11 @@ With such a declaration, it is acceptable to use any type that is a
 subtype of ``Real`` in place of ``T``, but not types that are not
 subtypes of ``Real``:
 
-.. doctest::
+.. testsetup:: real-pointy
+
+    abstract Pointy{T<:Real}
+
+.. doctest:: real-pointy
 
     julia> Pointy{Float64}
     Pointy{Float64}
@@ -1065,7 +1080,7 @@ objects, they also have types, and we can ask what their types are:
     DataType
 
     julia> typeof(Union(Real,Float64,Rational))
-    UnionType
+    DataType
 
     julia> typeof((Rational,None))
     (DataType,UnionType)
@@ -1131,10 +1146,11 @@ If you apply ``super`` to other type objects (or non-type objects), a
 .. doctest::
 
     julia> super(Union(Float64,Int64))
-    no method super(UnionType,)
+    ERROR: no method super(Type{Union(Float64,Int64)})
 
     julia> super(None)
-    no method super(UnionType,)
+    ERROR: no method super(Type{None})
 
     julia> super((Float64,Int64))
-    no method super((DataType,DataType),)
+    ERROR: no method super(Type{(Float64,Int64)})
+
