@@ -1563,3 +1563,16 @@ for i = -100:100
     @test nextpow2(i) == nextpow2(big(i))
     @test prevpow2(i) == prevpow2(big(i))
 end
+
+@test nextpow(2,1) == 1
+@test prevpow(2,1) == 1
+@test nextpow(3,243) == 243
+@test prevpow(3,243) == 243
+@test nextpow(3,241) == 243
+@test prevpow(3,244) == 243
+for a = -1:1
+    @test_throws nextpow(a, 2)
+    @test_throws prevpow(a, 2)
+end
+@test_throws nextpow(2,0)
+@test_throws prevpow(2,0)

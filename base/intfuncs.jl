@@ -146,15 +146,21 @@ prevpow2(x::Integer) = oftype(x,x < 0 ? -prevpow2(unsigned(-x)) : prevpow2(unsig
 
 ispow2(x::Integer) = ((x<=0) == (x&(x-1)))
 
-# smallest integer n for which a^n >= x
-function nextpow(a, x)
-    n = iceil(log(x) ./ log(a))
-    return n - int(a.^(n-1) .>= x) # guard against roundoff error, e.g., with a=5 and x=125
+# smallest a^n >= x, with integer n
+function nextpow(a::Real, x::Real)
+    (a <= 1 || x <= 0) && throw(DomainError())
+    x <= 1 && return one(a)
+    n = iceil(log(a, x))
+    p = a^(n-1)
+    # guard against roundoff error, e.g., with a=5 and x=125
+    p >= x ? p : a^n
 end
-# largest integer n for which a^n <= x
-function prevpow(a, x)
-    n = ifloor(log(x) ./ log(a))
-    return n + int(a.^(n+1) .<= x)
+# largest a^n <= x, with integer n
+function prevpow(a::Real, x::Real)
+    (a <= 1 || x < 1) && throw(DomainError())
+    n = ifloor(log(a, x))
+    p = a^(n+1)
+    p <= x ? p : a^n
 end
 
 # decimal digits in an unsigned integer

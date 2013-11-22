@@ -22,6 +22,9 @@ Library improvements
   * `consume(p)` extended to `consume(p, args...)`, allowing it
     to optionally pass `args...` back to the producer ([#4775]).
 
+  * `nextpow` and `prevpow` now return the `a^n` values instead of the
+    exponent `n` ([#4819])
+
 Deprecated or removed
 ---------------------
 
@@ -32,6 +35,7 @@ Deprecated or removed
 [#4766]: https://github.com/JuliaLang/julia/issues/4766
 [#4782]: https://github.com/JuliaLang/julia/issues/4782
 [#4759]: https://github.com/JuliaLang/julia/issues/4759
+[#4819]: https://github.com/JuliaLang/julia/issues/4819
 
 
 

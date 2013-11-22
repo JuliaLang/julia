@@ -2657,19 +2657,23 @@ Mathematical Functions
 
 .. function:: nextpow2(n)
 
-   Next power of two not less than ``n``
+   The smallest power of two not less than ``n``. Returns 0 for ``n==0``, and returns
+   ``-nextpow2(-n)`` for negative arguments.
 
 .. function:: prevpow2(n)
 
-   Previous power of two not greater than ``n``
+   The largest power of two not greater than ``n``. Returns 0 for ``n==0``, and returns
+   ``-prevpow2(-n)`` for negative arguments.
 
-.. function:: nextpow(a, n)
+.. function:: nextpow(a, x)
 
-   Next power of ``a`` not less than ``n``
+   The smallest ``a^n`` not less than ``x``, where ``n`` is a non-negative integer.
+   ``a`` must be greater than 1, and ``x`` must be greater than 0.
 
-.. function:: prevpow(a, n)
+.. function:: prevpow(a, x)
 
-   Previous power of ``a`` not greater than ``n``
+   The largest ``a^n`` not greater than ``x``, where ``n`` is a non-negative integer.
+   ``a`` must be greater than 1, and ``x`` must not be less than 1.
 
 .. function:: nextprod([k_1,k_2,...], n)
 
