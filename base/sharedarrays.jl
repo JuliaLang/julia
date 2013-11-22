@@ -25,17 +25,21 @@ end
 function SharedArray{T}(::Type{T}, dims::Dims, procs = procs(); filename::ASCIIString = "/julia.base.sharedarray." * string(getpid()), mode::ASCIIString = "", cutdim::Integer = defaultcutdim(dims, length(procs)))
     shm_unlink(filename) # Delete if found
 
-    data = shm_mmap_array(T, dims, filename)
-    refs = Array(RemoteRef, 0)
-    n = prod(dims)
-    for p in procs
-        if p != 1
-            push!(refs, remotecall_wait(p, shm_mmap_array, T, dims, filename))
+    try 
+        data = shm_mmap_array(T, dims, filename)
+        refs = Array(RemoteRef, 0)
+        n = prod(dims)
+        for p in procs
+            if p != 1
+                push!(refs, remotecall_wait(p, shm_mmap_array, T, dims, filename))
+            end
         end
+        
+        S = SharedArray{T,length(dims)}(data, SSharedArray{T,length(dims)}(dims, refs, int(cutdim)))
+        
+    finally
+        shm_unlink(filename)  # so the file gets cleaned up automatically
     end
-    
-    shm_unlink(filename)  # so the file gets cleaned up automatically
-    S = SharedArray{T,length(dims)}(data, SSharedArray{T,length(dims)}(dims, refs, int(cutdim)))
 end
 
 function sharedsync(procs = 1:nprocs())
@@ -175,7 +179,9 @@ function shm_mmap_array(T, dims, filename::String)
     if !(fd_mem > 0) error("shm_open() failed") end
 
     s = fdio(fd_mem, true)
-    mmap_array(T, dims, s, 0)
+    A = mmap_array(T, dims, s, 0)
+    close(s)
+    A
 end
 
 @unix_only shm_unlink(filename) = ccall(:shm_unlink, Cint, (Ptr{Uint8},), filename)
