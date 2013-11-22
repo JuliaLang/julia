@@ -309,3 +309,10 @@ function digits{T<:Integer}(n::Integer, base::T=10, pad::Int=1)
 end
 
 isqrt(x::Integer) = oftype(x, trunc(sqrt(x)))
+
+function isqrt(x::Union(Int64,Uint64,Int128,Uint128))
+    s = oftype(x, trunc(sqrt(x)))
+    # fix with a Newton iteration, since conversion to float discards
+    # too many bits.
+    (s + div(x,s)) >> 1
+end
