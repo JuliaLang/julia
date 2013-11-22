@@ -1450,24 +1450,37 @@ function _parseint{T<:Integer}(::Type{T}, s::String, base::Int)
         end
     end
     base = convert(T,base)
+    m::T = div(typemax(T)-base+1,base)
     n::T = 0
-    while true
+    while n <= m
         d::T = '0' <= c <= '9' ? c-'0' :
                'A' <= c <= 'Z' ? c-'A'+10 :
-               'a' <= c <= 'z' ? c-'a'+10 : typemax(T)
-        if d >= base
-            isspace(c) || error("invalid integer digit $(repr(c)) in $(repr(s))")
-            while !done(s,i)
-                c, i = next(s,i)
-                isspace(c) || error("extra characters after whitespace in $(repr(s))")
-            end
-        else
-            (T <: Signed) && (d *= sgn)
-            n = checked_mul(n,base)
-            n = checked_add(n,d)
+               'a' <= c <= 'z' ? c-'a'+10 : base
+        d < base || error("invalid base-$base digit $(repr(c)) in $(repr(s))")
+        n *= base
+        n += d
+        if done(s,i)
+            n *= sgn
+            return n
         end
-        done(s,i) && break
         c, i = next(s,i)
+        isspace(c) && break
+    end
+    (T <: Signed) && (n *= sgn)
+    while !isspace(c)
+        d::T = '0' <= c <= '9' ? c-'0' :
+               'A' <= c <= 'Z' ? c-'A'+10 :
+               'a' <= c <= 'z' ? c-'a'+10 : base
+        d < base || error("invalid base-$base digit $(repr(c)) in $(repr(s))")
+        (T <: Signed) && (d *= sgn)
+        n = checked_mul(n,base)
+        n = checked_add(n,d)
+        done(s,i) && return n
+        c, i = next(s,i)
+    end
+    while !done(s,i)
+        c, i = next(s,i)
+        isspace(c) || error("extra characters after whitespace in $(repr(s))")
     end
     return n
 end
