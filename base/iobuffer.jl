@@ -10,6 +10,9 @@ type IOBuffer <: IO
     size::Int
     maxsize::Int # pre-allocated, fixed array size
     ptr::Int # read (and maybe write) pointer
+
+    serialization_table::ObjectIdDict
+
     IOBuffer(data::Vector{Uint8},readable::Bool,writable::Bool,seekable::Bool,append::Bool,maxsize::Int) = 
         new(data,readable,writable,seekable,append,length(data),maxsize,1)
 end
@@ -186,6 +189,7 @@ function takebuf_array(io::IOBuffer)
         io.ptr = 1
         io.size = 0
     end
+    isdefined(io,:serialization_table) && empty!(io.serialization_table)
     data
 end
 takebuf_string(io::IOBuffer) = bytestring(takebuf_array(io))
