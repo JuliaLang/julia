@@ -75,7 +75,7 @@ end
 function fork(owner::String, repo::String)
     status, response = POST("repos/$owner/$repo/forks")
     status == 202 || error("forking $owner/$repo failed: $(response["message"])")
-    return response["url"]
+    return response
 end
 
 end # module
