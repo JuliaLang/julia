@@ -576,14 +576,14 @@ end
 
 ## checked +, - and *
 
-for T in (Int8,Int16,Int32,Int64,Int128)
+for T in (Int8,Int16,Int32,Int64)
     @eval begin
         checked_add(x::$T, y::$T) = box($T,checked_sadd(unbox($T,x),unbox($T,y)))
         checked_sub(x::$T, y::$T) = box($T,checked_ssub(unbox($T,x),unbox($T,y)))
         checked_mul(x::$T, y::$T) = box($T,checked_smul(unbox($T,x),unbox($T,y)))
     end
 end
-for T in (Uint8,Uint16,Uint32,Uint64,Uint128)
+for T in (Uint8,Uint16,Uint32,Uint64)
     @eval begin
         checked_add(x::$T, y::$T) = box($T,checked_uadd(unbox($T,x),unbox($T,y)))
         checked_sub(x::$T, y::$T) = box($T,checked_usub(unbox($T,x),unbox($T,y)))
