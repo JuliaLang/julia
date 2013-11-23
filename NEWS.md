@@ -25,6 +25,10 @@ Library improvements
   * `nextpow` and `prevpow` now return the `a^n` values instead of the
     exponent `n` ([#4819])
 
+  * `Dict(kv)` constructor for any iterator on (key,value) pairs.
+
+  * Overflow detection in `parseint` ([#4874]).
+
 Deprecated or removed
 ---------------------
 
