@@ -137,21 +137,13 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
 
 static void jl_serialize_gv(ios_t *s, jl_value_t *v)
 {
-    const char *gvname = jl_get_llvm_gv(v);
-    if (gvname != NULL) {
-        int32_t gvname_len = strlen(gvname);
-        write_int32(s, gvname_len);
-        ios_write(s, gvname, gvname_len);
-    }
-    else {
-        write_int32(s, 0);
-    }
+    write_int32(s, jl_get_llvm_gv(v));
 }
 static void jl_serialize_gv_syms(ios_t *s, jl_sym_t *v)
 {
     void *bp = ptrhash_bp(&backref_table, v);
     if (bp != HT_NOTFOUND) {
-        if (jl_get_llvm_gv((jl_value_t*)v) != NULL)
+        if (jl_get_llvm_gv((jl_value_t*)v) != 0)
             jl_serialize_value(s, v);
     }
     if (v->left) jl_serialize_gv_syms(s, v->left);
@@ -372,26 +364,9 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->roots);
         jl_serialize_value(s, (jl_value_t*)li->def);
         jl_serialize_value(s, (jl_value_t*)li->capt);
-        // save functionObject name 
-        // as mangled by llvm
-        if (li->functionObject) {
-            const char *llname = jl_get_llvmname(li->functionObject);
-            int32_t llname_size = strlen(llname);
-            write_int32(s, llname_size);
-            ios_write(s, (char*)llname, llname_size);
-        }
-        else {
-            write_int32(s, 0);
-        }
-        if (li->cFunctionObject) {
-            const char *llname = jl_get_llvmname(li->cFunctionObject);
-            int32_t llname_size = strlen(llname);
-            write_int32(s, llname_size);
-            ios_write(s, (char*)llname, llname_size);
-        }
-        else {
-            write_int32(s, 0);
-        }
+        // save functionObject pointers
+        write_int32(s, li->functionID);
+        write_int32(s, li->cFunctionID);
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
@@ -527,58 +502,53 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     return (jl_value_t*)dt;
 }
 
-static uv_lib_t *sysimg_handle = NULL;
+static jl_value_t** *sysimg_gvars = NULL;
 static void jl_load_sysimg_so()
 {
-    sysimg_handle = jl_load_dynamic_library("sysimg0", JL_RTLD_DEFAULT); //TODO: use absolute path
+    uv_lib_t *sysimg_handle = jl_load_dynamic_library_e("sysimg0", JL_RTLD_DEFAULT); //TODO: use absolute path
+    if (sysimg_handle != 0) {
+        sysimg_gvars = (jl_value_t***)jl_dlsym(sysimg_handle, "jl_sysimg_gvars");
+    } else {
+        sysimg_gvars = 0;
+    }
 }
 
-static void* *delayed_fptrs = NULL;
+struct {
+    jl_lambda_info_t *li;
+    int32_t func;
+    int32_t cfunc;
+} *delayed_fptrs = NULL;
 static size_t delayed_fptrs_n = 0;
 static size_t delayed_fptrs_max = 0;
 
-static void jl_delayed_fptrs(jl_lambda_info_t *li, char *func, char *cfunc)
+static void jl_delayed_fptrs(jl_lambda_info_t *li, int32_t func, int32_t cfunc)
 {
     if (cfunc || func) {
-        if (delayed_fptrs_max < delayed_fptrs_n + 3) {
+        if (delayed_fptrs_max < delayed_fptrs_n + 1) {
             if (delayed_fptrs_max == 0)
-                delayed_fptrs_max = 512;
+                delayed_fptrs_max = 256;
             else
                 delayed_fptrs_max *= 2;
             delayed_fptrs = realloc(delayed_fptrs, delayed_fptrs_max*sizeof(delayed_fptrs[0]));
         }
-        delayed_fptrs[delayed_fptrs_n++] = li;
-        if (func)
-            delayed_fptrs[delayed_fptrs_n++] = strdup(func);
-        else
-            delayed_fptrs[delayed_fptrs_n++] = 0;
-        if (cfunc)
-            delayed_fptrs[delayed_fptrs_n++] = strdup(cfunc);
-        else
-            delayed_fptrs[delayed_fptrs_n++] = 0;
+        delayed_fptrs[delayed_fptrs_n++] = (typeof(delayed_fptrs[0])){.li=li, .func=func, .cfunc=cfunc};
     }
 }
 static void jl_update_all_fptrs()
 {
-    uv_lib_t *sysimg = (uv_lib_t*)sysimg_handle;
-    sysimg_handle = NULL; // jlfptr_to_llvm needs to decompress some ast's
-    size_t i = 0;
-    while (i < delayed_fptrs_n) {
-        jl_lambda_info_t *li = (jl_lambda_info_t*)delayed_fptrs[i++];
-        char *func = delayed_fptrs[i++];
-        if (func) {
-            jlfptr_to_llvm(func,
-                    (jl_fptr_t)jl_dlsym(sysimg, func),
-                    li, 0);
-            free(func);
+    jl_value_t** *gvars = sysimg_gvars;
+    if (gvars <= 0) return;
+    sysimg_gvars = NULL; // jlfptr_to_llvm needs to decompress some ast's
+    size_t i;
+    for (i = 0; i < delayed_fptrs_n; i++) {
+        jl_lambda_info_t *li = delayed_fptrs[i].li;
+        int32_t func = delayed_fptrs[i].func-1;
+        if (func >= 0) {
+            jlfptr_to_llvm((jl_fptr_t)gvars[func], li, 0);
         }
-        char *cfunc = delayed_fptrs[i++];
-        if (cfunc){
-            assert(cfunc != 0);
-            jlfptr_to_llvm(cfunc,
-                    (jl_fptr_t)jl_dlsym(sysimg, cfunc),
-                    li, 1);
-            free(cfunc);
+        int32_t cfunc = delayed_fptrs[i].cfunc-1;
+        if (cfunc >= 0) {
+            jlfptr_to_llvm((jl_fptr_t)gvars[cfunc], li, 1);
         }
     }
     delayed_fptrs_n = 0;
@@ -593,15 +563,9 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag);
 
 static jl_value_t *jl_deserialize_gv(ios_t *s, jl_value_t *v)
 {
-    int32_t gvname_len = read_int32(s);
-    if (gvname_len > 0) {
-        char *gvname = alloca(gvname_len+1);
-        memset(gvname, 0, gvname_len+1);
-        ios_read(s, gvname, gvname_len);
-        gvname[gvname_len] = 0;
-        if (sysimg_handle != NULL) {
-            *((jl_value_t**)jl_dlsym((uv_lib_t*)sysimg_handle, gvname)) = v;
-        }
+    int32_t gvname_index = read_int32(s)-1;
+    if (sysimg_gvars != NULL && gvname_index >= 0) {
+        *sysimg_gvars[gvname_index] = v;
     }
     return v;
 }
@@ -762,22 +726,11 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag) {
         li->inInference = 0;
         li->inCompile = 0;
         li->unspecialized = NULL;
-        int32_t llname_size;
-        char *cfunc_llvm = NULL, *func_llvm = NULL;
-        llname_size = read_int32(s);
-        if (llname_size > 0) {
-            func_llvm = alloca(llname_size+1);
-            memset(func_llvm, 0, llname_size+1);
-            ios_read(s, func_llvm, llname_size);
-            func_llvm[llname_size] = 0;
-        }
-        llname_size = read_int32(s);
-        if (llname_size > 0) {
-            cfunc_llvm = alloca(llname_size+1);
-            memset(cfunc_llvm, 0, llname_size+1);
-            ios_read(s, cfunc_llvm, llname_size);
-            cfunc_llvm[llname_size] = 0;
-        }
+        li->functionID = 0;
+        li->cFunctionID = 0;
+        int32_t cfunc_llvm, func_llvm;
+        func_llvm = read_int32(s);
+        cfunc_llvm = read_int32(s);
         jl_delayed_fptrs(li, func_llvm, cfunc_llvm);
         return (jl_value_t*)li;
     }

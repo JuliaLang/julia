@@ -33,7 +33,7 @@ $(foreach link,base test doc examples,$(eval $(call symlink_target,$(link),$(BUI
 debug release: | $(DIRS) $(BUILD)/share/julia/base $(BUILD)/share/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples $(BUILD)/etc/julia/juliarc.jl
 	@$(MAKE) $(QUIET_MAKE) julia-$@
 	@export JL_PRIVATE_LIBDIR=$(JL_PRIVATE_LIBDIR) && \
-	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(BUILD)/lib:$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji
+	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(BUILD)/lib:$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.dylib
 
 julia-debug-symlink:
 	@ln -sf $(BUILD)/bin/julia-debug-$(DEFAULT_REPL) julia
@@ -65,14 +65,21 @@ $(BUILD)/etc/julia/juliarc.jl: etc/juliarc.jl | $(BUILD)/etc/julia
 	@cp $< $@
 
 # use sys.ji if it exists, otherwise run two stages
-$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys0.ji:
+$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%ji: $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%bc
+
+$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%o: $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%bc
+	$(call spawn,$(BUILD)/bin/llc) -filetype=obj -relocation-model=pic -o $@ $<
+
+$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%$(SHLIB_EXT): $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%o
+	$(CXX) -shared -fPIC -L$(BUILD)/lib -o $@ $< -Wl,-undefined,dynamic_lookup -lgrisu -lrandom -lgmp -lpcre
+
+$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys0.bc:
 	@$(QUIET_JULIA) cd base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) -bf sysimg.jl
 	mv $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys0.ji
-	$(call spawn,$(BUILD)/bin/llc) -filetype=obj -relocation-model=pic -o sysimg0.o $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.bc
-	$(CXX) -shared -fPIC -L$(BUILD)/lib -o $(BUILD)/lib/sysimg0.$(SHLIB_EXT) sysimg0.o -Wl,-undefined,dynamic_lookup -lgrisu -lrandom -lgmp -lpcre
+	mv $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.bc $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys0.bc
 
-$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl base/sparse/*.jl $(BUILD)/share/julia/helpdb.jl $(BUILD)/share/man/man1/julia.1 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys0.ji
+$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.bc: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl base/sparse/*.jl $(BUILD)/share/julia/helpdb.jl $(BUILD)/share/man/man1/julia.1 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys0.dylib
 	@$(QUIET_JULIA) cd base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) -f \
 		`[ -e $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji ] || echo -J"$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys0.ji"` sysimg.jl \

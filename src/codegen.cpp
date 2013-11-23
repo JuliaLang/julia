@@ -443,11 +443,14 @@ void jl_set_imaging_mode(uint8_t stat)
     imaging_mode = (stat == 1);
 }
 
+static void jl_gen_llvm_gv_array();
+
 extern "C" DLLEXPORT
 void jl_dump_bitcode(char* fname)
 {
     std::string err;
     raw_fd_ostream OS(fname, err);
+    jl_gen_llvm_gv_array();
     WriteBitcodeToFile(jl_Module, OS);
 }
 
@@ -2624,9 +2627,12 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                              Function::ExternalLinkage, funcName, jl_Module);
         if (lam->cFunctionObject == NULL) {
             lam->cFunctionObject = (void*)f;
+            lam->cFunctionID = jl_assign_functionID(f);
         }
         if (lam->functionObject == NULL) {
-            lam->functionObject = (void*)gen_jlcall_wrapper(lam, f);
+            Function *fwrap = gen_jlcall_wrapper(lam, f);
+            lam->functionObject = (void*)fwrap;
+            lam->functionID = jl_assign_functionID(fwrap);
         }
     }
     else {
@@ -2634,6 +2640,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                              funcName, jl_Module);
         if (lam->functionObject == NULL) {
             lam->functionObject = (void*)f;
+            lam->functionID = jl_assign_functionID(f);
         }
     }
     //TODO: this seems to cause problems, but should be made to work eventually
@@ -3150,7 +3157,7 @@ static Function *jlfunc_to_llvm(const std::string &cname, void *addr)
     return f;
 }
 
-extern "C" void jlfptr_to_llvm(const char *cname, void *fptr, jl_lambda_info_t *lam, int specsig) {
+extern "C" void jlfptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig) {
     if (specsig) {
         jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)lam->ast);
         std::vector<Type*> fsig(0);
@@ -3160,15 +3167,17 @@ extern "C" void jlfptr_to_llvm(const char *cname, void *fptr, jl_lambda_info_t *
         Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
         Function *f =
             Function::Create(FunctionType::get(rt, fsig, false), Function::ExternalLinkage,
-                             cname, jl_Module);
+                             "jl_julia_fptr", jl_Module);
         if (lam->cFunctionObject == NULL) {
             lam->cFunctionObject = (void*)f;
+            lam->cFunctionID = jl_assign_functionID(f);
         }
         jl_ExecutionEngine->addGlobalMapping(f, (void*)fptr);
     } else {
-        Function *f = jlfunc_to_llvm(cname, fptr);
+        Function *f = jlfunc_to_llvm("jl_julia_fptr", fptr);
         if (lam->functionObject == NULL) {
             lam->functionObject = (void*)f;
+            lam->functionID = jl_assign_functionID(f);
             assert(lam->fptr == &jl_trampoline);
             lam->fptr = (jl_fptr_t)fptr;
         }
