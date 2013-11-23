@@ -573,3 +573,31 @@ else
 
     mod(x::Int128, y::Int128) = box(Int128,smod_int(unbox(Int128,x),unbox(Int128,y)))
 end
+
+## checked +, - and *
+
+for T in (Int8,Int16,Int32,Int64,Int128)
+    @eval begin
+        checked_add(x::$T, y::$T) = box($T,checked_sadd(unbox($T,x),unbox($T,y)))
+        checked_sub(x::$T, y::$T) = box($T,checked_ssub(unbox($T,x),unbox($T,y)))
+        checked_mul(x::$T, y::$T) = box($T,checked_smul(unbox($T,x),unbox($T,y)))
+    end
+end
+for T in (Uint8,Uint16,Uint32,Uint64,Uint128)
+    @eval begin
+        checked_add(x::$T, y::$T) = box($T,checked_uadd(unbox($T,x),unbox($T,y)))
+        checked_sub(x::$T, y::$T) = box($T,checked_usub(unbox($T,x),unbox($T,y)))
+        checked_mul(x::$T, y::$T) = box($T,checked_umul(unbox($T,x),unbox($T,y)))
+    end
+end
+
+# checked mul is broken for 8-bit types (LLVM bug?)
+
+for T in (Int8,Uint8)
+    @eval function checked_mul(x::$T, y::$T)
+        xy = x*y
+        xy8 = convert($T,xy)
+        xy == xy8 || throw(OverflowError())
+        return xy8
+    end
+end
