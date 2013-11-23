@@ -503,9 +503,9 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
 }
 
 static jl_value_t** *sysimg_gvars = NULL;
-static void jl_load_sysimg_so()
+static void jl_load_sysimg_so(char *fname)
 {
-    uv_lib_t *sysimg_handle = jl_load_dynamic_library_e("sysimg0", JL_RTLD_DEFAULT); //TODO: use absolute path
+    uv_lib_t *sysimg_handle = jl_load_dynamic_library_e(fname, JL_RTLD_DEFAULT);
     if (sysimg_handle != 0) {
         sysimg_gvars = (jl_value_t***)jl_dlsym(sysimg_handle, "jl_sysimg_gvars");
     } else {
@@ -902,7 +902,11 @@ void jl_restore_system_image(char *fname)
         JL_PRINTF(JL_STDERR, "System image file \"%s\" not found\n", fname);
         exit(1);
     }
-    jl_load_sysimg_so();
+    char *fname_shlib = alloca(strlen(fname));
+    strcpy(fname_shlib, fname);
+    char *fname_shlib_dot = strrchr(fname_shlib, '.');
+    if (fname_shlib_dot != NULL) *fname_shlib_dot = 0;
+    jl_load_sysimg_so(fname_shlib);
 #ifdef JL_GC_MARKSWEEP
     int en = jl_gc_is_enabled();
     jl_gc_disable();
