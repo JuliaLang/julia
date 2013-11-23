@@ -1473,8 +1473,11 @@ function _parseint{T<:Integer}(::Type{T}, s::String, base::Int)
                'a' <= c <= 'z' ? c-'a'+10 : base
         d < base || error("invalid base-$base digit $(repr(c)) in $(repr(s))")
         (T <: Signed) && (d *= sgn)
-        n = checked_mul(n,base)
-        n = checked_add(n,d)
+        # TODO: restore when checked_* work for Int128
+        #n = checked_mul(n,base)
+        n = n*base
+        #n = checked_add(n,d)
+        n = n+d
         done(s,i) && return n
         c, i = next(s,i)
     end
