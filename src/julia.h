@@ -177,8 +177,10 @@ typedef struct _jl_lambda_info_t {
     int8_t inInference : 1;
     int8_t inCompile : 1;
     jl_fptr_t fptr;        // jlcall entry point
-    void *functionObject;  // jlcall llvm Function
+    void *functionObject; // jlcall llvm Function
     void *cFunctionObject; // c callable llvm Function
+    int32_t functionID;
+    int32_t cFunctionID;
 } jl_lambda_info_t;
 
 #define LAMBDA_INFO_NW (NWORDS(sizeof(jl_lambda_info_t))-1)
@@ -889,7 +891,7 @@ DLLEXPORT void jl_restore_system_image(char *fname);
 DLLEXPORT void jl_dump_bitcode(char *fname);
 const char *jl_get_llvmname(void *func);
 DLLEXPORT void jl_set_imaging_mode(uint8_t stat);
-const char *jl_get_llvm_gv(jl_value_t *p);
+int32_t jl_get_llvm_gv(jl_value_t *p);
 
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str);
@@ -991,7 +993,7 @@ jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types,
 jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache);
 jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
                          jl_value_t **args, size_t nargs);
-void jlfptr_to_llvm(const char *cname, void *fptr, jl_lambda_info_t *lam, int specsig);
+void jlfptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig);
 
 // AST access
 jl_array_t *jl_lam_args(jl_expr_t *l);
