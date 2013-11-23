@@ -218,6 +218,13 @@ parsehex(s) = parseint(s,16)
 @test_throws parseint("2x")
 @test_throws parseint("-")
 
+for T in (Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Int128,Uint128)
+    @test parseint(T,string(typemin(T))) == typemin(T)
+    @test parseint(T,string(typemax(T))) == typemax(T)
+    @test_throws parseint(T,string(big(typemin(T))-1))
+    @test_throws parseint(T,string(big(typemax(T))+1))
+end
+
 # string manipulation
 @test strip("\t  hi   \n") == "hi"
 
