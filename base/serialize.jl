@@ -333,11 +333,7 @@ deserialization_table = nothing
 
 function deserialize(s)
     global deserialization_table
-    top = false
-    if deserialization_table === nothing
-        deserialization_table = ObjectIdDict()
-        top = true
-    end
+    top = (deserialization_table === nothing)
 
     obj = handle_deserialize(s, int32(read(s, Uint8)))
 
@@ -348,10 +344,19 @@ function deserialize(s)
 end
 
 function deserialize_cycle(pos, x)
+    if pos < 0
+        return
+    end
+    global deserialization_table
+    if deserialization_table === nothing
+        deserialization_table = ObjectIdDict()
+    end
     deserialization_table[pos] = x
 end
 
-deserialize(s, tag, pos) = deserialize(s, tag)
+# deserialize_ is an internal function to dispatch on the tag
+# describing the serialized representation. the number of
+# representations is fixed, so deserialize_ does not get extended.
 
 function handle_deserialize(s, b)
     last_obj_pos = position(s)-1
@@ -371,15 +376,15 @@ function handle_deserialize(s, b)
         pos = read(s, Int)
         return deserialization_table[pos]
     end
-    return deserialize(s, tag, last_obj_pos)
+    return deserialize_(s, tag, last_obj_pos)
 end
 
 deserialize_tuple(s, len) = ntuple(len, i->deserialize(s))
 
-deserialize(s, ::Type{Symbol}) = symbol(read(s, Uint8, int32(read(s, Uint8))))
-deserialize(s, ::Type{LongSymbol}) = symbol(read(s, Uint8, read(s, Int32)))
+deserialize_(s, ::Type{Symbol}, p) = symbol(read(s, Uint8, int32(read(s, Uint8))))
+deserialize_(s, ::Type{LongSymbol}, p) = symbol(read(s, Uint8, read(s, Int32)))
 
-function deserialize(s, ::Type{Module})
+function deserialize_(s, ::Type{Module}, p)
     path = deserialize(s)
     m = Main
     for mname in path
@@ -390,7 +395,7 @@ end
 
 const known_lambda_data = Dict()
 
-function deserialize(s, ::Type{Function})
+function deserialize_(s, ::Type{Function}, p)
     b = read(s, Uint8)
     if b==0
         name = deserialize(s)::Symbol
@@ -415,7 +420,7 @@ function deserialize(s, ::Type{Function})
           C_NULL, env, linfo)::Function
 end
 
-function deserialize(s, ::Type{LambdaStaticData})
+function deserialize_(s, ::Type{LambdaStaticData}, p)
     lnumber = deserialize(s)
     ast = deserialize(s)
     roots = deserialize(s)
@@ -438,7 +443,7 @@ function deserialize(s, ::Type{LambdaStaticData})
     end
 end
 
-function deserialize(s, ::Type{Array}, pos)
+function deserialize_(s, ::Type{Array}, pos)
     elty = deserialize(s)
     dims = deserialize(s)::Dims
     if isbits(elty)
@@ -471,8 +476,8 @@ function deserialize(s, ::Type{Array}, pos)
     return A
 end
 
-deserialize(s, ::Type{Expr})     = deserialize_expr(s, int32(read(s, Uint8)))
-deserialize(s, ::Type{LongExpr}) = deserialize_expr(s, read(s, Int32))
+deserialize_(s, ::Type{Expr}, p)     = deserialize_expr(s, int32(read(s, Uint8)))
+deserialize_(s, ::Type{LongExpr}, p) = deserialize_expr(s, read(s, Int32))
 
 function deserialize_expr(s, len)
     hd = deserialize(s)::Symbol
@@ -483,7 +488,7 @@ function deserialize_expr(s, len)
     e
 end
 
-function deserialize(s, ::Type{TypeVar})
+function deserialize_(s, ::Type{TypeVar}, p)
     nf_expected = deserialize(s)
     name = deserialize(s)
     lb = deserialize(s)
@@ -491,13 +496,13 @@ function deserialize(s, ::Type{TypeVar})
     TypeVar(name, lb, ub)
 end
 
-function deserialize(s, ::Type{UnionType})
+function deserialize_(s, ::Type{UnionType}, p)
     nf_expected = deserialize(s)
     types = deserialize(s)
     Union(types...)
 end
 
-function deserialize(s, ::Type{DataType})
+function deserialize_(s, ::Type{DataType}, pos)
     form = read(s, Uint8)
     name = deserialize(s)::Symbol
     mod = deserialize(s)::Module
@@ -511,12 +516,15 @@ function deserialize(s, ::Type{DataType})
     if form == 0
         return t
     end
-    deserialize(s, t)
+    if applicable(deserialize, s, t)
+        return deserialize(s, t)
+    end
+    deserialize(s, t, pos)
 end
 
-deserialize{T}(s, ::Type{Ptr{T}}) = pointer(T, 0)
+deserialize_{T}(s, ::Type{Ptr{T}}, p) = pointer(T, 0)
 
-function deserialize(s, ::Type{Task})
+function deserialize_(s, ::Type{Task}, p)
     t = Task(deserialize(s))
     t.storage = deserialize(s)
     t.done = deserialize(s)
@@ -525,6 +533,9 @@ function deserialize(s, ::Type{Task})
     t.exception = deserialize(s)
     t
 end
+
+# all other formats are handled by the default DataType deserializer
+deserialize_(s, t::DataType, pos) = deserialize(s, t, pos)
 
 # default DataType deserializer
 function deserialize(s, t::DataType, pos)
