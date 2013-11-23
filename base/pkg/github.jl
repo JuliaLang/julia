@@ -52,14 +52,16 @@ function req(resource::String, data, opts::Cmd=``)
     status, response
 end
 
-for m in (:GET,:HEAD,:PUT,:POST,:PATCH,:DELETE)
-    @eval begin
-        m = $(string(m))
-        $m(resource::String, data, opts::Cmd=``) = req(resource,data,`-X $m $opts`)
-        $m(resource::String, opts::Cmd=``) = $m(resource,nothing,opts)
-    end
-end
 GET(resource::String, data, opts::Cmd=``) = req(resource,data,opts)
+HEAD(resource::String, data, opts::Cmd=``) = req(resource,data,`-I $opts`)
+PUT(resource::String, data, opts::Cmd=``) = req(resource,data,`-X PUT $opts`)
+POST(resource::String, data, opts::Cmd=``) = req(resource,data,`-X POST $opts`)
+PATCH(resource::String, data, opts::Cmd=``) = req(resource,data,`-X PATCH $opts`)
+DELETE(resource::String, data, opts::Cmd=``) = req(resource,data,`-X DELETE $opts`)
+
+for m in (:GET,:HEAD,:PUT,:POST,:PATCH,:DELETE)
+    @eval $m(resource::String, opts::Cmd=``) = $m(resource,nothing,opts)
+end
 
 function pushable(owner::String, repo::String, user::String=user())
     status, response = HEAD("repos/$owner/$repo")
