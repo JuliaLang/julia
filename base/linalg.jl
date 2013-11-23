@@ -170,7 +170,7 @@ end
 
 #Check that matrix is square
 function chksquare(A...)
-    sizes=BlasInt[]
+    sizes=Int[]
     for a in A 
         size(a,1)==size(a,2) || throw(DimensionMismatch("Matrix is not square: dimensions are $(size(a))"))
         push!(sizes, size(a,1))
