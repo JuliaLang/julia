@@ -1417,75 +1417,81 @@ strip(s::String, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 ## string to integer functions ##
 
-function parseint{T<:Integer}(::Type{T}, s::String, base::Integer)
-    if !(2 <= base <= 36); error("invalid base: ",base); end
-    i = start(s)
-    while true
-        if done(s,i)
-            throw(ArgumentError(string(
-                "premature end of integer (in ", repr(s) ,")"
-            )))
-        end
-        c,i = next(s,i)
-        if !isspace(c)
-            break
-        end
+function parseint_next(s::String, i::Int=start(s))
+    done(s,i) && error("premature end of integer: $(repr(s))")
+    c, i = next(s,i)
+end
+
+function _parseint{T<:Integer}(::Type{T}, s::String, base::Int)
+    c, i = parseint_next(s)
+    while isspace(c)
+        c, i = parseint_next(s,i)
     end
     sgn = 1
-    if T <: Signed && c == '-'
-        sgn = -1
-        if done(s,i)
-            throw(ArgumentError(string(
-                "premature end of integer (in ", repr(s), ")"
-            )))
+    if T <: Signed
+        if c == '-' || c == '+'
+            (c == '-') && (sgn = -1)
+            c, i = parseint_next(s,i)
         end
-        c,i = next(s,i)
-    elseif c == '+'
-        if done(s,i)
-            throw(ArgumentError(string(
-                "premature end of integer (in ", repr(s), ")"
-            )))
-        end
-        c,i = next(s,i)
     end
-    base = convert(T,base)
-    n::T = 0
-    while true
-        d = '0' <= c <= '9' ? c-'0' :
-            'A' <= c <= 'Z' ? c-'A'+10 :
-            'a' <= c <= 'z' ? c-'a'+10 : typemax(Int)
-        if d >= base
-            if !isspace(c)
-                throw(ArgumentError(string(
-                    repr(c)," is not a valid digit (in ", repr(s), ")"
-                )))
-            end
-            while !done(s,i)
-                c,i = next(s,i)
-                if !isspace(c)
-                    throw(ArgumentError(string(
-                        "extra characters after whitespace (in ", repr(s), ")"
-                    )))
-                end
+    while isspace(c)
+        c, i = parseint_next(s,i)
+    end
+    if base == 0
+        if c == '0'
+            done(s,i) && return zero(T)
+            c, i = next(s,i)
+            base = c=='b' ? 2 : c=='o' ? 8 : c=='x' ? 16 : 10
+            if base != 10
+                c, i = parseint_next(s,i)
             end
         else
-            # TODO: overflow detection?
-            n = n*base + d
+            base = 10
         end
-        if done(s,i)
-            break
-        end
-        c,i = next(s,i)
     end
-    if T <: Signed
-        n = flipsign(n,sgn)
+    base = convert(T,base)
+    m::T = div(typemax(T)-base+1,base)
+    n::T = 0
+    while n <= m
+        d::T = '0' <= c <= '9' ? c-'0' :
+               'A' <= c <= 'Z' ? c-'A'+10 :
+               'a' <= c <= 'z' ? c-'a'+10 : base
+        d < base || error("invalid base-$base digit $(repr(c)) in $(repr(s))")
+        n *= base
+        n += d
+        if done(s,i)
+            n *= sgn
+            return n
+        end
+        c, i = next(s,i)
+        isspace(c) && break
+    end
+    (T <: Signed) && (n *= sgn)
+    while !isspace(c)
+        d::T = '0' <= c <= '9' ? c-'0' :
+               'A' <= c <= 'Z' ? c-'A'+10 :
+               'a' <= c <= 'z' ? c-'a'+10 : base
+        d < base || error("invalid base-$base digit $(repr(c)) in $(repr(s))")
+        (T <: Signed) && (d *= sgn)
+        n = checked_mul(n,base)
+        n = checked_add(n,d)
+        done(s,i) && return n
+        c, i = next(s,i)
+    end
+    while !done(s,i)
+        c, i = next(s,i)
+        isspace(c) || error("extra characters after whitespace in $(repr(s))")
     end
     return n
 end
 
+function parseint(T::Type, s::String, base::Integer)
+    2 <= base <= 36 ? _parseint(T,s,base) : error("invalid base: $base")
+end
+
+parseint(T::Type, s::String)       = _parseint(T,s,0)
+parseint(s::String)                = _parseint(Int,s,0)
 parseint(s::String, base::Integer) = parseint(Int,s,base)
-parseint(T::Type, s::String)       = parseint(T,s,10)
-parseint(s::String)                = parseint(Int,s,10)
 
 integer (s::String) = int(s)
 unsigned(s::String) = uint(s)
