@@ -43,11 +43,11 @@ function A_ldiv_B!(D::Diagonal, v::Vector)
     end
     v
 end
-function /(A::Matrix, D::Diagonal)
+function /{TA<:Number,TD<:Number}(A::Matrix{TA}, D::Diagonal{TD})
     m, n = size(A)
+    n==length(D.diag) || throw(DimensionMismatch(""))
     (m == 0 || n == 0) && return A
-    n==length(D.diag) && throw(DimensionMismatch(""))
-    C = Array(promote_type(eltype(A),eltype(D.diag)),size(A))
+    C = Array(typeof(one(TD)/one(TA)),size(A))
     for j = 1:n
         dj = D.diag[j]
         dj==0 && throw(SingularException())
@@ -57,7 +57,20 @@ function /(A::Matrix, D::Diagonal)
     end
     return C
 end
-\(D::Diagonal, A::Matrix) = A/D
+function \{TD<:Number,TA<:Number}(D::Diagonal{TD}, A::Matrix{TA})
+    m, n = size(A)
+    m==length(D.diag) || throw(DimensionMismatch(""))
+    (m == 0 || n == 0) && return A
+    C = Array(typeof(one(TD)/one(TA)),size(A))
+    for j = 1:n
+        for i = 1:m
+            di = D.diag[i]
+            di==0 && throw(SingularException())
+            C[i,j] = A[i,j] / di
+        end
+    end
+    return C
+end
 
 conj(D::Diagonal) = Diagonal(conj(D.diag))
 transpose(D::Diagonal) = D

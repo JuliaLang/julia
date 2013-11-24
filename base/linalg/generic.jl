@@ -98,7 +98,10 @@ trace(x::Number) = x
 
 inv(a::AbstractVector) = error("argument must be a square matrix")
 
-\(A::AbstractMatrix, B::Union(AbstractVector,AbstractMatrix)) = A_ldiv_B!(A, copy(B))
+function \{TA<:Number,TB<:Number}(A::AbstractMatrix{TA}, B::Union(AbstractVector{TB},AbstractMatrix{TB}))
+    TC = typeof(one(TA)/one(TB))
+    return TB == TC ? A_ldiv_B!(A, copy(B)) : A_ldiv_B!(A, convert(Array{TC}, B))
+end
 \(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
 /(A::Union(AbstractVector,AbstractMatrix), B::Union(AbstractVector,AbstractMatrix)) = (B' \ A')'
 
