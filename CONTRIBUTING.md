@@ -1,3 +1,5 @@
+# Notes for Julia Contributors
+
 Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia dev list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev) is a good place to post them, but you should check out the [online Julia docs](http://docs.Julialang.org/en/latest/) first. If you have changes you'd like to contribute, you'll need a [free GitHub account](https://github.com/signup/free). (If you're reading this on GitHub, you probably already have one.) You'll also want a working copy of Julia, built from source (you can still contribute with a binary install, but it's harder and not really recommended). In list form, here's what to do to become a contributor:
 
 * Join the [dev list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev).
@@ -10,8 +12,7 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 * Keep Julia current. Julia is a fast-moving target, and many details of the language are still settling out. Keep your repository up-to-date and rebase your work in progress frequently.
 
-* Learn to use [git](http://git-scm.com), the version control system used by GitHub and the Julia project.
-  Try a tutorial such as the one [provided by GitHub](http://try.github.io/levels/1/challenges/1).
+* Learn to use [git](http://git-scm.com), the version control system used by GitHub and the Julia project. Try a tutorial such as the one [provided by GitHub](http://try.github.io/levels/1/challenges/1).
 
 * Relax and have fun.
 
