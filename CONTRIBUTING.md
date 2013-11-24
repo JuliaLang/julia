@@ -72,6 +72,8 @@ While getting familiar with Julia, remember to check out [the docs](http://docs.
   - **Source code:** <https://github.com/JuliaLang/julia>
   - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
   - **Documentation:** <http://julialang.org/manual/>
+  - **CodeSpeed:** <http://speed.julialang.org>
+  - **Status:** <http://status.julialang.org>
 
 * Design of Julia
   - [Julia: A Fast Dynamic Language for Technical Computing](http://julialang.org/images/julia-dynamic-2012-tr.pdf)
