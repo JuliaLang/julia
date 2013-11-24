@@ -222,8 +222,8 @@ end
 
 @eval function uuid4()
     u = rand(Uint128)
-    u &= $(parseint(Uint128,"ffffffffffff0fff3fffffffffffffff",16))
-    u |= $(parseint(Uint128,"00000000000040008000000000000000",16))
+    u &= $(uint128(0xffffffffffff0fff)<<64 | uint128(0x3fffffffffffffff))
+    u |= $(uint128(0x0000000000004000)<<64 | uint128(0x8000000000000000))
     UUID(u)
 end
 
