@@ -49,8 +49,184 @@ while developing you might use a workflow something like this::
     ...
 
 
-Type declarations and constructors
-----------------------------------
+Types, type declarations, and constructors
+------------------------------------------
+
+.. _man-type-stable:
+
+What does "type-stable" mean?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+It means that the type of the output is predictable from the types
+of the inputs.  In particular, it means that the type of the output
+cannot vary depending on the *values* of the inputs. The following
+code is *not* type-stable::
+
+    function unstable(flag::Bool)
+        if flag
+            return 1
+        else
+            return 1.0
+        end
+    end
+
+It returns either an ``Int`` or a ``Float64`` depending on the value of
+its argument. Since Julia can't predict the return type of this
+function at compile-time, any computation that uses it will not be
+fully optimized.
+
+
+It's possible to overflow integer calculations. Why doesn't Julia guard against this?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Julia uses machine arithmetic for calculation. This means that you get
+the following behavior::
+
+    julia> typemax(Int)
+    9223372036854775807
+    
+    julia> typemax(Int)+1
+    -9223372036854775808
+
+You might think this is bad, and it is, but the alternatives are far
+worse.  You might think that it should automatically promote to a
+``BigInt``; but well-written Julia code should be `type-stable
+<#man-type-stable>`_, so you'd have to promote all integer operations
+to ``BigInt``.  This would cause serious performance problems.
+
+You might also imagine using saturating arithmetic, which is what
+Matlab does, but this too is far worse. It's slow partly because it's
+not the behavior of the native type, and thus requires checking all
+integer operands before doing any kind of operations, instead of,
+e.g. just doing an add instruction. Worse, it's also non-associative::
+
+    >> n = int64(2)^62
+    4611686018427387904
+    
+    >> n + (n - 1)
+    9223372036854775807
+    
+    >> (n + n) - 1
+    9223372036854775806
+    
+    
+This make it hard to write many integer algorithms, since there are
+many tricks that work out despite overflow because of integer
+wrap-around – e.g. finding ``mid = (lo + hi) >>> 1``. Try this in Julia::
+
+    julia> n = 2^62
+    4611686018427387904
+    
+    julia> (n + 2n)>>>1
+    6917529027641081856
+
+See? No problem. That's the correct average between 2^62 and 2^63, despite
+the fact that ``n + 2n`` is -4611686018427387904. Now try it in Matlab::
+
+    >> (n + 2*n)/2
+    
+    ans =
+    
+      4611686018427387904
+
+
+Oops. Not only does this suck for programmers who cannot assume
+associativity in any integer code they write – it's far worse for compilers
+since it completely defeats any attempt they might make to optimized
+integer arithmetic. For example, since our integers use normal machine
+integer arithmetic, LLVM is free to optimize the hell out of simple little
+functions like ``f(k) = 5k-1``. The machine code for this function is just::
+
+    julia> code_native(f,(Int,)) .section
+    __TEXT,__text,regular,pure_instructions
+    Filename: none
+    Source line: 1
+     push RBP
+    mov RBP, RSP
+    Source line: 1
+    lea RAX, QWORD PTR [RDI + 4*RDI - 1]
+     pop RBP
+     ret
+
+
+The actual body of the function is a single LEA instruction, which computes
+the entire polynomial expression at once. This is even more beneficial when
+``f`` gets inlined into another function::
+
+    julia> function g(k,n=10)
+             for i = 1:n
+               k = f(k)
+             end
+             return k
+           end
+    g (generic function with 2 methods)
+    
+    julia> code_native(g,(Int,Int))
+     .section __TEXT,__text,regular,pure_instructions
+    Filename: none
+    Source line: 3
+     push RBP
+    mov RBP, RSP
+     test RSI, RSI
+    jle 22
+     mov EAX, 1
+    Source line: 3
+    lea RDI, QWORD PTR [RDI + 4*RDI - 1]
+     inc RAX
+    cmp RAX, RSI
+    Source line: 2
+    jle -17
+    Source line: 5
+    mov RAX, RDI
+     pop RBP
+    ret
+
+
+The call to ``g`` gets inlined and the loop body ends up being just a single
+LEA instruction. Or consider if we make the number of loop iterations fixed::
+
+    julia> function g(k)
+             for i = 1:10
+               k = f(k)
+             end
+             return k
+           end
+    g (generic function with 2 methods)
+    
+    julia> code_native(g,(Int,))
+    .section __TEXT,__text,regular,pure_instructions
+    Filename: none
+    Source line: 3
+    push RBP
+    mov RBP, RSP
+    Source line: 3
+    imul RAX, RDI, 9765625
+    add RAX, -2441406
+    Source line: 5
+    pop RBP
+    
+    ret
+
+
+Because it knows that integer addition and multiplication are associative
+and the former distributes over the latter (neither of which is true of
+saturating arithmetic), the compiler can optimize the entire loop down to a
+multiply and an add.
+
+Saturated arithmetic is just one example of a really poor choice of
+language semantics that completely prevents effective performance
+optimization. There are many things that are difficult about C
+programming, but integer overflow is NOT one of them – especially on
+64-bit systems. If my integers really might get bigger than ``2^63-1`` –
+which doesn't actually happen all that often – I can easily predict
+that. Am I looping over a number of actual things that are stored in
+the computer? Then it's not going to get that big – guaranteed, since
+I don't have that much memory. Am I computing a factorial? Then sure,
+it might get that big – I should use a ``BigInt``. See?  Easy to
+distinguish.
+
+
+
 .. _man-abstract-fields:
 
 How do "abstract" or ambiguous fields in types interact with the compiler?
