@@ -437,7 +437,7 @@ end
 
 immutable FixedSetPartitions{T<:AbstractVector}
     s::T
-	m::Int
+    m::Int
 end
 
 length(p::FixedSetPartitions) = nfixedsetpartitions(length(p.s),p.m)
@@ -457,7 +457,7 @@ function nextfixedsetpartition(s::AbstractVector,m, a, b, n)
         for i = 1:n
             push!(part[a[i]], s[i])
         end
-		return part
+        return part
     end
 
     part = makeparts(s,a)
@@ -471,37 +471,37 @@ function nextfixedsetpartition(s::AbstractVector,m, a, b, n)
                 break
             end
         end
-		if j>1
-			a[j]+=1
-			for p=j+1:n
-				if b[a[p]]!=p
-					a[p]=1
-				end
-			end
-		else
-			for k=m:-1:2
-				if b[k-1]<b[k]-1
-					break
-				end
-			end
-			b[k]=b[k]-1
-			b[k+1:m]=n-m+k+1:n
-			a[1:n]=1
-			a[b]=1:m
-		end
-	end
+        if j>1
+            a[j]+=1
+            for p=j+1:n
+                if b[a[p]]!=p
+                    a[p]=1
+                end
+            end
+        else
+            for k=m:-1:2
+                if b[k-1]<b[k]-1
+                    break
+                end
+            end
+            b[k]=b[k]-1
+            b[k+1:m]=n-m+k+1:n
+            a[1:n]=1
+            a[b]=1:m
+        end
+    end
 
     return (part, (a,b,n))
 
 end
 
 function nfixedsetpartitions(n::Int,m::Int)
-	numpart=0
-	for k=0:m
-		numpart+=(-1)^(m-k)*binomial(m,k)*(k^n)
-	end
-	numpart=div(numpart,factorial(m))
-	return numpart
+    numpart=0
+    for k=0:m
+        numpart+=(-1)^(m-k)*binomial(m,k)*(k^n)
+    end
+    numpart=div(numpart,factorial(m))
+    return numpart
 end
 
 
