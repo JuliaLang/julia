@@ -29,6 +29,9 @@ Library improvements
 
   * Overflow detection in `parseint` ([#4874]).
 
+  * New Pkg.submit(pkg[,commit]) function to automatically submit
+    a Github pull request to the package author.
+
 Deprecated or removed
 ---------------------
 
