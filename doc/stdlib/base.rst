@@ -286,7 +286,7 @@ Types
    in the following manner to summarize information about a struct type::
 
         structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...]
-        structinfo(Stat)
+        structinfo(StatStruct)
 
 .. function:: fieldtype(value, name::Symbol)
 
