@@ -432,12 +432,12 @@ function factorize!{T}(A::Matrix{T})
             return Triangular(A, :U)
         end
         if herm
-            C, info = LAPACK.potrf!('U', copy(A))
+            C, info = T <: BlasFloat ? LAPACK.potrf!('U', copy(A)) : LAPACK.potrf!('U', float(A))
             if info == 0 return Cholesky(C, 'U') end
             return factorize!(Hermitian(A))
         end
         if sym
-            C, info = LAPACK.potrf!('U', copy(A))
+            C, info = T <: BlasFloat ? LAPACK.potrf!('U', copy(A)) : LAPACK.potrf!('U', float(A))
             if info == 0 return Cholesky(C, 'U') end
             return factorize!(Symmetric(A))
         end
