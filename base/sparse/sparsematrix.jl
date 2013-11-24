@@ -337,10 +337,14 @@ function sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function, v
     k = K
     k = k + ((1-K/N)*exp(-k*l) - 1)/l
     k = k + ((1-K/N)*exp(-k*l) - 1)/l # for K<N/2, 2 iterations suffice
-    ind = sort(rand(1:N, int(k)))
+    ik = int(k)
+    ind = sort(rand(1:N, ik))
     uind = Array(Int, 0)   # unique indices
     sizehint(uind, int(N*density))
     if density < 0.5
+        if ik == 0
+            return sparse(Int[],Int[],Array(eltype(v),0),m,n)
+        end
         j = ind[1]
         push!(uind, j)
         uj = j
