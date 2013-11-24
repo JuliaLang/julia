@@ -34,12 +34,15 @@ Deprecated or removed
 
   * `dense` is deprecated in favor of `full` ([#4759])
 
+  * The `Stat` type is renamed `StatStruct` ([#4670])
+
 [#4775]: https://github.com/JuliaLang/julia/issues/4775
 [#4870]: https://github.com/JuliaLang/julia/issues/4870
 [#4766]: https://github.com/JuliaLang/julia/issues/4766
 [#4782]: https://github.com/JuliaLang/julia/issues/4782
 [#4759]: https://github.com/JuliaLang/julia/issues/4759
 [#4819]: https://github.com/JuliaLang/julia/issues/4819
+[#4670]: https://github.com/JuliaLang/julia/issues/4670
 
 
 

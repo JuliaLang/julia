@@ -88,7 +88,7 @@ export
     Schur,
     Set,
     SparseMatrixCSC,
-    Stat,
+    StatStruct,
     StridedArray,
     StridedMatrix,
     StridedVecOrMat,
