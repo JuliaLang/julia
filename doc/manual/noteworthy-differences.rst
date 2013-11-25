@@ -81,7 +81,7 @@ One of Julia's goals is to provide an effective language for data analysis and s
 	- Distributions functions are found in the `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_
 	- The `DataFrames package <https://github.com/HarlanH/DataFrames.jl>`_ provides data frames.
 	- Formulas for GLM's must be escaped: use ``:(y ~ x)`` instead of ``y ~ x``.
-- Julia provides tuples and real hash tables, but not R's lists. When returning multiple items, you should typically use a tuple: instead of ``list(a = 1, b = 2)``, use ``(1, 2)``. 
+- Julia provides tuples and real hash tables, but not R's lists. When returning multiple items, you should typically use a tuple: instead of ``list(a = 1, b = 2)``, use ``(1, 2)``.
 - Julia encourages all users to write their own types. Julia's types are much easier to use than S3 or S4 objects in R. Julia's multiple dispatch system means that ``table(x::TypeA)`` and ``table(x::TypeB)`` act like R's ``table.TypeA(x)`` and ``table.TypeB(x)``.
 - In Julia, values are passed and assigned by reference. If a function modifies an array, the changes will be visible in the caller. This is very different from R and allows new functions to operate on large data structures much more efficiently.
 - Concatenation of vectors and matrices is done using ``hcat`` and ``vcat``, not ``c``, ``rbind`` and ``cbind``.
@@ -97,9 +97,18 @@ Noteworthy differences from Python
 ----------------------------------
 
 - Indexing of arrays, strings, etc. in Julia is 1-based not 0-based.
-- The last element of a list or array is indexed with ``end`` in Julia, not -1 as in Python.
-- Comprehensions in Julia do not (yet) have the optional if clause found in Python.
-- For, if, while, etc. blocks in Julia are terminated by ``end``; indentation is not significant.
-- Julia has no line continuation syntax: if, at the end of a line, the input so far is a complete
-  expression, it is considered done; otherwise the input continues. One way to force an expression
+- The last element of a list or array is indexed with ``end`` in Julia,
+  not -1 as in Python.
+- Comprehensions in Julia do not (yet) have the optional if clause found
+  in Python.
+- For, if, while, etc. blocks in Julia are terminated by ``end``;
+  indentation is not significant.
+- Julia has no line continuation syntax: if, at the end of a line, the
+  input so far is a complete expression, it is considered done;
+  otherwise the input continues. One way to force an expression
   to continue is to wrap it in parentheses.
+- Julia arrays are column-major (Fortran ordered) whereas `numpy` arrays
+  are row-major (C-ordered) by default. To get optimal performance when
+  looping over arrays, the order of the loops should be reversed in
+  Julia relative to `numpy` (see relevant section of
+  :ref:`man-performance-tips`).
