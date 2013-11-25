@@ -8,7 +8,18 @@ const AUTH_DATA = {
     "note_url" => "http://docs.julialang.org/en/latest/manual/packages/",
 }
 
-user() = Git.readchomp(`config --global github.user`)
+function user()
+    if !Git.success(`config --global github.user`)
+        error("""
+        no GitHub user name configured; please configure it with:
+
+            git config --global github.user USERNAME
+
+        where USERNAME is replaced with your GitHub user name.
+        """)
+    end
+    Git.readchomp(`config --global github.user`)
+end
 
 function json()
     isdefined(:JSON) || try require("JSON")
