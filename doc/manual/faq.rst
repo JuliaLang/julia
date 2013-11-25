@@ -141,7 +141,7 @@ value. This is precisely what Matlab™ does::
 
      -9223372036854775808
 
-At first blush, this seems reasnable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emiting instructions after each machine integer operation to check for underflow or overflow and replace the result with ``typemin(Int)`` or ``typemax(Int)`` as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse. Saturating integer arithmetic isn't associative – consider this Matlab computation::
+At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emiting instructions after each machine integer operation to check for underflow or overflow and replace the result with ``typemin(Int)`` or ``typemax(Int)`` as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse – saturating integer arithmetic isn't associative.Consider this Matlab computation::
 
     >> n = int64(2)^62
     4611686018427387904
@@ -152,10 +152,10 @@ At first blush, this seems reasnable enough since 9223372036854775807 is much cl
     >> (n + n) - 1
     9223372036854775806
     
-This make it hard to write many basic integer algorithms, since there are many
-tricks that work well *because* of integer overflow – and the fact that it
-*is* associative. Consider finding the midpoint between integer values ``lo``
-and ``hi`` in Julia using the expression ``(lo + hi) >>> 1``::
+This makes it hard to write many basic integer algorithms since a lot of
+common techniques depend on the fact that machine addition with overflow *is*
+associative. Consider finding the midpoint between integer values ``lo`` and
+``hi`` in Julia using the expression ``(lo + hi) >>> 1``::
 
     julia> n = 2^62
     4611686018427387904
@@ -172,13 +172,16 @@ the fact that ``n + 2n`` is -4611686018427387904. Now try it in Matlab::
     
       4611686018427387904
 
+Oops. Adding a ``>>>`` operator to Matlab wouldn't help, because saturation
+that occurs when adding ``n`` and ``2n`` has already destroyed the information
+necessary to compute the correct midpoint.
 
-Oops. Not only is lack of associativity unfortunate for programmers who cannot
-use tricks like this, but it also defeats almost anything compilers might want
-to do to optimize integer arithmetic. For example, since Julia integers use
-normal machine integer arithmetic, LLVM is free to aggressively optimize
-simple little functions like ``f(k) = 5k-1``. The machine code for this
-function is just::
+Not only is lack of associativity unfortunate for programmers who cannot rely
+it for techniques like this, but it also defeats almost anything compilers
+might want to do to optimize integer arithmetic. For example, since Julia
+integers use normal machine integer arithmetic, LLVM is free to aggressively
+optimize simple little functions like ``f(k) = 5k-1``. The machine code for
+this function is just this::
 
     julia> code_native(f,(Int,))
         .section    __TEXT,__text,regular,pure_instructions
@@ -223,9 +226,9 @@ when ``f`` gets inlined into another function::
         pop RBP
         ret
 
-The call to ``f`` gets inlined and the loop body ends up being just a single
-``lea`` instruction. Next, consider what happens if we make the number of loop
-iterations fixed::
+Since the call to ``f`` gets inlined, the loop body ends up being just a
+single ``lea`` instruction. Next, consider what happens if we make the number
+of loop iterations fixed::
 
     julia> function g(k)
              for i = 1:10
@@ -251,11 +254,11 @@ iterations fixed::
 Because the compiler knows that integer addition and multiplication are
 associative and that multiplication distributes over addition – neither of
 which is true of saturating arithmetic – it can optimize the entire loop down
-to just a multiply and an add. Saturated aritmetic completely defeats this
+to just a multiply and an add. Saturated arithmetic completely defeats this
 kind of optimization since associativity and distributivity can fail at each
-loop iteration, causing different results depending on which iteration the
-failure occurs at. The compiler can unroll the loop, but it cannot
-algebraically reduce multiple operations into fewer operations.
+loop iteration, causing different outcomes depending on which iteration the
+failure occurs in. The compiler can unroll the loop, but it cannot
+algebraically reduce multiple operations into fewer equivalent operations.
 
 Saturated integer arithmetic is just one example of a really poor choice of
 language semantics that completely prevents effective performance
@@ -266,7 +269,7 @@ I looping over a number of actual things that are stored in the computer? Then
 it's not going to get that big. This is guaranteed, since I don't have that
 much memory. Am I counting things that occur in the real world? Unless they're
 grains of sand or atoms in the universe, 2^63-1 is going to be plenty big. Am
-I computing a factorial? Then sure, it might get that big – I should use a
+I computing a factorial? Then sure, they might get that big – I should use a
 ``BigInt``. See? Easy to distinguish.
 
 
