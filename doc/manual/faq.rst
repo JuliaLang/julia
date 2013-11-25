@@ -252,7 +252,7 @@ Because the compiler knows that integer addition and multiplication are
 associative and that multiplication distributes over addition – neither of
 which is true of saturating arithmetic – it can optimize the entire loop down
 to just a multiply and an add. Saturated aritmetic completely defeats this
-kind of intruction since associativity and distributivity can fail at each
+kind of optimization since associativity and distributivity can fail at each
 loop iteration, causing different results depending on which iteration the
 failure occurs at. The compiler can unroll the loop, but it cannot
 algebraically reduce multiple operations into fewer operations.
@@ -261,14 +261,13 @@ Saturated integer arithmetic is just one example of a really poor choice of
 language semantics that completely prevents effective performance
 optimization. There are many things that are difficult about C programming,
 but integer overflow is *not* one of them – especially on 64-bit systems. If
-my integers really might get bigger than 2^63-1 – which doesn't actually
-happen all that often – I can easily predict that. Am I looping over a number
-of actual things that are stored in the computer? Then it's not going to get
-that big. This is guaranteed, since I don't have that much memory. Am I
-counting things that occur in the real world? Unless they're grains of sand or
-atoms in the universe, 2^63-1 is going to be plenty big. Am I computing a
-factorial? Then sure, it might get that big – I should use a ``BigInt``. See?
-Easy to distinguish.
+my integers really might get bigger than 2^63-1, I can easily predict that. Am
+I looping over a number of actual things that are stored in the computer? Then
+it's not going to get that big. This is guaranteed, since I don't have that
+much memory. Am I counting things that occur in the real world? Unless they're
+grains of sand or atoms in the universe, 2^63-1 is going to be plenty big. Am
+I computing a factorial? Then sure, it might get that big – I should use a
+``BigInt``. See? Easy to distinguish.
 
 
 .. _man-abstract-fields:
