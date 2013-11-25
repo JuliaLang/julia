@@ -198,7 +198,6 @@ Example:
      3  7  11  15
      4  8  12  16
 
-
     julia> x[2:3, 2:end-1]
     2x2 Array{Int64,2}:
      6  10
@@ -504,14 +503,12 @@ you can use the same names with an ``sp`` prefix:
 
     julia> spzeros(3,5)
     3x5 sparse matrix with 0 Float64 nonzeros:
-    <BLANKLINE>
 
     julia> speye(3,5)
     3x5 sparse matrix with 3 Float64 nonzeros:
             [1, 1]  =  1.0
             [2, 2]  =  1.0
             [3, 3]  =  1.0
-    <BLANKLINE>
 
 The ``sparse`` function is often a handy way to construct sparse
 matrices. It takes as its input a vector ``I`` of row indices, a
@@ -529,7 +526,6 @@ values. ``sparse(I,J,V)`` constructs a sparse matrix such that
             [4 ,  7]  =  2
             [5 ,  9]  =  3
             [3 , 18]  =  -5
-    <BLANKLINE>
 
 The inverse of the ``sparse`` function is ``findn``, which
 retrieves the inputs used to create the sparse matrix.
@@ -554,7 +550,6 @@ into a sparse matrix using the ``sparse`` function:
             [3, 3]  =  1.0
             [4, 4]  =  1.0
             [5, 5]  =  1.0
-    <BLANKLINE>
 
 You can go in the other direction using the ``dense`` or the ``full``
 function. The ``issparse`` function can be used to query if a matrix
