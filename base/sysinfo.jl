@@ -91,6 +91,7 @@ function _cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
         summary.speed = div(summary.speed,count)
         show(io,summary,true,"#1-$(count) ")
     end
+    println(io)
 end
 
 function cpu_summary(io::IO=STDOUT, cpu::Array{CPUinfo}=cpu_info())
