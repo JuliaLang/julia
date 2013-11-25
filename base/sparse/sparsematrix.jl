@@ -327,15 +327,53 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 end
 
 function sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function, v)
-    numnz = int(m*n*density)
-    I = rand!(1:m, Array(Int, numnz))
-    J = rand!(1:n, Array(Int, numnz))
-    S = sparse(I, J, v, m, n)
-    if !iseltype(v,Bool)
-        S.nzval = rng(nnz(S))
+    0 <= density <= 1 || error("density must be between 0 and 1")
+    N = n*m
+    # if density < 0.5, we'll randomly generate the indices to set
+    #        otherwise, we'll randomly generate the indices to skip
+    K = (density > 0.5) ? N*(1-density) : N*density
+    # Use Newton's method to invert the birthday problem
+    l = log(1.0-1.0/N)
+    k = K
+    k = k + ((1-K/N)*exp(-k*l) - 1)/l
+    k = k + ((1-K/N)*exp(-k*l) - 1)/l # for K<N/2, 2 iterations suffice
+    ik = int(k)
+    ind = sort(rand(1:N, ik))
+    uind = Array(Int, 0)   # unique indices
+    sizehint(uind, int(N*density))
+    if density < 0.5
+        if ik == 0
+            return sparse(Int[],Int[],Array(eltype(v),0),m,n)
+        end
+        j = ind[1]
+        push!(uind, j)
+        uj = j
+        for i = 2:length(ind)
+            j = ind[i]
+            if j != uj
+                push!(uind, j)
+                uj = j
+            end
+        end
+    else
+        push!(ind, N+1) # sentinel
+        ii = 1
+        for i = 1:N
+            if i != ind[ii]
+                push!(uind, i)
+            else
+                while (i == ind[ii])
+                    ii += 1
+                end
+            end
+        end
     end
-
-    return S
+    I, J = ind2sub((m,n), uind)
+    if !iseltype(v,Bool)
+        return sparse_IJ_sorted!(I, J, rng(length(uind)), m, n, +)  # it will never need to combine
+    else
+        return sparse_IJ_sorted!(I, J, trues(length(uind)), m, n, +)
+    end
 end
 
 sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function) = sprand(m,n,density,rng, 1.0)
