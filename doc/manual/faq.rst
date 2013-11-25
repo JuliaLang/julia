@@ -277,18 +277,22 @@ I computing a factorial? Then sure, they might get that big – I should use a
 
 How do "abstract" or ambiguous fields in types interact with the compiler?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-Types can be declared without specifying the types of their fields::
+Types can be declared without specifying the types of their fields:
 
-    type MyAmbiguousType
-        a
-    end
+.. doctest::
+
+    julia> type MyAmbiguousType
+               a
+           end
 
 This allows ``a`` to be of any type. This can often be useful, but it
 does have a downside: for objects of type ``MyAmbiguousType``, the
 compiler will not be able to generate high-performance code.  The
 reason is that the compiler uses the types of objects, not their
 values, to determine how to build code. Unfortunately, very little can
-be inferred about an object of type ``MyAmbiguousType``::
+be inferred about an object of type ``MyAmbiguousType``:
+
+.. doctest::
 
     julia> b = MyAmbiguousType("Hello")
     MyAmbiguousType("Hello")
@@ -297,10 +301,10 @@ be inferred about an object of type ``MyAmbiguousType``::
     MyAmbiguousType(17)
 
     julia> typeof(b)
-    MyAmbiguousType
+    MyAmbiguousType (constructor with 1 method)
 
     julia> typeof(c)
-    MyAmbiguousType
+    MyAmbiguousType (constructor with 1 method)
 
 ``b`` and ``c`` have the same type, yet their underlying
 representation of data in memory is very different. Even if you stored
@@ -313,21 +317,26 @@ performance.
 
 You can do better by declaring the type of ``a``. Here, we are focused
 on the case where ``a`` might be any one of several types, in which
-case the natural solution is to use parameters. For example::
+case the natural solution is to use parameters. For example:
 
-    type MyType{T<:FloatingPoint}
-        a::T
-    end
+.. doctest::
+
+    julia> type MyType{T<:FloatingPoint}
+             a::T
+           end
 
 This is a better choice than
-::
 
-    type MyStillAmbiguousType
-        a::FloatingPoint
-    end
+.. doctest::
+
+    julia> type MyStillAmbiguousType
+             a::FloatingPoint
+           end
 
 because the first version specifies the type of ``a`` from the type of
-the wrapper object.  For example::
+the wrapper object.  For example:
+
+.. doctest::
 
     julia> m = MyType(3.2)
     MyType{Float64}(3.2)
@@ -336,14 +345,16 @@ the wrapper object.  For example::
     MyStillAmbiguousType(3.2)
 
     julia> typeof(m)
-    MyType{Float64}
+    MyType{Float64} (constructor with 1 method)
 
     julia> typeof(t)
-    MyStillAmbiguousType
+    MyStillAmbiguousType (constructor with 1 method)
 
 The type of field ``a`` can be readily determined from the type of
 ``m``, but not from the type of ``t``.  Indeed, in ``t`` it's possible
-to change the type of field ``a``::
+to change the type of field ``a``:
+
+.. doctest::
 
     julia> typeof(t.a)
     Float64
@@ -355,7 +366,9 @@ to change the type of field ``a``::
     Float32
 
 In contrast, once ``m`` is constructed, the type of ``m.a`` cannot
-change::
+change:
+
+.. doctest::
 
     julia> m.a = 4.5f0
     4.5
@@ -370,7 +383,9 @@ not for objects like ``t``.
 
 Of course, all of this is true only if we construct ``m`` with a
 concrete type.  We can break this by explicitly constructing it with
-an abstract type::
+an abstract type:
+
+.. doctest::
 
     julia> m = MyType{FloatingPoint}(3.2)
     MyType{FloatingPoint}(3.2)
@@ -409,37 +424,41 @@ How should I declare "abstract container type" fields?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The same best practices that apply in the `previous section
-<#man-abstract-fields>`_ also work for container types::
+<#man-abstract-fields>`_ also work for container types:
 
-    type MySimpleContainer{A<:AbstractVector}
-        a::A
-    end
+.. doctest::
 
-    type MyAmbiguousContainer{T}
-        a::AbstractVector{T}
-    end
+    julia> type MySimpleContainer{A<:AbstractVector}
+             a::A
+           end
 
-For example::
+    julia> type MyAmbiguousContainer{T}
+             a::AbstractVector{T}
+           end
+
+For example:
+
+.. doctest::
 
     julia> c = MySimpleContainer(1:3);
 
     julia> typeof(c)
-    MySimpleContainer{Range1{Int64}}
+    MySimpleContainer{Range1{Int64}} (constructor with 1 method)
 
     julia> c = MySimpleContainer([1:3]);
 
     julia> typeof(c)
-    MySimpleContainer{Array{Int64,1}}
+    MySimpleContainer{Array{Int64,1}} (constructor with 1 method)
 
     julia> b = MyAmbiguousContainer(1:3);
 
     julia> typeof(b)
-    MyAmbiguousContainer{Int64}
+    MyAmbiguousContainer{Int64} (constructor with 1 method)
 
     julia> b = MyAmbiguousContainer([1:3]);
 
     julia> typeof(b)
-    MyAmbiguousContainer{Int64}
+    MyAmbiguousContainer{Int64} (constructor with 1 method)
 
 For ``MySimpleContainer``, the object is fully-specified by its type
 and parameters, so the compiler can generate optimized functions. In
