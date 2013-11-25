@@ -1,7 +1,7 @@
 .. _man-arrays:
 
 **************************
- Multi-dimensional Arrays   
+ Multi-dimensional Arrays
 **************************
 
 Julia, like most technical computing languages, provides a first-class
@@ -352,7 +352,7 @@ vector to the size of the matrix:
 
     julia> repmat(a,1,3)+A
     2x3 Float64 Array:
-     0.848333  1.66714  1.3262 
+     0.848333  1.66714  1.3262
      1.26743   1.77988  1.13859
 
 This is wasteful when dimensions get large, so Julia offers
@@ -365,7 +365,7 @@ function elementwise:
 
     julia> broadcast(+, a, A)
     2x3 Float64 Array:
-     0.848333  1.66714  1.3262 
+     0.848333  1.66714  1.3262
      1.26743   1.77988  1.13859
 
     julia> b = rand(1,2)
@@ -392,12 +392,12 @@ These operations are guaranteed to work correctly as a fallback for any
 specific array implementation.
 
 The ``Array{T,n}`` type is a specific instance of ``AbstractArray``
-where elements are stored in column-major order. ``Vector`` and
-``Matrix`` are aliases for the 1-d and 2-d cases. Specific operations
-such as scalar indexing, assignment, and a few other basic
-storage-specific operations are all that have to be implemented for
-``Array``, so that the rest of the array library can be implemented in a
-generic manner for ``AbstractArray``.
+where elements are stored in column-major order (see additional notes in
+:ref:`man-performance-tips`). ``Vector`` and ``Matrix`` are aliases for
+the 1-d and 2-d cases. Specific operations such as scalar indexing,
+assignment, and a few other basic storage-specific operations are all
+that have to be implemented for ``Array``, so that the rest of the array
+library can be implemented in a generic manner for ``AbstractArray``.
 
 ``SubArray`` is a specialization of ``AbstractArray`` that performs
 indexing by reference rather than by copying. A ``SubArray`` is created
@@ -431,23 +431,23 @@ stride parameters.
      0.123628  0.833214   0.0224507  0.806369      0.80163   0.457005   0.226993
      0.362621  0.389317   0.702764   0.385856      0.155392  0.497805   0.430512
      0.504046  0.532631   0.477461   0.225632      0.919701  0.0453513  0.505329
-    
+
     julia> b = sub(a, 2:2:8,2:2:4)
     4x2 SubArray of 10x10 Float64 Array:
      0.235315  0.020172
      0.622764  0.372167
      0.493124  0.0314695
      0.833214  0.806369
-    
+
     julia> (q,r) = qr(b);
-    
+
     julia> q
     4x2 Float64 Array:
      -0.200268   0.331205
      -0.530012   0.107555
      -0.41968    0.720129
      -0.709119  -0.600124
-    
+
     julia> r
     2x2 Float64 Array:
      -1.175  -0.786311
