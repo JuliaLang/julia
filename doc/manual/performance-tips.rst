@@ -240,8 +240,8 @@ Functions like ``strange_twos`` occur when dealing with data of
 uncertain type, for example data loaded from an input file that might
 contain either integers, floats, strings, or something else.
 
-Remember arrays are column-major
---------------------------------
+Arrays are column-major
+-----------------------
 
 Multidimensional arrays in Julia are stored in column-major order. This
 means that arrays are stacked one column at a time. This can be verified
@@ -297,15 +297,6 @@ adapted accordingly). We could conceivably do this in at least four ways
         out
     end
 
-    function copy_row_col{T}(x::Vector{T})
-        n = size(x, 1)
-        out = Array(T, n, n)
-        for row=1:n, col=1:n
-            out[row, col] = x[col]
-        end
-        out
-    end
-
     function copy_col_row{T}(x::Vector{T})
         n = size(x, 1)
         out = Array(T, n, n)
@@ -315,11 +306,21 @@ adapted accordingly). We could conceivably do this in at least four ways
         out
     end
 
+    function copy_row_col{T}(x::Vector{T})
+        n = size(x, 1)
+        out = Array(T, n, n)
+        for row=1:n, col=1:n
+            out[row, col] = x[col]
+        end
+        out
+    end
 
 Now we will time each of these functions using the same random ``10000``
 by ``1`` input vector::
 
-    fmt(f) = println("$(rpad(string(f)*": ", 14, ' '))$(@elapsed f(x))")
+    julia> x = randn(10000);
+
+    julia> fmt(f) = println("$(rpad(string(f)*": ", 14, ' '))$(@elapsed f(x))")
 
     julia> map(fmt, {copy_cols, copy_rows, copy_col_row, copy_row_col});
     copy_cols:    0.331706323
