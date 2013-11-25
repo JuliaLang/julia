@@ -598,3 +598,4 @@
 @test complex(2,2)^2 === complex(0,8)
 @test_throws complex(2,2)^(-2)
 @test complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
+@test sin(im) == sin(1im)

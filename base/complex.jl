@@ -607,3 +607,10 @@ function atanh{T<:FloatingPoint}(z::Complex{T})
     complex(ξ, η)
 end
 atanh(z::Complex) = atanh(float(z))
+
+for f in (:sqrt, :exp, :log, :sin, :cos, :tan, :asin, :acos, :atan,
+          :sinh, :cosh, :tanh, :asinh, :acosh, :atanh)
+    @eval begin
+        ($f)(x::ImaginaryUnit) = ($f)(convert(Complex, x))
+    end
+end
