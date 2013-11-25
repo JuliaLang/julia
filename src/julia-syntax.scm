@@ -3007,6 +3007,7 @@ So far only the second case can actually occur.
 	(else
 	 (case (car e)
 	   ((escape) (cadr e))
+	   ((using import importall export) (map unescape e))
 	   ((macrocall)
 	    `(macrocall ,.(map (lambda (x)
 				 (resolve-expansion-vars- x env m inarg))
