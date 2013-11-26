@@ -365,6 +365,10 @@ macro uint128_str(str)
     uint128(str)
 end
 
+macro bigint_str(str)
+    BigInt(str)
+end
+
 ## system word size ##
 
 const WORD_SIZE = int(Int.size)*8

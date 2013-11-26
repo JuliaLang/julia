@@ -1241,6 +1241,7 @@ export
     @v_str,
     @int128_str,
     @uint128_str,
+    @bigint_str,
     @mstr,
     @unexpected,
     @assert,
