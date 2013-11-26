@@ -1,4 +1,3 @@
-
 immutable UTF16String <: String
     data::Array{Uint16,1}
 end
