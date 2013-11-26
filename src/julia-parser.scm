@@ -282,11 +282,11 @@
 		((eq? pred char-bin?) (fix-uint-neg neg (sized-uint-literal n s 1)))
                 (is-float32-literal   (float n))
 		(else (if (and (integer? n) (> n 9223372036854775807))
-			  `(call int128 ,n)
+			  `(macrocall @int128_str ,s)
 			  n)))
-	  (cond ((memq pred `(,char-hex? ,char-oct? ,char-bin?)) `(call uint128 ,s))
-		((within-int128? s) `(call int128 ,s))
-		(else `(call BigInt ,(strip-leading-0s s))))))))
+	  (cond ((memq pred `(,char-hex? ,char-oct? ,char-bin?)) `(macrocall @uint128_str ,s))
+		((within-int128? s) `(macrocall @int128_str ,s))
+		(else `(macrocall @bigint_str ,(strip-leading-0s s))))))))
 
 (define (fix-uint-neg neg n)
   (if neg `(call - ,n) n))
@@ -297,7 +297,7 @@
 	  ((<= l 16) (uint16 n))
 	  ((<= l 32) (uint32 n))
 	  ((<= l 64) (uint64 n))
-	  (else	     `(call uint128 ,s)))))
+	  (else	     `(macrocall @uint128_str ,s)))))
 
 (define (sized-uint-oct-literal n s)
   (if (eqv? (string.char s 2) #\0)
@@ -329,7 +329,9 @@
       (>= 0 (compare-num-strings s "170141183460469231731687303715884105727"))))
 
 (define (large-number? t)
-  (and (pair? t) (eq? (car t) 'call) (memq (cadr t) '(int128 uint128 BigInt))))
+  (and (pair? t)
+       (eq? (car t) 'macrocall)
+       (memq (cadr t) '(@int128_str @uint128_str @bigint_str))))
 
 (define (skip-ws-and-comments port)
   (skip-ws port #t)
@@ -671,10 +673,10 @@
   (if (eq? op '-)
       (if (large-number? num)
 	  (if (eqv? (caddr num) "-170141183460469231731687303715884105728")
-	      `(call BigInt "170141183460469231731687303715884105728")
+	      `(macrocall @bigint_str "170141183460469231731687303715884105728")
 	      `(,(car num) ,(cadr num) ,(string.tail (caddr num) 1)))
 	  (if (= num -9223372036854775808)
-	      `(call int128 "9223372036854775808")
+	      `(macrocall @int128_str "9223372036854775808")
 	      (- num)))
       num))
 
