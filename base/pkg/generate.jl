@@ -3,8 +3,8 @@ module Generate
 import ..Git, ..Read
 
 copyright_year() = readchomp(`date +%Y`)
-copyright_name() = Git.readchomp(`config --global --get user.name`)
-github_user() = readchomp(ignorestatus(Git.cmd(`config --global --get github.user`)))
+copyright_name() = readchomp(`git config --global --get user.name`)
+github_user() = readchomp(ignorestatus(`git config --global --get github.user`))
 
 function package(
     pkg::String,
