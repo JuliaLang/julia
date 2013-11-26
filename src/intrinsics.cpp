@@ -745,7 +745,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(checked_smul,2)
     HANDLE(checked_umul,2) {
         Value *ix = JL_INT(x); Value *iy = JL_INT(y);
-        Type *atypes[2] = { ix->getType(), iy->getType() };
+        assert(ix->getType() == iy->getType());
         Value *res = builder.CreateCall2
             (Intrinsic::getDeclaration(jl_Module,
                                        f==checked_sadd ?
@@ -759,7 +759,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                           (f==checked_smul ?
                                            Intrinsic::smul_with_overflow :
                                            Intrinsic::umul_with_overflow)))),
-                                       ArrayRef<Type*>(atypes)),
+                                       ArrayRef<Type*>(ix->getType())),
              ix, iy);
         Value *obit = builder.CreateExtractValue(res, ArrayRef<unsigned>(1));
         raise_exception_if(obit, jlovferr_var, ctx);

@@ -11,7 +11,6 @@ git_branch = $(shell git branch 2>/dev/null | sed -n '/\* /s///p')
 
 last_tag = $(shell git describe --tags --abbrev=0 2>/dev/null)
 tagged_commit = $(shell [ $$(git describe --tags --exact-match 2>/dev/null) ] && echo true || echo false)
-prerelease = $(shell [ -z "$(last_tag)" -o "$(last_tag)" = "v$(version_string)" ] && echo false || echo true)
 
 origin = $(shell [ -d ../.git/refs/remotes/origin ] && echo "origin/")
 
@@ -78,10 +77,9 @@ endif
 	@echo "    branch::String" >> $@
 	@echo "    build_number::Int" >> $@
 	@echo "    date_string::String" >> $@
-	@echo "    prerelease::Bool" >> $@
 	@echo "    tagged_commit::Bool" >> $@
 	@echo "    fork_master_distance::Int" >> $@
-	@echo "    fork_master_timestamp::Int" >> $@
+	@echo "    fork_master_timestamp::Float64" >> $@
 	@echo "    TAGGED_RELEASE_BANNER::String" >> $@
 	@echo "end" >> $@
 
@@ -93,10 +91,9 @@ endif
 			'\"$(git_branch)\"', \
 			$(build_number), \
 			'\"$(date_string)\"', \
-			$(prerelease), \
 			$(tagged_commit), \
 			$(fork_master_distance), \
-			$(fork_master_timestamp), \
+			$(fork_master_timestamp)., \
 			'\"$(TAGGED_RELEASE_BANNER)\"' \
 			)" | xargs >> $@
 

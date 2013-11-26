@@ -50,8 +50,8 @@ function mkpath(path::String, mode::Unsigned=0o777)
     mkdir(path)
 end
 
-mkdir(path::String, mode::Signed) = error("mkdir: mode must be an unsigned integer -- perhaps 0o$mode?")
-mkpath(path::String, mode::Signed) = error("mkpath: mode must be an unsigned integer -- perhaps 0o$mode?")
+mkdir(path::String, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
+mkpath(path::String, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
 
 function rmdir(path::String)
     @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
@@ -62,8 +62,8 @@ end
 # The following use Unix command line facilites
 
 rm(path::String) = FS.unlink(path)
-cp(src::String, dst::String) = run(`cp $src $dst`)
-mv(src::String, dst::String) = run(`mv $src $dst`)
+cp(src::String, dst::String) = FS.sendfile(src, dst)
+mv(src::String, dst::String) = FS.rename(src, dst)
 touch(path::String) = run(`touch $path`)
 
 # Obtain a temporary filename.
@@ -133,33 +133,6 @@ end
     end
 end
 
-downloadcmd = nothing
-function download(url::String, filename::String)
-    global downloadcmd
-    if downloadcmd === nothing
-        for checkcmd in (:curl, :wget, :fetch)
-            if success(`which $checkcmd` |> DevNull)
-                downloadcmd = checkcmd
-                break
-            end
-        end
-    end
-    if downloadcmd == :wget
-        run(`wget -O $filename $url`)
-    elseif downloadcmd == :curl
-        run(`curl -o $filename -L $url`)
-    elseif downloadcmd == :fetch
-        run(`fetch -f $filename $url`)
-    else
-        error("No download agent available; install curl, wget, or fetch.")
-    end
-    filename
-end
-function download(url::String)
-    filename = tempname()
-    download(url, filename)
-end
-
 function readdir(path::String)
     # Allocate space for uv_fs_t struct
     uv_readdir_req = zeros(Uint8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
@@ -169,7 +142,7 @@ function readdir(path::String)
                        bytestring(path), uv_readdir_req)
 
     if file_count < 0
-        error("Unable to read directory $path.")
+        error("unable to read directory $path")
     end
 
     # The list of dir entries is returned as a contiguous sequence of null-terminated

@@ -42,3 +42,11 @@ for encoding in ["UTF-32BE", "UTF-32LE", "UTF-16BE", "UTF-16LE", "UTF-8"]
     rm(joinpath(unicodedir,encoding*".unicode"))
 end
 rmdir(unicodedir)
+
+# UTF16
+u8 = "𝕥𝟶f𠂊"
+u16 = utf16(u8)
+@test length(u16.data) == 7
+@test length(u16) == 4
+@test utf8(u16) == u8
+@test collect(u8) == collect(u16)

@@ -1137,3 +1137,31 @@ macro make_closure()
 end
 end # module
 @test (Lib4771.@make_closure)(0) == 1
+
+# issue #4805
+abstract IT4805{N, T}
+
+let
+    T = TypeVar(:T,Int)
+    N = TypeVar(:N)
+    @test typeintersect(Type{IT4805{1,T}}, Type{TypeVar(:_,IT4805{N,Int})}) != None
+end
+
+let
+    test0{T <: Int64}(::Type{IT4805{1, T}}, x) = x
+    test1() = test0(IT4805{1, Int64}, 1)
+    test2() = test0(IT4805{1+0, Int64}, 1)
+    test3(n) = test0(IT4805{n, Int64}, 1)
+
+    @test test1() == 1
+    @test test2() == 1
+    @test test3(1) == 1
+    @test_throws test3(2)
+end
+
+# issue #4873
+macro myassert4873(ex)
+    :($ex ? nothing : error("Assertion failed: ", $(string(ex))))
+end
+x4873 = 1
+@myassert4873 (x -> x)(x4873) == 1

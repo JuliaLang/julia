@@ -129,9 +129,9 @@ end
 
 function init_pipe!(pipe::Union(Pipe,PipeServer);readable::Bool=false,writable=false,julia_only=true)
     if pipe.handle == C_NULL 
-        error("Cannot initialize pipe. UV object not allocated!")
+        error("failed to initialize pipe")
     elseif pipe.status != StatusUninit
-        error("Pipe is already initialized!")
+        error("pipe is already initialized")
     end
     uv_error("init_pipe",ccall(:jl_init_pipe, Cint, (Ptr{Void},Int32,Int32,Int32,Any), pipe.handle, writable,readable,julia_only,pipe))
     pipe.status = StatusInit
@@ -447,7 +447,7 @@ function _uv_hook_asynccb(async::AsyncWork, status::Int32)
     catch err
         #bt = catch_backtrace()
         if isa(err, MethodError)
-            warn_once("Async callbacks should take an AsyncWork object as the first argument")
+            warn_once("async callbacks should take an AsyncWork object as the first argument")
             async.cb(status)
             return
         end
@@ -581,7 +581,7 @@ end
 function start_reading(stream::AsyncStream)
     if stream.status == StatusOpen
         if !isreadable(stream)
-            error("Tried to read a stream that is not readable!")
+            error("tried to read a stream that is not readable")
         end
         ret = ccall(:uv_read_start,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),
             handle(stream),uv_jl_alloc_buf::Ptr{Void},uv_jl_readcb::Ptr{Void})
@@ -623,7 +623,7 @@ function readall(stream::AsyncStream)
 end
 
 function read{T}(this::AsyncStream, a::Array{T})
-    isbits(T) || error("Read from Buffer only supports bits types or arrays of bits types")
+    isbits(T) || error("read from buffer only supports bits types or arrays of bits types")
     nb = length(a)*sizeof(T)
     buf = this.buffer
     @assert buf.seekable == false
@@ -800,8 +800,8 @@ show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrornam
 
 function accept_nonblock(server::PipeServer,client::Pipe)
     if client.status != StatusInit
-        error(client.status == StatusUninit ? "accept: client is not initialized" : 
-                "accept: client is already in use or has been closed.")
+        error(client.status == StatusUninit ? "client is not initialized" :
+              "client is already in use or has been closed")
     end
     err = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server.handle,client.handle)
     if err == 0
@@ -817,7 +817,7 @@ end
 
 function accept(server::UVServer, client::AsyncStream)
     if server.status != StatusActive 
-        error("accept: Server not connected. Did you `listen`?")
+        error("server not connected; make sure \"listen\" has been called")
     end
     while isopen(server)
         err = accept_nonblock(server,client)
@@ -828,7 +828,7 @@ function accept(server::UVServer, client::AsyncStream)
         end
         wait(server.connectnotify)
     end
-    error("accept: Server was closed while attempting to accept a client.")
+    error("server was closed while attempting to accept a client")
 end
 
 const BACKLOG_DEFAULT = 511
@@ -858,7 +858,7 @@ end
 
 function listen(path::ByteString)
     sock = PipeServer()
-    bind(sock, path) || error("Could not listen on path $path")
+    bind(sock, path) || error("could not listen on path $path")
     uv_error("listen", _listen(sock))
     sock
 end

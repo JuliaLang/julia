@@ -1,3 +1,54 @@
+Julia v0.3.0 Release Notes
+==========================
+
+New language features
+---------------------
+
+New library functions
+---------------------
+
+  * `GitHub` module for interacting with the GitHub API
+
+Library improvements
+--------------------
+
+  * Multi-key dictionaries: `D[x,y...]` is now a synonym for `D[(x,y...)]`
+    for associations `D` ([#4870]).
+
+  * `big` is now vectorized ([#4766])
+
+  * `push!` and `unshift!` can push multiple arguments ([#4782])
+
+  * `consume(p)` extended to `consume(p, args...)`, allowing it
+    to optionally pass `args...` back to the producer ([#4775]).
+
+  * `nextpow` and `prevpow` now return the `a^n` values instead of the
+    exponent `n` ([#4819])
+
+  * `Dict(kv)` constructor for any iterator on (key,value) pairs.
+
+  * Overflow detection in `parseint` ([#4874]).
+
+  * New Pkg.submit(pkg[,commit]) function to automatically submit
+    a Github pull request to the package author.
+
+Deprecated or removed
+---------------------
+
+  * `dense` is deprecated in favor of `full` ([#4759])
+
+  * The `Stat` type is renamed `StatStruct` ([#4670])
+
+[#4775]: https://github.com/JuliaLang/julia/issues/4775
+[#4870]: https://github.com/JuliaLang/julia/issues/4870
+[#4766]: https://github.com/JuliaLang/julia/issues/4766
+[#4782]: https://github.com/JuliaLang/julia/issues/4782
+[#4759]: https://github.com/JuliaLang/julia/issues/4759
+[#4819]: https://github.com/JuliaLang/julia/issues/4819
+[#4670]: https://github.com/JuliaLang/julia/issues/4670
+
+
+
 Julia v0.2.0 Release Notes
 ==========================
 
@@ -278,8 +329,12 @@ Deprecated or removed
 
   * The `Reverse` iterator was removed since it did not work in many cases.
 
+  * The `gcd` function now returns a non-negative value regardless of
+    the argument signs, and various other sign problems with `invmod`,
+    `lcm`, `gcdx`, and `powermod` were fixed ([#4811]).
+
 Miscellaneous changes
---------------------------------
+---------------------
 
   * `julia-release-*` executables renamed to `julia-*`,
     and `libjulia-release` renamed to `libjulia` ([#4177]).

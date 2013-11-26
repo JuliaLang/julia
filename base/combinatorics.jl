@@ -108,7 +108,7 @@ function invperm(a::AbstractVector)
     for i = 1:n
         j = a[i]
         ((1 <= j <= n) && b[j] == 0) ||
-            error("invperm: input is not a permutation")
+            error("argument is not a permutation")
         b[j] = i
     end
     b
@@ -442,11 +442,11 @@ end
 # for integer n1, n2, n3
 function nextprod(a::Vector{Int}, x)
     if x > typemax(Int)
-        error("Unsafe for x bigger than typemax(Int)")
+        error("unsafe for x bigger than typemax(Int)")
     end
     k = length(a)
     v = ones(Int, k)            # current value of each counter
-    mx = int(a.^nextpow(a, x))  # maximum value of each counter
+    mx = int(nextpow(a, x))     # maximum value of each counter
     v[1] = mx[1]                # start at first case that is >= x
     p::morebits(Int) = mx[1]    # initial value of product in this case
     best = p
@@ -478,17 +478,17 @@ function nextprod(a::Vector{Int}, x)
     return int(best)  # could overflow, but best to have predictable return type
 end
 
-# For a list of integers i1, i2, i3, find the largest 
+# For a list of integers i1, i2, i3, find the largest
 #     i1^n1 * i2^n2 * i3^n3 <= x
 # for integer n1, n2, n3
 function prevprod(a::Vector{Int}, x)
     if x > typemax(Int)
-        error("Unsafe for x bigger than typemax(Int)")
+        error("unsafe for x bigger than typemax(Int)")
     end
     k = length(a)
     v = ones(Int, k)            # current value of each counter
-    mx = int(a.^nextpow(a, x))  # allow each counter to exceed p (sentinel)
-    first = int(a[1]^prevpow(a[1], x))  # start at best case in first factor 
+    mx = int(nextpow(a, x))     # allow each counter to exceed p (sentinel)
+    first = int(prevpow(a[1], x))  # start at best case in first factor
     v[1] = first
     p::morebits(Int) = first
     best = p

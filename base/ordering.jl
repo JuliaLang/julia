@@ -82,7 +82,7 @@ ordtype(o::Ordering,        vs::AbstractArray) = eltype(vs)
 
 function ord(lt::Function, by::Function, rev::Bool, order::Ordering=Forward)
     order == Forward || order == Lexicographic ||
-        Base.warn_once("the `order` keyword is deprecated, use `lt`, `by` and `rev` instead.")
+        Base.warn_once("the `order` keyword is deprecated, use `lt`, `by` and `rev` instead")
     o = (lt===isless) & (by===identity) ? order  :
         (lt===isless) & (by!==identity) ? By(by) :
         (lt!==isless) & (by===identity) ? Lt(lt) :

@@ -19,12 +19,12 @@ type BitArray{N} <: AbstractArray{Bool, N}
     dims::NTuple{N,Int}
     function BitArray(dims::Int...)
         if length(dims) != N
-            error("incorrect number of dimensions")
+            error("number of dimensions must be $N (got $(length(dims)))")
         end
         n = 1
         for d in dims
             if d < 0
-                error("invalid dimension size")
+                error("dimension size must be nonnegative (got $d)")
             end
             n *= d
         end
@@ -53,7 +53,7 @@ length(B::BitArray) = B.len
 size(B::BitVector) = (B.len,)
 size(B::BitArray) = B.dims
 
-size(B::BitVector, d) = (d==1 ? B.len : d>1 ? 1 : error("size: dimension out of range"))
+size(B::BitVector, d) = (d==1 ? B.len : d>1 ? 1 : error("dimensions should be positive (got $d)"))
 size{N}(B::BitArray{N}, d) = (d>N ? 1 : B.dims[d])
 
 ## Aux functions ##
@@ -258,7 +258,7 @@ end
 
 function reshape{N}(B::BitArray, dims::NTuple{N,Int})
     if prod(dims) != length(B)
-        error("reshape: dimensions must be consistent with array size")
+        error("new dimensions $(dims) inconsistent with the array length $(length(B))")
     end
     Br = BitArray{N}(ntuple(N,i->0)...)
     Br.chunks = B.chunks
@@ -322,7 +322,7 @@ convert{N}(::Type{BitArray{N}}, B::BitArray{N}) = B
 reinterpret{N}(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) = reinterpret(B, dims)
 function reinterpret{N}(B::BitArray, dims::NTuple{N,Int})
     if prod(dims) != length(B)
-        error("reinterpret: array size must not change")
+        error("new dimensions $(dims) are inconsistent with array length $(length(B))")
     end
     A = BitArray{N}(ntuple(N,i->0)...)
     A.chunks = B.chunks
@@ -372,20 +372,53 @@ getindex(B::BitArray) = getindex(B, 1)
 # 0d bitarray
 getindex(B::BitArray{0}) = getindex_unchecked(B.chunks, 1)
 
-getindex(B::BitArray, i0::Real, i1::Real) = B[to_index(i0) + size(B,1)*(to_index(i1)-1)]
-getindex(B::BitArray, i0::Real, i1::Real, i2::Real) =
-    B[to_index(i0) + size(B,1)*((to_index(i1)-1) + size(B,2)*(to_index(i2)-1))]
-getindex(B::BitArray, i0::Real, i1::Real, i2::Real, i3::Real) =
-    B[to_index(i0) + size(B,1)*((to_index(i1)-1) + size(B,2)*((to_index(i2)-1) + size(B,3)*(to_index(i3)-1)))]
+function getindex(B::BitArray, i1::Real, i2::Real)
+    #checkbounds(B, i0, i1) # manually inlined for performance
+    i1, i2 = to_index(i1, i2)
+    l1 = size(B,1)
+    1 <= i1 <= l1 || throw(BoundsError)
+    return B[i1 + l1*(i2-1)]
+end
+function getindex(B::BitArray, i1::Real, i2::Real, i3::Real)
+    #checkbounds(B, i0, i1, i2) # manually inlined for performance
+    i1, i2, i3 = to_index(i1, i2, i3)
+    l1 = size(B,1)
+    1 <= i1 <= l1 || throw(BoundsError)
+    l2 = size(B,2)
+    1 <= i2 <= l2 || throw(BoundsError)
+    return B[i1 + l1*((i2-1) + l2*(i3-1))]
+end
+function getindex(B::BitArray, i1::Real, i2::Real, i3::Real, i4::Real)
+    #checkbounds(B, i1, i2, i3, i4)
+    i1, i2, i3, i4 = to_index(i1, i2, i3, i4)
+    l1 = size(B,1)
+    1 <= i1 <= l1 || throw(BoundsError)
+    l2 = size(B,2)
+    1 <= i2 <= l2 || throw(BoundsError)
+    l3 = size(B,3)
+    1 <= i3 <= l3 || throw(BoundsError)
+    return B[i1 + l1*((i2-1) + l2*((i3-1) + l3*(i4-1)))]
+end
 
 function getindex(B::BitArray, I::Real...)
+    #checkbounds(B, I...) # inlined for performance
+    #I = to_index(I) # inlined for performance
     ndims = length(I)
-    index = to_index(I[1])
+    i = to_index(I[1])
+    l = size(B,1)
+    1 <= i <= l || throw(BoundsError)
+    index = i
     stride = 1
-    for k=2:ndims
-        stride *= size(B, k - 1)
-        index += (to_index(I[k]) - 1) * stride
+    for k = 2:ndims-1
+        stride *= l
+        i = to_index(I[k])
+        l = size(B,k)
+        1 <= i <= l || throw(BoundsError)
+        index += (i-1) * stride
     end
+    stride *= l
+    i = to_index(I[ndims])
+    index += (i-1) * stride
     return B[index]
 end
 
@@ -397,13 +430,13 @@ let getindex_cache = nothing
         # the < should become a != once
         # the stricter indexing behaviour is enforced
         if ndims(B) < 1 + length(I)
-            error("wrong number of dimensions in getindex")
+            error("wrong number of dimensions")
         end
         checkbounds(B, I0, I...)
         X = BitArray(index_shape(I0, I...))
         nI = 1 + length(I)
 
-        I = map(x->(isa(x,Real) ? (to_index(x):to_index(x)) : indices(x)), I[1:nI-1])
+        I = map(x->(isa(x,Real) ? (to_index(x):to_index(x)) : to_index(x)), I[1:nI-1])
 
         f0 = first(I0)
         l0 = length(I0)
@@ -468,9 +501,7 @@ function getindex{T<:Real}(B::BitArray, I::AbstractVector{T})
     for i in I
         # faster X[ind] = B[i]
         i = to_index(i)
-        if i < 1 || i > lB
-            throw(BoundsError())
-        end
+        1 <= i <= lB || throw(BoundsError())
         setindex_unchecked(Xc, getindex_unchecked(Bc, i), ind)
         ind += 1
     end
@@ -480,7 +511,8 @@ end
 let getindex_cache = nothing
     global getindex
     function getindex(B::BitArray, I::Union(Real,AbstractVector)...)
-        I = indices(I)
+        checkbounds(B, I...)
+        I = to_index(I)
         X = BitArray(index_shape(I...))
         Xc = X.chunks
 
@@ -549,22 +581,58 @@ setindex!(B::BitArray, x) = setindex!(B, x, 1)
 
 setindex!(B::BitArray, x, i::Real) = setindex!(B, convert(Bool,x), to_index(i))
 
-setindex!(B::BitArray, x, i0::Real, i1::Real) =
-    B[to_index(i0) + size(B,1)*(to_index(i1)-1)] = x
+function setindex!(B::BitArray, x, i1::Real, i2::Real)
+    #checkbounds(B, i0, i1) # manually inlined for performance
+    i1, i2 = to_index(i1, i2)
+    l1 = size(B,1)
+    1 <= i1 <= l1 || throw(BoundsError)
+    B[i1 + l1*(i2-1)] = x
+    return B
+end
 
-setindex!(B::BitArray, x, i0::Real, i1::Real, i2::Real) =
-    B[to_index(i0) + size(B,1)*((to_index(i1)-1) + size(B,2)*(to_index(i2)-1))] = x
+function setindex!(B::BitArray, x, i1::Real, i2::Real, i3::Real)
+    #checkbounds(B, i1, i2, i3) # manually inlined for performance
+    i1, i2, i3 = to_index(i1, i2, i3)
+    l1 = size(B,1)
+    1 <= i1 <= l1 || throw(BoundsError)
+    l2 = size(B,2)
+    1 <= i2 <= l2 || throw(BoundsError)
+    B[i1 + l1*((i2-1) + l2*(i3-1))] = x
+    return B
+end
 
-setindex!(B::BitArray, x, i0::Real, i1::Real, i2::Real, i3::Real) =
-    B[to_index(i0) + size(B,1)*((to_index(i1)-1) + size(B,2)*((to_index(i2)-1) + size(B,3)*(to_index(i3)-1)))] = x
+function setindex!(B::BitArray, x, i1::Real, i2::Real, i3::Real, i4::Real)
+    #checkbounds(B, i1, i2, i3, i4) # manually inlined for performance
+    i1, i2, i3, i4 = to_index(i1, i2, i3, i4)
+    l1 = size(B,1)
+    1 <= i1 <= l1 || throw(BoundsError)
+    l2 = size(B,2)
+    1 <= i2 <= l2 || throw(BoundsError)
+    l3 = size(B,3)
+    1 <= i3 <= l3 || throw(BoundsError)
+    B[i1 + l1*((i2-1) + l2*((i3-1) + l3*(i4-1)))] = x
+    return B
+end
 
-function setindex!(B::BitArray, x, I0::Real, I::Real...)
-    index = to_index(I0)
+function setindex!(B::BitArray, x, i::Real, I::Real...)
+    #checkbounds(B, I...) # inlined for performance
+    #I = to_index(I) # inlined for performance
+    ndims = length(I) + 1
+    i = to_index(i)
+    l = size(B,1)
+    1 <= i <= l || throw(BoundsError)
+    index = i
     stride = 1
-    for k = 1:length(I)
-        stride = stride * size(B, k)
-        index += (to_index(I[k]) - 1) * stride
+    for k = 2:ndims-1
+        stride *= l
+        l = size(B,k)
+        i = to_index(I[k-1])
+        1 <= i <= l || throw(BoundsError)
+        index += (i-1) * stride
     end
+    stride *= l
+    i = to_index(I[ndims-1])
+    index += (i-1) * stride
     B[index] = x
     return B
 end
@@ -638,8 +706,9 @@ end
 # note: we can gain some performance if the first dimension is a range;
 #       currently this is mainly indended for the general cat case
 # TODO: extend to I:Indices... (i.e. not necessarily contiguous)
-function setindex!(B::BitArray, X::BitArray, I0::Range1{Int}, I::Union(Integer, Range1{Int})...)
-    I = map(x->(isa(x,Integer) ? (x:x) : x), I)
+function setindex!(B::BitArray, X::BitArray, I0::Range1{Int}, I::Union(Real, Range1{Int})...)
+    checkbounds(B, I0, I...)
+    I = map(x->(isa(x,Real) ? (to_index(x):to_index(x)) : x), I)
     setindex_array2bitarray_ranges(B, X, I0, I...)
 end
 
@@ -677,7 +746,7 @@ end
 let setindex_cache = nothing
     global setindex!
     function setindex!(B::BitArray, X::AbstractArray, I::Union(Real,AbstractArray)...)
-        I = indices(I)
+        I = to_index(I)
         nel = 1
         for idx in I
             nel *= length(idx)
@@ -705,6 +774,7 @@ let setindex_cache = nothing
 end
 
 function setindex!{T<:Real}(B::BitArray, x, I::AbstractVector{T})
+    x = convert(Bool, x)
     for i in I
         B[i] = x
     end
@@ -714,7 +784,9 @@ end
 let setindex_cache = nothing
     global setindex!
     function setindex!(B::BitArray, x, I::Union(Real,AbstractArray)...)
-        I = indices(I)
+        x = convert(Bool, x)
+        checkbounds(B, I...)
+        I = to_index(I)
         if is(setindex_cache,nothing)
             setindex_cache = Dict()
         end
@@ -883,7 +955,7 @@ end
 
 function pop!(B::BitVector)
     if isempty(B)
-        error("pop!: BitArray is empty")
+        error("argument must not be empty")
     end
     item = B[end]
     B[end] = false
@@ -921,7 +993,7 @@ end
 
 function shift!(B::BitVector)
     if isempty(B)
-        error("shift!: BitArray is empty")
+        error("argument must not be empty")
     end
     @inbounds begin
         item = B[1]
@@ -1895,8 +1967,8 @@ function any(B::BitArray)
     return false
 end
 
-minimum(B::BitArray) = isempty(B) ? error("minimum: argument is empty") : all(B)
-maximum(B::BitArray) = isempty(B) ? error("maximum: argument is empty") : any(B)
+minimum(B::BitArray) = isempty(B) ? error("argument must be non-empty") : all(B)
+maximum(B::BitArray) = isempty(B) ? error("argument must be non-empty") : any(B)
 
 ## map over bitarrays ##
 
@@ -2056,7 +2128,7 @@ global permutedims
 function permutedims(B::Union(BitArray,StridedArray), perm)
     dimsB = size(B)
     ndimsB = length(dimsB)
-    ndimsB == length(perm) || error("permutedims: invalid dimensions")
+    ndimsB == length(perm) || error("invalid dimensions")
     dimsP = ntuple(ndimsB, i->dimsB[perm[i]])::typeof(dimsB)
     P = similar(B, dimsP)
     ranges = ntuple(ndimsB, i->(1:dimsP[i]))
@@ -2135,7 +2207,7 @@ end # let
 function hcat(B::BitVector...)
     height = length(B[1])
     for j = 2:length(B)
-        length(B[j]) == height || error("hcat: mismatched dimensions")
+        length(B[j]) == height || error("dimensions must match")
     end
     M = BitArray(height, length(B))
     for j = 1:length(B)
@@ -2167,7 +2239,7 @@ function hcat(A::Union(BitMatrix,BitVector)...)
         Aj = A[j]
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
-        if size(Aj, 1) != nrows; error("hcat: mismatched dimensions"); end
+        if size(Aj, 1) != nrows; error("rows must match"); end
     end
 
     B = BitArray(nrows, ncols)
@@ -2187,7 +2259,7 @@ function vcat(A::BitMatrix...)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
     for j = 2:nargs
-        if size(A[j], 2) != ncols; error("vcat: mismatched dimensions"); end
+        if size(A[j], 2) != ncols; error("columns must match"); end
     end
     B = BitArray(nrows, ncols)
     Bc = B.chunks
@@ -2228,7 +2300,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
     if catdim > d_max + 1
         for i=1:nargs
             if dimsX[1] != dimsX[i]
-                error("cat: all inputs must have same dimensions when concatenating along a higher dimension");
+                error("all inputs must have same dimensions when concatenating along a higher dimension");
             end
         end
     elseif nargs >= 2
@@ -2237,7 +2309,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
             len = d <= ndimsX[1] ? dimsX[1][d] : 1
             for i = 2:nargs
                 if len != (d <= ndimsX[i] ? dimsX[i][d] : 1)
-                    error("cat: dimension mismatch on dimension ", d)
+                    error("mismatch in dimension ", d)
                 end
             end
         end

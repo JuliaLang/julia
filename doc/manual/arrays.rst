@@ -1,7 +1,7 @@
 .. _man-arrays:
 
 **************************
- Multi-dimensional Arrays   
+ Multi-dimensional Arrays
 **************************
 
 Julia, like most technical computing languages, provides a first-class
@@ -109,27 +109,33 @@ ranges ``rx``, ``ry``, etc. and each ``F(x,y,...)`` evaluation returns a
 scalar.
 
 The following example computes a weighted average of the current element
-and its left and right neighbor along a 1-d grid. ::
+and its left and right neighbor along a 1-d grid. :
+
+.. testsetup:: *
+
+    srand(314)
+
+.. doctest:: array-rand
 
     julia> const x = rand(8)
-    8-element Float64 Array:
-     0.276455
-     0.614847
-     0.0601373
-     0.896024
-     0.646236
-     0.143959
-     0.0462343
-     0.730987
+    8-element Array{Float64,1}:
+     0.843025
+     0.869052
+     0.365105
+     0.699456
+     0.977653
+     0.994953
+     0.41084 
+     0.809411
 
     julia> [ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
-    6-element Float64 Array:
-     0.391572
-     0.407786
-     0.624605
-     0.583114
-     0.245097
-     0.241854
+    6-element Array{Float64,1}:
+     0.736559
+     0.57468
+     0.685417
+     0.912429
+     0.8446  
+     0.656511
 
 .. note:: In the above example, ``x`` is declared as constant because type
   inference in Julia does not work as well on non-constant global
@@ -143,10 +149,12 @@ that the result is of type ``Float64`` by writing::
     Float64[ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 
 Using curly brackets instead of square brackets is a shorthand notation for an
-array of type ``Any``::
+array of type ``Any``:
+
+.. doctest::
 
     julia> { i/2 for i = 1:3 }
-    3-element Any Array:
+    3-element Array{Any,1}:
      0.5
      1.0
      1.5
@@ -179,19 +187,21 @@ Indexing syntax is equivalent to a call to ``getindex``::
 
     X = getindex(A, I_1, I_2, ..., I_n)
 
-Example::
+Example:
+
+.. doctest::
 
     julia> x = reshape(1:16, 4, 4)
-    4x4 Int64 Array
-    1 5  9 13
-    2 6 10 14
-    3 7 11 15
-    4 8 12 16
+    4x4 Array{Int64,2}:
+     1  5   9  13
+     2  6  10  14
+     3  7  11  15
+     4  8  12  16
 
     julia> x[2:3, 2:end-1]
-    2x2 Int64 Array
-    6 10
-    7 11
+    2x2 Array{Int64,2}:
+     6  10
+     7  11
 
 Assignment
 ----------
@@ -219,19 +229,24 @@ Index assignment syntax is equivalent to a call to ``setindex!``::
 
       setindex!(A, X, I_1, I_2, ..., I_n)
 
-Example::
+Example:
+
+.. doctest::
 
     julia> x = reshape(1:9, 3, 3)
-    3x3 Int64 Array
-    1 4 7
-    2 5 8
-    3 6 9
+    3x3 Array{Int64,2}:
+     1  4  7
+     2  5  8
+     3  6  9
 
     julia> x[1:2, 2:3] = -1
-    3x3 Int64 Array
-    1 -1 -1
-    2 -1 -1
-    3  6  9
+    -1
+
+    julia> x
+    3x3 Array{Int64,2}:
+     1  -1  -1
+     2  -1  -1
+     3   6   9
 
 Concatenation
 -------------
@@ -301,7 +316,9 @@ Furthermore, Julia provides the ``@vectorize_1arg`` and ``@vectorize_2arg``
 macros to automatically vectorize any function of one or two arguments
 respectively.  Each of these takes two arguments, namely the ``Type`` of
 argument (which is usually chosen to be to be the most general possible) and
-the name of the function to vectorize. Here is a simple example::
+the name of the function to vectorize. Here is a simple example:
+
+.. doctest::
 
     julia> square(x) = x^2
     square (generic function with 1 method)
@@ -311,9 +328,9 @@ the name of the function to vectorize. Here is a simple example::
 
     julia> methods(square)
     # 4 methods for generic function "square":
-    square{T<:Number}(x::AbstractArray{T<:Number,1}) at operators.jl:236
-    square{T<:Number}(x::AbstractArray{T<:Number,2}) at operators.jl:237
-    square{T<:Number}(x::AbstractArray{T<:Number,N}) at operators.jl:239
+    square{T<:Number}(x::AbstractArray{T<:Number,1}) at operators.jl:248
+    square{T<:Number}(x::AbstractArray{T<:Number,2}) at operators.jl:249
+    square{T<:Number}(x::AbstractArray{T<:Number,N}) at operators.jl:251
     square(x) at none:1
 
     julia> square([1 2 4; 5 6 7])
@@ -327,24 +344,28 @@ Broadcasting
 It is sometimes useful to perform element-by-element binary operations
 on arrays of different sizes, such as adding a vector to each column
 of a matrix.  An inefficient way to do this would be to replicate the
-vector to the size of the matrix::
+vector to the size of the matrix:
+
+.. doctest::
 
     julia> a = rand(2,1); A = rand(2,3);
 
     julia> repmat(a,1,3)+A
     2x3 Float64 Array:
-     0.848333  1.66714  1.3262 
+     0.848333  1.66714  1.3262
      1.26743   1.77988  1.13859
 
 This is wasteful when dimensions get large, so Julia offers
 ``broadcast``, which expands singleton dimensions in
 array arguments to match the corresponding dimension in the other
 array without using extra memory, and applies the given
-function elementwise::
+function elementwise:
+
+.. doctest::
 
     julia> broadcast(+, a, A)
     2x3 Float64 Array:
-     0.848333  1.66714  1.3262 
+     0.848333  1.66714  1.3262
      1.26743   1.77988  1.13859
 
     julia> b = rand(1,2)
@@ -371,12 +392,12 @@ These operations are guaranteed to work correctly as a fallback for any
 specific array implementation.
 
 The ``Array{T,n}`` type is a specific instance of ``AbstractArray``
-where elements are stored in column-major order. ``Vector`` and
-``Matrix`` are aliases for the 1-d and 2-d cases. Specific operations
-such as scalar indexing, assignment, and a few other basic
-storage-specific operations are all that have to be implemented for
-``Array``, so that the rest of the array library can be implemented in a
-generic manner for ``AbstractArray``.
+where elements are stored in column-major order (see additional notes in
+:ref:`man-performance-tips`). ``Vector`` and ``Matrix`` are aliases for
+the 1-d and 2-d cases. Specific operations such as scalar indexing,
+assignment, and a few other basic storage-specific operations are all
+that have to be implemented for ``Array``, so that the rest of the array
+library can be implemented in a generic manner for ``AbstractArray``.
 
 ``SubArray`` is a specialization of ``AbstractArray`` that performs
 indexing by reference rather than by copying. A ``SubArray`` is created
@@ -410,23 +431,23 @@ stride parameters.
      0.123628  0.833214   0.0224507  0.806369      0.80163   0.457005   0.226993
      0.362621  0.389317   0.702764   0.385856      0.155392  0.497805   0.430512
      0.504046  0.532631   0.477461   0.225632      0.919701  0.0453513  0.505329
-    
+
     julia> b = sub(a, 2:2:8,2:2:4)
     4x2 SubArray of 10x10 Float64 Array:
      0.235315  0.020172
      0.622764  0.372167
      0.493124  0.0314695
      0.833214  0.806369
-    
+
     julia> (q,r) = qr(b);
-    
+
     julia> q
     4x2 Float64 Array:
      -0.200268   0.331205
      -0.530012   0.107555
      -0.41968    0.720129
      -0.709119  -0.600124
-    
+
     julia> r
     2x2 Float64 Array:
      -1.175  -0.786311
@@ -478,16 +499,16 @@ equivalent to the ``zeros`` and ``eye`` functions that Julia provides
 for working with dense matrices. To produce sparse matrices instead,
 you can use the same names with an ``sp`` prefix:
 
-::
+.. doctest::
 
     julia> spzeros(3,5)
-    3x5 sparse matrix with 0 nonzeros:
+    3x5 sparse matrix with 0 Float64 nonzeros:
 
     julia> speye(3,5)
-    3x5 sparse matrix with 3 nonzeros:
-        [1, 1]  =  1.0
-        [2, 2]  =  1.0
-        [3, 3]  =  1.0
+    3x5 sparse matrix with 3 Float64 nonzeros:
+            [1, 1]  =  1.0
+            [2, 2]  =  1.0
+            [3, 3]  =  1.0
 
 The ``sparse`` function is often a handy way to construct sparse
 matrices. It takes as its input a vector ``I`` of row indices, a
@@ -495,46 +516,46 @@ vector ``J`` of column indices, and a vector ``V`` of nonzero
 values. ``sparse(I,J,V)`` constructs a sparse matrix such that
 ``S[I[k], J[k]] = V[k]``.
 
-::
+.. doctest::
 
     julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
     julia> S = sparse(I,J,V)
-    5x18 sparse matrix with 4 nonzeros:
-         [1 ,  4]  =  1
-         [4 ,  7]  =  2
-         [5 ,  9]  =  3
-         [3 , 18]  =  -5
+    5x18 sparse matrix with 4 Int64 nonzeros:
+            [1 ,  4]  =  1
+            [4 ,  7]  =  2
+            [5 ,  9]  =  3
+            [3 , 18]  =  -5
 
 The inverse of the ``sparse`` function is ``findn``, which
 retrieves the inputs used to create the sparse matrix.
 
-::
+.. doctest::
 
     julia> findn(S)
-    ([1, 4, 5, 3],[4, 7, 9, 18])
+    ([1,4,5,3],[4,7,9,18])
 
     julia> findnz(S)
-    ([1, 4, 5, 3],[4, 7, 9, 18],[1, 2, 3, -5])
+    ([1,4,5,3],[4,7,9,18],[1,2,3,-5])
 
 Another way to create sparse matrices is to convert a dense matrix
 into a sparse matrix using the ``sparse`` function:
 
-::
+.. doctest::
 
     julia> sparse(eye(5))
-    5x5 sparse matrix with 5 nonzeros:
-        [1, 1]  =  1.0
-        [2, 2]  =  1.0
-        [3, 3]  =  1.0
-        [4, 4]  =  1.0
-        [5, 5]  =  1.0
+    5x5 sparse matrix with 5 Float64 nonzeros:
+            [1, 1]  =  1.0
+            [2, 2]  =  1.0
+            [3, 3]  =  1.0
+            [4, 4]  =  1.0
+            [5, 5]  =  1.0
 
 You can go in the other direction using the ``dense`` or the ``full``
 function. The ``issparse`` function can be used to query if a matrix
 is sparse.
 
-::
+.. doctest::
 
     julia> issparse(speye(5))
     true

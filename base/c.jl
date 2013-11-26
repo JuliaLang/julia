@@ -2,16 +2,6 @@
 
 import Core.Intrinsics.cglobal
 
-ptr_arg_convert{T}(::Type{Ptr{T}}, x) = convert(T, x)
-ptr_arg_convert(::Type{Ptr{Void}}, x) = x
-
-# conversion used by ccall
-cconvert(T, x) = convert(T, x)
-# use the code in ccall.cpp to safely allocate temporary pointer arrays
-cconvert{T}(::Type{Ptr{Ptr{T}}}, a::Array) = a
-# TODO: for some reason this causes a strange type inference problem
-#cconvert(::Type{Ptr{Uint8}}, s::String) = bytestring(s)
-
 # constants to match JL_RTLD_* in src/julia.h
 const RTLD_LOCAL     = 0x00000000
 const RTLD_GLOBAL    = 0x00000001

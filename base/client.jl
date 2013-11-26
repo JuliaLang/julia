@@ -46,6 +46,14 @@ end
 
 function repl_cmd(cmd)
     shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
+    # Note that we can't support the fish shell due to its lack of subshells
+    #   See this for details: https://github.com/JuliaLang/julia/issues/4918
+    if Base.basename(shell[1]) == "fish"
+        warn_once("cannot use the fish shell, defaulting to /bin/sh\
+         set the JULIA_SHELL environment variable to silence this warning")
+        shell = "/bin/sh"
+    end
+
     if isempty(cmd.exec)
         error("no cmd to execute")
     elseif cmd.exec[1] == "cd"

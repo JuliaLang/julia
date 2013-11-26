@@ -280,7 +280,7 @@ macro setup_stdio()
         in,out,err = stdios
         if isa(stdios[1],Pipe) 
             if stdios[1].handle==C_NULL
-                error("Pipes passed to spawn must be initialized!")
+                error("pipes passed to spawn must be initialized")
             end
         elseif isa(stdios[1],FileRedirect)
             in = FS.open(stdios[1].filename,JL_O_RDONLY)
@@ -290,7 +290,7 @@ macro setup_stdio()
         end
         if isa(stdios[2],Pipe)
             if stdios[2].handle==C_NULL
-                error("Pipes passed to spawn must be initialized!")
+                error("pipes passed to spawn must be initialized")
             end
         elseif isa(stdios[2],FileRedirect)
             out = FS.open(stdios[2].filename,JL_O_WRONLY|JL_O_CREAT|(stdios[2].append?JL_O_APPEND:JL_O_TRUNC),S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
@@ -300,7 +300,7 @@ macro setup_stdio()
         end
         if isa(stdios[3],Pipe)
             if stdios[3].handle==C_NULL
-                error("Pipes passed to spawn must be initialized!")
+                error("pipes passed to spawn must be initialized")
             end
         elseif isa(stdios[3],FileRedirect)
             err = FS.open(stdios[3].filename,JL_O_WRONLY|JL_O_CREAT|(stdios[3].append?JL_O_APPEND:JL_O_TRUNC),S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
@@ -540,7 +540,7 @@ end
 #
 function _jl_pre_exec(args::Vector{ByteString})
     if length(args) < 1
-        error("exec: too few words to exec")
+        error("too few arguments to exec")
     end
     ptrs = Array(Ptr{Uint8}, length(args)+1)
     for i = 1:length(args)

@@ -8,22 +8,22 @@ close(open(file,"w")) # like touch, but lets the operating system update the tim
 #######################################################################
 # This section tests some of the features of the stat-based file info #
 #######################################################################
-@test isdir(dir) == true
-@test isfile(dir) == false
-@test islink(dir) == false
-@test isdir(file) == false
-@test isfile(file) == true
-@test islink(file) == false
-@test isreadable(file) == true
-@test iswritable(file) == true
+@test isdir(dir)
+@test !isfile(dir)
+@test !islink(dir)
+@test !isdir(file)
+@test isfile(file)
+@test !islink(file)
+@test isreadable(file)
+@test iswritable(file)
 # Here's something else that might be UNIX-specific?
 run(`chmod -w $file`)
-@test iswritable(file) == false
+@test !iswritable(file)
 run(`chmod +w $file`)
-@test isexecutable(file) == false
+@test !isexecutable(file)
 @test filesize(file) == 0
-# On windows the filesize of a folder is the accumulation of all the contained 
-# files and is thus zero in this case. 
+# On windows the filesize of a folder is the accumulation of all the contained
+# files and is thus zero in this case.
 @windows_only begin
     @test filesize(dir) == 0
 end
@@ -35,9 +35,27 @@ end
 # rename file
 newfile = joinpath(dir, "bfile.txt")
 mv(file, newfile)
-@test ispath(file) == false
-@test isfile(newfile) == true
+@test !ispath(file)
+@test isfile(newfile)
 file = newfile
+
+# Test renaming directories
+a_tmpdir = mktempdir()
+b_tmpdir = joinpath(dir, "b_tmpdir")
+
+# grab a_tmpdir's file info before renaming
+a_stat = stat(a_tmpdir)
+
+# rename, then make sure b_tmpdir does exist and a_tmpdir doesn't
+mv(a_tmpdir, b_tmpdir)
+@test isdir(b_tmpdir)
+@test !ispath(a_tmpdir)
+
+# get b_tmpdir's file info and compare with a_tmpdir
+b_stat = stat(b_tmpdir)
+@test Base.samefile(a_stat, b_stat)
+
+rmdir(b_tmpdir)
 
 #######################################################################
 # This section tests file watchers.                                   #
@@ -53,9 +71,7 @@ function test_timeout(tval)
     @async test_file_poll(channel,tval)
     tr = take(channel)
     t_elapsed = toq()
-
-    @test tr == false
-
+    @test !tr
     @test tval <= t_elapsed
 end
 
@@ -63,15 +79,12 @@ function test_touch(slval)
     tval = slval*1.1
     channel = RemoteRef()
     @async test_file_poll(channel, tval)
-
     sleep(tval/10)  # ~ one poll period
     f = open(file,"a")
     write(f,"Hello World\n")
     close(f)
-
     tr = take(channel)
-
-    @test tr == true
+    @test tr
 end
 
 
@@ -102,7 +115,7 @@ function test_monitor_wait(tval)
     @test events.changed
 end
 
-# Commented out the tests below due to issues 3015, 3016 and 3020 
+# Commented out the tests below due to issues 3015, 3016 and 3020
 test_timeout(0.1)
 test_timeout(1)
 # the 0.1 second tests are too optimistic
@@ -143,7 +156,7 @@ write(s, [0xffffffffffffffff,
           0x000000001fffffff])
 close(s)
 s = open(file, "r")
-@test isreadonly(s) == true
+@test isreadonly(s)
 b = mmap_bitarray((17,13), s)
 @test b == trues(17,13)
 @test_throws mmap_bitarray((7,3), s)
@@ -155,7 +168,7 @@ msync(b)
 b0 = copy(b)
 close(s)
 s = open(file, "r")
-@test isreadonly(s) == true
+@test isreadonly(s)
 b = mmap_bitarray((17,19), s)
 @test b == b0
 close(s)
@@ -184,10 +197,28 @@ emptyf = open(emptyfile)
 close(emptyf)
 rm(emptyfile)
 
+# Test copy file
+afile = joinpath(dir, "a.txt")
+touch(afile)
+af = open(afile, "r+")
+write(af, "This is indeed a test")
+
+bfile = joinpath(dir, "b.txt")
+cp(afile, bfile)
+
+a_stat = stat(afile)
+b_stat = stat(bfile)
+@test a_stat.mode == b_stat.mode
+@test a_stat.size == b_stat.size
+
+close(af)
+rm(afile)
+rm(bfile)
+
 ############
 # Clean up #
 ############
 rm(file)
 rmdir(dir)
-@test ispath(file) == false
-@test ispath(dir) == false
+@test !ispath(file)
+@test !ispath(dir)

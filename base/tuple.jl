@@ -2,7 +2,7 @@
 
 length(t::Tuple) = tuplelen(t)
 endof(t::Tuple) = tuplelen(t)
-size(t::Tuple, d) = d==1 ? tuplelen(t) : error("invalid tuple dimension")
+size(t::Tuple, d) = d==1 ? tuplelen(t) : error("invalid tuple dimension $(d)")
 getindex(t::Tuple, i::Int) = tupleref(t, i)
 getindex(t::Tuple, i::Real) = tupleref(t, convert(Int, i))
 getindex(t::Tuple, r::AbstractArray) = tuple([t[ri] for ri in r]...)
@@ -19,6 +19,10 @@ next(t::Tuple, i::Int) = (t[i], i+1)
 indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
 indexed_next(a::Array, i::Int, state) = (a[i], i+1)
 indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state)
+
+# eltype
+
+eltype{T}(x::(T...)) = T
 
 ## mapping ##
 

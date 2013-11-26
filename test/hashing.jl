@@ -32,3 +32,5 @@ end
 @test hash(RopeString("1","2")) == hash("12")
 @test hash(:(X.x)) == hash(:(X.x))
 @test hash(:(X.x)) != hash(:(X.y))
+
+@test hash([1,2]) == hash(sub([1,2,3,4],1:2))

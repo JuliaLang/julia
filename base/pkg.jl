@@ -1,12 +1,13 @@
 module Pkg
 
+export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry
 export dir, init, rm, add, available, installed, status, clone, checkout,
        release, fix, update, resolve, register, tag, publish, generate
 
 const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
 
-for file in split("dir types reqs cache read query resolve write generate entry")
+for file in split("git dir github types reqs cache read query resolve write generate entry")
     include("pkg/$file.jl")
 end
 const cd = Dir.cd
@@ -49,6 +50,9 @@ tag(pkg::String, sym::Symbol, commit::String) = cd(Entry.tag,pkg,sym,false,commi
 tag(pkg::String, ver::VersionNumber; force::Bool=false) = cd(Entry.tag,pkg,ver,force)
 tag(pkg::String, ver::VersionNumber, commit::String; force::Bool=false) =
 	cd(Entry.tag,pkg,ver,force,commit)
+
+submit(pkg::String) = cd(Entry.submit,pkg)
+submit(pkg::String, commit::String) = cd(Entry.submit,pkg,commit)
 
 publish() = cd(Entry.publish,META_BRANCH)
 

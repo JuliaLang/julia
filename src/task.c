@@ -531,7 +531,8 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
 #if defined(_OS_WINDOWS_)
 int needsSymRefreshModuleList;
 WINBOOL WINAPI (*hSymRefreshModuleList)(HANDLE);
-DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize) {
+DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
+{
     CONTEXT Context;
     memset(&Context, 0, sizeof(Context));
     in_stackwalk = 1;
@@ -539,7 +540,8 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize) {
     in_stackwalk = 0;
     return rec_backtrace_ctx(data, maxsize, &Context);
 }
-DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Context) {
+DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Context)
+{
     if (in_stackwalk) {
         return 0;
     }

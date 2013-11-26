@@ -84,7 +84,7 @@ extern "C" {
 #include "julia.h"
 #include "builtin_proto.h"
 
-void * __stack_chk_guard = NULL;
+void *__stack_chk_guard = NULL;
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
 void __stack_chk_fail()
@@ -2299,7 +2299,16 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
             return literal_pointer_val((jl_value_t*)jl_nothing);
     }
     else if (head == copyast_sym) {
-        return builder.CreateCall(jlcopyast_func, emit_expr(args[0], ctx));
+        jl_value_t *arg = args[0];
+        if (jl_is_quotenode(arg)) {
+            jl_value_t *arg1 = jl_fieldref(arg,0);
+            if (!((jl_is_expr(arg1) && ((jl_expr_t*)arg1)->head!=null_sym) ||
+                  jl_typeis(arg1,jl_array_any_type) || jl_is_quotenode(arg1))) {
+                // elide call to jl_copy_ast when possible
+                return emit_expr(arg, ctx);
+            }
+        }
+        return builder.CreateCall(jlcopyast_func, emit_expr(arg, ctx));
     }
     else {
         if (!strcmp(head->name, "$"))
@@ -3458,7 +3467,6 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen(void)
 {
-    
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);
 
@@ -3506,8 +3514,8 @@ extern "C" void jl_init_codegen(void)
     jl_jit_events = new JuliaJITEventListener();
     jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
 #if LLVM_USE_INTEL_JITEVENTS
-    if( const char* jit_profiling = std::getenv("ENABLE_JITPROFILING") )
-        if( std::atoi(jit_profiling) )
+    if (const char* jit_profiling = std::getenv("ENABLE_JITPROFILING"))
+        if (std::atoi(jit_profiling))
             jl_ExecutionEngine->RegisterJITEventListener(
                 JITEventListener::createIntelJITEventListener());
 #endif // LLVM_USE_INTEL_JITEVENTS

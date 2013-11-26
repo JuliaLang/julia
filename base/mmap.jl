@@ -22,7 +22,7 @@ function mmap(len::Integer, prot::Integer, flags::Integer, fd::Integer, offset::
     const pagesize::Int = ccall(:jl_getpagesize, Clong, ())
     # Check that none of the computations will overflow
     if len > typemax(Int)-pagesize
-        error("Cannot map such a large buffer")
+        error("requested size is too large")
     end
     # Set the offset to a page boundary
     offset_page::FileOffset = ifloor(offset/pagesize)*pagesize
@@ -30,7 +30,7 @@ function mmap(len::Integer, prot::Integer, flags::Integer, fd::Integer, offset::
     # Mmap the file
     p = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
     if int(p) == -1
-        error("Memory mapping failed", strerror())
+        error("memory mapping failed: ", strerror())
     end
     # Also return a pointer that compensates for any adjustment in the offset
     return p, int(offset-offset_page)
@@ -101,7 +101,7 @@ function mmap_stream_settings(s::IO)
         prot = PROT_READ | PROT_WRITE
     end
     if prot & PROT_READ == 0
-        error("For mmap, you need read permissions on the file (choose r+)")
+        error("mmap requires read permissions on the file (choose r+)")
     end
     flags = MAP_SHARED
     return prot, flags, (prot & PROT_WRITE) > 0
@@ -112,7 +112,7 @@ function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, o
     prot, flags, iswrite = mmap_stream_settings(s)
     len = prod(dims)*sizeof(T)
     if len > typemax(Int)
-        error("File is too large to memory-map on this platform")
+        error("file is too large to memory-map on this platform")
     end
     if iswrite
         pmap, delta = mmap_grow(len, prot, flags, fd(s), offset)
@@ -132,24 +132,24 @@ end
 function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, offset::FileOffset)
     shandle = _get_osfhandle(RawFD(fd(s)))
     if int(shandle.handle) == -1
-        error("Could not get handle")
+        error("could not get handle for file to map")
     end
     ro = isreadonly(s)
     flprotect = ro ? 0x02 : 0x04
     len = prod(dims)*sizeof(T)
     if len > typemax(Int)
-        error("File is too large to memory-map on this platform")
+        error("file is too large to memory-map on this platform")
     end
     szarray = convert(Csize_t, len)
     szfile = szarray + convert(Csize_t, offset)
     mmaphandle = ccall(:CreateFileMappingA, stdcall, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Cint, Cint, Cint, Ptr{Void}), shandle.handle, C_NULL, flprotect, szfile>>32, szfile&0xffffffff, C_NULL)
     if mmaphandle == C_NULL
-        error("Could not create file mapping")
+        error("could not create file mapping")
     end
     access = ro ? 4 : 2
     viewhandle = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, Cint, Cint, Cint, Csize_t), mmaphandle, access, offset>>32, offset&0xffffffff, szarray)
     if viewhandle == C_NULL
-        error("Could not create mapping view")
+        error("could not create mapping view")
     end
     A = pointer_to_array(pointer(T, viewhandle), dims)
     finalizer(A, x->munmap(viewhandle, mmaphandle))
@@ -160,14 +160,14 @@ function munmap(viewhandle::Ptr, mmaphandle::Ptr)
     status = bool(ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle))
     status |= bool(ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), mmaphandle))
     if !status
-        error("Could not unmap view")
+        error("could not unmap view")
     end
 end
 
 function msync(p::Ptr, len::Integer)
     status = bool(ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), p, len))
     if !status
-        error("Could not msync")
+        error("could not msync")
     end
 end
 
@@ -185,14 +185,14 @@ function mmap_bitarray{N,TInt<:Integer}(dims::NTuple{N,TInt}, s::IOStream, offse
     end
     nc = num_bit_chunks(n)
     if nc > typemax(Int)
-        error("File is too large to memory-map on this platform")
+        error("file is too large to memory-map on this platform")
     end
     chunks = mmap_array(Uint64, (nc,), s, offset)
     if iswrite
         chunks[end] &= @_msk_end n
     else
         if chunks[end] != chunks[end] & @_msk_end n
-            error("The given file does not contain a valid BitArray of size ", join(dims, 'x'), " (open with \"r+\" mode to override)")
+            error("the given file does not contain a valid BitArray of size ", join(dims, 'x'), " (open with \"r+\" mode to override)")
         end
     end
     B = BitArray{N}(ntuple(N,i->0)...)

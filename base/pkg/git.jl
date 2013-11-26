@@ -90,7 +90,7 @@ function is_ancestor_of(a::String, b::String; dir="")
 end
 
 const GITHUB_REGEX =
-    r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*?)(?:\.git)?$"i
+    r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
 function set_remote_url(url::String; remote::String="origin", dir="")
     run(`config remote.$remote.url $url`, dir=dir)

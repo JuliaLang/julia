@@ -26,8 +26,8 @@ include("c.jl")
 
 # core operations & types
 include("promotion.jl")
-include("range.jl")
 include("tuple.jl")
+include("range.jl")
 include("cell.jl")
 include("expr.jl")
 include("error.jl")
@@ -69,6 +69,7 @@ const DL_LOAD_PATH = ByteString[]
 include("char.jl")
 include("ascii.jl")
 include("utf8.jl")
+include("utf16.jl")
 include("iobuffer.jl")
 include("string.jl")
 include("regex.jl")
@@ -194,6 +195,7 @@ big(n::Integer) = convert(BigInt,n)
 big(x::FloatingPoint) = convert(BigFloat,x)
 big(q::Rational) = big(num(q))//big(den(q))
 big(z::Complex) = complex(big(real(z)),big(imag(z)))
+@vectorize_1arg Number big
 
 # mathematical constants
 include("constants.jl")
@@ -205,9 +207,9 @@ importall .QuadGK
 # deprecated functions
 include("deprecated.jl")
 
-# git utils & package manager
-include("git.jl")
+# package manager
 include("pkg.jl")
+const Git = Pkg.Git
 
 # base graphics API
 include("graphics.jl")

@@ -107,7 +107,7 @@ function FDWatcher(fd::RawFD)
     handle = c_malloc(_sizeof_uv_poll)
     @unix_only if ccall(:jl_uv_unix_fd_is_watched,Int32,(Int32,Ptr{Void},Ptr{Void}),fd.fd,handle,eventloop()) == 1
         c_free(handle)
-        error("FD $(fd.fd) is already being watched by another watcher")
+        error("file descriptor $(fd.fd) is already being watched by another watcher")
     end
     err = ccall(:uv_poll_init,Int32,(Ptr{Void},Ptr{Void},Int32),eventloop(),handle,fd.fd)
     if err < 0
@@ -143,7 +143,7 @@ end
 
 function _wait(fdw::FDWatcher,readable,writable)
     if !readable && !writable
-        error("Must be watching for at least one event")
+        error("must watch for at least one event")
     end
     events = FDEvent(readable | fdw.events.readable,
                      writable | fdw.events.writable,
@@ -238,7 +238,7 @@ close(t::UVPollingWatcher) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 function start_watching(t::FDWatcher, events::FDEvent)
     associate_julia_struct(t.handle, t)
     @unix_only if ccall(:jl_uv_unix_fd_is_watched,Int32,(Int32,Ptr{Void},Ptr{Void}),t.fd,t.handle,eventloop()) == 1
-        error("Cannot watch an FD more than once on Unix")
+        error("cannot watch an FD more than once on Unix")
     end
     uv_error("start_watching (FD)",
         ccall(:jl_poll_start, Int32, (Ptr{Void},Int32), t.handle,
@@ -287,7 +287,7 @@ end
 
 function _uv_hook_fspollcb(t::PollingFileWatcher,status::Int32,prev::Ptr,cur::Ptr)
     if isa(t.cb,Function)
-        t.cb(t, Stat(convert(Ptr{Uint8},prev)), Stat(convert(Ptr{Uint8},cur)), status)
+        t.cb(t, StatStruct(convert(Ptr{Uint8},prev)), StatStruct(convert(Ptr{Uint8},cur)), status)
     end
 end
 

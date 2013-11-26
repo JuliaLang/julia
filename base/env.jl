@@ -20,18 +20,18 @@ end
 
 macro accessEnv(var,errorcase)
 @unix_only return quote
-     val=_getenv($var)
+     val=_getenv($(esc(var)))
      if val == C_NULL
-        $errorcase
+        $(esc(errorcase))
      end
      bytestring(val)
 end
 @windows_only return quote
-    len=_getenvlen($var)
+    len=_getenvlen($(esc(var)))
     if len == 0
-        $errorcase
+        $(esc(errorcase))
     end
-    bytestring(_jl_win_getenv($var,len))
+    bytestring(_jl_win_getenv($(esc(var)),len))
 end
 end
 

@@ -50,7 +50,7 @@ function librandom_init()
     try
         srand("/dev/urandom")
     catch
-        println(STDERR, "Entropy pool not available to seed RNG, using ad-hoc entropy sources.")
+        println(STDERR, "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
         seed = reinterpret(Uint64, time())
         seed = bitmix(seed, uint64(getpid()))
         try
@@ -149,7 +149,7 @@ function rand!{T}(A::Array{T})
     A
 end
 rand(T::Type, dims::Dims) = rand!(Array(T, dims))
-rand{T<:Number}(::Type{T}) = error("No random number generator for type $T. Try a more specific type.")
+rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try a more specific type")
 rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
 
 function randu{T<:Union(Uint32,Uint64,Uint128)}(k::T)
@@ -222,8 +222,8 @@ end
 
 @eval function uuid4()
     u = rand(Uint128)
-    u &= $(parseint(Uint128,"ffffffffffff0fff3fffffffffffffff",16))
-    u |= $(parseint(Uint128,"00000000000040008000000000000000",16))
+    u &= $(uint128(0xffffffffffff0fff)<<64 | uint128(0x3fffffffffffffff))
+    u |= $(uint128(0x0000000000004000)<<64 | uint128(0x8000000000000000))
     UUID(u)
 end
 

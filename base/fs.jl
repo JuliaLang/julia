@@ -20,6 +20,8 @@ export File,
        # close,
        write,
        unlink,
+       rename,
+       sendfile,
        JL_O_WRONLY,
        JL_O_RDONLY,
        JL_O_RDWR,
@@ -78,7 +80,7 @@ open(f::String,flags) = open(f,flags,0)
 
 function close(f::File)
     if !f.open
-        error("File is already closed")
+        error("file is already closed")
     end
     err = ccall(:jl_fs_close, Int32, (Int32,), f.handle)
     uv_error("close",err)
@@ -93,7 +95,7 @@ function unlink(p::String)
 end
 function unlink(f::File)
     if isempty(f.path)
-      error("No path associated with this file")
+      error("no path associated with this file")
     end
     if f.open
         close(f)
@@ -102,9 +104,54 @@ function unlink(f::File)
     f
 end
 
+# For move command
+function rename(src::String, dst::String)
+    err = ccall(:jl_fs_rename, Int32, (Ptr{Uint8}, Ptr{Uint8}), bytestring(src),
+                bytestring(dst))
+
+    # on error, default to cp && rm
+    if err < 0
+        # first copy
+        err = sendfile(src, dst)
+        uv_error("sendfile when moving file", err)
+        
+        # then rm
+        err = unlink(src)
+        uv_error("removing when moving file", err)
+    end
+end
+
+# For copy command
+function sendfile(src::String, dst::String)
+    flags = JL_O_RDONLY
+    src_file = open(src, flags)
+    if !src_file.open
+        error("Src file is not open")
+    end
+
+    flags = JL_O_CREAT | JL_O_RDWR
+    mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH | S_IWOTH
+    dst_file = open(dst, flags, mode)
+    if !dst_file.open
+        error("Dst file is not open")
+    end
+
+    src_stat = stat(src_file)
+    err = ccall(:jl_fs_sendfile, Int32, (Int32, Int32, Int64, Csize_t),
+                fd(src_file), fd(dst_file), 0, src_stat.size)
+    uv_error("sendfile", err)
+
+    if src_file.open
+        close(src_file)
+    end
+    if dst_file.open
+        close(dst_file)
+    end
+end
+
 function write(f::File, buf::Ptr{Uint8}, len::Integer, offset::Integer=-1)
     if !f.open
-        error("File is not open")
+        error("file is not open")
     end
     err = ccall(:jl_fs_write, Int32, (Int32, Ptr{Uint8}, Csize_t, Csize_t),
                 f.handle, buf, len, offset)
@@ -114,7 +161,7 @@ end
 
 function write(f::File, c::Uint8)
     if !f.open
-        error("File is not open")
+        error("file is not open")
     end
     err = ccall(:jl_fs_write_byte, Int32, (Int32, Cchar), f.handle, c)
     uv_error("write",err)
@@ -140,7 +187,7 @@ end
 
 function read(f::File, ::Type{Uint8})
     if !f.open
-        error("File is not open")
+        error("file is not open")
     end
     ret = ccall(:jl_fs_read_byte, Int32, (Int32,), f.handle)
     uv_error("read", ret)

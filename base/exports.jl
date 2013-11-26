@@ -88,7 +88,7 @@ export
     Schur,
     Set,
     SparseMatrixCSC,
-    Stat,
+    StatStruct,
     StridedArray,
     StridedMatrix,
     StridedVecOrMat,
@@ -104,6 +104,7 @@ export
     TmStruct,
     Triangular,
     Tridiagonal,
+    UTF16String,
     VecOrMat,
     Vector,
     VersionNumber,
@@ -647,7 +648,6 @@ export
     triu,
 
 # sparse
-    dense,
     etree,
     full,
     issparse,
@@ -818,6 +818,7 @@ export
     unescape_string,
     uppercase,
     utf8,
+    utf16,
     warn,
     xdump,
 
@@ -1236,6 +1237,7 @@ export
     @__FILE__,
     @b_str,
     @r_str,
+    @r_mstr,
     @v_str,
     @int128_str,
     @uint128_str,

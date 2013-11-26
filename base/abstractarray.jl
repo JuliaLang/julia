@@ -91,18 +91,14 @@ end
 
 checkbounds(A::AbstractArray, I) = checkbounds(length(A), I)
 
-function checkbounds(A::AbstractMatrix, I, J)
+function checkbounds(A::AbstractMatrix, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray))
     checkbounds(size(A,1), I)
     checkbounds(size(A,2), J)
 end
 
-function checkbounds(A::AbstractArray, I, J)
+function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray))
     checkbounds(size(A,1), I)
-    sz = size(A,2)
-    for i = 3:ndims(A)
-        sz *= size(A, i) # TODO: sync. with decision on issue #1030
-    end
-    checkbounds(sz, J)
+    checkbounds(trailingsize(A,2), J)
 end
 
 function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
@@ -111,11 +107,7 @@ function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
         for dim = 1:(n-1)
             checkbounds(size(A,dim), I[dim])
         end
-        sz = size(A,n)
-        for i = n+1:ndims(A)
-            sz *= size(A,i)     # TODO: sync. with decision on issue #1030
-        end
-        checkbounds(sz, I[n])
+        checkbounds(trailingsize(A,n), I[n])
     end
 end
 
@@ -146,7 +138,7 @@ similar   (a::AbstractArray, T, dims::Int...) = similar(a, T, dims)
 
 function reshape(a::AbstractArray, dims::Dims)
     if prod(dims) != length(a)
-        error("reshape: invalid dimensions")
+        error("dimensions must be consistent with array size")
     end
     copy!(similar(a, dims), a)
 end
@@ -309,7 +301,6 @@ complex{T<:Complex}(x::AbstractArray{T}) = x
 float   (x::AbstractArray) = copy!(similar(x,typeof(float(one(eltype(x))))), x)
 complex (x::AbstractArray) = copy!(similar(x,typeof(complex(one(eltype(x))))), x)
 
-dense(x::AbstractArray) = x
 full(x::AbstractArray) = x
 
 ## range conversions ##
@@ -580,7 +571,7 @@ function reverse(A::AbstractVector, s=1, n=length(A))
 end
 
 function flipdim(A::AbstractVector, d::Integer)
-    d > 0 || error("dimension out of range")
+    d > 0 || error("dimension to flip must be positive")
     d == 1 || return copy(A)
     reverse(A)
 end
@@ -724,7 +715,7 @@ end
 function hcat{T}(V::AbstractVector{T}...)
     height = length(V[1])
     for j = 2:length(V)
-        if length(V[j]) != height; error("hcat: mismatched dimensions"); end
+        if length(V[j]) != height; error("vector must have same lengths"); end
     end
     [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
@@ -756,7 +747,7 @@ function hcat{T}(A::Union(AbstractMatrix{T},AbstractVector{T})...)
         dense &= isa(Aj,Array)
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
-        if size(Aj, 1) != nrows; error("hcat: mismatched dimensions"); end
+        if size(Aj, 1) != nrows; error("number of rows must match"); end
     end
     B = similar(full(A[1]), nrows, ncols)
     pos = 1
@@ -783,7 +774,7 @@ function vcat{T}(A::AbstractMatrix{T}...)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
     for j = 2:nargs
-        if size(A[j], 2) != ncols; error("vcat: mismatched dimensions"); end
+        if size(A[j], 2) != ncols; error("number of columns must match"); end
     end
     B = similar(full(A[1]), nrows, ncols)
     pos = 1
@@ -807,7 +798,7 @@ function cat(catdim::Integer, X...)
     if catdim > d_max + 1
         for i=1:nargs
             if dimsX[1] != dimsX[i]
-                error("cat: all inputs must have same dimensions when concatenating along a higher dimension");
+                error("all inputs must have same dimensions when concatenating along a higher dimension");
             end
         end
     elseif nargs >= 2
@@ -816,8 +807,7 @@ function cat(catdim::Integer, X...)
             len = d <= ndimsX[1] ? dimsX[1][d] : 1
             for i = 2:nargs
                 if len != (d <= ndimsX[i] ? dimsX[i][d] : 1)
-                    error("cat: dimension mismatch on dimension ", d)
-                    #error("lala $d")
+                    error("mismatch in dimension ", d)
                 end
             end
         end
@@ -875,7 +865,7 @@ function cat_t(catdim::Integer, typeC, A::AbstractArray...)
     if catdim > d_max + 1
         for i=1:nargs
             if dimsA[1] != dimsA[i]
-                error("cat: all inputs must have same dimensions when concatenating along a higher dimension");
+                error("all inputs must have same dimensions when concatenating along a higher dimension");
             end
         end
     elseif nargs >= 2
@@ -884,7 +874,7 @@ function cat_t(catdim::Integer, typeC, A::AbstractArray...)
             len = d <= ndimsA[1] ? dimsA[1][d] : 1
             for i = 2:nargs
                 if len != (d <= ndimsA[i] ? dimsA[i][d] : 1)
-                    error("cat: dimension mismatch on dimension ", d)
+                    error("mismatch in dimension ", d)
                 end
             end
         end
@@ -931,7 +921,7 @@ function hvcat(nbc::Integer, as...)
     # nbc = # of block columns
     n = length(as)
     if mod(n,nbc) != 0
-        error("hvcat: not all rows have the same number of block columns")
+        error("all rows must have the same number of block columns")
     end
     nbr = div(n,nbc)
     hvcat(ntuple(nbr, i->nbc), as...)
@@ -963,16 +953,16 @@ function hvcat{T}(rows::(Int...), as::AbstractMatrix{T}...)
             Aj = as[a+j-1]
             szj = size(Aj,2)
             if size(Aj,1) != szi
-                error("hvcat: mismatched height in block row ", i)
+                error("mismatched height in block row ", i)
             end
             if c-1+szj > nc
-                error("hvcat: block row ", i, " has mismatched number of columns")
+                error("block row ", i, " has mismatched number of columns")
             end
             out[r:r-1+szi, c:c-1+szj] = Aj
             c += szj
         end
         if c != nc+1
-            error("hvcat: block row ", i, " has mismatched number of columns")
+            error("block row ", i, " has mismatched number of columns")
         end
         r += szi
         a += rows[i]
@@ -990,7 +980,7 @@ function hvcat{T<:Number}(rows::(Int...), xs::T...)
     k = 1
     for i=1:nr
         if nc != rows[i]
-            error("hvcat: row ", i, " has mismatched number of columns")
+            error("row ", i, " has mismatched number of columns")
         end
         for j=1:nc
             a[i,j] = xs[k]
@@ -1018,7 +1008,7 @@ function hvcat(rows::(Int...), xs::Number...)
     #error check
     for i = 2:nr
         if nc != rows[i]
-            error("hvcat: row ", i, " has mismatched number of columns")
+            error("row ", i, " has mismatched number of columns")
         end
     end
     T = typeof(xs[1])
@@ -1306,16 +1296,6 @@ function ind2sub!{T<:Integer}(sub::Array{T}, dims::Array{T}, ind::T)
     return
 end
 
-indices(I) = I
-indices(I::Int) = I
-indices(I::Real) = convert(Int, I)
-indices(I::AbstractArray{Bool,1}) = find(I)
-indices(I::(Any,))            = (indices(I[1]), )
-indices(I::(Any,Any,))        = (indices(I[1]), indices(I[2]))
-indices(I::(Any,Any,Any))     = (indices(I[1]), indices(I[2]), indices(I[3]))
-indices(I::(Any,Any,Any,Any)) = (indices(I[1]), indices(I[2]), indices(I[3]), indices(I[4]))
-indices(I::Tuple) = map(indices, I)
-
 # Generalized repmat
 function repeat{T}(A::Array{T};
                    inner::Array{Int} = ones(Int, ndims(A)),
@@ -1326,7 +1306,7 @@ function repeat{T}(A::Array{T};
     ndims_out = max(ndims_in, length_inner, length_outer)
 
     if length_inner < ndims_in || length_outer < ndims_in
-        msg = "Inner/outer repetitions must be set for all input dimensions"
+        msg = "inner/outer repetitions must be set for all input dimensions"
         throw(ArgumentError(msg))
     end
 
@@ -1580,7 +1560,7 @@ function prod{T}(A::AbstractArray{T})
 end
 
 function minimum{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("minimum: argument is empty"); end
+    if isempty(A); error("argument must not be empty"); end
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]
@@ -1592,7 +1572,7 @@ function minimum{T<:Real}(A::AbstractArray{T})
 end
 
 function maximum{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("maximum: argument is empty"); end
+    if isempty(A); error("argument must not be empty"); end
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]
@@ -1723,3 +1703,12 @@ function map(f::Callable, As::AbstractArray...)
     dest = similar(As[1], typeof(first), shape)
     return map_to!(f, first, dest, As...)
 end
+
+# multi-item push!, unshift! (built on top of type-specific 1-item version)
+# (note: must not cause a dispatch loop when 1-item case is not defined)
+push!(A) = A
+push!(A, a, b) = push!(push!(A, a), b)
+push!(A, a, b, c...) = push!(push!(A, a, b), c...)
+unshift!(A) = A
+unshift!(A, a, b) = unshift!(unshift!(A, b), a)
+unshift!(A, a, b, c...) = unshift!(unshift!(A, c...), a, b)
