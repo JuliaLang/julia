@@ -43,3 +43,5 @@ convert(::Type{UTF16String}, s::String) = encode16(s)
 convert(::Type{UTF8String}, s::UTF16String) =
     sprint(length(s.data), io->for c in s; write(io,c::Char); end)
 
+sizeof(s::UTF16String) = sizeof(s.data)
+convert(T::Type{Ptr}, s::UTF16String) = convert(T, s.data)
