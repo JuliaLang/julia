@@ -1,6 +1,9 @@
 #ifndef DTYPES_H
 #define DTYPES_H
 
+#if !defined(_OS_WINDOWS_)
+#include <inttypes.h>
+#endif
 #include <stddef.h>
 #include <stddef.h> // double include of stddef.h fixes #3421
 #include <stdint.h>
