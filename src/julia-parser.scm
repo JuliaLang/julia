@@ -308,11 +308,13 @@
 	  (else             (uint64 n)))))
 
 (define (strip-leading-0s s)
-  (let ((i (if (eqv? (string.char s 0) #\-) 1 0)))
-    (let loop ((i i))
-      (if (eqv? (string.char s i) #\0)
-	  (loop (+ i 1))
-	  (string #\- (string.tail s i))))))
+  (define (loop i)
+    (if (eqv? (string.char s i) #\0)
+	(loop (+ i 1))
+	(string.tail s i)))
+  (if (eqv? (string.char s 0) #\-)
+      (string #\- (loop 1))
+      (loop 0)))
 
 (define (compare-num-strings s1 s2)
   (let ((s1 (strip-leading-0s s1))
