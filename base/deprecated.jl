@@ -351,6 +351,10 @@ end
 export mmread
 
 # 0.3 deprecations
+@deprecate dense  full
+
+export Stat
+const Stat = StatStruct
 
 # 0.3 discontinued functions
 

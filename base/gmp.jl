@@ -6,7 +6,8 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
-             serialize, deserialize, bin, oct, dec, hex, isequal
+             serialize, deserialize, bin, oct, dec, hex, isequal, invmod,
+             prevpow2, nextpow2
 
 type BigInt <: Integer
     alloc::Cint
@@ -163,6 +164,18 @@ for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),
     end
 end
 
+function invmod(x::BigInt, y::BigInt)
+    z = BigInt()
+    y = abs(y)
+    if y == 1
+        return big(0)
+    end
+    if (y==0 || ccall((:__gmpz_invert, :libgmp), Cint, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &z, &x, &y) == 0)
+        error("no inverse exists")
+    end
+    return z
+end
+
 # More efficient commutative operations
 for (fJ, fC) in ((:+, :add), (:*, :mul), (:&, :and), (:|, :ior), (:$, :xor))
     @eval begin
@@ -303,23 +316,35 @@ end
 ^(x::Integer, y::BigInt ) = bigint_pow(BigInt(x), y)
 
 function powermod(x::BigInt, p::BigInt, m::BigInt)
+    p < 0 && throw(DomainError())
     r = BigInt()
     ccall((:__gmpz_powm, :libgmp), Void,
           (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}),
           &r, &x, &p, &m)
-    return r
+    return m < 0 && r > 0 ? r + m : r # choose sign conistent with mod(x^p, m)
 end
 powermod(x::BigInt, p::Integer, m::BigInt) = powermod(x, BigInt(p), m)
 powermod(x::BigInt, p::Integer, m::Integer) = powermod(x, BigInt(p), BigInt(m))
 
 function gcdx(a::BigInt, b::BigInt)
+    if b == 0 # shortcut this to ensure consistent results with gcdx(a,b)
+        return a < 0 ? (-a,-one(BigInt),zero(BigInt)) : (a,one(BigInt),zero(BigInt))
+    end
     g = BigInt()
     s = BigInt()
     t = BigInt()
     ccall((:__gmpz_gcdext, :libgmp), Void,
         (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}),
         &g, &s, &t, &a, &b)
-    BigInt(g), BigInt(s), BigInt(t)
+    if t == 0
+        # work around a difference in some versions of GMP
+        if a == b
+            return g, t, s
+        elseif abs(a)==abs(b)
+            return g, t, -s
+        end
+    end
+    g, s, t
 end
 
 function sum(arr::AbstractArray{BigInt})
@@ -392,5 +417,8 @@ widemul(x::BigInt, y::BigInt)   = x*y
 widemul(x::Int128, y::Uint128)  = BigInt(x)*BigInt(y)
 widemul(x::Uint128, y::Int128)  = BigInt(x)*BigInt(y)
 widemul{T<:Integer}(x::T, y::T) = BigInt(x)*BigInt(y)
+
+prevpow2(x::BigInt) = x < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << (ndigits(x, 2)-1))
+nextpow2(x::BigInt) = x < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))
 
 end # module

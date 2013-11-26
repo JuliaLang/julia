@@ -10,7 +10,7 @@ function countlines(filename::String, eol::Char)
 end
 function countlines(io::IO, eol::Char)
     if !isascii(eol)
-        error("countlines: only ASCII line terminators supported")
+        error("only ASCII line terminators are supported")
     end
     a = Array(Uint8, 8192)
     nl = 0
@@ -187,7 +187,10 @@ function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D)
     catch ex
         error("at row $nrows, column $col : $ex)")
     end
-    (col > 0) && (nrows += 1) 
+    if col > 0 
+        nrows += 1
+        ncols = max(ncols, col+1)
+    end
     ncols = max(ncols, col, 1)
     nrows = max(nrows, 1)
     return (nrows, ncols)

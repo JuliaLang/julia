@@ -23,12 +23,12 @@
   (cond ((and (symbol? v) (not (eq? v 'true)) (not (eq? v 'false)))
 	 v)
 	((not (pair? v))
-	 (error (string "malformed function arguments " v)))
+	 (error (string "malformed function arguments \"" v "\"")))
 	(else
 	 (case (car v)
 	   ((... kw)      (decl-var (cadr v)))
 	   ((|::|)        (decl-var v))
-	   (else (error (string "malformed function argument " v)))))))
+	   (else (error (string "malformed function argument \"" v "\"")))))))
 
 ; convert a lambda list into a list of just symbols
 (define (llist-vars lst)
@@ -37,16 +37,24 @@
 				    (eq? (car a) 'parameters))))
 			lst)))
 
+(define (llist-keywords lst)
+  (apply append
+	 (map (lambda (a)
+		(if (and (pair? a) (eq? (car a) 'parameters))
+		    (map arg-name (cdr a))
+		    '()))
+	      lst)))
+
 (define (arg-type v)
   (cond ((symbol? v)  'Any)
 	((not (pair? v))
-	 (error (string "malformed function arguments " v)))
+	 (error (string "malformed function arguments \"" v "\"")))
 	(else
 	 (case (car v)
 	   ((...)         `(... ,(decl-type (cadr v))))
 	   ((|::|)        (decl-type v))
 	   (else (error
-		  (string "malformed function arguments " v)))))))
+		  (string "malformed function arguments \"" v "\"")))))))
 
 ; get just argument types
 (define (llist-types lst)
@@ -374,7 +382,7 @@
      (if (not (or (sym-ref? name)
 		  (and (pair? name) (eq? (car name) 'kw)
 		       (sym-ref? (cadr name)))))
-	 (error (string "invalid method name " name)))
+	 (error (string "invalid method name \"" name "\"")))
      (let* ((types (llist-types argl))
 	    (body  (method-lambda-expr argl body)))
        (if (null? sparams)
@@ -528,7 +536,7 @@
 				   ,else)))
 			  (if (null? restkw)
 			      ;; if no rest kw, give error for unrecognized
-			      `(call (top error) "unrecognized keyword argument " ,elt)
+			      `(call (top error) "unrecognized keyword argument \"" ,elt  "\"")
 			      ;; otherwise add to rest keywords
 			      `(ccall 'jl_cell_1d_push Void (tuple Any Any)
 				      ,rkw (tuple ,elt
@@ -661,6 +669,10 @@
 		(call (curly ,name ,@params) ,@field-names)))))
 
 (define (new-call Texpr args field-names field-types mutabl)
+  (if (any vararg? args)
+      (error "... is not supported inside \"new\""))
+  (if (any kwarg? args)
+      (error "\"new\" does not accept keyword arguments"))
   (cond ((length> args (length field-names))
 	 `(call (top error) "new: too many arguments"))
 	(else
@@ -1161,10 +1173,24 @@
 
    )) ; vars-introduced-by-patterns
 
+(define keywords-introduced-by-patterns
+  (pattern-set
+   (pattern-lambda (function (call (curly name . sparams) . argl) body)
+		   (cons 'varlist (llist-keywords (fix-arglist argl))))
+
+   (pattern-lambda (function (call name . argl) body)
+		   (cons 'varlist (llist-keywords (fix-arglist argl))))
+
+   (pattern-lambda (= (call (curly name . sparams) . argl) body)
+		   `(function (call (curly ,name . ,sparams) . ,argl) ,body))
+   (pattern-lambda (= (call name . argl) body)
+		   `(function (call ,name ,@argl) ,body))
+   ))
+
 ; local x, y=2, z => local x;local y;local z;y = 2
 (define (expand-decls what binds)
   (if (not (list? binds))
-      (error (string "invalid " what " declaration")))
+      (error (string "invalid \"" what "\" declaration")))
   (let loop ((b       binds)
 	     (vars    '())
 	     (assigns '()))
@@ -1188,7 +1214,7 @@
 		((symbol? x)
 		 (loop (cdr b) (cons x vars) assigns))
 		(else
-		 (error (string "invalid syntax in " what " declaration"))))))))
+		 (error (string "invalid syntax in \"" what "\" declaration"))))))))
 
 (define (make-assignment l r) `(= ,l ,r))
 (define (assignment? e) (and (pair? e) (eq? (car e) '=)))
@@ -1196,14 +1222,14 @@
 
 (define (const-check-symbol s)
   (if (not (symbol? s))
-      (error "expected identifier after const")
+      (error "expected identifier after \"const\"")
       s))
 
 (define (qualified-const-expr binds __)
   (let ((vs (map (lambda (b)
 		   (if (assignment? b)
 		       (const-check-symbol (decl-var (cadr b)))
-		       (error "expected assignment after const")))
+		       (error "expected assignment after \"const\"")))
 		 binds)))
     `(block ,@(map (lambda (v) `(const ,v)) vs)
 	    ,(cadr __))))
@@ -1262,7 +1288,7 @@
     (if (pair? invalid)
 	(if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
 	    (error "more than one semicolon in argument list")
-	    (error (string "invalid keyword argument " (car invalid)))))))
+	    (error (string "invalid keyword argument \"" (car invalid) "\""))))))
 
 (define (lower-kw-call f kw pa)
   (check-kw-args kw)
@@ -1271,7 +1297,7 @@
    (let ((keyargs (apply append
 			 (map (lambda (a)
 				(if (not (symbol? (cadr a)))
-				    (error (string "keyword argument is not a symbol: " (cadr a))))
+				    (error (string "keyword argument is not a symbol: \"" (cadr a) "\"")))
 				`((quote ,(cadr a)) ,(caddr a)))
 			      keys))))
      (if (null? restkeys)
@@ -1408,7 +1434,7 @@
 	   ((typed_hcat)
 	    (error "invalid spacing in left side of indexed assignment"))
 	   ((typed_vcat)
-	    (error "unexpected ; in left side of indexed assignment"))
+	    (error "unexpected \";\" in left side of indexed assignment"))
 
 	   ((ref)
 	    ;; (= (ref a . idxs) rhs)
@@ -1586,7 +1612,7 @@
 			,.(map (lambda (x) (expand-forms (cadr  x))) args))
 		  (call (top tuple)
 			,.(map (lambda (x) (expand-forms (caddr x))) args)))
-	   (error (string "invalid typed_dict syntax " atypes)))))
+	   (error (string "invalid \"typed_dict\" syntax " atypes)))))
 
    'cell1d
    (lambda (e)
@@ -1643,7 +1669,7 @@
    '|::|
    (lambda (e)
      (if (length= e 2)
-	 (error "invalid :: syntax"))
+	 (error "invalid \"::\" syntax"))
      (if (and (length= e 3) (not (symbol? (cadr e))))
 	 `(call (top typeassert)
 		,(expand-forms (cadr e)) ,(expand-forms (caddr e)))
@@ -1763,7 +1789,7 @@
 		  (eq? (caddr e) ':))
 	     (and (length= e 4)
 		  (eq? (cadddr e) ':)))
-	 (error "invalid ':' outside indexing"))
+	 (error "invalid \":\" outside indexing"))
      `(call colon ,.(map expand-forms (cdr e))))
 
    'hcat
@@ -1843,7 +1869,7 @@
 	   (begin
 	     (if (not (and (pair? argtypes)
 			   (eq? (car argtypes) 'tuple)))
-		 (error "ccall argument types must be a tuple; try (T,)"))
+		 (error "ccall argument types must be a tuple; try \"(T,)\""))
 	     (expand-forms
 	      (lower-ccall name RT (cdr argtypes) args))))
 	 e))
@@ -2051,7 +2077,7 @@
 (define (lower-typed-dict-comprehension atypes expr ranges)
   (if (not (and (length= atypes 3)
 		(eq? (car atypes) '=>)))
-      (error "invalid typed_dict_comprehension syntax")
+      (error "invalid \"typed_dict_comprehension\" syntax")
       (let ( (result (gensy))
 	     (rs (map (lambda (x) (gensy)) ranges)) )
 
@@ -2206,7 +2232,7 @@
 	   (if (or (not (symbol? (cadr e)))
 		   (eq? (cadr e) 'true)
 		   (eq? (cadr e) 'false))
-	       (error (string "invalid assignment location " (cadr e))))
+	       (error (string "invalid assignment location \"" (cadr e) "\"")))
 	   (let ((LHS (cadr e))
 		 (RHS (caddr e)))
 	     (cond ((not dest)
@@ -2342,7 +2368,7 @@
 
 	  ((local global)
 	   (if dest
-	       (error (string "misplaced " (car e) " declaration")))
+	       (error (string "misplaced \"" (car e) "\" declaration")))
 	   (cons (to-blk (to-lff '(null) dest tail))
 		 (list e)))
 
@@ -2365,7 +2391,7 @@
 		     (fu (to-lff e #f #f)))
 		 (cons (car ex)
 		       (append fu (cdr ex))))
-	       ;(error (string "misplaced method definition for " (cadr e))))
+	       ;(error (string "misplaced method definition for \"" (cadr e) "\"")))
 	       (let ((r (map (lambda (arg) (to-lff arg #t #f))
 			     (cdr e))))
 		 (cond ((symbol? dest)
@@ -2406,7 +2432,7 @@ So far only the second case can actually occur.
 (define (check-dups locals)
   (if (and (pair? locals) (pair? (cdr locals)))
       (or (and (memq (car locals) (cdr locals))
-	       (error (string "local " (car locals) " declared twice")))
+	       (error (string "local \"" (car locals) "\" declared twice")))
 	  (check-dups (cdr locals))))
   locals)
 
@@ -2599,8 +2625,8 @@ So far only the second case can actually occur.
 		(r-s-b     (remove-scope-blocks body2 body2 argnames)))
 	   (for-each (lambda (v)
 		       (if (memq v argnames)
-			   (error (string "local " v
-					  " conflicts with argument"))))
+			   (error (string "local \"" v
+					  "\" conflicts with argument"))))
 		     (declared-local-vars body))
 	   `(lambda ,(cadr e)
 	      (locals ,@scope-block-vars)
@@ -2686,11 +2712,11 @@ So far only the second case can actually occur.
 	 (let ((vi (var-info-for (cadr e) env)))
 	   (if vi
 	       (begin (if (not (eq? (vinfo:type vi) 'Any))
-			  (error (string "multiple type declarations for "
-					 (cadr e))))
+			  (error (string "multiple type declarations for \""
+					 (cadr e) "\"")))
 		      (if (assq (cadr e) captvars)
-			  (error (string "type of " (cadr e)
-					 " declared in inner scope")))
+			  (error (string "type of \"" (cadr e)
+					 "\" declared in inner scope")))
 		      (vinfo:set-type! vi (caddr e))
 		      '(null))
 	       `(call (top typeassert) ,(cadr e) ,(caddr e)))))
@@ -2957,7 +2983,7 @@ So far only the second case can actually occur.
 	 (let ((form
                (apply invoke-julia-macro (cadr e) (cddr e))))
 	   (if (not form)
-	       (error (string "macro " (cadr e) " not defined")))
+	       (error (string "macro \"" (cadr e) "\" not defined")))
 	   (if (and (pair? form) (eq? (car form) 'error))
 	       (error (cadr form)))
 	   (let ((form (car form))
@@ -2990,7 +3016,10 @@ So far only the second case can actually occur.
    (append!
     (filter (lambda (x)
 	      (not (assq (car x) env)))
-	    (pair-with-gensyms (vars-introduced-by x)))
+	    (append!
+	     (pair-with-gensyms (vars-introduced-by x))
+	     (map (lambda (s) (cons s s))
+		  (keywords-introduced-by x))))
     env)
    m inarg))
 
@@ -3007,6 +3036,7 @@ So far only the second case can actually occur.
 	(else
 	 (case (car e)
 	   ((escape) (cadr e))
+	   ((using import importall export) (map unescape e))
 	   ((macrocall)
 	    `(macrocall ,.(map (lambda (x)
 				 (resolve-expansion-vars- x env m inarg))
@@ -3033,13 +3063,13 @@ So far only the second case can actually occur.
 	   ((= function)
 	    (if (and (pair? (cadr e)) (eq? (caadr e) 'call))
 		;; in (kw x 1) inside an arglist, the x isn't actually a kwarg
-		`(,(car e) (call ,(resolve-expansion-vars- (cadadr e) env m inarg)
+		`(,(car e) (call ,(resolve-expansion-vars-with-new-env (cadadr e) env m inarg)
 				 ,@(map (lambda (x)
-					  (resolve-expansion-vars- x env m #t))
+					  (resolve-expansion-vars-with-new-env x env m #t))
 					(cddr (cadr e))))
-		  ,(resolve-expansion-vars- (caddr e) env m inarg))
+		  ,(resolve-expansion-vars-with-new-env (caddr e) env m inarg))
 		`(,(car e) ,@(map (lambda (x)
-				    (resolve-expansion-vars- x env m inarg))
+				    (resolve-expansion-vars-with-new-env x env m inarg))
 				  (cdr e)))))
 
 	   ((kw)
@@ -3088,7 +3118,7 @@ So far only the second case can actually occur.
       '()
       (case (car e)
 	((escape)  '())
-	((= function ->)
+	((= function)
 	 (append! (filter
 		   symbol?
 		   (if (and (pair? (cadr e)) (eq? (car (cadr e)) 'tuple))
@@ -3104,15 +3134,25 @@ So far only the second case can actually occur.
 	(cdr v)
 	'())))
 
+(define (keywords-introduced-by e)
+  (let ((v (pattern-expand1 keywords-introduced-by-patterns e)))
+    (if (and (pair? v) (eq? (car v) 'varlist))
+	(cdr v)
+	'())))
+
 (define (env-for-expansion e)
-  (let ((v (diff (delete-duplicates
-		  (append! (find-declared-vars-in-expansion e 'local)
-			   (find-assigned-vars-in-expansion e)
-			   (map (lambda (x)
-				  (if (pair? x) (car x) x))
-				(vars-introduced-by e))))
-		 (find-declared-vars-in-expansion e 'global))))
-    (pair-with-gensyms v)))
+  (let ((globals (find-declared-vars-in-expansion e 'global)))
+    (let ((v (diff (delete-duplicates
+		    (append! (find-declared-vars-in-expansion e 'local)
+			     (find-assigned-vars-in-expansion e)
+			     (map (lambda (x)
+				    (if (pair? x) (car x) x))
+				  (vars-introduced-by e))))
+		   globals)))
+      (append!
+       (pair-with-gensyms v)
+       (map (lambda (s) (cons s s))
+	    (diff (keywords-introduced-by e) globals))))))
 
 (define (resolve-expansion-vars e m)
   ;; expand binding form patterns

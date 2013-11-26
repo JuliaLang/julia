@@ -496,6 +496,10 @@ function _gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Ptr), blk
 end
 
+function _gen_g(flags::ASCIIString, width::Int, precision::Int, c::Char)
+    error("printf \"%g\" format specifier not implemented")
+end
+
 ### core unsigned integer decoding functions ###
 
 macro _handle_zero()

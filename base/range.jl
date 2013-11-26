@@ -10,8 +10,8 @@ immutable Range{T<:Real} <: Ranges{T}
     len::Int
 
     function Range(start::T, step::T, len::Int)
-        if step != step; error("Range: step cannot be NaN"); end
-        if !(len >= 0);  error("Range: length must be non-negative"); end
+        if step != step; error("step cannot be NaN"); end
+        if !(len >= 0);  error("length must be non-negative"); end
         new(start, step, len)
     end
     Range(start::T, step::T, len::Integer) = Range(start, step, int(len))
@@ -24,7 +24,7 @@ immutable Range1{T<:Real} <: Ranges{T}
     len::Int
 
     function Range1(start::T, len::Int)
-        if !(len >= 0); error("Range: length must be non-negative"); end
+        if !(len >= 0); error("length must be non-negative"); end
         new(start, len)
     end
     Range1(start::T, len::Integer) = Range1(start, int(len))
@@ -58,7 +58,7 @@ function colon{T<:Real}(start::T, step::T, stop::T)
             len = itrunc(n)
         end
         if n >= typemax(Int)
-            error("Range: length ",n," is too large")
+            error("length ",n," is too large")
         end
     end
     Range(start, step, len)
@@ -76,7 +76,7 @@ function colon{T<:Real}(start::T, stop::T)
             len = itrunc(n)
         end
         if n >= typemax(Int)
-            error("Range: length ",n," is too large")
+            error("length ",n," is too large")
         end
     end
     Range1(start, len)
@@ -97,10 +97,10 @@ last{T}(r::Range{T})  = oftype(T, r.start + (r.len-1)*r.step)
 step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
 
-minimum(r::Range1) = (isempty(r)&&error("min: range is empty")) || first(r)
-maximum(r::Range1) = (isempty(r)&&error("max: range is empty")) || last(r)
-minimum(r::Ranges) = (isempty(r)&&error("min: range is empty")) || (step(r) > 0 ? first(r) :  last(r))
-maximum(r::Ranges) = (isempty(r)&&error("max: range is empty")) || (step(r) > 0 ?  last(r) : first(r))
+minimum(r::Range1) = (isempty(r)&&error("range must be non-empty")) || first(r)
+maximum(r::Range1) = (isempty(r)&&error("range must be non-empty")) || last(r)
+minimum(r::Ranges) = (isempty(r)&&error("range must be non-empty")) || (step(r) > 0 ? first(r) :  last(r))
+maximum(r::Ranges) = (isempty(r)&&error("range must be non-empty")) || (step(r) > 0 ?  last(r) : first(r))
 
 ctranspose(r::Ranges) = [x for _=1, x=r]
 transpose(r::Ranges) = r'
@@ -343,7 +343,7 @@ function vcat{T}(r::Ranges{T})
     a = Array(T,n)
     i = 1
     for x in r
-        a[i] = x
+        @inbounds a[i] = x
         i += 1
     end
     return a
@@ -357,7 +357,7 @@ function vcat{T}(rs::Ranges{T}...)
     i = 1
     for r in rs
         for x in r
-            a[i] = x
+            @inbounds a[i] = x
             i += 1
         end
     end

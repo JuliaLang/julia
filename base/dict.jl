@@ -140,6 +140,11 @@ function getindex(t::Associative, key)
     return v
 end
 
+# t[k1,k2,ks...] is syntactic sugar for t[(k1,k2,ks...)].  (Note
+# that we need to avoid dispatch loops if setindex!(t,v,k) is not defined.)
+getindex(t::Associative, k1, k2, ks...) = getindex(t, tuple(k1,k2,ks...))
+setindex!(t::Associative, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...))
+
 push!(t::Associative, key, v) = setindex!(t, v, key)
 
 # hashing objects by identity
@@ -238,7 +243,7 @@ function hash(t::Tuple)
     return h
 end
 
-function hash(a::Array)
+function hash(a::AbstractArray)
     h::Uint = hash(size(a))+1
     for i=1:length(a)
         h = bitmix(h,int(hash(a[i])))
@@ -247,7 +252,7 @@ function hash(a::Array)
 end
 
 # make sure Array{Bool} and BitArray can be equivalent
-hash(a::Array{Bool}) = hash(bitpack(a))
+hash(a::AbstractArray{Bool}) = hash(bitpack(a))
 
 hash(x::ANY) = object_id(x)
 
@@ -285,10 +290,18 @@ type Dict{K,V} <: Associative{K,V}
         new(zeros(Uint8,n), Array(K,n), Array(V,n), 0, 0, identity)
     end
     function Dict(ks, vs)
+        # TODO: eventually replace with a call to Dict(zip(ks,vs))
         n = length(ks)
         h = Dict{K,V}()
         for i=1:n
             h[ks[i]] = vs[i]
+        end
+        return h
+    end
+    function Dict(kv)
+        h = Dict{K,V}()
+        for (k,v) in kv
+            h[k] = v
         end
         return h
     end
@@ -302,6 +315,8 @@ Dict(ks, vs) = Dict{Any,Any}(ks, vs)
 Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
 Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
 Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
+
+Dict{K,V}(kv::Array{(K,V)}) = Dict{K,V}(kv)
 
 similar{K,V}(d::Dict{K,V}) = (K=>V)[]
 

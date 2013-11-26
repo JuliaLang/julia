@@ -152,7 +152,8 @@ void restore_signals()
 {
     SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
 }
-void jl_throw_in_ctx(jl_value_t* excpt, CONTEXT *ctxThread, int bt) {
+void jl_throw_in_ctx(jl_value_t* excpt, CONTEXT *ctxThread, int bt)
+{
     bt_size = bt ? rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ctxThread) : 0;
     jl_exception_in_transit = excpt;
 #if defined(_CPU_X86_64_)
@@ -213,7 +214,8 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     }
     return 1;
 }
-static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) {
+static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
+{
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
         case EXCEPTION_STACK_OVERFLOW:
@@ -309,7 +311,8 @@ static void jl_uv_exitcleanup_add(uv_handle_t* handle, struct uv_shutdown_queue 
     if (!queue->first) queue->first = item;
     queue->last = item;
 }
-static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg) {
+static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
+{
     if (handle != (uv_handle_t*)jl_uv_stdout && handle != (uv_handle_t*)jl_uv_stderr)
         jl_uv_exitcleanup_add(handle, arg);
 }
@@ -427,8 +430,7 @@ void *init_stdio_handle(uv_file fd,int readable)
     fd = dup(fd);
 #endif
     //printf("%d: %d -- %d\n", fd, type, 0);
-    switch(type)
-    {
+    switch(type) {
         case UV_TTY:
             handle = malloc(sizeof(uv_tty_t));
             if (uv_tty_init(jl_io_loop,(uv_tty_t*)handle,fd,readable)) {
@@ -540,8 +542,7 @@ DLLEXPORT kern_return_t catch_exception_raise
     //memset(&state,0,sizeof(x86_thread_state64_t));
     //memset(&exc_state,0,sizeof(x86_exception_state64_t));
 #ifdef LIBOSXUNWIND
-    if (thread == mach_profiler_thread)
-    {
+    if (thread == mach_profiler_thread) {
         return profiler_segv_handler(exception_port,thread,task,exception,code,code_count);
     }
 #endif
@@ -557,8 +558,7 @@ DLLEXPORT kern_return_t catch_exception_raise
         (char*)fault_addr <
         (char*)jl_current_task->stack+jl_current_task->ssize
 #endif
-        ) 
-    {
+        ) {
         ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
         HANDLE_MACH_ERROR("thread_get_state(2)",ret);
         old_state = state;
@@ -722,14 +722,12 @@ void julia_init(char *imageFile)
     // Alright, create a thread to serve as the listener for exceptions
     pthread_t thread;
     pthread_attr_t attr;
-    if (pthread_attr_init(&attr) != 0)
-    {
+    if (pthread_attr_init(&attr) != 0) {
         JL_PRINTF(JL_STDERR, "pthread_attr_init failed");
         jl_exit(1);  
     }
     pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
-    if (pthread_create(&thread,&attr,mach_segv_listener,NULL) != 0)
-    {
+    if (pthread_create(&thread,&attr,mach_segv_listener,NULL) != 0) {
         JL_PRINTF(JL_STDERR, "pthread_create failed");
         jl_exit(1);  
     }     
@@ -763,7 +761,6 @@ void julia_init(char *imageFile)
         jl_exit(1);
     }
 #endif
-
 
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();

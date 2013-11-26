@@ -122,6 +122,13 @@ sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
 @test strides(sA) == (2,9,30)
 @test sA[:] == A[1:2:3, 1:3:5, 1:2:8][:]
 
+# sub logical indexing #4763
+A = sub([1:10], 5:8)
+@test A[A.<7] == [5, 6]
+B = reshape(1:16, 4, 4)
+sB = sub(B, 2:3, 2:3)
+@test sB[sB.>8] == [10, 11]
+
 # slice
 A = reshape(1:120, 3, 5, 8)
 sA = slice(A, 2, :, 1:8)
@@ -197,14 +204,19 @@ let
 end
 
 ## arrays as dequeues
-l = {1,2,3}
-push!(l,8)
+l = {1}
+push!(l,2,3,8)
 @test l[1]==1 && l[2]==2 && l[3]==3 && l[4]==8
 v = pop!(l)
 @test v == 8
 v = pop!(l)
 @test v == 3
 @test length(l)==2
+unshift!(l,4,7,5)
+@test l[1]==4 && l[2]==7 && l[3]==5 && l[4]==1 && l[5]==2
+v = shift!(l)
+@test v == 4
+@test length(l)==4
 
 # concatenation
 @test isequal([ones(2,2)  2*ones(2,1)], [1. 1 2; 1 1 2])

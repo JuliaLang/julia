@@ -286,7 +286,7 @@ Types
    in the following manner to summarize information about a struct type::
 
         structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...]
-        structinfo(Stat)
+        structinfo(StatStruct)
 
 .. function:: fieldtype(value, name::Symbol)
 
@@ -642,6 +642,8 @@ Dicts can be created using a literal syntax: ``{"A"=>1, "B"=>2}``. Use of curly 
 As with arrays, ``Dicts`` may be created with comprehensions. For example,
 ``{i => f(i) for i = 1:10}``.
 
+Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if it exists) or throws an error, and ``D[x] = y`` stores the key-value pair ``x => y`` in ``D`` (replacing any existing value for the key ``x``).  Multiple arguments to ``D[...]`` are converted to tuples; for example, the syntax ``D[x,y]``  is equivalent to ``D[(x,y)]``, i.e. it refers to the value keyed by the tuple ``(x,y)``.
+
 .. function:: Dict()
 
    ``Dict{K,V}()`` constructs a hashtable with keys of type K and values of type V.
@@ -722,6 +724,9 @@ Set-Like Collections
 .. function:: setdiff(s1,s2)
 
    Construct the set of elements in ``s1`` but not ``s2``. Maintains order with arrays.
+   Note that both arguments must be collections, and both will be iterated over.
+   In particular, ``setdiff(set,element)`` where ``element`` is a potential member of
+   ``set``, will not work in general.
 
 .. function:: setdiff!(s, iterable)
 
@@ -766,17 +771,17 @@ Partially implemented by: ``Array``.
 Dequeues
 --------
 
-.. function:: push!(collection, item) -> collection
+.. function:: push!(collection, items...) -> collection
 
-   Insert an item at the end of a collection.
+   Insert items at the end of a collection.
 
 .. function:: pop!(collection) -> item
 
    Remove the last item in a collection and return it.
 
-.. function:: unshift!(collection, item) -> collection
+.. function:: unshift!(collection, items...) -> collection
 
-   Insert an item at the beginning of a collection.
+   Insert items at the beginning of a collection.
 
 .. function:: shift!(collection) -> item
 
@@ -2424,6 +2429,10 @@ Mathematical Functions
 
    Compute the natural logarithm of ``x``. Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.
 
+.. function:: log(b,x)
+
+   Compute the base ``b`` logarithm of ``x``. Throws ``DomainError`` for negative ``Real`` arguments.
+
 .. function:: log2(x)
 
    Compute the logarithm of ``x`` to base 2. Throws ``DomainError`` for negative ``Real`` arguments.
@@ -2542,9 +2551,9 @@ Mathematical Functions
 
    Return :math:`\sqrt{x}`. Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.
 
-.. function:: isqrt(x)
+.. function:: isqrt(n)
 
-   Integer square root.
+   Integer square root: the largest integer ``m`` such that ``m*m <= n``.
 
 .. function:: cbrt(x)
 
@@ -2632,15 +2641,15 @@ Mathematical Functions
 
 .. function:: gcd(x,y)
 
-   Greatest common divisor
+   Greatest common (positive) divisor (or zero if x and y are both zero).
 
 .. function:: lcm(x,y)
 
-   Least common multiple
+   Least common (non-negative) multiple.
 
 .. function:: gcdx(x,y)
 
-   Greatest common divisor, also returning integer coefficients ``u`` and ``v`` that solve ``ux+vy == gcd(x,y)``
+   Greatest common (positive) divisor, also returning integer coefficients ``u`` and ``v`` that solve ``ux+vy == gcd(x,y)``
 
 .. function:: ispow2(n)
 
@@ -2648,19 +2657,23 @@ Mathematical Functions
 
 .. function:: nextpow2(n)
 
-   Next power of two not less than ``n``
+   The smallest power of two not less than ``n``. Returns 0 for ``n==0``, and returns
+   ``-nextpow2(-n)`` for negative arguments.
 
 .. function:: prevpow2(n)
 
-   Previous power of two not greater than ``n``
+   The largest power of two not greater than ``n``. Returns 0 for ``n==0``, and returns
+   ``-prevpow2(-n)`` for negative arguments.
 
-.. function:: nextpow(a, n)
+.. function:: nextpow(a, x)
 
-   Next power of ``a`` not less than ``n``
+   The smallest ``a^n`` not less than ``x``, where ``n`` is a non-negative integer.
+   ``a`` must be greater than 1, and ``x`` must be greater than 0.
 
-.. function:: prevpow(a, n)
+.. function:: prevpow(a, x)
 
-   Previous power of ``a`` not greater than ``n``
+   The largest ``a^n`` not greater than ``x``, where ``n`` is a non-negative integer.
+   ``a`` must be greater than 1, and ``x`` must not be less than 1.
 
 .. function:: nextprod([k_1,k_2,...], n)
 
@@ -4966,13 +4979,16 @@ Tasks
 
    Tell whether a task has exited.
 
-.. function:: consume(task)
+.. function:: consume(task, values...)
 
    Receive the next value passed to ``produce`` by the specified task.
+   Additional arguments may be passed, to be returned from the last ``produce`` call
+   in the producer.
 
 .. function:: produce(value)
 
    Send the given value to the last ``consume`` call, switching to the consumer task.
+   If the next ``consume`` call passes any values, they are returned by ``produce``.
 
 .. function:: yield()
 

@@ -41,6 +41,12 @@ systemerror(p, b::Bool) = b ? throw(SystemError(string(p))) : nothing
 
 assert(x) = x ? nothing : error("assertion failed")
 macro assert(ex,msg...)
-    msg = isempty(msg) ? :(string($(Expr(:quote,ex)))) : esc(msg[1])
-    :($(esc(ex)) ? nothing : error("assertion failed: ", $msg))
+    msg = isempty(msg) ? ex : msg[1]
+    if isdefined(Base,:string)
+        msg = string("assertion failed: ", msg)
+    else
+        # string() might not be defined during bootstrap
+        msg = :(string("assertion failed: ", $(Expr(:quote,msg))))
+    end
+    :($(esc(ex)) ? $(nothing) : error($msg))
 end

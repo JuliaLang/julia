@@ -32,7 +32,7 @@ se33_i32 = speye(Int32, 3, 3)
 # check mixed sparse-dense concatenation
 sz33 = spzeros(3)
 de33 = eye(3)
-@test  all([se33 de33; sz33 se33] == dense([se33 se33; sz33 se33 ]))
+@test  all([se33 de33; sz33 se33] == full([se33 se33; sz33 se33 ]))
 
 # check splicing + concatenation on
 # random instances, with nested vcat
@@ -46,9 +46,9 @@ end
 a116 = reshape(1:16, 4, 4)
 s116 = sparse(a116)
 p = [4, 1, 2, 3, 2]
-@test dense(s116[p,:]) == a116[p,:]
-@test dense(s116[:,p]) == a116[:,p]
-@test dense(s116[p,p]) == a116[p,p]
+@test full(s116[p,:]) == a116[p,:]
+@test full(s116[:,p]) == a116[:,p]
+@test full(s116[p,p]) == a116[p,p]
 
 # sparse assign
 p = [4, 1, 3]
@@ -65,34 +65,34 @@ s116[p, p] = reshape(1:9, 3, 3)
 for i = 1:5
     a = sprand(10, 5, 0.5)
     b = rand(5)
-    @test maximum(abs(a*b - dense(a)*b)) < 100*eps()
+    @test maximum(abs(a*b - full(a)*b)) < 100*eps()
 end
 
 # complex matrix-vector multiplication and left-division
 for i = 1:5
     a = speye(5) + 0.1*sprandn(5, 5, 0.2)
     b = randn(5) + im*randn(5)
-    @test (maximum(abs(a*b - dense(a)*b)) < 100*eps())
-    @test (maximum(abs(a\b - dense(a)\b)) < 1000*eps())
-    @test (maximum(abs(a'\b - dense(a')\b)) < 1000*eps())
+    @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
+    @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
+    @test (maximum(abs(a'\b - full(a')\b)) < 1000*eps())
     a = speye(5) + 0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2)
     b = randn(5)
-    @test (maximum(abs(a*b - dense(a)*b)) < 100*eps())
-    @test (maximum(abs(a\b - dense(a)\b)) < 1000*eps())
-    @test (maximum(abs(a'\b - dense(a')\b)) < 1000*eps())
-    @test (maximum(abs(a.'\b - dense(a.')\b)) < 1000*eps())
+    @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
+    @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
+    @test (maximum(abs(a'\b - full(a')\b)) < 1000*eps())
+    @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
     b = randn(5) + im*randn(5)
-    @test (maximum(abs(a*b - dense(a)*b)) < 100*eps())
-    @test (maximum(abs(a\b - dense(a)\b)) < 1000*eps())
-    @test (maximum(abs(a'\b - dense(a')\b)) < 1000*eps())
-    @test (maximum(abs(a.'\b - dense(a.')\b)) < 1000*eps())
+    @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
+    @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
+    @test (maximum(abs(a'\b - full(a')\b)) < 1000*eps())
+    @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
 end
 
 # matrix multiplication
 for i = 1:5
     a = sprand(10, 5, 0.5)
     b = sprand(5, 10, 0.1)
-    @test maximum(abs(a*b - dense(a)*dense(b))) < 100*eps()
+    @test maximum(abs(a*b - full(a)*full(b))) < 100*eps()
 end
 
 # reductions

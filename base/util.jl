@@ -152,36 +152,46 @@ function edit(file::String, line::Integer)
         default_editor = "emacs"
     end
     editor = get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor)))
+    if ispath(editor)
+        if isreadable(editor)
+            edpath = realpath(editor)
+            edname = basename(edpath)
+        else
+            error("edit: can't find \"$editor\"")
+        end
+    else
+        edpath = edname = editor
+    end
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
         file = find_source_file(file)
     end
-    if editor == "emacs"
+    if beginswith(edname, "emacs")
         jmode = joinpath(JULIA_HOME, "..", "..", "contrib", "julia-mode.el")
         if issrc && isreadable(jmode)
-            run(`emacs $file --eval "(progn
+            run(`$edpath $file --eval "(progn
                                      (require 'julia-mode \"$jmode\")
                                      (julia-mode)
                                      (goto-line $line))"`)
         else
-            run(`emacs $file --eval "(goto-line $line)"`)
+            run(`$edpath $file --eval "(goto-line $line)"`)
         end
-    elseif editor == "vim"
-        run(`vim $file +$line`)
-    elseif editor == "textmate" || editor == "mate"
-        spawn(`mate $file -l $line`)
-    elseif editor == "subl"
-        spawn(`subl $file:$line`)
-    elseif OS_NAME == :Windows && (editor == "start" || editor == "open")
+    elseif edname == "vim"
+        run(`$edpath $file +$line`)
+    elseif edname == "textmate" || edname == "mate"
+        spawn(`$edpath $file -l $line`)
+    elseif edname == "subl"
+        spawn(`$edpath $file:$line`)
+    elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
         spawn(`start /b $file`)
-    elseif OS_NAME == :Darwin && (editor == "start" || editor == "open")
+    elseif OS_NAME == :Darwin && (edname == "start" || edname == "open")
         spawn(`open -t $file`)
-    elseif editor == "kate"
-        spawn(`kate $file -l $line`)
-    elseif editor == "nano"
-        spawn(`nano +$line $file`)
+    elseif edname == "kate"
+        spawn(`$edpath $file -l $line`)
+    elseif edname == "nano"
+        run(`$edpath +$line $file`)
     else
-        run(`$(shell_split(editor)) $file`)
+        run(`$(shell_split(edpath)) $file`)
     end
     nothing
 end
@@ -414,6 +424,35 @@ print_with_color(color::Symbol, io::IO, msg::String...) =
     with_output_color(print, color, io, msg...)
 print_with_color(color::Symbol, msg::String...) =
     print_with_color(color, STDOUT, msg...)
+
+## file downloading ##
+
+downloadcmd = nothing
+function download(url::String, filename::String)
+    global downloadcmd
+    if downloadcmd === nothing
+        for checkcmd in (:curl, :wget, :fetch)
+            if success(`which $checkcmd` |> DevNull)
+                downloadcmd = checkcmd
+                break
+            end
+        end
+    end
+    if downloadcmd == :wget
+        run(`wget -O $filename $url`)
+    elseif downloadcmd == :curl
+        run(`curl -o $filename -L $url`)
+    elseif downloadcmd == :fetch
+        run(`fetch -f $filename $url`)
+    else
+        error("no download agent available; install curl, wget, or fetch")
+    end
+    filename
+end
+function download(url::String)
+    filename = tempname()
+    download(url, filename)
+end
 
 ## warnings and messages ##
 

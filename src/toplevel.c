@@ -39,6 +39,9 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 {
     assert(ex->head == module_sym);
     jl_module_t *last_module = jl_current_module;
+    if (jl_array_len(ex->args) != 3 || !jl_is_expr(jl_exprarg(ex,2))) {
+        jl_error("syntax: malformed module expression");
+    }
     int std_imports = (jl_exprarg(ex,0)==jl_true);
     jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, 1);
     if (!jl_is_symbol(name)) {
@@ -309,7 +312,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         jl_module_t *m = eval_import_path(ex->args);
         if (m==NULL) return jl_nothing;
         jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
-        assert(jl_is_symbol(name));
+        if (!jl_is_symbol(name))
+            jl_error("syntax: malformed \"importall\" statement");
         m = (jl_module_t*)jl_eval_global_var(m, name);
         if (!jl_is_module(m))
 	    jl_errorf("invalid %s statement: name exists but does not refer to a module", ex->head->name);
@@ -321,7 +325,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         jl_module_t *m = eval_import_path(ex->args);
         if (m==NULL) return jl_nothing;
         jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
-        assert(jl_is_symbol(name));
+        if (!jl_is_symbol(name))
+            jl_error("syntax: malformed \"using\" statement");
         jl_module_t *u = (jl_module_t*)jl_eval_global_var(m, name);
         if (jl_is_module(u)) {
             jl_module_using(jl_current_module, u);
@@ -336,15 +341,18 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         jl_module_t *m = eval_import_path(ex->args);
         if (m==NULL) return jl_nothing;
         jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
-        assert(jl_is_symbol(name));
+        if (!jl_is_symbol(name))
+            jl_error("syntax: malformed \"import\" statement");
         jl_module_import(jl_current_module, m, name);
         return jl_nothing;
     }
 
     if (ex->head == export_sym) {
         for(size_t i=0; i < jl_array_len(ex->args); i++) {
-            jl_module_export(jl_current_module,
-                             (jl_sym_t*)jl_cellref(ex->args, i));
+            jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, i);
+            if (!jl_is_symbol(name))
+                jl_error("syntax: malformed \"export\" statement");
+            jl_module_export(jl_current_module, name);
         }
         return jl_nothing;
     }
