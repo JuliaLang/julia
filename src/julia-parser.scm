@@ -284,12 +284,18 @@
 		(else (if (and (integer? n) (> n 9223372036854775807))
 			  `(macrocall @int128_str ,s)
 			  n)))
-	  (cond ((memq pred `(,char-hex? ,char-oct? ,char-bin?)) `(macrocall @uint128_str ,s))
+	  (cond ((memq pred `(,char-hex? ,char-oct? ,char-bin?))
+		 (fix-uint-neg neg `(macrocall @uint128_str ,s)))
 		((within-int128? s) `(macrocall @int128_str ,s))
 		(else `(macrocall @bigint_str ,(strip-leading-0s s))))))))
 
 (define (fix-uint-neg neg n)
-  (if neg `(call - ,n) n))
+  (if neg
+      (if (large-number? n)
+	  `(call - ,(maybe-negate '- n))
+	  `(call - ,n))
+      n))
+
 
 (define (sized-uint-literal n s b)
   (let ((l (* (- (length s) 2) b)))
