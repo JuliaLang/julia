@@ -32,6 +32,10 @@ Library improvements
   * New Pkg.submit(pkg[,commit]) function to automatically submit
     a Github pull request to the package author.
 
+  * Triple-quoted regex strings, `r"""..."""` ([#4934]).
+
+  * New string type, `UTF16String` ([#4930]).
+
 Deprecated or removed
 ---------------------
 
