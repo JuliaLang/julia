@@ -1,6 +1,10 @@
 #ifndef JULIA_H
 #define JULIA_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "libsupport.h"
 #include <stdint.h>
 #include "uv.h"
@@ -1318,6 +1322,10 @@ __declspec(noreturn) __attribute__ ((__nothrow__)) void jl_longjmp(jmp_buf _Buf,
 #define JL_CATCH                                                \
     else                                                        \
         for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0)
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif
