@@ -104,6 +104,7 @@ export
     TmStruct,
     Triangular,
     Tridiagonal,
+    UTF16String,
     VecOrMat,
     Vector,
     VersionNumber,
@@ -817,6 +818,7 @@ export
     unescape_string,
     uppercase,
     utf8,
+    utf16,
     warn,
     xdump,
 
