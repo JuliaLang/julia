@@ -36,6 +36,7 @@ export
     Complex64,
     Complex32,
     DArray,
+    SharedArray,
     DevNull,
     Diagonal,
     Dict,
@@ -1138,7 +1139,7 @@ export
     pushdisplay,
     redisplay,
 
-# distributed arrays
+# distributed and shared arrays
     dfill,
     distribute,
     dones,
@@ -1148,7 +1149,14 @@ export
     localpart,
     myindexes,
     procs,
+    sharedfill,
+    sharedones,
+    sharedrand,
+    sharedrandn,
+    sharedzeros,
+    share,
 
+    
 # paths and file names
     abspath,
     basename,

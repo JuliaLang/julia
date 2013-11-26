@@ -1665,3 +1665,16 @@ function interrupt(pids::AbstractVector=workers())
         end
     end
 end
+
+
+function islocalwrkr(id)
+    if (myid() == id) 
+        return true
+    else
+        wrkr = worker_from_id(id)
+        if (wrkr.host == "127.0.0.1") || (wrkr.host == "localhost") || (wrkr.host == string(getipaddr()))
+            return true
+        end
+    end
+    return false
+end
