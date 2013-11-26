@@ -253,14 +253,10 @@ function update(branch::String)
     resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
 end
 
-function submit(pkg::String, commit::String)
-    ispath(pkg,".git") || error("$pkg is not a git repo")
-    commit = Git.readchomp(`rev-parse --verify $commit`, dir=pkg)
-    url = ispath("METADATA",pkg,"url") ?
-        readchomp(joinpath("METADATA",pkg,"url")) :
-        Git.readchomp(`config remote.origin.url`, dir=pkg)
-    m = match(Git.GITHUB_REGEX,url)
-    m == nothing && error("$pkg not hosted at GitHub ($url), don't know how to submit.")
+function pull_request(dir::String, commit::String, url::String)
+    commit = Git.readchomp(`rev-parse --verify $commit`, dir=dir)
+    m = match(Git.GITHUB_REGEX, url)
+    m == nothing && error("not a GitHub repo URL, can't make a pull request: $url")
     owner, repo = m.captures[2:3]
     user = GitHub.user()
     info("Forking $owner/$repo to $user")
@@ -268,13 +264,21 @@ function submit(pkg::String, commit::String)
     fork = response["ssh_url"]
     branch = "pkg/patch.$(commit[1:8])"
     info("Pushing changes as branch $branch")
-    Git.run(`push -q $fork $commit:refs/heads/$branch`, dir=pkg)
+    Git.run(`push -q $fork $commit:refs/heads/$branch`, dir=dir)
     pr_url = "$(response["html_url"])/compare/$branch?expand=1"
     @osx? run(`open $pr_url`) : info("To create a pull-request open:\n\n  $pr_url\n")
 end
+
 function submit(pkg::String)
     ispath(pkg,".git") || error("$pkg is not a git repo")
     submit(pkg, Git.readchomp(`rev-parse HEAD`, dir=pkg))
+end
+function submit(pkg::String, commit::String)
+    ispath(pkg,".git") || error("$pkg is not a git repo")
+    urlpath = joinpath("METADATA",pkg,"url")
+    url = ispath(urlpath) ? readchomp(urlpath) :
+        Git.readchomp(`config remote.origin.url`, dir=pkg)
+    pull_request(pkg, commit, url)
 end
 
 function publish(branch::String)
