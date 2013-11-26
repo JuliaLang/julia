@@ -44,4 +44,5 @@ convert(::Type{UTF8String}, s::UTF16String) =
     sprint(length(s.data), io->for c in s; write(io,c::Char); end)
 
 sizeof(s::UTF16String) = sizeof(s.data)
-convert(T::Type{Ptr}, s::UTF16String) = convert(T, s.data)
+convert{T<:Union(Int16,Uint16)}(::Type{Ptr{T}}, s::UTF16String) =
+    convert(Ptr{T}, s.data)
