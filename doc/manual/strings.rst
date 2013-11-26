@@ -699,6 +699,27 @@ For example, the following regex has all three flags turned on:
     julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
     RegexMatch("angry,\nBad world")
 
+Sometimes you want use double-quotes in regular expressions. Escaping them can
+be annoying. Now you can use tripple quotes.
+
+.. doctest::
+
+    julia> r = r"""
+           "[^"]*"
+           """xs
+    r"
+           \"[^\"]*\"
+           "sx
+
+Triple-quoted strings have worked for a while now:
+
+.. doctest::
+
+    julia> match(r, """
+           "foo"
+           """)
+    RegexMatch("\"foo\"")
+
 Byte Array Literals
 ~~~~~~~~~~~~~~~~~~~
 
