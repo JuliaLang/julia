@@ -583,7 +583,8 @@ convert{T<:String}(::Type{T}, v::Vector{Char}) = convert(T, CharString(v))
 reverse(s::CharString) = CharString(reverse(s.chars))
 
 sizeof(s::CharString) = sizeof(s.chars)
-convert(T::Type{Ptr}, s::CharString) = convert(T, s.chars)
+convert{T<:Union(Int32,Uint32)}(::Type{Ptr{T}}, s::CharString) =
+    convert(Ptr{T}, s.chars)
 
 ## substrings reference original strings ##
 
