@@ -1237,6 +1237,7 @@ export
     @__FILE__,
     @b_str,
     @r_str,
+    @r_mstr,
     @v_str,
     @mstr,
     @unexpected,
