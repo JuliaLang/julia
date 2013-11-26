@@ -180,7 +180,7 @@ else
 endif
 	cp -a $(BUILD)/include/uv* $(PREFIX)/include/julia
 endif
-	cp -a src/julia.h src/support/*.h $(PREFIX)/include/julia
+	cp -a src/julia.h src/support/*.h src/support/*.inc $(PREFIX)/include/julia
 	# Copy system image
 	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 	# Copy in all .jl sources as well
