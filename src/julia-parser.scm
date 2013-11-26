@@ -282,9 +282,11 @@
 		((eq? pred char-bin?) (fix-uint-neg neg (sized-uint-literal n s 1)))
                 (is-float32-literal   (float n))
 		(else (if (and (integer? n) (> n 9223372036854775807))
-			  (error (string "invalid numeric constant \"" s "\""))
+			  `(call int128 ,n)
 			  n)))
-	  (error (string "invalid numeric constant \"" s "\""))))))
+	  (cond ((memq pred `(,char-hex? ,char-oct? ,char-bin?)) `(call uint128 ,s))
+		((within-int128? s) `(call int128 ,s))
+		(else `(call BigInt ,(strip-leading-0s s))))))))
 
 (define (fix-uint-neg neg n)
   (if neg `(call - ,n) n))
@@ -294,7 +296,8 @@
     (cond ((<= l 8)  (uint8  n))
 	  ((<= l 16) (uint16 n))
 	  ((<= l 32) (uint32 n))
-	  (else      (uint64 n)))))
+	  ((<= l 64) (uint64 n))
+	  (else	     `(call uint128 ,s)))))
 
 (define (sized-uint-oct-literal n s)
   (if (eqv? (string.char s 2) #\0)
@@ -303,6 +306,28 @@
 	  ((< n 65536)      (uint16 n))
 	  ((< n 4294967296) (uint32 n))
 	  (else             (uint64 n)))))
+
+(define (strip-leading-0s s)
+  (let ((i (if (eqv? (string.char s 0) #\-) 1 0)))
+    (let loop ((i i))
+      (if (eqv? (string.char s i) #\0)
+	  (loop (+ i 1))
+	  (string #\- (string.tail s i))))))
+
+(define (compare-num-strings s1 s2)
+  (let ((s1 (strip-leading-0s s1))
+	(s2 (strip-leading-0s s2)))
+    (if (= (string-length s1) (string-length s2))
+	(compare s1 s2)
+	(compare (string-length s1) (string-length s2)))))
+
+(define (within-int128? s)
+  (if (eqv? (string.char s 0) #\-)
+      (>= 0 (compare-num-strings s "-170141183460469231731687303715884105728"))
+      (>= 0 (compare-num-strings s "170141183460469231731687303715884105727"))))
+
+(define (large-number? t)
+  (and (pair? t) (eq? (car t) 'call) (memq (cadr t) '(int128 uint128 BigInt))))
 
 (define (skip-ws-and-comments port)
   (skip-ws port #t)
@@ -641,7 +666,15 @@
       (memv tok '(#\, #\) #\] #\} #\; else elseif catch finally))))
 
 (define (maybe-negate op num)
-  (if (eq? op '-) (- num) num))
+  (if (eq? op '-)
+      (if (large-number? num)
+	  (if (eqv? (caddr num) "-170141183460469231731687303715884105728")
+	      `(call BigInt "170141183460469231731687303715884105728")
+	      `(,(car num) ,(cadr num) ,(string.tail (caddr num) 1)))
+	  (if (= num -9223372036854775808)
+	      `(call int128 "9223372036854775808")
+	      (- num)))
+      num))
 
 ; given an expression and the next token, is there a juxtaposition
 ; operator between them?
@@ -653,6 +686,7 @@
        (not (newline? t))
        (not (and (pair? expr) (eq? (car expr) '...)))
        (or (number? expr)
+	   (large-number? expr)
 	   (not (memv t '(#\( #\[ #\{))))))
 
 (define (parse-juxtapose ex s)
@@ -682,10 +716,7 @@
 			 s)))
 		   (if (memq (peek-token s) '(^ .^))
 		       ;; -2^x parsed as (- (^ 2 x))
-		       (begin (if (= num -9223372036854775808)
-				  (error (string "invalid numeric constant \""
-						 (- num) "\"")))
-			      (ts:put-back! s (maybe-negate op num))
+		       (begin (ts:put-back! s (maybe-negate op num))
 			      (list 'call op (parse-factor s)))
 		       num))
 		 (let ((next (peek-token s)))
@@ -761,7 +792,8 @@
 	  (let ((t (peek-token s)))
 	    (if (or (and space-sensitive (ts:space? s)
 			 (memv t '(#\( #\[ #\{ |'| #\")))
-		    (and (number? ex)  ;; 2(...) is multiply, not call
+		    (and (or (number? ex)  ;; 2(...) is multiply, not call
+			     (large-number? ex))
 			 (eqv? t #\()))
 		ex
 		(case t
@@ -1487,7 +1519,7 @@
 
 (define (parse-atom- s)
   (let ((t (require-token s)))
-    (cond ((or (string? t) (number? t)) (take-token s))
+    (cond ((or (string? t) (number? t) (large-number? t)) (take-token s))
 
 	  ;; char literal
 	  ((eq? t '|'|)
