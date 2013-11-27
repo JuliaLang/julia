@@ -1,7 +1,9 @@
 #ifndef DTYPES_H
 #define DTYPES_H
 
+#if !defined(_OS_WINDOWS_)
 #include <inttypes.h>
+#endif
 #include <stddef.h>
 #include <stddef.h> // double include of stddef.h fixes #3421
 #include <stdint.h>
@@ -112,9 +114,15 @@
 #define LLT_REALLOC(p,n) realloc((p),(n))
 #define LLT_FREE(x) free(x)
 
-#if defined(_COMPILER_INTEL_) && defined(_OS_WINDOWS_)
-# define STATIC_INLINE static
-# define INLINE
+#if defined(_OS_WINDOWS_)
+# if defined(_COMPILER_INTEL_)
+#  define STATIC_INLINE static
+#  define INLINE
+# endif /* _COMPILER_INTEL_ */
+# if defined(_COMPILER_MICROSOFT_)
+#  define STATIC_INLINE static __inline
+#  define INLINE __inline
+# endif /* _COMPILER_MICROSOFT_ */
 #else
 # define STATIC_INLINE static inline
 # define INLINE inline

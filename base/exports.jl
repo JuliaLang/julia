@@ -25,7 +25,6 @@ export
     BitMatrix,
     BitVector,
     BunchKaufman,
-    CharString,
     Cholesky,
     CholeskyPivoted,
     Cmd,
@@ -105,6 +104,7 @@ export
     Triangular,
     Tridiagonal,
     UTF16String,
+    UTF32String,
     VecOrMat,
     Vector,
     VersionNumber,
@@ -819,6 +819,7 @@ export
     uppercase,
     utf8,
     utf16,
+    utf32,
     warn,
     xdump,
 

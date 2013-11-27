@@ -565,25 +565,28 @@ next(s::GenericString, i::Int) = next(s.string, i)
 
 ## plain old character arrays ##
 
-immutable CharString <: DirectIndexString
+immutable UTF32String <: DirectIndexString
     chars::Array{Char,1}
 
-    CharString(a::Array{Char,1}) = new(a)
-    CharString(c::Char...) = new([ c[i] for i=1:length(c) ])
+    UTF32String(a::Array{Char,1}) = new(a)
+    UTF32String(c::Char...) = new([ c[i] for i=1:length(c) ])
 end
-CharString(x...) = CharString(map(char,x)...)
+UTF32String(x...) = UTF32String(map(char,x)...)
 
-next(s::CharString, i::Int) = (s.chars[i], i+1)
-endof(s::CharString) = length(s.chars)
-length(s::CharString) = length(s.chars)
+next(s::UTF32String, i::Int) = (s.chars[i], i+1)
+endof(s::UTF32String) = length(s.chars)
+length(s::UTF32String) = length(s.chars)
 
-convert(::Type{CharString}, s::String) = CharString(Char[c for c in s])
-convert{T<:String}(::Type{T}, v::Vector{Char}) = convert(T, CharString(v))
+utf32(x) = convert(UTF32String, x)
+convert(::Type{UTF32String}, s::String) = UTF32String(Char[c for c in s])
+convert{T<:String}(::Type{T}, v::Vector{Char}) = convert(T, UTF32String(v))
+convert(::Type{Array{Char,1}}, s::UTF32String) = s.chars
+convert(::Type{Array{Char}}, s::UTF32String) = s.chars
 
-reverse(s::CharString) = CharString(reverse(s.chars))
+reverse(s::UTF32String) = UTF32String(reverse(s.chars))
 
-sizeof(s::CharString) = sizeof(s.chars)
-convert{T<:Union(Int32,Uint32)}(::Type{Ptr{T}}, s::CharString) =
+sizeof(s::UTF32String) = sizeof(s.chars)
+convert{T<:Union(Int32,Uint32,Char)}(::Type{Ptr{T}}, s::UTF32String) =
     convert(Ptr{T}, s.chars)
 
 ## substrings reference original strings ##
@@ -813,8 +816,11 @@ end
 ## string promotion rules ##
 
 promote_rule(::Type{UTF8String} , ::Type{ASCIIString}) = UTF8String
-promote_rule(::Type{UTF8String} , ::Type{CharString} ) = UTF8String
-promote_rule(::Type{ASCIIString}, ::Type{CharString} ) = UTF8String
+promote_rule(::Type{UTF8String} , ::Type{UTF16String} ) = UTF8String
+promote_rule(::Type{ASCIIString}, ::Type{UTF16String} ) = UTF8String
+promote_rule(::Type{UTF32String} , ::Type{UTF16String} ) = UTF8String
+promote_rule(::Type{UTF8String} , ::Type{UTF32String} ) = UTF8String
+promote_rule(::Type{ASCIIString}, ::Type{UTF32String} ) = UTF8String
 promote_rule{T<:String}(::Type{RepString}, ::Type{T}) = RepString
 
 ## printing literal quoted string data ##
@@ -1126,7 +1132,7 @@ function shell_parse(raw::String, interp::Bool)
     if in_single_quotes; error("unterminated single quote"); end
     if in_double_quotes; error("unterminated double quote"); end
 
-    update_arg(s[i:])
+    update_arg(s[i:end])
     append_arg()
 
     if !interp
@@ -1269,7 +1275,7 @@ function split(str::String, splitter, limit::Integer, keep_empty::Bool)
         j, k = first(r), nextind(str,last(r))
     end
     if keep_empty || !done(str,i)
-        push!(strs, str[i:])
+        push!(strs, str[i:end])
     end
     return strs
 end

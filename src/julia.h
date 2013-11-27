@@ -143,7 +143,7 @@ DLLEXPORT size_t jl_array_len_(jl_array_t *a);
 #define jl_array_data_owner(a) (*((jl_value_t**)(&a->ncols+1+jl_array_ndimwords(jl_array_ndims(a)))))
 
 // compute # of extra words needed to store dimensions
-static inline int jl_array_ndimwords(uint32_t ndims)
+STATIC_INLINE int jl_array_ndimwords(uint32_t ndims)
 {
     return (ndims < 3 ? 0 : ndims-2);
 }
@@ -576,7 +576,7 @@ void *allocobj(size_t sz);
 // get a pointer to the data in a datatype
 #define jl_data_ptr(v)  (&((void**)(v))[1])
 
-static inline int jl_is_bitstype(void *v)
+STATIC_INLINE int jl_is_bitstype(void *v)
 {
     return (jl_is_datatype(v) && jl_is_immutable(v) &&
             jl_tuple_len(((jl_datatype_t*)(v))->names)==0 &&
@@ -584,7 +584,7 @@ static inline int jl_is_bitstype(void *v)
             ((jl_datatype_t*)(v))->size > 0);
 }
 
-static inline int jl_is_structtype(void *v)
+STATIC_INLINE int jl_is_structtype(void *v)
 {
     return (jl_is_datatype(v) &&
             (jl_tuple_len(((jl_datatype_t*)(v))->names) > 0 ||
@@ -592,62 +592,62 @@ static inline int jl_is_structtype(void *v)
             !((jl_datatype_t*)(v))->abstract);
 }
 
-static inline int jl_isbits(void *t)   // corresponding to isbits() in julia
+STATIC_INLINE int jl_isbits(void *t)   // corresponding to isbits() in julia
 {
     return (jl_is_datatype(t) && !((jl_datatype_t*)t)->mutabl &&
             ((jl_datatype_t*)t)->pointerfree && !((jl_datatype_t*)t)->abstract);
 }
 
-static inline int jl_is_abstracttype(void *v)
+STATIC_INLINE int jl_is_abstracttype(void *v)
 {
     return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->abstract);
 }
 
-static inline int jl_is_array_type(void *t)
+STATIC_INLINE int jl_is_array_type(void *t)
 {
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == jl_array_typename);
 }
 
-static inline int jl_is_array(void *v)
+STATIC_INLINE int jl_is_array(void *v)
 {
     jl_value_t *t = jl_typeof(v);
     return jl_is_array_type(t);
 }
 
-static inline int jl_is_box(void *v)
+STATIC_INLINE int jl_is_box(void *v)
 {
     jl_value_t *t = jl_typeof(v);
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == jl_box_typename);
 }
 
-static inline int jl_is_cpointer_type(void *t)
+STATIC_INLINE int jl_is_cpointer_type(void *t)
 {
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == jl_pointer_type->name);
 }
 
-static inline int jl_is_vararg_type(jl_value_t *v)
+STATIC_INLINE int jl_is_vararg_type(jl_value_t *v)
 {
     return (jl_is_datatype(v) &&
             ((jl_datatype_t*)(v))->name == jl_vararg_type->name);
 }
 
-static inline int jl_is_ntuple_type(jl_value_t *v)
+STATIC_INLINE int jl_is_ntuple_type(jl_value_t *v)
 {
     return (jl_is_datatype(v) &&
             ((jl_datatype_t*)v)->name == jl_ntuple_typename);
 }
 
-static inline int jl_is_nontuple_type(jl_value_t *v)
+STATIC_INLINE int jl_is_nontuple_type(jl_value_t *v)
 {
     return (jl_typeis(v, jl_uniontype_type) ||
             jl_typeis(v, jl_datatype_type) ||
             jl_typeis(v, jl_typector_type));
 }
 
-static inline int jl_is_type_type(jl_value_t *v)
+STATIC_INLINE int jl_is_type_type(jl_value_t *v)
 {
     return (jl_is_datatype(v) &&
             ((jl_datatype_t*)(v))->name == jl_type_type->name);
@@ -1009,22 +1009,22 @@ DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr);
 DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);
 DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data);
 
-static inline int jl_vinfo_capt(jl_array_t *vi)
+STATIC_INLINE int jl_vinfo_capt(jl_array_t *vi)
 {
     return (jl_unbox_long(jl_cellref(vi,2))&1)!=0;
 }
 
-static inline int jl_vinfo_assigned(jl_array_t *vi)
+STATIC_INLINE int jl_vinfo_assigned(jl_array_t *vi)
 {
     return (jl_unbox_long(jl_cellref(vi,2))&2)!=0;
 }
 
-static inline int jl_vinfo_assigned_inner(jl_array_t *vi)
+STATIC_INLINE int jl_vinfo_assigned_inner(jl_array_t *vi)
 {
     return (jl_unbox_long(jl_cellref(vi,2))&4)!=0;
 }
 
-static inline int jl_vinfo_sa(jl_array_t *vi)
+STATIC_INLINE int jl_vinfo_sa(jl_array_t *vi)
 {
     return (jl_unbox_long(jl_cellref(vi,2))&16)!=0;
 }
@@ -1033,7 +1033,7 @@ static inline int jl_vinfo_sa(jl_array_t *vi)
 #define JL_CALLABLE(name) \
     jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 
-static inline
+STATIC_INLINE
 jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 {
     return f->fptr((jl_value_t*)f, args, nargs);
@@ -1141,9 +1141,9 @@ void *alloc_4w(void);
 #define jl_gc_unpreserve()
 #define jl_gc_n_preserved_values() (0)
 
-static inline void *alloc_2w() { return allocobj(2*sizeof(void*)); }
-static inline void *alloc_3w() { return allocobj(3*sizeof(void*)); }
-static inline void *alloc_4w() { return allocobj(4*sizeof(void*)); }
+STATIC_INLINE void *alloc_2w() { return allocobj(2*sizeof(void*)); }
+STATIC_INLINE void *alloc_3w() { return allocobj(3*sizeof(void*)); }
+STATIC_INLINE void *alloc_4w() { return allocobj(4*sizeof(void*)); }
 #endif
 
 // asynch signal handling
@@ -1269,7 +1269,7 @@ DLLEXPORT JL_STREAM *jl_stdout_stream();
 DLLEXPORT JL_STREAM *jl_stdin_stream();
 DLLEXPORT JL_STREAM *jl_stderr_stream();
 
-static inline void jl_eh_restore_state(jl_handler_t *eh)
+STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 {
     JL_SIGATOMIC_BEGIN();
     jl_current_task->eh = eh->prev;
