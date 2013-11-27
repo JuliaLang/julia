@@ -162,7 +162,7 @@ install:
 	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "share/man/man1" "include/julia" "share/julia/site/"$(VERSDIR) "etc/julia" ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
-	cp -a $(BUILD)/bin $(PREFIX)
+	cp -a $(BUILD)/bin/julia* $(PREFIX)/bin/
 ifneq ($(OS),WINNT)
 	cd $(PREFIX)/bin && ln -sf julia-$(DEFAULT_REPL) julia
 endif
