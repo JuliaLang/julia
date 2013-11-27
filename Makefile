@@ -163,6 +163,7 @@ install:
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
 	cp -a $(BUILD)/bin/julia* $(PREFIX)/bin/
+	cp -a $(BUILD)/libexec $(PREFIX)
 ifneq ($(OS),WINNT)
 	cd $(PREFIX)/bin && ln -sf julia-$(DEFAULT_REPL) julia
 endif
