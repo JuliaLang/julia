@@ -17,8 +17,6 @@ end
 +(a::Vec, b::Vec) = Vec(a.x+b.x, a.y+b.y, a.z+b.z)
 -(a::Vec, b::Vec) = Vec(a.x-b.x, a.y-b.y, a.z-b.z)
 *(a::Float64, b::Vec) = Vec(a*b.x, a*b.y, a*b.z)
-*(a::Int, b::Vec) = Vec(a*b.x, a*b.y, a*b.z)
-*(a::Vec, b::Float64) = *(b,a)
 dot(a::Vec, b::Vec) = (a.x*b.x + a.y*b.y + a.z*b.z)
 unitize(a::Vec) = (1. / sqrt(dot(a, a)) * a)
  
@@ -34,7 +32,7 @@ end
  
 abstract Scene
  
-immutable Sphere <: Scene
+type Sphere <: Scene
     center::Vec
     radius::Float64
 end
@@ -56,31 +54,29 @@ end
  
 function intersect(s::Sphere, i::Hit, ray::Ray)
     l = ray_sphere(s, ray)
-    if l >= i.lambda
-        return i
-    else
+    if l < i.lambda
         n = ray.orig + l * ray.dir - s.center
-        return Hit(l, unitize(n))
+        i.lambda = l
+        i.normal = unitize(n)
     end
+    return i
 end
  
-immutable Group <: Scene
+type Group <: Scene
     bound::Sphere
-    objs::Array{Scene}
+    objs::Array{Scene,1}
 end
  
 Group(b::Sphere) = Group(b, Scene[])
  
 function intersect(g::Group, i::Hit, ray::Ray)
     l = ray_sphere(g.bound, ray)
-    if l >= i.lambda
-        return i
-    else
+    if l < i.lambda
         for j in g.objs
             i = intersect(j, i, ray)
         end
-        return i
     end
+    return i
 end
  
 function ray_trace(light::Vec, ray::Ray, scene::Scene)
@@ -93,7 +89,7 @@ function ray_trace(light::Vec, ray::Ray, scene::Scene)
     if g >= 0
         return 0
     end
-    sray = Ray(o, -1*light)
+    sray = Ray(o, -1.0*light)
     si = intersect(scene, Hit(Inf, Vec(0.,0.,0.)), sray)
     return si.lambda == Inf ? -g : 0
 end
@@ -128,7 +124,7 @@ function Raytracer(levels, n, ss)
                 for dy in 0:1:(ss-1)
                     d = Vec(x+dx*1./ss-n/2., y+dy*1./ss-n/2., n*1.0)
                     ray = Ray(Vec(0., 0., -4.0), unitize(d))
-                    g += ray_trace(light, ray, scene);
+                    g += ray_trace(light, ray, scene)
                 end
             end
             # write(f, int8(0.5 + 255. * g / (ss*ss)))
