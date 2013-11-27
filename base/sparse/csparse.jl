@@ -251,7 +251,7 @@ end
 
 etree(A::SparseMatrixCSC) = etree(A, false)
 
-# find nonzero pattern of Cholesky L(k,1:k-1) using etree and triu(A(:,k))
+# find nonzero pattern of Cholesky L[k,1:k-1] using etree and triu(A[:,k])
 # based on cs_ereach p. 43, "Direct Methods for Sparse Linear Systems"
 function ereach{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, k::Integer, parent::Vector{Ti})
     m,n = size(A); Ap = A.colptr; Ai = A.rowval
@@ -259,10 +259,10 @@ function ereach{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, k::Integer, parent::Vector{Ti}
     visited = falses(n)
     visited[k] = true
     for p in Ap[k]:(Ap[k+1] - 1)
-        i = Ai[p]                # A(i,k) is nonzero
+        i = Ai[p]                # A[i,k] is nonzero
         if i > k continue end    # only use upper triangular part of A
         while !visited[i]        # traverse up etree
-            push!(s,i)           # L(k,i) is nonzero
+            push!(s,i)           # L[k,i] is nonzero
             visited[i] = true
             i = parent[i]
         end

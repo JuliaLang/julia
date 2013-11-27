@@ -291,7 +291,7 @@ function process_options(args::Array{Any,1})
                 color_set = true
                 global have_color = true
             elseif args[i][8] == '='
-                val = args[i][9:]
+                val = args[i][9:end]
                 if in(val, ("no","0","false"))
                     color_set = true
                     global have_color = false
