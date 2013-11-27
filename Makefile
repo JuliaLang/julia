@@ -13,7 +13,7 @@ VERSDIR = v`cut -d. -f1-2 < VERSION`
 all: default
 default: release
 
-DIRS = $(BUILD)/bin $(BUILD)/etc/julia $(BUILD)/lib $(BUILD)/share/julia $(BUILD)/share/julia/man/man1
+DIRS = $(BUILD)/bin $(BUILD)/etc/julia $(BUILD)/lib $(BUILD)/libexec $(BUILD)/share/julia $(BUILD)/share/julia/man/man1
 ifneq ($(JL_LIBDIR),bin)
 ifneq ($(JL_LIBDIR),lib)
 DIRS += $(BUILD)/$(JL_LIBDIR)
