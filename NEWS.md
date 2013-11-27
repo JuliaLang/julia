@@ -36,6 +36,8 @@ Library improvements
 
   * New string type, `UTF16String` ([#4930]).
 
+  * `CharString` is renamed to `UTF32String` ([#4943]).
+
 Deprecated or removed
 ---------------------
 
