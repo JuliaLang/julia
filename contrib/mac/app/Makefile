@@ -10,6 +10,8 @@ ifeq ($(JULIA_PKGDIR),)
 	JULIA_PKGDIR=$(shell echo ~)/.julia
 endif
 
+VERSION_SUFFIX=$(shell [ $$(git describe --tags --exact-match 2>/dev/null) ] && echo $(JULIA_VERSION) || echo $(JULIA_VERSION)-$(JULIA_COMMIT))
+
 all: clean dmg
 
 dmg:
@@ -22,10 +24,10 @@ dmg:
 	-cp -a $(BUILD)/share/git* ./julia/share
 	rm -f julia/lib/*.{a,la}
 	-mkdir dmg
-	platypus -a Julia -p /bin/bash -V $(JULIA_VERSION) -R -u "The Julia Project" -i julia.icns -Q julia.icns -o "None" -I org.julialang -x -f julia script ./dmg/Julia-$(JULIA_VERSION)-pre-$(JULIA_COMMIT).app
+	platypus -a Julia -p /bin/bash -V $(JULIA_VERSION) -R -u "The Julia Project" -i julia.icns -Q julia.icns -o "None" -I org.julialang -x -f julia script ./dmg/Julia-$(VERSION_SUFFIX).app
 	-cp -f Julia.icns dmg/.VolumeIcon.icns
 	-ln -fs /Applications ./dmg/Applications
-	hdiutil create Julia-$(JULIA_VERSION)-pre-$(JULIA_COMMIT).dmg -ov -volname "Julia" -imagekey zlib-level=9 -srcfolder dmg
+	hdiutil create Julia-$(VERSION_SUFFIX).dmg -ov -volname "Julia" -imagekey zlib-level=9 -srcfolder dmg
 
 
 clean:
