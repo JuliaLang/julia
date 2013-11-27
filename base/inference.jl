@@ -660,7 +660,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
             af = isconstantfunc(fargs[1], sv)
         end
         if !is(af,false)
-            aargtypes = argtypes[2:]
+            aargtypes = argtypes[2:end]
             if all(x->isa(x,Tuple), aargtypes) &&
                 !any(isvatuple, aargtypes[1:(length(aargtypes)-1)])
                 e.head = :call1
@@ -704,7 +704,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
             sig = argtypes[2]
             if isa(sig,Tuple) && all(isType, sig)
                 sig = map(t->t.parameters[1], sig)
-                return invoke_tfunc(af, sig, argtypes[3:])
+                return invoke_tfunc(af, sig, argtypes[3:end])
             end
         end
     end
@@ -751,7 +751,7 @@ function abstract_eval_arg(a::ANY, vtypes::ANY, sv::StaticVarInfo)
 end
 
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
-    fargs = e.args[2:]
+    fargs = e.args[2:end]
     argtypes = tuple([abstract_eval_arg(a, vtypes, sv) for a in fargs]...)
     if any(x->is(x,None), argtypes)
         return None
@@ -1204,7 +1204,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                 end
                 s[1][args[la]] = Tuple
             else
-                s[1][args[la]] = limit_tuple_depth(atypes[la:])
+                s[1][args[la]] = limit_tuple_depth(atypes[la:end])
             end
             la -= 1
         else
@@ -1483,7 +1483,7 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo)
     end
     if (head === :call || head === :call1) && isa(e.args[1],LambdaStaticData)
         called = e.args[1]
-        fargs = e.args[2:]
+        fargs = e.args[2:end]
         argtypes = tuple([abstract_eval_arg(a, vtypes, sv) for a in fargs]...)
         # recur inside inner functions once we have all types
         tr,ty = typeinf(called, argtypes, called.sparams, called, false)
@@ -1725,7 +1725,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     if !(isa(f,Function) || isstructtype(f) || isa(f,IntrinsicFunction))
         return NF
     end
-    argexprs = e.args[2:]
+    argexprs = e.args[2:end]
     atypes = tuple(map(exprtype, argexprs)...)
     if length(atypes) > MAX_TUPLETYPE_LEN
         atypes = limit_tuple_type(atypes)
@@ -2039,7 +2039,7 @@ function inlining_pass(e::Expr, sv, ast)
                     t = exprtype(aarg)
                     if isa(aarg,Expr) && is_known_call(aarg, tuple, sv)
                         # apply(f,tuple(x,y,...)) => f(x,y,...)
-                        newargs[i-2] = aarg.args[2:]
+                        newargs[i-2] = aarg.args[2:end]
                     elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg,sv)
                         # apply(f,t::(x,y)) => f(t[1],t[2])
                         newargs[i-2] = { mk_tupleref(aarg,j) for j=1:length(t) }

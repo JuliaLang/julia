@@ -1132,7 +1132,7 @@ function shell_parse(raw::String, interp::Bool)
     if in_single_quotes; error("unterminated single quote"); end
     if in_double_quotes; error("unterminated double quote"); end
 
-    update_arg(s[i:])
+    update_arg(s[i:end])
     append_arg()
 
     if !interp
@@ -1275,7 +1275,7 @@ function split(str::String, splitter, limit::Integer, keep_empty::Bool)
         j, k = first(r), nextind(str,last(r))
     end
     if keep_empty || !done(str,i)
-        push!(strs, str[i:])
+        push!(strs, str[i:end])
     end
     return strs
 end
