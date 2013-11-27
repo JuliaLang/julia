@@ -6,11 +6,28 @@ copyright_year() = readchomp(`date +%Y`)
 copyright_name() = readchomp(`git config --global --get user.name`)
 github_user() = readchomp(ignorestatus(`git config --global --get github.user`))
 
+function git_contributors(dir::String, n::Int)
+    contrib = Dict()
+    tty = @windows? "CON:" : "/dev/tty"
+    for line in eachline(tty |> Git.cmd(`shortlog -nes`, dir=dir))
+        m = match(r"\s*(\d+)\s+(.+?)\s+\<(.+?)\>\s*$", line)
+        m == nothing && continue
+        commits, name, email = m.captures
+        if haskey(contrib,email)
+            contrib[email][1] += int(commits)
+        else
+            contrib[email] = [int(commits),name]
+        end
+    end
+    names = map(x->x[2],sort!(collect(values(contrib)),lt=lexless,rev=true))
+    length(names) <= n ? names : [names[1:n], "et al."]
+end
+
 function package(
     pkg::String,
     license::String;
     force::Bool = false,
-    authors::String = copyright_name(),
+    authors::String = "",
     years::Union(Int,String) = copyright_year(),
     user::String = github_user(),
 )
@@ -23,6 +40,9 @@ function package(
             Git.dirty(dir=pkg) && error("$pkg is dirty – commit or stash your changes")
         end
         Git.transact(dir=pkg) do
+            if isempty(authors)
+                authors = isnew ? copyright_name() : git_contributors(pkg,5)
+            end
             Generate.license(pkg,license,years,authors,force=force)
             Generate.readme(pkg,user,force=force)
             Generate.entrypoint(pkg,force=force)
@@ -32,7 +52,7 @@ function package(
             $pkg.jl $(isnew ? "generated" : "regenerated") files.
 
                 license:  $license
-                authors:  $authors
+                authors:  $(join([authors],", "))
                 years:    $years
                 user:     $user
 
@@ -68,7 +88,9 @@ function init(pkg::String, url::String="")
 end
 
 function license(pkg::String, license::String,
-                 years::Union(Int,String), authors::String; force::Bool=false)
+                 years::Union(Int,String),
+                 authors::Union(String,Array);
+                 force::Bool=false)
     genfile(pkg,"LICENSE.md",force) do io
         if !haskey(LICENSES,license)
             licenses = join(sort!([keys(LICENSES)...], by=lowercase), ", ")
@@ -131,11 +153,21 @@ function genfile(f::Function, pkg::String, file::String, force::Bool=false)
     return false
 end
 
-mit(pkg::String, years::String, authors::String) =
-"""
-The $pkg.jl package is licensed under the MIT Expat License:
+copyright(years::String, authors::String) = "> Copyright (c) $years: $authors."
 
-> Copyright (c) $years: $authors.
+function copyright(years::String, authors::Array)
+    text = "> Copyright (c) $years:"
+    for author in authors
+        text *= "\n>  * $author"
+    end
+    return text
+end
+
+mit(pkg::String, years::String, authors::Union(String,Array)) =
+"""
+The $pkg.jl package is licensed under the MIT "Expat" License:
+
+$(copyright(years,authors))
 >
 > Permission is hereby granted, free of charge, to any person obtaining
 > a copy of this software and associated documentation files (the
@@ -155,14 +187,13 @@ The $pkg.jl package is licensed under the MIT Expat License:
 > CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 > TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 > SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 """
 
-bsd(pkg::String, years::String, authors::String) =
+bsd(pkg::String, years::String, authors::Union(String,Array)) =
 """
-The $pkg.jl package is licensed under the Simplified BSD License:
+The $pkg.jl package is licensed under the Simplified "2-clause" BSD License:
 
-> Copyright (c) $years: $authors.
+$(copyright(years,authors))
 >
 > Redistribution and use in source and binary forms, with or without
 > modification, are permitted provided that the following conditions are
@@ -185,7 +216,6 @@ The $pkg.jl package is licensed under the Simplified BSD License:
 > THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 > (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 > OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 """
 
 const LICENSES = [ "MIT" => mit, "BSD" => bsd ]
