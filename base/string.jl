@@ -1438,8 +1438,8 @@ function parseint(c::Char, base::Integer)
     d = parseint(c)
     d < base || error("invalid base $base digit $(repr(c))")
 end
-parseint{T<:Integer}(::Type{T}, c::Char, base::Integer) =
-    convert(T,parseint(c,base))
+parseint{T<:Integer}(::Type{T}, c::Char, base::Integer) = convert(T,parseint(c,base))
+parseint{T<:Integer}(::Type{T}, c::Char) = convert(T,parseint(c))
 
 function parseint_next(s::String, i::Int=start(s))
     done(s,i) && error("premature end of integer: $(repr(s))")
