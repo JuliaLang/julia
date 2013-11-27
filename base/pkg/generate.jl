@@ -22,7 +22,7 @@ function package(
         else
             Git.dirty(dir=pkg) && error("$pkg is dirty – commit or stash your changes")
         end
-        # Git.transact(dir=pkg) do
+        Git.transact(dir=pkg) do
             Generate.license(pkg,license,years,authors,force=force)
             Generate.readme(pkg,user,force=force)
             Generate.entrypoint(pkg,force=force)
@@ -49,7 +49,7 @@ function package(
             else
                 info("Regenerated files are unchanged")
             end
-        # end
+        end
     catch
         isnew && run(`rm -rf $pkg`)
         rethrow()
