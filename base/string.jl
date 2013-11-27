@@ -1427,6 +1427,20 @@ strip(s::String, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 ## string to integer functions ##
 
+parseint(c::Char) =
+    '0' <= c <= '9' ? c-'0' :
+    'a' <= c <= 'z' ? c-'a'+10 :
+    'A' <= c <= 'Z' ? c-'A'+10 :
+        error("invalid digit: $(repr(c))")
+
+function parseint(c::Char, base::Integer)
+    2 <= base <= 36 || error("invalid base: $base")
+    d = parseint(c)
+    d < base || error("invalid base $base digit $(repr(c))")
+end
+parseint{T<:Integer}(::Type{T}, c::Char, base::Integer) =
+    convert(T,parseint(c,base))
+
 function parseint_next(s::String, i::Int=start(s))
     done(s,i) && error("premature end of integer: $(repr(s))")
     c, i = next(s,i)
@@ -1466,7 +1480,7 @@ function _parseint{T<:Integer}(::Type{T}, s::String, base::Int)
         d::T = '0' <= c <= '9' ? c-'0' :
                'A' <= c <= 'Z' ? c-'A'+10 :
                'a' <= c <= 'z' ? c-'a'+10 : base
-        d < base || error("invalid base-$base digit $(repr(c)) in $(repr(s))")
+        d < base || error("invalid base $base digit $(repr(c)) in $(repr(s))")
         n *= base
         n += d
         if done(s,i)
@@ -1481,7 +1495,7 @@ function _parseint{T<:Integer}(::Type{T}, s::String, base::Int)
         d::T = '0' <= c <= '9' ? c-'0' :
                'A' <= c <= 'Z' ? c-'A'+10 :
                'a' <= c <= 'z' ? c-'a'+10 : base
-        d < base || error("invalid base-$base digit $(repr(c)) in $(repr(s))")
+        d < base || error("invalid base $base digit $(repr(c)) in $(repr(s))")
         (T <: Signed) && (d *= sgn)
         n = checked_mul(n,base)
         n = checked_add(n,d)
