@@ -2457,7 +2457,9 @@ static bool store_unboxed_p(jl_sym_t *s, jl_codectx_t *ctx)
     return (ctx->linfo->inferred && jltupleisbits(jt,false) &&
             // don't unbox intrinsics, since inference depends on their having
             // stable addresses for table lookup.
-            jt != (jl_value_t*)jl_intrinsic_type && !vi.isCaptured);
+            jt != (jl_value_t*)jl_intrinsic_type && !vi.isCaptured &&
+            // don't unbox vararg tuples
+            s != ctx->vaName);
 }
 
 static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
@@ -2465,12 +2467,9 @@ static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
     jl_varinfo_t &vi = ctx->vars[s];
     jl_value_t *jt = vi.declType;
     Value *lv = NULL;
-    Type *vtype = NULL;
-    if(store_unboxed_p(s,ctx) && s != ctx->vaName)
-        vtype = julia_type_to_llvm(jt);
+    assert(store_unboxed_p(s,ctx));
+    Type *vtype = julia_type_to_llvm(jt);
     if (vtype != T_void) {
-        if (vtype == NULL)
-            vtype = jl_pvalue_llvmt;
         lv = builder.CreateAlloca(vtype, 0, s->name);
         if (vtype != jl_pvalue_llvmt)
             mark_julia_type(lv, jt);
