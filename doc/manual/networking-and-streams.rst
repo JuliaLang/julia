@@ -28,7 +28,7 @@ Note that I pressed enter again so that Julia would read the newline. Now, as yo
 data to be read as the second argument. For example, to read a simply byte array, we could do::
 
     julia> x = zeros(Uint8,4)
-    4-element Uint8 Array:
+    4-element Array{Uint8,1}:
      0x00
      0x00
      0x00
@@ -36,7 +36,7 @@ data to be read as the second argument. For example, to read a simply byte array
 
     julia> read(STDIN,x)
     abcd 
-    4-element Uint8 Array:
+    4-element Array{Uint8,1}:
      0x61
      0x62
      0x63
@@ -47,7 +47,7 @@ above as::
     
     julia> readbytes(STDIN,4)
     abcd 
-    4-element Uint8 Array:
+    4-element Array{Uint8,1}:
      0x61
      0x62
      0x63

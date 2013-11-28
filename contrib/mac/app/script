@@ -29,16 +29,10 @@ osascript 2>&1>/dev/null <<EOF
     if (ProcessList contains "Terminal") or ((count of every window) is less than 1) then
       tell application "System Events" to tell process "Terminal" to keystroke "n" using command down
     end if
-    do script ("exec bash -c \"PATH='${ROOT}/julia/bin:${PATH}' FONTCONFIG_PATH='${ROOT}/julia/etc/fonts' GIT_EXEC_PATH='${ROOT}/julia/libexec/git-core' GIT_TEMPLATE_DIR='${ROOT}/julia/share/git-core' TK_LIBRARY='/System/Library/Frameworks/Tk.framework/Versions/8.5/Resources/Scripts' exec '${ROOT}/julia/bin/julia'\"") in front window
+    do script ("exec '${ROOT}/julia/bin/julia'") in front window
   end tell
 EOF
 
-# Quit the Julia.application immediately after startup (ie. quitting
-# it in the taskbar) because once it is started it cannot be restarted
-# a second time. If Julia.app stays (eg. because of a crash) opened
-# then restarting is not possible.
-osascript 2>&1>/dev/null <<EOF
-  tell application "julia"
-    quit
-  end tell
-EOF
+# The app quits immediately after startup, as the app is completely 
+# separate from the actual Julia process. Something it would be neat to
+# change, once we're not just using the .app to tell Terminal what to do

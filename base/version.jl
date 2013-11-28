@@ -147,31 +147,72 @@ end
 
 hash(v::VersionNumber) = hash([v.(n) for n in VersionNumber.names])
 
+lowerbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, ("",), ())
+upperbound(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch, (), ("",))
+
+thispatch(v::VersionNumber) = VersionNumber(v.major, v.minor, v.patch)
+thisminor(v::VersionNumber) = VersionNumber(v.major, v.minor, 0)
+thismajor(v::VersionNumber) = VersionNumber(v.major, 0, 0)
+
+nextpatch(v::VersionNumber) = v < thispatch(v) ? thispatch(v) : VersionNumber(v.major, v.minor, v.patch+1)
+nextminor(v::VersionNumber) = v < thisminor(v) ? thisminor(v) : VersionNumber(v.major, v.minor+1, 0)
+nextmajor(v::VersionNumber) = v < thismajor(v) ? thismajor(v) : VersionNumber(v.major+1, 0, 0)
+
+function check_new_version(existing::Vector{VersionNumber}, ver::VersionNumber)
+    @assert issorted(existing)
+    if isempty(existing)
+        for v in [v"0", v"0.0.1", v"0.1", v"1"]
+            lowerbound(v) <= ver <= v && return
+        end
+        error("$ver is not a valid initial version (try 0.0.0, 0.0.1, 0.1 or 1.0)")
+    end
+    idx = searchsortedlast(existing,ver)
+    prv = existing[idx]
+    ver == prv && error("version $ver already exists")
+    nxt = thismajor(ver) != thismajor(prv) ? nextmajor(prv) :
+          thisminor(ver) != thisminor(prv) ? nextminor(prv) : nextpatch(prv)
+    ver <= nxt || error("$ver skips over $nxt")
+    thispatch(ver) <= ver && return # regular or build release
+    idx < length(existing) && thispatch(existing[idx+1]) <= nxt &&
+        error("$ver is a pre-release of existing version $(existing[idx+1])")
+    return # acceptable new version
+end
+
 ## julia version info
 
 begin
 # Include build number if we've got at least some distance from a tag (e.g. a release)
-prerelease = BUILD_INFO.prerelease ? "-prerelease" : ""
 build_number = BUILD_INFO.build_number != 0 ? "+$(BUILD_INFO.build_number)" : ""
 try
-    global const VERSION = convert(VersionNumber, "$(BUILD_INFO.version_string)$(prerelease)$(build_number)")
+    global const VERSION = convert(VersionNumber, "$(BUILD_INFO.version_string)$(build_number)")
 catch e
     println("while creating Base.VERSION, ignoring error $e")
     global const VERSION = VersionNumber(0)
 end
-branch_prefix = (BUILD_INFO.branch == "master") ? "" : "$(BUILD_INFO.branch)/"
-dirty_suffix = BUILD_INFO.dirty ? "*" : ""
-global const commit_string = (BUILD_INFO.commit == "") ? "" : "Commit $(branch_prefix)$(BUILD_INFO.commit_short)$(dirty_suffix) $(BUILD_INFO.date_string)"
+
+if BUILD_INFO.tagged_commit
+    const commit_string = BUILD_INFO.TAGGED_RELEASE_BANNER
+elseif BUILD_INFO.commit == ""
+    const commit_string = ""
+else
+    local days = int(floor((ccall(:clock_now, Float64, ()) - BUILD_INFO.fork_master_timestamp) / (60 * 60 * 24)))
+    if BUILD_INFO.fork_master_distance == 0
+        const commit_string = "Commit $(BUILD_INFO.commit_short) ($(days) days old master)"
+    else
+        const commit_string = "$(BUILD_INFO.branch)/$(BUILD_INFO.commit_short) (fork: $(BUILD_INFO.fork_master_distance) commits, $(days) days)"
+    end
+end
+commit_date = BUILD_INFO.date_string != "" ? " ($(BUILD_INFO.date_string))": ""
 
 const banner_plain =
 """
                _
    _       _ _(_)_     |  A fresh approach to technical computing
   (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
-   _ _   _| |_  __ _   |  Type "help()" to list help topics
+   _ _   _| |_  __ _   |  Type \"help()\" to list help topics
   | | | | | | |/ _` |  |
-  | | |_| | | | (_| |  |  Version $VERSION
- _/ |\\__'_|_|_|\\__'_|  |  "$commit_string"
+  | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
+ _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
 |__/                   |  $(Sys.MACHINE)
 
 """
@@ -187,8 +228,8 @@ const banner_color =
   $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: http://docs.julialang.org
    $(jl)_ _   _| |_  __ _$(tx)   |  Type \"help()\" to list help topics
   $(jl)| | | | | | |/ _` |$(tx)  |
-  $(jl)| | |_| | | | (_| |$(tx)  |  Version $VERSION
- $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $commit_string
+  $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
+ $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
 $(jl)|__/$(tx)                   |  $(Sys.MACHINE)
 
 \033[0m"

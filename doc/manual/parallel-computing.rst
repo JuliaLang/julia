@@ -20,7 +20,7 @@ multiprocessing environment based on message passing to allow programs
 to run on multiple processes in separate memory domains at once.
 
 Julia's implementation of message passing is different from other
-environments such as MPI. Communication in Julia is generally
+environments such as MPI [#mpi2rma]_. Communication in Julia is generally
 "one-sided", meaning that the programmer needs to explicitly manage only
 one process in a two-process operation. Furthermore, these
 operations typically do not look like "message send" and "message
@@ -37,9 +37,9 @@ return immediately; the process that made the call proceeds to its
 next operation while the remote call happens somewhere else. You can
 wait for a remote call to finish by calling ``wait`` on its remote
 reference, and you can obtain the full value of the result using
-``fetch``.
+``fetch``. You can store a value to a remote reference using ``put``.
 
-Let's try this out. Starting with ``julia -p n`` provides ``n``
+Let's try this out. Starting with ``julia -p n`` provides ``n`` worker
 processes on the local machine. Generally it makes sense for ``n`` to
 equal the number of CPU cores on the machine.
 
@@ -156,10 +156,11 @@ A file can also be preloaded on multiple processes at startup, and a driver scri
     julia -p <n> -L file1.jl -L file2.jl driver.jl
     
 Each process has an associated identifier. The process providing the interactive julia prompt
-always has an id equal to 1, as would the the julia process running the driver script in the
-example above. All other processes (also known as worker processes, or just workers) have their
-own unique ids. Workers are defined as all processes other than the driving process (id of 1). When
-no additional processes are started, the driving process is also deemed to be a worker.
+always has an id equal to 1, as would the julia process running the driver script in the
+example above.
+The processors used by default for parallel operations are referred to as ``workers``.
+When there is only one process, process 1 is considered a worker. Otherwise, workers are
+considered to be all processes other than process 1.
 
 The base Julia installation has in-built support for two types of clusters: 
 
@@ -224,7 +225,7 @@ Parallel Map and Loops
 ----------------------
 
 Fortunately, many useful parallel computations do not require data
-movement. A common example is a monte carlo simulation, where multiple
+movement. A common example is a Monte Carlo simulation, where multiple
 processes can handle independent simulation trials simultaneously. We
 can use ``@spawn`` to flip coins on two processes. First, write the
 following function in ``count_heads.jl``::
@@ -319,221 +320,11 @@ random matrices in parallel as follows::
 Julia's ``pmap`` is designed for the case where each function call does
 a large amount of work. In contrast, ``@parallel for`` can handle
 situations where each iteration is tiny, perhaps merely summing two
-numbers.
+numbers. Only worker processes are used by both ``pmap`` and ``@parallel for`` 
+for the parallel computation. In case of ``@parallel for``, the final reduction 
+is done on the calling process.
 
-..
-   Distributed Arrays
-   ------------------
 
-   Large computations are often organized around large arrays of data. In
-   these cases, a particularly natural way to obtain parallelism is to
-   distribute arrays among several processes. This combines the memory
-   resources of multiple machines, allowing use of arrays too large to fit
-   on one machine. Each process operates on the part of the array it
-   owns, providing a ready answer to the question of how a program should
-   be divided among machines.
-
-   A distributed array (or, more generally, a *global object*) is logically
-   a single array, but pieces of it are stored on different processes.
-   This means whole-array operations such as matrix multiply, scalar\*array
-   multiplication, etc. use the same syntax as with local arrays, and the
-   parallelism is invisible. In some cases it is possible to obtain useful
-   parallelism just by changing a local array to a distributed array.
-
-   Julia distributed arrays are implemented by the ``DArray`` type. A
-   ``DArray`` has an element type and dimensions just like an ``Array``,
-   but it also needs an additional property: the dimension along which data
-   is distributed. There are many possible ways to distribute data among
-   processes, but at this time Julia keeps things simple and only allows
-   distributing along a single dimension. For example, if a 2-d ``DArray``
-   is distributed in dimension 1, it means each process holds a certain
-   range of rows. If it is distributed in dimension 2, each process holds
-   a certain range of columns.
-
-   Common kinds of arrays can be constructed with functions beginning with
-   ``d``::
-
-       dzeros(100,100,10)
-       dones(100,100,10)
-       drand(100,100,10)
-       drandn(100,100,10)
-       dcell(100,100,10)
-       dfill(x, 100,100,10)
-
-   In the last case, each element will be initialized to the specified
-   value ``x``. These functions automatically pick a distributed dimension
-   for you. To specify the distributed dimension, other forms are
-   available::
-
-       drand((100,100,10), 3)
-       dzeros(Int64, (100,100), 2)
-       dzeros((100,100), 2, [7, 8])
-
-   In the ``drand`` call, we specified that the array should be distributed
-   across dimension 3. In the first ``dzeros`` call, we specified an
-   element type as well as the distributed dimension. In the second
-   ``dzeros`` call, we also specified which processes should be used to
-   store the data. When dividing data among a large number of processes,
-   one often sees diminishing returns in performance. Placing ``DArray``\ s
-   on a subset of processes allows multiple ``DArray`` computations to
-   happen at once, with a higher ratio of work to communication on each
-   process.
-
-   ``distribute(a::Array, dim)`` can be used to convert a local array to a
-   distributed array, optionally specifying the distributed dimension.
-   ``localize(a::DArray)`` can be used to obtain the locally-stored portion
-   of a ``DArray``. ``owner(a::DArray, index)`` gives the id of the
-   process storing the given index in the distributed dimension.
-   ``myindexes(a::DArray)`` gives a tuple of the indexes owned by the local
-   process. ``convert(Array, a::DArray)`` brings all the data to one
-   node.
-
-   A ``DArray`` can be stored on a subset of the available processes.
-   Three properties fully describe the distribution of ``DArray`` ``d``.
-   ``d.pmap[i]`` gives the process id that owns piece number ``i`` of the
-   array. Piece ``i`` consists of indexes ``d.dist[i]`` through
-   ``d.dist[i+1]-1``. ``distdim(d)`` gives the distributed dimension. For
-   convenience, ``d.localpiece`` gives the number of the piece owned by the
-   local process (this could also be determined by searching ``d.pmap``).
-   The array ``d.pmap`` is also available as ``procs(d)``.
-
-   Indexing a ``DArray`` (square brackets) gathers all of the referenced
-   data to a local ``Array`` object.
-
-   Indexing a ``DArray`` with the ``sub`` function creates a "virtual"
-   sub-array that leaves all of the data in place. This should be used
-   where possible, especially for indexing operations that refer to large
-   pieces of the original array.
-
-   ``sub`` itself, naturally, does no communication and so is very
-   efficient. However, this does not mean it should be viewed as an
-   optimization in all cases. Many situations require explicitly moving
-   data to the local process in order to do a fast serial operation. For
-   example, functions like matrix multiply perform many accesses to their
-   input data, so it is better to have all the data available locally up
-   front.
-
-   Constructing Distributed Arrays
-   -------------------------------
-
-   The primitive ``DArray`` constructor is the function ``darray``, which
-   has the following somewhat elaborate signature::
-
-       darray(init, type, dims, distdim, procs, dist)
-
-   ``init`` is a function of three arguments that will run on each
-   process, and should return an ``Array`` holding the local data for the
-   current process. Its arguments are ``(T,d,da)`` where ``T`` is the
-   element type, ``d`` is the dimensions of the needed local piece, and
-   ``da`` is the new ``DArray`` being constructed (though, of course, it is
-   not fully initialized).
-
-   ``type`` is the element type.
-
-   ``dims`` is the dimensions of the entire ``DArray``.
-
-   ``distdim`` is the dimension to distribute in.
-
-   ``procs`` is a vector of process ids to use.
-
-   ``dist`` is a vector giving the first index of each contiguous
-   distributed piece, such that the nth piece consists of indexes
-   ``dist[n]`` through ``dist[n+1]-1``. If you have a vector ``v`` of the
-   sizes of the pieces, ``dist`` can be computed as ``cumsum([1,v])``.
-
-   The last three arguments are optional, and defaults will be used if they
-   are omitted. The first argument, the ``init`` function, can also be
-   omitted, in which case an uninitialized ``DArray`` is constructed.
-
-   As an example, here is how to turn the local array constructor ``rand``
-   into a distributed array constructor::
-
-       drand(args...) = darray((T,d,da)->rand(d), Float64, args...)
-
-   In this case the ``init`` function only needs to call ``rand`` with the
-   dimensions of the local piece it is creating. ``drand`` accepts the same
-   trailing arguments as ``darray``. ``darray`` also has definitions that
-   allow functions like ``drand`` to accept the same arguments as their
-   local counterparts, so calls like ``drand(m,n)`` will also work.
-
-   The ``changedist`` function, which changes the distribution of a
-   ``DArray``, can be implemented with one call to ``darray`` where the
-   ``init`` function uses indexing to gather data from the existing array::
-
-       function changedist(A::DArray, to_dist)
-	   return darray((T,sz,da)->A[myindexes(da)...],
-			 eltype(A), size(A), to_dist, procs(A))
-       end
-
-   It is particularly easy to construct a ``DArray`` where each block is a
-   function of a block in an existing ``DArray``. This is done with the
-   form ``darray(f, A)``. For example, the unary minus function can be
-   implemented as::
-
-       -(A::DArray) = darray(-, A)
-
-   Distributed Array Computations
-   ------------------------------
-
-   Whole-array operations (e.g. elementwise operators) are a convenient way
-   to use distributed arrays, but they are not always sufficient. To handle
-   more complex problems, tasks can be spawned to operate on parts of a
-   ``DArray`` and write the results to another ``DArray``. For example,
-   here is how you could apply a function ``f`` to each 2-d slice of a 3-d
-   ``DArray``::
-
-       function compute_something(A::DArray)
-	   B = darray(eltype(A), size(A), 3)
-	   for i = 1:size(A,3)
-	       @spawnat owner(B,i) B[:,:,i] = f(A[:,:,i])
-	   end
-	   B
-       end
-
-   We used ``@spawnat`` to place each operation near the memory it writes
-   to.
-
-   This code works in some sense, but trouble stems from the fact that it
-   performs writes asynchronously. In other words, we don't know when the
-   result data will be written to the array and become ready for further
-   processing. This is known as a "race condition", one of the famous
-   pitfalls of parallel programming. Some form of synchronization is
-   necessary to wait for the result. As we saw above, ``@spawn`` returns a
-   remote reference that can be used to wait for its computation. We could
-   use that feature to wait for specific blocks of work to complete::
-
-       function compute_something(A::DArray)
-	   B = darray(eltype(A), size(A), 3)
-	   deps = cell(size(A,3))
-	   for i = 1:size(A,3)
-	       deps[i] = @spawnat owner(B,i) B[:,:,i] = f(A[:,:,i])
-	   end
-	   (B, deps)
-       end
-
-   Now a function that needs to access slice ``i`` can perform
-   ``wait(deps[i])`` first to make sure the data is available.
-
-   Another option is to use a ``@sync`` block, as follows::
-
-       function compute_something(A::DArray)
-	   B = darray(eltype(A), size(A), 3)
-	   @sync begin
-	       for i = 1:size(A,3)
-		   @spawnat owner(B,i) B[:,:,i] = f(A[:,:,i])
-	       end
-	   end
-	   B
-       end
-
-   ``@sync`` waits for all spawns performed within it to complete. This
-   makes our ``compute_something`` function easy to use, at the price of
-   giving up some parallelism (since calls to it cannot overlap with
-   subsequent operations).
-
-   Still another option is to use the initial, un-synchronized version of
-   the code, and place a ``@sync`` block around a larger set of operations
-   in the function calling this one.
 
 Synchronization With Remote References
 --------------------------------------
@@ -607,6 +398,148 @@ required, since the threads are scheduled cooperatively and not
 preemptively. This means context switches only occur at well-defined
 points: in this case, when ``remotecall_fetch`` is called.
 
+Distributed Arrays
+------------------
+
+Large computations are often organized around large arrays of data. In
+these cases, a particularly natural way to obtain parallelism is to
+distribute arrays among several processes. This combines the memory
+resources of multiple machines, allowing use of arrays too large to fit
+on one machine. Each process operates on the part of the array it
+owns, providing a ready answer to the question of how a program should
+be divided among machines.
+
+Julia distributed arrays are implemented by the ``DArray`` type. A
+``DArray`` has an element type and dimensions just like an ``Array``.
+A ``DArray`` can also use arbitrary array-like types to represent the local
+chunks that store actual data. The data in a ``DArray`` is distributed by
+dividing the index space into some number of blocks in each dimension.
+
+Common kinds of arrays can be constructed with functions beginning with
+``d``::
+
+    dzeros(100,100,10)
+    dones(100,100,10)
+    drand(100,100,10)
+    drandn(100,100,10)
+    dfill(x, 100,100,10)
+
+In the last case, each element will be initialized to the specified
+value ``x``. These functions automatically pick a distribution for you.
+For more control, you can specify which processors to use, and how the
+data should be distributed::
+
+    dzeros((100,100), workers()[1:4], [1,4])
+
+The second argument specifies that the array should be created on the first
+four workers. When dividing data among a large number of processes,
+one often sees diminishing returns in performance. Placing ``DArray``\ s
+on a subset of processes allows multiple ``DArray`` computations to
+happen at once, with a higher ratio of work to communication on each
+process.
+
+The third argument specifies a distribution; the nth element of
+this array specifies how many pieces dimension n should be divided into.
+In this example the first dimension will not be divided, and the second
+dimension will be divided into 4 pieces. Therefore each local chunk will be
+of size ``(100,25)``. Note that the product of the distribution array must
+equal the number of processors.
+
+``distribute(a::Array)`` converts a local array to a distributed array.
+
+``localpart(a::DArray)`` obtains the locally-stored portion
+of a ``DArray``.
+
+``myindexes(a::DArray)`` gives a tuple of the index ranges owned by the
+local process.
+
+``convert(Array, a::DArray)`` brings all the data to the local processor.
+
+Indexing a ``DArray`` (square brackets) with ranges of indexes always
+creates a ``SubArray``, not copying any data.
+
+
+Constructing Distributed Arrays
+-------------------------------
+
+The primitive ``DArray`` constructor has the following somewhat elaborate signature::
+
+    DArray(init, dims[, procs, dist])
+
+``init`` is a function that accepts a tuple of index ranges. This function should
+allocate a local chunk of the distributed array and initialize it for the specified
+indices. ``dims`` is the overall size of the distributed array.
+``procs`` optionally specifies a vector of processor IDs to use.
+``dist`` is an integer vector specifying how many chunks the
+distributed array should be divided into in each dimension.
+
+The last two arguments are optional, and defaults will be used if they
+are omitted.
+
+As an example, here is how to turn the local array constructor ``fill``
+into a distributed array constructor::
+
+    dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)
+
+In this case the ``init`` function only needs to call ``fill`` with the
+dimensions of the local piece it is creating.
+
+Distributed Array Operations
+----------------------------
+
+At this time, distributed arrays do not have much functionality. Their
+major utility is allowing communication to be done via array indexing, which
+is convenient for many problems. As an example, consider implementing the
+"life" cellular automaton, where each cell in a grid is updated according
+to its neighboring cells. To compute a chunk of the result of one iteration,
+each processor needs the immediate neighbor cells of its local chunk. The
+following code accomplishes this::
+
+    function life_step(d::DArray)
+        DArray(size(d),procs(d)) do I
+            top   = mod(first(I[1])-2,size(d,1))+1
+            bot   = mod( last(I[1])  ,size(d,1))+1
+            left  = mod(first(I[2])-2,size(d,2))+1
+            right = mod( last(I[2])  ,size(d,2))+1
+
+            old = Array(Bool, length(I[1])+2, length(I[2])+2)
+            old[1      , 1      ] = d[top , left]   # left side
+            old[2:end-1, 1      ] = d[I[1], left]
+            old[end    , 1      ] = d[bot , left]
+            old[1      , 2:end-1] = d[top , I[2]]
+            old[2:end-1, 2:end-1] = d[I[1], I[2]]   # middle
+            old[end    , 2:end-1] = d[bot , I[2]]
+            old[1      , end    ] = d[top , right]  # right side
+            old[2:end-1, end    ] = d[I[1], right]
+            old[end    , end    ] = d[bot , right]
+
+            life_rule(old)
+        end
+    end
+
+As you can see, we use a series of indexing expressions to fetch
+data into a local array ``old``. Note that the ``do`` block syntax is
+convenient for passing ``init`` functions to the ``DArray`` constructor.
+Next, the serial function ``life_rule`` is called to apply the update rules
+to the data, yielding the needed ``DArray`` chunk. Nothing about ``life_rule``
+is ``DArray``\ -specific, but we list it here for completeness::
+
+    function life_rule(old)
+        m, n = size(old)
+        new = similar(old, m-2, n-2)
+        for j = 2:n-1
+            for i = 2:m-1
+                nc = +(old[i-1,j-1], old[i-1,j], old[i-1,j+1],
+                       old[i  ,j-1],             old[i  ,j+1],
+                       old[i+1,j-1], old[i+1,j], old[i+1,j+1])
+                new[i-1,j-1] = (nc == 3 ? 1 :
+                                nc == 2 ? old[i,j] :
+                                0)
+            end
+        end
+        new
+    end
+
 
 ClusterManagers
 ---------------
@@ -642,3 +575,7 @@ then be added at runtime using ``addprocs``::
 
 which specifies a number of processes to add and a ``ClusterManager`` to
 use for launching those processes.
+
+.. rubric:: Footnotes
+
+.. [#mpi2rma] In this context, MPI refers to the MPI-1 standard. Beginning with MPI-2, the MPI standards committee introduced a new set of communication mechanisms, collectively referred to as Remote Memory Access (RMA). The motivation for adding RMA to the MPI standard was to facilitate one-sided communication patterns. For additional information on the latest MPI standard, see http://www.mpi-forum.org/docs.

@@ -4,9 +4,9 @@ abstract Associative{K,V}
 
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
-haskey(d::Associative, k) = contains(keys(d),k)
+haskey(d::Associative, k) = in(k,keys(d))
 
-function contains(a::Associative, p::(Any,Any))
+function in(p::(Any,Any), a::Associative)
     v = get(a,p[1],secret_table_token)
     !is(v, secret_table_token) && isequal(v, p[2])
 end
@@ -58,8 +58,8 @@ function next(v::ValueIterator, state)
     n[1][2], n[2]
 end
 
-contains(v::KeyIterator, k) = !is(get(v.dict, k, secret_table_token),
-                                  secret_table_token)
+in(k, v::KeyIterator) = !is(get(v.dict, k, secret_table_token),
+                            secret_table_token)
 
 keys(a::Associative) = KeyIterator(a)
 values(a::Associative) = ValueIterator(a)
@@ -95,16 +95,12 @@ filter(f::Function, d::Associative) = filter!(f,copy(d))
 eltype{K,V}(a::Associative{K,V}) = (K,V)
 
 function hash(d::Associative)
-    h = 0
+    h::Uint = 0
     for (k,v) in d
         h $= bitmix(hash(k),~hash(v))
     end
     h
 end
-
-# Used as default value arg to get in isequal: something that will
-# never be found in any dictionary.
-const _MISSING = gensym()
 
 function isequal(l::Associative, r::Associative)
     if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
@@ -112,7 +108,20 @@ function isequal(l::Associative, r::Associative)
     end
     if length(l) != length(r) return false end
     for (key, value) in l
-        if !isequal(value, get(r, key, _MISSING))
+        if !isequal(value, get(r, key, secret_table_token))
+            return false
+        end
+    end
+    true
+end
+
+function ==(l::Associative, r::Associative)
+    if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
+        return false
+    end
+    if length(l) != length(r) return false end
+    for (key, value) in l
+        if value != get(r, key, secret_table_token)
             return false
         end
     end
@@ -130,6 +139,11 @@ function getindex(t::Associative, key)
     end
     return v
 end
+
+# t[k1,k2,ks...] is syntactic sugar for t[(k1,k2,ks...)].  (Note
+# that we need to avoid dispatch loops if setindex!(t,v,k) is not defined.)
+getindex(t::Associative, k1, k2, ks...) = getindex(t, tuple(k1,k2,ks...))
+setindex!(t::Associative, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...))
 
 push!(t::Associative, key, v) = setindex!(t, v, key)
 
@@ -218,39 +232,27 @@ function hash(x::Integer)
     return h
 end
 
-@eval function hash(x::FloatingPoint)
-    if trunc(x) == x
-        # hash as integer if equal to some integer. note the result of
-        # float to int conversion is only defined for in-range values.
-        if x < 0
-            if $(float64(typemin(Int64))) <= x
-                return hash(int64(x))
-            end
-        else
-            # note: float64(typemax(Uint64)) == 2^64
-            if x < $(float64(typemax(Uint64)))
-                return hash(uint64(x))
-            end
-        end
-    end
-    isnan(x) ? $(hash64(NaN)) : hash64(float64(x))
-end
+hash(x::Float32) = hash(reinterpret(Uint32, isnan(x) ? NaN32 : x))
+hash(x::Float64) = hash(reinterpret(Uint64, isnan(x) ? NaN   : x))
 
 function hash(t::Tuple)
-    h = int(0)
+    h::Uint = 0
     for i=1:length(t)
-        h = bitmix(h,int(hash(t[i])))
+        h = bitmix(h,int(hash(t[i]))+42)
     end
-    return uint(h)
+    return h
 end
 
-function hash(a::Array)
-    h = hash(size(a))+1
+function hash(a::AbstractArray)
+    h::Uint = hash(size(a))+1
     for i=1:length(a)
         h = bitmix(h,int(hash(a[i])))
     end
-    return uint(h)
+    return h
 end
+
+# make sure Array{Bool} and BitArray can be equivalent
+hash(a::AbstractArray{Bool}) = hash(bitpack(a))
 
 hash(x::ANY) = object_id(x)
 
@@ -268,6 +270,10 @@ else
               s.data, length(s.data), uint32(seed))
 end
 
+hash(s::String) = hash(bytestring(s))
+
+hash(x::Expr) = bitmix(hash(x.head),hash(x.args)+43)
+
 
 # dict
 
@@ -284,10 +290,18 @@ type Dict{K,V} <: Associative{K,V}
         new(zeros(Uint8,n), Array(K,n), Array(V,n), 0, 0, identity)
     end
     function Dict(ks, vs)
+        # TODO: eventually replace with a call to Dict(zip(ks,vs))
         n = length(ks)
         h = Dict{K,V}()
         for i=1:n
             h[ks[i]] = vs[i]
+        end
+        return h
+    end
+    function Dict(kv)
+        h = Dict{K,V}()
+        for (k,v) in kv
+            h[k] = v
         end
         return h
     end
@@ -301,6 +315,8 @@ Dict(ks, vs) = Dict{Any,Any}(ks, vs)
 Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
 Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
 Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
+
+Dict{K,V}(kv::Array{(K,V)}) = Dict{K,V}(kv)
 
 similar{K,V}(d::Dict{K,V}) = (K=>V)[]
 
@@ -403,9 +419,12 @@ function empty!{K,V}(h::Dict{K,V})
     return h
 end
 
-function setindex!{K,V}(h::Dict{K,V}, v, key)
-    key = convert(K,key)
-    v   = convert(V,  v)
+function setindex!{K,V}(h::Dict{K,V}, v0, key0)
+    key = convert(K,key0)
+    if !isequal(key,key0)
+        error(key0, " is not a valid key for type ", K)
+    end
+    v   = convert(V,  v0)
 
     sz = length(h.keys)
 
@@ -502,7 +521,7 @@ function get{K,V}(h::Dict{K,V}, key, deflt)
 end
 
 haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
-contains{T<:Dict}(v::KeyIterator{T}, key) = (ht_keyindex(v.dict, key) >= 0)
+in{T<:Dict}(key, v::KeyIterator{T}) = (ht_keyindex(v.dict, key) >= 0)
 
 function getkey{K,V}(h::Dict{K,V}, key, deflt)
     index = ht_keyindex(h, key)

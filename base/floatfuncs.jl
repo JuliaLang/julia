@@ -32,9 +32,6 @@ maxintfloat{T<:FloatingPoint}(x::T)  = maxintfloat(T)
 maxintfloat() = maxintfloat(Float64)
 
 isinteger(x::FloatingPoint) = (trunc(x)==x)&isfinite(x)
-isfloat64(x::Number) = float64(x) == x
-isfloat64(::Float64) = true
-isfloat64(::Float32) = true
 
 ## precision, as defined by the effective number of bits in the mantissa ##
 precision(::Float16) = 11
@@ -76,11 +73,11 @@ iround{T<:Integer,R<:Real}(::Type{T}, x::AbstractArray{R}) = reshape([ iround(T,
 
 function _signif_og(x, digits, base)
     if base == 10
-        10. ^ floor(log10(abs(x)) - digits + 1.)
+        oftype(x, 10. ^ floor(log10(abs(x)) - digits + 1.))
     elseif base == 2
-        2. ^ floor(log2(abs(x)) - digits + 1.)
+        oftype(x, 2. ^ floor(log2(abs(x)) - digits + 1.))
     else
-        float(base) ^ floor(log2(abs(x))/log2(base) - digits + 1.)
+        oftype(x, float(base) ^ floor(log2(abs(x))/log2(base) - digits + 1.))
     end
 end
 
@@ -88,20 +85,20 @@ function signif(x, digits::Integer, base::Integer=10)
     if digits < 0
         throw(DomainError())
     end
+    x = float(x)
     if x==0 || !isfinite(x)
         return x
     end
-    og = _signif_og(float(x), digits, base)
-    round(float(x)/og) * og
+    og = _signif_og(x, digits, base)
+    round(x/og) * og
 end
-
-_round_og(digits, base) = float(base) ^ digits
 
 for f in (:round, :ceil, :floor, :trunc)
     @eval begin
         function ($f)(x, digits::Integer, base::Integer=10)
-            og = _round_og(digits, base)
-            ($f)(float(x) * og) / og
+            x = float(x)
+            og = oftype(eltype(x),base)^digits
+            ($f)(x * og) / og
         end
     end
 end

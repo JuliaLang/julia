@@ -115,6 +115,9 @@ static Type *julia_struct_to_llvm(jl_value_t *jt)
             size_t ntypes = jl_tuple_len(jst->types);
             if (ntypes == 0)
                 return NULL;
+            StructType *structdecl = StructType::create(getGlobalContext(), jst->name->name->name);
+            jst->struct_decl = structdecl;
+
             std::vector<Type *> latypes(0);
             size_t i;
             for(i = 0; i < ntypes; i++) {
@@ -124,7 +127,7 @@ static Type *julia_struct_to_llvm(jl_value_t *jt)
                     lty = jl_pvalue_llvmt;
                 latypes.push_back(lty);
             }
-            jst->struct_decl = (void*)StructType::create(latypes, jst->name->name->name);
+            structdecl->setBody(latypes);
         }
         return (Type*)jst->struct_decl;
     }

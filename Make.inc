@@ -1,20 +1,69 @@
 # -*- mode: makefile-gmake -*-
 
+## Note:
+##   It is generally preferable to change these options, for
+##   your local machine, in a file named `Make.user` in this directory
+
+# OPENBLAS build options
+OPENBLAS_DYNAMIC_ARCH=1
+OPENBLAS_USE_THREAD=1
+OPENBLAS_TARGET_ARCH=
+
+# Use libraries available on the system instead of building them
+USE_SYSTEM_LLVM=0
+USE_SYSTEM_LIBUNWIND=0
+USE_SYSTEM_READLINE=0
+USE_SYSTEM_PCRE=0
+USE_SYSTEM_LIBM=0
+USE_SYSTEM_OPENLIBM=0
+UNTRUSTED_SYSTEM_LIBM=0
+USE_SYSTEM_BLAS=0
+USE_SYSTEM_LAPACK=0
+USE_SYSTEM_FFTW=0
+USE_SYSTEM_GMP=0
+USE_SYSTEM_MPFR=0
+USE_SYSTEM_ARPACK=0
+USE_SYSTEM_SUITESPARSE=0
+USE_SYSTEM_ZLIB=0
+USE_SYSTEM_GRISU=0
+USE_SYSTEM_RMATH=0
+USE_SYSTEM_LIBUV=0
+
 USE_MKL = 0
 MKLLIB = $(MKLROOT)/lib/intel64
 
-# include twice to pickup user definitions
+# Link to the LLVM shared library
+USE_LLVM_SHLIB = 0
+
+# Set to 1 to enable profiling with Intel VTune Amplifier
+USE_INTEL_JITEVENTS = 0
+
+# libc++ is standard on OS X 10.9, but not for earlier releases
+USE_LIBCPP = 0
+
+# we include twice to pickup user definitions better
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
-include $(JULIAHOME)/Make.user 
+include $(JULIAHOME)/Make.user
 endif
 
+# disable automatic Makefile rules
 .SUFFIXES:
 
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
+# LLVM Options
 LLVMROOT = $(BUILD)
+LLVM_ASSERTIONS = 0
+LLVM_DEBUG = 0
+# set to 1 to get clang and compiler-rt
+BUILD_LLVM_CLANG = 0
+# set to 1 to get lldb (often does not work, no chance with llvm3.2 and earlier)
+# see http://lldb.llvm.org/build.html for dependancies
+BUILD_LLDB = 0
+
 BUILD = $(JULIAHOME)/usr
+
 # Directories where said libraries get installed to
 JL_PRIVATE_LIBDIR = lib/julia
 JL_LIBDIR = lib
@@ -39,10 +88,8 @@ override OPENBLAS_DYNAMIC_ARCH = 1
 override CROSS_COMPILE=$(XC_HOST)-
 ifneq (,$(findstring mingw,$(XC_HOST)))
 override OS := WINNT
-export WINE_PATH := $(shell winepath -w $(BUILD)/bin);$(shell winepath -w $(BUILD)/lib/julia);$(shell winepath -w $(BUILD)/lib)
-export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
-export WINE_PATH := $(WINE_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
-export WINE_PATH := $(WINE_PATH);C:\MinGW\\bin;C:\MinGW\msys\1.0\bin;$(shell winepath -w $(BUILD)/Git/bin)
+export STD_LIB_PATH := $(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep programs | sed "s/^programs: =//" | xargs -d":" winepath -w | tr '\n' ';')
+export STD_LIB_PATH := $(STD_LIB_PATH);$(shell $(CROSS_COMPILE)gcc -print-search-dirs | grep libraries | sed "s/^libraries: =//" | xargs -d":" winepath -w | tr '\n' ';')
 else
 $(error "unknown XC_HOST variable set")
 endif
@@ -68,9 +115,9 @@ override BUILD_OS := WINNT
 endif
 
 ifeq ($(OS), WINNT)
-fPIC = 
+fPIC =
 ifeq ($(BUILD_OS), WINNT)
-PATH := ${PATH}:${BUILD}/lib:${BUILD}/lib/julia:/c/Program Files/7-zip
+PATH := ${PATH}:${BUILD}/${JL_LIBDIR}:${BUILD}/${JL_PRIVATE_LIBDIR}:/c/Program Files/7-zip
 endif
 EXE = .exe
 else
@@ -92,6 +139,8 @@ USEGCC = 1
 USECLANG = 0
 endif
 
+STDLIBCPP_FLAG = 
+
 ifeq ($(OS), Darwin)
 DARWINVER = $(shell uname -r | cut -b 1-2)
 OSXVER = $(shell sw_vers -productVersion | cut -b 1-4)
@@ -100,13 +149,25 @@ USEGCC = 1
 USECLANG = 0
 OPENBLAS_TARGET_ARCH=NEHALEM
 OPENBLAS_DYNAMIC_ARCH=0
+USE_SYSTEM_LIBUNWIND=1
 else
+ifeq ($(DARWINVER),13)
+USE_LIBCPP = 1
+STDLIBCPP_FLAG = -stdlib=libstdc++
+else 
+USE_LIBCPP = 0
+endif
 USEGCC = 0
 USECLANG = 1
 endif
 endif
 
+FC = $(CROSS_COMPILE)gfortran
+
 ifeq ($(USEGCC),1)
+ifeq ($(USE_LIBCPP),1)
+$(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
+endif
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
@@ -123,13 +184,18 @@ JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -O0 -g -DDEBUG -fstack-protector-all
 SHIPFLAGS = -O3
 ifeq ($(OS), Darwin)
-CC += -mmacosx-version-min=10.6
-CXX += -mmacosx-version-min=10.6
+ifeq ($(USE_LIBCPP), 1)
+CC += -stdlib=libc++ -mmacosx-version-min=10.7
+CXX += -stdlib=libc++ -mmacosx-version-min=10.7
+FC += -mmacosx-version-min=10.7
+else
+CC += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
+CXX += $(STDLIBCPP_FLAG) -mmacosx-version-min=10.6
+endif
 JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
 
-FC = $(CROSS_COMPILE)gfortran
 JFFLAGS = -O2 $(fPIC)
 CPP = $(CC) -E
 AR := $(CROSS_COMPILE)ar
@@ -139,32 +205,6 @@ RANLIB := $(CROSS_COMPILE)ranlib
 
 # if not absolute, then relative to JULIA_HOME
 JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../$(JL_PRIVATE_LIBDIR)/sys.ji"'
-
-# OPENBLAS build options
-OPENBLAS_DYNAMIC_ARCH=1
-OPENBLAS_USE_THREAD=1
-OPENBLAS_TARGET_ARCH=
-
-# Use libraries available on the system instead of building them
-
-USE_SYSTEM_LLVM=0
-USE_SYSTEM_LIBUNWIND=0
-USE_SYSTEM_READLINE=0
-USE_SYSTEM_PCRE=0
-USE_SYSTEM_LIBM=0
-USE_SYSTEM_OPENLIBM=0
-UNTRUSTED_SYSTEM_LIBM=0
-USE_SYSTEM_BLAS=0
-USE_SYSTEM_LAPACK=0
-USE_SYSTEM_FFTW=0
-USE_SYSTEM_GMP=0
-USE_SYSTEM_MPFR=0
-USE_SYSTEM_ARPACK=0
-USE_SYSTEM_SUITESPARSE=0
-USE_SYSTEM_ZLIB=0
-USE_SYSTEM_GRISU=0
-USE_SYSTEM_RMATH=0
-USE_SYSTEM_LIBUV=0
 
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
@@ -200,27 +240,38 @@ endif
 endif
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
+ifneq ($(OS),Darwin)
 LIBUNWIND=-lunwind-generic -lunwind
+endif
 else
-LIBUNWIND=$(BUILD)/lib/libunwind-generic.a $(BUILD)/lib/libunwind.a
+ifeq ($(OS),Darwin)
+LIBUNWIND=$(BUILD)/$(JL_LIBDIR)/libosxunwind.a
+JCFLAGS+=-DLIBOSXUNWIND
+else
+LIBUNWIND=$(BUILD)/$(JL_LIBDIR)/libunwind-generic.a $(BUILD)/$(JL_LIBDIR)/libunwind.a
+endif
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
-LLVM_CONFIG ?= llvm-config
+LLVM_CONFIG ?= llvm-config$(EXE)
 else
-LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config
+LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config$(EXE)
 endif
 
 ifeq ($(USE_SYSTEM_READLINE), 1)
-READLINE = -lreadline 
+READLINE = -lreadline
 else
+ifeq ($(OS),WINNT)
 READLINE = $(BUILD)/lib/libreadline.a
+else
+READLINE = $(BUILD)/$(JL_LIBDIR)/libreadline.a
+endif
 endif
 
-ifneq ($(OS),WINNT)
-READLINE += -lncurses
-else
+ifeq ($(OS),WINNT)
 READLINE += $(BUILD)/lib/libhistory.a
+else
+READLINE += -lncurses
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -238,14 +289,14 @@ ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 USE_BLAS64 = 0
 USE_SYSTEM_LAPACK = 0
-LIBBLAS = -L$(BUILD)/lib -lgfortblas
+LIBBLAS = -L$(BUILD)/$(JL_LIBDIR) -lgfortblas
 LIBBLASNAME = libgfortblas
 else
 LIBBLAS ?= -lblas
 LIBBLASNAME ?= libblas
 endif
 else
-LIBBLAS = -L$(BUILD)/lib -lopenblas
+LIBBLAS = -L$(BUILD)/$(JL_LIBDIR) -lopenblas
 LIBBLASNAME = libopenblas
 endif
 
@@ -259,7 +310,7 @@ ifeq ($(USE_SYSTEM_LAPACK), 1)
 LIBLAPACK = -llapack
 LIBLAPACKNAME = liblapack
 else
-LIBLAPACK = -L$(BUILD)/lib -llapack $(LIBBLAS)
+LIBLAPACK = -L$(BUILD)/$(JL_LIBDIR) -llapack $(LIBBLAS)
 LIBLAPACKNAME = liblapack
 endif
 endif
@@ -276,7 +327,11 @@ ifeq ($(USE_SYSTEM_LIBUV), 1)
   LIBUV = /usr/lib/libuv-julia.a
   LIBUV_INC = /usr/include
 else
+ifeq ($(OS),WINNT)
   LIBUV = $(BUILD)/lib/libuv.a
+else
+  LIBUV = $(BUILD)/$(JL_LIBDIR)/libuv.a
+endif
   LIBUV_INC = $(JULIAHOME)/deps/libuv/include
 endif
 
@@ -290,8 +345,8 @@ ifeq ($(OS), Darwin)
   INSTALL_NAME_CHANGE_CMD = install_name_tool -change
 else
   INSTALL_NAME_ID_DIR =
-  INSTALL_NAME_CMD = true -ignore 
-  INSTALL_NAME_CHANGE_CMD = true -ignore 
+  INSTALL_NAME_CMD = true -ignore
+  INSTALL_NAME_CHANGE_CMD = true -ignore
 endif
 
 # shared library runtime paths
@@ -342,17 +397,15 @@ INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
 INSTALL_NAME_CHANGE_CMD = install_name_tool -change
 RPATH = -Wl,-rpath,'@executable_path/../$(JL_LIBDIR)' -Wl,-rpath,'@executable_path/../$(JL_PRIVATE_LIBDIR)'
 SHLIB_EXT = dylib
-OSLIBS += -ldl -Wl,-w -framework CoreFoundation -framework CoreServices
+OSLIBS += -ldl -Wl,-w -framework CoreFoundation -framework CoreServices $(LIBUNWIND)
 WHOLE_ARCHIVE = -Xlinker -all_load
 NO_WHOLE_ARCHIVE =
 JLDFLAGS =
 endif
 
 ifeq ($(OS), WINNT)
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm
-ifeq ($(ARCH),x86_64)
-OSLIBS += -ldbghelp
-endif
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
+	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -lssp
 JCFLAGS += -D_WIN32_WINNT=0x0600
 JCXXFLAGS += -D_WIN32_WINNT=0x0600
 JLDFLAGS = -Wl,--stack,8388608
@@ -360,12 +413,8 @@ ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
 UNTRUSTED_SYSTEM_LIBM = 1
-endif
-
-ifeq ($(USE_SYSTEM_LIBM),0)
-ifneq ($(UNTRUSTED_SYSTEM_LIBM),0)
-OSLIBS += $(WHOLE_ARCHIVE) $(BUILD)/lib/libopenlibm.a $(NO_WHOLE_ARCHIVE)
-endif
+JL_PRIVATE_LIBDIR = bin
+JL_LIBDIR = bin
 endif
 
 # Intel libraries
@@ -399,7 +448,7 @@ endif
 # or installed to usr/lib/libatlas from some another source (built as
 # a shared library, for your platform, single threaded)
 USE_ATLAS = 0
-ATLAS_LIBDIR = $(BUILD)/lib
+ATLAS_LIBDIR = $(BUILD)/$(JL_LIBDIR)
 #or ATLAS_LIBDIR = /path/to/system/atlas/lib
 
 ifeq ($(USE_ATLAS), 1)
@@ -416,7 +465,7 @@ endif
 
 define dir_target
 $$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(1))): $$(abspath $(1))
-$$(abspath $(1)): 
+$$(abspath $(1)):
 	@mkdir -p $$@
 endef
 
@@ -428,7 +477,7 @@ endif
 
 define symlink_target
 CLEAN_TARGETS += clean-$(2)/$(1)
-clean-$$(abspath $(2)/$(1)): 
+clean-$$(abspath $(2)/$(1)):
 ifeq ($(BUILD_OS), WINNT)
 	@-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&)
 else
@@ -449,7 +498,7 @@ ifeq ($(BUILD_OS), WINNT)
 spawn = $(1)
 else
 ifeq ($(OS), WINNT)
-spawn = wine cmd /c "set PATH=$(WINE_PATH)&& $$(exec winepath -w '$(1)')"
+spawn = wine $(1)
 else
 spawn = $(1)
 endif
@@ -461,20 +510,22 @@ wine_pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(shell printf %s\n '
 pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 
 JULIA_EXECUTABLE_debug = $(BUILD)/bin/julia-debug-$(DEFAULT_REPL)$(EXE)
-JULIA_EXECUTABLE_release = $(BUILD)/bin/julia-release-$(DEFAULT_REPL)$(EXE)
+JULIA_EXECUTABLE_release = $(BUILD)/bin/julia-$(DEFAULT_REPL)$(EXE)
 
 ifeq ($(OS), WINNT)
+JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
+else ifdef JULIA_VAGRANT_BUILD
 JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
 else
 JULIA_EXECUTABLE = $(JULIAHOME)/julia
 endif
 
 # Colors for make
-ifndef USE_QUIET
-USE_QUIET = 1
+ifndef VERBOSE
+VERBOSE = 0
 endif
 
-ifeq ($(USE_QUIET), 1)
+ifeq ($(VERBOSE), 0)
 
 QUIET_MAKE = -s
 
@@ -491,19 +542,18 @@ ENDCOLOR="\033[0m"
 
 GOAL=$(subst $(abspath $(JULIAHOME))/,,$(abspath $@))
 
-PRINT_CC = printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR);
-PRINT_LINK = printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
-PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
-PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
-PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
+PRINT_CC = printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_LINK = printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
+PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 
 else
-
 QUIET_MAKE =
-PRINT_CC =
-PRINT_LINK =
-PRINT_PERL =
-PRINT_FLISP =
-PRINT_JULIA =
+PRINT_CC = echo $(1); $(1)
+PRINT_LINK = echo $(1); $(1)
+PRINT_PERL = echo $(1); $(1)
+PRINT_FLISP = echo $(1); $(1)
+PRINT_JULIA = echo $(1); $(1)
 
 endif

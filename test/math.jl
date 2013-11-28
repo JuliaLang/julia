@@ -85,7 +85,8 @@ j43 = besselj(4,3.)
 
 @test_approx_eq j33 0.30906272225525164362
 @test_approx_eq j43 0.13203418392461221033
-@test_approx_eq besselj(0.1, -0.4) 0.820421842809028916 + 0.266571215948350899im
+@test_throws    besselj(0.1, -0.4)
+@test_approx_eq besselj(0.1, complex(-0.4)) 0.820421842809028916 + 0.266571215948350899im
 @test_approx_eq besselj(3.2, 1.3+0.6im) 0.01135309305831220201 + 0.03927719044393515275im
 @test_approx_eq besselj(1, 3im) 3.953370217402609396im
 
@@ -94,15 +95,17 @@ true_k33 = 0.12217037575718356792
 @test_approx_eq besselk(3,3) true_k33
 @test_approx_eq besselk(-3,3) true_k33
 true_k3m3 = -0.1221703757571835679 - 3.0151549516807985776im
-@test_approx_eq besselk(3,-3) true_k3m3
-@test_approx_eq besselk(-3,-3) true_k3m3
+@test_throws besselk(3,-3)
+@test_approx_eq besselk(3,complex(-3)) true_k3m3
+@test_approx_eq besselk(-3,complex(-3)) true_k3m3
 
 # bessely
 y33 = bessely(3,3.)
 @test bessely(3,3) == y33
 @test_approx_eq bessely(-3,3) -y33
 @test_approx_eq y33 -0.53854161610503161800
-@test_approx_eq bessely(3,-3) 0.53854161610503161800 - 0.61812544451050328724im
+@test_throws bessely(3,-3)
+@test_approx_eq bessely(3,complex(-3)) 0.53854161610503161800 - 0.61812544451050328724im
 
 # beta, lbeta
 @test_approx_eq beta(3/2,7/2) 5π/128
@@ -146,7 +149,7 @@ end
 # invdigamma
 for elty in (Float32, Float64)
     for val in [0.001, 0.01, 0.1, 1.0, 10.0]
-        @assert abs(invdigamma(digamma(convert(elty, val))) - convert(elty, val)) < 1e-8
+        @test abs(invdigamma(digamma(convert(elty, val))) - convert(elty, val)) < 1e-8
     end
 end
 
@@ -170,3 +173,7 @@ end
 # Ensure subnormal flags functions don't segfault
 @test any(ccall("jl_zero_subnormals", Uint8, (Uint8,), 1) .== [0x00 0x01])
 @test any(ccall("jl_zero_subnormals", Uint8, (Uint8,), 0) .== [0x00 0x01])
+
+# isqrt (issue #4884)
+@test isqrt(9223372030926249000) == 3037000498
+@test isqrt(typemax(Int128)) == int128("13043817825332782212")

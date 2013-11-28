@@ -346,8 +346,8 @@
 @test !isequal(+1.0,-1.0)
 @test !isequal(+Inf,-Inf)
 
-@test  isequal(-0.0f0,-0.0)
-@test  isequal( 0.0f0, 0.0)
+@test !isequal(-0.0f0,-0.0)
+@test !isequal( 0.0f0, 0.0)
 @test !isequal(-0.0f0, 0.0)
 @test !isequal(0.0f0 ,-0.0)
 
@@ -423,8 +423,8 @@
 @test !isless(+NaN,-NaN)
 @test !isless(+NaN,+NaN)
 
-@test  isequal(   0, 0.0)
-@test  isequal( 0.0,   0)
+@test !isequal(   0, 0.0)
+@test !isequal( 0.0,   0)
 @test !isequal(   0,-0.0)
 @test !isequal(-0.0,   0)
 @test   isless(-0.0,   0)
@@ -1082,6 +1082,13 @@ end
 @test signed(fld(typemax(Uint),typemin(Int)>>1))     == -4
 @test signed(fld(typemax(Uint),(typemin(Int)>>1)+1)) == -5
 
+# issue #4156
+@test fld(1.4,0.35667494393873234) == 3.0
+@test div(1.4,0.35667494393873234) == 3.0
+@test fld(0.3,0.01) == 29.0
+@test div(0.3,0.01) == 29.0
+# see https://github.com/JuliaLang/julia/issues/3127
+
 # issue #3046
 @test mod(int64(2),typemax(Int64)) == 2
 
@@ -1211,6 +1218,14 @@ end
 @test isa(0o111111,Uint16)
 @test isa(0o1111111111,Uint32)
 @test isa(0o11111111111,Uint32)
+
+# "-" is not part of unsigned literals
+@test -0x10 == -(0x10)
+@test -0b10 == -(0b10)
+@test -0o10 == -(0o10)
+@test -0x0010 == -(0x0010)
+@test -0b0010 == -(0b0010)
+@test -0o0010 == -(0o0010)
 
 # float32 literals
 @test isa(1f0,Float32)
@@ -1496,3 +1511,71 @@ end
 # overflow in rational comparison
 @test 3//2 < typemax(Int)
 @test 3//2 <= typemax(Int)
+
+# check gcd and related functions against GMP
+for i = -20:20, j = -20:20
+    local d = gcd(i,j)
+    @test d >= 0
+    @test lcm(i,j) >= 0
+    local ib = big(i)
+    local jb = big(j)
+    @test d == gcd(ib,jb)
+    @test lcm(i,j) == lcm(ib,jb)
+    @test gcdx(i,j) == gcdx(ib,jb)
+    if j == 0
+        @test_throws invmod(i,j)
+        @test_throws invmod(ib,jb)
+    elseif d == 1
+        n = invmod(i,j)
+        @test n == invmod(ib,jb)
+        @test mod(n*i,j) == mod(1,j)
+    end
+end
+
+# check powermod function against GMP
+for i = -10:10, p = 0:5, m = -10:10
+    if m != 0
+        @test powermod(i,p,m) == powermod(i,p,big(m)) == powermod(big(i),big(p),big(m))
+        @test mod(i^p,m) == powermod(i,p,m) == mod(big(i)^p,big(m))
+    end
+end
+
+# with m==1 should give 0
+@test powermod(1,0,1) == 0
+@test powermod(big(1),0,1) == 0
+@test powermod(1,0,-1) == 0
+@test powermod(big(1),0,-1) == 0
+# divide by zero error
+@test_throws powermod(1,0,0)
+@test_throws powermod(big(1),0,0)
+# negative power domain error
+@test_throws powermod(1,-2,1)
+@test_throws powermod(big(1),-2,1)
+
+# prevpow2/nextpow2:
+@test nextpow2(0) == prevpow2(0) == 0
+for i = -2:2
+    @test nextpow2(i) == prevpow2(i) == i
+end
+@test nextpow2(56789) == -nextpow2(-56789) == 65536
+@test prevpow2(56789) == -prevpow2(-56789) == 32768
+for i = -100:100
+    @test nextpow2(i) == nextpow2(big(i))
+    @test prevpow2(i) == prevpow2(big(i))
+end
+
+@test nextpow(2,1) == 1
+@test prevpow(2,1) == 1
+@test nextpow(3,243) == 243
+@test prevpow(3,243) == 243
+@test nextpow(3,241) == 243
+@test prevpow(3,244) == 243
+for a = -1:1
+    @test_throws nextpow(a, 2)
+    @test_throws prevpow(a, 2)
+end
+@test_throws nextpow(2,0)
+@test_throws prevpow(2,0)
+
+@test nextprod([2,3,5],30) == 30
+@test nextprod([2,3,5],33) == 36

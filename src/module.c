@@ -16,12 +16,12 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     m->name = name;
     m->constant_table = NULL;
     htable_new(&m->bindings, 0);
-    jl_set_const(m, name, (jl_value_t*)m);
     arraylist_new(&m->usings, 0);
     if (jl_core_module) {
         jl_module_using(m, jl_core_module);
     }
     // export own name, so "using Foo" makes "Foo" itself visible
+    jl_set_const(m, name, (jl_value_t*)m);
     jl_module_export(m, name);
     return m;
 }
@@ -45,6 +45,7 @@ JL_CALLABLE(jl_f_new_module)
 
 static jl_binding_t *new_binding(jl_sym_t *name)
 {
+    assert(jl_is_symbol(name));
     jl_binding_t *b = (jl_binding_t*)allocb(sizeof(jl_binding_t));
     b->name = name;
     b->value = NULL;
@@ -257,16 +258,18 @@ void jl_module_using(jl_module_t *to, jl_module_t *from)
     }
     // print a warning if something visible via this "using" conflicts with
     // an existing identifier. note that an identifier added later may still
-    // silently override a "using" name.
+    // silently override a "using" name. see issue #2054.
     void **table = from->bindings.table;
     for(size_t i=1; i < from->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             if (b->exportp && (b->owner==from || b->imported)) {
-                //jl_module_import(to, from, b->name);
                 jl_sym_t *var = (jl_sym_t*)table[i-1];
                 jl_binding_t **tobp = (jl_binding_t**)ptrhash_bp(&to->bindings, var);
                 if (*tobp != HT_NOTFOUND && (*tobp)->owner != NULL &&
+                    // don't warn for conflicts with the module name itself.
+                    // see issue #4715
+                    var != to->name &&
                     !eq_bindings(jl_get_binding(to,var), b)) {
                     jl_printf(JL_STDERR,
                               "Warning: using %s.%s in module %s conflicts with an existing identifier.\n",

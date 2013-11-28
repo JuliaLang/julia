@@ -2,6 +2,7 @@ show(io::IO, t::Task) = print(io, "Task")
 
 current_task() = ccall(:jl_get_current_task, Any, ())::Task
 istaskdone(t::Task) = t.done
+istaskstarted(t::Task) = isdefined(t,:parent)
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, exc)
@@ -18,6 +19,17 @@ function task_local_storage()
 end
 task_local_storage(key) = task_local_storage()[key]
 task_local_storage(key, val) = (task_local_storage()[key] = val)
+
+function task_local_storage(body::Function, key, val)
+    tls = task_local_storage()
+    hadkey = haskey(tls,key)
+    old = get(tls,key,nothing)
+    tls[key] = val
+    try body()
+    finally
+        hadkey ? (tls[key] = old) : delete!(tls,key)
+    end
+end
 
 # NOTE: you can only wait for scheduled tasks
 function wait(t::Task)
@@ -37,13 +49,13 @@ function produce(v)
         # make a task waiting for us runnable again
         notify1(q)
     end
-    yieldto(ct.last, v)
+    r = yieldto(ct.last, v)
     ct.parent = ct.last  # always exit to last consumer
-    nothing
+    r
 end
 produce(v...) = produce(v)
 
-function consume(P::Task)
+function consume(P::Task, values...)
     while !(P.runnable || P.done)
         if P.consumers === nothing
             P.consumers = Condition()
@@ -53,7 +65,7 @@ function consume(P::Task)
     ct = current_task()
     prev = ct.last
     ct.runnable = false
-    v = yieldto(P)
+    v = yieldto(P, values...)
     ct.last = prev
     ct.runnable = true
     if P.done

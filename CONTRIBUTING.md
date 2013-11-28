@@ -1,3 +1,5 @@
+# Notes for Julia Contributors
+
 Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia dev list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev) is a good place to post them, but you should check out the [online Julia docs](http://docs.Julialang.org/en/latest/) first. If you have changes you'd like to contribute, you'll need a [free GitHub account](https://github.com/signup/free). (If you're reading this on GitHub, you probably already have one.) You'll also want a working copy of Julia, built from source (you can still contribute with a binary install, but it's harder and not really recommended). In list form, here's what to do to become a contributor:
 
 * Join the [dev list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev).
@@ -10,8 +12,7 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 * Keep Julia current. Julia is a fast-moving target, and many details of the language are still settling out. Keep your repository up-to-date and rebase your work in progress frequently.
 
-* Learn to use [git](http://git-scm.com), the version control system used by GitHub and the Julia project.
-  Try a tutorial such as the one [provided by GitHub](http://try.github.io/levels/1/challenges/1).
+* Learn to use [git](http://git-scm.com), the version control system used by GitHub and the Julia project. Try a tutorial such as the one [provided by GitHub](http://try.github.io/levels/1/challenges/1).
 
 * Relax and have fun.
 
@@ -19,7 +20,7 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 ### Contributing a Julia package
 
-Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on git. A number of [packages](http://docs.julialang.org/en/latest/packages/packagelist/) across many domains are already available for julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating julia packages](http://docs.julialang.org/en/latest/manual/packages/). 
+Julia has a built-in [package manager](https://github.com/JuliaLang/METADATA.jl) based on git. A number of [packages](http://docs.julialang.org/en/latest/packages/packagelist/) across many domains are already available for Julia. Developers are encouraged to provide their libraries as a Julia package. The Julia manual provides instructions on [creating Julia packages](http://docs.julialang.org/en/latest/manual/packages/). 
 
 For developers who need to wrap C libraries so that they can be called from Julia, the [Clang.jl](https://github.com/ihnorton/Clang.jl) package can help generate the wrappers automatically from the C header files.
 
@@ -72,6 +73,8 @@ While getting familiar with Julia, remember to check out [the docs](http://docs.
   - **Source code:** <https://github.com/JuliaLang/julia>
   - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
   - **Documentation:** <http://julialang.org/manual/>
+  - **CodeSpeed:** <http://speed.julialang.org>
+  - **Status:** <http://status.julialang.org>
 
 * Design of Julia
   - [Julia: A Fast Dynamic Language for Technical Computing](http://julialang.org/images/julia-dynamic-2012-tr.pdf)

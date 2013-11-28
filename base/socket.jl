@@ -18,15 +18,15 @@ end
 
 function IPv4(host::Integer)
     if host < 0
-        error("IP address may not be negative")
+        error("IP address must not be negative")
     elseif typemax(typeof(host)) > typemax(Uint32) && host > typemax(Uint32) 
-        error("Number to large for IP Address")
+        error("IPv4 address must fit within 32 bits")
     else
         return IPv4(uint32(host))
     end
 end
 
-show(io::IO,ip::IPv4) = print(io,"IPv4(",ip,")")
+show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
 print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
                                   dec((ip.host&(0xFF0000))>>16),".",
                                   dec((ip.host&(0xFF00))>>8),".",
@@ -57,11 +57,11 @@ end
 
 function IPv6(host::Integer)
     if host < 0
-        error("IP address may not be negative")
-    # We allow passing bigger integer types, but need to be careful to avoid overflow
-    # Let's hope promotion rules are sensible
+        error("IP address must not be negative")
+        # We allow passing bigger integer types, but need to be careful to avoid overflow
+        # Let's hope promotion rules are sensible
     elseif typemax(typeof(host)) > typemax(Uint128) && host > typemax(Uint128) 
-        error("Number to large for IP Address")
+        error("IPv6 address must fit within 128 bits")
     else
         return IPv6(uint128(host))
     end
@@ -78,7 +78,7 @@ function ipv6_field(ip::IPv6,i)
     uint16(ip.host&(uint128(0xFFFF)<<(i*16))>>(i*16))
 end
 
-show(io::IO, ip::IPv6) = print(io,"IPv6(",ip,")")
+show(io::IO, ip::IPv6) = print(io,"ip\"",ip,"\"")
 # RFC 5952 compliant show function
 # http://tools.ietf.org/html/rfc5952
 function print(io::IO,ip::IPv6)
@@ -134,7 +134,7 @@ function parseipv4(str)
     ret = 0
     for f in fields 
         if length(f) == 0
-            error("Empty field in IPv4")
+            error("empty field in IPv4 address")
         end
         if f[1] == '0'
             if length(f) >= 2 && f[2] == 'x'
@@ -153,7 +153,7 @@ function parseipv4(str)
         end
         if i != length(fields)
             if r < 0 || r > 255
-                error("Invalid IPv4 field")
+                error("IPv4 field out of range (must be 0-255)")
             end
             ret |= uint32(r) << ((4-i)*8)
         else
@@ -169,7 +169,7 @@ end
 
 function parseipv6fields(fields,num_fields)
     if length(fields) > num_fields
-        error("Too many fields in IPv6 address")
+        error("too many fields in IPv6 address")
     end
     cf = 7
     ret = uint128(0)
@@ -192,10 +192,10 @@ parseipv6fields(fields) = parseipv6fields(fields,8)
 function parseipv6(str)
     fields = split(str,':')
     if length(fields) > 8
-        error("Too many fields in IPv6 address")
+        error("too many fields in IPv6 address")
     elseif length(fields) == 8
         return IPv6(parseipv6fields(fields))
-    elseif contains(fields[end],'.')
+    elseif in('.',fields[end])
         return IPv6((parseipv6fields(fields[1:(end-1)],6))
             | parseipv4(fields[end]).host )
     else
@@ -210,7 +210,7 @@ end
 #
 
 function parseip(str)
-    if contains(str,':')
+    if in(':',str)
         # IPv6 Address
         return parseipv6(str)
     else
@@ -267,7 +267,7 @@ function TcpSocket()
     if err != 0 
         c_free(this.handle)
         this.handle = C_NULL
-        error(UVError("Failed to create tcp socket",err))
+        error(UVError("failed to create tcp socket",err))
     end
     this.status = StatusInit
     this
@@ -294,7 +294,7 @@ function TcpServer()
     if err != 0 
         c_free(this.handle)
         this.handle = C_NULL
-        error(UVError("Failed to create tcp server",err))
+        error(UVError("failed to create tcp server",err))
     end
     this.status = StatusInit
     this
@@ -313,6 +313,8 @@ end
 #    closenotify::Condition
 #end
 
+isreadable(io::TcpSocket) = true
+iswritable(io::TcpSocket) = true
 
 show(io::IO,sock::TcpSocket) = print(io,"TcpSocket(",uv_status_string(sock),", ",
     nb_available(sock.buffer)," bytes waiting)")
@@ -439,7 +441,7 @@ function getipaddr()
         end
     end
     ccall(:uv_free_interface_addresses,Void,(Ptr{Uint8},Int32),addr,count)
-    error("No active external interfaces")
+    error("no active external interfaces")
 end
 
 ##
@@ -490,7 +492,7 @@ listen(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT) = (uv_error("listen",_l
 
 function listen(addr; backlog::Integer=BACKLOG_DEFAULT)
     sock = TcpServer()
-    !bind(sock,addr) && error("Cannot bind to port (may already be in use or access denied)")
+    !bind(sock,addr) && error("cannot bind to port; may already be in use or access denied")
     uv_error("listen",_listen(sock;backlog=backlog))
     sock
 end

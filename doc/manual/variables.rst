@@ -11,7 +11,7 @@ the language will not treat variables differently based on their names).
 
     \begin{CJK*}{UTF8}{gbsn}
 
-.. code-block:: guess
+.. doctest::
 
     julia> ix = 1.0
     1.0
@@ -38,10 +38,10 @@ Unicode names (in UTF-8 encoding) are allowed:
 
     \begin{CJK*}{UTF8}{mj}
 
-.. code-block:: guess
+.. doctest::
 
     julia> δ = 0.00001
-    0.00001
+    1.0e-5
 
     julia> 안녕하세요 = "Hello" 
     "Hello"
@@ -50,7 +50,9 @@ Unicode names (in UTF-8 encoding) are allowed:
 
     \end{CJK*}
 
-Julia will even let you redefine built-in constants and functions if needed::
+Julia will even let you redefine built-in constants and functions if needed:
+
+.. doctest::
 
     julia> pi
     π = 3.1415926535897...
@@ -79,13 +81,15 @@ contexts operators can be used just like variables; for example ``(+)`` refers
 to the addition function, and ``(+) = f`` will reassign it.
 
 The only explicitly disallowed names for variables are the names of built-in
-statements::
+statements:
+
+.. doctest::
 
     julia> else = false
-    ERROR: syntax: unexpected else
+    ERROR: syntax: unexpected "else"
     
     julia> try = "No"
-    ERROR: syntax: unexpected =
+    ERROR: syntax: unexpected "="
 
 
 Stylistic Conventions

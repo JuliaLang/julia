@@ -38,13 +38,13 @@ function unsafe_copy!{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
         unsafe_copy!(pointer(dest, dsto), pointer(src, so), N)
     else
         for i=0:N-1
-            arrayset(dest, src[i+so], i+dsto)
+            @inbounds arrayset(dest, src[i+so], i+dsto)
         end
     end
     return dest
 end
 
-function copy!{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
+function copy!{T}(dest::Array{T}, dsto::Integer, src::Array{T}, so::Integer, N::Integer)
     if so+N-1 > length(src) || dsto+N-1 > length(dest) || dsto < 1 || so < 1
         throw(BoundsError())
     end
@@ -55,7 +55,7 @@ copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
 
 function copy!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
     if length(ir_dest) != length(ir_src) || length(jr_dest) != length(jr_src)
-        error("copy!: size mismatch")
+        error("source and destination must have same size")
     end
     checkbounds(B, ir_dest, jr_dest)
     checkbounds(A, ir_src, jr_src)
@@ -83,7 +83,7 @@ end
 
 function copy_transpose!{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
     if length(ir_dest) != length(jr_src) || length(jr_dest) != length(ir_src)
-        error("copy_transpose!: size mismatch")
+        error("source and destination must have same size")
     end
     checkbounds(B, ir_dest, jr_dest)
     checkbounds(A, ir_src, jr_src)
@@ -107,7 +107,7 @@ end
 
 function reinterpret{T,S}(::Type{T}, a::Array{S})
     if sizeof(S) != sizeof(T)
-        error("reinterpret: result shape not specified")
+        error("result shape not specified")
     end
     reinterpret(T, a, size(a))
 end
@@ -121,7 +121,7 @@ function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
     end
     nel = div(length(a)*sizeof(S),sizeof(T))
     if prod(dims) != nel
-        error("reinterpret: invalid dimensions")
+        error("new dimensions $(dims) must be consistent with array size $(nel)")
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
@@ -129,7 +129,7 @@ reinterpret(t::Type,x) = reinterpret(t,[x])[1]
 
 function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
     if prod(dims) != length(a)
-        error("reshape: invalid dimensions")
+        error("new dimensions $(dims) must be consistent with array size $(length(a))")
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
@@ -155,6 +155,8 @@ function getindex(T::NonTupleType, vals...)
     return a
 end
 
+getindex(T::(Type...)) = Array(T,0)
+
 # T[a:b] and T[a:s:b] also contruct typed ranges
 function getindex{T<:Number}(::Type{T}, r::Ranges)
     copy!(Array(T,length(r)), r)
@@ -163,10 +165,10 @@ end
 function getindex{T<:Number}(::Type{T}, r1::Ranges, rs::Ranges...)
     a = Array(T,length(r1)+sum(length,rs))
     o = 1
-    copy!(a, r1, o)
+    copy!(a, o, r1)
     o += length(r1)
     for r in rs
-        copy!(a, r, o)
+        copy!(a, o, r)
         o += length(r)
     end
     return a
@@ -203,20 +205,21 @@ infs(dims...)               = fill!(Array(Float64, dims...), Inf)
 nans{T}(::Type{T}, dims...) = fill!(Array(T, dims...), nan(T))
 nans(dims...)               = fill!(Array(Float64, dims...), NaN)
 
-function eye(T::Type, m::Int, n::Int)
+function eye(T::Type, m::Integer, n::Integer)
     a = zeros(T,m,n)
     for i = 1:min(m,n)
         a[i,i] = one(T)
     end
     return a
 end
-eye(m::Int, n::Int) = eye(Float64, m, n)
-eye(T::Type, n::Int) = eye(T, n, n)
-eye(n::Int) = eye(Float64, n)
+eye(m::Integer, n::Integer) = eye(Float64, m, n)
+eye(T::Type, n::Integer) = eye(T, n, n)
+eye(n::Integer) = eye(Float64, n)
 eye{T}(x::AbstractMatrix{T}) = eye(T, size(x, 1), size(x, 2))
+
 function one{T}(x::AbstractMatrix{T})
     m,n = size(x)
-    if m != n; error("Multiplicative identity only defined for square matrices!"); end;
+    if m != n; error("multiplicative identity defined only for square matrices"); end;
     eye(T, m)
 end
 
@@ -248,23 +251,23 @@ convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy!(similar(x,T), x)
 
-function collect{T}(itr::T)
-    if method_exists(length,(T,))
-        if !method_exists(eltype,(T,))
-            return [x for x in itr]
-        end
-        i, a = 0, Array(eltype(itr),length(itr))
+function collect{C}(T::Type, itr::C)
+    if method_exists(length,(C,))
+        a = Array(T,length(itr))
+        i = 0
         for x in itr
             a[i+=1] = x
         end
-        return a
     else
-        a = Array(eltype(itr),0)
+        a = Array(T,0)
         for x in itr
             push!(a,x)
         end
-        return a
     end
+    return a
+end
+function collect{C}(itr::C)
+    method_exists(eltype,(C,)) ? collect(eltype(itr),itr) : [x for x in itr]
 end
 
 ## Indexing: getindex ##
@@ -296,10 +299,10 @@ function getindex(A::Array, I::Range1{Int})
 end
 
 function getindex{T<:Real}(A::Array, I::AbstractVector{T})
-    return [ A[i] for i in indices(I) ]
+    return [ A[i] for i in to_index(I) ]
 end
 function getindex{T<:Real}(A::Ranges, I::AbstractVector{T})
-    return [ A[i] for i in indices(I) ]
+    return [ A[i] for i in to_index(I) ]
 end
 
 # 2d indexing
@@ -335,14 +338,14 @@ function getindex(A::Array, I::Range1{Int}, J::AbstractVector{Int})
     return X
 end
 
-getindex{T<:Real}(A::Array, I::AbstractVector{T}, j::Real) = [ A[i,j] for i=indices(I) ]
-getindex{T<:Real}(A::Array, I::Real, J::AbstractVector{T}) = [ A[i,j] for i=I,j=indices(J) ]
+getindex{T<:Real}(A::Array, I::AbstractVector{T}, j::Real) = [ A[i,j] for i=to_index(I) ]
+getindex{T<:Real}(A::Array, I::Real, J::AbstractVector{T}) = [ A[i,j] for i=I,j=to_index(J) ]
 
 # This next is a 2d specialization of the algorithm used for general
 # multidimensional indexing
 function getindex{T<:Real}(A::Array, I::AbstractVector{T}, J::AbstractVector{T})
     checkbounds(A, I, J)
-    I = indices(I); J = indices(J)
+    I = to_index(I); J = to_index(J)
     X = similar(A, index_shape(I, J))
     storeind = 1
     for j = J
@@ -359,8 +362,8 @@ let getindex_cache = nothing
 global getindex
 function getindex(A::Array, I::Union(Real,AbstractVector)...)
     checkbounds(A, I...)
-    I = indices(I)
-    X = similar(A, index_shape(I...))
+    I = to_index(I)
+    X = similar(A, eltype(A), index_shape(I...))
 
     if is(getindex_cache,nothing)
         getindex_cache = Dict()
@@ -428,13 +431,17 @@ function setindex!{T<:Real}(A::Array, x, I::AbstractVector{T})
 end
 
 function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int})
-    if length(X) != length(I); error("argument dimensions must match"); end
+    if length(X) != length(I)
+        error("tried to assign $(length(X)) elements to $(length(I)) destinations");
+    end
     copy!(A, first(I), X, 1, length(I))
     return A
 end
 
 function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
-    if length(X) != length(I); error("argument dimensions must match"); end
+    if length(X) != length(I)
+        error("tried to assign $(length(X)) elements to $(length(I)) destinations");
+    end
     count = 1
     if is(X,A)
         X = copy(X)
@@ -456,7 +463,9 @@ function setindex!{T<:Real}(A::Array, x, i::Real, J::AbstractVector{T})
         end
     else
         X = x
-        if length(X) != length(J); error("argument dimensions must match"); end
+        if length(X) != length(J)
+            error("tried to assign $(length(X)) elements to $(length(J)) destinations");
+        end
         count = 1
         for j in J
             A[(j-1)*m + i] = X[count]
@@ -478,7 +487,9 @@ function setindex!{T<:Real}(A::Array, x, I::AbstractVector{T}, j::Real)
         end
     else
         X = x
-        if length(X) != length(I); error("argument dimensions must match"); end
+        if length(X) != length(I)
+            error("tried to assign $(length(X)) elements to $(length(I)) destinations");
+        end
         count = 1
         for i in I
             A[offset + i] = X[count]
@@ -491,7 +502,9 @@ end
 function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, j::Real)
     j = to_index(j)
     checkbounds(A, I, j)
-    if length(X) != length(I); error("argument dimensions must match"); end
+    if length(X) != length(I)
+        error("tried to assign $(length(X)) elements to $(length(I)) destinations");
+    end
     unsafe_copy!(A, first(I) + (j-1)*size(A,1), X, 1, length(I))
     return A
 end
@@ -501,7 +514,7 @@ function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, J::Range1{Int})
     nel = length(I)*length(J)
     if length(X) != nel ||
         (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
-        error("argument dimensions must match")
+        error("tried to assign $(size(X,1)) x $(size(X,2)) Array to $(length(I)) x $(length(J)) destination");
     end
     if length(I) == size(A,1)
         unsafe_copy!(A, first(I) + (first(J)-1)*size(A,1), X, 1, size(A,1)*length(J))
@@ -520,7 +533,7 @@ function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, J::AbstractVecto
     nel = length(I)*length(J)
     if length(X) != nel ||
         (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
-        error("argument dimensions must match")
+        error("tried to assign $(size(X)) Array to ($(length(I)),$(length(J))) destination");
     end
     refoffset = 1
     for j = J
@@ -545,7 +558,7 @@ function setindex!{T<:Real}(A::Array, x, I::AbstractVector{T}, J::AbstractVector
         nel = length(I)*length(J)
         if length(X) != nel ||
             (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
-            error("argument dimensions must match")
+            error("tried to assign $(size(X,1)) x $(size(X,2)) Array to $(length(I)) x $(length(J)) destination");
         end
         count = 1
         for j in J
@@ -563,7 +576,7 @@ let assign_cache = nothing, assign_scalar_cache = nothing
 global setindex!
 function setindex!(A::Array, x, I::Union(Real,AbstractArray)...)
     checkbounds(A, I...)
-    I = indices(I)
+    I = to_index(I)
     if !isa(x,AbstractArray)
         if is(assign_scalar_cache,nothing)
             assign_scalar_cache = Dict()
@@ -645,9 +658,12 @@ setindex!{T<:Real}(A::Array, x, I::AbstractVector{Bool}, J::AbstractVector{T}) =
 
 ## Dequeue functionality ##
 
+const _grow_none_errmsg =
+    "[] cannot grow. Instead, initialize the array with \"T[]\", where T is the desired element type."
+
 function push!{T}(a::Array{T,1}, item)
     if is(T,None)
-        error("[] cannot grow. Instead, initialize the array with \"T[]\".")
+        error(_grow_none_errmsg)
     end
     # convert first so we don't grow the array if the assignment won't work
     item = convert(T, item)
@@ -662,23 +678,27 @@ function push!(a::Array{Any,1}, item::ANY)
     return a
 end
 
-function append!{T}(a::Array{T,1}, items::Vector)
+function append!{T}(a::Array{T,1}, items::AbstractVector)
     if is(T,None)
-        error("[] cannot grow. Instead, initialize the array with \"T[]\".")
+        error(_grow_none_errmsg)
     end
     n = length(items)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
-    a[end-n+1:end] = items
+    copy!(a, length(a)-n+1, items, 1, n)
     return a
 end
 
-function prepend!{T}(a::Array{T,1}, items::Array{T,1})
+function prepend!{T}(a::Array{T,1}, items::AbstractVector)
     if is(T,None)
-        error("[] cannot grow. Instead, initialize the array with \"T[]\".")
+        error(_grow_none_errmsg)
     end
     n = length(items)
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, n)
-    a[1:n] = items
+    if a === items
+        copy!(a, 1, items, n+1, n)
+    else
+        copy!(a, 1, items, 1, n)
+    end
     return a
 end
 
@@ -702,7 +722,7 @@ end
 
 function pop!(a::Vector)
     if isempty(a)
-        error("pop!: array is empty")
+        error("array must be non-empty")
     end
     item = a[end]
     ccall(:jl_array_del_end, Void, (Any, Uint), a, 1)
@@ -711,7 +731,7 @@ end
 
 function unshift!{T}(a::Array{T,1}, item)
     if is(T,None)
-        error("[] cannot grow. Instead, initialize the array with \"T[]\".")
+        error(_grow_none_errmsg)
     end
     item = convert(T, item)
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, 1)
@@ -721,7 +741,7 @@ end
 
 function shift!(a::Vector)
     if isempty(a)
-        error("shift!: array is empty")
+        error("array must be non-empty")
     end
     item = a[1]
     ccall(:jl_array_del_beg, Void, (Any, Uint), a, 1)
@@ -1002,8 +1022,8 @@ function complex{T<:Real}(A::Array{T}, B::Real)
     return F
 end
 
-# use memcmp for cmp on byte arrays
-function cmp(a::Array{Uint8,1}, b::Array{Uint8,1})
+# use memcmp for lexcmp on byte arrays
+function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
     c = ccall(:memcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint),
               a, b, min(length(a),length(b)))
     c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
@@ -1321,7 +1341,7 @@ nonzeros(x::Number) = x == 0 ? Array(typeof(x),0) : [x]
 
 function findmax(a)
     if isempty(a)
-        error("findmax: array is empty")
+        error("array must be non-empty")
     end
     m = a[1]
     mi = 1
@@ -1337,7 +1357,7 @@ end
 
 function findmin(a)
     if isempty(a)
-        error("findmin: array is empty")
+        error("array must be non-empty")
     end
     m = a[1]
     mi = 1
@@ -1378,7 +1398,7 @@ function findin(a, b)
     ind = Array(Int, 0)
     bset = union!(Set(), b)
     for i = 1:length(a)
-        if contains(bset, a[i])
+        if in(a[i], bset)
             push!(ind, i)
         end
     end
@@ -1424,7 +1444,7 @@ function gen_reducedim_func(n, f)
     rvars = { symbol(string("r",i)) for i=1:n }
     setlims = { quote
         # each dim of reduction is either 1:sizeA or ivar:ivar
-        if contains(region,$i)
+        if in($i,region)
             $(lo[i]) = 1
             $(hi[i]) = size(A,$i)
         else
@@ -1464,10 +1484,10 @@ function reducedim(f::Function, A, region, v0, R)
 
     if  (is(f,+)     && (fname=:+;true)) ||
         (is(f,*)     && (fname=:*;true)) ||
-        (is(f,max)   && (fname=:max;true)) ||
-        (is(f,min)   && (fname=:min;true)) ||
-        (is(f,any)   && (fname=:any;true)) ||
-        (is(f,all)   && (fname=:all;true))
+        (is(f,scalarmax)   && (fname=:scalarmax;true)) ||
+        (is(f,scalarmin)   && (fname=:scalarmin;true)) ||
+        (is(f,&)     && (fname=:&;true)) ||
+        (is(f,|)     && (fname=:|;true))
         key = (fname, ndimsA)
     end
 
@@ -1518,9 +1538,10 @@ const sqrthalfcache = 1<<7
 function transpose!{T<:Number}(B::Matrix{T}, A::Matrix{T})
     m, n = size(A)
     if size(B) != (n,m)
-        error("Size of output is incorrect")
+        error("input and output must have same size")
     end
-    blocksize = ifloor(sqrthalfcache/sizeof(T)/1.4) # /1.4 to avoid complete fill of cache
+    elsz = isbits(T) ? sizeof(T) : sizeof(Ptr)
+    blocksize = ifloor(sqrthalfcache/elsz/1.4) # /1.4 to avoid complete fill of cache
     if m*n <= 4*blocksize*blocksize
         # For small sizes, use a simple linear-indexing algorithm
         for i2 = 1:n
@@ -1561,19 +1582,18 @@ ctranspose(x::StridedVecOrMat) = transpose(x)
 transpose(x::StridedVector) = [ x[j] for i=1, j=1:size(x,1) ]
 transpose(x::StridedMatrix) = [ x[j,i] for i=1:size(x,2), j=1:size(x,1) ]
 
-ctranspose{T<:Number}(x::StridedVector{T}) = [ conj(x[j]) for i=1, j=1:size(x,1) ]
-ctranspose{T<:Number}(x::StridedMatrix{T}) = [ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
+ctranspose{T<:Number}(x::StridedVector{T}) = T[ conj(x[j]) for i=1, j=1:size(x,1) ]
+ctranspose{T<:Number}(x::StridedMatrix{T}) = T[ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
 
-function intersect(vs...)
-    args_type = promote_type([eltype(v) for v in vs]...)
-    ret = Array(args_type,0)
-    for v_elem in vs[1]
+function intersect(v1, vs...)
+    ret = Array(eltype(v1),0)
+    for v_elem in v1
         inall = true
-        for i = 2:length(vs)
-            if !contains(vs[i], v_elem)
+        for i = 1:length(vs)
+            if !in(v_elem, vs[i])
                 inall=false; break
             end
         end
@@ -1583,13 +1603,16 @@ function intersect(vs...)
     end
     ret
 end
+
+promote_eltype() = None
+promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
+
 function union(vs...)
-    args_type = promote_type([eltype(v) for v in vs]...)
-    ret = Array(args_type,0)
+    ret = Array(promote_eltype(vs...),0)
     seen = Set()
     for v in vs
         for v_elem in v
-            if !contains(seen, v_elem)
+            if !in(v_elem, seen)
                 push!(ret, v_elem)
                 push!(seen, v_elem)
             end
@@ -1604,7 +1627,7 @@ function setdiff(a, b)
     ret = Array(args_type,0)
     seen = Set()
     for a_elem in a
-        if !contains(seen, a_elem) && !contains(bset, a_elem)
+        if !in(a_elem, seen) && !in(a_elem, bset)
             push!(ret, a_elem)
             push!(seen, a_elem)
         end

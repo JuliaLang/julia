@@ -6,7 +6,7 @@ immutable Rational{T<:Integer} <: Real
         if num == 0 && den == 0
             error("invalid rational: 0//0")
         end
-        g = gcd(den, num)
+        g = den < 0 ? -gcd(den,num) : gcd(den, num)
         new(div(num, g), div(den, g))
     end
 end
@@ -103,11 +103,8 @@ typemin{T<:Integer}(::Type{Rational{T}}) = -one(T)//zero(T)
 typemax{T<:Integer}(::Type{Rational{T}}) = one(T)//zero(T)
 
 isinteger(x::Rational) = x.den == 1
-isfloat64(x::Rational) = ispow2(x.den) & (abs(x.num) <= x.den*maxintfloat(Float64))
 
-hash(x::Rational) = isinteger(x) ? hash(x.num) :
-                    isfloat64(x) ? hash(float64(x)) :
-                    bitmix(hash(x.num), hash(x.den))
+hash(x::Rational) = bitmix(hash(x.num), ~hash(x.den))
 
 -(x::Rational) = (-x.num) // x.den
 for op in (:+, :-, :rem, :mod)

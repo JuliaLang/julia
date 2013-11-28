@@ -40,7 +40,7 @@ end
 
 a = rand(1:10000, 1000)
 
-for alg in [InsertionSort, MergeSort, TimSort, HeapSort, RadixSort]
+for alg in [InsertionSort, MergeSort]
     b = sort(a, alg=alg)
     @test issorted(b)
     ix = sortperm(a, alg=alg)
@@ -69,10 +69,8 @@ for alg in [InsertionSort, MergeSort, TimSort, HeapSort, RadixSort]
     ipermute!(c, ix)
     @test c == a
 
-    if alg != RadixSort  # RadixSort does not work with Lt orderings
-        c = sort(a, alg=alg, lt=(>))
-        @test b == c
-    end
+    c = sort(a, alg=alg, lt=(>))
+    @test b == c
 
     c = sort(a, alg=alg, by=x->1/x)
     @test b == c
@@ -106,13 +104,13 @@ for n in [0:10, 100, 101, 1000, 1001]
     v = rand(1:10,n)
     h = hist(v,r)
 
-    for ord in [Base.Order.Forward, Base.Order.Reverse]
+    for rev in [false,true]
         # insertion sort (stable) as reference
-        pi = sortperm(v, alg=InsertionSort, order=ord)
+        pi = sortperm(v, alg=InsertionSort, rev=rev)
         @test isperm(pi)
         si = v[pi]
         @test hist(si,r) == h
-        @test issorted(si, order=ord)
+        @test issorted(si, rev=rev)
         @test all(issorted,[pi[si.==x] for x in r])
         c = copy(v)
         permute!(c, pi)
@@ -121,8 +119,8 @@ for n in [0:10, 100, 101, 1000, 1001]
         @test c == v
 
         # stable algorithms
-        for alg in [MergeSort, TimSort, RadixSort]
-            p = sortperm(v, alg=alg, order=ord)
+        for alg in [MergeSort]
+            p = sortperm(v, alg=alg, rev=rev)
             @test p == pi
             s = copy(v)
             permute!(s, p)
@@ -132,8 +130,8 @@ for n in [0:10, 100, 101, 1000, 1001]
         end
 
         # unstable algorithms
-        for alg in [QuickSort, HeapSort]
-            p = sortperm(v, alg=alg, order=ord)
+        for alg in [QuickSort]
+            p = sortperm(v, alg=alg, rev=rev)
             @test isperm(p)
             @test v[p] == si
             s = copy(v)
@@ -145,18 +143,63 @@ for n in [0:10, 100, 101, 1000, 1001]
     end
 
     v = randn_with_nans(n,0.1)
-    for ord in [Base.Order.Forward, Base.Order.Reverse],
-        alg in [InsertionSort, QuickSort, MergeSort, TimSort, HeapSort, RadixSort]
+    for alg in [InsertionSort, QuickSort, MergeSort],
+        rev in [false,true]
         # test float sorting with NaNs
-        s = sort(v, alg=alg, order=ord)
-        @test issorted(s, order=ord)
+        s = sort(v, alg=alg, rev=rev)
+        @test issorted(s, rev=rev)
         @test reinterpret(Uint64,v[isnan(v)]) == reinterpret(Uint64,s[isnan(s)])
 
         # test float permutation with NaNs
-        p = sortperm(v, alg=alg, order=ord)
+        p = sortperm(v, alg=alg, rev=rev)
         @test isperm(p)
         vp = v[p]
         @test isequal(vp,s)
         @test reinterpret(Uint64,vp) == reinterpret(Uint64,s)
     end
+end
+
+inds = [
+    1,1,1,2,2,2,3,3,3,4,4,4,5,5,5,6,6,6,7,7,7,8,8,8,9,9,9,10,
+    10,10,11,11,11,12,12,12,13,13,13,14,14,14,15,15,15,16,16,
+    16,17,17,17,18,18,18,19,19,19,20,20,20,21,21,22,22,22,23,
+    23,24,24,24,25,25,25,26,26,26,27,27,27,28,28,28,29,29,29,
+    30,30,30,31,31,32,32,32,33,33,33,34,34,34,35,35,35,36,36,
+    36,37,37,37,38,38,38,39,39,39,40,40,40,41,41,41,42,42,42,
+    43,43,43,44,44,44,45,45,45,46,46,46,47,47,47,48,48,48,49,
+    49,49,50,50,50,51,51,52,52,52,53,53,53,54,54,54,55,55,55,
+    56,56,56,57,57,57,58,58,58,59,60,60,60,61,61,61,62,62,63,
+    64,64,64,65,65,65,66,66,66,67,67,67,68,68,69,69,69,70,70,
+    70,71,71,71,72,72,72,73,73,73,74,75,75,75,76,76,76,77,77,
+    77,78,78,78,79,79,79,80,80,80,81,81,82,82,82,83,83,83,84,
+    84,84,85,85,85,86,86,86,87,87,87,88,88,88,89,89,89,90,90,
+    90,91,91,91,92,92,93,93,93,94,94,94,95,95,95,96,96,96,97,
+    97,98,98,98,99,99,99,100,100,100,101,101,101,102,102,102,
+    103,103,103,104,105,105,105,106,106,106,107,107,107,108,
+    108,108,109,109,109,110,110,110,111,111,111,112,112,112,
+    113,113,113,114,114,115,115,115,116,116,116,117,117,117,
+    118,118,118,119,119,119,120,120,120,121,121,121,122,122,
+    122,123,123,123,124,124,124,125,125,125,126,126,126,127,
+    127,127,128,128,128,129,129,129,130,130,130,131,131,131,
+    132,132,132,133,133,133,134,134,134,135,135,135,136,136,
+    136,137,137,137,138,138,138,139,139,139,140,140,140,141,
+    141,142,142,142,143,143,143,144,144,144,145,145,145,146,
+    146,146,147,147,147,148,148,148,149,149,149,150,150,150,
+    151,151,151,152,152,152,153,153,153,154,154,154,155,155,
+    155,156,156,156,157,157,157,158,158,158,159,159,159,160,
+    160,160,161,161,161,162,162,162,163,163,163,164,164,164,
+    165,165,165,166,166,166,167,167,167,168,168,168,169,169,
+    169,170,170,170,171,171,171,172,172,172,173,173,173,174,
+    174,174,175,175,175,176,176,176,177,177,177,178,178,178,
+    179,179,179,180,180,180,181,181,181,182,182,182,183,183,
+    183,184,184,184,185,185,185,186,186,186,187,187,187,188,
+    188,188,189,189,189,190,190,190,191,191,191,192,192,192,
+    193,193,193,194,194,194,195,195,195,196,196,197,197,197,
+    198,198,198,199,199,199,200,200,200
+]
+sp = sortperm(inds)
+@test all(issorted, [sp[inds.==x] for x in 1:200])
+for alg in [InsertionSort, MergeSort]
+    sp = sortperm(inds, alg=alg)
+    @test all(issorted, [sp[inds.==x] for x in 1:200])
 end

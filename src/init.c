@@ -50,10 +50,9 @@ void __cdecl fpreset (void);
 #define _FPE_STACKUNDERFLOW 0x8b
 #define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
 #include <windows.h>
-#if defined(_CPU_X86_64_)
 #include <dbghelp.h>
 extern int needsSymRefreshModuleList;
-#endif
+extern WINBOOL WINAPI (*hSymRefreshModuleList)(HANDLE);
 #endif
 #if defined(__linux__)
 //#define _GNU_SOURCE
@@ -111,13 +110,13 @@ void fpe_handler(int arg)
 #endif
 }
 
-#ifndef _OS_WINDOWS_
-#if defined(_OS_LINUX_)
+#if defined(__linux__) || defined(__FreeBSD__)
+extern int in_jl_;
 void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
 
-    if (
+    if ( in_jl_ || (
 #ifdef COPY_STACKS
         (char*)info->si_addr > (char*)jl_stack_lo-3000000 &&
         (char*)info->si_addr < (char*)jl_stack_hi
@@ -126,7 +125,7 @@ void segv_handler(int sig, siginfo_t *info, void *context)
         (char*)info->si_addr <
         (char*)jl_current_task->stack+jl_current_task->ssize
 #endif
-        ) {
+        )) {
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
@@ -145,8 +144,6 @@ void segv_handler(int sig, siginfo_t *info, void *context)
 }
 #endif
 
-#endif
-
 volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
@@ -155,9 +152,21 @@ void restore_signals()
 {
     SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
 }
-static void __fastcall win_raise_exception(void* excpt)
-{ //why __fastcall? because the first two arguments are passed in registers, making this easier
-    jl_throw(excpt);
+void jl_throw_in_ctx(jl_value_t* excpt, CONTEXT *ctxThread, int bt)
+{
+    bt_size = bt ? rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ctxThread) : 0;
+    jl_exception_in_transit = excpt;
+#if defined(_CPU_X86_64_)
+    ctxThread->Rip = (DWORD64)&jl_rethrow;
+    ctxThread->Rsp &= (DWORD64)-16;
+    ctxThread->Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
+#elif defined(_CPU_X86_)
+    ctxThread->Eip = (DWORD)&jl_rethrow;
+    ctxThread->Esp &= (DWORD)-16;
+    ctxThread->Esp -= 4; //fix up the stack pointer
+#else
+#error WIN16 not supported :P
+#endif
 }
 volatile HANDLE hMainThread = NULL;
 DLLEXPORT void jlbacktrace();
@@ -190,19 +199,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
             fputs("error: GetThreadContext failed\n",stderr);
             return 0;
         }
-#if defined(_CPU_X86_64_)
-        ctxThread.Rip = (DWORD64)&win_raise_exception;
-        ctxThread.Rcx = (DWORD64)jl_interrupt_exception;
-        ctxThread.Rsp &= (DWORD64)-16;
-        ctxThread.Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
-#elif defined(_CPU_X86_)
-        ctxThread.Eip = (DWORD)&win_raise_exception;
-        ctxThread.Ecx = (DWORD)jl_interrupt_exception;
-        ctxThread.Esp &= (DWORD)-16;
-        ctxThread.Esp -= 4; //fix up the stack pointer
-#else
-#error WIN16 not supported :P
-#endif
+        jl_throw_in_ctx(jl_interrupt_exception, &ctxThread, 1);
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (!SetThreadContext(hMainThread,&ctxThread)) {
             fputs("error: SetThreadContext failed\n",stderr);
@@ -217,23 +214,12 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     }
     return 1;
 }
-static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) {
+static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
+{
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
         case EXCEPTION_STACK_OVERFLOW:
-#if defined(_CPU_X86_64_)
-            ExceptionInfo->ContextRecord->Rip = (DWORD64)&win_raise_exception;
-            ExceptionInfo->ContextRecord->Rcx = (DWORD64)jl_stackovf_exception;
-            ExceptionInfo->ContextRecord->Rsp &= (DWORD64)-16;
-            ExceptionInfo->ContextRecord->Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
-#elif defined(_CPU_X86_)
-            ExceptionInfo->ContextRecord->Eip = (DWORD)&win_raise_exception;
-            ExceptionInfo->ContextRecord->Ecx = (DWORD)jl_stackovf_exception;
-            ExceptionInfo->ContextRecord->Esp &= (DWORD)-16;
-            ExceptionInfo->ContextRecord->Esp -= 4; //fix up the stack pointer
-#else
-#error WIN16 not supported :P
-#endif
+            jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord, 0);
             return EXCEPTION_CONTINUE_EXECUTION;
         default:
             ios_puts("Please submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ", ios_stderr);
@@ -325,7 +311,8 @@ static void jl_uv_exitcleanup_add(uv_handle_t* handle, struct uv_shutdown_queue 
     if (!queue->first) queue->first = item;
     queue->last = item;
 }
-static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg) {
+static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
+{
     if (handle != (uv_handle_t*)jl_uv_stdout && handle != (uv_handle_t*)jl_uv_stderr)
         jl_uv_exitcleanup_add(handle, arg);
 }
@@ -337,7 +324,13 @@ DLLEXPORT void uv_atexit_hook()
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f!=NULL && jl_is_function(f)) {
-            jl_apply((jl_function_t*)f, NULL, 0);
+            JL_TRY {
+                jl_apply((jl_function_t*)f, NULL, 0);
+            }
+            JL_CATCH {
+                JL_PRINTF(JL_STDERR, "\natexit hook threw an error: ");
+                jl_show(jl_stderr_obj(),jl_exception_in_transit);
+            }
         }
     }
 
@@ -352,69 +345,51 @@ DLLEXPORT void uv_atexit_hook()
     jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stderr, &queue);
     struct uv_shutdown_queue_item *item = queue.first;
     while (item) {
-        uv_handle_t *handle = item->h;
-        if (uv_is_closing(handle)) {
+        JL_TRY {
+            while (item) {
+                uv_handle_t *handle = item->h;
+                if (handle->type != UV_FILE && uv_is_closing(handle)) {
+                    item = item->next;
+                    continue;
+                }
+                switch(handle->type) {
+                case UV_TTY:
+                case UV_UDP:
+                case UV_TCP:
+                case UV_NAMED_PIPE:
+                case UV_POLL:
+                case UV_TIMER:
+                case UV_ASYNC:
+                case UV_FS_EVENT:
+                case UV_FS_POLL:
+                case UV_IDLE:
+                case UV_PREPARE:
+                case UV_CHECK:
+                case UV_SIGNAL:
+                case UV_PROCESS:
+                case UV_FILE:
+                    // These will be shutdown as appropriate by jl_close_uv
+                    jl_close_uv(handle);
+                    break;
+                case UV_HANDLE:
+                case UV_STREAM:
+                case UV_UNKNOWN_HANDLE:
+                case UV_HANDLE_TYPE_MAX:
+                case UV_RAW_FD:
+                case UV_RAW_HANDLE:
+                default:
+                    assert(0);
+                }
+                item = item->next;
+            }
+        }
+        JL_CATCH {
+            //error handling -- continue cleanup, as much as possible
+            uv_unref(item->h);
+            jl_printf(JL_STDERR, "error during exit cleanup: close: ");
+            jl_static_show(JL_STDERR, jl_exception_in_transit);
             item = item->next;
-            continue;
         }
-        switch(handle->type) {
-        case UV_FILE:
-            free(handle);
-            break;
-        case UV_TTY:
-        case UV_UDP:
-//#ifndef _OS_WINDOWS_ // unix only supports shutdown on TCP and NAMED_PIPE
-// but uv_shutdown doesn't seem to be particularly reliable, so we'll avoid it in general
-            jl_close_uv(handle);
-            break;
-//#endif
-        case UV_TCP:
-        case UV_NAMED_PIPE:
-            // These will be shut down in jl_close_uv.
-            jl_close_uv(handle);
-            break;
-        //Don't close these directly, but rather let the GC take care of it
-        case UV_POLL:
-            uv_poll_stop((uv_poll_t*)handle);
-            handle->data = NULL;
-            uv_unref(handle);
-            break;
-        case UV_TIMER:
-            uv_timer_stop((uv_timer_t*)handle);
-            handle->data = NULL;
-            uv_unref(handle);
-            break;
-        case UV_IDLE:
-            uv_idle_stop((uv_idle_t*)handle);
-        case UV_ASYNC:
-            handle->data = NULL;
-            uv_unref(handle);
-            break;
-        case UV_FS_EVENT:
-            handle->data = NULL;
-            uv_unref(handle);
-            break;
-        case UV_FS_POLL:
-            uv_fs_poll_stop((uv_fs_poll_t*)handle);
-            handle->data = NULL;
-            uv_unref(handle);
-            break;
-        case UV_PREPARE:
-        case UV_CHECK:
-        case UV_SIGNAL:
-        case UV_PROCESS:
-            jl_close_uv(handle);
-            break;
-        case UV_HANDLE:
-        case UV_STREAM:
-        case UV_UNKNOWN_HANDLE:
-        case UV_HANDLE_TYPE_MAX:
-        case UV_RAW_FD:
-        case UV_RAW_HANDLE:
-        default:
-            assert(0);
-        }
-        item = item->next;
     }
     uv_run(loop,UV_RUN_DEFAULT); //let libuv spin until everything has finished closing
 }
@@ -449,14 +424,13 @@ void *init_stdio_handle(uv_file fd,int readable)
     jl_uv_file_t *file;
 #ifndef _OS_WINDOWS_    
     // Duplicate the file descritor so we can later dup it over if we want to redirect
-    // STDIO without having to worry about closing the associated libuv object. 
-    // On windows however, libuv objects remember streams by their HANDLE, so this is 
-    // unnessecary. 
+    // STDIO without having to worry about closing the associated libuv object.
+    // On windows however, libuv objects remember streams by their HANDLE, so this is
+    // unnessecary.
     fd = dup(fd);
 #endif
-    //printf("%d: %d -- %d\n", fd, type);
-    switch(type)
-    {
+    //printf("%d: %d -- %d\n", fd, type, 0);
+    switch(type) {
         case UV_TTY:
             handle = malloc(sizeof(uv_tty_t));
             if (uv_tty_init(jl_io_loop,(uv_tty_t*)handle,fd,readable)) {
@@ -546,6 +520,11 @@ void darwin_stack_overflow_handler(unw_context_t *uc)
 #define HANDLE_MACH_ERROR(msg, retval) \
     if (retval!=KERN_SUCCESS) { mach_error(msg ":", (retval)); jl_exit(1); }
 
+#ifdef LIBOSXUNWIND
+extern kern_return_t profiler_segv_handler(mach_port_t,mach_port_t,mach_port_t,exception_type_t,exception_data_t,mach_msg_type_number_t);
+extern volatile mach_port_t mach_profiler_thread;
+#endif
+
 //exc_server uses dlsym to find symbol
 DLLEXPORT kern_return_t catch_exception_raise
                 (mach_port_t                          exception_port,
@@ -562,7 +541,13 @@ DLLEXPORT kern_return_t catch_exception_raise
     kern_return_t ret;
     //memset(&state,0,sizeof(x86_thread_state64_t));
     //memset(&exc_state,0,sizeof(x86_exception_state64_t));
+#ifdef LIBOSXUNWIND
+    if (thread == mach_profiler_thread) {
+        return profiler_segv_handler(exception_port,thread,task,exception,code,code_count);
+    }
+#endif
     ret = thread_get_state(thread,x86_EXCEPTION_STATE64,(thread_state_t)&exc_state,&exc_count);
+    HANDLE_MACH_ERROR("thread_get_state(1)",ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
     if (
 #ifdef COPY_STACKS
@@ -573,10 +558,9 @@ DLLEXPORT kern_return_t catch_exception_raise
         (char*)fault_addr <
         (char*)jl_current_task->stack+jl_current_task->ssize
 #endif
-        ) 
-    {
+        ) {
         ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
-        HANDLE_MACH_ERROR("thread_get_state",ret);
+        HANDLE_MACH_ERROR("thread_get_state(2)",ret);
         old_state = state;
         // memset(&state,0,sizeof(x86_thread_state64_t));
         // Setup libunwind information
@@ -603,7 +587,7 @@ DLLEXPORT kern_return_t catch_exception_raise
         return KERN_SUCCESS;
     }
     else {
-        return -309;
+        return KERN_INVALID_ARGUMENT;
     }
 }
 
@@ -616,20 +600,21 @@ void julia_init(char *imageFile)
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
 #ifdef _OS_WINDOWS_
     uv_dlopen("ntdll.dll",jl_ntdll_handle); //bypass julia's pathchecking for system dlls
-    uv_dlopen("Kernel32.dll",jl_kernel32_handle);
+    uv_dlopen("kernel32.dll",jl_kernel32_handle);
     uv_dlopen("msvcrt.dll",jl_crtdll_handle);
-    uv_dlopen("Ws2_32.dll",jl_winsock_handle);
+    uv_dlopen("ws2_32.dll",jl_winsock_handle);
     _jl_exe_handle.handle = GetModuleHandleA(NULL);
     if (!DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
         GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
         TRUE, DUPLICATE_SAME_ACCESS )) {
         JL_PRINTF(JL_STDERR, "Couldn't access handle to main thread\n");
     }
-#if defined(_CPU_X86_64_)
-    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS);
+    SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
     SymInitialize(GetCurrentProcess(), NULL, 1);
     needsSymRefreshModuleList = 0;
-#endif
+    uv_lib_t jl_dbghelp;
+    uv_dlopen("dbghelp.dll",&jl_dbghelp);
+    if (uv_dlsym(&jl_dbghelp,"SymRefreshModuleList",(void**)&hSymRefreshModuleList)) hSymRefreshModuleList = 0;
 #endif
     jl_io_loop = uv_default_loop(); //this loop will internal events (spawining process etc.)
     init_stdio();
@@ -722,7 +707,35 @@ void julia_init(char *imageFile)
         JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
-#if defined(_OS_LINUX_)
+    if (signal(SIGPIPE,SIG_IGN) == SIG_ERR) {
+        JL_PRINTF(JL_STDERR, "Couldn't set SIGPIPE\n");
+        jl_exit(1);
+    }
+#if defined (_OS_DARWIN_)
+    kern_return_t ret;
+    mach_port_t self = mach_task_self();
+    ret = mach_port_allocate(self,MACH_PORT_RIGHT_RECEIVE,&segv_port);
+    HANDLE_MACH_ERROR("mach_port_allocate",ret);
+    ret = mach_port_insert_right(self,segv_port,segv_port,MACH_MSG_TYPE_MAKE_SEND);
+    HANDLE_MACH_ERROR("mach_port_insert_right",ret);
+
+    // Alright, create a thread to serve as the listener for exceptions
+    pthread_t thread;
+    pthread_attr_t attr;
+    if (pthread_attr_init(&attr) != 0) {
+        JL_PRINTF(JL_STDERR, "pthread_attr_init failed");
+        jl_exit(1);  
+    }
+    pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
+    if (pthread_create(&thread,&attr,mach_segv_listener,NULL) != 0) {
+        JL_PRINTF(JL_STDERR, "pthread_create failed");
+        jl_exit(1);  
+    }     
+    pthread_attr_destroy(&attr);
+
+    ret = task_set_exception_ports(self,EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
+    HANDLE_MACH_ERROR("task_set_exception_ports",ret);
+#else // defined(_OS_DARWIN_)
     stack_t ss;
     ss.ss_flags = 0;
     ss.ss_size = SIGSTKSZ;
@@ -741,45 +754,13 @@ void julia_init(char *imageFile)
         JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
-
-    if (signal(SIGPIPE,SIG_IGN) == SIG_ERR) {
-        JL_PRINTF(JL_STDERR, "Couldn't set SIGPIPE\n");
-        jl_exit(1);
-    }
-#elif defined (_OS_DARWIN_)
-    kern_return_t ret;
-    mach_port_t self = mach_task_self();
-    ret = mach_port_allocate(self,MACH_PORT_RIGHT_RECEIVE,&segv_port);
-    HANDLE_MACH_ERROR("mach_port_allocate",ret);
-    ret = mach_port_insert_right(self,segv_port,segv_port,MACH_MSG_TYPE_MAKE_SEND);
-    HANDLE_MACH_ERROR("mach_port_insert_right",ret);
-
-    // Alright, create a thread to serve as the listener for exceptions
-    pthread_t thread;
-    pthread_attr_t attr;
-    if (pthread_attr_init(&attr) != 0)
-    {
-        JL_PRINTF(JL_STDERR, "pthread_attr_init failed");
-        jl_exit(1);  
-    }
-    pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
-    if (pthread_create(&thread,&attr,mach_segv_listener,NULL) != 0)
-    {
-        JL_PRINTF(JL_STDERR, "pthread_create failed");
-        jl_exit(1);  
-    }     
-    pthread_attr_destroy(&attr);
-
-    ret = task_set_exception_ports(self,EXC_MASK_BAD_ACCESS,segv_port,EXCEPTION_DEFAULT,MACHINE_THREAD_STATE);
-    HANDLE_MACH_ERROR("task_set_exception_ports",ret);
-#endif
-#else
+#endif // defined(_OS_DARWIN_)
+#else // defined(_OS_WINDOWS_)
     if (signal(SIGFPE, (void (__cdecl *)(int))fpe_handler) == SIG_ERR) {
         JL_PRINTF(JL_STDERR, "Couldn't set SIGFPE\n");
         jl_exit(1);
     }
 #endif
-
 
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();
@@ -861,6 +842,7 @@ void jl_get_builtin_hooks(void)
     jl_root_task->consumers = jl_nothing;
     jl_root_task->donenotify = jl_nothing;
     jl_root_task->exception = jl_nothing;
+    jl_root_task->result = jl_nothing;
 
     jl_char_type    = (jl_datatype_t*)core("Char");
     jl_int8_type    = (jl_datatype_t*)core("Int8");

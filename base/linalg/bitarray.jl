@@ -1,10 +1,13 @@
 function dot(x::BitVector, y::BitVector)
     # simplest way to mimic Array dot behavior
+    length(x) == length(y) || throw(DimensionMismatch(""))
     s = 0
-    for i = 1 : length(x.chunks)
-        s += count_ones(x.chunks[i] & y.chunks[i])
+    xc = x.chunks
+    yc = y.chunks
+    @inbounds for i = 1 : length(xc)
+        s += count_ones(xc[i] & yc[i])
     end
-    return s
+    s
 end
 
 ## slower than the unpacked version, which is MUCH slower
@@ -14,17 +17,17 @@ end
     #(mA, nA) = size(A)
     #(mB, nB) = size(B)
     #C = falses(nA, nB)
-    #if mA != mB; error("*: argument shapes do not match"); end
+    #if mA != mB; throw(DimensionMismatch("")) end
     #if mA == 0; return C; end
     #col_ch = num_bit_chunks(mA)
     ## TODO: avoid using aux chunks and copy (?)
     #aux_chunksA = zeros(Uint64, col_ch)
     #aux_chunksB = [zeros(Uint64, col_ch) for j=1:nB]
     #for j = 1:nB
-        #copy_chunks(aux_chunksB[j], 1, B.chunks, (j-1)*mA+1, mA)
+        #Base.copy_chunks(aux_chunksB[j], 1, B.chunks, (j-1)*mA+1, mA)
     #end
     #for i = 1:nA
-        #copy_chunks(aux_chunksA, 1, A.chunks, (i-1)*mA+1, mA)
+        #Base.copy_chunks(aux_chunksA, 1, A.chunks, (i-1)*mA+1, mA)
         #for j = 1:nB
             #for k = 1:col_ch
                 ## TODO: improve
@@ -32,39 +35,39 @@ end
             #end
         #end
     #end
-    #return C
+    #C
 #end
 
 #aCb{T, S}(A::BitMatrix{T}, B::BitMatrix{S}) = aTb(A, B)
 
-function triu(B::BitMatrix, k::Int)
+function triu(B::BitMatrix, k::Integer)
     m,n = size(B)
     A = falses(m,n)
+    Ac = A.chunks
+    Bc = B.chunks
     for i = max(k+1,1):n
         j = clamp((i - 1) * m + 1, 1, i * m)
-        Base.copy_chunks(A.chunks, j, B.chunks, j, min(i-k, m))
+        Base.copy_chunks(Ac, j, Bc, j, min(i-k, m))
     end
-    return A
+    A
 end
-triu(B::BitMatrix, k::Integer) = triu(B, int(k))
 
-function tril(B::BitMatrix, k::Int)
+function tril(B::BitMatrix, k::Integer)
     m,n = size(B)
     A = falses(m, n)
+    Ac = A.chunks
+    Bc = B.chunks
     for i = 1:min(n, m+k)
         j = clamp((i - 1) * m + i - k, 1, i * m)
-        Base.copy_chunks(A.chunks, j, B.chunks, j, max(m-i+k+1, 0))
+        Base.copy_chunks(Ac, j, Bc, j, max(m-i+k+1, 0))
     end
-    return A
+    A
 end
-tril(B::BitMatrix, k::Integer) = tril(B, int(k))
 
 # TODO: improve this!
-(*)(A::BitArray, B::BitArray) = bitunpack(A) * bitunpack(B)
-(*)(A::BitArray, B::Array{Bool}) = bitunpack(A) * B
-(*)(A::Array{Bool}, B::BitArray) = A * bitunpack(B)
-(*)(A::BitArray, B::AbstractArray) = bitunpack(A) * B
-(*)(A::AbstractArray, B::BitArray) = A * bitunpack(B)
+(*)(A::BitArray, B::BitArray)      = bitunpack(A) * bitunpack(B)
+(*)(A::BitArray, B::Union(AbstractArray, Array{Bool})) = bitunpack(A) * B
+(*)(A::Union(AbstractArray, Array{Bool}), B::BitArray) = A * bitunpack(B)
 
 ## diff and gradient
 
@@ -78,34 +81,27 @@ gradient(F::BitVector, h::BitVector) = gradient(bitunpack(F), bitunpack(h))
 ## diag and related
 
 function diag(B::BitMatrix)
-    n = min(size(B))
+    n = minimum(size(B))
     v = similar(B, n)
     for i = 1:n
         v[i] = B[i,i]
     end
-    return v
+    v
 end
 
 function diagm(v::Union(BitVector,BitMatrix))
-    if isa(v, BitMatrix)
-        if (size(v,1) != 1 && size(v,2) != 1)
-            error("Input should be nx1 or 1xn")
-        end
-    end
-
+    isa(v, BitMatrix) && size(v,1)==1 || size(v,2)==1 || throw(DimensionMismatch(""))
     n = length(v)
     a = falses(n, n)
     for i=1:n
         a[i,i] = v[i]
     end
-
-    return a
+    a
 end
 
 ## norm and rank
 
 svd(A::BitMatrix) = svd(float(A))
-
 qr(A::BitMatrix) = qr(float(A))
 
 ## kron
@@ -113,14 +109,13 @@ qr(A::BitMatrix) = qr(float(A))
 function kron(a::BitVector, b::BitVector)
     m = length(a)
     n = length(b)
-    R = BitArray(m, n)
-    zS = zero(S)
-    for j = 1:n
-        if b[j] != zS
-            Base.copy_chunks(R.chunks, (j-1)*m+1, a.chunks, 1, m)
-        end
+    R = falses(n * m)
+    Rc = R.chunks
+    bc = b.chunks
+    for j = 1:m
+        a[j] && Base.copy_chunks(Rc, (j-1)*n+1, bc, 1, n)
     end
-    return R
+    R
 end
 
 function kron(a::BitMatrix, b::BitMatrix)
@@ -137,23 +132,17 @@ function kron(a::BitMatrix, b::BitMatrix)
             end
         end
     end
-    return R
+    R
 end
 
 ## Structure query functions
 
-function issym(A::BitMatrix)
-    m, n = size(A)
-    if m != n; return false; end
-    return nnz(A - A.') == 0
-end
-
+issym(A::BitMatrix) = size(A, 1)==size(A, 2) && nnz(A - A.')==0
 ishermitian(A::BitMatrix) = issym(A)
 
 function nonzero_chunks(chunks::Vector{Uint64}, pos0::Int, pos1::Int)
-
-    k0, l0 = get_chunks_id(pos0)
-    k1, l1 = get_chunks_id(pos1)
+    k0, l0 = Base.get_chunks_id(pos0)
+    k1, l1 = Base.get_chunks_id(pos1)
 
     delta_k = k1 - k0
 
@@ -166,24 +155,14 @@ function nonzero_chunks(chunks::Vector{Uint64}, pos0::Int, pos1::Int)
         msk_1 = ~(u << l1 << 1)
     end
 
-    if (chunks[k0] & msk_0) != z
-        return true
-    end
-
-    if delta_k == 0
-        return false
-    end
-
-    for i = k0 + 1 : k1 - 1
-        if chunks[i] != z
-            return true
+    @inbounds begin
+        (chunks[k0] & msk_0) == z || return true
+        delta_k == 0 && return false
+        for i = k0 + 1 : k1 - 1
+            chunks[i] == z || return true
         end
+        (chunks[k1] & msk_1)==z || return true
     end
-
-    if (chunks[k1] & msk_1) != z
-        return true
-    end
-
     return false
 end
 
@@ -191,67 +170,48 @@ function istriu(A::BitMatrix)
     m, n = size(A)
     for j = 1:min(n,m-1)
         stride = (j-1)*m
-        if nonzero_chunks(A.chunks, stride+j+1, stride+m)
-            return false
-        end
+        nonzero_chunks(A.chunks, stride+j+1, stride+m) && return false
     end
     return true
 end
 
 function istril(A::BitMatrix)
     m, n = size(A)
-    if m == 0 || n == 0
-        return true
-    end
+    (m == 0 || n == 0) && return true
     for j = 2:n
         stride = (j-1)*m
-        if nonzero_chunks(A.chunks, stride+1, stride+min(j-1,m))
-            return false
-        end
+        nonzero_chunks(A.chunks, stride+1, stride+min(j-1,m)) && return false
     end
     return true
 end
 
 function findmax(a::BitArray)
-    if length(a) == 0
-        error("findmax: array is empty")
-    end
-    m = false
-    mi = 1
+    length(a)==0 && error("findmax: array is empty")
+    m, mi = false, 1
     ti = 1
-    for i=1:length(a.chunks)
-        k = trailing_zeros(a.chunks[i])
+    ac = a.chunks
+    for i=1:length(ac)
+        @inbounds k = trailing_zeros(ac[i])
         ti += k
-        if k != 64
-            m = true
-            mi = ti
-            break
-        end
+        k==64 || return (true, ti)
     end
-    return (m, mi)
+    return m, mi
 end
 
 function findmin(a::BitArray)
-    if length(a) == 0
-        error("findmin: array is empty")
-    end
-    m = true
-    mi = 1
+    length(a)==0 && error("findmin: array is empty")
+    m, mi = true, 1
     ti = 1
-    for i=1:length(a.chunks) - 1
-        k = trailing_ones(a.chunks[i])
+    ac = a.chunks
+    for i = 1:length(ac)-1
+        @inbounds k = trailing_ones(ac[i])
         ti += k
-        if k != 64
-            return (false, ti)
-        end
+        k==64 || return (false, ti)
     end
     l = (Base.@_mod64 (length(a)-1)) + 1
     msk = Base.@_mskr l
-    k = trailing_ones(a.chunks[end] & msk)
+    @inbounds k = trailing_ones(ac[end] & msk)
     ti += k
-    if k != l
-        m = false
-        mi = ti
-    end
-    return (m, mi)
+    k==l || return (false, ri)
+    return m, mi
 end
