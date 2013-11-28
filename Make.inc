@@ -383,13 +383,13 @@ else
 endif
 
 ifeq ($(OS), Linux)
-OSLIBS += -ldl -lrt -lpthread -Wl,--export-dynamic -Wl,--no-whole-archive $(LIBUNWIND)
+OSLIBS += -ldl -lrt -lpthread -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
 JLDFLAGS = -Wl,-Bdynamic
 endif
 
 ifeq ($(OS), FreeBSD)
 JLDFLAGS = -Wl,-Bdynamic
-OSLIBS += -lkvm -lrt -Wl,--export-dynamic $(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
+OSLIBS += -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
 endif
 
 ifeq ($(OS), Darwin)
@@ -404,7 +404,7 @@ JLDFLAGS =
 endif
 
 ifeq ($(OS), WINNT)
-OSLIBS += -Wl,--export-all-symbols \
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp -lssp
 JCFLAGS += -D_WIN32_WINNT=0x0600
 JCXXFLAGS += -D_WIN32_WINNT=0x0600
