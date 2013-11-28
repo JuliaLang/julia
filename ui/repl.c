@@ -8,10 +8,15 @@
 #define WHOLE_ARCHIVE
 #include "../src/julia.h"
 
+#ifndef JL_SYSTEM_IMAGE_PATH
+#define JL_SYSTEM_IMAGE_PATH ".." PATHSEPSTRING "lib" PATHSEPSTRING "julia" PATHSEPSTRING "sys.ji"
+#endif
+
 static int lisp_prompt = 0;
 static char *program = NULL;
-char *image_file = "sys.ji";
+char *image_file;
 int tab_width = 2;
+char *build_mode;
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
@@ -37,11 +42,11 @@ static const char *opts =
     " -h --help                Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {
-    static char* shortopts = "+H:T:bhJ:";
+    static char* shortopts = "+H:T:hJ:";
     static struct option longopts[] = {
         { "home",        required_argument, 0, 'H' },
         { "tab",         required_argument, 0, 'T' },
-        { "bare",        no_argument,       0, 'b' },
+        { "build",       required_argument, 0, 'b' },
         { "lisp",        no_argument,       &lisp_prompt, 1 },
         { "help",        no_argument,       0, 'h' },
         { "sysimage",    required_argument, 0, 'J' },
@@ -49,10 +54,8 @@ void parse_opts(int *argcp, char ***argvp) {
     };
     int c;
     opterr = 0;
-    int ind = 1;
-#ifdef JL_SYSTEM_IMAGE_PATH
     int imagepathspecified=0;
-#endif
+    image_file = JL_SYSTEM_IMAGE_PATH;
     while ((c = getopt_long(*argcp,*argvp,shortopts,longopts,0)) != -1) {
         switch (c) {
         case 0:
@@ -61,23 +64,19 @@ void parse_opts(int *argcp, char ***argvp) {
             break;
         case 'H':
             julia_home = strdup(optarg);
-            ind+=2;
             break;
         case 'T':
             // TODO: more robust error checking.
             tab_width = atoi(optarg);
-            ind+=2;
             break;
         case 'b':
-            image_file = NULL;
-            ind+=1;
+            build_mode = strdup(optarg);
+            if (!imagepathspecified)
+                image_file = NULL;
             break;
         case 'J':
-            image_file = optarg;
-#ifdef JL_SYSTEM_IMAGE_PATH
+            image_file = strdup(optarg);
             imagepathspecified = 1;
-#endif
-            ind+=2;
             break;
         case 'h':
             printf("%s%s", usage, opts);
@@ -100,35 +99,29 @@ void parse_opts(int *argcp, char ***argvp) {
             free(julia_path);
         }
     }
-    *argvp += ind;
-    *argcp -= ind;
+    *argvp += optind;
+    *argcp -= optind;
     if (image_file==NULL && *argcp > 0) {
         if (strcmp((*argvp)[0], "-")) {
             program = (*argvp)[0];
         }
     }
     if (image_file) {
-        int build_time_path = 0;
-#ifdef JL_SYSTEM_IMAGE_PATH
-        if (!imagepathspecified) {
-            image_file = JL_SYSTEM_IMAGE_PATH;
-            build_time_path = 1;
-        }
-#endif
         if (image_file[0] != PATHSEP) {
             struct stat stbuf;
             char path[512];
-            if (build_time_path) {
+            if (!imagepathspecified) {
                 // build time path relative to JULIA_HOME
-                snprintf(path, sizeof(path), "%s%s%s",
-                         julia_home, PATHSEPSTRING, JL_SYSTEM_IMAGE_PATH);
+                snprintf(path, sizeof(path), "%s%s",
+                         julia_home, PATHSEPSTRING JL_SYSTEM_IMAGE_PATH);
                 image_file = strdup(path);
             }
             else if (jl_stat(image_file, (char*)&stbuf) != 0) {
                 // otherwise try julia_home/../lib/julia/%s
-                snprintf(path, sizeof(path), "%s%s..%slib%sjulia%s%s",
-                         julia_home, PATHSEPSTRING, PATHSEPSTRING,
-                         PATHSEPSTRING, PATHSEPSTRING, image_file);
+                snprintf(path, sizeof(path), "%s%s%s",
+                         julia_home,
+                         PATHSEPSTRING ".." PATHSEPSTRING "lib" PATHSEPSTRING "julia" PATHSEPSTRING,
+                         image_file);
                 image_file = strdup(path);
             }
         }
@@ -283,6 +276,6 @@ int main(int argc, char *argv[])
         jl_lisp_prompt();
         return 0;
     }
-    julia_init(lisp_prompt ? NULL : image_file);
-    return julia_trampoline(argc, argv, true_main);
+    julia_init(lisp_prompt ? NULL : image_file, build_mode!=NULL);
+    return julia_trampoline(argc, argv, true_main, build_mode);
 }

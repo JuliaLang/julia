@@ -894,7 +894,7 @@ extern void jl_get_system_hooks(void);
 extern void jl_get_uv_hooks(void);
 
 DLLEXPORT
-void jl_restore_system_image(char *fname)
+void jl_restore_system_image(char *fname, int build_mode)
 {
     ios_t f;
     char *fpath = fname;
@@ -902,11 +902,13 @@ void jl_restore_system_image(char *fname)
         JL_PRINTF(JL_STDERR, "System image file \"%s\" not found\n", fname);
         exit(1);
     }
-    char *fname_shlib = alloca(strlen(fname));
-    strcpy(fname_shlib, fname);
-    char *fname_shlib_dot = strrchr(fname_shlib, '.');
-    if (fname_shlib_dot != NULL) *fname_shlib_dot = 0;
-    jl_load_sysimg_so(fname_shlib);
+    if (!build_mode) {
+        char *fname_shlib = alloca(strlen(fname));
+        strcpy(fname_shlib, fname);
+        char *fname_shlib_dot = strrchr(fname_shlib, '.');
+        if (fname_shlib_dot != NULL) *fname_shlib_dot = 0;
+        jl_load_sysimg_so(fname_shlib);
+    }
 #ifdef JL_GC_MARKSWEEP
     int en = jl_gc_is_enabled();
     jl_gc_disable();

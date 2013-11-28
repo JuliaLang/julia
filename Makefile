@@ -33,7 +33,7 @@ $(foreach link,base test doc examples,$(eval $(call symlink_target,$(link),$(BUI
 debug release: | $(DIRS) $(BUILD)/share/julia/base $(BUILD)/share/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples $(BUILD)/etc/julia/juliarc.jl
 	@$(MAKE) $(QUIET_MAKE) julia-$@
 	@export JL_PRIVATE_LIBDIR=$(JL_PRIVATE_LIBDIR) && \
-	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(BUILD)/lib:$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.dylib
+	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(BUILD)/lib:$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.$(SHLIB_EXT)
 
 julia-debug-symlink:
 	@ln -sf $(BUILD)/bin/julia-debug-$(DEFAULT_REPL) julia
@@ -75,14 +75,11 @@ $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%$(SHLIB_EXT): $(BUILD)/$(JL_PRIVATE_LIBDIR)/sy
 
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys0.bc:
 	@$(QUIET_JULIA) cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -bf sysimg.jl
-	mv $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys0.ji
-	mv $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.bc $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys0.bc
-
+	$(call spawn,$(JULIA_EXECUTABLE)) --build $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys0 -f sysimg.jl
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.bc: VERSION base/*.jl base/pkg/*.jl base/linalg/*.jl base/sparse/*.jl $(BUILD)/share/julia/helpdb.jl $(BUILD)/share/man/man1/julia.1 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys0.dylib
 	@$(QUIET_JULIA) cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -f \
-		`[ -e $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji ] || echo -J"$(BUILD)/$(JL_PRIVATE_LIBDIR)/sys0.ji"` sysimg.jl \
+	$(call spawn,$(JULIA_EXECUTABLE)) --build $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys -f \
+		-J$(BUILD)/$(JL_PRIVATE_LIBDIR)/$$([ -e $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji ] && echo sys.ji || echo sys0.ji) sysimg.jl \
 		|| (echo "*** This error is usually fixed by running 'make clean'. If the error persists, try 'make cleanall'. ***" && false)
 
 run-julia-debug run-julia-release: run-julia-%:

@@ -593,8 +593,10 @@ DLLEXPORT kern_return_t catch_exception_raise
 
 #endif
 
-void julia_init(char *imageFile)
+void julia_init(char *imageFile, int build_mode)
 {
+    if (build_mode)
+        jl_set_imaging_mode(1);
     jl_page_size = jl_getpagesize();
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
@@ -644,7 +646,6 @@ void julia_init(char *imageFile)
     jl_init_serializer();
 
     if (!imageFile) {
-        jl_set_imaging_mode(1);
         jl_main_module = jl_new_module(jl_symbol("Main"));
         jl_main_module->parent = jl_main_module;
         jl_core_module = jl_new_module(jl_symbol("Core"));
@@ -666,7 +667,7 @@ void julia_init(char *imageFile)
 
     if (imageFile) {
         JL_TRY {
-            jl_restore_system_image(imageFile);
+            jl_restore_system_image(imageFile, build_mode);
         }
         JL_CATCH {
             JL_PRINTF(JL_STDERR, "error during init:\n");
@@ -792,7 +793,7 @@ DLLEXPORT void jl_install_sigint_handler()
 
 extern void * __stack_chk_guard;
 
-DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]))
+DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]), char *build_path)
 {
 #if defined(_OS_WINDOWS_) //&& !defined(_WIN64)
     SetUnhandledExceptionFilter(exception_handler);
@@ -813,6 +814,16 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
     }
 #endif
     int ret = pmain(argc, argv);
+    if (build_path) {
+        char *build_ji;
+        asprintf(&build_ji, "%s.ji",build_path);
+        jl_save_system_image(build_ji);
+        free(build_ji);
+        char *build_bc;
+        asprintf(&build_bc, "%s.bc",build_path);
+        jl_dump_bitcode(build_bc);
+        free(build_bc);
+    }
     p[sizeof(__stack_chk_guard)-1] = a;
     p[sizeof(__stack_chk_guard)-2] = b;
     p[0] = c;

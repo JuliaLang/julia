@@ -875,8 +875,8 @@ jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
 
 // initialization functions
-DLLEXPORT void julia_init(char *imageFile);
-DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
+DLLEXPORT void julia_init(char *imageFile, int build_mode);
+DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]), char* build_mode);
 void jl_init_types(void);
 void jl_init_box_caches(void);
 DLLEXPORT void jl_init_frontend(void);
@@ -886,11 +886,11 @@ void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void *stack, size_t ssize);
 void jl_init_serializer(void);
 
-DLLEXPORT void jl_save_system_image(char *fname);
-DLLEXPORT void jl_restore_system_image(char *fname);
-DLLEXPORT void jl_dump_bitcode(char *fname);
+void jl_save_system_image(char *fname);
+void jl_restore_system_image(char *fname, int build_mode);
+void jl_dump_bitcode(char *fname);
 const char *jl_get_llvmname(void *func);
-DLLEXPORT void jl_set_imaging_mode(uint8_t stat);
+void jl_set_imaging_mode(int stat);
 int32_t jl_get_llvm_gv(jl_value_t *p);
 
 // front end interface
