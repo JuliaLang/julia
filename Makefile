@@ -175,6 +175,7 @@ endif
 ifeq ($(USE_SYSTEM_LIBUV),0)
 ifeq ($(OS),WINNT)
 	cp -a $(BUILD)/lib/libuv.a $(PREFIX)/$(JL_PRIVATE_LIBDIR)
+	cp -a $(BUILD)/include/tree.h $(PREFIX)/include/julia
 else
 	cp -a $(BUILD)/$(JL_LIBDIR)/libuv.a $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
