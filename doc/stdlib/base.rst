@@ -317,9 +317,9 @@ Types
 Generic Functions
 -----------------
 
-.. function:: apply(f, x)
+.. function:: apply(f, x...)
 
-   Like calling f(x)
+   Like calling f(x) or f(x...).
 
    **Example**: ``apply(log, pi)``
 
