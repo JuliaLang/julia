@@ -2,6 +2,10 @@
   global:
     jl_*;
     uv_*;
+    julia_*;
+    ios_*;
+    libsupport_*;
+    locale_is_utf8;
     add_library_mapping;
 
     /* freebsd */
