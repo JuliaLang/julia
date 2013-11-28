@@ -1630,15 +1630,19 @@ Text I/O
 
    Read a matrix from the source with a given element type. If ``T`` is a numeric type, the result is an array of that type, with any non-numeric elements as ``NaN`` for floating-point types, or zero. Other useful values of ``T`` include ``ASCIIString``, ``String``, and ``Any``.
 
-.. function:: writedlm(filename, array, delim::Char)
+.. function:: writedlm(f, A, delim='\t')
 
-   Write an array to a text file using the given delimeter (defaults to comma).
+   Write ``A`` (either an array type or an iterable collection of iterable rows) as text to ``f`` (either a filename string or an ``IO`` stream) using the given delimeter ``delim`` (which defaults to tab, but can be any printable Julia object, typically a ``Char`` or ``String``).
+
+   For example, two vectors ``x`` and ``y`` of the same length can
+   be written as two columns of tab-delimited text to ``f`` by
+   either ``writedlm(f, [x y])`` or by ``writedlm(f, zip(x, y))``.
 
 .. function:: readcsv(source, [T::Type]; options...)
 
    Equivalent to ``readdlm`` with ``delim`` set to comma.
 
-.. function:: writecsv(filename, array)
+.. function:: writecsv(filename, A)
 
    Equivalent to ``writedlm`` with ``delim`` set to comma.
 
