@@ -38,6 +38,8 @@ Library improvements
 
   * `CharString` is renamed to `UTF32String` ([#4943]).
 
+  * Faster sparse `kron` ([#4958]).
+
 Deprecated or removed
 ---------------------
 
