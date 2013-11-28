@@ -816,11 +816,11 @@ end
 ## string promotion rules ##
 
 promote_rule(::Type{UTF8String} , ::Type{ASCIIString}) = UTF8String
-promote_rule(::Type{UTF8String} , ::Type{UTF16String} ) = UTF8String
-promote_rule(::Type{ASCIIString}, ::Type{UTF16String} ) = UTF8String
-promote_rule(::Type{UTF32String} , ::Type{UTF16String} ) = UTF8String
-promote_rule(::Type{UTF8String} , ::Type{UTF32String} ) = UTF8String
-promote_rule(::Type{ASCIIString}, ::Type{UTF32String} ) = UTF8String
+promote_rule(::Type{UTF8String} , ::Type{UTF16String}) = UTF8String
+promote_rule(::Type{ASCIIString}, ::Type{UTF16String}) = UTF8String
+promote_rule(::Type{UTF32String}, ::Type{UTF16String}) = UTF8String
+promote_rule(::Type{UTF8String} , ::Type{UTF32String}) = UTF8String
+promote_rule(::Type{ASCIIString}, ::Type{UTF32String}) = UTF8String
 promote_rule{T<:String}(::Type{RepString}, ::Type{T}) = RepString
 
 ## printing literal quoted string data ##
