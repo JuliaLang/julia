@@ -84,7 +84,7 @@ function status(io::IO)
     instd = Read.installed()
     required = sort!([keys(reqs)...])
     if !isempty(required)
-        println(io, "Required packages:")
+        println(io, "$(length(required)) required packages:")
         for pkg in required
             ver,fix = pop!(instd,pkg)
             status(io,pkg,ver,fix)
@@ -92,7 +92,7 @@ function status(io::IO)
     end
     additional = sort!([keys(instd)...])
     if !isempty(additional)
-        println(io, "Additional packages:")
+        println(io, "$(length(additional)) additional packages:")
         for pkg in additional
             ver,fix = instd[pkg]
             status(io,pkg,ver,fix)
