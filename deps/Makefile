@@ -1535,7 +1535,7 @@ git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
 	touch -c $@
 git-$(GIT_VER)/config.status: git-$(GIT_VER)/configure
 	cd git-$(GIT_VER) && \
-	./configure $(CONFIGURE_COMMON)
+	./configure $(CONFIGURE_COMMON) --bindir="$(BUILD)/libexec"
 	touch -c $@
 $(GIT_SOURCE): git-$(GIT_VER)/config.status
 	$(MAKE) -C git-$(GIT_VER)
@@ -1544,7 +1544,6 @@ git-$(GIT_VER)/checked: $(GIT_SOURCE)
 	echo 1 > $@
 $(GIT_TARGET): $(GIT_SOURCE) git-$(GIT_VER)/checked
 	$(MAKE) -C git-$(GIT_VER) install NO_INSTALL_HARDLINKS=1
-	mv $(BUILD)/bin/git* $(BUILD)/libexec/
 	touch -c $@
 
 clean-git:
