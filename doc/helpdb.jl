@@ -530,9 +530,9 @@
 
 "),
 
-("Generic Functions","Base","apply","apply(f, x)
+("Generic Functions","Base","apply","apply(f, x...)
 
-   Like calling f(x)
+   Like calling f(x) or f(x...).
 
    **Example**: \"apply(log, pi)\"
 
