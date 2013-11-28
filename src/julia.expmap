@@ -6,6 +6,7 @@
     ios_*;
     libsupport_*;
     bitvector_*;
+    u8_*;
     locale_is_utf8;
     add_library_mapping;
 
