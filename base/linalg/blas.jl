@@ -23,12 +23,16 @@ export
 # Level 3
     herk!,
     herk,
+    her2k!,
+    her2k,
     gemm!,
     gemm,
     symm!,
     symm,
     syrk!,
-    syrk
+    syrk,
+    syr2k!,
+    syr2k
 
 
 const libblas = Base.libblas_name
@@ -590,6 +594,81 @@ for (fname, elty) in ((:zherk_,:Complex128), (:cherk_,:Complex64))
            herk!(uplo, trans, alpha, A, zero($elty), Array($elty, (n,n)))
        end
        herk(uplo::BlasChar, trans::BlasChar, A::StridedVecOrMat{$elty}) = herk(uplo, trans, one($elty), A)
+   end
+end
+
+## syr2k
+for (fname, elty) in ((:dsyr2k_,:Float64),
+                      (:ssyr2k_,:Float32),
+                      (:zsyr2k_,:Complex128),
+                      (:csyr2k_,:Complex64))
+    @eval begin
+             #       SUBROUTINE DSYR2K(UPLO,TRANS,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
+             # 
+             #       .. Scalar Arguments ..
+             #       REAL PRECISION ALPHA,BETA
+             #       INTEGER K,LDA,LDB,LDC,N
+             #       CHARACTER TRANS,UPLO
+             #       ..
+             #       .. Array Arguments ..
+             #       REAL PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
+        function syr2k!(uplo::BlasChar, trans::BlasChar, 
+                        alpha::($elty), A::StridedVecOrMat{$elty}, B::StridedVecOrMat{$elty}, 
+                        beta::($elty), C::StridedMatrix{$elty})
+            n = chksquare(C)
+            nn = size(A, trans == 'N' ? 1 : 2)
+            if nn != n throw(DimensionMismatch("syr2k!")) end
+            k  = size(A, trans == 'N' ? 2 : 1)
+            ccall(($(string(fname)),Base.libblas_name), Void,
+                (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, 
+                 Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, 
+                 Ptr{$elty}, Ptr{BlasInt}),
+                 &uplo, &trans, &n, &k, 
+                 &alpha, A, &max(1,stride(A,2)), B, &max(1,stride(B,2)), &beta, 
+                 C, &max(1,stride(C,2)))
+            C
+        end
+    end
+end
+function syr2k(uplo::BlasChar, trans::BlasChar, alpha::Number, A::StridedVecOrMat, B::StridedVecOrMat)
+    T = eltype(A)
+    n = size(A, trans == 'N' ? 1 : 2)
+    syr2k!(uplo, trans, convert(T,alpha), A, B, zero(T), Array(T, (n, n)))
+end
+syr2k(uplo::BlasChar, trans::BlasChar, A::StridedVecOrMat, B::StridedVecOrMat) = syr2k(uplo, trans, one(eltype(A)), A, B)
+
+for (fname, elty1, elty2) in ((:zher2k_,:Complex128,:Float64), (:cher2k_,:Complex64,:Float32))
+   @eval begin
+       # SUBROUTINE CHER2K(UPLO,TRANS,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
+       # 
+       #       .. Scalar Arguments ..
+       #       COMPLEX ALPHA
+       #       REAL BETA
+       #       INTEGER K,LDA,LDB,LDC,N
+       #       CHARACTER TRANS,UPLO
+       #       ..
+       #       .. Array Arguments ..
+       #       COMPLEX A(LDA,*),B(LDB,*),C(LDC,*)
+       function her2k!(uplo::BlasChar, trans::BlasChar, alpha::($elty1), 
+                       A::StridedVecOrMat{$elty1}, B::StridedVecOrMat{$elty1},
+                       beta::($elty2), C::StridedMatrix{$elty1})
+           n = chksquare(C)
+           n == size(A, trans == 'N' ? 1 : 2) || throw(DimensionMismatch("her2k!"))
+           k  = size(A, trans == 'N' ? 2 : 1)
+           ccall(($(string(fname)),libblas), Void,
+                 (Ptr{Uint8}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{BlasInt}, 
+                  Ptr{$elty1}, Ptr{$elty1}, Ptr{BlasInt}, Ptr{$elty1}, Ptr{BlasInt}, 
+                  Ptr{$elty2},  Ptr{$elty1}, Ptr{BlasInt}),
+                 &uplo, &trans, &n, &k, 
+                 &alpha, A, &max(1,stride(A,2)), B, &max(1,stride(B,2)), 
+                 &beta, C, &max(1,stride(C,2)))
+           C
+       end
+       function her2k(uplo::BlasChar, trans::BlasChar, alpha::($elty1), A::StridedVecOrMat{$elty1}, B::StridedVecOrMat{$elty1})
+           n = size(A, trans == 'N' ? 1 : 2)
+           her2k!(uplo, trans, alpha, A, B, zero($elty2), Array($elty1, (n,n)))
+       end
+       her2k(uplo::BlasChar, trans::BlasChar, A::StridedVecOrMat{$elty1}, B::StridedVecOrMat{$elty1}) = her2k(uplo, trans, one($elty1), A, B)
    end
 end
 

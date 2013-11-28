@@ -20,7 +20,7 @@ for encoding in ["UTF-32LE", "UTF-16BE", "UTF-16LE", "UTF-8"]
 end
 
 f=open(joinpath(unicodedir,"UTF-32LE.unicode"))
-str1 = CharString(reinterpret(Char, read(f, Uint32, 1112065)[2:]))
+str1 = UTF32String(reinterpret(Char, read(f, Uint32, 1112065)[2:]))
 close(f)
 
 f=open(joinpath(unicodedir,"UTF-8.unicode"))
@@ -29,7 +29,7 @@ close(f)
 @test str1 == str2
 
 str1 = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
-str2 = CharString(
+str2 = UTF32String(
     8704, 32, 949, 32, 62, 32, 48, 44, 32, 8707, 32,
     948, 32, 62, 32, 48, 58, 32, 124, 120, 45, 121, 124,
     32, 60, 32, 948, 32, 8658, 32, 124, 102, 40, 120,
