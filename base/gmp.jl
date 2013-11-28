@@ -133,8 +133,8 @@ if sizeof(Int32) == sizeof(Clong)
 end
 if sizeof(Int64) == sizeof(Clong)
     function convert(::Type{Uint128}, x::BigInt)
-        uint128(uint(ax>>>64))<<64 +
-        uint128(uint(ax & typemax(Uint64)))
+        uint128(uint(x>>>64))<<64 +
+        uint128(uint(x & typemax(Uint64)))
     end
 end
 convert(::Type{Int128}, x::BigInt) = copysign(int128(uint128(abs(x))),x)
