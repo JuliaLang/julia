@@ -102,35 +102,28 @@ function nthperm!(a::AbstractVector, k::Integer)
 end
 nthperm(a::AbstractVector, k::Integer) = nthperm!(copy(a),k)
 
-# invert a permutation
-function _invperm(a::AbstractVector)
+function invperm(a::AbstractVector)
     b = zero(a) # similar vector of zeros
     n = length(a)
     for i = 1:n
         j = a[i]
-        if !(1 <= j <= n) || b[j] != 0
-            b[1] = 0
-            break
-        end
+        ((1 <= j <= n) && b[j] == 0) ||
+            error("argument is not a permutation")
         b[j] = i
     end
-    return b
+    b
 end
 
-function invperm(a::AbstractVector)
-    b = _invperm(a)
-    if !isempty(b) && b[1] == 0
-        error("invperm: input is not a permutation")
+function isperm(A::AbstractVector)
+    n = length(A)
+    used = falses(n)
+    for a in A
+        (0 < a <= n) && (used[a] $= true) || return false
     end
-    return b
+    true
 end
 
-function isperm(a::AbstractVector)
-    b = _invperm(a)
-    return isempty(b) || b[1]!=0
-end
-
-function permute!!(a, p::AbstractVector{Int})
+function permute!!{T<:Integer}(a, p::AbstractVector{T})
     count = 0
     start = 0
     while count < length(a)
@@ -151,9 +144,9 @@ function permute!!(a, p::AbstractVector{Int})
     a
 end
 
-permute!(a, p::AbstractVector{Int}) = permute!!(a, copy(p))
+permute!(a, p::AbstractVector) = permute!!(a, copy(p))
 
-function ipermute!!(a, p::AbstractVector{Int})
+function ipermute!!{T<:Integer}(a, p::AbstractVector{T})
     count = 0
     start = 0
     while count < length(a)
@@ -176,7 +169,7 @@ function ipermute!!(a, p::AbstractVector{Int})
     a
 end
 
-ipermute!(a, p::AbstractVector{Int}) = ipermute!!(a, copy(p))
+ipermute!(a, p::AbstractVector) = ipermute!!(a, copy(p))
 
 immutable Combinations{T}
     a::T
@@ -204,6 +197,7 @@ function next(c::Combinations, s)
         # special case to generate 1 result for t==0
         return (comb,[length(c.a)+2])
     end
+    s = copy(s)
     for i = length(s):-1:1
         s[i] += 1
         if s[i] > (length(c.a) - (length(s)-i))
@@ -236,6 +230,7 @@ function next(p::Permutations, s)
         # special case to generate 1 result for len==0
         return (p.a,[1])
     end
+    s = copy(s)
     perm = p.a[s]
     k = length(s)-1
     while k > 0 && s[k] > s[k+1];  k -= 1;  end
@@ -447,13 +442,13 @@ end
 # for integer n1, n2, n3
 function nextprod(a::Vector{Int}, x)
     if x > typemax(Int)
-        error("Unsafe for x bigger than typemax(Int)")
+        error("unsafe for x bigger than typemax(Int)")
     end
     k = length(a)
-    v = ones(Int, k)            # current value of each counter
-    mx = int(a.^nextpow(a, x))  # maximum value of each counter
-    v[1] = mx[1]                # start at first case that is >= x
-    p::morebits(Int) = mx[1]    # initial value of product in this case
+    v = ones(Int, k)                  # current value of each counter
+    mx = [nextpow(ai,x) for ai in a]  # maximum value of each counter
+    v[1] = mx[1]                      # start at first case that is >= x
+    p::morebits(Int) = mx[1]          # initial value of product in this case
     best = p
     icarry = 1
     
@@ -483,17 +478,17 @@ function nextprod(a::Vector{Int}, x)
     return int(best)  # could overflow, but best to have predictable return type
 end
 
-# For a list of integers i1, i2, i3, find the largest 
+# For a list of integers i1, i2, i3, find the largest
 #     i1^n1 * i2^n2 * i3^n3 <= x
 # for integer n1, n2, n3
 function prevprod(a::Vector{Int}, x)
     if x > typemax(Int)
-        error("Unsafe for x bigger than typemax(Int)")
+        error("unsafe for x bigger than typemax(Int)")
     end
     k = length(a)
-    v = ones(Int, k)            # current value of each counter
-    mx = int(a.^nextpow(a, x))  # allow each counter to exceed p (sentinel)
-    first = int(a[1]^prevpow(a[1], x))  # start at best case in first factor 
+    v = ones(Int, k)                  # current value of each counter
+    mx = [nextpow(ai,x) for ai in a]  # allow each counter to exceed p (sentinel)
+    first = int(prevpow(a[1], x))     # start at best case in first factor
     v[1] = first
     p::morebits(Int) = first
     best = p

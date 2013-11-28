@@ -15,23 +15,16 @@ import
         exp, exp2, exponent, factorial, floor, hypot, isinteger, iround,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, radians2degrees, rem, round, show,
-        showcompact, sum, sqrt, string, trunc, precision, exp10, expm1,
+        showcompact, sum, sqrt, string, print, trunc, precision, exp10, expm1,
         gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        serialize, deserialize
+        serialize, deserialize, inf, nan, hash, cbrt
 
 import Base.Math.lgamma_r
 
 const ROUNDING_MODE = [0]
 const DEFAULT_PRECISION = [256]
-
-# Rounding modes
-const RoundToNearest = 0
-const RoundToZero = 1
-const RoundUp = 2
-const RoundDown = 3
-const RoundAwayZero = 4
 
 # Basic type and initialization definitions
 
@@ -75,7 +68,7 @@ end
 function BigFloat(x::String, base::Int)
     z = BigFloat()
     err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{Uint8}, Int32, Int32), &z, x, base, ROUNDING_MODE[end])
-    if err != 0; error("Invalid input"); end
+    if err != 0; error("incorrectly formatted number"); end
     return z
 end
 BigFloat(x::String) = BigFloat(x, 10)
@@ -98,7 +91,7 @@ for to in (Int8, Int16, Int32, Int64)
         function convert(::Type{$to}, x::BigFloat)
             (isinteger(x) && (typemin($to) <= x <= typemax($to))) || throw(InexactError())
             convert($to, ccall((:mpfr_get_si,:libmpfr),
-                               Clong, (Ptr{BigFloat}, Int32), &x, RoundToZero))
+                               Clong, (Ptr{BigFloat}, Int32), &x, 0))
         end
     end
 end
@@ -108,7 +101,7 @@ for to in (Uint8, Uint16, Uint32, Uint64)
         function convert(::Type{$to}, x::BigFloat)
             (isinteger(x) && (typemin($to) <= x <= typemax($to))) || throw(InexactError())
             convert($to, ccall((:mpfr_get_ui,:libmpfr),
-                               Culong, (Ptr{BigFloat}, Int32), &x, RoundToZero))
+                               Culong, (Ptr{BigFloat}, Int32), &x, 0))
         end
     end
 end
@@ -404,7 +397,7 @@ function ^(x::BigFloat, y::BigInt)
 end
 
 for f in (:exp, :exp2, :exp10, :expm1, :digamma, :erf, :erfc, :zeta,
-          :cosh,:sinh,:tanh,:sech,:csch,:coth,)
+          :cosh,:sinh,:tanh,:sech,:csch,:coth, :cbrt)
     @eval function $f(x::BigFloat)
         z = BigFloat()
         ccall(($(string(:mpfr_,f)), :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
@@ -450,18 +443,27 @@ function besselj(n::Integer, x::BigFloat)
 end
 
 function bessely0(x::BigFloat)
+    if x < 0
+        throw(DomainError())
+    end
     z = BigFloat()
     ccall((:mpfr_y0, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
 function bessely1(x::BigFloat)
+    if x < 0
+        throw(DomainError())
+    end
     z = BigFloat()
     ccall((:mpfr_y1, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
 function bessely(n::Integer, x::BigFloat)
+    if x < 0
+        throw(DomainError())
+    end
     z = BigFloat()
     ccall((:mpfr_yn, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, n, &x, ROUNDING_MODE[end])
     return z
@@ -597,13 +599,23 @@ function set_bigfloat_precision(x::Int)
     DEFAULT_PRECISION[end] = x
 end
 
-get_bigfloat_rounding() = ROUNDING_MODE[end]
-function set_bigfloat_rounding(x::Int)
-    if x < 0 || x > 4
-        throw(DomainError())
+function to_mpfr(r::RoundingMode)
+    c = r.code
+    if !(0 <= c <= 4)
+        error("invalid BigFloat rounding mode")
     end
-    ROUNDING_MODE[end] = x
+    c
 end
+
+function from_mpfr(c::Integer)
+    if !(0 <= c <= 4)
+        error("invalid MPFR rounding mode code")
+    end
+    RoundingMode(c)
+end
+
+get_bigfloat_rounding() = from_mpfr(ROUNDING_MODE[end])
+set_bigfloat_rounding(r::RoundingMode) = ROUNDING_MODE[end] = to_mpfr(r)
 
 function copysign(x::BigFloat, y::BigFloat)
     z = BigFloat()
@@ -635,13 +647,12 @@ end
 
 function itrunc(x::BigFloat)
     z = BigInt()
-    ccall((:mpfr_get_z, :libmpfr), Int32, (Ptr{BigInt}, Ptr{BigFloat}, Int32), &z, &x, RoundToZero)
+    ccall((:mpfr_get_z, :libmpfr), Int32, (Ptr{BigInt}, Ptr{BigFloat}, Int32), &z, &x, 0)
     return z
 end
 
 iround(x::BigFloat) = itrunc(round(x))
 
-isfinite(x::BigFloat) = !isinf(x)
 function isinf(x::BigFloat)
     return ccall((:mpfr_inf_p, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 end
@@ -649,6 +660,11 @@ end
 function isnan(x::BigFloat)
     return ccall((:mpfr_nan_p, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0
 end
+
+isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
+
+@eval inf(::Type{BigFloat}) = $(BigFloat(Inf))
+@eval nan(::Type{BigFloat}) = $(BigFloat(NaN))
 
 function nextfloat(x::BigFloat)
     z = BigFloat()
@@ -666,6 +682,8 @@ function prevfloat(x::BigFloat)
     return z
 end
 
+eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
+
 function with_bigfloat_precision(f::Function, precision::Integer)
     old_precision = get_bigfloat_precision()
     set_bigfloat_precision(precision)
@@ -676,7 +694,7 @@ function with_bigfloat_precision(f::Function, precision::Integer)
     end
 end
 
-function with_bigfloat_rounding(f::Function, rounding::Integer)
+function with_bigfloat_rounding(f::Function, rounding::RoundingMode)
     old_rounding = get_bigfloat_rounding()
     set_bigfloat_rounding(rounding)
     try
@@ -686,30 +704,39 @@ function with_bigfloat_rounding(f::Function, rounding::Integer)
     end
 end
 
-function round(x::BigFloat, prec::Integer)
-    if prec < 1
-        throw(DomainError())
-    end
-    prec = int(ceil(log2(10^prec)))
-    z = BigFloat(x)
-    ccall((:mpfr_prec_round, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Int32), &z, prec, ROUNDING_MODE[end])
-    return z
-end
-
 function string(x::BigFloat)
     lng = 128
     for i = 1:2
-        z = Array(Uint8, lng)
-        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigFloat}...), z, lng, "%.Re", &x) + 1
+        z = Array(Uint8, lng + 1)
+        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigFloat}...), z, lng + 1, "%.Re", &x)
         if lng < 128 || i == 2
-            return bytestring(convert(Ptr{Uint8}, z[1:lng]))
+            return bytestring(z[1:lng])
         end
     end
 end
 
-eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
-
-show(io::IO, b::BigFloat) = print(io, string(b) * " with $(precision(b)) bits of precision")
+print(io::IO, b::BigFloat) = print(io, string(b))
+show(io::IO, b::BigFloat) = print(io, string(b), " with $(precision(b)) bits of precision")
 showcompact(io::IO, b::BigFloat) = print(io, string(b))
+
+function hash(x::BigFloat)
+    if isnan(x)
+        return hash(NaN)
+    end
+    if isinf(x)
+        return hash(float64(x))
+    end
+    n = ceil(precision(x)/53)
+    e = exponent(x)
+    h::Uint = signbit(x)
+    h = h<<30 + e
+    x = ldexp(x, -e)
+    for i=1:n
+        f64 = float64(x)
+        h = bitmix(h, hash(f64)$11111)
+        x -= f64
+    end
+    h
+end
 
 end #module

@@ -4,47 +4,44 @@ require("testdefs.jl")
 pipe_fds = Array(Cint,2)
 @test 0 == ccall(:pipe, Cint, (Ptr{Cint},), pipe_fds)
 
-function test_poll(timeout_ms)
-    rc = poll_fd(RawFD(pipe_fds[1]), timeout_ms; readable=true)
+function test_poll_fd(timeout_s)
+    rc = poll_fd(RawFD(pipe_fds[1]), timeout_s; readable=true)
     produce(rc)
 end
 
-function test_timeout(tval)
+function test_timeout_fd(tval)
     tic()
-    t = Task(()->test_poll(tval))
+    t = Task(()->test_poll_fd(tval))
     tr = consume(t)
     t_elapsed = toq()
 
-    @test tr == 0
+    @test tr.timedout
 
-    tdiff = t_elapsed * 1000
-    @test tval <= tdiff
+    @test tval <= t_elapsed
 end
 
 function test_read(slval)
-    tval = slval + 100
+    tval = slval * 1.1
     tic()
-    t = Task(()->test_poll(tval))
+    t = Task(()->test_poll_fd(tval))
 
-    sleep(slval/1000.0)
+    sleep(slval)
     @test 1 == ccall(:write, Csize_t, (Cint, Ptr{Uint8},Csize_t), pipe_fds[2], bytestring("A"), 1)
 
     tr = consume(t)
     t_elapsed = toq()
 
-    @test tr == UV_READABLE || (UV_READABLE | UV_WRITABLE)
+    @test isreadable(tr) || iswritable(tr)
 
     dout = Array(Uint8, 1)
     @test 1 == ccall(:read, Csize_t, (Cint, Ptr{Uint8},Csize_t), pipe_fds[1], dout, 1)
     @test dout[1] == int8('A')
 
-    tdiff = t_elapsed * 1000
-
-    @test slval <= tdiff
+    @test slval <= t_elapsed
 end
 
-test_timeout(.1)
-test_timeout(1)
+test_timeout_fd(.1)
+test_timeout_fd(1)
 test_read(.1)
 test_read(1)
 

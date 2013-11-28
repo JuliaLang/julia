@@ -7,8 +7,10 @@ include ../../../Make.inc
 
 JULIA_PKGDIR=$(shell echo $$JULIA_PKGDIR)
 ifeq ($(JULIA_PKGDIR),)
-	JULIA_PKGDIR=$(shell echo ~)
+	JULIA_PKGDIR=$(shell echo ~)/.julia
 endif
+
+VERSION_SUFFIX=$(shell [ $$(git describe --tags --exact-match 2>/dev/null) ] && echo $(JULIA_VERSION) || echo $(JULIA_VERSION)-$(JULIA_COMMIT))
 
 all: clean dmg
 
@@ -20,16 +22,12 @@ dmg:
 	-mkdir -p ./julia/libexec ./julia/share
 	-cp -a $(BUILD)/libexec/git* ./julia/libexec
 	-cp -a $(BUILD)/share/git* ./julia/share
-	cp -a $(JULIA_PKGDIR)/Cairo/deps/usr/* ./julia/
 	rm -f julia/lib/*.{a,la}
-	chmod a+w julia/lib/*.dylib
-	(for lib in julia/lib/*.dylib; do ./run-install-name-tool-change.sh $$lib $(JULIA_PKGDIR)/Cairo/deps/usr/lib/ lib/ change; done)
-	(cd julia/lib && for lib in *.dylib; do install_name_tool -id @executable_path/../lib/$$lib $$lib; done)
 	-mkdir dmg
-	platypus -a Julia -p /bin/bash -V $(JULIA_VERSION) -u "The Julia Project" -i julia.icns -Q julia.icns -o "None" -I org.julialang -x -f julia script ./dmg/Julia-$(JULIA_VERSION)-pre-$(JULIA_COMMIT).app
+	platypus -a Julia -p /bin/bash -V $(JULIA_VERSION) -R -u "The Julia Project" -i julia.icns -Q julia.icns -o "None" -I org.julialang -x -f julia script ./dmg/Julia-$(VERSION_SUFFIX).app
 	-cp -f Julia.icns dmg/.VolumeIcon.icns
 	-ln -fs /Applications ./dmg/Applications
-	hdiutil create Julia-$(JULIA_VERSION)-pre-$(JULIA_COMMIT).dmg -ov -volname "Julia" -imagekey zlib-level=9 -srcfolder dmg
+	hdiutil create Julia-$(VERSION_SUFFIX).dmg -ov -volname "Julia" -imagekey zlib-level=9 -srcfolder dmg
 
 
 clean:

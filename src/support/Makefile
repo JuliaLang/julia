@@ -4,7 +4,7 @@ include $(JULIAHOME)/Make.inc
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 
-OBJS = hashing.o timefuncs.o dblprint.o ptrhash.o operators.o \
+OBJS = hashing.o timefuncs.o ptrhash.o operators.o \
 	utf8.o ios.o htable.o bitvector.o \
 	int2str.o libsupportinit.o arraylist.o
 
@@ -38,19 +38,19 @@ default: release
 HEADERS = $(wildcard *.h) $(JULIAHOME)/deps/libuv/include/uv.h
 
 %.o: %.c $(HEADERS)
-	@$(PRINT_CC) $(CC) $(CPPFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@)
 %.do: %.c $(HEADERS)
-	@$(PRINT_CC) $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 %.o: %.S
-	@$(PRINT_CC) $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@)
 %.do: %.S
-	@$(PRINT_CC) $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@
+	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 release debug: libsupport.a
 
 libsupport.a: $(XOBJS)
 	rm -rf $@
-	@$(PRINT_LINK) $(AR) -rcs $@ $^
+	@$(call PRINT_LINK, $(AR) -rcs $@ $^)
 
 clean:
 	rm -f *.o

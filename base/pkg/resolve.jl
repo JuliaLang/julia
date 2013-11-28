@@ -24,7 +24,7 @@ function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Availa
     catch err
         if isa(err, UnsatError)
             p = interface.pkgs[err.info]
-            msg = "Unsatisfiable package requirements detected: " *
+            msg = "unsatisfiable package requirements detected: " *
                   "no feasible version could be found for package: $p"
             if msgs.num_nondecimated != graph.np
                 msg *= "\n  (you may try increasing the value of the" *
@@ -60,7 +60,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
     vers = Array((ByteString,VersionNumber,VersionNumber), 0)
     for (p,d) in deps, vn in keys(d)
         lvns = VersionNumber[filter(vn2->(vn2>vn), keys(d))...]
-        nvn = isempty(lvns) ? typemax(VersionNumber) : min(lvns)
+        nvn = isempty(lvns) ? typemax(VersionNumber) : minimum(lvns)
         push!(vers, (p,vn,nvn))
     end
     sort!(vers, by=pvn->(-ndeps[pvn[1]][pvn[2]]))

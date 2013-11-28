@@ -1,7 +1,12 @@
 ## type aliases ##
 
-typealias SmallSigned Union(Int8,Int16,Int32,Int)
-typealias SmallUnsigned Union(Uint8,Uint16,Uint32,Uint)
+if Int === Int32
+typealias SmallSigned Union(Int8,Int16)
+typealias SmallUnsigned Union(Uint8,Uint16)
+else
+typealias SmallSigned Union(Int8,Int16,Int32)
+typealias SmallUnsigned Union(Uint8,Uint16,Uint32)
+end
 
 ## integer arithmetic ##
 
@@ -258,7 +263,7 @@ for to in _inttypes, from in _inttypes
         if to.size < from.size
             @eval convert(::Type{$to}, x::($from)) = box($to,trunc_int($to,unbox($from,x)))
         elseif from.size < to.size || from===Bool
-            if subtype(from, Signed)
+            if issubtype(from, Signed)
                 @eval convert(::Type{$to}, x::($from)) = box($to,sext_int($to,unbox($from,x)))
             else
                 @eval convert(::Type{$to}, x::($from)) = box($to,zext_int($to,unbox($from,x)))
@@ -568,3 +573,63 @@ else
 
     mod(x::Int128, y::Int128) = box(Int128,smod_int(unbox(Int128,x),unbox(Int128,y)))
 end
+
+## checked +, - and *
+
+for T in (Int8,Int16,Int32,Int64)#,Int128) ## FIXME: #4905
+    @eval begin
+        checked_add(x::$T, y::$T) = box($T,checked_sadd(unbox($T,x),unbox($T,y)))
+        checked_sub(x::$T, y::$T) = box($T,checked_ssub(unbox($T,x),unbox($T,y)))
+    end
+end
+for T in (Int16,Int32)
+    @eval begin
+        checked_mul(x::$T, y::$T) = box($T,checked_smul(unbox($T,x),unbox($T,y)))
+    end
+end
+for T in (Uint8,Uint16,Uint32,Uint64)#,Uint128) ## FIXME: #4905
+    @eval begin
+        checked_add(x::$T, y::$T) = box($T,checked_uadd(unbox($T,x),unbox($T,y)))
+        checked_sub(x::$T, y::$T) = box($T,checked_usub(unbox($T,x),unbox($T,y)))
+    end
+end
+for T in (Uint16,Uint32)
+    @eval begin
+        checked_mul(x::$T, y::$T) = box($T,checked_umul(unbox($T,x),unbox($T,y)))
+    end
+end
+
+# checked mul is broken for 8-bit types (LLVM bug?) ## FIXME: #4905
+
+for T in (Int8,Uint8)
+    @eval function checked_mul(x::$T, y::$T)
+        xy = x*y
+        xy8 = convert($T,xy)
+        xy == xy8 || throw(OverflowError())
+        return xy8
+    end
+end
+
+if WORD_SIZE == 32
+for T in (Int64,Uint64)
+    @eval function checked_mul(x::$T, y::$T)
+        xy = int128(x)*int128(y)
+        xy64 = convert($T,xy)
+        xy == xy64 || throw(OverflowError())
+        return xy64
+    end
+end
+else
+    checked_mul(x::Int64, y::Int64)   = box(Int64,checked_smul(unbox(Int64,x),unbox(Int64,y)))
+    checked_mul(x::Uint64, y::Uint64) = box(Uint64,checked_umul(unbox(Uint64,x),unbox(Uint64,y)))
+end
+
+# checked ops are broken for 128-bit types (LLVM bug) ## FIXME: #4905
+
+checked_add(x::Int128, y::Int128) = x + y
+checked_sub(x::Int128, y::Int128) = x - y
+checked_mul(x::Int128, y::Int128) = x * y
+
+checked_add(x::Uint128, y::Uint128) = x + y
+checked_sub(x::Uint128, y::Uint128) = x - y
+checked_mul(x::Uint128, y::Uint128) = x * y

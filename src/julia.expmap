@@ -46,7 +46,6 @@
     ios_write_direct;
     iswprint;
     jl_;
-    jl_print_type;
     jl_alloc_array_1d;
     jl_alloc_array_2d;
     jl_alloc_array_3d;
@@ -115,6 +114,7 @@
     jl_exit;
     jl_expand;
     jl_expr_type;
+    jl_copy_ast;
     jl_eval_string;
     jl_exception_occurred;
     jl_exception_clear;
@@ -150,6 +150,7 @@
     jl_gc_counted_malloc;
     jl_gc_counted_free;
     jl_gc_counted_realloc;
+    jl_gc_counted_realloc_with_old_size;
     jl_gensym;
     jl_get_binding;
     jl_get_current_module;
@@ -244,7 +245,7 @@
     jl_pututf8;
     jl_pututf8_copy;
     jl_pwrite;
-    jl_readBuffer;
+    jl_read_buffer;
     jl_readdir;
     jl_readuntil;
     jl_throw;
@@ -254,6 +255,7 @@
     jl_get_backtrace;
     jl_backtrace_from_here;
     jl_lookup_code_address;
+    jl_read_sonames;
     rec_backtrace;
     profile_init;
     profile_get_data;
@@ -262,6 +264,7 @@
     profile_clear_data;
     profile_start_timer;
     profile_stop_timer;
+    profile_is_running;
     jl_reshape_array;
     jl_restore_system_image;
     jl_run_event_loop;
@@ -330,6 +333,8 @@
     jl_fs_poll_start;
     jl_fs_event_init;
     jl_fs_unlink;
+    jl_fs_rename;
+    jl_fs_sendfile;
     jl_fs_write;
     jl_fs_write_byte;
     jl_fs_read;
@@ -361,6 +366,7 @@
     memhash_seed;
     open_any_tcp_port;
     repl_callback_enable;
+    jl_init_repl;
     restore_signals;
     rl_clear_input;
     jl_SC_CLK_TCK;
@@ -368,6 +374,7 @@
     u8_isvalid;
     u8_strlen;
     u8_strwidth;
+    u8_reverse;
     wcwidth;
     uv_*;
     add_library_mapping;

@@ -40,6 +40,13 @@ value_t fl_defined_julia_global(value_t *args, uint32_t nargs)
     return (b != HT_NOTFOUND && b->owner==jl_current_module) ? FL_T : FL_F;
 }
 
+value_t fl_current_julia_module(value_t *args, uint32_t nargs)
+{
+    value_t opaque = cvalue(jvtype, sizeof(void*));
+    *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = (jl_value_t*)jl_current_module;
+    return opaque;
+}
+
 value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
 {
     if (nargs < 1)
@@ -91,6 +98,7 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
 static builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global },
     { "invoke-julia-macro", fl_invoke_julia_macro },
+    { "current-julia-module", fl_current_julia_module },
     { NULL, NULL }
 };
 
@@ -255,6 +263,8 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
             */
             size_t n = llength(e)-1;
             size_t i;
+            if (sym == null_sym && n == 0)
+                return jl_nothing;
             if (sym == lambda_sym) {
                 jl_expr_t *ex = jl_exprn(lambda_sym, n);
                 e = cdr_(e);
@@ -646,6 +656,10 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
         // been evaluated.
         JL_GC_PUSH1(&li);
         li = jl_add_static_parameters(li, sp);
+        // inner lambda does not need the "def" link. it leads to excess object
+        // retention, for example pointing to the original uncompressed AST
+        // of a top-level thunk that gets type inferred.
+        li->def = li;
         li->ast = jl_prepare_ast(li, li->sparams);
         JL_GC_POP();
         return (jl_value_t*)li;
@@ -675,6 +689,48 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
         }
         JL_GC_POP();
         return (jl_value_t*)ne;
+    }
+    return expr;
+}
+
+DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
+{
+    if (jl_is_expr(expr)) {
+        jl_expr_t *e = (jl_expr_t*)expr;
+        size_t i, l = jl_array_len(e->args);
+        jl_expr_t *ne = NULL;
+        JL_GC_PUSH2(&ne, &expr);
+        ne = jl_exprn(e->head, l);
+        if (l == 0) {
+            ne->args = jl_alloc_cell_1d(0);
+        }
+        else {
+            for(i=0; i < l; i++)
+                jl_exprarg(ne, i) = jl_copy_ast(jl_exprarg(e,i));
+        }
+        JL_GC_POP();
+        return (jl_value_t*)ne;
+    }
+    else if (jl_typeis(expr,jl_array_any_type)) {
+        jl_array_t *a = (jl_array_t*)expr;
+        size_t i, l = jl_array_len(a);
+        jl_array_t *na = NULL;
+        JL_GC_PUSH2(&na, &expr);
+        na = jl_alloc_cell_1d(l);
+        for(i=0; i < l; i++)
+            jl_cellset(na, i, jl_copy_ast(jl_cellref(a,i)));
+        JL_GC_POP();
+        return (jl_value_t*)na;
+    }
+    else if (jl_is_quotenode(expr)) {
+        if (jl_is_symbol(jl_fieldref(expr,0)))
+            return expr;
+        jl_value_t *q = NULL;
+        JL_GC_PUSH2(&q, &expr);
+        q = jl_copy_ast(jl_fieldref(expr,0));
+        jl_value_t *v = jl_new_struct(jl_quotenode_type, q);
+        JL_GC_POP();
+        return v;
     }
     return expr;
 }

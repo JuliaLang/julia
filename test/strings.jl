@@ -218,6 +218,22 @@ parsehex(s) = parseint(s,16)
 @test_throws parseint("2x")
 @test_throws parseint("-")
 
+@test parseint("1234") == 1234
+@test parseint("0x1234") == 0x1234
+@test parseint("0o1234") == 0o1234
+@test parseint("0b1011") == 0b1011
+@test parseint("-1234") == -1234
+@test parseint("-0x1234") == -int(0x1234)
+@test parseint("-0o1234") == -int(0o1234)
+@test parseint("-0b1011") == -int(0b1011)
+
+for T in (Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64)#,Int128,Uint128) ## FIXME: #4905
+    @test parseint(T,string(typemin(T))) == typemin(T)
+    @test parseint(T,string(typemax(T))) == typemax(T)
+    @test_throws parseint(T,string(big(typemin(T))-1))
+    @test_throws parseint(T,string(big(typemax(T))+1))
+end
+
 # string manipulation
 @test strip("\t  hi   \n") == "hi"
 
@@ -398,6 +414,7 @@ end
 for i = 1:endof(u8str)
     @test search(u8str, "", i) == i:i-1
 end
+@test search("", "") == 1:0
 
 # string rsearch with a zero-char string
 for i = 1:endof(astr)
@@ -406,6 +423,7 @@ end
 for i = 1:endof(u8str)
     @test rsearch(u8str, "", i) == i:i-1
 end
+@test rsearch("", "") == 1:0
 
 # string search with a zero-char regex
 for i = 1:endof(astr)
@@ -781,7 +799,7 @@ bin_val = hex2bytes("07bf")
 @test sizeof(RopeString("abc","def")) == 6
 
 # issue #3597
-@test string(CharString(['T', 'e', 's', 't'])[1:1], "X") == "TX"
+@test string(UTF32String(['T', 'e', 's', 't'])[1:1], "X") == "TX"
 
 # issue #3710
 @test prevind(SubString("{var}",2,4),4) == 3
@@ -823,3 +841,11 @@ bin_val = hex2bytes("07bf")
 @test (@sprintf "%s" "tést") == "tést"
 # reasonably complex
 @test (@sprintf "Test: %s%c%C%c%#-.0f." "t" 65 66 67 -42) == "Test: tABC-42.."
+
+# issue #4183
+@test split(SubString(ascii("x"), 2, 0), "y") == String[""]
+@test split(SubString(utf8("x"), 2, 0), "y") == String[""]
+
+# issue #4586
+@test rsplit(RevString("ailuj"),'l') == {"ju","ia"}
+@test_throws float64(RevString("64"))

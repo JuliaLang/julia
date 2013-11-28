@@ -45,7 +45,7 @@ function read_sub{T}(from::IOBuffer, a::Array{T}, offs, nel)
         throw(BoundsError())
     end
     if !isbits(T)
-        error("Read from IOBuffer only supports bits types or arrays of bits types; got "*string(T)*".")
+        error("read from IOBuffer only supports bits types or arrays of bits types; got "*string(T))
     end
     read(from, pointer(a, offs), nel*sizeof(T))
     return a
@@ -89,17 +89,21 @@ iswritable(io::IOBuffer) = io.writable
 # This should maybe be sizeof() instead.
 #length(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 nb_available(io::IOBuffer) = io.size - io.ptr + 1
-skip(io::IOBuffer, n::Integer) = (io.ptr = min(io.ptr + n, io.size+1))
+position(io::IOBuffer) = io.ptr-1
+
+function skip(io::IOBuffer, n::Integer)
+    io.ptr = min(io.ptr + n, io.size+1)
+    return io
+end
 function seek(io::IOBuffer, n::Integer)
     if !io.seekable error("seek failed") end
     io.ptr = min(n+1, io.size+1)
-    return true
+    return io
 end
 function seekend(io::IOBuffer)
     io.ptr = io.size+1
-    return true
+    return io
 end
-position(io::IOBuffer) = io.ptr-1
 function truncate(io::IOBuffer, n::Integer)
     if !io.writable error("truncate failed") end
     if !io.seekable error("truncate failed") end #because absolute offsets are meaningless
@@ -110,15 +114,16 @@ function truncate(io::IOBuffer, n::Integer)
     io.data[io.size+1:n] = 0
     io.size = n
     io.ptr = min(io.ptr, n+1)
-    return true
+    return io
 end
 function compact(io::IOBuffer)
     if !io.writable error("compact failed") end
     if io.seekable error("compact failed") end
-    ccall(:memmove, Ptr{Void}, (Ptr{Void},Ptr{Void},Uint), io.data, pointer(io.data,io.ptr), nb_available(io))
+    ccall(:memmove, Ptr{Void}, (Ptr{Void},Ptr{Void},Uint),
+          io.data, pointer(io.data,io.ptr), nb_available(io))
     io.size -= io.ptr - 1
     io.ptr = 1
-    return true
+    return io
 end
 function ensureroom(io::IOBuffer, nshort::Int)
     if !io.writable error("ensureroom failed") end
@@ -202,7 +207,7 @@ function write_sub{T}(to::IOBuffer, a::Array{T}, offs, nel)
         throw(BoundsError())
     end
     if !isbits(T)
-        error("Write to IOBuffer only supports bits types or arrays of bits types; got "*string(T)*".")
+        error("write to IOBuffer only supports bits types or arrays of bits types; got "*string(T))
     end
     write(to, pointer(a,offs), nel*sizeof(T))
 end

@@ -31,7 +31,8 @@ static const char *opts =
 
     " --no-history             Don't load or save history\n"
     " -f --no-startup          Don't load ~/.juliarc.jl\n"
-    " -F                       Load ~/.juliarc.jl, then handle remaining inputs\n\n"
+    " -F                       Load ~/.juliarc.jl, then handle remaining inputs\n"
+    " --color=yes|no           Enable or disable color text\n\n"
 
     " -h --help                Print this message\n";
 
@@ -159,20 +160,8 @@ static int exec_program(void)
                 jl_show(jl_stderr_obj(), e);
             }
             else {
-                while (1) {
-                    if (jl_typeof(e) == (jl_value_t*)jl_loaderror_type) {
-                        e = jl_fieldref(e, 2);
-                        // TODO: show file and line
-                    }
-                    else break;
-                }
-                if (jl_typeof(e) == (jl_value_t*)jl_errorexception_type) {
-                    jl_printf(JL_STDERR, "error during bootstrap: %s\n",
-                               jl_string_data(jl_fieldref(e,0)));
-                }
-                else {
-                    jl_printf(JL_STDERR, "error during bootstrap\n");
-                }
+                jl_printf(JL_STDERR, "error during bootstrap: ");
+                jl_static_show(JL_STDERR, e);
             }
             jl_printf(JL_STDERR, "\n");
             JL_EH_POP();
@@ -252,12 +241,10 @@ int true_main(int argc, char *argv[])
         return ret;
     }
 
-    init_repl_environment(argc, argv);
-
     jl_function_t *start_client =
         (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start"));
 
-    //uv_read_start(jl_stdin_tty,jl_alloc_read_buffer,&readBuffer);
+    //uv_read_start(jl_stdin_tty,jl_alloc_read_buffer,&read_buffer);
 
     if (start_client) {
         jl_apply(start_client, NULL, 0);
@@ -277,7 +264,7 @@ int true_main(int argc, char *argv[])
             jl_printf(JL_STDERR, "\n\n");
             iserr = 0;
         }
-    uv_run(jl_global_event_loop(),UV_RUN_DEFAULT);
+        uv_run(jl_global_event_loop(),UV_RUN_DEFAULT);
     }
     JL_CATCH {
         iserr = 1;

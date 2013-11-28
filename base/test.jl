@@ -1,8 +1,6 @@
 module Test
 
-export Result, Success, Failure, Error,
-       @test, @test_fails, @test_throws, @test_approx_eq, @test_approx_eq_eps,
-       registerhandler, withhandler
+export @test, @test_fails, @test_throws, @test_approx_eq, @test_approx_eq_eps
 
 abstract Result
 type Success <: Result
@@ -21,6 +19,11 @@ default_handler(r::Success) = nothing
 default_handler(r::Failure) = error("test failed: $(r.expr)")
 default_handler(r::Error)   = rethrow(r)
 
+handler() = get(task_local_storage(), :TEST_HANDLER, default_handler)
+
+with_handler(f::Function, handler) =
+    task_local_storage(f, :TEST_HANDLER, handler)
+
 import Base.showerror
 
 showerror(io::IO, r::Error) = showerror(io, r, {})
@@ -29,34 +32,21 @@ function showerror(io::IO, r::Error, bt)
     showerror(io, r.err, r.backtrace)
 end
 
-const handlers = [default_handler]
-
-function do_test(thk, qex)
-    handlers[end](try
-        thk() ? Success(qex) : Failure(qex)
+function do_test(body,qex)
+    handler()(try
+        body() ? Success(qex) : Failure(qex)
     catch err
         Error(qex,err,catch_backtrace())
     end)
 end
 
-function do_test_throws(thk, qex)
-    handlers[end](try
-        thk()
+function do_test_throws(body,qex)
+    handler()(try
+        body()
         Failure(qex)
-    catch err
+    catch
         Success(qex)
     end)
-end
-
-function registerhandler(handler)
-    handlers[end] = handler
-end
-
-function withhandler(f::Function, handler)
-    handler, handlers[end] = handlers[end], handler
-    ret = f()
-    handler, handlers[end] = handlers[end], handler
-    return ret
 end
 
 macro test(ex)
@@ -72,9 +62,9 @@ macro test_fails(ex)
 end
 
 function test_approx_eq(va, vb, Eps, astr, bstr)
-    diff = max(abs(va - vb))
-    sdiff = string("|", astr, " - ", bstr, "| <= ", Eps)
+    diff = maximum(abs(va - vb))
     if diff > Eps
+        sdiff = string("|", astr, " - ", bstr, "| <= ", Eps)
         error("assertion failed: ", sdiff,
 	      "\n  ", astr, " = ", va,
 	      "\n  ", bstr, " = ", vb,
@@ -82,7 +72,8 @@ function test_approx_eq(va, vb, Eps, astr, bstr)
     end
 end
 
-test_approx_eq(va, vb, astr, bstr) = test_approx_eq(va, vb, 10^4*length(va)*eps(max(max(abs(va)), max(abs(vb)))) * max(1, max(abs(va)), max(abs(vb))), astr, bstr)
+test_approx_eq(va, vb, astr, bstr) =
+    test_approx_eq(va, vb, 10^4*length(va)*eps(float(max(maximum(abs(va)), maximum(abs(vb))))), astr, bstr)
 
 macro test_approx_eq_eps(a, b, c)
     :(test_approx_eq($(esc(a)), $(esc(b)), $(esc(c)), $(string(a)), $(string(b))))

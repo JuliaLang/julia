@@ -10,8 +10,8 @@ immutable Range{T<:Real} <: Ranges{T}
     len::Int
 
     function Range(start::T, step::T, len::Int)
-        if step != step; error("Range: step cannot be NaN"); end
-        if !(len >= 0);  error("Range: length must be non-negative"); end
+        if step != step; error("step cannot be NaN"); end
+        if !(len >= 0);  error("length must be non-negative"); end
         new(start, step, len)
     end
     Range(start::T, step::T, len::Integer) = Range(start, step, int(len))
@@ -24,7 +24,7 @@ immutable Range1{T<:Real} <: Ranges{T}
     len::Int
 
     function Range1(start::T, len::Int)
-        if !(len >= 0); error("Range: length must be non-negative"); end
+        if !(len >= 0); error("length must be non-negative"); end
         new(start, len)
     end
     Range1(start::T, len::Integer) = Range1(start, int(len))
@@ -58,7 +58,7 @@ function colon{T<:Real}(start::T, step::T, stop::T)
             len = itrunc(n)
         end
         if n >= typemax(Int)
-            error("Range: length ",n," is too large")
+            error("length ",n," is too large")
         end
     end
     Range(start, step, len)
@@ -76,7 +76,7 @@ function colon{T<:Real}(start::T, stop::T)
             len = itrunc(n)
         end
         if n >= typemax(Int)
-            error("Range: length ",n," is too large")
+            error("length ",n," is too large")
         end
     end
     Range1(start, len)
@@ -97,10 +97,13 @@ last{T}(r::Range{T})  = oftype(T, r.start + (r.len-1)*r.step)
 step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
 
-min(r::Range1) = (isempty(r)&&error("min: range is empty")) || first(r)
-max(r::Range1) = (isempty(r)&&error("max: range is empty")) || last(r)
-min(r::Ranges) = (isempty(r)&&error("min: range is empty")) || (step(r) > 0 ? first(r) :  last(r))
-max(r::Ranges) = (isempty(r)&&error("max: range is empty")) || (step(r) > 0 ?  last(r) : first(r))
+minimum(r::Range1) = (isempty(r)&&error("range must be non-empty")) || first(r)
+maximum(r::Range1) = (isempty(r)&&error("range must be non-empty")) || last(r)
+minimum(r::Ranges) = (isempty(r)&&error("range must be non-empty")) || (step(r) > 0 ? first(r) :  last(r))
+maximum(r::Ranges) = (isempty(r)&&error("range must be non-empty")) || (step(r) > 0 ?  last(r) : first(r))
+
+ctranspose(r::Ranges) = [x for _=1, x=r]
+transpose(r::Ranges) = r'
 
 # Ranges are intended to be immutable
 copy(r::Ranges) = r
@@ -119,7 +122,7 @@ function getindex(r::Range1, s::Range1{Int})
         end
         Range1(r[s.start], s.len)
     else
-        Range1(r.start, s.len)
+        Range1(r.start + s.start-1, s.len)
     end
 end
 
@@ -130,7 +133,7 @@ function getindex(r::Ranges, s::Ranges{Int})
         end
         Range(r[s.start], step(r)*step(s), s.len)
     else
-        Range(r.start, step(r)*step(s), s.len)
+        Range(r.start + (s.start-1)*step(r), step(r)*step(s), s.len)
     end
 end
 
@@ -150,9 +153,6 @@ done(r::Ranges, i) = (length(r) <= i)
 
 ==(r::Ranges, s::Ranges) = (r.start==s.start) & (step(r)==step(s)) & (r.len==s.len)
 ==(r::Range1, s::Range1) = (r.start==s.start) & (r.len==s.len)
-isequal(r::Ranges, s::Ranges) =
-    isequal(r.start,s.start) & isequal(step(r),step(s)) & (r.len==s.len)
-isequal(r::Range1, s::Range1) = isequal(r.start,s.start) & (r.len==s.len)
 
 # TODO: isless?
 
@@ -343,7 +343,7 @@ function vcat{T}(r::Ranges{T})
     a = Array(T,n)
     i = 1
     for x in r
-        a[i] = x
+        @inbounds a[i] = x
         i += 1
     end
     return a
@@ -357,7 +357,7 @@ function vcat{T}(rs::Ranges{T}...)
     i = 1
     for r in rs
         for x in r
-            a[i] = x
+            @inbounds a[i] = x
             i += 1
         end
     end
@@ -390,15 +390,28 @@ function map!(f::Callable, dest, r::Ranges)
     dest
 end
 
-function map(f::Callable, r::Ranges)
-    if isempty(r); return {}; end
-    first = f(r[1])
-    map!(f, Array(typeof(first), length(r)), r)
+function map_range_to!(f::Callable, first, dest, r::Ranges, state)
+    dest[1] = first
+    i = 2
+    while !done(r, state)
+        ri, state = next(r, state)
+        dest[i] = f(ri)
+        i += 1
+    end
+    dest
 end
 
-function contains(r::Ranges, x)
+function map(f::Callable, r::Ranges)
+    if isempty(r); return {}; end
+    state = start(r)
+    (ri, state) = next(r, state)
+    first = f(ri)
+    map_range_to!(f, first, Array(typeof(first), length(r)), r, state)
+end
+
+function in(x, r::Ranges)
     n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1
     n >= 1 && n <= length(r) && r[n] == x
 end
 
-contains{T<:Integer}(r::Ranges{T}, x) = isinteger(x) && x>=min(r) && x<=max(r) && (step(r)==0 || mod(int(x)-first(r),step(r))==0)
+in{T<:Integer}(x, r::Ranges{T}) = isinteger(x) && x>=minimum(r) && x<=maximum(r) && (step(r)==0 || mod(int(x)-first(r),step(r))==0)

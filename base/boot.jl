@@ -80,23 +80,23 @@
 #    typ::Any
 #end
 
-#type LineNumberNode
+#immutable LineNumberNode
 #    line::Int
 #end
 
-#type LabelNode
+#immutable LabelNode
 #    label::Int
 #end
 
-#type GotoNode
+#immutable GotoNode
 #    label::Int
 #end
 
-#type QuoteNode
+#immutable QuoteNode
 #    value
 #end
 
-#type TopNode
+#immutable TopNode
 #    name::Symbol
 #end
 
@@ -138,7 +138,7 @@ export
     setfield, yieldto, throw, tuple, tuplelen, tupleref, is, ===, isdefined,
     convert_default, convert_tuple, kwcall,
     # type reflection
-    subtype, typeassert, typeof, apply_type, isa,
+    issubtype, typeassert, typeof, apply_type, isa,
     # method reflection
     applicable, invoke, method_exists,
     # constants
@@ -149,7 +149,7 @@ export
     #box, bswap_int, checked_fptosi, checked_fptoui, checked_sadd,
     #checked_smul, checked_ssub, checked_uadd, checked_umul, checked_usub,
     #nan_dom_err, copysign_float, ctlz_int, ctpop_int, cttz_int,
-    #div_float, eq_float, eq_int, eqfsi64, eqfui64, flipsign_int,
+    #div_float, eq_float, eq_int, eqfsi64, eqfui64, flipsign_int, select_value,
     #fpext64, fpiseq, fpislt, fpsiround, fpuiround, fptosi, fptoui,
     #fptrunc32, le_float, lefsi64, lefui64, lesif64,
     #leuif64, lshr_int, lt_float, ltfsi64, ltfui64, ltsif64, ltuif64, mul_float,

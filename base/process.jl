@@ -1,25 +1,23 @@
 abstract AbstractCmd
 
 type Cmd <: AbstractCmd
-    exec::Executable
+    exec::Vector{ByteString}
     ignorestatus::Bool
     detach::Bool
     env::Union(Array{ByteString},Nothing)
-    Cmd(exec::Executable) = new(exec,false,false,nothing)
+    Cmd(exec::Vector{ByteString}) = new(exec,false,false,nothing)
 end
-
-function eachline(cmd::AbstractCmd,stdin)
-    out = Pipe(C_NULL)
-    processes = spawn(false, cmd, (stdin,out,STDERR))
-    # implicitly close after reading lines, since we opened
-    EachLine(out, ()->close(out))
-end
-eachline(cmd::AbstractCmd) = eachline(cmd,DevNull)
 
 type OrCmds <: AbstractCmd
     a::AbstractCmd
     b::AbstractCmd
     OrCmds(a::AbstractCmd, b::AbstractCmd) = new(a,b)
+end
+
+type ErrOrCmds <: AbstractCmd
+    a::AbstractCmd
+    b::AbstractCmd
+    ErrOrCmds(a::AbstractCmd, b::AbstractCmd) = new(a,b)
 end
 
 type AndCmds <: AbstractCmd
@@ -28,9 +26,11 @@ type AndCmds <: AbstractCmd
     AndCmds(a::AbstractCmd, b::AbstractCmd) = new(a,b)
 end
 
+shell_escape(cmd::Cmd) = shell_escape(cmd.exec...)
+
 function show(io::IO, cmd::Cmd)
     if isa(cmd.exec,Vector{ByteString})
-        esc = shell_escape(cmd.exec...)
+        esc = shell_escape(cmd)
         print(io,'`')
         for c in esc
             if c == '`'
@@ -89,21 +89,21 @@ immutable FileRedirect
     append::Bool
     function FileRedirect(filename,append)
         if lowercase(filename) == (@unix? "/dev/null" : "nul")
-            warn_once("For portability use the DevNull type instead of a file redirect!")
+            warn_once("for portability use DevNull instead of a file redirect")
         end
         new(filename,append)
     end
 end
 
-type DevNull <: AsyncStream end
-copy(::DevNull) = DevNull
-uvhandle(::DevNull) = C_NULL
-uvhandle(::Type{DevNull}) = C_NULL
+immutable DevNullStream <: AsyncStream end
+const DevNull = DevNullStream()
+copy(::DevNullStream) = DevNull
+uvhandle(::DevNullStream) = C_NULL
 uvhandle(x::Ptr) = x
 uvtype(::Ptr) = UV_STREAM
-uvtype(::Type{DevNull}) = UV_STREAM
+uvtype(::DevNullStream) = UV_STREAM
 
-typealias Redirectable Union(UVStream,FS.File,FileRedirect,Type{DevNull})
+typealias Redirectable Union(UVStream,FS.File,FileRedirect,DevNullStream,IOStream)
 
 type CmdRedirect <: AbstractCmd
     cmd::AbstractCmd
@@ -137,6 +137,7 @@ setenv(cmd::Cmd, env::Associative) = (cmd.env = ByteString[string(k)*"="*string(
 
 (&)(left::AbstractCmd,right::AbstractCmd) = AndCmds(left,right)
 (|>)(src::AbstractCmd,dest::AbstractCmd) = OrCmds(src,dest)
+(.>)(src::AbstractCmd,dest::AbstractCmd) = ErrOrCmds(src,dest)
 
 # Stream Redirects
 (|>)(dest::Redirectable,src::AbstractCmd) = CmdRedirect(src,dest,STDIN_NO)
@@ -151,7 +152,7 @@ setenv(cmd::Cmd, env::Associative) = (cmd.env = ByteString[string(k)*"="*string(
 (.>>)(src::AbstractCmd,dest::String) = CmdRedirect(src,FileRedirect(dest,true),STDERR_NO)
 
 
-typealias RawOrBoxedHandle Union(UVHandle,UVStream,Redirectable)
+typealias RawOrBoxedHandle Union(UVHandle,UVStream,Redirectable,IOStream)
 typealias StdIOSet NTuple{3,RawOrBoxedHandle}
 
 type Process
@@ -168,13 +169,13 @@ type Process
     closenotify::Condition
     function Process(cmd::Cmd,handle::Ptr{Void},in::RawOrBoxedHandle,out::RawOrBoxedHandle,err::RawOrBoxedHandle)
         if !isa(in,AsyncStream) || in === DevNull
-            in=DevNull()
+            in=DevNull
         end
         if !isa(out,AsyncStream) || out === DevNull
-            out=DevNull()
+            out=DevNull
         end
         if !isa(err,AsyncStream) || err === DevNull
-            err=DevNull()
+            err=DevNull
         end
         new(cmd,handle,in,out,err,typemin(Int32),typemin(Int32),false,Condition(),false,Condition())
     end
@@ -249,6 +250,29 @@ function spawn(pc::ProcessChainOrNot,cmds::OrCmds,stdios::StdIOSet,exitcb::Callb
     pc
 end
 
+function spawn(pc::ProcessChainOrNot,cmds::ErrOrCmds,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
+    out_pipe = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
+    in_pipe = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
+    #out_pipe = c_malloc(_sizeof_uv_named_pipe)
+    #in_pipe = c_malloc(_sizeof_uv_named_pipe)
+    link_pipe(in_pipe,false,out_pipe,false)
+    if pc == false
+        pc = ProcessChain(stdios)
+    end
+    try
+        spawn(pc, cmds.a, (stdios[1], stdios[2], out_pipe), exitcb, closecb)
+        spawn(pc, cmds.b, (in_pipe, stdios[2], stdios[3]), exitcb, closecb)
+    catch err
+        close_pipe_sync(out_pipe)
+        close_pipe_sync(in_pipe)
+        rethrow(err)
+    end
+    close_pipe_sync(out_pipe)
+    close_pipe_sync(in_pipe)
+    pc
+end
+
+
 macro setup_stdio()
     esc(
     quote
@@ -256,36 +280,33 @@ macro setup_stdio()
         in,out,err = stdios
         if isa(stdios[1],Pipe) 
             if stdios[1].handle==C_NULL
-                in = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-                #in = c_malloc(_sizeof_uv_named_pipe)
-                link_pipe(in,false,stdios[1],true)
-                close_in = true
+                error("pipes passed to spawn must be initialized")
             end
         elseif isa(stdios[1],FileRedirect)
             in = FS.open(stdios[1].filename,JL_O_RDONLY)
             close_in = true
+        elseif isa(stdios[1],IOStream)
+            in = FS.File(RawFD(fd(stdios[1])))
         end
         if isa(stdios[2],Pipe)
             if stdios[2].handle==C_NULL
-                out = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-                #out = c_malloc(_sizeof_uv_named_pipe)
-                link_pipe(stdios[2],true,out,false)
-                close_out = true
+                error("pipes passed to spawn must be initialized")
             end
         elseif isa(stdios[2],FileRedirect)
             out = FS.open(stdios[2].filename,JL_O_WRONLY|JL_O_CREAT|(stdios[2].append?JL_O_APPEND:JL_O_TRUNC),S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
             close_out = true
+        elseif isa(stdios[2],IOStream)
+            out = FS.File(RawFD(fd(stdios[2])))
         end
         if isa(stdios[3],Pipe)
             if stdios[3].handle==C_NULL
-                err = box(Ptr{Void},Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-                #err = c_malloc(_sizeof_uv_named_pipe)
-                link_pipe(stdios[3],true,err,false)
-                close_err = true
+                error("pipes passed to spawn must be initialized")
             end
         elseif isa(stdios[3],FileRedirect)
             err = FS.open(stdios[3].filename,JL_O_WRONLY|JL_O_CREAT|(stdios[3].append?JL_O_APPEND:JL_O_TRUNC),S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH)
             close_err = true
+        elseif isa(stdios[3],IOStream)
+            err = FS.File(RawFD(fd(stdios[3])))
         end
     end)
 end
@@ -293,27 +314,9 @@ end
 macro cleanup_stdio()
     esc(
     quote
-        if close_in
-            if isa(in,Ptr)
-                close_pipe_sync(in)
-            else
-                close(in)
-            end
-        end
-        if close_out
-            if isa(out,Ptr)
-                close_pipe_sync(out)
-            else
-                close(out)
-            end
-        end
-        if close_err
-            if isa(err,Ptr)
-                close_pipe_sync(err)
-            else
-                close(err)
-            end
-        end
+        close_in && close(in)
+        close_out && close(out)
+        close_err && close(err)
     end)
 end
 
@@ -351,13 +354,13 @@ end
 # |       \ The function to be called once the process exits
 # \ A set of up to 256 stdio instructions, where each entry can be either:
 #   | - An AsyncStream to be passed to the child
-#   | - DevNull() to pass /dev/null
+#   | - DevNull to pass /dev/null
 #   | - An FS.File object to redirect the output to
 #   \ - An ASCIIString specifying a filename to be opened
 
 spawn_opts_swallow(stdios::StdIOSet,exitcb::Callback=false,closecb::Callback=false) =
     (stdios,exitcb,closecb)
-spawn_opts_swallow(in::Redirectable=DevNull(),out::Redirectable=DevNull(),err::Redirectable=DevNull(),args...) = 
+spawn_opts_swallow(in::Redirectable=DevNull,out::Redirectable=DevNull,err::Redirectable=DevNull,args...) =
     (tuple(in,out,err,args...),false,false)
 spawn_opts_inherit(stdios::StdIOSet,exitcb::Callback=false,closecb::Callback=false) =
     (stdios,exitcb,closecb)
@@ -367,39 +370,74 @@ spawn_opts_inherit(in::Redirectable=STDIN,out::Redirectable=STDOUT,err::Redirect
 spawn(pc::ProcessChainOrNot,cmds::AbstractCmd,args...) = spawn(pc,cmds,spawn_opts_swallow(args...)...)
 spawn(cmds::AbstractCmd,args...) = spawn(false,cmds,spawn_opts_swallow(args...)...)
 
+macro tmp_rpipe(pipe,tmppipe,code,args...)
+    esc(quote
+        $pipe = Pipe(C_NULL)
+        $tmppipe = Pipe(C_NULL)
+        link_pipe($pipe,true,$tmppipe,false)
+        r = begin
+            $code
+        end
+        close_pipe_sync($tmppipe)
+        r
+    end)
+end
+
+macro tmp_wpipe(tmppipe,pipe,code)
+    esc(quote
+        $pipe = Pipe(C_NULL)
+        $tmppipe = Pipe(C_NULL)
+        link_pipe($tmppipe,false,$pipe,true)
+        r = begin
+            $code
+        end
+        close_pipe_sync($tmppipe)
+        r
+    end)
+end
+
+function eachline(cmd::AbstractCmd,stdin)
+    @tmp_rpipe out tmp begin
+        processes = spawn(false, cmd, (stdin,tmp,STDERR))
+        # implicitly close after reading lines, since we opened
+        EachLine(out, ()->close(out))
+    end
+end
+eachline(cmd::AbstractCmd) = eachline(cmd,DevNull)
+
 #returns a pipe to read from the last command in the pipelines
-readsfrom(cmds::AbstractCmd) = readsfrom(cmds, DevNull())
+readsfrom(cmds::AbstractCmd) = readsfrom(cmds, DevNull)
 function readsfrom(cmds::AbstractCmd, stdin::AsyncStream)
-    out = Pipe(C_NULL)
-    processes = spawn(false, cmds, (stdin,out,STDERR))
+    processes = @tmp_rpipe out tmp spawn(false, cmds, (stdin,tmp,STDERR))
     start_reading(out)
     (out, processes)
 end
 
-writesto(cmds::AbstractCmd) = writesto(cmds, DevNull())
 function writesto(cmds::AbstractCmd, stdout::UVStream)
-    in = Pipe(C_NULL)
-    processes = spawn(false, cmds, (in,stdout,DevNull()))
-    (in, processes)
+    processes = @tmp_wpipe tmp inpipe spawn(false, cmds, (tmp,stdout,STDERR))
+    (inpipe, processes)
 end
+writesto(cmds::AbstractCmd) = writesto(cmds, DevNull)
 
 function readandwrite(cmds::AbstractCmd)
-    in = Pipe(C_NULL)
-    (out, processes) = readsfrom(cmds, in)
-    return (out, in, processes)
+    (out, processes) = @tmp_wpipe tmp inpipe readsfrom(cmds, tmp)
+    (out, inpipe, processes)
 end
 
-readall(cmd::AbstractCmd) = readall(cmd, DevNull())
-function readall(cmd::AbstractCmd,stdin::AsyncStream)
+function readbytes(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
     (out,pc) = readsfrom(cmd, stdin)
     if !success(pc)
         pipeline_error(pc)
     end
     wait_close(out)
-    return takebuf_string(out.buffer)
+    return takebuf_array(out.buffer)
 end
 
-writeall(cmd::AbstractCmd, stdin::String) = writeall(cmd, stdin, DevNull())
+function readall(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
+    return bytestring(readbytes(cmd, stdin))
+end
+
+writeall(cmd::AbstractCmd, stdin::String) = writeall(cmd, stdin, DevNull)
 function writeall(cmd::AbstractCmd, stdin::String, stdout::AsyncStream)
     (in,pc) = writesto(cmd, stdout)
     write(in, stdin)
@@ -475,12 +513,12 @@ end
 
 ## process status ##
 process_running(s::Process) = s.exitcode == typemin(Int32)
-process_running(s::Vector{Process}) = all(process_running,s)
+process_running(s::Vector{Process}) = any(process_running,s)
 process_running(s::ProcessChain) = process_running(s.processes)
 
 process_exited(s::Process) = !process_running(s)
 process_exited(s::Vector{Process}) = all(process_exited,s)
-process_exited(s::ProcessChain) = process_running(s.processes)
+process_exited(s::ProcessChain) = process_exited(s.processes)
 
 process_signaled(s::Process) = (s.termsignal > 0)
 
@@ -502,7 +540,7 @@ end
 #
 function _jl_pre_exec(args::Vector{ByteString})
     if length(args) < 1
-        error("exec: too few words to exec")
+        error("too few arguments to exec")
     end
     ptrs = Array(Ptr{Uint8}, length(args)+1)
     for i = 1:length(args)
@@ -549,7 +587,7 @@ function cmd_gen(parsed)
 end
 
 macro cmd(str)
-    :(cmd_gen($(shell_parse(str))))
+    :(cmd_gen($(shell_parse(str)[1])))
 end
 
 wait(x::Process)      = if !process_exited(x); wait(x.exitnotify); end

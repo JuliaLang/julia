@@ -84,7 +84,7 @@ Or in reverse order by a transformation::
 Reasonable sorting algorithms are used by default, but you can choose
 other algorithms as well::
 
-  julia> sort(v, alg=TimSort)
+  julia> sort(v, alg=InsertionSort)
   5-element Float64 Array:
    -1.25061
    -0.870797
@@ -181,15 +181,14 @@ Order-Related Functions
 Sorting Algorithms
 ------------------
 
-There are currently four sorting algorithms available in base Julia:
+There are currently three sorting algorithms available in base Julia:
 
 - ``InsertionSort``
 - ``QuickSort``
 - ``MergeSort``
-- ``TimSort``
 
 ``InsertionSort`` is an O(n^2) stable sorting algorithm. It is efficient
-for very small ``n``, and is used internally by ``QuickSort`` and ``TimSort``.
+for very small ``n``, and is used internally by ``QuickSort``.
 
 ``QuickSort`` is an O(n log n) sorting algorithm which is in-place,
 very fast, but not stable – i.e. elements which are considered
@@ -201,10 +200,6 @@ algorithm for numeric values, including integers and floats.
 in-place – it requires a temporary array of equal size to the
 input array – and is typically not quite as fast as ``QuickSort``.
 It is the default algorithm for non-numeric data.
-
-``TimSort`` is an O(n log n) stable adaptive sorting algorithm which is used as
-the default sorting algorithm in Python and Java. It takes advantage of sorted
-runs which exist in many real world datasets.
 
 The sort functions select a reasonable default algorithm, depending on
 the type of the array to be sorted. To force a specific algorithm to be

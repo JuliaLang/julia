@@ -1,3 +1,11 @@
+function regionsize(a, region)
+    s = 1
+    for d in region
+        s *= size(a,d)
+    end
+    s
+end
+
 function mean(iterable)
     state = start(iterable)
     if done(iterable, state)
@@ -13,7 +21,7 @@ function mean(iterable)
     return total/count
 end
 mean(v::AbstractArray) = sum(v) / length(v)
-mean(v::AbstractArray, region) = sum(v, region) / prod(size(v)[region])
+mean(v::AbstractArray, region) = sum(v, region) / regionsize(v, region)
 
 function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
     isempty(v) && error("median of an empty array is undefined")
@@ -63,7 +71,7 @@ end
 var(v::AbstractArray) = varm(v, mean(v))
 function var(v::AbstractArray, region)
     x = v .- mean(v, region)
-    return sum(abs2(x), region) / (prod(size(v)[region]) - 1)
+    return sum(abs2(x), region) / (regionsize(v,region) - 1)
 end
 
 ## standard deviation with known mean
@@ -78,7 +86,7 @@ function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
     if length(v) == 0
         return Range(0.0,1.0,1)
     end
-    lo, hi = min(v), max(v)
+    lo, hi = minimum(v), maximum(v)
     if hi == lo
         step = 1.0
     else
@@ -101,7 +109,7 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
     if length(v) == 0
         return Range(0,1,1)
     end
-    lo, hi = min(v), max(v)
+    lo, hi = minimum(v), maximum(v)
     if hi == lo
         step = 1
     else
@@ -159,7 +167,9 @@ hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
 hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
 
 function hist2d(v::AbstractMatrix, edg1::AbstractVector, edg2::AbstractVector)
-    @assert size(v,2) == 2
+    if size(v,2) != 2
+        error("hist2d requires an Nx2 matrix")
+    end
     n = length(edg1)-1
     m = length(edg2)-1
     h = zeros(Int, n, m)
@@ -209,9 +219,7 @@ function center(x::AbstractVector)
 end
 
 function cov(x::AbstractVecOrMat, y::AbstractVecOrMat)
-    if size(x, 1) != size(y, 1)
-        error("incompatible matrices")
-    end
+    size(x, 1)==size(y, 1) || throw(DimensionMismatch())
     n = size(x, 1)
     xc = center(x)
     yc = center(y)

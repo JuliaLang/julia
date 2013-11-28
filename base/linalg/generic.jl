@@ -4,13 +4,12 @@ scale{T<:Number}(X::AbstractArray{T}, s::Number) = scale!(copy(X), s)
 
 function scale!{T<:Number}(X::AbstractArray{T}, s::Number)
     for i in 1:length(X)
-        X[i] *= s;
+        X[i] *= s
     end
-    return X
+    X
 end
 
-cross(a::AbstractVector, b::AbstractVector) =
-    [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
+cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
 triu(M::AbstractMatrix) = triu(M,0)
 tril(M::AbstractMatrix) = tril(M,0)
@@ -27,7 +26,7 @@ gradient(F::AbstractVector) = gradient(F, [1:length(F)])
 gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F))])
 #gradient(F::AbstractVector, h::AbstractVector)
 
-diag(A::AbstractVector) = error("Perhaps you meant to use diagm().")
+diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagonal matrix")
 #diag(A::AbstractMatrix)
 
 #diagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
@@ -36,12 +35,12 @@ function norm{T}(x::AbstractVector{T}, p::Number)
     if length(x) == 0
         a = zero(T)
     elseif p == Inf
-        a = max(abs(x))
+        a = maximum(abs(x))
     elseif p == -Inf
-        a = min(abs(x))
+        a = minimum(abs(x))
     else
         absx = abs(x)
-        dx = max(absx)
+        dx = maximum(absx)
         if dx != zero(T)
             scale!(absx, 1/dx)
             a = dx * (sum(absx.^p).^(1/p))
@@ -49,33 +48,30 @@ function norm{T}(x::AbstractVector{T}, p::Number)
             a = sum(absx.^p).^(1/p)
         end
     end
-    return float(a)
+    float(a)
 end
 norm{T<:Integer}(x::AbstractVector{T}, p::Number) = norm(float(x), p)
 norm(x::AbstractVector) = norm(x, 2)
 
-function norm(A::AbstractMatrix, p::Number)
+function norm(A::AbstractMatrix, p::Number=2)
     m, n = size(A)
     if m == 0 || n == 0
         a = zero(eltype(A))
     elseif m == 1 || n == 1
         a = norm(reshape(A, length(A)), p)
     elseif p == 1
-        a = max(sum(abs(A),1))
+        a = maximum(sum(abs(A),1))
     elseif p == 2
-        a = max(svdvals(A))
+        a = maximum(svdvals(A))
     elseif p == Inf
-        a = max(sum(abs(A),2))
+        a = maximum(sum(abs(A),2))
     else
-        error("invalid parameter p given to compute matrix norm")
+        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
     end
-    return float(a)
+    float(a)
 end
 
-norm(A::AbstractMatrix) = norm(A, 2)
-
-norm(x::Number) = abs(x)
-norm(x::Number, p) = abs(x)
+norm(x::Number, p=nothing) = abs(x)
 
 normfro(A::AbstractMatrix) = norm(reshape(A, length(A)))
 normfro(x::Number) = abs(x)
@@ -83,16 +79,14 @@ normfro(x::Number) = abs(x)
 rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) .> tol)
 function rank(A::AbstractMatrix)
     m,n = size(A)
-    if m == 0 || n == 0; return 0; end
+    (m == 0 || n == 0) && return 0
     sv = svdvals(A)
-    sum(sv .> max(size(A))*eps(sv[1]))
+    return sum(sv .> maximum(size(A))*eps(sv[1]))
 end
-rank(x::Number) = x == 0 ? 0 : 1
+rank(x::Number) = x==0 ? 0 : 1
 
 function trace(A::AbstractMatrix)
-    if size(A,1) != size(A,2)
-        error("expected square matrix")
-    end
+    chksquare(A)
     sum(diag(A))
 end
 trace(x::Number) = x
@@ -101,23 +95,22 @@ trace(x::Number) = x
 #kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
 
 #det(a::AbstractMatrix)
-inv(a::AbstractMatrix) = a \ one(a)
 
-inv(a::AbstractVector) = inv(reshape(a, length(a), 1))
+inv(a::AbstractVector) = error("argument must be a square matrix")
 
+function \{TA<:Number,TB<:Number}(A::AbstractMatrix{TA}, B::Union(AbstractVector{TB},AbstractMatrix{TB}))
+    TC = typeof(one(TA)/one(TB))
+    return TB == TC ? A_ldiv_B!(A, copy(B)) : A_ldiv_B!(A, convert(Array{TC}, B))
+end
 \(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
-(/)(A::AbstractVector, B::AbstractVector) = (B' \ A')'
-(/)(A::AbstractVector, B::AbstractMatrix) = (B' \ A')'
-(/)(A::AbstractMatrix, B::AbstractVector) = (B' \ A')'
-(/)(A::AbstractMatrix, B::AbstractMatrix) = (B' \ A')'
-
+/(A::Union(AbstractVector,AbstractMatrix), B::Union(AbstractVector,AbstractMatrix)) = (B' \ A')'
 
 cond(x::Number) = x == 0 ? Inf : 1.0
 cond(x::Number, p) = cond(x)
 
 function issym(A::AbstractMatrix)
     m, n = size(A)
-    if m != n; return false; end
+    m==n || return false
     for i = 1:(n-1), j = (i+1):n
         if A[i,j] != A[j,i]
             return false
@@ -130,7 +123,7 @@ issym(x::Number) = true
 
 function ishermitian(A::AbstractMatrix)
     m, n = size(A)
-    if m != n; return false; end
+    m==n || return false
     for i = 1:n, j = i:n
         if A[i,j] != conj(A[j,i])
             return false
@@ -164,14 +157,12 @@ end
 istriu(x::Number) = true
 istril(x::Number) = true
 
-function linreg{T<:Number}(X::StridedVecOrMat{T}, y::Vector{T})
-    [ones(T, size(X,1)) X] \ y
-end
+linreg{T<:Number}(X::StridedVecOrMat{T}, y::Vector{T}) = [ones(T, size(X,1)) X] \ y
 
 # weighted least squares
 function linreg(x::AbstractVector, y::AbstractVector, w::AbstractVector)
-    w = sqrt(w)
-    [w w.*x] \ (w.*y)
+    sw = sqrt(w)
+    [sw sw.*x] \ (sw.*y)
 end
 
 # multiply by diagonal matrix as vector
@@ -197,11 +188,6 @@ function peakflops(n::Integer=2000; parallel::Bool=false)
     t = @elapsed a*a
     a = rand(n,n)
     t = @elapsed a*a
-    if parallel
-        floprate = sum(pmap(peakflops, [ n for i in 1:nworkers()]) )
-    else
-        floprate = (2.0*float64(n)^3/t)
-    end
-    floprate
+    parallel ? sum(pmap(peakflops, [ n for i in 1:nworkers()])) : (2*n^3/t)
 end
 

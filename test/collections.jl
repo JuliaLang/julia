@@ -38,6 +38,10 @@ for i=10000:20000
 end
 h = {"a" => 3}
 @test h["a"] == 3
+h["a","b"] = 4
+@test h["a","b"] == h[("a","b")] == 4
+h["a","b","c"] = 4
+@test h["a","b","c"] == h[("a","b","c")] == 4
 
 let
     z = Dict()
@@ -88,7 +92,7 @@ begin
         if id > 0
             x = xs[id]
             push!(s, x)
-            @test contains(s, x)                 # check that x can be found
+            @test in(x, s)                 # check that x can be found
         else
             delete!(s, xs[-id])
         end
@@ -187,13 +191,13 @@ for i in 1:1000
     @test (length(s) == i)
 end
 
-# delete!, has, contains
+# delete!, has, in
 for i in 1:2:1000
     delete!(s, i)
 end
 for i in 1:2:1000
-    @test !contains(s, i)
-    @test  contains(s, i+1)
+    @test !in(i  , s)
+    @test  in(i+1, s)
 end
 
 # elements
@@ -201,13 +205,15 @@ data_in = (1,"banana", ())
 s = Set(data_in...)
 data_out = collect(s)
 @test is(typeof(data_out), Array{Any,1})
-@test all(map(d->contains(data_out,d), data_in))
-@test all(map(data_in) do d contains(data_out, d) end)
+@test all(map(d->in(d,data_out), data_in))
+@test all(map(data_in) do d
+              in(d,data_out)
+          end)
 @test length(data_out) == length(data_in)
 
 # homogeneous sets
 @test is(typeof(Set(1,2,3)), Set{Int})
-@test is(typeof(Set{Int}(1.0, 4//2, 3)), Set{Int})
+@test is(typeof(Set{Int}(3)), Set{Int})
 
 # eltype
 @test is(eltype(Set(1,"hello")), Any)
@@ -292,7 +298,7 @@ setdiff!(s,(3,5))
 s = similar(Set(1,"Banana"))
 @test length(s) == 0
 @test typeof(s) == Set{Any}
-s = similar(Set{Float32}(2,3,4))
+s = similar(Set{Float32}(2.0f0,3.0f0,4.0f0))
 @test length(s) == 0
 @test typeof(s) == Set{Float32}
 
@@ -303,8 +309,8 @@ c = copy(s)
 @test isequal(s,c)
 push!(s,100)
 push!(c,200)
-@test !contains(c, 100)
-@test !contains(s, 200)
+@test !in(100, c)
+@test !in(200, s)
 
 # start, done, next
 for data_in in ((7,8,4,5),
@@ -320,7 +326,7 @@ for data_in in ((7,8,4,5),
     t = tuple(s...)
     @test length(t) == length(s)
     for e in t
-        @test contains(s,e)
+        @test in(e,s)
     end
 end
 
@@ -340,10 +346,19 @@ origs = Set(1,2,3,"apple")
 s = copy(origs)
 for i in 1:length(origs)
     el = pop!(s)
-    @test !contains(s, el)
-    @test contains(origs, el)
+    @test !in(el, s)
+    @test in(el, origs)
 end
 @test isempty(s)
+
+# hash
+s1 = Set{ASCIIString}("bar", "foo")
+s2 = Set{ASCIIString}("foo", "bar")
+s3 = Set{ASCIIString}("baz")
+@test hash(s1) == hash(s2)
+@test hash(s1) != hash(s3)
+
+
 # isequal
 @test  isequal(Set(), Set())
 @test !isequal(Set(), Set(1))
@@ -378,9 +393,9 @@ s = IntSet(0,1,10,20,200,300,1000,10000,10002)
 @test length(s) == 8
 @test shift!(s) == 0
 @test length(s) == 7
-@test !contains(s,0)
-@test !contains(s,10002)
-@test contains(s,10000)
+@test !in(0,s)
+@test !in(10002,s)
+@test in(10000,s)
 @test_throws first(IntSet())
 @test_throws last(IntSet())
 

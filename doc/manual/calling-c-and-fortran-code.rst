@@ -65,7 +65,7 @@ function from the standard C library::
     Int32
 
 ``clock`` takes no arguments and returns an ``Int32``. One common gotcha
-is that a 1-tuple must be written with with a trailing comma. For
+is that a 1-tuple must be written with a trailing comma. For
 example, to call the ``getenv`` function to get a pointer to the value
 of an environment variable, one makes a call like this::
 
@@ -338,8 +338,8 @@ for bitstypes or other pointer-free (``isbits``) immutable types.
 Any operation that throws an error is probably currently unimplemented
 and should be posted as a bug so that it can be resolved.
 
-If the pointer of interest is a plan-data array (bitstype or immutable), the
-function ``pointer_to_array(ptr,dims,[own])`` may be more more useful. The final
+If the pointer of interest is a plain-data array (bitstype or immutable), the
+function ``pointer_to_array(ptr,dims,[own])`` may be more useful. The final
 parameter should be true if Julia should "take ownership" of the underlying
 buffer and call ``free(ptr)`` when the returned ``Array`` object is finalized.
 If the ``own`` parameter is omitted or false, the caller must ensure the
@@ -377,7 +377,7 @@ Non-constant Function Specifications
 
 A ``(name, library)`` function specification must be a constant expression.
 However, it is possible to use computed values as function names by staging
-through ``eval`` as follows:
+through ``eval`` as follows::
 
     @eval ccall(($(string("a","b")),"lib"), ...
 
@@ -413,6 +413,76 @@ For example (from base/libc.jl)::
 For more information, please see the `LLVM Language Reference`_.
 
 .. _LLVM Language Reference: http://llvm.org/docs/LangRef.html#calling-conventions
+
+Accessing Global Variables
+--------------------------
+
+Global variables exported by native libraries can be accessed by name using the
+``cglobal`` function. The arguments to ``cglobal`` are a symbol specification
+identical to that used by ``ccall``, and a type describing the value stored in
+the variable::
+
+    julia> cglobal((:errno,:libc), Int32)
+    Ptr{Int32} @0x00007f418d0816b8
+
+The result is a pointer giving the address of the value. The value can be
+manipulated through this pointer using ``unsafe_load`` and ``unsafe_store``.
+
+Passing Julia Callback Functions to C
+-------------------------------------
+
+It is possible to pass Julia functions to native functions that accept function
+pointer arguments. A classic example is the standard C library ``qsort`` function,
+declared as::
+
+    void qsort(void *base, size_t nmemb, size_t size,
+               int(*compare)(const void *a, const void *b));
+
+The ``base`` argument is a pointer to an array of length ``nmemb``, with elements of
+``size`` bytes each. ``compare`` is a callback function which takes pointers to two
+elements ``a`` and ``b`` and returns an integer less/greater than zero if ``a`` should
+appear before/after ``b`` (or zero if any order is permitted). Now, suppose that we
+have a 1d array ``A`` of values in Julia that we want to sort using the ``qsort``
+function (rather than Julia’s built-in sort function). Before we worry about calling
+``qsort`` and passing arguments, we need to write a comparison function that works for
+some arbitrary type T::
+
+    function mycompare{T}(a_::Ptr{T}, b_::Ptr{T})
+        a = unsafe_load(a_)
+        b = unsafe_load(b_)
+        return convert(Cint, a < b ? -1 : a > b ? +1 : 0)
+    end
+
+Notice that we have to be careful about the return type: ``qsort`` expects a function
+returning a C ``int``, so we must be sure to return ``Cint`` via a call to ``convert``.
+
+In order to pass this function to C, we obtain its address using the function
+``cfunction``::
+
+    const mycompare_c = cfunction(mycompare, Cint, (Ptr{Cdouble}, Ptr{Cdouble}))
+
+``cfunction`` accepts three arguments: the Julia function (``mycompare``), the return
+type (``Cint``), and a tuple of the argument types, in this case to sort an array of
+``Cdouble`` (Float64) elements.
+
+The final call to ``qsort`` looks like this::
+
+    A = [1.3, -2.7, 4.4, 3.1]
+    ccall(:qsort, Void, (Ptr{Cdouble}, Csize_t, Csize_t, Ptr{Void}),
+          A, length(A), sizeof(eltype(A)), mycompare_c)
+
+After this executes, ``A`` is changed to the sorted array ``[ -2.7, 1.3, 3.1, 4.4]``.
+Note that Julia knows how to convert an array into a ``Ptr{Cdouble}``, how to compute
+the size of a type in bytes (identical to C’s ``sizeof`` operator), and so on.
+For fun, try inserting a ``println("mycompare($a,$b)")`` line into ``mycompare``, which
+will allow you to see the comparisons that ``qsort`` is performing (and to verify that
+it is really calling the Julia function that you passed to it).
+
+More About Callbacks
+--------------------
+
+For more details on how to pass callbacks to C libraries, see this
+`blog post <http://julialang.org/blog/2013/05/callback/>`_.
 
 C++
 ---

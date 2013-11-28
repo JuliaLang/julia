@@ -1,7 +1,7 @@
 .. _man-performance-tips:
 
 ******************
- Performance Tips  
+ Performance Tips
 ******************
 
 In the following sections, we briefly go through a few techniques that
@@ -15,6 +15,9 @@ at any point. This makes it difficult for the compiler to optimize code
 using global variables. Variables should be local, or passed as
 arguments to functions, whenever possible.
 
+Any code that is performance-critical or being benchmarked should be
+inside a function.
+
 We find that global names are frequently constants, and declaring them
 as such greatly improves performance::
 
@@ -25,6 +28,10 @@ at the point of use::
 
     global x
     y = f(x::Int + 1)
+
+Writing functions is better style. It leads to more reusable code and
+clarifies what steps are being done, and what their inputs and outputs
+are.
 
 Avoid containers with abstract type parameters
 ----------------------------------------------
@@ -96,24 +103,24 @@ Here, we happened to know that the first element of ``a`` would be an
 will raise a run-time error if the value is not of the expected type,
 potentially catching certain bugs earlier.
 
-Declare types of named arguments
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Declare types of keyword arguments
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Named arguments can have declared types::
+Keyword arguments can have declared types::
 
-    function with_named(x; name::Int = 1)
+    function with_keyword(x; name::Int = 1)
         ...
     end
 
-Functions are specialized on the types of named arguments, so these
+Functions are specialized on the types of keyword arguments, so these
 declarations will not affect performance of code inside the function.
 However, they will reduce the overhead of calls to the function that
-include named arguments.
+include keyword arguments.
 
-Functions with named arguments have near-zero overhead for call sites
+Functions with keyword arguments have near-zero overhead for call sites
 that pass only positional arguments.
 
-Passing dynamic lists of named arguments, as in ``f(x; names...)``,
+Passing dynamic lists of keyword arguments, as in ``f(x; keywords...)``,
 can be slow and should be avoided in performance-sensitive code.
 
 Break functions into multiple definitions
@@ -232,6 +239,111 @@ our own ``fill_twos!``.
 Functions like ``strange_twos`` occur when dealing with data of
 uncertain type, for example data loaded from an input file that might
 contain either integers, floats, strings, or something else.
+
+Access arrays in memory order, along columns
+--------------------------------------------
+
+Multidimensional arrays in Julia are stored in column-major order. This
+means that arrays are stacked one column at a time. This can be verified
+using the ``vec`` function or the syntax ``[:]`` as shown below (notice
+that the array is ordered ``[1 3 2 4]``, not ``[1 2 3 4]``):
+
+.. doctest::
+
+    julia> x = [1 2; 3 4]
+    2x2 Array{Int64,2}:
+     1  2
+     3  4
+
+    julia> x[:]
+    4-element Array{Int64,1}:
+     1
+     3
+     2
+     4
+
+This convention for ordering arrays is common in many languages like
+Fortran, Matlab, and R (to name a few). The alternative to column-major
+ordering is row-major ordering, which is the convention adopted by C and
+Python (``numpy``) among other languages. Remembering the ordering of
+arrays can have significant performance effects when looping over
+arrays. A rule of thumb to keep in mind is that with column-major
+arrays, the first index changes most rapidly. Essentially this means
+that looping will be faster if the inner-most loop index is the first to
+appear in a slice expression.
+
+Consider the following contrived example. Imagine we wanted to write a
+function that accepts a ``Vector`` and and returns a square ``Matrix``
+with either the rows or the columns filled with copies of the input
+vector. Assume that it is not important whether rows or columns are
+filled with these copies (perhaps the rest of the code can be easily
+adapted accordingly). We could conceivably do this in at least four ways
+(in addition to the recommended call to the built-in function
+``repmat``)::
+
+    function copy_cols{T}(x::Vector{T})
+        n = size(x, 1)
+        out = Array(eltype(x), n, n)
+        for i=1:n
+            out[:, i] = x
+        end
+        out
+    end
+
+    function copy_rows{T}(x::Vector{T})
+        n = size(x, 1)
+        out = Array(eltype(x), n, n)
+        for i=1:n
+            out[i, :] = x
+        end
+        out
+    end
+
+    function copy_col_row{T}(x::Vector{T})
+        n = size(x, 1)
+        out = Array(T, n, n)
+        for col=1:n, row=1:n
+            out[row, col] = x[row]
+        end
+        out
+    end
+
+    function copy_row_col{T}(x::Vector{T})
+        n = size(x, 1)
+        out = Array(T, n, n)
+        for row=1:n, col=1:n
+            out[row, col] = x[col]
+        end
+        out
+    end
+
+Now we will time each of these functions using the same random ``10000``
+by ``1`` input vector::
+
+    julia> x = randn(10000);
+
+    julia> fmt(f) = println("$(rpad(string(f)*": ", 14, ' '))$(@elapsed f(x))")
+
+    julia> map(fmt, {copy_cols, copy_rows, copy_col_row, copy_row_col});
+    copy_cols:    0.331706323
+    copy_rows:    1.799009911
+    copy_col_row: 0.415630047
+    copy_row_col: 1.721531501
+
+Notice that ``copy_cols`` is much faster than ``copy_rows``. This is
+expected because ``copy_cols`` respects the column-based memory layout
+of the ``Matrix`` and fills it one column at a time. Additionally,
+``copy_col_row`` is much faster than ``copy_row_col`` because it follows
+our rule of thumb that the first element to appear in a slice expression
+should be coupled with the inner-most loop.
+
+Fix deprecation warnings
+------------------------
+
+A deprecated function internally performs a lookup in order to
+print a relevant warning only once. This extra lookup can cause a
+significant slowdown, so all uses of deprecated functions should be
+modified as suggested by the warnings.
 
 Tweaks
 ------

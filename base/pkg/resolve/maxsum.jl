@@ -132,12 +132,12 @@ type Graph
                         bmt = gmsk[p1][j1]
                         if gdir[p0][j0] == -1
                             gdir[p0][j0] = 0
-                            gdir[p1][j0] = 0
+                            gdir[p1][j1] = 0
                         end
                     end
 
                     for v1 = 1:length(pvers[p1])
-                        if !contains(rvs, pvers[p1][v1])
+                        if !in(pvers[p1][v1], rvs)
                             bm[v1, v0] = false
                             bmt[v0, v1] = false
                         end
@@ -200,7 +200,7 @@ type Messages
             fld0 = fld[p0]
             for v0 = 1:spp[p0]-1
                 vn = pvers0[v0]
-                if !contains(rvs, vn)
+                if !in(vn, rvs)
                     # the state is forbidden by requirements
                     fld0[v0] = FieldValue(-1)
                 else
@@ -215,7 +215,7 @@ type Messages
         end
         # normalize fields
         for p0 = 1:np
-            m = max(fld[p0])
+            m = maximum(fld[p0])
             for v0 = 1:spp[p0]
                 fld[p0][v0] -= m
             end
@@ -303,7 +303,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         # compute the new message by passing cavmsg
         # through the constraint encoded in the bitmask
         # (nearly equivalent to:
-        #    newmsg = [ max(cavmsg[bm1[:,v1]]) for v1 = 1:spp1 ]
+        #    newmsg = [ maximum(cavmsg[bm1[:,v1]]) for v1 = 1:spp1 ]
         #  except for the gnrg term)
         m = FieldValue(-1)
         for v1 = 1:spp1
@@ -330,7 +330,7 @@ function update(p0::Int, graph::Graph, msgs::Messages)
         end
 
         diff = newmsg - oldmsg
-        maxdiff = max(maxdiff, max(abs(diff)))
+        maxdiff = max(maxdiff, maximum(abs(diff)))
 
         # update the field of p1
         fld1 = fld[p1]

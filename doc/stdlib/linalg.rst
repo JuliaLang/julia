@@ -7,7 +7,7 @@ Linear Algebra
 
 .. currentmodule:: Base
 
-Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http:://www.suitesparse.com/>`_.
+Linear algebra functions in Julia are largely implemented by calling functions from `LAPACK <http://www.netlib.org/lapack/>`_.  Sparse factorizations call functions from `SuiteSparse <http://www.suitesparse.com/>`_.
 
 .. function:: *(A, B)
    :noindex:
@@ -43,9 +43,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``factorize!`` is the same as :func:`factorize`, but saves space by overwriting the input A, instead of creating a copy.
 
-.. function:: lu(A) -> L, U, P
+.. function:: lu(A) -> L, U, p
 
-   Compute the LU factorization of ``A``, such that ``P*A = L*U``.
+   Compute the LU factorization of ``A``, such that ``A[p,:] = L*U``.
 
 .. function:: lufact(A) -> LU
 
@@ -73,7 +73,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: cholpfact(A, [LU]) -> CholeskyPivoted
 
-   Compute the pivoted Cholesky factorization of a symmetric positive semi-definite matrix ``A`` and return a ``CholeskyPivoted`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. The triangular factors containted in the factorization ``F`` can be obtained with ``F[:L]`` and ``F[:U]``, whereas the permutation can be obtained with ``F[:P]`` or ``F[:p]``. The following functions are available for ``CholeskyPivoted`` objects: ``size``, ``\``, ``inv``, ``det``. A ``LAPACK.RankDeficientException`` error is thrown in case the matrix is rank deficient.
+   Compute the pivoted Cholesky factorization of a symmetric positive semi-definite matrix ``A`` and return a ``CholeskyPivoted`` object. ``LU`` may be 'L' for using the lower part or 'U' for the upper part. The default is to use 'U'. The triangular factors contained in the factorization ``F`` can be obtained with ``F[:L]`` and ``F[:U]``, whereas the permutation can be obtained with ``F[:P]`` or ``F[:p]``.
+   The following functions are available for ``CholeskyPivoted`` objects: ``size``, ``\``, ``inv``, ``det``.
+   A ``LAPACK.RankDeficientException`` error is thrown in case the matrix is rank deficient.
 
 .. function:: cholpfact!(A, [LU]) -> CholeskyPivoted
 
@@ -81,23 +83,27 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qr(A, [thin]) -> Q, R
 
-   Compute the QR factorization of ``A`` such that ``A = Q*R``. Also see ``qrfact``. The default is to compute a thin factorization.
+   Compute the QR factorization of ``A`` such that ``A = Q*R``. Also see ``qrfact``. The default is to compute a thin factorization. Note that `R` is not extended with zeros when the full `Q` is requested. 
 
 .. function:: qrfact(A)
 
-   Compute the QR factorization of ``A`` and return a ``QR`` object. The coomponents of the factorization ``F`` can be accessed as follows: the orthogonal matrix ``Q`` can be extracted with ``F[:Q]`` and the triangular matrix ``R`` with ``F[:R]``. The following functions are available for ``QR`` objects: ``size``, ``\``. When ``Q`` is extracted, the resulting type is the ``QRPackedQ`` object, and has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``.
+   Computes the QR factorization of ``A`` and returns a ``QR`` type, which is a ``Factorization`` ``F`` consisting of an orthogonal matrix ``F[:Q]`` and a triangular matrix ``F[:R]``.
+   The following functions are available for ``QR`` objects: ``size``, ``\``.
+   The orthogonal matrix ``Q=F[:Q]`` is a ``QRPackedQ`` type which has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``. Multiplication with respect to either thin or full ``Q`` is allowed, i.e. both ``F[:Q]*F[:R]`` and ``F[:Q]*A`` are supported. A ``QRPackedQ`` matrix can be converted into a regular matrix with ``full``.
 
 .. function:: qrfact!(A)
 
    ``qrfact!`` is the same as :func:`qrfact`, but saves space by overwriting the input A, instead of creating a copy.
 
-.. function:: qrp(A, [thin]) -> Q, R, P
+.. function:: qrp(A, [thin]) -> Q, R, p
 
-   Compute the QR factorization of ``A`` with pivoting, such that ``A*P = Q*R``, Also see ``qrpfact``. The default is to compute a thin factorization.
+   Computes the QR factorization of ``A`` with pivoting, such that ``A[:,p] = Q*R``, Also see ``qrpfact``. The default is to compute a thin factorization.
 
 .. function:: qrpfact(A) -> QRPivoted
 
-   Compute the QR factorization of ``A`` with pivoting and return a ``QRPivoted`` object. The components of the factorization ``F`` can be accessed as follows: the orthogonal matrix ``Q`` can be extracted with ``F[:Q]``, the triangular matrix ``R`` with ``F[:R]``, and the permutation with ``F[:P]`` or ``F[:p]``. The following functions are available for ``QRPivoted`` objects: ``size``, ``\``. When ``Q`` is extracted, the resulting type is the ``QRPivotedQ`` object, and has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``. A ``QRPivotedQ`` matrix can be converted into a regular matrix with ``full``.
+   Computes the QR factorization of ``A`` with pivoting and returns a ``QRPivoted`` object, which is a ``Factorization`` ``F`` consisting of an orthogonal matrix ``F[:Q]``, a triangular matrix ``F[:R]``, and a permutation ``F[:p]`` (or  its matrix representation ``F[:P]``).
+   The following functions are available for ``QRPivoted`` objects: ``size``, ``\``.
+   The orthogonal matrix ``Q=F[:Q]`` is a ``QRPivotedQ`` type which has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``. Multiplication with respect to either the thin or full ``Q`` is allowed, i.e. both ``F[:Q]*F[:R]`` and ``F[:Q]*A`` are supperted. A ``QRPivotedQ`` matrix can be converted into a regular matrix with ``full``.
 
 .. function:: qrpfact!(A) -> QRPivoted
 
@@ -259,6 +265,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``scale!(A,B)`` overwrites the input array with the scaled result.
 
+.. function:: symmetrize!(A[, UL::Char])
+
+   ``symmetrize!(A)`` converts from the BLAS/LAPACK symmetric storage
+   format, in which only the ``UL`` ('U'pper or 'L'ower, default 'U')
+   triangle is used, to a full symmetric matrix.
+
 .. function:: Tridiagonal(dl, d, du)
 
    Construct a tridiagonal matrix from the lower diagonal, diagonal, and upper diagonal, respectively.  The result is of type ``Tridiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with ``full``.
@@ -322,7 +334,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: repeat(A, inner = Int[], outer = Int[])
 
-   Construct an array by repeating the entries of ``A``. The i-th element of ``inner`` specifies the number of times that the individual entries of the i-th dimension of ``A`` should be repeated. The i-th element of ``outer`` specifies the number of times that a slice along the i-th dimension of ``A` should be repeated.
+   Construct an array by repeating the entries of ``A``. The i-th element of ``inner`` specifies the number of times that the individual entries of the i-th dimension of ``A`` should be repeated. The i-th element of ``outer`` specifies the number of times that a slice along the i-th dimension of ``A`` should be repeated.
 
 .. function:: kron(A, B)
 
@@ -372,14 +384,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    The conjugate transpose operator (``'``).
 
-.. function:: eigs(A; nev=6, which="LM", tol=0.0, maxiter=1000, ritzvec=true)
+.. function:: eigs(A; nev=6, which="LM", tol=0.0, maxiter=1000, sigma=0, ritzvec=true, op_part=:real,v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
-   ``eigs`` computes the eigenvalues of A using Arnoldi factorization. The following keyword arguments are supported:
+   ``eigs`` computes eigenvalues ``d`` of A using Arnoldi factorization. The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
     * ``which``: type of eigenvalues ("LM", "SM")
     * ``tol``: tolerance (:math:`tol \le 0.0` defaults to ``DLAMCH('EPS')``)
     * ``maxiter``: Maximum number of iterations
-    * ``ritzvec``: Returns the Ritz vectors (eigenvectors) if ``true``
+    * ``sigma``: find eigenvalues close to ``sigma`` using shift and invert
+    * ``ritzvec``: Returns the Ritz vectors ``v`` (eigenvectors) if ``true``
+    * ``op_part``: which part of linear operator to use for real A (:real, :imag)
+    * ``v0``: starting vector from which to start the Arnoldi iteration
+   ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.
+    
 
 .. function:: svds(A; nev=6, which="LA", tol=0.0, maxiter=1000, ritzvec=true)
 
@@ -410,11 +427,6 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
 .. currentmodule:: Base
 
-.. function:: copy!(n, X, incx, Y, incy)
-
-   Copy ``n`` elements of array ``X`` with stride ``incx`` to array
-   ``Y`` with stride ``incy``.  Returns ``Y``.
-
 .. function:: dot(n, X, incx, Y, incy)
 
    Dot product of two vectors consisting of ``n`` elements of array
@@ -425,6 +437,11 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 The following functions are defined within the ``Base.LinAlg.BLAS`` module.
 
 .. currentmodule:: Base.LinAlg.BLAS
+
+.. function:: blascopy!(n, X, incx, Y, incy)
+
+   Copy ``n`` elements of array ``X`` with stride ``incx`` to array
+   ``Y`` with stride ``incy``.  Returns ``Y``.
 
 .. function:: nrm2(n, X, incx)
 

@@ -24,30 +24,30 @@ end
 function init(n::Integer, delay::Float64)
     status = ccall(:profile_init, Cint, (Csize_t, Uint64), n, iround(10^9*delay))
     if status == -1
-        error("Could not allocate space for ", n, " instruction pointers")
+        error("could not allocate space for ", n, " instruction pointers")
     end
 end
 
 clear() = ccall(:profile_clear_data, Void, ())
 
-function print{T<:Unsigned}(io::IO = STDOUT, data::Vector{T} = fetch(); format = :tree, C = false, combine = true, cols = tty_cols())
+function print{T<:Unsigned}(io::IO = STDOUT, data::Vector{T} = fetch(); format = :tree, C = false, combine = true, cols = Base.tty_cols())
     if format == :tree
         tree(io, data, C, combine, cols)
     elseif format == :flat
         flat(io, data, C, combine, cols)
     else
-        error("Output format ", format, " not recognized")
+        error("output format ", format, " not recognized")
     end
 end
 print{T<:Unsigned}(data::Vector{T} = fetch(); kwargs...) = print(STDOUT, data; kwargs...)
 
-function print{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
+function print{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict; format = :tree, combine = true, cols = Base.tty_cols())
     if format == :tree
         tree(io, data, lidict, combine, cols)
     elseif format == :flat
         flat(io, data, lidict, combine, cols)
     else
-        error("Output format ", format, " not recognized")
+        error("output format ", format, " not recognized")
     end
 end
 print{T<:Unsigned}(data::Vector{T}, lidict::Dict; kwargs...) = print(STDOUT, data, lidict; kwargs...)
@@ -79,6 +79,8 @@ start_timer() = ccall(:profile_start_timer, Cint, ())
 
 stop_timer() = ccall(:profile_stop_timer, Void, ())
 
+is_running() = bool(ccall(:profile_is_running, Cint, ()))
+
 get_data_pointer() = convert(Ptr{Uint}, ccall(:profile_get_data, Ptr{Uint8}, ()))
 
 len_data() = convert(Int, ccall(:profile_len_data, Csize_t, ()))
@@ -95,15 +97,15 @@ function lookup(ip::Uint, doCframes::Bool)
 end
 
 error_codes = (Int=>ASCIIString)[
-    -1=>"Cannot specify signal action for profiling",
-    -2=>"Cannot create the timer for profiling",
-    -3=>"Cannot start the timer for profiling"]
+    -1=>"cannot specify signal action for profiling",
+    -2=>"cannot create the timer for profiling",
+    -3=>"cannot start the timer for profiling"]
 
 function fetch()
     len = len_data()
     maxlen = maxlen_data()
     if (len == maxlen)
-        warn("the profile data buffer is full; profiling probably terminated\nbefore your program finished. To profile for longer runs, call Profile.init()\nwith a larger buffer and/or larger delay.")
+        warn("The profile data buffer is full; profiling probably terminated\nbefore your program finished. To profile for longer runs, call Profile.init()\nwith a larger buffer and/or larger delay.")
     end
     pointer_to_array(get_data_pointer(), (len,))
 end
@@ -111,8 +113,9 @@ end
 
 # Number of backtrace "steps" that are triggered by taking the backtrace, e.g., inside profile_bt
 # May be platform-specific?
-@unix_only const btskip = 2
-@windows_only const btskip = 0
+#@unix_only const btskip = 2
+#@windows_only const btskip = 0
+const btskip = 0
 
 ## Print as a flat list
 # Counts the number of times each line appears, at any nesting level
@@ -191,7 +194,7 @@ function print_flat(io::IO, lilist::Vector{LineInfo}, n::Vector{Int}, combine::B
         n = n[keep]
         lilist = lilist[keep]
     end
-    wcounts = max(6, ndigits(max(n)))
+    wcounts = max(6, ndigits(maximum(n)))
     maxline = 0
     maxfile = 0
     maxfunc = 0
@@ -242,8 +245,8 @@ tree_format_linewidth(x::LineInfo) = ndigits(x.line)+6
 
 function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, cols::Integer)
     nindent = min(ifloor(cols/2), level)
-    ndigcounts = ndigits(max(counts))
-    ndigline = max([tree_format_linewidth(x) for x in lilist])
+    ndigcounts = ndigits(maximum(counts))
+    ndigline = maximum([tree_format_linewidth(x) for x in lilist])
     ntext = cols-nindent-ndigcounts-ndigline-5
     widthfile = ifloor(0.4ntext)
     widthfunc = ifloor(0.6ntext)

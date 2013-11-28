@@ -33,13 +33,13 @@ object_id(x::ANY) = ccall(:jl_object_id, Uint, (Any,), x)
 const isimmutable = x->(isa(x,Tuple) || !typeof(x).mutable)
 isstructtype(t::DataType) = t.names!=() || (t.size==0 && !t.abstract)
 isstructtype(x) = false
-isbits(t::DataType) = !t.mutable & t.pointerfree
+isbits(t::DataType) = !t.mutable & t.pointerfree & isleaftype(t)
 isbits(t::Type) = false
 isbits(x) = isbits(typeof(x))
 isleaftype(t::ANY) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 
 typeintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
-typeseq(a::ANY,b::ANY) = subtype(a,b)&&subtype(b,a)
+typeseq(a::ANY,b::ANY) = a<:b && b<:a
 
 function fieldoffsets(x::DataType)
     offsets = Array(Int, length(x.names))
@@ -55,7 +55,7 @@ function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
             t = eval(m,s)
             if isa(t, DataType) && super(t).name == x.name
                 push!(sts, t)
-            elseif isa(t, Module) && !contains(visited, t)
+            elseif isa(t, Module) && !in(t, visited)
                 _subtypes(t, x, sts, visited)
             end
         end

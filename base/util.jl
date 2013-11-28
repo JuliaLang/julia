@@ -11,7 +11,7 @@ time() = ccall(:clock_now, Float64, ())
 time_ns() = ccall(:jl_hrtime, Uint64, ())
 
 # total number of bytes allocated so far
-gc_bytes() = ccall(:jl_gc_total_bytes, Csize_t, ())
+gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 
 function tic()
     t0 = time_ns()
@@ -25,7 +25,7 @@ function toq()
     if is(timers,())
         error("toc() without tic()")
     end
-    t0 = timers[1]
+    t0 = timers[1]::Uint64
     task_local_storage(:TIMERS, timers[2])
     (t1-t0)/1e9
 end
@@ -44,7 +44,7 @@ macro time(ex)
         local val = $(esc(ex))
         local t1 = time_ns()
         local b1 = gc_bytes()
-        println("elapsed time: ", (t1-t0)/1e9, " seconds (", int(b1-b0), " bytes allocated)")
+        println("elapsed time: ", (t1-t0)/1e9, " seconds (", b1-b0, " bytes allocated)")
         val
     end
 end
@@ -67,7 +67,7 @@ macro allocated(ex)
                 b0 = gc_bytes()
                 $(esc(ex))
                 b1 = gc_bytes()
-                int(b1-b0)
+                b1-b0
             end
             f()
         end
@@ -82,7 +82,7 @@ macro timed(ex)
         local val = $(esc(ex))
         local t1 = time_ns()
         local b1 = gc_bytes()
-        val, (t1-t0)/1e9, int(b1-b0)
+        val, (t1-t0)/1e9, b1-b0
     end
 end
 
@@ -105,8 +105,14 @@ end
 
 which(f, args...) = whicht(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
 
-macro which(ex)
-    ex = expand(ex)
+macro which(ex0)
+    if isa(ex0,Expr) &&
+        any(a->(Meta.isexpr(a,:kw) || Meta.isexpr(a,:parameters)), ex0.args)
+        # keyword args not used in dispatch, so just remove them
+        args = filter(a->!(Meta.isexpr(a,:kw) || Meta.isexpr(a,:parameters)), ex0.args)
+        return Expr(:call, :which, map(esc, args)...)
+    end
+    ex = expand(ex0)
     exret = Expr(:call, :error, "expression is not a function call")
     if !isa(ex, Expr)
         # do nothing -> error
@@ -130,18 +136,11 @@ end
 # source files, editing
 
 function find_source_file(file)
-    if file[1]!='/' && !is_file_readable(file)
-        file2 = find_in_path(file)
-        if file2 != nothing
-            return file2
-        else
-            file2 = "$JULIA_HOME/../share/julia/base/$file"
-            if is_file_readable(file2)
-                return file2
-            end
-        end
-    end
-    return file
+    (isabspath(file) || isfile(file)) && return file
+    file2 = find_in_path(file)
+    file2 != nothing && return file2
+    file2 = "$JULIA_HOME/../share/julia/base/$file"
+    isfile(file2) ? file2 : nothing
 end
 
 function edit(file::String, line::Integer)
@@ -152,36 +151,47 @@ function edit(file::String, line::Integer)
     else
         default_editor = "emacs"
     end
-    envvar = haskey(ENV,"JULIA_EDITOR") ? "JULIA_EDITOR" : "EDITOR"
-    editor = get(ENV, envvar, default_editor)
+    editor = get(ENV,"JULIA_EDITOR", get(ENV,"VISUAL", get(ENV,"EDITOR", default_editor)))
+    if ispath(editor)
+        if isreadable(editor)
+            edpath = realpath(editor)
+            edname = basename(edpath)
+        else
+            error("edit: can't find \"$editor\"")
+        end
+    else
+        edpath = edname = editor
+    end
     issrc = length(file)>2 && file[end-2:end] == ".jl"
     if issrc
         file = find_source_file(file)
     end
-    if editor == "emacs"
-        if issrc
-            jmode = "$JULIA_HOME/../../contrib/julia-mode.el"
-            run(`emacs $file --eval "(progn
+    if beginswith(edname, "emacs")
+        jmode = joinpath(JULIA_HOME, "..", "..", "contrib", "julia-mode.el")
+        if issrc && isreadable(jmode)
+            run(`$edpath $file --eval "(progn
                                      (require 'julia-mode \"$jmode\")
                                      (julia-mode)
                                      (goto-line $line))"`)
         else
-            run(`emacs $file --eval "(goto-line $line)"`)
+            run(`$edpath $file --eval "(goto-line $line)"`)
         end
-    elseif editor == "vim"
-        run(`vim $file +$line`)
-    elseif editor == "textmate" || editor == "mate"
-        spawn(`mate $file -l $line`)
-    elseif editor == "subl"
-        spawn(`subl $file:$line`)
-    elseif OS_NAME == :Windows && (editor == "start" || editor == "open")
+    elseif edname == "vim"
+        run(`$edpath $file +$line`)
+    elseif edname == "textmate" || edname == "mate"
+        spawn(`$edpath $file -l $line`)
+    elseif edname == "subl"
+        spawn(`$edpath $file:$line`)
+    elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
         spawn(`start /b $file`)
-    elseif OS_NAME == :Darwin && (editor == "start" || editor == "open")
+    elseif OS_NAME == :Darwin && (edname == "start" || edname == "open")
         spawn(`open -t $file`)
-    elseif editor == "kate"
-        spawn(`kate $file -l $line`)
+    elseif edname == "kate"
+        spawn(`$edpath $file -l $line`)
+    elseif edname == "nano"
+        run(`$edpath +$line $file`)
     else
-        run(`$(shell_split(editor)) $file`)
+        run(`$(shell_split(edpath)) $file`)
     end
     nothing
 end
@@ -198,14 +208,72 @@ edit(f::Function, t) = edit(functionloc(f,t)...)
 less(f::Function)    = less(functionloc(f)...)
 less(f::Function, t) = less(functionloc(f,t)...)
 
-# print a warning only once
+# clipboard copy and paste
 
-const have_warned = (ByteString=>Bool)[]
-function warn_once(msg::String...; depth=0)
-    msg = bytestring(msg...)
-    haskey(have_warned,msg) && return
-    have_warned[msg] = true
-    warn(msg; depth=depth+1)
+@osx_only begin
+    function clipboard(x)
+        w,p = writesto(`pbcopy`)
+        print(w,x)
+        close(w)
+        wait(p)
+    end
+    clipboard() = readall(`pbpaste`)
+end
+
+@linux_only begin
+    _clipboardcmd = nothing
+    function clipboardcmd()
+        global _clipboardcmd
+        _clipboardcmd !== nothing && return _clipboardcmd
+        for cmd in (:xclip, :xsel)
+            success(`which $cmd` |> DevNull) && return _clipboardcmd = cmd
+        end
+        error("no clipboard command found, please install xsel or xclip")
+    end
+    function clipboard(x)
+        c = clipboardcmd()
+        cmd = c == :xsel  ? `xsel --nodetach --input --clipboard` :
+              c == :xclip ? `xclip -quiet -in -selection clipboard` :
+            error("unexpected clipboard command: $c")
+        w,p = writesto(cmd)
+        print(w,x)
+        close(w)
+        wait(p)
+    end
+    function clipboard()
+        c = clipboardcmd()
+        cmd = c == :xsel  ? `xsel --nodetach --output --clipboard` :
+              c == :xclip ? `xclip -quiet -out -selection clipboard` :
+            error("unexpected clipboard command: $c")
+        readall(cmd)
+    end
+end
+
+@windows_only begin
+    function clipboard(x::ByteString)
+        ccall((:OpenClipboard, "user32"), stdcall, Bool, (Ptr{Void},), C_NULL)
+        ccall((:EmptyClipboard, "user32"), stdcall, Bool, ())
+        p = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{Void}, (Uint16,Int32), 2, length(x)+1)
+        p = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{Void}, (Ptr{Void},), p)
+        # write data to locked, allocated space
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void},Ptr{Uint8},Int32), p, x, length(x)+1)
+        ccall((:GlobalUnlock, "kernel32"), stdcall, Void, (Ptr{Void},), p)
+        # set clipboard data type to 13 for Unicode text/string
+        p = ccall((:SetClipboardData, "user32"), stdcall, Ptr{Void}, (Uint32, Ptr{Void}), 1, p)
+        ccall((:CloseClipboard, "user32"), stdcall, Void, ())
+    end
+    clipboard(x) = clipboard(sprint(io->print(io,x))::ByteString)
+
+    function clipboard()
+        ccall((:OpenClipboard, "user32"), stdcall, Bool, (Ptr{Void},), C_NULL)
+        s = bytestring(ccall((:GetClipboardData, "user32"), stdcall, Ptr{Uint8}, (Uint32,), 1))
+        ccall((:CloseClipboard, "user32"), stdcall, Void, ())
+        return s
+    end
+end
+
+if !isdefined(:clipboard)
+    clipboard(x="") = error("clipboard functionality not implemented for $OS_NAME")
 end
 
 # BLAS utility routines
@@ -262,7 +330,9 @@ end
 
 function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "Julia Version $VERSION")
-    println(io,             commit_string)
+    if !isempty(BUILD_INFO.commit_short)
+      println(io,             "Commit $(BUILD_INFO.commit_short) ($(BUILD_INFO.date_string))")
+    end
     println(io,             "Platform Info:")
     println(io,             "  System: ", Sys.OS_NAME, " (", Sys.MACHINE, ")")
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
@@ -338,3 +408,79 @@ function methodswith(io::IO, t::Type, showparents::Bool)
         end
     end
 end
+
+## printing with color ##
+
+function with_output_color(f::Function, color::Symbol, io::IO, args...)
+    have_color || return f(io, args...)
+    print(io, get(text_colors, color, color_normal))
+    try f(io, args...)
+    finally
+        print(io, color_normal)
+    end
+end
+
+print_with_color(color::Symbol, io::IO, msg::String...) =
+    with_output_color(print, color, io, msg...)
+print_with_color(color::Symbol, msg::String...) =
+    print_with_color(color, STDOUT, msg...)
+
+## file downloading ##
+
+downloadcmd = nothing
+function download(url::String, filename::String)
+    global downloadcmd
+    if downloadcmd === nothing
+        for checkcmd in (:curl, :wget, :fetch)
+            if success(`which $checkcmd` |> DevNull)
+                downloadcmd = checkcmd
+                break
+            end
+        end
+    end
+    if downloadcmd == :wget
+        run(`wget -O $filename $url`)
+    elseif downloadcmd == :curl
+        run(`curl -o $filename -L $url`)
+    elseif downloadcmd == :fetch
+        run(`fetch -f $filename $url`)
+    else
+        error("no download agent available; install curl, wget, or fetch")
+    end
+    filename
+end
+function download(url::String)
+    filename = tempname()
+    download(url, filename)
+end
+
+## warnings and messages ##
+
+function info(msg::String...; prefix="INFO: ")
+    with_output_color(print, :blue, STDERR, prefix, chomp(string(msg...)))
+    println(STDERR)
+end
+
+# print a warning only once
+
+const have_warned = Set()
+warn_once(msg::String...) = warn(msg..., once=true)
+
+function warn(msg::String...; prefix="WARNING: ", once=false, key=nothing, bt=nothing)
+    str = chomp(bytestring(msg...))
+    if once
+        if key === nothing
+            key = str
+        end
+        (key in have_warned) && return
+        push!(have_warned, key)
+    end
+    with_output_color(print, :red,  STDERR, prefix, str)
+    if bt !== nothing
+        show_backtrace(STDERR, bt)
+    end
+    println(STDERR)
+end
+
+warn(err::Exception; prefix="ERROR: ", kw...) =
+    warn(sprint(io->showerror(io,err)), prefix=prefix; kw...)

@@ -82,14 +82,14 @@ z = BigFloat(30)
 # rounding modes
 with_bigfloat_precision(4) do
     # default mode is round to nearest
-    down, up =  with_bigfloat_rounding(MPFR.RoundToNearest) do
+    down, up =  with_bigfloat_rounding(RoundNearest) do
         BigFloat("0.0938"), BigFloat("0.102")
     end
-    with_bigfloat_rounding(MPFR.RoundDown) do
+    with_bigfloat_rounding(RoundDown) do
         @test BigFloat(0.1) == down
         @test BigFloat(0.1) != up
     end
-    with_bigfloat_rounding(MPFR.RoundUp) do
+    with_bigfloat_rounding(RoundUp) do
         @test BigFloat(0.1) != down
         @test BigFloat(0.1) == up
     end
@@ -377,7 +377,7 @@ with_bigfloat_precision(53) do
         end
     end
     for f in (:sin,:cos,:tan,:sec,:csc,:cot,:cosh,:sinh,:tanh,
-            :sech,:csch,:coth,:acosh,:asinh),
+              :sech,:csch,:coth,:acosh,:asinh),
         j in (1., 1.5, 1.9)
         @eval begin
             @test_approx_eq ($f)(BigFloat($j)) ($f)($j)
@@ -393,7 +393,7 @@ end
 
 # atan2
 with_bigfloat_precision(53) do
-    @test isequal(atan2(12,2), atan2(BigFloat(12), BigFloat(2)))
+    @test atan2(12,2) == atan2(BigFloat(12), BigFloat(2))
 end
 
 # ldexp

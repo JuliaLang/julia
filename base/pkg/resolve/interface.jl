@@ -132,7 +132,7 @@ function verify_solution(sol::Vector{Int}, interface::Interface)
         p0 = pdict[p]
         @assert sol[p0] != spp[p0]
         vn = pvers[p0][sol[p0]]
-        @assert contains(vs, vn)
+        @assert in(vn, vs)
     end
 
     # verify dependencies
@@ -146,7 +146,7 @@ function verify_solution(sol::Vector{Int}, interface::Interface)
                     p1 = pdict[rp]
                     @assert sol[p1] != spp[p1]
                     vn = pvers[p1][sol[p1]]
-                    @assert contains(rvs, vn)
+                    @assert in(vn, rvs)
                 end
             end
         end
@@ -210,7 +210,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
                     break
                 end
                 vn = pvers[p1][sol[p1]]
-                if !contains(vs, vn)
+                if !in(vn, vs)
                     # the dependency is violated because
                     # the other package version is invalid
                     viol = true
@@ -229,7 +229,7 @@ function enforce_optimality!(sol::Vector{Int}, interface::Interface)
                     continue
                 end
                 vn = pvers[p0][s0+1]
-                if !contains(vs, vn)
+                if !in(vn, vs)
                     # bumping the version would violate
                     # the dependency
                     viol = true

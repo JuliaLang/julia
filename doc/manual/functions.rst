@@ -8,31 +8,18 @@ In Julia, a function is an object that maps a tuple of argument values
 to a return value. Julia functions are not pure mathematical functions,
 in the sense that functions can alter and be affected by the global
 state of the program. The basic syntax for defining functions in Julia
-is::
+is:
+
+.. testcode::
 
     function f(x,y)
       x + y
     end
 
-This syntax is similar to MATLAB, but there are some significant
-differences:
+.. testoutput::
+    :hide:
 
--  In MATLAB, this definition must be saved in a file, named ``f.m``,
-   whereas in Julia, this expression can appear anywhere, including in
-   an interactive session.
--  In MATLAB, the closing ``end`` is optional, being implied by the end
-   of the file. In Julia, the terminating ``end`` is required.
--  In MATLAB, this function would print the value ``x + y`` but would
-   not return any value, whereas in Julia, the last expression evaluated
-   is a function's return value.
--  Expression values are never printed automatically except in
-   interactive sessions. Semicolons are only required to separate
-   expressions on the same line.
-
-In general, while the function definition syntax is reminiscent of
-MATLAB, the similarity is largely superficial. Therefore, rather than
-continually comparing the two, in what follows, we will simply describe
-the behavior of functions in Julia directly.
+    f (generic function with 1 method)
 
 There is a second, more terse syntax for defining a function in Julia.
 The traditional function declaration syntax demonstrated above is
@@ -47,13 +34,17 @@ function definitions are common in Julia. The short function syntax is
 accordingly quite idiomatic, considerably reducing both typing and
 visual noise.
 
-A function is called using the traditional parenthesis syntax::
+A function is called using the traditional parenthesis syntax:
+
+.. doctest::
 
     julia> f(2,3)
     5
 
 Without parentheses, the expression ``f`` refers to the function object,
-and can be passed around like any value::
+and can be passed around like any value:
+
+.. doctest::
 
     julia> g = f;
 
@@ -63,13 +54,26 @@ and can be passed around like any value::
 There are two other ways that functions can be applied: using special
 operator syntax for certain function names (see `Operators Are
 Functions <#operators-are-functions>`_ below), or with the ``apply``
-function::
+function:
+
+.. doctest::
 
     julia> apply(f,2,3)
     5
 
 The ``apply`` function applies its first argument — a function object —
 to its remaining arguments.
+
+Argument Passing Behavior
+-------------------------
+
+Julia function arguments follow a convention sometimes called "pass-by-sharing",
+which means that values are not copied when they are passed to functions.
+Function arguments themselves act as new variable *bindings* (new locations that
+can refer to values), but the values they refer to are identical to the passed
+values. Modifications to mutable values (such as Arrays) made within a function
+will be visible to the caller. This is the same behavior found in Scheme, most
+Lisps, Python, Ruby and Perl, among other dynamic languages.
 
 .. _man-return-keyword:
 
@@ -138,10 +142,12 @@ Operators Are Functions
 In Julia, most operators are just functions with support for special
 syntax. The exceptions are operators with special evaluation semantics
 like ``&&`` and ``||``. These operators cannot be functions since
-:ref:`short circuit evaluation <man-short-circuit-evaluation>` requires that
+:ref:`short-circuit evaluation <man-short-circuit-evaluation>` requires that
 their operands are not evaluated before evaluation of the operator.
 Accordingly, you can also apply them using parenthesized argument lists,
-just as you would any other function::
+just as you would any other function:
+
+.. doctest::
 
     julia> 1 + 2 + 3
     6
@@ -152,7 +158,9 @@ just as you would any other function::
 The infix form is exactly equivalent to the function application form —
 in fact the former is parsed to produce the function call internally.
 This also means that you can assign and pass around operators such as
-``+`` and ``*`` just like you would with other function values::
+``+`` and ``*`` just like you would with other function values:
+
+.. doctest:: f-plus
 
     julia> f = +;
 
@@ -161,6 +169,28 @@ This also means that you can assign and pass around operators such as
 
 Under the name ``f``, the function does not support infix notation,
 however.
+
+Operators With Special Names
+----------------------------
+
+A few special expressions correspond to calls to functions with non-obvious
+names. These are:
+
+=================== ==============
+Expression          Calls
+=================== ==============
+``[A B C ...]``     ``hcat``
+``[A, B, C, ...]``  ``vcat``
+``[A B; C D; ...]`` ``hvcat``
+``A'``              ``ctranspose``
+``A.'``             ``transpose``
+``1:n``             ``colon``
+``A[i]``            ``getindex``
+``A[i]=x``          ``setindex!``
+=================== ==============
+
+These functions are included in the ``Base.Operators`` module even
+though they do not have operator-like names.
 
 .. _man-anonymous-functions:
 
@@ -172,20 +202,24 @@ Functions in Julia are `first-class objects
 variables, called using the standard function call syntax from the
 variable they have been assigned to. They can be used as arguments, and
 they can be returned as values. They can also be created anonymously,
-without being given a name::
+without being given a name:
+
+.. doctest::
 
     julia> x -> x^2 + 2x - 1
-    #<function>
+    (anonymous function)
 
 This creates an unnamed function taking one argument *x* and returning the
 value of the polynomial *x*\ ^2 + 2\ *x* - 1 at that value. The primary
 use for anonymous functions is passing them to functions which take
 other functions as arguments. A classic example is the ``map`` function,
 which applies a function to each value of an array and returns a new
-array containing the resulting values::
+array containing the resulting values:
+
+.. doctest::
 
     julia> map(round, [1.2,3.5,1.7])
-    3-element Float64 Array:
+    3-element Array{Float64,1}:
      1.0
      4.0
      2.0
@@ -194,11 +228,13 @@ This is fine if a named function effecting the transform one wants
 already exists to pass as the first argument to ``map``. Often, however,
 a ready-to-use, named function does not exist. In these situations, the
 anonymous function construct allows easy creation of a single-use
-function object without needing a name::
+function object without needing a name:
+
+.. doctest::
 
     julia> map(x -> x^2 + 2x - 1, [1,3,-1])
-    3-element Int64 Array:
-     2
+    3-element Array{Int64,1}:
+      2
      14
      -2
 
@@ -216,21 +252,27 @@ In Julia, one returns a tuple of values to simulate returning multiple
 values. However, tuples can be created and destructured without needing
 parentheses, thereby providing an illusion that multiple values are
 being returned, rather than a single tuple value. For example, the
-following function returns a pair of values::
+following function returns a pair of values:
 
-    function foo(a,b)
-      a+b, a*b
-    end
+.. doctest::
+
+    julia> function foo(a,b)
+             a+b, a*b
+           end;
 
 If you call it in an interactive session without assigning the return
-value anywhere, you will see the tuple returned::
+value anywhere, you will see the tuple returned:
+
+.. doctest::
 
     julia> foo(2,3)
     (5,6)
 
 A typical usage of such a pair of return values, however, extracts each
 value into a variable. Julia supports simple tuple "destructuring" that
-facilitates this::
+facilitates this:
+
+.. doctest::
 
     julia> x, y = foo(2,3);
 
@@ -256,13 +298,18 @@ It is often convenient to be able to write functions taking an arbitrary
 number of arguments. Such functions are traditionally known as "varargs"
 functions, which is short for "variable number of arguments". You can
 define a varargs function by following the last argument with an
-ellipsis::
+ellipsis:
 
-    bar(a,b,x...) = (a,b,x)
+.. doctest::
+
+    julia> bar(a,b,x...) = (a,b,x)
+    bar (generic function with 1 method)
 
 The variables ``a`` and ``b`` are bound to the first two argument values
 as usual, and the variable ``x`` is bound to an iterable collection of
-the zero or more values passed to ``bar`` after its first two arguments::
+the zero or more values passed to ``bar`` after its first two arguments:
+
+.. doctest::
 
     julia> bar(1,2)
     (1,2,())
@@ -281,7 +328,9 @@ passed to ``bar``.
 
 On the flip side, it is often handy to "splice" the values contained in
 an iterable collection into a function call as individual arguments. To
-do this, one also uses ``...`` but in the function call instead::
+do this, one also uses ``...`` but in the function call instead:
+
+.. doctest::
 
     julia> x = (3,4)
     (3,4)
@@ -291,7 +340,9 @@ do this, one also uses ``...`` but in the function call instead::
 
 In this case a tuple of values is spliced into a varargs call precisely
 where the variable number of arguments go. This need not be the case,
-however::
+however:
+
+.. doctest::
 
     julia> x = (2,3,4)
     (2,3,4)
@@ -306,10 +357,12 @@ however::
     (1,2,(3,4))
 
 Furthermore, the iterable object spliced into a function call need not
-be a tuple::
+be a tuple:
+
+.. doctest::
 
     julia> x = [3,4]
-    2-element Int64 Array:
+    2-element Array{Int64,1}:
      3
      4
 
@@ -317,7 +370,7 @@ be a tuple::
     (1,2,(3,4))
 
     julia> x = [1,2,3,4]
-    4-element Int64 Array:
+    4-element Array{Int64,1}:
      1
      2
      3
@@ -332,7 +385,7 @@ function (although it often is)::
     baz(a,b) = a + b
 
     julia> args = [1,2]
-    2-element Int64 Array:
+    2-element Array{Int64,1}:
      1
      2
 
@@ -340,7 +393,7 @@ function (although it often is)::
     3
 
     julia> args = [1,2,3]
-    3-element Int64 Array:
+    3-element Array{Int64,1}:
      1
      2
      3
@@ -367,7 +420,9 @@ expressed concisely as::
 
 With this definition, the function can be called with either one or two
 arguments, and ``10`` is automatically passed when a second argument is not
-specified::
+specified:
+
+.. doctest::
 
     julia> parseint("12",10)
     12
@@ -383,32 +438,31 @@ multiple method definitions with different numbers of arguments
 (see :ref:`man-methods`).
 
 
-Named Arguments
----------------
+Keyword Arguments
+-----------------
 
 Some functions need a large number of arguments, or have a large number of
-behaviors. Remembering how to call such functions can be difficult. Named
-arguments, also called keyword arguments, can make these complex interfaces
-easier to use and extend by allowing arguments to be identified by name
-instead of only by position.
+behaviors. Remembering how to call such functions can be difficult. Keyword
+arguments can make these complex interfaces easier to use and extend by
+allowing arguments to be identified by name instead of only by position.
 
 For example, consider a function ``plot`` that
 plots a line. This function might have many options, for controlling line
-style, width, color, and so on. If it accepts named arguments, a possible
+style, width, color, and so on. If it accepts keyword arguments, a possible
 call might look like ``plot(x, y, width=2)``, where we have chosen to
 specify only line width. Notice that this serves two purposes. The call is
 easier to read, since we can label an argument with its meaning. It also
 becomes possible to pass any subset of a large number of arguments, in
 any order.
 
-Functions with named arguments are defined using a semicolon in the
+Functions with keyword arguments are defined using a semicolon in the
 signature::
 
     function plot(x, y; style="solid", width=1, color="black")
         ###
     end
 
-Extra named arguments can be collected using ``...``, as in varargs
+Extra keyword arguments can be collected using ``...``, as in varargs
 functions::
 
     function f(x; args...)
@@ -416,9 +470,34 @@ functions::
     end
 
 Inside ``f``, ``args`` will be a collection of ``(key,value)`` tuples,
-where each ``key`` is a symbol. Such collections can be passed as named
+where each ``key`` is a symbol. Such collections can be passed as keyword
 arguments using a semicolon in a call, ``f(x; k...)``. Dictionaries
 can be used for this purpose.
+
+Keyword argument default values are evaluated only when necessary
+(when a corresponding keyword argument is not passed), and in
+left-to-right order. Therefore default expressions may refer to
+prior keyword arguments.
+
+
+Evaluation Scope of Default Values
+----------------------------------
+
+Optional and keyword arguments differ slightly in how their default
+values are evaluated. When optional argument default expressions are
+evaluated, only *previous* arguments are in scope. For example, given
+this definition::
+
+    function f(x, a=b, b=1)
+        ###
+    end
+
+the ``b`` in ``a=b`` refers to the ``b`` in an outer scope, not the
+subsequent argument ``b``. However, if ``a`` and ``b`` were keyword
+arguments instead, then both would be created in the same scope and
+``a=b`` would result in an undefined variable error (since the
+default expressions are evaluated left-to-right, and ``b`` has not
+been assigned yet).
 
 
 Block Syntax for Function Arguments

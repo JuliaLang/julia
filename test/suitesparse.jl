@@ -27,6 +27,10 @@ x = lua'\b
 
 @test norm(A'*x-b,1) < eps(1e4)
 
+#4523 - complex sparse \
+x = speye(2) + im * speye(2)
+@test_approx_eq ((lufact(x) \ ones(2)) * x) (complex(ones(2)))
+
 using Base.LinAlg.CHOLMOD
 
 # based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/
@@ -145,7 +149,7 @@ afiro = CholmodSparse!(int32([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,
                         -1.0,2.279,1.4,-1.0,1.0,-1.0,1.0,1.0,1.0], 27, 51, 0)
 chmaf = cholfact(afiro)
 y = afiro'*ones(size(afiro,1))
-sol = solve(chmaf, afiro*y) # least squares solution
+sol = Base.solve(chmaf, afiro*y) # least squares solution
 @test isvalid(sol)
 pred = afiro'*sol
 @test norm(afiro * (y.mat - pred.mat)) < 1e-8 

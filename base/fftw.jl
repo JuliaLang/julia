@@ -28,7 +28,7 @@ end
 const FORWARD = int32(-1)
 const BACKWARD = int32(1)
 
-## _jl_FFTW Flags from fftw3.h
+## FFTW Flags from fftw3.h
 
 const MEASURE         = uint32(0)
 const DESTROY_INPUT   = uint32(1 << 0)
@@ -786,43 +786,6 @@ for f in (:plan_r2r, :plan_r2r!)
         $f(X, kinds, region, flags) = $f(X, kinds, region, flags, NO_TIMELIMIT)
         $f(X, kinds, region) = $f(X, kinds, region, ESTIMATE, NO_TIMELIMIT)
         $f(X, kinds) = $f(X, kinds, 1:ndims(X), ESTIMATE, NO_TIMELIMIT)
-    end
-end
-
-# FFTW-based transpose routines
-#   TODO: implement in-place transpose! routine (this is supported by FFTW)
-#   TODO: fftw/fftwf can transpose matrices of any type, provided that the
-#         element size is a multiple of sizeof(double) or sizeof(float).
-
-for (libname, fname, elty) in ((:libfftw ,"fftw_plan_guru64_r2r",:Float64),
-                               (:libfftwf,"fftwf_plan_guru64_r2r",:Float32))
-    @eval begin
-        function transpose(X::Matrix{$elty})
-            P = similar(X)
-            (n1, n2) = size(X)
-            plan = ccall(($fname,$libname), Ptr{Void},
-                         (Int32, Ptr{Int}, Int32, Ptr{Int}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Uint32),
-                         0, C_NULL, 2, [n1,n2,1,n2,1,n1], X, P, [HC2R], ESTIMATE | PRESERVE_INPUT)
-            execute($elty, plan)
-            destroy_plan($elty, plan)
-            return P
-        end
-    end
-end
-
-for (libname, fname, celty) in ((:libfftw ,"fftw_plan_guru64_dft",:Complex128),
-                                (:libfftwf,"fftwf_plan_guru64_dft",:Complex64))
-    @eval begin
-        function transpose(X::Matrix{$celty})
-            P = similar(X)
-            (n1, n2) = size(X)
-            plan = ccall(($fname,$libname), Ptr{Void},
-                         (Int32, Ptr{Int}, Int32, Ptr{Int}, Ptr{$celty}, Ptr{$celty}, Int32, Uint32),
-                         0, C_NULL, 2, [n1,n2,1,n2,1,n1], X, P, FORWARD, ESTIMATE | PRESERVE_INPUT)
-            execute($celty, plan)
-            destroy_plan($celty, plan)
-            return P
-        end
     end
 end
 

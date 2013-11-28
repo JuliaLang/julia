@@ -535,6 +535,11 @@ static void print_string(ios_t *f, char *str, size_t sz)
 }
 
 static numerictype_t sym_to_numtype(value_t type);
+#ifndef _OS_WINDOWS_
+#define __USE_GNU
+#include <dlfcn.h>
+#undef __USE_GNU
+#endif
 
 // 'weak' means we don't need to accurately reproduce the type, so
 // for example #int32(0) can be printed as just 0. this is used
@@ -582,12 +587,11 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
     else if (type == floatsym || type == doublesym) {
         char buf[64];
         double d;
-        int ndec;
-        if (type == floatsym) { d = (double)*(float*)data; ndec = 8; }
-        else { d = *(double*)data; ndec = 16; }
+        if (type == floatsym) { d = (double)*(float*)data; }
+        else { d = *(double*)data; }
         if (!DFINITE(d)) {
             char *rep;
-            if (isnan(d))
+            if (DNAN(d))
                 rep = sign_bit(d) ? "-nan.0" : "+nan.0";
             else
                 rep = sign_bit(d) ? "-inf.0" : "+inf.0";
@@ -605,7 +609,16 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
                 outc('f', f);
         }
         else {
-            snprint_real(buf, sizeof(buf), d, 0, ndec, 3, 10);
+            double ad = d < 0 ? -d : d;
+            if ((long)d == d && ad < 1e6 && ad >= 1e-4) {
+                snprintf(buf, sizeof(buf), "%g", d);
+            }
+            else {
+                if (type == floatsym)
+                    snprintf(buf, sizeof(buf), "%.8g", d);
+                else
+                    snprintf(buf, sizeof(buf), "%.16g", d);
+            }
             int hasdec = (strpbrk(buf, ".eE") != NULL);
             outs(buf, f);
             if (!hasdec) outsn(".0", f, 2);
@@ -629,7 +642,25 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
         // at this point, so int64 is big enough to capture everything.
         numerictype_t nt = sym_to_numtype(type);
         if (nt == N_NUMTYPES) {
-            HPOS += ios_printf(f, "#<%s>", symbol_name(type));
+            static size_t (*jl_static_print)(ios_t*, void*) = 0;
+            static int init = 0;
+            static value_t jl_sym = 0;
+            if (init == 0) {
+                init = 1;
+#if defined(RTLD_SELF)
+                jl_static_print = dlsym(RTLD_SELF, "jl_static_show");
+#elif defined(RTLD_DEFAULT)
+                jl_static_print = dlsym(RTLD_DEFAULT, "jl_static_show");
+#endif
+                jl_sym = symbol("julia_value");
+            }
+            if (jl_static_print != 0 && jl_sym == type) {
+                HPOS += ios_printf(f, "#<julia: ");
+                HPOS += jl_static_print(f, *(void**)data);
+                HPOS += ios_printf(f, ">");
+            }
+            else
+                HPOS += ios_printf(f, "#<%s>", symbol_name(type));
         }
         else {
             int64_t i64 = conv_to_int64(data, nt);

@@ -1,7 +1,7 @@
 #ifndef EQUALHASH_H
 #define EQUALHASH_H
 
-#include "htableh.inc"
+#include "htable.h"
 
 HTPROT(equalhash)
 
