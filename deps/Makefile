@@ -1535,7 +1535,7 @@ git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
 	touch -c $@
 git-$(GIT_VER)/config.status: git-$(GIT_VER)/configure
 	cd git-$(GIT_VER) && \
-	./configure $(CONFIGURE_COMMON)
+	./configure $(CONFIGURE_COMMON) --bindir="$(BUILD)/libexec"
 	touch -c $@
 $(GIT_SOURCE): git-$(GIT_VER)/config.status
 	$(MAKE) -C git-$(GIT_VER)
