@@ -5,6 +5,7 @@
     julia_*;
     ios_*;
     libsupport_*;
+    bitvector_*;
     locale_is_utf8;
     add_library_mapping;
 
