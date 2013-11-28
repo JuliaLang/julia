@@ -317,6 +317,12 @@ Types
 Generic Functions
 -----------------
 
+.. function:: apply(f, x...)
+
+   Like calling f(x) or f(x...).
+
+   **Example**: ``apply(log, pi)``
+
 .. function:: method_exists(f, tuple) -> Bool
 
    Determine whether the given generic function has a method matching the given tuple of argument types.
