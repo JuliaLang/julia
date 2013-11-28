@@ -6,7 +6,7 @@ copyright_year() = readchomp(`date +%Y`)
 copyright_name() = readchomp(`git config --global --get user.name`)
 github_user() = readchomp(ignorestatus(`git config --global --get github.user`))
 
-function git_contributors(dir::String, n::Int)
+function git_contributors(dir::String, n::Int=typemax(Int))
     contrib = Dict()
     tty = @windows? "CON:" : "/dev/tty"
     for line in eachline(tty |> Git.cmd(`shortlog -nes`, dir=dir))
@@ -19,7 +19,11 @@ function git_contributors(dir::String, n::Int)
             contrib[email] = [int(commits),name]
         end
     end
-    names = map(x->x[2],sort!(collect(values(contrib)),lt=lexless,rev=true))
+    names = Dict()
+    for (commits,name) in values(contrib)
+        names[name] = get(names,name,0) + commits
+    end
+    names = sort!(collect(keys(names)),by=name->names[name],rev=true)
     length(names) <= n ? names : [names[1:n], "et al."]
 end
 
