@@ -353,7 +353,7 @@ function kron{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti})
 
     col = 1
 
-    for j = 1:nA
+    @inbounds for j = 1:nA
         startA = colptrA[j]
         stopA = colptrA[j+1]-1
         lA = stopA - startA + 1
