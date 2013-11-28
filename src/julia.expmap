@@ -1,5 +1,6 @@
 {
   global:
+    jl_*;
     uv_*;
     add_library_mapping;
 
