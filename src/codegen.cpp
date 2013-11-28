@@ -437,10 +437,10 @@ struct jl_varinfo_t {
 };
 
 // --- helpers for reloading IR image
-extern "C" DLLEXPORT
-void jl_set_imaging_mode(uint8_t stat)
+extern "C"
+void jl_set_imaging_mode(int stat)
 {
-    imaging_mode = (stat == 1);
+    imaging_mode = !!stat;
 }
 
 static void jl_gen_llvm_gv_array();
