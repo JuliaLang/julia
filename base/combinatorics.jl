@@ -102,6 +102,12 @@ function nthperm!(a::AbstractVector, k::Integer)
 end
 nthperm(a::AbstractVector, k::Integer) = nthperm!(copy(a),k)
 
+function nthperm{T<:Integer}(v::AbstractVector{T})
+#    @assert isperm(v)
+    n=length(v)
+    sum(map(i -> sum(v[i+1:end] .< v[i])factorial(n-i), 1:n-1)) + 1
+end
+
 function invperm(a::AbstractVector)
     b = zero(a) # similar vector of zeros
     n = length(a)
