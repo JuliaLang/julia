@@ -1443,36 +1443,43 @@ parseint{T<:Integer}(::Type{T}, c::Char) = convert(T,parseint(c))
 
 function parseint_next(s::String, i::Int=start(s))
     done(s,i) && error("premature end of integer: $(repr(s))")
+    j = i
     c, i = next(s,i)
+    c, i, j
 end
 
-function _parseint{T<:Integer}(::Type{T}, s::String, base::Int)
-    c, i = parseint_next(s)
+function parseint_preamble(signed::Bool, s::String, base::Int)
+    c, i, j = parseint_next(s)
     while isspace(c)
-        c, i = parseint_next(s,i)
+        c, i, j = parseint_next(s,i)
     end
     sgn = 1
-    if T <: Signed
+    if signed
         if c == '-' || c == '+'
             (c == '-') && (sgn = -1)
-            c, i = parseint_next(s,i)
+            c, i, j = parseint_next(s,i)
         end
     end
     while isspace(c)
-        c, i = parseint_next(s,i)
+        c, i, j = parseint_next(s,i)
     end
     if base == 0
-        if c == '0'
-            done(s,i) && return zero(T)
+        if c == '0' && !done(s,i)
             c, i = next(s,i)
             base = c=='b' ? 2 : c=='o' ? 8 : c=='x' ? 16 : 10
             if base != 10
-                c, i = parseint_next(s,i)
+                c, i, j = parseint_next(s,i)
             end
         else
             base = 10
         end
     end
+    return sgn, base, j
+end
+
+function parseint_nocheck{T<:Integer}(::Type{T}, s::String, base::Int)
+    sgn, base, i = parseint_preamble(T<:Signed,s,base)
+    c, i = parseint_next(s,i)
     base = convert(T,base)
     m::T = div(typemax(T)-base+1,base)
     n::T = 0
@@ -1509,13 +1516,11 @@ function _parseint{T<:Integer}(::Type{T}, s::String, base::Int)
     return n
 end
 
-function parseint(T::Type, s::String, base::Integer)
-    2 <= base <= 36 ? _parseint(T,s,base) : error("invalid base: $base")
-end
-
-parseint(T::Type, s::String)       = _parseint(T,s,0)
-parseint(s::String)                = _parseint(Int,s,0)
+parseint{T<:Integer}(::Type{T}, s::String, base::Integer) =
+    2 <= base <= 36 ? parseint_nocheck(T,s,int(base)) : error("invalid base: $base")
+parseint{T<:Integer}(::Type{T}, s::String) = parseint_nocheck(T,s,0)
 parseint(s::String, base::Integer) = parseint(Int,s,base)
+parseint(s::String) = parseint_nocheck(Int,s,0)
 
 integer (s::String) = int(s)
 unsigned(s::String) = uint(s)
