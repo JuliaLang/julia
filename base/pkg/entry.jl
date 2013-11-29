@@ -23,7 +23,7 @@ function edit(f::Function, pkg::String, args...)
     reqsʹ = Reqs.parse(rʹ)
     reqsʹ != reqs && resolve(reqsʹ,avail)
     Reqs.write("REQUIRE",rʹ)
-    info("REQUIRE updated.")
+    info("REQUIRE updated")
     return true
 end
 
@@ -35,7 +35,7 @@ function edit()
     reqs = Reqs.parse("REQUIRE")
     run(`$editor REQUIRE`)
     reqsʹ = Reqs.parse("REQUIRE")
-    reqs == reqsʹ && return info("Nothing to be done.")
+    reqs == reqsʹ && return info("Nothing to be done")
     info("Computing changes...")
     resolve(reqsʹ)
 end
@@ -43,13 +43,13 @@ end
 function add(pkg::String, vers::VersionSet)
     edit(Reqs.add,pkg,vers) && return
     ispath(pkg) || error("unknown package $pkg")
-    info("Nothing to be done.")
+    info("Nothing to be done")
 end
 add(pkg::String, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 function rm(pkg::String)
     edit(Reqs.rm,pkg) && return
-    ispath(pkg) || return info("Nothing to be done.")
+    ispath(pkg) || return info("Nothing to be done")
     info("Removing $pkg (unregistered)")
     Write.remove(pkg)
 end
@@ -99,7 +99,7 @@ function status(io::IO)
         end
     end
     if isempty(required) && isempty(additional)
-        println(io, "No packages installed.")
+        println(io, "No packages installed")
     end
 end
 # TODO: status(io::IO, pkg::String)
@@ -305,7 +305,7 @@ function publish(branch::String)
             return true
         end || error("$pkg v$ver is incorrectly tagged – $sha1 expected")
     end
-    isempty(tags) && info("No new package versions to publish.")
+    isempty(tags) && info("No new package versions to publish")
     @sync for pkg in sort!([keys(tags)...])
         @async begin
             forced = ASCIIString[]
@@ -354,7 +354,7 @@ function resolve(
 
     # compare what is installed with what should be
     changes = Query.diff(have, want, avail, fixed)
-    isempty(changes) && return info("No packages to install, update or remove.")
+    isempty(changes) && return info("No packages to install, update or remove")
 
     # prefetch phase isolates network activity, nothing to roll back
     missing = {}
