@@ -36,14 +36,12 @@ static GlobalVariable *stringConst(const std::string &txt)
 
 // --- emitting pointers directly into code ---
 
-static Value *literal_pointer_val(void *p, Type *t)
+static Value *literal_static_pointer_val(void *p, Type *t)
 {
 #if defined(_P64)
-    return ConstantExpr::getIntToPtr(ConstantInt::get(T_int64, (uint64_t)p),
-                                     t);
+    return ConstantExpr::getIntToPtr(ConstantInt::get(T_int64, (uint64_t)p), t);
 #else
-    return ConstantExpr::getIntToPtr(ConstantInt::get(T_int32, (uint32_t)p),
-                                     t);
+    return ConstantExpr::getIntToPtr(ConstantInt::get(T_int32, (uint32_t)p), t);
 #endif
 }
 
@@ -77,7 +75,7 @@ static int32_t jl_assign_functionID(Function *functionObject) {
     return jl_sysimg_gvars.size();
 }
 
-static Value *julia_to_gv(const char *cname, jl_value_t *addr)
+static Value *julia_gv(const char *cname, void *addr)
 {
     std::map<void*, jl_value_llvm>::iterator it;
     it = jl_value_to_llvm.find(addr);
@@ -86,19 +84,14 @@ static Value *julia_to_gv(const char *cname, jl_value_t *addr)
     GlobalValue *gv = new GlobalVariable(*jl_Module, jl_pvalue_llvmt,
                            false, GlobalVariable::PrivateLinkage,
                            ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt), cname);
-    jl_value_t **p = (jl_value_t**)jl_ExecutionEngine->getPointerToGlobal(gv);
+    void **p = (void**)jl_ExecutionEngine->getPointerToGlobal(gv);
     *p = addr;
     jl_sysimg_gvars.push_back(ConstantExpr::getBitCast(gv, T_psize));
     jl_value_to_llvm[addr] = (jl_value_llvm){.gv=gv, .index=jl_sysimg_gvars.size()};
     return builder.CreateLoad(gv);
 }
 
-static Value *julia_to_gv(jl_value_t *addr)
-{
-    return julia_to_gv("jl_global#", addr);
-}
-
-static Value *julia_to_gv(const char *prefix, jl_sym_t *name, jl_module_t *mod, jl_value_t *addr) {
+static Value *julia_gv(const char *prefix, jl_sym_t *name, jl_module_t *mod, void *addr) {
     size_t len = strlen(name->name)+strlen(prefix)+1;
     jl_module_t *parent = mod, *prev = NULL;
     while (parent != NULL && parent != prev) {
@@ -120,42 +113,45 @@ static Value *julia_to_gv(const char *prefix, jl_sym_t *name, jl_module_t *mod, 
         prev = parent;
         parent = parent->parent;
     }
-    return julia_to_gv(fullname, addr);
-}
-static Value *julia_to_gv(jl_datatype_t *addr) {
-    return julia_to_gv("+", addr->name->name, addr->name->module, (jl_value_t*)addr);
-}
-static Value *julia_to_gv(jl_lambda_info_t *linfo, jl_value_t *addr) {
-    if (linfo != NULL)
-        return julia_to_gv("-", linfo->name, linfo->module, addr);
-    return julia_to_gv("jl_method#", addr);
-}
-static Value *julia_to_gv(jl_function_t *addr) {
-    return julia_to_gv(addr->linfo, (jl_value_t*)addr);
-}
-static Value *julia_to_gv(jl_sym_t *addr) {
-    return julia_to_gv("jl_sym#", addr, NULL, (jl_value_t*)addr);
+    return julia_gv(fullname, addr);
 }
 
 static Value *literal_pointer_val(jl_value_t *p)
 {
     if (p == NULL)
-        return literal_pointer_val((void*)NULL, jl_pvalue_llvmt);
-    if (jl_is_datatype(p))
-        return julia_to_gv((jl_datatype_t*)p);
-    if (jl_is_func(p))
-        return julia_to_gv((jl_function_t*)p);
-    if (jl_is_lambda_info(p))
-        return julia_to_gv((jl_lambda_info_t*)p, p);
-    if (jl_is_symbol(p))
-        return julia_to_gv((jl_sym_t*)p);
-    return julia_to_gv(p);
+        return literal_static_pointer_val((void*)NULL, jl_pvalue_llvmt);
+    if (jl_is_datatype(p)) {
+        jl_datatype_t* addr = (jl_datatype_t*)p;
+        return julia_gv("+", addr->name->name, addr->name->module, p);
+    }
+    if (jl_is_func(p)) {
+        jl_lambda_info_t* linfo = ((jl_function_t*)p)->linfo;
+        if (linfo != NULL)
+            return julia_gv("-", linfo->name, linfo->module, p);
+        return julia_gv("jl_method#", p);
+    }
+    if (jl_is_lambda_info(p)) {
+        jl_lambda_info_t* linfo = (jl_lambda_info_t*)p;
+        return julia_gv("-", linfo->name, linfo->module, p);
+    }
+    if (jl_is_symbol(p)) {
+        jl_sym_t* addr = (jl_sym_t*)p;
+        return julia_gv("jl_sym#", addr, NULL, p);
+    }
+    return julia_gv("jl_global#", p);
 }
 
-static Value *julia_to_gv(jl_binding_t *b) {
+static Value *literal_pointer_val(jl_binding_t *p)
+{
+    if (p == NULL)
+        return literal_static_pointer_val((void*)NULL, jl_pvalue_llvmt);
+    return julia_gv("jl_bnd#", p->name, p->owner, p);
+}
+
+static Value *julia_binding_gv(jl_binding_t *b) {
     return builder.CreateGEP(
             builder.CreateBitCast(
-                julia_to_gv("*", b->name, b->owner, (jl_value_t*)b),
+                julia_gv("*", b->name, b->owner, b),
                 jl_ppvalue_llvmt),
             ConstantInt::get(
                 T_size,
