@@ -164,6 +164,10 @@ static GlobalVariable *jlovferr_var;
 static GlobalVariable *jlinexacterr_var;
 static GlobalVariable *jlboundserr_var;
 static GlobalVariable *jlstderr_var;
+#ifdef _OS_WINDOWS_
+static GlobalVariable *jlexe_var;
+static GlobalVariable *jldll_var;
+#endif
 
 // important functions
 static Function *jlnew_func;
@@ -3272,7 +3276,19 @@ static void init_julia_llvm_env(Module *m)
                                      (void*)&jl_bounds_exception);
     jlstderr_var = global_to_llvm("jl_uv_stderr",
                                      (void*)&jl_uv_stderr);
-    
+#ifdef _OS_WINDOWS_
+    jlexe_var =
+        new GlobalVariable(*jl_Module, T_int8,
+                           true, GlobalVariable::ExternalLinkage,
+                           NULL, "jl_exe_handle");
+    jl_ExecutionEngine->addGlobalMapping(jlexe_var, (void*)&jl_exe_handle);
+    jldll_var =
+        new GlobalVariable(*jl_Module, T_int8,
+                           true, GlobalVariable::ExternalLinkage,
+                           NULL, "jl_dl_handle");
+    jl_ExecutionEngine->addGlobalMapping(jldll_var, (void*)&jl_dl_handle);
+#endif
+
     // Has to be big enough for the biggest LLVM-supported float type
     jlfloattemp_var =
         new GlobalVariable(*jl_Module, IntegerType::get(jl_LLVMContext,128),

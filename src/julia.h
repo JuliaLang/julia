@@ -430,7 +430,8 @@ extern uv_lib_t *jl_dl_handle;
 
 #if defined(_OS_WINDOWS_)
 extern uv_lib_t *jl_ntdll_handle;
-extern uv_lib_t *jl_exe_handle;
+DLLEXPORT extern uv_lib_t *jl_exe_handle;
+DLLEXPORT extern uv_lib_t *jl_dl_handle;
 extern uv_lib_t *jl_kernel32_handle;
 extern uv_lib_t *jl_crtdll_handle;
 extern uv_lib_t *jl_winsock_handle;
