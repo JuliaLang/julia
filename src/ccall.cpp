@@ -72,19 +72,7 @@ extern "C" const char *jl_lookup_soname(char *pfx, size_t n)
 // map from user-specified lib names to handles
 static std::map<std::string, void*> libMap;
 
-extern "C" int add_library_mapping(char *lib, void *hnd)
-{
-    JL_PUTS(const_cast<char*>("WARNING: add_library_mapping is deprecated, use push!(DL_LOAD_PATH,\"/path/to/search\") instead.\n"), JL_STDERR);
-    if (libMap[lib] == NULL && hnd != NULL) {
-        libMap[lib] = hnd;
-        return 0;
-    }
-    else {
-        return -1;
-    }
-}
-
-static void *add_library_sym(char *name, char *lib)
+static void *get_library_sym(char *name, char *lib)
 {
     void *hnd;
     if (lib == NULL) {
@@ -100,20 +88,7 @@ static void *add_library_sym(char *name, char *lib)
                 return NULL;
         }
     }
-    // add a symbol->address mapping for the JIT
     void *sval = jl_dlsym_e((uv_lib_t*)hnd, name);
-    if (lib != NULL && hnd != jl_dl_handle) {
-        void *exist = sys::DynamicLibrary::SearchForAddressOfSymbol(name);
-        if (exist != NULL && exist != sval &&
-            // openlibm conflicts with libm, and lots of our libraries
-            // (including LLVM) link to libm. fortunately AddSymbol() is
-            // able to resolve these in favor of openlibm, but this could
-            // be an issue in the future (TODO).
-            strcmp(lib,"libopenlibm")) {
-            ios_printf(ios_stderr, "Warning: Possible conflict in library symbol %s\n", name);
-        }
-        sys::DynamicLibrary::AddSymbol(name, sval);
-    }
     return sval;
 }
 
@@ -451,38 +426,48 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     else {
         void *symaddr;
         if (sym.f_lib != NULL)
-            symaddr = add_library_sym(sym.f_name, sym.f_lib);
+            symaddr = get_library_sym(sym.f_name, sym.f_lib);
         else
             symaddr = sys::DynamicLibrary::SearchForAddressOfSymbol(sym.f_name);
-        if (symaddr == NULL) {
-            std::stringstream msg;
-            msg << "cglobal: could not find symbol ";
-            msg << sym.f_name;
+        if (imaging_mode) {
+            PointerType *lrtp = PointerType::get(lrt,0);
+            Constant *nullval = ConstantPointerNull::get(lrtp);
+            GlobalValue *llvmgv = new GlobalVariable(*jl_Module, lrtp,
+                   false, GlobalVariable::PrivateLinkage,
+                   nullval, sym.f_name);
+            *((void**)jl_ExecutionEngine->getPointerToGlobal(llvmgv)) = symaddr;
+            BasicBlock *dlsym_lookup=BasicBlock::Create(getGlobalContext(), "dlsym-lookup"),
+                       *cglobal_bb=BasicBlock::Create(getGlobalContext(), "cglobal");
+            builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(llvmgv), nullval), cglobal_bb, dlsym_lookup);
+            ctx->f->getBasicBlockList().push_back(dlsym_lookup);
+            builder.SetInsertPoint(dlsym_lookup);
+            Value *libptr;
             if (sym.f_lib != NULL) {
-                msg << " in library ";
-                msg << sym.f_lib;
+                libptr = builder.CreateCall2(jldlopen_func, builder.CreateGlobalStringPtr(sym.f_lib), ConstantInt::get(T_int32,0));
+            } else {
+                libptr = builder.CreateCall2(jldlopen_func, ConstantPointerNull::get((PointerType*)T_pint8), ConstantInt::get(T_int32,0));
             }
-            emit_error(msg.str(), ctx);
-            res = literal_static_pointer_val(NULL, lrt);
+            res = builder.CreateCall2(jldlsym_func, libptr, builder.CreateGlobalStringPtr(sym.f_name));
+            res = builder.CreatePointerCast(res, lrtp);
+            builder.CreateStore(res, llvmgv);
+            builder.CreateBr(cglobal_bb);
+            ctx->f->getBasicBlockList().push_back(cglobal_bb);
+            builder.SetInsertPoint(cglobal_bb);
+            res = builder.CreateLoad(llvmgv);
         }
         else {
-            Value *nv = jl_Module->getNamedValue(sym.f_name);
-            if (nv != NULL) {
-                // if the symbol already exists, it might be a function or
-                // something else other than a GlobalVariable, so return
-                // whatever it is.
-                res = nv;
-                if (res->getType() != lrt) {
-                    // if you attempt to access a cglobal multiple times with
-                    // different types, the type of the cached global might be
-                    // wrong.
-                    res = builder.CreateBitCast(res, lrt);
+            if (symaddr == NULL) {
+                std::stringstream msg;
+                msg << "cglobal: could not find symbol ";
+                msg << sym.f_name;
+                if (sym.f_lib != NULL) {
+                    msg << " in library ";
+                    msg << sym.f_lib;
                 }
+                emit_error(msg.str(), ctx);
+                res = literal_static_pointer_val(NULL, lrt);
             }
-            else {
-                res = jl_Module->getOrInsertGlobal(sym.f_name,
-                                                   lrt->getContainedType(0));
-            }
+            res = literal_static_pointer_val(symaddr, lrt);
         }
     }
 
@@ -691,24 +676,53 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         JL_PRINTF(JL_STDERR,"warning: literal address used in ccall for %s; code cannot be statically compiled\n", f_name);
     }
     else {
+        assert(f_name != NULL);
         void *symaddr;
         if (f_lib != NULL)
-            symaddr = add_library_sym(f_name, f_lib);
+            symaddr = get_library_sym(f_name, f_lib);
         else
             symaddr = sys::DynamicLibrary::SearchForAddressOfSymbol(f_name);
-        if (symaddr == NULL) {
-            JL_GC_POP();
-            std::stringstream msg;
-            msg << "ccall: could not find function ";
-            msg << f_name;
+        PointerType *funcptype = PointerType::get(functype,0);
+        if (imaging_mode) {
+            Constant *nullfunc = ConstantPointerNull::get(funcptype);
+            GlobalValue *llvmgv = new GlobalVariable(*jl_Module, funcptype,
+                   false, GlobalVariable::PrivateLinkage,
+                   nullfunc, f_name);
+            *((void**)jl_ExecutionEngine->getPointerToGlobal(llvmgv)) = symaddr;
+            BasicBlock *dlsym_lookup=BasicBlock::Create(getGlobalContext(), "dlsym-lookup"),
+                       *ccall_bb=BasicBlock::Create(getGlobalContext(), "ccall");
+            builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(llvmgv), nullfunc), ccall_bb, dlsym_lookup);
+            ctx->f->getBasicBlockList().push_back(dlsym_lookup);
+            builder.SetInsertPoint(dlsym_lookup);
+            Value *libptr;
             if (f_lib != NULL) {
-                msg << " in library ";
-                msg << f_lib;
+                libptr = builder.CreateCall2(jldlopen_func, builder.CreateGlobalStringPtr(f_lib), ConstantInt::get(T_int32,0));
+            } else {
+                libptr = builder.CreateCall2(jldlopen_func, ConstantPointerNull::get((PointerType*)T_pint8), ConstantInt::get(T_int32,0));
             }
-            emit_error(msg.str(), ctx);
-            return literal_pointer_val(jl_nothing);
+            llvmf = builder.CreateCall2(jldlsym_func, libptr, builder.CreateGlobalStringPtr(f_name));
+            llvmf = builder.CreatePointerCast(llvmf,funcptype);
+            builder.CreateStore(llvmf, llvmgv);
+            builder.CreateBr(ccall_bb);
+            ctx->f->getBasicBlockList().push_back(ccall_bb);
+            builder.SetInsertPoint(ccall_bb);
+            llvmf = builder.CreateLoad(llvmgv);
         }
-        llvmf = jl_Module->getOrInsertFunction(f_name, functype);
+        else {
+            if (symaddr == NULL) {
+                JL_GC_POP();
+                std::stringstream msg;
+                msg << "ccall: could not find function ";
+                msg << f_name;
+                if (f_lib != NULL) {
+                    msg << " in library ";
+                    msg << f_lib;
+                }
+                emit_error(msg.str(), ctx);
+                return literal_pointer_val(jl_nothing);
+            }
+            llvmf = literal_static_pointer_val(symaddr, funcptype);
+        }
     }
 
 

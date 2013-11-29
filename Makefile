@@ -72,8 +72,7 @@ $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%o: $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%bc
 
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%$(SHLIB_EXT): $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%o
 	$(CXX) -g -shared -fPIC -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) -o $@ $< \
-		-Wl,-undefined,dynamic_lookup -Wl,--unresolved-symbols,ignore-all \
-		-lgrisu -lrandom -lgmp -lpcre -lmpfr $(LIBBLAS) $(LIBLAPACK) $(LIBM) $(LIBUNWIND) \
+		$$([ $(OS) = Darwin ] && echo -Wl,-undefined,dynamic_lookup || echo -Wl,--unresolved-symbols,ignore-all ]) \
 		$$([ $(OS) = WINNT ] && echo -ljulia -lssp)
 
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys0.bc:

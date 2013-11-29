@@ -161,7 +161,7 @@ uv_lib_t *jl_load_dynamic_library(char *modname, unsigned flags)
     return jl_load_dynamic_library_(modname, flags, 1);
 }
 
-DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol)
+void *jl_dlsym_e(uv_lib_t *handle, char *symbol)
 {
     void *ptr;
     int  error=uv_dlsym(handle, symbol, &ptr);
@@ -169,7 +169,7 @@ DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol)
     return ptr;
 }
 
-DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol)
+void *jl_dlsym(uv_lib_t *handle, char *symbol)
 {
     void *ptr;
     int  error = uv_dlsym(handle, symbol, &ptr);
