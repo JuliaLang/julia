@@ -125,6 +125,7 @@
     jl_exception_occurred;
     jl_exception_clear;
     jl_tuple;
+    jl_type_error_rt;
     jl_typeof_str;
     jl_typename_str;
     jl_array_eltype;

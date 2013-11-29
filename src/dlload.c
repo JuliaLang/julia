@@ -181,25 +181,20 @@ DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol)
 
 #ifdef _OS_WINDOWS_
 //Look for symbols in win32 libraries
-void *jl_dlsym_win32(char *f_name)
+char *jl_dlfind_win32(char *f_name)
 {
-    void *fptr = jl_dlsym_e(jl_exe_handle, f_name);
-    if (!fptr) {
-        fptr = jl_dlsym_e(jl_dl_handle, f_name);
-        if (!fptr) {
-            fptr = jl_dlsym_e(jl_kernel32_handle, f_name);
-            if (!fptr) {
-                fptr = jl_dlsym_e(jl_ntdll_handle, f_name);
-                if (!fptr) {
-                    fptr = jl_dlsym_e(jl_crtdll_handle, f_name);
-                    if (!fptr) {
-                        fptr = jl_dlsym(jl_winsock_handle, f_name);
-                    }
-                }
-            }
-        }
-    }
-    return fptr;
+    if (jl_dlsym_e(jl_exe_handle, f_name))
+        return NULL;
+    if (jl_dlsym_e(jl_dl_handle, f_name))
+        return NULL;
+    if (jl_dlsym_e(jl_kernel32_handle, f_name))
+        return "kernel32";
+    if (jl_dlsym_e(jl_ntdll_handle, f_name))
+        return "ntdll";
+    if (jl_dlsym_e(jl_crtdll_handle, f_name))
+        return "msvcrt";
+    if (jl_dlsym(jl_winsock_handle, f_name))
+        return "ws2_32";
+    return NULL;
 }
-
 #endif

@@ -790,7 +790,7 @@ DLLEXPORT void jl_install_sigint_handler()
     //printf("sigint installed\n");
 }
 
-
+extern int asprintf(char **str, const char *fmt, ...);
 extern void * __stack_chk_guard;
 
 DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]), char *build_path)

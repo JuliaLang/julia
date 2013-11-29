@@ -368,11 +368,9 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
             f_name = jl_string_data(ptr);
         if (f_name != NULL) {
             // just symbol, default to JuliaDLHandle
-#ifdef _OS_WINDOWS_
-            //TODO: store the f_lib name instead of fptr
-            fptr = jl_dlsym_win32(f_name);
-#else
             // will look in process symbol table
+#ifdef _OS_WINDOWS_
+            f_lib = jl_dlfind_win32(f_name);
 #endif
         }
         else if (jl_is_cpointer_type(jl_typeof(ptr))) {

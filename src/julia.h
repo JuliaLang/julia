@@ -869,8 +869,8 @@ void NORETURN jl_errorf(const char *fmt, ...);
 void jl_too_few_args(const char *fname, int min);
 void jl_too_many_args(const char *fname, int max);
 void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);
-void jl_type_error_rt(const char *fname, const char *context,
-                      jl_value_t *ty, jl_value_t *got);
+DLLEXPORT void jl_type_error_rt(const char *fname, const char *context,
+                                jl_value_t *ty, jl_value_t *got);
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
 
@@ -959,7 +959,7 @@ DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol);
 DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
 DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
 void *jl_dlsym_e(uv_lib_t *handle, char *symbol); //supress errors
-void *jl_dlsym_win32(char *name);
+char *jl_dlfind_win32(char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
 
 // event loop
