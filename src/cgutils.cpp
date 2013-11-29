@@ -122,7 +122,7 @@ static Value *julia_gv(const char *prefix, jl_sym_t *name, jl_module_t *mod, voi
 static Value *literal_pointer_val(jl_value_t *p)
 {
     if (p == NULL)
-        return literal_static_pointer_val((void*)NULL, jl_pvalue_llvmt);
+        return ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt);
     if (jl_is_datatype(p)) {
         jl_datatype_t* addr = (jl_datatype_t*)p;
         return julia_gv("+", addr->name->name, addr->name->module, p);
