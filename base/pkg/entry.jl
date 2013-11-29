@@ -50,7 +50,7 @@ function add(pkg::String, vers::VersionSet)
             info("Nothing to be done")
         end
         branch = Pkg.META_BRANCH
-        @sync if Git.branch(dir="METADATA") == branch
+        if Git.branch(dir="METADATA") == branch
             if !Git.success(`diff --quiet origin/$branch`, dir="METADATA")
                 outdated = :yes
             else
