@@ -477,6 +477,9 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 msg << "cglobal: could not find symbol ";
                 msg << sym.f_name;
                 if (sym.f_lib != NULL) {
+#ifdef _OS_WINDOWS_
+                    assert((intptr_t)sym.f_lib != 1 && (intptr_t)sym.f_lib != 2);
+#endif
                     msg << " in library ";
                     msg << sym.f_lib;
                 }
@@ -747,6 +750,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 msg << "ccall: could not find function ";
                 msg << f_name;
                 if (f_lib != NULL) {
+#ifdef _OS_WINDOWS_
+                    assert((intptr_t)f_lib != 1 && (intptr_t)f_lib != 2);
+#endif
                     msg << " in library ";
                     msg << f_lib;
                 }
@@ -773,7 +779,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         savespot = &_savespot;
     }
 
-    if (0 && f_name != NULL && f_lib != NULL) {
+    if (0 && f_name != NULL) {
         // print the f_name before each ccall
         Value *zeros[2] = { ConstantInt::get(T_int32, 0),
                             ConstantInt::get(T_int32, 0) };
@@ -781,7 +787,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             msg << "ccall: ";
             msg << f_name;
             msg << "(...)";
-            if (f_lib != NULL) {
+            if (f_lib != NULL && (intptr_t)f_lib != 1 && (intptr_t)f_lib != 2) {
                 msg << " in library ";
                 msg << f_lib;
             }
