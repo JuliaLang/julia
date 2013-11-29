@@ -430,7 +430,7 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         else
             symaddr = sys::DynamicLibrary::SearchForAddressOfSymbol(sym.f_name);
         if (imaging_mode) {
-            PointerType *lrtp = PointerType::get(lrt,0);
+            PointerType *lrtp = (PointerType*)lrt;
             Constant *nullval = ConstantPointerNull::get(lrtp);
             GlobalValue *llvmgv = new GlobalVariable(*jl_Module, lrtp,
                    false, GlobalVariable::PrivateLinkage,
@@ -448,6 +448,7 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 libptr = builder.CreateCall2(jldlopen_func, ConstantPointerNull::get((PointerType*)T_pint8), ConstantInt::get(T_int32,0));
             }
             res = builder.CreateCall2(jldlsym_func, libptr, builder.CreateGlobalStringPtr(sym.f_name));
+            null_pointer_check(res,ctx);
             res = builder.CreatePointerCast(res, lrtp);
             builder.CreateStore(res, llvmgv);
             builder.CreateBr(cglobal_bb);
@@ -701,6 +702,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 libptr = builder.CreateCall2(jldlopen_func, ConstantPointerNull::get((PointerType*)T_pint8), ConstantInt::get(T_int32,0));
             }
             llvmf = builder.CreateCall2(jldlsym_func, libptr, builder.CreateGlobalStringPtr(f_name));
+            null_pointer_check(llvmf,ctx);
             llvmf = builder.CreatePointerCast(llvmf,funcptype);
             builder.CreateStore(llvmf, llvmgv);
             builder.CreateBr(ccall_bb);

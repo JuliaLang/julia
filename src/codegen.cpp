@@ -3491,8 +3491,8 @@ static void init_julia_llvm_env(Module *m)
     jldlsym_func =
         Function::Create(FunctionType::get(T_pint8, dlsym_args, false),
                          Function::ExternalLinkage,
-                         "jl_dlsym", jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(jldlsym_func, (void*)&jl_dlsym);
+                         "jl_dlsym_e", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jldlsym_func, (void*)&jl_dlsym_e);
 
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);
