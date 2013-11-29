@@ -40,10 +40,35 @@ function edit()
     resolve(reqsʹ)
 end
 
+const Reqs_add = Reqs.add ## FIXME: #4979
+
 function add(pkg::String, vers::VersionSet)
-    edit(Reqs.add,pkg,vers) && return
-    ispath(pkg) || error("unknown package $pkg")
-    info("Nothing to be done")
+    outdated = :maybe
+    @sync begin
+        @async if !edit(Reqs_add,pkg,vers)
+            ispath(pkg) || error("unknown package $pkg")
+            info("Nothing to be done")
+        end
+        branch = Pkg.META_BRANCH
+        @sync if Git.branch(dir="METADATA") == branch
+            if !Git.success(`diff --quiet origin/$branch`, dir="METADATA")
+                outdated = :yes
+            else
+                try
+                    run(Git.cmd(`fetch -q --all`, dir="METADATA") |>DevNull .>DevNull)
+                    outdated = Git.success(`diff --quiet origin/$branch`, dir="METADATA") ?
+                        (:no) : (:yes)
+                end
+            end
+        else
+            outdated = :no # user is doing something funky with METADATA
+        end
+    end
+    if outdated != :no
+        is = outdated == :yes ? "is" : "might be"
+        info("METADATA $is out-of-date — you may not have the latest version of $pkg")
+        info("Use `Pkg.update()` to get the latest versions of your packages")
+    end
 end
 add(pkg::String, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
