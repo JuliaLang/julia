@@ -428,6 +428,10 @@ void *init_stdio_handle(uv_file fd,int readable)
     // On windows however, libuv objects remember streams by their HANDLE, so this is
     // unnessecary.
     fd = dup(fd);
+#else
+    // Duplicate the file descritor so libuv can later close it without having to worry
+    // about needing to keep its handle open
+    fd = _dup(fd);
 #endif
     //printf("%d: %d -- %d\n", fd, type, 0);
     switch(type) {
