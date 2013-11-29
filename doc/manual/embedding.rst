@@ -45,7 +45,7 @@ While it is very nice to be able to execute a command in the Julia interpreter, 
 
 The return value of ``jl_eval_string`` is a pointer of type ``jl_value_t*``. This is the C type that holds Julia values of any type. In order to check whether ``ret`` is of a specific C type, we can use the ``jl_is_...`` functions. By typing ``typeof(sqrt(2.0)`` into the Julia shell we can see that the return type is float64 (i.e. double). To convert the boxed Julia value into a C double the ``jl_unbox_float64`` function can be used.
 
-Conerting C values into Julia values is as simple as the other way around. One can just use the ``jl_box_...`` functions::
+Converting C values into Julia values is as simple as the other way around. One can just use the ``jl_box_...`` functions::
 
     jl_value_t* a = jl_box_float64(3.0);
     jl_value_t* b = jl_box_float32(3.0f);
@@ -69,9 +69,9 @@ Working with Arrays
 
 In next example, it is shown how to exchange arrays between Julia back and forth. In order to make this highly performant, the array data will be shared between C and Julia.
 Julia arrays are represented in C by the datatype ``jl_array_t*``. Basically, ``jl_array_t`` is a struct that contains:
-- information about the datatype
-- a void pointer to the data block
-- information about the sizes of the array
+  - information about the datatype
+  - a void pointer to the data block
+  - information about the sizes of the array
 To keep things simple, we start with a 1D array. Creating an array containing Float64 elements of length 10 is done by::
 
     jl_value_t* array_type = jl_apply_array_type( jl_float64_t, 1 );
@@ -86,16 +86,24 @@ The last parameter is a boolean indicating whether Julia shoul take over the own
 
     double* xData = jl_array_data(x)
     
-This is obviously more important when letting Julia allocate the array for us. No we can fill the array::
+This is obviously more important when letting Julia allocate the array for us. Now we can fill the array::
 
     for(size_t i=0; i<jl_array_len(x); i++)
       xData[i] = i;
       
-Next, we will call a Julia function that performs an in-place operation on ``x``::      
+Now let us call a Julia function that performs an in-place operation on ``x``::      
       
-
+    jl_sym_t* sym        = jl_symbol("reverse!");
+    jl_function_t *func = (jl_function_t*) jl_get_global(jl_base_module, sym);
+    jl_value_t* ret        = jl_apply(func, &x , 1);
 
 Using Non-Standard Modules
 ===========================
 
-TODO
+In the examples discussed until now, only Julia functions from the Base module were used. In order to call a function from either a self written module or from an existing Julia package, one has to first import the module. This can be done using the ``jl_eval_string`` method. Suppose that we have written a module ``MyModule`` that exports a function ``my_function()``. In order to call the function we simply do::
+
+    jl_eval_string("using MyModule");
+    jl_function_t *func =  (jl_function_t*) jl_get_global(jl_current_module, jl_symbol("my_function"));
+    jl_apply(func, NULL, 0);
+
+Instead of using the ``jl_base_module`` pointer we use the pointer ``jl_current_module``
