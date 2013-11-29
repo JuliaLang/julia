@@ -3274,8 +3274,11 @@ static void init_julia_llvm_env(Module *m)
                                       (void*)&jl_inexact_exception);
     jlboundserr_var = global_to_llvm("jl_bounds_exception",
                                      (void*)&jl_bounds_exception);
-    jlstderr_var = global_to_llvm("jl_uv_stderr",
-                                     (void*)&jl_uv_stderr);
+    jlstderr_var =
+        new GlobalVariable(*jl_Module, T_int8,
+                           true, GlobalVariable::ExternalLinkage,
+                           NULL, "jl_uv_stderr");
+    jl_ExecutionEngine->addGlobalMapping(jlstderr_var, (void*)&jl_uv_stderr);
 #ifdef _OS_WINDOWS_
     jlexe_var =
         new GlobalVariable(*jl_Module, T_int8,
@@ -3485,7 +3488,7 @@ static void init_julia_llvm_env(Module *m)
     
     std::vector<Type *> puts_args(0);
     puts_args.push_back(T_pint8);
-    puts_args.push_back(jl_pvalue_llvmt);
+    puts_args.push_back(T_pint8);
     jlputs_func =
         Function::Create(FunctionType::get(T_void, puts_args, false),
                          Function::ExternalLinkage,
