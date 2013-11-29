@@ -1,3 +1,5 @@
+DISCLAIMER: This is work in progress and only works when exporting some symbols that are currently hidden in Julia master.
+
 .. _man-embedding:
 
 **************************
@@ -53,7 +55,7 @@ As we will see next, boxing is required to call Julia functions with specific ar
 
 Calling Julia Functions
 ========================
-Calling Julia function can be done with the ``jl_eval_string`` function has has been shown described before. While ``jl_eval_string`` can call Julia functions and access the return value, there is a more flexible way for this, which allows to easily pass arguments to the Julia function. The following code does the same as ``jl_value_t* ret = jl_eval_string("sqrt(2.0)");``::
+Calling Julia function can be done with the ``jl_eval_string`` function has has been described before. While ``jl_eval_string`` can call Julia functions and access the return value, there is a more flexible way for this, which allows to easily pass arguments to the Julia function. The following code does the same as ``jl_value_t* ret = jl_eval_string("sqrt(2.0)");``::
 
     jl_sym_t* sym = jl_symbol("sqrt");
     jl_function_t *func = (jl_function_t*) jl_get_global(jl_base_module, sym);
