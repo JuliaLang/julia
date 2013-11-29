@@ -68,7 +68,7 @@ $(BUILD)/etc/julia/juliarc.jl: etc/juliarc.jl | $(BUILD)/etc/julia
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%ji: $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%bc
 
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%o: $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%bc
-	$(call spawn,$(BUILD)/bin/llc) -filetype=obj -relocation-model=pic -o $@ $<
+	$(call spawn,$(LLVM_LLC)) -filetype=obj -relocation-model=pic -o $@ $<
 
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%$(SHLIB_EXT): $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%o
 	@$(CXX) -g -shared -fPIC -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) -o $@ $< -Wl,-undefined,dynamic_lookup -lgrisu -lrandom -lgmp -lpcre -lmpfr $(LIBBLAS) $(LIBLAPACK) $(LIBM) $(LIBUNWIND)
