@@ -148,7 +148,7 @@ DLLEXPORT void jl_uv_shutdownCallback(uv_shutdown_t* req, int status)
      * in the shutdown request (in that case we call uv_close, thus cancelling this)
      * request.
      */
-    if (status != UV__ECANCELED) {
+    if (status != UV__ECANCELED && !uv_is_closing((uv_handle_t*)req->handle)) {
         uv_close((uv_handle_t*) req->handle, &jl_uv_closeHandle);
     }
     free(req);
@@ -299,7 +299,7 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
             fd->file = -1;
         }
     }
-    else {
+    else if (!uv_is_closing((uv_handle_t*)handle)) {
         uv_close(handle,&jl_uv_closeHandle);
     }
 }
