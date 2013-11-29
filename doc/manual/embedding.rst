@@ -69,10 +69,30 @@ Working with Arrays
 
 In next example, it is shown how to exchange arrays between Julia back and forth. In order to make this highly performant, the array data will be shared between C and Julia.
 Julia arrays are represented in C by the datatype ``jl_array_t*``. Basically, ``jl_array_t`` is a struct that contains:
-  - information about the datatype
-  - a void pointer to the data block
-  - information about the sizes of the array
-To keep this simple, we start with a 1D array where which has a single size...
+- information about the datatype
+- a void pointer to the data block
+- information about the sizes of the array
+To keep things simple, we start with a 1D array. Creating an array containing Float64 elements of length 10 is done by::
+
+    jl_value_t* array_type = jl_apply_array_type( jl_float64_t, 1 );
+    jl_array_t* x          = jl_alloc_array_1d(array_type , 10);
+
+Alternatively, if you have already allocated the array you can generate a thin wrapper around that data::
+
+    double* existingArray     = (double*) malloc(sizeof(double)*10);
+    jl_array_t* x  = jl_ptr_to_array_1d(array_type, existingArray, 10, 0);
+    
+The last parameter is a boolean indicating whether Julia shoul take over the ownership of the data (only usefull for dynamic arrays). In order to access the data of x, we can use ``jl_array_data```::
+
+    double* xData = jl_array_data(x)
+    
+This is obviously more important when letting Julia allocate the array for us. No we can fill the array::
+
+    for(size_t i=0; i<jl_array_len(x); i++)
+      xData[i] = i;
+      
+Next, we will call a Julia function that performs an in-place operation on ``x``::      
+      
 
 
 Using Non-Standard Modules
