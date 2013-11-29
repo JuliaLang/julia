@@ -3765,6 +3765,10 @@ Combinatorics
 
    Compute the kth lexicographic permutation of a vector.
 
+.. function:: nthperm(p)
+
+   Return the ``k`` that generated permutation ``p``.  Note that ``nthperm(nthperm([1:N], k)) == k``.
+
 .. function:: nthperm!(v, k)
 
    In-place version of :func:`nthperm`.
