@@ -62,9 +62,20 @@ Calling Julia function can be done with the ``jl_eval_string`` function has has 
     jl_value_t* argument = jl_box_float64(2.0);
     jl_value_t* ret = jl_apply(func, &argument , 1);
 
-In the first step, a Julia symbol for the ``sqrt`` function is generated. Then a handle to the Julia function ``sqrt`` is retrieved by calling ``jl_get_global``. The first argument is a global pointer to the Base module in which ``sqrt`` is defined. Then, the double value is boxed using the ``jl_box_float64`` function. Finally, in the last step, the function is called by using the ``jl_apply`` function. The first argument is the Julia function handle, the second argument is an array of ``jl_value_t*`` arguments (therfore we take the adress of ``argument``), the last argument is the number of arguments. 
+In the first step, a Julia symbol for the ``sqrt`` function is generated. Then a handle to the Julia function ``sqrt`` is retrieved by calling ``jl_get_global``. The first argument is a global pointer to the Base module in which ``sqrt`` is defined. Then, the double value is boxed using the ``jl_box_float64`` function. Finally, in the last step, the function is called by using the ``jl_apply`` function. The first argument is the Julia function handle, the second argument is an array of ``jl_value_t*`` arguments (therefore we take the adress of ``argument``), the last argument is the number of arguments. 
 
 Working with Arrays
 ========================
+
+In next example, it is shown how to exchange arrays between Julia back and forth. In order to make this highly performant, the array data will be shared between C and Julia.
+Julia arrays are represented in C by the datatype ``jl_array_t*``. Basically, ``jl_array_t`` is a struct that contains:
+  - information about the datatype
+  - a void pointer to the data block
+  - information about the sizes of the array
+To keep this simple, we start with a 1D array where which has a single size...
+
+
+Using Non-Standard Modules
+===========================
 
 TODO
