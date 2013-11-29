@@ -71,7 +71,10 @@ $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%o: $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%bc
 	$(call spawn,$(LLVM_LLC)) -filetype=obj -relocation-model=pic -o $@ $<
 
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%$(SHLIB_EXT): $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%o
-	@$(CXX) -g -shared -fPIC -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) -o $@ $< -Wl,-undefined,dynamic_lookup -lgrisu -lrandom -lgmp -lpcre -lmpfr $(LIBBLAS) $(LIBLAPACK) $(LIBM) $(LIBUNWIND)
+	$(CXX) -g -shared -fPIC -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) -o $@ $< \
+		-Wl,-undefined,dynamic_lookup -Wl,--unresolved-symbols,ignore-all \
+		-lgrisu -lrandom -lgmp -lpcre -lmpfr $(LIBBLAS) $(LIBLAPACK) $(LIBM) $(LIBUNWIND) \
+		$$([ $(OS) = WINNT ] && echo -ljulia -lssp)
 
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys0.bc:
 	@$(QUIET_JULIA) cd base && \

@@ -239,6 +239,9 @@ ifneq ($(ARCH), ppc64)
 endif
 endif
 
+ifeq ($(OS),WINNT)
+LIBUNWIND=
+else
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 ifneq ($(OS),Darwin)
 LIBUNWIND=-lunwind-generic -lunwind
@@ -249,6 +252,7 @@ LIBUNWIND=$(BUILD)/$(JL_LIBDIR)/libosxunwind.a
 JCFLAGS+=-DLIBOSXUNWIND
 else
 LIBUNWIND=$(BUILD)/$(JL_LIBDIR)/libunwind-generic.a $(BUILD)/$(JL_LIBDIR)/libunwind.a
+endif
 endif
 endif
 
