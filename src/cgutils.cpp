@@ -87,7 +87,10 @@ static Value *julia_gv(const char *cname, void *addr)
     void **p = (void**)jl_ExecutionEngine->getPointerToGlobal(gv);
     *p = addr;
     jl_sysimg_gvars.push_back(ConstantExpr::getBitCast(gv, T_psize));
-    jl_value_to_llvm[addr] = (jl_value_llvm){.gv=gv, .index=jl_sysimg_gvars.size()};
+    jl_value_llvm gv_struct;
+    gv_struct.gv = gv;
+    gv_struct.index = jl_sysimg_gvars.size();
+    jl_value_to_llvm[addr] = gv_struct;
     return builder.CreateLoad(gv);
 }
 

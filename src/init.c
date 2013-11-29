@@ -816,13 +816,19 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
     int ret = pmain(argc, argv);
     if (build_path) {
         char *build_ji;
-        asprintf(&build_ji, "%s.ji",build_path);
-        jl_save_system_image(build_ji);
-        free(build_ji);
-        char *build_bc;
-        asprintf(&build_bc, "%s.bc",build_path);
-        jl_dump_bitcode(build_bc);
-        free(build_bc);
+        if (asprintf(&build_ji, "%s.ji",build_path) > 0) {
+            jl_save_system_image(build_ji);
+            free(build_ji);
+            char *build_bc;
+            if (asprintf(&build_bc, "%s.bc",build_path) > 0) {
+                jl_dump_bitcode(build_bc);
+                free(build_bc);
+            } else {
+                ios_printf(ios_stderr,"FATAL: failed to create string for .bc build path");
+            }
+        } else {
+            ios_printf(ios_stderr,"FATAL: failed to create string for .ji build path");
+        }
     }
     p[sizeof(__stack_chk_guard)-1] = a;
     p[sizeof(__stack_chk_guard)-2] = b;
