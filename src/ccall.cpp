@@ -447,7 +447,7 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         res = builder.CreateIntToPtr(sym.jl_ptr, lrt);
     }
     else if (sym.fptr != NULL) {
-        res = literal_pointer_val(sym.fptr, lrt);
+        res = literal_static_pointer_val(sym.fptr, lrt);
         JL_PRINTF(JL_STDERR,"warning: literal address used in cglobal for %s; code cannot be statically compiled\n", sym.f_name);
     }
     else {
@@ -465,7 +465,7 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 msg << sym.f_lib;
             }
             emit_error(msg.str(), ctx);
-            res = literal_pointer_val(NULL, lrt);
+            res = literal_static_pointer_val(NULL, lrt);
         }
         else {
             Value *nv = jl_Module->getNamedValue(sym.f_name);
@@ -689,7 +689,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     else if (fptr != NULL) {
         Type *funcptype = PointerType::get(functype,0);
-        llvmf = literal_pointer_val(fptr, funcptype);
+        llvmf = literal_static_pointer_val(fptr, funcptype);
         JL_PRINTF(JL_STDERR,"warning: literal address used in ccall for %s; code cannot be statically compiled\n", f_name);
     }
     else {
@@ -742,10 +742,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 msg << f_lib;
             }
             msg << "\n";
-//        builder.CreateCall2(jlputs_func,
-//                            builder.CreateGEP(stringConst(msg.str()),
-//                                         ArrayRef<Value*>(zeros)),
-//                            literal_pointer_val(JL_STDERR,T_pint8));
+        builder.CreateCall2(jlputs_func,
+                            builder.CreateGEP(stringConst(msg.str()),
+                                         ArrayRef<Value*>(zeros)),
+                            jlstderr_var);
     }
 
     // emit arguments

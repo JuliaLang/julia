@@ -163,6 +163,7 @@ static GlobalVariable *jldomerr_var;
 static GlobalVariable *jlovferr_var;
 static GlobalVariable *jlinexacterr_var;
 static GlobalVariable *jlboundserr_var;
+static GlobalVariable *jlstderr_var;
 
 // important functions
 static Function *jlnew_func;
@@ -1793,7 +1794,7 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
     if (assign || b==NULL)
         b = jl_get_binding_wr(m, s);
     if (pbnd) *pbnd = b;
-    return julia_to_gv(b);
+    return julia_binding_gv(b);
 }
 
 // yields a jl_value_t** giving the binding location of a variable
@@ -1913,7 +1914,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     if (bnd) {
         rval = boxed(emit_expr(r, ctx, true));
         builder.CreateCall2(jlcheckassign_func,
-                            literal_pointer_val((jl_value_t*)bnd),
+                            literal_pointer_val(bnd),
                             rval);
     }
     else {
@@ -2042,7 +2043,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         jl_binding_t *b = jl_get_binding(mod, var);
         if (b == NULL)
             b = jl_get_binding_wr(mod, var);
-        Value *bp = julia_to_gv(b);
+        Value *bp = julia_binding_gv(b);
         if ((b->constp && b->value!=NULL) ||
             (etype!=(jl_value_t*)jl_any_type &&
              !jl_subtype((jl_value_t*)jl_undef_type, etype, 0))) {
@@ -2148,7 +2149,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         else {
             if (is_global((jl_sym_t*)mn, ctx)) {
                 bnd = jl_get_binding_for_method_def(ctx->module, (jl_sym_t*)mn);
-                bp = julia_to_gv(bnd);
+                bp = julia_binding_gv(bnd);
             }
             else {
                 bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
@@ -2158,7 +2159,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         make_gcroot(a1, ctx);
         Value *a2 = boxed(emit_expr(args[2], ctx));
         make_gcroot(a2, ctx);
-        Value *mdargs[5] = { name, bp, literal_pointer_val((jl_value_t*)bnd), a1, a2 };
+        Value *mdargs[5] = { name, bp, literal_pointer_val(bnd), a1, a2 };
         ctx->argDepth = last_depth;
         return builder.CreateCall(jlmethod_func, ArrayRef<Value*>(&mdargs[0], 5));
     }
@@ -2168,7 +2169,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         (void)var_binding_pointer(sym, &bnd, true, ctx);
         if (bnd) {
             builder.CreateCall(jldeclareconst_func,
-                               literal_pointer_val((jl_value_t*)bnd));
+                               literal_pointer_val(bnd));
         }
     }
 
@@ -2266,8 +2267,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
             }
             else {
                 // 0 fields, singleton
-                return literal_pointer_val
-                    (jl_new_struct_uninit((jl_datatype_t*)ty));
+                return literal_pointer_val(jl_new_struct_uninit((jl_datatype_t*)ty));
             }
         }
         Value *typ = emit_expr(args[0], ctx);
@@ -2610,10 +2610,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     }
 
     std::string funcName = lam->name->name;
-    // sanitize macro names, otherwise julia_@name means versioned symbol
-    size_t atpos = funcName.find("@");
-    if (atpos != std::string::npos)
-        funcName.replace(atpos, 1, "#");
     // try to avoid conflicts in the global symbol table
     funcName = "julia_" + funcName;
     
@@ -3272,6 +3268,8 @@ static void init_julia_llvm_env(Module *m)
                                       (void*)&jl_inexact_exception);
     jlboundserr_var = global_to_llvm("jl_bounds_exception",
                                      (void*)&jl_bounds_exception);
+    jlstderr_var = global_to_llvm("jl_uv_stderr",
+                                     (void*)&jl_uv_stderr);
     
     // Has to be big enough for the biggest LLVM-supported float type
     jlfloattemp_var =
@@ -3470,7 +3468,7 @@ static void init_julia_llvm_env(Module *m)
     
     std::vector<Type *> puts_args(0);
     puts_args.push_back(T_pint8);
-    puts_args.push_back(T_pint8);
+    puts_args.push_back(jl_pvalue_llvmt);
     jlputs_func =
         Function::Create(FunctionType::get(T_void, puts_args, false),
                          Function::ExternalLinkage,

@@ -56,11 +56,15 @@ void parse_opts(int *argcp, char ***argvp) {
     opterr = 0;
     int imagepathspecified=0;
     image_file = JL_SYSTEM_IMAGE_PATH;
+    int skip = 0;
+    int lastind = optind;
     while ((c = getopt_long(*argcp,*argvp,shortopts,longopts,0)) != -1) {
         switch (c) {
         case 0:
             break;
         case '?':
+            if (optind != lastind) skip++;
+            lastind = optind;
             break;
         case 'H':
             julia_home = strdup(optarg);
@@ -99,6 +103,7 @@ void parse_opts(int *argcp, char ***argvp) {
             free(julia_path);
         }
     }
+    optind -= skip;
     *argvp += optind;
     *argcp -= optind;
     if (image_file==NULL && *argcp > 0) {
