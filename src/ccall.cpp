@@ -425,8 +425,16 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     else {
         void *symaddr;
-        if (sym.f_lib != NULL)
+        if (sym.f_lib != NULL) {
+#ifdef _OS_WINDOWS_
+            if ((intptr_t)sym.f_lib == 1)
+                symaddr = jl_dlsym_e(jl_exe_handle, sym.f_name);
+            else if ((intptr_t)sym.f_lib == 2)
+                symaddr = jl_dlsym_e(jl_dl_handle, sym.f_name);
+            else
+#endif
             symaddr = get_library_sym(sym.f_name, sym.f_lib);
+        }
         else
             symaddr = sys::DynamicLibrary::SearchForAddressOfSymbol(sym.f_name);
         if (imaging_mode) {
@@ -443,6 +451,13 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             builder.SetInsertPoint(dlsym_lookup);
             Value *libptr;
             if (sym.f_lib != NULL) {
+#ifdef _OS_WINDOWS_
+                if ((intptr_t)sym.f_lib == 1)
+                    libptr = jlexe_var;
+                else if ((intptr_t)sym.f_lib == 2)
+                    libptr = jldll_var;
+                else
+#endif
                 libptr = builder.CreateCall2(jldlopen_func, builder.CreateGlobalStringPtr(sym.f_lib), ConstantInt::get(T_int32,0));
             } else {
                 libptr = builder.CreateCall2(jldlopen_func, ConstantPointerNull::get((PointerType*)T_pint8), ConstantInt::get(T_int32,0));
@@ -679,8 +694,16 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     else {
         assert(f_name != NULL);
         void *symaddr;
-        if (f_lib != NULL)
+        if (f_lib != NULL) {
+#ifdef _OS_WINDOWS_
+            if ((intptr_t)f_lib == 1)
+                symaddr = jl_dlsym_e(jl_exe_handle, f_name);
+            else if ((intptr_t)f_lib == 2)
+                symaddr = jl_dlsym_e(jl_dl_handle, f_name);
+            else
+#endif
             symaddr = get_library_sym(f_name, f_lib);
+        }
         else
             symaddr = sys::DynamicLibrary::SearchForAddressOfSymbol(f_name);
         PointerType *funcptype = PointerType::get(functype,0);
@@ -697,6 +720,13 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             builder.SetInsertPoint(dlsym_lookup);
             Value *libptr;
             if (f_lib != NULL) {
+#ifdef _OS_WINDOWS_
+                if ((intptr_t)f_lib == 1)
+                    libptr = jlexe_var;
+                else if ((intptr_t)f_lib == 2)
+                    libptr = jldll_var;
+                else
+#endif
                 libptr = builder.CreateCall2(jldlopen_func, builder.CreateGlobalStringPtr(f_lib), ConstantInt::get(T_int32,0));
             } else {
                 libptr = builder.CreateCall2(jldlopen_func, ConstantPointerNull::get((PointerType*)T_pint8), ConstantInt::get(T_int32,0));

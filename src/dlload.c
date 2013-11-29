@@ -184,9 +184,9 @@ void *jl_dlsym(uv_lib_t *handle, char *symbol)
 char *jl_dlfind_win32(char *f_name)
 {
     if (jl_dlsym_e(jl_exe_handle, f_name))
-        return NULL;
+        return (char*)1;
     if (jl_dlsym_e(jl_dl_handle, f_name))
-        return NULL;
+        return (char*)2;
     if (jl_dlsym_e(jl_kernel32_handle, f_name))
         return "kernel32";
     if (jl_dlsym_e(jl_ntdll_handle, f_name))
