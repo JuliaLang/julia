@@ -131,12 +131,12 @@ static uint32_t arg_block_n = 0;
 static Function *save_arg_area_loc_func;
 static Function *restore_arg_area_loc_func;
 
-DLLEXPORT extern "C" uint64_t save_arg_area_loc()
+extern "C" DLLEXPORT uint64_t save_arg_area_loc()
 {
     return (((uint64_t)arg_block_n)<<32) | ((uint64_t)arg_area_loc);
 }
 
-DLLEXPORT extern "C" void restore_arg_area_loc(uint64_t l)
+extern "C" DLLEXPORT void restore_arg_area_loc(uint64_t l)
 {
     arg_area_loc = l&0xffffffff;
     uint32_t ab = l>>32;
@@ -175,7 +175,7 @@ static void *alloc_temp_arg_copy(void *obj, uint32_t sz)
 
 // this is a run-time function
 // warning: cannot allocate memory except using alloc_temp_arg_space
-DLLEXPORT extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
+extern "C" DLLEXPORT void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
                                      int addressof)
 {
     jl_value_t *jvt = (jl_value_t*)jl_typeof(v);

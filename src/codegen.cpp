@@ -3180,7 +3180,7 @@ extern "C" void jlfptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig) {
     }
 }
 
-DLLEXPORT extern "C" jl_value_t *jl_new_box(jl_value_t *v)
+extern "C" DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v)
 {
     jl_value_t *box = (jl_value_t*)alloc_2w();
 #ifdef OVERLAP_TUPLE_LEN
@@ -3317,8 +3317,7 @@ static void init_julia_llvm_env(Module *m)
 #endif
     setjmp_func =
         Function::Create(FunctionType::get(T_int32, args2, false),
-                         Function::ExternalLinkage, "sigsetjmp", jl_Module);
-        //Intrinsic::getDeclaration(jl_Module, Intrinsic::eh_sjlj_setjmp);
+                         Function::ExternalLinkage, jl_setjmp_name, jl_Module);
 #if LLVM32 && !LLVM33
     setjmp_func->addFnAttr(Attributes::ReturnsTwice);
 #else

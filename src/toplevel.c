@@ -466,8 +466,6 @@ jl_value_t *jl_parse_eval_all(char *fname)
     return result;
 }
 
-int asprintf(char **strp, const char *fmt, ...);
-
 jl_value_t *jl_load(const char *fname)
 {
     if (jl_current_module == jl_base_module) {

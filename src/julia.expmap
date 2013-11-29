@@ -103,6 +103,7 @@
     jl_dump_function;
     jl_f_*;
     jl_function_ptr;
+    jl_egal;
     jl_enable_color;
     jl_enable_inference;
     jl_enq_send_req;
@@ -123,6 +124,7 @@
     jl_eval_string;
     jl_exception_occurred;
     jl_exception_clear;
+    jl_tuple;
     jl_typeof_str;
     jl_typename_str;
     jl_array_eltype;
@@ -344,6 +346,7 @@
     jl_tcp_init;
     jl_test;
     jl_poll_start;
+    jl_pop_handler;
     jl_fs_poll_start;
     jl_fs_event_init;
     jl_fs_unlink;
@@ -382,10 +385,10 @@
     open_any_tcp_port;
     repl_callback_enable;
     jl_init_repl;
-    restore_arg_area_loc_func;
+    restore_arg_area_loc;
     restore_signals;
     rl_clear_input;
-    save_arg_area_loc_func;
+    save_arg_area_loc;
     jl_SC_CLK_TCK;
     jl_getpagesize;
     u8_isvalid;
