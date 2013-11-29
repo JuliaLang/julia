@@ -256,7 +256,7 @@ symbol_t *symtab = NULL;
 
 int fl_is_keyword_name(char *str, size_t len)
 {
-    return ((str[0] == ':' || str[len-1] == ':') && str[1] != '\0');
+    return len>1 && ((str[0] == ':' || str[len-1] == ':') && str[1] != '\0');
 }
 
 static symbol_t *mk_symbol(char *str)
