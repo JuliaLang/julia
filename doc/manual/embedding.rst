@@ -102,8 +102,25 @@ Multidimensional Arrays
 
 TODO: Data layout an array strides
 
-Using Non-Standard Modules
+Calling Non-Base Julia Code
 ===========================
+
+In the examples discussed until now, only Julia functions from the Base module were used. In order to call either a self written function, module or an existing Julia package, one has to first bring the function/module into the current scope of Julia. 
+
+Defining Julia Functions in C Code
+-----------------------------------------------
+
+One way to introduce new Julia function is to define them inside of an ``jl_eval_string`` call::
+ 
+    jl_eval_string("my_new_func(x) = 2*x");
+
+Now the function can be called either in a ``jl_eval_string`` call, or by ...
+
+  jl_function_t *func =  (jl_function_t*) jl_get_global(jl_current_module, jl_symbol("my_function"));
+    jl_apply(func, NULL, 0);
+
+Using Non-Standard Modules
+-----------------------------------------
 
 In the examples discussed until now, only Julia functions from the Base module were used. In order to call a function from either a self written module or from an existing Julia package, one has to first import the module. This can be done using the ``jl_eval_string`` method. Suppose that we have written a module ``MyModule`` that exports a function ``my_function()``. In order to call the function we simply do::
 
