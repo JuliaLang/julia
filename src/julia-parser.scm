@@ -898,7 +898,10 @@
 	       ;; line number for elseif condition
 	       (block ,(line-number-node s)
 		      ,(parse-resword s 'if))))
-	 ((else)    (list 'if test then (parse-resword s 'begin)))
+	 ((else)
+	  (if (eq? (peek-token s) 'if)
+	      (error "use \"elseif\" instead of \"else if\""))
+	  (list 'if test then (parse-resword s 'begin)))
 	 (else      (error (string "unexpected \"" nxt "\""))))))
     ((let)
      (let ((binds (if (memv (peek-token s) '(#\newline #\;))
