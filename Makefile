@@ -13,7 +13,7 @@ VERSDIR = v`cut -d. -f1-2 < VERSION`
 all: default
 default: release
 
-DIRS = $(BUILD)/bin $(BUILD)/etc/julia $(BUILD)/lib $(BUILD)/share/julia $(BUILD)/share/julia/man/man1
+DIRS = $(BUILD)/bin $(BUILD)/etc/julia $(BUILD)/lib $(BUILD)/libexec $(BUILD)/share/julia $(BUILD)/share/julia/man/man1
 ifneq ($(JL_LIBDIR),bin)
 ifneq ($(JL_LIBDIR),lib)
 DIRS += $(BUILD)/$(JL_LIBDIR)
@@ -162,7 +162,9 @@ install:
 	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "share/man/man1" "include/julia" "share/julia/site/"$(VERSDIR) "etc/julia" ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
-	cp -a $(BUILD)/bin $(PREFIX)
+	cp -a $(BUILD)/bin/julia* $(PREFIX)/bin/
+	-cp -a $(BUILD)/bin/*.dll $(BUILD)/bin/*.bat $(PREFIX)/bin/
+	cp -a $(BUILD)/libexec $(PREFIX)
 ifneq ($(OS),WINNT)
 	cd $(PREFIX)/bin && ln -sf julia-$(DEFAULT_REPL) julia
 endif
@@ -175,6 +177,7 @@ endif
 ifeq ($(USE_SYSTEM_LIBUV),0)
 ifeq ($(OS),WINNT)
 	cp -a $(BUILD)/lib/libuv.a $(PREFIX)/$(JL_PRIVATE_LIBDIR)
+	cp -a $(BUILD)/include/tree.h $(PREFIX)/include/julia
 else
 	cp -a $(BUILD)/$(JL_LIBDIR)/libuv.a $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif

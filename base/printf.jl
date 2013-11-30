@@ -48,7 +48,7 @@ function _parse(s::String)
             j = k
         end
     end
-    isempty(s[i:]) || push!(list, s[i:])
+    isempty(s[i:end]) || push!(list, s[i:end])
     # coalesce adjacent strings
     i = 1
     while i < length(list)
@@ -774,11 +774,11 @@ macro printf(args...)
     if isa(args[1],String)
         io = :(Base.STDOUT)
         fmt = args[1]
-        args = args[2:]
+        args = args[2:end]
     else
         io = args[1]
         fmt = args[2]
-        args = args[3:]
+        args = args[3:end]
     end
     args = {io,args...}
     sym_args, blk = _gen(fmt)

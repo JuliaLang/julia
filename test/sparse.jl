@@ -88,11 +88,12 @@ for i = 1:5
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
 end
 
-# matrix multiplication
+# matrix multiplication and kron
 for i = 1:5
-    a = sprand(10, 5, 0.5)
-    b = sprand(5, 10, 0.1)
+    a = sprand(10, 5, 0.7)
+    b = sprand(5, 10, 0.3)
     @test maximum(abs(a*b - full(a)*full(b))) < 100*eps()
+    @test full(kron(a,b)) == kron(full(a), full(b))
 end
 
 # reductions
@@ -116,3 +117,8 @@ A = sparse(rowval, colval, ones(length(rowval)))
 P,post = Base.LinAlg.etree(A, true)
 @test P == int32([6,3,8,6,8,7,9,10,10,11,0])
 @test post == int32([2,3,5,8,1,4,6,7,9,10,11])
+
+# reinterpret issue 4986
+sfe22 = speye(Float64, 2)
+mfe22 = eye(Float64, 2)
+@test reinterpret(Int64, sfe22) == reinterpret(Int64, mfe22)

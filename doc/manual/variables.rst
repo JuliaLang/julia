@@ -11,7 +11,7 @@ the language will not treat variables differently based on their names).
 
     \begin{CJK*}{UTF8}{gbsn}
 
-.. code-block:: guess
+.. doctest::
 
     julia> ix = 1.0
     1.0
@@ -38,10 +38,10 @@ Unicode names (in UTF-8 encoding) are allowed:
 
     \begin{CJK*}{UTF8}{mj}
 
-.. code-block:: guess
+.. doctest::
 
     julia> δ = 0.00001
-    0.00001
+    1.0e-5
 
     julia> 안녕하세요 = "Hello" 
     "Hello"

@@ -92,15 +92,17 @@ int isnumtok_base(char *tok, value_t *pval, int base)
         i64 = strtoll(tok, &end, base);
         if (errno)
             return 0;
+        int done = (*end == '\0');  // must access *end before alloc
         if (pval) *pval = return_from_int64(i64);
-        return (*end == '\0');
+        return done;
     }
     errno = 0;
     ui64 = strtoull_0b0o(tok, &end, base);
     if (errno)
         return 0;
+    int done = (*end == '\0');  // must access *end before alloc
     if (pval) *pval = return_from_uint64(ui64);
-    return (*end == '\0');
+    return done;
 }
 
 static int isnumtok(char *tok, value_t *pval)
@@ -435,6 +437,7 @@ static value_t read_vector(value_t label, u_int32_t closer)
     while (peek() != closer) {
         if (ios_eof(F))
             lerror(ParseError, "read: unexpected end of input");
+        v = Stack[SP-1]; // reload after possible alloc in peek()
         if (i >= vector_size(v)) {
             v = Stack[SP-1] = vector_grow(v);
             if (label != UNBOUND)
@@ -604,10 +607,14 @@ static value_t do_read_sexpr(value_t label)
     case TOK_QUOTE:
         head = &QUOTE;
     listwith:
+#ifdef MEMDEBUG2
+        v = fl_list2(*head, NIL);
+#else
         v = cons_reserve(2);
         car_(v) = *head;
         cdr_(v) = tagptr(((cons_t*)ptr(v))+1, TAG_CONS);
         car_(cdr_(v)) = cdr_(cdr_(v)) = NIL;
+#endif
         PUSH(v);
         if (label != UNBOUND)
             ptrhash_put(&readstate->backrefs, (void*)label, (void*)v);

@@ -826,7 +826,7 @@ function show_nd(io::IO, a::AbstractArray, limit, rows, cols)
     if isempty(a)
         return
     end
-    tail = size(a)[3:]
+    tail = size(a)[3:end]
     nd = ndims(a)-2
     function print_slice(idxs...)
         if limit

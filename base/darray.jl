@@ -204,7 +204,7 @@ function reshape{T,S<:Array}(A::DArray{T,1,S}, d::Dims)
 
         B = Array(T,sz)
         nr = size(B,1)
-        sztail = size(B)[2:]
+        sztail = size(B)[2:end]
 
         for i=1:div(length(B),nr)
             i2 = ind2sub(sztail, i)

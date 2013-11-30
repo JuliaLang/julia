@@ -6,50 +6,76 @@ copyright_year() = readchomp(`date +%Y`)
 copyright_name() = readchomp(`git config --global --get user.name`)
 github_user() = readchomp(ignorestatus(`git config --global --get github.user`))
 
+function git_contributors(dir::String, n::Int=typemax(Int))
+    contrib = Dict()
+    tty = @windows? "CON:" : "/dev/tty"
+    for line in eachline(tty |> Git.cmd(`shortlog -nes`, dir=dir))
+        m = match(r"\s*(\d+)\s+(.+?)\s+\<(.+?)\>\s*$", line)
+        m == nothing && continue
+        commits, name, email = m.captures
+        if haskey(contrib,email)
+            contrib[email][1] += int(commits)
+        else
+            contrib[email] = [int(commits),name]
+        end
+    end
+    names = Dict()
+    for (commits,name) in values(contrib)
+        names[name] = get(names,name,0) + commits
+    end
+    names = sort!(collect(keys(names)),by=name->names[name],rev=true)
+    length(names) <= n ? names : [names[1:n], "et al."]
+end
+
 function package(
     pkg::String,
     license::String;
     force::Bool = false,
-    authors::String = copyright_name(),
+    authors::String = "",
     years::Union(Int,String) = copyright_year(),
-    username::String = github_user(),
+    user::String = github_user(),
 )
     isnew = !ispath(pkg)
-    if !isnew
-        force || error("$pkg exists, refusing to overwrite.")
-        Git.dirty(dir=pkg) && error("$pkg is dirty – commit or stash your changes")
-    end
-    url = isempty(username) ? "" : "git://github.com/$username/$pkg.jl.git"
     try
-        Generate.init(pkg,url)
-        Generate.license(pkg,license,years,authors)
-        Generate.readme(pkg,username)
-        Generate.entrypoint(pkg)
-        Generate.travis(pkg)
-
-        msg = """
-        $pkg.jl $(isnew ? "generated" : "regenerated") files.
-
-            license:  $license
-            authors:  $authors
-            years:    $years
-            username: $username
-
-        Julia Version $VERSION [$(Base.BUILD_INFO.commit[1:10])]
-        """
-
         if isnew
-            info("Committing $pkg generated files")
-            Git.run(`commit -q -m $msg`, dir=pkg)
-        elseif Git.staged(dir=pkg)
-            Git.run(`reset -q --`, dir=pkg)
-            info("Regenerated files left unstaged, use `git add -p` to select")
-            open(io->print(io,msg), joinpath(Git.dir(pkg),"MERGE_MSG"), "w")
+            url = isempty(user) ? "" : "git://github.com/$user/$pkg.jl.git"
+            Generate.init(pkg,url)
         else
-            info("Regenerated files are unchanged")
+            Git.dirty(dir=pkg) && error("$pkg is dirty – commit or stash your changes")
+        end
+        Git.transact(dir=pkg) do
+            if isempty(authors)
+                authors = isnew ? copyright_name() : git_contributors(pkg,5)
+            end
+            Generate.license(pkg,license,years,authors,force=force)
+            Generate.readme(pkg,user,force=force)
+            Generate.entrypoint(pkg,force=force)
+            Generate.travis(pkg,force=force)
+
+            msg = """
+            $pkg.jl $(isnew ? "generated" : "regenerated") files.
+
+                license:  $license
+                authors:  $(join([authors],", "))
+                years:    $years
+                user:     $user
+
+            Julia Version $VERSION [$(Base.BUILD_INFO.commit[1:10])]
+            """
+
+            if isnew
+                info("Committing $pkg generated files")
+                Git.run(`commit -q -m $msg`, dir=pkg)
+            elseif Git.dirty(dir=pkg)
+                Git.run(`reset -q --`, dir=pkg)
+                info("Regenerated files left unstaged, use `git add -p` to select")
+                open(io->print(io,msg), joinpath(Git.dir(pkg),"MERGE_MSG"), "w")
+            else
+                info("Regenerated files are unchanged")
+            end
         end
     catch
-        isnew ? run(`rm -rf $pkg`) : Git.run(`checkout -q -f`, dir=pkg)
+        isnew && run(`rm -rf $pkg`)
         rethrow()
     end
 end
@@ -65,27 +91,30 @@ function init(pkg::String, url::String="")
     Git.set_remote_url(url,dir=pkg)
 end
 
-function license(pkg::String, license::String, years::Union(Int,String), authors::String)
-    if !haskey(LICENSES,license)
-        licenses = join(sort!([keys(LICENSES)...], by=lowercase), ", ")
-        error("$license is not a known license choice, choose one of: $licenses.")
-    end
-    genfile(pkg,"LICENSE.md") do io
+function license(pkg::String, license::String,
+                 years::Union(Int,String),
+                 authors::Union(String,Array);
+                 force::Bool=false)
+    genfile(pkg,"LICENSE.md",force) do io
+        if !haskey(LICENSES,license)
+            licenses = join(sort!([keys(LICENSES)...], by=lowercase), ", ")
+            error("$license is not a known license choice, choose one of: $licenses.")
+        end
         print(io, LICENSES[license](pkg, string(years), authors))
-    end
+    end || info("License file exists, leaving unmodified; use `force=true` to overwrite")
 end
 
-function readme(pkg::String, username::String="")
-    genfile(pkg,"README.md") do io
+function readme(pkg::String, user::String=""; force::Bool=false)
+    genfile(pkg,"README.md",force) do io
         println(io, "# $pkg")
-        isempty(username) && return
-        url = "https://travis-ci.org/$username/$pkg.jl"
+        isempty(user) && return
+        url = "https://travis-ci.org/$user/$pkg.jl"
         println(io, "\n[![Build Status]($url.png)]($url)")
     end
 end
 
-function travis(pkg::String)
-    genfile(pkg,".travis.yml") do io
+function travis(pkg::String; force::Bool=false)
+    genfile(pkg,".travis.yml",force) do io
         print(io, """
         language: cpp
         compiler:
@@ -104,8 +133,8 @@ function travis(pkg::String)
     end
 end
 
-function entrypoint(pkg::String)
-    genfile(pkg,"src/$pkg.jl") do io
+function entrypoint(pkg::String; force::Bool=false)
+    genfile(pkg,"src/$pkg.jl",force) do io
         print(io, """
         module $pkg
 
@@ -116,19 +145,33 @@ function entrypoint(pkg::String)
     end
 end
 
-function genfile(f::Function, pkg::String, file::String)
+function genfile(f::Function, pkg::String, file::String, force::Bool=false)
     path = joinpath(pkg,file)
-    info("Generating $file")
-    mkpath(dirname(path))
-    open(f, path, "w")
-    Git.run(`add $file`, dir=pkg)
+    if force || !ispath(path)
+        info("Generating $file")
+        mkpath(dirname(path))
+        open(f, path, "w")
+        Git.run(`add $file`, dir=pkg)
+        return true
+    end
+    return false
 end
 
-mit(pkg::String, years::String, authors::String) =
-"""
-The $pkg.jl package is licensed under the MIT Expat License:
+copyright(years::String, authors::String) = "> Copyright (c) $years: $authors."
 
-> Copyright (c) $years: $authors.
+function copyright(years::String, authors::Array)
+    text = "> Copyright (c) $years:"
+    for author in authors
+        text *= "\n>  * $author"
+    end
+    return text
+end
+
+mit(pkg::String, years::String, authors::Union(String,Array)) =
+"""
+The $pkg.jl package is licensed under the MIT "Expat" License:
+
+$(copyright(years,authors))
 >
 > Permission is hereby granted, free of charge, to any person obtaining
 > a copy of this software and associated documentation files (the
@@ -148,14 +191,13 @@ The $pkg.jl package is licensed under the MIT Expat License:
 > CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 > TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 > SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
 """
 
-bsd(pkg::String, years::String, authors::String) =
+bsd(pkg::String, years::String, authors::Union(String,Array)) =
 """
-The $pkg.jl package is licensed under the Simplified BSD License:
+The $pkg.jl package is licensed under the Simplified "2-clause" BSD License:
 
-> Copyright (c) $years: $authors.
+$(copyright(years,authors))
 >
 > Redistribution and use in source and binary forms, with or without
 > modification, are permitted provided that the following conditions are
@@ -178,7 +220,6 @@ The $pkg.jl package is licensed under the Simplified BSD License:
 > THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 > (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 > OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 """
 
 const LICENSES = [ "MIT" => mit, "BSD" => bsd ]
