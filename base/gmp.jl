@@ -34,22 +34,17 @@ function gmp_init()
 end
 
 BigInt(x::BigInt) = x
+BigInt(s::String) = parseint(BigInt,s)
 
-function mpz_set_str(x::String, b::Integer)
+function Base.parseint_nocheck(::Type{BigInt}, s::String, base::Int)
+    s = bytestring(s)
+    sgn, base, i = Base.parseint_preamble(true,s,base)
     z = BigInt()
-    err = ccall((:__gmpz_set_str, :libgmp), Int32, (Ptr{BigInt}, Ptr{Uint8}, Int32), &z, bytestring(x), b)
-    if err != 0; error("string is not a valid integer"); end
-    return z
-end
-
-# note: 0 is a special base value that uses leading characters (0x, 0b, 0)
-BigInt(x::String) = mpz_set_str(x, 0)
-
-function parseint(::Type{BigInt}, s::String, base::Integer=10)
-    if !(2 <= base <= 62)
-        error("invalid base: $b. Base b must satisfy: 2 <= b =< 62.")
-    end
-    mpz_set_str(s, base)
+    err = ccall((:__gmpz_set_str, :libgmp),
+               Int32, (Ptr{BigInt}, Ptr{Uint8}, Int32),
+               &z, convert(Ptr{Uint8},SubString(s,i)), base)
+    err == 0 || error("invalid big integer: $(repr(s))")
+    return sgn < 0 ? -z : z
 end
 
 function BigInt(x::Union(Clong,Int32))
@@ -133,8 +128,8 @@ if sizeof(Int32) == sizeof(Clong)
 end
 if sizeof(Int64) == sizeof(Clong)
     function convert(::Type{Uint128}, x::BigInt)
-        uint128(uint(ax>>>64))<<64 +
-        uint128(uint(ax & typemax(Uint64)))
+        uint128(uint(x>>>64))<<64 +
+        uint128(uint(x & typemax(Uint64)))
     end
 end
 convert(::Type{Int128}, x::BigInt) = copysign(int128(uint128(abs(x))),x)

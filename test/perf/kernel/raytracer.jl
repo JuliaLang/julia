@@ -17,7 +17,7 @@ end
 +(a::Vec, b::Vec) = Vec(a.x+b.x, a.y+b.y, a.z+b.z)
 -(a::Vec, b::Vec) = Vec(a.x-b.x, a.y-b.y, a.z-b.z)
 *(a::Float64, b::Vec) = Vec(a*b.x, a*b.y, a*b.z)
-*(a::Int64, b::Vec) = Vec(a*b.x, a*b.y, a*b.z)
+*(a::Int, b::Vec) = Vec(a*b.x, a*b.y, a*b.z)
 *(a::Vec, b::Float64) = *(b,a)
 dot(a::Vec, b::Vec) = (a.x*b.x + a.y*b.y + a.z*b.z)
 unitize(a::Vec) = (1. / sqrt(dot(a, a)) * a)

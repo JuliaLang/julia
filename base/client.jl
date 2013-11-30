@@ -291,7 +291,7 @@ function process_options(args::Array{Any,1})
                 color_set = true
                 global have_color = true
             elseif args[i][8] == '='
-                val = args[i][9:]
+                val = args[i][9:end]
                 if in(val, ("no","0","false"))
                     color_set = true
                     global have_color = false
@@ -371,6 +371,8 @@ function _start()
     fdwatcher_reinit()
     # Initialize RNG
     Random.librandom_init()
+    # Ensure PCRE is compatible with the compiled reg-exes
+    PCRE.check_pcre()
     # Check that BLAS is correctly built
     check_blas()
     LinAlg.init()

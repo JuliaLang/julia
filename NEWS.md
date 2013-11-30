@@ -32,6 +32,14 @@ Library improvements
   * New Pkg.submit(pkg[,commit]) function to automatically submit
     a Github pull request to the package author.
 
+  * Triple-quoted regex strings, `r"""..."""` ([#4934]).
+
+  * New string type, `UTF16String` ([#4930]).
+
+  * `CharString` is renamed to `UTF32String` ([#4943]).
+
+  * Faster sparse `kron` ([#4958]).
+
 Deprecated or removed
 ---------------------
 
