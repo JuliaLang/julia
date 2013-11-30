@@ -8,7 +8,7 @@ haskey(d::Associative, k) = in(k,keys(d))
 
 function in(p::(Any,Any), a::Associative)
     v = get(a,p[1],secret_table_token)
-    !is(v, secret_table_token) && isequal(v, p[2])
+    !is(v, secret_table_token) && (v == p[2])
 end
 
 function show{K,V}(io::IO, t::Associative{K,V})
