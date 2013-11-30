@@ -767,11 +767,16 @@
 		(case t
 		  ((#\( )   (take-token s)
 		   (let ((al (parse-arglist s #\) )))
-		     (if (eq? (peek-token s) 'do)
-			 (begin
-			   (take-token s)
-			   (loop `(call ,ex ,(parse-do s) ,@al)))
-			 (loop `(call ,ex ,@al)))))
+		     (receive
+		      (params args) (separate (lambda (x)
+						(and (pair? x)
+						     (eq? (car x) 'parameters)))
+					      al)
+		      (if (eq? (peek-token s) 'do)
+			  (begin
+			    (take-token s)
+			    (loop `(call ,ex ,@params ,(parse-do s) ,@args)))
+			  (loop `(call ,ex ,@al))))))
 		  ((#\[ )   (take-token s)
 		   ; ref is syntax, so we can distinguish
 		   ; a[i] = x  from

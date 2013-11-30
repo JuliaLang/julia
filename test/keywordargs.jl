@@ -161,3 +161,16 @@ type T4801{X}
     T4801(;k=0) = new()
 end
 @test isa(T4801{Any}(k=0), T4801{Any})
+
+# issue #4974
+function Foo4974(f; kwargs...)
+    (f(), kwargs)
+end
+
+function test4974(;kwargs...)
+    Foo4974(;kwargs...) do
+        2
+    end
+end
+
+@test test4974(a=1) == (2, {(:a,1)})
