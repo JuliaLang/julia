@@ -116,3 +116,8 @@ A = sparse(rowval, colval, ones(length(rowval)))
 P,post = Base.LinAlg.etree(A, true)
 @test P == int32([6,3,8,6,8,7,9,10,10,11,0])
 @test post == int32([2,3,5,8,1,4,6,7,9,10,11])
+
+# reinterpret issue 4986
+sfe22 = speye(Float64, 2)
+mfe22 = eye(Float64, 2)
+@test reinterpret(Int64, sfe22) == reinterpret(Int64, mfe22)

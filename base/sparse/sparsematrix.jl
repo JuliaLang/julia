@@ -43,7 +43,7 @@ function reinterpret{T,Tv,Ti}(::Type{T}, a::SparseMatrixCSC{Tv,Ti})
     mA, nA = size(a)
     colptr = copy(a.colptr)
     rowval = copy(a.rowval)
-    nzval  = reinterpret(Tv, a.nzval)
+    nzval  = reinterpret(T, a.nzval)
     return SparseMatrixCSC{T,Ti}(mA, nA, colptr, rowval, nzval)
 end
 
