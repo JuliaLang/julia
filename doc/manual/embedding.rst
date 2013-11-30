@@ -82,7 +82,7 @@ Alternatively, if you have already allocated the array you can generate a thin w
     double* existingArray     = (double*) malloc(sizeof(double)*10);
     jl_array_t* x  = jl_ptr_to_array_1d(array_type, existingArray, 10, 0);
     
-The last parameter is a boolean indicating whether Julia shoul take over the ownership of the data (only usefull for dynamic arrays). In order to access the data of x, we can use ``jl_array_data```::
+The last parameter is a boolean indicating whether Julia should take over the ownership of the data (only usefull for dynamic arrays). In order to access the data of x, we can use ``jl_array_data``::
 
     double* xData = jl_array_data(x)
     
@@ -94,8 +94,13 @@ This is obviously more important when letting Julia allocate the array for us. N
 Now let us call a Julia function that performs an in-place operation on ``x``::      
       
     jl_sym_t* sym        = jl_symbol("reverse!");
-    jl_function_t *func = (jl_function_t*) jl_get_global(jl_base_module, sym);
+    jl_function_t *func  = (jl_function_t*) jl_get_global(jl_base_module, sym);
     jl_value_t* ret        = jl_apply(func, &x , 1);
+
+Multidimensional Arrays
+---------------------------------
+
+TODO: Data layout an array strides
 
 Using Non-Standard Modules
 ===========================
@@ -106,4 +111,4 @@ In the examples discussed until now, only Julia functions from the Base module w
     jl_function_t *func =  (jl_function_t*) jl_get_global(jl_current_module, jl_symbol("my_function"));
     jl_apply(func, NULL, 0);
 
-Instead of using the ``jl_base_module`` pointer we use the pointer ``jl_current_module``
+In the first step, by calling ``jl_eval_string("using MyModule")``, the module ``MyModule`` is loaded into the current scope. This scope can be accessed using the module pointer ``jl_current_module``. Passing it to ``jl_get_global`` the function handle to ``my_function`` can be retrieved.
