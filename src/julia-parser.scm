@@ -857,7 +857,7 @@
 
 ; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
-  (set! expect-end-current-line (input-port-line (ts:port s)))
+  (with-bindings ((expect-end-current-line (input-port-line (ts:port s))))
   (define (expect-end s) (expect-end- s word))
   (with-normal-ops
   (without-whitespace-newline
@@ -1060,17 +1060,17 @@
 		 `(ccall ,.al))))))
     ((do)
      (error "invalid \"do\" syntax"))
-    (else (error "unhandled reserved word"))))))
+    (else (error "unhandled reserved word")))))))
 
 (define (parse-do s)
-  (set! expect-end-current-line (input-port-line (ts:port s)))
+  (with-bindings ((expect-end-current-line (input-port-line (ts:port s))))
   (without-whitespace-newline
    (let ((doargs (if (eqv? (peek-token s) #\newline)
 		     '()
 		     (parse-comma-separated-assignments s))))
      `(-> (tuple ,@doargs)
 	  ,(begin0 (parse-block s)
-		   (expect-end- s 'do))))))
+		   (expect-end- s 'do)))))))
 
 (define (macrocall-to-atsym e)
   (if (and (pair? e) (eq? (car e) 'macrocall))
