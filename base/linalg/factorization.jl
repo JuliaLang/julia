@@ -10,8 +10,14 @@ macro assertnonsingular(A, info)
    :(($info)==0 ? $A : throw(SingularException($info)))
 end
 
-\(F::Factorization, b::Union(AbstractVector, AbstractMatrix)) = A_ldiv_B!(F, copy(b))
-A_ldiv_B!(C::Factorization, B::StridedVecOrMat) = A_ldiv_B!(C, float(B))
+typealias AbstractVecOrMat Union(AbstractVector, AbstractMatrix)
+
+\(F::Factorization, B::AbstractVecOrMat) = A_ldiv_B!(F, copy(B))
+Ac_ldiv_B(F::Factorization, B::AbstractVecOrMat) = Ac_ldiv_B!(F, copy(B))
+At_ldiv_B(F::Factorization, B::AbstractVecOrMat) = At_ldiv_B!(F, copy(B))
+A_ldiv_B!(F::Factorization, B::StridedVecOrMat) = A_ldiv_B!(F, float(B))
+Ac_ldiv_B!(F::Factorization, B::StridedVecOrMat) = Ac_ldiv_B!(F, float(B))
+At_ldiv_B!(F::Factorization, B::StridedVecOrMat) = At_ldiv_B!(F, float(B))
 
 type Cholesky{T<:BlasFloat} <: Factorization{T}
     UL::Matrix{T}

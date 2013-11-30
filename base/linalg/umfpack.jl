@@ -8,7 +8,7 @@ export UmfpackLU,
 
 import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, nnz, show, size
 
-import ..LinAlg: Factorization, det, lufact, lufact!, solve
+import ..LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact, lufact!, solve
 
 include("umfpack_h.jl")
 type MatrixIllConditionedException <: Exception
@@ -278,42 +278,29 @@ for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz,get_num_r,get_num_z,it
 end
 
 ### Solve with Factorization
-
-(\){T<:UMFVTypes}(fact::UmfpackLU{T}, b::Vector{T}) = solve(fact, b)
-(\){Ts<:UMFVTypes,Tb<:Number}(fact::UmfpackLU{Ts}, b::Vector{Tb}) = fact\convert(Vector{Ts},b)
-function (\){Tb<:Complex}(fact::UmfpackLU{Float64}, b::Vector{Tb})
-    r = fact\[convert(Float64,real(be)) for be in b]
-    i = fact\[convert(Float64,imag(be)) for be in b]
-    Complex128[r[k]+im*i[k] for k = 1:length(r)]
+A_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Vector{T}) = solve(lu, b, UMFPACK_A)
+function A_ldiv_B!{Tlu<:Real,Tb<:Complex}(lu::UmfpackLU{Tlu}, b::Vector{Tb})
+    r = solve(lu, [convert(Tlu,real(be)) for be in b], UMFPACK_A)
+    i = solve(lu, [convert(Tlu,imag(be)) for be in b], UMFPACK_A)
+    Tb[r[k]+im*i[k] for k = 1:length(r)]
 end
-At_ldiv_B{T<:UMFVTypes}(fact::UmfpackLU{T}, b::Vector{T}) = solve(fact, b, UMFPACK_Aat)
-At_ldiv_B{Ts<:UMFVTypes,Tb<:Number}(fact::UmfpackLU{Ts}, b::Vector{Tb}) = fact.'\convert(Vector{Ts},b)
-At_ldiv_B{Tb<:Complex}(fact::UmfpackLU{Float64}, b::Vector{Tb}) = fact.'\b
-Ac_ldiv_B{T<:UMFVTypes}(fact::UmfpackLU{T}, b::Vector{T}) = solve(fact, b, UMFPACK_At)
-Ac_ldiv_B{Ts<:UMFVTypes,Tb<:Number}(fact::UmfpackLU{Ts}, b::Vector{Tb}) = fact'\convert(Vector{Ts},b)
-Ac_ldiv_B{Tb<:Complex}(fact::UmfpackLU{Float64}, b::Vector{Tb}) = fact'\b
+A_ldiv_B!{Tlu<:UMFVTypes,Tb<:Number}(lu::UmfpackLU{Tlu}, b::Vector{Tb}) = A_ldiv_B!(lu, convert(Vector{Tlu}, b))
 
-### Solve directly with matrix
-
-(\)(S::SparseMatrixCSC, b::Vector) = lufact(S) \ b
-At_ldiv_B{T<:UMFVTypes}(S::SparseMatrixCSC{T}, b::Vector{T}) = solve(lufact(S), b, UMFPACK_Aat)
-At_ldiv_B{Ts<:UMFVTypes,Tb<:Number}(S::SparseMatrixCSC{Ts}, b::Vector{Tb}) = At_ldiv_B(S, convert(Vector{Ts}, b))
-function At_ldiv_B{Tb<:Complex}(S::SparseMatrixCSC{Float64}, b::Vector{Tb})
-    F = lufact(S)
-    r = solve(F, [convert(Float64,real(be)) for be in b], UMFPACK_Aat)
-    i = solve(F, [convert(Float64,imag(be)) for be in b], UMFPACK_Aat)
-    Complex128[r[k]+im*i[k] for k = 1:length(r)]
+Ac_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Vector{T}) = solve(lu, b, UMFPACK_At)
+function Ac_ldiv_B!{Tlu<:Real,Tb<:Complex}(lu::UmfpackLU{Tlu}, b::Vector{Tb})
+    r = solve(lu, [convert(Float64,real(be)) for be in b], UMFPACK_At)
+    i = solve(lu, [convert(Float64,imag(be)) for be in b], UMFPACK_At)
+    Tb[r[k]+im*i[k] for k = 1:length(r)]
 end
-Ac_ldiv_B{T<:UMFVTypes}(S::SparseMatrixCSC{T}, b::Vector{T}) = solve(lufact(S), b, UMFPACK_At)
-Ac_ldiv_B{Ts<:UMFVTypes,Tb<:Number}(S::SparseMatrixCSC{Ts}, b::Vector{Tb}) = Ac_ldiv_B(S, convert(Vector{Ts}, b))
-function Ac_ldiv_B{Tb<:Complex}(S::SparseMatrixCSC{Float64}, b::Vector{Tb})
-    F = lufact(S)
-    r = solve(F, [convert(Float64,real(be)) for be in b], UMFPACK_At)
-    i = solve(F, [convert(Float64,imag(be)) for be in b], UMFPACK_At)
-    Complex128[r[k]+im*i[k] for k = 1:length(r)]
-end
+Ac_ldiv_B!{Tlu<:UMFVTypes,Tb<:Number}(lu::UmfpackLU{Tlu}, b::Vector{Tb}) = Ac_ldiv_B!(lu, convert(Vector{Tlu}, b))
 
-solve(lu::UmfpackLU, b::Vector) = solve(lu, b, UMFPACK_A)
+At_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::Vector{T}) = solve(lu, b, UMFPACK_Aat)
+function At_ldiv_B!{Tlu<:Real,Tb<:Complex}(lu::UmfpackLU{Tlu}, b::Vector{Tb})
+    r = solve(lu, [convert(Float64,real(be)) for be in b], UMFPACK_Aat)
+    i = solve(lu, [convert(Float64,imag(be)) for be in b], UMFPACK_Aat)
+    Tb[r[k]+im*i[k] for k = 1:length(r)]
+end
+At_ldiv_B!{Tlu<:UMFVTypes,Tb<:Number}(lu::UmfpackLU{Tlu}, b::Vector{Tb}) = At_ldiv_B!(lu, convert(Vector{Tlu}, b))
 
 function getindex(lu::UmfpackLU, d::Symbol)
     L,U,p,q,Rs = umf_extract(lu)
