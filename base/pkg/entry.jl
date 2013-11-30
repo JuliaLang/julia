@@ -40,12 +40,10 @@ function edit()
     resolve(reqsʹ)
 end
 
-const Reqs_add = Reqs.add ## FIXME: #4979
-
 function add(pkg::String, vers::VersionSet)
     outdated = :maybe
     @sync begin
-        @async if !edit(Reqs_add,pkg,vers)
+        @async if !edit(Reqs.add,pkg,vers)
             ispath(pkg) || error("unknown package $pkg")
             info("Nothing to be done")
         end
