@@ -302,9 +302,7 @@
 	  ((<= l 32)  (uint32 n))
 	  ((<= l 64)  (uint64 n))
 	  ((<= l 128) `(macrocall @uint128_str ,s))
-	  (else	(if (eqv? (string.char s (- i 1)) #\o)
-		    `(macrocall @bigint_str ,(list->string (string.split s "o")))
-		    `(macrocall @bigint_str ,s))))))
+	  (else	      `(macrocall @bigint_str  ,s)))))
 
 (define (sized-uint-oct-literal n s)
   (if (string.find s "o0")
@@ -316,7 +314,7 @@
 		(else             (uint64 n)))
 	  (if (oct-within-uint128? s)
 	      `(macrocall @uint128_str ,s)
-	      `(macrocall @bigint_str ,(list->string (string.split s "o")))))))
+	      `(macrocall @bigint_str ,s)))))
 
 (define (strip-leading-0s s)
   (define (loop i)
