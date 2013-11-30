@@ -311,7 +311,7 @@ function search(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},A
     end
 end
 
-function search(s::String, t::String, i::Integer)
+function search(s::String, t::String, i::Integer=start(s))
     idx = searchindex(s,t,i)
     if isempty(t)
         idx:idx-1
@@ -320,12 +320,8 @@ function search(s::String, t::String, i::Integer)
     end
 end
 
-search(s::String, t::String) = search(s,t,start(s))
-
-rsearch(s::String, c::Chars, i::Integer) =
+rsearch(s::String, c::Chars, i::Integer=endof(s)) =
     endof(s)-search(RevString(s), c, endof(s)-i+1)+1
-
-rsearch(s::String, c::Chars) = rsearch(s,c,endof(s))
 
 function _rsearchindex(s, t, i)
     if isempty(t)
@@ -451,7 +447,7 @@ function rsearch(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},
     end
 end
 
-function rsearch(s::String, t::String, i::Integer)
+function rsearch(s::String, t::String, i::Integer=endof(s))
     idx = rsearchindex(s,t,i)
     if isempty(t)
         idx:idx-1
@@ -459,8 +455,6 @@ function rsearch(s::String, t::String, i::Integer)
         idx:(idx > 0 ? idx + endof(t) - 1 : -1)
     end
 end
-
-rsearch(s::String, t::String) = rsearch(s,t,endof(s))
 
 contains(a::String, b::String) = searchindex(a,b)!=0
 
@@ -1629,7 +1623,6 @@ let
     randstring() = randstring(8)
 end
 
-
 function hex2bytes(s::ASCIIString)
     len = length(s)
     if isodd(len)
@@ -1642,11 +1635,13 @@ function hex2bytes(s::ASCIIString)
         c = s[i+=1]
         n = '0' <= c <= '9' ? c - '0' :
             'a' <= c <= 'f' ? c - 'a' + 10 :
-            'A' <= c <= 'F' ? c - 'A' + 10 : error("argument isn't a hexadecimal string")
+            'A' <= c <= 'F' ? c - 'A' + 10 :
+                error("argument isn't a hexadecimal string")
         c = s[i+=1]
         n = '0' <= c <= '9' ? n << 4 + c - '0' :
             'a' <= c <= 'f' ? n << 4 + c - 'a' + 10 :
-            'A' <= c <= 'F' ? n << 4 + c - 'A' + 10 : error("argument isn't a hexadecimal string")
+            'A' <= c <= 'F' ? n << 4 + c - 'A' + 10 :
+                error("argument isn't a hexadecimal string")
         arr[j+=1] = n
     end
     return arr
