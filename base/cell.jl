@@ -1,20 +1,3 @@
-function cell_1d(xs::ANY...)
-    n = length(xs)
-    a = Array(Any,n)
-    for i=1:n
-        arrayset(a,xs[i],i)
-    end
-    a
-end
-
-function cell_2d(nr, nc, xs::ANY...)
-    a = Array(Any,nr,nc)
-    for i=1:(nr*nc)
-        arrayset(a,xs[i],i)
-    end
-    a
-end
-
 # map cell array
 map(f::Callable, a::Array{Any,1}) = { f(a[i]) for i=1:length(a) }
 map(f::Callable, a::Array{Any,1}, b::Array{Any,1}) =
