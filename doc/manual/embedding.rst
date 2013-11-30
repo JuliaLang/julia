@@ -18,7 +18,7 @@ We start with a very simple C program that initializes Julia and calls some Juli
 
   int main(int argc, char *argv[])
   {
-    jl_init("/Applications/Julia-0.2.0.app/Contents/Resources/julia/lib/");
+    jl_init(NULL);
     jl_eval_string("print(sqrt(2.0))");
 
     return 0;
@@ -28,7 +28,7 @@ In order to build this program you have to put the path to the Julia header into
 
     gcc -o test -I$JULIA_DIR/include/julia -L$JULIA_DIR/usr/lib -ljulia test.c
 
-The first thing that has do be done before calling any other Julia C function is to initialize Julia. This is done by calling ``jl_init``, which takes as argument as String to the location where Julia is installed. The second statement in the test program evaluates a Julia statement using a call to ``jl_eval_string``.
+The first thing that has do be done before calling any other Julia C function is to initialize Julia. This is done by calling ``jl_init``, which takes as argument as String to the location where Julia is installed. When the parameter is NULL, the Julia location is guessed. The second statement in the test program evaluates a Julia statement using a call to ``jl_eval_string``.
 
 Converting Types
 ========================
@@ -40,7 +40,7 @@ While it is very nice to be able to execute a command in the Julia interpreter, 
     if(jl_is_float64(ret))
     {
         double ret_unboxed = jl_unbox_float64(ret);
-        printf("Pi by 2 in C: %e \n", ret_unboxed);
+        printf("sqrt(2.0) in C: %e \n", ret_unboxed);
     }
 
 The return value of ``jl_eval_string`` is a pointer of type ``jl_value_t*``. This is the C type that holds Julia values of any type. In order to check whether ``ret`` is of a specific C type, we can use the ``jl_is_...`` functions. By typing ``typeof(sqrt(2.0)`` into the Julia shell we can see that the return type is float64 (i.e. double). To convert the boxed Julia value into a C double the ``jl_unbox_float64`` function can be used.
@@ -74,7 +74,7 @@ Julia arrays are represented in C by the datatype ``jl_array_t*``. Basically, ``
   - information about the sizes of the array
 To keep things simple, we start with a 1D array. Creating an array containing Float64 elements of length 10 is done by::
 
-    jl_value_t* array_type = jl_apply_array_type( jl_float64_t, 1 );
+    jl_value_t* array_type = jl_apply_array_type( jl_float64_type, 1 );
     jl_array_t* x          = jl_alloc_array_1d(array_type , 10);
 
 Alternatively, if you have already allocated the array you can generate a thin wrapper around that data::
@@ -84,7 +84,7 @@ Alternatively, if you have already allocated the array you can generate a thin w
     
 The last parameter is a boolean indicating whether Julia should take over the ownership of the data (only usefull for dynamic arrays). In order to access the data of x, we can use ``jl_array_data``::
 
-    double* xData = jl_array_data(x)
+    double* xData = jl_array_data(x);
     
 This is obviously more important when letting Julia allocate the array for us. Now we can fill the array::
 
@@ -95,7 +95,7 @@ Now let us call a Julia function that performs an in-place operation on ``x``::
       
     jl_sym_t* sym        = jl_symbol("reverse!");
     jl_function_t *func  = (jl_function_t*) jl_get_global(jl_base_module, sym);
-    jl_value_t* ret        = jl_apply(func, &x , 1);
+    jl_value_t* ret        = jl_apply(func, (jl_value_t **) &x , 1);
 
 Multidimensional Arrays
 ---------------------------------
@@ -129,3 +129,26 @@ In the examples discussed until now, only Julia functions from the Base module w
     jl_apply(func, NULL, 0);
 
 In the first step, by calling ``jl_eval_string("using MyModule")``, the module ``MyModule`` is loaded into the current scope. This scope can be accessed using the module pointer ``jl_current_module``. Passing it to ``jl_get_global`` the function handle to ``my_function`` can be retrieved.
+
+Julia Callable C Functions
+===========================
+
+jl_value_t* my_c_sqrt(jl_value_t* F, jl_value_t** args, uint32_t nargs)
+// alternatively: JL_CALLABLE(my_c_sqrt)
+{
+    JL_NARGS(my_c_sqrt,1,1);
+    JL_TYPECHK(my_c_sqrt, float64, args[0])
+
+    double x = jl_unbox_float64(args[0]);
+    x = sqrt(x);
+    return jl_box_float64(x);
+}
+
+
+      jl_sym_t* name = jl_symbol("my_c_sqrt");
+      jl_set_const(jl_current_module,
+                   name,
+                   (jl_value_t*) jl_new_closure(my_c_sqrt, (jl_value_t*) name, NULL)
+                   );
+
+      jl_eval_string("println( my_c_sqrt(2.0) )");
