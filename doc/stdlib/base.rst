@@ -3135,22 +3135,26 @@ Numbers
    ``BigFloat(2.1)`` may not yield what you expect. You may prefer to
    initialize constants using strings, e.g., ``BigFloat("2.1")``.
 
-.. function:: get_rounding()
+.. function:: get_rounding(T)
 
-   Get the current floating point rounding mode. Valid modes are ``RoundNearest``, ``RoundToZero``, ``RoundUp`` and ``RoundDown``.
+   Get the current floating point rounding mode for type ``T``. Valid modes
+   are ``RoundNearest``, ``RoundToZero``, ``RoundUp``, ``RoundDown``, and
+   ``RoundFromZero`` (``BigFloat`` only).
 
-.. function:: set_rounding(mode)
+.. function:: set_rounding(T, mode)
 
-   Set the floating point rounding mode. See ``get_rounding`` for available modes
+   Set the rounding mode of floating point type ``T``. Note that this may
+   affect other types, for instance changing the rounding mode of ``Float64``
+   will change the rounding mode of ``Float32``. See ``get_rounding`` for available modes
 
-.. function:: with_rounding(f::Function,mode)
+.. function:: with_rounding(f::Function, T, mode)
 
-   Change the floating point rounding mode for the duration of ``f``. It is logically equivalent to::
+   Change the rounding mode of floating point type ``T`` for the duration of ``f``. It is logically equivalent to::
 
-       old = get_rounding()
-       set_rounding(mode)
+       old = get_rounding(T)
+       set_rounding(T, mode)
        f()
-       set_rounding(old)
+       set_rounding(T, old)
 
    See ``get_rounding`` for available rounding modes.
 
@@ -3239,18 +3243,6 @@ The `BigFloat` type implements arbitrary-precision floating-point aritmetic usin
        set_bigfloat_precision(precision)
        f()
        set_bigfloat_precision(old)
-
-.. function:: get_bigfloat_rounding()
-
-   Get the current BigFloat rounding mode. Valid modes are ``RoundNearest``, ``RoundToZero``, ``RoundUp``, ``RoundDown``, ``RoundFromZero``
-
-.. function:: set_bigfloat_rounding(mode)
-
-   Set the BigFloat rounding mode. See get_bigfloat_rounding for available modes
-
-.. function:: with_bigfloat_rounding(f::Function,mode)
-
-   Change the BigFloat rounding mode for the duration of ``f``. See ``get_bigfloat_rounding`` for available rounding modes; see also ``with_bigfloat_precision``.
 
 Random Numbers
 --------------
