@@ -60,9 +60,13 @@ Calling Julia function can be done with the ``jl_eval_string`` function has has 
     jl_sym_t* sym = jl_symbol("sqrt");
     jl_function_t *func = (jl_function_t*) jl_get_global(jl_base_module, sym);
     jl_value_t* argument = jl_box_float64(2.0);
-    jl_value_t* ret = jl_apply(func, &argument , 1);
+    jl_value_t* ret = jl_call1(func, argument);
 
-In the first step, a Julia symbol for the ``sqrt`` function is generated. Then a handle to the Julia function ``sqrt`` is retrieved by calling ``jl_get_global``. The first argument is a global pointer to the Base module in which ``sqrt`` is defined. Then, the double value is boxed using the ``jl_box_float64`` function. Finally, in the last step, the function is called by using the ``jl_apply`` function. The first argument is the Julia function handle, the second argument is an array of ``jl_value_t*`` arguments (therefore we take the adress of ``argument``), the last argument is the number of arguments. 
+In the first step, a Julia symbol for the ``sqrt`` function is generated. Then a handle to the Julia function ``sqrt`` is retrieved by calling ``jl_get_global``. The first argument is a global pointer to the Base module in which ``sqrt`` is defined. Then, the double value is boxed using the ``jl_box_float64`` function. Finally, in the last step, the function is called by using the ``jl_call1`` function. The first argument is the Julia function handle while the second argument is the actual argument for the Julia function. Note, that there are also, ``jl_call0``, ``jl_call2``, and ``jl_call3`` functions, for calling functions without, with 2 or with 3 arguments. The general ``jl_call`` function has the signature::
+
+    jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs)
+
+Its second argument ``args`` is an array of ``jl_value_t*`` arguments while ``nargs `` is the number of arguments.
 
 Working with Arrays
 ========================
@@ -95,7 +99,7 @@ Now let us call a Julia function that performs an in-place operation on ``x``::
       
     jl_sym_t* sym        = jl_symbol("reverse!");
     jl_function_t* func  = (jl_function_t*) jl_get_global(jl_base_module, sym);
-    jl_value_t* ret        = jl_apply(func, (jl_value_t **) &x , 1);
+    jl_call1(func, (jl_value_t *) x);
 
 Multidimensional Arrays
 ---------------------------------
@@ -110,36 +114,51 @@ In the examples discussed until now, only Julia functions from the Base module w
 Defining Julia Functions in C Code
 -----------------------------------------------
 
-One way to introduce new Julia function is to define them inside of an ``jl_eval_string`` call::
+One way to introduce new Julia function is to define them inside of a ``jl_eval_string`` call::
  
-    jl_eval_string("my_new_func(x) = 2*x");
+    jl_eval_string("my_func(x) = 2*x");
 
-Now the function can be called either in a ``jl_eval_string`` call, or by ...
+Now the function can be called either in a ``jl_eval_string`` call, or using the handle of our function::
 
-    jl_function_t *func =  (jl_function_t*) jl_get_global(jl_current_module, jl_symbol("my_function"));
-    jl_apply(func, NULL, 0);
+    jl_function_t *func = (jl_function_t*)jl_get_global(jl_current_module, jl_symbol("my_func"));
+    jl_value_t* arg = jl_box_float64(5.0);
+    double ret = jl_unbox_float64(jl_call1(func, arg));
+
+Note, that we now have to use the ``jl_current_module`` module pointer as the function ``my_func`` has been added in the current module scope.
 
 Using Non-Standard Modules
 -----------------------------------------
 
-In the examples discussed until now, only Julia functions from the Base module were used. In order to call a function from either a self written module or from an existing Julia package, one has to first import the module. This can be done using the ``jl_eval_string`` method. Suppose that we have written a module ``MyModule`` that exports a function ``my_function()``. In order to call the function we simply do::
+In order to call functions from non-standard modules, one first has to import the module using e.g.::
 
     jl_eval_string("using MyModule");
-    jl_function_t *func =  (jl_function_t*) jl_get_global(jl_current_module, jl_symbol("my_function"));
-    jl_apply(func, NULL, 0);
 
-In the first step, by calling ``jl_eval_string("using MyModule")``, the module ``MyModule`` is loaded into the current scope. This scope can be accessed using the module pointer ``jl_current_module``. Passing it to ``jl_get_global`` the function handle to ``my_function`` can be retrieved.
+Then, function handles can be retrieved as before using the ``jl_current_module`` module pointer.
+
+
+Exceptions
+==========
+
+One important question is, what happens if Julia code is called that throws an exception. This can be for instance tested by calling::
+
+      jl_eval_string("this_function_does_not_exist()");
+
+As one can verify, nothing will happen. This is of course very problematic as such silent error are very hard to debug. The solution is, to ask Julia whether an exception has been thrown::
+
+    if (jl_exception_occurred())
+        printf("%s \n", jl_string_data(jl_fieldref( jl_exception_occurred() ,0) ));
+
 
 Julia Callable C Functions
-===========================
+=====================================
 
-When embedding Julia into a C/C++ application, there sometimes is the need to call C code from Julia. Imagine, for instance, that we have developed some C/C++ game and want to let the user develop Julia scripts that can enhance/modify some behavior within our game. There are basically two different possibilities to achieve this task:
+When embedding Julia into a C/C++ application, there sometimes is the need to call C code from Julia. Imagine, for instance, that we have developed some C/C++ game and want to let the user develop Julia scripts that can enhance/modify some behavior within our game. There are basically two different possibilities to achieve this task::
   - The scripting API is developed in C and provided in form of a shared library that can be called from Julia using ``call``. The raw ``ccall``s will then have to be wrapped in Julia to do type and dimension checks.
   -  Alternatively, we can develop Julia callable C functions that have a special form  and do the type and dimension checks in C. These, functions have to be registered to be callable in C.
 As the first way has been already discussed in section ???, we will now focus on the Julia callable C functions.
 
 Julia Callable C Functions
--------------------------------------
+-------------------------------------------
 
 In order to make a C function Julia callable, it must have certain signature::
 
