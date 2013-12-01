@@ -437,8 +437,14 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     W = Woodbury(T, U, C, V)
     F = full(W)
     @test_approx_eq W*v F*v
-    @test_approx_eq W\v F\v
+    iFv = F\v
+    @test_approx_eq W\v iFv
     @test_approx_eq det(W) det(F)
+    iWv = similar(iFv)
+    if elty != Int
+        Base.LinAlg.solve!(iWv, W, v)
+        @test_approx_eq iWv iFv
+    end
 
     # Diagonal
     D = Diagonal(d)
