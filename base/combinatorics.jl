@@ -114,7 +114,7 @@ function invperm(a::AbstractVector)
     b
 end
 
-function isperm(A::AbstractVector)
+function isperm(A)
     n = length(A)
     used = falses(n)
     for a in A
