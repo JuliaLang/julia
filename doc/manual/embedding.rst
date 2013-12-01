@@ -69,9 +69,9 @@ Working with Arrays
 
 In next example, it is shown how to exchange arrays between Julia back and forth. In order to make this highly performant, the array data will be shared between C and Julia.
 Julia arrays are represented in C by the datatype ``jl_array_t*``. Basically, ``jl_array_t`` is a struct that contains:
-  - information about the datatype
-  - a void pointer to the data block
-  - information about the sizes of the array
+ - information about the datatype
+ - a void pointer to the data block
+ - information about the sizes of the array
 To keep things simple, we start with a 1D array. Creating an array containing Float64 elements of length 10 is done by::
 
     jl_value_t* array_type = jl_apply_array_type( jl_float64_type, 1 );
@@ -139,7 +139,7 @@ When embedding Julia into a C/C++ application, there sometimes is the need to ca
 As the first way has been already discussed in section ???, we will now focus on the Julia callable C functions.
 
 Julia Callable C Functions
-_______________________
+-------------------------------------
 
 In order to make a C function Julia callable, it must have certain signature::
 
@@ -164,7 +164,7 @@ As one can see, the arguments first have to be unboxed, in order to access their
     }    
 
 Registering Julia C Functions
-_______________________
+-----------------------------------------
 
 In order to make the Julia callable function accessible from Julia, we have to register it::
 
@@ -179,7 +179,7 @@ Now we can call ``my_c_sqrt``from Julia::
     jl_eval_string("println( my_c_sqrt(2.0) )");
 
 Type and Dimension Checks
-_______________________
+-----------------------------------------
 
 TODO::
 
