@@ -94,8 +94,8 @@ This is obviously more important when letting Julia allocate the array for us. N
 Now let us call a Julia function that performs an in-place operation on ``x``::      
       
     jl_sym_t* sym        = jl_symbol("reverse!");
-    jl_function_t *func  = (jl_function_t*) jl_get_global(jl_base_module, sym);
-    jl_value_t* ret        = jl_apply(func, (jl_value_t **) &x , 1);
+    jl_function_t* func  = (jl_function_t*) jl_get_global(jl_base_module, sym);
+    jl_value_t* ret        = jl_apply(func, (jl_value_t **) &x , 1);
 
 Multidimensional Arrays
 ---------------------------------
@@ -116,7 +116,7 @@ One way to introduce new Julia function is to define them inside of an ``jl_eval
 
 Now the function can be called either in a ``jl_eval_string`` call, or by ...
 
-  jl_function_t *func =  (jl_function_t*) jl_get_global(jl_current_module, jl_symbol("my_function"));
+    jl_function_t *func =  (jl_function_t*) jl_get_global(jl_current_module, jl_symbol("my_function"));
     jl_apply(func, NULL, 0);
 
 Using Non-Standard Modules
@@ -133,22 +133,55 @@ In the first step, by calling ``jl_eval_string("using MyModule")``, the module `
 Julia Callable C Functions
 ===========================
 
-jl_value_t* my_c_sqrt(jl_value_t* F, jl_value_t** args, uint32_t nargs)
-// alternatively: JL_CALLABLE(my_c_sqrt)
-{
-    JL_NARGS(my_c_sqrt,1,1);
-    JL_TYPECHK(my_c_sqrt, float64, args[0])
+When embedding Julia into a C/C++ application, there sometimes is the need to call C code from Julia. Imagine, for instance, that we have developed some C/C++ game and want to let the user develop Julia scripts that can enhance/modify some behavior within our game. There are basically two different possibilities to achieve this task:
+  - The scripting API is developed in C and provided in form of a shared library that can be called from Julia using ``call``. The raw ``ccall``s will then have to be wrapped in Julia to do type and dimension checks.
+  -  Alternatively, we can develop Julia callable C functions that have a special form  and do the type and dimension checks in C. These, functions have to be registered to be callable in C.
+As the first way has been already discussed in section ???, we will now focus on the Julia callable C functions.
 
-    double x = jl_unbox_float64(args[0]);
-    x = sqrt(x);
-    return jl_box_float64(x);
-}
+Julia Callable C Functions
+_______________________
 
+In order to make a C function Julia callable, it must have certain signature::
 
-      jl_sym_t* name = jl_symbol("my_c_sqrt");
-      jl_set_const(jl_current_module,
+    jl_value_t* my_c_sqrt(jl_value_t* F, jl_value_t** args, uint32_t nargs)
+
+The number of arguments that are passed from Julia to this function is ``nargs``. The arguments itself are passed in an array of ``jl_value_t*`` arguments (``args``). The function can return a result in form of a ``jl_value_t*``. Lets have a look at en example::
+
+    jl_value_t* my_c_sqrt(jl_value_t* F, jl_value_t** args, uint32_t nargs)
+    {
+        double x = jl_unbox_float64(args[0]);
+        x = sqrt(x);
+        return jl_box_float64(x);
+    }
+
+As one can see, the arguments first have to be unboxed, in order to access their value. The return value has to be boxed before returning it to Julia. In order to ensure that the function signature is correct, one can use the ``JL_CALLABLE`` macro::
+
+    JL_CALLABLE(my_c_sqrt)
+    {
+        double x = jl_unbox_float64(args[0]);
+        x = sqrt(x);
+        return jl_box_float64(x);
+    }    
+
+Registering Julia C Functions
+_______________________
+
+In order to make the Julia callable function accessible from Julia, we have to register it::
+
+    jl_sym_t* name = jl_symbol("my_c_sqrt");
+    jl_set_const(jl_current_module,
                    name,
                    (jl_value_t*) jl_new_closure(my_c_sqrt, (jl_value_t*) name, NULL)
                    );
 
-      jl_eval_string("println( my_c_sqrt(2.0) )");
+Now we can call ``my_c_sqrt``from Julia::
+
+    jl_eval_string("println( my_c_sqrt(2.0) )");
+
+Type and Dimension Checks
+_______________________
+
+TODO::
+
+    JL_NARGS(my_c_sqrt,1,1);
+    JL_TYPECHK(my_c_sqrt, float64, args[0])
