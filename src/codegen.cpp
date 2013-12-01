@@ -3293,12 +3293,12 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlstderr_var, (void*)&jl_uv_stderr);
 #ifdef _OS_WINDOWS_
     jlexe_var =
-        new GlobalVariable(*jl_Module, T_int8,
+        new GlobalVariable(*jl_Module, T_pint8,
                            true, GlobalVariable::ExternalLinkage,
                            NULL, "jl_exe_handle");
     jl_ExecutionEngine->addGlobalMapping(jlexe_var, (void*)&jl_exe_handle);
     jldll_var =
-        new GlobalVariable(*jl_Module, T_int8,
+        new GlobalVariable(*jl_Module, T_pint8,
                            true, GlobalVariable::ExternalLinkage,
                            NULL, "jl_dl_handle");
     jl_ExecutionEngine->addGlobalMapping(jldll_var, (void*)&jl_dl_handle);

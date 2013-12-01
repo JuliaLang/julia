@@ -71,7 +71,7 @@ $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%o: $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%bc
 	$(call spawn,$(LLVM_LLC)) -filetype=obj -relocation-model=pic -o $@ $<
 
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%$(SHLIB_EXT): $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%o
-	$(CXX) -g -shared -fPIC -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) -o $@ $< \
+	$(CXX) -shared -fPIC -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) -o $@ $< \
 		$$([ $(OS) = Darwin ] && echo -Wl,-undefined,dynamic_lookup || echo -Wl,--unresolved-symbols,ignore-all ) \
 		$$([ $(OS) = WINNT ] && echo -ljulia -lssp)
 

@@ -453,13 +453,16 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             if (sym.f_lib != NULL) {
 #ifdef _OS_WINDOWS_
                 if ((intptr_t)sym.f_lib == 1)
-                    libptr = jlexe_var;
+                    libptr = builder.CreateLoad(jlexe_var);
                 else if ((intptr_t)sym.f_lib == 2)
-                    libptr = jldll_var;
+                    libptr = builder.CreateLoad(jldll_var);
                 else
 #endif
                 libptr = builder.CreateCall2(jldlopen_func, builder.CreateGlobalStringPtr(sym.f_lib), ConstantInt::get(T_int32,0));
             } else {
+#ifdef _OS_WINDOWS_
+                assert(0); //XXX: this is unnecessarily harsh
+#endif
                 libptr = builder.CreateCall2(jldlopen_func, ConstantPointerNull::get((PointerType*)T_pint8), ConstantInt::get(T_int32,0));
             }
             res = builder.CreateCall2(jldlsym_func, libptr, builder.CreateGlobalStringPtr(sym.f_name));
@@ -725,13 +728,16 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             if (f_lib != NULL) {
 #ifdef _OS_WINDOWS_
                 if ((intptr_t)f_lib == 1)
-                    libptr = jlexe_var;
+                    libptr = builder.CreateLoad(jlexe_var);
                 else if ((intptr_t)f_lib == 2)
-                    libptr = jldll_var;
+                    libptr = builder.CreateLoad(jldll_var);
                 else
 #endif
                 libptr = builder.CreateCall2(jldlopen_func, builder.CreateGlobalStringPtr(f_lib), ConstantInt::get(T_int32,0));
             } else {
+#ifdef _OS_WINDOWS_
+                assert(0); //XXX: this is unnecessarily harsh
+#endif
                 libptr = builder.CreateCall2(jldlopen_func, ConstantPointerNull::get((PointerType*)T_pint8), ConstantInt::get(T_int32,0));
             }
             llvmf = builder.CreateCall2(jldlsym_func, libptr, builder.CreateGlobalStringPtr(f_name));
