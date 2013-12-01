@@ -83,14 +83,18 @@ function url(m::Method)
         return "https://github.com/JuliaLang/julia/tree/$(Base.BUILD_INFO.commit)/base/$file#L$line"
     else 
         try
-            pkg = Pkg.dir(string(M))
-            if file[1:length(pkg)] != pkg
+            d = dirname(file)
+            u = Git.readchomp(`config remote.origin.url`, dir=d)
+            u = match(Git.GITHUB_REGEX,u).captures[1]
+            root = cd(d) do # dir=d confuses --show-toplevel, apparently
+                Git.readchomp(`rev-parse --show-toplevel`)
+            end
+            if beginswith(file, root)
+                commit = Git.readchomp(`rev-parse HEAD`, dir=d)
+                return "https://github.com/$u/tree/$commit/"*file[length(root)+2:end]*"#L$line"
+            else
                 return "file://"*find_source_file(file)
             end
-            u = Git.readchomp(`config remote.origin.url`, dir=pkg)
-            u = match(Git.GITHUB_REGEX,u).captures[1]
-            commit = Git.readchomp(`rev-parse HEAD`, dir=pkg)
-            return "https://github.com/$u/tree/$commit/"*file[length(pkg)+2:end]*"#L$line"
         catch
             return "file://"*find_source_file(file)
         end
