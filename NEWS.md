@@ -49,6 +49,10 @@ Deprecated or removed
 
   * The `Stat` type is renamed `StatStruct` ([#4670])
 
+  * `set_rounding`, `get_rounding` and `with_rounding` now take an additional
+    argument specifying the floating point type to which they apply. The old
+    behaviour and `[get/set/with]_bigfloat_rounding` functions are deprecated ([#5007])
+
 [#4775]: https://github.com/JuliaLang/julia/issues/4775
 [#4870]: https://github.com/JuliaLang/julia/issues/4870
 [#4766]: https://github.com/JuliaLang/julia/issues/4766
@@ -56,7 +60,7 @@ Deprecated or removed
 [#4759]: https://github.com/JuliaLang/julia/issues/4759
 [#4819]: https://github.com/JuliaLang/julia/issues/4819
 [#4670]: https://github.com/JuliaLang/julia/issues/4670
-
+[#5007]: https://github.com/JuliaLang/julia/issues/5007
 
 
 Julia v0.2.0 Release Notes
