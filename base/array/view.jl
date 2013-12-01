@@ -26,13 +26,14 @@ end
 
 function view2data{T,n}(v::ArrayView{T,n}, i::Int)
     i -= 1
+    d = v.offset
     z = v.size
-    I = ntuple(n) do k
-        j = i % z[k]
+    t = v.strides
+    @inbounds for k = 1:n
+        d += t[k]*rem(i,z[k])
         i = div(i,z[k])
-        return j+1
     end
-    view2data(v,I)
+    return d+1
 end
 
 getindex(v::ArrayView, i::Int) = @inbounds return v.data[view2data(v,i)]
