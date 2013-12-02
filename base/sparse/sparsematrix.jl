@@ -1387,16 +1387,17 @@ end
 
 ## diag and related using an iterator
 
-type SpDiagIterer{Tv,Ti}
+type SpDiagIterator{Tv,Ti}
     A::SparseMatrixCSC{Tv,Ti}
     n::Int
 end
-SpDiagIterer(A::SparseMatrixCSC) = SpDiagIterer(A,minimum(size(A)))
+SpDiagIterator(A::SparseMatrixCSC) = SpDiagIterator(A,minimum(size(A)))
 
-length(d::SpDiagIterer) = d.n
-start(d::SpDiagIterer) = 1
-done(d::SpDiagIterer, j) = j > d.n
-function next{Tv,Ti}(d::SpDiagIterer{Tv,Ti}, j)
+length(d::SpDiagIterator) = d.n
+start(d::SpDiagIterator) = 1
+done(d::SpDiagIterator, j) = j > d.n
+
+function next{Tv}(d::SpDiagIterator{Tv}, j)
     p = d.A.colptr; i = d.A.rowval;
     first = p[j]
     last = p[j+1]-1
@@ -1411,21 +1412,21 @@ function next{Tv,Ti}(d::SpDiagIterer{Tv,Ti}, j)
             first = mid + 1
         end
     end
-    zero(eltype(A)), j+1
+    return (zero(Tv), j+1)
 end
 
-function trace(A::SparseMatrixCSC)
+function trace{Tv}(A::SparseMatrixCSC{Tv})
     if size(A,1) != size(A,2)
         error("expected square matrix")
     end
-    s = zero(eltype(A))
-    for d in SpDiagIterer(A)
+    s = zero(Tv)
+    for d in SpDiagIterator(A)
         s += d
     end
     s
 end
 
-diag(A::SparseMatrixCSC) = [d for d in SpDiagIterer(A)]
+diag(A::SparseMatrixCSC) = [d for d in SpDiagIterator(A)]
 
 function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
     if (size(v,1) != 1 && size(v,2) != 1)
