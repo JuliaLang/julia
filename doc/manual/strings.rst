@@ -252,7 +252,7 @@ You can also extract a substring using range indexing:
     julia> str[4:9]
     "lo, wo"
 
-Writing ``str[k]`` or ``str[k:k]`` does *not* give the same result:
+Writing ``str[k]`` or ``str[k:k]`` does not give the same result:
 
 .. doctest::
 
