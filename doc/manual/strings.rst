@@ -64,8 +64,8 @@ Characters
 A ``Char`` value represents a single character: it is just a 32-bit
 integer with a special literal representation and appropriate arithmetic
 behaviors, whose numeric value is interpreted as a `Unicode code
-point <http://en.wikipedia.org/wiki/Code_point>`_. Here is how ``Char``
-values are input and shown:
+point <http://en.wikipedia.org/wiki/Code_point>`_. A ``Char``
+values must be input in single quotes:
 
 .. doctest::
 
@@ -184,7 +184,8 @@ You can do comparisons and a limited amount of arithmetic with
 String Basics
 -------------
 
-Here a variable is initialized with a simple string literal:
+String literals are typed in double quotes. Here a variable is
+initialized with a simple string literal:
 
 .. doctest::
 
