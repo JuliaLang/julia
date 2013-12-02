@@ -22,13 +22,13 @@ end
 #### User-level functions
 ####
 function init(n::Integer, delay::Float64)
-    status = ccall(:profile_init, Cint, (Csize_t, Uint64), n, iround(10^9*delay))
+    status = ccall(:jl_profile_init, Cint, (Csize_t, Uint64), n, iround(10^9*delay))
     if status == -1
         error("could not allocate space for ", n, " instruction pointers")
     end
 end
 
-clear() = ccall(:profile_clear_data, Void, ())
+clear() = ccall(:jl_profile_clear_data, Void, ())
 
 function print{T<:Unsigned}(io::IO = STDOUT, data::Vector{T} = fetch(); format = :tree, C = false, combine = true, cols = Base.tty_cols())
     if format == :tree
@@ -75,17 +75,17 @@ isequal(a::LineInfo, b::LineInfo) = a.line == b.line && a.func == b.func && a.fi
 hash(li::LineInfo) = bitmix(hash(li.func), bitmix(hash(li.file), hash(li.line)))
 
 # C wrappers
-start_timer() = ccall(:profile_start_timer, Cint, ())
+start_timer() = ccall(:jl_profile_start_timer, Cint, ())
 
-stop_timer() = ccall(:profile_stop_timer, Void, ())
+stop_timer() = ccall(:jl_profile_stop_timer, Void, ())
 
-is_running() = bool(ccall(:profile_is_running, Cint, ()))
+is_running() = bool(ccall(:jl_profile_is_running, Cint, ()))
 
-get_data_pointer() = convert(Ptr{Uint}, ccall(:profile_get_data, Ptr{Uint8}, ()))
+get_data_pointer() = convert(Ptr{Uint}, ccall(:jl_profile_get_data, Ptr{Uint8}, ()))
 
-len_data() = convert(Int, ccall(:profile_len_data, Csize_t, ()))
+len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
 
-maxlen_data() = convert(Int, ccall(:profile_maxlen_data, Csize_t, ()))
+maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 
 function lookup(ip::Uint, doCframes::Bool)
     info = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Bool), ip, doCframes)
