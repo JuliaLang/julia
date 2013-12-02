@@ -37,8 +37,7 @@ getindex(v::ArrayView, I::Int...) = @inbounds return v.array[v2a(v,I)]
 setindex!(v::ArrayView, x, i::Int) = (@inbounds v.array[v2a(v,i)] = x)
 setindex!(v::ArrayView, x, I::Int...) = (@inbounds v.array[v2a(v,I)] = x)
 
-function ArrayView{T,n,m}(a::Array{T,m}, R::NTuple{n,Ranges})
-    sz = ntuple(n,k->length(R[k]))
+function ArrayView{n}(a::Array, R::NTuple{n,Ranges})
     origin = prod = 1
     strides = ntuple(n) do k
         origin += prod*(first(R[k])-1)
@@ -46,5 +45,5 @@ function ArrayView{T,n,m}(a::Array{T,m}, R::NTuple{n,Ranges})
         prod *= size(a,k)
         return stride
     end
-    ArrayView(a,sz,strides,origin)
+    ArrayView(a,map(length,R),strides,origin)
 end
