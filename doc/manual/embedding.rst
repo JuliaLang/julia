@@ -101,10 +101,37 @@ Now let us call a Julia function that performs an in-place operation on ``x``::
     jl_function_t* func  = jl_get_function(jl_base_module, "reverse!");
     jl_call1(func, (jl_value_t *) x);
 
+Acessing Returned Arrays
+---------------------------------
+If a Julia function returns an array, the return value of can be casted into a ``jl_array_t*``::
+
+    jl_function_t* func  = jl_get_function(jl_base_module, "reverse");
+    jl_array_t* y = (jl_array_t*)  jl_call1(func, (jl_value_t *) x);
+
+Now the content of ``y`` can be accessed as before using ``jl_array_data``.
+
+TODO: Whats up with memory management here?
+
 Multidimensional Arrays
 ---------------------------------
+Julia supports multidimensional arrays. In memory, the entries are stored in a linearised form, where Julia uses the column-major data format. Here is some code that creates a 2D array and uses some functions to access the array properties::
 
-TODO: Data layout an array strides
+    // Create 2D array of float64 type
+    jl_value_t* array_type = jl_apply_array_type( jl_float64_type, 1 );
+    jl_array_t* x  = jl_alloc_array_2d(array_type , 10, 5);
+
+    // Get array pointer
+    double* p = (double*) jl_array_data(x);
+    // Get number of dimensions
+    int ndims = jl_array_ndims(x)
+    // Get the size of the i-th dim
+    size_t size0 =  jl_array_dim(x,0)
+    size_t size1 =  jl_array_dim(x,1)
+
+    // Fill array with data
+    for(size_t i=0; i<size1; i++)
+        for(size_t j=0; j<size0; j++)
+            p[ j + size0* i] = i + j; 
 
 Calling Non-Base Julia Code
 ===========================
@@ -148,6 +175,10 @@ As one can verify, nothing will happen. This is of course very problematic as su
     if (jl_exception_occurred())
         printf("%s \n", jl_get_exception_str( jl_exception_occurred() ) );
 
+If you are using the Julia C API from a higher level programming language (Python, C#, C++) that supports exceptions, it makes a lot of sense to wrap each call into libjulia into a function which
+
+- First checks, whether an error has occurred
+- Then throws an exception in the programming language used
 
 Julia Callable C Functions
 =====================================
