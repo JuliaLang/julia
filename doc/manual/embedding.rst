@@ -101,7 +101,7 @@ Now let us call a Julia function that performs an in-place operation on ``x``::
     jl_function_t* func  = jl_get_function(jl_base_module, "reverse!");
     jl_call1(func, (jl_value_t *) x);
 
-Acessing Returned Arrays
+Accessing Returned Arrays
 ---------------------------------
 If a Julia function returns an array, the return value of can be casted into a ``jl_array_t*``::
 
