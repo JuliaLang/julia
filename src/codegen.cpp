@@ -164,6 +164,7 @@ static GlobalVariable *jlovferr_var;
 static GlobalVariable *jlinexacterr_var;
 static GlobalVariable *jlboundserr_var;
 static GlobalVariable *jlstderr_var;
+static GlobalVariable *jlRTLD_DEFAULT_var;
 #ifdef _OS_WINDOWS_
 static GlobalVariable *jlexe_var;
 static GlobalVariable *jldll_var;
@@ -264,14 +265,14 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     assert(f != NULL);
     nested_compile = last_n_c;
     //f->dump();
-    //verifyFunction(*f);
+    verifyFunction(*f);
     FPM->run(*f);
     //n_compile++;
     // print out the function's LLVM code
     //ios_printf(ios_stderr, "%s:%d\n",
     //           ((jl_sym_t*)li->file)->name, li->line);
     //f->dump();
-    //verifyFunction(*f);
+    verifyFunction(*f);
     if (old != NULL) {
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
@@ -3291,6 +3292,12 @@ static void init_julia_llvm_env(Module *m)
                            true, GlobalVariable::ExternalLinkage,
                            NULL, "jl_uv_stderr");
     jl_ExecutionEngine->addGlobalMapping(jlstderr_var, (void*)&jl_uv_stderr);
+
+    jlRTLD_DEFAULT_var =
+        new GlobalVariable(*jl_Module, T_pint8,
+                           true, GlobalVariable::ExternalLinkage,
+                           NULL, "jl_RTLD_DEFAULT_handle");
+    jl_ExecutionEngine->addGlobalMapping(jlRTLD_DEFAULT_var, (void*)&jl_RTLD_DEFAULT_handle);
 #ifdef _OS_WINDOWS_
     jlexe_var =
         new GlobalVariable(*jl_Module, T_pint8,

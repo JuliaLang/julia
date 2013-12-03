@@ -427,14 +427,15 @@ extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
 
 extern uv_lib_t *jl_dl_handle;
+DLLEXPORT extern uv_lib_t *const jl_RTLD_DEFAULT_handle;
 
 #if defined(_OS_WINDOWS_)
-extern uv_lib_t *jl_ntdll_handle;
-DLLEXPORT extern uv_lib_t *jl_exe_handle;
-DLLEXPORT extern uv_lib_t *jl_dl_handle;
-extern uv_lib_t *jl_kernel32_handle;
-extern uv_lib_t *jl_crtdll_handle;
-extern uv_lib_t *jl_winsock_handle;
+DLLEXPORT extern uv_lib_t *const jl_exe_handle;
+DLLEXPORT extern const uv_lib_t *const jl_dl_handle;
+extern uv_lib_t *const jl_ntdll_handle;
+extern uv_lib_t *const jl_kernel32_handle;
+extern uv_lib_t *const jl_crtdll_handle;
+extern uv_lib_t *const jl_winsock_handle;
 #endif
 
 extern uv_loop_t *jl_io_loop;
