@@ -214,9 +214,9 @@ parsehex(s) = parseint(s,16)
 @test parseint(" 2") == 2
 @test parseint("+2\n") == 2
 @test parseint("-2") == -2
-@test_throws parseint("   2 \n 0")
-@test_throws parseint("2x")
-@test_throws parseint("-")
+@test_throws parseint("   2 \n 0") ArgumentError
+@test_throws parseint("2x") ArgumentError
+@test_throws parseint("-") ArgumentError
 
 @test parseint("1234") == 1234
 @test parseint("0x1234") == 0x1234
@@ -787,10 +787,10 @@ bin_val = hex2bytes("07bf")
 @test "0123456789abcdefabcdef" == bytes2hex(hex2bytes("0123456789abcdefABCDEF"))
 
 # odd size
-@test_throws hex2bytes("0123456789abcdefABCDEF0")
+@test_throws hex2bytes("0123456789abcdefABCDEF0") ErrorException
 
 #non-hex characters
-@test_throws hex2bytes("0123456789abcdefABCDEFGH")
+@test_throws hex2bytes("0123456789abcdefABCDEFGH") ErrorException
 
 # sizeof
 @test sizeof("abc") == 3
@@ -848,4 +848,4 @@ bin_val = hex2bytes("07bf")
 
 # issue #4586
 @test rsplit(RevString("ailuj"),'l') == {"ju","ia"}
-@test_throws float64(RevString("64"))
+@test_throws float64(RevString("64")) MethodError

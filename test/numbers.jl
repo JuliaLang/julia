@@ -39,7 +39,7 @@
 @test bool(-1.0) == true
 @test bool(Complex(0,0)) == false
 @test bool(Complex(1,0)) == true
-@test_throws bool(Complex(0,1)) == true
+@test_throws bool(Complex(0,1)) == true InexactError
 @test bool(0//1) == false
 @test bool(1//1) == true
 @test bool(1//2) == true
@@ -53,9 +53,9 @@
 @test min(1.0,1) == 1
 
 # lexing typemin(Int64)
-@test_throws parse("9223372036854775808")
-@test_throws parse("-(9223372036854775808)")
-@test_throws parse("-9223372036854775808^1")
+@test_throws parse("9223372036854775808") ParseError
+@test_throws parse("-(9223372036854775808)") ParseError
+@test_throws parse("-9223372036854775808^1") ParseError
 @test (-9223372036854775808)^1 == -9223372036854775808
 @test [1 -1 -9223372036854775808] == [1 -1 typemin(Int64)]
 
@@ -701,7 +701,7 @@ for a = -5:5, b = -5:5
     @test rationalize(a/b) == a//b
     @test a//b == a//b
     if b == 0
-        @test_throws integer(a//b) == integer(a/b)
+        @test_throws integer(a//b) == integer(a/b) DivideError
     else
         @test integer(a//b) == integer(a/b)
     end
@@ -792,8 +792,8 @@ for A = real_types, B = real_types
 end
 
 # comparison should fail on complex
-@test_throws complex(1,2) > 0
-@test_throws complex(1,2) > complex(0,0)
+@test_throws complex(1,2) > 0 MethodError
+@test_throws complex(1,2) > complex(0,0) MethodError
 
 # div, fld, rem, mod
 for yr = {
@@ -1131,21 +1131,21 @@ for x = 2^24-10:2^24+10
     @test iceil(y)      == i
 end
 
-@test_throws iround(Inf)
-@test_throws iround(NaN)
+@test_throws iround(Inf) InexactError
+@test_throws iround(NaN) InexactError
 @test iround(2.5) == 3
 @test iround(-1.9) == -2
-@test_throws iround(Int64, 9.223372036854776e18)
+@test_throws iround(Int64, 9.223372036854776e18) InexactError
 @test       iround(Int64, 9.223372036854775e18) == 9223372036854774784
-@test_throws iround(Int64, -9.223372036854778e18)
+@test_throws iround(Int64, -9.223372036854778e18) InexactError
 @test       iround(Int64, -9.223372036854776e18) == typemin(Int64)
-@test_throws iround(Uint64, 1.8446744073709552e19)
+@test_throws iround(Uint64, 1.8446744073709552e19) InexactError
 @test       iround(Uint64, 1.844674407370955e19) == 0xfffffffffffff800
-@test_throws iround(Int32, 2.1474836f9)
+@test_throws iround(Int32, 2.1474836f9) InexactError
 @test       iround(Int32, 2.1474835f9) == 2147483520
-@test_throws iround(Int32, -2.147484f9)
+@test_throws iround(Int32, -2.147484f9) InexactError
 @test       iround(Int32, -2.1474836f9) == typemin(Int32)
-@test_throws iround(Uint32, 4.2949673f9)
+@test_throws iround(Uint32, 4.2949673f9) InexactError
 @test       iround(Uint32, 4.294967f9) == 0xffffff00
 
 for n = 1:100
@@ -1166,7 +1166,7 @@ end
 
 @test iround(Uint, 0.5) == 1
 @test iround(Uint, prevfloat(0.5)) == 0
-@test_throws iround(Uint, -0.5)
+@test_throws iround(Uint, -0.5) InexactError
 @test iround(Uint, prevfloat(-0.5)) == 0
 
 @test iround(Int, 0.5f0) == 1
@@ -1176,7 +1176,7 @@ end
 
 @test iround(Uint, 0.5f0) == 1
 @test iround(Uint, prevfloat(0.5f0)) == 0
-@test_throws iround(Uint, -0.5f0)
+@test_throws iround(Uint, -0.5f0) InexactError
 @test iround(Uint, prevfloat(-0.5f0)) == 0
 
 # numbers that can't be rounded by trunc(x+0.5)

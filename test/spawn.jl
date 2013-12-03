@@ -38,7 +38,7 @@ begin
     kill(p)
 end
 
-@test_throws run(`foo`)
+@test_throws run(`foo`) Base.UVError
 
 if false
     prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
