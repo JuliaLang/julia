@@ -267,6 +267,8 @@ const tupleref_tfunc = function (A, t, i)
             end
         elseif i == n && vararg
             return last.parameters[1]
+        elseif i <= 0
+            return None
         else
             return tupleref(t,i)
         end
