@@ -516,8 +516,8 @@ for elty in (Complex64, Complex128)
     V = convert(Array{elty, 2}, V)
     @test_approx_eq tril(LinAlg.BLAS.her2k('L','N',U,V)) tril(U*V' + V*U')
     @test_approx_eq triu(LinAlg.BLAS.her2k('U','N',U,V)) triu(U*V' + V*U')
-    @test_approx_eq tril(LinAlg.BLAS.her2k('L','T',U,V)) tril(U'*V + V'*U)
-    @test_approx_eq triu(LinAlg.BLAS.her2k('U','T',U,V)) triu(U'*V + V'*U)        
+    @test_approx_eq tril(LinAlg.BLAS.her2k('L','C',U,V)) tril(U'*V + V'*U)
+    @test_approx_eq triu(LinAlg.BLAS.her2k('U','C',U,V)) triu(U'*V + V'*U)        
 end
 
 # LAPACK tests
