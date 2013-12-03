@@ -57,7 +57,7 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
     hBtThread = 0;
     return 0;
 }
-DLLEXPORT int profile_start_timer(void)
+DLLEXPORT int jl_profile_start_timer(void)
 {
     running = 1;
     if (hBtThread == 0) {
@@ -78,7 +78,7 @@ DLLEXPORT int profile_start_timer(void)
     }
     return (hBtThread != NULL ? 0 : -1);
 }
-DLLEXPORT void profile_stop_timer(void)
+DLLEXPORT void jl_profile_stop_timer(void)
 {
     running = 0;
 }
@@ -229,7 +229,7 @@ void *mach_profile_listener(void *arg)
     }
 }
 
-DLLEXPORT int profile_start_timer(void)
+DLLEXPORT int jl_profile_start_timer(void)
 {
     kern_return_t ret;
     if (!profile_started) {
@@ -268,7 +268,7 @@ DLLEXPORT int profile_start_timer(void)
     return 0;
 }
 
-DLLEXPORT void profile_stop_timer(void)
+DLLEXPORT void jl_profile_stop_timer(void)
 {
     running = 0;
 }
@@ -296,7 +296,7 @@ static void profile_bt(int dummy)
     }
 }
 
-DLLEXPORT int profile_start_timer(void)
+DLLEXPORT int jl_profile_start_timer(void)
 {
     timerprof.it_interval.tv_sec = 0;
     timerprof.it_interval.tv_usec = 0;
@@ -311,7 +311,7 @@ DLLEXPORT int profile_start_timer(void)
     return 0;
 }
 
-DLLEXPORT void profile_stop_timer(void)
+DLLEXPORT void jl_profile_stop_timer(void)
 {
     running = 0;
 }
@@ -343,7 +343,7 @@ static void profile_bt(int signal, siginfo_t *si, void *uc)
     }
 }
 
-DLLEXPORT int profile_start_timer(void)
+DLLEXPORT int jl_profile_start_timer(void)
 {
     struct sigevent sigprof;
     struct sigaction sa;
@@ -376,7 +376,7 @@ DLLEXPORT int profile_start_timer(void)
     return 0;
 }
 
-DLLEXPORT void profile_stop_timer(void)
+DLLEXPORT void jl_profile_stop_timer(void)
 {
     if (running)
         timer_delete(timerprof);
@@ -389,7 +389,7 @@ DLLEXPORT void profile_stop_timer(void)
 ///////////////////////
 // Utility functions //
 ///////////////////////
-DLLEXPORT int profile_init(size_t maxsize, u_int64_t delay_nsec)
+DLLEXPORT int jl_profile_init(size_t maxsize, u_int64_t delay_nsec)
 {
     bt_size_max = maxsize;
     nsecprof = delay_nsec;
@@ -402,27 +402,27 @@ DLLEXPORT int profile_init(size_t maxsize, u_int64_t delay_nsec)
     return 0;
 }
 
-DLLEXPORT u_int8_t* profile_get_data(void)
+DLLEXPORT u_int8_t* jl_profile_get_data(void)
 {
     return (u_int8_t*) bt_data_prof;
 }
 
-DLLEXPORT size_t profile_len_data(void)
+DLLEXPORT size_t jl_profile_len_data(void)
 {
     return bt_size_cur;
 }
 
-DLLEXPORT size_t profile_maxlen_data(void)
+DLLEXPORT size_t jl_profile_maxlen_data(void)
 {
     return bt_size_max;
 }
 
-DLLEXPORT void profile_clear_data(void)
+DLLEXPORT void jl_profile_clear_data(void)
 {
     bt_size_cur = 0;
 }
 
-DLLEXPORT int profile_is_running(void)
+DLLEXPORT int jl_profile_is_running(void)
 {
     return running;
 }
