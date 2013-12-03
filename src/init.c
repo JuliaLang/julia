@@ -397,6 +397,8 @@ DLLEXPORT void uv_atexit_hook()
 void jl_get_builtin_hooks(void);
 
 uv_lib_t *jl_dl_handle;
+uv_lib_t _jl_RTLD_DEFAULT_handle;
+uv_lib_t *const jl_RTLD_DEFAULT_handle=&_jl_RTLD_DEFAULT_handle;
 #ifdef _OS_WINDOWS_
 uv_lib_t _jl_ntdll_handle;
 uv_lib_t _jl_exe_handle;
@@ -404,11 +406,11 @@ uv_lib_t _jl_kernel32_handle;
 uv_lib_t _jl_crtdll_handle;
 uv_lib_t _jl_winsock_handle;
 
-uv_lib_t *jl_ntdll_handle=&_jl_ntdll_handle;
-uv_lib_t *jl_exe_handle=&_jl_exe_handle;
-uv_lib_t *jl_kernel32_handle=&_jl_kernel32_handle;
-uv_lib_t *jl_crtdll_handle=&_jl_crtdll_handle;
-uv_lib_t *jl_winsock_handle=&_jl_winsock_handle;
+uv_lib_t *const jl_ntdll_handle=&_jl_ntdll_handle;
+uv_lib_t *const jl_exe_handle=&_jl_exe_handle;
+uv_lib_t *const jl_kernel32_handle=&_jl_kernel32_handle;
+uv_lib_t *const jl_crtdll_handle=&_jl_crtdll_handle;
+uv_lib_t *const jl_winsock_handle=&_jl_winsock_handle;
 #endif
 uv_loop_t *jl_io_loop;
 
@@ -604,6 +606,11 @@ void julia_init(char *imageFile, int build_mode)
     jl_page_size = jl_getpagesize();
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
+#ifdef RTLD_DEFAULT
+    jl_RTLD_DEFAULT_handle->handle = RTLD_DEFAULT;
+#else
+    jl_RTLD_DEFAULT_handle->handle = jl_dl_handle->handle;
+#endif
 #ifdef _OS_WINDOWS_
     uv_dlopen("ntdll.dll",jl_ntdll_handle); //bypass julia's pathchecking for system dlls
     uv_dlopen("kernel32.dll",jl_kernel32_handle);

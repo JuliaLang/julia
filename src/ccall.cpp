@@ -70,28 +70,101 @@ extern "C" const char *jl_lookup_soname(char *pfx, size_t n)
 #endif
 
 // map from user-specified lib names to handles
-static std::map<std::string, void*> libMap;
+static std::map<std::string, uv_lib_t*> libMap;
 
-static void *get_library_sym(char *name, char *lib)
+static uv_lib_t *get_library(char *lib)
 {
-    void *hnd;
-    if (lib == NULL) {
-        hnd = jl_dl_handle;
-    }
-    else {
-        hnd = libMap[lib];
-        if (hnd == NULL) {
-            hnd = jl_load_dynamic_library(lib, JL_RTLD_DEFAULT);
-            if (hnd != NULL)
-                libMap[lib] = hnd;
-            else
-                return NULL;
-        }
-    }
-    void *sval = jl_dlsym_e((uv_lib_t*)hnd, name);
-    return sval;
+    uv_lib_t *hnd;
+#ifdef _OS_WINDOWS_
+    if ((intptr_t)lib == 1)
+        return jl_exe_handle;
+    if ((intptr_t)lib == 2)
+        return jl_dl_handle;
+#endif
+    if (lib == NULL)
+        return jl_RTLD_DEFAULT_handle;
+    hnd = libMap[lib];
+    if (hnd != NULL)
+        return hnd;
+    hnd = jl_load_dynamic_library(lib, JL_RTLD_DEFAULT);
+    if (hnd != NULL)
+        libMap[lib] = hnd;
+    return hnd;
 }
 
+static std::map<std::string, GlobalVariable*> libMapGV;
+static std::map<std::string, GlobalVariable*> symMapGV;
+static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_name, jl_codectx_t *ctx)
+{
+    Constant *initnul = ConstantPointerNull::get((PointerType*)T_pint8);
+
+    uv_lib_t *libsym = NULL;
+    bool runtime_lib = false;
+    GlobalVariable *libptrgv;
+#ifdef _OS_WINDOWS_
+    if ((intptr_t)f_lib == 1)
+        libptrgv = jlexe_var;
+    else if ((intptr_t)f_lib == 2)
+        libptrgv = jldll_var;
+    else
+#endif
+    if (f_lib == NULL)
+        libptrgv = jlRTLD_DEFAULT_var;
+    else {
+        runtime_lib = true;
+        libptrgv = libMapGV[f_lib];
+        if (libptrgv == NULL) {
+            libptrgv = new GlobalVariable(*jl_Module, T_pint8,
+               false, GlobalVariable::PrivateLinkage,
+               initnul, f_lib);
+            libMapGV[f_lib] = libptrgv;
+            libsym = get_library(f_lib);
+            *((uv_lib_t**)jl_ExecutionEngine->getPointerToGlobal(libptrgv)) = libsym;
+        }
+    }
+    if (libsym == NULL) {
+        libsym = *((uv_lib_t**)jl_ExecutionEngine->getPointerToGlobal(libptrgv));
+    }
+
+    GlobalVariable *llvmgv = symMapGV[f_name];
+    if (llvmgv == NULL) {
+        llvmgv = new GlobalVariable(*jl_Module, T_pint8,
+           false, GlobalVariable::PrivateLinkage,
+           initnul, f_name);
+        symMapGV[f_name] = llvmgv;
+        *((void**)jl_ExecutionEngine->getPointerToGlobal(llvmgv)) = jl_dlsym_e(libsym, f_name);
+    }
+
+    BasicBlock *dlopen_lookup = runtime_lib ? BasicBlock::Create(getGlobalContext(), "dlopen") : NULL,
+               *dlopen_lookup2 = runtime_lib ? BasicBlock::Create(getGlobalContext(), "dlopen2") : NULL,
+               *dlsym_lookup = BasicBlock::Create(getGlobalContext(), "dlsym"),
+               *ccall_bb = BasicBlock::Create(getGlobalContext(), "ccall");
+    builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(llvmgv), initnul), ccall_bb, runtime_lib ? dlopen_lookup : dlsym_lookup);
+
+    if (runtime_lib) {
+        ctx->f->getBasicBlockList().push_back(dlopen_lookup);
+        builder.SetInsertPoint(dlopen_lookup);
+        builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(libptrgv), initnul), dlsym_lookup, dlopen_lookup2);
+
+        ctx->f->getBasicBlockList().push_back(dlopen_lookup2);
+        builder.SetInsertPoint(dlopen_lookup2);
+        Value *libptr = builder.CreateCall2(jldlopen_func, builder.CreateGlobalStringPtr(f_lib), ConstantInt::get(T_int32,0));
+        builder.CreateStore(libptr, libptrgv);
+        builder.CreateBr(dlsym_lookup);
+    }
+
+    ctx->f->getBasicBlockList().push_back(dlsym_lookup);
+    builder.SetInsertPoint(dlsym_lookup);
+    Value *llvmf = builder.CreateCall2(jldlsym_func, builder.CreateLoad(libptrgv), builder.CreateGlobalStringPtr(f_name));
+    null_pointer_check(llvmf,ctx);
+    builder.CreateStore(llvmf, llvmgv);
+    builder.CreateBr(ccall_bb);
+
+    ctx->f->getBasicBlockList().push_back(ccall_bb);
+    builder.SetInsertPoint(ccall_bb);
+    llvmf = builder.CreateLoad(llvmgv);
+    return builder.CreatePointerCast(llvmf,funcptype);
+}
 // --- argument passing and scratch space utilities ---
 
 static Function *value_to_pointer_func;
@@ -424,57 +497,11 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         JL_PRINTF(JL_STDERR,"warning: literal address used in cglobal for %s; code cannot be statically compiled\n", sym.f_name);
     }
     else {
-        void *symaddr;
-        if (sym.f_lib != NULL) {
-#ifdef _OS_WINDOWS_
-            if ((intptr_t)sym.f_lib == 1)
-                symaddr = jl_dlsym_e(jl_exe_handle, sym.f_name);
-            else if ((intptr_t)sym.f_lib == 2)
-                symaddr = jl_dlsym_e(jl_dl_handle, sym.f_name);
-            else
-#endif
-            symaddr = get_library_sym(sym.f_name, sym.f_lib);
-        }
-        else
-            symaddr = sys::DynamicLibrary::SearchForAddressOfSymbol(sym.f_name);
         if (imaging_mode) {
-            PointerType *lrtp = (PointerType*)lrt;
-            Constant *nullval = ConstantPointerNull::get(lrtp);
-            GlobalValue *llvmgv = new GlobalVariable(*jl_Module, lrtp,
-                   false, GlobalVariable::PrivateLinkage,
-                   nullval, sym.f_name);
-            *((void**)jl_ExecutionEngine->getPointerToGlobal(llvmgv)) = symaddr;
-            BasicBlock *dlsym_lookup=BasicBlock::Create(getGlobalContext(), "dlsym-lookup"),
-                       *cglobal_bb=BasicBlock::Create(getGlobalContext(), "cglobal");
-            builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(llvmgv), nullval), cglobal_bb, dlsym_lookup);
-            ctx->f->getBasicBlockList().push_back(dlsym_lookup);
-            builder.SetInsertPoint(dlsym_lookup);
-            Value *libptr;
-            if (sym.f_lib != NULL) {
-#ifdef _OS_WINDOWS_
-                if ((intptr_t)sym.f_lib == 1)
-                    libptr = builder.CreateLoad(jlexe_var);
-                else if ((intptr_t)sym.f_lib == 2)
-                    libptr = builder.CreateLoad(jldll_var);
-                else
-#endif
-                libptr = builder.CreateCall2(jldlopen_func, builder.CreateGlobalStringPtr(sym.f_lib), ConstantInt::get(T_int32,0));
-            } else {
-#ifdef _OS_WINDOWS_
-                assert(0); //XXX: this is unnecessarily harsh
-#endif
-                libptr = builder.CreateCall2(jldlopen_func, ConstantPointerNull::get((PointerType*)T_pint8), ConstantInt::get(T_int32,0));
-            }
-            res = builder.CreateCall2(jldlsym_func, libptr, builder.CreateGlobalStringPtr(sym.f_name));
-            null_pointer_check(res,ctx);
-            res = builder.CreatePointerCast(res, lrtp);
-            builder.CreateStore(res, llvmgv);
-            builder.CreateBr(cglobal_bb);
-            ctx->f->getBasicBlockList().push_back(cglobal_bb);
-            builder.SetInsertPoint(cglobal_bb);
-            res = builder.CreateLoad(llvmgv);
+            res = runtime_sym_lookup((PointerType*)lrt, sym.f_lib, sym.f_name, ctx);
         }
         else {
+            void *symaddr = jl_dlsym_e(get_library(sym.f_lib), sym.f_name);
             if (symaddr == NULL) {
                 std::stringstream msg;
                 msg << "cglobal: could not find symbol ";
@@ -686,7 +713,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     // make LLVM function object for the target
     Value *llvmf;
     FunctionType *functype = FunctionType::get(lrt, fargt_sig, isVa);
-    
+
     if (jl_ptr != NULL) {
         null_pointer_check(jl_ptr,ctx);
         Type *funcptype = PointerType::get(functype,0);
@@ -699,57 +726,13 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     else {
         assert(f_name != NULL);
-        void *symaddr;
-        if (f_lib != NULL) {
-#ifdef _OS_WINDOWS_
-            if ((intptr_t)f_lib == 1)
-                symaddr = jl_dlsym_e(jl_exe_handle, f_name);
-            else if ((intptr_t)f_lib == 2)
-                symaddr = jl_dlsym_e(jl_dl_handle, f_name);
-            else
-#endif
-            symaddr = get_library_sym(f_name, f_lib);
-        }
-        else
-            symaddr = sys::DynamicLibrary::SearchForAddressOfSymbol(f_name);
+
         PointerType *funcptype = PointerType::get(functype,0);
         if (imaging_mode) {
-            Constant *nullfunc = ConstantPointerNull::get(funcptype);
-            GlobalValue *llvmgv = new GlobalVariable(*jl_Module, funcptype,
-                   false, GlobalVariable::PrivateLinkage,
-                   nullfunc, f_name);
-            *((void**)jl_ExecutionEngine->getPointerToGlobal(llvmgv)) = symaddr;
-            BasicBlock *dlsym_lookup=BasicBlock::Create(getGlobalContext(), "dlsym-lookup"),
-                       *ccall_bb=BasicBlock::Create(getGlobalContext(), "ccall");
-            builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(llvmgv), nullfunc), ccall_bb, dlsym_lookup);
-            ctx->f->getBasicBlockList().push_back(dlsym_lookup);
-            builder.SetInsertPoint(dlsym_lookup);
-            Value *libptr;
-            if (f_lib != NULL) {
-#ifdef _OS_WINDOWS_
-                if ((intptr_t)f_lib == 1)
-                    libptr = builder.CreateLoad(jlexe_var);
-                else if ((intptr_t)f_lib == 2)
-                    libptr = builder.CreateLoad(jldll_var);
-                else
-#endif
-                libptr = builder.CreateCall2(jldlopen_func, builder.CreateGlobalStringPtr(f_lib), ConstantInt::get(T_int32,0));
-            } else {
-#ifdef _OS_WINDOWS_
-                assert(0); //XXX: this is unnecessarily harsh
-#endif
-                libptr = builder.CreateCall2(jldlopen_func, ConstantPointerNull::get((PointerType*)T_pint8), ConstantInt::get(T_int32,0));
-            }
-            llvmf = builder.CreateCall2(jldlsym_func, libptr, builder.CreateGlobalStringPtr(f_name));
-            null_pointer_check(llvmf,ctx);
-            llvmf = builder.CreatePointerCast(llvmf,funcptype);
-            builder.CreateStore(llvmf, llvmgv);
-            builder.CreateBr(ccall_bb);
-            ctx->f->getBasicBlockList().push_back(ccall_bb);
-            builder.SetInsertPoint(ccall_bb);
-            llvmf = builder.CreateLoad(llvmgv);
+            llvmf = runtime_sym_lookup(funcptype, f_lib, f_name, ctx);
         }
         else {
+            void *symaddr = jl_dlsym_e(get_library(f_lib), f_name);
             if (symaddr == NULL) {
                 JL_GC_POP();
                 std::stringstream msg;
