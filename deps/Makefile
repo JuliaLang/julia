@@ -719,13 +719,13 @@ ifneq ($(ARCH),x86_64)
 OPENBLAS_BUILD_OPTS += NUM_THREADS=8
 else ifeq ($(OS),WINNT)
 # Windows seems unable to handle very many
-OPENBLAS_BUILD_OPTS += NUM_THREADS=24
+OPENBLAS_BUILD_OPTS += NUM_THREADS=16
 else ifeq ($(OS),Darwin)
 # This should suffice for the largest macs
-OPENBLAS_BUILD_OPTS += NUM_THREADS=24
+OPENBLAS_BUILD_OPTS += NUM_THREADS=16
 else
 # On linux, try to provision for the largest possible machine currently
-OPENBLAS_BUILD_OPTS += NUM_THREADS=128
+OPENBLAS_BUILD_OPTS += NUM_THREADS=16
 endif
 else
 OPENBLAS_BUILD_OPTS += USE_THREAD=0
@@ -1535,7 +1535,7 @@ git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
 	touch -c $@
 git-$(GIT_VER)/config.status: git-$(GIT_VER)/configure
 	cd git-$(GIT_VER) && \
-	./configure $(CONFIGURE_COMMON)
+	./configure $(CONFIGURE_COMMON) --bindir="$(BUILD)/libexec"
 	touch -c $@
 $(GIT_SOURCE): git-$(GIT_VER)/config.status
 	$(MAKE) -C git-$(GIT_VER)

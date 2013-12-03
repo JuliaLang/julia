@@ -8,7 +8,7 @@ haskey(d::Associative, k) = in(k,keys(d))
 
 function in(p::(Any,Any), a::Associative)
     v = get(a,p[1],secret_table_token)
-    !is(v, secret_table_token) && isequal(v, p[2])
+    !is(v, secret_table_token) && (v == p[2])
 end
 
 function show{K,V}(io::IO, t::Associative{K,V})
@@ -316,7 +316,7 @@ Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
 Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
 Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
 
-Dict{K,V}(kv::Array{(K,V)}) = Dict{K,V}(kv)
+Dict{K,V}(kv::AbstractArray{(K,V)}) = Dict{K,V}(kv)
 
 similar{K,V}(d::Dict{K,V}) = (K=>V)[]
 

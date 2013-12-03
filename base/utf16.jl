@@ -1,4 +1,3 @@
-
 immutable UTF16String <: String
     data::Array{Uint16,1}
 end
@@ -43,4 +42,9 @@ convert(::Type{UTF16String}, s::UTF16String) = s
 convert(::Type{UTF16String}, s::String) = encode16(s)
 convert(::Type{UTF8String}, s::UTF16String) =
     sprint(length(s.data), io->for c in s; write(io,c::Char); end)
+convert(::Type{Array{Uint16,1}}, s::UTF16String) = s.data
+convert(::Type{Array{Uint16}}, s::UTF16String) = s.data
 
+sizeof(s::UTF16String) = sizeof(s.data)
+convert{T<:Union(Int16,Uint16)}(::Type{Ptr{T}}, s::UTF16String) =
+    convert(Ptr{T}, s.data)

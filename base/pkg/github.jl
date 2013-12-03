@@ -9,7 +9,7 @@ const AUTH_DATA = {
 }
 
 function user()
-    if !Git.success(`config --global github.user`)
+    if !success(`git config --global github.user`)
         error("""
         no GitHub user name configured; please configure it with:
 
@@ -18,7 +18,7 @@ function user()
         where USERNAME is replaced with your GitHub user name.
         """)
     end
-    Git.readchomp(`config --global github.user`)
+    readchomp(`git config --global github.user`)
 end
 
 function json()

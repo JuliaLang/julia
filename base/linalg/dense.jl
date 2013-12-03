@@ -356,7 +356,6 @@ end
 sqrtm{T<:Integer}(A::StridedMatrix{T}, cond::Bool) = sqrtm(float(A), cond)
 sqrtm{T<:Integer}(A::StridedMatrix{Complex{T}}, cond::Bool) = sqrtm(complex128(A), cond)
 sqrtm(A::StridedMatrix) = sqrtm(A, false)
-sqrtm(a::StridedVector) = size(a, 1) == 1 ? sqrt(a) : throw(DimensionMismatch("vector must have length one"))
 sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
 sqrtm(a::Complex) = sqrt(a)
 
@@ -487,7 +486,7 @@ function null{T<:BlasFloat}(A::StridedMatrix{T})
     (m == 0 || n == 0) && return eye(T, n)
     SVD = svdfact(A, false)
     indstart = sum(SVD[:S] .> max(m,n)*maximum(SVD[:S])*eps(eltype(SVD[:S]))) + 1
-    return SVD[:V][:,indstart:]
+    return SVD[:V][:,indstart:end]
 end
 null{T<:Integer}(A::StridedMatrix{T}) = null(float(A))
 null(a::StridedVector) = null(reshape(a, length(a), 1))

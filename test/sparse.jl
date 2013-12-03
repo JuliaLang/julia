@@ -88,11 +88,12 @@ for i = 1:5
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
 end
 
-# matrix multiplication
+# matrix multiplication and kron
 for i = 1:5
-    a = sprand(10, 5, 0.5)
-    b = sprand(5, 10, 0.1)
+    a = sprand(10, 5, 0.7)
+    b = sprand(5, 10, 0.3)
     @test maximum(abs(a*b - full(a)*full(b))) < 100*eps()
+    @test full(kron(a,b)) == kron(full(a), full(b))
 end
 
 # reductions

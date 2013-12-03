@@ -220,7 +220,7 @@ end
 writedlm{T}(io::IO, a::AbstractArray{T,0}, dlm::Char) = writedlm(io, reshape(a,1), dlm)
 
 function writedlm(io::IO, a::AbstractArray, dlm::Char)
-    tail = size(a)[3:]
+    tail = size(a)[3:end]
     function print_slice(idxs...)
         writedlm(io, sub(a, 1:size(a,1), 1:size(a,2), idxs...), dlm)
         if idxs != tail

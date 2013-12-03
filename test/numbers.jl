@@ -1576,3 +1576,6 @@ for a = -1:1
 end
 @test_throws nextpow(2,0)
 @test_throws prevpow(2,0)
+
+@test nextprod([2,3,5],30) == 30
+@test nextprod([2,3,5],33) == 36

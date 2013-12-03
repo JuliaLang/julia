@@ -437,8 +437,14 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     W = Woodbury(T, U, C, V)
     F = full(W)
     @test_approx_eq W*v F*v
-    @test_approx_eq W\v F\v
+    iFv = F\v
+    @test_approx_eq W\v iFv
     @test_approx_eq det(W) det(F)
+    iWv = similar(iFv)
+    if elty != Int
+        Base.LinAlg.solve!(iWv, W, v)
+        @test_approx_eq iWv iFv
+    end
 
     # Diagonal
     D = Diagonal(d)
@@ -479,6 +485,39 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     # issue 1490
     @test_approx_eq_eps det(ones(elty, 3,3)) zero(elty) 3*eps(real(one(elty)))
     end
+end
+
+# Generic BLAS tests
+srand(100)
+# syr2k! and her2k!
+for elty in (Float32, Float64, Complex64, Complex128)
+    U = randn(5,2)
+    V = randn(5,2)
+    if elty == Complex64 || elty == Complex128
+        U = complex(U, U)
+        V = complex(V, V)
+    end
+    U = convert(Array{elty, 2}, U)
+    V = convert(Array{elty, 2}, V)
+    @test_approx_eq tril(LinAlg.BLAS.syr2k('L','N',U,V)) tril(U*V.' + V*U.')
+    @test_approx_eq triu(LinAlg.BLAS.syr2k('U','N',U,V)) triu(U*V.' + V*U.')
+    @test_approx_eq tril(LinAlg.BLAS.syr2k('L','T',U,V)) tril(U.'*V + V.'*U)
+    @test_approx_eq triu(LinAlg.BLAS.syr2k('U','T',U,V)) triu(U.'*V + V.'*U)        
+end
+
+for elty in (Complex64, Complex128)
+    U = randn(5,2)
+    V = randn(5,2)
+    if elty == Complex64 || elty == Complex128
+        U = complex(U, U)
+        V = complex(V, V)
+    end
+    U = convert(Array{elty, 2}, U)
+    V = convert(Array{elty, 2}, V)
+    @test_approx_eq tril(LinAlg.BLAS.her2k('L','N',U,V)) tril(U*V' + V*U')
+    @test_approx_eq triu(LinAlg.BLAS.her2k('U','N',U,V)) triu(U*V' + V*U')
+    @test_approx_eq tril(LinAlg.BLAS.her2k('L','T',U,V)) tril(U'*V + V'*U)
+    @test_approx_eq triu(LinAlg.BLAS.her2k('U','T',U,V)) triu(U'*V + V'*U)        
 end
 
 # LAPACK tests

@@ -2605,6 +2605,18 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     //TODO: this seems to cause problems, but should be made to work eventually
     //if (jlrettype == (jl_value_t*)jl_bottom_type)
     //    f->setDoesNotReturn();
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+    AttrBuilder *attr = new AttrBuilder();
+    attr->addStackAlignmentAttr(8);
+#if LLVM32 && !LLVM33
+    f->addAttribute(Attributes::FunctionIndex,
+        Attributes::get(f->getContext(),*attr));
+#else
+    f->addAttributes(AttributeSet::FunctionIndex,
+        AttributeSet::get(f->getContext(),
+            AttributeSet::FunctionIndex,*attr));
+#endif
+#endif
 #ifdef DEBUG
 #if LLVM32 && !LLVM33
     f->addFnAttr(Attributes::StackProtectReq);
@@ -3491,8 +3503,8 @@ extern "C" void jl_init_codegen(void)
 #ifndef LLVM34
     options.NoFramePointerElimNonLeaf = true;
 #endif
-#ifdef __MINGW32__
-    options.StackAlignmentOverride = 16;
+#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+    options.StackAlignmentOverride = 8;
 #endif
 #ifdef __APPLE__
     options.JITExceptionHandling = 1;
