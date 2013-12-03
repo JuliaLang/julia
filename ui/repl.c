@@ -188,6 +188,7 @@ void handle_input(jl_value_t *ast, int end, int show_value)
     fargs[0] = ast;
     fargs[1] = jl_box_long(show_value);
     jl_apply((jl_function_t*)f, fargs, 2);
+    JL_GC_POP();
 }
 
 void jl_lisp_prompt();
