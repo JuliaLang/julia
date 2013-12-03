@@ -747,7 +747,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     // emit arguments
-    Value *argvals[(nargs-3)/2 + sret];
+    std::vector<Value *> argvals((nargs-3)/2 + sret);
     Value *result;
     if (sret) {
         assert(jl_is_structtype(rt));
