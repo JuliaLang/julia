@@ -445,10 +445,10 @@ function nextprod(a::Vector{Int}, x)
         error("unsafe for x bigger than typemax(Int)")
     end
     k = length(a)
-    v = ones(Int, k)            # current value of each counter
-    mx = int(nextpow(a, x))     # maximum value of each counter
-    v[1] = mx[1]                # start at first case that is >= x
-    p::morebits(Int) = mx[1]    # initial value of product in this case
+    v = ones(Int, k)                  # current value of each counter
+    mx = [nextpow(ai,x) for ai in a]  # maximum value of each counter
+    v[1] = mx[1]                      # start at first case that is >= x
+    p::morebits(Int) = mx[1]          # initial value of product in this case
     best = p
     icarry = 1
     
@@ -486,9 +486,9 @@ function prevprod(a::Vector{Int}, x)
         error("unsafe for x bigger than typemax(Int)")
     end
     k = length(a)
-    v = ones(Int, k)            # current value of each counter
-    mx = int(nextpow(a, x))     # allow each counter to exceed p (sentinel)
-    first = int(prevpow(a[1], x))  # start at best case in first factor
+    v = ones(Int, k)                  # current value of each counter
+    mx = [nextpow(ai,x) for ai in a]  # allow each counter to exceed p (sentinel)
+    first = int(prevpow(a[1], x))     # start at best case in first factor
     v[1] = first
     p::morebits(Int) = first
     best = p

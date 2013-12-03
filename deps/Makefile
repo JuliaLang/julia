@@ -719,13 +719,13 @@ ifneq ($(ARCH),x86_64)
 OPENBLAS_BUILD_OPTS += NUM_THREADS=8
 else ifeq ($(OS),WINNT)
 # Windows seems unable to handle very many
-OPENBLAS_BUILD_OPTS += NUM_THREADS=24
+OPENBLAS_BUILD_OPTS += NUM_THREADS=16
 else ifeq ($(OS),Darwin)
 # This should suffice for the largest macs
-OPENBLAS_BUILD_OPTS += NUM_THREADS=24
+OPENBLAS_BUILD_OPTS += NUM_THREADS=16
 else
 # On linux, try to provision for the largest possible machine currently
-OPENBLAS_BUILD_OPTS += NUM_THREADS=128
+OPENBLAS_BUILD_OPTS += NUM_THREADS=16
 endif
 else
 OPENBLAS_BUILD_OPTS += USE_THREAD=0

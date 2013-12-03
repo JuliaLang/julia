@@ -377,7 +377,7 @@ function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
         return write(s, pointer(a, 1), colsz)
     else
         cartesianmap((idxs...)->write(s, pointer(a, idxs), colsz),
-                     tuple(1, size(a)[2:]...))
+                     tuple(1, size(a)[2:end]...))
         return colsz*trailingsize(a,2)
     end
 end

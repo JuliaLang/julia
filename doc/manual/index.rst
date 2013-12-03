@@ -30,6 +30,7 @@
    parallel-computing
    running-external-programs
    calling-c-and-fortran-code
+   embedding
    packages
    performance-tips
    style-guide

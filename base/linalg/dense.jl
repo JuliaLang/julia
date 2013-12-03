@@ -486,7 +486,7 @@ function null{T<:BlasFloat}(A::StridedMatrix{T})
     (m == 0 || n == 0) && return eye(T, n)
     SVD = svdfact(A, false)
     indstart = sum(SVD[:S] .> max(m,n)*maximum(SVD[:S])*eps(eltype(SVD[:S]))) + 1
-    return SVD[:V][:,indstart:]
+    return SVD[:V][:,indstart:end]
 end
 null{T<:Integer}(A::StridedMatrix{T}) = null(float(A))
 null(a::StridedVector) = null(reshape(a, length(a), 1))

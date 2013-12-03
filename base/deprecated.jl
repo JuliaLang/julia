@@ -356,5 +356,8 @@ export mmread
 export Stat
 const Stat = StatStruct
 
+export CharString
+const CharString = UTF32String
+
 # 0.3 discontinued functions
 

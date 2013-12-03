@@ -491,6 +491,12 @@ beyond the point of insertion have to be moved one place over.
 All operations on sparse matrices are carefully implemented to exploit
 the CSC data structure for performance, and to avoid expensive operations.
 
+If you have data in CSC format from a different application or library, 
+and wish to import it in Julia, make sure that you use 1-based indexing.
+The row indices in every column need to be sorted. If your `SparseMatrixCSC` 
+ojbect contains unsorted row indices, one quick way to sort them is by
+doing a double transpose.
+
 Sparse matrix constructors
 --------------------------
 
