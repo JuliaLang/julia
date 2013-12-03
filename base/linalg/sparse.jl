@@ -126,6 +126,62 @@ function *{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
     Ctt = Base.SparseMatrix.transpose!(Ct, SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC))
 end
 
+## solvers
+function A_ldiv_B!(A::SparseMatrixCSC, b::AbstractVector)
+    if istril(A) 
+        if istriu(A) return A_ldiv_B!(Diagonal(A.nzval), b) end
+        return fwdTriSolve!(A, b) 
+    end
+    if istriu(A) return bwdTriSolve!(A, b) end
+    return A_ldiv_B!(lufact(A),b)
+end
+
+function fwdTriSolve!(A::SparseMatrixCSC, b::AbstractVector)
+# forward substitution for CSC matrices
+    n = length(b)
+    ncol = chksquare(A)
+    if n != ncol throw(DimensionMismatch("A is $(ncol)X$(ncol) and b has length $(n)")) end
+   
+    aa = A.nzval
+    ja = A.rowval
+    ia = A.colptr
+   
+    for j = 1:n - 1
+        i1 = ia[j]
+        i2 = ia[j+1]-1
+        b[j] /= aa[i1]
+        bj = b[j]
+        for i = i1+1:i2
+            b[ja[i]] -= bj*aa[i]
+        end
+    end
+    b[end] /= aa[end]
+    return b
+end
+
+function bwdTriSolve!(A::SparseMatrixCSC, b::AbstractVector)
+# backward substitution for CSC matrices
+    n = length(b)
+    ncol = chksquare(A)
+    if n != ncol throw(DimensionMismatch("A is $(ncol)X$(ncol) and b has length $(n)")) end
+
+   aa = A.nzval
+   ja = A.rowval
+   ia = A.colptr
+
+   for j = n:-1:2
+      i1 = ia[j]
+      i2 = ia[j+1]-1
+      b[j] /= aa[i2]
+      bj = b[j]
+      for i = i2-1:-1:i1
+         b[ja[i]] -= bj*aa[i]
+      end
+   end
+   b[1] /= aa[1]
+   return b
+end
+
 ## triu, tril
 
 function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
