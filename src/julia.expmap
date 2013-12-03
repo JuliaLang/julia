@@ -263,6 +263,7 @@
     jl_read_buffer;
     jl_readdir;
     jl_readuntil;
+    jl_RTLD_DEFAULT_handle;
     jl_throw;
     jl_rethrow;
     jl_rethrow_other;
