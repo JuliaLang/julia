@@ -183,7 +183,10 @@ void handle_input(jl_value_t *ast, int end, int show_value)
     }
     jl_value_t *f = jl_get_global(jl_base_module,jl_symbol("repl_callback"));
     assert(f);
-    jl_value_t *fargs[] = { ast, jl_box_long(show_value) };
+    jl_value_t **fargs;
+    JL_GC_PUSHARGS(fargs, 2);
+    fargs[0] = ast;
+    fargs[1] = jl_box_long(show_value);
     jl_apply((jl_function_t*)f, fargs, 2);
 }
 
