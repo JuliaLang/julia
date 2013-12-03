@@ -645,7 +645,7 @@ DLLEXPORT void jl_exit(int exitcode)
 
 DLLEXPORT int jl_cwd(char *buffer, size_t size)
 {
-    return uv_cwd(buffer,size).code;
+    return uv_cwd(buffer,size);
 }
 
 DLLEXPORT int jl_getpid()
@@ -684,7 +684,7 @@ DLLEXPORT int jl_uv_sizeof_interface_address()
 
 DLLEXPORT int jl_uv_interface_addresses(uv_interface_address_t **ifAddrStruct,int *count)
 {
-    return uv_interface_addresses(ifAddrStruct,count).code;
+    return uv_interface_addresses(ifAddrStruct,count);
 }
 
 DLLEXPORT int jl_uv_interface_address_is_internal(uv_interface_address_t *addr)
