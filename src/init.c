@@ -52,7 +52,7 @@ void __cdecl fpreset (void);
 #include <windows.h>
 #include <dbghelp.h>
 extern int needsSymRefreshModuleList;
-extern WINBOOL WINAPI (*hSymRefreshModuleList)(HANDLE);
+extern BOOL (*hSymRefreshModuleList)(HANDLE);
 #endif
 #if defined(__linux__)
 //#define _GNU_SOURCE

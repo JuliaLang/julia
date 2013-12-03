@@ -491,7 +491,7 @@ DLLEXPORT int jl_write_copy(uv_stream_t *stream, const char *str, size_t n, uv_w
     memcpy(data,str,n);
     uv_buf_t buf[]  = {{.base = data,.len=n}};
     uvw->data = NULL;
-    int err = uv_write(uvw,stream,buf,1,writecb);  
+    int err = uv_write(uvw,stream,buf,1,(uv_write_cb)writecb);  
     JL_SIGATOMIC_END();
     return err;
 }
@@ -532,7 +532,7 @@ DLLEXPORT int jl_write_no_copy(uv_stream_t *stream, char *data, size_t n, uv_wri
 {
     uv_buf_t buf[]  = {{.base = data,.len=n}};
     JL_SIGATOMIC_BEGIN();
-    int err = uv_write(uvw,stream,buf,1,writecb);
+    int err = uv_write(uvw,stream,buf,1,(uv_write_cb)writecb);
     uvw->data = NULL;
     JL_SIGATOMIC_END();
     return err;
@@ -645,7 +645,7 @@ DLLEXPORT void jl_exit(int exitcode)
 
 DLLEXPORT int jl_cwd(char *buffer, size_t size)
 {
-    return uv_cwd(buffer,size);
+    return uv_cwd(buffer,size).code;
 }
 
 DLLEXPORT int jl_getpid()
@@ -684,7 +684,7 @@ DLLEXPORT int jl_uv_sizeof_interface_address()
 
 DLLEXPORT int jl_uv_interface_addresses(uv_interface_address_t **ifAddrStruct,int *count)
 {
-    return uv_interface_addresses(ifAddrStruct,count);
+    return uv_interface_addresses(ifAddrStruct,count).code;
 }
 
 DLLEXPORT int jl_uv_interface_address_is_internal(uv_interface_address_t *addr)
