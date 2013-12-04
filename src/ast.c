@@ -561,6 +561,16 @@ jl_array_t *jl_lam_args(jl_expr_t *l)
     return (jl_array_t*)ae;
 }
 
+jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i)
+{
+    jl_expr_t *ast;
+    if (jl_is_expr(li->ast))
+        ast = (jl_expr_t*)li->ast;
+    else
+        ast = (jl_expr_t*)jl_uncompress_ast(li, li->ast);
+    return (jl_sym_t*)jl_arrayref(jl_lam_args(ast),i);
+}
+
 // get array of local var symbols
 jl_array_t *jl_lam_locals(jl_expr_t *l)
 {
