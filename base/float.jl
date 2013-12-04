@@ -216,6 +216,24 @@ const NaN32 = box(Float32,unbox(Uint32,0x7fc00000))
 const Inf = box(Float64,unbox(Uint64,0x7ff0000000000000))
 const NaN = box(Float64,unbox(Uint64,0x7ff8000000000000))
 
+function float_lex_order(f::Integer, delta::Integer)
+    # convert from signed magnitude to 2's complement and back
+    if f < 0
+        f = oftype(f, -(f & typemax(f)))
+    end
+    f = oftype(f, f + delta)
+    f < 0 ? oftype(f, -(f & typemax(f))) : f
+end
+
+nextfloat(x::Float16, i::Integer) =
+    reinterpret(Float16,float_lex_order(reinterpret(Int16,x), i))
+nextfloat(x::Float32, i::Integer) =
+    reinterpret(Float32,float_lex_order(reinterpret(Int32,x), i))
+nextfloat(x::Float64, i::Integer) =
+    reinterpret(Float64,float_lex_order(reinterpret(Int64,x), i))
+nextfloat(x::FloatingPoint) = nextfloat(x,1)
+prevfloat(x::FloatingPoint) = nextfloat(x,-1)
+
 @eval begin
     inf(::Type{Float16}) = $Inf16
     nan(::Type{Float16}) = $NaN16
@@ -248,12 +266,6 @@ const NaN = box(Float64,unbox(Uint64,0x7ff8000000000000))
     realmax{T<:FloatingPoint}(x::T) = realmax(T)
     realmin() = realmin(Float64)
     realmax() = realmax(Float64)
-
-    nextfloat(x::Float16, i::Integer) = box(Float16,add_int(reinterpret(Int16,x),unbox(Int16,int16(i))))
-    nextfloat(x::Float32, i::Integer) = box(Float32,add_int(unbox(Float32,x),unbox(Int32,int32(i))))
-    nextfloat(x::Float64, i::Integer) = box(Float64,add_int(unbox(Float64,x),unbox(Int64,int64(i))))
-    nextfloat(x::FloatingPoint) = nextfloat(x,1)
-    prevfloat(x::FloatingPoint) = nextfloat(x,-1)
 
     eps(x::FloatingPoint) = isfinite(x) ? abs(nextfloat(x)-x) : nan(x)
     eps(::Type{Float16}) = $(box(Float16,unbox(Uint16,0x1400)))
