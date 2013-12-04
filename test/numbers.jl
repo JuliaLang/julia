@@ -1590,3 +1590,6 @@ end
 @test prevfloat(-1.0) < -1.0
 @test nextfloat(nextfloat(0.0),-2) == -5.0e-324
 @test nextfloat(prevfloat(0.0), 2) ==  5.0e-324
+
+@test eps(realmax(Float64)) == 1.99584030953472e292
+@test eps(-realmax(Float64)) == 1.99584030953472e292

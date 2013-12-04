@@ -19,7 +19,7 @@ import
         gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        serialize, deserialize, inf, nan, hash, cbrt
+        serialize, deserialize, inf, nan, hash, cbrt, typemax, typemin
 
 import Base.Math.lgamma_r
 
@@ -665,6 +665,9 @@ isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
 
 @eval inf(::Type{BigFloat}) = $(BigFloat(Inf))
 @eval nan(::Type{BigFloat}) = $(BigFloat(NaN))
+
+typemax(::Type{BigFloat}) = inf(BigFloat)
+@eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
 
 function nextfloat(x::BigFloat)
     z = BigFloat()
