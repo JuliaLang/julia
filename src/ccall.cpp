@@ -96,6 +96,15 @@ static std::map<std::string, GlobalVariable*> libMapGV;
 static std::map<std::string, GlobalVariable*> symMapGV;
 static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_name, jl_codectx_t *ctx)
 {
+    // in pseudo-code, this function emits the following:
+    //   global libptrgv, llvmgv
+    //   if (*llvmgv == NULL) {
+    //       if (*libptrgv == NULL) {
+    //           *libptrgv = jl_load_dynamic_library(f_lib, JL_RTLD_DEFAULT)
+    //       }
+    //       *llvmgv = jl_dlsym_e(*libptrgv, f_name)
+    //   }
+    //   return (*llvmgv)
     Constant *initnul = ConstantPointerNull::get((PointerType*)T_pint8);
 
     uv_lib_t *libsym = NULL;
@@ -148,7 +157,9 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
 
         ctx->f->getBasicBlockList().push_back(dlopen_lookup2);
         builder.SetInsertPoint(dlopen_lookup2);
-        Value *libptr = builder.CreateCall2(jldlopen_func, builder.CreateGlobalStringPtr(f_lib), ConstantInt::get(T_int32,0));
+        Value *libptr = builder.CreateCall2(jldlopen_func,
+                                            builder.CreateGlobalStringPtr(f_lib),
+                                            ConstantInt::get(T_int32,JL_RTLD_DEFAULT));
         builder.CreateStore(libptr, libptrgv);
         builder.CreateBr(dlsym_lookup);
     }
@@ -516,6 +527,8 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 emit_error(msg.str(), ctx);
                 res = literal_static_pointer_val(NULL, lrt);
             }
+            // since we aren't saving this code, there's no sense in
+            // putting anything complicated here: just JIT the address of the cglobal
             res = literal_static_pointer_val(symaddr, lrt);
         }
     }
@@ -710,49 +723,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 rt);
     }
 
-    // make LLVM function object for the target
-    Value *llvmf;
-    FunctionType *functype = FunctionType::get(lrt, fargt_sig, isVa);
-
-    if (jl_ptr != NULL) {
-        null_pointer_check(jl_ptr,ctx);
-        Type *funcptype = PointerType::get(functype,0);
-        llvmf = builder.CreateIntToPtr(jl_ptr, funcptype);
-    }
-    else if (fptr != NULL) {
-        Type *funcptype = PointerType::get(functype,0);
-        llvmf = literal_static_pointer_val(fptr, funcptype);
-        JL_PRINTF(JL_STDERR,"warning: literal address used in ccall for %s; code cannot be statically compiled\n", f_name);
-    }
-    else {
-        assert(f_name != NULL);
-
-        PointerType *funcptype = PointerType::get(functype,0);
-        if (imaging_mode) {
-            llvmf = runtime_sym_lookup(funcptype, f_lib, f_name, ctx);
-        }
-        else {
-            void *symaddr = jl_dlsym_e(get_library(f_lib), f_name);
-            if (symaddr == NULL) {
-                JL_GC_POP();
-                std::stringstream msg;
-                msg << "ccall: could not find function ";
-                msg << f_name;
-                if (f_lib != NULL) {
-#ifdef _OS_WINDOWS_
-                    assert((intptr_t)f_lib != 1 && (intptr_t)f_lib != 2);
-#endif
-                    msg << " in library ";
-                    msg << f_lib;
-                }
-                emit_error(msg.str(), ctx);
-                return literal_pointer_val(jl_nothing);
-            }
-            llvmf = literal_static_pointer_val(symaddr, funcptype);
-        }
-    }
-
-
     // save place before arguments, for possible insertion of temp arg
     // area saving code.
     Value *saveloc=NULL;
@@ -866,6 +836,54 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         needTempSpace |= mightNeed;
         needStackRestore |= nSR;
     }
+
+
+    // make LLVM function object for the target
+    // keep this close to the function call, so that the compiler can
+    // optimize the global pointer load in the common case
+    Value *llvmf;
+    FunctionType *functype = FunctionType::get(lrt, fargt_sig, isVa);
+
+    if (jl_ptr != NULL) {
+        null_pointer_check(jl_ptr,ctx);
+        Type *funcptype = PointerType::get(functype,0);
+        llvmf = builder.CreateIntToPtr(jl_ptr, funcptype);
+    }
+    else if (fptr != NULL) {
+        Type *funcptype = PointerType::get(functype,0);
+        llvmf = literal_static_pointer_val(fptr, funcptype);
+        JL_PRINTF(JL_STDERR,"warning: literal address used in ccall for %s; code cannot be statically compiled\n", f_name);
+    }
+    else {
+        assert(f_name != NULL);
+
+        PointerType *funcptype = PointerType::get(functype,0);
+        if (imaging_mode) {
+            llvmf = runtime_sym_lookup(funcptype, f_lib, f_name, ctx);
+        }
+        else {
+            void *symaddr = jl_dlsym_e(get_library(f_lib), f_name);
+            if (symaddr == NULL) {
+                JL_GC_POP();
+                std::stringstream msg;
+                msg << "ccall: could not find function ";
+                msg << f_name;
+                if (f_lib != NULL) {
+#ifdef _OS_WINDOWS_
+                    assert((intptr_t)f_lib != 1 && (intptr_t)f_lib != 2);
+#endif
+                    msg << " in library ";
+                    msg << f_lib;
+                }
+                emit_error(msg.str(), ctx);
+                return literal_pointer_val(jl_nothing);
+            }
+            // since we aren't saving this code, there's no sense in
+            // putting anything complicated here: just JIT the function address
+            llvmf = literal_static_pointer_val(symaddr, funcptype);
+        }
+    }
+
     if (needTempSpace) {
         // save temp argument area stack pointer
         // TODO: inline this
@@ -884,6 +902,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         else
             instList.push_front((Instruction*)stacksave);
     }
+
     // the actual call
     Value *ret = builder.CreateCall(
             llvmf,

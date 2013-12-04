@@ -515,15 +515,6 @@ static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codect
 
 #include "cgutils.cpp"
 
-extern "C" DLLEXPORT
-const char* jl_get_llvmname(void *llvmFunc)
-{
-    Function *f = (Function*)llvmFunc;
-    (void)jl_ExecutionEngine->getPointerToFunction(f); //force compile
-    const char *llname = f->getName().data();
-    return llname;
-}
-
 // --- code gen for intrinsic functions ---
 
 #include "intrinsics.cpp"
@@ -2347,9 +2338,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                 // elide call to jl_copy_ast when possible
                 return emit_expr(arg, ctx);
             }
-            }
-        return builder.CreateCall(jlcopyast_func, emit_expr(arg, ctx));
         }
+        return builder.CreateCall(jlcopyast_func, emit_expr(arg, ctx));
+    }
     else {
         if (!strcmp(head->name, "$"))
             jl_error("syntax: prefix $ in non-quoted expression");
@@ -2372,10 +2363,10 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                 jl_errorf("macro definition not allowed inside a local scope");
             }
             else {
-            jl_errorf("unsupported or misplaced expression %s in function %s",
-                      head->name, ctx->linfo->name->name);
+                jl_errorf("unsupported or misplaced expression %s in function %s",
+                          head->name, ctx->linfo->name->name);
+            }
         }
-    }
     }
     return NULL;
 }
@@ -2619,7 +2610,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     std::string funcName = lam->name->name;
     // try to avoid conflicts in the global symbol table
     funcName = "julia_" + funcName;
-    
+
     if (specsig) {
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
@@ -2650,6 +2641,10 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     //if (jlrettype == (jl_value_t*)jl_bottom_type)
     //    f->setDoesNotReturn();
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+    // tell Win32 to realign the stack to the next 8-byte boundary
+    // upon entry to any function. This achieves compatibility
+    // with both MinGW-GCC (which assumes an 8-byte-aligned stack) and
+    // Windows (which uses a 2-byte-aligned stack)
     AttrBuilder *attr = new AttrBuilder();
     attr->addStackAlignmentAttr(8);
 #if LLVM32 && !LLVM33
@@ -3173,6 +3168,7 @@ static Function *jlfunc_to_llvm(const std::string &cname, void *addr)
 }
 
 extern "C" void jlfptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig) {
+    // this assigns a function pointer (from loading the system image), to the function object
     if (specsig) {
         jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)lam->ast);
         std::vector<Type*> fsig(0);
@@ -3213,6 +3209,8 @@ extern "C" DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v)
 
 static void init_julia_llvm_env(Module *m)
 {
+    // every variable or function mapped in this function must be
+    // exported from libjulia, to support static compilation
     T_int1  = Type::getInt1Ty(getGlobalContext());
     T_int8  = Type::getInt8Ty(getGlobalContext());
     T_pint8 = PointerType::get(T_int8, 0);
@@ -3615,9 +3613,13 @@ extern "C" void jl_init_codegen(void)
     options.NoFramePointerElimNonLeaf = true;
 #endif
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
+    // tell Win32 to assume the stack is always 8-byte aligned,
+    // and to ensure that it is 8-byte aligned for out-going calls,
+    // to ensure compatibility with GCC codes
     options.StackAlignmentOverride = 8;
 #endif
 #ifdef __APPLE__
+    // turn on JIT support for libunwind to walk the stack
     options.JITExceptionHandling = 1;
 #endif
     // Temporarily disable Haswell BMI2 features due to LLVM bug.
