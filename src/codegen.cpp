@@ -116,6 +116,7 @@ static FunctionPassManager *FPM;
 
 // for image reloading
 static bool imaging_mode = false;
+static ios_t *wiser_file = NULL;
 
 // types
 static Type *jl_value_llvmt;
@@ -265,17 +266,37 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     assert(f != NULL);
     nested_compile = last_n_c;
     //f->dump();
-    verifyFunction(*f);
+    //verifyFunction(*f);
     FPM->run(*f);
     //n_compile++;
     // print out the function's LLVM code
     //ios_printf(ios_stderr, "%s:%d\n",
     //           ((jl_sym_t*)li->file)->name, li->line);
     //f->dump();
-    verifyFunction(*f);
+    //verifyFunction(*f);
     if (old != NULL) {
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
+    }
+    if (wiser_file && li->specTypes &&
+            jl_base_module && strchr(li->name->name, '#')==NULL) {
+        //TODO: verify li->module is in Base
+        jl_module_t *isinbase = li->module;
+        while (isinbase && isinbase != jl_main_module) {
+            if (isinbase == jl_base_module) {
+                uv_stream_t *w = (uv_stream_t*)wiser_file;
+                JL_PUTS((char*)"precompile(", w);
+                jl_static_show(w, (jl_value_t*)li->module);
+                JL_PUTC('.', w);
+                JL_PUTS(li->name->name, w);
+                JL_PUTC(',', w);
+                jl_static_show(w, (jl_value_t*)li->specTypes);
+                JL_PUTS((char*)")\n", w);
+                ios_flush(wiser_file);
+                break;
+            }
+            isinbase = isinbase->parent;
+        }
     }
     JL_SIGATOMIC_END();
     return f;
@@ -449,6 +470,12 @@ extern "C"
 void jl_set_imaging_mode(int stat)
 {
     imaging_mode = !!stat;
+}
+
+extern "C"
+void jl_set_wiser_file(ios_t *file)
+{
+    wiser_file = file;
 }
 
 static void jl_gen_llvm_gv_array();
