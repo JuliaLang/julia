@@ -58,10 +58,12 @@ int jl_is_type(jl_value_t *v)
 {
     if (jl_is_tuple(v)) {
         jl_tuple_t *t = (jl_tuple_t*)v;
-        size_t i;
-        for(i=0; i < jl_tuple_len(t); i++) {
+        size_t i, l = jl_tuple_len(t);
+        for(i=0; i < l; i++) {
             jl_value_t *vv = jl_tupleref(t, i);
             if (!jl_is_typevar(vv) && !jl_is_type(vv))
+                return 0;
+            if (i < l-1 && jl_is_vararg_type(vv))
                 return 0;
         }
         return 1;
