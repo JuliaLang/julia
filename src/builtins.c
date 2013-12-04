@@ -42,16 +42,17 @@ void jl_error(const char *str)
 
 void jl_errorf(const char *fmt, ...)
 {
-    char buf[1024];
     va_list args;
+    ios_t buf;
+    ios_mem(&buf, 0);
     va_start(args, fmt);
-    int nc = vsnprintf(buf, sizeof(buf), fmt, args);
+    ios_vprintf(&buf, fmt, args);
     va_end(args);
     if (jl_errorexception_type == NULL) {
-        JL_PRINTF(JL_STDERR, "%s", &buf);
+        JL_PRINTF(JL_STDERR, "%s", buf.buf);
         jl_exit(1);
     }
-    jl_value_t *msg = jl_pchar_to_string(buf, nc);
+    jl_value_t *msg = jl_takebuf_string(&buf);
     JL_GC_PUSH1(&msg);
     jl_throw(jl_new_struct(jl_errorexception_type, msg));
 }

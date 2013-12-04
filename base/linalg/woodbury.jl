@@ -78,31 +78,35 @@ det(W::Woodbury)=det(W.A)*det(W.C)/det(W.Cp)
 
 # Allocation-free solver for arbitrary strides (requires that W.A has a
 # non-aliasing "solve" routine, e.g., is Tridiagonal)
-function solve(x::AbstractArray, xrng::Ranges{Int}, W::Woodbury, rhs::AbstractArray, rhsrng::Ranges{Int})
-    solve(W.tmpN1, 1:length(W.tmpN1), W.A, rhs, rhsrng)
+function solve!(x::AbstractArray, xrng::Ranges{Int}, W::Woodbury, rhs::AbstractArray, rhsrng::Ranges{Int})
+    solve!(W.tmpN1, 1:length(W.tmpN1), W.A, rhs, rhsrng)
     A_mul_B!(W.tmpk1, W.V, W.tmpN1)
     A_mul_B!(W.tmpk2, W.Cp, W.tmpk1)
     A_mul_B!(W.tmpN2, W.U, W.tmpk2)
-    solve(W.tmpN2, W.A, W.tmpN2)
+    solve!(W.tmpN2, W.A, W.tmpN2)
     indx = first(xrng)
     xinc = step(xrng)
     for i = 1:length(W.tmpN2)
         x[indx] = W.tmpN1[i] - W.tmpN2[i]
         indx += xinc
     end
+    nothing
 end
 
-solve(x::AbstractVector, W::Woodbury, rhs::AbstractVector) = solve(x, 1:length(x), W, rhs, 1:length(rhs))
-solve(W::Woodbury, rhs::AbstractVector) = solve(similar(rhs), W, rhs)
-solve(W::Woodbury, B::StridedMatrix)=solve(similar(B), W, B)
-function solve(X::StridedMatrix, W::Woodbury, B::StridedMatrix)
+function solve!(x::AbstractVector, W::Woodbury, rhs::AbstractVector)
+    solve!(x, 1:length(x), W, rhs, 1:length(rhs))
+    x
+end
+solve(W::Woodbury, rhs::AbstractVector) = solve!(similar(rhs), W, rhs)
+solve(W::Woodbury, B::StridedMatrix)=solve!(similar(B), W, B)
+function solve!(X::StridedMatrix, W::Woodbury, B::StridedMatrix)
     size(B, 1) == size(W, 1) || throw(DimensionMismatch(""))
     size(X) == size(B) || throw(DimensionMismatch(""))
     m, n = size(B)
     r = 1:m
     for j = 1:n
         r.start = (j-1)*m+1
-        solve(X, r, W, B, r)
+        solve!(X, r, W, B, r)
     end
     X
 end

@@ -1165,3 +1165,14 @@ macro myassert4873(ex)
 end
 x4873 = 1
 @myassert4873 (x -> x)(x4873) == 1
+
+# issue from IRC
+function invalid_tupleref()
+    A = (1, "2", 3.0)
+    try
+        return A[0]
+    catch
+        return true
+    end
+end
+@test invalid_tupleref()==true

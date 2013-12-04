@@ -24,6 +24,9 @@ extern "C" DLLEXPORT void jl_read_sonames()
             char *dot = strstr(name, ".so");
             i=0;
 
+            if (NULL == dot)
+                continue;
+
             // Detect if this entry is for the current architecture
             while (!isspace(dot[++i])) ;
             while (isspace(dot[++i])) ;

@@ -126,6 +126,62 @@ function *{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
     Ctt = Base.SparseMatrix.transpose!(Ct, SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC))
 end
 
+## solvers
+function A_ldiv_B!(A::SparseMatrixCSC, b::AbstractVector)
+    if istril(A) 
+        if istriu(A) return A_ldiv_B!(Diagonal(A.nzval), b) end
+        return fwdTriSolve!(A, b) 
+    end
+    if istriu(A) return bwdTriSolve!(A, b) end
+    return A_ldiv_B!(lufact(A),b)
+end
+
+function fwdTriSolve!(A::SparseMatrixCSC, b::AbstractVector)
+# forward substitution for CSC matrices
+    n = length(b)
+    ncol = chksquare(A)
+    if n != ncol throw(DimensionMismatch("A is $(ncol)X$(ncol) and b has length $(n)")) end
+   
+    aa = A.nzval
+    ja = A.rowval
+    ia = A.colptr
+   
+    for j = 1:n - 1
+        i1 = ia[j]
+        i2 = ia[j+1]-1
+        b[j] /= aa[i1]
+        bj = b[j]
+        for i = i1+1:i2
+            b[ja[i]] -= bj*aa[i]
+        end
+    end
+    b[end] /= aa[end]
+    return b
+end
+
+function bwdTriSolve!(A::SparseMatrixCSC, b::AbstractVector)
+# backward substitution for CSC matrices
+    n = length(b)
+    ncol = chksquare(A)
+    if n != ncol throw(DimensionMismatch("A is $(ncol)X$(ncol) and b has length $(n)")) end
+
+   aa = A.nzval
+   ja = A.rowval
+   ia = A.colptr
+
+   for j = n:-1:2
+      i1 = ia[j]
+      i2 = ia[j+1]-1
+      b[j] /= aa[i2]
+      bj = b[j]
+      for i = i2-1:-1:i1
+         b[ja[i]] -= bj*aa[i]
+      end
+   end
+   b[1] /= aa[1]
+   return b
+end
+
 ## triu, tril
 
 function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
@@ -353,7 +409,7 @@ function kron{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti})
 
     col = 1
 
-    for j = 1:nA
+    @inbounds for j = 1:nA
         startA = colptrA[j]
         stopA = colptrA[j+1]-1
         lA = stopA - startA + 1
@@ -363,16 +419,19 @@ function kron{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti})
             stopB = colptrB[i+1]-1
             lB = stopB - startB + 1
 
-            r = (1:lB) + (colptr[col]-1)
-            rB = startB:stopB
+            ptr_range = (1:lB) + (colptr[col]-1)
 
             colptr[col+1] = colptr[col] + lA * lB
             col += 1
 
             for ptrA = startA : stopA
-                rowval[r] = (rowvalA[ptrA]-1)*mB + rowvalB[rB]
-                nzval[r] = nzvalA[ptrA] * nzvalB[rB]
-                r += lB
+                ptrB = startB
+                for ptr = ptr_range
+                    rowval[ptr] = (rowvalA[ptrA]-1)*mB + rowvalB[ptrB]
+                    nzval[ptr] = nzvalA[ptrA] * nzvalB[ptrB]
+                    ptrB += 1
+                end
+                ptr_range += lB
             end
         end
     end

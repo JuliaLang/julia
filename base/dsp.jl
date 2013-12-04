@@ -47,20 +47,24 @@ function filt{T<:Number}(b::Union(AbstractVector{T}, T),a::Union(AbstractVector{
             a = newa
         end
 
-        for i=1:xs
-            y[i] = si[1] + b[1]*x[i]
-            for j=1:(silen-1)
-                si[j] = si[j+1] + b[j+1]*x[i] - a[j+1]*y[i]
+        @inbounds begin
+            for i=1:xs
+                y[i] = si[1] + b[1]*x[i]
+                for j=1:(silen-1)
+                    si[j] = si[j+1] + b[j+1]*x[i] - a[j+1]*y[i]
+                end
+                si[silen] = b[silen+1]*x[i] - a[silen+1]*y[i]
             end
-            si[silen] = b[silen+1]*x[i] - a[silen+1]*y[i]
         end
     else
-        for i=1:xs
-            y[i] = si[1] + b[1]*x[i]
-            for j=1:(silen-1)
-                si[j] = si[j+1] + b[j+1]*x[i]
+        @inbounds begin
+            for i=1:xs
+                y[i] = si[1] + b[1]*x[i]
+                for j=1:(silen-1)
+                    si[j] = si[j+1] + b[j+1]*x[i]
+                end
+                si[silen] = b[silen+1]*x[i]
             end
-            si[silen] = b[silen+1]*x[i]
         end
     end
     return y
