@@ -102,7 +102,7 @@ end
 
 function methods(f::Function)
     if !isgeneric(f)
-        error("methods: not a generic function")
+        error("not a generic function")
     end
     f.env
 end

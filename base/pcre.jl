@@ -54,8 +54,7 @@ function info{T}(
                 (Ptr{Void}, Ptr{Void}, Int32, Ptr{Uint8}),
                 regex, extra, what, buf)
     if ret != 0
-        error("info: ",
-              ret == ERROR_NULL      ? "NULL regex object" :
+        error(ret == ERROR_NULL      ? "NULL regex object" :
               ret == ERROR_BADMAGIC  ? "invalid regex object" :
               ret == ERROR_BADOPTION ? "invalid option flags" :
                                        "unknown error $ret")
@@ -70,7 +69,7 @@ function config{T}(what::Integer, ::Type{T})
                 what, buf)
 
     if ret != 0
-        error("config: error $n")
+        error("error $n")
     end
     reinterpret(T,buf)[1]
 end
@@ -82,7 +81,7 @@ function compile(pattern::String, options::Integer)
                         (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
                         pattern, options, errstr, erroff, C_NULL))()
     if re_ptr == C_NULL
-        error("compile: $(bytestring(errstr[1]))",
+        error("$(bytestring(errstr[1]))",
               " at position $(erroff[1]+1)",
               " in $(repr(pattern))")
     end
@@ -99,7 +98,7 @@ function study(regex::Array{Uint8}, options::Integer)
                   (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
                   regex, options, errstr)
     if errstr[1] != C_NULL
-        error("study: $(bytestring(errstr[1]))")
+        error("$(bytestring(errstr[1]))")
     end
     extra
 end
@@ -125,7 +124,7 @@ function exec(regex::Array{Uint8}, extra::Ptr{Void},
               regex, extra, pointer(str.data,shift+1), len,
               offset, options, ovec, length(ovec))
     if n < -1
-        error("exec: error $n")
+        error("error $n")
     end
     cap ? ((n > -1 ? ovec[1:2(ncap+1)] : Array(Int32,0)), ncap) : n > -1
 end
