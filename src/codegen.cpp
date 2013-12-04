@@ -1516,6 +1516,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     if (jl_array_store_unboxed(ety) &&
                         ((jl_datatype_t*)ety)->size == 0) {
                         jl_new_struct_uninit((jl_datatype_t*)ety);
+                        assert(jl_is_datatype(ety));
                         return literal_pointer_val(((jl_datatype_t*)ety)->instance);
                     }
                     return typed_load(emit_arrayptr(ary, args[1], ctx), idx, ety, ctx);
@@ -1545,6 +1546,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     if (jl_array_store_unboxed(ety) &&
                         ((jl_datatype_t*)ety)->size == 0) {
                         // no-op, but emit expr for possible effects
+                        assert(jl_is_datatype(ety));
                         emit_expr(args[2],ctx,false);
                     }
                     else {
@@ -2131,6 +2133,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     }
     else if (head == const_sym) {
         jl_sym_t *sym = (jl_sym_t*)args[0];
+        assert(jl_is_symbol(sym));
         jl_binding_t *bnd = NULL;
         (void)var_binding_pointer(sym, &bnd, true, ctx);
         if (bnd) {
@@ -2500,6 +2503,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         jl_array_t *vi = (jl_array_t*)jl_cellref(vinfos, i);
         assert(jl_is_array(vi));
         jl_sym_t *vname = ((jl_sym_t*)jl_cellref(vi,0));
+        assert(jl_is_symbol(vname));
         jl_varinfo_t &varinfo = ctx.vars[vname];
         varinfo.isAssigned = (jl_vinfo_assigned(vi)!=0);
         varinfo.isCaptured = (jl_vinfo_capt(vi)!=0);
@@ -2516,6 +2520,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         jl_array_t *vi = (jl_array_t*)jl_cellref(vinfos, i);
         assert(jl_is_array(vi));
         jl_sym_t *vname = ((jl_sym_t*)jl_cellref(vi,0));
+        assert(jl_is_symbol(vname));
         jl_varinfo_t &varinfo = ctx.vars[vname];
         varinfo.closureidx = i;
         varinfo.isAssigned = (jl_vinfo_assigned(vi)!=0);
@@ -2721,6 +2726,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     }
     for(i=0; i < lvarslen; i++) {
         jl_sym_t *s = (jl_sym_t*)jl_cellref(lvars,i);
+        assert(jl_is_symbol(s));
         if (store_unboxed_p(s, &ctx)) {
             alloc_local(s, &ctx);
         }

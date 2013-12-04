@@ -218,6 +218,7 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
         m = jl_current_module;
         while (1) {
             var = (jl_sym_t*)jl_cellref(args,i);
+            assert(jl_is_symbol(var));
             i++;
             if (var != dot_sym) {
                 if (i == jl_array_len(args))
@@ -388,6 +389,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     if (jl_is_expr(ex) && ex->head == thunk_sym) {
         thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
         assert(jl_is_lambda_info(thk));
+        assert(jl_is_expr(thk->ast));
         ewc = jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast), fast);
         if (!ewc) {
             if (jl_lam_vars_captured((jl_expr_t*)thk->ast)) {

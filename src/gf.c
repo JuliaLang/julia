@@ -1108,7 +1108,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         if (jl_args_morespecific((jl_value_t*)type, (jl_value_t*)l->sig))
             break;
         if (check_amb) {
-            check_ambiguous(*pml, (jl_tuple_t*)type, l,
+            check_ambiguous(*pml, type, l,
                             method->linfo ? method->linfo->name :
                             anonymous_sym, method->linfo);
         }
