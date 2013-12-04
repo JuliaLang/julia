@@ -285,7 +285,7 @@
 		   `(macrocall @int128_str ,n)
 		   n))
 	    ((within-int128? s) `(macrocall @int128_str ,s))
-	    (else `(macrocall @bigint_str ,(strip-leading-0s s)))))))
+	    (else `(macrocall @bigint_str ,s))))))
 
 (define (fix-uint-neg neg n)
   (if neg
