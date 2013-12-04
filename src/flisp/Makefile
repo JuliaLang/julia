@@ -18,7 +18,7 @@ LLT = $(LLTDIR)/libsupport.a $(LIBUV)
 
 FLAGS = -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
 	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) $(LIBDIRS:%=-L%) \
-        -fvisibility=hidden
+        -fvisibility=hidden -DLIBRARY_EXPORTS
 LIBFILES = $(LLT)
 LIBS = $(LIBFILES)
 ifneq ($(OS),WINNT)
