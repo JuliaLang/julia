@@ -1,13 +1,13 @@
 module GMP
 
-export BigInt
+export BigInt, BigRNG
 
 import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
              serialize, deserialize, bin, oct, dec, hex, isequal, invmod,
-             prevpow2, nextpow2
+             prevpow2, nextpow2, rand, rand!, srand
 
 type BigInt <: Integer
     alloc::Cint
@@ -415,5 +415,88 @@ widemul{T<:Integer}(x::T, y::T) = BigInt(x)*BigInt(y)
 
 prevpow2(x::BigInt) = x < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << (ndigits(x, 2)-1))
 nextpow2(x::BigInt) = x < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))
+
+# Random number generation
+type BigRNG <: AbstractRNG
+    seed_alloc::Cint
+    seed_size::Cint
+    seed_d::Ptr{Void}
+    alg::Cint
+    alg_data::Ptr{Void}
+
+    function BigRNG()
+        randstate = new(zero(Cint), zero(Cint), C_NULL, zero(Cint), C_NULL)
+        # The default algorithm in GMP is currently MersenneTwister
+        ccall((:__gmp_randinit_default, :libgmp), Void, (Ptr{BigRNG},),
+          &randstate)
+        finalizer(randstate, BigRNG_clear)
+        randstate
+    end
+end
+
+# Initialize with seed
+function BigRNG(seed::Uint64)
+    randstate = BigRNG()
+    ccall((:__gmp_randseed_ui, :libgmp), Void, (Ptr{BigRNG}, Culong),
+      &randstate, seed)
+    randstate
+end
+function BigRNG(seed::BigInt)
+    randstate = BigRNG()
+    ccall((:__gmp_randseed, :libgmp), Void, (Ptr{BigRNG}, Ptr{BigInt}),
+      &randstate, &seed)
+    randstate
+end
+
+function BigRNG_clear(x::BigRNG)
+    ccall((:__gmp_randclear, :libgmp), Void, (Ptr{BigRNG},), &x)
+end
+
+function rand(::Type{BigInt}, randstate::BigRNG, n::Integer)
+    m = convert(BigInt, n)
+    randu(randstate, m)
+end
+
+function rand(r::Range1{BigInt})
+    ulen = convert(BigInt, length(r))
+    convert(BigInt, first(r) + randu(ulen))
+end
+
+function rand!(r::Range1{BigInt}, A::Array{BigInt})
+    for i = 1:length(A)
+        A[i] = rand(r)
+    end
+    A
+end
+
+rand(r::Range1{BigInt}, dims::Dims) = rand!(r, Array(BigInt, dims))
+rand(r::Range1{BigInt}, dims::Int...) = rand!(r, Array(BigInt, dims...))
+
+function randu(randstate::BigRNG, k::BigInt)
+    z = BigInt()
+    ccall((:__gmpz_urandomm, :libgmp), Void,
+      (Ptr{BigInt}, Ptr{BigRNG}, Ptr{BigInt}), &z, &randstate, &k)
+    z
+end
+randu(k::BigInt) = randu(Base.Random.DEFAULT_BIGRNG, k)
+
+srand(r::BigRNG, seed) = srand(r, convert(BigInt, seed))
+function srand(randstate::BigRNG, seed::Vector{Uint32})
+    s = big(0)
+    for i in seed
+        s = s << 32 + i
+    end
+    srand(randstate, s)
+end
+function srand(randstate::BigRNG, seed::Uint64)
+    ccall((:__gmp_randseed_ui, :libgmp), Void, (Ptr{BigRNG}, Culong),
+      &randstate, seed)
+    return
+end
+function srand(randstate::BigRNG, seed::BigInt)
+    ccall((:__gmp_randseed, :libgmp), Void, (Ptr{BigRNG}, Ptr{BigInt}),
+      &randstate, &seed)
+    return
+end
 
 end # module
