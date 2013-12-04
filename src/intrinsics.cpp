@@ -540,7 +540,7 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
     jl_value_t *ety = jl_tparam0(aty);
     if (jl_is_typevar(ety))
         jl_error("pointerref: invalid pointer");
-    if ((jl_datatype_t*)expr_type(i, ctx) != jl_long_type) {
+    if (expr_type(i, ctx) != (jl_value_t*)jl_long_type) {
         jl_error("pointerref: invalid index type");
     }
     Value *thePtr = auto_unbox(e,ctx);
@@ -554,6 +554,7 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
         if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety)) {
             return emit_error("pointerref: invalid pointer type", ctx);
         }
+        assert(jl_is_datatype(ety));
         uint64_t size = ((jl_datatype_t*)ety)->size;
         Value *strct =
             builder.CreateCall(jlallocobj_func,
@@ -583,7 +584,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
     if (!jl_subtype(xty, ety, 0)) {
         return emit_error("pointerset: type mismatch in assign", ctx);
     }
-    if ((jl_datatype_t*)expr_type(i, ctx) != jl_long_type)
+    if (expr_type(i, ctx) != (jl_value_t*)jl_long_type)
         jl_error("pointerset: invalid index type");
     Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx));
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
@@ -594,6 +595,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
         }
         Value *val = emit_expr(x,ctx,true,true);
         assert(val->getType() == jl_pvalue_llvmt); //Boxed
+        assert(jl_is_datatype(ety));
         uint64_t size = ((jl_datatype_t*)ety)->size;
         builder.CreateMemCpy(builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1),
             builder.CreateBitCast(emit_nthptr_addr(val, (size_t)1),T_pint8),  size, 1);
