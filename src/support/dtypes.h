@@ -55,10 +55,10 @@
 
 #ifdef _OS_WINDOWS_
 #define STDCALL __stdcall
-# ifdef IMPORT_EXPORTS
-#  define DLLEXPORT __declspec(dllimport)
-# else
+# ifdef LIBRARY_EXPORTS
 #  define DLLEXPORT __declspec(dllexport)
+# else
+#  define DLLEXPORT __declspec(dllimport)
 # endif
 #else
 #define STDCALL
