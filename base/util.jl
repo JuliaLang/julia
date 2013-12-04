@@ -157,7 +157,7 @@ function edit(file::String, line::Integer)
             edpath = realpath(editor)
             edname = basename(edpath)
         else
-            error("edit: can't find \"$editor\"")
+            error("can't find \"$editor\"")
         end
     else
         edpath = edname = editor
