@@ -16,8 +16,8 @@ function copy!(A::Hermitian, B::Hermitian)
     A
 end
 size(A::Hermitian, args...) = size(A.S, args...)
-print_matrix(io::IO, A::Hermitian, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
-full(A::Hermitian) = A.S
+getindex(A::Hermitian, i::Integer, j::Integer) = (A.uplo == 'U') == (i < j) ? getindex(A.S, i, j) : conj(getindex(A.S, j, i))
+full(A::Hermitian) = symmetrize_conj!(A.S, A.uplo)
 ishermitian(A::Hermitian) = true
 issym{T<:Real}(A::Hermitian{T}) = true
 issym{T<:Complex}(A::Hermitian{T}) = all(imag(A.S) .== 0)
