@@ -1279,4 +1279,5 @@ export
     @sprintf,
     @deprecate,
     @boundscheck,
-    @inbounds
+    @inbounds,
+    @ifpkg

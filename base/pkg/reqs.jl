@@ -72,22 +72,25 @@ function write(io::IO, reqs::Requires)
 end
 write(file::String, r::Union(Vector{Line},Requires)) = open(io->write(io,r), file, "w")
 
+function applies(req::Requirement)
+    !isempty(req.system) || return true
+    ret = false
+    @windows_only ret |=  ("windows"  in req.system)
+    @unix_only    ret |=  ("unix"     in req.system)
+    @osx_only     ret |=  ("osx"      in req.system)
+    @linux_only   ret |=  ("linux"    in req.system)
+    @windows_only ret &= !("!windows" in req.system)
+    @unix_only    ret &= !("!unix"    in req.system)
+    @osx_only     ret &= !("!osx"     in req.system)
+    @linux_only   ret &= !("!linux"   in req.system)
+    ret
+end
+
 function parse(lines::Vector{Line})
     reqs = Requires()
     for line in lines
         if isa(line,Requirement)
-            if !isempty(line.system)
-                applies = false
-                @windows_only applies |=  ("windows"  in line.system)
-                @unix_only    applies |=  ("unix"     in line.system)
-                @osx_only     applies |=  ("osx"      in line.system)
-                @linux_only   applies |=  ("linux"    in line.system)
-                @windows_only applies &= !("!windows" in line.system)
-                @unix_only    applies &= !("!unix"    in line.system)
-                @osx_only     applies &= !("!osx"     in line.system)
-                @linux_only   applies &= !("!linux"   in line.system)
-                applies || continue
-            end
+            applies(line) || continue
             reqs[line.package] = haskey(reqs, line.package) ?
                 intersect(reqs[line.package], line.versions) : line.versions
         end
