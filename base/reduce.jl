@@ -236,7 +236,7 @@ end
 
 function in(x, itr)
     for y in itr
-        if isequal(y,x)
+        if y==x
             return true
         end
     end

@@ -23,7 +23,7 @@ function edit(f::Function, pkg::String, args...)
     reqsʹ = Reqs.parse(rʹ)
     reqsʹ != reqs && resolve(reqsʹ,avail)
     Reqs.write("REQUIRE",rʹ)
-    info("REQUIRE updated.")
+    info("REQUIRE updated")
     return true
 end
 
@@ -35,21 +35,44 @@ function edit()
     reqs = Reqs.parse("REQUIRE")
     run(`$editor REQUIRE`)
     reqsʹ = Reqs.parse("REQUIRE")
-    reqs == reqsʹ && return info("Nothing to be done.")
+    reqs == reqsʹ && return info("Nothing to be done")
     info("Computing changes...")
     resolve(reqsʹ)
 end
 
 function add(pkg::String, vers::VersionSet)
-    edit(Reqs.add,pkg,vers) && return
-    ispath(pkg) || error("unknown package $pkg")
-    info("Nothing to be done.")
+    outdated = :maybe
+    @sync begin
+        @async if !edit(Reqs.add,pkg,vers)
+            ispath(pkg) || error("unknown package $pkg")
+            info("Nothing to be done")
+        end
+        branch = Pkg.META_BRANCH
+        if Git.branch(dir="METADATA") == branch
+            if !Git.success(`diff --quiet origin/$branch`, dir="METADATA")
+                outdated = :yes
+            else
+                try
+                    run(Git.cmd(`fetch -q --all`, dir="METADATA") |>DevNull .>DevNull)
+                    outdated = Git.success(`diff --quiet origin/$branch`, dir="METADATA") ?
+                        (:no) : (:yes)
+                end
+            end
+        else
+            outdated = :no # user is doing something funky with METADATA
+        end
+    end
+    if outdated != :no
+        is = outdated == :yes ? "is" : "might be"
+        info("METADATA $is out-of-date — you may not have the latest version of $pkg")
+        info("Use `Pkg.update()` to get the latest versions of your packages")
+    end
 end
 add(pkg::String, vers::VersionNumber...) = add(pkg,VersionSet(vers...))
 
 function rm(pkg::String)
     edit(Reqs.rm,pkg) && return
-    ispath(pkg) || return info("Nothing to be done.")
+    ispath(pkg) || return info("Nothing to be done")
     info("Removing $pkg (unregistered)")
     Write.remove(pkg)
 end
@@ -84,7 +107,7 @@ function status(io::IO)
     instd = Read.installed()
     required = sort!([keys(reqs)...])
     if !isempty(required)
-        println(io, "Required packages:")
+        println(io, "$(length(required)) required packages:")
         for pkg in required
             ver,fix = pop!(instd,pkg)
             status(io,pkg,ver,fix)
@@ -92,14 +115,14 @@ function status(io::IO)
     end
     additional = sort!([keys(instd)...])
     if !isempty(additional)
-        println(io, "Additional packages:")
+        println(io, "$(length(additional)) additional packages:")
         for pkg in additional
             ver,fix = instd[pkg]
             status(io,pkg,ver,fix)
         end
     end
     if isempty(required) && isempty(additional)
-        println(io, "No packages installed.")
+        println(io, "No packages installed")
     end
 end
 # TODO: status(io::IO, pkg::String)
@@ -281,7 +304,7 @@ function publish(branch::String)
     Git.branch(dir="METADATA") == branch ||
         error("METADATA must be on $branch to publish changes")
     Git.success(`push -q -n origin $branch`, dir="METADATA") ||
-        error("METADATA is behind origin/$branch – run Pkg.update() before publishing")
+        error("METADATA is behind origin/$branch – run `Pkg.update()` before publishing")
     Git.run(`fetch -q`, dir="METADATA")
     info("Validating METADATA")
     check_metadata()
@@ -305,7 +328,7 @@ function publish(branch::String)
             return true
         end || error("$pkg v$ver is incorrectly tagged – $sha1 expected")
     end
-    isempty(tags) && info("No new package versions to publish.")
+    isempty(tags) && info("No new package versions to publish")
     @sync for pkg in sort!([keys(tags)...])
         @async begin
             forced = ASCIIString[]
@@ -354,7 +377,7 @@ function resolve(
 
     # compare what is installed with what should be
     changes = Query.diff(have, want, avail, fixed)
-    isempty(changes) && return info("No packages to install, update or remove.")
+    isempty(changes) && return info("No packages to install, update or remove")
 
     # prefetch phase isolates network activity, nothing to roll back
     missing = {}

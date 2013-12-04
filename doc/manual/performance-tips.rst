@@ -240,8 +240,8 @@ Functions like ``strange_twos`` occur when dealing with data of
 uncertain type, for example data loaded from an input file that might
 contain either integers, floats, strings, or something else.
 
-Remember that arrays are column-major
--------------------------------------
+Access arrays in memory order, along columns
+--------------------------------------------
 
 Multidimensional arrays in Julia are stored in column-major order. This
 means that arrays are stacked one column at a time. This can be verified

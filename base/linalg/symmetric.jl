@@ -16,8 +16,8 @@ function copy!(A::Symmetric, B::Symmetric)
     A
 end
 size(A::Symmetric, args...) = size(A.S, args...)
-print_matrix(io::IO, A::Symmetric, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
-full(A::Symmetric) = A.S
+getindex(A::Symmetric, i::Integer, j::Integer) = (A.uplo == 'U') == (i < j) ? getindex(A.S, i, j) : getindex(A.S, j, i)
+full(A::Symmetric) = symmetrize!(A.S, A.uplo)
 ishermitian{T<:Real}(A::Symmetric{T}) = true
 ishermitian{T<:Complex}(A::Symmetric{T}) = all(imag(A.S) .== 0)
 issym(A::Symmetric) = true

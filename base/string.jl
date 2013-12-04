@@ -311,7 +311,7 @@ function search(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},A
     end
 end
 
-function search(s::String, t::String, i::Integer)
+function search(s::String, t::String, i::Integer=start(s))
     idx = searchindex(s,t,i)
     if isempty(t)
         idx:idx-1
@@ -320,12 +320,8 @@ function search(s::String, t::String, i::Integer)
     end
 end
 
-search(s::String, t::String) = search(s,t,start(s))
-
-rsearch(s::String, c::Chars, i::Integer) =
+rsearch(s::String, c::Chars, i::Integer=endof(s)) =
     endof(s)-search(RevString(s), c, endof(s)-i+1)+1
-
-rsearch(s::String, c::Chars) = rsearch(s,c,endof(s))
 
 function _rsearchindex(s, t, i)
     if isempty(t)
@@ -451,7 +447,7 @@ function rsearch(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},
     end
 end
 
-function rsearch(s::String, t::String, i::Integer)
+function rsearch(s::String, t::String, i::Integer=endof(s))
     idx = rsearchindex(s,t,i)
     if isempty(t)
         idx:idx-1
@@ -459,8 +455,6 @@ function rsearch(s::String, t::String, i::Integer)
         idx:(idx > 0 ? idx + endof(t) - 1 : -1)
     end
 end
-
-rsearch(s::String, t::String) = rsearch(s,t,endof(s))
 
 contains(a::String, b::String) = searchindex(a,b)!=0
 
@@ -816,11 +810,11 @@ end
 ## string promotion rules ##
 
 promote_rule(::Type{UTF8String} , ::Type{ASCIIString}) = UTF8String
-promote_rule(::Type{UTF8String} , ::Type{UTF16String} ) = UTF8String
-promote_rule(::Type{ASCIIString}, ::Type{UTF16String} ) = UTF8String
-promote_rule(::Type{UTF32String} , ::Type{UTF16String} ) = UTF8String
-promote_rule(::Type{UTF8String} , ::Type{UTF32String} ) = UTF8String
-promote_rule(::Type{ASCIIString}, ::Type{UTF32String} ) = UTF8String
+promote_rule(::Type{UTF8String} , ::Type{UTF16String}) = UTF8String
+promote_rule(::Type{ASCIIString}, ::Type{UTF16String}) = UTF8String
+promote_rule(::Type{UTF32String}, ::Type{UTF16String}) = UTF8String
+promote_rule(::Type{UTF8String} , ::Type{UTF32String}) = UTF8String
+promote_rule(::Type{ASCIIString}, ::Type{UTF32String}) = UTF8String
 promote_rule{T<:String}(::Type{RepString}, ::Type{T}) = RepString
 
 ## printing literal quoted string data ##
@@ -1438,41 +1432,48 @@ function parseint(c::Char, base::Integer)
     d = parseint(c)
     d < base || error("invalid base $base digit $(repr(c))")
 end
-parseint{T<:Integer}(::Type{T}, c::Char, base::Integer) =
-    convert(T,parseint(c,base))
+parseint{T<:Integer}(::Type{T}, c::Char, base::Integer) = convert(T,parseint(c,base))
+parseint{T<:Integer}(::Type{T}, c::Char) = convert(T,parseint(c))
 
 function parseint_next(s::String, i::Int=start(s))
     done(s,i) && error("premature end of integer: $(repr(s))")
+    j = i
     c, i = next(s,i)
+    c, i, j
 end
 
-function _parseint{T<:Integer}(::Type{T}, s::String, base::Int)
-    c, i = parseint_next(s)
+function parseint_preamble(signed::Bool, s::String, base::Int)
+    c, i, j = parseint_next(s)
     while isspace(c)
-        c, i = parseint_next(s,i)
+        c, i, j = parseint_next(s,i)
     end
     sgn = 1
-    if T <: Signed
+    if signed
         if c == '-' || c == '+'
             (c == '-') && (sgn = -1)
-            c, i = parseint_next(s,i)
+            c, i, j = parseint_next(s,i)
         end
     end
     while isspace(c)
-        c, i = parseint_next(s,i)
+        c, i, j = parseint_next(s,i)
     end
     if base == 0
-        if c == '0'
-            done(s,i) && return zero(T)
+        if c == '0' && !done(s,i)
             c, i = next(s,i)
             base = c=='b' ? 2 : c=='o' ? 8 : c=='x' ? 16 : 10
             if base != 10
-                c, i = parseint_next(s,i)
+                c, i, j = parseint_next(s,i)
             end
         else
             base = 10
         end
     end
+    return sgn, base, j
+end
+
+function parseint_nocheck{T<:Integer}(::Type{T}, s::String, base::Int)
+    sgn, base, i = parseint_preamble(T<:Signed,s,base)
+    c, i = parseint_next(s,i)
     base = convert(T,base)
     m::T = div(typemax(T)-base+1,base)
     n::T = 0
@@ -1509,13 +1510,11 @@ function _parseint{T<:Integer}(::Type{T}, s::String, base::Int)
     return n
 end
 
-function parseint(T::Type, s::String, base::Integer)
-    2 <= base <= 36 ? _parseint(T,s,base) : error("invalid base: $base")
-end
-
-parseint(T::Type, s::String)       = _parseint(T,s,0)
-parseint(s::String)                = _parseint(Int,s,0)
+parseint{T<:Integer}(::Type{T}, s::String, base::Integer) =
+    2 <= base <= 36 ? parseint_nocheck(T,s,int(base)) : error("invalid base: $base")
+parseint{T<:Integer}(::Type{T}, s::String) = parseint_nocheck(T,s,0)
 parseint(s::String, base::Integer) = parseint(Int,s,base)
+parseint(s::String) = parseint_nocheck(Int,s,0)
 
 integer (s::String) = int(s)
 unsigned(s::String) = uint(s)
@@ -1624,12 +1623,9 @@ let
     randstring() = randstring(8)
 end
 
-
 function hex2bytes(s::ASCIIString)
     len = length(s)
-    if isodd(len)
-        error("argument string length must be even")
-    end
+    iseven(len) || error("string length must be even: $(repr(s))")
     arr = zeros(Uint8, div(len,2))
     i = j = 0
     while i < len
@@ -1637,17 +1633,19 @@ function hex2bytes(s::ASCIIString)
         c = s[i+=1]
         n = '0' <= c <= '9' ? c - '0' :
             'a' <= c <= 'f' ? c - 'a' + 10 :
-            'A' <= c <= 'F' ? c - 'A' + 10 : error("argument isn't a hexadecimal string")
+            'A' <= c <= 'F' ? c - 'A' + 10 :
+                error("not a hexadecimal string: $(repr(s))")
         c = s[i+=1]
         n = '0' <= c <= '9' ? n << 4 + c - '0' :
             'a' <= c <= 'f' ? n << 4 + c - 'a' + 10 :
-            'A' <= c <= 'F' ? n << 4 + c - 'A' + 10 : error("argument isn't a hexadecimal string")
+            'A' <= c <= 'F' ? n << 4 + c - 'A' + 10 :
+                error("not a hexadecimal string: $(repr(s))")
         arr[j+=1] = n
     end
     return arr
 end
 
-bytes2hex(arr::Array{Uint8,1}) = join([hex(i, 2) for i in arr])
+bytes2hex{T<:Uint8}(arr::Array{T,1}) = join([hex(i,2) for i in arr])
 
 function repr(x)
     s = IOBuffer()

@@ -63,8 +63,8 @@ function At_mul_B{T<:BlasFloat}(A::StridedMatrix{T}, x::StridedVector{T})
     gemv(similar(A, size(A, 2)), 'T', A, x)
 end
 
-At_mul_B{T<:BlasFloat}(y::StridedVector{T}, A::StridedMatrix{T}, x::StridedVector{T}) = gemv(y, 'T', A, x)
-At_mul_B(y::StridedVector, A::StridedMatrix, x::StridedVector) = generic_matvecmul(y, 'T', A, x)
+At_mul_B!{T<:BlasFloat}(y::StridedVector{T}, A::StridedMatrix{T}, x::StridedVector{T}) = gemv(y, 'T', A, x)
+At_mul_B!(y::StridedVector, A::StridedMatrix, x::StridedVector) = generic_matvecmul(y, 'T', A, x)
 
 Ac_mul_B{T<:Union(Float32,Integer,Rational)}(A::StridedMatrix{Float64}, X::StridedVector{T}) = Ac_mul_B(A,convert(Vector{eltype(A)},X))
 Ac_mul_B{T<:Union(Float32,Complex64,Integer,Rational)}(A::StridedMatrix{Complex128}, X::StridedVector{T}) = Ac_mul_B(A,convert(Vector{eltype(A)},X))
@@ -72,6 +72,9 @@ Ac_mul_B{T<:BlasReal}(A::StridedMatrix{T}, x::StridedVector{T}) = At_mul_B(A, x)
 function Ac_mul_B{T<:BlasComplex}(A::StridedMatrix{T}, x::StridedVector{T})
     gemv(similar(A, size(A, 2)), 'C', A, x)
 end
+
+Ac_mul_B!{T<:BlasReal}(y::StridedVector{T}, A::StridedMatrix{T}, x::StridedVector{T}) = At_mul_B!(y, A, x)
+Ac_mul_B!{T<:BlasComplex}(y::StridedVector{T}, A::StridedMatrix{T}, x::StridedVector{T}) = gemv(y, 'C', A, x)
 Ac_mul_B!(y::StridedVector, A::StridedMatrix, x::StridedVector) = generic_matvecmul(y, 'C', A, x)
 
 
