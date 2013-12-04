@@ -154,6 +154,7 @@ include("combinatorics.jl")
 # distributed arrays and memory-mapped arrays
 include("darray.jl")
 include("mmap.jl")
+include("sharedarrays.jl")
 
 # utilities - version, timing, help, edit, metaprogramming
 include("sysinfo.jl")
