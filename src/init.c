@@ -671,6 +671,8 @@ void julia_init(char *imageFile, int build_mode)
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
         jl_init_box_caches();
+        // Core.JULIA_HOME is a "magic" constant, we set it at runtime here
+        // since it's value gets excluded from the system image
         jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
                      jl_cstr_to_string(julia_home));
         jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));

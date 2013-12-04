@@ -179,8 +179,8 @@ typedef struct _jl_lambda_info_t {
     jl_fptr_t fptr;        // jlcall entry point
     void *functionObject; // jlcall llvm Function
     void *cFunctionObject; // c callable llvm Function
-    int32_t functionID;
-    int32_t cFunctionID;
+    int32_t functionID; // index that this function will have in the codegen table
+    int32_t cFunctionID; // index that this cFunction will have in the codegen table
 } jl_lambda_info_t;
 
 #define LAMBDA_INFO_NW (NWORDS(sizeof(jl_lambda_info_t))-1)
@@ -891,7 +891,6 @@ void jl_init_serializer(void);
 void jl_save_system_image(char *fname);
 void jl_restore_system_image(char *fname, int build_mode);
 void jl_dump_bitcode(char *fname);
-const char *jl_get_llvmname(void *func);
 void jl_set_imaging_mode(int stat);
 int32_t jl_get_llvm_gv(jl_value_t *p);
 

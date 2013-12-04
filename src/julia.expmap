@@ -75,11 +75,7 @@
     jl_declare_constant;
     jl_defines_or_exports_p;
     jl_box_*;
-    jl_unbox_int32;
-    jl_unbox_int64;
-    jl_unbox_float32;
-    jl_unbox_float64;
-    jl_unbox_voidpointer;
+    jl_unbox_*;
     jl_callback;
     jl_clear_input;
     jl_close_uv;
@@ -402,9 +398,9 @@
     add_library_mapping;
 
     jl_dump_bitcode;
-    jl_set_imaging_mode;	
+    jl_set_imaging_mode;
 
-	jl_stackovf_exception;
+    jl_stackovf_exception;
     jl_memory_exception;
     jl_diverror_exception;
     jl_domain_exception;

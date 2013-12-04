@@ -195,6 +195,15 @@ char *jl_dlfind_win32(char *f_name)
         return "msvcrt";
     if (jl_dlsym(jl_winsock_handle, f_name))
         return "ws2_32";
+    // additional common libraries (libc?) could be added here, but in general,
+    // it is better to specify the library explicitly in the code. This exists
+    // mainly to ease compatibility with linux, and for libraries that don't
+    // have a name (julia.exe and libjulia.dll)
+    // We could also loop over all libraries that have been used so far, but, again,
+    // explicit is preferred over implicit
     return NULL;
+    // oops, we didn't find it. NULL defaults to searching jl_RTLD_DEFAULT_handle,
+    // which defaults to jl_dl_handle, where we won't find it, and will throw the
+    // appropriate error.
 }
 #endif
