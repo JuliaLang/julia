@@ -207,6 +207,21 @@ isless (a::FloatingPoint, b::Integer) = (a<b) | isless(a,float(b))
 <=(x::Float32, y::Union(Int32,Uint32)) = float64(x)<=float64(y)
 <=(x::Union(Int32,Uint32), y::Float32) = float64(x)<=float64(y)
 
+abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
+abs(x::Float32) = box(Float32,abs_float(unbox(Float32,x)))
+
+isnan(x::FloatingPoint) = (x != x)
+isnan(x::Real) = isnan(float(x))
+isnan(x::Integer) = false
+
+isinf(x::FloatingPoint) = (abs(x) == Inf)
+isinf(x::Real) = isinf(float(x))
+isinf(x::Integer) = false
+
+isfinite(x::FloatingPoint) = (x-x == 0)
+isfinite(x::Real) = isfinite(float(x))
+isfinite(x::Integer) = true
+
 ## floating point traits ##
 
 const Inf16 = box(Float16,unbox(Uint16,0x7c00))
@@ -215,6 +230,11 @@ const Inf32 = box(Float32,unbox(Uint32,0x7f800000))
 const NaN32 = box(Float32,unbox(Uint32,0x7fc00000))
 const Inf = box(Float64,unbox(Uint64,0x7ff0000000000000))
 const NaN = box(Float64,unbox(Uint64,0x7ff8000000000000))
+
+## precision, as defined by the effective number of bits in the mantissa ##
+precision(::Float16) = 11
+precision(::Float32) = 24
+precision(::Float64) = 53
 
 function float_lex_order(f::Integer, delta::Integer)
     # convert from signed magnitude to 2's complement and back
@@ -267,7 +287,7 @@ prevfloat(x::FloatingPoint) = nextfloat(x,-1)
     realmin() = realmin(Float64)
     realmax() = realmax(Float64)
 
-    eps(x::FloatingPoint) = isfinite(x) ? abs(nextfloat(x)-x) : nan(x)
+    eps(x::FloatingPoint) = isfinite(x) ? abs(x)-prevfloat(abs(x)) : nan(x)
     eps(::Type{Float16}) = $(box(Float16,unbox(Uint16,0x1400)))
     eps(::Type{Float32}) = $(box(Float32,unbox(Uint32,0x34000000)))
     eps(::Type{Float64}) = $(box(Float64,unbox(Uint64,0x3cb0000000000000)))
