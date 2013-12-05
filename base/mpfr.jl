@@ -19,7 +19,8 @@ import
         gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        serialize, deserialize, inf, nan, hash, cbrt, typemax, typemin
+        serialize, deserialize, inf, nan, hash, cbrt, typemax, typemin,
+        realmin, realmax
 
 import Base.Math.lgamma_r
 
@@ -686,6 +687,9 @@ function prevfloat(x::BigFloat)
 end
 
 eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
+
+realmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
+realmax(::Type{BigFloat}) = prevfloat(inf(BigFloat))
 
 function with_bigfloat_precision(f::Function, precision::Integer)
     old_precision = get_bigfloat_precision()
