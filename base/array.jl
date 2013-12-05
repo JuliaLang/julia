@@ -234,8 +234,9 @@ function linspace(start::Real, stop::Real, n::Integer)
         return a
     end
     n -= 1
+    S = promote_type(T, Float64)
     for i=0:n
-        a[i+1] = start*((n-i)/n) + stop*(i/n)
+        a[i+1] = start*(convert(S, (n-i))/n) + stop*(convert(S, i)/n)
     end
     a
 end
