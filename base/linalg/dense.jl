@@ -470,7 +470,7 @@ end
 function pinv{T<:BlasFloat}(A::StridedMatrix{T})
     m, n = size(A)
     (m == 0 || n == 0) && return Array(T, n, m)
-    SVD         = svdfact(A, true)
+    SVD         = svdfact(A, thin = true)
     Sinv        = zeros(T, length(SVD[:S]))
     index       = SVD[:S] .> eps(real(one(T)))*max(m,n)*maximum(SVD[:S])
     Sinv[index] = 1.0 ./ SVD[:S][index]
@@ -484,7 +484,7 @@ pinv(x::Number) = one(x)/x
 function null{T<:BlasFloat}(A::StridedMatrix{T})
     m, n = size(A)
     (m == 0 || n == 0) && return eye(T, n)
-    SVD = svdfact(A, false)
+    SVD = svdfact(A, thin = false)
     indstart = sum(SVD[:S] .> max(m,n)*maximum(SVD[:S])*eps(eltype(SVD[:S]))) + 1
     return SVD[:V][:,indstart:end]
 end
