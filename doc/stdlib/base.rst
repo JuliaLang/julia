@@ -4425,50 +4425,66 @@ Parallel Computing
    Wait until all dynamically-enclosed uses of ``@async``, ``@spawn``, and
    ``@spawnat`` complete.
 
-Distributed Arrays
-------------------
+Distributed and Shared Arrays
+-----------------------------
 
-.. function:: DArray(init, dims, [procs, dist])
+.. function:: DArray(alloc::Union(Type, Function), dims, [procs, dist]; init=false)
 
-   Construct a distributed array. ``init`` is a function that accepts a tuple of index ranges. 
-   This function should allocate a local chunk of the distributed array and initialize it for the specified indices. 
+   Construct a distributed array. If ``alloc`` is a ``DataType``, local array chunks are alocated. If ``alloc`` is 
+   a ``Function``, it should be a a function that accepts a tuple of index ranges, and should allocate a local 
+   chunk of the distributed array. It may also optionally initialize it. 
    ``dims`` is the overall size of the distributed array. ``procs`` optionally specifies a vector of processor IDs to use. 
    If unspecified, the array is distributed over all worker processes only. Typically, when runnning in distributed mode,
    i.e., ``nprocs() > 1``, this would mean that no chunk of the distributed array exists on the process hosting the 
    interactive julia prompt.
    ``dist`` is an integer vector specifying how many chunks the distributed array should be divided into in each dimension.
+   If keyword argument ``init`` is specified, it should be a function that accepts a DArray object. It is expected to 
+   initialize its ``localpart``.
 
-   For example, the ``dfill`` function that creates a distributed array and fills it with a value ``v`` is implemented as:
+   For example, the ``fill`` variant that creates a distributed array and fills it with a value ``v`` is implemented as:
 
-   ``dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)``
+   `` fill(v, ::Type{DArray}, args...) = DArray(I->fill(v, map(length,I)), args...)``
 
-.. function:: dzeros(dims, ...)
+.. function:: SharedArray(arrtype, dims, [procs, dist]; init=false)
 
-   Construct a distributed array of zeros. Trailing arguments are the same as those accepted by ``darray``.
+   Construct an array mapped across all participating processes using shared memory. ``arrtype`` determines the type of 
+   the array created in shared memory. ``isbits(arrtype)`` MUST be true. 
+   ``dims``, ``procs`` and ``dist`` are similar to those in ``DArray``. 
+   The shared array created is initialized by calling the ``init``function if specified. It should be a function that 
+   accepts a SharedArray object and is expected to initialize its ``localpart`` which will be a ``SubArray``.
+   
+   
+.. function:: ones, zeros, infs, nans, rand, randn, fill
 
-.. function:: dones(dims, ...)
+    DArray / SharedArray variants of the standard Array convenience constructors.
+    
+    Except for ``fill``, they are called by specifying the distribution type as the first parameter. 
+    ``fill`` accepts the distribution type as the second parameter.
+    
+    ``zeros(SharedArray, dims, ...)``, ``ones(SharedArray, dims, ...)``, ``rand(DArray, dims, ...)`` and so on.
 
-   Construct a distributed array of ones. Trailing arguments are the same as those accepted by ``darray``.
-
-.. function:: dfill(x, dims, ...)
-
-   Construct a distributed array filled with value ``x``. Trailing arguments are the same as those accepted by ``darray``.
-
-.. function:: drand(dims, ...)
-
-   Construct a distributed uniform random array. Trailing arguments are the same as those accepted by ``darray``.
-
-.. function:: drandn(dims, ...)
-
-   Construct a distributed normal random array. Trailing arguments are the same as those accepted by ``darray``.
-
+    Trailing arguments are the same as those accepted by DArray and SharedArray.
+    
+    For example, 
+    
+    ``rand(DArray, 1:100, (100,100))`` will created a DArray of size 100 x 100 with random integers between 
+    1 and 100.
+    
+    ``fill(float64(pi), SharedArray, (100,100))`` gets you an all pi SharedArray.
+    
+    
 .. function:: distribute(a)
 
    Convert a local array to distributed
 
+.. function:: share(a)
+
+   Convert a local array to shared
+   
 .. function:: localpart(d)
 
-   Get the local piece of a distributed array. Returns an empty array if no local part exists on the calling process.
+   Get the local piece of a distributed/shared array. Returns an empty array if no local part exists on the calling process.
+   If ``d`` is a SharedArray, returns a ``SubArray``.
 
 .. function:: myindexes(d)
 
@@ -4477,7 +4493,28 @@ Distributed Arrays
 
 .. function:: procs(d)
 
-   Get the vector of processors storing pieces of ``d``
+   Get the vector of processors participating in the distribution of ``d``
+
+    
+.. function:: dzeros(dims, ...) : DEPRECATED
+
+   Construct a distributed array of zeros. Trailing arguments are the same as those accepted by ``darray``.
+
+.. function:: dones(dims, ...) : DEPRECATED
+
+   Construct a distributed array of ones. Trailing arguments are the same as those accepted by ``darray``.
+
+.. function:: dfill(x, dims, ...) : DEPRECATED
+
+   Construct a distributed array filled with value ``x``. Trailing arguments are the same as those accepted by ``darray``.
+
+.. function:: drand(dims, ...) : DEPRECATED
+
+   Construct a distributed uniform random array. Trailing arguments are the same as those accepted by ``darray``.
+
+.. function:: drandn(dims, ...) : DEPRECATED
+
+   Construct a distributed normal random array. Trailing arguments are the same as those accepted by ``darray``.
 
 System
 ------

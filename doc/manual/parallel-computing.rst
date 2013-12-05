@@ -398,8 +398,8 @@ required, since the threads are scheduled cooperatively and not
 preemptively. This means context switches only occur at well-defined
 points: in this case, when ``remotecall_fetch`` is called.
 
-Distributed Arrays
-------------------
+Distributed and Shared Arrays
+-----------------------------
 
 Large computations are often organized around large arrays of data. In
 these cases, a particularly natural way to obtain parallelism is to
@@ -415,21 +415,21 @@ A ``DArray`` can also use arbitrary array-like types to represent the local
 chunks that store actual data. The data in a ``DArray`` is distributed by
 dividing the index space into some number of blocks in each dimension.
 
-Common kinds of arrays can be constructed with functions beginning with
-``d``::
+Common kinds of darrays can be constructed using the same convenience 
+functions for Arrays with the first parameter specified as ``DArray``::
 
-    dzeros(100,100,10)
-    dones(100,100,10)
-    drand(100,100,10)
-    drandn(100,100,10)
-    dfill(x, 100,100,10)
+    zeros(DArray, 100,100,10)
+    ones(DArray, 100,100,10)
+    rand(DArray, 100,100,10)
+    randn(DArray, 100,100,10)
+    fill(x, DArray, 100,100,10)         # second parameter for fill
 
 In the last case, each element will be initialized to the specified
 value ``x``. These functions automatically pick a distribution for you.
 For more control, you can specify which processors to use, and how the
 data should be distributed::
 
-    dzeros((100,100), workers()[1:4], [1,4])
+    zeros(DArray, (100,100), workers()[1:4], [1,4])
 
 The second argument specifies that the array should be created on the first
 four workers. When dividing data among a large number of processes,
@@ -464,11 +464,12 @@ Constructing Distributed Arrays
 
 The primitive ``DArray`` constructor has the following somewhat elaborate signature::
 
-    DArray(init, dims[, procs, dist])
+    DArray(alloc, dims[, procs, dist]; init=false)
 
-``init`` is a function that accepts a tuple of index ranges. This function should
+``alloc`` is a function that accepts a tuple of index ranges. This function should
 allocate a local chunk of the distributed array and initialize it for the specified
-indices. ``dims`` is the overall size of the distributed array.
+indices. You can also pass a type instead and the required space is allocated by DArray 
+itself. ``dims`` is the overall size of the distributed array.
 ``procs`` optionally specifies a vector of processor IDs to use.
 ``dist`` is an integer vector specifying how many chunks the
 distributed array should be divided into in each dimension.
@@ -476,13 +477,14 @@ distributed array should be divided into in each dimension.
 The last two arguments are optional, and defaults will be used if they
 are omitted.
 
-As an example, here is how to turn the local array constructor ``fill``
-into a distributed array constructor::
+If a keyword argument ``init`` function is specified, it is called on all the workers 
+with the ``darray`` object and is expected to initialize its ``localpart``.
 
-    dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)
+As an example, the DArray ``fill`` is implemented as::
 
-In this case the ``init`` function only needs to call ``fill`` with the
-dimensions of the local piece it is creating.
+    fill(v, ::Type{DArray}, args...) = DArray(I->fill(v, map(length,I)), args...)
+
+In this case the ``alloc`` allocates and initializes the local piece it is creating.
 
 Distributed Array Operations
 ----------------------------
@@ -519,7 +521,7 @@ following code accomplishes this::
 
 As you can see, we use a series of indexing expressions to fetch
 data into a local array ``old``. Note that the ``do`` block syntax is
-convenient for passing ``init`` functions to the ``DArray`` constructor.
+convenient for passing ``alloc`` functions to the ``DArray`` constructor.
 Next, the serial function ``life_rule`` is called to apply the update rules
 to the data, yielding the needed ``DArray`` chunk. Nothing about ``life_rule``
 is ``DArray``\ -specific, but we list it here for completeness::
@@ -540,6 +542,20 @@ is ``DArray``\ -specific, but we list it here for completeness::
         new
     end
 
+SharedArrays
+------------
+
+SharedArrays are like DArrays in the sense that they allow computation to be more easily
+spread across a bunch of worker processes. Unlike DArrays which allocate a chunk of 
+the Array on each participating worker, SharedArrays map the complete array into each 
+worker using operating system provided shared memory facilities.
+
+While each worker has full visibility into the SharedArray, local chunks in SharedArrays 
+(of type SubArray) may be used to partition work across paticipating workers.
+
+All participating workers in a SharedArray must be on the same host. Limits on the 
+size and number of SharedArray objects are system defined.
+    
 
 ClusterManagers
 ---------------

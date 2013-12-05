@@ -12,10 +12,11 @@ end
 function SharedArray(T::Type, dims, dprocs, dist; init=false)
     N = length(dims)
 
-    @windows_only error(" SharedArray is not available on Windows yet.")
+    !isbits(T) ? error("Type of Shared Array elements must be bits types") : nothing
+    @windows_only error(" SharedArray is not supported on Windows yet.")
     
-    # Ensure that all processes are on localhost. Currently only checking this if pid is 1.
-    if (myid() == 1) && !(all(x->islocalwrkr(x), [dprocs, myid()]))
+    # Ensure that all processes are on localhost. 
+    if !(all(x->islocalwrkr(x), [dprocs, myid()]))
         error("SharedArray requires all requested processes to be on the same machine.")
     end
 
@@ -165,7 +166,7 @@ getindex(sa::SharedArray, x::AbstractArray) = getindex(sa.local_shmmap, x)
 getindex(sa::SharedArray, args...) = getindex(sa.local_shmmap, args...)
 setindex!(sa::SharedArray, args...) = (setindex!(sa.local_shmmap, args...); sa)
 
-function print_shmem_limits()
+function print_shmem_limits(slen)
     try
         @linux_only pfx = "kernel"
         @osx_only pfx = "kern.sysv"
@@ -176,12 +177,12 @@ function print_shmem_limits()
         
         println("System max size of single shmem segment(MB) : ", shmmax_MB, 
             "\nSystem max size of all shmem segments(MB) : ", shmall_MB,
-            "\nRequested size(MB) : ", div(prod(dims)*sizeof(T), 1024*1024),
+            "\nRequested size(MB) : ", div(slen, 1024*1024),
             "\nPlease ensure requested size is within system limits.",
             "\nIf not, increase system limits and try again."
         )
     catch e
-        ; # Ignore any errors in this... 
+        nothing # Ignore any errors in this... 
     end
 end
 
@@ -209,8 +210,8 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
         
         A = mmap_array(T, dims, s, 0, grow=false)
     catch e
-        print_shmem_limits()
-        rethrow()
+        print_shmem_limits(prod(dims)*sizeof(T))
+        rethrow(e)
         
     finally
         if s != nothing 

@@ -212,7 +212,7 @@ function add_workers(pg::ProcessGroup, ws::Array{Any,1})
     end
     all_locs = map(x -> isa(x, Worker) ? (x.privhost, x.port, x.id) : ("", 0, x.id), pg.workers)
     for w in ws
-        send_msg_now(w, :join_pgrp, w.id, all_locs)
+        send_msg_now(w, :join_pgrp, w.id, all_locs, string(getipaddr()))
     end
     for w in ws
         @schedule begin
@@ -859,25 +859,28 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     put(lookup_ref(oid), val)
                 elseif is(msg, :identify_socket)
                     otherid = deserialize(sock)
-                    register_worker(Worker("", 0, sock, otherid))
+                    otherhost = deserialize(sock)
+                    register_worker(Worker(otherhost, 0, sock, otherid))
                 elseif is(msg, :join_pgrp)
                     # first connection; get process group info from client
                     self_pid = LPROC.id = deserialize(sock)
                     locs = deserialize(sock)
+                    otherhost = deserialize(sock)
                     #print("\nLocation: ",locs,"\nId:",myid(),"\n")
                     # joining existing process group
                     
-                    register_worker(Worker("", 0, sock, 1))
+                    register_worker(Worker(otherhost, 0, sock, 1))
                     register_worker(LPROC)
                     
                     for (rhost, rport, rpid) in locs
+                        self_ipaddr_str = string(getipaddr())
                         if (rpid < self_pid) && (!(rpid == 1))
                             # Connect to them
                             w = Worker(rhost, rport)
                             w.id = rpid
                             register_worker(w)
                             create_message_handler_loop(w.socket)
-                            send_msg_now(w, :identify_socket, self_pid)
+                            send_msg_now(w, :identify_socket, self_pid, self_ipaddr_str)
                         else
                             # Others will connect to us. Don't do anything just yet
                             continue
@@ -1667,7 +1670,6 @@ function interrupt(pids::AbstractVector=workers())
 end
 
 
-# FIXME : For other workers that connect to us, we have to query socket itself to get the other endpoint - TBD...
 function islocalwrkr(id)
     if (myid() == id) 
         return true
