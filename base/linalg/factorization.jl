@@ -552,24 +552,29 @@ type SVD{T<:BlasFloat,Tr} <: Factorization{T}
     S::Vector{Tr}
     Vt::Matrix{T}
 end
-function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, thin::Bool)
+function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}; thin::Bool = true, method::Symbol = :DnC)
     m,n = size(A)
     if m == 0 || n == 0
         u,s,vt = (eye(T, m, thin ? n : m), real(zeros(T,0)), eye(T,n,n))
     else
-        u,s,vt = LAPACK.gesdd!(thin ? 'S' : 'A', A)
+        if method == :DnC
+            u,s,vt = LAPACK.gesdd!(thin ? 'S' : 'A', A)
+        elseif method == :QR
+            u,s,vt = LAPACK.gesvd!(thin ? 'S' : 'A', thin ? 'S' : 'A', A) 
+        else
+            error("method must be either :DnC or :QR")
+        end
     end
     SVD(u,s,vt)
 end
-svdfact!(A::StridedVecOrMat, args...) = svdfact!(float(A), args...)
-svdfact!{T<:BlasFloat}(a::Vector{T}, thin::Bool) = svdfact!(reshape(a, length(a), 1), thin)
-svdfact!{T<:BlasFloat}(A::StridedVecOrMat{T}) = svdfact!(A, true)
-svdfact(A::StridedVecOrMat, args...) = svdfact!(eltype(A)<:BlasFloat ? copy(A) : float(A), args...)
-svdfact(x::Number, thin::Bool=true) = SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
-svdfact(x::Integer, thin::Bool=true) = svdfact(float(x), thin)
+svdfact!(A::StridedVecOrMat; args...) = svdfact!(float(A); args...)
+svdfact!{T<:BlasFloat}(a::Vector{T}; args...) = svdfact!(reshape(a, length(a), 1); args...)
+svdfact(A::StridedVecOrMat; args...) = svdfact!(eltype(A)<:BlasFloat ? copy(A) : float(A); args...)
+svdfact(x::Number; thin::Bool=true) = SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
+svdfact(x::Integer; thin::Bool=true) = svdfact(float(x), thin)
 
-function svd(A::Union(Number, AbstractArray), thin::Bool=true)
-    F = svdfact(A, thin)
+function svd(A::Union(Number, AbstractArray); args...)
+    F = svdfact(A; args...)
     F.U, F.S, F.Vt'
 end
 

@@ -147,6 +147,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     # singular value decomposition
     usv = svdfact(a)                
     @test_approx_eq usv[:U]*scale(usv[:S],usv[:Vt]) a
+    @test_approx_eq usv[:U] svdfact(a, method = :QR)[:U]
     
     # Generalized svd
     gsvd = svdfact(a,a[1:5,:])
