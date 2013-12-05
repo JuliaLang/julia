@@ -8,6 +8,7 @@
  * including <math.h> (or rather its content).
  */
 #if defined(_OS_WINDOWS_)
+#define NOMINMAX
 #include <malloc.h>
 #if defined(_COMPILER_INTEL_)
 #include <mathimf.h>
@@ -903,7 +904,7 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
 
     int argStart = ctx->argDepth;
     size_t clen = jl_array_dim0(capt);
-    Value *captured[1+clen];
+    Value **captured = (Value**) alloca((1+clen)*sizeof(Value*));
     captured[0] = ConstantInt::get(T_size, clen);
     for(i=0; i < clen; i++) {
         Value *val;
@@ -1693,7 +1694,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
     Value *result;
     if (f!=NULL && specialized && f->linfo!=NULL && f->linfo->cFunctionObject!=NULL) {
         // emit specialized call site
-        Value *argvals[nargs];
+        Value **argvals = (Value**) alloca(nargs*sizeof(Value*));
         Function *cf = (Function*)f->linfo->cFunctionObject;
         FunctionType *cft = cf->getFunctionType();
         for(size_t i=0; i < nargs; i++) {
@@ -2412,7 +2413,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, Function *f)
     builder.SetCurrentDebugLocation(noDbg);
 
     size_t nargs = jl_tuple_len(lam->specTypes);
-    Value *args[nargs];
+    Value **args = (Value**) alloca(nargs*sizeof(Value*));
     for(size_t i=0; i < nargs; i++) {
         Value *argPtr = builder.CreateGEP(argArray,
                                           ConstantInt::get(T_size, i));

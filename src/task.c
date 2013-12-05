@@ -530,7 +530,7 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
 
 #if defined(_OS_WINDOWS_)
 int needsSymRefreshModuleList;
-WINBOOL WINAPI (*hSymRefreshModuleList)(HANDLE);
+BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
 {
     CONTEXT Context;

@@ -750,7 +750,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     // emit arguments
-    Value *argvals[(nargs-3)/2 + sret];
+    Value **argvals = (Value**) alloca(((nargs-3)/2 + sret)*sizeof(Value*));
     Value *result;
     if (sret) {
         assert(jl_is_structtype(rt));
