@@ -1,13 +1,15 @@
 ## linalg.jl: Some generic Linear Algebra definitions
 
-scale{T<:Number}(X::AbstractArray{T}, s::Number) = scale!(copy(X), s)
+scale(X::AbstractArray, s::Number) = scale!(copy(X), s)
+scale(s::Number, X::AbstractArray) = scale!(copy(X), s)
 
-function scale!{T<:Number}(X::AbstractArray{T}, s::Number)
+function scale!(X::AbstractArray, s::Number)
     for i in 1:length(X)
-        X[i] *= s
+        @inbounds X[i] *= s
     end
     X
 end
+scale!(s::Number, X::AbstractArray) = scale!(X, s)
 
 cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
