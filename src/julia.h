@@ -906,6 +906,7 @@ DLLEXPORT int jl_uv_dlopen(const char *filename, uv_lib_t *lib, unsigned flags);
 DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
 char *jl_dlfind_win32(char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
+DLLEXPORT char *jl_get_libjulia_path();
 
 #if defined(__linux__) || defined(__FreeBSD__)
 DLLEXPORT const char *jl_lookup_soname(char *pfx, size_t n);
