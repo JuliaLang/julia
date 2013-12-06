@@ -70,6 +70,33 @@ In the first step, a handle to the Julia function ``sqrt`` is retrieved by calli
 
 Its second argument ``args`` is an array of ``jl_value_t*`` arguments while ``nargs`` is the number of arguments.
 
+Memory Management
+========================
+
+As we have seen before, most Julia C types are handled as pointers which raises the question: Who is responsible for freeing any memory that functions as for instance ``jl_call`` allocate?
+
+The fortune answer is: The garbage collector (GC)! The unfortunate issue arising is: The GC cannot know that we are holding a reference to a Julia value from C, which implies that the GC may free the memory, rendering our pointer invalid. We thus have to be careful when using pointers to Julia values.
+
+The first thing to remember is that the GC is only active within `certain` ``jl_...`` calls. It is therefore safe to use a pointer in-between ``jl_...`` calls. But in order to make sure that values also survive ``jl_...`` calls, we have to tell Julia that we hold a reference to a Julia value. This can be done using the ``JL_GC_PUSH`` macros::
+
+    jl_value_t* ret = jl_eval_string("sqrt(2.0)");
+    JL_GC_PUSH1(&ret);
+    // Do something with ret
+    JL_POP();
+
+The last call tells Julia that we do not anymore hold a reference to the Julia value and that the GC is now allowed to collect the value behind the ``ret`` pointer. Several Julia values can be pushed at once using the ``JL_GC_PUSH2`` , ``JL_GC_PUSH3`` , and ``JL_GC_PUSH4`` macros. To push an array of Julia values one can use the  ``JL_GC_PUSHARGS`` macro, which takes as first argument a C array of ``jl_value_t`` pointers (i.e. ``jl_value_t**``) and as second argument the length of the array.
+
+Manipulating the Garbage Collector
+---------------------------------------------------
+
+There are some functions to control the GC. In the normal use case, these should not be necessary to be used.
+
+========================= ==============================================================================
+``void jl_gc_collect()``   Force a GC run
+``void jl_gc_disable()``   Disable the GC
+``void jl_gc_enable()``    Enable the GC
+========================= ==============================================================================
+
 Working with Arrays
 ========================
 
@@ -263,4 +290,3 @@ While ``jl_error`` takes a simple C string, ``jl_errorf`` can be used like a ``p
     jl_errorf("An error occurred as x = %d is to large", x);
 
 where in this example ``x`` is assumed to be an integer.
-
