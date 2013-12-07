@@ -341,6 +341,14 @@ end
 x = eps(BigFloat)
 @test BigFloat(1) + x == BigFloat(1) + prevfloat(x)
 
+# realmin/realmax
+x = realmin(BigFloat)
+@test x > 0 
+@test prevfloat(x) == 0
+x = realmax(BigFloat)
+@test !isinf(x)
+@test isinf(nextfloat(x))
+
 # factorial
 with_bigfloat_precision(256) do
     x = BigFloat(42)

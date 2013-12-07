@@ -247,23 +247,28 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Construct a diagonal matrix and place ``v`` on the ``k``-th diagonal.
 
-.. function:: scale(A, B)
+.. function:: scale(A, b), scale(b, A)
 
-   ``scale(A::Array, B::Number)`` scales all values in ``A`` with ``B``.
-   Note: In cases where the array is big enough, ``scale`` can be much
-   faster than ``A .* B``, due to the use of BLAS.
+   Scale an array ``A`` by a scalar ``b``, returning a new array.
 
-   ``scale(A::Matrix, B::Vector)`` is the same as multiplying with a
-   diagonal matrix on the right, and scales the columns of ``A`` with
-   the values in ``B``.
+   If ``A`` is a matrix and ``b`` is a vector, then ``scale!(A,b)``
+   scales each column ``i`` of ``A`` by ``b[i]`` (similar to
+   ``A*diagm(b)``), while ``scale!(b,A)`` scales each row ``i`` of
+   ``A`` by ``b[i]`` (similar to ``diagm(b)*A``), returning a new array.
 
-   ``scale(A::Vector, B::Matrix)`` is the same as multiplying with a
-   diagonal matrix on the left, and scales the rows of ``B`` with the
-   values in ``A``.
+   Note: for large ``A``, ``scale`` can be much faster than ``A .* b`` or
+   ``b .* A``, due to the use of BLAS.
 
-.. function:: scale!(A, B)
+.. function:: scale!(A, b), scale!(b, A)
 
-   ``scale!(A,B)`` overwrites the input array with the scaled result.
+   Scale an array ``A`` by a scalar ``b``, similar to ``scale`` but
+   overwriting ``A`` in-place.
+
+   If ``A`` is a matrix and ``b`` is a vector, then ``scale!(A,b)``
+   scales each column ``i`` of ``A`` by ``b[i]`` (similar to
+   ``A*diagm(b)``), while ``scale!(b,A)`` scales each row ``i`` of
+   ``A`` by ``b[i]`` (similar to ``diagm(b)*A``), again operating in-place
+   on ``A``.
 
 .. function:: symmetrize!(A[, UL::Char])
 

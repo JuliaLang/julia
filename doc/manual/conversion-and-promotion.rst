@@ -68,7 +68,9 @@ function. The ``convert`` function generally takes two arguments: the
 first is a type object while the second is a value to convert to that
 type; the returned value is the value converted to an instance of given
 type. The simplest way to understand this function is to see it in
-action::
+action:
+
+.. doctest::
 
     julia> x = 12
     12
@@ -77,7 +79,7 @@ action::
     Int64
 
     julia> convert(Uint8, x)
-    12
+    0x0c
 
     julia> typeof(ans)
     Uint8
@@ -90,10 +92,13 @@ action::
 
 Conversion isn't always possible, in which case a no method error is
 thrown indicating that ``convert`` doesn't know how to perform the
-requested conversion::
+requested conversion:
+
+.. doctest::
 
     julia> convert(FloatingPoint, "foo")
-    no method convert(Type{FloatingPoint},ASCIIString)
+    ERROR: no method convert(Type{FloatingPoint}, ASCIIString)
+     in convert at base.jl:11
 
 Some languages consider parsing strings as numbers or formatting
 numbers as strings to be conversions (many dynamic languages will even
@@ -115,7 +120,9 @@ type <man-singleton-types>`, ``Type{Bool}``, the only instance of
 which is ``Bool``. Thus, this method is only invoked when the first
 argument is the type value ``Bool``. When invoked, the method determines
 whether a numeric value is true or false as a boolean, by comparing it
-to zero::
+to zero:
+
+.. doctest::
 
     julia> convert(Bool, 1)
     true
@@ -124,7 +131,8 @@ to zero::
     false
 
     julia> convert(Bool, 1im)
-    true
+    ERROR: InexactError()
+     in convert at complex.jl:27
 
     julia> convert(Bool, 0im)
     false
@@ -211,7 +219,9 @@ Promotion to a common supertype is performed in Julia by the ``promote``
 function, which takes any number of arguments, and returns a tuple of
 the same number of values, converted to a common type, or throws an
 exception if promotion is not possible. The most common use case for
-promotion is to convert numeric arguments to a common type::
+promotion is to convert numeric arguments to a common type:
+
+.. doctest::
 
     julia> promote(1, 2.5)
     (1.0,2.5)
@@ -269,13 +279,15 @@ provides the following outer constructor method::
 
     Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 
-This allows calls like the following to work::
+This allows calls like the following to work:
+
+.. doctest::
 
     julia> Rational(int8(15),int32(-5))
     -3//1
 
     julia> typeof(ans)
-    Rational{Int64}
+    Rational{Int64} (constructor with 1 method)
 
 For most user-defined types, it is better practice to require
 programmers to supply the expected types to constructor functions
@@ -319,7 +331,9 @@ second function called ``promote_type``, which, given any number of type
 objects, returns the common type to which those values, as arguments to
 ``promote`` should be promoted. Thus, if one wants to know, in absence
 of actual values, what type a collection of values of certain types
-would promote to, one can use ``promote_type``::
+would promote to, one can use ``promote_type``:
+
+.. doctest::
 
     julia> promote_type(Int8, Uint16)
     Int64

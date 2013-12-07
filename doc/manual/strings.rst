@@ -65,7 +65,9 @@ A ``Char`` value represents a single character: it is just a 32-bit
 integer with a special literal representation and appropriate arithmetic
 behaviors, whose numeric value is interpreted as a `Unicode code
 point <http://en.wikipedia.org/wiki/Code_point>`_. Here is how ``Char``
-values are input and shown::
+values are input and shown:
+
+.. doctest::
 
     julia> 'x'
     'x'
@@ -74,7 +76,9 @@ values are input and shown::
     Char
 
 You can convert a ``Char`` to its integer value, i.e. code point,
-easily::
+easily:
+
+.. doctest::
 
     julia> int('x')
     120
@@ -83,7 +87,9 @@ easily::
     Int64
 
 On 32-bit architectures, ``typeof(ans)`` will be ``Int32``. You can
-convert an integer value back to a ``Char`` just as easily::
+convert an integer value back to a ``Char`` just as easily:
+
+.. doctest::
 
     julia> char(120)
     'x'
@@ -91,7 +97,9 @@ convert an integer value back to a ``Char`` just as easily::
 Not all integer values are valid Unicode code points, but for
 performance, the ``char`` conversion does not check that every character
 value is valid. If you want to check that each converted value is a
-valid code point, use the ``is_valid_char`` function::
+valid code point, use the ``is_valid_char`` function:
+
+.. doctest::
 
     julia> char(0x110000)
     '\U110000'
@@ -107,7 +115,9 @@ be valid Unicode characters.
 
 You can input any Unicode character in single quotes using ``\u``
 followed by up to four hexadecimal digits or ``\U`` followed by up to
-eight hexadecimal digits (the longest valid value only requires six)::
+eight hexadecimal digits (the longest valid value only requires six):
+
+.. doctest::
 
     julia> '\u0'
     '\0'
@@ -126,7 +136,9 @@ characters can be printed as-is and which must be output using the
 generic, escaped ``\u`` or ``\U`` input forms. In addition to these
 Unicode escape forms, all of `C's traditional escaped input
 forms <http://en.wikipedia.org/wiki/C_syntax#Backslash_escapes>`_ can
-also be used::
+also be used:
+
+.. doctest::
 
     julia> int('\0')
     0
@@ -150,7 +162,9 @@ also be used::
     255
 
 You can do comparisons and a limited amount of arithmetic with
-``Char`` values::
+``Char`` values:
+
+.. doctest::
 
     julia> 'A' < 'a'
     true
@@ -170,12 +184,16 @@ You can do comparisons and a limited amount of arithmetic with
 String Basics
 -------------
 
-Here a variable is initialized with a simple string literal::
+Here a variable is initialized with a simple string literal:
+
+.. doctest::
 
     julia> str = "Hello, world.\n"
     "Hello, world.\n"
 
-If you want to extract a character from a string, you index into it::
+If you want to extract a character from a string, you index into it:
+
+.. doctest::
 
     julia> str[1]
     'H'
@@ -194,7 +212,9 @@ a length of ``n``.
 In any indexing expression, the keyword ``end`` can be used as a
 shorthand for the last index (computed by ``endof(str)``).
 You can perform arithmetic and other operations with ``end``, just like
-a normal value::
+a normal value:
+
+.. doctest::
 
     julia> str[end-1]
     '.'
@@ -203,25 +223,35 @@ a normal value::
     ' '
 
     julia> str[end/3]
-    'o'
+    ERROR: InexactError()
+     in getindex at string.jl:58
 
     julia> str[end/4]
-    'l'
+    ERROR: InexactError()
+     in getindex at string.jl:58
 
-Using an index less than 1 or greater than ``end`` raises an error::
+Using an index less than 1 or greater than ``end`` raises an error:
+
+.. doctest::
 
     julia> str[0]
-    BoundsError()
+    ERROR: BoundsError()
+     in getindex at ascii.jl:11
 
     julia> str[end+1]
-    BoundsError()
+    ERROR: BoundsError()
+     in getindex at ascii.jl:11
 
-You can also extract a substring using range indexing::
+You can also extract a substring using range indexing:
+
+.. doctest::
 
     julia> str[4:9]
     "lo, wo"
 
-Note the distinction between ``str[k]`` and ``str[k:k]``::
+Note the distinction between ``str[k]`` and ``str[k:k]``:
+
+.. doctest::
 
     julia> str[6]
     ','
@@ -240,7 +270,9 @@ Julia fully supports Unicode characters and strings. As `discussed
 above <#characters>`_, in character literals, Unicode code points can be
 represented using Unicode ``\u`` and ``\U`` escape sequences, as well as
 all the standard C escape sequences. These can likewise be used to write
-string literals::
+string literals:
+
+.. doctest::
 
     julia> s = "\u2200 x \u2203 y"
     "∀ x ∃ y"
@@ -255,16 +287,20 @@ encoded as they are in ASCII, using a single byte, while code points
 0x80 and above are encoded using multiple bytes — up to four per
 character. This means that not every byte index into a UTF-8 string is
 necessarily a valid index for a character. If you index into a string at
-such an invalid byte index, an error is thrown::
+such an invalid byte index, an error is thrown:
+
+.. doctest::
 
     julia> s[1]
     '∀'
 
     julia> s[2]
-    invalid UTF-8 character index
+    ERROR: invalid UTF-8 character index
+     in getindex at utf8.jl:63
 
     julia> s[3]
-    invalid UTF-8 character index
+    ERROR: invalid UTF-8 character index
+     in getindex at utf8.jl:63
 
     julia> s[4]
     ' '
@@ -279,7 +315,9 @@ into ``s``, the sequence of characters returned, when errors aren't
 thrown, is the sequence of characters comprising the string ``s``.
 Thus, we do have the identity that ``length(s) <= endof(s)`` since each
 character in a string must have its own index. The following is an
-inefficient and verbose way to iterate through the characters of ``s``::
+inefficient and verbose way to iterate through the characters of ``s``:
+
+.. doctest::
 
     julia> for i = 1:endof(s)
              try
@@ -289,27 +327,29 @@ inefficient and verbose way to iterate through the characters of ``s``::
              end
            end
     ∀
-
+    <BLANKLINE>
     x
-
+    <BLANKLINE>
     ∃
-
+    <BLANKLINE>
     y
 
 The blank lines actually have spaces on them. Fortunately, the above
 awkward idiom is unnecessary for iterating through the characters in a
 string, since you can just use the string as an iterable object, no
-exception handling required::
+exception handling required:
+
+.. doctest::
 
     julia> for c in s
              println(c)
            end
     ∀
-
+    <BLANKLINE>
     x
-
+    <BLANKLINE>
     ∃
-
+    <BLANKLINE>
     y
 
 UTF-8 is not the only encoding that Julia supports, and adding support
@@ -324,7 +364,9 @@ which goes into some greater detail.
 Interpolation
 -------------
 
-One of the most common and useful string operations is concatenation::
+One of the most common and useful string operations is concatenation:
+
+.. doctest::
 
     julia> greet = "Hello"
     "Hello"
@@ -337,7 +379,9 @@ One of the most common and useful string operations is concatenation::
 
 Constructing strings like this can become a bit cumbersome, however. To
 reduce the need for these verbose calls to ``string``, Julia allows
-interpolation into string literals using ``$``, as in Perl::
+interpolation into string literals using ``$``, as in Perl:
+
+.. doctest::
 
     julia> "$greet, $whom.\n"
     "Hello, world.\n"
@@ -348,7 +392,9 @@ into a concatenation of string literals with variables.
 
 The shortest complete expression after the ``$`` is taken as the
 expression whose value is to be interpolated into the string. Thus, you
-can interpolate any expression into a string using parentheses::
+can interpolate any expression into a string using parentheses:
+
+.. doctest::
 
     julia> "1 + 2 = $(1 + 2)"
     "1 + 2 = 3"
@@ -356,20 +402,24 @@ can interpolate any expression into a string using parentheses::
 Both concatenation and string interpolation call the generic ``string``
 function to convert objects into ``String`` form. Most non-``String``
 objects are converted to strings as they are shown in interactive
-sessions::
+sessions:
+
+.. doctest::
 
     julia> v = [1,2,3]
-    3-element Int64 Array:
+    3-element Array{Int64,1}:
      1
      2
      3
 
     julia> "v: $v"
-    "v: [1, 2, 3]"
+    "v: 1\n2\n3\n"
 
 The ``string`` function is the identity for ``String`` and ``Char``
 values, so these are interpolated into strings as themselves, unquoted
-and unescaped::
+and unescaped:
+
+.. doctest::
 
     julia> c = 'x'
     'x'
@@ -378,7 +428,9 @@ and unescaped::
     "hi, x"
 
 To include a literal ``$`` in a string literal, escape it with a
-backslash::
+backslash:
+
+.. doctest::
 
     julia> print("I have \$100 in my account.\n")
     I have $100 in my account.
@@ -387,7 +439,9 @@ Common Operations
 -----------------
 
 You can lexicographically compare strings using the standard comparison
-operators::
+operators:
+
+.. doctest::
 
     julia> "abracadabra" < "xylophone"
     true
@@ -402,7 +456,9 @@ operators::
     true
 
 You can search for the index of a particular character using the
-``search`` function::
+``search`` function:
+
+.. doctest::
 
     julia> search("xylophone", 'x')
     1
@@ -414,7 +470,9 @@ You can search for the index of a particular character using the
     0
 
 You can start the search for a character at a given offset by providing
-a third argument::
+a third argument:
+
+.. doctest::
 
     julia> search("xylophone", 'o')
     4
@@ -425,7 +483,9 @@ a third argument::
     julia> search("xylophone", 'o', 8)
     0
 
-Another handy string function is ``repeat``::
+Another handy string function is ``repeat``:
+
+.. doctest::
 
     julia> repeat(".:Z:.", 10)
     ".:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:."
@@ -474,15 +534,19 @@ which are parsed into a state machine that can be used to efficiently
 search for patterns in strings. In Julia, regular expressions are input
 using non-standard string literals prefixed with various identifiers
 beginning with ``r``. The most basic regular expression literal without
-any options turned on just uses ``r"..."``::
+any options turned on just uses ``r"..."``:
+
+.. doctest::
 
     julia> r"^\s*(?:#|$)"
     r"^\s*(?:#|$)"
 
     julia> typeof(ans)
-    Regex
+    Regex (constructor with 3 methods)
 
-To check if a regex matches a string, use the ``ismatch`` function::
+To check if a regex matches a string, use the ``ismatch`` function:
+
+.. doctest::
 
     julia> ismatch(r"^\s*(?:#|$)", "not a comment")
     false
@@ -494,7 +558,9 @@ As one can see here, ``ismatch`` simply returns true or false,
 indicating whether the given regex matches the string or not. Commonly,
 however, one wants to know not just whether a string matched, but also
 *how* it matched. To capture this information about a match, use the
-``match`` function instead::
+``match`` function instead:
+
+.. doctest::
 
     julia> match(r"^\s*(?:#|$)", "not a comment")
 
@@ -518,7 +584,9 @@ If a regular expression does match, the value returned by ``match`` is a
 including the substring that the pattern matches and any captured
 substrings, if there are any. This example only captures the portion of
 the substring that matches, but perhaps we want to capture any non-blank
-text after the comment character. We could do the following::
+text after the comment character. We could do the following:
+
+.. doctest::
 
     julia> m = match(r"^\s*(?:#\s*(.*?)\s*$|$)", "# a comment ")
     RegexMatch("# a comment ", 1="a comment")
@@ -533,7 +601,9 @@ You can extract the following info from a ``RegexMatch`` object:
 For when a capture doesn't match, instead of a substring, ``m.captures``
 contains ``nothing`` in that position, and ``m.offsets`` has a zero
 offset (recall that indices in Julia are 1-based, so a zero offset into
-a string is invalid). Here's is a pair of somewhat contrived examples::
+a string is invalid). Here's is a pair of somewhat contrived examples:
+
+.. doctest::
 
     julia> m = match(r"(a|b)(c)?(d)", "acd")
     RegexMatch("acd", 1="a", 2="c", 3="d")
@@ -542,7 +612,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     "acd"
 
     julia> m.captures
-    3-element Union(UTF8String,ASCIIString,Nothing) Array:
+    3-element Array{Union(Nothing,SubString{UTF8String}),1}:
      "a"
      "c"
      "d"
@@ -551,7 +621,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     1
 
     julia> m.offsets
-    3-element Int64 Array:
+    3-element Array{Int64,1}:
      1
      2
      3
@@ -563,7 +633,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     "ad"
 
     julia> m.captures
-    3-element Union(UTF8String,ASCIIString,Nothing) Array:
+    3-element Array{Union(Nothing,SubString{UTF8String}),1}:
      "a"
      nothing
      "d"
@@ -572,13 +642,15 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     1
 
     julia> m.offsets
-    3-element Int64 Array:
+    3-element Array{Int64,1}:
      1
      0
      2
 
 It is convenient to have captures returned as a tuple so that one can
-use tuple destructuring syntax to bind them to local variables::
+use tuple destructuring syntax to bind them to local variables:
+
+.. doctest::
 
     julia> first, second, third = m.captures; first
     "a"
@@ -617,13 +689,19 @@ manpage <http://perldoc.perl.org/perlre.html#Modifiers>`_::
         treated as a metacharacter introducing a comment, just as in
         ordinary code.
 
-For example, the following regex has all three flags turned on::
+For example, the following regex has all three flags turned on:
+
+.. doctest::
 
     julia> r"a+.*b+.*?d$"ism
     r"a+.*b+.*?d$"ims
 
     julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
     RegexMatch("angry,\nBad world")
+
+Triple-quoted regex strings, of the form ``r"""..."""``, are also
+supported (and may be convenient for regular expressions containing
+quotation marks or newlines).
 
 Byte Array Literals
 ~~~~~~~~~~~~~~~~~~~
@@ -647,32 +725,46 @@ and octal escapes less than 0x80 (128) are covered by both of the first
 two rules, but here these rules agree. Together, these rules allow one
 to easily use ASCII characters, arbitrary byte values, and UTF-8
 sequences to produce arrays of bytes. Here is an example using all
-three::
+three:
+
+.. doctest::
 
     julia> b"DATA\xff\u2200"
-    [68,65,84,65,255,226,136,128]
+    8-element Array{Uint8,1}:
+     0x44
+     0x41
+     0x54
+     0x41
+     0xff
+     0xe2
+     0x88
+     0x80
 
 The ASCII string "DATA" corresponds to the bytes 68, 65, 84, 65.
 ``\xff`` produces the single byte 255. The Unicode escape ``\u2200`` is
 encoded in UTF-8 as the three bytes 226, 136, 128. Note that the
 resulting byte array does not correspond to a valid UTF-8 string — if
 you try to use this as a regular string literal, you will get a syntax
-error::
+error:
+
+.. doctest::
 
     julia> "DATA\xff\u2200"
-    syntax error: invalid UTF-8 sequence
+    ERROR: syntax: invalid UTF-8 sequence
 
 Also observe the significant distinction between ``\xff`` and ``\uff``:
 the former escape sequence encodes the *byte 255*, whereas the latter
 escape sequence represents the *code point 255*, which is encoded as two
-bytes in UTF-8::
+bytes in UTF-8:
+
+.. doctest::
 
     julia> b"\xff"
-    1-element Uint8 Array:
+    1-element Array{Uint8,1}:
      0xff
 
     julia> b"\uff"
-    2-element Uint8 Array:
+    2-element Array{Uint8,1}:
      0xc3
      0xbf
 

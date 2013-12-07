@@ -10,7 +10,14 @@ macro assertnonsingular(A, info)
    :(($info)==0 ? $A : throw(SingularException($info)))
 end
 
-\(F::Factorization, b::Union(AbstractVector, AbstractMatrix)) = A_ldiv_B!(F, copy(b))
+typealias AbstractVecOrMat Union(AbstractVector, AbstractMatrix)
+
+\(F::Factorization, B::AbstractVecOrMat) = A_ldiv_B!(F, copy(B))
+Ac_ldiv_B(F::Factorization, B::AbstractVecOrMat) = Ac_ldiv_B!(F, copy(B))
+At_ldiv_B(F::Factorization, B::AbstractVecOrMat) = At_ldiv_B!(F, copy(B))
+A_ldiv_B!(F::Factorization, B::StridedVecOrMat) = A_ldiv_B!(F, float(B))
+Ac_ldiv_B!(F::Factorization, B::StridedVecOrMat) = Ac_ldiv_B!(F, float(B))
+At_ldiv_B!(F::Factorization, B::StridedVecOrMat) = At_ldiv_B!(F, float(B))
 
 type Cholesky{T<:BlasFloat} <: Factorization{T}
     UL::Matrix{T}
@@ -200,7 +207,7 @@ function logdet{T<:Complex}(A::LU{T})
 end
 
 
-\{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, copy(B)) A.info
+A_ldiv_B!{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info
 At_ldiv_B{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, copy(B)) A.info
 Ac_ldiv_B{T<:BlasComplex}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, copy(B)) A.info
 At_ldiv_Bt{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, transpose(B)) A.info
@@ -260,6 +267,7 @@ end
 *{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.gemqrt!('R', 'N', B.vs, B.T, copy(A))
 Ac_mul_B{T<:BlasReal}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','T',A.vs,A.T,copy(B))
 Ac_mul_B{T<:BlasComplex}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','C',A.vs,A.T,copy(B))
+Ac_mul_B(A::QRPackedQ, B::StridedVecOrMat) = Ac_mul_B(A, float(B))
 function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T})
     Apad = size(A, 2)==size(B.vs, 2) ? [A zeros(T, size(A, 1), size(B.vs, 1) - size(B.vs, 2))] : copy(A)     
     LAPACK.gemqrt!('R', iseltype(B.vs,Complex) ? 'C' : 'T', B.vs, B.T, Apad)
@@ -327,7 +335,8 @@ function \{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
     LAPACK.ormrz!('L', iseltype(B, Complex) ? 'C' : 'T', C, tau, X)
     return X[invperm(A[:p]),:], rnk
 end
-\(A::QRPivoted, B::StridedMatrix) = (\)(A, B, sqrt(eps(typeof(real(B[1])))))[1]
+\(A::QRPivoted, B::StridedMatrix, rcond::Real) = \(A, float(B), rcond)
+\(A::QRPivoted, B::StridedMatrix) = (\)(A, B, sqrt(eps(typeof(float(real(B[1]))))))[1]
 \(A::QRPivoted, B::StridedVector) = (\)(A, reshape(B, length(B), 1))[:]
 
 type QRPivotedQ{T} <: AbstractMatrix{T}
@@ -354,6 +363,7 @@ end
 
 Ac_mul_B{T<:BlasReal}(A::QRPivotedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','T',A.hh,A.tau,copy(B))
 Ac_mul_B{T<:BlasComplex}(A::QRPivotedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','C',A.hh,A.tau,copy(B))
+Ac_mul_B(A::QRPivotedQ, B::StridedVecOrMat) = Ac_mul_B(A, float(B))
 *(A::StridedVecOrMat, B::QRPivotedQ) = LAPACK.ormqr!('R', 'N', B.hh, B.tau, copy(A))
 function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPivotedQ{T})
     Apad = size(A, 2)==size(B.hh, 2) ? [A zeros(T, size(A, 1), size(B.hh, 1) - size(B.hh, 2))] : copy(A)

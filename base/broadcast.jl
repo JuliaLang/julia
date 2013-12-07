@@ -163,7 +163,7 @@ function code_map!_inner(fname::Symbol, dest, extra_args::Vector,
     @gensym k
     code_inner(fname, {dest, extra_args...}, :($k=1),
         (els...)->quote
-            $dest[$k] = $(innermost(:($dest[$k]), els...))
+            @inbounds $dest[$k] = $(innermost(:($dest[$k]), els...))
             $k += 1
         end)
 end

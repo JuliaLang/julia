@@ -316,8 +316,8 @@ end
 # the parent array
 function translate_linear_indexes(s, n, I, pdims)
     idx = Array(Int, length(I))
-    ssztail = size(s)[n:]
-    indexestail = s.indexes[pdims[n:]]
+    ssztail = size(s)[n:end]
+    indexestail = s.indexes[pdims[n:end]]
     # The next gets the strides of dimensions listed in pdims[n:end], relative to the stride of pdims[n]
     pstrd = [1]
     j = n+1

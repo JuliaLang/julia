@@ -69,6 +69,7 @@ const DL_LOAD_PATH = ByteString[]
 include("char.jl")
 include("ascii.jl")
 include("utf8.jl")
+include("utf16.jl")
 include("iobuffer.jl")
 include("string.jl")
 include("regex.jl")

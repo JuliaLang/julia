@@ -24,6 +24,9 @@ extern "C" DLLEXPORT void jl_read_sonames()
             char *dot = strstr(name, ".so");
             i=0;
 
+            if (NULL == dot)
+                continue;
+
             // Detect if this entry is for the current architecture
             while (!isspace(dot[++i])) ;
             while (isspace(dot[++i])) ;
@@ -302,7 +305,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
 {
     Type *vt = jv->getType();
     if (ty == jl_pvalue_llvmt) {
-        return boxed(jv);
+        return boxed(jv,ctx);
     }
     else if (ty == vt && !addressOf) {
         return jv;
@@ -328,7 +331,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
             }
         }
         // error. box for error handling.
-        jv = boxed(jv);
+        jv = boxed(jv,ctx);
     }
     else if (jl_is_cpointer_type(jt)) {
         assert(ty->isPointerTy());
@@ -373,6 +376,8 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         // //safe thing would be to also check that jl_typeof(aty)->size > sizeof(ty) here and/or at runtime
         Value *pjv = builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), PointerType::get(ty,0));
         return builder.CreateLoad(pjv, false);
+    } else if (jl_is_tuple(jt)) {
+        return emit_unbox(ty,jv,jt);
     }
     // TODO: error for & with non-pointer argument type
     assert(jl_is_bitstype(jt));
@@ -412,7 +417,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
                                "cglobal: first argument not a pointer or valid constant expression",
                                ctx);
         }
-        jl_ptr = emit_unbox(T_size, T_psize, arg1);
+        jl_ptr = emit_unbox(T_size, arg1, ptr_ty);
     }
 
     void *fptr=NULL;
@@ -716,7 +721,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             addressOf = true;
             argi = jl_exprarg(argi,0);
         }
-        Value *ary = boxed(emit_expr(argi, ctx));
+        Value *ary = boxed(emit_expr(argi, ctx),ctx);
         JL_GC_POP();
         return mark_julia_type(
                 builder.CreateBitCast(emit_nthptr_addr(ary, addressOf?1:0),lrt),
@@ -801,23 +806,22 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (largty == jl_pvalue_llvmt || largty->isStructTy()) {
             arg = emit_expr(argi, ctx, true);
             if (largty == jl_pvalue_llvmt && arg->getType() != jl_pvalue_llvmt) {
-                arg = boxed(arg);
+                arg = boxed(arg,ctx);
                 needroot = true;
             }
-        }
+        } 
         else {
             arg = emit_unboxed(argi, ctx);
             if (jl_is_bitstype(expr_type(argi, ctx))) {
-                Type *totype = addressOf ? largty->getContainedType(0) : largty;
-                Type *ptype  = addressOf ? largty : PointerType::get(largty,0);
                 Type *at = arg->getType();
+                Type *totype = addressOf ? largty->getContainedType(0) : largty;
                 if (at != jl_pvalue_llvmt && at != totype &&
                     !(at->isPointerTy() && jargty==(jl_value_t*)jl_voidpointer_type)) {
                     emit_type_error(arg, jargty, "ccall", ctx);
                     arg = UndefValue::get(totype);
                 }
                 else {
-                    arg = emit_unbox(totype, ptype, arg);
+                    arg = emit_unbox(totype, arg, jargty);
                 }
             }
         }

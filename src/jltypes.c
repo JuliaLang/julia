@@ -58,10 +58,12 @@ int jl_is_type(jl_value_t *v)
 {
     if (jl_is_tuple(v)) {
         jl_tuple_t *t = (jl_tuple_t*)v;
-        size_t i;
-        for(i=0; i < jl_tuple_len(t); i++) {
+        size_t i, l = jl_tuple_len(t);
+        for(i=0; i < l; i++) {
             jl_value_t *vv = jl_tupleref(t, i);
             if (!jl_is_typevar(vv) && !jl_is_type(vv))
+                return 0;
+            if (i < l-1 && jl_is_vararg_type(vv))
                 return 0;
         }
         return 1;
@@ -1562,6 +1564,7 @@ static jl_value_t *lookup_type(jl_typename_t *tn, jl_value_t **key, size_t n)
     }
     for(size_t i=0; i < cl; i++) {
         jl_datatype_t *tt = (jl_datatype_t*)data[i];
+        assert(jl_is_datatype(tt));
         if (typekey_compare(tt, key, n)) {
             if (tn == jl_type_type->name &&
                 (jl_is_typector(key[0]) != jl_is_typector(jl_tupleref(tt->parameters,0))))
@@ -1585,6 +1588,7 @@ int jl_assign_type_uid(void)
 static void cache_type_(jl_value_t *type)
 {
     // only cache concrete types
+    assert(jl_is_datatype(type));
     jl_tuple_t *t = ((jl_datatype_t*)type)->parameters;
     if (jl_tuple_len(t) == 0) return;
     if (jl_is_abstracttype(type)) {
@@ -1612,6 +1616,7 @@ static void cache_type_(jl_value_t *type)
             cache = (jl_value_t*)nc;
             ((jl_datatype_t*)type)->name->cache = cache;
         }
+        assert(jl_is_array(cache));
         jl_cell_1d_push((jl_array_t*)cache, (jl_value_t*)type);
     }
     else {
@@ -1667,6 +1672,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
     if (jl_is_uniontype(t)) {
         jl_tuple_t *tw = (jl_tuple_t*)inst_type_w_((jl_value_t*)((jl_uniontype_t*)t)->types,
                                                    env, n, stack);
+        assert(jl_is_tuple(tw));
         JL_GC_PUSH1(&tw);
         jl_value_t *res = (jl_value_t*)jl_new_uniontype(tw);
         JL_GC_POP();
@@ -1684,6 +1690,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             return (jl_value_t*)t;
         jl_value_t *result;
         size_t ntp = jl_tuple_len(tp);
+        assert(jl_is_datatype(tc));
         assert(ntp == jl_tuple_len(((jl_datatype_t*)tc)->parameters));
         jl_value_t **iparams;
         JL_GC_PUSHARGS(iparams, ntp+2);

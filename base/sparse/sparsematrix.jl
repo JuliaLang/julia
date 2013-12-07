@@ -24,10 +24,10 @@ function show(io::IO, S::SparseMatrixCSC)
     k = 0
     for col = 1:S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         if k < half_screen_rows || k > nnz(S)-half_screen_rows
-            println(io, "\t[", rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ",
+            println(io, "[", rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ",
                     sprint(showcompact, S.nzval[k]))
         elseif k == half_screen_rows
-            println(io, "\t\u22ee")
+            println(io, "\u22ee")
         end
         k += 1
     end
@@ -42,7 +42,7 @@ function reinterpret{T,Tv,Ti}(::Type{T}, a::SparseMatrixCSC{Tv,Ti})
     mA, nA = size(a)
     colptr = copy(a.colptr)
     rowval = copy(a.rowval)
-    nzval  = reinterpret(Tv, a.nzval)
+    nzval  = reinterpret(T, a.nzval)
     return SparseMatrixCSC{T,Ti}(mA, nA, colptr, rowval, nzval)
 end
 
@@ -287,7 +287,7 @@ function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
             J[count] = col
             count += 1
         else
-            println("warning: sparse matrix contains explicit stored zeros")
+            warn_once("sparse matrix contains explicit stored zeros")
         end
     end
 
@@ -313,7 +313,7 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
             V[count] = S.nzval[k]
             count += 1
         else
-            println("warning: sparse matrix contains explicit stored zeros")
+            warn_once("sparse matrix contains explicit stored zeros")
         end
     end
 
@@ -327,15 +327,53 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 end
 
 function sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function, v)
-    numnz = int(m*n*density)
-    I = rand!(1:m, Array(Int, numnz))
-    J = rand!(1:n, Array(Int, numnz))
-    S = sparse(I, J, v, m, n)
-    if !iseltype(v,Bool)
-        S.nzval = rng(nnz(S))
+    0 <= density <= 1 || error("density must be between 0 and 1")
+    N = n*m
+    # if density < 0.5, we'll randomly generate the indices to set
+    #        otherwise, we'll randomly generate the indices to skip
+    K = (density > 0.5) ? N*(1-density) : N*density
+    # Use Newton's method to invert the birthday problem
+    l = log(1.0-1.0/N)
+    k = K
+    k = k + ((1-K/N)*exp(-k*l) - 1)/l
+    k = k + ((1-K/N)*exp(-k*l) - 1)/l # for K<N/2, 2 iterations suffice
+    ik = int(k)
+    ind = sort(rand(1:N, ik))
+    uind = Array(Int, 0)   # unique indices
+    sizehint(uind, int(N*density))
+    if density < 0.5
+        if ik == 0
+            return sparse(Int[],Int[],Array(eltype(v),0),m,n)
+        end
+        j = ind[1]
+        push!(uind, j)
+        uj = j
+        for i = 2:length(ind)
+            j = ind[i]
+            if j != uj
+                push!(uind, j)
+                uj = j
+            end
+        end
+    else
+        push!(ind, N+1) # sentinel
+        ii = 1
+        for i = 1:N
+            if i != ind[ii]
+                push!(uind, i)
+            else
+                while (i == ind[ii])
+                    ii += 1
+                end
+            end
+        end
     end
-
-    return S
+    I, J = ind2sub((m,n), uind)
+    if !iseltype(v,Bool)
+        return sparse_IJ_sorted!(I, J, rng(length(uind)), m, n, +)  # it will never need to combine
+    else
+        return sparse_IJ_sorted!(I, J, trues(length(uind)), m, n, +)
+    end
 end
 
 sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function) = sprand(m,n,density,rng, 1.0)
@@ -1349,16 +1387,17 @@ end
 
 ## diag and related using an iterator
 
-type SpDiagIterer{Tv,Ti}
+type SpDiagIterator{Tv,Ti}
     A::SparseMatrixCSC{Tv,Ti}
     n::Int
 end
-SpDiagIterer(A::SparseMatrixCSC) = SpDiagIterer(A,minimum(size(A)))
+SpDiagIterator(A::SparseMatrixCSC) = SpDiagIterator(A,minimum(size(A)))
 
-length(d::SpDiagIterer) = d.n
-start(d::SpDiagIterer) = 1
-done(d::SpDiagIterer, j) = j > d.n
-function next{Tv,Ti}(d::SpDiagIterer{Tv,Ti}, j)
+length(d::SpDiagIterator) = d.n
+start(d::SpDiagIterator) = 1
+done(d::SpDiagIterator, j) = j > d.n
+
+function next{Tv}(d::SpDiagIterator{Tv}, j)
     p = d.A.colptr; i = d.A.rowval;
     first = p[j]
     last = p[j+1]-1
@@ -1373,21 +1412,21 @@ function next{Tv,Ti}(d::SpDiagIterer{Tv,Ti}, j)
             first = mid + 1
         end
     end
-    zero(eltype(A)), j+1
+    return (zero(Tv), j+1)
 end
 
-function trace(A::SparseMatrixCSC)
+function trace{Tv}(A::SparseMatrixCSC{Tv})
     if size(A,1) != size(A,2)
         error("expected square matrix")
     end
-    s = zero(eltype(A))
-    for d in SpDiagIterer(A)
+    s = zero(Tv)
+    for d in SpDiagIterator(A)
         s += d
     end
     s
 end
 
-diag(A::SparseMatrixCSC) = [d for d in SpDiagIterer(A)]
+diag(A::SparseMatrixCSC) = [d for d in SpDiagIterator(A)]
 
 function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
     if (size(v,1) != 1 && size(v,2) != 1)

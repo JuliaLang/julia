@@ -34,6 +34,7 @@ end
 Regex(pattern::String) = Regex(pattern, DEFAULT_OPTS)
 
 macro r_str(pattern, flags...) Regex(pattern, flags...) end
+macro r_mstr(pattern, flags...) Regex(pattern, flags...) end
 
 copy(r::Regex) = r
 

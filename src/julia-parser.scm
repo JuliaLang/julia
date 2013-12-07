@@ -767,11 +767,16 @@
 		(case t
 		  ((#\( )   (take-token s)
 		   (let ((al (parse-arglist s #\) )))
-		     (if (eq? (peek-token s) 'do)
-			 (begin
-			   (take-token s)
-			   (loop `(call ,ex ,(parse-do s) ,@al)))
-			 (loop `(call ,ex ,@al)))))
+		     (receive
+		      (params args) (separate (lambda (x)
+						(and (pair? x)
+						     (eq? (car x) 'parameters)))
+					      al)
+		      (if (eq? (peek-token s) 'do)
+			  (begin
+			    (take-token s)
+			    (loop `(call ,ex ,@params ,(parse-do s) ,@args)))
+			  (loop `(call ,ex ,@al))))))
 		  ((#\[ )   (take-token s)
 		   ; ref is syntax, so we can distinguish
 		   ; a[i] = x  from
@@ -852,7 +857,7 @@
 
 ; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
-  (set! expect-end-current-line (input-port-line (ts:port s)))
+  (with-bindings ((expect-end-current-line (input-port-line (ts:port s))))
   (define (expect-end s) (expect-end- s word))
   (with-normal-ops
   (without-whitespace-newline
@@ -893,7 +898,10 @@
 	       ;; line number for elseif condition
 	       (block ,(line-number-node s)
 		      ,(parse-resword s 'if))))
-	 ((else)    (list 'if test then (parse-resword s 'begin)))
+	 ((else)
+	  (if (eq? (peek-token s) 'if)
+	      (error "use \"elseif\" instead of \"else if\""))
+	  (list 'if test then (parse-resword s 'begin)))
 	 (else      (error (string "unexpected \"" nxt "\""))))))
     ((let)
      (let ((binds (if (memv (peek-token s) '(#\newline #\;))
@@ -1052,17 +1060,17 @@
 		 `(ccall ,.al))))))
     ((do)
      (error "invalid \"do\" syntax"))
-    (else (error "unhandled reserved word"))))))
+    (else (error "unhandled reserved word")))))))
 
 (define (parse-do s)
-  (set! expect-end-current-line (input-port-line (ts:port s)))
+  (with-bindings ((expect-end-current-line (input-port-line (ts:port s))))
   (without-whitespace-newline
    (let ((doargs (if (eqv? (peek-token s) #\newline)
 		     '()
 		     (parse-comma-separated-assignments s))))
      `(-> (tuple ,@doargs)
 	  ,(begin0 (parse-block s)
-		   (expect-end- s 'do))))))
+		   (expect-end- s 'do)))))))
 
 (define (macrocall-to-atsym e)
   (if (and (pair? e) (eq? (car e) 'macrocall))
@@ -1334,8 +1342,8 @@
 (define (parse-tuple s first)
   (let loop ((lst '())
 	     (nxt first))
-    (if (assignment? nxt)
-	(error "invalid syntax in tuple"))
+    (if (and (pair? nxt) (memq (car nxt) assignment-ops))
+	(error (string "invalid syntax \"" (car nxt)  "\" in tuple")))
     (case (require-token s)
       ((#\))
        (take-token s)

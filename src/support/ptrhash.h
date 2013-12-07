@@ -1,7 +1,7 @@
 #ifndef PTRHASH_H
 #define PTRHASH_H
 
-#include "htableh.inc"
+#include "htable.h"
 
 HTPROT(ptrhash)
 

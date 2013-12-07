@@ -57,11 +57,12 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
     int i;
     for(i=0; i < nargs; i++) margs[i] = NULL;
     for(i=1; i < nargs; i++) margs[i] = scm_to_julia(args[i], 1);
-    jl_value_t *result=NULL;
+    jl_value_t *result = NULL;
 
     JL_TRY {
         margs[0] = scm_to_julia(args[0], 1);
         f = (jl_function_t*)jl_toplevel_eval(margs[0]);
+        assert(jl_is_func(f));
         result = jl_apply(f, &margs[1], nargs-1);
     }
     JL_CATCH {
@@ -553,15 +554,27 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
 // get array of formal argument expressions
 jl_array_t *jl_lam_args(jl_expr_t *l)
 {
+    assert(jl_is_expr(l));
     assert(l->head == lambda_sym);
     jl_value_t *ae = jl_exprarg(l,0);
     assert(jl_is_array(ae));
     return (jl_array_t*)ae;
 }
 
+jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i)
+{
+    jl_expr_t *ast;
+    if (jl_is_expr(li->ast))
+        ast = (jl_expr_t*)li->ast;
+    else
+        ast = (jl_expr_t*)jl_uncompress_ast(li, li->ast);
+    return (jl_sym_t*)jl_arrayref(jl_lam_args(ast),i);
+}
+
 // get array of local var symbols
 jl_array_t *jl_lam_locals(jl_expr_t *l)
 {
+    assert(jl_is_expr(l));
     jl_value_t *le = jl_exprarg(l, 1);
     assert(jl_is_array(le));
     jl_value_t *ll = jl_cellref(le, 0);
@@ -572,6 +585,7 @@ jl_array_t *jl_lam_locals(jl_expr_t *l)
 // get array of var info records
 jl_array_t *jl_lam_vinfo(jl_expr_t *l)
 {
+    assert(jl_is_expr(l));
     jl_value_t *le = jl_exprarg(l, 1);
     assert(jl_is_array(le));
     jl_value_t *ll = jl_cellref(le, 1);

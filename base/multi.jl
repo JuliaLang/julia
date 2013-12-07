@@ -1480,7 +1480,7 @@ macro parallel(args...)
             ex = loop.args[1]
             loop.args[1] = esc(ex)
             nd = length(loop.args)-1
-            ranges = map(e->esc(e.args[2]), loop.args[2:])
+            ranges = map(e->esc(e.args[2]), loop.args[2:end])
             for i=1:nd
                 var = loop.args[1+i].args[1]
                 loop.args[1+i] = :( $(esc(var)) = ($(ranges[i]))[I[$i]] )
