@@ -137,14 +137,20 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
 
 static void jl_serialize_gv(ios_t *s, jl_value_t *v)
 {
+    // write the index of the literal_pointer_val into the system image
     write_int32(s, jl_get_llvm_gv(v));
 }
 static void jl_serialize_gv_syms(ios_t *s, jl_sym_t *v)
 {
-    void *bp = ptrhash_bp(&backref_table, v);
-    if (bp != HT_NOTFOUND) {
-        if (jl_get_llvm_gv((jl_value_t*)v) != 0)
+    // ensures all symbols referenced in the code have
+    // references in the system image to their global variable
+    // since symbols are static, they might not have had a
+    // reference anywhere in the code image other than here
+    void **bp = ptrhash_bp(&backref_table, v);
+    if (*bp == HT_NOTFOUND) {
+        if (jl_get_llvm_gv((jl_value_t*)v) != 0) {
             jl_serialize_value(s, v);
+        }
     }
     if (v->left) jl_serialize_gv_syms(s, v->left);
     if (v->right) jl_serialize_gv_syms(s, v->right);
@@ -502,9 +508,12 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     return (jl_value_t*)dt;
 }
 
-static jl_value_t** *sysimg_gvars = NULL;
+static jl_value_t ***sysimg_gvars = NULL;
 static void jl_load_sysimg_so(char *fname)
 {
+    // attempt to load the pre-compiled sysimg at fname
+    // if this succeeds, sysimg_gvars will be a valid array
+    // otherwise, it will be NULL
     uv_lib_t *sysimg_handle = jl_load_dynamic_library_e(fname, JL_RTLD_DEFAULT);
     if (sysimg_handle != 0) {
         sysimg_gvars = (jl_value_t***)jl_dlsym(sysimg_handle, "jl_sysimg_gvars");
@@ -523,22 +532,28 @@ static size_t delayed_fptrs_max = 0;
 
 static void jl_delayed_fptrs(jl_lambda_info_t *li, int32_t func, int32_t cfunc)
 {
+    // can't restore the fptrs until after the system image is fully restored,
+    // since it will try to decompress the function AST to determine the argument types
     if (cfunc || func) {
         if (delayed_fptrs_max < delayed_fptrs_n + 1) {
             if (delayed_fptrs_max == 0)
-                delayed_fptrs_max = 256;
+                // current measurements put the number of functions at 1130
+                delayed_fptrs_max = 2048; 
             else
                 delayed_fptrs_max *= 2;
-            delayed_fptrs = realloc(delayed_fptrs, delayed_fptrs_max*sizeof(delayed_fptrs[0]));
+            delayed_fptrs = realloc(delayed_fptrs, delayed_fptrs_max*sizeof(delayed_fptrs[0])); //assumes sizeof==alignof
         }
         delayed_fptrs[delayed_fptrs_n++] = (typeof(delayed_fptrs[0])){.li=li, .func=func, .cfunc=cfunc};
     }
 }
 static void jl_update_all_fptrs()
 {
-    jl_value_t** *gvars = sysimg_gvars;
-    if (gvars <= 0) return;
-    sysimg_gvars = NULL; // jlfptr_to_llvm needs to decompress some ast's
+    //printf("delayed_fptrs_n: %d\n", delayed_fptrs_n);
+    jl_value_t ***gvars = sysimg_gvars;
+    if (gvars == 0) return;
+    // jlfptr_to_llvm needs to decompress some ast's, therefore this needs to be NULL
+    // to skip trying to restore GlobalVariable pointers in jl_deserialize_gv
+    sysimg_gvars = NULL;
     size_t i;
     for (i = 0; i < delayed_fptrs_n; i++) {
         jl_lambda_info_t *li = delayed_fptrs[i].li;
@@ -563,6 +578,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag);
 
 static jl_value_t *jl_deserialize_gv(ios_t *s, jl_value_t *v)
 {
+    // Restore the GlobalVariable reference to this jl_value_t via the sysimg_gvars table
     int32_t gvname_index = read_int32(s)-1;
     if (sysimg_gvars != NULL && gvname_index >= 0) {
         *sysimg_gvars[gvname_index] = v;
@@ -626,10 +642,10 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag) {
         char *name = alloca(len+1);
         ios_read(s, name, len);
         name[len] = '\0';
-        jl_value_t *s = (jl_value_t*)jl_symbol(name);
+        jl_value_t *sym = (jl_value_t*)jl_symbol(name);
         if (usetable)
-            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, s);
-        return s;
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, sym);
+        return sym;
     }
     else if (vtag == (jl_value_t*)jl_array_type ||
              vtag == (jl_value_t*)Array1d_tag) {
@@ -869,6 +885,8 @@ void jl_save_system_image(char *fname)
 
     jl_serialize_value(&f, jl_main_module);
 
+    // deser_tag is an array indexed from 2 until HT_NOTFOUND
+    // ensure everything in there can be reassociated with it's GlobalValue
     ptrint_t i=2;
     void *v = ptrhash_get(&deser_tag, (void*)i);
     while (v != HT_NOTFOUND) {
@@ -876,8 +894,9 @@ void jl_save_system_image(char *fname)
         v = ptrhash_get(&deser_tag, (void*)i);
         i += 1;
     }
+    // serialize all symbols, for the side-effect of storing their GlobalValue references
     jl_serialize_gv_syms(&f, jl_get_root_symbol());
-    jl_serialize_value(&f, NULL);
+    jl_serialize_value(&f, NULL); // signal the end of the symbols list
 
     write_int32(&f, jl_get_t_uid_ctr());
     write_int32(&f, jl_get_gs_ctr());
@@ -930,6 +949,8 @@ void jl_restore_system_image(char *fname, int build_mode)
                                                  jl_symbol("Base"));
     jl_current_module = jl_base_module; // run start_image in Base
 
+    // deser_tag is an array indexed from 2 until HT_NOTFOUND
+    // ensure everything in there is reassociated with it's GlobalValue
     ptrint_t i=2;
     void *v = ptrhash_get(&deser_tag, (void*)i);
     while (v != HT_NOTFOUND) {
@@ -948,7 +969,7 @@ void jl_restore_system_image(char *fname, int build_mode)
         jl_cache_type_((jl_datatype_t*)v);
         ((jl_datatype_t*)v)->uid = uid;
     }
-    
+
     jl_get_builtin_hooks();
     jl_get_system_hooks();
     jl_get_uv_hooks();
@@ -967,6 +988,7 @@ void jl_restore_system_image(char *fname, int build_mode)
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();
 #endif
+    // restore the value of our "magic" JULIA_HOME variable/constant
     jl_get_binding_wr(jl_core_module, jl_symbol("JULIA_HOME"))->value =
         jl_cstr_to_string(julia_home);
     jl_update_all_fptrs();

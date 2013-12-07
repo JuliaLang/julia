@@ -397,9 +397,6 @@
     uv_*;
     add_library_mapping;
 
-    jl_dump_bitcode;
-    jl_set_imaging_mode;
-
     jl_stackovf_exception;
     jl_memory_exception;
     jl_diverror_exception;
