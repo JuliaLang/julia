@@ -24,15 +24,21 @@ include("gk.jl")
 
 # issue #942
 s = sparse(ones(280,280));
-@timeit s*s "sparsemul" "Sparse matrix multiplication"
-
-# issue #939
-y = [500000:-1:1];
-@timeit sortperm(y) "sortperm" "Sorting of a worst-case vector"
+@timeit s*s "sparsemul" "Sparse matrix - sparse matrix multiplication"
 
 # issue #938
 x = 1:600000;
 @timeit sparse(x,x,x) "sparserange" "Construction of a sparse array from ranges"
+
+# issue 4707
+include("getdivgrad.jl")
+A = getDivGrad(64,64,64)
+v = rand(64^3)
+@timeit A*v "matvec" "Sparse matrix - dense vector multiplication"
+
+# issue #939
+y = [500000:-1:1];
+@timeit sortperm(y) "sortperm" "Sorting of a worst-case vector"
 
 # issue #445
 include("stockcorr.jl")
