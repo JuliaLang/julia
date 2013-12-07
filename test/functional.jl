@@ -26,10 +26,22 @@ end
 @test reduce((x,y)->"($x+$y)", [9:11]) == "((9+10)+11)"
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
 @test reduce(+, 1000, [1:5]) == (1000 + 1 + 2 + 3 + 4 + 5)
+rv = reduce( (x,y) -> x * string(y), "0", [1,2,3,4,5])
+@test length(rv) == 6
+@test searchindex(rv, "0") == 1
+@test searchindex(rv, "1") > 1
+@test searchindex(rv, "3") > 1
+@test searchindex(rv, "5") > 1
 
 # mapreduce -- reduce.jl
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
 @test mapreduce((x)->x[1:3], (x,y)->"($x+$y)", ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
+rv = mapreduce((x)->string(x), (x,y)-> x * y, "0", [1,2,3,4,5])
+@test length(rv) == 6
+@test searchindex(rv, "0") == 1
+@test searchindex(rv, "1") > 1
+@test searchindex(rv, "3") > 1
+@test searchindex(rv, "5") > 1
 
 # filter -- array.jl
 @test isequal(filter(x->(x>1), [0 1 2 3 2 1 0]), [2, 3, 2])
