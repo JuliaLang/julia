@@ -707,7 +707,7 @@ DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *spar
 jl_tuple_t *jl_tuple(size_t n, ...);
 jl_tuple_t *jl_tuple1(void *a);
 jl_tuple_t *jl_tuple2(void *a, void *b);
-jl_tuple_t *jl_alloc_tuple(size_t n);
+DLLEXPORT jl_tuple_t *jl_alloc_tuple(size_t n);
 jl_tuple_t *jl_alloc_tuple_uninit(size_t n);
 jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b);
 jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v);
@@ -1095,7 +1095,7 @@ extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 #define JL_GC_PUSHARGS(rts_var,n)                               \
-  rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
+  rts_var = ((jl_value_t**)__builtin_alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
   ((void**)rts_var)[-2] = (void*)(((size_t)n)<<1);              \
   ((void**)rts_var)[-1] = jl_pgcstack;                          \
   jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2])
