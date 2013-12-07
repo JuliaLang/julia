@@ -850,21 +850,23 @@
 ("Iterable Collections","Base","count","count(p, itr) -> Integer
 
    Count the number of elements in \"itr\" for which predicate \"p\"
-   is true.
+   returns \"true\".
 
 "),
 
 ("Iterable Collections","Base","any","any(p, itr) -> Bool
 
-   Determine whether any element of \"itr\" satisfies the given
-   predicate.
+   Determine whether there are any element in \"itr\" for which 
+   predicate \"p\" returns \"true\".
 
 "),
 
 ("Iterable Collections","Base","all","all(p, itr) -> Bool
 
-   Determine whether all elements of \"itr\" satisfy the given
-   predicate.
+   Determine whether all elements of \"itr\" return \"true\" when 
+   passed to predicate \"p\".
+
+   **Example**: \"all((i) -> i>1,[4,5,6]) = true\"
 
 "),
 
@@ -2061,7 +2063,7 @@
 ("I/O","Base","skipchars","skipchars(stream, predicate; linecomment::Char)
 
    Advance the stream until before the first character for which
-   \"predicate\" returns false. For example \"skipchars(stream,
+   \"predicate\" returns \"false\". For example \"skipchars(stream,
    isspace)\" will skip all whitespace. If keyword argument
    \"linecomment\" is specified, characters from that character
    through the end of a line will also be skipped.
@@ -5256,8 +5258,7 @@ popdisplay(d::Display)
 
 ("Arrays","Base","findfirst","findfirst(predicate, A)
 
-   Return the index of the first element that satisfies the given
-   predicate in \"A\".
+   Return the index of the first element in \"A\" for which \"predicate\" returns \"true\".
 
 "),
 
@@ -5270,8 +5271,8 @@ popdisplay(d::Display)
 
 ("Arrays","Base","findnext","findnext(predicate, A, i)
 
-   Find the next index >= \"i\" of an element of \"A\" satisfying the
-   given predicate, or \"0\" if not found.
+   Find the next index >= \"i\" of an element of \"A\" for which \"predicate\" returns
+   \"true\", or \"0\" if not found.
 
 "),
 
