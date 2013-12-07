@@ -130,4 +130,14 @@ function exec(regex::Array{Uint8}, extra::Ptr{Void},
     cap ? ((n > -1 ? ovec[1:2(ncap+1)] : Array(Int32,0)), ncap) : n > -1
 end
 
+function check_pcre()
+    libver = bytestring(ccall((:pcre_version, :libpcre), Ptr{Uint8}, ()))
+    if VERSION != libver
+        println("ERROR: PCRE v\"$libver\" was loaded, but was compiled with v\"$VERSION\"")
+        println("Please ensure the libpcre that Julia's stdlib was compiled against is loaded.")
+        println("Quitting.")
+        quit()
+    end
+end
+
 end # module

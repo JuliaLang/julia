@@ -1,6 +1,10 @@
 #ifndef JULIA_H
 #define JULIA_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "libsupport.h"
 #include <stdint.h>
 #include "uv.h"
@@ -139,7 +143,7 @@ DLLEXPORT size_t jl_array_len_(jl_array_t *a);
 #define jl_array_data_owner(a) (*((jl_value_t**)(&a->ncols+1+jl_array_ndimwords(jl_array_ndims(a)))))
 
 // compute # of extra words needed to store dimensions
-static inline int jl_array_ndimwords(uint32_t ndims)
+STATIC_INLINE int jl_array_ndimwords(uint32_t ndims)
 {
     return (ndims < 3 ? 0 : ndims-2);
 }
@@ -177,7 +181,7 @@ typedef struct _jl_lambda_info_t {
     int8_t inInference : 1;
     int8_t inCompile : 1;
     jl_fptr_t fptr;        // jlcall entry point
-    void *functionObject; // jlcall llvm Function
+    void *functionObject;  // jlcall llvm Function
     void *cFunctionObject; // c callable llvm Function
     int32_t functionID; // index that this function will have in the codegen table
     int32_t cFunctionID; // index that this cFunction will have in the codegen table
@@ -576,7 +580,7 @@ void *allocobj(size_t sz);
 // get a pointer to the data in a datatype
 #define jl_data_ptr(v)  (&((void**)(v))[1])
 
-static inline int jl_is_bitstype(void *v)
+STATIC_INLINE int jl_is_bitstype(void *v)
 {
     return (jl_is_datatype(v) && jl_is_immutable(v) &&
             jl_tuple_len(((jl_datatype_t*)(v))->names)==0 &&
@@ -584,7 +588,7 @@ static inline int jl_is_bitstype(void *v)
             ((jl_datatype_t*)(v))->size > 0);
 }
 
-static inline int jl_is_structtype(void *v)
+STATIC_INLINE int jl_is_structtype(void *v)
 {
     return (jl_is_datatype(v) &&
             (jl_tuple_len(((jl_datatype_t*)(v))->names) > 0 ||
@@ -592,62 +596,62 @@ static inline int jl_is_structtype(void *v)
             !((jl_datatype_t*)(v))->abstract);
 }
 
-static inline int jl_isbits(void *t)   // corresponding to isbits() in julia
+STATIC_INLINE int jl_isbits(void *t)   // corresponding to isbits() in julia
 {
     return (jl_is_datatype(t) && !((jl_datatype_t*)t)->mutabl &&
             ((jl_datatype_t*)t)->pointerfree && !((jl_datatype_t*)t)->abstract);
 }
 
-static inline int jl_is_abstracttype(void *v)
+STATIC_INLINE int jl_is_abstracttype(void *v)
 {
     return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->abstract);
 }
 
-static inline int jl_is_array_type(void *t)
+STATIC_INLINE int jl_is_array_type(void *t)
 {
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == jl_array_typename);
 }
 
-static inline int jl_is_array(void *v)
+STATIC_INLINE int jl_is_array(void *v)
 {
     jl_value_t *t = jl_typeof(v);
     return jl_is_array_type(t);
 }
 
-static inline int jl_is_box(void *v)
+STATIC_INLINE int jl_is_box(void *v)
 {
     jl_value_t *t = jl_typeof(v);
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == jl_box_typename);
 }
 
-static inline int jl_is_cpointer_type(void *t)
+STATIC_INLINE int jl_is_cpointer_type(void *t)
 {
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == jl_pointer_type->name);
 }
 
-static inline int jl_is_vararg_type(jl_value_t *v)
+STATIC_INLINE int jl_is_vararg_type(jl_value_t *v)
 {
     return (jl_is_datatype(v) &&
             ((jl_datatype_t*)(v))->name == jl_vararg_type->name);
 }
 
-static inline int jl_is_ntuple_type(jl_value_t *v)
+STATIC_INLINE int jl_is_ntuple_type(jl_value_t *v)
 {
     return (jl_is_datatype(v) &&
             ((jl_datatype_t*)v)->name == jl_ntuple_typename);
 }
 
-static inline int jl_is_nontuple_type(jl_value_t *v)
+STATIC_INLINE int jl_is_nontuple_type(jl_value_t *v)
 {
     return (jl_typeis(v, jl_uniontype_type) ||
             jl_typeis(v, jl_datatype_type) ||
             jl_typeis(v, jl_typector_type));
 }
 
-static inline int jl_is_type_type(jl_value_t *v)
+STATIC_INLINE int jl_is_type_type(jl_value_t *v)
 {
     return (jl_is_datatype(v) &&
             ((jl_datatype_t*)(v))->name == jl_type_type->name);
@@ -707,7 +711,7 @@ DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *spar
 DLLEXPORT jl_tuple_t *jl_tuple(size_t n, ...);
 jl_tuple_t *jl_tuple1(void *a);
 jl_tuple_t *jl_tuple2(void *a, void *b);
-jl_tuple_t *jl_alloc_tuple(size_t n);
+DLLEXPORT jl_tuple_t *jl_alloc_tuple(size_t n);
 jl_tuple_t *jl_alloc_tuple_uninit(size_t n);
 jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b);
 jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v);
@@ -872,7 +876,7 @@ void jl_too_few_args(const char *fname, int min);
 void jl_too_many_args(const char *fname, int max);
 void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);
 DLLEXPORT void jl_type_error_rt(const char *fname, const char *context,
-                                jl_value_t *ty, jl_value_t *got);
+                      jl_value_t *ty, jl_value_t *got);
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
 
@@ -1001,6 +1005,7 @@ jl_array_t *jl_lam_args(jl_expr_t *l);
 jl_array_t *jl_lam_locals(jl_expr_t *l);
 jl_array_t *jl_lam_vinfo(jl_expr_t *l);
 jl_array_t *jl_lam_capt(jl_expr_t *l);
+jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i);
 int jl_lam_vars_captured(jl_expr_t *ast);
 jl_expr_t *jl_lam_body(jl_expr_t *l);
 DLLEXPORT jl_value_t *jl_ast_rettype(jl_lambda_info_t *li, jl_value_t *ast);
@@ -1013,22 +1018,22 @@ DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr);
 DLLEXPORT jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);
 DLLEXPORT jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data);
 
-static inline int jl_vinfo_capt(jl_array_t *vi)
+STATIC_INLINE int jl_vinfo_capt(jl_array_t *vi)
 {
     return (jl_unbox_long(jl_cellref(vi,2))&1)!=0;
 }
 
-static inline int jl_vinfo_assigned(jl_array_t *vi)
+STATIC_INLINE int jl_vinfo_assigned(jl_array_t *vi)
 {
     return (jl_unbox_long(jl_cellref(vi,2))&2)!=0;
 }
 
-static inline int jl_vinfo_assigned_inner(jl_array_t *vi)
+STATIC_INLINE int jl_vinfo_assigned_inner(jl_array_t *vi)
 {
     return (jl_unbox_long(jl_cellref(vi,2))&4)!=0;
 }
 
-static inline int jl_vinfo_sa(jl_array_t *vi)
+STATIC_INLINE int jl_vinfo_sa(jl_array_t *vi)
 {
     return (jl_unbox_long(jl_cellref(vi,2))&16)!=0;
 }
@@ -1037,7 +1042,7 @@ static inline int jl_vinfo_sa(jl_array_t *vi)
 #define JL_CALLABLE(name) \
     DLLEXPORT jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 
-static inline
+STATIC_INLINE
 jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 {
     return f->fptr((jl_value_t*)f, args, nargs);
@@ -1098,7 +1103,7 @@ extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 #define JL_GC_PUSHARGS(rts_var,n)                               \
-  rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
+  rts_var = ((jl_value_t**)__builtin_alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
   ((void**)rts_var)[-2] = (void*)(((size_t)n)<<1);              \
   ((void**)rts_var)[-1] = jl_pgcstack;                          \
   jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2])
@@ -1145,9 +1150,9 @@ void *alloc_4w(void);
 #define jl_gc_unpreserve()
 #define jl_gc_n_preserved_values() (0)
 
-static inline void *alloc_2w() { return allocobj(2*sizeof(void*)); }
-static inline void *alloc_3w() { return allocobj(3*sizeof(void*)); }
-static inline void *alloc_4w() { return allocobj(4*sizeof(void*)); }
+STATIC_INLINE void *alloc_2w() { return allocobj(2*sizeof(void*)); }
+STATIC_INLINE void *alloc_3w() { return allocobj(3*sizeof(void*)); }
+STATIC_INLINE void *alloc_4w() { return allocobj(4*sizeof(void*)); }
 #endif
 
 // asynch signal handling
@@ -1276,7 +1281,7 @@ DLLEXPORT JL_STREAM *jl_stderr_stream();
 
 extern char *julia_home;
 
-static inline void jl_eh_restore_state(jl_handler_t *eh)
+STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 {
     JL_SIGATOMIC_BEGIN();
     jl_current_task->eh = eh->prev;
@@ -1304,10 +1309,10 @@ void jl_longjmp(jmp_buf _Buf,int _Value);
 #else
 // determine actual entry point name
 #if defined(sigsetjmp)
-#define jl_setjmp_f     __sigsetjmp
+#define jl_setjmp_f    __sigsetjmp
 #define jl_setjmp_name "__sigsetjmp"
 #else
-#define jl_setjmp_f     sigsetjmp
+#define jl_setjmp_f    sigsetjmp
 #define jl_setjmp_name "sigsetjmp"
 #endif
 #define jl_setjmp(a,b) sigsetjmp(a,b)
@@ -1331,6 +1336,10 @@ void jl_longjmp(jmp_buf _Buf,int _Value);
 #define JL_CATCH                                                \
     else                                                        \
         for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0)
+#endif
+
+#ifdef __cplusplus
+}
 #endif
 
 #endif

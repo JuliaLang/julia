@@ -47,24 +47,26 @@ strings) that makes it easy to create expression objects without
 explicitly constructing ``Expr`` objects. There are two forms: a short
 form for inline expressions using ``:`` followed by a single expression,
 and a long form for blocks of code, enclosed in ``quote ... end``. Here
-is an example of the short form used to quote an arithmetic expression::
+is an example of the short form used to quote an arithmetic expression:
+
+.. doctest::
 
     julia> ex = :(a+b*c+1)
-    +(a,*(b,c),1)
+    :(+(a,*(b,c),1))
 
     julia> typeof(ex)
     Expr
 
     julia> ex.head
-    call
+    :call
 
     julia> typeof(ans)
     Symbol
 
     julia> ex.args
-    4-element Any Array:
-      +        
-      a        
+    4-element Array{Any,1}:
+      :+       
+      :a       
       :(*(b,c))
      1         
 
@@ -86,28 +88,31 @@ constructed by Julia code can easily have arbitrary run-time values
 without literal forms as args. In this specific example, ``+`` and ``a``
 are symbols, ``*(b,c)`` is a subexpression, and ``1`` is a literal
 64-bit signed integer. Here's an example of the longer expression
-quoting form::
+quoting form:
+
+.. doctest::
 
     julia> quote
-         x = 1
-         y = 2
-         x + y
-       end
-
-    begin
-      x = 1
-      y = 2
-      +(x,y)
+             x = 1
+             y = 2
+             x + y
+           end
+    quote  # none, line 2:
+        x = 1 # line 3:
+        y = 2 # line 4:
+        +(x,y)
     end
 
 Symbols
 ~~~~~~~
 
 When the argument to ``:`` is just a symbol, a ``Symbol`` object results
-instead of an ``Expr``::
+instead of an ``Expr``:
+
+.. doctest::
 
     julia> :foo
-    foo
+    :foo
 
     julia> typeof(ans)
     Symbol
@@ -118,7 +123,9 @@ the value bound to that symbol in the appropriate :ref:`scope
 <man-variables-and-scoping>`.
 
 Sometimes extra parentheses around the argument to ``:`` are needed to avoid
-ambiguity in parsing.::
+ambiguity in parsing.:
+
+.. doctest::
 
     julia> :(:)
     :(:)
@@ -127,7 +134,9 @@ ambiguity in parsing.::
     :(::)
 
 ``Symbol``\ s can also be created using the ``symbol`` function, which takes
-a character or string as its argument::
+a character or string as its argument:
+
+.. doctest::
 
     julia> symbol('\'')
     :'
@@ -140,19 +149,21 @@ a character or string as its argument::
 
 Given an expression object, one can cause Julia to evaluate (execute) it
 at the *top level* scope — i.e. in effect like loading from a file or
-typing at the interactive prompt — using the ``eval`` function::
+typing at the interactive prompt — using the ``eval`` function:
+
+.. doctest::
 
     julia> :(1 + 2)
-    +(1,2)
+    :(+(1,2))
 
     julia> eval(ans)
     3
 
     julia> ex = :(a + b)
-    +(a,b)
+    :(+(a,b))
 
     julia> eval(ex)
-    a not defined
+    ERROR: a not defined
 
     julia> a = 1; b = 2;
 
@@ -161,13 +172,15 @@ typing at the interactive prompt — using the ``eval`` function::
 
 Expressions passed to ``eval`` are not limited to returning values
 — they can also have side-effects that alter the state of the top-level
-evaluation environment::
+evaluation environment:
+
+.. doctest::
 
     julia> ex = :(x = 1)
-    x = 1
+    :(x = 1)
 
     julia> x
-    x not defined
+    ERROR: x not defined
 
     julia> eval(ex)
     1
@@ -181,7 +194,9 @@ assigned to the top-level variable ``x``.
 Since expressions are just ``Expr`` objects which can be constructed
 programmatically and then evaluated, one can, from within Julia code,
 dynamically generate arbitrary code which can then be run using
-``eval``. Here is a simple example::
+``eval``. Here is a simple example:
+
+.. doctest::
 
     julia> a = 1;
 
@@ -214,10 +229,11 @@ tedious and ugly. Since the Julia parser is already excellent at
 producing expression objects, Julia allows "splicing" or interpolation
 of expression objects, prefixed with ``$``, into quoted expressions,
 written using normal syntax. The above example can be written more
-clearly and concisely using interpolation::
+clearly and concisely using interpolation:
+
+.. doctest::
 
     julia> a = 1;
-    1
 
     julia> ex = :($a + b)
     :(+(1,b))
@@ -272,10 +288,12 @@ expression argument given to ``@eval`` can be a block::
     end
 
 Interpolating into an unquoted expression is not supported and will
-cause a compile-time error::
+cause a compile-time error:
+
+.. doctest::
 
     julia> $a + b
-    unsupported or misplaced expression $
+    ERROR: unsupported or misplaced expression $
 
 .. _man-macros:
 
@@ -317,12 +335,15 @@ macro (see
         :($ex ? nothing : error("Assertion failed: ", $(string(ex))))
     end
 
-This macro can be used like this::
+This macro can be used like this:
+
+.. doctest::
 
     julia> @assert 1==1.0
 
     julia> @assert 1==0
-    Assertion failed: 1==0
+    ERROR: assertion failed: :((1==0))
+     in error at error.jl:21
 
 Macro calls are expanded so that the above calls are precisely
 equivalent to writing::

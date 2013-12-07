@@ -8,7 +8,18 @@ const AUTH_DATA = {
     "note_url" => "http://docs.julialang.org/en/latest/manual/packages/",
 }
 
-user() = Git.readchomp(`config --global github.user`)
+function user()
+    if !success(`git config --global github.user`)
+        error("""
+        no GitHub user name configured; please configure it with:
+
+            git config --global github.user USERNAME
+
+        where USERNAME is replaced with your GitHub user name.
+        """)
+    end
+    readchomp(`git config --global github.user`)
+end
 
 function json()
     isdefined(:JSON) || try require("JSON")
@@ -20,7 +31,7 @@ function json()
 end
 
 function curl(url::String, opts::Cmd=``)
-    success(`which -s curl`) || error("using the GitHub API requires having `curl` installed")
+    success(`which curl`) || error("using the GitHub API requires having `curl` installed")
     out, proc = readsfrom(`curl -i -s -S $opts $url`)
     head = readline(out)
     status = int(split(head,r"\s+",3)[2])
@@ -52,14 +63,16 @@ function req(resource::String, data, opts::Cmd=``)
     status, response
 end
 
-for m in (:GET,:HEAD,:PUT,:POST,:PATCH,:DELETE)
-    @eval begin
-        m = $(string(m))
-        $m(resource::String, data, opts::Cmd=``) = req(resource,data,`-X $m $opts`)
-        $m(resource::String, opts::Cmd=``) = $m(resource,nothing,opts)
-    end
-end
 GET(resource::String, data, opts::Cmd=``) = req(resource,data,opts)
+HEAD(resource::String, data, opts::Cmd=``) = req(resource,data,`-I $opts`)
+PUT(resource::String, data, opts::Cmd=``) = req(resource,data,`-X PUT $opts`)
+POST(resource::String, data, opts::Cmd=``) = req(resource,data,`-X POST $opts`)
+PATCH(resource::String, data, opts::Cmd=``) = req(resource,data,`-X PATCH $opts`)
+DELETE(resource::String, data, opts::Cmd=``) = req(resource,data,`-X DELETE $opts`)
+
+for m in (:GET,:HEAD,:PUT,:POST,:PATCH,:DELETE)
+    @eval $m(resource::String, opts::Cmd=``) = $m(resource,nothing,opts)
+end
 
 function pushable(owner::String, repo::String, user::String=user())
     status, response = HEAD("repos/$owner/$repo")
@@ -73,7 +86,7 @@ end
 function fork(owner::String, repo::String)
     status, response = POST("repos/$owner/$repo/forks")
     status == 202 || error("forking $owner/$repo failed: $(response["message"])")
-    return response["url"]
+    return response
 end
 
 end # module

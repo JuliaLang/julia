@@ -353,5 +353,11 @@ export mmread
 # 0.3 deprecations
 @deprecate dense  full
 
+export Stat
+const Stat = StatStruct
+
+export CharString
+const CharString = UTF32String
+
 # 0.3 discontinued functions
 

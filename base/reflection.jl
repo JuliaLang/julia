@@ -128,16 +128,16 @@ done(mt::MethodTable, i::()) = true
 uncompressed_ast(l::LambdaStaticData) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
-function _dump_function(f, t::ANY, native)
-    str = ccall(:jl_dump_function, Any, (Any,Any,Bool), f, t, native)::ByteString
+function _dump_function(f, t::ANY, native, wrapper)
+    str = ccall(:jl_dump_function, Any, (Any,Any,Bool,Bool), f, t, native, wrapper)::ByteString
     if str == ""
         error("no method found for the specified argument types")
     end
     str
 end
 
-code_llvm  (f::Callable, types::Tuple) = print(_dump_function(f, types, false))
-code_native(f::Callable, types::Tuple) = print(_dump_function(f, types, true))
+code_llvm  (f::Callable, types::Tuple) = print(_dump_function(f, types, false, false))
+code_native(f::Callable, types::Tuple) = print(_dump_function(f, types, true, false))
 
 function functionlocs(f::Function, types=(Any...))
     locs = Any[]

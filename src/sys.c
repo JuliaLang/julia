@@ -203,7 +203,7 @@ DLLEXPORT double jl_stat_mtime(char *statbuf)
 DLLEXPORT double jl_stat_ctime(char *statbuf)
 {
     uv_stat_t *s;
-    s = (uv_stat_t*) stat;
+    s = (uv_stat_t*) statbuf;
     return (double)s->st_ctim.tv_sec + (double)s->st_ctim.tv_nsec * 1e-9;
 }
 

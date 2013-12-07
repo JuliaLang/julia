@@ -432,12 +432,12 @@ function factorize!{T}(A::Matrix{T})
             return Triangular(A, :U)
         end
         if herm
-            C, info = LAPACK.potrf!('U', copy(A))
+            C, info = T <: BlasFloat ? LAPACK.potrf!('U', copy(A)) : LAPACK.potrf!('U', float(A))
             if info == 0 return Cholesky(C, 'U') end
             return factorize!(Hermitian(A))
         end
         if sym
-            C, info = LAPACK.potrf!('U', copy(A))
+            C, info = T <: BlasFloat ? LAPACK.potrf!('U', copy(A)) : LAPACK.potrf!('U', float(A))
             if info == 0 return Cholesky(C, 'U') end
             return factorize!(Symmetric(A))
         end
@@ -486,7 +486,7 @@ function null{T<:BlasFloat}(A::StridedMatrix{T})
     (m == 0 || n == 0) && return eye(T, n)
     SVD = svdfact(A, false)
     indstart = sum(SVD[:S] .> max(m,n)*maximum(SVD[:S])*eps(eltype(SVD[:S]))) + 1
-    return SVD[:V][:,indstart:]
+    return SVD[:V][:,indstart:end]
 end
 null{T<:Integer}(A::StridedMatrix{T}) = null(float(A))
 null(a::StridedVector) = null(reshape(a, length(a), 1))

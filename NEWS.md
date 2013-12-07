@@ -4,6 +4,8 @@ Julia v0.3.0 Release Notes
 New language features
 ---------------------
 
+  * Greatly enhanced performance for passing and returning tuples ([#4042]).
+
 New library functions
 ---------------------
 
@@ -25,10 +27,27 @@ Library improvements
   * `nextpow` and `prevpow` now return the `a^n` values instead of the
     exponent `n` ([#4819])
 
+  * `Dict(kv)` constructor for any iterator on (key,value) pairs.
+
+  * Overflow detection in `parseint` ([#4874]).
+
+  * New Pkg.submit(pkg[,commit]) function to automatically submit
+    a Github pull request to the package author.
+
+  * Triple-quoted regex strings, `r"""..."""` ([#4934]).
+
+  * New string type, `UTF16String` ([#4930]).
+
+  * `CharString` is renamed to `UTF32String` ([#4943]).
+
+  * Faster sparse `kron` ([#4958]).
+
 Deprecated or removed
 ---------------------
 
   * `dense` is deprecated in favor of `full` ([#4759])
+
+  * The `Stat` type is renamed `StatStruct` ([#4670])
 
 [#4775]: https://github.com/JuliaLang/julia/issues/4775
 [#4870]: https://github.com/JuliaLang/julia/issues/4870
@@ -36,6 +55,7 @@ Deprecated or removed
 [#4782]: https://github.com/JuliaLang/julia/issues/4782
 [#4759]: https://github.com/JuliaLang/julia/issues/4759
 [#4819]: https://github.com/JuliaLang/julia/issues/4819
+[#4670]: https://github.com/JuliaLang/julia/issues/4670
 
 
 
