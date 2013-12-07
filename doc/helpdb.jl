@@ -866,7 +866,7 @@
    Determine whether all elements of \"itr\" return \"true\" when 
    passed to predicate \"p\".
 
-   **Example**: \"all((i)->i>1,[4,5,6]) = true\"
+   **Example**: \"all((i) -> i>1,[4,5,6]) = true\"
 
 "),
 
@@ -874,7 +874,7 @@
 
    Transform collection \"c\" by applying \"f\" to each element.
 
-   ``
+   **Example**: \"map((x) -> x * 2, [1, 2, 3]) = [2, 4, 6]\"
 
 "),
 
