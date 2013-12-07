@@ -162,10 +162,37 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
     return emit_expr(e, ctx, false);
 }
 
-// emit code to unpack a raw value from a box
-static Value *emit_unbox(Type *to, Type *pto, Value *x)
+static Type *jl_llvmtuple_eltype(Type *tuple, jl_value_t *jt, size_t i)
 {
-    Type *ty = x->getType();
+    Type *ety = NULL;
+    if(tuple->isArrayTy())
+        ety = dyn_cast<ArrayType>(tuple)->getElementType();
+    else if(tuple->isVectorTy())
+        ety = dyn_cast<VectorType>(tuple)->getElementType();
+    else if(tuple == T_void) 
+        ety = T_void;
+    else if (tuple->isStructTy()) {
+        ety = julia_type_to_llvm(jl_tupleref((jl_tuple_t*)jt,i));
+    }
+    else
+        assert(false);
+    return ety;
+}
+
+static Value *ghostValue(jl_value_t *ty);
+
+// emit code to unpack a raw value from a box
+static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
+{
+    Type *ty = (x == NULL) ? NULL : x->getType();
+    if (x == NULL || ty == NoopType) {
+        if (to == T_void) {
+            if (jt != NULL)
+                return (ty == NoopType && julia_type_of(x) == jt) ? x : ghostValue(jt);
+            return NULL;
+        }
+        return UndefValue::get(to);
+    }
     if (ty != jl_pvalue_llvmt) {
         // bools are stored internally as int8 (for now)
         if (ty == T_int1 && to == T_int8)
@@ -185,6 +212,23 @@ static Value *emit_unbox(Type *to, Type *pto, Value *x)
         }
         return x;
     }
+    if ( (jt != NULL && jl_is_tuple(jt)) || to->isVectorTy() || to->isArrayTy() ||
+        (to->isStructTy() && dyn_cast<StructType>(to)->isLiteral()) )
+    {
+        assert(jt != 0);
+        assert(jl_is_tuple(jt));
+        assert(to != T_void);
+        Value *tpl = UndefValue::get(to);
+        for (size_t i = 0; i < jl_tuple_len(jt); ++i) {
+            Type *ety = jl_llvmtuple_eltype(to,jt,i);
+            if(ety == T_void)
+                continue;
+            Value *ref = emit_tupleref(x,ConstantInt::get(T_size,i+1),jt,NULL);
+            Value *elt = emit_unbox(ety,ref,julia_type_of(ref));
+            tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,jt,NULL);
+        }
+        return tpl;
+    }
     Value *p = data_pointer(x);
     if (to == T_int1) {
         // bools stored as int8, so an extra Trunc is needed to get an int1
@@ -195,9 +239,10 @@ static Value *emit_unbox(Type *to, Type *pto, Value *x)
     }
     if (to->isStructTy() && !to->isSized()) {
         // empty struct - TODO - is this a good way to represent it?
+        assert(to != T_void);
         return UndefValue::get(to);
     }
-    return builder.CreateLoad(builder.CreateBitCast(p, pto), false);
+    return builder.CreateLoad(builder.CreateBitCast(p, to->getPointerTo()), false);
 }
 
 // unbox trying to determine type automatically
@@ -217,7 +262,10 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
         if (bt == NULL || !jl_is_bitstype(bt)) {
             // TODO: make sure this code is valid; hopefully it is
             // unreachable but it should still be well-formed.
-            return emit_error("auto_unbox: unable to determine argument type", ctx);
+            emit_error("auto_unbox: unable to determine argument type", ctx);
+            // This isn't correct but probably most likely to cause
+            // the least amount of trouble
+            return UndefValue::get(T_int64);
         }
     }
     Type *to = julia_type_to_llvm(bt);
@@ -225,7 +273,10 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
         unsigned int nb = jl_datatype_size(bt)*8;
         to = IntegerType::get(jl_LLVMContext, nb);
     }
-    return emit_unbox(to, PointerType::get(to, 0), v);
+    if (to == T_void) {
+        return NULL;
+    }
+    return emit_unbox(to, v, bt);
 }
 
 // figure out how many bits a bitstype has at compile time, or -1
@@ -255,7 +306,7 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         jl_value_t *p = jl_tparam0(et);
         if (jl_is_leaf_type(p)) {
             Type *to = julia_type_to_llvm(p);
-            return emit_unbox(to, PointerType::get(to,0), emit_unboxed(x,ctx));
+            return emit_unbox(to, emit_unboxed(x,ctx), p);
         }
     }
     int nb = try_to_determine_bitstype_nbits(targ, ctx);
@@ -273,7 +324,7 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_datatype_size(bt)*8;
     }
     Type *to = IntegerType::get(jl_LLVMContext, nb);
-    return emit_unbox(to, PointerType::get(to, 0), emit_unboxed(x, ctx));
+    return emit_unbox(to, emit_unboxed(x, ctx), et);
 }
 
 static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
@@ -335,7 +386,8 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
             }
             else {
                 if (vxt->getPrimitiveSizeInBits() != llvmt->getPrimitiveSizeInBits()) {
-                    return emit_error("box: argument is of incorrect size", ctx);
+                    emit_error("box: argument is of incorrect size", ctx);
+                    return vx;
                 }
                 vx = builder.CreateBitCast(vx, llvmt);
             }
@@ -544,7 +596,7 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
         jl_error("pointerref: invalid index type");
     }
     Value *thePtr = auto_unbox(e,ctx);
-    Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx));
+    Value *idx = emit_unbox(T_size, emit_unboxed(i, ctx), (jl_value_t*)jl_long_type);
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
     if (!jl_isbits(ety)) {
         if (ety == (jl_value_t*)jl_any_type)
@@ -552,7 +604,8 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
                         builder.CreateBitCast(thePtr, jl_ppvalue_llvmt),
                         im1));
         if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety)) {
-            return emit_error("pointerref: invalid pointer type", ctx);
+            emit_error("pointerref: invalid pointer type", ctx);
+            return NULL;
         }
         assert(jl_is_datatype(ety));
         uint64_t size = ((jl_datatype_t*)ety)->size;
@@ -582,16 +635,18 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
         jl_error("pointerset: invalid pointer");
     jl_value_t *xty = expr_type(x, ctx);    
     if (!jl_subtype(xty, ety, 0)) {
-        return emit_error("pointerset: type mismatch in assign", ctx);
+        emit_error("pointerset: type mismatch in assign", ctx);
+        return NULL;
     }
     if (expr_type(i, ctx) != (jl_value_t*)jl_long_type)
         jl_error("pointerset: invalid index type");
-    Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx));
+    Value *idx = emit_unbox(T_size, emit_unboxed(i, ctx),(jl_value_t*)jl_long_type);
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
     Value *thePtr = auto_unbox(e,ctx);
     if (!jl_isbits(ety) && ety != (jl_value_t*)jl_any_type) {
         if (!jl_is_structtype(ety) || jl_is_array_type(ety) || !jl_is_leaf_type(ety)) {
-            return emit_error("pointerset: invalid pointer type", ctx);
+            emit_error("pointerset: invalid pointer type", ctx);
+            return NULL;
         }
         Value *val = emit_expr(x,ctx,true,true);
         assert(val->getType() == jl_pvalue_llvmt); //Boxed
@@ -672,8 +727,8 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         }
         else {
             return builder.CreateSelect(isfalse,
-                                        boxed(emit_expr(args[3], ctx, false)),
-                                        boxed(emit_expr(args[2], ctx, false)));
+                                        boxed(emit_expr(args[3], ctx, false),ctx,expr_type(args[3],ctx)),
+                                        boxed(emit_expr(args[2], ctx, false),ctx,expr_type(args[2],ctx)));
         }
     }
     default: ;
