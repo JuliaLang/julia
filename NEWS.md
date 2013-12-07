@@ -4,6 +4,8 @@ Julia v0.3.0 Release Notes
 New language features
 ---------------------
 
+  * Greatly enhanced performance for passing and returning tuples ([#4042]).
+
 New library functions
 ---------------------
 
