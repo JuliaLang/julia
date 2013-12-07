@@ -38,6 +38,9 @@ static GlobalVariable *stringConst(const std::string &txt)
 
 static Value *literal_static_pointer_val(void *p, Type *t)
 {
+    // this function will emit a static pointer into the generated code
+    // the generated code will only be valid during the current session,
+    // and thus, this should typically be avoided in new API's
 #if defined(_P64)
     return ConstantExpr::getIntToPtr(ConstantInt::get(T_int64, (uint64_t)p), t);
 #else
@@ -45,12 +48,13 @@ static Value *literal_static_pointer_val(void *p, Type *t)
 #endif
 }
 
-typedef struct {Value* gv; int32_t index;} jl_value_llvm; // 1-based indexing
+typedef struct {Value* gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
 static std::map<void*, jl_value_llvm> jl_value_to_llvm;
 static std::vector<Constant*> jl_sysimg_gvars;
 
 extern "C" int32_t jl_get_llvm_gv(jl_value_t *p)
 {
+    // map a jl_value_t memory location to a GlobalVariable
     std::map<void*, jl_value_llvm>::iterator it;
     it = jl_value_to_llvm.find(p);
     if (it == jl_value_to_llvm.end())
@@ -59,33 +63,42 @@ extern "C" int32_t jl_get_llvm_gv(jl_value_t *p)
 }
 static void jl_gen_llvm_gv_array()
 {
+    // emit the variable table into the code image (can only call this once)
+    // used just before dumping bitcode
     ArrayType *atype = ArrayType::get(T_psize,jl_sysimg_gvars.size());
-    GlobalValue *gv = new GlobalVariable(
+    new GlobalVariable(
             *jl_Module,
             atype,
             true,
             GlobalVariable::ExternalLinkage,
             ConstantArray::get(atype, ArrayRef<Constant*>(jl_sysimg_gvars)),
             "jl_sysimg_gvars");
-    (void)jl_ExecutionEngine->getPointerToGlobal(gv);
 }
 
 static int32_t jl_assign_functionID(Function *functionObject) {
+    // give the function an index in the constant lookup table
+    if (!imaging_mode)
+        return 0;
     jl_sysimg_gvars.push_back(ConstantExpr::getBitCast(functionObject,T_psize));
     return jl_sysimg_gvars.size();
 }
 
 static Value *julia_gv(const char *cname, void *addr)
 {
+    // emit a GlobalVariable for a jl_value_t named "cname"
     std::map<void*, jl_value_llvm>::iterator it;
+    // first see if there already is a GlobalVariable for this address
     it = jl_value_to_llvm.find(addr);
     if (it != jl_value_to_llvm.end())
         return builder.CreateLoad(it->second.gv);
+    // no existing GlobalVariable, create one and store it
     GlobalValue *gv = new GlobalVariable(*jl_Module, jl_pvalue_llvmt,
-                           false, GlobalVariable::PrivateLinkage,
+                           false, GlobalVariable::InternalLinkage,
                            ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt), cname);
+    // make the pointer valid for this session
     void **p = (void**)jl_ExecutionEngine->getPointerToGlobal(gv);
     *p = addr;
+    // make the pointer valid for future sessions
     jl_sysimg_gvars.push_back(ConstantExpr::getBitCast(gv, T_psize));
     jl_value_llvm gv_struct;
     gv_struct.gv = gv;
@@ -95,6 +108,8 @@ static Value *julia_gv(const char *cname, void *addr)
 }
 
 static Value *julia_gv(const char *prefix, jl_sym_t *name, jl_module_t *mod, void *addr) {
+    // emit a GlobalVariable for a jl_value_t, using the prefix, name, and module to
+    // to create a readable name of the form prefixModA.ModB.name
     size_t len = strlen(name->name)+strlen(prefix)+1;
     jl_module_t *parent = mod, *prev = NULL;
     while (parent != NULL && parent != prev) {
@@ -121,43 +136,57 @@ static Value *julia_gv(const char *prefix, jl_sym_t *name, jl_module_t *mod, voi
 
 static Value *literal_pointer_val(jl_value_t *p)
 {
+    // emit a pointer to any jl_value_t which will be valid across reloading code
+    // also, try to give it a nice name for gdb, for easy identification
     if (p == NULL)
         return ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt);
+    if (!imaging_mode)
+        return literal_static_pointer_val(p, jl_pvalue_llvmt);
     if (jl_is_datatype(p)) {
         jl_datatype_t* addr = (jl_datatype_t*)p;
+        // DataTypes are prefixed with a +
         return julia_gv("+", addr->name->name, addr->name->module, p);
     }
     if (jl_is_func(p)) {
         jl_lambda_info_t* linfo = ((jl_function_t*)p)->linfo;
+        // Functions are prefixed with a -
         if (linfo != NULL)
             return julia_gv("-", linfo->name, linfo->module, p);
+        // Anonymous lambdas are prefixed with jl_method#
         return julia_gv("jl_method#", p);
     }
     if (jl_is_lambda_info(p)) {
         jl_lambda_info_t* linfo = (jl_lambda_info_t*)p;
+        // Type-inferred functions are prefixed with a -
         return julia_gv("-", linfo->name, linfo->module, p);
     }
     if (jl_is_symbol(p)) {
         jl_sym_t* addr = (jl_sym_t*)p;
+        // Symbols are prefixed with jl_sym#
         return julia_gv("jl_sym#", addr, NULL, p);
     }
+    // something else gets just a generic name
     return julia_gv("jl_global#", p);
 }
 
 static Value *literal_pointer_val(jl_binding_t *p)
 {
+    // emit a pointer to any jl_value_t which will be valid across reloading code
     if (p == NULL)
-        return literal_static_pointer_val((void*)NULL, jl_pvalue_llvmt);
+        return ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt);
+    if (!imaging_mode)
+        return literal_static_pointer_val(p, jl_pvalue_llvmt);
+    // bindings are prefixed with jl_bnd#
     return julia_gv("jl_bnd#", p->name, p->owner, p);
 }
 
 static Value *julia_binding_gv(jl_binding_t *b) {
-    return builder.CreateGEP(
-            builder.CreateBitCast(
-                julia_gv("*", b->name, b->owner, b),
-                jl_ppvalue_llvmt),
-            ConstantInt::get(
-                T_size,
+    // emit a literal_pointer_val to the value field of a jl_binding_t
+    // binding->value are prefixed with *
+    Value *bv = imaging_mode ?
+        builder.CreateBitCast(julia_gv("*", b->name, b->owner, b), jl_ppvalue_llvmt) :
+        literal_static_pointer_val(b,jl_ppvalue_llvmt);
+    return builder.CreateGEP(bv,ConstantInt::get(T_size,
                 offsetof(jl_binding_t,value)/sizeof(size_t)));
 }
 

@@ -343,6 +343,8 @@ DLLEXPORT void uv_atexit_hook()
     // able to show stuff (incl. printf's)
     jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stdout, &queue);
     jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stderr, &queue);
+    //uv_unref((uv_handle_t*)jl_uv_stdout);
+    //uv_unref((uv_handle_t*)jl_uv_stderr);
     struct uv_shutdown_queue_item *item = queue.first;
     while (item) {
         JL_TRY {
