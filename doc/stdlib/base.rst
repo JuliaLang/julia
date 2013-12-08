@@ -556,15 +556,17 @@ Iterable Collections
 
 .. function:: count(p, itr) -> Integer
 
-   Count the number of elements in ``itr`` for which predicate ``p`` is true.
+   Count the number of elements in ``itr`` for which predicate ``p`` returns true.
 
 .. function:: any(p, itr) -> Bool
 
-   Determine whether any element of ``itr`` satisfies the given predicate.
+   Determine whether predicate ``p`` returns true for any elements of ``itr``.
 
 .. function:: all(p, itr) -> Bool
 
-   Determine whether all elements of ``itr`` satisfy the given predicate.
+   Determine whether predicate ``p`` returns true for all elements of ``itr``.
+
+   **Example**: ``all((i) -> i>i, [4,5,6]) = true``
 
 .. function:: map(f, c) -> collection
 
@@ -3538,7 +3540,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: findfirst(predicate, A)
 
-   Return the index of the first element that satisfies the given predicate in ``A``.
+   Return the index of the first element of ``A`` for which ``predicate`` returns true.
 
 .. function:: findnext(A, i)
 
@@ -3546,8 +3548,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: findnext(predicate, A, i)
 
-   Find the next index >= ``i`` of an element of ``A`` satisfying the given predicate,
-   or ``0`` if not found.
+   Find the next index >= ``i`` of an element of ``A`` for which ``predicate`` returns true, or ``0`` if not found.
 
 .. function:: findnext(A, v, i)
 
