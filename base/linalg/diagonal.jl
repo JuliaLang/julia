@@ -13,11 +13,7 @@ convert{T}(::Type{SymTridiagonal{T}}, D::Diagonal{T}) = SymTridiagonal(D.diag,ze
 convert{T}(::Type{Tridiagonal{T}}, D::Diagonal{T}) = Tridiagonal(zeros(T,length(D.diag)-1),D.diag,zeros(T,length(D.diag)-1))
 
 full(D::Diagonal) = diagm(D.diag)
-function show(io::IO, D::Diagonal)
-    println(io, summary(D), ":")
-    print(io, "diag: ")
-    print_matrix(io, (D.diag)')
-end
+getindex(D::Diagonal, i::Integer, j::Integer) = i == j ? D.diag[i] : zero(eltype(D.diag))
 
 ishermitian(D::Diagonal) = true
 issym(D::Diagonal) = true
@@ -89,6 +85,7 @@ function inv{T<:BlasFloat}(D::Diagonal{T})
 end
 inv(D::Diagonal) = inv(Diagonal(float(D.diag)))
 
+svdvals(D::Diagonal) = sort(D.diag, rev = true)
 eigvals(D::Diagonal) = sort(D.diag)
 
 expm(D::Diagonal) = Diagonal(exp(D.diag))
