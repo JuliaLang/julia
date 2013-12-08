@@ -6,7 +6,7 @@
 
 Recall from :ref:`man-functions` that a function is an object
 that maps a tuple of arguments to a return value, or throws an exception
-if no appropriate value can be returned. It is very common for the same
+if no appropriate value can be returned. It is common for the same
 conceptual function or operation to be implemented quite differently for
 different types of arguments: adding two integers is very different from
 adding two floating-point numbers, both of which are distinct from
@@ -49,7 +49,7 @@ argument more than any of the others: does the addition operation in
 ``x + y`` belong to ``x`` any more than it does to ``y``? The
 implementation of a mathematical operator generally depends on the types
 of all of its arguments. Even beyond mathematical operations, however,
-multiple dispatch ends up being a very powerful and convenient paradigm
+multiple dispatch ends up being a powerful and convenient paradigm
 for structuring and organizing programs.
 
 .. [#] In C++ or Java, for example, in a method call like
