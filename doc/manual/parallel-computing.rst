@@ -11,7 +11,7 @@ There are two major factors that influence performance: the speed of the
 CPUs themselves, and the speed of their access to memory. In a cluster,
 it's fairly obvious that a given CPU will have fastest access to the RAM
 within the same computer (node). Perhaps more surprisingly, similar
-issues are very relevant on a typical multicore laptop, due to
+issues are relevant on a typical multicore laptop, due to
 differences in the speed of main memory and the
 `cache <http://www.akkadia.org/drepper/cpumemory.pdf>`_. Consequently, a
 good multiprocessing environment should allow control over the
@@ -211,7 +211,7 @@ the first.
 
 In this toy example, the two methods are easy to distinguish and choose
 from. However, in a real program designing data movement might require
-more thought and very likely some measurement. For example, if the first
+more thought and likely some measurement. For example, if the first
 process needs matrix ``A`` then the first method might be better. Or,
 if computing ``A`` is expensive and only the current process has it,
 then moving it to another process might be unavoidable. Or, if the
