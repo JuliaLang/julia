@@ -378,7 +378,7 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 function methodswith(io::IO, t::Type, m::Module, showparents::Bool)
     for nm in names(m)
         try
-           mt = eval(nm)
+           mt = eval(m, nm)
            d = mt.env.defs
            while !is(d,())
                if any(map(x -> x == t || (showparents && t <: x && x != Any && x != ANY && !isa(x, TypeVar)), d.sig))
