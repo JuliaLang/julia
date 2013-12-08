@@ -894,6 +894,12 @@ void jl_init_serializer(void);
 
 void jl_save_system_image(char *fname);
 void jl_restore_system_image(char *fname, int build_mode);
+ios_t *jl_save_file_cache_init(ios_t *f, char *fname, htable_t *_backref_table);
+void jl_save_file_cache(ios_t *f, jl_value_t *form, htable_t *_backref_table);
+void jl_save_file_cache_fini(ios_t *f, htable_t *_backref_table);
+ios_t *jl_load_file_cache_init(ios_t *f, char *fname, htable_t *_backref_table);
+jl_value_t *jl_load_file_cache(ios_t *f, htable_t *_backref_table);
+void jl_load_file_cache_fini(ios_t *f, htable_t *_backref_table);
 void jl_dump_bitcode(char *fname);
 void jl_set_imaging_mode(int stat);
 int32_t jl_get_llvm_gv(jl_value_t *p);
@@ -1100,6 +1106,10 @@ extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
 
 #define JL_GC_PUSH4(arg1, arg2, arg3, arg4)                               \
   void *__gc_stkf[] = {(void*)9, jl_pgcstack, arg1, arg2, arg3, arg4};    \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSH5(arg1, arg2, arg3, arg4, arg5)                               \
+  void *__gc_stkf[] = {(void*)11, jl_pgcstack, arg1, arg2, arg3, arg4, arg5};    \
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 #define JL_GC_PUSHARGS(rts_var,n)                               \

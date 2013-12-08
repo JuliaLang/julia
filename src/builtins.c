@@ -1129,6 +1129,8 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         else {
             n += JL_PRINTF(out, "(?)");
         }
+        JL_PRINTF(out, " -> ");
+        jl_static_show(out, jl_is_array(li->ast) ? jl_uncompress_ast(li, li->ast) : li->ast);
     }
     else if (jl_is_tuple(v)) {
         jl_tuple_t *t = (jl_tuple_t*)v;

@@ -441,39 +441,68 @@ jl_value_t *jl_toplevel_eval(jl_value_t *v)
 jl_value_t *jl_parse_eval_all(char *fname)
 {
     //jl_printf(JL_STDERR, "***** loading %s\n", fname);
-    int last_lineno = jl_lineno;
-    jl_lineno=0;
-    jl_value_t *fn=NULL, *ln=NULL, *form=NULL, *result=jl_nothing;
-    JL_GC_PUSH4(&fn, &ln, &form, &result);
-    JL_TRY {
-        // handle syntax error
-        while (1) {
-            form = jl_parse_next();
-            if (form == NULL)
-                break;
-            if (jl_is_expr(form)) {
-                if (((jl_expr_t*)form)->head == jl_continue_sym) {
-                    jl_errorf("syntax: %s", jl_string_data(jl_exprarg(form,0)));
+    char *cache_fname = alloca(strlen(fname)+2);
+    sprintf(cache_fname, "%sc", fname);
+    htable_t backref_table;
+    ios_t ios_f;
+    ios_t *f = jl_load_file_cache_init(&ios_f, cache_fname, &backref_table);
+    if (!f) {
+        f = jl_save_file_cache_init(&ios_f, cache_fname, &backref_table);
+        int last_lineno = jl_lineno;
+        jl_lineno=0;
+        jl_value_t *fn=NULL, *ln=NULL, *form=NULL, *result=jl_nothing;
+        JL_GC_PUSH4(&fn, &ln, &form, &result);
+        JL_TRY {
+            // handle syntax error
+            while (1) {
+                form = jl_parse_next();
+                if (form == NULL)
+                    break;
+                if (jl_is_expr(form)) {
+                    if (((jl_expr_t*)form)->head == jl_continue_sym) {
+                        jl_errorf("syntax: %s", jl_string_data(jl_exprarg(form,0)));
+                    }
+                    if (((jl_expr_t*)form)->head == error_sym) {
+                        jl_interpret_toplevel_expr(form);
+                        assert(0);
+                    }
                 }
-                if (((jl_expr_t*)form)->head == error_sym) {
-                    jl_interpret_toplevel_expr(form);
-                }
+                if (f) jl_save_file_cache(f, form, &backref_table);
+                result = jl_toplevel_eval_flex(form, 1);
             }
-            result = jl_toplevel_eval_flex(form, 1);
         }
-    }
-    JL_CATCH {
+        JL_CATCH {
+            jl_stop_parsing();
+            if (f) jl_save_file_cache_fini(f, &backref_table);
+            fn = jl_pchar_to_string(fname, strlen(fname));
+            ln = jl_box_long(jl_lineno);
+            jl_lineno = last_lineno;
+            jl_rethrow_other(jl_new_struct(jl_loaderror_type, fn, ln,
+                                           jl_exception_in_transit));
+        }
         jl_stop_parsing();
-        fn = jl_pchar_to_string(fname, strlen(fname));
-        ln = jl_box_long(jl_lineno);
         jl_lineno = last_lineno;
-        jl_rethrow_other(jl_new_struct(jl_loaderror_type, fn, ln,
-                                       jl_exception_in_transit));
+        if (f) jl_save_file_cache_fini(f, &backref_table);
+        JL_GC_POP();
+        return result;
     }
-    jl_stop_parsing();
-    jl_lineno = last_lineno;
-    JL_GC_POP();
-    return result;
+    else {
+        jl_stop_parsing();
+        jl_value_t *form=NULL, *result=jl_nothing;
+        JL_GC_PUSH2(&form, &result);
+        int np = jl_gc_n_preserved_values();
+        form = jl_load_file_cache(f, &backref_table);
+        while (form != NULL) {
+            result = jl_toplevel_eval_flex(form, 1);
+            form = jl_load_file_cache(f, &backref_table);
+        }
+        while (jl_gc_n_preserved_values() > np) {
+            jl_gc_unpreserve();
+        }
+        JL_GC_POP();
+        jl_load_file_cache_fini(f, &backref_table);
+        return result;
+    }
 }
 
 jl_value_t *jl_load(const char *fname)
