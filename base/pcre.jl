@@ -46,7 +46,7 @@ const EXECUTE_MASK      =
 const OPTIONS_MASK = COMPILE_MASK | EXECUTE_MASK
 
 function info{T}(
-    regex::Union(Ptr{Void},Vector{Uint8}),
+    regex::Ptr{Void},
     extra::Ptr{Void}, what::Integer, ::Type{T}
 )
     buf = Array(Uint8,sizeof(T))
@@ -77,21 +77,18 @@ end
 function compile(pattern::String, options::Integer)
     errstr = Array(Ptr{Uint8},1)
     erroff = Array(Int32,1)
-    re_ptr = (()->ccall((:pcre_compile, :libpcre), Ptr{Void},
-                        (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
-                        pattern, options, errstr, erroff, C_NULL))()
+    re_ptr = ccall((:pcre_compile, :libpcre), Ptr{Void},
+                    (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
+                    pattern, options, errstr, erroff, C_NULL)
     if re_ptr == C_NULL
         error("$(bytestring(errstr[1]))",
               " at position $(erroff[1]+1)",
               " in $(repr(pattern))")
     end
-    size = info(re_ptr, C_NULL, INFO_SIZE, Int32)
-    regex = Array(Uint8,size)
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), regex, re_ptr, size)
-    regex
+    re_ptr
 end
 
-function study(regex::Array{Uint8}, options::Integer)
+function study(regex::Ptr{Void}, options::Integer)
     # NOTE: options should always be zero in current PCRE
     errstr = Array(Ptr{Uint8},1)
     extra = ccall((:pcre_study, :libpcre), Ptr{Void},
@@ -102,16 +99,18 @@ function study(regex::Array{Uint8}, options::Integer)
     end
     extra
 end
-study(re::Array{Uint8}) = study(re, int32(0))
+study(re::Ptr{Void}) = study(re, int32(0))
 
 free_study(extra::Ptr{Void}) =
     ccall((:pcre_free_study, :libpcre), Void, (Ptr{Void},), extra)
+free(regex::Ptr{Void}) =
+    ccall((:pcre_free, :libpcre), Void, (Ptr{Void},), regex)
 
-exec(regex::Array{Uint8}, extra::Ptr{Void}, str::SubString, offset::Integer, options::Integer, cap::Bool) =
+exec(regex::Ptr{Void}, extra::Ptr{Void}, str::SubString, offset::Integer, options::Integer, cap::Bool) =
     exec(regex, extra, str.string, str.offset, offset, sizeof(str), options, cap)
-exec(regex::Array{Uint8}, extra::Ptr{Void}, str::ByteString, offset::Integer, options::Integer, cap::Bool) =
+exec(regex::Ptr{Void}, extra::Ptr{Void}, str::ByteString, offset::Integer, options::Integer, cap::Bool) =
     exec(regex, extra, str, 0, offset, sizeof(str), options, cap)
-function exec(regex::Array{Uint8}, extra::Ptr{Void},
+function exec(regex::Ptr{Void}, extra::Ptr{Void},
               str::ByteString, shift::Integer, offset::Integer, len::Integer, options::Integer, cap::Bool)
     if offset < 0 || len < offset || len+shift > sizeof(str)
         error(BoundsError)
@@ -127,16 +126,6 @@ function exec(regex::Array{Uint8}, extra::Ptr{Void},
         error("error $n")
     end
     cap ? ((n > -1 ? ovec[1:2(ncap+1)] : Array(Int32,0)), ncap) : n > -1
-end
-
-function check_pcre()
-    libver = bytestring(ccall((:pcre_version, :libpcre), Ptr{Uint8}, ()))
-    if VERSION != libver
-        println("ERROR: PCRE v\"$libver\" was loaded, but was compiled with v\"$VERSION\"")
-        println("Please ensure the libpcre that Julia's stdlib was compiled against is loaded.")
-        println("Quitting.")
-        quit()
-    end
 end
 
 end # module
