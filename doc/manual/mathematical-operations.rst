@@ -248,7 +248,7 @@ Function          Tests if
     false
 
 Mixed-type comparisons between signed integers, unsigned integers, and
-floats can be very tricky. A great deal of care has been taken to ensure
+floats can be tricky. A great deal of care has been taken to ensure
 that Julia does them correctly.
 
 Chaining comparisons

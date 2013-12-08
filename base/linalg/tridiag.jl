@@ -226,10 +226,13 @@ function solve!{T<:BlasFloat}(x::AbstractArray{T}, xrng::Ranges{Int}, M::Tridiag
         x[ix] = xlast
         ix -= xstride
     end
-    x
+    nothing
 end
 
-solve!(x::StridedVector, M::Tridiagonal, rhs::StridedVector) = solve!(x, 1:length(x), M, rhs, 1:length(rhs))
+function solve!(x::StridedVector, M::Tridiagonal, rhs::StridedVector)
+    solve!(x, 1:length(x), M, rhs, 1:length(rhs))
+    x
+end
 solve{TM<:BlasFloat,TB<:BlasFloat}(M::Tridiagonal{TM}, B::StridedVecOrMat{TB}) = solve!(zeros(typeof(one(TM)/one(TB)), size(B)), M, B)
 solve(M::Tridiagonal, B::StridedVecOrMat) = solve(float(M), float(B))
 function solve!(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)

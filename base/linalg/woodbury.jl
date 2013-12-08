@@ -90,9 +90,13 @@ function solve!(x::AbstractArray, xrng::Ranges{Int}, W::Woodbury, rhs::AbstractA
         x[indx] = W.tmpN1[i] - W.tmpN2[i]
         indx += xinc
     end
+    nothing
 end
 
-solve!(x::AbstractVector, W::Woodbury, rhs::AbstractVector) = solve!(x, 1:length(x), W, rhs, 1:length(rhs))
+function solve!(x::AbstractVector, W::Woodbury, rhs::AbstractVector)
+    solve!(x, 1:length(x), W, rhs, 1:length(rhs))
+    x
+end
 solve(W::Woodbury, rhs::AbstractVector) = solve!(similar(rhs), W, rhs)
 solve(W::Woodbury, B::StridedMatrix)=solve!(similar(B), W, B)
 function solve!(X::StridedMatrix, W::Woodbury, B::StridedMatrix)

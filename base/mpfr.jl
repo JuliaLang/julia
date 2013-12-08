@@ -19,7 +19,8 @@ import
         gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        serialize, deserialize, inf, nan, hash, cbrt
+        serialize, deserialize, inf, nan, hash, cbrt, typemax, typemin,
+        realmin, realmax
 
 import Base.Math.lgamma_r
 
@@ -666,6 +667,9 @@ isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
 @eval inf(::Type{BigFloat}) = $(BigFloat(Inf))
 @eval nan(::Type{BigFloat}) = $(BigFloat(NaN))
 
+typemax(::Type{BigFloat}) = inf(BigFloat)
+@eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
+
 function nextfloat(x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32),
@@ -683,6 +687,9 @@ function prevfloat(x::BigFloat)
 end
 
 eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
+
+realmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
+realmax(::Type{BigFloat}) = prevfloat(inf(BigFloat))
 
 function with_bigfloat_precision(f::Function, precision::Integer)
     old_precision = get_bigfloat_precision()

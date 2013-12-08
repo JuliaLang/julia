@@ -13,6 +13,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
 {
     jl_module_t *m = (jl_module_t*)allocobj(sizeof(jl_module_t));
     m->type = (jl_value_t*)jl_module_type;
+    assert(jl_is_symbol(name));
     m->name = name;
     m->constant_table = NULL;
     htable_new(&m->bindings, 0);
