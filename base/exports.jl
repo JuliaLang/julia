@@ -25,6 +25,7 @@ export
     BitMatrix,
     BitVector,
     BunchKaufman,
+    CFILE,
     Cholesky,
     CholeskyPivoted,
     Cmd,
