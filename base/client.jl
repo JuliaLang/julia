@@ -355,8 +355,6 @@ function _start()
     fdwatcher_reinit()
     # Initialize RNG
     Random.librandom_init()
-    # Ensure PCRE is compatible with the compiled reg-exes
-    PCRE.check_pcre()
     Sys.init()
     global const CPU_CORES = Sys.CPU_CORES
     if CPU_CORES > 8 && !("OPENBLAS_NUM_THREADS" in keys(ENV)) && !("OMP_NUM_THREADS" in keys(ENV))
