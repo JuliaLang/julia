@@ -1419,8 +1419,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 Type *ety = NULL;
                 if (tpl != NULL)
                     ety = jl_llvmtuple_eltype(tpl->getType(),tt,i);
-                if(tpl == NULL || ety == T_void)
-                {
+                if (tpl == NULL || ety == T_void) {
                     emit_expr(args[i+1],ctx); //for side effects (if any)
                     continue;
                 }
@@ -1766,7 +1765,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         for(size_t i=0; i < nargs; i++) {
             Type *at = cft->getParamType(idx);
             Type *et = julia_type_to_llvm(jl_tupleref(f->linfo->specTypes,i));
-            if(et == T_void) {
+            if (et == T_void) {
                 // Still emit the expression in case it has side effects
                 emit_expr(args[i+1], ctx);
                 continue;
@@ -1921,7 +1920,7 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool is
         }
         jl_binding_t *jbp=NULL;
         Value *bp = var_binding_pointer(sym, &jbp, false, ctx);
-        if(bp == NULL)
+        if (bp == NULL)
             return NULL;
         assert(jbp != NULL);
         if (jbp->value != NULL) {
@@ -2277,7 +2276,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                     for(size_t i=0; i < na; i++) {
                         jl_value_t *jtype = jl_tupleref(sty->types,i);
                         Type *fty = julia_type_to_llvm(jtype);
-                        if(fty == T_void)
+                        if (fty == T_void)
                             continue;
                         Value *fval = emit_unbox(fty, emit_unboxed(args[i+1],ctx), jtype);
                         if (fty == T_int1)
@@ -2656,7 +2655,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
                 continue;
             theNewArg = emit_unbox(lty, theArg, ty);
         } 
-        else if(jl_is_tuple(ty)) {
+        else if (jl_is_tuple(ty)) {
             Type *lty = julia_struct_to_llvm(ty);
             if (lty != jl_pvalue_llvmt) {
                 if (lty == T_void)
@@ -3072,7 +3071,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 
     // step 11. check arg count
     if (ctx.linfo->specTypes == NULL) {
-      if (va) {
+        if (va) {
             Value *enough =
                 builder.CreateICmpUGE(argCount,
                                       ConstantInt::get(T_int32, nreq));
@@ -3122,8 +3121,9 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         }
 
         Value *theArg = NULL;
-        if (specsig)
+        if (specsig) {
             theArg = argPtr;
+        }
         else {
             assert(argPtr != NULL);
             theArg = builder.CreateLoad(argPtr, false);
@@ -3133,7 +3133,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         if (lv == NULL) {
             if (ctx.vars[s].isGhost) {
                 ctx.vars[s].passedAs = NULL;
-            } 
+            }
             else {
                 // if this argument hasn't been given space yet, we've decided
                 // to leave it in the input argument array.
@@ -3150,16 +3150,19 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                 }
                 builder.CreateStore(builder.CreateCall(jlbox_func, theArg), lv);
             }
-            else if (dyn_cast<GetElementPtrInst>(lv) != NULL)
+            else if (dyn_cast<GetElementPtrInst>(lv) != NULL) {
                 builder.CreateStore(boxed(theArg,&ctx), lv);
-            else if (dyn_cast<AllocaInst>(lv)->getAllocatedType() == jl_pvalue_llvmt)
+            }
+            else if (dyn_cast<AllocaInst>(lv)->getAllocatedType() == jl_pvalue_llvmt) {
                 builder.CreateStore(theArg,lv);
-            else
+            }
+            else {
                 builder.CreateStore(emit_unbox(dyn_cast<AllocaInst>(lv)->getAllocatedType(),
                                                theArg,
                                                lam->specTypes == NULL ? NULL :
                                                jl_tupleref(lam->specTypes,i)),
                                     lv);
+            }
         }
         // get arrayvar data if applicable
         if (arrayvars.find(s) != arrayvars.end()) {
@@ -3175,11 +3178,10 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         if (!vi.escapes && !vi.isAssigned) {
             ctx.vaStack = true;
         }
-        else if(!vi.isGhost) {
+        else if (!vi.isGhost) {
             // restarg = jl_f_tuple(NULL, &args[nreq], nargs-nreq)
             Value *lv = vi.memvalue;
-            if (dyn_cast<GetElementPtrInst>(lv) != NULL || dyn_cast<AllocaInst>(lv)->getAllocatedType() == jl_pvalue_llvmt)
-            {
+            if (dyn_cast<GetElementPtrInst>(lv) != NULL || dyn_cast<AllocaInst>(lv)->getAllocatedType() == jl_pvalue_llvmt) {
                 Value *restTuple =
                     builder.CreateCall3(jltuple_func, V_null,
                                         builder.CreateGEP(argArray,
@@ -3190,7 +3192,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                     builder.CreateStore(builder.CreateCall(jlbox_func, restTuple), lv);
                 else
                     builder.CreateStore(restTuple, lv);
-            } 
+            }
             else {
                 // TODO: Perhaps allow this in the future, but for now sice varargs are always unspecialized
                 // we don't
