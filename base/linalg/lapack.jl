@@ -3303,4 +3303,18 @@ for (fn, elty) in ((:dtrttf_, :Float64),
         end
     end
 end
+
+#
+# Build-time check if BlasInt is of the correct expected bitsize
+#
+_, _info = potrf!('U', [[1.0, 0.0] [0.0, -1.0]])
+if _info!=2 #mangled info code
+    if _info == 2^33
+        error("""Wrong size of BlasInt for LAPACK: LAPACK was compiled with 32-bit integer support but Julia expects 64-bit integers. Please check the BLAS and LAPACK libraries your system is using or recompile OpenBLAS with the correct USE_BLAS64 settings.""")
+    elseif _info == 0
+        error("""Wrong size of BlasInt for LAPACK: LAPACK was compiled with 64-bit integer support but Julia expects 32-bit integers. Please check the BLAS and LAPACK libraries your system is using or recompile OpenBLAS with the correct USE_BLAS64 settings.""")
+    else
+        error("""Unparseable LAPACK info code: Julia did not understand the error codes used by your LAPACK library. Please check the BLAS and LAPACK libraries your system is using or recompile OpenBLAS.""")
+    end
+end
 end # module
