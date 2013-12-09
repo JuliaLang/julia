@@ -65,6 +65,10 @@ $(BUILD)/share/man/man1/julia.1: doc/man/julia.1 | $(BUILD)/share/julia
 
 $(BUILD)/etc/julia/juliarc.jl: etc/juliarc.jl | $(BUILD)/etc/julia
 	@cp $< $@
+ifeq ($(OS), WINNT)
+	@cat ./contrib/windows/juliarc.jl >> $(BUILD)/etc/julia/juliarc.jl
+$(BUILD)/etc/julia/juliarc.jl: contrib/windows/juliarc.jl
+endif
 
 # use sys.ji if it exists, otherwise run two stages
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%ji: $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%bc
