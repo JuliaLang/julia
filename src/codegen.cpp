@@ -793,7 +793,7 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
             simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
             simple_escape_analysis(jl_exprarg(e,2), esc, ctx);
         }
-        else {
+        else if (e->head != line_sym) {
             size_t elen = jl_array_dim0(e->args);
             for(i=0; i < elen; i++) {
                 simple_escape_analysis(jl_exprarg(e,i), esc, ctx);
