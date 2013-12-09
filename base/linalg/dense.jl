@@ -74,16 +74,6 @@ end
 
 tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
-diff(a::Vector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
-
-function diff(A::Matrix, dim::Integer)
-    if dim == 1
-        [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
-    else
-        [A[i,j+1] - A[i,j] for i=1:size(A,1), j=1:size(A,2)-1]
-    end
-end
-
 function gradient(F::Vector, h::Vector)
     n = length(F)
     g = similar(F)
