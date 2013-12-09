@@ -22,9 +22,11 @@ end
 
 function v2a{n}(size::NTuple{n,Int}, strides::NTuple{n,Int}, o::Int, i::Int)
     i -= 1
-    @inbounds for k = 1:n
-        o += rem(i,size[k])*strides[k]
-        i =  div(i,size[k])
+    p = size[1]
+    o += i*strides[1]
+    @inbounds for k = 2:n
+        o += div(i,p)*(strides[k]-size[k-1]*strides[k-1])
+        p *= size[k]
     end
     return o
 end
