@@ -88,27 +88,21 @@ function power_by_squaring(x, p::Integer)
     elseif p < 0
         throw(DomainError())
     end
-    t = 1
-    while t <= p
-        t *= 2
+    t = trailing_zeros(p) + 1
+    p >>= t
+    while (t -= 1) > 0
+        x *= x
     end
-    t = div(t,2)
-    p -= t
-    a = x
-    while true
-        t = div(t,2)
-        if t > 0
-            x = x*x
-        else
-            break
+    y = x
+    while p > 0
+        t = trailing_zeros(p) + 1
+        p >>= t
+        while (t -= 1) >= 0
+            x *= x
         end
-
-        if p >= t
-            x = x*a
-            p -= t
-        end
+        y *= x
     end
-    return x
+    return y
 end
 
 ^{T<:Integer}(x::T, p::T) = power_by_squaring(x,p)
