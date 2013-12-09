@@ -1593,3 +1593,13 @@ end
 
 @test eps(realmax(Float64)) == 1.99584030953472e292
 @test eps(-realmax(Float64)) == 1.99584030953472e292
+
+# modular multiplicative inverses of odd numbers via exponentiation
+
+for T = (Uint8,Int8,Uint16,Int16,Uint32,Int32,Uint64,Int64,Uint128,Int128)
+    for n = 1:2:1000
+        @test convert(T,n*(n^typemax(T))) == one(T)
+        n = rand(T) | one(T)
+        @test convert(T,n*(n^typemax(T))) == one(T)
+    end
+end
