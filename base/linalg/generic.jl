@@ -23,6 +23,16 @@ tril!(M::AbstractMatrix) = tril!(M,0)
 #diff(a::AbstractVector)
 #diff(a::AbstractMatrix, dim::Integer)
 diff(a::AbstractMatrix) = diff(a, 1)
+diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
+
+function diff(A::AbstractMatrix, dim::Integer)
+    if dim == 1
+        [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
+    else
+        [A[i,j+1] - A[i,j] for i=1:size(A,1), j=1:size(A,2)-1]
+    end
+end
+
 
 gradient(F::AbstractVector) = gradient(F, [1:length(F)])
 gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F))])
