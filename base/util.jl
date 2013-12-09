@@ -324,6 +324,21 @@ function check_blas()
             quit()
         end
     end
+
+    #
+    # Check if BlasInt is the expected bitsize, by triggering an error
+    #
+    (_, info) = LinAlg.LAPACK.potrf!('U', [1.0 0.0; 0.0 -1.0])
+    if info != 2 # mangled info code
+        if info == 2^33
+            error("""BLAS and LAPACK are compiled with 32-bit integer support, but Julia expects 64-bit integers. Please build Julia with USE_BLAS64=0.""")
+        elseif info == 0
+            error("""BLAS and LAPACK are compiled with 64-bit integer support but Julia expects 32-bit integers. Please build Julia with USE_BLAS64=1.""")
+        else
+            error("""The LAPACK library produced an undefined error code. Please verify the installation of BLAS and LAPACK.""")
+        end
+    end
+
 end
 
 # system information
