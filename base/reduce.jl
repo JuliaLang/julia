@@ -94,6 +94,46 @@ function reduce(op::Function, v0, itr)
     return v
 end
 
+# folds
+
+function foldl(op::Function, itr)
+    v = itr[1]
+    for x in itr[2:end]
+        v = op(v,x)
+    end
+    return v
+end
+
+function foldl(op::Function, v0, itr)
+    v = v0
+    for x in itr
+        v = op(v,x)
+    end
+    return v
+end
+
+function foldr(op::Function, itr)
+    s = length(itr)
+    v = itr[s]
+    while s > 1
+        s = s - 1
+        x = itr[s]
+        v = op(x,v)
+    end
+    return v
+end
+
+function foldr(op::Function, v0, itr)
+    s = length(itr)
+    v = v0
+    while s > 0
+        x = itr[s]
+        v = op(x,v)
+        s = s - 1
+    end
+    return v
+end
+
 ##
 # generic map on any iterator
 function map(f::Callable, iters...)

@@ -492,12 +492,21 @@ Iterable Collections
    The associativity of the reduction is implementation-dependent. This means
    that you can't use non-associative operations like ``-`` because it is
    undefined whether ``reduce(-,[1,2,3])`` should be evaluated as ``(1-2)-3``
-   or ``1-(2-3)``. This is because it is trivial to implement a loop to ensure
-   the right associativity and there are good reasons to use a different grouping.
-   Some operations accumulate error, and paralellism will also be easier if the
-   reduction can be excecuted in groups. Future versions of Julia might change
-   the algorithm. Note that the elements are not reordered if you use a ordered
+   or ``1-(2-3)``. Use ``foldl`` or ``foldr`` instead for guaranteed left or
+   right associativity.
+
+   Some operations accumulate error, and parallelism will also be easier if the
+   reduction can be executed in groups. Future versions of Julia might change
+   the algorithm. Note that the elements are not reordered if you use an ordered
    collection.
+
+.. function:: foldl(op, v0, itr)
+
+   Like ``reduce``, but with guaranteed left associativity. 
+
+.. function:: foldr(op, v0, itr)
+
+   Like ``reduce``, but with guaranteed right associativity. 
 
 .. function:: maximum(itr)
 
