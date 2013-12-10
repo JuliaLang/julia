@@ -696,6 +696,8 @@ export
     endof,
     filter!,
     filter,
+    foldl,
+    foldr,
     get,
     get!,
     getindex,
