@@ -75,6 +75,9 @@ clean:
 	rm -f pcre_h.jl
 	rm -f errno_h.jl
 	rm -f build_h.jl
+	rm -f build_h.jl.phony
 	rm -f fenv_constants.jl
 	rm -f uv_constants.jl
 	rm -f file_constants.jl
+	rm -f version_git.jl
+	rm -f version_git.jl.phony
