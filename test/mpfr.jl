@@ -340,6 +340,7 @@ end
 # eps
 x = eps(BigFloat)
 @test BigFloat(1) + x == BigFloat(1) + prevfloat(x)
+@test eps(BigFloat) == eps(BigFloat(1))
 
 # realmin/realmax
 x = realmin(BigFloat)
