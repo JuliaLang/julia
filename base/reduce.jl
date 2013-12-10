@@ -94,44 +94,33 @@ function reduce(op::Function, v0, itr)
     return v
 end
 
-# folds
+# left-associative and right-associative folds
 
+function foldl(op::Function, v0, itr, i=start(itr))
+    v = v0
+    while !done(itr,i)
+        x, i = next(itr,i)
+        v = op(v,x)
+    end
+    return v
+end
 function foldl(op::Function, itr)
-    v = itr[1]
-    for x in itr[2:end]
-        v = op(v,x)
-    end
-    return v
+    v0, i = next(itr,start(itr))
+    foldl(op, v0, itr, i)
 end
 
-function foldl(op::Function, v0, itr)
+function foldr(op::Function, v0, itr, i=endof(itr))
     v = v0
-    for x in itr
-        v = op(v,x)
+    while i > 0
+        x = itr[i]
+        v = op(x,v)
+        i = i - 1
     end
     return v
 end
-
 function foldr(op::Function, itr)
-    s = length(itr)
-    v = itr[s]
-    while s > 1
-        s = s - 1
-        x = itr[s]
-        v = op(x,v)
-    end
-    return v
-end
-
-function foldr(op::Function, v0, itr)
-    s = length(itr)
-    v = v0
-    while s > 0
-        x = itr[s]
-        v = op(x,v)
-        s = s - 1
-    end
-    return v
+    i = endof(itr)
+    foldr(op, itr[i], itr, i-1)
 end
 
 ##
