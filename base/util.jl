@@ -345,8 +345,8 @@ end
 
 function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "Julia Version $VERSION")
-    if !isempty(BUILD_INFO.commit_short)
-      println(io,             "Commit $(BUILD_INFO.commit_short) ($(BUILD_INFO.date_string))")
+    if !isempty(GIT_VERSION_INFO.commit_short)
+      println(io,             "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
     end
     println(io,             "Platform Info:")
     println(io,             "  System: ", Sys.OS_NAME, " (", Sys.MACHINE, ")")

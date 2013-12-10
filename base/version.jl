@@ -182,27 +182,27 @@ end
 
 begin
 # Include build number if we've got at least some distance from a tag (e.g. a release)
-build_number = BUILD_INFO.build_number != 0 ? "+$(BUILD_INFO.build_number)" : ""
 try
-    global const VERSION = convert(VersionNumber, "$(BUILD_INFO.version_string)$(build_number)")
+    build_number = GIT_VERSION_INFO.build_number != 0 ? "+$(GIT_VERSION_INFO.build_number)" : ""
+    global const VERSION = convert(VersionNumber, "$(VERSION_STRING)$(build_number)")
 catch e
     println("while creating Base.VERSION, ignoring error $e")
     global const VERSION = VersionNumber(0)
 end
 
-if BUILD_INFO.tagged_commit
-    const commit_string = BUILD_INFO.TAGGED_RELEASE_BANNER
-elseif BUILD_INFO.commit == ""
+if GIT_VERSION_INFO.tagged_commit
+    const commit_string = TAGGED_RELEASE_BANNER
+elseif GIT_VERSION_INFO.commit == ""
     const commit_string = ""
 else
-    local days = int(floor((ccall(:clock_now, Float64, ()) - BUILD_INFO.fork_master_timestamp) / (60 * 60 * 24)))
-    if BUILD_INFO.fork_master_distance == 0
-        const commit_string = "Commit $(BUILD_INFO.commit_short) ($(days) days old master)"
+    local days = int(floor((ccall(:clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
+    if GIT_VERSION_INFO.fork_master_distance == 0
+        const commit_string = "Commit $(GIT_VERSION_INFO.commit_short) ($(days) days old master)"
     else
-        const commit_string = "$(BUILD_INFO.branch)/$(BUILD_INFO.commit_short) (fork: $(BUILD_INFO.fork_master_distance) commits, $(days) days)"
+        const commit_string = "$(GIT_VERSION_INFO.branch)/$(GIT_VERSION_INFO.commit_short) (fork: $(GIT_VERSION_INFO.fork_master_distance) commits, $(days) days)"
     end
 end
-commit_date = BUILD_INFO.date_string != "" ? " ($(BUILD_INFO.date_string))": ""
+commit_date = GIT_VERSION_INFO.date_string != "" ? " ($(GIT_VERSION_INFO.date_string))": ""
 
 const banner_plain =
 """
