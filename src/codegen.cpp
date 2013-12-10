@@ -221,7 +221,6 @@ static Function *box32_func;
 static Function *box64_func;
 static Function *jlputs_func;
 static Function *jldlsym_func;
-static Function *jldlopen_func;
 #ifdef _OS_WINDOWS_
 static Function *resetstkoflw_func;
 #endif
@@ -3715,23 +3714,15 @@ static void init_julia_llvm_env(Module *m)
                          "jl_puts", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlputs_func, (void*)&jl_puts);
 
-    std::vector<Type *> dlopen_args(0);
-    dlopen_args.push_back(T_pint8);
-    dlopen_args.push_back(T_int32);
-    jldlopen_func =
-        Function::Create(FunctionType::get(T_pint8, dlopen_args, false),
-                         Function::ExternalLinkage,
-                         "jl_load_dynamic_library", jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(jldlopen_func, (void*)&jl_load_dynamic_library);
-
     std::vector<Type *> dlsym_args(0);
     dlsym_args.push_back(T_pint8);
     dlsym_args.push_back(T_pint8);
+    dlsym_args.push_back(PointerType::get(T_pint8,0));
     jldlsym_func =
         Function::Create(FunctionType::get(T_pint8, dlsym_args, false),
                          Function::ExternalLinkage,
-                         "jl_dlsym_e", jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(jldlsym_func, (void*)&jl_dlsym_e);
+                         "jl_load_and_lookup", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jldlsym_func, (void*)&jl_load_and_lookup);
 
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);
