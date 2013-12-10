@@ -348,6 +348,9 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     if !isempty(BUILD_INFO.commit_short)
       println(io,             "Commit $(BUILD_INFO.commit_short) ($(BUILD_INFO.date_string))")
     end
+    if ccall(:jl_is_debugbuild, Bool, ())
+        println(io, "DEBUG build")
+    end
     println(io,             "Platform Info:")
     println(io,             "  System: ", Sys.OS_NAME, " (", Sys.MACHINE, ")")
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
@@ -365,6 +368,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         print_matrix(io,    Sys.loadavg()')
         println(io          )
         Sys.cpu_summary(io)
+        println(io          )
     end
     if Base.libblas_name == "libopenblas" || blas_vendor() == :openblas
         openblas_config = openblas_get_config()
