@@ -112,7 +112,7 @@ for i = 1:5
 
     a = speye(5) + triu(0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2))
     b = randn(5)
-    @test (maximum(abs(a'b - full(a)'b)) < 100*eps())
+    @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
     @test (maximum(abs(a'b - full(a)'b)) < 100*eps())
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
     @test (maximum(abs(a'\b - full(a')\b)) < 1000*eps())
