@@ -24,7 +24,53 @@ function A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number,
     end
     y
 end
-*{TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx}) = A_mul_B!(1, A, x, 0, zeros(promote_type(TA,Tx), A.m))
+function *{TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx})
+    T = promote_type(TA,Tx)
+    A_mul_B!(one(T), A, x, zero(T), zeros(T, A.m))
+end
+
+function Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number, y::AbstractVector)
+    A.n == length(y) || throw(DimensionMismatch(""))
+    A.m == length(x) || throw(DimensionMismatch(""))
+    nzv = A.nzval
+    rv = A.rowval
+    @inbounds begin
+        for i = 1 : A.n
+            y[i] *= β
+            tmp = zero(eltype(y))
+            for j = A.colptr[i] : (A.colptr[i+1]-1)
+                tmp += conj(nzv[j])*x[rv[j]]
+            end
+            y[i] += α*tmp
+        end
+    end
+    y
+end
+function At_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number, y::AbstractVector)
+    A.n == length(y) || throw(DimensionMismatch(""))
+    A.m == length(x) || throw(DimensionMismatch(""))
+    nzv = A.nzval
+    rv = A.rowval
+    @inbounds begin
+        for i = 1 : A.n
+            y[i] *= β
+            tmp = zero(eltype(y))
+            for j = A.colptr[i] : (A.colptr[i+1]-1)
+                tmp += nzv[j]*x[rv[j]]
+            end
+            y[i] += α*tmp
+        end
+    end
+    y
+end
+function Ac_mul_B{TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx})
+    T = promote_type(TA, Tx)
+    Ac_mul_B!(one(T), A, x, zero(T), zeros(T, A.n))
+end
+function At_mul_B{TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx})
+    T = promote_type(TA, Tx)
+    At_mul_B!(one(T), A, x, zero(T), zeros(T, A.n))
+end
 
 *(X::BitArray{1}, A::SparseMatrixCSC) = invoke(*, (AbstractVector, SparseMatrixCSC), X, A)
 # In vector-matrix multiplication, the correct orientation of the vector is assumed.
