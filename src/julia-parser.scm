@@ -271,7 +271,7 @@
 	   (n (string-to-number
 	       ;; for an unsigned literal starting with -, remove the - and
 	       ;; parse instead as a call to unary -
-	       (if (and neg (not (= r 10)))
+	       (if (and neg (not (= r 10)) (not is-hex-float-literal))
 		   (string.sub s 1)
 		   s)
 	       r)))
