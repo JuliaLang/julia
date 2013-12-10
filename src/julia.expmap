@@ -190,6 +190,7 @@
     jl_listen;
     jl_load_;
     jl_load;
+    jl_load_and_lookup;
     jl_load_dynamic_library;
     jl_load_dynamic_library_e;
     jl_load_file_string;
