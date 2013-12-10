@@ -436,7 +436,7 @@ function show(io::IO, m::Method)
     end
 end
 
-function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header=true)
+function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=true)
     name = mt.name
     n = length(mt)
     if header
