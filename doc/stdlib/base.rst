@@ -480,11 +480,18 @@ Iterable Collections
 
 .. function:: reduce(op, v0, itr)
 
-   Reduce the given collection with the given operator, i.e. accumulate ``v = op(v,elt)`` for each element, where ``v`` starts as ``v0``. Reductions for certain commonly-used operators are available in a more convenient 1-argument form: ``maximum(itr)``, ``minimum(itr)``, ``sum(itr)``, ``prod(itr)``, ``any(itr)``, ``all(itr)``.
+   Reduce the given collection ``ìtr`` with the given binary operator. Reductions
+   for certain commonly-used operators are available in a more convenient
+   1-argument form: ``maximum(itr)``, ``minimum(itr)``, ``sum(itr)``,
+   ``prod(itr)``, ``any(itr)``, ``all(itr)``.
 
-   The associativity of the reduction is implementation-dependent; if you
-   need a particular associativity, e.g. left-to-right, you should write
-   your own loop.
+   The associativity of the reduction is implementation-dependent. This means
+   that you can't use non associative operations like ``-`` because it is
+   undefined whether ``reduce(-,[1,2,3])`` should be evaluated as ``(1-2)-3``
+   or ``1-(2-3)``. This is because errors tend to accumulate, and it is often
+   better do reduction in groups e.g ```(a+b+...)+(c+d+...)`` if the chain is
+   long. Future versions of Julia might change the algorithm. Note that the
+   elements are not reordered if you use a ordered collection.
 
 .. function:: maximum(itr)
 
