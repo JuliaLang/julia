@@ -1,6 +1,6 @@
 ## reductions ##
 
-function reduce(op::Function, itr) # this is a left fold
+function reduce(op::Callable, itr) # this is a left fold
     if is(op,+)
         return sum(itr)
     elseif is(op,*)
@@ -74,7 +74,7 @@ function prod(itr)
     return v
 end
 
-function reduce(op::Function, v0, itr)
+function reduce(op::Callable, v0, itr)
     v = v0
     if is(op,+)
         for x in itr
@@ -96,7 +96,7 @@ end
 
 # left-associative and right-associative folds
 
-function foldl(op::Function, v0, itr, i=start(itr))
+function foldl(op::Callable, v0, itr, i=start(itr))
     v = v0
     while !done(itr,i)
         x, i = next(itr,i)
@@ -104,12 +104,12 @@ function foldl(op::Function, v0, itr, i=start(itr))
     end
     return v
 end
-function foldl(op::Function, itr)
+function foldl(op::Callable, itr)
     v0, i = next(itr,start(itr))
     foldl(op, v0, itr, i)
 end
 
-function foldr(op::Function, v0, itr, i=endof(itr))
+function foldr(op::Callable, v0, itr, i=endof(itr))
     v = v0
     while i > 0
         x = itr[i]
@@ -118,7 +118,7 @@ function foldr(op::Function, v0, itr, i=endof(itr))
     end
     return v
 end
-function foldr(op::Function, itr)
+function foldr(op::Callable, itr)
     i = endof(itr)
     foldr(op, itr[i], itr, i-1)
 end
@@ -146,7 +146,7 @@ function map(f::Callable, iters...)
     result
 end
 
-function mapreduce(f::Callable, op::Function, itr)
+function mapreduce(f::Callable, op::Callable, itr)
     s = start(itr)
     if done(itr, s)
         return op()  # empty collection
@@ -160,7 +160,7 @@ function mapreduce(f::Callable, op::Function, itr)
     return v
 end
 
-function mapreduce(f::Callable, op::Function, v0, itr)
+function mapreduce(f::Callable, op::Callable, v0, itr)
     v = v0
     for x in itr
         v = op(v,f(x))
@@ -170,7 +170,7 @@ end
 
 # mapreduce for random-access arrays, using pairwise recursive reduction
 # for improved accuracy (see sum_pairwise)
-function mr_pairwise(f::Callable, op::Function, A::AbstractArray, i1,n)
+function mr_pairwise(f::Callable, op::Callable, A::AbstractArray, i1,n)
     if n < 128
         @inbounds v = f(A[i1])
         for i = i1+1:i1+n-1
@@ -182,16 +182,16 @@ function mr_pairwise(f::Callable, op::Function, A::AbstractArray, i1,n)
         return op(mr_pairwise(f,op,A, i1,n2), mr_pairwise(f,op,A, i1+n2,n-n2))
     end
 end
-function mapreduce(f::Callable, op::Function, A::AbstractArray)
+function mapreduce(f::Callable, op::Callable, A::AbstractArray)
     n = length(A)
     n == 0 ? op() : mr_pairwise(f,op,A, 1,n)
 end
-function mapreduce(f::Callable, op::Function, v0, A::AbstractArray)
+function mapreduce(f::Callable, op::Callable, v0, A::AbstractArray)
     n = length(A)
     n == 0 ? v0 : op(v0, mr_pairwise(f,op,A, 1,n))
 end
 
-function r_pairwise(op::Function, A::AbstractArray, i1,n)
+function r_pairwise(op::Callable, A::AbstractArray, i1,n)
     if n < 128
         @inbounds v = A[i1]
         for i = i1+1:i1+n-1
@@ -203,11 +203,11 @@ function r_pairwise(op::Function, A::AbstractArray, i1,n)
         return op(r_pairwise(op,A, i1,n2), r_pairwise(op,A, i1+n2,n-n2))
     end
 end
-function reduce(op::Function, A::AbstractArray)
+function reduce(op::Callable, A::AbstractArray)
     n = length(A)
     n == 0 ? op() : r_pairwise(op,A, 1,n)
 end
-function reduce(op::Function, v0, A::AbstractArray)
+function reduce(op::Callable, v0, A::AbstractArray)
     n = length(A)
     n == 0 ? v0 : op(v0, r_pairwise(op,A, 1,n))
 end
