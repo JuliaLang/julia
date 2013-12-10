@@ -97,10 +97,10 @@ last{T}(r::Range{T})  = oftype(T, r.start + (r.len-1)*r.step)
 step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
 
-minimum(r::Range1) = (isempty(r)&&error("range must be non-empty")) || first(r)
-maximum(r::Range1) = (isempty(r)&&error("range must be non-empty")) || last(r)
-minimum(r::Ranges) = (isempty(r)&&error("range must be non-empty")) || (step(r) > 0 ? first(r) :  last(r))
-maximum(r::Ranges) = (isempty(r)&&error("range must be non-empty")) || (step(r) > 0 ?  last(r) : first(r))
+minimum(r::Range1) = isempty(r) ? error("range must be non-empty") : first(r)
+maximum(r::Range1) = isempty(r) ? error("range must be non-empty") : last(r)
+minimum(r::Ranges) = isempty(r) ? error("range must be non-empty") : step(r) > 0 ? first(r) : last(r)
+maximum(r::Ranges) = isempty(r) ? error("range must be non-empty") : step(r) > 0 ? last(r) : first(r)
 
 ctranspose(r::Ranges) = [x for _=1, x=r]
 transpose(r::Ranges) = r'
