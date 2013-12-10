@@ -287,7 +287,7 @@ prevfloat(x::FloatingPoint) = nextfloat(x,-1)
     realmin() = realmin(Float64)
     realmax() = realmax(Float64)
 
-    eps(x::FloatingPoint) = isfinite(x) ? abs(x)-prevfloat(abs(x)) : nan(x)
+    eps(x::FloatingPoint) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)),exponent(x)) : nextfloat(zero(x)) : nan(x)
     eps(::Type{Float16}) = $(box(Float16,unbox(Uint16,0x1400)))
     eps(::Type{Float32}) = $(box(Float32,unbox(Uint32,0x34000000)))
     eps(::Type{Float64}) = $(box(Float64,unbox(Uint64,0x3cb0000000000000)))
