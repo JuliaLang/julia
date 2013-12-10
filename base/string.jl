@@ -1218,6 +1218,16 @@ function parse(str::String; raise::Bool=true)
     return ex
 end
 
+function parseall(str::String; greedy::Bool=true, raise::Bool=true)
+    exprs = Array(Any,1)
+    i = start(str)
+    while !done(str,i)
+        (ex, i) = parse(str, i, greedy=greedy, raise=raise)
+        push!(exprs,ex)
+    end
+end
+
+
 ## miscellaneous string functions ##
 
 function lpad(s::String, n::Integer, p::String=" ")
