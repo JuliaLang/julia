@@ -744,34 +744,23 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 
     Value *fy;
     Value *den;
-    Value *typemin;
     switch (f) {
     HANDLE(neg_int,1) return builder.CreateSub(ConstantInt::get(t, 0), JL_INT(x));
     HANDLE(add_int,2) return builder.CreateAdd(JL_INT(x), JL_INT(y));
     HANDLE(sub_int,2) return builder.CreateSub(JL_INT(x), JL_INT(y));
     HANDLE(mul_int,2) return builder.CreateMul(JL_INT(x), JL_INT(y));
     HANDLE(sdiv_int,2)
-        den = JL_INT(y);
+        y = JL_INT(y);
+        den = builder.CreateAlloca(y->getType(),0,"sdiv");
+        builder.CreateStore(y, den);
+        den = builder.CreateLoad(den, true);
         x = JL_INT(x);
-
-        typemin = builder.CreateShl(ConstantInt::get(t,1),
-                                    x->getType()->getPrimitiveSizeInBits()-1);
-        raise_exception_unless(builder.
-                               CreateAnd(builder.
-                                         CreateICmpNE(den, ConstantInt::get(t,0)),
-                                         builder.
-                                         CreateOr(builder.
-                                                  CreateICmpNE(den,
-                                                               ConstantInt::get(t,-1,true)),
-                                                  builder.CreateICmpNE(x, typemin))),
-                               jldiverr_var, ctx);
-
         return builder.CreateSDiv(x, den);
     HANDLE(udiv_int,2)
-        den = JL_INT(y);
-        raise_exception_unless(builder.CreateICmpNE(den,
-                                                    ConstantInt::get(t,0)),
-                               jldiverr_var, ctx);
+        y = JL_INT(y);
+        den = builder.CreateAlloca(y->getType(),0,"sdiv");
+        builder.CreateStore(y, den);
+        den = builder.CreateLoad(den, true);
         return builder.CreateUDiv(JL_INT(x), den);
 
     HANDLE(srem_int,2) return builder.CreateSRem(JL_INT(x), JL_INT(y));
