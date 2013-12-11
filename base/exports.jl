@@ -16,6 +16,7 @@ export
     AbstractMatrix,
     AbstractSparseMatrix,
     AbstractVector,
+    AbstractVecOrMat,
     Array,
     Associative,
     Bidiagonal,
