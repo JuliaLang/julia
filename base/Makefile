@@ -40,7 +40,7 @@ else
 	@echo "const USE_BLAS64 = false" >> $@
 endif
 	@echo "const SYSCONFDIR = \"$(SYSCONFDIR)\"" >> $@
-	@echo "const VERSION_STRING = \"$(shell cat ../VERSION)\"" >> $@
+	@echo "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@
 	@echo "const TAGGED_RELEASE_BANNER = \"$(TAGGED_RELEASE_BANNER)\"" >> $@
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
@@ -54,10 +54,6 @@ endif
 
 version_git.jl.phony:
 ifneq ($(NO_GIT), 1)
-	@if ! git status 2>/dev/null 1>/dev/null ; then  \
-	    echo "To build without git info availible, you must use NO_GIT=1 in Make.inc"; \
-	    exit 1; \
-	fi
 	@sh version_git.sh > $@
 	# This to avoid touching git_version.jl when it is not modified, so that the
 	# so that the system image does not need to be rebuilt.
@@ -71,7 +67,7 @@ else
 ifeq ($(shell [ -f version_git.jl ] && echo "true"), true)
 	# Give warning if boilerplate git is used
 	@if grep -q "Default output if git is not availible" version_git.jl; then \
-	    echo "WARNING: Using boilerplate git version info"; \
+	    echo "WARNING: Using boilerplate git version info" >&2; \
 	fi
 else
 	$(warning "WARNING: Using boilerplate git version info")
