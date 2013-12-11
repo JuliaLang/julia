@@ -66,6 +66,7 @@ export
     eye,
     factorize,
     factorize!,
+    givens,
     gradient,
     hessfact,
     hessfact!,
