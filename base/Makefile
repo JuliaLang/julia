@@ -53,18 +53,31 @@ endif
 	fi
 
 version_git.jl.phony:
-	@# The first check is to ensure that we don't overwrite version.git if git is unavailible.
-	@if !( [ -f version_git.jl ] && ! [ -d ../.git ] ); then  \
-	    sh version_git.sh >> $@  \
-	    # This to avoid touching git_version.jl when it is not modified, so that the \
-	    # so that the system image does not need to be rebuilt. \
-	    if ! cmp -s $@ version_git.jl; then \
-	        $(call PRINT_PERL,) \
-	        mv $@ version_git.jl; \
-	    else \
-	        rm -f $@; \
-	    fi  \
+ifneq ($(NO_GIT), 1)
+	@if ! git status 2>/dev/null 1>/dev/null ; then  \
+	    echo "To build without git info availible, you must use NO_GIT=1 in Make.inc"; \
+	    exit 1; \
 	fi
+	@sh version_git.sh > $@
+	# This to avoid touching git_version.jl when it is not modified, so that the
+	# so that the system image does not need to be rebuilt.
+	@if ! cmp -s $@ version_git.jl; then \
+	    $(call PRINT_PERL,) \
+	    mv $@ version_git.jl; \
+	else \
+	    rm -f $@; \
+	fi
+else
+ifeq ($(shell [ -f version_git.jl ] && echo "true"), true)
+	# Give warning if boilerplate git is used
+	@if grep -q "Default output if git is not availible" version_git.jl; then \
+	    echo "WARNING: Using boilerplate git version info"; \
+	fi
+else
+	$(warning "WARNING: Using boilerplate git version info")
+	@sh version_git.sh NO_GIT > version_git.jl
+endif
+endif
 
 .PHONY: build_h.jl.phony version_git.jl.phony
 

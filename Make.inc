@@ -49,8 +49,14 @@ endif
 # disable automatic Makefile rules
 .SUFFIXES:
 
+NO_GIT = 0
+
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
+ifneq ($(NO_GIT), 1)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
+else
+JULIA_COMMIT = "NotAvailible"
+endif
 
 # LLVM Options
 LLVMROOT = $(BUILD)
