@@ -297,15 +297,50 @@ else
 		git clone http://llvm.org/git/llvm.git llvm-$(LLVM_VER) ) || \
 		(cd llvm-$(LLVM_VER) && \
 		git pull --ff-only)
+ifneq ($(LLVM_GIT_VER),)
+	(cd llvm-$(LLVM_VER) && \
+		git checkout $(LLVM_GIT_VER))
 endif
+endif
+ifneq ($(LLVM_VER),svn)
 ifneq ($(LLVM_CLANG_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/tools/clang && \
 	tar -C llvm-$(LLVM_VER)/tools/clang --strip-components 1 -xf $(LLVM_CLANG_TAR)
 endif
+else
+ifneq ($(BUILD_LLVM_CLANG),)
+	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
+		git clone http://llvm.org/git/clang.git llvm-$(LLVM_VER)/tools/clang  ) || \
+		(cd llvm-$(LLVM_VER)/tools/clang  && \
+		git pull --ff-only)	
+endif
+endif
+ifneq ($(LLVM_VER),svn)
 ifneq ($(LLVM_COMPILER_RT_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/projects/compiler-rt && \
 	tar -C llvm-$(LLVM_VER)/projects/compiler-rt --strip-components 1 -xf $(LLVM_COMPILER_RT_TAR)
 endif
+ifneq ($(LLVM_LIBCXX_TAR),)
+	mkdir -p llvm-$(LLVM_VER)/projects/libcxx && \
+	tar -C llvm-$(LLVM_VER)/projects/libcxx --strip-components 1 -xf $(LLVM_LIBCXX_TAR)
+endif
+else
+ifneq ($(BUILD_LLVM_CLANG),)
+	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
+		git clone http://llvm.org/git/clang.git llvm-$(LLVM_VER)/tools/clang  ) || \
+		(cd llvm-$(LLVM_VER)/tools/clang  && \
+		git pull --ff-only)
+	([ ! -d llvm-$(LLVM_VER)/projects/compiler-rt ] && \
+		git clone http://llvm.org/git/compiler-rt.git llvm-$(LLVM_VER)/projects/compiler-rt  ) || \
+		(cd llvm-$(LLVM_VER)/projects/compiler-rt  && \
+		git pull --ff-only)		
+ifneq ($(LLVM_CLANG_VER),)
+	(cd llvm-$(LLVM_VER) && \
+		git checkout $(LLVM_GIT_VER))
+endif
+endif
+endif
+
 ifeq ($(BUILD_LLDB), 1)
 	([ ! -d llvm-$(LLVM_VER)/tools/lldb ] && \
 		(cd llvm-$(LLVM_VER)/tools && \
