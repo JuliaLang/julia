@@ -1067,7 +1067,7 @@
   (without-whitespace-newline
    (let ((doargs (if (eqv? (peek-token s) #\newline)
 		     '()
-		     (parse-comma-separated-assignments s))))
+		     (parse-comma-separated s parse-range))))
      `(-> (tuple ,@doargs)
 	  ,(begin0 (parse-block s)
 		   (expect-end- s 'do)))))))
