@@ -341,6 +341,17 @@ A1 = randn(4,4) + im*randn(4,4)
 A2 = A1 + A1'
 @test_approx_eq expm(A2) expm(Hermitian(A2))
 
+# complex exponential (issue #5116)
+A = [0.  0.  0.  0.
+     0.  0. -im  0.
+     0. im   0.  0.
+     0.  0.  0.  0.]
+
+@test_approx_eq expm(A) [1 0                     0                    0
+                         0 1.543080634815244    -1.1752011936438016im 0
+                         0 1.1752011936438016im  1.543080634815244    0
+                         0 0                     0                    1]
+
 # matmul for types w/o sizeof (issue #1282)
 A = Array(Complex{Int},10,10)
 A[:] = complex(1,1)
