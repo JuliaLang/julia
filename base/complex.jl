@@ -206,8 +206,7 @@ end
 # then do calculations in way that avoids over/underflow (subfuncs 1 and 2)
 # then undo the scaling
 # scaling variable s and other techniques
-# see arxiv.1210.4539 and a c version at link
-# http://forge.scilab.org/index.php/p/compdiv/source/tree/HEAD/src/c/compdiv.c
+# based on arxiv.1210.4539 
 #             a + i*b
 #  p + i*q = ---------
 #             c + i*d
