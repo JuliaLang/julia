@@ -1,6 +1,6 @@
 # require
 
-function find_in_path(name::String)
+function find_in_path(name::String; constants::Bool=true)
     isabspath(name) && return name
     isfile(name) && return abspath(name)
     base = name
@@ -13,16 +13,21 @@ function find_in_path(name::String)
     for prefix in [Pkg.dir(), LOAD_PATH]
         path = joinpath(prefix, name)
         isfile(path) && return abspath(path)
-        path = joinpath(prefix, base, "src", name)
+        if constants
+            file_name = name
+        else
+            file_name = string(name[1:end-3], "Code", ".jl")
+        end
+        path = joinpath(prefix, base, "src", file_name)
         isfile(path) && return abspath(path)
-        path = joinpath(prefix, name, "src", name)
+        path = joinpath(prefix, name, "src", file_name)
         isfile(path) && return abspath(path)
     end
     return nothing
 end
 
-find_in_node1_path(name) = myid()==1 ?
-    find_in_path(name) : remotecall_fetch(1, find_in_path, name)
+find_in_node1_path(name; kwargs...) = myid()==1 ?
+    find_in_path(name; kwargs...) : remotecall_fetch(1, find_in_path, name) #todo handle kwargs
 
 # Store list of files and their load time
 package_list = (ByteString=>Float64)[]
@@ -60,9 +65,9 @@ function _require(path)
     end
 end
 
-function reload(name::String)
+function reload(name::String; kwargs...)
     global toplevel_load
-    path = find_in_node1_path(name)
+    path = find_in_node1_path(name; kwargs...)
     path == nothing && error("$name not found")
     refs = nothing
     if myid() == 1 && toplevel_load
