@@ -331,12 +331,10 @@ lgamma_r(x::Real) = lgamma_r(float(x))
 lfact(x::Real) = (x<=1 ? zero(float(x)) : lgamma(x+one(x)))
 @vectorize_1arg Number lfact
 
-max(x::Float64, y::Float64) = ccall((:fmax,libm),  Float64, (Float64,Float64), x, y)
-max(x::Float32, y::Float32) = ccall((:fmaxf,libm), Float32, (Float32,Float32), x, y)
+max{T<:FloatingPoint}(x::T, y::T) = ifelse((y > x) | (x != x), y, x)
 @vectorize_2arg Real max
 
-min(x::Float64, y::Float64) = ccall((:fmin,libm),  Float64, (Float64,Float64), x, y)
-min(x::Float32, y::Float32) = ccall((:fminf,libm), Float32, (Float32,Float32), x, y)
+min{T<:FloatingPoint}(x::T, y::T) = ifelse((y < x) | (x != x), y, x)
 @vectorize_2arg Real min
 
 function exponent(x::Float64)
