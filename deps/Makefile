@@ -3,15 +3,17 @@ JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 include Versions.make
 
-CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) F77="$(FC)" CC="$(CC)" CXX="$(CXX)" --build=$(BUILD_MACHINE)
+CONFIGURE_CC = F77="$(FC)" CC="$(CC)" CXX="$(CXX)" 
+CONFIGURE_OPTIONS = --prefix=$(abspath $(BUILD)) --build=$(BUILD_MACHINE)
 ifneq ($(XC_HOST),)
-CONFIGURE_COMMON += --host=$(XC_HOST)
+CONFIGURE_OPTIONS += --host=$(XC_HOST)
 endif
 ifeq ($(OS),WINNT)
-CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
+CONFIGURE_OPTIONS += LDFLAGS=-Wl,--stack,8388608
 else ifneq ($(JL_LIBDIR),lib)
-CONFIGURE_COMMON += --libdir=$(abspath $(BUILD)/$(JL_LIBDIR))
+CONFIGURE_OPTIONS += --libdir=$(abspath $(BUILD)/$(JL_LIBDIR))
 endif
+CONFIGURE_COMMON = $(CONFIGURE_OPTIONS) $(CONFIGURE_CC)
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr patchelf uv
 #custom configure-driven script: zlib
@@ -165,9 +167,13 @@ endif
 ifeq ($(LLVM_ASSERTIONS),1)
 LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+Asserts
 endif
+LLVM_FLAVOR := $(LLVM_BUILDTYPE)
+ifeq ($(LLVM_SANITIZE),1)
+LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+Sanitize
+endif
 
 LLVM_LIB_FILE = libLLVMJIT.a
-LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/$(LLVM_BUILDTYPE)/lib/$(LLVM_LIB_FILE)
+LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/$(LLVM_FLAVOR)/lib/$(LLVM_LIB_FILE)
 LLVM_OBJ_TARGET = $(BUILD)/lib/$(LLVM_LIB_FILE)
 
 ifneq ($(LLVM_VER),svn)
@@ -239,6 +245,14 @@ ifeq ($(ARCH), ppc64)
   LLVM_MFLAGS += CXXFLAGS=-mminimal-toc
 endif
 
+
+ifeq ($(LLVM_SANITIZE),1)
+LLVM_CC = $(CONFIGURE_CC) CXXFLAGS="-fsanitize=address" CFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
+LLVM_MFLAGS += TOOL_NO_EXPORTS= HAVE_LINK_VERSION_SCRIPT=0
+else
+LLVM_CC = $(CONFIGURE_CC)
+endif
+
 ifneq ($(LLVM_CLANG_TAR),)
 $(LLVM_CLANG_TAR):
 	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
@@ -306,7 +320,7 @@ llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status: llvm-$(LLVM_VER)/configu
 	cd llvm-$(LLVM_VER) && \
 	mkdir -p build_$(LLVM_BUILDTYPE) && cd build_$(LLVM_BUILDTYPE) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	../configure $(CONFIGURE_COMMON) $(LLVM_FLAGS)
+	../configure $(CONFIGURE_OPTIONS) $(LLVM_CC) $(LLVM_FLAGS)
 	touch -c $@
 
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status | $(llvm_python_workaround)
