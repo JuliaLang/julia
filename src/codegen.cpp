@@ -852,7 +852,7 @@ static bool is_getfield_nonallocating(jl_datatype_t *ty, jl_value_t *fld)
     return true;
 }
 
-static bool jltupleisbits(jl_value_t *jt, bool allow_unsized = true)
+static bool jltupleisbits(jl_value_t *jt, bool allow_unsized)
 {
     if (!jl_is_tuple(jt))
         return jl_isbits(jt) && (allow_unsized || 
@@ -2470,7 +2470,8 @@ static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
     jl_value_t *jt = vi.declType;
     Value *lv = NULL;
     assert(store_unboxed_p(s,ctx));
-    Type *vtype = julia_type_to_llvm(jt);
+    Type *vtype = julia_struct_to_llvm(jt);
+    assert(vtype != jl_pvalue_llvmt);
     if (vtype != T_void) {
         lv = builder.CreateAlloca(vtype, 0, s->name);
         if (vtype != jl_pvalue_llvmt)

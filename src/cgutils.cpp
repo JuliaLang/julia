@@ -62,6 +62,8 @@ static Value *literal_pointer_val(void *p)
 
 static Type *julia_struct_to_llvm(jl_value_t *jt);
 
+static bool jltupleisbits(jl_value_t *jt, bool allow_unsized = true);
+
 static Type *julia_type_to_llvm(jl_value_t *jt)
 {
     if (jt == (jl_value_t*)jl_bool_type) return T_int1;
@@ -76,7 +78,7 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
         Type *type = NULL;
         for (size_t i = 0; i < ntypes; ++i) {
             jl_value_t *elt = jl_tupleref(jt,i);
-            purebits &= jl_isbits(elt);
+            purebits &= jltupleisbits(elt);
             Type *newtype = julia_struct_to_llvm(elt);
             if (type != NULL && type != newtype)
                 isvector = false;
@@ -91,7 +93,7 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
                 Type *ret = NULL;
                 if (type == T_void)
                     return T_void;
-                if (type->isSingleValueType())
+                if (type->isSingleValueType() && !type->isVectorTy())
                     ret = VectorType::get(type,ntypes);
                 else
                     ret = ArrayType::get(type,ntypes);
