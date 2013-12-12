@@ -415,13 +415,9 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     @inbounds while true
         while i <= j &&  issignleft(o,v[i]); i += 1; end
         while i <= j && !issignleft(o,v[j]); j -= 1; end
-        if i <= j
-            v[i], v[j] = v[j], v[i]
-            i += 1
-            j -= 1
-        else
-            break
-        end
+        i <= j || break
+        v[i], v[j] = v[j], v[i]
+        i += 1; j -= 1
     end
     sort!(v, lo, j,  a, left(o))
     sort!(v, i,  hi, a, right(o))
