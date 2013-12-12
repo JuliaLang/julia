@@ -222,7 +222,7 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
             if (ety == T_void)
                 continue;
             Value *ref = emit_tupleref(x,ConstantInt::get(T_size,i+1),jt,NULL);
-            Value *elt = emit_unbox(ety,ref,julia_type_of(ref));
+            Value *elt = emit_unbox(ety,ref,jl_tupleref(jt,i));
             tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,jt,NULL);
         }
         return tpl;
