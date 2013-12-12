@@ -602,6 +602,7 @@ export
     eye,
     factorize!,
     factorize,
+    givens,
     hessfact!,
     hessfact,
     ishermitian,

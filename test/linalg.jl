@@ -641,11 +641,19 @@ end
 
 # Test givens rotations
 for elty in (Float32, Float64, Complex64, Complex128)
-    for i = 1:10
-        f, g = convert(elty, randn()), convert(elty, randn())
-        c, s, h = Base.LinAlg.givens(f, g)
-        @test_approx_eq [c s; -s c]*[f, g] [h, 0]
+    A = convert(Matrix{elty}, randn(10,10))
+    Ac = copy(A)
+    R = Base.LinAlg.Rotation(Base.LinAlg.Givens{elty}[])
+    for j = 1:8
+        for i = j+2:10
+            G = givens(A, j+1, i, j)
+            A_mul_B!(G, A)
+            A_mul_Bc!(A, G)
+            A_mul_B!(G, R)
+        end
     end
+    @test_approx_eq abs(A) abs(hessfact(Ac)[:H])
+    @test_approx_eq norm(R*eye(elty, 10)) one(elty)
 end
 
 
