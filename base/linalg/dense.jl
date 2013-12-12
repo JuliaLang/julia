@@ -279,7 +279,7 @@ function expm!{T<:BlasFloat}(A::StridedMatrix{T})
         end
     end
     if ilo > 1       # apply lower permutations in reverse order
-        for j in (ilo-1):1:-1 rcswap!(j, int(scale[j]), X) end
+        for j in (ilo-1):-1:1 rcswap!(j, int(scale[j]), X) end
     end
     if ihi < n       # apply upper permutations in forward order
         for j in (ihi+1):n    rcswap!(j, int(scale[j]), X) end
@@ -287,15 +287,13 @@ function expm!{T<:BlasFloat}(A::StridedMatrix{T})
     X
 end
 
-## Swap rows j and jp and columns j and jp in X
-function rcswap!{T<:Number}(j::Integer, jp::Integer, X::StridedMatrix{T})
-    for k in 1:size(X, 2)
-        tmp     = X[k,j]
-        X[k,j]  = X[k,jp]
-        X[k,jp] = tmp
-        tmp     = X[j,k]
-        X[j,k]  = X[jp,k]
-        X[jp,k] = tmp
+## Swap rows i and j and columns i and j in X
+function rcswap!{T<:Number}(i::Integer, j::Integer, X::StridedMatrix{T})
+    for k = 1:size(X,1)
+        X[k,i], X[k,j] = X[k,j], X[k,i]
+    end
+    for k = 1:size(X,2)
+        X[i,k], X[j,k] = X[j,k], X[i,k]
     end
 end
 
