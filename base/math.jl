@@ -950,7 +950,76 @@ polygamma(k::Int, x::Float64) = (2rem(k,2) - 1)*psifn(x, k, 1, 1)[1]/gamma(k + 1
 polygamma(k::Int, x::Float32) = float32(polygamma(k, float64(x)))
 polygamma(k::Int, x::Real) = polygamma(k, float64(x))
 
-digamma(x::Real) = polygamma(0, x)
+# Translation of psi.c from cephes
+const digamma_EUL = 0.57721566490153286061
+const digamma_coefs = [8.33333333333333333333e-2,-2.10927960927960927961e-2, 7.57575757575757575758e-3,
+                      -4.16666666666666666667e-3, 3.96825396825396825397e-3,-8.33333333333333333333e-3,
+                       8.33333333333333333333e-2]
+function digamma(x::Float64)  
+    negative = false
+    nz = 0.0
+
+    if x <= 0.0
+        negative = true
+        q = x
+        p = floor(q)
+        if p == q
+            return NaN
+        end
+
+        nz = q - p
+        if nz != 0.5
+            if nz > 0.5
+                p += 1.0
+                nz = q - p
+            end
+            nz = pi / tan(pi * nz)
+        else
+            nz = 0.0
+        end
+        x = 1.0 - x
+    end
+
+    if x <= 10.0 && x == floor(x)
+        y = 0.0
+        for i = 1:x-1
+            y += 1.0 / i
+        end
+        y -= digamma_EUL
+
+        if negative
+            y -= nz
+        end
+        return y
+    end
+
+    w = 0.0
+    while x < 10.0
+        w += 1.0 / x
+        x += 1.0
+    end
+
+    if x < 1.0e17
+        z = 1.0 / (x*x)
+        y = digamma_coefs[1]
+        for j = 2:7
+            y = y*z + digamma_coefs[j]
+        end
+        y *= z
+    else
+        y = 0.0
+    end
+
+    y = log(x) - 0.5/x - y - w
+
+    if negative
+        y -= nz
+    end
+
+    return y
+end
+digamma(x::Float32) = float32(digamma(float64(x)))
+digamma(x::Real) = digamma(float64(x))
 @vectorize_1arg Real digamma
 
 trigamma(x::Real) = polygamma(1, x)

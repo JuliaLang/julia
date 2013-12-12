@@ -124,6 +124,19 @@ y33 = bessely(3,3.)
 
 # digamma
 for elty in (Float32, Float64)
+
+    @test_approx_eq digamma(convert(elty, 9)) convert(elty, 2.140641477955609996536345)
+    @test_approx_eq digamma(convert(elty, 2.5)) convert(elty, 0.7031566406452431872257)
+    @test_approx_eq digamma(convert(elty, 0.1)) convert(elty, -10.42375494041107679516822)
+    @test_approx_eq digamma(convert(elty, 7e-4)) convert(elty, -1429.147493371120205005198)
+    @test_approx_eq digamma(convert(elty, 7e-5)) convert(elty, -14286.29138623969227538398)
+    @test_approx_eq digamma(convert(elty, 7e-6)) convert(elty, -142857.7200612932791081972)
+    @test_approx_eq digamma(convert(elty, 2e-6)) convert(elty, -500000.5772123750382073831)
+    @test_approx_eq digamma(convert(elty, 1e-6)) convert(elty, -1000000.577214019968668068)
+    @test_approx_eq digamma(convert(elty, 7e-7)) convert(elty, -1428572.005785942019703646)
+    @test_approx_eq digamma(convert(elty, -0.5)) convert(elty, .03648997397857652055902367)
+    @test_approx_eq digamma(convert(elty, -1.1)) convert(elty,  10.15416395914385769902271)
+
     @test_approx_eq digamma(convert(elty, 0.1)) convert(elty, -10.42375494041108)
     @test_approx_eq digamma(convert(elty, 1/2)) convert(elty, -γ - log(4))
     @test_approx_eq digamma(convert(elty, 1)) convert(elty, -γ)
