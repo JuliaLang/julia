@@ -191,13 +191,16 @@ LLVM_COMPILER_RT_TAR=
 else ifeq ($(LLVM_VER), 3.3)
 LLVM_CLANG_TAR=cfe-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
+LLVM_LIBCXX_TAR=libcxx-$(LLVM_VER).src.tar.gz
 else
 LLVM_CLANG_TAR=clang-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
+LLVM_LIBCXX_TAR=libcxx-$(LLVM_VER).src.tar.gz
 endif
 else
 LLVM_CLANG_TAR=
 LLVM_COMPILER_RT_TAR=
+LLVM_LIBCXX_TAR=
 endif
 
 LLVM_TARGET_FLAGS= --enable-targets=host
@@ -261,6 +264,11 @@ ifneq ($(LLVM_COMPILER_RT_TAR),)
 $(LLVM_COMPILER_RT_TAR):
 	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
 endif
+
+ifneq ($(LLVM_LIBCXX_TAR),)
+$(LLVM_LIBCXX_TAR):
+	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
+endif
 ifneq ($(LLVM_VER),svn)
 $(LLVM_TAR):
 	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
@@ -280,7 +288,7 @@ llvm-$(LLVM_VER)/python2_path:
 llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
 
 
-llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR)
+llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
 ifneq ($(LLVM_VER),svn)
 	mkdir -p llvm-$(LLVM_VER) && \
 	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $(LLVM_TAR)
@@ -346,9 +354,9 @@ clean-llvm:
 	-$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) clean
 	-rm -f $(BUILD)/bin/llvm-config
 distclean-llvm:
-	-rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).tar.gz compiler-rt-$(LLVM_VER).src.tar.gz llvm-$(LLVM_VER)
+	-rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).tar.gz libcxx-$(LLVM_VER).src.tar.gz compiler-rt-$(LLVM_VER).src.tar.gz llvm-$(LLVM_VER)
 
-get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR)
+get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
 configure-llvm: llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status
 compile-llvm: $(LLVM_OBJ_SOURCE)
 check-llvm: llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/checked
