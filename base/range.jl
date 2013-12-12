@@ -33,7 +33,7 @@ Range1{T}(start::T, len::Integer) = Range1{T}(start, len)
 
 function colon{T<:Integer}(start::T, step::T, stop::T)
     step != 0 || error("step cannot be zero in colon syntax")
-    Range(start, step, max(0, div(stop-start+step, step)))
+    Range(start, step, max(0, 1 + fld(stop-start, step)))
 end
 colon{T<:Integer}(start::T, stop::T) =
     Range1(start, max(0, stop-start+1))
