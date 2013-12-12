@@ -188,20 +188,15 @@ function rand{T<:Real}(r::Ranges{T})
 end
 
 
-# fallback for other Real types
-rand{T<:Integer}(r::Range1{T}) = convert(T, rand(int(r)))
 rand{T<:Real}(r::Ranges{T}, dims::Dims) = rand!(r, Array(T, dims))
-rand{T<:Real}(r::Ranges{T}, dims::Int...) = rand(r, dims)
+rand(r::Ranges, dims::Int...) = rand(r, dims)
 
-function rand!{T<:Real}(r::Ranges{T}, A::Array{T})
+function rand!(r::Ranges, A::Array)
     for i=1:length(A) 
         A[i] = rand(r)
     end
     return A
 end
-
-rand{T<:Integer}(r::Range1{T}, dims::Dims) = rand!(r, Array(T, dims))
-rand{T<:Integer}(r::Range1{T}, dims::Int...) = rand(r, dims)
 
 ## random Bools
 
