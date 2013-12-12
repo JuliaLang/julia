@@ -21,6 +21,18 @@
 	<array>
 		<dict>
 			<key>include</key>
+			<string>#operator</string>
+		</dict>
+		<dict>
+			<key>include</key>
+			<string>#array</string>
+		</dict>
+		<dict>
+			<key>include</key>
+			<string>#string</string>
+		</dict>
+		<dict>
+			<key>include</key>
 			<string>#bracket</string>
 		</dict>
 		<dict>
@@ -33,23 +45,11 @@
 		</dict>
 		<dict>
 			<key>include</key>
-			<string>#type_decl</string>
-		</dict>
-		<dict>
-			<key>include</key>
 			<string>#keyword</string>
 		</dict>
 		<dict>
 			<key>include</key>
-			<string>#operator</string>
-		</dict>
-		<dict>
-			<key>include</key>
 			<string>#number</string>
-		</dict>
-		<dict>
-			<key>include</key>
-			<string>#string</string>
 		</dict>
 		<dict>
 			<key>include</key>
@@ -58,6 +58,47 @@
 	</array>
 	<key>repository</key>
 	<dict>
+		<key>array</key>
+		<dict>
+			<key>patterns</key>
+			<array>
+				<dict>
+					<key>begin</key>
+					<string>\[</string>
+					<key>end</key>
+					<string>\](')?</string>
+					<key>endCaptures</key>
+					<dict>
+						<key>1</key>
+						<dict>
+							<key>name</key>
+							<string>keyword.operator.transpose.julia</string>
+						</dict>
+					</dict>
+					<key>name</key>
+					<string>array.julia</string>
+					<key>patterns</key>
+					<array>
+						<dict>
+							<key>match</key>
+							<string>\bend\b</string>
+							<key>name</key>
+							<string>constant.numeric.julia</string>
+						</dict>
+						<dict>
+							<key>match</key>
+							<string>(?:\]')</string>
+							<key>name</key>
+							<string>keyword.operator</string>
+						</dict>
+						<dict>
+							<key>include</key>
+							<string>$self</string>
+						</dict>
+					</array>
+				</dict>
+			</array>
+		</dict>
 		<key>bracket</key>
 		<dict>
 			<key>patterns</key>
@@ -66,7 +107,7 @@
 					<key>match</key>
 					<string>(?:\(|\)|\[|\]|\{|\}|,)(?!('|(?:\.'))*\.?')</string>
 					<key>name</key>
-					<string>keyword.bracket.julia</string>
+					<string>bracket.julia</string>
 				</dict>
 			</array>
 		</dict>
@@ -130,9 +171,21 @@
 			<key>patterns</key>
 			<array>
 				<dict>
-					<key>begin</key>
-					<string>(function|macro)\s*([a-zA-Z0-9_\{]+!?)\w*([(\\{])</string>
-					<key>beginCaptures</key>
+					<key>match</key>
+					<string>^\s*([a-zA-Z0-9_]+!?)(?=.*\)\s*=(?!=))</string>
+					<key>captures</key>
+					<dict>
+						<key>1</key>
+						<dict>
+							<key>name</key>
+							<string>entity.name.function.julia</string>
+						</dict>
+					</dict>
+				</dict>
+				<dict>
+					<key>match</key>
+					<string>\b(function|macro)\s+([a-zA-Z0-9_]+!?)\b</string>
+					<key>captures</key>
 					<dict>
 						<key>1</key>
 						<dict>
@@ -145,17 +198,6 @@
 							<string>entity.name.function.julia</string>
 						</dict>
 					</dict>
-					<key>end</key>
-					<string>([)\\}])</string>
-					<key>name</key>
-					<string>meta.function.julia</string>
-					<key>patterns</key>
-					<array>
-						<dict>
-							<key>include</key>
-							<string>$self</string>
-						</dict>
-					</array>
 				</dict>
 			</array>
 		</dict>
@@ -185,7 +227,7 @@
 					<key>match</key>
 					<string>@\w+\b</string>
 					<key>name</key>
-					<string>variable.macro.julia</string>
+					<string>support.function.macro.julia</string>
 				</dict>
 			</array>
 		</dict>
@@ -195,9 +237,15 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>((\b0(x|X)[0-9a-fA-F]*)|((\b[0-9]+\.?[0-9]*)|(\.[0-9]+))((e|E)(\+|-)?[0-9]*)?(im)?|\bInf(32)?\b|\bNaN(32)?\b|\btrue\b|\bfalse\b)</string>
+					<string>((\b0(x|X)[0-9a-fA-F]+)|(\b0o[0-7]+)|(\b0b[0-1]+)|((\b[0-9]+\.?[0-9]*)|(\.[0-9]+))((e|E)(\+|-)?[0-9]*)?(im)?|\bInf(32)?\b|\bNaN(32)?\b)</string>
 					<key>name</key>
 					<string>constant.numeric.julia</string>
+				</dict>
+				<dict>
+					<key>match</key>
+					<string>\btrue\b|\bfalse\b|\bnothing\b</string>
+					<key>name</key>
+					<string>constant.language.julia</string>
 				</dict>
 			</array>
 		</dict>
@@ -334,6 +382,12 @@
 		<dict>
 			<key>patterns</key>
 			<array>
+				<dict>
+					<key>match</key>
+					<string>(?&lt;![a-zA-Z0-9:&lt;]:)(?&lt;=:)[a-zA-Z_][a-zA-Z0-9_]*\b</string>
+					<key>name</key>
+					<string>string.quoted.symbol.julia</string>
+				</dict>
 				<dict>
 					<key>begin</key>
 					<string>'</string>
@@ -481,57 +535,6 @@
 					<string>\\(\\|[0-3]\d{,2}|[4-7]\d?|x[a-fA-F0-9]{,2}|u[a-fA-F0-9]{,4}|U[a-fA-F0-9]{,8}|.)</string>
 					<key>name</key>
 					<string>constant.character.escape.julia</string>
-				</dict>
-			</array>
-		</dict>
-		<key>type_decl</key>
-		<dict>
-			<key>patterns</key>
-			<array>
-				<dict>
-					<key>captures</key>
-					<dict>
-						<key>1</key>
-						<dict>
-							<key>name</key>
-							<string>keyword.control.type.julia</string>
-						</dict>
-						<key>2</key>
-						<dict>
-							<key>name</key>
-							<string>entity.name.type.julia</string>
-						</dict>
-						<key>3</key>
-						<dict>
-							<key>name</key>
-							<string>entity.other.inherited-class.julia</string>
-						</dict>
-						<key>4</key>
-						<dict>
-							<key>name</key>
-							<string>punctuation.separator.inheritance.julia</string>
-						</dict>
-					</dict>
-					<key>match</key>
-					<string>(type|immutable)\s+([a-zA-Z0-9_]+)(\s*(&lt;:)\s*[.a-zA-Z0-9_:]+)?</string>
-					<key>name</key>
-					<string>meta.type.julia</string>
-				</dict>
-				<dict>
-					<key>captures</key>
-					<dict>
-						<key>2</key>
-						<dict>
-							<key>name</key>
-							<string>support.type.julia</string>
-						</dict>
-					</dict>
-					<key>comments</key>
-					<string>Matches a typed variable, such as 'id::String'</string>
-					<key>match</key>
-					<string>([a-zA-Z0-9_]+)(::([a-zA-Z0-9_]+|\(.*\))(\{.*\})?)</string>
-					<key>name</key>
-					<string>other.typed-variable.julia</string>
 				</dict>
 			</array>
 		</dict>
