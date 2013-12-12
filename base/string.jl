@@ -1219,12 +1219,13 @@ function parse(str::String; raise::Bool=true)
 end
 
 function parseall(str::String; greedy::Bool=true, raise::Bool=true)
-    exprs = Array(Any,1)
-    i = start(str)
-    while !done(str,i)
+    exprs = Array(Any,0)
+    i, len = 1, length(str)
+    while i<len
         (ex, i) = parse(str, i, greedy=greedy, raise=raise)
         push!(exprs,ex)
     end
+    exprs
 end
 
 

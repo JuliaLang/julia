@@ -972,6 +972,7 @@ export
     gensym,
     macroexpand,
     parse,
+    parseall,
     symbol,
 
 # help and reflection
