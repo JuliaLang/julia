@@ -598,3 +598,46 @@
 @test complex(2,2)^2 === complex(0,8)
 @test_throws complex(2,2)^(-2)
 @test complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
+
+# robust division of Float64
+# hard complex divisions from Fig 6 of arxiv.1210.4539
+z7 = Complex{Float64}(3.898125604559113300e289, 8.174961907852353577e295)
+z9 = Complex{Float64}(0.001953125, -0.001953125)
+z10 = Complex{Float64}( 1.02951151789360578e-84, 6.97145987515076231e-220)
+harddivs = ((1.0+im*1.0, 1.0+im*2^1023.0, 2^-1023.0-im*2^-1023.0), #1
+      (1.0+im*1.0, 2^-1023.0+im*2^-1023.0, 2^1023.0+im*0.0), #2
+      (2^1023.0+im*2^-1023.0, 2^677.0+im*2^-677.0, 2^346.0-im*2^-1008.0), #3
+      (2^1023.0+im*2^1023.0, 1.0+im*1.0, 2^1023.0+im*0.0), #4
+      (2^1020.0+im*2^-844., 2^656.0+im*2^-780.0, 2^364.0-im*2^-1072.0), #5
+      (2^-71.0+im*2^1021., 2^1001.0+im*2^-323.0, 2^-1072.0+im*2^20.0), #6
+      (2^-347.0+im*2^-54., 2^-1037.0+im*2^-1058.0, z7), #7
+      (2^-1074.0+im*2^-1074., 2^-1073.0+im*2^-1074., 0.6+im*0.2), #8
+      (2^1015.0+im*2^-989., 2^1023.0+im*2^1023.0, z9), #9
+      (2^-622.0+im*2^-1071., 2^-343.0+im*2^-798.0, z10)#10
+      )
+
+# calculate "accurate bits" in range 0:53 by algorithm given in arxiv.1210.4539
+function sb_accuracy(x,expected)
+  min(logacc(real(x),real(expected)), 
+    logacc(imag(x),imag(expected)) )
+end
+relacc(x,expected) = abs(x-expected)/abs(expected)
+function logacc(x::Float64,expected::Float64)
+  x == expected && (return 53)
+  expected == 0 && (return 0)
+  (x == Inf || x == -Inf) && (return 0)
+  isnan(x) && (return 0)
+  ra = relacc(BigFloat(x),BigFloat(expected))
+  max(ifloor(-log2(ra)),0)
+end
+# the robust division algorithm should have 53 or 52 
+# bits accuracy for each of the hard divisions
+@test 52 <= minimum([sb_accuracy(h[1]/h[2],h[3]) for h in harddivs])
+
+# division of non-Float64
+function cdiv_test(a,b)
+  c=convert(Complex{Float64},a)/convert(Complex{Float64},b)
+  50 <= sb_accuracy(c,convert(Complex{Float64},a/b))
+end
+@test cdiv_test(complex(1//2, 3//4), complex(17//13, 4//5))
+@test cdiv_test(complex(1,2), complex(8997,2432))
