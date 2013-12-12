@@ -1285,6 +1285,8 @@ end
 @test 0xf.fP0 === 15.9375
 @test 0xf.fP1 === 31.875
 
+@test -0x1.0p2 === -4.0
+
 # eps / realmin / realmax
 @test 0x1p-52 == eps()
 @test 0x1p-52 + 1 != 1
