@@ -601,10 +601,12 @@ DLLEXPORT kern_return_t catch_exception_raise
 
 #endif
 
-void julia_init(char *imageFile, int build_mode)
+void julia_init(char *imageFile, int build_mode, char* wiser_file)
 {
     if (build_mode)
         jl_set_imaging_mode(1);
+    if (wiser_file)
+        jl_set_wiser_file(ios_file(malloc(sizeof(ios_t)), wiser_file,0,1,1,1));
     jl_page_size = jl_getpagesize();
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);

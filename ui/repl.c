@@ -17,6 +17,7 @@ static char *program = NULL;
 char *image_file;
 int tab_width = 2;
 char *build_mode;
+char *wiser_file;
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
@@ -29,7 +30,8 @@ static const char *opts =
     " -E --print <expr>        Evaluate and show <expr>\n"
     " -P --post-boot <expr>    Evaluate <expr> right after boot\n"
     " -L --load file           Load <file> right after boot on all processors\n"
-    " -J --sysimage file       Start up with the given system image file\n\n"
+    " -J --sysimage file       Start up with the given system image file\n"
+    " -w --wiser file          Export accumulated speed wisdom, from the current run, to file\n\n"
 
     " -p n                     Run n local processes\n"
     " --machinefile file       Run processes on hosts listed in file\n\n"
@@ -42,7 +44,7 @@ static const char *opts =
     " -h --help                Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {
-    static char* shortopts = "+H:T:hJ:";
+    static char* shortopts = "+H:T:hJ:w:";
     static struct option longopts[] = {
         { "home",        required_argument, 0, 'H' },
         { "tab",         required_argument, 0, 'T' },
@@ -50,6 +52,7 @@ void parse_opts(int *argcp, char ***argvp) {
         { "lisp",        no_argument,       &lisp_prompt, 1 },
         { "help",        no_argument,       0, 'h' },
         { "sysimage",    required_argument, 0, 'J' },
+        { "wiser",       required_argument, 0, 'w' },
         { 0, 0, 0, 0 }
     };
     int c;
@@ -85,6 +88,9 @@ void parse_opts(int *argcp, char ***argvp) {
         case 'h':
             printf("%s%s", usage, opts);
             exit(0);
+        case 'w':
+            wiser_file = strdup(optarg);
+            break;
         default:
             ios_printf(ios_stderr, "julia: unhandled option -- %c\n",  c);
             ios_printf(ios_stderr, "This is a bug, please report it.\n");
@@ -285,6 +291,6 @@ int main(int argc, char *argv[])
         jl_lisp_prompt();
         return 0;
     }
-    julia_init(lisp_prompt ? NULL : image_file, build_mode!=NULL);
+    julia_init(lisp_prompt ? NULL : image_file, build_mode!=NULL, wiser_file);
     return julia_trampoline(argc, argv, true_main, build_mode);
 }
