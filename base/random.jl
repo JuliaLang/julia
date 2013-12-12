@@ -110,6 +110,7 @@ rand(::Type{Float16}) = float16(rand())
 
 rand{T<:Real}(::Type{Complex{T}}) = complex(rand(T),rand(T))
 
+
 rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
 
 ## random integers
@@ -181,12 +182,18 @@ function rand(r::Range1{Int128})
     ulen = convert(Uint128, length(r))
     convert(Int128, first(r) + randu(ulen))
 end
+function rand{T<:Real}(r::Ranges{T})
+    ulen = convert(Uint64, length(r)) #length of Ranges is stored as Int, Uint64 is always enough
+    convert(T, first(r) + randu(ulen)*step(r))
+end
 
 
-# fallback for other integer types
+# fallback for other Real types
 rand{T<:Integer}(r::Range1{T}) = convert(T, rand(int(r)))
+rand{T<:Real}(r::Ranges{T}, dims::Dims) = rand!(r, Array(T, dims))
+rand{T<:Real}(r::Ranges{T}, dims::Int...) = rand(r, dims)
 
-function rand!{T<:Integer}(r::Range1{T}, A::Array{T})
+function rand!{T<:Real}(r::Ranges{T}, A::Array{T})
     for i=1:length(A) 
         A[i] = rand(r)
     end
