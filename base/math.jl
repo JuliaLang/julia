@@ -33,6 +33,14 @@ clamp{T<:Real}(x::AbstractArray{T,2}, lo::Real, hi::Real) =
 clamp{T<:Real}(x::AbstractArray{T}, lo::Real, hi::Real) =
     reshape([clamp(xx, lo, hi) for xx in x], size(x))
 
+# evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
+macro horner(x, p...)
+    ex = esc(p[end])
+    for i = length(p)-1:-1:1
+        ex = :($(esc(p[i])) + $(esc(x)) * $ex)
+    end
+    ex
+end
 
 function sinpi(x::Real)
     if isinf(x)
@@ -951,10 +959,6 @@ polygamma(k::Int, x::Float32) = float32(polygamma(k, float64(x)))
 polygamma(k::Int, x::Real) = polygamma(k, float64(x))
 
 # Translation of psi.c from cephes
-const digamma_EUL = 0.57721566490153286061
-const digamma_coefs = [8.33333333333333333333e-2,-2.10927960927960927961e-2, 7.57575757575757575758e-3,
-                      -4.16666666666666666667e-3, 3.96825396825396825397e-3,-8.33333333333333333333e-3,
-                       8.33333333333333333333e-2]
 function digamma(x::Float64)  
     negative = false
     nz = 0.0
@@ -985,7 +989,7 @@ function digamma(x::Float64)
         for i = 1:x-1
             y += 1.0 / i
         end
-        y -= digamma_EUL
+        y -= γ  # γ == -digamma(1) == 0.5772156649015328606065121;
 
         if negative
             y -= nz
@@ -1001,10 +1005,9 @@ function digamma(x::Float64)
 
     if x < 1.0e17
         z = 1.0 / (x*x)
-        y = digamma_coefs[1]
-        for j = 2:7
-            y = y*z + digamma_coefs[j]
-        end
+        y = @horner(z, 8.33333333333333333333e-2, -8.33333333333333333333e-3, 3.96825396825396825397e-3,
+                       -4.16666666666666666667e-3, 7.57575757575757575758e-3,-2.10927960927960927961e-2,
+                       8.33333333333333333333e-2)
         y *= z
     else
         y = 0.0
@@ -1194,15 +1197,6 @@ for f in (:erfcx, :erfi, :Dawson)
         ($fname)(x::Integer) = ($fname)(float(x))
         @vectorize_1arg Number $fname
     end
-end
-
-# evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
-macro horner(x, p...)
-    ex = esc(p[end])
-    for i = length(p)-1:-1:1
-        ex = :($(esc(p[i])) + $(esc(x)) * $ex)
-    end
-    ex
 end
 
 # Compute the inverse of the error function: erf(erfinv(x)) == x, 
