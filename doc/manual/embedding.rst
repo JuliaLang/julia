@@ -81,11 +81,18 @@ The GC can only run when Julia objects are allocated. Calls like ``jl_box_float6
     jl_value_t *ret = jl_eval_string("sqrt(2.0)");
     JL_GC_PUSH1(&ret);
     // Do something with ret
-    JL_POP();
+    JL_GC_POP();
 
-The ``JL_POP`` call releases the references established by the previous ``JL_PUSH``.
+The ``JL_GC_POP`` call releases the references established by the previous ``JL_GC_PUSH``. Note that ``JL_GC_PUSH``  is working on the stack, so it must be exactly paired with a ``JL_GC_POP`` before the stack frame is destroyed.
 
-Several Julia values can be pushed at once using the ``JL_GC_PUSH2`` , ``JL_GC_PUSH3`` , and ``JL_GC_PUSH4`` macros. To push an array of Julia values one can use the  ``JL_GC_PUSHARGS`` macro, which takes as first argument a C array of ``jl_value_t*`` (i.e. ``jl_value_t**``) and as second argument the length of the array.
+Several Julia values can be pushed at once using the ``JL_GC_PUSH2`` , ``JL_GC_PUSH3`` , and ``JL_GC_PUSH4`` macros. To push an array of Julia values one can use the  ``JL_GC_PUSHARGS`` macro, which can be used as follows::
+
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 2); // args can now hold 2 `jl_value_t*` objects
+    args[0] = some_value;
+    args[1] = some_other_value;
+    // Do something with args (e.g. call jl_... functions)
+    JL_GC_POP();
 
 Manipulating the Garbage Collector
 ---------------------------------------------------
