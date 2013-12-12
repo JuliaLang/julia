@@ -402,6 +402,8 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
             return;
         }
         ptrhash_put(backref_table, v, (void*)(ptrint_t)ios_pos(s));
+        if (mode == MODE_FILE_CACHE && !jl_is_symbol(v))
+            jl_gc_preserve(v);
     }
 
     size_t i;
@@ -692,7 +694,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         return jl_cellref(tree_literal_values, read_uint16(s));
     }
     jl_value_t *v = jl_deserialize_value_(s, pos, vtag);
-    if (mode == MODE_FILE_CACHE)
+    if (mode == MODE_FILE_CACHE && !jl_is_symbol(v))
         jl_gc_preserve(v);
     return v;
 }

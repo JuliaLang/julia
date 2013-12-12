@@ -452,6 +452,7 @@ jl_value_t *jl_parse_eval_all(char *fname)
         jl_lineno=0;
         jl_value_t *fn=NULL, *ln=NULL, *form=NULL, *result=jl_nothing;
         JL_GC_PUSH4(&fn, &ln, &form, &result);
+        int np = jl_gc_n_preserved_values();
         JL_TRY {
             // handle syntax error
             while (1) {
@@ -474,6 +475,9 @@ jl_value_t *jl_parse_eval_all(char *fname)
         JL_CATCH {
             jl_stop_parsing();
             if (f) jl_save_file_cache_fini(f, &backref_table);
+            while (jl_gc_n_preserved_values() > np) {
+                jl_gc_unpreserve();
+            }
             fn = jl_pchar_to_string(fname, strlen(fname));
             ln = jl_box_long(jl_lineno);
             jl_lineno = last_lineno;
@@ -483,6 +487,9 @@ jl_value_t *jl_parse_eval_all(char *fname)
         jl_stop_parsing();
         jl_lineno = last_lineno;
         if (f) jl_save_file_cache_fini(f, &backref_table);
+        while (jl_gc_n_preserved_values() > np) {
+            jl_gc_unpreserve();
+        }
         JL_GC_POP();
         return result;
     }
