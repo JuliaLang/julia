@@ -10,8 +10,6 @@ macro assertnonsingular(A, info)
    :(($info)==0 ? $A : throw(SingularException($info)))
 end
 
-typealias AbstractVecOrMat Union(AbstractVector, AbstractMatrix)
-
 \(F::Factorization, B::AbstractVecOrMat) = A_ldiv_B!(F, copy(B))
 Ac_ldiv_B(F::Factorization, B::AbstractVecOrMat) = Ac_ldiv_B!(F, copy(B))
 At_ldiv_B(F::Factorization, B::AbstractVecOrMat) = At_ldiv_B!(F, copy(B))

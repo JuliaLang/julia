@@ -23,6 +23,16 @@ tril!(M::AbstractMatrix) = tril!(M,0)
 #diff(a::AbstractVector)
 #diff(a::AbstractMatrix, dim::Integer)
 diff(a::AbstractMatrix) = diff(a, 1)
+diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
+
+function diff(A::AbstractMatrix, dim::Integer)
+    if dim == 1
+        [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
+    else
+        [A[i,j+1] - A[i,j] for i=1:size(A,1), j=1:size(A,2)-1]
+    end
+end
+
 
 gradient(F::AbstractVector) = gradient(F, [1:length(F)])
 gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F))])
@@ -31,7 +41,7 @@ gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F))])
 diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagonal matrix")
 #diag(A::AbstractMatrix)
 
-#diagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
+#diagm{T}(v::AbstractVecOrMat{T})
 
 function norm{T}(x::AbstractVector{T}, p::Number)
     if length(x) == 0
@@ -100,12 +110,12 @@ trace(x::Number) = x
 
 inv(a::AbstractVector) = error("argument must be a square matrix")
 
-function \{TA<:Number,TB<:Number}(A::AbstractMatrix{TA}, B::Union(AbstractVector{TB},AbstractMatrix{TB}))
+function \{TA<:Number,TB<:Number}(A::AbstractMatrix{TA}, B::AbstractVecOrMat{TB})
     TC = typeof(one(TA)/one(TB))
     return TB == TC ? A_ldiv_B!(A, copy(B)) : A_ldiv_B!(A, convert(Array{TC}, B))
 end
 \(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
-/(A::Union(AbstractVector,AbstractMatrix), B::Union(AbstractVector,AbstractMatrix)) = (B' \ A')'
+/(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'
 
 cond(x::Number) = x == 0 ? Inf : 1.0
 cond(x::Number, p) = cond(x)

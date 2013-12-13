@@ -144,7 +144,7 @@ example computes a dot product using a BLAS function.
 
 ::
 
-    function compute_dot(DX::Vector, DY::Vector)
+    function compute_dot(DX::Vector{Float64}, DY::Vector{Float64})
       assert(length(DX) == length(DY))
       n = length(DX)
       incx = incy = 1

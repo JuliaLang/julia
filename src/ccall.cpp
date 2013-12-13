@@ -375,7 +375,8 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         // //safe thing would be to also check that jl_typeof(aty)->size > sizeof(ty) here and/or at runtime
         Value *pjv = builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), PointerType::get(ty,0));
         return builder.CreateLoad(pjv, false);
-    } else if (jl_is_tuple(jt)) {
+    }
+    else if (jl_is_tuple(jt)) {
         return emit_unbox(ty,jv,jt);
     }
     // TODO: error for & with non-pointer argument type
@@ -808,7 +809,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 arg = boxed(arg,ctx);
                 needroot = true;
             }
-        } 
+        }
         else {
             arg = emit_unboxed(argi, ctx);
             if (jl_is_bitstype(expr_type(argi, ctx))) {

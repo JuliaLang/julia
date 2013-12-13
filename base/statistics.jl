@@ -195,8 +195,6 @@ hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
 
 ## pearson covariance functions ##
 
-typealias AbstractVecOrMat{T} Union(AbstractVector{T}, AbstractMatrix{T})
-
 function center(x::AbstractMatrix)
     m,n = size(x)
     res = Array(promote_type(eltype(x),Float64), size(x))

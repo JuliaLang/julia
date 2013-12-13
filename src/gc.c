@@ -639,6 +639,13 @@ static void gc_mark_module(jl_module_t *m, int d)
                 gc_push_root(b->type, d);
         }
     }
+    // this is only necessary because bindings for "using" modules
+    // are added only when accessed. therefore if a module is replaced
+    // after "using" it but before accessing it, this array might
+    // contain the only reference.
+    for(i=0; i < m->usings.len; i++) {
+        gc_push_root(m->usings.items[i], d);
+    }
     if (m->constant_table)
         gc_push_root(m->constant_table, d);
 }

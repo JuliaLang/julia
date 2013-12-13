@@ -86,6 +86,30 @@ win-extras` in between `make` and `make dist`.  After that process is
 completed, the `.zip` file created in the head Julia directory will
 hold a completely self-contained Julia.
 
+Notes on BLAS and LAPACK
+------------------------
+
+Julia builds OpenBLAS by default, which includes the BLAS and LAPACK
+libraries. On 32-bit architectures, Julia builds OpenBLAS to use
+32-bit integers, while on 64-bit architectuers, Julia builds OpenBLAS
+to use 64-bit integers. It is essential that all Julia functions that
+call BLAS and LAPACK API routines use integers of the correct width.
+
+Most BLAS and LAPACK distributions provided on linux distributions,
+and even commercial implementations ship libraries that use 32-bit
+APIs. In many cases, a 64-bit API is provided as a separate library.
+
+When using vendor provided or OS provided libraries, a `make` option
+called `USE_BLAS64` is available as part of the Julia build. When doing
+`make USE_BLAS64=0`, Julia will call BLAS and LAPACK assuming a 32-bit
+API, where all integers are 32-bit wide, even on a 64-bit architecture.
+
+Other libraries that Julia uses, such as ARPACK and SuiteSparse also
+use BLAS and LAPACK internally. The APIs need to be consistent across
+all libraries that depend on BLAS and LAPACK. The Julia build process
+will build all these libraries correctly, but when overriding defaults
+and using system provided libraries, this consistency must be ensured.
+
 
 Compilation scripts
 ===================

@@ -132,11 +132,11 @@ USE_COPY_STACKS = 1
 # Compiler specific stuff
 
 ifeq ($(CC), clang)
-USEGCC = 0
-USECLANG = 1
+USEGCC ?= 0
+USECLANG ?= 1
 else
-USEGCC = 1
-USECLANG = 0
+USEGCC ?= 1
+USECLANG ?= 0
 endif
 
 STDLIBCPP_FLAG = 
@@ -167,6 +167,9 @@ FC = $(CROSS_COMPILE)gfortran
 ifeq ($(USEGCC),1)
 ifeq ($(USE_LIBCPP),1)
 $(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
+endif
+ifeq ($(SANITIZE),1)
+$(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
 endif
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
@@ -208,6 +211,12 @@ JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../$(JL_PRIVATE_LIBDIR)/sys.ji"'
 
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
+endif
+
+ifeq ($(SANITIZE),1)
+JCXXFLAGS += -fsanitize=address -mllvm -asan-stack=0
+JCFLAGS += -fsanitize=address -mllvm -asan-stack=0
+LDFLAGS += -fsanitize=address -mllvm -asan-stack=0
 endif
 
 # ===========================================================================
@@ -389,7 +398,7 @@ else
 endif
 
 ifeq ($(OS), Linux)
-OSLIBS += -ldl -lrt -lpthread -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
+OSLIBS += -ldl -ltinfo -lrt -lpthread -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
 JLDFLAGS = -Wl,-Bdynamic
 endif
 
