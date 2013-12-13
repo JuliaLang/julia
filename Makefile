@@ -221,7 +221,7 @@ ifeq ($(OS), Darwin)
 	-./contrib/mac/fixup-libgfortran.sh $(DESTDIR)$(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
 	# Copy in juliarc.jl files per-platform for binary distributions as well
-	# Note that we don't install to SYSCONFDIR: we always install to PREFIX/etc.
+	# Note that we don't install to SYSCONFDIR: we always install to $(DESTDIR)$(PREFIX)/etc.
 	# If you want to make a distribution with a hardcoded path, you take care of installation
 ifeq ($(OS), Darwin)
 	-cat ./contrib/mac/juliarc.jl >> $(DESTDIR)$(PREFIX)/etc/julia/juliarc.jl
