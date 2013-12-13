@@ -1,3 +1,5 @@
+include = include_from_node1
+
 # prime method cache with some things we know we'll need right after startup
 precompile(pwd, ())
 precompile(fdio, (Int32,))
