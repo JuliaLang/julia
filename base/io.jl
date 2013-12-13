@@ -267,9 +267,10 @@ fd(s::IOStream) = int(ccall(:jl_ios_fd, Clong, (Ptr{Void},), s.ios))
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 isopen(s::IOStream) = bool(ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios))
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
-isreadonly(s::IOStream) = bool(ccall(:ios_get_readonly, Cint, (Ptr{Void},), s.ios))
-iswritable(s::IOStream) = !isreadonly(s)
-isreadable(s::IOStream) = true
+iswritable(s::IOStream) = bool(ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios))
+isreadable(s::IOStream) = bool(ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios))
+modestr(s::IO) = modestr(isreadable(s), iswritable(s))
+modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : error("Neither readable nor writable"))
 
 function truncate(s::IOStream, n::Integer)
     ccall(:ios_trunc, Int32, (Ptr{Void}, Uint), s.ios, n) == 0 ||
@@ -300,6 +301,33 @@ end
 position(s::IOStream) = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
 
 eof(s::IOStream) = bool(ccall(:jl_ios_eof, Int32, (Ptr{Void},), s.ios))
+
+# For interfacing with C FILE* functions
+
+
+immutable CFILE
+    ptr::Ptr{Void}
+end
+
+function CFILE(s::IO)
+    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Ptr{Uint8}), convert(Cint, fd(s)), modestr(s))
+    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Ptr{Uint8}), convert(Cint, fd(s)), modestr(s))
+    if FILEp == 0
+        error("fdopen failed")
+    end
+    seek(CFILE(FILEp), position(s))
+end
+
+convert(::Type{CFILE}, s::IO) = CFILE(s)
+
+function seek(h::CFILE, offset::Integer)
+    ccall(:fseek, Cint, (Ptr{Void}, Clong, Cint), 
+          h.ptr, convert(Clong, offset), int32(0)) == 0 ||
+          error("fseek failed")
+    h
+end
+
+position(h::CFILE) = ccall(:ftell, Clong, (Ptr{Void},), h.ptr)
 
 ## constructing and opening streams ##
 
@@ -351,7 +379,7 @@ write(s::IOStream, b::Uint8) = int(ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b,
 
 function write{T}(s::IOStream, a::Array{T})
     if isbits(T)
-        if isreadonly(s)
+        if !iswritable(s)
             error("attempt to write to a read-only IOStream")
         end
         int(ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
@@ -362,7 +390,7 @@ function write{T}(s::IOStream, a::Array{T})
 end
 
 function write(s::IOStream, p::Ptr, nb::Integer)
-    if isreadonly(s)
+    if !iswritable(s)
         error("attempt to write to a read-only IOStream")
     end
     int(ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb))
@@ -409,7 +437,7 @@ end
 ## text I/O ##
 
 function write(s::IOStream, c::Char)
-    if isreadonly(s)
+    if !iswritable(s)
         error("attempt to write to a read-only IOStream")
     end
     int(ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c))

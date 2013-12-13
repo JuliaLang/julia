@@ -42,6 +42,8 @@ Library improvements
 
   * Faster sparse `kron` ([#4958]).
 
+  * `rand` now supports arbitrary `Ranges` arguments ([#5059]).
+
 Deprecated or removed
 ---------------------
 

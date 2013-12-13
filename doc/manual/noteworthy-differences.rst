@@ -74,7 +74,7 @@ One of Julia's goals is to provide an effective language for data analysis and s
 - Julia does not treat the numbers ``0`` and ``1`` as Booleans. You cannot write ``if (1)`` in Julia, because ``if`` statements accept only booleans. Instead, you can write ``if true``.
 - Julia does not provide ``nrow`` and ``ncol``. Instead, use ``size(M, 1)`` for ``nrow(M)`` and ``size(M, 2)`` for ``ncol(M)``.
 - Julia's SVD is not thinned by default, unlike R. To get results like R's, you will often want to call ``svd(X, true)`` on a matrix ``X``.
-- Julia is very careful to distinguish scalars, vectors and matrices. In R, ``1`` and ``c(1)`` are the same. In Julia, they can not be used interchangeably. One potentially confusing result of this is that ``x' * y`` for vectors ``x`` and ``y`` is a 1-element vector, not a scalar. To get a scalar, use ``dot(x, y)``.
+- Julia is careful to distinguish scalars, vectors and matrices. In R, ``1`` and ``c(1)`` are the same. In Julia, they can not be used interchangeably. One potentially confusing result of this is that ``x' * y`` for vectors ``x`` and ``y`` is a 1-element vector, not a scalar. To get a scalar, use ``dot(x, y)``.
 - Julia's ``diag()`` and ``diagm()`` are not like R's.
 - Julia cannot assign to the results of function calls on the left-hand of an assignment operation: you cannot write ``diag(M) = ones(n)``.
 - Julia discourages populating the main namespace with functions. Most statistical functionality for Julia is found in `packages <http://docs.julialang.org/en/latest/packages/packagelist/>`_ like the DataFrames and Distributions packages:

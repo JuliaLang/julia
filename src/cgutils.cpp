@@ -194,6 +194,8 @@ static Value *julia_binding_gv(jl_binding_t *b) {
 
 static Type *julia_struct_to_llvm(jl_value_t *jt);
 
+static bool jltupleisbits(jl_value_t *jt, bool allow_unsized = true);
+
 static Type *julia_type_to_llvm(jl_value_t *jt)
 {
     if (jt == (jl_value_t*)jl_bool_type) return T_int1;
@@ -208,7 +210,7 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
         Type *type = NULL;
         for (size_t i = 0; i < ntypes; ++i) {
             jl_value_t *elt = jl_tupleref(jt,i);
-            purebits &= jl_isbits(elt);
+            purebits &= jltupleisbits(elt);
             Type *newtype = julia_struct_to_llvm(elt);
             if (type != NULL && type != newtype)
                 isvector = false;
@@ -221,9 +223,9 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
             // http://llvm.org/bugs/show_bug.cgi?id=12618
             if (isvector && type != T_int1) {
                 Type *ret = NULL;
-                if(type == T_void)
+                if (type == T_void)
                     return T_void;
-                if (type->isSingleValueType())
+                if (type->isSingleValueType() && !type->isVectorTy())
                     ret = VectorType::get(type,ntypes);
                 else
                     ret = ArrayType::get(type,ntypes);
@@ -746,7 +748,7 @@ static Value *emit_tuplelen(Value *t,jl_value_t *jt)
         Value *lenbits = emit_nthptr(t, 1);
         return builder.CreatePtrToInt(lenbits, T_size);
     #endif
-    } 
+    }
     else { //unboxed
         return ConstantInt::get(T_size,jl_tuple_len(jt));
     }
@@ -780,9 +782,9 @@ static Value *emit_tupleset(Value *tuple, Value *i, Value *x, jl_value_t *jt, jl
             assert(ity->isIntegerTy());
             IntegerType *iity = dyn_cast<IntegerType>(ity);
             // ExtractElement needs i32 *sigh*
-            if(iity->getBitWidth() > 32)
+            if (iity->getBitWidth() > 32)
                 i = builder.CreateTrunc(i,T_int32);
-            else if(iity->getBitWidth() < 32)
+            else if (iity->getBitWidth() < 32)
                 i = builder.CreateZExt(i,T_int32);
             ret = builder.CreateInsertElement(tuple,x,builder.CreateSub(i,ConstantInt::get(T_int32,1)));
         } 
@@ -797,7 +799,7 @@ static Value *emit_tupleset(Value *tuple, Value *i, Value *x, jl_value_t *jt, jl
                     else 
                         ret = builder.CreateInsertValue(tuple,x,ArrayRef<unsigned>(j));
                 }
-                if(ty != T_void)
+                if (ty != T_void)
                     ++j;
             }
         }
@@ -829,9 +831,9 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
             assert(ity->isIntegerTy());
             IntegerType *iity = dyn_cast<IntegerType>(ity);
             // ExtractElement needs i32 *sigh*
-            if(iity->getBitWidth() > 32)
+            if (iity->getBitWidth() > 32)
                 ival = builder.CreateTrunc(ival,T_int32);
-            else if(iity->getBitWidth() < 32)
+            else if (iity->getBitWidth() < 32)
                 ival = builder.CreateZExt(ival,T_int32);
             return builder.CreateExtractElement(tuple,builder.CreateSub(ival,ConstantInt::get(T_int32,1)));
         }
@@ -847,7 +849,7 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
                     else 
                         return mark_julia_type(builder.CreateExtractValue(tuple,ArrayRef<unsigned>(j)),jl_tupleref(jt,i));
                 }
-                if(ty != T_void)
+                if (ty != T_void)
                     ++j;
             }
             assert("Out of bounds!");
@@ -1168,9 +1170,9 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
     ConstantVector *cvec = NULL;
     if ((carr = dyn_cast<ConstantArray>(constant)) != NULL)
         nargs = carr->getType()->getNumElements();
-    else if((cst = dyn_cast<ConstantStruct>(constant)) != NULL)
+    else if ((cst = dyn_cast<ConstantStruct>(constant)) != NULL)
         nargs = cst->getType()->getNumElements();
-    else if((cvec = dyn_cast<ConstantVector>(constant)) != NULL)
+    else if ((cvec = dyn_cast<ConstantVector>(constant)) != NULL)
         nargs = cvec->getType()->getNumElements();
     else
         assert(false && "Cannot process this type of constant");
@@ -1198,7 +1200,7 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
         if (jt == NULL || jl_is_uniontype(jt) || jl_is_abstracttype(jt))
             jt = julia_type_of(v);
         jl_value_t *s = static_void_instance(jt);
-        if(jl_is_tuple(jt) && jl_tuple_len(jt) > 0)
+        if (jl_is_tuple(jt) && jl_tuple_len(jt) > 0)
             jl_add_linfo_root(ctx->linfo, s);
         return literal_pointer_val(s);
     }
@@ -1209,12 +1211,12 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
         jt = julia_type_of(v);
     if (t == T_void) {
         jl_value_t *s = static_void_instance(jt);
-        if(jl_is_tuple(jt) && jl_tuple_len(jt) > 0)
+        if (jl_is_tuple(jt) && jl_tuple_len(jt) > 0)
             jl_add_linfo_root(ctx->linfo, s);
         return literal_pointer_val(s);
     }
     Constant *c = NULL;
-    if((c = dyn_cast<Constant>(v)) != NULL) {
+    if ((c = dyn_cast<Constant>(v)) != NULL) {
         jl_value_t *s = static_constant_instance(c,jt);
         jl_add_linfo_root(ctx->linfo, s);
         return literal_pointer_val(s);

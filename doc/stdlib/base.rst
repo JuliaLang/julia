@@ -376,9 +376,13 @@ Syntax
 
    Generates a gensym symbol for a variable. For example, `@gensym x y` is transformed into `x = gensym("x"); y = gensym("y")`.
 
-.. function:: parse(str, [start]; greedy=true, raise=false)
+.. function:: parse(str, start; greedy=true, raise=true)
 
    Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing (default is 1). If greedy is true (default), parse will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid token. If raise is true (default), parse errors will raise an error; otherwise, parse will return the error as an expression object.
+
+.. function:: parse(str; raise=true)
+
+   Parse the whole string greedily, returning a single expression.  An error is thrown if there are additional characters after the first expression.
 
 Iteration
 ---------
@@ -480,11 +484,29 @@ Iterable Collections
 
 .. function:: reduce(op, v0, itr)
 
-   Reduce the given collection with the given operator, i.e. accumulate ``v = op(v,elt)`` for each element, where ``v`` starts as ``v0``. Reductions for certain commonly-used operators are available in a more convenient 1-argument form: ``maximum(itr)``, ``minimum(itr)``, ``sum(itr)``, ``prod(itr)``, ``any(itr)``, ``all(itr)``.
+   Reduce the given collection ``ìtr`` with the given binary operator. Reductions
+   for certain commonly-used operators are available in a more convenient
+   1-argument form: ``maximum(itr)``, ``minimum(itr)``, ``sum(itr)``,
+   ``prod(itr)``, ``any(itr)``, ``all(itr)``.
 
-   The associativity of the reduction is implementation-dependent; if you
-   need a particular associativity, e.g. left-to-right, you should write
-   your own loop.
+   The associativity of the reduction is implementation-dependent. This means
+   that you can't use non-associative operations like ``-`` because it is
+   undefined whether ``reduce(-,[1,2,3])`` should be evaluated as ``(1-2)-3``
+   or ``1-(2-3)``. Use ``foldl`` or ``foldr`` instead for guaranteed left or
+   right associativity.
+
+   Some operations accumulate error, and parallelism will also be easier if the
+   reduction can be executed in groups. Future versions of Julia might change
+   the algorithm. Note that the elements are not reordered if you use an ordered
+   collection.
+
+.. function:: foldl(op, v0, itr)
+
+   Like ``reduce``, but with guaranteed left associativity. 
+
+.. function:: foldr(op, v0, itr)
+
+   Like ``reduce``, but with guaranteed right associativity. 
 
 .. function:: maximum(itr)
 
@@ -556,15 +578,17 @@ Iterable Collections
 
 .. function:: count(p, itr) -> Integer
 
-   Count the number of elements in ``itr`` for which predicate ``p`` is true.
+   Count the number of elements in ``itr`` for which predicate ``p`` returns true.
 
 .. function:: any(p, itr) -> Bool
 
-   Determine whether any element of ``itr`` satisfies the given predicate.
+   Determine whether predicate ``p`` returns true for any elements of ``itr``.
 
 .. function:: all(p, itr) -> Bool
 
-   Determine whether all elements of ``itr`` satisfy the given predicate.
+   Determine whether predicate ``p`` returns true for all elements of ``itr``.
+
+   **Example**: ``all((i) -> i>i, [4,5,6]) = true``
 
 .. function:: map(f, c) -> collection
 
@@ -584,7 +608,7 @@ Iterable Collections
 
    The associativity of the reduction is implementation-dependent; if you
    need a particular associativity, e.g. left-to-right, you should write
-   your own loop.
+   your own loop. See documentation for ``reduce``.
 
 .. function:: first(coll)
 
@@ -3538,7 +3562,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: findfirst(predicate, A)
 
-   Return the index of the first element that satisfies the given predicate in ``A``.
+   Return the index of the first element of ``A`` for which ``predicate`` returns true.
 
 .. function:: findnext(A, i)
 
@@ -3546,8 +3570,7 @@ Indexing, Assignment, and Concatenation
 
 .. function:: findnext(predicate, A, i)
 
-   Find the next index >= ``i`` of an element of ``A`` satisfying the given predicate,
-   or ``0`` if not found.
+   Find the next index >= ``i`` of an element of ``A`` for which ``predicate`` returns true, or ``0`` if not found.
 
 .. function:: findnext(A, v, i)
 
@@ -3631,7 +3654,7 @@ Array functions
 
    The associativity of the reduction is implementation-dependent; if you
    need a particular associativity, e.g. left-to-right, you should write
-   your own loop.
+   your own loop. See documentation for ``reduce``.
 
 .. function:: mapslices(f, A, dims)
 

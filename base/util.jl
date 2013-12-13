@@ -324,6 +324,21 @@ function check_blas()
             quit()
         end
     end
+
+    #
+    # Check if BlasInt is the expected bitsize, by triggering an error
+    #
+    (_, info) = LinAlg.LAPACK.potrf!('U', [1.0 0.0; 0.0 -1.0])
+    if info != 2 # mangled info code
+        if info == 2^33
+            error("""BLAS and LAPACK are compiled with 32-bit integer support, but Julia expects 64-bit integers. Please build Julia with USE_BLAS64=0.""")
+        elseif info == 0
+            error("""BLAS and LAPACK are compiled with 64-bit integer support but Julia expects 32-bit integers. Please build Julia with USE_BLAS64=1.""")
+        else
+            error("""The LAPACK library produced an undefined error code. Please verify the installation of BLAS and LAPACK.""")
+        end
+    end
+
 end
 
 # system information
@@ -332,6 +347,9 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "Julia Version $VERSION")
     if !isempty(BUILD_INFO.commit_short)
       println(io,             "Commit $(BUILD_INFO.commit_short) ($(BUILD_INFO.date_string))")
+    end
+    if ccall(:jl_is_debugbuild, Bool, ())
+        println(io, "DEBUG build")
     end
     println(io,             "Platform Info:")
     println(io,             "  System: ", Sys.OS_NAME, " (", Sys.MACHINE, ")")
@@ -350,6 +368,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
         print_matrix(io,    Sys.loadavg()')
         println(io          )
         Sys.cpu_summary(io)
+        println(io          )
     end
     if Base.libblas_name == "libopenblas" || blas_vendor() == :openblas
         openblas_config = openblas_get_config()
@@ -378,7 +397,7 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 function methodswith(io::IO, t::Type, m::Module, showparents::Bool)
     for nm in names(m)
         try
-           mt = eval(nm)
+           mt = eval(m, nm)
            d = mt.env.defs
            while !is(d,())
                if any(map(x -> x == t || (showparents && t <: x && x != Any && x != ANY && !isa(x, TypeVar)), d.sig))

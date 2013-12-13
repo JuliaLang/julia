@@ -2,6 +2,7 @@
 
 typealias AbstractVector{T} AbstractArray{T,1}
 typealias AbstractMatrix{T} AbstractArray{T,2}
+typealias AbstractVecOrMat{T} Union(AbstractVector{T}, AbstractMatrix{T})
 
 ## Basic functions ##
 
@@ -737,7 +738,7 @@ function vcat{T}(V::AbstractVector{T}...)
     a
 end
 
-function hcat{T}(A::Union(AbstractMatrix{T},AbstractVector{T})...)
+function hcat{T}(A::AbstractVecOrMat{T}...)
     nargs = length(A)
     nrows = size(A[1], 1)
     ncols = 0
@@ -1180,7 +1181,7 @@ function hvcat(rows::(Int...), as...)
     vcat(rs...)
 end
 
-function repmat(a::Union(AbstractVector,AbstractMatrix), m::Int, n::Int=1)
+function repmat(a::AbstractVecOrMat, m::Int, n::Int=1)
     o, p = size(a,1), size(a,2)
     b = similar(a, o*m, p*n)
     for j=1:n

@@ -47,16 +47,31 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
 end
 
 #linear indexing sub (may want to rename as slice)
-function sub{T,N}(A::Array{T,N}, i::(RangeIndex,))
-    SubArray{T,(isa(i[1], Int) ? 0 : 1),typeof(A),typeof(i)}(A, i)
+function sub{T,N}(A::Array{T,N}, i::(Union(Range{Int}, Range1{Int}),))
+    SubArray{T,1,typeof(A),typeof(i)}(A, i)
+end
+
+# if `I` were a vector, index_ranges would do the following:
+# j = length(I)
+# while j > 0 && isa(j[0], Int)
+#     j -= 1
+# end
+# for i = 1:j
+#     if isa(I[i], Int)
+#         I[i] = I[i]:I[i]
+#     end
+# end
+to_range(j::Int) = j:j
+to_range(j::RangeIndex) = j
+index_ranges(I::Int...) = I
+index_ranges(i, I...) = tuple(to_range(i), index_ranges(I...)...)
+
+function sub_internal{T,N,L}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex}, ::NTuple{L,Int})
+    SubArray{T,L,typeof(A),typeof(i)}(A, i)
 end
 
 function sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
-    L = length(i)
-    while L > 0 && isa(i[L], Int); L-=1; end
-    i0 = map(j -> isa(j, Int) ? (j:j) : j, i[1:L])
-    i = ntuple(length(i), k->(k<=L ? i0[k] : i[k]))
-    SubArray{T,L,typeof(A),typeof(i)}(A, i)
+    sub_internal(A, index_ranges(i...), index_shape(i...))
 end
 
 sub{N}(A::SubArray, i::NTuple{N,RangeIndex}) = sub(A, i...)
@@ -82,12 +97,15 @@ function sub(A::SubArray, i::RangeIndex...)
     SubArray{eltype(A),L,typeof(A.parent),typeof(ni)}(A.parent, ni)
 end
 
+# Drops all Ints from a tuple of RangeIndexes
+ranges_only(I::Int...) = ()
+ranges_only(i::Int, I...) = ranges_only(I...)
+ranges_only(i::Union(Range{Int}, Range1{Int}), I...) = tuple(i, ranges_only(I...)...)
 
-function slice{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
-    n = 0
-    for j = i; if !isa(j, Int); n += 1; end; end
-    SubArray{T,n,typeof(A),typeof(i)}(A, i)
+function slice_internal{T,N,L}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex}, ::NTuple{L,RangeIndex})
+    SubArray{T,L,typeof(A),typeof(i)}(A, i)
 end
+slice{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex}) = slice_internal(A, i, ranges_only(i...))
 
 # Throw error on slice dimension mismatch
 slice{T,N,M}(A::AbstractArray{T,N}, i::NTuple{M,RangeIndex}) = throw(BoundsError())
