@@ -13,3 +13,4 @@
 *.o
 *.dylib
 *.dSYM
+*.jlc
