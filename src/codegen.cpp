@@ -3342,25 +3342,25 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 static GlobalVariable *global_to_llvm(const std::string &cname, void *addr)
 {
     GlobalVariable *gv =
-        new GlobalVariable(*jl_Module, jl_pvalue_llvmt,
-                           true, GlobalVariable::ExternalLinkage,
-                           NULL, cname);
+        new GlobalVariable(*jl_Module, jl_pvalue_llvmt, true,
+                           GlobalVariable::ExternalLinkage, NULL, cname);
     jl_ExecutionEngine->addGlobalMapping(gv, addr);
     return gv;
 }
 
-static Function *jlfunc_to_llvm(const std::string &cname, void *addr)
+static Function *jlcall_func_to_llvm(const std::string &cname, void *addr)
 {
-    Function *f =
-        Function::Create(jl_func_sig, Function::ExternalLinkage,
-                         cname, jl_Module);
+    Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage,
+                                   cname, jl_Module);
     jl_ExecutionEngine->addGlobalMapping(f, addr);
     return f;
 }
 
-extern "C" void jlfptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
+extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
 {
     // this assigns a function pointer (from loading the system image), to the function object
+    std::string funcName = lam->name->name;
+    funcName = "julia_" + funcName;
     if (specsig) {
         jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)lam->ast);
         std::vector<Type*> fsig(0);
@@ -3370,9 +3370,8 @@ extern "C" void jlfptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
                 fsig.push_back(ty);
         }
         Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
-        Function *f =
-            Function::Create(FunctionType::get(rt, fsig, false), Function::ExternalLinkage,
-                             "jl_julia_fptr", jl_Module);
+        Function *f = Function::Create(FunctionType::get(rt, fsig, false),
+                                       Function::ExternalLinkage, funcName, jl_Module);
         if (lam->cFunctionObject == NULL) {
             lam->cFunctionObject = (void*)f;
             lam->cFunctionID = jl_assign_functionID(f);
@@ -3380,7 +3379,7 @@ extern "C" void jlfptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
         jl_ExecutionEngine->addGlobalMapping(f, (void*)fptr);
     }
     else {
-        Function *f = jlfunc_to_llvm("jl_julia_fptr", fptr);
+        Function *f = jlcall_func_to_llvm(funcName, fptr);
         if (lam->functionObject == NULL) {
             lam->functionObject = (void*)f;
             lam->functionID = jl_assign_functionID(f);
@@ -3594,10 +3593,10 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jldeclareconst_func,
                                          (void*)&jl_declare_constant);
 
-    jltuple_func = jlfunc_to_llvm("jl_f_tuple", (void*)&jl_f_tuple);
+    jltuple_func = jlcall_func_to_llvm("jl_f_tuple", (void*)&jl_f_tuple);
     jlapplygeneric_func =
-        jlfunc_to_llvm("jl_apply_generic", (void*)&jl_apply_generic);
-    jlgetfield_func = jlfunc_to_llvm("jl_f_get_field", (void*)&jl_f_get_field);
+        jlcall_func_to_llvm("jl_apply_generic", (void*)&jl_apply_generic);
+    jlgetfield_func = jlcall_func_to_llvm("jl_f_get_field", (void*)&jl_f_get_field);
 
     std::vector<Type*> args3(0);
     args3.push_back(jl_pvalue_llvmt);

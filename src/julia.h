@@ -998,7 +998,7 @@ jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types,
 jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache);
 jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
                          jl_value_t **args, size_t nargs);
-void jlfptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig);
+void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig);
 
 // AST access
 jl_array_t *jl_lam_args(jl_expr_t *l);
