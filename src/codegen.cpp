@@ -308,9 +308,9 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
             (void)jl_ExecutionEngine->getPointerToFunction((Function*)li->cFunctionObject);
         JL_SIGATOMIC_END();
         if (!imaging_mode) {
-        llvmf->deleteBody();
-        if (li->cFunctionObject != NULL)
-            ((Function*)li->cFunctionObject)->deleteBody();
+            llvmf->deleteBody();
+            if (li->cFunctionObject != NULL)
+                ((Function*)li->cFunctionObject)->deleteBody();
         }
     }
     f->fptr = li->fptr;
@@ -3358,7 +3358,8 @@ static Function *jlfunc_to_llvm(const std::string &cname, void *addr)
     return f;
 }
 
-extern "C" void jlfptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig) {
+extern "C" void jlfptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
+{
     // this assigns a function pointer (from loading the system image), to the function object
     if (specsig) {
         jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)lam->ast);
@@ -3377,7 +3378,8 @@ extern "C" void jlfptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig) {
             lam->cFunctionID = jl_assign_functionID(f);
         }
         jl_ExecutionEngine->addGlobalMapping(f, (void*)fptr);
-    } else {
+    }
+    else {
         Function *f = jlfunc_to_llvm("jl_julia_fptr", fptr);
         if (lam->functionObject == NULL) {
             lam->functionObject = (void*)f;

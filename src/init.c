@@ -839,10 +839,12 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
             if (asprintf(&build_bc, "%s.bc",build_path) > 0) {
                 jl_dump_bitcode(build_bc);
                 free(build_bc);
-            } else {
+            }
+            else {
                 ios_printf(ios_stderr,"FATAL: failed to create string for .bc build path");
             }
-        } else {
+        }
+        else {
             ios_printf(ios_stderr,"FATAL: failed to create string for .ji build path");
         }
     }

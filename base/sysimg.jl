@@ -220,6 +220,8 @@ importall .Profile
 
 include("precompile.jl")
 
+include = include_from_node1
+
 # invoke type inference, running the existing inference code on the new
 # inference code to cache an optimized version of it.
 begin

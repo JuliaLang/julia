@@ -75,7 +75,8 @@ static void jl_gen_llvm_gv_array()
             "jl_sysimg_gvars");
 }
 
-static int32_t jl_assign_functionID(Function *functionObject) {
+static int32_t jl_assign_functionID(Function *functionObject)
+{
     // give the function an index in the constant lookup table
     if (!imaging_mode)
         return 0;
@@ -107,7 +108,8 @@ static Value *julia_gv(const char *cname, void *addr)
     return builder.CreateLoad(gv);
 }
 
-static Value *julia_gv(const char *prefix, jl_sym_t *name, jl_module_t *mod, void *addr) {
+static Value *julia_gv(const char *prefix, jl_sym_t *name, jl_module_t *mod, void *addr)
+{
     // emit a GlobalVariable for a jl_value_t, using the prefix, name, and module to
     // to create a readable name of the form prefixModA.ModB.name
     size_t len = strlen(name->name)+strlen(prefix)+1;
@@ -180,7 +182,8 @@ static Value *literal_pointer_val(jl_binding_t *p)
     return julia_gv("jl_bnd#", p->name, p->owner, p);
 }
 
-static Value *julia_binding_gv(jl_binding_t *b) {
+static Value *julia_binding_gv(jl_binding_t *b)
+{
     // emit a literal_pointer_val to the value field of a jl_binding_t
     // binding->value are prefixed with *
     Value *bv = imaging_mode ?

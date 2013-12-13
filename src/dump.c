@@ -92,9 +92,8 @@ static void write_as_tag(ios_t *s, uint8_t tag)
 #define jl_serialize_value(s, v) jl_serialize_value_(s,(jl_value_t*)(v))
 static void jl_serialize_value_(ios_t *s, jl_value_t *v);
 static jl_value_t *jl_deserialize_value(ios_t *s);
-
-
 static jl_value_t ***sysimg_gvars = NULL;
+
 static void jl_load_sysimg_so(char *fname)
 {
     // attempt to load the pre-compiled sysimg at fname
@@ -103,7 +102,8 @@ static void jl_load_sysimg_so(char *fname)
     uv_lib_t *sysimg_handle = jl_load_dynamic_library_e(fname, JL_RTLD_DEFAULT);
     if (sysimg_handle != 0) {
         sysimg_gvars = (jl_value_t***)jl_dlsym(sysimg_handle, "jl_sysimg_gvars");
-    } else {
+    }
+    else {
         sysimg_gvars = 0;
     }
 }
@@ -301,7 +301,8 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
                 jl_serialize_value(s, b->name);
                 if (table[i-1] == jhsym && m == jl_core_module) {
                     jl_serialize_value(s, NULL);
-                } else {
+                }
+                else {
                     jl_serialize_value(s, b->value);
                 }
                 jl_serialize_value(s, b->type);
@@ -667,7 +668,9 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
     }
     return jl_deserialize_value_(s, pos, vtag);
 }
-static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag) {
+
+static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag)
+{
     int usetable = (tree_literal_values == NULL);
 
     size_t i;
