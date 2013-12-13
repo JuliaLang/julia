@@ -129,34 +129,22 @@ static void jl_serialize_globalvals(ios_t *s)
     size_t i, len = backref_table.size;
     void **p = backref_table.table;
     for(i=0; i < len; i+=2) {
-        void *v = p[i];
-        if (v != HT_NOTFOUND) {
-            void *key = p[i+1];
-            if (key != HT_NOTFOUND) {
-                int32_t gv = jl_get_llvm_gv(v);
-                if (gv != 0) {
-                    write_int32(s, (int)(intptr_t)key);
-#ifdef _P64
-                    write_int32(s, (int)((intptr_t)key>>32));
-#endif
-                    write_int32(s, gv);
-                }
+        void *offs = p[i+1];
+        if (offs != HT_NOTFOUND) {
+            int32_t gv = jl_get_llvm_gv(p[i]);
+            if (gv != 0) {
+                write_int32(s, (int)(intptr_t)offs);
+                write_int32(s, gv);
             }
         }
     }
     write_int32(s, 0);
-#ifdef _P64
-    write_int32(s, 0);
-#endif
 }
 
 static void jl_deserialize_globalvals(ios_t *s)
 {
     while (1) {
         intptr_t key = read_int32(s);
-#ifdef _P64
-        key |= ((intptr_t)read_int32(s))<<32;
-#endif
         if (key == 0) break;
         jl_deserialize_gv(s, ptrhash_get(&backref_table, (void*)key));
     }
@@ -219,7 +207,7 @@ static void jl_update_all_fptrs()
     //printf("delayed_fptrs_n: %d\n", delayed_fptrs_n);
     jl_value_t ***gvars = sysimg_gvars;
     if (gvars == 0) return;
-    // jlfptr_to_llvm needs to decompress some ast's, therefore this needs to be NULL
+    // jl_fptr_to_llvm needs to decompress some ASTs, therefore this needs to be NULL
     // to skip trying to restore GlobalVariable pointers in jl_deserialize_gv
     sysimg_gvars = NULL;
     size_t i;
@@ -227,11 +215,11 @@ static void jl_update_all_fptrs()
         jl_lambda_info_t *li = delayed_fptrs[i].li;
         int32_t func = delayed_fptrs[i].func-1;
         if (func >= 0) {
-            jlfptr_to_llvm((jl_fptr_t)gvars[func], li, 0);
+            jl_fptr_to_llvm((jl_fptr_t)gvars[func], li, 0);
         }
         int32_t cfunc = delayed_fptrs[i].cfunc-1;
         if (cfunc >= 0) {
-            jlfptr_to_llvm((jl_fptr_t)gvars[cfunc], li, 1);
+            jl_fptr_to_llvm((jl_fptr_t)gvars[cfunc], li, 1);
         }
     }
     delayed_fptrs_n = 0;
@@ -637,8 +625,6 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
 
 jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
 
-static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag);
-
 static jl_value_t *jl_deserialize_value(ios_t *s)
 {
     int pos = ios_pos(s);
@@ -666,11 +652,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
     else if (vtag == (jl_value_t*)LiteralVal_tag) {
         return jl_cellref(tree_literal_values, read_uint16(s));
     }
-    return jl_deserialize_value_(s, pos, vtag);
-}
 
-static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag)
-{
     int usetable = (tree_literal_values == NULL);
 
     size_t i;
@@ -942,7 +924,7 @@ void jl_save_system_image(char *fname)
     jl_serialize_value(&f, jl_main_module);
 
     // deser_tag is an array indexed from 2 until HT_NOTFOUND
-    // ensure everything in there can be reassociated with it's GlobalValue
+    // ensure everything in there can be reassociated with its GlobalValue
     ptrint_t i=2;
     void *v = ptrhash_get(&deser_tag, (void*)i);
     while (v != HT_NOTFOUND) {
@@ -1006,7 +988,7 @@ void jl_restore_system_image(char *fname, int build_mode)
     jl_current_module = jl_base_module; // run start_image in Base
 
     // deser_tag is an array indexed from 2 until HT_NOTFOUND
-    // ensure everything in there is reassociated with it's GlobalValue
+    // ensure everything in there is reassociated with its GlobalValue
     ptrint_t i=2;
     void *v = ptrhash_get(&deser_tag, (void*)i);
     while (v != HT_NOTFOUND) {
