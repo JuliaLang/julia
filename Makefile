@@ -197,7 +197,7 @@ endif
 	$(INSTALL_F) $(BUILD)/share/man/man1/julia.1 $(DESTDIR)$(PREFIX)/share/man/man1/
 	# Copy etc/julia directory to SYSCONFIGDIR if it is set, otherwise to just $(PREFIX)/etc/
 ifneq ($(SYSCONFDIR),)
-	mkdir -p $(SYSCONFDIR)
+	mkdir -p $(DESTDIR)$(SYSCONFDIR)
 	cp -R $(BUILD)/etc/julia $(DESTDIR)$(SYSCONFDIR)/
 else
 	cp -R $(BUILD)/etc/julia $(DESTDIR)$(PREFIX)/etc/
