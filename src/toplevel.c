@@ -476,8 +476,6 @@ jl_value_t *jl_parse_eval_all(char *fname)
     return result;
 }
 
-int asprintf(char **strp, const char *fmt, ...);
-
 jl_value_t *jl_load(const char *fname)
 {
     if (jl_current_module == jl_base_module) {
@@ -560,7 +558,7 @@ static int type_contains(jl_value_t *ty, jl_value_t *x)
 
 void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
-jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
+DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f)
 {
     // argtypes is a tuple ((types...), (typevars...))

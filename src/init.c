@@ -344,6 +344,8 @@ DLLEXPORT void uv_atexit_hook()
     // able to show stuff (incl. printf's)
     jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stdout, &queue);
     jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stderr, &queue);
+    //uv_unref((uv_handle_t*)jl_uv_stdout);
+    //uv_unref((uv_handle_t*)jl_uv_stderr);
     struct uv_shutdown_queue_item *item = queue.first;
     while (item) {
         JL_TRY {
@@ -398,6 +400,8 @@ DLLEXPORT void uv_atexit_hook()
 void jl_get_builtin_hooks(void);
 
 uv_lib_t *jl_dl_handle;
+uv_lib_t _jl_RTLD_DEFAULT_handle;
+uv_lib_t *jl_RTLD_DEFAULT_handle=&_jl_RTLD_DEFAULT_handle;
 #ifdef _OS_WINDOWS_
 uv_lib_t _jl_ntdll_handle;
 uv_lib_t _jl_exe_handle;
@@ -598,11 +602,18 @@ DLLEXPORT kern_return_t catch_exception_raise
 
 #endif
 
-void julia_init(char *imageFile)
+void julia_init(char *imageFile, int build_mode)
 {
+    if (build_mode)
+        jl_set_imaging_mode(1);
     jl_page_size = jl_getpagesize();
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
+#ifdef RTLD_DEFAULT
+    jl_RTLD_DEFAULT_handle->handle = RTLD_DEFAULT;
+#else
+    jl_RTLD_DEFAULT_handle->handle = jl_dl_handle->handle;
+#endif
 #ifdef _OS_WINDOWS_
     uv_dlopen("ntdll.dll",jl_ntdll_handle); //bypass julia's pathchecking for system dlls
     uv_dlopen("kernel32.dll",jl_kernel32_handle);
@@ -643,7 +654,7 @@ void julia_init(char *imageFile)
     jl_init_frontend();
     jl_init_types();
     jl_init_tasks(jl_stack_lo, jl_stack_hi-jl_stack_lo);
-    jl_init_codegen();
+    jl_init_codegen(imageFile);
     jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
 
     jl_init_serializer();
@@ -663,11 +674,16 @@ void julia_init(char *imageFile)
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
         jl_init_box_caches();
+        // Core.JULIA_HOME is a "magic" constant, we set it at runtime here
+        // since it's value gets excluded from the system image
+        jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
+                     jl_cstr_to_string(julia_home));
+        jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));
     }
 
     if (imageFile) {
         JL_TRY {
-            jl_restore_system_image(imageFile);
+            jl_restore_system_image(imageFile, build_mode);
         }
         JL_CATCH {
             JL_PRINTF(JL_STDERR, "error during init:\n");
@@ -790,10 +806,10 @@ DLLEXPORT void jl_install_sigint_handler()
     //printf("sigint installed\n");
 }
 
-
+extern int asprintf(char **str, const char *fmt, ...);
 extern void * __stack_chk_guard;
 
-DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]))
+DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]), char *build_path)
 {
 #if defined(_OS_WINDOWS_) //&& !defined(_WIN64)
     SetUnhandledExceptionFilter(exception_handler);
@@ -814,6 +830,22 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
     }
 #endif
     int ret = pmain(argc, argv);
+    if (build_path) {
+        char *build_ji;
+        if (asprintf(&build_ji, "%s.ji",build_path) > 0) {
+            jl_save_system_image(build_ji);
+            free(build_ji);
+            char *build_bc;
+            if (asprintf(&build_bc, "%s.bc",build_path) > 0) {
+                jl_dump_bitcode(build_bc);
+                free(build_bc);
+            } else {
+                ios_printf(ios_stderr,"FATAL: failed to create string for .bc build path");
+            }
+        } else {
+            ios_printf(ios_stderr,"FATAL: failed to create string for .ji build path");
+        }
+    }
     p[sizeof(__stack_chk_guard)-1] = a;
     p[sizeof(__stack_chk_guard)-2] = b;
     p[0] = c;

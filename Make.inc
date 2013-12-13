@@ -248,6 +248,9 @@ ifneq ($(ARCH), ppc64)
 endif
 endif
 
+ifeq ($(OS),WINNT)
+LIBUNWIND=
+else
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 ifneq ($(OS),Darwin)
 LIBUNWIND=-lunwind-generic -lunwind
@@ -260,11 +263,14 @@ else
 LIBUNWIND=$(BUILD)/$(JL_LIBDIR)/libunwind-generic.a $(BUILD)/$(JL_LIBDIR)/libunwind.a
 endif
 endif
+endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
 LLVM_CONFIG ?= llvm-config$(EXE)
+LLVM_LLC ?= llc$(EXE)
 else
 LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config$(EXE)
+LLVM_LLC=$(LLVMROOT)/bin/llc$(EXE)
 endif
 
 ifeq ($(USE_SYSTEM_READLINE), 1)

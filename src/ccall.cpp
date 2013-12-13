@@ -73,53 +73,111 @@ extern "C" const char *jl_lookup_soname(char *pfx, size_t n)
 #endif
 
 // map from user-specified lib names to handles
-static std::map<std::string, void*> libMap;
+static std::map<std::string, uv_lib_t*> libMap;
 
-extern "C" int add_library_mapping(char *lib, void *hnd)
+static uv_lib_t *get_library(char *lib)
 {
-    JL_PUTS(const_cast<char*>("WARNING: add_library_mapping is deprecated, use push!(DL_LOAD_PATH,\"/path/to/search\") instead.\n"), JL_STDERR);
-    if (libMap[lib] == NULL && hnd != NULL) {
+    uv_lib_t *hnd;
+#ifdef _OS_WINDOWS_
+    if ((intptr_t)lib == 1)
+        return jl_exe_handle;
+    if ((intptr_t)lib == 2)
+        return jl_dl_handle;
+#endif
+    if (lib == NULL)
+        return jl_RTLD_DEFAULT_handle;
+    hnd = libMap[lib];
+    if (hnd != NULL)
+        return hnd;
+    hnd = jl_load_dynamic_library(lib, JL_RTLD_DEFAULT);
+    if (hnd != NULL)
         libMap[lib] = hnd;
-        return 0;
-    }
-    else {
-        return -1;
-    }
+    return hnd;
 }
 
-static void *add_library_sym(char *name, char *lib)
+extern "C" DLLEXPORT
+void *jl_load_and_lookup(char *f_lib, char *f_name, uv_lib_t **hnd)
 {
-    void *hnd;
-    if (lib == NULL) {
-        hnd = jl_dl_handle;
-    }
-    else {
-        hnd = libMap[lib];
-        if (hnd == NULL) {
-            hnd = jl_load_dynamic_library(lib, JL_RTLD_DEFAULT);
-            if (hnd != NULL)
-                libMap[lib] = hnd;
-            else
-                return NULL;
-        }
-    }
-    // add a symbol->address mapping for the JIT
-    void *sval = jl_dlsym_e((uv_lib_t*)hnd, name);
-    if (lib != NULL && hnd != jl_dl_handle) {
-        void *exist = sys::DynamicLibrary::SearchForAddressOfSymbol(name);
-        if (exist != NULL && exist != sval &&
-            // openlibm conflicts with libm, and lots of our libraries
-            // (including LLVM) link to libm. fortunately AddSymbol() is
-            // able to resolve these in favor of openlibm, but this could
-            // be an issue in the future (TODO).
-            strcmp(lib,"libopenlibm")) {
-            ios_printf(ios_stderr, "Warning: Possible conflict in library symbol %s\n", name);
-        }
-        sys::DynamicLibrary::AddSymbol(name, sval);
-    }
-    return sval;
+    uv_lib_t *handle = *hnd;
+    if (!handle)
+        *hnd = handle = get_library(f_lib);
+    void *ptr = jl_dlsym_e(handle, f_name);
+    if (!ptr)
+        jl_errorf("symbol could not be found %s: %s\n", f_name, uv_dlerror(handle));
+    return ptr;
 }
 
+static std::map<std::string, GlobalVariable*> libMapGV;
+static std::map<std::string, GlobalVariable*> symMapGV;
+static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_name, jl_codectx_t *ctx)
+{
+    // in pseudo-code, this function emits the following:
+    //   global uv_lib_t **libptrgv
+    //   global void **llvmgv
+    //   if (*llvmgv == NULL) {
+    //       *llvmgv = jl_load_and_lookup(f_lib, f_name, libptrgv);
+    //   }
+    //   return (*llvmgv)
+    Constant *initnul = ConstantPointerNull::get((PointerType*)T_pint8);
+
+    uv_lib_t *libsym = NULL;
+    bool runtime_lib = false;
+    GlobalVariable *libptrgv;
+#ifdef _OS_WINDOWS_
+    if ((intptr_t)f_lib == 1)
+        libptrgv = jlexe_var;
+    else if ((intptr_t)f_lib == 2)
+        libptrgv = jldll_var;
+    else
+#endif
+    if (f_lib == NULL)
+        libptrgv = jlRTLD_DEFAULT_var;
+    else {
+        runtime_lib = true;
+        libptrgv = libMapGV[f_lib];
+        if (libptrgv == NULL) {
+            libptrgv = new GlobalVariable(*jl_Module, T_pint8,
+               false, GlobalVariable::PrivateLinkage,
+               initnul, f_lib);
+            libMapGV[f_lib] = libptrgv;
+            libsym = get_library(f_lib);
+            *((uv_lib_t**)jl_ExecutionEngine->getPointerToGlobal(libptrgv)) = libsym;
+        }
+    }
+    if (libsym == NULL) {
+        libsym = *((uv_lib_t**)jl_ExecutionEngine->getPointerToGlobal(libptrgv));
+    }
+
+    GlobalVariable *llvmgv = symMapGV[f_name];
+    if (llvmgv == NULL) {
+        llvmgv = new GlobalVariable(*jl_Module, T_pint8,
+           false, GlobalVariable::PrivateLinkage,
+           initnul, f_name);
+        symMapGV[f_name] = llvmgv;
+        *((void**)jl_ExecutionEngine->getPointerToGlobal(llvmgv)) = jl_dlsym_e(libsym, f_name);
+    }
+
+    BasicBlock *dlsym_lookup = BasicBlock::Create(getGlobalContext(), "dlsym"),
+               *ccall_bb = BasicBlock::Create(getGlobalContext(), "ccall");
+    builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(llvmgv), initnul), ccall_bb, dlsym_lookup);
+
+    ctx->f->getBasicBlockList().push_back(dlsym_lookup);
+    builder.SetInsertPoint(dlsym_lookup);
+    Value *libname;
+    if (runtime_lib) {
+        libname = builder.CreateGlobalStringPtr(f_lib);
+    } else {
+        libname = literal_static_pointer_val(f_lib, T_pint8);
+    }
+    Value *llvmf = builder.CreateCall3(jldlsym_func, libname, builder.CreateGlobalStringPtr(f_name), libptrgv);
+    builder.CreateStore(llvmf, llvmgv);
+    builder.CreateBr(ccall_bb);
+
+    ctx->f->getBasicBlockList().push_back(ccall_bb);
+    builder.SetInsertPoint(ccall_bb);
+    llvmf = builder.CreateLoad(llvmgv);
+    return builder.CreatePointerCast(llvmf,funcptype);
+}
 // --- argument passing and scratch space utilities ---
 
 static Function *value_to_pointer_func;
@@ -134,12 +192,12 @@ static uint32_t arg_block_n = 0;
 static Function *save_arg_area_loc_func;
 static Function *restore_arg_area_loc_func;
 
-static uint64_t save_arg_area_loc()
+extern "C" DLLEXPORT uint64_t save_arg_area_loc()
 {
     return (((uint64_t)arg_block_n)<<32) | ((uint64_t)arg_area_loc);
 }
 
-static void restore_arg_area_loc(uint64_t l)
+extern "C" DLLEXPORT void restore_arg_area_loc(uint64_t l)
 {
     arg_area_loc = l&0xffffffff;
     uint32_t ab = l>>32;
@@ -178,7 +236,7 @@ static void *alloc_temp_arg_copy(void *obj, uint32_t sz)
 
 // this is a run-time function
 // warning: cannot allocate memory except using alloc_temp_arg_space
-extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
+extern "C" DLLEXPORT void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
                                      int addressof)
 {
     jl_value_t *jvt = (jl_value_t*)jl_typeof(v);
@@ -374,11 +432,9 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
             f_name = jl_string_data(ptr);
         if (f_name != NULL) {
             // just symbol, default to JuliaDLHandle
-#ifdef _OS_WINDOWS_
-            //TODO: store the f_lib name instead of fptr
-            fptr = jl_dlsym_win32(f_name);
-#else
             // will look in process symbol table
+#ifdef _OS_WINDOWS_
+            f_lib = jl_dlfind_win32(f_name);
 #endif
         }
         else if (jl_is_cpointer_type(jl_typeof(ptr))) {
@@ -453,43 +509,32 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         res = builder.CreateIntToPtr(sym.jl_ptr, lrt);
     }
     else if (sym.fptr != NULL) {
-        res = literal_pointer_val(sym.fptr, lrt);
+        res = literal_static_pointer_val(sym.fptr, lrt);
+        JL_PRINTF(JL_STDERR,"warning: literal address used in cglobal for %s; code cannot be statically compiled\n", sym.f_name);
     }
     else {
-        void *symaddr;
-        if (sym.f_lib != NULL)
-            symaddr = add_library_sym(sym.f_name, sym.f_lib);
-        else
-            symaddr = sys::DynamicLibrary::SearchForAddressOfSymbol(sym.f_name);
-        if (symaddr == NULL) {
-            std::stringstream msg;
-            msg << "cglobal: could not find symbol ";
-            msg << sym.f_name;
-            if (sym.f_lib != NULL) {
-                msg << " in library ";
-                msg << sym.f_lib;
-            }
-            emit_error(msg.str(), ctx);
-            res = literal_pointer_val(NULL, lrt);
+        if (imaging_mode) {
+            res = runtime_sym_lookup((PointerType*)lrt, sym.f_lib, sym.f_name, ctx);
         }
         else {
-            Value *nv = jl_Module->getNamedValue(sym.f_name);
-            if (nv != NULL) {
-                // if the symbol already exists, it might be a function or
-                // something else other than a GlobalVariable, so return
-                // whatever it is.
-                res = nv;
-                if (res->getType() != lrt) {
-                    // if you attempt to access a cglobal multiple times with
-                    // different types, the type of the cached global might be
-                    // wrong.
-                    res = builder.CreateBitCast(res, lrt);
+            void *symaddr = jl_dlsym_e(get_library(sym.f_lib), sym.f_name);
+            if (symaddr == NULL) {
+                std::stringstream msg;
+                msg << "cglobal: could not find symbol ";
+                msg << sym.f_name;
+                if (sym.f_lib != NULL) {
+#ifdef _OS_WINDOWS_
+                    assert((intptr_t)sym.f_lib != 1 && (intptr_t)sym.f_lib != 2);
+#endif
+                    msg << " in library ";
+                    msg << sym.f_lib;
                 }
+                emit_error(msg.str(), ctx);
+                res = literal_static_pointer_val(NULL, lrt);
             }
-            else {
-                res = jl_Module->getOrInsertGlobal(sym.f_name,
-                                                   lrt->getContainedType(0));
-            }
+            // since we aren't saving this code, there's no sense in
+            // putting anything complicated here: just JIT the address of the cglobal
+            res = literal_static_pointer_val(symaddr, lrt);
         }
     }
 
@@ -683,41 +728,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 rt);
     }
 
-    // make LLVM function object for the target
-    Value *llvmf;
-    FunctionType *functype = FunctionType::get(lrt, fargt_sig, isVa);
-    
-    if (jl_ptr != NULL) {
-        null_pointer_check(jl_ptr,ctx);
-        Type *funcptype = PointerType::get(functype,0);
-        llvmf = builder.CreateIntToPtr(jl_ptr, funcptype);
-    }
-    else if (fptr != NULL) {
-        Type *funcptype = PointerType::get(functype,0);
-        llvmf = literal_pointer_val(fptr, funcptype);
-    }
-    else {
-        void *symaddr;
-        if (f_lib != NULL)
-            symaddr = add_library_sym(f_name, f_lib);
-        else
-            symaddr = sys::DynamicLibrary::SearchForAddressOfSymbol(f_name);
-        if (symaddr == NULL) {
-            JL_GC_POP();
-            std::stringstream msg;
-            msg << "ccall: could not find function ";
-            msg << f_name;
-            if (f_lib != NULL) {
-                msg << " in library ";
-                msg << f_lib;
-            }
-            emit_error(msg.str(), ctx);
-            return literal_pointer_val(jl_nothing);
-        }
-        llvmf = jl_Module->getOrInsertFunction(f_name, functype);
-    }
-
-
     // save place before arguments, for possible insertion of temp arg
     // area saving code.
     Value *saveloc=NULL;
@@ -733,7 +743,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         savespot = &_savespot;
     }
 
-    if (0 && f_name != NULL && f_lib != NULL) {
+    if (0 && f_name != NULL) {
         // print the f_name before each ccall
         Value *zeros[2] = { ConstantInt::get(T_int32, 0),
                             ConstantInt::get(T_int32, 0) };
@@ -741,7 +751,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             msg << "ccall: ";
             msg << f_name;
             msg << "(...)";
-            if (f_lib != NULL) {
+            if (f_lib != NULL && (intptr_t)f_lib != 1 && (intptr_t)f_lib != 2) {
                 msg << " in library ";
                 msg << f_lib;
             }
@@ -749,7 +759,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         builder.CreateCall2(jlputs_func,
                             builder.CreateGEP(stringConst(msg.str()),
                                          ArrayRef<Value*>(zeros)),
-                            literal_pointer_val(JL_STDERR));
+                            jlstderr_var);
     }
 
     // emit arguments
@@ -830,6 +840,54 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         needTempSpace |= mightNeed;
         needStackRestore |= nSR;
     }
+
+
+    // make LLVM function object for the target
+    // keep this close to the function call, so that the compiler can
+    // optimize the global pointer load in the common case
+    Value *llvmf;
+    FunctionType *functype = FunctionType::get(lrt, fargt_sig, isVa);
+
+    if (jl_ptr != NULL) {
+        null_pointer_check(jl_ptr,ctx);
+        Type *funcptype = PointerType::get(functype,0);
+        llvmf = builder.CreateIntToPtr(jl_ptr, funcptype);
+    }
+    else if (fptr != NULL) {
+        Type *funcptype = PointerType::get(functype,0);
+        llvmf = literal_static_pointer_val(fptr, funcptype);
+        JL_PRINTF(JL_STDERR,"warning: literal address used in ccall for %s; code cannot be statically compiled\n", f_name);
+    }
+    else {
+        assert(f_name != NULL);
+
+        PointerType *funcptype = PointerType::get(functype,0);
+        if (imaging_mode) {
+            llvmf = runtime_sym_lookup(funcptype, f_lib, f_name, ctx);
+        }
+        else {
+            void *symaddr = jl_dlsym_e(get_library(f_lib), f_name);
+            if (symaddr == NULL) {
+                JL_GC_POP();
+                std::stringstream msg;
+                msg << "ccall: could not find function ";
+                msg << f_name;
+                if (f_lib != NULL) {
+#ifdef _OS_WINDOWS_
+                    assert((intptr_t)f_lib != 1 && (intptr_t)f_lib != 2);
+#endif
+                    msg << " in library ";
+                    msg << f_lib;
+                }
+                emit_error(msg.str(), ctx);
+                return literal_pointer_val(jl_nothing);
+            }
+            // since we aren't saving this code, there's no sense in
+            // putting anything complicated here: just JIT the function address
+            llvmf = literal_static_pointer_val(symaddr, funcptype);
+        }
+    }
+
     if (needTempSpace) {
         // save temp argument area stack pointer
         // TODO: inline this
@@ -848,6 +906,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         else
             instList.push_front((Instruction*)stacksave);
     }
+
     // the actual call
     Value *ret = builder.CreateCall(
             llvmf,

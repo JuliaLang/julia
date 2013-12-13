@@ -219,6 +219,8 @@ function init_stdio(handle)
             ret = TcpSocket(handle)
         elseif t == UV_NAMED_PIPE
             ret = Pipe(handle)
+        else
+            error("FATAL: stdio type invalid")
         end
         ret.status = StatusOpen
         ret.line_buffered = false  

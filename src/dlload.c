@@ -102,7 +102,7 @@ static uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int thr
         error = jl_uv_dlopen(modname,handle,flags);
         if (!error) goto done;
     }
-    else {
+    else if (jl_base_module != NULL) {
         jl_array_t* DL_LOAD_PATH = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("DL_LOAD_PATH"));
         if (DL_LOAD_PATH != NULL) {
             size_t j;
@@ -161,7 +161,7 @@ uv_lib_t *jl_load_dynamic_library(char *modname, unsigned flags)
     return jl_load_dynamic_library_(modname, flags, 1);
 }
 
-DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol)
+void *jl_dlsym_e(uv_lib_t *handle, char *symbol)
 {
     void *ptr;
     int  error=uv_dlsym(handle, symbol, &ptr);
@@ -169,7 +169,7 @@ DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol)
     return ptr;
 }
 
-DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol)
+void *jl_dlsym(uv_lib_t *handle, char *symbol)
 {
     void *ptr;
     int  error = uv_dlsym(handle, symbol, &ptr);
@@ -181,25 +181,29 @@ DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol)
 
 #ifdef _OS_WINDOWS_
 //Look for symbols in win32 libraries
-void *jl_dlsym_win32(char *f_name)
+char *jl_dlfind_win32(char *f_name)
 {
-    void *fptr = jl_dlsym_e(jl_exe_handle, f_name);
-    if (!fptr) {
-        fptr = jl_dlsym_e(jl_dl_handle, f_name);
-        if (!fptr) {
-            fptr = jl_dlsym_e(jl_kernel32_handle, f_name);
-            if (!fptr) {
-                fptr = jl_dlsym_e(jl_ntdll_handle, f_name);
-                if (!fptr) {
-                    fptr = jl_dlsym_e(jl_crtdll_handle, f_name);
-                    if (!fptr) {
-                        fptr = jl_dlsym(jl_winsock_handle, f_name);
-                    }
-                }
-            }
-        }
-    }
-    return fptr;
+    if (jl_dlsym_e(jl_exe_handle, f_name))
+        return (char*)1;
+    if (jl_dlsym_e(jl_dl_handle, f_name))
+        return (char*)2;
+    if (jl_dlsym_e(jl_kernel32_handle, f_name))
+        return "kernel32";
+    if (jl_dlsym_e(jl_ntdll_handle, f_name))
+        return "ntdll";
+    if (jl_dlsym_e(jl_crtdll_handle, f_name))
+        return "msvcrt";
+    if (jl_dlsym(jl_winsock_handle, f_name))
+        return "ws2_32";
+    // additional common libraries (libc?) could be added here, but in general,
+    // it is better to specify the library explicitly in the code. This exists
+    // mainly to ease compatibility with linux, and for libraries that don't
+    // have a name (julia.exe and libjulia.dll)
+    // We could also loop over all libraries that have been used so far, but, again,
+    // explicit is preferred over implicit
+    return NULL;
+    // oops, we didn't find it. NULL defaults to searching jl_RTLD_DEFAULT_handle,
+    // which defaults to jl_dl_handle, where we won't find it, and will throw the
+    // appropriate error.
 }
-
 #endif
