@@ -150,7 +150,7 @@ function display(x)
         try
             return display(displays[i], x)
         catch e
-            if !isa(e, MethodError)
+            if !(isa(e, MethodError) && e.f == display)
                 rethrow()
             end
         end
@@ -163,7 +163,7 @@ function display(m::MIME, x)
         try
             return display(displays[i], m, x)
         catch e
-            if !isa(e, MethodError)
+            if !(isa(e, MethodError) && e.f == display)
                 rethrow()
             end
         end
@@ -196,7 +196,7 @@ function redisplay(x)
         try
             return redisplay(displays[i], x)
         catch e
-            if !isa(e, MethodError)
+            if !(isa(e, MethodError) && e.f == redisplay)
                 rethrow()
             end
         end
@@ -209,7 +209,7 @@ function redisplay(m::Union(MIME,String), x)
         try
             return redisplay(displays[i], m, x)
         catch e
-            if !isa(e, MethodError)
+            if !(isa(e, MethodError) && e.f == redisplay)
                 rethrow()
             end
         end
