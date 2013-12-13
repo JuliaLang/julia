@@ -166,16 +166,18 @@ endif
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install:
-	@$(MAKE) $(QUIET_MAKE) debug
 	@$(MAKE) $(QUIET_MAKE) release
+	@$(MAKE) $(QUIET_MAKE) debug
 	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "share/man/man1" "include/julia" "share/julia/site/"$(VERSDIR) "etc/julia" ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
 	cp -a $(BUILD)/bin/julia* $(PREFIX)/bin/
-	-cp -a $(BUILD)/bin/*.dll $(BUILD)/bin/*.bat $(PREFIX)/bin/
-	cp -a $(BUILD)/libexec $(PREFIX)
+	#-cp -a $(BUILD)/bin/llc$(EXE) $(PREFIX)/libexec # this needs libLLVM-3.3.$(SHLIB_EXT)
 ifneq ($(OS),WINNT)
+	cp -a $(BUILD)/libexec $(PREFIX)
 	cd $(PREFIX)/bin && ln -sf julia-$(DEFAULT_REPL) julia
+else
+	cp -a $(BUILD)/bin/*.dll $(BUILD)/bin/*.bat $(PREFIX)/bin/
 endif
 	for suffix in $(JL_LIBS) ; do \
 		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
@@ -195,6 +197,7 @@ endif
 	cp -a src/julia.h src/support/*.h $(PREFIX)/include/julia
 	# Copy system image
 	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(PREFIX)/$(JL_PRIVATE_LIBDIR)
+	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.$(SHLIB_EXT) $(PREFIX)/$(JL_PRIVATE_LIBDIR)
 	# Copy in all .jl sources as well
 	cp -R -L $(BUILD)/share/julia $(PREFIX)/share/
 ifeq ($(OS), WINNT)
@@ -241,7 +244,6 @@ ifeq ($(OS), WINNT)
    		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll ../$(PREFIX)/bin && \
 	    mkdir ../$(PREFIX)/Git && \
 	    7z x PortableGit.7z -o"../$(PREFIX)/Git" )
-	cd $(PREFIX)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 	./dist-extras/7z a -mx9 -sfx7z.sfx julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).exe julia-$(JULIA_COMMIT)
 else
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
@@ -252,7 +254,7 @@ clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C base clean
 	@$(MAKE) -C src clean
 	@$(MAKE) -C ui clean
-		for repltype in "basic" "readline"; do \
+	for repltype in "basic" "readline"; do \
 		rm -f usr/bin/julia-debug-$${repltype}; \
 		rm -f usr/bin/julia-$${repltype}; \
 	done
