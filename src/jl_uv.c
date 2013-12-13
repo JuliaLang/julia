@@ -467,6 +467,7 @@ DLLEXPORT int jl_fs_close(int handle)
 //units are in ms
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream)
 {
+    if (!stream) return 0;
     return jl_write(stream,str,strlen(str));
 }
 
