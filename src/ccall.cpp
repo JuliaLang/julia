@@ -130,8 +130,9 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
         libptrgv = jldll_var;
     else
 #endif
-    if (f_lib == NULL)
+    if (f_lib == NULL) {
         libptrgv = jlRTLD_DEFAULT_var;
+    }
     else {
         runtime_lib = true;
         libptrgv = libMapGV[f_lib];
@@ -166,7 +167,8 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
     Value *libname;
     if (runtime_lib) {
         libname = builder.CreateGlobalStringPtr(f_lib);
-    } else {
+    }
+    else {
         libname = literal_static_pointer_val(f_lib, T_pint8);
     }
     Value *llvmf = builder.CreateCall3(jldlsym_func, libname, builder.CreateGlobalStringPtr(f_name), libptrgv);
