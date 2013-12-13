@@ -1093,7 +1093,22 @@ end
 @test mod(int64(2),typemax(Int64)) == 2
 
 # things related to floating-point epsilon
+@test eps() == eps(Float64)
+@test eps(Float64) == eps(1.0)
+@test eps(Float64) == eps(1.5)
+@test eps(Float32) == eps(1f0)
 @test eps(float(0)) == 5e-324
+@test eps(-float(0)) == 5e-324
+@test eps(nextfloat(float(0))) == 5e-324
+@test eps(-nextfloat(float(0))) == 5e-324
+@test eps(realmin()) == 5e-324
+@test eps(-realmin()) == 5e-324
+@test eps(realmax()) ==  2.0^(1023-52)
+@test eps(-realmax()) ==  2.0^(1023-52)
+@test isnan(eps(NaN))
+@test isnan(eps(Inf))
+@test isnan(eps(-Inf))
+
 @test .1+.1+.1 != .3
 # TODO: uncomment when isapprox() becomes part of base.
 # @test isapprox(.1+.1+.1, .3)
