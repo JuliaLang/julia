@@ -14,9 +14,9 @@
 
 static int lisp_prompt = 0;
 static char *program = NULL;
-char *image_file;
+char *image_file = NULL;
 int tab_width = 2;
-char *build_mode;
+char *build_mode = NULL;
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =

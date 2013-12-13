@@ -311,7 +311,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         llvmf->deleteBody();
         if (li->cFunctionObject != NULL)
             ((Function*)li->cFunctionObject)->deleteBody();
-    }
+        }
     }
     f->fptr = li->fptr;
 }
@@ -476,7 +476,7 @@ void jl_set_imaging_mode(int stat)
 
 static void jl_gen_llvm_gv_array();
 
-extern "C" DLLEXPORT
+extern "C"
 void jl_dump_bitcode(char* fname)
 {
     std::string err;
@@ -2649,7 +2649,7 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
 // generate a julia-callable function that calls f (AKA lam)
 static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Function *f)
 {
-    Function *w = Function::Create(jl_func_sig, Function::ExternalLinkage,
+    Function *w = Function::Create(jl_func_sig, Function::InternalLinkage,
                                    f->getName(), jl_Module);
     Function::arg_iterator AI = w->arg_begin();
     AI++; //const Argument &fArg = *AI++;
@@ -2873,7 +2873,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         }
         Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
         f = Function::Create(FunctionType::get(rt, fsig, false),
-                             Function::ExternalLinkage, funcName, jl_Module);
+                             Function::InternalLinkage, funcName, jl_Module);
         if (lam->cFunctionObject == NULL) {
             lam->cFunctionObject = (void*)f;
             lam->cFunctionID = jl_assign_functionID(f);
@@ -2885,7 +2885,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         }
     }
     else {
-        f = Function::Create(jl_func_sig, Function::ExternalLinkage,
+        f = Function::Create(jl_func_sig, Function::InternalLinkage,
                              funcName, jl_Module);
         if (lam->functionObject == NULL) {
             lam->functionObject = (void*)f;
