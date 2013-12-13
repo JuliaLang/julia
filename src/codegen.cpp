@@ -277,14 +277,14 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     assert(f != NULL);
     nested_compile = last_n_c;
     //f->dump();
-    verifyFunction(*f);
+    //verifyFunction(*f);
     FPM->run(*f);
     //n_compile++;
     // print out the function's LLVM code
     //ios_printf(ios_stderr, "%s:%d\n",
     //           ((jl_sym_t*)li->file)->name, li->line);
     //f->dump();
-    verifyFunction(*f);
+    //verifyFunction(*f);
     if (old != NULL) {
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
