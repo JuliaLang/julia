@@ -154,6 +154,7 @@ void restore_signals()
 }
 void jl_throw_in_ctx(jl_value_t* excpt, CONTEXT *ctxThread, int bt)
 {
+    assert(excpt != NULL);
     bt_size = bt ? rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ctxThread) : 0;
     jl_exception_in_transit = excpt;
 #if defined(_CPU_X86_64_)
