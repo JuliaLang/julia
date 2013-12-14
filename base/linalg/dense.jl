@@ -256,28 +256,18 @@ function expm!{T<:BlasFloat}(A::StridedMatrix{T})
             for t=1:si X *= X end
         end
     end
-                                        # Undo the balancing
-    doscale = false                     # check if rescaling is needed
-    for i = ilo:ihi
-        if scale[i] != 1.
-            doscale = true
-            break
+
+	# Undo the balancing
+    for j = ilo:ihi
+        scj = scale[j]
+        for i = 1:n
+            X[j,i] *= scj
+        end
+        for i = 1:n
+            X[i,j] /= scj
         end
     end
-    if doscale
-        for j = ilo:ihi
-            scj = scale[j]
-            if scj != 1.                # is this overkill?
-                for i = ilo:ihi
-                    X[i,j] *= scale[i]/scj
-                end
-            else
-                for i = ilo:ihi
-                    X[i,j] *= scale[i]
-                end
-            end
-        end
-    end
+
     if ilo > 1       # apply lower permutations in reverse order
         for j in (ilo-1):-1:1 rcswap!(j, int(scale[j]), X) end
     end
