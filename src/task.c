@@ -724,6 +724,7 @@ DLLEXPORT void gdbbacktrace()
 // yield to exception handler
 void NORETURN throw_internal(jl_value_t *e)
 {
+    assert(e != NULL);
     jl_exception_in_transit = e;
     if (jl_current_task->eh != NULL) {
         jl_longjmp(jl_current_task->eh->eh_ctx, 1);
@@ -751,6 +752,7 @@ void NORETURN throw_internal(jl_value_t *e)
 // record backtrace and raise an error
 DLLEXPORT void jl_throw(jl_value_t *e)
 {
+    assert(e != NULL);
     record_backtrace();
     throw_internal(e);
 }
