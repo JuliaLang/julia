@@ -104,10 +104,12 @@ ifeq ($(USE_SYSTEM_PCRE),0)
 JL_PRIVATE_LIBS += pcre
 endif
 ifeq ($(USE_SYSTEM_OPENLIBM),0)
-JL_PRIVATE_LIBS += openlibm-extras
 ifeq ($(USE_SYSTEM_LIBM),0)
 JL_PRIVATE_LIBS += openlibm
 endif
+endif
+ifeq ($(USE_SYSTEM_OPENSPECFUN),0)
+JL_PRIVATE_LIBS += openspecfun
 endif
 ifeq ($(USE_SYSTEM_BLAS),0)
 JL_PRIVATE_LIBS += openblas
