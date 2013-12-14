@@ -630,10 +630,10 @@ begin
     @test all(b.==6)
 
     # issue #5141
-    c1 = mapslices(x-> sum(-x), a, [])
+    c1 = mapslices(x-> maximum(-x), a, [])
     @test c1 == -a
-    c2 = mapslices(x-> sum(-x), a, [1,2])
-    @test c2 == -sum(a)
+    c2 = mapslices(x-> maximum(-x), a, [1,2])
+    @test c2 == maximum(-a)
 end
 
 
