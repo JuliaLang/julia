@@ -253,3 +253,11 @@ s = string(n)
 @test length(s) == 208988
 @test endswith(s, "359244926937501")
 @test beginswith(s, "316047687386689")
+
+# serialization (#5133)
+let
+    b = IOBuffer()
+    serialize(b, big(2)^100)
+    seek(b,0)
+    @test deserialize(b) == big(2)^100
+end
