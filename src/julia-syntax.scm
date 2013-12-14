@@ -1298,6 +1298,8 @@
 			 (map (lambda (a)
 				(if (not (symbol? (cadr a)))
 				    (error (string "keyword argument is not a symbol: \"" (cadr a) "\"")))
+				(if (vararg? (caddr a))
+				    (error "splicing with \"...\" cannot be used for a keyword argument value"))
 				`((quote ,(cadr a)) ,(caddr a)))
 			      keys))))
      (if (null? restkeys)
