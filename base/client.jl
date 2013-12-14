@@ -373,23 +373,17 @@ function _start()
     Random.librandom_init()
     # Ensure PCRE is compatible with the compiled reg-exes
     PCRE.check_pcre()
+    Sys.init()
+    global const CPU_CORES = Sys.CPU_CORES
+    if CPU_CORES > 8 && !("OPENBLAS_NUM_THREADS" in keys(ENV)) && !("OMP_NUM_THREADS" in keys(ENV))
+        # Prevent openblas from stating to many threads, unless/until specifically requested
+        ENV["OPENBLAS_NUM_THREADS"] = 8
+    end
     # Check that BLAS is correctly built
     check_blas()
     LinAlg.init()
-    Sys.init()
     GMP.gmp_init()
-    global const CPU_CORES = Sys.CPU_CORES
     init_profiler()
-
-    @windows_only ENV["PATH"] = JULIA_HOME*";"*joinpath(JULIA_HOME,"..","Git","bin")*";"*ENV["PATH"]*
-        ";C:\\Program Files\\Git\\bin;C:\\Program Files (x86)\\Git\\bin"*
-        ";C:\\MinGW\\bin;C:\\MinGW\\msys\\1.0\\bin"*
-        ";C:\\Python27;C:\\Python26;C:\\Python25"
-    @windows_only haskey(ENV,"JULIA_EDITOR") || (ENV["JULIA_EDITOR"] = "start")
-    @windows_only begin
-        user_data_dir = abspath(ENV["AppData"],"julia")
-        isdir(user_data_dir) || mkdir(user_data_dir)
-    end
 
     #atexit(()->flush(STDOUT))
     try
