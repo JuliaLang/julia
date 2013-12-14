@@ -233,7 +233,8 @@ function Base.convert(::Type{Vector{Uint8}}, u::UUID)
     u = u.value
     a = Array(Uint8,36)
     for i = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
-        a[i] = Base.digit(u & 0xf)
+        d = u & 0xf
+        a[i] = '0'+d+39*(d>9)
         u >>= 4
     end
     a[[24,19,14,9]] = '-'
