@@ -275,34 +275,78 @@
 		   (string.sub s 1)
 		   s)
 	       r)))
-      (if n
-	  (cond (is-hex-float-literal (double n))
-		((eq? pred char-hex?) (fix-uint-neg neg (sized-uint-literal n s 4)))
-		((eq? pred char-oct?) (fix-uint-neg neg (sized-uint-oct-literal n s)))
-		((eq? pred char-bin?) (fix-uint-neg neg (sized-uint-literal n s 1)))
-                (is-float32-literal   (float n))
-		(else (if (and (integer? n) (> n 9223372036854775807))
-			  (error (string "invalid numeric constant \"" s "\""))
-			  n)))
-	  (error (string "invalid numeric constant \"" s "\""))))))
+      ;; n is #f for integers > typemax(Uint64)
+      (cond (is-hex-float-literal (double n))
+	    ((eq? pred char-hex?) (fix-uint-neg neg (sized-uint-literal n s 4)))
+	    ((eq? pred char-oct?) (fix-uint-neg neg (sized-uint-oct-literal n s)))
+	    ((eq? pred char-bin?) (fix-uint-neg neg (sized-uint-literal n s 1)))
+	    (is-float32-literal   (float n))
+	    (n (if (and (integer? n) (> n 9223372036854775807))
+		   `(macrocall @int128_str ,n)
+		   n))
+	    ((within-int128? s) `(macrocall @int128_str ,s))
+	    (else `(macrocall @bigint_str ,s))))))
 
 (define (fix-uint-neg neg n)
-  (if neg `(call - ,n) n))
+  (if neg
+      (if (large-number? n)
+	  `(call - ,(maybe-negate '- n))
+	  `(call - ,n))
+      n))
 
 (define (sized-uint-literal n s b)
-  (let ((l (* (- (length s) 2) b)))
-    (cond ((<= l 8)  (uint8  n))
-	  ((<= l 16) (uint16 n))
-	  ((<= l 32) (uint32 n))
-	  (else      (uint64 n)))))
+  (let* ((i (if (eqv? (string.char s 0) #\-) 3 2))
+	 (l (* (- (length s) i) b)))
+    (cond ((<= l 8)   (uint8  n))
+	  ((<= l 16)  (uint16 n))
+	  ((<= l 32)  (uint32 n))
+	  ((<= l 64)  (uint64 n))
+	  ((<= l 128) `(macrocall @uint128_str ,s))
+	  (else	      `(macrocall @bigint_str  ,s)))))
 
 (define (sized-uint-oct-literal n s)
-  (if (eqv? (string.char s 2) #\0)
-    (sized-uint-literal n s 3)
-    (cond ((< n 256)        (uint8  n))
-	  ((< n 65536)      (uint16 n))
-	  ((< n 4294967296) (uint32 n))
-	  (else             (uint64 n)))))
+  (if (string.find s "o0")
+      (sized-uint-literal n s 3)
+      (if n
+	  (cond ((< n 256)        (uint8  n))
+		((< n 65536)      (uint16 n))
+		((< n 4294967296) (uint32 n))
+		(else             (uint64 n)))
+	  (if (oct-within-uint128? s)
+	      `(macrocall @uint128_str ,s)
+	      `(macrocall @bigint_str ,s)))))
+
+(define (strip-leading-0s s)
+  (define (loop i)
+    (if (eqv? (string.char s i) #\0)
+	(loop (+ i 1))
+	(string.tail s i)))
+  (if (eqv? (string.char s 0) #\-)
+      (string #\- (loop 1))
+      (loop 0)))
+
+(define (compare-num-strings s1 s2)
+  (let ((s1 (strip-leading-0s s1))
+	(s2 (strip-leading-0s s2)))
+    (if (= (string-length s1) (string-length s2))
+	(compare s1 s2)
+	(compare (string-length s1) (string-length s2)))))
+
+(define (oct-within-uint128? s)
+  (let ((s (if (eqv? (string.char s 0) #\-)
+	       (string.tail s 1)
+	       s)))
+    (>= 0 (compare-num-strings s "0o3777777777777777777777777777777777777777777"))))
+
+(define (within-int128? s)
+  (if (eqv? (string.char s 0) #\-)
+      (>= 0 (compare-num-strings s "-170141183460469231731687303715884105728"))
+      (>= 0 (compare-num-strings s "170141183460469231731687303715884105727"))))
+
+(define (large-number? t)
+  (and (pair? t)
+       (eq? (car t) 'macrocall)
+       (memq (cadr t) '(@int128_str @uint128_str @bigint_str))))
 
 (define (skip-ws-and-comments port)
   (skip-ws port #t)
@@ -641,7 +685,15 @@
       (memv tok '(#\, #\) #\] #\} #\; else elseif catch finally))))
 
 (define (maybe-negate op num)
-  (if (eq? op '-) (- num) num))
+  (if (eq? op '-)
+      (if (large-number? num)
+	  (if (eqv? (caddr num) "-170141183460469231731687303715884105728")
+	      `(macrocall @bigint_str "170141183460469231731687303715884105728")
+	      `(,(car num) ,(cadr num) ,(string.tail (caddr num) 1)))
+	  (if (= num -9223372036854775808)
+	      `(macrocall @int128_str "9223372036854775808")
+	      (- num)))
+      num))
 
 ; given an expression and the next token, is there a juxtaposition
 ; operator between them?
@@ -653,6 +705,7 @@
        (not (newline? t))
        (not (and (pair? expr) (eq? (car expr) '...)))
        (or (number? expr)
+	   (large-number? expr)
 	   (not (memv t '(#\( #\[ #\{))))))
 
 (define (parse-juxtapose ex s)
@@ -682,10 +735,7 @@
 			 s)))
 		   (if (memq (peek-token s) '(^ .^))
 		       ;; -2^x parsed as (- (^ 2 x))
-		       (begin (if (= num -9223372036854775808)
-				  (error (string "invalid numeric constant \""
-						 (- num) "\"")))
-			      (ts:put-back! s (maybe-negate op num))
+		       (begin (ts:put-back! s (maybe-negate op num))
 			      (list 'call op (parse-factor s)))
 		       num))
 		 (let ((next (peek-token s)))
@@ -761,7 +811,8 @@
 	  (let ((t (peek-token s)))
 	    (if (or (and space-sensitive (ts:space? s)
 			 (memv t '(#\( #\[ #\{ |'| #\")))
-		    (and (number? ex)  ;; 2(...) is multiply, not call
+		    (and (or (number? ex)  ;; 2(...) is multiply, not call
+			     (large-number? ex))
 			 (eqv? t #\()))
 		ex
 		(case t
@@ -1495,7 +1546,7 @@
 
 (define (parse-atom- s)
   (let ((t (require-token s)))
-    (cond ((or (string? t) (number? t)) (take-token s))
+    (cond ((or (string? t) (number? t) (large-number? t)) (take-token s))
 
 	  ;; char literal
 	  ((eq? t '|'|)
