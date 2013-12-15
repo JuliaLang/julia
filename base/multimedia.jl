@@ -161,20 +161,15 @@ function display(m::MIME, x)
     throw(MethodError(display, (m, x)))
 end
 
-displayable{D<:Display,T}(d::D, ::T) =
-    method_exists(display, (D, T))
+displayable(D::Display, args...) =
+  applicable(display, D, args...)
 
 displayable{D<:Display,mime}(d::D, ::MIME{mime}) =
   method_exists(display, (D, MIME{mime}, Any))
 
-displayable{D<:Display,mime,T}(d::D, ::MIME{mime}, ::T) =
-  method_exists(display, (D, MIME{mime}, T))
-
 function displayable(m::MIME)
     for d in displays
-        if displayable(d, m)
-            return true
-        end
+        displayable(d, m) && return true
     end
     return false
 end
@@ -189,26 +184,16 @@ end
 
 function redisplay(x)
     for i = length(displays):-1:1
-        try
-            return redisplay(displays[i], x)
-        catch e
-            if !(isa(e, MethodError) && e.f == redisplay)
-                rethrow()
-            end
-        end
+      applicable(redisplay, displays[i], x) &&
+        return redisplay(displays[i], x)
     end
     throw(MethodError(redisplay, (x,)))
 end
 
 function redisplay(m::Union(MIME,String), x)
     for i = length(displays):-1:1
-        try
-            return redisplay(displays[i], m, x)
-        catch e
-            if !(isa(e, MethodError) && e.f == redisplay)
-                rethrow()
-            end
-        end
+      applicable(redisplay, displays[i], m, x) &&
+        return redisplay(displays[i], m, x)
     end
     throw(MethodError(redisplay, (m, x)))
 end
