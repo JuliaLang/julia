@@ -49,7 +49,7 @@ function token(user::String=user())
     tokfile = Dir.path(".github","token")
     isfile(tokfile) && return strip(readchomp(tokfile))
     status, content = curl("https://api.github.com/authorizations",AUTH_DATA,`-u $user`)
-    status == 200 || error("$status: $(r["message"])")
+    (status != 401 && status != 403) || error("$status: $(json().parse(content)["message"])")
     tok = json().parse(content)["token"]
     mkpath(dirname(tokfile))
     open(io->println(io,tok),tokfile,"w")
