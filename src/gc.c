@@ -595,7 +595,7 @@ static size_t mark_sp = 0;
 
 static void push_root(jl_value_t *v, int d);
 
-#define gc_push_root(v,d) if (!gc_marked(v)) push_root((jl_value_t*)(v),d);
+#define gc_push_root(v,d) do {  assert(v != NULL); if (!gc_marked(v)) { push_root((jl_value_t*)(v),d); } } while (0)
 
 void jl_gc_setmark(jl_value_t *v)
 {

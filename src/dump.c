@@ -92,6 +92,7 @@ static void write_as_tag(ios_t *s, uint8_t tag)
 #define jl_serialize_value(s, v) jl_serialize_value_(s,(jl_value_t*)(v))
 static void jl_serialize_value_(ios_t *s, jl_value_t *v);
 static jl_value_t *jl_deserialize_value(ios_t *s);
+static jl_value_t *jl_deserialize_value_internal(ios_t *s);
 static jl_value_t ***sysimg_gvars = NULL;
 
 static void jl_load_sysimg_so(char *fname)
@@ -260,7 +261,8 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
         jl_serialize_value(s, dt->names);
         jl_serialize_value(s, dt->types);
     }
-    write_uint8(s, dt->abstract | (dt->mutabl<<1) | (dt->pointerfree<<2));
+    int has_instance = !!(dt->instance != NULL);
+    write_uint8(s, dt->abstract | (dt->mutabl<<1) | (dt->pointerfree<<2) | (has_instance<<3));
     if (!dt->abstract)
         write_int32(s, dt->uid);
 
@@ -270,6 +272,8 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
     jl_serialize_value(s, dt->ctor_factory);
     jl_serialize_value(s, dt->env);
     jl_serialize_value(s, dt->linfo);
+    if (has_instance)
+        jl_serialize_value(s, dt->instance);
     jl_serialize_fptr(s, dt->fptr);
 }
 
@@ -563,6 +567,8 @@ static jl_fptr_t jl_deserialize_fptr(ios_t *s)
     return *(jl_fptr_t*)pbp;
 }
 
+#define DTINSTANCE_PLACEHOLDER ((void*)2)
+
 static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
 {
     int tag = read_uint8(s);
@@ -600,6 +606,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     dt->abstract = flags&1;
     dt->mutabl = (flags>>1)&1;
     dt->pointerfree = (flags>>2)&1;
+    int has_instance = (flags>>3)&1;
     if (!dt->abstract)
         dt->uid = read_int32(s);
     else
@@ -610,6 +617,12 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     dt->ctor_factory = jl_deserialize_value(s);
     dt->env = jl_deserialize_value(s);
     dt->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
+    if (has_instance) {
+        jl_value_t *instance = (jl_value_t*)jl_deserialize_value_internal(s);
+        if (instance == DTINSTANCE_PLACEHOLDER)
+            instance = jl_new_struct_uninit(dt);
+        dt->instance = instance;
+    }
     dt->fptr = jl_deserialize_fptr(s);
     if (dt->name == jl_array_type->name || dt->name == jl_pointer_type->name ||
         dt->name == jl_type_type->name || dt->name == jl_vararg_type->name ||
@@ -625,7 +638,8 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
 
 jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
 
-static jl_value_t *jl_deserialize_value(ios_t *s)
+// Internal jl_deserialize_value. May return the placeholder value DTINSTANCE_PLACEHOLDER, unlike jl_deserialize_value
+static jl_value_t *jl_deserialize_value_internal(ios_t *s)
 {
     int pos = ios_pos(s);
     int32_t tag = read_uint8(s);
@@ -828,6 +842,14 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         return v;
     }
     else if (vtag == (jl_value_t*)jl_datatype_type || vtag == (jl_value_t*)IdTable_tag) {
+        // If the value v we are about to deserialize is some dt->instance, we have a circular 
+        // reference, because v == v->type->instance. To avoid this, we put a null value in 
+        // the backref table to reserve the space. If jl_deserialize_value encounters this,
+        // it knows to do the allocation itself. This work, because in all instances where
+        // v->type->instance != null, v->type has no fields, so there is no further serialized
+        // data stored that we would need to construct the type. 
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, DTINSTANCE_PLACEHOLDER);
         jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s);
         if (dt == jl_datatype_type)
             return jl_deserialize_datatype(s, pos);
@@ -860,6 +882,11 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
                 ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
         }
         else {
+            if (dt->instance) {
+                if (usetable)
+                    *ptrhash_bp(&backref_table, (void*)(ptrint_t)pos) = dt->instance;
+                return dt->instance;
+            }
             v = jl_new_struct_uninit(dt);
             if (usetable)
                 ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
@@ -885,6 +912,13 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
     }
     assert(0);
     return NULL;
+}
+
+static jl_value_t* jl_deserialize_value(ios_t *s)
+{
+    jl_value_t *v = jl_deserialize_value_internal(s);
+    assert(v != DTINSTANCE_PLACEHOLDER);
+    return v;
 }
 
 // --- entry points ---
