@@ -1465,45 +1465,6 @@ void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li)
     }
 }
 
-static void print_methlist(jl_value_t *outstr, char *name, jl_methlist_t *ml)
-{
-    JL_STREAM *s = (JL_STREAM*)jl_iostr_data(outstr);
-    while (ml != JL_NULL) {
-        JL_PRINTF(s, "%s", name);
-        if (ml->tvars != jl_null) {
-            if (jl_is_typevar(ml->tvars)) {
-                JL_PUTC('{', s); jl_show(outstr, (jl_value_t*)ml->tvars);
-                JL_PUTC('}', s);
-            }
-            else {
-                jl_show_tuple(outstr, ml->tvars, '{', '}', 0);
-            }
-        }
-        jl_show(outstr, (jl_value_t*)ml->sig);
-        if (ml->func == jl_bottom_func)  {
-            // mark guard cache entries
-            JL_PRINTF(s, " *");
-        }
-        else {
-            jl_lambda_info_t *li = ml->func->linfo;
-            assert(li);
-            print_func_loc(s, li);
-        }
-        if (ml->next != JL_NULL)
-            JL_PRINTF(s, "\n");
-        ml = ml->next;
-    }
-}
-
-void jl_show_method_table(jl_value_t *outstr, jl_function_t *gf)
-{
-    char *name = jl_gf_name(gf)->name;
-    jl_methtable_t *mt = jl_gf_mtable(gf);
-    print_methlist(outstr, name, mt->defs);
-    //JL_PRINTF(JL_STDOUT, "\ncache:\n");
-    //print_methlist(outstr, name, mt->cache);
-}
-
 void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)
 {
     f->fptr = jl_apply_generic;
