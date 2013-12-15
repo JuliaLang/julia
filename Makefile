@@ -45,6 +45,8 @@ julia-debug julia-release:
 ifneq ($(NO_GIT), 1)
 	@-git submodule init --quiet
 	@-git submodule update
+else
+	$(warn "Submodules could not be updated because git is unavailible")
 endif
 	@$(MAKE) $(QUIET_MAKE) -C deps
 	@$(MAKE) $(QUIET_MAKE) -C src lib$@
