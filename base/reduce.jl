@@ -25,7 +25,7 @@ end
 function maximum(itr)
     s = start(itr)
     if done(itr, s)
-        error("maximum: argument is empty")
+        error("argument is empty")
     end
     (v, s) = next(itr, s)
     while !done(itr, s)
@@ -38,7 +38,7 @@ end
 function minimum(itr)
     s = start(itr)
     if done(itr, s)
-        error("minimum: argument is empty")
+        error("argument is empty")
     end
     (v, s) = next(itr, s)
     while !done(itr, s)
