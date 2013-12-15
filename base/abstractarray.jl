@@ -1592,7 +1592,7 @@ end
 mapslices(f::Function, A::AbstractArray, dims) = mapslices(f, A, [dims...])
 function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
     if isempty(dims)
-        return A
+        return map(f,A)
     end
 
     dimsA = [size(A)...]

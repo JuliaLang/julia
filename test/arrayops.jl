@@ -628,6 +628,12 @@ begin
     b = mapslices(sum, ones(2,3,4), [1,2])
     @test size(b) === (1,1,4)
     @test all(b.==6)
+
+    # issue #5141
+    c1 = mapslices(x-> maximum(-x), a, [])
+    @test c1 == -a
+    c2 = mapslices(x-> maximum(-x), a, [1,2])
+    @test c2 == maximum(-a)
 end
 
 
