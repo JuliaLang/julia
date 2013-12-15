@@ -345,6 +345,7 @@ const apply_type_tfunc = function (A, args...)
     for i=2:max(lA,length(args))
         ai = args[i]
         if isType(ai)
+            uncertain |= (!isleaftype(ai))
             tparams = tuple(tparams..., ai.parameters[1])
         elseif isa(ai,Tuple) && all(isType,ai)
             tparams = tuple(tparams..., map(t->t.parameters[1], ai))

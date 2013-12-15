@@ -1176,3 +1176,7 @@ function invalid_tupleref()
     end
 end
 @test invalid_tupleref()==true
+
+# issue #5150
+f5150(T) = Array(Rational{T},1)
+@test typeof(f5150(Int)) === Array{Rational{Int},1}
