@@ -2144,7 +2144,7 @@ end
 function delete_var!(ast, v)
     filter!(vi->!symequal(vi[1],v), ast.args[2][2])
     filter!(x->!symequal(x,v), ast.args[2][1])
-    filter!(x->!(isa(x,Expr) && x.head === :(=) &&
+    filter!(x->!(isa(x,Expr) && (x.head === :(=) || x.head === :const) &&
                  symequal(x.args[1],v)),
             ast.args[3].args)
     ast
