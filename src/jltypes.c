@@ -1447,8 +1447,18 @@ int jl_types_equal_generic(jl_value_t *a, jl_value_t *b, int useenv)
 
 static int valid_type_param(jl_value_t *v)
 {
-    // TODO: maybe more things
-    return jl_is_type(v) || jl_is_long(v) || jl_is_symbol(v) || jl_is_typevar(v) || jl_is_bool(v);
+    if (jl_is_tuple(v)) {
+        size_t i;
+        size_t l = jl_tuple_len(v);
+        for(i=0; i < l; i++) {
+            if (!valid_type_param(jl_tupleref(v,i)))
+                return 0;
+        }
+        return 1;
+    } else {
+        // TODO: maybe more things
+        return jl_is_type(v) || jl_is_long(v) || jl_is_symbol(v) || jl_is_typevar(v) || jl_is_bool(v);
+    }
 }
 
 jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
