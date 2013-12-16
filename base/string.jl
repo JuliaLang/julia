@@ -1471,7 +1471,8 @@ function parseint_nocheck{T<:Integer}(::Type{T}, s::String, base::Int, a::Int)
     sgn, base, i = parseint_preamble(T<:Signed,s,base)
     c, i = parseint_next(s,i)
     base = convert(T,base)
-    m::T = div(typemax(T)-base+1,base)
+    ## FIXME: remove 128-bit specific code once 128-bit div doesn't rely on BigInt
+    m::T = T===Uint128 || T===Int128 ? typemax(T) : div(typemax(T)-base+1,base)
     n::T = 0
     while n <= m
         d::T = '0' <= c <= '9' ? c-'0'    :
