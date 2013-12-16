@@ -654,3 +654,9 @@ function atanh{T<:FloatingPoint}(z::Complex{T})
     complex(ξ, η)
 end
 atanh(z::Complex) = atanh(float(z))
+
+function lexcmp(a::Complex, b::Complex)
+    c = cmp(real(a), real(b))
+    c == 0 || return c
+    cmp(imag(a), imag(b))
+end
