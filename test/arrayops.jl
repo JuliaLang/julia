@@ -658,6 +658,17 @@ b = [3,1,2]
 a[b] = a
 @test a == [3,5,1]
 
+# lexicographic comparison
+@test lexcmp([1.0], [1]) == 0
+@test lexcmp([1], [1.0]) == 0
+@test lexcmp([1, 1], [1, 1]) == 0
+@test lexcmp([1, 1], [2, 1]) == -1
+@test lexcmp([2, 1], [1, 1]) == 1
+@test lexcmp([1, 1], [1, 2]) == -1
+@test lexcmp([1, 2], [1, 1]) == 1
+@test lexcmp([1], [1, 1]) == -1
+@test lexcmp([1, 1], [1]) == 1
+
 # sort on arrays
 begin
     local a = rand(3,3)
