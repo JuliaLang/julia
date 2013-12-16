@@ -175,7 +175,7 @@ function sind(x::Real)
 
     if arx == 0.0
         # return -0.0 iff x == -0.0
-        return x == 0.0 ? x : arx
+        return x == 0.0 ? 0.0 : arx
     elseif arx < 45.0
         return sin(degrees2radians(rx))
     elseif arx <= 135.0
@@ -331,7 +331,7 @@ function lgamma_r(x::Float64)
 end
 function lgamma_r(x::Float32)
     signp = Array(Int32, 1)
-    y = ccall((:lgamma_r,libm),  Float32, (Float32, Ptr{Int32}), x, signp)
+    y = ccall((:lgammaf_r,libm),  Float32, (Float32, Ptr{Int32}), x, signp)
     return y, signp[1]
 end
 lgamma_r(x::Real) = lgamma_r(float(x))

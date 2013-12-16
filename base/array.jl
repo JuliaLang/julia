@@ -607,9 +607,6 @@ function setindex!(A::Array, x, I::Union(Real,AbstractArray)...)
                 end
             end
         end
-        if is(assign_cache,nothing)
-            assign_cache = Dict()
-        end
         gen_array_index_map(assign_cache, storeind -> quote
                               A[$storeind] = X[refind]
                               refind += 1
