@@ -181,7 +181,7 @@ for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz,get_num_r,get_num_z,it
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, U.nzval, U.symbolic, tmp,
                            umf_ctrl, umf_info)
-            status > 0 && throw(MatrixIllConditionedException)
+            status > 0 && throw(MatrixIllConditionedException(""))
             umferror(status)
             U.numeric = tmp[1]
             return U
@@ -195,7 +195,7 @@ for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz,get_num_r,get_num_z,it
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, real(U.nzval), imag(U.nzval), U.symbolic, tmp,
                            umf_ctrl, umf_info)
-            status > 0 && throw(MatrixIllConditionedException)
+            status > 0 && throw(MatrixIllConditionedException(""))
             umferror(status)
             U.numeric = tmp[1]
             return U
