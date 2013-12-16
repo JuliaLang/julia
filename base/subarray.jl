@@ -147,7 +147,7 @@ slice(A::AbstractArray, I...) = slice(A, ntuple(length(I), i-> isa(I[i], Colon) 
 #        for j in sdims
 #            if i == j
 #                if size(a, i) != 1
-#                    error("slice: dimension ", i, " has length greater than 1")
+#                    error("dimension ", i, " has length greater than 1")
 #                end
 #                next = 1
 #                break
@@ -164,7 +164,7 @@ slice(A::AbstractArray, I...) = slice(A, ntuple(length(I), i-> isa(I[i], Colon) 
 #        for j in sdims
 #            if i == j
 #                if length(next) != 1
-#                    error("slice: dimension ", i," has length greater than 1")
+#                    error("dimension ", i," has length greater than 1")
 #                end
 #                next = isa(next, Int) ? next : first(next)
 #                break

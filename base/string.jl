@@ -1214,7 +1214,7 @@ end
 
 function parse(str::String; raise::Bool=true)
     ex, pos = parse(str, start(str), greedy=true, raise=raise)
-    done(str, pos) || error("syntax: extra token after end of expression")
+    done(str, pos) || error("extra token after end of expression")
     return ex
 end
 
