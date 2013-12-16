@@ -1022,7 +1022,13 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         !jl_args_morespecific((jl_value_t*)sig, (jl_value_t*)type)) {
         jl_value_t *isect = jl_type_intersection((jl_value_t*)type,
                                                  (jl_value_t*)sig);
-        if (isect == (jl_value_t*)jl_bottom_type)
+        if (isect == (jl_value_t*)jl_bottom_type ||
+            // we're ok if the new definition is actually the one we just
+            // inferred to be required (see issue #3609). ideally this would
+            // never happen, since if New ⊓ Old == New then we should have
+            // considered New more specific, but jl_args_morespecific is not
+            // perfect, so this is a useful fallback.
+            sigs_eq(isect, (jl_value_t*)type, 1))
             return;
         JL_GC_PUSH1(&isect);
         jl_methlist_t *l = ml;
