@@ -331,7 +331,7 @@ function lgamma_r(x::Float64)
 end
 function lgamma_r(x::Float32)
     signp = Array(Int32, 1)
-    y = ccall((:lgamma_r,libm),  Float32, (Float32, Ptr{Int32}), x, signp)
+    y = ccall((:lgammaf_r,libm),  Float32, (Float32, Ptr{Int32}), x, signp)
     return y, signp[1]
 end
 lgamma_r(x::Real) = lgamma_r(float(x))
