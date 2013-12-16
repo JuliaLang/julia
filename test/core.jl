@@ -1180,3 +1180,12 @@ end
 # issue #5150
 f5150(T) = Array(Rational{T},1)
 @test typeof(f5150(Int)) === Array{Rational{Int},1}
+
+# issue #5165
+bitstype 64 T5165{S}
+make_t(x::Int64) = Base.box(T5165{Nothing}, Base.unbox(Int64, x))
+xs5165 = T5165[make_t(1)]
+b5165 = IOBuffer()
+for x in xs5165
+    println(b5165, x)   # segfaulted
+end
