@@ -886,9 +886,9 @@ static bool is_getfield_nonallocating(jl_datatype_t *ty, jl_value_t *fld)
 static bool jltupleisbits(jl_value_t *jt, bool allow_unsized)
 {
     if (!jl_is_tuple(jt))
-        return jl_isbits(jt) && (allow_unsized || 
-            ((jl_is_bitstype(jt) && jl_datatype_size(jt) > 0) || 
-                (jl_is_datatype(jt) && jl_tuple_len(((jl_datatype_t*)jt)->names)>0)));
+        return jl_isbits(jt) && jl_is_leaf_type(jt) && (allow_unsized ||
+            ((jl_is_bitstype(jt) && jl_datatype_size(jt) > 0) ||
+             (jl_is_datatype(jt) && jl_tuple_len(((jl_datatype_t*)jt)->names)>0)));
     size_t ntypes = jl_tuple_len(jt);
     if (ntypes == 0)
         return allow_unsized;
@@ -1433,7 +1433,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         size_t i;
         for(i=0; i < nargs; i++) {
             jl_value_t *it = (jl_value_t*)expr_type(args[i+1],ctx);
-            if (!jl_isbits(it))
+            if (!(jl_isbits(it) && jl_is_leaf_type(it)))
                 break;
         }
         if (i >= nargs) {
