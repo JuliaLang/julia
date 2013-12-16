@@ -287,7 +287,7 @@ function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
             J[count] = col
             count += 1
         else
-            warn_once("sparse matrix contains explicit stored zeros")
+            Base.warn_once("sparse matrix contains explicit stored zeros")
         end
     end
 
@@ -313,7 +313,7 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
             V[count] = S.nzval[k]
             count += 1
         else
-            warn_once("sparse matrix contains explicit stored zeros")
+            Base.warn_once("sparse matrix contains explicit stored zeros")
         end
     end
 
