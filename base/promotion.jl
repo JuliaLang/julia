@@ -144,6 +144,15 @@ end
 # happens, and +(promote(x,y)...) is called again, causing a stack
 # overflow.
 promote_result{T<:Number,S<:Number}(::Type{T},::Type{S},::Type{None},::Type{None}) =
+    promote_to_super(T, S, typejoin(T,S))
+
+# promote numeric types T and S to typejoin(T,S) if T<:S or S<:T
+# for example this makes promote_type(Integer,Real) == Real without
+# promoting arbitrary pairs of numeric types to Number.
+promote_to_super{T<:Number          }(::Type{T}, ::Type{T}, ::Type{T}) = T
+promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{T}) = T
+promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{S}) = S
+promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
     error("no promotion exists for ", T, " and ", S)
 
 +(x::Number, y::Number) = +(promote(x,y)...)
