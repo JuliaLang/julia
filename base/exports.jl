@@ -385,6 +385,7 @@ export
     mod,
     mod1,
     modf,
+    mod2pi,
     nan,
     nextfloat,
     nextpow,
