@@ -251,7 +251,7 @@ for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number),
 end
 
 # DCT of scalar is just the identity:
-dct(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())x
+dct(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
 idct(x::Number, dims) = dct(x, dims)
 dct(x::Number) = x
 idct(x::Number) = x
