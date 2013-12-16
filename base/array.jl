@@ -854,6 +854,73 @@ function splice!{T<:Integer}(a::Vector, r::Range1{T}, ins::AbstractArray=_defaul
     return v
 end
 
+function deleteat!(a::Vector, i::Integer)
+    n = length(a)
+    if !(1 <= i <= n)
+        throw(BoundsError())
+    end
+    if i < div(n,2)
+        for k = i:-1:2
+            a[k] = a[k-1]
+        end
+        ccall(:jl_array_del_beg, Void, (Any, Uint), a, 1)
+    else
+        for k = i:n-1
+            a[k] = a[k+1]
+        end
+        ccall(:jl_array_del_end, Void, (Any, Uint), a, 1)
+    end
+    return a
+end
+
+function deleteat!{T<:Integer}(a::Vector, r::Range1{T})
+    n = length(a)
+    f = first(r)
+    l = last(r)
+    if !(1 <= f && l <= n)
+        throw(BoundsError())
+    end
+    delta = l-f+1
+    if f-1 < n-l
+        for k = l:-1:1+delta
+            a[k] = a[k-delta]
+        end
+        ccall(:jl_array_del_beg, Void, (Any, Uint), a, delta)
+    else
+        for k = f:n-delta
+            a[k] = a[k+delta]
+        end
+        ccall(:jl_array_del_end, Void, (Any, Uint), a, delta)
+    end
+    return a
+end
+
+function deleteat!(a::Vector, inds)
+    n = length(a)
+    s = start(inds)
+    done(inds, s) && return a
+    (p, s) = next(inds, s)
+    q = p+1
+    while !done(inds, s)
+        (i,s) = next(inds, s)
+        if !(q <= i <= n) 
+            i < q && error("indices must be unique and sorted")
+            throw(BoundsError())
+        end
+        while q < i
+            a[p] = a[q]
+            p += 1; q += 1
+        end
+        q = i+1
+    end
+    while q <= n
+        a[p] = a[q]
+        p += 1; q += 1
+    end
+    ccall(:jl_array_del_end, Void, (Any, Uint), a, n-p+1)
+    return a
+end
+
 function empty!(a::Vector)
     ccall(:jl_array_del_end, Void, (Any, Uint), a, length(a))
     return a
