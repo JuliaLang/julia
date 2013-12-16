@@ -49,6 +49,9 @@ Library improvements
 
   * `modpi` function ([#4799]).
 
+  * New function `deleteat!` deletes a specified index or indices and
+    returns the updated collection
+
 Deprecated or removed
 ---------------------
 
