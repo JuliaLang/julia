@@ -175,7 +175,7 @@ function sind(x::Real)
 
     if arx == 0.0
         # return -0.0 iff x == -0.0
-        return x == 0.0 ? x : arx
+        return x == 0.0 ? 0.0 : arx
     elseif arx < 45.0
         return sin(degrees2radians(rx))
     elseif arx <= 135.0
