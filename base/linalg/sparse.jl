@@ -486,7 +486,7 @@ end
 
 ## det, inv, cond
 
-inv(A::SparseMatrixCSC) = throw(MemoryError("The inverse of a sparse matrix can often be dense and can cause the computer to run out of memory. If you are sure you have enough memory, please convert your matrix to a dense matrix."))
+inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be dense and can cause the computer to run out of memory. If you are sure you have enough memory, please convert your matrix to a dense matrix.")
 
 # TODO
 
