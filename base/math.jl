@@ -451,7 +451,7 @@ function airy(k::Int, z::Complex128)
               pointer(ae,1), pointer(ae,2))
         return complex(ai[1],ai[2])
     else
-        error("airy: invalid argument")
+        error("invalid argument")
     end
 end
 end
