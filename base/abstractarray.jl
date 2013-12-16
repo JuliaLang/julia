@@ -1037,10 +1037,8 @@ end
 function lexcmp(A::AbstractArray, B::AbstractArray)
     nA, nB = length(A), length(B)
     for i = 1:min(nA, nB)
-        a, b = A[i], B[i]
-        if !isequal(a, b)
-            return isless(a, b) ? -1 : +1
-        end
+        res = lexcmp(A[i], B[i])
+        res == 0 || return res
     end
     return cmp(nA, nB)
 end
