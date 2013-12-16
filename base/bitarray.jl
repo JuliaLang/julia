@@ -376,27 +376,27 @@ function getindex(B::BitArray, i1::Real, i2::Real)
     #checkbounds(B, i0, i1) # manually inlined for performance
     i1, i2 = to_index(i1, i2)
     l1 = size(B,1)
-    1 <= i1 <= l1 || throw(BoundsError)
+    1 <= i1 <= l1 || throw(BoundsError())
     return B[i1 + l1*(i2-1)]
 end
 function getindex(B::BitArray, i1::Real, i2::Real, i3::Real)
     #checkbounds(B, i0, i1, i2) # manually inlined for performance
     i1, i2, i3 = to_index(i1, i2, i3)
     l1 = size(B,1)
-    1 <= i1 <= l1 || throw(BoundsError)
+    1 <= i1 <= l1 || throw(BoundsError())
     l2 = size(B,2)
-    1 <= i2 <= l2 || throw(BoundsError)
+    1 <= i2 <= l2 || throw(BoundsError())
     return B[i1 + l1*((i2-1) + l2*(i3-1))]
 end
 function getindex(B::BitArray, i1::Real, i2::Real, i3::Real, i4::Real)
     #checkbounds(B, i1, i2, i3, i4)
     i1, i2, i3, i4 = to_index(i1, i2, i3, i4)
     l1 = size(B,1)
-    1 <= i1 <= l1 || throw(BoundsError)
+    1 <= i1 <= l1 || throw(BoundsError())
     l2 = size(B,2)
-    1 <= i2 <= l2 || throw(BoundsError)
+    1 <= i2 <= l2 || throw(BoundsError())
     l3 = size(B,3)
-    1 <= i3 <= l3 || throw(BoundsError)
+    1 <= i3 <= l3 || throw(BoundsError())
     return B[i1 + l1*((i2-1) + l2*((i3-1) + l3*(i4-1)))]
 end
 
@@ -406,14 +406,14 @@ function getindex(B::BitArray, I::Real...)
     ndims = length(I)
     i = to_index(I[1])
     l = size(B,1)
-    1 <= i <= l || throw(BoundsError)
+    1 <= i <= l || throw(BoundsError())
     index = i
     stride = 1
     for k = 2:ndims-1
         stride *= l
         i = to_index(I[k])
         l = size(B,k)
-        1 <= i <= l || throw(BoundsError)
+        1 <= i <= l || throw(BoundsError())
         index += (i-1) * stride
     end
     stride *= l
@@ -585,7 +585,7 @@ function setindex!(B::BitArray, x, i1::Real, i2::Real)
     #checkbounds(B, i0, i1) # manually inlined for performance
     i1, i2 = to_index(i1, i2)
     l1 = size(B,1)
-    1 <= i1 <= l1 || throw(BoundsError)
+    1 <= i1 <= l1 || throw(BoundsError())
     B[i1 + l1*(i2-1)] = x
     return B
 end
@@ -594,9 +594,9 @@ function setindex!(B::BitArray, x, i1::Real, i2::Real, i3::Real)
     #checkbounds(B, i1, i2, i3) # manually inlined for performance
     i1, i2, i3 = to_index(i1, i2, i3)
     l1 = size(B,1)
-    1 <= i1 <= l1 || throw(BoundsError)
+    1 <= i1 <= l1 || throw(BoundsError())
     l2 = size(B,2)
-    1 <= i2 <= l2 || throw(BoundsError)
+    1 <= i2 <= l2 || throw(BoundsError())
     B[i1 + l1*((i2-1) + l2*(i3-1))] = x
     return B
 end
@@ -605,11 +605,11 @@ function setindex!(B::BitArray, x, i1::Real, i2::Real, i3::Real, i4::Real)
     #checkbounds(B, i1, i2, i3, i4) # manually inlined for performance
     i1, i2, i3, i4 = to_index(i1, i2, i3, i4)
     l1 = size(B,1)
-    1 <= i1 <= l1 || throw(BoundsError)
+    1 <= i1 <= l1 || throw(BoundsError())
     l2 = size(B,2)
-    1 <= i2 <= l2 || throw(BoundsError)
+    1 <= i2 <= l2 || throw(BoundsError())
     l3 = size(B,3)
-    1 <= i3 <= l3 || throw(BoundsError)
+    1 <= i3 <= l3 || throw(BoundsError())
     B[i1 + l1*((i2-1) + l2*((i3-1) + l3*(i4-1)))] = x
     return B
 end
@@ -620,14 +620,14 @@ function setindex!(B::BitArray, x, i::Real, I::Real...)
     ndims = length(I) + 1
     i = to_index(i)
     l = size(B,1)
-    1 <= i <= l || throw(BoundsError)
+    1 <= i <= l || throw(BoundsError())
     index = i
     stride = 1
     for k = 2:ndims-1
         stride *= l
         l = size(B,k)
         i = to_index(I[k-1])
-        1 <= i <= l || throw(BoundsError)
+        1 <= i <= l || throw(BoundsError())
         index += (i-1) * stride
     end
     stride *= l
