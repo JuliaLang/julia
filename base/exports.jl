@@ -1031,6 +1031,7 @@ export
     parseip,
 
 # I/O and events
+    alloc_request,
     accept,
     close,
     connect,
@@ -1057,6 +1058,7 @@ export
     mmap_bitarray,
     msync,
     nb_available,
+    notify_filled,
     ntoh,
     open,
     PipeBuffer,
