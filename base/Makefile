@@ -55,7 +55,7 @@ endif
 version_git.jl.phony:
 ifneq ($(NO_GIT), 1)
 	@sh version_git.sh > $@
-	@# This to avoid touching git_version.jl when it is not modified, so that the
+	@# This to avoid touching git_version.jl when it is not modified,
 	@# so that the system image does not need to be rebuilt.
 	@if ! cmp -s $@ version_git.jl; then \
 	    $(call PRINT_PERL,) \
@@ -66,7 +66,7 @@ ifneq ($(NO_GIT), 1)
 else
 ifeq ($(shell [ -f version_git.jl ] && echo "true"), true)
 	@# Give warning if boilerplate git is used
-	@if grep -q "Default output if git is not availible" version_git.jl; then \
+	@if grep -q "Default output if git is not available" version_git.jl; then \
 	    echo "WARNING: Using boilerplate git version info" >&2; \
 	fi
 else

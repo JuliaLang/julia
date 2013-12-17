@@ -16,11 +16,11 @@ echo ""
 # If the script didn't ask not to use git info
 if [  "$#" = "1"  -a "$1" = "NO_GIT" ]; then
     # this comment is used in base/Makefile to distinguish boilerplate
-    echo "# Default output if git is not availible."
+    echo "# Default output if git is not available."
     echo "const GIT_VERSION_INFO = GitVersionInfo(\"\" ,\"\" ,\"\" ,0 ,\"\" ,true ,0 ,0.)"
     exit 0
 fi
-# Collect tempoarty variables
+# Collect temporary variables
 origin=$(git config -l 2>/dev/null | grep 'remote\.\w*\.url.*JuliaLang/julia.git' | sed -n 's/remote\.\([a-zA-Z]*\)\..*/\1\//p')
 last_tag=$(git describe --tags --abbrev=0)
 git_time=$(git log -1 --pretty=format:%ct)
