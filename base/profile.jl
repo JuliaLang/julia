@@ -212,6 +212,9 @@ function print_flat(io::IO, lilist::Vector{LineInfo}, n::Vector{Int}, combine::B
         wfile = ifloor(2*ntext/5)
         wfunc = ifloor(3*ntext/5)
     end
+    p = sortperm(n,rev=true)
+    permute!(lilist,p)
+    permute!(n,p)
     println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ", rpad("Function", wfunc, " "), " ", lpad("Line", wline, " "))
     for i = 1:length(n)
         li = lilist[i]
