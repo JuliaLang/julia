@@ -1083,65 +1083,6 @@ function _deleteat!(B::BitVector, i::Integer)
     return B
 end
 
-function splice!(B::BitVector, i::Integer)
-    n = length(B)
-    if !(1 <= i <= n)
-        throw(BoundsError())
-    end
-
-    v = B[i]   # TODO: change to a copy if/when subscripting becomes an ArrayView
-    _deleteat!(B, i)
-    return v
-end
-splice!(B::BitVector, i::Integer, ins::BitVector) = splice!(B, int(i):int(i), ins)
-splice!(B::BitVector, i::Integer, ins::AbstractVector{Bool}) = splice!(B, i, bitpack(ins))
-
-const _default_bit_splice = BitVector(0)
-
-function splice!(B::BitVector, r::Range1{Int}, ins::BitVector = _default_bit_splice)
-    n = length(B)
-    i_f = first(r)
-    i_l = last(r)
-    if !(1 <= i_f <= n+1)
-        throw(BoundsError())
-    end
-    if !(i_l <= n)
-        throw(BoundsError())
-    end
-    if (i_f > n)
-        append!(B, ins)
-        return BitVector(0)
-    end
-
-    v = B[r]  # TODO: change to a copy if/when subscripting becomes an ArrayView
-
-    Bc = B.chunks
-
-    lins = length(ins)
-    ldel = length(r)
-
-    new_l = length(B) + lins - ldel
-    delta_k = num_bit_chunks(new_l) - length(Bc)
-
-    if delta_k > 0
-        ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, delta_k)
-    end
-    copy_chunks(Bc, i_f+lins, Bc, i_l+1, n-i_l)
-    copy_chunks(Bc, i_f, ins.chunks, 1, lins)
-    if delta_k < 0
-        ccall(:jl_array_del_end, Void, (Any, Uint), Bc, -delta_k)
-    end
-
-    B.len = new_l
-
-    if new_l > 0
-        Bc[end] &= @_msk_end new_l
-    end
-
-    return v
-end
-splice!(B::BitVector, r::Range1{Int}, ins::AbstractVector{Bool}) = splice!(B, r, bitpack(ins))
-
 function deleteat!(B::BitVector, i::Integer)
     n = length(B)
     if !(1 <= i <= n)
@@ -1215,6 +1156,65 @@ function deleteat!(B::BitVector, inds)
 
     return B
 end
+
+function splice!(B::BitVector, i::Integer)
+    n = length(B)
+    if !(1 <= i <= n)
+        throw(BoundsError())
+    end
+
+    v = B[i]   # TODO: change to a copy if/when subscripting becomes an ArrayView
+    _deleteat!(B, i)
+    return v
+end
+splice!(B::BitVector, i::Integer, ins::BitVector) = splice!(B, int(i):int(i), ins)
+splice!(B::BitVector, i::Integer, ins::AbstractVector{Bool}) = splice!(B, i, bitpack(ins))
+
+const _default_bit_splice = BitVector(0)
+
+function splice!(B::BitVector, r::Range1{Int}, ins::BitVector = _default_bit_splice)
+    n = length(B)
+    i_f = first(r)
+    i_l = last(r)
+    if !(1 <= i_f <= n+1)
+        throw(BoundsError())
+    end
+    if !(i_l <= n)
+        throw(BoundsError())
+    end
+    if (i_f > n)
+        append!(B, ins)
+        return BitVector(0)
+    end
+
+    v = B[r]  # TODO: change to a copy if/when subscripting becomes an ArrayView
+
+    Bc = B.chunks
+
+    lins = length(ins)
+    ldel = length(r)
+
+    new_l = length(B) + lins - ldel
+    delta_k = num_bit_chunks(new_l) - length(Bc)
+
+    if delta_k > 0
+        ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, delta_k)
+    end
+    copy_chunks(Bc, i_f+lins, Bc, i_l+1, n-i_l)
+    copy_chunks(Bc, i_f, ins.chunks, 1, lins)
+    if delta_k < 0
+        ccall(:jl_array_del_end, Void, (Any, Uint), Bc, -delta_k)
+    end
+
+    B.len = new_l
+
+    if new_l > 0
+        Bc[end] &= @_msk_end new_l
+    end
+
+    return v
+end
+splice!(B::BitVector, r::Range1{Int}, ins::AbstractVector{Bool}) = splice!(B, r, bitpack(ins))
 
 function empty!(B::BitVector)
     ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, length(B.chunks))
