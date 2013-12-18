@@ -359,3 +359,22 @@ These are some minor points that might help in tight inner loops.
    try to rewrite code to use ``abs2`` instead of ``abs`` for complex arguments.
 -  Use ``div(x,y)`` for truncating division of integers instead of
    ``trunc(x/y)``, and ``fld(x,y)`` instead of ``floor(x/y)``.
+
+Tools
+-----
+
+Julia includes some tools that may help you improve the performance of your code:
+
+- :ref:`stdlib-profiling` allows you to measure the performance of
+  your running code and identify lines that serve as bottlenecks.
+
+- Unexpectedly-large memory allocations---as reported by ``@time``,
+  ``@allocated``, or the profiler (through calls to the
+  garbage-collection routines)---hint that there might be issues with
+  your code.  If you don't see another reason for the allocations,
+  suspect a type problem.
+
+- Using ``code_typed()`` on your function can help identify sources of
+  type problems.  Look particularly for variables that, contrary to
+  your intentions, are inferred to be ``Union`` types.  Such problems
+  can usually be fixed using the tips above.
