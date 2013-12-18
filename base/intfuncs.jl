@@ -51,6 +51,9 @@ lcm(a::Integer, b::Integer) = lcm(promote(a,b)...)
 gcd(a::Integer, b::Integer...) = gcd(a, gcd(b...))
 lcm(a::Integer, b::Integer...) = lcm(a, lcm(b...))
 
+gcd{T<:Integer}(abc::AbstractArray{T}) = gcd(abc...)
+lcm{T<:Integer}(abc::AbstractArray{T}) = lcm(abc...)
+
 # return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
 function gcdx{T<:Integer}(a::T, b::T)
     s0, s1 = one(T), zero(T)
