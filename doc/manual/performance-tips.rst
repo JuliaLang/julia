@@ -348,6 +348,7 @@ bottlenecks.
 Sometimes you can circumvent the need to allocate memory on each
 function call by pre-allocating the output.  As a
 trivial example, compare
+::
 
     function xinc(x)
         return [x, x+1, x+2]
@@ -363,6 +364,7 @@ trivial example, compare
     end
 
 with
+::
 
     function xinc!{T}(ret::AbstractVector{T}, x::T)
         ret[1] = x
@@ -381,7 +383,7 @@ with
         y
     end
     
-Timing results:
+Timing results::
 
     julia> @time loopinc()
     elapsed time: 1.955026528 seconds (1279975584 bytes allocated)
