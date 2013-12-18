@@ -6,6 +6,9 @@ New language features
 
   * Greatly enhanced performance for passing and returning tuples ([#4042]).
 
+  * Tuples (of integers, symbols, or bools) can now be used as type
+    parameters ([#5164]).
+
 New library functions
 ---------------------
 
@@ -43,6 +46,8 @@ Library improvements
   * Faster sparse `kron` ([#4958]).
 
   * `rand` now supports arbitrary `Ranges` arguments ([#5059]).
+
+  * `modpi` function ([#4799]).
 
 Deprecated or removed
 ---------------------
