@@ -262,5 +262,3 @@ let
     seek(b,0)
     @test deserialize(b) == n
 end
-
-@test sum(digits(big(2)^1000)) == 1366
