@@ -47,7 +47,7 @@ Library improvements
 
   * `rand` now supports arbitrary `Ranges` arguments ([#5059]).
 
-  * `modpi` function ([#4799]).
+  * `mod2pi` function ([#4799], [#4862]).
 
 Deprecated or removed
 ---------------------
