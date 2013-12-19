@@ -2126,24 +2126,95 @@ ctranspose(B::BitArray) = transpose(B)
 ## Permute array dims ##
 
 let permutedims_cache = nothing, stridenames::Array{Any,1} = {}
-global permutedims
-function permutedims(B::Union(BitArray,StridedArray), perm)
+global permutedims!
+function permutedims!(P::BitArray,B::BitArray, perm)
     dimsB = size(B)
     ndimsB = length(dimsB)
-    ndimsB == length(perm) || error("invalid dimensions")
-    dimsP = ntuple(ndimsB, i->dimsB[perm[i]])::typeof(dimsB)
-    P = similar(B, dimsP)
+    (ndimsB == length(perm) && isperm(perm)) || error("no valid permutation of dimensions")
+	dimsP = size(P)
+	ndimsP = length(dimsP)
+    (dimsP==dimsB[perm]) || error("destination tensor of incorrect size")
+	
     ranges = ntuple(ndimsB, i->(1:dimsP[i]))
     while length(stridenames) < ndimsB
         push!(stridenames, gensym())
     end
 
     #calculates all the strides
-    if isa(B,BitArray)
-        strides = [ prod(dimsB[1:(perm[dim]-1)])::Int for dim = 1:length(perm) ]
-    else
-        strides = [ stride(B, perm[dim]) for dim = 1:length(perm) ]
+    strides = [ prod(dimsB[1:(perm[dim]-1)])::Int for dim = 1:length(perm) ]
+
+    #Creates offset, because indexing starts at 1
+    offset = 0
+    for i in strides
+        offset+=i
     end
+    offset = 1-offset
+
+    if isa(B,SubArray)
+        offset += (B.first_index-1)
+        B = B.parent
+    end
+
+    function permute_one_dim(ivars)
+        len = length(ivars)
+        counts = { symbol(string("count",i)) for i=1:len}
+        toReturn = cell(len+1,2)
+        for i = 1:length(toReturn)
+            toReturn[i] = nothing
+        end
+
+        tmp = counts[end]
+        toReturn[len+1] = quote
+            ind = 1
+            $tmp = $(stridenames[len])
+        end
+
+        #inner most loop
+        toReturn[1] = quote
+            P[ind] = B[+($(counts...))+offset]
+            ind+=1
+            $(counts[1]) += $(stridenames[1])
+        end
+        for i = 1:len-1
+            tmp = counts[i]
+            val = i
+            toReturn[(i+1)] = quote
+                $tmp = $(stridenames[val])
+            end
+            tmp2 = counts[i+1]
+            val = i+1
+            toReturn[(i+1)+(len+1)] = quote
+                 $tmp2 += $(stridenames[val])
+            end
+        end
+        toReturn
+    end
+
+    if is(permutedims_cache,nothing)
+        permutedims_cache = Dict()
+    end
+
+    gen_cartesian_map(permutedims_cache, permute_one_dim, ranges,
+                      tuple(:B, :P, :perm, :offset, stridenames[1:ndimsB]...),
+                      B, P, perm, offset, strides...)
+
+    return P
+end
+function permutedims!(P::Array,B::StridedArray, perm)
+    dimsB = size(B)
+    ndimsB = length(dimsB)
+    (ndimsB == length(perm) && isperm(perm)) || error("no valid permutation of dimensions")
+	dimsP = size(P)
+	ndimsP = length(dimsP)
+    (dimsP==dimsB[perm]) || error("destination tensor of incorrect size")
+	
+    ranges = ntuple(ndimsB, i->(1:dimsP[i]))
+    while length(stridenames) < ndimsB
+        push!(stridenames, gensym())
+    end
+
+    #calculates all the strides
+    strides = [ stride(B, perm[dim]) for dim = 1:length(perm) ]
 
     #Creates offset, because indexing starts at 1
     offset = 0
@@ -2203,6 +2274,16 @@ function permutedims(B::Union(BitArray,StridedArray), perm)
     return P
 end
 end # let
+
+function permutedims(B::Union(BitArray,StridedArray), perm)
+    dimsB = size(B)
+    ndimsB = length(dimsB)
+    (ndimsB == length(perm) && isperm(perm)) || error("no valid permutation of dimensions")
+    dimsP = ntuple(ndimsB, i->dimsB[perm[i]])::typeof(dimsB)
+    P = similar(B, dimsP)
+	permutedims!(P,B,perm)
+end
+
 
 ## Concatenation ##
 
