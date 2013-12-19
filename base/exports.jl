@@ -534,6 +534,7 @@ export
     permutations,
     permute!,
     permutedims,
+    permutedims!,
     prod,
     promote_shape,
     randcycle,

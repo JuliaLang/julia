@@ -2125,6 +2125,41 @@ ctranspose(B::BitArray) = transpose(B)
 
 ## Permute array dims ##
 
+function permute_one_dim(ivars, stridenames)
+    len = length(ivars)
+    counts = { symbol(string("count",i)) for i=1:len}
+    toReturn = cell(len+1,2)
+    for i = 1:length(toReturn)
+        toReturn[i] = nothing
+    end
+
+    tmp = counts[end]
+    toReturn[len+1] = quote
+        ind = 1
+        $tmp = $(stridenames[len])
+    end
+
+    #inner most loop
+    toReturn[1] = quote
+        P[ind] = B[+($(counts...))+offset]
+        ind+=1
+        $(counts[1]) += $(stridenames[1])
+    end
+    for i = 1:len-1
+        tmp = counts[i]
+        val = i
+        toReturn[(i+1)] = quote
+            $tmp = $(stridenames[val])
+        end
+        tmp2 = counts[i+1]
+        val = i+1
+        toReturn[(i+1)+(len+1)] = quote
+            $tmp2 += $(stridenames[val])
+        end
+    end
+    toReturn
+end
+
 let permutedims_cache = nothing, stridenames::Array{Any,1} = {}
 global permutedims!
 function permutedims!(P::BitArray,B::BitArray, perm)
@@ -2155,46 +2190,11 @@ function permutedims!(P::BitArray,B::BitArray, perm)
         B = B.parent
     end
 
-    function permute_one_dim(ivars)
-        len = length(ivars)
-        counts = { symbol(string("count",i)) for i=1:len}
-        toReturn = cell(len+1,2)
-        for i = 1:length(toReturn)
-            toReturn[i] = nothing
-        end
-
-        tmp = counts[end]
-        toReturn[len+1] = quote
-            ind = 1
-            $tmp = $(stridenames[len])
-        end
-
-        #inner most loop
-        toReturn[1] = quote
-            P[ind] = B[+($(counts...))+offset]
-            ind+=1
-            $(counts[1]) += $(stridenames[1])
-        end
-        for i = 1:len-1
-            tmp = counts[i]
-            val = i
-            toReturn[(i+1)] = quote
-                $tmp = $(stridenames[val])
-            end
-            tmp2 = counts[i+1]
-            val = i+1
-            toReturn[(i+1)+(len+1)] = quote
-                 $tmp2 += $(stridenames[val])
-            end
-        end
-        toReturn
-    end
-
     if is(permutedims_cache,nothing)
         permutedims_cache = Dict()
     end
 
-    gen_cartesian_map(permutedims_cache, permute_one_dim, ranges,
+    gen_cartesian_map(permutedims_cache, iv->permute_one_dim(iv,stridenames), ranges,
                       tuple(:B, :P, :perm, :offset, stridenames[1:ndimsB]...),
                       B, P, perm, offset, strides...)
 
@@ -2228,46 +2228,11 @@ function permutedims!(P::Array,B::StridedArray, perm)
         B = B.parent
     end
 
-    function permute_one_dim(ivars)
-        len = length(ivars)
-        counts = { symbol(string("count",i)) for i=1:len}
-        toReturn = cell(len+1,2)
-        for i = 1:length(toReturn)
-            toReturn[i] = nothing
-        end
-
-        tmp = counts[end]
-        toReturn[len+1] = quote
-            ind = 1
-            $tmp = $(stridenames[len])
-        end
-
-        #inner most loop
-        toReturn[1] = quote
-            P[ind] = B[+($(counts...))+offset]
-            ind+=1
-            $(counts[1]) += $(stridenames[1])
-        end
-        for i = 1:len-1
-            tmp = counts[i]
-            val = i
-            toReturn[(i+1)] = quote
-                $tmp = $(stridenames[val])
-            end
-            tmp2 = counts[i+1]
-            val = i+1
-            toReturn[(i+1)+(len+1)] = quote
-                 $tmp2 += $(stridenames[val])
-            end
-        end
-        toReturn
-    end
-
     if is(permutedims_cache,nothing)
         permutedims_cache = Dict()
     end
 
-    gen_cartesian_map(permutedims_cache, permute_one_dim, ranges,
+    gen_cartesian_map(permutedims_cache, iv->permute_one_dim(iv,stridenames), ranges,
                       tuple(:B, :P, :perm, :offset, stridenames[1:ndimsB]...),
                       B, P, perm, offset, strides...)
 
