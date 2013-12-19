@@ -176,3 +176,6 @@ P,post = Base.LinAlg.etree(A, true)
 sfe22 = speye(Float64, 2)
 mfe22 = eye(Float64, 2)
 @test reinterpret(Int64, sfe22) == reinterpret(Int64, mfe22)
+
+# Issue 5190
+@test_throws sparsevec([3,5,7],[0.1,0.0,3.2],4)
