@@ -417,7 +417,6 @@ function nextsetpartition(s::AbstractVector, a, b, n, m)
 
 end
 
-
 const _nsetpartitions = (Int=>Int)[]
 function nsetpartitions(n::Int)
     if n < 0
@@ -451,7 +450,7 @@ start(p::FixedSetPartitions) = (n = length(p.s);m=p.m; (vcat(ones(Int, n-m),1:m)
 done(p::FixedSetPartitions, s) = !isempty(s) && s[1][1] > 1
 next(p::FixedSetPartitions, s) = nextfixedsetpartition(p.s,p.m, s...)
 
-function nextfixedsetpartition(s::AbstractVector,m, a, b, n)
+function nextfixedsetpartition(s::AbstractVector, m, a, b, n)
     function makeparts(s, a)
         part = [ similar(s,0) for k = 1:m ]
         for i = 1:n
@@ -492,7 +491,6 @@ function nextfixedsetpartition(s::AbstractVector,m, a, b, n)
     end
 
     return (part, (a,b,n))
-
 end
 
 function nfixedsetpartitions(n::Int,m::Int)
