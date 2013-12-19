@@ -202,4 +202,3 @@ function peakflops(n::Integer=2000; parallel::Bool=false)
     t = @elapsed a*a
     parallel ? sum(pmap(peakflops, [ n for i in 1:nworkers()])) : (2*n^3/t)
 end
-

@@ -630,7 +630,6 @@ for elty in (Float32, Float64, Complex64, Complex128)
     end
 end
 
-
 # Test gglse
 for elty in (Float32, Float64, Complex64, Complex128)
     A = convert(Array{elty, 2}, [1 1 1 1; 1 3 1 1; 1 -1 3 1; 1 1 1 3; 1 1 1 -1])
@@ -638,6 +637,23 @@ for elty in (Float32, Float64, Complex64, Complex128)
     B = convert(Array{elty, 2}, [1 1 1 -1; 1 -1 1 1; 1 1 -1 1])
     d = convert(Array{elty, 1}, [1, 3, -1])
     @test_approx_eq LinAlg.LAPACK.gglse!(A, c, B, d)[1] convert(Array{elty}, [0.5, -0.5, 1.5, 0.5])
+end
+
+# Test givens rotations
+for elty in (Float32, Float64, Complex64, Complex128)
+    A = convert(Matrix{elty}, randn(10,10))
+    Ac = copy(A)
+    R = Base.LinAlg.Rotation(Base.LinAlg.Givens{elty}[])
+    for j = 1:8
+        for i = j+2:10
+            G = givens(A, j+1, i, j)
+            A_mul_B!(G, A)
+            A_mul_Bc!(A, G)
+            A_mul_B!(G, R)
+        end
+    end
+    @test_approx_eq abs(A) abs(hessfact(Ac)[:H])
+    @test_approx_eq norm(R*eye(elty, 10)) one(elty)
 end
 
 

@@ -66,6 +66,7 @@ export
     eye,
     factorize,
     factorize!,
+    givens,
     gradient,
     hessfact,
     hessfact!,
@@ -204,6 +205,7 @@ include("linalg/tridiag.jl")
 include("linalg/diagonal.jl")
 include("linalg/bidiag.jl")
 include("linalg/rectfullpacked.jl")
+include("linalg/givens.jl")
 
 include("linalg/bitarray.jl")
 
