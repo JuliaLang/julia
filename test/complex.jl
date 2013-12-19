@@ -647,3 +647,6 @@ function cdiv_test(a,b)
 end
 @test cdiv_test(complex(1//2, 3//4), complex(17//13, 4//5))
 @test cdiv_test(complex(1,2), complex(8997,2432))
+
+# inv
+@test inv(1e300+0im) == 1e-300 - 0.0im
