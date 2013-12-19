@@ -1044,12 +1044,12 @@ Strings
 
 .. function:: nextind(str, i)
 
-   Get the next valid string index after ``i``. Returns ``endof(str)+1`` at
-   the end of the string.
+   Get the next valid string index after ``i``. Returns a value greater than ``endof(str)``
+   at or after the end of the string.
 
 .. function:: prevind(str, i)
 
-   Get the previous valid string index before ``i``. Returns ``0`` at
+   Get the previous valid string index before ``i``. Returns a value less than ``1`` at
    the beginning of the string.
 
 .. function:: randstring(len)
