@@ -156,7 +156,7 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one)
     print(io, cl)
 end
 
-show_comma_array(io::IO, itr, o, c) = show_delim_array(io, itr, o, ',', c, false)
+show_comma_array(io::IO, itr, o, c) = show_delim_array(io, itr, o, ", ", c, false)
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 
 ## AST decoding helpers ##
@@ -408,7 +408,11 @@ function argtype_decl_string(n, t)
     if t <: Vararg && t !== None && t.parameters[1] === Any
         return string(n, "...")
     end
-    return string(n, "::", t)
+    if have_color
+        return string(n, "::", color_normal, t, default_color_answer)
+    else
+        return string(n, "::", t)
+    end
 end
 
 function show(io::IO, m::Method)
@@ -417,7 +421,7 @@ function show(io::IO, m::Method)
         tv = (tv,)
     end
     if !isempty(tv)
-        show_delim_array(io, tv, '{', ',', '}', false)
+        show_delim_array(io, tv, '{', ", ", '}', false)
     end
     li = m.func.code
     e = uncompressed_ast(li)
@@ -428,8 +432,14 @@ function show(io::IO, m::Method)
     else
         decls = map(argtype_decl_string, argnames, {m.sig...})
     end
+    if have_color
+        print(io, default_color_answer)
+    end
     print(io, "(")
-    print_joined(io, decls, ",", ",")
+    print_joined(io, decls, ", ")
+    if have_color
+        print(io, default_color_answer)
+    end
     print(io, ")")
     if li.line > 0
         print(io, " at ", li.file, ":", li.line)
@@ -448,7 +458,8 @@ function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=tr
     while !is(d,())
         if max==-1 || n<max || (rest==0 && n==max && d.next === ())
             println(io)
-            print(io, name)
+            # Add a color to the name of the method
+            print_with_color(:blue, io, "$name")
             show(io, d)
             n += 1
         else
