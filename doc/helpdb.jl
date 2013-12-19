@@ -482,7 +482,7 @@
    information about a struct type:
 
       structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...]
-      structinfo(Stat)
+      structinfo(StatStruct)
 
 "),
 
@@ -527,6 +527,14 @@
 
    Compute a type that contains the intersection of \"T\" and \"S\".
    Usually this will be the smallest such type or one close to it.
+
+"),
+
+("Generic Functions","Base","apply","apply(f, x...)
+
+   Like calling f(x) or f(x...).
+
+   **Example**: \"apply(log, pi)\"
 
 "),
 
@@ -3556,6 +3564,13 @@ popdisplay(d::Display)
 
 "),
 
+("Mathematical Functions","Base","log","log(b, x)
+
+   Compute the base \"b\" logarithm of \"x\". Throws \"DomainError\"
+   for negative \"Real\" arguments.
+
+"),
+
 ("Mathematical Functions","Base","log2","log2(x)
 
    Compute the logarithm of \"x\" to base 2. Throws \"DomainError\"
@@ -3754,9 +3769,10 @@ popdisplay(d::Display)
 
 "),
 
-("Mathematical Functions","Base","isqrt","isqrt(x)
+("Mathematical Functions","Base","isqrt","isqrt(n)
 
-   Integer square root.
+   Integer square root: the largest integer \"m\" such that \"m*m <=
+   n\".
 
 "),
 
@@ -3914,25 +3930,31 @@ popdisplay(d::Display)
 
 ("Mathematical Functions","Base","nextpow2","nextpow2(n)
 
-   Next power of two not less than \"n\"
+   The smallest power of two not less than \"n\". Returns 0 for
+   \"n==0\", and returns \"-nextpow2(-n)\" for negative arguments.
 
 "),
 
 ("Mathematical Functions","Base","prevpow2","prevpow2(n)
 
-   Previous power of two not greater than \"n\"
+   The largest power of two not greater than \"n\". Returns 0 for
+   \"n==0\", and returns \"-prevpow2(-n)\" for negative arguments.
 
 "),
 
-("Mathematical Functions","Base","nextpow","nextpow(a, n)
+("Mathematical Functions","Base","nextpow","nextpow(a, x)
 
-   Next power of \"a\" not less than \"n\"
+   The smallest \"a^n\" not less than \"x\", where \"n\" is a non-
+   negative integer. \"a\" must be greater than 1, and \"x\" must be
+   greater than 0.
 
 "),
 
-("Mathematical Functions","Base","prevpow","prevpow(a, n)
+("Mathematical Functions","Base","prevpow","prevpow(a, x)
 
-   Previous power of \"a\" not greater than \"n\"
+   The largest \"a^n\" not greater than \"x\", where \"n\" is a non-
+   negative integer. \"a\" must be greater than 1, and \"x\" must not
+   be less than 1.
 
 "),
 
@@ -7341,16 +7363,19 @@ popdisplay(d::Display)
 
 "),
 
-("Tasks","Base","consume","consume(task)
+("Tasks","Base","consume","consume(task, values...)
 
    Receive the next value passed to \"produce\" by the specified task.
+   Additional arguments may be passed, to be returned from the last
+   \"produce\" call in the producer.
 
 "),
 
 ("Tasks","Base","produce","produce(value)
 
    Send the given value to the last \"consume\" call, switching to the
-   consumer task.
+   consumer task. If the next \"consume\" call passes any values, they
+   are returned by \"produce\".
 
 "),
 

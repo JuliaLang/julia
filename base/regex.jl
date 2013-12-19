@@ -27,6 +27,7 @@ function Regex(pattern::String, flags::String)
                    f=='m' ? PCRE.MULTILINE :
                    f=='s' ? PCRE.DOTALL    :
                    f=='x' ? PCRE.EXTENDED  :
+                   f=='a' ? PCRE.ANCHORED  :
                    error("unknown regex flag: $f")
     end
     Regex(pattern, options)
