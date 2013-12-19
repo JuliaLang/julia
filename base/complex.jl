@@ -126,6 +126,7 @@ conj(z::Complex) = complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))
 abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
 inv(z::Complex)  = conj(z)/abs2(z)
+inv{T<:Integer}(z::Complex{T}) = inv(float(z))
 sign(z::Complex) = z/abs(z)
 
 (-)(::ImaginaryUnit) = complex(0, -1)
@@ -151,6 +152,7 @@ sign(z::Complex) = z/abs(z)
 *(w::Complex, z::ImaginaryUnit) = complex(-imag(w), real(w))
 
 /(z::Number, w::Complex) = z*inv(w)
+/(a::Real  , w::Complex) = a*inv(w)
 /(z::Complex, x::Real) = complex(real(z)/x, imag(z)/x)
 
 function /(a::Complex, b::Complex)
@@ -174,77 +176,68 @@ function /(a::Complex, b::Complex)
     end
 end
 
-/(a::Real, b::Complex) =
-    real(convert(promote_type(typeof(a),typeof(b)),a)) /
-    convert(promote_type(typeof(a),typeof(b)),b)
-function /{T<:Real}(a::T, b::Complex{T})
-    bre = real(b); bim = imag(b)
-    if abs(bre) <= abs(bim)
-        if isinf(bre) && isinf(bim)
-            r = sign(bre)/sign(bim)
-        else
-            r = bre / bim
-        end
-        den = bim + r*bre
-        complex(a*r/den, -a/den)
-    else
-        if isinf(bre) && isinf(bim)
-            r = sign(bim)/sign(bre)
-        else
-            r = bim / bre
-        end
-        den = bre + r*bim
-        complex(a/den, -a*r/den)
-    end
-end
-function /(a::Complex{Float64}, b::Complex{Float64})
-     r,i = robust_cdiv(real(a), imag(a), real(b), imag(b))
-     Complex{Float64}(r,i)
-end
-# robust_cdiv performs complex division in real arithmetic
-# the first step is to scale variables if appropriate
-# then do calculations in way that avoids over/underflow (subfuncs 1 and 2)
-# then undo the scaling
+inv{T<:Union(Float16,Float32)}(z::Complex{T}) =
+    oftype(z, conj(complex128(z))/abs2(complex128(z)))
+
+# robust complex division for double precision
+# the first step is to scale variables if appropriate ,then do calculations
+# in a way that avoids over/underflow (subfuncs 1 and 2), then undo the scaling.
 # scaling variable s and other techniques
 # based on arxiv.1210.4539 
 #             a + i*b
 #  p + i*q = ---------
 #             c + i*d
-function robust_cdiv{T<:Float64}(a::T,b::T,c::T,d::T)
-    const half::T = 0.5
-    const two::T = 2.0
-    const ab::T = max(abs(a), abs(b))
-    const cd::T = max(abs(c), abs(d))
-    const ov::T = realmax(T)
-    const un::T = realmin(T)
-    const ϵ::T = eps(T)
-    const bs=two/(ϵ*ϵ)
-    s::T = 1.0
+function /(z::Complex128, w::Complex128)
+    a, b = reim(z); c, d = reim(w)
+    half = 0.5
+    two = 2.0
+    ab = max(abs(a), abs(b))
+    cd = max(abs(c), abs(d))
+    ov = realmax(a)
+    un = realmin(a)
+    ϵ = eps(Float64)
+    bs = two/(ϵ*ϵ)
+    s = 1.0
     ab >= half*ov  && (a=half*a; b=half*b; s=two*s ) # scale down a,b
     cd >= half*ov  && (c=half*c; d=half*d; s=s*half) # scale down c,d
     ab <= un*two/ϵ && (a=a*bs; b=b*bs; s=s/bs      ) # scale up a,b
     cd <= un*two/ϵ && (c=c*bs; d=d*bs; s=s*bs      ) # scale up c,d
     abs(d)<=abs(c) ? ((p,q)=robust_cdiv1(a,b,c,d)  ) : ((p,q)=robust_cdiv1(b,a,d,c); q=-q)
-    return p*s,q*s # undo scaling
+    return Complex128(p*s,q*s) # undo scaling
 end
-function robust_cdiv1{T<:Float64}(a::T,b::T,c::T,d::T)
-    const one::T = 1.0
-    const r::T=d/c
-    const t::T=one/(c+d*r)
-    p::T=robust_cdiv2(a,b,c,d,r,t)
-    q::T=robust_cdiv2(b,-a,c,d,r,t)
+function robust_cdiv1(a::Float64, b::Float64, c::Float64, d::Float64)
+    r = d/c
+    t = 1.0/(c+d*r)
+    p = robust_cdiv2(a,b,c,d,r,t)
+    q = robust_cdiv2(b,-a,c,d,r,t)
     return p,q
 end
-function robust_cdiv2{T<:Float64}(a::T,b::T,c::T,d::T,r::T,t::T)
-    const zero::T = 0.0
-    if r != zero
-        const br::T = b*r
-        return (br != zero ? (a+br)*t : a*t + (b*t)*r)
+function robust_cdiv2(a::Float64, b::Float64, c::Float64, d::Float64, r::Float64, t::Float64)
+    if r != 0
+        br = b*r
+        return (br != 0 ? (a+br)*t : a*t + (b*t)*r)
     else
         return (a + d*(b/c)) * t
     end
 end
- 
+
+function inv(w::Complex128)
+    c, d = reim(w)
+    half = 0.5
+    two = 2.0
+    cd = max(abs(c), abs(d))
+    ov = realmax(c)
+    un = realmin(c)
+    ϵ = eps(Float64)
+    bs = two/(ϵ*ϵ)
+    s = 1.0
+    cd >= half*ov  && (c=half*c; d=half*d; s=s*half) # scale down c,d
+    cd <= un*two/ϵ && (c=c*bs; d=d*bs; s=s*bs      ) # scale up c,d
+    abs(d)<=abs(c) ? ((p,q)=robust_cdiv1(1.0,0.0,c,d)) :
+                     ((p,q)=robust_cdiv1(0.0,1.0,d,c); q=-q)
+    return Complex128(p*s,q*s) # undo scaling
+end
+
 function ssqs{T<:FloatingPoint}(x::T, y::T)
     k::Int = 0
     ρ = x*x + y*y
