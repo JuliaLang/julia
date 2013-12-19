@@ -145,18 +145,27 @@ function reinit_displays()
     pushdisplay(TextDisplay(STDOUT))
 end
 
+macro try_display(expr)
+  quote
+    display_fns = [display, redisplay, writemime]
+    try $(esc(expr))
+    catch e
+      isa(e, MethodError) && any(f -> e.f == f, display_fns) ||
+        rethrow()
+    end
+  end
+end
+
 function display(x)
     for i = length(displays):-1:1
-        displayable(displays[i], x) &&
-          return display(displays[i], x)
+        @try_display return display(displays[i], x)
     end
     throw(MethodError(display, (x,)))
 end
 
 function display(m::MIME, x)
     for i = length(displays):-1:1
-        displayable(displays[i], m, x) &&
-          return display(displays[i], m, x)
+        @try_display return display(displays[i], m, x)
     end
     throw(MethodError(display, (m, x)))
 end
@@ -184,16 +193,14 @@ end
 
 function redisplay(x)
     for i = length(displays):-1:1
-      applicable(redisplay, displays[i], x) &&
-        return redisplay(displays[i], x)
+      @try_display return redisplay(displays[i], x)
     end
     throw(MethodError(redisplay, (x,)))
 end
 
 function redisplay(m::Union(MIME,String), x)
     for i = length(displays):-1:1
-      applicable(redisplay, displays[i], m, x) &&
-        return redisplay(displays[i], m, x)
+      @try_display return redisplay(displays[i], m, x)
     end
     throw(MethodError(redisplay, (m, x)))
 end
