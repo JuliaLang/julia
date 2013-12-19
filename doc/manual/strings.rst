@@ -64,8 +64,8 @@ Characters
 A ``Char`` value represents a single character: it is just a 32-bit
 integer with a special literal representation and appropriate arithmetic
 behaviors, whose numeric value is interpreted as a `Unicode code
-point <http://en.wikipedia.org/wiki/Code_point>`_. Here is how ``Char``
-values are input and shown:
+point <http://en.wikipedia.org/wiki/Code_point>`_. A ``Char``
+values must be input in single quotes:
 
 .. doctest::
 
@@ -184,7 +184,10 @@ You can do comparisons and a limited amount of arithmetic with
 String Basics
 -------------
 
-Here a variable is initialized with a simple string literal:
+String literals are typed in double quotes `"..." or triple double 
+quotes `"""..."""`; the latter form is called a 'triple-quoted string' 
+for short. Here a variable is initialized with a simple string literal 
+ending in a newline:
 
 .. doctest::
 
@@ -249,7 +252,7 @@ You can also extract a substring using range indexing:
     julia> str[4:9]
     "lo, wo"
 
-Note the distinction between ``str[k]`` and ``str[k:k]``:
+Writing ``str[k]`` or ``str[k:k]`` does not give the same result:
 
 .. doctest::
 
