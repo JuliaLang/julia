@@ -233,8 +233,18 @@ function inv(w::Complex128)
     s = 1.0
     cd >= half*ov  && (c=half*c; d=half*d; s=s*half) # scale down c,d
     cd <= un*two/ϵ && (c=c*bs; d=d*bs; s=s*bs      ) # scale up c,d
-    abs(d)<=abs(c) ? ((p,q)=robust_cdiv1(1.0,0.0,c,d)) :
-                     ((p,q)=robust_cdiv1(0.0,1.0,d,c); q=-q)
+    if abs(d)<=abs(c)
+        r = d/c
+        t = 1.0/(c+d*r)
+        p = t
+        q = -r * t
+    else
+        c, d = d, c
+        r = d/c
+        t = 1.0/(c+d*r)
+        p = r * t
+        q = -t
+    end
     return Complex128(p*s,q*s) # undo scaling
 end
 
