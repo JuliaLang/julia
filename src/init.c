@@ -812,7 +812,7 @@ extern void * __stack_chk_guard;
 
 DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]), char *build_path)
 {
-#if defined(_OS_WINDOWS_) //&& !defined(_WIN64)
+#if defined(_OS_WINDOWS_)
     SetUnhandledExceptionFilter(exception_handler);
 #endif
     unsigned char * p = (unsigned char *) &__stack_chk_guard;
