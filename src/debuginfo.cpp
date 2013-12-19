@@ -24,14 +24,14 @@ public:
         uint8_t *UnwindData = (uint8_t*)((((uintptr_t)&tbl[1])+3)&~(uintptr_t)3);
         RUNTIME_FUNCTION fn = {0,(DWORD)Size,(DWORD)(intptr_t)(UnwindData-(uint8_t*)Code)};
         tbl[0] = fn;
-        UnwindData[0] = 0x20; // version info, UNW_FLAG_NHANDLER
+        UnwindData[0] = 0x01; // version info, UNW_FLAG_NHANDLER
         UnwindData[1] = 4;    // size of prolog (bytes)
         UnwindData[2] = 2;    // count of unwind codes (slots)
-        UnwindData[3] = 0x50; // frame register (rbp) = rsp
-        UnwindData[4] = 0x01; // first instruction
-        UnwindData[5] = 0x05; // push RBP
-        UnwindData[6] = 0x04; // second instruction
-        UnwindData[7] = 0x10; // mov RBP, RSP
+        UnwindData[3] = 0x05; // frame register (rbp) = rsp
+        UnwindData[4] = 4;    // second instruction
+        UnwindData[5] = 0x01; // mov RBP, RSP
+        UnwindData[6] = 1;    // first instruction
+        UnwindData[7] = 0x50; // push RBP
         RtlAddFunctionTable(tbl,1,(DWORD64)Code);
 #endif
     }
