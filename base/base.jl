@@ -70,6 +70,10 @@ end
 
 type EOFError <: Exception end
 
+type DimensionMismatch <: Exception
+    name::ASCIIString
+end
+
 type WeakRef
     value
     WeakRef() = WeakRef(nothing)
