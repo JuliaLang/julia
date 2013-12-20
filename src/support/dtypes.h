@@ -1,14 +1,15 @@
 #ifndef DTYPES_H
 #define DTYPES_H
 
-#if !defined(_OS_WINDOWS_)
-#include <inttypes.h>
-#endif
 #include <stddef.h>
 #include <stddef.h> // double include of stddef.h fixes #3421
 #include <stdint.h>
 
 #include "platform.h"
+
+#if !defined(_OS_WINDOWS_)
+#include <inttypes.h>
+#endif
 
 #if defined(_OS_WINDOWS_)
 
@@ -55,10 +56,10 @@
 
 #ifdef _OS_WINDOWS_
 #define STDCALL __stdcall
-# ifdef IMPORT_EXPORTS
-#  define DLLEXPORT __declspec(dllimport)
-# else
+# ifdef LIBRARY_EXPORTS
 #  define DLLEXPORT __declspec(dllexport)
+# else
+#  define DLLEXPORT __declspec(dllimport)
 # endif
 #else
 #define STDCALL
