@@ -3832,7 +3832,7 @@ extern "C" void jl_init_codegen(void)
     std::vector<std::string> attrvec (mattr, mattr+2);
     jl_ExecutionEngine = EngineBuilder(jl_Module)
         .setEngineKind(EngineKind::JIT)
-#if defined(_OS_WINDOWS_)
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
         .setJITMemoryManager(new JITMemoryManagerWin())
 #endif
         .setTargetOptions(options)
