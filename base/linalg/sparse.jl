@@ -24,6 +24,8 @@ function A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number,
     end
     y
 end
+A_mul_B!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractVector) = A_mul_B!(one(eltype(x)), A, x, zero(eltype(y)), y)
+
 function *{TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx})
     T = promote_type(TA,Tx)
     A_mul_B!(one(T), A, x, zero(T), zeros(T, A.m))
@@ -46,6 +48,7 @@ function Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number
     end
     y
 end
+Ac_mul_B!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractVector) = Ac_mul_B!(one(eltype(x)), A, x, zero(eltype(y)), y)
 function At_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number, y::AbstractVector)
     A.n == length(y) || throw(DimensionMismatch(""))
     A.m == length(x) || throw(DimensionMismatch(""))
@@ -63,6 +66,7 @@ function At_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number
     end
     y
 end
+At_mul_B!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractVector) = At_mul_B!(one(eltype(x)), A, x, zero(eltype(y)), y)
 function Ac_mul_B{TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx})
     T = promote_type(TA, Tx)
     Ac_mul_B!(one(T), A, x, zero(T), zeros(T, A.n))
