@@ -1452,11 +1452,10 @@ function sum_seq{T}(a::AbstractArray{T}, ifirst::Int, ilast::Int)
 
     else # a has more than four elements
 
-        # the purpose of using multiple accumulators here
-        # is to leverage instruction pairing to hide 
-        # read-after-write latency. Benchmark shows that
-        # this can lead to considerable performance
-        # improvement (over 2x).                
+        # more effective utilization of the instruction
+        # pipeline through manually unrolling the sum
+        # into four-way accumulation. Benchmark shows
+        # that this results in about 2x speed-up.                
 
         @inbounds s1 = a[ifirst]
         @inbounds s2 = a[ifirst + 1]
