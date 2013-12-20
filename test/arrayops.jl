@@ -351,7 +351,7 @@ let es = sum_kbn(z), es2 = sum_kbn(z[1:10^5])
     @test (es - cs[end]) < es * 1e-13
     @test (es2 - cs[10^5]) < es2 * 1e-13
 end
-@test sum(sin(z)) == sum(sin, z)
+@test_approx_eq sum(sin(z)) sum(sin, z)
 
 @test any([true false; false false], 2) == [true false]'
 @test any([true false; false false], 1) == [true false]
