@@ -10,6 +10,8 @@
 #if defined(_OS_WINDOWS_)
 #define NOMINMAX
 #include <malloc.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #if defined(_COMPILER_INTEL_)
 #include <mathimf.h>
 #else
@@ -24,6 +26,7 @@
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
+#include "llvm/ExecutionEngine/JITMemoryManager.h"
 #include "llvm/PassManager.h"
 #include "llvm/Analysis/Verifier.h"
 #include "llvm/Analysis/Passes.h"
@@ -3830,6 +3833,9 @@ extern "C" void jl_init_codegen(void)
     std::vector<std::string> attrvec (mattr, mattr+2);
     jl_ExecutionEngine = EngineBuilder(jl_Module)
         .setEngineKind(EngineKind::JIT)
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+        .setJITMemoryManager(new JITMemoryManagerWin())
+#endif
         .setTargetOptions(options)
         .setMAttrs(attrvec)
         .create();

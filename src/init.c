@@ -215,14 +215,20 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     }
     return 1;
 }
-static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
+static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo, int in_ctx)
 {
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
             case EXCEPTION_INT_DIVIDE_BY_ZERO:
+                fpreset();
+                if (!in_ctx)
+                    jl_throw(jl_diverror_exception);
                 jl_throw_in_ctx(jl_diverror_exception, ExceptionInfo->ContextRecord, 0);
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_STACK_OVERFLOW:
+                bt_size = 0;
+                if (!in_ctx)
+                    jl_rethrow_other(jl_stackovf_exception);
                 jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord, 0);
                 return EXCEPTION_CONTINUE_EXECUTION;
         }
@@ -278,6 +284,17 @@ static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
     }
     return EXCEPTION_CONTINUE_SEARCH;
 }
+static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) {
+    return _exception_handler(ExceptionInfo,1);
+}
+#if defined(_CPU_X86_64_)
+EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext) {
+    EXCEPTION_POINTERS ExceptionInfo;
+    ExceptionInfo.ExceptionRecord = ExceptionRecord;
+    ExceptionInfo.ContextRecord = ContextRecord;
+    return _exception_handler(&ExceptionInfo,0);
+} 
+#endif
 #else
 void restore_signals()
 {
@@ -812,7 +829,7 @@ extern void * __stack_chk_guard;
 
 DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]), char *build_path)
 {
-#if defined(_OS_WINDOWS_) //&& !defined(_WIN64)
+#if defined(_OS_WINDOWS_)
     SetUnhandledExceptionFilter(exception_handler);
 #endif
     unsigned char * p = (unsigned char *) &__stack_chk_guard;
