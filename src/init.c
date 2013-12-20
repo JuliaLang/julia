@@ -80,18 +80,9 @@ static void jl_find_stack_bottom(void)
 }
 
 #ifdef _OS_WINDOWS_
-void __cdecl fpe_handler(int arg,int num)
-#else
-void fpe_handler(int arg)
-#endif
+void __cdecl fpe_handler(int arg, int num)
 {
     (void)arg;
-#ifndef _OS_WINDOWS_
-    sigset_t sset;
-    sigemptyset(&sset);
-    sigaddset(&sset, SIGFPE);
-    sigprocmask(SIG_UNBLOCK, &sset, NULL);
-#else
     fpreset();
     signal(SIGFPE, (void (__cdecl *)(int))fpe_handler);
     switch(num) {
@@ -102,11 +93,31 @@ void fpe_handler(int arg)
         jl_errorf("Unexpected FPE Error 0x%X", num);
         break;
     case _FPE_ZERODIVIDE:
-#endif
         jl_throw(jl_diverror_exception);
-#ifdef _OS_WINDOWS_
         break;
     }
+}
+#else
+void fpe_handler(int arg)
+{
+    (void)arg;
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, SIGFPE);
+    sigprocmask(SIG_UNBLOCK, &sset, NULL);
+
+    jl_throw(jl_diverror_exception);
+}
+#endif
+
+static int is_addr_on_stack(void *addr)
+{
+#ifdef COPY_STACKS
+    return ((char*)addr > (char*)jl_stack_lo-3000000 &&
+            (char*)addr < (char*)jl_stack_hi);
+#else
+    return ((char*)addr > (char*)jl_current_task->stack-8192 &&
+            (char*)addr < (char*)jl_current_task->stack+jl_current_task->ssize);
 #endif
 }
 
@@ -116,16 +127,7 @@ void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
 
-    if ( in_jl_ || (
-#ifdef COPY_STACKS
-        (char*)info->si_addr > (char*)jl_stack_lo-3000000 &&
-        (char*)info->si_addr < (char*)jl_stack_hi
-#else
-        (char*)info->si_addr > (char*)jl_current_task->stack-8192 &&
-        (char*)info->si_addr <
-        (char*)jl_current_task->stack+jl_current_task->ssize
-#endif
-        )) {
+    if (in_jl_ || is_addr_on_stack(info->si_addr)) {
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
@@ -150,9 +152,10 @@ volatile sig_atomic_t jl_defer_signal = 0;
 #ifdef _OS_WINDOWS_
 void restore_signals()
 {
-    SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
+    SetConsoleCtrlHandler(NULL, 0); //turn on ctrl-c handler
 }
-void jl_throw_in_ctx(jl_value_t* excpt, CONTEXT *ctxThread, int bt)
+
+void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 {
     assert(excpt != NULL);
     bt_size = bt ? rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ctxThread) : 0;
@@ -169,9 +172,11 @@ void jl_throw_in_ctx(jl_value_t* excpt, CONTEXT *ctxThread, int bt)
 #error WIN16 not supported :P
 #endif
 }
+
 volatile HANDLE hMainThread = NULL;
 DLLEXPORT void jlbacktrace();
 DLLEXPORT void gdblookup(ptrint_t ip);
+
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
     int sig;
@@ -215,6 +220,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     }
     return 1;
 }
+
 static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo, int in_ctx)
 {
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
@@ -284,24 +290,31 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
     }
     return EXCEPTION_CONTINUE_SEARCH;
 }
-static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) {
+
+static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
+{
     return _exception_handler(ExceptionInfo,1);
 }
+
 #if defined(_CPU_X86_64_)
-EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext) {
+EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext)
+{
     EXCEPTION_POINTERS ExceptionInfo;
     ExceptionInfo.ExceptionRecord = ExceptionRecord;
     ExceptionInfo.ContextRecord = ContextRecord;
     return _exception_handler(&ExceptionInfo,0);
 } 
 #endif
-#else
+
+#else // #ifdef _OS_WINDOWS_
+
 void restore_signals()
 {
     sigset_t sset;
     sigemptyset(&sset);
     sigprocmask(SIG_SETMASK, &sset, 0);
 }
+
 void sigint_handler(int sig, siginfo_t *info, void *context)
 {
     if (jl_defer_signal) {
@@ -330,11 +343,13 @@ static void jl_uv_exitcleanup_add(uv_handle_t* handle, struct uv_shutdown_queue 
     if (!queue->first) queue->first = item;
     queue->last = item;
 }
+
 static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
 {
     if (handle != (uv_handle_t*)jl_uv_stdout && handle != (uv_handle_t*)jl_uv_stderr)
         jl_uv_exitcleanup_add(handle, arg);
 }
+
 DLLEXPORT void uv_atexit_hook()
 {
 #if defined(JL_GC_MARKSWEEP) && defined(GC_FINAL_STATS)
@@ -527,9 +542,9 @@ static mach_port_t segv_port = 0;
 
 extern boolean_t exc_server(mach_msg_header_t *, mach_msg_header_t *);
 
-void * mach_segv_listener(void *arg)
+void *mach_segv_listener(void *arg)
 {
-    (void) arg;
+    (void)arg;
     while (1) {
         int ret = mach_msg_server(exc_server,2048,segv_port,MACH_MSG_TIMEOUT_NONE);
         printf("mach_msg_server: %s\n", mach_error_string(ret));
@@ -553,13 +568,13 @@ extern volatile mach_port_t mach_profiler_thread;
 #endif
 
 //exc_server uses dlsym to find symbol
-DLLEXPORT kern_return_t catch_exception_raise
-                (mach_port_t                          exception_port,
-                 mach_port_t                                  thread,
-                 mach_port_t                                    task,
-                 exception_type_t                          exception,
-                 exception_data_t                               code,
-                 mach_msg_type_number_t                   code_count)
+DLLEXPORT
+kern_return_t catch_exception_raise(mach_port_t            exception_port,
+                                    mach_port_t            thread,
+                                    mach_port_t            task,
+                                    exception_type_t       exception,
+                                    exception_data_t       code,
+                                    mach_msg_type_number_t code_count)
 {
     unsigned int count = MACHINE_THREAD_STATE_COUNT;
     unsigned int exc_count = X86_EXCEPTION_STATE64_COUNT;
@@ -576,16 +591,7 @@ DLLEXPORT kern_return_t catch_exception_raise
     ret = thread_get_state(thread,x86_EXCEPTION_STATE64,(thread_state_t)&exc_state,&exc_count);
     HANDLE_MACH_ERROR("thread_get_state(1)",ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
-    if (
-#ifdef COPY_STACKS
-        (char*)fault_addr > (char*)jl_stack_lo-3000000 &&
-        (char*)fault_addr < (char*)jl_stack_hi
-#else
-        (char*)fault_addr > (char*)jl_current_task->stack-8192 &&
-        (char*)fault_addr <
-        (char*)jl_current_task->stack+jl_current_task->ssize
-#endif
-        ) {
+    if (is_addr_on_stack(fault_addr)) {
         ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
         HANDLE_MACH_ERROR("thread_get_state(2)",ret);
         old_state = state;
@@ -633,14 +639,14 @@ void julia_init(char *imageFile, int build_mode)
     jl_RTLD_DEFAULT_handle->handle = jl_dl_handle->handle;
 #endif
 #ifdef _OS_WINDOWS_
-    uv_dlopen("ntdll.dll",jl_ntdll_handle); //bypass julia's pathchecking for system dlls
-    uv_dlopen("kernel32.dll",jl_kernel32_handle);
-    uv_dlopen("msvcrt.dll",jl_crtdll_handle);
-    uv_dlopen("ws2_32.dll",jl_winsock_handle);
+    uv_dlopen("ntdll.dll", jl_ntdll_handle); // bypass julia's pathchecking for system dlls
+    uv_dlopen("kernel32.dll", jl_kernel32_handle);
+    uv_dlopen("msvcrt.dll", jl_crtdll_handle);
+    uv_dlopen("ws2_32.dll", jl_winsock_handle);
     _jl_exe_handle.handle = GetModuleHandleA(NULL);
-    if (!DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
-        GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
-        TRUE, DUPLICATE_SAME_ACCESS )) {
+    if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
+                         GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
+                         TRUE, DUPLICATE_SAME_ACCESS)) {
         JL_PRINTF(JL_STDERR, "Couldn't access handle to main thread\n");
     }
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
@@ -648,7 +654,8 @@ void julia_init(char *imageFile, int build_mode)
     needsSymRefreshModuleList = 0;
     uv_lib_t jl_dbghelp;
     uv_dlopen("dbghelp.dll",&jl_dbghelp);
-    if (uv_dlsym(&jl_dbghelp,"SymRefreshModuleList",(void**)&hSymRefreshModuleList)) hSymRefreshModuleList = 0;
+    if (uv_dlsym(&jl_dbghelp, "SymRefreshModuleList", (void**)&hSymRefreshModuleList))
+        hSymRefreshModuleList = 0;
 #endif
     jl_io_loop = uv_default_loop(); //this loop will internal events (spawining process etc.)
     init_stdio();
