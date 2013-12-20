@@ -293,6 +293,27 @@ expressions with side effects (such as printing) in chained comparisons.
 If side effects are required, the short-circuit ``&&`` operator should
 be used explicitly (see :ref:`man-short-circuit-evaluation`).
 
+Operator Precedence
+~~~~~~~~~~~~~~~~~~~
+
+Julia applies the following order of operations, from highest precedence 
+to lowest:
+
+================= =============================================================================================
+Category          Operators
+================= =============================================================================================
+Syntax            ``.`` followed by ``::``
+Exponentiation    ``^`` and its elementwise equivalent ``.^``
+Fractions         ``//`` and ``.//``
+Multiplication    ``* / % & \`` and  ``.* ./ .% .\``
+Bitshifts         ``<< >> >>>`` and ``.<< .>> .>>>``
+Addition          ``+ - | $`` and ``.+ .-``
+Syntax            ``: ..`` followed by ``|>``
+Comparisons       ``> < >= <= == === != !== <:`` and ``.> .< .>= .<= .== .!=``
+Control flow      ``&&`` followed by ``||`` followed by ``?``
+Assignments       ``= += -= *= /= //= \= ^= %= |= &= $= <<= >>= >>>=`` and ``.+= .-= .*= ./= .//= .\= .^= .%=``
+================= =============================================================================================
+
 .. _man-elementary-functions:
 
 Elementary Functions
