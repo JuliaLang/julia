@@ -12,7 +12,8 @@ export  CPU_CORES,
         free_memory,
         total_memory,
         shlib_ext,
-        shlib_list
+        shlib_list,
+        dlpath
 
 import ..Base: WORD_SIZE, OS_NAME, ARCH, MACHINE
 import ..Base: show, uv_error
@@ -190,6 +191,14 @@ function shlib_list()
     end
 
     dynamic_libraries
+end
+
+function dlpath( handle::Ptr{Void} )
+    return bytestring(ccall( :jl_pathname_for_handle, Ptr{Uint8}, (Ptr{Void},), handle ))
+end
+
+function dlpath( libname::String )
+    return dlpath( dlopen(libname) )
 end
 
 end
