@@ -6,7 +6,9 @@ struct FuncInfo{
     std::vector<JITEvent_EmittedFunctionDetails::LineStart> lines;
 };
 
+#ifdef _OS_WINDOWS_
 extern "C" EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord,void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext);
+#endif
 
 class JuliaJITEventListener: public JITEventListener
 {
