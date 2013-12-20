@@ -8,6 +8,7 @@
  * including <math.h> (or rather its content).
  */
 #if defined(_OS_WINDOWS_)
+#define NOMINMAX
 #include <malloc.h>
 #if defined(_COMPILER_INTEL_)
 #include <mathimf.h>
@@ -991,7 +992,7 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
 
     int argStart = ctx->argDepth;
     size_t clen = jl_array_dim0(capt);
-    Value *captured[1+clen];
+    Value **captured = (Value**) alloca((1+clen)*sizeof(Value*));
     captured[0] = ConstantInt::get(T_size, clen);
     for(i=0; i < clen; i++) {
         Value *val;
@@ -1791,7 +1792,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         Function *cf = (Function*)f->linfo->cFunctionObject;
         FunctionType *cft = cf->getFunctionType();
         size_t nfargs = cft->getNumParams();
-        Value *argvals[nfargs];
+        Value **argvals = (Value**) alloca(nfargs*sizeof(Value*));
         unsigned idx = 0;
         for(size_t i=0; i < nargs; i++) {
             Type *at = cft->getParamType(idx);
@@ -2668,7 +2669,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
 
     size_t nargs = jl_tuple_len(lam->specTypes);
     size_t nfargs = f->getFunctionType()->getNumParams();
-    Value *args[nfargs];
+    Value **args = (Value**) alloca(nfargs*sizeof(Value*));
     unsigned argIdx = 0;
     unsigned idx = 0;
     for(size_t i=0; i < nargs; i++) {

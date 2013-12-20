@@ -71,7 +71,7 @@ int jl_is_type(jl_value_t *v)
     return jl_is_nontuple_type(v);
 }
 
-static inline int is_unspec(jl_datatype_t *dt)
+STATIC_INLINE int is_unspec(jl_datatype_t *dt)
 {
     return (jl_datatype_t*)dt->name->primary == dt;
 }
@@ -282,7 +282,7 @@ typedef struct {
     jl_tuple_t *tvars;
 } cenv_t;
 
-static inline int is_bnd(jl_tvar_t *tv, cenv_t *env)
+STATIC_INLINE int is_bnd(jl_tvar_t *tv, cenv_t *env)
 {
     if (jl_is_typevar(env->tvars))
         return (jl_tvar_t*)env->tvars == tv;
@@ -293,7 +293,7 @@ static inline int is_bnd(jl_tvar_t *tv, cenv_t *env)
     return 0;
 }
 
-static inline int is_btv(jl_value_t *v)
+STATIC_INLINE int is_btv(jl_value_t *v)
 {
     return jl_is_typevar(v) && ((jl_tvar_t*)v)->bound;
 }
