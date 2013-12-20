@@ -158,14 +158,16 @@ end
 
 function display(x)
     for i = length(displays):-1:1
-        @try_display return display(displays[i], x)
+        displayable(displays[i], x) &&
+            @try_display return display(displays[i], x)
     end
     throw(MethodError(display, (x,)))
 end
 
 function display(m::MIME, x)
     for i = length(displays):-1:1
-        @try_display return display(displays[i], m, x)
+        displayable(displays[i], m, x) &&
+            @try_display return display(displays[i], m, x)
     end
     throw(MethodError(display, (m, x)))
 end
@@ -193,14 +195,16 @@ end
 
 function redisplay(x)
     for i = length(displays):-1:1
-      @try_display return redisplay(displays[i], x)
+        applicable(redisplay, displays[i], x) &&
+            @try_display return redisplay(displays[i], x)
     end
     throw(MethodError(redisplay, (x,)))
 end
 
 function redisplay(m::Union(MIME,String), x)
     for i = length(displays):-1:1
-      @try_display return redisplay(displays[i], m, x)
+        applicable(redisplay, displays[i], m, x) &&
+            @try_display return redisplay(displays[i], m, x)
     end
     throw(MethodError(redisplay, (m, x)))
 end
