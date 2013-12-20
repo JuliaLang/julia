@@ -1437,6 +1437,52 @@ prod(A::AbstractArray{Bool}) =
 prod(A::AbstractArray{Bool}, region) =
     error("use all() instead of prod() for boolean arrays")
 
+
+# a fast implementation of sum in sequential order (from left to right)
+function sum_seq{T}(a::AbstractArray{T}, ifirst::Int, ilast::Int)
+
+    if ifirst + 3 >= ilast  # a has at most four elements
+        s = zero(T)
+        i = ifirst
+        while i <= ilast
+            @inbounds s += a[i]
+            i += 1
+        end
+        return s
+
+    else # a has more than four elements
+
+        # the purpose of using multiple accumulators here
+        # is to leverage instruction pairing to hide 
+        # read-after-write latency. Benchmark shows that
+        # this can lead to considerable performance
+        # improvement (over 2x).                
+
+        @inbounds s1 = a[ifirst]
+        @inbounds s2 = a[ifirst + 1]
+        @inbounds s3 = a[ifirst + 2]
+        @inbounds s4 = a[ifirst + 3]
+
+        i = ifirst + 4
+        il = ilast - 3
+        while i <= il
+            @inbounds s1 += a[i]
+            @inbounds s2 += a[i+1]
+            @inbounds s3 += a[i+2]
+            @inbounds s4 += a[i+3]
+            i += 4
+        end
+
+        while i <= ilast
+                @inbounds s1 += a[i]
+                i += 1
+        end
+
+        return s1 + s2 + s3 + s4
+    end
+end
+
+
 # Pairwise (cascade) summation of A[i1:i1+n-1], which has O(log n) error growth
 # [vs O(n) for a simple loop] with negligible performance cost if
 # the base case is large enough.  See, e.g.:
@@ -1448,23 +1494,24 @@ prod(A::AbstractArray{Bool}, region) =
 # in practice.  See:
 #        Manfred Tasche and Hansmartin Zeuner, Handbook of
 #        Analytic-Computational Methods in Applied Mathematics (2000).
-function sum_pairwise(A::AbstractArray, i1,n)
-    if n < 128
-        @inbounds s = A[i1]
-        for i = i1+1:i1+n-1
-            @inbounds s += A[i]
-        end
-        return s
+#
+
+function sum_pairwise(a::AbstractArray, ifirst::Int, ilast::Int, bsiz::Int)
+    # bsiz: maximum block size
+
+    if ifirst + bsiz >= ilast
+        sum_seq(a, ifirst, ilast)
     else
-        n2 = div(n,2)
-        return sum_pairwise(A, i1, n2) + sum_pairwise(A, i1+n2, n-n2)
+        imid = ifirst + ((ilast - ifirst) >> 1)
+        sum_pairwise(a, ifirst, imid, bsiz) + sum_pairwise(a, imid+1, ilast, bsiz)
     end
 end
 
-function sum{T}(A::AbstractArray{T})
-    n = length(A)
-    n == 0 ? zero(T) : sum_pairwise(A, 1, n)
-end
+# Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
+const PAIRWISE_SUM_BLOCKSIZE = 1024
+
+sum(a::AbstractArray) = sum_pairwise(a, 1, length(a), PAIRWISE_SUM_BLOCKSIZE)
+
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
 # of a considerable increase in computational expense.
