@@ -21,10 +21,6 @@ type BigInt <: Integer
     end
 end
 
-function BigInt_clear(mpz::BigInt)
-    ccall((:__gmpz_clear, :libgmp), Void, (Ptr{BigInt},), &mpz)
-end
-
 _gmp_clear_func = C_NULL
 _mpfr_clear_func = C_NULL
 

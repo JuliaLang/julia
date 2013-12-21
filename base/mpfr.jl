@@ -45,7 +45,6 @@ type BigFloat <: FloatingPoint
         new(prec, sign, exp, d)
     end
 end
-MPFR_clear(mpfr::BigFloat) = ccall((:mpfr_clear, :libmpfr), Void, (Ptr{BigFloat},), &mpfr)
 
 BigFloat(x::BigFloat) = x
 

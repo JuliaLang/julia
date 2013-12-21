@@ -864,9 +864,9 @@ static void gc_mark(void)
             if (!gc_marked(v)) {
                 jl_value_t *fin = finalizer_table.table[i+1];
                 if (gc_typeof(fin) == (jl_value_t*)jl_voidpointer_type) {
-                    void *p = ((void**)fin)[1];
+                    void *p = jl_unbox_voidpointer(fin);
                     if (p)
-                        ((void (*)(void*))p)(&((void**)v)[1]);
+                        ((void (*)(void*))p)(jl_data_ptr(v));
                     finalizer_table.table[i+1] = HT_NOTFOUND;
                     continue;
                 }
