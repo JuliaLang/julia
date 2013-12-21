@@ -3786,9 +3786,10 @@ static void init_julia_llvm_env(Module *m)
     // Has to be big enough for the biggest LLVM-supported float type
     jlfloattemp_var =
         new GlobalVariable(*m, IntegerType::get(jl_LLVMContext,128),
-                           false, GlobalVariable::PrivateLinkage, 
+                           false, GlobalVariable::ExternalLinkage, 
                            ConstantInt::get(IntegerType::get(jl_LLVMContext,128),0),
                            "jl_float_temp");
+
 
     std::vector<Type*> args1(0);
     args1.push_back(T_pint8);

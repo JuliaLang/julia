@@ -918,7 +918,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (needTempSpace) {
         // save temp argument area stack pointer
         // TODO: inline this
-        saveloc = CallInst::Create(save_arg_area_loc_func);
+        saveloc = CallInst::Create(prepare_call(save_arg_area_loc_func));
         if (savespot)
             instList.insertAfter(savespot, (Instruction*)saveloc);
         else
