@@ -13,6 +13,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
 {
     jl_module_t *m = (jl_module_t*)allocobj(sizeof(jl_module_t));
     m->type = (jl_value_t*)jl_module_type;
+    assert(jl_is_symbol(name));
     m->name = name;
     m->constant_table = NULL;
     htable_new(&m->bindings, 0);
@@ -45,6 +46,7 @@ JL_CALLABLE(jl_f_new_module)
 
 static jl_binding_t *new_binding(jl_sym_t *name)
 {
+    assert(jl_is_symbol(name));
     jl_binding_t *b = (jl_binding_t*)allocb(sizeof(jl_binding_t));
     b->name = name;
     b->value = NULL;
@@ -345,7 +347,7 @@ DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
     return b && b->constp;
 }
 
-void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
+DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
     if (b->constp && b->value != NULL) {
         if (!jl_egal(rhs, b->value) &&
@@ -358,7 +360,7 @@ void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
     b->value = rhs;
 }
 
-void jl_declare_constant(jl_binding_t *b)
+DLLEXPORT void jl_declare_constant(jl_binding_t *b)
 {
     if (b->value != NULL && !b->constp) {
         jl_errorf("cannot declare %s constant; it already has a value",

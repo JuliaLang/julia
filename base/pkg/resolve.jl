@@ -24,7 +24,7 @@ function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Availa
     catch err
         if isa(err, UnsatError)
             p = interface.pkgs[err.info]
-            msg = "Unsatisfiable package requirements detected: " *
+            msg = "unsatisfiable package requirements detected: " *
                   "no feasible version could be found for package: $p"
             if msgs.num_nondecimated != graph.np
                 msg *= "\n  (you may try increasing the value of the" *

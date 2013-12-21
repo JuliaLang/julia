@@ -1,16 +1,17 @@
 ## linalg.jl: Some generic Linear Algebra definitions
 
-scale{T<:Number}(X::AbstractArray{T}, s::Number) = scale!(copy(X), s)
+scale(X::AbstractArray, s::Number) = scale!(copy(X), s)
+scale(s::Number, X::AbstractArray) = scale!(copy(X), s)
 
-function scale!{T<:Number}(X::AbstractArray{T}, s::Number)
+function scale!(X::AbstractArray, s::Number)
     for i in 1:length(X)
-        X[i] *= s;
+        @inbounds X[i] *= s
     end
-    return X
+    X
 end
+scale!(s::Number, X::AbstractArray) = scale!(X, s)
 
-cross(a::AbstractVector, b::AbstractVector) =
-    [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
+cross(a::AbstractVector, b::AbstractVector) = [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
 triu(M::AbstractMatrix) = triu(M,0)
 tril(M::AbstractMatrix) = tril(M,0)
@@ -22,15 +23,25 @@ tril!(M::AbstractMatrix) = tril!(M,0)
 #diff(a::AbstractVector)
 #diff(a::AbstractMatrix, dim::Integer)
 diff(a::AbstractMatrix) = diff(a, 1)
+diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
+
+function diff(A::AbstractMatrix, dim::Integer)
+    if dim == 1
+        [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
+    else
+        [A[i,j+1] - A[i,j] for i=1:size(A,1), j=1:size(A,2)-1]
+    end
+end
+
 
 gradient(F::AbstractVector) = gradient(F, [1:length(F)])
 gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F))])
 #gradient(F::AbstractVector, h::AbstractVector)
 
-diag(A::AbstractVector) = error("Perhaps you meant to use diagm().")
+diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagonal matrix")
 #diag(A::AbstractMatrix)
 
-#diagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
+#diagm{T}(v::AbstractVecOrMat{T})
 
 function norm{T}(x::AbstractVector{T}, p::Number)
     if length(x) == 0
@@ -49,12 +60,12 @@ function norm{T}(x::AbstractVector{T}, p::Number)
             a = sum(absx.^p).^(1/p)
         end
     end
-    return float(a)
+    float(a)
 end
 norm{T<:Integer}(x::AbstractVector{T}, p::Number) = norm(float(x), p)
 norm(x::AbstractVector) = norm(x, 2)
 
-function norm(A::AbstractMatrix, p::Number)
+function norm(A::AbstractMatrix, p::Number=2)
     m, n = size(A)
     if m == 0 || n == 0
         a = zero(eltype(A))
@@ -67,15 +78,12 @@ function norm(A::AbstractMatrix, p::Number)
     elseif p == Inf
         a = maximum(sum(abs(A),2))
     else
-        error("invalid parameter p given to compute matrix norm")
+        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
     end
-    return float(a)
+    float(a)
 end
 
-norm(A::AbstractMatrix) = norm(A, 2)
-
-norm(x::Number) = abs(x)
-norm(x::Number, p) = abs(x)
+norm(x::Number, p=nothing) = abs(x)
 
 normfro(A::AbstractMatrix) = norm(reshape(A, length(A)))
 normfro(x::Number) = abs(x)
@@ -83,16 +91,14 @@ normfro(x::Number) = abs(x)
 rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) .> tol)
 function rank(A::AbstractMatrix)
     m,n = size(A)
-    if m == 0 || n == 0; return 0; end
+    (m == 0 || n == 0) && return 0
     sv = svdvals(A)
-    sum(sv .> maximum(size(A))*eps(sv[1]))
+    return sum(sv .> maximum(size(A))*eps(sv[1]))
 end
-rank(x::Number) = x == 0 ? 0 : 1
+rank(x::Number) = x==0 ? 0 : 1
 
 function trace(A::AbstractMatrix)
-    if size(A,1) != size(A,2)
-        error("expected square matrix")
-    end
+    chksquare(A)
     sum(diag(A))
 end
 trace(x::Number) = x
@@ -102,23 +108,21 @@ trace(x::Number) = x
 
 #det(a::AbstractMatrix)
 
-inv(a::AbstractVector) = error("Input must be a square matrix")
+inv(a::AbstractVector) = error("argument must be a square matrix")
 
-(\)(A::AbstractMatrix, b::AbstractVector) = A_ldiv_B!(A, copy(b))
-(\)(A::AbstractMatrix, B::AbstractMatrix) = A_ldiv_B!(A, copy(B))
-(\)(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
-(/)(A::AbstractVector, B::AbstractVector) = (B' \ A')'
-(/)(A::AbstractVector, B::AbstractMatrix) = (B' \ A')'
-(/)(A::AbstractMatrix, B::AbstractVector) = (B' \ A')'
-(/)(A::AbstractMatrix, B::AbstractMatrix) = (B' \ A')'
-
+function \{TA<:Number,TB<:Number}(A::AbstractMatrix{TA}, B::AbstractVecOrMat{TB})
+    TC = typeof(one(TA)/one(TB))
+    return TB == TC ? A_ldiv_B!(A, copy(B)) : A_ldiv_B!(A, convert(Array{TC}, B))
+end
+\(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
+/(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'
 
 cond(x::Number) = x == 0 ? Inf : 1.0
 cond(x::Number, p) = cond(x)
 
 function issym(A::AbstractMatrix)
     m, n = size(A)
-    if m != n; return false; end
+    m==n || return false
     for i = 1:(n-1), j = (i+1):n
         if A[i,j] != A[j,i]
             return false
@@ -131,7 +135,7 @@ issym(x::Number) = true
 
 function ishermitian(A::AbstractMatrix)
     m, n = size(A)
-    if m != n; return false; end
+    m==n || return false
     for i = 1:n, j = i:n
         if A[i,j] != conj(A[j,i])
             return false
@@ -165,14 +169,12 @@ end
 istriu(x::Number) = true
 istril(x::Number) = true
 
-function linreg{T<:Number}(X::StridedVecOrMat{T}, y::Vector{T})
-    [ones(T, size(X,1)) X] \ y
-end
+linreg{T<:Number}(X::StridedVecOrMat{T}, y::Vector{T}) = [ones(T, size(X,1)) X] \ y
 
 # weighted least squares
 function linreg(x::AbstractVector, y::AbstractVector, w::AbstractVector)
-    w = sqrt(w)
-    [w w.*x] \ (w.*y)
+    sw = sqrt(w)
+    [sw sw.*x] \ (sw.*y)
 end
 
 # multiply by diagonal matrix as vector
@@ -198,11 +200,27 @@ function peakflops(n::Integer=2000; parallel::Bool=false)
     t = @elapsed a*a
     a = rand(n,n)
     t = @elapsed a*a
-    if parallel
-        floprate = sum(pmap(peakflops, [ n for i in 1:nworkers()]) )
-    else
-        floprate = (2.0*float64(n)^3/t)
+    parallel ? sum(pmap(peakflops, [ n for i in 1:nworkers()])) : (2*n^3/t)
+end
+
+# BLAS-like in-place y=alpha*x+y function (see also the version in blas.jl
+#                                          for BlasFloat Arrays)
+function axpy!(alpha, x::AbstractArray, y::AbstractArray)
+    n = length(x)
+    n==length(y) || throw(DimensionMismatch(""))
+    for i = 1:n
+        @inbounds y[i] += alpha * x[i]
     end
-    floprate
+    y
+end
+function axpy!{Ti<:Integer,Tj<:Integer}(alpha, x::AbstractArray, rx::AbstractArray{Ti}, y::AbstractArray, ry::AbstractArray{Tj})
+    length(x)==length(y) || throw(DimensionMismatch(""))
+    if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y) || length(rx) != length(ry)
+        throw(BoundsError())
+    end
+    for i = 1:length(rx)
+        @inbounds y[ry[i]] += alpha * x[rx[i]]
+    end
+    y
 end
 

@@ -1,6 +1,7 @@
 module Read
 
-using Base.Git, ..Types, ..Cache, ..Reqs
+import ..Git, ..Cache, ..Reqs
+using ..Types
 
 readstrip(path...) = strip(readall(joinpath(path...)))
 

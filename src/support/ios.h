@@ -38,7 +38,8 @@ typedef struct {
     // to be a pointer
     long fd;
 
-    unsigned char readonly:1;
+    unsigned char readable:1;
+    unsigned char writable:1;
     unsigned char ownbuf:1;
     unsigned char ownfd:1;
     unsigned char _eof:1;
@@ -77,7 +78,8 @@ DLLEXPORT char *ios_takebuf(ios_t *s, size_t *psize);  // release buffer to call
 // set buffer space to use
 DLLEXPORT int ios_setbuf(ios_t *s, char *buf, size_t size, int own);
 DLLEXPORT int ios_bufmode(ios_t *s, bufmode_t mode);
-DLLEXPORT int ios_get_readonly(ios_t *s);
+DLLEXPORT int ios_get_readable(ios_t *s);
+DLLEXPORT int ios_get_writable(ios_t *s);
 DLLEXPORT void ios_set_readonly(ios_t *s);
 DLLEXPORT size_t ios_copy(ios_t *to, ios_t *from, size_t nbytes);
 DLLEXPORT size_t ios_copyall(ios_t *to, ios_t *from);

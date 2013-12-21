@@ -1,7 +1,7 @@
 .. _man-performance-tips:
 
 ******************
- Performance Tips  
+ Performance Tips
 ******************
 
 In the following sections, we briefly go through a few techniques that
@@ -104,7 +104,7 @@ will raise a run-time error if the value is not of the expected type,
 potentially catching certain bugs earlier.
 
 Declare types of keyword arguments
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Keyword arguments can have declared types::
 
@@ -240,6 +240,168 @@ Functions like ``strange_twos`` occur when dealing with data of
 uncertain type, for example data loaded from an input file that might
 contain either integers, floats, strings, or something else.
 
+Access arrays in memory order, along columns
+--------------------------------------------
+
+Multidimensional arrays in Julia are stored in column-major order. This
+means that arrays are stacked one column at a time. This can be verified
+using the ``vec`` function or the syntax ``[:]`` as shown below (notice
+that the array is ordered ``[1 3 2 4]``, not ``[1 2 3 4]``):
+
+.. doctest::
+
+    julia> x = [1 2; 3 4]
+    2x2 Array{Int64,2}:
+     1  2
+     3  4
+
+    julia> x[:]
+    4-element Array{Int64,1}:
+     1
+     3
+     2
+     4
+
+This convention for ordering arrays is common in many languages like
+Fortran, Matlab, and R (to name a few). The alternative to column-major
+ordering is row-major ordering, which is the convention adopted by C and
+Python (``numpy``) among other languages. Remembering the ordering of
+arrays can have significant performance effects when looping over
+arrays. A rule of thumb to keep in mind is that with column-major
+arrays, the first index changes most rapidly. Essentially this means
+that looping will be faster if the inner-most loop index is the first to
+appear in a slice expression.
+
+Consider the following contrived example. Imagine we wanted to write a
+function that accepts a ``Vector`` and and returns a square ``Matrix``
+with either the rows or the columns filled with copies of the input
+vector. Assume that it is not important whether rows or columns are
+filled with these copies (perhaps the rest of the code can be easily
+adapted accordingly). We could conceivably do this in at least four ways
+(in addition to the recommended call to the built-in function
+``repmat``)::
+
+    function copy_cols{T}(x::Vector{T})
+        n = size(x, 1)
+        out = Array(eltype(x), n, n)
+        for i=1:n
+            out[:, i] = x
+        end
+        out
+    end
+
+    function copy_rows{T}(x::Vector{T})
+        n = size(x, 1)
+        out = Array(eltype(x), n, n)
+        for i=1:n
+            out[i, :] = x
+        end
+        out
+    end
+
+    function copy_col_row{T}(x::Vector{T})
+        n = size(x, 1)
+        out = Array(T, n, n)
+        for col=1:n, row=1:n
+            out[row, col] = x[row]
+        end
+        out
+    end
+
+    function copy_row_col{T}(x::Vector{T})
+        n = size(x, 1)
+        out = Array(T, n, n)
+        for row=1:n, col=1:n
+            out[row, col] = x[col]
+        end
+        out
+    end
+
+Now we will time each of these functions using the same random ``10000``
+by ``1`` input vector::
+
+    julia> x = randn(10000);
+
+    julia> fmt(f) = println("$(rpad(string(f)*": ", 14, ' '))$(@elapsed f(x))")
+
+    julia> map(fmt, {copy_cols, copy_rows, copy_col_row, copy_row_col});
+    copy_cols:    0.331706323
+    copy_rows:    1.799009911
+    copy_col_row: 0.415630047
+    copy_row_col: 1.721531501
+
+Notice that ``copy_cols`` is much faster than ``copy_rows``. This is
+expected because ``copy_cols`` respects the column-based memory layout
+of the ``Matrix`` and fills it one column at a time. Additionally,
+``copy_col_row`` is much faster than ``copy_row_col`` because it follows
+our rule of thumb that the first element to appear in a slice expression
+should be coupled with the inner-most loop.
+
+Pre-allocating outputs
+----------------------
+
+If your function returns an Array or some other complex
+type, it may have to allocate memory.  Unfortunately, oftentimes
+allocation and its converse, garbage collection, are substantial
+bottlenecks.
+
+Sometimes you can circumvent the need to allocate memory on each
+function call by pre-allocating the output.  As a
+trivial example, compare
+::
+
+    function xinc(x)
+        return [x, x+1, x+2]
+    end
+
+    function loopinc()
+        y = 0
+        for i = 1:10^7
+            ret = xinc(i)
+            y += ret[2]
+        end
+        y
+    end
+
+with
+::
+
+    function xinc!{T}(ret::AbstractVector{T}, x::T)
+        ret[1] = x
+        ret[2] = x+1
+        ret[3] = x+2
+        nothing
+    end
+
+    function loopinc_prealloc()
+        ret = Array(Int, 3)
+        y = 0
+        for i = 1:10^7
+            xinc!(ret, i)
+            y += ret[2]
+        end
+        y
+    end
+    
+Timing results::
+
+    julia> @time loopinc()
+    elapsed time: 1.955026528 seconds (1279975584 bytes allocated)
+    50000015000000
+
+    julia> @time loopinc_prealloc()
+    elapsed time: 0.078639163 seconds (144 bytes allocated)
+    50000015000000
+
+Pre-allocation has other advantages, for example by allowing the
+caller to control the "output" type from an algorithm.  In the example
+above, we could have passed a ``SubArray`` rather than an ``Array``,
+had we so desired.
+
+Taken to its extreme, pre-allocation can make your code uglier, so
+performance measurements and some judgment may be required.
+
+
 Fix deprecation warnings
 ------------------------
 
@@ -262,3 +424,22 @@ These are some minor points that might help in tight inner loops.
    try to rewrite code to use ``abs2`` instead of ``abs`` for complex arguments.
 -  Use ``div(x,y)`` for truncating division of integers instead of
    ``trunc(x/y)``, and ``fld(x,y)`` instead of ``floor(x/y)``.
+
+Tools
+-----
+
+Julia includes some tools that may help you improve the performance of your code:
+
+- :ref:`stdlib-profiling` allows you to measure the performance of
+  your running code and identify lines that serve as bottlenecks.
+
+- Unexpectedly-large memory allocations---as reported by ``@time``,
+  ``@allocated``, or the profiler (through calls to the
+  garbage-collection routines)---hint that there might be issues with
+  your code.  If you don't see another reason for the allocations,
+  suspect a type problem.
+
+- Using ``code_typed()`` on your function can help identify sources of
+  type problems.  Look particularly for variables that, contrary to
+  your intentions, are inferred to be ``Union`` types.  Such problems
+  can usually be fixed using the tips above.

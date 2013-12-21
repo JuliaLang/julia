@@ -436,7 +436,7 @@ function show(io::IO, m::Method)
     end
 end
 
-function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header=true)
+function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=true)
     name = mt.name
     n = length(mt)
     if header
@@ -663,7 +663,7 @@ const undef_ref_str = "#undef"
 const undef_ref_alignment = (3,3)
 
 function alignment(
-    X::Union(AbstractMatrix,AbstractVector),
+    X::AbstractVecOrMat,
     rows::AbstractVector, cols::AbstractVector,
     cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer
 )
@@ -694,7 +694,7 @@ function alignment(
 end
 
 function print_matrix_row(io::IO,
-    X::Union(AbstractMatrix,AbstractVector), A::Vector,
+    X::AbstractVecOrMat, A::Vector,
     i::Integer, cols::AbstractVector, sep::String
 )
     for k = 1:length(A)
@@ -731,7 +731,7 @@ function print_matrix_vdots(io::IO,
 end
 
 function print_matrix(io::IO,
-    X::Union(AbstractMatrix,AbstractVector), rows::Integer, cols::Integer,
+    X::AbstractVecOrMat, rows::Integer, cols::Integer,
     pre::String, sep::String, post::String,
     hdots::String, vdots::String, ddots::String,
     hmod::Integer, vmod::Integer
@@ -805,12 +805,12 @@ function print_matrix(io::IO,
         end
     end
 end
-print_matrix(io::IO, X::Union(AbstractMatrix,AbstractVector),
+print_matrix(io::IO, X::AbstractVecOrMat,
              rows::Integer, cols::Integer) =
     print_matrix(io, X, rows, cols, " ", "  ", "",
                  "  \u2026  ", "\u22ee", "  \u22f1  ", 5, 5)
 
-print_matrix(io::IO, X::Union(AbstractMatrix,AbstractVector)) =
+print_matrix(io::IO, X::AbstractVecOrMat) =
                print_matrix(io, X, tty_rows()-4, tty_cols())
 
 summary(x) = string(typeof(x))
@@ -826,7 +826,7 @@ function show_nd(io::IO, a::AbstractArray, limit, rows, cols)
     if isempty(a)
         return
     end
-    tail = size(a)[3:]
+    tail = size(a)[3:end]
     nd = ndims(a)-2
     function print_slice(idxs...)
         if limit

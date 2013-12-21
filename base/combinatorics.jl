@@ -108,13 +108,13 @@ function invperm(a::AbstractVector)
     for i = 1:n
         j = a[i]
         ((1 <= j <= n) && b[j] == 0) ||
-            error("invperm: input is not a permutation")
+            error("argument is not a permutation")
         b[j] = i
     end
     b
 end
 
-function isperm(A::AbstractVector)
+function isperm(A)
     n = length(A)
     used = falses(n)
     for a in A
@@ -308,7 +308,6 @@ function npartitions(n::Int)
     end
 end
 
-
 # Algorithm H from TAoCP 7.2.1.4
 # Partition n into m parts
 # in colex order (lexicographic by reflected sequence)
@@ -418,7 +417,6 @@ function nextsetpartition(s::AbstractVector, a, b, n, m)
 
 end
 
-
 const _nsetpartitions = (Int=>Int)[]
 function nsetpartitions(n::Int)
     if n < 0
@@ -436,19 +434,87 @@ function nsetpartitions(n::Int)
     end
 end
 
+immutable FixedSetPartitions{T<:AbstractVector}
+    s::T
+    m::Int
+end
+
+length(p::FixedSetPartitions) = nfixedsetpartitions(length(p.s),p.m)
+
+partitions(s::AbstractVector,m::Int) = (@assert 2 <= m <= length(s); FixedSetPartitions(s,m))
+
+start(p::FixedSetPartitions) = (n = length(p.s);m=p.m; (vcat(ones(Int, n-m),1:m), vcat(1,n-m+2:n), n))
+# state consists of vector a of length n describing to which partition every element of s belongs and
+# a vector b of length m describing the first index b[i] that belongs to partition i
+
+done(p::FixedSetPartitions, s) = !isempty(s) && s[1][1] > 1
+next(p::FixedSetPartitions, s) = nextfixedsetpartition(p.s,p.m, s...)
+
+function nextfixedsetpartition(s::AbstractVector, m, a, b, n)
+    function makeparts(s, a)
+        part = [ similar(s,0) for k = 1:m ]
+        for i = 1:n
+            push!(part[a[i]], s[i])
+        end
+        return part
+    end
+
+    part = makeparts(s,a)
+
+    if a[end] != m
+        a[end] += 1
+    else
+        local j, k
+        for j = n-1:-1:1
+            if a[j]<m && b[a[j]+1]<j
+                break
+            end
+        end
+        if j>1
+            a[j]+=1
+            for p=j+1:n
+                if b[a[p]]!=p
+                    a[p]=1
+                end
+            end
+        else
+            for k=m:-1:2
+                if b[k-1]<b[k]-1
+                    break
+                end
+            end
+            b[k]=b[k]-1
+            b[k+1:m]=n-m+k+1:n
+            a[1:n]=1
+            a[b]=1:m
+        end
+    end
+
+    return (part, (a,b,n))
+end
+
+function nfixedsetpartitions(n::Int,m::Int)
+    numpart=0
+    for k=0:m
+        numpart+=(-1)^(m-k)*binomial(m,k)*(k^n)
+    end
+    numpart=div(numpart,factorial(m))
+    return numpart
+end
+
 
 # For a list of integers i1, i2, i3, find the smallest 
 #     i1^n1 * i2^n2 * i3^n3 >= x
 # for integer n1, n2, n3
 function nextprod(a::Vector{Int}, x)
     if x > typemax(Int)
-        error("Unsafe for x bigger than typemax(Int)")
+        error("unsafe for x bigger than typemax(Int)")
     end
     k = length(a)
-    v = ones(Int, k)            # current value of each counter
-    mx = int(a.^nextpow(a, x))  # maximum value of each counter
-    v[1] = mx[1]                # start at first case that is >= x
-    p::morebits(Int) = mx[1]    # initial value of product in this case
+    v = ones(Int, k)                  # current value of each counter
+    mx = [nextpow(ai,x) for ai in a]  # maximum value of each counter
+    v[1] = mx[1]                      # start at first case that is >= x
+    p::morebits(Int) = mx[1]          # initial value of product in this case
     best = p
     icarry = 1
     
@@ -478,17 +544,17 @@ function nextprod(a::Vector{Int}, x)
     return int(best)  # could overflow, but best to have predictable return type
 end
 
-# For a list of integers i1, i2, i3, find the largest 
+# For a list of integers i1, i2, i3, find the largest
 #     i1^n1 * i2^n2 * i3^n3 <= x
 # for integer n1, n2, n3
 function prevprod(a::Vector{Int}, x)
     if x > typemax(Int)
-        error("Unsafe for x bigger than typemax(Int)")
+        error("unsafe for x bigger than typemax(Int)")
     end
     k = length(a)
-    v = ones(Int, k)            # current value of each counter
-    mx = int(a.^nextpow(a, x))  # allow each counter to exceed p (sentinel)
-    first = int(a[1]^prevpow(a[1], x))  # start at best case in first factor 
+    v = ones(Int, k)                  # current value of each counter
+    mx = [nextpow(ai,x) for ai in a]  # allow each counter to exceed p (sentinel)
+    first = int(prevpow(a[1], x))     # start at best case in first factor
     v[1] = first
     p::morebits(Int) = first
     best = p

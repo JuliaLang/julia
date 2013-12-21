@@ -596,7 +596,7 @@ static size_t mark_sp = 0;
 
 static void push_root(jl_value_t *v, int d);
 
-#define gc_push_root(v,d) if (!gc_marked(v)) push_root((jl_value_t*)(v),d);
+#define gc_push_root(v,d) do {  assert(v != NULL); if (!gc_marked(v)) { push_root((jl_value_t*)(v),d); } } while (0)
 
 void jl_gc_setmark(jl_value_t *v)
 {
@@ -639,6 +639,13 @@ static void gc_mark_module(jl_module_t *m, int d)
             if (b->type != (jl_value_t*)jl_any_type)
                 gc_push_root(b->type, d);
         }
+    }
+    // this is only necessary because bindings for "using" modules
+    // are added only when accessed. therefore if a module is replaced
+    // after "using" it but before accessing it, this array might
+    // contain the only reference.
+    for(i=0; i < m->usings.len; i++) {
+        gc_push_root(m->usings.items[i], d);
     }
     if (m->constant_table)
         gc_push_root(m->constant_table, d);
@@ -990,7 +997,7 @@ void *allocb(size_t sz)
     return (void*)((void**)b + 1);
 }
 
-void *allocobj(size_t sz)
+DLLEXPORT void *allocobj(size_t sz)
 {
 #ifdef MEMDEBUG
     return alloc_big(sz);
@@ -1000,7 +1007,7 @@ void *allocobj(size_t sz)
     return pool_alloc(&pools[szclass(sz)]);
 }
 
-void *alloc_2w(void)
+DLLEXPORT void *alloc_2w(void)
 {
 #ifdef MEMDEBUG
     return alloc_big(2*sizeof(void*));
@@ -1012,7 +1019,7 @@ void *alloc_2w(void)
 #endif
 }
 
-void *alloc_3w(void)
+DLLEXPORT void *alloc_3w(void)
 {
 #ifdef MEMDEBUG
     return alloc_big(3*sizeof(void*));
@@ -1024,7 +1031,7 @@ void *alloc_3w(void)
 #endif
 }
 
-void *alloc_4w(void)
+DLLEXPORT void *alloc_4w(void)
 {
 #ifdef MEMDEBUG
     return alloc_big(4*sizeof(void*));

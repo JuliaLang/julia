@@ -148,7 +148,7 @@ DLLEXPORT void jl_uv_shutdownCallback(uv_shutdown_t* req, int status)
      * in the shutdown request (in that case we call uv_close, thus cancelling this)
      * request.
      */
-    if (status != UV__ECANCELED) {
+    if (status != UV__ECANCELED && !uv_is_closing((uv_handle_t*)req->handle)) {
         uv_close((uv_handle_t*) req->handle, &jl_uv_closeHandle);
     }
     free(req);
@@ -299,7 +299,7 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
             fd->file = -1;
         }
     }
-    else {
+    else if (!uv_is_closing((uv_handle_t*)handle)) {
         uv_close(handle,&jl_uv_closeHandle);
     }
 }
@@ -403,6 +403,24 @@ DLLEXPORT int jl_fs_unlink(char *path)
     return ret;
 }
 
+DLLEXPORT int jl_fs_rename(char *src_path, char *dst_path)
+{
+    uv_fs_t req;
+    int ret = uv_fs_rename(jl_io_loop, &req, src_path, dst_path, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
+DLLEXPORT int jl_fs_sendfile(int src_fd, int dst_fd,
+                             int64_t in_offset, size_t len)
+{
+    uv_fs_t req;
+    int ret = uv_fs_sendfile(jl_io_loop, &req, dst_fd, src_fd,
+                             in_offset, len, NULL);
+    uv_fs_req_cleanup(&req);
+    return ret;
+}
+
 DLLEXPORT int jl_fs_write(int handle, char *buf, size_t len, size_t offset)
 {
     uv_fs_t req;
@@ -449,6 +467,7 @@ DLLEXPORT int jl_fs_close(int handle)
 //units are in ms
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream)
 {
+    if (!stream) return 0;
     return jl_write(stream,str,strlen(str));
 }
 
@@ -473,7 +492,7 @@ DLLEXPORT int jl_write_copy(uv_stream_t *stream, const char *str, size_t n, uv_w
     memcpy(data,str,n);
     uv_buf_t buf[]  = {{.base = data,.len=n}};
     uvw->data = NULL;
-    int err = uv_write(uvw,stream,buf,1,writecb);  
+    int err = uv_write(uvw,stream,buf,1,(uv_write_cb)writecb);
     JL_SIGATOMIC_END();
     return err;
 }
@@ -514,7 +533,7 @@ DLLEXPORT int jl_write_no_copy(uv_stream_t *stream, char *data, size_t n, uv_wri
 {
     uv_buf_t buf[]  = {{.base = data,.len=n}};
     JL_SIGATOMIC_BEGIN();
-    int err = uv_write(uvw,stream,buf,1,writecb);
+    int err = uv_write(uvw,stream,buf,1,(uv_write_cb)writecb);
     uvw->data = NULL;
     JL_SIGATOMIC_END();
     return err;

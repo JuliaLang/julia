@@ -195,8 +195,6 @@ hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
 
 ## pearson covariance functions ##
 
-typealias AbstractVecOrMat{T} Union(AbstractVector{T}, AbstractMatrix{T})
-
 function center(x::AbstractMatrix)
     m,n = size(x)
     res = Array(promote_type(eltype(x),Float64), size(x))
@@ -219,9 +217,7 @@ function center(x::AbstractVector)
 end
 
 function cov(x::AbstractVecOrMat, y::AbstractVecOrMat)
-    if size(x, 1) != size(y, 1)
-        error("incompatible matrices")
-    end
+    size(x, 1)==size(y, 1) || throw(DimensionMismatch())
     n = size(x, 1)
     xc = center(x)
     yc = center(y)
@@ -265,8 +261,8 @@ cor(x::AbstractVector) = cor(x'')[1]
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7
 function quantile!(v::AbstractVector, q::AbstractVector)
-    isempty(v) && error("quantile: empty data array")
-    isempty(q) && error("quantile: empty quantile array")
+    isempty(v) && error("empty data array")
+    isempty(q) && error("empty quantile array")
 
     # make sure the quantiles are in [0,1]
     q = bound_quantiles(q)

@@ -16,7 +16,8 @@ static volatile int running = 0;
 // Windows
 //
 volatile HANDLE hBtThread = 0;
-static DWORD WINAPI profile_bt( LPVOID lparam ) {
+static DWORD WINAPI profile_bt( LPVOID lparam )
+{
     TIMECAPS tc;
     if (MMSYSERR_NOERROR!=timeGetDevCaps(&tc, sizeof(tc))) {
         fputs("failed to get get timer resulution",stderr);
@@ -56,7 +57,8 @@ static DWORD WINAPI profile_bt( LPVOID lparam ) {
     hBtThread = 0;
     return 0;
 }
-DLLEXPORT int profile_start_timer(void) {
+DLLEXPORT int jl_profile_start_timer(void)
+{
     running = 1;
     if (hBtThread == 0) {
         hBtThread = CreateThread( 
@@ -76,7 +78,8 @@ DLLEXPORT int profile_start_timer(void) {
     }
     return (hBtThread != NULL ? 0 : -1);
 }
-DLLEXPORT void profile_stop_timer(void) {
+DLLEXPORT void jl_profile_stop_timer(void)
+{
     running = 0;
 }
 #else
@@ -149,17 +152,17 @@ kern_return_t profiler_segv_handler
     return KERN_SUCCESS;
 }
 
-void * mach_profile_listener(void *arg)
+void *mach_profile_listener(void *arg)
 {
-    (void) arg;
+    (void)arg;
     int max_size = 512;
     mach_profiler_thread = mach_thread_self();
     mig_reply_error_t *bufRequest = (mig_reply_error_t *) malloc(max_size);
     while (1) {
         kern_return_t ret = mach_msg(&bufRequest->Head, MACH_RCV_MSG,
-              0, max_size, profile_port,
-              MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
-        HANDLE_MACH_ERROR("mach_msg",ret)
+                                     0, max_size, profile_port,
+                                     MACH_MSG_TIMEOUT_NONE, MACH_PORT_NULL);
+        HANDLE_MACH_ERROR("mach_msg",ret);
         if (bt_size_cur < bt_size_max) {
             kern_return_t ret;
             // Suspend the thread so we may safely sample it
@@ -199,9 +202,11 @@ void * mach_profile_listener(void *arg)
             if (forceDwarf == 0) {
                 // Save the backtrace
                 bt_size_cur += rec_backtrace_ctx((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &uc);
-            } else if(forceDwarf == 1) {
+            }
+            else if (forceDwarf == 1) {
                 bt_size_cur += rec_backtrace_ctx_dwarf((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &uc);
-            } else if (forceDwarf == -1) {
+            }
+            else if (forceDwarf == -1) {
                 JL_PRINTF(JL_STDERR, "Warning: Profiler attempt to access an invalid memory location\n");
             }
 
@@ -224,11 +229,10 @@ void * mach_profile_listener(void *arg)
     }
 }
 
-DLLEXPORT int profile_start_timer(void)
+DLLEXPORT int jl_profile_start_timer(void)
 {
     kern_return_t ret;
-    if (!profile_started)
-    {
+    if (!profile_started) {
         mach_port_t self = mach_task_self();
         main_thread = mach_thread_self();
 
@@ -240,17 +244,15 @@ DLLEXPORT int profile_start_timer(void)
 
         // Alright, create a thread to serve as the listener for exceptions
         pthread_attr_t attr;
-        if (pthread_attr_init(&attr) != 0)
-        {
+        if (pthread_attr_init(&attr) != 0) {
             JL_PRINTF(JL_STDERR, "pthread_attr_init failed");
-            jl_exit(1);  
+            jl_exit(1);
         }
         pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
-        if (pthread_create(&profiler_thread,&attr,mach_profile_listener,NULL) != 0)
-        {
+        if (pthread_create(&profiler_thread,&attr,mach_profile_listener,NULL) != 0) {
             JL_PRINTF(JL_STDERR, "pthread_create failed");
-            jl_exit(1);  
-        }     
+            jl_exit(1);
+        }
         pthread_attr_destroy(&attr);
 
         profile_started = 1;
@@ -261,12 +263,12 @@ DLLEXPORT int profile_start_timer(void)
 
     running = 1;
     ret = clock_alarm(clk, TIME_RELATIVE, timerprof, profile_port);
-    HANDLE_MACH_ERROR("clock_alarm",ret)
+    HANDLE_MACH_ERROR("clock_alarm",ret);
 
     return 0;
 }
 
-DLLEXPORT void profile_stop_timer(void)
+DLLEXPORT void jl_profile_stop_timer(void)
 {
     running = 0;
 }
@@ -294,7 +296,7 @@ static void profile_bt(int dummy)
     }
 }
 
-DLLEXPORT int profile_start_timer(void)
+DLLEXPORT int jl_profile_start_timer(void)
 {
     timerprof.it_interval.tv_sec = 0;
     timerprof.it_interval.tv_usec = 0;
@@ -309,7 +311,7 @@ DLLEXPORT int profile_start_timer(void)
     return 0;
 }
 
-DLLEXPORT void profile_stop_timer(void)
+DLLEXPORT void jl_profile_stop_timer(void)
 {
     running = 0;
 }
@@ -329,7 +331,7 @@ static void profile_bt(int signal, siginfo_t *si, void *uc)
 {
     if (si->si_value.sival_ptr == &timerprof && bt_size_cur < bt_size_max) {
         // Get backtrace data
-       bt_size_cur += rec_backtrace((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1);
+        bt_size_cur += rec_backtrace((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1);
         // Mark the end of this block with 0
         bt_data_prof[bt_size_cur] = 0;
         bt_size_cur++;
@@ -341,7 +343,7 @@ static void profile_bt(int signal, siginfo_t *si, void *uc)
     }
 }
 
-DLLEXPORT int profile_start_timer(void)
+DLLEXPORT int jl_profile_start_timer(void)
 {
     struct sigevent sigprof;
     struct sigaction sa;
@@ -374,7 +376,7 @@ DLLEXPORT int profile_start_timer(void)
     return 0;
 }
 
-DLLEXPORT void profile_stop_timer(void)
+DLLEXPORT void jl_profile_stop_timer(void)
 {
     if (running)
         timer_delete(timerprof);
@@ -387,7 +389,7 @@ DLLEXPORT void profile_stop_timer(void)
 ///////////////////////
 // Utility functions //
 ///////////////////////
-DLLEXPORT int profile_init(size_t maxsize, u_int64_t delay_nsec)
+DLLEXPORT int jl_profile_init(size_t maxsize, u_int64_t delay_nsec)
 {
     bt_size_max = maxsize;
     nsecprof = delay_nsec;
@@ -400,27 +402,27 @@ DLLEXPORT int profile_init(size_t maxsize, u_int64_t delay_nsec)
     return 0;
 }
 
-DLLEXPORT u_int8_t* profile_get_data(void)
+DLLEXPORT u_int8_t* jl_profile_get_data(void)
 {
     return (u_int8_t*) bt_data_prof;
 }
 
-DLLEXPORT size_t profile_len_data(void)
+DLLEXPORT size_t jl_profile_len_data(void)
 {
     return bt_size_cur;
 }
 
-DLLEXPORT size_t profile_maxlen_data(void)
+DLLEXPORT size_t jl_profile_maxlen_data(void)
 {
     return bt_size_max;
 }
 
-DLLEXPORT void profile_clear_data(void)
+DLLEXPORT void jl_profile_clear_data(void)
 {
     bt_size_cur = 0;
 }
 
-DLLEXPORT int profile_is_running(void)
+DLLEXPORT int jl_profile_is_running(void)
 {
     return running;
 }

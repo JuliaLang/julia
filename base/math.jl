@@ -11,7 +11,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        cbrt, sqrt, erf, erfc, erfcx, erfi, dawson,
        ceil, floor, trunc, round, significand, 
        lgamma, hypot, gamma, lfact, max, min, ldexp, frexp,
-       clamp, modf, ^, 
+       clamp, modf, ^, mod2pi,
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
        hankelh1, hankelh2, besseli, besselk, besselh,
@@ -33,6 +33,14 @@ clamp{T<:Real}(x::AbstractArray{T,2}, lo::Real, hi::Real) =
 clamp{T<:Real}(x::AbstractArray{T}, lo::Real, hi::Real) =
     reshape([clamp(xx, lo, hi) for xx in x], size(x))
 
+# evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
+macro horner(x, p...)
+    ex = esc(p[end])
+    for i = length(p)-1:-1:1
+        ex = :($(esc(p[i])) + $(esc(x)) * $ex)
+    end
+    ex
+end
 
 function sinpi(x::Real)
     if isinf(x)
@@ -167,7 +175,7 @@ function sind(x::Real)
 
     if arx == 0.0
         # return -0.0 iff x == -0.0
-        return x == 0.0 ? x : arx
+        return x == 0.0 ? 0.0 : arx
     elseif arx < 45.0
         return sin(degrees2radians(rx))
     elseif arx <= 135.0
@@ -230,7 +238,7 @@ for (fd, f) in ((:asind, :asin), (:acosd, :acos), (:atand, :atan),
     end
 end
 
-log(b,x) = log(x)/log(b)
+log(b,x) = log(x)./log(b)
 
 hypot(x::Real, y::Real) = hypot(promote(x,y)...)
 function hypot{T<:Real}(x::T, y::T)
@@ -323,7 +331,7 @@ function lgamma_r(x::Float64)
 end
 function lgamma_r(x::Float32)
     signp = Array(Int32, 1)
-    y = ccall((:lgamma_r,libm),  Float32, (Float32, Ptr{Int32}), x, signp)
+    y = ccall((:lgammaf_r,libm),  Float32, (Float32, Ptr{Int32}), x, signp)
     return y, signp[1]
 end
 lgamma_r(x::Real) = lgamma_r(float(x))
@@ -331,12 +339,10 @@ lgamma_r(x::Real) = lgamma_r(float(x))
 lfact(x::Real) = (x<=1 ? zero(float(x)) : lgamma(x+one(x)))
 @vectorize_1arg Number lfact
 
-max(x::Float64, y::Float64) = ccall((:fmax,libm),  Float64, (Float64,Float64), x, y)
-max(x::Float32, y::Float32) = ccall((:fmaxf,libm), Float32, (Float32,Float32), x, y)
+max{T<:FloatingPoint}(x::T, y::T) = ifelse((y > x) | (x != x), y, x)
 @vectorize_2arg Real max
 
-min(x::Float64, y::Float64) = ccall((:fmin,libm),  Float64, (Float64,Float64), x, y)
-min(x::Float32, y::Float32) = ccall((:fminf,libm), Float32, (Float32,Float32), x, y)
+min{T<:FloatingPoint}(x::T, y::T) = ifelse((y < x) | (x != x), y, x)
 @vectorize_2arg Real min
 
 function exponent(x::Float64)
@@ -445,7 +451,7 @@ function airy(k::Int, z::Complex128)
               pointer(ae,1), pointer(ae,2))
         return complex(ai[1],ai[2])
     else
-        error("airy: invalid argument")
+        error("invalid argument")
     end
 end
 end
@@ -644,9 +650,9 @@ hankelh2(nu, z) = besselh(nu, 2, z)
 
 
 function angle_restrict_symm(theta)
-    P1 = 4 * 7.8539812564849853515625e-01
-    P2 = 4 * 3.7748947079307981766760e-08
-    P3 = 4 * 2.6951514290790594840552e-15
+    const P1 = 4 * 7.8539812564849853515625e-01
+    const P2 = 4 * 3.7748947079307981766760e-08
+    const P3 = 4 * 2.6951514290790594840552e-15
 
     y = 2*floor(theta/(2*pi))
     r = ((theta - y*P1) - y*P2) - y*P3
@@ -664,7 +670,7 @@ const clg_coeff = [76.18009172947146,
                    -0.5395239384953e-5]
 
 function clgamma_lanczos(z)
-    sqrt2pi = 2.5066282746310005
+    const sqrt2pi = 2.5066282746310005
     
     y = x = z
     temp = x + 5.5
@@ -685,7 +691,7 @@ function lgamma(z::Complex)
     if real(z) <= 0.5
         a = clgamma_lanczos(1-z)
         b = log(sinpi(z))
-        logpi = 1.14472988584940017
+        const logpi = 1.14472988584940017
         z = logpi - b - a
     else
         z = clgamma_lanczos(z)
@@ -741,7 +747,7 @@ function psifn(x::Float64, n::Int, kode::Int, m::Int)
 #-----------------------------------------------------------------------
     if abs(t) > elim
         if t <= 0.0 error("n too large") end
-        error("Overflow, x too small or n+m-1 too large or both")
+        error("overflow; x too small or n+m-1 too large or both")
     end
     if x < wdtol
         ans[1] = x^(-n - 1)
@@ -830,7 +836,7 @@ function psifn(x::Float64, n::Int, kode::Int, m::Int)
     t1 = xdmln + xdmln
     t2 = t + xdmln
     tk = max(abs(t), abs(t1), abs(t2))
-    if tk > elim error("Underflow") end
+    if tk > elim error("underflow") end
     tss = exp(-t)
     tt = 0.5/xdmy
     t1 = tt
@@ -950,7 +956,71 @@ polygamma(k::Int, x::Float64) = (2rem(k,2) - 1)*psifn(x, k, 1, 1)[1]/gamma(k + 1
 polygamma(k::Int, x::Float32) = float32(polygamma(k, float64(x)))
 polygamma(k::Int, x::Real) = polygamma(k, float64(x))
 
-digamma(x::Real) = polygamma(0, x)
+# Translation of psi.c from cephes
+function digamma(x::Float64)  
+    negative = false
+    nz = 0.0
+
+    if x <= 0.0
+        negative = true
+        q = x
+        p = floor(q)
+        if p == q
+            return NaN
+        end
+
+        nz = q - p
+        if nz != 0.5
+            if nz > 0.5
+                p += 1.0
+                nz = q - p
+            end
+            nz = pi / tan(pi * nz)
+        else
+            nz = 0.0
+        end
+        x = 1.0 - x
+    end
+
+    if x <= 10.0 && x == floor(x)
+        y = 0.0
+        for i = 1:x-1
+            y += 1.0 / i
+        end
+        y -= γ  # γ == -digamma(1) == 0.5772156649015328606065121;
+
+        if negative
+            y -= nz
+        end
+        return y
+    end
+
+    w = 0.0
+    while x < 10.0
+        w += 1.0 / x
+        x += 1.0
+    end
+
+    if x < 1.0e17
+        z = 1.0 / (x*x)
+        y = @horner(z, 8.33333333333333333333e-2, -8.33333333333333333333e-3, 3.96825396825396825397e-3,
+                       -4.16666666666666666667e-3, 7.57575757575757575758e-3,-2.10927960927960927961e-2,
+                       8.33333333333333333333e-2)
+        y *= z
+    else
+        y = 0.0
+    end
+
+    y = log(x) - 0.5/x - y - w
+
+    if negative
+        y -= nz
+    end
+
+    return y
+end
+digamma(x::Float32) = float32(digamma(float64(x)))
+digamma(x::Real) = digamma(float64(x))
 @vectorize_1arg Real digamma
 
 trigamma(x::Real) = polygamma(1, x)
@@ -1125,15 +1195,6 @@ for f in (:erfcx, :erfi, :Dawson)
         ($fname)(x::Integer) = ($fname)(float(x))
         @vectorize_1arg Number $fname
     end
-end
-
-# evaluate p[1] + x * (p[2] + x * (....)), i.e. a polynomial via Horner's rule
-macro horner(x, p...)
-    ex = esc(p[end])
-    for i = length(p)-1:-1:1
-        ex = :($(esc(p[i])) + $(esc(x)) * $ex)
-    end
-    ex
 end
 
 # Compute the inverse of the error function: erf(erfinv(x)) == x, 
@@ -1336,5 +1397,91 @@ end
 
 erfcinv(x::Integer) = erfcinv(float(x))
 @vectorize_1arg Real erfcinv
+
+## mod2pi-related calculations ##
+
+function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
+    # as above, but only compute and return high double
+    r = xh+yh
+    s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)
+    zh = r+s
+    return zh
+end
+
+function ieee754_rem_pio2(x::Float64)
+    # rem_pio2 essentially computes x mod pi/2 (ie within a quarter circle)
+    # and returns the result as 
+    # y between + and - pi/4 (for maximal accuracy (as the sign bit is exploited)), and
+    # n, where n specifies the integer part of the division, or, at any rate, 
+    # in which quadrant we are.
+    # The invariant fulfilled by the returned values seems to be
+    #  x = y + n*pi/2 (where y = y1+y2 is a double-double and y2 is the "tail" of y).
+    # Note: for very large x (thus n), the invariant might hold only modulo 2pi 
+    # (in other words, n might be off by a multiple of 4, or a multiple of 100)
+
+    # this is just wrapping up 
+    # https://github.com/JuliaLang/openlibm/blob/master/src/e_rem_pio2.c
+
+    y = [0.0,0.0]
+    n = ccall((:__ieee754_rem_pio2, libm), Cint, (Float64,Ptr{Float64}), x, y)
+    return (n,y)
+end
+
+# multiples of pi/2, as double-double (ie with "tail")
+const pi1o2_h  = 1.5707963267948966     # convert(Float64, pi * BigFloat(1/2))
+const pi1o2_l  = 6.123233995736766e-17  # convert(Float64, pi * BigFloat(1/2) - pi1o2_h)
+
+const pi2o2_h  = 3.141592653589793      # convert(Float64, pi * BigFloat(1))
+const pi2o2_l  = 1.2246467991473532e-16 # convert(Float64, pi * BigFloat(1) - pi2o2_h)
+
+const pi3o2_h  = 4.71238898038469       # convert(Float64, pi * BigFloat(3/2))
+const pi3o2_l  = 1.8369701987210297e-16 # convert(Float64, pi * BigFloat(3/2) - pi3o2_h)
+
+const pi4o2_h  = 6.283185307179586      # convert(Float64, pi * BigFloat(2))
+const pi4o2_l  = 2.4492935982947064e-16 # convert(Float64, pi * BigFloat(2) - pi4o2_h)
+
+function mod2pi(x::Float64) # or modtau(x)
+# with r = mod2pi(x)
+# a) 0 <= r < 2π  (note: boundary open or closed - a bit fuzzy, due to rem_pio2 implementation)
+# b) r-x = k*2π with k integer
+
+# note: mod(n,4) is 0,1,2,3; while mod(n-1,4)+1 is 1,2,3,4.
+# We use the latter to push negative y in quadrant 0 into the positive (one revolution, + 4*pi/2)
+
+    if x < pi4o2_h
+        if 0.0 <= x return x end
+        if x > -pi4o2_h 
+            return add22condh(x,0.0,pi4o2_h,pi4o2_l)
+        end
+    end
+
+    (n,y) = ieee754_rem_pio2(x)
+
+    if iseven(n)
+        if n & 2 == 2 # add pi
+            return add22condh(y[1],y[2],pi2o2_h,pi2o2_l)
+        else # add 0 or 2pi
+            if y[1] > 0.0
+                return y[1]
+            else # else add 2pi
+                return add22condh(y[1],y[2],pi4o2_h,pi4o2_l)
+            end
+        end
+    else # add pi/2 or 3pi/2
+        if n & 2 == 2 # add 3pi/2
+            return add22condh(y[1],y[2],pi3o2_h,pi3o2_l) 
+        else # add pi/2
+            return add22condh(y[1],y[2],pi1o2_h,pi1o2_l) 
+        end
+    end
+end
+
+mod2pi(x::Float32) = float32(mod2pi(float64(x)))
+mod2pi(x::Int32) = mod2pi(float64(x))
+function mod2pi(x::Int64)
+  fx = float64(x)
+  fx == x || error("Integer argument to mod2pi is too large: $x")
+  mod2pi(fx)
+end
 
 end # module

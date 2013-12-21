@@ -144,7 +144,7 @@ example computes a dot product using a BLAS function.
 
 ::
 
-    function compute_dot(DX::Vector, DY::Vector)
+    function compute_dot(DX::Vector{Float64}, DY::Vector{Float64})
       assert(length(DX) == length(DY))
       n = length(DX)
       incx = incy = 1
@@ -377,7 +377,7 @@ Non-constant Function Specifications
 
 A ``(name, library)`` function specification must be a constant expression.
 However, it is possible to use computed values as function names by staging
-through ``eval`` as follows:
+through ``eval`` as follows::
 
     @eval ccall(($(string("a","b")),"lib"), ...
 

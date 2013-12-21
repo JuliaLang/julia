@@ -1,12 +1,13 @@
-testnames = ["core", "keywordargs", "numbers", "strings", "unicode",
-             "collections", "hashing", "remote", "iobuffer", "arrayops",
-             "linalg", "blas", "fft", "dsp", "sparse", "bitarray",
-             "random", "math", "functional", "bigint", "sorting",
-             "statistics", "spawn", "parallel", "priorityqueue",
-             "arpack", "file", "suitesparse", "version",
-             "resolve", "pollfd", "mpfr", "broadcast", "complex",
-             "socket", "floatapprox", "readdlm", "regex", "float16",
-             "combinatorics", "sysinfo", "rounding", "ranges"]
+testnames = [
+    "core", "keywordargs", "numbers", "strings", "unicode",
+    "collections", "hashing", "remote", "iobuffer", "arrayops", "linalg",
+    "blas", "fft", "dsp", "sparse", "bitarray", "random", "math",
+    "functional", "bigint", "sorting", "statistics", "spawn", "parallel",
+    "priorityqueue", "arpack", "file", "suitesparse", "version",
+    "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
+    "floatapprox", "readdlm", "regex", "float16", "combinatorics",
+    "sysinfo", "rounding", "ranges", "mod2pi", "euler"
+]
 
 tests = ARGS==["all"] ? testnames : ARGS
 

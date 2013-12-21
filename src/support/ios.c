@@ -352,7 +352,7 @@ DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src)
 
 size_t ios_write(ios_t *s, const char *data, size_t n)
 {
-    if (s->readonly) return 0;
+    if (!s->writable) return 0;
     if (n == 0) return 0;
     size_t space;
     size_t wrote = 0;
@@ -687,17 +687,22 @@ int ios_bufmode(ios_t *s, bufmode_t mode)
     return 0;
 }
 
-int ios_get_readonly(ios_t *s)
+int ios_get_readable(ios_t *s)
 {
-    return s->readonly;
+    return s->readable;
+}
+
+int ios_get_writable(ios_t *s)
+{
+    return s->writable;
 }
 
 void ios_set_readonly(ios_t *s)
 {
-    if (s->readonly) return;
+    if (!s->writable) return;
     ios_flush(s);
     s->state = bst_none;
-    s->readonly = 1;
+    s->writable = 0;
 }
 
 static size_t ios_copy_(ios_t *to, ios_t *from, size_t nbytes, bool_t all)
@@ -786,8 +791,9 @@ static void _ios_init(ios_t *s)
     s->ownbuf = 1;
     s->ownfd = 0;
     s->_eof = 0;
+    s->readable = 1;
+    s->writable = 1;
     s->rereadable = 0;
-    s->readonly = 0;
 }
 
 /* stream object initializers. we do no allocation. */
@@ -809,8 +815,10 @@ ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
     if (fd == -1)
         goto open_file_err;
     s = ios_fd(s, fd, 1, 1);
+    if (!rd)
+        s->readable = 0;
     if (!wr)
-        s->readonly = 1;
+        s->writable = 0;
     return s;
  open_file_err:
     s->fd = -1;

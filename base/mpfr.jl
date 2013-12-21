@@ -4,10 +4,7 @@ export
     BigFloat,
     get_bigfloat_precision,
     set_bigfloat_precision,
-    with_bigfloat_precision,
-    set_bigfloat_rounding,
-    get_bigfloat_rounding,
-    with_bigfloat_rounding
+    with_bigfloat_precision
 
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1, bessely,
@@ -19,7 +16,8 @@ import
         gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        serialize, deserialize, inf, nan, hash, cbrt
+        serialize, deserialize, inf, nan, hash, cbrt, typemax, typemin,
+        realmin, realmax, get_rounding, set_rounding
 
 import Base.Math.lgamma_r
 
@@ -67,7 +65,7 @@ end
 function BigFloat(x::String, base::Int)
     z = BigFloat()
     err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{Uint8}, Int32, Int32), &z, x, base, ROUNDING_MODE[end])
-    if err != 0; error("Invalid input"); end
+    if err != 0; error("incorrectly formatted number"); end
     return z
 end
 BigFloat(x::String) = BigFloat(x, 10)
@@ -613,8 +611,8 @@ function from_mpfr(c::Integer)
     RoundingMode(c)
 end
 
-get_bigfloat_rounding() = from_mpfr(ROUNDING_MODE[end])
-set_bigfloat_rounding(r::RoundingMode) = ROUNDING_MODE[end] = to_mpfr(r)
+get_rounding(::Type{BigFloat}) = from_mpfr(ROUNDING_MODE[end])
+set_rounding(::Type{BigFloat},r::RoundingMode) = ROUNDING_MODE[end] = to_mpfr(r)
 
 function copysign(x::BigFloat, y::BigFloat)
     z = BigFloat()
@@ -665,6 +663,9 @@ isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
 @eval inf(::Type{BigFloat}) = $(BigFloat(Inf))
 @eval nan(::Type{BigFloat}) = $(BigFloat(NaN))
 
+typemax(::Type{BigFloat}) = inf(BigFloat)
+@eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
+
 function nextfloat(x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_set, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32),
@@ -683,6 +684,9 @@ end
 
 eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
 
+realmin(::Type{BigFloat}) = nextfloat(zero(BigFloat))
+realmax(::Type{BigFloat}) = prevfloat(inf(BigFloat))
+
 function with_bigfloat_precision(f::Function, precision::Integer)
     old_precision = get_bigfloat_precision()
     set_bigfloat_precision(precision)
@@ -690,16 +694,6 @@ function with_bigfloat_precision(f::Function, precision::Integer)
         return f()
     finally
         set_bigfloat_precision(old_precision)
-    end
-end
-
-function with_bigfloat_rounding(f::Function, rounding::RoundingMode)
-    old_rounding = get_bigfloat_rounding()
-    set_bigfloat_rounding(rounding)
-    try
-        return f()
-    finally
-        set_bigfloat_rounding(old_rounding)
     end
 end
 

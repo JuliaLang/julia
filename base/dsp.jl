@@ -11,9 +11,9 @@ export FFTW, filt, deconv, conv, conv2, xcorr, fftshift, ifftshift,
        fft!, bfft!, ifft!, plan_fft!, plan_bfft!, plan_ifft!
 
 function filt{T<:Number}(b::Union(AbstractVector{T}, T),a::Union(AbstractVector{T}, T),x::AbstractVector{T})
-    if isempty(b); error("filt: b is empty"); end
-    if isempty(a); error("filt: a is empty"); end
-    if a[1]==0; error("filt: a[1] must be nonzero"); end
+    if isempty(b); error("b must be non-empty"); end
+    if isempty(a); error("a must be non-empty"); end
+    if a[1]==0; error("a[1] must be nonzero"); end
 
     as = length(a)
     bs = length(b)
@@ -47,20 +47,24 @@ function filt{T<:Number}(b::Union(AbstractVector{T}, T),a::Union(AbstractVector{
             a = newa
         end
 
-        for i=1:xs
-            y[i] = si[1] + b[1]*x[i]
-            for j=1:(silen-1)
-                si[j] = si[j+1] + b[j+1]*x[i] - a[j+1]*y[i]
+        @inbounds begin
+            for i=1:xs
+                y[i] = si[1] + b[1]*x[i]
+                for j=1:(silen-1)
+                    si[j] = si[j+1] + b[j+1]*x[i] - a[j+1]*y[i]
+                end
+                si[silen] = b[silen+1]*x[i] - a[silen+1]*y[i]
             end
-            si[silen] = b[silen+1]*x[i] - a[silen+1]*y[i]
         end
     else
-        for i=1:xs
-            y[i] = si[1] + b[1]*x[i]
-            for j=1:(silen-1)
-                si[j] = si[j+1] + b[j+1]*x[i]
+        @inbounds begin
+            for i=1:xs
+                y[i] = si[1] + b[1]*x[i]
+                for j=1:(silen-1)
+                    si[j] = si[j+1] + b[j+1]*x[i]
+                end
+                si[silen] = b[silen+1]*x[i]
             end
-            si[silen] = b[silen+1]*x[i]
         end
     end
     return y
@@ -94,7 +98,7 @@ function conv{T<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{T}
     end
     return y[1:n]
 end
-conv{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}) = conv(float(u), float(v))
+conv{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}) = int(conv(float(u), float(v)))
 conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{S}) = conv(float(u), v)
 conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::StridedVector{S}, v::StridedVector{T}) = conv(u, float(v))
 
@@ -125,6 +129,8 @@ function conv2{T}(A::StridedMatrix{T}, B::StridedMatrix{T})
     end
     return C
 end
+conv2{T<:Integer}(A::StridedMatrix{T}, B::StridedMatrix{T}) = int(conv2(float(A), float(B)))
+conv2{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}, A::StridedMatrix{T}) = int(conv2(float(u), float(v), float(A)))
 
 function xcorr(u, v)
     su = size(u,1); sv = size(v,1)
@@ -247,7 +253,7 @@ for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number),
 end
 
 # DCT of scalar is just the identity:
-dct(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())x
+dct(x::Number, dims) = length(dims) == 0 || dims[1] == 1 ? x : throw(BoundsError())
 idct(x::Number, dims) = dct(x, dims)
 dct(x::Number) = x
 idct(x::Number) = x

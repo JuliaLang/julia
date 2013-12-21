@@ -34,7 +34,7 @@ function broadcast_shape(As::AbstractArray...)
                 if bshape[d] == 1
                     bshape[d] = n
                 elseif bshape[d] != n
-                    error("arrays cannot be broadcast to a common size")
+                    error("arrays could not be broadcast to a common size")
                 end
             end
         end
@@ -51,7 +51,7 @@ function check_broadcast_shape(shape::Dims, As::AbstractArray...)
         for k in 1:ndims(A)
             n, nA = shape[k], size(A, k)
             if n != nA != 1
-                error("array cannot be broadcast to match destination")
+                error("array could not be broadcast to match destination")
             end
         end
     end
@@ -163,7 +163,7 @@ function code_map!_inner(fname::Symbol, dest, extra_args::Vector,
     @gensym k
     code_inner(fname, {dest, extra_args...}, :($k=1),
         (els...)->quote
-            $dest[$k] = $(innermost(:($dest[$k]), els...))
+            @inbounds $dest[$k] = $(innermost(:($dest[$k]), els...))
             $k += 1
         end)
 end

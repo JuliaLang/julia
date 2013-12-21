@@ -251,7 +251,7 @@ end
 
 etree(A::SparseMatrixCSC) = etree(A, false)
 
-# find nonzero pattern of Cholesky L(k,1:k-1) using etree and triu(A(:,k))
+# find nonzero pattern of Cholesky L[k,1:k-1] using etree and triu(A[:,k])
 # based on cs_ereach p. 43, "Direct Methods for Sparse Linear Systems"
 function ereach{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, k::Integer, parent::Vector{Ti})
     m,n = size(A); Ap = A.colptr; Ai = A.rowval
@@ -259,10 +259,10 @@ function ereach{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, k::Integer, parent::Vector{Ti}
     visited = falses(n)
     visited[k] = true
     for p in Ap[k]:(Ap[k+1] - 1)
-        i = Ai[p]                # A(i,k) is nonzero
+        i = Ai[p]                # A[i,k] is nonzero
         if i > k continue end    # only use upper triangular part of A
         while !visited[i]        # traverse up etree
-            push!(s,i)           # L(k,i) is nonzero
+            push!(s,i)           # L[k,i] is nonzero
             visited[i] = true
             i = parent[i]
         end
@@ -274,9 +274,9 @@ end
 function csc_permute{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti}, q::Vector{Ti})
     m,n = size(A); Ap = A.colptr; Ai = A.rowval; Ax = A.nzval
     if length(pinv) != m || length(q) !=  n 
-        error("Dimension mismatch, size(A) = $(size(A)), length(pinv) = $(length(pinv)) and length(q) = $(length(q))")
+        error("dimension mismatch, size(A) = $(size(A)), length(pinv) = $(length(pinv)) and length(q) = $(length(q))")
     end
-    if !isperm(pinv) || !isperm(q) error("Both pinv and q must be permutations") end
+    if !isperm(pinv) || !isperm(q) error("both pinv and q must be permutations") end
     C = copy(A); Cp = C.colptr; Ci = C.rowval; Cx = C.nzval
     nz = zero(Ti)
     for k in 1:n
@@ -297,7 +297,7 @@ end
 function symperm{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, pinv::Vector{Ti})
     m,n = size(A); Ap = A.colptr; Ai = A.rowval; Ax = A.nzval
     isperm(pinv) || error("perm must be a permutation")
-    m == n == length(pinv) || error("Dimension mismatch")
+    m == n == length(pinv) || error("dimension mismatch")
     C = copy(A); Cp = C.colptr; Ci = C.rowval; Cx = C.nzval
     w = zeros(Ti,n)
     for j in 1:n                   # count entries in each column of C

@@ -24,15 +24,21 @@ include("gk.jl")
 
 # issue #942
 s = sparse(ones(280,280));
-@timeit s*s "sparsemul" "Sparse matrix multiplication"
-
-# issue #939
-y = [500000:-1:1];
-@timeit sortperm(y) "sortperm" "Sorting of a worst-case vector"
+@timeit s*s "sparsemul" "Sparse matrix - sparse matrix multiplication"
 
 # issue #938
 x = 1:600000;
 @timeit sparse(x,x,x) "sparserange" "Construction of a sparse array from ranges"
+
+# issue 4707
+include("getdivgrad.jl")
+A = getDivGrad(64,64,64)
+v = rand(64^3)
+@timeit A*v "matvec" "Sparse matrix - dense vector multiplication"
+
+# issue #939
+y = [500000:-1:1];
+@timeit sortperm(y) "sortperm" "Sorting of a worst-case vector"
 
 # issue #445
 include("stockcorr.jl")
@@ -190,3 +196,14 @@ _json_data = "{\"web-app\": {
     \"taglib-location\": \"/WEB-INF/tlds/cofax.tld\"}}}"
 
 @timeit (for n in 1:10; a = parse_json(_json_data); end) "json" "JSON parsing"
+
+include("indexing.jl")
+x = [1:100_000]
+y = filter(iseven, 1:length(x))
+logical_y = map(iseven, 1:length(x))
+
+@timeit (for n=1:100 add_one!(x,y) end) "add_one" "Increment vector x at locations y"
+@timeit (for n=1:100 devec_add_one!(x,y) end) "devec_add_one" "Devectorized increment vector x at locations y"
+@timeit (for n=1:100 add_one!(x,logical_y) end) "add_one_logical" "Increment x_i if y_i is true"
+@timeit (for n=1:100 devec_add_one_logical!(x,logical_y) end) "devec_add_one_logical" "Devectorized increment x_i if y_i is true"
+

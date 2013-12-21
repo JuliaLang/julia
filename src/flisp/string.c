@@ -215,6 +215,7 @@ value_t fl_string_sub(value_t *args, u_int32_t nargs)
     if (i2 <= i1)
         return cvalue_string(0);
     value_t ns = cvalue_string(i2-i1);
+    s = cvalue_data(args[0]); // reload after alloc
     memcpy(cv_data((cvalue_t*)ptr(ns)), &s[i1], i2-i1);
     return ns;
 }

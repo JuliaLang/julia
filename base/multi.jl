@@ -799,7 +799,7 @@ notify_empty(rv::RemoteValue) = notify(rv.empty)
 # activity on accept fd
 function accept_handler(server::TcpServer, status::Int32)
     if status == -1
-        error("An error occured during the creation of the server")
+        error("an error occured during the creation of the server")
     end
     client = accept_nonblock(server)
     create_message_handler_loop(client)
@@ -992,7 +992,7 @@ function start_cluster_workers(np::Integer, config::Dict, cman::ClusterManager)
     elseif insttype == :host_port
         read_cb_response(inst) = (nothing, inst[1], inst[2], inst[1], inst[3])
     else
-        error("Unsupported format from Cluster Manager callback")
+        error("unsupported format from ClusterManager callback")
     end
     
     for i=1:np
@@ -1025,7 +1025,7 @@ function create_worker(privhost, port, pubhost, stream, config, manage)
         if haskey(ENV, "USER")
             user = ENV["USER"]
         elseif tunnel
-            error("USER must be specified either in the environment or as part of the hostname when tunnel option is used.")
+            error("USER must be specified either in the environment or as part of the hostname when tunnel option is used")
         end
     end
     
@@ -1090,7 +1090,7 @@ function ssh_tunnel(user, host, privhost, port, sshflags)
     end
     
     if localp >= 10000
-        error("Unable to assign a local tunnel port between 9201 and 10000")
+        error("unable to assign a local tunnel port between 9201 and 10000")
     end
     
     tunnel_port = localp+1
@@ -1480,7 +1480,7 @@ macro parallel(args...)
             ex = loop.args[1]
             loop.args[1] = esc(ex)
             nd = length(loop.args)-1
-            ranges = map(e->esc(e.args[2]), loop.args[2:])
+            ranges = map(e->esc(e.args[2]), loop.args[2:end])
             for i=1:nd
                 var = loop.args[1+i].args[1]
                 loop.args[1+i] = :( $(esc(var)) = ($(ranges[i]))[I[$i]] )

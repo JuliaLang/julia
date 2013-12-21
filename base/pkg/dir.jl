@@ -1,7 +1,7 @@
 module Dir
 
-import Base.Git
 import ..Pkg: DEFAULT_META, META_BRANCH
+import ..Git
 
 const DIR_NAME = ".julia"
 

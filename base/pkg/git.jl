@@ -58,8 +58,10 @@ function snapshot(; dir="")
     head = readchomp(`rev-parse HEAD`, dir=dir)
     index = readchomp(`write-tree`, dir=dir)
     work = try
-        run(`add --all`, dir=dir)
-        run(`add .`, dir=dir)
+        if length(readdir(abspath(dir))) > 1
+            run(`add --all`, dir=dir)
+            run(`add .`, dir=dir)
+        end
         readchomp(`write-tree`, dir=dir)
     finally
         run(`read-tree $index`, dir=dir) # restore index
@@ -90,7 +92,7 @@ function is_ancestor_of(a::String, b::String; dir="")
 end
 
 const GITHUB_REGEX =
-    r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*?)(?:\.git)?$"i
+    r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
 function set_remote_url(url::String; remote::String="origin", dir="")
     run(`config remote.$remote.url $url`, dir=dir)

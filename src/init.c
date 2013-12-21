@@ -52,7 +52,7 @@ void __cdecl fpreset (void);
 #include <windows.h>
 #include <dbghelp.h>
 extern int needsSymRefreshModuleList;
-extern WINBOOL WINAPI (*hSymRefreshModuleList)(HANDLE);
+extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 #endif
 #if defined(__linux__)
 //#define _GNU_SOURCE
@@ -80,18 +80,9 @@ static void jl_find_stack_bottom(void)
 }
 
 #ifdef _OS_WINDOWS_
-void __cdecl fpe_handler(int arg,int num)
-#else
-void fpe_handler(int arg)
-#endif
+void __cdecl fpe_handler(int arg, int num)
 {
     (void)arg;
-#ifndef _OS_WINDOWS_
-    sigset_t sset;
-    sigemptyset(&sset);
-    sigaddset(&sset, SIGFPE);
-    sigprocmask(SIG_UNBLOCK, &sset, NULL);
-#else
     fpreset();
     signal(SIGFPE, (void (__cdecl *)(int))fpe_handler);
     switch(num) {
@@ -102,11 +93,31 @@ void fpe_handler(int arg)
         jl_errorf("Unexpected FPE Error 0x%X", num);
         break;
     case _FPE_ZERODIVIDE:
-#endif
         jl_throw(jl_diverror_exception);
-#ifdef _OS_WINDOWS_
         break;
     }
+}
+#else
+void fpe_handler(int arg)
+{
+    (void)arg;
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigaddset(&sset, SIGFPE);
+    sigprocmask(SIG_UNBLOCK, &sset, NULL);
+
+    jl_throw(jl_diverror_exception);
+}
+#endif
+
+static int is_addr_on_stack(void *addr)
+{
+#ifdef COPY_STACKS
+    return ((char*)addr > (char*)jl_stack_lo-3000000 &&
+            (char*)addr < (char*)jl_stack_hi);
+#else
+    return ((char*)addr > (char*)jl_current_task->stack-8192 &&
+            (char*)addr < (char*)jl_current_task->stack+jl_current_task->ssize);
 #endif
 }
 
@@ -116,16 +127,7 @@ void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
 
-    if ( in_jl_ || (
-#ifdef COPY_STACKS
-        (char*)info->si_addr > (char*)jl_stack_lo-3000000 &&
-        (char*)info->si_addr < (char*)jl_stack_hi
-#else
-        (char*)info->si_addr > (char*)jl_current_task->stack-8192 &&
-        (char*)info->si_addr <
-        (char*)jl_current_task->stack+jl_current_task->ssize
-#endif
-        )) {
+    if (in_jl_ || is_addr_on_stack(info->si_addr)) {
         sigemptyset(&sset);
         sigaddset(&sset, SIGSEGV);
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
@@ -150,9 +152,12 @@ volatile sig_atomic_t jl_defer_signal = 0;
 #ifdef _OS_WINDOWS_
 void restore_signals()
 {
-    SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
+    SetConsoleCtrlHandler(NULL, 0); //turn on ctrl-c handler
 }
-void jl_throw_in_ctx(jl_value_t* excpt, CONTEXT *ctxThread, int bt) {
+
+void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
+{
+    assert(excpt != NULL);
     bt_size = bt ? rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ctxThread) : 0;
     jl_exception_in_transit = excpt;
 #if defined(_CPU_X86_64_)
@@ -167,9 +172,11 @@ void jl_throw_in_ctx(jl_value_t* excpt, CONTEXT *ctxThread, int bt) {
 #error WIN16 not supported :P
 #endif
 }
+
 volatile HANDLE hMainThread = NULL;
 DLLEXPORT void jlbacktrace();
 DLLEXPORT void gdblookup(ptrint_t ip);
+
 static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {
     int sig;
@@ -213,74 +220,101 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
     }
     return 1;
 }
-static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo) {
+
+static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo, int in_ctx)
+{
     if (ExceptionInfo->ExceptionRecord->ExceptionFlags == 0) {
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
-        case EXCEPTION_STACK_OVERFLOW:
-            jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord, 0);
-            return EXCEPTION_CONTINUE_EXECUTION;
-        default:
-            ios_puts("Please submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ", ios_stderr);
-            switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
-                case EXCEPTION_ACCESS_VIOLATION:
-                    ios_puts("EXCEPTION_ACCESS_VIOLATION", ios_stderr); break;
-                case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
-                    ios_puts("EXCEPTION_ARRAY_BOUNDS_EXCEEDED", ios_stderr); break;
-                case EXCEPTION_BREAKPOINT:
-                    ios_puts("EXCEPTION_BREAKPOINT", ios_stderr); break;
-                case EXCEPTION_DATATYPE_MISALIGNMENT:
-                    ios_puts("EXCEPTION_DATATYPE_MISALIGNMENT", ios_stderr); break;
-                case EXCEPTION_FLT_DENORMAL_OPERAND:
-                    ios_puts("EXCEPTION_FLT_DENORMAL_OPERAND", ios_stderr); break;
-                case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-                    ios_puts("EXCEPTION_FLT_DIVIDE_BY_ZERO", ios_stderr); break;
-                case EXCEPTION_FLT_INEXACT_RESULT:
-                    ios_puts("EXCEPTION_FLT_INEXACT_RESULT", ios_stderr); break;
-                case EXCEPTION_FLT_INVALID_OPERATION:
-                    ios_puts("EXCEPTION_FLT_INVALID_OPERATION", ios_stderr); break;
-                case EXCEPTION_FLT_OVERFLOW:
-                    ios_puts("EXCEPTION_FLT_OVERFLOW", ios_stderr); break;
-                case EXCEPTION_FLT_STACK_CHECK:
-                    ios_puts("EXCEPTION_FLT_STACK_CHECK", ios_stderr); break;
-                case EXCEPTION_FLT_UNDERFLOW:
-                    ios_puts("EXCEPTION_FLT_UNDERFLOW", ios_stderr); break;
-                case EXCEPTION_ILLEGAL_INSTRUCTION:
-                    ios_puts("EXCEPTION_ILLEGAL_INSTRUCTION", ios_stderr); break;
-                case EXCEPTION_IN_PAGE_ERROR:
-                    ios_puts("EXCEPTION_IN_PAGE_ERROR", ios_stderr); break;
-                case EXCEPTION_INT_DIVIDE_BY_ZERO:
-                    ios_puts("EXCEPTION_INT_DIVIDE_BY_ZERO", ios_stderr); break;
-                case EXCEPTION_INT_OVERFLOW:
-                    ios_puts("EXCEPTION_INT_OVERFLOW", ios_stderr); break;
-                case EXCEPTION_INVALID_DISPOSITION:
-                    ios_puts("EXCEPTION_INVALID_DISPOSITION", ios_stderr); break;
-                case EXCEPTION_NONCONTINUABLE_EXCEPTION:
-                    ios_puts("EXCEPTION_NONCONTINUABLE_EXCEPTION", ios_stderr); break;
-                case EXCEPTION_PRIV_INSTRUCTION:
-                    ios_puts("EXCEPTION_PRIV_INSTRUCTION", ios_stderr); break;
-                case EXCEPTION_SINGLE_STEP:
-                    ios_puts("EXCEPTION_SINGLE_STEP", ios_stderr); break;
-                case EXCEPTION_STACK_OVERFLOW:
-                    ios_puts("EXCEPTION_STACK_OVERFLOW", ios_stderr); break;
-                default:
-                    ios_puts("UNKNOWN", ios_stderr); break;
-            }
-            ios_printf(ios_stderr," at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-            gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
-            bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ExceptionInfo->ContextRecord);
-            jlbacktrace();
-            break;
+            case EXCEPTION_INT_DIVIDE_BY_ZERO:
+                fpreset();
+                if (!in_ctx)
+                    jl_throw(jl_diverror_exception);
+                jl_throw_in_ctx(jl_diverror_exception, ExceptionInfo->ContextRecord, 0);
+                return EXCEPTION_CONTINUE_EXECUTION;
+            case EXCEPTION_STACK_OVERFLOW:
+                bt_size = 0;
+                if (!in_ctx)
+                    jl_rethrow_other(jl_stackovf_exception);
+                jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord, 0);
+                return EXCEPTION_CONTINUE_EXECUTION;
         }
+        ios_puts("Please submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ", ios_stderr);
+        switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
+            case EXCEPTION_ACCESS_VIOLATION:
+                ios_puts("EXCEPTION_ACCESS_VIOLATION", ios_stderr); break;
+            case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
+                ios_puts("EXCEPTION_ARRAY_BOUNDS_EXCEEDED", ios_stderr); break;
+            case EXCEPTION_BREAKPOINT:
+                ios_puts("EXCEPTION_BREAKPOINT", ios_stderr); break;
+            case EXCEPTION_DATATYPE_MISALIGNMENT:
+                ios_puts("EXCEPTION_DATATYPE_MISALIGNMENT", ios_stderr); break;
+            case EXCEPTION_FLT_DENORMAL_OPERAND:
+                ios_puts("EXCEPTION_FLT_DENORMAL_OPERAND", ios_stderr); break;
+            case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+                ios_puts("EXCEPTION_FLT_DIVIDE_BY_ZERO", ios_stderr); break;
+            case EXCEPTION_FLT_INEXACT_RESULT:
+                ios_puts("EXCEPTION_FLT_INEXACT_RESULT", ios_stderr); break;
+            case EXCEPTION_FLT_INVALID_OPERATION:
+                ios_puts("EXCEPTION_FLT_INVALID_OPERATION", ios_stderr); break;
+            case EXCEPTION_FLT_OVERFLOW:
+                ios_puts("EXCEPTION_FLT_OVERFLOW", ios_stderr); break;
+            case EXCEPTION_FLT_STACK_CHECK:
+                ios_puts("EXCEPTION_FLT_STACK_CHECK", ios_stderr); break;
+            case EXCEPTION_FLT_UNDERFLOW:
+                ios_puts("EXCEPTION_FLT_UNDERFLOW", ios_stderr); break;
+            case EXCEPTION_ILLEGAL_INSTRUCTION:
+                ios_puts("EXCEPTION_ILLEGAL_INSTRUCTION", ios_stderr); break;
+            case EXCEPTION_IN_PAGE_ERROR:
+                ios_puts("EXCEPTION_IN_PAGE_ERROR", ios_stderr); break;
+            case EXCEPTION_INT_DIVIDE_BY_ZERO:
+                ios_puts("EXCEPTION_INT_DIVIDE_BY_ZERO", ios_stderr); break;
+            case EXCEPTION_INT_OVERFLOW:
+                ios_puts("EXCEPTION_INT_OVERFLOW", ios_stderr); break;
+            case EXCEPTION_INVALID_DISPOSITION:
+                ios_puts("EXCEPTION_INVALID_DISPOSITION", ios_stderr); break;
+            case EXCEPTION_NONCONTINUABLE_EXCEPTION:
+                ios_puts("EXCEPTION_NONCONTINUABLE_EXCEPTION", ios_stderr); break;
+            case EXCEPTION_PRIV_INSTRUCTION:
+                ios_puts("EXCEPTION_PRIV_INSTRUCTION", ios_stderr); break;
+            case EXCEPTION_SINGLE_STEP:
+                ios_puts("EXCEPTION_SINGLE_STEP", ios_stderr); break;
+            case EXCEPTION_STACK_OVERFLOW:
+                ios_puts("EXCEPTION_STACK_OVERFLOW", ios_stderr); break;
+            default:
+                ios_puts("UNKNOWN", ios_stderr); break;
+        }
+        ios_printf(ios_stderr," at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+        gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+        bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ExceptionInfo->ContextRecord);
+        jlbacktrace();
     }
     return EXCEPTION_CONTINUE_SEARCH;
 }
-#else
+
+static LONG WINAPI exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
+{
+    return _exception_handler(ExceptionInfo,1);
+}
+
+#if defined(_CPU_X86_64_)
+EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext)
+{
+    EXCEPTION_POINTERS ExceptionInfo;
+    ExceptionInfo.ExceptionRecord = ExceptionRecord;
+    ExceptionInfo.ContextRecord = ContextRecord;
+    return _exception_handler(&ExceptionInfo,0);
+} 
+#endif
+
+#else // #ifdef _OS_WINDOWS_
+
 void restore_signals()
 {
     sigset_t sset;
     sigemptyset(&sset);
     sigprocmask(SIG_SETMASK, &sset, 0);
 }
+
 void sigint_handler(int sig, siginfo_t *info, void *context)
 {
     if (jl_defer_signal) {
@@ -309,10 +343,13 @@ static void jl_uv_exitcleanup_add(uv_handle_t* handle, struct uv_shutdown_queue 
     if (!queue->first) queue->first = item;
     queue->last = item;
 }
-static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg) {
+
+static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
+{
     if (handle != (uv_handle_t*)jl_uv_stdout && handle != (uv_handle_t*)jl_uv_stderr)
         jl_uv_exitcleanup_add(handle, arg);
 }
+
 DLLEXPORT void uv_atexit_hook()
 {
 #if defined(JL_GC_MARKSWEEP) && defined(GC_FINAL_STATS)
@@ -340,6 +377,8 @@ DLLEXPORT void uv_atexit_hook()
     // able to show stuff (incl. printf's)
     jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stdout, &queue);
     jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stderr, &queue);
+    //uv_unref((uv_handle_t*)jl_uv_stdout);
+    //uv_unref((uv_handle_t*)jl_uv_stderr);
     struct uv_shutdown_queue_item *item = queue.first;
     while (item) {
         JL_TRY {
@@ -394,6 +433,8 @@ DLLEXPORT void uv_atexit_hook()
 void jl_get_builtin_hooks(void);
 
 uv_lib_t *jl_dl_handle;
+uv_lib_t _jl_RTLD_DEFAULT_handle;
+uv_lib_t *jl_RTLD_DEFAULT_handle=&_jl_RTLD_DEFAULT_handle;
 #ifdef _OS_WINDOWS_
 uv_lib_t _jl_ntdll_handle;
 uv_lib_t _jl_exe_handle;
@@ -425,10 +466,13 @@ void *init_stdio_handle(uv_file fd,int readable)
     // On windows however, libuv objects remember streams by their HANDLE, so this is
     // unnessecary.
     fd = dup(fd);
+#else
+    // Duplicate the file descritor so libuv can later close it without having to worry
+    // about needing to keep its handle open
+    fd = _dup(fd);
 #endif
     //printf("%d: %d -- %d\n", fd, type, 0);
-    switch(type)
-    {
+    switch(type) {
         case UV_TTY:
             handle = malloc(sizeof(uv_tty_t));
             if (uv_tty_init(jl_io_loop,(uv_tty_t*)handle,fd,readable)) {
@@ -498,9 +542,9 @@ static mach_port_t segv_port = 0;
 
 extern boolean_t exc_server(mach_msg_header_t *, mach_msg_header_t *);
 
-void * mach_segv_listener(void *arg)
+void *mach_segv_listener(void *arg)
 {
-    (void) arg;
+    (void)arg;
     while (1) {
         int ret = mach_msg_server(exc_server,2048,segv_port,MACH_MSG_TIMEOUT_NONE);
         printf("mach_msg_server: %s\n", mach_error_string(ret));
@@ -524,13 +568,13 @@ extern volatile mach_port_t mach_profiler_thread;
 #endif
 
 //exc_server uses dlsym to find symbol
-DLLEXPORT kern_return_t catch_exception_raise
-                (mach_port_t                          exception_port,
-                 mach_port_t                                  thread,
-                 mach_port_t                                    task,
-                 exception_type_t                          exception,
-                 exception_data_t                               code,
-                 mach_msg_type_number_t                   code_count)
+DLLEXPORT
+kern_return_t catch_exception_raise(mach_port_t            exception_port,
+                                    mach_port_t            thread,
+                                    mach_port_t            task,
+                                    exception_type_t       exception,
+                                    exception_data_t       code,
+                                    mach_msg_type_number_t code_count)
 {
     unsigned int count = MACHINE_THREAD_STATE_COUNT;
     unsigned int exc_count = X86_EXCEPTION_STATE64_COUNT;
@@ -540,25 +584,14 @@ DLLEXPORT kern_return_t catch_exception_raise
     //memset(&state,0,sizeof(x86_thread_state64_t));
     //memset(&exc_state,0,sizeof(x86_exception_state64_t));
 #ifdef LIBOSXUNWIND
-    if (thread == mach_profiler_thread)
-    {
+    if (thread == mach_profiler_thread) {
         return profiler_segv_handler(exception_port,thread,task,exception,code,code_count);
     }
 #endif
     ret = thread_get_state(thread,x86_EXCEPTION_STATE64,(thread_state_t)&exc_state,&exc_count);
     HANDLE_MACH_ERROR("thread_get_state(1)",ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
-    if (
-#ifdef COPY_STACKS
-        (char*)fault_addr > (char*)jl_stack_lo-3000000 &&
-        (char*)fault_addr < (char*)jl_stack_hi
-#else
-        (char*)fault_addr > (char*)jl_current_task->stack-8192 &&
-        (char*)fault_addr <
-        (char*)jl_current_task->stack+jl_current_task->ssize
-#endif
-        ) 
-    {
+    if (is_addr_on_stack(fault_addr)) {
         ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
         HANDLE_MACH_ERROR("thread_get_state(2)",ret);
         old_state = state;
@@ -593,20 +626,27 @@ DLLEXPORT kern_return_t catch_exception_raise
 
 #endif
 
-void julia_init(char *imageFile)
+void julia_init(char *imageFile, int build_mode)
 {
+    if (build_mode)
+        jl_set_imaging_mode(1);
     jl_page_size = jl_getpagesize();
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
+#ifdef RTLD_DEFAULT
+    jl_RTLD_DEFAULT_handle->handle = RTLD_DEFAULT;
+#else
+    jl_RTLD_DEFAULT_handle->handle = jl_dl_handle->handle;
+#endif
 #ifdef _OS_WINDOWS_
-    uv_dlopen("ntdll.dll",jl_ntdll_handle); //bypass julia's pathchecking for system dlls
-    uv_dlopen("kernel32.dll",jl_kernel32_handle);
-    uv_dlopen("msvcrt.dll",jl_crtdll_handle);
-    uv_dlopen("ws2_32.dll",jl_winsock_handle);
+    uv_dlopen("ntdll.dll", jl_ntdll_handle); // bypass julia's pathchecking for system dlls
+    uv_dlopen("kernel32.dll", jl_kernel32_handle);
+    uv_dlopen("msvcrt.dll", jl_crtdll_handle);
+    uv_dlopen("ws2_32.dll", jl_winsock_handle);
     _jl_exe_handle.handle = GetModuleHandleA(NULL);
-    if (!DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
-        GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
-        TRUE, DUPLICATE_SAME_ACCESS )) {
+    if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
+                         GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
+                         TRUE, DUPLICATE_SAME_ACCESS)) {
         JL_PRINTF(JL_STDERR, "Couldn't access handle to main thread\n");
     }
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
@@ -614,7 +654,8 @@ void julia_init(char *imageFile)
     needsSymRefreshModuleList = 0;
     uv_lib_t jl_dbghelp;
     uv_dlopen("dbghelp.dll",&jl_dbghelp);
-    if (uv_dlsym(&jl_dbghelp,"SymRefreshModuleList",(void**)&hSymRefreshModuleList)) hSymRefreshModuleList = 0;
+    if (uv_dlsym(&jl_dbghelp, "SymRefreshModuleList", (void**)&hSymRefreshModuleList))
+        hSymRefreshModuleList = 0;
 #endif
     jl_io_loop = uv_default_loop(); //this loop will internal events (spawining process etc.)
     init_stdio();
@@ -638,7 +679,7 @@ void julia_init(char *imageFile)
     jl_init_frontend();
     jl_init_types();
     jl_init_tasks(jl_stack_lo, jl_stack_hi-jl_stack_lo);
-    jl_init_codegen();
+    jl_init_codegen(imageFile);
     jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
 
     jl_init_serializer();
@@ -658,11 +699,16 @@ void julia_init(char *imageFile)
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
         jl_init_box_caches();
+        // Core.JULIA_HOME is a "magic" constant, we set it at runtime here
+        // since its value gets excluded from the system image
+        jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
+                     jl_cstr_to_string(julia_home));
+        jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));
     }
 
     if (imageFile) {
         JL_TRY {
-            jl_restore_system_image(imageFile);
+            jl_restore_system_image(imageFile, build_mode);
         }
         JL_CATCH {
             JL_PRINTF(JL_STDERR, "error during init:\n");
@@ -722,14 +768,12 @@ void julia_init(char *imageFile)
     // Alright, create a thread to serve as the listener for exceptions
     pthread_t thread;
     pthread_attr_t attr;
-    if (pthread_attr_init(&attr) != 0)
-    {
+    if (pthread_attr_init(&attr) != 0) {
         JL_PRINTF(JL_STDERR, "pthread_attr_init failed");
         jl_exit(1);  
     }
     pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
-    if (pthread_create(&thread,&attr,mach_segv_listener,NULL) != 0)
-    {
+    if (pthread_create(&thread,&attr,mach_segv_listener,NULL) != 0) {
         JL_PRINTF(JL_STDERR, "pthread_create failed");
         jl_exit(1);  
     }     
@@ -764,7 +808,6 @@ void julia_init(char *imageFile)
     }
 #endif
 
-
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();
 #endif
@@ -788,12 +831,12 @@ DLLEXPORT void jl_install_sigint_handler()
     //printf("sigint installed\n");
 }
 
-
+extern int asprintf(char **str, const char *fmt, ...);
 extern void * __stack_chk_guard;
 
-DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]))
+DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]), char *build_path)
 {
-#if defined(_OS_WINDOWS_) //&& !defined(_WIN64)
+#if defined(_OS_WINDOWS_)
     SetUnhandledExceptionFilter(exception_handler);
 #endif
     unsigned char * p = (unsigned char *) &__stack_chk_guard;
@@ -812,6 +855,24 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
     }
 #endif
     int ret = pmain(argc, argv);
+    if (build_path) {
+        char *build_ji;
+        if (asprintf(&build_ji, "%s.ji",build_path) > 0) {
+            jl_save_system_image(build_ji);
+            free(build_ji);
+            char *build_bc;
+            if (asprintf(&build_bc, "%s.bc",build_path) > 0) {
+                jl_dump_bitcode(build_bc);
+                free(build_bc);
+            }
+            else {
+                ios_printf(ios_stderr,"FATAL: failed to create string for .bc build path");
+            }
+        }
+        else {
+            ios_printf(ios_stderr,"FATAL: failed to create string for .ji build path");
+        }
+    }
     p[sizeof(__stack_chk_guard)-1] = a;
     p[sizeof(__stack_chk_guard)-2] = b;
     p[0] = c;

@@ -17,7 +17,7 @@ function check_bitop(func, RetT, args)
 end
 
 macro check_bit_operation(func, RetT, args)
-    :(check_bitop($func, $RetT, $args))
+    :(check_bitop($(esc(func)), $(esc(RetT)), $(esc(args))))
 end
 
 let t0 = time()
@@ -522,6 +522,8 @@ for m = [rand(1:v1)-1 0 1 63 64 65 191 192 193 v1-1]
     @test isequal(b1 >>> m, [ falses(m); b1[1:end-m] ])
     @test isequal(rol(b1, m), [ b1[m+1:end]; b1[1:m] ])
     @test isequal(ror(b1, m), [ b1[end-m+1:end]; b1[1:end-m] ])
+    @test isequal(ror(b1, m), rol(b1, -m))
+    @test isequal(rol(b1, m), ror(b1, -m))
 end
 
 timesofar("datamove")

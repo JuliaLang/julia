@@ -10,7 +10,7 @@ function countlines(filename::String, eol::Char)
 end
 function countlines(io::IO, eol::Char)
     if !isascii(eol)
-        error("countlines: only ASCII line terminators supported")
+        error("only ASCII line terminators are supported")
     end
     a = Array(Uint8, 8192)
     nl = 0
@@ -187,7 +187,10 @@ function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D)
     catch ex
         error("at row $nrows, column $col : $ex)")
     end
-    (col > 0) && (nrows += 1) 
+    if col > 0 
+        nrows += 1
+        ncols = max(ncols, col+1)
+    end
     ncols = max(ncols, col, 1)
     nrows = max(nrows, 1)
     return (nrows, ncols)
@@ -199,7 +202,7 @@ readcsv(io, T::Type; opts...) = readdlm(io, ',', T; opts...)
 # todo: keyword argument for # of digits to print
 writedlm_cell(io::IO, elt::FloatingPoint) = print_shortest(io, elt)
 writedlm_cell(io::IO, elt) = print(io, elt)
-function writedlm(io::IO, a::Union(AbstractMatrix,AbstractVector), dlm::Char)
+function writedlm(io::IO, a::AbstractVecOrMat, dlm::Char)
     pb = PipeBuffer()
     nr = size(a,1)
     nc = size(a,2)
@@ -217,7 +220,7 @@ end
 writedlm{T}(io::IO, a::AbstractArray{T,0}, dlm::Char) = writedlm(io, reshape(a,1), dlm)
 
 function writedlm(io::IO, a::AbstractArray, dlm::Char)
-    tail = size(a)[3:]
+    tail = size(a)[3:end]
     function print_slice(idxs...)
         writedlm(io, sub(a, 1:size(a,1), 1:size(a,2), idxs...), dlm)
         if idxs != tail
@@ -236,5 +239,5 @@ end
 writedlm(io, a) = writedlm(io, a, '\t')
 writecsv(io, a) = writedlm(io, a, ',')
 
-writemime(io::IO, ::MIME"text/csv", a::Union(AbstractVector,AbstractMatrix)) = writedlm(io, a, ',')
-writemime(io::IO, ::MIME"text/tab-separated-values", a::Union(AbstractVector,AbstractMatrix)) = writedlm(io, a, '\t')
+writemime(io::IO, ::MIME"text/csv", a::AbstractVecOrMat) = writedlm(io, a, ',')
+writemime(io::IO, ::MIME"text/tab-separated-values", a::AbstractVecOrMat) = writedlm(io, a, '\t')

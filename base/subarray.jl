@@ -47,16 +47,31 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
 end
 
 #linear indexing sub (may want to rename as slice)
-function sub{T,N}(A::Array{T,N}, i::(RangeIndex,))
-    SubArray{T,(isa(i[1], Int) ? 0 : 1),typeof(A),typeof(i)}(A, i)
+function sub{T,N}(A::Array{T,N}, i::(Union(Range{Int}, Range1{Int}),))
+    SubArray{T,1,typeof(A),typeof(i)}(A, i)
+end
+
+# if `I` were a vector, index_ranges would do the following:
+# j = length(I)
+# while j > 0 && isa(I[j], Int)
+#     j -= 1
+# end
+# for i = 1:j
+#     if isa(I[i], Int)
+#         I[i] = I[i]:I[i]
+#     end
+# end
+to_range(j::Int) = j:j
+to_range(j::RangeIndex) = j
+index_ranges(I::Int...) = I
+index_ranges(i, I...) = tuple(to_range(i), index_ranges(I...)...)
+
+function sub_internal{T,N,L}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex}, ::NTuple{L,Int})
+    SubArray{T,L,typeof(A),typeof(i)}(A, i)
 end
 
 function sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
-    L = length(i)
-    while L > 0 && isa(i[L], Int); L-=1; end
-    i0 = map(j -> isa(j, Int) ? (j:j) : j, i[1:L])
-    i = ntuple(length(i), k->(k<=L ? i0[k] : i[k]))
-    SubArray{T,L,typeof(A),typeof(i)}(A, i)
+    sub_internal(A, index_ranges(i...), index_shape(i...))
 end
 
 sub{N}(A::SubArray, i::NTuple{N,RangeIndex}) = sub(A, i...)
@@ -82,12 +97,15 @@ function sub(A::SubArray, i::RangeIndex...)
     SubArray{eltype(A),L,typeof(A.parent),typeof(ni)}(A.parent, ni)
 end
 
+# Drops all Ints from a tuple of RangeIndexes
+ranges_only(I::Int...) = ()
+ranges_only(i::Int, I...) = ranges_only(I...)
+ranges_only(i::Union(Range{Int}, Range1{Int}), I...) = tuple(i, ranges_only(I...)...)
 
-function slice{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
-    n = 0
-    for j = i; if !isa(j, Int); n += 1; end; end
-    SubArray{T,n,typeof(A),typeof(i)}(A, i)
+function slice_internal{T,N,L}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex}, ::NTuple{L,RangeIndex})
+    SubArray{T,L,typeof(A),typeof(i)}(A, i)
 end
+slice{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex}) = slice_internal(A, i, ranges_only(i...))
 
 # Throw error on slice dimension mismatch
 slice{T,N,M}(A::AbstractArray{T,N}, i::NTuple{M,RangeIndex}) = throw(BoundsError())
@@ -109,9 +127,9 @@ function slice(A::SubArray, i::RangeIndex...)
     slice(A.parent, tuple(newindexes...))
 end
 
-# Generic fallback for Colon translation
-sub(A::AbstractArray, I...) = sub(A, ntuple(length(I), i-> isa(I[i], Colon) ? (1:size(A,i)) : I[i])...)
-slice(A::AbstractArray, I...) = slice(A, ntuple(length(I), i-> isa(I[i], Colon) ? (1:size(A,i)) : I[i])...)
+# Colon translation
+sub(A::AbstractArray, I::Union(RangeIndex, Colon)...) = sub(A, ntuple(length(I), i-> isa(I[i], Colon) ? (1:size(A,i)) : I[i])...)
+slice(A::AbstractArray, I::Union(RangeIndex, Colon)...) = slice(A, ntuple(length(I), i-> isa(I[i], Colon) ? (1:size(A,i)) : I[i])...)
 
 
 ### rename the old slice function ###
@@ -129,7 +147,7 @@ slice(A::AbstractArray, I...) = slice(A, ntuple(length(I), i-> isa(I[i], Colon) 
 #        for j in sdims
 #            if i == j
 #                if size(a, i) != 1
-#                    error("slice: dimension ", i, " has length greater than 1")
+#                    error("dimension ", i, " has length greater than 1")
 #                end
 #                next = 1
 #                break
@@ -146,7 +164,7 @@ slice(A::AbstractArray, I...) = slice(A, ntuple(length(I), i-> isa(I[i], Colon) 
 #        for j in sdims
 #            if i == j
 #                if length(next) != 1
-#                    error("slice: dimension ", i," has length greater than 1")
+#                    error("dimension ", i," has length greater than 1")
 #                end
 #                next = isa(next, Int) ? next : first(next)
 #                break
@@ -263,6 +281,25 @@ function getindex(s::SubArray, is::Integer...)
     s.parent[index]
 end
 
+function getindex_bool_1d(S::SubArray, I::AbstractArray{Bool})
+    n = sum(I)
+    out = similar(S, n)
+    c = 1
+    for i = 1:length(I)
+        if I[i]
+            out[c] = S[i]
+            c += 1
+        end
+    end
+    out
+end
+
+getindex{T}(S::SubArray{T,1}, I::AbstractArray{Bool,1}) = getindex_bool_1d(S, I)
+getindex{T}(S::SubArray{T,2}, I::AbstractArray{Bool,2}) = getindex_bool_1d(S, I)
+getindex{T}(S::SubArray{T,3}, I::AbstractArray{Bool,3}) = getindex_bool_1d(S, I)
+getindex{T}(S::SubArray{T,4}, I::AbstractArray{Bool,4}) = getindex_bool_1d(S, I)
+getindex{T}(S::SubArray{T,5}, I::AbstractArray{Bool,5}) = getindex_bool_1d(S, I)
+
 getindex{T}(s::SubArray{T,1}, I::Range1{Int}) =
     getindex(s.parent, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
 
@@ -297,8 +334,8 @@ end
 # the parent array
 function translate_linear_indexes(s, n, I, pdims)
     idx = Array(Int, length(I))
-    ssztail = size(s)[n:]
-    indexestail = s.indexes[pdims[n:]]
+    ssztail = size(s)[n:end]
+    indexestail = s.indexes[pdims[n:end]]
     # The next gets the strides of dimensions listed in pdims[n:end], relative to the stride of pdims[n]
     pstrd = [1]
     j = n+1

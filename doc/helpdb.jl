@@ -1091,7 +1091,10 @@
 ("Set-Like Collections","Base","setdiff","setdiff(s1, s2)
 
    Construct the set of elements in \"s1\" but not \"s2\". Maintains
-   order with arrays.
+   order with arrays. Note that both arguments must be collections,
+   and both will be iterated over. In particular,
+   \"setdiff(set,element)\" where \"element\" is a potential member of
+   \"set\", will not work in general.
 
 "),
 
@@ -1154,9 +1157,9 @@
 
 "),
 
-("Dequeues","Base","push!","push!(collection, item) -> collection
+("Dequeues","Base","push!","push!(collection, items...) -> collection
 
-   Insert an item at the end of a collection.
+   Insert items at the end of a collection.
 
 "),
 
@@ -1166,9 +1169,9 @@
 
 "),
 
-("Dequeues","Base","unshift!","unshift!(collection, item) -> collection
+("Dequeues","Base","unshift!","unshift!(collection, items...) -> collection
 
-   Insert an item at the beginning of a collection.
+   Insert items at the beginning of a collection.
 
 "),
 
@@ -3885,7 +3888,8 @@ popdisplay(d::Display)
 
 ("Mathematical Functions","Base","gcd","gcd(x, y)
 
-   Greatest common (positive) divisor (or zero if x and y are both zero).
+   Greatest common (positive) divisor (or zero if x and y are both
+   zero).
 
 "),
 
@@ -3897,8 +3901,8 @@ popdisplay(d::Display)
 
 ("Mathematical Functions","Base","gcdx","gcdx(x, y)
 
-   Greatest common (positive) divisor, also returning integer coefficients \"u\"
-   and \"v\" that solve \"ux+vy == gcd(x,y)\"
+   Greatest common (positive) divisor, also returning integer
+   coefficients \"u\" and \"v\" that solve \"ux+vy == gcd(x,y)\"
 
 "),
 

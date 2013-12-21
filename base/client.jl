@@ -37,15 +37,16 @@ exit(n) = ccall(:jl_exit, Void, (Int32,), n)
 exit() = exit(0)
 quit() = exit()
 
-function repl_callback(ast::ANY, show_value)
-    global _repl_enough_stdin = true
-    stop_reading(STDIN) 
-    STDIN.readcb = false
-    put(repl_channel, (ast, show_value))
-end
-
 function repl_cmd(cmd)
     shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
+    # Note that we can't support the fish shell due to its lack of subshells
+    #   See this for details: https://github.com/JuliaLang/julia/issues/4918
+    if Base.basename(shell[1]) == "fish"
+        warn_once("cannot use the fish shell, defaulting to /bin/sh\
+         set the JULIA_SHELL environment variable to silence this warning")
+        shell = "/bin/sh"
+    end
+
     if isempty(cmd.exec)
         error("no cmd to execute")
     elseif cmd.exec[1] == "cd"
@@ -136,28 +137,9 @@ function eval_user_input(ast::ANY, show_value)
     isa(STDIN,TTY) && println()
 end
 
-function read_buffer(stream::AsyncStream, nread)
-    global _repl_enough_stdin::Bool
-    while !_repl_enough_stdin && nb_available(stream.buffer) > 0
-        nread = int(search(stream.buffer,'\n')) # never more than one line or readline explodes :O
-        nread2 = int(search(stream.buffer,'\r'))
-        if nread == 0
-            if nread2 == 0
-                nread = nb_available(stream.buffer)
-            else
-                nread = nread2
-            end
-        else
-            if nread2 != 0 && nread2 < nread
-                nread = nread2
-            end
-        end
-        ptr = pointer(stream.buffer.data,stream.buffer.ptr)
-        skip(stream.buffer,nread)
-        #println(STDERR,stream.buffer.data[stream.buffer.ptr-nread:stream.buffer.ptr-1])
-        ccall(:jl_read_buffer,Void,(Ptr{Void},Cssize_t),ptr,nread)
-    end
-    return false
+function repl_callback(ast::ANY, show_value)
+    global _repl_enough_stdin = true
+    put(repl_channel, (ast, show_value))
 end
 
 function run_repl()
@@ -167,7 +149,17 @@ function run_repl()
 
     # install Ctrl-C interrupt handler (InterruptException)
     ccall(:jl_install_sigint_handler, Void, ())
-    STDIN.closecb = (x...)->put(repl_channel,(nothing,-1))
+    buf = Uint8[0]
+    @async begin
+        while !eof(STDIN)
+            read(STDIN, buf)
+            ccall(:jl_read_buffer,Void,(Ptr{Void},Cssize_t),buf,1)
+            if _repl_enough_stdin
+                yield()
+            end
+        end
+        put(repl_channel,(nothing,-1))
+    end
 
     while true
         if have_color
@@ -177,7 +169,6 @@ function run_repl()
         end
         ccall(:repl_callback_enable, Void, (Ptr{Uint8},), prompt_string)
         global _repl_enough_stdin = false
-        start_reading(STDIN, read_buffer)
         (ast, show_value) = take(repl_channel)
         if show_value == -1
             # exit flag
@@ -283,7 +274,7 @@ function process_options(args::Array{Any,1})
                 color_set = true
                 global have_color = true
             elseif args[i][8] == '='
-                val = args[i][9:]
+                val = args[i][9:end]
                 if in(val, ("no","0","false"))
                     color_set = true
                     global have_color = false
@@ -363,6 +354,8 @@ function _start()
     fdwatcher_reinit()
     # Initialize RNG
     Random.librandom_init()
+    # Ensure PCRE is compatible with the compiled reg-exes
+    PCRE.check_pcre()
     # Check that BLAS is correctly built
     check_blas()
     LinAlg.init()
