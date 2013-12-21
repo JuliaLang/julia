@@ -26,16 +26,16 @@ static llvm::Value *prepare_call(llvm::Value* Callee)
     if (!F)
         return Callee;
     if (F->getParent() != jl_Module) {
-      Function *ModuleF = jl_Module->getFunction(F->getName());
-      if(ModuleF) {
-        return ModuleF;
-      }
-      else {
-        return Function::Create(F->getFunctionType(),
-                      Function::ExternalLinkage,
-                      F->getName(),
-                      jl_Module);
-      }
+        Function *ModuleF = jl_Module->getFunction(F->getName());
+        if(ModuleF) {
+            return ModuleF;
+        }
+        else {
+            return Function::Create(F->getFunctionType(),
+                          Function::ExternalLinkage,
+                          F->getName(),
+                          jl_Module);
+        }
     }
 #endif
     return Callee;
@@ -109,22 +109,20 @@ public:
     virtual Value *materializeValueFor (Value *V)
     {
         Function *F = dyn_cast<Function>(V);
-        if(F)
-        {
-            if(F->isIntrinsic())
+        if(F) {
+            if(F->isIntrinsic()) {
                 return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
-            if(F->isDeclaration() || F->getParent() != destModule)
-            {
+            }
+            if(F->isDeclaration() || F->getParent() != destModule) {
                 Function *shadow = srcModule->getFunction(F->getName());
-                if (shadow != NULL && !shadow->isDeclaration())
-                {
+                if (shadow != NULL && !shadow->isDeclaration()) {
                     // Not truly external
                     // Check whether we already emitted it once
                     uint64_t addr = jl_mcjmm->getSymbolAddress(F->getName());
-                    if(addr == 0)
-                    {
+                    if (addr == 0) {
                         return clone_llvm_function(shadow,this);
-                    } else {
+                    } 
+                    else {
                         return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
                     }
                 } else if (!F->isDeclaration())
@@ -153,8 +151,7 @@ public:
             if (GV->isDeclaration())
                 return newGV;
             uint64_t addr = jl_mcjmm->getSymbolAddress(GV->getName());
-            if(addr != 0)
-            {
+            if(addr != 0) {
                 newGV->setExternallyInitialized(true);
                 return newGV;
             }
@@ -163,7 +160,8 @@ public:
             if (it != llvm_to_jl_value.end()) {
                 newGV->setInitializer(Constant::getIntegerValue(GV->getType()->getElementType(),APInt(sizeof(void*)*8,(ptrint_t)it->second)));
                 newGV->setConstant(true);
-            } else if (GV->hasInitializer()) {
+            } 
+            else if (GV->hasInitializer()) {
                 Value *C = MapValue(GV->getInitializer(),VMap,RF_None,NULL,this);
                 newGV->setInitializer(cast<Constant>(C));
             }
@@ -181,8 +179,7 @@ static Function *clone_llvm_function(llvm::Function *toClone,FunctionMover *move
         mover->destModule);    
     ClonedCodeInfo info;
     Function::arg_iterator DestI = NewF->arg_begin();
-    for (Function::const_arg_iterator I = toClone->arg_begin(), E = toClone->arg_end();
-      I != E; ++I) {
+    for (Function::const_arg_iterator I = toClone->arg_begin(), E = toClone->arg_end(); I != E; ++I) {
             DestI->setName(I->getName());    // Copy the name over...
             mover->VMap[I] = DestI++;        // Add mapping to VMap
     }
