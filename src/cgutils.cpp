@@ -66,7 +66,7 @@ static GlobalVariable *stringConst(const std::string &txt)
         gv = new GlobalVariable(*jl_Module,
                                 ArrayType::get(T_int8, txt.length()+1),
                                 true,
-                                GlobalVariable::ExternalLinkage,
+                                imaging_mode ? GlobalVariable::PrivateLinkage : GlobalVariable::ExternalLinkage,
 #ifndef LLVM_VERSION_MAJOR
                                 ConstantArray::get(getGlobalContext(),
                                                        txt.c_str()),
@@ -259,8 +259,12 @@ static Value *julia_gv(const char *cname, void *addr)
                            ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt), cname);
 
     // make the pointer valid for this session
+#ifdef USE_MCJIT
     llvm_to_jl_value[gv] = addr;
-
+#else
+    void **p = (void**)jl_ExecutionEngine->getPointerToGlobal(gv);
+    *p = addr;
+#endif
     // make the pointer valid for future sessions
     jl_sysimg_gvars.push_back(ConstantExpr::getBitCast(gv, T_psize));
     jl_value_llvm gv_struct;
