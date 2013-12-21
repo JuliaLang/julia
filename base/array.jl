@@ -121,7 +121,7 @@ function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
     end
     nel = div(length(a)*sizeof(S),sizeof(T))
     if prod(dims) != nel
-        error("new dimensions $(dims) must be consistent with array size $(nel)")
+        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(nel)"))
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
@@ -129,7 +129,7 @@ reinterpret(t::Type,x) = reinterpret(t,[x])[1]
 
 function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
     if prod(dims) != length(a)
-        error("new dimensions $(dims) must be consistent with array size $(length(a))")
+        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
@@ -598,12 +598,12 @@ function setindex!(A::Array, x, I::Union(Real,AbstractArray)...)
             nel *= length(idx)
         end
         if length(X) != nel
-            error("argument dimensions must match")
+            throw(DimensionMismatch(""))
         end
         if ndims(X) > 1
             for i = 1:length(I)
                 if size(X,i) != length(I[i])
-                    error("argument dimensions must match")
+                    throw(DimensionMismatch(""))
                 end
             end
         end
@@ -996,7 +996,7 @@ end
 ## promotion to complex ##
 
 function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
-    if size(A) != size(B); error("argument dimensions must match"); end
+    if size(A) != size(B); throw(DimensionMismatch("")); end
     F = similar(A, typeof(complex(zero(S),zero(T))))
     for i=1:length(A)
         @inbounds F[i] = complex(A[i], B[i])
