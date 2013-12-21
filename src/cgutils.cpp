@@ -252,7 +252,7 @@ static Value *julia_gv(const char *cname, void *addr)
         return builder.CreateLoad(it->second.gv);
     // no existing GlobalVariable, create one and store it
     GlobalValue *gv = new GlobalVariable(*jl_Module, jl_pvalue_llvmt,
-                           false, GlobalVariable::ExternalLinkage,
+                           false, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
                            ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt), cname);
 
     // make the pointer valid for this session
