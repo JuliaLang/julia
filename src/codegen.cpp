@@ -37,6 +37,7 @@
 #define USE_MCJIT 1
 #include "llvm/ExecutionEngine/MCJIT.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
+#include "llvm/ADT/DenseMapInfo.h"
 #endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
 #include "llvm/IR/DerivedTypes.h"
@@ -120,6 +121,9 @@ static IRBuilder<> builder(getGlobalContext());
 static bool nested_compile=false;
 static Module *jl_Module;
 static ExecutionEngine *jl_ExecutionEngine;
+#ifdef USE_MCJIT
+static RTDyldMemoryManager *jl_mcjmm;
+#endif
 static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
 
@@ -3991,19 +3995,24 @@ extern "C" void jl_init_codegen(void)
     // turn on JIT support for libunwind to walk the stack
     options.JITExceptionHandling = 1;
 #endif
+#ifdef USE_MCJIT
+    jl_mcjmm = new SectionMemoryManager();
+#else
     // Temporarily disable Haswell BMI2 features due to LLVM bug.
     const char *mattr[] = {"-bmi2", "-avx2"};
     std::vector<std::string> attrvec (mattr, mattr+2);
+#endif
     jl_ExecutionEngine = EngineBuilder(jl_Module)
         .setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
         .setJITMemoryManager(new JITMemoryManagerWin())
 #endif
+        .setTargetOptions(options)
 #ifdef USE_MCJIT
         .setUseMCJIT(true)
-#endif
-        .setTargetOptions(options)
+#else
         .setMAttrs(attrvec)
+#endif
         .create();
 #endif // LLVM VERSION
     jl_ExecutionEngine->DisableLazyCompilation();

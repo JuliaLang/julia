@@ -34,6 +34,110 @@ static GlobalVariable *stringConst(const std::string &txt)
 
 }
 
+// --- Shadow module handling ---
+
+
+#ifdef USE_MCJIT
+class FunctionMover;
+
+static Function *myCloneFunction(llvm::Function *toClone,FunctionMover *mover);
+
+class FunctionMover : public ValueMaterializer
+{
+public:
+    FunctionMover(llvm::Module *dest,llvm::Module *src) :
+        ValueMaterializer(), destModule(dest), srcModule(src), VMap()
+    {
+
+    } 
+    ValueToValueMapTy VMap;
+    llvm::Module *destModule;
+    llvm::Module *srcModule;
+    virtual Value *materializeValueFor (Value *V)
+    {
+        Function *F = dyn_cast<Function>(V);
+        if(F)
+        {
+            if(F->isIntrinsic())
+                return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
+            if(F->isDeclaration() || F->getParent() != destModule)
+            {
+                Function *shadow = srcModule->getFunction(F->getName());
+                if (shadow != NULL && !shadow->isDeclaration())
+                {
+                    // Not truly external
+                    // Check whether we already emitted it once
+                    uint64_t addr = jl_mcjmm->getSymbolAddress(F->getName());
+                    if(addr == 0)
+                    {
+                        return myCloneFunction(shadow,this);
+                    } else {
+                        return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
+                    }
+                } else if (!F->isDeclaration())
+                {
+                    return myCloneFunction(F,this);
+                }
+            }
+            // Still a declaration and still in a diffrent module
+            if(F->isDeclaration() && F->getParent() != destModule)
+            {
+                // Create forward declaration in current module
+                return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
+            }
+        } else if (isa<GlobalVariable>(V))
+        {
+            GlobalVariable *GV = cast<GlobalVariable>(V);
+            assert(GV != NULL);
+            GlobalVariable *newGV = new GlobalVariable(*destModule,
+                GV->getType()->getElementType(),
+                GV->isConstant(),
+                GlobalVariable::ExternalLinkage,
+                NULL,
+                GV->getName());
+            newGV->copyAttributesFrom(GV);
+            if (GV->isDeclaration())
+                return newGV;
+            uint64_t addr = jl_mcjmm->getSymbolAddress(GV->getName());
+            if(addr != 0)
+            {
+                newGV->setExternallyInitialized(true);
+                return newGV;
+            }
+            if(GV->getInitializer() != NULL) {
+                Value *C = MapValue(GV->getInitializer(),VMap,RF_None,NULL,this);
+                newGV->setInitializer(cast<Constant>(C));
+            }
+            return newGV;
+        }
+        return NULL;
+    };
+};
+
+static Function *clone_llvm_function(llvm::Function *toClone,FunctionMover *mover)
+{
+    Function *NewF = Function::Create(toClone->getFunctionType(),
+        Function::ExternalLinkage,
+        toClone->getName(),
+        mover->destModule);    
+    ClonedCodeInfo info;
+    Function::arg_iterator DestI = NewF->arg_begin();
+    for (Function::const_arg_iterator I = toClone->arg_begin(), E = toClone->arg_end();
+      I != E; ++I) {
+            DestI->setName(I->getName());    // Copy the name over...
+            mover->VMap[I] = DestI++;        // Add mapping to VMap
+    }
+
+    // Necessary in case the function is self referential
+    mover->VMap[toClone] = NewF;
+
+    SmallVector<ReturnInst*, 8> Returns;
+    llvm::CloneFunctionInto(NewF,toClone,mover->VMap,true,Returns,"",NULL,NULL,mover);
+
+    return NewF;
+}
+#endif
+
 // --- emitting pointers directly into code ---
 
 static Value *literal_static_pointer_val(void *p, Type *t)
