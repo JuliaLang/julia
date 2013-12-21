@@ -138,6 +138,7 @@ export
 
 # Exceptions
     ArgumentError,
+    DimensionMismatch,
     EOFError,
     ErrorException,
     KeyError,
