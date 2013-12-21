@@ -1,5 +1,55 @@
 // utility procedures used in code generation
 
+// Fixing up references to other modules for MCJIT
+static GlobalVariable *prepare_global(GlobalVariable *G)
+{
+#ifdef USE_MCJIT
+    if(G->getParent() != jl_Module)
+    {
+        GlobalVariable *gv = jl_Module->getGlobalVariable(G->getName());
+        if(!gv) {
+            gv =
+            new GlobalVariable(*jl_Module, G->getType()->getElementType(),
+                               true, GlobalVariable::ExternalLinkage,
+                               NULL, G->getName());
+        }
+        return gv;     
+    }
+#endif
+    return G;
+}
+
+static llvm::Value *prepare_call(llvm::Value* Callee)
+{
+#ifdef USE_MCJIT
+    llvm::Function *F = dyn_cast<Function>(Callee);
+    if (!F)
+        return Callee;
+    if (F->getParent() != jl_Module) {
+      Function *ModuleF = jl_Module->getFunction(F->getName());
+      if(ModuleF) {
+        return ModuleF;
+      }
+      else {
+        return Function::Create(F->getFunctionType(),
+                      Function::ExternalLinkage,
+                      F->getName(),
+                      jl_Module);
+      }
+    }
+#endif
+    return Callee;
+}
+
+static inline void add_named_global(GlobalValue *gv, void *addr)
+{
+#ifdef USE_MCJIT
+    sys::DynamicLibrary::AddSymbol(gv->getName(),addr);
+#else
+    jl_ExecutionEngine->addGlobalMapping(gv,addr);
+#endif
+}
+
 // --- string constants ---
 static std::map<const std::string, GlobalVariable*> stringConstants;
 
@@ -16,7 +66,7 @@ static GlobalVariable *stringConst(const std::string &txt)
         gv = new GlobalVariable(*jl_Module,
                                 ArrayType::get(T_int8, txt.length()+1),
                                 true,
-                                GlobalVariable::PrivateLinkage,
+                                GlobalVariable::ExternalLinkage,
 #ifndef LLVM_VERSION_MAJOR
                                 ConstantArray::get(getGlobalContext(),
                                                        txt.c_str()),
@@ -36,17 +86,20 @@ static GlobalVariable *stringConst(const std::string &txt)
 
 // --- Shadow module handling ---
 
+typedef struct {Value* gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
+static std::map<void*, jl_value_llvm> jl_value_to_llvm;
+static std::map<Value *, void*> llvm_to_jl_value;
 
 #ifdef USE_MCJIT
 class FunctionMover;
 
-static Function *myCloneFunction(llvm::Function *toClone,FunctionMover *mover);
+static Function *clone_llvm_function(llvm::Function *toClone,FunctionMover *mover);
 
 class FunctionMover : public ValueMaterializer
 {
 public:
     FunctionMover(llvm::Module *dest,llvm::Module *src) :
-        ValueMaterializer(), destModule(dest), srcModule(src), VMap()
+        ValueMaterializer(), VMap(), destModule(dest), srcModule(src)
     {
 
     } 
@@ -70,13 +123,13 @@ public:
                     uint64_t addr = jl_mcjmm->getSymbolAddress(F->getName());
                     if(addr == 0)
                     {
-                        return myCloneFunction(shadow,this);
+                        return clone_llvm_function(shadow,this);
                     } else {
                         return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
                     }
                 } else if (!F->isDeclaration())
                 {
-                    return myCloneFunction(F,this);
+                    return clone_llvm_function(F,this);
                 }
             }
             // Still a declaration and still in a diffrent module
@@ -87,6 +140,7 @@ public:
             }
         } else if (isa<GlobalVariable>(V))
         {
+
             GlobalVariable *GV = cast<GlobalVariable>(V);
             assert(GV != NULL);
             GlobalVariable *newGV = new GlobalVariable(*destModule,
@@ -104,7 +158,12 @@ public:
                 newGV->setExternallyInitialized(true);
                 return newGV;
             }
-            if(GV->getInitializer() != NULL) {
+            std::map<Value*, void *>::iterator it;
+            it = llvm_to_jl_value.find(GV);
+            if (it != llvm_to_jl_value.end()) {
+                newGV->setInitializer(Constant::getIntegerValue(GV->getType()->getElementType(),APInt(sizeof(void*)*8,(ptrint_t)it->second)));
+                newGV->setConstant(true);
+            } else if (GV->hasInitializer()) {
                 Value *C = MapValue(GV->getInitializer(),VMap,RF_None,NULL,this);
                 newGV->setInitializer(cast<Constant>(C));
             }
@@ -152,8 +211,6 @@ static Value *literal_static_pointer_val(void *p, Type *t)
 #endif
 }
 
-typedef struct {Value* gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
-static std::map<void*, jl_value_llvm> jl_value_to_llvm;
 static std::vector<Constant*> jl_sysimg_gvars;
 
 extern "C" int32_t jl_get_llvm_gv(jl_value_t *p)
@@ -198,11 +255,12 @@ static Value *julia_gv(const char *cname, void *addr)
         return builder.CreateLoad(it->second.gv);
     // no existing GlobalVariable, create one and store it
     GlobalValue *gv = new GlobalVariable(*jl_Module, jl_pvalue_llvmt,
-                           false, GlobalVariable::InternalLinkage,
+                           false, GlobalVariable::ExternalLinkage,
                            ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt), cname);
+
     // make the pointer valid for this session
-    void **p = (void**)jl_ExecutionEngine->getPointerToGlobal(gv);
-    *p = addr;
+    llvm_to_jl_value[gv] = addr;
+
     // make the pointer valid for future sessions
     jl_sysimg_gvars.push_back(ConstantExpr::getBitCast(gv, T_psize));
     jl_value_llvm gv_struct;

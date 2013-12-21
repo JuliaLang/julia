@@ -124,14 +124,19 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
     bool runtime_lib = false;
     GlobalVariable *libptrgv;
 #ifdef _OS_WINDOWS_
-    if ((intptr_t)f_lib == 1)
+    if ((intptr_t)f_lib == 1) {
         libptrgv = prepare_global(jlexe_var);
-    else if ((intptr_t)f_lib == 2)
+        libsym = jl_exe_handle;
+    }
+    else if ((intptr_t)f_lib == 2) {
         libptrgv = prepare_global(jldll_var);
+        libsym = jl_dll_handle;
+    }
     else
 #endif
     if (f_lib == NULL) {
         libptrgv = prepare_global(jlRTLD_DEFAULT_var);
+        libsym = jl_RTLD_DEFAULT_handle;
     }
     else {
         runtime_lib = true;
@@ -142,20 +147,27 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
                initnul, f_lib);
             libMapGV[f_lib] = libptrgv;
             libsym = get_library(f_lib);
-            *((uv_lib_t**)jl_ExecutionEngine->getPointerToGlobal(libptrgv)) = libsym;
+            assert(libsym != NULL);
+            llvm_to_jl_value[libptrgv] = libsym;
         }
     }
     if (libsym == NULL) {
-        libsym = *((uv_lib_t**)jl_ExecutionEngine->getPointerToGlobal(libptrgv));
+        libsym = (uv_lib_t*)llvm_to_jl_value[libptrgv];
     }
+
+    assert(libsym != NULL);
 
     GlobalVariable *llvmgv = symMapGV[f_name];
     if (llvmgv == NULL) {
+        // MCJIT forces this to have external linkage eventually, so we would clobber
+        // the symbol of the actual function.
+        std::string name = f_name;
+        name = "ccall_" + name;
         llvmgv = new GlobalVariable(*jl_Module, T_pint8,
            false, GlobalVariable::PrivateLinkage,
-           initnul, f_name);
+           initnul, name);
         symMapGV[f_name] = llvmgv;
-        *((void**)jl_ExecutionEngine->getPointerToGlobal(llvmgv)) = jl_dlsym_e(libsym, f_name);
+        llvm_to_jl_value[llvmgv] = jl_dlsym_e(libsym, f_name);
     }
 
     BasicBlock *dlsym_lookup = BasicBlock::Create(getGlobalContext(), "dlsym"),
