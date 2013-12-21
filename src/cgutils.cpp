@@ -494,7 +494,7 @@ static void just_emit_error(const std::string &txt, jl_codectx_t *ctx)
 {
     Value *zeros[2] = { ConstantInt::get(T_int32, 0),
                         ConstantInt::get(T_int32, 0) };
-    builder.CreateCall(jlerror_func,
+    builder.CreateCall(prepare_call(jlerror_func),
                        builder.CreateGEP(stringConst(txt),
                                          ArrayRef<Value*>(zeros)));
 }
@@ -525,7 +525,7 @@ static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(cond, passBB, failBB);
     builder.SetInsertPoint(failBB);
-    builder.CreateCall2(jlthrow_line_func, exc,
+    builder.CreateCall2(prepare_call(jlthrow_line_func), exc,
                         ConstantInt::get(T_int32, ctx->lineno));
     builder.CreateUnreachable();
     ctx->f->getBasicBlockList().push_back(passBB);
@@ -553,7 +553,7 @@ static void raise_exception_if(Value *cond, GlobalVariable *exc,
 static void null_pointer_check(Value *v, jl_codectx_t *ctx)
 {
     raise_exception_unless(builder.CreateICmpNE(v,Constant::getNullValue(v->getType())),
-                           jlundeferr_var, ctx);
+                           prepare_global(jlundeferr_var), ctx);
 }
 
 static Value *boxed(Value *v, jl_codectx_t *ctx, jl_value_t *jt=NULL);
@@ -567,7 +567,7 @@ static void emit_type_error(Value *x, jl_value_t *type, const std::string &msg,
                                          ArrayRef<Value*>(zeros));
     Value *msg_val = builder.CreateGEP(stringConst(msg),
                                        ArrayRef<Value*>(zeros));
-    builder.CreateCall4(jltypeerror_func,
+    builder.CreateCall4(prepare_call(jltypeerror_func),
                         fname_val, msg_val,
                         literal_pointer_val(type), boxed(x,ctx));
 }
@@ -597,7 +597,7 @@ static Value *emit_bounds_check(Value *i, Value *len, jl_codectx_t *ctx)
 #if CHECK_BOUNDS==1
     if (ctx->boundsCheck.empty() || ctx->boundsCheck.back()==true) {
         Value *ok = builder.CreateICmpULT(im1, len);
-        raise_exception_unless(ok, jlboundserr_var, ctx);
+        raise_exception_unless(ok, prepare_global(jlboundserr_var), ctx);
     }
 #endif
     return im1;
@@ -928,7 +928,7 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
             else {
                 for (i = 0; i < l; i++) {
                     if (!jl_isbits(jl_tupleref(jt,i))) {
-                        v = builder.CreateCall2(jlnewbits_func, lty,
+                        v = builder.CreateCall2(prepare_call(jlnewbits_func), lty,
                                                 builder.CreatePointerCast(v,T_pint8));
                         break;
                     }
@@ -1061,7 +1061,7 @@ static Value *emit_arraylen_prim(Value *t, jl_value_t *ty)
         fargt.push_back(jl_pvalue_llvmt);
         FunctionType *ft = FunctionType::get(T_size, fargt, false);
         Value *alen = jl_Module->getOrInsertFunction("jl_array_len_", ft);
-        return builder.CreateCall(alen, t);
+        return builder.CreateCall(prepare_call(alen), t);
     }
 #endif
 }
@@ -1150,7 +1150,7 @@ static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_
 
         ctx->f->getBasicBlockList().push_back(failBB);
         builder.SetInsertPoint(failBB);
-        builder.CreateCall2(jlthrow_line_func, builder.CreateLoad(jlboundserr_var),
+        builder.CreateCall2(prepare_call(jlthrow_line_func), builder.CreateLoad(prepare_global(jlboundserr_var)),
                             ConstantInt::get(T_int32, ctx->lineno));
         builder.CreateUnreachable();
 
@@ -1187,7 +1187,7 @@ static Value *allocate_box_dynamic(Value *jlty, Value *nb, Value *v)
     if (v->getType()->isPointerTy()) {
         v = builder.CreatePtrToInt(v, T_size);
     }
-    Value *newv = builder.CreateCall(jlallocobj_func,
+    Value *newv = builder.CreateCall(prepare_call(jlallocobj_func),
                                      builder.CreateAdd(nb,
                                                        ConstantInt::get(T_size, sizeof(void*))));
     // TODO: make sure this is rooted. I think it is.
@@ -1303,7 +1303,7 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
     }
     if (jl_is_tuple(jt)) {
         size_t n = jl_tuple_len(jt);
-        Value *tpl = builder.CreateCall(jl_alloc_tuple_func,ConstantInt::get(T_size,n));
+        Value *tpl = builder.CreateCall(prepare_call(jl_alloc_tuple_func),ConstantInt::get(T_size,n));
         int last_depth = ctx->argDepth;
         make_gcroot(tpl,ctx);
         for (size_t i = 0; i < n; ++i) {
@@ -1317,29 +1317,29 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
     jl_datatype_t *jb = (jl_datatype_t*)jt;
     assert(jl_is_datatype(jb));
     if (jb == jl_int8_type)
-        return builder.CreateCall(box_int8_func,
+        return builder.CreateCall(prepare_call(box_int8_func),
                                   builder.CreateSExt(v, T_int32));
-    if (jb == jl_int16_type) return builder.CreateCall(box_int16_func, v);
-    if (jb == jl_int32_type) return builder.CreateCall(box_int32_func, v);
-    if (jb == jl_int64_type) return builder.CreateCall(box_int64_func, v);
-    if (jb == jl_float32_type) return builder.CreateCall(box_float32_func, v);
+    if (jb == jl_int16_type) return builder.CreateCall(prepare_call(box_int16_func), v);
+    if (jb == jl_int32_type) return builder.CreateCall(prepare_call(box_int32_func), v);
+    if (jb == jl_int64_type) return builder.CreateCall(prepare_call(box_int64_func), v);
+    if (jb == jl_float32_type) return builder.CreateCall(prepare_call(box_float32_func), v);
     //if (jb == jl_float64_type) return builder.CreateCall(box_float64_func, v);
     if (jb == jl_float64_type) {
         // manually inline alloc & init of Float64 box. cheap, I know.
 #ifdef _P64
-        Value *newv = builder.CreateCall(jlalloc2w_func);
+        Value *newv = builder.CreateCall(prepare_call(jlalloc2w_func));
 #else
-        Value *newv = builder.CreateCall(jlalloc3w_func);
+        Value *newv = builder.CreateCall(prepare_call(jlalloc3w_func));
 #endif
         return init_bits_value(newv, literal_pointer_val(jt), t, v);
     }
     if (jb == jl_uint8_type)
-        return builder.CreateCall(box_uint8_func,
+        return builder.CreateCall(prepare_call(box_uint8_func),
                                   builder.CreateZExt(v, T_int32));
-    if (jb == jl_uint16_type) return builder.CreateCall(box_uint16_func, v);
-    if (jb == jl_uint32_type) return builder.CreateCall(box_uint32_func, v);
-    if (jb == jl_uint64_type) return builder.CreateCall(box_uint64_func, v);
-    if (jb == jl_char_type)   return builder.CreateCall(box_char_func, v);
+    if (jb == jl_uint16_type) return builder.CreateCall(prepare_call(box_uint16_func), v);
+    if (jb == jl_uint32_type) return builder.CreateCall(prepare_call(box_uint32_func), v);
+    if (jb == jl_uint64_type) return builder.CreateCall(prepare_call(box_uint64_func), v);
+    if (jb == jl_char_type)   return builder.CreateCall(prepare_call(box_char_func), v);
     if (!jl_isbits(jt)) {
         assert("Don't know how to box this type" && false);
         return NULL;
