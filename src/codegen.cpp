@@ -3987,7 +3987,7 @@ extern "C" void jl_init_codegen(void)
     // to ensure compatibility with GCC codes
     options.StackAlignmentOverride = 8;
 #endif
-#ifdef __APPLE__
+#if defined(__APPLE__) && !defined(LLVM34)
     // turn on JIT support for libunwind to walk the stack
     options.JITExceptionHandling = 1;
 #endif
