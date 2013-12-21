@@ -58,8 +58,10 @@ function snapshot(; dir="")
     head = readchomp(`rev-parse HEAD`, dir=dir)
     index = readchomp(`write-tree`, dir=dir)
     work = try
-        run(`add --all`, dir=dir)
-        run(`add .`, dir=dir)
+        if length(readdir(abspath(dir))) > 1
+            run(`add --all`, dir=dir)
+            run(`add .`, dir=dir)
+        end
         readchomp(`write-tree`, dir=dir)
     finally
         run(`read-tree $index`, dir=dir) # restore index
