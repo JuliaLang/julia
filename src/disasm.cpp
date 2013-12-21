@@ -132,7 +132,11 @@ void jl_dump_function_asm(void* Fptr, size_t Fsize,
     MCAsmBackend *MAB = 0;
     if (ShowEncoding) {
         CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, *STI, Ctx);
+#ifdef LLVM34
+        MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, MCPU);
+#else
         MAB = TheTarget->createMCAsmBackend(TripleName, MCPU);
+#endif
     }
 
     Streamer.reset(TheTarget->createAsmStreamer(Ctx, stream, /*asmverbose*/true,
