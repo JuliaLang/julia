@@ -16,6 +16,7 @@
 /libunwind-*
 /libosxunwind-*
 /lighttpd-*
+/libcxx-*
 /llvm-*
 /mpfr-*
 /openblas-*

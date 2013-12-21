@@ -50,7 +50,7 @@ function librandom_init()
     try
         srand("/dev/urandom")
     catch
-        println(STDERR, "Entropy pool not available to seed RNG, using ad-hoc entropy sources.")
+        println(STDERR, "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
         seed = reinterpret(Uint64, time())
         seed = bitmix(seed, uint64(getpid()))
         try
@@ -110,6 +110,7 @@ rand(::Type{Float16}) = float16(rand())
 
 rand{T<:Real}(::Type{Complex{T}}) = complex(rand(T),rand(T))
 
+
 rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
 
 ## random integers
@@ -149,7 +150,7 @@ function rand!{T}(A::Array{T})
     A
 end
 rand(T::Type, dims::Dims) = rand!(Array(T, dims))
-rand{T<:Number}(::Type{T}) = error("No random number generator for type $T. Try a more specific type.")
+rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try a more specific type")
 rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
 
 function randu{T<:Union(Uint32,Uint64,Uint128)}(k::T)
@@ -181,20 +182,21 @@ function rand(r::Range1{Int128})
     ulen = convert(Uint128, length(r))
     convert(Int128, first(r) + randu(ulen))
 end
+function rand{T<:Real}(r::Ranges{T})
+    ulen = convert(Uint64, length(r)) #length of Ranges is stored as Int, Uint64 is always enough
+    convert(T, first(r) + randu(ulen)*step(r))
+end
 
 
-# fallback for other integer types
-rand{T<:Integer}(r::Range1{T}) = convert(T, rand(int(r)))
+rand{T<:Real}(r::Ranges{T}, dims::Dims) = rand!(r, Array(T, dims))
+rand(r::Ranges, dims::Int...) = rand(r, dims)
 
-function rand!{T<:Integer}(r::Range1{T}, A::Array{T})
+function rand!(r::Ranges, A::Array)
     for i=1:length(A) 
         A[i] = rand(r)
     end
     return A
 end
-
-rand{T<:Integer}(r::Range1{T}, dims::Dims) = rand!(r, Array(T, dims))
-rand{T<:Integer}(r::Range1{T}, dims::Int...) = rand(r, dims)
 
 ## random Bools
 
@@ -216,14 +218,16 @@ randn!(A::Array{Float64}) = randmtzig_fill_randn!(A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
 randn(dims::Int...) = randn!(Array(Float64, dims...))
 
+## random UUID generation
+
 immutable UUID
     value::Uint128
 end
 
-@eval function uuid4()
+function uuid4()
     u = rand(Uint128)
-    u &= $(parseint(Uint128,"ffffffffffff0fff3fffffffffffffff",16))
-    u |= $(parseint(Uint128,"00000000000040008000000000000000",16))
+    u &= 0xffffffffffff0fff3fffffffffffffff
+    u |= 0x00000000000040008000000000000000
     UUID(u)
 end
 
@@ -231,7 +235,8 @@ function Base.convert(::Type{Vector{Uint8}}, u::UUID)
     u = u.value
     a = Array(Uint8,36)
     for i = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
-        a[i] = Base.digit(u & 0xf)
+        d = u & 0xf
+        a[i] = '0'+d+39*(d>9)
         u >>= 4
     end
     a[[24,19,14,9]] = '-'

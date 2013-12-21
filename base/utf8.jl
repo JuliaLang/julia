@@ -130,8 +130,8 @@ function string(a::ByteString...)
     UTF8String(data)
 end
 
-ucfirst(s::UTF8String) = string(uppercase(s[1]), s[2:])
-lcfirst(s::UTF8String) = string(lowercase(s[1]), s[2:])
+ucfirst(s::UTF8String) = string(uppercase(s[1]), s[2:end])
+lcfirst(s::UTF8String) = string(lowercase(s[1]), s[2:end])
 
 function reverse(s::UTF8String)
     out = similar(s.data)

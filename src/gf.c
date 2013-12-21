@@ -1022,7 +1022,13 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         !jl_args_morespecific((jl_value_t*)sig, (jl_value_t*)type)) {
         jl_value_t *isect = jl_type_intersection((jl_value_t*)type,
                                                  (jl_value_t*)sig);
-        if (isect == (jl_value_t*)jl_bottom_type)
+        if (isect == (jl_value_t*)jl_bottom_type ||
+            // we're ok if the new definition is actually the one we just
+            // inferred to be required (see issue #3609). ideally this would
+            // never happen, since if New ⊓ Old == New then we should have
+            // considered New more specific, but jl_args_morespecific is not
+            // perfect, so this is a useful fallback.
+            sigs_eq(isect, (jl_value_t*)type, 1))
             return;
         JL_GC_PUSH1(&isect);
         jl_methlist_t *l = ml;
@@ -1108,7 +1114,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         if (jl_args_morespecific((jl_value_t*)type, (jl_value_t*)l->sig))
             break;
         if (check_amb) {
-            check_ambiguous(*pml, (jl_tuple_t*)type, l,
+            check_ambiguous(*pml, type, l,
                             method->linfo ? method->linfo->name :
                             anonymous_sym, method->linfo);
         }
@@ -1463,45 +1469,6 @@ void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li)
         char *fname = ((jl_sym_t*)li->file)->name;
         JL_PRINTF(s, " at %s:%d", fname, lno);
     }
-}
-
-static void print_methlist(jl_value_t *outstr, char *name, jl_methlist_t *ml)
-{
-    JL_STREAM *s = (JL_STREAM*)jl_iostr_data(outstr);
-    while (ml != JL_NULL) {
-        JL_PRINTF(s, "%s", name);
-        if (ml->tvars != jl_null) {
-            if (jl_is_typevar(ml->tvars)) {
-                JL_PUTC('{', s); jl_show(outstr, (jl_value_t*)ml->tvars);
-                JL_PUTC('}', s);
-            }
-            else {
-                jl_show_tuple(outstr, ml->tvars, '{', '}', 0);
-            }
-        }
-        jl_show(outstr, (jl_value_t*)ml->sig);
-        if (ml->func == jl_bottom_func)  {
-            // mark guard cache entries
-            JL_PRINTF(s, " *");
-        }
-        else {
-            jl_lambda_info_t *li = ml->func->linfo;
-            assert(li);
-            print_func_loc(s, li);
-        }
-        if (ml->next != JL_NULL)
-            JL_PRINTF(s, "\n");
-        ml = ml->next;
-    }
-}
-
-void jl_show_method_table(jl_value_t *outstr, jl_function_t *gf)
-{
-    char *name = jl_gf_name(gf)->name;
-    jl_methtable_t *mt = jl_gf_mtable(gf);
-    print_methlist(outstr, name, mt->defs);
-    //JL_PRINTF(JL_STDOUT, "\ncache:\n");
-    //print_methlist(outstr, name, mt->cache);
 }
 
 void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)

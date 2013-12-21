@@ -1,20 +1,5 @@
 ## floating-point functions ##
 
-abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
-abs(x::Float32) = box(Float32,abs_float(unbox(Float32,x)))
-
-isnan(x::FloatingPoint) = (x != x)
-isnan(x::Real) = isnan(float(x))
-isnan(x::Integer) = false
-
-isinf(x::FloatingPoint) = (abs(x) == Inf)
-isinf(x::Real) = isinf(float(x))
-isinf(x::Integer) = false
-
-isfinite(x::FloatingPoint) = (x-x == 0)
-isfinite(x::Real) = isfinite(float(x))
-isfinite(x::Integer) = true
-
 copysign(x::Float64, y::Float64) = box(Float64,copysign_float(unbox(Float64,x),unbox(Float64,y)))
 copysign(x::Float32, y::Float32) = box(Float32,copysign_float(unbox(Float32,x),unbox(Float32,y)))
 copysign(x::Float32, y::Real) = copysign(x, float32(y))
@@ -32,11 +17,6 @@ maxintfloat{T<:FloatingPoint}(x::T)  = maxintfloat(T)
 maxintfloat() = maxintfloat(Float64)
 
 isinteger(x::FloatingPoint) = (trunc(x)==x)&isfinite(x)
-
-## precision, as defined by the effective number of bits in the mantissa ##
-precision(::Float16) = 11
-precision(::Float32) = 24
-precision(::Float64) = 53
 
 num2hex(x::Float16) = hex(reinterpret(Uint16,x), 4)
 num2hex(x::Float32) = hex(box(Uint32,unbox(Float32,x)),8)

@@ -253,3 +253,12 @@ s = string(n)
 @test length(s) == 208988
 @test endswith(s, "359244926937501")
 @test beginswith(s, "316047687386689")
+
+# serialization (#5133)
+let
+    n = BigInt("359334085968622831041960188598043661065388726959079837")
+    b = IOBuffer()
+    serialize(b,n)
+    seek(b,0)
+    @test deserialize(b) == n
+end

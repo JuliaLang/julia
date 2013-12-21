@@ -41,7 +41,7 @@ end
 
 function DArray(init, dims, procs)
     if isempty(procs)
-        error("DArray: no processors!")
+        error("no processors")
     end
     DArray(init, dims, procs, defaultdist(dims,procs))
 end
@@ -195,7 +195,7 @@ end
 
 function reshape{T,S<:Array}(A::DArray{T,1,S}, d::Dims)
     if prod(d) != length(A)
-        error("reshape: invalid dimensions")
+        error("dimensions must be consistent with array size")
     end
     DArray(d) do I
         sz = map(length,I)
@@ -204,7 +204,7 @@ function reshape{T,S<:Array}(A::DArray{T,1,S}, d::Dims)
 
         B = Array(T,sz)
         nr = size(B,1)
-        sztail = size(B)[2:]
+        sztail = size(B)[2:end]
 
         for i=1:div(length(B),nr)
             i2 = ind2sub(sztail, i)

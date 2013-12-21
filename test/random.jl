@@ -6,10 +6,15 @@
 @test minimum([rand(int32(1):int32(7^7)) for i = 1:100000]) > 0
 @test(typeof(rand(false:true)) == Bool)
 
-for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128, Char, BigInt)
+for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128, Char, BigInt,
+	Float16, Float32, Float64, Rational{Int})
     r = rand(convert(T, 97):convert(T, 122))
     @test typeof(r) == T
     @test 97 <= r <= 122
+    r = rand(convert(T, 97):convert(T,2):convert(T, 122),2)[1]
+    @test typeof(r) == T
+    @test 97 <= r <= 122
+    @test mod(r,2)==1
 end
 
 if sizeof(Int32) < sizeof(Int)

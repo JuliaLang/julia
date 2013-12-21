@@ -45,7 +45,7 @@ function read_sub{T}(from::IOBuffer, a::Array{T}, offs, nel)
         throw(BoundsError())
     end
     if !isbits(T)
-        error("Read from IOBuffer only supports bits types or arrays of bits types; got "*string(T)*".")
+        error("read from IOBuffer only supports bits types or arrays of bits types; got "*string(T))
     end
     read(from, pointer(a, offs), nel*sizeof(T))
     return a
@@ -207,7 +207,7 @@ function write_sub{T}(to::IOBuffer, a::Array{T}, offs, nel)
         throw(BoundsError())
     end
     if !isbits(T)
-        error("Write to IOBuffer only supports bits types or arrays of bits types; got "*string(T)*".")
+        error("write to IOBuffer only supports bits types or arrays of bits types; got "*string(T))
     end
     write(to, pointer(a,offs), nel*sizeof(T))
 end

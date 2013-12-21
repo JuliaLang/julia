@@ -11,6 +11,16 @@ typealias Callable Union(Function,DataType)
 convert(T, x)               = convert_default(T, x, convert)
 convert(T::Tuple, x::Tuple) = convert_tuple(T, x, convert)
 
+ptr_arg_convert{T}(::Type{Ptr{T}}, x) = convert(T, x)
+ptr_arg_convert(::Type{Ptr{Void}}, x) = x
+
+# conversion used by ccall
+cconvert(T, x) = convert(T, x)
+# use the code in ccall.cpp to safely allocate temporary pointer arrays
+cconvert{T}(::Type{Ptr{Ptr{T}}}, a::Array) = a
+# TODO: for some reason this causes a strange type inference problem
+#cconvert(::Type{Ptr{Uint8}}, s::String) = bytestring(s)
+
 abstract IO
 
 type ErrorException <: Exception
@@ -59,6 +69,10 @@ type MethodError <: Exception
 end
 
 type EOFError <: Exception end
+
+type DimensionMismatch <: Exception
+    name::ASCIIString
+end
 
 type WeakRef
     value
@@ -128,6 +142,8 @@ function precompile(f, args::Tuple)
         ccall(:jl_compile_hint, Void, (Any, Any), f, args)
     end
 end
+
+esc(e::ANY) = Expr(:escape, e)
 
 macro boundscheck(yesno,blk)
     quote

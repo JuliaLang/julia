@@ -16,7 +16,7 @@ areal = randn(n,n)
 aimg  = randn(n,n) 
 breal = randn(n)
 bimg  = randn(n)
-for elty in (Float32, Float64, Complex64, Complex128)
+for elty in (Float32, Float64, Complex64, Complex128, Int)
     if elty == Complex64 || elty == Complex128
         a = complex(areal, aimg)
         b = complex(breal, bimg)
@@ -24,13 +24,18 @@ for elty in (Float32, Float64, Complex64, Complex128)
         a = areal
         b = breal
     end
-    a = convert(Matrix{elty}, a)
-    b = convert(Vector{elty}, b)
+    if elty != Int
+        a = convert(Matrix{elty}, a)
+        b = convert(Vector{elty}, b)
+    else
+        a = rand(1:100, n, n)
+        b = rand(1:100, n)
+    end
     asym = a' + a                  # symmetric indefinite
     apd  = a'*a                    # symmetric positive-definite
 
     # (Automatic) upper Cholesky factor
-    capd  = factorize(apd)              
+    capd  = factorize(apd)
     r     = capd[:U]
     @test_approx_eq r'*r apd
     @test_approx_eq b apd * (capd\b)
@@ -156,12 +161,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
     
     x = tril(a)\b
     @test_approx_eq tril(a)*x b
-
+    
     # Test null
     a15null = null(a[:,1:5]')
     @test rank([a[:,1:5] a15null]) == 10
-    @test_approx_eq_eps norm(a[:,1:5]'a15null) zero(elty) 2*n*eps(real(one(elty)))
-    @test_approx_eq_eps norm(a15null'a[:,1:5]) zero(elty) 2*n*eps(real(one(elty)))
+    @test_approx_eq_eps norm(a[:,1:5]'a15null) zero(elty) elty <: Union(Float32, Complex64) ? 1f-5 : 1e-13
+    @test_approx_eq_eps norm(a15null'a[:,1:5]) zero(elty) elty <: Union(Float32, Complex64) ? 1f-5 : 1e-13
     @test size(null(b), 2) == 0
 
     # Test pinv
@@ -336,6 +341,17 @@ A1 = randn(4,4) + im*randn(4,4)
 A2 = A1 + A1'
 @test_approx_eq expm(A2) expm(Hermitian(A2))
 
+# complex exponential (issue #5116)
+A = [0.  0.  0.  0.
+     0.  0. -im  0.
+     0. im   0.  0.
+     0.  0.  0.  0.]
+
+@test_approx_eq expm(A) [1 0                     0                    0
+                         0 1.543080634815244    -1.1752011936438016im 0
+                         0 1.1752011936438016im  1.543080634815244    0
+                         0 0                     0                    1]
+
 # matmul for types w/o sizeof (issue #1282)
 A = Array(Complex{Int},10,10)
 A[:] = complex(1,1)
@@ -344,6 +360,9 @@ A2 = A^2
 
 # basic tridiagonal operations
 n = 5
+
+srand(123)
+
 d = 1 + rand(n)
 dl = -rand(n-1)
 du = -rand(n-1)
@@ -355,10 +374,29 @@ U = randn(n,2)
 V = randn(2,n)
 C = randn(2,2)
 
-for elty in (Float32, Float64, Complex64, Complex128)
-    d = convert(Vector{elty}, d)
-    dl = convert(Vector{elty}, dl)
-    du = convert(Vector{elty}, du)
+for elty in (Float32, Float64, Complex64, Complex128, Int)
+    if elty == Int
+        srand(61516384)
+        d = rand(1:100, n)
+        dl = -rand(0:10, n-1)
+        du = -rand(0:10, n-1)
+        v = rand(1:100, n)
+        B = rand(1:100, n, 2)
+
+        # Woodbury
+        U = rand(1:100, n, 2)
+        V = rand(1:100, 2, n)
+        C = rand(1:100, 2, 2)
+    else 
+        d = convert(Vector{elty}, d)
+        dl = convert(Vector{elty}, dl)
+        du = convert(Vector{elty}, du)
+        v = convert(Vector{elty}, v)
+        B = convert(Matrix{elty}, B)
+        U = convert(Matrix{elty}, U)
+        V = convert(Matrix{elty}, V)
+        C = convert(Matrix{elty}, C)
+    end
     T = Tridiagonal(dl, d, du)
     @test size(T, 1) == n
     @test size(T) == (n, n)
@@ -380,18 +418,16 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test SymTridiagonal(d, dl) + Tridiagonal(du, d, du) == SymTridiagonal(2d, dl+du)
 
     # tridiagonal linear algebra
-    v = convert(Vector{elty}, v)
     @test_approx_eq T*v F*v
     invFv = F\v
     @test_approx_eq T\v invFv
     @test_approx_eq Base.solve(T,v) invFv
-    B = convert(Matrix{elty}, B)
     @test_approx_eq Base.solve(T, B) F\B
     Tlu = factorize(T)
     x = Tlu\v
     @test_approx_eq x invFv
     @test_approx_eq det(T) det(F)
-    
+
     # symmetric tridiagonal
     Ts = SymTridiagonal(d, dl)
     Fs = full(Ts)
@@ -409,14 +445,17 @@ for elty in (Float32, Float64, Complex64, Complex128)
     end
 
     # Woodbury
-    U = convert(Matrix{elty}, U)
-    V = convert(Matrix{elty}, V)
-    C = convert(Matrix{elty}, C)
     W = Woodbury(T, U, C, V)
     F = full(W)
     @test_approx_eq W*v F*v
-    @test_approx_eq W\v F\v
+    iFv = F\v
+    @test_approx_eq W\v iFv
     @test_approx_eq det(W) det(F)
+    iWv = similar(iFv)
+    if elty != Int
+        Base.LinAlg.solve!(iWv, W, v)
+        @test_approx_eq iWv iFv
+    end
 
     # Diagonal
     D = Diagonal(d)
@@ -447,17 +486,53 @@ for elty in (Float32, Float64, Complex64, Complex128)
     end
 
     # The determinant of a rotation matrix should always be 1.
-    for theta = convert(Vector{elty}, pi ./ [1:4])
-        R = [cos(theta) -sin(theta);
-             sin(theta) cos(theta)]
-        @test_approx_eq convert(elty, det(R)) one(elty)
-    end
+    if elty != Int
+        for theta = convert(Vector{elty}, pi ./ [1:4])
+            R = [cos(theta) -sin(theta);
+                 sin(theta) cos(theta)]
+            @test_approx_eq convert(elty, det(R)) one(elty)
+        end
 
     # issue 1490
     @test_approx_eq_eps det(ones(elty, 3,3)) zero(elty) 3*eps(real(one(elty)))
+    end
+end
+
+# Generic BLAS tests
+srand(100)
+# syr2k! and her2k!
+for elty in (Float32, Float64, Complex64, Complex128)
+    U = randn(5,2)
+    V = randn(5,2)
+    if elty == Complex64 || elty == Complex128
+        U = complex(U, U)
+        V = complex(V, V)
+    end
+    U = convert(Array{elty, 2}, U)
+    V = convert(Array{elty, 2}, V)
+    @test_approx_eq tril(LinAlg.BLAS.syr2k('L','N',U,V)) tril(U*V.' + V*U.')
+    @test_approx_eq triu(LinAlg.BLAS.syr2k('U','N',U,V)) triu(U*V.' + V*U.')
+    @test_approx_eq tril(LinAlg.BLAS.syr2k('L','T',U,V)) tril(U.'*V + V.'*U)
+    @test_approx_eq triu(LinAlg.BLAS.syr2k('U','T',U,V)) triu(U.'*V + V.'*U)        
+end
+
+for elty in (Complex64, Complex128)
+    U = randn(5,2)
+    V = randn(5,2)
+    if elty == Complex64 || elty == Complex128
+        U = complex(U, U)
+        V = complex(V, V)
+    end
+    U = convert(Array{elty, 2}, U)
+    V = convert(Array{elty, 2}, V)
+    @test_approx_eq tril(LinAlg.BLAS.her2k('L','N',U,V)) tril(U*V' + V*U')
+    @test_approx_eq triu(LinAlg.BLAS.her2k('U','N',U,V)) triu(U*V' + V*U')
+    @test_approx_eq tril(LinAlg.BLAS.her2k('L','C',U,V)) tril(U'*V + V'*U)
+    @test_approx_eq triu(LinAlg.BLAS.her2k('U','C',U,V)) triu(U'*V + V'*U)        
 end
 
 # LAPACK tests
+srand(123)
 Ainit = randn(5,5)
 for elty in (Float32, Float64, Complex64, Complex128)
     # syevr!
@@ -498,11 +573,8 @@ for elty in (Float32, Float64)
     B = convert(Array{elty, 1}, Binit)
     zero, infinity = convert(elty, 0), convert(elty, Inf)
     #This tests eigenvalue and eigenvector computations using stebz! and stein!
-    (w, iblock, isplit, info) = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,A,B) 
-
-    (evecs, ifail, info)=LinAlg.LAPACK.stein!(A,B,w)
-    @test info==0
-    @test all(ifail .== 0)
+    w, iblock, isplit = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,A,B) 
+    evecs = LinAlg.LAPACK.stein!(A,B,w)
     
     (e, v)=eig(SymTridiagonal(A,B))
     @test_approx_eq e w
@@ -515,11 +587,8 @@ for elty in (Float32, Float64)
     end
 
     #Test stein! call using iblock and isplit
-    (w, iblock, isplit, info) = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,A,B) 
-    @test info==0
-    (evecs, ifail, info)=LinAlg.LAPACK.stein!(A, B, w, iblock, isplit)
-    @test info==0
-    @test all(ifail .== 0)
+    w, iblock, isplit = LinAlg.LAPACK.stebz!('V','B',-infinity,infinity,0,0,zero,A,B) 
+    evecs = LinAlg.LAPACK.stein!(A, B, w, iblock, isplit)
     test_approx_eq_vecs(v, evecs)
 end
 

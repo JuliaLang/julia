@@ -53,11 +53,40 @@
 @test min(1.0,1) == 1
 
 # lexing typemin(Int64)
-@test_throws parse("9223372036854775808")
-@test_throws parse("-(9223372036854775808)")
-@test_throws parse("-9223372036854775808^1")
 @test (-9223372036854775808)^1 == -9223372036854775808
 @test [1 -1 -9223372036854775808] == [1 -1 typemin(Int64)]
+
+# large integer literals
+@test isa(-170141183460469231731687303715884105729,BigInt)
+@test isa(-170141183460469231731687303715884105728,Int128)
+@test isa(-9223372036854775809,Int128)
+@test isa(-9223372036854775808,Int64)
+@test isa(9223372036854775807,Int64)
+@test isa(9223372036854775808,Int128)
+@test isa(170141183460469231731687303715884105727,Int128)
+@test isa(170141183460469231731687303715884105728,BigInt)
+
+@test isa(0170141183460469231731687303715884105728,BigInt)
+
+# exponentiating with a negative base
+@test -3^2 == -9
+@test -9223372036854775808^2 == -(9223372036854775808^2)
+@test -10000000000000000000^2 == -(10000000000000000000^2)
+@test -170141183460469231731687303715884105728^2 ==
+    -(170141183460469231731687303715884105728^2)
+
+# numeric literal coefficients
+let x = 10
+    @test 2x == 20
+    @test 9223372036854775808x == 92233720368547758080
+    @test 170141183460469231731687303715884105728x ==
+        1701411834604692317316873037158841057280
+end
+
+@test 2(10) == 20
+@test 9223372036854775808(10) == 92233720368547758080
+@test 170141183460469231731687303715884105728(10) ==
+    1701411834604692317316873037158841057280
 
 # definition and printing of extreme integers
 @test bin(typemin(Uint8)) == "0"
@@ -1093,7 +1122,22 @@ end
 @test mod(int64(2),typemax(Int64)) == 2
 
 # things related to floating-point epsilon
+@test eps() == eps(Float64)
+@test eps(Float64) == eps(1.0)
+@test eps(Float64) == eps(1.5)
+@test eps(Float32) == eps(1f0)
 @test eps(float(0)) == 5e-324
+@test eps(-float(0)) == 5e-324
+@test eps(nextfloat(float(0))) == 5e-324
+@test eps(-nextfloat(float(0))) == 5e-324
+@test eps(realmin()) == 5e-324
+@test eps(-realmin()) == 5e-324
+@test eps(realmax()) ==  2.0^(1023-52)
+@test eps(-realmax()) ==  2.0^(1023-52)
+@test isnan(eps(NaN))
+@test isnan(eps(Inf))
+@test isnan(eps(-Inf))
+
 @test .1+.1+.1 != .3
 # TODO: uncomment when isapprox() becomes part of base.
 # @test isapprox(.1+.1+.1, .3)
@@ -1162,22 +1206,22 @@ end
 @test iround(Int, 0.5) == 1
 @test iround(Int, prevfloat(0.5)) == 0
 @test iround(Int, -0.5) == -1
-@test iround(Int, prevfloat(-0.5)) == 0
+@test iround(Int, nextfloat(-0.5)) == 0
 
 @test iround(Uint, 0.5) == 1
 @test iround(Uint, prevfloat(0.5)) == 0
 @test_throws iround(Uint, -0.5)
-@test iround(Uint, prevfloat(-0.5)) == 0
+@test iround(Uint, nextfloat(-0.5)) == 0
 
 @test iround(Int, 0.5f0) == 1
 @test iround(Int, prevfloat(0.5f0)) == 0
 @test iround(Int, -0.5f0) == -1
-@test iround(Int, prevfloat(-0.5f0)) == 0
+@test iround(Int, nextfloat(-0.5f0)) == 0
 
 @test iround(Uint, 0.5f0) == 1
 @test iround(Uint, prevfloat(0.5f0)) == 0
 @test_throws iround(Uint, -0.5f0)
-@test iround(Uint, prevfloat(-0.5f0)) == 0
+@test iround(Uint, nextfloat(-0.5f0)) == 0
 
 # numbers that can't be rounded by trunc(x+0.5)
 @test iround(Int64, 2.0^52 + 1) == 4503599627370497
@@ -1192,12 +1236,20 @@ end
 @test isa(0b00000000000000000,Uint32)
 @test isa(0b00000000000000000000000000000000,Uint32)
 @test isa(0b000000000000000000000000000000000,Uint64)
+@test isa(0b0000000000000000000000000000000000000000000000000000000000000000,Uint64)
+@test isa(0b00000000000000000000000000000000000000000000000000000000000000000,Uint128)
+@test isa(0b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,Uint128)
+@test isa(0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,BigInt)
 @test isa(0b11111111,Uint8)
 @test isa(0b111111111,Uint16)
 @test isa(0b1111111111111111,Uint16)
 @test isa(0b11111111111111111,Uint32)
 @test isa(0b11111111111111111111111111111111,Uint32)
 @test isa(0b111111111111111111111111111111111,Uint64)
+@test isa(0b1111111111111111111111111111111111111111111111111111111111111111,Uint64)
+@test isa(0b11111111111111111111111111111111111111111111111111111111111111111,Uint128)
+@test isa(0b11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111,Uint128)
+@test isa(0b111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111,BigInt)
 
 # octal literals
 
@@ -1212,12 +1264,46 @@ end
 @test isa(0o000000,Uint32)
 @test isa(0o0000000000,Uint32)
 @test isa(0o00000000000,Uint64)
+@test isa(0o000000000000000000000,Uint64)
+@test isa(0o0000000000000000000000,Uint128)
+@test isa(0o000000000000000000000000000000000000000000,Uint128)
+@test isa(0o0000000000000000000000000000000000000000000,BigInt)
 @test isa(0o11,Uint8)
 @test isa(0o111,Uint8)
 @test isa(0o11111,Uint16)
 @test isa(0o111111,Uint16)
 @test isa(0o1111111111,Uint32)
 @test isa(0o11111111111,Uint32)
+@test isa(0o111111111111111111111,Uint64)
+@test isa(0o1111111111111111111111,Uint64)
+@test isa(0o111111111111111111111111111111111111111111,Uint128)
+@test isa(0o1111111111111111111111111111111111111111111,Uint128)
+@test isa(0o11111111111111111111111111111111111111111111,BigInt)
+@test 0o4000000000000000000000000000000000000000000 ==
+    340282366920938463463374607431768211456
+
+# hexadecimal literals
+
+@test isa(0x00,Uint8)
+@test isa(0x000,Uint16)
+@test isa(0x0000,Uint16)
+@test isa(0x00000,Uint32)
+@test isa(0x00000000,Uint32)
+@test isa(0x000000000,Uint64)
+@test isa(0x0000000000000000,Uint64)
+@test isa(0x00000000000000000,Uint128)
+@test isa(0x00000000000000000000000000000000,Uint128)
+@test isa(0x000000000000000000000000000000000,BigInt)
+@test isa(0x11,Uint8)
+@test isa(0x111,Uint16)
+@test isa(0x1111,Uint16)
+@test isa(0x11111,Uint32)
+@test isa(0x11111111,Uint32)
+@test isa(0x111111111,Uint64)
+@test isa(0x1111111111111111,Uint64)
+@test isa(0x11111111111111111,Uint128)
+@test isa(0x11111111111111111111111111111111,Uint128)
+@test isa(0x111111111111111111111111111111111,BigInt)
 
 # "-" is not part of unsigned literals
 @test -0x10 == -(0x10)
@@ -1226,6 +1312,21 @@ end
 @test -0x0010 == -(0x0010)
 @test -0b0010 == -(0b0010)
 @test -0o0010 == -(0o0010)
+@test -0x00000000000000001 == -(0x00000000000000001)
+@test -0o0000000000000000000001 == -(0o0000000000000000000001)
+@test -0b00000000000000000000000000000000000000000000000000000000000000001 ==
+    -(0b00000000000000000000000000000000000000000000000000000000000000001)
+@test -0x000000000000000000000000000000001 == -(0x000000000000000000000000000000001)
+@test -0o0000000000000000000000000000000000000000001 ==
+    -(0o0000000000000000000000000000000000000000001)
+@test -0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001 ==
+    -(0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001)
+
+@test isa(-0x00,Uint)
+@test isa(-0x0000000000000000,Uint64)
+@test isa(-0x00000000000000000,Uint128)
+@test isa(-0x00000000000000000000000000000000,Uint128)
+@test isa(-0x000000000000000000000000000000000,BigInt)
 
 # float32 literals
 @test isa(1f0,Float32)
@@ -1284,6 +1385,8 @@ end
 @test 0xf.1P1 === 30.125
 @test 0xf.fP0 === 15.9375
 @test 0xf.fP1 === 31.875
+
+@test -0x1.0p2 === -4.0
 
 # eps / realmin / realmax
 @test 0x1p-52 == eps()
@@ -1562,4 +1665,44 @@ end
 for i = -100:100
     @test nextpow2(i) == nextpow2(big(i))
     @test prevpow2(i) == prevpow2(big(i))
+end
+
+@test nextpow(2,1) == 1
+@test prevpow(2,1) == 1
+@test nextpow(3,243) == 243
+@test prevpow(3,243) == 243
+@test nextpow(3,241) == 243
+@test prevpow(3,244) == 243
+for a = -1:1
+    @test_throws nextpow(a, 2)
+    @test_throws prevpow(a, 2)
+end
+@test_throws nextpow(2,0)
+@test_throws prevpow(2,0)
+
+@test nextprod([2,3,5],30) == 30
+@test nextprod([2,3,5],33) == 36
+
+@test nextfloat(0.0) == 5.0e-324
+@test prevfloat(0.0) == -5.0e-324
+@test nextfloat(-0.0) == 5.0e-324
+@test prevfloat(-0.0) == -5.0e-324
+@test nextfloat(-5.0e-324) == 0.0
+@test prevfloat(5.0e-324) == 0.0
+@test nextfloat(-1.0) > -1.0
+@test prevfloat(-1.0) < -1.0
+@test nextfloat(nextfloat(0.0),-2) == -5.0e-324
+@test nextfloat(prevfloat(0.0), 2) ==  5.0e-324
+
+@test eps(realmax(Float64)) == 1.99584030953472e292
+@test eps(-realmax(Float64)) == 1.99584030953472e292
+
+# modular multiplicative inverses of odd numbers via exponentiation
+
+for T = (Uint8,Int8,Uint16,Int16,Uint32,Int32,Uint64,Int64,Uint128,Int128)
+    for n = 1:2:1000
+        @test convert(T,n*(n^typemax(T))) == one(T)
+        n = rand(T) | one(T)
+        @test convert(T,n*(n^typemax(T))) == one(T)
+    end
 end

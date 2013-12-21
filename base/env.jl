@@ -11,7 +11,7 @@ function _jl_win_getenv(s::String,len::Uint32)
     val=zeros(Uint8,len-1)
     ret=ccall(:GetEnvironmentVariableA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32),s,val,len)
     if ret==0||ret!=len-1 #Trailing 0 is only included on first call to GetEnvA
-        error("getenv: unknown system error: ", s, len, ret)
+        error("unknown system error: ", s, len, ret)
     end
     val
 end
@@ -20,18 +20,18 @@ end
 
 macro accessEnv(var,errorcase)
 @unix_only return quote
-     val=_getenv($var)
+     val=_getenv($(esc(var)))
      if val == C_NULL
-        $errorcase
+        $(esc(errorcase))
      end
      bytestring(val)
 end
 @windows_only return quote
-    len=_getenvlen($var)
+    len=_getenvlen($(esc(var)))
     if len == 0
-        $errorcase
+        $(esc(errorcase))
     end
-    bytestring(_jl_win_getenv($var,len))
+    bytestring(_jl_win_getenv($(esc(var)),len))
 end
 end
 

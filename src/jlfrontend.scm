@@ -182,19 +182,18 @@
 
 (define (jl-parser-next)
   (skip-ws-and-comments (ts:port current-token-stream))
-  (let ((e (parser-wrap (lambda ()
-			  (julia-parse current-token-stream)))))
-    (if (eof-object? e)
-	e
-	(parser-wrap
-	 (lambda ()
-	   (cons (+ (input-port-line (ts:port current-token-stream))
-		    (if (eqv? (peek-token current-token-stream) #\newline)
-			-1 0))
-		 (if (and (pair? e) (or (eq? (car e) 'error)
-					(eq? (car e) 'continue)))
-		     e
-		     (expand-toplevel-expr e))))))))
+  (let ((lineno (input-port-line (ts:port current-token-stream))))
+    (let ((e (parser-wrap (lambda ()
+			    (julia-parse current-token-stream)))))
+      (if (eof-object? e)
+	  e
+	  (cons lineno
+		(parser-wrap
+		 (lambda ()
+		   (if (and (pair? e) (or (eq? (car e) 'error)
+					  (eq? (car e) 'continue)))
+		       e
+		       (expand-toplevel-expr e)))))))))
 
 ; expand a piece of raw surface syntax to an executable thunk
 (define (jl-expand-to-thunk expr)

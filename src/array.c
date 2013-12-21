@@ -24,7 +24,7 @@ int jl_array_store_unboxed(jl_value_t *el_type)
 // at this size use malloc
 #define MALLOC_THRESH 1048576
 
-#ifdef _P64
+#if defined(_P64) && defined(UINT128MAX)
 typedef __uint128_t wideint_t;
 #else
 typedef uint64_t wideint_t;

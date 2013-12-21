@@ -132,11 +132,11 @@ USE_COPY_STACKS = 1
 # Compiler specific stuff
 
 ifeq ($(CC), clang)
-USEGCC = 0
-USECLANG = 1
+USEGCC ?= 0
+USECLANG ?= 1
 else
-USEGCC = 1
-USECLANG = 0
+USEGCC ?= 1
+USECLANG ?= 0
 endif
 
 STDLIBCPP_FLAG = 
@@ -167,6 +167,9 @@ FC = $(CROSS_COMPILE)gfortran
 ifeq ($(USEGCC),1)
 ifeq ($(USE_LIBCPP),1)
 $(error USE_LIBCPP only supported with clang. Try setting USE_LIBCPP=0)
+endif
+ifeq ($(SANITIZE),1)
+$(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
 endif
 CC = $(CROSS_COMPILE)gcc
 CXX = $(CROSS_COMPILE)g++
@@ -210,6 +213,12 @@ ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
 endif
 
+ifeq ($(SANITIZE),1)
+JCXXFLAGS += -fsanitize=address -mllvm -asan-stack=0
+JCFLAGS += -fsanitize=address -mllvm -asan-stack=0
+LDFLAGS += -fsanitize=address
+endif
+
 # ===========================================================================
 
 BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
@@ -239,6 +248,9 @@ ifneq ($(ARCH), ppc64)
 endif
 endif
 
+ifeq ($(OS),WINNT)
+LIBUNWIND=
+else
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 ifneq ($(OS),Darwin)
 LIBUNWIND=-lunwind-generic -lunwind
@@ -251,11 +263,14 @@ else
 LIBUNWIND=$(BUILD)/$(JL_LIBDIR)/libunwind-generic.a $(BUILD)/$(JL_LIBDIR)/libunwind.a
 endif
 endif
+endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
 LLVM_CONFIG ?= llvm-config$(EXE)
+LLVM_LLC ?= llc$(EXE)
 else
 LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config$(EXE)
+LLVM_LLC=$(LLVMROOT)/bin/llc$(EXE)
 endif
 
 ifeq ($(USE_SYSTEM_READLINE), 1)

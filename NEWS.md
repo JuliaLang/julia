@@ -1,3 +1,75 @@
+Julia v0.3.0 Release Notes
+==========================
+
+New language features
+---------------------
+
+  * Greatly enhanced performance for passing and returning tuples ([#4042]).
+
+  * Tuples (of integers, symbols, or bools) can now be used as type
+    parameters ([#5164]).
+
+New library functions
+---------------------
+
+  * `GitHub` module for interacting with the GitHub API
+
+Library improvements
+--------------------
+
+  * Multi-key dictionaries: `D[x,y...]` is now a synonym for `D[(x,y...)]`
+    for associations `D` ([#4870]).
+
+  * `big` is now vectorized ([#4766])
+
+  * `push!` and `unshift!` can push multiple arguments ([#4782])
+
+  * `consume(p)` extended to `consume(p, args...)`, allowing it
+    to optionally pass `args...` back to the producer ([#4775]).
+
+  * `nextpow` and `prevpow` now return the `a^n` values instead of the
+    exponent `n` ([#4819])
+
+  * `Dict(kv)` constructor for any iterator on (key,value) pairs.
+
+  * Overflow detection in `parseint` ([#4874]).
+
+  * New Pkg.submit(pkg[,commit]) function to automatically submit
+    a Github pull request to the package author.
+
+  * Triple-quoted regex strings, `r"""..."""` ([#4934]).
+
+  * New string type, `UTF16String` ([#4930]).
+
+  * `CharString` is renamed to `UTF32String` ([#4943]).
+
+  * Faster sparse `kron` ([#4958]).
+
+  * `rand` now supports arbitrary `Ranges` arguments ([#5059]).
+
+  * `mod2pi` function ([#4799], [#4862]).
+
+Deprecated or removed
+---------------------
+
+  * `dense` is deprecated in favor of `full` ([#4759])
+
+  * The `Stat` type is renamed `StatStruct` ([#4670])
+
+  * `set_rounding`, `get_rounding` and `with_rounding` now take an additional
+    argument specifying the floating point type to which they apply. The old
+    behaviour and `[get/set/with]_bigfloat_rounding` functions are deprecated ([#5007])
+
+[#4775]: https://github.com/JuliaLang/julia/issues/4775
+[#4870]: https://github.com/JuliaLang/julia/issues/4870
+[#4766]: https://github.com/JuliaLang/julia/issues/4766
+[#4782]: https://github.com/JuliaLang/julia/issues/4782
+[#4759]: https://github.com/JuliaLang/julia/issues/4759
+[#4819]: https://github.com/JuliaLang/julia/issues/4819
+[#4670]: https://github.com/JuliaLang/julia/issues/4670
+[#5007]: https://github.com/JuliaLang/julia/issues/5007
+
+
 Julia v0.2.0 Release Notes
 ==========================
 
@@ -283,7 +355,7 @@ Deprecated or removed
     `lcm`, `gcdx`, and `powermod` were fixed ([#4811]).
 
 Miscellaneous changes
---------------------------------
+---------------------
 
   * `julia-release-*` executables renamed to `julia-*`,
     and `libjulia-release` renamed to `libjulia` ([#4177]).

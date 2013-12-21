@@ -122,16 +122,17 @@ promote(x) = (x,)
 function promote{T,S}(x::T, y::S)
     (convert(promote_type(T,S),x), convert(promote_type(T,S),y))
 end
-function promote{T,S,U}(x::T, y::S, z::U)
-    R = promote_type(promote_type(T,S), U)
-    convert((R...), (x, y, z))
+promote_typeof(x) = typeof(x)
+promote_typeof(x, xs...) = promote_type(typeof(x), promote_typeof(xs...))
+function promote(x, y, z)
+    (convert(promote_typeof(x,y,z), x),
+     convert(promote_typeof(x,y,z), y),
+     convert(promote_typeof(x,y,z), z))
 end
-function promote{T,S}(x::T, y::S, zs...)
-    R = promote_type(T,S)
-    for z in zs
-        R = promote_type(R,typeof(z))
-    end
-    convert((R...), tuple(x,y,zs...))
+function promote(x, y, zs...)
+    tuple(convert(promote_typeof(x,y,zs...), x),
+          convert(promote_typeof(x,y,zs...), y),
+          convert((promote_typeof(x,y,zs...)...), zs)...)
 end
 # TODO: promote{T}(x::T, ys::T...) here to catch all circularities?
 
@@ -143,6 +144,15 @@ end
 # happens, and +(promote(x,y)...) is called again, causing a stack
 # overflow.
 promote_result{T<:Number,S<:Number}(::Type{T},::Type{S},::Type{None},::Type{None}) =
+    promote_to_super(T, S, typejoin(T,S))
+
+# promote numeric types T and S to typejoin(T,S) if T<:S or S<:T
+# for example this makes promote_type(Integer,Real) == Real without
+# promoting arbitrary pairs of numeric types to Number.
+promote_to_super{T<:Number          }(::Type{T}, ::Type{T}, ::Type{T}) = T
+promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{T}) = T
+promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type{S}) = S
+promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
     error("no promotion exists for ", T, " and ", S)
 
 +(x::Number, y::Number) = +(promote(x,y)...)

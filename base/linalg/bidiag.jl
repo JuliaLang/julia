@@ -8,14 +8,12 @@ type Bidiagonal{T} <: AbstractMatrix{T}
     ev::Vector{T} # sub/super diagonal
     isupper::Bool # is upper bidiagonal (true) or lower (false)
     function Bidiagonal{T}(dv::Vector{T}, ev::Vector{T}, isupper::Bool)
-        if length(ev)!=length(dv)-1 error("dimension mismatch") end
-        new(dv, ev, isupper)
+        length(ev)==length(dv)-1 ? new(dv, ev, isupper) : throw(DimensionMismatch(""))
     end
 end
 
 Bidiagonal{T<:BlasFloat}(dv::Vector{T}, ev::Vector{T}, isupper::Bool)=Bidiagonal{T}(copy(dv), copy(ev), isupper)
 Bidiagonal{T}(dv::Vector{T}, ev::Vector{T}) = error("Did you want an upper or lower Bidiagonal? Try again with an additional true (upper) or false (lower) argument.")
-
 
 #Convert from BLAS uplo flag to boolean internal
 function Bidiagonal{T<:BlasFloat}(dv::Vector{T}, ev::Vector{T}, uplo::BlasChar)
@@ -24,7 +22,7 @@ function Bidiagonal{T<:BlasFloat}(dv::Vector{T}, ev::Vector{T}, uplo::BlasChar)
     elseif uplo=='L'
         isupper = false
     else
-        error(string("Bidiagonal can only be upper 'U' or lower 'L' but you said '", uplo, "'"))
+        error("Bidiagonal can only be upper 'U' or lower 'L' but you said '$uplo''")
     end
     Bidiagonal{T}(copy(dv), copy(ev), isupper)
 end
@@ -75,51 +73,33 @@ ctranspose(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), !M.isupper)
 function +(A::Bidiagonal, B::Bidiagonal)
     if A.isupper==B.isupper
         Bidiagonal(A.dv+B.dv, A.ev+B.ev, A.isupper)
-    else #return tridiagonal
-        if A.isupper #&& !B.isupper
-            Tridiagonal(B.ev,A.dv+B.dv,A.ev)
-        else
-            Tridiagonal(A.ev,A.dv+B.dv,B.ev)
-        end
+    else
+        apply(Tridiagonal, A.isupper ? (B.ev,A.dv+B.dv,A.ev) : (A.ev,A.dv+B.dv,B.ev))
     end
 end
 
 function -(A::Bidiagonal, B::Bidiagonal)
     if A.isupper==B.isupper
         Bidiagonal(A.dv-B.dv, A.ev-B.ev, A.isupper)
-    else #return tridiagonal
-        if A.isupper #&& !B.isupper
-            Tridiagonal(-B.ev,A.dv-B.dv,A.ev)
-        else
-            Tridiagonal(A.ev,A.dv-B.dv,-B.ev)
-        end
+    else
+        apply(Tridiagonal, A.isupper ? (-B.ev,A.dv-B.dv,A.ev) : (A.ev,A.dv-B.dv,-B.ev))
     end
 end
 
 -(A::Bidiagonal)=Bidiagonal(-A.dv,-A.ev)
-#XXX Returns dense matrix but really should be banded
-*(A::Bidiagonal, B::Bidiagonal) = full(A)*full(B)
 *(A::Bidiagonal, B::Number) = Bidiagonal(A.dv*B, A.ev*B, A.isupper)
 *(B::Number, A::Bidiagonal) = A*B
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.isupper)
 ==(A::Bidiagonal, B::Bidiagonal) = (A.dv==B.dv) && (A.ev==B.ev) && (A.isupper==B.isupper)
 
-*(A::SymTridiagonal, B::Bidiagonal) = full(A)*full(B)
-*(A::Bidiagonal, B::SymTridiagonal) = full(A)*full(B)
-*(A::Tridiagonal, B::Bidiagonal) = full(A)*full(B)
-*(A::Bidiagonal, B::Tridiagonal) = full(A)*full(B)
+SpecialMatrix = Union(Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal)
+*(A::SpecialMatrix, B::SpecialMatrix)=full(A)*full(B)
 
 # solver uses tridiagonal gtsv! 
 function \{T<:BlasFloat}(M::Bidiagonal{T}, rhs::StridedVecOrMat{T})
-    if stride(rhs, 1) == 1
-        z = zeros(size(M, 1) - 1)
-        if M.isupper
-            return LAPACK.gtsv!(z, copy(M.dv), copy(M.ev), copy(rhs))
-        else
-            return LAPACK.gtsv!(copy(M.ev), copy(M.dv), z, copy(rhs))
-        end
-    end
-    solve(M, rhs)  # use the Julia "fallback"
+    stride(rhs, 1)==1 || solve(M, rhs) #generic fallback
+    z = zeros(size(M, 1) - 1)
+    apply(LAPACK.gtsv!, M.isupper ? (z, copy(M.dv), copy(M.ev), copy(rhs)) : (copy(M.ev), copy(M.dv), z, copy(rhs)))
 end
 
 #Wrap bdsdc to compute singular values and vectors

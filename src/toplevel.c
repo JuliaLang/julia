@@ -39,6 +39,9 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 {
     assert(ex->head == module_sym);
     jl_module_t *last_module = jl_current_module;
+    if (jl_array_len(ex->args) != 3 || !jl_is_expr(jl_exprarg(ex,2))) {
+        jl_error("syntax: malformed module expression");
+    }
     int std_imports = (jl_exprarg(ex,0)==jl_true);
     jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, 1);
     if (!jl_is_symbol(name)) {
@@ -215,6 +218,7 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
         m = jl_current_module;
         while (1) {
             var = (jl_sym_t*)jl_cellref(args,i);
+            assert(jl_is_symbol(var));
             i++;
             if (var != dot_sym) {
                 if (i == jl_array_len(args))
@@ -309,7 +313,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         jl_module_t *m = eval_import_path(ex->args);
         if (m==NULL) return jl_nothing;
         jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
-        assert(jl_is_symbol(name));
+        if (!jl_is_symbol(name))
+            jl_error("syntax: malformed \"importall\" statement");
         m = (jl_module_t*)jl_eval_global_var(m, name);
         if (!jl_is_module(m))
 	    jl_errorf("invalid %s statement: name exists but does not refer to a module", ex->head->name);
@@ -321,7 +326,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         jl_module_t *m = eval_import_path(ex->args);
         if (m==NULL) return jl_nothing;
         jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
-        assert(jl_is_symbol(name));
+        if (!jl_is_symbol(name))
+            jl_error("syntax: malformed \"using\" statement");
         jl_module_t *u = (jl_module_t*)jl_eval_global_var(m, name);
         if (jl_is_module(u)) {
             jl_module_using(jl_current_module, u);
@@ -336,15 +342,18 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         jl_module_t *m = eval_import_path(ex->args);
         if (m==NULL) return jl_nothing;
         jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
-        assert(jl_is_symbol(name));
+        if (!jl_is_symbol(name))
+            jl_error("syntax: malformed \"import\" statement");
         jl_module_import(jl_current_module, m, name);
         return jl_nothing;
     }
 
     if (ex->head == export_sym) {
         for(size_t i=0; i < jl_array_len(ex->args); i++) {
-            jl_module_export(jl_current_module,
-                             (jl_sym_t*)jl_cellref(ex->args, i));
+            jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, i);
+            if (!jl_is_symbol(name))
+                jl_error("syntax: malformed \"export\" statement");
+            jl_module_export(jl_current_module, name);
         }
         return jl_nothing;
     }
@@ -380,6 +389,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     if (jl_is_expr(ex) && ex->head == thunk_sym) {
         thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
         assert(jl_is_lambda_info(thk));
+        assert(jl_is_expr(thk->ast));
         ewc = jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast), fast);
         if (!ewc) {
             if (jl_lam_vars_captured((jl_expr_t*)thk->ast)) {
@@ -466,8 +476,6 @@ jl_value_t *jl_parse_eval_all(char *fname)
     return result;
 }
 
-int asprintf(char **strp, const char *fmt, ...);
-
 jl_value_t *jl_load(const char *fname)
 {
     if (jl_current_module == jl_base_module) {
@@ -550,26 +558,20 @@ static int type_contains(jl_value_t *ty, jl_value_t *x)
 
 void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
-jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
+DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f)
 {
     // argtypes is a tuple ((types...), (typevars...))
     jl_tuple_t *t = (jl_tuple_t*)jl_t1(argtypes);
     argtypes = (jl_tuple_t*)jl_t0(argtypes);
-    jl_value_t *gf;
-    if (bnd) {
-        //jl_declare_constant(bnd);
-        if (bnd->value != NULL && !bnd->constp) {
-            jl_errorf("cannot define function %s; it already has a value",
-                      bnd->name->name);
-        }
-        bnd->constp = 1;
+    jl_value_t *gf=NULL;
+
+    if (bnd && bnd->value != NULL && !bnd->constp) {
+        jl_errorf("cannot define function %s; it already has a value",
+                  bnd->name->name);
     }
-    if (*bp == NULL) {
-        gf = (jl_value_t*)jl_new_generic_function(name);
-        *bp = gf;
-    }
-    else {
+
+    if (*bp != NULL) {
         gf = *bp;
         if (!jl_is_gf(gf)) {
             if (jl_is_datatype(gf) &&
@@ -581,20 +583,14 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
             }
         }
     }
-    JL_GC_PUSH1(&gf);
-    assert(jl_is_function(f));
-    assert(jl_is_tuple(argtypes));
-    assert(jl_is_tuple(t));
 
-    for(size_t i=0; i < jl_tuple_len(argtypes); i++) {
+    size_t na = jl_tuple_len(argtypes);
+    for(size_t i=0; i < na; i++) {
         jl_value_t *elt = jl_tupleref(argtypes,i);
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_lambda_info_t *li = f->linfo;
             jl_errorf("invalid type for argument %s in method definition for %s at %s:%d",
-                      jl_is_expr(li->ast) ?
-                      ((jl_sym_t*)jl_arrayref(jl_lam_args((jl_expr_t*)li->ast),i))->name :
-                      "?",
-                      name->name, li->file->name, li->line);
+                      jl_lam_argname(li,i)->name, name->name, li->file->name, li->line);
         }
     }
 
@@ -610,6 +606,19 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
             JL_PRINTF(JL_STDERR, ".\nThe method will not be callable.\n");
         }
     }
+
+    if (bnd) {
+        bnd->constp = 1;
+    }
+    if (*bp == NULL) {
+        gf = (jl_value_t*)jl_new_generic_function(name);
+        *bp = gf;
+    }
+    JL_GC_PUSH1(&gf);
+    assert(jl_is_function(f));
+    assert(jl_is_tuple(argtypes));
+    assert(jl_is_tuple(t));
+
     jl_add_method((jl_function_t*)gf, argtypes, f, t);
     if (jl_boot_file_loaded &&
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {

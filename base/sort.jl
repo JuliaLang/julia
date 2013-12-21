@@ -372,44 +372,32 @@ isnan(o::DirectOrdering, x::Floats) = (x!=x)
 isnan(o::Perm, i::Int) = isnan(o.order,o.data[i])
 
 function nans2left!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
-    hi < lo && return lo, hi
     i = lo
-    @inbounds while (i < hi) & isnan(o, v[i])
+    @inbounds while i <= hi && isnan(o,v[i])
         i += 1
     end
-    r = 0
-    @inbounds while true
-        if isnan(o, v[i])
-            i += 1
-        else
-            r += 1
-        end
-        j = i + r
-        j > hi && break
-        if r > 0
+    j = i + 1
+    @inbounds while j <= hi
+        if isnan(o,v[j])
             v[i], v[j] = v[j], v[i]
+            i += 1
         end
+        j += 1
     end
     return i, hi
 end
 function nans2right!(v::AbstractVector, o::Ordering, lo::Int=1, hi::Int=length(v))
-    hi < lo && return lo, hi
     i = hi
-    @inbounds while (i > lo) & isnan(o, v[i])
+    @inbounds while lo <= i && isnan(o,v[i])
         i -= 1
     end
-    r = 0
-    @inbounds while true
-        if isnan(o, v[i])
-            i -= 1
-        else
-            r += 1
-        end
-        j = i - r
-        j < lo && break
-        if r > 0
+    j = i - 1
+    @inbounds while lo <= j
+        if isnan(o,v[j])
             v[i], v[j] = v[j], v[i]
+            i -= 1
         end
+        j -= 1
     end
     return lo, i
 end
@@ -427,13 +415,9 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     @inbounds while true
         while i <= j &&  issignleft(o,v[i]); i += 1; end
         while i <= j && !issignleft(o,v[j]); j -= 1; end
-        if i <= j
-            v[i], v[j] = v[j], v[i]
-            i += 1
-            j -= 1
-        else
-            break
-        end
+        i <= j || break
+        v[i], v[j] = v[j], v[i]
+        i += 1; j -= 1
     end
     sort!(v, lo, j,  a, left(o))
     sort!(v, i,  hi, a, right(o))

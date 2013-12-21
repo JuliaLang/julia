@@ -122,6 +122,13 @@ sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
 @test strides(sA) == (2,9,30)
 @test sA[:] == A[1:2:3, 1:3:5, 1:2:8][:]
 
+# sub logical indexing #4763
+A = sub([1:10], 5:8)
+@test A[A.<7] == [5, 6]
+B = reshape(1:16, 4, 4)
+sB = sub(B, 2:3, 2:3)
+@test sB[sB.>8] == [10, 11]
+
 # slice
 A = reshape(1:120, 3, 5, 8)
 sA = slice(A, 2, :, 1:8)
@@ -197,14 +204,19 @@ let
 end
 
 ## arrays as dequeues
-l = {1,2,3}
-push!(l,8)
+l = {1}
+push!(l,2,3,8)
 @test l[1]==1 && l[2]==2 && l[3]==3 && l[4]==8
 v = pop!(l)
 @test v == 8
 v = pop!(l)
 @test v == 3
 @test length(l)==2
+unshift!(l,4,7,5)
+@test l[1]==4 && l[2]==7 && l[3]==5 && l[4]==1 && l[5]==2
+v = shift!(l)
+@test v == 4
+@test length(l)==4
 
 # concatenation
 @test isequal([ones(2,2)  2*ones(2,1)], [1. 1 2; 1 1 2])
@@ -296,7 +308,7 @@ for i = 1:3
 end
 
 #permutes correctly
-@test isequal(z,permutedims(y,(3,1,2)))
+@test isequal(z,permutedims(y,[3,1,2]))
 
 # of a subarray
 a = rand(5,5)
@@ -352,7 +364,7 @@ end
 for i = 1 : 3
     a = rand(200, 300)
 
-    @test isequal(a', permutedims(a, (2, 1)))
+    @test isequal(a', permutedims(a, [2, 1]))
 end
 
 ## cumsum, cummin, cummax
@@ -616,6 +628,12 @@ begin
     b = mapslices(sum, ones(2,3,4), [1,2])
     @test size(b) === (1,1,4)
     @test all(b.==6)
+
+    # issue #5141
+    c1 = mapslices(x-> maximum(-x), a, [])
+    @test c1 == -a
+    c2 = mapslices(x-> maximum(-x), a, [1,2])
+    @test c2 == maximum(-a)
 end
 
 
@@ -639,6 +657,17 @@ a = [1,3,5]
 b = [3,1,2]
 a[b] = a
 @test a == [3,5,1]
+
+# lexicographic comparison
+@test lexcmp([1.0], [1]) == 0
+@test lexcmp([1], [1.0]) == 0
+@test lexcmp([1, 1], [1, 1]) == 0
+@test lexcmp([1, 1], [2, 1]) == -1
+@test lexcmp([2, 1], [1, 1]) == 1
+@test lexcmp([1, 1], [1, 2]) == -1
+@test lexcmp([1, 2], [1, 1]) == 1
+@test lexcmp([1], [1, 1]) == -1
+@test lexcmp([1, 1], [1]) == 1
 
 # sort on arrays
 begin

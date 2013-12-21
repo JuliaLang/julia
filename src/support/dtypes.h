@@ -1,12 +1,15 @@
 #ifndef DTYPES_H
 #define DTYPES_H
 
-#include <inttypes.h>
 #include <stddef.h>
 #include <stddef.h> // double include of stddef.h fixes #3421
 #include <stdint.h>
 
 #include "platform.h"
+
+#if !defined(_OS_WINDOWS_)
+#include <inttypes.h>
+#endif
 
 #if defined(_OS_WINDOWS_)
 
@@ -53,10 +56,10 @@
 
 #ifdef _OS_WINDOWS_
 #define STDCALL __stdcall
-# ifdef IMPORT_EXPORTS
-#  define DLLEXPORT __declspec(dllimport)
-# else
+# ifdef LIBRARY_EXPORTS
 #  define DLLEXPORT __declspec(dllexport)
+# else
+#  define DLLEXPORT __declspec(dllimport)
 # endif
 #else
 #define STDCALL
@@ -112,9 +115,12 @@
 #define LLT_REALLOC(p,n) realloc((p),(n))
 #define LLT_FREE(x) free(x)
 
-#if defined(_COMPILER_INTEL_) && defined(_OS_WINDOWS_)
-# define STATIC_INLINE static
-# define INLINE
+#if defined(_OS_WINDOWS_) && defined(_COMPILER_INTEL_)
+#  define STATIC_INLINE static
+#  define INLINE
+#elif defined(_OS_WINDOWS_) && defined(_COMPILER_MICROSOFT_)
+#  define STATIC_INLINE static __inline
+#  define INLINE __inline
 #else
 # define STATIC_INLINE static inline
 # define INLINE inline

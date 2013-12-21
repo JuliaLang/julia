@@ -24,8 +24,6 @@ macro gensym(names...)
     return blk
 end
 
-esc(e::ANY) = Expr(:escape, e)
-
 ## expressions ##
 
 splicedexpr(hd::Symbol, args::Array{Any,1}) = (e=Expr(hd); e.args=args; e)
@@ -74,7 +72,7 @@ function find_vars(e, lst)
         else
             push!(lst, e)
         end
-    elseif isa(e,Expr)
+    elseif isa(e,Expr) && e.head !== :quote && e.head !== :top
         for x in e.args
             find_vars(x,lst)
         end

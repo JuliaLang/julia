@@ -219,7 +219,7 @@ DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
     return jv;
 }
 
-jl_tuple_t *jl_tuple(size_t n, ...)
+DLLEXPORT jl_tuple_t *jl_tuple(size_t n, ...)
 {
     va_list args;
     if (n == 0) return jl_null;
@@ -345,6 +345,8 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->roots = NULL;
     li->functionObject = NULL;
     li->cFunctionObject = NULL;
+    li->functionID = 0;
+    li->cFunctionID = 0;
     li->specTypes = NULL;
     li->inferred = 0;
     li->inInference = 0;
