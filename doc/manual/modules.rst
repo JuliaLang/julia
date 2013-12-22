@@ -19,6 +19,8 @@ not meant to be run, but is shown for illustrative purposes::
     module MyModule
     using Lib
     
+    import BigLib: bar, baz
+    
     export MyType, foo
     
     type MyType
@@ -46,6 +48,9 @@ encountered that has no definition in the current module, the system
 will search for it in ``Lib`` and import it if it is found there.
 This means that all uses of that global within the current module will
 resolve to the definition of that variable in ``Lib``.
+
+The statement ``import BigLib: bar, baz`` means that the names `bar` and `baz`
+from the `BigLib` module will be available as needed (but no other names).
 
 Once a variable is imported this way (or, equivalently, with the ``import``
 keyword), a module may not create its own variable with the same name.
