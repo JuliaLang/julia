@@ -310,8 +310,10 @@ end
 isqrt(x::Integer) = oftype(x, trunc(sqrt(x)))
 
 function isqrt(x::Union(Int64,Uint64,Int128,Uint128))
+    x==0 && return x
     s = oftype(x, trunc(sqrt(x)))
     # fix with a Newton iteration, since conversion to float discards
     # too many bits.
-    (s + div(x,s)) >> 1
+    s = (s + div(x,s)) >> 1
+    s*s > x ? s-1 : s
 end
