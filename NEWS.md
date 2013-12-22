@@ -9,6 +9,8 @@ New language features
   * Tuples (of integers, symbols, or bools) can now be used as type
     parameters ([#5164]).
 
+  * `import module: name1, name2, ...` ([#5214]).
+
 New library functions
 ---------------------
 
