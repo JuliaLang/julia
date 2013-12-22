@@ -2195,14 +2195,14 @@ Mathematical Operators
    Boolean not
 
 .. _&&:
-.. function:: &&(x, y)
+.. function:: x && y
 
-   Boolean and
+   Short-circuiting boolean and
 
 .. _||:
-.. function:: ||(x, y)
+.. function:: x || y
 
-   Boolean or
+   Short-circuiting boolean or
 
 .. function:: A_ldiv_Bc(a,b)
 
