@@ -152,14 +152,16 @@ for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
                   (:sech, :cosh), (:csch, :sinh), (:coth, :tanh),
                   (:secd, :cosd), (:cscd, :sind), (:cotd, :tand))
     @eval begin
-        ($finv)(z) = 1 ./ (($f)(z))
+        ($finv){T<:Number}(z::T) = one(T) / (($f)(z))
+        ($finv){T<:Number}(z::AbstractArray{T}) = one(T) ./ (($f)(z))
     end
 end
 
 for (fa, fainv) in ((:asec, :acos), (:acsc, :asin), (:acot, :atan),
                     (:asech, :acosh), (:acsch, :asinh), (:acoth, :atanh))
     @eval begin
-        ($fa)(y) = ($fainv)(1 ./ y)
+        ($fa){T<:Number}(y::T) = ($fainv)(one(T) / y)
+        ($fa){T<:Number}(y::AbstractArray{T}) = ($fainv)(one(T) ./ y)
     end
 end
 
