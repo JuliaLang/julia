@@ -240,21 +240,6 @@ end
 
 log(b,x) = log(x)./log(b)
 
-hypot(x::Real, y::Real) = hypot(promote(x,y)...)
-function hypot{T<:Real}(x::T, y::T)
-    x = abs(x)
-    y = abs(y)
-    if x < y
-        x, y = y, x
-    end
-    if x == 0
-        r = y/one(x)
-    else
-        r = y/x
-    end
-    x * sqrt(one(r)+r*r)
-end
-
 # type specific math functions
 
 const libm = Base.libm_name
@@ -307,6 +292,21 @@ round(x::Float32) = ccall((:roundf, libm), Float32, (Float32,), x)
 
 floor(x::Float32) = ccall((:floorf, libm), Float32, (Float32,), x)
 @vectorize_1arg Real floor
+
+hypot(x::Real, y::Real) = hypot(promote(float(x), float(y))...)
+function hypot{T<:FloatingPoint}(x::T, y::T) 
+    x = abs(x)
+    y = abs(y)
+    if x < y
+        x, y = y, x
+    end
+    if x == 0
+        r = y/one(x)
+    else
+        r = y/x
+    end
+    x * sqrt(one(r)+r*r)
+end
 
 atan2(x::Real, y::Real) = atan2(promote(float(x),float(y))...)
 atan2{T<:FloatingPoint}(x::T, y::T) = Base.no_op_err("atan2", T)
