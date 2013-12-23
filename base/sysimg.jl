@@ -105,6 +105,7 @@ import .Grisu.print_shortest
 include("printf.jl")
 importall .Printf
 include("file.jl")
+include("methodshow.jl")
 
 # core math functions
 include("floatfuncs.jl")
