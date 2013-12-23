@@ -593,20 +593,7 @@ function setindex!(A::Array, x, I::Union(Real,AbstractArray)...)
             assign_cache = Dict()
         end
         X = x
-        nel = 1
-        for idx in I
-            nel *= length(idx)
-        end
-        if length(X) != nel
-            throw(DimensionMismatch(""))
-        end
-        if ndims(X) > 1
-            for i = 1:length(I)
-                if size(X,i) != length(I[i])
-                    throw(DimensionMismatch(""))
-                end
-            end
-        end
+        setindex_shape_check(X, I...)
         gen_array_index_map(assign_cache, storeind -> quote
                               A[$storeind] = X[refind]
                               refind += 1
