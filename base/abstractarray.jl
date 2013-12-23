@@ -1616,20 +1616,26 @@ function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
     # determine result size and allocate
     Rsize = copy(dimsA)
     # TODO: maybe support removing dimensions
-    if isempty(size(r1))
-        r1 = [r1]
+    ndimsr = ndims(r1)
+    if ndimsr == 0
+        Rsize[dims] = 1
+        R = similar([r1], tuple(Rsize...))
+    else
+        Rsize[dims] = [size(r1)...; ones(Int,max(0,length(dims)-ndimsr))]
+        R = similar(r1, tuple(Rsize...))
     end
-    Rsize[dims] = [size(r1)...; ones(Int,max(0,length(dims)-ndims(r1)))]
-    R = similar(r1, tuple(Rsize...))
 
     ridx = cell(ndims(R))
     fill!(ridx, 1)
     for d in dims
         ridx[d] = 1:size(R,d)
     end
-
-    R[ridx...] = r1
-
+    if ndimsr < 2
+        R[ridx...] = r1
+    else 
+        R[ridx...] = r1[:]
+    end
+       
     first = true
     cartesianmap(itershape) do idxs...
         if first
@@ -1638,13 +1644,16 @@ function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
             ia = [idxs...]
             idx[otherdims] = ia
             ridx[otherdims] = ia
-            R[ridx...] = f(reshape(A[idx...], Asliceshape))
+            if ndimsr < 2
+                R[ridx...] = f(reshape(A[idx...], Asliceshape))
+            else
+                R[ridx...] = f(reshape(A[idx...], Asliceshape))[:]
+            end
         end
     end
 
     return R
 end
-
 
 ## 1 argument
 function map_to!(f::Callable, first, dest::AbstractArray, A::AbstractArray)
