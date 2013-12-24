@@ -1667,6 +1667,7 @@ function interrupt(pids::AbstractVector=workers())
 end
 
 
+# FIXME : For other workers that connect to us, we have to query socket itself to get the other endpoint - TBD...
 function islocalwrkr(id)
     if (myid() == id) 
         return true

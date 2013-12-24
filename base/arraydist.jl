@@ -1,7 +1,5 @@
 # ArrayDist holds the chunks of an array distribution across workers
 type ArrayDist{N}
-    dims::NTuple{N,Int}
-    
     # ppmap[i]==p ⇒ processor p has piece i
     ppmap::Vector{Int}
 
@@ -19,7 +17,7 @@ type ArrayDist{N}
         assert(size(chunks) == size(indexes))
         assert(length(chunks) == length(ppmap))
     
-        new(dims, ppmap, indexes, cuts, chunks)
+        new(ppmap, indexes, cuts, chunks)
     end
 end
 
@@ -109,10 +107,10 @@ dimdist(ad::ArrayDist) = size(ad.chunks)   # number of parts in each dimension
 chunk_ref(ad::ArrayDist, i::Int) = ad.chunks[i]
 chunk_ref(ad::ArrayDist, i...) = ad.chunks[i...]
 
-function myindexes(ad::ArrayDist)
+function myindexes{N}(ad::ArrayDist{N})
     lpidx = localpartindex(ad)
     if lpidx == 0
-        ntuple(length(ad.dims), i->1:0)
+        ntuple(N, i->1:0)
     else
         ad.indexes[lpidx]
     end
@@ -120,14 +118,14 @@ end
 
 
 # find which piece holds index (I...)
-function locate(ad::ArrayDist, I::Int...)
-    ntuple(length(ad.dims), i->searchsortedlast(ad.cuts[i], I[i]))
+function locate{N}(ad::ArrayDist{N}, I::Int...)
+    ntuple(N, i->searchsortedlast(ad.cuts[i], I[i]))
 end
 
-function localindex_rr(ad::ArrayDist, I::(Int...))
+function localindex_rr{N}(ad::ArrayDist{N}, I::(Int...))
     chidx = locate(ad, I...)
     idxs = ad.indexes[chidx...]
     chunk_rr = ad.chunks[chidx...]
-    chunk_rr, ntuple(length(ad.dims), i->(I[i]-first(idxs[i])+1))
+    chunk_rr, ntuple(N, i->(I[i]-first(idxs[i])+1))
 end
 

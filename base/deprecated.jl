@@ -290,6 +290,7 @@ export ComplexPair
 @deprecate parse(str::String, pos::Int, greedy::Bool, raise::Bool) parse(str,pos,greedy=greedy,raise=raise)
 @deprecate parse(str::String, pos::Int, greedy::Bool) parse(str,pos,greedy=greedy)
 
+
 function amap(f::Function, A::AbstractArray, axis::Integer)
     depwarn("amap is deprecated, use mapslices(f, A, dims) instead", :amap)
     dimsA = size(A)
@@ -367,6 +368,18 @@ const CharString = UTF32String
 @deprecate get_bigfloat_rounding() get_rounding(BigFloat)
 @deprecate with_bigfloat_rounding(f::Function, r::RoundingMode) with_rounding(f::Function, BigFloat, r)
 eval(Sys, :(@deprecate shlib_list dllist))
+
+@deprecate dzeros(args...) zeros(DArray, args...)
+@deprecate dzeros(d::Int...) zeros(DArray, d...)
+@deprecate dones(args...) ones(DArray, args...)
+@deprecate dones(d::Int...) ones(DArray, d...)
+@deprecate dfill(v, args...) fill(v, DArray, args...)
+@deprecate dfill(v, d::Int...) fill(v, DArray, d...)
+@deprecate drand(args...) rand(DArray, args...)
+@deprecate drand(d::Int...) rand(DArray, d...)
+@deprecate drandn(args...) randn(DArray, args...)
+@deprecate drandn(d::Int...) randn(DArray, d...)
+
 
 # 0.3 discontinued functions
 

@@ -1,4 +1,4 @@
-type SharedArray{T,N,A} <: AbstractArray{T,N}
+type SharedArray{T,N} <: AbstractArray{T,N}
     dims::NTuple{N,Int}
     ad::ArrayDist{N}
     
@@ -14,8 +14,8 @@ function SharedArray(T::Type, dims, dprocs, dist; init=false)
 
     @windows_only error(" SharedArray is not available on Windows yet.")
     
-    # Ensure that all processes are on localhost
-    if !(all(x->islocalwrkr(x), [dprocs, myid()]))
+    # Ensure that all processes are on localhost. Currently only checking this if pid is 1.
+    if (myid() == 1) && !(all(x->islocalwrkr(x), [dprocs, myid()]))
         error("SharedArray requires all requested processes to be on the same machine.")
     end
 
@@ -46,8 +46,8 @@ function SharedArray(T::Type, dims, dprocs, dist; init=false)
         
         
         # get the typeof the chunks 
-        A = typeof(sub(Array(T, ntuple(N,i->0)), ntuple(N, i->1:0)))
-        sa = SharedArray{T,N,A}(dims, ad, local_shmmap, localpartindex(ad))
+#        A = typeof(sub(Array(T, ntuple(N,i->0)), ntuple(N, i->1:0)))
+        sa = SharedArray{T,N}(dims, ad, local_shmmap, localpartindex(ad))
 
         # if present init function is called on each of the parts
         @sync begin 
@@ -75,39 +75,48 @@ function SharedArray(T, dims, procs; kwargs...)
 end
 SharedArray(T, dims; kwargs...) = SharedArray(T, dims, workers()[1:min(nworkers(),maximum(dims))]; kwargs...)
 
-# new DArray similar to an existing one
+# new SharedArray similar to an existing one
 SharedArray{T}(sa::SharedArray{T}; kwargs...) = SharedArray(T, size(sa), procs(sa), [dimdist(sa.ad)...]; kwargs...)
 
 length(sa::SharedArray) = prod(sa.dims)
 size(sa::SharedArray) = sa.dims
 procs(sa::SharedArray) = procs(sa.ad)
 
-chunktype{T,N,A}(sa::SharedArray{T,N,A}) = A
-
 localpartindex(sa::SharedArray) = localpartindex(sa.ad)
 
-function localpart{T,N,A}(sa::SharedArray{T,N,A})
+function localpart{T,N}(sa::SharedArray{T,N})
     if sa.local_idx == 0
         sub(Array(T, ntuple(N,i->0)), ntuple(N, i->1:0))
     else
-        fetch(chunk_ref(sa.ad, sa.local_idx))::A
+        fetch(chunk_ref(sa.ad, sa.local_idx))
     end
 end
 myindexes(sa::SharedArray) = myindexes(sa.ad)
 locate(sa::SharedArray, I::Int...) = locate(sa.ad, I...)
 
 ## convenience constructors ##
+for (arrtype) in (:zero, :one, :inf, :nan)
+    f = symbol(string(arrtype, "s"))
+    @eval begin
+        ($f)(::Type{SharedArray}, d::Int...) = ($f)(SharedArray, Float64, d)
+        ($f)(::Type{SharedArray}, T::DataType, d::Int...) = ($f)(SharedArray, T, d)
+        
+        ($f)(::Type{SharedArray}, args...) = ($f)(SharedArray, Float64, args...)
+        ($f)(::Type{SharedArray}, T::DataType, args...) = SharedArray(T, args...; init = S->fill!(localpart(S), ($arrtype)(T)))
+    end
+end
 
-sharedzeros(args...) = SharedArray(Float64, args...; init = S->fill!(localpart(S), 0.0))
-sharedzeros(d::Int...) = sharedzeros(d)
-sharedones(args...) = SharedArray(Float64, args...; init = S->fill!(localpart(S), 1.0))
-sharedones(d::Int...) = sharedones(d)
-sharedfill(v, args...) = SharedArray(typeof(v), args...; init = S->fill!(localpart(S), v))
-sharedfill(v, d::Int...) = sharedfill(v, d)
-sharedrand(args...)  = SharedArray(Float64, args...; init = S->fill!(localpart(S), rand()))
-sharedrand(d::Int...) = sharedrand(d)
-sharedrandn(args...) = SharedArray(Float64, args...; init = S->fill!(localpart(S), randn()))
-sharedrandn(d::Int...) = sharedrandn(d)
+rand(::Type{SharedArray}, I::(Int...)) = rand(SharedArray, Float64, I)
+rand(::Type{SharedArray}, T::DataType, args...) = SharedArray(T, args...; init = S->map!((x)->rand(T), localpart(S)))
+rand(::Type{SharedArray}, R::Range1, args...) = SharedArray(Int, args...; init = S->map!((x)->rand(R), localpart(S)))
+rand(::Type{SharedArray}, args...) = rand(SharedArray, Float64, args...)
+
+fill(v, ::Type{SharedArray}, args...) = SharedArray(typeof(v), args...; init = S->fill!(localpart(S), v))
+fill(v, ::Type{SharedArray}, d::Int...) = fill(v, SharedArray, d)
+
+randn(::Type{SharedArray}, args...) = SharedArray(Float64, args...; init = S-> map!((x)->randn(), localpart(S)))
+randn(::Type{SharedArray}, d::Int...) = randn(SharedArray, d)
+
 ## conversions ##
 
 
@@ -132,7 +141,7 @@ function serialize(s, sa::SharedArray)
     end
 end
 
-function deserialize{T,N,A}(s, t::Type{SharedArray{T,N,A}})
+function deserialize{T,N}(s, t::Type{SharedArray{T,N}})
     sa = invoke(deserialize, (Any, DataType), s, t)
     
     sa.local_idx = localpartindex(sa)
@@ -156,6 +165,25 @@ getindex(sa::SharedArray, x::AbstractArray) = getindex(sa.local_shmmap, x)
 getindex(sa::SharedArray, args...) = getindex(sa.local_shmmap, args...)
 setindex!(sa::SharedArray, args...) = (setindex!(sa.local_shmmap, args...); sa)
 
+function print_shmem_limits()
+    try
+        @linux_only pfx = "kernel"
+        @osx_only pfx = "kern.sysv"
+
+        shmmax_MB = div(int(split(readall(readsfrom(`sysctl $(pfx).shmmax`)[1]))[end]), 1024*1024)
+        page_size = int(split(readall(readsfrom(`getconf PAGE_SIZE`)[1]))[end])
+        shmall_MB = div(int(split(readall(readsfrom(`sysctl $(pfx).shmall`)[1]))[end]) * page_size, 1024*1024)
+        
+        println("System max size of single shmem segment(MB) : ", shmmax_MB, 
+            "\nSystem max size of all shmem segments(MB) : ", shmall_MB,
+            "\nRequested size(MB) : ", div(prod(dims)*sizeof(T), 1024*1024),
+            "\nPlease ensure requested size is within system limits.",
+            "\nIf not, increase system limits and try again."
+        )
+    catch e
+        ; # Ignore any errors in this... 
+    end
+end
 
 # utilities
 function shm_mmap_array(T, dims, shm_seg_name, mode)
@@ -181,20 +209,7 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
         
         A = mmap_array(T, dims, s, 0, grow=false)
     catch e
-        @linux_only pfx = "kernel"
-        @osx_only pfx = "kern.sysv"
-        
-        shmmax_MB = div(int(split(readall(readsfrom(`sysctl $(pfx).shmmax`)[1]))[end]), 1024*1024)
-        page_size = int(split(readall(readsfrom(`getconf PAGE_SIZE`)[1]))[end])
-        shmall_MB = div(int(split(readall(readsfrom(`sysctl $(pfx).shmall`)[1]))[end]) * page_size, 1024*1024)
-        
-        println("System max size of single shmem segment(MB) : ", shmmax_MB, 
-            "\nSystem max size of all shmem segments(MB) : ", shmall_MB,
-            "\nRequested size(MB) : ", div(prod(dims)*sizeof(T), 1024*1024),
-            "\nPlease ensure requested size is within system limits.",
-            "\nIf not, increase system limits and try again."
-        )
-        
+        print_shmem_limits()
         rethrow()
         
     finally

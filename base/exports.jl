@@ -1149,11 +1149,6 @@ export
     localpart,
     myindexes,
     procs,
-    sharedfill,
-    sharedones,
-    sharedrand,
-    sharedrandn,
-    sharedzeros,
     share,
 
     

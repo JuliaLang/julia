@@ -69,17 +69,29 @@ locate(d::DArray, I::Int...) = locate(d.ad, I...)
 chunk{T,N,A}(d::DArray{T,N,A}, i...) = fetch(chunk_ref(d.ad, i...))::A
 
 ## convenience constructors ##
+for (f) in (:zeros, :ones, :nans, :infs)
+    @eval begin
+        ($f)(::Type{DArray}, T::DataType, args...) = DArray(I->($f)(T, map(length,I)), args...)
+        ($f)(::Type{DArray}, args...) = ($f)(DArray, Float64, args...)
+        ($f)(::Type{DArray}, T::DataType, d::Int...) = ($f)(DArray, T, d)
+        ($f)(::Type{DArray}, d::Int...) = ($f)(DArray, Float64, d)
+    end
+end
 
-dzeros(args...) = DArray(I->zeros(map(length,I)), args...)
-dzeros(d::Int...) = dzeros(d)
-dones(args...) = DArray(I->ones(map(length,I)), args...)
-dones(d::Int...) = dones(d)
-dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)
-dfill(v, d::Int...) = dfill(v, d)
-drand(args...)  = DArray(I->rand(map(length,I)), args...)
-drand(d::Int...) = drand(d)
-drandn(args...) = DArray(I->randn(map(length,I)), args...)
-drandn(d::Int...) = drandn(d)
+# rand variant with range
+rand(::Type{DArray}, TR::Union(DataType, Range1), d::Int...) = rand(DArray, TR, d)
+rand(::Type{DArray}, TR::Union(DataType, Range1), args...) = DArray(I->rand(TR, map(length,I)), args...)
+rand(::Type{DArray}, I::(Int...)) = rand(DArray, Float64, I)
+rand(::Type{DArray}, args...) = rand(DArray, Float64, args...)
+rand(::Type{DArray}, d::Int...) = rand(DArray, Float64, d)
+
+fill(v, ::Type{DArray}, args...) = DArray(I->fill(v, map(length,I)), args...)
+fill(v, ::Type{DArray}, d::Int...) = fill(v, DArray, d)
+
+randn(::Type{DArray}, args...) = DArray(I->randn(map(length,I)), args...)
+randn(::Type{DArray}, d::Int...) = randn(DArray, d)
+
+
 ## conversions ##
 
 
