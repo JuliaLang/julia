@@ -84,11 +84,14 @@ function factor{T<:Integer}(n::T)
     local s::T, p::T
     s = isqrt(n)
     for p in PRIMES
-        p <= s || break
+        if p > s
+            h[n] = 1
+            return h
+        end
         if n % p == 0
             while n % p == 0
                 h[p] = get(h,p,0)+1
-                n = div(n,p)
+                n = oftype(n, div(n,p))
             end
             n == 1 && return h
             s = isqrt(n)
@@ -99,7 +102,7 @@ function factor{T<:Integer}(n::T)
         if n % p == 0
             while n % p == 0
                 h[p] = get(h,p,0)+1
-                n = div(n,p)
+                n = oftype(n, div(n,p))
             end
             if n == 1
                 return h
