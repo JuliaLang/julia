@@ -1661,11 +1661,19 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
 {
     jl_typestack_t top;
     size_t i;
-    if (n == 0) return (jl_value_t*)t;
+    if (n == 0) return t;
     if (jl_is_typevar(t)) {
         for(i=0; i < n; i++) {
-            if (env[i*2] == t)
-                return (jl_value_t*)env[i*2+1];
+            if (env[i*2] == t) {
+                jl_value_t *val = env[i*2+1];
+                if (!jl_is_typevar(val) && !jl_subtype(val, t, 0)) {
+                    jl_type_error_rt("type parameter",
+                                     ((jl_tvar_t*)t)->name->name,
+                                     ((jl_tvar_t*)t)->ub,
+                                     val);
+                }
+                return val;
+            }
         }
         return (jl_value_t*)t;
     }
