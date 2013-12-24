@@ -1596,6 +1596,10 @@ end
 @test !isprime(0xffffffffffffffc7)
 @test !isprime(0xffffffffffffffc9)
 
+# issue #5210
+@test prod([ k^v for (k,v) in factor(typemax(Uint32)) ]) == typemax(Uint32)
+@test prod([ k^v for (k,v) in factor(typemax(Int8)) ]) == typemax(Int8)
+
 # rational-exponent promotion rules (issue #3155):
 @test 2.0f0^(1//3) == 2.0f0^(1.0f0/3)
 @test 2^(1//3) == 2^(1/3)
