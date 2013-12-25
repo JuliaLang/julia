@@ -332,7 +332,7 @@ function init_head_sched()
 end
 
 function init_profiler()
-    # Use a max size of 1M profile samples, and fire timer evey 1ms
+    # Use a max size of 1M profile samples, and fire timer every 1ms
     Profile.init(1_000_000, 0.001)
 end
 
@@ -375,7 +375,7 @@ function _start()
         init_load_path()
         (quiet,repl,startup,color_set,history) = process_options(ARGS)
         global _use_history = history
-        repl && startup && load_juliarc()
+        startup && load_juliarc()
 
         if repl
             if !isa(STDIN,TTY)
