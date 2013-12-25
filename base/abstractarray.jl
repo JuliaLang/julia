@@ -1495,21 +1495,22 @@ end
 #        Analytic-Computational Methods in Applied Mathematics (2000).
 #
 
-function sum_pairwise(a::AbstractArray, ifirst::Int, ilast::Int, bsiz::Int)
-    # bsiz: maximum block size
-
-    if ifirst + bsiz >= ilast
-        sum_seq(a, ifirst, ilast)
-    else
-        imid = ifirst + ((ilast - ifirst) >> 1)
-        sum_pairwise(a, ifirst, imid, bsiz) + sum_pairwise(a, imid+1, ilast, bsiz)
-    end
-end
-
 # Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
 const PAIRWISE_SUM_BLOCKSIZE = 1024
 
-sum(a::AbstractArray) = sum_pairwise(a, 1, length(a), PAIRWISE_SUM_BLOCKSIZE)
+function sum_pairwise(a::AbstractArray, ifirst::Int, ilast::Int)
+    # bsiz: maximum block size
+
+    if ifirst + PAIRWISE_SUM_BLOCKSIZE >= ilast
+        sum_seq(a, ifirst, ilast)
+    else
+        imid = (ifirst + ilast) >>> 1
+        sum_pairwise(a, ifirst, imid) + sum_pairwise(a, imid+1, ilast)
+    end
+end
+
+sum(a::AbstractArray) = sum_pairwise(a, 1, length(a))
+sum{T<:Integer}(a::AbstractArray{T}) = sum_seq(a, 1, length(a))
 
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
