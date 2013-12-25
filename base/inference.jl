@@ -750,6 +750,9 @@ function abstract_eval_arg(a::ANY, vtypes::ANY, sv::StaticVarInfo)
     if isa(a,Symbol) || isa(a,SymbolNode)
         t = typeintersect(t,Any)  # remove Undef
     end
+    if isa(t,TypeVar) && t.lb == None && isleaftype(t.ub)
+        t = t.ub
+    end
     return t
 end
 
