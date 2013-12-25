@@ -4830,7 +4830,8 @@ popdisplay(d::Display)
    Seed the RNG with a \"seed\", which may be an unsigned integer or a
    vector of unsigned integers. \"seed\" can even be a filename, in
    which case the seed is read from a file. If the argument \"rng\" is
-   not provided, the default global RNG is seeded.
+   not provided, the default global RNG and the default BigRNG are
+   seeded.
 
 "),
 
@@ -4842,9 +4843,24 @@ popdisplay(d::Display)
 
 "),
 
+("Random Numbers","Base","BigRNG","BigRNG([seed])
+
+   Create a \"BigRNG\" RNG object, used exclusively to generate random
+   BigInts and BigFloats. Different RNG objects can have their own
+   seeds, which may be useful for generating different streams of
+   random numbers.
+
+"),
+
 ("Random Numbers","Base","rand","rand()
 
-   Generate a \"Float64\" random number uniformly in [0,1)
+   Generate a \"Float64\" random number uniformly in [0,1).
+
+"),
+
+("Random Numbers","Base","rand","rand(BigFloat)
+
+   Generate a \"BigFloat\" random number uniformly in [0,1).
 
 "),
 
@@ -4864,9 +4880,24 @@ popdisplay(d::Display)
 
 "),
 
+("Random Numbers","Base","rand","rand(BigFloat, rng::AbstractRNG[, dims...])
+
+   Generate a random \"BigFloat\" number or array of the size
+   specified by dims, using the specified RNG object. Currently,
+   \"BigRNG\" is the only available Random Number Generator (RNG) for
+   BigFloats, which may be seeded using srand.
+
+"),
+
 ("Random Numbers","Base","rand","rand(dims or [dims...])
 
-   Generate a random \"Float64\" array of the size specified by dims
+   Generate a random \"Float64\" array of the size specified by dims.
+
+"),
+
+("Random Numbers","Base","rand","rand(BigFloat, dims or [dims...])
+
+   Generate a random \"BigFloat\" array of the size specified by dims.
 
 "),
 
@@ -4907,10 +4938,25 @@ popdisplay(d::Display)
 
 "),
 
+("Random Numbers","Base","randn","randn(BigFloat, dims or [dims...])
+
+   Generate a normally-distributed random BigFloat with mean 0 and
+   standard deviation 1. Optionally generate an array of normally-
+   distributed random BigFloats.
+
+"),
+
 ("Random Numbers","Base","randn!","randn!(A::Array{Float64, N})
 
    Fill the array A with normally-distributed (mean 0, standard
    deviation 1) random numbers. Also see the rand function.
+
+"),
+
+("Random Numbers","Base","randn!","randn!(A::Array{BigFloat, N})
+
+   Fill the array A with normally-distributed (mean 0, standard
+   deviation 1) random BigFloats. Also see the rand function.
 
 "),
 

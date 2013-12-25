@@ -17,7 +17,8 @@ import
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         serialize, deserialize, inf, nan, hash, cbrt, typemax, typemin,
-        realmin, realmax, get_rounding, set_rounding
+        realmin, realmax, get_rounding, set_rounding,
+        rand, rand!, randn, randn!
 
 import Base.Math.lgamma_r
 
@@ -731,5 +732,42 @@ function hash(x::BigFloat)
     end
     h
 end
+
+# RNG-related functions
+function rand(::Type{BigFloat}, randstate::BigRNG)
+    z = BigFloat()
+    ccall((:mpfr_urandom,:libmpfr), Int32,
+          (Ptr{BigFloat}, Ptr{BigRNG}, Int32),
+           &z, &randstate, ROUNDING_MODE[end])
+    z
+end
+rand(::Type{BigFloat}) = rand(BigFloat, Base.Random.DEFAULT_BIGRNG)
+
+function rand!(r::BigRNG, A::Array{BigFloat})
+    for i = 1:length(A)
+        A[i] = rand(BigFloat, r)
+    end
+    A
+end
+rand!(A::Array{BigFloat}) = rand!(Base.Random.DEFAULT_BIGRNG, A)
+
+function randn(::Type{BigFloat}, randstate::BigRNG)
+    z = BigFloat()
+    ccall((:mpfr_grandom,:libmpfr), Int32,
+          (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigRNG}, Int32),
+           &z, C_NULL, &randstate, ROUNDING_MODE[end])
+    z
+end
+randn(::Type{BigFloat}) = randn(BigFloat, Base.Random.DEFAULT_BIGRNG)
+randn(::Type{BigFloat}, dims::Dims) = randn!(Array(BigFloat, dims))
+randn(::Type{BigFloat}, dims::Int...) = randn!(Array(BigFloat, dims...))
+
+function randn!(r::BigRNG, A::Array{BigFloat})
+    for i = 1:length(A)
+        A[i] = randn(BigFloat, r)
+    end
+    A
+end
+randn!(A::Array{BigFloat}) = randn!(Base.Random.DEFAULT_BIGRNG, A)
 
 end #module
