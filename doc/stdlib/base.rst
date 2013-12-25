@@ -3263,27 +3263,19 @@ The `BigFloat` type implements arbitrary-precision floating-point aritmetic usin
 Random Numbers
 --------------
 
-Random number generation in Julia uses the `Mersenne Twister library <http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT>`_. Julia has a global RNG, which is used by default. Multiple RNGs can be plugged in using the ``AbstractRNG`` object, which can then be used to have multiple streams of random numbers. Currently, only ``MersenneTwister`` is supported. For the generation of BigInts and BigFloats, GMP's own Mersenne Twister implementation is used instead.
+Random number generation in Julia uses the `Mersenne Twister library <http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT>`_. Julia has a global RNG, which is used by default. Multiple RNGs can be plugged in using the ``AbstractRNG`` object, which can then be used to have multiple streams of random numbers. Currently, only ``MersenneTwister`` is supported.
 
 .. function:: srand([rng], seed)
 
-   Seed the RNG with a ``seed``, which may be an unsigned integer or a vector of unsigned integers. ``seed`` can even be a filename, in which case the seed is read from a file. If the argument ``rng`` is not provided, the default global RNG and the default BigRNG are seeded.
+   Seed the RNG with a ``seed``, which may be an unsigned integer or a vector of unsigned integers. ``seed`` can even be a filename, in which case the seed is read from a file. If the argument ``rng`` is not provided, the default global RNG is seeded.
 
 .. function:: MersenneTwister([seed])
 
    Create a ``MersenneTwister`` RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers.
 
-.. function:: BigRNG([seed])
-
-   Create a ``BigRNG`` RNG object, used exclusively to generate random BigInts and BigFloats. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers.
-
 .. function:: rand()
 
-   Generate a ``Float64`` random number uniformly in [0,1).
-
-.. function:: rand(BigFloat)
-
-   Generate a ``BigFloat`` random number uniformly in [0,1).
+   Generate a ``Float64`` random number uniformly in [0,1)
 
 .. function:: rand!([rng], A)
 
@@ -3293,17 +3285,9 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
    Generate a random ``Float64`` number or array of the size specified by dims, using the specified RNG object. Currently, ``MersenneTwister`` is the only available Random Number Generator (RNG), which may be seeded using srand.
 
-.. function:: rand(BigFloat, rng::AbstractRNG, [dims...])
-
-   Generate a random ``BigFloat`` number or array of the size specified by dims, using the specified RNG object. Currently, ``BigRNG`` is the only available Random Number Generator (RNG) for BigFloats, which may be seeded using srand.
-
 .. function:: rand(dims or [dims...])
 
-   Generate a random ``Float64`` array of the size specified by dims.
-
-.. function:: rand(BigFloat, dims or [dims...])
-
-   Generate a random ``BigFloat`` array of the size specified by dims.
+   Generate a random ``Float64`` array of the size specified by dims
 
 .. function:: rand(Int32|Uint32|Int64|Uint64|Int128|Uint128, [dims...])
 
@@ -3325,17 +3309,9 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
    Generate a normally-distributed random number with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random numbers.
 
-.. function:: randn(BigFloat, dims or [dims...])
-
-   Generate a normally-distributed random BigFloat with mean 0 and standard deviation 1. Optionally generate an array of normally-distributed random BigFloats.
-
 .. function:: randn!(A::Array{Float64,N})
 
    Fill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.
-
-.. function:: randn!(A::Array{BigFloat,N})
-
-   Fill the array A with normally-distributed (mean 0, standard deviation 1) random BigFloats. Also see the rand function.
 
 .. function:: randsym(n)
 
