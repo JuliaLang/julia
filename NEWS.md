@@ -37,7 +37,7 @@ Library improvements
   * Overflow detection in `parseint` ([#4874]).
 
   * New Pkg.submit(pkg[,commit]) function to automatically submit
-    a Github pull request to the package author.
+    a GitHub pull request to the package author.
 
   * Triple-quoted regex strings, `r"""..."""` ([#4934]).
 
@@ -55,6 +55,8 @@ Library improvements
     iterable rows, in addition to `AbstractArray` arguments, and the
     ``writedlm`` delimiter can be any printable object (e.g. a
     ``String``) instead of just a ``Char``.
+
+  * `.juliarc.jl` is now loaded for both script and REPL execution ([#5076]).
 
 Deprecated or removed
 ---------------------
@@ -75,6 +77,7 @@ Deprecated or removed
 [#4819]: https://github.com/JuliaLang/julia/issues/4819
 [#4670]: https://github.com/JuliaLang/julia/issues/4670
 [#5007]: https://github.com/JuliaLang/julia/issues/5007
+[#5076]: https://github.com/JuliaLang/julia/issues/5076
 
 
 Julia v0.2.0 Release Notes
