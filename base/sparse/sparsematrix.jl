@@ -284,7 +284,7 @@ function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     count = 1
     for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        if S.nzval[k] != 0
+        if S.nzval[k] != zero(Tv)
             I[count] = S.rowval[k]
             J[count] = col
             count += 1
@@ -309,7 +309,7 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     count = 1
     for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        if S.nzval[k] != 0
+        if S.nzval[k] != zero(Tv)
             I[count] = S.rowval[k]
             J[count] = col
             V[count] = S.nzval[k]
@@ -1297,14 +1297,14 @@ function ishermitian(A::SparseMatrixCSC)
     return nnz(A - A') == 0
 end
 
-function istriu(A::SparseMatrixCSC)
+function istriu{Tv}(A::SparseMatrixCSC{Tv})
     for col = 1:min(A.n,A.m-1)
         l1 = A.colptr[col+1]-1
         for i = 0 : (l1 - A.colptr[col])
             if A.rowval[l1-i] <= col
                 break
             end
-            if A.nzval[l1-i] != 0
+            if A.nzval[l1-i] != zero(Tv)
                 return false
             end
         end
@@ -1312,13 +1312,13 @@ function istriu(A::SparseMatrixCSC)
     return true
 end
 
-function istril(A::SparseMatrixCSC)
+function istril{Tv}(A::SparseMatrixCSC{Tv})
     for col = 2:A.n
         for i = A.colptr[col] : (A.colptr[col+1]-1)
             if A.rowval[i] >= col
                 break
             end
-            if A.nzval[i] != 0
+            if A.nzval[i] != zero(Tv)
                 return false
             end
         end

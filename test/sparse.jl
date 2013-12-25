@@ -179,3 +179,6 @@ mfe22 = eye(Float64, 2)
 
 # Issue 5190
 @test_throws sparsevec([3,5,7],[0.1,0.0,3.2],4)
+
+# issue #5169
+@test nnz(sparse([1,1],[1,2],[0.0,-0.0])) == 0
