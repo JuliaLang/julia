@@ -17,6 +17,7 @@ USE_SYSTEM_PCRE=0
 USE_SYSTEM_LIBM=0
 USE_SYSTEM_OPENLIBM=0
 UNTRUSTED_SYSTEM_LIBM=0
+USE_SYSTEM_OPENSPECFUN=0
 USE_SYSTEM_BLAS=0
 USE_SYSTEM_LAPACK=0
 USE_SYSTEM_FFTW=0
@@ -216,7 +217,7 @@ endif
 ifeq ($(SANITIZE),1)
 JCXXFLAGS += -fsanitize=address -mllvm -asan-stack=0
 JCFLAGS += -fsanitize=address -mllvm -asan-stack=0
-LDFLAGS += -fsanitize=address -mllvm -asan-stack=0
+LDFLAGS += -fsanitize=address
 endif
 
 # ===========================================================================
@@ -398,7 +399,7 @@ else
 endif
 
 ifeq ($(OS), Linux)
-OSLIBS += -ldl -ltinfo -lrt -lpthread -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
+OSLIBS += -ldl -lrt -lpthread -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
 JLDFLAGS = -Wl,-Bdynamic
 endif
 

@@ -321,7 +321,8 @@ static void run_finalizers(void)
 void jl_gc_run_all_finalizers()
 {
     for(size_t i=0; i < finalizer_table.size; i+=2) {
-        if (finalizer_table.table[i+1] != HT_NOTFOUND) {
+        jl_value_t *f = finalizer_table.table[i+1];
+        if (f != HT_NOTFOUND && !jl_is_cpointer(f)) {
             schedule_finalization(finalizer_table.table[i]);
         }
     }
@@ -595,7 +596,7 @@ static size_t mark_sp = 0;
 
 static void push_root(jl_value_t *v, int d);
 
-#define gc_push_root(v,d) if (!gc_marked(v)) push_root((jl_value_t*)(v),d);
+#define gc_push_root(v,d) do {  assert(v != NULL); if (!gc_marked(v)) { push_root((jl_value_t*)(v),d); } } while (0)
 
 void jl_gc_setmark(jl_value_t *v)
 {
@@ -868,6 +869,14 @@ static void gc_mark(void)
         if (finalizer_table.table[i+1] != HT_NOTFOUND) {
             jl_value_t *v = finalizer_table.table[i];
             if (!gc_marked(v)) {
+                jl_value_t *fin = finalizer_table.table[i+1];
+                if (gc_typeof(fin) == (jl_value_t*)jl_voidpointer_type) {
+                    void *p = ((void**)fin)[1];
+                    if (p)
+                        ((void (*)(void*))p)(jl_data_ptr(v));
+                    finalizer_table.table[i+1] = HT_NOTFOUND;
+                    continue;
+                }
                 gc_push_root(v, 0);
                 schedule_finalization(v);
             }

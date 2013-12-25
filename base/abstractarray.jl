@@ -1037,10 +1037,8 @@ end
 function lexcmp(A::AbstractArray, B::AbstractArray)
     nA, nB = length(A), length(B)
     for i = 1:min(nA, nB)
-        a, b = A[i], B[i]
-        if !isequal(a, b)
-            return isless(a, b) ? -1 : +1
-        end
+        res = lexcmp(A[i], B[i])
+        res == 0 || return res
     end
     return cmp(nA, nB)
 end
@@ -1592,7 +1590,7 @@ end
 mapslices(f::Function, A::AbstractArray, dims) = mapslices(f, A, [dims...])
 function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
     if isempty(dims)
-        return A
+        return map(f,A)
     end
 
     dimsA = [size(A)...]

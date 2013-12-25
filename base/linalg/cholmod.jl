@@ -23,7 +23,7 @@ import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul
 include("cholmod_h.jl")
 
 macro isok(A)
-    :($A==CHOLMOD_TRUE || throw(CholmodException))
+    :($A==CHOLMOD_TRUE || throw(CholmodException()))
 end
 
 const chm_ver    = Array(Cint, 3)

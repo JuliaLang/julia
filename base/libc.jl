@@ -55,7 +55,7 @@ function strptime(fmt::ByteString, timestr::ByteString)
     # exposed in the API.
     # tm.isdst = -1
     if r == C_NULL
-        error("strptime: invalid arguments")
+        error("invalid arguments")
     end
     tm
 end

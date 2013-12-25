@@ -25,7 +25,7 @@ function primesmask(n::Int)
     return s
 end
 function primesmask(n::Integer)
-    n <= typemax(Int) || error("primesmask: you want WAY too many primes ($n)")
+    n <= typemax(Int) || error("you want WAY too many primes ($n)")
     primesmask(int(n))
 end
 
@@ -77,18 +77,21 @@ isprime(n::Int128) = n < 2 ? false :
 const PRIMES = primes(10000)
 
 function factor{T<:Integer}(n::T)
-    0 < n || error("factor: number to be factored must be positive")
+    0 < n || error("number to be factored must be positive")
     h = (T=>Int)[]
     n == 1 && return h
     n <= 3 && (h[n] = 1; return h)
     local s::T, p::T
     s = isqrt(n)
     for p in PRIMES
-        p <= s || break
+        if p > s
+            h[n] = 1
+            return h
+        end
         if n % p == 0
             while n % p == 0
                 h[p] = get(h,p,0)+1
-                n = div(n,p)
+                n = oftype(n, div(n,p))
             end
             n == 1 && return h
             s = isqrt(n)
@@ -99,7 +102,7 @@ function factor{T<:Integer}(n::T)
         if n % p == 0
             while n % p == 0
                 h[p] = get(h,p,0)+1
-                n = div(n,p)
+                n = oftype(n, div(n,p))
             end
             if n == 1
                 return h

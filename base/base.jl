@@ -70,6 +70,10 @@ end
 
 type EOFError <: Exception end
 
+type DimensionMismatch <: Exception
+    name::ASCIIString
+end
+
 type WeakRef
     value
     WeakRef() = WeakRef(nothing)
@@ -94,7 +98,7 @@ isequal(w::WeakRef, v::WeakRef) = isequal(w.value, v.value)
 isequal(w::WeakRef, v) = isequal(w.value, v)
 isequal(w, v::WeakRef) = isequal(w, v.value)
 
-function finalizer(o::ANY, f::Function)
+function finalizer(o::ANY, f::Union(Function,Ptr))
     if isimmutable(o)
         error("objects of type ", typeof(o), " cannot be finalized")
     end

@@ -202,14 +202,14 @@ readcsv(io, T::Type; opts...) = readdlm(io, ',', T; opts...)
 # todo: keyword argument for # of digits to print
 writedlm_cell(io::IO, elt::FloatingPoint) = print_shortest(io, elt)
 writedlm_cell(io::IO, elt) = print(io, elt)
-function writedlm(io::IO, a::AbstractVecOrMat, dlm::Char)
+function writedlm(io::IO, a::AbstractVecOrMat, dlm)
     pb = PipeBuffer()
     nr = size(a,1)
     nc = size(a,2)
     for i = 1:nr
         for j = 1:nc
             writedlm_cell(pb, a[i,j])
-            write(pb, (j == nc) ? '\n' : dlm)
+            j == nc ? write(pb,'\n') : print(pb,dlm)
         end
         (nb_available(pb) > (16*1024)) && write(io, takebuf_array(pb))
     end
@@ -217,9 +217,9 @@ function writedlm(io::IO, a::AbstractVecOrMat, dlm::Char)
     nothing
 end
 
-writedlm{T}(io::IO, a::AbstractArray{T,0}, dlm::Char) = writedlm(io, reshape(a,1), dlm)
+writedlm{T}(io::IO, a::AbstractArray{T,0}, dlm) = writedlm(io, reshape(a,1), dlm)
 
-function writedlm(io::IO, a::AbstractArray, dlm::Char)
+function writedlm(io::IO, a::AbstractArray, dlm)
     tail = size(a)[3:end]
     function print_slice(idxs...)
         writedlm(io, sub(a, 1:size(a,1), 1:size(a,2), idxs...), dlm)
@@ -230,7 +230,22 @@ function writedlm(io::IO, a::AbstractArray, dlm::Char)
     cartesianmap(print_slice, tail)
 end
 
-function writedlm(fname::String, a, dlm::Char)
+function writedlm(io::IO, itr, dlm)
+    pb = PipeBuffer()
+    for row in itr
+        state = start(row)
+        while !done(row, state)
+            (x, state) = next(row, state)
+            writedlm_cell(pb, x)
+            done(row, state) ? write(pb,'\n') : print(pb,dlm)
+        end
+        (nb_available(pb) > (16*1024)) && write(io, takebuf_array(pb))
+    end
+    write(io, takebuf_array(pb))
+    nothing
+end
+
+function writedlm(fname::String, a, dlm)
     open(fname, "w") do io
         writedlm(io, a, dlm)
     end

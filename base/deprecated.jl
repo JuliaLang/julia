@@ -359,5 +359,13 @@ const Stat = StatStruct
 export CharString
 const CharString = UTF32String
 
+@deprecate set_rounding(r::RoundingMode) set_rounding(Float64,r)
+@deprecate get_rounding() get_rounding(Float64)
+@deprecate with_rounding(f::Function, r::RoundingMode) with_rounding(f::Function, Float64, r)
+
+@deprecate set_bigfloat_rounding(r::RoundingMode) set_rounding(BigFloat,r)
+@deprecate get_bigfloat_rounding() get_rounding(BigFloat)
+@deprecate with_bigfloat_rounding(f::Function, r::RoundingMode) with_rounding(f::Function, BigFloat, r)
+
 # 0.3 discontinued functions
 
