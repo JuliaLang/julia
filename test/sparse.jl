@@ -71,7 +71,7 @@ end
 # complex matrix-vector multiplication and left-division
 for i = 1:5
     a = speye(5) + 0.1*sprandn(5, 5, 0.2)
-    b = randn(5) + im*randn(5)
+    b = randn(5,3) + im*randn(5,3)
     @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
     @test (maximum(abs(a'b - full(a)'b)) < 100*eps())
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
@@ -79,7 +79,7 @@ for i = 1:5
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
     
     a = speye(5) + 0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2)
-    b = randn(5)
+    b = randn(5,3)
     @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
     @test (maximum(abs(a'b - full(a)'b)) < 100*eps())
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
@@ -87,7 +87,7 @@ for i = 1:5
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
 
     a = speye(5) + tril(0.1*sprandn(5, 5, 0.2))
-    b = randn(5) + im*randn(5)
+    b = randn(5,3) + im*randn(5,3)
     @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
     @test (maximum(abs(a'b - full(a)'b)) < 100*eps())
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
@@ -95,7 +95,7 @@ for i = 1:5
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
 
     a = speye(5) + tril(0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2))
-    b = randn(5)
+    b = randn(5,3)
     @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
     @test (maximum(abs(a'b - full(a)'b)) < 100*eps())
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
@@ -103,7 +103,7 @@ for i = 1:5
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
 
     a = speye(5) + triu(0.1*sprandn(5, 5, 0.2))
-    b = randn(5) + im*randn(5)
+    b = randn(5,3) + im*randn(5,3)
     @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
     @test (maximum(abs(a'b - full(a)'b)) < 100*eps())
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
@@ -111,7 +111,7 @@ for i = 1:5
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
 
     a = speye(5) + triu(0.1*sprandn(5, 5, 0.2) + 0.1*im*sprandn(5, 5, 0.2))
-    b = randn(5)
+    b = randn(5,3)
     @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
     @test (maximum(abs(a'b - full(a)'b)) < 100*eps())
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
@@ -119,7 +119,7 @@ for i = 1:5
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
 
     a = speye(5) + triu(0.1*sprandn(5, 5, 0.2))
-    b = randn(5) + im*randn(5)
+    b = randn(5,3) + im*randn(5,3)
     @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
     @test (maximum(abs(a'b - full(a)'b)) < 100*eps())
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
@@ -127,14 +127,14 @@ for i = 1:5
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
 
     a = spdiagm(randn(5)) + im*spdiagm(randn(5))
-    b = randn(5)
+    b = randn(5,3)
     @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
     @test (maximum(abs(a'b - full(a)'b)) < 100*eps())
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
     @test (maximum(abs(a'\b - full(a')\b)) < 1000*eps())
     @test (maximum(abs(a.'\b - full(a.')\b)) < 1000*eps())
 
-    b = randn(5) + im*randn(5)
+    b = randn(5,3) + im*randn(5,3)
     @test (maximum(abs(a*b - full(a)*b)) < 100*eps())
     @test (maximum(abs(a'b - full(a)'b)) < 100*eps())
     @test (maximum(abs(a\b - full(a)\b)) < 1000*eps())
