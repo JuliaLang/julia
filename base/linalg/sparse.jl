@@ -186,60 +186,74 @@ function A_ldiv_B!(A::SparseMatrixCSC, b::AbstractVecOrMat)
     return A_ldiv_B!(lufact(A),b)
 end
 
-function fwdTriSolve!(A::SparseMatrixCSC, b::AbstractVecOrMat)
+function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 # forward substitution for CSC matrices
-    n = length(b)
+    n = length(B)
+    if isa(B, Vector)
+        nrowB = n
+        ncolB = 1
+    else
+        nrowB, ncolB = size(B)
+    end
     ncol = chksquare(A)
-    if n != ncol throw(DimensionMismatch("A is $(ncol)X$(ncol) and b has length $(n)")) end
+    if nrowB != ncol
+        throw(DimensionMismatch("A is $(ncol)X$(ncol) and B has length $(n)"))
+    end
    
     aa = A.nzval
     ja = A.rowval
     ia = A.colptr
    
     joff = 0
-    for k = 1:size(b,2)
-        for j = 1:n-1
+    for k = 1:ncolB
+        for j = 1:(nrowB-1)
             jb = joff + j
             i1 = ia[j]
             i2 = ia[j+1]-1
-            b[jb] /= aa[i1]
-            bj = b[jb]
+            B[jb] /= aa[i1]
+            bj = B[jb]
             for i = i1+1:i2
-                b[joff+ja[i]] -= bj*aa[i]
+                B[joff+ja[i]] -= bj*aa[i]
             end
         end
-        joff += n
-        b[joff] /= aa[end]
+        joff += nrowB
+        B[joff] /= aa[end]
     end
-    return b
+    return B
 end
 
-function bwdTriSolve!(A::SparseMatrixCSC, b::AbstractVecOrMat)
+function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 # backward substitution for CSC matrices
-    n = length(b)
+    n = length(B)
+    if isa(B, Vector)
+        nrowB = n
+        ncolB = 1
+    else
+        nrowB, ncolB = size(B)
+    end
     ncol = chksquare(A)
-    if n != ncol throw(DimensionMismatch("A is $(ncol)X$(ncol) and b has length $(n)")) end
+    if n != ncol throw(DimensionMismatch("A is $(ncol)X$(ncol) and B has length $(n)")) end
 
     aa = A.nzval
     ja = A.rowval
     ia = A.colptr
     
     joff = 0
-    for k = 1:size(b,2)
-        for j = n:-1:2
+    for k = 1:ncolB
+        for j = nrowB:-1:2
             jb = joff + j
             i1 = ia[j]
             i2 = ia[j+1]-1
-            b[jb] /= aa[i2]
-            bj = b[jb]
+            B[jb] /= aa[i2]
+            bj = B[jb]
             for i = i2-1:-1:i1
-                b[joff+ja[i]] -= bj*aa[i]
+                B[joff+ja[i]] -= bj*aa[i]
             end
         end
-        b[joff+1] /= aa[1]
-        joff += n
+        B[joff+1] /= aa[1]
+        joff += nrowB
     end
-   return b
+   return B
 end
 
 ## triu, tril
