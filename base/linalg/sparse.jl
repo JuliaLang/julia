@@ -177,7 +177,7 @@ function *{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
 end
 
 ## solvers
-function A_ldiv_B!(A::SparseMatrixCSC, b::AbstractVector)
+function A_ldiv_B!(A::SparseMatrixCSC, b::AbstractVecOrMat)
     if istril(A) 
         if istriu(A) return A_ldiv_B!(Diagonal(A.nzval), b) end
         return fwdTriSolve!(A, b) 
@@ -186,7 +186,7 @@ function A_ldiv_B!(A::SparseMatrixCSC, b::AbstractVector)
     return A_ldiv_B!(lufact(A),b)
 end
 
-function fwdTriSolve!(A::SparseMatrixCSC, b::AbstractVector)
+function fwdTriSolve!(A::SparseMatrixCSC, b::AbstractVecOrMat)
 # forward substitution for CSC matrices
     n = length(b)
     ncol = chksquare(A)
@@ -196,39 +196,49 @@ function fwdTriSolve!(A::SparseMatrixCSC, b::AbstractVector)
     ja = A.rowval
     ia = A.colptr
    
-    for j = 1:n - 1
-        i1 = ia[j]
-        i2 = ia[j+1]-1
-        b[j] /= aa[i1]
-        bj = b[j]
-        for i = i1+1:i2
-            b[ja[i]] -= bj*aa[i]
+    joff = 0
+    for k = 1:size(b,2)
+        for j = 1:n-1
+            jb = joff + j
+            i1 = ia[j]
+            i2 = ia[j+1]-1
+            b[jb] /= aa[i1]
+            bj = b[jb]
+            for i = i1+1:i2
+                b[joff+ja[i]] -= bj*aa[i]
+            end
         end
+        joff += n
+        b[joff] /= aa[end]
     end
-    b[end] /= aa[end]
     return b
 end
 
-function bwdTriSolve!(A::SparseMatrixCSC, b::AbstractVector)
+function bwdTriSolve!(A::SparseMatrixCSC, b::AbstractVecOrMat)
 # backward substitution for CSC matrices
     n = length(b)
     ncol = chksquare(A)
     if n != ncol throw(DimensionMismatch("A is $(ncol)X$(ncol) and b has length $(n)")) end
 
-   aa = A.nzval
-   ja = A.rowval
-   ia = A.colptr
-
-   for j = n:-1:2
-      i1 = ia[j]
-      i2 = ia[j+1]-1
-      b[j] /= aa[i2]
-      bj = b[j]
-      for i = i2-1:-1:i1
-         b[ja[i]] -= bj*aa[i]
-      end
-   end
-   b[1] /= aa[1]
+    aa = A.nzval
+    ja = A.rowval
+    ia = A.colptr
+    
+    joff = 0
+    for k = 1:size(b,2)
+        for j = n:-1:2
+            jb = joff + j
+            i1 = ia[j]
+            i2 = ia[j+1]-1
+            b[jb] /= aa[i2]
+            bj = b[jb]
+            for i = i2-1:-1:i1
+                b[joff+ja[i]] -= bj*aa[i]
+            end
+        end
+        b[joff+1] /= aa[1]
+        joff += n
+    end
    return b
 end
 
