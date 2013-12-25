@@ -281,7 +281,9 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     assert(f != NULL);
     nested_compile = last_n_c;
     //f->dump();
-    //verifyFunction(*f);
+#ifdef DEBUG
+    verifyFunction(*f);
+#endif
     FPM->run(*f);
     //n_compile++;
     // print out the function's LLVM code
