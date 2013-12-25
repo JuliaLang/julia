@@ -54,8 +54,7 @@ function librandom_init()
         seed = reinterpret(Uint64, time())
         seed = bitmix(seed, uint64(getpid()))
         try
-            @linux_only seed = bitmix(seed, parseint(Uint64, readall(`ifconfig` |> `sha1sum`)[1:40], 16))
-            @osx_only seed = bitmix(seed, parseint(Uint64, readall(`ifconfig` |> `shasum`)[1:40], 16))
+            seed = bitmix(seed, parseint(Uint64, readall(`ifconfig` |> `sha1sum`)[1:40], 16))
         catch
             # ignore
         end
@@ -76,12 +75,6 @@ end
 function srand(seed::Vector{Uint32})
     global RANDOM_SEED = seed
     dsfmt_gv_init_by_array(seed)
-    s = big(0)
-    for i in Base.Random.RANDOM_SEED
-        s = s << 32 + i
-    end
-    global DEFAULT_BIGRNG = BigRNG(s)
-    return
 end
 srand(n::Integer) = srand(make_seed(n))
 
