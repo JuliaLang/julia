@@ -51,6 +51,11 @@ Library improvements
 
   * `mod2pi` function ([#4799], [#4862]).
 
+  * `writedlm` and `writecsv` now accept any iterable collection of
+    iterable rows, in addition to `AbstractArray` arguments, and the
+    ``writedlm`` delimiter can be any printable object (e.g. a
+    ``String``) instead of just a ``Char``.
+
 Deprecated or removed
 ---------------------
 
