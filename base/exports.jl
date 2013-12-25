@@ -22,6 +22,7 @@ export
     Bidiagonal,
     BigFloat,
     BigInt,
+    BigRNG,
     BitArray,
     BitMatrix,
     BitVector,

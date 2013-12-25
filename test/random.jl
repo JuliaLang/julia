@@ -22,3 +22,25 @@ if sizeof(Int32) < sizeof(Int)
     @test typeof(r) == Int32
     @test -1 <= r <= typemax(Int32)
 end
+
+range = big(typemax(Int128)):(big(typemax(Int128)) + 10000)
+@test rand(range) != rand(range)
+@test big(typemax(Int128)) <= rand(range) <= big(typemax(Int128)) + 10000
+r = rand(range, 1, 2)
+@test size(r) == (1, 2)
+@test typeof(r) == Matrix{BigInt}
+
+srand(0)
+r = rand(range)
+f = rand(BigFloat)
+srand(0)
+@test rand(range) == r
+@test rand(BigFloat) == f
+
+@test rand(BigFloat) != rand(BigFloat)
+@test 0.0 <= rand(BigFloat) < 1.0
+@test typeof(rand(BigFloat)) == BigFloat
+
+r = rand(BigFloat, 1, 3)
+@test size(r) == (1, 3)
+@test typeof(r) == Matrix{BigFloat}
