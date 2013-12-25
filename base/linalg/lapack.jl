@@ -280,13 +280,13 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             end
             return A, tau, jpvt
         end
-        function geqrt!(A::StridedMatrix{$elty}, nb::Integer)
+        function geqrt!(A::StridedMatrix{$elty}, T::Matrix{$elty})
             chkstride1(A)
             m, n = size(A)
             minmn = min(m, n)
+            nb = size(T, 1)
             nb <= minmn || throw(ArgumentError("Block size $nb > $minmn too large"))
             lda = max(1, m)
-            T = Array($elty, nb, minmn)
             work = Array($elty, nb*n)
             if n > 0
                 info = Array(BlasInt, 1)
@@ -392,6 +392,7 @@ end
 
 gelqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gelqf!(A,Array(T,min(m,n))))
 geqlf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqlf!(A,Array(T,min(m,n))))
+geqrt!{T<:BlasFloat}(A::StridedMatrix{T}, nb::Integer) = geqrt!(A,Array(T,nb,minimum(size(A))))
 geqrt3!{T<:BlasFloat}(A::StridedMatrix{T}) = (n=size(A,2); geqrt3!(A,Array(T,n,n)))
 geqrf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqrf!(A,Array(T,min(m,n))))
 gerqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gerqf!(A,Array(T,min(m,n))))
