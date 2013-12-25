@@ -175,11 +175,11 @@ install:
 	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "share/man/man1" "include/julia" "share/julia/site/"$(VERSDIR) "etc/julia" ; do \
 		mkdir -p $(DESTDIR)$(PREFIX)/$$subdir ; \
 	done
-	$(INSTALL_B) $(BUILD)/bin/julia* $(DESTDIR)$(PREFIX)/bin/
-	# $(INSTALL_B) $(BUILD)/bin/llc$(EXE) $(DESTDIR)$(PREFIX)/libexec # this needs libLLVM-3.3.$(SHLIB_EXT)
-	-$(INSTALL_F) $(BUILD)/bin/*.dll $(BUILD)/bin/*.bat $(DESTDIR)$(PREFIX)/bin/
-	$(INSTALL_B) $(BUILD)/libexec $(DESTDIR)$(PREFIX)
+	$(INSTALL_M) $(BUILD)/bin/julia* $(DESTDIR)$(PREFIX)/bin/
+	# $(INSTALL_F) $(BUILD)/bin/llc$(EXE) $(DESTDIR)$(PREFIX)/libexec # this needs libLLVM-3.3.$(SHLIB_EXT)
+	-$(INSTALL_M) $(BUILD)/bin/*.dll $(BUILD)/bin/*.bat $(DESTDIR)$(PREFIX)/bin/
 ifneq ($(OS),WINNT)
+	-cp -a $(BUILD)/libexec $(DESTDIR)$(PREFIX)
 	cd $(DESTDIR)$(PREFIX)/bin && ln -sf julia-$(DEFAULT_REPL) julia
 endif
 	for suffix in $(JL_LIBS) ; do \
