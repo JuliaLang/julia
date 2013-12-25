@@ -211,6 +211,7 @@ include("linalg/givens.jl")
 include("linalg/bitarray.jl")
 
 include("linalg/sparse.jl")
+include("linalg/sparseblas.jl")
 include("linalg/umfpack.jl")
 include("linalg/cholmod.jl")
 
