@@ -35,6 +35,7 @@ export
     Diagonal,
 
 # Functions
+    axpy!,
     bkfact,
     bkfact!,
     check_blas,

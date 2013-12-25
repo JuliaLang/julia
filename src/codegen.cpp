@@ -8,7 +8,10 @@
  * including <math.h> (or rather its content).
  */
 #if defined(_OS_WINDOWS_)
+#define NOMINMAX
 #include <malloc.h>
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #if defined(_COMPILER_INTEL_)
 #include <mathimf.h>
 #else
@@ -23,6 +26,7 @@
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
+#include "llvm/ExecutionEngine/JITMemoryManager.h"
 #include "llvm/PassManager.h"
 #include "llvm/Analysis/Verifier.h"
 #include "llvm/Analysis/Passes.h"
@@ -886,9 +890,9 @@ static bool is_getfield_nonallocating(jl_datatype_t *ty, jl_value_t *fld)
 static bool jltupleisbits(jl_value_t *jt, bool allow_unsized)
 {
     if (!jl_is_tuple(jt))
-        return jl_isbits(jt) && (allow_unsized || 
-            ((jl_is_bitstype(jt) && jl_datatype_size(jt) > 0) || 
-                (jl_is_datatype(jt) && jl_tuple_len(((jl_datatype_t*)jt)->names)>0)));
+        return jl_isbits(jt) && jl_is_leaf_type(jt) && (allow_unsized ||
+            ((jl_is_bitstype(jt) && jl_datatype_size(jt) > 0) ||
+             (jl_is_datatype(jt) && jl_tuple_len(((jl_datatype_t*)jt)->names)>0)));
     size_t ntypes = jl_tuple_len(jt);
     if (ntypes == 0)
         return allow_unsized;
@@ -991,7 +995,7 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
 
     int argStart = ctx->argDepth;
     size_t clen = jl_array_dim0(capt);
-    Value *captured[1+clen];
+    Value **captured = (Value**) alloca((1+clen)*sizeof(Value*));
     captured[0] = ConstantInt::get(T_size, clen);
     for(i=0; i < clen; i++) {
         Value *val;
@@ -1433,7 +1437,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         size_t i;
         for(i=0; i < nargs; i++) {
             jl_value_t *it = (jl_value_t*)expr_type(args[i+1],ctx);
-            if (!jl_isbits(it))
+            if (!(jl_isbits(it) && jl_is_leaf_type(it)))
                 break;
         }
         if (i >= nargs) {
@@ -1791,7 +1795,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         Function *cf = (Function*)f->linfo->cFunctionObject;
         FunctionType *cft = cf->getFunctionType();
         size_t nfargs = cft->getNumParams();
-        Value *argvals[nfargs];
+        Value **argvals = (Value**) alloca(nfargs*sizeof(Value*));
         unsigned idx = 0;
         for(size_t i=0; i < nargs; i++) {
             Type *at = cft->getParamType(idx);
@@ -2668,7 +2672,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
 
     size_t nargs = jl_tuple_len(lam->specTypes);
     size_t nfargs = f->getFunctionType()->getNumParams();
-    Value *args[nfargs];
+    Value **args = (Value**) alloca(nfargs*sizeof(Value*));
     unsigned argIdx = 0;
     unsigned idx = 0;
     for(size_t i=0; i < nargs; i++) {
@@ -3829,6 +3833,9 @@ extern "C" void jl_init_codegen(void)
     std::vector<std::string> attrvec (mattr, mattr+2);
     jl_ExecutionEngine = EngineBuilder(jl_Module)
         .setEngineKind(EngineKind::JIT)
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+        .setJITMemoryManager(new JITMemoryManagerWin())
+#endif
         .setTargetOptions(options)
         .setMAttrs(attrvec)
         .create();

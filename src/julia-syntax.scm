@@ -654,8 +654,7 @@
 
 (define (default-inner-ctor name field-names field-types)
   (let ((field-names (safe-field-names field-names field-types)))
-    `(function (call ,name
-		     ,@(map make-decl field-names field-types))
+    `(function (call ,name ,@field-names)
 	       (block
 		(call new ,@field-names)))))
 
@@ -1298,6 +1297,8 @@
 			 (map (lambda (a)
 				(if (not (symbol? (cadr a)))
 				    (error (string "keyword argument is not a symbol: \"" (cadr a) "\"")))
+				(if (vararg? (caddr a))
+				    (error "splicing with \"...\" cannot be used for a keyword argument value"))
 				`((quote ,(cadr a)) ,(caddr a)))
 			      keys))))
      (if (null? restkeys)

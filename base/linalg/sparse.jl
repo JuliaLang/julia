@@ -24,6 +24,8 @@ function A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number,
     end
     y
 end
+A_mul_B!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractVector) = A_mul_B!(one(eltype(x)), A, x, zero(eltype(y)), y)
+
 function *{TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx})
     T = promote_type(TA,Tx)
     A_mul_B!(one(T), A, x, zero(T), zeros(T, A.m))
@@ -46,6 +48,7 @@ function Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number
     end
     y
 end
+Ac_mul_B!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractVector) = Ac_mul_B!(one(eltype(x)), A, x, zero(eltype(y)), y)
 function At_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number, y::AbstractVector)
     A.n == length(y) || throw(DimensionMismatch(""))
     A.m == length(x) || throw(DimensionMismatch(""))
@@ -63,6 +66,7 @@ function At_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number
     end
     y
 end
+At_mul_B!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractVector) = At_mul_B!(one(eltype(x)), A, x, zero(eltype(y)), y)
 function Ac_mul_B{TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx})
     T = promote_type(TA, Tx)
     Ac_mul_B!(one(T), A, x, zero(T), zeros(T, A.n))
@@ -173,59 +177,88 @@ function *{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
 end
 
 ## solvers
-function A_ldiv_B!(A::SparseMatrixCSC, b::AbstractVector)
+function A_ldiv_B!(A::SparseMatrixCSC, b::AbstractVecOrMat)
+    if iseltype(b, Complex); A = complex(A); end
+
     if istril(A) 
-        if istriu(A) return A_ldiv_B!(Diagonal(A.nzval), b) end
+        # TODO: Fix diagonal case. Diagonal(A.nzval) needs to handle 
+        # the case where there are zeros on the diagonal and error out.
+        # It also does not work in the complex case. VBS.
+        #if istriu(A); return A_ldiv_B!(Diagonal(A.nzval), b); end
         return fwdTriSolve!(A, b) 
     end
-    if istriu(A) return bwdTriSolve!(A, b) end
+    if istriu(A); return bwdTriSolve!(A, b); end
     return A_ldiv_B!(lufact(A),b)
 end
 
-function fwdTriSolve!(A::SparseMatrixCSC, b::AbstractVector)
+function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 # forward substitution for CSC matrices
-    n = length(b)
+    n = length(B)
+    if isa(B, Vector)
+        nrowB = n
+        ncolB = 1
+    else
+        nrowB, ncolB = size(B)
+    end
     ncol = chksquare(A)
-    if n != ncol throw(DimensionMismatch("A is $(ncol)X$(ncol) and b has length $(n)")) end
+    if nrowB != ncol
+        throw(DimensionMismatch("A is $(ncol)X$(ncol) and B has length $(n)"))
+    end
    
     aa = A.nzval
     ja = A.rowval
     ia = A.colptr
    
-    for j = 1:n - 1
-        i1 = ia[j]
-        i2 = ia[j+1]-1
-        b[j] /= aa[i1]
-        bj = b[j]
-        for i = i1+1:i2
-            b[ja[i]] -= bj*aa[i]
+    joff = 0
+    for k = 1:ncolB
+        for j = 1:(nrowB-1)
+            jb = joff + j
+            i1 = ia[j]
+            i2 = ia[j+1]-1
+            B[jb] /= aa[i1]
+            bj = B[jb]
+            for i = i1+1:i2
+                B[joff+ja[i]] -= bj*aa[i]
+            end
         end
+        joff += nrowB
+        B[joff] /= aa[end]
     end
-    b[end] /= aa[end]
-    return b
+    return B
 end
 
-function bwdTriSolve!(A::SparseMatrixCSC, b::AbstractVector)
+function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
 # backward substitution for CSC matrices
-    n = length(b)
+    n = length(B)
+    if isa(B, Vector)
+        nrowB = n
+        ncolB = 1
+    else
+        nrowB, ncolB = size(B)
+    end
     ncol = chksquare(A)
-    if n != ncol throw(DimensionMismatch("A is $(ncol)X$(ncol) and b has length $(n)")) end
+    if nrowB != ncol throw(DimensionMismatch("A is $(ncol)X$(ncol) and B has length $(n)")) end
 
-   aa = A.nzval
-   ja = A.rowval
-   ia = A.colptr
-
-   for j = n:-1:2
-      i1 = ia[j]
-      i2 = ia[j+1]-1
-      b[j] /= aa[i2]
-      bj = b[j]
-      for i = i2-1:-1:i1
-         b[ja[i]] -= bj*aa[i]
-      end
-   end
-   b[1] /= aa[1]
-   return b
+    aa = A.nzval
+    ja = A.rowval
+    ia = A.colptr
+    
+    joff = 0
+    for k = 1:ncolB
+        for j = nrowB:-1:2
+            jb = joff + j
+            i1 = ia[j]
+            i2 = ia[j+1]-1
+            B[jb] /= aa[i2]
+            bj = B[jb]
+            for i = i2-1:-1:i1
+                B[joff+ja[i]] -= bj*aa[i]
+            end
+        end
+        B[joff+1] /= aa[1]
+        joff += nrowB
+    end
+   return B
 end
 
 ## triu, tril
@@ -486,7 +519,7 @@ end
 
 ## det, inv, cond
 
-inv(A::SparseMatrixCSC) = throw(MemoryError("The inverse of a sparse matrix can often be dense and can cause the computer to run out of memory. If you are sure you have enough memory, please convert your matrix to a dense matrix."))
+inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be dense and can cause the computer to run out of memory. If you are sure you have enough memory, please convert your matrix to a dense matrix.")
 
 # TODO
 

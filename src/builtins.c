@@ -692,108 +692,6 @@ void jl_show(jl_value_t *stream, jl_value_t *v)
     }
 }
 
-// comma_one prints a comma for 1 element, e.g. "(x,)"
-void jl_show_tuple(jl_value_t *st, jl_tuple_t *t, char opn, char cls, int comma_one)
-{
-    JL_STREAM *s = ((JL_STREAM**)st)[1];
-    JL_PUTC(opn, s);
-    size_t i, n=jl_tuple_len(t);
-    for(i=0; i < n; i++) {
-        jl_show(st, jl_tupleref(t, i));
-        if ((i < n-1) || (n==1 && comma_one))
-            JL_PUTC(',', s);
-    }
-    JL_PUTC(cls, s);
-}
-
-static void show_function(JL_STREAM *s, jl_value_t *v)
-{
-    if (jl_is_gf(v)) {
-        JL_PUTS(jl_gf_name(v)->name, s);
-    }
-    else {
-        JL_PUTS("# function", s);
-    }
-}
-
-static void show_type(jl_value_t *st, jl_value_t *t)
-{
-    uv_stream_t *s =((uv_stream_t**)st)[1];
-    if (jl_is_uniontype(t)) {
-        if (t == (jl_value_t*)jl_bottom_type) {
-            JL_WRITE(s, "None", 4);
-        }
-        else if (t == jl_top_type) {
-            JL_WRITE(s, "Top", 3);
-        }
-        else {
-            JL_WRITE(s, "Union", 5);
-            jl_show_tuple(st, ((jl_uniontype_t*)t)->types, '(', ')', 0);
-        }
-    }
-    else if (jl_is_vararg_type(t)) {
-        jl_show(st, jl_tparam0(t));
-        JL_WRITE(s, "...", 3);
-    }
-    else if (jl_is_typector(t)) {
-        jl_show(st, (jl_value_t*)((jl_typector_t*)t)->body);
-    }
-    else {
-        assert(jl_is_datatype(t));
-        jl_datatype_t *tt = (jl_datatype_t*)t;
-        JL_PUTS(tt->name->name->name, s);
-        jl_tuple_t *p = tt->parameters;
-        if (jl_tuple_len(p) > 0)
-            jl_show_tuple(st, p, '{', '}', 0);
-    }
-}
-
-DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
-{
-    uv_stream_t *s = ((uv_stream_t**)str)[1];
-    // fallback for printing some other builtin types
-    if (jl_is_tuple(v)) {
-        jl_show_tuple(str, (jl_tuple_t*)v, '(', ')', 1);
-    }
-    else if (jl_is_type(v)) {
-        show_type(str, v);
-    }
-    else if (jl_is_func(v)) {
-        show_function(s, v);
-    }
-    else if (jl_typeis(v,jl_intrinsic_type)) {
-        JL_PRINTF(s, "# intrinsic function %d", *(uint32_t*)jl_data_ptr(v));
-    }
-    else {
-        jl_value_t *t = (jl_value_t*)jl_typeof(v);
-        assert(jl_is_datatype(t));
-        jl_datatype_t *dt = (jl_datatype_t*)t;
-        show_type(str, t);
-        JL_PUTC('(', s);
-        if (jl_tuple_len(dt->names)>0 || dt->size==0) {
-            size_t i;
-            size_t n = jl_tuple_len(dt->names);
-            for(i=0; i < n; i++) {
-                jl_value_t *fval = jl_get_nth_field(v, i);
-                if (fval == NULL)
-                    JL_PUTS("#undef", s);
-                else
-                    jl_show(str, fval);
-                if (i < n-1)
-                    JL_PUTC(',', s);
-            }
-        }
-        else {
-            size_t nb = jl_datatype_size(dt);
-            char *data = (char*)jl_data_ptr(v);
-            JL_PUTS("0x", s);
-            for(int i=nb-1; i >= 0; --i)
-                jl_printf(s, "%02hhx", data[i]);
-        }
-        JL_PUTC(')', s);
-    }
-}
-
 // internal functions ---------------------------------------------------------
 
 extern int jl_in_inference;
@@ -1110,7 +1008,24 @@ void jl_init_primitives(void)
     add_builtin("ANY", jl_ANY_flag);
 }
 
-// toys for debugging -----------------------------------------------------------------------
+// toys for debugging ---------------------------------------------------------
+
+// comma_one prints a comma for 1 element, e.g. "(x,)"
+static size_t jl_show_tuple(JL_STREAM *out, jl_tuple_t *t, char *opn, char *cls, int comma_one)
+{
+    size_t i, n=0, len = jl_tuple_len(t);
+    n += JL_PRINTF(out, "(");
+    for (i = 0; i < len; i++) {
+        jl_value_t *v = jl_tupleref(t,i);
+        n += jl_static_show(out, v);
+        if (len == 1)
+            n += JL_PRINTF(out, ",");
+        else if (i != len-1)
+            n += JL_PRINTF(out, ", ");
+    }
+    n += JL_PRINTF(out, ")");
+    return n;
+}
 
 DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
 {
@@ -1131,18 +1046,7 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         }
     }
     else if (jl_is_tuple(v)) {
-        jl_tuple_t *t = (jl_tuple_t*)v;
-        size_t i, len = jl_tuple_len(t);
-        n += JL_PRINTF(out, "(");
-        for (i = 0; i < len; i++) {
-            jl_value_t *v = jl_tupleref(t,i);
-            n += jl_static_show(out, v);
-            if (len == 1)
-                n += JL_PRINTF(out, ",");
-            else if (i != len-1)
-                n += JL_PRINTF(out, ", ");
-        }
-        n += JL_PRINTF(out, ")");
+        n += jl_show_tuple(out, (jl_tuple_t*)v, "(", ")", 1);
     }
     else if (jl_is_vararg_type(v)) {
         n += jl_static_show(out, jl_tparam0(v));
@@ -1334,20 +1238,27 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v)
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
         n += jl_static_show(out, (jl_value_t*)t);
         n += JL_PRINTF(out, "(");
-        size_t i, tlen = jl_tuple_len(t->names);
-        for (i = 0; i < tlen; i++) {
-            n += JL_PRINTF(out, ((jl_sym_t*)jl_tupleref(t->names, i))->name);
-            jl_fielddesc_t f = t->fields[i];
-            if (f.isptr) {
+        size_t nb = jl_datatype_size(t);
+        size_t tlen = jl_tuple_len(t->names);
+        if (nb > 0 && tlen == 0) {
+            char *data = (char*)jl_data_ptr(v);
+            n += JL_PRINTF(out, "0x");
+            for(int i=nb-1; i >= 0; --i)
+                n += JL_PRINTF(out, "%02hhx", data[i]);
+        }
+        else {
+            jl_value_t *fldval=NULL;
+            JL_GC_PUSH1(&fldval);
+            for (size_t i = 0; i < tlen; i++) {
+                n += JL_PRINTF(out, ((jl_sym_t*)jl_tupleref(t->names, i))->name);
+                //jl_fielddesc_t f = t->fields[i];
                 n += JL_PRINTF(out, "=");
-                n += jl_static_show(out, *((jl_value_t**)jl_data_ptr(v)+f.offset/sizeof(void*)));
+                fldval = jl_get_nth_field(v, i);
+                n += jl_static_show(out, fldval);
+                if (i != tlen-1)
+                    n += JL_PRINTF(out, ", ");
             }
-            else {
-                n += JL_PRINTF(out, "::");
-                n += jl_static_show(out, jl_tupleref(t->types, i));
-            }
-            if (i != tlen-1)
-                n += JL_PRINTF(out, ", ");
+            JL_GC_POP();
         }
         n += JL_PRINTF(out, ")");
     }

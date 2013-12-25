@@ -1,3 +1,5 @@
+.. _stdlib-profiling:
+
 Profiling
 =========
 
@@ -58,7 +60,9 @@ Now we're ready to profile this function::
 
     julia> @profile myfunc()
 
-Now let's see the results::
+To see the profiling results, there is a `graphical browser
+<https://github.com/timholy/ProfileView.jl>`_ available, but here
+we'll use the text-based display that comes with the standard library::
 
     julia> Profile.print()
           23 client.jl; _start; line: 373
@@ -146,8 +150,10 @@ In general, if you have ``N`` samples collected at a line, you can
 expect an uncertainty on the order of ``sqrt(N)`` (barring other
 sources of noise, like how busy the computer is with other tasks). The
 major exception to this rule is garbage-collection, which runs
-infrequently but tends to be quite expensive. Below you'll see how you
-can detect such events.
+infrequently but tends to be quite expensive. (Since julia's garbage
+collector is written in C, such events can be detected using the
+``C=true`` output mode described below, or by using `ProfileView
+<https://github.com/timholy/ProfileView.jl>`_.)
 
 This illustrates the default "tree" dump; an alternative is the "flat"
 dump, which accumulates counts independent of their nesting::

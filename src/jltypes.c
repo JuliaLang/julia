@@ -71,7 +71,7 @@ int jl_is_type(jl_value_t *v)
     return jl_is_nontuple_type(v);
 }
 
-static inline int is_unspec(jl_datatype_t *dt)
+STATIC_INLINE int is_unspec(jl_datatype_t *dt)
 {
     return (jl_datatype_t*)dt->name->primary == dt;
 }
@@ -282,7 +282,7 @@ typedef struct {
     jl_tuple_t *tvars;
 } cenv_t;
 
-static inline int is_bnd(jl_tvar_t *tv, cenv_t *env)
+STATIC_INLINE int is_bnd(jl_tvar_t *tv, cenv_t *env)
 {
     if (jl_is_typevar(env->tvars))
         return (jl_tvar_t*)env->tvars == tv;
@@ -293,7 +293,7 @@ static inline int is_bnd(jl_tvar_t *tv, cenv_t *env)
     return 0;
 }
 
-static inline int is_btv(jl_value_t *v)
+STATIC_INLINE int is_btv(jl_value_t *v)
 {
     return jl_is_typevar(v) && ((jl_tvar_t*)v)->bound;
 }
@@ -1447,8 +1447,18 @@ int jl_types_equal_generic(jl_value_t *a, jl_value_t *b, int useenv)
 
 static int valid_type_param(jl_value_t *v)
 {
-    // TODO: maybe more things
-    return jl_is_type(v) || jl_is_long(v) || jl_is_symbol(v) || jl_is_typevar(v) || jl_is_bool(v);
+    if (jl_is_tuple(v)) {
+        size_t i;
+        size_t l = jl_tuple_len(v);
+        for(i=0; i < l; i++) {
+            if (!valid_type_param(jl_tupleref(v,i)))
+                return 0;
+        }
+        return 1;
+    } else {
+        // TODO: maybe more things
+        return jl_is_type(v) || jl_is_long(v) || jl_is_symbol(v) || jl_is_typevar(v) || jl_is_bool(v);
+    }
 }
 
 jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
@@ -1651,11 +1661,19 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
 {
     jl_typestack_t top;
     size_t i;
-    if (n == 0) return (jl_value_t*)t;
+    if (n == 0) return t;
     if (jl_is_typevar(t)) {
         for(i=0; i < n; i++) {
-            if (env[i*2] == t)
-                return (jl_value_t*)env[i*2+1];
+            if (env[i*2] == t) {
+                jl_value_t *val = env[i*2+1];
+                if (!jl_is_typevar(val) && !jl_subtype(val, t, 0)) {
+                    jl_type_error_rt("type parameter",
+                                     ((jl_tvar_t*)t)->name->name,
+                                     ((jl_tvar_t*)t)->ub,
+                                     val);
+                }
+                return val;
+            }
         }
         return (jl_value_t*)t;
     }

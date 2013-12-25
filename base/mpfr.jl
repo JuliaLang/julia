@@ -4,10 +4,7 @@ export
     BigFloat,
     get_bigfloat_precision,
     set_bigfloat_precision,
-    with_bigfloat_precision,
-    set_bigfloat_rounding,
-    get_bigfloat_rounding,
-    with_bigfloat_rounding
+    with_bigfloat_precision
 
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1, bessely,
@@ -20,7 +17,7 @@ import
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         serialize, deserialize, inf, nan, hash, cbrt, typemax, typemin,
-        realmin, realmax
+        realmin, realmax, get_rounding, set_rounding
 
 import Base.Math.lgamma_r
 
@@ -38,7 +35,7 @@ type BigFloat <: FloatingPoint
         N = get_bigfloat_precision()
         z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
         ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, N)
-        finalizer(z, MPFR_clear)
+        finalizer(z, Base.GMP._mpfr_clear_func)
         return z
     end
     # Not recommended for general use
@@ -46,7 +43,6 @@ type BigFloat <: FloatingPoint
         new(prec, sign, exp, d)
     end
 end
-MPFR_clear(mpfr::BigFloat) = ccall((:mpfr_clear, :libmpfr), Void, (Ptr{BigFloat},), &mpfr)
 
 BigFloat(x::BigFloat) = x
 
@@ -615,8 +611,8 @@ function from_mpfr(c::Integer)
     RoundingMode(c)
 end
 
-get_bigfloat_rounding() = from_mpfr(ROUNDING_MODE[end])
-set_bigfloat_rounding(r::RoundingMode) = ROUNDING_MODE[end] = to_mpfr(r)
+get_rounding(::Type{BigFloat}) = from_mpfr(ROUNDING_MODE[end])
+set_rounding(::Type{BigFloat},r::RoundingMode) = ROUNDING_MODE[end] = to_mpfr(r)
 
 function copysign(x::BigFloat, y::BigFloat)
     z = BigFloat()
@@ -698,16 +694,6 @@ function with_bigfloat_precision(f::Function, precision::Integer)
         return f()
     finally
         set_bigfloat_precision(old_precision)
-    end
-end
-
-function with_bigfloat_rounding(f::Function, rounding::RoundingMode)
-    old_rounding = get_bigfloat_rounding()
-    set_bigfloat_rounding(rounding)
-    try
-        return f()
-    finally
-        set_bigfloat_rounding(old_rounding)
     end
 end
 

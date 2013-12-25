@@ -51,6 +51,9 @@ lcm(a::Integer, b::Integer) = lcm(promote(a,b)...)
 gcd(a::Integer, b::Integer...) = gcd(a, gcd(b...))
 lcm(a::Integer, b::Integer...) = lcm(a, lcm(b...))
 
+gcd{T<:Integer}(abc::AbstractArray{T}) = reduce(gcd,abc)
+lcm{T<:Integer}(abc::AbstractArray{T}) = reduce(lcm,abc)
+
 # return (gcd(a,b),x,y) such that ax+by == gcd(a,b)
 function gcdx{T<:Integer}(a::T, b::T)
     s0, s1 = one(T), zero(T)
@@ -245,13 +248,12 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
     ASCIIString(a)
 end
 
-digit(x::Integer) = '0'+x+39*(x>9)
-
 function hex(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
     a = Array(Uint8,i)
     while i > neg
-        a[i] = digit(x&0xf)
+        d = x & 0xf
+        a[i] = '0'+d+39*(d>9)
         x >>= 4
         i -= 1
     end
@@ -261,20 +263,23 @@ end
 
 num2hex(n::Integer) = hex(n, sizeof(n)*2)
 
+const base36digits = ['0':'9','a':'z']
+const base62digits = ['0':'9','A':'Z','a':'z']
+
 function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
     if !(2 <= b <= 62) error("invalid base: $b") end
+    digits = b <= 36 ? base36digits : base62digits
     i = neg + max(pad,ndigits0z(x,b))
     a = Array(Uint8,i)
     while i > neg
-        a[i] = digit(rem(x,b))
+        a[i] = digits[1+rem(x,b)]
         x = div(x,b)
         i -= 1
     end
     if neg; a[1]='-'; end
     ASCIIString(a)
 end
-base(b::Integer, n::Integer, pad::Integer=1) =
-    base(int(b), unsigned(abs(n)), pad, n<0)
+base(b::Integer, n::Integer, pad::Integer=1) = base(int(b), unsigned(abs(n)), pad, n<0)
 
 for sym in (:bin, :oct, :dec, :hex)
     @eval begin
@@ -305,8 +310,10 @@ end
 isqrt(x::Integer) = oftype(x, trunc(sqrt(x)))
 
 function isqrt(x::Union(Int64,Uint64,Int128,Uint128))
+    x==0 && return x
     s = oftype(x, trunc(sqrt(x)))
     # fix with a Newton iteration, since conversion to float discards
     # too many bits.
-    (s + div(x,s)) >> 1
+    s = (s + div(x,s)) >> 1
+    s*s > x ? s-1 : s
 end
