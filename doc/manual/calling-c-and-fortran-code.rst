@@ -428,6 +428,19 @@ the variable::
 The result is a pointer giving the address of the value. The value can be
 manipulated through this pointer using ``unsafe_load`` and ``unsafe_store``.
 
+Passing Pointers for Modification
+---------------------------------
+
+Because C doesn't support multiple return values, often C functions will take
+pointers to data that the function will modify. To accomplish this within a
+``ccall`` you need to encapsulate the value inside an array of the appropriate
+type. When you pass the array as an argument with a ``Ptr`` type, julia will
+automatically pass a C pointer to the encapsulated data::
+
+    width = Cint[0]
+    range = Cfloat[0]
+    ccall(:foo, Void, (Ptr{Cint}, Ptr{Cfloat}), width, range)
+
 Passing Julia Callback Functions to C
 -------------------------------------
 
