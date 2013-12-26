@@ -157,6 +157,7 @@ copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
 
 # function pipelining
 |>(x, f::Function) = f(x)
+|>(f::Function, g::Function) = (x...) -> g(f(x...))
 
 # array shape rules
 
