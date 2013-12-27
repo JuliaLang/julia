@@ -198,7 +198,10 @@ function dlpath( handle::Ptr{Void} )
 end
 
 function dlpath( libname::String )
-    return dlpath( dlopen(libname) )
+    handle = dlopen(libname)
+    path = dlpath( handle )
+    dlclose(handle)
+    return path
 end
 
 end
