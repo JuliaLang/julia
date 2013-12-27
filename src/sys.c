@@ -542,7 +542,7 @@ typedef struct segment_command segment_command_t;
 typedef struct nlist nlist_t;
 #endif
 
-static const char * first_external_symbol_for_image(const mach_header_t *header)
+static const char *first_external_symbol_for_image(const mach_header_t *header)
 {
     Dl_info info;
     if (dladdr(header, &info) == 0)
@@ -553,21 +553,19 @@ static const char * first_external_symbol_for_image(const mach_header_t *header)
     struct symtab_command *symtab = NULL;
 
     struct load_command *cmd = (struct load_command *)((intptr_t)header + sizeof(mach_header_t));
-    for (uint32_t i = 0; i < header->ncmds; i++, cmd = (struct load_command *)((intptr_t)cmd + cmd->cmdsize))
-    {
-        switch(cmd->cmd)
-        {
-            case LC_SEGMENT:
-            case LC_SEGMENT_64:
-                if (!strcmp(((segment_command_t *)cmd)->segname, SEG_TEXT))
-                    seg_text = (segment_command_t *)cmd;
-                else if (!strcmp(((segment_command_t *)cmd)->segname, SEG_LINKEDIT))
-                    seg_linkedit = (segment_command_t *)cmd;
-                break;
+    for (uint32_t i = 0; i < header->ncmds; i++, cmd = (struct load_command *)((intptr_t)cmd + cmd->cmdsize)) {
+        switch(cmd->cmd) {
+        case LC_SEGMENT:
+        case LC_SEGMENT_64:
+            if (!strcmp(((segment_command_t *)cmd)->segname, SEG_TEXT))
+                seg_text = (segment_command_t *)cmd;
+            else if (!strcmp(((segment_command_t *)cmd)->segname, SEG_LINKEDIT))
+                seg_linkedit = (segment_command_t *)cmd;
+            break;
 
-            case LC_SYMTAB:
-                symtab = (struct symtab_command *)cmd;
-                break;
+        case LC_SYMTAB:
+            symtab = (struct symtab_command *)cmd;
+            break;
         }
     }
 
@@ -578,31 +576,29 @@ static const char * first_external_symbol_for_image(const mach_header_t *header)
     intptr_t strings = (intptr_t)header + (symtab->stroff + file_slide);
     nlist_t *sym = (nlist_t *)((intptr_t)header + (symtab->symoff + file_slide));
 
-    for (uint32_t i = 0; i < symtab->nsyms; i++, sym++)
-    {
+    for (uint32_t i = 0; i < symtab->nsyms; i++, sym++) {
         if ((sym->n_type & N_EXT) != N_EXT || !sym->n_value)
             continue;
 
-        return (const char *)strings + sym->n_un.n_strx;
+        return (const char*)strings + sym->n_un.n_strx;
     }
 
     return NULL;
 }
 #endif
 
-
 // Takes a handle (as returned from dlopen()) and returns the absolute path to the image loaded
-DLLEXPORT const char * jl_pathname_for_handle(uv_lib_t * uv_lib)
+DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
 {
-    if( !uv_lib )
+    if (!uv_lib)
         return NULL;
     
-    void * handle = uv_lib->handle;
+    void *handle = uv_lib->handle;
 #ifdef __APPLE__
     for (int32_t i = _dyld_image_count(); i >= 0 ; i--) {
         const char *first_symbol = first_external_symbol_for_image((const mach_header_t *)_dyld_get_image_header(i));
         if (first_symbol && strlen(first_symbol) > 1) {
-            handle = (void *)((intptr_t)handle | 1); // in order to trigger findExportedSymbol instead of findExportedSymbolInImageOrDependentImages. See `dlsym` implementation at http://opensource.apple.com/source/dyld/dyld-239.3/src/dyldAPIs.cpp
+            handle = (void*)((intptr_t)handle | 1); // in order to trigger findExportedSymbol instead of findExportedSymbolInImageOrDependentImages. See `dlsym` implementation at http://opensource.apple.com/source/dyld/dyld-239.3/src/dyldAPIs.cpp
             first_symbol++; // in order to remove the leading underscore
             void *address = dlsym(handle, first_symbol);
             Dl_info info;
@@ -613,8 +609,8 @@ DLLEXPORT const char * jl_pathname_for_handle(uv_lib_t * uv_lib)
 #endif
 
 #ifdef _OS_LINUX_
-    struct link_map * map;
-    dlinfo( handle, RTLD_DI_LINKMAP, &map );
+    struct link_map *map;
+    dlinfo(handle, RTLD_DI_LINKMAP, &map);
     if (map)
         return map->l_name;
 #endif
