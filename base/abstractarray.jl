@@ -1441,11 +1441,11 @@ prod(A::AbstractArray{Bool}, region) =
 # a fast implementation of sum in sequential order (from left to right)
 function sum_seq{T}(a::AbstractArray{T}, ifirst::Int, ilast::Int)
 
-    if ifirst + 3 >= ilast  # a has at most four elements
+    @inbounds if ifirst + 3 >= ilast  # a has at most four elements
         s = zero(T)
         i = ifirst
         while i <= ilast
-            @inbounds s += a[i]
+            s += a[i]
             i += 1
         end
         return s
@@ -1457,24 +1457,24 @@ function sum_seq{T}(a::AbstractArray{T}, ifirst::Int, ilast::Int)
         # into four-way accumulation. Benchmark shows
         # that this results in about 2x speed-up.                
 
-        @inbounds s1 = a[ifirst]
-        @inbounds s2 = a[ifirst + 1]
-        @inbounds s3 = a[ifirst + 2]
-        @inbounds s4 = a[ifirst + 3]
+        s1 = a[ifirst]
+        s2 = a[ifirst + 1]
+        s3 = a[ifirst + 2]
+        s4 = a[ifirst + 3]
 
         i = ifirst + 4
         il = ilast - 3
         while i <= il
-            @inbounds s1 += a[i]
-            @inbounds s2 += a[i+1]
-            @inbounds s3 += a[i+2]
-            @inbounds s4 += a[i+3]
+            s1 += a[i]
+            s2 += a[i+1]
+            s3 += a[i+2]
+            s4 += a[i+3]
             i += 4
         end
 
         while i <= ilast
-                @inbounds s1 += a[i]
-                i += 1
+            s1 += a[i]
+            i += 1
         end
 
         return s1 + s2 + s3 + s4
