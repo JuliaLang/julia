@@ -353,6 +353,9 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     end
     println(io,             "Platform Info:")
     println(io,             "  System: ", Sys.OS_NAME, " (", Sys.MACHINE, ")")
+
+    cpu = Sys.cpu_info()
+    println(io,         "  CPU: ", cpu[1].model)
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
         lsb = ""
