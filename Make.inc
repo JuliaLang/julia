@@ -66,14 +66,15 @@ BUILD_LLDB = 0
 BUILD = $(JULIAHOME)/usr
 
 # Directories where said libraries get installed to
-JL_PRIVATE_LIBDIR = lib/julia
-JL_LIBDIR = lib
+LIBDIR = lib
+JL_LIBDIR = $(LIBDIR)
+JL_PRIVATE_LIBDIR = $(JL_LIBDIR)/julia
 
 # This used for debian packaging, to conform to library layout guidelines
 ifeq ($(MULTIARCH_INSTALL), 1)
 MULTIARCH = $(shell gcc -print-multiarch)
-JL_PRIVATE_LIBDIR = lib/$(MULTIARCH)/julia
-JL_LIBDIR = lib/$(MULTIARCH)/
+JL_PRIVATE_LIBDIR = $(LIBDIR)/$(MULTIARCH)/julia
+JL_LIBDIR = $(LIBDIR)/$(MULTIARCH)/
 endif
 
 # Cross-compile
