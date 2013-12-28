@@ -433,7 +433,7 @@ end
 
 function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int})
     if length(X) != length(I)
-        error("tried to assign $(length(X)) elements to $(length(I)) destinations");
+        throw_setindex_mismatch(X, (I,))
     end
     copy!(A, first(I), X, 1, length(I))
     return A
@@ -441,7 +441,7 @@ end
 
 function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
     if length(X) != length(I)
-        error("tried to assign $(length(X)) elements to $(length(I)) destinations");
+        throw_setindex_mismatch(X, (I,))
     end
     count = 1
     if is(X,A)
@@ -465,7 +465,7 @@ function setindex!{T<:Real}(A::Array, x, i::Real, J::AbstractVector{T})
     else
         X = x
         if length(X) != length(J)
-            error("tried to assign $(length(X)) elements to $(length(J)) destinations");
+            throw_setindex_mismatch(X, (i,J))
         end
         count = 1
         for j in J
@@ -489,7 +489,7 @@ function setindex!{T<:Real}(A::Array, x, I::AbstractVector{T}, j::Real)
     else
         X = x
         if length(X) != length(I)
-            error("tried to assign $(length(X)) elements to $(length(I)) destinations");
+            throw_setindex_mismatch(X, (I,j))
         end
         count = 1
         for i in I
@@ -504,7 +504,7 @@ function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, j::Real)
     j = to_index(j)
     checkbounds(A, I, j)
     if length(X) != length(I)
-        error("tried to assign $(length(X)) elements to $(length(I)) destinations");
+        throw_setindex_mismatch(X, (I,j))
     end
     unsafe_copy!(A, first(I) + (j-1)*size(A,1), X, 1, length(I))
     return A
@@ -512,11 +512,7 @@ end
 
 function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, J::Range1{Int})
     checkbounds(A, I, J)
-    nel = length(I)*length(J)
-    if length(X) != nel ||
-        (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
-        error("tried to assign $(size(X,1)) x $(size(X,2)) Array to $(length(I)) x $(length(J)) destination");
-    end
+    setindex_shape_check(X, I, J)
     if length(I) == size(A,1)
         unsafe_copy!(A, first(I) + (first(J)-1)*size(A,1), X, 1, size(A,1)*length(J))
     else
@@ -531,11 +527,7 @@ end
 
 function setindex!{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, J::AbstractVector{Int})
     checkbounds(A, I, J)
-    nel = length(I)*length(J)
-    if length(X) != nel ||
-        (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
-        error("tried to assign $(size(X)) Array to ($(length(I)),$(length(J))) destination");
-    end
+    setindex_shape_check(X, I, J)
     refoffset = 1
     for j = J
         unsafe_copy!(A, first(I) + (j-1)*size(A,1), X, refoffset, length(I))
@@ -556,11 +548,7 @@ function setindex!{T<:Real}(A::Array, x, I::AbstractVector{T}, J::AbstractVector
         end
     else
         X = x
-        nel = length(I)*length(J)
-        if length(X) != nel ||
-            (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
-            error("tried to assign $(size(X,1)) x $(size(X,2)) Array to $(length(I)) x $(length(J)) destination");
-        end
+        setindex_shape_check(X, I, J)
         count = 1
         for j in J
             offset = (j-1)*m
@@ -593,20 +581,7 @@ function setindex!(A::Array, x, I::Union(Real,AbstractArray)...)
             assign_cache = Dict()
         end
         X = x
-        nel = 1
-        for idx in I
-            nel *= length(idx)
-        end
-        if length(X) != nel
-            throw(DimensionMismatch(""))
-        end
-        if ndims(X) > 1
-            for i = 1:length(I)
-                if size(X,i) != length(I[i])
-                    throw(DimensionMismatch(""))
-                end
-            end
-        end
+        setindex_shape_check(X, I...)
         gen_array_index_map(assign_cache, storeind -> quote
                               A[$storeind] = X[refind]
                               refind += 1
