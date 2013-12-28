@@ -20,8 +20,8 @@ dmg:
 	tar zxf ../../../julia-*.tar.gz
 	mv julia-* julia
 	-mkdir -p ./julia/libexec ./julia/share
-	-cp -a $(BUILD)/libexec/git* ./julia/libexec
-	-cp -a $(BUILD)/share/git* ./julia/share
+	-cp -a $(build_libexecdir)/git* ./julia/libexec
+	-cp -a $(build_datarootdir)/git* ./julia/share
 	rm -f julia/lib/*.{a,la}
 	-mkdir dmg
 	platypus -a Julia -p /bin/bash -V $(JULIA_VERSION) -R -u "The Julia Project" -i julia.icns -Q julia.icns -o "None" -I org.julialang -x -f julia script ./dmg/Julia-$(VERSION_SUFFIX).app
