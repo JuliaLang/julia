@@ -419,7 +419,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
                                "cglobal: first argument not a pointer or valid constant expression",
                                ctx);
         }
-        jl_ptr = emit_unbox(T_size, arg1, ptr_ty);
+        jl_ptr = emit_unbox(T_size, arg1, (jl_value_t*)jl_voidpointer_type);
     }
 
     void *fptr=NULL;
