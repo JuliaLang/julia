@@ -211,55 +211,36 @@ index_shape(i, I...) = tuple(length(i), index_shape(I...)...)
 # those are the permutations that preserve the order of the non-singleton
 # dimensions.
 function setindex_shape_check(X::AbstractArray, I...)
-    li = length(I)
-    ii = 1
-    nel = 1
-    xi = 1
-    ndx = ndims(X)
-    match = true
-    while ii < li
-        lii = length(I[ii])::Int
-        ii += 1
-        if lii != 1
-            nel *= lii
-            local lxi
-            while true
-                lxi = size(X,xi)
-                xi += 1
-                if lxi != 1 || xi > ndx
-                    break
-                end
+    li = ndims(X)
+    lj = length(I)
+    i = j = 1
+    while true
+        ii = size(X,i)
+        jj = length(I[j])::Int
+        if i == li || j == lj
+            while i < li
+                i += 1
+                ii *= size(X,i)
             end
-            if xi > ndx
-                trailing = lii
-                while ii <= li
-                    lii = length(I[ii])::Int
-                    trailing *= lii
-                    ii += 1
-                end
-                # X's last dimension can match all the trailing indexes
-                if lxi == trailing && match
-                    return
-                else
-                    throw(DimensionMismatch(""))
-                end
-            else
-                if lxi != lii
-                    match = false
-                end
+            while j < lj
+                j += 1
+                jj *= length(I[j])::Int
             end
+            if ii != jj
+                throw(DimensionMismatch(""))
+            end
+            return
         end
-    end
-
-    # last index can match X's trailing dimensions
-    lii = length(I[ii])::Int
-    nel *= lii
-    if lii != trailingsize(X,xi)
-        match = false
-    end
-
-    if !(match && length(X)==nel)
-        throw(DimensionMismatch(""))
+        if ii == jj
+            i += 1
+            j += 1
+        elseif ii == 1
+            i += 1
+        elseif jj == 1
+            j += 1
+        else
+            throw(DimensionMismatch(""))
+        end
     end
 end
 
