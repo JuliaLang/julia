@@ -557,7 +557,7 @@ $(PCRE_SRC_TARGET): pcre-$(PCRE_VER)/config.status
 	touch -c $@
 pcre-$(PCRE_VER)/checked: $(PCRE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C pcre-$(PCRE_VER) check
+	$(MAKE) -C pcre-$(PCRE_VER) check -j1
 endif
 	echo 1 > $@
 $(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET) pcre-$(PCRE_VER)/checked
