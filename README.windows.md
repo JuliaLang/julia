@@ -1,7 +1,7 @@
-General Information for Windows
-===============================
+# General Information for Windows
 
-Please see the README at https://github.com/JuliaLang/julia/blob/master/README.md for more complete information about Julia. This is intended to only include information specific to using Julia on Windows.
+This file describes how to use and build Julia on Windows.
+For more information about Julia, please see the [main README](https://github.com/JuliaLang/julia/blob/master/README.md) 
 
 # Binary distribution
 
@@ -56,13 +56,20 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
   - When the build process fails for no apparent reason, try running `make` again.
   - Sometimes, `make` will appear to hang, consuming 100% cpu but without apparent progress. If this happens, kill `make` from the Task Manager and try again.
   - Expect this to take a very long time (dozens of hours is not uncommon).
+  - If `make` fails complaining that `./flisp/flisp` is not found, force `make` to build FemtoLisp before Julia by running `make -C src/flisp && make`.
 
-
-8. Run Julia with
-   ```
+8. Run Julia with _either_ of:
+  - Using `make`
+    ```
     make run-julia
    ```
    (the full syntax is `make run-julia[-release|-debug] [DEFAULT_REPL=(basic|readline)]`)
+
+  - Using the Julia executables directly
+    ```
+    usr/bin/julia-readline
+```
+    (or `julia-basic` if you prefer)
 
 ## Compiling with MinGW/MSYS2 (experimental)
 
