@@ -443,6 +443,9 @@ LIBMNAME = libimf
 endif
 
 ifeq ($(USE_MKL), 1)
+ifeq ($(USE_BLAS64), 1)
+export MKL_INTERFACE_LAYER := ILP64
+endif
 USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
 LIBBLASNAME = libmkl_rt
