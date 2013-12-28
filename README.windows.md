@@ -21,7 +21,7 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
 
 2. Download and install the latest [Python 2.x](http://www.python.org/download/releases) release. Do not install Python 3.x.
 
-2. Install [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/), a Windows port of GCC. (Do not use the regular MinGW distribution.)
+3. Install [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/), a Windows port of GCC. (Do not use the regular MinGW distribution.)
   1. Download the [MinGW-builds installer](http://downloads.sourceforge.net/project/mingwbuilds/mingw-builds-install/mingw-builds-install.exe) from the [MinGW-builds homepage](http://sourceforge.net/projects/mingwbuilds/). 
   2. Run the installer. When prompted, choose:
     - Version: the most recent version (these instructions were tested with 4.8.1)
@@ -64,7 +64,56 @@ Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and W
    ```
    (the full syntax is `make run-julia[-release|-debug] [DEFAULT_REPL=(basic|readline)]`)
 
-## Compiling with 
+## Compiling with MinGW/MSYS2 (experimental)
+
+1. Download and install [7-Zip](http://www.7-zip.org/download.html), [Python 2.x](http://www.python.org/download/releases) and [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/) as described in the previous section.
+
+2. Install and configure [MSYS2](http://sourceforge.net/projects/msys2), a minimal POSIX-like environment for Windows.
+  1. Download the latest base [32-bit](http://sourceforge.net/projects/msys2/files/Base/32-bit) or [64-bit](http://sourceforge.net/projects/msys2/files/Base/64-bit) distribution as apprpriate.
+  2. Using [7-Zip](http://www.7-zip.org/download.html), extract the archive to a convenient directory, e.g. **C:\msys2\x64-20131126**. You may need to extract the tarball in a separate step. This will create an additional `msys32`/`msys64` subdirectory.
+    - Some versions of this archive contain zero-byte files that clash with existing files. If prompted, choose to not overwrite all existing files.
+  3. Launch `msys2_shell.bat`, which will initialize MSYS2.
+  4. Install the necessary packages:
+
+     ```
+    pacman-key --init #Download keys
+    pacman -Syu #Update package database and full system upgrade
+    pacman -S diffutils git m4 make patch python2 tar
+    ln -s /usr/bin/python{2.exe,} #Fixes python2 not found error
+```
+
+  5. Edit the `/etc/fstab` file and append a line of the form
+
+     ```
+    C:/mingw-builds/x64-4.8.1-win32-seh-rev5/mingw64 /mingw ext3 binary 0 0
+```
+
+   Use the actual installation directory of MinGW from Step 2c. Consult the
+  [Cygwin manual](http://cygwin.com/cygwin-ug-net/using.html#mount-table) for
+  details of how to enter the directory name.
+
+  6. Edit the `~/.bashrc` file and append the line
+     ```   
+    export PATH=$PATH:/mingw/bin
+```
+
+  7. `exit` the MSYS2 shell.
+
+3. Build Julia and its dependencies from source.
+  1. Relaunch the MSYS2 shell and type
+
+     ```
+    . ~/.bashrc #Some versions of MSYS2 do not run this automatically
+    git clone https://github.com/JuliaLang/julia.git
+    cd julia
+    make
+```
+
+  2. Some versions of PCRE (e.g. 8.31) will compile correctly but have a single
+  test fail with an error like `** Failed to set locale "fr_FR`
+  which will break the entire build. To circumvent the test and allow the rest
+  of the build to continue, create an empty `checked` file in the `deps/pcre*`
+  directory and rerun `make`.
 
 
 ## Cross-compiling
