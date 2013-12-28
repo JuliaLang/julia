@@ -142,6 +142,8 @@ function repl_callback(ast::ANY, show_value)
     put(repl_channel, (ast, show_value))
 end
 
+_eval_done = Condition()
+
 function run_repl()
     global const repl_channel = RemoteRef()
 
@@ -155,7 +157,7 @@ function run_repl()
             read(STDIN, buf)
             ccall(:jl_read_buffer,Void,(Ptr{Void},Cssize_t),buf,1)
             if _repl_enough_stdin
-                yield()
+                wait(_eval_done)
             end
         end
         put(repl_channel,(nothing,-1))
@@ -175,6 +177,7 @@ function run_repl()
             break
         end
         eval_user_input(ast, show_value!=0)
+        notify(_eval_done)
     end
 
     if have_color
