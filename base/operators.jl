@@ -205,6 +205,15 @@ end
 index_shape(I::Real...) = ()
 index_shape(i, I...) = tuple(length(i), index_shape(I...)...)
 
+function throw_setindex_mismatch(X, I)
+    if length(I) == 1
+        e = DimensionMismatch("tried to assign $(length(X)) elements to $(length(I[1])) destinations")
+    else
+        e = DimensionMismatch("tried to assign $(dims2string(size(X))) array to $(dims2string(map(length,I))) destination")
+    end
+    throw(e)
+end
+
 # check for valid sizes in A[I...] = X where X <: AbstractArray
 # we want to allow dimensions that are equal up to permutation, but only
 # for permutations that leave array elements in the same linear order.
@@ -227,7 +236,7 @@ function setindex_shape_check(X::AbstractArray, I...)
                 jj *= length(I[j])::Int
             end
             if ii != jj
-                throw(DimensionMismatch(""))
+                throw_setindex_mismatch(X, I)
             end
             return
         end
@@ -239,30 +248,31 @@ function setindex_shape_check(X::AbstractArray, I...)
         elseif jj == 1
             j += 1
         else
-            throw(DimensionMismatch(""))
+            throw_setindex_mismatch(X, I)
         end
     end
 end
 
-setindex_shape_check(X::AbstractArray) = (length(X)==1 || throw(DimensionMismatch("")))
+setindex_shape_check(X::AbstractArray) =
+    (length(X)==1 || throw_setindex_mismatch(X,()))
 
 setindex_shape_check(X::AbstractArray, i) =
-    (length(X)==length(i) || throw(DimensionMismatch("")))
+    (length(X)==length(i) || throw_setindex_mismatch(X, (i,)))
 
 setindex_shape_check{T}(X::AbstractArray{T,1}, i) =
-    (length(X)==length(i) || throw(DimensionMismatch("")))
+    (length(X)==length(i) || throw_setindex_mismatch(X, (i,)))
 
 setindex_shape_check{T}(X::AbstractArray{T,1}, i, j) =
-    (length(X)==length(i)*length(j) || throw(DimensionMismatch("")))
+    (length(X)==length(i)*length(j) || throw_setindex_mismatch(X, (i,j)))
 
 function setindex_shape_check{T}(X::AbstractArray{T,2}, i, j)
     li, lj = length(i), length(j)
     if length(X) != li*lj
-        throw(DimensionMismatch(""))
+        throw_setindex_mismatch(X, (i,j))
     end
     sx1 = size(X,1)
     if !(li == 1 || li == sx1 || sx1 == 1)
-        throw(DimensionMismatch(""))
+        throw_setindex_mismatch(X, (i,j))
     end
 end
 
