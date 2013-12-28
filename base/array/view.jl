@@ -59,41 +59,32 @@ function ArrayView{n}(a::Array, R::NTuple{n,Ranges})
     ArrayView(a,sizes,strides,origin,magic,coefs)
 end
 
-function repeated_linear_indexing(a,n=1000)
-    t = zero(eltype(a))
-    for _ = 1:n, i = 1:length(a)
-        t += a[i]
+function repeated_linear_indexing(a,cap=0.01)
+    n = 0
+    time = 0.0
+    total = zero(eltype(a))
+    while time < cap
+        time += @elapsed for i = 1:length(a)
+            total += a[i]
+        end
+        n += 1
     end
-    return t
-end
-
-using Distributions
-
-function rand_slice(z)
-    a = max(1,rand(Binomial(z,1/3)))
-    b = max(1,rand(Binomial(z,2/3)))
-    s = max(1,rand(NegativeBinomial(1,1/2)))
-    r = a:copysign(s,sign(b-a)):b
-    randbool() ? r : z-r+1
+    total, time/n
 end
 
 function benchmark(z=1000000,n=10,m=10)
     results = Array(Float64,n,m,3)
-    for d = 1:n, _ = 1:m
-        S = max(1,rand(Binomial((2z)^(1/d),0.5),d))
+    for d = 1:n, x = 1:m
+        S = [ iround(3z^(1/d)+1) for _=1:d ]
         A = rand(S...)
-        R = map(rand_slice,size(A))
-        # @show size(A), R
+        R = map(s->2:3:s-1,size(A))
         a = A[R...]
         v = ArrayView(A,R)
         s = sub(A,R)
-        @assert a == v
-        @assert a == s
-        @assert v == s
-        ta = @elapsed repeated_linear_indexing(a)
-        tv = @elapsed repeated_linear_indexing(v)
-        ts = @elapsed repeated_linear_indexing(s)
-        results[d,_,:] = [ta,tv,ts]
+        @show S, size(a), length(a)
+        results[d,x,1] = repeated_linear_indexing(a)[2]
+        results[d,x,2] = repeated_linear_indexing(v)[2]
+        results[d,x,3] = repeated_linear_indexing(s)[2]
     end
     return results
 end
