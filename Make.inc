@@ -64,8 +64,35 @@ else
 JULIA_COMMIT = $JULIA_VERSION
 endif
 
+# Directories where said libraries get installed to
+bindir = $(prefix)/bin
+libdir = $(prefix)/lib
+private_libdir = $(libdir)/julia
+libexecdir = $(prefix)/libexec
+datarootdir = $(prefix)/share
+includedir = $(prefix)/include
+sysconfdir = $(prefix)/etc
+
+# Directories where things get built into
+build_prefix = $(JULIAHOME)/usr
+build_bindir = $(build_prefix)/bin
+build_libdir = $(build_prefix)/lib
+build_private_libdir = $(build_prefix)/lib/julia
+build_libexecdir = $(build_prefix)/libexec
+build_datarootdir = $(build_prefix)/share
+build_includedir = $(build_prefix)/include
+build_sysconfdir = $(build_prefix)/etc
+
+# This used for debian packaging, to conform to library layout guidelines
+ifeq ($(MULTIARCH_INSTALL), 1)
+MULTIARCH = $(shell gcc -print-multiarch)
+private_libdir = $(libdir)/$(MULTIARCH)/julia
+libdir = $(libdir)/$(MULTIARCH)/
+endif
+
+
 # LLVM Options
-LLVMROOT = $(BUILD)
+LLVMROOT = $(build_prefix)
 LLVM_ASSERTIONS = 0
 LLVM_DEBUG = 0
 # set to 1 to get clang and compiler-rt
@@ -73,20 +100,6 @@ BUILD_LLVM_CLANG = 0
 # set to 1 to get lldb (often does not work, no chance with llvm3.2 and earlier)
 # see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB = 0
-
-BUILD = $(JULIAHOME)/usr
-
-# Directories where said libraries get installed to
-LIBDIR = lib
-JL_LIBDIR = $(LIBDIR)
-JL_PRIVATE_LIBDIR = $(JL_LIBDIR)/julia
-
-# This used for debian packaging, to conform to library layout guidelines
-ifeq ($(MULTIARCH_INSTALL), 1)
-MULTIARCH = $(shell gcc -print-multiarch)
-JL_PRIVATE_LIBDIR = $(LIBDIR)/$(MULTIARCH)/julia
-JL_LIBDIR = $(LIBDIR)/$(MULTIARCH)/
-endif
 
 # Cross-compile
 #XC_HOST = i686-w64-mingw32
@@ -130,7 +143,7 @@ endif
 ifeq ($(OS), WINNT)
 fPIC =
 ifeq ($(BUILD_OS), WINNT)
-PATH := ${PATH}:${BUILD}/${JL_LIBDIR}:${BUILD}/${JL_PRIVATE_LIBDIR}:/c/Program Files/7-zip
+PATH := $(PATH):$(build_libdir):$(build_private_libdir):/c/Program Files/7-zip
 endif
 EXE = .exe
 else
@@ -220,8 +233,16 @@ AS := $(CROSS_COMPILE)as
 LD := $(CROSS_COMPILE)ld
 RANLIB := $(CROSS_COMPILE)ranlib
 
-# if not absolute, then relative to JULIA_HOME
-JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../$(JL_PRIVATE_LIBDIR)/sys.ji"'
+
+# Calculate relative paths to libdir and private_libdir
+build_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_libdir))
+libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(libdir))
+
+build_private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(build_bindir) $(build_private_libdir))
+private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(private_libdir))
+
+# if not absolute, then relative to the directory of the julia executable
+JCFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.ji\""
 
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
@@ -284,10 +305,10 @@ LIBUNWIND=-lunwind-generic -lunwind
 endif
 else
 ifeq ($(OS),Darwin)
-LIBUNWIND=$(BUILD)/$(JL_LIBDIR)/libosxunwind.a
+LIBUNWIND=$(build_libdir)/libosxunwind.a
 JCFLAGS+=-DLIBOSXUNWIND
 else
-LIBUNWIND=$(BUILD)/$(JL_LIBDIR)/libunwind-generic.a $(BUILD)/$(JL_LIBDIR)/libunwind.a
+LIBUNWIND=$(build_libdir)/libunwind-generic.a $(build_libdir)/libunwind.a
 endif
 endif
 endif
@@ -304,14 +325,14 @@ ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline
 else
 ifeq ($(OS),WINNT)
-READLINE = $(BUILD)/lib/libreadline.a
+READLINE = $(build_libdir)/libreadline.a
 else
-READLINE = $(BUILD)/$(JL_LIBDIR)/libreadline.a
+READLINE = $(build_libdir)/libreadline.a
 endif
 endif
 
 ifeq ($(OS),WINNT)
-READLINE += $(BUILD)/lib/libhistory.a
+READLINE += $(build_libdir)/libhistory.a
 else
 READLINE += -lncurses
 endif
@@ -319,7 +340,7 @@ endif
 ifeq ($(USE_SYSTEM_PCRE), 1)
 PCRE_CONFIG = pcre-config
 else
-PCRE_CONFIG = $(BUILD)/bin/pcre-config
+PCRE_CONFIG = $(build_bindir)/pcre-config
 endif
 
 # Use 64-bit libraries by default on 64-bit architectures
@@ -331,14 +352,14 @@ ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 USE_BLAS64 = 0
 USE_SYSTEM_LAPACK = 0
-LIBBLAS = -L$(BUILD)/$(JL_LIBDIR) -lgfortblas
+LIBBLAS = -L$(build_libdir) -lgfortblas
 LIBBLASNAME = libgfortblas
 else
 LIBBLAS ?= -lblas
 LIBBLASNAME ?= libblas
 endif
 else
-LIBBLAS = -L$(BUILD)/$(JL_LIBDIR) -lopenblas
+LIBBLAS = -L$(build_libdir) -lopenblas
 LIBBLASNAME = libopenblas
 endif
 
@@ -352,7 +373,7 @@ ifeq ($(USE_SYSTEM_LAPACK), 1)
 LIBLAPACK = -llapack
 LIBLAPACKNAME = liblapack
 else
-LIBLAPACK = -L$(BUILD)/$(JL_LIBDIR) -llapack $(LIBBLAS)
+LIBLAPACK = -L$(build_libdir) -llapack $(LIBBLAS)
 LIBLAPACKNAME = liblapack
 endif
 endif
@@ -369,18 +390,14 @@ ifeq ($(USE_SYSTEM_LIBUV), 1)
   LIBUV = /usr/lib/libuv-julia.a
   LIBUV_INC = /usr/include
 else
-ifeq ($(OS),WINNT)
-  LIBUV = $(BUILD)/lib/libuv.a
-else
-  LIBUV = $(BUILD)/$(JL_LIBDIR)/libuv.a
-endif
+  LIBUV = $(build_libdir)/libuv.a
   LIBUV_INC = $(JULIAHOME)/deps/libuv/include
 endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
   LIBUTF8PROC = -lutf8proc
 else
-  LIBUTF8PROC = $(BUILD)/$(JL_LIBDIR)/libutf8proc.a
+  LIBUTF8PROC = $(build_libdir)/libutf8proc.a
 endif
 
 # OS specific stuff
@@ -402,10 +419,10 @@ ifeq ($(OS), WINNT)
   RPATH =
   RPATH_ORIGIN =
 else ifeq ($(OS), Darwin)
-  RPATH = -Wl,-rpath,'@executable_path/../$(JL_PRIVATE_LIBDIR)' -Wl,-rpath,'@executable_path/../$(JL_LIBDIR)'
+  RPATH = -Wl,-rpath,'@executable_path/$(build_private_libdir_rel)' -Wl,-rpath,'@executable_path/$(build_libdir_rel)'
   RPATH_ORIGIN =
 else
-  RPATH = -Wl,-rpath,'$$ORIGIN/../$(JL_PRIVATE_LIBDIR)' -Wl,-rpath,'$$ORIGIN/../$(JL_LIBDIR)' -Wl,-z,origin
+  RPATH = -Wl,-rpath,'$$ORIGIN/$(build_private_libdir_rel)' -Wl,-rpath,'$$ORIGIN/$(build_libdir_rel)' -Wl,-z,origin
   RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
 endif
 
@@ -443,7 +460,6 @@ endif
 ifeq ($(OS), Darwin)
 INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
 INSTALL_NAME_CHANGE_CMD = install_name_tool -change
-RPATH = -Wl,-rpath,'@executable_path/../$(JL_LIBDIR)' -Wl,-rpath,'@executable_path/../$(JL_PRIVATE_LIBDIR)'
 SHLIB_EXT = dylib
 OSLIBS += -ldl -Wl,-w -framework CoreFoundation -framework CoreServices $(LIBUNWIND)
 WHOLE_ARCHIVE = -Xlinker -all_load
@@ -461,8 +477,10 @@ ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
 UNTRUSTED_SYSTEM_LIBM = 1
-JL_PRIVATE_LIBDIR = bin
-JL_LIBDIR = bin
+private_libdir = $(bindir)
+libdir = $(bindir)
+build_private_libdir = $(build_bindir)
+build_libdir = $(build_bindir)
 endif
 
 # Intel libraries
@@ -502,7 +520,7 @@ endif
 # or installed to usr/lib/libatlas from some another source (built as
 # a shared library, for your platform, single threaded)
 USE_ATLAS = 0
-ATLAS_LIBDIR = $(BUILD)/$(JL_LIBDIR)
+ATLAS_LIBDIR = $(build_libdir)
 #or ATLAS_LIBDIR = /path/to/system/atlas/lib
 
 ifeq ($(USE_ATLAS), 1)
@@ -563,8 +581,8 @@ exec = $(shell $(call spawn,$(1)))
 wine_pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(shell printf %s\n '$(2)' | xargs -d";" winepath -u | tr '\n' ' '))))
 pathsearch = $(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
 
-JULIA_EXECUTABLE_debug = $(BUILD)/bin/julia-debug-$(DEFAULT_REPL)$(EXE)
-JULIA_EXECUTABLE_release = $(BUILD)/bin/julia-$(DEFAULT_REPL)$(EXE)
+JULIA_EXECUTABLE_debug = $(build_bindir)/julia-debug-$(DEFAULT_REPL)$(EXE)
+JULIA_EXECUTABLE_release = $(build_bindir)/julia-$(DEFAULT_REPL)$(EXE)
 
 ifeq ($(OS), WINNT)
 JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
