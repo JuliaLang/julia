@@ -3,81 +3,71 @@ General Information for Windows
 
 Please see the README at https://github.com/JuliaLang/julia/blob/master/README.md for more complete information about Julia. This is intended to only include information specific to using Julia on Windows.
 
+# Binary distribution
+
 Julia runs on Windows XP SP2 or later (including Windows Vista, Windows 7, and Windows 8). Both the 32-bit and 64-bit versions are supported. The 32-bit i686 binary will run on either 32-bit and 64-bit operating systems. The 64-bit x86_64 binary will only run on 64-bit Windows.
 
-Downloading additional libraries (Tk, Cairo, etc) is not necessary. Julia's package manager will acquire them as needed. For this to work, you must have `7z` installed (not the command-line version / 7za) (see below), and it must be on your path.
+1. Download and install [7-Zip](http://www.7-zip.org/download.html). Install the full program, not just the command line version.
 
-Julia requires that the lib and lib/julia directories be part of your `%PATH%` variable to startup. The `julia.bat` script will attempt to do this for you and is the recommended way of running julia on your system. The julia.bat file can be given arguments (e.g. `julia.bat -p 2 script.jl` for running script.jl on two processors) which will be passed directly to julia.exe.
+2. [Download](http://julialang.org/downloads) the latest version of Julia. Extract the binary to a reasonable destination folder, e.g. `C:\julia`.
 
-___________________________________________________
-Binary Downloads
-================
+3. Double-click the file `julia.bat` to launch Julia.
 
-Download the latest version of Julia from the downloads page at http://julialang.org/downloads/
+# Source distribution
 
-Unzip the download to a folder. Do not attempt to run Julia without extracting the zip archive first (hint: it won't work). Double-click the file `julia.bat` to launch Julia.
+## Building on Windows with MinGW-builds/MSYS
 
-Explore and have fun!
+1. Download and install the full [7-Zip](http://www.7-zip.org/download.html) program.
 
-Recommended external libraries (essential, if you use binary-only or source distribution, without batteries-included):
+2. Download and install the latest [Python 2.x](http://www.python.org/download/releases) release. Do not install Python 3.x.
 
- - [7z](http://www.7-zip.org/download.html) (install the full program, not the command line version / 7za)
- - [msysGit](https://code.google.com/p/msysgit/downloads/list)
- - [TortoiseGit](https://code.google.com/p/tortoisegit/wiki/Download)
+2. Install [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/), a Windows port of GCC. (Do not use the regular MinGW distribution.)
+  1. Download the [MinGW-builds installer](http://downloads.sourceforge.net/project/mingwbuilds/mingw-builds-install/mingw-builds-install.exe) from the [MinGW-builds homepage](http://sourceforge.net/projects/mingwbuilds/). 
+  2. Run the installer. When prompted, choose:
+    - Version: the most recent version (these instructions were tested with 4.8.1)
+    - Architecture: x32 or x64 as desired 
+    - Threads: win32 (not posix)
+    - Exception: sjlj (for x32) or seh (for x64). Do not choose dwarf2.
+    - Build revision: most recent available (tested with 5)
+  3. Do **not** install to a directory with spaces in the name. You will have to change the default installation path. Choose instead something like `C:\mingw-builds\x64-4.8.1-win32-seh-rev5\mingw64`.
 
-Optional external libraries
+4. Download and extract the [MSYS distribution for MinGW-builds](http://sourceforge.net/projects/mingwbuilds/files/external-binary-packages/) (e.g. msys+7za+wget+svn+git+mercurial+cvs-rev13.7z) to a directory *without* spaces in the name, e.g. `C:/mingw-builds/msys`.
 
- - MinGW/MSYS (as described below)
+5. Download the [MSYS distribution of make](http://sourceforge.net/projects/mingw/files/MSYS/Base/make) and use this  `make.exe` to replace the one in the `mingw64\bin` subdirectory of the MinGW-builds installation.
 
-___________________________________________________
-Source Compiling
-================
+6. Run the `msys.bat` installed in Step 4. Set up MSYS by running at the MSYS prompt:
 
-There are a few environments you can use to build julia. Making this easy requires getting the right environment.
+   ```
+    mount C:/mingw-builds/x64-4.8.1-win32-seh-rev5/mingw64/bin /mingw
+    mount C:/Python27 /python
+    export PATH=$PATH:/mingw/bin:/python
+   ```
 
-Important Build Errata
-----------------------
+   Replace the directories as appropriate.
 
-- You must use win32 threads version of MinGW. **Do not** use a POSIX threads version of MinGW.
-- Do not use GCC 4.6 or earlier or gcc-dw2, stuff will be broken.
-- Julia uses a [patched version](http://github.com/JuliaLang/readline/tarball/master)
-  of GNU Readline (this should be downloaded automatically by the build script).
-- Run `make win-extras` to download additional runtime dependencies not provided by default in MinGW.
+7. Download the Julia source repository and build it
+   ```
+    git clone https://github.com/JuliaLang/julia.git
+    cd julia
+    make
+   ```
+   *Tips:* 
+  - The MSYS build of `make` is fragile and will occasionally corrupt the build process. You can minimize the changes of this occurring by only running `make` in serial, i.e. avoid the `-j` argument.
+  - When the build process fails for no apparent reason, try running `make` again.
+  - Sometimes, `make` will appear to hang, consuming 100% cpu but without apparent progress. If this happens, kill `make` from the Task Manager and try again.
+  - Expect this to take a very long time (dozens of hours is not uncommon).
 
 
-Native Compile
---------------
+8. Run Julia with
+   ```
+    make run-julia
+   ```
+   (the full syntax is `make run-julia[-release|-debug] [DEFAULT_REPL=(basic|readline)]`)
 
-On Windows, do not use the mingw/msys environment from http://www.mingw.org as it will miscompile the OpenBLAS math library
+## Compiling with 
 
-The recommended way to setup your environment follows:
 
-1. Download and extract MinGW (e.g. x64-4.8.0-release-win32-seh-rev2.7z) to C:/MinGW (or similar location) from
-MinGW-builds [32-bit](http://sourceforge.net/projects/mingwbuilds/files/host-windows/releases/4.8.0/32-bit/threads-win32/sjlj/)
-or [64-bit](http://sourceforge.net/projects/mingwbuilds/files/host-windows/releases/4.8.0/64-bit/threads-win32/seh/) 
-2. Download and extract MSYS (e.g. msys+7za+wget+svn+git+mercurial+cvs-rev12.7z) to C:/MinGW/msys/1.0 (or similar location) from [MinGW-w64/MSYS](http://sourceforge.net/projects/mingwbuilds/files/external-binary-packages/)
-3. Add the line "C:/MinGW /mingw" to C:/MinGW/msys/1.0/etc/fstab (create the file if it doesn't exist)
-4. You will need to replace C:/MinGW/msys/1.0/bin/make.exe with C:/MinGW/msys/1.0/bin/make-old.exe or with a copy of make.exe extracted from [mingw-msys](http://sourceforge.net/projects/mingw/files/MSYS/Base/make/make-3.81-3/) (e.g. make-3.81-3-msys-1.0.13-bin.tar.lzma)
-
-Before proceeding, verify that python.exe from Python 2.7 is available in the MSYS PATH. If Python is not installed on your computer, [download Python 2.7](http://www.python.org/download/releases/2.7.5/) and install with default options (Python 2.7 is required to build LLVM; Python 3.3 will not work).
-
-If you plan to build Cairo (for graphics), you'll also need to install [CMake](http://www.cmake.org/cmake/resources/software.html).
-
-These sections assume you are familiar with building code. If you are not, you should stop reading now and go to the section on binaries. Regardless of which set of steps you followed above, you are now ready to compile julia. Open a unix shell by launching C:/MinGW/msys/1.0/msys.bat (or your favorite shortcut to that file). 
-
-Run the following commands in your build directory ($HOME at C:/MinGW/msys/1.0/home/your_name is fine)
-
-1. `git clone https://github.com/JuliaLang/julia.git`
-2. `cd julia`
-3. `make` Avoid using the `-j` argument to make. Windows will sometimes corrupt your build files. Additionally, make will probably lock up several times during the process, using 100% cpu, but not show progress. The only solution appears to be to kill make from the Task Manager and rerunning make. It should pickup where it left off. Expect this to take a very long time (dozens of hours is not uncommon).
-
-Running julia can be done in two ways:
-
-1. `make run-julia[-release|-debug] [DEFAULT_REPL=(basic|readline)]` (e.g. `make run-julia`)
-2. Launching the `julia.bat` script in usr/bin
-
-Cross-Compile
--------------
+## Cross-compiling
 
 If you prefer to cross-compile, the following steps should get you started.
 
