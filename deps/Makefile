@@ -567,8 +567,8 @@ $(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET) pcre-$(PCRE_VER)/checked
 
 clean-pcre:
 	-$(MAKE) -C pcre-$(PCRE_VER) clean
-	-rm -f $(PCRE_OBJ_TARGET)
-distclean-pcre:
+	-rm -f $(BUILD)/$(JL_LIBDIR)/libpcre*
+distclean-pcre: clean-pcre
 	-rm -rf pcre-$(PCRE_VER).tar.bz2 pcre-$(PCRE_VER)
 
 get-pcre: pcre-$(PCRE_VER).tar.bz2
