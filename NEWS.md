@@ -58,6 +58,13 @@ Library improvements
 
   * `.juliarc.jl` is now loaded for both script and REPL execution ([#5076]).
 
+  * More routines for specialized matrix types
+    - `Triangular`
+      - generic linear solver `\`, `inv` ([#5255])
+      - generic eigensystems solver `eigvals`, `eigvecs`, `eigfact` ([#5255])
+      - generic `transpose`, `ctranspose`, `istril`, `istriu` ([#5255])
+      - LAPACK wrapper for condition number estimate `cond` ([#5255])
+
 Deprecated or removed
 ---------------------
 
@@ -78,7 +85,7 @@ Deprecated or removed
 [#4670]: https://github.com/JuliaLang/julia/issues/4670
 [#5007]: https://github.com/JuliaLang/julia/issues/5007
 [#5076]: https://github.com/JuliaLang/julia/issues/5076
-
+[#5255]: https://github.com/JuliaLang/julia/issues/5255
 
 Julia v0.2.0 Release Notes
 ==========================
