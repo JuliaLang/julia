@@ -42,6 +42,30 @@ A_rdiv_Bc{T<:BlasComplex}(A::StridedVecOrMat{T}, B::Triangular{T}) = BLAS.trsm!(
 
 inv{T<:BlasFloat}(A::Triangular{T}) = LAPACK.trtri!(A.uplo, A.unitdiag, copy(A.UL))
 
+#Eigensystems
+#reorders eigenvalues and vectors
+eigvals(A::Triangular) = A.uplo=='U' ? diag(A) : reverse(diag(A))
+function eigvecs{T<:BlasFloat}(A::Triangular{T})
+    if A.uplo=='U'
+        V = LAPACK.trevc!('R', 'A', Array(Bool,1), A.UL, similar(A.UL), similar(A.UL))
+    else #A.uplo=='L'
+        V = LAPACK.trevc!('L', 'A', Array(Bool,1), transpose(A.UL), similar(A.UL), similar(A.UL))
+    end
+  # if A.uplo=='L' #This is the transpose of the Schur form
+  #   #The eigenvectors must be transformed
+  #   VV = inv(Triangular(transpose(V)))
+  #   N = size(V,2)
+  #   for i=1:N #Reorder eigenvectors to follow LAPACK convention
+  #     V[:,i]=VV[:,N+1-i]
+  #   end
+  # end
+  # #Need to normalize
+  # for i=1:size(V,2)
+  #   V[:,i] /= norm(V[:,i])
+  # end
+  # V
+end
+
 function cond{T<:BlasFloat}(A::Triangular{T}, p::Real=2)
 	chksquare(A)
 	if p==1
@@ -154,43 +178,9 @@ end
 
 eigfact(A::Triangular) = Eigen(eigvals(A), eigvecs(A))
 
-#######################
-# Eigenvalues/vectors #
-#######################
-
-#A is in Schur form (or its transpose), so its eigenvalues are simply the
-#diagonal elements.
-#The reverse ordering for lower triangular follows LAPACK's convention
-eigvals(A::Triangular) = A.uplo=='U' ? diag(A) : reverse(diag(A))
-
-#Calculate eigenvectors, taking advantage of the fact that A is already in
-#Schur form (or its transpose)
-function eigvecs{T<:BlasFloat}(A::Triangular{T})
-  N = size(A,2)
-  VL, VR = Array(T,N,N), Array(T,N,N)
-  if A.uplo=='U' #Schur form; compute right eigenvectors
-    VR = LAPACK.trevc!('R', 'A', Array(Bool,1), A.UL, VL, VR)
-  else # A.uplo=='L' #Transpose of Schur form; compute left eigenvectors
-    VL = LAPACK.trevc!('L', 'A', Array(Bool,1), transpose(A.UL), VL, VR)
-    for i=1:N #Reorder eigenvectors to follow LAPACK convention
-      VR[:,i]=VL[:,N+1-i]
+#Generic singular systems
+for func in (:svd, :svdfact, :svdfact!, :svdvals, :svdvecs)
+    @eval begin
+        ($func)(A::Triangular) = ($func)(full(A))
     end
-  end
-  for i=1:N #Normalize eigenvectors
-    VR[:,i] /= norm(VR[:,i])
-  end
-  VR
 end
-
-eig(M::Triangular) = eigvals(M), eigvecs(M)
-eigfact(M::Triangular) = Eigen(eigvals(M), eigvecs(M))
-
-#############################
-# Singular values / vectors #
-#############################
-
-svd(M::Triangular) = svd(full(M))
-svdfact(M::Triangular) = svdfact(full(M))
-svdfact!(M::Triangular) = svdfact!(full(M))
-svdvals(M::Triangular) = svdvals(full(M))
-svdvecs(M::Triangular) = svdvecs(full(M))
