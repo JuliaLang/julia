@@ -113,3 +113,38 @@ end
 eigvals(A::Triangular) = diag(A.UL)
 det(A::Triangular) = prod(eigvals(A))
 
+function eigvecs{T}(A::Triangular{T})
+	evecs = zeros(A)
+	N = size(A,1)
+	if A.unitdiag == 'U' #Trivial
+		return eye(A)
+	elseif A.uplo == 'L' #do forward substitution
+        for i=1:N
+            evecs[i,i] = one(T)
+            for j = i+1:N
+                for k = i:j-1
+                    evecs[j,i] -= A[j,k] * evecs[k,i]
+                end
+                evecs[j,i] /= A[j,j]-A[i,i]
+            end
+            evecs[i:N, i] /= norm(evecs[i:N, i])
+        end
+	    evecs
+    elseif A.uplo == 'U' #do backward substitution
+        for i=1:N
+            evecs[i,i] = one(T)
+            for j = i-1:-1:1
+                for k = j+1:i
+                    evecs[j,i] -= A[j,k] * evecs[k,i]
+                end
+                evecs[j,i] /= A[j,j]-A[i,i]
+            end
+            evecs[1:i, i] /= norm(evecs[1:i, i])
+        end
+	else
+		throw(ArgumentError("Unknown uplo=$(A.uplo)"))
+	end
+    evecs
+end
+
+eigfact(A::Triangular) = Eigen(eigvals(A), eigvecs(A))
