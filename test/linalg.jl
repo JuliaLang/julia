@@ -187,38 +187,6 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     end
 end
 
-#Triangular-specific tests
-n = 20
-for elty in (Float32, Float64, Complex64, Complex128)
-    A = convert(Matrix{elty}, randn(n, n))
-    b = convert(Vector{elty}, randn(n))
-    fudgefactor = n^3*eps(typeof(real(b[1])))*(elty<:Complex?2:1)
-    if elty <: Complex
-        A += im*convert(Matrix{elty}, randn(n, n))
-        b += im*convert(Vector{elty}, randn(n))
-    end
-
-    for M in {triu(A), tril(A)}
-        TM = Triangular(M)
-        #Linear solve
-        x = M \ b
-        solve_error = 2norm(M*x-b)
-        tx = TM \ b
-        @test_approx_eq_eps norm(TM*tx-b) 0 solve_error
-        @test_approx_eq_eps norm(x-tx) 0 solve_error
-        #Eigensystems
-        vals, vecs = eig(TM)
-        for i=1:n
-            @test_approx_eq  M*vecs[:,i] vals[i]*vecs[:,i]
-            @test_approx_eq TM*vecs[:,i] vals[i]*vecs[:,i]
-        end
-        #Condition number
-        for p in [1.0, Inf]
-            @test_approx_eq_eps cond(TM, p) cond(M, p) (cond(TM,p)+cond(M,p))*fudgefactor
-        end
-    end
-end
-
 ## Least squares solutions
 a = [ones(20) 1:20 1:20]
 b = reshape(eye(8, 5), 20, 2)
@@ -606,21 +574,44 @@ end
 ##############################
 
 #Triangular matrices
-n=5
-for elty in (Float32, Float64)
-  AUfull = convert(Matrix{elty}, sum([diagm(randn(n-i), i) for i=0:n-1]))
-  for Afull in {AUfull, AUfull'} #Test upper and lower triangular
-    A = Triangular(Afull)
-    #Test eigenvalues/vectors against dense routines
-    d1, d2 = eigvals(A), eigvals(Afull)
-    v1, v2 = eigvecs(A), eigvecs(Afull)
-    @test_approx_eq d1 d2
-    test_approx_eq_vecs(v1, v2)
-    #Test spectral decomposition
-    #XXX This is not the correct error bound
-    @test_approx_eq_eps 0 norm(v1 * diagm(d1) * inv(v1) - Afull) sqrt(eps(elty))
-    @test_approx_eq_eps 0 norm(v2 * diagm(d2) * inv(v2) - Afull) sqrt(eps(elty))
-  end
+n=12
+for elty in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloat})
+    A = convert(Matrix{elty}, randn(n, n))
+    b = convert(Vector{elty}, randn(n))
+    thiseps = eps(typeof(real(b[1])))
+    if elty <: Complex
+        A += im*convert(Matrix{elty}, randn(n, n))
+        b += im*convert(Vector{elty}, randn(n))
+    end
+
+    for M in (triu(A), tril(A))
+        TM = Triangular(M)
+        #Linear solvee
+        x = M \ b
+        tx = TM \ b
+        solve_error = n^3*max(norm(M*x-b), thiseps)
+        @test_approx_eq_eps norm(TM*tx-b) 0 solve_error
+        @test_approx_eq_eps norm(x-tx) 0 solve_error
+        if elty != BigFloat && elty != Complex{BigFloat} #naivesub! is the default for non-BlasFloats
+            tx = Base.LinAlg.naivesub!(TM, b, similar(b))
+            @test_approx_eq_eps norm(TM*tx-b) 0 solve_error
+            @test_approx_eq_eps norm(x-tx) 0 solve_error
+        end
+
+        #Eigensystems
+        vals1, vecs1 = eig(complex128(M))
+        vals2, vecs2 = eig(TM)
+        res1=norm(complex128(vecs1*diagm(vals1)*inv(vecs1) - M))
+        res2=norm(complex128(vecs2*diagm(vals2)*inv(vecs2) - full(TM)))
+        @test_approx_eq_eps res1 res2 res1+res2
+
+        if elty != BigFloat && elty != Complex{BigFloat}
+            #Condition number tests - can be VERY approximate
+            for p in [1.0, Inf]
+                @test_approx_eq_eps cond(TM, p) cond(M, p) (cond(TM,p)+cond(M,p))*0.2
+            end
+        end
+    end
 end
 
 #SymTridiagonal (symmetric tridiagonal) matrices
