@@ -96,6 +96,14 @@ transpose(A::Triangular) = Triangular(A.UL, A.uplo=='U':'L':'U', A.unitdiag)
 ctranspose(A::Triangular) = conj(transpose(A))
 diag(A::Triangular) = diag(A.UL)
 
+#Generic multiplication
+for func in (:*, :Ac_mul_B, :A_mul_Bc, :Ac_ldiv_B, :/, :A_rdiv_Bc)
+    @eval begin
+        ($func){T}(A::Triangular{T}, B::AbstractVector{T}) = ($func)(full(A), B)
+        #($func){T}(A::AbstractArray{T}, B::Triangular{T}) = ($func)(full(A), B)
+    end
+end
+
 #Generic solver using naive substitution
 function naivesub!(A::Triangular, b::AbstractVector, x::AbstractVector=b)
     N = size(A, 2)
