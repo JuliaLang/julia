@@ -1606,7 +1606,7 @@ function prod{T}(A::AbstractArray{T})
 end
 
 function minimum{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("minimum: argument must not be empty"); end
+    if isempty(A); error("argument must not be empty"); end
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]
@@ -1618,7 +1618,7 @@ function minimum{T<:Real}(A::AbstractArray{T})
 end
 
 function maximum{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("maximum: argument must not be empty"); end
+    if isempty(A); error("argument must not be empty"); end
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]
@@ -1632,7 +1632,7 @@ end
 # specialized versions for floating-point, which deal with NaNs
 
 function minimum{T<:FloatingPoint}(A::AbstractArray{T})
-    if isempty(A); error("minimum: argument must not be empty"); end
+    if isempty(A); error("argument must not be empty"); end
     n = length(A)
 
     # locate the first non NaN number
@@ -1654,7 +1654,7 @@ function minimum{T<:FloatingPoint}(A::AbstractArray{T})
 end
 
 function maximum{T<:FloatingPoint}(A::AbstractArray{T})
-    if isempty(A); error("minimum: argument must not be empty"); end
+    if isempty(A); error("argument must not be empty"); end
     n = length(A)
 
     # locate the first non NaN number
