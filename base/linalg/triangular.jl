@@ -42,6 +42,17 @@ A_rdiv_Bc{T<:BlasComplex}(A::StridedVecOrMat{T}, B::Triangular{T}) = BLAS.trsm!(
 
 inv{T<:BlasFloat}(A::Triangular{T}) = LAPACK.trtri!(A.uplo, A.unitdiag, copy(A.UL))
 
+function cond{T<:BlasFloat}(A::Triangular{T}, p::Real=2)
+	chksquare(A)
+	if p==1
+		inv(LAPACK.trcon!('O', A.uplo, A.unitdiag, A.UL))
+	elseif p==Inf
+		inv(LAPACK.trcon!('I', A.uplo, A.unitdiag, A.UL))
+	else #use fallback
+		return cond(full(A), p)
+	end
+end
+
 ####################
 # Generic routines #
 ####################
