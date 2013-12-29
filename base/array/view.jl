@@ -72,7 +72,7 @@ function repeated_linear_indexing(a,cap=0.01)
     total, time/n
 end
 
-function benchmark(z=1000000,n=10,m=10)
+function benchmark(z=100000,n=10,m=10)
     results = Array(Float64,n,m,3)
     for d = 1:n, x = 1:m
         S = [ iround(3z^(1/d)+1) for _=1:d ]
