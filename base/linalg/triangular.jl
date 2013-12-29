@@ -82,12 +82,12 @@ end
 ####################
 
 size(A::Triangular, args...) = size(A.UL, args...)
+convert(::Type{Matrix}, A::Triangular) = full(A)
+full(A::Triangular) = A.UL
+
+getindex{T}(A::Triangular{T}, i::Integer, j::Integer) = i == j ? A.UL[i,j] : ((A.uplo == 'U') == (i < j) ? getindex(A.UL, i, j) : zero(T))
 
 print_matrix(io::IO, A::Triangular, rows::Integer, cols::Integer) = print_matrix(io, full(A), rows, cols)
-
-convert(::Type{Matrix}, A::Triangular) = full(A)
-full(A::Triangular) = (istril(A) ? tril! : triu!)(A.UL)
-getindex{T}(A::Triangular{T}, i::Integer, j::Integer) = i == j ? A.UL[i,j] : ((A.uplo == 'U') == (i < j) ? getindex(A.UL, i, j) : zero(T))
 
 istril(A::Triangular) = A.uplo == 'L' || istriu(A.UL)
 istriu(A::Triangular) = A.uplo == 'U' || istril(A.UL)
