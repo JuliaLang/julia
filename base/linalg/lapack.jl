@@ -1823,6 +1823,173 @@ for (trtri, trtrs, elty) in
     end
 end
 
+#Eigenvector computation and condition number estimation
+for (trcon, trevc, elty) in
+    ((:dtrcon_,:dtrevc_,:Float64),
+     (:strcon_,:strevc_,:Float32))
+    @eval begin
+        #SUBROUTINE DTRCON( NORM, UPLO, DIAG, N, A, LDA, RCOND, WORK,
+        #                   IWORK, INFO )
+        #.. Scalar Arguments ..
+        #CHARACTER          DIAG, NORM, UPLO
+        #INTEGER            INFO, LDA, N
+        #DOUBLE PRECISION   RCOND
+        #.. Array Arguments ..
+        #INTEGER            IWORK( * )
+        #DOUBLE PRECISION   A( LDA, * ), WORK( * )
+        function trcon!(norm::BlasChar, uplo::BlasChar, diag::BlasChar,
+                        A::StridedMatrix{$elty})
+            chkstride1(A)
+            n = chksquare(A)
+            @chkuplo
+            rcond = Array($elty, 1)
+            work  = Array($elty, 3n)
+            iwork = Array(BlasInt, n)
+            info  = Array(BlasInt, 1)
+            ccall(($(string(trcon)),liblapack), Void,
+                  (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                  &norm, &uplo, &diag, &n,
+                  A, &max(1,stride(A,2)), rcond, work, iwork, info)
+            @lapackerror
+            rcond[1]
+        end
+        # SUBROUTINE DTREVC( SIDE, HOWMNY, SELECT, N, T, LDT, VL, LDVL, VR,
+        #                    LDVR, MM, M, WORK, INFO )
+        #
+        # .. Scalar Arguments ..
+        # CHARACTER          HOWMNY, SIDE
+        # INTEGER            INFO, LDT, LDVL, LDVR, M, MM, N
+        # ..
+        # .. Array Arguments ..
+        # LOGICAL            SELECT( * )
+        # DOUBLE PRECISION   T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
+        #$                   WORK( * )
+        function trevc!(side::BlasChar, howmny::BlasChar,
+                select::Vector{Bool}, A::StridedMatrix{$elty},
+                VL::StridedMatrix{$elty}, VR::StridedMatrix{$elty})
+            chkstride1(A)
+            chksquare(A)
+            ldt, n = size(A)
+            ldvl, mm = size(VL)
+            ldvr, mm = size(VR)
+            m = Array(BlasInt, 1)
+            work = Array($elty, 3n)
+            info = Array(BlasInt, 1)
+            ccall(($(string(trevc)),liblapack), Void,
+            (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Bool}, Ptr{BlasInt}, Ptr{$elty},
+            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+            Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+            &side, &howmny, select, &n, A, &ldt, VL, &ldvl, VR, &ldvr, &mm,
+            m, work, info)
+            @lapackerror
+
+            #Decide what exactly to return
+            if howmny=='S' #compute selected eigenvectors
+                if side=='L' #left eigenvectors only
+                    return select, VL[:,1:m[1]]
+                elseif side=='R' #right eigenvectors only
+                    return select, VR[:,1:m[1]]
+                else #side=='B' #both eigenvectors
+                    return select, VL[:,1:m[1]], VR[:,1:m[1]]
+                end
+            else #compute all eigenvectors
+                if side=='L' #left eigenvectors only
+                    return VL[:,1:m[1]]
+                elseif side=='R' #right eigenvectors only
+                    return VR[:,1:m[1]]
+                else #side=='B' #both eigenvectors
+                    return VL[:,1:m[1]], VR[:,1:m[1]]
+                end
+            end
+        end
+    end
+end
+for (trcon, trevc, elty, relty) in
+    ((:ztrcon_,:ztrevc_,Complex128,:Float64),
+     (:ctrcon_,:ctrevc_,Complex64,:Float32))
+    @eval begin
+        #SUBROUTINE ZTRCON( NORM, UPLO, DIAG, N, A, LDA, RCOND, WORK,
+        #                   RWORK, INFO )
+        #.. Scalar Arguments ..
+        #CHARACTER          DIAG, NORM, UPLO
+        #INTEGER            INFO, LDA, N
+        #DOUBLE PRECISION   RCOND
+        #.. Array Arguments ..
+        #DOUBLE PRECISION   RWORK( * )
+        #COMPLEX*16         A( LDA, * ), WORK( * )
+        function trcon!(norm::BlasChar, uplo::BlasChar, diag::BlasChar,
+                        A::StridedMatrix{$elty})
+            chkstride1(A)
+            n = chksquare(A)
+            @chkuplo
+            rcond = Array($relty, 1)
+            work  = Array($elty, 2n)
+            rwork = Array($elty, n)
+            info  = Array(BlasInt, 1)
+            ccall(($(string(trcon)),liblapack), Void,
+                  (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
+                  &norm, &uplo, &diag, &n,
+                  A, &max(1,stride(A,2)), rcond, work, rwork, info)
+            @lapackerror
+            rcond[1]
+        end
+
+        # SUBROUTINE ZTREVC( SIDE, HOWMNY, SELECT, N, T, LDT, VL, LDVL, VR,
+        #                    LDVR, MM, M, WORK, RWORK, INFO )
+        #
+        # .. Scalar Arguments ..
+        # CHARACTER          HOWMNY, SIDE
+        # INTEGER            INFO, LDT, LDVL, LDVR, M, MM, N
+        # ..
+        # .. Array Arguments ..
+        # LOGICAL            SELECT( * )
+        # DOUBLE PRECISION   RWORK( * )
+        # COMPLEX*16         T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
+        #$                   WORK( * )
+        function trevc!(side::BlasChar, howmny::BlasChar,
+                select::Vector{Bool}, A::StridedMatrix{$elty},
+                VL::StridedMatrix{$elty}, VR::StridedMatrix{$elty})
+            chkstride1(A)
+            chksquare(A)
+            ldt, n = size(A)
+            ldvl, mm = size(VL)
+            ldvr, mm = size(VR)
+            m = Array(BlasInt, 1)
+            work = Array($elty, 2n)
+            rwork = Array($relty, n)
+            info = Array(BlasInt, 1)
+            ccall(($(string(trevc)),liblapack), Void,
+            (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Bool}, Ptr{BlasInt}, Ptr{$elty},
+            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+            Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
+            &side, &howmny, select, &n, A, &ldt, VL, &ldvl, VR, &ldvr, &mm,
+            m, work, rwork, info)
+            @lapackerror
+
+            #Decide what exactly to return
+            if howmny=='S' #compute selected eigenvectors
+                if side=='L' #left eigenvectors only
+                    return select, VL[:,1:m[1]]
+                elseif side=='R' #right eigenvectors only
+                    return select, VR[:,1:m[1]]
+                else #side=='B' #both eigenvectors
+                    return select, VL[:,1:m[1]], VR[:,1:m[1]]
+                end
+            else #compute all eigenvectors
+                if side=='L' #left eigenvectors only
+                    return VL[:,1:m[1]]
+                elseif side=='R' #right eigenvectors only
+                    return VR[:,1:m[1]]
+                else #side=='B' #both eigenvectors
+                    return VL[:,1:m[1]], VR[:,1:m[1]]
+                end
+            end
+        end
+    end
+end
+
 ## (ST) Symmetric tridiagonal - eigendecomposition
 for (stev, stebz, stegr, stein, elty) in
     ((:dstev_,:dstebz_,:dstegr_,:dstein_,:Float64),

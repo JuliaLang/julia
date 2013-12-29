@@ -187,6 +187,38 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     end
 end
 
+#Triangular-specific tests
+n = 20
+for elty in (Float32, Float64, Complex64, Complex128)
+    A = convert(Matrix{elty}, randn(n, n))
+    b = convert(Vector{elty}, randn(n))
+    fudgefactor = n^3*eps(typeof(real(b[1])))*(elty<:Complex?2:1)
+    if elty <: Complex
+        A += im*convert(Matrix{elty}, randn(n, n))
+        b += im*convert(Vector{elty}, randn(n))
+    end
+
+    for M in {triu(A), tril(A)}
+        TM = Triangular(M)
+        #Linear solve
+        x = M \ b
+        solve_error = 2norm(M*x-b)
+        tx = TM \ b
+        @test_approx_eq_eps norm(TM*tx-b) 0 solve_error
+        @test_approx_eq_eps norm(x-tx) 0 solve_error
+        #Eigensystems
+        vals, vecs = eig(TM)
+        for i=1:n
+            @test_approx_eq  M*vecs[:,i] vals[i]*vecs[:,i]
+            @test_approx_eq TM*vecs[:,i] vals[i]*vecs[:,i]
+        end
+        #Condition number
+        for p in [1.0, Inf]
+            @test_approx_eq_eps cond(TM, p) cond(M, p) (cond(TM,p)+cond(M,p))*fudgefactor
+        end
+    end
+end
+
 ## Least squares solutions
 a = [ones(20) 1:20 1:20]
 b = reshape(eye(8, 5), 20, 2)
@@ -569,7 +601,29 @@ function test_approx_eq_vecs(a, b)
     end
 end
 
-#LAPACK tests for symmetric tridiagonal matrices
+##############################
+# Tests for special matrices #
+##############################
+
+#Triangular matrices
+n=5
+for elty in (Float32, Float64)
+  AUfull = convert(Matrix{elty}, sum([diagm(randn(n-i), i) for i=0:n-1]))
+  for Afull in {AUfull, AUfull'} #Test upper and lower triangular
+    A = Triangular(Afull)
+    #Test eigenvalues/vectors against dense routines
+    d1, d2 = eigvals(A), eigvals(Afull)
+    v1, v2 = eigvecs(A), eigvecs(Afull)
+    @test_approx_eq d1 d2
+    test_approx_eq_vecs(v1, v2)
+    #Test spectral decomposition
+    #XXX This is not the correct error bound
+    @test_approx_eq_eps 0 norm(v1 * diagm(d1) * inv(v1) - Afull) sqrt(eps(elty))
+    @test_approx_eq_eps 0 norm(v2 * diagm(d2) * inv(v2) - Afull) sqrt(eps(elty))
+  end
+end
+
+#SymTridiagonal (symmetric tridiagonal) matrices
 n=5
 Ainit = randn(n)
 Binit = randn(n-1)
@@ -598,7 +652,7 @@ for elty in (Float32, Float64)
 end
 
 
-#Test bidiagonal matrices and their SVDs
+#Bidiagonal matrices
 dv = randn(n)
 ev = randn(n-1)
 for elty in (Float32, Float64, Complex64, Complex128)
@@ -621,16 +675,22 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test ctranspose(ctranspose(T)) == T
 
         if (elty <: Real)
-            #XXX If I run either of these tests separately, by themselves, things are OK.
-            # Enabling BOTH tests results in segfault.
-            # Where is the memory corruption???
-
-            @test_approx_eq svdvals(full(T)) svdvals(T)
-            u1, d1, v1 = svd(full(T))
+            Tfull = full(T)
+            #Test singular values/vectors
+            @test_approx_eq svdvals(Tfull) svdvals(T)
+            u1, d1, v1 = svd(Tfull)
             u2, d2, v2 = svd(T)
             @test_approx_eq d1 d2
-            test_approx_eq_vecs(u1, u2)
-            test_approx_eq_vecs(v1, v2)
+            test_approx_eq_vecs(u1, u2) 
+            test_approx_eq_vecs(v1, v2) 
+     
+            #Test eigenvalues/vectors
+            d1, v1 = eig(Tfull)
+            d2, v2 = eigvals(T), eigvecs(T)
+            @test_approx_eq d1 d2
+            test_approx_eq_vecs(v1, v2) 
+            @test_approx_eq_eps 0 norm(v1 * diagm(d1) * inv(v1) - Tfull) eps(elty)*n*(n+1)
+            @test_approx_eq_eps 0 norm(v2 * diagm(d2) * inv(v2) - Tfull) eps(elty)*n*(n+1)
         end
     end
 end

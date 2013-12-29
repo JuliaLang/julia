@@ -473,7 +473,7 @@ function cond(A::StridedMatrix, p::Real=2)
     if p == 2
         v = svdvals(A)
         maxv = maximum(v)
-        return maxv == 0.0 ? Inf : maxv / minimum(v)
+        return maxv == 0.0 ? inf(typeof(real(A[1,1]))) : maxv / minimum(v)
     elseif p == 1 || p == Inf
         chksquare(A)
         return cond(lufact(A), p)
