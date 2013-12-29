@@ -206,6 +206,12 @@ for elty in (Float32, Float64, Complex64, Complex128)
         tx = TM \ b
         @test_approx_eq_eps norm(TM*tx-b) 0 solve_error
         @test_approx_eq_eps norm(x-tx) 0 solve_error
+        #Eigensystems
+        vals, vecs = eig(TM)
+        for i=1:n
+            @test_approx_eq  M*vecs[:,i] vals[i]*vecs[:,i]
+            @test_approx_eq TM*vecs[:,i] vals[i]*vecs[:,i]
+        end
         #Condition number
         for p in [1.0, Inf]
             @test_approx_eq_eps cond(TM, p) cond(M, p) (cond(TM,p)+cond(M,p))*fudgefactor
