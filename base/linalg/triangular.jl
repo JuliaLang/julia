@@ -110,5 +110,6 @@ function inv(A::Triangular)
 end
 
 #Generic eigensystems
+eigvals(A::Triangular) = diag(A.UL)
 det(A::Triangular) = prod(eigvals(A))
 
