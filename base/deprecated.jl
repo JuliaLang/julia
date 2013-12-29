@@ -366,6 +366,7 @@ const CharString = UTF32String
 @deprecate set_bigfloat_rounding(r::RoundingMode) set_rounding(BigFloat,r)
 @deprecate get_bigfloat_rounding() get_rounding(BigFloat)
 @deprecate with_bigfloat_rounding(f::Function, r::RoundingMode) with_rounding(f::Function, BigFloat, r)
+eval(Sys, :(@deprecate shlib_list dllist))
 
 # 0.3 discontinued functions
 
