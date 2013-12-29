@@ -542,6 +542,7 @@ export
     promote_shape,
     randcycle,
     randperm,
+    range,
     reducedim,
     repmat,
     reshape,
