@@ -164,8 +164,8 @@ function getindex{T}(A::LU{T}, d::Symbol)
     d == :U && return triu(A.factors[1:min(m,n),1:n])
     if d == :p
         p = [1:m]
-        for i in 1:length(A.ipiv)
-            p[i], p[A.ipiv[i]] = p[A.ipiv[i]], p[i]
+        for i in 1:length(A.pivots)
+            p[i], p[A.pivots[i]] = p[A.pivots[i]], p[i]
         end
         return p
     elseif d == :P
