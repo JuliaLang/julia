@@ -84,6 +84,7 @@ istriu(A::Triangular) = A.uplo == 'U' || istril(A.UL)
 transpose(A::Triangular) = Triangular(A.UL, A.uplo=='U':'L':'U', A.unitdiag)
 ctranspose(A::Triangular) = conj(transpose(A))
 diag(A::Triangular) = diag(A.UL)
+big(A::Triangular) = Triangular(big(A.UL), A.uplo, A.unitdiag)
 
 #Generic multiplication
 for func in (:*, :Ac_mul_B, :A_mul_Bc, :Ac_ldiv_B, :/, :A_rdiv_Bc)
