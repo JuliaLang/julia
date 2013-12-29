@@ -1823,6 +1823,72 @@ for (trtri, trtrs, elty) in
     end
 end
 
+#Condition number estimation
+for (trcon, elty) in
+    ((:dtrcon_,:Float64),
+     (:strcon_,:Float32))
+    @eval begin
+        #SUBROUTINE DTRCON( NORM, UPLO, DIAG, N, A, LDA, RCOND, WORK,
+        #                   IWORK, INFO )
+        #.. Scalar Arguments ..
+        #CHARACTER          DIAG, NORM, UPLO
+        #INTEGER            INFO, LDA, N
+        #DOUBLE PRECISION   RCOND
+        #.. Array Arguments ..
+        #INTEGER            IWORK( * )
+        #DOUBLE PRECISION   A( LDA, * ), WORK( * )
+        function trcon!(norm::BlasChar, uplo::BlasChar, diag::BlasChar,
+                        A::StridedMatrix{$elty})
+            chkstride1(A)
+            n = chksquare(A)
+            @chkuplo
+            rcond = Array($elty, 1)
+            work  = Array($elty, 3n)
+            iwork = Array(BlasInt, n)
+            info  = Array(BlasInt, 1)
+            ccall(($(string(trcon)),liblapack), Void,
+                  (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                  &norm, &uplo, &diag, &n,
+                  A, &max(1,stride(A,2)), rcond, work, iwork, info)
+            @lapackerror
+            rcond[1]
+        end
+    end
+end
+for (trcon, elty, relty) in
+    ((:ztrcon_,:Complex128,:Float64),
+     (:ctrcon_,:Complex64,:Float32))
+    @eval begin
+        #SUBROUTINE ZTRCON( NORM, UPLO, DIAG, N, A, LDA, RCOND, WORK,
+        #                   RWORK, INFO )
+        #.. Scalar Arguments ..
+        #CHARACTER          DIAG, NORM, UPLO
+        #INTEGER            INFO, LDA, N
+        #DOUBLE PRECISION   RCOND
+        #.. Array Arguments ..
+        #DOUBLE PRECISION   RWORK( * )
+        #COMPLEX*16         A( LDA, * ), WORK( * )
+        function trcon!(norm::BlasChar, uplo::BlasChar, diag::BlasChar,
+                        A::StridedMatrix{$elty})
+            chkstride1(A)
+            n = chksquare(A)
+            @chkuplo
+            rcond = Array($relty, 1)
+            work  = Array($elty, 2n)
+            rwork = Array($elty, n)
+            info  = Array(BlasInt, 1)
+            ccall(($(string(trcon)),liblapack), Void,
+                  (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
+                  &norm, &uplo, &diag, &n,
+                  A, &max(1,stride(A,2)), rcond, work, rwork, info)
+            @lapackerror
+            rcond[1]
+        end
+    end
+end
+
 ## (ST) Symmetric tridiagonal - eigendecomposition
 for (stev, stebz, stegr, stein, elty) in
     ((:dstev_,:dstebz_,:dstegr_,:dstein_,:Float64),
