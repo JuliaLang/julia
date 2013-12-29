@@ -1610,7 +1610,7 @@ function minimum{T<:Real}(A::AbstractArray{T})
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]
-        if x < v || v!=v
+        if x < v
             v = x
         end
     end
@@ -1622,12 +1622,59 @@ function maximum{T<:Real}(A::AbstractArray{T})
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]
-        if x > v || v!=v
+        if x > v
             v = x
         end
     end
     v
 end
+
+# specialized versions for floating-point, which deal with NaNs
+
+function minimum{T<:FloatingPoint}(A::AbstractArray{T})
+    if isempty(A); error("argument must not be empty"); end
+    n = length(A)
+
+    # locate the first non NaN number
+    v = A[1]
+    i = 2
+    while v != v && i <= n
+        @inbounds v = A[i]
+        i += 1
+    end
+
+    while i <= n
+        @inbounds x = A[i]
+        if x < v
+            v = x
+        end
+        i += 1
+    end
+    v
+end
+
+function maximum{T<:FloatingPoint}(A::AbstractArray{T})
+    if isempty(A); error("argument must not be empty"); end
+    n = length(A)
+
+    # locate the first non NaN number
+    v = A[1]
+    i = 2
+    while v != v && i <= n
+        @inbounds v = A[i]
+        i += 1
+    end
+
+    while i <= n
+        @inbounds x = A[i]
+        if x > v
+            v = x
+        end
+        i += 1
+    end
+    v
+end
+
 
 ## map over arrays ##
 

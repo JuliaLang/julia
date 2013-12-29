@@ -353,6 +353,13 @@ let es = sum_kbn(z), es2 = sum_kbn(z[1:10^5])
 end
 @test_approx_eq sum(sin(z)) sum(sin, z)
 
+@test maximum([4, 3, 5, 2]) == 5
+@test minimum([4, 3, 5, 2]) == 2
+@test isnan(maximum([NaN]))
+@test isnan(minimum([NaN]))
+@test maximum([4., 3., NaN, 5., 2.]) == 5.
+@test minimum([4., 3., NaN, 5., 2.]) == 2.
+
 @test any([true false; false false], 2) == [true false]'
 @test any([true false; false false], 1) == [true false]
 
