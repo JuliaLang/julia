@@ -846,17 +846,30 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
         tvs = &jl_t0(tvars);
         tvarslen = jl_tuple_len(tvars);
     }
-    for(int i=0; i < jl_tuple_len(*penv); i+=2) {
+    int l = jl_tuple_len(*penv);
+    for(int i=0; i < l; i+=2) {
         jl_value_t *v = jl_tupleref(*penv,i);
         jl_value_t *val = jl_tupleref(*penv,i+1);
         for(int j=0; j < tvarslen; j++) {
             if (v == tvs[j]) {
                 ee[n++] = v;
                 ee[n++] = val;
+                /*
+                  since "a" is a concrete type, we assume that
+                  (a∩b != None) => a<:b. However if a static parameter is
+                  forced to equal None, then part of "b" might become None,
+                  and therefore a subtype of "a". For example
+                  (Type{None},Int) ∩ (Type{T},T)
+                  issue #5254
+                */
+                if (val == (jl_value_t*)jl_bottom_type) {
+                    if (!jl_subtype(a, ti, 0))
+                        return (jl_value_t*)jl_bottom_type;
+                }
             }
         }
     }
-    if (n != jl_tuple_len(*penv)) {
+    if (n != l) {
         jl_tuple_t *en = jl_alloc_tuple_uninit(n);
         memcpy(en->data, ee, n*sizeof(void*));
         *penv = en;

@@ -1213,3 +1213,8 @@ let
     @test tupledispatch(t1) == true
     @test_throws tupledispatch(t2)
 end
+
+# issue #5254
+f5254{T}(::Type{T}, b::T) = 0
+f5254(a, b) = 1
+@test f5254(None, 1) == 1
