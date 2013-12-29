@@ -58,8 +58,14 @@ Library improvements
 
   * `.juliarc.jl` is now loaded for both script and REPL execution ([#5076]).
 
+  * The `Sys` module now includes convenient functions for working with
+    dynamic library handles; `Sys.dllist` will list out all paths currently
+    loaded via `dlopen`, and `Sys.dlpath` will lookup a path from a handle
+
 Deprecated or removed
 ---------------------
+
+  * `Sys.shlib_ext` has been renamed to `Sys.dlext`
 
   * `dense` is deprecated in favor of `full` ([#4759])
 
