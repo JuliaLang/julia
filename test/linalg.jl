@@ -187,6 +187,32 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     end
 end
 
+#Triangular-specific tests
+n = 20
+for elty in (Float32, Float64, Complex64, Complex128)
+    A = convert(Matrix{elty}, randn(n, n))
+    b = convert(Vector{elty}, randn(n))
+    fudgefactor = n^3*eps(typeof(real(b[1])))*(elty<:Complex?2:1)
+    if elty <: Complex
+        A += im*convert(Matrix{elty}, randn(n, n))
+        b += im*convert(Vector{elty}, randn(n))
+    end
+
+    for M in {triu(A), tril(A)}
+        TM = Triangular(M)
+        #Linear solve
+        x = M \ b
+        solve_error = 2norm(M*x-b)
+        tx = TM \ b
+        @test_approx_eq_eps norm(TM*tx-b) 0 solve_error
+        @test_approx_eq_eps norm(x-tx) 0 solve_error
+        #Condition number
+        for p in [1.0, Inf]
+            @test_approx_eq_eps cond(TM, p) cond(M, p) (cond(TM,p)+cond(M,p))*fudgefactor
+        end
+    end
+end
+
 ## Least squares solutions
 a = [ones(20) 1:20 1:20]
 b = reshape(eye(8, 5), 20, 2)
