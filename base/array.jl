@@ -193,17 +193,16 @@ end
 fill(v, dims::Dims)       = fill!(Array(typeof(v), dims), v)
 fill(v, dims::Integer...) = fill!(Array(typeof(v), dims...), v)
 
-zeros{T}(::Type{T}, dims...) = fill!(Array(T, dims...), zero(T))
-zeros(dims...)               = fill!(Array(Float64, dims...), 0.0)
-
-ones{T}(::Type{T}, dims...) = fill!(Array(T, dims...), one(T))
-ones(dims...)               = fill!(Array(Float64, dims...), 1.0)
-
-infs{T}(::Type{T}, dims...) = fill!(Array(T, dims...), inf(T))
-infs(dims...)               = fill!(Array(Float64, dims...), Inf)
-
-nans{T}(::Type{T}, dims...) = fill!(Array(T, dims...), nan(T))
-nans(dims...)               = fill!(Array(Float64, dims...), NaN)
+for (fname, felt) in ((:zeros,:zero),
+                      (:ones,:one),
+                      (:infs,:inf), 
+                      (:nans,:nan))
+    @eval begin
+        ($fname){T}(::Type{T}, dims...) = fill!(Array(T, dims...), ($felt)(T))
+        ($fname)(dims...)               = fill!(Array(Float64, dims...), ($felt)(Float64))
+        ($fname){T}(x::AbstractMatrix{T}) = ($fname)(T, size(x, 1), size(x, 2))
+    end
+end
 
 function eye(T::Type, m::Integer, n::Integer)
     a = zeros(T,m,n)
@@ -219,7 +218,7 @@ eye{T}(x::AbstractMatrix{T}) = eye(T, size(x, 1), size(x, 2))
 
 function one{T}(x::AbstractMatrix{T})
     m,n = size(x)
-    if m != n; error("multiplicative identity defined only for square matrices"); end;
+    m==n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
     eye(T, m)
 end
 
