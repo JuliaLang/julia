@@ -103,7 +103,7 @@ end
 for op in (:+,:-,:*,:/,:\)
     @eval ($op)(a::Float16, b::Float16) = float16(($op)(float32(a), float32(b)))
 end
-for op in (:<,:.<,:<=,:.<=,:>,:.>,:>=,:.>=, :isless)
+for op in (:<,:isless)
     @eval ($op)(a::Float16, b::Float16) = ($op)(float32(a), float32(b))
 end
 for func in (sin,cos,tan,asin,acos,atan,sinh,cosh,tanh,asinh,acosh,atanh,exp,log,exponent,sqrt)
