@@ -32,7 +32,15 @@ Ac_mul_B{T<:BlasReal}(A::Triangular{T}, B::StridedMatrix{T}) = BLAS.trmm('L', A.
 A_mul_Bc{T<:BlasComplex}(A::StridedMatrix{T}, B::Triangular{T}) = BLAS.trmm('R', B.uplo, 'C', B.unitdiag, one(T), B.UL, A)
 A_mul_Bc{T<:BlasReal}(A::StridedMatrix{T}, B::Triangular{T}) = BLAS.trmm('R', B.uplo, 'T', B.unitdiag, one(T), B.UL, A)
 
-\{T<:BlasFloat}(A::Triangular{T}, B::StridedVecOrMat{T}) = LAPACK.trtrs!(A.uplo, 'N', A.unitdiag, A.UL, copy(B))
+function \{T<:BlasFloat}(A::Triangular{T}, B::StridedVecOrMat{T})
+    x = LAPACK.trtrs!(A.uplo, 'N', A.unitdiag, A.UL, copy(B))
+    for errors in LAPACK.trrfs!(A.uplo, 'N', A.unitdiag, A.UL, B, x)
+        all(isfinite(errors)) || all(ferr.<one(T)/eps(T)) || warn("""Unreasonably large error in computed solution:
+forward error: $ferr
+backward error: $berr""")
+    end
+    x
+end
 Ac_ldiv_B{T<:BlasReal}(A::Triangular{T}, B::StridedVecOrMat{T}) = LAPACK.trtrs!(A.uplo, 'T', A.unitdiag, A.UL, copy(B))
 Ac_ldiv_B{T<:BlasComplex}(A::Triangular{T}, B::StridedVecOrMat{T}) = LAPACK.trtrs!(A.uplo, 'C', A.unitdiag, A.UL, copy(B))
 

@@ -1824,9 +1824,9 @@ for (trtri, trtrs, elty) in
 end
 
 #Eigenvector computation and condition number estimation
-for (trcon, trevc, elty) in
-    ((:dtrcon_,:dtrevc_,:Float64),
-     (:strcon_,:strevc_,:Float32))
+for (trcon, trevc, trrfs, elty) in
+    ((:dtrcon_,:dtrevc_,:dtrrfs_,:Float64),
+     (:strcon_,:strevc_,:strrfs_,:Float32))
     @eval begin
         #SUBROUTINE DTRCON( NORM, UPLO, DIAG, N, A, LDA, RCOND, WORK,
         #                   IWORK, INFO )
@@ -1903,11 +1903,41 @@ for (trcon, trevc, elty) in
                 end
             end
         end
+        # SUBROUTINE DTRRFS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, X,
+        #                    LDX, FERR, BERR, WORK, IWORK, INFO )
+        # .. Scalar Arguments ..
+        # CHARACTER          DIAG, TRANS, UPLO
+        # INTEGER            INFO, LDA, LDB, LDX, N, NRHS
+        # .. Array Arguments ..
+        # INTEGER            IWORK( * )
+        # DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), BERR( * ), FERR( * ),
+        #$                   WORK( * ), X( LDX, * )
+        function trrfs!(uplo::BlasChar, trans::BlasChar, diag::BlasChar,
+                A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, X::StridedVecOrMat{$elty},
+                Ferr::StridedVector{$elty}=Array($elty, size(B,2)), Berr::StridedVector{$elty}=Array($elty, size(B,2)))
+            @chkuplo
+            lda, n = size(A)
+            ldb, nrhs = size(B,2)==1 ? (size(B,1),1) : size(B)
+            ldx, nrhs2= size(X,2)==1 ? (size(X,1),1) : size(X)
+            nrhs==nrhs2 || throw(DimensionMismatch(""))
+            work=Array($elty, 3n)
+            iwork=Array(BlasInt, n)
+            info=Array(BlasInt, 1)
+            ccall(($(string(trrfs)),liblapack), Void,
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
+                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                 Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                &uplo, &trans, &diag, &n,
+                &nrhs, A, &lda, B, &ldb, X, &ldx,
+                Ferr, Berr, work, iwork, info)
+            @lapackerror
+            Ferr, Berr
+        end
     end
 end
-for (trcon, trevc, elty, relty) in
-    ((:ztrcon_,:ztrevc_,Complex128,:Float64),
-     (:ctrcon_,:ctrevc_,Complex64,:Float32))
+for (trcon, trevc, trrfs, elty, relty) in
+    ((:ztrcon_,:ztrevc_,:ztrrfs_,:Complex128,:Float64),
+     (:ctrcon_,:ctrevc_,:ctrrfs_,:Complex64, :Float32))
     @eval begin
         #SUBROUTINE ZTRCON( NORM, UPLO, DIAG, N, A, LDA, RCOND, WORK,
         #                   RWORK, INFO )
@@ -1986,6 +2016,37 @@ for (trcon, trevc, elty, relty) in
                     return VL[:,1:m[1]], VR[:,1:m[1]]
                 end
             end
+        end
+
+        # SUBROUTINE ZTRRFS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, X,
+        #                    LDX, FERR, BERR, WORK, IWORK, INFO )
+        # .. Scalar Arguments ..
+        # CHARACTER          DIAG, TRANS, UPLO
+        # INTEGER            INFO, LDA, LDB, LDX, N, NRHS
+        # .. Array Arguments ..
+        # INTEGER            IWORK( * )
+        # DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), BERR( * ), FERR( * ),
+        #$                   WORK( * ), X( LDX, * )
+        function trrfs!(uplo::BlasChar, trans::BlasChar, diag::BlasChar,
+                A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, X::StridedVecOrMat{$elty},
+                Ferr::StridedVector{$relty}=Array($relty, size(B,2)), Berr::StridedVector{$relty}=Array($relty, size(B,2)))
+            @chkuplo
+            lda, n = size(A)
+            ldb, nrhs = size(B,2)==1 ? (size(B,1),1) : size(B)
+            ldx, nrhs2= size(X,2)==1 ? (size(X,1),1) : size(X)
+            nrhs==nrhs2 || throw(DimensionMismatch(""))
+            work=Array($elty, 2n)
+            rwork=Array($elty, n)
+            info=Array(BlasInt, 1)
+            ccall(($(string(trrfs)),liblapack), Void,
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
+                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                 Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
+                &uplo, &trans, &diag, &n,
+                &nrhs, A, &lda, B, &ldb, X, &ldx,
+                Ferr, Berr, work, rwork, info)
+            @lapackerror
+            Ferr, Berr
         end
     end
 end
