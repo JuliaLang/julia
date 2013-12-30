@@ -114,7 +114,7 @@ function invperm(a::AbstractVector)
     b
 end
 
-function isperm(A::AbstractVector)
+function isperm(A)
     n = length(A)
     used = falses(n)
     for a in A
@@ -308,7 +308,6 @@ function npartitions(n::Int)
     end
 end
 
-
 # Algorithm H from TAoCP 7.2.1.4
 # Partition n into m parts
 # in colex order (lexicographic by reflected sequence)
@@ -418,7 +417,6 @@ function nextsetpartition(s::AbstractVector, a, b, n, m)
 
 end
 
-
 const _nsetpartitions = (Int=>Int)[]
 function nsetpartitions(n::Int)
     if n < 0
@@ -434,6 +432,74 @@ function nsetpartitions(n::Int)
         end
         _nsetpartitions[n] = wn
     end
+end
+
+immutable FixedSetPartitions{T<:AbstractVector}
+    s::T
+    m::Int
+end
+
+length(p::FixedSetPartitions) = nfixedsetpartitions(length(p.s),p.m)
+
+partitions(s::AbstractVector,m::Int) = (@assert 2 <= m <= length(s); FixedSetPartitions(s,m))
+
+start(p::FixedSetPartitions) = (n = length(p.s);m=p.m; (vcat(ones(Int, n-m),1:m), vcat(1,n-m+2:n), n))
+# state consists of vector a of length n describing to which partition every element of s belongs and
+# a vector b of length m describing the first index b[i] that belongs to partition i
+
+done(p::FixedSetPartitions, s) = !isempty(s) && s[1][1] > 1
+next(p::FixedSetPartitions, s) = nextfixedsetpartition(p.s,p.m, s...)
+
+function nextfixedsetpartition(s::AbstractVector, m, a, b, n)
+    function makeparts(s, a)
+        part = [ similar(s,0) for k = 1:m ]
+        for i = 1:n
+            push!(part[a[i]], s[i])
+        end
+        return part
+    end
+
+    part = makeparts(s,a)
+
+    if a[end] != m
+        a[end] += 1
+    else
+        local j, k
+        for j = n-1:-1:1
+            if a[j]<m && b[a[j]+1]<j
+                break
+            end
+        end
+        if j>1
+            a[j]+=1
+            for p=j+1:n
+                if b[a[p]]!=p
+                    a[p]=1
+                end
+            end
+        else
+            for k=m:-1:2
+                if b[k-1]<b[k]-1
+                    break
+                end
+            end
+            b[k]=b[k]-1
+            b[k+1:m]=n-m+k+1:n
+            a[1:n]=1
+            a[b]=1:m
+        end
+    end
+
+    return (part, (a,b,n))
+end
+
+function nfixedsetpartitions(n::Int,m::Int)
+    numpart=0
+    for k=0:m
+        numpart+=(-1)^(m-k)*binomial(m,k)*(k^n)
+    end
+    numpart=div(numpart,factorial(m))
+    return numpart
 end
 
 

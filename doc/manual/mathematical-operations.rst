@@ -293,6 +293,27 @@ expressions with side effects (such as printing) in chained comparisons.
 If side effects are required, the short-circuit ``&&`` operator should
 be used explicitly (see :ref:`man-short-circuit-evaluation`).
 
+Operator Precedence
+~~~~~~~~~~~~~~~~~~~
+
+Julia applies the following order of operations, from highest precedence 
+to lowest:
+
+================= =============================================================================================
+Category          Operators
+================= =============================================================================================
+Syntax            ``.`` followed by ``::``
+Exponentiation    ``^`` and its elementwise equivalent ``.^``
+Fractions         ``//`` and ``.//``
+Multiplication    ``* / % & \`` and  ``.* ./ .% .\``
+Bitshifts         ``<< >> >>>`` and ``.<< .>> .>>>``
+Addition          ``+ - | $`` and ``.+ .-``
+Syntax            ``: ..`` followed by ``|>``
+Comparisons       ``> < >= <= == === != !== <:`` and ``.> .< .>= .<= .== .!=``
+Control flow      ``&&`` followed by ``||`` followed by ``?``
+Assignments       ``= += -= *= /= //= \= ^= %= |= &= $= <<= >>= >>>=`` and ``.+= .-= .*= ./= .//= .\= .^= .%=``
+================= =============================================================================================
+
 .. _man-elementary-functions:
 
 Elementary Functions
@@ -330,6 +351,9 @@ Function        Description
 ``fld(x,y)``    floored division; quotient rounded towards ``-Inf``
 ``rem(x,y)``    remainder; satisfies ``x == div(x,y)*y + rem(x,y)``; sign matches ``x``
 ``mod(x,y)``    modulus; satisfies ``x == fld(x,y)*y + mod(x,y)``; sign matches ``y``
+``mod2pi(x)``   modulus with respect to 2pi;  ``0 <= mod2pi(x)  < 2pi``
+``modpi(x)``    modulus with respect to pi;   ``0 <= modpi(x)   < pi``
+``modpio2(x)``  modulus with respect to pi/2; ``0 <= modpio2(x) < pi/2``
 ``gcd(x,y...)`` greatest common divisor of ``x``, ``y``,...; sign matches ``x``
 ``lcm(x,y...)`` least common multiple of ``x``, ``y``,...; sign matches ``x``
 =============== =======================================================================

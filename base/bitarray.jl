@@ -376,27 +376,27 @@ function getindex(B::BitArray, i1::Real, i2::Real)
     #checkbounds(B, i0, i1) # manually inlined for performance
     i1, i2 = to_index(i1, i2)
     l1 = size(B,1)
-    1 <= i1 <= l1 || throw(BoundsError)
+    1 <= i1 <= l1 || throw(BoundsError())
     return B[i1 + l1*(i2-1)]
 end
 function getindex(B::BitArray, i1::Real, i2::Real, i3::Real)
     #checkbounds(B, i0, i1, i2) # manually inlined for performance
     i1, i2, i3 = to_index(i1, i2, i3)
     l1 = size(B,1)
-    1 <= i1 <= l1 || throw(BoundsError)
+    1 <= i1 <= l1 || throw(BoundsError())
     l2 = size(B,2)
-    1 <= i2 <= l2 || throw(BoundsError)
+    1 <= i2 <= l2 || throw(BoundsError())
     return B[i1 + l1*((i2-1) + l2*(i3-1))]
 end
 function getindex(B::BitArray, i1::Real, i2::Real, i3::Real, i4::Real)
     #checkbounds(B, i1, i2, i3, i4)
     i1, i2, i3, i4 = to_index(i1, i2, i3, i4)
     l1 = size(B,1)
-    1 <= i1 <= l1 || throw(BoundsError)
+    1 <= i1 <= l1 || throw(BoundsError())
     l2 = size(B,2)
-    1 <= i2 <= l2 || throw(BoundsError)
+    1 <= i2 <= l2 || throw(BoundsError())
     l3 = size(B,3)
-    1 <= i3 <= l3 || throw(BoundsError)
+    1 <= i3 <= l3 || throw(BoundsError())
     return B[i1 + l1*((i2-1) + l2*((i3-1) + l3*(i4-1)))]
 end
 
@@ -406,14 +406,14 @@ function getindex(B::BitArray, I::Real...)
     ndims = length(I)
     i = to_index(I[1])
     l = size(B,1)
-    1 <= i <= l || throw(BoundsError)
+    1 <= i <= l || throw(BoundsError())
     index = i
     stride = 1
     for k = 2:ndims-1
         stride *= l
         i = to_index(I[k])
         l = size(B,k)
-        1 <= i <= l || throw(BoundsError)
+        1 <= i <= l || throw(BoundsError())
         index += (i-1) * stride
     end
     stride *= l
@@ -585,7 +585,7 @@ function setindex!(B::BitArray, x, i1::Real, i2::Real)
     #checkbounds(B, i0, i1) # manually inlined for performance
     i1, i2 = to_index(i1, i2)
     l1 = size(B,1)
-    1 <= i1 <= l1 || throw(BoundsError)
+    1 <= i1 <= l1 || throw(BoundsError())
     B[i1 + l1*(i2-1)] = x
     return B
 end
@@ -594,9 +594,9 @@ function setindex!(B::BitArray, x, i1::Real, i2::Real, i3::Real)
     #checkbounds(B, i1, i2, i3) # manually inlined for performance
     i1, i2, i3 = to_index(i1, i2, i3)
     l1 = size(B,1)
-    1 <= i1 <= l1 || throw(BoundsError)
+    1 <= i1 <= l1 || throw(BoundsError())
     l2 = size(B,2)
-    1 <= i2 <= l2 || throw(BoundsError)
+    1 <= i2 <= l2 || throw(BoundsError())
     B[i1 + l1*((i2-1) + l2*(i3-1))] = x
     return B
 end
@@ -605,11 +605,11 @@ function setindex!(B::BitArray, x, i1::Real, i2::Real, i3::Real, i4::Real)
     #checkbounds(B, i1, i2, i3, i4) # manually inlined for performance
     i1, i2, i3, i4 = to_index(i1, i2, i3, i4)
     l1 = size(B,1)
-    1 <= i1 <= l1 || throw(BoundsError)
+    1 <= i1 <= l1 || throw(BoundsError())
     l2 = size(B,2)
-    1 <= i2 <= l2 || throw(BoundsError)
+    1 <= i2 <= l2 || throw(BoundsError())
     l3 = size(B,3)
-    1 <= i3 <= l3 || throw(BoundsError)
+    1 <= i3 <= l3 || throw(BoundsError())
     B[i1 + l1*((i2-1) + l2*((i3-1) + l3*(i4-1)))] = x
     return B
 end
@@ -620,14 +620,14 @@ function setindex!(B::BitArray, x, i::Real, I::Real...)
     ndims = length(I) + 1
     i = to_index(i)
     l = size(B,1)
-    1 <= i <= l || throw(BoundsError)
+    1 <= i <= l || throw(BoundsError())
     index = i
     stride = 1
     for k = 2:ndims-1
         stride *= l
         l = size(B,k)
         i = to_index(I[k-1])
-        1 <= i <= l || throw(BoundsError)
+        1 <= i <= l || throw(BoundsError())
         index += (i-1) * stride
     end
     stride *= l
@@ -2125,25 +2125,58 @@ ctranspose(B::BitArray) = transpose(B)
 
 ## Permute array dims ##
 
+function permute_one_dim(ivars, stridenames)
+    len = length(ivars)
+    counts = { symbol(string("count",i)) for i=1:len}
+    toReturn = cell(len+1,2)
+    for i = 1:length(toReturn)
+        toReturn[i] = nothing
+    end
+
+    tmp = counts[end]
+    toReturn[len+1] = quote
+        ind = 1
+        $tmp = $(stridenames[len])
+    end
+
+    #inner most loop
+    toReturn[1] = quote
+        P[ind] = B[+($(counts...))+offset]
+        ind+=1
+        $(counts[1]) += $(stridenames[1])
+    end
+    for i = 1:len-1
+        tmp = counts[i]
+        val = i
+        toReturn[(i+1)] = quote
+            $tmp = $(stridenames[val])
+        end
+        tmp2 = counts[i+1]
+        val = i+1
+        toReturn[(i+1)+(len+1)] = quote
+            $tmp2 += $(stridenames[val])
+        end
+    end
+    toReturn
+end
+
 let permutedims_cache = nothing, stridenames::Array{Any,1} = {}
-global permutedims
-function permutedims(B::Union(BitArray,StridedArray), perm)
+global permutedims!
+function permutedims!(P::BitArray,B::BitArray, perm)
     dimsB = size(B)
     ndimsB = length(dimsB)
-    ndimsB == length(perm) || error("invalid dimensions")
-    dimsP = ntuple(ndimsB, i->dimsB[perm[i]])::typeof(dimsB)
-    P = similar(B, dimsP)
+    (ndimsB == length(perm) && isperm(perm)) || error("no valid permutation of dimensions")
+	dimsP = size(P)
+	ndimsP = length(dimsP)
+    (dimsP==dimsB[perm]) || error("destination tensor of incorrect size")
+	
     ranges = ntuple(ndimsB, i->(1:dimsP[i]))
     while length(stridenames) < ndimsB
         push!(stridenames, gensym())
     end
 
     #calculates all the strides
-    if isa(B,BitArray)
-        strides = [ prod(dimsB[1:(perm[dim]-1)])::Int for dim = 1:length(perm) ]
-    else
-        strides = [ stride(B, perm[dim]) for dim = 1:length(perm) ]
-    end
+    strides = [ prod(dimsB[1:(perm[dim]-1)])::Int for dim = 1:length(perm) ]
 
     #Creates offset, because indexing starts at 1
     offset = 0
@@ -2157,52 +2190,65 @@ function permutedims(B::Union(BitArray,StridedArray), perm)
         B = B.parent
     end
 
-    function permute_one_dim(ivars)
-        len = length(ivars)
-        counts = { symbol(string("count",i)) for i=1:len}
-        toReturn = cell(len+1,2)
-        for i = 1:length(toReturn)
-            toReturn[i] = nothing
-        end
+    if is(permutedims_cache,nothing)
+        permutedims_cache = Dict()
+    end
 
-        tmp = counts[end]
-        toReturn[len+1] = quote
-            ind = 1
-            $tmp = $(stridenames[len])
-        end
+    gen_cartesian_map(permutedims_cache, iv->permute_one_dim(iv,stridenames), ranges,
+                      tuple(:B, :P, :perm, :offset, stridenames[1:ndimsB]...),
+                      B, P, perm, offset, strides...)
 
-        #inner most loop
-        toReturn[1] = quote
-            P[ind] = B[+($(counts...))+offset]
-            ind+=1
-            $(counts[1]) += $(stridenames[1])
-        end
-        for i = 1:len-1
-            tmp = counts[i]
-            val = i
-            toReturn[(i+1)] = quote
-                $tmp = $(stridenames[val])
-            end
-            tmp2 = counts[i+1]
-            val = i+1
-            toReturn[(i+1)+(len+1)] = quote
-                 $tmp2 += $(stridenames[val])
-            end
-        end
-        toReturn
+    return P
+end
+function permutedims!(P::Array,B::StridedArray, perm)
+    dimsB = size(B)
+    ndimsB = length(dimsB)
+    (ndimsB == length(perm) && isperm(perm)) || error("no valid permutation of dimensions")
+	dimsP = size(P)
+	ndimsP = length(dimsP)
+    (dimsP==dimsB[perm]) || error("destination tensor of incorrect size")
+	
+    ranges = ntuple(ndimsB, i->(1:dimsP[i]))
+    while length(stridenames) < ndimsB
+        push!(stridenames, gensym())
+    end
+
+    #calculates all the strides
+    strides = [ stride(B, perm[dim]) for dim = 1:length(perm) ]
+
+    #Creates offset, because indexing starts at 1
+    offset = 0
+    for i in strides
+        offset+=i
+    end
+    offset = 1-offset
+
+    if isa(B,SubArray)
+        offset += (B.first_index-1)
+        B = B.parent
     end
 
     if is(permutedims_cache,nothing)
         permutedims_cache = Dict()
     end
 
-    gen_cartesian_map(permutedims_cache, permute_one_dim, ranges,
+    gen_cartesian_map(permutedims_cache, iv->permute_one_dim(iv,stridenames), ranges,
                       tuple(:B, :P, :perm, :offset, stridenames[1:ndimsB]...),
                       B, P, perm, offset, strides...)
 
     return P
 end
 end # let
+
+function permutedims(B::Union(BitArray,StridedArray), perm)
+    dimsB = size(B)
+    ndimsB = length(dimsB)
+    (ndimsB == length(perm) && isperm(perm)) || error("no valid permutation of dimensions")
+    dimsP = ntuple(ndimsB, i->dimsB[perm[i]])::typeof(dimsB)
+    P = similar(B, dimsP)
+	permutedims!(P,B,perm)
+end
+
 
 ## Concatenation ##
 

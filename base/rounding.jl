@@ -46,16 +46,16 @@ function from_fenv(r::Integer)
     end
 end
 
-set_rounding(r::RoundingMode) = ccall(:fesetround, Cint, (Cint,), to_fenv(r))
-get_rounding() = from_fenv(ccall(:fegetround, Cint, ()))
+set_rounding{T<:Union(Float32,Float64)}(::Type{T},r::RoundingMode) = ccall(:fesetround, Cint, (Cint,), to_fenv(r))
+get_rounding{T<:Union(Float32,Float64)}(::Type{T}) = from_fenv(ccall(:fegetround, Cint, ()))
 
-function with_rounding(f::Function, rounding::RoundingMode)
-    old_rounding = get_rounding()
-    set_rounding(rounding)
+function with_rounding{T}(f::Function, ::Type{T}, rounding::RoundingMode)
+    old_rounding = get_rounding(T)
+    set_rounding(T,rounding)
     try
         return f()
     finally
-        set_rounding(old_rounding)
+        set_rounding(T,old_rounding)
     end
 end
 

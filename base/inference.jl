@@ -345,6 +345,7 @@ const apply_type_tfunc = function (A, args...)
     for i=2:max(lA,length(args))
         ai = args[i]
         if isType(ai)
+            uncertain |= (!isleaftype(ai))
             tparams = tuple(tparams..., ai.parameters[1])
         elseif isa(ai,Tuple) && all(isType,ai)
             tparams = tuple(tparams..., map(t->t.parameters[1], ai))
@@ -748,6 +749,9 @@ function abstract_eval_arg(a::ANY, vtypes::ANY, sv::StaticVarInfo)
     t = abstract_eval(a, vtypes, sv)
     if isa(a,Symbol) || isa(a,SymbolNode)
         t = typeintersect(t,Any)  # remove Undef
+    end
+    if isa(t,TypeVar) && t.lb == None && isleaftype(t.ub)
+        t = t.ub
     end
     return t
 end
@@ -2143,7 +2147,7 @@ end
 function delete_var!(ast, v)
     filter!(vi->!symequal(vi[1],v), ast.args[2][2])
     filter!(x->!symequal(x,v), ast.args[2][1])
-    filter!(x->!(isa(x,Expr) && x.head === :(=) &&
+    filter!(x->!(isa(x,Expr) && (x.head === :(=) || x.head === :const) &&
                  symequal(x.args[1],v)),
             ast.args[3].args)
     ast

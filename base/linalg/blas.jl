@@ -37,7 +37,7 @@ export
 
 const libblas = Base.libblas_name
 
-import ..LinAlg: BlasFloat, BlasChar, BlasInt, blas_int, DimensionMismatch, chksquare
+import ..LinAlg: BlasFloat, BlasChar, BlasInt, blas_int, DimensionMismatch, chksquare, axpy!
 
 # Level 1
 ## copy
@@ -163,12 +163,12 @@ for (fname, elty) in ((:daxpy_,:Float64),
         end
     end
 end
-function axpy!{T,Ta<:Number}(alpha::Ta, x::Array{T}, y::Array{T})
+function axpy!{T<:BlasFloat,Ta<:Number}(alpha::Ta, x::Array{T}, y::Array{T})
     length(x)==length(y) || throw(DimensionMismatch(""))
     axpy!(length(x), convert(T,alpha), x, 1, y, 1)
 end
 
-function axpy!{T,Ta<:Number,Ti<:Integer}(alpha::Ta, x::Array{T}, rx::Union(Range1{Ti},Range{Ti}),
+function axpy!{T<:BlasFloat,Ta<:Number,Ti<:Integer}(alpha::Ta, x::Array{T}, rx::Union(Range1{Ti},Range{Ti}),
                                          y::Array{T}, ry::Union(Range1{Ti},Range{Ti}))
 
     length(rx)==length(ry) || throw(DimensionMismatch(""))
@@ -177,6 +177,7 @@ function axpy!{T,Ta<:Number,Ti<:Integer}(alpha::Ta, x::Array{T}, rx::Union(Range
         throw(BoundsError())
     end
     axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+    y
 end
 
 ## iamax

@@ -11,7 +11,9 @@ export  CPU_CORES,
         loadavg,
         free_memory,
         total_memory,
-        shlib_ext
+        dlext,
+        dllist,
+        dlpath
 
 import ..Base: WORD_SIZE, OS_NAME, ARCH, MACHINE
 import ..Base: show, uv_error
@@ -90,6 +92,7 @@ function _cpu_summary(io::IO, cpu::Array{CPUinfo}, i, j)
         summary.speed = div(summary.speed,count)
         show(io,summary,true,"#1-$(count) ")
     end
+    println(io)
 end
 
 function cpu_summary(io::IO=STDOUT, cpu::Array{CPUinfo}=cpu_info())
@@ -132,12 +135,73 @@ free_memory() = ccall(:uv_get_free_memory, Uint64, ())
 total_memory() = ccall(:uv_get_total_memory, Uint64, ())
 
 if OS_NAME === :Darwin
-    const shlib_ext = "dylib"
+    const dlext = "dylib"
 elseif OS_NAME === :Windows
-    const shlib_ext = "dll"
+    const dlext = "dll"
 else
     #assume OS_NAME === :Linux, or similar
-    const shlib_ext = "so"
+    const dlext = "so"
+end
+
+@linux_only begin
+    immutable dl_phdr_info
+        # Base address of object
+        addr::Cuint
+
+        # Null-terminated name of object
+        name::Ptr{Uint8}
+
+        # Pointer to array of ELF program headers for this object
+        phdr::Ptr{Void}
+
+        # Number of program headers for this object
+        phnum::Cshort
+    end
+
+    # This callback function called by dl_iterate_phdr() on Linux
+    function dl_phdr_info_callback( di_ptr::Ptr{dl_phdr_info}, size::Csize_t, dynamic_libraries_ptr::Ptr{Array{String,1}} )
+        di = unsafe_load(di_ptr)
+
+        # Skip over objects without a path (as they represent this own object)
+        name = bytestring(di.name)
+        if !isempty(name)
+            dynamic_libraries = unsafe_pointer_to_objref( dynamic_libraries_ptr )
+            push!(dynamic_libraries, name )
+        end
+        convert(Cint, 0)::Cint
+    end
+end #@linux_only
+
+function dllist()
+    dynamic_libraries = Array(String,0)
+
+    @linux_only begin
+        const callback = cfunction(dl_phdr_info_callback, Cint, (Ptr{dl_phdr_info}, Csize_t, Ptr{Array{String,1}} ))
+        ccall( cglobal("dl_iterate_phdr"), Cint, (Ptr{Void}, Ptr{Void}), callback, pointer_from_objref(dynamic_libraries) )
+    end
+
+    @osx_only begin
+        numImages = ccall( cglobal("_dyld_image_count"), Cint, (), )
+
+        # start at 1 instead of 0 to skip self
+        for i in 1:numImages-1
+            name = bytestring(ccall( cglobal("_dyld_get_image_name"), Ptr{Uint8}, (Uint32,), uint32(i)))
+            push!(dynamic_libraries, name)
+        end
+    end
+
+    dynamic_libraries
+end
+
+function dlpath( handle::Ptr{Void} )
+    return bytestring(ccall( :jl_pathname_for_handle, Ptr{Uint8}, (Ptr{Void},), handle ))
+end
+
+function dlpath( libname::String )
+    handle = dlopen(libname)
+    path = dlpath( handle )
+    dlclose(handle)
+    return path
 end
 
 end

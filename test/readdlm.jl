@@ -12,3 +12,9 @@ dlm_data = readdlm(joinpath("perf", "kernel", "imdb-1.tsv"), '\t')
 @test size(readcsv(IOBuffer("1,2,3,4\n1,2,3,4"))) == (2,4)
 @test size(readcsv(IOBuffer("1,2,3,4\n1,2,3,"))) == (2,4)
 @test size(readcsv(IOBuffer("1,2,3,4\n1,2,3"))) == (2,4)
+
+let x = [1,2,3], y = [4,5,6], io = IOBuffer()
+    writedlm(io, zip(x,y), ",  ")
+    seek(io, 0)
+    @test readcsv(io) == [x y]
+end

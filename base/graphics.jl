@@ -55,8 +55,6 @@ immutable Vec2
     y::Float64
 end
 
-Vec2(x::Real, y::Real) = Vec2(float64(x), float64(y))
-
 typealias Point Vec2
 
 (+)(a::Vec2, b::Vec2) = Vec2(a.x + b.x, a.y + b.y)
@@ -84,9 +82,6 @@ immutable BoundingBox
 end
 
 BoundingBox() = BoundingBox(NaN, NaN, NaN, NaN)
-
-BoundingBox(a::Real, b::Real, c::Real, d::Real) =
-    BoundingBox(float64(a), float64(b), float64(c), float64(d))
 
 function BoundingBox(points::Point...)
     xmin, xmax, ymin, ymax = NaN, NaN, NaN, NaN

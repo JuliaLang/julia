@@ -53,7 +53,7 @@ end
 
 # if `I` were a vector, index_ranges would do the following:
 # j = length(I)
-# while j > 0 && isa(j[0], Int)
+# while j > 0 && isa(I[j], Int)
 #     j -= 1
 # end
 # for i = 1:j
@@ -127,9 +127,9 @@ function slice(A::SubArray, i::RangeIndex...)
     slice(A.parent, tuple(newindexes...))
 end
 
-# Generic fallback for Colon translation
-sub(A::AbstractArray, I...) = sub(A, ntuple(length(I), i-> isa(I[i], Colon) ? (1:size(A,i)) : I[i])...)
-slice(A::AbstractArray, I...) = slice(A, ntuple(length(I), i-> isa(I[i], Colon) ? (1:size(A,i)) : I[i])...)
+# Colon translation
+sub(A::AbstractArray, I::Union(RangeIndex, Colon)...) = sub(A, ntuple(length(I), i-> isa(I[i], Colon) ? (1:size(A,i)) : I[i])...)
+slice(A::AbstractArray, I::Union(RangeIndex, Colon)...) = slice(A, ntuple(length(I), i-> isa(I[i], Colon) ? (1:size(A,i)) : I[i])...)
 
 
 ### rename the old slice function ###
@@ -147,7 +147,7 @@ slice(A::AbstractArray, I...) = slice(A, ntuple(length(I), i-> isa(I[i], Colon) 
 #        for j in sdims
 #            if i == j
 #                if size(a, i) != 1
-#                    error("slice: dimension ", i, " has length greater than 1")
+#                    error("dimension ", i, " has length greater than 1")
 #                end
 #                next = 1
 #                break
@@ -164,7 +164,7 @@ slice(A::AbstractArray, I...) = slice(A, ntuple(length(I), i-> isa(I[i], Colon) 
 #        for j in sdims
 #            if i == j
 #                if length(next) != 1
-#                    error("slice: dimension ", i," has length greater than 1")
+#                    error("dimension ", i," has length greater than 1")
 #                end
 #                next = isa(next, Int) ? next : first(next)
 #                break

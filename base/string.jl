@@ -47,6 +47,7 @@ convert(::Type{Array{Uint8,1}}, s::String) = bytestring(s).data
 convert(::Type{Array{Uint8}}, s::String) = bytestring(s).data
 convert(::Type{ByteString}, s::String) = bytestring(s)
 convert(::Type{Array{Char,1}}, s::String) = collect(s)
+convert(::Type{Symbol}, s::String) = symbol(s)
 
 ## generic supplied functions ##
 
@@ -1214,7 +1215,7 @@ end
 
 function parse(str::String; raise::Bool=true)
     ex, pos = parse(str, start(str), greedy=true, raise=raise)
-    done(str, pos) || error("syntax: extra token after end of expression")
+    done(str, pos) || error("extra token after end of expression")
     return ex
 end
 
@@ -1421,15 +1422,11 @@ strip(s::String, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 ## string to integer functions ##
 
-parseint(c::Char) =
-    '0' <= c <= '9' ? c-'0' :
-    'a' <= c <= 'z' ? c-'a'+10 :
-    'A' <= c <= 'Z' ? c-'A'+10 :
-        error("invalid digit: $(repr(c))")
-
-function parseint(c::Char, base::Integer)
-    2 <= base <= 36 || error("invalid base: $base")
-    d = parseint(c)
+function parseint(c::Char, base::Integer=36, a::Int=(base <= 36 ? 10 : 36))
+    2 <= base <= 62 || error("invalid base: $base")
+    d = '0' <= c <= '9' ? c-'0'    :
+        'A' <= c <= 'Z' ? c-'A'+10 :
+        'a' <= c <= 'z' ? c-'a'+a  : error("invalid digit: $(repr(c))")
     d < base || error("invalid base $base digit $(repr(c))")
 end
 parseint{T<:Integer}(::Type{T}, c::Char, base::Integer) = convert(T,parseint(c,base))
@@ -1471,16 +1468,17 @@ function parseint_preamble(signed::Bool, s::String, base::Int)
     return sgn, base, j
 end
 
-function parseint_nocheck{T<:Integer}(::Type{T}, s::String, base::Int)
+function parseint_nocheck{T<:Integer}(::Type{T}, s::String, base::Int, a::Int)
     sgn, base, i = parseint_preamble(T<:Signed,s,base)
     c, i = parseint_next(s,i)
     base = convert(T,base)
-    m::T = div(typemax(T)-base+1,base)
+    ## FIXME: remove 128-bit specific code once 128-bit div doesn't rely on BigInt
+    m::T = T===Uint128 || T===Int128 ? typemax(T) : div(typemax(T)-base+1,base)
     n::T = 0
     while n <= m
-        d::T = '0' <= c <= '9' ? c-'0' :
+        d::T = '0' <= c <= '9' ? c-'0'    :
                'A' <= c <= 'Z' ? c-'A'+10 :
-               'a' <= c <= 'z' ? c-'a'+10 : base
+               'a' <= c <= 'z' ? c-'a'+a  : base
         d < base || error("invalid base $base digit $(repr(c)) in $(repr(s))")
         n *= base
         n += d
@@ -1493,9 +1491,9 @@ function parseint_nocheck{T<:Integer}(::Type{T}, s::String, base::Int)
     end
     (T <: Signed) && (n *= sgn)
     while !isspace(c)
-        d::T = '0' <= c <= '9' ? c-'0' :
+        d::T = '0' <= c <= '9' ? c-'0'    :
                'A' <= c <= 'Z' ? c-'A'+10 :
-               'a' <= c <= 'z' ? c-'a'+10 : base
+               'a' <= c <= 'z' ? c-'a'+a  : base
         d < base || error("invalid base $base digit $(repr(c)) in $(repr(s))")
         (T <: Signed) && (d *= sgn)
         n = checked_mul(n,base)
@@ -1509,9 +1507,11 @@ function parseint_nocheck{T<:Integer}(::Type{T}, s::String, base::Int)
     end
     return n
 end
+parseint_nocheck{T<:Integer}(::Type{T}, s::String, base::Int) =
+    parseint_nocheck(T, s, base, base <= 36 ? 10 : 36)
 
 parseint{T<:Integer}(::Type{T}, s::String, base::Integer) =
-    2 <= base <= 36 ? parseint_nocheck(T,s,int(base)) : error("invalid base: $base")
+    2 <= base <= 62 ? parseint_nocheck(T,s,int(base)) : error("invalid base: $base")
 parseint{T<:Integer}(::Type{T}, s::String) = parseint_nocheck(T,s,0)
 parseint(s::String, base::Integer) = parseint(Int,s,base)
 parseint(s::String) = parseint_nocheck(Int,s,0)

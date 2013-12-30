@@ -17,6 +17,7 @@ USE_SYSTEM_PCRE=0
 USE_SYSTEM_LIBM=0
 USE_SYSTEM_OPENLIBM=0
 UNTRUSTED_SYSTEM_LIBM=0
+USE_SYSTEM_OPENSPECFUN=0
 USE_SYSTEM_BLAS=0
 USE_SYSTEM_LAPACK=0
 USE_SYSTEM_FFTW=0
@@ -65,14 +66,15 @@ BUILD_LLDB = 0
 BUILD = $(JULIAHOME)/usr
 
 # Directories where said libraries get installed to
-JL_PRIVATE_LIBDIR = lib/julia
-JL_LIBDIR = lib
+LIBDIR = lib
+JL_LIBDIR = $(LIBDIR)
+JL_PRIVATE_LIBDIR = $(JL_LIBDIR)/julia
 
 # This used for debian packaging, to conform to library layout guidelines
 ifeq ($(MULTIARCH_INSTALL), 1)
 MULTIARCH = $(shell gcc -print-multiarch)
-JL_PRIVATE_LIBDIR = lib/$(MULTIARCH)/julia
-JL_LIBDIR = lib/$(MULTIARCH)/
+JL_PRIVATE_LIBDIR = $(LIBDIR)/$(MULTIARCH)/julia
+JL_LIBDIR = $(LIBDIR)/$(MULTIARCH)/
 endif
 
 # Cross-compile
@@ -216,7 +218,7 @@ endif
 ifeq ($(SANITIZE),1)
 JCXXFLAGS += -fsanitize=address -mllvm -asan-stack=0
 JCFLAGS += -fsanitize=address -mllvm -asan-stack=0
-LDFLAGS += -fsanitize=address -mllvm -asan-stack=0
+LDFLAGS += -fsanitize=address
 endif
 
 # ===========================================================================
@@ -398,7 +400,7 @@ else
 endif
 
 ifeq ($(OS), Linux)
-OSLIBS += -ldl -ltinfo -lrt -lpthread -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
+OSLIBS += -ldl -lrt -lpthread -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
 JLDFLAGS = -Wl,-Bdynamic
 endif
 
@@ -441,6 +443,9 @@ LIBMNAME = libimf
 endif
 
 ifeq ($(USE_MKL), 1)
+ifeq ($(USE_BLAS64), 1)
+export MKL_INTERFACE_LAYER := ILP64
+endif
 USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
 LIBBLASNAME = libmkl_rt

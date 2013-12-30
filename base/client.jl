@@ -37,13 +37,6 @@ exit(n) = ccall(:jl_exit, Void, (Int32,), n)
 exit() = exit(0)
 quit() = exit()
 
-function repl_callback(ast::ANY, show_value)
-    global _repl_enough_stdin = true
-    stop_reading(STDIN) 
-    STDIN.readcb = false
-    put(repl_channel, (ast, show_value))
-end
-
 function repl_cmd(cmd)
     shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
     # Note that we can't support the fish shell due to its lack of subshells
@@ -144,29 +137,12 @@ function eval_user_input(ast::ANY, show_value)
     isa(STDIN,TTY) && println()
 end
 
-function read_buffer(stream::AsyncStream, nread)
-    global _repl_enough_stdin::Bool
-    while !_repl_enough_stdin && nb_available(stream.buffer) > 0
-        nread = int(search(stream.buffer,'\n')) # never more than one line or readline explodes :O
-        nread2 = int(search(stream.buffer,'\r'))
-        if nread == 0
-            if nread2 == 0
-                nread = nb_available(stream.buffer)
-            else
-                nread = nread2
-            end
-        else
-            if nread2 != 0 && nread2 < nread
-                nread = nread2
-            end
-        end
-        ptr = pointer(stream.buffer.data,stream.buffer.ptr)
-        skip(stream.buffer,nread)
-        #println(STDERR,stream.buffer.data[stream.buffer.ptr-nread:stream.buffer.ptr-1])
-        ccall(:jl_read_buffer,Void,(Ptr{Void},Cssize_t),ptr,nread)
-    end
-    return false
+function repl_callback(ast::ANY, show_value)
+    global _repl_enough_stdin = true
+    put(repl_channel, (ast, show_value))
 end
+
+_eval_done = Condition()
 
 function run_repl()
     global const repl_channel = RemoteRef()
@@ -175,7 +151,17 @@ function run_repl()
 
     # install Ctrl-C interrupt handler (InterruptException)
     ccall(:jl_install_sigint_handler, Void, ())
-    STDIN.closecb = (x...)->put(repl_channel,(nothing,-1))
+    buf = Uint8[0]
+    @async begin
+        while !eof(STDIN)
+            read(STDIN, buf)
+            ccall(:jl_read_buffer,Void,(Ptr{Void},Cssize_t),buf,1)
+            if _repl_enough_stdin
+                wait(_eval_done)
+            end
+        end
+        put(repl_channel,(nothing,-1))
+    end
 
     while true
         if have_color
@@ -185,13 +171,13 @@ function run_repl()
         end
         ccall(:repl_callback_enable, Void, (Ptr{Uint8},), prompt_string)
         global _repl_enough_stdin = false
-        start_reading(STDIN, read_buffer)
         (ast, show_value) = take(repl_channel)
         if show_value == -1
             # exit flag
             break
         end
         eval_user_input(ast, show_value!=0)
+        notify(_eval_done)
     end
 
     if have_color
@@ -349,7 +335,7 @@ function init_head_sched()
 end
 
 function init_profiler()
-    # Use a max size of 1M profile samples, and fire timer evey 1ms
+    # Use a max size of 1M profile samples, and fire timer every 1ms
     Profile.init(1_000_000, 0.001)
 end
 
@@ -373,23 +359,17 @@ function _start()
     Random.librandom_init()
     # Ensure PCRE is compatible with the compiled reg-exes
     PCRE.check_pcre()
+    Sys.init()
+    global const CPU_CORES = Sys.CPU_CORES
+    if CPU_CORES > 8 && !("OPENBLAS_NUM_THREADS" in keys(ENV)) && !("OMP_NUM_THREADS" in keys(ENV))
+        # Prevent openblas from stating to many threads, unless/until specifically requested
+        ENV["OPENBLAS_NUM_THREADS"] = 8
+    end
     # Check that BLAS is correctly built
     check_blas()
     LinAlg.init()
-    Sys.init()
     GMP.gmp_init()
-    global const CPU_CORES = Sys.CPU_CORES
     init_profiler()
-
-    @windows_only ENV["PATH"] = JULIA_HOME*";"*joinpath(JULIA_HOME,"..","Git","bin")*";"*ENV["PATH"]*
-        ";C:\\Program Files\\Git\\bin;C:\\Program Files (x86)\\Git\\bin"*
-        ";C:\\MinGW\\bin;C:\\MinGW\\msys\\1.0\\bin"*
-        ";C:\\Python27;C:\\Python26;C:\\Python25"
-    @windows_only haskey(ENV,"JULIA_EDITOR") || (ENV["JULIA_EDITOR"] = "start")
-    @windows_only begin
-        user_data_dir = abspath(ENV["AppData"],"julia")
-        isdir(user_data_dir) || mkdir(user_data_dir)
-    end
 
     #atexit(()->flush(STDOUT))
     try
@@ -398,7 +378,7 @@ function _start()
         init_load_path()
         (quiet,repl,startup,color_set,history) = process_options(ARGS)
         global _use_history = history
-        repl && startup && load_juliarc()
+        startup && load_juliarc()
 
         if repl
             if !isa(STDIN,TTY)
