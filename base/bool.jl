@@ -26,6 +26,7 @@ typemax(::Type{Bool}) = true
 signbit(x::Bool) = 0
 sign(x::Bool) = x
 abs(x::Bool) = x
+abs2(x::Bool) = x
 
 <(x::Bool, y::Bool) = y&!x
 <=(x::Bool, y::Bool) = y|!x

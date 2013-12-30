@@ -6,6 +6,11 @@ New language features
 
   * Greatly enhanced performance for passing and returning tuples ([#4042]).
 
+  * Tuples (of integers, symbols, or bools) can now be used as type
+    parameters ([#5164]).
+
+  * `import module: name1, name2, ...` ([#5214]).
+
 New library functions
 ---------------------
 
@@ -32,7 +37,7 @@ Library improvements
   * Overflow detection in `parseint` ([#4874]).
 
   * New Pkg.submit(pkg[,commit]) function to automatically submit
-    a Github pull request to the package author.
+    a GitHub pull request to the package author.
 
   * Triple-quoted regex strings, `r"""..."""` ([#4934]).
 
@@ -44,12 +49,31 @@ Library improvements
 
   * `rand` now supports arbitrary `Ranges` arguments ([#5059]).
 
+  * `mod2pi` function ([#4799], [#4862]).
+
+  * `writedlm` and `writecsv` now accept any iterable collection of
+    iterable rows, in addition to `AbstractArray` arguments, and the
+    ``writedlm`` delimiter can be any printable object (e.g. a
+    ``String``) instead of just a ``Char``.
+
+  * `.juliarc.jl` is now loaded for both script and REPL execution ([#5076]).
+
+  * The `Sys` module now includes convenient functions for working with
+    dynamic library handles; `Sys.dllist` will list out all paths currently
+    loaded via `dlopen`, and `Sys.dlpath` will lookup a path from a handle
+
 Deprecated or removed
 ---------------------
+
+  * `Sys.shlib_ext` has been renamed to `Sys.dlext`
 
   * `dense` is deprecated in favor of `full` ([#4759])
 
   * The `Stat` type is renamed `StatStruct` ([#4670])
+
+  * `set_rounding`, `get_rounding` and `with_rounding` now take an additional
+    argument specifying the floating point type to which they apply. The old
+    behaviour and `[get/set/with]_bigfloat_rounding` functions are deprecated ([#5007])
 
 [#4775]: https://github.com/JuliaLang/julia/issues/4775
 [#4870]: https://github.com/JuliaLang/julia/issues/4870
@@ -58,7 +82,8 @@ Deprecated or removed
 [#4759]: https://github.com/JuliaLang/julia/issues/4759
 [#4819]: https://github.com/JuliaLang/julia/issues/4819
 [#4670]: https://github.com/JuliaLang/julia/issues/4670
-
+[#5007]: https://github.com/JuliaLang/julia/issues/5007
+[#5076]: https://github.com/JuliaLang/julia/issues/5076
 
 
 Julia v0.2.0 Release Notes

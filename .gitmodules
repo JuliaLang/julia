@@ -4,9 +4,13 @@
 [submodule "deps/openlibm"]
 	path = deps/openlibm
 	url = git://github.com/JuliaLang/openlibm.git
+[submodule "deps/openspecfun"]
+	path = deps/openspecfun
+	url = git://github.com/JuliaLang/openspecfun.git
 [submodule "deps/Rmath"]
 	path = deps/Rmath
 	url = git://github.com/JuliaLang/Rmath.git
 [submodule "doc/juliadoc"]
 	path = doc/juliadoc
 	url = git://github.com/JuliaLang/JuliaDoc.git
+

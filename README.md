@@ -225,12 +225,15 @@ SuiteSparse is a special case, since it is typically only installed as a static 
 
 ### Intel Math Kernel Libraries
 
-To use the Intel [MKL] BLAS and LAPACK libraries, edit the following settings in `Make.inc`:
+To use the Intel [MKL] BLAS and LAPACK libraries, make sure that MKL version 10.3.6 or higher is installed. For a 64-bit architecture, the MKL environment should be set up as:
+
+    source /path/to/mkl/bin/mklvars.sh intel64 ilp64
+    export MKL_INTERFACE_LAYER=ILP64
+
+When building julia, pass the `USE_MKL=1` option to `make` or add the following line to `Make.user`.
 
     USE_MKL = 1
-    MKLLIB = /path/to/mkl/lib/arch
 
-`MKLLIB` points to the directory containing `libmkl_rt.so`. MKL version 10.3.6 or greater is required.
 To rebuild a pre-built Julia source install with MKL support, delete the OpenBLAS, ARPACK, and SuiteSparse dependencies from `deps`, and run `make cleanall testall`.
 
 <a name="Source-Code-Organization"/>

@@ -11,7 +11,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        cbrt, sqrt, erf, erfc, erfcx, erfi, dawson,
        ceil, floor, trunc, round, significand, 
        lgamma, hypot, gamma, lfact, max, min, ldexp, frexp,
-       clamp, modf, ^, 
+       clamp, modf, ^, mod2pi,
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
        hankelh1, hankelh2, besseli, besselk, besselh,
@@ -152,14 +152,16 @@ for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
                   (:sech, :cosh), (:csch, :sinh), (:coth, :tanh),
                   (:secd, :cosd), (:cscd, :sind), (:cotd, :tand))
     @eval begin
-        ($finv)(z) = 1 ./ (($f)(z))
+        ($finv){T<:Number}(z::T) = one(T) / (($f)(z))
+        ($finv){T<:Number}(z::AbstractArray{T}) = one(T) ./ (($f)(z))
     end
 end
 
 for (fa, fainv) in ((:asec, :acos), (:acsc, :asin), (:acot, :atan),
                     (:asech, :acosh), (:acsch, :asinh), (:acoth, :atanh))
     @eval begin
-        ($fa)(y) = ($fainv)(1 ./ y)
+        ($fa){T<:Number}(y::T) = ($fainv)(one(T) / y)
+        ($fa){T<:Number}(y::AbstractArray{T}) = ($fainv)(one(T) ./ y)
     end
 end
 
@@ -175,7 +177,7 @@ function sind(x::Real)
 
     if arx == 0.0
         # return -0.0 iff x == -0.0
-        return x == 0.0 ? x : arx
+        return x == 0.0 ? 0.0 : arx
     elseif arx < 45.0
         return sin(degrees2radians(rx))
     elseif arx <= 135.0
@@ -240,25 +242,10 @@ end
 
 log(b,x) = log(x)./log(b)
 
-hypot(x::Real, y::Real) = hypot(promote(x,y)...)
-function hypot{T<:Real}(x::T, y::T)
-    x = abs(x)
-    y = abs(y)
-    if x < y
-        x, y = y, x
-    end
-    if x == 0
-        r = y/one(x)
-    else
-        r = y/x
-    end
-    x * sqrt(one(r)+r*r)
-end
-
 # type specific math functions
 
 const libm = Base.libm_name
-const openlibm_extras = "libopenlibm-extras"
+const openspecfun = "libopenspecfun"
 
 # functions with no domain error
 for f in (:cbrt, :sinh, :cosh, :tanh, :atan, :asinh, :exp, :erf, :erfc, :exp2, :expm1)
@@ -308,6 +295,21 @@ round(x::Float32) = ccall((:roundf, libm), Float32, (Float32,), x)
 floor(x::Float32) = ccall((:floorf, libm), Float32, (Float32,), x)
 @vectorize_1arg Real floor
 
+hypot(x::Real, y::Real) = hypot(promote(float(x), float(y))...)
+function hypot{T<:FloatingPoint}(x::T, y::T) 
+    x = abs(x)
+    y = abs(y)
+    if x < y
+        x, y = y, x
+    end
+    if x == 0
+        r = y/one(x)
+    else
+        r = y/x
+    end
+    x * sqrt(one(r)+r*r)
+end
+
 atan2(x::Real, y::Real) = atan2(promote(float(x),float(y))...)
 atan2{T<:FloatingPoint}(x::T, y::T) = Base.no_op_err("atan2", T)
 
@@ -331,7 +333,7 @@ function lgamma_r(x::Float64)
 end
 function lgamma_r(x::Float32)
     signp = Array(Int32, 1)
-    y = ccall((:lgamma_r,libm),  Float32, (Float32, Ptr{Int32}), x, signp)
+    y = ccall((:lgammaf_r,libm),  Float32, (Float32, Ptr{Int32}), x, signp)
     return y, signp[1]
 end
 lgamma_r(x::Real) = lgamma_r(float(x))
@@ -396,8 +398,8 @@ end
 
 modf(x) = rem(x,one(x)), trunc(x)
 
-^(x::Float64, y::Float64) = ccall((:pow,libm),  Float64, (Float64,Float64), x, y)
-^(x::Float32, y::Float32) = ccall((:powf,libm), Float32, (Float32,Float32), x, y)
+^(x::Float64, y::Float64) = nan_dom_err(ccall((:pow,libm),  Float64, (Float64,Float64), x, y), x+y)
+^(x::Float32, y::Float32) = nan_dom_err(ccall((:powf,libm), Float32, (Float32,Float32), x, y), x+y)
 
 ^(x::Float64, y::Integer) = x^float64(y)
 ^(x::Float32, y::Integer) = x^float32(y)
@@ -433,7 +435,7 @@ global airy
 function airy(k::Int, z::Complex128)
     id = int32(k==1 || k==3)
     if k == 0 || k == 1
-        ccall((:zairy_,openlibm_extras), Void,
+        ccall((:zairy_,openspecfun), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
               &real(z), &imag(z),
@@ -442,7 +444,7 @@ function airy(k::Int, z::Complex128)
               pointer(ae,1), pointer(ae,2))
         return complex(ai[1],ai[2])
     elseif k == 2 || k == 3
-        ccall((:zbiry_,openlibm_extras), Void,
+        ccall((:zbiry_,openspecfun), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
               &real(z), &imag(z),
@@ -451,7 +453,7 @@ function airy(k::Int, z::Complex128)
               pointer(ae,1), pointer(ae,2))
         return complex(ai[1],ai[2])
     else
-        error("airy: invalid argument")
+        error("invalid argument")
     end
 end
 end
@@ -480,7 +482,7 @@ const ae = Array(Int32,2)
 const wrk = Array(Float64,2)
 
 function _besselh(nu::Float64, k::Integer, z::Complex128)
-    ccall((:zbesh_,openlibm_extras), Void,
+    ccall((:zbesh_,openspecfun), Void,
           (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
            Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
           &real(z), &imag(z), &nu, &1, &k, &1,
@@ -490,7 +492,7 @@ function _besselh(nu::Float64, k::Integer, z::Complex128)
 end
 
 function _besseli(nu::Float64, z::Complex128)
-    ccall((:zbesi_,openlibm_extras), Void,
+    ccall((:zbesi_,openspecfun), Void,
           (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
            Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
           &real(z), &imag(z), &nu, &1, &1,
@@ -500,7 +502,7 @@ function _besseli(nu::Float64, z::Complex128)
 end
 
 function _besselj(nu::Float64, z::Complex128)
-    ccall((:zbesj_,openlibm_extras), Void,
+    ccall((:zbesj_,openspecfun), Void,
           (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
            Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
           &real(z), &imag(z), &nu, &1, &1,
@@ -510,7 +512,7 @@ function _besselj(nu::Float64, z::Complex128)
 end
 
 function _besselk(nu::Float64, z::Complex128)
-    ccall((:zbesk_,openlibm_extras), Void,
+    ccall((:zbesk_,openspecfun), Void,
           (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
            Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
           &real(z), &imag(z), &nu, &1, &1,
@@ -520,7 +522,7 @@ function _besselk(nu::Float64, z::Complex128)
 end
 
 function _bessely(nu::Float64, z::Complex128)
-    ccall((:zbesy_,openlibm_extras), Void,
+    ccall((:zbesy_,openspecfun), Void,
           (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
            Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
            Ptr{Float64}, Ptr{Float64}, Ptr{Int32}),
@@ -650,9 +652,9 @@ hankelh2(nu, z) = besselh(nu, 2, z)
 
 
 function angle_restrict_symm(theta)
-    P1 = 4 * 7.8539812564849853515625e-01
-    P2 = 4 * 3.7748947079307981766760e-08
-    P3 = 4 * 2.6951514290790594840552e-15
+    const P1 = 4 * 7.8539812564849853515625e-01
+    const P2 = 4 * 3.7748947079307981766760e-08
+    const P3 = 4 * 2.6951514290790594840552e-15
 
     y = 2*floor(theta/(2*pi))
     r = ((theta - y*P1) - y*P2) - y*P3
@@ -670,7 +672,7 @@ const clg_coeff = [76.18009172947146,
                    -0.5395239384953e-5]
 
 function clgamma_lanczos(z)
-    sqrt2pi = 2.5066282746310005
+    const sqrt2pi = 2.5066282746310005
     
     y = x = z
     temp = x + 5.5
@@ -691,7 +693,7 @@ function lgamma(z::Complex)
     if real(z) <= 0.5
         a = clgamma_lanczos(1-z)
         b = log(sinpi(z))
-        logpi = 1.14472988584940017
+        const logpi = 1.14472988584940017
         z = logpi - b - a
     else
         z = clgamma_lanczos(z)
@@ -1181,8 +1183,8 @@ end
 for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
     fname = (f === :Dawson) ? :dawson : f
     @eval begin
-        ($fname)(z::Complex128) = complex128(ccall(($(string("Faddeeva_",f)),openlibm_extras), Complex{Float64}, (Complex{Float64}, Float64), z, zero(Float64)))
-        ($fname)(z::Complex64) = complex64(ccall(($(string("Faddeeva_",f)),openlibm_extras), Complex{Float64}, (Complex{Float64}, Float64), complex128(z), float64(eps(Float32))))
+        ($fname)(z::Complex128) = complex128(ccall(($(string("Faddeeva_",f)),openspecfun), Complex{Float64}, (Complex{Float64}, Float64), z, zero(Float64)))
+        ($fname)(z::Complex64) = complex64(ccall(($(string("Faddeeva_",f)),openspecfun), Complex{Float64}, (Complex{Float64}, Float64), complex128(z), float64(eps(Float32))))
         ($fname)(z::Complex) = ($fname)(complex128(z))
     end
 end
@@ -1190,8 +1192,8 @@ end
 for f in (:erfcx, :erfi, :Dawson)
     fname = (f === :Dawson) ? :dawson : f
     @eval begin
-        ($fname)(x::Float64) = ccall(($(string("Faddeeva_",f,"_re")),openlibm_extras), Float64, (Float64,), x)
-        ($fname)(x::Float32) = float32(ccall(($(string("Faddeeva_",f,"_re")),openlibm_extras), Float64, (Float64,), float64(x)))
+        ($fname)(x::Float64) = ccall(($(string("Faddeeva_",f,"_re")),openspecfun), Float64, (Float64,), x)
+        ($fname)(x::Float32) = float32(ccall(($(string("Faddeeva_",f,"_re")),openspecfun), Float64, (Float64,), float64(x)))
         ($fname)(x::Integer) = ($fname)(float(x))
         @vectorize_1arg Number $fname
     end
@@ -1397,5 +1399,91 @@ end
 
 erfcinv(x::Integer) = erfcinv(float(x))
 @vectorize_1arg Real erfcinv
+
+## mod2pi-related calculations ##
+
+function add22condh(xh::Float64, xl::Float64, yh::Float64, yl::Float64)
+    # as above, but only compute and return high double
+    r = xh+yh
+    s = (abs(xh) > abs(yh)) ? (xh-r+yh+yl+xl) : (yh-r+xh+xl+yl)
+    zh = r+s
+    return zh
+end
+
+function ieee754_rem_pio2(x::Float64)
+    # rem_pio2 essentially computes x mod pi/2 (ie within a quarter circle)
+    # and returns the result as 
+    # y between + and - pi/4 (for maximal accuracy (as the sign bit is exploited)), and
+    # n, where n specifies the integer part of the division, or, at any rate, 
+    # in which quadrant we are.
+    # The invariant fulfilled by the returned values seems to be
+    #  x = y + n*pi/2 (where y = y1+y2 is a double-double and y2 is the "tail" of y).
+    # Note: for very large x (thus n), the invariant might hold only modulo 2pi 
+    # (in other words, n might be off by a multiple of 4, or a multiple of 100)
+
+    # this is just wrapping up 
+    # https://github.com/JuliaLang/openlibm/blob/master/src/e_rem_pio2.c
+
+    y = [0.0,0.0]
+    n = ccall((:__ieee754_rem_pio2, libm), Cint, (Float64,Ptr{Float64}), x, y)
+    return (n,y)
+end
+
+# multiples of pi/2, as double-double (ie with "tail")
+const pi1o2_h  = 1.5707963267948966     # convert(Float64, pi * BigFloat(1/2))
+const pi1o2_l  = 6.123233995736766e-17  # convert(Float64, pi * BigFloat(1/2) - pi1o2_h)
+
+const pi2o2_h  = 3.141592653589793      # convert(Float64, pi * BigFloat(1))
+const pi2o2_l  = 1.2246467991473532e-16 # convert(Float64, pi * BigFloat(1) - pi2o2_h)
+
+const pi3o2_h  = 4.71238898038469       # convert(Float64, pi * BigFloat(3/2))
+const pi3o2_l  = 1.8369701987210297e-16 # convert(Float64, pi * BigFloat(3/2) - pi3o2_h)
+
+const pi4o2_h  = 6.283185307179586      # convert(Float64, pi * BigFloat(2))
+const pi4o2_l  = 2.4492935982947064e-16 # convert(Float64, pi * BigFloat(2) - pi4o2_h)
+
+function mod2pi(x::Float64) # or modtau(x)
+# with r = mod2pi(x)
+# a) 0 <= r < 2π  (note: boundary open or closed - a bit fuzzy, due to rem_pio2 implementation)
+# b) r-x = k*2π with k integer
+
+# note: mod(n,4) is 0,1,2,3; while mod(n-1,4)+1 is 1,2,3,4.
+# We use the latter to push negative y in quadrant 0 into the positive (one revolution, + 4*pi/2)
+
+    if x < pi4o2_h
+        if 0.0 <= x return x end
+        if x > -pi4o2_h 
+            return add22condh(x,0.0,pi4o2_h,pi4o2_l)
+        end
+    end
+
+    (n,y) = ieee754_rem_pio2(x)
+
+    if iseven(n)
+        if n & 2 == 2 # add pi
+            return add22condh(y[1],y[2],pi2o2_h,pi2o2_l)
+        else # add 0 or 2pi
+            if y[1] > 0.0
+                return y[1]
+            else # else add 2pi
+                return add22condh(y[1],y[2],pi4o2_h,pi4o2_l)
+            end
+        end
+    else # add pi/2 or 3pi/2
+        if n & 2 == 2 # add 3pi/2
+            return add22condh(y[1],y[2],pi3o2_h,pi3o2_l) 
+        else # add pi/2
+            return add22condh(y[1],y[2],pi1o2_h,pi1o2_l) 
+        end
+    end
+end
+
+mod2pi(x::Float32) = float32(mod2pi(float64(x)))
+mod2pi(x::Int32) = mod2pi(float64(x))
+function mod2pi(x::Int64)
+  fx = float64(x)
+  fx == x || error("Integer argument to mod2pi is too large: $x")
+  mod2pi(fx)
+end
 
 end # module

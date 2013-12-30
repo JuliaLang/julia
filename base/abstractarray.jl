@@ -1037,10 +1037,8 @@ end
 function lexcmp(A::AbstractArray, B::AbstractArray)
     nA, nB = length(A), length(B)
     for i = 1:min(nA, nB)
-        a, b = A[i], B[i]
-        if !isequal(a, b)
-            return isless(a, b) ? -1 : +1
-        end
+        res = lexcmp(A[i], B[i])
+        res == 0 || return res
     end
     return cmp(nA, nB)
 end
@@ -1439,6 +1437,51 @@ prod(A::AbstractArray{Bool}) =
 prod(A::AbstractArray{Bool}, region) =
     error("use all() instead of prod() for boolean arrays")
 
+
+# a fast implementation of sum in sequential order (from left to right)
+function sum_seq{T}(a::AbstractArray{T}, ifirst::Int, ilast::Int)
+
+    @inbounds if ifirst + 3 >= ilast  # a has at most four elements
+        s = zero(T)
+        i = ifirst
+        while i <= ilast
+            s += a[i]
+            i += 1
+        end
+        return s
+
+    else # a has more than four elements
+
+        # more effective utilization of the instruction
+        # pipeline through manually unrolling the sum
+        # into four-way accumulation. Benchmark shows
+        # that this results in about 2x speed-up.                
+
+        s1 = a[ifirst]
+        s2 = a[ifirst + 1]
+        s3 = a[ifirst + 2]
+        s4 = a[ifirst + 3]
+
+        i = ifirst + 4
+        il = ilast - 3
+        while i <= il
+            s1 += a[i]
+            s2 += a[i+1]
+            s3 += a[i+2]
+            s4 += a[i+3]
+            i += 4
+        end
+
+        while i <= ilast
+            s1 += a[i]
+            i += 1
+        end
+
+        return s1 + s2 + s3 + s4
+    end
+end
+
+
 # Pairwise (cascade) summation of A[i1:i1+n-1], which has O(log n) error growth
 # [vs O(n) for a simple loop] with negligible performance cost if
 # the base case is large enough.  See, e.g.:
@@ -1450,23 +1493,25 @@ prod(A::AbstractArray{Bool}, region) =
 # in practice.  See:
 #        Manfred Tasche and Hansmartin Zeuner, Handbook of
 #        Analytic-Computational Methods in Applied Mathematics (2000).
-function sum_pairwise(A::AbstractArray, i1,n)
-    if n < 128
-        @inbounds s = A[i1]
-        for i = i1+1:i1+n-1
-            @inbounds s += A[i]
-        end
-        return s
+#
+
+# Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
+const PAIRWISE_SUM_BLOCKSIZE = 1024
+
+function sum_pairwise(a::AbstractArray, ifirst::Int, ilast::Int)
+    # bsiz: maximum block size
+
+    if ifirst + PAIRWISE_SUM_BLOCKSIZE >= ilast
+        sum_seq(a, ifirst, ilast)
     else
-        n2 = div(n,2)
-        return sum_pairwise(A, i1, n2) + sum_pairwise(A, i1+n2, n-n2)
+        imid = (ifirst + ilast) >>> 1
+        sum_pairwise(a, ifirst, imid) + sum_pairwise(a, imid+1, ilast)
     end
 end
 
-function sum{T}(A::AbstractArray{T})
-    n = length(A)
-    n == 0 ? zero(T) : sum_pairwise(A, 1, n)
-end
+sum(a::AbstractArray) = sum_pairwise(a, 1, length(a))
+sum{T<:Integer}(a::AbstractArray{T}) = sum_seq(a, 1, length(a))
+
 
 # Kahan (compensated) summation: O(1) error growth, at the expense
 # of a considerable increase in computational expense.
@@ -1565,7 +1610,7 @@ function minimum{T<:Real}(A::AbstractArray{T})
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]
-        if x < v || v!=v
+        if x < v
             v = x
         end
     end
@@ -1577,12 +1622,59 @@ function maximum{T<:Real}(A::AbstractArray{T})
     v = A[1]
     for i=2:length(A)
         @inbounds x = A[i]
-        if x > v || v!=v
+        if x > v
             v = x
         end
     end
     v
 end
+
+# specialized versions for floating-point, which deal with NaNs
+
+function minimum{T<:FloatingPoint}(A::AbstractArray{T})
+    if isempty(A); error("argument must not be empty"); end
+    n = length(A)
+
+    # locate the first non NaN number
+    v = A[1]
+    i = 2
+    while v != v && i <= n
+        @inbounds v = A[i]
+        i += 1
+    end
+
+    while i <= n
+        @inbounds x = A[i]
+        if x < v
+            v = x
+        end
+        i += 1
+    end
+    v
+end
+
+function maximum{T<:FloatingPoint}(A::AbstractArray{T})
+    if isempty(A); error("argument must not be empty"); end
+    n = length(A)
+
+    # locate the first non NaN number
+    v = A[1]
+    i = 2
+    while v != v && i <= n
+        @inbounds v = A[i]
+        i += 1
+    end
+
+    while i <= n
+        @inbounds x = A[i]
+        if x > v
+            v = x
+        end
+        i += 1
+    end
+    v
+end
+
 
 ## map over arrays ##
 
@@ -1592,7 +1684,7 @@ end
 mapslices(f::Function, A::AbstractArray, dims) = mapslices(f, A, [dims...])
 function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
     if isempty(dims)
-        return A
+        return map(f,A)
     end
 
     dimsA = [size(A)...]

@@ -1176,3 +1176,45 @@ function invalid_tupleref()
     end
 end
 @test invalid_tupleref()==true
+
+# issue #5150
+f5150(T) = Array(Rational{T},1)
+@test typeof(f5150(Int)) === Array{Rational{Int},1}
+
+
+# issue #5165
+bitstype 64 T5165{S}
+make_t(x::Int64) = Base.box(T5165{Nothing}, Base.unbox(Int64, x))
+xs5165 = T5165[make_t(1)]
+b5165 = IOBuffer()
+for x in xs5165
+    println(b5165, x)   # segfaulted
+end
+
+# support tuples as type parameters
+
+type TupleParam{P}
+    x::Bool
+end
+
+function tupledispatch(a::TupleParam{(1,:a)})
+    a.x
+end
+
+let
+    # tuples can be used as type params
+    t1 = TupleParam{(1,:a)}(true)
+    t2 = TupleParam{(1,:b)}(true)
+
+    # tuple type params can't contain invalid type params
+    @test_throws t3 = TupleParam{(1,"nope")}(true)
+
+    # dispatch works properly
+    @test tupledispatch(t1) == true
+    @test_throws tupledispatch(t2)
+end
+
+# issue #5254
+f5254{T}(::Type{T}, b::T) = 0
+f5254(a, b) = 1
+@test f5254(None, 1) == 1

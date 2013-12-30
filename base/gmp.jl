@@ -7,7 +7,7 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              widemul, sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
              serialize, deserialize, bin, oct, dec, hex, isequal, invmod,
-             prevpow2, nextpow2
+             prevpow2, nextpow2, ndigits0z
 
 type BigInt <: Integer
     alloc::Cint
@@ -16,16 +16,17 @@ type BigInt <: Integer
     function BigInt()
         b = new(zero(Cint), zero(Cint), C_NULL)
         ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &b)
-        finalizer(b, BigInt_clear)
+        finalizer(b, _gmp_clear_func)
         return b
     end
 end
 
-function BigInt_clear(mpz::BigInt)
-    ccall((:__gmpz_clear, :libgmp), Void, (Ptr{BigInt},), &mpz)
-end
+_gmp_clear_func = C_NULL
+_mpfr_clear_func = C_NULL
 
 function gmp_init()
+    global _gmp_clear_func = cglobal((:__gmpz_clear, :libgmp))
+    global _mpfr_clear_func = cglobal((:mpfr_clear, :libmpfr))
     ccall((:__gmp_set_memory_functions, :libgmp), Void,
           (Ptr{Void},Ptr{Void},Ptr{Void}),
           cglobal(:jl_gc_counted_malloc),
@@ -406,6 +407,8 @@ function base(b::Integer, n::BigInt)
 end
 
 ndigits(x::BigInt, base::Integer=10) = ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, base)
+ndigits0z(x::BigInt, base::Integer=10) = x == 0 ? 0 : ndigits(x)
+
 isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
 
 widemul(x::BigInt, y::BigInt)   = x*y

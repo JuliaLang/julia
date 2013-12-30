@@ -308,7 +308,7 @@ for i = 1:3
 end
 
 #permutes correctly
-@test isequal(z,permutedims(y,(3,1,2)))
+@test isequal(z,permutedims(y,[3,1,2]))
 
 # of a subarray
 a = rand(5,5)
@@ -351,7 +351,14 @@ let es = sum_kbn(z), es2 = sum_kbn(z[1:10^5])
     @test (es - cs[end]) < es * 1e-13
     @test (es2 - cs[10^5]) < es2 * 1e-13
 end
-@test sum(sin(z)) == sum(sin, z)
+@test_approx_eq sum(sin(z)) sum(sin, z)
+
+@test maximum([4, 3, 5, 2]) == 5
+@test minimum([4, 3, 5, 2]) == 2
+@test isnan(maximum([NaN]))
+@test isnan(minimum([NaN]))
+@test maximum([4., 3., NaN, 5., 2.]) == 5.
+@test minimum([4., 3., NaN, 5., 2.]) == 2.
 
 @test any([true false; false false], 2) == [true false]'
 @test any([true false; false false], 1) == [true false]
@@ -364,7 +371,7 @@ end
 for i = 1 : 3
     a = rand(200, 300)
 
-    @test isequal(a', permutedims(a, (2, 1)))
+    @test isequal(a', permutedims(a, [2, 1]))
 end
 
 ## cumsum, cummin, cummax
@@ -628,6 +635,12 @@ begin
     b = mapslices(sum, ones(2,3,4), [1,2])
     @test size(b) === (1,1,4)
     @test all(b.==6)
+
+    # issue #5141
+    c1 = mapslices(x-> maximum(-x), a, [])
+    @test c1 == -a
+    c2 = mapslices(x-> maximum(-x), a, [1,2])
+    @test c2 == maximum(-a)
 end
 
 
@@ -651,6 +664,17 @@ a = [1,3,5]
 b = [3,1,2]
 a[b] = a
 @test a == [3,5,1]
+
+# lexicographic comparison
+@test lexcmp([1.0], [1]) == 0
+@test lexcmp([1], [1.0]) == 0
+@test lexcmp([1, 1], [1, 1]) == 0
+@test lexcmp([1, 1], [2, 1]) == -1
+@test lexcmp([2, 1], [1, 1]) == 1
+@test lexcmp([1, 1], [1, 2]) == -1
+@test lexcmp([1, 2], [1, 1]) == 1
+@test lexcmp([1], [1, 1]) == -1
+@test lexcmp([1, 1], [1]) == 1
 
 # sort on arrays
 begin

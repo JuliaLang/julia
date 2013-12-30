@@ -846,17 +846,30 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
         tvs = &jl_t0(tvars);
         tvarslen = jl_tuple_len(tvars);
     }
-    for(int i=0; i < jl_tuple_len(*penv); i+=2) {
+    int l = jl_tuple_len(*penv);
+    for(int i=0; i < l; i+=2) {
         jl_value_t *v = jl_tupleref(*penv,i);
         jl_value_t *val = jl_tupleref(*penv,i+1);
         for(int j=0; j < tvarslen; j++) {
             if (v == tvs[j]) {
                 ee[n++] = v;
                 ee[n++] = val;
+                /*
+                  since "a" is a concrete type, we assume that
+                  (a∩b != None) => a<:b. However if a static parameter is
+                  forced to equal None, then part of "b" might become None,
+                  and therefore a subtype of "a". For example
+                  (Type{None},Int) ∩ (Type{T},T)
+                  issue #5254
+                */
+                if (val == (jl_value_t*)jl_bottom_type) {
+                    if (!jl_subtype(a, ti, 0))
+                        return (jl_value_t*)jl_bottom_type;
+                }
             }
         }
     }
-    if (n != jl_tuple_len(*penv)) {
+    if (n != l) {
         jl_tuple_t *en = jl_alloc_tuple_uninit(n);
         memcpy(en->data, ee, n*sizeof(void*));
         *penv = en;
@@ -1022,7 +1035,13 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         !jl_args_morespecific((jl_value_t*)sig, (jl_value_t*)type)) {
         jl_value_t *isect = jl_type_intersection((jl_value_t*)type,
                                                  (jl_value_t*)sig);
-        if (isect == (jl_value_t*)jl_bottom_type)
+        if (isect == (jl_value_t*)jl_bottom_type ||
+            // we're ok if the new definition is actually the one we just
+            // inferred to be required (see issue #3609). ideally this would
+            // never happen, since if New ⊓ Old == New then we should have
+            // considered New more specific, but jl_args_morespecific is not
+            // perfect, so this is a useful fallback.
+            sigs_eq(isect, (jl_value_t*)type, 1))
             return;
         JL_GC_PUSH1(&isect);
         jl_methlist_t *l = ml;
@@ -1463,45 +1482,6 @@ void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li)
         char *fname = ((jl_sym_t*)li->file)->name;
         JL_PRINTF(s, " at %s:%d", fname, lno);
     }
-}
-
-static void print_methlist(jl_value_t *outstr, char *name, jl_methlist_t *ml)
-{
-    JL_STREAM *s = (JL_STREAM*)jl_iostr_data(outstr);
-    while (ml != JL_NULL) {
-        JL_PRINTF(s, "%s", name);
-        if (ml->tvars != jl_null) {
-            if (jl_is_typevar(ml->tvars)) {
-                JL_PUTC('{', s); jl_show(outstr, (jl_value_t*)ml->tvars);
-                JL_PUTC('}', s);
-            }
-            else {
-                jl_show_tuple(outstr, ml->tvars, '{', '}', 0);
-            }
-        }
-        jl_show(outstr, (jl_value_t*)ml->sig);
-        if (ml->func == jl_bottom_func)  {
-            // mark guard cache entries
-            JL_PRINTF(s, " *");
-        }
-        else {
-            jl_lambda_info_t *li = ml->func->linfo;
-            assert(li);
-            print_func_loc(s, li);
-        }
-        if (ml->next != JL_NULL)
-            JL_PRINTF(s, "\n");
-        ml = ml->next;
-    }
-}
-
-void jl_show_method_table(jl_value_t *outstr, jl_function_t *gf)
-{
-    char *name = jl_gf_name(gf)->name;
-    jl_methtable_t *mt = jl_gf_mtable(gf);
-    print_methlist(outstr, name, mt->defs);
-    //JL_PRINTF(JL_STDOUT, "\ncache:\n");
-    //print_methlist(outstr, name, mt->cache);
 }
 
 void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)

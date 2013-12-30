@@ -184,12 +184,15 @@ You can do comparisons and a limited amount of arithmetic with
 String Basics
 -------------
 
-Here a variable is initialized with a simple string literal:
+String literals are delimited by double quotes or triple double quotes:
 
 .. doctest::
 
     julia> str = "Hello, world.\n"
     "Hello, world.\n"
+
+    julia> """Contains "quote" characters"""
+    "Contains \"quote\" characters"
 
 If you want to extract a character from a string, you index into it:
 
@@ -249,7 +252,7 @@ You can also extract a substring using range indexing:
     julia> str[4:9]
     "lo, wo"
 
-Note the distinction between ``str[k]`` and ``str[k:k]``:
+Notice that the expressions ``str[k]`` and ``str[k:k]`` do not give the same result:
 
 .. doctest::
 

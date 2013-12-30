@@ -55,8 +55,11 @@ function _require(path)
     else
         last = toplevel_load
         toplevel_load = false
-        reload_path(path)
-        toplevel_load = last
+        try 
+            reload_path(path)
+        finally 
+            toplevel_load = last
+        end
     end
 end
 
@@ -70,8 +73,11 @@ function reload(name::String)
     end
     last = toplevel_load
     toplevel_load = false
-    reload_path(path)
-    toplevel_load = last
+    try 
+        reload_path(path)
+    finally 
+        toplevel_load = last
+    end
     if refs !== nothing
         for r in refs; wait(r); end
     end

@@ -23,11 +23,14 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
 
     # Allocate sparse matrix data structure
     # Count entries in each row
-    nz = length(I)
     Rnz = zeros(Ti, nrow+1)
     Rnz[1] = 1
-    for k=1:nz
-        Rnz[I[k]+1] += 1
+    nz = 0
+    for k=1:length(I)
+        if V[k] != zero(Tv)
+            Rnz[I[k]+1] += 1
+            nz += 1
+        end
     end
     Rp = cumsum(Rnz)
     Ri = Array(Ti, nz)
@@ -41,9 +44,12 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     for k=1:nz
         ind = I[k]
         p = Wj[ind]
-        Wj[ind] += 1
-        Rx[p] = V[k]
-        Ri[p] = J[k]
+        Vk = V[k]
+        if Vk != zero(Tv)
+            Wj[ind] += 1
+            Rx[p] = Vk
+            Ri[p] = J[k]
+        end
     end
 
     # Reset work array for use in counting duplicates
@@ -206,9 +212,12 @@ end
 # A root node is indicated by 0. This tree may actually be a forest in that
 # there may be more than one root, indicating complete separability.
 # A trivial example is speye(n, n) in which every node is a root.
-function etree(A::SparseMatrixCSC, postorder::Bool)
-    m,n = size(A); Ap = A.colptr; Ai = A.rowval; T = eltype(Ai)
-    parent = zeros(T, n); ancestor = zeros(T, n)
+function etree{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, postorder::Bool)
+    m,n = size(A)
+    Ap = A.colptr
+    Ai = A.rowval
+    parent = zeros(Tv, n)
+    ancestor = zeros(Tv, n)
     for k in 1:n, p in Ap[k]:(Ap[k+1] - 1)
         i = Ai[p]
         while i != 0 && i < k
@@ -219,16 +228,16 @@ function etree(A::SparseMatrixCSC, postorder::Bool)
         end
     end
     if !postorder return parent end
-    head = zeros(T,n)                   # empty linked lists
-    next = zeros(T,n)
+    head = zeros(Tv,n)                   # empty linked lists
+    next = zeros(Tv,n)
     for j in n:-1:1                      # traverse in reverse order
-        if (parent[j] == 0) continue end # j is a root
+        if (parent[j] == zero(Tv)); continue; end # j is a root
         next[j] = head[parent[j]]        # add j to list of its parent
         head[parent[j]] = j
     end
-    stack = T[]
+    stack = Tv[]
     sizehint(stack, n)
-    post = zeros(T,n)
+    post = zeros(Tv,n)
     k = 1
     for j in 1:n
         if (parent[j] != 0) continue end # skip j if it is not a root

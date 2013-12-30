@@ -9,6 +9,8 @@ include $(JULIAHOME)/Make.inc
 # so that PREFIX/share/julia/VERSDIR can be overwritten without touching
 # third-party code).
 VERSDIR = v`cut -d. -f1-2 < VERSION`
+INSTALL_F = install -pm644
+INSTALL_M = install -pm755
 
 all: default
 default: release
@@ -63,12 +65,16 @@ $(BUILD)/share/man/man1/julia.1: doc/man/julia.1 | $(BUILD)/share/julia
 
 $(BUILD)/etc/julia/juliarc.jl: etc/juliarc.jl | $(BUILD)/etc/julia
 	@cp $< $@
+ifeq ($(OS), WINNT)
+	@cat ./contrib/windows/juliarc.jl >> $(BUILD)/etc/julia/juliarc.jl
+$(BUILD)/etc/julia/juliarc.jl: contrib/windows/juliarc.jl
+endif
 
 # use sys.ji if it exists, otherwise run two stages
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%ji: $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%bc
 
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%o: $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%bc
-	$(call spawn,$(LLVM_LLC)) -filetype=obj -relocation-model=pic -o $@ $<
+	$(call spawn,$(LLVM_LLC)) -filetype=obj -relocation-model=pic -mattr=-bmi2,-avx2 -o $@ $<
 
 $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%$(SHLIB_EXT): $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys%o
 	$(CXX) -shared -fPIC -L$(BUILD)/$(JL_PRIVATE_LIBDIR) -L$(BUILD)/$(JL_LIBDIR) -o $@ $< \
@@ -104,10 +110,12 @@ ifeq ($(USE_SYSTEM_PCRE),0)
 JL_PRIVATE_LIBS += pcre
 endif
 ifeq ($(USE_SYSTEM_OPENLIBM),0)
-JL_PRIVATE_LIBS += openlibm-extras
 ifeq ($(USE_SYSTEM_LIBM),0)
 JL_PRIVATE_LIBS += openlibm
 endif
+endif
+ifeq ($(USE_SYSTEM_OPENSPECFUN),0)
+JL_PRIVATE_LIBS += openspecfun
 endif
 ifeq ($(USE_SYSTEM_BLAS),0)
 JL_PRIVATE_LIBS += openblas
@@ -169,48 +177,47 @@ install:
 	@$(MAKE) $(QUIET_MAKE) release
 	@$(MAKE) $(QUIET_MAKE) debug
 	@for subdir in "bin" "libexec" $(JL_LIBDIR) $(JL_PRIVATE_LIBDIR) "share/julia" "share/man/man1" "include/julia" "share/julia/site/"$(VERSDIR) "etc/julia" ; do \
-		mkdir -p $(PREFIX)/$$subdir ; \
+		mkdir -p $(DESTDIR)$(PREFIX)/$$subdir ; \
 	done
-	cp -a $(BUILD)/bin/julia* $(PREFIX)/bin/
-	#-cp -a $(BUILD)/bin/llc$(EXE) $(PREFIX)/libexec # this needs libLLVM-3.3.$(SHLIB_EXT)
+	$(INSTALL_M) $(BUILD)/bin/julia* $(DESTDIR)$(PREFIX)/bin/
+	# $(INSTALL_F) $(BUILD)/bin/llc$(EXE) $(DESTDIR)$(PREFIX)/libexec # this needs libLLVM-3.3.$(SHLIB_EXT)
+	-$(INSTALL_M) $(BUILD)/bin/*.dll $(BUILD)/bin/*.bat $(DESTDIR)$(PREFIX)/bin/
 ifneq ($(OS),WINNT)
-	cp -a $(BUILD)/libexec $(PREFIX)
-	cd $(PREFIX)/bin && ln -sf julia-$(DEFAULT_REPL) julia
-else
-	cp -a $(BUILD)/bin/*.dll $(BUILD)/bin/*.bat $(PREFIX)/bin/
+	-cp -a $(BUILD)/libexec $(DESTDIR)$(PREFIX)
+	cd $(DESTDIR)$(PREFIX)/bin && ln -sf julia-$(DEFAULT_REPL) julia
 endif
 	for suffix in $(JL_LIBS) ; do \
-		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
+		$(INSTALL_F) $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(DESTDIR)$(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 	for suffix in $(JL_PRIVATE_LIBS) ; do \
-		cp -a $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
+		$(INSTALL_F) $(BUILD)/$(JL_LIBDIR)/lib$${suffix}*.$(SHLIB_EXT)* $(DESTDIR)$(PREFIX)/$(JL_PRIVATE_LIBDIR) ; \
 	done
 ifeq ($(USE_SYSTEM_LIBUV),0)
 ifeq ($(OS),WINNT)
-	cp -a $(BUILD)/lib/libuv.a $(PREFIX)/$(JL_PRIVATE_LIBDIR)
-	cp -a $(BUILD)/include/tree.h $(PREFIX)/include/julia
+	$(INSTALL_F) $(BUILD)/lib/libuv.a $(DESTDIR)$(PREFIX)/$(JL_PRIVATE_LIBDIR)
+	$(INSTALL_F) $(BUILD)/include/tree.h $(DESTDIR)$(PREFIX)/include/julia
 else
-	cp -a $(BUILD)/$(JL_LIBDIR)/libuv.a $(PREFIX)/$(JL_PRIVATE_LIBDIR)
+	$(INSTALL_F) $(BUILD)/$(JL_LIBDIR)/libuv.a $(DESTDIR)$(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
-	cp -a $(BUILD)/include/uv* $(PREFIX)/include/julia
+	$(INSTALL_F) $(BUILD)/include/uv* $(DESTDIR)$(PREFIX)/include/julia
 endif
-	cp -a src/julia.h src/support/*.h $(PREFIX)/include/julia
+	$(INSTALL_F) src/julia.h src/support/*.h $(DESTDIR)$(PREFIX)/include/julia
 	# Copy system image
-	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(PREFIX)/$(JL_PRIVATE_LIBDIR)
-	cp $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.$(SHLIB_EXT) $(PREFIX)/$(JL_PRIVATE_LIBDIR)
+	$(INSTALL_F) $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(DESTDIR)$(PREFIX)/$(JL_PRIVATE_LIBDIR)
+	$(INSTALL_F) $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/$(JL_PRIVATE_LIBDIR)
 	# Copy in all .jl sources as well
-	cp -R -L $(BUILD)/share/julia $(PREFIX)/share/
+	cp -R -L $(BUILD)/share/julia $(DESTDIR)$(PREFIX)/share/
 ifeq ($(OS), WINNT)
-	cp $(JULIAHOME)/contrib/windows/*.bat $(PREFIX)
+	cp $(JULIAHOME)/contrib/windows/*.bat $(DESTDIR)$(PREFIX)
 endif
 	# Copy in beautiful new man page!
-	cp $(BUILD)/share/man/man1/julia.1 $(PREFIX)/share/man/man1/
+	$(INSTALL_F) $(BUILD)/share/man/man1/julia.1 $(DESTDIR)$(PREFIX)/share/man/man1/
 	# Copy etc/julia directory to SYSCONFIGDIR if it is set, otherwise to just $(PREFIX)/etc/
 ifneq ($(SYSCONFDIR),)
-	mkdir -p $(SYSCONFDIR)
-	cp -R $(BUILD)/etc/julia $(SYSCONFDIR)/
+	mkdir -p $(DESTDIR)$(SYSCONFDIR)
+	cp -R $(BUILD)/etc/julia $(DESTDIR)$(SYSCONFDIR)/
 else
-	cp -R $(BUILD)/etc/julia $(PREFIX)/etc/
+	cp -R $(BUILD)/etc/julia $(DESTDIR)$(PREFIX)/etc/
 endif
 
 
@@ -228,22 +235,23 @@ endif
 	@$(MAKE) install
 	cp LICENSE.md julia-$(JULIA_COMMIT)
 ifeq ($(OS), Darwin)
-	-./contrib/mac/fixup-libgfortran.sh $(PREFIX)/$(JL_PRIVATE_LIBDIR)
+	-./contrib/mac/fixup-libgfortran.sh $(DESTDIR)$(PREFIX)/$(JL_PRIVATE_LIBDIR)
 endif
 	# Copy in juliarc.jl files per-platform for binary distributions as well
-	# Note that we don't install to SYSCONFDIR: we always install to PREFIX/etc.
+	# Note that we don't install to SYSCONFDIR: we always install to $(DESTDIR)$(PREFIX)/etc.
 	# If you want to make a distribution with a hardcoded path, you take care of installation
 ifeq ($(OS), Darwin)
-	-cat ./contrib/mac/juliarc.jl >> $(PREFIX)/etc/julia/juliarc.jl
+	-cat ./contrib/mac/juliarc.jl >> $(DESTDIR)$(PREFIX)/etc/julia/juliarc.jl
 else ifeq ($(OS), WINNT)
-	-cat ./contrib/windows/juliarc.jl >> $(PREFIX)/etc/julia/juliarc.jl
+	-cat ./contrib/windows/juliarc.jl >> $(DESTDIR)$(PREFIX)/etc/julia/juliarc.jl
 endif
 
 ifeq ($(OS), WINNT)
 	[ ! -d dist-extras ] || ( cd dist-extras && \
-   		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll ../$(PREFIX)/bin && \
+		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll ../$(PREFIX)/bin && \
 	    mkdir ../$(PREFIX)/Git && \
 	    7z x PortableGit.7z -o"../$(PREFIX)/Git" )
+	cd $(DESTDIR)$(PREFIX)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 	./dist-extras/7z a -mx9 -sfx7z.sfx julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).exe julia-$(JULIA_COMMIT)
 else
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
@@ -315,8 +323,8 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd dist-extras && \
 	wget -O 7z920.exe http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll 7z.sfx && \
-	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP2/noarch/mingw32-libexpat-2.0.1-5.1.noarch.rpm && \
-	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP2/noarch/mingw32-zlib-1.2.7-2.2.noarch.rpm
+	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP2/noarch/mingw32-libexpat-2.0.1-5.3.noarch.rpm && \
+	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP2/noarch/mingw32-zlib-1.2.7-2.4.noarch.rpm
 else ifeq ($(ARCH),x86_64)
 	cd dist-extras && \
 	wget -O 7z920-x64.msi http://downloads.sourceforge.net/sevenzip/7z920-x64.msi && \
@@ -324,8 +332,8 @@ else ifeq ($(ARCH),x86_64)
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
 	mv _7z.sfx 7z.sfx && \
-	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-libexpat-2.0.1-4.1.noarch.rpm && \
-	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP2/noarch/mingw64-zlib-1.2.7-2.2.noarch.rpm
+	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-libexpat-2.0.1-4.3.noarch.rpm && \
+	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-zlib-1.2.7-2.4.noarch.rpm
 else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif

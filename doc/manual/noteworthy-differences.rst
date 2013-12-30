@@ -52,6 +52,12 @@ differences that may trip up Julia users accustomed to MATLAB:
 -  If ``A`` and ``B`` are arrays, ``A == B`` doesn't return an array of
    booleans. Use ``A .== B`` instead. Likewise for the other boolean
    operators, ``<``, ``>``, ``!=``, etc.
+-  The operators ``&``, ``|``, and ``$`` perform the bitwise operations and,
+   or, and xor, respectively, and have precedence similar to Python's bitwise
+   operators (not like C). They can operate on scalars or elementwise
+   across arrays and can be used to combine logical arrays, but note the
+   difference in order of operations—parentheses may be required (e.g.,
+   to select elements of ``A`` equal to 1 or 2 use ``(A .== 1) | (A .== 2)``).
 -  The elements of a collection can be passed as arguments to a function
    using ``...``, as in ``xs=[1,2]; f(xs...)``.
 -  Julia's ``svd`` returns singular values as a vector instead of as a

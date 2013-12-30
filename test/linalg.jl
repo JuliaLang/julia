@@ -329,6 +329,22 @@ for elty in (Float32, Float64, Complex64, Complex128)
         0.135335281175235 0.406005843524598 0.541341126763207]')
         @test_approx_eq expm(A3) eA3
 
+        # issue 5116
+        A4  = [0 10 0 0; -1 0 0 0; 0 0 0 0; -2 0 0 0]
+        eA4 = [-0.999786072879326  -0.065407069689389   0.0   0.0
+                0.006540706968939  -0.999786072879326   0.0   0.0
+                0.0                 0.0                 1.0   0.0
+                0.013081413937878  -3.999572145758650   0.0   1.0]
+        @test_approx_eq expm(A4) eA4
+
+        # issue 5116
+        A5  = [ 0. 0. 0. 0. ; 0. 0. -im 0.; 0. im 0. 0.; 0. 0. 0. 0.]
+        eA5 = [ 1.0+0.0im   0.0+0.0im                 0.0+0.0im                0.0+0.0im
+                0.0+0.0im   1.543080634815244+0.0im   0.0-1.175201193643801im  0.0+0.0im
+                0.0+0.0im   0.0+1.175201193643801im   1.543080634815243+0.0im  0.0+0.0im
+                0.0+0.0im   0.0+0.0im                 0.0+0.0im                1.0+0.0im]
+        @test_approx_eq expm(A5) eA5
+
         # Hessenberg
         @test_approx_eq hessfact(A1)[:H] convert(Matrix{elty}, 
                         [4.000000000000000  -1.414213562373094  -1.414213562373095
@@ -340,17 +356,6 @@ end
 A1 = randn(4,4) + im*randn(4,4)
 A2 = A1 + A1'
 @test_approx_eq expm(A2) expm(Hermitian(A2))
-
-# complex exponential (issue #5116)
-A = [0.  0.  0.  0.
-     0.  0. -im  0.
-     0. im   0.  0.
-     0.  0.  0.  0.]
-
-@test_approx_eq expm(A) [1 0                     0                    0
-                         0 1.543080634815244    -1.1752011936438016im 0
-                         0 1.1752011936438016im  1.543080634815244    0
-                         0 0                     0                    1]
 
 # matmul for types w/o sizeof (issue #1282)
 A = Array(Complex{Int},10,10)
@@ -630,7 +635,6 @@ for elty in (Float32, Float64, Complex64, Complex128)
     end
 end
 
-
 # Test gglse
 for elty in (Float32, Float64, Complex64, Complex128)
     A = convert(Array{elty, 2}, [1 1 1 1; 1 3 1 1; 1 -1 3 1; 1 1 1 3; 1 1 1 -1])
@@ -638,6 +642,23 @@ for elty in (Float32, Float64, Complex64, Complex128)
     B = convert(Array{elty, 2}, [1 1 1 -1; 1 -1 1 1; 1 1 -1 1])
     d = convert(Array{elty, 1}, [1, 3, -1])
     @test_approx_eq LinAlg.LAPACK.gglse!(A, c, B, d)[1] convert(Array{elty}, [0.5, -0.5, 1.5, 0.5])
+end
+
+# Test givens rotations
+for elty in (Float32, Float64, Complex64, Complex128)
+    A = convert(Matrix{elty}, randn(10,10))
+    Ac = copy(A)
+    R = Base.LinAlg.Rotation(Base.LinAlg.Givens{elty}[])
+    for j = 1:8
+        for i = j+2:10
+            G = givens(A, j+1, i, j)
+            A_mul_B!(G, A)
+            A_mul_Bc!(A, G)
+            A_mul_B!(G, R)
+        end
+    end
+    @test_approx_eq abs(A) abs(hessfact(Ac)[:H])
+    @test_approx_eq norm(R*eye(elty, 10)) one(elty)
 end
 
 

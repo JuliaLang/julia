@@ -500,7 +500,7 @@ presented in the `IEEE 754 standard <http://en.wikipedia.org/wiki/IEEE_754-2008>
     julia> 1.1 + 0.1
     1.2000000000000002
 
-    julia> with_rounding(RoundDown) do
+    julia> with_rounding(Float64,RoundDown) do
            1.1 + 0.1
            end
     1.2
@@ -603,12 +603,12 @@ will take these changes in account:
 
 .. doctest::
 
-    julia> with_bigfloat_rounding(RoundUp) do
+    julia> with_rounding(BigFloat,RoundUp) do
            BigFloat(1) + BigFloat("0.1")
            end
     1.100000000000000000000000000000000000000000000000000000000000000000000000000003e+00 with 256 bits of precision
 
-    julia> with_bigfloat_rounding(RoundDown) do
+    julia> with_rounding(BigFloat,RoundDown) do
            BigFloat(1) + BigFloat("0.1")
            end
     1.099999999999999999999999999999999999999999999999999999999999999999999999999986e+00 with 256 bits of precision

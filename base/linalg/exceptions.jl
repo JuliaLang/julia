@@ -2,8 +2,7 @@ export LAPACKException,
        ARPACKException,
        SingularException,
        PosDefException,
-       RankDeficientException,
-       DimensionMismatch
+       RankDeficientException
 
 type LAPACKException <: Exception
     info::BlasInt
@@ -23,8 +22,4 @@ end
 
 type RankDeficientException <: Exception
     info::BlasInt
-end
-
-type DimensionMismatch <: Exception
-    name::ASCIIString
 end

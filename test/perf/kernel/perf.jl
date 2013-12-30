@@ -196,3 +196,14 @@ _json_data = "{\"web-app\": {
     \"taglib-location\": \"/WEB-INF/tlds/cofax.tld\"}}}"
 
 @timeit (for n in 1:10; a = parse_json(_json_data); end) "json" "JSON parsing"
+
+include("indexing.jl")
+x = [1:100_000]
+y = filter(iseven, 1:length(x))
+logical_y = map(iseven, 1:length(x))
+
+@timeit (for n=1:100 add1!(x,y) end) "add1" "Increment vector x at locations y"
+@timeit (for n=1:100 devec_add1!(x,y) end) "devec_add1" "Devectorized increment vector x at locations y"
+@timeit (for n=1:100 add1!(x,logical_y) end) "add1_logical" "Increment x_i if y_i is true"
+@timeit (for n=1:100 devec_add1_logical!(x,logical_y) end) "devec_add1_logical" "Devectorized increment x_i if y_i is true"
+

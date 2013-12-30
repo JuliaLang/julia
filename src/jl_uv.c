@@ -492,7 +492,7 @@ DLLEXPORT int jl_write_copy(uv_stream_t *stream, const char *str, size_t n, uv_w
     memcpy(data,str,n);
     uv_buf_t buf[]  = {{.base = data,.len=n}};
     uvw->data = NULL;
-    int err = uv_write(uvw,stream,buf,1,writecb);  
+    int err = uv_write(uvw,stream,buf,1,(uv_write_cb)writecb);
     JL_SIGATOMIC_END();
     return err;
 }
@@ -533,7 +533,7 @@ DLLEXPORT int jl_write_no_copy(uv_stream_t *stream, char *data, size_t n, uv_wri
 {
     uv_buf_t buf[]  = {{.base = data,.len=n}};
     JL_SIGATOMIC_BEGIN();
-    int err = uv_write(uvw,stream,buf,1,writecb);
+    int err = uv_write(uvw,stream,buf,1,(uv_write_cb)writecb);
     uvw->data = NULL;
     JL_SIGATOMIC_END();
     return err;

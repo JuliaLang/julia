@@ -1229,8 +1229,7 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
         Value *tpl = builder.CreateCall(jl_alloc_tuple_func,ConstantInt::get(T_size,n));
         int last_depth = ctx->argDepth;
         make_gcroot(tpl,ctx);
-        for (size_t i = 0; i < n; ++i)
-        {
+        for (size_t i = 0; i < n; ++i) {
             jl_value_t *jti = jl_tupleref(jt,i);
             Value *vi = emit_tupleref(v,ConstantInt::get(T_size,i+1),jt,ctx);
             emit_tupleset(tpl,ConstantInt::get(T_size,i+1),boxed(vi,ctx,jti),jt,ctx);

@@ -16,7 +16,6 @@ endif
 CONFIGURE_COMMON = $(CONFIGURE_OPTIONS) $(CONFIGURE_CC)
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr patchelf uv
-#custom configure-driven script: zlib
 #custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas
 
 # prevent installing libs into usr/lib64 on opensuse
@@ -56,11 +55,13 @@ endif
 ## USE_SYSTEM_LIBS options
 
 ifeq ($(USE_SYSTEM_OPENLIBM), 0)
-# No matter if we are using a system-libm or not, if we don't have a system-openlibm, we need the extras
-STAGE1_DEPS += openlibm-extras
 ifeq ($(USE_SYSTEM_LIBM), 0)
 STAGE1_DEPS += openlibm
 endif
+endif
+
+ifeq ($(USE_SYSTEM_OPENSPECFUN), 0)
+STAGE1_DEPS += openspecfun
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
@@ -144,7 +145,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf $(BUILD)
-getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-random get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf
+getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-random get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf
 
 ## PATHS ##
 DIRS = $(addprefix $(BUILD)/,lib include bin share etc)
@@ -556,7 +557,7 @@ $(PCRE_SRC_TARGET): pcre-$(PCRE_VER)/config.status
 	touch -c $@
 pcre-$(PCRE_VER)/checked: $(PCRE_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C pcre-$(PCRE_VER) check
+	$(MAKE) -C pcre-$(PCRE_VER) check -j1
 endif
 	echo 1 > $@
 $(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET) pcre-$(PCRE_VER)/checked
@@ -566,8 +567,8 @@ $(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET) pcre-$(PCRE_VER)/checked
 
 clean-pcre:
 	-$(MAKE) -C pcre-$(PCRE_VER) clean
-	-rm -f $(PCRE_OBJ_TARGET)
-distclean-pcre:
+	-rm -f $(BUILD)/$(JL_LIBDIR)/libpcre*
+distclean-pcre: clean-pcre
 	-rm -rf pcre-$(PCRE_VER).tar.bz2 pcre-$(PCRE_VER)
 
 get-pcre: pcre-$(PCRE_VER).tar.bz2
@@ -623,30 +624,23 @@ check-double-conversion: compile-double-conversion
 install-double-conversion: $(BUILD)/$(JL_LIBDIR)/libgrisu.$(SHLIB_EXT)
 
 
-## openlibm && openlibm-extras ##
+## openlibm ##
 
 OPENLIBM_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 
 OPENLIBM_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libopenlibm.$(SHLIB_EXT)
 OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
-OPENLIBMEXT_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libopenlibm-extras.$(SHLIB_EXT)
-OPENLIBMEXT_OBJ_SOURCE = openlibm/libopenlibm-extras.$(SHLIB_EXT)
 
-openlibm/Makefile openlibm/Makefile.extras:
+openlibm/Makefile:
 	(cd .. && git submodule init && git submodule update)
 ifeq (exists, $(shell [ -d openlibm/.git ] && echo exists ))
 $(OPENLIBM_OBJ_SOURCE): openlibm/.git/HEAD
-$(OPENLIBMEXT_OBJ_SOURCE): openlibm/.git/HEAD
 endif
 ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/openlibm ] && echo exists ))
 $(OPENLIBM_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
-$(OPENLIBMEXT_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
 endif
 $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 	$(MAKE) -C openlibm $(OPENLIBM_FLAGS)
-	touch -c $@
-$(OPENLIBMEXT_OBJ_SOURCE): openlibm/Makefile.extras
-	$(MAKE) -C openlibm -f Makefile.extras $(OPENLIBM_FLAGS)
 	touch -c $@
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(BUILD)/lib
 ifeq ($(OS),WINNT)
@@ -656,19 +650,11 @@ else
 endif
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
-$(OPENLIBMEXT_OBJ_TARGET): $(OPENLIBMEXT_OBJ_SOURCE) | $(BUILD)/lib
-	cp $< $@
-	$(INSTALL_NAME_CMD)libopenlibm-extras.$(SHLIB_EXT) $@
 
 clean-openlibm:
 	-$(MAKE) -C openlibm distclean $(OPENLIBM_FLAGS)
 	-rm $(OPENLIBM_OBJ_TARGET)
 distclean-openlibm: clean-openlibm
-
-clean-openlibm-extras:
-	-$(MAKE) -C openlibm -f Makefile.extras distclean
-	-rm $(OPENLIBMEXT_OBJ_TARGET)
-distclean-openlibm-extras: clean-openlibm-extras
 
 get-openlibm: openlibm/Makefile
 configure-openlibm: get-openlibm
@@ -676,11 +662,43 @@ compile-openlibm: $(OPENLIBM_OBJ_SOURCE)
 check-openlibm: compile-openlibm
 install-openlibm: $(OPENLIBM_OBJ_TARGET) 
 
-get-openlibm-extras: openlibm/Makefile.extras
-configure-openlibm-extras: get-openlibm-extras
-compile-openlibm-extras: $(OPENLIBMEXT_OBJ_SOURCE)
-check-openlibm-extras: compile-openlibm-extras
-install-openlibm-extras: $(OPENLIBMEXT_OBJ_TARGET)
+## openspecfun ##
+
+OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) USE_OPENLIBM=1 OPENLIBM_HOME=$(JULIAHOME)/deps/openlibm
+
+OPENSPECFUN_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libopenspecfun.$(SHLIB_EXT)
+OPENSPECFUN_OBJ_SOURCE = openspecfun/libopenspecfun.$(SHLIB_EXT)
+
+openspecfun/Makefile openspecfun/Makefile.extras:
+	(cd .. && git submodule init && git submodule update)
+ifeq (exists, $(shell [ -d openspecfun/.git ] && echo exists ))
+$(OPENSPECFUN_OBJ_SOURCE): openspecfun/.git/HEAD
+endif
+ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/openspecfun ] && echo exists ))
+$(OPENSPECFUN_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openspecfun/HEAD
+endif
+$(OPENSPECFUN_OBJ_SOURCE): openspecfun/Makefile
+	$(MAKE) -C openspecfun $(OPENSPECFUN_FLAGS)
+	touch -c $@
+$(OPENSPECFUN_OBJ_TARGET): $(OPENSPECFUN_OBJ_SOURCE) | $(BUILD)/lib
+ifeq ($(OS),WINNT)
+	cp openspecfun/libopenspecfun.a $(BUILD)/lib/libopenspecfun.a
+else
+	cp openspecfun/libopenspecfun.a $(BUILD)/$(JL_LIBDIR)/libopenspecfun.a
+endif
+	cp $< $@
+	$(INSTALL_NAME_CMD)libopenspecfun.$(SHLIB_EXT) $@
+
+clean-openspecfun:
+	-$(MAKE) -C openspecfun distclean $(OPENSPECFUN_FLAGS)
+	-rm $(OPENSPECFUN_OBJ_TARGET)
+distclean-openspecfun: clean-openspecfun
+
+get-openspecfun: openspecfun/Makefile
+configure-openspecfun: get-openspecfun
+compile-openspecfun: $(OPENSPECFUN_OBJ_SOURCE)
+check-openspecfun: compile-openspecfun
+install-openspecfun: $(OPENSPECFUN_OBJ_TARGET) 
 
 ## LIBRANDOM ##
 
