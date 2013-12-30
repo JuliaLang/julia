@@ -119,9 +119,11 @@ logdet{T}(C::Cholesky{T}) = 2sum(log(diag(C.UL)))
 logdet{T}(C::CholeskyPivoted{T}) = C.rank < size(C.UL, 1) ? real(convert(T, -Inf)) : 2sum(log(diag(C.UL)))
 
 function inv(C::Cholesky)
-    Ci, info = LAPACK.potri!(C.uplo, copy(C.UL))
-    info == 0 ? symmetrize_conj!(Ci, C.uplo) : throw(SingularException(info))
+    Ci = LAPACK.potri!(C.uplo, copy(C.UL))
+    symmetrize_conj!(Ci, C.uplo)
 end
+
+chkfullrank(C::CholeskyPivoted) = C.rank == size(C,1) ? true : throw(SingularException(C.rank))
 
 function inv(C::CholeskyPivoted)
     chkfullrank(C)
@@ -314,10 +316,10 @@ function *{T<:BlasFloat}(A::QRPivotedQ{T}, B::StridedVecOrMat{T})
 end
 *(A::StridedVecOrMat, B::QRPivotedQ) = LAPACK.ormqr!('R', 'N', B.hh, B.tau, copy(A))
 
-Ac_mul_B{T<:BlasReal   }(A::QRPackedQ{T},  B::StridedVecOrMat) = LAPACK.gemqrt!('L','T',A.vs,A.T,  copy(B))
-Ac_mul_B{T<:BlasComplex}(A::QRPackedQ{T},  B::StridedVecOrMat) = LAPACK.gemqrt!('L','C',A.vs,A.T,  copy(B))
-Ac_mul_B{T<:BlasReal   }(A::QRPivotedQ{T}, B::StridedVecOrMat) = LAPACK.ormqr! ('L','T',A.hh,A.tau,copy(B))
-Ac_mul_B{T<:BlasComplex}(A::QRPivotedQ{T}, B::StridedVecOrMat) = LAPACK.ormqr! ('L','C',A.hh,A.tau,copy(B))
+Ac_mul_B{T<:BlasReal   }(A::QRPackedQ{T},  B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','T',A.vs,A.T,  copy(B))
+Ac_mul_B{T<:BlasComplex}(A::QRPackedQ{T},  B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','C',A.vs,A.T,  copy(B))
+Ac_mul_B{T<:BlasReal   }(A::QRPivotedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr! ('L','T',A.hh,A.tau,copy(B))
+Ac_mul_B{T<:BlasComplex}(A::QRPivotedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr! ('L','C',A.hh,A.tau,copy(B))
 function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T})
     m, n = size(A, 1), ndims(A)==1 ? 1 : size(A, 2)
     if n == size(B.vs, 1)
@@ -340,6 +342,19 @@ function A_mul_Bc{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPivotedQ{T})
     end
     LAPACK.ormqr!('R', iseltype(B.hh,Complex) ? 'C' : 'T', B.hh, B.tau, Ac)
 end
+# promotions
+*{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVector) = *(A,convert(Vector{T},B))
+*{T<:BlasFloat}(A::QRPivotedQ{T}, B::StridedVector) = *(A,convert(Vector{T},B))
+*{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedMatrix) = *(A,convert(Matrix{T},B))
+*{T<:BlasFloat}(A::QRPivotedQ{T}, B::StridedMatrix) = *(A,convert(Matrix{T},B))
+*{T<:BlasFloat}(A::StridedMatrix, B::QRPackedQ{T}) = *(convert(Matrix{T},A),B)
+*{T<:BlasFloat}(A::StridedMatrix, B::QRPivotedQ{T}) = *(convert(Matrix{T},A),B)
+Ac_mul_B{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVector) = Ac_mul_B(A,convert(Vector{T},B))
+Ac_mul_B{T<:BlasFloat}(A::QRPivotedQ{T}, B::StridedVector) = Ac_mul_B(A,convert(Vector{T},B))
+Ac_mul_B{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedMatrix) = Ac_mul_B(A,convert(Matrix{T},B))
+Ac_mul_B{T<:BlasFloat}(A::QRPivotedQ{T}, B::StridedMatrix) = Ac_mul_B(A,convert(Matrix{T},B))
+A_mul_Bc{T<:BlasFloat}(A::StridedMatrix, B::QRPackedQ{T}) = Ac_mul_B(convert(Matrix{T},A),B)
+A_mul_Bc{T<:BlasFloat}(A::StridedMatrix, B::QRPivotedQ{T}) = Ac_mul_B(convert(Matrix{T},A),B)
 
 ## Least squares solution.
 #XXX Should be more careful about cases with m < n

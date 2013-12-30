@@ -49,7 +49,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test_approx_eq l*l' apd
 
     # pivoted Choleksy decomposition
-    cpapd = cholpfact(apd)
+    cpapd = cholfact(apd, true)
     @test rank(cpapd) == n
     @test all(diff(diag(real(cpapd.UL))).<=0.) # diagonal should be non-increasing
     @test_approx_eq b apd * (cpapd\b)
