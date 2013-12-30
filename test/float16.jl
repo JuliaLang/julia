@@ -4,15 +4,15 @@ g = float16(1.)
 
 @test -f === float16(-2.)
 
-@test f+g === 3f0
-@test f-g === 1f0
-@test f*g === 2f0
-@test f/g === 2f0
+@test f+g === float16(3f0)
+@test f-g === float16(1f0)
+@test f*g === float16(2f0)
+@test f/g === float16(2f0)
 
-@test f + 2 === 4f0
-@test f - 2 === 0f0
-@test f*2 === 4f0
-@test f/2 === 1f0
+@test f + 2 === float32(4f0)
+@test f - 2 === float32(0f0)
+@test f*2 === float32(4f0)
+@test f/2 === float32(1f0)
 @test f + 2. === 4.
 @test f - 2. === 0.
 @test f*2. === 4.
