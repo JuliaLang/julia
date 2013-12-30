@@ -32,6 +32,10 @@ endif
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,base test doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
 
+git-submodules:
+	@-git submodule init --quiet
+	@-git submodule update
+
 debug release: | $(DIRS) $(BUILD)/share/julia/base $(BUILD)/share/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples $(BUILD)/etc/julia/juliarc.jl
 	@$(MAKE) $(QUIET_MAKE) julia-$@
 	@export JL_PRIVATE_LIBDIR=$(JL_PRIVATE_LIBDIR) && \
@@ -43,9 +47,7 @@ julia-debug-symlink:
 julia-release-symlink:
 	@ln -sf $(BUILD)/bin/julia-$(DEFAULT_REPL) julia
 
-julia-debug julia-release:
-	@-git submodule init --quiet
-	@-git submodule update
+julia-debug julia-release: git-submodules
 	@$(MAKE) $(QUIET_MAKE) -C deps
 	@$(MAKE) $(QUIET_MAKE) -C src lib$@
 	@$(MAKE) $(QUIET_MAKE) -C base
@@ -257,6 +259,48 @@ else
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
 endif
 	rm -fr julia-$(JULIA_COMMIT)
+
+
+source-dist: git-submodules cleanall
+	# Clean other stuff that isn't covered by cleanall
+	@$(MAKE) -C contrib/mac/app clean
+
+	# Save git information
+	-@$(MAKE) -C base version_git.jl.phony
+
+	# Create a packaging temp directory
+	rm -rf tarball
+	mkdir tarball
+
+	# Copy in all julia source
+	for subdir in base contrib doc etc examples src test ui; do \
+		cp -R $$subdir tarball/; \
+	done
+	cp -a *.md *.inc Makefile VERSION tarball/
+
+	# Get all the dependencies that aren't git submodules as .tar.gz files
+	@$(MAKE) -C deps getall
+
+	# Copy in all deps
+	mkdir -p tarball/deps
+	for file in *.tar.gz Makefile Versions.make jldownload *.patch *.c *.cpp *.alias *.h readline62-*; do \
+		cp -a deps/$$file tarball/deps/; \
+	done
+
+	# Special-case random sources
+	mkdir -p tarball/deps/random
+	cp -a deps/random/*.c deps/random/*.patch deps/random/*.tar.gz tarball/deps/random/
+
+	# Special-case git submodules
+	for subdir in Rmath libuv openlibm openspecfun; do \
+		(cd deps/$$subdir && git clean -fdx); \
+		cp -R deps/$$subdir tarball/deps/; \
+	done
+
+	# Create tarball
+	cd tarball && tar -cvf - . | gzip -9 - > ../julia-$(JULIA_VERSION)_source.tar.gz
+	rm -rf tarball
+	
 
 clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C base clean
