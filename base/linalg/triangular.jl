@@ -35,7 +35,7 @@ A_mul_Bc{T<:BlasReal}(A::StridedMatrix{T}, B::Triangular{T}) = BLAS.trmm('R', B.
 function \{T<:BlasFloat}(A::Triangular{T}, B::StridedVecOrMat{T})
     x = LAPACK.trtrs!(A.uplo, 'N', A.unitdiag, A.UL, copy(B))
     for errors in LAPACK.trrfs!(A.uplo, 'N', A.unitdiag, A.UL, B, x)
-        all(isfinite(errors)) || all(ferr.<one(T)/eps(T)) || warn("""Unreasonably large error in computed solution:
+        all(isfinite(errors)) || all(errors.<one(T)/eps(T)) || warn("""Unreasonably large error in computed solution:
 forward error: $ferr
 backward error: $berr""")
     end
