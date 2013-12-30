@@ -147,10 +147,9 @@ end
 
 macro try_display(expr)
   quote
-    display_fns = [display, redisplay, writemime]
     try $(esc(expr))
     catch e
-      isa(e, MethodError) && any(f -> e.f == f, display_fns) ||
+      isa(e, MethodError) && e.f in (display, redisplay, writemime) ||
         rethrow()
     end
   end
