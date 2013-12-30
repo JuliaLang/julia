@@ -11,8 +11,8 @@ export  CPU_CORES,
         loadavg,
         free_memory,
         total_memory,
-        shlib_ext,
-        shlib_list,
+        dlext,
+        dllist,
         dlpath
 
 import ..Base: WORD_SIZE, OS_NAME, ARCH, MACHINE
@@ -135,12 +135,12 @@ free_memory() = ccall(:uv_get_free_memory, Uint64, ())
 total_memory() = ccall(:uv_get_total_memory, Uint64, ())
 
 if OS_NAME === :Darwin
-    const shlib_ext = "dylib"
+    const dlext = "dylib"
 elseif OS_NAME === :Windows
-    const shlib_ext = "dll"
+    const dlext = "dll"
 else
     #assume OS_NAME === :Linux, or similar
-    const shlib_ext = "so"
+    const dlext = "so"
 end
 
 @linux_only begin
@@ -172,7 +172,7 @@ end
     end
 end #@linux_only
 
-function shlib_list()
+function dllist()
     dynamic_libraries = Array(String,0)
 
     @linux_only begin
