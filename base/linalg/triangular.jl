@@ -95,13 +95,32 @@ diag(A::Triangular) = diag(A.UL)
 big(A::Triangular) = Triangular(big(A.UL), A.uplo, A.unitdiag)
 
 #Generic multiplication
-for func in (:*, :Ac_mul_B, :A_mul_Bc, :Ac_ldiv_B, :/, :A_rdiv_Bc)
+for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
     @eval begin
         ($func){T}(A::Triangular{T}, B::AbstractVector{T}) = ($func)(full(A), B)
         #($func){T}(A::AbstractArray{T}, B::Triangular{T}) = ($func)(full(A), B)
     end
 end
 
+A_ldiv_B!(A::Triangular, b::AbstractVector)=naivesub!(A,b)
+At_ldiv_B!(A::Triangular, b::AbstractVector)=naivesub!(transpose(A),b)
+Ac_ldiv_B!(A::Triangular, b::AbstractVector)=naivesub!(ctranspose(A),b)
+for func in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!) @eval begin
+    function ($func)(A::Triangular, B::AbstractMatrix)
+        for i=1:size(B,2)
+            ($func)(A, B[:,i])
+        end
+        B
+    end
+end end
+for func in (:A_ldiv_Bt!, :Ac_ldiv_Bt!, :At_ldiv_Bt!) @eval begin
+    function ($func)(A::Triangular, B::AbstractMatrix)
+        for i=1:size(B,1)
+            ($func)(A, B[i,:])
+        end
+        B
+    end
+end end
 #Generic solver using naive substitution
 function naivesub!(A::Triangular, b::AbstractVector, x::AbstractVector=b)
     N = size(A, 2)
