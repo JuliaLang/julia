@@ -12,6 +12,7 @@ export  CPU_CORES,
         free_memory,
         total_memory,
         dlext,
+	shlib_ext,
         dllist,
         dlpath
 
@@ -142,6 +143,9 @@ else
     #assume OS_NAME === :Linux, or similar
     const dlext = "so"
 end
+
+# This is deprecated!  use dlext instead!
+const shlib_ext = dlext
 
 @linux_only begin
     immutable dl_phdr_info
