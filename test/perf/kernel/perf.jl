@@ -202,8 +202,8 @@ x = [1:100_000]
 y = filter(iseven, 1:length(x))
 logical_y = map(iseven, 1:length(x))
 
-@timeit (for n=1:100 add_one!(x,y) end) "add_one" "Increment vector x at locations y"
-@timeit (for n=1:100 devec_add_one!(x,y) end) "devec_add_one" "Devectorized increment vector x at locations y"
-@timeit (for n=1:100 add_one!(x,logical_y) end) "add_one_logical" "Increment x_i if y_i is true"
-@timeit (for n=1:100 devec_add_one_logical!(x,logical_y) end) "devec_add_one_logical" "Devectorized increment x_i if y_i is true"
+@timeit (for n=1:100 add1!(x,y) end) "add1" "Increment vector x at locations y"
+@timeit (for n=1:100 devec_add1!(x,y) end) "devec_add1" "Devectorized increment vector x at locations y"
+@timeit (for n=1:100 add1!(x,logical_y) end) "add1_logical" "Increment x_i if y_i is true"
+@timeit (for n=1:100 devec_add1_logical!(x,logical_y) end) "devec_add1_logical" "Devectorized increment x_i if y_i is true"
 
