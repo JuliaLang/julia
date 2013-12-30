@@ -269,9 +269,13 @@ source-dist: git-submodules
 
 	# Create file source-dist.tmp to hold all the filenames that goes into the tarball
 	echo "base/version_git.jl" > source-dist.tmp
-	git ls-files | grep -v "^.git" >> source-dist.tmp
-	ls deps/*.tar.gz >> source-dist.tmp
-	git submodule --quiet foreach 'git ls-files | grep -v "^.git" | sed "s&^&$$path/&"' >> source-dist.tmp
+	git ls-files >> source-dist.tmp
+	ls deps/*.tar.gz deps/*.tar.bz2 deps/*.tgz deps/random/*.tar.gz >> source-dist.tmp
+	git submodule --quiet foreach 'git ls-files | sed "s&^&$$path/&"' >> source-dist.tmp
+
+	# Remove unwanted files
+	sed -i".bak" '/\.git/d' source-dist.tmp
+	sed -i".bak" '/\.travis/d' source-dist.tmp
 
 	# Create tarball
 	tar -cz -T source-dist.tmp -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
