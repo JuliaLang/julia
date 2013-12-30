@@ -55,9 +55,6 @@ float32(x) = convert(Float32, x)
 float64(x) = convert(Float64, x)
 float(x)   = convert(FloatingPoint, x)
 
-# possibly a hack, but useful for `f(x::Real) = f(float(x))` fallbacks
-float(x::Float16) = float32(x)
-
 ## conversions from floating-point ##
 
 # fallbacks using only convert, trunc, ceil, floor, round
