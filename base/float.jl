@@ -71,7 +71,7 @@ iceil {T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,ceil(x))
 ifloor{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,floor(x))
 iround{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,round(x))
 
-## fast specific type converions ##
+## fast specific type conversions ##
 
 if WORD_SIZE == 64
     iround(x::Float32) = iround(float64(x))
@@ -121,13 +121,9 @@ morebits(::Type{Float32}) = Float64
 
 ## floating point arithmetic ##
 
--(x::Float16) = reinterpret(Float16, reinterpret(Uint16,x) $ 0x8000)
 -(x::Float32) = box(Float32,neg_float(unbox(Float32,x)))
 -(x::Float64) = box(Float64,neg_float(unbox(Float64,x)))
 
-for op in (:+,:-,:*,:/)
-    @eval ($op)(a::Float16, b::Float16) = ($op)(float32(a), float32(b))
-end
 +(x::Float32, y::Float32) = box(Float32,add_float(unbox(Float32,x),unbox(Float32,y)))
 +(x::Float64, y::Float64) = box(Float64,add_float(unbox(Float64,x),unbox(Float64,y)))
 -(x::Float32, y::Float32) = box(Float32,sub_float(unbox(Float32,x),unbox(Float32,y)))

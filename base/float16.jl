@@ -99,7 +99,26 @@ function ==(x::Float16, y::Float16)
     return ix == iy
 end
 
-<(x::Float16, y::Float16) = float32(x) < float32(y)
-isless(x::Float16, y::Float16) = isless(float32(x), float32(y))
+-(x::Float16) = reinterpret(Float16, reinterpret(Uint16,x) $ 0x8000)
+for op in (:+,:-,:*,:/,:\)
+    @eval ($op)(a::Float16, b::Float16) = float16(($op)(float32(a), float32(b)))
+end
+for op in (:<,:.<,:<=,:.<=,:>,:.>,:>=,:.>=, :isless)
+    @eval ($op)(a::Float16, b::Float16) = ($op)(float32(a), float32(b))
+end
+for func in (sin,cos,tan,asin,acos,atan,sinh,cosh,tanh,asinh,acosh,atanh,exp,log,exponent,sqrt)
+    func(a::Float16) = float16(func(float32(a)))
+    func(a::Complex32) = complex32(func(complex64(a)))
+end
+for func in (abs,)
+    func(a::Float16) = float16(func(float32(a)))
+    func(a::Complex32) = float16(func(complex64(a)))
+end
+for func in (atan2,)
+    func(a::Float16, b::Float16) = float16(func(float32(a), float32(b)))
+end
+for func in (ldexp,)
+    func(a::Float16, b::Integer) = float16(func(float32(a), b))
+end
 
 hash(x::Float16) = hash(reinterpret(Uint16, isnan(x) ? NaN16 : x))
