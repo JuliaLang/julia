@@ -20,7 +20,7 @@ function perm_matrix{T<:Integer}(A::Vector{T})
     P
 end
 
-\(F::Factorization, B::AbstractVecOrMat) = A_ldiv_B!(F, copy(B))
+(\)(F::Factorization, B::AbstractVecOrMat) = A_ldiv_B!(F, copy(B))
 Ac_ldiv_B(F::Factorization, B::AbstractVecOrMat) = Ac_ldiv_B!(F, copy(B))
 At_ldiv_B(F::Factorization, B::AbstractVecOrMat) = At_ldiv_B!(F, copy(B))
 A_ldiv_B!(F::Factorization, B::StridedVecOrMat) = A_ldiv_B!(F, float(B))
@@ -347,8 +347,7 @@ end
 (\)(A::QR, B::StridedMatrix) = Triangular(A[:R], :U)\(A[:Q]'B)[1:size(A, 2),:]
 # Julia implementation similarly to xgelsy
 function (\){T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
-    nr = minimum(size(A.hh))
-    nrhs = size(B, 2)
+    nr, nrhs = minimum(size(A.hh)), size(B, 2)
     if nr == 0 return zeros(0, nrhs), 0 end
     ar = abs(A.hh[1])
     if ar == 0 return zeros(nr, nrhs), 0 end #XXX is 0 the correct underflow threshold?
