@@ -64,14 +64,14 @@ function eigvecs{T<:BlasFloat}(A::Triangular{T})
 end
 
 function cond{T<:BlasFloat}(A::Triangular{T}, p::Real=2)
-	chksquare(A)
-	if p==1
-		inv(LAPACK.trcon!('O', A.uplo, A.unitdiag, A.UL))
-	elseif p==Inf
-		inv(LAPACK.trcon!('I', A.uplo, A.unitdiag, A.UL))
-	else #use fallback
-		return cond(full(A), p)
-	end
+    chksquare(A)
+    if p==1
+        return inv(LAPACK.trcon!('O', A.uplo, A.unitdiag, A.UL))
+    elseif p==Inf
+        return inv(LAPACK.trcon!('I', A.uplo, A.unitdiag, A.UL))
+    else #use fallback
+        return cond(full(A), p)
+    end
 end
 
 ####################
@@ -107,29 +107,29 @@ function naivesub!(A::Triangular, b::AbstractVector, x::AbstractVector=b)
     N = size(A, 2)
     N==length(b)==length(x) || throw(DimensionMismatch(""))
 
-	if A.uplo == 'L' #do forward substitution
-	    for j = 1:N
-	    	x[j] = b[j]
-	        for k = 1:j-1
-	        	x[j] -= A[j,k] * x[k]
-	        end
-	        if A.unitdiag=='N'
-	        	x[j]/= A[j,j]==0 ? throw(SingularException(j)) : A[j,j]
-	        end
-	    end
+    if A.uplo == 'L' #do forward substitution
+        for j = 1:N
+            x[j] = b[j]
+            for k = 1:j-1
+                x[j] -= A[j,k] * x[k]
+            end
+            if A.unitdiag=='N'
+                x[j]/= A[j,j]==0 ? throw(SingularException(j)) : A[j,j]
+            end
+        end
     elseif A.uplo == 'U' #do backward substitution
-	    for j = N:-1:1
-	        x[j] = b[j]
-	        for k = j+1:1:N
-	            x[j] -= A[j,k] * x[k]
-	        end
-	        if A.unitdiag=='N'
-	        	x[j]/= A[j,j]==0 ? throw(SingularException(j)) : A[j,j]
-	        end
-	    end
-	else
-		throw(ArgumentError("Unknown uplo=$(A.uplo)"))
-	end
+        for j = N:-1:1
+            x[j] = b[j]
+            for k = j+1:1:N
+                x[j] -= A[j,k] * x[k]
+            end
+            if A.unitdiag=='N'
+                x[j]/= A[j,j]==0 ? throw(SingularException(j)) : A[j,j]
+            end
+        end
+    else
+        throw(ArgumentError("Unknown uplo=$(A.uplo)"))
+    end
     x
 end
 
@@ -137,11 +137,11 @@ end
 \{T<:Number}(A::Triangular{T}, B::AbstractMatrix{T}) = hcat([naivesub!(A, B[:,i], similar(B[:,i])) for i=1:size(B,2)]...)
 
 function inv(A::Triangular)
-	B = eye(eltype(A), size(A, 1))
-	for i=1:size(B,2)
-		naivesub!(A, B[:,i])
-	end
-	B
+    B = eye(eltype(A), size(A, 1))
+    for i=1:size(B,2)
+        naivesub!(A, B[:,i])
+    end
+    B
 end
 
 #Generic eigensystems
@@ -149,11 +149,11 @@ eigvals(A::Triangular) = diag(A.UL)
 det(A::Triangular) = prod(eigvals(A))
 
 function eigvecs{T}(A::Triangular{T})
-	evecs = zeros(A)
-	N = size(A,1)
-	if A.unitdiag == 'U' #Trivial
-		return eye(A)
-	elseif A.uplo == 'L' #do forward substitution
+    evecs = zeros(A)
+    N = size(A,1)
+    if A.unitdiag == 'U' #Trivial
+        return eye(A)
+    elseif A.uplo == 'L' #do forward substitution
         for i=1:N
             evecs[i,i] = one(T)
             for j = i+1:N
@@ -164,7 +164,7 @@ function eigvecs{T}(A::Triangular{T})
             end
             evecs[i:N, i] /= norm(evecs[i:N, i])
         end
-	    evecs
+        evecs
     elseif A.uplo == 'U' #do backward substitution
         for i=1:N
             evecs[i,i] = one(T)
@@ -176,9 +176,9 @@ function eigvecs{T}(A::Triangular{T})
             end
             evecs[1:i, i] /= norm(evecs[1:i, i])
         end
-	else
-		throw(ArgumentError("Unknown uplo=$(A.uplo)"))
-	end
+    else
+        throw(ArgumentError("Unknown uplo=$(A.uplo)"))
+    end
     evecs
 end
 
