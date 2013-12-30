@@ -6,6 +6,7 @@
 /usr
 /Make.user
 /julia-*
+/source-dist.tmp
 
 *.exe
 *.dll
