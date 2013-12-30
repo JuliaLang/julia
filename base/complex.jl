@@ -270,9 +270,9 @@ function sqrt{T<:FloatingPoint}(z::Complex{T})
     ρ, k::Int = ssqs(x, y)
     if isfinite(x) ρ=ldexp(abs(x),-k)+sqrt(ρ) end
     if isodd(k)
-        k = (k-1)/2
+        k = div(k-1,2)
     else
-        k = k/2-1
+        k = div(k,2)-1
         ρ += ρ
     end
     ρ = ldexp(sqrt(ρ),k) #sqrt((abs(z)+abs(x))/2) without over/underflow
