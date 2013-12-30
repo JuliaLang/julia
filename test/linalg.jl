@@ -462,15 +462,6 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         @test_approx_eq iWv iFv
     end
 
-    # Diagonal
-    D = Diagonal(d)
-    DM = diagm(d)
-    @test_approx_eq D*v DM*v
-    @test_approx_eq D*U DM*U
-    @test_approx_eq D\v DM\v
-    @test_approx_eq D\U DM\U
-    @test_approx_eq det(D) det(DM)   
-
     # Test det(A::Matrix)
     # In the long run, these tests should step through Strang's
     #  axiomatic definition of determinants.
@@ -682,6 +673,40 @@ for elty in (Float32, Float64, Complex64, Complex128)
             #test_approx_eq_vecs(v1, v2) 
             #@test_approx_eq_eps 0 norm(v1 * diagm(d1) * inv(v1) - Tfull) eps(elty)*n*(n+1)
             #@test_approx_eq_eps 0 norm(v2 * diagm(d2) * inv(v2) - Tfull) eps(elty)*n*(n+1)
+        end
+    end
+end
+
+#Diagonal matrices
+n=12
+for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
+    d=convert(Vector{elty}, randn(n))
+    v=convert(Vector{elty}, randn(n))
+    U=convert(Matrix{elty}, randn(n,n))
+    if elty <: Complex
+        d+=im*convert(Vector{elty}, randn(n))
+        v+=im*convert(Vector{elty}, randn(n))
+        U+=im*convert(Matrix{elty}, randn(n,n))
+    end
+    D = Diagonal(d)
+    DM = diagm(d)
+    @test_approx_eq_eps D*v DM*v n*eps(relty)*(elty<:Complex ? 2:1)
+    @test_approx_eq_eps D*U DM*U n^2*eps(relty)*(elty<:Complex ? 2:1)
+    if relty != BigFloat 
+        @test_approx_eq_eps D\v DM\v n*eps(relty)*(elty<:Complex ? 2:1)
+        @test_approx_eq_eps D\U DM\U n^2*eps(relty)*(elty<:Complex ? 2:1)
+    end
+    for func in (det, trace)
+        @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)
+    end
+    if relty != BigFloat && relty != Float16
+        for func in (expm,)
+            @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)
+        end
+    end        
+    if elty <: Complex && relty != BigFloat && relty != Float16
+        for func in (logdet, sqrtm)
+            @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)
         end
     end
 end
