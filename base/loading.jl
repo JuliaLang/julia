@@ -160,5 +160,9 @@ end
 
 function evalfile(path::String, args::Array = {})
     return eval(Module(:__anon__),
-                Expr(:toplevel,:(ARGS=$args),:(include($path))))
+                Expr(:toplevel,
+                     :(ARGS=$args),
+                     :(eval(x) = Core.eval(__anon__,x)),
+                     :(eval(m,x) = Core.eval(m,x)),
+                     :(include($path))))
 end
