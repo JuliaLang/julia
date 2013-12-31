@@ -3,16 +3,16 @@ JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 include Versions.make
 
-CONFIGURE_OPTIONS = --prefix=$(abspath $(BUILD)) --build=$(BUILD_MACHINE)
+CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) --build=$(BUILD_MACHINE)
 ifneq ($(XC_HOST),)
-CONFIGURE_OPTIONS += --host=$(XC_HOST)
+CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
 ifeq ($(OS),WINNT)
-CONFIGURE_OPTIONS += LDFLAGS=-Wl,--stack,8388608
+CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
 else ifneq ($(JL_LIBDIR),lib)
-CONFIGURE_OPTIONS += --libdir=$(abspath $(BUILD)/$(JL_LIBDIR))
+CONFIGURE_COMMON += --libdir=$(abspath $(BUILD)/$(JL_LIBDIR))
 endif
-CONFIGURE_COMMON = $(CONFIGURE_OPTIONS) F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
+CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr patchelf uv
 #custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas
@@ -363,7 +363,7 @@ llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status: llvm-$(LLVM_VER)/configu
 	cd llvm-$(LLVM_VER) && \
 	mkdir -p build_$(LLVM_BUILDTYPE) && cd build_$(LLVM_BUILDTYPE) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	../configure $(CONFIGURE_OPTIONS) $(LLVM_CC) $(LLVM_FLAGS)
+	../configure $(CONFIGURE_COMMON) $(LLVM_CC) $(LLVM_FLAGS)
 	touch -c $@
 
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status | $(llvm_python_workaround)
