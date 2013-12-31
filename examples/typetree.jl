@@ -81,7 +81,7 @@ function store_all_from(m::Module)
             t = eval(m,expr)
             isa(t, Type) && store_type(string(expr), t)
         #catch ex
-        #    println("Error adding ", string(expr), " ", t, " ", m, " (", ex, ")")
+        #    println("Error adding ", string(expr), m, " (", ex, ")")
         end
     end
 end
@@ -95,7 +95,8 @@ type_props(typ::DataType) = string("<<",
                                  " >>")
 
 function print_tree(subtypes::Dict{String, TTNode}, pfx::String="")
-    for (n,v) in subtypes
+    for n in sort!([keys(subtypes)...])
+        v = subtypes[n]
         if(n == string(v.typ))
             println(pfx, "+- ", n, " ", type_props(v.typ))
         else
