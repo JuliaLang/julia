@@ -39,7 +39,7 @@ public:
         UnwindData[2] = 2;    // count of unwind codes (slots)
         UnwindData[3] = 0x05; // frame register (rbp) = rsp
         UnwindData[4] = 4;    // second instruction
-        UnwindData[5] = 0x01; // mov RBP, RSP
+        UnwindData[5] = 0x03; // mov RBP, RSP
         UnwindData[6] = 1;    // first instruction
         UnwindData[7] = 0x50; // push RBP
         *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp-(intptr_t)Code);
