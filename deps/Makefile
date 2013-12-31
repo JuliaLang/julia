@@ -3,7 +3,6 @@ JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 include Versions.make
 
-CONFIGURE_CC = F77="$(FC)" CC="$(CC)" CXX="$(CXX)" 
 CONFIGURE_OPTIONS = --prefix=$(abspath $(BUILD)) --build=$(BUILD_MACHINE)
 ifneq ($(XC_HOST),)
 CONFIGURE_OPTIONS += --host=$(XC_HOST)
@@ -13,7 +12,7 @@ CONFIGURE_OPTIONS += LDFLAGS=-Wl,--stack,8388608
 else ifneq ($(JL_LIBDIR),lib)
 CONFIGURE_OPTIONS += --libdir=$(abspath $(BUILD)/$(JL_LIBDIR))
 endif
-CONFIGURE_COMMON = $(CONFIGURE_OPTIONS) $(CONFIGURE_CC)
+CONFIGURE_COMMON = $(CONFIGURE_OPTIONS) F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr patchelf uv
 #custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas
@@ -251,10 +250,10 @@ endif
 
 
 ifeq ($(LLVM_SANITIZE),1)
-LLVM_CC = $(CONFIGURE_CC) CXXFLAGS="-fsanitize=address" CFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
+LLVM_CC = CXXFLAGS="-fsanitize=address" CFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
 LLVM_MFLAGS += TOOL_NO_EXPORTS= HAVE_LINK_VERSION_SCRIPT=0
 else
-LLVM_CC = $(CONFIGURE_CC)
+LLVM_CC =
 endif
 
 ifneq ($(LLVM_CLANG_TAR),)
