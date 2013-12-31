@@ -274,12 +274,12 @@ source-dist: git-submodules
 	git submodule --quiet foreach 'git ls-files | sed "s&^&$$path/&"' >> source-dist.tmp
 
 	# Remove unwanted files
-	sed -i".bak" '/\.git/d' source-dist.tmp
-	sed -i".bak" '/\.travis/d' source-dist.tmp
+	sed '/\.git/d' source-dist.tmp > source-dist.tmp1
+	sed '/\.travis/d' source-dist.tmp1 > source-dist.tmp
 
 	# Create tarball
-	tar -cz -T source-dist.tmp -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
-	rm source-dist.tmp
+	tar -cz -T source-dist.tmp --no-recursion -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
+	rm -f source-dist.tmp source-dist.tmp1
 
 clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C base clean
@@ -292,7 +292,7 @@ clean: | $(CLEAN_TARGETS)
 	@rm -f julia
 	@rm -f *~ *# *.tar.gz
 	@rm -fr $(BUILD)/$(JL_PRIVATE_LIBDIR)
-	@rm -f source-dist.tmp
+	@rm -f source-dist.tmp source-dist.tmp1
 # Temporarily add this line to the Makefile to remove extras
 	@rm -fr $(BUILD)/share/julia/extras
 
@@ -312,7 +312,7 @@ distclean: cleanall
 .PHONY: default debug release julia-debug julia-release \
 	test testall testall1 test-* clean distclean cleanall \
 	run-julia run-julia-debug run-julia-release run \
-	install dist
+	install dist source-dist
 
 ifeq ($(VERBOSE),1)
 .SILENT:
