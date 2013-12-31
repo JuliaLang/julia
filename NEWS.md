@@ -19,6 +19,10 @@ New library functions
 Library improvements
 --------------------
 
+  * Array assignment (e.g. `x[:] = y`) ignores singleton dimensions
+    and allows the last dimension of one side to match all trailing dimensions
+    of the other ([#4048], [#4383]).
+
   * Multi-key dictionaries: `D[x,y...]` is now a synonym for `D[(x,y...)]`
     for associations `D` ([#4870]).
 
@@ -61,6 +65,8 @@ Library improvements
   * The `Sys` module now includes convenient functions for working with
     dynamic library handles; `Sys.dllist` will list out all paths currently
     loaded via `dlopen`, and `Sys.dlpath` will lookup a path from a handle
+
+  * `sparse(A) \ B` now supports a matrix `B` of right-hand sides ([#5196]).
 
 Deprecated or removed
 ---------------------
