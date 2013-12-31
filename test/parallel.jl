@@ -13,11 +13,12 @@ id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 @fetch begin myid() end
 
 
-@windows_only dist_test_types = [DArray]
-@unix_only dist_test_types = [DArray, SharedArray]
+@windows_only dist_modes = [DISTMODE_DISTRIBUTED]
+@unix_only dist_modes = [DISTMODE_DISTRIBUTED, DISTMODE_SHARED]
 
-for tt in dist_test_types
-    d = rand(tt, (200,200), [id_me, id_other])
+for dm in dist_modes
+    dprocs = [id_me, id_other]
+    d = rand(DimDist((200,200), length(dprocs); mode = dm); dprocs = dprocs)
     s = convert(Array, d[1:150, 1:150])
     a = convert(Array, d)
     @test a[1:150,1:150] == s
@@ -29,7 +30,7 @@ end
 @unix_only begin
 # SharedArray tests
 dims = (20,20,20)
-d = rand(SharedArray, 1:100, dims)
+d = rand(1:100, DimDist(dims; mode=DISTMODE_SHARED))
 a = convert(Array, d)
 
 partsums = Array(Int, length(procs(d)))
@@ -40,7 +41,7 @@ partsums = Array(Int, length(procs(d)))
 end
 @test sum(a) == sum(partsums)
 
-d = rand(SharedArray, dims)
+d = rand(DimDist(dims; mode=DISTMODE_SHARED))
 for p in procs(d)
     idxes_in_p = remotecall_fetch(p, D->parentindexes(localpart(D)), d)
     idxf = sub2ind(dims, map(first,idxes_in_p)...)
@@ -50,10 +51,10 @@ for p in procs(d)
     @test d[idxl] == rv
 end
 
-@test ones(10, 10, 10) == ones(SharedArray, 10, 10, 10)
-@test zeros(Int32, 10, 10, 10) == zeros(SharedArray, 10, 10, 10)
+@test ones(10, 10, 10) == fill(1.0, DimDist(10, 10, 10; mode=DISTMODE_SHARED))
+@test zeros(Int32, 10, 10, 10) == fill(0, DimDist(10, 10, 10; mode=DISTMODE_SHARED))
 
-d = SharedArray(Int, dims; init = D->fill!(localpart(D), myid()))
+d = SharedArray(Int, DimDist(dims; mode=DISTMODE_SHARED); init = D->fill!(localpart(D), myid()))
 for p in procs(d)
     idxes_in_p = remotecall_fetch(p, D->parentindexes(localpart(D)), d)
     idxf = sub2ind(dims, map(first,idxes_in_p)...)

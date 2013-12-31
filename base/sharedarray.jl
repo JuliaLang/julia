@@ -1,6 +1,6 @@
 type SharedArray{T,N} <: AbstractArray{T,N}
-    dims::NTuple{N,Int}
-    ad::ArrayDist{N}
+    arrdist::ArrayDist
+    refs::DistRefs{N}    
     
     # Local shmem map. Not to be serialized.
     local_shmmap::Array{T,N}
@@ -9,47 +9,53 @@ type SharedArray{T,N} <: AbstractArray{T,N}
     local_idx::Int
 end
 
-function SharedArray(T::Type, dims, dprocs, dist; init=false)
-    N = length(dims)
+function SharedArray(T::Type, arrdist::ArrayDist; init=false, dprocs=workers())
+    N = length(dims(arrdist))
 
     !isbits(T) ? error("Type of Shared Array elements must be bits types") : nothing
     @windows_only error(" SharedArray is not supported on Windows yet.")
     
-    # Ensure that all processes are on localhost. 
-    if !(all(x->islocalwrkr(x), [dprocs, myid()]))
-        error("SharedArray requires all requested processes to be on the same machine.")
-    end
+    onlocalhost = assert_same_host(dprocs)
 
     local shm_seg_name = ""
     local local_shmmap 
     local sa = nothing 
+    local shmmem_create_pid
     try
         # On OSX, the shm_seg_name length must be < 32 characters
         shm_seg_name = string("/jl", getpid(), int64(time() * 10^9)) 
+        if onlocalhost
+            shmmem_create_pid = myid()
+            local_shmmap = shm_mmap_array(T, dims(arrdist), shm_seg_name, JL_O_CREAT | JL_O_RDWR)
+        else
+            # The shared array is being created on a remote machine....
+            shmmem_create_pid = dprocs[1]
+            remotecall(dprocs[1], () -> begin shm_mmap_array(T, dims(arrdist), shm_seg_name, JL_O_CREAT | JL_O_RDWR); nothing end) 
+        end
 
-        local_shmmap = shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
-    
         func_alloc = (idxs) -> begin 
-            basemap = shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR)
+            basemap = shm_mmap_array(T, dims(arrdist), shm_seg_name, JL_O_RDWR)
             sub(basemap, idxs)
         end
         
-        ad = ArrayDist(func_alloc, dims, dprocs, dist)
+        refs = setup_chunks(func_alloc, dprocs, arrdist)
         
         # Wait till all the workers have mapped the segment
-        for i in 1:length(ad)
-            wait(chunk_ref(ad, i))
+        for i in 1:length(refs)
+            wait(refs[i])
         end
         
         # All good, immediately unlink the segment.
-        shm_unlink(shm_seg_name) 
-        shm_seg_name = "" ;
+        remotecall(shmmem_create_pid, () -> begin shm_unlink(shm_seg_name); nothing end)  
+        shm_seg_name = "" 
         
+        if onlocalhost
+            sa = SharedArray{T,N}(arrdist, refs, local_shmmap, localpartindex(refs))
+        else
+            sa = SharedArray{T,N}(arrdist, refs)
+            sa.local_idx = 0 
+        end
         
-        # get the typeof the chunks 
-#        A = typeof(sub(Array(T, ntuple(N,i->0)), ntuple(N, i->1:0)))
-        sa = SharedArray{T,N}(dims, ad, local_shmmap, localpartindex(ad))
-
         # if present init function is called on each of the parts
         @sync begin 
             if isa(init, Function)
@@ -61,71 +67,72 @@ function SharedArray(T::Type, dims, dprocs, dist; init=false)
         
     finally
         if shm_seg_name != "" 
-            shm_unlink(shm_seg_name) 
+            remotecall(shmmem_create_pid, () -> begin shm_unlink(shm_seg_name); nothing end)  
         end
     end
     sa
 end
 
 
-function SharedArray(T, dims, procs; kwargs...)
-    if isempty(procs)
-        error("no processors")
+function SharedArray(T, dims; kwargs...) 
+    idx = findfirst(Arg -> begin (S,_) = Arg; S == :dprocs end, kwargs)
+    if idx > 0
+        SharedArray(T, DimDist(dims, length(kwargs[idx][2]); mode=DISTMODE_SHARED); kwargs...)
+    else
+        SharedArray(T, DimDist(dims, length(workers()); mode=DISTMODE_SHARED); kwargs...)
     end
-    SharedArray(T, dims, procs, defaultdist(dims,procs); kwargs...)
 end
-SharedArray(T, dims; kwargs...) = SharedArray(T, dims, workers()[1:min(nworkers(),maximum(dims))]; kwargs...)
+
+function SharedArray(T, dims, dist; kwargs...) 
+    idx = findfirst(Arg -> begin (S,_) = Arg; S == :dprocs end, kwargs)
+    if idx > 0
+        SharedArray(T, DimDist(dims, length(kwargs[idx][2]), dist; mode=DISTMODE_SHARED); kwargs...)
+    else
+        SharedArray(T, DimDist(dims, length(workers()), dist; mode=DISTMODE_SHARED); kwargs...)
+    end
+end
 
 # new SharedArray similar to an existing one
-SharedArray{T}(sa::SharedArray{T}; kwargs...) = SharedArray(T, size(sa), procs(sa), [dimdist(sa.ad)...]; kwargs...)
+function SharedArray{T}(sa::SharedArray{T}; kwargs...) 
+    idx = findfirst(Arg -> begin (S,_) = Arg; S == :dprocs end, kwargs)
+    if idx > 0
+        dprocs = kwargs[idx][2]
+        if length(procs(d)) != length(dprocs)
+            error("Requested number of workers must be same as existing SharedArray")
+        end
+        SharedArray(T, size(sa), length(dprocs), pdims(sa.arrdist); kwargs...) 
+    else
+        append!(kwargs, [(:dprocs, procs(d))])
+        SharedArray(T, size(sa), length(dprocs), length(procs(d)), pdims(sa.arrdist); kwargs...) 
+    end
+end
 
-length(sa::SharedArray) = prod(sa.dims)
-size(sa::SharedArray) = sa.dims
-procs(sa::SharedArray) = procs(sa.ad)
 
-localpartindex(sa::SharedArray) = localpartindex(sa.ad)
+length(sa::SharedArray) = prod(dims(sa.arrdist))
+size(sa::SharedArray) = dims(sa.arrdist)
+procs(sa::SharedArray) = procs(sa.refs)
+
+localpartindex(sa::SharedArray) = localpartindex(sa.refs)
 
 function localpart{T,N}(sa::SharedArray{T,N})
     if sa.local_idx == 0
         sub(Array(T, ntuple(N,i->0)), ntuple(N, i->1:0))
     else
-        fetch(chunk_ref(sa.ad, sa.local_idx))
+        fetch(sa.refs[sa.local_idx])
     end
 end
-myindexes(sa::SharedArray) = myindexes(sa.ad)
-locate(sa::SharedArray, I::Int...) = locate(sa.ad, I...)
-
-## convenience constructors ##
-for (arrtype) in (:zero, :one, :inf, :nan)
-    f = symbol(string(arrtype, "s"))
-    @eval begin
-        ($f)(::Type{SharedArray}, d::Int...) = ($f)(SharedArray, Float64, d)
-        ($f)(::Type{SharedArray}, T::DataType, d::Int...) = ($f)(SharedArray, T, d)
-        
-        ($f)(::Type{SharedArray}, args...) = ($f)(SharedArray, Float64, args...)
-        ($f)(::Type{SharedArray}, T::DataType, args...) = SharedArray(T, args...; init = S->fill!(localpart(S), ($arrtype)(T)))
+function myindexes(sa::SharedArray) 
+    lpidx = localpartindex(sa.refs)
+    if lpidx == 0
+        ntuple(N, i->1:0)
+    else
+        d.dimdist[lpidx]
     end
+
 end
 
-rand(::Type{SharedArray}, I::(Int...)) = rand(SharedArray, Float64, I)
-rand(::Type{SharedArray}, T::DataType, args...) = SharedArray(T, args...; init = S->map!((x)->rand(T), localpart(S)))
-rand(::Type{SharedArray}, R::Range1, args...) = SharedArray(Int, args...; init = S->map!((x)->rand(R), localpart(S)))
-rand(::Type{SharedArray}, args...) = rand(SharedArray, Float64, args...)
+locate(sa::SharedArray, I::Int...) = locate(sa.arrdist, I...)
 
-fill(v, ::Type{SharedArray}, args...) = SharedArray(typeof(v), args...; init = S->fill!(localpart(S), v))
-fill(v, ::Type{SharedArray}, d::Int...) = fill(v, SharedArray, d)
-
-randn(::Type{SharedArray}, args...) = SharedArray(Float64, args...; init = S-> map!((x)->randn(), localpart(S)))
-randn(::Type{SharedArray}, d::Int...) = randn(SharedArray, d)
-
-## conversions ##
-
-
-function share{T}(a::AbstractArray{T})
-    sa = SharedArray(T, size(a))
-    copy!(sa.local_shmmap, a)
-    sa
-end
 
 
 # Don't serialize local_shmmap (it is the complete array) and 
@@ -147,14 +154,14 @@ function deserialize{T,N}(s, t::Type{SharedArray{T,N}})
     
     sa.local_idx = localpartindex(sa)
     if (sa.local_idx > 0) 
-        sa.local_shmmap = parent(fetch(chunk_ref(sa.ad, sa.local_idx)))
+        sa.local_shmmap = parent(fetch(sa.refs[sa.local_idx]))
     else
         error("SharedArray cannot be used on a non-participating process")
     end
     sa
 end
 
-localpartindex(sa::SharedArray) = localpartindex(sa.ad)
+localpartindex(sa::SharedArray) = localpartindex(sa.refs)
 
 convert(::Type{Array}, sa::SharedArray) = sa.local_shmmap
 
@@ -224,3 +231,20 @@ end
 @unix_only shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Ptr{Uint8},), shm_seg_name)
 @unix_only shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{Uint8}, Int, Int), shm_seg_name, oflags, permissions)
 
+
+function assert_same_host(procs)
+    myip = 
+    resp = Array(Any, length(procs))
+    
+    @sync begin
+        for (i, p) in enumerate(procs)
+            @async resp[i] = remotecall_fetch(p, () -> getipaddr())
+        end
+    end
+    
+    if !all(x->x==resp[1], resp) 
+        error("SharedArray requires all requested processes to be on the same machine.")
+    end
+    
+    return (resp[1] != getipaddr()) ? false : true
+end

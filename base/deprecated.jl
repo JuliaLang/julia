@@ -369,17 +369,33 @@ const CharString = UTF32String
 @deprecate with_bigfloat_rounding(f::Function, r::RoundingMode) with_rounding(f::Function, BigFloat, r)
 eval(Sys, :(@deprecate shlib_list dllist))
 
-@deprecate dzeros(args...) zeros(DArray, args...)
-@deprecate dzeros(d::Int...) zeros(DArray, d...)
-@deprecate dones(args...) ones(DArray, args...)
-@deprecate dones(d::Int...) ones(DArray, d...)
-@deprecate dfill(v, args...) fill(v, DArray, args...)
-@deprecate dfill(v, d::Int...) fill(v, DArray, d...)
-@deprecate drand(args...) rand(DArray, args...)
-@deprecate drand(d::Int...) rand(DArray, d...)
-@deprecate drandn(args...) randn(DArray, args...)
-@deprecate drandn(d::Int...) randn(DArray, d...)
 
+@deprecate dzeros(dims)  fill(0.0, DimDist(dims))
+@deprecate dzeros(dims, procs)  fill(0.0, DimDist(dims, length(procs)); dprocs=procs)
+@deprecate dzeros(dims, procs, dist)  fill(0.0, DimDist(dims, length(procs), dist); dprocs=procs)
+@deprecate dzeros(d::Int...) fill(0.0, DimDist(d))
+
+@deprecate dones(dims)  fill(1.0, DimDist(dims))
+@deprecate dones(dims, procs)  fill(1.0, DimDist(dims, length(procs)); dprocs=procs)
+@deprecate dones(dims, procs, dist)  fill(1.0, DimDist(dims, length(procs), dist); dprocs=procs)
+@deprecate dones(d::Int...) fill(1.0, DimDist(d))
+
+@deprecate drand(dims)  rand(DimDist(dims))
+@deprecate drand(dims, procs)  rand(DimDist(dims, length(procs)); dprocs=procs)
+@deprecate drand(dims, procs, dist)  rand(DimDist(dims, length(procs), dist); dprocs=procs)
+@deprecate drand(d::Int...) rand(DimDist(d))
+
+@deprecate drandn(dims)  randn(DimDist(dims))
+@deprecate drandn(dims, procs)  randn(DimDist(dims, length(procs)); dprocs=procs)
+@deprecate drandn(dims, procs, dist)  randn(DimDist(dims, length(procs), dist); dprocs=procs)
+@deprecate drandn(d::Int...) randn(DimDist(d))
+
+@deprecate dfill(v, dims)  fill(v, DimDist(dims))
+@deprecate dfill(v, dims, procs)  fill(v, DimDist(dims, length(procs)); dprocs=procs)
+@deprecate dfill(v, dims, procs, dist)  fill(v, DimDist(dims, length(procs), dist); dprocs=procs)
+@deprecate dfill(v, d::Int...) fill(v, DimDist(d))
+
+@deprecate distribute(a::Array) similar(a, DimDist(size(a)))
 
 # 0.3 discontinued functions
 
