@@ -1810,8 +1810,8 @@ for (trtri, trtrs, elty) in
             chkstride1(A)
             n = chksquare(A)
             @chkuplo
-            if size(B,1) != n throw(DimensionMismatch("trtrs!")) end
-            info    = Array(BlasInt, 1)
+            size(B,1)==n || throw(DimensionMismatch(""))
+            info = Array(BlasInt, 1)
             ccall(($(string(trtrs)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -1916,10 +1916,9 @@ for (trcon, trevc, trrfs, elty) in
                 A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, X::StridedVecOrMat{$elty},
                 Ferr::StridedVector{$elty}=Array($elty, size(B,2)), Berr::StridedVector{$elty}=Array($elty, size(B,2)))
             @chkuplo
-            lda, n = size(A)
-            ldb, nrhs = size(B,2)==1 ? (size(B,1),1) : size(B)
-            ldx, nrhs2= size(X,2)==1 ? (size(X,1),1) : size(X)
-            nrhs==nrhs2 || throw(DimensionMismatch(""))
+            n=size(A,2)
+            nrhs=size(B,2)
+            nrhs==size(X,2) || throw(DimensionMismatch(""))
             work=Array($elty, 3n)
             iwork=Array(BlasInt, n)
             info=Array(BlasInt, 1)
@@ -1928,7 +1927,7 @@ for (trcon, trevc, trrfs, elty) in
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                 &uplo, &trans, &diag, &n,
-                &nrhs, A, &lda, B, &ldb, X, &ldx,
+                &nrhs, A, &max(1,stride(A,2)), B, &max(1,stride(B,2)), X, &max(1,stride(X,2)),
                 Ferr, Berr, work, iwork, info)
             @lapackerror
             Ferr, Berr
@@ -2031,10 +2030,9 @@ for (trcon, trevc, trrfs, elty, relty) in
                 A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, X::StridedVecOrMat{$elty},
                 Ferr::StridedVector{$relty}=Array($relty, size(B,2)), Berr::StridedVector{$relty}=Array($relty, size(B,2)))
             @chkuplo
-            lda, n = size(A)
-            ldb, nrhs = size(B,2)==1 ? (size(B,1),1) : size(B)
-            ldx, nrhs2= size(X,2)==1 ? (size(X,1),1) : size(X)
-            nrhs==nrhs2 || throw(DimensionMismatch(""))
+            n=size(A,2)
+            nrhs=size(B,2)
+            nrhs==size(X,2) || throw(DimensionMismatch(""))
             work=Array($elty, 2n)
             rwork=Array($elty, n)
             info=Array(BlasInt, 1)
@@ -2043,7 +2041,7 @@ for (trcon, trevc, trrfs, elty, relty) in
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
                  Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
                 &uplo, &trans, &diag, &n,
-                &nrhs, A, &lda, B, &ldb, X, &ldx,
+                &nrhs, A, &max(1,stride(A,2)), B, &max(1,stride(B,2)), X, &max(1,stride(X,2)),
                 Ferr, Berr, work, rwork, info)
             @lapackerror
             Ferr, Berr
