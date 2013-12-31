@@ -177,5 +177,4 @@ function show_backtrace(io::IO, top_function::Symbol, t, set)
     if n > 1 || lastline != -11
         show_trace_entry(io, lastname, lastfile, lastline, n)
     end
-    @windows_only if WORD_SIZE == 64; println(); warn_once("backtraces on your platform are often misleading or partially incorrect") end
 end
