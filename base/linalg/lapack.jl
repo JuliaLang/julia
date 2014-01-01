@@ -1810,8 +1810,8 @@ for (trtri, trtrs, elty) in
             chkstride1(A)
             n = chksquare(A)
             @chkuplo
-            if size(B,1) != n throw(DimensionMismatch("trtrs!")) end
-            info    = Array(BlasInt, 1)
+            size(B,1)==n || throw(DimensionMismatch(""))
+            info = Array(BlasInt, 1)
             ccall(($(string(trtrs)),liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -1819,6 +1819,232 @@ for (trtri, trtrs, elty) in
                   B, &max(1,stride(B,2)), info)
             @lapackerror
             B
+        end
+    end
+end
+
+#Eigenvector computation and condition number estimation
+for (trcon, trevc, trrfs, elty) in
+    ((:dtrcon_,:dtrevc_,:dtrrfs_,:Float64),
+     (:strcon_,:strevc_,:strrfs_,:Float32))
+    @eval begin
+        #SUBROUTINE DTRCON( NORM, UPLO, DIAG, N, A, LDA, RCOND, WORK,
+        #                   IWORK, INFO )
+        #.. Scalar Arguments ..
+        #CHARACTER          DIAG, NORM, UPLO
+        #INTEGER            INFO, LDA, N
+        #DOUBLE PRECISION   RCOND
+        #.. Array Arguments ..
+        #INTEGER            IWORK( * )
+        #DOUBLE PRECISION   A( LDA, * ), WORK( * )
+        function trcon!(norm::BlasChar, uplo::BlasChar, diag::BlasChar,
+                        A::StridedMatrix{$elty})
+            chkstride1(A)
+            n = chksquare(A)
+            @chkuplo
+            rcond = Array($elty, 1)
+            work  = Array($elty, 3n)
+            iwork = Array(BlasInt, n)
+            info  = Array(BlasInt, 1)
+            ccall(($(string(trcon)),liblapack), Void,
+                  (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                  &norm, &uplo, &diag, &n,
+                  A, &max(1,stride(A,2)), rcond, work, iwork, info)
+            @lapackerror
+            rcond[1]
+        end
+        # SUBROUTINE DTREVC( SIDE, HOWMNY, SELECT, N, T, LDT, VL, LDVL, VR,
+        #                    LDVR, MM, M, WORK, INFO )
+        #
+        # .. Scalar Arguments ..
+        # CHARACTER          HOWMNY, SIDE
+        # INTEGER            INFO, LDT, LDVL, LDVR, M, MM, N
+        # ..
+        # .. Array Arguments ..
+        # LOGICAL            SELECT( * )
+        # DOUBLE PRECISION   T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
+        #$                   WORK( * )
+        function trevc!(side::BlasChar, howmny::BlasChar,
+                select::Vector{Bool}, A::StridedMatrix{$elty},
+                VL::StridedMatrix{$elty}=similar(A), VR::StridedMatrix{$elty}=similar(A))
+            chkstride1(A)
+            chksquare(A)
+            ldt, n = size(A)
+            ldvl, mm = size(VL)
+            ldvr, mm = size(VR)
+            m = Array(BlasInt, 1)
+            work = Array($elty, 3n)
+            info = Array(BlasInt, 1)
+            ccall(($(string(trevc)),liblapack), Void,
+            (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Bool}, Ptr{BlasInt}, Ptr{$elty},
+            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+            Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+            &side, &howmny, select, &n, A, &ldt, VL, &ldvl, VR, &ldvr, &mm,
+            m, work, info)
+            @lapackerror
+
+            #Decide what exactly to return
+            if howmny=='S' #compute selected eigenvectors
+                if side=='L' #left eigenvectors only
+                    return select, VL[:,1:m[1]]
+                elseif side=='R' #right eigenvectors only
+                    return select, VR[:,1:m[1]]
+                else #side=='B' #both eigenvectors
+                    return select, VL[:,1:m[1]], VR[:,1:m[1]]
+                end
+            else #compute all eigenvectors
+                if side=='L' #left eigenvectors only
+                    return VL[:,1:m[1]]
+                elseif side=='R' #right eigenvectors only
+                    return VR[:,1:m[1]]
+                else #side=='B' #both eigenvectors
+                    return VL[:,1:m[1]], VR[:,1:m[1]]
+                end
+            end
+        end
+        # SUBROUTINE DTRRFS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, X,
+        #                    LDX, FERR, BERR, WORK, IWORK, INFO )
+        # .. Scalar Arguments ..
+        # CHARACTER          DIAG, TRANS, UPLO
+        # INTEGER            INFO, LDA, LDB, LDX, N, NRHS
+        # .. Array Arguments ..
+        # INTEGER            IWORK( * )
+        # DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), BERR( * ), FERR( * ),
+        #$                   WORK( * ), X( LDX, * )
+        function trrfs!(uplo::BlasChar, trans::BlasChar, diag::BlasChar,
+                A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, X::StridedVecOrMat{$elty},
+                Ferr::StridedVector{$elty}=Array($elty, size(B,2)), Berr::StridedVector{$elty}=Array($elty, size(B,2)))
+            @chkuplo
+            n=size(A,2)
+            nrhs=size(B,2)
+            nrhs==size(X,2) || throw(DimensionMismatch(""))
+            work=Array($elty, 3n)
+            iwork=Array(BlasInt, n)
+            info=Array(BlasInt, 1)
+            ccall(($(string(trrfs)),liblapack), Void,
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
+                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                 Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                &uplo, &trans, &diag, &n,
+                &nrhs, A, &max(1,stride(A,2)), B, &max(1,stride(B,2)), X, &max(1,stride(X,2)),
+                Ferr, Berr, work, iwork, info)
+            @lapackerror
+            Ferr, Berr
+        end
+    end
+end
+for (trcon, trevc, trrfs, elty, relty) in
+    ((:ztrcon_,:ztrevc_,:ztrrfs_,:Complex128,:Float64),
+     (:ctrcon_,:ctrevc_,:ctrrfs_,:Complex64, :Float32))
+    @eval begin
+        #SUBROUTINE ZTRCON( NORM, UPLO, DIAG, N, A, LDA, RCOND, WORK,
+        #                   RWORK, INFO )
+        #.. Scalar Arguments ..
+        #CHARACTER          DIAG, NORM, UPLO
+        #INTEGER            INFO, LDA, N
+        #DOUBLE PRECISION   RCOND
+        #.. Array Arguments ..
+        #DOUBLE PRECISION   RWORK( * )
+        #COMPLEX*16         A( LDA, * ), WORK( * )
+        function trcon!(norm::BlasChar, uplo::BlasChar, diag::BlasChar,
+                        A::StridedMatrix{$elty})
+            chkstride1(A)
+            n = chksquare(A)
+            @chkuplo
+            rcond = Array($relty, 1)
+            work  = Array($elty, 2n)
+            rwork = Array($elty, n)
+            info  = Array(BlasInt, 1)
+            ccall(($(string(trcon)),liblapack), Void,
+                  (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
+                  &norm, &uplo, &diag, &n,
+                  A, &max(1,stride(A,2)), rcond, work, rwork, info)
+            @lapackerror
+            rcond[1]
+        end
+
+        # SUBROUTINE ZTREVC( SIDE, HOWMNY, SELECT, N, T, LDT, VL, LDVL, VR,
+        #                    LDVR, MM, M, WORK, RWORK, INFO )
+        #
+        # .. Scalar Arguments ..
+        # CHARACTER          HOWMNY, SIDE
+        # INTEGER            INFO, LDT, LDVL, LDVR, M, MM, N
+        # ..
+        # .. Array Arguments ..
+        # LOGICAL            SELECT( * )
+        # DOUBLE PRECISION   RWORK( * )
+        # COMPLEX*16         T( LDT, * ), VL( LDVL, * ), VR( LDVR, * ),
+        #$                   WORK( * )
+        function trevc!(side::BlasChar, howmny::BlasChar,
+                select::Vector{Bool}, A::StridedMatrix{$elty},
+                VL::StridedMatrix{$elty}=similar(A), VR::StridedMatrix{$elty}=similar(A))
+            chkstride1(A)
+            chksquare(A)
+            ldt, n = size(A)
+            ldvl, mm = size(VL)
+            ldvr, mm = size(VR)
+            m = Array(BlasInt, 1)
+            work = Array($elty, 2n)
+            rwork = Array($relty, n)
+            info = Array(BlasInt, 1)
+            ccall(($(string(trevc)),liblapack), Void,
+            (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Bool}, Ptr{BlasInt}, Ptr{$elty},
+            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+            Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
+            &side, &howmny, select, &n, A, &ldt, VL, &ldvl, VR, &ldvr, &mm,
+            m, work, rwork, info)
+            @lapackerror
+
+            #Decide what exactly to return
+            if howmny=='S' #compute selected eigenvectors
+                if side=='L' #left eigenvectors only
+                    return select, VL[:,1:m[1]]
+                elseif side=='R' #right eigenvectors only
+                    return select, VR[:,1:m[1]]
+                else #side=='B' #both eigenvectors
+                    return select, VL[:,1:m[1]], VR[:,1:m[1]]
+                end
+            else #compute all eigenvectors
+                if side=='L' #left eigenvectors only
+                    return VL[:,1:m[1]]
+                elseif side=='R' #right eigenvectors only
+                    return VR[:,1:m[1]]
+                else #side=='B' #both eigenvectors
+                    return VL[:,1:m[1]], VR[:,1:m[1]]
+                end
+            end
+        end
+
+        # SUBROUTINE ZTRRFS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, X,
+        #                    LDX, FERR, BERR, WORK, IWORK, INFO )
+        # .. Scalar Arguments ..
+        # CHARACTER          DIAG, TRANS, UPLO
+        # INTEGER            INFO, LDA, LDB, LDX, N, NRHS
+        # .. Array Arguments ..
+        # INTEGER            IWORK( * )
+        # DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), BERR( * ), FERR( * ),
+        #$                   WORK( * ), X( LDX, * )
+        function trrfs!(uplo::BlasChar, trans::BlasChar, diag::BlasChar,
+                A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, X::StridedVecOrMat{$elty},
+                Ferr::StridedVector{$relty}=Array($relty, size(B,2)), Berr::StridedVector{$relty}=Array($relty, size(B,2)))
+            @chkuplo
+            n=size(A,2)
+            nrhs=size(B,2)
+            nrhs==size(X,2) || throw(DimensionMismatch(""))
+            work=Array($elty, 2n)
+            rwork=Array($elty, n)
+            info=Array(BlasInt, 1)
+            ccall(($(string(trrfs)),liblapack), Void,
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
+                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                 Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
+                &uplo, &trans, &diag, &n,
+                &nrhs, A, &max(1,stride(A,2)), B, &max(1,stride(B,2)), X, &max(1,stride(X,2)),
+                Ferr, Berr, work, rwork, info)
+            @lapackerror
+            Ferr, Berr
         end
     end
 end
