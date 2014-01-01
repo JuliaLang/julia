@@ -48,6 +48,27 @@ function minimum(itr)
     return v
 end
 
+function extrema(itr)
+    s = start(itr)
+    if done(itr, s)
+        error("argument is empty")
+    end
+    (v, s) = next(itr, s)
+    vmin = v
+    vmax = v
+    while !done(itr, s)
+        (x, s) = next(itr, s)
+        if x == x
+            if x > vmax
+                vmax = x
+            elseif x < vmin
+                vmin = x
+            end
+        end
+    end
+    return (vmin, vmax)
+end
+
 function sum(itr)
     s = start(itr)
     if done(itr, s)
