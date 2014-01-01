@@ -806,6 +806,12 @@
 
 "),
 
+("Iterable Collections","Base","extrema","extrema(itr)
+
+   Return a tuple as (minimum(x), maximum(x)). This function finds both 
+   the maximum and minimum of a collection in a single pass.
+")
+
 ("Iterable Collections","Base","indmax","indmax(itr) -> Integer
 
    Returns the index of the maximum element in a collection
@@ -3769,6 +3775,11 @@ popdisplay(d::Display)
    Return the maximum of the arguments. Operates elementwise over
    arrays.
 
+"),
+
+("Mathematical Functions","Base","minmax","minmax(x, y)
+
+   Return (min(x, y), max(x, y)).
 "),
 
 ("Mathematical Functions","Base","clamp","clamp(x, lo, hi)
