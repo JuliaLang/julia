@@ -215,7 +215,7 @@ Ac_ldiv_Bc{T<:BlasComplex}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular
 
 inv(A::LU)=@assertnonsingular LAPACK.getri!(copy(A.factors), A.ipiv) A.info
 
-cond(A::LU, p) = 1.0/LinAlg.LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm(A[:L][A[:p],:]*A[:U], p))
+cond(A::LU, p) = inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm(A[:L][A[:p],:]*A[:U], p)))
 
 ## QR decomposition without column pivots. By the faster geqrt3
 type QR{S<:BlasFloat} <: Factorization{S}

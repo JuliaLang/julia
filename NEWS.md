@@ -68,6 +68,14 @@ Library improvements
 
   * `sparse(A) \ B` now supports a matrix `B` of right-hand sides ([#5196]).
 
+  * More routines for specialized matrix types
+    - new algorithms for linear solvers and eigensystems of `Triangular`
+      matrices of generic types ([#5255])
+    - specialized methods `transpose`, `ctranspose`, `istril`, `istriu` for
+      `Triangular` ([#5255])
+    - new LAPACK wrappers
+      - condition number estimate `cond(A::Triangular)` ([#5255])
+
 Deprecated or removed
 ---------------------
 
@@ -90,7 +98,7 @@ Deprecated or removed
 [#4670]: https://github.com/JuliaLang/julia/issues/4670
 [#5007]: https://github.com/JuliaLang/julia/issues/5007
 [#5076]: https://github.com/JuliaLang/julia/issues/5076
-
+[#5255]: https://github.com/JuliaLang/julia/issues/5255
 
 Julia v0.2.0 Release Notes
 ==========================

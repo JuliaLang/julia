@@ -569,7 +569,52 @@ function test_approx_eq_vecs(a, b)
     end
 end
 
-#LAPACK tests for symmetric tridiagonal matrices
+##############################
+# Tests for special matrices #
+##############################
+
+#Triangular matrices
+n=12
+for elty in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloat})
+    A = convert(Matrix{elty}, randn(n, n))
+    b = convert(Vector{elty}, randn(n))
+    thiseps = eps(typeof(real(b[1])))
+    if elty <: Complex
+        A += im*convert(Matrix{elty}, randn(n, n))
+        b += im*convert(Vector{elty}, randn(n))
+    end
+
+    for M in (triu(A), tril(A))
+        TM = Triangular(M)
+        #Linear solver
+        x = M \ b
+        tx = TM \ b
+        solve_error = n^3*max(norm(M*x-b), thiseps)
+        @test_approx_eq_eps norm(TM*tx-b) 0 solve_error
+        @test_approx_eq_eps norm(x-tx) 0 solve_error
+        if elty != BigFloat && elty != Complex{BigFloat} #naivesub! is the default for non-BlasFloats
+            tx = Base.LinAlg.naivesub!(TM, b, similar(b))
+            @test_approx_eq_eps norm(TM*tx-b) 0 solve_error
+            @test_approx_eq_eps norm(x-tx) 0 solve_error
+        end
+
+        #Eigensystems
+        vals1, vecs1 = eig(complex128(M))
+        vals2, vecs2 = eig(TM)
+        res1=norm(complex128(vecs1*diagm(vals1)*inv(vecs1) - M))
+        res2=norm(complex128(vecs2*diagm(vals2)*inv(vecs2) - full(TM)))
+        @test_approx_eq_eps res1 res2 res1+res2
+
+        if elty != BigFloat && elty != Complex{BigFloat}
+            #Condition number tests - can be VERY approximate
+            for p in [1.0, Inf]
+                @test_approx_eq_eps cond(TM, p) cond(M, p) (cond(TM,p)+cond(M,p))*0.2
+            end
+        end
+    end
+end
+
+#SymTridiagonal (symmetric tridiagonal) matrices
 n=5
 Ainit = randn(n)
 Binit = randn(n-1)
@@ -598,7 +643,7 @@ for elty in (Float32, Float64)
 end
 
 
-#Test bidiagonal matrices and their SVDs
+#Bidiagonal matrices
 dv = randn(n)
 ev = randn(n-1)
 for elty in (Float32, Float64, Complex64, Complex128)
@@ -621,16 +666,22 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test ctranspose(ctranspose(T)) == T
 
         if (elty <: Real)
-            #XXX If I run either of these tests separately, by themselves, things are OK.
-            # Enabling BOTH tests results in segfault.
-            # Where is the memory corruption???
-
-            @test_approx_eq svdvals(full(T)) svdvals(T)
-            u1, d1, v1 = svd(full(T))
+            Tfull = full(T)
+            #Test singular values/vectors
+            @test_approx_eq svdvals(Tfull) svdvals(T)
+            u1, d1, v1 = svd(Tfull)
             u2, d2, v2 = svd(T)
             @test_approx_eq d1 d2
-            test_approx_eq_vecs(u1, u2)
-            test_approx_eq_vecs(v1, v2)
+            test_approx_eq_vecs(u1, u2) 
+            test_approx_eq_vecs(v1, v2) 
+     
+            #Test eigenvalues/vectors
+            #d1, v1 = eig(Tfull)
+            #d2, v2 = eigvals(T), eigvecs(T)
+            #@test_approx_eq d1 d2
+            #test_approx_eq_vecs(v1, v2) 
+            #@test_approx_eq_eps 0 norm(v1 * diagm(d1) * inv(v1) - Tfull) eps(elty)*n*(n+1)
+            #@test_approx_eq_eps 0 norm(v2 * diagm(d2) * inv(v2) - Tfull) eps(elty)*n*(n+1)
         end
     end
 end
