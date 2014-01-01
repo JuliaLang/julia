@@ -1,4 +1,6 @@
 import Base.LinAlg
+import Base.LinAlg: BlasFloat
+
 n     = 10
 srand(1234321)
 
@@ -566,10 +568,9 @@ end
 
 #Triangular matrices
 n=12
-for elty in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloat})
+for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     A = convert(Matrix{elty}, randn(n, n))
     b = convert(Vector{elty}, randn(n))
-    thiseps = eps(typeof(real(b[1])))
     if elty <: Complex
         A += im*convert(Matrix{elty}, randn(n, n))
         b += im*convert(Vector{elty}, randn(n))
@@ -577,16 +578,19 @@ for elty in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloat
 
     for M in (triu(A), tril(A))
         TM = Triangular(M)
+        condM = cond(complex128(M))
+        solve_err = n*max(eps(relty),eps())*condM
         #Linear solver
         x = M \ b
         tx = TM \ b
-        solve_error = n^3*max(norm(M*x-b), thiseps)
-        @test_approx_eq_eps norm(TM*tx-b) 0 solve_error
-        @test_approx_eq_eps norm(x-tx) 0 solve_error
-        if elty != BigFloat && elty != Complex{BigFloat} #naivesub! is the default for non-BlasFloats
-            tx = Base.LinAlg.naivesub!(TM, b, similar(b))
-            @test_approx_eq_eps norm(TM*tx-b) 0 solve_error
-            @test_approx_eq_eps norm(x-tx) 0 solve_error
+        @test_approx_eq_eps norm(TM*tx-b) 0 solve_err
+        @test_approx_eq_eps norm(x-tx) 0 solve_err
+        @test norm(x-tx)<=max(condM*norm(TM*tx-b)*norm(x), 2condM*max(eps(relty),eps()))
+        if elty <: BlasFloat #test naivesub! against LAPACK
+            tx = LinAlg.naivesub!(TM, b, similar(b))
+            @test_approx_eq_eps norm(TM*tx-b) 0 solve_err
+            @test_approx_eq_eps norm(x-tx) 0 solve_err
+            @test norm(x-tx)<=max(condM*norm(TM*tx-b)*norm(x), 2condM*max(eps(relty),eps()))
         end
 
         #Eigensystems
@@ -596,7 +600,7 @@ for elty in (Float32, Float64, BigFloat, Complex64, Complex128, Complex{BigFloat
         res2=norm(complex128(vecs2*diagm(vals2)*inv(vecs2) - full(TM)))
         @test_approx_eq_eps res1 res2 res1+res2
 
-        if elty != BigFloat && elty != Complex{BigFloat}
+        if elty <:BlasFloat
             #Condition number tests - can be VERY approximate
             for p in [1.0, Inf]
                 @test_approx_eq_eps cond(TM, p) cond(M, p) (cond(TM,p)+cond(M,p))*0.2
@@ -699,12 +703,12 @@ for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relt
     for func in (det, trace)
         @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)
     end
-    if relty != BigFloat && relty != Float16
+    if relty <: BlasFloat
         for func in (expm,)
             @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)
         end
     end        
-    if elty <: Complex && relty != BigFloat && relty != Float16
+    if elty <: Complex && relty <:BlasFloat
         for func in (logdet, sqrtm)
             @test_approx_eq_eps func(D) func(DM) n^2*eps(relty)
         end
