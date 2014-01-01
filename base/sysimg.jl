@@ -23,6 +23,7 @@ end
 include("base.jl")
 include("reflection.jl")
 include("build_h.jl")
+include("version_git.jl")
 include("c.jl")
 
 # core operations & types
