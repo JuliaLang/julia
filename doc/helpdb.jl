@@ -810,7 +810,7 @@
 
    Return a tuple as (minimum(x), maximum(x)). This function finds both 
    the maximum and minimum of a collection in a single pass.
-")
+"),
 
 ("Iterable Collections","Base","indmax","indmax(itr) -> Integer
 
