@@ -48,7 +48,7 @@ function minimum(itr)
     return v
 end
 
-function range(itr)
+function extrema(itr)
     s = start(itr)
     if done(itr, s)
         error("argument is empty")

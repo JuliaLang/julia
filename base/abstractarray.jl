@@ -1675,25 +1675,9 @@ function maximum{T<:FloatingPoint}(A::AbstractArray{T})
     v
 end
 
-# range
+# extrema
 
-function range{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("argument must not be empty"); end
-    n = length(A)
-    vmin = vmax = A[1]
-    for i=2:length(A)
-        v = A[i]
-        if v > vmax
-            vmax = v
-        elseif v < vmin
-            vmin = v
-        end
-    end
-    return (vmin, vmax)
-end
-
-
-function range{T<:FloatingPoint}(A::AbstractArray{T})
+function extrema{T<:Real}(A::AbstractArray{T})
     if isempty(A); error("argument must not be empty"); end
     n = length(A)
 
