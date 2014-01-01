@@ -2,6 +2,17 @@
 f = float16(2.)
 g = float16(1.)
 
+@test f >= g
+@test f > g
+@test g < f
+@test g <= g
+@test all([g g] .< [f f])
+@test all([g g] .<= [f f])
+@test all([f f] .> [g g])
+@test all([f f] .>= [g g])
+@test isless(g, f)
+@test !isless(f, g)
+
 @test -f === float16(-2.)
 
 @test f+g === float16(3f0)
@@ -42,10 +53,16 @@ g = float16(1.)
 @test repr(Inf16) == "Inf16"
 @test sprint(showcompact, Inf16) == "Inf"
 
-@test float16(0.0) == float16(0.0)
-@test float16(-0.0) == float16(0.0)
-@test float16(0.0) == float16(-0.0)
-@test float16(-0.0) == float16(-0.0)
+for z1 in (float16(0.0), float16(-0.0)), z2 in (float16(0.0), float16(-0.0))
+    @test z1 == z2
+    @test isequal(z1, z1)
+    @test z1 === z1
+    for elty in (Float32, Float64)
+        z3 = convert(elty, z2)
+        @test z1==z3
+    end
+end
+
 @test float16(2.5) == float16(2.5)
 @test float16(2.5) != float16(2.6)
 @test isequal(float16(0.0), float16(0.0))
