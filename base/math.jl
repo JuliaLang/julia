@@ -10,7 +10,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
        cbrt, sqrt, erf, erfc, erfcx, erfi, dawson,
        ceil, floor, trunc, round, significand, 
-       lgamma, hypot, gamma, lfact, max, min, ldexp, frexp,
+       lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
        clamp, modf, ^, mod2pi,
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
@@ -20,7 +20,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
-             max, min, ceil, floor, trunc, round, ^, exp2, exp10
+             max, min, minmax, ceil, floor, trunc, round, ^, exp2, exp10
 
 import Core.Intrinsics.nan_dom_err
 
@@ -346,6 +346,10 @@ max{T<:FloatingPoint}(x::T, y::T) = ifelse((y > x) | (x != x), y, x)
 
 min{T<:FloatingPoint}(x::T, y::T) = ifelse((y < x) | (x != x), y, x)
 @vectorize_2arg Real min
+
+minmax{T<:FloatingPoint}(x::T, y::T) =  x <= y ? (x, y) :
+                                        x >  y ? (y, x) :
+                                        x == x ? (x, x) : (y, y)
 
 function exponent(x::Float64)
     if x==0 || !isfinite(x)

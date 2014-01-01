@@ -52,6 +52,13 @@
 @test 2. * 3. == 6.
 @test min(1.0,1) == 1
 
+@test minmax(5, 3) == (3, 5)
+@test minmax(3., 5.) == (3., 5.)
+@test minmax(5., 3.) == (3., 5.)
+@test minmax(3., NaN) == (3., 3.)
+@test minmax(NaN, 3.) == (3., 3.)
+@test isequal(minmax(NaN, NaN), (NaN, NaN))
+
 # lexing typemin(Int64)
 @test (-9223372036854775808)^1 == -9223372036854775808
 @test [1 -1 -9223372036854775808] == [1 -1 typemin(Int64)]
