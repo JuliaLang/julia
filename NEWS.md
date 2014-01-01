@@ -58,6 +58,8 @@ Library improvements
 
   * `.juliarc.jl` is now loaded for both script and REPL execution ([#5076]).
 
+  * New functions: `minmax` and `extrema` ([#5257])
+
 Deprecated or removed
 ---------------------
 
