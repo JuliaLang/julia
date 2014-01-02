@@ -20,6 +20,8 @@ New library functions
   * `GitHub` module for interacting with the GitHub API
 
   * `mod2pi` function ([#4799], [#4862]).
+ 
+  * New functions ``minmax`` and ``extrema`` ([#5275]).
 
 Library improvements
 --------------------
@@ -80,8 +82,6 @@ Library improvements
       `Triangular` ([#5255])
     - new LAPACK wrappers
       - condition number estimate `cond(A::Triangular)` ([#5255])
-
-  * New functions ``minmax`` and ``extrema`` ([#5275]).
 
 Deprecated or removed
 ---------------------
