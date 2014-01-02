@@ -87,9 +87,7 @@ end
 
 ## dot
 for (fname, elty) in ((:ddot_,:Float64), 
-                      (:sdot_,:Float32),
-                      (:zdotc_,:Complex128),
-                      (:cdotc_,:Complex64))
+                      (:sdot_,:Float32))
     @eval begin
                 #       DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
                 # *     .. Scalar Arguments ..
@@ -104,10 +102,52 @@ for (fname, elty) in ((:ddot_,:Float64),
         end
     end
 end
+for (fname, elty) in ((:zdotc_,:Complex128),
+                      (:cdotc_,:Complex64))
+    @eval begin
+                #       DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
+                # *     .. Scalar Arguments ..
+                #       INTEGER INCX,INCY,N
+                # *     ..
+                # *     .. Array Arguments ..
+                #       DOUBLE PRECISION DX(*),DY(*)
+        function dotc(n::Integer, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer, DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
+            ccall(($(string(fname)),libblas), $elty,
+                (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                 &n, DX, &incx, DY, &incy)
+        end
+    end
+end
+for (fname, elty) in ((:zdotu_,:Complex128),
+                      (:cdotu_,:Complex64))
+    @eval begin
+                #       DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
+                # *     .. Scalar Arguments ..
+                #       INTEGER INCX,INCY,N
+                # *     ..
+                # *     .. Array Arguments ..
+                #       DOUBLE PRECISION DX(*),DY(*)
+        function dotu(n::Integer, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer, DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
+            ccall(($(string(fname)),libblas), $elty,
+                (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                 &n, DX, &incx, DY, &incy)
+        end
+    end
+end
 function dot{T<:BlasFloat}(DX::Array{T}, DY::Array{T})
     n = length(DX)
     n==length(DY) || throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
     dot(n, DX, 1, DY, 1)
+end
+function dotc{T<:BlasFloat}(DX::Array{T}, DY::Array{T})
+    n = length(DX)
+    n==length(DY) || throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
+    dotc(n, DX, 1, DY, 1)
+end
+function dotu{T<:BlasFloat}(DX::Array{T}, DY::Array{T})
+    n = length(DX)
+    n==length(DY) || throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
+    dotu(n, DX, 1, DY, 1)
 end
 
 ## nrm2
