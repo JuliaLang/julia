@@ -666,7 +666,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             }
         }
         Type *t = julia_struct_to_llvm(tti);
-        if (t == NULL) {
+        if (t == NULL || t == T_void) {
             JL_GC_POP();
             std::stringstream msg;
             msg << "ccall: the type of argument ";
@@ -712,8 +712,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(lrt->isPointerTy());
         Value *ary = emit_expr(args[4], ctx);
         JL_GC_POP();
-        return mark_julia_type(builder.CreateBitCast(emit_arrayptr(ary),lrt),
-                               rt);
+        return mark_julia_type(builder.CreateBitCast(emit_arrayptr(ary),lrt), rt);
     }
     if (fptr == &jl_value_ptr ||
         (f_lib==NULL && f_name && !strcmp(f_name,"jl_value_ptr"))) {
@@ -727,7 +726,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         Value *ary = boxed(emit_expr(argi, ctx),ctx);
         JL_GC_POP();
         return mark_julia_type(
-                builder.CreateBitCast(emit_nthptr_addr(ary, addressOf?1:0),lrt),
+                builder.CreateBitCast(emit_nthptr_addr(ary, addressOf?1:0), lrt),
                 rt);
     }
 
