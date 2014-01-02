@@ -1675,6 +1675,35 @@ function maximum{T<:FloatingPoint}(A::AbstractArray{T})
     v
 end
 
+# extrema
+
+function extrema{T<:Real}(A::AbstractArray{T})
+    if isempty(A); error("argument must not be empty"); end
+    n = length(A)
+
+    # locate the first non NaN number
+    v = A[1]
+    i = 2
+    while v != v && i <= n
+        @inbounds v = A[i]
+        i += 1
+    end
+
+    vmin = v
+    vmax = v
+    while i <= n
+        @inbounds v = A[i]
+        if v > vmax
+            vmax = v
+        elseif v < vmin
+            vmin = v
+        end
+        i += 1
+    end
+
+    return (vmin, vmax)
+end
+
 
 ## map over arrays ##
 
