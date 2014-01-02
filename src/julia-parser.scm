@@ -182,11 +182,15 @@
       (eqv? c #\1)))
 
 (define (string-to-number s r)
-  (string->number
-    (if (< r 16)
-        (string.map (lambda (c) (if (eqv? c #\f) #\e c)) s)
-        s)
-    r))
+  (let ((ans (string->number
+	      (if (< r 16)
+		  (string.map (lambda (c) (if (eqv? c #\f) #\e c)) s)
+		  s)
+	      r)))
+    (and ans
+	 (if (or (= ans +inf.0) (= ans -inf.0))
+	     (error (string "overflow in numeric constant \"" s "\""))
+	     ans))))
 
 (define (read-number port leadingdot neg)
   (let ((str  (open-output-string))
