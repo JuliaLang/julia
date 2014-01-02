@@ -579,18 +579,13 @@ for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relt
     for M in (triu(A), tril(A))
         TM = Triangular(M)
         condM = cond(complex128(M))
-        solve_err = n*max(eps(relty),eps())*condM
         #Linear solver
         x = M \ b
         tx = TM \ b
-        @test_approx_eq_eps norm(TM*tx-b) 0 solve_err
-        @test_approx_eq_eps norm(x-tx) 0 solve_err
-        @test norm(x-tx)<=max(condM*norm(TM*tx-b)*norm(x), 2condM*max(eps(relty),eps()))
+        @test norm(x-tx,Inf) <= 4*max(eps(), eps(relty))*condM*norm(x,Inf)
         if elty <: BlasFloat #test naivesub! against LAPACK
             tx = LinAlg.naivesub!(TM, b, similar(b))
-            @test_approx_eq_eps norm(TM*tx-b) 0 solve_err
-            @test_approx_eq_eps norm(x-tx) 0 solve_err
-            @test norm(x-tx)<=max(condM*norm(TM*tx-b)*norm(x), 2condM*max(eps(relty),eps()))
+            @test norm(x-tx,Inf) <= 4*max(eps(), eps(relty))*condM*norm(x,Inf)
         end
 
         #Eigensystems
