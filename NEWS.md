@@ -11,10 +11,15 @@ New language features
 
   * `import module: name1, name2, ...` ([#5214]).
 
+  * Default "inner" constructors now accept any arguments. Constructors that
+    look like `MyType(a, b) = new(a, b)` can and should be removed ([#4026]).
+
 New library functions
 ---------------------
 
   * `GitHub` module for interacting with the GitHub API
+
+  * `mod2pi` function ([#4799], [#4862]).
 
 Library improvements
 --------------------
@@ -53,8 +58,6 @@ Library improvements
 
   * `rand` now supports arbitrary `Ranges` arguments ([#5059]).
 
-  * `mod2pi` function ([#4799], [#4862]).
-
   * `writedlm` and `writecsv` now accept any iterable collection of
     iterable rows, in addition to `AbstractArray` arguments, and the
     ``writedlm`` delimiter can be any printable object (e.g. a
@@ -91,8 +94,17 @@ Deprecated or removed
     argument specifying the floating point type to which they apply. The old
     behaviour and `[get/set/with]_bigfloat_rounding` functions are deprecated ([#5007])
 
+[#4042]: https://github.com/JuliaLang/julia/issues/4042
+[#5164]: https://github.com/JuliaLang/julia/issues/5164
+[#5214]: https://github.com/JuliaLang/julia/issues/5214
+[#4026]: https://github.com/JuliaLang/julia/issues/4026
+[#4799]: https://github.com/JuliaLang/julia/issues/4799
+[#4862]: https://github.com/JuliaLang/julia/issues/4862
+[#4048]: https://github.com/JuliaLang/julia/issues/4048
+[#4383]: https://github.com/JuliaLang/julia/issues/4383
 [#4775]: https://github.com/JuliaLang/julia/issues/4775
 [#4870]: https://github.com/JuliaLang/julia/issues/4870
+[#4874]: https://github.com/JuliaLang/julia/issues/4874
 [#4766]: https://github.com/JuliaLang/julia/issues/4766
 [#4782]: https://github.com/JuliaLang/julia/issues/4782
 [#4759]: https://github.com/JuliaLang/julia/issues/4759
@@ -102,6 +114,12 @@ Deprecated or removed
 [#5076]: https://github.com/JuliaLang/julia/issues/5076
 [#5255]: https://github.com/JuliaLang/julia/issues/5255
 [#5263]: https://github.com/JuliaLang/julia/issues/5263
+[#4934]: https://github.com/JuliaLang/julia/issues/4934
+[#4930]: https://github.com/JuliaLang/julia/issues/4930
+[#4943]: https://github.com/JuliaLang/julia/issues/4943
+[#4958]: https://github.com/JuliaLang/julia/issues/4958
+[#5059]: https://github.com/JuliaLang/julia/issues/5059
+[#5196]: https://github.com/JuliaLang/julia/issues/5196
 
 Julia v0.2.0 Release Notes
 ==========================
