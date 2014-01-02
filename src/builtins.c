@@ -125,6 +125,23 @@ static int bits_equal(void *a, void *b, int sz)
     }
 }
 
+int jl_equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb) {
+    if(dta->name->name != dtb->name->name) 
+        return 0;
+    // if(!tuple_eq(dta->types, dtb->types)) return 0; // This isn't working as expected for some reason. dtb->types is often NULL
+    if(dta->abstract != dtb->abstract) 
+        return 0;
+    if(dta->mutabl != dtb->mutabl) 
+        return 0;
+    if(!jl_egal((jl_value_t*)dta->super, (jl_value_t*)dtb->super))
+        return 0;
+    if(!jl_egal((jl_value_t*)dta->names, (jl_value_t*)dtb->names)) 
+        return 0;
+    if(!jl_egal((jl_value_t*)dta->parameters, (jl_value_t*)dtb->parameters)) 
+        return 0;
+    return 1;
+}
+
 int jl_egal(jl_value_t *a, jl_value_t *b)
 {
     if (a == b)
@@ -146,8 +163,7 @@ int jl_egal(jl_value_t *a, jl_value_t *b)
     if (dt == jl_datatype_type) {
         jl_datatype_t *dta = (jl_datatype_t*)a;
         jl_datatype_t *dtb = (jl_datatype_t*)b;
-        return dta->name == dtb->name &&
-            jl_egal((jl_value_t*)dta->parameters, (jl_value_t*)dtb->parameters);
+        return jl_equiv_type(dta, dtb);            
     }
     if (dt->mutabl) return 0;
     size_t sz = dt->size;
