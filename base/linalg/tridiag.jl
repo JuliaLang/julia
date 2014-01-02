@@ -23,7 +23,7 @@ function SymTridiagonal{Td<:Number,Te<:Number}(dv::Vector{Td}, ev::Vector{Te})
     SymTridiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev))
 end
 
-SymTridiagonal(M::AbstractMatrix) = diag(A,1)==diag(A,-1)?SymTridiagonal(diag(A), diag(A,1)):error("matrix is not symmetric; cannot convert to SymTridiagonal")
+SymTridiagonal(A::AbstractMatrix) = diag(A,1)==diag(A,-1)?SymTridiagonal(diag(A), diag(A,1)):throw(DimensionMismatch("matrix is not symmetric; cannot convert to SymTridiagonal"))
 full{T}(M::SymTridiagonal{T}) = convert(Matrix{T}, M)
 convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})=diagm(M.dv)+diagm(M.ev,-1)+conj(diagm(M.ev,1))
 
