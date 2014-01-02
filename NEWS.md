@@ -81,6 +81,8 @@ Library improvements
     - new LAPACK wrappers
       - condition number estimate `cond(A::Triangular)` ([#5255])
 
+  * New functions ``minmax`` and ``extrema`` ([#5275]).
+
 Deprecated or removed
 ---------------------
 
@@ -120,6 +122,7 @@ Deprecated or removed
 [#4958]: https://github.com/JuliaLang/julia/issues/4958
 [#5059]: https://github.com/JuliaLang/julia/issues/5059
 [#5196]: https://github.com/JuliaLang/julia/issues/5196
+[#5275]: https://github.com/JuliaLang/julia/issues/5275
 
 Julia v0.2.0 Release Notes
 ==========================
