@@ -181,6 +181,7 @@ cmp(x::Real, y::Real) = cmp(promote(x,y)...)
 
 max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)
+minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 
@@ -200,3 +201,5 @@ no_op_err(name, T) = error(name," not defined for ",T)
 
 max{T<:Real}(x::T, y::T) = ifelse(y < x, x, y)
 min{T<:Real}(x::T, y::T) = ifelse(x < y, x, y)
+minmax{T<:Real}(x::T, y::T) = x < y ? (x, y) : (y, x)
+
