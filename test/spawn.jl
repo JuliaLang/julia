@@ -120,4 +120,4 @@ yield()
 
 # issue #4535
 exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia-basic":"julia-debug-basic"))
-@test readall(`$exename -e 'println(STDERR,"Hello World")'` .> `cat`) == "Hello World\n"
+@test readall(`$exename -f -e 'println(STDERR,"Hello World")'` .> `cat`) == "Hello World\n"
