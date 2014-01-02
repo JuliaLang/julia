@@ -95,7 +95,8 @@ void parse_opts(int *argcp, char ***argvp) {
         julia_home = getenv("JULIA_HOME");
         if (julia_home) {
             julia_home = strdup(julia_home);
-        } else {
+        }
+        else {
             char *julia_path = (char*)malloc(PATH_MAX);
             size_t path_size = PATH_MAX;
             uv_exepath(julia_path, &path_size);
