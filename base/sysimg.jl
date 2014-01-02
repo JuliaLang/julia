@@ -42,6 +42,7 @@ include("pointer.jl")
 
 include("float.jl")
 include("reduce.jl")
+include("reducedim.jl")
 include("complex.jl")
 include("rational.jl")
 
