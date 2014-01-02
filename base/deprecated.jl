@@ -367,6 +367,7 @@ const CharString = UTF32String
 @deprecate get_bigfloat_rounding() get_rounding(BigFloat)
 @deprecate with_bigfloat_rounding(f::Function, r::RoundingMode) with_rounding(f::Function, BigFloat, r)
 eval(Sys, :(@deprecate shlib_list dllist))
+# Sys.shlib_ext is deprecated, renamed to Sys.dlext. Remove alias before release
 
 # 0.3 discontinued functions
 
