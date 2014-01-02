@@ -180,7 +180,6 @@ end
 
 ## julia version info
 
-begin
 # Include build number if we've got at least some distance from a tag (e.g. a release)
 build_number = BUILD_INFO.build_number != 0 ? "+$(BUILD_INFO.build_number)" : ""
 try
@@ -190,47 +189,54 @@ catch e
     global const VERSION = VersionNumber(0)
 end
 
-if BUILD_INFO.tagged_commit
-    const commit_string = BUILD_INFO.TAGGED_RELEASE_BANNER
-elseif BUILD_INFO.commit == ""
-    const commit_string = ""
-else
-    local days = int(floor((ccall(:clock_now, Float64, ()) - BUILD_INFO.fork_master_timestamp) / (60 * 60 * 24)))
-    if BUILD_INFO.fork_master_distance == 0
-        const commit_string = "Commit $(BUILD_INFO.commit_short) ($(days) days old master)"
+function banner()
+    if BUILD_INFO.tagged_commit
+        const commit_string = BUILD_INFO.TAGGED_RELEASE_BANNER
+    elseif BUILD_INFO.commit == ""
+        const commit_string = ""
     else
-        const commit_string = "$(BUILD_INFO.branch)/$(BUILD_INFO.commit_short) (fork: $(BUILD_INFO.fork_master_distance) commits, $(days) days)"
+        local days = int(floor((ccall(:clock_now, Float64, ()) - BUILD_INFO.fork_master_timestamp) / (60 * 60 * 24)))
+        if BUILD_INFO.fork_master_distance == 0
+            const commit_string = "Commit $(BUILD_INFO.commit_short) ($(days) days old master)"
+        else
+            const commit_string = "$(BUILD_INFO.branch)/$(BUILD_INFO.commit_short) (fork: $(BUILD_INFO.fork_master_distance) commits, $(days) days)"
+        end
+    end
+    commit_date = BUILD_INFO.date_string != "" ? " ($(BUILD_INFO.date_string))": ""
+
+    const banner_plain =
+    """
+                   _
+       _       _ _(_)_     |  A fresh approach to technical computing
+      (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
+       _ _   _| |_  __ _   |  Type \"help()\" to list help topics
+      | | | | | | |/ _` |  |
+      | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
+     _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
+    |__/                   |  $(Sys.MACHINE)
+
+    """
+    local tx = "\033[0m\033[1m" # text
+    local jl = "\033[0m\033[1m" # julia
+    local d1 = "\033[34m" # first dot
+    local d2 = "\033[31m" # second dot
+    local d3 = "\033[32m" # third dot
+    local d4 = "\033[35m" # fourth dot
+    const banner_color =
+    """\033[1m               $(d3)_
+       $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
+      $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: http://docs.julialang.org
+       $(jl)_ _   _| |_  __ _$(tx)   |  Type \"help()\" to list help topics
+      $(jl)| | | | | | |/ _` |$(tx)  |
+      $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
+     $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
+    $(jl)|__/$(tx)                   |  $(Sys.MACHINE)
+
+    \033[0m"""
+
+    if have_color
+        print(banner_color)
+    else
+        print(banner_plain)
     end
 end
-commit_date = BUILD_INFO.date_string != "" ? " ($(BUILD_INFO.date_string))": ""
-
-const banner_plain =
-"""
-               _
-   _       _ _(_)_     |  A fresh approach to technical computing
-  (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
-   _ _   _| |_  __ _   |  Type \"help()\" to list help topics
-  | | | | | | |/ _` |  |
-  | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
- _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
-|__/                   |  $(Sys.MACHINE)
-
-"""
-local tx = "\033[0m\033[1m" # text
-local jl = "\033[0m\033[1m" # julia
-local d1 = "\033[34m" # first dot
-local d2 = "\033[31m" # second dot
-local d3 = "\033[32m" # third dot
-local d4 = "\033[35m" # fourth dot
-const banner_color =
-"\033[1m               $(d3)_
-   $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
-  $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: http://docs.julialang.org
-   $(jl)_ _   _| |_  __ _$(tx)   |  Type \"help()\" to list help topics
-  $(jl)| | | | | | |/ _` |$(tx)  |
-  $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
- $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
-$(jl)|__/$(tx)                   |  $(Sys.MACHINE)
-
-\033[0m"
-end # begin
