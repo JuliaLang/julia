@@ -31,8 +31,6 @@ function input_color()
     return get(text_colors, c, default_color_input)
 end
 
-banner() = print(have_color ? banner_color : banner_plain)
-
 exit(n) = ccall(:jl_exit, Void, (Int32,), n)
 exit() = exit(0)
 quit() = exit()
