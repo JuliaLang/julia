@@ -27,12 +27,20 @@ scale(b::Vector, A::Matrix) = scale!(Array(promote_type(eltype(A),eltype(b)),siz
 # Dot products
 
 dot{T<:BlasReal}(x::Vector{T}, y::Vector{T}) = BLAS.dot(x, y)
-function dot{T<:BLAS.BlasFloat, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
+dot{T<:BlasComplex}(x::Vector{T}, y::Vector{T}) = BLAS.dotc(x, y)
+function dot{T<:BlasReal, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
     length(rx)==length(ry) || throw(DimensionMismatch(""))
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError())
     end
     BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+end
+function dot{T<:BlasComplex, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
+    length(rx)==length(ry) || throw(DimensionMismatch(""))
+    if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
+        throw(BoundsError())
+    end
+    BLAS.dotc(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
 function dot(x::AbstractVector, y::AbstractVector)
     length(x)==length(y) || throw(DimensionMismatch(""))
@@ -45,6 +53,7 @@ end
 dot(x::Number, y::Number) = conj(x) * y
 Ac_mul_B(x::Vector, y::Vector) = [dot(x, y)]
 At_mul_B{T<:Real}(x::Vector{T}, y::Vector{T}) = [dot(x, y)]
+At_mul_B{T<:BlasComplex}(x::Vector{T}, y::Vector{T}) = [BLAS.dotu(x, y)]
 
 # Matrix-vector multiplication
 
