@@ -21,7 +21,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: dot(x, y)
 
-   Compute the dot product
+   Compute the dot product. For complex vectors the first vector is conjugated.
 
 .. function:: cross(x, y)
 
@@ -430,18 +430,21 @@ arrays have names ending in ``'!'``.
 Usually a function has 4 methods defined, one each for ``Float64``,
 ``Float32``, ``Complex128`` and ``Complex64`` arrays.
 
-.. currentmodule:: Base
+.. currentmodule:: Base.LinAlg.BLAS
 
 .. function:: dot(n, X, incx, Y, incy)
 
    Dot product of two vectors consisting of ``n`` elements of array
    ``X`` with stride ``incx`` and ``n`` elements of array ``Y`` with
-   stride ``incy``.  There are no ``dot`` methods for ``Complex``
-   arrays.
+   stride ``incy``.
 
-The following functions are defined within the ``Base.LinAlg.BLAS`` module.
+.. function:: dotu(n, X, incx, Y, incy)
 
-.. currentmodule:: Base.LinAlg.BLAS
+   Dot function for two complex vectors.
+
+.. function:: dotc(n, X, incx, U, incy)
+
+   Dot function for two complex vectors conjugating the first vector.
 
 .. function:: blascopy!(n, X, incx, Y, incy)
 
