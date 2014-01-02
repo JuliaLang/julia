@@ -133,7 +133,7 @@ int jl_equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb) {
         return 0;
     if(dta->mutabl != dtb->mutabl) 
         return 0;
-    if(dta->super != dtb->super) 
+    if(!jl_egal((jl_value_t*)dta->super, (jl_value_t*)dtb->super))
         return 0;
     if(!jl_egal((jl_value_t*)dta->names, (jl_value_t*)dtb->names)) 
         return 0;
