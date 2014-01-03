@@ -158,8 +158,37 @@ isequal(x::Float64, y::Float64) = fpiseq(unbox(Float64,x),unbox(Float64,y))
 isless (x::Float32, y::Float32) = fpislt(unbox(Float32,x),unbox(Float32,y))
 isless (x::Float64, y::Float64) = fpislt(unbox(Float64,x),unbox(Float64,y))
 
-isless (a::Integer, b::FloatingPoint) = (a<b) | isless(float(a),b)
-isless (a::FloatingPoint, b::Integer) = (a<b) | isless(a,float(b))
+isless(a::FloatingPoint, b::FloatingPoint) =
+    (a<b) | (!isnan(a) & (isnan(b) | (signbit(a)>signbit(b))))
+isless(a::Real, b::FloatingPoint) = (a<b) | isless(float(a),b)
+isless(a::FloatingPoint, b::Real) = (a<b) | isless(a,float(b))
+
+function cmp(x::FloatingPoint, y::FloatingPoint)
+    # TODO: for now cmp() is a total order, but we might move this logic to
+    # lexcmp in the future.
+    x<y && return -1
+    x>y && return  1
+    if isnan(x)
+        isnan(y) && return 0
+        return 1
+    end
+    isnan(y) && return -1
+    return signbit(y) - signbit(x)
+end
+
+function cmp(x::Real, y::FloatingPoint)
+    x<y && return -1
+    x>y && return  1
+    isnan(y) && return -1
+    return signbit(y) - signbit(x)
+end
+
+function cmp(x::FloatingPoint, y::Real)
+    x<y && return -1
+    x>y && return  1
+    isnan(x) && return 1
+    return signbit(y) - signbit(x)
+end
 
 ==(x::Float64, y::Int64  ) = eqfsi64(unbox(Float64,x),unbox(Int64,y))
 ==(x::Float64, y::Uint64 ) = eqfui64(unbox(Float64,x),unbox(Uint64,y))

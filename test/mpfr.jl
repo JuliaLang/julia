@@ -222,6 +222,15 @@ imi = BigFloat(-Inf)
 @test !isequal(BigFloat(0.0),BigFloat(-0.0))
 @test isequal(z, BigFloat(NaN))
 
+# total ordering
+@test isless(big(-0.0), big(0.0))
+@test cmp(big(-0.0), big(0.0)) == -1
+@test cmp(big(0.0), big(-0.0)) == 1
+@test isless(big(1.0), big(NaN))
+@test cmp(big(1.0), big(NaN)) == -1
+@test cmp(big(NaN), big(NaN)) == 0
+@test cmp(big(NaN), big(1.0)) == 1
+
 # signbit
 @test signbit(BigFloat(-1.0)) == 1
 @test signbit(BigFloat(1.0)) == 0
@@ -741,5 +750,3 @@ tol = 1e-3
 @test_approx_eq_eps f+(1//1) g tol
 
 @test_approx_eq_eps f+one(Rational{BigInt}) g tol
-
-# new tests

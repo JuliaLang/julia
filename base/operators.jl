@@ -28,9 +28,12 @@ isless(x::Real, y::Real) = x<y
 
 ifelse(c::Bool, x, y) = Intrinsics.select_value(c, x, y)
 
-cmp(x,y) = isless(x,y) ? -1 : isless(y,x) ? 1 : 0
+cmp(x,y) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
 lexcmp(x,y) = cmp(x,y)
 lexless(x,y) = lexcmp(x,y)<0
+
+# cmp returns -1, 0, +1 indicating ordering
+cmp(x::Real, y::Real) = int(sign(x-y))
 
 max(x,y) = ifelse(y < x, x, y)
 min(x,y) = ifelse(x < y, x, y)
@@ -111,9 +114,6 @@ const % = rem
 mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
 rem1{T<:Real}(x::T, y::T) = rem(x-1,y)+1
 fld1{T<:Real}(x::T, y::T) = fld(x-1,y)+1
-
-# cmp returns -1, 0, +1 indicating ordering
-cmp{T<:Real}(x::T, y::T) = int(sign(x-y))
 
 # transposed multiply
 Ac_mul_B (a,b) = ctranspose(a)*b

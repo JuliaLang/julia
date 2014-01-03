@@ -466,6 +466,13 @@ end
 @test   isless(-0.0,   0)
 @test  !isless(   0,-0.0)
 
+@test isless(-0.0, 0.0f0)
+@test lexcmp(-0.0, 0.0f0) == -1
+@test lexcmp(0.0, -0.0f0) == 1
+@test lexcmp(NaN, 1) == 1
+@test lexcmp(1, NaN) == -1
+@test lexcmp(NaN, NaN) == 0
+
 for x=-5:5, y=-5:5
     @test (x==y)==(float64(x)==int64(y))
     @test (x!=y)==(float64(x)!=int64(y))
