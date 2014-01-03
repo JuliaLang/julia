@@ -1,12 +1,43 @@
 
-# for reductions that expand 0 dims to 1
-reduced_dims(A, region) = ntuple(ndims(A), i->(in(i, region) ? 1 :
-                                               size(A,i)))
+## Functions to compute the reduced shape
 
-# keep 0 dims in place
-reduced_dims0(A, region) = ntuple(ndims(A), i->(size(A,i)==0 ? 0 :
-                                                in(i, region) ? 1 :
-                                                size(A,i)))
+# for reductions that expand 0 dims to 1
+reduced_dims(a::AbstractArray, region) = reduced_dims(size(a), region)
+
+# for reductions that keep 0 dims as 0
+reduced_dims0(a::AbstractArray, region) = reduced_dims0(size(a), region)
+
+reduced_dims{N}(siz::NTuple{N,Int}, d::Int, rd::Int) = d == 1 ? tuple(rd, siz[d+1:N]...) :
+                                                       d == N ? tuple(siz[1:N-1]..., rd) :
+                                                       1 < d < N ? tuple(siz[1:d-1]..., rd, siz[d+1:N]...) : 
+                                                       siz
+
+reduced_dims{N}(siz::NTuple{N,Int}, d::Int) = reduced_dims(siz, d, 1)
+
+reduced_dims0{N}(siz::NTuple{N,Int}, d::Int) = reduced_dims(siz, d, (siz[d] == 0 ? 0 : 1))
+
+function reduced_dims{N}(siz::NTuple{N,Int}, region)
+    rsiz = [siz...]
+    for i in region
+        if 1 <= i <= N
+            rsiz[i] = 1
+        end
+    end
+    tuple(rsiz...)
+end
+
+function reduced_dims0{N}(siz::NTuple{N,Int}, region)
+    rsiz = [siz...]
+    for i in region
+        if i <= i <= N
+            rsiz[i] = (rsiz[i] == 0 ? 0 : 1)
+        end
+    end
+    tuple(rsiz...)
+end
+
+
+# reduction codes
 
 reducedim(f::Function, A, region, v0) =
     reducedim(f, A, region, v0, similar(A, reduced_dims(A, region)))
