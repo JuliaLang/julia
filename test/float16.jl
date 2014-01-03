@@ -68,3 +68,6 @@ end
 @test isequal(float16(0.0), float16(0.0))
 @test !isequal(float16(-0.0), float16(0.0))
 @test !isequal(float16(0.0), float16(-0.0))
+
+@test isnan(reinterpret(Float16,0x7c01))
+@test !isinf(reinterpret(Float16,0x7c01))

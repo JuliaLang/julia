@@ -22,14 +22,14 @@ function convert(::Type{Float32}, val::Float16)
             ret = sign | exp | sig
         end
     elseif exp == 0x1f
-        if sig == 0
+        if sig == 0  # Inf
             if sign == 0
                 ret = 0x7f800000
             else
                 ret = 0xff800000
             end
-        else
-            ret = 0xffffffff
+        else  # NaN
+            ret = 0x7fc00000 | (sign<<31)
         end
     else
         sign = sign << 31
@@ -84,13 +84,14 @@ function convert(::Type{Float16}, val::Float32)
     reinterpret(Float16, uint16(h))
 end
 
-isnan(x::Float16) = reinterpret(Uint16,x)&0x7e00 == 0x7e00
-isinf(x::Float16) = reinterpret(Uint16,x)&0x7e00 == 0x7c00
+isnan(x::Float16)    = reinterpret(Uint16,x)&0x7fff  > 0x7c00
+isinf(x::Float16)    = reinterpret(Uint16,x)&0x7fff == 0x7c00
+isfinite(x::Float16) = reinterpret(Uint16,x)&0x7c00 != 0x7c00
 
 function ==(x::Float16, y::Float16)
     ix = reinterpret(Uint16,x)
     iy = reinterpret(Uint16,y)
-    if (ix|iy)&0x7e00 == 0x7e00 #isnan(x) || isnan(y)
+    if (ix|iy)&0x7fff > 0x7c00 #isnan(x) || isnan(y)
         return false
     end
     if (ix|iy)&0x7fff == 0x0000
