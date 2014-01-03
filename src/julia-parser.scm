@@ -181,12 +181,12 @@
   (or (eqv? c #\0)
       (eqv? c #\1)))
 
-(define (string-to-number s r)
-  (let ((ans (string->number
-	      (if (< r 16)
-		  (string.map (lambda (c) (if (eqv? c #\f) #\e c)) s)
-		  s)
-	      r)))
+(define (string-to-number s r is-float32)
+  (let ((ans (if is-float32
+		 (float (string->number
+			 (string.map (lambda (c) (if (eqv? c #\f) #\e c)) s)
+			 r))
+		 (string->number s r))))
     (and ans
 	 (if (or (= ans +inf.0) (= ans -inf.0))
 	     (error (string "overflow in numeric constant \"" s "\""))
@@ -278,7 +278,7 @@
 	       (if (and neg (not (= r 10)) (not is-hex-float-literal))
 		   (string.sub s 1)
 		   s)
-	       r)))
+	       r is-float32-literal)))
       ;; n is #f for integers > typemax(Uint64)
       (cond (is-hex-float-literal (double n))
 	    ((eq? pred char-hex?) (fix-uint-neg neg (sized-uint-literal n s 4)))
