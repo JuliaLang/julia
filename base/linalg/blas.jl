@@ -102,8 +102,8 @@ for (fname, elty) in ((:ddot_,:Float64),
         end
     end
 end
-for (fname, elty) in ((:zdotc_,:Complex128),
-                      (:cdotc_,:Complex64))
+for (fname, elty) in ((:cblas_zdotc_sub,:Complex128),
+                      (:cblas_cdotc_sub,:Complex64))
     @eval begin
                 #       DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
                 # *     .. Scalar Arguments ..
@@ -112,14 +112,16 @@ for (fname, elty) in ((:zdotc_,:Complex128),
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dotc(n::Integer, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer, DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
+            result = Array($elty, 1)
             ccall(($(string(fname)),libblas), $elty,
-                (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                 &n, DX, &incx, DY, &incy)
+                (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
+                 n, DX, incx, DY, incy, result)
+            result[1]
         end
     end
 end
-for (fname, elty) in ((:zdotu_,:Complex128),
-                      (:cdotu_,:Complex64))
+for (fname, elty) in ((:cblas_zdotu_sub,:Complex128),
+                      (:cblas_cdotu_sub,:Complex64))
     @eval begin
                 #       DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
                 # *     .. Scalar Arguments ..
@@ -128,9 +130,11 @@ for (fname, elty) in ((:zdotu_,:Complex128),
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dotu(n::Integer, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer, DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
+            result = Array($elty, 1)
             ccall(($(string(fname)),libblas), $elty,
-                (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
-                 &n, DX, &incx, DY, &incy)
+                (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
+                 n, DX, incx, DY, incy, result)
+            result[1]
         end
     end
 end
