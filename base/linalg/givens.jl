@@ -199,7 +199,7 @@ function A_mul_B!(G::Givens, A::AbstractMatrix)
     m, n = size(A)
     for i = 1:n
         tmp = G.c*A[G.i1,i] + G.s*A[G.i2,i]
-        A[G.i2,i] = G.c*A[G.i2,i] - G.s*A[G.i1,i]
+        A[G.i2,i] = G.c*A[G.i2,i] - conj(G.s)*A[G.i1,i]
         A[G.i1,i] = tmp
     end
     return A
@@ -207,7 +207,7 @@ end
 function A_mul_Bc!(A::AbstractMatrix, G::Givens)
     m, n = size(A)
     for i = 1:m
-        tmp = G.c*A[i,G.i1] + G.s*A[i,G.i2]
+        tmp = G.c*A[i,G.i1] + conj(G.s)*A[i,G.i2]
         A[i,G.i2] = G.c*A[i,G.i2] - G.s*A[i,G.i1]
         A[i,G.i1] = tmp
     end

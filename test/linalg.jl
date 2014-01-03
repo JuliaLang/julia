@@ -721,7 +721,11 @@ end
 
 # Test givens rotations
 for elty in (Float32, Float64, Complex64, Complex128)
-    A = convert(Matrix{elty}, randn(10,10))
+    if elty <: Real
+        A = convert(Matrix{elty}, randn(10,10))
+    else
+        A = convert(Matrix{elty}, complex(randn(10,10),randn(10,10)))
+    end
     Ac = copy(A)
     R = Base.LinAlg.Rotation(Base.LinAlg.Givens{elty}[])
     for j = 1:8
