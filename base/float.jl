@@ -268,11 +268,11 @@ function float_lex_order(f::Integer, delta::Integer)
 end
 
 nextfloat(x::Float16, i::Integer) =
-    reinterpret(Float16,float_lex_order(reinterpret(Int16,x), i))
+    (isinf(x)&&sign(x)==sign(i)) ? x : reinterpret(Float16,float_lex_order(reinterpret(Int16,x), i))
 nextfloat(x::Float32, i::Integer) =
-    reinterpret(Float32,float_lex_order(reinterpret(Int32,x), i))
+    (isinf(x)&&sign(x)==sign(i)) ? x : reinterpret(Float32,float_lex_order(reinterpret(Int32,x), i))
 nextfloat(x::Float64, i::Integer) =
-    reinterpret(Float64,float_lex_order(reinterpret(Int64,x), i))
+    (isinf(x)&&sign(x)==sign(i)) ? x : reinterpret(Float64,float_lex_order(reinterpret(Int64,x), i))
 nextfloat(x::FloatingPoint) = nextfloat(x,1)
 prevfloat(x::FloatingPoint) = nextfloat(x,-1)
 

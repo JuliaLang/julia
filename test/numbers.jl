@@ -1711,6 +1711,10 @@ end
 @test prevfloat(-1.0) < -1.0
 @test nextfloat(nextfloat(0.0),-2) == -5.0e-324
 @test nextfloat(prevfloat(0.0), 2) ==  5.0e-324
+@test nextfloat(Inf) === Inf
+@test prevfloat(-Inf) === -Inf
+@test nextfloat(Inf32) === Inf32
+@test prevfloat(-Inf32) === -Inf32
 
 @test eps(realmax(Float64)) == 1.99584030953472e292
 @test eps(-realmax(Float64)) == 1.99584030953472e292

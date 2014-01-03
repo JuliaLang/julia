@@ -71,3 +71,6 @@ end
 
 @test isnan(reinterpret(Float16,0x7c01))
 @test !isinf(reinterpret(Float16,0x7c01))
+
+@test nextfloat(Inf16) === Inf16
+@test prevfloat(-Inf16) === -Inf16
