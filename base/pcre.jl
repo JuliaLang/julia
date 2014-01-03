@@ -104,7 +104,7 @@ study(re::Ptr{Void}) = study(re, int32(0))
 free_study(extra::Ptr{Void}) =
     ccall((:pcre_free_study, :libpcre), Void, (Ptr{Void},), extra)
 free(regex::Ptr{Void}) =
-    ccall((:pcre_free, :libpcre), Void, (Ptr{Void},), regex)
+    ccall(unsafe_load(cglobal((:pcre_free, :libpcre),Ptr{Void})), Void, (Ptr{Void},), regex)
 
 exec(regex::Ptr{Void}, extra::Ptr{Void}, str::SubString, offset::Integer, options::Integer, cap::Bool) =
     exec(regex, extra, str.string, str.offset, offset, sizeof(str), options, cap)
