@@ -20,7 +20,7 @@ type Regex
         finalizer(re,
             function(re::Regex)
                 re.extra != C_NULL && PCRE.free_study(re.extra)
-                #re.regex != C_NULL && PCRE.free(re.regex) # why does this cause a bus error?
+                re.regex != C_NULL && PCRE.free(re.regex)
             end)
         re
     end
