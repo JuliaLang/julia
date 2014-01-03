@@ -50,8 +50,19 @@ endif
 # disable automatic Makefile rules
 .SUFFIXES:
 
+# find out if git repository is availible
+ifeq ($(shell [ -e $(JULIAHOME)/.git ] && echo true || echo "Warning: git information unavailable; versioning information limited" >&2), true)
+NO_GIT = 0
+else
+NO_GIT = 1
+endif
+
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
+ifneq ($(NO_GIT), 1)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
+else
+JULIA_COMMIT = $JULIA_VERSION
+endif
 
 # LLVM Options
 LLVMROOT = $(BUILD)

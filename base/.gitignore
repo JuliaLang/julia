@@ -4,3 +4,4 @@
 /fenv_constants.jl
 /file_constants.jl
 /uv_constants.jl
+/version_git.jl
