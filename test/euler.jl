@@ -25,12 +25,15 @@ end
 #4: 906609
 function euler4(n)
     m = 1
-    for a=10^n-1:-1:10^(n-1),
-        b=10^n-1:-1:max(a,-fld(-m,a))
-        p = a*b
-        d = digits(p)
-        d == reverse(d) || continue
-        m = max(m,p)
+    for a = 10^n-1:-1:10^(n-1)
+        for b = 10^n-1:-1:max(a,-fld(-m,a))
+            p = a*b
+            d = digits(p)
+            if d == reverse(d) && p > m
+                m = p
+                b < -fld(-m,a) && break
+            end
+        end
     end
     return m
 end
