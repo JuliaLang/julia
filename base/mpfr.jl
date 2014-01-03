@@ -8,7 +8,7 @@ export
 
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1, bessely,
-        bessely0, bessely1, ceil, cmp, convert, copysign, degrees2radians,
+        bessely0, bessely1, ceil, convert, copysign, degrees2radians,
         exp, exp2, exponent, factorial, floor, hypot, isinteger, iround,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, radians2degrees, rem, round, show,
@@ -354,10 +354,6 @@ function -(x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_neg, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
-end
-
-function cmp(x::BigFloat, y::BigFloat)
-    ccall((:mpfr_cmp, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &x, &y)
 end
 
 function sqrt(x::BigFloat)

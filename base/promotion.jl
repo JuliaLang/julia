@@ -177,7 +177,6 @@ mod(x::Real, y::Real) = mod(promote(x,y)...)
 mod1(x::Real, y::Real) = mod1(promote(x,y)...)
 rem1(x::Real, y::Real) = rem1(promote(x,y)...)
 fld1(x::Real, y::Real) = fld1(promote(x,y)...)
-cmp(x::Real, y::Real) = cmp(promote(x,y)...)
 
 max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)
@@ -202,4 +201,3 @@ no_op_err(name, T) = error(name," not defined for ",T)
 max{T<:Real}(x::T, y::T) = ifelse(y < x, x, y)
 min{T<:Real}(x::T, y::T) = ifelse(x < y, x, y)
 minmax{T<:Real}(x::T, y::T) = x < y ? (x, y) : (y, x)
-
