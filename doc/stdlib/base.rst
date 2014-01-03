@@ -2497,9 +2497,9 @@ Mathematical Functions
 
    Accurate natural logarithm of ``1+x``.  Throws ``DomainError`` for ``Real`` arguments less than -1.
 
-.. function:: frexp(val, exp)
+.. function:: frexp(val)
 
-   Return a number ``x`` such that it has a magnitude in the interval ``[1/2, 1)`` or 0,
+   Return ``(x,exp)`` such that ``x`` has a magnitude in the interval ``[1/2, 1)`` or 0,
    and val = :math:`x \times 2^{exp}`.
 
 .. function:: exp(x)
