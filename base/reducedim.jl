@@ -173,7 +173,6 @@ function generate_reducedim_funcs(fname, comb, sker, ker0!, ker1!)
     # - ker1!:  a kernel that accumulates a term column to an accumulating column
     #
 
-
     fname! = symbol("$(fname)!")
     fa! = symbol("$(fname)_a!")
     fb! = symbol("$(fname)_b!")
@@ -192,7 +191,7 @@ function generate_reducedim_funcs(fname, comb, sker, ker0!, ker1!)
                     $(fb!)(true, dst, 0, a, 0, prod(siz[dim+1:nd]), siz[dim], prod(siz[1:dim-1]))
                 end
             else
-                $(ker0!)(dst, 0, a, 0, length(a))
+                $(ker0!)(dst, 1, a, 1, length(a))
             end
             dst
         end
@@ -261,22 +260,22 @@ function generate_reducedim_funcs(fname, comb, sker, ker0!, ker1!)
         global $(fb!)
         function $(fb!)(isinit::Bool, dst::Array, od::Int, a::Array, oa::Int, n1::Int)
             if isinit
-                $(ker0!)(dst, od, a, oa, n1)
+                $(ker0!)(dst, od+1, a, oa+1, n1)
             else
-                $(ker1!)(dst, od, a, oa, n1)
+                $(ker1!)(dst, od+1, a, oa+1, n1)
             end
         end
 
         function $(fb!)(isinit::Bool, dst::Array, od::Int, a::Array, oa::Int, n1::Int, n2::Int)
             if isinit
-                $(ker0!)(dst, od, a, oa, n2)
+                $(ker0!)(dst, od+1, a, oa+1, n2)
             else
-                $(ker1!)(dst, od, a, oa, n2)        
+                $(ker1!)(dst, od+1, a, oa+1, n2)        
             end
             oa += n2
     
             for j = 2:n1
-                $(ker1!)(dst, od, a, oa, n2)
+                $(ker1!)(dst, od+1, a, oa+1, n2)
                 oa += n2
             end
         end
@@ -312,15 +311,19 @@ end
 
 function vcopy!(dst::Array, od::Int, a::Array, oa::Int, n::Int)
     for i = 1:n
-        @inbounds dst[od+i] = a[oa+i]
+        @inbounds dst[od] = a[oa]
+        od += 1
+        oa += 1
     end    
 end
 
-vcopy!{T}(dst::Array{T}, od::Int, a::Array{T}, oa::Int, n::Int) = copy!(dst, od+1, a, oa+1, n)
+vcopy!{T}(dst::Array{T}, od::Int, a::Array{T}, oa::Int, n::Int) = copy!(dst, od, a, oa, n)
 
 function vadd!(dst::Array, od::Int, a::Array, oa::Int, n::Int)
     for i = 1:n
-        @inbounds dst[od+i] += a[oa+i]
+        @inbounds dst[od] += a[oa]
+        od += 1
+        oa += 1
     end
 end
 
