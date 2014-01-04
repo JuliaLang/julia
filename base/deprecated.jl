@@ -369,5 +369,8 @@ const CharString = UTF32String
 eval(Sys, :(@deprecate shlib_list dllist))
 # Sys.shlib_ext is deprecated, renamed to Sys.dlext. Remove alias before release
 
+@deprecate degrees2radians deg2rad
+@deprecate radians2degrees rad2deg
+
 # 0.3 discontinued functions
 
