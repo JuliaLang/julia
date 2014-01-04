@@ -36,7 +36,7 @@ safe_sum{T}(A::Array{T}, region) = reducedim(+,A,region,zero(T))
 
 Areduc = rand(3, 4, 5, 6)
 for region in {
-	1, 2, 3, 4, (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4), 
+	1, 2, 3, 4, 5, (1, 2), (1, 3), (1, 4), (2, 3), (2, 4), (3, 4), 
 	(1, 2, 3), (1, 3, 4), (2, 3, 4), (1, 2, 3, 4)}
 
 	@test_approx_eq sum(Areduc, region) safe_sum(Areduc, region)

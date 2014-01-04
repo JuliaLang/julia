@@ -180,13 +180,33 @@ function generate_reducedim_funcs(fname, comb, sker, ker0!, ker1!)
     
     quote
         global $(fname!)
-        function $(fname!)(dst::Array, a::Array, region)
-            isrd1, secs = rcompress_dims(size(a), region)
-            @assert prod(secs) == length(a)
-            if isrd1
-                $(fa!)(true, dst, 0, a, 0, secs[end:-1:1]...)
+        function $(fname!)(dst::Array, a::Array, dim::Integer)
+            nd = ndims(a)
+            siz = size(a)
+            if 1 <= dim <= nd
+                if dim == 1
+                    $(fa!)(true, dst, 0, a, 0, prod(siz[2:nd]), siz[1])
+                elseif dim == nd
+                    $(fb!)(true, dst, 0, a, 0, siz[nd], prod(siz[1:nd-1]))
+                else
+                    $(fb!)(true, dst, 0, a, 0, prod(siz[dim+1:nd]), siz[dim], prod(siz[1:dim-1]))
+                end
             else
-                $(fb!)(true, dst, 0, a, 0, secs[end:-1:1]...)
+                $(ker0!)(dst, 0, a, 0, length(a))
+            end
+            dst
+        end
+
+        function $(fname!)(dst::Array, a::Array, region)
+            if length(region) == 1
+                $(fname!)(dst, a, region[1])
+            else
+                isrd1, secs = rcompress_dims(size(a), region)
+                if isrd1
+                    $(fa!)(true, dst, 0, a, 0, secs[end:-1:1]...)
+                else
+                    $(fb!)(true, dst, 0, a, 0, secs[end:-1:1]...)
+                end                
             end
             dst
         end
