@@ -268,7 +268,7 @@ close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 isopen(s::IOStream) = bool(ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios))
 function flush(s::IOStream)
     sigatomic_begin()
-    systemerror("flush", ccall(:ios_flush, Void, (Ptr{Void},), s.ios) != 0)
+    systemerror("flush", ccall(:ios_flush, Cint, (Ptr{Void},), s.ios) != 0)
     sigatomic_end()
     s
 end
