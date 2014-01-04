@@ -8,10 +8,10 @@ export
 
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1, bessely,
-        bessely0, bessely1, ceil, convert, copysign, degrees2radians,
+        bessely0, bessely1, ceil, convert, copysign, deg2rad,
         exp, exp2, exponent, factorial, floor, hypot, isinteger, iround,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
-        nextfloat, prevfloat, promote_rule, radians2degrees, rem, round, show,
+        nextfloat, prevfloat, promote_rule, rad2deg, rem, round, show,
         showcompact, sum, sqrt, string, print, trunc, precision, exp10, expm1,
         gamma, lgamma, digamma, erf, erfc, zeta, log1p, airyai, iceil, ifloor,
         itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
@@ -367,8 +367,8 @@ end
 
 sqrt(x::BigInt) = sqrt(BigFloat(x))
 
-radians2degrees(z::BigFloat) = 180/big(pi)*z
-degrees2radians(z::BigFloat) = big(pi)/180*z
+rad2deg(z::BigFloat) = 180/big(pi)*z
+deg2rad(z::BigFloat) = big(pi)/180*z
 
 
 function ^(x::BigFloat, y::Unsigned)

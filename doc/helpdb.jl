@@ -3593,13 +3593,13 @@ popdisplay(d::Display)
 
 "),
 
-("Mathematical Functions","Base","degrees2radians","degrees2radians(x)
+("Mathematical Functions","Base","deg2rad","deg2rad(x)
 
    Convert \"x\" from degrees to radians
 
 "),
 
-("Mathematical Functions","Base","radians2degrees","radians2degrees(x)
+("Mathematical Functions","Base","rad2deg","rad2deg(x)
 
    Convert \"x\" from radians to degrees
 
