@@ -6,7 +6,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        sinpi, cospi, sinc, cosc, 
        cosd, cotd, cscd, secd, sind, tand,
        acosd, acotd, acscd, asecd, asind, atand, atan2,
-       radians2degrees, degrees2radians,
+       rad2deg, deg2rad,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
        cbrt, sqrt, erf, erfc, erfcx, erfi, dawson,
        ceil, floor, trunc, round, significand, 
@@ -141,12 +141,12 @@ cosc(x::Integer) = cosc(float(x))
 cosc{T<:Integer}(x::Complex{T}) = cosc(float(x))
 @vectorize_1arg Number cosc
 
-radians2degrees(z::Real) = oftype(z, 57.29577951308232*z)
-degrees2radians(z::Real) = oftype(z, 0.017453292519943295*z)
-radians2degrees(z::Integer) = radians2degrees(float(z))
-degrees2radians(z::Integer) = degrees2radians(float(z))
-@vectorize_1arg Real radians2degrees
-@vectorize_1arg Real degrees2radians
+rad2deg(z::Real) = oftype(z, 57.29577951308232*z)
+deg2rad(z::Real) = oftype(z, 0.017453292519943295*z)
+rad2deg(z::Integer) = rad2deg(float(z))
+deg2rad(z::Integer) = deg2rad(float(z))
+@vectorize_1arg Real rad2deg
+@vectorize_1arg Real deg2rad
 
 for (finv, f) in ((:sec, :cos), (:csc, :sin), (:cot, :tan),
                   (:sech, :cosh), (:csch, :sinh), (:coth, :tanh),
@@ -179,19 +179,19 @@ function sind(x::Real)
         # return -0.0 iff x == -0.0
         return x == 0.0 ? 0.0 : arx
     elseif arx < 45.0
-        return sin(degrees2radians(rx))
+        return sin(deg2rad(rx))
     elseif arx <= 135.0
         arx = 90.0 - arx
-        return copysign(cos(degrees2radians(arx)),rx)
+        return copysign(cos(deg2rad(arx)),rx)
     elseif arx < 225.0
         rx = copysign(180.0,rx) - rx
-        return sin(degrees2radians(rx))
+        return sin(deg2rad(rx))
     elseif arx <= 315.0
         arx = 270.0 - arx
-        return -copysign(cos(degrees2radians(arx)),rx)
+        return -copysign(cos(deg2rad(arx)),rx)
     else
         rx = rx - copysign(360.0,rx)
-        return sin(degrees2radians(rx))
+        return sin(deg2rad(rx))
     end
 end
 @vectorize_1arg Real sind
@@ -206,19 +206,19 @@ function cosd(x::Real)
     rx = abs(rem(x,360.0))
 
     if rx <= 45.0
-        return cos(degrees2radians(rx))
+        return cos(deg2rad(rx))
     elseif rx < 135.0
         rx = 90.0 - rx
-        return sin(degrees2radians(rx))
+        return sin(deg2rad(rx))
     elseif rx <= 225.0
         rx = 180.0 - rx
-        return -cos(degrees2radians(rx))
+        return -cos(deg2rad(rx))
     elseif rx < 315.0
         rx = rx - 270.0
-        return sin(degrees2radians(rx))
+        return sin(deg2rad(rx))
     else
         rx = 360.0 - rx
-        return cos(degrees2radians(rx))
+        return cos(deg2rad(rx))
     end
 end
 @vectorize_1arg Real cosd
@@ -228,14 +228,14 @@ tand(x::Real) = sind(x) / cosd(x)
 
 for (fd, f) in ((:sind, :sin), (:cosd, :cos), (:tand, :tan))
     @eval begin
-        ($fd)(z) = ($f)(degrees2radians(z))
+        ($fd)(z) = ($f)(deg2rad(z))
     end
 end
 
 for (fd, f) in ((:asind, :asin), (:acosd, :acos), (:atand, :atan),
                 (:asecd, :asec), (:acscd, :acsc), (:acotd, :acot))
     @eval begin
-        ($fd)(y) = radians2degrees(($f)(y))
+        ($fd)(y) = rad2deg(($f)(y))
         @vectorize_1arg Real $fd
     end
 end
