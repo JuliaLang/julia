@@ -171,6 +171,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[readline]**            — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
 - **[libuv]**               — portable, high-performance event-based I/O library
 - **[OpenLibm]**            — a portable libm library containing elementary math functions.
+- **[OpenSpecFun]**         — a library containing Bessel and error functions of complex arguments.
 - **[DSFMT]**               — a fast Mersenne Twister pseudorandom number generator library.
 - **[OpenBLAS]**            — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/). The system provided BLAS and LAPACK are used on OS X.
 - **[LAPACK]**              — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
@@ -195,6 +196,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [git]:          http://git-scm.com/
 [perl]:         http://www.perl.org/
 [OpenLibm]:     https://github.com/JuliaLang/openlibm
+[OpenSpecFun]:  https://github.com/JuliaLang/openspecfun
 [DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS
 [LAPACK]:       http://www.netlib.org/lapack/
