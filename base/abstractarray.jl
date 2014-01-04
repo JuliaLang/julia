@@ -1580,45 +1580,19 @@ function prod{T}(A::AbstractArray{T})
     v
 end
 
-function minimum{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("argument must not be empty"); end
-    v = A[1]
-    for i=2:length(A)
-        @inbounds x = A[i]
-        if x < v
-            v = x
-        end
-    end
-    v
-end
 
-function maximum{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("argument must not be empty"); end
-    v = A[1]
-    for i=2:length(A)
-        @inbounds x = A[i]
-        if x > v
-            v = x
-        end
-    end
-    v
-end
-
-# specialized versions for floating-point, which deal with NaNs
-
-function minimum{T<:FloatingPoint}(A::AbstractArray{T})
-    if isempty(A); error("argument must not be empty"); end
-    n = length(A)
+function minimum{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
+    if first > last; error("argument range must not be empty"); end
 
     # locate the first non NaN number
-    v = A[1]
-    i = 2
-    while v != v && i <= n
+    v = A[first]
+    i = first + 1
+    while v != v && i <= last
         @inbounds v = A[i]
         i += 1
     end
 
-    while i <= n
+    while i <= last
         @inbounds x = A[i]
         if x < v
             v = x
@@ -1628,19 +1602,18 @@ function minimum{T<:FloatingPoint}(A::AbstractArray{T})
     v
 end
 
-function maximum{T<:FloatingPoint}(A::AbstractArray{T})
-    if isempty(A); error("argument must not be empty"); end
-    n = length(A)
+function maximum{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
+    if first > last; error("argument range must not be empty"); end
 
     # locate the first non NaN number
-    v = A[1]
-    i = 2
-    while v != v && i <= n
+    v = A[first]
+    i = first + 1
+    while v != v && i <= last
         @inbounds v = A[i]
         i += 1
     end
 
-    while i <= n
+    while i <= last
         @inbounds x = A[i]
         if x > v
             v = x
@@ -1649,6 +1622,9 @@ function maximum{T<:FloatingPoint}(A::AbstractArray{T})
     end
     v
 end
+
+minimum{T<:Real}(A::AbstractArray{T}) = minimum(A, 1, length(A))
+maximum{T<:Real}(A::AbstractArray{T}) = maximum(A, 1, length(A))
 
 # extrema
 
