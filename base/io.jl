@@ -283,8 +283,9 @@ function truncate(s::IOStream, n::Integer)
 end
 
 function seek(s::IOStream, n::Integer)
-    ccall(:ios_seek, FileOffset, (Ptr{Void}, FileOffset), s.ios, n)==0 ||
-        error("seek failed")
+    ret = ccall(:ios_seek, FileOffset, (Ptr{Void}, FileOffset), s.ios, n)
+    systemerror("seek", ret == -1)
+    ret < -1 && error("seek failed")
     return s
 end
 
@@ -296,8 +297,9 @@ function seekend(s::IOStream)
 end
 
 function skip(s::IOStream, delta::Integer)
-    ccall(:ios_skip, FileOffset, (Ptr{Void}, FileOffset), s.ios, delta)==0 ||
-        error("skip failed")
+    ret = ccall(:ios_skip, FileOffset, (Ptr{Void}, FileOffset), s.ios, delta)
+    systemerror("skip", ret == -1)
+    ret < -1 && error("skip failed")
     return s
 end
 
