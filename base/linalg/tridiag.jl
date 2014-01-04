@@ -47,6 +47,19 @@ conj(M::SymTridiagonal) = SymTridiagonal(conj(M.dv), conj(M.ev))
 transpose(M::SymTridiagonal) = M #Identity operation
 ctranspose(M::SymTridiagonal) = conj(M)
 
+function diag{T}(M::SymTridiagonal{T}, n::Integer=0)
+    absn = abs(n)
+    if absn==0
+        return M.dv
+    elseif absn==1
+        return M.ev
+    elseif absn<size(M,1)
+        return zeros(T,size(M,1)-absn)
+    else
+        throw(BoundsError())
+    end
+end
+
 +(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv+B.dv, A.ev+B.ev)
 -(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv-B.dv, A.ev-B.ev)
 *(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv*B, A.ev*B)
@@ -147,6 +160,20 @@ iround(M::Tridiagonal) = Tridiagonal(iround(M.dl), iround(M.d), iround(M.du))
 conj(M::Tridiagonal) = Tridiagonal(conj(M.dl), conj(M.d), conj(M.du))
 transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
 ctranspose(M::Tridiagonal) = conj(transpose(M))
+
+function diag{T}(M::Tridiagonal{T}, n::Integer=0)
+    if n==0
+        return M.d 
+    elseif n==-1
+        return M.dl
+    elseif n==1
+        return M.du
+    elseif -size(M,1)n<size(M,1)
+        return zeros(T,size(M,1)-abs(n))
+    else 
+        throw(BoundsError())
+    end
+end
 
 +(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl+B.dl, A.d+B.d, A.du+B.du)
 -(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl-B.dl, A.d-B.d, A.du+B.du)
