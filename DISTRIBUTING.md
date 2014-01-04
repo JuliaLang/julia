@@ -110,6 +110,18 @@ all libraries that depend on BLAS and LAPACK. The Julia build process
 will build all these libraries correctly, but when overriding defaults
 and using system provided libraries, this consistency must be ensured.
 
+Notes on Rmath
+==============
+
+Rmath is a library from R, which includes basic statistical
+functions. Julia uses a patched version of Rmath, which uses DSFMT as
+its underlying generator, and faster normal random number
+generators. If the stock Rmath provided by various linux distributions
+is used, the underlying random streams will not be the same for
+different RNGs in Base and Distributions.jl.
+
+It is highly recommended that the patched Rmath provided by Julia is
+used.
 
 Compilation scripts
 ===================
