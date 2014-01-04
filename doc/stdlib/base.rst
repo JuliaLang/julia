@@ -2465,11 +2465,11 @@ Mathematical Functions
    Compute :math:`\cos(\pi x) / x - \sin(\pi x) / (\pi x^2)` if :math:`x \neq 0`, and :math:`0`
    if :math:`x = 0`. This is the derivative of ``sinc(x)``.
 
-.. function:: degrees2radians(x)
+.. function:: deg2rad(x)
 
    Convert ``x`` from degrees to radians
 
-.. function:: radians2degrees(x)
+.. function:: rad2deg(x)
 
    Convert ``x`` from radians to degrees
 
