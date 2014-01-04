@@ -417,6 +417,9 @@ in `radians <http://en.wikipedia.org/wiki/Radian>`_ between the *x*-axis
 and the point specified by its arguments, interpreted as *x* and *y*
 coordinates.
 
+Additionally, ``sinpi(x)`` and ``cospi(x)`` are provided for more accurate computations
+of ``sin(pi*x)`` and ``cos(pi*x)`` respectively.
+
 In order to compute trigonometric functions with degrees
 instead of radians, suffix the function with ``d``. For example, ``sind(x)``
 computes the sine of ``x`` where ``x`` is specified in degrees.
