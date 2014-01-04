@@ -1584,7 +1584,7 @@ end
 prod{T}(A::AbstractArray{T}) = prod_rgn(A, 1, length(A))
 
 
-function minimum{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
+function minimum_rgn{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
     if first > last; error("argument range must not be empty"); end
 
     # locate the first non NaN number
@@ -1605,7 +1605,7 @@ function minimum{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
     v
 end
 
-function maximum{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
+function maximum_rgn{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
     if first > last; error("argument range must not be empty"); end
 
     # locate the first non NaN number
@@ -1626,8 +1626,8 @@ function maximum{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
     v
 end
 
-minimum{T<:Real}(A::AbstractArray{T}) = minimum(A, 1, length(A))
-maximum{T<:Real}(A::AbstractArray{T}) = maximum(A, 1, length(A))
+minimum{T<:Real}(A::AbstractArray{T}) = minimum_rgn(A, 1, length(A))
+maximum{T<:Real}(A::AbstractArray{T}) = maximum_rgn(A, 1, length(A))
 
 # extrema
 
