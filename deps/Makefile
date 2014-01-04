@@ -663,7 +663,7 @@ install-openlibm: $(OPENLIBM_OBJ_TARGET)
 
 ## openspecfun ##
 
-OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) USE_OPENLIBM=1 OPENLIBM_HOME=$(JULIAHOME)/deps/openlibm
+OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" USE_OPENLIBM=1 OPENLIBM_HOME=$(JULIAHOME)/deps/openlibm
 
 OPENSPECFUN_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libopenspecfun.$(SHLIB_EXT)
 OPENSPECFUN_OBJ_SOURCE = openspecfun/libopenspecfun.$(SHLIB_EXT)
@@ -1035,7 +1035,7 @@ endif
 ARPACK_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libarpack.$(SHLIB_EXT)
 
 ARPACK_MFLAGS = F77="$(FC)" MPIF77="$(FC)"
-ARPACK_OPTS = $(FFLAGS) $(JFFLAGS)
+ARPACK_FFLAGS += $(FFLAGS) $(JFFLAGS)
 ARPACK_FLAGS = --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)"
 ifneq ($(OS),WINNT)
 ARPACK_FLAGS += LDFLAGS="-Wl,-rpath,'$(BUILD)/lib'"
