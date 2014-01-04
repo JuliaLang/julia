@@ -405,7 +405,7 @@ off_t ios_seek(ios_t *s, off_t pos)
     s->_eof = 0;
     if (s->bm == bm_mem) {
         if ((size_t)pos > s->size)
-            return -1;
+            return -2;
         s->bpos = pos;
     }
     else {
@@ -446,7 +446,7 @@ off_t ios_skip(ios_t *s, off_t offs)
             }
             else if (s->bm == bm_mem) {
                 // TODO: maybe grow buffer
-                return -1;
+                return -2;
             }
         }
         else if (offs < 0) {
@@ -456,7 +456,7 @@ off_t ios_skip(ios_t *s, off_t offs)
                 return 0;
             }
             else if (s->bm == bm_mem) {
-                return -1;
+                return -2;
             }
         }
         ios_flush(s);
