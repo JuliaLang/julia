@@ -233,7 +233,7 @@ const SEEK_END = int32(2)
 
 function position(f::File)
     ret = ccall(:jl_lseek, Coff_t,(Int32,Coff_t,Int32),f.handle,0,SEEK_CUR)
-    systemerror("lseek", ret == -one(Coff_t))
+    systemerror("lseek", ret == -1)
     ret
 end
 
