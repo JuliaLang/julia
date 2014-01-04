@@ -268,7 +268,7 @@ close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 isopen(s::IOStream) = bool(ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios))
 function flush(s::IOStream)
     sigatomic_begin()
-    ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
+    systemerror("flush", ccall(:ios_flush, Void, (Ptr{Void},), s.ios) != 0)
     sigatomic_end()
     s
 end
@@ -303,7 +303,11 @@ function skip(s::IOStream, delta::Integer)
     return s
 end
 
-position(s::IOStream) = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
+function position(s::IOStream)
+    pos = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
+    systemerror("position", pos == -1)
+    return pos
+end
 
 eof(s::IOStream) = bool(ccall(:jl_ios_eof, Int32, (Ptr{Void},), s.ios))
 

@@ -52,6 +52,7 @@ function mmap_grow(len::Integer, prot::Integer, flags::Integer, fd::Integer, off
         systemerror("pwrite", ccall(:jl_pwrite, Cssize_t, (Cint, Ptr{Void}, Uint, FileOffset), fd, int8([0]), 1, offset + len - 1) < 1)
     end
     cpos = ccall(:jl_lseek, FileOffset, (Cint, FileOffset, Cint), fd, cpos, SEEK_SET)
+    systemerror("lseek", cpos < 0)
     return mmap(len, prot, flags, fd, offset)
 end
 
@@ -77,6 +78,7 @@ function mmap_stream_settings(s::IO)
     const MAP_SHARED::Cint = 1
     const F_GETFL::Cint = 3
     mode = ccall(:fcntl,Cint,(Cint,Cint),fd(s),F_GETFL)
+    systemerror("fcntl F_GETFL", mode == -1)
     mode = mode & 3
     if mode == 0
         prot = PROT_READ
