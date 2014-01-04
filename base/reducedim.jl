@@ -14,7 +14,7 @@ reduced_dims{N}(siz::NTuple{N,Int}, d::Int, rd::Int) = d == 1 ? tuple(rd, siz[d+
 
 reduced_dims{N}(siz::NTuple{N,Int}, d::Int) = reduced_dims(siz, d, 1)
 
-reduced_dims0{N}(siz::NTuple{N,Int}, d::Int) = reduced_dims(siz, d, (siz[d] == 0 ? 0 : 1))
+reduced_dims0{N}(siz::NTuple{N,Int}, d::Int) = 1 <= d <= N ? reduced_dims(siz, d, (siz[d] == 0 ? 0 : 1)) : siz
 
 function reduced_dims{N}(siz::NTuple{N,Int}, region)
     rsiz = [siz...]
@@ -389,8 +389,22 @@ function vmin!(dst::Array, od::Int, a::Array, oa::Int, n::Int)
     end
 end
 
-@code_reducedim maximum scalarmax maximum vcopy! vmax!
-@code_reducedim minimum scalarmin minimum vcopy! vmin!
+@code_reducedim maximum scalarmax maximum_rgn vcopy! vmax!
+@code_reducedim minimum scalarmin minimum_rgn vcopy! vmin!
 
+function maximum{T}(a::Array{T}, region)
+    dst = Array(T, reduced_dims0(a, region))
+    if !isempty(dst)
+        maximum!(dst, a, region)
+    end
+    return dst
+end
 
+function minimum{T}(a::Array{T}, region)
+    dst = Array(T, reduced_dims0(a, region))
+    if !isempty(dst)
+        minimum!(dst, a, region)
+    end
+    return dst
+end
 
