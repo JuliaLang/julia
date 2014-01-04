@@ -328,11 +328,12 @@ function vadd!(dst::Array, od::Int, a::Array, oa::Int, n::Int)
 end
 
 @code_reducedim sum (+) sum_seq vcopy! vadd!
-function sum{T<:Number}(a::Array{T}, region)
-    dst = Array(T, reduced_dims(a, region))
+
+function sum{R}(rt::Type{R}, a::Array, region)
+    dst = Array(R, reduced_dims(a, region))
     if !isempty(dst)
         if isempty(a)
-            fill!(dst, zero(T))
+            fill!(dst, zero(R))
         else
             sum!(dst, a, region)
         end
@@ -340,15 +341,6 @@ function sum{T<:Number}(a::Array{T}, region)
     return dst
 end
 
-function sum(a::Array{Bool}, region)
-    dst = Array(Int, reduced_dims(a, region))
-    if !isempty(dst)
-        if isempty(a)
-            fill!(dst, 0)
-        else
-            sum!(dst, a, region)
-        end
-    end
-    return dst
-end
+sum{T}(a::Array{T}, region) = sum(T, a, region)
+sum(a::Array{Bool}, region) = sum(Int, a, region)
 
