@@ -33,6 +33,7 @@
 # main tests
 
 safe_sum{T}(A::Array{T}, region) = reducedim(+, A, region, zero(T))
+safe_prod{T}(A::Array{T}, region) = reducedim(*, A, region, one(T))
 safe_maximum{T}(A::Array{T}, region) = reducedim(Base.scalarmax, A, region, typemin(T))
 safe_minimum{T}(A::Array{T}, region) = reducedim(Base.scalarmin, A, region, typemax(T))
 
@@ -42,6 +43,7 @@ for region in {
 	(1, 2, 3), (1, 3, 4), (2, 3, 4), (1, 2, 3, 4)}
 
 	@test_approx_eq sum(Areduc, region) safe_sum(Areduc, region)
+	@test_approx_eq prod(Areduc, region) safe_prod(Areduc, region)
 	@test_approx_eq maximum(Areduc, region) safe_maximum(Areduc, region)
 	@test_approx_eq minimum(Areduc, region) safe_minimum(Areduc, region)
 end
