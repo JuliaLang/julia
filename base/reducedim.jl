@@ -344,6 +344,32 @@ end
 sum{T}(a::Array{T}, region) = sum(T, a, region)
 sum(a::Array{Bool}, region) = sum(Int, a, region)
 
+# prod
+
+function vmultiply!(dst::Array, od::Int, a::Array, oa::Int, n::Int)
+    for i = 1:n
+        @inbounds dst[od] *= a[oa]
+        od += 1
+        oa += 1
+    end
+end
+
+@code_reducedim prod (*) prod_rgn vcopy! vmultiply!
+
+function prod{R}(rt::Type{R}, a::Array, region)
+    dst = Array(R, reduced_dims(a, region))
+    if !isempty(dst)
+        if isempty(a)
+            fill!(dst, one(R))
+        else
+            prod!(dst, a, region)
+        end
+    end
+    return dst
+end
+
+prod{T}(a::Array{T}, region) = prod(T, a, region)
+
 
 # maximum & minimum
 

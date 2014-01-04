@@ -1569,16 +1569,19 @@ function cumsum_kbn{T<:FloatingPoint}(A::AbstractArray{T}, axis::Integer)
     return B + C
 end
 
-function prod{T}(A::AbstractArray{T})
-    if isempty(A)
+
+function prod_rgn{T}(A::AbstractArray{T}, first::Int, last::Int)
+    if first > last
         return one(T)
     end
-    v = A[1]
-    for i=2:length(A)
-        @inbounds v *= A[i]
+    i = first
+    v = A[i]
+    while i < last
+        @inbounds v *= A[i+=1]
     end
-    v
+    return v
 end
+prod{T}(A::AbstractArray{T}) = prod_rgn(A, 1, length(A))
 
 
 function minimum{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
