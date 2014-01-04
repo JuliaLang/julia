@@ -42,7 +42,6 @@ include("pointer.jl")
 
 include("float.jl")
 include("reduce.jl")
-include("reducedim.jl")
 include("complex.jl")
 include("rational.jl")
 
@@ -179,6 +178,9 @@ include("linalg.jl")
 importall .LinAlg
 include("broadcast.jl")
 importall .Broadcast
+
+# reduction along dims
+include("reducedim.jl")  # macros in this file relies on string.jl
 
 # signal processing
 include("fftw.jl")

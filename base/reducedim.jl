@@ -37,7 +37,7 @@ function reduced_dims0{N}(siz::NTuple{N,Int}, region)
 end
 
 
-# reduction codes
+##### (original) reduction codes for arbitrary arrays
 
 reducedim(f::Function, A, region, v0) =
     reducedim(f, A, region, v0, similar(A, reduced_dims(A, region)))
@@ -128,5 +128,204 @@ function reducedim(f::Function, A, region, v0, R)
 
     return R
 end
+end
+
+
+
+##### Below are optimized codes for contiguous arrays
+
+function rcompress_dims{N}(siz::NTuple{N,Int}, region)
+    isrd = fill(false, N)
+    for k in region
+        if 1 <= k <= N
+            isrd[k] = true
+        end
+    end
+    
+    sdims = Int[]
+    sizehint(sdims, N)
+    b = isrd[1]
+    n = siz[1]
+    i = 2
+    while i <= N
+        if isrd[i] == b
+            n *= siz[i]
+        else
+            b = !b
+            push!(sdims, n)
+            n = siz[i]
+        end
+        i += 1
+    end
+    if n != 1
+        push!(sdims, n)
+    end
+    return (isrd[1], sdims)
+end
+
+function generate_reducedim_funcs(fname, comb, sker, ker0!, ker1!)
+    # Parameters:
+    #
+    # - fname:  the interface function name (e.g. sum, maximum)
+    # - comb:   the combination operation (e.g. +)
+    # - sker:   a kernel function that reduces a vector (or a range of it) to a scalar
+    # - ker0!:  a kernel that initializes an accumulator array using the first column of terms
+    # - ker1!:  a kernel that accumulates a term column to an accumulating column
+    #
+
+
+    fname! = symbol("$(fname)!")
+    fa! = symbol("$(fname)_a!")
+    fb! = symbol("$(fname)_b!")
+    
+    quote
+        global $(fname!)
+        function $(fname!)(dst::Array, a::Array, region)
+            isrd1, secs = rcompress_dims(size(a), region)
+            @assert prod(secs) == length(a)
+            if isrd1
+                $(fa!)(true, dst, 0, a, 0, secs[end:-1:1]...)
+            else
+                $(fb!)(true, dst, 0, a, 0, secs[end:-1:1]...)
+            end
+            dst
+        end
+    
+        # $(fa!)
+        global $(fa!)
+        function $(fa!)(isinit::Bool, dst::Array, od::Int, a::Array, oa::Int, n1::Int)
+            if isinit
+                dst[od+1] = $(sker)(a, oa+1, oa+n1)
+            else
+                dst[od+1] = $(comb)(dst[od+1], $(sker)(a, oa+1, oa+n1))
+            end
+        end
+
+        function $(fa!)(isinit::Bool, dst::Array, od::Int, a::Array, oa::Int, n1::Int, n2::Int)
+            if isinit
+                for j = 1:n1
+                    alast = oa + n2
+                    dst[od+j] = $(sker)(a, oa+1, alast)
+                    oa = alast
+                end
+            else
+                for j = 1:n1
+                    alast = oa + n2
+                    dst[od+j] = $(comb)(dst[od+j], $(sker)(a, oa+1, alast))
+                    oa = alast
+                end
+            end
+        end
+
+        function $(fa!)(isinit::Bool, dst::Array, od::Int, a::Array, oa::Int, n1::Int, n2::Int, n3::Int, ns::Int...)
+            as::Int = *(n2, n3, ns...)
+            if length(ns) & 1 == 0
+                $(fa!)(isinit, dst, od, a, oa, n2, n3, ns...)
+                oa += as    
+    
+                for j = 2:n1
+                    $(fa!)(false, dst, od, a, oa, n2, n3, ns...)
+                    oa += as
+                end                                 
+            else 
+                ds::Int = *(n3, ns[2:2:end]...)
+                for j = 1:n1
+                    $(fa!)(isinit, dst, od, a, oa, n2, n3, ns...)
+                    od += ds
+                    oa += as
+                end   
+            end
+        end
+
+        # $(fb!)
+        global $(fb!)
+        function $(fb!)(isinit::Bool, dst::Array, od::Int, a::Array, oa::Int, n1::Int)
+            if isinit
+                $(ker0!)(dst, od, a, oa, n1)
+            else
+                $(ker1!)(dst, od, a, oa, n1)
+            end
+        end
+
+        function $(fb!)(isinit::Bool, dst::Array, od::Int, a::Array, oa::Int, n1::Int, n2::Int)
+            if isinit
+                $(ker0!)(dst, od, a, oa, n2)
+            else
+                $(ker1!)(dst, od, a, oa, n2)        
+            end
+            oa += n2
+    
+            for j = 2:n1
+                $(ker1!)(dst, od, a, oa, n2)
+                oa += n2
+            end
+        end
+
+        function $(fb!)(isinit::Bool, dst::Array, od::Int, a::Array, oa::Int, n1::Int, n2::Int, n3::Int, ns::Int...)
+            as = *(n2, n3, ns...)
+            if length(ns) & 1 == 0
+                ds::Int = *(n3, ns[2:2:end]...)
+                for j = 1:n1
+                    $(fb!)(isinit, dst, od, a, oa, n2, n3, ns...)
+                    od += ds
+                    oa += as
+                end
+            else
+                $(fb!)(isinit, dst, od, a, oa, n2, n3, ns...)
+                oa += as
+    
+                for j = 2:n1
+                    $(fb!)(false, dst, od, a, oa, n2, n3, ns...)
+                    oa += as
+                end
+            end
+        end
+    end
+end
+
+macro code_reducedim(fname, comb, sker, ker0, ker1)
+    esc(generate_reducedim_funcs(fname, comb, sker, ker0, ker1))
+end
+
+
+# sum
+
+function vcopy!(dst::Array, od::Int, a::Array, oa::Int, n::Int)
+    for i = 1:n
+        @inbounds dst[od+i] = a[oa+i]
+    end    
+end
+
+vcopy!{T}(dst::Array{T}, od::Int, a::Array{T}, oa::Int, n::Int) = copy!(dst, od+1, a, oa+1, n)
+
+function vadd!(dst::Array, od::Int, a::Array, oa::Int, n::Int)
+    for i = 1:n
+        @inbounds dst[od+i] += a[oa+i]
+    end
+end
+
+@code_reducedim sum (+) sum_seq vcopy! vadd!
+function sum{T<:Number}(a::Array{T}, region)
+    dst = Array(T, reduced_dims(a, region))
+    if !isempty(dst)
+        if isempty(a)
+            fill!(dst, zero(T))
+        else
+            sum!(dst, a, region)
+        end
+    end
+    return dst
+end
+
+function sum(a::Array{Bool}, region)
+    dst = Array(Int, reduced_dims(a, region))
+    if !isempty(dst)
+        if isempty(a)
+            fill!(dst, 0)
+        else
+            sum!(dst, a, region)
+        end
+    end
+    return dst
 end
 
