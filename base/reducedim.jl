@@ -344,3 +344,27 @@ end
 sum{T}(a::Array{T}, region) = sum(T, a, region)
 sum(a::Array{Bool}, region) = sum(Int, a, region)
 
+
+# maximum & minimum
+
+function vmax!(dst::Array, od::Int, a::Array, oa::Int, n::Int)
+    for i = 1:n
+        @inbounds dst[od] = scalarmax(dst[od], a[oa])
+        od += 1
+        oa += 1
+    end
+end
+
+function vmin!(dst::Array, od::Int, a::Array, oa::Int, n::Int)
+    for i = 1:n
+        @inbounds dst[od] = scalarmin(dst[od], a[oa])
+        od += 1
+        oa += 1
+    end
+end
+
+@code_reducedim maximum scalarmax maximum vcopy! vmax!
+@code_reducedim minimum scalarmin minimum vcopy! vmin!
+
+
+
