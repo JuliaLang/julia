@@ -307,7 +307,8 @@ function blas_set_num_threads(n::Integer)
 end
 
 function check_blas()
-    if blas_vendor() == :openblas
+    blas = blas_vendor()
+    if blas == :openblas
         openblas_config = openblas_get_config()
         openblas64 = ismatch(r".*USE64BITINT.*", openblas_config)
         if Base.USE_BLAS64 != openblas64
@@ -322,6 +323,10 @@ function check_blas()
             end
             println("Quitting.")
             quit()
+        end
+    elseif blas == :mkl
+        if Base.USE_BLAS64
+            ENV["MKL_INTERFACE_LAYER"] = "ILP64"
         end
     end
 
