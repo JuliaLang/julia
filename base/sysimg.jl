@@ -179,6 +179,9 @@ importall .LinAlg
 include("broadcast.jl")
 importall .Broadcast
 
+# reduction along dims
+include("reducedim.jl")  # macros in this file relies on string.jl
+
 # signal processing
 include("fftw.jl")
 include("dsp.jl")
