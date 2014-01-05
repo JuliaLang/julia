@@ -1218,3 +1218,12 @@ end
 f5254{T}(::Type{T}, b::T) = 0
 f5254(a, b) = 1
 @test f5254(None, 1) == 1
+
+# evaluate arguments left-to-right, including assignments. issue #4990
+let
+    i = 0
+    @test (i, i+=1, i+=1) === (0, 1, 2)
+    @test i == 2
+    x = 65
+    @test [x, x|=0x20] == [65, 97]
+end

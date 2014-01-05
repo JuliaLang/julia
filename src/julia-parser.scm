@@ -69,6 +69,9 @@
 (define (assignment? e)
   (and (pair? e) (eq? (car e) '=)))
 
+(define (assignment-like? e)
+  (and (pair? e) (memq (car e) assignment-ops)))
+
 (define (kwarg? e)
   (and (pair? e) (eq? (car e) 'kw)))
 
@@ -1402,8 +1405,6 @@
 (define (parse-tuple s first)
   (let loop ((lst '())
 	     (nxt first))
-    (if (and (pair? nxt) (memq (car nxt) assignment-ops))
-	(error (string "invalid syntax \"" (car nxt)  "\" in tuple")))
     (case (require-token s)
       ((#\))
        (take-token s)
