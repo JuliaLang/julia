@@ -137,6 +137,9 @@ begin
     end
 end
 
+# reduction along dims
+include("reducedim.jl")  # macros in this file relies on string.jl
+
 # random number generation and statistics
 include("statistics.jl")
 include("librandom.jl")

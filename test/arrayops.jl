@@ -790,3 +790,8 @@ A = [NaN]; B = [NaN]
 @test !(A==B)
 @test isequal(A,B)
 @test A!==B
+
+# complete testsuite for reducedim
+
+include("reducedim.jl")
+
