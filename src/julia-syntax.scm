@@ -1586,6 +1586,9 @@
    (lambda (e)
      `(call (top tuple)
 	    ,.(map (lambda (x)
+		     ;; assignment inside tuple looks like a keyword argument
+		     (if (assignment? x)
+			 (error "assignment not allowed inside tuple"))
 		     (expand-forms
 		      (if (vararg? x)
 			  `(curly Vararg ,(cadr x))
@@ -2193,216 +2196,255 @@
 	 (let ((msg (cadr e)))
 	   (raise `(error ,(string msg " at line " *lff-line*))))
 	 (raise e)))
-   (lambda () (to-LFF- e))))
+   (lambda () (to-blk (to-lff e #t #t)))))
 
-(define (to-LFF- e)
-  (define (to-blk r)
-    (if (length= r 1)
-	(car r)
-	(cons 'block (reverse r))))
-  (define (blk-tail r)
-    (reverse r))
-  ; to-lff returns (new-ex . stmts) where stmts is a list of statements that
-  ; must run before new-ex is valid.
-  ;
-  ; If the input expression needed to be removed from its original context,
-  ; like the 'if' in "1+if(a,b,c)", then new-ex is a symbol holding the
-  ; result of the expression.
-  ;
-  ; If dest is a symbol or #f, new-ex can be a statement.
-  ;
-  ; We essentially maintain a stack of control-flow constructs that need to be
-  ; run in statement position as we walk around an expression. If we hit
-  ; statement context, we can dump the control-flow stuff there.
-  ; This expression walk is entirely within the "else" clause of the giant
-  ; case expression. Everything else deals with special forms.
-  (define (to-lff e dest tail)
-    (if (effect-free? e)
-	(cond ((symbol? dest)
-	       (if (and (pair? e) (eq? (car e) 'break))
-		   ;; odd corner case: sometimes try/finally generates
-		   ;; a (break ) as an assignment RHS
-		   (to-lff e #f #f)
-		   (cons `(= ,dest ,e) '())))
-	      (dest (cons (if tail `(return ,e) e)
-			  '()))
-	      (else (cons e '())))
+(define (to-blk r)
+  (if (length= r 1) (car r) (cons 'block (reverse r))))
 
-	(case (car e)
-	  ((=)
-	   (if (or (not (symbol? (cadr e)))
-		   (eq? (cadr e) 'true)
-		   (eq? (cadr e) 'false))
-	       (error (string "invalid assignment location \"" (cadr e) "\"")))
-	   (let ((LHS (cadr e))
-		 (RHS (caddr e)))
-	     (cond ((not dest)
-		    (to-lff RHS LHS #f))
-		   #;((assignment? RHS)
-		    (let ((r (to-lff RHS dest #f)))
-		      (list* (if tail `(return ,(car r)) (car r))
-			     `(= ,LHS ,(car r))
-			     (cdr r))))
-		   ((effect-free? RHS)
-		    (cond ((symbol? dest)  (list `(= ,LHS ,RHS)
-						 `(= ,dest ,RHS)))
-			  (dest  (list (if tail `(return ,RHS) RHS)
-				       `(= ,LHS ,RHS)))
-			  (else  (list e))))
-		   (else
-		    (to-lff (let ((val (gensy)))
-			      `(block (local! ,val)
-				      (= ,val ,RHS)
-				      (= ,LHS ,val)
-				      ,val))
-			    dest tail)))))
+(define (blk-tail r) (reverse r))
 
-	  ((if)
-	   (cond ((or tail (eq? dest #f) (symbol? dest))
-		  (let ((r (to-lff (cadr e) #t #f)))
-		    (cons `(if
-			    ,(car r)
-			    ,(to-blk (to-lff (caddr e) dest tail))
-			    ,(if (length= e 4)
-				 (to-blk (to-lff (cadddr e) dest tail))
-				 (to-blk (to-lff '(null)  dest tail))))
-			  (cdr r))))
-		 (else (let ((g (gensy)))
-			 (cons g
-			       (cons `(local! ,g) (to-lff e g #f)))))))
-
-	  ((line)
-	   (set! *lff-line* (cadr e))
-	   (cons e '()))
-
-	  ((trycatch)
-	   (cond ((and (eq? dest #t) (not tail))
-		  (let ((g (gensy)))
-		    (list* g
-			   `(local! ,g)
-			   (to-lff e g #f))))
-		 (else
-		  (cons `(trycatch ,(fix-try-block-returns
-				     (to-blk (to-lff (cadr e) dest tail)))
-				   ,(to-blk (to-lff (caddr e) dest tail)))
-			()))))
-
-	  ((&&)
-	   (to-lff (expand-and e) dest tail))
-	  ((|\|\||)
-	   (to-lff (expand-or e) dest tail))
-
-	  ((block)
-	   (if (length= e 2)
-	       (to-lff (cadr e) dest tail)
-	       (let* ((g (gensy))
-		      (stmts
-		       (let loop ((tl (cdr e)))
-			 (if (null? tl) '()
-			     (if (null? (cdr tl))
-				 (cond ((or tail (eq? dest #f) (symbol? dest))
-					(blk-tail (to-lff (car tl) dest tail)))
-				       (else
-					(blk-tail (to-lff (car tl) g tail))))
-				 (cons (to-blk (to-lff (car tl) #f #f))
-				       (loop (cdr tl))))))))
-		 (if (and (eq? dest #t) (not tail))
-		     (cons g (reverse stmts))
-		     (if (and tail (null? stmts))
-			 (cons '(return (null))
-			       '())
-			 (cons (cons 'block stmts)
-			       '()))))))
-
-	  ((return)
-	   (if (and dest (not tail))
-	       (error "misplaced return statement")
-	       (to-lff (cadr e) #t #t)))
-
-	  ((_while) (cond ((eq? dest #t)
-			   (cons (if tail '(return (null)) '(null))
-				 (to-lff e #f #f)))
-			  (else
-			   (let* ((r (to-lff (cadr e) #t #f))
-				  (w (cons `(_while ,(to-blk (cdr r))
-						    ,(car r)
-					      ,(to-blk
-						(to-lff (caddr e) #f #f)))
-					   '())))
-			     (if (symbol? dest)
-				 (cons `(= ,dest (null)) w)
-				 w)))))
-
-	  ((break-block)
-	   (let ((r (to-lff (caddr e) dest tail)))
-	     (if dest
-		 (cons (car r)
-		       (list `(break-block ,(cadr e) ,(to-blk (cdr r)))))
-		 (cons `(break-block ,(cadr e) ,(car r))
-		       (cdr r)))))
-
-	  ((scope-block)
-	   (if (and dest (not tail))
-	       (let* ((g (gensy))
-		      (r (to-lff (cadr e) g tail)))
-		 (cons (car (to-lff g dest tail))
-		       ; tricky: need to introduce a new local outside the
-		       ; scope-block so the scope-block's value can propagate
-		       ; out. otherwise the value could be inaccessible due
-		       ; to being wrapped inside a scope.
-		       `((scope-block ,(to-blk r))
-			 (local! ,g))))
-	       (let ((r (to-lff (cadr e) dest tail)))
-		 (cons `(scope-block ,(to-blk r))
-		       '()))))
-
-	  ;; move the break to the list of preceding statements. value is
-	  ;; null but this will never be observed.
-	  ((break) (cons '(null) (list e)))
-
-	  ((lambda)
-	   (let ((l `(lambda ,(cadr e)
-		       ,(to-blk (to-lff (caddr e) #t #t)))))
-	     (if (symbol? dest)
-		 (cons `(= ,dest ,l) '())
-		 (cons (if tail `(return ,l) l) '()))))
-
-	  ((local global)
-	   (if dest
-	       (error (string "misplaced \"" (car e) "\" declaration")))
-	   (cons (to-blk (to-lff '(null) dest tail))
-		 (list e)))
-
-	  ((|::|)
-	   (if dest
-	       ;; convert to typeassert or decl based on whether it's in
-	       ;; value or statement position.
-	       (to-lff `(typeassert ,@(cdr e)) dest tail)
-	       (to-lff `(decl ,@(cdr e)) dest tail)))
-
-	  ((unnecessary-tuple)
-	   (if dest
-	       (to-lff (cadr e) dest tail)
-	       ;; remove if not in value position
-	       (to-lff '(null) dest tail)))
-
+;; apply to-lff to each subexpr and combine results
+(define (map-to-lff e dest tail)
+  (let ((r (map (lambda (arg) (to-lff arg #t #f))
+		(cdr e))))
+    (cond ((symbol? dest)
+	   (cons `(= ,dest ,(cons (car e) (map car r)))
+		 (apply append (map cdr (reverse r)))))
 	  (else
-	   (if (and dest (not tail) (eq? (car e) 'method))
-	       (let ((ex (to-lff (method-expr-name e) dest tail))
-		     (fu (to-lff e #f #f)))
-		 (cons (car ex)
-		       (append fu (cdr ex))))
-	       ;(error (string "misplaced method definition for \"" (cadr e) "\"")))
-	       (let ((r (map (lambda (arg) (to-lff arg #t #f))
-			     (cdr e))))
-		 (cond ((symbol? dest)
-			(cons `(= ,dest ,(cons (car e) (map car r)))
-			      (apply append (map cdr (reverse r)))))
-		       (else
-			(let ((ex (cons (car e) (map car r))))
-			  (cons (if tail `(return ,ex) ex)
-				(apply append (map cdr (reverse r)))))))))))))
-  (to-blk (to-lff e #t #t)))
+	   (let ((ex (cons (car e) (map car r))))
+	     (cons (if tail `(return ,ex) ex)
+		   (apply append (map cdr (reverse r)))))))))
+
+;; to-lff returns (new-ex . stmts) where stmts is a list of statements that
+;; must run before new-ex is valid.
+;;
+;; If the input expression needed to be removed from its original context,
+;; like the 'if' in "1+if(a,b,c)", then new-ex is a symbol holding the
+;; result of the expression.
+;;
+;; If dest is a symbol or #f, new-ex can be a statement.
+;;
+;; We essentially maintain a stack of control-flow constructs that need to be
+;; run in statement position as we walk around an expression. If we hit
+;; statement context, we can dump the control-flow stuff there.
+;; This expression walk is entirely within the "else" clause of the giant
+;; case expression. Everything else deals with special forms.
+(define (to-lff e dest tail)
+  (if (effect-free? e)
+      (cond ((symbol? dest)
+	     (if (and (pair? e) (eq? (car e) 'break))
+		 ;; odd corner case: sometimes try/finally generates
+		 ;; a (break ) as an assignment RHS
+		 (to-lff e #f #f)
+		 (cons `(= ,dest ,e) '())))
+	    (dest (cons (if tail `(return ,e) e)
+			'()))
+	    (else (cons e '())))
+      
+      (case (car e)
+	((call)  ;; ensure left-to-right evaluation of arguments
+	 (let ((assigned
+		;; vars assigned in each arg
+		;; start with cddr since each arg only considers subsequent ones
+		(map (lambda (x) (expr-find-all assignment-like? x key: cadr))
+		     (cddr e))))
+	   (if (every null? assigned)
+	       ;; no assignments
+	       (map-to-lff e dest tail)
+	       ;; has assignments
+	       (let each-arg ((ass  assigned)
+			      (args (cdr e))
+			      (tmp  '())
+			      (newa '()))
+		 ;; if an argument contains vars assigned in later arguments,
+		 ;; lift out a temporary assignment for it.
+		 (if (null? ass)
+		     (if (null? tmp)
+			 (map-to-lff e dest tail)
+			 (to-lff `(block
+				   ,.(map (lambda (a) `(local! ,(cadr a))) tmp)
+				   ,.(reverse tmp)
+				   (call ,.(reverse newa) ,(car args)))
+				 dest tail))
+		     (if (expr-contains-p (lambda (v)
+					    (any (lambda (vlist) (memq v vlist)) ass))
+					  (car args))
+			 (let ((g (gensy)))
+			   (each-arg (cdr ass) (cdr args)
+				     (cons `(= ,g ,(car args)) tmp)
+				     (cons g newa)))
+			 (each-arg (cdr ass) (cdr args)
+				   tmp
+				   (cons (car args) newa))))))))
+	
+	((=)
+	 (if (or (not (symbol? (cadr e)))
+		 (eq? (cadr e) 'true)
+		 (eq? (cadr e) 'false))
+	     (error (string "invalid assignment location \"" (cadr e) "\"")))
+	 (let ((LHS (cadr e))
+	       (RHS (caddr e)))
+	   (cond ((not dest)
+		  (to-lff RHS LHS #f))
+		 #;((assignment? RHS)
+		 (let ((r (to-lff RHS dest #f)))
+		 (list* (if tail `(return ,(car r)) (car r))
+		 `(= ,LHS ,(car r))
+		 (cdr r))))
+		 ((effect-free? RHS)
+		  (cond ((symbol? dest)  (list `(= ,LHS ,RHS)
+					       `(= ,dest ,RHS)))
+			(dest  (list (if tail `(return ,RHS) RHS)
+				     `(= ,LHS ,RHS)))
+			(else  (list e))))
+		 (else
+		  (to-lff (let ((val (gensy)))
+			    `(block (local! ,val)
+				    (= ,val ,RHS)
+				    (= ,LHS ,val)
+				    ,val))
+			  dest tail)))))
+	
+	((if)
+	 (cond ((or tail (eq? dest #f) (symbol? dest))
+		(let ((r (to-lff (cadr e) #t #f)))
+		  (cons `(if
+			  ,(car r)
+			  ,(to-blk (to-lff (caddr e) dest tail))
+			  ,(if (length= e 4)
+			       (to-blk (to-lff (cadddr e) dest tail))
+			       (to-blk (to-lff '(null)  dest tail))))
+			(cdr r))))
+	       (else (let ((g (gensy)))
+		       (cons g
+			     (cons `(local! ,g) (to-lff e g #f)))))))
+	
+	((line)
+	 (set! *lff-line* (cadr e))
+	 (cons e '()))
+	
+	((trycatch)
+	 (cond ((and (eq? dest #t) (not tail))
+		(let ((g (gensy)))
+		  (list* g
+			 `(local! ,g)
+			 (to-lff e g #f))))
+	       (else
+		(cons `(trycatch ,(fix-try-block-returns
+				   (to-blk (to-lff (cadr e) dest tail)))
+				 ,(to-blk (to-lff (caddr e) dest tail)))
+		      ()))))
+	
+	((&&)
+	 (to-lff (expand-and e) dest tail))
+	((|\|\||)
+	 (to-lff (expand-or e) dest tail))
+	
+	((block)
+	 (if (length= e 2)
+	     (to-lff (cadr e) dest tail)
+	     (let* ((g (gensy))
+		    (stmts
+		     (let loop ((tl (cdr e)))
+		       (if (null? tl) '()
+			   (if (null? (cdr tl))
+			       (cond ((or tail (eq? dest #f) (symbol? dest))
+				      (blk-tail (to-lff (car tl) dest tail)))
+				     (else
+				      (blk-tail (to-lff (car tl) g tail))))
+			       (cons (to-blk (to-lff (car tl) #f #f))
+				     (loop (cdr tl))))))))
+	       (if (and (eq? dest #t) (not tail))
+		   (cons g (reverse stmts))
+		   (if (and tail (null? stmts))
+		       (cons '(return (null))
+			     '())
+		       (cons (cons 'block stmts)
+			     '()))))))
+	
+	((return)
+	 (if (and dest (not tail))
+	     (error "misplaced return statement")
+	     (to-lff (cadr e) #t #t)))
+	
+	((_while) (cond ((eq? dest #t)
+			 (cons (if tail '(return (null)) '(null))
+			       (to-lff e #f #f)))
+			(else
+			 (let* ((r (to-lff (cadr e) #t #f))
+				(w (cons `(_while ,(to-blk (cdr r))
+						  ,(car r)
+						  ,(to-blk
+						    (to-lff (caddr e) #f #f)))
+					 '())))
+			   (if (symbol? dest)
+			       (cons `(= ,dest (null)) w)
+			       w)))))
+	
+	((break-block)
+	 (let ((r (to-lff (caddr e) dest tail)))
+	   (if dest
+	       (cons (car r)
+		     (list `(break-block ,(cadr e) ,(to-blk (cdr r)))))
+	       (cons `(break-block ,(cadr e) ,(car r))
+		     (cdr r)))))
+	
+	((scope-block)
+	 (if (and dest (not tail))
+	     (let* ((g (gensy))
+		    (r (to-lff (cadr e) g tail)))
+	       (cons (car (to-lff g dest tail))
+		     ;; tricky: need to introduce a new local outside the
+		     ;; scope-block so the scope-block's value can propagate
+		     ;; out. otherwise the value could be inaccessible due
+		     ;; to being wrapped inside a scope.
+		     `((scope-block ,(to-blk r))
+		       (local! ,g))))
+	     (let ((r (to-lff (cadr e) dest tail)))
+	       (cons `(scope-block ,(to-blk r))
+		     '()))))
+	
+	;; move the break to the list of preceding statements. value is
+	;; null but this will never be observed.
+	((break) (cons '(null) (list e)))
+	
+	((lambda)
+	 (let ((l `(lambda ,(cadr e)
+		     ,(to-blk (to-lff (caddr e) #t #t)))))
+	   (if (symbol? dest)
+	       (cons `(= ,dest ,l) '())
+	       (cons (if tail `(return ,l) l) '()))))
+	
+	((local global)
+	 (if dest
+	     (error (string "misplaced \"" (car e) "\" declaration")))
+	 (cons (to-blk (to-lff '(null) dest tail))
+	       (list e)))
+	
+	((|::|)
+	 (if dest
+	     ;; convert to typeassert or decl based on whether it's in
+	     ;; value or statement position.
+	     (to-lff `(typeassert ,@(cdr e)) dest tail)
+	     (to-lff `(decl ,@(cdr e)) dest tail)))
+	
+	((unnecessary-tuple)
+	 (if dest
+	     (to-lff (cadr e) dest tail)
+	     ;; remove if not in value position
+	     (to-lff '(null) dest tail)))
+
+	((method)
+	 (if (and dest (not tail))
+	     (let ((ex (to-lff (method-expr-name e) dest tail))
+		   (fu (to-lff e #f #f)))
+	       (cons (car ex)
+		     (append fu (cdr ex))))
+	     (map-to-lff e dest tail)))
+	
+	(else
+	 (map-to-lff e dest tail)))))
+
 #|
 future issue:
 right now scope blocks need to be inside functions:
