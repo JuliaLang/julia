@@ -36,6 +36,14 @@ function reduced_dims0{N}(siz::NTuple{N,Int}, region)
     tuple(rsiz...)
 end
 
+function regionsize(a, region)
+    s = 1
+    for d in region
+        s *= size(a,d)
+    end
+    s
+end
+
 
 ##### (original) reduction codes for arbitrary arrays
 

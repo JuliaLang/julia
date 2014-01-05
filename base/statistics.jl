@@ -1,10 +1,3 @@
-function regionsize(a, region)
-    s = 1
-    for d in region
-        s *= size(a,d)
-    end
-    s
-end
 
 function mean(iterable)
     state = start(iterable)
@@ -21,7 +14,17 @@ function mean(iterable)
     return total/count
 end
 mean(v::AbstractArray) = sum(v) / length(v)
-mean(v::AbstractArray, region) = sum(v, region) / regionsize(v, region)
+
+function mean(v::AbstractArray, region)
+    rs = regionsize(v, region)
+    dst = sum(v, region)
+    if rs != 1
+        for i = 1 : length(dst)
+            @inbounds dst[i] /= rs
+        end
+    end
+    return dst
+end
 
 function median!{T<:Real}(v::AbstractVector{T}; checknan::Bool=true)
     isempty(v) && error("median of an empty array is undefined")
