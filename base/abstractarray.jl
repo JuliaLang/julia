@@ -1409,34 +1409,9 @@ function nnz{T}(a::AbstractArray{T})
     return n
 end
 
-# for reductions that expand 0 dims to 1
-reduced_dims(A, region) = ntuple(ndims(A), i->(in(i, region) ? 1 :
-                                               size(A,i)))
-
-# keep 0 dims in place
-reduced_dims0(A, region) = ntuple(ndims(A), i->(size(A,i)==0 ? 0 :
-                                                in(i, region) ? 1 :
-                                                size(A,i)))
-
-reducedim(f::Function, A, region, v0) =
-    reducedim(f, A, region, v0, similar(A, reduced_dims(A, region)))
-
-maximum{T}(A::AbstractArray{T}, region) =
-    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(scalarmax,A,region,typemin(T))
-minimum{T}(A::AbstractArray{T}, region) =
-    isempty(A) ? similar(A,reduced_dims0(A,region)) : reducedim(scalarmin,A,region,typemax(T))
-sum{T}(A::AbstractArray{T}, region)  = reducedim(+,A,region,zero(T))
-prod{T}(A::AbstractArray{T}, region) = reducedim(*,A,region,one(T))
-
-all(A::AbstractArray{Bool}, region) = reducedim(&,A,region,true)
-any(A::AbstractArray{Bool}, region) = reducedim(|,A,region,false)
-sum(A::AbstractArray{Bool}, region) = reducedim(+,A,region,0,similar(A,Int,reduced_dims(A,region)))
 sum(A::AbstractArray{Bool}) = nnz(A)
 prod(A::AbstractArray{Bool}) =
     error("use all() instead of prod() for boolean arrays")
-prod(A::AbstractArray{Bool}, region) =
-    error("use all() instead of prod() for boolean arrays")
-
 
 # a fast implementation of sum in sequential order (from left to right)
 function sum_seq{T}(a::AbstractArray{T}, ifirst::Int, ilast::Int)
@@ -1594,56 +1569,33 @@ function cumsum_kbn{T<:FloatingPoint}(A::AbstractArray{T}, axis::Integer)
     return B + C
 end
 
-function prod{T}(A::AbstractArray{T})
-    if isempty(A)
+
+function prod_rgn{T}(A::AbstractArray{T}, first::Int, last::Int)
+    if first > last
         return one(T)
     end
-    v = A[1]
-    for i=2:length(A)
-        @inbounds v *= A[i]
+    i = first
+    v = A[i]
+    while i < last
+        @inbounds v *= A[i+=1]
     end
-    v
+    return v
 end
+prod{T}(A::AbstractArray{T}) = prod_rgn(A, 1, length(A))
 
-function minimum{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("argument must not be empty"); end
-    v = A[1]
-    for i=2:length(A)
-        @inbounds x = A[i]
-        if x < v
-            v = x
-        end
-    end
-    v
-end
 
-function maximum{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("argument must not be empty"); end
-    v = A[1]
-    for i=2:length(A)
-        @inbounds x = A[i]
-        if x > v
-            v = x
-        end
-    end
-    v
-end
-
-# specialized versions for floating-point, which deal with NaNs
-
-function minimum{T<:FloatingPoint}(A::AbstractArray{T})
-    if isempty(A); error("argument must not be empty"); end
-    n = length(A)
+function minimum_rgn{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
+    if first > last; error("argument range must not be empty"); end
 
     # locate the first non NaN number
-    v = A[1]
-    i = 2
-    while v != v && i <= n
+    v = A[first]
+    i = first + 1
+    while v != v && i <= last
         @inbounds v = A[i]
         i += 1
     end
 
-    while i <= n
+    while i <= last
         @inbounds x = A[i]
         if x < v
             v = x
@@ -1653,19 +1605,18 @@ function minimum{T<:FloatingPoint}(A::AbstractArray{T})
     v
 end
 
-function maximum{T<:FloatingPoint}(A::AbstractArray{T})
-    if isempty(A); error("argument must not be empty"); end
-    n = length(A)
+function maximum_rgn{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
+    if first > last; error("argument range must not be empty"); end
 
     # locate the first non NaN number
-    v = A[1]
-    i = 2
-    while v != v && i <= n
+    v = A[first]
+    i = first + 1
+    while v != v && i <= last
         @inbounds v = A[i]
         i += 1
     end
 
-    while i <= n
+    while i <= last
         @inbounds x = A[i]
         if x > v
             v = x
@@ -1674,6 +1625,9 @@ function maximum{T<:FloatingPoint}(A::AbstractArray{T})
     end
     v
 end
+
+minimum{T<:Real}(A::AbstractArray{T}) = minimum_rgn(A, 1, length(A))
+maximum{T<:Real}(A::AbstractArray{T}) = maximum_rgn(A, 1, length(A))
 
 # extrema
 
