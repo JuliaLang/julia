@@ -14,17 +14,21 @@ Rational{T<:Integer}(n::T, d::T) = Rational{T}(n,d)
 Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 Rational(n::Integer) = Rational(n,one(n))
 
-//(n::Integer,  d::Integer ) = Rational(n,d)
-//(x::Rational, y::Integer ) = x.num//(x.den*y)
-//(x::Integer,  y::Rational) = (x*y.den)//y.num
-//(x::Rational, y::Rational) = (x.num*y.den)//(x.den*y.num)
-//(x::Complex,  y::Real    ) = complex(real(x)//y,imag(x)//y)
-//(x::Real,     y::Complex ) = x*y'//real(y*y')
+//(n::Integer,   d::Integer  ) = Rational(n,d)
+//(x::Rational,  y::Integer  ) = x.num//(x.den*y)
+//(x::Integer,   y::Rational ) = (x*y.den)//y.num
+//(x::Rational,  y::Rational ) = (x.num*y.den)//(x.den*y.num)
+//(x::Complex,   y::Real     ) = Complex(real(x)//y, imag(x)//y)
+//(x::Real,      y::Complex  ) = x*y'//real(y*y')
+//(x::Imaginary, y::Real     ) = Imaginary(imag(x)//y)
+//(x::Real,      y::Imaginary) = Imaginary(-x//imag(y))
+//(x::Imaginary, y::Imaginary) = imag(x)//imag(y)
+//(x::Complex,   y::Imaginary) = Complex(imag(x)//imag(y), -real(x)/imag(y))
 
-function //(x::Complex, y::Complex)
+function //(x::Complex, y::Union(Imaginary,Complex))
     xy = x*y'
-    yy = real(y*y')
-    complex(real(xy)//yy, imag(xy)//yy)
+    yy = abs2(y)
+    Complex(real(xy)//yy, imag(xy)//yy)
 end
 
 function show(io::IO, x::Rational)

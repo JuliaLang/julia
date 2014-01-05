@@ -24,6 +24,8 @@ import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
 
 import Core.Intrinsics.nan_dom_err
 
+typealias ComplexIm Union(Imaginary,Complex)
+
 # non-type specific math functions
 
 clamp(x::Real, lo::Real, hi::Real) = (x > hi ? hi : (x < lo ? lo : x))
@@ -101,7 +103,7 @@ end
 sinpi(x::Integer) = zero(x)
 cospi(x::Integer) = isodd(x) ? -one(x) : one(x)
 
-function sinpi(z::Complex)
+function sinpi(z::ComplexIm)
     zr, zi = reim(z)
     if !isfinite(zi) && zr == 0 return complex(zr, zi) end
     if isnan(zr) && !isfinite(zi) return complex(zr, zi) end
@@ -112,7 +114,7 @@ function sinpi(z::Complex)
     complex(sinpi(zr)*cosh(pizi), cospi(zr)*sinh(pizi))
 end
 
-function cospi(z::Complex)
+function cospi(z::ComplexIm)
     zr, zi = reim(z)
     if !isfinite(zi) && zr == 0
         return complex(isnan(zi) ? zi : oftype(zi, Inf),
@@ -478,7 +480,7 @@ airybiprime(z) = airy(3,z)
 airy(k::Number, x::FloatingPoint) = oftype(x, real(airy(k, complex(x))))
 airy(k::Number, x::Real) = airy(k, float(x))
 airy(k::Number, z::Complex64) = complex64(airy(k, complex128(z)))
-airy(k::Number, z::Complex) = airy(convert(Int,k), complex128(z))
+airy(k::Number, z::ComplexIm) = airy(convert(Int,k), complex128(z))
 @vectorize_2arg Number airy
 
 const cy = Array(Float64,2)
@@ -580,12 +582,12 @@ end
 
 besselh(nu, z) = besselh(nu, 1, z)
 besselh(nu::Real, k::Integer, z::Complex64) = complex64(besselh(float64(nu), k, complex128(z)))
-besselh(nu::Real, k::Integer, z::Complex) = besselh(float64(nu), k, complex128(z))
+besselh(nu::Real, k::Integer, z::ComplexIm) = besselh(float64(nu), k, complex128(z))
 besselh(nu::Real, k::Integer, x::Real) = besselh(float64(nu), k, complex128(x))
 @vectorize_2arg Number besselh
 
 besseli(nu::Real, z::Complex64) = complex64(bessely(float64(nu), complex128(z)))
-besseli(nu::Real, z::Complex) = besseli(float64(nu), complex128(z))
+besseli(nu::Real, z::ComplexIm) = besseli(float64(nu), complex128(z))
 besseli(nu::Real, x::Integer) = besseli(nu, float64(x))
 function besseli(nu::Real, x::FloatingPoint)
     if x < 0 && !isinteger(nu)
@@ -607,12 +609,12 @@ function besselj(nu::FloatingPoint, x::FloatingPoint)
 end
 
 besselj(nu::Real, z::Complex64) = complex64(besselj(float64(nu), complex128(z)))
-besselj(nu::Real, z::Complex) = besselj(float64(nu), complex128(z))
+besselj(nu::Real, z::ComplexIm) = besselj(float64(nu), complex128(z))
 besselj(nu::Real, x::Integer) = besselj(nu, float(x))
 @vectorize_2arg Number besselj
 
 besselk(nu::Real, z::Complex64) = complex64(besselk(float64(nu), complex128(z)))
-besselk(nu::Real, z::Complex) = besselk(float64(nu), complex128(z))
+besselk(nu::Real, z::ComplexIm) = besselk(float64(nu), complex128(z))
 besselk(nu::Real, x::Integer) = besselk(nu, float64(x))
 function besselk(nu::Real, x::FloatingPoint)
     if x < 0
@@ -623,7 +625,7 @@ end
 @vectorize_2arg Number besselk
 
 bessely(nu::Real, z::Complex64) = complex64(bessely(float64(nu), complex128(z)))
-bessely(nu::Real, z::Complex) = bessely(float64(nu), complex128(z))
+bessely(nu::Real, z::ComplexIm) = bessely(float64(nu), complex128(z))
 bessely(nu::Real, x::Integer) = bessely(nu, float64(x))
 function bessely(nu::Real, x::FloatingPoint)
     if x < 0
@@ -693,7 +695,7 @@ function clgamma_lanczos(z)
     return log(zz) - temp
 end
 
-function lgamma(z::Complex)
+function lgamma(z::ComplexIm)
     if real(z) <= 0.5
         a = clgamma_lanczos(1-z)
         b = log(sinpi(z))
@@ -705,7 +707,7 @@ function lgamma(z::Complex)
     complex(real(z), angle_restrict_symm(imag(z)))
 end
 
-gamma(z::Complex) = exp(lgamma(z))
+gamma(z::ComplexIm) = exp(lgamma(z))
 
 # Derivatives of the digamma function
 function psifn(x::Float64, n::Int, kode::Int, m::Int)
@@ -1173,7 +1175,7 @@ end
 
 eta(x::Integer) = eta(float64(x))
 eta(x::Real)    = oftype(x,eta(float64(x)))
-eta(z::Complex) = oftype(z,eta(complex128(z)))
+eta(z::ComplexIm) = oftype(z,eta(complex128(z)))
 @vectorize_1arg Number eta
 
 function zeta(z::Number)
@@ -1189,7 +1191,7 @@ for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
     @eval begin
         ($fname)(z::Complex128) = complex128(ccall(($(string("Faddeeva_",f)),openspecfun), Complex{Float64}, (Complex{Float64}, Float64), z, zero(Float64)))
         ($fname)(z::Complex64) = complex64(ccall(($(string("Faddeeva_",f)),openspecfun), Complex{Float64}, (Complex{Float64}, Float64), complex128(z), float64(eps(Float32))))
-        ($fname)(z::Complex) = ($fname)(complex128(z))
+        ($fname)(z::ComplexIm) = ($fname)(complex128(z))
     end
 end
 end

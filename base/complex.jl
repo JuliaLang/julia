@@ -1,9 +1,15 @@
+immutable Imaginary{T<:Real} <: Number
+    im::T
+end
+const im = Imaginary(1)
+
 immutable Complex{T<:Real} <: Number
     re::T
     im::T
 end
 Complex(x::Real, y::Real) = Complex(promote(x,y)...)
 Complex(x::Real) = Complex(x, zero(x))
+Complex(i::Imaginary) = Complex(zero(imag(i)), imag(i))
 
 typealias Complex128 Complex{Float64}
 typealias Complex64  Complex{Float32}
@@ -18,14 +24,11 @@ imag(z::Complex) = z.im
 real(x::Real) = x
 imag(x::Real) = zero(x)
 
-convert{T<:Real}(::Type{Complex{T}}, x::Real) =
-    Complex{T}(convert(T,x), convert(T,0))
 convert{T<:Real}(::Type{Complex{T}}, z::Complex{T}) = z
-convert{T<:Real}(::Type{Complex{T}}, z::Complex) =
-    Complex{T}(convert(T,real(z)),convert(T,imag(z)))
-
-convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
-                                           throw(InexactError()))
+convert{T<:Real}(::Type{Complex{T}}, x::Real) = Complex{T}(x,0)
+convert{T<:Real}(::Type{Complex{T}}, z::Complex) = Complex{T}(real(z),imag(z))
+convert{T<:Real}(::Type{T}, z::Complex) =
+    imag(z)==0 ? convert(T,real(z)) : throw(InexactError())
 
 promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{S}) =
     Complex{promote_type(T,S)}
@@ -50,108 +53,147 @@ for fn in _numeric_conversion_func_names
     @eval $fn(z::Complex) = complex($fn(real(z)),$fn(imag(z)))
 end
 
-isreal{T<:Real}(z::Complex{T}) = imag(z) == 0
-isinteger(z::Complex) = isreal(z) && isinteger(real(z))
+sizeof{T<:Real}(::Type{Imaginary{T}}) = sizeof(T)
+sizeof{T<:Real}(::Type{Complex{T}}) = 2*sizeof(T)
 
+real(i::Imaginary) = zero(i.im)
+imag(i::Imaginary) = i.im
+real(z::Complex) = z.re
+imag(z::Complex) = z.im
+real(x::Real) = x
+imag(x::Real) = zero(x)
+reim(x::Number) = (real(x), imag(x))
+
+isreal(x::Number) = imag(x) == 0
+isimag(x::Number) = real(x) == 0
+isinteger(z::Union(Imaginary,Complex)) = isreal(z) && isinteger(real(z))
+
+isfinite(z::Imaginary) = isfinite(imag(z))
 isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
-reim(z) = (real(z), imag(z))
+
+function imaginary_show(io::IO, i::Imaginary, compact::Bool)
+    compact ? showcompact(io,i.im) : show(io,i.im)
+    if !(isa(i.im,Integer) || isa(i.im,FloatingPoint) && isfinite(i.im))
+        print(io, "*")
+    end
+    print(io, "im")
+end
+show(io::IO, z::Imaginary) = imaginary_show(io, z, false)
+showcompact(io::IO, z::Imaginary) = imaginary_show(io, z, true)
 
 function complex_show(io::IO, z::Complex, compact::Bool)
     r, i = reim(z)
-    if isnan(r) || isfinite(i)
-        compact ? showcompact(io,r) : show(io,r)
-        if signbit(i)==1 && !isnan(i)
-            i = -i
-            print(io, compact ? "-" : " - ")
-        else
-            print(io, compact ? "+" : " + ")
-        end
-        compact ? showcompact(io, i) : show(io, i)
-        if !(isa(i,Integer) || isa(i,Rational) ||
-             isa(i,FloatingPoint) && isfinite(i))
-            print(io, "*")
-        end
-        print(io, "im")
+    compact ? showcompact(io,r) : show(io,r)
+    if signbit(i)==1 && !isnan(i)
+        i = -i
+        print(io, compact ? "-" : " - ")
     else
-        print(io, "complex(",r,",",i,")")
+        print(io, compact ? "+" : " + ")
     end
+    compact ? showcompact(io, i) : show(io, i)
+    if !(isa(i,Integer) || isa(i,FloatingPoint) && isfinite(i))
+        print(io, "*")
+    end
+    print(io, "im")
 end
 show(io::IO, z::Complex) = complex_show(io, z, false)
 showcompact(io::IO, z::Complex) = complex_show(io, z, true)
 
-function read{T<:Real}(s::IO, ::Type{Complex{T}})
-    r = read(s,T)
-    i = read(s,T)
-    Complex{T}(r,i)
-end
-function write(s::IO, z::Complex)
-    write(s,real(z))
-    write(s,imag(z))
-end
+read{T<:Real}(s::IO, ::Type{Imaginary{T}}) = Imaginary{T}(read(s,T))
+read{T<:Real}(s::IO, ::Type{Complex{T}}) = Complex{T}(read(s,T),read(s,T))
 
+write(s::IO, i::Imaginary) = write(s,i.im)
+write(s::IO, z::Complex) = write(s,real(z),imag(z))
 
-## singleton type for imaginary unit constant ##
+convert{T<:Real}(::Type{Imaginary{T}}, i::Imaginary) = Imaginary{T}(imag(i))
 
-type ImaginaryUnit <: Number end
-const im = ImaginaryUnit()
+convert{T<:Real}(::Type{Complex{T}}, x::Real)      = Complex{T}(real(x), zero(T))
+convert{T<:Real}(::Type{Complex{T}}, i::Imaginary) = Complex{T}(zero(T), imag(i))
+convert{T<:Real}(::Type{Complex{T}}, z::Complex)   = Complex{T}(real(z), imag(z))
 
-convert{T<:Real}(::Type{Complex{T}}, ::ImaginaryUnit) = Complex{T}(zero(T),one(T))
-convert(::Type{Complex}, ::ImaginaryUnit) = Complex(real(im),imag(im))
+convert{T<:Real}(::Type{T}, z::Union(Imaginary,Complex)) =
+    isreal(z) ? convert(T,real(z)) : throw(InexactError())
 
-real(::ImaginaryUnit) = int(0)
-imag(::ImaginaryUnit) = int(1)
+promote_rule{T<:Real,S<:Real}(::Type{Imaginary{T}}, ::Type{S}) =
+    Complex{promote_type(T,S)}
+promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Imaginary{S}}) =
+    Complex{promote_type(T,S)}
+promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{S}) =
+    Complex{promote_type(T,S)}
+promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) =
+    Complex{promote_type(T,S)}
 
-promote_rule{T<:Complex}(::Type{ImaginaryUnit}, ::Type{T}) = T
-promote_rule{T<:Real}(::Type{ImaginaryUnit}, ::Type{T}) = Complex{T}
+convert(::Type{Complex}, z::Complex)   = z
+convert(::Type{Complex}, x::Real)      = Complex(x)
+convert(::Type{Complex}, i::Imaginary) = Complex(zero(i),i)
 
-show(io::IO, ::ImaginaryUnit) = print(io, "im")
+==(z::Complex,   w::Complex  ) = (real(z) == real(w)) & (imag(z) == imag(w))
+==(z::Complex,   x::Real     ) = isreal(z) && real(z) == real(x)
+==(z::Complex,   i::Imaginary) = isimag(z) && imag(z) == imag(i)
+==(x::Real,      z::Complex  ) = isreal(z) && real(z) == real(x)
+==(i::Imaginary, z::Complex  ) = isimag(z) && imag(z) == imag(i)
 
-
-## generic functions of complex numbers ##
-
-convert(::Type{Complex}, z::Complex) = z
-convert(::Type{Complex}, x::Real) = complex(x)
-
-==(z::Complex, w::Complex) = (real(z) == real(w)) & (imag(z) == imag(w))
-==(z::Complex, x::Real) = isreal(z) && real(z) == x
-==(x::Real, z::Complex) = isreal(z) && real(z) == x
-
+isequal(i::Imaginary, j::Imaginary) = isequal(imag(i),imag(j))
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
 
+hash(i::Imaginary) = hash(imag(i))
 hash(z::Complex) = bitmix(hash(real(z)),hash(imag(z)))
 
-conj(z::Complex) = complex(real(z),-imag(z))
+conj{T<:Real}(i::Imaginary{T}) = Imaginary{T}(-imag(i))
+conj{T<:Real}(z::Complex{T}) = Complex{T}(real(z),-imag(z))
+
+abs(i::Imaginary)  = abs(imag(i))
 abs(z::Complex)  = hypot(real(z), imag(z))
+
+abs2(i::Imaginary) = abs2(imag(i))
 abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
+
+inv(i::Imaginary) = Imaginary(-inv(imag(i)))
 inv(z::Complex)  = conj(z)/abs2(z)
-inv{T<:Integer}(z::Complex{T}) = inv(float(z))
+
+sign{T<:Real}(i::Imaginary{T}) = Imaginary{T}(sign(imag(i)))
 sign(z::Complex) = z/abs(z)
 
-(-)(::ImaginaryUnit) = complex(0, -1)
--(z::Complex) = complex(-real(z), -imag(z))
-+(z::Complex, w::Complex) = complex(real(z) + real(w), imag(z) + imag(w))
--(z::Complex, w::Complex) = complex(real(z) - real(w), imag(z) - imag(w))
-*(z::Complex, w::Complex) = complex(real(z) * real(w) - imag(z) * imag(w),
+-(i::Imaginary) = Imaginary(-imag(i))
+-(z::Complex) = Complex(-real(z), -imag(z))
+
++(i::Imaginary, j::Imaginary) = Imaginary(imag(i) + imag(j))
+-(i::Imaginary, j::Imaginary) = Imaginary(imag(i) - imag(j))
+*(i::Imaginary, j::Imaginary) = -(imag(i) * imag(j))
+
++(z::Complex, w::Complex) = Complex(real(z) + real(w), imag(z) + imag(w))
+-(z::Complex, w::Complex) = Complex(real(z) - real(w), imag(z) - imag(w))
+*(z::Complex, w::Complex) = Complex(real(z) * real(w) - imag(z) * imag(w),
                                     real(z) * imag(w) + imag(z) * real(w))
 
-# adding or multiplying real & complex is common
-*(x::Real, z::Complex) = complex(x * real(z), x * imag(z))
-*(z::Complex, x::Real) = complex(x * real(z), x * imag(z))
-+(x::Real, z::Complex) = complex(x + real(z), imag(z))
-+(z::Complex, x::Real) = complex(x + real(z), imag(z))
--(x::Real, z::Complex) = complex(x - real(z), -imag(z))
--(z::Complex, x::Real) = complex(real(z) - x, imag(z))
++(x::Real, i::Imaginary) = Complex(x, imag(i))
++(i::Imaginary, x::Real) = Complex(x, imag(i))
+-(x::Real, i::Imaginary) = Complex(x, -imag(i))
+-(i::Imaginary, x::Real) = Complex(-x, imag(i))
+*(x::Real, i::Imaginary) = Imaginary(x * imag(i))
+*(i::Imaginary, x::Real) = Imaginary(x * imag(i))
 
-# multiplying by im is common
-*(z::ImaginaryUnit, w::ImaginaryUnit) = complex(-imag(z), real(z))
-*(z::ImaginaryUnit, x::Real)    = complex(zero(x), x)
-*(x::Real, z::ImaginaryUnit)    = complex(zero(x), x)
-*(z::ImaginaryUnit, w::Complex) = complex(-imag(w), real(w))
-*(w::Complex, z::ImaginaryUnit) = complex(-imag(w), real(w))
++(z::Complex, x::Real) = Complex(x + real(z), imag(z))
++(x::Real, z::Complex) = Complex(x + real(z), imag(z))
+-(z::Complex, x::Real) = Complex(real(z) - x, imag(z))
+-(x::Real, z::Complex) = Complex(x - real(z), -imag(z))
+*(z::Complex, x::Real) = Complex(x * real(z), x * imag(z))
+*(x::Real, z::Complex) = Complex(x * real(z), x * imag(z))
 
-/(z::Number, w::Complex) = z*inv(w)
-/(a::Real  , w::Complex) = a*inv(w)
-/(z::Complex, x::Real) = complex(real(z)/x, imag(z)/x)
++(z::Complex, i::Imaginary) = Complex(real(z), imag(i) + imag(z))
++(i::Imaginary, z::Complex) = Complex(real(z), imag(i) + imag(z))
+-(z::Complex, i::Imaginary) = Complex(real(z), imag(z) - imag(i))
+-(i::Imaginary, z::Complex) = Complex(-real(z), imag(i) - imag(z))
+*(z::Complex, i::Imaginary) = imag(i) * Complex(-imag(z), real(z))
+*(i::Imaginary, z::Complex) = imag(i) * Complex(-imag(z), real(z))
+
+/(i::Imaginary, x::Real) = Imaginary(imag(i)/x)
+/(x::Real, i::Imaginary) = Imaginary(-x/imag(i))
+/(i::Imaginary, j::Imaginary) = imag(i)/imag(j)
+
+/(z::Complex, x::Real) = Complex(real(z)/x, imag(z)/x)
+/(z::Complex, i::Imaginary) = Complex(imag(z)/imag(i), -real(z)/imag(i))
+/(x::Union(Real,Imaginary), z::Complex) = x*inv(z)
 
 function /(a::Complex, b::Complex)
     are = real(a); aim = imag(a); bre = real(b); bim = imag(b)
@@ -353,7 +395,7 @@ log(z::Complex) = log(float(z))
 log10(z::Complex) = log(z)/oftype(real(z),2.302585092994046)
 log2(z::Complex) = log(z)/oftype(real(z),0.6931471805599453)
 
-function exp(z::Complex)
+function exp(z::Union(Imaginary,Complex))
     zr, zi = reim(z)
     if isfinite(zr) && !isfinite(zi) return complex(oftype(zr, NaN), oftype(zi, NaN)) end
     if zr==Inf && zi==0 return complex(zr, zi) end
@@ -482,6 +524,9 @@ end
 ^{T<:FloatingPoint}(z::Complex{T}, n::Integer) =
     n>=0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
 ^{T<:Integer}(z::Complex{T}, n::Integer) = power_by_squaring(z,n) # DomainError for n<0
+
+^(x::Imaginary, y::Number) = complex(x)^y
+^(x::Number, y::Imaginary) = x^complex(y)
 
 function sin(z::Complex)
     zr, zi = reim(z)

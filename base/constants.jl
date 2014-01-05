@@ -18,9 +18,6 @@ for op in {:+, :-, :*, :/, :^}
     @eval $op(x::MathConst, y::MathConst) = $op(float64(x),float64(y))
 end
 
-*(x::MathConst, i::ImaginaryUnit) = float64(x)*i
-*(i::ImaginaryUnit, x::MathConst) = i*float64(x)
-
 macro math_const(sym, val, def)
     esym = esc(sym)
     qsym = esc(Expr(:quote, sym))
@@ -68,7 +65,7 @@ const golden = φ
 #    ^(::MathConst{:e}, x::Number) = exp(x)
 #    .^(::MathConst{:e}, x) = exp(x)
 # but need to loop over types to prevent ambiguity with generic rules for ^(::Number, x) etc.
-for T in (MathConst, Rational, Integer, Number)
+for T in (MathConst, Imaginary, Rational, Integer, Number)
     ^(::MathConst{:e}, x::T) = exp(x)
 end
 for T in (Ranges, BitArray, SparseMatrixCSC, StridedArray, AbstractArray)

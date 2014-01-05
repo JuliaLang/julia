@@ -51,7 +51,7 @@ export
     GeneralizedSVD,
     Hermitian,
     Hessenberg,
-    ImaginaryUnit,
+    Imaginary,
     InsertionSort,
     IntSet,
     IO,
