@@ -814,6 +814,10 @@ DLLEXPORT void jl_array_sizehint(jl_array_t *a, size_t sz);
 DLLEXPORT void *jl_value_ptr(jl_value_t *a);
 DLLEXPORT void jl_cell_1d_push(jl_array_t *a, jl_value_t *item);
 
+// eq hash tables
+DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
+DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt);
+
 // system information
 DLLEXPORT int jl_errno(void);
 DLLEXPORT int32_t jl_stat(const char* path, char* statbuf);

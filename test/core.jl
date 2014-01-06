@@ -1227,3 +1227,13 @@ let
     x = 65
     @test [x, x|=0x20] == [65, 97]
 end
+
+# issue #5312
+let
+    local x = 0
+    global incr5312, foo5312
+    incr5312() = (x+=1; nothing)
+    foo5312() = (incr5312(),)
+    @test foo5312() === (nothing,)
+    @test x == 1
+end

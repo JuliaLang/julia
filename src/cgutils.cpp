@@ -224,22 +224,20 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
         if (purebits) {
             // Can't be bool due to 
             // http://llvm.org/bugs/show_bug.cgi?id=12618
-            if (isvector && type != T_int1) {
+            if (isvector && type != T_int1 && type != T_void) {
                 Type *ret = NULL;
-                if (type == T_void)
-                    return T_void;
                 if (type->isSingleValueType() && !type->isVectorTy())
                     ret = VectorType::get(type,ntypes);
                 else
                     ret = ArrayType::get(type,ntypes);
                 return ret;
-            } 
+            }
             else {
                 Type *types[ntypes];
                 size_t j = 0;
                 for (size_t i = 0; i < ntypes; ++i) {
                     Type *ty = julia_struct_to_llvm(jl_tupleref(jt,i));
-                    if (ty == T_void)
+                    if (ty == T_void || ty->isEmptyTy())
                         continue;
                     types[j++] = ty;
                 }
@@ -302,9 +300,11 @@ static Type *julia_struct_to_llvm(jl_value_t *jt)
             size_t i;
             for(i = 0; i < ntypes; i++) {
                 jl_value_t *ty = jl_tupleref(jst->types, i);
-                Type *lty = ty==(jl_value_t*)jl_bool_type ? T_int8 : julia_type_to_llvm(ty);
+                Type *lty;
                 if (jst->fields[i].isptr)
                     lty = jl_pvalue_llvmt;
+                else
+                    lty = ty==(jl_value_t*)jl_bool_type ? T_int8 : julia_type_to_llvm(ty);
                 latypes.push_back(lty);
             }
             structdecl->setBody(latypes);
@@ -328,6 +328,7 @@ static jl_value_t *llvm_type_to_julia(Type *t, bool throw_error)
     if (t == T_float32) return (jl_value_t*)jl_float32_type;
     if (t == T_float64) return (jl_value_t*)jl_float64_type;
     if (t == T_void) return (jl_value_t*)jl_bottom_type;
+    if (t->isEmptyTy()) return (jl_value_t*)jl_nothing->type;
     if (t == jl_pvalue_llvmt)
         return (jl_value_t*)jl_any_type;
     if (t->isPointerTy()) {
@@ -347,21 +348,24 @@ static jl_value_t *llvm_type_to_julia(Type *t, bool throw_error)
 // --- scheme for tagging llvm values with julia types using metadata ---
 
 static std::map<int, jl_value_t*> typeIdToType;
-static std::map<jl_value_t*, int> typeToTypeId;
+static jl_array_t *typeToTypeId;
 static int cur_type_id = 1;
 
 static int jl_type_to_typeid(jl_value_t *t)
 {
-    std::map<jl_value_t*, int>::iterator it = typeToTypeId.find(t);
-    if (it == typeToTypeId.end()) {
+    jl_value_t *id = jl_eqtable_get(typeToTypeId, t, NULL);
+    if (id == NULL) {
         int mine = cur_type_id++;
         if (mine > 65025)
             jl_error("internal compiler error: too many bits types");
-        typeToTypeId[t] = mine;
+        JL_GC_PUSH1(&id);
+        id = jl_box_long(mine);
+        jl_eqtable_put(typeToTypeId, t, id);
         typeIdToType[mine] = t;
+        JL_GC_POP();
         return mine;
     }
-    return (*it).second;
+    return jl_unbox_long(id);
 }
 
 static jl_value_t *jl_typeid_to_type(int i)
@@ -797,7 +801,7 @@ static Value *emit_tupleset(Value *tuple, Value *i, Value *x, jl_value_t *jt, jl
             for (size_t i=0,j = 0; i<n; ++i) {
                 Type *ty = julia_struct_to_llvm(jl_tupleref(jt,i));
                 if (ci == i) {
-                    if (ty == T_void)
+                    if (ty == T_void || ty->isEmptyTy())
                         return tuple;
                     else 
                         ret = builder.CreateInsertValue(tuple,x,ArrayRef<unsigned>(j));
@@ -847,7 +851,7 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
             for (size_t i = 0,j = 0; i<n; ++i) {
                 Type *ty = julia_struct_to_llvm(jl_tupleref(jt,i));
                 if (ci == i) {
-                    if (ty == T_void)
+                    if (ty == T_void || ty->isEmptyTy())
                         return mark_julia_type(UndefValue::get(NoopType),jl_tupleref(jt,i));
                     else 
                         return mark_julia_type(builder.CreateExtractValue(tuple,ArrayRef<unsigned>(j)),jl_tupleref(jt,i));
@@ -1212,7 +1216,7 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
     if (t == T_int1) return julia_bool(v);
     if (jt == NULL || jl_is_uniontype(jt) || jl_is_abstracttype(jt))
         jt = julia_type_of(v);
-    if (t == T_void) {
+    if (t == T_void || t->isEmptyTy()) {
         jl_value_t *s = static_void_instance(jt);
         if (jl_is_tuple(jt) && jl_tuple_len(jt) > 0)
             jl_add_linfo_root(ctx->linfo, s);
