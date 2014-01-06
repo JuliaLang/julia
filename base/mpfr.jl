@@ -69,12 +69,10 @@ function BigFloat(x::String, base::Int)
     return z
 end
 BigFloat(x::String) = BigFloat(x, 10)
-
 BigFloat(x::Integer) = BigFloat(BigInt(x))
 
 BigFloat(x::Union(Bool,Int8,Int16,Int32)) = BigFloat(convert(Clong,x))
 BigFloat(x::Union(Uint8,Uint16,Uint32)) = BigFloat(convert(Culong,x))
-
 BigFloat(x::Union(Float16,Float32)) = BigFloat(float64(x))
 BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 
