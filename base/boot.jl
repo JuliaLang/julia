@@ -46,8 +46,10 @@
 #end
 
 #abstract AbstractArray{T,N}
+#abstract StoredArray{T,N} <: AbstractArray{T,N}
+#abstract DenseArray{T,N} <: StoredArray{T,N}
 
-#type Array{T,N} <: AbstractArray{T,N}
+#type Array{T,N} <: DenseArray{T,N}
 #end
 
 #type Module
@@ -116,7 +118,7 @@ export
     # key types
     Any, DataType, Vararg, ANY, NTuple, None, Top,
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, UnionType, Void,
-    AbstractArray,
+    AbstractArray, StoredArray, DenseArray,
     # special objects
     Box, Function, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
     Module, Nothing, Symbol, Task, Array,
