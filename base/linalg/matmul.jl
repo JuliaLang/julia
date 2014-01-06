@@ -156,6 +156,8 @@ function symmetrize!(A::StridedMatrix, uplo::Char='U')
     A
 end
 
+symmetrize!(A::Number, uplo) = A
+
 function symmetrize_conj!(A::StridedMatrix, uplo::Char='U')
     n = chksquare(A)
     @chkuplo
@@ -170,6 +172,8 @@ function symmetrize_conj!(A::StridedMatrix, uplo::Char='U')
     end
     A
 end
+
+symmetrize_conj!(A::Number, uplo) = A
 
 function gemv{T<:BlasFloat}(y::StridedVector{T}, tA::Char, A::StridedMatrix{T}, x::StridedVector{T})
     stride(A, 1)==1 || return generic_matvecmul(y, tA, A, x)
