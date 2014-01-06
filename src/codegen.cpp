@@ -1456,7 +1456,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 Type *ety = NULL;
                 if (tpl != NULL)
                     ety = jl_llvmtuple_eltype(tpl->getType(),tt,i);
-                if (tpl == NULL || ety == T_void) {
+                if (tpl == NULL || ety == T_void || ety->isEmptyTy()) {
                     emit_expr(args[i+1],ctx); //for side effects (if any)
                     continue;
                 }
@@ -1467,6 +1467,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
             JL_GC_POP();
             JL_GC_POP();
+            if (ty->isEmptyTy())
+                return mark_julia_type(tpl, tt);
             return tpl;
         }
 
@@ -1802,7 +1804,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         for(size_t i=0; i < nargs; i++) {
             Type *at = cft->getParamType(idx);
             Type *et = julia_type_to_llvm(jl_tupleref(f->linfo->specTypes,i));
-            if (et == T_void) {
+            if (et == T_void || et->isEmptyTy()) {
                 // Still emit the expression in case it has side effects
                 emit_expr(args[i+1], ctx);
                 continue;
@@ -2313,7 +2315,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                     for(size_t i=0; i < na; i++) {
                         jl_value_t *jtype = jl_tupleref(sty->types,i);
                         Type *fty = julia_type_to_llvm(jtype);
-                        if (fty == T_void)
+                        if (fty == T_void || fty->isEmptyTy())
                             continue;
                         Value *fval = emit_unbox(fty, emit_unboxed(args[i+1],ctx), jtype);
                         if (fty == T_int1)
@@ -2508,7 +2510,7 @@ static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
     assert(store_unboxed_p(s,ctx));
     Type *vtype = julia_struct_to_llvm(jt);
     assert(vtype != jl_pvalue_llvmt);
-    if (vtype != T_void) {
+    if (vtype != T_void && !vtype->isEmptyTy()) {
         lv = builder.CreateAlloca(vtype, 0, s->name);
         if (vtype != jl_pvalue_llvmt)
             mark_julia_type(lv, jt);
@@ -2688,14 +2690,14 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
             ((jl_datatype_t*)ty)->size > 0)) {
             Type *lty = julia_struct_to_llvm(ty);
             assert(lty != NULL);
-            if (lty == T_void)
+            if (lty == T_void || lty->isEmptyTy())
                 continue;
             theNewArg = emit_unbox(lty, theArg, ty);
         } 
         else if (jl_is_tuple(ty)) {
             Type *lty = julia_struct_to_llvm(ty);
             if (lty != jl_pvalue_llvmt) {
-                if (lty == T_void)
+                if (lty == T_void || lty->isEmptyTy())
                     continue;
                 theNewArg = emit_unbox(lty, theArg, ty);
             }
@@ -2870,11 +2872,11 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
             Type *ty = julia_type_to_llvm(jl_tupleref(lam->specTypes,i));
-            if (ty != T_void) {
-                fsig.push_back(ty);
+            if (ty == T_void || ty->isEmptyTy()) {
+                ctx.vars[jl_decl_var(jl_cellref(largs,i))].isGhost = true;
             }
             else {
-                ctx.vars[jl_decl_var(jl_cellref(largs,i))].isGhost = true;
+                fsig.push_back(ty);
             }
         }
         Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
@@ -3372,7 +3374,7 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
             Type *ty = julia_type_to_llvm(jl_tupleref(lam->specTypes,i));
-            if (ty != T_void)
+            if (ty != T_void && !ty->isEmptyTy())
                 fsig.push_back(ty);
         }
         Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
@@ -3902,6 +3904,9 @@ extern "C" void jl_init_codegen(void)
                          jl_Module);
     jl_ExecutionEngine->addGlobalMapping(restore_arg_area_loc_func,
                                          (void*)&restore_arg_area_loc);
+
+    typeToTypeId = jl_alloc_cell_1d(16);
+    jl_gc_preserve((jl_value_t*)typeToTypeId);
 }
 
 /*
