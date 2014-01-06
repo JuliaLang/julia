@@ -76,6 +76,8 @@ eltype{T<:String}(::Type{T}) = Char
 (*)(s::String...) = string(s...)
 (^)(s::String, r::Integer) = repeat(s,r)
 
+ndims(s::String) = 1
+
 length(s::DirectIndexString) = endof(s)
 function length(s::String)
     i = start(s)
