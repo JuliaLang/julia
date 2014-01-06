@@ -91,7 +91,11 @@ end
 
 convert(::Type{BigInt}, x::Integer) = BigInt(x)
 
-convert(::Type{Int64}, n::BigInt) = int64(convert(Clong, n))
+function convert(::Type{Int64}, x::BigInt)
+    lo = int64(convert(Culong, x & typemax(Uint32)))
+    hi = int64(convert(Clong, x >> 32))
+    hi << 32 | lo
+end
 convert(::Type{Int32}, n::BigInt) = int32(convert(Clong, n))
 convert(::Type{Int16}, n::BigInt) = int16(convert(Clong, n))
 convert(::Type{Int8}, n::BigInt) = int8(convert(Clong, n))
@@ -105,7 +109,11 @@ function convert(::Type{Clong}, n::BigInt)
     end
 end
 
-convert(::Type{Uint64}, x::BigInt) = uint64(convert(Culong, x))
+function convert(::Type{Uint64}, x::BigInt)
+    lo = uint64(convert(Culong, x & typemax(Uint32)))
+    hi = uint64(convert(Culong, x >> 32))
+    hi << 32 | lo
+end
 convert(::Type{Uint32}, x::BigInt) = uint32(convert(Culong, x))
 convert(::Type{Uint16}, x::BigInt) = uint16(convert(Culong, x))
 convert(::Type{Uint8}, x::BigInt) = uint8(convert(Culong, x))
