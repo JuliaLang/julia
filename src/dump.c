@@ -626,7 +626,8 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos)
     dt->fptr = jl_deserialize_fptr(s);
     if (dt->name == jl_array_type->name || dt->name == jl_pointer_type->name ||
         dt->name == jl_type_type->name || dt->name == jl_vararg_type->name ||
-        dt->name == jl_abstractarray_type->name) {
+        dt->name == jl_abstractarray_type->name || dt->name == jl_storedarray_type->name ||
+        dt->name == jl_densearray_type->name) {
         // builtin types are not serialized, so their caches aren't
         // explicitly saved. so we reconstruct the caches of builtin
         // parametric types here.
@@ -1208,8 +1209,7 @@ void jl_init_serializer(void)
                      jl_box_int32(51), jl_box_int32(52), jl_box_int32(53),
                      jl_box_int32(54), jl_box_int32(55), jl_box_int32(56),
                      jl_box_int32(57), jl_box_int32(58), jl_box_int32(59),
-                     jl_box_int32(60), jl_box_int32(61), jl_box_int32(62),
-                     jl_box_int32(63), jl_box_int32(64),
+                     jl_box_int32(60), jl_box_int32(61),
 #endif
                      jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
                      jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
@@ -1232,30 +1232,28 @@ void jl_init_serializer(void)
                      jl_box_int64(51), jl_box_int64(52), jl_box_int64(53),
                      jl_box_int64(54), jl_box_int64(55), jl_box_int64(56),
                      jl_box_int64(57), jl_box_int64(58), jl_box_int64(59),
-                     jl_box_int64(60), jl_box_int64(61), jl_box_int64(62),
-                     jl_box_int64(63), jl_box_int64(64),
+                     jl_box_int64(60), jl_box_int64(61),
 #endif
                      jl_labelnode_type, jl_linenumbernode_type,
                      jl_gotonode_type, jl_quotenode_type, jl_topnode_type,
                      jl_type_type, jl_bottom_type, jl_pointer_type,
                      jl_vararg_type, jl_ntuple_type, jl_abstractarray_type,
-                     jl_box_type, jl_typector_type, jl_undef_type, jl_top_type,
-                     jl_typename_type, jl_task_type, jl_uniontype_type,
-                     jl_typetype_type, jl_typetype_tvar, jl_ANY_flag,
-                     jl_array_any_type, jl_intrinsic_type, jl_method_type,
+                     jl_storedarray_type, jl_densearray_type, jl_box_type,
+                     jl_typector_type, jl_undef_type, jl_top_type, jl_typename_type,
+                     jl_task_type, jl_uniontype_type, jl_typetype_type, jl_typetype_tvar,
+                     jl_ANY_flag, jl_array_any_type, jl_intrinsic_type, jl_method_type,
                      jl_methtable_type, jl_voidpointer_type, jl_newvarnode_type,
                      jl_array_symbol_type, jl_tupleref(jl_tuple_type,0),
 
-                     jl_symbol_type->name, jl_pointer_type->name,
-                     jl_datatype_type->name, jl_uniontype_type->name,
-                     jl_array_type->name, jl_expr_type->name,
+                     jl_symbol_type->name, jl_pointer_type->name, jl_datatype_type->name,
+                     jl_uniontype_type->name, jl_array_type->name, jl_expr_type->name,
                      jl_typename_type->name, jl_type_type->name, jl_methtable_type->name,
-                     jl_method_type->name, jl_tvar_type->name,
-                     jl_vararg_type->name, jl_ntuple_type->name, jl_abstractarray_type->name,
-                     jl_lambda_info_type->name, jl_module_type->name,
-                     jl_box_type->name, jl_function_type->name,
-                     jl_typector_type->name, jl_intrinsic_type->name, jl_undef_type->name,
-                     jl_task_type->name,
+                     jl_method_type->name, jl_tvar_type->name, jl_vararg_type->name,
+                     jl_ntuple_type->name, jl_abstractarray_type->name,
+                     jl_storedarray_type->name, jl_densearray_type->name,
+                     jl_lambda_info_type->name, jl_module_type->name, jl_box_type->name,
+                     jl_function_type->name, jl_typector_type->name,
+                     jl_intrinsic_type->name, jl_undef_type->name, jl_task_type->name,
                      jl_labelnode_type->name, jl_linenumbernode_type->name,
                      jl_gotonode_type->name, jl_quotenode_type->name,
                      jl_topnode_type->name,

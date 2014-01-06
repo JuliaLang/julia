@@ -32,6 +32,8 @@ jl_value_t *jl_bottom_type;
 jl_value_t *jl_top_type;
 jl_datatype_t *jl_vararg_type;
 jl_datatype_t *jl_abstractarray_type;
+jl_datatype_t *jl_storedarray_type;
+jl_datatype_t *jl_densearray_type;
 
 jl_datatype_t *jl_bool_type;
 jl_datatype_t *jl_char_type;
@@ -2668,14 +2670,27 @@ void jl_init_types(void)
     jl_methtable_type->fptr = jl_f_no_function;
 
     tv = jl_tuple2(tvar("T"), tvar("N"));
-    jl_abstractarray_type = jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractArray"),
-                                                jl_any_type, tv);
+    jl_abstractarray_type =
+        jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractArray"),
+                            jl_any_type, tv);
+
+    tv = jl_tuple2(tvar("T"), tvar("N"));
+    jl_storedarray_type =
+        jl_new_abstracttype((jl_value_t*)jl_symbol("StoredArray"),
+                            (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_abstractarray_type, tv),
+                            tv);
+
+    tv = jl_tuple2(tvar("T"), tvar("N"));
+    jl_densearray_type =
+        jl_new_abstracttype((jl_value_t*)jl_symbol("DenseArray"),
+                            (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_storedarray_type, tv),
+                            tv);
 
     tv = jl_tuple2(tvar("T"), tvar("N"));
     jl_array_type = 
         jl_new_datatype(jl_symbol("Array"),
                         (jl_datatype_t*)
-                        jl_apply_type((jl_value_t*)jl_abstractarray_type, tv),
+                        jl_apply_type((jl_value_t*)jl_densearray_type, tv),
                         tv,
                         jl_null, jl_null, 0, 1);
     jl_array_typename = jl_array_type->name;
