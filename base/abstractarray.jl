@@ -1155,6 +1155,64 @@ for (f, op) = ((:cummin, :min), (:cummax, :max))
     @eval ($f)(A::AbstractArray) = ($f)(A, 1)
 end
 
+# Uses K-B-N summation
+function cumsum_kbn{T<:FloatingPoint}(v::AbstractVector{T})
+    n = length(v)
+    r = similar(v, n)
+    if n == 0; return r; end
+
+    s = r[1] = v[1]
+    c = zero(T)
+    for i=2:n
+        vi = v[i]
+        t = s + vi
+        if abs(s) >= abs(vi)
+            c += ((s-t) + vi)
+        else
+            c += ((vi-t) + s)
+        end
+        s = t
+        r[i] = s+c
+    end
+    return r
+end
+
+# Uses K-B-N summation
+function cumsum_kbn{T<:FloatingPoint}(A::AbstractArray{T}, axis::Integer)
+    dimsA = size(A)
+    ndimsA = ndims(A)
+    axis_size = dimsA[axis]
+    axis_stride = 1
+    for i = 1:(axis-1)
+        axis_stride *= size(A,i)
+    end
+
+    if axis_size <= 1
+        return A
+    end
+
+    B = similar(A)
+    C = similar(A)
+
+    for i = 1:length(A)
+        if div(i-1, axis_stride) % axis_size == 0
+            B[i] = A[i]
+            C[i] = zero(T)
+        else
+            s = B[i-axis_stride]
+            Ai = A[i]
+            B[i] = t = s + Ai
+            if abs(s) >= abs(Ai)
+                C[i] = C[i-axis_stride] + ((s-t) + Ai)
+            else
+                C[i] = C[i-axis_stride] + ((Ai-t) + s)
+            end
+        end
+    end
+
+    return B + C
+end
+
 ## ipermutedims in terms of permutedims ##
 
 function ipermutedims(A::AbstractArray,perm)
@@ -1399,268 +1457,28 @@ function cartesianmap(body, t::(Int,Int,Int))
     end
 end
 
-# Basic AbstractArray functions
-
-function nnz{T}(a::AbstractArray{T})
-    n = 0
-    for i = 1:length(a)
-        @inbounds n += (a[i] != zero(T))
+##
+# generic map on any iterator
+function map(f::Callable, iters...)
+    result = {}
+    len = length(iters)
+    states = [start(iters[idx]) for idx in 1:len]
+    nxtvals = cell(len)
+    cont = true
+    for idx in 1:len
+        done(iters[idx], states[idx]) && (cont = false; break)
     end
-    return n
-end
-
-sum(A::AbstractArray{Bool}) = nnz(A)
-prod(A::AbstractArray{Bool}) =
-    error("use all() instead of prod() for boolean arrays")
-
-# a fast implementation of sum in sequential order (from left to right)
-function sum_seq{T}(a::AbstractArray{T}, ifirst::Int, ilast::Int)
-
-    @inbounds if ifirst + 3 >= ilast  # a has at most four elements
-        if ifirst > ilast
-            return zero(T)
-        else
-            i = ifirst
-            s = a[i]        
-            while i < ilast
-                s += a[i+=1]
-            end
-            return s
+    while cont
+        for idx in 1:len
+            nxtvals[idx],states[idx] = next(iters[idx], states[idx])
         end
-
-    else # a has more than four elements
-
-        # more effective utilization of the instruction
-        # pipeline through manually unrolling the sum
-        # into four-way accumulation. Benchmark shows
-        # that this results in about 2x speed-up.                
-
-        s1 = a[ifirst]
-        s2 = a[ifirst + 1]
-        s3 = a[ifirst + 2]
-        s4 = a[ifirst + 3]
-
-        i = ifirst + 4
-        il = ilast - 3
-        while i <= il
-            s1 += a[i]
-            s2 += a[i+1]
-            s3 += a[i+2]
-            s4 += a[i+3]
-            i += 4
-        end
-
-        while i <= ilast
-            s1 += a[i]
-            i += 1
-        end
-
-        return s1 + s2 + s3 + s4
-    end
-end
-
-
-# Pairwise (cascade) summation of A[i1:i1+n-1], which has O(log n) error growth
-# [vs O(n) for a simple loop] with negligible performance cost if
-# the base case is large enough.  See, e.g.:
-#        http://en.wikipedia.org/wiki/Pairwise_summation
-#        Higham, Nicholas J. (1993), "The accuracy of floating point
-#        summation", SIAM Journal on Scientific Computing 14 (4): 783–799.
-# In fact, the root-mean-square error growth, assuming random roundoff
-# errors, is only O(sqrt(log n)), which is nearly indistinguishable from O(1)
-# in practice.  See:
-#        Manfred Tasche and Hansmartin Zeuner, Handbook of
-#        Analytic-Computational Methods in Applied Mathematics (2000).
-#
-
-# Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
-const PAIRWISE_SUM_BLOCKSIZE = 1024
-
-function sum_pairwise(a::AbstractArray, ifirst::Int, ilast::Int)
-    # bsiz: maximum block size
-
-    if ifirst + PAIRWISE_SUM_BLOCKSIZE >= ilast
-        sum_seq(a, ifirst, ilast)
-    else
-        imid = (ifirst + ilast) >>> 1
-        sum_pairwise(a, ifirst, imid) + sum_pairwise(a, imid+1, ilast)
-    end
-end
-
-sum(a::AbstractArray) = sum_pairwise(a, 1, length(a))
-sum{T<:Integer}(a::AbstractArray{T}) = sum_seq(a, 1, length(a))
-
-
-# Kahan (compensated) summation: O(1) error growth, at the expense
-# of a considerable increase in computational expense.
-function sum_kbn{T<:FloatingPoint}(A::AbstractArray{T})
-    n = length(A)
-    if (n == 0)
-        return zero(T)
-    end
-    s = A[1]
-    c = zero(T)
-    for i in 2:n
-        Ai = A[i]
-        t = s + Ai
-        if abs(s) >= abs(Ai)
-            c += ((s-t) + Ai)
-        else
-            c += ((Ai-t) + s)
-        end
-        s = t
-    end
-
-    s + c
-end
-
-# Uses K-B-N summation
-function cumsum_kbn{T<:FloatingPoint}(v::AbstractVector{T})
-    n = length(v)
-    r = similar(v, n)
-    if n == 0; return r; end
-
-    s = r[1] = v[1]
-    c = zero(T)
-    for i=2:n
-        vi = v[i]
-        t = s + vi
-        if abs(s) >= abs(vi)
-            c += ((s-t) + vi)
-        else
-            c += ((vi-t) + s)
-        end
-        s = t
-        r[i] = s+c
-    end
-    return r
-end
-
-# Uses K-B-N summation
-function cumsum_kbn{T<:FloatingPoint}(A::AbstractArray{T}, axis::Integer)
-    dimsA = size(A)
-    ndimsA = ndims(A)
-    axis_size = dimsA[axis]
-    axis_stride = 1
-    for i = 1:(axis-1)
-        axis_stride *= size(A,i)
-    end
-
-    if axis_size <= 1
-        return A
-    end
-
-    B = similar(A)
-    C = similar(A)
-
-    for i = 1:length(A)
-        if div(i-1, axis_stride) % axis_size == 0
-            B[i] = A[i]
-            C[i] = zero(T)
-        else
-            s = B[i-axis_stride]
-            Ai = A[i]
-            B[i] = t = s + Ai
-            if abs(s) >= abs(Ai)
-                C[i] = C[i-axis_stride] + ((s-t) + Ai)
-            else
-                C[i] = C[i-axis_stride] + ((Ai-t) + s)
-            end
+        push!(result, f(nxtvals...))
+        for idx in 1:len
+            done(iters[idx], states[idx]) && (cont = false; break)
         end
     end
-
-    return B + C
+    result
 end
-
-
-function prod_rgn{T}(A::AbstractArray{T}, first::Int, last::Int)
-    if first > last
-        return one(T)
-    end
-    i = first
-    v = A[i]
-    while i < last
-        @inbounds v *= A[i+=1]
-    end
-    return v
-end
-prod{T}(A::AbstractArray{T}) = prod_rgn(A, 1, length(A))
-
-
-function minimum_rgn{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
-    if first > last; error("argument range must not be empty"); end
-
-    # locate the first non NaN number
-    v = A[first]
-    i = first + 1
-    while v != v && i <= last
-        @inbounds v = A[i]
-        i += 1
-    end
-
-    while i <= last
-        @inbounds x = A[i]
-        if x < v
-            v = x
-        end
-        i += 1
-    end
-    v
-end
-
-function maximum_rgn{T<:Real}(A::AbstractArray{T}, first::Int, last::Int)
-    if first > last; error("argument range must not be empty"); end
-
-    # locate the first non NaN number
-    v = A[first]
-    i = first + 1
-    while v != v && i <= last
-        @inbounds v = A[i]
-        i += 1
-    end
-
-    while i <= last
-        @inbounds x = A[i]
-        if x > v
-            v = x
-        end
-        i += 1
-    end
-    v
-end
-
-minimum{T<:Real}(A::AbstractArray{T}) = minimum_rgn(A, 1, length(A))
-maximum{T<:Real}(A::AbstractArray{T}) = maximum_rgn(A, 1, length(A))
-
-# extrema
-
-function extrema{T<:Real}(A::AbstractArray{T})
-    if isempty(A); error("argument must not be empty"); end
-    n = length(A)
-
-    # locate the first non NaN number
-    v = A[1]
-    i = 2
-    while v != v && i <= n
-        @inbounds v = A[i]
-        i += 1
-    end
-
-    vmin = v
-    vmax = v
-    while i <= n
-        @inbounds v = A[i]
-        if v > vmax
-            vmax = v
-        elseif v < vmin
-            vmin = v
-        end
-        i += 1
-    end
-
-    return (vmin, vmax)
-end
-
 
 ## map over arrays ##
 
