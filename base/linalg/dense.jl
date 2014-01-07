@@ -76,15 +76,17 @@ tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
 function gradient(F::Vector, h::Vector)
     n = length(F)
-    g = similar(F)
-    if n > 0
-        g[1] = 0
+    T = typeof(one(eltype(F))/one(eltype(h)))
+    g = Array(T,n)
+    if n == 1
+        g[1] = zero(T)
     elseif n > 1
         g[1] = (F[2] - F[1]) / (h[2] - h[1])
         g[n] = (F[n] - F[n-1]) / (h[end] - h[end-1])
-    elseif n > 2
-        h = h[3:n] - h[1:n-2]
-        g[2:n-1] = (F[3:n] - F[1:n-2]) ./ h
+        if n > 2
+            h = h[3:n] - h[1:n-2]
+            g[2:n-1] = (F[3:n] - F[1:n-2]) ./ h
+        end
     end
     g
 end
