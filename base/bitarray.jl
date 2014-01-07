@@ -260,7 +260,7 @@ function reshape{N}(B::BitArray, dims::NTuple{N,Int})
     if prod(dims) != length(B)
         error("new dimensions $(dims) inconsistent with the array length $(length(B))")
     end
-    Br = BitArray{N}(ntuple(N,i->0)...)
+    Br = BitArray{N}(ntuple(N,i->0)::typeof(dims)...)
     Br.chunks = B.chunks
     Br.len = prod(dims)
     if N != 1
