@@ -78,8 +78,10 @@ Library improvements
       matrices of generic types ([#5255])
     - new algorithms for linear solvers, eigensystems and singular systems of `Diagonal`
       matrices of generic types ([#5263])
+    - new algorithms for linear solvers and eigensystems of `Bidiagonal`
+      matrices of generic types ([#5277])
     - specialized methods `transpose`, `ctranspose`, `istril`, `istriu` for
-      `Triangular` ([#5255])
+      `Triangular` ([#5255]) and `Bidiagonal` ([#5277])
     - new LAPACK wrappers
       - condition number estimate `cond(A::Triangular)` ([#5255])
 
@@ -123,6 +125,7 @@ Deprecated or removed
 [#5059]: https://github.com/JuliaLang/julia/issues/5059
 [#5196]: https://github.com/JuliaLang/julia/issues/5196
 [#5275]: https://github.com/JuliaLang/julia/issues/5275
+[#5277]: https://github.com/JuliaLang/julia/issues/5277
 
 Julia v0.2.0 Release Notes
 ==========================
