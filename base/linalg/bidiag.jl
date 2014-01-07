@@ -65,6 +65,23 @@ end
 transpose(M::Bidiagonal) = Bidiagonal(M.dv, M.ev, !M.isupper)
 ctranspose(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), !M.isupper)
 
+istriu(M::Bidiagonal) = M.isupper
+istril(M::Bidiagonal) = !M.isupper
+
+function diag{T}(M::Bidiagonal{T}, n::Integer=0)
+    if n==0
+        return M.dv
+    elseif n==1
+        return M.isupper ? M.ev : zeros(T, size(M,1)-1)
+    elseif n==-1
+        return M.isupper ? zeros(T, size(M,1)-1) : M.ev
+    elseif -size(M,1)<n<size(M,1)
+        return zeros(T, size(M,1)-abs(n))
+    else
+        throw(BoundsError())
+    end
+end
+
 function +(A::Bidiagonal, B::Bidiagonal)
     if A.isupper==B.isupper
         Bidiagonal(A.dv+B.dv, A.ev+B.ev, A.isupper)
