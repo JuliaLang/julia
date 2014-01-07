@@ -1417,13 +1417,16 @@ prod(A::AbstractArray{Bool}) =
 function sum_seq{T}(a::AbstractArray{T}, ifirst::Int, ilast::Int)
 
     @inbounds if ifirst + 3 >= ilast  # a has at most four elements
-        s = zero(T)
-        i = ifirst
-        while i <= ilast
-            s += a[i]
-            i += 1
+        if ifirst > ilast
+            return zero(T)
+        else
+            i = ifirst
+            s = a[i]        
+            while i < ilast
+                s += a[i+=1]
+            end
+            return s
         end
-        return s
 
     else # a has more than four elements
 
