@@ -740,6 +740,17 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_approx_eq norm(R*eye(elty, 10)) one(elty)
 end
 
+# Test gradient
+for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
+    if elty <: Real
+        x = convert(Vector{elty}, [1:3])
+        g = ones(elty, 3)
+    else
+        x = convert(Vector{elty}, complex([1:3],[1:3]))
+        g = convert(Vector{elty}, complex(ones(3), ones(3)))
+    end
+    @test_approx_eq gradient(x) g
+end
 
 ## Issue related tests
 # issue 1447
