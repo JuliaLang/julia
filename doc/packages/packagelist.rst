@@ -161,6 +161,41 @@ _______________________________________________________________
 
 ----
 
+`AudioIO <https://github.com/ssfrr/AudioIO.jl>`_ |AudioIO_build|
+________________________________________________
+
+  .. |AudioIO_build| image:: ../images/travis-icon.png
+     :height: 19
+     :width: 19
+     :target: https://travis-ci.org/ssfrr/AudioIO.jl
+
+  .. image:: https://gravatar.com/avatar/733be193bf3baac5c2d6872b42c7774e?d=https%3A%2F%2Fidenticons.github.com%2F80edbd56f6cf1db86e54e6f6f309c698.png&r=x
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Spencer Russell
+     :target: https://github.com/ssfrr
+
+  Simple Audio IO in Julia 
+
+  Current Version: ``0.0.2``  (updated: 2014-01-06) 
+
+  Maintainer: `Spencer Russell <https://github.com/ssfrr>`_
+
+  Dependencies::
+
+      BinDeps                  [0.0.0-,∞)
+
+  Contributors:
+
+    .. image:: https://gravatar.com/avatar/733be193bf3baac5c2d6872b42c7774e?d=https%3A%2F%2Fidenticons.github.com%2F80edbd56f6cf1db86e54e6f6f309c698.png&r=x
+        :height: 40px
+        :width: 40px
+        :alt: Spencer Russell
+        :target: https://github.com/ssfrr
+
+----
+
 `Autoreload <https://github.com/malmaud/Autoreload.jl>`_ |Autoreload_build|
 ________________________________________________________
 
@@ -1384,6 +1419,12 @@ __________________________________________________
         :alt: Keno Fischer
         :target: https://github.com/loladiro
 
+    .. image:: https://gravatar.com/avatar/313878fc8f316fc3fe4443b13913d0a4?d=https%3A%2F%2Fidenticons.github.com%2Fb12c483d8922cb5945bd4ffdae6d591d.png&r=x
+        :height: 40px
+        :width: 40px
+        :alt: Jared Forsyth
+        :target: https://github.com/jaredly
+
     .. image:: https://gravatar.com/avatar/2989a078f4caff6fb86fa30e59bd9aa9?d=https%3A%2F%2Fidenticons.github.com%2F0d84f7b936eeba4c2a9b73061cfbbf13.png&r=x
         :height: 40px
         :width: 40px
@@ -1402,17 +1443,17 @@ __________________________________________________
         :alt: catawbasam
         :target: https://github.com/catawbasam
 
-    .. image:: https://gravatar.com/avatar/1af2db0b26142fd0c7ab082f3d445f73?d=https%3A%2F%2Fidenticons.github.com%2Fabc7045985c1a04674b1024963c5dcc6.png&r=x
-        :height: 40px
-        :width: 40px
-        :alt: Ian Fiske
-        :target: https://github.com/ianfiske
-
     .. image:: https://gravatar.com/avatar/449044e4f0ed377b21409488cddafc45?d=https%3A%2F%2Fidenticons.github.com%2F3f2743ab32e9c084ddcabc42324d7465.png&r=x
         :height: 40px
         :width: 40px
         :alt: Blake Johnson
         :target: https://github.com/blakejohnson
+
+    .. image:: https://gravatar.com/avatar/1af2db0b26142fd0c7ab082f3d445f73?d=https%3A%2F%2Fidenticons.github.com%2Fabc7045985c1a04674b1024963c5dcc6.png&r=x
+        :height: 40px
+        :width: 40px
+        :alt: Ian Fiske
+        :target: https://github.com/ianfiske
 
     .. image:: https://gravatar.com/avatar/f5c61e85dfa465686adc24e0bffba42a?d=https%3A%2F%2Fidenticons.github.com%2Fd166f0c0f0c599a75f4938f2b9660479.png&r=x
         :height: 40px
@@ -2639,6 +2680,12 @@ _________________________________________________________________
         :alt: Antonio Saragga
         :target: https://github.com/AntonioSaragga
 
+    .. image:: https://gravatar.com/avatar/469373064055498d7c228aa55cf7a542?d=https%3A%2F%2Fidenticons.github.com%2Fe1e166638e80a67cc594296a5d08b17f.png&r=x
+        :height: 40px
+        :width: 40px
+        :alt: G. Jay Kerns
+        :target: https://github.com/gjkerns
+
     .. image:: https://gravatar.com/avatar/6cba33e8e7c69fa63f6ad386b7a958c5?d=https%3A%2F%2Fidenticons.github.com%2F270edd69788dce200a3b395a6da6fdb7.png&r=x
         :height: 40px
         :width: 40px
@@ -3293,17 +3340,23 @@ ________________________________________________
         :alt: john verzani
         :target: https://github.com/jverzani
 
-    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+    .. image:: https://gravatar.com/avatar/313878fc8f316fc3fe4443b13913d0a4?d=https%3A%2F%2Fidenticons.github.com%2Fb12c483d8922cb5945bd4ffdae6d591d.png&r=x
         :height: 40px
         :width: 40px
-        :alt: Stefan Karpinski
-        :target: https://github.com/StefanKarpinski
+        :alt: Jared Forsyth
+        :target: https://github.com/jaredly
 
     .. image:: https://gravatar.com/avatar/f17ca369fdfffba1f53e461fff5400c5?d=https%3A%2F%2Fidenticons.github.com%2Fcfe9d26390606405f1a2d2095a8fea96.png&r=x
         :height: 40px
         :width: 40px
         :alt: Calder Coalson
         :target: https://github.com/Calder
+
+    .. image:: https://gravatar.com/avatar/21aeae1f260365557523718bc19640f7?d=https%3A%2F%2Fidenticons.github.com%2F85df517d6848f02168468b6cbb2dc786.png&r=x
+        :height: 40px
+        :width: 40px
+        :alt: Stefan Karpinski
+        :target: https://github.com/StefanKarpinski
 
     .. image:: https://gravatar.com/avatar/449044e4f0ed377b21409488cddafc45?d=https%3A%2F%2Fidenticons.github.com%2F3f2743ab32e9c084ddcabc42324d7465.png&r=x
         :height: 40px
@@ -3664,11 +3717,23 @@ _____________________________________________
         :alt: Chris DuBois
         :target: https://github.com/doobwa
 
+    .. image:: https://gravatar.com/avatar/3db090e101b916d9256d0d3e043db71d?d=https%3A%2F%2Fidenticons.github.com%2F25219d2b2afe83531dc59b52b9217686.png&r=x
+        :height: 40px
+        :width: 40px
+        :alt: Dahua Lin
+        :target: https://github.com/lindahua
+
     .. image:: https://gravatar.com/avatar/d788bf7fd037ebef5798d8881c5faa2f?d=https%3A%2F%2Fidenticons.github.com%2Fb74329b16ae6564aa58c344720a5a087.png&r=x
         :height: 40px
         :width: 40px
         :alt: Jacob Quinn
         :target: https://github.com/karbarcca
+
+    .. image:: https://gravatar.com/avatar/eb7d19c0c2d38d6f2616601189425b8e?d=https%3A%2F%2Fidenticons.github.com%2F823cfadd06578fce6b392866260a4d8f.png&r=x
+        :height: 40px
+        :width: 40px
+        :alt: lendle
+        :target: https://github.com/lendle
 
     .. image:: https://gravatar.com/avatar/11ed595b17e2ccf6bc0b3c80f3dde4e8?d=https%3A%2F%2Fidenticons.github.com%2F176a9d5ad1fcb179b164bdd7d4e625dc.png&r=x
         :height: 40px
@@ -5990,6 +6055,12 @@ ______________________________________________________________
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
+    .. image:: https://gravatar.com/avatar/7587822f903939a9cfda491818381a01?d=https%3A%2F%2Fidenticons.github.com%2F6676b2eb81579b068a7366563daef420.png&r=x
+        :height: 40px
+        :width: 40px
+        :alt: Sean Williamson
+        :target: https://github.com/supernullset
+
 ----
 
 `LibCURL <https://github.com/amitmurthy/LibCURL.jl>`_
@@ -6046,7 +6117,7 @@ _______________________________________________________
 
   Julia interface to libexpat 
 
-  Current Version: ``0.0.0``  (updated: 2013-09-14) 
+  Current Version: ``0.0.0``  (updated: 2014-01-03) 
 
   Maintainer: `Amit Murthy <https://github.com/amitmurthy>`_
 
@@ -6215,6 +6286,12 @@ ______________________________________________
         :alt: Daniel Jones
         :target: https://github.com/dcjones
 
+    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+        :height: 40px
+        :width: 40px
+        :alt: John Myles White
+        :target: https://github.com/johnmyleswhite
+
 ----
 
 `Logging <https://github.com/kmsquire/Logging.jl>`_
@@ -6280,6 +6357,49 @@ ___________________________________________________
         :width: 40px
         :alt: John Myles White
         :target: https://github.com/johnmyleswhite
+
+----
+
+`Lumberjack <https://github.com/forio/Lumberjack.jl>`_ |Lumberjack_build|
+______________________________________________________
+
+  .. |Lumberjack_build| image:: ../images/travis-icon.png
+     :height: 19
+     :width: 19
+     :target: https://travis-ci.org/forio/Lumberjack.jl
+
+  .. image:: https://gravatar.com/avatar/bd2a3d33c3dcc6f25e61382f81689f33?d=https%3A%2F%2Fidenticons.github.com%2F303541224a8d81c65040eb747f5ee614.png&r=x
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Forio
+     :target: https://github.com/forio
+
+  Create logs that would make Paul Bunyan blush 
+
+  Current Version: ``0.0.1``  (updated: 2014-01-02) 
+
+  Maintainer: `Forio <https://github.com/forio>`_
+
+  Dependencies::
+
+      julia                    [0.2.0-,∞)
+      UUID                     [0.0.0-,∞)
+      Datetime                 [0.0.0-,∞)
+
+  Contributors:
+
+    .. image:: https://gravatar.com/avatar/dfc3b0fbb59c9444153823fd35dbd13b?d=https%3A%2F%2Fidenticons.github.com%2F678085c7c9e848e0442b77d8b0c4be71.png&r=x
+        :height: 40px
+        :width: 40px
+        :alt: Westley Argentum Hennigh
+        :target: https://github.com/WestleyArgentum
+
+    .. image:: https://gravatar.com/avatar/d5f30c2d40341d55ba235d674d24972e?d=https%3A%2F%2Fidenticons.github.com%2Fae7e0405c74926295bca0f9d2aa09fa1.png&r=x
+        :height: 40px
+        :width: 40px
+        :alt: Stu Thompson
+        :target: https://github.com/stuinzuri
 
 ----
 
@@ -7683,7 +7803,7 @@ _______________________________________________________________________
 
   Julia extensions to provide high performance computational support 
 
-  Current Version: ``0.3.4``  (updated: 2013-12-29) 
+  Current Version: ``0.3.5``  (updated: 2014-01-05) 
 
   Maintainer: `Dahua Lin <https://github.com/lindahua>`_
 
@@ -8380,7 +8500,7 @@ _________________________________________________
 
   Package to call Python functions from the Julia language 
 
-  Current Version: ``0.2.1``  (updated: 2013-11-19) 
+  Current Version: ``0.3.0``  (updated: 2014-01-05) 
 
   Maintainer: `Steven G. Johnson <https://github.com/stevengj>`_
 
@@ -8407,6 +8527,12 @@ _________________________________________________
         :width: 40px
         :alt: Simon Kornblith
         :target: https://github.com/simonster
+
+    .. image:: https://gravatar.com/avatar/d9e3f7e864e3fa0cb1906b79000d436a?d=https%3A%2F%2Fidenticons.github.com%2Fed99a4a153bc412570b5d7443557561b.png&r=x
+        :height: 40px
+        :width: 40px
+        :alt: Jonathan Malmaud
+        :target: https://github.com/malmaud
 
     .. image:: https://gravatar.com/avatar/8af4d5971a2308b86a94f58fb98129c5?d=https%3A%2F%2Fidenticons.github.com%2F5d5113de843c8b258029d6a06bccd163.png&r=x
         :height: 40px
@@ -8488,7 +8614,7 @@ _________________________________________________
 
   Plotting for Julia based on matplotlib.pyplot 
 
-  Current Version: ``1.0.12``  (updated: 2013-09-27) 
+  Current Version: ``1.1.0``  (updated: 2014-01-04) 
 
   Maintainer: `Steven G. Johnson <https://github.com/stevengj>`_
 
@@ -8605,6 +8731,48 @@ ___________________________________________________
         :width: 40px
         :alt: milktrader
         :target: https://github.com/milktrader
+
+----
+
+`Quat <https://github.com/forio/Quat.jl>`_ |Quat_build|
+__________________________________________
+
+  .. |Quat_build| image:: ../images/travis-icon.png
+     :height: 19
+     :width: 19
+     :target: https://travis-ci.org/forio/Quat.jl
+
+  .. image:: https://gravatar.com/avatar/bd2a3d33c3dcc6f25e61382f81689f33?d=https%3A%2F%2Fidenticons.github.com%2F303541224a8d81c65040eb747f5ee614.png&r=x
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: Forio
+     :target: https://github.com/forio
+
+  A Julia module with quaternion and dual-quaternion functionality 
+
+  Current Version: ``0.0.1``  (updated: 2014-01-06) 
+
+  Maintainer: `Forio <https://github.com/forio>`_
+
+  Dependencies::
+
+      julia                    [0.2.0-,∞)
+      DualNumbers              [0.0.0-,∞)
+
+  Contributors:
+
+    .. image:: https://gravatar.com/avatar/163163e3fabc8901d907ada73435c64a?d=https%3A%2F%2Fidenticons.github.com%2Fc2f125da279766c178540cac4bae8889.png&r=x
+        :height: 40px
+        :width: 40px
+        :alt: Kees van Prooijen
+        :target: https://github.com/keesvp
+
+    .. image:: https://gravatar.com/avatar/d5f30c2d40341d55ba235d674d24972e?d=https%3A%2F%2Fidenticons.github.com%2Fae7e0405c74926295bca0f9d2aa09fa1.png&r=x
+        :height: 40px
+        :width: 40px
+        :alt: Stu Thompson
+        :target: https://github.com/stuinzuri
 
 ----
 
@@ -9368,6 +9536,37 @@ ___________________________________________________
 
 ----
 
+`SmoothingKernels <https://github.com/johnmyleswhite/SmoothingKernels.jl>`_
+___________________________________________________________________________
+
+  .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+     :height: 80px
+     :width: 80px
+     :align: right
+     :alt: John Myles White
+     :target: https://github.com/johnmyleswhite
+
+  Smoothing kernels for use in kernel regression and kernel density estimation 
+
+  Current Version: ``0.0.0``  (updated: 2014-01-04) 
+
+  Maintainer: `John Myles White <https://github.com/johnmyleswhite>`_
+
+  Dependencies::
+
+      julia                    [0.3.0-,∞)
+      Stats                    [0.0.0-,∞)
+
+  Contributors:
+
+    .. image:: https://gravatar.com/avatar/b6b704f26ffe0d91e6317a1c069d4303?d=https%3A%2F%2Fidenticons.github.com%2F9c8f9728c5c3be5ef64f32ed3d49f02e.png&r=x
+        :height: 40px
+        :width: 40px
+        :alt: John Myles White
+        :target: https://github.com/johnmyleswhite
+
+----
+
 `SMTPClient <https://github.com/aviks/SMTPClient.jl>`_
 ______________________________________________________
 
@@ -9572,7 +9771,7 @@ _________________________________________________
 
   Basic statistics for Julia 
 
-  Current Version: ``0.3.0``  (updated: 2013-12-29) 
+  Current Version: ``0.3.2``  (updated: 2014-01-06) 
 
   Maintainer: `Julia Statistics <https://github.com/JuliaStats>`_
 
@@ -11139,5 +11338,5 @@ ____________________________________________
 
 ----
 
-.. footer: 242 packages, generated 3 Jan 2014 19:38:07 GMT 
+.. footer: 246 packages, generated 7 Jan 2014 00:16:29 GMT 
 
