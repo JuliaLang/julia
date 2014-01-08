@@ -4,14 +4,13 @@
 # [3] precise addition, see Add22: http://ftp.nluug.nl/pub/os/BSD/FreeBSD/distfiles/crlibm/crlibm-1.0beta3.pdf
 
 # Examples:
-# ΓΓ = 6411027962775774 / 2^47  # see [2] above, section 1.2
-# julia> mod(ΓΓ, pi/2)   # "naive" way - easily wrong
-# 1.7763568394002505e-15
-# julia> modpio2( ΓΓ )   # using function provided here
-# 6.189806365883577e-19
-# Wolfram Alpha: mod(6411027962775774 / 2^47, pi/2)
-# 6.189806365883577000150671465609655958633034115366621088... × 10^-19
-
+# ΓΓ = 6411027962775774 / 2^45  # see [2] above, section 1.2
+# julia> mod(ΓΓ, 2pi)    # "naive" way - easily wrong
+# 7.105427357601002e-15
+# julia> mod2pi(ΓΓ)      # using function provided here
+# 2.475922546353431e-18
+# Wolfram Alpha: mod(6411027962775774 / 2^45, 2pi)
+# 2.475922546353430800060268586243862383453213646146648435... × 10^-18
 
 # Test Cases. Each row contains: x and x mod 2pi (as from Wolfram Alpha)
 # The values x are:

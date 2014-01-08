@@ -2042,17 +2042,9 @@ Mathematical Operators
 
    Modulus after division, returning in the range [0,m)
 
-.. function:: modpi(x)
-
-   Modulus after division by pi, returning in the range [0,pi). More accurate than mod(x,pi).
-
 .. function:: mod2pi(x)
 
    Modulus after division by 2pi, returning in the range [0,2pi). More accurate than mod(x,2pi).
-
-.. function:: modpio2(x)
-
-   Modulus after division by pi/2, returning in the range [0,pi/2). More accurate than mod(x,pi/2).
 
 .. function:: rem(x, m)
 
