@@ -696,6 +696,8 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                 end
                 return Tuple
             end
+            # apply known function with unknown args => f(Any...)
+            return abstract_call(_ieval(af), (), Tuple, vtypes, sv, ())
         end
     end
     if isgeneric(f)
@@ -868,6 +870,10 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
         t = abstract_eval(e.args[1], vtypes, sv)
     else
         t = Any
+    end
+    if isa(t,TypeVar) && t.lb === None
+        # no need to use a typevar as the type of an expression
+        t = t.ub
     end
     e.typ = t
     return t
