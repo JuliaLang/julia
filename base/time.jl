@@ -341,7 +341,7 @@ typealias TimeTypePeriod Union(TimeType,Period)
 (+){T<:TimeTypePeriod}(x::TimeTypePeriod, y::AbstractArray{T}) = reshape([x + y[i] for i in 1:length(y)], size(y))
 (+){T<:TimeTypePeriod}(x::AbstractArray{T}, y::TimeTypePeriod) = reshape([x[i] + y for i in 1:length(x)], size(x))
 (-){T<:TimeTypePeriod}(x::TimeTypePeriod, y::AbstractArray{T}) = reshape([x - y[i] for i in 1:length(y)], size(y))
-(-){T<:TimeTypePeriod}(x::AbstractArray{T}, y::TimeTypePeriod) = reshape([x[i] - fyor i in 1:length(x)], size(x))
+(-){T<:TimeTypePeriod}(x::AbstractArray{T}, y::TimeTypePeriod) = reshape([x[i] - y for i in 1:length(x)], size(x))
 
 #Datetime range
 immutable DatetimeRange{T<:TimeType,P<:Period} <: Ranges{T}
