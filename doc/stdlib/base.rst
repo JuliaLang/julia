@@ -124,13 +124,38 @@ All Objects
 
 .. function:: isequal(x, y)
 
-   True if and only if ``x`` and ``y`` have the same contents. Loosely speaking, this means ``x`` and ``y`` would look the same when printed. This is the default comparison function used by hash tables (``Dict``).
-   New types with a notion of equality should implement this function, except for numbers, which should implement ``==`` instead. However, numeric types with special values might need to implement ``isequal`` as well. For example, floating point ``NaN`` values are not ``==``, but are all equivalent in the sense of ``isequal``. Numbers of different types are considered unequal.
-   Mutable containers should generally implement ``isequal`` by calling ``isequal`` recursively on all contents.
+   True if and only if ``x`` and ``y`` would cause a typical function to behave the
+   same. A "typical" function is one that uses only intended interfaces, and does not
+   unreasonably exploit implementation details of its arguments. For example,
+   floating-point ``NaN`` values are ``isequal`` regardless of their sign bits, since
+   the sign of a ``NaN`` has no meaning in the vast majority of cases (but can be
+   discovered if you really want to).
+
+   One implication of this definition is that implementing ``isequal`` for a new type
+   encapsulates, to a large extent, what the true abstraction presented by that type
+   is. For example, a ``String`` is a sequence of characters, so two strings are
+   ``isequal`` if they generate the same characters. Other concerns, such as encoding,
+   are not considered.
+
+   When calling ``isequal``, be aware that it cannot be all things to all people.
+   For example, if your use of strings *does* care about encoding, you will have to
+   perform a check like ``typeof(x)==typeof(y) && isequal(x,y)``.
+
+   ``isequal`` is the default comparison function used by hash tables (``Dict``).
+   ``isequal(x,y)`` must imply ``hash(x)==hash(y)``.
+
+   New types with a notion of equality should implement this function, except for
+   numbers, which should implement ``==`` instead. However, numeric types with special
+   values like ``NaN`` might need to implement ``isequal`` as well. Numbers of different
+   types are considered unequal.
+
+   Mutable containers should generally implement ``isequal`` by calling ``isequal``
+   recursively on all contents.
 
 .. function:: isless(x, y)
 
-   Test whether ``x`` is less than ``y``. Provides a total order consistent with ``isequal``. Values that are normally unordered, such as ``NaN``, are ordered in an arbitrary but consistent fashion. This is the default comparison used by ``sort``. Non-numeric types that can be ordered should implement this function. Numeric types only need to implement it if they have special values such as ``NaN``.
+   Test whether ``x`` is less than ``y``, according to a canonical total order.
+   Values that are normally unordered, such as ``NaN``, are ordered in an arbitrary but consistent fashion. This is the default comparison used by ``sort``. Non-numeric types with a canonical total order should implement this function. Numeric types only need to implement it if they have special values such as ``NaN``.
 
 .. function:: ifelse(condition::Bool, x, y)
 
@@ -2122,6 +2147,9 @@ Mathematical Operators
 
    Less-than comparison operator. New numeric types should implement this function
    for two arguments of the new type.
+   Because of the behavior of floating-point NaN values, ``<`` implements a
+   partial order. Types with a canonical partial order should implement ``<``, and
+   types with a canonical total order should implement ``isless``.
 
 .. _<=:
 .. function:: <=(x, y)
@@ -2171,7 +2199,8 @@ Mathematical Operators
 
 .. function:: cmp(x,y)
 
-   Return -1, 0, or 1 depending on whether ``x<y``, ``x==y``, or ``x>y``, respectively.
+   Return -1, 0, or 1 depending on whether ``x`` is less than, equal to, or greater
+   than ``y``, respectively. Uses the total order implemented by ``isless``.
 
 .. _~:
 .. function:: ~(x)
