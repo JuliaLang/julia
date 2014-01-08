@@ -41,12 +41,13 @@ include("operators.jl")
 include("pointer.jl")
 
 include("float.jl")
-include("reduce.jl")
 include("complex.jl")
 include("rational.jl")
 
 # core data structures (used by type inference)
 include("abstractarray.jl")
+include("reduce.jl")
+
 include("subarray.jl")
 include("array.jl")
 include("bitarray.jl")
