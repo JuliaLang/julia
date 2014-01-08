@@ -12,6 +12,7 @@ Building the documentation
 The documentation is built using [Sphinx](http://sphinx.pocoo.org/) and LaTeX.
 On ubuntu, you'll need the following packages installed:
 
+    latex-cjk-all
     python-sphinx
     texlive
     texlive-lang-cjk
