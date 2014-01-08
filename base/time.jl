@@ -4,9 +4,9 @@ import Base: hash, isless, isequal, isfinite, convert, precision,
              typemax, typemin, zero, one, string, show,
              step, next, colon, last, +, -, *, /, div
 
-export Calendar, ISOCalendar, Timezone, CALENDAR, TIMEZONE, 
+export Calendar, ISOCalendar, Timezone,
     UTC, Period, Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
-    Date, Datetime, DatetimeRange, DatetimeRange1,
+    Date, Datetime,
     year, month, week, day, hour, minute, second, millisecond,
     monthname, monthabr, dayname, dayabr, unix2datetime,
     isleap, lastdayofmonth, dayofweek, dayofyear, ISOFormat,
@@ -24,11 +24,9 @@ abstract Calendar <: AbstractTime
 # ISOCalendar Implements the ISO 8601 standard (en.wikipedia.org/wiki/ISO_8601)
 # Notably based on the proleptic Gregorian calendar
 abstract ISOCalendar <: Calendar
-const CALENDAR = ISOCalendar
 
 abstract Timezone <: AbstractTime
 abstract UTC <: Timezone
-const TIMEZONE = UTC
 
 abstract Period     <: AbstractTime
 abstract DatePeriod <: Period
