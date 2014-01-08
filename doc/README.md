@@ -14,6 +14,7 @@ On ubuntu, you'll need the following packages installed:
 
     python-sphinx
     texlive
+    texlive-lang-cjk
     texlive-latex-extra
 
 Then run
