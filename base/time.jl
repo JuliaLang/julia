@@ -64,7 +64,7 @@ function totaldays(y,m,d)
     @inbounds mdays = monthdays[m]
     return d + mdays + yeardays(m < 3 ? y - 1 : y) - 306
 end
-include("Leaps.jl")    
+include("leaps.jl")    
 typealias UTCDatetime Datetime{Millisecond,UTC,ISOCalendar}
 
 # UTC constructor with defaults
