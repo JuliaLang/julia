@@ -322,7 +322,7 @@ function \{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
     while rnk < nr
         tmin, smin, cmin = LAPACK.laic1!(2, sub(xmin, 1:rnk), tmin, sub(A.hh, 1:rnk, rnk + 1), A.hh[rnk + 1, rnk + 1])
         tmax, smax, cmax = LAPACK.laic1!(1, sub(xmax, 1:rnk), tmax, sub(A.hh, 1:rnk, rnk + 1), A.hh[rnk + 1, rnk + 1])
-        if tmax*rcond > tmin && break end
+        tmax*rcond > tmin && break
         xmin[1:rnk + 1] = [smin*sub(xmin, 1:rnk), cmin]
         xmax[1:rnk + 1] = [smax*sub(xmin, 1:rnk), cmax]
         rnk += 1
