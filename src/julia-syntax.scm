@@ -1887,6 +1887,9 @@
 	 (error "invalid \":\" outside indexing"))
      `(call colon ,.(map expand-forms (cdr e))))
 
+   'vect
+   (lambda (e) (expand-forms `(call (top vect) ,@(cdr e))))
+
    'hcat
    (lambda (e) (expand-forms `(call hcat ,.(map expand-forms (cdr e)))))
 
@@ -1909,47 +1912,26 @@
 	    `(call vcat ,@a)))))
 
    'typed_hcat
-   (lambda (e)
-     (let ((t (cadr e))
-	   (a (cddr e)))
-       (let ((result (gensy))
-	     (ncols (length a)))
-	 `(block
-	   #;(if (call (top !) (call (top isa) ,t Type))
-	   (call (top error) "invalid array index"))
-	   (= ,result (call (top Array) ,(expand-forms t) 1 ,ncols))
-	   ,.(map (lambda (x i) `(call (top setindex!) ,result
-				       ,(expand-forms x) ,i))
-		  a (cdr (iota (+ ncols 1))))
-	   ,result))))
+   (lambda (e) `(call (top typed_hcat) ,(expand-forms (cadr e)) ,.(map expand-forms (cddr e))))
 
    'typed_vcat
    (lambda (e)
      (let ((t (cadr e))
-	   (rows (cddr e)))
-       (if (any (lambda (x) (not (and (pair? x) (eq? 'row (car x))))) rows)
-	   (error "invalid array literal")
-	   (let ((result (gensy))
-		 (nrows (length rows))
-		 (ncols (length (cdar rows))))
-	     (if (any (lambda (x) (not (= (length (cdr x)) ncols))) rows)
-		 (error "invalid array literal")
-		 `(block
-		   #;(if (call (top !) (call (top isa) ,t Type))
-		   (call (top error) "invalid array index"))
-		   (= ,result (call (top Array) ,(expand-forms t) ,nrows ,ncols))
-		   ,.(apply nconc
-			    (map
-			     (lambda (row i)
-			       (map
-				(lambda (x j)
-				  `(call (top setindex!) ,result
-					 ,(expand-forms x) ,i ,j))
-				(cdr row)
-				(cdr (iota (+ ncols 1)))))
-			     rows
-			     (cdr (iota (+ nrows 1)))))
-		   ,result))))))
+           (a (cddr e)))
+       (expand-forms
+        (if (any (lambda (x)
+             (and (pair? x) (eq? (car x) 'row)))
+           a)
+            ;; convert nested hcat inside vcat to hvcat
+            (let ((rows (map (lambda (x)
+                               (if (and (pair? x) (eq? (car x) 'row))
+                                   (cdr x)
+                                   (list x)))
+                             a)))
+              `(call (top typed_hvcat) ,t
+                     (tuple ,.(map length rows))
+                     ,.(apply nconc rows)))
+            `(call (top typed_vcat) ,t ,@a)))))
 
    '|'|  (lambda (e) `(call ctranspose ,(expand-forms (cadr e))))
    '|.'| (lambda (e) `(call  transpose ,(expand-forms (cadr e))))
