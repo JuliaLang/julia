@@ -1,6 +1,6 @@
 module Time
 
-import Base: hash, isless, isequal, isfinite, convert,
+import Base: hash, isless, isequal, isfinite, convert, precision,
              typemax, typemin, zero, one, string, show,
              step, next, colon, last, +, -, *, /, div
 
