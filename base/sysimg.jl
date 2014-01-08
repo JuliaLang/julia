@@ -79,7 +79,8 @@ include("base64.jl")
 importall .Base64
 
 # multidimensional arrays
-# include("cartesian.jl")
+include("cartesian.jl")
+using .Cartesian
 include("multidimensional.jl")
 
 # system & environment
