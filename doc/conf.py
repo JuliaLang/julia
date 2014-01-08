@@ -185,9 +185,12 @@ latex_elements = {
 #'preamble': '',
 
     'utf8extra': r'''
+        \usepackage{CJKutf8}
         \DeclareUnicodeCharacter{00A0}{\nobreakspace}
         \DeclareUnicodeCharacter{2203}{\ensuremath{\exists}}
         \DeclareUnicodeCharacter{2200}{\ensuremath{\forall}}
+        \DeclareUnicodeCharacter{2286}{\ensuremath{\subseteq}}
+        \DeclareUnicodeCharacter{2713}{x}
         \DeclareUnicodeCharacter{27FA}{\ensuremath{\Longleftrightarrow}}
     ''',
 }
@@ -195,7 +198,7 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('index', 'JuliaLanguage.tex', u'Julia Language Documentation',
+  ('latex', 'JuliaLanguage.tex', u'Julia Language Documentation',
    AUTHORS, 'manual'),
 ]
 
