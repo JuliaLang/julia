@@ -512,25 +512,29 @@ static jl_value_t *intersect_tag(jl_datatype_t *a, jl_datatype_t *b,
                     continue;
                 }
             }
-            else if (jl_has_typevars_(ap,1) || jl_has_typevars_(bp,1)) {
-                if (jl_subtype_invariant(ap,bp,0) ||
-                    jl_subtype_invariant(bp,ap,0)) {
-                    ti = jl_type_intersect(ap,bp,penv,eqc,invariant);
+            else {
+                int tva = jl_has_typevars_(ap,1);
+                int tvb = jl_has_typevars_(bp,1);
+                if (tva || tvb) {
+                    if ((tva&&tvb) || jl_subtype_invariant(ap,bp,0) ||
+                        jl_subtype_invariant(bp,ap,0)) {
+                        ti = jl_type_intersect(ap,bp,penv,eqc,invariant);
+                    }
+                    else {
+                        ti = (jl_value_t*)jl_bottom_type;
+                    }
+                }
+                else if (type_eqv_(ap,bp)) {
+                    ti = ap;
+                    if (ti == (jl_value_t*)jl_bottom_type) {
+                        // "None" as a type parameter
+                        jl_tupleset(p, i, ti);
+                        continue;
+                    }
                 }
                 else {
                     ti = (jl_value_t*)jl_bottom_type;
                 }
-            }
-            else if (type_eqv_(ap,bp)) {
-                ti = ap;
-                if (ti == (jl_value_t*)jl_bottom_type) {
-                    // "None" as a type parameter
-                    jl_tupleset(p, i, ti);
-                    continue;
-                }
-            }
-            else {
-                ti = (jl_value_t*)jl_bottom_type;
             }
             if (ti == (jl_value_t*)jl_bottom_type) {
                 JL_GC_POP();
@@ -1336,9 +1340,29 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
     }
 
     if (env0 > 0) {
+        /*
+          in a situation like this:
+          Type{_<:Array{T,1}} ∩ Type{Array{S,N}}
+          We end up with environment
+          _ = Array{S,N}
+          N = 1
+          So we need to instantiate all the RHS's first.
+        */
+        for(int i=1; i < eqc.n; i+=2) {
+            jl_value_t *rhs = jl_tupleref(*penv,i);
+            if (jl_has_typevars_(rhs,1)) {
+                JL_TRY {
+                    jl_tupleset(*penv, i,
+                                jl_instantiate_type_with(rhs,
+                                                         &jl_t0(*penv), eqc.n/2));
+                }
+                JL_CATCH {
+                }
+            }
+        }
         JL_TRY {
-            *pti=(jl_value_t*)jl_instantiate_type_with((jl_value_t*)*pti,
-                                                       &jl_t0(*penv), eqc.n/2);
+            *pti = (jl_value_t*)jl_instantiate_type_with((jl_value_t*)*pti,
+                                                         &jl_t0(*penv), eqc.n/2);
         }
         JL_CATCH {
             *pti = (jl_value_t*)jl_bottom_type;

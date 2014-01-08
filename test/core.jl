@@ -49,6 +49,10 @@ let T = TypeVar(:T,true)
     @test f47(Array(Vector{Int},0)) == 0
     @test typeintersect((T,T), (Union(Float64,Int64),Int64)) == (Int64,Int64)
     @test typeintersect((T,T), (Int64,Union(Float64,Int64))) == (Int64,Int64)
+
+    TT = TypeVar(:T,Top)
+    S = TypeVar(:S,true); N = TypeVar(:N,true)
+    @test typeintersect(Type{Array{TT,1}},Type{Array{S,N}}) == Type{Array{S,1}}
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
@@ -1237,3 +1241,18 @@ let
     @test foo5312() === (nothing,)
     @test x == 1
 end
+
+# issue #5319
+cnvt(T, x) = convert_default(T, x, cnvt)
+cnvt{S, T, N}(::Type{Array{S, N}}, x::Array{T, N}) = convert(Array{S}, x)
+
+function tighttypes!(adf)
+    T = None
+    tt = {Int}
+    for t in tt
+        T = typejoin(T, t)
+    end
+    cnvt(Vector{T}, adf[1])
+end
+
+@test isequal(tighttypes!({Any[1.0,2.0]}), [1,2])
