@@ -258,6 +258,18 @@ Y = [1. 2. 3.; 4. 5. 6.]
 @test size(X) == size(Y)
 for i = 1:length(X) @test X[i] === Y[i] end
 
+_array_equiv(a,b) = eltype(a) == eltype(b) && a == b
+@test _array_equiv(Uint8[1:3;4], [0x1,0x2,0x3,0x4])
+if !Base._oldstyle_array_vcat_
+    @test_throws MethodError Uint8[1:3]
+    @test_throws MethodError Uint8[1:3,]
+    @test_throws MethodError Uint8[1:3,4:6]
+    a = Array(Range1{Int},1); a[1] = 1:3
+    @test _array_equiv([1:3,], a)
+    a = Array(Range1{Int},2); a[1] = 1:3; a[2] = 4:6
+    @test _array_equiv([1:3,4:6], a)
+end
+
 # "end"
 X = [ i+2j for i=1:5, j=1:5 ]
 @test X[end,end] == 15
