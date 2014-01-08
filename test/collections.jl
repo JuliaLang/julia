@@ -168,10 +168,10 @@ d = (String => String)[ a => "foo" for a in ["a","b","c"]]
 @test !isempty(Set("banana", "apple"))
 @test !isempty(Set(1, 1:10, "pear"))
 
-# isless
-@test isless(Set(), Set(1))
-@test isless(Set(1), Set(1,2))
-@test !isless(Set(3), Set(1,2))
+# ordering
+@test Set() < Set(1)
+@test Set(1) < Set(1,2)
+@test !(Set(3) < Set(1,2))
 @test !(Set(3) > Set(1,2))
 @test Set(1,2,3) > Set(1,2)
 @test !(Set(3) <= Set(1,2))
