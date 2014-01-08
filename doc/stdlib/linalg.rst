@@ -59,55 +59,31 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute Cholesky factorization of a symmetric positive-definite matrix ``A`` and return the matrix ``F``. If ``LU`` is ``:L`` (Lower), ``A = L*L'``. If ``LU`` is ``:U`` (Upper), ``A = R'*R``.
 
-.. function:: cholfact(A, [LU]) -> Cholesky
+.. function:: cholfact(A, [LU,][pivot=false,][tol=-1.0]) -> Cholesky
 
-   Compute the Cholesky factorization of a dense symmetric positive-definite matrix ``A`` and return a ``Cholesky`` object. ``LU`` may be ``:L`` for using the lower part or ``:U`` for the upper part. The default is to use ``:U``. The triangular matrix can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``. The following functions are available for ``Cholesky`` objects: ``size``, ``\``, ``inv``, ``det``. A ``LAPACK.PosDefException`` error is thrown in case the matrix is not positive definite.
+   Compute the Cholesky factorization of a dense symmetric positive (semi)definite matrix ``A`` and return either a ``Cholesky`` if ``pivot=false`` or ``CholeskyPivoted`` if ``pivot=true``. ``LU`` may be ``:L`` for using the lower part or ``:U`` for the upper part. The default is to use ``:U``. The triangular matrix can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``. The following functions are available for ``Cholesky`` objects: ``size``, ``\``, ``inv``, ``det``. For ``CholeskyPivoted`` there is also defined a ``rank``. If ``pivot=false`` a ``PosDefException`` exception is thrown in case the matrix is not positive definite. The argument ``tol`` determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.
 
 .. function:: cholfact(A, [ll]) -> CholmodFactor
 
    Compute the sparse Cholesky factorization of a sparse matrix ``A``.  If ``A`` is Hermitian its Cholesky factor is determined.  If ``A`` is not Hermitian the Cholesky factor of ``A*A'`` is determined. A fill-reducing permutation is used.  Methods for ``size``, ``solve``, ``\``, ``findn_nzs``, ``diag``, ``det`` and ``logdet``.  One of the solve methods includes an integer argument that can be used to solve systems involving parts of the factorization only.  The optional boolean argument, ``ll`` determines whether the factorization returned is of the ``A[p,p] = L*L'`` form, where ``L`` is lower triangular or ``A[p,p] = scale(L,D)*L'`` form where ``L`` is unit lower triangular and ``D`` is a non-negative vector.  The default is LDL.
 
-.. function:: cholfact!(A, [LU]) -> Cholesky
+.. function:: cholfact!(A, [LU,][pivot=false,][tol=-1.0]) -> Cholesky
 
    ``cholfact!`` is the same as :func:`cholfact`, but saves space by overwriting the input A, instead of creating a copy.
 
-.. function:: cholpfact(A, [LU]) -> CholeskyPivoted
+.. function:: qr(A, [pivot=false,][thin=true]) -> Q, R, [p]
 
-   Compute the pivoted Cholesky factorization of a symmetric positive semi-definite matrix ``A`` and return a ``CholeskyPivoted`` object. ``LU`` may be ``:L`` for using the lower part or ``:U`` for the upper part. The default is to use ``:U``. The triangular factors contained in the factorization ``F`` can be obtained with ``F[:L]`` and ``F[:U]``, whereas the permutation can be obtained with ``F[:P]`` or ``F[:p]``.
-   The following functions are available for ``CholeskyPivoted`` objects: ``size``, ``\``, ``inv``, ``det``.
-   A ``LAPACK.RankDeficientException`` error is thrown in case the matrix is rank deficient.
+   Compute the (pivoted) QR factorization of ``A`` such that either ``A = Q*R`` or ``A[:,p] = Q*R``. Also see ``qrfact``. The default is to compute a thin factorization. Note that `R` is not extended with zeros when the full `Q` is requested. 
 
-.. function:: cholpfact!(A, [LU]) -> CholeskyPivoted
+.. function:: qrfact(A,[pivot=false])
 
-   ``cholpfact!`` is the same as ``cholpfact``, but saves space by overwriting the input A, instead of creating a copy.
+   Computes the QR factorization of ``A`` and returns either a ``QR`` type if ``pivot=false`` or ``QRPivoted`` type if ``pivot=true``. From a ``QR`` or  ``QRPivoted`` factorization ``F``, an orthogonal matrix ``F[:Q]`` and a triangular matrix ``F[:R]`` can be extracted. For ``QRPivoted`` it is also posiible to extract the permutation vector ``F[:p]`` or matrix ``F[:P]``.
+   The following functions are available for the ``QR`` objects: ``size``, ``\``. When ``A`` is rectangular ``\`` will return a least squares solution and if the soultion is not unique, the one with smallest norm is returned.
+   The orthogonal matrix ``Q=F[:Q]`` is a ``QRPackedQ`` type when ``F`` is a ``QR`` and a ``QRPivotedQ`` then ``F`` is a ``QRPivoted``. Both have the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``. Multiplication with respect to either thin or full ``Q`` is allowed, i.e. both ``F[:Q]*F[:R]`` and ``F[:Q]*A`` are supported. A ``Q`` matrix can be converted into a regular matrix with ``full`` which has a named argument ``thin``.
 
-.. function:: qr(A, [thin]) -> Q, R
-
-   Compute the QR factorization of ``A`` such that ``A = Q*R``. Also see ``qrfact``. The default is to compute a thin factorization. Note that `R` is not extended with zeros when the full `Q` is requested. 
-
-.. function:: qrfact(A)
-
-   Computes the QR factorization of ``A`` and returns a ``QR`` type, which is a ``Factorization`` ``F`` consisting of an orthogonal matrix ``F[:Q]`` and a triangular matrix ``F[:R]``.
-   The following functions are available for ``QR`` objects: ``size``, ``\``.
-   The orthogonal matrix ``Q=F[:Q]`` is a ``QRPackedQ`` type which has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``. Multiplication with respect to either thin or full ``Q`` is allowed, i.e. both ``F[:Q]*F[:R]`` and ``F[:Q]*A`` are supported. A ``QRPackedQ`` matrix can be converted into a regular matrix with ``full``.
-
-.. function:: qrfact!(A)
+.. function:: qrfact!(A,[pivot=false])
 
    ``qrfact!`` is the same as :func:`qrfact`, but saves space by overwriting the input A, instead of creating a copy.
-
-.. function:: qrp(A, [thin]) -> Q, R, p
-
-   Computes the QR factorization of ``A`` with pivoting, such that ``A[:,p] = Q*R``, Also see ``qrpfact``. The default is to compute a thin factorization.
-
-.. function:: qrpfact(A) -> QRPivoted
-
-   Computes the QR factorization of ``A`` with pivoting and returns a ``QRPivoted`` object, which is a ``Factorization`` ``F`` consisting of an orthogonal matrix ``F[:Q]``, a triangular matrix ``F[:R]``, and a permutation ``F[:p]`` (or  its matrix representation ``F[:P]``).
-   The following functions are available for ``QRPivoted`` objects: ``size``, ``\``.
-   The orthogonal matrix ``Q=F[:Q]`` is a ``QRPivotedQ`` type which has the ``*`` operator overloaded to support efficient multiplication by ``Q`` and ``Q'``. Multiplication with respect to either the thin or full ``Q`` is allowed, i.e. both ``F[:Q]*F[:R]`` and ``F[:Q]*A`` are supperted. A ``QRPivotedQ`` matrix can be converted into a regular matrix with ``full``.
-
-.. function:: qrpfact!(A) -> QRPivoted
-
-   ``qrpfact!`` is the same as :func:`qrpfact`, but saves space by overwriting the input A, instead of creating a copy.
 
 .. function:: bkfact(A) -> BunchKaufman
 

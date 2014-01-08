@@ -1674,7 +1674,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$rtyp}, Ptr{$rtyp}, Ptr{BlasInt}),
                   &uplo, &n, A, &max(1,stride(A,2)), piv, rank, &tol, work, info)
-            @lapackerror
+            @assertargsok
             A, piv, rank[1], info[1] #Stored in PivotedCholesky
         end
     end

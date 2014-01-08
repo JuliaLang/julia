@@ -17,55 +17,13 @@ A_ldiv_B!(F::Factorization, B::StridedVecOrMat) = A_ldiv_B!(F, float(B))
 Ac_ldiv_B!(F::Factorization, B::StridedVecOrMat) = Ac_ldiv_B!(F, float(B))
 At_ldiv_B!(F::Factorization, B::StridedVecOrMat) = At_ldiv_B!(F, float(B))
 
+##########################
+# Cholesky Factorization #
+##########################
 type Cholesky{T<:BlasFloat} <: Factorization{T}
     UL::Matrix{T}
     uplo::Char
 end
-
-function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol)
-    uplochar = string(uplo)[1]
-    C, info = LAPACK.potrf!(uplochar, A)
-    @assertposdef Cholesky(C, uplochar) info
-end
-cholfact!(A::StridedMatrix, args...) = cholfact!(float(A), args...)
-cholfact!{T<:BlasFloat}(A::StridedMatrix{T}) = cholfact!(A, :U)
-cholfact{T<:BlasFloat}(A::StridedMatrix{T}, args...) = cholfact!(copy(A), args...)
-cholfact(A::StridedMatrix, args...) = cholfact!(float(A), args...)
-cholfact(x::Number) = @assertposdef Cholesky(fill(sqrt(x), 1, 1), :U) !(imag(x) == 0 && real(x) > 0)
-
-chol(A::Union(Number, AbstractMatrix), uplo::Symbol) = cholfact(A, uplo)[uplo]
-chol(A::Union(Number, AbstractMatrix)) = cholfact(A, :U)[:U]
-
-size(C::Cholesky) = size(C.UL)
-size(C::Cholesky,d::Integer) = size(C.UL,d)
-
-function getindex(C::Cholesky, d::Symbol)
-    C.uplo == 'U' ? triu!(C.UL) : tril!(C.UL)
-    if d == :U || d == :L
-        return symbol(C.uplo) == d ? C.UL : C.UL'
-    elseif d == :UL
-        return Triangular(C.UL, C.uplo)
-    end
-    throw(KeyError(d))
-end
-
-A_ldiv_B!{T<:BlasFloat}(C::Cholesky{T}, B::StridedVecOrMat{T}) = LAPACK.potrs!(C.uplo, C.UL, B)
-
-function det{T}(C::Cholesky{T})
-    dd = one(T)
-    for i in 1:size(C.UL,1) dd *= abs2(C.UL[i,i]) end
-    dd
-end
-
-function logdet{T}(C::Cholesky{T})
-    dd = zero(T)
-    for i in 1:size(C.UL,1) dd += log(C.UL[i,i]) end
-    dd + dd # instead of 2.0dd which can change the type
-end
-
-inv(C::Cholesky)=symmetrize_conj!(LAPACK.potri!(C.uplo, copy(C.UL)), C.uplo)
-
-## Pivoted Cholesky
 type CholeskyPivoted{T<:BlasFloat} <: Factorization{T}
     UL::Matrix{T}
     uplo::Char
@@ -74,26 +32,36 @@ type CholeskyPivoted{T<:BlasFloat} <: Factorization{T}
     tol::Real
     info::BlasInt
 end
-function CholeskyPivoted{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Char, tol::Real)
-    A, piv, rank, info = LAPACK.pstrf!(uplo, A, tol)
-    CholeskyPivoted{T}((uplo == 'U' ? triu! : tril!)(A), uplo, piv, rank, tol, info)
+
+function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=-1.0)
+    uplochar = string(uplo)[1]
+    if pivot
+        A, piv, rank, info = LAPACK.pstrf!(uplochar, A, tol)
+        return CholeskyPivoted{T}(A, uplochar, piv, rank, tol, info)
+    else
+        C, info = LAPACK.potrf!(uplochar, A)
+        return @assertposdef Cholesky(C, uplochar) info
+    end
 end
+cholfact!(A::StridedMatrix, args...) = cholfact!(float(A), args...)
+cholfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=-1.0) = cholfact!(copy(A), uplo, pivot=pivot, tol=tol)
+cholfact(A::StridedMatrix, uplo::Symbol=:U; pivot=false, tol=-1.0) = cholfact!(float(A), uplo, pivot=pivot, tol=tol)
+cholfact(x::Number) = @assertposdef Cholesky(fill(sqrt(x), 1, 1), :U) !(imag(x) == 0 && real(x) > 0)
 
-chkfullrank(C::CholeskyPivoted) = C.rank<size(C.UL, 1) && throw(RankDeficientException(C.info))
+chol(A::Union(Number, AbstractMatrix), uplo::Symbol=:U) = cholfact(A, uplo)[uplo]
 
-cholpfact!(A::StridedMatrix, args...) = cholpfact!(float(A), args...)
-cholpfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol, tol::Real) = CholeskyPivoted(A, string(uplo)[1], tol)
-cholpfact!{T<:BlasFloat}(A::StridedMatrix{T}, tol::Real) = cholpfact!(A, :U, tol)
-cholpfact!{T<:BlasFloat}(A::StridedMatrix{T}) = cholpfact!(A, -1.)
-cholpfact{T<:BlasFloat}(A::StridedMatrix{T}, args...) = cholpfact!(copy(A), args...)
-cholpfact(A::StridedMatrix, args...) = cholpfact!(float(A), args...)
+size(C::Cholesky) = size(C.UL)
+size(C::Cholesky,d::Integer) = size(C.UL,d)
 
-size(C::CholeskyPivoted) = size(C.UL)
-size(C::CholeskyPivoted,d::Integer) = size(C.UL,d)
-
-getindex(C::CholeskyPivoted) = C.UL, C.piv
+function getindex(C::Cholesky, d::Symbol)
+    d == :U && return triu!(symbol(C.uplo) == d ? C.UL : C.UL')
+    d == :L && return tril!(symbol(C.uplo) == d ? C.UL : C.UL')
+    d == :UL && return Triangular(C.UL, C.uplo)
+    throw(KeyError(d))
+end
 function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
-    (d == :U || d == :L) && return symbol(C.uplo) == d ? C.UL : C.UL'
+    d == :U && return triu!(symbol(C.uplo) == d ? C.UL : C.UL')
+    d == :L && return tril!(symbol(C.uplo) == d ? C.UL : C.UL')
     d == :p && return C.piv
     if d == :P
         n = size(C, 1)
@@ -105,6 +73,10 @@ function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
     end
     throw(KeyError(d))
 end
+
+show(io::IO, C::Cholesky) = (println("$(typeof(C)) with factor:");show(io,C[symbol(C.uplo)]))
+
+A_ldiv_B!{T<:BlasFloat}(C::Cholesky{T}, B::StridedVecOrMat{T}) = LAPACK.potrs!(C.uplo, C.UL, B)
 
 function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedVector{T})
     chkfullrank(C)
@@ -124,9 +96,21 @@ function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
     B
 end
 
-rank(C::CholeskyPivoted) = C.rank
+function det{T}(C::Cholesky{T})
+    dd = one(T)
+    for i in 1:size(C.UL,1) dd *= abs2(C.UL[i,i]) end
+    dd
+end
 
 det{T}(C::CholeskyPivoted{T}) = C.rank<size(C.UL,1) ? real(zero(T)) : prod(abs2(diag(C.UL)))
+
+function logdet{T}(C::Cholesky{T})
+    dd = zero(T)
+    for i in 1:size(C.UL,1) dd += log(C.UL[i,i]) end
+    dd + dd # instead of 2.0dd which can change the type
+end
+
+inv(C::Cholesky)=symmetrize_conj!(LAPACK.potri!(C.uplo, copy(C.UL)), C.uplo)
 
 function inv(C::CholeskyPivoted)
     chkfullrank(C)
@@ -134,7 +118,13 @@ function inv(C::CholeskyPivoted)
     (symmetrize!(LAPACK.potri!(C.uplo, copy(C.UL)), C.uplo))[ipiv, ipiv]
 end
 
-## LU
+chkfullrank(C::CholeskyPivoted) = C.rank<size(C.UL, 1) && throw(RankDeficientException(C.info))
+
+rank(C::CholeskyPivoted) = C.rank
+
+####################
+# LU Factorization #
+####################
 type LU{T<:BlasFloat} <: Factorization{T}
     factors::Matrix{T}
     ipiv::Vector{BlasInt}
@@ -204,7 +194,6 @@ function logdet{T<:Complex}(A::LU{T})
     complex(r,a)    
 end
 
-
 A_ldiv_B!{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info
 At_ldiv_B{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, copy(B)) A.info
 Ac_ldiv_B{T<:BlasComplex}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, copy(B)) A.info
@@ -217,23 +206,33 @@ inv(A::LU)=@assertnonsingular LAPACK.getri!(copy(A.factors), A.ipiv) A.info
 
 cond(A::LU, p) = inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm(A[:L][A[:p],:]*A[:U], p)))
 
-## QR decomposition without column pivots. By the faster geqrt3
+####################
+# QR Factorization #
+####################
+
+# Note. For QR factorization without pivoting, the WY representation based method introduced in LAPACK 3.4
 type QR{S<:BlasFloat} <: Factorization{S}
-    vs::Matrix{S}                     # the elements on and above the diagonal contain the N-by-N upper triangular matrix R; the elements below the diagonal are the columns of V
-    T::Matrix{S}                      # upper triangular factor of the block reflector.
+    vs::Matrix{S}
+    T::Matrix{S}
 end
 QR{T<:BlasFloat}(A::StridedMatrix{T}, nb::Integer = min(minimum(size(A)), 36)) = QR(LAPACK.geqrt!(A, nb)...)
 
-qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, args::Integer...) = QR(A, args...)
-qrfact!(A::StridedMatrix, args::Integer...) = qrfact!(float(A), args...)
-qrfact{T<:BlasFloat}(A::StridedMatrix{T}, args::Integer...) = qrfact!(copy(A), args...)
-qrfact(A::StridedMatrix, args::Integer...) = qrfact!(float(A), args...)
+type QRPivoted{T} <: Factorization{T}
+    hh::Matrix{T}
+    tau::Vector{T}
+    jpvt::Vector{BlasInt}
+end
+
+qrfact!{T<:BlasFloat}(A::StridedMatrix{T}; pivot=false) = pivot ? QRPivoted{T}(LAPACK.geqp3!(A)...) : QR(A)
+qrfact!(A::StridedMatrix; pivot=false) = qrfact!(float(A), pivot=pivot)
+qrfact{T<:BlasFloat}(A::StridedMatrix{T}; pivot=false) = qrfact!(copy(A), pivot=pivot)
+qrfact(A::StridedMatrix; pivot=false) = qrfact!(float(A), pivot=pivot)
 qrfact(x::Integer) = qrfact(float(x))
 qrfact(x::Number) = QR(fill(one(x), 1, 1), fill(x, 1, 1))
 
-function qr(A::Union(Number, AbstractMatrix), thin::Bool=true)
-    F = qrfact(A)
-    full(F[:Q], thin), F[:R]
+function qr(A::Union(Number, AbstractMatrix); pivot=false, thin::Bool=true)
+    F = qrfact(A, pivot=pivot)
+    full(F[:Q], thin=thin), F[:R]
 end
 
 size(A::QR, args::Integer...) = size(A.vs, args...)
@@ -253,9 +252,9 @@ QRPackedQ(A::QR) = QRPackedQ(A.vs, A.T)
 size(A::QRPackedQ, dim::Integer) = 0 < dim ? (dim <= 2 ? size(A.vs, 1) : 1) : throw(BoundsError())
 size(A::QRPackedQ) = size(A, 1), size(A, 2)
 
-full{T<:BlasFloat}(A::QRPackedQ{T}, thin::Bool=true) = A * (thin ? eye(T, size(A.vs)...) : eye(T, size(A.vs,1)))
+full{T<:BlasFloat}(A::QRPackedQ{T}; thin::Bool=true) = A * (thin ? eye(T, size(A.vs)...) : eye(T, size(A.vs,1)))
 
-print_matrix(io::IO, A::QRPackedQ, rows::Integer, cols::Integer) = print_matrix(io, full(A, false), rows, cols)
+print_matrix(io::IO, A::QRPackedQ, rows::Integer, cols::Integer) = print_matrix(io, full(A, thin=false), rows, cols)
 
 ## Multiplication by Q from the QR decomposition
 function *{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T})
@@ -273,22 +272,6 @@ end
 ## Least squares solution.  Should be more careful about cases with m < n
 \(A::QR, B::StridedVector) = Triangular(A[:R], :U)\(A[:Q]'B)[1:size(A, 2)]
 \(A::QR, B::StridedMatrix) = Triangular(A[:R], :U)\(A[:Q]'B)[1:size(A, 2),:]
-
-type QRPivoted{T} <: Factorization{T}
-    hh::Matrix{T}
-    tau::Vector{T}
-    jpvt::Vector{BlasInt}
-end
-
-qrpfact!{T<:BlasFloat}(A::StridedMatrix{T}) = QRPivoted{T}(LAPACK.geqp3!(A)...)
-qrpfact!(A::StridedMatrix) = qrpfact!(float(A))
-qrpfact{T<:BlasFloat}(A::StridedMatrix{T}) = qrpfact!(copy(A))
-qrpfact(A::StridedMatrix) = qrpfact!(float(A))
-
-function qrp(A::AbstractMatrix, thin::Bool=false)
-    F = qrpfact(A)
-    full(F[:Q], thin), F[:R], F[:p]
-end
 
 size(A::QRPivoted, args::Integer...) = size(A.hh, args...)
 
@@ -345,13 +328,13 @@ QRPivotedQ(A::QRPivoted) = QRPivotedQ(A.hh, A.tau)
 
 size(A::QRPivotedQ, dims::Integer) = dims > 0 ? (dims < 3 ? size(A.hh, 1) : 1) : throw(BoundsError())
 
-function full{T<:BlasFloat}(A::QRPivotedQ{T}, thin::Bool=true)
+function full{T<:BlasFloat}(A::QRPivotedQ{T}; thin::Bool=true)
     m, n = size(A.hh)
     Ahhpad = thin ? copy(A.hh) : [A.hh zeros(T, m, max(0, m - n))]
     LAPACK.orgqr!(Ahhpad, A.tau)
 end
 
-print_matrix(io::IO, A::QRPivotedQ, rows::Integer, cols::Integer) = print_matrix(io, full(A, false), rows, cols)
+print_matrix(io::IO, A::QRPivotedQ, rows::Integer, cols::Integer) = print_matrix(io, full(A, thin=false), rows, cols)
 
 ## Multiplication by Q from the Pivoted QR decomposition
 function *{T<:BlasFloat}(A::QRPivotedQ{T}, B::StridedVecOrMat{T})
