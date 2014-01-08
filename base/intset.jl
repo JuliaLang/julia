@@ -287,3 +287,5 @@ function isequal(s1::IntSet, s2::IntSet)
 end
 
 issubset(a::IntSet, b::IntSet) = isequal(a, intersect(a,b))
+<(a::IntSet, b::IntSet) = (a<=b) && !isequal(a,b)
+<=(a::IntSet, b::IntSet) = issubset(a, b)
