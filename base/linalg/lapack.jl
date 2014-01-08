@@ -2244,7 +2244,7 @@ for (stev, stebz, stegr, stein, elty) in
         function stegr!(jobz::BlasChar, range::BlasChar, dv::Vector{$elty}, ev::Vector{$elty}, vl::Real, vu::Real, il::Integer, iu::Integer)
             n = length(dv)
             if length(ev) != (n-1) throw(DimensionMismatch("stebz!")) end
-            eev = [ev, zero($elty)]
+            eev = [ev; zero($elty)]
             abstol = Array($elty, 1)
             m = Array(BlasInt, 1)
             w = similar(dv, $elty, n)

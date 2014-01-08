@@ -1308,7 +1308,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     la = length(args)
     assert(is(ast.head,:lambda))
     locals = (ast.args[2][1])::Array{Any,1}
-    vars = [args, locals]
+    vars = [args; locals]
     body = (ast.args[3].args)::Array{Any,1}
     n = length(body)
 
@@ -2688,7 +2688,7 @@ function inlining_pass(e::Expr, sv, ast)
                             return (e,stmts)
                         end
                     end
-                    e.args = [{e.args[2]}, newargs...]
+                    e.args = [{e.args[2]}; newargs...]
 
                     # now try to inline the simplified call
 

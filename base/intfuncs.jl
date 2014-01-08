@@ -236,8 +236,8 @@ end
 
 num2hex(n::Integer) = hex(n, sizeof(n)*2)
 
-const base36digits = ['0':'9','a':'z']
-const base62digits = ['0':'9','A':'Z','a':'z']
+const base36digits = ['0':'9';'a':'z']
+const base62digits = ['0':'9';'A':'Z';'a':'z']
 
 function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
     if !(2 <= b <= 62) error("invalid base: $b") end

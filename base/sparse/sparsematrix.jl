@@ -414,8 +414,8 @@ eye(S::SparseMatrixCSC) = speye(S)
 
 function speye(T::Type, m::Integer, n::Integer)
     x = min(m,n)
-    rowval = [1:x]
-    colptr = [rowval, fill(int(x+1), n+1-x)]
+    rowval = [1:x;]
+    colptr = [rowval; fill(int(x+1), n+1-x)]
     nzval  = ones(T, x)
     return SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end

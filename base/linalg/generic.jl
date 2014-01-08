@@ -43,8 +43,8 @@ function diff(A::AbstractMatrix, dim::Integer)
 end
 
 
-gradient(F::AbstractVector) = gradient(F, [1:length(F)])
-gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F))])
+gradient(F::AbstractVector) = gradient(F, [1:length(F);])
+gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F));])
 
 diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagonal matrix")
 

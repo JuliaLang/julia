@@ -429,7 +429,7 @@ function circshift{T,N}(a::AbstractArray{T,N}, shiftamts)
     for i=1:N
         s = size(a,i)
         d = i<=length(shiftamts) ? shiftamts[i] : 0
-        I = tuple(I..., d==0 ? [1:s] : mod([-d:s-1-d], s).+1)
+        I = tuple(I..., d==0 ? [1:s;] : mod([-d:s-1-d;], s).+1)
     end
     a[(I::NTuple{N,Vector{Int}})...]
 end
@@ -1216,7 +1216,7 @@ function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
 
     dimsA = [size(A)...]
     ndimsA = ndims(A)
-    alldims = [1:ndimsA]
+    alldims = [1:ndimsA;]
 
     otherdims = setdiff(alldims, dims)
 
