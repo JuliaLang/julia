@@ -30,7 +30,7 @@ end
 
 # Based on code by Stefan Karpinski from https://github.com/hackerschool/WebSockets.jl (distributed under the same MIT license as Julia)
 
-const b64chars = ['A':'Z','a':'z','0':'9','+','/']
+const b64chars = ['A':'Z';'a':'z';'0':'9';'+';'/']
 
 function b64(x::Uint8, y::Uint8, z::Uint8)
     n = int(x)<<16 | int(y)<<8 | int(z)

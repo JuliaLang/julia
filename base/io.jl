@@ -6,7 +6,7 @@
 
 ## byte-order mark, ntoh & hton ##
 
-const ENDIAN_BOM = reinterpret(Uint32,uint8([1:4]))[1]
+const ENDIAN_BOM = reinterpret(Uint32,uint8([1:4;]))[1]
 
 if ENDIAN_BOM == 0x01020304
     ntoh(x) = x

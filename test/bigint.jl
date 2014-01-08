@@ -33,7 +33,7 @@ ee = typemax(Int64)
 @test string(d) == "-246913578024691357802469135780"
 @test string(a) == "123456789012345678901234567890"
 
-for i = -10:10, j = [-10:-1,1:10]
+for i = -10:10, j = [-10:-1;1:10]
     @test div(BigInt(i), BigInt(j)) == div(i,j)
     @test fld(BigInt(i), BigInt(j)) == fld(i,j)
     @test mod(BigInt(i), BigInt(j)) == mod(i,j)

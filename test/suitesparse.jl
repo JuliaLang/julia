@@ -17,13 +17,13 @@ L,U,p,q,Rs = lua[:(:)]
 
 b = [8., 45., -3., 3., 19.]
 x = lua\b
-@test_approx_eq x float([1:5])
+@test_approx_eq x float([1:5;])
 
 @test norm(A*x-b,1) < eps(1e4)
 
 b = [8., 20., 13., 6., 17.]
 x = lua'\b
-@test_approx_eq x float([1:5])
+@test_approx_eq x float([1:5;])
 
 @test norm(A'*x-b,1) < eps(1e4)
 

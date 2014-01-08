@@ -131,7 +131,7 @@ end # @unix_only(SharedArray tests)
 if nprocs() < 4
     remotecall_fetch(1, () -> addprocs(4 - nprocs()))
 end
-workloads = hist(@parallel((a,b)->[a,b], for i=1:7; myid(); end), nprocs())[2]
+workloads = hist(@parallel((a,b)->[a;b], for i=1:7; myid(); end), nprocs())[2]
 @test maximum(workloads) - minimum(workloads) <= 1
 
 # @parallel reduction should work even with very short ranges

@@ -47,7 +47,7 @@ A_ldiv_B!{T<:BlasFloat,S<:AbstractMatrix,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsU
 function \{T<:BlasFloat,S<:AbstractMatrix,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, B::StridedVecOrMat{T})
     x = A_ldiv_B!(A, copy(B))
     errors = LAPACK.trrfs!(UpLo == :L ? 'L' : 'U', 'N', IsUnit ? 'U' : 'N', A.data, B, x)
-    all(isfinite, [errors...]) || all([errors...] .< one(T)/eps(T)) || warn("""Unreasonably large error in computed solution:
+    all(isfinite, vcat(errors...)) || all(vcat(errors...) .< one(T)/eps(T)) || warn("""Unreasonably large error in computed solution:
 forward errors:
 $(errors[1])
 backward errors:
