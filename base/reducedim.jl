@@ -7,10 +7,10 @@ reduced_dims(a::AbstractArray, region) = reduced_dims(size(a), region)
 # for reductions that keep 0 dims as 0
 reduced_dims0(a::AbstractArray, region) = reduced_dims0(size(a), region)
 
-reduced_dims{N}(siz::NTuple{N,Int}, d::Int, rd::Int) = d == 1 ? tuple(rd, siz[d+1:N]...) :
-                                                       d == N ? tuple(siz[1:N-1]..., rd) :
-                                                       1 < d < N ? tuple(siz[1:d-1]..., rd, siz[d+1:N]...) : 
-                                                       siz
+reduced_dims{N}(siz::NTuple{N,Int}, d::Int, rd::Int) = (d == 1 ? tuple(rd, siz[d+1:N]...) :
+                                                        d == N ? tuple(siz[1:N-1]..., rd) :
+                                                        1 < d < N ? tuple(siz[1:d-1]..., rd, siz[d+1:N]...) : 
+                                                        siz)::typeof(siz)
 
 reduced_dims{N}(siz::NTuple{N,Int}, d::Int) = reduced_dims(siz, d, 1)
 
@@ -23,7 +23,7 @@ function reduced_dims{N}(siz::NTuple{N,Int}, region)
             rsiz[i] = 1
         end
     end
-    tuple(rsiz...)
+    tuple(rsiz...)::typeof(siz)
 end
 
 function reduced_dims0{N}(siz::NTuple{N,Int}, region)
@@ -33,7 +33,7 @@ function reduced_dims0{N}(siz::NTuple{N,Int}, region)
             rsiz[i] = (rsiz[i] == 0 ? 0 : 1)
         end
     end
-    tuple(rsiz...)
+    tuple(rsiz...)::typeof(siz)
 end
 
 function regionsize(a, region)
