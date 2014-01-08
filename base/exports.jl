@@ -7,6 +7,7 @@ export
     Operators,
     Pkg,
     Profile,
+    Time,
     Sys,
     Test,
     BLAS,
