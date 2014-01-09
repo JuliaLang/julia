@@ -72,28 +72,25 @@ int jl_has_intrinsics(jl_expr_t *e);
 extern int jl_boot_file_loaded;
 extern int inside_typedef;
 
-int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb) {
-    if(dta->name->name != dtb->name->name) 
-        return 0;
-    if(!jl_egal((jl_value_t*)dta->types, (jl_value_t*)dtb->types)) 
-        return 0;
-    if(dta->abstract != dtb->abstract) 
-        return 0;
-    if(dta->mutabl != dtb->mutabl) 
-        return 0;
-    if(!jl_egal((jl_value_t*)dta->super, (jl_value_t*)dtb->super))
-        return 0;
-    if(!jl_egal((jl_value_t*)dta->names, (jl_value_t*)dtb->names)) 
-        return 0;
-    if(!jl_egal((jl_value_t*)dta->parameters, (jl_value_t*)dtb->parameters)) 
-        return 0;
-    return 1;
+// this is a heuristic for allowing "redefining" a type to something identical
+static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
+{
+    return (jl_typeof(dta) == jl_typeof(dtb) &&
+            dta->name->name == dtb->name->name &&
+            jl_egal((jl_value_t*)dta->types, (jl_value_t*)dtb->types) &&
+            dta->abstract == dtb->abstract &&
+            dta->mutabl == dtb->mutabl &&
+            dta->size == dtb->size &&
+            jl_egal((jl_value_t*)dta->super, (jl_value_t*)dtb->super) &&
+            jl_egal((jl_value_t*)dta->names, (jl_value_t*)dtb->names) &&
+            jl_egal((jl_value_t*)dta->parameters, (jl_value_t*)dtb->parameters));
 }
 
-void check_can_assign_type(jl_binding_t *b) {
-    if (b->constp && b->value != NULL && !jl_is_type(b->value))
+void check_can_assign_type(jl_binding_t *b)
+{
+    if (b->constp && b->value != NULL && !jl_is_datatype(b->value))
         jl_errorf("invalid redefinition of constant %s", b->name->name);
-}    
+}
 
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
 {
@@ -318,9 +315,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         super = eval(args[2], locals, nl);
         jl_set_datatype_super(dt, super);
         b->value = temp;
-        if(temp==NULL || 
-           jl_typeof((jl_value_t*)dt) != jl_typeof(temp) || 
-           !equiv_type(dt, (jl_datatype_t*)temp)) {
+        if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
             jl_checked_assignment(b, (jl_value_t*)dt);
         }
         JL_GC_POP();
@@ -328,8 +323,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     }
     else if (ex->head == bitstype_sym) {
         jl_value_t *name = args[0];
-        jl_value_t *super = NULL, *para = NULL, *vnb = NULL;
-        JL_GC_PUSH3(&para, &super, &vnb);
+        jl_value_t *super = NULL, *para = NULL, *vnb = NULL, *temp = NULL;
+        JL_GC_PUSH3(&para, &super, &temp);
         assert(jl_is_symbol(name));
         para = eval(args[1], locals, nl);
         assert(jl_is_tuple(para));
@@ -343,9 +338,15 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_datatype_t *dt =
             jl_new_bitstype(name, jl_any_type, (jl_tuple_t*)para, nb);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
-        jl_checked_assignment(b, (jl_value_t*)dt);
+        temp = b->value;
+        check_can_assign_type(b);
+        b->value = (jl_value_t*)dt;
         super = eval(args[3], locals, nl);
         jl_set_datatype_super(dt, super);
+        b->value = temp;
+        if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
+            jl_checked_assignment(b, (jl_value_t*)dt);
+        }
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
     }
@@ -385,18 +386,18 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             b->value = temp;
             jl_rethrow();
         }
-        b->value = temp;
-        if(temp==NULL || 
-           jl_typeof((jl_value_t*)dt)!=jl_typeof(temp) || 
-           !equiv_type(dt, (jl_datatype_t*)temp)) {
-            jl_checked_assignment(b, (jl_value_t*)dt);
-        }
-
         for(size_t i=0; i < jl_tuple_len(para); i++) {
             ((jl_tvar_t*)jl_tupleref(para,i))->bound = 0;
         }
         jl_compute_field_offsets(dt);
-        jl_add_constructors(dt);
+
+        b->value = temp;
+        if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
+            jl_checked_assignment(b, (jl_value_t*)dt);
+
+            jl_add_constructors(dt);
+        }
+
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
     }
