@@ -31,7 +31,6 @@ USE_SYSTEM_RMATH=0
 USE_SYSTEM_LIBUV=0
 
 USE_MKL = 0
-MKLLIB = $(MKLROOT)/lib/intel64
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB = 0
@@ -202,6 +201,7 @@ endif
 endif
 
 JFFLAGS = -O2 $(fPIC)
+JF2CFLAGS = -ff2c -fno-second-underscore
 CPP = $(CC) -E
 AR := $(CROSS_COMPILE)ar
 AS := $(CROSS_COMPILE)as
@@ -445,6 +445,9 @@ endif
 ifeq ($(USE_MKL), 1)
 ifeq ($(USE_BLAS64), 1)
 export MKL_INTERFACE_LAYER := ILP64
+MKLLIB = $(MKLROOT)/lib/intel64
+else
+MKLLIB = $(MKLROOT)/lib/ia32
 endif
 USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
