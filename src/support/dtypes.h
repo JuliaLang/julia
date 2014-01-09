@@ -173,12 +173,27 @@ typedef uptrint_t u_ptrint_t;
 #define S32_MIN    (-S32_MAX - 1L)
 #define BIT31      0x80000000
 
+/* check if these constants are defined before defining them, most can be
+   found in gcc's float.h */
+#ifndef DBL_EPSILON
 #define DBL_EPSILON      2.2204460492503131e-16
+#endif
+#ifndef FLT_EPSILON
 #define FLT_EPSILON      1.192092896e-7
+#endif
+#ifndef DBL_MAX
 #define DBL_MAX          1.7976931348623157e+308
+#endif
+#ifndef DBL_MIN
 #define DBL_MIN          2.2250738585072014e-308
+#endif
+#ifndef FLT_MAX
 #define FLT_MAX          3.402823466e+38
+#endif
+#ifndef FLT_MIN
 #define FLT_MIN          1.175494351e-38
+#endif
+
 #define LOG2_10          3.3219280948873626
 #define rel_zero(a, b) (fabs((a)/(b)) < DBL_EPSILON)
 #define sign_bit(r) ((*(int64_t*)&(r)) & BIT63)
