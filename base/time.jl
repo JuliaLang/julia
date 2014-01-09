@@ -528,6 +528,20 @@ function Date(dt::String,format::String)
     y, m, d = _format(dt,f)
     return Date(y,m,d)
 end
+# Best guess at Date
+function Date(s::String)
+    if ismatch(r"[\/|\-|\.|,|\s]",s)
+        m = match(r"[\/|\-|\.|,|\s]",s)
+        a,b,c = split(s,m.match)
+        y = length(a) == 4 ? int64(a) : length(c) == 4 ? int64(c) : 0
+        a,b,c = int64(a),int64(b),int64(c)
+        y == 0 && (y = c > 49 ? c + 1900 : c + 2000)
+        m,d = y == a ? (b,c) : (a,b)
+        return m > 12 ? Date(y,d,m) : Date(y,m,d)
+    else
+        error("Can't parse Date, please use Date(datestring,format)")
+    end
+end
 function Datetime{T<:String}(y::AbstractArray{T},x::T)
     f = DatetimeFormat(x)
     return reshape([Datetime(y[i],f) for i in 1:length(y)], size(y))
@@ -535,6 +549,9 @@ end
 function Date{T<:String}(y::AbstractArray{T},x::T)
     f = DateFormat(x)
     return reshape([Date(y[i],f) for i in 1:length(y)], size(y))
+end
+function Date{T<:String}(y::AbstractArray{T})
+    return reshape([Date(y[i]) for i in 1:length(y)], size(y))
 end
 
 #Period types
