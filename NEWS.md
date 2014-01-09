@@ -14,6 +14,13 @@ New language features
   * Default "inner" constructors now accept any arguments. Constructors that
     look like `MyType(a, b) = new(a, b)` can and should be removed ([#4026]).
 
+  * Expanded array type hierarchy, including ``StoredArray`` for all
+    container-like arrays, and ``DenseArray`` for in-memory arrays with
+    standard strided storage ([#987], [#2345]).
+
+  * When reloading code, types whose definitions have not changed can be
+    ignored in some cases.
+
 New library functions
 ---------------------
 
@@ -126,6 +133,8 @@ Deprecated or removed
 [#5196]: https://github.com/JuliaLang/julia/issues/5196
 [#5275]: https://github.com/JuliaLang/julia/issues/5275
 [#5277]: https://github.com/JuliaLang/julia/issues/5277
+[#987]: https://github.com/JuliaLang/julia/issues/987
+[#2345]: https://github.com/JuliaLang/julia/issues/2345
 
 Julia v0.2.0 Release Notes
 ==========================
