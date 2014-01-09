@@ -11,7 +11,6 @@ HEADERS = \
 	dtypes.h \
 	hashing.h \
 	htable.h \
-	ieee754.h \
 	ios.h \
 	libsupport.h \
 	MurmurHash3.h \
