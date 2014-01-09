@@ -136,7 +136,7 @@ convert(::Type{Complex}, i::Imaginary) = Complex(zero(i),i)
 isequal(i::Imaginary, j::Imaginary) = isequal(imag(i),imag(j))
 isequal(z::Complex, w::Complex) = isequal(real(z),real(w)) & isequal(imag(z),imag(w))
 
-hash(i::Imaginary) = hash(imag(i))
+hash(i::Imaginary) = hash(complex(i))
 hash(z::Complex) = bitmix(hash(real(z)),hash(imag(z)))
 
 conj{T<:Real}(i::Imaginary{T}) = Imaginary{T}(-imag(i))
