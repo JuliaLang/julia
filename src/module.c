@@ -350,12 +350,13 @@ DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
 DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
     if (b->constp && b->value != NULL) {
-        if (!jl_egal(rhs, b->value) &&
-            (jl_typeof(rhs) != jl_typeof(b->value) ||
-             jl_is_type(rhs) || jl_is_function(rhs) || jl_is_module(rhs))) {
-            jl_errorf("invalid redefinition of constant %s", b->name->name);
+        if (!jl_egal(rhs, b->value)) {
+            if (jl_typeof(rhs) != jl_typeof(b->value) ||
+                jl_is_type(rhs) || jl_is_function(rhs) || jl_is_module(rhs)) {
+                jl_errorf("invalid redefinition of constant %s", b->name->name);
+            }
+            JL_PRINTF(JL_STDERR,"Warning: redefining constant %s\n",b->name->name);
         }
-        JL_PRINTF(JL_STDERR,"Warning: redefining constant %s\n",b->name->name);
     }
     b->value = rhs;
 }
