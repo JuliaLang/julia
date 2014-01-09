@@ -2859,8 +2859,11 @@ So far only the second case can actually occur.
 	    ((=)     (let ((vt (vinfo:type
 				(or (var-info-for (cadr e) vi) '(#f Any)))))
 		       (if (not (eq? vt 'Any))
-			   (emit `(= ,(cadr e) (call (top convert) ,vt
-						     ,(goto-form (caddr e)))))
+			   (emit `(= ,(cadr e)
+				     (call (top typeassert)
+					   (call (top convert) ,vt
+						 ,(goto-form (caddr e)))
+					   ,vt)))
 			   (emit `(= ,(cadr e) ,(goto-form (caddr e)))))))
 	    ((if) (let ((test     `(gotoifnot ,(goto-form (cadr e)) _))
 			(end-jump `(goto _))
