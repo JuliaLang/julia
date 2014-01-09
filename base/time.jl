@@ -349,73 +349,16 @@ typealias TimeTypePeriod Union(TimeType,Period)
 (-){T<:TimeTypePeriod}(x::TimeTypePeriod, y::AbstractArray{T}) = reshape([x - y[i] for i in 1:length(y)], size(y))
 (-){T<:TimeTypePeriod}(x::AbstractArray{T}, y::TimeTypePeriod) = reshape([x[i] - y for i in 1:length(x)], size(x))
 
-#Datetime range
-immutable DatetimeRange{T<:TimeType,P<:Period} <: Ranges{T}
-    start::T
-    step::P
-    len::Int
-end
-immutable DatetimeRange1{T<:TimeType,P<:Period} <: Ranges{T}
-    start::T
-    step::P
-    fun::Function
-    len::Int
-end
-step(r::Union(DatetimeRange,DatetimeRange1))  = r.step
-function show(io::IO,r::DatetimeRange)
-    print(io, r.start, ':', r.step, ':', last(r))
-end
-function show(io::IO,r::DatetimeRange1)
-    print(io, r.start, ':', r.step, ':', last(r), ' ', "+ inclusion function")
-end
-next(r::DatetimeRange, i) = (r.start + i*r.step, i+1)
-colon{T<:TimeType}(t1::T, y::Year, t2::T) = DatetimeRange{T,Year}(t1, y, int(div(year(t2) - year(t1),y) + 1))
-colon{T<:TimeType}(t1::T, m::Month, t2::T) = DatetimeRange{T,Month}(t1, m, div((year(t2)-year(t1))*12+month(t2)-month(t1),m) + 1)
-colon{T<:TimeType}(t1::T, w::Week, t2::T) = DatetimeRange{T,Week}(t1, w, div(_days(t2)-_days(t1),7w)+1)
-colon{T<:TimeType}(t1::T, d::Day, t2::T) = DatetimeRange{T,Day}(t1, d, div(_days(t2)-_days(t1),d)+1)
-colon{T<:Datetime}(t1::T, h::Hour, t2::T) = DatetimeRange{T,Hour}(t1, h, div(div(t2.instant.ms,3600000)-div(t1.instant.ms,3600000),h)+1)
-colon{T<:Datetime}(t1::T, mi::Minute, t2::T) = DatetimeRange{T,Minute}(t1, mi, div(div(t2.instant.ms,60000)-div(t1.instant.ms,60000),mi)+1)
-colon{T<:Datetime}(t1::T, s::Second, t2::T) = DatetimeRange{T,Second}(t1, s, div(div(t2.instant.ms,1000)-div(t1.instant.ms,1000),s)+1)
-colon{T<:Datetime}(t1::T, ms::Millisecond, t2::T) = DatetimeRange{T,Millisecond}(t1, ms, div(t2.instant.ms-t1.instant.ms,ms)+1)
-colon{T<:Datetime}(t1::T,t2::T) = DatetimeRange{T,Day}(t1, Day(1), div(_days(t2)-_days(t1),Day(1))+1)
-(+){T<:TimeType}(r::DatetimeRange{T},p::Period) = DatetimeRange{T}(r.start+p,r.step,r.len)
-(-){T<:TimeType}(r::DatetimeRange{T},p::Period) = DatetimeRange{T}(r.start-p,r.step,r.len)
-(+){T<:TimeType}(p::Period,r::DatetimeRange{T}) = r + p
-(-){T<:TimeType}(p::Period,r::DatetimeRange{T}) = r - p
-function last(r::DatetimeRange1)
-    t = r.start
-    len = 0
-    while true
-        r.fun(t) && (len += 1)
-        len == r.len && break
-        t += r.step
+# Temporal Expressions
+function recur{T<:Time.TimeType}(fun::Function,start::T,stop::T,step::Time.Period=Time.Day(1))
+    a = T[]
+    i = start
+    while i <= stop
+        fun(i) && (push!(a,i))
+        i += step
     end
-    return t
+    return a
 end
-function next(r::DatetimeRange1, i)
-    t = r.start
-    len = 0
-    while true
-        r.fun(t) && (len += 1)
-        len == i+1 && break
-        t += r.step
-    end
-    return (t,i+1)
-end
-function _colon{T<:TimeType,P<:Period}(t1::T,fun::Function,p::P,t2::T)
-    len = 0
-    t = d1 = t1
-    while t < t2
-        if fun(t) 
-            len += 1
-            len == 1 && (d1 = t)
-        end
-        t += p
-    end
-    return DatetimeRange1{T,P}(d1, p, fun, len)
-end
-recur(fun::Function,d1::TimeType,p::Period,d2::TimeType) = _colon(d1,fun,p,d2)
-recur(fun::Function,di::DatetimeRange) = _colon(di.start,fun,di.step,last(di))
 
 # Datetime Parsing
 # TODO: Handle generic offsets, i.e. +08:00, -05:00
