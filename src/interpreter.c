@@ -72,6 +72,29 @@ int jl_has_intrinsics(jl_expr_t *e);
 extern int jl_boot_file_loaded;
 extern int inside_typedef;
 
+int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb) {
+    if(dta->name->name != dtb->name->name) 
+        return 0;
+    if(!jl_egal((jl_value_t*)dta->types, (jl_value_t*)dtb->types)) 
+        return 0;
+    if(dta->abstract != dtb->abstract) 
+        return 0;
+    if(dta->mutabl != dtb->mutabl) 
+        return 0;
+    if(!jl_egal((jl_value_t*)dta->super, (jl_value_t*)dtb->super))
+        return 0;
+    if(!jl_egal((jl_value_t*)dta->names, (jl_value_t*)dtb->names)) 
+        return 0;
+    if(!jl_egal((jl_value_t*)dta->parameters, (jl_value_t*)dtb->parameters)) 
+        return 0;
+    return 1;
+}
+
+void check_can_assign_type(jl_binding_t *b) {
+    if (b->constp && b->value != NULL && !jl_is_type(b->value))
+        jl_errorf("invalid redefinition of constant %s", b->name->name);
+}    
+
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
 {
     if (jl_is_symbol(e)) {
@@ -282,15 +305,24 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_value_t *name = args[0];
         jl_value_t *para = eval(args[1], locals, nl);
         jl_value_t *super = NULL;
-        JL_GC_PUSH2(&para, &super);
+        jl_value_t *temp = NULL;
+        JL_GC_PUSH3(&para, &super, &temp);
         assert(jl_is_tuple(para));
         assert(jl_is_symbol(name));
         jl_datatype_t *dt =
             jl_new_abstracttype(name, jl_any_type, (jl_tuple_t*)para);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
-        jl_checked_assignment(b, (jl_value_t*)dt);
+        temp = b->value;
+        check_can_assign_type(b);
+        b->value = (jl_value_t*)dt;
         super = eval(args[2], locals, nl);
         jl_set_datatype_super(dt, super);
+        b->value = temp;
+        if(temp==NULL || 
+           jl_typeof((jl_value_t*)dt) != jl_typeof(temp) || 
+           !equiv_type(dt, (jl_datatype_t*)temp)) {
+            jl_checked_assignment(b, (jl_value_t*)dt);
+        }
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
     }
@@ -337,7 +369,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
         temp = b->value;  // save old value
         // temporarily assign so binding is available for field types
-        jl_checked_assignment(b, (jl_value_t*)dt);
+        check_can_assign_type(b);
+        b->value = (jl_value_t*)dt;
 
         JL_TRY {
             // operations that can fail
@@ -351,6 +384,12 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         JL_CATCH {
             b->value = temp;
             jl_rethrow();
+        }
+        b->value = temp;
+        if(temp==NULL || 
+           jl_typeof((jl_value_t*)dt)!=jl_typeof(temp) || 
+           !equiv_type(dt, (jl_datatype_t*)temp)) {
+            jl_checked_assignment(b, (jl_value_t*)dt);
         }
 
         for(size_t i=0; i < jl_tuple_len(para); i++) {
