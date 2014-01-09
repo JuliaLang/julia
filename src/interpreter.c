@@ -86,7 +86,7 @@ static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
             jl_egal((jl_value_t*)dta->parameters, (jl_value_t*)dtb->parameters));
 }
 
-void check_can_assign_type(jl_binding_t *b)
+static void check_can_assign_type(jl_binding_t *b)
 {
     if (b->constp && b->value != NULL && !jl_is_datatype(b->value))
         jl_errorf("invalid redefinition of constant %s", b->name->name);

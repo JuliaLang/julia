@@ -1,32 +1,5 @@
 /*
   bit vector primitives
-
-  todo:
-  * reverse
-  * nreverse
- (- rotate left/right)
-  * shl_to
-  * not
-  - shr_row, shl_row
-
-  These routines are the back end supporting bit matrices. Many operations
-  on bit matrices are slow (such as accessing or setting a single element!)
-  but certain operations are privileged and lend themselves to extremely
-  efficient implementation due to the bit-vector nature of machine integers.
-  These are:
-  done:
-    &  |  $  ~  copy  reverse  fill  sum  prod
-  todo:
-    shift  trans  rowswap
-  would be nice:
-    channel  interleave
-
-  Important note:
-  Out-of-place functions always assume dest and source have the same amount
-  of space available.
-
-  shr_to, shl_to, not_to, and reverse_to assume source and dest don't overlap
-  and_to, or_to, and xor_to allow overlap.
 */
 
 #include <stdlib.h>
@@ -76,6 +49,33 @@ u_int32_t bitvector_get(u_int32_t *b, u_int64_t n)
 {
     return b[n>>5] & (1<<(n&31));
 }
+
+// a mask with n set lo or hi bits
+#define lomask(n) (u_int32_t)((((u_int32_t)1)<<(n))-1)
+#define ONES32 ((u_int32_t)0xffffffff)
+
+#ifdef __INTEL_COMPILER
+#define count_bits(b) _popcnt32(b)
+#else
+STATIC_INLINE u_int32_t count_bits(u_int32_t b)
+{
+    b = b - ((b>>1)&0x55555555);
+    b = ((b>>2)&0x33333333) + (b&0x33333333);
+    b = ((b>>4)+b)&0x0f0f0f0f;
+    b += (b>>8);
+    b += (b>>16);
+    return b & 0x3f;
+    // here is the non-optimized version, for clarity:
+    /*
+    b = ((b>> 1)&0x55555555) + (b&0x55555555);
+    b = ((b>> 2)&0x33333333) + (b&0x33333333);
+    b = ((b>> 4)&0x0f0f0f0f) + (b&0x0f0f0f0f);
+    b = ((b>> 8)&0x00ff00ff) + (b&0x00ff00ff);
+    b = ((b>>16)&0x0000ffff) + (b&0x0000ffff);
+    return b & 0x3f;
+    */
+}
+#endif
 
 static int ntz(uint32_t x)
 {

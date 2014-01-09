@@ -541,6 +541,9 @@ static numerictype_t sym_to_numtype(value_t type);
 #undef __USE_GNU
 #endif
 
+#define sign_bit(r) ((*(int64_t*)&(r)) & BIT63)
+#define DFINITE(d) (((*(int64_t*)&(d))&0x7ff0000000000000LL)!=0x7ff0000000000000LL)
+
 // 'weak' means we don't need to accurately reproduce the type, so
 // for example #int32(0) can be printed as just 0. this is used
 // printing in a context where a type is already implied, e.g. inside
@@ -591,7 +594,7 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
         else { d = *(double*)data; }
         if (!DFINITE(d)) {
             char *rep;
-            if (DNAN(d))
+            if (d != d)
                 rep = sign_bit(d) ? "-nan.0" : "+nan.0";
             else
                 rep = sign_bit(d) ? "-inf.0" : "+inf.0";
@@ -601,7 +604,7 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
                 outs(rep, f);
         }
         else if (d == 0) {
-            if (1/d < 0)
+            if (sign_bit(d))
                 outsn("-0.0", f, 4);
             else
                 outsn("0.0", f, 3);
