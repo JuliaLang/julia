@@ -1500,9 +1500,6 @@ function intersect(v1, vs...)
     ret
 end
 
-promote_eltype() = None
-promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
-
 function union(vs...)
     ret = Array(promote_eltype(vs...),0)
     seen = Set()

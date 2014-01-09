@@ -685,6 +685,9 @@ get(A::AbstractArray, I::RangeVecIntList, default) = get!(similar(A, typeof(defa
 
 ## Concatenation ##
 
+promote_eltype() = None
+promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
+
 #TODO: ERROR CHECK
 cat(catdim::Integer) = Array(None, 0)
 
@@ -853,7 +856,7 @@ hcat(X...) = cat(2, X...)
 cat{T}(catdim::Integer, A::AbstractArray{T}...) = cat_t(catdim, T, A...)
 
 cat(catdim::Integer, A::AbstractArray...) =
-    cat_t(catdim, promote_type(map(eltype, A)...), A...)
+    cat_t(catdim, promote_eltype(A...), A...)
 
 function cat_t(catdim::Integer, typeC, A::AbstractArray...)
     # ndims of all input arrays should be in [d-1, d]
