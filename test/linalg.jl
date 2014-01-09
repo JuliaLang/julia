@@ -51,7 +51,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test_approx_eq l*l' apd
 
     # pivoted Choleksy decomposition
-    cpapd = cholpfact(apd)
+    cpapd = cholfact(apd, pivot=true)
     @test rank(cpapd) == n
     @test all(diff(diag(real(cpapd.UL))).<=0.) # diagonal should be non-increasing
     @test_approx_eq b apd * (cpapd\b)
@@ -88,16 +88,16 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     # QR decomposition
     qra   = qrfact(a)
     q,r   = qra[:Q], qra[:R]
-    @test_approx_eq q'*full(q, false) eye(elty, n)
-    @test_approx_eq q*full(q, false)' eye(elty, n)
+    @test_approx_eq q'*full(q, thin=false) eye(elty, n)
+    @test_approx_eq q*full(q, thin=false)' eye(elty, n)
     @test_approx_eq q*r a
     @test_approx_eq a*(qra\b) b
 
     # (Automatic) Fat pivoted QR decomposition
     qrpa  = factorize(a[1:5,:])
     q,r,p = qrpa[:Q], qrpa[:R], qrpa[:p]
-    @test_approx_eq q'*full(q, false) eye(elty, 5)
-    @test_approx_eq q*full(q, false)' eye(elty, 5)
+    @test_approx_eq q'*full(q, thin=false) eye(elty, 5)
+    @test_approx_eq q*full(q, thin=false)' eye(elty, 5)
     @test_approx_eq q*r a[1:5,p]
     @test_approx_eq q*r[:,invperm(p)] a[1:5,:]
     @test_approx_eq a[1:5,:]*(qrpa\b[1:5]) b[1:5]
@@ -105,8 +105,8 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     # (Automatic) Thin pivoted QR decomposition
     qrpa  = factorize(a[:,1:5])
     q,r,p = qrpa[:Q], qrpa[:R], qrpa[:p]
-    @test_approx_eq q'*full(q, false) eye(elty, n)
-    @test_approx_eq q*full(q, false)' eye(elty, n)
+    @test_approx_eq q'*full(q, thin=false) eye(elty, n)
+    @test_approx_eq q*full(q, thin=false)' eye(elty, n)
     @test_approx_eq q*r a[:,p]
     @test_approx_eq q*r[:,invperm(p)] a[:,1:5]
 
@@ -125,7 +125,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     @test_approx_eq asym[1:5,1:5]*f[:vectors] scale(a610'a610*f[:vectors], f[:values])
     @test_approx_eq f[:values] eigvals(asym[1:5,1:5], a610'a610)
     @test_approx_eq prod(f[:values]) prod(eigvals(asym[1:5,1:5]/(a610'a610)))
-
+ 
     # Non-symmetric generalized eigenproblem
     f = eigfact(a[1:5,1:5], a[6:10,6:10])
     @test_approx_eq a[1:5,1:5]*f[:vectors] scale(a[6:10,6:10]*f[:vectors], f[:values])
@@ -149,7 +149,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     # singular value decomposition
     usv = svdfact(a)                
     @test_approx_eq usv[:U]*scale(usv[:S],usv[:Vt]) a
-    
+  
     # Generalized svd
     gsvd = svdfact(a,a[1:5,:])
     @test_approx_eq gsvd[:U]*gsvd[:D1]*gsvd[:R]*gsvd[:Q]' a
@@ -163,7 +163,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     
     x = tril(a)\b
     @test_approx_eq tril(a)*x b
-    
+   
     # Test null
     a15null = null(a[:,1:5]')
     @test rank([a[:,1:5] a15null]) == 10
