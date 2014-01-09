@@ -330,6 +330,63 @@ int complete_method_table()
     return 1;
 }
 
+int complete_filenames_query()
+{
+    if (rl_line_buffer[0] == ';')
+        return 1; //rl_filename_completion_function(ch, c);
+
+    int instring = 0;
+    int incmd = 0;
+    int escaped = 0;
+    int nearquote = 0;
+    int i;
+    for (i = 0; i < rl_point; ++i) {
+        switch (rl_line_buffer[i]) {
+            case '\\':
+                if (instring)
+                    escaped ^= 1;
+                nearquote = 0;
+                break;
+            case '\'':
+                if (!instring)
+                    nearquote = 1;
+                break;
+            case '"':
+                if (!escaped && !nearquote && !incmd)
+                    instring ^= 1;
+                escaped = nearquote = 0;
+                break;
+            case '`':
+                if (!escaped && !nearquote && !instring)
+                    incmd ^= 1;
+                escaped = nearquote = 0;
+                break;
+            default:
+                escaped = nearquote = 0;
+        }
+    }
+    return (instring || incmd);
+}
+
+int complete_filenames()
+{
+    if (!complete_filenames_query())
+        return 0;
+
+    char * bk_completer_word_break_characters = rl_completer_word_break_characters;
+    char * (*bk_completion_entry_function)(const char*, int) = rl_completion_entry_function;
+
+    rl_completer_word_break_characters = " \t\n\"\\'`@$><=;|&{(";
+    rl_completion_entry_function = rl_filename_completion_function;
+
+    rl_complete_internal('!');
+
+    rl_completer_word_break_characters = bk_completer_word_break_characters;
+    rl_completion_entry_function = bk_completion_entry_function;
+
+    return 1;
+}
+
 static int tab_callback(int count, int key)
 {
     if (!rl_point) {
@@ -342,7 +399,8 @@ static int tab_callback(int count, int key)
             // do tab completion
             i = rl_point;
             if (!complete_method_table()) {
-                rl_complete_internal('!');
+                if (!complete_filenames())
+                    rl_complete_internal('!');
                 if (i < rl_point && rl_line_buffer[rl_point-1] == ' ') {
                     rl_delete_text(rl_point-1, rl_point);
                     rl_point = rl_point-1;
