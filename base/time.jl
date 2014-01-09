@@ -23,10 +23,10 @@ abstract Calendar <: AbstractTime
 
 # ISOCalendar Implements the ISO 8601 standard (en.wikipedia.org/wiki/ISO_8601)
 # Notably based on the proleptic Gregorian calendar
-abstract ISOCalendar <: Calendar
+immutable ISOCalendar <: Calendar end
 
 abstract Timezone <: AbstractTime
-abstract UTC <: Timezone
+immutable UTC <: Timezone end
 
 abstract Period     <: AbstractTime
 abstract DatePeriod <: Period
