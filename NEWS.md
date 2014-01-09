@@ -105,6 +105,9 @@ Deprecated or removed
     argument specifying the floating point type to which they apply. The old
     behaviour and `[get/set/with]_bigfloat_rounding` functions are deprecated ([#5007])
 
+  * cholpfact and qrpfact are deprecated in favor of keyword arguments in 
+    cholfact and qrfact.
+
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
 [#5214]: https://github.com/JuliaLang/julia/issues/5214
@@ -135,6 +138,7 @@ Deprecated or removed
 [#5277]: https://github.com/JuliaLang/julia/issues/5277
 [#987]: https://github.com/JuliaLang/julia/issues/987
 [#2345]: https://github.com/JuliaLang/julia/issues/2345
+[#5330]: https://github.com/JuliaLang/julia/issues/5330
 
 Julia v0.2.0 Release Notes
 ==========================
