@@ -4,8 +4,6 @@
 #include <stddef.h>
 #include "dtypes.h"
 #include "utils.h"
-#include "ieee754.h"
-
 
 double conv_to_double(void *data, numerictype_t tag)
 {
