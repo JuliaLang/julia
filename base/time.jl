@@ -4,14 +4,17 @@ import Base: hash, isless, isequal, isfinite, convert, precision,
              typemax, typemin, zero, one, string, show,
              step, next, colon, last, +, -, *, /, div
 
-export Calendar, ISOCalendar, Timezone,
-    UTC, Period, Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
-    Date, Datetime,
+export Calendar, ISOCalendar, Timezone, UTC,
+    Date, Datetime, UTCDatetime, ISODatetime,
+    Period, Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
+    # accessors
     year, month, week, day, hour, minute, second, millisecond,
-    monthname, monthabr, dayname, dayabr, unix2datetime,
-    isleap, lastdayofmonth, dayofweek, dayofyear, ISOFormat,
+    # date functions
+    monthname, monthabr, dayname, dayabr, unix2datetime, now,
+    isleap, lastdayofmonth, dayofweek, dayofyear,
     dayofweekofmonth, daysofweekinmonth, firstdayofweek, lastdayofweek,
-    recur, now, calendar, timezone, precision,
+    recur, calendar, timezone, precision, ISOFormat,
+    # consts
     Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday,
     Mon,Tue,Wed,Thu,Fri,Sat,Sun,
     January, February, March, April, May, June, July,
@@ -48,10 +51,12 @@ abstract TimeType <: AbstractTime
 immutable Datetime{P<:Period,T<:Timezone,C<:Calendar} <: TimeType
     instant::P
 end 
-Datetime{P<:Period,T<:Timezone,C<:Calendar}(ms::P,::Type{T}=UTC,::Type{C}=ISOCalendar) = Datetime{P,T,C}(ms)
+typealias UTCDatetime Datetime{Millisecond,UTC,ISOCalendar}
+typealias ISODatetime{T} Datetime{Millisecond,T,ISOCalendar}
 
 immutable Date <: TimeType
     instant::Day
+    # This prevents any Real from auto-converting for a single argument
     Date(x::Day) = new(x)
 end
 
@@ -62,8 +67,7 @@ function totaldays(y,m,d)
     @inbounds mdays = monthdays[m]
     return d + mdays + yeardays(m < 3 ? y - 1 : y) - 306
 end
-include("leaps.jl")    
-typealias UTCDatetime Datetime{Millisecond,UTC,ISOCalendar}
+include("leaps.jl")
 
 # UTC constructor with defaults
 function Datetime(y,m=1,d=1,h=0,mi=0,s=0,ms=0,tz::Type{UTC}=UTC)
@@ -85,8 +89,9 @@ end
      # return apply(Datetime,(y,m,d,h,mi,s,ms,tz))
 # end
 # Datetime(y,m,d,h,mi,s,tz::Timezone) = Datetime(y,m,d,h,mi,s,0,tz)
-# Datetime(y,m,d,h,mi,s,ms,tz::String) = Datetime(y,m,d,h,mi,s,0,tz)
-# Datetime(y,m,d,h,mi,s,tz::String) = Datetime(y,m,d,h,mi,s,0,tz)
+# Datetime(y,m,d,h,mi,s,ms,tz::String) = Datetime(y,m,d,h,mi,s,0,timezone(tz))
+# Datetime(y,m,d,h,mi,s,tz::String) = Datetime(y,m,d,h,mi,s,0,timezone(tz))
+# timezone(tz::String) = lookup olsen timezone string
 
 function Date(y,m=1,d=1)
     0 < m < 13 || error("Month out of range")
@@ -126,10 +131,8 @@ end
 # Accessor functions
 getoffset(::Type{UTC},ms)       = getleaps(ms)
 getoffsetsecond(::Type{UTC},ms) = getleapsecond(ms)
+getabr(::Type{UTC},ms)          = "UTC"
 setoffset(::Type{UTC},ms)       = setleaps(ms)
-setoffsetsecond(::Type{UTC},ms) = setleapsecond(ms)
-
-typealias ISODatetime{T} Datetime{Millisecond,T,ISOCalendar}
 
 _days(dt::Date)               = dt.instant.days
 _days{T}(dt::ISODatetime{T})  = div(dt.instant.ms - getoffset(T,dt.instant.ms),86400000)
@@ -145,8 +148,10 @@ function second{T}(dt::ISODatetime{T})
 end
 millisecond(dt::Datetime) = dt.instant.ms % 1000
 
-# TODO: Conversion/Promotion
+# Conversion/Promotion
 Datetime(dt::Date) = Datetime(year(dt),month(dt),day(dt))
+#Datetime(dt::Date,tz::Type{T}) = Datetime(year(dt),month(dt),day(dt),0,0,0,0,tz)
+#Datetime(dt::Date,tz::String) = Datetime(year(dt),month(dt),day(dt),0,0,0,0,timezone(tz))
 Date(dt::Datetime) = Date(year(dt),month(dt),day(dt))
 #different calendars?
 #different timezones?
@@ -168,7 +173,7 @@ typemax(::Type{Date}) = Date(252522163911149,12,31)
 typemin(::Type{Date}) = Date(-252522163911150,1,1)
 
 # RFC: is there a way to make this more efficient?
-function string(dt::UTCDatetime)
+function string{T}(dt::ISODatetime{T})
     y,m,d = _day2date(_days(dt))
     h,mi,s = hour(dt),minute(dt),second(dt)
     yy = y < 0 ? lpad(y,5,"0") : lpad(y,4,"0")
@@ -178,8 +183,10 @@ function string(dt::UTCDatetime)
     mii = lpad(mi,2,"0")
     ss = lpad(s,2,"0")
     ms = millisecond(dt) == 0 ? "" : string(millisecond(dt)/1000)[2:end]
-    return "$yy-$mm-$(dd)T$hh:$mii:$ss$ms UTC"
+    abr = getabr(T,dt.instant.ms)
+    return "$yy-$mm-$(dd)T$hh:$mii:$ss$ms $abr"
 end
+show{T}(io::IO,x::ISODatetime{T}) = print(io,string(x))
 function string(dt::Date)
     y,m,d = _day2date(dt.instant.days)
     yy = y < 0 ? lpad(y,5,"0") : lpad(y,4,"0")
@@ -187,7 +194,7 @@ function string(dt::Date)
     dd = lpad(d,2,"0")
     return "$yy-$mm-$dd"
 end
-show(io::IO,x::TimeType) = print(io,string(x))
+show(io::IO,x::Date) = print(io,string(x))
 
 # Date functions
 const Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday = 1,2,3,4,5,6,7
@@ -264,7 +271,6 @@ function unix2datetime{T<:Timezone}(x,::Type{T}=UTC)
         UNIXEPOCH + x + getoffset(T,UNIXEPOCH + x)))
 end
 now{T<:Timezone}(tz::Type{T}=UTC) = unix2datetime(int64(1000*time()),tz)
-today() = Date(now())
 
 #wrapping arithmetic
 addwrap(y,m) = (v = (y + m)    % 12; return v == 0 ? 12 : v)
