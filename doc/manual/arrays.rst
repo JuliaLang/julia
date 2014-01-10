@@ -563,6 +563,8 @@ matrix element has a probability ``d`` of being non-zero.
 Details can be found in the :ref:`stdlib-sparse` section of the standard library
 reference.
 
+.. tabularcolumns:: |l|l|L|
+
 +-----------------------+-------------------+----------------------------------------+
 | Sparse                | Dense             | Description                            |
 +-----------------------+-------------------+----------------------------------------+
