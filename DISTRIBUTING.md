@@ -21,17 +21,20 @@ Versioning and Git
 The Makefile uses both the `VERSION` file and commit hashes and tags from the
 git repository to generate the `base/version_git.jl` with information we use to
 fill the splash screen and the `versioninfo()` output. If you for some reason
-don't want to have the git repository availible when building you should
+don't want to have the git repository available when building you should
 pregenerate the `base/version_git.jl` file with:
 
     make -C base version_git.jl.phony
 
-For some dependencies we use patched versions that will be fetched via
-`git submodules`. Those might be prefetched by:
+Juila has lots of build dependencies where we use patched versions that has not
+yet been included by the popular package managers. These dependencies will usually
+be automatically downloaded when you build, but if you want to be able to build
+Julia on a computer without internet access you should create a source-dist archive
+with the special make targed
 
-    git submodule update --init
+   make source-dist
 
-See example for how this is done for building nigtlies at [the debian build servers](https://github.com/staticfloat/julia-nightly-packaging/blob/master/build_ubuntu.sh)
+that creates a julia-version-commit.tar.gz archive with all required dependencies.
 
 When compiling a tagged release in the git repository, we don't display the
 branch/commit hash info in the splash screen. You can use this line to show
