@@ -220,56 +220,6 @@ getindex(s::SubArray, i0::Real, i1::Real, i2::Real, i3::Real, i4::Real, i5::Real
 
 getindex(s::SubArray, i::Integer) = s[ind2sub(size(s), i)...]
 
-function getindex{T}(s::SubArray{T,2}, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    ind -= 1
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2]]
-end
-
-function getindex{T}(s::SubArray{T,3}, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    @inbounds strd3 = strd2*s.dims[2]
-    ind -= 1
-    i3 = div(ind,strd3)
-    ind -= i3*strd3
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2] + i3*s.strides[3]]
-end
-
-function getindex{T}(s::SubArray{T,4}, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    @inbounds strd3 = strd2*s.dims[2]
-    @inbounds strd4 = strd3*s.dims[3]
-    ind -= 1
-    i4 = div(ind,strd4)
-    ind -= i4*strd4
-    i3 = div(ind,strd3)
-    ind -= i3*strd3
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2] + i3*s.strides[3] + i4*s.strides[4]]
-end
-
-function getindex{T}(s::SubArray{T,5}, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    @inbounds strd3 = strd2*s.dims[2]
-    @inbounds strd4 = strd3*s.dims[3]
-    @inbounds strd5 = strd4*s.dims[4]
-    ind -= 1
-    i5 = div(ind,strd5)
-    ind -= i5*strd5
-    i4 = div(ind,strd4)
-    ind -= i4*strd4
-    i3 = div(ind,strd3)
-    ind -= i3*strd3
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2] + i3*s.strides[3] + i4*s.strides[4] + i5*s.strides[5]]
-end
-
 function getindex(s::SubArray, is::Integer...)
     index = s.first_index
     for i = 1:length(is)
@@ -395,60 +345,6 @@ function getindex(s::SubArray, I::Union(Real,AbstractVector)...)
 end
 
 setindex!(s::SubArray, v, i::Integer) = setindex!(s, v, ind2sub(size(s), i)...)
-
-function setindex!{T}(s::SubArray{T,2}, v, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    ind -= 1
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2]] = v
-    s
-end
-
-function setindex!{T}(s::SubArray{T,3}, v, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    @inbounds strd3 = strd2*s.dims[2]
-    ind -= 1
-    i3 = div(ind,strd3)
-    ind -= i3*strd3
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2] + i3*s.strides[3]] = v
-    s
-end
-
-function setindex!{T}(s::SubArray{T,4}, v, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    @inbounds strd3 = strd2*s.dims[2]
-    @inbounds strd4 = strd3*s.dims[3]
-    ind -= 1
-    i4 = div(ind,strd4)
-    ind -= i4*strd4
-    i3 = div(ind,strd3)
-    ind -= i3*strd3
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2] + i3*s.strides[3] + i4*s.strides[4]] = v
-    s
-end
-
-function setindex!{T}(s::SubArray{T,5}, v, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    @inbounds strd3 = strd2*s.dims[2]
-    @inbounds strd4 = strd3*s.dims[3]
-    @inbounds strd5 = strd4*s.dims[4]
-    ind -= 1
-    i5 = div(ind,strd5)
-    ind -= i5*strd5
-    i4 = div(ind,strd4)
-    ind -= i4*strd4
-    i3 = div(ind,strd3)
-    ind -= i3*strd3
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2] + i3*s.strides[3] + i4*s.strides[4] + i5*s.strides[5]] = v
-    s
-end
 
 function setindex!(s::SubArray, v, is::Integer...)
     index = s.first_index
