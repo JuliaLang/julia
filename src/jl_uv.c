@@ -374,7 +374,7 @@ DLLEXPORT struct tm* localtime_r(const time_t *t, struct tm *tm)
     return uv_loop_new();
 }*/
 
-DLLEXPORT uv_loop_t *jl_global_event_loop()
+DLLEXPORT uv_loop_t *jl_global_event_loop(void)
 {
     return jl_io_loop;
 }
