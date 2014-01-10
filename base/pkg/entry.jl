@@ -607,7 +607,7 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
         isfile(path) || continue
         info("Building $pkg")
         cd(dirname(path)) do
-            try eval(Module(),Expr(:toplevel,:(ARGS={}),:(include($path))))
+            try evalfile(path)
             catch err
                 warnbanner(err, label="[ ERROR: $pkg ]")
                 errs[pkg] = err
