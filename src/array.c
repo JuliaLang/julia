@@ -584,11 +584,14 @@ void jl_array_del_end(jl_array_t *a, size_t dec)
     if (dec > a->nrows)
         jl_throw(jl_bounds_exception);
     if (a->isshared) array_try_unshare(a);
-    char *ptail = (char*)a->data + (a->nrows-dec)*a->elsize;
-    if (a->ptrarray)
-        memset(ptail, 0, dec*a->elsize);
-    else
-        ptail[0] = 0;
+    if (a->elsize > 0) {
+        char *ptail = (char*)a->data + (a->nrows-dec)*a->elsize;
+        assert(ptail < (char*)a->data + (a->length*a->elsize));
+        if (a->ptrarray)
+            memset(ptail, 0, dec*a->elsize);
+        else
+            ptail[0] = 0;
+    }
 #ifdef STORE_ARRAY_LEN
     a->length -= dec;
 #endif
