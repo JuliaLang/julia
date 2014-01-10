@@ -8,10 +8,6 @@ Diagonal(A::Matrix) = Diagonal(diag(A))
 size(D::Diagonal) = (length(D.diag),length(D.diag))
 size(D::Diagonal,d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(D.diag) : 1)
 
-convert{T}(::Type{Matrix{T}}, D::Diagonal{T}) = diagm(D.diag)
-convert{T}(::Type{SymTridiagonal{T}}, D::Diagonal{T}) = SymTridiagonal(D.diag,zeros(T,length(D.diag)-1))
-convert{T}(::Type{Tridiagonal{T}}, D::Diagonal{T}) = Tridiagonal(zeros(T,length(D.diag)-1),D.diag,zeros(T,length(D.diag)-1))
-
 full(D::Diagonal) = diagm(D.diag)
 getindex(D::Diagonal, i::Integer, j::Integer) = i == j ? D.diag[i] : zero(eltype(D.diag))
 
