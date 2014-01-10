@@ -76,6 +76,8 @@ extern int inside_typedef;
 static int equiv_type(jl_datatype_t *dta, jl_datatype_t *dtb)
 {
     return (jl_typeof(dta) == jl_typeof(dtb) &&
+            // TODO: can't yet handle parametric types due to how constructors work
+            dta->parameters == jl_null &&
             dta->name->name == dtb->name->name &&
             jl_egal((jl_value_t*)dta->types, (jl_value_t*)dtb->types) &&
             dta->abstract == dtb->abstract &&
@@ -396,6 +398,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             jl_checked_assignment(b, (jl_value_t*)dt);
 
             jl_add_constructors(dt);
+        }
+        else {
+            // TODO: remove all old ctors and set temp->ctor_factory = dt->ctor_factory
         }
 
         JL_GC_POP();
