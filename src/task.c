@@ -757,7 +757,7 @@ DLLEXPORT void jl_throw(jl_value_t *e)
     throw_internal(e);
 }
 
-DLLEXPORT void jl_rethrow()
+DLLEXPORT void jl_rethrow(void)
 {
     throw_internal(jl_exception_in_transit);
 }

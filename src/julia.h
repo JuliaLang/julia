@@ -840,7 +840,7 @@ DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
 DLLEXPORT int jl_run_once(uv_loop_t *loop);
 DLLEXPORT int jl_process_events(uv_loop_t *loop);
 
-DLLEXPORT uv_loop_t *jl_global_event_loop();
+DLLEXPORT uv_loop_t *jl_global_event_loop(void);
 
 DLLEXPORT uv_pipe_t *jl_make_pipe(int writable, int julia_only, jl_value_t *julia_struct);
 DLLEXPORT void jl_close_uv(uv_handle_t *handle);
@@ -867,9 +867,7 @@ DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host);
 
 DLLEXPORT void NORETURN jl_exit(int status);
 
-DLLEXPORT size_t jl_sizeof_uv_stream_t();
-DLLEXPORT size_t jl_sizeof_uv_pipe_t();
-DLLEXPORT int jl_sizeof_ios_t();
+DLLEXPORT int jl_sizeof_ios_t(void);
 
 #ifdef _OS_WINDOWS_
 DLLEXPORT struct tm* localtime_r(const time_t *t, struct tm *tm);
@@ -893,7 +891,7 @@ void jl_init_types(void);
 void jl_init_box_caches(void);
 DLLEXPORT void jl_init_frontend(void);
 void jl_init_primitives(void);
-void jl_init_codegen();
+void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void *stack, size_t ssize);
 void jl_init_serializer(void);
@@ -908,17 +906,17 @@ int32_t jl_get_llvm_gv(jl_value_t *p);
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str);
 DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy);
 int jl_start_parsing_file(const char *fname);
-void jl_stop_parsing();
-jl_value_t *jl_parse_next();
+void jl_stop_parsing(void);
+jl_value_t *jl_parse_next(void);
 DLLEXPORT jl_value_t *jl_load_file_string(const char *text, char *filename);
 DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr);
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 
 // some useful functions
 DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v);
-DLLEXPORT void jl_flush_cstdio();
-DLLEXPORT jl_value_t *jl_stdout_obj();
-DLLEXPORT jl_value_t *jl_stderr_obj();
+DLLEXPORT void jl_flush_cstdio(void);
+DLLEXPORT jl_value_t *jl_stdout_obj(void);
+DLLEXPORT jl_value_t *jl_stderr_obj(void);
 DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b);
 DLLEXPORT uptrint_t jl_object_id(jl_value_t *v);
 DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v);
@@ -961,7 +959,7 @@ enum JL_RTLD_CONSTANT {
 };
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
 #ifdef _OS_LINUX_
-DLLEXPORT void jl_read_sonames();
+DLLEXPORT void jl_read_sonames(void);
 #endif
 DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname, unsigned flags);
 DLLEXPORT uv_lib_t *jl_load_dynamic_library_e(char *fname, unsigned flags);
@@ -971,10 +969,6 @@ DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
 void *jl_dlsym_e(uv_lib_t *handle, char *symbol); //supress errors
 char *jl_dlfind_win32(char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
-
-// event loop
-DLLEXPORT void jl_runEventLoop();
-DLLEXPORT void jl_processEvents();
 
 // compiler
 void jl_compile(jl_function_t *f);
@@ -1139,7 +1133,7 @@ void *jl_gc_managed_malloc(size_t sz);
 void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned);
 void jl_gc_free_array(jl_array_t *a);
 void jl_gc_track_malloced_array(jl_array_t *a);
-void jl_gc_run_all_finalizers();
+void jl_gc_run_all_finalizers(void);
 void *alloc_2w(void);
 void *alloc_3w(void);
 void *alloc_4w(void);
@@ -1165,7 +1159,6 @@ STATIC_INLINE void *alloc_4w() { return allocobj(4*sizeof(void*)); }
 
 DLLEXPORT extern volatile sig_atomic_t jl_signal_pending;
 DLLEXPORT extern volatile sig_atomic_t jl_defer_signal;
-DLLEXPORT void jl_handle_sigint();
 
 #define JL_SIGATOMIC_BEGIN() (jl_defer_signal++)
 #define JL_SIGATOMIC_END()                                      \
@@ -1232,7 +1225,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 DLLEXPORT void NORETURN jl_throw(jl_value_t *e);
 DLLEXPORT void NORETURN jl_throw_with_superfluous_argument(jl_value_t *e, int);
-DLLEXPORT void NORETURN jl_rethrow();
+DLLEXPORT void NORETURN jl_rethrow(void);
 DLLEXPORT void NORETURN jl_rethrow_other(jl_value_t *e);
 
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
@@ -1279,9 +1272,9 @@ extern DLLEXPORT uv_stream_t *jl_uv_stdin;
 extern DLLEXPORT uv_stream_t * jl_uv_stdout;
 extern DLLEXPORT uv_stream_t * jl_uv_stderr;
 
-DLLEXPORT JL_STREAM *jl_stdout_stream();
-DLLEXPORT JL_STREAM *jl_stdin_stream();
-DLLEXPORT JL_STREAM *jl_stderr_stream();
+DLLEXPORT JL_STREAM *jl_stdout_stream(void);
+DLLEXPORT JL_STREAM *jl_stdin_stream(void);
+DLLEXPORT JL_STREAM *jl_stderr_stream(void);
 
 extern char *julia_home;
 
