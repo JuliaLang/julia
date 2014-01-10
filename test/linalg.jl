@@ -16,8 +16,8 @@ end
 
 areal = randn(n,n)
 aimg  = randn(n,n) 
-breal = randn(n)
-bimg  = randn(n)
+breal = randn(n,2)
+bimg  = randn(n,2)
 for elty in (Float32, Float64, Complex64, Complex128, Int)
     if elty == Complex64 || elty == Complex128
         a = complex(areal, aimg)
@@ -26,12 +26,12 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         a = areal
         b = breal
     end
-    if elty != Int
+    if elty <: BlasFloat
         a = convert(Matrix{elty}, a)
-        b = convert(Vector{elty}, b)
+        b = convert(Matrix{elty}, b)
     else
-        a = rand(1:100, n, n)
-        b = rand(1:100, n)
+        a = rand(1:10, n, n)
+        b = rand(1:10, n, 2)
     end
     asym = a' + a                  # symmetric indefinite
     apd  = a'*a                    # symmetric positive-definite
@@ -569,10 +569,10 @@ end
 n=12
 for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     A = convert(Matrix{elty}, randn(n, n))
-    b = convert(Vector{elty}, randn(n))
+    b = convert(Matrix{elty}, randn(n, 2))
     if elty <: Complex
         A += im*convert(Matrix{elty}, randn(n, n))
-        b += im*convert(Vector{elty}, randn(n))
+        b += im*convert(Matrix{elty}, randn(n, 2))
     end
 
     for M in (triu(A), tril(A))
@@ -583,7 +583,7 @@ for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relt
         tx = TM \ b
         @test norm(x-tx,Inf) <= 4*condM*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
         if elty <: BlasFloat #test naivesub! against LAPACK
-            tx = LinAlg.naivesub!(TM, b, similar(b))
+            tx = [LinAlg.naivesub!(TM, b[:,1]) LinAlg.naivesub!(TM, b[:,2])]
             @test norm(x-tx,Inf) <= 4*condM*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
         end
 
@@ -668,11 +668,11 @@ end
 for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     dv = convert(Vector{elty}, randn(n))
     ev = convert(Vector{elty}, randn(n-1))
-    b = convert(Vector{elty}, randn(n))
+    b = convert(Matrix{elty}, randn(n, 2))
     if (elty <: Complex)
         dv += im*convert(Vector{elty}, randn(n))
         ev += im*convert(Vector{elty}, randn(n-1))
-        b += im*convert(Vector{elty}, randn(n))
+        b += im*convert(Matrix{elty}, randn(n, 2))
     end
     for isupper in (true, false) #Test upper and lower bidiagonal matrices
         T = Bidiagonal(dv, ev, isupper)
@@ -753,8 +753,6 @@ for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relt
 end
 
 #Test interconversion between special matrix types
-using Base.Test
-
 N=12
 A=Diagonal([1:N]*1.0)
 for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Triangular, Matrix]
@@ -829,6 +827,26 @@ for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
     @test_approx_eq gradient(x) g
 end
 
+# Test rational matrices
+## Integrate in general tests when more linear algebra is implemented in julia
+a = convert(Matrix{Rational{BigInt}}, rand(1:10//1,n,n))/n
+b = rand(1:10,n,2)
+lua   = factorize(a)
+l,u,p = lua[:L], lua[:U], lua[:p]
+@test_approx_eq l*u a[p,:]
+@test_approx_eq l[invperm(p),:]*u a
+@test_approx_eq a * inv(lua) eye(n)
+@test_approx_eq a*(lua\b) b
+@test_approx_eq det(a) det(float64(float(a)))
+## Hilbert Matrix (very ill conditioned)
+## Testing Rational{BigInt} and BigFloat version
+nHilbert = 50
+H = Rational{BigInt}[1//(i+j-1) for i = 1:nHilbert,j = 1:nHilbert]
+Hinv = Rational{BigInt}[(-1)^(i+j)*(i+j-1)*binomial(nHilbert+i-1,nHilbert-j)*binomial(nHilbert+j-1,nHilbert-i)*binomial(i+j-2,i-1)^2 for i = big(1):nHilbert,j=big(1):nHilbert]
+@test inv(H) == Hinv
+with_bigfloat_precision(2^10) do
+    @test norm(float64(inv(float(H)) - float(Hinv))) < 1e-100
+end
 ## Issue related tests
 # issue 1447
 let
