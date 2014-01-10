@@ -357,25 +357,6 @@ function getindex{T<:Real}(A::Array, I::AbstractVector{T}, J::AbstractVector{T})
     end
     return X
 end
-# Multidimensional indexing
-let getindex_cache = nothing
-global getindex
-function getindex(A::Array, I::Union(Real,AbstractVector)...)
-    checkbounds(A, I...)
-    I = to_index(I)
-    X = similar(A, eltype(A), index_shape(I...))
-
-    if is(getindex_cache,nothing)
-        getindex_cache = Dict()
-    end
-    gen_array_index_map(getindex_cache, refind -> quote
-            X[storeind] = A[$refind]
-            storeind += 1
-        end, I, (:A, :X, :storeind), A, X, 1)
-    return X
-end
-end
-
 
 # logical indexing
 
@@ -560,38 +541,6 @@ function setindex!{T<:Real}(A::Array, x, I::AbstractVector{T}, J::AbstractVector
     return A
 end
 
-let assign_cache = nothing, assign_scalar_cache = nothing
-global setindex!
-function setindex!(A::Array, x, I::Union(Real,AbstractArray)...)
-    checkbounds(A, I...)
-    I = to_index(I)
-    if !isa(x,AbstractArray)
-        if is(assign_scalar_cache,nothing)
-            assign_scalar_cache = Dict()
-        end
-        gen_array_index_map(assign_scalar_cache, storeind -> quote
-                              A[$storeind] = x
-                            end,
-                            I,
-                            (:A, :x),
-                            A, x)
-    else
-        if is(assign_cache,nothing)
-            assign_cache = Dict()
-        end
-        X = x
-        setindex_shape_check(X, I...)
-        gen_array_index_map(assign_cache, storeind -> quote
-                              A[$storeind] = X[refind]
-                              refind += 1
-                            end,
-                            I,
-                            (:A, :X, :refind),
-                            A, X, 1)
-    end
-    return A
-end
-end
 
 # logical indexing
 
@@ -1240,37 +1189,6 @@ function findn(A::AbstractMatrix)
         end
     end
     return (I, J)
-end
-
-let findn_cache = nothing
-function findn_one(ivars)
-    s = { quote I[$i][count] = $(ivars[i]) end for i = 1:length(ivars)}
-    quote
-    	Aind = A[$(ivars...)]
-    	if Aind != z
-    	    $(s...)
-    	    count +=1
-    	end
-    end
-end
-
-global findn
-function findn{T}(A::AbstractArray{T})
-    ndimsA = ndims(A)
-    nnzA = nnz(A)
-    I = ntuple(ndimsA, x->Array(Int, nnzA))
-    if nnzA > 0
-        ranges = ntuple(ndims(A), d->(1:size(A,d)))
-
-        if is(findn_cache,nothing)
-            findn_cache = Dict()
-        end
-
-        gen_cartesian_map(findn_cache, findn_one, ranges,
-                          (:A, :I, :count, :z), A,I,1, zero(T))
-    end
-    return I
-end
 end
 
 function findnz{T}(A::AbstractMatrix{T})

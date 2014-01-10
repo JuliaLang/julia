@@ -78,6 +78,10 @@ include("regex.jl")
 include("base64.jl")
 importall .Base64
 
+# multidimensional arrays
+# include("cartesian.jl")
+include("multidimensional.jl")
+
 # system & environment
 include("libc.jl")
 include("env.jl")
