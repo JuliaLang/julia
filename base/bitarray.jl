@@ -2167,8 +2167,9 @@ function permutedims!(P::BitArray,B::BitArray, perm)
     ndimsB = length(dimsB)
     (ndimsB == length(perm) && isperm(perm)) || error("no valid permutation of dimensions")
 	dimsP = size(P)
-	ndimsP = length(dimsP)
-    (dimsP==dimsB[perm]) || error("destination tensor of incorrect size")
+    for i = 1:length(perm)
+        dimsP[i] == dimsB[perm[i]] || error("destination tensor of incorrect size")
+    end
 	
     ranges = ntuple(ndimsB, i->(1:dimsP[i]))
     while length(stridenames) < ndimsB
@@ -2205,8 +2206,9 @@ function permutedims!(P::Array,B::StridedArray, perm)
     ndimsB = length(dimsB)
     (ndimsB == length(perm) && isperm(perm)) || error("no valid permutation of dimensions")
 	dimsP = size(P)
-	ndimsP = length(dimsP)
-    (dimsP==dimsB[perm]) || error("destination tensor of incorrect size")
+    for i = 1:length(perm)
+        dimsP[i] == dimsB[perm[i]] || error("destination tensor of incorrect size")
+    end
 	
     ranges = ntuple(ndimsB, i->(1:dimsP[i]))
     while length(stridenames) < ndimsB

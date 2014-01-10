@@ -616,6 +616,7 @@ timesofar("transpose")
 b1 = randbool(s1, s2, s3, s4)
 p = randperm(4)
 @check_bit_operation permutedims BitArray{4} (b1, p)
+@check_bit_operation permutedims BitArray{4} (b1, tuple(p...))
 
 timesofar("permutedims")
 
