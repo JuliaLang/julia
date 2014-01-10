@@ -309,6 +309,7 @@ end
 
 #permutes correctly
 @test isequal(z,permutedims(y,[3,1,2]))
+@test isequal(z,permutedims(y,(3,1,2)))
 
 # of a subarray
 a = rand(5,5)
