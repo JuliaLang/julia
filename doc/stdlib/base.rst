@@ -4652,7 +4652,7 @@ System
 
 .. function:: @time
 
-   A macro to execute and expression, printing time it took to execute and the total number of bytes its execution caused to be allocated, before returning the value of the expression.
+   A macro to execute an expression, printing the time it took to execute and the total number of bytes its execution caused to be allocated, before returning the value of the expression.
 
 .. function:: @elapsed
 
