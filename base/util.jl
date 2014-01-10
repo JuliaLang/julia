@@ -112,12 +112,22 @@ macro which(ex0)
         args = filter(a->!(Meta.isexpr(a,:kw) || Meta.isexpr(a,:parameters)), ex0.args)
         return Expr(:call, :which, map(esc, args)...)
     end
+    if isa(ex0, Expr) && ex0.head == :call
+        return Expr(:call, :which, map(esc, ex0.args)...)
+    end
     ex = expand(ex0)
     exret = Expr(:call, :error, "expression is not a function call")
     if !isa(ex, Expr)
         # do nothing -> error
     elseif ex.head == :call
-        exret = Expr(:call, :which, map(esc, ex.args)...)
+        if any(e->(isa(e,Expr) && e.head==:(...)), ex0.args) &&
+            isa(ex.args[1],TopNode) && ex.args[1].name == :apply
+            exret = Expr(:call, ex.args[1], :which,
+                         Expr(:tuple, esc(ex.args[2])),
+                         map(esc, ex.args[3:end])...)
+        else
+            exret = Expr(:call, :which, map(esc, ex.args)...)
+        end
     elseif ex.head == :body
         a1 = ex.args[1]
         if isa(a1, Expr) && a1.head == :call

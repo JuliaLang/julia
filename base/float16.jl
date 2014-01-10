@@ -107,7 +107,7 @@ end
 for op in (:<,:<=,:isless)
     @eval ($op)(a::Float16, b::Float16) = ($op)(float32(a), float32(b))
 end
-for func in (sin,cos,tan,asin,acos,atan,sinh,cosh,tanh,asinh,acosh,atanh,exp,log,exponent,sqrt)
+for func in (sin,cos,tan,asin,acos,atan,sinh,cosh,tanh,asinh,acosh,atanh,exp,log,sqrt)
     func(a::Float16) = float16(func(float32(a)))
     func(a::Complex32) = complex32(func(complex64(a)))
 end
@@ -121,5 +121,6 @@ end
 for func in (ldexp,)
     func(a::Float16, b::Integer) = float16(func(float32(a), b))
 end
+exponent(x::Float16) = exponent(float32(x))
 
 hash(x::Float16) = hash(reinterpret(Uint16, isnan(x) ? NaN16 : x))
