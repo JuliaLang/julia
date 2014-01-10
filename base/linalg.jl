@@ -208,7 +208,7 @@ include("linalg/diagonal.jl")
 include("linalg/bidiag.jl")
 include("linalg/rectfullpacked.jl")
 include("linalg/givens.jl")
-
+include("linalg/special.jl")
 include("linalg/bitarray.jl")
 
 include("linalg/sparse.jl")
