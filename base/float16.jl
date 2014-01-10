@@ -122,6 +122,5 @@ for func in (ldexp,)
     func(a::Float16, b::Integer) = float16(func(float32(a), b))
 end
 exponent(x::Float16) = exponent(float32(x))
-exponent(x::Complex32) = exponent(complex64(x))
 
 hash(x::Float16) = hash(reinterpret(Uint16, isnan(x) ? NaN16 : x))
