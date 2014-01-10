@@ -117,35 +117,42 @@ end
 
 
 #Linear solvers
-\{T<:Number}(A::Union(Bidiagonal{T},Triangular{T}), b::AbstractVector{T}) = naivesub!(A, b, similar(b))
-\{T<:Number}(A::Union(Bidiagonal{T},Triangular{T}), B::AbstractMatrix{T}) = hcat([naivesub!(A, B[:,i], similar(B[:,i])) for i=1:size(B,2)]...)
+function \{TA<:Number,Tb<:Number}(A::Union(Bidiagonal{TA},Triangular{TA}), b::AbstractVector{Tb})
+    TAb = typeof(one(TA)/one(Tb))
+    naivesub!(A, b, similar(b, TAb))
+end
+function \{TA<:Number,TB<:Number}(A::Union(Bidiagonal{TA},Triangular{TA}), B::AbstractMatrix{TB})
+    TAB = typeof(one(TA)/one(TB))
+    hcat([naivesub!(A, B[:,i], similar(B[:,i], TAB)) for i=1:size(B,2)]...)
+end
 A_ldiv_B!(A::Union(Bidiagonal,Triangular), b::AbstractVector)=naivesub!(A,b)
 At_ldiv_B!(A::Union(Bidiagonal,Triangular), b::AbstractVector)=naivesub!(transpose(A),b)
 Ac_ldiv_B!(A::Union(Bidiagonal,Triangular), b::AbstractVector)=naivesub!(ctranspose(A),b)
 for func in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!) @eval begin
-    function ($func)(A::Bidiagonal, B::AbstractMatrix)
+    function ($func)(A::Union(Bidiagonal,Triangular), B::AbstractMatrix)
+        tmp = similar(B[:,1])
+        n = size(B, 1)
         for i=1:size(B,2)
-            ($func)(A, B[:,i])
+            copy!(tmp, 1, B, (i-1)*n+1, n)
+            ($func)(A, tmp)
+            copy!(B, (i-1)*n+1, tmp, 1, n) # Modify this when array view are implemented.
         end
         B
     end
 end end
 for func in (:A_ldiv_Bt!, :Ac_ldiv_Bt!, :At_ldiv_Bt!) @eval begin
-    function ($func)(A::Bidiagonal, B::AbstractMatrix)
+    function ($func)(A::Union(Bidiagonal,Triangular), B::AbstractMatrix)
+        tmp = similar(B[:,2])
+        m, n = size(B)
+        nm = n*m
         for i=1:size(B,1)
-            ($func)(A, B[i,:])
+            copy!(tmp, 1, B, i:m:nm, n)
+            ($func)(A, tmp)
+            copy!(B, i:m:nm, tmp, 1, n)
         end
         B
     end
 end end
-
-function inv(A::Union(Bidiagonal, Triangular))
-    B = eye(eltype(A), size(A, 1))
-    for i=1:size(B,2)
-        naivesub!(A, B[:,i])
-    end
-    B
-end
 
 #Generic solver using naive substitution
 function naivesub!{T}(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector=b)

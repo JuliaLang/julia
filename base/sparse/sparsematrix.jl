@@ -150,6 +150,17 @@ function convert{Tv,Ti,TvS,TiS}(::Type{SparseMatrixCSC{Tv,Ti}}, S::SparseMatrixC
     end
 end
 
+function convert{Tv,TvS,TiS}(::Type{SparseMatrixCSC{Tv}}, S::SparseMatrixCSC{TvS,TiS})
+    if Tv == TvS
+        return S
+    else
+        return SparseMatrixCSC(S.m, S.n,
+                               S.colptr,
+                               S.rowval,
+                               convert(Vector{Tv},S.nzval))
+    end
+end
+
 function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, M::Matrix)
     m, n = size(M)
     (I, J, V) = findnz(M)

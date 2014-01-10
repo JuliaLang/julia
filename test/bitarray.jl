@@ -288,8 +288,8 @@ end
 b2 = randbool(n1, n1)
 
 @check_bit_operation (*) Matrix{Int} (b1, b2)
-@check_bit_operation (/) Matrix{Float64} (b1, b1)
-@check_bit_operation (\) Matrix{Float64} (b1, b1)
+@check_bit_operation (/) Matrix{Float32} (b1, b1)
+@check_bit_operation (\) Matrix{Float32} (b1, b1)
 
 b0 = falses(0)
 @check_bit_operation (&) BitVector (b0, b0)
