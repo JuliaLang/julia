@@ -23,8 +23,6 @@ isposdef(D::Diagonal) = all(D.diag .> 0)
 
 +(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag + Db.diag)
 -(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag - Db.diag)
--{T}(D::Diagonal{T}, M::AbstractMatrix{T}) = full(D) - M
--{T}(M::AbstractMatrix{T}, D::Diagonal{T}) = M - full(D)
 
 *{T<:Number}(x::T, D::Diagonal) = Diagonal(x * D.diag)
 *{T<:Number}(D::Diagonal, x::T) = Diagonal(D.diag * x)
