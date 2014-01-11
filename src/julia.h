@@ -702,7 +702,7 @@ jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super);
 
 // constructors
-jl_value_t *jl_new_bits(jl_datatype_t *bt, void *data);
+DLLEXPORT jl_value_t *jl_new_bits(jl_value_t *bt, void *data);
 void jl_assign_bits(void *dest, jl_value_t *bits);
 DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...);
 DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na);

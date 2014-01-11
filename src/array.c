@@ -403,8 +403,7 @@ jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
     jl_value_t *el_type = (jl_value_t*)jl_tparam0(jl_typeof(a));
     jl_value_t *elt;
     if (!a->ptrarray) {
-        elt = jl_new_bits((jl_datatype_t*)el_type,
-                          &((char*)a->data)[i*a->elsize]);
+        elt = jl_new_bits(el_type, &((char*)a->data)[i*a->elsize]);
     }
     else {
         elt = ((jl_value_t**)a->data)[i];

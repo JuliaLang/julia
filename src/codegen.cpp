@@ -225,6 +225,7 @@ static Function *box32_func;
 static Function *box64_func;
 static Function *jlputs_func;
 static Function *jldlsym_func;
+static Function *jlnewbits_func;
 #ifdef _OS_WINDOWS_
 static Function *resetstkoflw_func;
 #endif
@@ -3736,9 +3737,17 @@ static void init_julia_llvm_env(Module *m)
                          "jl_load_and_lookup", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jldlsym_func, (void*)&jl_load_and_lookup);
 
+    std::vector<Type *> newbits_args(0);
+    newbits_args.push_back(jl_pvalue_llvmt);
+    newbits_args.push_back(T_pint8);
+    jlnewbits_func =
+        Function::Create(FunctionType::get(jl_pvalue_llvmt, newbits_args, false),
+                         Function::ExternalLinkage,
+                         "jl_new_bits", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlnewbits_func, (void*)&jl_new_bits);
+
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);
-
     
 #ifdef LLVM32
     jl_data_layout = new DataLayout(*jl_ExecutionEngine->getDataLayout());
