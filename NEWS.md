@@ -88,6 +88,7 @@ Library improvements
       matrices of generic types ([#5263])
     - new algorithms for linear solvers and eigensystems of `Bidiagonal`
       matrices of generic types ([#5277])
+    - specialized `inv` and `det` for `Tridiagonal` and `SymTridiagonal` ([#5358])
     - specialized methods `transpose`, `ctranspose`, `istril`, `istriu` for
       `Triangular` ([#5255]) and `Bidiagonal` ([#5277])
     - new LAPACK wrappers
@@ -140,6 +141,7 @@ Deprecated or removed
 [#2345]: https://github.com/JuliaLang/julia/issues/2345
 [#5330]: https://github.com/JuliaLang/julia/issues/5330
 [#4882]: https://github.com/JuliaLang/julia/issues/4882
+[#5358]: https://github.com/JuliaLang/julia/pull/5358
 
 Julia v0.2.0 Release Notes
 ==========================
