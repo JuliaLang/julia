@@ -89,6 +89,65 @@ eigmin(m::SymTridiagonal) = eigvals(m, 1, 1)[1]
 eigvecs(m::SymTridiagonal) = eig(m)[2]
 eigvecs{Eigenvalue<:Real}(m::SymTridiagonal, eigvals::Vector{Eigenvalue}) = LAPACK.stein!(m.dv, m.ev, eigvals)
 
+###################
+# Generic methods #
+###################
+
+#Needed for inv()
+type ZeroOffsetVector
+    data::Vector
+end
+getindex (a::ZeroOffsetVector, i) = a.data[i+1] 
+setindex!(a::ZeroOffsetVector, x, i) = a.data[i+1]=x
+
+#Implements the inverse using principal minors
+#Ref:
+#    R. Usmani, "Inversion of a tridiagonal Jacobi matrix",
+#    Linear Algebra and its Applications 212-213 (1994), pp.413-414
+#    doi:10.1016/0024-3795(94)90414-6
+function inv{T}(A::SymTridiagonal{T})
+    n = size(A, 1)
+    θ = ZeroOffsetVector(zeros(T, n+1)) #principal minors of A
+    θ[0] = 1
+    n>=1 && (θ[1] = A.dv[1])
+    for i=2:n
+        θ[i] = A.dv[i]*θ[i-1]-A.ev[i-1]^2*θ[i-2]
+    end
+    φ = zeros(T, n+1)
+    φ[n+1] = 1
+    n>=1 && (φ[n] = A.dv[n])
+    for i=n-1:-1:1
+        φ[i] = A.dv[i]*φ[i+1]-A.ev[i]^2*φ[i+2]
+    end
+    α = Array(T, n, n)
+    for i=1:n, j=1:n
+        sign = (i+j)%2==0 ? (+) : (-)
+        if i<j
+            α[i,j]=(sign)(prod(A.ev[i:j-1]))*θ[i-1]*φ[j+1]/θ[n]
+        elseif i==j
+            α[i,i]=                          θ[i-1]*φ[i+1]/θ[n]
+        else #i>j
+            α[i,j]=(sign)(prod(A.ev[j:i-1]))*θ[j-1]*φ[i+1]/θ[n]
+        end
+    end
+    α 
+end
+
+#Implements the determinant using principal minors
+#    R. Usmani, "Inversion of a tridiagonal Jacobi matrix",
+#    Linear Algebra and its Applications 212-213 (1994), pp.413-414
+#    doi:10.1016/0024-3795(94)90414-6
+function det{T}(A::SymTridiagonal{T})
+    n = size(A, 1)
+    θa = one(T)
+    n==0 && return θa
+    θb = A.dv[1]
+    for i=2:n
+        θb, θa = A.dv[i]*θb-A.ev[i-1]^2*θa, θb
+    end
+    return θb
+end
+
 ## Tridiagonal matrices ##
 type Tridiagonal{T} <: AbstractMatrix{T}
     dl::Vector{T}    # sub-diagonal
@@ -175,6 +234,10 @@ function diag{T}(M::Tridiagonal{T}, n::Integer=0)
     end
 end
 
+###################
+# Generic methods #
+###################
+
 +(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl+B.dl, A.d+B.d, A.du+B.du)
 -(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl-B.dl, A.d-B.d, A.du+B.du)
 *(A::Tridiagonal, B::Number) = Tridiagonal(A.dl*B, A.d*B, A.du*B)
@@ -184,6 +247,54 @@ end
 ==(A::Tridiagonal, B::Tridiagonal) = (A.dl==B.dl) && (A.d==B.d) && (A.du==B.du)
 ==(A::Tridiagonal, B::SymTridiagonal) = (A.dl==A.du==B.ev) && (A.d==B.dv)
 ==(A::SymTridiagonal, B::SymTridiagonal) = B==A
+
+#Implements the inverse using principal minors
+#Ref:
+#    R. Usmani, "Inversion of a tridiagonal Jacobi matrix",
+#    Linear Algebra and its Applications 212-213 (1994), pp.413-414
+#    doi:10.1016/0024-3795(94)90414-6
+function inv{T}(A::Tridiagonal{T})
+    n = size(A, 1)
+    θ = ZeroOffsetVector(zeros(T, n+1)) #principal minors of A
+    θ[0] = 1
+    n>=1 && (θ[1] = A.d[1])
+    for i=2:n
+        θ[i] = A.d[i]*θ[i-1]-A.dl[i-1]*A.du[i-1]*θ[i-2]
+    end
+    φ = zeros(T, n+1)
+    φ[n+1] = 1
+    n>=1 && (φ[n] = A.d[n])
+    for i=n-1:-1:1
+        φ[i] = A.d[i]*φ[i+1]-A.du[i]*A.dl[i]*φ[i+2]
+    end
+    α = Array(T, n, n)
+    for i=1:n, j=1:n
+        sign = (i+j)%2==0 ? (+) : (-)
+        if i<j
+            α[i,j]=(sign)(prod(A.du[i:j-1]))*θ[i-1]*φ[j+1]/θ[n]
+        elseif i==j
+            α[i,i]=                          θ[i-1]*φ[i+1]/θ[n]
+        else #i>j
+            α[i,j]=(sign)(prod(A.dl[j:i-1]))*θ[j-1]*φ[i+1]/θ[n]
+        end
+    end
+    α 
+end
+
+#Implements the determinant using principal minors
+#    R. Usmani, "Inversion of a tridiagonal Jacobi matrix",
+#    Linear Algebra and its Applications 212-213 (1994), pp.413-414
+#    doi:10.1016/0024-3795(94)90414-6
+function det{T}(A::Tridiagonal{T})
+    n = size(A, 1)
+    θa = one(T)
+    n==0 && return θa
+    θb = A.d[1]
+    for i=2:n
+        θb, θa = A.d[i]*θb-A.dl[i-1]*A.du[i-1]*θa, θb
+    end
+    return θb
+end
 
 # Elementary operations that mix Tridiagonal and SymTridiagonal matrices
 convert(::Type{Tridiagonal}, A::SymTridiagonal) = Tridiagonal(A.ev, A.dv, A.ev)
