@@ -443,18 +443,19 @@ LIBMNAME = libimf
 endif
 
 ifeq ($(USE_MKL), 1)
-ifeq ($(USE_BLAS64), 1)
-export MKL_INTERFACE_LAYER := ILP64
-MKLLIB = $(MKLROOT)/lib/intel64
-else
-MKLLIB = $(MKLROOT)/lib/ia32
-endif
 USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
+MKLLIB = $(MKLROOT)/lib/intel64
+MKLCOMMON = -lmkl_core -lmkl_sequential -lpthread -lm
+ifeq ($(USE_BLAS64), 1)
 LIBBLASNAME = libmkl_gf_ilp64
-LIBLAPACKNAME = libmkl_gf_ilp64
-LIBBLAS   = -lmkl_gf_ilp64 -lmkl_core -lmkl_sequential -lpthread -lm
-LIBLAPACK = -lmkl_gf_ilp64 -lmkl_core -lmkl_sequential -lpthread -lm
+LIBBLAS     = -lmkl_gf_ilp64 $(MKLCOMMON)
+else
+LIBBLASNAME = libmkl_gf_lp64
+LIBBLAS     = -lmkl_gf_lp64  $(MKLCOMMON)
+endif
+LIBLAPACKNAME = $(LIBBLASNAME)
+LIBLAPACK     = $(LIBBLAS)
 RPATH += -Wl,-rpath,$(MKLLIB)
 endif
 
