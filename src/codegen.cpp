@@ -1443,34 +1443,38 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             if (!(jl_isbits(it) && jl_is_leaf_type(it)))
                 break;
         }
-        if (i >= nargs) {
-            jl_value_t *tt = (jl_value_t*)jl_alloc_tuple_uninit(nargs);
-            JL_GC_PUSH1(&tt);
-            for(i=0; i < nargs; i++) {
-                jl_tupleset(tt, i, expr_type(args[i+1],ctx));
-            }
-            Type *ty = julia_type_to_llvm(tt);
-            Value *tpl = NULL;
-            if (ty != T_void)
-                tpl = UndefValue::get(ty);
-            for (size_t i = 0; i < nargs; ++i) {
-                Type *ety = NULL;
-                if (tpl != NULL)
-                    ety = jl_llvmtuple_eltype(tpl->getType(),tt,i);
-                if (tpl == NULL || ety == T_void || ety->isEmptyTy()) {
-                    emit_expr(args[i+1],ctx); //for side effects (if any)
-                    continue;
+        if (i >= nargs && ctx->linfo->specTypes) {
+            rt1 = expr_type(expr, ctx);
+            if (jl_is_tuple(rt1) && nargs == jl_tuple_len(rt1)) {
+                for(i=0; i < nargs; i++) {
+                    // paranoia: make sure the inferred tuple type matches what
+                    // we are about to construct.
+                    if (!jl_types_equal(jl_tupleref(rt1,i), expr_type(args[i+1],ctx)))
+                        break;
                 }
-                assert(tpl != NULL);
-                Value *elt = emit_unbox(ety,
-                    emit_unboxed(args[i+1],ctx),jl_tupleref(tt,i));
-                tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,tt,ctx);
+                if (i >= nargs) {
+                    Type *ty = julia_type_to_llvm(rt1);
+                    Value *tpl = NULL;
+                    if (ty != T_void)
+                        tpl = UndefValue::get(ty);
+                    for (size_t i = 0; i < nargs; ++i) {
+                        Type *ety = NULL;
+                        if (tpl != NULL)
+                            ety = jl_llvmtuple_eltype(tpl->getType(),rt1,i);
+                        if (tpl == NULL || ety == T_void || ety->isEmptyTy()) {
+                            emit_expr(args[i+1],ctx); //for side effects (if any)
+                            continue;
+                        }
+                        assert(tpl != NULL);
+                        Value *elt = emit_unbox(ety,emit_unboxed(args[i+1],ctx),jl_tupleref(rt1,i));
+                        tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,rt1,ctx);
+                    }
+                    JL_GC_POP();
+                    if (ty->isEmptyTy())
+                        return mark_julia_type(tpl, rt1);
+                    return tpl;
+                }
             }
-            JL_GC_POP();
-            JL_GC_POP();
-            if (ty->isEmptyTy())
-                return mark_julia_type(tpl, tt);
-            return tpl;
         }
 
         int last_depth = ctx->argDepth;
@@ -2295,6 +2299,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         else {
             extype = (jl_value_t*)jl_any_type;
         }
+        if (jl_is_tuple(extype))
+            jl_add_linfo_root(ctx->linfo, extype);
         return literal_pointer_val(extype);
     }
     else if (head == new_sym) {
