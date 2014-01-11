@@ -189,7 +189,7 @@ catch e
     global const VERSION = VersionNumber(0)
 end
 
-function banner()
+function banner(io::IO = STDOUT)
     if BUILD_INFO.tagged_commit
         commit_string = BUILD_INFO.TAGGED_RELEASE_BANNER
     elseif BUILD_INFO.commit == ""
@@ -212,7 +212,7 @@ function banner()
         d3 = "\033[32m" # third dot
         d4 = "\033[35m" # fourth dot
 
-        print("""\033[1m               $(d3)_
+        print(io,"""\033[1m               $(d3)_
            $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
           $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: http://docs.julialang.org
            $(jl)_ _   _| |_  __ _$(tx)   |  Type \"help()\" to list help topics
@@ -223,7 +223,7 @@ function banner()
 
         \033[0m""")
     else
-        print("""
+        print(io,"""
                        _
            _       _ _(_)_     |  A fresh approach to technical computing
           (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
