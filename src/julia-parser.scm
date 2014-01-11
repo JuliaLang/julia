@@ -445,9 +445,9 @@
 ; parse right-to-left binary operator
 ; produces structures like (= a (= b (= c d)))
 (define (parse-RtoL s down ops)
-  (let ((ex (down s))
-	(t   (peek-token s))
-	(spc (ts:space? s)))
+  (let loop ((ex  (down s))
+	     (t   (peek-token s))
+	     (spc (ts:space? s)))
     (if (not (memq t ops))
 	ex
 	(begin (take-token s)
@@ -457,6 +457,14 @@
 		      ex)
 		     ((syntactic-op? t)
 		      (list t ex (parse-RtoL s down ops)))
+		     ((eq? t '~)
+		      (let ((args (parse-chain s down '~)))
+			(if (memq (peek-token s) ops)
+			    `(macrocall @~ ,ex ,@(butlast args)
+					,(loop (last args)
+					       (peek-token s)
+					       (ts:space? s)))
+			    `(macrocall @~ ,ex ,@args))))
 		     (else
 		      (list 'call t ex (parse-RtoL s down ops))))))))
 
