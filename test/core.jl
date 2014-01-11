@@ -52,7 +52,10 @@ let T = TypeVar(:T,true)
 
     TT = TypeVar(:T,Top)
     S = TypeVar(:S,true); N = TypeVar(:N,true)
-    @test typeintersect(Type{Array{TT,1}},Type{Array{S,N}}) == Type{Array{S,1}}
+    @test typeintersect(Type{TypeVar(:T,Array{TT,1})},Type{Array{S,N}}) == Type{Array{S,1}}
+    # issue #5359
+    @test typeintersect((Type{Array{T,1}},Array{T,1}),
+                        (Type{AbstractVector},Vector{Int})) === None
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
