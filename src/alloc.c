@@ -93,7 +93,8 @@ typedef struct {
     int64_t b;
 } bits128_t;
 
-static size_t jl_new_bits_align(jl_value_t *dt) {
+static size_t jl_new_bits_align(jl_value_t *dt)
+{
     if (jl_is_tuple(dt)) {
         size_t i, l = jl_tuple_len(dt), align = 0;
         for (i = 0; i < l; i++) {

@@ -831,7 +831,7 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
         Value *slot = builder.CreateGEP(builder.CreateBitCast(tuple, jl_ppvalue_llvmt),ival);
 #else
         Value *slot = builder.CreateGEP(builder.CreateBitCast(tuple, jl_ppvalue_llvmt),
-                                 builder.CreateAdd(ConstantInt::get(T_size,1),ival));
+                                        builder.CreateAdd(ConstantInt::get(T_size,1),ival));
 #endif
         return builder.CreateLoad(slot);
     }
@@ -847,13 +847,16 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
         else if (iity->getBitWidth() < 32)
             ival = builder.CreateZExt(ival,T_int32);
         Value *v = builder.CreateExtractElement(tuple,builder.CreateSub(ival,ConstantInt::get(T_int32,1)));
-        if (idx)
+        if (idx) {
             v = mark_julia_type(v,jl_tupleref(jt,ci));
+        }
         else {
             if (sizeof(void*) != 4)
                 ival = builder.CreateZExt(ival,T_size);
             jl_add_linfo_root(ctx->linfo, jt);
-            v = allocate_box_dynamic(emit_tupleref(literal_pointer_val(jt), ival, jl_typeof(jt), ctx), ty->getScalarSizeInBits(), v);
+            v = allocate_box_dynamic(emit_tupleref(literal_pointer_val(jt),
+                                                   ival, jl_typeof(jt), ctx),
+                                     ty->getScalarSizeInBits(), v);
         }
         return v;
     }
@@ -863,13 +866,13 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
             Type *ty = julia_struct_to_llvm(jl_tupleref(jt,i));
             if (ci == i) {
                 if (ty == T_void || ty->isEmptyTy())
-                    return mark_julia_type(UndefValue::get(NoopType),jl_tupleref(jt,i));
+                    return mark_julia_type(UndefValue::get(NoopType), jl_tupleref(jt,i));
                 else
-                    return mark_julia_type(builder.CreateExtractValue(tuple,ArrayRef<unsigned>(j)),jl_tupleref(jt,i));
+                    return mark_julia_type(builder.CreateExtractValue(tuple,ArrayRef<unsigned>(j)), jl_tupleref(jt,i));
             }
             if (ty != T_void) ++j;
         }
-        assert("Out of bounds!");
+        assert(0 && "emit_tupleref must be called with an in-bounds index");
         return NULL;
     }
     if (ty->isArrayTy()) {
@@ -880,15 +883,17 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
         idxs[0] = ConstantInt::get(T_size,0);
         idxs[1] = builder.CreateSub(ival,ConstantInt::get(T_size,1));
         Value *v = builder.CreateGEP(tempSpace,ArrayRef<Value*>(&idxs[0],2));
-        if (idx)
-            v = mark_julia_type(builder.CreateLoad(v),jl_tupleref(jt,ci));
+        if (idx) {
+            v = mark_julia_type(builder.CreateLoad(v), jl_tupleref(jt,ci));
+        }
         else {
             jl_add_linfo_root(ctx->linfo, jt);
             Value *lty = emit_tupleref(literal_pointer_val(jt), ival, jl_typeof(jt), ctx);
             size_t i, l = jl_tuple_len(jt);
             for (i = 0; i < l; jt++)
                 if (!jl_isbits(jl_tupleref(jt,i)))
-                    return builder.CreateCall2(jlnewbits_func, boxed(lty,ctx), builder.CreatePointerCast(v,T_pint8));
+                    return builder.CreateCall2(jlnewbits_func, boxed(lty,ctx),
+                                               builder.CreatePointerCast(v,T_pint8));
             unsigned nb = (ty->getSequentialElementType()->getPrimitiveSizeInBits()+7)/8;
             v = allocate_box_dynamic(lty, nb, builder.CreateLoad(v));
         }
@@ -905,7 +910,7 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
     // Anything else is a bounds error
     builder.SetInsertPoint(deflt);
     builder.CreateCall2(jlthrow_line_func, builder.CreateLoad(jlboundserr_var),
-                ConstantInt::get(T_int32, ctx->lineno));
+                        ConstantInt::get(T_int32, ctx->lineno));
     builder.CreateUnreachable();
     // Now for the cases
     for (size_t i = 0, j = 0; i < jl_tuple_len(jt); ++i) {
@@ -924,12 +929,10 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
         }
         builder.CreateStore(val,ret);
         builder.CreateBr(after);
-
     }
     builder.SetInsertPoint(after);
     return builder.CreateLoad(ret);
 }
-
 
 
 // emit length of vararg tuple
