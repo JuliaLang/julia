@@ -112,10 +112,12 @@ static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
         jl_tuple_t *tuple = (jl_tuple_t*)dt;
         *len = LLT_ALIGN(*len, jl_new_bits_align(dt));
         size_t i, l = jl_tuple_len(tuple);
-        jl_value_t *v = (jl_value_t*) jl_alloc_tuple_uninit(l);
+        jl_value_t *v = (jl_value_t*) jl_alloc_tuple(l);
+        JL_GC_PUSH1(v);
         for (i = 0; i < l; i++) {
             jl_tupleset(v,i,jl_new_bits_internal(jl_tupleref(tuple,i), (char*)data, len));
         }
+        JL_GC_POP();
         return v;
     }
 
