@@ -102,4 +102,4 @@ r = (-4*int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
 @test_throws (0:2:10)[7:7]
 
 # avoiding intermediate overflow (#5065)
-@test length(1:4:typemax(Int64)) == 2305843009213693952
+@test length(1:4:typemax(Int)) == div(typemax(Int),4) + 1

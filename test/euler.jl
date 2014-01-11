@@ -67,7 +67,7 @@ end
 @test euler9(1000) == 31875000
 
 #10: 142913828922
-@test sum(primes(2000000)) == 142913828922
+@test sum(int64(primes(2000000))) == 142913828922
 
 #11: 70600674
 function euler11(grid,n)
