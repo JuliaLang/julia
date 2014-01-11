@@ -553,7 +553,7 @@ end
 function test_approx_eq_vecs{S<:Real,T<:Real}(a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, error=nothing)
     n = size(a, 1)
     @test n==size(b,1) && size(a,2)==size(b,2)
-    if error==nothing error=n^2*(eps(S)+eps(T)) end
+    error==nothing && (error=n^3*(eps(S)+eps(T)))
     for i=1:n
         ev1, ev2 = a[:,i], b[:,i]
         deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
