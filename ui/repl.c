@@ -226,11 +226,14 @@ uv_buf_t *jl_alloc_read_buffer(uv_handle_t* handle, size_t suggested_size)
 int true_main(int argc, char *argv[])
 {
     if (jl_base_module != NULL) {
-        jl_array_t *args = jl_alloc_cell_1d(argc);
-        jl_set_global(jl_base_module, jl_symbol("ARGS"), (jl_value_t*)args);
+        jl_array_t *args = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("ARGS"));
+        assert(jl_array_len(args) == 0);
+        jl_array_grow_end(args, argc);
         int i;
         for (i=0; i < argc; i++) {
-            jl_arrayset(args, (jl_value_t*)jl_cstr_to_string(argv[i]), i);
+            jl_value_t *s = (jl_value_t*)jl_cstr_to_string(argv[i]);
+            s->type = (jl_value_t*)jl_utf8_string_type;
+            jl_arrayset(args, s, i);
         }
     }
     
