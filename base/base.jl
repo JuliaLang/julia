@@ -146,11 +146,10 @@ end
 esc(e::ANY) = Expr(:escape, e)
 
 macro boundscheck(yesno,blk)
-    quote
-        $(Expr(:boundscheck,yesno))
-        $(esc(blk))
-        $(Expr(:boundscheck,:pop))
-    end
+    # hack: use this syntax since it avoids introducing line numbers
+    :($(Expr(:boundscheck,yesno));
+      $(esc(blk));
+      $(Expr(:boundscheck,:pop)))
 end
 
 macro inbounds(blk)

@@ -462,14 +462,14 @@ int jl_start_parsing_file(const char *fname)
     return 0;
 }
 
-void jl_stop_parsing()
+void jl_stop_parsing(void)
 {
     fl_applyn(0, symbol_value(symbol("jl-parser-close-stream")));
 }
 
 extern int jl_lineno;
 
-jl_value_t *jl_parse_next()
+jl_value_t *jl_parse_next(void)
 {
     value_t c = fl_applyn(0, symbol_value(symbol("jl-parser-next")));
     if (c == FL_EOF)

@@ -9,8 +9,6 @@ New language features
   * Tuples (of integers, symbols, or bools) can now be used as type
     parameters ([#5164]).
 
-  * `import module: name1, name2, ...` ([#5214]).
-
   * Default "inner" constructors now accept any arguments. Constructors that
     look like `MyType(a, b) = new(a, b)` can and should be removed ([#4026]).
 
@@ -20,6 +18,9 @@ New language features
 
   * When reloading code, types whose definitions have not changed can be
     ignored in some cases.
+
+  * Binary `~` now parses as a vararg macro call to `@~`.
+    For example `x~y~z` => `@~ x y z` ([#4882]).
 
 New library functions
 ---------------------
@@ -110,7 +111,6 @@ Deprecated or removed
 
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
-[#5214]: https://github.com/JuliaLang/julia/issues/5214
 [#4026]: https://github.com/JuliaLang/julia/issues/4026
 [#4799]: https://github.com/JuliaLang/julia/issues/4799
 [#4862]: https://github.com/JuliaLang/julia/issues/4862
@@ -139,6 +139,7 @@ Deprecated or removed
 [#987]: https://github.com/JuliaLang/julia/issues/987
 [#2345]: https://github.com/JuliaLang/julia/issues/2345
 [#5330]: https://github.com/JuliaLang/julia/issues/5330
+[#4882]: https://github.com/JuliaLang/julia/issues/4882
 
 Julia v0.2.0 Release Notes
 ==========================
@@ -189,6 +190,8 @@ New language features
 
   * Methods can be added to functions in other modules using dot syntax,
     as in `Foo.bar(x) = 0`.
+
+  * `import module: name1, name2, ...` ([#5214]).
 
   * A semicolon is now allowed after an `import` or `using` statement ([#4130]).
 
@@ -512,6 +515,7 @@ Too numerous to mention.
 [#4235]: https://github.com/JuliaLang/julia/issues/4235
 [#4284]: https://github.com/JuliaLang/julia/issues/4284
 [#4412]: https://github.com/JuliaLang/julia/issues/4412
+[#5214]: https://github.com/JuliaLang/julia/issues/5214
 
 [packages chapter]: http://docs.julialang.org/en/latest/manual/packages/
 [sorting functions]: http://docs.julialang.org/en/latest/stdlib/sort/

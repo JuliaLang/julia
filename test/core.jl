@@ -52,7 +52,10 @@ let T = TypeVar(:T,true)
 
     TT = TypeVar(:T,Top)
     S = TypeVar(:S,true); N = TypeVar(:N,true)
-    @test typeintersect(Type{Array{TT,1}},Type{Array{S,N}}) == Type{Array{S,1}}
+    @test typeintersect(Type{TypeVar(:T,Array{TT,1})},Type{Array{S,N}}) == Type{Array{S,1}}
+    # issue #5359
+    @test typeintersect((Type{Array{T,1}},Array{T,1}),
+                        (Type{AbstractVector},Vector{Int})) === None
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
@@ -1256,3 +1259,25 @@ function tighttypes!(adf)
 end
 
 @test isequal(tighttypes!({Any[1.0,2.0]}), [1,2])
+
+# issue #5142
+bitstype 64 Int5142
+function h5142(a::Bool)
+    x=a ? (int64(0),reinterpret(Int5142,int64(0))) : (int64(1),reinterpret(Int5142,int64(1)))
+    x[2]::Int5142
+end
+function h5142(a::Int)
+    x=(int64(0),reinterpret(Int5142,int64(0)))
+    x[a]::Int5142
+end
+h5142(true)
+@test_throws h5142(1)
+h5142(2)
+
+bitstype 8 Int5142b
+function h5142b(a::Int)
+    x=((int8(1),int8(2)),(reinterpret(Int5142b,int8(3)),reinterpret(Int5142b,int8(4))))
+    x[a]::(Int8,Int8)
+end
+h5142b(1)
+@test_throws h5142b(2)

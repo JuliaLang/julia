@@ -318,7 +318,7 @@ static void run_finalizers(void)
     JL_GC_POP();
 }
 
-void jl_gc_run_all_finalizers()
+void jl_gc_run_all_finalizers(void)
 {
     for(size_t i=0; i < finalizer_table.size; i+=2) {
         jl_value_t *f = finalizer_table.table[i+1];

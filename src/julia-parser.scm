@@ -445,9 +445,9 @@
 ; parse right-to-left binary operator
 ; produces structures like (= a (= b (= c d)))
 (define (parse-RtoL s down ops)
-  (let ((ex (down s))
-	(t   (peek-token s))
-	(spc (ts:space? s)))
+  (let loop ((ex  (down s))
+	     (t   (peek-token s))
+	     (spc (ts:space? s)))
     (if (not (memq t ops))
 	ex
 	(begin (take-token s)
@@ -457,6 +457,14 @@
 		      ex)
 		     ((syntactic-op? t)
 		      (list t ex (parse-RtoL s down ops)))
+		     ((eq? t '~)
+		      (let ((args (parse-chain s down '~)))
+			(if (memq (peek-token s) ops)
+			    `(macrocall @~ ,ex ,@(butlast args)
+					,(loop (last args)
+					       (peek-token s)
+					       (ts:space? s)))
+			    `(macrocall @~ ,ex ,@args))))
 		     (else
 		      (list 'call t ex (parse-RtoL s down ops))))))))
 
@@ -620,15 +628,31 @@
 (define (parse-arrow s) (parse-RtoL s parse-ineq  (prec-ops 4)))
 (define (parse-ineq s)  (parse-comparison s (prec-ops 5)))
 
-; parse left to right, combining chains of certain operators into 1 call
-; e.g. a+b+c => (call + a b c)
-(define expr-ops (prec-ops 8))
-(define (parse-expr s)
-  (let loop ((ex       (parse-shift s))
-	     (chain-op #f))
+;; parse left to right chains of a certain binary operator
+;; returns a list of arguments
+(define (parse-chain s down op)
+  (let loop ((chain (list (down s))))
     (let* ((t   (peek-token s))
 	   (spc (ts:space? s)))
-      (if (not (memq t expr-ops))
+      (if (not (eq? t op))
+	  (reverse! chain)
+	  (begin
+	    (take-token s)
+	    (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
+			(not (eqv? (peek-char (ts:port s)) #\ )))
+		   ;; here we have "x -y"
+		   (ts:put-back! s t)
+		   (reverse! chain))
+		  (else
+		   (loop (cons (down s) chain)))))))))
+
+;; parse left to right, combining chains of a certain operator into 1 call
+;; e.g. a+b+c => (call + a b c)
+(define (parse-with-chains s down ops chain-op)
+  (let loop ((ex (down s)))
+    (let* ((t   (peek-token s))
+	   (spc (ts:space? s)))
+      (if (not (memq t ops))
 	  ex
 	  (begin
 	    (take-token s)
@@ -638,35 +662,18 @@
 		   (ts:put-back! s t)
 		   ex)
 		  ((eq? t chain-op)
-		   (loop (append ex (list (parse-shift s)))
-			 chain-op))
+		   (loop (list* 'call t ex
+				(parse-chain s down t))))
 		  (else
-		   (loop (list 'call t ex (parse-shift s))
-			 (and (eq? t '+) t)))))))))
+		   (loop (list 'call t ex (down s))))))))))
+
+(define expr-ops (prec-ops 8))
+(define (parse-expr s) (parse-with-chains s parse-shift expr-ops '+))
 
 (define (parse-shift s) (parse-LtoR s parse-term (prec-ops 9)))
 
 (define term-ops (prec-ops 10))
-(define (parse-term s)
-  (let loop ((ex       (parse-rational s))
-	     (chain-op #f))
-    (let ((t   (peek-token s))
-	  (spc (ts:space? s)))
-      (cond ((not (memq t term-ops))
-	     ex)
-	    ;; TODO: maybe parse 2x*y as (call * 2 x y)
-	    ((eq? t chain-op)
-	     (begin (take-token s)
-		    (loop (append ex (list (parse-rational s)))
-			  chain-op)))
-	    (else
-	     (begin (take-token s)
-		    (if (and space-sensitive spc (memq t unary-and-binary-ops)
-			     (not (eqv? (peek-char (ts:port s)) #\ )))
-			(begin (ts:put-back! s t)
-			       ex)
-			(loop (list 'call t ex (parse-rational s))
-			      (and (eq? t '*) t)))))))))
+(define (parse-term s) (parse-with-chains s parse-rational term-ops '*))
 
 (define (parse-rational s) (parse-LtoR s parse-unary (prec-ops 11)))
 

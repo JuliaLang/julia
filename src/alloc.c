@@ -93,15 +93,46 @@ typedef struct {
     int64_t b;
 } bits128_t;
 
-jl_value_t *jl_new_bits(jl_datatype_t *bt, void *data)
+static size_t jl_new_bits_align(jl_value_t *dt)
 {
-    if (bt == jl_uint8_type)        return jl_box_uint8(*(uint8_t*)data);
-    else if (bt == jl_int64_type)   return jl_box_int64(*(int64_t*)data);
-    else if (bt == jl_bool_type)    return (*(int8_t*)data) ? jl_true:jl_false;
-    else if (bt == jl_int32_type)   return jl_box_int32(*(int32_t*)data);
-    else if (bt == jl_float64_type) return jl_box_float64(*(double*)data);
-    
+    if (jl_is_tuple(dt)) {
+        size_t i, l = jl_tuple_len(dt), align = 0;
+        for (i = 0; i < l; i++) {
+            size_t l = jl_new_bits_align(jl_tupleref(dt,i));
+            if (l > align)
+                align = l;
+        }
+        return align;
+    }
+    return ((jl_datatype_t*)dt)->alignment;
+}
+
+static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
+{
+    if (jl_is_tuple(dt)) {
+        jl_tuple_t *tuple = (jl_tuple_t*)dt;
+        *len = LLT_ALIGN(*len, jl_new_bits_align(dt));
+        size_t i, l = jl_tuple_len(tuple);
+        jl_value_t *v = (jl_value_t*) jl_alloc_tuple(l);
+        JL_GC_PUSH1(v);
+        for (i = 0; i < l; i++) {
+            jl_tupleset(v,i,jl_new_bits_internal(jl_tupleref(tuple,i), (char*)data, len));
+        }
+        JL_GC_POP();
+        return v;
+    }
+
+    jl_datatype_t *bt = (jl_datatype_t*)dt;
     size_t nb = jl_datatype_size(bt);
+    *len = LLT_ALIGN(*len, bt->alignment);
+    data = (char*)data + (*len);
+    *len += nb;
+    if (bt == jl_uint8_type)   return jl_box_uint8(*(uint8_t*)data);
+    if (bt == jl_int64_type)   return jl_box_int64(*(int64_t*)data);
+    if (bt == jl_bool_type)    return (*(int8_t*)data) ? jl_true:jl_false;
+    if (bt == jl_int32_type)   return jl_box_int32(*(int32_t*)data);
+    if (bt == jl_float64_type) return jl_box_float64(*(double*)data);
+
     jl_value_t *v = 
         (jl_value_t*)allocobj((NWORDS(LLT_ALIGN(nb,sizeof(void*)))+1)*
                               sizeof(void*));
@@ -115,6 +146,12 @@ jl_value_t *jl_new_bits(jl_datatype_t *bt, void *data)
     default: memcpy(jl_data_ptr(v), data, nb);
     }
     return v;
+}
+
+jl_value_t *jl_new_bits(jl_value_t *bt, void *data)
+{
+    size_t len = 0;
+    return jl_new_bits_internal(bt, data, &len);
 }
 
 void jl_assign_bits(void *dest, jl_value_t *bits)
@@ -150,8 +187,7 @@ jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
     if (st->fields[i].isptr) {
         return *(jl_value_t**)((char*)v + offs);
     }
-    return jl_new_bits((jl_datatype_t*)jl_tupleref(st->types,i),
-                       (char*)v + offs);
+    return jl_new_bits(jl_tupleref(st->types,i), (char*)v + offs);
 }
 
 int jl_field_isdefined(jl_value_t *v, jl_sym_t *fld, int err)

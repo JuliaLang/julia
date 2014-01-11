@@ -7,7 +7,7 @@
 static std::map<std::string, std::string> sonameMap;
 static bool got_sonames = false;
 
-extern "C" DLLEXPORT void jl_read_sonames()
+extern "C" DLLEXPORT void jl_read_sonames(void)
 {
     char *line=NULL;
     size_t sz=0;
