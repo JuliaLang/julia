@@ -35,7 +35,7 @@ LIBSUPPORT = $(MAKEDIR)\..\support\libsupport.lib
 
 INCLUDE = $(INCLUDE);$(MAKEDIR)\..\..\deps\libuv\include;$(MAKEDIR)\..\support
 
-CFLAGS = $(CFLAGS) /Qstd=c99 -D_CRT_SECURE_NO_WARNINGS -DIMPORT_EXPORT
+CFLAGS = $(CFLAGS) /Qstd=c99 -D_CRT_SECURE_NO_WARNINGS -DLIBRARY_EXPORTS
 LFLAGS = $(LFLAGS) kernel32.lib ws2_32.lib psapi.lib advapi32.lib iphlpapi.lib
 
 default: $(NAME).exe

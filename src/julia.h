@@ -432,11 +432,10 @@ DLLEXPORT extern jl_value_t *jl_nothing;
 extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
 
-extern uv_lib_t *jl_dl_handle;
+DLLEXPORT extern uv_lib_t *jl_dl_handle;
 DLLEXPORT extern uv_lib_t *jl_RTLD_DEFAULT_handle;
 
 #if defined(_OS_WINDOWS_)
-DLLEXPORT extern uv_lib_t *jl_dl_handle;
 DLLEXPORT extern uv_lib_t *jl_exe_handle;
 extern uv_lib_t *jl_ntdll_handle;
 extern uv_lib_t *jl_kernel32_handle;
@@ -482,7 +481,7 @@ extern jl_sym_t *boundscheck_sym; extern jl_sym_t *copyast_sym;
 
 #ifdef JL_GC_MARKSWEEP
 void *allocb(size_t sz);
-void *allocobj(size_t sz);
+DLLEXPORT void *allocobj(size_t sz);
 #else
 #define allocb(nb)    malloc(nb)
 #define allocobj(nb)  malloc(nb)
@@ -728,7 +727,7 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name);
 void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name);
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
                    jl_tuple_t *tvars);
-jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
+DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f);
 DLLEXPORT jl_value_t *jl_box_bool(int8_t x);
 DLLEXPORT jl_value_t *jl_box_int8(int32_t x);
@@ -897,8 +896,8 @@ void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void *stack, size_t ssize);
 void jl_init_serializer(void);
 
-void jl_save_system_image(char *fname);
-void jl_restore_system_image(char *fname, int build_mode);
+DLLEXPORT void jl_save_system_image(char *fname);
+DLLEXPORT void jl_restore_system_image(char *fname, int build_mode);
 void jl_dump_bitcode(char *fname);
 void jl_set_imaging_mode(int stat);
 int32_t jl_get_llvm_gv(jl_value_t *p);
@@ -967,7 +966,6 @@ DLLEXPORT uv_lib_t *jl_load_dynamic_library_e(char *fname, unsigned flags);
 DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol);
 DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
 DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
-void *jl_dlsym_e(uv_lib_t *handle, char *symbol); //supress errors
 char *jl_dlfind_win32(char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
 
@@ -1102,7 +1100,7 @@ extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
   jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
 
 #define JL_GC_PUSHARGS(rts_var,n)                               \
-  rts_var = ((jl_value_t**)__builtin_alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
+  rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
   ((void**)rts_var)[-2] = (void*)(((size_t)n)<<1);              \
   ((void**)rts_var)[-1] = jl_pgcstack;                          \
   jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2])
@@ -1135,9 +1133,9 @@ void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned);
 void jl_gc_free_array(jl_array_t *a);
 void jl_gc_track_malloced_array(jl_array_t *a);
 void jl_gc_run_all_finalizers(void);
-void *alloc_2w(void);
-void *alloc_3w(void);
-void *alloc_4w(void);
+DLLEXPORT void *alloc_2w(void);
+DLLEXPORT void *alloc_3w(void);
+DLLEXPORT void *alloc_4w(void);
 
 #else
 
@@ -1277,7 +1275,7 @@ DLLEXPORT JL_STREAM *jl_stdout_stream(void);
 DLLEXPORT JL_STREAM *jl_stdin_stream(void);
 DLLEXPORT JL_STREAM *jl_stderr_stream(void);
 
-extern char *julia_home;
+DLLEXPORT extern char *julia_home;
 
 STATIC_INLINE void jl_eh_restore_state(jl_handler_t *eh)
 {
