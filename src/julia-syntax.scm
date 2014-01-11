@@ -561,7 +561,7 @@
 	,name))))
 
 (define (optional-positional-defs name sparams req opt dfl body overall-argl . kw)
-  (let ((lno  (if (and (pair? (cdr body))
+  (let ((lno  (if (and (pair? body) (pair? (cdr body))
 		       (pair? (cadr body)) (eq? (caadr body) 'line))
 		  (list (cadr body))
 		  '())))
