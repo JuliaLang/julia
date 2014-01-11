@@ -35,14 +35,38 @@ abstract Period     <: AbstractTime
 abstract DatePeriod <: Period
 abstract TimePeriod <: Period
 
-immutable Year        <: DatePeriod years::Int64   end
-immutable Month       <: DatePeriod months::Int64  end
-immutable Week        <: DatePeriod weeks::Int64   end
-immutable Day         <: DatePeriod days::Int64    end
-immutable Hour        <: TimePeriod h::Int64       end
-immutable Minute      <: TimePeriod m::Int64       end
-immutable Second      <: TimePeriod s::Int64       end
-immutable Millisecond <: TimePeriod ms::Int64      end
+immutable Year           <: DatePeriod
+    years::Int64
+    Year(x::Real)        = new(int64(x))
+end
+immutable Month          <: DatePeriod
+    months::Int64
+    Month(x::Real)       = new(int64(x))
+end
+immutable Week           <: DatePeriod
+    weeks::Int64
+    Week(x::Real)        = new(int64(x))
+end
+immutable Day            <: DatePeriod
+    days::Int64
+    Day(x::Real)         = new(int64(x))
+end
+immutable Hour           <: TimePeriod
+    h::Int64
+    Hour(x::Real)        = new(int64(x))
+end
+immutable Minute         <: TimePeriod
+    m::Int64
+    Minute(x::Real)      = new(int64(x))
+end
+immutable Second         <: TimePeriod
+    s::Int64
+    Second(x::Real)      = new(int64(x))
+end
+immutable Millisecond    <: TimePeriod
+    ms::Int64
+    Millisecond(x::Real) = new(int64(x))
+end
 
 # TimeTypes wrap Period types to provide human representations of time
 abstract TimeType <: AbstractTime
@@ -56,7 +80,6 @@ typealias ISODatetime{T} Datetime{Millisecond,T,ISOCalendar}
 
 immutable Date <: TimeType
     instant::Day
-    # This prevents any Real from auto-converting for a single argument
     Date(x::Day) = new(x)
 end
 
@@ -172,7 +195,7 @@ typemin{D<:Datetime}(::Type{D}) = Datetime(-292277023,1,1,0,0,0)
 typemax(::Type{Date}) = Date(252522163911149,12,31)
 typemin(::Type{Date}) = Date(-252522163911150,1,1)
 
-# RFC: is there a way to make this more efficient?
+# TODO: optimize this?
 function string{T}(dt::ISODatetime{T})
     y,m,d = _day2date(_days(dt))
     h,mi,s = hour(dt),minute(dt),second(dt)
@@ -325,10 +348,10 @@ function (-)(dt::Date,z::Month)
     mm = subwrap(m,z.months); ld = _lastdayofmonth(ny,mm)
     return Date(ny,mm,d <= ld ? d : ld)
 end
-(+)(x::Date,y::Week) = return Date(x.instant + int64(7y))
-(-)(x::Date,y::Week) = return Date(x.instant - int64(7y))
-(+)(x::Date,y::Day)  = return Date(x.instant + int64(y))
-(-)(x::Date,y::Day)  = return Date(x.instant - int64(y))
+(+)(x::Date,y::Week) = return Date(x.instant + 7*y.weeks)
+(-)(x::Date,y::Week) = return Date(x.instant - 7*y.weeks)
+(+)(x::Date,y::Day)  = return Date(x.instant + y.days)
+(-)(x::Date,y::Day)  = return Date(x.instant - y.days)
 (+){T}(x::ISODatetime{T},y::Week)   = (x=x.instant.ms+604800000*value(y)-getoffset(T,x.instant.ms); return ISODatetime{T}(Millisecond(x+setoffset(T,x))))
 (-){T}(x::ISODatetime{T},y::Week)   = (x=x.instant.ms-604800000*value(y)-getoffset(T,x.instant.ms); return ISODatetime{T}(Millisecond(x+setoffset(T,x))))
 (+){T}(x::ISODatetime{T},y::Day)    = (x=x.instant.ms+86400000 *value(y)-getoffset(T,x.instant.ms); return ISODatetime{T}(Millisecond(x+setoffset(T,x))))
