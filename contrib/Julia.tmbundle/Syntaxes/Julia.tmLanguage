@@ -66,7 +66,7 @@
 					<key>begin</key>
 					<string>\[</string>
 					<key>end</key>
-					<string>\](')?</string>
+					<string>\]('*)</string>
 					<key>endCaptures</key>
 					<dict>
 						<key>1</key>
@@ -84,12 +84,6 @@
 							<string>\bend\b</string>
 							<key>name</key>
 							<string>constant.numeric.julia</string>
-						</dict>
-						<dict>
-							<key>match</key>
-							<string>(?:\]')</string>
-							<key>name</key>
-							<string>keyword.operator</string>
 						</dict>
 						<dict>
 							<key>include</key>
@@ -172,7 +166,7 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>^\s*([a-zA-Z0-9_]+!?)(?=.*\)\s*=(?!=))</string>
+					<string>^\s*([a-zA-Z0-9\._]+!?)(?=.*\)\s*=(?!=))</string>
 					<key>captures</key>
 					<dict>
 						<key>1</key>
@@ -184,7 +178,7 @@
 				</dict>
 				<dict>
 					<key>match</key>
-					<string>\b(function|macro)\s+([a-zA-Z0-9_]+!?)\b</string>
+					<string>\b(function|macro)\s+([a-zA-Z0-9_\.]+!?)\b</string>
 					<key>captures</key>
 					<dict>
 						<key>1</key>
@@ -328,11 +322,6 @@
 				<dict>
 					<key>captures</key>
 					<dict>
-						<key>1</key>
-						<dict>
-							<key>name</key>
-							<string>variable</string>
-						</dict>
 						<key>2</key>
 						<dict>
 							<key>name</key>
