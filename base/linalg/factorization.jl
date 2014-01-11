@@ -48,7 +48,8 @@ cholfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=-1
 cholfact(A::StridedMatrix, uplo::Symbol=:U; pivot=false, tol=-1.0) = cholfact!(float(A), uplo, pivot=pivot, tol=tol)
 cholfact(x::Number) = @assertposdef Cholesky(fill(sqrt(x), 1, 1), :U) !(imag(x) == 0 && real(x) > 0)
 
-chol(A::Union(Number, AbstractMatrix), uplo::Symbol=:U) = cholfact(A, uplo)[uplo]
+chol(A::Union(Number, AbstractMatrix), uplo::Symbol) = cholfact(A, uplo)[uplo]
+chol(A::Union(Number, AbstractMatrix)) = triu!(cholfact(A, :U).UL)
 
 size(C::Cholesky) = size(C.UL)
 size(C::Cholesky,d::Integer) = size(C.UL,d)

@@ -718,6 +718,41 @@ for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relt
     end
 end
 
+#Test interconversion between special matrix types
+using Base.Test
+
+N=12
+A=Diagonal([1:N]*1.0)
+for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Triangular, Matrix]
+    @test full(convert(newtype, A)) == full(A)
+end
+
+for isupper in (true, false)
+    A=Bidiagonal([1:N]*1.0, [1:N-1]*1.0, isupper)
+    for newtype in [Bidiagonal, Tridiagonal, Triangular, Matrix]
+        @test full(convert(newtype, A)) == full(A)
+    end
+    A=Bidiagonal([1:N]*1.0, [1:N-1]*0.0, isupper) #morally Diagonal
+    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Triangular, Matrix]
+        @test full(convert(newtype, A)) == full(A)
+    end
+end
+
+A=SymTridiagonal([1:N]*1.0, [1:N-1]*1.0)
+for newtype in [Tridiagonal, Matrix]
+    @test full(convert(newtype, A)) == full(A)
+end
+
+A=Tridiagonal([1:N-1]*0.0, [1:N]*1.0, [1:N-1]*0.0) #morally Diagonal
+for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Triangular, Matrix]
+    @test full(convert(newtype, A)) == full(A)
+end
+
+A=Triangular(full(Diagonal([1:N]*1.0))) #morally Diagonal
+for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Triangular, Matrix]
+    @test full(convert(newtype, A)) == full(A)
+end
+
 # Test gglse
 for elty in (Float32, Float64, Complex64, Complex128)
     A = convert(Array{elty, 2}, [1 1 1 1; 1 3 1 1; 1 -1 3 1; 1 1 1 3; 1 1 1 -1])

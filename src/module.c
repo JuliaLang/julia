@@ -113,7 +113,7 @@ jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
 }
 
 static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
-                           int explicit);
+                           int explici);
 
 typedef struct _modstack_t {
     jl_module_t *m;
@@ -168,8 +168,9 @@ static int eq_bindings(jl_binding_t *a, jl_binding_t *b)
     return 0;
 }
 
+// NOTE: we use explici since explicit is a C++ keyword
 static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
-                           int explicit)
+                           int explici)
 {
     if (to == from)
         return;
@@ -188,14 +189,14 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
             }
             else if (bto->owner == b->owner) {
                 // already imported
-                bto->imported = (explicit!=0);
+                bto->imported = (explici!=0);
             }
             else if (bto->owner != to && bto->owner != NULL) {
                 // already imported from somewhere else
                 jl_binding_t *bval = jl_get_binding(to, s);
                 if (bval->constp && bval->value && b->constp && b->value == bval->value) {
                     // equivalent binding
-                    bto->imported = (explicit!=0);
+                    bto->imported = (explici!=0);
                     return;
                 }
                 jl_printf(JL_STDERR,
@@ -215,13 +216,13 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
             }
             else {
                 bto->owner = b->owner;
-                bto->imported = (explicit!=0);
+                bto->imported = (explici!=0);
             }
         }
         else {
             jl_binding_t *nb = new_binding(s);
             nb->owner = b->owner;
-            nb->imported = (explicit!=0);
+            nb->imported = (explici!=0);
             *bp = nb;
         }
     }

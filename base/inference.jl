@@ -291,6 +291,9 @@ const getfield_tfunc = function (A, s, name)
             return Any
         end
     end
+    if isa(s,UnionType)
+        return reduce(tmerge, None, map(t->getfield_tfunc(A, t, name), s.types))
+    end
     if !isa(s,DataType) || s.abstract
         return Any
     end
