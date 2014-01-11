@@ -603,7 +603,41 @@ for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relt
     end
 end
 
+#Tridiagonal matrices
+for relty in (Float16, Float32, Float64), elty in (relty, Complex{relty})
+    a = convert(Vector{elty}, randn(n-1))
+    b = convert(Vector{elty}, randn(n))
+    c = convert(Vector{elty}, randn(n-1))
+    if elty <: Complex
+        a += im*convert(Vector{elty}, randn(n-1))
+        b += im*convert(Vector{elty}, randn(n))
+        c += im*convert(Vector{elty}, randn(n-1))
+    end
+
+    A=Tridiagonal(a, b, c)
+    fA=(elty<:Complex?complex128:float64)(full(A))
+    for func in (det, inv)
+        @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
+    end
+end
+
 #SymTridiagonal (symmetric tridiagonal) matrices
+for relty in (Float16, Float32, Float64), elty in (relty, )#XXX Complex{relty}) doesn't work
+    a = convert(Vector{elty}, randn(n))
+    b = convert(Vector{elty}, randn(n-1))
+    if elty <: Complex
+        relty==Float16 && continue
+        a += im*convert(Vector{elty}, randn(n))
+        b += im*convert(Vector{elty}, randn(n-1))
+    end
+
+    A=SymTridiagonal(a, b)
+    fA=(elty<:Complex?complex128:float64)(full(A))
+    for func in (det, inv)
+        @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
+    end
+end
+
 Ainit = randn(n)
 Binit = randn(n-1)
 for elty in (Float32, Float64)
