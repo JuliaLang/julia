@@ -158,11 +158,12 @@ function reload_path(path::String)
     nothing
 end
 
-function evalfile(path::String, args::Array = {})
+function evalfile(path::String, args::Vector{UTF8String}=UTF8String[])
     return eval(Module(:__anon__),
                 Expr(:toplevel,
-                     :(ARGS=$args),
+                     :(const ARGS = $args),
                      :(eval(x) = Core.eval(__anon__,x)),
                      :(eval(m,x) = Core.eval(m,x)),
                      :(include($path))))
 end
+evalfile(path::String, args::Vector) = evalfile(path, UTF8String[args...])

@@ -1,6 +1,8 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
+const ARGS = UTF8String[]
+
 const text_colors = {
     :black   => "\033[1m\033[30m",
     :red     => "\033[1m\033[31m",
@@ -212,8 +214,8 @@ end
 # try to include() a file, ignoring if not found
 try_include(path::String) = isfile(path) && include(path)
 
-function process_options(args::Array{Any,1})
-    global ARGS, bind_addr
+function process_options(args::Vector{UTF8String})
+    global bind_addr
     quiet = false
     repl = true
     startup = true
@@ -232,13 +234,13 @@ function process_options(args::Array{Any,1})
         elseif args[i]=="-e" || args[i]=="--eval"
             repl = false
             i+=1
-            ARGS = args[i+1:end]
+            splice!(ARGS, 1:length(ARGS), args[i+1:end])
             eval(Main,parse_input_line(args[i]))
             break
         elseif args[i]=="-E" || args[i]=="--print"
             repl = false
             i+=1
-            ARGS = args[i+1:end]
+            splice!(ARGS, 1:length(ARGS), args[i+1:end])
             show(eval(Main,parse_input_line(args[i])))
             println()
             break
@@ -293,7 +295,7 @@ function process_options(args::Array{Any,1})
             # program
             repl = false
             # remove julia's arguments
-            ARGS = args[i+1:end]
+            splice!(ARGS, 1:length(ARGS), args[i+1:end])
             include(args[i])
             break
         else
@@ -374,7 +376,7 @@ function _start()
         init_sched()
         any(a->(a=="--worker"), ARGS) || init_head_sched()
         init_load_path()
-        (quiet,repl,startup,color_set,history) = process_options(ARGS)
+        (quiet,repl,startup,color_set,history) = process_options(copy(ARGS))
         global _use_history = history
         startup && load_juliarc()
 
