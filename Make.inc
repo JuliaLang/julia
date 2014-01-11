@@ -451,18 +451,11 @@ MKLLIB = $(MKLROOT)/lib/ia32
 endif
 USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
-LIBBLASNAME = libmkl_rt
-LIBLAPACKNAME = libmkl_rt
-MKL_LDFLAGS = -L$(MKLLIB) -lmkl_rt
-ifneq ($(strip $(MKLLIB)),)
-  ifeq ($(OS), Linux)
-    RPATH_MKL = -Wl,-rpath,$(MKLLIB)
-    RPATH     += $(RPATH_MKL)
-    MKL_LDFLAGS += $(RPATH_MKL)
-  endif
-endif
-LIBBLAS   = $(MKL_LDFLAGS)
-LIBLAPACK = $(MKL_LDFLAGS)
+LIBBLASNAME = libmkl_gf_ilp64
+LIBLAPACKNAME = libmkl_gf_ilp64
+LIBBLAS   = -lmkl_gf_ilp64 -lmkl_core -lmkl_sequential -lpthread -lm
+LIBLAPACK = -lmkl_gf_ilp64 -lmkl_core -lmkl_sequential -lpthread -lm
+RPATH += -Wl,-rpath,$(MKLLIB)
 endif
 
 # ATLAS
