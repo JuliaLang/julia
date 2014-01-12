@@ -82,6 +82,9 @@ Library improvements
   * `sparse(A) \ B` now supports a matrix `B` of right-hand sides ([#5196]).
 
   * More routines for specialized matrix types
+    - Interconversions between the special matrix types `Diagonal`, `Bidiagonal`,
+      `SymTridiagonal`, `Triangular`, and `Triangular`, and `Matrix` are now allowed
+      for matrices which are representable in both source and destination types. ([a448e08])
     - new algorithms for linear solvers and eigensystems of `Triangular`
       matrices of generic types ([#5255])
     - new algorithms for linear solvers, eigensystems and singular systems of `Diagonal`
@@ -142,6 +145,7 @@ Deprecated or removed
 [#5330]: https://github.com/JuliaLang/julia/issues/5330
 [#4882]: https://github.com/JuliaLang/julia/issues/4882
 [#5358]: https://github.com/JuliaLang/julia/pull/5358
+[a448e08]: https://github.com/JuliaLang/julia/commit/a448e080dc736c7fb326426dfcb2528be36973d3
 
 Julia v0.2.0 Release Notes
 ==========================
