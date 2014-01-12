@@ -2907,9 +2907,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             lam->functionID = jl_assign_functionID(f);
         }
     }
-    //TODO: this seems to cause problems, but should be made to work eventually
-    //if (jlrettype == (jl_value_t*)jl_bottom_type)
-    //    f->setDoesNotReturn();
+    if (jlrettype == (jl_value_t*)jl_bottom_type)
+        f->setDoesNotReturn();
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
     // tell Win32 to realign the stack to the next 8-byte boundary
     // upon entry to any function. This achieves compatibility
