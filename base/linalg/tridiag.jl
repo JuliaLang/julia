@@ -420,7 +420,7 @@ type LUTridiagonal{T} <: Factorization{T}
     # end
 end
 lufact!{T<:BlasFloat}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(A.dl,A.d,A.du)...)
-lufact!{T<:Integer}(A::Tridiagonal{T}) = lufact!(float(A))
+lufact!{T<:Union(Rational,Integer)}(A::Tridiagonal{T}) = lufact!(float(A))
 lufact(A::Tridiagonal) = lufact!(copy(A))
 factorize!(A::Tridiagonal) = lufact!(A)
 #show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
