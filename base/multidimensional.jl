@@ -1,6 +1,123 @@
+### TODO: implement bitarray functions in terms of cartesian and delete gen_cartesian_map
+
+### From array.jl
+
+@ngenerate N function checksize(A::AbstractArray, I::NTuple{N, Any}...)
+    @nexprs N d->(size(A, d) == length(I_d) || throw(DimensionMismatch("Index $d has length $(length(I_d)), but size(A, $d) = $(size(A,d))")))
+    nothing
+end
+
+# Version that uses cartesian indexing for src
+@ngenerate N function getindex!(dest::Array, src::AbstractArray, I::NTuple{N,Union(Real,AbstractVector)}...)
+    checksize(dest, I...)
+    checkbounds(src, I...)
+    @nexprs N d->(J_d = to_index(I_d))
+    k = 1
+    @nloops N i dest d->(j_d = J_d[i_d]) begin
+        @inbounds dest[k] = (@nref N src j)
+        k += 1
+    end
+    dest
+end
+
+# Version that uses linear indexing for src
+@ngenerate N function getindex!(dest::Array, src::Array, I::NTuple{N,Union(Real,AbstractVector)}...)
+    checksize(dest, I...)
+    checkbounds(src, I...)
+    @nexprs N d->(J_d = to_index(I_d))
+    stride_1 = 1
+    @nexprs N d->(stride_{d+1} = stride_d*size(src,d))
+    @nexprs N d->(offset_d = 1)  # only really need offset_$N = 1
+    k = 1
+    @nloops N i dest d->(offset_{d-1} = offset_d + (J_d[i_d]-1)*stride_d) begin
+        @inbounds dest[k] = src[offset_0]
+        k += 1
+    end
+    dest
+end
+
+@ngenerate N getindex(A::Array, I::NTuple{N,Union(Real,AbstractVector)}...) = getindex!(similar(A, eltype(A), index_shape(I...)), A, I...)
+
+
+@ngenerate N function setindex!(A::Array, x, I::NTuple{N,Union(Real,AbstractArray)}...)
+    checkbounds(A, I...)
+    @nexprs N d->(J_d = to_index(I_d))
+    stride_1 = 1
+    @nexprs N d->(stride_{d+1} = stride_d*size(A,d))
+    @nexprs N d->(offset_d = 1)  # really only need offset_$N = 1
+    if !isa(x, AbstractArray)
+        @nloops N i d->(1:length(J_d)) d->(offset_{d-1} = offset_d + (J_d[i_d]-1)*stride_d) begin
+            @inbounds A[offset_0] = x
+        end
+    else
+        X = x
+        setindex_shape_check(X, I...)
+        # TODO? A variant that can use cartesian indexing for RHS
+        k = 1
+        @nloops N i d->(1:length(J_d)) d->(offset_{d-1} = offset_d + (J_d[i_d]-1)*stride_d) begin
+            @inbounds A[offset_0] = X[k]
+            k += 1
+        end
+    end
+    A
+end
+
+
+@ngenerate N function findn{T,N}(A::AbstractArray{T,N})
+    nnzA = nnz(A)
+    @nexprs N d->(I_d = Array(Int, nnzA))
+    k = 1
+    @nloops N i A begin
+        @inbounds if (@nref N A i) != zero(T)
+            @nexprs N d->(I_d[k] = i_d)
+            k += 1
+        end
+    end
+    @ntuple N I
+end
+
+
+### subarray.jl
+
+# Here we want to skip creating the dict-based cached version,
+# so use the ngenerate function
+function gen_getindex_body(N::Int)
+    quote
+        strd_1 = 1
+        @nexprs $N d->(@inbounds strd_{d+1} = strd_d*s.dims[d])
+        ind -= 1
+        indp = s.first_index
+        @nexprs $N d->begin
+            i = div(ind, strd_{$N-d+1})
+            @inbounds indp += i*s.strides[$N-d+1]
+            ind -= i*strd_{$N-d+1}
+        end
+        s.parent[indp]
+    end
+end
+
+eval(ngenerate(:N, :(getindex{T}(s::SubArray{T,N}, ind::Integer)), gen_getindex_body, 2:5, false))
+
+
+function gen_setindex!_body(N::Int)
+    quote
+        strd_1 = 1
+        @nexprs $N d->(@inbounds strd_{d+1} = strd_d*s.dims[d])
+        ind -= 1
+        indp = s.first_index
+        @nexprs $N d->begin
+            i = div(ind, strd_{$N-d+1})
+            @inbounds indp += i*s.strides[$N-d+1]
+            ind -= i*strd_{$N-d+1}
+        end
+        s.parent[indp] = v
+    end
+end
+
+eval(ngenerate(:N, :(setindex!{T}(s::SubArray{T,N}, v, ind::Integer)), gen_setindex!_body, 2:5, false))
+
+
 ### from abstractarray.jl
-
-
 ## code generator for specializing on the number of dimensions ##
 
 #otherbodies are the bodies that reside between loops, if its a 2 dimension array.
@@ -58,8 +175,8 @@ function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
         if isa(bodies,Array)
             if (ndims(bodies)==2)
                 #println("2d array noticed")
-	        body = bodies[1]
-	        bodies = bodies[2:end,:]
+                body = bodies[1]
+                bodies = bodies[2:end,:]
             elseif (ndims(bodies)==1)
                 #println("1d array noticed")
                 body = bodies[1]
@@ -72,7 +189,7 @@ function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
             end
         else
             #println("no array noticed")
-	    body = bodies
+            body = bodies
             bodies = cell(N,2)
             for i=1:2*N
                 bodies[i] = nothing
@@ -95,194 +212,7 @@ function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
 end
 
 
-# Generate function bodies which look like this (example for a 3d array):
-#    offset3 = 0
-#    stride1 = 1
-#    stride2 = stride1 * size(A,1)
-#    stride3 = stride2 * size(A,2)
-#    for i3 = ind3
-#        offset2 = offset3 + (i3-1)*stride3
-#        for i2 = ind2
-#            offset1 = offset2 + (i2-1)*stride2
-#            for i1 = ind1
-#                linearind = offset1 + i1
-#                <A function, "body", of linearind>
-#            end
-#        end
-#    end
-function make_arrayind_loop_nest(loopvars, offsetvars, stridevars, linearind, ranges, body, arrayname)
-    # Initialize: calculate the strides
-    offset = offsetvars[end]
-    s = stridevars[1]
-    exinit = quote
-        $offset = 0
-        $s = 1
-    end
-    for i = 2:length(ranges)
-        sprev = s
-        s = stridevars[i]
-        exinit = quote
-            $exinit
-            $s = $sprev * size($arrayname, $i-1)
-        end
-    end
-    # Build the innermost loop (iterating over the first index)
-    v = loopvars[1]
-    r = ranges[1]
-    offset = offsetvars[1]
-    exloop = quote
-        for ($v) = ($r)
-            $linearind = $offset + $v
-            $body
-        end
-    end
-    # Build the remaining loops
-    for i = 2:length(ranges)
-        v = loopvars[i]
-        r = ranges[i]
-        offset = offsetvars[i-1]
-        offsetprev = offsetvars[i]
-        s = stridevars[i]
-        exloop = quote
-            for ($v) = ($r)
-                $offset = $offsetprev + ($v - 1) * $s
-                $exloop
-            end
-        end
-    end
-    # Return the combined result
-    return quote
-        $exinit
-        $exloop
-    end
-end
-
-# Like gen_cartesian_map, except it builds a function creating a
-# loop nest that computes a single linear index (instead of a
-# multidimensional index).
-# Important differences:
-#   - genbody is a scalar-valued function of a single scalar argument,
-#     the linear index. In gen_cartesian_map, this function can return
-#     an array to specify "pre-loop" and "post-loop" operations, but
-#     here those are handled explicitly in make_arrayind_loop_nest.
-#   - exargnames[1] must be the array for which the linear index is
-#     being created (it is used to calculate the strides, which in
-#     turn are used for computing the linear index)
-function gen_array_index_map(cache, genbody, ranges, exargnames, exargs...)
-    N = length(ranges)
-    if !haskey(cache,N)
-        dimargnames = { symbol(string("_d",i)) for i=1:N }
-        loopvars = { symbol(string("_l",i)) for i=1:N }
-        offsetvars = { symbol(string("_offs",i)) for i=1:N }
-        stridevars = { symbol(string("_stri",i)) for i=1:N }
-        linearind = :_li
-        body = genbody(linearind)
-        fexpr = quote
-            local _F_
-            function _F_($(dimargnames...), $(exargnames...))
-                $(make_arrayind_loop_nest(loopvars, offsetvars, stridevars, linearind, dimargnames, body, exargnames[1]))
-            end
-            return _F_
-        end
-        f = eval(fexpr)
-        cache[N] = f
-    else
-        f = cache[N]
-    end
-    return f(ranges..., exargs...)
-end
-
-
-
-### From array.jl
-
-# Multidimensional indexing
-let getindex_cache = nothing
-global getindex
-function getindex(A::Array, I::Union(Real,AbstractVector)...)
-    checkbounds(A, I...)
-    I = to_index(I)
-    X = similar(A, eltype(A), index_shape(I...))
-
-    if is(getindex_cache,nothing)
-        getindex_cache = Dict()
-    end
-    gen_array_index_map(getindex_cache, refind -> quote
-            X[storeind] = A[$refind]
-            storeind += 1
-        end, I, (:A, :X, :storeind), A, X, 1)
-    return X
-end
-end
-
-let assign_cache = nothing, assign_scalar_cache = nothing
-global setindex!
-function setindex!(A::Array, x, I::Union(Real,AbstractArray)...)
-    checkbounds(A, I...)
-    I = to_index(I)
-    if !isa(x,AbstractArray)
-        if is(assign_scalar_cache,nothing)
-            assign_scalar_cache = Dict()
-        end
-        gen_array_index_map(assign_scalar_cache, storeind -> quote
-                              A[$storeind] = x
-                            end,
-                            I,
-                            (:A, :x),
-                            A, x)
-    else
-        if is(assign_cache,nothing)
-            assign_cache = Dict()
-        end
-        X = x
-        setindex_shape_check(X, I...)
-        gen_array_index_map(assign_cache, storeind -> quote
-                              A[$storeind] = X[refind]
-                              refind += 1
-                            end,
-                            I,
-                            (:A, :X, :refind),
-                            A, X, 1)
-    end
-    return A
-end
-end
-
-
-let findn_cache = nothing
-function findn_one(ivars)
-    s = { quote I[$i][count] = $(ivars[i]) end for i = 1:length(ivars)}
-    quote
-        Aind = A[$(ivars...)]
-        if Aind != z
-            $(s...)
-            count +=1
-        end
-    end
-end
-
-global findn
-function findn{T}(A::AbstractArray{T})
-    ndimsA = ndims(A)
-    nnzA = nnz(A)
-    I = ntuple(ndimsA, x->Array(Int, nnzA))
-    if nnzA > 0
-        ranges = ntuple(ndims(A), d->(1:size(A,d)))
-
-        if is(findn_cache,nothing)
-            findn_cache = Dict()
-        end
-
-        gen_cartesian_map(findn_cache, findn_one, ranges,
-                          (:A, :I, :count, :z), A,I,1, zero(T))
-    end
-    return I
-end
-end
-
 ### from bitarray.jl
-
-
 
 # note: we can gain some performance if the first dimension is a range;
 # TODO: extend to I:Union(Real,AbstractArray)... (i.e. not necessarily contiguous)
@@ -586,110 +516,3 @@ function permutedims!(P::Array,B::StridedArray, perm)
     return P
 end
 end # let
-
-
-### subarray.jl
-
-function getindex{T}(s::SubArray{T,2}, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    ind -= 1
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2]]
-end
-
-function getindex{T}(s::SubArray{T,3}, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    @inbounds strd3 = strd2*s.dims[2]
-    ind -= 1
-    i3 = div(ind,strd3)
-    ind -= i3*strd3
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2] + i3*s.strides[3]]
-end
-
-function getindex{T}(s::SubArray{T,4}, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    @inbounds strd3 = strd2*s.dims[2]
-    @inbounds strd4 = strd3*s.dims[3]
-    ind -= 1
-    i4 = div(ind,strd4)
-    ind -= i4*strd4
-    i3 = div(ind,strd3)
-    ind -= i3*strd3
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2] + i3*s.strides[3] + i4*s.strides[4]]
-end
-
-function getindex{T}(s::SubArray{T,5}, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    @inbounds strd3 = strd2*s.dims[2]
-    @inbounds strd4 = strd3*s.dims[3]
-    @inbounds strd5 = strd4*s.dims[4]
-    ind -= 1
-    i5 = div(ind,strd5)
-    ind -= i5*strd5
-    i4 = div(ind,strd4)
-    ind -= i4*strd4
-    i3 = div(ind,strd3)
-    ind -= i3*strd3
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2] + i3*s.strides[3] + i4*s.strides[4] + i5*s.strides[5]]
-end
-
-function setindex!{T}(s::SubArray{T,2}, v, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    ind -= 1
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2]] = v
-    s
-end
-
-function setindex!{T}(s::SubArray{T,3}, v, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    @inbounds strd3 = strd2*s.dims[2]
-    ind -= 1
-    i3 = div(ind,strd3)
-    ind -= i3*strd3
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2] + i3*s.strides[3]] = v
-    s
-end
-
-function setindex!{T}(s::SubArray{T,4}, v, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    @inbounds strd3 = strd2*s.dims[2]
-    @inbounds strd4 = strd3*s.dims[3]
-    ind -= 1
-    i4 = div(ind,strd4)
-    ind -= i4*strd4
-    i3 = div(ind,strd3)
-    ind -= i3*strd3
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2] + i3*s.strides[3] + i4*s.strides[4]] = v
-    s
-end
-
-function setindex!{T}(s::SubArray{T,5}, v, ind::Integer)
-    @inbounds strd2 = s.dims[1]
-    @inbounds strd3 = strd2*s.dims[2]
-    @inbounds strd4 = strd3*s.dims[3]
-    @inbounds strd5 = strd4*s.dims[4]
-    ind -= 1
-    i5 = div(ind,strd5)
-    ind -= i5*strd5
-    i4 = div(ind,strd4)
-    ind -= i4*strd4
-    i3 = div(ind,strd3)
-    ind -= i3*strd3
-    i2 = div(ind,strd2)
-    i1 = ind-i2*strd2
-    s.parent[s.first_index + i1*s.strides[1] + i2*s.strides[2] + i3*s.strides[3] + i4*s.strides[4] + i5*s.strides[5]] = v
-    s
-end
