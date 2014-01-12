@@ -23,7 +23,7 @@ function edit(f::Function, pkg::String, args...)
     reqsʹ = Reqs.parse(rʹ)
     reqsʹ != reqs && resolve(reqsʹ,avail)
     Reqs.write("REQUIRE",rʹ)
-    info("REQUIRE updated")
+    info("Package database updated")
     return true
 end
 
