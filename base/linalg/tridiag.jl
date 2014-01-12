@@ -89,6 +89,68 @@ eigmin(m::SymTridiagonal) = eigvals(m, 1, 1)[1]
 eigvecs(m::SymTridiagonal) = eig(m)[2]
 eigvecs{Eigenvalue<:Real}(m::SymTridiagonal, eigvals::Vector{Eigenvalue}) = LAPACK.stein!(m.dv, m.ev, eigvals)
 
+###################
+# Generic methods #
+###################
+
+#Needed for inv_usmani()
+type ZeroOffsetVector
+    data::Vector
+end
+getindex (a::ZeroOffsetVector, i) = a.data[i+1] 
+setindex!(a::ZeroOffsetVector, x, i) = a.data[i+1]=x
+
+#Implements the inverse using the recurrence relation between principal minors
+# a, b, c are assumed to be the subdiagonal, diagonal, and superdiagonal of
+# a tridiagonal matrix.
+#Ref:
+#    R. Usmani, "Inversion of a tridiagonal Jacobi matrix",
+#    Linear Algebra and its Applications 212-213 (1994), pp.413-414
+#    doi:10.1016/0024-3795(94)90414-6
+function inv_usmani{T}(a::Vector{T}, b::Vector{T}, c::Vector{T})
+    n = length(b)
+    θ = ZeroOffsetVector(zeros(T, n+1)) #principal minors of A
+    θ[0] = 1
+    n>=1 && (θ[1] = b[1])
+    for i=2:n
+        θ[i] = b[i]*θ[i-1]-a[i-1]*c[i-1]*θ[i-2]
+    end
+    φ = zeros(T, n+1)
+    φ[n+1] = 1
+    n>=1 && (φ[n] = b[n])
+    for i=n-1:-1:1
+        φ[i] = b[i]*φ[i+1]-a[i]*c[i]*φ[i+2]
+    end
+    α = Array(T, n, n)
+    for i=1:n, j=1:n
+        sign = (i+j)%2==0 ? (+) : (-)
+        if i<j
+            α[i,j]=(sign)(prod(c[i:j-1]))*θ[i-1]*φ[j+1]/θ[n]
+        elseif i==j
+            α[i,i]=                       θ[i-1]*φ[i+1]/θ[n]
+        else #i>j
+            α[i,j]=(sign)(prod(a[j:i-1]))*θ[j-1]*φ[i+1]/θ[n]
+        end
+    end
+    α 
+end
+
+#Implements the determinant using principal minors
+#Inputs and reference are as above for inv_usmani()
+function det_usmani{T}(a::Vector{T}, b::Vector{T}, c::Vector{T})
+    n = length(b)
+    θa = one(T)
+    n==0 && return θa
+    θb = b[1]
+    for i=2:n
+        θb, θa = b[i]*θb-a[i-1]*c[i-1]*θa, θb
+    end
+    return θb
+end
+
+inv(A::SymTridiagonal) = inv_usmani(A.ev, A.dv, A.ev)
+det(A::SymTridiagonal) = det_usmani(A.ev, A.dv, A.ev)
+
 ## Tridiagonal matrices ##
 type Tridiagonal{T} <: AbstractMatrix{T}
     dl::Vector{T}    # sub-diagonal
@@ -175,6 +237,10 @@ function diag{T}(M::Tridiagonal{T}, n::Integer=0)
     end
 end
 
+###################
+# Generic methods #
+###################
+
 +(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl+B.dl, A.d+B.d, A.du+B.du)
 -(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl-B.dl, A.d-B.d, A.du+B.du)
 *(A::Tridiagonal, B::Number) = Tridiagonal(A.dl*B, A.d*B, A.du*B)
@@ -184,6 +250,9 @@ end
 ==(A::Tridiagonal, B::Tridiagonal) = (A.dl==B.dl) && (A.d==B.d) && (A.du==B.du)
 ==(A::Tridiagonal, B::SymTridiagonal) = (A.dl==A.du==B.ev) && (A.d==B.dv)
 ==(A::SymTridiagonal, B::SymTridiagonal) = B==A
+
+inv(A::Tridiagonal) = inv_usmani(A.dl, A.d, A.du)
+det(A::Tridiagonal) = det_usmani(A.dl, A.d, A.du)
 
 # Elementary operations that mix Tridiagonal and SymTridiagonal matrices
 convert(::Type{Tridiagonal}, A::SymTridiagonal) = Tridiagonal(A.ev, A.dv, A.ev)
@@ -351,7 +420,7 @@ type LUTridiagonal{T} <: Factorization{T}
     # end
 end
 lufact!{T<:BlasFloat}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(A.dl,A.d,A.du)...)
-lufact!(A::Tridiagonal) = lufact!(float(A))
+lufact!{T<:Union(Rational,Integer)}(A::Tridiagonal{T}) = lufact!(float(A))
 lufact(A::Tridiagonal) = lufact!(copy(A))
 factorize!(A::Tridiagonal) = lufact!(A)
 #show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
@@ -361,7 +430,7 @@ function det{T}(lu::LUTridiagonal{T})
     prod(lu.d) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -one(T) : one(T))
 end
 
-det(A::Tridiagonal) = det(lufact(A))
+det{T<:BlasFloat}(A::Tridiagonal{T}) = det(lufact(A))
 
 A_ldiv_B!{T<:BlasFloat}(lu::LUTridiagonal{T}, B::StridedVecOrMat{T}) =
     LAPACK.gttrs!('N', lu.dl, lu.d, lu.du, lu.du2, lu.ipiv, B)
