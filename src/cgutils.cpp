@@ -780,38 +780,38 @@ static Value *emit_tupleset(Value *tuple, Value *i, Value *x, jl_value_t *jt, jl
         builder.CreateStore(x,slot);
         return tuple;
     }
-    else {
-        Value *ret = NULL;
-        ConstantInt *idx = dyn_cast<ConstantInt>(i);
-        assert(idx != NULL && "tuplesets must use constant indices");
-        if (ty->isVectorTy()) {
-            Type *ity = i->getType();
-            assert(ity->isIntegerTy());
-            IntegerType *iity = dyn_cast<IntegerType>(ity);
-            // ExtractElement needs i32 *sigh*
-            if (iity->getBitWidth() > 32)
-                i = builder.CreateTrunc(i,T_int32);
-            else if (iity->getBitWidth() < 32)
-                i = builder.CreateZExt(i,T_int32);
-            ret = builder.CreateInsertElement(tuple,x,builder.CreateSub(i,ConstantInt::get(T_int32,1)));
-        }
-        else {
-            unsigned ci = (unsigned)idx->getZExtValue()-1;
-            size_t n = jl_tuple_len(jt);
-            for (size_t i=0,j = 0; i<n; ++i) {
-                Type *ty = julia_struct_to_llvm(jl_tupleref(jt,i));
-                if (ci == i) {
-                    if (ty == T_void || ty->isEmptyTy())
-                        return tuple;
-                    else
-                        ret = builder.CreateInsertValue(tuple,x,ArrayRef<unsigned>(j));
-                }
-                if (ty != T_void)
-                    ++j;
+    Value *ret = NULL;
+    ConstantInt *idx = dyn_cast<ConstantInt>(i);
+    assert(idx != NULL && "tuplesets must use constant indices");
+    if (ty->isVectorTy()) {
+        Type *ity = i->getType();
+        assert(ity->isIntegerTy());
+        IntegerType *iity = dyn_cast<IntegerType>(ity);
+        // ExtractElement needs i32 *sigh*
+        if (iity->getBitWidth() > 32)
+            i = builder.CreateTrunc(i,T_int32);
+        else if (iity->getBitWidth() < 32)
+            i = builder.CreateZExt(i,T_int32);
+        return mark_julia_type(builder.CreateInsertElement(tuple,x,builder.CreateSub(i,ConstantInt::get(T_int32,1))), jt);
+    }
+    unsigned ci = (unsigned)idx->getZExtValue()-1;
+    size_t n = jl_tuple_len(jt);
+    for (size_t i = 0,j = 0; i<n; ++i) {
+        Type *ty = julia_struct_to_llvm(jl_tupleref(jt,i));
+        if (ty == T_void || ty->isEmptyTy()) {
+            if (ci == i) {
+                return tuple;
             }
         }
-        return mark_julia_type(ret,jt);
+        else {
+            if (ci == i) {
+                return mark_julia_type(builder.CreateInsertValue(tuple,x,ArrayRef<unsigned>(j)), jt);
+            }
+            j++;
+        }
     }
+    assert(0 && "emit_tupleset must be called with an in-bounds index");
+    return NULL;
 }
 
 static Value *allocate_box_dynamic(Value *jlty, int nb, Value *v);
@@ -864,13 +864,17 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
         size_t n = jl_tuple_len(jt);
         for (size_t i = 0,j = 0; i<n; ++i) {
             Type *ty = julia_struct_to_llvm(jl_tupleref(jt,i));
-            if (ci == i) {
-                if (ty == T_void || ty->isEmptyTy())
+            if (ty == T_void || ty->isEmptyTy()) {
+                if (ci == i) {
                     return mark_julia_type(UndefValue::get(NoopType), jl_tupleref(jt,i));
-                else
-                    return mark_julia_type(builder.CreateExtractValue(tuple,ArrayRef<unsigned>(j)), jl_tupleref(jt,i));
+                }
             }
-            if (ty != T_void) ++j;
+            else {
+                if (ci == i) {
+                    return mark_julia_type(builder.CreateExtractValue(tuple,ArrayRef<unsigned>(j)), jl_tupleref(jt,i));
+                }
+                j++;
+            }
         }
         assert(0 && "emit_tupleref must be called with an in-bounds index");
         return NULL;
