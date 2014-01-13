@@ -3,7 +3,7 @@
 import Base.conj, Base.transpose, Base.ctranspose, Base.convert
 
 ## Hermitian tridiagonal matrices
-type SymTridiagonal{T<:BlasFloat} <: AbstractMatrix{T}
+type SymTridiagonal{T} <: AbstractMatrix{T}
     dv::Vector{T}                        # diagonal
     ev::Vector{T}                        # subdiagonal
     function SymTridiagonal(dv::Vector{T}, ev::Vector{T})
@@ -12,13 +12,9 @@ type SymTridiagonal{T<:BlasFloat} <: AbstractMatrix{T}
     end
 end
 
-SymTridiagonal{T<:BlasFloat}(dv::Vector{T}, ev::Vector{T}) = SymTridiagonal{T}(copy(dv), copy(ev))
+SymTridiagonal{T}(dv::Vector{T}, ev::Vector{T}) = SymTridiagonal{T}(copy(dv), copy(ev))
 
-function SymTridiagonal{T<:Real}(dv::Vector{T}, ev::Vector{T})
-    SymTridiagonal{Float64}(float64(dv),float64(ev))
-end
-
-function SymTridiagonal{Td<:Number,Te<:Number}(dv::Vector{Td}, ev::Vector{Te})
+function SymTridiagonal{Td,Te}(dv::Vector{Td}, ev::Vector{Te})
     T = promote(Td,Te)
     SymTridiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev))
 end
@@ -76,10 +72,10 @@ function \{T<:BlasFloat}(M::SymTridiagonal{T}, rhs::StridedVecOrMat{T})
 end
 
 #Wrap LAPACK DSTE{GR,BZ} to compute eigenvalues
-eig(m::SymTridiagonal) = LAPACK.stegr!('V', copy(m.dv), copy(m.ev))
-eigvals(m::SymTridiagonal, il::Int, iu::Int) = LAPACK.stegr!('N', 'I', copy(m.dv), copy(m.ev), 0.0, 0.0, il, iu)[1]
-eigvals{T<:BlasFloat}(m::SymTridiagonal, vl::T, vu::T) = LAPACK.stegr!('N', 'V', copy(m.dv), copy(m.ev), vl, vu, 0, 0)[1]
-eigvals(m::SymTridiagonal) = LAPACK.stev!('N', m.dv, m.ev)[1]
+eig{T<:BlasFloat}(m::SymTridiagonal{T}) = LAPACK.stegr!('V', copy(m.dv), copy(m.ev))
+eigvals{T<:BlasFloat}(m::SymTridiagonal{T}, il::Int, iu::Int) = LAPACK.stegr!('N', 'I', copy(m.dv), copy(m.ev), 0.0, 0.0, il, iu)[1]
+eigvals{T<:BlasFloat}(m::SymTridiagonal{T}, vl::Real, vu::Real) = LAPACK.stegr!('N', 'V', copy(m.dv), copy(m.ev), vl, vu, 0, 0)[1]
+eigvals{T<:BlasFloat}(m::SymTridiagonal{T}) = LAPACK.stev!('N', copy(m.dv), copy(m.ev))[1]
 
 #Computes largest and smallest eigenvalue
 eigmax(m::SymTridiagonal) = eigvals(m, size(m, 1), size(m, 1))[1]
@@ -87,7 +83,7 @@ eigmin(m::SymTridiagonal) = eigvals(m, 1, 1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
 eigvecs(m::SymTridiagonal) = eig(m)[2]
-eigvecs{Eigenvalue<:Real}(m::SymTridiagonal, eigvals::Vector{Eigenvalue}) = LAPACK.stein!(m.dv, m.ev, eigvals)
+eigvecs{T<:BlasFloat,Eigenvalue<:Real}(m::SymTridiagonal{T}, eigvals::Vector{Eigenvalue}) = LAPACK.stein!(m.dv, m.ev, eigvals)
 
 ###################
 # Generic methods #
@@ -396,7 +392,8 @@ end
 LDLTTridiagonal{S<:BlasFloat,T<:BlasFloat}(D::Vector{S}, E::Vector{T}) = LDLTTridiagonal{T,S}(D, E)
 
 ldltd!{T<:BlasFloat}(A::SymTridiagonal{T}) = LDLTTridiagonal(LAPACK.pttrf!(real(A.dv),A.ev)...)
-ldltd{T<:BlasFloat}(A::SymTridiagonal{T}) = ldltd!(copy(A))
+ldltd!{T<:Integer}(A::SymTridiagonal{T}) = ldltd!(SymTridiagonal(float(A.dv),float(A.ev)))
+ldltd(A::SymTridiagonal) = ldltd!(copy(A))
 factorize!(A::SymTridiagonal) = ldltd(A)
 
 A_ldiv_B!{T<:BlasReal}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) = LAPACK.pttrs!(C.D, C.E, B)
