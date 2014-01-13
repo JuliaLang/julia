@@ -942,9 +942,11 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
         builder.CreateBr(after);
     }
     builder.SetInsertPoint(after);
-    if (ntuple > 0)
+    if (ntuple > 0) {
         builder.Insert(ret);
-    return ret;
+        return ret;
+    }
+    return UndefValue::get(jl_pvalue_llvmt);
 }
 
 
