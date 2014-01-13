@@ -220,7 +220,7 @@ static int return_callback(int count, int key)
     add_history_temporary(rl_line_buffer);
     rl_ast = repl_parse_input_line(rl_line_buffer);
     rl_done = !rl_ast || !jl_is_expr(rl_ast) ||
-        (((jl_expr_t*)rl_ast)->head != jl_continue_sym) ||
+        (((jl_expr_t*)rl_ast)->head != jl_incomplete_sym) ||
         consecutive_returns > 1;
     if (!rl_done) {
         newline_callback(count, key);

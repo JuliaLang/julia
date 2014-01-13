@@ -452,7 +452,7 @@ jl_value_t *jl_parse_eval_all(char *fname)
             if (form == NULL)
                 break;
             if (jl_is_expr(form)) {
-                if (((jl_expr_t*)form)->head == jl_continue_sym) {
+                if (((jl_expr_t*)form)->head == jl_incomplete_sym) {
                     jl_errorf("syntax: %s", jl_string_data(jl_exprarg(form,0)));
                 }
                 if (((jl_expr_t*)form)->head == error_sym) {

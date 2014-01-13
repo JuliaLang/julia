@@ -205,7 +205,7 @@ function parse_input_line(io::IO)
     while !eof(io)
         s = s*readline(io)
         e = parse_input_line(s)
-        if !(isa(e,Expr) && e.head === :continue)
+        if !(isa(e,Expr) && e.head === :incomplete)
             return e
         end
     end
