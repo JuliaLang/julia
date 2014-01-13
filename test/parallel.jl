@@ -12,13 +12,59 @@ id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 @test @fetchfrom id_other begin myid() end == id_other
 @fetch begin myid() end
 
-d = drand((200,200), [id_me, id_other])
-s = convert(Array, d[1:150, 1:150])
-a = convert(Array, d)
-@test a[1:150,1:150] == s
 
-@test fetch(@spawnat id_me localpart(d)[1,1]) == d[1,1]
-@test fetch(@spawnat id_other localpart(d)[1,1]) == d[1,101]
+@windows_only dist_modes = [DISTMODE_DISTRIBUTED]
+@unix_only dist_modes = [DISTMODE_DISTRIBUTED, DISTMODE_SHARED]
+
+for dm in dist_modes
+    dprocs = [id_me, id_other]
+    d = rand(DimDist((200,200), length(dprocs); mode = dm); dprocs = dprocs)
+    s = convert(Array, d[1:150, 1:150])
+    a = convert(Array, d)
+    @test a[1:150,1:150] == s
+
+    @test fetch(@spawnat id_me localpart(d)[1,1]) == d[1,1]
+    @test fetch(@spawnat id_other localpart(d)[1,1]) == d[1,101]
+end
+
+@unix_only begin
+# SharedArray tests
+dims = (20,20,20)
+d = rand(1:100, DimDist(dims; mode=DISTMODE_SHARED))
+a = convert(Array, d)
+
+partsums = Array(Int, length(procs(d)))
+@sync begin
+    for (i, p) in enumerate(procs(d))
+        @async partsums[i] = remotecall_fetch(p, D->sum(localpart(D)), d)
+    end
+end
+@test sum(a) == sum(partsums)
+
+d = rand(DimDist(dims; mode=DISTMODE_SHARED))
+for p in procs(d)
+    idxes_in_p = remotecall_fetch(p, D->parentindexes(localpart(D)), d)
+    idxf = sub2ind(dims, map(first,idxes_in_p)...)
+    idxl = sub2ind(dims, map(last,idxes_in_p)...)
+    d[idxf] = float64(idxf)
+    rv = remotecall_fetch(p, (D,idxf,idxl) -> begin assert(D[idxf] == float64(idxf)); D[idxl] = float64(idxl); D[idxl];  end, d,idxf,idxl)
+    @test d[idxl] == rv
+end
+
+@test ones(10, 10, 10) == fill(1.0, DimDist(10, 10, 10; mode=DISTMODE_SHARED))
+@test zeros(Int32, 10, 10, 10) == fill(0, DimDist(10, 10, 10; mode=DISTMODE_SHARED))
+
+d = SharedArray(Int, DimDist(dims; mode=DISTMODE_SHARED); init = D->fill!(localpart(D), myid()))
+for p in procs(d)
+    idxes_in_p = remotecall_fetch(p, D->parentindexes(localpart(D)), d)
+    idxf = sub2ind(dims, map(first,idxes_in_p)...)
+    idxl = sub2ind(dims, map(last,idxes_in_p)...)
+    @test d[idxf] == p 
+    @test d[idxl] == p 
+end
+
+
+end # @unix_only(SharedArray tests)
 
 # Test @parallel load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.

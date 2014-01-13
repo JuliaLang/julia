@@ -158,8 +158,10 @@ importall .Sort
 include("combinatorics.jl")
 
 # distributed arrays and memory-mapped arrays
+include("arraydist.jl")
 include("darray.jl")
 include("mmap.jl")
+include("sharedarray.jl")
 
 # utilities - version, timing, help, edit, metaprogramming
 include("sysinfo.jl")

@@ -18,6 +18,7 @@ export
     AbstractVector,
     AbstractVecOrMat,
     Array,
+    ArrayDist,
     Associative,
     Bidiagonal,
     BigFloat,
@@ -40,6 +41,7 @@ export
     Diagonal,
     Dict,
     Dims,
+    DimDist,
     EachLine,
     Eigen,
     Enumerate,
@@ -89,6 +91,7 @@ export
     RoundUp,
     Schur,
     Set,
+    SharedArray,
     SparseMatrixCSC,
     StatStruct,
     StridedArray,
@@ -155,6 +158,8 @@ export
     C_NULL,
     CPU_CORES,
     DL_LOAD_PATH,
+    DISTMODE_DISTRIBUTED,
+    DISTMODE_SHARED,
     ENDIAN_BOM,
     ENV,
     Inf,
@@ -1140,7 +1145,7 @@ export
     pushdisplay,
     redisplay,
 
-# distributed arrays
+# distributed and shared arrays
     dfill,
     distribute,
     dones,
@@ -1150,7 +1155,9 @@ export
     localpart,
     myindexes,
     procs,
+    share,
 
+    
 # paths and file names
     abspath,
     basename,
