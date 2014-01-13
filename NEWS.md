@@ -22,6 +22,8 @@ New language features
   * Binary `~` now parses as a vararg macro call to `@~`.
     For example `x~y~z` => `@~ x y z` ([#4882]).
 
+  * Structure fields can now be accessed by index ([#4806]).
+
 New library functions
 ---------------------
 
@@ -140,6 +142,7 @@ Deprecated or removed
 [#2345]: https://github.com/JuliaLang/julia/issues/2345
 [#5330]: https://github.com/JuliaLang/julia/issues/5330
 [#4882]: https://github.com/JuliaLang/julia/issues/4882
+[#4806]: https://github.com/JuliaLang/julia/issues/4806
 
 Julia v0.2.0 Release Notes
 ==========================

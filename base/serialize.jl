@@ -289,9 +289,9 @@ function serialize(s, x)
         write(s, x)
     else
         serialize(s, length(t.names))
-        for n in t.names
-            if isdefined(x, n)
-                serialize(s, getfield(x, n))
+        for i in 1:length(t.names)
+            if isdefined(x, i)
+                serialize(s, getfield(x, i))
             else
                 writetag(s, UndefRefTag)
             end
@@ -502,10 +502,10 @@ function deserialize(s, t::DataType)
         end
     else
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
-        for n in t.names
+        for i in 1:length(t.names)
             tag = int32(read(s, Uint8))
             if tag==0 || !is(deser_tag[tag], UndefRefTag)
-                setfield(x, n, handle_deserialize(s, tag))
+                setfield(x, i, handle_deserialize(s, tag))
             end
         end
         return x

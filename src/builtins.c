@@ -393,17 +393,29 @@ JL_CALLABLE(jl_f_isdefined)
         JL_NARGS(isdefined, 1, 1);
     }
     else {
-        JL_TYPECHK(isdefined, symbol, args[1]);
-        s = (jl_sym_t*)args[1];
         if (!jl_is_module(args[0])) {
-            jl_value_t *vt = (jl_value_t*)jl_typeof(args[0]);
+            jl_datatype_t *vt = (jl_datatype_t*)jl_typeof(args[0]);
             if (!jl_is_datatype(vt)) {
                 jl_type_error("isdefined", (jl_value_t*)jl_datatype_type, args[0]);
             }
-            return jl_field_isdefined(args[0], s, 0) ? jl_true : jl_false;
+            size_t idx;
+            if (jl_is_long(args[1])) {
+                idx = jl_unbox_long(args[1])-1;
+                if (idx >= jl_tuple_len(vt->names))
+                    return jl_false;
+            }
+            else {
+                JL_TYPECHK(isdefined, symbol, args[1]);
+                idx = jl_field_index(vt, (jl_sym_t*)args[1], 0);
+                if ((int)idx == -1)
+                    return jl_false;
+            }
+            return jl_field_isdefined(args[0], idx) ? jl_true : jl_false;
         }
         JL_TYPECHK(isdefined, module, args[0]);
+        JL_TYPECHK(isdefined, symbol, args[1]);
         m = (jl_module_t*)args[0];
+        s = (jl_sym_t*)args[1];
     }
     assert(s);
     return jl_boundp(m, s) ? jl_true : jl_false;
@@ -446,18 +458,27 @@ JL_CALLABLE(jl_f_tuplelen)
 JL_CALLABLE(jl_f_get_field)
 {
     JL_NARGS(getfield, 2, 2);
-    JL_TYPECHK(getfield, symbol, args[1]);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
     if (vt == (jl_value_t*)jl_module_type) {
+        JL_TYPECHK(getfield, symbol, args[1]);
         return jl_eval_global_var((jl_module_t*)v, (jl_sym_t*)args[1]);
     }
-    if (!jl_is_datatype(vt)) {
+    if (!jl_is_datatype(vt))
         jl_type_error("getfield", (jl_value_t*)jl_datatype_type, v);
-    }
     jl_datatype_t *st = (jl_datatype_t*)vt;
-    jl_sym_t *fld = (jl_sym_t*)args[1];
-    jl_value_t *fval = jl_get_nth_field(v, jl_field_index(st, fld, 1));
+    size_t idx;
+    if (jl_is_long(args[1])) {
+        idx = jl_unbox_long(args[1])-1;
+        if (idx >= jl_tuple_len(st->names))
+            jl_throw(jl_bounds_exception);
+    }
+    else {
+        JL_TYPECHK(getfield, symbol, args[1]);
+        jl_sym_t *fld = (jl_sym_t*)args[1];
+        idx = jl_field_index(st, fld, 1);
+    }
+    jl_value_t *fval = jl_get_nth_field(v, idx);
     if (fval == NULL)
         jl_throw(jl_undefref_exception);
     return fval;
@@ -466,7 +487,6 @@ JL_CALLABLE(jl_f_get_field)
 JL_CALLABLE(jl_f_set_field)
 {
     JL_NARGS(setfield, 3, 3);
-    JL_TYPECHK(setfield, symbol, args[1]);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
     if (vt == (jl_value_t*)jl_module_type)
@@ -476,13 +496,21 @@ JL_CALLABLE(jl_f_set_field)
     jl_datatype_t *st = (jl_datatype_t*)vt;
     if (!st->mutabl)
         jl_errorf("type %s is immutable", st->name->name->name);
-    jl_sym_t *fld = (jl_sym_t*)args[1];
-    size_t i = jl_field_index(st, fld, 1);
-    jl_value_t *ft = jl_tupleref(st->types,i);
+    size_t idx;
+    if (jl_is_long(args[1])) {
+        idx = jl_unbox_long(args[1])-1;
+        if (idx >= jl_tuple_len(st->names))
+            jl_throw(jl_bounds_exception);
+    }
+    else {
+        JL_TYPECHK(setfield, symbol, args[1]);
+        idx = jl_field_index(st, (jl_sym_t*)args[1], 1);
+    }
+    jl_value_t *ft = jl_tupleref(st->types, idx);
     if (!jl_subtype(args[2], ft, 1)) {
         jl_type_error("setfield", ft, args[2]);
     }
-    jl_set_nth_field(v, i, args[2]);
+    jl_set_nth_field(v, idx, args[2]);
     return args[2];
 }
 

@@ -32,9 +32,9 @@ function _deepcopy_t(x, T::DataType, stackdict::ObjectIdDict)
     end
     ret = ccall(:jl_new_struct_uninit, Any, (Any,), T)
     stackdict[x] = ret
-    for f in T.names
-        if isdefined(x,f)
-            ret.(f) = deepcopy_internal(x.(f), stackdict)
+    for i in 1:length(T.names)
+        if isdefined(x,i)
+            ret.(i) = deepcopy_internal(x.(i), stackdict)
         end
     end
     return ret

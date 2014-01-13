@@ -778,8 +778,9 @@ DLLEXPORT void *jl_unbox_voidpointer(jl_value_t *v);
 void jl_compute_field_offsets(jl_datatype_t *st);
 int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
 DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
-jl_value_t *jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs);
-int jl_field_isdefined(jl_value_t *v, jl_sym_t *fld, int err);
+DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i);
+DLLEXPORT void        jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs);
+DLLEXPORT int         jl_field_isdefined(jl_value_t *v, size_t i);
 
 // arrays
 DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_tuple_t *dims);

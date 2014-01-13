@@ -226,6 +226,9 @@ static Function *box64_func;
 static Function *jlputs_func;
 static Function *jldlsym_func;
 static Function *jlnewbits_func;
+//static Function *jlgetnthfield_func;
+static Function *jlgetnthfieldchecked_func;
+//static Function *jlsetnthfield_func;
 #ifdef _OS_WINDOWS_
 static Function *resetstkoflw_func;
 #endif
@@ -1227,6 +1230,33 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
     return answer;
 }
 
+static bool is_structtype_all_pointers(jl_datatype_t *dt)
+{
+    jl_tuple_t *t = dt->types;
+    size_t i, l = jl_tuple_len(t);
+    for(i=0; i < l; i++) {
+        if (!dt->fields[i].isptr)
+            return false;
+    }
+    return true;
+}
+
+static bool is_structtype_homogeneous(jl_datatype_t *dt)
+{
+    jl_tuple_t *t = dt->types;
+    size_t i, l = jl_tuple_len(t);
+    if (l > 0) {
+        jl_value_t *t0 = jl_tupleref(t, 0);
+        if (!jl_is_leaf_type(t0))
+            return false;
+        for(i=1; i < l; i++) {
+            if (!jl_types_equal(t0, jl_tupleref(t,i)))
+                return false;
+        }
+    }
+    return true;
+}
+
 static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                               jl_codectx_t *ctx,
                               Value **theFptr, jl_function_t **theF,
@@ -1675,6 +1705,77 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             JL_GC_POP();
             return fld;
         }
+        jl_datatype_t *stt = (jl_datatype_t*)expr_type(args[1], ctx);
+        jl_value_t *fldt   = expr_type(args[2], ctx);
+        if (jl_is_structtype(stt) && fldt == (jl_value_t*)jl_long_type && !jl_subtype((jl_value_t*)jl_module_type, (jl_value_t*)stt, 0)) {
+            size_t nfields = jl_tuple_len(stt->names);
+            // integer index
+            if (jl_is_long(args[2])) {
+                // known index
+                size_t idx = jl_unbox_long(args[2])-1;
+                if (idx < nfields) {
+                    Value *fld = emit_getfield(args[1],
+                                               (jl_sym_t*)jl_tupleref(stt->names, idx),
+                                               ctx);
+                    JL_GC_POP();
+                    return fld;
+                }
+            }
+            else {
+                // unknown index
+                Value *strct = emit_expr(args[1], ctx);
+                Value *idx = emit_unbox(T_size, emit_unboxed(args[2], ctx), (jl_value_t*)jl_long_type);
+                Type *llvm_st = strct->getType();
+                if (llvm_st == jl_pvalue_llvmt) {
+                    if (is_structtype_all_pointers(stt)) {
+                        idx = emit_bounds_check(idx, ConstantInt::get(T_size, nfields), ctx);
+                        Value *fld =
+                            builder.
+                            CreateLoad(builder.
+                                       CreateGEP(builder.
+                                                 CreateBitCast(strct, jl_ppvalue_llvmt),
+                                                 builder.CreateAdd(idx,ConstantInt::get(T_size,1))));
+                        null_pointer_check(fld, ctx);
+                        JL_GC_POP();
+                        return fld;
+                    }
+                    else if (is_structtype_homogeneous(stt)) {
+                        assert(nfields > 0); // nf==0 trapped by all_pointers case
+                        jl_value_t *jt = jl_t0(stt->types);
+                        idx = emit_bounds_check(idx, ConstantInt::get(T_size, nfields), ctx);
+                        Value *ptr = data_pointer(strct);
+                        JL_GC_POP();
+                        return typed_load(ptr, idx, jt, ctx);
+                    }
+                    else {
+                        idx = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
+                        Value *fld = builder.CreateCall2(jlgetnthfieldchecked_func, strct, idx);
+                        JL_GC_POP();
+                        return fld;
+                    }
+                }
+                else if (is_structtype_homogeneous(stt)) {
+                    assert(llvm_st->isStructTy());
+                    // TODO: move these allocas to the first basic block instead of
+                    // frobbing the stack
+                    Instruction *stacksave =
+                        CallInst::Create(Intrinsic::getDeclaration(jl_Module,
+                                                                   Intrinsic::stacksave));
+                    builder.Insert(stacksave);
+                    Value *tempSpace = builder.CreateAlloca(llvm_st);
+                    builder.CreateStore(strct, tempSpace);
+                    jl_value_t *jt = jl_t0(stt->types);
+                    idx = emit_bounds_check(idx, ConstantInt::get(T_size, nfields), ctx);
+                    Value *ptr = builder.CreateGEP(tempSpace, ConstantInt::get(T_size, 0));
+                    Value *fld = typed_load(ptr, idx, jt, ctx);
+                    builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                                 Intrinsic::stackrestore),
+                                       stacksave);
+                    JL_GC_POP();
+                    return fld;
+                }
+            }
+        }
     }
     else if (f->fptr == &jl_f_set_field && nargs==3) {
         jl_datatype_t *sty = (jl_datatype_t*)expr_type(args[1], ctx);
@@ -1701,6 +1802,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 }
             }
         }
+        // TODO: faster code for integer index
     }
     else if (f->fptr == &jl_f_instantiate_type && nargs > 0) {
         size_t i;
@@ -3751,6 +3853,15 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_new_bits", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlnewbits_func, (void*)&jl_new_bits);
+
+    std::vector<Type *> getnthfld_args(0);
+    getnthfld_args.push_back(jl_pvalue_llvmt);
+    getnthfld_args.push_back(T_size);
+    jlgetnthfieldchecked_func =
+        Function::Create(FunctionType::get(jl_pvalue_llvmt, getnthfld_args, false),
+                         Function::ExternalLinkage,
+                         "jl_get_nth_field_checked", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlgetnthfieldchecked_func, (void*)*jl_get_nth_field_checked);
 
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);
