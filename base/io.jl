@@ -9,15 +9,15 @@
 const ENDIAN_BOM = reinterpret(Uint32,uint8([1:4]))[1]
 
 if ENDIAN_BOM == 0x01020304
-    ntoh(x) = identity(x)
-    hton(x) = identity(x)
+    ntoh(x) = x
+    hton(x) = x
     ltoh(x) = bswap(x)
     htol(x) = bswap(x)
 elseif ENDIAN_BOM == 0x04030201
     ntoh(x) = bswap(x)
     hton(x) = bswap(x)
-    ltoh(x) = identity(x)
-    htol(x) = identity(x)
+    ltoh(x) = x
+    htol(x) = x
 else
     error("seriously? what is this machine?")
 end
