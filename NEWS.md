@@ -39,8 +39,6 @@ New library functions
 Library improvements
 --------------------
 
-  * New abstract `DenseArray <: StoredArray <: AbstractArray` types ([#987]).
-
   * `consume(p)` extended to `consume(p, args...)`, allowing it
     to optionally pass `args...` back to the producer ([#4775]).
 
