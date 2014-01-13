@@ -715,6 +715,12 @@ end
 
 # fill
 @test fill!(Array(Float64,1),-0.0)[1] === -0.0
+A = ones(3,3)
+S = sub(A, 2, 1:3)
+fill!(S, 2)
+S = sub(A, 1:2, 3)
+fill!(S, 3)
+@test A == [1 1 3; 2 2 3; 1 1 1]
 
 # splice!
 for idx in {1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
