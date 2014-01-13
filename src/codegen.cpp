@@ -1230,33 +1230,6 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
     return answer;
 }
 
-static bool is_structtype_all_pointers(jl_datatype_t *dt)
-{
-    jl_tuple_t *t = dt->types;
-    size_t i, l = jl_tuple_len(t);
-    for(i=0; i < l; i++) {
-        if (!dt->fields[i].isptr)
-            return false;
-    }
-    return true;
-}
-
-static bool is_structtype_homogeneous(jl_datatype_t *dt)
-{
-    jl_tuple_t *t = dt->types;
-    size_t i, l = jl_tuple_len(t);
-    if (l > 0) {
-        jl_value_t *t0 = jl_tupleref(t, 0);
-        if (!jl_is_leaf_type(t0))
-            return false;
-        for(i=1; i < l; i++) {
-            if (!jl_types_equal(t0, jl_tupleref(t,i)))
-                return false;
-        }
-    }
-    return true;
-}
-
 static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                               jl_codectx_t *ctx,
                               Value **theFptr, jl_function_t **theF,
@@ -1739,7 +1712,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         JL_GC_POP();
                         return fld;
                     }
-                    else if (is_structtype_homogeneous(stt)) {
+                    else if (is_tupletype_homogeneous(stt->types)) {
                         assert(nfields > 0); // nf==0 trapped by all_pointers case
                         jl_value_t *jt = jl_t0(stt->types);
                         idx = emit_bounds_check(idx, ConstantInt::get(T_size, nfields), ctx);
@@ -1754,7 +1727,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         return fld;
                     }
                 }
-                else if (is_structtype_homogeneous(stt)) {
+                else if (is_tupletype_homogeneous(stt->types)) {
                     assert(llvm_st->isStructTy());
                     // TODO: move these allocas to the first basic block instead of
                     // frobbing the stack
