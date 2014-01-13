@@ -298,7 +298,8 @@ function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
         end
     end
 
-    if numnz != count-1
+    count -= 1
+    if numnz != count
         I = I[1:count]
         J = J[1:count]
     end
@@ -324,7 +325,8 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
         end
     end
 
-    if numnz != count-1
+    count -= 1
+    if numnz != count
         I = I[1:count]
         J = J[1:count]
         V = V[1:count]
