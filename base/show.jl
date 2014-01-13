@@ -16,7 +16,7 @@ function show(io::IO, x::ANY)
             if !isdefined(x, f)
                 print(io, undef_ref_str)
             else
-                show(io, x.(f))
+                show(io, x.(i))
             end
             if i < n
                 print(io, ',')

@@ -190,19 +190,22 @@ jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
     return jl_new_bits(jl_tupleref(st->types,i), (char*)v + offs);
 }
 
-int jl_field_isdefined(jl_value_t *v, jl_sym_t *fld, int err)
+jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
-    int i = jl_field_index(st, fld, err);
-    if (i == -1) return 0;
+    if (i >= jl_tuple_len(st->names))
+        jl_throw(jl_bounds_exception);
     size_t offs = jl_field_offset(st,i) + sizeof(void*);
     if (st->fields[i].isptr) {
-        return *(jl_value_t**)((char*)v + offs) != NULL;
+        jl_value_t *fval = *(jl_value_t**)((char*)v + offs);
+        if (fval == NULL)
+            jl_throw(jl_undefref_exception);
+        return fval;
     }
-    return 1;
+    return jl_new_bits(jl_tupleref(st->types,i), (char*)v + offs);
 }
 
-jl_value_t *jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
+void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     size_t offs = jl_field_offset(st,i) + sizeof(void*);
@@ -212,7 +215,16 @@ jl_value_t *jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
     else {
         jl_assign_bits((char*)v + offs, rhs);
     }
-    return rhs;
+}
+
+int jl_field_isdefined(jl_value_t *v, size_t i)
+{
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
+    size_t offs = jl_field_offset(st,i) + sizeof(void*);
+    if (st->fields[i].isptr) {
+        return *(jl_value_t**)((char*)v + offs) != NULL;
+    }
+    return 1;
 }
 
 DLLEXPORT jl_value_t *jl_new_struct(jl_datatype_t *type, ...)

@@ -312,6 +312,15 @@ const getfield_tfunc = function (A, s, name)
             end
         end
         return None
+    elseif isa(A[2],Int)
+        if isa(A[1],Module) || s === Module
+            return None
+        end
+        i::Int = A[2]
+        if i < 1 || i > length(s.names)
+            return None
+        end
+        return s.types[i]
     else
         return reduce(tmerge, None, s.types)#Union(s.types...)
     end

@@ -378,14 +378,16 @@ begin
     @test isdefined(a)
     @test !isdefined(a,2)
 
-    @test isdefined("a",:data)
     a = UndefField()
     @test !isdefined(a, :field)
     @test !isdefined(a, :foo)
     @test !isdefined(2, :a)
 
+    @test  isdefined("a",:data)
+    @test  isdefined("a", 1)
+    @test !isdefined("a", 2)
+
     @test_throws isdefined(2)
-    @test_throws isdefined("a", 2)
 end
 
 # dispatch
@@ -516,6 +518,30 @@ begin
     a, b = b, a.re
     @test a == 3
     @test b == 1
+end
+
+# accessing fields by index
+begin
+    local z = complex(3, 4)
+    v = Int[0,0]
+    for i=1:2
+        v[i] = getfield(z, i)
+    end
+    @test v == [3,4]
+    @test_throws getfield(z, -1)
+    @test_throws getfield(z, 0)
+    @test_throws getfield(z, 3)
+
+    strct = LoadError("", 0, "")
+    setfield(strct, 2, 8)
+    @test strct.line == 8
+    setfield(strct, 3, "hi")
+    @test strct.error == "hi"
+    setfield(strct, 1, "yo")
+    @test strct.file == "yo"
+    @test_throws getfield(strct, 10)
+    @test_throws setfield(strct, 0, "")
+    @test_throws setfield(strct, 4, "")
 end
 
 # allow typevar in Union to match as long as the arguments contain
