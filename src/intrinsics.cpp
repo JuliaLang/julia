@@ -397,7 +397,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     }
 
     // dynamically-determined type; evaluate.
-    return allocate_box_dynamic(emit_expr(targ, ctx), (nb+7)/8, vx);
+    return allocate_box_dynamic(emit_expr(targ, ctx), ConstantInt::get(T_size,(nb+7)/8), vx);
 }
 
 static Type *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_codectx_t *ctx)

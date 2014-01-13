@@ -805,7 +805,7 @@ static Value *emit_tupleset(Value *tuple, Value *ival, Value *x, jl_value_t *jt,
     return NULL;
 }
 
-static Value *allocate_box_dynamic(Value *jlty, int nb, Value *v);
+static Value *allocate_box_dynamic(Value *jlty, Value *nb, Value *v);
 static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val);
 
 // Julia semantics
@@ -847,7 +847,7 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
             jl_add_linfo_root(ctx->linfo, jt);
             v = allocate_box_dynamic(emit_tupleref(literal_pointer_val(jt),
                                                    ival, jl_typeof(jt), ctx),
-                                     ty->getScalarSizeInBits(), v);
+                                     ConstantInt::get(T_size,ty->getScalarSizeInBits()), v);
         }
         return v;
     }
@@ -891,16 +891,17 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
             jl_add_linfo_root(ctx->linfo, jt);
             Value *lty = emit_tupleref(literal_pointer_val(jt), ival, jl_typeof(jt), ctx);
             size_t i, l = jl_tuple_len(jt);
-            for (i = 0; i < l; jt++) {
+            for (i = 0; i < l; i++) {
                 if (!jl_isbits(jl_tupleref(jt,i))) {
-                    v = builder.CreateCall2(jlnewbits_func, boxed(lty,ctx),
+                    v = builder.CreateCall2(jlnewbits_func, lty,
                                             builder.CreatePointerCast(v,T_pint8));
                     break;
                 }
             }
             if (i >= l) {
-                unsigned nb =
-                    (ty->getSequentialElementType()->getPrimitiveSizeInBits()+7)/8;
+                Value *nb = ConstantExpr::getSizeOf(at->getElementType());
+                if (sizeof(size_t)==4)
+                    nb = builder.CreateTrunc(nb, T_int32);
                 v = allocate_box_dynamic(lty, nb, builder.CreateLoad(v));
             }
         }
@@ -1145,14 +1146,14 @@ static Value *init_bits_value(Value *newv, Value *jt, Type *t, Value *v)
 }
 
 // allocate a box where the type might not be known at compile time
-static Value *allocate_box_dynamic(Value *jlty, int nb, Value *v)
+static Value *allocate_box_dynamic(Value *jlty, Value *nb, Value *v)
 {
     if (v->getType()->isPointerTy()) {
         v = builder.CreatePtrToInt(v, T_size);
     }
-    size_t sz = sizeof(void*) + nb;
     Value *newv = builder.CreateCall(jlallocobj_func,
-                                     ConstantInt::get(T_size, sz));
+                                     builder.CreateAdd(nb,
+                                                       ConstantInt::get(T_size, sizeof(void*))));
     // TODO: make sure this is rooted. I think it is.
     return init_bits_value(newv, jlty, v->getType(), v);
 }
@@ -1313,7 +1314,7 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
         assert(jb->instance != NULL);
         return literal_pointer_val(jb->instance);
     }
-    return allocate_box_dynamic(literal_pointer_val(jt),jl_datatype_size(jt),v);
+    return allocate_box_dynamic(literal_pointer_val(jt),ConstantInt::get(T_size,jl_datatype_size(jt)),v);
 }
 
 static void emit_cpointercheck(Value *x, const std::string &msg,
