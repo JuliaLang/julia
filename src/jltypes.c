@@ -1683,7 +1683,7 @@ typedef struct _jl_typestack_t {
 } jl_typestack_t;
 
 static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
-                                jl_typestack_t *stack)
+                                jl_typestack_t *stack, int check)
 {
     jl_typestack_t top;
     size_t i;
@@ -1692,7 +1692,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         for(i=0; i < n; i++) {
             if (env[i*2] == t) {
                 jl_value_t *val = env[i*2+1];
-                if (!jl_is_typevar(val) && !jl_subtype(val, t, 0)) {
+                if (check && !jl_is_typevar(val) && !jl_subtype(val, t, 0)) {
                     jl_type_error_rt("type parameter",
                                      ((jl_tvar_t*)t)->name->name,
                                      ((jl_tvar_t*)t)->ub,
@@ -1708,14 +1708,14 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         jl_tuple_t *nt = jl_alloc_tuple(jl_tuple_len(p));
         JL_GC_PUSH1(&nt);
         for(i=0; i < jl_tuple_len(p); i++) {
-            jl_tupleset(nt, i, (jl_value_t*)inst_type_w_(jl_tupleref(p,i), env, n, stack));
+            jl_tupleset(nt, i, (jl_value_t*)inst_type_w_(jl_tupleref(p,i), env, n, stack, 1));
         }
         JL_GC_POP();
         return (jl_value_t*)nt;
     }
     if (jl_is_uniontype(t)) {
         jl_tuple_t *tw = (jl_tuple_t*)inst_type_w_((jl_value_t*)((jl_uniontype_t*)t)->types,
-                                                   env, n, stack);
+                                                   env, n, stack, 1);
         assert(jl_is_tuple(tw));
         JL_GC_PUSH1(&tw);
         jl_value_t *res = (jl_value_t*)jl_new_uniontype(tw);
@@ -1748,9 +1748,10 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                 iparams[i] = t;
             }
             else {
-                iparams[i] = (jl_value_t*)inst_type_w_(elt, env, n, stack);
                 jl_value_t *tv =
                     jl_tupleref(((jl_datatype_t*)tc)->parameters, i);
+                iparams[i] = (jl_value_t*)inst_type_w_(elt, env, n, stack,
+                                                       elt != tv);
                 if (jl_is_typevar(tv) && !jl_is_typevar(iparams[i])) {
                     // TODO: Undef should not be special here; fix.
                     // maybe introduce Top == Union(Any,Undef), and make this
@@ -1835,11 +1836,11 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         ndt->uid = 0;
         ndt->struct_decl = NULL;
         ndt->size = ndt->alignment = 0;
-        ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)dt->super, env,n,stack);
+        ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)dt->super, env,n,stack, 1);
         jl_tuple_t *ftypes = dt->types;
         if (ftypes != NULL) {
             // recursively instantiate the types of the fields
-            ndt->types = (jl_tuple_t*)inst_type_w_((jl_value_t*)ftypes, env, n, stack);
+            ndt->types = (jl_tuple_t*)inst_type_w_((jl_value_t*)ftypes, env, n, stack, 1);
             if (!isabstract) {
                 jl_compute_field_offsets(ndt);
             }
@@ -1864,7 +1865,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
 
 jl_value_t *jl_instantiate_type_with(jl_value_t *t, jl_value_t **env, size_t n)
 {
-    return inst_type_w_((jl_value_t*)t, env, n, NULL);
+    return inst_type_w_((jl_value_t*)t, env, n, NULL, 1);
 }
 
 jl_datatype_t *jl_wrap_Type(jl_value_t *t)
@@ -1890,10 +1891,10 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t)
         env[i*2] = jl_tupleref(t->parameters,i);
         env[i*2+1] = env[i*2];
     }
-    t->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, env, n, &top);
+    t->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)t->super, env, n, &top, 1);
     if (jl_is_datatype(t)) {
         jl_datatype_t *st = (jl_datatype_t*)t;
-        st->types = (jl_tuple_t*)inst_type_w_((jl_value_t*)st->types, env, n, &top);
+        st->types = (jl_tuple_t*)inst_type_w_((jl_value_t*)st->types, env, n, &top, 1);
     }
 }
 
