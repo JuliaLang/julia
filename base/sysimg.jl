@@ -78,11 +78,6 @@ include("regex.jl")
 include("base64.jl")
 importall .Base64
 
-# multidimensional arrays
-include("cartesian.jl")
-using .Cartesian
-include("multidimensional.jl")
-
 # system & environment
 include("libc.jl")
 include("env.jl")
@@ -112,6 +107,11 @@ include("printf.jl")
 importall .Printf
 include("file.jl")
 include("methodshow.jl")
+
+# multidimensional arrays
+include("cartesian.jl")
+using .Cartesian
+include("multidimensional.jl")
 
 # core math functions
 include("floatfuncs.jl")
