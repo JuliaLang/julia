@@ -130,7 +130,7 @@ public:
                     return clone_llvm_function(F,this);
                 }
             }
-            // Still a declaration and still in a diffrent module
+            // Still a declaration and still in a different module
             if(F->isDeclaration() && F->getParent() != destModule)
             {
                 // Create forward declaration in current module
