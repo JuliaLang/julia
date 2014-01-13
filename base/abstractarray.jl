@@ -162,13 +162,6 @@ function squeeze(A::AbstractArray, dims)
     reshape(A, d)
 end
 
-function fill!(A::AbstractArray, x)
-    for i = 1:length(A)
-        A[i] = x
-    end
-    return A
-end
-
 function copy!(dest::AbstractArray, src)
     i = 1
     for x in src

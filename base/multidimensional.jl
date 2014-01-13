@@ -118,6 +118,14 @@ eval(ngenerate(:N, :(setindex!{T}(s::SubArray{T,N}, v, ind::Integer)), gen_setin
 
 
 ### from abstractarray.jl
+
+@ngenerate N function fill!{T,N}(A::AbstractArray{T,N}, x)
+    @nloops N i A begin
+        @inbounds (@nref N A i) = x
+    end
+    return A
+end
+
 ## code generator for specializing on the number of dimensions ##
 
 #otherbodies are the bodies that reside between loops, if its a 2 dimension array.
