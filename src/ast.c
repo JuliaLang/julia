@@ -697,6 +697,10 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
             jl_exprarg(ne, 1) = copy_ast(jl_exprarg(e,1), sp, 0);
             jl_exprarg(ne, 2) = copy_ast(jl_exprarg(e,2), sp, 1);
         }
+        else if (e->head == assign_sym) {
+            jl_exprarg(ne, 0) = copy_ast(jl_exprarg(e,0), sp, 0);
+            jl_exprarg(ne, 1) = copy_ast(jl_exprarg(e,1), sp, 1);
+        }
         else {
             for(size_t i=0; i < jl_array_len(e->args); i++)
                 jl_exprarg(ne, i) = copy_ast(jl_exprarg(e,i), sp, 1);
@@ -760,6 +764,10 @@ static jl_value_t *dont_copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
             jl_exprarg(e, 0) = dont_copy_ast(jl_exprarg(e,0), sp, 0);
             jl_exprarg(e, 1) = dont_copy_ast(jl_exprarg(e,1), sp, 0);
             jl_exprarg(e, 2) = dont_copy_ast(jl_exprarg(e,2), sp, 1);
+        }
+        else if (e->head == assign_sym) {
+            jl_exprarg(e, 0) = dont_copy_ast(jl_exprarg(e,0), sp, 0);
+            jl_exprarg(e, 1) = dont_copy_ast(jl_exprarg(e,1), sp, 1);
         }
         else {
             for(size_t i=0; i < jl_array_len(e->args); i++)
