@@ -877,6 +877,12 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
     }
     if (ty->isArrayTy()) {
         ArrayType *at = dyn_cast<ArrayType>(ty);
+        // TODO: move these allocas to the first basic block instead of
+        // frobbing the stack
+        Instruction *stacksave =
+            CallInst::Create(Intrinsic::getDeclaration(jl_Module,
+                                                       Intrinsic::stacksave));
+        builder.Insert(stacksave);
         Value *tempSpace = builder.CreateAlloca(at);
         builder.CreateStore(tuple,tempSpace);
         Value *idxs[2];
@@ -890,19 +896,27 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
             jl_add_linfo_root(ctx->linfo, jt);
             Value *lty = emit_tupleref(literal_pointer_val(jt), ival, jl_typeof(jt), ctx);
             size_t i, l = jl_tuple_len(jt);
-            for (i = 0; i < l; jt++)
-                if (!jl_isbits(jl_tupleref(jt,i)))
-                    return builder.CreateCall2(jlnewbits_func, boxed(lty,ctx),
-                                               builder.CreatePointerCast(v,T_pint8));
-            unsigned nb = (ty->getSequentialElementType()->getPrimitiveSizeInBits()+7)/8;
-            v = allocate_box_dynamic(lty, nb, builder.CreateLoad(v));
+            for (i = 0; i < l; jt++) {
+                if (!jl_isbits(jl_tupleref(jt,i))) {
+                    v = builder.CreateCall2(jlnewbits_func, boxed(lty,ctx),
+                                            builder.CreatePointerCast(v,T_pint8));
+                    break;
+                }
+            }
+            if (i >= l) {
+                unsigned nb =
+                    (ty->getSequentialElementType()->getPrimitiveSizeInBits()+7)/8;
+                v = allocate_box_dynamic(lty, nb, builder.CreateLoad(v));
+            }
         }
+        builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                     Intrinsic::stackrestore),
+                           stacksave);
         return v;
     }
     assert(ty->isStructTy());
     StructType *st = dyn_cast<StructType>(ty);
     size_t n = st->getNumElements();
-    Value *ret = builder.CreateAlloca(jl_pvalue_llvmt);
     BasicBlock *after = BasicBlock::Create(getGlobalContext(),"after_switch",ctx->f);
     BasicBlock *deflt = BasicBlock::Create(getGlobalContext(),"default_case",ctx->f);
     // Create the switch
@@ -912,8 +926,10 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
     builder.CreateCall2(jlthrow_line_func, builder.CreateLoad(jlboundserr_var),
                         ConstantInt::get(T_int32, ctx->lineno));
     builder.CreateUnreachable();
+    size_t ntuple = jl_tuple_len(jt);
+    PHINode *ret = PHINode::Create(jl_pvalue_llvmt, ntuple);
     // Now for the cases
-    for (size_t i = 0, j = 0; i < jl_tuple_len(jt); ++i) {
+    for (size_t i = 0, j = 0; i < ntuple; ++i) {
         BasicBlock *blk = BasicBlock::Create(getGlobalContext(),"case",ctx->f);
         sw->addCase(ConstantInt::get((IntegerType*)T_size,i+1),blk);
         builder.SetInsertPoint(blk);
@@ -927,11 +943,13 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
         else {
             val = boxed(NULL,ctx,jltype);
         }
-        builder.CreateStore(val,ret);
+        ret->addIncoming(val, blk);
         builder.CreateBr(after);
     }
     builder.SetInsertPoint(after);
-    return builder.CreateLoad(ret);
+    if (ntuple > 0)
+        builder.Insert(ret);
+    return ret;
 }
 
 
