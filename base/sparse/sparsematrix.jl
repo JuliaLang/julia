@@ -23,13 +23,13 @@ function show(io::IO, S::SparseMatrixCSC)
     half_screen_rows = div(Base.tty_rows() - 8, 2)
     pad = ndigits(max(S.m,S.n))
     k = 0
+    sep = "\n\t"
     for col = 1:S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        print("\n\t")
         if k < half_screen_rows || k > nnz(S)-half_screen_rows
-            print(io, "[", rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ",
+            print(io, sep, '[', rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ",
                     sprint(showcompact, S.nzval[k]))
         elseif k == half_screen_rows
-            print(io, "\u22ee")
+            print(io, sep, '\u22ee')
         end
         k += 1
     end
