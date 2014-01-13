@@ -162,22 +162,21 @@ type Tridiagonal{T} <: AbstractMatrix{T}
     function Tridiagonal(N::Integer)
         dutmp = Array(T, N-1)
         rhstmp = Array(T, N)
-        new(dutmp, rhstmp, copy(dutmp), copy(dutmp), copy(rhstmp))  # first three will be overwritten
+        new(dutmp, rhstmp, similar(dutmp), similar(dutmp), similar(rhstmp))
+    end
+
+    function Tridiagonal(dl::Vector{T}, d::Vector{T}, du::Vector{T})
+        N = length(d)
+        if (length(dl) != N-1 || length(du) != N-1)
+            error(string("Cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: (", length(dl), ", ", length(d), ", ", length(du),")"))
+        end
+        new(copy(dl), copy(d), copy(du), Array(T,N-1), Array(T,N))
     end
 end
 
-function Tridiagonal{T<:Number}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
-    N = length(d)
-    if (length(dl) != N-1 || length(du) != N-1)
-        error(string("Cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: (", length(dl), ", ", length(d), ", ", length(du),")"))
-    end
-    M = Tridiagonal{T}(N)
-    M.dl = copy(dl)
-    M.d = copy(d)
-    M.du = copy(du)
-    M
-end
-function Tridiagonal{Tl<:Number, Td<:Number, Tu<:Number}(dl::Vector{Tl}, d::Vector{Td}, du::Vector{Tu})
+Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T}) = Tridiagonal{T}(dl, d, du)
+
+function Tridiagonal{Tl, Td, Tu}(dl::Vector{Tl}, d::Vector{Td}, du::Vector{Tu})
     R = promote(Tl, Td, Tu)
     Tridiagonal(convert(Vector{R}, dl), convert(Vector{R}, d), convert(Vector{R}, du))
 end
