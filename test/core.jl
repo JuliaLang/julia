@@ -1307,3 +1307,13 @@ function h5142b(a::Int)
 end
 h5142b(1)
 @test_throws h5142b(2)
+
+# accessing bits tuples of structs
+function test_bits_tuples()
+    a = (complex(1,2),complex(1,3));s=0
+    for i=1:10
+        s += a[rand(1:2)]
+    end
+    s
+end
+@test real(test_bits_tuples()) == 10
