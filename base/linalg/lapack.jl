@@ -516,7 +516,14 @@ for (gels, gesv, getrs, getri, elty) in
             end
             k   = min(m, n)
             F   = m < n ? tril(A[1:k, 1:k]) : triu(A[1:k, 1:k])
-            F, isa(B, Vector) ? B[1:k] : B[1:k,:], [sum(B[(k+1):size(B,1), i].^2) for i=1:size(B,2)]
+            ssr = [begin
+                x = zero($elty)
+                for j=k+1:size(B,1)
+                    x += abs2(B[j, i])
+                end
+                x
+            end for i=1:size(B,2)]
+            F, isa(B, Vector) ? B[1:k] : B[1:k,:], ssr
         end
         # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
         # *     .. Scalar Arguments ..
