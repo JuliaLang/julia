@@ -20,6 +20,48 @@ a = convert(Array, d)
 @test fetch(@spawnat id_me localpart(d)[1,1]) == d[1,1]
 @test fetch(@spawnat id_other localpart(d)[1,1]) == d[1,101]
 
+
+@unix_only begin
+# SharedArray tests
+dims = (20,20,20)
+d = Base.shmem_rand(1:100, dims)
+a = convert(Array, d)
+
+partsums = Array(Int, length(procs(d)))
+@sync begin
+    for (i, p) in enumerate(procs(d))
+        @async partsums[i] = remotecall_fetch(p, D->sum(D.loc_subarr_1d), d)
+    end
+end
+@test sum(a) == sum(partsums)
+
+d = Base.shmem_rand(dims)
+for p in procs(d)
+    idxes_in_p = remotecall_fetch(p, D -> parentindexes(D.loc_subarr_1d)[1], d)
+    idxf = first(idxes_in_p)
+    idxl = last(idxes_in_p)
+    d[idxf] = float64(idxf)
+    rv = remotecall_fetch(p, (D,idxf,idxl) -> begin assert(D[idxf] == float64(idxf)); D[idxl] = float64(idxl); D[idxl];  end, d,idxf,idxl)
+    @test d[idxl] == rv
+end
+
+@test ones(10, 10, 10) == Base.shmem_fill(1.0, (10,10,10))
+@test zeros(Int32, 10, 10, 10) == Base.shmem_fill(0, (10,10,10))
+
+d = SharedArray(Int, dims; init = D->fill!(D.loc_subarr_1d, myid()))
+for p in procs(d)
+    idxes_in_p = remotecall_fetch(p, D -> parentindexes(D.loc_subarr_1d)[1], d)
+    idxf = first(idxes_in_p)
+    idxl = last(idxes_in_p)
+    @test d[idxf] == p 
+    @test d[idxl] == p 
+end
+
+
+end # @unix_only(SharedArray tests)
+
+
+
 # Test @parallel load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.
 if nprocs() < 4
