@@ -553,7 +553,7 @@ end
 function test_approx_eq_vecs{S<:Real,T<:Real}(a::StridedVecOrMat{S}, b::StridedVecOrMat{T}, error=nothing)
     n = size(a, 1)
     @test n==size(b,1) && size(a,2)==size(b,2)
-    if error==nothing error=n^2*(eps(S)+eps(T)) end
+    error==nothing && (error=n^3*(eps(S)+eps(T)))
     for i=1:n
         ev1, ev2 = a[:,i], b[:,i]
         deviation = min(abs(norm(ev1-ev2)),abs(norm(ev1+ev2)))
@@ -603,7 +603,41 @@ for relty in (Float16, Float32, Float64, BigFloat), elty in (relty, Complex{relt
     end
 end
 
+#Tridiagonal matrices
+for relty in (Float16, Float32, Float64), elty in (relty, Complex{relty})
+    a = convert(Vector{elty}, randn(n-1))
+    b = convert(Vector{elty}, randn(n))
+    c = convert(Vector{elty}, randn(n-1))
+    if elty <: Complex
+        a += im*convert(Vector{elty}, randn(n-1))
+        b += im*convert(Vector{elty}, randn(n))
+        c += im*convert(Vector{elty}, randn(n-1))
+    end
+
+    A=Tridiagonal(a, b, c)
+    fA=(elty<:Complex?complex128:float64)(full(A))
+    for func in (det, inv)
+        @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
+    end
+end
+
 #SymTridiagonal (symmetric tridiagonal) matrices
+for relty in (Float16, Float32, Float64), elty in (relty, )#XXX Complex{relty}) doesn't work
+    a = convert(Vector{elty}, randn(n))
+    b = convert(Vector{elty}, randn(n-1))
+    if elty <: Complex
+        relty==Float16 && continue
+        a += im*convert(Vector{elty}, randn(n))
+        b += im*convert(Vector{elty}, randn(n-1))
+    end
+
+    A=SymTridiagonal(a, b)
+    fA=(elty<:Complex?complex128:float64)(full(A))
+    for func in (det, inv)
+        @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
+    end
+end
+
 Ainit = randn(n)
 Binit = randn(n-1)
 for elty in (Float32, Float64)
