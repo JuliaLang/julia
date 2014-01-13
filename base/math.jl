@@ -432,6 +432,11 @@ for jy in ("j","y"), nu in (0,1)
     end
 end
 
+        
+type AmosException <: Exception
+    info::Int32
+end
+
 let
     const ai::Array{Float64,1} = Array(Float64,2)
     const ae::Array{Int32,1} = Array(Int32,2)
@@ -446,16 +451,24 @@ function airy(k::Int, z::Complex128)
               &id, &1,
               pointer(ai,1), pointer(ai,2),
               pointer(ae,1), pointer(ae,2))
-        return complex(ai[1],ai[2])
+        if ae[2] == 0 || ae[2] == 3 
+            return complex(ai[1],ai[2])
+        else
+            throw(AmosException(ae[2]))
+        end
     elseif k == 2 || k == 3
         ccall((:zbiry_,openspecfun), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
-               Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
+               Ptr{Float64}, Ptr{Float64}, Ptr{Int32}),
               &real(z), &imag(z),
               &id, &1,
               pointer(ai,1), pointer(ai,2),
-              pointer(ae,1), pointer(ae,2))
-        return complex(ai[1],ai[2])
+              pointer(ae,1))
+        if ae[1] == 0 || ae[1] == 3  # ignore underflow
+            return complex(ai[1],ai[2]) 
+        else
+            throw(AmosException(ae[2]))
+        end
     else
         error("invalid argument")
     end
@@ -492,7 +505,11 @@ function _besselh(nu::Float64, k::Integer, z::Complex128)
           &real(z), &imag(z), &nu, &1, &k, &1,
           pointer(cy,1), pointer(cy,2),
           pointer(ae,1), pointer(ae,2))
-    return complex(cy[1],cy[2])
+    if ae[2] == 0 || ae[2] == 3 
+        return complex(cy[1],cy[2]) 
+    else
+        throw(AmosException(ae[2]))
+    end
 end
 
 function _besseli(nu::Float64, z::Complex128)
@@ -502,7 +519,11 @@ function _besseli(nu::Float64, z::Complex128)
           &real(z), &imag(z), &nu, &1, &1,
           pointer(cy,1), pointer(cy,2),
           pointer(ae,1), pointer(ae,2))
-    return complex(cy[1],cy[2])
+    if ae[2] == 0 || ae[2] == 3 
+        return complex(cy[1],cy[2]) 
+    else
+        throw(AmosException(ae[2]))
+    end
 end
 
 function _besselj(nu::Float64, z::Complex128)
@@ -512,7 +533,11 @@ function _besselj(nu::Float64, z::Complex128)
           &real(z), &imag(z), &nu, &1, &1,
           pointer(cy,1), pointer(cy,2),
           pointer(ae,1), pointer(ae,2))
-    return complex(cy[1],cy[2])
+    if ae[2] == 0 || ae[2] == 3 
+        return complex(cy[1],cy[2]) 
+    else
+        throw(AmosException(ae[2]))
+    end
 end
 
 function _besselk(nu::Float64, z::Complex128)
@@ -522,7 +547,11 @@ function _besselk(nu::Float64, z::Complex128)
           &real(z), &imag(z), &nu, &1, &1,
           pointer(cy,1), pointer(cy,2),
           pointer(ae,1), pointer(ae,2))
-    return complex(cy[1],cy[2])
+    if ae[2] == 0 || ae[2] == 3 
+        return complex(cy[1],cy[2]) 
+    else
+        throw(AmosException(ae[2]))
+    end
 end
 
 function _bessely(nu::Float64, z::Complex128)
@@ -534,7 +563,11 @@ function _bessely(nu::Float64, z::Complex128)
           pointer(cy,1), pointer(cy,2),
           pointer(ae,1), pointer(wrk,1),
           pointer(wrk,2), pointer(ae,2))
-    return complex(cy[1],cy[2])
+    if ae[2] == 0 || ae[2] == 3 
+        return complex(cy[1],cy[2]) 
+    else
+        throw(AmosException(ae[2]))
+    end
 end
 
 function besselh(nu::Float64, k::Integer, z::Complex128)
