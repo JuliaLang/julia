@@ -117,7 +117,6 @@ static IRBuilder<> builder(getGlobalContext());
 static bool nested_compile=false;
 static Module *jl_Module;
 static ExecutionEngine *jl_ExecutionEngine;
-static DIBuilder *dbuilder;
 static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
 
@@ -538,6 +537,7 @@ typedef struct {
 #endif
     BasicBlock::iterator first_gcframe_inst;
     BasicBlock::iterator last_gcframe_inst;
+    llvm::DIBuilder *dbuilder;
     std::vector<Instruction*> gc_frame_pops;
     std::vector<CallInst*> to_inline;
 } jl_codectx_t;
@@ -3009,9 +3009,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             lam->functionID = jl_assign_functionID(f);
         }
     }
-    //TODO: this seems to cause problems, but should be made to work eventually
-    //if (jlrettype == (jl_value_t*)jl_bottom_type)
-    //    f->setDoesNotReturn();
+    if (jlrettype == (jl_value_t*)jl_bottom_type)
+        f->setDoesNotReturn();
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
     // tell Win32 to realign the stack to the next 8-byte boundary
     // upon entry to any function. This achieves compatibility
@@ -3067,7 +3066,9 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
 
-    llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(ArrayRef<Value*>());
+    DIBuilder dbuilder(*jl_Module);
+    ctx.dbuilder = &dbuilder;
+    llvm::DIArray EltTypeArray = dbuilder.getOrCreateArray(ArrayRef<Value*>());
     DIFile fil;
     DISubprogram SP;
     //ios_printf(ios_stderr, "\n*** compiling %s at %s:%d\n\n",
@@ -3083,25 +3084,27 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     else {
         // TODO: Fix when moving to new LLVM version
         #ifndef LLVM34
-        dbuilder->createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
+        dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
         #else
-        DICompileUnit CU = dbuilder->createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
+        DICompileUnit CU = dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
+        assert(CU.Verify());
         #endif
 
-        fil = dbuilder->createFile(filename, ".");
+        fil = dbuilder.createFile(filename, ".");
         #ifndef LLVM34
-        SP = dbuilder->createFunction((DIDescriptor)dbuilder->getCU(),
+        SP = dbuilder.createFunction((DIDescriptor)dbuilder.getCU(),
         #else 
-        SP = dbuilder->createFunction(CU,
+        SP = dbuilder.createFunction(CU,
         #endif
-                                      dbgFuncName, dbgFuncName,
+                                      dbgFuncName, f->getName(),
                                       fil,
                                       0,
-                                      dbuilder->createSubroutineType(fil,EltTypeArray),
+                                      dbuilder.createSubroutineType(fil,EltTypeArray),
                                       false, true,
                                       0, true, f);
         // set initial line number
         builder.SetCurrentDebugLocation(DebugLoc::get(lno, 0, (MDNode*)SP, NULL));
+        assert(SP.Verify() && SP.describes(f));
     }
 
     Value *fArg=NULL, *argArray=NULL, *argCount=NULL;
@@ -3449,6 +3452,10 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         if (!InlineFunction(*it,info))
             jl_error("Inlining Pass failed");
     }
+
+    // step 18. Perform any delayed instantiations
+    if (debug_enabled)
+        ctx.dbuilder->finalize();
 
     JL_GC_POP();
     return f;
@@ -3971,8 +3978,6 @@ extern "C" void jl_init_codegen(void)
         .create();
 #endif // LLVM VERSION
     jl_ExecutionEngine->DisableLazyCompilation();
-    
-    dbuilder = new DIBuilder(*jl_Module);
 
     init_julia_llvm_env(jl_Module);
 

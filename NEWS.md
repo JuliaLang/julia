@@ -4,9 +4,9 @@ Julia v0.3.0 Release Notes
 New language features
 ---------------------
 
-  * Greatly enhanced performance for passing and returning tuples ([#4042]).
+  * Greatly enhanced performance for passing and returning `Tuple`s ([#4042]).
 
-  * Tuples (of integers, symbols, or bools) can now be used as type
+  * `Tuple`s (of `Integer`s, `Symbol`s, or `Bool`s) can now be used as type
     parameters ([#5164]).
 
   * Default "inner" constructors now accept any arguments. Constructors that
@@ -29,51 +29,18 @@ New library functions
 
   * `GitHub` module for interacting with the GitHub API
 
+  * `Pkg.submit(pkg[,commit])` function to automatically submit
+    a GitHub pull request to the package author.
+
   * `mod2pi` function ([#4799], [#4862]).
  
-  * New functions ``minmax`` and ``extrema`` ([#5275]).
+  * New functions `minmax` and `extrema` ([#5275]).
 
 Library improvements
 --------------------
 
-  * Array assignment (e.g. `x[:] = y`) ignores singleton dimensions
-    and allows the last dimension of one side to match all trailing dimensions
-    of the other ([#4048], [#4383]).
-
-  * Multi-key dictionaries: `D[x,y...]` is now a synonym for `D[(x,y...)]`
-    for associations `D` ([#4870]).
-
-  * `big` is now vectorized ([#4766])
-
-  * `push!` and `unshift!` can push multiple arguments ([#4782])
-
   * `consume(p)` extended to `consume(p, args...)`, allowing it
     to optionally pass `args...` back to the producer ([#4775]).
-
-  * `nextpow` and `prevpow` now return the `a^n` values instead of the
-    exponent `n` ([#4819])
-
-  * `Dict(kv)` constructor for any iterator on (key,value) pairs.
-
-  * Overflow detection in `parseint` ([#4874]).
-
-  * New Pkg.submit(pkg[,commit]) function to automatically submit
-    a GitHub pull request to the package author.
-
-  * Triple-quoted regex strings, `r"""..."""` ([#4934]).
-
-  * New string type, `UTF16String` ([#4930]).
-
-  * `CharString` is renamed to `UTF32String` ([#4943]).
-
-  * Faster sparse `kron` ([#4958]).
-
-  * `rand` now supports arbitrary `Ranges` arguments ([#5059]).
-
-  * `writedlm` and `writecsv` now accept any iterable collection of
-    iterable rows, in addition to `AbstractArray` arguments, and the
-    ``writedlm`` delimiter can be any printable object (e.g. a
-    ``String``) instead of just a ``Char``.
 
   * `.juliarc.jl` is now loaded for both script and REPL execution ([#5076]).
 
@@ -81,19 +48,77 @@ Library improvements
     dynamic library handles; `Sys.dllist` will list out all paths currently
     loaded via `dlopen`, and `Sys.dlpath` will lookup a path from a handle
 
-  * `sparse(A) \ B` now supports a matrix `B` of right-hand sides ([#5196]).
+  * Collections improvements
 
-  * More routines for specialized matrix types
-    - new algorithms for linear solvers and eigensystems of `Triangular`
-      matrices of generic types ([#5255])
-    - new algorithms for linear solvers, eigensystems and singular systems of `Diagonal`
-      matrices of generic types ([#5263])
-    - new algorithms for linear solvers and eigensystems of `Bidiagonal`
-      matrices of generic types ([#5277])
-    - specialized methods `transpose`, `ctranspose`, `istril`, `istriu` for
-      `Triangular` ([#5255]) and `Bidiagonal` ([#5277])
-    - new LAPACK wrappers
-      - condition number estimate `cond(A::Triangular)` ([#5255])
+    * `Array` assignment (e.g. `x[:] = y`) ignores singleton dimensions
+      and allows the last dimension of one side to match all trailing dimensions
+      of the other ([#4048], [#4383]).
+
+    * `Dict(kv)` constructor for any iterator on `(key,value)` pairs.
+
+    * Multi-key `Dict`s: `D[x,y...]` is now a synonym for `D[(x,y...)]`
+      for associations `D` ([#4870]).
+
+    * `push!` and `unshift!` can push multiple arguments ([#4782])
+
+    * `writedlm` and `writecsv` now accept any iterable collection of
+      iterable rows, in addition to `AbstractArray` arguments, and the
+      ``writedlm`` delimiter can be any printable object (e.g. a
+      ``String``) instead of just a ``Char``.
+
+  * `Number` improvements
+
+    * `big` is now vectorized ([#4766])
+
+    * `nextpow` and `prevpow` now return the `a^n` values instead of the
+      exponent `n` ([#4819])
+
+    * Overflow detection in `parseint` ([#4874]).
+
+    * `rand` now supports arbitrary `Ranges` arguments ([#5059]).
+
+  * `String` improvements
+
+    * Triple-quoted regex strings, `r"""..."""` ([#4934]).
+
+    * New string type, `UTF16String` ([#4930]).
+
+    * `CharString` is renamed to `UTF32String` ([#4943]).
+
+  * `LinAlg` (linear algebra) improvements
+
+    * Sparse linear algebra
+
+      * Faster sparse `kron` ([#4958]).
+
+      * `sparse(A) \ B` now supports a matrix `B` of right-hand sides ([#5196]).
+
+    * Dense linear algebra for special matrix types
+
+      * Interconversions between the special matrix types `Diagonal`, `Bidiagonal`,
+        `SymTridiagonal`, `Triangular`, and `Triangular`, and `Matrix` are now allowed
+        for matrices which are representable in both source and destination types. ([5e3f074b])
+
+      * Allow for addition and subtraction over mixed matrix types, automatically promoting
+        the result to the denser matrix type ([a448e080])
+
+      * new algorithms for linear solvers and eigensystems of `Bidiagonal`
+        matrices of generic element types ([#5277])
+
+      * new algorithms for linear solvers, eigensystems and singular systems of `Diagonal`
+        matrices of generic element types ([#5263])
+
+      * new algorithms for linear solvers and eigensystems of `Triangular`
+        matrices of generic element types ([#5255])
+
+      * specialized `inv` and `det` methods for `Tridiagonal` and `SymTridiagonal`
+        based on recurrence relations between principal minors ([#5358])
+
+      * specialized `transpose`, `ctranspose`, `istril`, `istriu` methods for
+        `Triangular` ([#5255]) and `Bidiagonal` ([#5277])
+
+      * new LAPACK wrappers
+        - condition number estimate `cond(A::Triangular)` ([#5255])
 
 Deprecated or removed
 ---------------------
@@ -143,6 +168,9 @@ Deprecated or removed
 [#5330]: https://github.com/JuliaLang/julia/issues/5330
 [#4882]: https://github.com/JuliaLang/julia/issues/4882
 [#4806]: https://github.com/JuliaLang/julia/issues/4806
+[#5358]: https://github.com/JuliaLang/julia/pull/5358
+[a448e080]: https://github.com/JuliaLang/julia/commit/a448e080dc736c7fb326426dfcb2528be36973d3
+[5e3f074b]: https://github.com/JuliaLang/julia/commit/5e3f074b9173044a0a4219f9b285879ff7cec041
 
 Julia v0.2.0 Release Notes
 ==========================
