@@ -628,3 +628,29 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
     JL_GC_POP();
     return gf;
 }
+
+void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_tuple_t *t, jl_sym_t *fname)
+{
+    jl_array_t *vinfo;
+    size_t nvars;
+
+    if (li->ast && jl_is_expr(li->ast)) {
+        vinfo = jl_lam_vinfo((jl_expr_t*)li->ast);
+        nvars = jl_array_len(vinfo);
+        for(size_t i=0; i < jl_tuple_len(t); i++) {
+            for(size_t j=0; j < nvars; j++) {
+                jl_value_t *tv = jl_tupleref(t,i);
+                if (jl_is_typevar(tv)) {
+                    if ((jl_sym_t*)jl_arrayref((jl_array_t*)jl_arrayref(vinfo,j),0) ==
+                        ((jl_tvar_t*)tv)->name) {
+                        JL_PRINTF(JL_STDERR,
+                                  "Warning: local variable %s conflicts with a static parameter in %s",
+                                  ((jl_tvar_t*)tv)->name->name, fname->name);
+                        print_func_loc(JL_STDERR, li);
+                        JL_PRINTF(JL_STDERR, ".\n");
+                    }
+                }
+            }
+        }
+    }
+}

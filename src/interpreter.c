@@ -67,6 +67,8 @@ jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
     return v;
 }
 
+void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_tuple_t *t, jl_sym_t *fname);
+
 int jl_has_intrinsics(jl_expr_t *e);
 
 extern int jl_boot_file_loaded;
@@ -271,6 +273,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_value_t *atypes=NULL, *meth=NULL;
         JL_GC_PUSH2(&atypes, &meth);
         atypes = eval(args[1], locals, nl);
+        if (jl_is_lambda_info(args[2])) {
+            jl_check_static_parameter_conflicts((jl_lambda_info_t*)args[2], (jl_tuple_t*)jl_t1(atypes), fname);
+        }
         meth = eval(args[2], locals, nl);
         jl_method_def(fname, bp, b, (jl_tuple_t*)atypes, (jl_function_t*)meth);
         JL_GC_POP();
