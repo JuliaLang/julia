@@ -345,6 +345,32 @@ static jl_value_t *llvm_type_to_julia(Type *t, bool throw_error)
     return NULL;
 }
 
+static bool is_structtype_all_pointers(jl_datatype_t *dt)
+{
+    jl_tuple_t *t = dt->types;
+    size_t i, l = jl_tuple_len(t);
+    for(i=0; i < l; i++) {
+        if (!dt->fields[i].isptr)
+            return false;
+    }
+    return true;
+}
+
+static bool is_tupletype_homogeneous(jl_tuple_t *t)
+{
+    size_t i, l = jl_tuple_len(t);
+    if (l > 0) {
+        jl_value_t *t0 = jl_tupleref(t, 0);
+        if (!jl_is_leaf_type(t0))
+            return false;
+        for(i=1; i < l; i++) {
+            if (!jl_types_equal(t0, jl_tupleref(t,i)))
+                return false;
+        }
+    }
+    return true;
+}
+
 // --- scheme for tagging llvm values with julia types using metadata ---
 
 static std::map<int, jl_value_t*> typeIdToType;
@@ -844,10 +870,15 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
         else {
             if (sizeof(void*) != 4)
                 ival = builder.CreateZExt(ival,T_size);
-            jl_add_linfo_root(ctx->linfo, jt);
-            v = allocate_box_dynamic(emit_tupleref(literal_pointer_val(jt),
-                                                   ival, jl_typeof(jt), ctx),
-                                     ConstantInt::get(T_size,ty->getScalarSizeInBits()), v);
+            if (is_tupletype_homogeneous((jl_tuple_t*)jt)) {
+                v = mark_julia_type(v, jl_t0(jt));
+            }
+            else {
+                jl_add_linfo_root(ctx->linfo, jt);
+                v = allocate_box_dynamic(emit_tupleref(literal_pointer_val(jt),
+                                                       ival, jl_typeof(jt), ctx),
+                                         ConstantInt::get(T_size,ty->getScalarSizeInBits()), v);
+            }
         }
         return v;
     }
@@ -891,18 +922,23 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
             jl_add_linfo_root(ctx->linfo, jt);
             Value *lty = emit_tupleref(literal_pointer_val(jt), ival, jl_typeof(jt), ctx);
             size_t i, l = jl_tuple_len(jt);
-            for (i = 0; i < l; i++) {
-                if (!jl_isbits(jl_tupleref(jt,i))) {
-                    v = builder.CreateCall2(jlnewbits_func, lty,
-                                            builder.CreatePointerCast(v,T_pint8));
-                    break;
-                }
+            if (is_tupletype_homogeneous((jl_tuple_t*)jt) && jl_isbits(jl_t0(jt))) {
+                v = mark_julia_type(builder.CreateLoad(v), jl_t0(jt));
             }
-            if (i >= l) {
-                Value *nb = ConstantExpr::getSizeOf(at->getElementType());
-                if (sizeof(size_t)==4)
-                    nb = builder.CreateTrunc(nb, T_int32);
-                v = allocate_box_dynamic(lty, nb, builder.CreateLoad(v));
+            else {
+                for (i = 0; i < l; i++) {
+                    if (!jl_isbits(jl_tupleref(jt,i))) {
+                        v = builder.CreateCall2(jlnewbits_func, lty,
+                                                builder.CreatePointerCast(v,T_pint8));
+                        break;
+                    }
+                }
+                if (i >= l) {
+                    Value *nb = ConstantExpr::getSizeOf(at->getElementType());
+                    if (sizeof(size_t)==4)
+                        nb = builder.CreateTrunc(nb, T_int32);
+                    v = allocate_box_dynamic(lty, nb, builder.CreateLoad(v));
+                }
             }
         }
         builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
