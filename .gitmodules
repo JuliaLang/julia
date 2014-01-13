@@ -13,4 +13,6 @@
 [submodule "doc/juliadoc"]
 	path = doc/juliadoc
 	url = git://github.com/JuliaLang/JuliaDoc.git
-
+[submodule "deps/libgit2"]
+	path = deps/libgit2
+	url = git://github.com/libgit2/libgit2.git
