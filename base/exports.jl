@@ -89,6 +89,7 @@ export
     RoundUp,
     Schur,
     Set,
+    SharedArray,
     SparseMatrixCSC,
     StatStruct,
     StridedArray,
