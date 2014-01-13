@@ -2890,7 +2890,7 @@ void jl_init_types(void)
     top_sym = jl_symbol("top");
     dots_sym = jl_symbol("Vararg");
     line_sym = jl_symbol("line");
-    jl_continue_sym = jl_symbol("continue");
+    jl_incomplete_sym = jl_symbol("incomplete");
     error_sym = jl_symbol("error");
     goto_sym = jl_symbol("goto");
     goto_ifnot_sym = jl_symbol("gotoifnot");

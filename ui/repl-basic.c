@@ -99,7 +99,7 @@ void jl_input_line_callback(char *input)
     if (input) {
         jl_value_t *ast = jl_parse_input_line(input);
         int line_done = !ast || !jl_is_expr(ast) ||
-            (((jl_expr_t*)ast)->head != jl_continue_sym);
+            (((jl_expr_t*)ast)->head != jl_incomplete_sym);
         if (line_done) {
             jl_deprep_terminal();
             int doprint = !ends_with_semicolon(input);

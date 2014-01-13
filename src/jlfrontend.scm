@@ -15,7 +15,7 @@
 	   (if (and (string? msg) (>= (string-length msg) (string-length pfx))
 		    (equal? pfx
 			    (substring msg 0 (string-length pfx))))
-	       `(continue ,msg)
+	       `(incomplete ,msg)
 	       e))
 	 (begin
 	   ;;(newline)
