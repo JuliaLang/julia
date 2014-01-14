@@ -29,7 +29,9 @@ A useful bug report filed as a Github issue provides information about how to re
   - A minimal working example, i.e. the smallest chunk of code that triggers the error. Ideally, this should be code that can be pasted into a REPL or run from a source file. If the code is larger than (say) 50 lines, consider putting it in a [gist](https://gist.github.com).
   - The version of Julia you are using as provided by the `versioninfo()` command. Occasionally, the longer output produced by `versioninfo(true)` may be useful also.
 
-4. For segfaults or other hard crashes:
+4. When pasting code or output, put triple backquotes (```) around the code block and output block so that Github will format it nicely.
+
+5. For segfaults or other hard crashes:
   - Try running the code with the debug REPL. If you have a source distribution of Julia, you can build your own debug REPL with `make debug`, which produces the `usr/bin/julia-debug-basic` and `usr/bin/julia-debug-readline` REPLs.
   - Consider running the debug REPL in a debugger such as `gdb` or `lldb`. Obtaining even a simple [backtrace](http://www.unknownroad.com/rtfm/gdbtut/gdbsegfault.html) is very useful.
 
