@@ -208,10 +208,7 @@ endif
 	$(INSTALL_F) $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.ji $(DESTDIR)$(PREFIX)/$(JL_PRIVATE_LIBDIR)
 	$(INSTALL_F) $(BUILD)/$(JL_PRIVATE_LIBDIR)/sys.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/$(JL_PRIVATE_LIBDIR)
 	# Copy in all .jl sources as well
-	cp -R -L $(BUILD)/share/julia $(DESTDIR)$(PREFIX)/share/
-ifeq ($(OS), WINNT)
-	cp $(JULIAHOME)/contrib/windows/*.bat $(DESTDIR)$(PREFIX)
-endif
+	cp -R -L $(BUILD)/share/julia $(DESTDIR)$(PREFIX)/share/	
 	# Copy in beautiful new man page!
 	$(INSTALL_F) $(BUILD)/share/man/man1/julia.1 $(DESTDIR)$(PREFIX)/share/man/man1/
 	# Copy etc/julia directory to SYSCONFIGDIR if it is set, otherwise to just $(PREFIX)/etc/
@@ -224,7 +221,7 @@ endif
 
 
 dist:
-	rm -fr julia-*.tar.gz julia-*.exe julia-$(JULIA_COMMIT)
+	rm -fr julia-*.tar.gz julia-*.exe julia-*.7z julia-$(JULIA_COMMIT)
 ifeq ($(USE_SYSTEM_BLAS),0)
 ifneq ($(OPENBLAS_DYNAMIC_ARCH),1)
 	@echo OpenBLAS must be rebuilt with OPENBLAS_DYNAMIC_ARCH=1 to use dist target
@@ -254,7 +251,9 @@ ifeq ($(OS), WINNT)
 	    mkdir ../$(PREFIX)/Git && \
 	    7z x PortableGit.7z -o"../$(PREFIX)/Git" )
 	cd $(DESTDIR)$(PREFIX)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
-	./dist-extras/7z a -mx9 -sfx7z.sfx julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).exe julia-$(JULIA_COMMIT)
+	$(call spawn,./dist-extras/nsis/makensis.exe) /NOCD /DVersion=$(VERSDIR) /DArch=$(ARCH) /DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
+	./dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
+	cat ./dist-extras/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "Julia Installer ${VERSDIR}-${ARCH}.exe"
 else
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
 endif
@@ -324,22 +323,26 @@ endif
 ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd dist-extras && \
 	wget -O 7z920.exe http://downloads.sourceforge.net/sevenzip/7z920.exe && \
-	7z x -y 7z920.exe 7z.exe 7z.dll 7z.sfx && \
+	7z x -y 7z920.exe 7z.exe 7z.dll && \
 	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP3/noarch/mingw32-libexpat-2.0.1-5.3.noarch.rpm && \
 	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP3/noarch/mingw32-zlib-1.2.7-2.4.noarch.rpm
 else ifeq ($(ARCH),x86_64)
 	cd dist-extras && \
 	wget -O 7z920-x64.msi http://downloads.sourceforge.net/sevenzip/7z920-x64.msi && \
-	7z x -y 7z920-x64.msi _7z.exe _7z.dll _7z.sfx && \
+	7z x -y 7z920-x64.msi _7z.exe _7z.dll && \
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
-	mv _7z.sfx 7z.sfx && \
 	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-libexpat-2.0.1-4.3.noarch.rpm && \
 	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-zlib-1.2.7-2.4.noarch.rpm
 else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif
 	cd dist-extras && \
+	wget -O 7z920_extra.7z http://downloads.sourceforge.net/sevenzip/7z920_extra.7z && \
+	7z x -y 7z920_extra.7z 7zS.sfx && \
+	wget -O nsis-2.46.5-Unicode-setup.exe https://unsis.googlecode.com/files/nsis-2.46.5-Unicode-setup.exe && \
+	$(call spawn,./7z.exe) x -onsis nsis-2.46.5-Unicode-setup.exe && \
+	chmod a+x ./nsis/makensis.exe && \
 	chmod a+x 7z.exe && \
 	7z x -y mingw-libexpat.rpm -so > mingw-libexpat.cpio && \
 	7z e -y mingw-libexpat.cpio && \
