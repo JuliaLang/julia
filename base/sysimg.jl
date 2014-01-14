@@ -108,6 +108,11 @@ importall .Printf
 include("file.jl")
 include("methodshow.jl")
 
+# multidimensional arrays
+include("cartesian.jl")
+using .Cartesian
+include("multidimensional.jl")
+
 # core math functions
 include("floatfuncs.jl")
 include("math.jl")
