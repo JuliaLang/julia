@@ -4,8 +4,7 @@
 static GlobalVariable *prepare_global(GlobalVariable *G)
 {
 #ifdef USE_MCJIT
-    if(G->getParent() != jl_Module)
-    {
+    if(G->getParent() != jl_Module) {
         GlobalVariable *gv = jl_Module->getGlobalVariable(G->getName());
         if(!gv) {
             gv =
@@ -125,20 +124,18 @@ public:
                     else {
                         return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
                     }
-                } else if (!F->isDeclaration())
-                {
+                } 
+                else if (!F->isDeclaration()) {
                     return clone_llvm_function(F,this);
                 }
             }
             // Still a declaration and still in a different module
-            if(F->isDeclaration() && F->getParent() != destModule)
-            {
+            if(F->isDeclaration() && F->getParent() != destModule) {
                 // Create forward declaration in current module
                 return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
             }
-        } else if (isa<GlobalVariable>(V))
-        {
-
+        } 
+        else if (isa<GlobalVariable>(V)) {
             GlobalVariable *GV = cast<GlobalVariable>(V);
             assert(GV != NULL);
             GlobalVariable *newGV = new GlobalVariable(*destModule,

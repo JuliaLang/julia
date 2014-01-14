@@ -2999,7 +2999,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     if(!imaging_mode) {
         m = new Module(funcName.str(), jl_LLVMContext);
         jl_ExecutionEngine->addModule(m);
-    } else {
+    } 
+    else {
         m = shadow_module;
     }
     #else
