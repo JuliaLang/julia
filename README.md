@@ -277,6 +277,8 @@ The following distributions include julia, but the versions may be out of date d
 
 * [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877)
 * [Debian GNU/Linux](http://packages.debian.org/sid/julia)
+* [Gentoo Linux](https://packages.gentoo.org/package/dev-lang/julia)
+  * Git Package in the [Science overlay](https://wiki.gentoo.org/wiki/Project:Science/Overlay)
 * Ubuntu
   * [Ubuntu 13.04 (Raring Ringtail)](http://packages.ubuntu.com/raring/julia)
   * [Nightly builds PPA](https://launchpad.net/~staticfloat/+archive/julianightlies) (depends on the [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/))
