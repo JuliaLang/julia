@@ -71,7 +71,6 @@ function gen_broadcast_body(nd::Int, narrays::Int, f::Function)
             @nexprs $narrays k->(@inbounds v_k = @nref $nd A_k d->j_d_k)
             @inbounds (@nref $nd B i) = (@ncall $narrays $F v)
         end
-        B
     end
 end
 
@@ -100,6 +99,7 @@ function broadcast!(f::Function, B, As...)
         func = broadcast_cache[key]
     end
     func(B, As...)
+    B
 end
 end  # let broadcast_cache
 

@@ -2,13 +2,16 @@
 
 ### From array.jl
 
-@ngenerate N function checksize(A::AbstractArray, I::NTuple{N, Any}...)
+@ngenerate N function _checksize(A::AbstractArray, I::NTuple{N, Any}...)
     @nexprs N d->(size(A, d) == length(I_d) || throw(DimensionMismatch("Index $d has length $(length(I_d)), but size(A, $d) = $(size(A,d))")))
     nothing
 end
+checksize(A, I) = (_checksize(A, I); return nothing)
+checksize(A, I, J) = (_checksize(A, I, J); return nothing)
+checksize(A, I...) = (_checksize(A, I...); return nothing)
 
 # Version that uses cartesian indexing for src
-@ngenerate N function getindex!(dest::Array, src::AbstractArray, I::NTuple{N,Union(Real,AbstractVector)}...)
+@ngenerate N function _getindex!(dest::Array, src::AbstractArray, I::NTuple{N,Union(Real,AbstractVector)}...)
     checksize(dest, I...)
     checkbounds(src, I...)
     @nexprs N d->(J_d = to_index(I_d))
@@ -17,11 +20,10 @@ end
         @inbounds dest[k] = (@nref N src j)
         k += 1
     end
-    dest
 end
 
 # Version that uses linear indexing for src
-@ngenerate N function getindex!(dest::Array, src::Array, I::NTuple{N,Union(Real,AbstractVector)}...)
+@ngenerate N function _getindex!(dest::Array, src::Array, I::NTuple{N,Union(Real,AbstractVector)}...)
     checksize(dest, I...)
     checkbounds(src, I...)
     @nexprs N d->(J_d = to_index(I_d))
@@ -33,13 +35,18 @@ end
         @inbounds dest[k] = src[offset_0]
         k += 1
     end
-    dest
 end
 
-@ngenerate N getindex(A::Array, I::NTuple{N,Union(Real,AbstractVector)}...) = getindex!(similar(A, eltype(A), index_shape(I...)), A, I...)
+getindex!(dest, src, I) = (_getindex!(dest, src, I); return dest)
+getindex!(dest, src, I, J) = (_getindex!(dest, src, I, J); return dest)
+getindex!(dest, src, I...) = (_getindex!(dest, src, I...); return dest)
+
+getindex(A::Array, I::Union(Real,AbstractVector)) = getindex!(similar(A, index_shape(I)), A, I)
+getindex(A::Array, I::Union(Real,AbstractVector), J::Union(Real,AbstractVector)) = getindex!(similar(A, index_shape(I,J)), A, I, J)
+getindex(A::Array, I::Union(Real,AbstractVector)...) = getindex!(similar(A, index_shape(I...)), A, I...)
 
 
-@ngenerate N function setindex!(A::Array, x, I::NTuple{N,Union(Real,AbstractArray)}...)
+@ngenerate N function _setindex!(A::Array, x, I::NTuple{N,Union(Real,AbstractArray)}...)
     checkbounds(A, I...)
     @nexprs N d->(J_d = to_index(I_d))
     stride_1 = 1
@@ -59,8 +66,12 @@ end
             k += 1
         end
     end
-    A
 end
+
+setindex!(A::Array, x, I::Union(Real,AbstractArray)) = (_setindex!(A, x, I); return A)
+setindex!(A::Array, x, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray)) =
+    (_setindex!(A, x, I, J); return A)
+setindex!(A::Array, x, I::Union(Real,AbstractArray)...) = (_setindex!(A, x, I...); return A)
 
 
 @ngenerate N function findn{T,N}(A::AbstractArray{T,N})
@@ -119,12 +130,13 @@ eval(ngenerate(:N, :(setindex!{T}(s::SubArray{T,N}, v, ind::Integer)), gen_setin
 
 ### from abstractarray.jl
 
-@ngenerate N function fill!{T,N}(A::AbstractArray{T,N}, x)
+@ngenerate N function _fill!{T,N}(A::AbstractArray{T,N}, x)
     @nloops N i A begin
         @inbounds (@nref N A i) = x
     end
-    return A
 end
+
+fill!(A::AbstractArray, x) = (_fill!(A, x); return A)
 
 ## code generator for specializing on the number of dimensions ##
 
