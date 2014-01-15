@@ -20,22 +20,6 @@ end
     dest
 end
 
-# Version that uses linear indexing for src
-@ngenerate N function getindex!(dest::Array, src::Array, I::NTuple{N,Union(Real,AbstractVector)}...)
-    checksize(dest, I...)
-    checkbounds(src, I...)
-    @nexprs N d->(J_d = to_index(I_d))
-    stride_1 = 1
-    @nexprs N d->(stride_{d+1} = stride_d*size(src,d))
-    @nexprs N d->(offset_d = 1)  # only really need offset_$N = 1
-    k = 1
-    @nloops N i dest d->(offset_{d-1} = offset_d + (J_d[i_d]-1)*stride_d) begin
-        @inbounds dest[k] = src[offset_0]
-        k += 1
-    end
-    dest
-end
-
 @ngenerate N getindex(A::Array, I::NTuple{N,Union(Real,AbstractVector)}...) = getindex!(similar(A, eltype(A), index_shape(I...)), A, I...)
 
 
