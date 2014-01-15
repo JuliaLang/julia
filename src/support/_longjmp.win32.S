@@ -51,19 +51,19 @@
  * The previous signal state is NOT restored.
  */
 
+.intel_syntax
 ENTRY(jl_longjmp)
-    movl    4(%esp),%edx
-    movl    8(%esp),%eax
-    movl    0(%edx),%ebp
-    movl    4(%edx),%ebx
-    movl    8(%edx),%edi
-    movl    12(%edx),%esi
-    movl    16(%edx),%esp
-    movl    20(%edx),%ecx
-    testl   %eax,%eax
-    jnz 1f
-    incl    %eax
-1:  movl    %ecx,0(%esp)
+    mov    edx,DWORD PTR [esp+0x04]
+    mov    eax,DWORD PTR [esp+0x08]
+    mov    ebp,DWORD PTR [edx+0x00]
+    mov    ebx,DWORD PTR [edx+0x04]
+    mov    edi,DWORD PTR [edx+0x08]
+    mov    esi,DWORD PTR [edx+0x0c]
+    mov    esp,DWORD PTR [edx+0x10]
+    mov    ecx,DWORD PTR [edx+0x14]
+    test   eax,eax
+    jne    1f
+    inc    eax
+1:  mov    DWORD PTR [esp],ecx
     ret
 END(jl_longjmp)
-

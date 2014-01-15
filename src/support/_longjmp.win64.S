@@ -1,31 +1,31 @@
 #include "../../deps/openlibm/amd64/bsd_asm.h"
 
+.intel_syntax noprefix
 ENTRY(jl_longjmp)
-    movq    8(%rcx),%rbx
-    movq    16(%rcx),%rsp
-    movq    24(%rcx),%rbp
-    movq    32(%rcx),%rsi
-    movq    40(%rcx),%rdi
-    movq    48(%rcx),%r12
-    movq    56(%rcx),%r13
-    movq    64(%rcx),%r14
-    movq    72(%rcx),%r15
-    movq    80(%rcx),%r8
-    movaps  96(%rcx),%xmm6
-    movaps  112(%rcx),%xmm7
-    movaps  128(%rcx),%xmm8
-    movaps  144(%rcx),%xmm9
-    movaps  160(%rcx),%xmm10
-    movaps  176(%rcx),%xmm11
-    movaps  192(%rcx),%xmm12
-    movaps  208(%rcx),%xmm13
-    movaps  224(%rcx),%xmm14
-    movaps  240(%rcx),%xmm15
-    
-    movl    %edx,%eax
-    testl   %eax,%eax
-    jnz     1f
-    incl    %eax
-1:  movq    %r8,0(%rsp)
+    mov    rbx,QWORD PTR [rcx+0x08]
+    mov    rsp,QWORD PTR [rcx+0x10]
+    mov    rbp,QWORD PTR [rcx+0x18]
+    mov    rsi,QWORD PTR [rcx+0x20]
+    mov    rdi,QWORD PTR [rcx+0x28]
+    mov    r12,QWORD PTR [rcx+0x30]
+    mov    r13,QWORD PTR [rcx+0x38]
+    mov    r14,QWORD PTR [rcx+0x40]
+    mov    r15,QWORD PTR [rcx+0x48]
+    mov    r8, QWORD PTR [rcx+0x50]
+    movaps xmm6,XMMWORD PTR [rcx+0x60]
+    movaps xmm7,XMMWORD PTR [rcx+0x70]
+    movaps xmm8,XMMWORD PTR [rcx+0x80]
+    movaps xmm9,XMMWORD PTR [rcx+0x90]
+    movaps xmm10,XMMWORD PTR [rcx+0xa0]
+    movaps xmm11,XMMWORD PTR [rcx+0xb0]
+    movaps xmm12,XMMWORD PTR [rcx+0xc0]
+    movaps xmm13,XMMWORD PTR [rcx+0xd0]
+    movaps xmm14,XMMWORD PTR [rcx+0xe0]
+    movaps xmm15,XMMWORD PTR [rcx+0xf0]
+    mov    eax,edx
+    test   eax,eax
+    jne    1f
+    inc    eax
+1:  mov    QWORD PTR [rsp],r8
     ret
 END(jl_longjmp)
