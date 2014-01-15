@@ -398,16 +398,20 @@ DLLEXPORT int jl_fs_event_init(uv_loop_t* loop, uv_fs_event_t* handle,
 DLLEXPORT int jl_fs_unlink(char *path)
 {
     uv_fs_t req;
+    JL_SIGATOMIC_BEGIN();
     int ret = uv_fs_unlink(jl_io_loop, &req, path, NULL);
     uv_fs_req_cleanup(&req);
+    JL_SIGATOMIC_END();
     return ret;
 }
 
 DLLEXPORT int jl_fs_rename(char *src_path, char *dst_path)
 {
     uv_fs_t req;
+    JL_SIGATOMIC_BEGIN();
     int ret = uv_fs_rename(jl_io_loop, &req, src_path, dst_path, NULL);
     uv_fs_req_cleanup(&req);
+    JL_SIGATOMIC_END();
     return ret;
 }
 
@@ -415,9 +419,11 @@ DLLEXPORT int jl_fs_sendfile(int src_fd, int dst_fd,
                              int64_t in_offset, size_t len)
 {
     uv_fs_t req;
+    JL_SIGATOMIC_BEGIN();
     int ret = uv_fs_sendfile(jl_io_loop, &req, dst_fd, src_fd,
                              in_offset, len, NULL);
     uv_fs_req_cleanup(&req);
+    JL_SIGATOMIC_END();
     return ret;
 }
 
