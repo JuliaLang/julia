@@ -1273,8 +1273,7 @@ void jl_init_serializer(void)
     assert(i <= Null_tag);
     VALUE_TAGS = (ptrint_t)ptrhash_get(&ser_tag, jl_null);
 
-    typedef jl_value_t* (*funcptr_t)(jl_value_t *, jl_value_t **, uint32_t);
-    funcptr_t fptrs[] = { 
+    jl_fptr_t fptrs[] = { 
                       jl_f_new_expr, jl_f_new_box,
                       jl_f_throw, jl_f_is, 
                       jl_f_no_function, jl_f_typeof, 
