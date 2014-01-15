@@ -219,9 +219,10 @@ else
 	cp -R $(BUILD)/etc/julia $(DESTDIR)$(PREFIX)/etc/
 endif
 
-
-dist:
+dist-clean:
 	rm -fr julia-*.tar.gz julia-*.exe julia-*.7z julia-$(JULIA_COMMIT)
+
+dist: dist-clean
 ifeq ($(USE_SYSTEM_BLAS),0)
 ifneq ($(OPENBLAS_DYNAMIC_ARCH),1)
 	@echo OpenBLAS must be rebuilt with OPENBLAS_DYNAMIC_ARCH=1 to use dist target
