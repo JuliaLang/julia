@@ -25,3 +25,7 @@ R = reducedim((a,b) -> a+b, [1 2; 3 4], 2, 0.0)
 @test eltype(R) == Float64
 @test_approx_eq R [3,7]
 @test reducedim((a,b) -> a+b, [1 2; 3 4], 1, 0) == [4 6]
+
+# inferred return types
+rt = Base.return_types(reducedim, (Function, Array{Float64, 3}, Int, Float64))
+@test length(rt) == 1 && rt[1] == Array{Float64, 3}
