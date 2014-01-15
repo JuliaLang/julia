@@ -1,4 +1,5 @@
 #include "platform.h"
+#include "julia.h"
 
 /*
  * We include <mathimf.h> here, because somewhere below <math.h> is included also.
@@ -89,7 +90,6 @@ using namespace llvm;
 
 extern "C" {
 
-#include "julia.h"
 #include "builtin_proto.h"
 
 void *__stack_chk_guard = NULL;
