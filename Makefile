@@ -342,7 +342,7 @@ endif
 	wget -O 7z920_extra.7z http://downloads.sourceforge.net/sevenzip/7z920_extra.7z && \
 	7z x -y 7z920_extra.7z 7zS.sfx && \
 	wget -O nsis-2.46.5-Unicode-setup.exe https://unsis.googlecode.com/files/nsis-2.46.5-Unicode-setup.exe && \
-	$(call spawn,./7z.exe) x -onsis nsis-2.46.5-Unicode-setup.exe && \
+	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \
 	chmod a+x ./nsis/makensis.exe && \
 	chmod a+x 7z.exe && \
 	7z x -y mingw-libexpat.rpm -so > mingw-libexpat.cpio && \
