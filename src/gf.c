@@ -27,10 +27,10 @@ static jl_methtable_t *new_method_table(jl_sym_t *name)
     jl_methtable_t *mt = (jl_methtable_t*)allocobj(sizeof(jl_methtable_t));
     mt->type = (jl_value_t*)jl_methtable_type;
     mt->name = name;
-    mt->defs = (jl_methlist_t*) JL_NULL;
-    mt->cache = (jl_methlist_t*) JL_NULL;
-    mt->cache_arg1 = (jl_array_t*) JL_NULL;
-    mt->cache_targ = (jl_array_t*) JL_NULL;
+    mt->defs = (jl_methlist_t*)JL_NULL;
+    mt->cache = (jl_methlist_t*)JL_NULL;
+    mt->cache_arg1 = (jl_array_t*)JL_NULL;
+    mt->cache_targ = (jl_array_t*)JL_NULL;
     mt->max_args = 0;
     mt->kwsorter = NULL;
 #ifdef JL_GF_PROFILE
@@ -158,7 +158,7 @@ jl_methlist_t *mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int tparam)
         if (t == ty)
             return ml;
     }
-    return (jl_methlist_t*) JL_NULL;
+    return (jl_methlist_t*)JL_NULL;
 }
 
 static void mtcache_rehash(jl_array_t **pa)
@@ -189,7 +189,7 @@ static jl_methlist_t **mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
         while (1) {
             jl_methlist_t **pml = (jl_methlist_t**)&jl_cellref(*pa, uid & ((*pa)->nrows-1));
             if (*pml == NULL || *pml == JL_NULL) {
-                *pml = (jl_methlist_t*) JL_NULL;
+                *pml = (jl_methlist_t*)JL_NULL;
                 return pml;
             }
             jl_value_t *t = jl_tupleref((*pml)->sig,0);
@@ -211,7 +211,7 @@ static jl_methlist_t **mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
 static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
                                                           jl_tuple_t *types)
 {
-    jl_methlist_t *ml = (jl_methlist_t*) JL_NULL;
+    jl_methlist_t *ml = (jl_methlist_t*)JL_NULL;
     if (jl_tuple_len(types) > 0) {
         jl_value_t *ty = jl_t0(types);
         if (jl_is_type_type(ty)) {
@@ -243,7 +243,7 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
                                                   jl_value_t **args, size_t n)
 {
     // NOTE: This function is a huge performance hot spot!!
-    jl_methlist_t *ml = (jl_methlist_t*) JL_NULL;
+    jl_methlist_t *ml = (jl_methlist_t*)JL_NULL;
     if (n > 0) {
         jl_value_t *a0 = args[0];
         jl_value_t *ty = (jl_value_t*)jl_typeof(a0);
@@ -833,7 +833,7 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
     if (ti == (jl_value_t*)jl_bottom_type)
         return ti;
     assert(jl_is_tuple(*penv));
-    jl_value_t **ee = (jl_value_t**) alloca(sizeof(void*) * jl_tuple_len(*penv));
+    jl_value_t **ee = (jl_value_t**)alloca(sizeof(void*) * jl_tuple_len(*penv));
     int n=0;
     // only keep vars in tvars list
     jl_value_t **tvs;
@@ -1117,7 +1117,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
             l->va = (jl_tuple_len(type) > 0 &&
                      jl_is_vararg_type(jl_tupleref(type,jl_tuple_len(type)-1))) ?
                 1 : 0;
-            l->invokes = (struct _jl_methtable_t *) JL_NULL;
+            l->invokes = (struct _jl_methtable_t *)JL_NULL;
             l->func = method;
             JL_SIGATOMIC_END();
             return l;
@@ -1145,7 +1145,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                   jl_is_vararg_type(jl_tupleref(type,jl_tuple_len(type)-1))) ?
         1 : 0;
     newrec->func = method;
-    newrec->invokes = (struct _jl_methtable_t*) JL_NULL;
+    newrec->invokes = (struct _jl_methtable_t*)JL_NULL;
     newrec->next = l;
     JL_SIGATOMIC_BEGIN();
     *pl = newrec;

@@ -302,7 +302,7 @@ EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, 
     EXCEPTION_POINTERS ExceptionInfo;
     ExceptionInfo.ExceptionRecord = ExceptionRecord;
     ExceptionInfo.ContextRecord = ContextRecord;
-    return (EXCEPTION_DISPOSITION) _exception_handler(&ExceptionInfo,0);
+    return (EXCEPTION_DISPOSITION)_exception_handler(&ExceptionInfo,0);
 } 
 #endif
 
@@ -336,7 +336,7 @@ struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutd
 
 static void jl_uv_exitcleanup_add(uv_handle_t* handle, struct uv_shutdown_queue *queue)
 {
-    struct uv_shutdown_queue_item *item = (struct uv_shutdown_queue_item*) malloc(sizeof(struct uv_shutdown_queue_item));
+    struct uv_shutdown_queue_item *item = (struct uv_shutdown_queue_item*)malloc(sizeof(struct uv_shutdown_queue_item));
     item->h = handle;
     item->next = NULL;
     if (queue->last) queue->last->next = item;
@@ -347,7 +347,7 @@ static void jl_uv_exitcleanup_add(uv_handle_t* handle, struct uv_shutdown_queue 
 static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
 {
     if (handle != (uv_handle_t*)jl_uv_stdout && handle != (uv_handle_t*)jl_uv_stderr)
-        jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*) arg);
+        jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
 }
 
 DLLEXPORT void uv_atexit_hook()
@@ -479,7 +479,7 @@ void *init_stdio_handle(uv_file fd,int readable)
             uv_tty_set_mode((uv_tty_t*)handle,0); //cooked stdio
             break;
         case UV_FILE: 
-            file = (jl_uv_file_t*) malloc(sizeof(jl_uv_file_t));
+            file = (jl_uv_file_t*)malloc(sizeof(jl_uv_file_t));
             file->loop = jl_io_loop;
             file->type = UV_FILE;
             file->file = fd;
@@ -521,9 +521,9 @@ void *init_stdio_handle(uv_file fd,int readable)
 
 void init_stdio()
 {   //order must be 2,1,0
-    JL_STDERR = (uv_stream_t*) init_stdio_handle(2,0);
-    JL_STDOUT = (uv_stream_t*) init_stdio_handle(1,0);
-    JL_STDIN = (uv_stream_t*) init_stdio_handle(0,1);
+    JL_STDERR = (uv_stream_t*)init_stdio_handle(2,0);
+    JL_STDOUT = (uv_stream_t*)init_stdio_handle(1,0);
+    JL_STDIN = (uv_stream_t*)init_stdio_handle(0,1);
 }
 
 #ifndef _OS_WINDOWS_
@@ -587,7 +587,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     ret = thread_get_state(thread,x86_EXCEPTION_STATE64,(thread_state_t)&exc_state,&exc_count);
     HANDLE_MACH_ERROR("thread_get_state(1)",ret);
     uint64_t fault_addr = exc_state.__faultvaddr;
-    if (is_addr_on_stack((void*) fault_addr)) {
+    if (is_addr_on_stack((void*)fault_addr)) {
         ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
         HANDLE_MACH_ERROR("thread_get_state(2)",ret);
         old_state = state;
@@ -835,7 +835,7 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
 #if defined(_OS_WINDOWS_)
     SetUnhandledExceptionFilter(exception_handler);
 #endif
-    unsigned char * p = (unsigned char *) &__stack_chk_guard;
+    unsigned char *p = (unsigned char *)&__stack_chk_guard;
     char a = p[sizeof(__stack_chk_guard)-1];
     char b = p[sizeof(__stack_chk_guard)-2];
     char c = p[0];

@@ -164,7 +164,7 @@ int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops)
             }
         }
         size_t sz = (maxlabl+1+7)/8;
-        char *labls = (char*) alloca(sz); memset(labls,0,sz);
+        char *labls = (char*)alloca(sz); memset(labls,0,sz);
         for(i=0; i < jl_array_len(body); i++) {
             jl_value_t *stmt = jl_cellref(body,i);
             if (jl_is_labelnode(stmt)) {

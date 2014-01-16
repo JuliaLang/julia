@@ -1595,7 +1595,7 @@ static jl_value_t *lookup_type(jl_typename_t *tn, jl_value_t **key, size_t n)
         cl = jl_tuple_len(cache);
     }
     else {
-        data = (jl_value_t**) jl_array_data(cache);
+        data = (jl_value_t**)jl_array_data(cache);
         cl = jl_array_len(cache);
     }
     for(size_t i=0; i < cl; i++) {
@@ -1890,7 +1890,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t)
     top.tt = (jl_datatype_t*)t;
     top.prev = NULL;
     size_t n = jl_tuple_len(t->parameters);
-    jl_value_t **env = (jl_value_t**) alloca(n*2*sizeof(void*));
+    jl_value_t **env = (jl_value_t**)alloca(n*2*sizeof(void*));
     for(int i=0; i < n; i++) {
         env[i*2] = jl_tupleref(t->parameters,i);
         env[i*2+1] = env[i*2];
@@ -2315,7 +2315,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
         jl_tuple_t *t = ((jl_uniontype_t*)child)->types;
         if (morespecific) {
             cenv_t tenv;
-            tenv.data = (jl_value_t**) alloca(MAX_CENV_SIZE*sizeof(void*));
+            tenv.data = (jl_value_t**)alloca(MAX_CENV_SIZE*sizeof(void*));
             for(i=0; i < jl_tuple_len(t); i++) {
                 int n = env->n;
                 tmp = type_match_(jl_tupleref(t,i), parent, env, 1, invariant);
@@ -2841,7 +2841,7 @@ void jl_init_types(void)
     jl_tupleset(jl_method_type->types, 3, jl_function_type);
     jl_tupleset(jl_lambda_info_type->types, 6, jl_function_type);
 
-    jl_bottom_func = jl_new_closure(jl_f_no_function, (jl_value_t*) JL_NULL, NULL);
+    jl_bottom_func = jl_new_closure(jl_f_no_function, (jl_value_t*)JL_NULL, NULL);
 
     jl_intrinsic_type = jl_new_bitstype((jl_value_t*)jl_symbol("IntrinsicFunction"),
                                         jl_any_type, jl_null, 32);

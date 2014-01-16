@@ -35,11 +35,11 @@
 #if defined(__APPLE__) || defined(_OS_WINDOWS_)
 DLLEXPORT void *memrchr(const void *s, int c, size_t n)
 {
-    const unsigned char *src = (unsigned char *)s + n;
+    const unsigned char *src = (unsigned char*)s + n;
     unsigned char uc = c;
-    while (--src >= (unsigned char *) s)
+    while (--src >= (unsigned char*)s)
         if (*src == uc)
-            return (void *) src;
+            return (void*)src;
     return NULL;
 }
 #else
@@ -165,12 +165,12 @@ static char *_buf_realloc(ios_t *s, size_t sz)
         // if we own the buffer we're free to resize it
         // always allocate 1 bigger in case user wants to add a NUL
         // terminator after taking over the buffer
-        temp = (char*) LLT_REALLOC(s->buf, sz+1);
+        temp = (char*)LLT_REALLOC(s->buf, sz+1);
         if (temp == NULL)
             return NULL;
     }
     else {
-        temp = (char*) LLT_ALLOC(sz+1);
+        temp = (char*)LLT_ALLOC(sz+1);
         if (temp == NULL)
             return NULL;
         s->ownbuf = 1;
@@ -633,7 +633,7 @@ char *ios_takebuf(ios_t *s, size_t *psize)
     ios_flush(s);
 
     if (s->buf == &s->local[0]) {
-        buf = (char*) LLT_ALLOC(s->size+1);
+        buf = (char*)LLT_ALLOC(s->size+1);
         if (buf == NULL)
             return NULL;
         if (s->size)
@@ -641,7 +641,7 @@ char *ios_takebuf(ios_t *s, size_t *psize)
     }
     else {
         if (s->buf == NULL)
-            buf = (char*) LLT_ALLOC(s->size+1);
+            buf = (char*)LLT_ALLOC(s->size+1);
         else
             buf = s->buf;
     }
@@ -873,14 +873,14 @@ ios_t *ios_stderr = NULL;
 
 void ios_init_stdstreams(void)
 {
-    ios_stdin = (ios_t*) malloc(sizeof(ios_t));
+    ios_stdin = (ios_t*)malloc(sizeof(ios_t));
     ios_fd(ios_stdin, STDIN_FILENO, 0, 0);
 
-    ios_stdout = (ios_t*) malloc(sizeof(ios_t));
+    ios_stdout = (ios_t*)malloc(sizeof(ios_t));
     ios_fd(ios_stdout, STDOUT_FILENO, 0, 0);
     ios_stdout->bm = bm_line;
 
-    ios_stderr = (ios_t*) malloc(sizeof(ios_t));
+    ios_stderr = (ios_t*)malloc(sizeof(ios_t));
     ios_fd(ios_stderr, STDERR_FILENO, 0, 0);
     ios_stderr->bm = bm_none;
 }
