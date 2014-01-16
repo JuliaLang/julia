@@ -1115,7 +1115,7 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
     SwitchInst *sw = builder.CreateSwitch(ival,deflt,n);
     // Anything else is a bounds error
     builder.SetInsertPoint(deflt);
-    builder.CreateCall2(jlthrow_line_func, builder.CreateLoad(jlboundserr_var),
+    builder.CreateCall2(prepare_call(jlthrow_line_func), builder.CreateLoad(prepare_global(jlboundserr_var)),
                         ConstantInt::get(T_int32, ctx->lineno));
     builder.CreateUnreachable();
     size_t ntuple = jl_tuple_len(jt);
