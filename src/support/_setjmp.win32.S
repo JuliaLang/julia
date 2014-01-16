@@ -51,16 +51,16 @@
  * The previous signal state is NOT restored.
  */
 
+.intel_syntax
 ENTRY(jl_setjmp)
-    movl    4(%esp),%eax
-    movl    0(%esp),%edx
-    movl    %ebp, 0(%eax)       /* rta */
-    movl    %ebx, 4(%eax)
-    movl    %edi, 8(%eax)
-    movl    %esi,12(%eax)
-    movl    %esp,16(%eax)
-    movl    %edx,20(%eax)
-    xorl    %eax,%eax
+    mov    eax,DWORD PTR [esp+0x04]
+    mov    edx,DWORD PTR [esp+0x00]
+    mov    DWORD PTR [eax+0x00],ebp  /* rta */
+    mov    DWORD PTR [eax+0x04],ebx
+    mov    DWORD PTR [eax+0x08],edi
+    mov    DWORD PTR [eax+0x0c],esi
+    mov    DWORD PTR [eax+0x10],esp
+    mov    DWORD PTR [eax+0x14],edx
+    xor    eax,eax
     ret
 END(jl_setjmp)
-

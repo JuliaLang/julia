@@ -266,7 +266,12 @@ show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
 fd(s::IOStream) = int(ccall(:jl_ios_fd, Clong, (Ptr{Void},), s.ios))
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 isopen(s::IOStream) = bool(ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios))
-flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
+function flush(s::IOStream)
+    sigatomic_begin()
+    ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
+    sigatomic_end()
+    s
+end
 iswritable(s::IOStream) = bool(ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios))
 isreadable(s::IOStream) = bool(ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios))
 modestr(s::IO) = modestr(isreadable(s), iswritable(s))

@@ -12,7 +12,7 @@
 #include "julia.h"
 #include "flisp.h"
 
-static char flisp_system_image[] = {
+static uint8_t flisp_system_image[] = {
 #include "julia_flisp.boot.inc"
 };
 
@@ -111,7 +111,7 @@ DLLEXPORT void jl_init_frontend(void)
     fl_init(2*512*1024);
     value_t img = cvalue(iostreamtype, sizeof(ios_t));
     ios_t *pi = value2c(ios_t*, img);
-    ios_static_buffer(pi, flisp_system_image, sizeof(flisp_system_image));
+    ios_static_buffer(pi, (char*)flisp_system_image, sizeof(flisp_system_image));
     
     if (fl_load_system_image(img)) {
         JL_PRINTF(JL_STDERR, "fatal error loading system image\n");
@@ -240,7 +240,7 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
         return (jl_value_t*)scmsym_to_julia(e);
     }
     if (fl_isstring(e)) {
-        return jl_pchar_to_string(cvalue_data(e), cvalue_len(e));
+        return jl_pchar_to_string((char*)cvalue_data(e), cvalue_len(e));
     }
     if (e == FL_F) {
         return jl_false;

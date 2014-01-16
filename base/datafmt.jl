@@ -113,7 +113,7 @@ function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, au
             end_pos = offsets[row,col]
             
             end_idx = prevind(sbuff, nextind(sbuff,end_pos))
-            (col == maxcol) && ('\n' == eol) && ('\r' == sbuff[end_idx]) && (end_idx = prevind(sbuff, end_idx))
+            (col == maxcol) && (end_idx > 0) && ('\n' == eol) && ('\r' == sbuff[end_idx]) && (end_idx = prevind(sbuff, end_idx))
             sval = SubString(sbuff, start_pos, end_idx)
             
             if T <: Char
@@ -148,9 +148,10 @@ function dlm_offsets(sbuff::UTF8String, dlm, eol, offsets::Array{Int,2})
     maxrow,maxcol = size(offsets)
     offsets[maxrow,maxcol] = length(sbuff.data)
     idx = 1
+    is_default_dlm = (dlm == invalid_dlm)
     while(idx <= length(sbuff.data))
         val,idx = next(sbuff, idx)
-        (val != eol) && ((dlm == invalid_dlm) ? !in(val, _default_delims) : (val != dlm)) && continue
+        (val != eol) && (is_default_dlm ? !in(val, _default_delims) : (val != dlm)) && continue
         col += 1
         offsets[row,col] = idx-2
         (row >= maxrow) && (col == maxcol) && break
@@ -162,11 +163,12 @@ dlm_offsets(sbuff::ASCIIString, dlmc, eolc, offsets::Array{Int,2}) = dlm_offsets
 function dlm_offsets(dbuff::Vector{Uint8}, dlm::Uint8, eol::Uint8, offsets::Array{Int,2})
     col = 0
     row = 1
+    is_default_dlm = (dlm == uint8(invalid_dlm))
     maxrow,maxcol = size(offsets)
     offsets[maxrow,maxcol] = length(dbuff)
     for idx in 1:length(dbuff)
         val = dbuff[idx]
-        (val != eol) && ((dlm == invalid_dlm) ? !in(val, _default_delims) : (val != dlm)) && continue
+        (val != eol) && (is_default_dlm ? !in(val, _default_delims) : (val != dlm)) && continue
         col += 1
         offsets[row,col] = idx-1
         (row >= maxrow) && (col == maxcol) && break
@@ -178,9 +180,10 @@ dlm_dims(s::ASCIIString, eol::Char, dlm::Char) = dlm_dims(s.data, uint8(eol), ui
 function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D)
     isa(dbuff, UTF8String) && isascii(eol) && isascii(dlm) && (return dlm_dims(dbuff.data, uint8(eol), uint8(dlm)))
     ncols = nrows = col = 0
+    is_default_dlm = (dlm == convert(D, invalid_dlm))
     try
         for val in dbuff
-            (val != eol) && ((dlm == invalid_dlm) ? !in(val, _default_delims) : (val != dlm)) && continue
+            (val != eol) && (is_default_dlm ? !in(val, _default_delims) : (val != dlm)) && continue
             col += 1
             (val == eol) && (nrows += 1; ncols = max(ncols, col); col = 0)
         end

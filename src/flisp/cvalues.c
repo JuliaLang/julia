@@ -425,7 +425,7 @@ value_t cvalue_array(value_t *args, u_int32_t nargs)
     sz = elsize * cnt;
 
     value_t cv = cvalue(type, sz);
-    char *dest = cv_data((cvalue_t*)ptr(cv));
+    char *dest = (char*)cv_data((cvalue_t*)ptr(cv));
     FOR_ARGS(i,1,arg,args) {
         cvalue_init(type->eltype, arg, dest);
         dest += elsize;
@@ -502,7 +502,7 @@ void to_sized_ptr(value_t v, char *fname, char **pdata, size_t *psz)
             return;
         }
         else if (cv_isPOD(pcv)) {
-            *pdata = cv_data(pcv);
+            *pdata = (char*)cv_data(pcv);
             *psz = cv_len(pcv);
             return;
         }
@@ -666,7 +666,7 @@ static numerictype_t sym_to_numtype(value_t type)
         return T_FLOAT;
     else if (type == doublesym)
         return T_DOUBLE;
-    return N_NUMTYPES;
+    return (numerictype_t)N_NUMTYPES;
 }
 
 // (new type . args)
@@ -708,8 +708,8 @@ value_t cvalue_compare(value_t a, value_t b)
 {
     cvalue_t *ca = (cvalue_t*)ptr(a);
     cvalue_t *cb = (cvalue_t*)ptr(b);
-    char *adata = cv_data(ca);
-    char *bdata = cv_data(cb);
+    char *adata = (char*)cv_data(ca);
+    char *bdata = (char*)cv_data(cb);
     size_t asz = cv_len(ca);
     size_t bsz = cv_len(cb);
     size_t minsz = asz < bsz ? asz : bsz;
@@ -728,7 +728,7 @@ static void check_addr_args(char *fname, value_t arr, value_t ind,
 {
     size_t numel;
     cvalue_t *cv = (cvalue_t*)ptr(arr);
-    *data = cv_data(cv);
+    *data = (char*)cv_data(cv);
     numel = cv_len(cv)/(cv_class(cv)->elsz);
     *index = tosize(ind, fname);
     if (*index >= numel)
@@ -753,7 +753,7 @@ static value_t cvalue_array_aref(value_t *args)
             return fixnum(((int16_t*)data)[index]);
         return fixnum(((uint16_t*)data)[index]);
     }
-    char *dest = cptr(el);
+    char *dest = (char*)cptr(el);
     size_t sz = eltype->size;
     if (sz == 1)
         *dest = data[index];
@@ -783,7 +783,7 @@ value_t fl_builtin(value_t *args, u_int32_t nargs)
     argcount("builtin", nargs, 1);
     symbol_t *name = tosymbol(args[0], "builtin");
     cvalue_t *cv;
-    if (ismanaged(args[0]) || (cv=name->dlcache) == NULL) {
+    if (ismanaged(args[0]) || (cv=(cvalue_t*)name->dlcache) == NULL) {
         lerrorf(ArgError, "builtin: function %s not found", name->name);
     }
     return tagptr(cv, TAG_CVALUE);
@@ -795,7 +795,7 @@ value_t cbuiltin(char *name, builtin_t f)
     cv->type = builtintype;
     cv->data = &cv->_space[0];
     cv->len = sizeof(value_t);
-    *(void**)cv->data = f;
+    *(void**)cv->data = (void*)f;
 
     value_t sym = symbol(name);
     ((symbol_t*)ptr(sym))->dlcache = cv;
@@ -837,16 +837,21 @@ static builtinspec_t cvalues_builtin_info[] = {
 #define mk_primtype_(name,ctype) \
   name##type=get_type(name##sym);name##type->init = &cvalue_##ctype##_init
 
+struct prim_int16{ char a; int16_t i; };
+struct prim_int32{ char a; int32_t i; };
+struct prim_int64{ char a; int64_t i; };
+struct prim_ptr{ char a;  void   *i; };
+
 static void cvalues_init(void)
 {
     htable_new(&TypeTable, 256);
     htable_new(&reverse_dlsym_lookup_table, 256);
 
     // compute struct field alignment required for primitives
-    ALIGN2   = sizeof(struct { char a; int16_t i; }) - 2;
-    ALIGN4   = sizeof(struct { char a; int32_t i; }) - 4;
-    ALIGN8   = sizeof(struct { char a; int64_t i; }) - 8;
-    ALIGNPTR = sizeof(struct { char a; void   *i; }) - sizeof(void*);
+    ALIGN2   = sizeof(struct prim_int16) - 2;
+    ALIGN4   = sizeof(struct prim_int32) - 4;
+    ALIGN8   = sizeof(struct prim_int64) - 8;
+    ALIGNPTR = sizeof(struct prim_ptr) - sizeof(void*);
 
     builtintype = define_opaque_type(builtinsym, sizeof(builtin_t), NULL, NULL);
 
@@ -1418,7 +1423,7 @@ static value_t fl_ash(value_t *args, u_int32_t nargs)
             if (ta == T_UINT64)
                 return return_from_uint64((*(uint64_t*)aptr)<<n);
             else if (ta < T_FLOAT) {
-                int64_t i64 = conv_to_int64(aptr, ta);
+                int64_t i64 = conv_to_int64(aptr, (numerictype_t)ta);
                 return return_from_int64(i64<<n);
             }
         }

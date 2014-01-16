@@ -46,6 +46,7 @@
 #include "platform.h"
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#include <malloc.h>
 char * basename(char *);
 char * dirname(char *);
 #else
@@ -274,7 +275,8 @@ static symbol_t *mk_symbol(char *str)
     else {
         sym->binding = UNBOUND;
     }
-    sym->type = sym->dlcache = NULL;
+    sym->type = NULL;
+    sym->dlcache = NULL;
     sym->hash = memhash32(str, len)^0xAAAAAAAA;
     strcpy(&sym->name[0], str);
     return sym;
@@ -653,7 +655,7 @@ void gc(int mustgrow)
 
     temp = tospace;
     tospace = fromspace;
-    fromspace = temp;
+    fromspace = (unsigned char*)temp;
 
     // if we're using > 80% of the space, resize tospace so we have
     // more space to fill next time. if we grew tospace last time,
@@ -669,7 +671,7 @@ void gc(int mustgrow)
         temp = LLT_REALLOC(tospace, heapsize*2);
         if (temp == NULL)
             fl_raise(memory_exception_value);
-        tospace = temp;
+        tospace = (unsigned char*)temp;
         if (grew) {
             heapsize*=2;
             temp = bitvector_resize(consflags, 0, heapsize/sizeof(cons_t), 1);
@@ -690,7 +692,7 @@ void gc(int mustgrow)
 static void grow_stack(void)
 {
     size_t newsz = N_STACK + (N_STACK>>1);
-    value_t *ns = realloc(Stack, newsz*sizeof(value_t));
+    value_t *ns = (value_t*)realloc(Stack, newsz*sizeof(value_t));
     if (ns == NULL)
         lerror(MemoryError, "stack overflow");
     Stack = ns;
@@ -950,9 +952,11 @@ static uint32_t process_keys(value_t kwtable,
                              uint32_t nreq, uint32_t nkw, uint32_t nopt,
                              uint32_t bp, uint32_t nargs, int va)
 {
+    uptrint_t n;
     uint32_t extr = nopt+nkw;
     uint32_t ntot = nreq+extr;
-    value_t args[extr], v;
+    value_t *args = (value_t*)alloca(extr*sizeof(value_t));
+    value_t v;
     uint32_t i, a = 0, nrestargs;
     value_t s1 = Stack[SP-1];
     value_t s2 = Stack[SP-2];
@@ -971,7 +975,7 @@ static uint32_t process_keys(value_t kwtable,
     }
     if (i >= nargs) goto no_kw;
     // now process keywords
-    uptrint_t n = vector_size(kwtable)/2;
+    n = vector_size(kwtable)/2;
     do {
         i++;
         if (i >= nargs)
@@ -1080,7 +1084,7 @@ static value_t apply_cl(uint32_t nargs)
  apply_cl_top:
     captured = 0;
     func = Stack[SP-nargs-1];
-    ip = cv_data((cvalue_t*)ptr(fn_bcode(func)));
+    ip = (uint8_t*)cv_data((cvalue_t*)ptr(fn_bcode(func)));
 #ifndef MEMDEBUG2
     assert(!ismanaged((uptrint_t)ip));
 #endif
@@ -2155,7 +2159,7 @@ static value_t fl_function(value_t *args, uint32_t nargs)
         type_error("function", "vector", args[1]);
     cvalue_t *arr = (cvalue_t*)ptr(args[0]);
     cv_pin(arr);
-    char *data = cv_data(arr);
+    char *data = (char*)cv_data(arr);
     int swap = 0;
     if ((uint8_t)data[4] >= N_OPCODES) {
         // read syntax, shifted 48 for compact text representation
@@ -2384,11 +2388,11 @@ static void lisp_init(size_t initial_heapsize)
 
     heapsize = initial_heapsize;
 
-    fromspace = LLT_ALLOC(heapsize);
+    fromspace = (unsigned char*)LLT_ALLOC(heapsize);
 #ifdef MEMDEBUG
     tospace   = NULL;
 #else
-    tospace   = LLT_ALLOC(heapsize);
+    tospace   = (unsigned char*)LLT_ALLOC(heapsize);
 #endif
     curheap = fromspace;
     lim = curheap+heapsize-sizeof(cons_t);
@@ -2396,7 +2400,7 @@ static void lisp_init(size_t initial_heapsize)
     htable_new(&printconses, 32);
     comparehash_init();
     N_STACK = 262144;
-    Stack = malloc(N_STACK*sizeof(value_t));
+    Stack = (value_t*)malloc(N_STACK*sizeof(value_t));
 
     FL_NIL = NIL = builtin(OP_THE_EMPTY_LIST);
     FL_T = builtin(OP_BOOL_CONST_T);

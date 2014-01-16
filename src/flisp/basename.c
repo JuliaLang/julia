@@ -32,6 +32,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <locale.h>
+#include <malloc.h>
 
 char *basename( char *path )
 {
@@ -52,7 +53,7 @@ char *basename( char *path )
          * in which to create a wide character reference copy of path
          */
 
-        wchar_t refcopy[1 + (len = mbstowcs( NULL, path, 0 ))];
+        wchar_t *refcopy = (wchar_t*)alloca((1 + (len = mbstowcs(NULL, path, 0)))*sizeof(wchar_t));
 
         /* create the wide character reference copy of path,
          * and step over the drive designator, if present ...
@@ -134,7 +135,7 @@ char *basename( char *path )
                  * returning it in our own buffer.
                  */
 
-                retfail = realloc( retfail, len = 1 + wcstombs( NULL, L"/", 0 ));
+                retfail = (char*)realloc( retfail, len = 1 + wcstombs( NULL, L"/", 0 ));
                 wcstombs( path = retfail, L"/", len );
             }
 
@@ -158,7 +159,7 @@ char *basename( char *path )
      * after a previous call.
      */
 
-    retfail = realloc( retfail, len = 1 + wcstombs( NULL, L".", 0 ));
+    retfail = (char*)realloc( retfail, len = 1 + wcstombs( NULL, L".", 0 ));
     wcstombs( retfail, L".", len );
 
     /* restore the caller's locale, clean up, and return the result */

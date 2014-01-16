@@ -463,11 +463,11 @@ static value_t read_string(void)
     value_t s;
     u_int32_t wc=0;
 
-    buf = malloc(sz);
+    buf = (char*)malloc(sz);
     while (1) {
         if (i >= sz-4) {  // -4: leaves room for longest utf8 sequence
             sz *= 2;
-            temp = realloc(buf, sz);
+            temp = (char*)realloc(buf, sz);
             if (temp == NULL) {
                 free(buf);
                 lerror(ParseError, "read: out of memory reading string");

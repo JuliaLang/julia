@@ -28,7 +28,7 @@ int main(int argc, char *argv[])
 
     fname_buf[0] = '\0';
     value_t str = symbol_value(symbol("*install-dir*"));
-    char *exedir = (str == UNBOUND ? NULL : cvalue_data(str));
+    char *exedir = (char*)(str == UNBOUND ? NULL : cvalue_data(str));
     if (exedir != NULL) {
         strcat(fname_buf, exedir);
         strcat(fname_buf, PATHSEPSTRING);
