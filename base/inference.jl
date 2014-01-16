@@ -1902,9 +1902,19 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
         end
     end
 
+    conflicting = x->(isa(x,Symbol)&&!is_global(sv,x)&&!contains_is(args,x))
+
+    spnames = { sp[i].name for i=1:2:length(sp) }
+
+    if any(conflicting, spnames)
+        # replace static parameters in source function first if there are name conflicts
+        expr = sym_replace(expr, spnames, {}, spvals, {})
+        spnames = spvals = {}
+    end
+
     # avoid capture if the function has free variables with the same name
     # as our vars
-    if occurs_more(expr, x->(isa(x,Symbol)&&!is_global(sv,x)&&!contains_is(args,x)), 0) > 0
+    if occurs_more(expr, conflicting, 0) > 0
         return NF
     end
 
@@ -1932,7 +1942,6 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     end
 
     # ok, substitute argument expressions for argument names in the body
-    spnames = { sp[i].name for i=1:2:length(sp) }
     if needcopy; expr = astcopy(expr); end
     mfrom = linfo.module; mto = (inference_stack::CallStack).mod
     if !is(mfrom, mto)

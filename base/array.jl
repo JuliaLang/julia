@@ -184,7 +184,7 @@ function fill!{T<:Union(Integer,FloatingPoint)}(a::Array{T}, x)
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Int32, Csize_t), a,0,length(a)*sizeof(T))
     else
         for i = 1:length(a)
-            a[i] = x
+            @inbounds a[i] = x
         end
     end
     return a
