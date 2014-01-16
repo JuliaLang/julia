@@ -598,7 +598,10 @@ function abstract_call_gf(f, fargs, argtypes, e)
     x::Array{Any,1} = applicable
     if isempty(x)
         # no methods match
-        return None
+        # TODO: it would be nice to return None here, but during bootstrap we
+        # often compile code that calls methods not defined yet, so it is much
+        # safer just to fall back on dynamic dispatch.
+        return Any
     end
     if isa(e,Expr)
         if length(x)==1
@@ -708,8 +711,11 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                 end
                 return Tuple
             end
+            if is(af,kwcall)
+                return Any
+            end
             # apply known function with unknown args => f(Any...)
-            return abstract_call(_ieval(af), (), Tuple, vtypes, sv, ())
+            return abstract_call(af, (), Tuple, vtypes, sv, ())
         end
     end
     if isgeneric(f)
