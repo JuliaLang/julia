@@ -17,7 +17,7 @@
 #include "julia.h"
 #include "builtin_proto.h"
 
-DLLEXPORT char *julia_home = NULL;
+char *julia_home = NULL;
 // current line number in a file
 int jl_lineno = 0;
 
@@ -164,7 +164,7 @@ int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops)
             }
         }
         size_t sz = (maxlabl+1+7)/8;
-        char *labls = alloca(sz); memset(labls,0,sz);
+        char *labls = (char*)alloca(sz); memset(labls,0,sz);
         for(i=0; i < jl_array_len(body); i++) {
             jl_value_t *stmt = jl_cellref(body,i);
             if (jl_is_labelnode(stmt)) {

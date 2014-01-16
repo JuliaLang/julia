@@ -45,7 +45,7 @@ value_t fl_string_count(value_t *args, u_int32_t nargs)
                 return fixnum(0);
         }
     }
-    char *str = cvalue_data(args[0]);
+    char *str = (char*)cvalue_data(args[0]);
     return size_wrap(u8_charnum(str+start, stop-start));
 }
 
@@ -78,7 +78,7 @@ value_t fl_string_reverse(value_t *args, u_int32_t nargs)
         type_error("string.reverse", "string", args[0]);
     size_t len = cv_len((cvalue_t*)ptr(args[0]));
     value_t ns = cvalue_string(len);
-    u8_reverse(cvalue_data(ns), cvalue_data(args[0]), len);
+    u8_reverse((char*)cvalue_data(ns), (char*)cvalue_data(args[0]), len);
     return ns;
 }
 
@@ -93,8 +93,8 @@ value_t fl_string_encode(value_t *args, u_int32_t nargs)
             uint32_t *ptr = (uint32_t*)cv_data(cv);
             size_t nbytes = u8_codingsize(ptr, nc);
             value_t str = cvalue_string(nbytes);
-            ptr = cv_data((cvalue_t*)ptr(args[0]));  // relocatable pointer
-            u8_toutf8(cvalue_data(str), nbytes, ptr, nc);
+            ptr = (uint32_t*)cv_data((cvalue_t*)ptr(args[0]));  // relocatable pointer
+            u8_toutf8((char*)cvalue_data(str), nbytes, ptr, nc);
             return str;
         }
     }
@@ -119,8 +119,8 @@ value_t fl_string_decode(value_t *args, u_int32_t nargs)
     size_t newsz = nc*sizeof(uint32_t);
     if (term) newsz += sizeof(uint32_t);
     value_t wcstr = cvalue(wcstringtype, newsz);
-    ptr = cv_data((cvalue_t*)ptr(args[0]));  // relocatable pointer
-    uint32_t *pwc = cvalue_data(wcstr);
+    ptr = (char*)cv_data((cvalue_t*)ptr(args[0]));  // relocatable pointer
+    uint32_t *pwc = (uint32_t*)cvalue_data(wcstr);
     u8_toucs(pwc, nc, ptr, nb);
     if (term) pwc[nc] = 0;
     return wcstr;
@@ -175,8 +175,8 @@ value_t fl_string_split(value_t *args, u_int32_t nargs)
         c = fl_cons(cvalue_string(ssz), FL_NIL);
 
         // we've done allocation; reload movable pointers
-        s = cv_data((cvalue_t*)ptr(args[0]));
-        delim = cv_data((cvalue_t*)ptr(args[1]));
+        s = (char*)cv_data((cvalue_t*)ptr(args[0]));
+        delim = (char*)cv_data((cvalue_t*)ptr(args[1]));
 
         if (ssz) memcpy(cv_data((cvalue_t*)ptr(car_(c))), &s[tokstart], ssz);
 
@@ -215,7 +215,7 @@ value_t fl_string_sub(value_t *args, u_int32_t nargs)
     if (i2 <= i1)
         return cvalue_string(0);
     value_t ns = cvalue_string(i2-i1);
-    s = cvalue_data(args[0]); // reload after alloc
+    s = (char*)cvalue_data(args[0]); // reload after alloc
     memcpy(cv_data((cvalue_t*)ptr(ns)), &s[i1], i2-i1);
     return ns;
 }
@@ -253,7 +253,7 @@ value_t fl_char_downcase(value_t *args, u_int32_t nargs)
 
 static value_t mem_find_byte(char *s, char c, size_t start, size_t len)
 {
-    char *p = memchr(s+start, c, len-start);
+    char *p = (char*)memchr(s+start, c, len-start);
     if (p == NULL)
         return FL_F;
     return size_wrap((size_t)(p - s));

@@ -80,8 +80,8 @@ static uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int thr
     char *ext;
     char path[PATHBUF];
     int i;
-    uv_lib_t *handle=malloc(sizeof(uv_lib_t));
-    handle->errmsg=NULL;
+    uv_lib_t *handle = (uv_lib_t*)malloc(sizeof(uv_lib_t));
+    handle->errmsg = NULL;
 
     if (modname == NULL) {
 #ifdef _OS_WINDOWS_

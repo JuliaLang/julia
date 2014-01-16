@@ -30,7 +30,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
     size_t maxprobe = max_probe(sz);
     void **tab = (void**)a->data;
 
-    hv = keyhash(key);
+    hv = keyhash((jl_value_t*)key);
  retry_bp:
     iter = 0;
     index = h2index(hv,sz);
@@ -43,7 +43,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
             return &tab[index+1];
         }
 
-        if (jl_egal(key, tab[index]))
+        if (jl_egal((jl_value_t*)key, (jl_value_t*)tab[index]))
             return &tab[index+1];
 
         index = (index+2) & (sz-1);
@@ -82,7 +82,7 @@ static void **jl_table_peek_bp(jl_array_t *a, void *key)
     size_t sz = hash_size(a);
     size_t maxprobe = max_probe(sz);
     void **tab = (void**)a->data;
-    uint_t hv = keyhash(key);
+    uint_t hv = keyhash((jl_value_t*)key);
     size_t index = h2index(hv, sz);
     sz *= 2;
     size_t orig = index;
@@ -91,7 +91,7 @@ static void **jl_table_peek_bp(jl_array_t *a, void *key)
     do {
         if (tab[index] == NULL)
             return NULL;
-        if (jl_egal(key, tab[index]))
+        if (jl_egal((jl_value_t*)key, (jl_value_t*)tab[index]))
             return &tab[index+1];
 
         index = (index+2) & (sz-1);
@@ -117,7 +117,7 @@ jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt)
     void **bp = jl_table_peek_bp(h, key);
     if (bp == NULL || *bp == NULL)
         return deflt;
-    return *bp;
+    return (jl_value_t*)*bp;
 }
 
 DLLEXPORT
@@ -126,7 +126,7 @@ jl_value_t *jl_eqtable_pop(jl_array_t *h, void *key, jl_value_t *deflt)
     void **bp = jl_table_peek_bp(h, key);
     if (bp == NULL || *bp == NULL)
         return deflt;
-    jl_value_t *val = *bp;
+    jl_value_t *val = (jl_value_t*)*bp;
     *bp = NULL;
     return val;
 }

@@ -323,7 +323,7 @@ static uptrint_t bounded_hash(value_t a, int bound, int *oob)
     case TAG_CVALUE:
         cv = (cvalue_t*)ptr(a);
         data = cv_data(cv);
-        return memhash(data, cv_len(cv));
+        return memhash((char*)data, cv_len(cv));
 
     case TAG_VECTOR:
         if (bound <= 0) {

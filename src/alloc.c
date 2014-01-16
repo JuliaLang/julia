@@ -472,7 +472,7 @@ jl_sym_t *jl_symbol_lookup(const char *str)
 
 DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len)
 {
-    char name[len+1];
+    char *name = (char*)alloca(len+1);
     memcpy(name, str, len);
     name[len] = '\0';
     return jl_symbol(name);
@@ -497,7 +497,7 @@ DLLEXPORT jl_sym_t *jl_gensym(void)
 DLLEXPORT jl_sym_t *jl_tagged_gensym(const char* str, int32_t len)
 {
     static char gs_name[14];
-    char name[sizeof(gs_name)+len+3];
+    char *name = (char*)alloca(sizeof(gs_name)+len+3);
     char *n;
     name[0] = '#'; name[1] = '#'; name[2+len] = '#';
     memcpy(name+2, str, len);
@@ -709,15 +709,15 @@ jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_value_t *body)
 
 // bits constructors ----------------------------------------------------------
 
-#define BOXN_FUNC(nb,nw)                                        \
-jl_value_t *jl_box##nb(jl_datatype_t *t, int##nb##_t x)         \
-{                                                               \
-    assert(jl_is_bitstype(t));                                  \
-    assert(jl_datatype_size(t) == sizeof(x));                   \
-    jl_value_t *v = alloc_##nw##w();                            \
-    v->type = (jl_value_t*)t;                                   \
-    *(int##nb##_t*)jl_data_ptr(v) = x;                          \
-    return v;                                                   \
+#define BOXN_FUNC(nb,nw)                                       \
+jl_value_t *jl_box##nb(jl_datatype_t *t, int##nb##_t x)        \
+{                                                              \
+    assert(jl_is_bitstype(t));                                 \
+    assert(jl_datatype_size(t) == sizeof(x));                  \
+    jl_value_t *v = (jl_value_t*)alloc_##nw##w();              \
+    v->type = (jl_value_t*)t;                                  \
+    *(int##nb##_t*)jl_data_ptr(v) = x;                         \
+    return v;                                                  \
 }
 BOXN_FUNC(8,  2)
 BOXN_FUNC(16, 2)
@@ -748,13 +748,13 @@ UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
 UNBOX_FUNC(voidpointer, void*)
 
-#define BOX_FUNC(typ,c_type,pfx,nw)             \
-jl_value_t *pfx##_##typ(c_type x)               \
-{                                               \
-    jl_value_t *v = alloc_##nw##w();            \
-    v->type = (jl_value_t*)jl_##typ##_type;     \
-    *(c_type*)jl_data_ptr(v) = x;               \
-    return v;                                   \
+#define BOX_FUNC(typ,c_type,pfx,nw)               \
+jl_value_t *pfx##_##typ(c_type x)                 \
+{                                                 \
+    jl_value_t *v = (jl_value_t*)alloc_##nw##w(); \
+    v->type = (jl_value_t*)jl_##typ##_type;       \
+    *(c_type*)jl_data_ptr(v) = x;                 \
+    return v;                                     \
 }
 BOX_FUNC(float32, float,  jl_box, 2)
 BOX_FUNC(voidpointer, void*,  jl_box, 2) //2 pointers == two words on all platforms
@@ -773,21 +773,21 @@ jl_value_t *jl_box_##typ(c_type x)                      \
     c_type idx = x+NBOX_C/2;                            \
     if ((u##c_type)idx < (u##c_type)NBOX_C)             \
         return boxed_##typ##_cache[idx];                \
-    jl_value_t *v = alloc_##nw##w();                    \
+    jl_value_t *v = (jl_value_t*)alloc_##nw##w();       \
     v->type = (jl_value_t*)jl_##typ##_type;             \
     *(c_type*)jl_data_ptr(v) = x;                       \
     return v;                                           \
 }
-#define UIBOX_FUNC(typ,c_type,nw)               \
-static jl_value_t *boxed_##typ##_cache[NBOX_C]; \
-jl_value_t *jl_box_##typ(c_type x)              \
-{                                               \
-    if (x < NBOX_C)                             \
-        return boxed_##typ##_cache[x];          \
-    jl_value_t *v = alloc_##nw##w();            \
-    v->type = (jl_value_t*)jl_##typ##_type;     \
-    *(c_type*)jl_data_ptr(v) = x;               \
-    return v;                                   \
+#define UIBOX_FUNC(typ,c_type,nw)                  \
+static jl_value_t *boxed_##typ##_cache[NBOX_C];    \
+jl_value_t *jl_box_##typ(c_type x)                 \
+{                                                  \
+    if (x < NBOX_C)                                \
+        return boxed_##typ##_cache[x];             \
+    jl_value_t *v = (jl_value_t*)alloc_##nw##w();  \
+    v->type = (jl_value_t*)jl_##typ##_type;        \
+    *(c_type*)jl_data_ptr(v) = x;                  \
+    return v;                                      \
 }
 SIBOX_FUNC(int16,  int16_t, 2)
 SIBOX_FUNC(int32,  int32_t, 2)

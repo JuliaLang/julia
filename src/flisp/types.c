@@ -10,7 +10,7 @@ fltype_t *get_type(value_t t)
     }
     void **bp = equalhash_bp(&TypeTable, (void*)t);
     if (*bp != HT_NOTFOUND)
-        return *bp;
+        return (fltype_t*)*bp;
 
     int align, isarray=(iscons(t) && car_(t) == arraysym && iscons(cdr_(t)));
     size_t sz;
@@ -29,7 +29,7 @@ fltype_t *get_type(value_t t)
         ((symbol_t*)ptr(t))->type = ft;
     }
     else {
-        ft->numtype = N_NUMTYPES;
+        ft->numtype = (numerictype_t)N_NUMTYPES;
     }
     ft->size = sz;
     ft->vtable = NULL;
@@ -69,7 +69,7 @@ fltype_t *define_opaque_type(value_t sym, size_t sz, cvtable_t *vtab,
     fltype_t *ft = (fltype_t*)malloc(sizeof(fltype_t));
     ft->type = sym;
     ft->size = sz;
-    ft->numtype = N_NUMTYPES;
+    ft->numtype = (numerictype_t)N_NUMTYPES;
     ft->vtable = vtab;
     ft->artype = NULL;
     ft->eltype = NULL;

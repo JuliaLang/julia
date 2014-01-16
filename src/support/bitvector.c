@@ -18,7 +18,7 @@ u_int32_t *bitvector_resize(u_int32_t *b, uint64_t oldsz, uint64_t newsz,
 {
     u_int32_t *p;
     size_t sz = ((newsz+31)>>5) * sizeof(uint32_t);
-    p = LLT_REALLOC(b, sz);
+    p = (u_int32_t*)LLT_REALLOC(b, sz);
     if (p == NULL) return NULL;
     if (initzero && newsz>oldsz) {
         size_t osz = ((oldsz+31)>>5) * sizeof(uint32_t);

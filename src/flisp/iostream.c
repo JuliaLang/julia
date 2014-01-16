@@ -265,7 +265,7 @@ value_t fl_ioread(value_t *args, u_int32_t nargs)
     }
     value_t cv = cvalue(ft, n);
     char *data;
-    if (iscvalue(cv)) data = cv_data((cvalue_t*)ptr(cv));
+    if (iscvalue(cv)) data = (char*)cv_data((cvalue_t*)ptr(cv));
     else data = cp_data((cprim_t*)ptr(cv));
     size_t got = ios_read(value2c(ios_t*,args[0]), data, n);
     if (got < n)
@@ -329,7 +329,7 @@ value_t fl_ioreaduntil(value_t *args, u_int32_t nargs)
     argcount("io.readuntil", nargs, 2);
     value_t str = cvalue_string(80);
     cvalue_t *cv = (cvalue_t*)ptr(str);
-    char *data = cv_data(cv);
+    char *data = (char*)cv_data(cv);
     ios_t dest;
     ios_mem(&dest, 0);
     ios_setbuf(&dest, data, 80, 0);

@@ -422,74 +422,6 @@ function getindex(B::BitArray, I::Real...)
     return B[index]
 end
 
-# note: we can gain some performance if the first dimension is a range;
-# TODO: extend to I:Union(Real,AbstractArray)... (i.e. not necessarily contiguous)
-let getindex_cache = nothing
-    global getindex
-    function getindex(B::BitArray, I0::Range1{Int}, I::Union(Real,Range1{Int})...)
-        # the < should become a != once
-        # the stricter indexing behaviour is enforced
-        if ndims(B) < 1 + length(I)
-            error("wrong number of dimensions")
-        end
-        checkbounds(B, I0, I...)
-        X = BitArray(index_shape(I0, I...))
-        nI = 1 + length(I)
-
-        I = map(x->(isa(x,Real) ? (to_index(x):to_index(x)) : to_index(x)), I[1:nI-1])
-
-        f0 = first(I0)
-        l0 = length(I0)
-
-        gap_lst = Int[last(r)-first(r)+1 for r in I]
-        stride_lst = Array(Int, nI)
-        stride = 1
-        ind = f0
-        for k = 1 : nI - 1
-            stride *= size(B, k)
-            stride_lst[k] = stride
-            ind += stride * (first(I[k]) - 1)
-            gap_lst[k] *= stride
-        end
-        # we only need nI-1 elements, the last one
-        # is dummy (used in bodies[k,2] below)
-        stride_lst[nI] = 0
-
-        if ndims(X) == 1
-            copy_chunks(X.chunks, 1, B.chunks, ind, l0)
-            return X
-        end
-
-        if is(getindex_cache,nothing)
-            getindex_cache = Dict()
-        end
-
-        gen_cartesian_map(getindex_cache,
-            ivars->begin
-                bodies = cell(nI, 2)
-                bodies[1] = quote
-                        copy_chunks(X.chunks, storeind, B.chunks, ind, l0)
-                        storeind += l0
-                        ind += stride_lst[loop_ind]
-                    end
-                for k = 2 : nI
-                    bodies[k, 1] = quote
-                        loop_ind -= 1
-                    end
-                    bodies[k, 2] = quote
-                        ind -= gap_lst[loop_ind]
-                        loop_ind += 1
-                        ind += stride_lst[loop_ind]
-                    end
-                end
-                return bodies
-            end,
-            I, (:B, :X, :storeind, :ind, :l0, :stride_lst, :gap_lst, :loop_ind),
-            B, X, 1, ind, l0, stride_lst, gap_lst, nI)
-        return X
-    end
-end
-
 # note: the Range1{Int} case is still handled by the version above
 #       (which is fine)
 function getindex{T<:Real}(B::BitArray, I::AbstractVector{T})
@@ -506,26 +438,6 @@ function getindex{T<:Real}(B::BitArray, I::AbstractVector{T})
         ind += 1
     end
     return X
-end
-
-let getindex_cache = nothing
-    global getindex
-    function getindex(B::BitArray, I::Union(Real,AbstractVector)...)
-        checkbounds(B, I...)
-        I = to_index(I)
-        X = BitArray(index_shape(I...))
-        Xc = X.chunks
-
-        if is(getindex_cache,nothing)
-            getindex_cache = Dict()
-        end
-        gen_cartesian_map(getindex_cache, ivars -> quote
-                #faster X[storeind] = B[$(ivars...)]
-                setindex_unchecked(Xc, B[$(ivars...)], ind)
-                ind += 1
-            end, I, (:B, :Xc, :ind), B, Xc, 1)
-        return X
-    end
 end
 
 # logical indexing
@@ -637,72 +549,6 @@ function setindex!(B::BitArray, x, i::Real, I::Real...)
     return B
 end
 
-let setindex_cache = nothing
-    global setindex_array2bitarray_ranges
-    function setindex_array2bitarray_ranges(B::BitArray, X::BitArray, I0::Range1{Int}, I::Range1{Int}...)
-        nI = 1 + length(I)
-        if ndims(B) != nI
-            error("wrong number of dimensions in assigment")
-        end
-        lI = length(I0)
-        for r in I
-            lI *= length(r)
-        end
-        if length(X) != lI
-            error("array assignment dimensions mismatch")
-        end
-        if lI == 0
-            return B
-        end
-        f0 = first(I0)
-        l0 = length(I0)
-        if nI == 1
-            copy_chunks(B.chunks, f0, X.chunks, 1, l0)
-            return B
-        end
-        if is(setindex_cache,nothing)
-            setindex_cache = Dict()
-        end
-        gap_lst = [last(r)-first(r)+1 for r in I]
-        stride_lst = Array(Int, nI)
-        stride = 1
-        ind = f0
-        @inbounds for k = 1 : nI - 1
-            stride *= size(B, k)
-            stride_lst[k] = stride
-            ind += stride * (first(I[k]) - 1)
-            gap_lst[k] *= stride
-        end
-        # we only need nI-1 elements, the last one
-        # is dummy (used in bodies[k,2] below)
-        stride_lst[nI] = 0
-
-        gen_cartesian_map(setindex_cache,
-            ivars->begin
-                bodies = cell(nI, 2)
-                bodies[1] = quote
-                        copy_chunks(B.chunks, ind, X.chunks, refind, l0)
-                        refind += l0
-                        ind += stride_lst[loop_ind]
-                    end
-                for k = 2 : nI
-                    bodies[k, 1] = quote
-                        loop_ind -= 1
-                    end
-                    bodies[k, 2] = quote
-                        ind -= gap_lst[loop_ind]
-                        loop_ind += 1
-                        ind += stride_lst[loop_ind]
-                    end
-                end
-                return bodies
-            end,
-            I, (:B, :X, :refind, :ind, :l0, :stride_lst, :gap_lst, :loop_ind),
-            B, X, 1, ind, l0, stride_lst, gap_lst, nI)
-        return B
-    end
-end
-
 # note: we can gain some performance if the first dimension is a range;
 #       currently this is mainly indended for the general cat case
 # TODO: extend to I:Indices... (i.e. not necessarily contiguous)
@@ -743,59 +589,12 @@ function setindex!(B::BitArray, X::AbstractArray, I0::Real, I::Real...)
     return setindex!(B, X[1], i0, I...)
 end
 
-let setindex_cache = nothing
-    global setindex!
-    function setindex!(B::BitArray, X::AbstractArray, I::Union(Real,AbstractArray)...)
-        I = to_index(I)
-        nel = 1
-        for idx in I
-            nel *= length(idx)
-        end
-        if length(X) != nel
-            error("argument dimensions must match")
-        end
-        if ndims(X) > 1
-            for i = 1:length(I)
-                if size(X,i) != length(I[i])
-                    error("argument dimensions must match")
-                end
-            end
-        end
-        if is(setindex_cache,nothing)
-            setindex_cache = Dict()
-        end
-        gen_cartesian_map(setindex_cache,
-            ivars->:(B[$(ivars...)] = X[refind]; refind += 1),
-            I,
-            (:B, :X, :refind),
-            B, X, 1)
-        return B
-    end
-end
-
 function setindex!{T<:Real}(B::BitArray, x, I::AbstractVector{T})
     x = convert(Bool, x)
     for i in I
         B[i] = x
     end
     return B
-end
-
-let setindex_cache = nothing
-    global setindex!
-    function setindex!(B::BitArray, x, I::Union(Real,AbstractArray)...)
-        x = convert(Bool, x)
-        checkbounds(B, I...)
-        I = to_index(I)
-        if is(setindex_cache,nothing)
-            setindex_cache = Dict()
-        end
-        gen_cartesian_map(setindex_cache, ivars->:(B[$(ivars...)] = x),
-            I,
-            (:B, :x),
-            B, x)
-        return B
-    end
 end
 
 # logical indexing
@@ -1896,7 +1695,6 @@ function findn(B::BitMatrix)
     return (I, J)
 end
 
-let findn_cache = nothing
 function findn_one(ivars)
     s = { quote I[$i][count] = $(ivars[i]) end for i = 1:length(ivars)}
     quote
@@ -1906,25 +1704,6 @@ function findn_one(ivars)
             count +=1
         end
     end
-end
-
-global findn
-function findn(B::BitArray)
-    ndimsB = ndims(B)
-    nnzB = nnz(B)
-    I = ntuple(ndimsB, x->Array(Int, nnzB))
-    if nnzB > 0
-        ranges = ntuple(ndims(B), d->(1:size(B,d)))
-
-        if is(findn_cache,nothing)
-            findn_cache = Dict()
-        end
-
-        gen_cartesian_map(findn_cache, findn_one, ranges,
-                          (:B, :I, :count), B, I, 1)
-    end
-    return I
-end
 end
 
 function findnz(B::BitMatrix)
@@ -2159,88 +1938,6 @@ function permute_one_dim(ivars, stridenames)
     end
     toReturn
 end
-
-let permutedims_cache = nothing, stridenames::Array{Any,1} = {}
-global permutedims!
-function permutedims!(P::BitArray,B::BitArray, perm)
-    dimsB = size(B)
-    ndimsB = length(dimsB)
-    (ndimsB == length(perm) && isperm(perm)) || error("no valid permutation of dimensions")
-	dimsP = size(P)
-    for i = 1:length(perm)
-        dimsP[i] == dimsB[perm[i]] || error("destination tensor of incorrect size")
-    end
-	
-    ranges = ntuple(ndimsB, i->(1:dimsP[i]))
-    while length(stridenames) < ndimsB
-        push!(stridenames, gensym())
-    end
-
-    #calculates all the strides
-    strides = [ prod(dimsB[1:(perm[dim]-1)])::Int for dim = 1:length(perm) ]
-
-    #Creates offset, because indexing starts at 1
-    offset = 0
-    for i in strides
-        offset+=i
-    end
-    offset = 1-offset
-
-    if isa(B,SubArray)
-        offset += (B.first_index-1)
-        B = B.parent
-    end
-
-    if is(permutedims_cache,nothing)
-        permutedims_cache = Dict()
-    end
-
-    gen_cartesian_map(permutedims_cache, iv->permute_one_dim(iv,stridenames), ranges,
-                      tuple(:B, :P, :perm, :offset, stridenames[1:ndimsB]...),
-                      B, P, perm, offset, strides...)
-
-    return P
-end
-function permutedims!(P::Array,B::StridedArray, perm)
-    dimsB = size(B)
-    ndimsB = length(dimsB)
-    (ndimsB == length(perm) && isperm(perm)) || error("no valid permutation of dimensions")
-	dimsP = size(P)
-    for i = 1:length(perm)
-        dimsP[i] == dimsB[perm[i]] || error("destination tensor of incorrect size")
-    end
-	
-    ranges = ntuple(ndimsB, i->(1:dimsP[i]))
-    while length(stridenames) < ndimsB
-        push!(stridenames, gensym())
-    end
-
-    #calculates all the strides
-    strides = [ stride(B, perm[dim]) for dim = 1:length(perm) ]
-
-    #Creates offset, because indexing starts at 1
-    offset = 0
-    for i in strides
-        offset+=i
-    end
-    offset = 1-offset
-
-    if isa(B,SubArray)
-        offset += (B.first_index-1)
-        B = B.parent
-    end
-
-    if is(permutedims_cache,nothing)
-        permutedims_cache = Dict()
-    end
-
-    gen_cartesian_map(permutedims_cache, iv->permute_one_dim(iv,stridenames), ranges,
-                      tuple(:B, :P, :perm, :offset, stridenames[1:ndimsB]...),
-                      B, P, perm, offset, strides...)
-
-    return P
-end
-end # let
 
 function permutedims(B::Union(BitArray,StridedArray), perm)
     dimsB = size(B)

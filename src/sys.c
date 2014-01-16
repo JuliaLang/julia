@@ -42,6 +42,10 @@ char *dirname(char *);
 #include <xmmintrin.h>
 #endif
 
+#if defined _MSC_VER
+#include <io.h>
+#endif
+
 DLLEXPORT uint32_t jl_getutf8(ios_t *s)
 {
     uint32_t wc=0;
@@ -98,8 +102,8 @@ DLLEXPORT int jl_readdir(const char* path, uv_fs_t* readdir_req)
     return uv_fs_readdir(uv_default_loop(), readdir_req, path, 0 /*flags*/, NULL);
 }
 
-DLLEXPORT char* jl_uv_fs_t_ptr(uv_fs_t* req) {return req->ptr; }
-DLLEXPORT char* jl_uv_fs_t_ptr_offset(uv_fs_t* req, int offset) {return (char *)req->ptr + offset; }
+DLLEXPORT char* jl_uv_fs_t_ptr(uv_fs_t* req) { return (char*)req->ptr; }
+DLLEXPORT char* jl_uv_fs_t_ptr_offset(uv_fs_t* req, int offset) { return (char*)req->ptr + offset; }
 DLLEXPORT int jl_uv_fs_result(uv_fs_t *f) { return f->result; }
 
 // --- stat ---
@@ -145,52 +149,52 @@ DLLEXPORT int32_t jl_fstat(int fd, char *statbuf)
 
 DLLEXPORT unsigned int jl_stat_dev(char *statbuf)
 {
-    return ((uv_stat_t*) statbuf)->st_dev;
+    return ((uv_stat_t*)statbuf)->st_dev;
 }
 
 DLLEXPORT unsigned int jl_stat_ino(char *statbuf)
 {
-    return ((uv_stat_t*) statbuf)->st_ino;
+    return ((uv_stat_t*)statbuf)->st_ino;
 }
 
 DLLEXPORT unsigned int jl_stat_mode(char *statbuf)
 {
-    return ((uv_stat_t*) statbuf)->st_mode;
+    return ((uv_stat_t*)statbuf)->st_mode;
 }
 
 DLLEXPORT unsigned int jl_stat_nlink(char *statbuf)
 {
-    return ((uv_stat_t*) statbuf)->st_nlink;
+    return ((uv_stat_t*)statbuf)->st_nlink;
 }
 
 DLLEXPORT unsigned int jl_stat_uid(char *statbuf)
 {
-    return ((uv_stat_t*) statbuf)->st_uid;
+    return ((uv_stat_t*)statbuf)->st_uid;
 }
 
 DLLEXPORT unsigned int jl_stat_gid(char *statbuf)
 {
-    return ((uv_stat_t*) statbuf)->st_gid;
+    return ((uv_stat_t*)statbuf)->st_gid;
 }
 
 DLLEXPORT unsigned int jl_stat_rdev(char *statbuf)
 {
-    return ((uv_stat_t*) statbuf)->st_rdev;
+    return ((uv_stat_t*)statbuf)->st_rdev;
 }
 
 DLLEXPORT uint64_t jl_stat_size(char *statbuf)
 {
-    return ((uv_stat_t*) statbuf)->st_size;
+    return ((uv_stat_t*)statbuf)->st_size;
 }
 
 DLLEXPORT uint64_t jl_stat_blksize(char *statbuf)
 {
-    return ((uv_stat_t*) statbuf)->st_blksize;
+    return ((uv_stat_t*)statbuf)->st_blksize;
 }
 
 DLLEXPORT uint64_t jl_stat_blocks(char *statbuf)
 {
-    return ((uv_stat_t*) statbuf)->st_blocks;
+    return ((uv_stat_t*)statbuf)->st_blocks;
 }
 
 /*
@@ -198,7 +202,7 @@ DLLEXPORT uint64_t jl_stat_blocks(char *statbuf)
 DLLEXPORT double jl_stat_atime(char *statbuf)
 {
   uv_stat_t *s;
-  s = (uv_stat_t*) statbuf;
+  s = (uv_stat_t*)statbuf;
   return (double)s->st_atim.tv_sec + (double)s->st_atim.tv_nsec * 1e-9;
 }
 */
@@ -206,14 +210,14 @@ DLLEXPORT double jl_stat_atime(char *statbuf)
 DLLEXPORT double jl_stat_mtime(char *statbuf)
 {
     uv_stat_t *s;
-    s = (uv_stat_t*) statbuf;
+    s = (uv_stat_t*)statbuf;
     return (double)s->st_mtim.tv_sec + (double)s->st_mtim.tv_nsec * 1e-9;
 }
 
 DLLEXPORT double jl_stat_ctime(char *statbuf)
 {
     uv_stat_t *s;
-    s = (uv_stat_t*) statbuf;
+    s = (uv_stat_t*)statbuf;
     return (double)s->st_ctim.tv_sec + (double)s->st_ctim.tv_nsec * 1e-9;
 }
 
@@ -269,7 +273,7 @@ jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
         a = jl_alloc_array_1d(jl_array_uint8_type, 80);
         ios_t dest;
         ios_mem(&dest, 0);
-        ios_setbuf(&dest, a->data, 80, 0);
+        ios_setbuf(&dest, (char*)a->data, 80, 0);
         size_t n = ios_copyuntil(&dest, s, delim);
         if (dest.buf != a->data) {
             a = jl_takebuf_array(&dest);

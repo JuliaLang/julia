@@ -433,7 +433,7 @@ void fl_print_child(ios_t *f, value_t v)
                 if (print_circle_prefix(f, v)) break;
                 function_t *fn = (function_t*)ptr(v);
                 outs("#fn(", f);
-                char *data = cvalue_data(fn->bcode);
+                char *data = (char*)cvalue_data(fn->bcode);
                 size_t i, sz = cvalue_len(fn->bcode);
                 for(i=0; i < sz; i++) data[i] += 48;
                 fl_print_child(f, fn->bcode);
@@ -595,9 +595,9 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
         if (!DFINITE(d)) {
             char *rep;
             if (d != d)
-                rep = sign_bit(d) ? "-nan.0" : "+nan.0";
+                rep = (char*)(sign_bit(d) ? "-nan.0" : "+nan.0");
             else
-                rep = sign_bit(d) ? "-inf.0" : "+inf.0";
+                rep = (char*)(sign_bit(d) ? "-inf.0" : "+inf.0");
             if (type == floatsym && !print_princ && !weak)
                 HPOS+=ios_printf(f, "#%s(%s)", symbol_name(type), rep);
             else
@@ -651,9 +651,9 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
             if (init == 0) {
                 init = 1;
 #if defined(RTLD_SELF)
-                jl_static_print = dlsym(RTLD_SELF, "jl_static_show");
+                jl_static_print = (size_t (*)(ios_t *, void *)) dlsym(RTLD_SELF, "jl_static_show");
 #elif defined(RTLD_DEFAULT)
-                jl_static_print = dlsym(RTLD_DEFAULT, "jl_static_show");
+                jl_static_print = (size_t (*)(ios_t *, void *)) dlsym(RTLD_DEFAULT, "jl_static_show");
 #endif
                 jl_sym = symbol("julia_value");
             }
@@ -689,7 +689,7 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
             }
             if (eltype == bytesym) {
                 if (print_princ) {
-                    ios_write(f, data, len);
+                    ios_write(f, (char*)data, len);
                     /*
                     char *nl = memrchr(data, '\n', len);
                     if (nl)

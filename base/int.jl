@@ -21,10 +21,6 @@ end
 -{T<:SmallUnsigned}(x::T, y::T) = uint(x) - uint(y)
 *{T<:SmallUnsigned}(x::T, y::T) = uint(x) * uint(y)
 
-div{T<:SmallSigned}(x::T, y::T) = div(int(x),int(y))
-rem{T<:SmallSigned}(x::T, y::T) = rem(int(x),int(y))
-mod{T<:SmallSigned}(x::T, y::T) = mod(int(x),int(y))
-
 div{T<:SmallUnsigned}(x::T, y::T) = div(uint(x),uint(y))
 rem{T<:SmallUnsigned}(x::T, y::T) = rem(uint(x),uint(y))
 mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
@@ -70,21 +66,18 @@ fld(x::Unsigned, y::Signed) = div(x,y)-(signbit(y)&(rem(x,y)!=0))
 mod(x::Signed, y::Unsigned) = rem(y+unsigned(rem(x,y)),y)
 mod(x::Unsigned, y::Signed) = rem(y+signed(rem(x,y)),y)
 
-div(x::Int,     y::Int)     = box(Int,sdiv_int(unbox(Int,x),unbox(Int,y)))
-div(x::Uint,    y::Uint)    = box(Uint,udiv_int(unbox(Uint,x),unbox(Uint,y)))
-div(x::Int64,   y::Int64)   = box(Int64,sdiv_int(unbox(Int64,x),unbox(Int64,y)))
-div(x::Uint64,  y::Uint64)  = box(Uint64,udiv_int(unbox(Uint64,x),unbox(Uint64,y)))
-
-rem(x::Int,     y::Int)     = box(Int,srem_int(unbox(Int,x),unbox(Int,y)))
-rem(x::Uint,    y::Uint)    = box(Uint,urem_int(unbox(Uint,x),unbox(Uint,y)))
-rem(x::Int64,   y::Int64)   = box(Int64,srem_int(unbox(Int64,x),unbox(Int64,y)))
-rem(x::Uint64,  y::Uint64)  = box(Uint64,urem_int(unbox(Uint64,x),unbox(Uint64,y)))
+# Don't promote integers for div/rem/mod since there no danger of overflow,
+# while there is a substantial performance penalty to 64-bit promotion.
+typealias Signed64 Union(Int8,Int16,Int32,Int64)
+typealias Unsigned64 Union(Uint8,Uint16,Uint32,Uint64)
+div{T<:Signed64}  (x::T, y::T) = box(T,sdiv_int(unbox(T,x),unbox(T,y)))
+div{T<:Unsigned64}(x::T, y::T) = box(T,udiv_int(unbox(T,x),unbox(T,y)))
+rem{T<:Signed64}  (x::T, y::T) = box(T,srem_int(unbox(T,x),unbox(T,y)))
+rem{T<:Unsigned64}(x::T, y::T) = box(T,urem_int(unbox(T,x),unbox(T,y)))
+mod{T<:Signed64}  (x::T, y::T) = box(T,smod_int(unbox(T,x),unbox(T,y)))
 
 fld{T<:Unsigned}(x::T, y::T) = div(x,y)
 fld{T<:Integer }(x::T, y::T) = div(x,y)-(signbit(x$y)&(rem(x,y)!=0))
-
-mod(x::Int,    y::Int)    = box(Int,smod_int(unbox(Int,x),unbox(Int,y)))
-mod(x::Int64,  y::Int64)  = box(Int64,smod_int(unbox(Int64,x),unbox(Int64,y)))
 
 ## integer bitwise operations ##
 
