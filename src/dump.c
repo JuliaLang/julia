@@ -989,7 +989,7 @@ extern void jl_get_system_hooks(void);
 extern void jl_get_uv_hooks(void);
 
 DLLEXPORT
-void jl_restore_system_image(char *fname, int build_mode)
+void jl_restore_system_image(char *fname)
 {
     ios_t f;
     char *fpath = fname;
@@ -997,6 +997,7 @@ void jl_restore_system_image(char *fname, int build_mode)
         JL_PRINTF(JL_STDERR, "System image file \"%s\" not found\n", fname);
         exit(1);
     }
+    int build_mode = (jl_compileropts.build_path != NULL);
 #ifdef _OS_WINDOWS_
     //XXX: the windows linker forces our system image to be
     //     linked against only one dll, I picked libjulia-release

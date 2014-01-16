@@ -155,3 +155,67 @@ public:
   virtual void registerEHFrames(StringRef SectionData) { return JMM->registerEHFrames(SectionData); }
 };
 #endif
+
+// Code coverage
+
+typedef std::map<std::string,std::vector<GlobalVariable*> > coveragedata_t;
+static coveragedata_t coverageData;
+
+static void coverageVisitLine(std::string filename, int line)
+{
+    if (filename == "" || filename == "none" || filename == "no file")
+        return;
+    coveragedata_t::iterator it = coverageData.find(filename);
+    if (it == coverageData.end()) {
+        coverageData[filename] = std::vector<GlobalVariable*>(0);
+    }
+    std::vector<GlobalVariable*> &vec = coverageData[filename];
+    if (vec.size() <= (size_t)line)
+        vec.resize(line+1, NULL);
+    if (vec[line] == NULL)
+        vec[line] = new GlobalVariable(*jl_Module, T_int64, false, GlobalVariable::ExternalLinkage,
+                                       ConstantInt::get(T_int64,0), "lcnt");
+    GlobalVariable *v = vec[line];
+    builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v),
+                                          ConstantInt::get(T_int64,1)),
+                        v);
+}
+
+extern "C" void jl_write_coverage_data(void)
+{
+    coveragedata_t::iterator it = coverageData.begin();
+    for (; it != coverageData.end(); it++) {
+        std::string filename = (*it).first;
+        std::string outfile = filename + ".cov";
+        std::vector<GlobalVariable*> &counts = (*it).second;
+        if (counts.size() > 1) {
+            std::ifstream inf(filename.c_str());
+            if (inf.is_open()) {
+                std::ofstream outf(outfile.c_str(), std::ofstream::trunc | std::ofstream::out);
+                char line[1024];
+                int l = 1;
+                while (!inf.eof()) {
+                    inf.getline(line, sizeof(line));
+                    int count = -1;
+                    if ((size_t)l < counts.size()) {
+                        GlobalVariable *gv = counts[l];
+                        if (gv) {
+                            int *p = (int*)jl_ExecutionEngine->getPointerToGlobal(gv);
+                            count = *p;
+                        }
+                    }
+                    outf.width(9);
+                    if (count == -1)
+                        outf<<'-';
+                    else
+                        outf<<count;
+                    outf.width(0);
+                    outf<<" "<<line<<std::endl;
+                    l++;
+                }
+                outf.close();
+                inf.close();
+            }
+        }
+    }
+}
