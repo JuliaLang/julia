@@ -265,7 +265,7 @@ function _gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print sign
     in('+',flags) ? push!(blk.args, :(write(out, neg?'-':'+'))) :
     in(' ',flags) ? push!(blk.args, :(write(out, neg?'-':' '))) :
-                          push!(blk.args, :(neg && write(out, '-')))
+                    push!(blk.args, :(neg && write(out, '-')))
     # print prefix
     for ch in prefix
         push!(blk.args, :(write(out, $ch)))
@@ -328,7 +328,7 @@ function _gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print sign
     in('+',flags) ? push!(blk.args, :(write(out, neg?'-':'+'))) :
     in(' ',flags) ? push!(blk.args, :(write(out, neg?'-':' '))) :
-                          push!(blk.args, :(neg && write(out, '-')))
+                    push!(blk.args, :(neg && write(out, '-')))
     # print zero padding
     if padding != nothing && !in('-',flags) && in('0',flags)
         push!(blk.args, _pad(width-1, padding, '0'))
