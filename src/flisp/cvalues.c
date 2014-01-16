@@ -502,7 +502,7 @@ void to_sized_ptr(value_t v, char *fname, char **pdata, size_t *psz)
             return;
         }
         else if (cv_isPOD(pcv)) {
-            *pdata = (char*) cv_data(pcv);
+            *pdata = (char*)cv_data(pcv);
             *psz = cv_len(pcv);
             return;
         }
@@ -666,7 +666,7 @@ static numerictype_t sym_to_numtype(value_t type)
         return T_FLOAT;
     else if (type == doublesym)
         return T_DOUBLE;
-    return (numerictype_t) N_NUMTYPES;
+    return (numerictype_t)N_NUMTYPES;
 }
 
 // (new type . args)
@@ -708,8 +708,8 @@ value_t cvalue_compare(value_t a, value_t b)
 {
     cvalue_t *ca = (cvalue_t*)ptr(a);
     cvalue_t *cb = (cvalue_t*)ptr(b);
-    char *adata = (char*) cv_data(ca);
-    char *bdata = (char*) cv_data(cb);
+    char *adata = (char*)cv_data(ca);
+    char *bdata = (char*)cv_data(cb);
     size_t asz = cv_len(ca);
     size_t bsz = cv_len(cb);
     size_t minsz = asz < bsz ? asz : bsz;
@@ -728,7 +728,7 @@ static void check_addr_args(char *fname, value_t arr, value_t ind,
 {
     size_t numel;
     cvalue_t *cv = (cvalue_t*)ptr(arr);
-    *data = (char*) cv_data(cv);
+    *data = (char*)cv_data(cv);
     numel = cv_len(cv)/(cv_class(cv)->elsz);
     *index = tosize(ind, fname);
     if (*index >= numel)
@@ -753,7 +753,7 @@ static value_t cvalue_array_aref(value_t *args)
             return fixnum(((int16_t*)data)[index]);
         return fixnum(((uint16_t*)data)[index]);
     }
-    char *dest = (char*) cptr(el);
+    char *dest = (char*)cptr(el);
     size_t sz = eltype->size;
     if (sz == 1)
         *dest = data[index];
@@ -795,7 +795,7 @@ value_t cbuiltin(char *name, builtin_t f)
     cv->type = builtintype;
     cv->data = &cv->_space[0];
     cv->len = sizeof(value_t);
-    *(void**)cv->data = (void*) f;
+    *(void**)cv->data = (void*)f;
 
     value_t sym = symbol(name);
     ((symbol_t*)ptr(sym))->dlcache = cv;
@@ -1423,7 +1423,7 @@ static value_t fl_ash(value_t *args, u_int32_t nargs)
             if (ta == T_UINT64)
                 return return_from_uint64((*(uint64_t*)aptr)<<n);
             else if (ta < T_FLOAT) {
-                int64_t i64 = conv_to_int64(aptr, (numerictype_t) ta);
+                int64_t i64 = conv_to_int64(aptr, (numerictype_t)ta);
                 return return_from_int64(i64<<n);
             }
         }

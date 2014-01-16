@@ -73,7 +73,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
         size_t doffs = tsz;
         tsz += tot;
         tsz = (tsz+15)&-16; // align whole object 16
-        a = (jl_array_t*) allocobj(tsz);
+        a = (jl_array_t*)allocobj(tsz);
         a->type = atype;
         a->how = 0;
         data = (char*)a + doffs;
@@ -83,7 +83,7 @@ static jl_array_t *_new_array_(jl_value_t *atype, uint32_t ndims, size_t *dims,
     }
     else {
         tsz = (tsz+15)&-16; // align whole object size 16
-        a = (jl_array_t*) allocobj(tsz);
+        a = (jl_array_t*)allocobj(tsz);
         JL_GC_PUSH1(&a);
         a->type = atype;
         // temporarily initialize to make gc-safe
@@ -143,7 +143,7 @@ jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_tuple_t *di
     size_t ndims = jl_tuple_len(dims);
 
     int ndimwords = jl_array_ndimwords(ndims);
-    a = (jl_array_t*) allocobj((sizeof(jl_array_t) + sizeof(void*) + ndimwords*sizeof(size_t) + 15)&-16);
+    a = (jl_array_t*)allocobj((sizeof(jl_array_t) + sizeof(void*) + ndimwords*sizeof(size_t) + 15)&-16);
     a->type = atype;
     a->ndims = ndims;
     a->offset = 0;
@@ -208,7 +208,7 @@ jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data, size_t nel,
     else
         elsz = sizeof(void*);
 
-    a = (jl_array_t*) allocobj((sizeof(jl_array_t)+jl_array_ndimwords(1)*sizeof(size_t)+15)&-16);
+    a = (jl_array_t*)allocobj((sizeof(jl_array_t)+jl_array_ndimwords(1)*sizeof(size_t)+15)&-16);
     a->type = atype;
     a->data = data;
 #ifdef STORE_ARRAY_LEN
@@ -256,7 +256,7 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_tuple_t *dims,
         elsz = sizeof(void*);
 
     int ndimwords = jl_array_ndimwords(ndims);
-    a = (jl_array_t*) allocobj((sizeof(jl_array_t) + ndimwords*sizeof(size_t)+15)&-16);
+    a = (jl_array_t*)allocobj((sizeof(jl_array_t) + ndimwords*sizeof(size_t)+15)&-16);
     a->type = atype;
     a->data = data;
 #ifdef STORE_ARRAY_LEN
@@ -292,7 +292,7 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_tuple_t *dims,
 jl_array_t *jl_new_array(jl_value_t *atype, jl_tuple_t *dims)
 {
     size_t ndims = jl_tuple_len(dims);
-    size_t *adims = (size_t*) alloca(ndims*sizeof(size_t));
+    size_t *adims = (size_t*)alloca(ndims*sizeof(size_t));
     size_t i;
     for(i=0; i < ndims; i++)
         adims[i] = jl_unbox_long(jl_tupleref(dims,i));
@@ -326,9 +326,9 @@ jl_array_t *jl_pchar_to_array(const char *str, size_t len)
 jl_value_t *jl_array_to_string(jl_array_t *a)
 {
     // TODO: check type of array?
-    jl_datatype_t* string_type = u8_isvalid( (char*) a->data, jl_array_len(a)) == 1 ? // ASCII
+    jl_datatype_t* string_type = u8_isvalid((char*)a->data, jl_array_len(a)) == 1 ? // ASCII
         jl_ascii_string_type : jl_utf8_string_type;
-    jl_value_t *s = (jl_value_t*) alloc_2w();
+    jl_value_t *s = (jl_value_t*)alloc_2w();
     s->type = (jl_value_t*)string_type;
     jl_set_nth_field(s, 0, (jl_value_t*)a);
     return s;
@@ -523,21 +523,21 @@ static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, siz
     char *newdata;
     if (a->how == 2) {
         // already malloc'd - use realloc
-        newdata = (char*) jl_gc_managed_realloc((char*)a->data - oldoffsnb, nbytes,
-                                        oldnbytes+oldoffsnb, a->isaligned);
+        newdata = (char*)jl_gc_managed_realloc((char*)a->data - oldoffsnb, nbytes,
+                                               oldnbytes+oldoffsnb, a->isaligned);
         if (offs != a->offset) {
             memmove(&newdata[offsnb], &newdata[oldoffsnb], oldnbytes);
         }
     }
     else {
         if (nbytes >= MALLOC_THRESH) {
-            newdata = (char*) jl_gc_managed_malloc(nbytes);
+            newdata = (char*)jl_gc_managed_malloc(nbytes);
             jl_gc_track_malloced_array(a);
             a->how = 2;
             a->isaligned = 1;
         }
         else {
-            newdata = (char*) allocb(nbytes);
+            newdata = (char*)allocb(nbytes);
             a->how = 1;
         }
         memcpy(newdata + offsnb, (char*)a->data, oldnbytes);

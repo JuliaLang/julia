@@ -159,12 +159,12 @@ static void save_stack(jl_task_t *t)
     size_t nb = (char*)t->stackbase - (char*)&_x;
     char *buf;
     if (t->stkbuf == NULL || t->bufsz < nb) {
-        buf = (char*) allocb(nb);
+        buf = (char*)allocb(nb);
         t->stkbuf = buf;
         t->bufsz = nb;
     }
     else {
-        buf = (char*) t->stkbuf;
+        buf = (char*)t->stkbuf;
     }
     t->ssize = nb;
     memcpy(buf, (char*)&_x, nb);
@@ -180,7 +180,7 @@ void __attribute__((noinline)) restore_stack(jl_task_t *t, jl_jmp_buf *where, ch
     if (!p) {
         p = _x;
         if ((char*)&_x > _x) {
-            p = (char*) alloca((char*)&_x - _x);
+            p = (char*)alloca((char*)&_x - _x);
     	}
         restore_stack(t, where, p);
     }
@@ -506,7 +506,7 @@ static int frame_info_from_ip(const char **func_name, int *line_num, const char 
         }
 #else
         Dl_info dlinfo;
-        if (dladdr((void*) ip, &dlinfo) != 0) {
+        if (dladdr((void*)ip, &dlinfo) != 0) {
             *file_name = (dlinfo.dli_fname != NULL) ? dlinfo.dli_fname : name_unknown;
             if (dlinfo.dli_sname != NULL) {
                 *func_name = dlinfo.dli_sname;
@@ -647,7 +647,7 @@ DLLEXPORT jl_value_t *jl_backtrace_from_here(void)
                                             jl_tuple2(jl_voidpointer_type,
                                                       jl_box_long(1)));
     jl_array_t *bt = jl_alloc_array_1d(array_ptr_void_type, MAX_BT_SIZE);
-    size_t n = rec_backtrace((ptrint_t*) jl_array_data(bt), MAX_BT_SIZE);
+    size_t n = rec_backtrace((ptrint_t*)jl_array_data(bt), MAX_BT_SIZE);
     if (n < MAX_BT_SIZE)
         jl_array_del_end(bt, MAX_BT_SIZE-n);
     return (jl_value_t*)bt;

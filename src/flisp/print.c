@@ -433,7 +433,7 @@ void fl_print_child(ios_t *f, value_t v)
                 if (print_circle_prefix(f, v)) break;
                 function_t *fn = (function_t*)ptr(v);
                 outs("#fn(", f);
-                char *data = (char*) cvalue_data(fn->bcode);
+                char *data = (char*)cvalue_data(fn->bcode);
                 size_t i, sz = cvalue_len(fn->bcode);
                 for(i=0; i < sz; i++) data[i] += 48;
                 fl_print_child(f, fn->bcode);
@@ -689,7 +689,7 @@ static void cvalue_printdata(ios_t *f, void *data, size_t len, value_t type,
             }
             if (eltype == bytesym) {
                 if (print_princ) {
-                    ios_write(f, (char*) data, len);
+                    ios_write(f, (char*)data, len);
                     /*
                     char *nl = memrchr(data, '\n', len);
                     if (nl)

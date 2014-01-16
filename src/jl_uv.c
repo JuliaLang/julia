@@ -149,7 +149,7 @@ DLLEXPORT void jl_uv_shutdownCallback(uv_shutdown_t* req, int status)
      * request.
      */
     if (status != UV__ECANCELED && !uv_is_closing((uv_handle_t*)req->handle)) {
-        uv_close((uv_handle_t*) req->handle, &jl_uv_closeHandle);
+        uv_close((uv_handle_t*)req->handle, &jl_uv_closeHandle);
     }
     free(req);
 }
@@ -173,7 +173,7 @@ DLLEXPORT uv_buf_t jl_uv_alloc_buf(uv_handle_t *handle, size_t suggested_size)
     if (!jl_is_tuple(ret) || !jl_is_pointer(jl_t0(ret)) || !jl_is_int32(jl_t1(ret))) {
         jl_error("jl_alloc_buf: Julia function returned invalid value for buffer allocation callback");
     }
-    buf.base = (char*) jl_unbox_voidpointer(jl_t0(ret));
+    buf.base = (char*)jl_unbox_voidpointer(jl_t0(ret));
     buf.len = jl_unbox_int32(jl_t1(ret));
     return buf;
 }
@@ -267,7 +267,8 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
     if (handle->type==UV_TTY)
         uv_tty_set_mode((uv_tty_t*)handle,0);
 
-    if ( (handle->type == UV_NAMED_PIPE || handle->type == UV_TCP) && uv_is_writable( (uv_stream_t *) handle)) { 
+    if ((handle->type == UV_NAMED_PIPE || handle->type == UV_TCP) &&
+        uv_is_writable((uv_stream_t*)handle)) {
         // Make sure that the stream has not already been marked closed in Julia.
         // A double shutdown would cause the process to hang on exit.
         JULIA_CB(isopen, handle->data, 0);
@@ -278,7 +279,7 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
             return;
         }
 
-        uv_shutdown_t *req = (uv_shutdown_t*) malloc(sizeof(uv_shutdown_t));
+        uv_shutdown_t *req = (uv_shutdown_t*)malloc(sizeof(uv_shutdown_t));
         req->data = 0;
         /*
          * We are explicity ignoring the error here for the following reason:
@@ -520,8 +521,8 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
                 return err ? 0 : 1;
             }
             else {
-                uv_write_t *uvw = (uv_write_t*) malloc(sizeof(uv_write_t)+1);
-                err = jl_write_copy(stream,(char*)&c,1,uvw, (void*) &jl_uv_writecb);
+                uv_write_t *uvw = (uv_write_t*)malloc(sizeof(uv_write_t)+1);
+                err = jl_write_copy(stream,(char*)&c,1,uvw, (void*)&jl_uv_writecb);
                 if (err < 0) {
                     free(uvw);
                     return 0;
@@ -589,8 +590,8 @@ DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
             return err ? 0 : n;
         }
         else {
-            uv_write_t *uvw = (uv_write_t*) malloc(sizeof(uv_write_t)+n);
-            err = jl_write_copy(stream,str,n,uvw, (void*) &jl_uv_writecb);
+            uv_write_t *uvw = (uv_write_t*)malloc(sizeof(uv_write_t)+n);
+            err = jl_write_copy(stream,str,n,uvw, (void*)&jl_uv_writecb);
             if (err < 0) {
                 free(uvw);
                 return 0;
@@ -710,7 +711,7 @@ DLLEXPORT struct sockaddr_in *jl_uv_interface_address_sockaddr(uv_interface_addr
 
 DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, const char *host, const char *service, jl_function_t *cb)
 {
-    uv_getaddrinfo_t *req = (uv_getaddrinfo_t*) malloc(sizeof(uv_getaddrinfo_t));
+    uv_getaddrinfo_t *req = (uv_getaddrinfo_t*)malloc(sizeof(uv_getaddrinfo_t));
     struct addrinfo hints;
 
     memset (&hints, 0, sizeof (hints));
@@ -776,7 +777,7 @@ DLLEXPORT void jl_sockaddr_set_port(struct sockaddr_storage *addr,uint16_t port)
 DLLEXPORT int jl_tcp4_connect(uv_tcp_t *handle,uint32_t host, uint16_t port)
 {
     struct sockaddr_in addr;
-    uv_connect_t *req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
+    uv_connect_t *req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
     req->data = 0;
     memset(&addr, 0, sizeof(struct sockaddr_in));
     addr.sin_family = AF_INET;
@@ -788,7 +789,7 @@ DLLEXPORT int jl_tcp4_connect(uv_tcp_t *handle,uint32_t host, uint16_t port)
 DLLEXPORT int jl_tcp6_connect(uv_tcp_t *handle, void *host, uint16_t port)
 {
     struct sockaddr_in6 addr;
-    uv_connect_t *req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
+    uv_connect_t *req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
     req->data = 0;
     memset(&addr, 0, sizeof(struct sockaddr_in6));
     addr.sin6_family = AF_INET6;
@@ -799,7 +800,7 @@ DLLEXPORT int jl_tcp6_connect(uv_tcp_t *handle, void *host, uint16_t port)
 
 DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr_storage *addr)
 {
-    uv_connect_t *req = (uv_connect_t*) malloc(sizeof(uv_connect_t));
+    uv_connect_t *req = (uv_connect_t*)malloc(sizeof(uv_connect_t));
     req->data = 0;
     if (addr->ss_family==AF_INET) {
         return uv_tcp_connect(req,handle,*((struct sockaddr_in*)addr),&jl_uv_connectcb);
@@ -818,7 +819,7 @@ DLLEXPORT char *jl_ios_buf_base(ios_t *ios)
 
 DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
 {
-    uv_lib_t *lib = (uv_lib_t*) malloc(sizeof(uv_lib_t));
+    uv_lib_t *lib = (uv_lib_t*)malloc(sizeof(uv_lib_t));
     #ifdef _OS_WINDOWS_
     lib->handle=(HMODULE)handle;
     #else
@@ -872,7 +873,7 @@ DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle)
 #ifndef _OS_WINDOWS_
 #if defined(__APPLE__)
 int uv___stream_fd(uv_stream_t* handle);
-#define uv__stream_fd(handle) (uv___stream_fd((uv_stream_t*) (handle)))
+#define uv__stream_fd(handle) (uv___stream_fd((uv_stream_t*)(handle)))
 #else
 #define uv__stream_fd(handle) ((handle)->io_watcher.fd)
 #endif /* defined(__APPLE__) */

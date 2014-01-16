@@ -53,7 +53,7 @@ char *dirname( char *path )
          * in which to create a wide character reference copy of path
          */
 
-        wchar_t* refcopy = (wchar_t*) alloca((1 + (len = mbstowcs( NULL, path, 0 )))*sizeof(wchar_t));
+        wchar_t* refcopy = (wchar_t*)alloca((1 + (len = mbstowcs(NULL, path, 0)))*sizeof(wchar_t));
 
         /* create the wide character reference copy of path */
 
@@ -210,7 +210,7 @@ char *dirname( char *path )
                  */
 
                 *refname = L'\0';
-                retfail = (char*) realloc( retfail, len = 1 + wcstombs( NULL, refcopy, 0 ));
+                retfail = (char*)realloc( retfail, len = 1 + wcstombs( NULL, refcopy, 0 ));
                 wcstombs( path = retfail, refcopy, len );
             }
 
@@ -227,7 +227,7 @@ char *dirname( char *path )
      * in case the caller trashed it after a previous call.
      */
 
-    retfail = (char*) realloc( retfail, len = 1 + wcstombs( NULL, L".", 0 ));
+    retfail = (char*)realloc( retfail, len = 1 + wcstombs( NULL, L".", 0 ));
     wcstombs( retfail, L".", len );
 
     /* restore caller's locale, clean up, and return the default dirname */

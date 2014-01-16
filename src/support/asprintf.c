@@ -51,7 +51,7 @@ vasprintf(char **str, const char *fmt, va_list ap)
         size_t len;
 
         VA_COPY(ap2, ap);
-        if ((string = (char*) malloc(INIT_SZ)) == NULL)
+        if ((string = (char*)malloc(INIT_SZ)) == NULL)
                 goto fail;
 
         ret = vsnprintf(string, INIT_SZ, fmt, ap2);
@@ -61,7 +61,7 @@ vasprintf(char **str, const char *fmt, va_list ap)
                 goto fail;
         } else {        /* bigger than initial, realloc allowing for nul */
                 len = (size_t)ret + 1;
-                if ((newstr = (char*) realloc(string, len)) == NULL) {
+                if ((newstr = (char*)realloc(string, len)) == NULL) {
                         free(string);
                         goto fail;
                 } else {
