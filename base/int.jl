@@ -21,10 +21,6 @@ end
 -{T<:SmallUnsigned}(x::T, y::T) = uint(x) - uint(y)
 *{T<:SmallUnsigned}(x::T, y::T) = uint(x) * uint(y)
 
-div{T<:SmallUnsigned}(x::T, y::T) = div(uint(x),uint(y))
-rem{T<:SmallUnsigned}(x::T, y::T) = rem(uint(x),uint(y))
-mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
-
 -(x::Int)     = box(Int,neg_int(unbox(Int,x)))
 -(x::Uint)    = box(Uint,neg_int(unbox(Uint,x)))
 -(x::Int64)   = box(Int64,neg_int(unbox(Int64,x)))
@@ -75,6 +71,8 @@ div{T<:Unsigned64}(x::T, y::T) = box(T,udiv_int(unbox(T,x),unbox(T,y)))
 rem{T<:Signed64}  (x::T, y::T) = box(T,srem_int(unbox(T,x),unbox(T,y)))
 rem{T<:Unsigned64}(x::T, y::T) = box(T,urem_int(unbox(T,x),unbox(T,y)))
 mod{T<:Signed64}  (x::T, y::T) = box(T,smod_int(unbox(T,x),unbox(T,y)))
+
+mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 
 fld{T<:Unsigned}(x::T, y::T) = div(x,y)
 fld{T<:Integer }(x::T, y::T) = div(x,y)-(signbit(x$y)&(rem(x,y)!=0))
