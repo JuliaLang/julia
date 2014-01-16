@@ -434,6 +434,17 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
 
 extern "C" jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
 
+static void jl_setup_module(Module *m, bool add)
+{
+    m->addModuleFlag(llvm::Module::Warning, "Dwarf Version",4);
+#ifdef LLVM34
+    m->addModuleFlag(llvm::Module::Error, "Debug Info Version",
+        llvm::DEBUG_METADATA_VERSION);
+#endif
+    if (add)
+        jl_ExecutionEngine->addModule(m);
+}
+
 extern "C" void jl_generate_fptr(jl_function_t *f)
 {
     // objective: assign li->fptr
@@ -445,7 +456,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         if (imaging_mode) {
             // Copy the function out of the shadow module
             Module *m = new Module("julia", jl_LLVMContext);
-            jl_ExecutionEngine->addModule(m);
+            jl_setup_module(m,true);
             FunctionMover mover(m,shadow_module);
             li->functionObject = MapValue((Function*)li->functionObject,mover.VMap,RF_None,NULL,&mover);
             if (li->cFunctionObject != NULL)
@@ -2998,7 +3009,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     #ifdef USE_MCJIT
     if(!imaging_mode) {
         m = new Module(funcName.str(), jl_LLVMContext);
-        jl_ExecutionEngine->addModule(m);
+        jl_setup_module(m,true);
     } 
     else {
         m = shadow_module;
@@ -3901,7 +3912,7 @@ static void init_julia_llvm_env(Module *m)
     jlnewbits_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, newbits_args, false),
                          Function::ExternalLinkage,
-                         "jl_new_bits", jl_Module);
+                         "jl_new_bits", m);
     jl_ExecutionEngine->addGlobalMapping(jlnewbits_func, (void*)&jl_new_bits);
 
     std::vector<Type *> getnthfld_args(0);
@@ -3910,7 +3921,7 @@ static void init_julia_llvm_env(Module *m)
     jlgetnthfieldchecked_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, getnthfld_args, false),
                          Function::ExternalLinkage,
-                         "jl_get_nth_field_checked", jl_Module);
+                         "jl_get_nth_field_checked", m);
     jl_ExecutionEngine->addGlobalMapping(jlgetnthfieldchecked_func, (void*)*jl_get_nth_field_checked);
 
     // set up optimization passes
@@ -3982,14 +3993,17 @@ extern "C" void jl_init_codegen(void)
 
 #ifdef USE_MCJIT
     m = shadow_module = new Module("shadow", jl_LLVMContext);
+    jl_setup_module(shadow_module,false);
     if (imaging_mode) {
         engine_module = new Module("engine_module", jl_LLVMContext);
+        jl_setup_module(engine_module,false);
     }
     else {
         engine_module = m;
     }
 #else
     engine_module = m = jl_Module = new Module("julia", jl_LLVMContext);
+    jl_setup_module(engine_module,false);
 #endif
 
 
