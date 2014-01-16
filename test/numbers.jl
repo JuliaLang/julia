@@ -1673,6 +1673,20 @@ end
 @test_throws powermod(1,-2,1)
 @test_throws powermod(big(1),-2,1)
 
+# other divide-by-zero errors
+@test_throws div(1,0)
+@test_throws rem(1,0)
+@test_throws mod(1,0)
+@test_throws div(-1,0)
+@test_throws rem(-1,0)
+@test_throws mod(-1,0)
+@test_throws div(uint(1),uint(0))
+@test_throws rem(uint(1),uint(0))
+@test_throws mod(uint(1),uint(0))
+@test_throws div(typemin(Int),-1)
+@test rem(typemin(Int),-1) == 0
+@test mod(typemin(Int),-1) == 0
+
 # prevpow2/nextpow2:
 @test nextpow2(0) == prevpow2(0) == 0
 for i = -2:2
