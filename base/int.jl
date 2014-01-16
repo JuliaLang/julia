@@ -1,12 +1,13 @@
 ## type aliases ##
 
 if Int === Int32
-typealias SmallSigned Union(Int8,Int16)
-typealias SmallUnsigned Union(Uint8,Uint16)
+    typealias SmallSigned Union(Int8,Int16)
+    typealias SmallUnsigned Union(Uint8,Uint16)
 else
-typealias SmallSigned Union(Int8,Int16,Int32)
-typealias SmallUnsigned Union(Uint8,Uint16,Uint32)
+    typealias SmallSigned Union(Int8,Int16,Int32)
+    typealias SmallUnsigned Union(Uint8,Uint16,Uint32)
 end
+typealias BitsInteger Union(Bool,Char,Signed,Unsigned)
 
 ## integer arithmetic ##
 
@@ -29,31 +30,10 @@ div{T<:SmallUnsigned}(x::T, y::T) = div(uint(x),uint(y))
 rem{T<:SmallUnsigned}(x::T, y::T) = rem(uint(x),uint(y))
 mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 
--(x::Int)     = box(Int,neg_int(unbox(Int,x)))
--(x::Uint)    = box(Uint,neg_int(unbox(Uint,x)))
--(x::Int64)   = box(Int64,neg_int(unbox(Int64,x)))
--(x::Uint64)  = box(Uint64,neg_int(unbox(Uint64,x)))
--(x::Int128)  = box(Int128,neg_int(unbox(Int128,x)))
--(x::Uint128) = box(Uint128,neg_int(unbox(Uint128,x)))
-
-+(x::Int,     y::Int)     = box(Int,add_int(unbox(Int,x),unbox(Int,y)))
-+(x::Uint,    y::Uint)    = box(Uint,add_int(unbox(Uint,x),unbox(Uint,y)))
-+(x::Int64,   y::Int64)   = box(Int64,add_int(unbox(Int64,x),unbox(Int64,y)))
-+(x::Uint64,  y::Uint64)  = box(Uint64,add_int(unbox(Uint64,x),unbox(Uint64,y)))
-+(x::Int128,  y::Int128)  = box(Int128,add_int(unbox(Int128,x),unbox(Int128,y)))
-+(x::Uint128, y::Uint128) = box(Uint128,add_int(unbox(Uint128,x),unbox(Uint128,y)))
-
--(x::Int,     y::Int)     = box(Int,sub_int(unbox(Int,x),unbox(Int,y)))
--(x::Uint,    y::Uint)    = box(Uint,sub_int(unbox(Uint,x),unbox(Uint,y)))
--(x::Int64,   y::Int64)   = box(Int64,sub_int(unbox(Int64,x),unbox(Int64,y)))
--(x::Uint64,  y::Uint64)  = box(Uint64,sub_int(unbox(Uint64,x),unbox(Uint64,y)))
--(x::Int128,  y::Int128)  = box(Int128,sub_int(unbox(Int128,x),unbox(Int128,y)))
--(x::Uint128, y::Uint128) = box(Uint128,sub_int(unbox(Uint128,x),unbox(Uint128,y)))
-
-*(x::Int,     y::Int)     = box(Int,mul_int(unbox(Int,x),unbox(Int,y)))
-*(x::Uint,    y::Uint)    = box(Uint,mul_int(unbox(Uint,x),unbox(Uint,y)))
-*(x::Int64,   y::Int64)   = box(Int64,mul_int(unbox(Int64,x),unbox(Int64,y)))
-*(x::Uint64,  y::Uint64)  = box(Uint64,mul_int(unbox(Uint64,x),unbox(Uint64,y)))
+-{T<:BitsInteger}(x::T) = box(T,neg_int(unbox(T,x)))
++{T<:BitsInteger}(x::T, y::T) = box(T,add_int(unbox(T,x),unbox(T,y)))
+-{T<:BitsInteger}(x::T, y::T) = box(T,sub_int(unbox(T,x),unbox(T,y)))
+*{T<:BitsInteger}(x::T, y::T) = box(T,mul_int(unbox(T,x),unbox(T,y)))
 
 /(x::Integer, y::Integer) = float(x)/float(y)
 inv(x::Integer) = float(one(x))/float(x)
@@ -88,133 +68,24 @@ mod(x::Int64,  y::Int64)  = box(Int64,smod_int(unbox(Int64,x),unbox(Int64,y)))
 
 ## integer bitwise operations ##
 
-~(x::Int8 )  = box(Int8,not_int(unbox(Int8,x)))
-~(x::Int16)  = box(Int16,not_int(unbox(Int16,x)))
-~(x::Int32)  = box(Int32,not_int(unbox(Int32,x)))
-~(x::Int64)  = box(Int64,not_int(unbox(Int64,x)))
-~(x::Int128) = box(Int128,not_int(unbox(Int128,x)))
+~  {T<:BitsInteger}(x::T)       = box(T,not_int(unbox(T,x)))
+(&){T<:BitsInteger}(x::T, y::T) = box(T,and_int(unbox(T,x),unbox(T,y)))
+|  {T<:BitsInteger}(x::T, y::T) = box(T,or_int(unbox(T,x),unbox(T,y)))
+($){T<:BitsInteger}(x::T, y::T) = box(T,xor_int(unbox(T,x),unbox(T,y)))
 
-~(x::Uint8 )  = box(Uint8,not_int(unbox(Uint8,x)))
-~(x::Uint16)  = box(Uint16,not_int(unbox(Uint16,x)))
-~(x::Uint32)  = box(Uint32,not_int(unbox(Uint32,x)))
-~(x::Uint64)  = box(Uint64,not_int(unbox(Uint64,x)))
-~(x::Uint128) = box(Uint128,not_int(unbox(Uint128,x)))
+<< {T<:BitsInteger}(x::T, y::Int32) = box(T,shl_int(unbox(T,x),unbox(Int32,y)))
+>> {T<:Signed     }(x::T, y::Int32) = box(T,ashr_int(unbox(T,x),unbox(Int32,y)))
+>> {T<:Unsigned   }(x::T, y::Int32) = box(T,lshr_int(unbox(T,x),unbox(Int32,y)))
+>>>{T<:BitsInteger}(x::T, y::Int32) = box(T,lshr_int(unbox(T,x),unbox(Int32,y)))
 
-(&)(x::Int8,   y::Int8 )  = box(Int8,and_int(unbox(Int8,x),unbox(Int8,y)))
-(&)(x::Int16,  y::Int16)  = box(Int16,and_int(unbox(Int16,x),unbox(Int16,y)))
-(&)(x::Int32,  y::Int32)  = box(Int32,and_int(unbox(Int32,x),unbox(Int32,y)))
-(&)(x::Int64,  y::Int64)  = box(Int64,and_int(unbox(Int64,x),unbox(Int64,y)))
-(&)(x::Int128, y::Int128) = box(Int128,and_int(unbox(Int128,x),unbox(Int128,y)))
+bswap(x::Int8)  = x
+bswap(x::Uint8) = x
+bswap(x::Bool)  = x
+bswap{T<:BitsInteger}(x::T) = box(T,bswap_int(unbox(T,x)))
 
-(&)(x::Uint8,   y::Uint8 )  = box(Uint8,and_int(unbox(Uint8,x),unbox(Uint8,y)))
-(&)(x::Uint16,  y::Uint16)  = box(Uint16,and_int(unbox(Uint16,x),unbox(Uint16,y)))
-(&)(x::Uint32,  y::Uint32)  = box(Uint32,and_int(unbox(Uint32,x),unbox(Uint32,y)))
-(&)(x::Uint64,  y::Uint64)  = box(Uint64,and_int(unbox(Uint64,x),unbox(Uint64,y)))
-(&)(x::Uint128, y::Uint128) = box(Uint128,and_int(unbox(Uint128,x),unbox(Uint128,y)))
-
-|(x::Int8,   y::Int8)   = box(Int8,or_int(unbox(Int8,x),unbox(Int8,y)))
-|(x::Int16,  y::Int16)  = box(Int16,or_int(unbox(Int16,x),unbox(Int16,y)))
-|(x::Int32,  y::Int32)  = box(Int32,or_int(unbox(Int32,x),unbox(Int32,y)))
-|(x::Int64,  y::Int64)  = box(Int64,or_int(unbox(Int64,x),unbox(Int64,y)))
-|(x::Int128, y::Int128) = box(Int128,or_int(unbox(Int128,x),unbox(Int128,y)))
-
-|(x::Uint8,   y::Uint8)   = box(Uint8,or_int(unbox(Uint8,x),unbox(Uint8,y)))
-|(x::Uint16,  y::Uint16)  = box(Uint16,or_int(unbox(Uint16,x),unbox(Uint16,y)))
-|(x::Uint32,  y::Uint32)  = box(Uint32,or_int(unbox(Uint32,x),unbox(Uint32,y)))
-|(x::Uint64,  y::Uint64)  = box(Uint64,or_int(unbox(Uint64,x),unbox(Uint64,y)))
-|(x::Uint128, y::Uint128) = box(Uint128,or_int(unbox(Uint128,x),unbox(Uint128,y)))
-
-($)(x::Int8,   y::Int8)   = box(Int8,xor_int(unbox(Int8,x),unbox(Int8,y)))
-($)(x::Int16,  y::Int16)  = box(Int16,xor_int(unbox(Int16,x),unbox(Int16,y)))
-($)(x::Int32,  y::Int32)  = box(Int32,xor_int(unbox(Int32,x),unbox(Int32,y)))
-($)(x::Int64,  y::Int64)  = box(Int64,xor_int(unbox(Int64,x),unbox(Int64,y)))
-($)(x::Int128, y::Int128) = box(Int128,xor_int(unbox(Int128,x),unbox(Int128,y)))
-
-($)(x::Uint8,   y::Uint8)   = box(Uint8,xor_int(unbox(Uint8,x),unbox(Uint8,y)))
-($)(x::Uint16,  y::Uint16)  = box(Uint16,xor_int(unbox(Uint16,x),unbox(Uint16,y)))
-($)(x::Uint32,  y::Uint32)  = box(Uint32,xor_int(unbox(Uint32,x),unbox(Uint32,y)))
-($)(x::Uint64,  y::Uint64)  = box(Uint64,xor_int(unbox(Uint64,x),unbox(Uint64,y)))
-($)(x::Uint128, y::Uint128) = box(Uint128,xor_int(unbox(Uint128,x),unbox(Uint128,y)))
-
-<<(x::Int8,   y::Int32) = box(Int8,shl_int(unbox(Int8,x),unbox(Int32,y)))
-<<(x::Int16,  y::Int32) = box(Int16,shl_int(unbox(Int16,x),unbox(Int32,y)))
-<<(x::Int32,  y::Int32) = box(Int32,shl_int(unbox(Int32,x),unbox(Int32,y)))
-<<(x::Int64,  y::Int32) = box(Int64,shl_int(unbox(Int64,x),unbox(Int32,y)))
-<<(x::Int128, y::Int32) = box(Int128,shl_int(unbox(Int128,x),unbox(Int32,y)))
-
-<<(x::Uint8,   y::Int32) = box(Uint8,shl_int(unbox(Uint8,x),unbox(Int32,y)))
-<<(x::Uint16,  y::Int32) = box(Uint16,shl_int(unbox(Uint16,x),unbox(Int32,y)))
-<<(x::Uint32,  y::Int32) = box(Uint32,shl_int(unbox(Int32,x),unbox(Uint32,y)))
-<<(x::Uint64,  y::Int32) = box(Uint64,shl_int(unbox(Uint64,x),unbox(Int32,y)))
-<<(x::Uint128, y::Int32) = box(Uint128,shl_int(unbox(Uint128,x),unbox(Int32,y)))
-
->>(x::Int8,   y::Int32) = box(Int8,ashr_int(unbox(Int8,x),unbox(Int32,y)))
->>(x::Int16,  y::Int32) = box(Int16,ashr_int(unbox(Int16,x),unbox(Int32,y)))
->>(x::Int32,  y::Int32) = box(Int32,ashr_int(unbox(Int32,x),unbox(Int32,y)))
->>(x::Int64,  y::Int32) = box(Int64,ashr_int(unbox(Int64,x),unbox(Int32,y)))
->>(x::Int128, y::Int32) = box(Int128,ashr_int(unbox(Int128,x),unbox(Int32,y)))
-
->>(x::Uint8,   y::Int32) = box(Uint8,lshr_int(unbox(Uint8,x),unbox(Int32,y)))
->>(x::Uint16,  y::Int32) = box(Uint16,lshr_int(unbox(Uint16,x),unbox(Int32,y)))
->>(x::Uint32,  y::Int32) = box(Uint32,lshr_int(unbox(Int32,x),unbox(Uint32,y)))
->>(x::Uint64,  y::Int32) = box(Uint64,lshr_int(unbox(Uint64,x),unbox(Int32,y)))
->>(x::Uint128, y::Int32) = box(Uint128,lshr_int(unbox(Uint128,x),unbox(Int32,y)))
-
->>>(x::Int8,   y::Int32) = box(Int8,lshr_int(unbox(Int8,x),unbox(Int32,y)))
->>>(x::Int16,  y::Int32) = box(Int16,lshr_int(unbox(Int16,x),unbox(Int32,y)))
->>>(x::Int32,  y::Int32) = box(Int32,lshr_int(unbox(Int32,x),unbox(Int32,y)))
->>>(x::Int64,  y::Int32) = box(Int64,lshr_int(unbox(Int64,x),unbox(Int32,y)))
->>>(x::Int128, y::Int32) = box(Int128,lshr_int(unbox(Int128,x),unbox(Int32,y)))
-
->>>(x::Uint8,   y::Int32) = box(Uint8,lshr_int(unbox(Uint8,x),unbox(Int32,y)))
->>>(x::Uint16,  y::Int32) = box(Uint16,lshr_int(unbox(Uint16,x),unbox(Int32,y)))
->>>(x::Uint32,  y::Int32) = box(Uint32,lshr_int(unbox(Int32,x),unbox(Uint32,y)))
->>>(x::Uint64,  y::Int32) = box(Uint64,lshr_int(unbox(Uint64,x),unbox(Int32,y)))
->>>(x::Uint128, y::Int32) = box(Uint128,lshr_int(unbox(Uint128,x),unbox(Int32,y)))
-
-bswap(x::Int8)    = x
-bswap(x::Uint8)   = x
-bswap(x::Int16)   = box(Int16,bswap_int(unbox(Int16,x)))
-bswap(x::Uint16)  = box(Uint16,bswap_int(unbox(Uint16,x)))
-bswap(x::Int32)   = box(Int32,bswap_int(unbox(Int32,x)))
-bswap(x::Uint32)  = box(Uint32,bswap_int(unbox(Uint32,x)))
-bswap(x::Int64)   = box(Int64,bswap_int(unbox(Int64,x)))
-bswap(x::Uint64)  = box(Uint64,bswap_int(unbox(Uint64,x)))
-bswap(x::Int128)  = box(Int128,bswap_int(unbox(Int128,x)))
-bswap(x::Uint128) = box(Uint128,bswap_int(unbox(Uint128,x)))
-
-count_ones(x::Int8)    = int(box(Int8,ctpop_int(unbox(Int8,x))))
-count_ones(x::Uint8)   = int(box(Uint8,ctpop_int(unbox(Uint8,x))))
-count_ones(x::Int16)   = int(box(Int16,ctpop_int(unbox(Int16,x))))
-count_ones(x::Uint16)  = int(box(Uint16,ctpop_int(unbox(Uint16,x))))
-count_ones(x::Int32)   = int(box(Int32,ctpop_int(unbox(Int32,x))))
-count_ones(x::Uint32)  = int(box(Uint32,ctpop_int(unbox(Uint32,x))))
-count_ones(x::Int64)   = int(box(Int64,ctpop_int(unbox(Int64,x))))
-count_ones(x::Uint64)  = int(box(Uint64,ctpop_int(unbox(Uint64,x))))
-count_ones(x::Int128)  = int(box(Int128,ctpop_int(unbox(Int128,x))))
-count_ones(x::Uint128) = int(box(Uint128,ctpop_int(unbox(Uint128,x))))
-
-leading_zeros(x::Int8)    = int(box(Int8,ctlz_int(unbox(Int8,x))))
-leading_zeros(x::Uint8)   = int(box(Uint8,ctlz_int(unbox(Uint8,x))))
-leading_zeros(x::Int16)   = int(box(Int16,ctlz_int(unbox(Int16,x))))
-leading_zeros(x::Uint16)  = int(box(Uint16,ctlz_int(unbox(Uint16,x))))
-leading_zeros(x::Int32)   = int(box(Int32,ctlz_int(unbox(Int32,x))))
-leading_zeros(x::Uint32)  = int(box(Uint32,ctlz_int(unbox(Uint32,x))))
-leading_zeros(x::Int64)   = int(box(Int64,ctlz_int(unbox(Int64,x))))
-leading_zeros(x::Uint64)  = int(box(Uint64,ctlz_int(unbox(Uint64,x))))
-leading_zeros(x::Int128)  = int(box(Int128,ctlz_int(unbox(Int128,x))))
-leading_zeros(x::Uint128) = int(box(Uint128,ctlz_int(unbox(Uint128,x))))
-
-trailing_zeros(x::Int8)    = int(box(Int8,cttz_int(unbox(Int8,x))))
-trailing_zeros(x::Uint8)   = int(box(Uint8,cttz_int(unbox(Uint8,x))))
-trailing_zeros(x::Int16)   = int(box(Int16,cttz_int(unbox(Int16,x))))
-trailing_zeros(x::Uint16)  = int(box(Uint16,cttz_int(unbox(Uint16,x))))
-trailing_zeros(x::Int32)   = int(box(Int32,cttz_int(unbox(Int32,x))))
-trailing_zeros(x::Uint32)  = int(box(Uint32,cttz_int(unbox(Uint32,x))))
-trailing_zeros(x::Int64)   = int(box(Int64,cttz_int(unbox(Int64,x))))
-trailing_zeros(x::Uint64)  = int(box(Uint64,cttz_int(unbox(Uint64,x))))
-trailing_zeros(x::Int128)  = int(box(Int128,cttz_int(unbox(Int128,x))))
-trailing_zeros(x::Uint128) = int(box(Uint128,cttz_int(unbox(Uint128,x))))
+count_ones    {T<:BitsInteger}(x::T) = int(box(T,ctpop_int(unbox(T,x))))
+leading_zeros {T<:BitsInteger}(x::T) = int(box(T,ctlz_int(unbox(T,x))))
+trailing_zeros{T<:BitsInteger}(x::T) = int(box(T,cttz_int(unbox(T,x))))
 
 count_zeros  (x::Integer) = count_ones(~x)
 leading_ones (x::Integer) = leading_zeros(~x)
@@ -222,29 +93,11 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 
 ## integer comparisons ##
 
-<(x::Int8,   y::Int8)   = slt_int(unbox(Int8,x),unbox(Int8,y))
-<(x::Int16,  y::Int16)  = slt_int(unbox(Int16,x),unbox(Int16,y))
-<(x::Int32,  y::Int32)  = slt_int(unbox(Int32,x),unbox(Int32,y))
-<(x::Int64,  y::Int64)  = slt_int(unbox(Int64,x),unbox(Int64,y))
-<(x::Int128, y::Int128) = slt_int(unbox(Int128,x),unbox(Int128,y))
+<{T<:Signed  }(x::T, y::T) = slt_int(unbox(T,x),unbox(T,y))
+<{T<:Unsigned}(x::T, y::T) = ult_int(unbox(T,x),unbox(T,y))
 
-<(x::Uint8,   y::Uint8)   = ult_int(unbox(Uint8,x),unbox(Uint8,y))
-<(x::Uint16,  y::Uint16)  = ult_int(unbox(Uint16,x),unbox(Uint16,y))
-<(x::Uint32,  y::Uint32)  = ult_int(unbox(Uint32,x),unbox(Uint32,y))
-<(x::Uint64,  y::Uint64)  = ult_int(unbox(Uint64,x),unbox(Uint64,y))
-<(x::Uint128, y::Uint128) = ult_int(unbox(Uint128,x),unbox(Uint128,y))
-
-<=(x::Int8,   y::Int8)   = sle_int(unbox(Int8,x),unbox(Int8,y))
-<=(x::Int16,  y::Int16)  = sle_int(unbox(Int16,x),unbox(Int16,y))
-<=(x::Int32,  y::Int32)  = sle_int(unbox(Int32,x),unbox(Int32,y))
-<=(x::Int64,  y::Int64)  = sle_int(unbox(Int64,x),unbox(Int64,y))
-<=(x::Int128, y::Int128) = sle_int(unbox(Int128,x),unbox(Int128,y))
-
-<=(x::Uint8,   y::Uint8)   = ule_int(unbox(Uint8,x),unbox(Uint8,y))
-<=(x::Uint16,  y::Uint16)  = ule_int(unbox(Uint16,x),unbox(Uint16,y))
-<=(x::Uint32,  y::Uint32)  = ule_int(unbox(Uint32,x),unbox(Uint32,y))
-<=(x::Uint64,  y::Uint64)  = ule_int(unbox(Uint64,x),unbox(Uint64,y))
-<=(x::Uint128, y::Uint128) = ule_int(unbox(Uint128,x),unbox(Uint128,y))
+<={T<:Signed  }(x::T, y::T) = sle_int(unbox(T,x),unbox(T,y))
+<={T<:Unsigned}(x::T, y::T) = ule_int(unbox(T,x),unbox(T,y))
 
 ==(x::Signed,   y::Unsigned) = (x >= 0) & (unsigned(x) == y)
 ==(x::Unsigned, y::Signed  ) = (y >= 0) & (x == unsigned(y))
