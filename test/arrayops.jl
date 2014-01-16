@@ -366,6 +366,8 @@ end
 @test minimum([4., 3., NaN, 5., 2.]) == 2.
 @test extrema([4., 3., NaN, 5., 2.]) == (2., 5.)
 
+@test extrema(1:5) == (1,5)
+
 @test any([true false; false false], 2) == [true false]'
 @test any([true false; false false], 1) == [true false]
 
