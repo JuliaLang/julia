@@ -254,6 +254,7 @@ JL_CALLABLE(jl_f_apply)
                             jl_tuple_len(args[1]));
         }
     }
+    jl_value_t **newargs;
     size_t n=0, i, j;
     for(i=1; i < nargs; i++) {
         if (jl_is_tuple(args[i])) {
@@ -275,7 +276,7 @@ JL_CALLABLE(jl_f_apply)
             goto fancy_apply;
         }
     }
-    jl_value_t **newargs = alloca(n * sizeof(jl_value_t*));
+    newargs = (jl_value_t**) alloca(n * sizeof(jl_value_t*));
     n = 0;
     for(i=1; i < nargs; i++) {
         if (jl_is_tuple(args[i])) {

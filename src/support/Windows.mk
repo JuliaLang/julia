@@ -23,7 +23,6 @@ HEADERS = \
 OBJECTS = \
 	hashing.obj \
 	timefuncs.obj \
-	dblprint.obj \
 	ptrhash.obj \
 	operators.obj \
 	utf8.obj \
@@ -37,7 +36,7 @@ OBJECTS = \
 	wcwidth.obj
 
 INCLUDE = $(INCLUDE);$(MAKEDIR)\..\..\deps\libuv\include
-CFLAGS = $(CFLAGS) -D_CRT_SECURE_NO_WARNINGS
+CFLAGS = $(CFLAGS) -D_CRT_SECURE_NO_WARNINGS -DLIBRARY_EXPORTS
 
 default: lib$(NAME).lib
 
@@ -46,6 +45,6 @@ lib$(NAME).lib: $(OBJECTS)
 
 .c.obj:
 	$(CC) $(CFLAGS) $<
-
+	
 # vim: noexpandtab:ts=4:sw=4:
 

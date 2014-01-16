@@ -42,6 +42,10 @@ char *dirname(char *);
 #include <xmmintrin.h>
 #endif
 
+#if defined _MSC_VER
+#include <io.h>
+#endif
+
 DLLEXPORT uint32_t jl_getutf8(ios_t *s)
 {
     uint32_t wc=0;
@@ -98,7 +102,7 @@ DLLEXPORT int jl_readdir(const char* path, uv_fs_t* readdir_req)
     return uv_fs_readdir(uv_default_loop(), readdir_req, path, 0 /*flags*/, NULL);
 }
 
-DLLEXPORT char* jl_uv_fs_t_ptr(uv_fs_t* req) {return req->ptr; }
+DLLEXPORT char* jl_uv_fs_t_ptr(uv_fs_t* req) {return (char*) req->ptr; }
 DLLEXPORT char* jl_uv_fs_t_ptr_offset(uv_fs_t* req, int offset) {return (char *)req->ptr + offset; }
 DLLEXPORT int jl_uv_fs_result(uv_fs_t *f) { return f->result; }
 
@@ -269,7 +273,7 @@ jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
         a = jl_alloc_array_1d(jl_array_uint8_type, 80);
         ios_t dest;
         ios_mem(&dest, 0);
-        ios_setbuf(&dest, a->data, 80, 0);
+        ios_setbuf(&dest, (char*) a->data, 80, 0);
         size_t n = ios_copyuntil(&dest, s, delim);
         if (dest.buf != a->data) {
             a = jl_takebuf_array(&dest);
