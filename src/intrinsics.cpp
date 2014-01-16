@@ -660,6 +660,63 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
     return mark_julia_type(thePtr, aty);
 }
 
+static Value *emit_srem(Value *x, Value *den, jl_codectx_t *ctx)
+{
+    Type *t = den->getType();
+    raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
+                           jldiverr_var, ctx);
+    BasicBlock *m1BB = BasicBlock::Create(getGlobalContext(),"minus1",ctx->f);
+    BasicBlock *okBB = BasicBlock::Create(getGlobalContext(),"oksrem",ctx->f);
+    BasicBlock *cont = BasicBlock::Create(getGlobalContext(),"after_srem",ctx->f);
+    PHINode *ret = PHINode::Create(t, 2);
+    builder.CreateCondBr(builder.CreateICmpEQ(den,ConstantInt::get(t,-1,true)),
+                         m1BB, okBB);
+    builder.SetInsertPoint(m1BB);
+    builder.CreateBr(cont);
+    builder.SetInsertPoint(okBB);
+    Value *sremval = builder.CreateSRem(x, den);
+    builder.CreateBr(cont);
+    builder.SetInsertPoint(cont);
+    ret->addIncoming(// rem(typemin, -1) is undefined
+                     ConstantInt::get(t,0), m1BB);
+    ret->addIncoming(sremval, okBB);
+    builder.Insert(ret);
+    return ret;
+}
+
+static Value *emit_smod(Value *x, Value *den, jl_codectx_t *ctx)
+{
+    Type *t = den->getType();
+    raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
+                           jldiverr_var, ctx);
+    BasicBlock *m1BB = BasicBlock::Create(getGlobalContext(),"minus1",ctx->f);
+    BasicBlock *okBB = BasicBlock::Create(getGlobalContext(),"oksmod",ctx->f);
+    BasicBlock *cont = BasicBlock::Create(getGlobalContext(),"after_smod",ctx->f);
+    PHINode *ret = PHINode::Create(t, 2);
+    builder.CreateCondBr(builder.CreateICmpEQ(den,ConstantInt::get(t,-1,true)),
+                         m1BB, okBB);
+    builder.SetInsertPoint(m1BB);
+    builder.CreateBr(cont);
+    builder.SetInsertPoint(okBB);
+
+    Value *rem = builder.CreateSRem(x,den);
+    Value *smodval =
+        builder.
+        CreateSelect(builder.CreateICmpEQ(builder.CreateICmpSLT(x,ConstantInt::get(t,0)),
+                                          builder.CreateICmpSLT(den,ConstantInt::get(t,0))),
+                     // mod == rem for arguments with same sign
+                     rem,
+                     builder.CreateSRem(builder.CreateAdd(den,rem),den));
+
+    builder.CreateBr(cont);
+    builder.SetInsertPoint(cont);
+    ret->addIncoming(// rem(typemin, -1) is undefined
+                     ConstantInt::get(t,0), m1BB);
+    ret->addIncoming(smodval, okBB);
+    builder.Insert(ret);
+    return ret;
+}
+
 #define HANDLE(intr,n)                                                  \
     case intr: if (nargs!=n) jl_error(#intr": wrong number of arguments");
 
@@ -752,6 +809,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(mul_int,2) return builder.CreateMul(JL_INT(x), JL_INT(y));
     HANDLE(sdiv_int,2)
         den = JL_INT(y);
+        t = den->getType();
         x = JL_INT(x);
 
         typemin = builder.CreateShl(ConstantInt::get(t,1),
@@ -769,22 +827,23 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateSDiv(x, den);
     HANDLE(udiv_int,2)
         den = JL_INT(y);
-        raise_exception_unless(builder.CreateICmpNE(den,
-                                                    ConstantInt::get(t,0)),
+        t = den->getType();
+        raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
                                jldiverr_var, ctx);
         return builder.CreateUDiv(JL_INT(x), den);
 
-    HANDLE(srem_int,2) return builder.CreateSRem(JL_INT(x), JL_INT(y));
-    HANDLE(urem_int,2) return builder.CreateURem(JL_INT(x), JL_INT(y));
+    HANDLE(srem_int,2)
+        return emit_srem(JL_INT(x), JL_INT(y), ctx);
+
+    HANDLE(urem_int,2)
+        den = JL_INT(y);
+        t = den->getType();
+        raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
+                               jldiverr_var, ctx);
+        return builder.CreateURem(JL_INT(x), den);
+
     HANDLE(smod_int,2)
-        x = JL_INT(x); y = JL_INT(y);
-        fy = builder.CreateSRem(x,y);
-        return builder.
-            CreateSelect(builder.CreateICmpEQ(builder.CreateICmpSLT(x,ConstantInt::get(x->getType(),0)),
-                                              builder.CreateICmpSLT(y,ConstantInt::get(y->getType(),0))),
-                         // mod == rem for arguments with same sign
-                         fy,
-                         builder.CreateSRem(builder.CreateAdd(y,fy),y));
+        return emit_smod(JL_INT(x), JL_INT(y), ctx);
 
     HANDLE(neg_float,1) return builder.CreateFMul(ConstantFP::get(FT(t), -1.0), FP(x));
     HANDLE(add_float,2) return builder.CreateFAdd(FP(x), FP(y));
