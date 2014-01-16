@@ -233,7 +233,7 @@ static Type *julia_type_to_llvm(jl_value_t *jt)
                 return ret;
             }
             else {
-                Type *types[ntypes];
+                Type **types = (Type**) alloca(ntypes*sizeof(Type*));
                 size_t j = 0;
                 for (size_t i = 0; i < ntypes; ++i) {
                     Type *ty = julia_struct_to_llvm(jl_tupleref(jt,i));

@@ -302,7 +302,7 @@ EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, 
     EXCEPTION_POINTERS ExceptionInfo;
     ExceptionInfo.ExceptionRecord = ExceptionRecord;
     ExceptionInfo.ContextRecord = ContextRecord;
-    return _exception_handler(&ExceptionInfo,0);
+    return (EXCEPTION_DISPOSITION) _exception_handler(&ExceptionInfo,0);
 } 
 #endif
 
@@ -336,7 +336,7 @@ struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutd
 
 static void jl_uv_exitcleanup_add(uv_handle_t* handle, struct uv_shutdown_queue *queue)
 {
-    struct uv_shutdown_queue_item *item = malloc(sizeof(struct uv_shutdown_queue_item));
+    struct uv_shutdown_queue_item *item = (struct uv_shutdown_queue_item*) malloc(sizeof(struct uv_shutdown_queue_item));
     item->h = handle;
     item->next = NULL;
     if (queue->last) queue->last->next = item;
@@ -347,7 +347,7 @@ static void jl_uv_exitcleanup_add(uv_handle_t* handle, struct uv_shutdown_queue 
 static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
 {
     if (handle != (uv_handle_t*)jl_uv_stdout && handle != (uv_handle_t*)jl_uv_stderr)
-        jl_uv_exitcleanup_add(handle, arg);
+        jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*) arg);
 }
 
 DLLEXPORT void uv_atexit_hook()
@@ -476,10 +476,10 @@ void *init_stdio_handle(uv_file fd,int readable)
                 abort();
             }
             ((uv_tty_t*)handle)->data=0;
-            uv_tty_set_mode((void*)handle,0); //cooked stdio
+            uv_tty_set_mode((uv_tty_t*)handle,0); //cooked stdio
             break;
         case UV_FILE: 
-            file = malloc(sizeof(jl_uv_file_t));
+            file = (jl_uv_file_t*) malloc(sizeof(jl_uv_file_t));
             file->loop = jl_io_loop;
             file->type = UV_FILE;
             file->file = fd;
@@ -521,9 +521,9 @@ void *init_stdio_handle(uv_file fd,int readable)
 
 void init_stdio()
 {   //order must be 2,1,0
-    JL_STDERR = init_stdio_handle(2,0);
-    JL_STDOUT = init_stdio_handle(1,0);
-    JL_STDIN = init_stdio_handle(0,1);
+    JL_STDERR = (uv_stream_t*) init_stdio_handle(2,0);
+    JL_STDOUT = (uv_stream_t*) init_stdio_handle(1,0);
+    JL_STDIN = (uv_stream_t*) init_stdio_handle(0,1);
 }
 
 #ifndef _OS_WINDOWS_
