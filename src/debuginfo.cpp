@@ -173,7 +173,7 @@ static void coverageVisitLine(std::string filename, int line)
     if (vec.size() <= (size_t)line)
         vec.resize(line+1, NULL);
     if (vec[line] == NULL)
-        vec[line] = new GlobalVariable(*jl_Module, T_int64, false, GlobalVariable::ExternalLinkage,
+        vec[line] = new GlobalVariable(*jl_Module, T_int64, false, GlobalVariable::InternalLinkage,
                                        ConstantInt::get(T_int64,0), "lcnt");
     GlobalVariable *v = vec[line];
     builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v),

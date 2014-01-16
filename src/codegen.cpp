@@ -3421,8 +3421,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     }
 
     // step 15. compile body statements
-    if (do_coverage)
-        coverageVisitLine(filename, lno);
     bool prevlabel = false;
     for(i=0; i < stmtslen; i++) {
         jl_value_t *stmt = jl_cellref(stmts,i);
