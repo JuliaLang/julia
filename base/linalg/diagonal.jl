@@ -79,7 +79,7 @@ function \{TD<:Number,TA<:Number}(D::Diagonal{TD}, A::AbstractArray{TA,1})
     for j = 1:n
         for i = 1:m
             di = D.diag[i]
-            di==0 && throw(SingularException())
+            di==0 && throw(SingularException(i))
             C[i,j] = A[i,j] / di
         end
     end
