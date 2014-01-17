@@ -146,7 +146,7 @@ fill!(A::AbstractArray, x) = (_fill!(A, x); return A)
 # note: we can gain some performance if the first dimension is a range;
 # but we need to single-out the N=0 case due to how @ngenerate works
 # case N = 0
-function getindex(B::BitArray, I0::Range1{Int})
+function getindex(B::BitArray, I0::Range1)
     ndims(B) < 1 && error("wrong number of dimensions")
     checkbounds(B, I0)
     X = BitArray(length(I0))
@@ -155,31 +155,33 @@ function getindex(B::BitArray, I0::Range1{Int})
 end
 
 # TODO: extend to I:Union(Real,AbstractArray)... (i.e. not necessarily contiguous)
-@ngenerate N function getindex(B::BitArray, I0::Range1{Int}, IR::NTuple{N,Union(Real,Range1{Int})}...)
+@ngenerate N function getindex(B::BitArray, I0::Range1, I::NTuple{N,Union(Real,Range1)}...)
     ndims(B) < N+1 && error("wrong number of dimensions")
-    checkbounds(B, I0, IR...)
-    X = BitArray(index_shape(I0, IR...))
+    checkbounds(B, I0, I...)
+    X = BitArray(index_shape(I0, I...))
 
-    I = map(x->(isa(x,Real) ? (to_index(x):to_index(x)) : to_index(x)), tuple(IR...))
+    I0 = to_index(I0)
 
     f0 = first(I0)
     l0 = length(I0)
 
-    gap_lst = Int[i==1 ? 0 : last(I[i-1])-first(I[i-1])+1 for i = 1:N+1]
-    stride_lst = Array(Int, N)
+    Base.@nexprs N d->(I_d = to_index(I_d))
+
+    gap_lst_1 = 0
+    @nexprs N d->(gap_lst_{d+1} = length(I_d))
     stride = 1
     ind = f0
-    for k = 1 : N
-        stride *= size(B, k)
-        stride_lst[k] = stride
-        ind += stride * (first(I[k]) - 1)
-        gap_lst[k+1] *= stride
+    @nexprs N d->begin
+        stride *= size(B, d)
+        stride_lst_d = stride
+        ind += stride * (first(I_d) - 1)
+        gap_lst_{d+1} *= stride
     end
 
     storeind = 1
-    @nloops(N, i, d->I[d],
+    @nloops(N, i, d->I_d,
         d->nothing, # PRE
-        d->(ind += stride_lst[d] - gap_lst[d]), # POST
+        d->(ind += stride_lst_d - gap_lst_d), # POST
         begin # BODY
             copy_chunks(X.chunks, storeind, B.chunks, ind, l0)
             storeind += l0

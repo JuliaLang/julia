@@ -462,8 +462,10 @@ function getindex_bool_1d(B::BitArray, I::AbstractArray{Bool})
     return X
 end
 
+getindex(B::BitVector, I::Range1{Bool}) = getindex_bool_1d(B, I) # disambiguation
 getindex(B::BitVector, I::AbstractVector{Bool}) = getindex_bool_1d(B, I)
 getindex(B::BitVector, I::AbstractArray{Bool}) = getindex_bool_1d(B, I)
+getindex(B::BitArray, I::Range1{Bool}) = getindex_bool_1d(B, I) # disambiguation
 getindex(B::BitArray, I::AbstractVector{Bool}) = getindex_bool_1d(B, I)
 getindex(B::BitArray, I::AbstractArray{Bool}) = getindex_bool_1d(B, I)
 
