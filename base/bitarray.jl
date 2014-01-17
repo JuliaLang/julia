@@ -462,12 +462,11 @@ function getindex_bool_1d(B::BitArray, I::AbstractArray{Bool})
     return X
 end
 
-getindex(B::BitVector, I::Range1{Bool}) = getindex_bool_1d(B, I) # disambiguation
-getindex(B::BitVector, I::AbstractVector{Bool}) = getindex_bool_1d(B, I)
-getindex(B::BitVector, I::AbstractArray{Bool}) = getindex_bool_1d(B, I)
-getindex(B::BitArray, I::Range1{Bool}) = getindex_bool_1d(B, I) # disambiguation
-getindex(B::BitArray, I::AbstractVector{Bool}) = getindex_bool_1d(B, I)
-getindex(B::BitArray, I::AbstractArray{Bool}) = getindex_bool_1d(B, I)
+# multiple signatures required for disambiguation
+# (see also getindex in multidimensional.jl)
+for BT in [BitVector, BitArray], IT in [Range1{Bool}, AbstractVector{Bool}, AbstractArray{Bool}]
+    @eval getindex(B::$BT, I::$IT) = getindex_bool_1d(B, I)
+end
 
 ## Indexing: setindex! ##
 
@@ -551,15 +550,6 @@ function setindex!(B::BitArray, x, i::Real, I::Real...)
     return B
 end
 
-# note: we can gain some performance if the first dimension is a range;
-#       currently this is mainly indended for the general cat case
-# TODO: extend to I:Indices... (i.e. not necessarily contiguous)
-function setindex!(B::BitArray, X::BitArray, I0::Range1{Int}, I::Union(Real, Range1{Int})...)
-    checkbounds(B, I0, I...)
-    I = map(x->(isa(x,Real) ? (to_index(x):to_index(x)) : x), I)
-    setindex_array2bitarray_ranges(B, X, I0, I...)
-end
-
 function setindex!{T<:Real}(B::BitArray, X::AbstractArray, I::AbstractVector{T})
     if length(X) != length(I); error("argument dimensions must match"); end
     count = 1
@@ -631,40 +621,25 @@ function setindex_bool_vector_1d(A::BitArray, X::AbstractArray, I::AbstractArray
     A
 end
 
-setindex!(A::BitArray, X::AbstractArray, I::AbstractVector{Bool}) = setindex_bool_vector_1d(A, X, I)
-setindex!(A::BitArray, X::AbstractArray, I::AbstractArray{Bool}) = setindex_bool_vector_1d(A, X, I)
-setindex!(A::BitArray, x, I::AbstractVector{Bool}) = setindex_bool_scalar_1d(A, x, I)
-setindex!(A::BitArray, x, I::AbstractArray{Bool}) = setindex_bool_scalar_1d(A, x, I)
+# lots of definitions here are required just for disambiguation
+# (see also setindex! in multidimensional.jl)
+for XT in [BitArray, AbstractArray, Any]
+    for IT in [AbstractVector{Bool}, AbstractArray{Bool}]
+        @eval setindex!(A::BitArray, X::$XT, I::$IT) = setindex_bool_vector_1d(A, X, I)
+    end
 
-setindex!(A::BitMatrix, x::AbstractArray, I::Real, J::AbstractVector{Bool}) =
-    (A[I,find(J)] = x)
+    for IT in [Range1{Bool}, AbstractVector{Bool}], JT in [Range1{Bool}, AbstractVector{Bool}]
+        @eval setindex!(A::BitMatrix, x::$XT, I::$IT, J::$JT) = (A[find(I),find(J)] = x)
+    end
 
-setindex!(A::BitMatrix, x, I::Real, J::AbstractVector{Bool}) =
-    (A[I,find(J)] = x)
+    for IT in [Range1{Bool}, AbstractVector{Bool}], JT in [Real, Range1]
+        @eval setindex!(A::BitMatrix, x::$XT, I::$IT, J::$JT) = (A[find(I),J] = x)
+    end
+    @eval setindex!{T<:Real}(A::BitMatrix, x::$XT, I::AbstractVector{Bool}, J::AbstractVector{T}) = (A[find(I),J] = x)
 
-setindex!(A::BitMatrix, x::AbstractArray, I::AbstractVector{Bool}, J::Real) =
-    (A[find(I),J] = x)
-
-setindex!(A::BitMatrix, x, I::AbstractVector{Bool}, J::Real) =
-    (A[find(I),J] = x)
-
-setindex!(A::BitMatrix, x::AbstractArray, I::AbstractVector{Bool}, J::AbstractVector{Bool}) =
-    (A[find(I),find(J)] = x)
-
-setindex!(A::BitMatrix, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) =
-    (A[find(I),find(J)] = x)
-
-setindex!{T<:Real}(A::BitMatrix, x::AbstractArray, I::AbstractVector{T}, J::AbstractVector{Bool}) =
-    (A[I,find(J)] = x)
-
-setindex!{T<:Real}(A::BitMatrix, x, I::AbstractVector{T}, J::AbstractVector{Bool}) =
-    (A[I,find(J)] = x)
-
-setindex!{T<:Real}(A::BitMatrix, x::AbstractArray, I::AbstractVector{Bool}, J::AbstractVector{T}) =
-    (A[find(I),J] = x)
-
-setindex!{T<:Real}(A::BitMatrix, x, I::AbstractVector{Bool}, J::AbstractVector{T}) =
-    (A[find(I),J] = x)
+    @eval setindex!(A::BitMatrix, x::$XT, I::Real, J::AbstractVector{Bool}) = (A[I,find(J)] = x)
+    @eval setindex!{T<:Real}(A::BitMatrix, x::$XT, I::AbstractVector{T}, J::AbstractVector{Bool}) = (A[I,find(J)] = x)
+end
 
 ## Dequeue functionality ##
 

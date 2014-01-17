@@ -191,21 +191,24 @@ end
 
 @ngenerate N function getindex(B::BitArray, I::NTuple{N,Union(Real,AbstractVector)}...)
     checkbounds(B, I...)
-    J = to_index(I...)
-    X = BitArray(index_shape(J...))
+    @nexprs N d->(I_d = to_index(I_d))
+    X = BitArray(index_shape(I...))
     Xc = X.chunks
 
     ind = 1
-    @nloops N i d->J[d] begin
+    @nloops N i d->I_d begin
         setindex_unchecked(Xc, (@nref N B i), ind)
         ind += 1
     end
     return X
 end
 
+# note: we can gain some performance if the first dimension is a range;
 # case N = 0
-function setindex_array2bitarray_ranges(B::BitArray, X::BitArray, I0::Range1{Int})
+function setindex!(B::BitArray, X::BitArray, I0::Range1)
     ndims(B) != 1 && error("wrong number of dimensions in assigment")
+    I0 = to_index(I0)
+    checkbounds(B, I0)
     lI = length(I0)
     length(X) != lI && error("array assignment dimensions mismatch")
     lI == 0 && return B
@@ -215,34 +218,37 @@ function setindex_array2bitarray_ranges(B::BitArray, X::BitArray, I0::Range1{Int
     return B
 end
 
-@ngenerate N function setindex_array2bitarray_ranges(B::BitArray, X::BitArray, I0::Range1{Int}, IR::NTuple{N,Range1{Int}}...)
+# TODO: extend to I:Union(Real,AbstractArray)... (i.e. not necessarily contiguous)
+@ngenerate N function setindex!(B::BitArray, X::BitArray, I0::Range1, I::NTuple{N,Union(Real,Range1)}...)
     ndims(B) != N+1 && error("wrong number of dimensions in assigment")
+    I0 = to_index(I0)
     lI = length(I0)
 
-    I = tuple(IR...)
-    for r in I
-        lI *= length(r)
+    @nexprs N d->begin
+        I_d = to_index(I_d)
+        lI *= length(I_d)
     end
     length(X) != lI && error("array assignment dimensions mismatch")
+    checkbounds(B, I0, I...)
     lI == 0 && return B
     f0 = first(I0)
     l0 = length(I0)
 
-    gap_lst = Int[i==1 ? 0 : last(I[i-1])-first(I[i-1])+1 for i = 1:N+1]
-    stride_lst = Array(Int, N)
+    gap_lst_1 = 0
+    @nexprs N d->(gap_lst_{d+1} = length(I_d))
     stride = 1
     ind = f0
-    @inbounds for k = 1 : N
-        stride *= size(B, k)
-        stride_lst[k] = stride
-        ind += stride * (first(I[k]) - 1)
-        gap_lst[k+1] *= stride
+    @nexprs N d->begin
+        stride *= size(B, d)
+        stride_lst_d = stride
+        ind += stride * (first(I_d) - 1)
+        gap_lst_{d+1} *= stride
     end
 
     refind = 1
-    @nloops(N, i, d->I[d],
+    @nloops(N, i, d->I_d,
         d->nothing, # PRE
-        d->(ind += stride_lst[d] - gap_lst[d]), # POST
+        d->(ind += stride_lst_d - gap_lst_d), # POST
         begin # BODY
             copy_chunks(B.chunks, ind, X.chunks, refind, l0)
             refind += l0
@@ -252,20 +258,19 @@ end
 end
 
 @ngenerate N function setindex!(B::BitArray, X::AbstractArray, I::NTuple{N,Union(Real,AbstractArray)}...)
-    J = to_index(I...)
+    checkbounds(B, I...)
+    @nexprs N d->(I_d = to_index(I_d))
     nel = 1
-    for idx in J
-        nel *= length(idx)
-    end
+    @nexprs N d->(nel *= length(I_d))
     length(X) != nel && error("argument dimensions must match")
     if ndims(X) > 1
-        for i = 1:length(J)
-            size(X,i) != length(J[i]) && error("argument dimensions must match")
+        @nexprs N d->begin
+            size(X,d) != length(I_d) && error("argument dimensions must match")
         end
     end
     refind = 1
-    @nloops N i d->J[d] begin
-        (@nref N B i) = X[refind]
+    @nloops N i d->I_d begin
+        (@nref N B i) = X[refind] # TODO: should avoid bounds checking
         refind += 1
     end
     return B
@@ -274,9 +279,9 @@ end
 @ngenerate N function setindex!(B::BitArray, x, I::NTuple{N,Union(Real,AbstractArray)}...)
     x = convert(Bool, x)
     checkbounds(B, I...)
-    J = to_index(I...)
+    @nexprs N d->(I_d = to_index(I_d))
     Bc = B.chunks
-    @nloops N i d->J[d] begin
+    @nloops N i d->I_d begin
         (@nref N B i) = x # TODO: should avoid bounds checking
     end
     return B
