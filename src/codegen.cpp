@@ -1775,7 +1775,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     }
                     else {
                         idx = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
-                        Value *fld = builder.CreateCall2(jlgetnthfieldchecked_func, strct, idx);
+                        Value *fld = builder.CreateCall2(prepare_call(jlgetnthfieldchecked_func), strct, idx);
                         JL_GC_POP();
                         return fld;
                     }
@@ -3913,7 +3913,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(jl_pvalue_llvmt, newbits_args, false),
                          Function::ExternalLinkage,
                          "jl_new_bits", m);
-    jl_ExecutionEngine->addGlobalMapping(jlnewbits_func, (void*)&jl_new_bits);
+    add_named_global(jlnewbits_func, (void*)&jl_new_bits);
 
     std::vector<Type *> getnthfld_args(0);
     getnthfld_args.push_back(jl_pvalue_llvmt);
@@ -3922,7 +3922,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(jl_pvalue_llvmt, getnthfld_args, false),
                          Function::ExternalLinkage,
                          "jl_get_nth_field_checked", m);
-    jl_ExecutionEngine->addGlobalMapping(jlgetnthfieldchecked_func, (void*)*jl_get_nth_field_checked);
+    add_named_global(jlgetnthfieldchecked_func, (void*)*jl_get_nth_field_checked);
 
     // set up optimization passes
     FPM = new FunctionPassManager(m);

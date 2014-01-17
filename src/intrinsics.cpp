@@ -664,7 +664,7 @@ static Value *emit_srem(Value *x, Value *den, jl_codectx_t *ctx)
 {
     Type *t = den->getType();
     raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
-                           jldiverr_var, ctx);
+                           prepare_global(jldiverr_var), ctx);
     BasicBlock *m1BB = BasicBlock::Create(getGlobalContext(),"minus1",ctx->f);
     BasicBlock *okBB = BasicBlock::Create(getGlobalContext(),"oksrem",ctx->f);
     BasicBlock *cont = BasicBlock::Create(getGlobalContext(),"after_srem",ctx->f);
@@ -688,7 +688,7 @@ static Value *emit_smod(Value *x, Value *den, jl_codectx_t *ctx)
 {
     Type *t = den->getType();
     raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
-                           jldiverr_var, ctx);
+                           prepare_global(jldiverr_var), ctx);
     BasicBlock *m1BB = BasicBlock::Create(getGlobalContext(),"minus1",ctx->f);
     BasicBlock *okBB = BasicBlock::Create(getGlobalContext(),"oksmod",ctx->f);
     BasicBlock *cont = BasicBlock::Create(getGlobalContext(),"after_smod",ctx->f);
@@ -829,7 +829,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         den = JL_INT(y);
         t = den->getType();
         raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
-                               jldiverr_var, ctx);
+                               prepare_global(jldiverr_var), ctx);
         return builder.CreateUDiv(JL_INT(x), den);
 
     HANDLE(srem_int,2)
@@ -839,7 +839,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         den = JL_INT(y);
         t = den->getType();
         raise_exception_unless(builder.CreateICmpNE(den, ConstantInt::get(t,0)),
-                               jldiverr_var, ctx);
+                               prepare_global(jldiverr_var), ctx);
         return builder.CreateURem(JL_INT(x), den);
 
     HANDLE(smod_int,2)
