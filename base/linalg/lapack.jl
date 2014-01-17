@@ -1167,10 +1167,65 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         end
     end
 end
-for (ggev, elty) in 
-    ((:dggev_,:Float64),
-     (:sggev_,:Float32))
+## Expert driver and generalized eigenvlua problem
+for (geevx, ggev, elty) in 
+    ((:dgeevx_,:dggev_,:Float64),
+     (:sgeevx_,:sggev_,:Float32))
     @eval begin
+   #     SUBROUTINE DGEEVX( BALANC, JOBVL, JOBVR, SENSE, N, A, LDA, WR, WI,
+   #                          VL, LDVL, VR, LDVR, ILO, IHI, SCALE, ABNRM,
+   #                          RCONDE, RCONDV, WORK, LWORK, IWORK, INFO )
+   # 
+   #       .. Scalar Arguments ..
+   #       CHARACTER          BALANC, JOBVL, JOBVR, SENSE
+   #       INTEGER            IHI, ILO, INFO, LDA, LDVL, LDVR, LWORK, N
+   #       DOUBLE PRECISION   ABNRM
+   #       ..
+   #       .. Array Arguments ..
+   #       INTEGER            IWORK( * )
+   #       DOUBLE PRECISION   A( LDA, * ), RCONDE( * ), RCONDV( * ),
+   #      $                   SCALE( * ), VL( LDVL, * ), VR( LDVR, * ),
+   #      $                   WI( * ), WORK( * ), WR( * )
+    function geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::StridedMatrix{$elty})
+        n = chksquare(A)
+        lda = max(1,stride(A,2))
+        wr = Array($elty, n)
+        wi = Array($elty, n)
+        ldvl = jobvl == 'V' ? n : (jobvl == 'N' ? 0 : throw(ArgumentError("jobvl must be 'V' or 'N'")))
+        VL = Array($elty, ldvl, n)
+        ldvr = jobvr == 'V' ? n : (jobvr == 'N' ? 0 : throw(ArgumentError("jobvr must be 'V' or 'N'")))
+        VR = Array($elty, ldvr, n)
+        ilo = Array(BlasInt, 1)
+        ihi = Array(BlasInt, 1)
+        scale = Array($elty, n)
+        abnrm = Array($elty, 1)
+        rconde = Array($elty, n)
+        rcondv = Array($elty, n)
+        work = Array($elty, 1)
+        lwork::BlasInt = -1
+        iwork = Array(BlasInt, sense == 'N' || sense == 'E' ? 0 : (sense == 'V' || sense == 'B' ? 2n-2 : throw(ArgumentError("argument sense must be 'N', 'E', 'V' or 'B'"))))
+        info = Array(BlasInt, 1)
+        for i = 1:2
+            ccall(($(string(geevx)),Base.liblapack_name), Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8},
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                   Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                   Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
+                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+                   &balanc, &jobvl, &jobvr, &sense, 
+                   &n, A, &lda, wr, 
+                   wi, VL, &max(1,ldvl), VR, 
+                   &max(1,ldvr), ilo, ihi, scale, 
+                   abnrm, rconde, rcondv, work, 
+                   &lwork, iwork, info)
+            lwork = convert(BlasInt, work[1])
+            work = Array($elty, lwork)
+        end
+        @lapackerror
+        A, wr, wi, VL, VR, ilo[1], ihi[1], scale, abnrm[1], rconde, rcondv
+    end
+
     #       SUBROUTINE DGGEV( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHAR, ALPHAI,
 #      $                  BETA, VL, LDVL, VR, LDVR, WORK, LWORK, INFO )
 # *     .. Scalar Arguments ..
@@ -1219,10 +1274,63 @@ for (ggev, elty) in
         end
     end
 end
-for (ggev, elty, relty) in 
-    ((:zggev_,:Complex128,:Float64),
-     (:cggev_,:Complex64,:Float32))
+for (geevx, ggev, elty, relty) in 
+    ((:zgeevx_,:zggev_,:Complex128,:Float64),
+     (:cgeevx_,:cggev_,:Complex64,:Float32))
     @eval begin
+  #     SUBROUTINE ZGEEVX( BALANC, JOBVL, JOBVR, SENSE, N, A, LDA, W, VL,
+  #                          LDVL, VR, LDVR, ILO, IHI, SCALE, ABNRM, RCONDE,
+  #                          RCONDV, WORK, LWORK, RWORK, INFO )
+  # 
+  #       .. Scalar Arguments ..
+  #       CHARACTER          BALANC, JOBVL, JOBVR, SENSE
+  #       INTEGER            IHI, ILO, INFO, LDA, LDVL, LDVR, LWORK, N
+  #       DOUBLE PRECISION   ABNRM
+  #       ..
+  #       .. Array Arguments ..
+  #       DOUBLE PRECISION   RCONDE( * ), RCONDV( * ), RWORK( * ),
+  #      $                   SCALE( * )
+  #       COMPLEX*16         A( LDA, * ), VL( LDVL, * ), VR( LDVR, * ),
+  #      $                   W( * ), WORK( * )
+    function geevx!(balanc::Char, jobvl::Char, jobvr::Char, sense::Char, A::StridedMatrix{$elty})
+        n = chksquare(A)
+        lda = max(1,stride(A,2))
+        w = Array($elty, n)
+        ldvl = jobvl == 'V' ? n : (jobvl == 'N' ? 0 : throw(ArgumentError("jobvl must be 'V' or 'N'")))
+        VL = Array($elty, ldvl, n)
+        ldvr = jobvr == 'V' ? n : (jobvr == 'N' ? 0 : throw(ArgumentError("jobvr must be 'V' or 'N'")))
+        VR = Array($elty, ldvr, n)
+        ilo = Array(BlasInt, 1)
+        ihi = Array(BlasInt, 1)
+        scale = Array($relty, n)
+        abnrm = Array($relty, 1)
+        rconde = Array($relty, n)
+        rcondv = Array($relty, n)
+        work = Array($elty, 1)
+        lwork::BlasInt = -1
+        rwork = Array($relty, 2n)
+        info = Array(BlasInt, 1)
+        for i = 1:2
+            ccall(($(string(geevx)),Base.liblapack_name), Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8},
+                   Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$relty}, 
+                   Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, 
+                   Ptr{$relty}, Ptr{BlasInt}),
+                   &balanc, &jobvl, &jobvr, &sense, 
+                   &n, A, &lda, w, 
+                   VL, &max(1,ldvl), VR, &max(1,ldvr), 
+                   ilo, ihi, scale, abnrm, 
+                   rconde, rcondv, work, &lwork, 
+                   rwork, info)
+            lwork = convert(BlasInt, work[1])
+            work = Array($elty, lwork)
+        end
+        @lapackerror
+        A, w, VL, VR, ilo[1], ihi[1], scale, abnrm[1], rconde, rcondv
+    end
+
       # SUBROUTINE ZGGEV( JOBVL, JOBVR, N, A, LDA, B, LDB, ALPHA, BETA,
      # $                  VL, LDVL, VR, LDVR, WORK, LWORK, RWORK, INFO )
 # *     .. Scalar Arguments ..
@@ -1271,6 +1379,7 @@ for (ggev, elty, relty) in
         end
     end
 end
+
 # One step incremental condition estimation of max/min singular values
 for (laic1, elty) in
     ((:dlaic1_,:Float64),
