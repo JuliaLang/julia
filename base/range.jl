@@ -24,19 +24,38 @@ immutable Range1{T<:Real} <: Ranges{T}
     len::Int
 
     function Range1(start::T, len::Int)
-        if !(len >= 0); error("length must be non-negative"); end
+        if len < 0; error("length must be non-negative"); end
         new(start, len)
     end
     Range1(start::T, len::Integer) = Range1(start, int(len))
+
+    # TODO: this is a hack to elide the len<0 check for colon.
+    # should store start and stop for integer ranges instead
+    Range1(start::T, len::Integer, _) = new(start, int(len))
 end
 Range1{T}(start::T, len::Integer) = Range1{T}(start, len)
 
 function colon{T<:Integer}(start::T, step::T, stop::T)
     step != 0 || error("step cannot be zero in colon syntax")
-    Range(start, step, max(0, 1 + fld(stop-start, step)))
+    Range{T}(start, step, max(0, 1 + fld(stop-start, step)))
 end
+
 colon{T<:Integer}(start::T, stop::T) =
-    Range1(start, max(0, stop-start+1))
+    Range1{T}(start, ifelse(stop<start, 0, int(stop-start+1)))
+
+if Int === Int32
+colon{T<:Union(Int8,Int16,Int32,Uint8,Uint16)}(start::T, stop::T) =
+    Range1{T}(start,
+              ifelse(stop<start, 0,
+                     checked_add(checked_sub(convert(Int,stop),convert(Int,start)),1)),
+              0)  # hack to elide negative length check
+else
+colon{T<:Union(Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32)}(start::T, stop::T) =
+    Range1{T}(start,
+              ifelse(stop<start, 0,
+                     checked_add(checked_sub(convert(Int,stop),convert(Int,start)),1)),
+              0)  # hack to elide negative length check
+end
 
 function colon{T<:Real}(start::T, step::T, stop::T)
     step != 0 || error("step cannot be zero in colon syntax")
@@ -150,6 +169,12 @@ start(r::Ranges) = 0
 next{T}(r::Range{T},  i) = (oftype(T, r.start + i*step(r)), i+1)
 next{T}(r::Range1{T}, i) = (oftype(T, r.start + i), i+1)
 done(r::Ranges, i) = (length(r) <= i)
+
+# though these look very similar to the above, for some reason LLVM generates
+# much better code for these.
+start{T<:Integer}(r::Range1{T}) = r.start
+next{T<:Integer}(r::Range1{T}, i) = (i, oftype(T, i+1))
+done{T<:Integer}(r::Range1{T}, i) = i==(r.start+r.len)
 
 ==(r::Ranges, s::Ranges) = (r.start==s.start) & (step(r)==step(s)) & (r.len==s.len)
 ==(r::Range1, s::Range1) = (r.start==s.start) & (r.len==s.len)

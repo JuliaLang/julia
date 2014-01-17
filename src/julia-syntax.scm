@@ -1722,46 +1722,22 @@
      (let ((X (caddr (cadr e)))
 	   (lhs (cadr (cadr e)))
 	   (body (caddr e)))
-       (if
-	(and (pair? X) (eq? (car X) ':) (length= X 3))
-	;; (for (= lhs (: a b)) body)
-	(let* ((cnt (gensy))
-	       (a (cadr X))
-	       (b (caddr X))
-	       (lim (if (number? b) b (gensy))))
-	  `(scope-block
-	    (block
-	     (= ,cnt ,(expand-forms a))
-	     ,.(if (eq? lim b) '() `((= ,lim ,(expand-forms b))))
-	     (break-block loop-exit
-			  (_while (call (top <=) ,cnt ,lim)
-				  (scope-block
-				   (block
-				    ;; NOTE: enable this to force loop-local var
-				    #;(local ,lhs)
-				    (= ,lhs ,cnt)
-				    (break-block loop-cont
-						 ,(expand-forms body))
-				    (= ,cnt (call (top convert)
-						  (call (top typeof) ,cnt)
-						  (call (top +) 1 ,cnt))))))))))
-
-	;; (for (= lhs X) body)
-	(let ((coll  (gensy))
-	      (state (gensy)))
-	  `(scope-block
-	    (block (= ,coll ,(expand-forms X))
-		   (= ,state (call (top start) ,coll))
-		   ,(expand-forms
-		     `(while
-		       (call (top !) (call (top done) ,coll ,state))
-		       (scope-block
-			(block
-			 ;; NOTE: enable this to force loop-local var
-			 #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
-			 ,(lower-tuple-assignment (list lhs state)
-						  `(call (top next) ,coll ,state))
-			 ,body))))))))))
+       ;; (for (= lhs X) body)
+       (let ((coll  (gensy))
+	     (state (gensy)))
+	 `(scope-block
+	   (block (= ,coll ,(expand-forms X))
+		  (= ,state (call (top start) ,coll))
+		  ,(expand-forms
+		    `(while
+		      (call (top !) (call (top done) ,coll ,state))
+		      (scope-block
+		       (block
+			;; NOTE: enable this to force loop-local var
+			#;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
+			,(lower-tuple-assignment (list lhs state)
+						 `(call (top next) ,coll ,state))
+			,body)))))))))
 
    '+=     lower-update-op
    '-=     lower-update-op
