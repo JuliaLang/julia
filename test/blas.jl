@@ -77,7 +77,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test all(tril(BLAS.herk('L', 'C', L4)) .== tril(BLAS.gemm('T', 'N', L4, L4)))
         ans = similar(L4)
         @test all(tril(BLAS.herk('L','C', L4)) .== tril(BLAS.herk!('L', 'C', one(elty), L4, zero(elty), ans)))
-        @test all(symmetrize!(ans, 'L') .== LinAlg.BLAS.gemm('T', 'N', L4, L4))
+        @test all(Base.LinAlg.copytri!(ans, 'L') .== LinAlg.BLAS.gemm('T', 'N', L4, L4))
     else
         @test all(triu(BLAS.syrk('U', 'N', U4)) .== triu(BLAS.gemm('N', 'T', U4, U4)))
         @test all(tril(BLAS.syrk('L', 'N', U4)) .== tril(BLAS.gemm('N', 'T', U4, U4)))
@@ -89,6 +89,6 @@ for elty in (Float32, Float64, Complex64, Complex128)
         @test all(tril(BLAS.syrk('L', 'T', L4)) .== tril(BLAS.gemm('T', 'N', L4, L4)))
         ans = similar(L4)
         @test all(tril(BLAS.syrk('L','T', L4)) .== tril(BLAS.syrk!('L', 'T', one(elty), L4, zero(elty), ans)))
-        @test all(symmetrize!(ans, 'L') .== BLAS.gemm('T', 'N', L4, L4))
+        @test all(Base.LinAlg.copytri!(ans, 'L') .== BLAS.gemm('T', 'N', L4, L4))
     end
 end

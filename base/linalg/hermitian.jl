@@ -17,7 +17,7 @@ function copy!(A::Hermitian, B::Hermitian)
 end
 size(A::Hermitian, args...) = size(A.S, args...)
 getindex(A::Hermitian, i::Integer, j::Integer) = (A.uplo == 'U') == (i < j) ? getindex(A.S, i, j) : conj(getindex(A.S, j, i))
-full(A::Hermitian) = symmetrize_conj!(A.S, A.uplo)
+full(A::Hermitian) = copytri!(A.S, A.uplo, true)
 ishermitian(A::Hermitian) = true
 issym{T<:Real}(A::Hermitian{T}) = true
 issym{T<:Complex}(A::Hermitian{T}) = all(imag(A.S) .== 0)
@@ -57,10 +57,10 @@ function sqrtm(A::Hermitian, cond::Bool=false)
     length(F[:values]) == 0 && return A
     vsqrt = sqrt(complex(F[:values]))
     if all(imag(vsqrt) .== 0)
-        retmat = symmetrize!(scale(F[:vectors], real(vsqrt)) * F[:vectors]')
+        retmat = copytri!(scale(F[:vectors], real(vsqrt)) * F[:vectors]', 'U')
     else
         zc = complex(F[:vectors])
-        retmat = symmetrize!(scale(zc, vsqrt) * zc')
+        retmat = copytri!(scale(zc, vsqrt) * zc', 'U')
     end
     return cond ? (retmat, norm(vsqrt, Inf)^2/norm(F[:values], Inf)) : retmat
 end

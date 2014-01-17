@@ -649,7 +649,6 @@ export
     svdfact,
     svdvals!,
     svdvals,
-    symmetrize!,
     trace,
     transpose,
     tril!,
