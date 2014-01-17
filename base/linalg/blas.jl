@@ -161,14 +161,14 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
                                 (:scnrm2_,:Complex64,:Float32))
     @eval begin
         # SUBROUTINE DNRM2(N,X,INCX)
-        function nrm2(n::Integer, X::Union(Ptr{$elty},Array{$elty}), incx::Integer)
+        function nrm2(n::Integer, X::Union(Ptr{$elty},StridedVector{$elty}), incx::Integer)
             ccall(($(string(fname)),libblas), $ret_type,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &n, X, &incx)
         end
     end
 end
-nrm2(A::Array) = nrm2(length(A), A, 1)
+nrm2(x::StridedVector) = nrm2(length(x), x, stride(x,1))
 
 ## asum
 for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
@@ -177,14 +177,14 @@ for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
                                 (:scasum_,:Complex64,:Float32))
      @eval begin
         # SUBROUTINE ASUM(N, X, INCX)
-        function asum(n::Integer, X::Union(Ptr{$elty},Array{$elty}), incx::Integer)
+        function asum(n::Integer, X::Union(Ptr{$elty},StridedVector{$elty}), incx::Integer)
             ccall(($(string(fname)),libblas), $ret_type,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &n, X, &incx)
         end
     end
 end
-asum(A::Array) = asum(length(A), A, 1)
+asum(x::StridedVector) = asum(length(x), x, stride(x,1))
 
 ## axpy
 for (fname, elty) in ((:daxpy_,:Float64),

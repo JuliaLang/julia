@@ -270,9 +270,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: norm(A, [p])
 
-   Compute the ``p``-norm of a vector or a matrix ``A``, defaulting to the ``p=2``-norm.
+   Compute the ``p``-norm of a vector or the operator norm of a matrix ``A``, defaulting to the ``p=2``-norm.
 
-   For vectors, ``p`` can be any numeric value is valid (even though not all values produce a mathematically valid vector norm). In particular, `norm(A, Inf)`` returns the largest value in ``abs(A)``, whereas ``norm(A, -Inf)`` returns the smallest.
+   For vectors, ``p`` can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, `norm(A, Inf)`` returns the largest value in ``abs(A)``, whereas ``norm(A, -Inf)`` returns the smallest.
 
    For matrices, valid values of ``p`` are ``1``, ``2``, or ``Inf``. Use :func:`normfro` to compute the Frobenius norm.
 
