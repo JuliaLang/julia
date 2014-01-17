@@ -110,8 +110,6 @@ export
     svdfact,
     svdvals!,
     svdvals,
-    symmetrize!,
-    symmetrize_conj!,
     trace,
     transpose,
     tril,

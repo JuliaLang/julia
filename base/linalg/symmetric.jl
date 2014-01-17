@@ -17,7 +17,7 @@ function copy!(A::Symmetric, B::Symmetric)
 end
 size(A::Symmetric, args...) = size(A.S, args...)
 getindex(A::Symmetric, i::Integer, j::Integer) = (A.uplo == 'U') == (i < j) ? getindex(A.S, i, j) : getindex(A.S, j, i)
-full(A::Symmetric) = symmetrize!(A.S, A.uplo)
+full(A::Symmetric) = copytri!(A.S, A.uplo)
 ishermitian{T<:Real}(A::Symmetric{T}) = true
 ishermitian{T<:Complex}(A::Symmetric{T}) = all(imag(A.S) .== 0)
 issym(A::Symmetric) = true
@@ -57,10 +57,10 @@ function sqrtm{T<:Real}(A::Symmetric{T}, cond::Bool)
     F = eigfact(A)
     vsqrt = sqrt(complex(F[:values]))
     if all(imag(vsqrt) .== 0)
-        retmat = symmetrize!(scale(F[:vectors], real(vsqrt)) * F[:vectors]')
+        retmat = copytri!(scale(F[:vectors], real(vsqrt)) * F[:vectors]', 'U')
     else
         zc = complex(F[:vectors])
-        retmat = symmetrize!(scale(zc, vsqrt) * zc')
+        retmat = copytri!(scale(zc, vsqrt) * zc', 'U')
     end
     cond ? (retmat, norm(vsqrt, Inf)^2/norm(F[:values], Inf)) : retmat
 end

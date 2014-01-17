@@ -89,8 +89,8 @@ getindex{T}(A::Triangular{T}, i::Integer, j::Integer) = i == j ? (A.unitdiag == 
 istril(A::Triangular) = A.uplo == 'L' || istriu(A.UL)
 istriu(A::Triangular) = A.uplo == 'U' || istril(A.UL)
 
-transpose(A::Triangular) = Triangular(symmetrize!(A.UL, A.uplo), A.uplo=='U'?'L':'U', A.unitdiag)
-ctranspose(A::Triangular) = Triangular(symmetrize_conj!(A.UL, A.uplo), A.uplo=='U'?'L':'U', A.unitdiag)
+transpose(A::Triangular) = Triangular(copytri!(A.UL, A.uplo), A.uplo=='U'?'L':'U', A.unitdiag)
+ctranspose(A::Triangular) = Triangular(copytri!(A.UL, A.uplo, true), A.uplo=='U'?'L':'U', A.unitdiag)
 diag(A::Triangular) = diag(A.UL)
 big(A::Triangular) = Triangular(big(A.UL), A.uplo, A.unitdiag)
 

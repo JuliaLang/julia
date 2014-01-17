@@ -176,6 +176,8 @@ export PipeString
 @deprecate cholpfact!(A,tol=tol)        cholfact!(A, :U, pivot=true, tol=tol)
 @deprecate cholpfact!(A,uplo,tol=tol)   cholfact!(A, uplo, pivot=true, tol=tol)
 @deprecate cholpfact(A)             cholfact(A, :U, pivot=true)
+@deprecate symmetrize!(A)      Base.LinAlg.copytri!(A, 'U')
+@deprecate symmetrize!(A, uplo)      Base.LinAlg.copytri!(A, uplo)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
