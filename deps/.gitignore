@@ -13,10 +13,11 @@
 /grisu-*
 /libgrisu.so
 /lapack-*
-/libunwind-*
-/libosxunwind-*
-/lighttpd-*
 /libcxx-*
+/libosxunwind-*
+/libunwind-*
+/libuv-*
+/lighttpd-*
 /llvm-*
 /mpfr-*
 /openblas-*

@@ -489,51 +489,54 @@ install-readline: $(READLINE_OBJ_TARGET)
 
 ## LIBUV ##
 
-UV_SRC_TARGET = libuv/.libs/libuv.a
+LIBUV_DIR = libuv-$(LIBUV_VER)
+UV_SRC_TARGET = $(LIBUV_DIR)/.libs/libuv.a
 ifeq ($(OS),WINNT)
 UV_OBJ_TARGET = $(BUILD)/lib/libuv.a
 else
 UV_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libuv.a
 endif
 
-libuv/configure:
-	(cd .. && git submodule init && git submodule update)
-ifeq (exists, $(shell [ -d libuv/.git ] && echo exists ))
-libuv/config.status: libuv/.git/HEAD
-endif
-ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/libuv ] && echo exists ))
-libuv/config.status: $(JULIAHOME)/.git/modules/deps/libuv/HEAD
-endif
-libuv/config.status: libuv/configure
-	cd libuv && \
+libuv-$(LIBUV_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/libuv/tarball/$(LIBUV_VER)
+	touch -c $@
+$(LIBUV_DIR)/configure: libuv-$(LIBUV_VER).tar.gz
+	mkdir $(LIBUV_DIR)
+	tar -C $(LIBUV_DIR) --strip-components 1 -xf $<
+	touch -c $@
+$(LIBUV_DIR)/config.status: $(LIBUV_DIR)/configure
+	cd $(LIBUV_DIR) && \
 	./configure --with-pic $(CONFIGURE_COMMON)
 	touch -c $@
-$(UV_SRC_TARGET): libuv/config.status
-	touch -c libuv/aclocal.m4
-	touch -c libuv/Makefile.in
-	touch -c libuv/configure
-	touch -c libuv/config.status
-	$(MAKE) -C libuv
+$(UV_SRC_TARGET): $(LIBUV_DIR)/config.status
+	touch -c $(LIBUV_DIR)/aclocal.m4
+	touch -c $(LIBUV_DIR)/Makefile.in
+	touch -c $(LIBUV_DIR)/configure
+	touch -c $(LIBUV_DIR)/config.status
+	$(MAKE) -C $(LIBUV_DIR)
 	touch -c $@
-libuv/checked: $(UV_SRC_TARGET)
+$(LIBUV_DIR)/checked: $(UV_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
-	-$(MAKE) -C libuv check
+	-$(MAKE) -C $(LIBUV_DIR) check
 endif
 	echo 1 > $@
-$(UV_OBJ_TARGET): $(UV_SRC_TARGET)
-	$(MAKE) -C libuv install
+$(BUILD)/include/libuv:
+	mkdir $(BUILD)/include/libuv
+$(UV_OBJ_TARGET): $(UV_SRC_TARGET) | $(BUILD)/include/libuv
+	$(MAKE) -C $(LIBUV_DIR) install
 	$(INSTALL_NAME_CMD)libuv.dylib $(BUILD)/$(JL_LIBDIR)/libuv.dylib
+	cp $(LIBUV_DIR)/src/queue.h $(BUILD)/include/libuv
 
 clean-uv:
-	-$(MAKE) -C libuv clean
+	-$(MAKE) -C $(LIBUV_DIR) clean
 	-rm -rf $(BUILD)/lib/libuv.a $(BUILD)/include/uv.h $(BUILD)/include/uv-private
 distclean-uv: clean-uv
-	-$(MAKE) -C libuv distclean
+	-$(MAKE) -C $(LIBUV_DIR) distclean
 
-get-uv: libuv/configure
-configure-uv: libuv/config.status
+get-uv: $(LIBUV_DIR)/configure
+configure-uv: $(LIBUV_DIR)/config.status
 compile-uv: $(UV_SRC_TARGET)
-check-uv: libuv/checked
+check-uv: $(LIBUV_DIR)/checked
 install-uv: $(UV_OBJ_TARGET)
 
 

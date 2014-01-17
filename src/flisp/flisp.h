@@ -6,7 +6,7 @@
 
 #include "platform.h"
 #include "libsupport.h"
-#include "../../deps/libuv/include/uv.h"
+#include "../../usr/include/uv.h"
 
 //#define MEMDEBUG
 //#define MEMDEBUG2
