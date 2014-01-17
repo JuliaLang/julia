@@ -1176,3 +1176,12 @@ function invalid_tupleref()
     end
 end
 @test invalid_tupleref()==true
+
+# issue #5374
+type FileObj5374
+    io::IO
+end
+function read_file5374(fileobj)
+    read(fileobj.io, Float32)
+end
+@test isa(read_file5374(FileObj5374(IOBuffer(Uint8[0,0,0,0]))), Float32)

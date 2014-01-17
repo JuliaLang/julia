@@ -1741,7 +1741,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
             return (e.args[3],())
         end
     end
-    if length(atypes)==2 && is(f,unbox) && isa(atypes[2],DataType)
+    if length(atypes)==2 && is(f,unbox) && isa(atypes[2],DataType) && !atypes[2].mutable && atypes[2].pointerfree
         # remove redundant unbox
         return (e.args[3],())
     end
