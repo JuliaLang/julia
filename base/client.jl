@@ -314,13 +314,10 @@ isinteractive() = (is_interactive::Bool)
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     global const LOAD_PATH = ByteString[]
-    julia_load_path = get(ENV, "JULIA_LOAD_PATH", "")
-    if !isempty(julia_load_path)
+    if haskey(ENV,"JULIA_LOAD_PATH")
         @unix_only sep = ":"
         @windows_only sep = ";"
-        for s in split(julia_load_path,sep)
-            push!(LOAD_PATH, s)
-        end
+        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], sep))
     end
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","local","share","julia","site",vers))
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))
