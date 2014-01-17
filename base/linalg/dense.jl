@@ -287,29 +287,21 @@ function rcswap!{T<:Number}(i::Integer, j::Integer, X::StridedMatrix{T})
     end
 end
 
-function sqrtm{T<:Real}(A::StridedMatrix{T}, cond::Bool)
-    issym(A) && return sqrtm(Symmetric(A), cond)
-    
+function sqrtm{T<:Real}(A::StridedMatrix{T})
+    issym(A) && return sqrtm(Symmetric(A))
     n = chksquare(A)
-    SchurF = schurfact!(complex(A))
+    SchurF = schurfact(complex(A))
     R = full(sqrtm(Triangular(SchurF[:T])))
     retmat = SchurF[:vectors]*R*SchurF[:vectors]'
-    retmat2= all(imag(retmat) .== 0) ? real(retmat) : retmat
-    cond ? (retmat2, norm(R)^2/norm(SchurF[:T])) : retmat2
+    all(imag(retmat) .== 0) ? real(retmat) : retmat
 end
-function sqrtm{T<:Complex}(A::StridedMatrix{T}, cond::Bool)
-    ishermitian(A) && return sqrtm(Hermitian(A), cond)
-    
+function sqrtm{T<:Complex}(A::StridedMatrix{T})
+    ishermitian(A) && return sqrtm(Hermitian(A))
     n = chksquare(A)
     SchurF = schurfact(A)
     R = full(sqrtm(Triangular(SchurF[:T])))
-    retmat = SchurF[:vectors]*R*SchurF[:vectors]'
-    cond ? (retmat, norm(R)^2/norm(SchurF[:T])) : retmat
+    SchurF[:vectors]*R*SchurF[:vectors]'
 end
-
-sqrtm{T<:Integer}(A::StridedMatrix{T}, cond::Bool) = sqrtm(float(A), cond)
-sqrtm{T<:Integer}(A::StridedMatrix{Complex{T}}, cond::Bool) = sqrtm(complex128(A), cond)
-sqrtm(A::StridedMatrix) = sqrtm(A, false)
 sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
 sqrtm(a::Complex) = sqrt(a)
 
@@ -327,7 +319,7 @@ function inv(A::Matrix)
     return inv(lufact(A))
 end
 
-function factorize!{T}(A::Matrix{T})
+function factorize{T}(A::Matrix{T})
     m, n = size(A)
     if m == n
         if m == 1 return A[1] end
@@ -377,9 +369,9 @@ function factorize!{T}(A::Matrix{T})
             end
             if utri1
                 if (herm & (T <: Complex)) | sym
-                    return ldltd!(SymTridiagonal(diag(A), diag(A, -1)))
+                    return ldltd(SymTridiagonal(diag(A), diag(A, -1)))
                 end
-                return lufact!(Tridiagonal(diag(A, -1), diag(A), diag(A, 1)))
+                return lufact(Tridiagonal(diag(A, -1), diag(A), diag(A, 1)))
             end
         end
         if utri
@@ -388,31 +380,35 @@ function factorize!{T}(A::Matrix{T})
         if herm
             if T <: BlasFloat
                 C, info = LAPACK.potrf!('U', copy(A))
-            elseif typeof(one(T)/one(T)) <: BlasFloat
-                C, info = LAPACK.potrf!('U', float(A))
-            else
-                error("Unable to factorize hermitian $(typeof(A)). Try converting to other element type or use explicit factorization.")
+            else 
+                S = typeof(one(T)/one(T))
+                if S <: BlasFloat
+                    C, info = LAPACK.potrf!('U', convert(Matrix{S}, A))
+                else
+                    C, info = S <: Real ? LAPACK.potrf!('U', complex128(A)) : LAPACK.potrf!('U', complex128(A))
+                end
             end
             if info == 0 return Cholesky(C, 'U') end
-            return factorize!(Hermitian(A))
+            return factorize(Hermitian(A))
         end
         if sym
             if T <: BlasFloat
                 C, info = LAPACK.potrf!('U', copy(A))
-            elseif eltype(one(T)/one(T)) <: BlasFloat
-                C, info = LAPACK.potrf!('U', float(A))
             else
-                error("Unable to factorize symmetric $(typeof(A)). Try converting to other element type or use explicit factorization.")
+                S = eltype(one(T)/one(T))
+                if S <: BlasFloat
+                    C, info = LAPACK.potrf!('U', convert(Matrix{S},A))
+                else
+                    C, info = S <: Real ? LAPACK.potrf!('U', float64(A)) : LAPACK.potrf!('U', complex(A))
+                end
             end
             if info == 0 return Cholesky(C, 'U') end
-            return factorize!(Symmetric(A))
+            return factorize(Symmetric(A))
         end
-        return lufact!(A)
+        return lufact(A)
     end
-    return qrfact!(A,pivot=true)
+    qrfact(A,pivot=T<:BlasFloat)
 end
-
-factorize(A::AbstractMatrix) = factorize!(copy(A))
 
 (\)(a::Vector, B::StridedVecOrMat) = (\)(reshape(a, length(a), 1), B)
 function (\)(A::StridedMatrix, B::StridedVecOrMat)
@@ -424,32 +420,31 @@ function (\)(A::StridedMatrix, B::StridedVecOrMat)
         istriu(A) && return \(Triangular(A, :U),B)
         return \(lufact(A),B)
     end
-    return qrfact(A,pivot=true)\B
+    return qrfact(A,pivot=eltype(A)<:BlasFloat)\B
 end
 
 ## Moore-Penrose inverse
-function pinv{T<:BlasFloat}(A::StridedMatrix{T})
-    m, n = size(A)
-    (m == 0 || n == 0) && return Array(T, n, m)
-    SVD         = svdfact(A, true)
-    Sinv        = zeros(T, length(SVD[:S]))
-    index       = SVD[:S] .> eps(real(one(T)))*max(m,n)*maximum(SVD[:S])
-    Sinv[index] = 1.0 ./ SVD[:S][index]
+function pinv{T}(A::StridedMatrix{T})
+    SVD         = svdfact(A, thin=true)
+    S           = eltype(SVD[:S])
+    m, n        = size(A)
+    (m == 0 || n == 0) && return Array(S, n, m)
+    Sinv        = zeros(S, length(SVD[:S]))
+    index       = SVD[:S] .> eps(real(float(one(T))))*max(m,n)*maximum(SVD[:S])
+    Sinv[index] = one(S) ./ SVD[:S][index]
     return SVD[:Vt]'scale(Sinv, SVD[:U]')
 end
-pinv{T<:Integer}(A::StridedMatrix{T}) = pinv(float(A))
 pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
 pinv(x::Number) = one(x)/x
 
 ## Basis for null space
-function null{T<:BlasFloat}(A::StridedMatrix{T})
+function null{T}(A::StridedMatrix{T})
     m, n = size(A)
     (m == 0 || n == 0) && return eye(T, n)
-    SVD = svdfact(A, false)
+    SVD = svdfact(A, thin=false)
     indstart = sum(SVD[:S] .> max(m,n)*maximum(SVD[:S])*eps(eltype(SVD[:S]))) + 1
     return SVD[:V][:,indstart:end]
 end
-null{T<:Integer}(A::StridedMatrix{T}) = null(float(A))
 null(a::StridedVector) = null(reshape(a, length(a), 1))
 
 function cond(A::StridedMatrix, p::Real=2) 

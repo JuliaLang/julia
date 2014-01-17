@@ -110,6 +110,8 @@ Library improvements
 
       * Balancing options for eigenvector calculations for general matrices ([#5428]).
 
+      * Mutating linear algebra functions no longer promote ([#5526]).
+
     * Sparse linear algebra
 
       * Faster sparse `kron` ([#4958]).
@@ -147,6 +149,8 @@ Library improvements
 
       * LU factorization ([#5381] and [#5430])
 
+      * QR factorization ([#5526])
+
   * New function `deleteat!` deletes a specified index or indices and
     returns the updated collection
 
@@ -176,6 +180,8 @@ Deprecated or removed
   * `symmetrize!` is deprecated in favor of `Base.LinAlg.copytri!` ([#5427])
 
   * `myindexes` has been renamed to `localindexes` ([#5475])
+
+  * `factorize!` is deprecated in favor of `factorize`. ([#5526])
 
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
@@ -220,6 +226,7 @@ Deprecated or removed
 [#5025]: https://github.com/JuliaLang/julia/pull/5025
 [#4888]: https://github.com/JuliaLang/julia/pull/4888
 [#5475]: https://github.com/JuliaLang/julia/pull/5475
+[#5526]: https://github.com/JuliaLang/julia/pull/5526
 
 Julia v0.2.0 Release Notes
 ==========================
