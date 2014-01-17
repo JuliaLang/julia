@@ -315,9 +315,7 @@ function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     global const LOAD_PATH = ByteString[]
     if haskey(ENV,"JULIA_LOAD_PATH")
-        @unix_only sep = ":"
-        @windows_only sep = ";"
-        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], sep))
+        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @windows? ';' : ':'))    
     end
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","local","share","julia","site",vers))
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))
