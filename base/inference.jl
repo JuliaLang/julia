@@ -2367,6 +2367,16 @@ function code_typed(f::Callable, types)
     asts
 end
 
+function return_types(f::Callable, types)
+    rt = {}
+    for x in _methods(f,types,-1)
+        linfo = x[3].func.code
+        (tree, ty) = typeinf(linfo, x[1], x[2])
+        push!(rt, ty)
+    end
+    rt
+end
+
 #tfunc(f,t) = methods(f,t)[1].func.code.tfunc
 
 ccall(:jl_enable_inference, Void, ())
