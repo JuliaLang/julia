@@ -652,7 +652,7 @@ setindex!(A::BitMatrix, x::AbstractArray, I::AbstractVector{Bool}, J::AbstractVe
 setindex!(A::BitMatrix, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) =
     (A[find(I),find(J)] = x)
 
-setindex!{T<:Integer}(A::BitMatrix, x::AbstractArray, I::AbstractVector{T}, J::AbstractVector{Bool}) =
+setindex!{T<:Real}(A::BitMatrix, x::AbstractArray, I::AbstractVector{T}, J::AbstractVector{Bool}) =
     (A[I,find(J)] = x)
 
 setindex!{T<:Real}(A::BitMatrix, x, I::AbstractVector{T}, J::AbstractVector{Bool}) =
@@ -1695,17 +1695,6 @@ function findn(B::BitMatrix)
     return (I, J)
 end
 
-function findn_one(ivars)
-    s = { quote I[$i][count] = $(ivars[i]) end for i = 1:length(ivars)}
-    quote
-        Bind = B[$(ivars...)]
-        if Bind
-            $(s...)
-            count +=1
-        end
-    end
-end
-
 function findnz(B::BitMatrix)
     I, J = findn(B)
     return (I, J, trues(length(I)))
@@ -1904,48 +1893,13 @@ ctranspose(B::BitArray) = transpose(B)
 
 ## Permute array dims ##
 
-function permute_one_dim(ivars, stridenames)
-    len = length(ivars)
-    counts = { symbol(string("count",i)) for i=1:len}
-    toReturn = cell(len+1,2)
-    for i = 1:length(toReturn)
-        toReturn[i] = nothing
-    end
-
-    tmp = counts[end]
-    toReturn[len+1] = quote
-        ind = 1
-        $tmp = $(stridenames[len])
-    end
-
-    #inner most loop
-    toReturn[1] = quote
-        P[ind] = B[+($(counts...))+offset]
-        ind+=1
-        $(counts[1]) += $(stridenames[1])
-    end
-    for i = 1:len-1
-        tmp = counts[i]
-        val = i
-        toReturn[(i+1)] = quote
-            $tmp = $(stridenames[val])
-        end
-        tmp2 = counts[i+1]
-        val = i+1
-        toReturn[(i+1)+(len+1)] = quote
-            $tmp2 += $(stridenames[val])
-        end
-    end
-    toReturn
-end
-
 function permutedims(B::Union(BitArray,StridedArray), perm)
     dimsB = size(B)
     ndimsB = length(dimsB)
     (ndimsB == length(perm) && isperm(perm)) || error("no valid permutation of dimensions")
     dimsP = ntuple(ndimsB, i->dimsB[perm[i]])::typeof(dimsB)
     P = similar(B, dimsP)
-	permutedims!(P,B,perm)
+    permutedims!(P, B, perm)
 end
 
 
