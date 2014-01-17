@@ -412,12 +412,24 @@ function factorize!{T}(A::Matrix{T})
             return Triangular(A, :U)
         end
         if herm
-            C, info = T <: BlasFloat ? LAPACK.potrf!('U', copy(A)) : LAPACK.potrf!('U', float(A))
+            if T <: BlasFloat
+                C, info = LAPACK.potrf!('U', copy(A))
+            elseif typeof(one(T)/one(T)) <: BlasFloat
+                C, info = LAPACK.potrf!('U', float(A))
+            else
+                error("Unable to factorize hermitian $(typeof(A)). Try converting to other element type or use explicit factorization.")
+            end
             if info == 0 return Cholesky(C, 'U') end
             return factorize!(Hermitian(A))
         end
         if sym
-            C, info = T <: BlasFloat ? LAPACK.potrf!('U', copy(A)) : LAPACK.potrf!('U', float(A))
+            if T <: BlasFloat
+                C, info = LAPACK.potrf!('U', copy(A))
+            elseif eltype(one(T)/one(T)) <: BlasFloat
+                C, info = LAPACK.potrf!('U', float(A))
+            else
+                error("Unable to factorize symmetric $(typeof(A)). Try converting to other element type or use explicit factorization.")
+            end
             if info == 0 return Cholesky(C, 'U') end
             return factorize!(Symmetric(A))
         end
@@ -428,13 +440,8 @@ end
 
 factorize(A::AbstractMatrix) = factorize!(copy(A))
 
-(\){T1<:BlasFloat, T2<:BlasFloat}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) =
-    (\)(convert(Array{promote_type(T1,T2)},A), convert(Array{promote_type(T1,T2)},B))
-(\){T1<:BlasFloat, T2<:Number}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(A, convert(Array{T1}, B))
-(\){T1<:Number, T2<:BlasFloat}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(convert(Array{T2}, A), B)
-(\){T1<:Number, T2<:Number}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = T1<:Complex||T2<:Complex ? (\)(complex128(A), complex128(B)) : (\)(float64(A), float64(B))
 (\)(a::Vector, B::StridedVecOrMat) = (\)(reshape(a, length(a), 1), B)
-function (\){T<:BlasFloat}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
+function (\)(A::StridedMatrix, B::StridedVecOrMat)
     m, n = size(A)
     if m == n
         if istril(A)
