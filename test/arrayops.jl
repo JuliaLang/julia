@@ -804,3 +804,10 @@ A = [NaN]; B = [NaN]
 
 include("reducedim.jl")
 
+# Check that return types can be inferred
+rt = Base.return_types(getindex, (Array{Float64, 3}, Vector{Int}, Float64, Range1{Int}))
+@test length(rt) == 1 && rt[1] == Array{Float64, 3}
+rt = Base.return_types(setindex!, (Array{Int32, 3}, Uint8, Vector{Int}, Float64, Range1{Int}))
+@test length(rt) == 1 && rt[1] == Array{Int32, 3}
+rt = Base.return_types(fill!, (Array{Int32, 3}, Uint8))
+@test length(rt) == 1 && rt[1] == Array{Int32, 3}
