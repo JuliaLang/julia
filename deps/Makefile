@@ -182,7 +182,6 @@ LLVM_TAR=llvm-$(LLVM_VER).tar.gz
 else
 LLVM_TAR=llvm-$(LLVM_VER).src.tar.gz
 endif
-endif
 
 ifeq ($(BUILD_LLVM_CLANG),1)
 ifeq ($(LLVM_VER), 3.0)
@@ -201,6 +200,7 @@ else
 LLVM_CLANG_TAR=
 LLVM_COMPILER_RT_TAR=
 LLVM_LIBCXX_TAR=
+endif
 endif
 
 LLVM_TARGET_FLAGS= --enable-targets=host
