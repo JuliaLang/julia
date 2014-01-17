@@ -1,5 +1,3 @@
-### TODO: implement bitarray functions in terms of cartesian and delete gen_cartesian_map
-
 ### From array.jl
 
 @ngenerate N function _checksize(A::AbstractArray, I::NTuple{N, Any}...)
@@ -138,401 +136,209 @@ end
 
 fill!(A::AbstractArray, x) = (_fill!(A, x); return A)
 
-## code generator for specializing on the number of dimensions ##
-
-#otherbodies are the bodies that reside between loops, if its a 2 dimension array.
-function make_loop_nest(vars, ranges, body)
-    otherbodies = cell(length(vars),2)
-    #println(vars)
-    for i = 1:2*length(vars)
-        otherbodies[i] = nothing
-    end
-    make_loop_nest(vars, ranges, body, otherbodies)
-end
-
-function make_loop_nest(vars, ranges, body, otherbodies)
-    expr = body
-    len = size(otherbodies)[1]
-    for i=1:length(vars)
-        v = vars[i]
-        r = ranges[i]
-        l = otherbodies[i]
-        j = otherbodies[i+len]
-        expr = quote
-            $l
-            for ($v) = ($r)
-                $expr
-            end
-            $j
-        end
-    end
-    expr
-end
-
-
-## genbodies() is a function that creates an array (potentially 2d),
-## where the first element is inside the inner most array, and the last
-## element is outside most loop, and all the other arguments are
-## between each loop. If it creates a 2d array, it just means that it
-## specifies what it wants to do before and after each loop.
-## If genbodies creates an array it must of length N.
-function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
-    if ranges === ()
-        ranges = (1,)
-    end
-    N = length(ranges)
-    if !haskey(cache,N)
-        if isdefined(genbodies,:code)
-            mod = genbodies.code.module
-        else
-            mod = Main
-        end
-        dimargnames = { symbol(string("_d",i)) for i=1:N }
-        ivars = { symbol(string("_i",i)) for i=1:N }
-        bodies = genbodies(ivars)
-
-        ## creating a 2d array, to pass as bodies
-        if isa(bodies,Array)
-            if (ndims(bodies)==2)
-                #println("2d array noticed")
-                body = bodies[1]
-                bodies = bodies[2:end,:]
-            elseif (ndims(bodies)==1)
-                #println("1d array noticed")
-                body = bodies[1]
-                bodies_tmp = cell(N,2)
-                for i = 1:N
-                    bodies_tmp[i] = bodies[i+1]
-                    bodies_tmp[i+N] = nothing
-                end
-                bodies = bodies_tmp
-            end
-        else
-            #println("no array noticed")
-            body = bodies
-            bodies = cell(N,2)
-            for i=1:2*N
-                bodies[i] = nothing
-            end
-        end
-        fexpr =
-        quote
-            local _F_
-            function _F_($(dimargnames...), $(exargnames...))
-                $(make_loop_nest(ivars, dimargnames, body, bodies))
-            end
-            _F_
-        end
-        f = eval(mod,fexpr)
-        cache[N] = f
-    else
-        f = cache[N]
-    end
-    return f(ranges..., exargs...)
-end
-
 
 ### from bitarray.jl
 
 # note: we can gain some performance if the first dimension is a range;
+# but we need to single-out the N=0 case due to how @ngenerate works
+# case N = 0
+function getindex(B::BitArray, I0::Range1{Int})
+    ndims(B) < 1 && error("wrong number of dimensions")
+    checkbounds(B, I0)
+    X = BitArray(length(I0))
+    copy_chunks(X.chunks, 1, B.chunks, first(I0), length(I0))
+    return X
+end
+
 # TODO: extend to I:Union(Real,AbstractArray)... (i.e. not necessarily contiguous)
-let getindex_cache = nothing
-    global getindex
-    function getindex(B::BitArray, I0::Range1{Int}, I::Union(Real,Range1{Int})...)
-        # the < should become a != once
-        # the stricter indexing behaviour is enforced
-        if ndims(B) < 1 + length(I)
-            error("wrong number of dimensions")
-        end
-        checkbounds(B, I0, I...)
-        X = BitArray(index_shape(I0, I...))
-        nI = 1 + length(I)
+@ngenerate N function getindex(B::BitArray, I0::Range1{Int}, IR::NTuple{N,Union(Real,Range1{Int})}...)
+    ndims(B) < N+1 && error("wrong number of dimensions")
+    checkbounds(B, I0, IR...)
+    X = BitArray(index_shape(I0, IR...))
 
-        I = map(x->(isa(x,Real) ? (to_index(x):to_index(x)) : to_index(x)), I[1:nI-1])
+    I = map(x->(isa(x,Real) ? (to_index(x):to_index(x)) : to_index(x)), tuple(IR...))
 
-        f0 = first(I0)
-        l0 = length(I0)
+    f0 = first(I0)
+    l0 = length(I0)
 
-        gap_lst = Int[last(r)-first(r)+1 for r in I]
-        stride_lst = Array(Int, nI)
-        stride = 1
-        ind = f0
-        for k = 1 : nI - 1
-            stride *= size(B, k)
-            stride_lst[k] = stride
-            ind += stride * (first(I[k]) - 1)
-            gap_lst[k] *= stride
-        end
-        # we only need nI-1 elements, the last one
-        # is dummy (used in bodies[k,2] below)
-        stride_lst[nI] = 0
-
-        if ndims(X) == 1
-            copy_chunks(X.chunks, 1, B.chunks, ind, l0)
-            return X
-        end
-
-        if is(getindex_cache,nothing)
-            getindex_cache = Dict()
-        end
-
-        gen_cartesian_map(getindex_cache,
-            ivars->begin
-                bodies = cell(nI, 2)
-                bodies[1] = quote
-                        copy_chunks(X.chunks, storeind, B.chunks, ind, l0)
-                        storeind += l0
-                        ind += stride_lst[loop_ind]
-                    end
-                for k = 2 : nI
-                    bodies[k, 1] = quote
-                        loop_ind -= 1
-                    end
-                    bodies[k, 2] = quote
-                        ind -= gap_lst[loop_ind]
-                        loop_ind += 1
-                        ind += stride_lst[loop_ind]
-                    end
-                end
-                return bodies
-            end,
-            I, (:B, :X, :storeind, :ind, :l0, :stride_lst, :gap_lst, :loop_ind),
-            B, X, 1, ind, l0, stride_lst, gap_lst, nI)
-        return X
+    gap_lst = Int[i==1 ? 0 : last(I[i-1])-first(I[i-1])+1 for i = 1:N+1]
+    stride_lst = Array(Int, N)
+    stride = 1
+    ind = f0
+    for k = 1 : N
+        stride *= size(B, k)
+        stride_lst[k] = stride
+        ind += stride * (first(I[k]) - 1)
+        gap_lst[k+1] *= stride
     end
+
+    storeind = 1
+    @nloops(N, i, d->I[d],
+        d->nothing, # PRE
+        d->(ind += stride_lst[d] - gap_lst[d]), # POST
+        begin # BODY
+            copy_chunks(X.chunks, storeind, B.chunks, ind, l0)
+            storeind += l0
+        end)
+    return X
 end
 
-let getindex_cache = nothing
-    global getindex
-    function getindex(B::BitArray, I::Union(Real,AbstractVector)...)
-        checkbounds(B, I...)
-        I = to_index(I)
-        X = BitArray(index_shape(I...))
-        Xc = X.chunks
+@ngenerate N function getindex(B::BitArray, I::NTuple{N,Union(Real,AbstractVector)}...)
+    checkbounds(B, I...)
+    J = to_index(I...)
+    X = BitArray(index_shape(J...))
+    Xc = X.chunks
 
-        if is(getindex_cache,nothing)
-            getindex_cache = Dict()
-        end
-        gen_cartesian_map(getindex_cache, ivars -> quote
-                #faster X[storeind] = B[$(ivars...)]
-                setindex_unchecked(Xc, B[$(ivars...)], ind)
-                ind += 1
-            end, I, (:B, :Xc, :ind), B, Xc, 1)
-        return X
+    ind = 1
+    @nloops N i d->J[d] begin
+        setindex_unchecked(Xc, (@nref N B i), ind)
+        ind += 1
     end
+    return X
 end
 
-let setindex_cache = nothing
-    global setindex_array2bitarray_ranges
-    function setindex_array2bitarray_ranges(B::BitArray, X::BitArray, I0::Range1{Int}, I::Range1{Int}...)
-        nI = 1 + length(I)
-        if ndims(B) != nI
-            error("wrong number of dimensions in assigment")
-        end
-        lI = length(I0)
-        for r in I
-            lI *= length(r)
-        end
-        if length(X) != lI
-            error("array assignment dimensions mismatch")
-        end
-        if lI == 0
-            return B
-        end
-        f0 = first(I0)
-        l0 = length(I0)
-        if nI == 1
-            copy_chunks(B.chunks, f0, X.chunks, 1, l0)
-            return B
-        end
-        if is(setindex_cache,nothing)
-            setindex_cache = Dict()
-        end
-        gap_lst = [last(r)-first(r)+1 for r in I]
-        stride_lst = Array(Int, nI)
-        stride = 1
-        ind = f0
-        @inbounds for k = 1 : nI - 1
-            stride *= size(B, k)
-            stride_lst[k] = stride
-            ind += stride * (first(I[k]) - 1)
-            gap_lst[k] *= stride
-        end
-        # we only need nI-1 elements, the last one
-        # is dummy (used in bodies[k,2] below)
-        stride_lst[nI] = 0
-
-        gen_cartesian_map(setindex_cache,
-            ivars->begin
-                bodies = cell(nI, 2)
-                bodies[1] = quote
-                        copy_chunks(B.chunks, ind, X.chunks, refind, l0)
-                        refind += l0
-                        ind += stride_lst[loop_ind]
-                    end
-                for k = 2 : nI
-                    bodies[k, 1] = quote
-                        loop_ind -= 1
-                    end
-                    bodies[k, 2] = quote
-                        ind -= gap_lst[loop_ind]
-                        loop_ind += 1
-                        ind += stride_lst[loop_ind]
-                    end
-                end
-                return bodies
-            end,
-            I, (:B, :X, :refind, :ind, :l0, :stride_lst, :gap_lst, :loop_ind),
-            B, X, 1, ind, l0, stride_lst, gap_lst, nI)
-        return B
-    end
+# case N = 0
+function setindex_array2bitarray_ranges(B::BitArray, X::BitArray, I0::Range1{Int})
+    ndims(B) != 1 && error("wrong number of dimensions in assigment")
+    lI = length(I0)
+    length(X) != lI && error("array assignment dimensions mismatch")
+    lI == 0 && return B
+    f0 = first(I0)
+    l0 = length(I0)
+    copy_chunks(B.chunks, f0, X.chunks, 1, l0)
+    return B
 end
 
-let setindex_cache = nothing
-    global setindex!
-    function setindex!(B::BitArray, X::AbstractArray, I::Union(Real,AbstractArray)...)
-        I = to_index(I)
-        nel = 1
-        for idx in I
-            nel *= length(idx)
+@ngenerate N function setindex_array2bitarray_ranges(B::BitArray, X::BitArray, I0::Range1{Int}, IR::NTuple{N,Range1{Int}}...)
+    ndims(B) != N+1 && error("wrong number of dimensions in assigment")
+    lI = length(I0)
+
+    I = tuple(IR...)
+    for r in I
+        lI *= length(r)
+    end
+    length(X) != lI && error("array assignment dimensions mismatch")
+    lI == 0 && return B
+    f0 = first(I0)
+    l0 = length(I0)
+
+    gap_lst = Int[i==1 ? 0 : last(I[i-1])-first(I[i-1])+1 for i = 1:N+1]
+    stride_lst = Array(Int, N)
+    stride = 1
+    ind = f0
+    @inbounds for k = 1 : N
+        stride *= size(B, k)
+        stride_lst[k] = stride
+        ind += stride * (first(I[k]) - 1)
+        gap_lst[k+1] *= stride
+    end
+
+    refind = 1
+    @nloops(N, i, d->I[d],
+        d->nothing, # PRE
+        d->(ind += stride_lst[d] - gap_lst[d]), # POST
+        begin # BODY
+            copy_chunks(B.chunks, ind, X.chunks, refind, l0)
+            refind += l0
+        end)
+
+    return B
+end
+
+@ngenerate N function setindex!(B::BitArray, X::AbstractArray, I::NTuple{N,Union(Real,AbstractArray)}...)
+    J = to_index(I...)
+    nel = 1
+    for idx in J
+        nel *= length(idx)
+    end
+    length(X) != nel && error("argument dimensions must match")
+    if ndims(X) > 1
+        for i = 1:length(J)
+            size(X,i) != length(J[i]) && error("argument dimensions must match")
         end
-        if length(X) != nel
-            error("argument dimensions must match")
-        end
-        if ndims(X) > 1
-            for i = 1:length(I)
-                if size(X,i) != length(I[i])
-                    error("argument dimensions must match")
-                end
+    end
+    refind = 1
+    @nloops N i d->J[d] begin
+        (@nref N B i) = X[refind]
+        refind += 1
+    end
+    return B
+end
+
+@ngenerate N function setindex!(B::BitArray, x, I::NTuple{N,Union(Real,AbstractArray)}...)
+    x = convert(Bool, x)
+    checkbounds(B, I...)
+    J = to_index(I...)
+    Bc = B.chunks
+    @nloops N i d->J[d] begin
+        (@nref N B i) = x # TODO: should avoid bounds checking
+    end
+    return B
+end
+
+@ngenerate N function findn{N}(B::BitArray{N})
+    nnzB = nnz(B)
+    I = ntuple(N, x->Array(Int, nnzB))
+    if nnzB > 0
+        count = 1
+        @nloops N i B begin
+            if (@nref N B i) # TODO: should avoid bounds checking
+                @nexprs N d->(I[d][count] = i_d)
+                count += 1
             end
         end
-        if is(setindex_cache,nothing)
-            setindex_cache = Dict()
-        end
-        gen_cartesian_map(setindex_cache,
-            ivars->:(B[$(ivars...)] = X[refind]; refind += 1),
-            I,
-            (:B, :X, :refind),
-            B, X, 1)
-        return B
-    end
-end
-
-let setindex_cache = nothing
-    global setindex!
-    function setindex!(B::BitArray, x, I::Union(Real,AbstractArray)...)
-        x = convert(Bool, x)
-        checkbounds(B, I...)
-        I = to_index(I)
-        if is(setindex_cache,nothing)
-            setindex_cache = Dict()
-        end
-        gen_cartesian_map(setindex_cache, ivars->:(B[$(ivars...)] = x),
-            I,
-            (:B, :x),
-            B, x)
-        return B
-    end
-end
-
-let findn_cache = nothing
-global findn
-function findn(B::BitArray)
-    ndimsB = ndims(B)
-    nnzB = nnz(B)
-    I = ntuple(ndimsB, x->Array(Int, nnzB))
-    if nnzB > 0
-        ranges = ntuple(ndims(B), d->(1:size(B,d)))
-
-        if is(findn_cache,nothing)
-            findn_cache = Dict()
-        end
-
-        gen_cartesian_map(findn_cache, findn_one, ranges,
-                          (:B, :I, :count), B, I, 1)
     end
     return I
 end
+
+for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
+    @eval begin
+    @ngenerate N function permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
+        dimsB = size(B)
+        ndimsB = N
+        (length(perm) == N && isperm(perm)) || error("no valid permutation of dimensions")
+        dimsP = size(P)
+        for i = 1:length(perm)
+            dimsP[i] == dimsB[perm[i]] || error("destination tensor of incorrect size")
+        end
+
+        #calculates all the strides
+        @nexprs N d->(strides_d = (d > 1 ? stride(B, perm[d-1]) : 0))
+        strides_last = stride(B, perm[N])
+
+        #Creates offset, because indexing starts at 1
+        offset = strides_last
+        @nexprs N d->(offset += strides_d)
+        offset = 1 - offset
+
+        if isa(B, SubArray)
+            offset += B.first_index - 1
+            B = B.parent
+        end
+
+        ind = 1
+        counts_last = strides_last
+        @nloops(N, i, P,
+            d->begin # PRE
+                counts_d = strides_d
+            end,
+            d->begin # POST
+                if d < N
+                    counts_{d+1} += strides_{d+1}
+                else
+                    counts_last += strides_last
+                end
+            end,
+            begin # BODY
+                sumc = 0
+                @nexprs N d->(sumc += counts_d)
+                # note: could use @inbounds, but it does not seem to
+                #       improve performance
+                P[ind] = B[sumc+counts_last+offset]
+                ind += 1
+            end)
+
+        return P
+    end
+    end
 end
-
-let permutedims_cache = nothing, stridenames::Array{Any,1} = {}
-global permutedims!
-function permutedims!(P::BitArray,B::BitArray, perm)
-    dimsB = size(B)
-    ndimsB = length(dimsB)
-    (ndimsB == length(perm) && isperm(perm)) || error("no valid permutation of dimensions")
-	dimsP = size(P)
-    for i = 1:length(perm)
-        dimsP[i] == dimsB[perm[i]] || error("destination tensor of incorrect size")
-    end
-	
-    ranges = ntuple(ndimsB, i->(1:dimsP[i]))
-    while length(stridenames) < ndimsB
-        push!(stridenames, gensym())
-    end
-
-    #calculates all the strides
-    strides = [ prod(dimsB[1:(perm[dim]-1)])::Int for dim = 1:length(perm) ]
-
-    #Creates offset, because indexing starts at 1
-    offset = 0
-    for i in strides
-        offset+=i
-    end
-    offset = 1-offset
-
-    if isa(B,SubArray)
-        offset += (B.first_index-1)
-        B = B.parent
-    end
-
-    if is(permutedims_cache,nothing)
-        permutedims_cache = Dict()
-    end
-
-    gen_cartesian_map(permutedims_cache, iv->permute_one_dim(iv,stridenames), ranges,
-                      tuple(:B, :P, :perm, :offset, stridenames[1:ndimsB]...),
-                      B, P, perm, offset, strides...)
-
-    return P
-end
-function permutedims!(P::Array,B::StridedArray, perm)
-    dimsB = size(B)
-    ndimsB = length(dimsB)
-    (ndimsB == length(perm) && isperm(perm)) || error("no valid permutation of dimensions")
-	dimsP = size(P)
-    for i = 1:length(perm)
-        dimsP[i] == dimsB[perm[i]] || error("destination tensor of incorrect size")
-    end
-	
-    ranges = ntuple(ndimsB, i->(1:dimsP[i]))
-    while length(stridenames) < ndimsB
-        push!(stridenames, gensym())
-    end
-
-    #calculates all the strides
-    strides = [ stride(B, perm[dim]) for dim = 1:length(perm) ]
-
-    #Creates offset, because indexing starts at 1
-    offset = 0
-    for i in strides
-        offset+=i
-    end
-    offset = 1-offset
-
-    if isa(B,SubArray)
-        offset += (B.first_index-1)
-        B = B.parent
-    end
-
-    if is(permutedims_cache,nothing)
-        permutedims_cache = Dict()
-    end
-
-    gen_cartesian_map(permutedims_cache, iv->permute_one_dim(iv,stridenames), ranges,
-                      tuple(:B, :P, :perm, :offset, stridenames[1:ndimsB]...),
-                      B, P, perm, offset, strides...)
-
-    return P
-end
-end # let
