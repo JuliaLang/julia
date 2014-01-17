@@ -825,6 +825,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     dt->size = size;
     dt->struct_decl = NULL;
     dt->instance = NULL;
+    dt->ditype = NULL;
     dt->abstract = flags&1;
     dt->mutabl = (flags>>1)&1;
     dt->pointerfree = (flags>>2)&1;
@@ -842,6 +843,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         dt->instance->type = (jl_value_t*)dt;
     }
     assert(tree_literal_values==NULL && mode != MODE_AST);
+
     ptrhash_put(&backref_table, (void*)(ptrint_t)pos, dt);
     if (tag == 5 || tag == 8) {
         arraylist_push(&flagref_list, dt);
