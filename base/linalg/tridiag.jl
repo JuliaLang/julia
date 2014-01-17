@@ -13,7 +13,7 @@ end
 SymTridiagonal{T}(dv::Vector{T}, ev::Vector{T}) = SymTridiagonal{T}(copy(dv), copy(ev))
 
 function SymTridiagonal{Td,Te}(dv::Vector{Td}, ev::Vector{Te})
-    T = promote(Td,Te)
+    T = promote_type(Td,Te)
     SymTridiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev))
 end
 
@@ -231,9 +231,11 @@ convert(::Type{Tridiagonal}, A::SymTridiagonal) = Tridiagonal(A.ev, A.dv, A.ev)
 -(A::Tridiagonal, B::SymTridiagonal) = Tridiagonal(A.dl-B.ev, A.d-B.dv, A.du-B.ev)
 -(A::SymTridiagonal, B::Tridiagonal) = Tridiagonal(A.ev-B.dl, A.dv-B.d, A.ev-B.du)
 
+convert{T}(::Type{Tridiagonal{T}},M::Tridiagonal) = Tridiagonal(convert(Vector{T}, M.dl), convert(Vector{T}, M.d), convert(Vector{T}, M.du))
 convert{T}(::Type{Tridiagonal{T}}, M::SymTridiagonal{T}) = Tridiagonal(M)
 convert{T}(::Type{SymTridiagonal{T}}, M::Tridiagonal) = M.dl==M.du ? (SymTridiagonal(M.dl, M.d)) :
     error("Tridiagonal is not symmetric, cannot convert to SymTridiagonal")
+convert{T}(::Type{SymTridiagonal{T}},M::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, M.dv), convert(Vector{T}, M.ev))
 
 ## Solvers
 
@@ -367,9 +369,9 @@ end
 LDLTTridiagonal{S<:BlasFloat,T<:BlasFloat}(D::Vector{S}, E::Vector{T}) = LDLTTridiagonal{T,S}(D, E)
 
 ldltd!{T<:BlasFloat}(A::SymTridiagonal{T}) = LDLTTridiagonal(LAPACK.pttrf!(real(A.dv),A.ev)...)
-ldltd!{T<:Integer}(A::SymTridiagonal{T}) = ldltd!(SymTridiagonal(float(A.dv),float(A.ev)))
-ldltd(A::SymTridiagonal) = ldltd!(copy(A))
-factorize!(A::SymTridiagonal) = ldltd(A)
+ldltd{T<:BlasFloat}(A::SymTridiagonal{T}) = ldltd!(copy(A))
+ldltd{T}(A::SymTridiagonal{T}) = (S = promote_type(typeof(sqrt(one(T))),Float32); S != T ? ldltd!(convert(SymTridiagonal{S},A)) : ldltd!(copy(A)))
+factorize(A::SymTridiagonal) = ldltd(A)
 
 A_ldiv_B!{T<:BlasReal}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) = LAPACK.pttrs!(C.D, C.E, B)
 A_ldiv_B!{T<:BlasComplex}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) = LAPACK.pttrs!('L', C.D, C.E, B)
@@ -391,9 +393,9 @@ type LUTridiagonal{T} <: Factorization{T}
     # end
 end
 lufact!{T<:BlasFloat}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(A.dl,A.d,A.du)...)
-lufact!{T<:Union(Rational,Integer)}(A::Tridiagonal{T}) = lufact!(float(A))
-lufact(A::Tridiagonal) = lufact!(copy(A))
-factorize!(A::Tridiagonal) = lufact!(A)
+lufact{T<:BlasFloat}(A::Tridiagonal{T}) = lufact!(copy(A))
+lufact{T}(A::Tridiagonal{T}) = (S = promote_type(typeof(sqrt(one(T))),Float32); S != T ? lufact!(convert(Tridiagonal{S},A)) : lufact!(copy(A)))
+factorize(A::Tridiagonal) = lufact(A)
 #show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
 
 function det{T}(lu::LUTridiagonal{T})

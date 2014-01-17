@@ -607,7 +607,6 @@ export
     eigvecs,
     expm,
     eye,
-    factorize!,
     factorize,
     givens,
     hessfact!,

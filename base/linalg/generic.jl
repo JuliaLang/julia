@@ -240,3 +240,67 @@ function axpy!{Ti<:Integer,Tj<:Integer}(alpha, x::AbstractArray, rx::AbstractArr
     y
 end
 
+# Elementary reflection similar to LAPACK. The reflector is not Hermitian but ensures that tridiagonalization of Hermitian matrices become real. See lawn72
+function elementaryLeft!(A::AbstractMatrix, row::Integer, col::Integer)
+    m, n = size(A)
+    1 <= row <= m || throw(BoundsError("row cannot be less than one or larger than $(size(A,1))"))
+    1 <= col <= n || throw(BoundsError("col cannot be less than one or larger than $(size(A,2))"))
+    @inbounds begin
+        ξ1 = A[row,col]
+        normu = abs2(ξ1)
+        for i = row+1:m
+            normu += abs2(A[i,col])
+        end
+        normu = sqrt(normu)
+        ν = copysign(normu,real(ξ1))
+        A[row,col] += ν
+        ξ1 += ν
+        A[row,col] = -ν
+        for i = row+1:m
+            A[i,col] /= ξ1
+        end
+    end
+    ξ1/ν
+end
+function elementaryRight!(A::AbstractMatrix, row::Integer, col::Integer)
+    m, n = size(A)
+    1 <= row <= m || throw(BoundsError("row cannot be less than one or larger than $(size(A,1))"))
+    1 <= col <= n || throw(BoundsError("col cannot be less than one or larger than $(size(A,2))"))
+    row <= col || error("col cannot be larger than row")
+    @inbounds begin
+        ξ1 = A[row,col]
+        normu = abs2(ξ1)
+        for i = col+1:n
+            normu += abs2(A[row,i])
+        end
+        normu = sqrt(normu)
+        ν = copysign(normu,real(ξ1))
+        A[row,col] += ν
+        ξ1 += ν
+        A[row,col] = -ν
+        for i = col+1:n
+            A[row,i] /= ξ1
+        end
+    end
+    conj(ξ1/ν)
+end
+function elementaryRightTrapezoid!(A::AbstractMatrix, row::Integer)
+    m, n = size(A)
+    1 <= row <= m || throw(BoundsError("row cannot be less than one or larger than $(size(A,1))"))
+    @inbounds begin
+        ξ1 = A[row,row]
+        normu = abs2(A[row,row])
+        for i = m+1:n
+            normu += abs2(A[row,i])
+        end
+        normu = sqrt(normu)
+        ν = copysign(normu,real(ξ1))
+        A[row,row] += ν
+        ξ1 += ν
+        A[row,row] = -ν
+        for i = m+1:n
+            A[row,i] /= ξ1
+        end
+    end
+    conj(ξ1/ν)
+end
