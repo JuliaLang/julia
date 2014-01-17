@@ -131,11 +131,34 @@ function lufact!{T}(A::AbstractMatrix{T})
     m, n = size(A)
     minmn = min(m,n)
     info = 0
-    for k = 1:minmn-1
-        if A[k,k] == 0; info = k; break; end
-        for i = k+1:m
-            A[i,k] /= A[k,k]
+    ipiv = Array(BlasInt, minmn)
+    for k = 1:minmn
+        # find index max
+        kp = 1
+        amax = zero(T)
+        for i = k:m
+            absi = abs(A[i,k])
+            if absi > amax
+                kp = i
+                amax = absi
+            end
         end
+        ipiv[k] = kp
+        if A[kp,k] != 0
+            # Interchange
+            for i = 1:n
+                tmp = A[k,i]
+                A[k,i] = A[kp,i]
+                A[kp,i] = tmp
+            end
+            # Scale first column
+            for i = k+1:m
+                A[i,k] /= A[k,k]
+            end
+        elseif info == 0
+            info = k
+        end
+        # Update the rest
         for j = k+1:n
             for i = k+1:m
                 A[i,j] -= A[i,k]*A[k,j]
@@ -143,7 +166,7 @@ function lufact!{T}(A::AbstractMatrix{T})
         end
     end
     if minmn > 0 && A[minmn,minmn] == 0; info = minmn; end
-    LU(A, BlasInt[1:minmn], convert(BlasInt, info))
+    LU(A, ipiv, convert(BlasInt, info))
 end
 lufact(A::StridedMatrix) = lufact!(copy(A))
 lufact(x::Number) = LU(fill(x, 1, 1), BlasInt[1], x == 0 ? one(BlasInt) : zero(BlasInt))
@@ -158,17 +181,20 @@ convert{T}(::Type{LU{T}}, F::LU) = LU(convert(Matrix{T}, F.factors), F.ipiv, F.i
 size(A::LU) = size(A.factors)
 size(A::LU,n) = size(A.factors,n)
 
+function ipiv2perm{T}(v::AbstractVector{T}, maxi::Integer)
+    p = T[1:maxi]
+    @inbounds for i in 1:length(v)
+        p[i], p[v[i]] = p[v[i]], p[i]
+    end
+    return p
+end
+
 function getindex{T}(A::LU{T}, d::Symbol)
     m, n = size(A)
     d == :L && return tril(A.factors[1:m, 1:min(m,n)], -1) + eye(T, m, min(m,n))
     d == :U && return triu(A.factors[1:min(m,n),1:n])
-    if d == :p
-        p = [1:m]
-        for i in 1:length(A.ipiv)
-            p[i], p[A.ipiv[i]] = p[A.ipiv[i]], p[i]
-        end
-        return p
-    elseif d == :P
+    d == :p && return ipiv2perm(A.ipiv, m)
+    if d == :P
         p = A[:p]
         P = zeros(T, m, m)
         for i in 1:m
@@ -207,7 +233,8 @@ function logdet{T<:Complex}(A::LU{T})
 end
 
 A_ldiv_B!{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info
-A_ldiv_B!(A::LU, B::StridedVecOrMat) = A_ldiv_B!(Triangular(A.factors, :U, false), A_ldiv_B!(Triangular(A.factors, :L, true), B))
+A_ldiv_B!(A::LU, b::StridedVector) = A_ldiv_B!(Triangular(A.factors, :U, false), A_ldiv_B!(Triangular(A.factors, :L, true), b[ipiv2perm(A.ipiv, length(b))]))
+A_ldiv_B!(A::LU, B::StridedMatrix) = A_ldiv_B!(Triangular(A.factors, :U, false), A_ldiv_B!(Triangular(A.factors, :L, true), B[ipiv2perm(A.ipiv, size(B, 1)),:]))
 At_ldiv_B{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, copy(B)) A.info
 Ac_ldiv_B{T<:BlasComplex}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, copy(B)) A.info
 At_ldiv_Bt{T<:BlasFloat}(A::LU{T}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, transpose(B)) A.info
