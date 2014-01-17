@@ -16,7 +16,7 @@ FLAGS = \
 	-I$(call exec,$(LLVM_CONFIG) --includedir) \
 	-I$(LIBUV_INC) -I$(JULIAHOME)/usr/include -DLIBRARY_EXPORTS
 
-LLVMLINK = $(call exec,$(LLVM_CONFIG) --libs)
+LLVMLINK = $(call exec,$(LLVM_CONFIG) --libs) $(call exec,$(LLVM_CONFIG) --system-libs 2> /dev/null)
 ifeq ($(USE_LLVM_SHLIB),1)
 LLVMLINK = -lLLVM-$(LLVM_VER)
 endif

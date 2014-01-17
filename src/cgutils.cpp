@@ -1,5 +1,54 @@
 // utility procedures used in code generation
 
+// Fixing up references to other modules for MCJIT
+static GlobalVariable *prepare_global(GlobalVariable *G)
+{
+#ifdef USE_MCJIT
+    if(G->getParent() != jl_Module) {
+        GlobalVariable *gv = jl_Module->getGlobalVariable(G->getName());
+        if(!gv) {
+            gv =
+            new GlobalVariable(*jl_Module, G->getType()->getElementType(),
+                               true, GlobalVariable::ExternalLinkage,
+                               NULL, G->getName());
+        }
+        return gv;     
+    }
+#endif
+    return G;
+}
+
+static llvm::Value *prepare_call(llvm::Value* Callee)
+{
+#ifdef USE_MCJIT
+    llvm::Function *F = dyn_cast<Function>(Callee);
+    if (!F)
+        return Callee;
+    if (F->getParent() != jl_Module) {
+        Function *ModuleF = jl_Module->getFunction(F->getName());
+        if(ModuleF) {
+            return ModuleF;
+        }
+        else {
+            return Function::Create(F->getFunctionType(),
+                          Function::ExternalLinkage,
+                          F->getName(),
+                          jl_Module);
+        }
+    }
+#endif
+    return Callee;
+}
+
+static inline void add_named_global(GlobalValue *gv, void *addr)
+{
+#ifdef USE_MCJIT
+    sys::DynamicLibrary::AddSymbol(gv->getName(),addr);
+#else
+    jl_ExecutionEngine->addGlobalMapping(gv,addr);
+#endif
+}
+
 // --- string constants ---
 static std::map<const std::string, GlobalVariable*> stringConstants;
 
@@ -16,7 +65,7 @@ static GlobalVariable *stringConst(const std::string &txt)
         gv = new GlobalVariable(*jl_Module,
                                 ArrayType::get(T_int8, txt.length()+1),
                                 true,
-                                GlobalVariable::PrivateLinkage,
+                                imaging_mode ? GlobalVariable::PrivateLinkage : GlobalVariable::ExternalLinkage,
 #ifndef LLVM_VERSION_MAJOR
                                 ConstantArray::get(getGlobalContext(),
                                                        txt.c_str()),
@@ -34,6 +83,114 @@ static GlobalVariable *stringConst(const std::string &txt)
 
 }
 
+// --- Shadow module handling ---
+
+typedef struct {Value* gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
+static std::map<void*, jl_value_llvm> jl_value_to_llvm;
+static std::map<Value *, void*> llvm_to_jl_value;
+
+#ifdef USE_MCJIT
+class FunctionMover;
+
+static Function *clone_llvm_function(llvm::Function *toClone,FunctionMover *mover);
+
+class FunctionMover : public ValueMaterializer
+{
+public:
+    FunctionMover(llvm::Module *dest,llvm::Module *src) :
+        ValueMaterializer(), VMap(), destModule(dest), srcModule(src)
+    {
+
+    } 
+    ValueToValueMapTy VMap;
+    llvm::Module *destModule;
+    llvm::Module *srcModule;
+    virtual Value *materializeValueFor (Value *V)
+    {
+        Function *F = dyn_cast<Function>(V);
+        if(F) {
+            if(F->isIntrinsic()) {
+                return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
+            }
+            if(F->isDeclaration() || F->getParent() != destModule) {
+                Function *shadow = srcModule->getFunction(F->getName());
+                if (shadow != NULL && !shadow->isDeclaration()) {
+                    // Not truly external
+                    // Check whether we already emitted it once
+                    uint64_t addr = jl_mcjmm->getSymbolAddress(F->getName());
+                    if (addr == 0) {
+                        return clone_llvm_function(shadow,this);
+                    } 
+                    else {
+                        return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
+                    }
+                } 
+                else if (!F->isDeclaration()) {
+                    return clone_llvm_function(F,this);
+                }
+            }
+            // Still a declaration and still in a different module
+            if(F->isDeclaration() && F->getParent() != destModule) {
+                // Create forward declaration in current module
+                return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
+            }
+        } 
+        else if (isa<GlobalVariable>(V)) {
+            GlobalVariable *GV = cast<GlobalVariable>(V);
+            assert(GV != NULL);
+            GlobalVariable *newGV = new GlobalVariable(*destModule,
+                GV->getType()->getElementType(),
+                GV->isConstant(),
+                GlobalVariable::ExternalLinkage,
+                NULL,
+                GV->getName());
+            newGV->copyAttributesFrom(GV);
+            if (GV->isDeclaration())
+                return newGV;
+            uint64_t addr = jl_mcjmm->getSymbolAddress(GV->getName());
+            if(addr != 0) {
+                newGV->setExternallyInitialized(true);
+                return newGV;
+            }
+            std::map<Value*, void *>::iterator it;
+            it = llvm_to_jl_value.find(GV);
+            if (it != llvm_to_jl_value.end()) {
+                newGV->setInitializer(Constant::getIntegerValue(GV->getType()->getElementType(),APInt(sizeof(void*)*8,(ptrint_t)it->second)));
+                newGV->setConstant(true);
+            } 
+            else if (GV->hasInitializer()) {
+                Value *C = MapValue(GV->getInitializer(),VMap,RF_None,NULL,this);
+                newGV->setInitializer(cast<Constant>(C));
+            }
+            return newGV;
+        }
+        return NULL;
+    };
+};
+
+static Function *clone_llvm_function(llvm::Function *toClone,FunctionMover *mover)
+{
+    Function *NewF = Function::Create(toClone->getFunctionType(),
+        Function::ExternalLinkage,
+        toClone->getName(),
+        mover->destModule);    
+    ClonedCodeInfo info;
+    Function::arg_iterator DestI = NewF->arg_begin();
+    for (Function::const_arg_iterator I = toClone->arg_begin(), E = toClone->arg_end(); I != E; ++I) {
+            DestI->setName(I->getName());    // Copy the name over...
+            mover->VMap[I] = DestI++;        // Add mapping to VMap
+    }
+
+    // Necessary in case the function is self referential
+    mover->VMap[toClone] = NewF;
+
+    SmallVector<ReturnInst*, 8> Returns;
+    llvm::CloneFunctionInto(NewF,toClone,mover->VMap,true,Returns,"",NULL,NULL,mover);
+
+    return NewF;
+}
+#endif
+
 // --- emitting pointers directly into code ---
 
 static Value *literal_static_pointer_val(void *p, Type *t)
@@ -48,8 +205,6 @@ static Value *literal_static_pointer_val(void *p, Type *t)
 #endif
 }
 
-typedef struct {Value* gv; int32_t index;} jl_value_llvm; // uses 1-based indexing
-static std::map<void*, jl_value_llvm> jl_value_to_llvm;
 static std::vector<Constant*> jl_sysimg_gvars;
 
 extern "C" int32_t jl_get_llvm_gv(jl_value_t *p)
@@ -94,11 +249,16 @@ static Value *julia_gv(const char *cname, void *addr)
         return builder.CreateLoad(it->second.gv);
     // no existing GlobalVariable, create one and store it
     GlobalValue *gv = new GlobalVariable(*jl_Module, jl_pvalue_llvmt,
-                           false, GlobalVariable::InternalLinkage,
+                           false, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
                            ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt), cname);
+
     // make the pointer valid for this session
+#ifdef USE_MCJIT
+    llvm_to_jl_value[gv] = addr;
+#else
     void **p = (void**)jl_ExecutionEngine->getPointerToGlobal(gv);
     *p = addr;
+#endif
     // make the pointer valid for future sessions
     jl_sysimg_gvars.push_back(ConstantExpr::getBitCast(gv, T_psize));
     jl_value_llvm gv_struct;
@@ -494,7 +654,7 @@ static void just_emit_error(const std::string &txt, jl_codectx_t *ctx)
 {
     Value *zeros[2] = { ConstantInt::get(T_int32, 0),
                         ConstantInt::get(T_int32, 0) };
-    builder.CreateCall(jlerror_func,
+    builder.CreateCall(prepare_call(jlerror_func),
                        builder.CreateGEP(stringConst(txt),
                                          ArrayRef<Value*>(zeros)));
 }
@@ -525,7 +685,7 @@ static void raise_exception_unless(Value *cond, Value *exc, jl_codectx_t *ctx)
     BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
     builder.CreateCondBr(cond, passBB, failBB);
     builder.SetInsertPoint(failBB);
-    builder.CreateCall2(jlthrow_line_func, exc,
+    builder.CreateCall2(prepare_call(jlthrow_line_func), exc,
                         ConstantInt::get(T_int32, ctx->lineno));
     builder.CreateUnreachable();
     ctx->f->getBasicBlockList().push_back(passBB);
@@ -553,7 +713,7 @@ static void raise_exception_if(Value *cond, GlobalVariable *exc,
 static void null_pointer_check(Value *v, jl_codectx_t *ctx)
 {
     raise_exception_unless(builder.CreateICmpNE(v,Constant::getNullValue(v->getType())),
-                           jlundeferr_var, ctx);
+                           prepare_global(jlundeferr_var), ctx);
 }
 
 static Value *boxed(Value *v, jl_codectx_t *ctx, jl_value_t *jt=NULL);
@@ -567,7 +727,7 @@ static void emit_type_error(Value *x, jl_value_t *type, const std::string &msg,
                                          ArrayRef<Value*>(zeros));
     Value *msg_val = builder.CreateGEP(stringConst(msg),
                                        ArrayRef<Value*>(zeros));
-    builder.CreateCall4(jltypeerror_func,
+    builder.CreateCall4(prepare_call(jltypeerror_func),
                         fname_val, msg_val,
                         literal_pointer_val(type), boxed(x,ctx));
 }
@@ -597,7 +757,7 @@ static Value *emit_bounds_check(Value *i, Value *len, jl_codectx_t *ctx)
 #if CHECK_BOUNDS==1
     if (ctx->boundsCheck.empty() || ctx->boundsCheck.back()==true) {
         Value *ok = builder.CreateICmpULT(im1, len);
-        raise_exception_unless(ok, jlboundserr_var, ctx);
+        raise_exception_unless(ok, prepare_global(jlboundserr_var), ctx);
     }
 #endif
     return im1;
@@ -928,7 +1088,7 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
             else {
                 for (i = 0; i < l; i++) {
                     if (!jl_isbits(jl_tupleref(jt,i))) {
-                        v = builder.CreateCall2(jlnewbits_func, lty,
+                        v = builder.CreateCall2(prepare_call(jlnewbits_func), lty,
                                                 builder.CreatePointerCast(v,T_pint8));
                         break;
                     }
@@ -955,7 +1115,7 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
     SwitchInst *sw = builder.CreateSwitch(ival,deflt,n);
     // Anything else is a bounds error
     builder.SetInsertPoint(deflt);
-    builder.CreateCall2(jlthrow_line_func, builder.CreateLoad(jlboundserr_var),
+    builder.CreateCall2(prepare_call(jlthrow_line_func), builder.CreateLoad(prepare_global(jlboundserr_var)),
                         ConstantInt::get(T_int32, ctx->lineno));
     builder.CreateUnreachable();
     size_t ntuple = jl_tuple_len(jt);
@@ -1061,7 +1221,7 @@ static Value *emit_arraylen_prim(Value *t, jl_value_t *ty)
         fargt.push_back(jl_pvalue_llvmt);
         FunctionType *ft = FunctionType::get(T_size, fargt, false);
         Value *alen = jl_Module->getOrInsertFunction("jl_array_len_", ft);
-        return builder.CreateCall(alen, t);
+        return builder.CreateCall(prepare_call(alen), t);
     }
 #endif
 }
@@ -1150,7 +1310,7 @@ static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_
 
         ctx->f->getBasicBlockList().push_back(failBB);
         builder.SetInsertPoint(failBB);
-        builder.CreateCall2(jlthrow_line_func, builder.CreateLoad(jlboundserr_var),
+        builder.CreateCall2(prepare_call(jlthrow_line_func), builder.CreateLoad(prepare_global(jlboundserr_var)),
                             ConstantInt::get(T_int32, ctx->lineno));
         builder.CreateUnreachable();
 
@@ -1187,7 +1347,7 @@ static Value *allocate_box_dynamic(Value *jlty, Value *nb, Value *v)
     if (v->getType()->isPointerTy()) {
         v = builder.CreatePtrToInt(v, T_size);
     }
-    Value *newv = builder.CreateCall(jlallocobj_func,
+    Value *newv = builder.CreateCall(prepare_call(jlallocobj_func),
                                      builder.CreateAdd(nb,
                                                        ConstantInt::get(T_size, sizeof(void*))));
     // TODO: make sure this is rooted. I think it is.
@@ -1303,7 +1463,7 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
     }
     if (jl_is_tuple(jt)) {
         size_t n = jl_tuple_len(jt);
-        Value *tpl = builder.CreateCall(jl_alloc_tuple_func,ConstantInt::get(T_size,n));
+        Value *tpl = builder.CreateCall(prepare_call(jl_alloc_tuple_func),ConstantInt::get(T_size,n));
         int last_depth = ctx->argDepth;
         make_gcroot(tpl,ctx);
         for (size_t i = 0; i < n; ++i) {
@@ -1317,29 +1477,29 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
     jl_datatype_t *jb = (jl_datatype_t*)jt;
     assert(jl_is_datatype(jb));
     if (jb == jl_int8_type)
-        return builder.CreateCall(box_int8_func,
+        return builder.CreateCall(prepare_call(box_int8_func),
                                   builder.CreateSExt(v, T_int32));
-    if (jb == jl_int16_type) return builder.CreateCall(box_int16_func, v);
-    if (jb == jl_int32_type) return builder.CreateCall(box_int32_func, v);
-    if (jb == jl_int64_type) return builder.CreateCall(box_int64_func, v);
-    if (jb == jl_float32_type) return builder.CreateCall(box_float32_func, v);
+    if (jb == jl_int16_type) return builder.CreateCall(prepare_call(box_int16_func), v);
+    if (jb == jl_int32_type) return builder.CreateCall(prepare_call(box_int32_func), v);
+    if (jb == jl_int64_type) return builder.CreateCall(prepare_call(box_int64_func), v);
+    if (jb == jl_float32_type) return builder.CreateCall(prepare_call(box_float32_func), v);
     //if (jb == jl_float64_type) return builder.CreateCall(box_float64_func, v);
     if (jb == jl_float64_type) {
         // manually inline alloc & init of Float64 box. cheap, I know.
 #ifdef _P64
-        Value *newv = builder.CreateCall(jlalloc2w_func);
+        Value *newv = builder.CreateCall(prepare_call(jlalloc2w_func));
 #else
-        Value *newv = builder.CreateCall(jlalloc3w_func);
+        Value *newv = builder.CreateCall(prepare_call(jlalloc3w_func));
 #endif
         return init_bits_value(newv, literal_pointer_val(jt), t, v);
     }
     if (jb == jl_uint8_type)
-        return builder.CreateCall(box_uint8_func,
+        return builder.CreateCall(prepare_call(box_uint8_func),
                                   builder.CreateZExt(v, T_int32));
-    if (jb == jl_uint16_type) return builder.CreateCall(box_uint16_func, v);
-    if (jb == jl_uint32_type) return builder.CreateCall(box_uint32_func, v);
-    if (jb == jl_uint64_type) return builder.CreateCall(box_uint64_func, v);
-    if (jb == jl_char_type)   return builder.CreateCall(box_char_func, v);
+    if (jb == jl_uint16_type) return builder.CreateCall(prepare_call(box_uint16_func), v);
+    if (jb == jl_uint32_type) return builder.CreateCall(prepare_call(box_uint32_func), v);
+    if (jb == jl_uint64_type) return builder.CreateCall(prepare_call(box_uint64_func), v);
+    if (jb == jl_char_type)   return builder.CreateCall(prepare_call(box_char_func), v);
     if (!jl_isbits(jt)) {
         assert("Don't know how to box this type" && false);
         return NULL;

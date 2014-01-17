@@ -124,14 +124,19 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
     bool runtime_lib = false;
     GlobalVariable *libptrgv;
 #ifdef _OS_WINDOWS_
-    if ((intptr_t)f_lib == 1)
-        libptrgv = jlexe_var;
-    else if ((intptr_t)f_lib == 2)
-        libptrgv = jldll_var;
+    if ((intptr_t)f_lib == 1) {
+        libptrgv = prepare_global(jlexe_var);
+        libsym = jl_exe_handle;
+    }
+    else if ((intptr_t)f_lib == 2) {
+        libptrgv = prepare_global(jldll_var);
+        libsym = jl_dll_handle;
+    }
     else
 #endif
     if (f_lib == NULL) {
-        libptrgv = jlRTLD_DEFAULT_var;
+        libptrgv = prepare_global(jlRTLD_DEFAULT_var);
+        libsym = jl_RTLD_DEFAULT_handle;
     }
     else {
         runtime_lib = true;
@@ -142,20 +147,39 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
                initnul, f_lib);
             libMapGV[f_lib] = libptrgv;
             libsym = get_library(f_lib);
+            assert(libsym != NULL);
+#ifdef USE_MCJIT
+            llvm_to_jl_value[libptrgv] = libsym;
+#else
             *((uv_lib_t**)jl_ExecutionEngine->getPointerToGlobal(libptrgv)) = libsym;
+#endif
         }
     }
     if (libsym == NULL) {
+#ifdef USE_MCJIT
+        libsym = (uv_lib_t*)llvm_to_jl_value[libptrgv];
+#else
         libsym = *((uv_lib_t**)jl_ExecutionEngine->getPointerToGlobal(libptrgv));
+#endif
     }
+
+    assert(libsym != NULL);
 
     GlobalVariable *llvmgv = symMapGV[f_name];
     if (llvmgv == NULL) {
+        // MCJIT forces this to have external linkage eventually, so we would clobber
+        // the symbol of the actual function.
+        std::string name = f_name;
+        name = "ccall_" + name;
         llvmgv = new GlobalVariable(*jl_Module, T_pint8,
            false, GlobalVariable::PrivateLinkage,
-           initnul, f_name);
+           initnul, name);
         symMapGV[f_name] = llvmgv;
+#ifdef USE_MCJIT
+        llvm_to_jl_value[llvmgv] = jl_dlsym_e(libsym, f_name);
+#else
         *((void**)jl_ExecutionEngine->getPointerToGlobal(llvmgv)) = jl_dlsym_e(libsym, f_name);
+#endif
     }
 
     BasicBlock *dlsym_lookup = BasicBlock::Create(getGlobalContext(), "dlsym"),
@@ -171,7 +195,7 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
     else {
         libname = literal_static_pointer_val(f_lib, T_pint8);
     }
-    Value *llvmf = builder.CreateCall3(jldlsym_func, libname, builder.CreateGlobalStringPtr(f_name), libptrgv);
+    Value *llvmf = builder.CreateCall3(prepare_call(jldlsym_func), libname, builder.CreateGlobalStringPtr(f_name), libptrgv);
     builder.CreateStore(llvmf, llvmgv);
     builder.CreateBr(ccall_bb);
 
@@ -354,7 +378,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
             return builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), ty); // skip type tag field
         }
         *mightNeedTempSpace = true;
-        Value *p = builder.CreateCall4(value_to_pointer_func,
+        Value *p = builder.CreateCall4(prepare_call(value_to_pointer_func),
                                        literal_pointer_val(jl_tparam0(jt)), jv,
                                        ConstantInt::get(T_int32, argn),
                                        ConstantInt::get(T_int32, (int)addressOf));
@@ -758,10 +782,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 msg << f_lib;
             }
             msg << "\n";
-        builder.CreateCall2(jlputs_func,
+        builder.CreateCall2(prepare_call(jlputs_func),
                             builder.CreateGEP(stringConst(msg.str()),
                                          ArrayRef<Value*>(zeros)),
-                            jlstderr_var);
+                            prepare_global(jlstderr_var));
     }
 
     // emit arguments
@@ -770,7 +794,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (sret) {
         assert(jl_is_structtype(rt));
         result = builder.CreateCall(
-                jlallocobj_func,
+                prepare_call(jlallocobj_func),
                 ConstantInt::get(T_size,
                     sizeof(void*)+((jl_datatype_t*)rt)->size));
         //TODO: Fill type pointer fields with C_NULL's
@@ -894,7 +918,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (needTempSpace) {
         // save temp argument area stack pointer
         // TODO: inline this
-        saveloc = CallInst::Create(save_arg_area_loc_func);
+        saveloc = CallInst::Create(prepare_call(save_arg_area_loc_func));
         if (savespot)
             instList.insertAfter(savespot, (Instruction*)saveloc);
         else
@@ -912,7 +936,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     // the actual call
     Value *ret = builder.CreateCall(
-            llvmf,
+            prepare_call(llvmf),
             ArrayRef<Value*>(&argvals[0],(nargs-3)/2+sret));
 
     attr_type attributes;
@@ -944,7 +968,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (needTempSpace) {
         // restore temp argument area stack pointer
         assert(saveloc != NULL);
-        builder.CreateCall(restore_arg_area_loc_func, saveloc);
+        builder.CreateCall(prepare_call(restore_arg_area_loc_func), saveloc);
     }
     ctx->argDepth = last_depth;
     if (0) { // Enable this to turn on SSPREQ (-fstack-protector) on the function containing this ccall
@@ -962,7 +986,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         //fprintf(stderr, "ccall rt: %s -> %s\n", f_name, ((jl_tag_type_t*)rt)->name->name->name);
         assert(jl_is_structtype(rt));
         Value *strct =
-            builder.CreateCall(jlallocobj_func,
+            builder.CreateCall(prepare_call(jlallocobj_func),
                                ConstantInt::get(T_size,
                                     sizeof(void*)+((jl_datatype_t*)rt)->size));
         builder.CreateStore(literal_pointer_val((jl_value_t*)rt),
