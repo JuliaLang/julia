@@ -8,13 +8,17 @@ checksize(A, I) = (_checksize(A, I); return nothing)
 checksize(A, I, J) = (_checksize(A, I, J); return nothing)
 checksize(A, I...) = (_checksize(A, I...); return nothing)
 
+unsafe_getindex(v::Real, ind::Integer) = v
+unsafe_getindex(v::Ranges, ind::Integer) = first(v) + (ind-1)*step(v)
+unsafe_getindex(v::AbstractArray, ind::Integer) = v[ind]
+
 # Version that uses cartesian indexing for src
 @ngenerate N function _getindex!(dest::Array, src::AbstractArray, I::NTuple{N,Union(Real,AbstractVector)}...)
     checksize(dest, I...)
     checkbounds(src, I...)
     @nexprs N d->(J_d = to_index(I_d))
     k = 1
-    @nloops N i dest d->(j_d = J_d[i_d]) begin
+    @nloops N i dest d->(@inbounds j_d = unsafe_getindex(J_d, i_d)) begin
         @inbounds dest[k] = (@nref N src j)
         k += 1
     end
@@ -29,7 +33,7 @@ end
     @nexprs N d->(stride_{d+1} = stride_d*size(src,d))
     @nexprs N d->(offset_d = 1)  # only really need offset_$N = 1
     k = 1
-    @nloops N i dest d->(offset_{d-1} = offset_d + (J_d[i_d]-1)*stride_d) begin
+    @nloops N i dest d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(J_d, i_d)-1)*stride_d) begin
         @inbounds dest[k] = src[offset_0]
         k += 1
     end
@@ -51,7 +55,7 @@ getindex(A::Array, I::Union(Real,AbstractVector)...) = getindex!(similar(A, inde
     @nexprs N d->(stride_{d+1} = stride_d*size(A,d))
     @nexprs N d->(offset_d = 1)  # really only need offset_$N = 1
     if !isa(x, AbstractArray)
-        @nloops N i d->(1:length(J_d)) d->(offset_{d-1} = offset_d + (J_d[i_d]-1)*stride_d) begin
+        @nloops N i d->(1:length(J_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(J_d, i_d)-1)*stride_d) begin
             @inbounds A[offset_0] = x
         end
     else
@@ -59,7 +63,7 @@ getindex(A::Array, I::Union(Real,AbstractVector)...) = getindex!(similar(A, inde
         setindex_shape_check(X, I...)
         # TODO? A variant that can use cartesian indexing for RHS
         k = 1
-        @nloops N i d->(1:length(J_d)) d->(offset_{d-1} = offset_d + (J_d[i_d]-1)*stride_d) begin
+        @nloops N i d->(1:length(J_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(J_d, i_d)-1)*stride_d) begin
             @inbounds A[offset_0] = X[k]
             k += 1
         end
