@@ -440,12 +440,12 @@ function getindex(A::Union(Eigen,GeneralizedEigen), d::Symbol)
     throw(KeyError(d))
 end
 
-function eigfact!{T<:BlasReal}(A::StridedMatrix{T})
+function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; balance::Symbol=:balance)
     n = size(A, 2)
     n==0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     issym(A) && return eigfact!(Symmetric(A))
 
-    WR, WI, VL, VR = LAPACK.geev!('N', 'V', A)
+    A, WR, WI, VL, VR, _ = LAPACK.geevx!(balance == :balance ? 'B' : (balance == :diagonal ? 'S' : (balance == :permute ? 'P' : (balance == :nobalance ? 'N' : throw(ArgumentError("balance must be either ':balance', ':diagonal', ':permute' or ':nobalance'"))))), 'N', 'V', 'N', A)
     all(WI .== 0.) && return Eigen(WR, VR)
     evec = zeros(Complex{T}, n, n)
     j = 1
@@ -462,24 +462,24 @@ function eigfact!{T<:BlasReal}(A::StridedMatrix{T})
     return Eigen(complex(WR, WI), evec)
 end
 
-function eigfact!{T<:BlasComplex}(A::StridedMatrix{T})
+function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}; balance::Symbol=:balance)
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     ishermitian(A) && return eigfact!(Hermitian(A)) 
-    return Eigen(LAPACK.geev!('N', 'V', A)[[1,3]]...)
+    return Eigen(LAPACK.geevx!(balance == :balance ? 'B' : (balance == :diagonal ? 'S' : (balance == :permute ? 'P' : (balance == :nobalance ? 'N' : throw(ArgumentError("balance must be either ':balance', 'diagonal', 'permute' or 'nobalance'"))))), 'N', 'V', 'N', A)[[2,4]]...)
 end
-eigfact!(A::StridedMatrix) = eigfact!(float(A))
-eigfact{T<:BlasFloat}(x::StridedMatrix{T}) = eigfact!(copy(x))
-eigfact(A::StridedMatrix) = eigfact!(float(A))
+eigfact!(A::StridedMatrix; balance::Symbol=:balance) = eigfact!(float(A), balance=balance)
+eigfact{T<:BlasFloat}(x::StridedMatrix{T}; balance::Symbol=:balance) = eigfact!(copy(x), balance=balance)
+eigfact(A::StridedMatrix; balance::Symbol=:balance) = eigfact!(float(A), balance=balance)
 eigfact(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
-function eig(A::Union(Number, AbstractMatrix))
-    F = eigfact(A)
+function eig(A::Union(Number, AbstractMatrix), args...)
+    F = eigfact(A, args...)
     F[:values], F[:vectors]
 end
 
 #Calculates eigenvectors
-eigvecs(A::Union(Number, AbstractMatrix)) = eigfact(A)[:vectors]
+eigvecs(A::Union(Number, AbstractMatrix); balance::Symbol=:balance) = eigfact(A, balance=balance)[:vectors]
 
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T})
     issym(A) && return eigvals!(Symmetric(A))

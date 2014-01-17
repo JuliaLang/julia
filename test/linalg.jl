@@ -847,6 +847,19 @@ Hinv = Rational{BigInt}[(-1)^(i+j)*(i+j-1)*binomial(nHilbert+i-1,nHilbert-j)*bin
 with_bigfloat_precision(2^10) do
     @test norm(float64(inv(float(H)) - float(Hinv))) < 1e-100
 end
+
+# Test balancing in eigenvector calculations
+for elty in (Float32, Float64, Complex64, Complex128)
+    A = convert(Matrix{elty}, [ 3.0     -2.0      -0.9     2*eps(real(one(elty)));
+                               -2.0      4.0       1.0    -eps(real(one(elty)));
+                               -eps(real(one(elty)))/4  eps(real(one(elty)))/2  -1.0     0;
+                               -0.5     -0.5       0.1     1.0])
+    F = eigfact(A,balance=:nobalance)
+    @test_approx_eq F[:vectors]*Diagonal(F[:values])/F[:vectors] A
+    F = eigfact(A)
+    @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
+end
+
 ## Issue related tests
 # issue 1447
 let
