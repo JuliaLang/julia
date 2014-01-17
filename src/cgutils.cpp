@@ -932,14 +932,14 @@ static Value *emit_tuplelen(Value *t,jl_value_t *jt)
         return ConstantInt::get(T_size,0);
     Type *ty = t->getType();
     if (ty == jl_pvalue_llvmt) { //boxed
-    #ifdef OVERLAP_TUPLE_LEN
+#ifdef OVERLAP_TUPLE_LEN
         Value *lenbits = emit_nthptr(t, (size_t)0);
         return builder.CreateLShr(builder.CreatePtrToInt(lenbits, T_int64),
                                   ConstantInt::get(T_int32, 52));
-    #else
+#else
         Value *lenbits = emit_nthptr(t, 1);
         return builder.CreatePtrToInt(lenbits, T_size);
-    #endif
+#endif
     }
     else { //unboxed
         return ConstantInt::get(T_size,jl_tuple_len(jt));
@@ -955,13 +955,13 @@ static Value *emit_tupleset(Value *tuple, Value *ival, Value *x, jl_value_t *jt,
     }
     Type *ty = tuple->getType();
     if (ty == jl_pvalue_llvmt) { //boxed
-    #ifdef OVERLAP_TUPLE_LEN
+#ifdef OVERLAP_TUPLE_LEN
         Value *slot = builder.CreateGEP(builder.CreateBitCast(tuple, jl_ppvalue_llvmt),
-                                 ival);
-    #else
+                                        ival);
+#else
         Value *slot = builder.CreateGEP(builder.CreateBitCast(tuple, jl_ppvalue_llvmt),
-                                 builder.CreateAdd(ConstantInt::get(T_size,1),ival));
-    #endif
+                                        builder.CreateAdd(ConstantInt::get(T_size,1),ival));
+#endif
         builder.CreateStore(x,slot);
         return tuple;
     }
