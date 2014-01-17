@@ -65,22 +65,37 @@ end
 norm{T<:Integer}(x::AbstractVector{T}, p::Number) = norm(float(x), p)
 norm(x::AbstractVector) = norm(x, 2)
 
-function norm(A::AbstractMatrix, p::Number=2)
+function norm{T}(A::AbstractMatrix{T}, p::Number=2)
     m, n = size(A)
     if m == 0 || n == 0
-        a = zero(eltype(A))
+        return zero(real(zero(T)))
     elseif m == 1 || n == 1
-        a = norm(reshape(A, length(A)), p)
+        return norm(reshape(A, length(A)), p)
     elseif p == 1
-        a = maximum(sum(abs(A),1))
+        nrm = zero(real(zero(T)))
+        for j = 1:n
+            nrmj = zero(real(zero(T)))
+            for i = 1:m
+                nrmj += abs(A[i,j])
+            end
+            nrm = max(nrm,nrmj)
+        end
+        return nrm
     elseif p == 2
-        a = maximum(svdvals(A))
+        return svdvals(A)[1]
     elseif p == Inf
-        a = maximum(sum(abs(A),2))
+        nrm = zero(real(zero(T)))
+        for i = 1:m
+            nrmi = zero(real(zero(T)))
+            for j = 1:n
+                nrmi += abs(A[i,j])
+            end
+            nrm = max(nrm,nrmi)
+        end
+        return nrm
     else
         throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
     end
-    float(a)
 end
 
 norm(x::Number, p=nothing) = abs(x)
@@ -109,10 +124,11 @@ trace(x::Number) = x
 #det(a::AbstractMatrix)
 
 inv(a::AbstractVector) = error("argument must be a square matrix")
+inv{T}(A::AbstractMatrix{T}) = A_ldiv_B!(A,eye(T, chksquare(A)))
 
 function \{TA<:Number,TB<:Number}(A::AbstractMatrix{TA}, B::AbstractVecOrMat{TB})
     TC = typeof(one(TA)/one(TB))
-    return TB == TC ? A_ldiv_B!(A, copy(B)) : A_ldiv_B!(A, convert(Array{TC}, B))
+    A_ldiv_B!(convert(typeof(A).name.primary{TC}, A), TB == TC ? copy(B) : convert(typeof(B).name.primary{TC}, B))
 end
 \(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
 /(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'

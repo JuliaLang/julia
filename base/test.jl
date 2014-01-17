@@ -73,7 +73,7 @@ function test_approx_eq(va, vb, Eps, astr, bstr)
 end
 
 test_approx_eq(va, vb, astr, bstr) =
-    test_approx_eq(va, vb, 10^4*length(va)*eps(float(max(maximum(abs(va)), maximum(abs(vb))))), astr, bstr)
+    test_approx_eq(va, vb, 10^4*length(va)*max(eps(float(maximum(abs(va)))), eps(float(maximum(abs(vb))))), astr, bstr)
 
 macro test_approx_eq_eps(a, b, c)
     :(test_approx_eq($(esc(a)), $(esc(b)), $(esc(c)), $(string(a)), $(string(b))))
