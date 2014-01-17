@@ -3006,17 +3006,17 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     funcName << "julia_" << lam->name->name;
 
     Module *m;
-    #ifdef USE_MCJIT
-    if(!imaging_mode) {
+#ifdef USE_MCJIT
+    if (!imaging_mode) {
         m = new Module(funcName.str(), jl_LLVMContext);
         jl_setup_module(m,true);
     } 
     else {
         m = shadow_module;
     }
-    #else
-        m = jl_Module;
-    #endif
+#else
+    m = jl_Module;
+#endif
 
     funcName << globalUnique++;
 

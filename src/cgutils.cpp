@@ -4,13 +4,12 @@
 static GlobalVariable *prepare_global(GlobalVariable *G)
 {
 #ifdef USE_MCJIT
-    if(G->getParent() != jl_Module) {
+    if (G->getParent() != jl_Module) {
         GlobalVariable *gv = jl_Module->getGlobalVariable(G->getName());
-        if(!gv) {
-            gv =
-            new GlobalVariable(*jl_Module, G->getType()->getElementType(),
-                               true, GlobalVariable::ExternalLinkage,
-                               NULL, G->getName());
+        if (!gv) {
+            gv = new GlobalVariable(*jl_Module, G->getType()->getElementType(),
+                                    true, GlobalVariable::ExternalLinkage,
+                                    NULL, G->getName());
         }
         return gv;     
     }
@@ -26,14 +25,14 @@ static llvm::Value *prepare_call(llvm::Value* Callee)
         return Callee;
     if (F->getParent() != jl_Module) {
         Function *ModuleF = jl_Module->getFunction(F->getName());
-        if(ModuleF) {
+        if (ModuleF) {
             return ModuleF;
         }
         else {
             return Function::Create(F->getFunctionType(),
-                          Function::ExternalLinkage,
-                          F->getName(),
-                          jl_Module);
+                                    Function::ExternalLinkage,
+                                    F->getName(),
+                                    jl_Module);
         }
     }
 #endif
@@ -108,11 +107,11 @@ public:
     virtual Value *materializeValueFor (Value *V)
     {
         Function *F = dyn_cast<Function>(V);
-        if(F) {
-            if(F->isIntrinsic()) {
+        if (F) {
+            if (F->isIntrinsic()) {
                 return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
             }
-            if(F->isDeclaration() || F->getParent() != destModule) {
+            if (F->isDeclaration() || F->getParent() != destModule) {
                 Function *shadow = srcModule->getFunction(F->getName());
                 if (shadow != NULL && !shadow->isDeclaration()) {
                     // Not truly external
@@ -130,7 +129,7 @@ public:
                 }
             }
             // Still a declaration and still in a different module
-            if(F->isDeclaration() && F->getParent() != destModule) {
+            if (F->isDeclaration() && F->getParent() != destModule) {
                 // Create forward declaration in current module
                 return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
             }
@@ -148,7 +147,7 @@ public:
             if (GV->isDeclaration())
                 return newGV;
             uint64_t addr = jl_mcjmm->getSymbolAddress(GV->getName());
-            if(addr != 0) {
+            if (addr != 0) {
                 newGV->setExternallyInitialized(true);
                 return newGV;
             }
@@ -171,14 +170,14 @@ public:
 static Function *clone_llvm_function(llvm::Function *toClone,FunctionMover *mover)
 {
     Function *NewF = Function::Create(toClone->getFunctionType(),
-        Function::ExternalLinkage,
-        toClone->getName(),
-        mover->destModule);    
+                                      Function::ExternalLinkage,
+                                      toClone->getName(),
+                                      mover->destModule);
     ClonedCodeInfo info;
     Function::arg_iterator DestI = NewF->arg_begin();
     for (Function::const_arg_iterator I = toClone->arg_begin(), E = toClone->arg_end(); I != E; ++I) {
-            DestI->setName(I->getName());    // Copy the name over...
-            mover->VMap[I] = DestI++;        // Add mapping to VMap
+        DestI->setName(I->getName());    // Copy the name over...
+        mover->VMap[I] = DestI++;        // Add mapping to VMap
     }
 
     // Necessary in case the function is self referential
