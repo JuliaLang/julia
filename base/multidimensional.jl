@@ -306,7 +306,6 @@ for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
     @eval begin
     @ngenerate N function permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
         dimsB = size(B)
-        ndimsB = N
         (length(perm) == N && isperm(perm)) || error("no valid permutation of dimensions")
         dimsP = size(P)
         for i = 1:length(perm)
@@ -314,13 +313,11 @@ for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
         end
 
         #calculates all the strides
-        @nexprs N d->(strides_d = (d > 1 ? stride(B, perm[d-1]) : 0))
-        strides_last = stride(B, perm[N])
+        strides_1 = 0
+        @nexprs N d->(strides_{d+1} = stride(B, perm[d]))
 
         #Creates offset, because indexing starts at 1
-        offset = strides_last
-        @nexprs N d->(offset += strides_d)
-        offset = 1 - offset
+        offset = 1 - sum(@ntuple N d->strides_{d+1})
 
         if isa(B, SubArray)
             offset += B.first_index - 1
@@ -328,24 +325,13 @@ for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
         end
 
         ind = 1
-        counts_last = strides_last
+        @nexprs 1 d->(counts_{N+1} = strides_{N+1}) # a trick to set counts_($N+1)
         @nloops(N, i, P,
-            d->begin # PRE
-                counts_d = strides_d
-            end,
-            d->begin # POST
-                if d < N
-                    counts_{d+1} += strides_{d+1}
-                else
-                    counts_last += strides_last
-                end
-            end,
+            d->(counts_d = strides_d), # PRE
+            d->(counts_{d+1} += strides_{d+1}), # POST
             begin # BODY
-                sumc = 0
-                @nexprs N d->(sumc += counts_d)
-                # note: could use @inbounds, but it does not seem to
-                #       improve performance
-                P[ind] = B[sumc+counts_last+offset]
+                sumc = sum(@ntuple N d->counts_{d+1})
+                @inbounds P[ind] = B[sumc+offset]
                 ind += 1
             end)
 
