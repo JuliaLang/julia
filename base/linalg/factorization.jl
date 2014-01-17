@@ -282,7 +282,7 @@ print_matrix(io::IO, A::QRPivotedQ, rows::Integer, cols::Integer) = print_matrix
 
 ## Multiplication by Q from the QR decomposition
 function *{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T})
-    Bpad = size(B, 1)==size(A.factors, 2) ? [B; zeros(T, size(A.factors, 1) - size(A.factors, 2), size(B, 2))] : copy(B)
+    Bpad = size(B, 1)==size(A.factors, 2) ? (isa(B, Vector) ? [B; zeros(T, size(A.factors, 1) - size(A.factors, 2))] : [B; zeros(T, size(A.factors, 1) - size(A.factors, 2), size(B, 2))]) : copy(B)
     LAPACK.gemqrt!('L', 'N', A.factors, A.T, Bpad)
 end
 *{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.gemqrt!('R', 'N', B.factors, B.T, copy(A))
@@ -344,10 +344,9 @@ end
 
 ## Multiplication by Q from the Pivoted QR decomposition
 function *{T<:BlasFloat}(A::QRPivotedQ{T}, B::StridedVecOrMat{T})
-    Bpad = size(A.factors, 2)==size(B, 1) ? [B; zeros(T, size(A.factors, 1) - size(A.factors, 2), size(B, 2))] : copy(B)
+    Bpad = size(A.factors, 2)==size(B, 1) ? (isa(B, Vector) ? [B; zeros(T, size(A.factors, 1) - size(A.factors, 2))] : [B; zeros(T, size(A.factors, 1) - size(A.factors, 2), size(B, 2))]) : copy(B)
     LAPACK.ormqr!('L', 'N', A.factors, A.tau, Bpad)
 end
-
 Ac_mul_B{T<:BlasReal}(A::QRPivotedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','T',A.factors,A.tau,copy(B))
 Ac_mul_B{T<:BlasComplex}(A::QRPivotedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('L','C',A.factors,A.tau,copy(B))
 Ac_mul_B(A::QRPivotedQ, B::StridedVecOrMat) = Ac_mul_B(A, float(B))
