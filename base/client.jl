@@ -317,6 +317,14 @@ function init_load_path()
         abspath(JULIA_HOME,"..","local","share","julia","site",vers),
         abspath(JULIA_HOME,"..","share","julia","site",vers)
     ]
+    julia_load_path = get(ENV, "JULIA_LOAD_PATH", "")
+    if !isempty(julia_load_path)
+        @unix_only sep = ":"
+        @windows_only sep = ";"
+        for s in split(julia_load_path,sep)
+            push!(LOAD_PATH, s)
+        end
+    end
 end
 
 function init_sched()
