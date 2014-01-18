@@ -2536,24 +2536,33 @@
 
 "),
 
-("Text I/O","Base","readdlm","readdlm(source, delim::Char; has_header=false, use_mmap=false, ignore_invalid_chars=false)
+("Text I/O","Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=false, ignore_invalid_chars=false)
 
-   Read a matrix from the source where each line gives one row, with
-   elements separated by the given delimeter. The source can be a text
-   file, stream or byte array. Memory mapped filed can be used by
-   passing the byte array representation of the mapped segment as
-   source.
+   Read a matrix from the source where each line (separated by \"eol\") 
+   gives one row, with elements separated by the given delimeter. The 
+   source can be a text file, stream or byte array. Memory mapped files 
+   can be used by passing the byte array representation of the mapped 
+   segment as source. 
 
-   If \"has_header\" is \"true\" the first row of data would be read
+   If \"T\" is a numeric type, the result is an array of that type, 
+   with any non-numeric elements as \"NaN\" for floating-point types, 
+   or zero. Other useful values of \"T\" include \"ASCIIString\", 
+   \"String\", and \"Any\".
+
+   If \"has_header\" is \"true\", the first row of data would be read
    as headers and the tuple \"(data_cells, header_cells)\" is returned
    instead of only \"data_cells\".
 
-   If \"use_mmap\" is \"true\" the file specified by \"source\" is
+   If \"use_mmap\" is \"true\", the file specified by \"source\" is
    memory mapped for potential speedups.
 
-   If \"ignore_invalid_chars\" is \"true\" bytes in \"source\" with
+   If \"ignore_invalid_chars\" is \"true\", bytes in \"source\" with
    invalid character encoding will be ignored. Otherwise an error is
    thrown indicating the offending character position.
+
+"),
+
+("Text I/O","Base","readdlm","readdlm(source, delim::Char, eol::Char; options...)
 
    If all data is numeric, the result will be a numeric array. If some
    elements cannot be parsed as numbers, a cell array of numbers and
@@ -2563,11 +2572,33 @@
 
 ("Text I/O","Base","readdlm","readdlm(source, delim::Char, T::Type; options...)
 
-   Read a matrix from the source with a given element type. If \"T\"
-   is a numeric type, the result is an array of that type, with any
-   non-numeric elements as \"NaN\" for floating-point types, or zero.
-   Other useful values of \"T\" include \"ASCIIString\", \"String\",
-   and \"Any\".
+   The end of line delimiter is taken as \"\\n\". 
+
+"),
+
+("Text I/O","Base","readdlm","readdlm(source, delim::Char; options...)
+
+   The end of line delimiter is taken as \"\\n\". If all data is 
+   numeric, the result will be a numeric array. If some elements 
+   cannot be parsed as numbers, a cell array of numbers and 
+   strings is returned.
+
+"),
+
+("Text I/O","Base","readdlm","readdlm(source, T::Type; options...)
+
+   The columns are assumed to be separated by one or more whitespaces. 
+   The end of line delimiter is taken as \"\\n\".
+
+"),
+
+("Text I/O","Base","readdlm","readdlm(source, options...)
+
+   The columns are assumed to be separated by one or more whitespaces. 
+   The end of line delimiter is taken as \"\\n\". If all data is 
+   numeric, the result will be a numeric array. If some elements 
+   cannot be parsed as numbers, a cell array of numbers and strings 
+   is returned.
 
 "),
 
