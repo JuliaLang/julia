@@ -104,12 +104,12 @@ function logdet{T}(C::Cholesky{T})
     dd + dd # instead of 2.0dd which can change the type
 end
 
-inv(C::Cholesky)=symmetrize_conj!(LAPACK.potri!(C.uplo, copy(C.UL)), C.uplo)
+inv(C::Cholesky) = copytri!(LAPACK.potri!(C.uplo, copy(C.UL)), C.uplo, true)
 
 function inv(C::CholeskyPivoted)
     chkfullrank(C)
     ipiv = invperm(C.piv)
-    (symmetrize!(LAPACK.potri!(C.uplo, copy(C.UL)), C.uplo))[ipiv, ipiv]
+    copytri!(LAPACK.potri!(C.uplo, copy(C.UL)), C.uplo, true)[ipiv, ipiv]
 end
 
 chkfullrank(C::CholeskyPivoted) = C.rank<size(C.UL, 1) && throw(RankDeficientException(C.info))
