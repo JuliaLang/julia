@@ -120,6 +120,10 @@ Library improvements
       * new LAPACK wrappers
         - condition number estimate `cond(A::Triangular)` ([#5255])
 
+    * Dense linear algebra for generic matrix element types
+
+      * LU factorization ([#5381] and [#5430])
+
 Deprecated or removed
 ---------------------
 
@@ -133,10 +137,10 @@ Deprecated or removed
     argument specifying the floating point type to which they apply. The old
     behaviour and `[get/set/with]_bigfloat_rounding` functions are deprecated ([#5007])
 
-  * cholpfact and qrpfact are deprecated in favor of keyword arguments in 
-    cholfact and qrfact.
+  * `cholpfact` and `qrpfact` are deprecated in favor of keyword arguments in 
+    `cholfact(...,pivot=true)` and `qrfact(...,pivot=true)` ([#5330]) 
 
-  * symmetrize! is deprecated in favor copytri! but the new function is not exported
+  * `symmetrize!` is deprecated in favor of `Base.LinAlg.copytri!` ([#5427])
 
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
@@ -171,6 +175,8 @@ Deprecated or removed
 [#4882]: https://github.com/JuliaLang/julia/issues/4882
 [#4806]: https://github.com/JuliaLang/julia/issues/4806
 [#5358]: https://github.com/JuliaLang/julia/pull/5358
+[#5381]: https://github.com/JuliaLang/julia/pull/5381
+[#5430]: https://github.com/JuliaLang/julia/pull/5430
 [a448e080]: https://github.com/JuliaLang/julia/commit/a448e080dc736c7fb326426dfcb2528be36973d3
 [5e3f074b]: https://github.com/JuliaLang/julia/commit/5e3f074b9173044a0a4219f9b285879ff7cec041
 
