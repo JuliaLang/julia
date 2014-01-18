@@ -819,7 +819,11 @@ static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
     assert(elty != NULL);
     bool isbool=false;
     if (elty==T_int1) { elty = T_int8; isbool=true; }
-    Value *data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
+    Value *data;
+    if (ptr->getType()->getContainedType(0) != elty)
+        data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
+    else
+        data = ptr;
     Value *elt = builder.CreateLoad(builder.CreateGEP(data, idx_0based), false);
     if (elty == jl_pvalue_llvmt) {
         null_pointer_check(elt, ctx);
@@ -841,7 +845,11 @@ static Value *typed_store(Value *ptr, Value *idx_0based, Value *rhs,
         rhs = emit_unbox(elty, rhs, jltype);
     else
         rhs = boxed(rhs,ctx);
-    Value *data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
+    Value *data;
+    if (ptr->getType()->getContainedType(0) != elty)
+        data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
+    else
+        data = ptr;
     return builder.CreateStore(rhs, builder.CreateGEP(data, idx_0based));
 }
 
@@ -1256,7 +1264,8 @@ static Value *emit_arraysize(Value *t, jl_value_t *ex, int dim, jl_codectx_t *ct
 
 static void assign_arrayvar(jl_arrayvar_t &av, Value *ar)
 {
-    builder.CreateStore(builder.CreateBitCast(emit_arrayptr(ar),T_pint8),
+    builder.CreateStore(builder.CreateBitCast(emit_arrayptr(ar),
+                                              av.dataptr->getType()->getContainedType(0)),
                         av.dataptr);
     builder.CreateStore(emit_arraylen_prim(ar, av.ty), av.len);
     for(size_t i=0; i < av.sizes.size(); i++)
