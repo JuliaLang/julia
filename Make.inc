@@ -289,12 +289,6 @@ DEBUGFLAGS = -O0 -ggdb3 -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS = -O3 -g -falign-functions
 endif
 
-ifneq ($(USEICC),1)
-JCFLAGS += -m$(BINARY)
-JCXXFLAGS += -m$(BINARY)
-JFFLAGS += -m$(BINARY)
-endif
-
 ifeq ($(LLVM_VER),svn)
 JCXXFLAGS += -std=c++11
 endif
@@ -417,6 +411,15 @@ AS += -q
 endif
 endif
 
+# Set some ARCH-specific flags
+ifneq ($(USEICC),1)
+ifneq ($(ARCH), arm)
+JCFLAGS += -m$(BINARY)
+JCXXFLAGS += -m$(BINARY)
+JFFLAGS += -m$(BINARY)
+endif
+endif
+
 JULIA_CPU_TARGET ?= native
 JCPPFLAGS += -DJULIA_TARGET_ARCH=$(JULIA_CPU_TARGET)
 
@@ -437,12 +440,15 @@ else ifeq ($(ARCH),i686)
 BINARY=32
 else ifeq ($(ARCH),x86_64)
 BINARY=64
+else ifeq ($(ARCH),arm)
+BINARY=32
 else
 $(error "unknown word-size for arch: $(ARCH)")
 endif
 
 ifeq ($(USEGCC),1)
-ifneq ($(ARCH), ppc64)
+ifeq ($(ARCH), arm)
+else ifneq ($(ARCH), ppc64)
   SHIPFLAGS += -momit-leaf-frame-pointer
 endif
 endif

@@ -406,6 +406,8 @@ DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 {
 #if defined _MSC_VER
     __cpuid(CPUInfo, InfoType);
+#elif defined(__arm__)
+    printf("jl_cpuid not implemented on arm\n");
 #else
     __asm__ __volatile__ (
         #if defined(__i386__) && defined(__PIC__)
