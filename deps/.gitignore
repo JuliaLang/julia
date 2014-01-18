@@ -26,6 +26,7 @@
 /readline-*
 /readline62-*
 !readline-win.h
+/Rmath-*
 /root
 /SuiteSparse-*
 /zlib-*

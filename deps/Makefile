@@ -744,34 +744,34 @@ install-random: $(LIBRANDOM_OBJ_TARGET)
 
 ## Rmath ##
 
+RMATH_DIR = Rmath-$(RMATH_VER)
 RMATH_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libRmath.$(SHLIB_EXT)
-RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
+RMATH_OBJ_SOURCE = $(RMATH_DIR)/src/libRmath.$(SHLIB_EXT)
 
 RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
 			   OS="$(OS)" ARCH="$(ARCH)" \
 			   USE_LIBRANDOM=1 LIBRANDOM_PATH="$(BUILD)/$(JL_LIBDIR)"
 
-Rmath/Make.inc:
-	(cd .. && git submodule init && git submodule update)
-ifeq (exists, $(shell [ -d Rmath/.git ] && echo exists ))
-$(RMATH_OBJ_SOURCE): Rmath/.git/HEAD
-endif
-ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/Rmath ] && echo exists ))
-$(RMATH_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/Rmath/HEAD
-endif
-$(RMATH_OBJ_SOURCE): Rmath/Make.inc $(LIBRANDOM_OBJ_TARGET)
-	$(MAKE) -C Rmath/src $(RMATH_FLAGS)
+Rmath-$(RMATH_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/Rmath/tarball/$(RMATH_VER)
+	touch -c $@
+$(RMATH_DIR)/Make.inc: Rmath-$(RMATH_VER).tar.gz
+	mkdir $(RMATH_DIR)
+	tar -C $(RMATH_DIR) --strip-components 1 -xf $<
+	touch -c $@
+$(RMATH_OBJ_SOURCE): $(RMATH_DIR)/Make.inc $(LIBRANDOM_OBJ_TARGET)
+	$(MAKE) -C $(RMATH_DIR)/src $(RMATH_FLAGS)
 	touch -c $@
 $(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
 	$(INSTALL_NAME_CMD)libRmath.$(SHLIB_EXT) $@
 
 clean-Rmath:
-	-$(MAKE) -C Rmath/src clean
+	-$(MAKE) -C $(RMATH_DIR)/src clean
 	-rm $(RMATH_OBJ_TARGET)
 distclean-Rmath: clean-Rmath
 
-get-Rmath: Rmath/Make.inc
+get-Rmath: $(RMATH_DIR)/Make.inc
 configure-Rmath: get-Rmath
 compile-Rmath: $(RMATH_OBJ_SOURCE)
 check-Rmath: compile-Rmath
