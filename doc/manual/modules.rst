@@ -63,6 +63,18 @@ Method definitions are a bit special: they do not search modules named in
 elsewhere. For example, in ``MyModule`` above we wanted to add a method
 to the standard ``show`` function, so we had to write ``import Base.show``.
 
+Module paths
+------------
+
+The Julia variable LOAD_PATH contains the directories Julia searches for 
+modules. It can be extended using the ``push!`` method::
+
+    push!(LOAD_PATH, "/Path/To/My/Module/")
+
+Putting this statement to the ``~\.juliarc.jl`` file will extend LOAD_PATH 
+on every Julia startup. Alternatively, the Julia module load path can be
+extended by defining the environoment variable JULIA_LOAD_PATH and putting
+directories to it.
 
 Modules and files
 -----------------
