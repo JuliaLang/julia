@@ -2670,7 +2670,8 @@ static void maybe_alloc_arrayvar(jl_sym_t *s, jl_codectx_t *ctx)
         // passed to an external function (ideally only impure functions)
         jl_arrayvar_t av;
         int ndims = jl_unbox_long(jl_tparam1(jt));
-        av.dataptr = builder.CreateAlloca(T_pint8);
+        av.dataptr =
+            builder.CreateAlloca(PointerType::get(julia_type_to_llvm(jl_tparam0(jt)),0));
         av.len = builder.CreateAlloca(T_size);
         for(int i=0; i < ndims-1; i++)
             av.sizes.push_back(builder.CreateAlloca(T_size));
