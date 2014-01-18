@@ -60,7 +60,7 @@ endif
 endif
 
 ifeq ($(USE_SYSTEM_OPENSPECFUN), 0)
-STAGE1_DEPS += openspecfun
+STAGE2_DEPS += openspecfun
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
@@ -679,7 +679,7 @@ $(OPENSPECFUN_DIR)/Makefile $(OPENSPECFUN_DIR)/Makefile.extras: openspecfun-$(OP
 	mkdir $(OPENSPECFUN_DIR)
 	tar -C $(OPENSPECFUN_DIR) --strip-components 1 -xf $<
 	touch -c $@
-$(OPENSPECFUN_OBJ_SOURCE): $(OPENSPECFUN_DIR)/Makefile
+$(OPENSPECFUN_OBJ_SOURCE): $(OPENSPECFUN_DIR)/Makefile $(OPENLIBM_OBJ_SOURCE)
 	$(MAKE) -C $(OPENSPECFUN_DIR) $(OPENSPECFUN_FLAGS)
 	touch -c $@
 $(OPENSPECFUN_OBJ_TARGET): $(OPENSPECFUN_OBJ_SOURCE) | $(BUILD)/lib
