@@ -41,7 +41,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     # Use work array for temporary row pointers
     for i=1:nrow; Wj[i] = Rp[i]; end
 
-    for k=1:nz
+    for k=1:length(I)
         ind = I[k]
         p = Wj[ind]
         Vk = V[k]
