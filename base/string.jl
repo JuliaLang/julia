@@ -780,10 +780,10 @@ uppercase(s::String) = map(uppercase, s)
 lowercase(s::String) = map(lowercase, s)
 
 function ucfirst(s::String)
-    length(s) < 1 || isupper(s[1]) ? s : string(uppercase(s[1]),s[nextind(s,1):end])
+    isempty(s) || isupper(s[1]) ? s : string(uppercase(s[1]),s[nextind(s,1):end])
 end
 function lcfirst(s::String)
-    length(s) < 1 || islower(s[1]) ? s : string(lowercase(s[1]),s[nextind(s,1):end])
+    isempty(s) || islower(s[1]) ? s : string(lowercase(s[1]),s[nextind(s,1):end])
 end
 
 ## string map, filter, has ##
