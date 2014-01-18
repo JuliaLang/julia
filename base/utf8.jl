@@ -130,13 +130,6 @@ function string(a::ByteString...)
     UTF8String(data)
 end
 
-function ucfirst(s::UTF8String)
-    length(s) < 1 || isupper(s[1]) ? s : string(uppercase(s[1]), s[2:end])
-end
-function lcfirst(s::UTF8String)
-    length(s) < 1 || islower(s[1]) ? s : string(lowercase(s[1]), s[2:end])
-end
-
 function reverse(s::UTF8String)
     out = similar(s.data)
     if ccall(:u8_reverse, Cint, (Ptr{Uint8}, Ptr{Uint8}, Csize_t),
