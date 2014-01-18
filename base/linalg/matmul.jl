@@ -141,32 +141,19 @@ Ac_mul_Bt!{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S})
 
 # Supporting functions for matrix multiplication
 
-function symmetrize!(A::StridedMatrix, uplo::Char='U')
+function copytri!(A::StridedMatrix, uplo::Char, conjugate::Bool=false)
     n = chksquare(A)
     @chkuplo
     if uplo == 'U'
         for i = 1:(n-1), j = (i+1):n
-            A[j,i] = A[i,j]
+            A[j,i] = conjugate ? conj(A[i,j]) : A[i,j]
         end
-    else #uplo == 'L'
+    elseif uplo == 'L'
         for i = 1:(n-1), j = (i+1):n
-            A[i,j] = A[j,i]
+            A[i,j] = conjugate ? conj(A[j,i]) : A[j,i]
         end
-    end
-    A
-end
-
-function symmetrize_conj!(A::StridedMatrix, uplo::Char='U')
-    n = chksquare(A)
-    @chkuplo
-    if uplo == 'U'
-        for i = 1:(n-1), j = (i+1):n
-            A[j,i] = conj(A[i,j])
-        end
-    else #uplo == 'L'
-        for i = 1:(n-1), j = (i+1):n
-            A[i,j] = conj(A[j,i])
-        end
+    else
+        throw(ArgumentError("second argument must be 'U' or 'L'"))
     end
     A
 end
@@ -200,7 +187,7 @@ function syrk_wrapper{T<:BlasFloat}(tA::Char, A::StridedMatrix{T})
     if mA == 3 && nA == 3; return matmul3x3(tA,tAt,A,A); end
 
     stride(A, 1) == 1 || (return generic_matmatmul(tA, tAt, A, A))
-    symmetrize!(BLAS.syrk('U', tA, one(T), A))
+    copytri!(BLAS.syrk('U', tA, one(T), A), 'U')
 end
 
 function herk_wrapper{T<:BlasFloat}(tA::Char, A::StridedMatrix{T})
@@ -220,7 +207,7 @@ function herk_wrapper{T<:BlasFloat}(tA::Char, A::StridedMatrix{T})
     # Result array does not need to be initialized as long as beta==0
     #    C = Array(T, mA, mA)
 
-    symmetrize_conj!(BLAS.herk('U', tA, one(T), A))
+    copytri!(BLAS.herk('U', tA, one(T), A), 'U', true)
 end
 
 function gemm_wrapper{T<:BlasFloat}(tA::Char, tB::Char,

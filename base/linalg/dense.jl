@@ -141,8 +141,6 @@ kron(a::Vector, b::Vector)=vec(kron(reshape(a,length(a),1),reshape(b,length(b),1
 kron(a::Matrix, b::Vector)=kron(a,reshape(b,length(b),1))
 kron(a::Vector, b::Matrix)=kron(reshape(a,length(a),1),b)
 
-randsym(n) = symmetrize!(randn(n,n))
-
 ^(A::Matrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
 
 function ^(A::Matrix, p::Number)

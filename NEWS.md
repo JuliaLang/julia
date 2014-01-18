@@ -136,6 +136,8 @@ Deprecated or removed
   * cholpfact and qrpfact are deprecated in favor of keyword arguments in 
     cholfact and qrfact.
 
+  * symmetrize! is deprecated in favor copytri! but the new function is not exported
+
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
 [#4026]: https://github.com/JuliaLang/julia/issues/4026
