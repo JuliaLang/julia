@@ -291,7 +291,7 @@ type Dict{K,V} <: Associative{K,V}
     end
     function Dict(ks, vs)
         # TODO: eventually replace with a call to Dict(zip(ks,vs))
-        n = length(ks)
+        n = min(length(ks), length(vs))
         h = Dict{K,V}()
         for i=1:n
             h[ks[i]] = vs[i]
