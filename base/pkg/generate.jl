@@ -121,9 +121,13 @@ function travis(pkg::String; force::Bool=false)
           - clang
         notifications:
           email: false
+        env:
+          matrix: 
+            - JULIAVERSION="juliareleases" 
+            - JULIAVERSION="julianightlies" 
         before_install:
           - sudo add-apt-repository ppa:staticfloat/julia-deps -y
-          - sudo add-apt-repository ppa:staticfloat/julianightlies -y
+          - sudo add-apt-repository ppa:staticfloat/\${JULIAVERSION} -y
           - sudo apt-get update -qq -y
           - sudo apt-get install libpcre3-dev julia -y
         script:
