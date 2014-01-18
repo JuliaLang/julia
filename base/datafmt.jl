@@ -68,18 +68,21 @@ function ascii_if_possible(sbuff::String)
 end
 
 function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool, optsd::Dict)
+    ign_empty = (dlm == invalid_dlm)
+
     nrows,ncols = try
-            dlm_dims(sbuff, eol, dlm)
+            dlm_dims(sbuff, eol, dlm, ign_empty)
         catch ex
             !get(optsd, :ignore_invalid_chars, false) && throw(ex)
             sbuff = ascii_if_possible(convert(typeof(sbuff), sbuff.data, ""))
-            dlm_dims(sbuff, eol, dlm)
+            dlm_dims(sbuff, eol, dlm, ign_empty)
         end
-    offsets = zeros(Int, nrows, ncols)
+    begin_offsets = zeros(Int, nrows, ncols)
+    end_offsets = zeros(Int, nrows, ncols)
     has_header = get(optsd, :has_header, false)
     cells = Array(T, has_header ? nrows-1 : nrows, ncols)
-    dlm_offsets(sbuff, dlm, eol, offsets)
-    has_header ? (dlm_fill(cells, offsets, sbuff, auto, 1, eol), dlm_fill(Array(String, 1, ncols), offsets, sbuff, auto, 0, eol)) : dlm_fill(cells, offsets, sbuff, auto, 0, eol)
+    dlm_offsets(sbuff, dlm, eol, begin_offsets, end_offsets, ign_empty)
+    has_header ? (dlm_fill(cells, begin_offsets, end_offsets, sbuff, auto, 1, dlm, eol, ign_empty), dlm_fill(Array(String, 1, ncols), begin_offsets, end_offsets, sbuff, auto, 0, dlm, eol, ign_empty)) : dlm_fill(cells, begin_offsets, end_offsets, sbuff, auto, 0, dlm, eol, ign_empty)
 end
 
 const valid_opts = [:has_header, :ignore_invalid_chars, :use_mmap]
@@ -93,28 +96,31 @@ function val_opts(opts)
     d
 end
 
-function dlm_col_begin(ncols::Int, offsets::Array{Int,2}, row::Int, col::Int)
-    (row == 1) && (col == 1) && return 1
-    pp_row = (1 == col) ? (row-1) : row
-    pp_col = (1 == col) ? ncols : (col-1)
-
-    ret = offsets[pp_row, pp_col]
-    (ret == 0) ? dlm_col_begin(ncols, offsets, pp_row, pp_col) : (ret+2)
-end
-
-function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, auto::Bool, row_offset::Int, eol::Char)
+function dlm_fill{T}(cells::Array{T,2}, begin_offsets::Array{Int,2}, end_offsets::Array{Int,2}, sbuff::String, auto::Bool, row_offset::Int, dlm::Char, eol::Char, ign_adj_dlm::Bool)
     maxrow,maxcol = size(cells)
     tmp64 = Array(Float64,1)
 
     for row in (1+row_offset):(maxrow+row_offset)
         cell_row = row-row_offset
         for col in 1:maxcol
-            start_pos = dlm_col_begin(maxcol, offsets, row, col)
-            end_pos = offsets[row,col]
-            
-            end_idx = prevind(sbuff, nextind(sbuff,end_pos))
-            (col == maxcol) && (end_idx > 0) && ('\n' == eol) && ('\r' == sbuff[end_idx]) && (end_idx = prevind(sbuff, end_idx))
-            sval = SubString(sbuff, start_pos, end_idx)
+            start_pos = begin_offsets[row,col] 
+            end_pos = end_offsets[row,col]
+
+            if start_pos > 0 && end_pos > 0
+                end_idx = prevind(sbuff, nextind(sbuff,end_pos))
+                (end_idx > 0) && ('\n' == eol) && ('\r' == sbuff[end_idx]) && (end_idx = prevind(sbuff, end_idx))
+                if ign_adj_dlm
+                    is_default_dlm = (dlm == invalid_dlm)
+                    while start_pos <= end_idx
+                        val = sbuff[start_pos] 
+                        (is_default_dlm ? !in(val, _default_delims) : (val != dlm)) && break
+                        start_pos = nextind(sbuff, start_pos)
+                    end
+                end
+                sval = SubString(sbuff, start_pos, end_idx)
+            else
+                sval = SubString(sbuff, 1, 0)
+            end
             
             if T <: Char
                 (length(sval) != 1) && error("file entry \"$(sval)\" is not a Char")
@@ -123,7 +129,7 @@ function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, au
                 if float64_isvalid(sval, tmp64)
                     cells[cell_row,col] = tmp64[1]
                 elseif auto
-                    return dlm_fill(Array(Any,maxrow,maxcol), offsets, sbuff, false, row_offset, eol)
+                    return dlm_fill(Array(Any,maxrow,maxcol), begin_offsets, end_offsets, sbuff, false, row_offset, dlm, eol, ign_adj_dlm)
                 else
                     cells[cell_row,col] = NaN
                 end
@@ -140,52 +146,78 @@ function dlm_fill{T}(cells::Array{T,2}, offsets::Array{Int,2}, sbuff::String, au
 end
 
 
-function dlm_offsets(sbuff::UTF8String, dlm, eol, offsets::Array{Int,2})
-    isascii(dlm) && isascii(eol) && (return dlm_offsets(sbuff.data, uint8(dlm), uint8(eol), offsets))
+function dlm_offsets(sbuff::UTF8String, dlm, eol, begin_offsets::Array{Int,2}, end_offsets::Array{Int,2}, ign_adj_dlm::Bool)
+    isascii(dlm) && isascii(eol) && (return dlm_offsets(sbuff.data, uint8(dlm), uint8(eol), begin_offsets, end_offsets, ign_adj_dlm))
 
     col = 0
     row = 1
-    maxrow,maxcol = size(offsets)
-    offsets[maxrow,maxcol] = length(sbuff.data)
+    maxrow,maxcol = size(begin_offsets)
     idx = 1
     is_default_dlm = (dlm == invalid_dlm)
-    while(idx <= length(sbuff.data))
+    got_data = false
+    last_offset = 0
+    slen = length(sbuff.data)
+    while idx <= slen
         val,idx = next(sbuff, idx)
-        (val != eol) && (is_default_dlm ? !in(val, _default_delims) : (val != dlm)) && continue
-        col += 1
-        offsets[row,col] = idx-2
+        (val != eol) && (is_default_dlm ? !in(val, _default_delims) : (val != dlm)) && (got_data = true) && continue
+        if got_data || !ign_adj_dlm
+            col += 1
+            end_offsets[row,col] = idx-2
+            begin_offsets[row,col] = last_offset+1
+        end
+        last_offset = idx
         (row >= maxrow) && (col == maxcol) && break
         (val == eol) && (row += 1; col = 0)
+        got_data = false
+    end
+    if last_offset < slen
+        col += 1
+        begin_offsets[row,col] = last_offset+1
+        end_offsets[row,col] = slen
     end
 end
 
-dlm_offsets(sbuff::ASCIIString, dlmc, eolc, offsets::Array{Int,2}) = dlm_offsets(sbuff.data, uint8(dlmc), uint8(eolc), offsets)
-function dlm_offsets(dbuff::Vector{Uint8}, dlm::Uint8, eol::Uint8, offsets::Array{Int,2})
+dlm_offsets(sbuff::ASCIIString, dlmc, eolc, begin_offsets::Array{Int,2}, end_offsets::Array{Int,2}, ign_adj_dlm::Bool) = dlm_offsets(sbuff.data, uint8(dlmc), uint8(eolc), begin_offsets, end_offsets, ign_adj_dlm)
+function dlm_offsets(dbuff::Vector{Uint8}, dlm::Uint8, eol::Uint8, begin_offsets::Array{Int,2}, end_offsets::Array{Int,2}, ign_adj_dlm::Bool)
     col = 0
     row = 1
     is_default_dlm = (dlm == uint8(invalid_dlm))
-    maxrow,maxcol = size(offsets)
-    offsets[maxrow,maxcol] = length(dbuff)
-    for idx in 1:length(dbuff)
+    maxrow,maxcol = size(begin_offsets)
+    got_data = false
+    last_offset = 0
+    slen = length(dbuff)
+    for idx in 1:slen
         val = dbuff[idx]
-        (val != eol) && (is_default_dlm ? !in(val, _default_delims) : (val != dlm)) && continue
-        col += 1
-        offsets[row,col] = idx-1
+        (val != eol) && (is_default_dlm ? !in(val, _default_delims) : (val != dlm)) && (got_data = true) && continue
+        if got_data || !ign_adj_dlm
+            col += 1
+            end_offsets[row,col] = idx-1
+            begin_offsets[row,col] = last_offset+1
+        end
+        last_offset = idx
         (row >= maxrow) && (col == maxcol) && break
         (val == eol) && (row += 1; col = 0)
+        got_data = false
+    end
+    if last_offset < slen
+        col += 1
+        begin_offsets[row,col] = last_offset+1
+        end_offsets[row,col] = slen
     end
 end
 
-dlm_dims(s::ASCIIString, eol::Char, dlm::Char) = dlm_dims(s.data, uint8(eol), uint8(dlm))
-function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D)
-    isa(dbuff, UTF8String) && isascii(eol) && isascii(dlm) && (return dlm_dims(dbuff.data, uint8(eol), uint8(dlm)))
+dlm_dims(s::ASCIIString, eol::Char, dlm::Char, ign_adj_dlm::Bool) = dlm_dims(s.data, uint8(eol), uint8(dlm), ign_adj_dlm)
+function dlm_dims{T,D}(dbuff::T, eol::D, dlm::D, ign_adj_dlm::Bool)
+    isa(dbuff, UTF8String) && isascii(eol) && isascii(dlm) && (return dlm_dims(dbuff.data, uint8(eol), uint8(dlm), ign_adj_dlm))
     ncols = nrows = col = 0
     is_default_dlm = (dlm == convert(D, invalid_dlm))
     try
+        got_data = false
         for val in dbuff
-            (val != eol) && (is_default_dlm ? !in(val, _default_delims) : (val != dlm)) && continue
-            col += 1
+            (val != eol) && (is_default_dlm ? !in(val, _default_delims) : (val != dlm)) && (got_data = true) && continue
+            (got_data || !ign_adj_dlm) && (col += 1)
             (val == eol) && (nrows += 1; ncols = max(ncols, col); col = 0)
+            got_data = false
         end
     catch ex
         error("at row $nrows, column $col : $ex)")
