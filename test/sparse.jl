@@ -30,7 +30,7 @@ se33_i32 = speye(Int32, 3, 3)
 @test all([se44 sz42 sz41_f32; sz34 se33_i32] == se77)
 
 # check mixed sparse-dense concatenation
-sz33 = spzeros(3)
+sz33 = spzeros(3, 3)
 de33 = eye(3)
 @test  all([se33 de33; sz33 se33] == full([se33 se33; sz33 se33 ]))
 
