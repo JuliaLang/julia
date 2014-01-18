@@ -153,50 +153,65 @@ rand(T::Type, dims::Dims) = rand!(Array(T, dims))
 rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try a more specific type")
 rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
 
-function randu{T<:Union(Uint32,Uint64,Uint128)}(k::T)
-    # generate an unsigned integer in 0:k-1
-    # largest multiple of k that can be represented in T
-    u = convert(T, div(typemax(T),k)*k)
-    x = rand(T)
-    while x >= u
-        x = rand(T)
+# Generate random integer within a range
+
+immutable RandIntGen{T<:Integer, U<:Unsigned}
+    a::T   # first element of the range
+    k::U   # range length
+    u::U   # maximum multiple of k within the domain of U
+
+    RandIntGen(a::T, k::U) = new(a, k, div(typemax(U),k)*k)
+end
+
+RandIntGen{T<:Unsigned}(r::Range1{T}) = RandIntGen{T,T}(first(r), convert(T, length(r)))
+
+# specialized versions
+for (T, U) in [(Uint8, Uint32), (Uint16, Uint32), (Int8, Uint32), (Int16, Uint32), 
+               (Int32, Uint32), (Int64, Uint64), (Int128, Uint128), 
+               (Bool, Uint32), (Char, Uint32)]
+
+    @eval RandIntGen(r::Range1{$T}) = RandIntGen{$T, $U}(first(r), convert($U, length(r)))
+end
+
+function rand{T<:Integer,U<:Unsigned}(g::RandIntGen{T,U})
+    x = rand(U)
+    while x >= g.u
+        x = rand(U)
     end
-    rem(x, k)
+    convert(T, g.a + rem(x, g.k))
 end
 
-# random integer from lo to hi inclusive
-function rand{T<:Union(Uint32,Uint64,Uint128)}(r::Range1{T})
-    ulen = convert(T, length(r))
-    convert(T, first(r) + randu(ulen))
+rand{T<:Union(Signed,Unsigned,Bool,Char)}(r::Range1{T}) = rand(RandIntGen(r))
+rand{T<:Real}(r::Ranges{T}) = convert(T, first(r) + rand(0:(length(r)-1)) * step(r))
+
+function rand!(g::RandIntGen, A::AbstractArray)
+    for i = 1 : length(A)
+        @inbounds A[i] = rand(g)
+    end    
+    return A
 end
 
-function rand(r::Range1{Int32})
-    ulen = convert(Uint32, length(r))
-    convert(Int32, first(r) + randu(ulen))
-end
-function rand(r::Range1{Int64})
-    ulen = convert(Uint64, length(r))
-    convert(Int64, first(r) + randu(ulen))
-end
-function rand(r::Range1{Int128})
-    ulen = convert(Uint128, length(r))
-    convert(Int128, first(r) + randu(ulen))
-end
-function rand{T<:Real}(r::Ranges{T})
-    ulen = convert(Uint64, length(r)) #length of Ranges is stored as Int, Uint64 is always enough
-    convert(T, first(r) + randu(ulen)*step(r))
-end
+rand!{T<:Union(Signed,Unsigned,Bool,Char)}(r::Range1{T}, A::AbstractArray) = rand!(RandIntGen(r), A)
 
+function rand!{T<:Real}(r::Ranges{T}, A::AbstractArray)
+    g = RandIntGen(0:(length(r)-1))
+    f = first(r)
+    s = step(r)
+    if s == 1
+        for i = 1 : length(A)
+            @inbounds A[i] = convert(T, f + rand(g))
+        end
+    else
+        for i = 1 : length(A)
+            @inbounds A[i] = convert(T, f + rand(g) * s)
+        end
+    end
+    return A
+end
 
 rand{T<:Real}(r::Ranges{T}, dims::Dims) = rand!(r, Array(T, dims))
 rand(r::Ranges, dims::Int...) = rand(r, dims)
 
-function rand!(r::Ranges, A::Array)
-    for i=1:length(A) 
-        A[i] = rand(r)
-    end
-    return A
-end
 
 ## random Bools
 
