@@ -666,37 +666,37 @@ install-openlibm: $(OPENLIBM_OBJ_TARGET)
 
 ## openspecfun ##
 
-OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" USE_OPENLIBM=1 OPENLIBM_HOME=$(JULIAHOME)/deps/openlibm
+OPENSPECFUN_DIR = openspecfun-$(OPENSPECFUN_VER)
+OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" USE_OPENLIBM=1 OPENLIBM_HOME=$(JULIAHOME)/deps/$(OPENLIBM_DIR)
 
 OPENSPECFUN_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libopenspecfun.$(SHLIB_EXT)
-OPENSPECFUN_OBJ_SOURCE = openspecfun/libopenspecfun.$(SHLIB_EXT)
+OPENSPECFUN_OBJ_SOURCE = $(OPENSPECFUN_DIR)/libopenspecfun.$(SHLIB_EXT)
 
-openspecfun/Makefile openspecfun/Makefile.extras:
-	(cd .. && git submodule init && git submodule update)
-ifeq (exists, $(shell [ -d openspecfun/.git ] && echo exists ))
-$(OPENSPECFUN_OBJ_SOURCE): openspecfun/.git/HEAD
-endif
-ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/openspecfun ] && echo exists ))
-$(OPENSPECFUN_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openspecfun/HEAD
-endif
-$(OPENSPECFUN_OBJ_SOURCE): openspecfun/Makefile
-	$(MAKE) -C openspecfun $(OPENSPECFUN_FLAGS)
+openspecfun-$(OPENSPECFUN_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/openspecfun/tarball/$(OPENSPECFUN_VER)
+	touch -c $@
+$(OPENSPECFUN_DIR)/Makefile $(OPENSPECFUN_DIR)/Makefile.extras: openspecfun-$(OPENSPECFUN_VER).tar.gz
+	mkdir $(OPENSPECFUN_DIR)
+	tar -C $(OPENSPECFUN_DIR) --strip-components 1 -xf $<
+	touch -c $@
+$(OPENSPECFUN_OBJ_SOURCE): $(OPENSPECFUN_DIR)/Makefile
+	$(MAKE) -C $(OPENSPECFUN_DIR) $(OPENSPECFUN_FLAGS)
 	touch -c $@
 $(OPENSPECFUN_OBJ_TARGET): $(OPENSPECFUN_OBJ_SOURCE) | $(BUILD)/lib
 ifeq ($(OS),WINNT)
-	cp openspecfun/libopenspecfun.a $(BUILD)/lib/libopenspecfun.a
+	cp $(OPENSPECFUN_DIR)/libopenspecfun.a $(BUILD)/lib/libopenspecfun.a
 else
-	cp openspecfun/libopenspecfun.a $(BUILD)/$(JL_LIBDIR)/libopenspecfun.a
+	cp $(OPENSPECFUN_DIR)/libopenspecfun.a $(BUILD)/$(JL_LIBDIR)/libopenspecfun.a
 endif
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenspecfun.$(SHLIB_EXT) $@
 
 clean-openspecfun:
-	-$(MAKE) -C openspecfun distclean $(OPENSPECFUN_FLAGS)
+	-$(MAKE) -C $(OPENSPECFUN_DIR) distclean $(OPENSPECFUN_FLAGS)
 	-rm $(OPENSPECFUN_OBJ_TARGET)
 distclean-openspecfun: clean-openspecfun
 
-get-openspecfun: openspecfun/Makefile
+get-openspecfun: $(OPENSPECFUN_DIR)/Makefile
 configure-openspecfun: get-openspecfun
 compile-openspecfun: $(OPENSPECFUN_OBJ_SOURCE)
 check-openspecfun: compile-openspecfun

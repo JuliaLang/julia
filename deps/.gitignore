@@ -22,6 +22,7 @@
 /mpfr-*
 /openblas-*
 /openlibm-*
+/openspecfun-*
 /patchelf-*
 /pcre-*
 /readline-*
