@@ -400,6 +400,9 @@ size_t ios_write(ios_t *s, const char *data, size_t n)
     return wrote;
 }
 
+// Returns 0 on success,
+//        -1 on error which set errno, and
+//        -2 on error which doesn't set errno.
 off_t ios_seek(ios_t *s, off_t pos)
 {
     s->_eof = 0;
@@ -436,6 +439,9 @@ off_t ios_seek_end(ios_t *s)
     return 0;
 }
 
+// Returns 0 on success,
+//        -1 on error which set errno, and
+//        -2 on error which doesn't set errno.
 off_t ios_skip(ios_t *s, off_t offs)
 {
     if (offs != 0) {
