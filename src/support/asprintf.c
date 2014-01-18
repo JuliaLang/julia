@@ -17,8 +17,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-extern int vsnprintf();
-
 /* Include vasprintf() if not on your OS. */
 #ifndef HAVE_VASPRINTF
 

@@ -130,7 +130,7 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
     }
     else if ((intptr_t)f_lib == 2) {
         libptrgv = prepare_global(jldll_var);
-        libsym = jl_dll_handle;
+        libsym = jl_dl_handle;
     }
     else
 #endif
