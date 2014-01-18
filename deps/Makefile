@@ -628,37 +628,37 @@ install-double-conversion: $(BUILD)/$(JL_LIBDIR)/libgrisu.$(SHLIB_EXT)
 
 ## openlibm ##
 
+OPENLIBM_DIR = openlibm-$(OPENLIBM_VER)
 OPENLIBM_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 
 OPENLIBM_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libopenlibm.$(SHLIB_EXT)
-OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
+OPENLIBM_OBJ_SOURCE = $(OPENLIBM_DIR)/libopenlibm.$(SHLIB_EXT)
 
-openlibm/Makefile:
-	(cd .. && git submodule init && git submodule update)
-ifeq (exists, $(shell [ -d openlibm/.git ] && echo exists ))
-$(OPENLIBM_OBJ_SOURCE): openlibm/.git/HEAD
-endif
-ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/openlibm ] && echo exists ))
-$(OPENLIBM_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
-endif
-$(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
-	$(MAKE) -C openlibm $(OPENLIBM_FLAGS)
+openlibm-$(OPENLIBM_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/openlibm/tarball/$(OPENLIBM_VER)
+	touch -c $@
+$(OPENLIBM_DIR)/Makefile: openlibm-$(OPENLIBM_VER).tar.gz
+	mkdir $(OPENLIBM_DIR)
+	tar -C $(OPENLIBM_DIR) --strip-components 1 -xf $<
+	touch -c $@
+$(OPENLIBM_OBJ_SOURCE): $(OPENLIBM_DIR)/Makefile
+	$(MAKE) -C $(OPENLIBM_DIR) $(OPENLIBM_FLAGS)
 	touch -c $@
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(BUILD)/lib
 ifeq ($(OS),WINNT)
-	cp openlibm/libopenlibm.a $(BUILD)/lib/libopenlibm.a
+	cp $(OPENLIBM_DIR)/libopenlibm.a $(BUILD)/lib/libopenlibm.a
 else
-	cp openlibm/libopenlibm.a $(BUILD)/$(JL_LIBDIR)/libopenlibm.a
+	cp $(OPENLIBM_DIR)/libopenlibm.a $(BUILD)/$(JL_LIBDIR)/libopenlibm.a
 endif
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
 
 clean-openlibm:
-	-$(MAKE) -C openlibm distclean $(OPENLIBM_FLAGS)
+	-$(MAKE) -C $(OPENLIBM_DIR) distclean $(OPENLIBM_FLAGS)
 	-rm $(OPENLIBM_OBJ_TARGET)
 distclean-openlibm: clean-openlibm
 
-get-openlibm: openlibm/Makefile
+get-openlibm: $(OPENLIBM_DIR)/Makefile
 configure-openlibm: get-openlibm
 compile-openlibm: $(OPENLIBM_OBJ_SOURCE)
 check-openlibm: compile-openlibm

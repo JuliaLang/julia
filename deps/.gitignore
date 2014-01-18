@@ -21,6 +21,7 @@
 /llvm-*
 /mpfr-*
 /openblas-*
+/openlibm-*
 /patchelf-*
 /pcre-*
 /readline-*
