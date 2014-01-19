@@ -1757,10 +1757,13 @@ function resolve_globals(e::ANY, from, to, env1, env2)
         # something else there
         e2 = resolve_globals(e.args[1]::Symbol, from, to, env1, env2)
         if isa(e2, GetfieldNode)
-            e2 = e2::GetfieldNode
-            e = Expr(:call, top_setfield, e2.value, QuoteNode(e2.name),
-                resolve_globals(e.args[2], from, to, env1, env2))
-            e.typ = e2.typ
+            # abort when trying to inline a function which assigns to a global
+            # variable in a different module, since `Mod.X=V` isn't allowed
+            throw(e2)
+#            e2 = e2::GetfieldNode
+#            e = Expr(:call, top_setfield, e2.value, qn(e2.name),
+#                resolve_globals(e.args[2], from, to, env1, env2))
+#            e.typ = e2.typ
         else
             e.args[1] = e2::Symbol
             e.args[2] = resolve_globals(e.args[2], from, to, env1, env2)
@@ -2105,7 +2108,14 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     # ok, substitute argument expressions for argument names in the body
     mfrom = linfo.module; mto = (inference_stack::CallStack).mod
     if !is(mfrom, mto)
-        body = resolve_globals(body, mfrom, mto, args, spnames)
+        try
+            body = resolve_globals(body, mfrom, mto, args, spnames)
+        catch ex
+            if isa(ex,GetfieldNode)
+                return NF
+            end
+            rethrow(ex)
+        end
     end
     body = sym_replace(body, args, spnames, argexprs, spvals)
 
