@@ -1712,7 +1712,10 @@ function _sym_repl(s::Symbol, from1, from2, to1, to2, deflt)
 end
 
 # return an expr to evaluate "from.sym" in module "to"
-function resolve_relative(sym, from, to, typ, orig)
+function resolve_relative(sym, locals, args, from, to, typ, orig)
+    if sym in locals || sym in args
+        return GetfieldNode(from, sym, typ)
+    end
     if is(from,to)
         return orig
     end
@@ -1731,13 +1734,13 @@ function resolve_relative(sym, from, to, typ, orig)
 end
 
 # annotate symbols with their original module for inlining
-function resolve_globals(e::ANY, from, to, env1, env2)
+function resolve_globals(e::ANY, locals, args, from, to, env1, env2)
     if isa(e,Symbol)
         s = e::Symbol
         if contains_is(env1, s) || contains_is(env2, s)
             return s
         end
-        return resolve_relative(s, from, to, Any, s)
+        return resolve_relative(s, locals, args, from, to, Any, s)
     end
     if isa(e,SymbolNode)
         s = e::SymbolNode
@@ -1745,7 +1748,7 @@ function resolve_globals(e::ANY, from, to, env1, env2)
         if contains_is(env1, name) || contains_is(env2, name)
             return s
         end
-        return resolve_relative(name, from, to, s.typ, s)
+        return resolve_relative(name, locals, args, from, to, s.typ, s)
     end
     if !isa(e,Expr)
         return e
@@ -1755,24 +1758,24 @@ function resolve_globals(e::ANY, from, to, env1, env2)
         # remove_redundant_temp_vars can only handle Symbols
         # on the LHS of assignments, so we make sure not to put
         # something else there
-        e2 = resolve_globals(e.args[1]::Symbol, from, to, env1, env2)
+        e2 = resolve_globals(e.args[1]::Symbol, locals, args, from, to, env1, env2)
         if isa(e2, GetfieldNode)
             # abort when trying to inline a function which assigns to a global
             # variable in a different module, since `Mod.X=V` isn't allowed
             throw(e2)
 #            e2 = e2::GetfieldNode
 #            e = Expr(:call, top_setfield, e2.value, qn(e2.name),
-#                resolve_globals(e.args[2], from, to, env1, env2))
+#                resolve_globals(e.args[2], locals, args, from, to, env1, env2))
 #            e.typ = e2.typ
         else
             e.args[1] = e2::Symbol
-            e.args[2] = resolve_globals(e.args[2], from, to, env1, env2)
+            e.args[2] = resolve_globals(e.args[2], locals, args, from, to, env1, env2)
         end
     elseif !is(e.head,:line)
         for i=1:length(e.args)
             subex = e.args[i]
             if !(isa(subex,Number) || isa(subex,String))
-                e.args[i] = resolve_globals(subex, from, to, env1, env2)
+                e.args[i] = resolve_globals(subex, locals, args, from, to, env1, env2)
             end
         end
     end
@@ -2107,15 +2110,13 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
 
     # ok, substitute argument expressions for argument names in the body
     mfrom = linfo.module; mto = (inference_stack::CallStack).mod
-    if !is(mfrom, mto)
-        try
-            body = resolve_globals(body, mfrom, mto, args, spnames)
-        catch ex
-            if isa(ex,GetfieldNode)
-                return NF
-            end
-            rethrow(ex)
+    try
+        body = resolve_globals(body, enc_locllist, enclosing_ast.args[1], mfrom, mto, args, spnames)
+    catch ex
+        if isa(ex,GetfieldNode)
+            return NF
         end
+        rethrow(ex)
     end
     body = sym_replace(body, args, spnames, argexprs, spvals)
 
