@@ -4515,6 +4515,37 @@ Distributed Arrays
 
    Get the vector of processors storing pieces of ``d``
 
+   
+Shared Arrays (EXPERIMENTAL FEATURE)
+------------------------------------
+
+.. function:: SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
+
+    Construct a SharedArray of type ``T``  and size ``dims`` across the processes
+    specified by ``pids`` - all of which have to be on the same host. 
+
+    If an ``init`` function of the type ``initfn(S::SharedArray)`` is specified, 
+    it is called on all the participating workers. 
+
+    The following fields in type ``SharedArray`` are initialized appropriately on each 
+    participating process.
+    
+    ``loc_shmarr::Array{T,N}`` - the shared memory segment mapped appropriately into 
+    the current process. Note: For indexed access it is NOT required to use this field.
+    A ``SharedArray`` object can be used just like a regular array.
+    
+    ``loc_pididx::Int`` - index of the current process into the ``pids`` vector. Can be 
+    used while distributing computational work across participating workers
+    
+    ``loc_subarr_1d`` - a 1-d subarray of the entire array, when equally partitioned 
+    across participating workers. Can be used as a simple work partitioning scheme.
+    
+
+.. function:: procs(sa::SharedArray)
+
+   Get the vector of processes that have mapped the shared array 
+   
+   
 System
 ------
 
