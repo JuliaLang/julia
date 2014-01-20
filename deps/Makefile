@@ -60,7 +60,7 @@ endif
 endif
 
 ifeq ($(USE_SYSTEM_OPENSPECFUN), 0)
-STAGE1_DEPS += openspecfun
+STAGE2_DEPS += openspecfun
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
@@ -489,51 +489,54 @@ install-readline: $(READLINE_OBJ_TARGET)
 
 ## LIBUV ##
 
-UV_SRC_TARGET = libuv/.libs/libuv.a
+LIBUV_DIR = libuv-$(LIBUV_VER)
+UV_SRC_TARGET = $(LIBUV_DIR)/.libs/libuv.a
 ifeq ($(OS),WINNT)
 UV_OBJ_TARGET = $(BUILD)/lib/libuv.a
 else
 UV_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libuv.a
 endif
 
-libuv/configure:
-	(cd .. && git submodule init && git submodule update)
-ifeq (exists, $(shell [ -d libuv/.git ] && echo exists ))
-libuv/config.status: libuv/.git/HEAD
-endif
-ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/libuv ] && echo exists ))
-libuv/config.status: $(JULIAHOME)/.git/modules/deps/libuv/HEAD
-endif
-libuv/config.status: libuv/configure
-	cd libuv && \
+libuv-$(LIBUV_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/libuv/tarball/$(LIBUV_VER)
+	touch -c $@
+$(LIBUV_DIR)/configure: libuv-$(LIBUV_VER).tar.gz
+	mkdir $(LIBUV_DIR)
+	tar -C $(LIBUV_DIR) --strip-components 1 -xf $<
+	touch -c $@
+$(LIBUV_DIR)/config.status: $(LIBUV_DIR)/configure
+	cd $(LIBUV_DIR) && \
 	./configure --with-pic $(CONFIGURE_COMMON)
 	touch -c $@
-$(UV_SRC_TARGET): libuv/config.status
-	touch -c libuv/aclocal.m4
-	touch -c libuv/Makefile.in
-	touch -c libuv/configure
-	touch -c libuv/config.status
-	$(MAKE) -C libuv
+$(UV_SRC_TARGET): $(LIBUV_DIR)/config.status
+	touch -c $(LIBUV_DIR)/aclocal.m4
+	touch -c $(LIBUV_DIR)/Makefile.in
+	touch -c $(LIBUV_DIR)/configure
+	touch -c $(LIBUV_DIR)/config.status
+	$(MAKE) -C $(LIBUV_DIR)
 	touch -c $@
-libuv/checked: $(UV_SRC_TARGET)
+$(LIBUV_DIR)/checked: $(UV_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
-	-$(MAKE) -C libuv check
+	-$(MAKE) -C $(LIBUV_DIR) check
 endif
 	echo 1 > $@
-$(UV_OBJ_TARGET): $(UV_SRC_TARGET)
-	$(MAKE) -C libuv install
+$(BUILD)/include/libuv:
+	mkdir $(BUILD)/include/libuv
+$(UV_OBJ_TARGET): $(UV_SRC_TARGET) | $(BUILD)/include/libuv
+	$(MAKE) -C $(LIBUV_DIR) install
 	$(INSTALL_NAME_CMD)libuv.dylib $(BUILD)/$(JL_LIBDIR)/libuv.dylib
+	cp $(LIBUV_DIR)/src/queue.h $(BUILD)/include/libuv
 
 clean-uv:
-	-$(MAKE) -C libuv clean
+	-$(MAKE) -C $(LIBUV_DIR) clean
 	-rm -rf $(BUILD)/lib/libuv.a $(BUILD)/include/uv.h $(BUILD)/include/uv-private
 distclean-uv: clean-uv
-	-$(MAKE) -C libuv distclean
+	-$(MAKE) -C $(LIBUV_DIR) distclean
 
-get-uv: libuv/configure
-configure-uv: libuv/config.status
+get-uv: $(LIBUV_DIR)/configure
+configure-uv: $(LIBUV_DIR)/config.status
 compile-uv: $(UV_SRC_TARGET)
-check-uv: libuv/checked
+check-uv: $(LIBUV_DIR)/checked
 install-uv: $(UV_OBJ_TARGET)
 
 
@@ -625,37 +628,37 @@ install-double-conversion: $(BUILD)/$(JL_LIBDIR)/libgrisu.$(SHLIB_EXT)
 
 ## openlibm ##
 
+OPENLIBM_DIR = openlibm-$(OPENLIBM_VER)
 OPENLIBM_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 
 OPENLIBM_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libopenlibm.$(SHLIB_EXT)
-OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
+OPENLIBM_OBJ_SOURCE = $(OPENLIBM_DIR)/libopenlibm.$(SHLIB_EXT)
 
-openlibm/Makefile:
-	(cd .. && git submodule init && git submodule update)
-ifeq (exists, $(shell [ -d openlibm/.git ] && echo exists ))
-$(OPENLIBM_OBJ_SOURCE): openlibm/.git/HEAD
-endif
-ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/openlibm ] && echo exists ))
-$(OPENLIBM_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
-endif
-$(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
-	$(MAKE) -C openlibm $(OPENLIBM_FLAGS)
+openlibm-$(OPENLIBM_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/openlibm/tarball/$(OPENLIBM_VER)
+	touch -c $@
+$(OPENLIBM_DIR)/Makefile: openlibm-$(OPENLIBM_VER).tar.gz
+	mkdir $(OPENLIBM_DIR)
+	tar -C $(OPENLIBM_DIR) --strip-components 1 -xf $<
+	touch -c $@
+$(OPENLIBM_OBJ_SOURCE): $(OPENLIBM_DIR)/Makefile
+	$(MAKE) -C $(OPENLIBM_DIR) $(OPENLIBM_FLAGS)
 	touch -c $@
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(BUILD)/lib
 ifeq ($(OS),WINNT)
-	cp openlibm/libopenlibm.a $(BUILD)/lib/libopenlibm.a
+	cp $(OPENLIBM_DIR)/libopenlibm.a $(BUILD)/lib/libopenlibm.a
 else
-	cp openlibm/libopenlibm.a $(BUILD)/$(JL_LIBDIR)/libopenlibm.a
+	cp $(OPENLIBM_DIR)/libopenlibm.a $(BUILD)/$(JL_LIBDIR)/libopenlibm.a
 endif
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
 
 clean-openlibm:
-	-$(MAKE) -C openlibm distclean $(OPENLIBM_FLAGS)
+	-$(MAKE) -C $(OPENLIBM_DIR) distclean $(OPENLIBM_FLAGS)
 	-rm $(OPENLIBM_OBJ_TARGET)
 distclean-openlibm: clean-openlibm
 
-get-openlibm: openlibm/Makefile
+get-openlibm: $(OPENLIBM_DIR)/Makefile
 configure-openlibm: get-openlibm
 compile-openlibm: $(OPENLIBM_OBJ_SOURCE)
 check-openlibm: compile-openlibm
@@ -663,37 +666,37 @@ install-openlibm: $(OPENLIBM_OBJ_TARGET)
 
 ## openspecfun ##
 
-OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" USE_OPENLIBM=1 OPENLIBM_HOME=$(JULIAHOME)/deps/openlibm
+OPENSPECFUN_DIR = openspecfun-$(OPENSPECFUN_VER)
+OPENSPECFUN_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) FFLAGS="$(JFFLAGS)" USE_OPENLIBM=1 OPENLIBM_HOME=$(JULIAHOME)/deps/$(OPENLIBM_DIR)
 
 OPENSPECFUN_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libopenspecfun.$(SHLIB_EXT)
-OPENSPECFUN_OBJ_SOURCE = openspecfun/libopenspecfun.$(SHLIB_EXT)
+OPENSPECFUN_OBJ_SOURCE = $(OPENSPECFUN_DIR)/libopenspecfun.$(SHLIB_EXT)
 
-openspecfun/Makefile openspecfun/Makefile.extras:
-	(cd .. && git submodule init && git submodule update)
-ifeq (exists, $(shell [ -d openspecfun/.git ] && echo exists ))
-$(OPENSPECFUN_OBJ_SOURCE): openspecfun/.git/HEAD
-endif
-ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/openspecfun ] && echo exists ))
-$(OPENSPECFUN_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openspecfun/HEAD
-endif
-$(OPENSPECFUN_OBJ_SOURCE): openspecfun/Makefile
-	$(MAKE) -C openspecfun $(OPENSPECFUN_FLAGS)
+openspecfun-$(OPENSPECFUN_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/openspecfun/tarball/$(OPENSPECFUN_VER)
+	touch -c $@
+$(OPENSPECFUN_DIR)/Makefile $(OPENSPECFUN_DIR)/Makefile.extras: openspecfun-$(OPENSPECFUN_VER).tar.gz
+	mkdir $(OPENSPECFUN_DIR)
+	tar -C $(OPENSPECFUN_DIR) --strip-components 1 -xf $<
+	touch -c $@
+$(OPENSPECFUN_OBJ_SOURCE): $(OPENSPECFUN_DIR)/Makefile $(OPENLIBM_OBJ_SOURCE)
+	$(MAKE) -C $(OPENSPECFUN_DIR) $(OPENSPECFUN_FLAGS)
 	touch -c $@
 $(OPENSPECFUN_OBJ_TARGET): $(OPENSPECFUN_OBJ_SOURCE) | $(BUILD)/lib
 ifeq ($(OS),WINNT)
-	cp openspecfun/libopenspecfun.a $(BUILD)/lib/libopenspecfun.a
+	cp $(OPENSPECFUN_DIR)/libopenspecfun.a $(BUILD)/lib/libopenspecfun.a
 else
-	cp openspecfun/libopenspecfun.a $(BUILD)/$(JL_LIBDIR)/libopenspecfun.a
+	cp $(OPENSPECFUN_DIR)/libopenspecfun.a $(BUILD)/$(JL_LIBDIR)/libopenspecfun.a
 endif
 	cp $< $@
 	$(INSTALL_NAME_CMD)libopenspecfun.$(SHLIB_EXT) $@
 
 clean-openspecfun:
-	-$(MAKE) -C openspecfun distclean $(OPENSPECFUN_FLAGS)
+	-$(MAKE) -C $(OPENSPECFUN_DIR) distclean $(OPENSPECFUN_FLAGS)
 	-rm $(OPENSPECFUN_OBJ_TARGET)
 distclean-openspecfun: clean-openspecfun
 
-get-openspecfun: openspecfun/Makefile
+get-openspecfun: $(OPENSPECFUN_DIR)/Makefile
 configure-openspecfun: get-openspecfun
 compile-openspecfun: $(OPENSPECFUN_OBJ_SOURCE)
 check-openspecfun: compile-openspecfun
@@ -741,34 +744,34 @@ install-random: $(LIBRANDOM_OBJ_TARGET)
 
 ## Rmath ##
 
+RMATH_DIR = Rmath-$(RMATH_VER)
 RMATH_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libRmath.$(SHLIB_EXT)
-RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
+RMATH_OBJ_SOURCE = $(RMATH_DIR)/src/libRmath.$(SHLIB_EXT)
 
 RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
 			   OS="$(OS)" ARCH="$(ARCH)" \
 			   USE_LIBRANDOM=1 LIBRANDOM_PATH="$(BUILD)/$(JL_LIBDIR)"
 
-Rmath/Make.inc:
-	(cd .. && git submodule init && git submodule update)
-ifeq (exists, $(shell [ -d Rmath/.git ] && echo exists ))
-$(RMATH_OBJ_SOURCE): Rmath/.git/HEAD
-endif
-ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/Rmath ] && echo exists ))
-$(RMATH_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/Rmath/HEAD
-endif
-$(RMATH_OBJ_SOURCE): Rmath/Make.inc $(LIBRANDOM_OBJ_TARGET)
-	$(MAKE) -C Rmath/src $(RMATH_FLAGS)
+Rmath-$(RMATH_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/Rmath/tarball/$(RMATH_VER)
+	touch -c $@
+$(RMATH_DIR)/Make.inc: Rmath-$(RMATH_VER).tar.gz
+	mkdir $(RMATH_DIR)
+	tar -C $(RMATH_DIR) --strip-components 1 -xf $<
+	touch -c $@
+$(RMATH_OBJ_SOURCE): $(RMATH_DIR)/Make.inc $(LIBRANDOM_OBJ_TARGET)
+	$(MAKE) -C $(RMATH_DIR)/src $(RMATH_FLAGS)
 	touch -c $@
 $(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
 	$(INSTALL_NAME_CMD)libRmath.$(SHLIB_EXT) $@
 
 clean-Rmath:
-	-$(MAKE) -C Rmath/src clean
+	-$(MAKE) -C $(RMATH_DIR)/src clean
 	-rm $(RMATH_OBJ_TARGET)
 distclean-Rmath: clean-Rmath
 
-get-Rmath: Rmath/Make.inc
+get-Rmath: $(RMATH_DIR)/Make.inc
 configure-Rmath: get-Rmath
 compile-Rmath: $(RMATH_OBJ_SOURCE)
 check-Rmath: compile-Rmath

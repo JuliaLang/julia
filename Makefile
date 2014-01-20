@@ -44,8 +44,6 @@ julia-release-symlink:
 	@ln -sf $(BUILD)/bin/julia-$(DEFAULT_REPL) julia
 
 julia-debug julia-release:
-	@-git submodule init --quiet
-	@-git submodule update
 	@$(MAKE) $(QUIET_MAKE) -C deps
 	@$(MAKE) $(QUIET_MAKE) -C src lib$@
 	@$(MAKE) $(QUIET_MAKE) -C base

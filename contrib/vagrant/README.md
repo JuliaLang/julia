@@ -24,15 +24,6 @@ Vagrant.
 
 ### Building Julia
 
-Before attempting to build Julia from the Vagrant machine, you must ensure that
-submodules have been initialized and are up to date. On the host system, from
-the top level Julia repository directory, run:
-
-```
-$ git submodule init
-$ git submodule update
-```
-
 The Julia repository is exposed to the VM using a VirtualBox shared folder as
 `~/julia`. To speed up the build process and handle some limitations of
 VirtualBox shared folders, the contents of the julia-dependencies PPA are

@@ -349,7 +349,7 @@ ifeq ($(OS),WINNT)
 else
   LIBUV = $(BUILD)/$(JL_LIBDIR)/libuv.a
 endif
-  LIBUV_INC = $(JULIAHOME)/deps/libuv/include
+  LIBUV_INC = $(BUILD)/include
 endif
 
 # OS specific stuff

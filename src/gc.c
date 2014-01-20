@@ -801,7 +801,7 @@ static void gc_mark_uv_handle(uv_handle_t *handle, void *arg)
     }
 }
 
-#include "../deps/libuv/src/queue.h"
+#include "../usr/include/libuv/queue.h"
 
 static void gc_mark_uv_state(uv_loop_t *loop)
 {
