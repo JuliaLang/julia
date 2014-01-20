@@ -1,3 +1,4 @@
+using Base.Test
 @test Time.yeardays(0) == 0
 @test Time.yeardays(1) == 365
 @test Time.yeardays(-1) == -365
@@ -35,6 +36,7 @@ test = Time.Datetime{Time.Millisecond,Time.UTC,Time.ISOCalendar}(Time.Millisecon
 @test Time.Datetime(2013,1,1,0,0,0) == test
 @test Time.Datetime(2013,1,1,0,0,0,0) == test
 @test Time.Datetime(2013,1,1,0,0,0,0,Time.UTC) == test
+@test Time.Datetime(2012,12,31,19,0,0,0,Time.New_York) == test # -5:00 offset
 test = Time.Date(Time.Day(734869))
 @test Time.Date(2013) == test
 @test Time.Date(2013,1) == test
@@ -43,6 +45,8 @@ test = Time.Date(Time.Day(734869))
 # Months must be in range
 @test_throws Time.Datetime(2013,0,1)
 @test_throws Time.Datetime(2013,13,1)
+@test_throws Time.Datetime(2013,0,1,0,0,0,0,Time.New_York)
+@test_throws Time.Datetime(2013,13,1,0,0,0,0,Time.New_York)
 
 # Days/Hours/Minutes/Seconds/Milliseconds roll back/forward
 @test Time.Datetime(2013,1,0) == Time.Datetime(2012,12,31)
@@ -71,14 +75,119 @@ dt = Time.Datetime(1972,6,30,23,59,60)
 dt = Time.Datetime(1972,6,30,23,59,59)
 @test dt + Time.Year(1) == Time.Datetime(1973,6,30,23,59,59)
 @test dt - Time.Year(1) == Time.Datetime(1971,6,30,23,59,59)
+@test dt + Time.Year(-1) == Time.Datetime(1971,6,30,23,59,59)
+
+# Wrapping arithemtic for Months
+@test Time.monthwrap(1,-14) == 11
+@test Time.monthwrap(1,-13) == 12
+@test Time.monthwrap(1,-12) == 1
+@test Time.monthwrap(1,-11) == 2
+@test Time.monthwrap(1,-10) == 3
+@test Time.monthwrap(1,-9) == 4
+@test Time.monthwrap(1,-8) == 5
+@test Time.monthwrap(1,-7) == 6
+@test Time.monthwrap(1,-6) == 7
+@test Time.monthwrap(1,-5) == 8
+@test Time.monthwrap(1,-4) == 9
+@test Time.monthwrap(1,-3) == 10
+@test Time.monthwrap(1,-2) == 11
+@test Time.monthwrap(1,-1) == 12
+@test Time.monthwrap(1,0) == 1
+@test Time.monthwrap(1,1) == 2
+@test Time.monthwrap(1,2) == 3
+@test Time.monthwrap(1,3) == 4
+@test Time.monthwrap(1,4) == 5
+@test Time.monthwrap(1,5) == 6
+@test Time.monthwrap(1,6) == 7
+@test Time.monthwrap(1,7) == 8
+@test Time.monthwrap(1,8) == 9
+@test Time.monthwrap(1,9) == 10
+@test Time.monthwrap(1,10) == 11
+@test Time.monthwrap(1,11) == 12
+@test Time.monthwrap(1,12) == 1
+@test Time.monthwrap(1,13) == 2
+@test Time.monthwrap(1,24) == 1
+@test Time.monthwrap(12,-14) == 10
+@test Time.monthwrap(12,-13) == 11
+@test Time.monthwrap(12,-12) == 12
+@test Time.monthwrap(12,-11) == 1
+@test Time.monthwrap(12,-2) == 10
+@test Time.monthwrap(12,-1) == 11
+@test Time.monthwrap(12,0) == 12
+@test Time.monthwrap(12,1) == 1
+@test Time.monthwrap(12,2) == 2
+@test Time.monthwrap(12,11) == 11
+@test Time.monthwrap(12,12) == 12
+@test Time.monthwrap(12,13) == 1
+
+@test Time.yearwrap(2000,1,-3600) == 1700
+@test Time.yearwrap(2000,1,-37) == 1996
+@test Time.yearwrap(2000,1,-36) == 1997
+@test Time.yearwrap(2000,1,-35) == 1997
+@test Time.yearwrap(2000,1,-25) == 1997
+@test Time.yearwrap(2000,1,-24) == 1998
+@test Time.yearwrap(2000,1,-23) == 1998
+@test Time.yearwrap(2000,1,-14) == 1998
+@test Time.yearwrap(2000,1,-13) == 1998
+@test Time.yearwrap(2000,1,-12) == 1999
+@test Time.yearwrap(2000,1,-11) == 1999
+@test Time.yearwrap(2000,1,-2) == 1999
+@test Time.yearwrap(2000,1,-1) == 1999
+@test Time.yearwrap(2000,1,0) == 2000
+@test Time.yearwrap(2000,1,1) == 2000
+@test Time.yearwrap(2000,1,11) == 2000
+@test Time.yearwrap(2000,1,12) == 2001
+@test Time.yearwrap(2000,1,13) == 2001
+@test Time.yearwrap(2000,1,23) == 2001
+@test Time.yearwrap(2000,1,24) == 2002
+@test Time.yearwrap(2000,1,25) == 2002
+@test Time.yearwrap(2000,1,36) == 2003
+@test Time.yearwrap(2000,1,3600) == 2300
+@test Time.yearwrap(2000,2,-2) == 1999
+@test Time.yearwrap(2000,3,10) == 2001
+@test Time.yearwrap(2000,4,-4) == 1999
+@test Time.yearwrap(2000,5,8) == 2001
+@test Time.yearwrap(2000,6,-18) == 1998
+@test Time.yearwrap(2000,6,-6) == 1999
+@test Time.yearwrap(2000,6,6) == 2000
+@test Time.yearwrap(2000,6,7) == 2001
+@test Time.yearwrap(2000,6,19) == 2002
+@test Time.yearwrap(2000,12,-3600) == 1700
+@test Time.yearwrap(2000,12,-36) == 1997
+@test Time.yearwrap(2000,12,-35) == 1998
+@test Time.yearwrap(2000,12,-24) == 1998
+@test Time.yearwrap(2000,12,-23) == 1999
+@test Time.yearwrap(2000,12,-14) == 1999
+@test Time.yearwrap(2000,12,-13) == 1999
+@test Time.yearwrap(2000,12,-12) == 1999
+@test Time.yearwrap(2000,12,-11) == 2000
+@test Time.yearwrap(2000,12,-2) == 2000
+@test Time.yearwrap(2000,12,-1) == 2000
+@test Time.yearwrap(2000,12,0) == 2000
+@test Time.yearwrap(2000,12,1) == 2001
+@test Time.yearwrap(2000,12,11) == 2001
+@test Time.yearwrap(2000,12,12) == 2001
+@test Time.yearwrap(2000,12,13) == 2002
+@test Time.yearwrap(2000,12,24) == 2002
+@test Time.yearwrap(2000,12,25) == 2003
+@test Time.yearwrap(2000,12,36) == 2003
+@test Time.yearwrap(2000,12,37) == 2004
+@test Time.yearwrap(2000,12,3600) == 2300
 
 dt = Time.Datetime(1999,12,27)
 @test dt + Time.Month(1) == Time.Datetime(2000,1,27)
-@test dt + Time.Month(100) == Time.Datetime(2007,4,27)
-@test dt + Time.Month(1000) == Time.Datetime(2082,4,27)
+@test dt + Time.Month(-1) == Time.Datetime(1999,11,27)
+@test dt + Time.Month(-11) == Time.Datetime(1999,1,27)
+@test dt + Time.Month(11) == Time.Datetime(2000,11,27)
+@test dt + Time.Month(-12) == Time.Datetime(1998,12,27)
+@test dt + Time.Month(12) == Time.Datetime(2000,12,27)
+@test dt + Time.Month(13) == Time.Datetime(2001,1,27)
+@test dt + Time.Month(100) == Time.Datetime(2008,4,27)
+@test dt + Time.Month(1000) == Time.Datetime(2083,4,27)
 @test dt - Time.Month(1) == Time.Datetime(1999,11,27)
-@test dt - Time.Month(100) == Time.Datetime(1991,4,27)
-@test dt - Time.Month(1000) == Time.Datetime(1916,4,27)
+@test dt - Time.Month(-1) == Time.Datetime(2000,1,27)
+@test dt - Time.Month(100) == Time.Datetime(1991,8,27)
+@test dt - Time.Month(1000) == Time.Datetime(1916,8,27)
 dt = Time.Datetime(2000,2,29)
 @test dt + Time.Month(1) == Time.Datetime(2000,3,29)
 @test dt - Time.Month(1) == Time.Datetime(2000,1,29)
@@ -88,6 +197,7 @@ dt = Time.Datetime(1972,6,30,23,59,60)
 dt = Time.Datetime(1972,6,30,23,59,59)
 @test dt + Time.Month(1) == Time.Datetime(1972,7,30,23,59,59)
 @test dt - Time.Month(1) == Time.Datetime(1972,5,30,23,59,59)
+@test dt + Time.Month(-1) == Time.Datetime(1972,5,30,23,59,59)
 
 dt = Time.Datetime(1999,12,27)
 @test dt + Time.Week(1) == Time.Datetime(2000,1,3)
@@ -105,6 +215,7 @@ dt = Time.Datetime(1972,6,30,23,59,60)
 dt = Time.Datetime(1972,6,30,23,59,59)
 @test dt + Time.Week(1) == Time.Datetime(1972,7,7,23,59,59)
 @test dt - Time.Week(1) == Time.Datetime(1972,6,23,23,59,59)
+@test dt + Time.Week(-1) == Time.Datetime(1972,6,23,23,59,59)
 
 dt = Time.Datetime(1999,12,27)
 @test dt + Time.Day(1) == Time.Datetime(1999,12,28)
@@ -119,6 +230,7 @@ dt = Time.Datetime(1972,6,30,23,59,60)
 dt = Time.Datetime(1972,6,30,23,59,59)
 @test dt + Time.Day(1) == Time.Datetime(1972,7,1,23,59,59)
 @test dt - Time.Day(1) == Time.Datetime(1972,6,29,23,59,59)
+@test dt + Time.Day(-1) == Time.Datetime(1972,6,29,23,59,59)
 
 dt = Time.Datetime(1999,12,27)
 @test dt + Time.Hour(1) == Time.Datetime(1999,12,27,1)
@@ -133,6 +245,7 @@ dt = Time.Datetime(1972,6,30,23,59,60)
 dt = Time.Datetime(1972,6,30,23,59,59)
 @test dt + Time.Hour(1) == Time.Datetime(1972,7,1,0,59,59)
 @test dt - Time.Hour(1) == Time.Datetime(1972,6,30,22,59,59)
+@test dt + Time.Hour(-1) == Time.Datetime(1972,6,30,22,59,59)
 
 dt = Time.Datetime(1999,12,27)
 @test dt + Time.Minute(1) == Time.Datetime(1999,12,27,0,1)
@@ -147,6 +260,7 @@ dt = Time.Datetime(1972,6,30,23,59,60)
 dt = Time.Datetime(1972,6,30,23,59,59)
 @test dt + Time.Minute(1) == Time.Datetime(1972,7,1,0,0,59)
 @test dt - Time.Minute(1) == Time.Datetime(1972,6,30,23,58,59)
+@test dt + Time.Minute(-1) == Time.Datetime(1972,6,30,23,58,59)
 
 dt = Time.Datetime(1999,12,27)
 @test dt + Time.Second(1) == Time.Datetime(1999,12,27,0,0,1)
@@ -161,6 +275,7 @@ dt = Time.Datetime(1972,6,30,23,59,60)
 dt = Time.Datetime(1972,6,30,23,59,59)
 @test dt + Time.Second(1) == Time.Datetime(1972,6,30,23,59,60)
 @test dt - Time.Second(1) == Time.Datetime(1972,6,30,23,59,58)
+@test dt + Time.Second(-1) == Time.Datetime(1972,6,30,23,59,58)
 
 dt = Time.Datetime(1999,12,27)
 @test dt + Time.Millisecond(1) == Time.Datetime(1999,12,27,0,0,0,1)
@@ -175,6 +290,7 @@ dt = Time.Datetime(1972,6,30,23,59,60)
 dt = Time.Datetime(1972,6,30,23,59,59)
 @test dt + Time.Millisecond(1) == Time.Datetime(1972,6,30,23,59,59,1)
 @test dt - Time.Millisecond(1) == Time.Datetime(1972,6,30,23,59,58,999)
+@test dt + Time.Millisecond(-1) == Time.Datetime(1972,6,30,23,59,58,999)
 
 dt = Time.Date(1999,12,27)
 @test dt + Time.Year(1) == Time.Date(2000,12,27)
@@ -191,11 +307,11 @@ dt = Time.Date(2000,2,29)
 
 dt = Time.Date(1999,12,27)
 @test dt + Time.Month(1) == Time.Date(2000,1,27)
-@test dt + Time.Month(100) == Time.Date(2007,4,27)
-@test dt + Time.Month(1000) == Time.Date(2082,4,27)
+@test dt + Time.Month(100) == Time.Date(2008,4,27)
+@test dt + Time.Month(1000) == Time.Date(2083,4,27)
 @test dt - Time.Month(1) == Time.Date(1999,11,27)
-@test dt - Time.Month(100) == Time.Date(1991,4,27)
-@test dt - Time.Month(1000) == Time.Date(1916,4,27)
+@test dt - Time.Month(100) == Time.Date(1991,8,27)
+@test dt - Time.Month(1000) == Time.Date(1916,8,27)
 dt = Time.Date(2000,2,29)
 @test dt + Time.Month(1) == Time.Date(2000,3,29)
 @test dt - Time.Month(1) == Time.Date(2000,1,29)
@@ -218,6 +334,9 @@ dt = Time.Date(1999,12,27)
 @test dt - Time.Day(1) == Time.Date(1999,12,26)
 @test dt - Time.Day(100) == Time.Date(1999,9,18)
 @test dt - Time.Day(1000) == Time.Date(1997,4,1)
+
+@test Date(Datetime(Date(2012,7,1))) == Date(2012,7,1)
+@test Time.unix2date(Time.date2unix(Datetime(2000,1,1))) == Datetime(2000,1,1)
 
 # week function
 dt = Time.Datetime(1999,12,27)
@@ -264,178 +383,328 @@ b = Time.Datetime(1972,6,29,23,59,60) #not a leapsecond, rolls forward
 a = Time.Datetime(1972,6,30,23,59,59)
 b = Time.Datetime(1972,6,30,23,59,60)
 c = Time.Datetime(1972,7,1,0,0,0)
+d = Time.Datetime(1972,6,30,19,59,60,Time.New_York)
+e = Time.Datetime(1972,6,30,20,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1972-06-30T23:59:60 UTC"
 @test string(c) == "1972-07-01T00:00:00 UTC"
+@test string(d) == "1972-06-30T19:59:60 EDT"
+@test string(e) == "1972-06-30T20:00:00 EDT"
 a = Time.Datetime(1972,12,31,23,59,59)
 b = Time.Datetime(1972,12,31,23,59,60)
 c = Time.Datetime(1973,1,1,0,0,0)
+d = Time.Datetime(1972,12,31,18,59,60,Time.New_York)
+e = Time.Datetime(1972,12,31,19,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1972-12-31T23:59:60 UTC"
 @test string(c) == "1973-01-01T00:00:00 UTC"
+@test string(d) == "1972-12-31T18:59:60 EST"
+@test string(e) == "1972-12-31T19:00:00 EST"
 a = Time.Datetime(1973,12,31,23,59,59)
 b = Time.Datetime(1973,12,31,23,59,60)
 c = Time.Datetime(1974,1,1,0,0,0)
+d = Time.Datetime(1973,12,31,18,59,60,Time.New_York)
+e = Time.Datetime(1973,12,31,19,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1973-12-31T23:59:60 UTC"
 @test string(c) == "1974-01-01T00:00:00 UTC"
+@test string(d) == "1973-12-31T18:59:60 EST"
+@test string(e) == "1973-12-31T19:00:00 EST"
 a = Time.Datetime(1974,12,31,23,59,59)
 b = Time.Datetime(1974,12,31,23,59,60)
 c = Time.Datetime(1975,1,1,0,0,0)
+d = Time.Datetime(1974,12,31,18,59,60,Time.New_York)
+e = Time.Datetime(1974,12,31,19,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1974-12-31T23:59:60 UTC"
 @test string(c) == "1975-01-01T00:00:00 UTC"
+@test string(d) == "1974-12-31T18:59:60 EST"
+@test string(e) == "1974-12-31T19:00:00 EST"
 a = Time.Datetime(1975,12,31,23,59,59)
 b = Time.Datetime(1975,12,31,23,59,60)
 c = Time.Datetime(1976,1,1,0,0,0)
+d = Time.Datetime(1975,12,31,18,59,60,Time.New_York)
+e = Time.Datetime(1975,12,31,19,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1975-12-31T23:59:60 UTC"
 @test string(c) == "1976-01-01T00:00:00 UTC"
+@test string(d) == "1975-12-31T18:59:60 EST"
+@test string(e) == "1975-12-31T19:00:00 EST"
 a = Time.Datetime(1976,12,31,23,59,59)
 b = Time.Datetime(1976,12,31,23,59,60)
 c = Time.Datetime(1977,1,1,0,0,0)
+d = Time.Datetime(1976,12,31,18,59,60,Time.New_York)
+e = Time.Datetime(1976,12,31,19,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1976-12-31T23:59:60 UTC"
 @test string(c) == "1977-01-01T00:00:00 UTC"
+@test string(d) == "1976-12-31T18:59:60 EST"
+@test string(e) == "1976-12-31T19:00:00 EST"
 a = Time.Datetime(1977,12,31,23,59,59)
 b = Time.Datetime(1977,12,31,23,59,60)
 c = Time.Datetime(1978,1,1,0,0,0)
+d = Time.Datetime(1977,12,31,18,59,60,Time.New_York)
+e = Time.Datetime(1977,12,31,19,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1977-12-31T23:59:60 UTC"
 @test string(c) == "1978-01-01T00:00:00 UTC"
+@test string(d) == "1977-12-31T18:59:60 EST"
+@test string(e) == "1977-12-31T19:00:00 EST"
 a = Time.Datetime(1978,12,31,23,59,59)
 b = Time.Datetime(1978,12,31,23,59,60)
 c = Time.Datetime(1979,1,1,0,0,0)
+d = Time.Datetime(1978,12,31,18,59,60,Time.New_York)
+e = Time.Datetime(1978,12,31,19,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1978-12-31T23:59:60 UTC"
 @test string(c) == "1979-01-01T00:00:00 UTC"
+@test string(d) == "1978-12-31T18:59:60 EST"
+@test string(e) == "1978-12-31T19:00:00 EST"
 a = Time.Datetime(1979,12,31,23,59,59)
 b = Time.Datetime(1979,12,31,23,59,60)
 c = Time.Datetime(1980,1,1,0,0,0)
+d = Time.Datetime(1979,12,31,18,59,60,Time.New_York)
+e = Time.Datetime(1979,12,31,19,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1979-12-31T23:59:60 UTC"
 @test string(c) == "1980-01-01T00:00:00 UTC"
+@test string(d) == "1979-12-31T18:59:60 EST"
+@test string(e) == "1979-12-31T19:00:00 EST"
 a = Time.Datetime(1981,6,30,23,59,59)
 b = Time.Datetime(1981,6,30,23,59,60)
 c = Time.Datetime(1981,7,1,0,0,0)
+d = Time.Datetime(1981,6,30,19,59,60,Time.New_York)
+e = Time.Datetime(1981,6,30,20,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1981-06-30T23:59:60 UTC"
 @test string(c) == "1981-07-01T00:00:00 UTC"
+@test string(d) == "1981-06-30T19:59:60 EDT"
+@test string(e) == "1981-06-30T20:00:00 EDT"
 a = Time.Datetime(1982,6,30,23,59,59)
 b = Time.Datetime(1982,6,30,23,59,60)
 c = Time.Datetime(1982,7,1,0,0,0)
+d = Time.Datetime(1982,6,30,19,59,60,Time.New_York)
+e = Time.Datetime(1982,6,30,20,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1982-06-30T23:59:60 UTC"
 @test string(c) == "1982-07-01T00:00:00 UTC"
+@test string(d) == "1982-06-30T19:59:60 EDT"
+@test string(e) == "1982-06-30T20:00:00 EDT"
 a = Time.Datetime(1983,6,30,23,59,59)
 b = Time.Datetime(1983,6,30,23,59,60)
 c = Time.Datetime(1983,7,1,0,0,0)
+d = Time.Datetime(1983,6,30,19,59,60,Time.New_York)
+e = Time.Datetime(1983,6,30,20,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1983-06-30T23:59:60 UTC"
 @test string(c) == "1983-07-01T00:00:00 UTC"
+@test string(d) == "1983-06-30T19:59:60 EDT"
+@test string(e) == "1983-06-30T20:00:00 EDT"
 a = Time.Datetime(1985,6,30,23,59,59)
 b = Time.Datetime(1985,6,30,23,59,60)
 c = Time.Datetime(1985,7,1,0,0,0)
+d = Time.Datetime(1985,6,30,19,59,60,Time.New_York)
+e = Time.Datetime(1985,6,30,20,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1985-06-30T23:59:60 UTC"
 @test string(c) == "1985-07-01T00:00:00 UTC"
+@test string(d) == "1985-06-30T19:59:60 EDT"
+@test string(e) == "1985-06-30T20:00:00 EDT"
 a = Time.Datetime(1987,12,31,23,59,59)
 b = Time.Datetime(1987,12,31,23,59,60)
 c = Time.Datetime(1988,1,1,0,0,0)
+d = Time.Datetime(1987,12,31,18,59,60,Time.New_York)
+e = Time.Datetime(1987,12,31,19,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1987-12-31T23:59:60 UTC"
 @test string(c) == "1988-01-01T00:00:00 UTC"
+@test string(d) == "1987-12-31T18:59:60 EST"
+@test string(e) == "1987-12-31T19:00:00 EST"
 a = Time.Datetime(1989,12,31,23,59,59)
 b = Time.Datetime(1989,12,31,23,59,60)
 c = Time.Datetime(1990,1,1,0,0,0)
+d = Time.Datetime(1989,12,31,18,59,60,Time.New_York)
+e = Time.Datetime(1989,12,31,19,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1989-12-31T23:59:60 UTC"
 @test string(c) == "1990-01-01T00:00:00 UTC"
+@test string(d) == "1989-12-31T18:59:60 EST"
+@test string(e) == "1989-12-31T19:00:00 EST"
 a = Time.Datetime(1990,12,31,23,59,59)
 b = Time.Datetime(1990,12,31,23,59,60)
 c = Time.Datetime(1991,1,1,0,0,0)
+d = Time.Datetime(1990,12,31,18,59,60,Time.New_York)
+e = Time.Datetime(1990,12,31,19,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1990-12-31T23:59:60 UTC"
 @test string(c) == "1991-01-01T00:00:00 UTC"
+@test string(d) == "1990-12-31T18:59:60 EST"
+@test string(e) == "1990-12-31T19:00:00 EST"
 a = Time.Datetime(1992,6,30,23,59,59)
 b = Time.Datetime(1992,6,30,23,59,60)
 c = Time.Datetime(1992,7,1,0,0,0)
+d = Time.Datetime(1992,6,30,19,59,60,Time.New_York)
+e = Time.Datetime(1992,6,30,20,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1992-06-30T23:59:60 UTC"
 @test string(c) == "1992-07-01T00:00:00 UTC"
+@test string(d) == "1992-06-30T19:59:60 EDT"
+@test string(e) == "1992-06-30T20:00:00 EDT"
 a = Time.Datetime(1993,6,30,23,59,59)
 b = Time.Datetime(1993,6,30,23,59,60)
 c = Time.Datetime(1993,7,1,0,0,0)
+d = Time.Datetime(1993,6,30,19,59,60,Time.New_York)
+e = Time.Datetime(1993,6,30,20,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1993-06-30T23:59:60 UTC"
 @test string(c) == "1993-07-01T00:00:00 UTC"
+@test string(d) == "1993-06-30T19:59:60 EDT"
+@test string(e) == "1993-06-30T20:00:00 EDT"
 a = Time.Datetime(1994,6,30,23,59,59)
 b = Time.Datetime(1994,6,30,23,59,60)
 c = Time.Datetime(1994,7,1,0,0,0)
+d = Time.Datetime(1994,6,30,19,59,60,Time.New_York)
+e = Time.Datetime(1994,6,30,20,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1994-06-30T23:59:60 UTC"
 @test string(c) == "1994-07-01T00:00:00 UTC"
+@test string(d) == "1994-06-30T19:59:60 EDT"
+@test string(e) == "1994-06-30T20:00:00 EDT"
 a = Time.Datetime(1995,12,31,23,59,59)
 b = Time.Datetime(1995,12,31,23,59,60)
 c = Time.Datetime(1996,1,1,0,0,0)
+d = Time.Datetime(1995,12,31,18,59,60,Time.New_York)
+e = Time.Datetime(1995,12,31,19,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1995-12-31T23:59:60 UTC"
 @test string(c) == "1996-01-01T00:00:00 UTC"
+@test string(d) == "1995-12-31T18:59:60 EST"
+@test string(e) == "1995-12-31T19:00:00 EST"
 a = Time.Datetime(1997,6,30,23,59,59)
 b = Time.Datetime(1997,6,30,23,59,60)
 c = Time.Datetime(1997,7,1,0,0,0)
+d = Time.Datetime(1997,6,30,19,59,60,Time.New_York)
+e = Time.Datetime(1997,6,30,20,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1997-06-30T23:59:60 UTC"
 @test string(c) == "1997-07-01T00:00:00 UTC"
+@test string(d) == "1997-06-30T19:59:60 EDT"
+@test string(e) == "1997-06-30T20:00:00 EDT"
 a = Time.Datetime(1998,12,31,23,59,59)
 b = Time.Datetime(1998,12,31,23,59,60)
 c = Time.Datetime(1999,1,1,0,0,0)
+d = Time.Datetime(1998,12,31,18,59,60,Time.New_York)
+e = Time.Datetime(1998,12,31,19,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "1998-12-31T23:59:60 UTC"
 @test string(c) == "1999-01-01T00:00:00 UTC"
+@test string(d) == "1998-12-31T18:59:60 EST"
+@test string(e) == "1998-12-31T19:00:00 EST"
 a = Time.Datetime(2005,12,31,23,59,59)
 b = Time.Datetime(2005,12,31,23,59,60)
 c = Time.Datetime(2006,1,1,0,0,0)
+d = Time.Datetime(2005,12,31,18,59,60,Time.New_York)
+e = Time.Datetime(2005,12,31,19,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "2005-12-31T23:59:60 UTC"
 @test string(c) == "2006-01-01T00:00:00 UTC"
+@test string(d) == "2005-12-31T18:59:60 EST"
+@test string(e) == "2005-12-31T19:00:00 EST"
 a = Time.Datetime(2008,12,31,23,59,59)
 b = Time.Datetime(2008,12,31,23,59,60)
 c = Time.Datetime(2009,1,1,0,0,0)
+d = Time.Datetime(2008,12,31,18,59,60,Time.New_York)
+e = Time.Datetime(2008,12,31,19,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "2008-12-31T23:59:60 UTC"
 @test string(c) == "2009-01-01T00:00:00 UTC"
+@test string(d) == "2008-12-31T18:59:60 EST"
+@test string(e) == "2008-12-31T19:00:00 EST"
 a = Time.Datetime(2012,6,30,23,59,59)
 b = Time.Datetime(2012,6,30,23,59,60)
 c = Time.Datetime(2012,7,1,0,0,0)
+d = Time.Datetime(2012,6,30,19,59,60,Time.New_York)
+e = Time.Datetime(2012,6,30,20,0,0,Time.New_York)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
+@test b.instant.ms == d.instant.ms
+@test c.instant.ms == e.instant.ms
 @test string(b) == "2012-06-30T23:59:60 UTC"
 @test string(c) == "2012-07-01T00:00:00 UTC"
+@test string(d) == "2012-06-30T19:59:60 EDT"
+@test string(e) == "2012-06-30T20:00:00 EDT"
 
 a = Time.Datetime(1972,6,30,23,59,59)
 b = Time.Datetime(1972,6,30,23,59,60)
@@ -496,12 +765,6 @@ c = Time.Datetime(1972,7,1,0,0,0)
 
 @test Time.firstdayofweek(Time.Datetime(2013,12,24)) == Time.Datetime(2013,12,23)
 @test Time.lastdayofweek(Time.Datetime(2013,12,24)) == Time.Datetime(2013,12,29)
-
-@test Time.addwrap(1,11) == 12 #month 1 plus 11 months == month 12
-@test Time.addwrap(1,12) == 1  #month 1 plus 12 months == month 1
-@test Time.addwrap(1,24) == 1  #month 1 plus 24 months == month 1
-@test Time.subwrap(12,1) == 11 #month 12 minus 1 month == month 11
-@test Time.addwrap(2000,12,1) == 2001 #year 2000 month 12 plus 1 month == year 2001
 
 # Datetime parsing
 #'1996-January-15'
@@ -602,6 +865,11 @@ f = "mmm-yyyy-dd"
  #optional millisecond?
  #hh for 1-12, requires 'aa' for am/pm
  #zzzz for olson timezone string
+
+#Testing TODO
+ #generic offsets
+ #spotcheck timezones
+ #try to break Periods/Dates/Datetimes
 
 # Period testing
 @test -Time.Year(1) == Time.Year(-1)
