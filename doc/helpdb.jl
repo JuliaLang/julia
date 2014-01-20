@@ -1494,7 +1494,7 @@
 
 ("Strings","Base","split","split(string, [chars, [limit,] [include_empty]])
 
-   Return an array of strings by splitting the given string on
+   Return an array of substrings by splitting the given string on
    occurrences of the given character delimiters, which may be
    specified in any of the formats allowed by \"search\"'s second
    argument (i.e. a single character, collection of characters,
