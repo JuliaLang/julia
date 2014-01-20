@@ -198,7 +198,7 @@ void *mach_profile_listener(void *arg)
              */
 
             forceDwarf = 0;
-            unw_getcontext(&profiler_uc);
+            //unw_getcontext(&profiler_uc);
 
             if (forceDwarf == 0) {
                 // Save the backtrace

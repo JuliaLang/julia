@@ -599,7 +599,7 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
 {
     unw_context_t uc;
-    unw_getcontext(&uc);
+    //unw_getcontext(&uc);
     return rec_backtrace_ctx(data, maxsize, &uc);
 }
 DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, unw_context_t *uc)
@@ -608,15 +608,15 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, unw_context_t
     unw_word_t ip;
     size_t n=0;
     
-    unw_init_local(&cursor, uc);
-    do {
-        if (n >= maxsize)
-            break;
-        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0) {
-            break;
-        }
-        data[n++] = ip;
-    } while (unw_step(&cursor) > 0);
+    //unw_init_local(&cursor, uc);
+    //do {
+    //    if (n >= maxsize)
+    //        break;
+    //    if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0) {
+    //        break;
+    //    }
+    //    data[n++] = ip;
+    //} while (unw_step(&cursor) > 0);
     return n;
 }
 #ifdef LIBOSXUNWIND

@@ -82,6 +82,7 @@
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Transforms/Instrumentation.h"
 #include <setjmp.h>
 
 #include <string>
@@ -3015,6 +3016,9 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     m = jl_Module;
 #endif
 
+    std::string str2 = funcName.str();
+    std::cout << str2;
+
     funcName << globalUnique++;
 
     if (specsig) {
@@ -3029,8 +3033,9 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             }
         }
         Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
+	std::string str = funcName.str();
         f = Function::Create(FunctionType::get(rt, fsig, false),
-                             Function::ExternalLinkage, funcName.str(), m);
+                             Function::ExternalLinkage, str, m);
         if (lam->cFunctionObject == NULL) {
             lam->cFunctionObject = (void*)f;
             lam->cFunctionID = jl_assign_functionID(f);
@@ -3937,6 +3942,8 @@ static void init_julia_llvm_env(Module *m)
     jl_data_layout = new TargetData(*jl_ExecutionEngine->getTargetData());
 #endif
     FPM->add(jl_data_layout);
+
+    FPM->add(llvm::createMemorySanitizerPass(true,""));
 
     // list of passes from vmkit
     FPM->add(createCFGSimplificationPass()); // Clean up disgusting code

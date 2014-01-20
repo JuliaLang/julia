@@ -31,7 +31,7 @@ static unsigned long long strtoull_0b0o(const char *nptr, char **endptr, int bas
 
 int isnumtok_base(char *tok, value_t *pval, int base)
 {
-    char *end;
+    char *end = NULL;
     int64_t i64;
     uint64_t ui64;
     double d;
@@ -206,7 +206,7 @@ static value_t do_read_sexpr(value_t label);
 
 static u_int32_t peek(void)
 {
-    char c, *end;
+    char c, *end = NULL;
     fixnum_t x;
     int ch, base;
 

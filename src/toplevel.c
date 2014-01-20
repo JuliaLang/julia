@@ -483,9 +483,9 @@ jl_value_t *jl_load(const char *fname)
     }
     char *fpath = (char*)fname;
     uv_stat_t stbuf;
-    if (jl_stat(fpath, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
-        jl_errorf("could not open file %s", fpath);
-    }
+    //if (jl_stat(fpath, (char*)&stbuf) != 0 || (stbuf.st_mode & S_IFMT) != S_IFREG) {
+    //    jl_errorf("could not open file %s", fpath);
+    //}
     if (jl_start_parsing_file(fpath) != 0) {
         jl_errorf("could not open file %s", fpath);
     }

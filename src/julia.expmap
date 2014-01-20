@@ -1,5 +1,9 @@
 {
   global:
+    __asan_*;
+    __msan_*;
+    __interceptor_*;
+    atexit;
     alloc_*w;
     allocobj;
     asprintf;

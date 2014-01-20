@@ -76,6 +76,7 @@ static void jl_find_stack_bottom(void)
     size_t stack_size;
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
     struct rlimit rl;
+    memset(&rl,0,sizeof(struct rlimit));
     getrlimit(RLIMIT_STACK, &rl);
     stack_size = rl.rlim_cur;
 #else
