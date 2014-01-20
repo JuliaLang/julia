@@ -95,11 +95,20 @@ sizeof(s::UTF8String) = sizeof(s.data)
 isvalid(s::UTF8String, i::Integer) =
     (1 <= i <= endof(s.data)) && is_utf8_start(s.data[i])
 
+const empty_utf8 = UTF8String(Uint8[])
+
 function getindex(s::UTF8String, r::Range1{Int})
-    a, b = first(r), last(r)
-    i = isvalid(s,a) ? a : nextind(s,a)
-    j = b < endof(s) ? nextind(s,b)-1 : endof(s.data)
-    UTF8String(s.data[i:j])
+    isempty(r) && return empty_utf8
+    i, j = first(r), last(r)
+    d = s.data
+    if !is_utf8_start(d[i])
+        i = nextind(s,i)
+    end
+    if j > endof(s)
+        throw(BoundsError())
+    end
+    j = nextind(s,j)-1
+    UTF8String(d[i:j])
 end
 
 function search(s::UTF8String, c::Char, i::Integer)
