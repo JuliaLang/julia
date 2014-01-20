@@ -589,12 +589,32 @@ begin
 end
 
 @test (1:5)[[true,false,true,false,true]] == [1,3,5]
+@test [1:5][[true,false,true,false,true]] == [1,3,5]
+@test_throws (1:5)[[true,false,true,false]]
+@test_throws (1:5)[[true,false,true,false,true,false]]
+@test_throws [1:5][[true,false,true,false]]
+@test_throws [1:5][[true,false,true,false,true,false]]
 a = [1:5]
 a[[true,false,true,false,true]] = 6
 @test a == [6,2,6,4,6]
 a[[true,false,true,false,true]] = [7,8,9]
 @test a == [7,2,8,4,9]
 @test_throws (a[[true,false,true,false,true]] = [7,8,9,10])
+A = reshape(1:15, 3, 5)
+@test A[[true, false, true], [false, false, true, true, false]] == [7 10; 9 12]
+@test_throws A[[true, false], [false, false, true, true, false]]
+@test_throws A[[true, false, true], [false, true, true, false]]
+@test_throws A[[true, false, true, true], [false, false, true, true, false]]
+@test_throws A[[true, false, true], [false, false, true, true, false, true]]
+A = ones(Int, 3, 5)
+@test_throws A[2,[true, false, true, true, false]] = 2:5
+A[2,[true, false, true, true, false]] = 2:4
+@test A == [1 1 1 1 1; 2 1 3 4 1; 1 1 1 1 1]
+@test_throws A[[true,false,true], 5] = [19]
+@test_throws A[[true,false,true], 5] = 19:21
+A[[true,false,true], 5] = 7
+@test A == [1 1 1 1 7; 2 1 3 4 1; 1 1 1 1 7]
+
 B = cat(3, 1, 2, 3)
 @test B[:,:,[true, false, true]] == reshape([1,3], 1, 1, 2)  # issue #5454
 

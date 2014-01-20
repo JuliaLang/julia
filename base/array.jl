@@ -304,6 +304,10 @@ end
 function getindex{T<:Real}(A::Ranges, I::AbstractVector{T})
     return [ A[i] for i in to_index(I) ]
 end
+function getindex(A::Ranges, I::AbstractVector{Bool})
+    checkbounds(A, I)
+    return [ A[i] for i in to_index(I) ]
+end
 
 
 # logical indexing
@@ -326,6 +330,7 @@ getindex(A::Vector, I::AbstractVector{Bool}) = getindex_bool_1d(A, I)
 getindex(A::Vector, I::AbstractArray{Bool}) = getindex_bool_1d(A, I)
 getindex(A::Array, I::AbstractVector{Bool}) = getindex_bool_1d(A, I)
 getindex(A::Array, I::AbstractArray{Bool}) = getindex_bool_1d(A, I)
+
 
 ## Indexing: setindex! ##
 setindex!{T}(A::Array{T}, x) = arrayset(A, convert(T,x), 1)
