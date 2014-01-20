@@ -416,21 +416,23 @@ A ``DArray`` can also use arbitrary array-like types to represent the local
 chunks that store actual data. The data in a ``DArray`` is distributed by
 dividing the index space into some number of blocks in each dimension.
 
-Common kinds of arrays can be constructed with functions beginning with
-``d``::
+An object of type ``ChunkedDist`` represents the partionining of the 
+index space.
 
-    dzeros(100,100,10)
-    dones(100,100,10)
-    drand(100,100,10)
-    drandn(100,100,10)
-    dfill(x, 100,100,10)
+Common kinds of distributed arrays can be constructed with the ``ChunkedDist`` variants 
+of the regular array construction functions::
+    zeros(ChunkedDist(100,100,10))
+    ones(ChunkedDist(100,100,10))
+    rand(ChunkedDist(100,100,10))
+    randn(ChunkedDist(100,100,10))
+    fill(x, ChunkedDist(100,100,10))
 
 In the last case, each element will be initialized to the specified
 value ``x``. These functions automatically pick a distribution for you.
 For more control, you can specify which processors to use, and how the
 data should be distributed::
 
-    dzeros((100,100), workers()[1:4], [1,4])
+    zeros(ChunkedDist((100,100); pids=workers()[1:4], dist=[1,4])
 
 The second argument specifies that the array should be created on the first
 four workers. When dividing data among a large number of processes,

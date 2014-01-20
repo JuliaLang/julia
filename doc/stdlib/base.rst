@@ -4595,44 +4595,43 @@ Parallel Computing
 Distributed Arrays
 ------------------
 
-.. function:: DArray(init, dims, [procs, dist])
+.. function:: DArray(init, cdist::ChunkedDist)
 
    Construct a distributed array. ``init`` is a function that accepts a tuple of index ranges. 
    This function should allocate a local chunk of the distributed array and initialize it for the specified indices. 
-   ``dims`` is the overall size of the distributed array. ``procs`` optionally specifies a vector of processor IDs to use. 
-   If unspecified, the array is distributed over all worker processes only. Typically, when runnning in distributed mode,
+   A ``ChunkedDist(dims; pids::Vector, dist::Vector)`` represents the partitioning of overall array size ``dims`` 
+   across workers identified by ``pids``. 
+   
+   Keyword argument ``pids`` defaults to all worker processes only. Typically, when runnning in distributed mode,
    i.e., ``nprocs() > 1``, this would mean that no chunk of the distributed array exists on the process hosting the 
    interactive julia prompt.
-   ``dist`` is an integer vector specifying how many chunks the distributed array should be divided into in each dimension.
+   
+   Keyword argument ``dist`` is an integer vector specifying how many chunks the distributed array should be divided 
+   into in each dimension, and defaults to a partion along the larger dimensions first.
+   
+   For example, the DArray variant of the ``fill`` function that creates a distributed array and fills it with a value ``v`` is implemented as:
 
-   For example, the ``dfill`` function that creates a distributed array and fills it with a value ``v`` is implemented as:
-
-   ``dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)``
-
-.. function:: dzeros(dims, ...)
-
-   Construct a distributed array of zeros. Trailing arguments are the same as those accepted by ``darray``.
-
-.. function:: dones(dims, ...)
-
-   Construct a distributed array of ones. Trailing arguments are the same as those accepted by ``darray``.
-
-.. function:: dfill(x, dims, ...)
-
-   Construct a distributed array filled with value ``x``. Trailing arguments are the same as those accepted by ``darray``.
-
-.. function:: drand(dims, ...)
-
-   Construct a distributed uniform random array. Trailing arguments are the same as those accepted by ``darray``.
-
-.. function:: drandn(dims, ...)
-
-   Construct a distributed normal random array. Trailing arguments are the same as those accepted by ``darray``.
-
+   ``fill(v, cdist::ChunkedDist) = DArray(I->fill(v, map(length,I)), cdist)``
+   
+   
+   The following convenience constructors, which create a distributed version of the corresponsing array are available ::
+   
+              zeros(cdist::ChunkedDist)
+              zeros(::Type{T}, cdist::ChunkedDist)  
+              ones(cdist::ChunkedDist)
+              ones(::Type{T}, cdist::ChunkedDist)  
+              fill(v, cdist::ChunkedDist)  
+              rand(cdist::ChunkedDist)  
+              randn(cdist::ChunkedDist)  
+              
 .. function:: distribute(a)
 
    Convert a local array to distributed
 
+.. function:: distribution(d::DArray)
+
+   Get the ChunkedDist representing the distribution of ``d``
+   
 .. function:: localpart(d)
 
    Get the local piece of a distributed array. Returns an empty array if no local part exists on the calling process.
