@@ -108,13 +108,13 @@ function mmap_stream_settings(s::IO)
 end
 
 # Mmapped-array constructor
-function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, offset::FileOffset)
+function mmap_array{T,N,TInt<:Integer}(::Type{T}, dims::NTuple{N,TInt}, s::IO, offset::FileOffset; grow::Bool=true)
     prot, flags, iswrite = mmap_stream_settings(s)
     len = prod(dims)*sizeof(T)
     if len > typemax(Int)
         error("file is too large to memory-map on this platform")
     end
-    if iswrite
+    if iswrite && grow
         pmap, delta = mmap_grow(len, prot, flags, fd(s), offset)
     else
         pmap, delta = mmap(len, prot, flags, fd(s), offset)
