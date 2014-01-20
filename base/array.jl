@@ -1226,13 +1226,12 @@ function transpose{T<:Number}(A::Matrix{T})
 end
 
 ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
-ctranspose(x::StridedVecOrMat) = transpose(x)
 
 transpose(x::StridedVector) = [ x[j] for i=1, j=1:size(x,1) ]
 transpose(x::StridedMatrix) = [ x[j,i] for i=1:size(x,2), j=1:size(x,1) ]
 
-ctranspose{T<:Number}(x::StridedVector{T}) = T[ conj(x[j]) for i=1, j=1:size(x,1) ]
-ctranspose{T<:Number}(x::StridedMatrix{T}) = T[ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
+ctranspose{T}(x::StridedVector{T}) = T[ conj(x[j]) for i=1, j=1:size(x,1) ]
+ctranspose{T}(x::StridedMatrix{T}) = T[ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.
