@@ -54,11 +54,13 @@ end
 read(from::IOBuffer, p::Ptr, nb::Integer) = read(from, p, int(nb))
 function read(from::IOBuffer, p::Ptr, nb::Int)
     if !from.readable error("read failed") end
-    if nb > nb_available(from)
+    avail = nb_available(from)
+    adv = min(avail,nb)
+    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), p, pointer(from.data,from.ptr), adv)
+    from.ptr += adv
+    if nb > avail
         throw(EOFError())
     end
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), p, pointer(from.data,from.ptr), nb)
-    from.ptr += nb
     p
 end
 
