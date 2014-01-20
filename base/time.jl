@@ -9,8 +9,9 @@ export Calendar, ISOCalendar, Timezone, UTC,
     Period, Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
     # accessors
     year, month, week, day, hour, minute, second, millisecond,
+    ratadays2date, date2ratadays, unix2date, date2unix,
     # date functions
-    monthname, monthabr, dayname, dayabr, unix2datetime, now,
+    monthname, monthabbr, dayname, dayabbr, now,
     isleap, lastdayofmonth, dayofweek, dayofyear,
     dayofweekofmonth, daysofweekinmonth, firstdayofweek, lastdayofweek,
     recur, calendar, timezone, precision, ISOFormat,
@@ -30,6 +31,10 @@ immutable ISOCalendar <: Calendar end
 
 abstract Timezone <: AbstractTime
 immutable UTC <: Timezone end
+
+# Generic offset; "n" is number of minutes offset from UTC
+immutable Offset{n<:Integer} <: Timezone end
+Offset(n::Real) = Offset{int(n)}
 
 abstract Period     <: AbstractTime
 abstract DatePeriod <: Period
@@ -68,10 +73,11 @@ immutable Millisecond    <: TimePeriod
     Millisecond(x::Real) = new(int64(x))
 end
 
-# TimeTypes wrap Period types to provide human representations of time
+# TimeTypes wrap Period instants to provide human representations of time
 abstract TimeType <: AbstractTime
 
-# The Datetime type is a generic Period wrapper
+# The Datetime type is a generic Period wrapper parameterized by
+# different Period precision levels, Timezone types, and Calendars
 immutable Datetime{P<:Period,T<:Timezone,C<:Calendar} <: TimeType
     instant::P
 end 
@@ -83,6 +89,8 @@ immutable Date <: TimeType
     Date(x::Day) = new(x)
 end
 
+include("timezone.jl")
+
 # Convert y,m,d to # of Rata Die days
 yeardays(y) = 365y + div(y,4) - div(y,100) + div(y,400)
 const monthdays = [306,337,0,31,61,92,122,153,184,214,245,275]
@@ -90,31 +98,35 @@ function totaldays(y,m,d)
     @inbounds mdays = monthdays[m]
     return d + mdays + yeardays(m < 3 ? y - 1 : y) - 306
 end
-include("leaps.jl")
 
-# UTC constructor with defaults
-function Datetime(y,m=1,d=1,h=0,mi=0,s=0,ms=0,tz::Type{UTC}=UTC)
+# Timezone/Leapsecond dispatch functions
+setoffset(::Type{UTC},ms)       = setleaps(ms)
+setoffsetsecond(::Type{UTC},ms) = setleapsecond(ms)
+getoffset(::Type{UTC},ms)       = getleaps(ms)
+getoffsetsecond(::Type{UTC},ms) = getleapsecond(ms)
+getabbr(::Type{UTC},ms)         = "UTC"
+
+setoffset{n}(::Type{Offset{n}},ms)       = 60000*n + setleaps(ms)
+setoffsetsecond{n}(::Type{Offset{n}},ms) = 60000*n + setleapsecond(ms)
+getoffset{n}(::Type{Offset{n}},ms)       = 60000*n + getleaps(ms)
+getoffsetsecond{n}(::Type{Offset{n}},ms) = 60000*n + getleapsecond(ms)
+function getabbr{n}(tz::Type{Offset{n}},ms) 
+    hrs = string(div(abs(n),60))
+    mins = string(abs(n) % 60)
+    return string(sign(n) == 1 ? "+" : "-", lpad(hrs,2,"0"),":",lpad(mins,2,"0"))
+end
+
+# Datetime constructor with defaults
+function Datetime(y,m=1,d=1,h=0,mi=0,s=0,ms=0,::Type{UTC}=UTC)
     # RFC: Month is the only Period we check because it can throw a
     # BoundsError() in construction (see totaldays())
     # all other Periods "roll over"; should we make these consistent?
     0 < m < 13 || error("Month out of range")
     rata = ms + 1000*(s + 60mi + 3600h + 86400*totaldays(y,m,d))
-    return UTCDatetime(Millisecond(
-        rata + (s == 60 ? setleapsecond(rata) : setleaps(rata))))
+    return ISODatetime{UTC}(Millisecond(
+        rata + (s == 60 ? setoffsetsecond(UTC,rata) : setoffset(UTC,rata))))
 end
-# Generic constructor to handle Timezone data loading
-# TODO: Keyword arg to disambiguate daylight savings time input?
-# function Datetime(y,m,d,h,mi,s,ms,tz)
-     # Timezone data lazy loading
-     # Define Datetime constructor for tz
-     # getoffset, getoffsetsecond, setoffset, setoffsetsecond
-     # string abr
-     # return apply(Datetime,(y,m,d,h,mi,s,ms,tz))
-# end
-# Datetime(y,m,d,h,mi,s,tz::Timezone) = Datetime(y,m,d,h,mi,s,0,tz)
-# Datetime(y,m,d,h,mi,s,ms,tz::String) = Datetime(y,m,d,h,mi,s,0,timezone(tz))
-# Datetime(y,m,d,h,mi,s,tz::String) = Datetime(y,m,d,h,mi,s,0,timezone(tz))
-# timezone(tz::String) = lookup olsen timezone string
+Datetime{T<:Timezone}(y,m,d,h,mi,s,::Type{T}) = Datetime(y,m,d,h,mi,s,0,T)
 
 function Date(y,m=1,d=1)
     0 < m < 13 || error("Month out of range")
@@ -152,11 +164,6 @@ function _week(days)
 end
 
 # Accessor functions
-getoffset(::Type{UTC},ms)       = getleaps(ms)
-getoffsetsecond(::Type{UTC},ms) = getleapsecond(ms)
-getabr(::Type{UTC},ms)          = "UTC"
-setoffset(::Type{UTC},ms)       = setleaps(ms)
-
 _days(dt::Date)               = dt.instant.days
 _days{T}(dt::ISODatetime{T})  = div(dt.instant.ms - getoffset(T,dt.instant.ms),86400000)
 year(dt::TimeType)            = _year(_days(dt))
@@ -171,6 +178,9 @@ function second{T}(dt::ISODatetime{T})
 end
 millisecond(dt::Datetime) = dt.instant.ms % 1000
 
+ratadays2date(days) = _day2date(days)
+date2ratadays(dt::TimeType) = _days(dt)
+
 # Conversion/Promotion
 Datetime(dt::Date) = Datetime(year(dt),month(dt),day(dt))
 #Datetime(dt::Date,tz::Type{T}) = Datetime(year(dt),month(dt),day(dt),0,0,0,0,tz)
@@ -182,8 +192,8 @@ Date(dt::Datetime) = Date(year(dt),month(dt),day(dt))
 
 # Traits, Equality
 hash(dt::TimeType) = hash(dt.instant)
-isless{T<:TimeType}(x::T,y::T) = isless(x.instant,y.instant)
-isequal{T<:TimeType}(x::T,y::T) = isequal(x.instant,y.instant)
+isless(x::TimeType,y::TimeType) = isless(x.instant,y.instant)
+isequal(x::TimeType,y::TimeType) = isequal(x.instant,y.instant)
 isfinite(::TimeType) = true
 calendar{P,T,C}(dt::Datetime{P,T,C}) = C
 calendar(dt::Date) = ISOCalendar
@@ -206,8 +216,8 @@ function string{T}(dt::ISODatetime{T})
     mii = lpad(mi,2,"0")
     ss = lpad(s,2,"0")
     ms = millisecond(dt) == 0 ? "" : string(millisecond(dt)/1000)[2:end]
-    abr = getabr(T,dt.instant.ms)
-    return "$yy-$mm-$(dd)T$hh:$mii:$ss$ms $abr"
+    abbr = getabbr(T,dt.instant.ms)
+    return "$yy-$mm-$(dd)T$hh:$mii:$ss$ms $abbr"
 end
 show{T}(io::IO,x::ISODatetime{T}) = print(io,string(x))
 function string(dt::Date)
@@ -220,32 +230,32 @@ end
 show(io::IO,x::Date) = print(io,string(x))
 
 # Date functions
-const Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday = 1,2,3,4,5,6,7
+const Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday = 1,2,3,4,5,6,0
 const January,February,March,April,May,June = 1,2,3,4,5,6
 const July,August,September,October,November,December = 7,8,9,10,11,12
 const Mon,Tue,Wed,Thu,Fri,Sat,Sun = 1,2,3,4,5,6,0
 const Jan,Feb,Mar,Apr,Jun,Jul,Aug,Sep,Oct,Nov,Dec = 1,2,3,4,5,6,7,8,9,10,11,12
 const DAYSOFWEEK = [1=>"Monday",2=>"Tuesday",3=>"Wednesday",
                     4=>"Thursday",5=>"Friday",6=>"Saturday",0=>"Sunday"]
-const DAYSOFWEEKABR = [1=>"Mon",2=>"Tue",3=>"Wed",
+const DAYSOFWEEKABBR = [1=>"Mon",2=>"Tue",3=>"Wed",
                        4=>"Thu",5=>"Fri",6=>"Sat",0=>"Sun"]
 const MONTHS = [1=>"January",2=>"February",3=>"March",4=>"April",
                 5=>"May",6=>"June",7=>"July",8=>"August",9=>"September",
                 10=>"October",11=>"November",12=>"December"]
-const MONTHSABR = [1=>"Jan",2=>"Feb",3=>"Mar",4=>"Apr",
+const MONTHSABBR = [1=>"Jan",2=>"Feb",3=>"Mar",4=>"Apr",
                    5=>"May",6=>"Jun",7=>"Jul",8=>"Aug",9=>"Sep",
                    10=>"Oct",11=>"Nov",12=>"Dec"]
 # These two are used in Datetime parsing
 const RMONTHS = ["january"=>1,"february"=>2,"march"=>3,"april"=>4,
                  "may"=>5,"june"=>6,"july"=>7,"august"=>8,"september"=>9,
                  "october"=>10,"november"=>11,"december"=>12]
-const RMONTHSABR = ["jan"=>1,"feb"=>2,"mar"=>3,"apr"=>4,
+const RMONTHSABBR = ["jan"=>1,"feb"=>2,"mar"=>3,"apr"=>4,
                     "may"=>5,"jun"=>6,"jul"=>7,"aug"=>8,"sep"=>9,
                     "oct"=>10,"nov"=>11,"dec"=>12]
-monthname(dt::TimeType) = get(MONTHS,month(dt),"January")
-monthabr(dt::TimeType) = get(MONTHSABR,month(dt),"Jan")
-dayname(dt::TimeType) = get(DAYSOFWEEK,dayofweek(dt),"Monday")
-dayabr(dt::TimeType) = get(DAYSOFWEEKABR,dayofweek(dt),"Mon")
+monthname(dt::TimeType) = MONTHS[month(dt)]
+monthabbr(dt::TimeType) = MONTHSABBR[month(dt)]
+dayname(dt::TimeType) = DAYSOFWEEK[dayofweek(dt)]
+dayabbr(dt::TimeType) = DAYSOFWEEKABBR[dayofweek(dt)]
 
 const DAYSINMONTH = [31,28,31,30,31,30,31,31,30,31,30,31]
 _isleap(y) = ((y % 4 == 0) && (y % 100 != 0)) || (y % 400 == 0)
@@ -289,17 +299,15 @@ dayofyear(dt::TimeType) = _days(dt) - totaldays(year(dt),1,1) + 1
 @vectorize_1arg TimeType dayofyear
 
 const UNIXEPOCH = 62135683200000 #Rata Die milliseconds for 1970-01-01T00:00:00 UTC
-function unix2datetime{T<:Timezone}(x,::Type{T}=UTC)
-    return Datetime{Millisecond,T,ISOCalendar}(Millisecond(
-        UNIXEPOCH + x + getoffset(T,UNIXEPOCH + x)))
+function unix2date{T<:Timezone}(x,::Type{T}=UTC)
+    return ISODatetime{T}(Millisecond(UNIXEPOCH+x+setleaps(UNIXEPOCH+x)))
 end
-now{T<:Timezone}(tz::Type{T}=UTC) = unix2datetime(int64(1000*time()),tz)
+date2unix(dt::Datetime) = dt.instant.ms - getleaps(dt.instant.ms) - UNIXEPOCH
+now{T<:Timezone}(tz::Type{T}=UTC) = unix2date(int64(1000*time()),tz)
 
 #wrapping arithmetic
-addwrap(y,m) = (v = (y + m)    % 12; return v == 0 ? 12 : v)
-subwrap(y,m) = (v = abs(y - m) % 12; return v == 0 ? 12 : v)
-addwrap(y,m,m2) = y + (m + m2 > 12 ? max(1, div(m2,12)) : 0)
-subwrap(y,m,m2) = y - (m - m2 < 1  ? max(1, div(m2,12)) : 0)
+monthwrap(m1,m2) = (v = (m1 + m2) % 12; return v == 0 ? 12 : v < 0 ? 12 + v : v)
+yearwrap(y,m1,m2) = y + fld(m1 + m2 - 1,12)
 
 #Datetime arithmetic
 for op in (:+,:*,:%,:/)
@@ -326,26 +334,26 @@ function (-)(dt::Date,y::Year)
 end
 function (+)(dt::Datetime,z::Month) 
     y,m,d = _day2date(_days(dt))
-    ny = addwrap(y,m,z.months)
-    mm = addwrap(m,z.months); ld = _lastdayofmonth(ny,mm)
+    ny = yearwrap(y,m,z.months)
+    mm = monthwrap(m,z.months); ld = _lastdayofmonth(ny,mm)
     return Datetime(ny,mm,d <= ld ? d : ld,hour(dt),minute(dt),second(dt) == 60 ? 59 : second(dt))
 end
 function (+)(dt::Date,z::Month) 
     y,m,d = _day2date(_days(dt))
-    ny = addwrap(y,m,z.months)
-    mm = addwrap(m,z.months); ld = _lastdayofmonth(ny,mm)
+    ny = yearwrap(y,m,z.months)
+    mm = monthwrap(m,z.months); ld = _lastdayofmonth(ny,mm)
     return Date(ny,mm,d <= ld ? d : ld)
 end
 function (-)(dt::Datetime,z::Month) 
     y,m,d = _day2date(_days(dt))
-    ny = subwrap(y,m,z.months)
-    mm = subwrap(m,z.months); ld = _lastdayofmonth(ny,mm)
+    ny = yearwrap(y,m,-z.months)
+    mm = monthwrap(m,-z.months); ld = _lastdayofmonth(ny,mm)
     return Datetime(ny,mm,d <= ld ? d : ld,hour(dt),minute(dt),second(dt) == 60 ? 59 : second(dt))
 end
 function (-)(dt::Date,z::Month) 
     y,m,d = _day2date(_days(dt))
-    ny = subwrap(y,m,z.months)
-    mm = subwrap(m,z.months); ld = _lastdayofmonth(ny,mm)
+    ny = yearwrap(y,m,-z.months)
+    mm = monthwrap(m,-z.months); ld = _lastdayofmonth(ny,mm)
     return Date(ny,mm,d <= ld ? d : ld)
 end
 (+)(x::Date,y::Week) = return Date(x.instant + 7*y.weeks)
@@ -454,7 +462,7 @@ function _format(dt::String,format::DateFormat)
     y = (yy = match(format.year,dt)) == nothing ? "0" : yy.match
     m = (mm = match(format.month,dt)) == nothing ? "0" : mm.match
     m = format.monthoption == 0 ? m : format.monthoption == 1 ? 
-            get(Time.RMONTHSABR,lowercase(m),1) : get(Time.RMONTHS,lowercase(m),1)
+            get(Time.RMONTHSABBR,lowercase(m),1) : get(Time.RMONTHS,lowercase(m),1)
     d = (dd = match(format.day,dt)) == nothing ? "0" : dd.match
     y == "" && (y = 0)
     m == "" && (m = 1)
@@ -586,6 +594,9 @@ value(x::Hour)          = x.h
 value(x::Minute)        = x.m
 value(x::Second)        = x.s
 value(x::Millisecond)   = x.ms
+for p in (:Year,:Month,:Week,:Day,:Hour,:Minute,:Second,:Millisecond)
+    @eval $p(x::$p) = x
+end
 convert{R<:Real}(::Type{R},x::Period) = convert(R,value(x))
 
 #Print/show/traits
