@@ -13,43 +13,51 @@ unsafe_getindex(v::Ranges, ind::Integer) = first(v) + (ind-1)*step(v)
 unsafe_getindex(v::AbstractArray, ind::Integer) = v[ind]
 
 # Version that uses cartesian indexing for src
-@ngenerate N function _getindex!(dest::Array, src::AbstractArray, I::NTuple{N,Union(Real,AbstractVector)}...)
+@ngenerate N function _getindex!(dest::Array, src::AbstractArray, I::NTuple{N,Union(Int,AbstractVector{Int})}...)
     checksize(dest, I...)
-    checkbounds(src, I...)
-    @nexprs N d->(J_d = to_index(I_d))
     k = 1
-    @nloops N i dest d->(@inbounds j_d = unsafe_getindex(J_d, i_d)) begin
+    @nloops N i dest d->(@inbounds j_d = unsafe_getindex(I_d, i_d)) begin
         @inbounds dest[k] = (@nref N src j)
         k += 1
     end
 end
 
 # Version that uses linear indexing for src
-@ngenerate N function _getindex!(dest::Array, src::Array, I::NTuple{N,Union(Real,AbstractVector)}...)
+@ngenerate N function _getindex!(dest::Array, src::Array, I::NTuple{N,Union(Int,AbstractVector{Int})}...)
     checksize(dest, I...)
-    checkbounds(src, I...)
-    @nexprs N d->(J_d = to_index(I_d))
     stride_1 = 1
     @nexprs N d->(stride_{d+1} = stride_d*size(src,d))
     @nexprs N d->(offset_d = 1)  # only really need offset_$N = 1
     k = 1
-    @nloops N i dest d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(J_d, i_d)-1)*stride_d) begin
+    @nloops N i dest d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
         @inbounds dest[k] = src[offset_0]
         k += 1
     end
 end
 
-getindex!(dest, src, I) = (_getindex!(dest, src, I); return dest)
-getindex!(dest, src, I, J) = (_getindex!(dest, src, I, J); return dest)
-getindex!(dest, src, I...) = (_getindex!(dest, src, I...); return dest)
+getindex!(dest, src, I) = (checkbounds(src, I); _getindex!(dest, src, to_index(I)); return dest)
+getindex!(dest, src, I, J) = (checkbounds(src, I, J); _getindex!(dest, src, to_index(I), to_index(J)); return dest)
+getindex!(dest, src, I...) = (checkbounds(src, I...); _getindex!(dest, src, to_index(I)...); return dest)
 
 getindex(A::Array, I::Union(Real,AbstractVector)) = getindex!(similar(A, index_shape(I)), A, I)
-getindex(A::Array, I::Union(Real,AbstractVector), J::Union(Real,AbstractVector)) = getindex!(similar(A, index_shape(I,J)), A, I, J)
-getindex(A::Array, I::Union(Real,AbstractVector)...) = getindex!(similar(A, index_shape(I...)), A, I...)
-
-
-@ngenerate N function _setindex!(A::Array, x, I::NTuple{N,Union(Real,AbstractArray)}...)
+function getindex(A::Array, I::Union(Real,AbstractVector)...)
     checkbounds(A, I...)
+    Ii = to_index(I)
+    dest = similar(A, index_shape(Ii...))
+    _getindex!(dest, A, Ii...)
+    dest
+end
+# Version of the above for 2d without the splats
+function getindex(A::Array, I::Union(Real,AbstractVector), J::Union(Real,AbstractVector))
+    checkbounds(A, I, J)
+    Ii, Ji = to_index(I), to_index(J)
+    dest = similar(A, index_shape(Ii,Ji))
+    _getindex!(dest, A, Ii, Ji)
+    dest
+end
+
+
+@ngenerate N function _setindex!(A::Array, x, I::NTuple{N,Union(Int,AbstractArray{Int})}...)
     @nexprs N d->(J_d = to_index(I_d))
     stride_1 = 1
     @nexprs N d->(stride_{d+1} = stride_d*size(A,d))
@@ -70,10 +78,21 @@ getindex(A::Array, I::Union(Real,AbstractVector)...) = getindex!(similar(A, inde
     end
 end
 
-setindex!(A::Array, x, I::Union(Real,AbstractArray)) = (_setindex!(A, x, I); return A)
-setindex!(A::Array, x, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray)) =
-    (_setindex!(A, x, I, J); return A)
-setindex!(A::Array, x, I::Union(Real,AbstractArray)...) = (_setindex!(A, x, I...); return A)
+function setindex!(A::Array, x, I::Union(Real,AbstractArray)...)
+    checkbounds(A, I...)
+    _setindex!(A, x, to_index(I)...)
+    A
+end
+function setindex!(A::Array, x, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray))
+    checkbounds(A, I, J)
+    _setindex!(A, x, to_index(I), to_index(J))
+    A
+end
+function setindex!(A::Array, x, I::Union(Real,AbstractArray))
+    checkbounds(A, I)
+    _setindex!(A, x, to_index(I))
+    A
+end
 
 
 @ngenerate N function findn{T,N}(A::AbstractArray{T,N})

@@ -327,14 +327,6 @@ getindex(A::Vector, I::AbstractArray{Bool}) = getindex_bool_1d(A, I)
 getindex(A::Array, I::AbstractVector{Bool}) = getindex_bool_1d(A, I)
 getindex(A::Array, I::AbstractArray{Bool}) = getindex_bool_1d(A, I)
 
-# @Jeff: more efficient is to check the bool vector, and then do
-# indexing without checking. Turn off checking for the second stage?
-getindex(A::Matrix, I::Real, J::AbstractVector{Bool}) = A[I,find(J)]
-getindex(A::Matrix, I::AbstractVector{Bool}, J::Real) = A[find(I),J]
-getindex(A::Matrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[find(I),find(J)]
-getindex{T<:Real}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = A[I,find(J)]
-getindex{T<:Real}(A::Matrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = A[find(I),J]
-
 ## Indexing: setindex! ##
 setindex!{T}(A::Array{T}, x) = arrayset(A, convert(T,x), 1)
 
@@ -385,7 +377,7 @@ end
 
 # logical indexing
 
-function assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
+function assign_bool_scalar_1d!(A::Array, x, I::AbstractArray{Bool})
     checkbounds(A, I)
     for i = 1:length(I)
         if I[i]
@@ -395,7 +387,7 @@ function assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
     A
 end
 
-function assign_bool_vector_1d(A::Array, X::AbstractArray, I::AbstractArray{Bool})
+function assign_bool_vector_1d!(A::Array, X::AbstractArray, I::AbstractArray{Bool})
     checkbounds(A, I)
     c = 1
     for i = 1:length(I)
@@ -404,19 +396,16 @@ function assign_bool_vector_1d(A::Array, X::AbstractArray, I::AbstractArray{Bool
             c += 1
         end
     end
+    if length(X) != c-1
+        throw(DimensionMismatch("assigned $(length(X)) elements to length $(c-1) destination"))
+    end
     A
 end
 
-setindex!(A::Array, X::AbstractArray, I::AbstractVector{Bool}) = assign_bool_vector_1d(A, X, I)
-setindex!(A::Array, X::AbstractArray, I::AbstractArray{Bool}) = assign_bool_vector_1d(A, X, I)
-setindex!(A::Array, x, I::AbstractVector{Bool}) = assign_bool_scalar_1d(A, x, I)
-setindex!(A::Array, x, I::AbstractArray{Bool}) = assign_bool_scalar_1d(A, x, I)
-
-setindex!(A::Array, x, I::Real, J::AbstractVector{Bool}) = setindex!(A, x, I,find(J))
-setindex!(A::Array, x, I::AbstractVector{Bool}, J::Real) = setindex!(A,x,find(I),J)
-setindex!(A::Array, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = setindex!(A, x, find(I),find(J))
-setindex!{T<:Real}(A::Array, x, I::AbstractVector{T}, J::AbstractVector{Bool}) = setindex!(A, x, I,find(J))
-setindex!{T<:Real}(A::Array, x, I::AbstractVector{Bool}, J::AbstractVector{T}) = setindex!(A, x, find(I),J)
+setindex!(A::Array, X::AbstractArray, I::AbstractVector{Bool}) = assign_bool_vector_1d!(A, X, I)
+setindex!(A::Array, X::AbstractArray, I::AbstractArray{Bool}) = assign_bool_vector_1d!(A, X, I)
+setindex!(A::Array, x, I::AbstractVector{Bool}) = assign_bool_scalar_1d!(A, x, I)
+setindex!(A::Array, x, I::AbstractArray{Bool}) = assign_bool_scalar_1d!(A, x, I)
 
 ## Dequeue functionality ##
 

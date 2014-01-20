@@ -589,6 +589,14 @@ begin
 end
 
 @test (1:5)[[true,false,true,false,true]] == [1,3,5]
+a = [1:5]
+a[[true,false,true,false,true]] = 6
+@test a == [6,2,6,4,6]
+a[[true,false,true,false,true]] = [7,8,9]
+@test a == [7,2,8,4,9]
+@test_throws (a[[true,false,true,false,true]] = [7,8,9,10])
+B = cat(3, 1, 2, 3)
+@test B[:,:,[true, false, true]] == reshape([1,3], 1, 1, 2)  # issue #5454
 
 # issue #2342
 @test isequal(cumsum([1 2 3]), [1 2 3])
