@@ -98,8 +98,8 @@ Getting Around
 
 .. function:: methodswith(typ[, showparents])
 
-   Show all methods with an argument of type ``typ``. If optional
-   ``showparents`` is ``true``, also show arguments with a parent type
+   Return an array of methods with an argument of type ``typ``. If optional
+   ``showparents`` is ``true``, also return arguments with a parent type
    of ``typ``, excluding type ``Any``.
 
 .. function:: @show
