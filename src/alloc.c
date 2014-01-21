@@ -278,6 +278,7 @@ void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
     size_t offs = jl_field_offset(st,i) + sizeof(void*);
     if (st->fields[i].isptr) {
         *(jl_value_t**)((char*)v + offs) = rhs;
+        if(rhs != NULL) gc_wb(v, rhs);
     }
     else {
         jl_assign_bits((char*)v + offs, rhs);
@@ -521,7 +522,7 @@ static jl_sym_t *mk_symbol(const char *str)
 static void unmark_symbols_(jl_sym_t *root)
 {
     while (root != NULL) {
-        root->type = (jl_value_t*)(((uptrint_t)root->type)&~1UL);
+        root->type = (jl_value_t*)(((uptrint_t)root->type)&~3UL);
         unmark_symbols_(root->left);
         root = root->right;
     }
@@ -529,9 +530,10 @@ static void unmark_symbols_(jl_sym_t *root)
 
 void jl_unmark_symbols(void) { unmark_symbols_(symtab); }
 
-static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str)
+static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str, jl_sym_t **parent)
 {
     int x;
+    if (parent != NULL) *parent = NULL;
     uptrint_t h = hash_symbol(str, strlen(str));
 
     // Tree nodes sorted by major key of (int(hash)) and minor key o (str).
@@ -542,6 +544,7 @@ static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str)
             if (x == 0)
                 return ptree;
         }
+        if (parent != NULL) *parent = *ptree;
         if (x < 0)
             ptree = &(*ptree)->left;
         else
@@ -553,16 +556,19 @@ static jl_sym_t **symtab_lookup(jl_sym_t **ptree, const char *str)
 jl_sym_t *jl_symbol(const char *str)
 {
     jl_sym_t **pnode;
-
-    pnode = symtab_lookup(&symtab, str);
-    if (*pnode == NULL)
+    jl_sym_t *parent;
+    pnode = symtab_lookup(&symtab, str, &parent);
+    if (*pnode == NULL) {
         *pnode = mk_symbol(str);
+        if (parent != NULL)
+            gc_wb(parent, *pnode);
+    }
     return *pnode;
 }
 
 jl_sym_t *jl_symbol_lookup(const char *str)
 {
-    return *symtab_lookup(&symtab, str);
+    return *symtab_lookup(&symtab, str, NULL);
 }
 
 DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len)
@@ -696,12 +702,15 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
         t = jl_new_uninitialized_datatype(jl_tuple_len(fnames));
     else
         tn = t->name;
-
     // init before possibly calling jl_new_typename
     t->super = super;
+    if(super != NULL) gc_wb(t, t->super);
     t->parameters = parameters;
+    gc_wb(t, t->parameters);
     t->names = fnames;
+    gc_wb(t, t->names);
     t->types = ftypes;
+    if(ftypes != NULL) gc_wb(t, t->types);
     t->abstract = abstract;
     t->mutabl = mutabl;
     t->pointerfree = 0;
@@ -718,10 +727,13 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
         else
             tn = jl_new_typename((jl_sym_t*)name);
         t->name = tn;
+        gc_wb(t, t->name);
     }
 
-    if (t->name->primary == NULL)
+    if (t->name->primary == NULL) {
         t->name->primary = (jl_value_t*)t;
+        gc_wb(t->name, t);
+    }
 
     if (abstract || jl_tuple_len(parameters) > 0) {
         t->uid = 0;

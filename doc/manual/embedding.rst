@@ -107,6 +107,23 @@ Several Julia values can be pushed at once using the ``JL_GC_PUSH2`` , ``JL_GC_P
     // Do something with args (e.g. call jl_... functions)
     JL_GC_POP();
 
+The garbage collector also operates under the assumption that it is aware of every old-generation object pointing to a young-generation one. Any time a pointer is updated breaking that assumption, it must be signaled to the collector with the ``gc_wb`` (write barrier) function like so::
+
+    jl_value_t *parent = some_old_value, *child = some_young_value;
+    ((some_specific_type*)parent)->field = child;
+    gc_wb(parent, child);
+
+It is in general impossible to predict which values will be old at runtime, so the write barrier must be inserted after all explicit stores. One notable exception is if the ``parent`` object was just allocated and garbage collection was not run since then. Remember that most ``jl_...`` functions can sometimes invoke garbage collection.
+
+The write barrier is also necessary for arrays of pointers when updating their data directly. For example::
+
+    jl_array_t *some_array = ...; // e.g. a Vector{Any}
+    void **data = (void**)jl_array_data(some_array);
+    jl_value_t *some_value = ...;
+    data[0] = some_value;
+    gc_wb(some_array, some_value);
+
+
 Manipulating the Garbage Collector
 ---------------------------------------------------
 
