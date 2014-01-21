@@ -112,7 +112,7 @@ promote_type{T,S}(::Type{T}, ::Type{S}) =
 
 promote_rule(T, S) = None
 
-promote_result(t,s,T,S) = typejoin(T,S)
+promote_result(t,s,T,S) = promote_type(T,S)
 # If no promote_rule is defined, both directions give None. In that
 # case use typejoin on the original types instead.
 promote_result{T,S}(::Type{T},::Type{S},::Type{None},::Type{None}) = typejoin(T, S)
