@@ -885,8 +885,8 @@ jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
 
 // initialization functions
-DLLEXPORT void julia_init(char *imageFile, int build_mode);
-DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]), char* build_mode);
+DLLEXPORT void julia_init(char *imageFile);
+DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
 void jl_init_types(void);
 void jl_init_box_caches(void);
 DLLEXPORT void jl_init_frontend(void);
@@ -897,9 +897,8 @@ void jl_init_tasks(void *stack, size_t ssize);
 void jl_init_serializer(void);
 
 DLLEXPORT void jl_save_system_image(char *fname);
-DLLEXPORT void jl_restore_system_image(char *fname, int build_mode);
+DLLEXPORT void jl_restore_system_image(char *fname);
 void jl_dump_bitcode(char *fname);
-void jl_set_imaging_mode(int stat);
 int32_t jl_get_llvm_gv(jl_value_t *p);
 
 // front end interface
@@ -1267,9 +1266,9 @@ size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, bt_context_t ctx)
 
 
 //IO objects
-extern DLLEXPORT uv_stream_t *jl_uv_stdin; 
-extern DLLEXPORT uv_stream_t * jl_uv_stdout;
-extern DLLEXPORT uv_stream_t * jl_uv_stderr;
+extern DLLEXPORT uv_stream_t *jl_uv_stdin;
+extern DLLEXPORT uv_stream_t *jl_uv_stdout;
+extern DLLEXPORT uv_stream_t *jl_uv_stderr;
 
 DLLEXPORT JL_STREAM *jl_stdout_stream(void);
 DLLEXPORT JL_STREAM *jl_stdin_stream(void);
@@ -1333,6 +1332,15 @@ void jl_longjmp(jmp_buf _Buf,int _Value);
     else                                                        \
         for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0)
 #endif
+
+// Compiler options
+
+typedef struct {
+    char *build_path;
+    int code_coverage;
+} jl_compileropts_t;
+
+extern DLLEXPORT jl_compileropts_t jl_compileropts;
 
 #ifdef __cplusplus
 }

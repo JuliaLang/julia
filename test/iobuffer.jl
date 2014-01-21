@@ -119,4 +119,11 @@ print(io, true)
 close(io)
 end
 
+# issue 5453
+let io=IOBuffer("abcdef")
+a = Array(Uint8,1024)
+@test_throws read(io,a)
+@test eof(io)
+end
+
 @test isempty(readlines(IOBuffer()))
