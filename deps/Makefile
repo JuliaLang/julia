@@ -279,6 +279,7 @@ llvm-$(LLVM_VER)/tools/lldb:
 llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER)/tools/lldb
 endif
 
+ifeq ($(LLVM_VER), 3.2)
 ## LLVM needs python 2.x, but doesn't check for it, so we have to use an ugly workaround to make it compile
 llvm-$(LLVM_VER)/python2_path:
 	mkdir -p llvm-$(LLVM_VER)/python2_path
@@ -286,7 +287,9 @@ llvm-$(LLVM_VER)/python2_path:
 	/usr/bin/python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
 	ln -sf /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python"
 llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
-
+else
+  LLVM_FLAGS += --with-python="$(shell ./find_python_for_llvm)"
+endif
 
 llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
 ifneq ($(LLVM_VER),svn)
