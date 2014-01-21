@@ -52,9 +52,9 @@ Library improvements
     by default (when no delimiter is specified). This is useful for reading
     fixed-width or messy whitespace-delimited data ([#5403]).
 
-  * The Airy, Bessel, Hankel (and their related) functions `airy*`, `bessel*`, `hankel*`
-    now correctly traps any errors returned by the underlying AMOS library, returning an
-    `AmosException`. ([#4967])
+  * The Airy, Bessel, Hankel, and related functions (`airy*`,
+    `bessel*`, `hankel*`) now detect errors returned by the underlying 
+    AMOS library, throwing an `AmosException` in that case ([#4967]).
 
   * Collections improvements
 
