@@ -33,6 +33,10 @@
 // catch invalid accesses.
 //#define MEMDEBUG
 
+// GC_VERIFY force a full verification gc along with every quick gc to ensure no
+// reachable memory is freed
+//#define GC_VERIFY
+
 // profiling options
 
 // GC_FINAL_STATS prints total GC stats at exit
@@ -42,7 +46,7 @@
 //#define MEMPROFILE
 
 // GCTIME prints time taken by each phase of GC
-//#define GCTIME
+//#define GC_TIME
 
 // OBJPROFILE counts objects by type
 //#define OBJPROFILE

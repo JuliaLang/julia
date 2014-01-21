@@ -151,6 +151,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             jl_lambda_info_t *li = (jl_lambda_info_t*)e;
             if (jl_boot_file_loaded && li->ast && jl_is_expr(li->ast)) {
                 li->ast = jl_compress_ast(li, li->ast);
+                gc_wb(li, li->ast);
             }
             return (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null, li);
         }
@@ -192,6 +193,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                     }
                     for(int i=0; i < na; i++) {
                         ar[i*2+1] = eval(args[i+1], locals, nl);
+                        gc_wb(ex->args, ar[i*2+1]);
                     }
                     if (na != nreq) {
                         jl_error("wrong number of arguments");
@@ -217,7 +219,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         size_t i;
         for (i=0; i < nl; i++) {
             if (locals[i*2] == sym) {
-                return (locals[i*2+1] = eval(args[1], locals, nl));
+                locals[i*2+1] = eval(args[1], locals, nl);
+                gc_wb(jl_current_module, locals[i*2+1]); // not sure about jl_current_module
+                return locals[i*2+1];
             }
         }
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)sym);
@@ -252,6 +256,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == method_sym) {
         jl_sym_t *fname = (jl_sym_t*)args[0];
         jl_value_t **bp=NULL;
+        jl_value_t *bp_owner=NULL;
         jl_binding_t *b=NULL;
         jl_value_t *gf=NULL;
         int kw=0;
@@ -276,6 +281,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             if (bp == NULL) {
                 b = jl_get_binding_for_method_def(jl_current_module, fname);
                 bp = &b->value;
+                bp_owner = (jl_value_t*)jl_current_module;
             }
         }
         jl_value_t *atypes=NULL, *meth=NULL;
@@ -285,7 +291,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             jl_check_static_parameter_conflicts((jl_lambda_info_t*)args[2], (jl_tuple_t*)jl_t1(atypes), fname);
         }
         meth = eval(args[2], locals, nl);
-        jl_method_def(fname, bp, b, (jl_tuple_t*)atypes, (jl_function_t*)meth, args[3], NULL, kw);
+        jl_method_def(fname, bp, bp_owner, b, (jl_tuple_t*)atypes, (jl_function_t*)meth, args[3], NULL, kw);
         JL_GC_POP();
         return *bp;
     }
@@ -327,6 +333,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         temp = b->value;
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
+        gc_wb_binding(((void**)b)-1, dt);
         super = eval(args[2], locals, nl);
         jl_set_datatype_super(dt, super);
         b->value = temp;
@@ -384,11 +391,13 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         // temporarily assign so binding is available for field types
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
+        gc_wb_binding(b,dt);
 
         JL_TRY {
             // operations that can fail
             inside_typedef = 1;
             dt->types = (jl_tuple_t*)eval(args[4], locals, nl);
+            gc_wb(dt, dt->types);
             inside_typedef = 0;
             jl_check_type_tuple(dt->types, dt->name->name, "type definition");
             super = eval(args[3], locals, nl);
@@ -426,6 +435,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
             jl_lambda_info_t *li = f->linfo;
             li->ast = jl_compress_ast(li, li->ast);
+            gc_wb(li, li->ast);
             li->name = nm;
         }
         jl_set_global(jl_current_module, nm, (jl_value_t*)f);
