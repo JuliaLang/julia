@@ -2036,7 +2036,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     }
     if (!jl_is_expr(expr)) {
         // numeric literals
-        int needroot = 0;
+        int needroot = 1;
         if (jl_is_int32(expr)) {
             needroot = !((uint32_t)(jl_unbox_int32(expr)+512) < 1024);
         }
@@ -2045,9 +2045,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         else if (jl_is_lambda_info(expr)) {
             return emit_lambda_closure(expr, ctx);
-        }
-        else if (jl_is_tuple(expr) || jl_is_uniontype(expr)) {
-            needroot = 1;
         }
         if (needroot) {
             jl_add_linfo_root(ctx->linfo, expr);
