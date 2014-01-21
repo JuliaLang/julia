@@ -447,20 +447,24 @@ Function                               Description
 ``lbeta(x,y)``                         accurate ``log(beta(x,y))`` for large ``x`` or ``y``
 ``eta(x)``                             the `Dirichlet eta function <http://en.wikipedia.org/wiki/Dirichlet_eta_function>`_ at ``x``
 ``zeta(x)``                            the `Riemann zeta function <http://en.wikipedia.org/wiki/Riemann_zeta_function>`_ at ``x``
-``airy(x)``, ``airyai(x)``             the `Airy Ai function <http://en.wikipedia.org/wiki/Airy_function>`_ at ``x``
-``airyprime(x)``, ``airyaiprime(x)``   the derivative of the Airy Ai function at ``x``
-``airybi(x)``                          the `Airy Bi function <http://en.wikipedia.org/wiki/Airy_function>`_ at ``x``
-``airybiprime(x)``                     the derivative of the Airy Bi function at ``x``
-``airy(k,x)``                          the ``k``-th derivative of the Airy Ai function at ``x``
-``besselj(nu,z)``                      the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z``
-``besselj0(z)``                        ``besselj(0,z)``
-``besselj1(z)``                        ``besselj(1,z)``
-``bessely(nu,z)``                      the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``
-``bessely0(z)``                        ``bessely(0,z)``
-``bessely1(z)``                        ``bessely(1,z)``
-``besselh(nu,k,z)``                    the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the third kind (a.k.a. Hankel function) of order ``nu`` at ``z``; ``k`` must be either ``1`` or ``2``
-``hankelh1(nu,z)``                     ``besselh(nu, 1, z)``
-``hankelh2(nu,z)``                     ``besselh(nu, 2, z)``
-``besseli(nu,z)``                      the modified `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z``
-``besselk(nu,z)``                      the modified `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``
+|airylist|                             the `Airy Ai function <http://en.wikipedia.org/wiki/Airy_function>`_ at ``z`` 
+|airyprimelist|                        the derivative of the Airy Ai function at ``z`` 
+``airybi(z)``, ``airy(2,z)``           the `Airy Bi function <http://en.wikipedia.org/wiki/Airy_function>`_ at ``z`` 
+``airybiprime(z)``, ``airy(3,z)``      the derivative of the Airy Bi function at ``z`` 
+``besselj(nu,z)``                      the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z`` 
+``besselj0(z)``                        ``besselj(0,z)``  
+``besselj1(z)``                        ``besselj(1,z)``  
+``bessely(nu,z)``                      the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``  
+``bessely0(z)``                        ``bessely(0,z)``  
+``bessely1(z)``                        ``bessely(1,z)``  
+``besselh(nu,k,z)``                    the `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the third kind (a.k.a. Hankel function) of order ``nu`` at ``z``; ``k`` must be either ``1`` or ``2``  
+``hankelh1(nu,z)``                     ``besselh(nu, 1, z)``  
+``hankelh2(nu,z)``                     ``besselh(nu, 2, z)``  
+``besseli(nu,z)``                      the modified `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the first kind of order ``nu`` at ``z``  
+``besselk(nu,z)``                      the modified `Bessel function <http://en.wikipedia.org/wiki/Bessel_function>`_ of the second kind of order ``nu`` at ``z``  
 ====================================== ==============================================================================
+
+.. |airylist| replace:: ``airy(z)``, ``airyai(z)``, ``airy(0,z)``
+.. |airyprimelist| replace:: ``airyprime(z)``, ``airyaiprime(z)``, ``airy(1,z)``
+
+

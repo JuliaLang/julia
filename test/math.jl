@@ -49,6 +49,8 @@ end
 @test_approx_eq airyprime(1.8) -0.0685247801186109345638
 @test_approx_eq airybi(1.8) 2.595869356743906290060
 @test_approx_eq airybiprime(1.8) 2.98554005084659907283
+@test_throws airy(200im)
+@test_throws airybi(200)
 
 # besselh
 true_h133 = 0.30906272225525164362 - 0.53854161610503161800im
@@ -56,6 +58,8 @@ true_h133 = 0.30906272225525164362 - 0.53854161610503161800im
 @test_approx_eq besselh(-3,1,3) -true_h133
 @test_approx_eq besselh(3,2,3) conj(true_h133)
 @test_approx_eq besselh(-3,2,3) -conj(true_h133)
+@test_throws besselh(1,0)
+
 
 # besseli
 true_i33 = 0.95975362949600785698
@@ -63,6 +67,7 @@ true_i33 = 0.95975362949600785698
 @test_approx_eq besseli(-3,3) true_i33
 @test_approx_eq besseli(3,-3) -true_i33
 @test_approx_eq besseli(-3,-3) -true_i33
+@test_throws besseli(1,1000)
 
 # besselj
 @test besselj(0,0) == 1
@@ -89,6 +94,7 @@ j43 = besselj(4,3.)
 @test_approx_eq besselj(0.1, complex(-0.4)) 0.820421842809028916 + 0.266571215948350899im
 @test_approx_eq besselj(3.2, 1.3+0.6im) 0.01135309305831220201 + 0.03927719044393515275im
 @test_approx_eq besselj(1, 3im) 3.953370217402609396im
+@test_throws besselj(20,1000im)
 
 # besselk
 true_k33 = 0.12217037575718356792
@@ -98,6 +104,8 @@ true_k3m3 = -0.1221703757571835679 - 3.0151549516807985776im
 @test_throws besselk(3,-3)
 @test_approx_eq besselk(3,complex(-3)) true_k3m3
 @test_approx_eq besselk(-3,complex(-3)) true_k3m3
+@test_throws besselk(200,0.01)
+
 
 # bessely
 y33 = bessely(3,3.)
@@ -106,6 +114,7 @@ y33 = bessely(3,3.)
 @test_approx_eq y33 -0.53854161610503161800
 @test_throws bessely(3,-3)
 @test_approx_eq bessely(3,complex(-3)) 0.53854161610503161800 - 0.61812544451050328724im
+@test_throws bessely(200.5,0.1)
 
 # beta, lbeta
 @test_approx_eq beta(3/2,7/2) 5π/128
