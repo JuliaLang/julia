@@ -631,10 +631,11 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
     jl_value_t *ety = jl_tparam0(aty);
     if (jl_is_typevar(ety))
         jl_error("pointerset: invalid pointer");
-    jl_value_t *xty = expr_type(x, ctx);    
+    jl_value_t *xty = expr_type(x, ctx);
+    Value *val=NULL;
     if (!jl_subtype(xty, ety, 0)) {
-        emit_error("pointerset: type mismatch in assign", ctx);
-        return NULL;
+        val = emit_expr(x,ctx);
+        emit_typecheck(val, ety, "pointerset: type mismatch in assign", ctx);
     }
     if (expr_type(i, ctx) != (jl_value_t*)jl_long_type)
         jl_error("pointerset: invalid index type");
@@ -646,16 +647,21 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
             emit_error("pointerset: invalid pointer type", ctx);
             return NULL;
         }
-        Value *val = emit_expr(x,ctx,true,true);
+        if (val==NULL) val = emit_expr(x,ctx,true,true);
         assert(val->getType() == jl_pvalue_llvmt); //Boxed
         assert(jl_is_datatype(ety));
         uint64_t size = ((jl_datatype_t*)ety)->size;
         builder.CreateMemCpy(builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1),
-            builder.CreateBitCast(emit_nthptr_addr(val, (size_t)1),T_pint8),  size, 1);
+                             builder.CreateBitCast(emit_nthptr_addr(val, (size_t)1),T_pint8), size, 1);
     }
     else {
-        (void)typed_store(thePtr, im1, ety == (jl_value_t*)jl_any_type ? emit_expr(x,ctx) : emit_unboxed(x,ctx), 
-            ety, ctx);
+        if (val == NULL) {
+            if (ety == (jl_value_t*)jl_any_type)
+                val = emit_expr(x,ctx);
+            else
+                val = emit_unboxed(x,ctx);
+        }
+        (void)typed_store(thePtr, im1, val, ety, ctx);
     }
     return mark_julia_type(thePtr, aty);
 }
