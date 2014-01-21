@@ -48,9 +48,9 @@ Library improvements
     dynamic library handles; `Sys.dllist` will list out all paths currently
     loaded via `dlopen`, and `Sys.dlpath` will lookup a path from a handle
 
-  * `readdlm` has a new keyword `ignore_empty_columns` to ignore empty
-    columns in the input, e.g. to read fixed-with whitespace-delimited
-    data ([#5403]).
+  * `readdlm` treats multiple whitespace characters as a single delimiter
+    by default (when no delimiter is specified). This is useful for reading
+    fixed-width or messy whitespace-delimited data ([#5403]).
 
   * Collections improvements
 
