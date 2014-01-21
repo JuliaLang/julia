@@ -525,9 +525,6 @@ end
     n>=0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
 ^{T<:Integer}(z::Complex{T}, n::Integer) = power_by_squaring(z,n) # DomainError for n<0
 
-^(x::Imaginary, y::Number) = complex(x)^y
-^(x::Number, y::Imaginary) = x^complex(y)
-
 function sin(z::Complex)
     zr, zi = reim(z)
     if !isfinite(zi) && zr == 0 return complex(zr, zi) end

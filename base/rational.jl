@@ -184,3 +184,11 @@ end
 ^{T<:Rational}(z::Complex{T}, n::Bool) = n ? z : one(z) # to resolve ambiguity
 ^{T<:Rational}(z::Complex{T}, n::Integer) =
     n>=0 ? power_by_squaring(z,n) : power_by_squaring(inv(z),-n)
+
+^(x::Imaginary, y::Imaginary) = complex(x)^y
+^(x::Imaginary, y::Rational) = complex(x)^y
+^(x::Imaginary, y::Integer) = complex(x)^y
+^(x::Imaginary, y::Number) = complex(x)^y
+
+^(x::Real, y::Imaginary) = x^complex(y)
+^(x::Number, y::Imaginary) = x^complex(y)
