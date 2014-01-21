@@ -1,6 +1,6 @@
 module Test
 
-export @test, @test_fails, @test_throws, @test_approx_eq, @test_approx_eq_eps
+export @test, @test_fails, @test_throws, @test_approx_eq, @test_approx_eq_eps, @inferred
 
 abstract Result
 type Success <: Result
@@ -81,6 +81,19 @@ end
 
 macro test_approx_eq(a, b)
     :(test_approx_eq($(esc(a)), $(esc(b)), $(string(a)), $(string(b))))
+end
+
+macro inferred(ex)
+    ex.head == :call || error("@inferred requires a call expression")
+    quote
+        vals = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
+        inftypes = Base.return_types($(ex.args[1]), ($([:(typeof(vals[$i])) for i = 1:length(ex.args)-1]...),))
+        @assert length(inftypes) == 1
+        result = $(esc(ex.args[1]))(vals...)
+        rettype = typeof(result)
+        is(rettype, inftypes[1]) || error("return type $rettype does not match inferred return type $(inftypes[1])")
+        result
+    end
 end
 
 end # module
