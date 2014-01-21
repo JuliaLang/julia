@@ -4,19 +4,9 @@ immutable MathConst{sym} <: Real end
 
 show{sym}(io::IO, x::MathConst{sym}) = print(io, "$sym = $(string(float(x))[1:15])...")
 
-promote_rule{s,T<:Real}(::Type{MathConst{s}}, ::Type{T}) = Float64
-
-promote_rule{s}(::Type{MathConst{s}}, ::Type{Float64}) = Float64
 promote_rule{s}(::Type{MathConst{s}}, ::Type{Float32}) = Float32
-promote_rule{s}(::Type{MathConst{s}}, ::Type{BigInt}) = BigFloat
-promote_rule{s}(::Type{MathConst{s}}, ::Type{BigFloat}) = BigFloat
-promote_rule{s}(::Type{MathConst{s}}, ::Type{ImaginaryUnit}) = Complex{Float64}
-promote_rule{s}(::Type{ImaginaryUnit}, ::Type{MathConst{s}}) = Complex{Float64}
-
-promote_rule{s,T<:Integer}(::Type{MathConst{s}}, ::Type{Rational{T}}) =
-    promote_type(MathConst{s},T)
-promote_rule{s,T<:Real}(::Type{MathConst{s}}, ::Type{Complex{T}}) =
-    Complex{promote_type(MathConst{s},T)}
+promote_rule{s,t}(::Type{MathConst{s}}, ::Type{MathConst{t}}) = Float64
+promote_rule{s,T<:Number}(::Type{MathConst{s}}, ::Type{T}) = promote_type(Float64,T)
 
 convert(::Type{FloatingPoint}, x::MathConst) = float64(x)
 convert(::Type{Float16}, x::MathConst) = float16(float32(x))

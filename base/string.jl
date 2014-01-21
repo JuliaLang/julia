@@ -814,13 +814,7 @@ end
 
 ## string promotion rules ##
 
-promote_rule(::Type{UTF8String} , ::Type{ASCIIString}) = UTF8String
-promote_rule(::Type{UTF8String} , ::Type{UTF16String}) = UTF8String
-promote_rule(::Type{ASCIIString}, ::Type{UTF16String}) = UTF8String
-promote_rule(::Type{UTF32String}, ::Type{UTF16String}) = UTF8String
-promote_rule(::Type{UTF8String} , ::Type{UTF32String}) = UTF8String
-promote_rule(::Type{ASCIIString}, ::Type{UTF32String}) = UTF8String
-promote_rule{T<:String}(::Type{RepString}, ::Type{T}) = RepString
+promote_rule{S<:String,T<:String}(::Type{S}, ::Type{T}) = UTF8String
 
 ## printing literal quoted string data ##
 
