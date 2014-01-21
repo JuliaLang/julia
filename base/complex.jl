@@ -1,7 +1,7 @@
 immutable Imaginary{T<:Real} <: Number
     im::T
 end
-const im = Imaginary(1)
+const im = Imaginary(true)
 
 immutable Complex{T<:Real} <: Number
     re::T
@@ -73,8 +73,10 @@ function imaginary_show(io::IO, i::Imaginary, compact::Bool)
     end
     print(io, "im")
 end
-show(io::IO, z::Imaginary) = imaginary_show(io, z, false)
-showcompact(io::IO, z::Imaginary) = imaginary_show(io, z, true)
+imaginary_show(io::IO, i::Imaginary{Bool}, compact::Bool) =
+    print(io, i.im ? "im" : "false*im")
+show(io::IO, i::Imaginary) = imaginary_show(io, i, false)
+showcompact(io::IO, i::Imaginary) = imaginary_show(io, i, true)
 
 function complex_show(io::IO, z::Complex, compact::Bool)
     r, i = reim(z)
@@ -85,8 +87,8 @@ function complex_show(io::IO, z::Complex, compact::Bool)
     else
         print(io, compact ? "+" : " + ")
     end
-    compact ? showcompact(io, i) : show(io, i)
-    if !(isa(i,Integer) || isa(i,FloatingPoint) && isfinite(i))
+    compact ? showcompact(io,i) : show(io,i)
+    if !(isa(i,Integer) && !isa(i,Bool) || isa(i,FloatingPoint) && isfinite(i))
         print(io, "*")
     end
     print(io, "im")
@@ -122,7 +124,7 @@ promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) =
 
 convert(::Type{Complex}, z::Complex)   = z
 convert(::Type{Complex}, x::Real)      = Complex(x)
-convert(::Type{Complex}, i::Imaginary) = Complex(zero(i),i)
+convert(::Type{Complex}, i::Imaginary) = Complex(i)
 
 ==(z::Complex,   w::Complex  ) = (real(z) == real(w)) & (imag(z) == imag(w))
 ==(z::Complex,   x::Real     ) = isreal(z) && real(z) == real(x)
