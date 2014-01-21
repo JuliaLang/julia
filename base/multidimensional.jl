@@ -13,7 +13,7 @@ unsafe_getindex(v::Ranges, ind::Integer) = first(v) + (ind-1)*step(v)
 unsafe_getindex(v::AbstractArray, ind::Integer) = v[ind]
 
 # Version that uses cartesian indexing for src
-@ngenerate N function _getindex!(dest::Array, src::AbstractArray, I::NTuple{N,Union(Int,AbstractVector{Int})}...)
+@ngenerate N function _getindex!(dest::Array, src::AbstractArray, I::NTuple{N,Union(Int,AbstractVector)}...)
     checksize(dest, I...)
     k = 1
     @nloops N i dest d->(@inbounds j_d = unsafe_getindex(I_d, i_d)) begin
@@ -23,7 +23,7 @@ unsafe_getindex(v::AbstractArray, ind::Integer) = v[ind]
 end
 
 # Version that uses linear indexing for src
-@ngenerate N function _getindex!(dest::Array, src::Array, I::NTuple{N,Union(Int,AbstractVector{Int})}...)
+@ngenerate N function _getindex!(dest::Array, src::Array, I::NTuple{N,Union(Int,AbstractVector)}...)
     checksize(dest, I...)
     stride_1 = 1
     @nexprs N d->(stride_{d+1} = stride_d*size(src,d))
@@ -57,7 +57,7 @@ function getindex(A::Array, I::Union(Real,AbstractVector), J::Union(Real,Abstrac
 end
 
 
-@ngenerate N function _setindex!(A::Array, x, I::NTuple{N,Union(Int,AbstractArray{Int})}...)
+@ngenerate N function _setindex!(A::Array, x, I::NTuple{N,Union(Int,AbstractArray)}...)
     @nexprs N d->(J_d = to_index(I_d))
     stride_1 = 1
     @nexprs N d->(stride_{d+1} = stride_d*size(A,d))
