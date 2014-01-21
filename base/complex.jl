@@ -30,11 +30,6 @@ convert{T<:Real}(::Type{Complex{T}}, z::Complex) = Complex{T}(real(z),imag(z))
 convert{T<:Real}(::Type{T}, z::Complex) =
     imag(z)==0 ? convert(T,real(z)) : throw(InexactError())
 
-promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{S}) =
-    Complex{promote_type(T,S)}
-promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) =
-    Complex{promote_type(T,S)}
-
 complex(x, y) = Complex(x, y)
 complex(x) = Complex(x)
 complex(z::Complex) = z
@@ -114,11 +109,13 @@ convert{T<:Real}(::Type{Complex{T}}, z::Complex)   = Complex{T}(real(z), imag(z)
 convert{T<:Real}(::Type{T}, z::Union(Imaginary,Complex)) =
     isreal(z) ? convert(T,real(z)) : throw(InexactError())
 
+promote_rule{T<:Real,S<:Real}(::Type{Imaginary{T}}, ::Type{Imaginary{S}}) =
+    Imaginary{promote_type(T,S)}
 promote_rule{T<:Real,S<:Real}(::Type{Imaginary{T}}, ::Type{S}) =
     Complex{promote_type(T,S)}
-promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Imaginary{S}}) =
-    Complex{promote_type(T,S)}
 promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{S}) =
+    Complex{promote_type(T,S)}
+promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Imaginary{S}}) =
     Complex{promote_type(T,S)}
 promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) =
     Complex{promote_type(T,S)}
