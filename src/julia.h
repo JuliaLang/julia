@@ -89,7 +89,8 @@ typedef struct {
     size_t length;
 #endif
 
-    unsigned short ndims:11;
+    unsigned short ndims:10;
+    unsigned short pooled:1;
     unsigned short ptrarray:1;  // representation is pointer array
     /*
       how - allocation style
@@ -431,16 +432,27 @@ extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 #ifdef OVERLAP_TUPLE_LEN
 #define jl_typeof(v) ((jl_value_t*)((uptrint_t)((jl_value_t*)(v))->type & 0x000ffffffffffffeULL))
 #else
+#ifdef GC_INC
+#define jl_typeof(v) ((jl_value_t*)((uptrint_t)((jl_value_t*)(v))->type & ((uintptr_t)~3)))
+#else
 #define jl_typeof(v) (((jl_value_t*)(v))->type)
 #endif
+#endif
+
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
+
+
 
 #ifdef OVERLAP_TUPLE_LEN
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[1+(i)])
 #define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[1+(i)])=(jl_value_t*)(x))
 #else
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
-#define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(jl_value_t*)(x))
+#define jl_tupleset(t,i,x) do {                                         \
+        jl_value_t *xx = (jl_value_t*)(x);                              \
+        if (xx) gc_wb(t, xx);                                           \
+        (((jl_value_t**)(t))[2+(i)])=xx;                                \
+    } while(0)
 #endif
 #define jl_t0(t) jl_tupleref(t,0)
 #define jl_t1(t) jl_tupleref(t,1)
@@ -449,9 +461,14 @@ extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 #define jl_tuple_set_len_unsafe(t,n) (((jl_tuple_t*)(t))->length=(n))
 
 #define jl_cellref(a,i) (((jl_value_t**)((jl_array_t*)a)->data)[(i)])
-#define jl_cellset(a,i,x) ((((jl_value_t**)((jl_array_t*)a)->data)[(i)])=((jl_value_t*)(x)))
+#define jl_cellset(a,i,x) do {                                    \
+        jl_value_t *xx = (jl_value_t*)(x);                        \
+        if (xx) gc_wb_back(a);                                    \
+        (((jl_value_t**)((jl_array_t*)a)->data)[(i)])=xx;         \
+    } while(0);
 
 #define jl_exprarg(e,n) jl_cellref(((jl_expr_t*)(e))->args,n)
+#define jl_exprargset(e, n, v) jl_cellset(((jl_expr_t*)(e))->args, n, v)
 
 #define jl_fieldref(s,i) jl_get_nth_field(((jl_value_t*)s),i)
 
@@ -466,6 +483,7 @@ extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 
 #define jl_tparam0(t) jl_tupleref(((jl_datatype_t*)(t))->parameters, 0)
 #define jl_tparam1(t) jl_tupleref(((jl_datatype_t*)(t))->parameters, 1)
+
 
 #define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
 #define jl_string_data(s) ((char*)((jl_array_t*)((jl_value_t**)(s))[1])->data)
@@ -483,7 +501,6 @@ extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 #define jl_datatype_size(t)   (((jl_datatype_t*)t)->size)
 
 // basic predicates -----------------------------------------------------------
-
 #define jl_is_null(v)        (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
 #define jl_is_nothing(v)     (((jl_value_t*)(v)) == ((jl_value_t*)jl_nothing))
 #define jl_is_tuple(v)       jl_typeis(v,jl_tuple_type)
@@ -1236,7 +1253,6 @@ void jl_longjmp(jmp_buf _Buf,int _Value);
         for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0)
 #endif
 
-
 // I/O system -----------------------------------------------------------------
 
 #define JL_STREAM uv_stream_t
@@ -1329,7 +1345,6 @@ void jl_print_gc_stats(JL_STREAM *s);
 void show_execution_point(char *filename, int lno);
 
 // compiler options -----------------------------------------------------------
-
 typedef struct {
     char *build_path;
     int8_t code_coverage;
@@ -1357,6 +1372,40 @@ extern DLLEXPORT jl_compileropts_t jl_compileropts;
 
 #define JL_COMPILEROPT_DUMPBITCODE_ON 1
 #define JL_COMPILEROPT_DUMPBITCODE_OFF 2
+
+DLLEXPORT void gc_queue_root(void *root);
+void gc_setmark_buf(void *buf);
+DLLEXPORT void gc_wb_slow(void* parent, void* ptr);
+
+static inline void gc_wb(void* parent, void* ptr)
+{
+    #ifdef GC_INC
+    // if parent is marked and ptr is clean
+    if(__unlikely((*((uintptr_t*)parent) & 3) == 1 && (*((uintptr_t*)ptr) & 3) == 0)) {
+        gc_queue_root(ptr);
+    }
+    #endif
+}
+
+static inline void gc_wb_buf(void *parent, void *bufptr)
+{
+    #ifdef GC_INC
+    // if parent is marked
+    if((*((uintptr_t*)parent) & 3) == 1)
+        gc_setmark_buf(bufptr);
+    #endif
+}
+
+static inline void gc_wb_back(void *ptr)
+{
+    #ifdef GC_INC
+    // if ptr is marked
+    if((*((uintptr_t*)ptr) & 3) == 1) {
+        *((uintptr_t*)ptr) &= ~(uintptr_t)3; // clear the mark
+        gc_queue_root(ptr);
+    }
+    #endif
+}
 
 #ifdef __cplusplus
 }

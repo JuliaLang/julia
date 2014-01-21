@@ -720,6 +720,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
         // of a top-level thunk that gets type inferred.
         li->def = li;
         li->ast = jl_prepare_ast(li, li->sparams);
+        gc_wb(li, li->ast);
         JL_GC_POP();
         return (jl_value_t*)li;
     }
@@ -738,17 +739,18 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
         jl_expr_t *ne = jl_exprn(e->head, jl_array_len(e->args));
         JL_GC_PUSH1(&ne);
         if (e->head == lambda_sym) {
-            jl_exprarg(ne, 0) = copy_ast(jl_exprarg(e,0), sp, 0);
-            jl_exprarg(ne, 1) = copy_ast(jl_exprarg(e,1), sp, 0);
-            jl_exprarg(ne, 2) = copy_ast(jl_exprarg(e,2), sp, 1);
+            jl_exprargset(ne, 0, copy_ast(jl_exprarg(e,0), sp, 0));
+            jl_exprargset(ne, 1, copy_ast(jl_exprarg(e,1), sp, 0));
+            jl_exprargset(ne, 2, copy_ast(jl_exprarg(e,2), sp, 1));
         }
         else if (e->head == assign_sym) {
-            jl_exprarg(ne, 0) = copy_ast(jl_exprarg(e,0), sp, 0);
-            jl_exprarg(ne, 1) = copy_ast(jl_exprarg(e,1), sp, 1);
+            jl_exprargset(ne, 0, copy_ast(jl_exprarg(e,0), sp, 0));
+            jl_exprargset(ne, 1, copy_ast(jl_exprarg(e,1), sp, 1));
         }
         else {
-            for(size_t i=0; i < jl_array_len(e->args); i++)
-                jl_exprarg(ne, i) = copy_ast(jl_exprarg(e,i), sp, 1);
+            for(size_t i=0; i < jl_array_len(e->args); i++) {
+                jl_exprargset(ne, i, copy_ast(jl_exprarg(e,i), sp, 1));
+            }
         }
         JL_GC_POP();
         return (jl_value_t*)ne;
@@ -766,10 +768,12 @@ DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         ne = jl_exprn(e->head, l);
         if (l == 0) {
             ne->args = jl_alloc_cell_1d(0);
+            gc_wb(ne, ne->args);
         }
         else {
-            for(i=0; i < l; i++)
-                jl_exprarg(ne, i) = jl_copy_ast(jl_exprarg(e,i));
+            for(i=0; i < l; i++) {
+                jl_exprargset(ne, i, jl_copy_ast(jl_exprarg(e,i)));
+            }
         }
         JL_GC_POP();
         return (jl_value_t*)ne;
@@ -806,17 +810,18 @@ static jl_value_t *dont_copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
         if (e->head == lambda_sym) {
-            jl_exprarg(e, 0) = dont_copy_ast(jl_exprarg(e,0), sp, 0);
-            jl_exprarg(e, 1) = dont_copy_ast(jl_exprarg(e,1), sp, 0);
-            jl_exprarg(e, 2) = dont_copy_ast(jl_exprarg(e,2), sp, 1);
+            jl_exprargset(e, 0, dont_copy_ast(jl_exprarg(e,0), sp, 0));
+            jl_exprargset(e, 1, dont_copy_ast(jl_exprarg(e,1), sp, 0));
+            jl_exprargset(e, 2, dont_copy_ast(jl_exprarg(e,2), sp, 1));
         }
         else if (e->head == assign_sym) {
-            jl_exprarg(e, 0) = dont_copy_ast(jl_exprarg(e,0), sp, 0);
-            jl_exprarg(e, 1) = dont_copy_ast(jl_exprarg(e,1), sp, 1);
+            jl_exprargset(e, 0, dont_copy_ast(jl_exprarg(e,0), sp, 0));
+            jl_exprargset(e, 1, dont_copy_ast(jl_exprarg(e,1), sp, 1));
         }
         else {
-            for(size_t i=0; i < jl_array_len(e->args); i++)
-                jl_exprarg(e, i) = dont_copy_ast(jl_exprarg(e,i), sp, 1);
+            for(size_t i=0; i < jl_array_len(e->args); i++) {
+                jl_exprargset(e, i, dont_copy_ast(jl_exprarg(e,i), sp, 1));
+            }
         }
         return (jl_value_t*)e;
     }
@@ -834,6 +839,7 @@ static void eval_decl_types(jl_array_t *vi, jl_value_t *ast, jl_tuple_t *spenv)
                                         (jl_value_t*)spenv, (jl_expr_t*)ast, 1, 1);
         if (ty != NULL && (jl_is_type(ty) || jl_is_typevar(ty))) {
             jl_cellref(v, 1) = ty;
+            gc_wb(v, ty);
         }
         else {
             jl_cellref(v, 1) = (jl_value_t*)jl_any_type;

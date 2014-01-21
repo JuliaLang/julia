@@ -25,7 +25,9 @@
 
 // only one GC is supported at this time
 #define JL_GC_MARKSWEEP
-
+#ifndef GC_NO_INC
+#define GC_INC
+#endif
 // debugging options
 
 // with MEMDEBUG, every object is allocated explicitly with malloc, and

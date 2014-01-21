@@ -146,6 +146,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             jl_lambda_info_t *li = (jl_lambda_info_t*)e;
             if (jl_boot_file_loaded && li->ast && jl_is_expr(li->ast)) {
                 li->ast = jl_compress_ast(li, li->ast);
+                gc_wb(li, li->ast);
             }
             return (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null, li);
         }
@@ -187,6 +188,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                     }
                     for(int i=0; i < na; i++) {
                         ar[i*2+1] = eval(args[i+1], locals, nl);
+                        gc_wb(ex->args, ar[i*2+1]);
                     }
                     if (na != nreq) {
                         jl_error("wrong number of arguments");
@@ -212,7 +214,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         size_t i;
         for (i=0; i < nl; i++) {
             if (locals[i*2] == sym) {
-                return (locals[i*2+1] = eval(args[1], locals, nl));
+                locals[i*2+1] = eval(args[1], locals, nl);
+                gc_wb(jl_current_module, locals[i*2+1]); // not sure about jl_current_module
+                return locals[i*2+1];
             }
         }
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)sym);
@@ -381,6 +385,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                              0, args[6]==jl_true ? 1 : 0);
         dt->fptr = jl_f_ctor_trampoline;
         dt->name->ctor_factory = eval(args[3], locals, nl);
+        gc_wb(dt->name, dt->name->ctor_factory);
 
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
         temp = b->value;  // save old value
@@ -392,6 +397,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             // operations that can fail
             inside_typedef = 1;
             dt->types = (jl_tuple_t*)eval(args[5], locals, nl);
+            gc_wb(dt, dt->types);
             inside_typedef = 0;
             jl_check_type_tuple(dt->types, dt->name->name, "type definition");
             super = eval(args[4], locals, nl);
@@ -430,6 +436,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
             jl_lambda_info_t *li = f->linfo;
             li->ast = jl_compress_ast(li, li->ast);
+            gc_wb(li, li->ast);
             li->name = nm;
         }
         jl_set_global(jl_current_module, nm, (jl_value_t*)f);
