@@ -33,8 +33,9 @@ abstract Timezone <: AbstractTime
 immutable UTC <: Timezone end
 
 # Generic offset; "n" is number of minutes offset from UTC
-immutable Offset{n<:Integer} <: Timezone end
-Offset(n::Real) = Offset{int(n)}
+immutable Offset <: Timezone 
+    n::Int
+end
 
 abstract Period     <: AbstractTime
 abstract DatePeriod <: Period
@@ -106,14 +107,14 @@ getoffset(::Type{UTC},ms)       = getleaps(ms)
 getoffsetsecond(::Type{UTC},ms) = getleapsecond(ms)
 getabbr(::Type{UTC},ms)         = "UTC"
 
-setoffset{n}(::Type{Offset{n}},ms)       = 60000*n + setleaps(ms)
-setoffsetsecond{n}(::Type{Offset{n}},ms) = 60000*n + setleapsecond(ms)
-getoffset{n}(::Type{Offset{n}},ms)       = 60000*n + getleaps(ms)
-getoffsetsecond{n}(::Type{Offset{n}},ms) = 60000*n + getleapsecond(ms)
-function getabbr{n}(tz::Type{Offset{n}},ms) 
-    hrs = string(div(abs(n),60))
-    mins = string(abs(n) % 60)
-    return string(sign(n) == 1 ? "+" : "-", lpad(hrs,2,"0"),":",lpad(mins,2,"0"))
+setoffset(o::Offset, ms)        = 60000*o.n + setleaps(ms)
+setoffsecond(o::Offset, ms)     = 60000*o.n + setleapsecond(ms)
+getoffset(o::Offset, ms)        = 60000*o.n + getleaps(ms)
+getoffsetsecond(o::Offset, ms)  = 60000*o.n + getleapsecond(ms)
+function getabbr(o::Offset,ms) 
+    hrs = string(div(abs(o.n),60))
+    mins = string(abs(o.n) % 60)
+    return string(sign(o.n) == 1 ? "+" : "-", lpad(hrs,2,"0"),":",lpad(mins,2,"0"))
 end
 
 # Datetime constructor with defaults
