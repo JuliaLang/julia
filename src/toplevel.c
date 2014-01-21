@@ -17,7 +17,6 @@
 #include "julia.h"
 #include "builtin_proto.h"
 
-char *julia_home = NULL;
 // current line number in a file
 int jl_lineno = 0;
 

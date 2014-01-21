@@ -66,7 +66,7 @@ function checkbounds(sz::Int, I::Real)
 end
 
 function checkbounds(sz::Int, I::AbstractVector{Bool})
-    if length(I) > sz
+    if length(I) != sz
         throw(BoundsError())
     end
 end

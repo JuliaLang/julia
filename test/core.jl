@@ -1326,3 +1326,14 @@ function read_file5374(fileobj)
     read(fileobj.io, Float32)
 end
 @test isa(read_file5374(FileObj5374(IOBuffer(Uint8[0,0,0,0]))), Float32)
+
+# issue #5457
+function f5457(obj_ptr::Ptr{Float64}, f)
+    new_obj = convert(Float64, f(1.0))
+    unsafe_store!(obj_ptr, new_obj)
+    return int32(1)
+end
+let
+    a = [1.0]
+    f5457(pointer(a,1), sin)
+end

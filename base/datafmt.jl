@@ -16,11 +16,8 @@ function countlines(io::IO, eol::Char)
     nl = 0
     preceded_by_eol = true
     while !eof(io)
-        fill!(a, uint8(eol))
-        try
-            read(io, a)
-        end
-        for i=1:length(a)
+        nb = readbytes!(io, a)
+        for i=1:nb
             if a[i] == eol
                 preceded_by_eol = true
             elseif preceded_by_eol

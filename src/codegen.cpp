@@ -85,6 +85,7 @@
 
 #include <string>
 #include <sstream>
+#include <fstream>
 #include <map>
 #include <vector>
 #include <set>
@@ -273,12 +274,6 @@ struct jl_varinfo_t {
 };
 
 // --- helpers for reloading IR image
-extern "C"
-void jl_set_imaging_mode(int stat)
-{
-    imaging_mode = !!stat;
-}
-
 static void jl_gen_llvm_gv_array();
 
 extern "C"
@@ -3081,6 +3076,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     ctx.f = f;
 
     // step 5. set up debug info context and create first basic block
+    bool do_coverage =
+        jl_compileropts.code_coverage && lam->module != jl_base_module && lam->module != jl_core_module;
     jl_value_t *stmt = jl_cellref(stmts,0);
     std::string filename = "no file";
     char *dbgFuncName = lam->name->name;
@@ -3125,6 +3122,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         // special value: if function name is empty, disable debug info
         builder.SetCurrentDebugLocation(noDbg);
         debug_enabled = false;
+        do_coverage = false;
     }
     else {
         // TODO: Fix when moving to new LLVM version
@@ -3431,12 +3429,16 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             int lno = jl_linenode_line(stmt);
             if (debug_enabled)
                 builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP, NULL));
+            if (do_coverage)
+                coverageVisitLine(filename, lno);
             ctx.lineno = lno;
         }
         else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
             int lno = jl_unbox_long(jl_exprarg(stmt, 0));
             if (debug_enabled)
                 builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP, NULL));
+            if (do_coverage)
+                coverageVisitLine(filename, lno);
             ctx.lineno = lno;
         }
         if (jl_is_labelnode(stmt)) {
@@ -3986,6 +3988,8 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen(void)
 {
+    imaging_mode = jl_compileropts.build_path != NULL;
+
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
     InitializeNativeTargetAsmParser();

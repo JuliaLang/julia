@@ -44,7 +44,7 @@ DLLEXPORT void jl_init(char *julia_home_dir)
 {
     libsupport_init();
     char *image_file = jl_locate_sysimg(julia_home_dir, JL_SYSTEM_IMAGE_PATH);
-    julia_init(image_file, 0);
+    julia_init(image_file);
     jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
                  jl_cstr_to_string(julia_home));
     jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));

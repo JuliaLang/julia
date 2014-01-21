@@ -304,6 +304,10 @@ end
 function getindex{T<:Real}(A::Ranges, I::AbstractVector{T})
     return [ A[i] for i in to_index(I) ]
 end
+function getindex(A::Ranges, I::AbstractVector{Bool})
+    checkbounds(A, I)
+    return [ A[i] for i in to_index(I) ]
+end
 
 
 # logical indexing
@@ -326,6 +330,7 @@ getindex(A::Vector, I::AbstractVector{Bool}) = getindex_bool_1d(A, I)
 getindex(A::Vector, I::AbstractArray{Bool}) = getindex_bool_1d(A, I)
 getindex(A::Array, I::AbstractVector{Bool}) = getindex_bool_1d(A, I)
 getindex(A::Array, I::AbstractArray{Bool}) = getindex_bool_1d(A, I)
+
 
 ## Indexing: setindex! ##
 setindex!{T}(A::Array{T}, x) = arrayset(A, convert(T,x), 1)
@@ -1221,13 +1226,12 @@ function transpose{T<:Number}(A::Matrix{T})
 end
 
 ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
-ctranspose(x::StridedVecOrMat) = transpose(x)
 
 transpose(x::StridedVector) = [ x[j] for i=1, j=1:size(x,1) ]
 transpose(x::StridedMatrix) = [ x[j,i] for i=1:size(x,2), j=1:size(x,1) ]
 
-ctranspose{T<:Number}(x::StridedVector{T}) = T[ conj(x[j]) for i=1, j=1:size(x,1) ]
-ctranspose{T<:Number}(x::StridedMatrix{T}) = T[ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
+ctranspose{T}(x::StridedVector{T}) = T[ conj(x[j]) for i=1, j=1:size(x,1) ]
+ctranspose{T}(x::StridedMatrix{T}) = T[ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
 
 # set-like operators for vectors
 # These are moderately efficient, preserve order, and remove dupes.

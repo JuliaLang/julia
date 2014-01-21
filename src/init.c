@@ -59,6 +59,11 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 #include <sched.h>   // for setting CPU affinity
 #endif
 
+char *julia_home = NULL;
+jl_compileropts_t jl_compileropts = { NULL, // build_path
+                                      0     // code_coverage
+};
+
 int jl_boot_file_loaded = 0;
 
 char *jl_stack_lo;
@@ -350,11 +355,15 @@ static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg)
         jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
 }
 
+void jl_write_coverage_data(void);
+
 DLLEXPORT void uv_atexit_hook()
 {
 #if defined(JL_GC_MARKSWEEP) && defined(GC_FINAL_STATS)
     jl_print_gc_stats(JL_STDERR);
 #endif
+    if (jl_compileropts.code_coverage)
+        jl_write_coverage_data();
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f!=NULL && jl_is_function(f)) {
@@ -622,10 +631,8 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
 
 #endif
 
-void julia_init(char *imageFile, int build_mode)
+void julia_init(char *imageFile)
 {
-    if (build_mode)
-        jl_set_imaging_mode(1);
     jl_page_size = jl_getpagesize();
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
@@ -704,7 +711,7 @@ void julia_init(char *imageFile, int build_mode)
 
     if (imageFile) {
         JL_TRY {
-            jl_restore_system_image(imageFile, build_mode);
+            jl_restore_system_image(imageFile);
         }
         JL_CATCH {
             JL_PRINTF(JL_STDERR, "error during init:\n");
@@ -830,7 +837,7 @@ DLLEXPORT void jl_install_sigint_handler()
 extern int asprintf(char **str, const char *fmt, ...);
 extern void * __stack_chk_guard;
 
-DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]), char *build_path)
+DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]))
 {
 #if defined(_OS_WINDOWS_)
     SetUnhandledExceptionFilter(exception_handler);
@@ -851,6 +858,7 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
     }
 #endif
     int ret = pmain(argc, argv);
+    char *build_path = jl_compileropts.build_path;
     if (build_path) {
         char *build_ji;
         if (asprintf(&build_ji, "%s.ji",build_path) > 0) {
