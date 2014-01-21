@@ -1,3 +1,3 @@
 file ../usr/bin/julia-debug-basic
-r -bf sysimg.jl
+r --build ../usr/lib/julia/sys0.bc sysimg.jl
 bt
