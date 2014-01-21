@@ -21,7 +21,7 @@ ifeq ($(USE_LLVM_SHLIB),1)
 LLVMLINK = -lLLVM-$(LLVM_VER)
 endif
 
-LIBS = $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(BUILD)/lib $(LIBUV) $(NO_WHOLE_ARCHIVE) $(call exec,$(LLVM_CONFIG) --ldflags) $(LLVMLINK) $(OSLIBS)
+LIBS = $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(BUILD)/lib $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(call exec,$(LLVM_CONFIG) --ldflags) $(LLVMLINK) $(OSLIBS)
 
 ifneq ($(MAKECMDGOALS),debug)
 TARGET =
