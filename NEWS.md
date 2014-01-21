@@ -52,6 +52,10 @@ Library improvements
     by default (when no delimiter is specified). This is useful for reading
     fixed-width or messy whitespace-delimited data ([#5403]).
 
+  * The Airy, Bessel, Hankel (and their related) functions `airy*`, `bessel*`, `hankel*`
+    now correctly traps any errors returned by the underlying AMOS library, returning an
+    `AmosException`. ([#4967])
+
   * Collections improvements
 
     * `Array` assignment (e.g. `x[:] = y`) ignores singleton dimensions
@@ -183,6 +187,7 @@ Deprecated or removed
 [#5430]: https://github.com/JuliaLang/julia/pull/5430
 [a448e080]: https://github.com/JuliaLang/julia/commit/a448e080dc736c7fb326426dfcb2528be36973d3
 [5e3f074b]: https://github.com/JuliaLang/julia/commit/5e3f074b9173044a0a4219f9b285879ff7cec041
+[#4967]: https://github.com/JuliaLang/julia/pull/4967
 
 Julia v0.2.0 Release Notes
 ==========================
