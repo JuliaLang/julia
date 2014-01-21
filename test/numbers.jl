@@ -1742,3 +1742,8 @@ for T = (Uint8,Int8,Uint16,Int16,Uint32,Int32,Uint64,Int64,Uint128,Int128)
         @test convert(T,n*(n^typemax(T))) == one(T)
     end
 end
+
+@test is(false*pi, 0.0)
+@test is(true*pi, float64(pi))
+@test is(pi*false, 0.0)
+@test is(pi*true, float64(pi))
