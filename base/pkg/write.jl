@@ -8,7 +8,7 @@ function prefetch(pkg::String, sha1::String)
 end
 
 function fetch(pkg::String, sha1::String)
-    refspec = "+refs/heads/*:refs/remotes/cache/*"
+    refspec = "+refs/*:refs/remotes/cache/*"
     Git.run(`fetch -q $(Cache.path(pkg)) $refspec`, dir=pkg)
     Git.iscommit(sha1, dir=pkg) && return
     f = Git.iscommit(sha1, dir=Cache.path(pkg)) ? "fetch" : "prefetch"
