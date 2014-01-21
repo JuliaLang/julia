@@ -88,14 +88,14 @@ end
 
 # searching definitions
 
-function whicht(f, types)
+function whicht(io::IO, f, types)
     for m in methods(f, types)
         lsd = m.func.code::LambdaStaticData
         d = f.env.defs
         while !is(d,())
             if is(d.func.code, lsd)
-                print(STDOUT, f.env.name)
-                show(STDOUT, d); println(STDOUT)
+                print(io, f.env.name)
+                show(io, d); println(io)
                 return
             end
             d = d.next
@@ -103,7 +103,9 @@ function whicht(f, types)
     end
 end
 
-which(f, args...) = whicht(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
+which(io::IO, f, args...) = whicht(io, f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
+
+which(f, args) = which(STDOUT, f, args)
 
 macro which(ex0)
     if isa(ex0,Expr) &&
