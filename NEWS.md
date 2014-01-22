@@ -79,6 +79,11 @@ Library improvements
 
   * `Number` improvements
 
+    * The `ImaginaryUnit` type no longer exists. Instead, `im` is of type
+      `Complex{Bool}`. Making this work required changing the semantics of
+      boolean multiplication to approximately, `true * x = x` and
+      `false * x = zero(x)`, which can itself be considered useful ([#5468]).
+
     * `big` is now vectorized ([#4766])
 
     * `nextpow` and `prevpow` now return the `a^n` values instead of the
@@ -191,6 +196,7 @@ Deprecated or removed
 [a448e080]: https://github.com/JuliaLang/julia/commit/a448e080dc736c7fb326426dfcb2528be36973d3
 [5e3f074b]: https://github.com/JuliaLang/julia/commit/5e3f074b9173044a0a4219f9b285879ff7cec041
 [#4967]: https://github.com/JuliaLang/julia/pull/4967
+[#5468]: https://github.com/JuliaLang/julia/pull/5468
 
 Julia v0.2.0 Release Notes
 ==========================
