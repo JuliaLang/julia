@@ -56,6 +56,9 @@ Library improvements
     `bessel*`, `hankel*`) now detect errors returned by the underlying 
     AMOS library, throwing an `AmosException` in that case ([#4967]).
 
+  * `methodswith` now returns an array of `Method`s ([#5464]) rather
+    than just printing its results.
+
   * Collections improvements
 
     * `Array` assignment (e.g. `x[:] = y`) ignores singleton dimensions
