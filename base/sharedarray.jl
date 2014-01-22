@@ -146,15 +146,18 @@ function deserialize{T,N}(s, t::Type{SharedArray{T,N}})
     sa
 end
 
-convert(::Type{Array}, sa::SharedArray) = sa.loc_shmarr
+convert(::Type{Array}, S::SharedArray) = S.loc_shmarr
 
-# avoiding ambiguity warnings
-getindex(sa::SharedArray, x::Real) = getindex(sa.loc_shmarr, x)
-getindex(sa::SharedArray, x::AbstractArray) = getindex(sa.loc_shmarr, x)
+# # pass through getindex and setindex! - they always work on the complete array unlike DArrays
+getindex(S::SharedArray) = getindex(S.loc_shmarr)
+getindex(S::SharedArray,I::AbstractArray) = getindex(S.loc_shmarr,I)
+getindex(S::SharedArray,I::Range1) = getindex(S.loc_shmarr,I)
+getindex(S::SharedArray,I::Real...) = getindex(S.loc_shmarr, I...)
 
-# pass through getindex and setindex! - they always work on the complete array unlike DArrays
-getindex(sa::SharedArray, args...) = getindex(sa.loc_shmarr, args...)
-setindex!(sa::SharedArray, args...) = (setindex!(sa.loc_shmarr, args...); sa)
+setindex!(S::SharedArray, x) = (setindex!(S.loc_shmarr, x); S)
+setindex!(S::SharedArray, x, I::Real...) = (setindex!(S.loc_shmarr, x, I...); S)
+setindex!(S::SharedArray, x, I::AbstractArray) = (setindex!(S.loc_shmarr, x, I); S)
+setindex!(S::SharedArray, x, I::Range1) = (setindex!(S.loc_shmarr, x, I); S)
 
 # convenience constructors
 function shmem_fill(v, dims; kwargs...) 
