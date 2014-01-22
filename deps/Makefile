@@ -657,6 +657,7 @@ clean-openlibm:
 	-$(MAKE) -C openlibm distclean $(OPENLIBM_FLAGS)
 	-rm $(OPENLIBM_OBJ_TARGET)
 distclean-openlibm: clean-openlibm
+	-cd openlibm && git clean -fdx
 
 get-openlibm: openlibm/Makefile
 configure-openlibm: get-openlibm
@@ -695,6 +696,7 @@ clean-openspecfun:
 	-$(MAKE) -C openspecfun distclean $(OPENSPECFUN_FLAGS)
 	-rm $(OPENSPECFUN_OBJ_TARGET)
 distclean-openspecfun: clean-openspecfun
+	-cd openspecfun && git clean -fdx
 
 get-openspecfun: openspecfun/Makefile
 configure-openspecfun: get-openspecfun
@@ -770,6 +772,7 @@ clean-Rmath:
 	-$(MAKE) -C Rmath/src clean
 	-rm $(RMATH_OBJ_TARGET)
 distclean-Rmath: clean-Rmath
+	-cd Rmath && git clean -fdx
 
 get-Rmath: Rmath/Make.inc
 configure-Rmath: get-Rmath
