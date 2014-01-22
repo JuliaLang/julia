@@ -1208,7 +1208,7 @@ clean-fftw-double:
 	-$(MAKE) -C fftw-$(FFTW_VER)-double clean
 	-rm -f $(FFTW_DOUBLE_OBJ_TARGET)
 distclean-fftw:
-	-rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-{single,double}
+	-rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-single fftw-$(FFTW_VER)-double
 
 get-fftw: get-fftw-single get-fftw-double
 configure-fftw: configure-fftw-single configure-fftw-double
