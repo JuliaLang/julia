@@ -1,3 +1,17 @@
+# test a + b*im construction fidelity
+for A in [Float64, Float32, Float16, BigFloat],
+	B in [Float64, Float32, Float16, BigFloat],
+	a in A[-Inf, -1.0, -0.0, 0.0, 1.0, Inf, NaN],
+	b in B[-Inf, -1.0, -0.0, 0.0, 1.0, Inf, NaN]
+	A === B === Float16 && continue # FIXME pending #5314
+	if A != BigFloat && B != BigFloat
+		@test a + b*im === Complex(a,b)
+	else
+		# BigFloats aren't immutable
+		@test isequal(a + b*im, Complex(a,b))
+	end
+end
+
 # sqrt:
 # tests special values from csqrt man page
 # as well as conj(sqrt(z)) = sqrt(conj(z))
