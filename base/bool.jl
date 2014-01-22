@@ -44,7 +44,9 @@ abs2(x::Bool) = x
 
 function *{T<:Number}(x::Bool, y::T)
     S = promote_type(Bool,T)
-    ifelse(x, convert(S,y), convert(S,0))
+    z = convert(S,0)
+    z = ifelse(signbit(y)==0, z, -z)
+    ifelse(x, convert(S,y), z)
 end
 *(y::Number, x::Bool) = x * y
 
