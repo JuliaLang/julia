@@ -35,11 +35,12 @@ size(m::SymTridiagonal) = (length(m.dv), length(m.dv))
 size(m::SymTridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(m.dv) : 1)
 
 #Elementary operations
-copy(S::SymTridiagonal) = SymTridiagonal(copy(S.dv), copy(S.ev))
-round(M::SymTridiagonal) = SymTridiagonal(round(M.dv), round(M.ev))
-iround(M::SymTridiagonal) = SymTridiagonal(iround(M.dv), iround(M.ev))
+for func in (:copy, :round, :iround, :conj)
+    @eval begin
+        ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
+    end
+end
 
-conj(M::SymTridiagonal) = SymTridiagonal(conj(M.dv), conj(M.ev))
 transpose(M::SymTridiagonal) = M #Identity operation
 ctranspose(M::SymTridiagonal) = conj(M)
 
@@ -239,7 +240,7 @@ end
 +(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl+B.dl, A.d+B.d, A.du+B.du)
 -(A::Tridiagonal, B::Tridiagonal) = Tridiagonal(A.dl-B.dl, A.d-B.d, A.du+B.du)
 *(A::Tridiagonal, B::Number) = Tridiagonal(A.dl*B, A.d*B, A.du*B)
-*(B::Number, A::SymTridiagonal) = A*B
+*(B::Number, A::Tridiagonal) = A*B
 /(A::Tridiagonal, B::Number) = Tridiagonal(A.dl/B, A.d/B, A.du/B)
 
 ==(A::Tridiagonal, B::Tridiagonal) = (A.dl==B.dl) && (A.d==B.d) && (A.du==B.du)
