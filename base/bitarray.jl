@@ -825,12 +825,7 @@ function insert!(B::BitVector, i::Integer, item)
     B[i] = item
 end
 
-function splice!(B::BitVector, i::Integer)
-    n = length(B)
-    if !(1 <= i <= n)
-        throw(BoundsError())
-    end
-    v = B[i]
+function _deleteat!(B::BitVector, i::Integer)
 
     k, j = get_chunks_id(i)
 
@@ -861,6 +856,91 @@ function splice!(B::BitVector, i::Integer)
 
     B.len -= 1
 
+    return B
+end
+
+function deleteat!(B::BitVector, i::Integer)
+    n = length(B)
+    if !(1 <= i <= n)
+        throw(BoundsError())
+    end
+
+    return _deleteat!(B, i)
+end
+
+function deleteat!(B::BitVector, r::Range1{Int})
+    n = length(B)
+    i_f = first(r)
+    i_l = last(r)
+    if !(1 <= i_f && i_l <= n)
+        throw(BoundsError())
+    end
+
+    Bc = B.chunks
+    new_l = length(B) - length(r)
+    delta_k = num_bit_chunks(new_l) - length(Bc)
+
+    copy_chunks(Bc, i_f, Bc, i_l+1, n-i_l)
+
+    if delta_k < 0
+        ccall(:jl_array_del_end, Void, (Any, Uint), Bc, -delta_k)
+    end
+
+    B.len = new_l
+
+    if new_l > 0
+        Bc[end] &= @_msk_end new_l
+    end
+
+    return B
+end
+
+function deleteat!(B::BitVector, inds)
+    n = new_l = length(B)
+    s = start(inds)
+    done(inds, s) && return B
+
+    Bc = B.chunks
+
+    (p, s) = next(inds, s)
+    q = p+1
+    new_l -= 1
+    while !done(inds, s)
+        (i,s) = next(inds, s)
+        if !(q <= i <= n)
+            i < q && error("indices must be unique and sorted")
+            throw(BoundsError())
+        end
+        new_l -= 1
+        if i > q
+            copy_chunks(Bc, p, Bc, q, i-q)
+            p += i-q
+        end
+        q = i+1
+    end
+
+    q <= n && copy_chunks(Bc, p, Bc, q, n-q+1)
+
+    delta_k = num_bit_chunks(new_l) - length(Bc)
+    delta_k < 0 && ccall(:jl_array_del_end, Void, (Any, Uint), Bc, -delta_k)
+
+    B.len = new_l
+
+    if new_l > 0
+        Bc[end] &= @_msk_end new_l
+    end
+
+    return B
+end
+
+function splice!(B::BitVector, i::Integer)
+    n = length(B)
+    if !(1 <= i <= n)
+        throw(BoundsError())
+    end
+
+    v = B[i]   # TODO: change to a copy if/when subscripting becomes an ArrayView
+    _deleteat!(B, i)
     return v
 end
 splice!(B::BitVector, i::Integer, ins::BitVector) = splice!(B, int(i):int(i), ins)
@@ -879,8 +959,11 @@ function splice!(B::BitVector, r::Range1{Int}, ins::BitVector = _default_bit_spl
         throw(BoundsError())
     end
     if (i_f > n)
-        return append!(B, ins)
+        append!(B, ins)
+        return BitVector(0)
     end
+
+    v = B[r]  # TODO: change to a copy if/when subscripting becomes an ArrayView
 
     Bc = B.chunks
 
@@ -905,7 +988,7 @@ function splice!(B::BitVector, r::Range1{Int}, ins::BitVector = _default_bit_spl
         Bc[end] &= @_msk_end new_l
     end
 
-    return B
+    return v
 end
 splice!(B::BitVector, r::Range1{Int}, ins::AbstractVector{Bool}) = splice!(B, r, bitpack(ins))
 
