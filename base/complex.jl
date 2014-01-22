@@ -11,31 +11,35 @@ typealias Complex128 Complex{Float64}
 typealias Complex64  Complex{Float32}
 typealias Complex32  Complex{Float16}
 
-sizeof(::Type{Complex128}) = 16
-sizeof(::Type{Complex64}) = 8
-sizeof(::Type{Complex32}) = 4
+sizeof{T<:Real}(::Type{Complex{T}}) = 2*sizeof(T)
 
-real(z::Complex) = z.re
-imag(z::Complex) = z.im
-real(x::Real) = x
-imag(x::Real) = zero(x)
+convert{T<:Real}(::Type{Complex{T}}, x::Real) = Complex{T}(x,0)
+convert{T<:Real}(::Type{Complex{T}}, z::Complex) = Complex{T}(real(z),imag(z))
+convert{T<:Real}(::Type{T}, z::Complex) =
+    isreal(z) ? convert(T,real(z)) : throw(InexactError())
 
-convert{T<:Real}(::Type{Complex{T}}, x::Real) =
-    Complex{T}(convert(T,x), convert(T,0))
-convert{T<:Real}(::Type{Complex{T}}, z::Complex{T}) = z
-convert{T<:Real}(::Type{Complex{T}}, z::Complex) =
-    Complex{T}(convert(T,real(z)),convert(T,imag(z)))
-
-convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
-                                           throw(InexactError()))
+convert(::Type{Complex}, z::Complex) = z
+convert(::Type{Complex}, x::Real) = Complex(x)
 
 promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{S}) =
     Complex{promote_type(T,S)}
 promote_rule{T<:Real,S<:Real}(::Type{Complex{T}}, ::Type{Complex{S}}) =
     Complex{promote_type(T,S)}
 
-complex(x, y) = Complex(x, y)
-complex(x) = Complex(x)
+real(z::Complex) = z.re
+imag(z::Complex) = z.im
+real(x::Real) = x
+imag(x::Real) = zero(x)
+reim(z) = (real(z), imag(z))
+
+isreal(x::Real) = true
+isreal(z::Complex) = imag(z) == 0
+isimag(z::Number) = real(z) == 0
+isinteger(z::Complex) = isreal(z) && isinteger(real(z))
+isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
+
+complex(x::Real, y::Real) = Complex(x, y)
+complex(x::Real) = Complex(x)
 complex(z::Complex) = z
 
 complex128(r::Float64, i::Float64) = Complex{Float64}(r, i)
@@ -51,12 +55,6 @@ complex32(z) = complex32(real(z), imag(z))
 for fn in _numeric_conversion_func_names
     @eval $fn(z::Complex) = complex($fn(real(z)),$fn(imag(z)))
 end
-
-isreal{T<:Real}(z::Complex{T}) = imag(z) == 0
-isinteger(z::Complex) = isreal(z) && isinteger(real(z))
-
-isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
-reim(z) = (real(z), imag(z))
 
 function complex_show(io::IO, z::Complex, compact::Bool)
     r, i = reim(z)
@@ -90,9 +88,6 @@ end
 
 
 ## generic functions of complex numbers ##
-
-convert(::Type{Complex}, z::Complex) = z
-convert(::Type{Complex}, x::Real) = complex(x)
 
 ==(z::Complex, w::Complex) = (real(z) == real(w)) & (imag(z) == imag(w))
 ==(z::Complex, x::Real) = isreal(z) && real(z) == x
