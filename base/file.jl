@@ -71,6 +71,7 @@ function tempname()
     d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
     @unix_only p = ccall(:tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
     @windows_only p = ccall(:_tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
+    systemerror(:tempnam, p == C_NULL)
     s = bytestring(p)
     c_free(p)
     s
@@ -137,13 +138,10 @@ function readdir(path::String)
     # Allocate space for uv_fs_t struct
     uv_readdir_req = zeros(Uint8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 
-    # defined in sys.c, to call uv_fs_readdir
+    # defined in sys.c, to call uv_fs_readdir, which sets errno on error.
     file_count = ccall(:jl_readdir, Int32, (Ptr{Uint8}, Ptr{Uint8}),
                        bytestring(path), uv_readdir_req)
-
-    if file_count < 0
-        error("unable to read directory $path")
-    end
+    systemerror("unable to read directory $path", file_count < 0)
 
     # The list of dir entries is returned as a contiguous sequence of null-terminated
     # strings, the first of which is pointed to by ptr in uv_readdir_req.

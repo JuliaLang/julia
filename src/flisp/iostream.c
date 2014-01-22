@@ -217,7 +217,7 @@ value_t fl_ioseek(value_t *args, u_int32_t nargs)
     ios_t *s = toiostream(args[0], "io.seek");
     size_t pos = tosize(args[1], "io.seek");
     off_t res = ios_seek(s, (off_t)pos);
-    if (res == -1)
+    if (res < 0)
         return FL_F;
     return FL_T;
 }
