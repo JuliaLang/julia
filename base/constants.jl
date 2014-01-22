@@ -18,9 +18,6 @@ for op in {:+, :-, :*, :/, :^}
     @eval $op(x::MathConst, y::MathConst) = $op(float64(x),float64(y))
 end
 
-*(x::MathConst, i::ImaginaryUnit) = float64(x)*i
-*(i::ImaginaryUnit, x::MathConst) = i*float64(x)
-
 macro math_const(sym, val, def)
     esym = esc(sym)
     qsym = esc(Expr(:quote, sym))
