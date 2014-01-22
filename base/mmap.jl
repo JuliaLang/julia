@@ -29,9 +29,7 @@ function mmap(len::Integer, prot::Integer, flags::Integer, fd::Integer, offset::
     len_page::Int = (offset-offset_page) + len
     # Mmap the file
     p = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
-    if int(p) == -1
-        error("memory mapping failed: ", strerror())
-    end
+    systemerror("memory mapping failed", int(p) == -1)
     # Also return a pointer that compensates for any adjustment in the offset
     return p, int(offset-offset_page)
 end
@@ -47,38 +45,26 @@ function mmap_grow(len::Integer, prot::Integer, flags::Integer, fd::Integer, off
     const SEEK_END::Cint = 2
     # Save current file position so we can restore it later
     cpos = ccall(:jl_lseek, FileOffset, (Cint, FileOffset, Cint), fd, 0, SEEK_CUR)
-    if cpos < 0
-        error(strerror())
-    end
+    systemerror("lseek", cpos < 0)
     filelen = ccall(:jl_lseek, FileOffset, (Cint, FileOffset, Cint), fd, 0, SEEK_END)
-    if filelen < 0
-        error(strerror())
-    end
+    systemerror("lseek", filelen < 0)
     if (filelen < offset + len)
-        n = ccall(:jl_pwrite, Cssize_t, (Cint, Ptr{Void}, Uint, FileOffset), fd, int8([0]), 1, offset + len - 1)
-        if (n < 1)
-            error(strerror())
-        end
+        systemerror("pwrite", ccall(:jl_pwrite, Cssize_t, (Cint, Ptr{Void}, Uint, FileOffset), fd, int8([0]), 1, offset + len - 1) < 1)
     end
     cpos = ccall(:jl_lseek, FileOffset, (Cint, FileOffset, Cint), fd, cpos, SEEK_SET)
+    systemerror("lseek", cpos < 0)
     return mmap(len, prot, flags, fd, offset)
 end
 
 function munmap(p::Ptr,len::Integer)
-    ret = ccall(:munmap,Cint,(Ptr{Void},Int),p,len)
-    if ret != 0
-        error(strerror())
-    end
+    systemerror("munmap", ccall(:munmap,Cint,(Ptr{Void},Int),p,len) != 0)
 end
 
 const MS_ASYNC = 1
 const MS_INVALIDATE = 2
 const MS_SYNC = 4
 function msync(p::Ptr, len::Integer, flags::Integer)
-    ret = ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), p, len, flags)
-    if ret != 0
-        error(strerror())
-    end
+    systemerror("msync", ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), p, len, flags) != 0)
 end
 msync(p::Ptr, len::Integer) = msync(p, len, MS_SYNC)
 
@@ -92,6 +78,7 @@ function mmap_stream_settings(s::IO)
     const MAP_SHARED::Cint = 1
     const F_GETFL::Cint = 3
     mode = ccall(:fcntl,Cint,(Cint,Cint),fd(s),F_GETFL)
+    systemerror("fcntl F_GETFL", mode == -1)
     mode = mode & 3
     if mode == 0
         prot = PROT_READ
