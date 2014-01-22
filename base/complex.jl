@@ -59,7 +59,6 @@ isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
 reim(z) = (real(z), imag(z))
 
 function complex_show(io::IO, z::Complex, compact::Bool)
-    z === im && return print(io, "im")
     r, i = reim(z)
     compact ? showcompact(io,r) : show(io,r)
     if signbit(i)==1 && !isnan(i)
@@ -74,6 +73,8 @@ function complex_show(io::IO, z::Complex, compact::Bool)
     end
     print(io, "im")
 end
+complex_show(io::IO, z::Complex{Bool}, compact::Bool) =
+    print(io, z == im ? "im" : "Complex($(z.re),$(z.im))")
 show(io::IO, z::Complex) = complex_show(io, z, false)
 showcompact(io::IO, z::Complex) = complex_show(io, z, true)
 
@@ -115,8 +116,8 @@ sign(z::Complex) = z/abs(z)
                                     real(z) * imag(w) + imag(z) * real(w))
 
 # adding or multiplying real & complex is common
-*(x::Bool, z::Complex) = ifelse(x,z,zero(z))
-*(z::Complex, x::Bool) = x * z
+*(x::Bool, z::Complex) = ifelse(x, z, zero(z))
+*(z::Complex, x::Bool) = ifelse(x, z, zero(z))
 *(x::Real, z::Complex) = complex(x * real(z), x * imag(z))
 *(z::Complex, x::Real) = complex(x * real(z), x * imag(z))
 +(x::Real, z::Complex) = complex(x + real(z), imag(z))
