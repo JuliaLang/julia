@@ -4521,7 +4521,7 @@ Shared Arrays (EXPERIMENTAL FEATURE)
 
 .. function:: SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
 
-    Construct a SharedArray of type ``T``  and size ``dims`` across the processes
+    Construct a SharedArray of a bitstype ``T``  and size ``dims`` across the processes
     specified by ``pids`` - all of which have to be on the same host. 
 
     If an ``init`` function of the type ``initfn(S::SharedArray)`` is specified, 
@@ -4541,7 +4541,7 @@ Shared Arrays (EXPERIMENTAL FEATURE)
     across participating workers. Can be used as a simple work partitioning scheme.
     
 
-.. function:: procs(sa::SharedArray)
+.. function:: procs(S::SharedArray)
 
    Get the vector of processes that have mapped the shared array 
    
