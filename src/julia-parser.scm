@@ -583,6 +583,16 @@
 			ex)
 		 (let ((argument
 			(cond ((closing-token? (peek-token s))
+			       (io.write
+				*stderr*
+				(string
+				 #\newline "WARNING: deprecated syntax \"x[i:]\""
+				 (if (eq? current-filename 'none)
+				     ""
+				     (string
+				      " at "
+				      current-filename ":" (input-port-line (ts:port s))))
+				 "." #\newline "Use \"x[i:end]\" instead." #\newline))
 			       ':)  ; missing last argument
 			      ((newline? (peek-token s))
 			       (error "line break in \":\" expression"))
