@@ -99,7 +99,7 @@ function norm{T}(A::AbstractMatrix{T}, p::Number=2)
 end
 function norm(A::SparseMatrixCSC,p::Number=1)
     m, n = size(A)
-    if m == 0 || n == 0
+    if m == 0 || n == 0 || isempty(A)
         return real(zero(eltype(A))) 
     elseif m == 1 || n == 1
         return norm(reshape(full(A), length(A)), p)
@@ -121,7 +121,7 @@ function norm(A::SparseMatrixCSC,p::Number=1)
         aa = A.nzval
         ja = A.rowval
         ia = A.colptr
-        rowSum = real(zeros(eltype(A),m))
+        rowSum = zeros(typeof(real(A[1])),m)
         for j=1:n
             i1 = ia[j]
             i2 = ia[j+1]-1
