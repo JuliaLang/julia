@@ -57,6 +57,8 @@ char * dirname(char *);
 #include "flisp.h"
 #include "opcodes.h"
 
+#include "utf8proc.h"
+
 static char *builtin_names[] =
     { NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
       NULL, NULL, NULL, NULL,
@@ -253,12 +255,40 @@ SAFECAST_OP(string,char*,    cvalue_data)
 
 symbol_t *symtab = NULL;
 
-int fl_is_keyword_name(char *str, size_t len)
+int fl_is_keyword_name(const char *str, size_t len)
 {
     return len>1 && ((str[0] == ':' || str[len-1] == ':') && str[1] != '\0');
 }
 
-static symbol_t *mk_symbol(char *str)
+// return NFC-normalized UTF8-encoded version of s
+static const char *normalize(char *s)
+{
+    static size_t buflen = 0;
+    static void *buf = NULL; // persistent buffer (avoid repeated malloc/free)
+    // options equivalent to utf8proc_NFC:
+    const int options = UTF8PROC_NULLTERM|UTF8PROC_STABLE|UTF8PROC_COMPOSE;
+    ssize_t result;
+    size_t newlen;
+    result = utf8proc_decompose((uint8_t*) s, 0, NULL, 0, options);
+    if (result < 0) goto error;
+    newlen = result * sizeof(int32_t) + 1;
+    if (newlen > buflen) {
+        buflen = newlen * 2;
+        buf = realloc(buf, buflen);
+        if (!buf) lerror(MemoryError, "error allocating UTF8 buffer");
+    }
+    result = utf8proc_decompose((uint8_t*)s,0, (int32_t*)buf,result, options);
+    if (result < 0) goto error;
+    result = utf8proc_reencode((int32_t*)buf,result, options);
+    if (result < 0) goto error;
+    return (char*) buf;
+error:
+    lerrorf(ParseError, "error normalizing identifier %s: %s", s,
+            utf8proc_errmsg(result));
+}
+
+// note: assumes str is normalized
+static symbol_t *mk_symbol(const char *str)
 {
     symbol_t *sym;
     size_t len = strlen(str);
@@ -282,7 +312,8 @@ static symbol_t *mk_symbol(char *str)
     return sym;
 }
 
-static symbol_t **symtab_lookup(symbol_t **ptree, char *str)
+// note: assumes str is normalized
+static symbol_t **symtab_lookup(symbol_t **ptree, const char *str)
 {
     int x;
 
@@ -301,10 +332,11 @@ static symbol_t **symtab_lookup(symbol_t **ptree, char *str)
 value_t symbol(char *str)
 {
     symbol_t **pnode;
+    const char *nstr = normalize(str);
 
-    pnode = symtab_lookup(&symtab, str);
+    pnode = symtab_lookup(&symtab, nstr);
     if (*pnode == NULL)
-        *pnode = mk_symbol(str);
+        *pnode = mk_symbol(nstr);
     return tagptr(*pnode, TAG_SYM);
 }
 
