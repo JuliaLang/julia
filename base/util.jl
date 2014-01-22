@@ -94,8 +94,7 @@ function whicht(f, types)
         d = f.env.defs
         while !is(d,())
             if is(d.func.code, lsd)
-                print(STDOUT, f.env.name)
-                show(STDOUT, d); println(STDOUT)
+                display(d)
                 return
             end
             d = d.next
@@ -412,38 +411,36 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 # `methodswith` -- shows a list of methods using the type given
 
-function methodswith(io::IO, t::Type, m::Module, showparents::Bool)
+function methodswith(t::Type, m::Module, showparents::Bool=false)
+    meths = Method[]
     for nm in names(m)
         try
            mt = eval(m, nm)
            d = mt.env.defs
            while !is(d,())
                if any(map(x -> x == t || (showparents && t <: x && x != Any && x != ANY && !isa(x, TypeVar)), d.sig))
-                   print(io, nm)
-                   show(io, d)
-                   println(io)
+                   push!(meths, d)
                end
                d = d.next
            end
         end
     end
+    return meths
 end
 
-methodswith(t::Type, m::Module, showparents::Bool) = methodswith(STDOUT, t, m, showparents)
-methodswith(t::Type, showparents::Bool) = methodswith(STDOUT, t, showparents)
-methodswith(t::Type, m::Module) = methodswith(STDOUT, t, m, false)
-methodswith(t::Type) = methodswith(STDOUT, t, false)
-function methodswith(io::IO, t::Type, showparents::Bool)
+function methodswith(t::Type, showparents::Bool=false)
+    meths = Method[]
     mainmod = current_module()
     # find modules in Main
     for nm in names(mainmod)
         if isdefined(mainmod,nm)
             mod = eval(mainmod, nm)
             if isa(mod, Module)
-                methodswith(io, t, mod, showparents)
+                meths = [meths, methodswith(t, mod, showparents)]
             end
         end
     end
+    return meths
 end
 
 ## printing with color ##

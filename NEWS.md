@@ -48,9 +48,13 @@ Library improvements
     dynamic library handles; `Sys.dllist` will list out all paths currently
     loaded via `dlopen`, and `Sys.dlpath` will lookup a path from a handle
 
-  * `readdlm` has a new keyword `ignore_empty_columns` to ignore empty
-    columns in the input, e.g. to read fixed-with whitespace-delimited
-    data ([#5403]).
+  * `readdlm` treats multiple whitespace characters as a single delimiter
+    by default (when no delimiter is specified). This is useful for reading
+    fixed-width or messy whitespace-delimited data ([#5403]).
+
+  * The Airy, Bessel, Hankel, and related functions (`airy*`,
+    `bessel*`, `hankel*`) now detect errors returned by the underlying 
+    AMOS library, throwing an `AmosException` in that case ([#4967]).
 
   * Collections improvements
 
@@ -183,6 +187,7 @@ Deprecated or removed
 [#5430]: https://github.com/JuliaLang/julia/pull/5430
 [a448e080]: https://github.com/JuliaLang/julia/commit/a448e080dc736c7fb326426dfcb2528be36973d3
 [5e3f074b]: https://github.com/JuliaLang/julia/commit/5e3f074b9173044a0a4219f9b285879ff7cec041
+[#4967]: https://github.com/JuliaLang/julia/pull/4967
 
 Julia v0.2.0 Release Notes
 ==========================

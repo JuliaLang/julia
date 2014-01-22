@@ -32,6 +32,7 @@ function arg_decl_parts(m::Method)
 end
 
 function show(io::IO, m::Method)
+    print(io, m.func.code.name)
     tv, decls, file, line = arg_decl_parts(m)
     if !isempty(tv)
         show_delim_array(io, tv, '{', ',', '}', false)
@@ -57,7 +58,6 @@ function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=tr
     while !is(d,())
         if max==-1 || n<max || (rest==0 && n==max && d.next === ())
             println(io)
-            print(io, name)
             show(io, d)
             n += 1
         else
@@ -102,6 +102,7 @@ function url(m::Method)
 end
 
 function writemime(io::IO, ::MIME"text/html", m::Method)
+    print(io, m.func.code.name)
     tv, decls, file, line = arg_decl_parts(m)
     if !isempty(tv)
         print(io,"<i>")
@@ -130,9 +131,27 @@ function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
     print(io, "$n $meths for generic function <b>$name</b>:<ul>")
     d = mt.defs
     while !is(d,())
-        print(io, "<li> ", name)
+        print(io, "<li> ")
         writemime(io, mime, d)
         d = d.next
     end
     print(io, "</ul>")
 end
+
+# pretty-printing of Vector{Method} for output of methodswith:
+
+function writemime(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
+    print(io, summary(mt))
+    if !isempty(mt)
+        print(io, ":<ul>")
+        for d in mt
+            print(io, "<li> ")
+            writemime(io, mime, d)
+        end
+        print(io, "</ul>")
+    end
+end
+               
+# override usual show method for Vector{Method}: don't abbreviate long lists
+writemime(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method}) =
+    showarray(io, mt, limit=false)
