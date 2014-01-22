@@ -42,6 +42,14 @@ abs2(x::Bool) = x
 ^(x::Bool, y::Bool) = x|!y
 ^(x::Integer, y::Bool) = y ? x : one(x)
 
+function *{T<:Number}(x::Bool, y::T)
+    S = promote_type(Bool,T)
+    z = convert(S,0)
+    z = ifelse(signbit(y)==0, z, -z)
+    ifelse(x, convert(S,y), z)
+end
+*(y::Number, x::Bool) = x * y
+
 div(x::Bool, y::Bool) = y ? x : throw(DivideError())
 fld(x::Bool, y::Bool) = div(x,y)
 rem(x::Bool, y::Bool) = y ? false : throw(DivideError())
