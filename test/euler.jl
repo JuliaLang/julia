@@ -211,14 +211,14 @@ let nums = [
     20849603980134001723930671666823555245252804609722
     53503534226472524250874054075591789781264330331690
 ]
-    @test sum(digits(sum(nums))[end-9:end].*10.^(0:9)) == 5537376230
+    @test sum(digits(sum(nums))[end-9:end].*int64(10).^(0:9)) == 5537376230
 end
 
 #14: 837799
 function euler14(m)
     c = zeros(Int,m)
     c[1] = 1
-    for n = 2:m
+    for n::Int64 = 2:m
         nʹ, d = n, 0
         while nʹ > length(c) || c[nʹ] == 0
             nʹ = iseven(nʹ) ? nʹ>>1 : 3nʹ+1
