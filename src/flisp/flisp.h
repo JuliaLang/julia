@@ -154,7 +154,7 @@ value_t fl_list2(value_t a, value_t b);
 value_t fl_listn(size_t n, ...);
 value_t symbol(char *str);
 char *symbol_name(value_t v);
-int fl_is_keyword_name(char *str, size_t len);
+int fl_is_keyword_name(const char *str, size_t len);
 value_t alloc_vector(size_t n, int init);
 size_t llength(value_t v);
 value_t fl_compare(value_t a, value_t b);  // -1, 0, or 1

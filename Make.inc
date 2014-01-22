@@ -29,6 +29,7 @@ USE_SYSTEM_ZLIB=0
 USE_SYSTEM_GRISU=0
 USE_SYSTEM_RMATH=0
 USE_SYSTEM_LIBUV=0
+USE_SYSTEM_UTF8PROC=0
 
 USE_MKL = 0
 
@@ -350,6 +351,12 @@ else
   LIBUV = $(BUILD)/$(JL_LIBDIR)/libuv.a
 endif
   LIBUV_INC = $(JULIAHOME)/deps/libuv/include
+endif
+
+ifeq ($(USE_SYSTEM_UTF8PROC), 1)
+  LIBUTF8PROC = /usr/lib/libutf8proc.a
+else
+  LIBUTF8PROC = $(BUILD)/$(JL_LIBDIR)/libutf8proc.a
 endif
 
 # OS specific stuff
