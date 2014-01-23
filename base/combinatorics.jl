@@ -102,6 +102,18 @@ function nthperm!(a::AbstractVector, k::Integer)
 end
 nthperm(a::AbstractVector, k::Integer) = nthperm!(copy(a),k)
 
+function nthperm{T<:Integer}(p::AbstractVector{T})
+    isperm(p) || error("argument is not a permutation")
+    k, n = 1, length(p)
+    for i = 1:n-1
+        f = factorial(n-i)
+        for j = i+1:n
+            k += ifelse(p[j] < p[i], f, 0)
+        end
+    end
+    return k
+end
+
 function invperm(a::AbstractVector)
     b = zero(a) # similar vector of zeros
     n = length(a)
