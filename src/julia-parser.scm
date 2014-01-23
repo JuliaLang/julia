@@ -1759,7 +1759,7 @@
   (cond ((symbol? e)  (symbol (string #\@ e)))
 	((valid-modref? e)  `(|.| ,(cadr e)
 			      (quote ,(macroify-name (cadr (caddr e))))))
-	(else (error (string "invalid macro use \"@" e "\"" )))))
+	(else (error (string "invalid macro use \"@(" (deparse e) ")\"" )))))
 
 ; --- main entry point ---
 
