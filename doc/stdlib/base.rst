@@ -852,6 +852,16 @@ Dequeues
 
    Insert an item at the given index.
 
+.. function:: deleteat!(collection, index)
+
+   Remove the item at the given index, and return the modified collection. Subsequent items
+   are shifted to fill the resulting gap.
+
+.. function:: deleteat!(collection, itr)
+
+   Remove the items at the indices given by `itr`, and return the modified collection. Subsequent 
+   items are shifted to fill the resulting gap.  `itr` must be sorted and unique.
+
 .. function:: splice!(collection, index, [replacement]) -> item
 
    Remove the item at the given index, and return the removed item. Subsequent items
@@ -3755,6 +3765,11 @@ Combinatorics
 
    Compute the kth lexicographic permutation of a vector.
 
+.. function:: nthperm(p)
+
+   Return the ``k`` that generated permutation ``p``.
+   Note that ``nthperm(nthperm([1:n], k)) == k`` for ``1 <= k <= factorial(n)``.
+
 .. function:: nthperm!(v, k)
 
    In-place version of :func:`nthperm`.
@@ -4521,7 +4536,7 @@ Shared Arrays (EXPERIMENTAL FEATURE)
 
 .. function:: SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
 
-    Construct a SharedArray of type ``T``  and size ``dims`` across the processes
+    Construct a SharedArray of a bitstype ``T``  and size ``dims`` across the processes
     specified by ``pids`` - all of which have to be on the same host. 
 
     If an ``init`` function of the type ``initfn(S::SharedArray)`` is specified, 
@@ -4541,7 +4556,7 @@ Shared Arrays (EXPERIMENTAL FEATURE)
     across participating workers. Can be used as a simple work partitioning scheme.
     
 
-.. function:: procs(sa::SharedArray)
+.. function:: procs(S::SharedArray)
 
    Get the vector of processes that have mapped the shared array 
    
@@ -4829,6 +4844,18 @@ C Interface
 
    Close shared library referenced by handle.
 
+.. function:: find_library(names, locations)
+
+   Searches for the first library in ``names`` in the paths in the ``locations`` list, ``DL_LOAD_PATH``, or system
+   library paths (in that order) which can successfully be dlopen'd. On success, the return value will be one of
+   the names (potentially prefixed by one of the paths in locations). This string can be assigned to a ``global const``
+   and used as the library name in future ``ccall``'s. On failure, it returns the empty string.
+
+.. data:: DL_LOAD_PATH
+
+   When calling ``dlopen``, the paths in this list will be searched first, in order, before searching the
+   system locations for a valid library handle.
+
 .. function:: c_malloc(size::Integer)
 
    Call ``malloc`` from the C standard library.
@@ -4908,17 +4935,22 @@ C Interface
    Re-enable Ctrl-C handler during execution of a function. Temporarily
    reverses the effect of ``disable_sigint``.
 
-.. function:: find_library(names, locations)
+.. function:: errno([code])
 
-   Searches for the first library in ``names`` in the paths in the ``locations`` list, ``DL_LOAD_PATH``, or system
-   library paths (in that order) which can successfully be dlopen'd. On success, the return value will be one of
-   the names (potentially prefixed by one of the paths in locations). This string can be assigned to a ``global const``
-   and used as the library name in future ``ccall``'s. On failure, it returns the empty string.
+   Get the value of the C library's ``errno``. If an argument is specified, it is
+   used to set the value of ``errno``.
 
-.. data:: DL_LOAD_PATH
+   The value of ``errno`` is only valid immediately after a ``ccall`` to a C
+   library routine that sets it. Specifically, you cannot call ``errno`` at the next
+   prompt in a REPL, because lots of code is executed between prompts.
 
-   When calling ``dlopen``, the paths in this list will be searched first, in order, before searching the
-   system locations for a valid library handle.
+.. function:: systemerror(sysfunc, iftrue)
+
+   Raises a ``SystemError`` for ``errno`` with the descriptive string ``sysfunc`` if ``bool`` is true
+
+.. function:: strerror(n)
+
+   Convert a system call error code to a descriptive string
 
 .. data:: Cchar
 
@@ -5014,18 +5046,6 @@ Errors
 
    Get the backtrace of the current exception, for use within ``catch``
    blocks.
-
-.. function:: errno()
-
-   Get the value of the C library's ``errno``
-
-.. function:: systemerror(sysfunc, iftrue)
-
-   Raises a ``SystemError`` for ``errno`` with the descriptive string ``sysfunc`` if ``bool`` is true
-
-.. function:: strerror(n)
-
-   Convert a system call error code to a descriptive string
 
 .. function:: assert(cond, [text])
 

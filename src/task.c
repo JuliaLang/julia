@@ -238,10 +238,16 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
         jl_current_task->gcstack = jl_pgcstack;
         jl_pgcstack = t->gcstack;
 #endif
+        jl_current_task->current_module = jl_current_module;
         t->last = jl_current_task;
         // by default, parent is first task to switch to this one
-        if (t->parent == NULL)
+        if (t->parent == NULL) {
             t->parent = jl_current_task;
+            t->current_module = jl_current_module;
+        }
+        else {
+            jl_current_module = t->current_module;
+        }
         jl_current_task = t;
 
 #ifdef COPY_STACKS
@@ -913,6 +919,7 @@ void jl_init_tasks(void *stack, size_t ssize)
 #endif
     jl_current_task->stkbuf = NULL;
     jl_current_task->parent = jl_current_task;
+    jl_current_task->current_module = jl_current_module;
     jl_current_task->last = jl_current_task;
     jl_current_task->tls = NULL;
     jl_current_task->consumers = NULL;

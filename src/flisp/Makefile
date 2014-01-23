@@ -14,10 +14,11 @@ SRCS = flisp.c builtins.c string.c equalhash.c table.c iostream.c \
 OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 LLTDIR = ../support
-LLT = $(LLTDIR)/libsupport.a $(LIBUV)
+LLT = $(LLTDIR)/libsupport.a $(LIBUV) $(LIBUTF8PROC)
 
 FLAGS = -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
-	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) $(LIBDIRS:%=-L%) \
+	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) \
+        -I$(LIBUV_INC) -I$(JULIAHOME)/usr/include $(LIBDIRS:%=-L%) \
         -fvisibility=hidden -DLIBRARY_EXPORTS
 LIBFILES = $(LLT)
 LIBS = $(LIBFILES)

@@ -412,6 +412,65 @@ setindex!(A::Array, X::AbstractArray, I::AbstractArray{Bool}) = assign_bool_vect
 setindex!(A::Array, x, I::AbstractVector{Bool}) = assign_bool_scalar_1d!(A, x, I)
 setindex!(A::Array, x, I::AbstractArray{Bool}) = assign_bool_scalar_1d!(A, x, I)
 
+# efficiently grow an array
+
+function _growat!(a::Vector, i::Integer, delta::Integer)
+    n = length(a)
+    if i < div(n,2)
+        _growat_beg!(a, i, delta)
+    else
+        _growat_end!(a, i, delta)
+    end
+    return a
+end
+
+function _growat_beg!(a::Vector, i::Integer, delta::Integer)
+    ccall(:jl_array_grow_beg, Void, (Any, Uint), a, delta)
+    @inbounds for k = 1:i-1
+        a[k] = a[k+delta]
+    end
+    return a
+end
+
+function _growat_end!(a::Vector, i::Integer, delta::Integer)
+    ccall(:jl_array_grow_end, Void, (Any, Uint), a, delta)
+    n = length(a)
+    @inbounds for k = n:-1:(i+delta)
+        a[k] = a[k-delta]
+    end
+    return a
+end
+
+# efficiently delete part of an array
+
+function _deleteat!(a::Vector, i::Integer, delta::Integer)
+    n = length(a)
+    last = i+delta-1
+    if i-1 < n-last
+        _deleteat_beg!(a, i, delta)
+    else
+        _deleteat_end!(a, i, delta)
+    end
+    return a
+end
+
+function _deleteat_beg!(a::Vector, i::Integer, delta::Integer)
+    @inbounds for k = i+delta-1:-1:1+delta
+        a[k] = a[k-delta]
+    end
+    ccall(:jl_array_del_beg, Void, (Any, Uint), a, delta)
+    return a
+end
+
+function _deleteat_end!(a::Vector, i::Integer, delta::Integer)
+    n = length(a)
+    @inbounds for k = i:n-delta
+        a[k] = a[k+delta]
+    end
+    ccall(:jl_array_del_end, Void, (Any, Uint), a, delta)
+    return a
+end
+
 ## Dequeue functionality ##
 
 const _grow_none_errmsg =
@@ -512,56 +571,67 @@ function insert!{T}(a::Array{T,1}, i::Integer, item)
     n = length(a)
     if i > n
         ccall(:jl_array_grow_end, Void, (Any, Uint), a, i-n)
-    elseif i > div(n,2)
-        ccall(:jl_array_grow_end, Void, (Any, Uint), a, 1)
-        for k=n+1:-1:i+1
-            a[k] = a[k-1]
-        end
     else
-        ccall(:jl_array_grow_beg, Void, (Any, Uint), a, 1)
-        for k=1:(i-1)
-            a[k] = a[k+1]
-        end
+        _growat!(a, i, 1)
     end
     a[i] = item
+    return a
+end
+
+function deleteat!(a::Vector, i::Integer)
+    if !(1 <= i <= length(a))
+        throw(BoundsError())
+    end
+    return _deleteat!(a, i, 1)
+end
+
+function deleteat!{T<:Integer}(a::Vector, r::Range1{T})
+    n = length(a)
+    f = first(r)
+    l = last(r)
+    if !(1 <= f && l <= n)
+        throw(BoundsError())
+    end
+    return _deleteat!(a, f, length(r))
+end
+
+function deleteat!(a::Vector, inds)
+    n = length(a)
+    s = start(inds)
+    done(inds, s) && return a
+    (p, s) = next(inds, s)
+    q = p+1
+    while !done(inds, s)
+        (i,s) = next(inds, s)
+        if !(q <= i <= n) 
+            i < q && error("indices must be unique and sorted")
+            throw(BoundsError())
+        end
+        while q < i
+            @inbounds a[p] = a[q]
+            p += 1; q += 1
+        end
+        q = i+1
+    end
+    while q <= n
+        @inbounds a[p] = a[q]
+        p += 1; q += 1
+    end
+    ccall(:jl_array_del_end, Void, (Any, Uint), a, n-p+1)
     return a
 end
 
 const _default_splice = []
 
 function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
-    n = length(a)
-    if !(1 <= i <= n)
-        throw(BoundsError())
-    end
     v = a[i]
     m = length(ins)
     if m == 0
-        if i < div(n,2)
-            for k = i:-1:2
-                a[k] = a[k-1]
-            end
-            ccall(:jl_array_del_beg, Void, (Any, Uint), a, 1)
-        else
-            for k = i:n-1
-                a[k] = a[k+1]
-            end
-            ccall(:jl_array_del_end, Void, (Any, Uint), a, 1)
-        end
+        _deleteat!(a, i, 1)
     elseif m == 1
         a[i] = ins[1]
     else
-        if i < div(n,2)
-            ccall(:jl_array_grow_beg, Void, (Any, Uint), a, m-1)
-            for k = 1:i-1
-                a[k] = a[k+m-1]
-            end
-        else
-            ccall(:jl_array_grow_end, Void, (Any, Uint), a, m-1)
-            for k = n+m-1:-1:(i+1+(m-1))
-                a[k] = a[k-(m-1)]
-            end
-        end
+        _growat!(a, i, m-1)
         for k = 1:m
             a[i+k-1] = ins[k]
         end
@@ -570,42 +640,34 @@ function splice!(a::Vector, i::Integer, ins::AbstractArray=_default_splice)
 end
 
 function splice!{T<:Integer}(a::Vector, r::Range1{T}, ins::AbstractArray=_default_splice)
+    v = a[r]
+    m = length(ins)
+    if m == 0
+        deleteat!(a, r)
+        return v
+    end
+
     n = length(a)
     f = first(r)
     l = last(r)
-    if !(1 <= f && l <= n)
-        throw(BoundsError())
-    end
-    d = l-f+1
-    v = a[r]
-    m = length(ins)
+    d = length(r)
+
     if m < d
         delta = d - m
         if f-1 < n-l
-            for k = l:-1:1+delta
-                a[k] = a[k-delta]
-            end
-            ccall(:jl_array_del_beg, Void, (Any, Uint), a, delta)
+            _deleteat_beg!(a, f, delta)
         else
-            for k = f:n-delta
-                a[k] = a[k+delta]
-            end
-            ccall(:jl_array_del_end, Void, (Any, Uint), a, delta)
+            _deleteat_end!(a, l-delta+1, delta)
         end
     elseif m > d
         delta = m - d
         if f-1 < n-l
-            ccall(:jl_array_grow_beg, Void, (Any, Uint), a, delta)
-            for k = 1:f-1
-                a[k] = a[k+delta]
-            end
+            _growat_beg!(a, f, delta)
         else
-            ccall(:jl_array_grow_end, Void, (Any, Uint), a, delta)
-            for k = n+delta:-1:(l+1+delta)
-                a[k] = a[k-delta]
-            end
+            _growat_end!(a, l+1, delta)
         end
     end
+
     for k = 1:m
         a[f+k-1] = ins[k]
     end

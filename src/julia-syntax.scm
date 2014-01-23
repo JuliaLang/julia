@@ -19,16 +19,62 @@
 	     (fill-missing-argname a)))
        l))
 
+(define (deparse-arglist l (sep ",")) (string.join (map deparse l) sep))
+
+(define (deparse e)
+  (cond ((or (symbol? e) (number? e)) (string e))
+	((eq? e #t) "true")
+	((eq? e #f) "false")
+	((eq? (typeof e) 'julia_value)
+	 (let ((s (string e)))
+	   (string.sub s 9 (string.dec s (length s)))))
+	((atom? e) (string e))
+	((eq? (car e) '|.|)
+	 (string (deparse (cadr e)) '|.|
+		 (if (and (pair? (caddr e)) (eq? (caaddr e) 'quote))
+		     (deparse (cadr (caddr e)))
+		     (string #\( (deparse (caddr e)) #\)))))
+	((memq (car e) '(... |'| |.'|))
+	 (string (deparse (cadr e)) (car e)))
+	((syntactic-op? (car e))
+	 (string (deparse (cadr e)) (car e) (deparse (caddr e))))
+	(else (case (car e)
+		((tuple)
+		 (string #\( (deparse-arglist (cdr e))
+			 (if (length= e 2) #\, "")
+			 #\)))
+		((cell1d) (string #\{ (deparse-arglist (cdr e)) #\}))
+		((call)   (string (deparse (cadr e)) #\( (deparse-arglist (cddr e)) #\)))
+		((ref)    (string (deparse (cadr e)) #\[ (deparse-arglist (cddr e)) #\]))
+		((quote)  (string ":(" (deparse (cadr e)) ")"))
+		((vcat)   (string #\[ (deparse-arglist (cdr e)) #\]))
+		((hcat)   (string #\[ (deparse-arglist (cdr e) " ") #\]))
+		((curly)  (string (deparse (cadr e)) #\{ (deparse (caddr e)) #\}))
+		((global local const)
+		 (string (car e) " " (deparse (cadr e))))
+		((:)
+		 (string (deparse (cadr e)) ': (deparse (caddr e))
+			 (if (length> e 3)
+			     (string ': (deparse (cadddr e)))
+			     "")))
+		((comparison) (apply string (map deparse (cdr e))))
+		((in) (string (deparse (cadr e)) " in " (deparse (caddr e))))
+		(else
+		 (string e))))))
+
+(define (bad-formal-argument v)
+  (error (string #\" (deparse v) #\" " is not a valid function argument name")))
+
 (define (arg-name v)
   (cond ((and (symbol? v) (not (eq? v 'true)) (not (eq? v 'false)))
 	 v)
 	((not (pair? v))
-	 (error (string "malformed function arguments \"" v "\"")))
+	 (bad-formal-argument v))
 	(else
 	 (case (car v)
 	   ((... kw)      (decl-var (cadr v)))
 	   ((|::|)        (decl-var v))
-	   (else (error (string "malformed function argument \"" v "\"")))))))
+	   (else (bad-formal-argument v))))))
 
 ; convert a lambda list into a list of just symbols
 (define (llist-vars lst)
@@ -48,13 +94,12 @@
 (define (arg-type v)
   (cond ((symbol? v)  'Any)
 	((not (pair? v))
-	 (error (string "malformed function arguments \"" v "\"")))
+	 (bad-formal-argument v))
 	(else
 	 (case (car v)
 	   ((...)         `(... ,(decl-type (cadr v))))
 	   ((|::|)        (decl-type v))
-	   (else (error
-		  (string "malformed function arguments \"" v "\"")))))))
+	   (else (bad-formal-argument v))))))
 
 ; get just argument types
 (define (llist-types lst)
@@ -382,7 +427,7 @@
      (if (not (or (sym-ref? name)
 		  (and (pair? name) (eq? (car name) 'kw)
 		       (sym-ref? (cadr name)))))
-	 (error (string "invalid method name \"" name "\"")))
+	 (error (string "invalid method name \"" (deparse name) "\"")))
      (let* ((types (llist-types argl))
 	    (body  (method-lambda-expr argl body)))
        (if (null? sparams)
@@ -1287,7 +1332,7 @@
     (if (pair? invalid)
 	(if (and (pair? (car invalid)) (eq? 'parameters (caar invalid)))
 	    (error "more than one semicolon in argument list")
-	    (error (string "invalid keyword argument \"" (car invalid) "\""))))))
+	    (error (string "invalid keyword argument \"" (deparse (car invalid)) "\""))))))
 
 (define (lower-kw-call f kw pa)
   (check-kw-args kw)
@@ -1296,7 +1341,8 @@
    (let ((keyargs (apply append
 			 (map (lambda (a)
 				(if (not (symbol? (cadr a)))
-				    (error (string "keyword argument is not a symbol: \"" (cadr a) "\"")))
+				    (error (string "keyword argument is not a symbol: \""
+						   (deparse (cadr a)) "\"")))
 				(if (vararg? (caddr a))
 				    (error "splicing with \"...\" cannot be used for a keyword argument value"))
 				`((quote ,(cadr a)) ,(caddr a)))
@@ -1616,7 +1662,7 @@
 			,.(map (lambda (x) (expand-forms (cadr  x))) args))
 		  (call (top tuple)
 			,.(map (lambda (x) (expand-forms (caddr x))) args)))
-	   (error (string "invalid \"typed_dict\" syntax " atypes)))))
+	   (error (string "invalid \"typed_dict\" syntax " (deparse atypes))))))
 
    'cell1d
    (lambda (e)
@@ -2257,7 +2303,7 @@
 	 (if (or (not (symbol? (cadr e)))
 		 (eq? (cadr e) 'true)
 		 (eq? (cadr e) 'false))
-	     (error (string "invalid assignment location \"" (cadr e) "\"")))
+	     (error (string "invalid assignment location \"" (deparse (cadr e)) "\"")))
 	 (let ((LHS (cadr e))
 	       (RHS (caddr e)))
 	   (cond ((not dest)
@@ -2644,8 +2690,7 @@ So far only the second case can actually occur.
 		(r-s-b     (remove-scope-blocks body2 body2 argnames)))
 	   (for-each (lambda (v)
 		       (if (memq v argnames)
-			   (error (string "local \"" v
-					  "\" conflicts with argument"))))
+			   (error (string "local \"" v "\" conflicts with argument"))))
 		     (declared-local-vars body))
 	   `(lambda ,(cadr e)
 	      (locals ,@scope-block-vars)

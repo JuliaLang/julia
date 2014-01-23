@@ -190,8 +190,19 @@ b1 = randbool(v1)
 i1 = bitunpack(b1)
 for m = v1 : -1 : 1
     j = rand(1:m)
-    splice!(b1, j)
-    splice!(i1, j)
+    b = splice!(b1, j)
+    i = splice!(i1, j)
+    @test isequal(bitunpack(b1), i1)
+    @test b == i
+end
+@test length(b1) == 0
+
+b1 = randbool(v1)
+i1 = bitunpack(b1)
+for m = v1 : -1 : 1
+    j = rand(1:m)
+    deleteat!(b1, j)
+    deleteat!(i1, j)
     @test isequal(bitunpack(b1), i1)
 end
 @test length(b1) == 0
@@ -199,8 +210,17 @@ end
 b1 = randbool(v1)
 i1 = bitunpack(b1)
 for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
-    splice!(b1, j)
-    splice!(i1, j)
+    b = splice!(b1, j)
+    i = splice!(i1, j)
+    @test isequal(bitunpack(b1), i1)
+    @test b == i
+end
+
+b1 = randbool(v1)
+i1 = bitunpack(b1)
+for j in [63, 64, 65, 127, 128, 129, 191, 192, 193]
+    deleteat!(b1, j)
+    deleteat!(i1, j)
     @test isequal(bitunpack(b1), i1)
 end
 
@@ -210,8 +230,21 @@ for m1 = 1 : v1
     for m2 = m1 : v1
         b2 = copy(b1)
         i2 = copy(i1)
-        splice!(b2, m1:m2)
-        splice!(i2, m1:m2)
+        b = splice!(b2, m1:m2)
+        i = splice!(i2, m1:m2)
+        @test isequal(bitunpack(b2), i2)
+        @test b == i
+    end
+end
+
+b1 = randbool(v1)
+i1 = bitunpack(b1)
+for m1 = 1 : v1
+    for m2 = m1 : v1
+        b2 = copy(b1)
+        i2 = copy(i1)
+        deleteat!(b2, m1:m2)
+        deleteat!(i2, m1:m2)
         @test isequal(bitunpack(b2), i2)
     end
 end
@@ -225,10 +258,25 @@ for m1 = 1 : v1 + 1
             i2 = copy(i1)
             b3 = randbool(v2)
             i3 = bitunpack(b3)
-            splice!(b2, m1:m2, b3)
-            splice!(i2, m1:m2, i3)
+            b = splice!(b2, m1:m2, b3)
+            i = splice!(i2, m1:m2, i3)
             @test isequal(bitunpack(b2), i2)
+            @test b == i
         end
+    end
+end
+
+b1 = randbool(v1)
+i1 = bitunpack(b1)
+for m1 = 1 : v1 - 1
+    for m2 = m1 + 1 : v1
+        locs = randbool(m2-m1+1)
+        m = [m1:m2...][locs]
+        b2 = copy(b1)
+        i2 = copy(i1)
+        deleteat!(b2, m)
+        deleteat!(i2, m)
+        @test isequal(bitunpack(b2), i2)
     end
 end
 

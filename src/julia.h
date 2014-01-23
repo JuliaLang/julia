@@ -821,7 +821,6 @@ DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
 DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt);
 
 // system information
-DLLEXPORT int jl_errno(void);
 DLLEXPORT int32_t jl_stat(const char* path, char* statbuf);
 
 // environment entries
@@ -1205,6 +1204,8 @@ typedef struct _jl_task_t {
     jl_handler_t *eh;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
+    // saved current module
+    jl_module_t *current_module;
 } jl_task_t;
 
 typedef union jl_any_stream {

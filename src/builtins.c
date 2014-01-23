@@ -746,7 +746,9 @@ JL_CALLABLE(jl_trampoline)
         }
     }
     jl_compile(f);
-    assert(f->fptr == &jl_trampoline);
+    // this assertion is probably not correct; the fptr could have been assigned
+    // by a recursive invocation from inference above.
+    //assert(f->fptr == &jl_trampoline);
     jl_generate_fptr(f);
     if (jl_boot_file_loaded && jl_is_expr(f->linfo->ast)) {
         f->linfo->ast = jl_compress_ast(f->linfo, f->linfo->ast);

@@ -58,7 +58,11 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
         end
         
         # All good, immediately unlink the segment.
-        remotecall(shmmem_create_pid, () -> begin shm_unlink(shm_seg_name); nothing end)  
+        if onlocalhost
+            shm_unlink(shm_seg_name)
+        else
+            remotecall(shmmem_create_pid, shm_unlink, shm_seg_name)  
+        end
         shm_seg_name = "" 
         
         sa = SharedArray{T,N}(dims, pids, refs)
@@ -83,7 +87,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
         
     finally
         if shm_seg_name != "" 
-            remotecall(shmmem_create_pid, () -> begin shm_unlink(shm_seg_name); nothing end)  
+            remotecall_fetch(shmmem_create_pid, shm_unlink, shm_seg_name)  
         end
     end
     sa
@@ -146,15 +150,18 @@ function deserialize{T,N}(s, t::Type{SharedArray{T,N}})
     sa
 end
 
-convert(::Type{Array}, sa::SharedArray) = sa.loc_shmarr
+convert(::Type{Array}, S::SharedArray) = S.loc_shmarr
 
-# avoiding ambiguity warnings
-getindex(sa::SharedArray, x::Real) = getindex(sa.loc_shmarr, x)
-getindex(sa::SharedArray, x::AbstractArray) = getindex(sa.loc_shmarr, x)
+# # pass through getindex and setindex! - they always work on the complete array unlike DArrays
+getindex(S::SharedArray) = getindex(S.loc_shmarr)
+getindex(S::SharedArray,I::AbstractArray) = getindex(S.loc_shmarr,I)
+getindex(S::SharedArray,I::Range1) = getindex(S.loc_shmarr,I)
+getindex(S::SharedArray,I::Real...) = getindex(S.loc_shmarr, I...)
 
-# pass through getindex and setindex! - they always work on the complete array unlike DArrays
-getindex(sa::SharedArray, args...) = getindex(sa.loc_shmarr, args...)
-setindex!(sa::SharedArray, args...) = (setindex!(sa.loc_shmarr, args...); sa)
+setindex!(S::SharedArray, x) = (setindex!(S.loc_shmarr, x); S)
+setindex!(S::SharedArray, x, I::Real...) = (setindex!(S.loc_shmarr, x, I...); S)
+setindex!(S::SharedArray, x, I::AbstractArray) = (setindex!(S.loc_shmarr, x, I); S)
+setindex!(S::SharedArray, x, I::Range1) = (setindex!(S.loc_shmarr, x, I); S)
 
 # convenience constructors
 function shmem_fill(v, dims; kwargs...) 
@@ -238,7 +245,13 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
     A
 end
 
-@unix_only shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Ptr{Uint8},), shm_seg_name)
+@unix_only begin
+function shm_unlink(shm_seg_name) 
+    rc = ccall(:shm_unlink, Cint, (Ptr{Uint8},), shm_seg_name)
+    systemerror("Error unlinking shmem segment " * shm_seg_name, rc != 0)
+end
+end
+
 @unix_only shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{Uint8}, Int, Int), shm_seg_name, oflags, permissions)
 
 

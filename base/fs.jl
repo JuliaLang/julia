@@ -71,7 +71,7 @@ function open(f::File,flags::Integer,mode::Integer)
     f.handle = _uv_fs_result(req)
     ccall(:uv_fs_req_cleanup,Void,(Ptr{Void},),req)
     c_free(req)
-    uv_error(:open,ret)
+    uv_error("open",ret)
     f.open = true
     f
 end
@@ -111,13 +111,12 @@ function rename(src::String, dst::String)
 
     # on error, default to cp && rm
     if err < 0
+        # Note that those two functions already handle their errors.
         # first copy
-        err = sendfile(src, dst)
-        uv_error("sendfile when moving file", err)
-        
+        sendfile(src, dst)
+
         # then rm
-        err = unlink(src)
-        uv_error("removing when moving file", err)
+        unlink(src)
     end
 end
 
@@ -181,8 +180,8 @@ function truncate(f::File, n::Integer)
     err = ccall(:uv_fs_ftruncate,Int32,(Ptr{Void},Ptr{Void},Int32,Int64,Ptr{Void}),
                 eventloop(),req,f.handle,n,C_NULL)
     c_free(req)
-    uv_error(err)
-    f    
+    uv_error("ftruncate", err)
+    f
 end
 
 function read(f::File, ::Type{Uint8})
@@ -202,7 +201,7 @@ function read{T}(f::File, a::Array{T}, nel=length(a))
         nb = nel*sizeof(T)
         ret = ccall(:jl_fs_read, Int32, (Int32, Ptr{Void}, Csize_t),
                     f.handle, a, nb)
-        uv_error("write",ret)
+        uv_error("read",ret)
     else
         invoke(read, (IO, Array), s, a)
     end
@@ -232,8 +231,12 @@ const SEEK_SET = int32(0)
 const SEEK_CUR = int32(1)
 const SEEK_END = int32(2)
 
-position(f::File) = ccall(:jl_lseek, Coff_t,(Int32,Coff_t,Int32),f.handle,0,SEEK_CUR)
- 
+function position(f::File)
+    ret = ccall(:jl_lseek, Coff_t,(Int32,Coff_t,Int32),f.handle,0,SEEK_CUR)
+    systemerror("lseek", ret == -1)
+    ret
+end
+
 fd(f::File) = RawFD(f.handle)
 stat(f::File) = stat(fd(f))
 

@@ -20,11 +20,11 @@ for encoding in ["UTF-32LE", "UTF-16BE", "UTF-16LE", "UTF-8"]
 end
 
 f=open(joinpath(unicodedir,"UTF-32LE.unicode"))
-str1 = UTF32String(reinterpret(Char, read(f, Uint32, 1112065)[2:]))
+str1 = UTF32String(reinterpret(Char, read(f, Uint32, 1112065)[2:end]))
 close(f)
 
 f=open(joinpath(unicodedir,"UTF-8.unicode"))
-str2 = UTF8String(read(f, Uint8, 4382595)[4:])
+str2 = UTF8String(read(f, Uint8, 4382595)[4:end])
 close(f)
 @test str1 == str2
 

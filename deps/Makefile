@@ -15,7 +15,7 @@ endif
 CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 
 #autoconf configure-driven scripts: llvm readline pcre arpack fftw unwind gmp mpfr patchelf uv
-#custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas
+#custom Makefile rules: openlibm Rmath double-conversion random suitesparse-wrapper suitesparse lapack openblas utf8proc
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
@@ -115,6 +115,10 @@ ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 STAGE2_DEPS += suitesparse
 endif
 
+ifeq ($(USE_SYSTEM_UTF8PROC), 0)
+STAGE2_DEPS += utf8proc
+endif
+
 # Only compile standalone LAPACK if we are not using OpenBLAS.
 # OpenBLAS otherwise compiles LAPACK as part of its build.
 # This is useful where one wants to use the vendor BLAS, but 
@@ -144,7 +148,7 @@ install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf $(BUILD)
-getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-random get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf
+getall: get-llvm get-readline get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-random get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc
 
 ## PATHS ##
 DIRS = $(addprefix $(BUILD)/,lib include bin share etc)
@@ -657,6 +661,7 @@ clean-openlibm:
 	-$(MAKE) -C openlibm distclean $(OPENLIBM_FLAGS)
 	-rm $(OPENLIBM_OBJ_TARGET)
 distclean-openlibm: clean-openlibm
+	-cd openlibm && git clean -fdx
 
 get-openlibm: openlibm/Makefile
 configure-openlibm: get-openlibm
@@ -695,6 +700,7 @@ clean-openspecfun:
 	-$(MAKE) -C openspecfun distclean $(OPENSPECFUN_FLAGS)
 	-rm $(OPENSPECFUN_OBJ_TARGET)
 distclean-openspecfun: clean-openspecfun
+	-cd openspecfun && git clean -fdx
 
 get-openspecfun: openspecfun/Makefile
 configure-openspecfun: get-openspecfun
@@ -770,6 +776,7 @@ clean-Rmath:
 	-$(MAKE) -C Rmath/src clean
 	-rm $(RMATH_OBJ_TARGET)
 distclean-Rmath: clean-Rmath
+	-cd Rmath && git clean -fdx
 
 get-Rmath: Rmath/Make.inc
 configure-Rmath: get-Rmath
@@ -1208,7 +1215,7 @@ clean-fftw-double:
 	-$(MAKE) -C fftw-$(FFTW_VER)-double clean
 	-rm -f $(FFTW_DOUBLE_OBJ_TARGET)
 distclean-fftw:
-	-rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-{single,double}
+	-rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-single fftw-$(FFTW_VER)-double
 
 get-fftw: get-fftw-single get-fftw-double
 configure-fftw: configure-fftw-single configure-fftw-double
@@ -1228,6 +1235,39 @@ compile-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 check-fftw-double: fftw-$(FFTW_VER)-double/checked
 install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
+## UTF8PROC ##
+
+UTF8PROC_OBJ_SOURCE = utf8proc-v$(UTF8PROC_VER)/libutf8proc.a
+UTF8PROC_OBJ_LIB = $(BUILD)/$(JL_LIBDIR)/libutf8proc.a
+UTF8PROC_OBJ_HEADER = $(BUILD)/include/utf8proc.h
+UTF8PROC_OBJ_TARGET = $(UTF8PROC_OBJ_LIB) $(UTF8PROC_OBJ_HEADER)
+
+utf8proc-v$(UTF8PROC_VER).tar.gz:
+	$(JLDOWNLOAD) $@ http://www.public-software-group.org/pub/projects/utf8proc/v$(UTF8PROC_VER)/$@
+
+utf8proc-v$(UTF8PROC_VER)/Makefile: utf8proc-v$(UTF8PROC_VER).tar.gz
+	tar -xzf $<
+	touch -c $@
+
+$(UTF8PROC_OBJ_SOURCE): utf8proc-v$(UTF8PROC_VER)/Makefile
+	$(MAKE) -C utf8proc-v$(UTF8PROC_VER) cc="$(CC) -O2 -std=c99 $(fPIC)" libutf8proc.a
+
+$(UTF8PROC_OBJ_LIB): $(UTF8PROC_OBJ_SOURCE)
+	cp -f $< $@
+
+$(UTF8PROC_OBJ_HEADER): utf8proc-v$(UTF8PROC_VER)/Makefile
+	cp -f utf8proc-v$(UTF8PROC_VER)/utf8proc.h $@
+
+clean-utf8proc:
+	-$(MAKE) -C utf8proc-v$(UTF8PROC_VER) clean
+distclean-utf8proc: clean-utf8proc
+	-rm -rf utf8proc-v$(UTF8PROC_VER).tar.gz utf8proc-v$(UTF8PROC_VER)
+
+get-utf8proc: utf8proc-v$(UTF8PROC_VER).tar.gz
+configure-utf8proc: get-utf8proc
+compile-utf8proc: $(UTF8PROC_OBJ_SOURCE)
+check-utf8proc: 
+install-utf8proc: $(UTF8PROC_OBJ_TARGET)
 
 ## SUITESPARSE ##
 

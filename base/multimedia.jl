@@ -13,6 +13,7 @@ immutable MIME{mime} end
 
 import Base: show, print, string, convert
 MIME(s) = MIME{symbol(s)}()
+show{mime}(io::IO, ::Type{MIME{mime}}) = print(io, "MIME\"", string(mime), "\"")
 show{mime}(io::IO, ::MIME{mime}) = print(io, "MIME type ", string(mime))
 print{mime}(io::IO, ::MIME{mime}) = print(io, mime)
 

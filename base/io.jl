@@ -268,7 +268,7 @@ close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 isopen(s::IOStream) = bool(ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios))
 function flush(s::IOStream)
     sigatomic_begin()
-    ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
+    systemerror("flush", ccall(:ios_flush, Cint, (Ptr{Void},), s.ios) != 0)
     sigatomic_end()
     s
 end
@@ -278,32 +278,36 @@ modestr(s::IO) = modestr(isreadable(s), iswritable(s))
 modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : error("Neither readable nor writable"))
 
 function truncate(s::IOStream, n::Integer)
-    ccall(:ios_trunc, Int32, (Ptr{Void}, Uint), s.ios, n) == 0 ||
-        error("truncate failed")
+    systemerror("truncate", ccall(:ios_trunc, Int32, (Ptr{Void}, Uint), s.ios, n) != 0)
     return s
 end
 
 function seek(s::IOStream, n::Integer)
-    ccall(:ios_seek, FileOffset, (Ptr{Void}, FileOffset), s.ios, n)==0 ||
-        error("seek failed")
+    ret = ccall(:ios_seek, FileOffset, (Ptr{Void}, FileOffset), s.ios, n)
+    systemerror("seek", ret == -1)
+    ret < -1 && error("seek failed")
     return s
 end
 
 seekstart(s::IO) = seek(s,0)
 
 function seekend(s::IOStream)
-    ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios)==0 ||
-        error("seekend failed")
+    systemerror("seekend", ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios) != 0)
     return s
 end
 
 function skip(s::IOStream, delta::Integer)
-    ccall(:ios_skip, FileOffset, (Ptr{Void}, FileOffset), s.ios, delta)==0 ||
-        error("skip failed")
+    ret = ccall(:ios_skip, FileOffset, (Ptr{Void}, FileOffset), s.ios, delta)
+    systemerror("skip", ret == -1)
+    ret < -1 && error("skip failed")
     return s
 end
 
-position(s::IOStream) = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
+function position(s::IOStream)
+    pos = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
+    systemerror("position", pos == -1)
+    return pos
+end
 
 eof(s::IOStream) = bool(ccall(:jl_ios_eof, Int32, (Ptr{Void},), s.ios))
 
@@ -317,18 +321,15 @@ end
 function CFILE(s::IO)
     @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Ptr{Uint8}), convert(Cint, fd(s)), modestr(s))
     @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Ptr{Uint8}), convert(Cint, fd(s)), modestr(s))
-    if FILEp == 0
-        error("fdopen failed")
-    end
+    systemerror("fdopen", FILEp == C_NULL)
     seek(CFILE(FILEp), position(s))
 end
 
 convert(::Type{CFILE}, s::IO) = CFILE(s)
 
 function seek(h::CFILE, offset::Integer)
-    ccall(:fseek, Cint, (Ptr{Void}, Clong, Cint), 
-          h.ptr, convert(Clong, offset), int32(0)) == 0 ||
-          error("fseek failed")
+    systemerror("fseek", ccall(:fseek, Cint, (Ptr{Void}, Clong, Cint),
+                               h.ptr, convert(Clong, offset), int32(0)) != 0)
     h
 end
 
@@ -347,13 +348,12 @@ fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 
 function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     s = IOStream(string("<file ",fname,">"))
-    if ccall(:ios_file, Ptr{Void},
-             (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
-             s.ios, fname, rd, wr, cr, tr) == C_NULL
-        error("could not open file ", fname)
-    end
-    if ff && ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios) != 0
-        error("error seeking to end of file ", fname)
+    systemerror("opening file $fname",
+                ccall(:ios_file, Ptr{Void},
+                      (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
+                      s.ios, fname, rd, wr, cr, tr) == C_NULL)
+    if ff
+        systemerror("seeking to end of file $fname", ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios) != 0)
     end
     return s
 end
