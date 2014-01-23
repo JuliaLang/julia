@@ -22,3 +22,9 @@ a = randcycle(10)
 @test length(collect(partitions(90,4))) == length(partitions(90,4))
 @test length(collect(partitions('a':'h'))) == length(partitions('a':'h'))
 @test length(collect(partitions('a':'h',5))) == length(partitions('a':'h',5))
+
+for n = 0:7, k = 1:factorial(n)
+    p = nthperm!([1:n], k)
+    @test isperm(p)
+    @test nthperm(p) == k
+end
