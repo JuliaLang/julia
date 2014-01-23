@@ -232,16 +232,16 @@
 		   (set! leadingzero #t)
 		   (cond ((allow #\x)
 			  (begin
-			     (set! leadingzero #f)
-			     (set! pred char-hex?)))
+			    (set! leadingzero #f)
+			    (set! pred char-hex?)))
 			 ((allow #\o)
 			  (begin
-			     (set! leadingzero #f)
-			     (set! pred char-oct?)))
+			    (set! leadingzero #f)
+			    (set! pred char-oct?)))
 			 ((allow #\b)
 			  (begin
-			     (set! leadingzero #f)
-			     (set! pred char-bin?)))))
+			    (set! leadingzero #f)
+			    (set! pred char-bin?)))))
 	    (allow #\.)))
     (read-digs leadingzero)
     (if (eqv? (peek-char port) #\.)
@@ -258,13 +258,13 @@
 		   (if (and (not (eof-object? d))
 			    (or (char-numeric? d) (eqv? d #\+) (eqv? d #\-)))
 		       (begin (set! is-float32-literal (eqv? c #\f))
-                  (set! is-hex-float-literal (or (eqv? c #\p) (eqv? c #\P)))
+			      (set! is-hex-float-literal (or (eqv? c #\p) (eqv? c #\P)))
 			      (write-char c str)
 			      (write-char (read-char port) str)
 			      (read-digs #f)
 			      (disallow-dot))
 		       (io.ungetc port c))))
-	  ; disallow digits after binary or octal literals, e.g., 0b12
+	  ;; disallow digits after binary or octal literals, e.g., 0b12
 	  (if (and (or (eq? pred char-bin?) (eq? pred char-oct?))
 		   (not (eof-object? c))
 		   (char-numeric? c))
