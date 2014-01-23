@@ -3,6 +3,12 @@ JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 include Versions.make
 
+ifeq ($(OS), OpenBSD)
+TAR=`which gtar`
+else
+TAR=`which tar`
+endif
+
 CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) --build=$(BUILD_MACHINE)
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
@@ -298,7 +304,7 @@ endif
 llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
 ifneq ($(LLVM_VER),svn)
 	mkdir -p llvm-$(LLVM_VER) && \
-	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $(LLVM_TAR)
+	$(TAR) -C llvm-$(LLVM_VER) --strip-components 1 -xf $(LLVM_TAR)
 else
 	([ ! -d llvm-$(LLVM_VER) ] && \
 		git clone http://llvm.org/git/llvm.git llvm-$(LLVM_VER) ) || \
@@ -312,7 +318,7 @@ endif
 ifneq ($(LLVM_VER),svn)
 ifneq ($(LLVM_CLANG_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/tools/clang && \
-	tar -C llvm-$(LLVM_VER)/tools/clang --strip-components 1 -xf $(LLVM_CLANG_TAR)
+	$(TAR) -C llvm-$(LLVM_VER)/tools/clang --strip-components 1 -xf $(LLVM_CLANG_TAR)
 endif
 else
 ifneq ($(BUILD_LLVM_CLANG),)
@@ -325,11 +331,11 @@ endif
 ifneq ($(LLVM_VER),svn)
 ifneq ($(LLVM_COMPILER_RT_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/projects/compiler-rt && \
-	tar -C llvm-$(LLVM_VER)/projects/compiler-rt --strip-components 1 -xf $(LLVM_COMPILER_RT_TAR)
+	$(TAR) -C llvm-$(LLVM_VER)/projects/compiler-rt --strip-components 1 -xf $(LLVM_COMPILER_RT_TAR)
 endif
 ifneq ($(LLVM_LIBCXX_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/projects/libcxx && \
-	tar -C llvm-$(LLVM_VER)/projects/libcxx --strip-components 1 -xf $(LLVM_LIBCXX_TAR)
+	$(TAR) -C llvm-$(LLVM_VER)/projects/libcxx --strip-components 1 -xf $(LLVM_LIBCXX_TAR)
 endif
 else
 ifneq ($(BUILD_LLVM_CLANG),)
@@ -420,7 +426,7 @@ readline-$(READLINE_VER).tar.gz:
 	touch -c $@
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	mkdir readline-$(READLINE_VER)
-	tar -C readline-$(READLINE_VER) --strip-components 1 -xf $<
+	$(TAR) -C readline-$(READLINE_VER) --strip-components 1 -xf $<
 	touch -c $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE) readline-$(READLINE_VER)/checked
 	$(MAKE) -C readline-$(READLINE_VER) $(READLINE_CFLAGS) install
@@ -594,7 +600,7 @@ double-conversion-$(GRISU_VER).tar.gz:
 	touch -c $@
 double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
 	mkdir -p double-conversion-$(GRISU_VER) && \
-	tar -C double-conversion-$(GRISU_VER) --strip-components 1 -xf double-conversion-$(GRISU_VER).tar.gz
+	$(TAR) -C double-conversion-$(GRISU_VER) --strip-components 1 -xf double-conversion-$(GRISU_VER).tar.gz
 	touch -c $@
 
 ifeq ($(USE_SYSTEM_GRISU), 0)
@@ -726,7 +732,7 @@ random/dsfmt-$(DSFMT_VER).tar.gz:
 random/dsfmt-$(DSFMT_VER)/config.status: random/dsfmt-$(DSFMT_VER).tar.gz
 	cd random && \
 	mkdir -p dsfmt-$(DSFMT_VER) && \
-	tar -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
+	$(TAR) -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
 	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch && patch < ../dSFMT.c.patch
 	echo 1 > $@
 $(LIBRANDOM_OBJ_SOURCE): random/jl_random.c random/randmtzig.c random/dsfmt-$(DSFMT_VER)/config.status
@@ -842,6 +848,8 @@ else ifeq ($(ARCH),i686)
 OPENBLAS_BUILD_OPTS += BINARY=32
 else ifeq ($(ARCH),x86_64)
 OPENBLAS_BUILD_OPTS += BINARY=64
+else ifeq ($(ARCH),amd64)
+OPENBLAS_BUILD_OPTS += BINARY=64
 else
 $(error "unknown arch for openblas cross-compile")
 endif
@@ -862,7 +870,7 @@ openblas-$(OPENBLAS_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) 
 openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
 	mkdir -p openblas-$(OPENBLAS_VER) && \
-	tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
+	$(TAR) -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 ifeq  ($(OPENBLAS_VER),v0.2.8)
 	cd openblas-$(OPENBLAS_VER)/lapack-netlib/SRC && \
@@ -1135,7 +1143,7 @@ fftw-$(FFTW_VER).tar.gz:
 
 fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	mkdir -p fftw-$(FFTW_VER)-single && \
-	tar -C fftw-$(FFTW_VER)-single --strip-components 1 -xf $<
+	$(TAR) -C fftw-$(FFTW_VER)-single --strip-components 1 -xf $<
 ifeq ($(OS),WINNT)
 	patch fftw-$(FFTW_VER)-single/configure < fftw-config-nopthreads.patch
 	patch fftw-$(FFTW_VER)-single/kernel/ifftw.h < ifftw.h.patch
@@ -1172,7 +1180,7 @@ endif
 
 fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
 	mkdir -p fftw-$(FFTW_VER)-double && \
-	tar -C fftw-$(FFTW_VER)-double --strip-components 1 -xf $<
+	$(TAR) -C fftw-$(FFTW_VER)-double --strip-components 1 -xf $<
 ifeq ($(OS),WINNT)
 	patch fftw-$(FFTW_VER)-double/configure < fftw-config-nopthreads.patch
 	patch fftw-$(FFTW_VER)-double/kernel/ifftw.h < ifftw.h.patch
@@ -1246,7 +1254,7 @@ utf8proc-v$(UTF8PROC_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://www.public-software-group.org/pub/projects/utf8proc/v$(UTF8PROC_VER)/$@
 
 utf8proc-v$(UTF8PROC_VER)/Makefile: utf8proc-v$(UTF8PROC_VER).tar.gz
-	tar -xzf $<
+	$(TAR) -xzf $<
 	patch $@ < utf8proc_Makefile.patch
 	touch -c $@
 
@@ -1297,7 +1305,7 @@ SuiteSparse-$(SUITESPARSE_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://www.cise.ufl.edu/research/sparse/SuiteSparse/$@ 
 SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
-	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
+	$(TAR) -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
 	touch -c $@
 
 ifeq ($(USE_ATLAS), 1)
