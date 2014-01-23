@@ -1134,7 +1134,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
         unsigned idx = jl_field_index(sty, name, 0);
         if (idx != (unsigned)-1) {
             jl_value_t *jfty = jl_tupleref(sty->types, idx);
-            Value *strct = emit_expr(expr, ctx);
+            Value *strct = emit_expr(expr, ctx, false);
             if (strct->getType() == jl_pvalue_llvmt) {
                 Value *addr =
                     builder.CreateGEP(builder.CreateBitCast(strct, T_pint8),
@@ -2092,7 +2092,7 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool is
         assert(jbp != NULL);
         if (jbp->value != NULL) {
             if (jbp->constp) {
-                if (!isboxed && jl_is_bitstype(jl_typeof(jbp->value)))
+                if (!isboxed && jl_isbits(jl_typeof(jbp->value)))
                     return emit_unboxed(jbp->value, ctx);
             }
             // double-check that a global variable is actually defined. this

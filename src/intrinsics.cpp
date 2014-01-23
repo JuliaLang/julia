@@ -121,16 +121,20 @@ static Value *uint_cnvt(Type *to, Value *x)
     return builder.CreateZExt(x, to);
 }
 
-static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
+static Constant *julia_const_to_llvm(jl_value_t *e)
 {
-    if (e == jl_true) {
+    jl_value_t *jt = jl_typeof(e);
+    jl_datatype_t *bt = (jl_datatype_t*)jt;
+
+    if (!jl_is_datatype(bt))
+        return NULL;
+
+    if (e == jl_true)
         return ConstantInt::get(T_int1, 1);
-    }
-    else if (e == jl_false) {
+    else if (e == jl_false)
         return ConstantInt::get(T_int1, 0);
-    }
-    else if (jl_is_bitstype(jl_typeof(e))) {
-        jl_datatype_t *bt = (jl_datatype_t*)jl_typeof(e);
+
+    if (jl_is_bitstype(jt)) {
         int nb = jl_datatype_size(bt);
         //APInt copies the data (but only as much as needed, so it doesn't matter if ArrayRef extends too far)
         APInt val = APInt(8*nb,ArrayRef<uint64_t>((uint64_t*)jl_data_ptr(e),(nb+7)/8));
@@ -142,23 +146,58 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
 #endif
 #ifndef DISABLE_FLOAT16
             if (nb == 2)
-                return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEhalf,val)),(jl_value_t*)bt);
+                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEhalf,val));
             else
 #endif
             if (nb == 4)
-                return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEsingle,val)),(jl_value_t*)bt);
+                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEsingle,val));
             else if (nb == 8)
-                return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEdouble,val)),(jl_value_t*)bt);
+                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEdouble,val));
             else if (nb == 16)
-                return mark_julia_type(ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEquad,val)),(jl_value_t*)bt);
+                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEquad,val));
             // If we have a floating point type that's not hardware supported, just treat it like an integer for LLVM purposes
         }
         Constant *asInt = ConstantInt::get(IntegerType::get(jl_LLVMContext,8*nb),val);
         if (jl_is_cpointer_type(bt)) {
-            return mark_julia_type(ConstantExpr::getIntToPtr(asInt, julia_type_to_llvm((jl_value_t*)bt)), (jl_value_t*)bt);
+            return ConstantExpr::getIntToPtr(asInt, julia_type_to_llvm((jl_value_t*)bt));
         }
-        return mark_julia_type(asInt, (jl_value_t*)bt);
+        return asInt;
     }
+    else if (jl_isbits(jt)) {
+        size_t nf = jl_tuple_len(bt->names), i;
+        Constant **fields = (Constant**)alloca(nf * sizeof(Constant*));
+        jl_value_t *f=NULL;
+        JL_GC_PUSH1(&f);
+        for(i=0; i < nf; i++) {
+            f = jl_get_nth_field(e, i);
+            Constant *val;
+            if (f == jl_true)
+                val = ConstantInt::get(T_int8,1);
+            else if (f == jl_false)
+                val = ConstantInt::get(T_int8,0);
+            else
+                val = julia_const_to_llvm(f);
+            if (val == NULL) {
+                JL_GC_POP();
+                return NULL;
+            }
+            fields[i] = val;
+        }
+        JL_GC_POP();
+        Type *t = julia_struct_to_llvm(jt);
+        if (t == T_void || t->isEmptyTy())
+            return UndefValue::get(NoopType);
+        StructType *st = dyn_cast<StructType>(t);
+        assert(st);
+        return ConstantStruct::get(st, ArrayRef<Constant*>(fields,nf));
+    }
+    return NULL;
+}
+
+static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
+{
+    Constant *c = julia_const_to_llvm(e);
+    if (c) return mark_julia_type(c, jl_typeof(e));
     return emit_expr(e, ctx, false);
 }
 
