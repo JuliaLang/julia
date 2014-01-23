@@ -58,7 +58,11 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
         end
         
         # All good, immediately unlink the segment.
-        remotecall(shmmem_create_pid, () -> begin shm_unlink(shm_seg_name); nothing end)  
+        if onlocalhost
+            shm_unlink(shm_seg_name)
+        else
+            remotecall(shmmem_create_pid, () -> begin shm_unlink(shm_seg_name); nothing end)  
+        end
         shm_seg_name = "" 
         
         sa = SharedArray{T,N}(dims, pids, refs)
