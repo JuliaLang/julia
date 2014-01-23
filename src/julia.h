@@ -821,7 +821,6 @@ DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
 DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt);
 
 // system information
-DLLEXPORT int jl_errno(void);
 DLLEXPORT int32_t jl_stat(const char* path, char* statbuf);
 
 // environment entries
