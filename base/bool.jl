@@ -43,10 +43,8 @@ abs2(x::Bool) = x
 ^(x::Integer, y::Bool) = y ? x : one(x)
 
 function *{T<:Number}(x::Bool, y::T)
-    S = promote_type(Bool,T)
-    z = convert(S,0)
-    z = ifelse(signbit(y)==0, z, -z)
-    ifelse(x, convert(S,y), z)
+    ifelse(x, convert(promote_type(Bool,T),y),
+           ifelse(signbit(y)==0, zero(promote_type(Bool,T)), -zero(promote_type(Bool,T))))
 end
 *(y::Number, x::Bool) = x * y
 
