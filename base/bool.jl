@@ -42,6 +42,12 @@ abs2(x::Bool) = x
 ^(x::Bool, y::Bool) = x | !y
 ^(x::Integer, y::Bool) = ifelse(y, x, one(x))
 
+function +{T<:Number}(x::Bool, y::T)
+    ifelse(x, one(promote_type(Bool,T)) + convert(promote_type(Bool,T),y),
+           convert(promote_type(Bool,T),y))
+end
++(y::Number, x::Bool) = x + y
+
 function *{T<:Number}(x::Bool, y::T)
     ifelse(x, convert(promote_type(Bool,T),y),
            ifelse(signbit(y)==0, zero(promote_type(Bool,T)), -zero(promote_type(Bool,T))))
