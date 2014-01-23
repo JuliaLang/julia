@@ -61,7 +61,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
         if onlocalhost
             shm_unlink(shm_seg_name)
         else
-            remotecall(shmmem_create_pid, () -> begin shm_unlink(shm_seg_name); nothing end)  
+            remotecall(shmmem_create_pid, shm_unlink, shm_seg_name)  
         end
         shm_seg_name = "" 
         
@@ -87,7 +87,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
         
     finally
         if shm_seg_name != "" 
-            remotecall(shmmem_create_pid, () -> begin shm_unlink(shm_seg_name); nothing end)  
+            remotecall_fetch(shmmem_create_pid, shm_unlink, shm_seg_name)  
         end
     end
     sa
@@ -245,7 +245,13 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
     A
 end
 
-@unix_only shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Ptr{Uint8},), shm_seg_name)
+@unix_only begin
+function shm_unlink(shm_seg_name) 
+    rc = ccall(:shm_unlink, Cint, (Ptr{Uint8},), shm_seg_name)
+    systemerror("Error unlinking shmem segment " * shm_seg_name, rc != 0)
+end
+end
+
 @unix_only shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{Uint8}, Int, Int), shm_seg_name, oflags, permissions)
 
 
