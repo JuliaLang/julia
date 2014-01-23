@@ -24,6 +24,9 @@ New language features
 
   * Structure fields can now be accessed by index ([#4806]).
 
+  * Unicode identifiers are normalized (NFC) so that different encodings
+    of equivalent strings are treated as the same identifier ([#5462]).
+
 New library functions
 ---------------------
 
