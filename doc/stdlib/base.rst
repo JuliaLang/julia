@@ -3767,7 +3767,8 @@ Combinatorics
 
 .. function:: nthperm(p)
 
-   Return the ``k`` that generated permutation ``p``.  Note that ``nthperm(nthperm([1:N], k)) == k``.
+   Return the ``k`` that generated permutation ``p``.
+   Note that ``nthperm(nthperm([1:n], k)) == k`` for ``1 <= k <= factorial(n)``.
 
 .. function:: nthperm!(v, k)
 
