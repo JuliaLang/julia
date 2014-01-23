@@ -5032,7 +5032,10 @@ Errors
 
 .. function:: errno()
 
-   Get the value of the C library's ``errno``
+   Get the value of the C library's ``errno``. As in C, ``errno()`` must be called
+   directly after a function that uses ``errno`` for error reporting. Specifically
+   you can not call ``errno`` on the next prompt in a REPL, because lots of code
+   is executed between REPL prompts.
 
 .. function:: systemerror(sysfunc, iftrue)
 
