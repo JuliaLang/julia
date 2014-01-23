@@ -174,7 +174,7 @@ done(r::Ranges, i) = (length(r) <= i)
 # much better code for these.
 start{T<:Integer}(r::Range1{T}) = r.start
 next{T<:Integer}(r::Range1{T}, i) = (i, oftype(T, i+1))
-done{T<:Integer}(r::Range1{T}, i) = i==(r.start+r.len)
+done{T<:Integer}(r::Range1{T}, i) = i==oftype(T, r.start+r.len)
 
 ==(r::Ranges, s::Ranges) = (r.start==s.start) & (step(r)==step(s)) & (r.len==s.len)
 ==(r::Range1, s::Range1) = (r.start==s.start) & (r.len==s.len)
