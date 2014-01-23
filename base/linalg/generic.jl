@@ -97,50 +97,11 @@ function norm{T}(A::AbstractMatrix{T}, p::Number=2)
         throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
     end
 end
-function norm(A::SparseMatrixCSC,p::Number=1)
-    m, n = size(A)
-    if m == 0 || n == 0 || isempty(A)
-        return real(zero(eltype(A))) 
-    elseif m == 1 || n == 1
-        return norm(reshape(full(A), length(A)), p)
-    elseif p==1
-        aa = A.nzval
-        ja = A.rowval
-        ia = A.colptr
-        nA = real(zero(eltype(A))) 
-        for j=1:n
-            colSum = real(zero(eltype(A))) 
-            i1 = ia[j]
-            i2 = ia[j+1]-1
-            for i = i1:i2
-                colSum += abs(aa[i])
-            end
-            nA = max(nA, colSum)
-        end
-    elseif p==Inf
-        aa = A.nzval
-        ja = A.rowval
-        ia = A.colptr
-        rowSum = zeros(typeof(real(A[1])),m)
-        for j=1:n
-            i1 = ia[j]
-            i2 = ia[j+1]-1
-            for i = i1:i2
-                rowSum[ja[i]] += abs(aa[i])
-            end
-        end
-        nA = maximum(rowSum)
-    else
-        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, Inf"))
-    end
-    return nA
-end
 
 norm(x::Number, p=nothing) = abs(x)
 
 normfro(A::AbstractMatrix) = norm(reshape(A, length(A)))
 normfro(x::Number) = abs(x)
-normfro(A::SparseMatrixCSC) = norm(A.nzval,2)
 
 rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) .> tol)
 function rank(A::AbstractMatrix)
