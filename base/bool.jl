@@ -36,11 +36,11 @@ abs2(x::Bool) = x
 +(x::Bool) =  int(x)
 -(x::Bool) = -int(x)
 
-+(x::Bool, y::Bool) = int(x)+int(y)
--(x::Bool, y::Bool) = int(x)-int(y)
-*(x::Bool, y::Bool) = x&y
-^(x::Bool, y::Bool) = x|!y
-^(x::Integer, y::Bool) = y ? x : one(x)
++(x::Bool, y::Bool) = int(x) + int(y)
+-(x::Bool, y::Bool) = int(x) - int(y)
+*(x::Bool, y::Bool) = x & y
+^(x::Bool, y::Bool) = x | !y
+^(x::Integer, y::Bool) = ifelse(y, x, one(x))
 
 function *{T<:Number}(x::Bool, y::T)
     ifelse(x, convert(promote_type(Bool,T),y),
