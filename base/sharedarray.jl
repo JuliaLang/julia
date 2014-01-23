@@ -61,7 +61,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
         if onlocalhost
             shm_unlink(shm_seg_name)
         else
-            remotecall(shmmem_create_pid, (s) -> shm_unlink(s), shm_seg_name)  
+            remotecall(shmmem_create_pid, shm_unlink, shm_seg_name)  
         end
         shm_seg_name = "" 
         
@@ -87,7 +87,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
         
     finally
         if shm_seg_name != "" 
-            remotecall_fetch(shmmem_create_pid, (s) -> shm_unlink(s), shm_seg_name)  
+            remotecall_fetch(shmmem_create_pid, shm_unlink, shm_seg_name)  
         end
     end
     sa
