@@ -530,11 +530,7 @@ end
 
 function _pop!(h::Dict, index)
     val = h.vals[index]
-    h.slots[index] = 0x2
-    ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
-    ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, index-1)
-    h.ndel += 1
-    h.count -= 1
+    _delete!(h, index)
     return val
 end
 
@@ -549,7 +545,6 @@ function pop!(h::Dict, key, default)
 end
 
 function _delete!(h::Dict, index)
-    val = h.vals[index]
     h.slots[index] = 0x2
     ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
     ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, index-1)
