@@ -1,12 +1,7 @@
-function tc(r1, r2)
-    if isa(r1, Tuple) && isa(r2, Tuple) && length(r1) == length(r2)
-        return all(map(x->tc(x...), [zip(r1,r2)...]))
-    elseif isa(r1,BitArray)
-        return isa(r2, Union(BitArray,Array{Bool}))
-    else
-        return typeof(r1) == typeof(r2)
-    end
-end
+tc{N}(r1::NTuple{N}, r2::NTuple{N}) = all(map(x->tc(x...), [zip(r1,r2)...]))
+tc{N}(r1::BitArray{N}, r2::Union(BitArray{N},Array{Bool,N})) = true
+tc{T}(r1::T, r2::T) = true
+tc(r1,r2) = false
 
 function check_bitop(func, RetT, args)
     r1 = func(args...)
@@ -98,6 +93,31 @@ b1 = randbool(n1, n2)
 t1 = randbool(n1, n2)
 @test isequal(bitunpack(b1[t1]), bitunpack(b1)[t1])
 @test isequal(bitunpack(b1[t1]), bitunpack(b1)[bitunpack(t1)])
+
+b2 = copy(b1)
+@check_bit_operation setindex! BitMatrix (b2, true, t1)
+b2 = copy(b1)
+b3 = randbool(nnz(t1))
+@check_bit_operation setindex! BitMatrix (b2, b3, t1)
+
+b1 = randbool(n1, n2)
+m1 = rand(1:n1)
+m2 = rand(1:n2)
+
+t1 = randbool(n1)
+b2 = randbool(nnz(t1), m2)
+@check_bit_operation setindex! BitMatrix (b1, b2, t1, 1:m2)
+@check_bit_operation setindex! BitMatrix (b1, b2, t1, n2-m2+1:n2)
+k2 = randperm(m2)
+@check_bit_operation setindex! BitMatrix (b1, b2, t1, k2)
+
+t2 = randbool(n2)
+b2 = randbool(m1, nnz(t2))
+@check_bit_operation setindex! BitMatrix (b1, b2, 1:m1, t2)
+@check_bit_operation setindex! BitMatrix (b1, b2, n1-m1+1:n1, t2)
+k1 = randperm(m1)
+@check_bit_operation setindex! BitMatrix (b1, b2, k1, t2)
+
 t1 = randbool(n1)
 t2 = randbool(n2)
 @test isequal(bitunpack(b1[t1, t2]), bitunpack(b1)[t1, t2])
