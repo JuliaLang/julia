@@ -591,7 +591,7 @@ end
 
 # logical indexing
 
-function setindex_bool_scalar_1d(A::BitArray, x, I::AbstractArray{Bool})
+function setindex_bool_1d(A::BitArray, x, I::AbstractArray{Bool})
     if length(I) > length(A)
         throw(BoundsError())
     end
@@ -605,7 +605,7 @@ function setindex_bool_scalar_1d(A::BitArray, x, I::AbstractArray{Bool})
     A
 end
 
-function setindex_bool_vector_1d(A::BitArray, X::AbstractArray, I::AbstractArray{Bool})
+function setindex_bool_1d(A::BitArray, X::AbstractArray, I::AbstractArray{Bool})
     if length(I) > length(A)
         throw(BoundsError())
     end
@@ -625,7 +625,7 @@ end
 # (see also setindex! in multidimensional.jl)
 for XT in [BitArray, AbstractArray, Any]
     for IT in [AbstractVector{Bool}, AbstractArray{Bool}]
-        @eval setindex!(A::BitArray, X::$XT, I::$IT) = setindex_bool_vector_1d(A, X, I)
+        @eval setindex!(A::BitArray, X::$XT, I::$IT) = setindex_bool_1d(A, X, I)
     end
 
     for IT in [Range1{Bool}, AbstractVector{Bool}], JT in [Range1{Bool}, AbstractVector{Bool}]
