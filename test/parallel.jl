@@ -118,6 +118,13 @@ et=toq()
 @test isready(rr1)
 @test !isready(rr3)
 
+resp = pmap(x->myid(), [1:32])
+@test all([x in workers() for x in resp])
+
+w_some = workers()[1:2]
+resp = pmap(x->myid(), [1:32]; pids=w_some) 
+@test all([x in w_some for x in resp])
+
 
 # TODO: The below block should be always enabled but the error is printed by the event loop
 

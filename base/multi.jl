@@ -1251,7 +1251,7 @@ pmap(f) = f()
 # rsym(n) = (a=rand(n,n);a*a')
 # L = {rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000),rsym(200),rsym(1000)};
 # pmap(eig, L);
-function pmap(f, lsts...; err_retry=true, err_stop=false)
+function pmap(f, lsts...; err_retry=true, err_stop=false, pids=workers())
     len = length(lsts)
 
     results = Dict{Int,Any}()
@@ -1282,7 +1282,7 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
     end
 
     @sync begin
-        for wpid in workers()
+        for wpid in pids
             @async begin
                 tasklet = getnext_tasklet()
                 while (tasklet != nothing)
