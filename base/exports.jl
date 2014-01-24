@@ -1165,6 +1165,7 @@ export
     splitdir,
     splitdrive,
     splitext,
+    glob,
 
 # filesystem operations
     cd,

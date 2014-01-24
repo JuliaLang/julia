@@ -1063,8 +1063,28 @@ function shell_parse(raw::String, interp::Bool)
         end
     end
     function append_arg()
-        if isempty(arg); arg = {"",}; end
-        push!(args, arg)
+        if isempty(arg)
+            push!(args, {"",})
+        elseif length(arg) == 1
+            x = arg[1]
+            if isa(x, String) && !isempty(x)
+                if x[1] == '~'
+                    x = string(ENV["HOME"], x[2:end])
+                end
+                if search(x, ['*', '?']) != 0
+                    paths = glob(x)
+                    for p in paths
+                        push!(args, {p,})
+                    end
+                else
+                    push!(args, {x,})
+                end
+            else
+                push!(args, arg)
+            end
+        else
+            push!(args, arg)
+        end
         arg = {}
     end
 
