@@ -222,6 +222,8 @@ JCFLAGS += -fsanitize=address -mllvm -asan-stack=0
 LDFLAGS += -fsanitize=address
 endif
 
+TAR=`which gtar || which tar`
+
 # ===========================================================================
 
 BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)

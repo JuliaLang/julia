@@ -3,12 +3,6 @@ JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 include Versions.make
 
-ifeq ($(OS), OpenBSD)
-TAR=`which gtar`
-else
-TAR=`which tar`
-endif
-
 CONFIGURE_COMMON = --prefix=$(abspath $(BUILD)) --build=$(BUILD_MACHINE)
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
@@ -449,7 +443,7 @@ readline-$(READLINE_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://ftp.gnu.org/gnu/readline/$@
 	touch -c $@
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
-	tar zxf $<
+	$(TAR) zxf $<
 	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-001
 	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-002
 	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-003
@@ -558,7 +552,7 @@ PCRE_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libpcre.$(SHLIB_EXT)
 pcre-$(PCRE_VER).tar.bz2:
 	$(JLDOWNLOAD) $@ http://sourceforge.net/projects/pcre/files/pcre/$(PCRE_VER)/$@/download
 pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
-	tar jxf $<
+	$(TAR) jxf $<
 	touch -c $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
@@ -1001,7 +995,7 @@ endif
 lapack-$(LAPACK_VER).tgz:
 	$(JLDOWNLOAD) $@ http://www.netlib.org/lapack/$@
 lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
-	tar zxf $<
+	$(TAR) zxf $<
 	cd lapack-$(LAPACK_VER)/SRC && patch < ../../dlasd4-lapack-3.4.2.patch && patch < ../../slasd4-lapack-3.4.2.patch
 	touch -c $@
 ifeq ($(USE_SYSTEM_BLAS), 0)
@@ -1063,7 +1057,7 @@ arpack-ng-$(ARPACK_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/get/arpack-ng-$(ARPACK_VER).tar.gz
 	touch -c $@
 arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
-	tar zxf $< 
+	$(TAR) zxf $< 
 	touch -c $@
 
 ifeq ($(USE_ATLAS), 1)
@@ -1393,7 +1387,7 @@ LIBUNWIND_CFLAGS = $(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)
 libunwind-$(UNWIND_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://download.savannah.gnu.org/releases/libunwind/$@ 
 libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
-	tar xfz $<
+	$(TAR) xfz $<
 	touch -c $@
 libunwind-$(UNWIND_VER)/config.status: libunwind-$(UNWIND_VER)/configure
 	cd libunwind-$(UNWIND_VER) && \
@@ -1438,7 +1432,7 @@ libosxunwind-$(OSXUNWIND_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/libosxunwind/archive/v$(OSXUNWIND_VER).tar.gz
 
 libosxunwind-$(OSXUNWIND_VER)/Makefile: libosxunwind-$(OSXUNWIND_VER).tar.gz
-	tar xfz $<
+	$(TAR) xfz $<
 	touch -c $@
 
 $(OSXUNWIND_OBJ_SOURCE): libosxunwind-$(OSXUNWIND_VER)/Makefile
@@ -1469,7 +1463,7 @@ GMP_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libgmp.$(SHLIB_EXT)
 gmp-$(GMP_VER).tar.bz2:
 	$(JLDOWNLOAD) $@ ftp://ftp.gmplib.org/pub/gmp-$(GMP_VER)/$@
 gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
-	tar jxf $<
+	$(TAR) jxf $<
 	touch -c $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
@@ -1518,7 +1512,7 @@ endif
 mpfr-$(MPFR_VER).tar.bz2:
 	$(JLDOWNLOAD) $@ http://www.mpfr.org/mpfr-current/$@
 mpfr-$(MPFR_VER)/configure: mpfr-$(MPFR_VER).tar.bz2
-	tar jxf $<
+	$(TAR) jxf $<
 	touch -c $@
 mpfr-$(MPFR_VER)/config.status: mpfr-$(MPFR_VER)/configure $(MPFR_DEPS)
 	cd mpfr-$(MPFR_VER) && \
@@ -1566,7 +1560,7 @@ endif
 zlib-$(ZLIB_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://zlib.net/$@
 zlib-$(ZLIB_VER)/configure: zlib-$(ZLIB_VER).tar.gz
-	tar zxf $<
+	$(TAR) zxf $<
 	touch -c $@
 zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
 ifeq ($(OS), WINNT)
@@ -1618,7 +1612,7 @@ install-patchelf: $(PATCHELF_TARGET)
 patchelf-$(PATCHELF_VER).tar.bz2:
 	$(JLDOWNLOAD) $@ http://hydra.nixos.org/build/1524660/download/2/$@
 patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.bz2
-	tar jxf $<
+	$(TAR) jxf $<
 	touch -c $@
 patchelf-$(PATCHELF_VER)/config.status: patchelf-$(PATCHELF_VER)/configure
 	cd patchelf-$(PATCHELF_VER) && \
@@ -1657,7 +1651,7 @@ GIT_TARGET = $(BUILD)/git
 git-$(GIT_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://git-core.googlecode.com/files/$@
 git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
-	tar zxf $<
+	$(TAR) zxf $<
 	touch -c $@
 git-$(GIT_VER)/config.status: git-$(GIT_VER)/configure
 	cd git-$(GIT_VER) && \
