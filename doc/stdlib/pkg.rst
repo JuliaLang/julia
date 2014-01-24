@@ -84,10 +84,12 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    Checkout the ``Pkg.dir(pkg)`` repo to the branch ``branch``.
    Defaults to checking out the "master" branch.
+   To go back to using the newest compatible released version, use ``Pkg.free(pkg)``
 
 .. function:: pin(pkg)
 
    Pin ``pkg`` at the current version.
+   To go back to using the newest compatible released version, use ``Pkg.free(pkg)``
 
 .. function:: pin(pkg, version)
 
