@@ -1385,18 +1385,6 @@ macro parallel(args...)
     na = length(args)
     if na==1
         loop = args[1]
-        if isa(loop,Expr) && loop.head === :comprehension
-            ex = loop.args[1]
-            loop.args[1] = esc(ex)
-            nd = length(loop.args)-1
-            ranges = map(e->esc(e.args[2]), loop.args[2:end])
-            for i=1:nd
-                var = loop.args[1+i].args[1]
-                loop.args[1+i] = :( $(esc(var)) = ($(ranges[i]))[I[$i]] )
-            end
-            return :( DArray((I::(Range1{Int}...))->($loop),
-                             tuple($(map(r->:(length($r)),ranges)...))) )
-        end
     elseif na==2
         reducer = args[1]
         loop = args[2]

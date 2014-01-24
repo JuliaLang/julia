@@ -4639,6 +4639,9 @@ Distributed Arrays
 
    Get the vector of processors storing pieces of ``d``
 
+.. function:: @darray comprehension_expr [pids]
+
+   Constructs a DArray specified as a comprehension. An optional second argument specifies the list of processes participating in the distribution.
    
 Shared Arrays (Experimental, UNIX-only feature)
 -----------------------------------------------

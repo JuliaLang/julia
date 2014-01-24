@@ -1268,6 +1268,7 @@ export
     @unexpected,
     @assert,
     @cmd,
+    @darray,
     @time,
     @timed,
     @elapsed,
