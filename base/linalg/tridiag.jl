@@ -148,6 +148,11 @@ end
 inv(A::SymTridiagonal) = inv_usmani(A.ev, A.dv, A.ev)
 det(A::SymTridiagonal) = det_usmani(A.ev, A.dv, A.ev)
 
+function getindex{T}(A::SymTridiagonal{T}, i::Integer, j::Integer)
+    (1<=i<=size(A,2) && 1<=j<=size(A,2)) || throw(BoundsError())
+    i==j ? A.dv[i] : i==j+1 ? A.ev[i] : i+1==j ? A.ev[i] : zero(T)
+end
+
 ## Tridiagonal matrices ##
 type Tridiagonal{T} <: AbstractMatrix{T}
     dl::Vector{T}    # sub-diagonal
