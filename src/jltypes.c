@@ -1481,7 +1481,8 @@ static int valid_type_param(jl_value_t *v)
                 return 0;
         }
         return 1;
-    } else {
+    }
+    else {
         // TODO: maybe more things
         return jl_is_type(v) || jl_is_long(v) || jl_is_symbol(v) || jl_is_typevar(v) || jl_is_bool(v);
     }
