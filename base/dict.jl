@@ -419,67 +419,6 @@ function empty!{K,V}(h::Dict{K,V})
     return h
 end
 
-function setindex!{K,V}(h::Dict{K,V}, v0, key0)
-    key = convert(K,key0)
-    if !isequal(key,key0)
-        error(key0, " is not a valid key for type ", K)
-    end
-    v   = convert(V,  v0)
-
-    sz = length(h.keys)
-
-    if h.ndel >= ((3*sz)>>2) || h.count*3 > sz*2
-        # > 3/4 deleted or > 2/3 full
-        rehash(h, h.count > 64000 ? h.count*2 : h.count*4)
-        sz = length(h.keys)  # rehash may resize the table at this point!
-    end
-
-    iter = 0
-    maxprobe = max(16, sz>>6)
-    index = hashindex(key, sz)
-    avail = -1  # an available slot
-    keys = h.keys; vals = h.vals
-
-    while true
-        if isslotempty(h,index)
-            if avail > 0; index = avail; end
-            h.slots[index] = 0x1
-            h.keys[index] = key
-            h.vals[index] = v
-            h.count += 1
-            return h
-        end
-
-        if isslotmissing(h,index)
-            if avail<0
-                # found an available slot, but need to keep scanning
-                # in case "key" already exists in a later collided slot.
-                avail = index
-            end
-        elseif isequal(key, keys[index])
-            vals[index] = v
-            return h
-        end
-
-        index = (index & (sz-1)) + 1
-        iter+=1
-        iter > maxprobe && break
-    end
-
-    if avail>0
-        index = avail
-        h.slots[index] = 0x1
-        h.keys[index] = key
-        h.vals[index] = v
-        h.count += 1
-        return h
-    end
-
-    rehash(h, h.count > 64000 ? sz*2 : sz*4)
-
-    setindex!(h, v, key)
-end
-
 # get the index where a key is stored, or -1 if not present
 function ht_keyindex{K,V}(h::Dict{K,V}, key)
     sz = length(h.keys)
@@ -502,6 +441,92 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key)
     end
 
     return -1
+end
+
+# get the index where a key is stored, or -pos if not present
+# and the key would be inserted at pos
+# This version is for use by setindex! and get!
+function ht_keyindex2{K,V}(h::Dict{K,V}, key)
+    sz = length(h.keys)
+
+    if h.ndel >= ((3*sz)>>2) || h.count*3 > sz*2
+        # > 3/4 deleted or > 2/3 full
+        rehash(h, h.count > 64000 ? h.count*2 : h.count*4)
+        sz = length(h.keys)  # rehash may resize the table at this point!
+    end
+
+    iter = 0
+    maxprobe = max(16, sz>>6)
+    index = hashindex(key, sz)
+    avail = 0
+    keys = h.keys
+
+    while true
+        if isslotempty(h,index)
+            avail < 0 && return avail
+            return -index
+        end
+
+        if isslotmissing(h,index)
+            if avail == 0
+                # found an available slot, but need to keep scanning
+                # in case "key" already exists in a later collided slot.
+                avail = -index
+            end
+        elseif isequal(key, keys[index])
+            return index
+        end
+
+        index = (index & (sz-1)) + 1
+        iter+=1
+        iter > maxprobe && break
+    end
+
+    avail < 0 && return avail
+
+    rehash(h, h.count > 64000 ? sz*2 : sz*4)
+
+    return ht_keyindex2(h, key)
+end
+
+function _setindex!(h::Dict, v, key, index)
+    h.slots[index] = 0x1
+    h.keys[index] = key
+    h.vals[index] = v
+    h.count += 1
+end
+
+function setindex!{K,V}(h::Dict{K,V}, v0, key0)
+    key = convert(K,key0)
+    if !isequal(key,key0)
+        error(key0, " is not a valid key for type ", K)
+    end
+    v = convert(V,  v0)
+
+    index = ht_keyindex2(h, key)
+
+    if index > 0
+        h.vals[index] = v
+    else
+        _setindex!(h, v, key, -index)
+    end
+
+    return h
+end
+
+function get!{K,V}(h::Dict{K,V}, key0, default)
+    key = convert(K,key0)
+    if !isequal(key,key0)
+        error(key0, " is not a valid key for type ", K)
+    end
+
+    index = ht_keyindex2(h, key)
+
+    index > 0 && return h.vals[index]
+
+    v = convert(V,  default)
+    _setindex!(h, v, key, -index)
+    return v
 end
 
 function getindex{K,V}(h::Dict{K,V}, key)
