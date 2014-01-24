@@ -1251,7 +1251,7 @@ utf8proc-v$(UTF8PROC_VER)/Makefile: utf8proc-v$(UTF8PROC_VER).tar.gz
 	touch -c $@
 
 $(UTF8PROC_OBJ_SOURCE): utf8proc-v$(UTF8PROC_VER)/Makefile
-	$(MAKE) -C utf8proc-v$(UTF8PROC_VER) cc="$(CC) -O2 -std=c99 $(fPIC)" libutf8proc.a
+	$(MAKE) -C utf8proc-v$(UTF8PROC_VER) cc="$(CC) -O2 -std=c99 $(fPIC)" AR="$(AR)" libutf8proc.a
 
 $(UTF8PROC_OBJ_LIB): $(UTF8PROC_OBJ_SOURCE)
 	cp -f $< $@
