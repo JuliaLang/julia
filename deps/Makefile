@@ -1247,6 +1247,7 @@ utf8proc-v$(UTF8PROC_VER).tar.gz:
 
 utf8proc-v$(UTF8PROC_VER)/Makefile: utf8proc-v$(UTF8PROC_VER).tar.gz
 	tar -xzf $<
+	patch $@ < utf8proc_Makefile.patch
 	touch -c $@
 
 $(UTF8PROC_OBJ_SOURCE): utf8proc-v$(UTF8PROC_VER)/Makefile
