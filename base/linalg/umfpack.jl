@@ -302,13 +302,9 @@ end
 ### Solve with Factorization
 A_ldiv_B!{T<:UMFVTypes}(lu::UmfpackLU{T}, b::VecOrMat{T}) = solve(lu, b, UMFPACK_A)
 function A_ldiv_B!{Tlu<:Real,Tb<:Complex}(lu::UmfpackLU{Tlu}, b::Vector{Tb})
-    @show 1
     r = solve(lu, [convert(Tlu,real(be)) for be in b], UMFPACK_A)
-    @show 1
     i = solve(lu, [convert(Tlu,imag(be)) for be in b], UMFPACK_A)
-    @show 1
     Tb[r[k]+im*i[k] for k = 1:length(r)]
-    @show 1
 end
 A_ldiv_B!{Tlu<:UMFVTypes,Tb<:Number}(lu::UmfpackLU{Tlu}, b::StridedVecOrMat{Tb}) = A_ldiv_B!(lu, convert(Array{Tlu}, b))
 A_ldiv_B!{Tlu<:UMFVTypes,Tb<:Number}(lu::UmfpackLU{Tlu}, b::AbstractVecOrMat{Tb}) = A_ldiv_B!(lu, convert(Array{Tlu}, b))
