@@ -4844,18 +4844,6 @@ C Interface
 
    Close shared library referenced by handle.
 
-.. function:: find_library(names, locations)
-
-   Searches for the first library in ``names`` in the paths in the ``locations`` list, ``DL_LOAD_PATH``, or system
-   library paths (in that order) which can successfully be dlopen'd. On success, the return value will be one of
-   the names (potentially prefixed by one of the paths in locations). This string can be assigned to a ``global const``
-   and used as the library name in future ``ccall``'s. On failure, it returns the empty string.
-
-.. data:: DL_LOAD_PATH
-
-   When calling ``dlopen``, the paths in this list will be searched first, in order, before searching the
-   system locations for a valid library handle.
-
 .. function:: c_malloc(size::Integer)
 
    Call ``malloc`` from the C standard library.
@@ -4935,22 +4923,17 @@ C Interface
    Re-enable Ctrl-C handler during execution of a function. Temporarily
    reverses the effect of ``disable_sigint``.
 
-.. function:: errno([code])
+.. function:: find_library(names, locations)
 
-   Get the value of the C library's ``errno``. If an argument is specified, it is
-   used to set the value of ``errno``.
+   Searches for the first library in ``names`` in the paths in the ``locations`` list, ``DL_LOAD_PATH``, or system
+   library paths (in that order) which can successfully be dlopen'd. On success, the return value will be one of
+   the names (potentially prefixed by one of the paths in locations). This string can be assigned to a ``global const``
+   and used as the library name in future ``ccall``'s. On failure, it returns the empty string.
 
-   The value of ``errno`` is only valid immediately after a ``ccall`` to a C
-   library routine that sets it. Specifically, you cannot call ``errno`` at the next
-   prompt in a REPL, because lots of code is executed between prompts.
+.. data:: DL_LOAD_PATH
 
-.. function:: systemerror(sysfunc, iftrue)
-
-   Raises a ``SystemError`` for ``errno`` with the descriptive string ``sysfunc`` if ``bool`` is true
-
-.. function:: strerror(n)
-
-   Convert a system call error code to a descriptive string
+   When calling ``dlopen``, the paths in this list will be searched first, in order, before searching the
+   system locations for a valid library handle.
 
 .. data:: Cchar
 
@@ -5046,6 +5029,21 @@ Errors
 
    Get the backtrace of the current exception, for use within ``catch``
    blocks.
+
+.. function:: errno()
+
+   Get the value of the C library's ``errno``. As in C, ``errno()`` must be called
+   directly after a function that uses ``errno`` for error reporting. Specifically
+   you can not call ``errno`` on the next prompt in a REPL, because lots of code
+   is executed between REPL prompts.
+
+.. function:: systemerror(sysfunc, iftrue)
+
+   Raises a ``SystemError`` for ``errno`` with the descriptive string ``sysfunc`` if ``bool`` is true
+
+.. function:: strerror(n)
+
+   Convert a system call error code to a descriptive string
 
 .. function:: assert(cond, [text])
 
