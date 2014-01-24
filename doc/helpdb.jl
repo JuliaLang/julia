@@ -7057,6 +7057,18 @@ popdisplay(d::Display)
 
 "),
 
+("C Interface","Base","c_calloc","c_calloc(num::Integer, size::Integer)
+
+   Call \"calloc\" from the C standard library.
+
+"),
+
+("C Interface","Base","c_realloc","c_realloc(addr::Ptr, size::Integer)
+
+   Call \"realloc\" from the C standard library.
+
+"),
+
 ("C Interface","Base","c_free","c_free(addr::Ptr)
 
    Call \"free\" from the C standard library.
