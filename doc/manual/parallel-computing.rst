@@ -166,8 +166,9 @@ The base Julia installation has in-built support for two types of clusters:
 
     - A local cluster specified with the ``-p`` option as shown above.  
     
-    - And a cluster spanning machines using the ``--machinefile`` option. This uses ``ssh`` to start 
-      the worker processes on the specified machines.
+    - And a cluster spanning machines using the ``--machinefile`` option. This uses a passwordless 
+      ``ssh`` login to start julia worker processes (from the same path as the current host)
+      on the specified machines.
     
 Functions ``addprocs``, ``rmprocs``, ``workers`` and others, are available as a programmatic means of 
 adding, removing and querying the processes in a cluster.
