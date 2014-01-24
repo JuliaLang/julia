@@ -629,16 +629,16 @@ for XT in [BitArray, AbstractArray, Any]
     end
 
     for IT in [Range1{Bool}, AbstractVector{Bool}], JT in [Range1{Bool}, AbstractVector{Bool}]
-        @eval setindex!(A::BitMatrix, x::$XT, I::$IT, J::$JT) = (A[find(I),find(J)] = x)
+        @eval setindex!(A::BitMatrix, x::$XT, I::$IT, J::$JT) = (A[find(I),find(J)] = x; A)
     end
 
     for IT in [Range1{Bool}, AbstractVector{Bool}], JT in [Real, Range1]
-        @eval setindex!(A::BitMatrix, x::$XT, I::$IT, J::$JT) = (A[find(I),J] = x)
+        @eval setindex!(A::BitMatrix, x::$XT, I::$IT, J::$JT) = (A[find(I),J] = x; A)
     end
-    @eval setindex!{T<:Real}(A::BitMatrix, x::$XT, I::AbstractVector{Bool}, J::AbstractVector{T}) = (A[find(I),J] = x)
+    @eval setindex!{T<:Real}(A::BitMatrix, x::$XT, I::AbstractVector{Bool}, J::AbstractVector{T}) = (A[find(I),J] = x; A)
 
-    @eval setindex!(A::BitMatrix, x::$XT, I::Real, J::AbstractVector{Bool}) = (A[I,find(J)] = x)
-    @eval setindex!{T<:Real}(A::BitMatrix, x::$XT, I::AbstractVector{T}, J::AbstractVector{Bool}) = (A[I,find(J)] = x)
+    @eval setindex!(A::BitMatrix, x::$XT, I::Real, J::AbstractVector{Bool}) = (A[I,find(J)] = x; A)
+    @eval setindex!{T<:Real}(A::BitMatrix, x::$XT, I::AbstractVector{T}, J::AbstractVector{Bool}) = (A[I,find(J)] = x; A)
 end
 
 ## Dequeue functionality ##
