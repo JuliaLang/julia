@@ -202,6 +202,7 @@ for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz,get_num_r,get_num_z,it
         end
         function solve{Tv<:Float64,Ti<:$itype}(lu::UmfpackLU{Tv,Ti}, b::VecOrMat{Tv}, typ::Integer)
             umfpack_numeric!(lu)
+            size(b,1)==lu.m || throw(DimensionMismatch(""))
             x = similar(b)
             joff = 1
             for k = 1:size(b,2)
@@ -215,6 +216,7 @@ for (sym_r,sym_c,num_r,num_c,sol_r,sol_c,det_r,det_z,lunz,get_num_r,get_num_z,it
         end
         function solve{Tv<:Complex128,Ti<:$itype}(lu::UmfpackLU{Tv,Ti}, b::VecOrMat{Tv}, typ::Integer)
             umfpack_numeric!(lu)
+            size(b,1)==lu.m || throw(DimensionMismatch(""))
             x = similar(b)
             n = size(b,1)
             br = Array(Float64, n)

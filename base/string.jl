@@ -459,7 +459,7 @@ end
 
 contains(a::String, b::String) = searchindex(a,b)!=0
 
-in(::String, ::String) = error("use contains(string,substring) for string containment")
+in(::String, ::String) = error("use contains(x,y) for string containment")
 
 function cmp(a::String, b::String)
     if a === b

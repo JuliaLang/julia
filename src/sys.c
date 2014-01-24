@@ -294,6 +294,11 @@ void jl_free2(void *p, void *hint)
     free(p);
 }
 
+// -- syscall utilities --
+
+int jl_errno(void) { return errno; }
+void jl_set_errno(int e) { errno = e; }
+
 // -- get the number of CPU cores --
 
 #ifdef _OS_WINDOWS_

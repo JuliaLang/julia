@@ -437,7 +437,6 @@ function setindex!{K,V}(h::Dict{K,V}, v0, key0)
     iter = 0
     maxprobe = max(16, sz>>6)
     index = hashindex(key, sz)
-    orig = index
     avail = -1  # an available slot
     keys = h.keys; vals = h.vals
 
@@ -464,9 +463,7 @@ function setindex!{K,V}(h::Dict{K,V}, v0, key0)
 
         index = (index & (sz-1)) + 1
         iter+=1
-        if iter > maxprobe || index==orig
-            break
-        end
+        iter > maxprobe && break
     end
 
     if avail>0
@@ -489,7 +486,6 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key)
     iter = 0
     maxprobe = max(16, sz>>6)
     index = hashindex(key, sz)
-    orig = index
     keys = h.keys
 
     while true
@@ -502,9 +498,7 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key)
 
         index = (index & (sz-1)) + 1
         iter+=1
-        if iter > maxprobe || index==orig
-            break
-        end
+        iter > maxprobe && break
     end
 
     return -1
@@ -530,11 +524,7 @@ end
 
 function _pop!(h::Dict, index)
     val = h.vals[index]
-    h.slots[index] = 0x2
-    ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
-    ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, index-1)
-    h.ndel += 1
-    h.count -= 1
+    _delete!(h, index)
     return val
 end
 
@@ -549,7 +539,6 @@ function pop!(h::Dict, key, default)
 end
 
 function _delete!(h::Dict, index)
-    val = h.vals[index]
     h.slots[index] = 0x2
     ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
     ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, index-1)
