@@ -817,7 +817,11 @@ DLLEXPORT void *jl_value_ptr(jl_value_t *a);
 DLLEXPORT void jl_cell_1d_push(jl_array_t *a, jl_value_t *item);
 STATIC_INLINE jl_value_t *jl_apply_array_type(jl_datatype_t *type, size_t dim)
 {
-  return jl_apply_type((jl_value_t*)jl_array_type, jl_tuple2(type, jl_box_long(dim)));
+    jl_value_t *boxed_dim = jl_box_long(dim);
+    JL_GC_PUSH1(&boxed_dim);
+    jl_value_t *ret = jl_apply_type((jl_value_t*)jl_array_type, jl_tuple2(type, boxed_dim));
+    JL_GC_POP();
+    return ret;
 }
 
 // eq hash tables
