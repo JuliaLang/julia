@@ -59,6 +59,7 @@ publish() = cd(Entry.publish,META_BRANCH)
 build() = cd(Entry.build)
 build(pkgs::String...) = cd(Entry.build,[pkgs...])
 
+generate(pkg::String) = error("Please specify the license for the new package $pkg.")
 generate(pkg::String, license::String; force::Bool=false) =
 	cd(Generate.package,pkg,license,force=force)
 
