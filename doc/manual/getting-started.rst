@@ -69,8 +69,9 @@ Julia can be started in parallel mode with either the ``-p`` or the
 ``--machinefile`` options. ``-p n`` will launch an additional ``n`` 
 worker processes, while ``--machinefile file`` will launch a worker 
 for each line in file ``file``. The machines defined in ``file`` must be 
-accessible via ``ssh`` and each machine definition takes the form 
-``[user@]host[:port]``
+accessible via a passwordless ``ssh`` login, with Julia installed at the
+same location as the current host. Each machine definition takes the form 
+``[user@]host[:port]`` 
     
     
 If you have code that you want executed whenever julia is run, you can
