@@ -4856,9 +4856,17 @@ C Interface
    When calling ``dlopen``, the paths in this list will be searched first, in order, before searching the
    system locations for a valid library handle.
 
-.. function:: c_malloc(size::Integer)
+.. function:: c_malloc(size::Integer) -> Ptr{Void}
 
    Call ``malloc`` from the C standard library.
+
+.. function:: c_calloc(num::Integer, size::Integer) -> Ptr{Void}
+
+   Call ``calloc`` from the C standard library.
+
+.. function:: c_realloc(addr::Ptr, size::Integer) -> Ptr{Void}
+
+   Call ``realloc`` from the C standard library.
 
 .. function:: c_free(addr::Ptr)
 
