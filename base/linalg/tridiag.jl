@@ -23,14 +23,6 @@ SymTridiagonal(A::AbstractMatrix) = diag(A,1)==diag(A,-1)?SymTridiagonal(diag(A)
 full{T}(M::SymTridiagonal{T}) = convert(Matrix{T}, M)
 convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})=diagm(M.dv)+diagm(M.ev,-1)+conj(diagm(M.ev,1))
 
-function show(io::IO, S::SymTridiagonal)
-    println(io, summary(S), ":")
-    print(io, "diag: ")
-    print_matrix(io, (S.dv)')
-    print(io, "\n sub: ")
-    print_matrix(io, (S.ev)')
-end
-
 size(m::SymTridiagonal) = (length(m.dv), length(m.dv))
 size(m::SymTridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(m.dv) : 1)
 
@@ -186,15 +178,6 @@ end
 size(M::Tridiagonal) = (length(M.d), length(M.d))
 size(M::Tridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(M.d) : 1)
 
-function show(io::IO, M::Tridiagonal)
-    println(io, summary(M), ":")
-    print(io, " sub: ")
-    print_matrix(io, (M.dl)')
-    print(io, "\ndiag: ")
-    print_matrix(io, (M.d)')
-    print(io, "\n sup: ")
-    print_matrix(io, (M.du)')
-end
 full{T}(M::Tridiagonal{T}) = convert(Matrix{T}, M)
 function convert{T}(::Type{Matrix{T}}, M::Tridiagonal{T})
     A = zeros(T, size(M))
