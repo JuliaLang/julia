@@ -686,6 +686,22 @@ show(io::IO,x::CompoundPeriod) = print(io,string(x))
 (-){P1<:Period,P2<:Period}(x::P1,y::P2) = CompoundPeriod(sort!(Period[x,-y],rev=true,lt=periodisless))
 (-)(x::CompoundPeriod,y::Period) = (sort!(push!(x.periods,-y),rev=true,lt=periodisless); return x)
 
+function Datetime(y::Year=Year(1),m::Month=Month(1),d::Day=Day(1),
+                  h::Hour=Hour(0),mi::Minute=Minute(0),
+                  s::Second=Second(0),ms::Millisecond=Millisecond(0))
+    0 < m.months < 13 || error("Month out of range")
+    rata = ms + 1000*(s.s + 60mi.m + 3600h.h + 
+                         86400*totaldays(y.years,m.months,d.days))
+    return ISODatetime{:UTC}(rata + (s.s == 60 ? 
+                setoffsetsecond(UTC,rata.ms) : setoffset(UTC,rata.ms)))
+end
+Datetime(x::Period...) = error("Required argument order is Datetime(y,m,d,h,mi,s,ms)")
+function Date(y::Year,m::Month=Month(1),d::Day=Day(1))
+    0 < m.months < 13 || error("Month out of range")
+    return Date(Day(totaldays(y.years,m.months,d.days)))
+end
+Date(x::Period...) = error("Required argument order is Date(y,m,d)")
+
 function (+)(x::TimeType,y::CompoundPeriod)
     for p in y.periods
         x += p
