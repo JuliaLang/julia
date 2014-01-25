@@ -2069,7 +2069,11 @@ Mathematical Operators
 
 .. function:: mod2pi(x)
 
-   Modulus after division by 2pi, returning in the range [0,2pi). More accurate than mod(x,2pi).
+   Modulus after division by 2pi, returning in the range [0,2pi).
+  
+   This function computes a floating point representation of the modulus after
+   numerically exact division by 2pi, and is therefore not exactly the same as
+   mod(x,2pi).
 
 .. function:: rem(x, m)
 
