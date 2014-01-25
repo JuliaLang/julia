@@ -39,35 +39,35 @@ abstract TimePeriod <: Period
 
 immutable Year           <: DatePeriod
     years::Int64
-    Year(x::Real)        = new(int64(x))
+    Year(x::Integer)        = new(int64(x))
 end
 immutable Month          <: DatePeriod
     months::Int64
-    Month(x::Real)       = new(int64(x))
+    Month(x::Integer)       = new(int64(x))
 end
 immutable Week           <: DatePeriod
     weeks::Int64
-    Week(x::Real)        = new(int64(x))
+    Week(x::Integer)        = new(int64(x))
 end
 immutable Day            <: DatePeriod
     days::Int64
-    Day(x::Real)         = new(int64(x))
+    Day(x::Integer)         = new(int64(x))
 end
 immutable Hour           <: TimePeriod
     h::Int64
-    Hour(x::Real)        = new(int64(x))
+    Hour(x::Integer)        = new(int64(x))
 end
 immutable Minute         <: TimePeriod
     m::Int64
-    Minute(x::Real)      = new(int64(x))
+    Minute(x::Integer)      = new(int64(x))
 end
 immutable Second         <: TimePeriod
     s::Int64
-    Second(x::Real)      = new(int64(x))
+    Second(x::Integer)      = new(int64(x))
 end
 immutable Millisecond    <: TimePeriod
     ms::Int64
-    Millisecond(x::Real) = new(int64(x))
+    Millisecond(x::Integer) = new(int64(x))
 end
 
 # TimeTypes wrap Period instants to provide human representations of time
