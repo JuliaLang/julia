@@ -1,7 +1,5 @@
 #### Specialized matrix types ####
 
-import Base.conj, Base.transpose, Base.ctranspose, Base.convert
-
 ## Hermitian tridiagonal matrices
 type SymTridiagonal{T} <: AbstractMatrix{T}
     dv::Vector{T}                        # diagonal
@@ -38,15 +36,7 @@ ctranspose(M::SymTridiagonal) = conj(M)
 
 function diag{T}(M::SymTridiagonal{T}, n::Integer=0)
     absn = abs(n)
-    if absn==0
-        return M.dv
-    elseif absn==1
-        return M.ev
-    elseif absn<size(M,1)
-        return zeros(T,size(M,1)-absn)
-    else
-        throw(BoundsError())
-    end
+    absn==0 ? M.dv : absn==1 ? M.ev : absn<size(M,1) ? zeros(T,size(M,1)-absn) : throw(BoundsError())
 end
 
 +(A::SymTridiagonal, B::SymTridiagonal) = SymTridiagonal(A.dv+B.dv, A.ev+B.ev)
@@ -171,8 +161,7 @@ end
 Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T}) = Tridiagonal{T}(dl, d, du)
 
 function Tridiagonal{Tl, Td, Tu}(dl::Vector{Tl}, d::Vector{Td}, du::Vector{Tu})
-    R = promote(Tl, Td, Tu)
-    Tridiagonal(convert(Vector{R}, dl), convert(Vector{R}, d), convert(Vector{R}, du))
+    Tridiagonal(map(v->copy(convert(Vector{promote_type(Tl,Td,Tu)}, v)), (dl, d, du))...)
 end
 
 size(M::Tridiagonal) = (length(M.d), length(M.d))
@@ -199,27 +188,18 @@ end
 
 # Operations on Tridiagonal matrices
 copy!(dest::Tridiagonal, src::Tridiagonal) = Tridiagonal(copy!(dest.dl, src.dl), copy!(dest.d, src.d), copy!(dest.du, src.du))
-# copy(A::Tridiagonal) = Tridiagonal(copy(A.dl), copy(A.d), copy(A.du))
-round(M::Tridiagonal) = Tridiagonal(round(M.dl), round(M.d), round(M.du))
-iround(M::Tridiagonal) = Tridiagonal(iround(M.dl), iround(M.d), iround(M.du))
 
-conj(M::Tridiagonal) = Tridiagonal(conj(M.dl), conj(M.d), conj(M.du))
+#Elementary operations
+for func in (:copy, :round, :iround, :conj) 
+    @eval begin
+        ($func)(M::Tridiagonal) = Tridiagonal(map(($func), (M.dl, M.d, M.du))...)
+    end
+end
+
 transpose(M::Tridiagonal) = Tridiagonal(M.du, M.d, M.dl)
 ctranspose(M::Tridiagonal) = conj(transpose(M))
 
-function diag{T}(M::Tridiagonal{T}, n::Integer=0)
-    if n==0
-        return M.d 
-    elseif n==-1
-        return M.dl
-    elseif n==1
-        return M.du
-    elseif -size(M,1)n<size(M,1)
-        return zeros(T,size(M,1)-abs(n))
-    else 
-        throw(BoundsError())
-    end
-end
+diag{T}(M::Tridiagonal{T}, n::Integer=0) = n==0 ? M.d : n==-1 ? M.dl : n==1 ? M.du : abs(n)<size(M,1) ? zeros(T,size(M,1)-abs(n)) : throw(BoundsError()) 
 
 function getindex{T}(A::Tridiagonal{T}, i::Integer, j::Integer)
     (1<=i<=size(A,2) && 1<=j<=size(A,2)) || throw(BoundsError())
