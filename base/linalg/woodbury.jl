@@ -40,7 +40,7 @@ size(W::Woodbury) = size(W.A)
 
 function show(io::IO, W::Woodbury)
     println(io, summary(W), ":")
-    print(io, "A: ", W.A)
+    print(io, "A:\n", W.A)
     print(io, "\nU:\n")
     print_matrix(io, W.U)
     if isa(W.C, Matrix)
