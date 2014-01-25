@@ -30,12 +30,8 @@ abstract Calendar <: AbstractTime
 immutable ISOCalendar <: Calendar end
 
 abstract Timezone <: AbstractTime
-immutable UTC <: Timezone end
-
-# Generic offset; "n" is number of minutes offset from UTC
-immutable Offset <: Timezone 
-    n::Int
-end
+immutable UTCTimezone <: Timezone end
+const UTC = UTCTimezone()
 
 abstract Period     <: AbstractTime
 abstract DatePeriod <: Period
@@ -79,10 +75,10 @@ abstract TimeType <: AbstractTime
 
 # The Datetime type is a generic Period wrapper parameterized by
 # different Period precision levels, Timezone types, and Calendars
-immutable Datetime{P<:Period,T<:Timezone,C<:Calendar} <: TimeType
+immutable Datetime{P<:Period,T,C<:Calendar} <: TimeType
     instant::P
 end 
-typealias UTCDatetime Datetime{Millisecond,UTC,ISOCalendar}
+typealias UTCDatetime Datetime{Millisecond,:UTC,ISOCalendar}
 typealias ISODatetime{T} Datetime{Millisecond,T,ISOCalendar}
 
 immutable Date <: TimeType
@@ -90,44 +86,34 @@ immutable Date <: TimeType
     Date(x::Day) = new(x)
 end
 
-include("timezone.jl")
+include("leapseconds.jl")
 
 # Convert y,m,d to # of Rata Die days
-yeardays(y) = 365y + div(y,4) - div(y,100) + div(y,400)
-const monthdays = [306,337,0,31,61,92,122,153,184,214,245,275]
+const MONTHDAYS = [306,337,0,31,61,92,122,153,184,214,245,275]
 function totaldays(y,m,d)
-    @inbounds mdays = monthdays[m]
-    return d + mdays + yeardays(m < 3 ? y - 1 : y) - 306
+    z = m < 3 ? y - 1 : y
+    @inbounds mdays = MONTHDAYS[m]
+    return d + mdays + 365z + fld(z,4) - fld(z,100) + fld(z,400) - 306
 end
 
 # Timezone/Leapsecond dispatch functions
-setoffset(::Type{UTC},ms)       = setleaps(ms)
-setoffsetsecond(::Type{UTC},ms) = setleapsecond(ms)
-getoffset(::Type{UTC},ms)       = getleaps(ms)
-getoffsetsecond(::Type{UTC},ms) = getleapsecond(ms)
-getabbr(::Type{UTC},ms)         = "UTC"
-
-setoffset(o::Offset, ms)        = 60000*o.n + setleaps(ms)
-setoffsecond(o::Offset, ms)     = 60000*o.n + setleapsecond(ms)
-getoffset(o::Offset, ms)        = 60000*o.n + getleaps(ms)
-getoffsetsecond(o::Offset, ms)  = 60000*o.n + getleapsecond(ms)
-function getabbr(o::Offset,ms) 
-    hrs = string(div(abs(o.n),60))
-    mins = string(abs(o.n) % 60)
-    return string(sign(o.n) == 1 ? "+" : "-", lpad(hrs,2,"0"),":",lpad(mins,2,"0"))
-end
+setoffset(x,ms)       = setleaps(ms)
+setoffsetsecond(x,ms) = setleapsecond(ms)
+getoffset(::Symbol,ms)       = getleaps(ms)
+getoffsetsecond(::Symbol,ms) = getleapsecond(ms)
+getabbr(::Symbol,ms)         = "UTC"
 
 # Datetime constructor with defaults
-function Datetime(y,m=1,d=1,h=0,mi=0,s=0,ms=0,::Type{UTC}=UTC)
+function Datetime(y,m=1,d=1,h=0,mi=0,s=0,ms=0,::UTCTimezone=UTC)
     # RFC: Month is the only Period we check because it can throw a
     # BoundsError() in construction (see totaldays())
     # all other Periods "roll over"; should we make these consistent?
     0 < m < 13 || error("Month out of range")
     rata = ms + 1000*(s + 60mi + 3600h + 86400*totaldays(y,m,d))
-    return ISODatetime{UTC}(Millisecond(
+    return ISODatetime{:UTC}(Millisecond(
         rata + (s == 60 ? setoffsetsecond(UTC,rata) : setoffset(UTC,rata))))
 end
-Datetime{T<:Timezone}(y,m,d,h,mi,s,::Type{T}) = Datetime(y,m,d,h,mi,s,0,T)
+Datetime(y,m,d,h,mi,s,tz::Timezone) = Datetime(y,m,d,h,mi,s,0,tz)
 
 function Date(y,m=1,d=1)
     0 < m < 13 || error("Month out of range")
@@ -299,12 +285,26 @@ dayofyear(dt::TimeType) = _days(dt) - totaldays(year(dt),1,1) + 1
 @vectorize_1arg TimeType lastdayofweek
 @vectorize_1arg TimeType dayofyear
 
-const UNIXEPOCH = 62135683200000 #Rata Die milliseconds for 1970-01-01T00:00:00 UTC
-function unix2date{T<:Timezone}(x,::Type{T}=UTC)
-    return ISODatetime{T}(Millisecond(UNIXEPOCH+x+setleaps(UNIXEPOCH+x)))
+const UNIXEPOCH = Datetime(1970).instant.ms #Rata Die milliseconds for 1970-01-01T00:00:00 UTC
+function unix2date(x,::UTCTimezone=UTC)
+    rata = UNIXEPOCH + int64(1000*x)
+    return ISODatetime{:UTC}(Millisecond(rata + setoffset(UTC,rata)))
 end
-date2unix(dt::Datetime) = dt.instant.ms - getleaps(dt.instant.ms) - UNIXEPOCH
-now{T<:Timezone}(tz::Type{T}=UTC) = unix2date(int64(1000*time()),tz)
+# Returns unix seconds since 1970-01-01T00:00:00 UTC
+date2unix{T}(dt::ISODatetime{T}) = (dt.instant.ms - getoffset(T,dt.instant.ms) - UNIXEPOCH)/1000.0
+now(::UTCTimezone=UTC) = unix2date(time(),UTC)
+
+ratadays2date(days) = _day2date(days)
+date2ratadays(dt::TimeType) = _days(dt)
+
+# Julian conversions
+const JULIANEPOCH = Datetime(-4713,11,24,12).instant.ms
+function julian2date(f,::UTCTimezone=UTC)
+    rata = JULIANEPOCH + int64(86400000*f)
+    return ISODatetime{:UTC}(Millisecond(rata + setoffset(UTC,rata)))
+end
+# Returns # of julian days since -4713-11-24T12:00:00 UTC
+date2julian{T}(dt::ISODatetime{T}) = (dt.instant.ms - getoffset(T,dt.instant.ms) - JULIANEPOCH)/86400000.0
 
 #wrapping arithmetic
 monthwrap(m1,m2) = (v = (m1 + m2) % 12; return v == 0 ? 12 : v < 0 ? 12 + v : v)
