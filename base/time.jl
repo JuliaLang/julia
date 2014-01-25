@@ -232,20 +232,21 @@ const Jan,Feb,Mar,Apr,Jun,Jul,Aug,Sep,Oct,Nov,Dec = 1,2,3,4,5,6,7,8,9,10,11,12
 const DAYSOFWEEK = [1=>"Monday",2=>"Tuesday",3=>"Wednesday",
                     4=>"Thursday",5=>"Friday",6=>"Saturday",0=>"Sunday"]
 const DAYSOFWEEKABBR = [1=>"Mon",2=>"Tue",3=>"Wed",
-                       4=>"Thu",5=>"Fri",6=>"Sat",0=>"Sun"]
+                        4=>"Thu",5=>"Fri",6=>"Sat",0=>"Sun"]
 const MONTHS = [1=>"January",2=>"February",3=>"March",4=>"April",
                 5=>"May",6=>"June",7=>"July",8=>"August",9=>"September",
                 10=>"October",11=>"November",12=>"December"]
 const MONTHSABBR = [1=>"Jan",2=>"Feb",3=>"Mar",4=>"Apr",
-                   5=>"May",6=>"Jun",7=>"Jul",8=>"Aug",9=>"Sep",
-                   10=>"Oct",11=>"Nov",12=>"Dec"]
+                    5=>"May",6=>"Jun",7=>"Jul",8=>"Aug",9=>"Sep",
+                    10=>"Oct",11=>"Nov",12=>"Dec"]
 # These two are used in Datetime parsing
 const RMONTHS = ["january"=>1,"february"=>2,"march"=>3,"april"=>4,
                  "may"=>5,"june"=>6,"july"=>7,"august"=>8,"september"=>9,
                  "october"=>10,"november"=>11,"december"=>12]
 const RMONTHSABBR = ["jan"=>1,"feb"=>2,"mar"=>3,"apr"=>4,
-                    "may"=>5,"jun"=>6,"jul"=>7,"aug"=>8,"sep"=>9,
-                    "oct"=>10,"nov"=>11,"dec"=>12]
+                     "may"=>5,"jun"=>6,"jul"=>7,"aug"=>8,"sep"=>9,
+                     "oct"=>10,"nov"=>11,"dec"=>12]
+
 monthname(dt::TimeType) = MONTHS[month(dt)]
 monthabbr(dt::TimeType) = MONTHSABBR[month(dt)]
 dayname(dt::TimeType) = DAYSOFWEEK[dayofweek(dt)]
@@ -259,6 +260,7 @@ function _lastdayofmonth(y,m)
 end
 isleap(dt::TimeType) = _isleap(year(dt))
 lastdayofmonth(dt::TimeType) = _lastdayofmonth(year(dt),month(dt))
+# Sunday = 0, Monday = 1....Saturday = 6
 dayofweek(dt::TimeType) = _days(dt) % 7
 # i.e. 1st Monday? 2nd Monday? 3rd Wednesday? 5th Sunday?
 dayofweekofmonth(dt::TimeType) = (d = day(dt); return d < 8 ? 1 : 
