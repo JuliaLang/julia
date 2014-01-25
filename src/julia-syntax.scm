@@ -1056,13 +1056,17 @@
 		  (else (error "invalid let syntax")))))))))
 
       ((macro)
-       (if (and (pair? (cadr e))
-		(eq? (car (cadr e)) 'call))
-	   `(macro ,(symbol (string #\@ (cadr (cadr e))))
-	      ,(expand-binding-forms
-		`(-> (tuple ,@(cddr (cadr e)))
-		     ,(caddr e))))
-	   e))
+       (cond ((and (pair? (cadr e))
+		   (eq? (car (cadr e)) 'call)
+		   (symbol? (cadr (cadr e))))
+	      `(macro ,(symbol (string #\@ (cadr (cadr e))))
+		 ,(expand-binding-forms
+		   `(-> (tuple ,@(cddr (cadr e)))
+			,(caddr e)))))
+	     ((symbol? (cadr e))  ;; already expanded
+	      e)
+	     (else
+	      (error "invalid macro definition"))))
 
       ((type)
        (let ((mut (cadr e))

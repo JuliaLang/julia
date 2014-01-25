@@ -13,6 +13,7 @@
 #endif
 
 static int lisp_prompt = 0;
+static int codecov=0;
 static char *program = NULL;
 char *image_file = NULL;
 int tab_width = 2;
@@ -51,7 +52,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "lisp",          no_argument,       &lisp_prompt, 1 },
         { "help",          no_argument,       0, 'h' },
         { "sysimage",      required_argument, 0, 'J' },
-        { "code-coverage", no_argument,       &jl_compileropts.code_coverage, 1 },
+        { "code-coverage", no_argument,       &codecov, 1 },
         { 0, 0, 0, 0 }
     };
     int c;
@@ -93,6 +94,7 @@ void parse_opts(int *argcp, char ***argvp)
             exit(1);
         }
     }
+    jl_compileropts.code_coverage = codecov;
     if (!julia_home) {
         julia_home = getenv("JULIA_HOME");
         if (julia_home) {

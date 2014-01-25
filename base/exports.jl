@@ -1223,6 +1223,8 @@ export
 # C interface
     c_free,
     c_malloc,
+    c_calloc,
+    c_realloc,
     cfunction,
     cglobal,
     disable_sigint,
