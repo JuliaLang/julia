@@ -7,11 +7,7 @@ Complex(x::Real) = Complex(x, zero(x))
 
 const im = Complex(false,true)
 
-typealias Complex128 Complex{Float64}
-typealias Complex64  Complex{Float32}
-typealias Complex32  Complex{Float16}
-
-sizeof{T<:Real}(::Type{Complex{T}}) = 2*sizeof(T)
+sizeof{T<:Real}(::Type{Complex{T}}) = 2sizeof(T)
 
 convert{T<:Real}(::Type{Complex{T}}, x::Real) = Complex{T}(x,0)
 convert{T<:Real}(::Type{Complex{T}}, z::Complex) = Complex{T}(real(z),imag(z))
@@ -41,16 +37,6 @@ isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
 complex(x::Real, y::Real) = Complex(x, y)
 complex(x::Real) = Complex(x)
 complex(z::Complex) = z
-
-complex128(r::Float64, i::Float64) = Complex{Float64}(r, i)
-complex128(r::Real, i::Real) = complex128(float64(r),float64(i))
-complex128(z) = complex128(real(z), imag(z))
-complex64(r::Float32, i::Float32) = Complex{Float32}(r, i)
-complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
-complex64(z) = complex64(real(z), imag(z))
-complex32(r::Float16, i::Float16) = Complex{Float16}(r, i)
-complex32(r::Real, i::Real) = complex32(float16(r),float16(i))
-complex32(z) = complex32(real(z), imag(z))
 
 for fn in _numeric_conversion_func_names
     @eval $fn(z::Complex) = Complex($fn(real(z)),$fn(imag(z)))
@@ -148,7 +134,17 @@ end
 inv{T<:Union(Float16,Float32)}(z::Complex{T}) =
     oftype(z, conj(complex128(z))/abs2(complex128(z)))
 
-# robust complex division for double precision
+for (cons, elty, rcons, relty) in ((:complex128, :Complex128, :float64, :Float64),
+                                   (:complex64 ,  :Complex64, :float32, :Float32),
+                                   (:complex32 ,  :Complex32, :float16, :Float16))
+@eval begin
+
+typealias $elty Complex{$relty}
+$cons(r::$relty, i::$relty) = $elty(r, i)
+$cons(r::Real, i::Real) = $cons($rcons(r), $rcons(i))
+$cons(z) = $cons(real(z), imag(z))
+
+# robust complex division
 # the first step is to scale variables if appropriate ,then do calculations
 # in a way that avoids over/underflow (subfuncs 1 and 2), then undo the scaling.
 # scaling variable s and other techniques
@@ -156,32 +152,32 @@ inv{T<:Union(Float16,Float32)}(z::Complex{T}) =
 #             a + i*b
 #  p + i*q = ---------
 #             c + i*d
-function /(z::Complex128, w::Complex128)
+function /(z::$elty, w::$elty)
     a, b = reim(z); c, d = reim(w)
-    half = 0.5
-    two = 2.0
+    half = convert($relty, 0.5)
+    two = convert($relty, 2.0)
     ab = max(abs(a), abs(b))
     cd = max(abs(c), abs(d))
     ov = realmax(a)
     un = realmin(a)
-    ϵ = eps(Float64)
+    ϵ = eps($relty)
     bs = two/(ϵ*ϵ)
-    s = 1.0
+    s = one($relty)
     ab >= half*ov  && (a=half*a; b=half*b; s=two*s ) # scale down a,b
     cd >= half*ov  && (c=half*c; d=half*d; s=s*half) # scale down c,d
     ab <= un*two/ϵ && (a=a*bs; b=b*bs; s=s/bs      ) # scale up a,b
     cd <= un*two/ϵ && (c=c*bs; d=d*bs; s=s*bs      ) # scale up c,d
     abs(d)<=abs(c) ? ((p,q)=robust_cdiv1(a,b,c,d)  ) : ((p,q)=robust_cdiv1(b,a,d,c); q=-q)
-    return Complex128(p*s,q*s) # undo scaling
+    return ($elty)(p*s,q*s) # undo scaling
 end
-function robust_cdiv1(a::Float64, b::Float64, c::Float64, d::Float64)
+function robust_cdiv1(a::$relty, b::$relty, c::$relty, d::$relty)
     r = d/c
-    t = 1.0/(c+d*r)
+    t = one($relty)/(c+d*r)
     p = robust_cdiv2(a,b,c,d,r,t)
     q = robust_cdiv2(b,-a,c,d,r,t)
     return p,q
 end
-function robust_cdiv2(a::Float64, b::Float64, c::Float64, d::Float64, r::Float64, t::Float64)
+function robust_cdiv2(a::$relty, b::$relty, c::$relty, d::$relty, r::$relty, t::$relty)
     if r != 0
         br = b*r
         return (br != 0 ? (a+br)*t : a*t + (b*t)*r)
@@ -190,32 +186,35 @@ function robust_cdiv2(a::Float64, b::Float64, c::Float64, d::Float64, r::Float64
     end
 end
 
-function inv(w::Complex128)
+function inv(w::$elty)
     c, d = reim(w)
-    half = 0.5
-    two = 2.0
+    half = convert($relty, 0.5)
+    two = convert($relty, 2.0)
     cd = max(abs(c), abs(d))
     ov = realmax(c)
     un = realmin(c)
-    ϵ = eps(Float64)
+    ϵ = eps($relty)
     bs = two/(ϵ*ϵ)
-    s = 1.0
+    s = one($relty)
     cd >= half*ov  && (c=half*c; d=half*d; s=s*half) # scale down c,d
     cd <= un*two/ϵ && (c=c*bs; d=d*bs; s=s*bs      ) # scale up c,d
     if abs(d)<=abs(c)
         r = d/c
-        t = 1.0/(c+d*r)
+        t = one($relty)/(c+d*r)
         p = t
         q = -r * t
     else
         c, d = d, c
         r = d/c
-        t = 1.0/(c+d*r)
+        t = one($relty)/(c+d*r)
         p = r * t
         q = -t
     end
-    return Complex128(p*s,q*s) # undo scaling
+    return $elty(p*s,q*s) # undo scaling
 end
+
+end #eval
+end #Complex types
 
 function ssqs{T<:FloatingPoint}(x::T, y::T)
     k::Int = 0
