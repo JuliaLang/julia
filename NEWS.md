@@ -62,6 +62,8 @@ Library improvements
   * `methodswith` now returns an array of `Method`s ([#5464]) rather
     than just printing its results.
 
+  * `errno([code])` function to get or set the C library's `errno`.
+
   * Collections improvements
 
     * `Array` assignment (e.g. `x[:] = y`) ignores singleton dimensions
