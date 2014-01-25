@@ -150,7 +150,7 @@ det(A::SymTridiagonal) = det_usmani(A.ev, A.dv, A.ev)
 
 function getindex{T}(A::SymTridiagonal{T}, i::Integer, j::Integer)
     (1<=i<=size(A,2) && 1<=j<=size(A,2)) || throw(BoundsError())
-    i==j ? A.dv[i] : i==j+1 ? A.ev[i] : i+1==j ? A.ev[i] : zero(T)
+    i==j ? A.dv[i] : i==j+1 ? A.ev[j] : i+1==j ? A.ev[i] : zero(T)
 end
 
 ## Tridiagonal matrices ##
@@ -237,6 +237,12 @@ function diag{T}(M::Tridiagonal{T}, n::Integer=0)
         throw(BoundsError())
     end
 end
+
+function getindex{T}(A::Tridiagonal{T}, i::Integer, j::Integer)
+    (1<=i<=size(A,2) && 1<=j<=size(A,2)) || throw(BoundsError())
+    i==j ? A.d[i] : i==j+1 ? A.dl[j] : i+1==j ? A.du[i] : zero(T)
+end
+
 
 ###################
 # Generic methods #
