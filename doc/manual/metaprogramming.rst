@@ -4,10 +4,9 @@
  Metaprogramming  
 *****************
 
-The strongest legacy of Lisp in the Julia language is its
-metaprogramming support. Like Lisp, Julia is
-`homoiconic <http://en.wikipedia.org/wiki/Homoiconicity>`_: it
-represents its own code as a data structure of the language itself.
+The strongest legacy of Lisp in the Julia language is its metaprogramming
+support. Like Lisp, Julia represents its own code as a data structure of
+the language itself.
 Since code is represented by objects that can be created and manipulated
 from within the language, it is possible for a program to transform and
 generate its own code. This allows sophisticated code generation without
