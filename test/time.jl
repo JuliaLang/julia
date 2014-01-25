@@ -892,98 +892,98 @@ januarymondays2014 = [Date(2014,1,6),Date(2014,1,13),Date(2014,1,20),Date(2014,1
 
 # Datetime parsing
 #'1996-January-15'
-dt = Time.Datetime(1996,1,15)
-a = "96-01-15"
-f = "yy-mm-dd"
-@test Time.Datetime(a,f) + Time.Year(1900) == dt
-b = "96/Feb/15"
-f = "yy/mmm/dd"
-@test Time.Datetime(b,f) + Time.Year(1900) == dt + Time.Month(1)
-c = "96:15:01"
-f = "yy:dd:mm"
-@test Time.Datetime(c,f) + Time.Year(1900) == dt
-d = "1996,Jan,15"
-f = "yyyy,mmm,dd"
-@test Time.Datetime(d,f) == dt
-e = "1996.January.15"
-f = "yyyy.mmmm.dd"
-@test Time.Datetime(e,f) == dt
-f = "1996 1 15"
-fo = "yyyy m dd"
-@test Time.Datetime(f,fo) == dt
-g = "1996-1-1"
-f = "yyyy-m-d"
-@test Time.Datetime(g,f) == dt - Time.Day(14)
-# h = "1996-01-15 10 pm"
-# f = "yyyy-mm-dd HH aa"
-# Time.Datetime(h,f)
-# i = "1996-01-15 10 am"
-# f = "yyyy-mm-dd HH aa"
-j = "1996-01-15 UTC"
-f = "yyyy-mm-dd zzz"
-@test Time.Datetime(j,f) == dt
-k = "1996-01-15 10:00:00 UTC"
-f = "yyyy-mm-dd HH:MM:SS zzz"
-@test Time.Datetime(k,f) == dt + Time.Hour(10)
-l = "1996-01-15 10:10:10.25 UTC"
-f = "yyyy-mm-dd HH:MM:SS.ss zzz"
-@test Time.Datetime(l,f) == dt + Time.Hour(10) + Time.Minute(10) + Time.Second(10) + Time.Millisecond(250)
-
-# m = "1996-01-15 10:00:00 -0800"
+# dt = Time.Datetime(1996,1,15)
+# a = "96-01-15"
+# f = "yy-mm-dd"
+# @test Time.Datetime(a,f) + Time.Year(1900) == dt
+# b = "96/Feb/15"
+# f = "yy/mmm/dd"
+# @test Time.Datetime(b,f) + Time.Year(1900) == dt + Time.Month(1)
+# c = "96:15:01"
+# f = "yy:dd:mm"
+# @test Time.Datetime(c,f) + Time.Year(1900) == dt
+# d = "1996,Jan,15"
+# f = "yyyy,mmm,dd"
+# @test Time.Datetime(d,f) == dt
+# e = "1996.January.15"
+# f = "yyyy.mmmm.dd"
+# @test Time.Datetime(e,f) == dt
+# f = "1996 1 15"
+# fo = "yyyy m dd"
+# @test Time.Datetime(f,fo) == dt
+# g = "1996-1-1"
+# f = "yyyy-m-d"
+# @test Time.Datetime(g,f) == dt - Time.Day(14)
+# # h = "1996-01-15 10 pm"
+# # f = "yyyy-mm-dd HH aa"
+# # Time.Datetime(h,f)
+# # i = "1996-01-15 10 am"
+# # f = "yyyy-mm-dd HH aa"
+# j = "1996-01-15 UTC"
+# f = "yyyy-mm-dd zzz"
+# @test Time.Datetime(j,f) == dt
+# k = "1996-01-15 10:00:00 UTC"
+# f = "yyyy-mm-dd HH:MM:SS zzz"
+# @test Time.Datetime(k,f) == dt + Time.Hour(10)
+# l = "1996-01-15 10:10:10.25 UTC"
 # f = "yyyy-mm-dd HH:MM:SS.ss zzz"
-# n = "1996-01-15 10:00:00 +0800"
-# o = "1996-01-15 10:00:00-08:00"
-# p = "1996-01-15 10:00:00+08:45"
-# q = "1996-01-15 10:00:00 GMT+08:45"
+# @test Time.Datetime(l,f) == dt + Time.Hour(10) + Time.Minute(10) + Time.Second(10) + Time.Millisecond(250)
 
-r = "1/15/1996" # Excel
-f = "m/dd/yyyy"
-@test Time.Datetime(r,f) == dt
-s = "19960115"
-f = "yyyymmdd"
-@test Time.Datetime(s,f) == dt
-# t = "1996-01-15 10 PST"
-# f = "yyyy-mm-dd HH zzz"
-# Time.Datetime(t,f) == dt + Time.Hour(10)
-# u = "1996-01-15 10:00 PST"
-# f = "yyyy-mm-dd HH:MM zzz"
-# Time.Datetime(u,f) == dt + Time.Hour(10)
-v = "1996-01-15 10:00:00"
-f = "yyyy-mm-dd HH:MM:SS"
-@test Time.Datetime(v,f) == dt + Time.Hour(10)
-w = "1996-01-15T10:00:00 UTC"
-f = "yyyy-mm-ddTHH:MM:SS zzz"
-@test Time.Datetime(w,f;sep="T") == dt + Time.Hour(10)
-# x = "1996-01-15 10:00:00 America/Chicago"
-# f = "yyyy-mm-dd HH:MM:SS zzzz"
-# Time.Datetime(x,f) == dt + Time.Hour(10)
-y = "1996/1"
-f = "yyyy/m"
-@test Time.Datetime(y,f) == dt - Time.Day(14)
-z = "1996"
-f = "yyyy"
-@test Time.Datetime(z,f) == dt - Time.Day(14)
-aa = "1/5/1996"
-f = "m/d/yyyy"
-@test Time.Datetime(aa,f) == dt - Time.Day(10)
-bb = "5/1/1996"
-f = "d/m/yyyy"
-@test Time.Datetime(bb,f) == dt - Time.Day(10)
-cc = "01151996"
-f = "mmddyyyy"
-@test Time.Datetime(cc,f) == dt
-dd = "15011996"
-f = "ddmmyyyy"
-@test Time.Datetime(dd,f) == dt
-ee = "01199615"
-f = "mmyyyydd"
-@test Time.Datetime(ee,f) == dt
-ff = "1996-15-Jan"
-f = "yyyy-dd-mmm"
-@test Time.Datetime(ff,f) == dt
-gg = "Jan-1996-15"
-f = "mmm-yyyy-dd"
-@test Time.Datetime(gg,f) == dt
+# # m = "1996-01-15 10:00:00 -0800"
+# # f = "yyyy-mm-dd HH:MM:SS.ss zzz"
+# # n = "1996-01-15 10:00:00 +0800"
+# # o = "1996-01-15 10:00:00-08:00"
+# # p = "1996-01-15 10:00:00+08:45"
+# # q = "1996-01-15 10:00:00 GMT+08:45"
+
+# r = "1/15/1996" # Excel
+# f = "m/dd/yyyy"
+# @test Time.Datetime(r,f) == dt
+# s = "19960115"
+# f = "yyyymmdd"
+# @test Time.Datetime(s,f) == dt
+# # t = "1996-01-15 10 PST"
+# # f = "yyyy-mm-dd HH zzz"
+# # Time.Datetime(t,f) == dt + Time.Hour(10)
+# # u = "1996-01-15 10:00 PST"
+# # f = "yyyy-mm-dd HH:MM zzz"
+# # Time.Datetime(u,f) == dt + Time.Hour(10)
+# v = "1996-01-15 10:00:00"
+# f = "yyyy-mm-dd HH:MM:SS"
+# @test Time.Datetime(v,f) == dt + Time.Hour(10)
+# w = "1996-01-15T10:00:00 UTC"
+# f = "yyyy-mm-ddTHH:MM:SS zzz"
+# @test Time.Datetime(w,f;sep="T") == dt + Time.Hour(10)
+# # x = "1996-01-15 10:00:00 America/Chicago"
+# # f = "yyyy-mm-dd HH:MM:SS zzzz"
+# # Time.Datetime(x,f) == dt + Time.Hour(10)
+# y = "1996/1"
+# f = "yyyy/m"
+# @test Time.Datetime(y,f) == dt - Time.Day(14)
+# z = "1996"
+# f = "yyyy"
+# @test Time.Datetime(z,f) == dt - Time.Day(14)
+# aa = "1/5/1996"
+# f = "m/d/yyyy"
+# @test Time.Datetime(aa,f) == dt - Time.Day(10)
+# bb = "5/1/1996"
+# f = "d/m/yyyy"
+# @test Time.Datetime(bb,f) == dt - Time.Day(10)
+# cc = "01151996"
+# f = "mmddyyyy"
+# @test Time.Datetime(cc,f) == dt
+# dd = "15011996"
+# f = "ddmmyyyy"
+# @test Time.Datetime(dd,f) == dt
+# ee = "01199615"
+# f = "mmyyyydd"
+# @test Time.Datetime(ee,f) == dt
+# ff = "1996-15-Jan"
+# f = "yyyy-dd-mmm"
+# @test Time.Datetime(ff,f) == dt
+# gg = "Jan-1996-15"
+# f = "mmm-yyyy-dd"
+# @test Time.Datetime(gg,f) == dt
 
 # Period testing
 @test -Time.Year(1) == Time.Year(-1)
