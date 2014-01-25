@@ -423,11 +423,23 @@ type DatetimeFormat
     sep::String
 end
 # y-m-d
+function date_regex(f,i,sep,monthoption)
+    if monthoption == 0
+        i == 1        ? Regex("^\\d{1,4}(?=\\$(sep[i]))") : 
+        i == endof(f) ? Regex("(?<=\\$(sep[i-1]))\\d{1,4}") : 
+                        Regex("(?<=\\$(sep[i-1]))\\d{1,4}(?=\\$(sep[i]))")
+    else
+        i == 1        ? Regex("^.+?(?=\\$(sep[i]))") : 
+        i == endof(f) ? Regex("(?<=\\$(sep[i-1])).+?") : 
+                        Regex("(?<=\\$(sep[i-1])).+?(?=\\$(sep[i]))")
+    end
+end
 function DateFormat(dt::String)
-    sep = (s = match(r"\W",dt)) == nothing ? "" : s.match
+    sep = matchall(r"\W",dt)
+    sep = map(x->x[1],sep)
     y = m = d = r""
     monthoption = 0
-    if sep == "" #separator-less format strings
+    if length(sep) == 0 #separator-less format strings
         sep = r"([ymd])(?!\1)" #match character changes
         st = 1
         for i in eachmatch(sep,dt)
@@ -451,21 +463,16 @@ function DateFormat(dt::String)
         end
         sep = ""
     else
-        f = split(dt,sep)
+        f = split(dt,sep,0,false)
         for i = 1:length(f)
             if 'y' in f[i]
-                y = i == 1 ? Regex("^\\d+?(?=\\$sep)") : i == endof(f) ? Regex("(?<=\\$sep)\\d+?\$") : Regex("(?<=$sep)\\d+?(?=\\$sep)")
+                y = date_regex(f,i,sep,0)
             elseif 'm' in f[i]
                 l = length(f[i])
-                if l > 2
-                    m = i == 1 ? Regex("^.+?(?=\\$sep)") : i == endof(f) ? Regex("(?<=\\$sep).+?\$") : Regex("(?<=$sep).+?(?=\\$sep)")
-                    monthoption = l > 3 ? 2 : 1
-                else
-                    m = i == 1 ? Regex("^\\d+?(?=\\$sep)") : i == endof(f) ? Regex("(?<=\\$sep)\\d+?\$") : Regex("(?<=$sep)\\d+?(?=\\$sep)")
-                    monthoption = 0
-                end
+                monthoption = l > 3 ? 2 : l > 2 ? 1 : 0
+                m = date_regex(f,i,sep,monthoption)
             else # contains(f[i],"d")
-                d = i == 1 ? Regex("^\\d+?(?=\\$sep)") : i == endof(f) ? Regex("(?<=\\$sep)\\d+?\$") : Regex("(?<=$sep)\\d+?(?=\\$sep)")
+                d = date_regex(f,i,sep,0)
             end
         end
     end
