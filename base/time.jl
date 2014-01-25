@@ -392,15 +392,17 @@ typealias TimeTypePeriod Union(TimeType,Period)
 (-){T<:TimeTypePeriod}(x::AbstractArray{T}, y::TimeTypePeriod) = reshape([x[i] - y for i in 1:length(x)], size(x))
 
 # Temporal Expressions
-function recur{T<:Time.TimeType}(fun::Function,start::T,stop::T,step::Time.Period=Time.Day(1))
+function recur{T<:TimeType}(fun::Function,start::T,stop::T,step::Period=Day(1);inclusion=true)
     a = T[]
+    negate = inclusion ? identity : (!)
     i = start
     while i <= stop
-        fun(i) && (push!(a,i))
+        negate(fun(i)) && (push!(a,i))
         i += step
     end
     return a
 end
+# TODO: Allow Array{Function} as 1st argument? with and=true keyword?
 
 # Datetime Parsing
 # TODO: Handle generic offsets, i.e. +08:00, -05:00
