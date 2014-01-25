@@ -108,6 +108,8 @@ Library improvements
 
   * `LinAlg` (linear algebra) improvements
 
+      * Balancing options for eigenvector calculations
+
     * Sparse linear algebra
 
       * Faster sparse `kron` ([#4958]).
