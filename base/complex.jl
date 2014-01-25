@@ -331,7 +331,8 @@ function exp(z::Complex)
     if zr==-Inf && !isfinite(zi) return Complex(-zero(zr), copysign(zero(zi), zi)) end
     if zr==Inf && !isfinite(zi) return Complex(-zr, oftype(zr, NaN)) end
     if isnan(zr) return Complex(zr, zi==0 ? zi : zr) end
-    er = zr==Inf ? zr : exp(zr)
+    er = exp(zr)
+    zi==0 && return Complex(er, zi)
     wr = er*(isfinite(zi) ? cos(zi) : zi)
     wi = er*(isfinite(zi) ? sin(zi) : zi)
     Complex(wr, wi)
