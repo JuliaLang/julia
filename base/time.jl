@@ -275,16 +275,17 @@ function daysofweekinmonth(dt::TimeType)
 end
 # TODO: check these with daylight savings
 function firstdayofweek(dt::UTCDatetime)
-    d = dayofweek(dt)
-    return UTCDatetime(Millisecond(dt.instant.ms - 86400000*(d-1)))
+    d = firstdayofweek(Date(dt))
+    return Datetime(d)
 end
-firstdayofweek(dt::Date) = Date(dt.instant - dayofweek(dt) + 1)
+firstdayofweek(dt::Date) = Date(dt.instant - dayofweek(dt))
 function lastdayofweek (dt::UTCDatetime)
-    d = dayofweek(dt)
-    return UTCDatetime(Millisecond(dt.instant.ms + 86400000*(7-d)))
+    d = lastdayofweek(Date(dt))
+    return Datetime(d)
 end
-lastdayofweek(dt::Date) = Date(dt.instant + (7-dayofweek(dt)))
+lastdayofweek(dt::Date) = Date(dt.instant + (6-dayofweek(dt)))
 dayofyear(dt::TimeType) = _days(dt) - totaldays(year(dt),1,1) + 1
+
 @vectorize_1arg TimeType isleap
 @vectorize_1arg TimeType lastdayofmonth
 @vectorize_1arg TimeType dayofweek
