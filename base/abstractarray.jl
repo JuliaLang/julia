@@ -1315,7 +1315,7 @@ function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
     # determine result size and allocate
     Rsize = copy(dimsA)
     # TODO: maybe support removing dimensions
-    if isempty(size(r1))
+    if !isa(r1, AbstractArray) || ndims(r1) == 0
         r1 = [r1]
     end
     Rsize[dims] = [size(r1)...; ones(Int,max(0,length(dims)-ndims(r1)))]
