@@ -58,12 +58,11 @@ end
 
 
 @ngenerate N function _setindex!(A::Array, x, I::NTuple{N,Union(Int,AbstractArray)}...)
-    @nexprs N d->(J_d = to_index(I_d))
     stride_1 = 1
     @nexprs N d->(stride_{d+1} = stride_d*size(A,d))
     @nexprs N d->(offset_d = 1)  # really only need offset_$N = 1
     if !isa(x, AbstractArray)
-        @nloops N i d->(1:length(J_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(J_d, i_d)-1)*stride_d) begin
+        @nloops N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
             @inbounds A[offset_0] = x
         end
     else
@@ -71,18 +70,13 @@ end
         setindex_shape_check(X, I...)
         # TODO? A variant that can use cartesian indexing for RHS
         k = 1
-        @nloops N i d->(1:length(J_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(J_d, i_d)-1)*stride_d) begin
+        @nloops N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
             @inbounds A[offset_0] = X[k]
             k += 1
         end
     end
 end
 
-function setindex!(A::Array, x, I::Union(Real,AbstractArray)...)
-    checkbounds(A, I...)
-    _setindex!(A, x, to_index(I)...)
-    A
-end
 function setindex!(A::Array, x, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray))
     checkbounds(A, I, J)
     _setindex!(A, x, to_index(I), to_index(J))
@@ -91,6 +85,11 @@ end
 function setindex!(A::Array, x, I::Union(Real,AbstractArray))
     checkbounds(A, I)
     _setindex!(A, x, to_index(I))
+    A
+end
+function setindex!(A::Array, x, I::Union(Real,AbstractArray)...)
+    checkbounds(A, I...)
+    _setindex!(A, x, to_index(I)...)
     A
 end
 
