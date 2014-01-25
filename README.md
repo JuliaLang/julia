@@ -84,7 +84,7 @@ or Windows, take a look at the detailed notes in
 <a name="Uninstalling-Julia"/>
 ## Uninstalling Julia
 
-Julia does not install anything outside the directory it was cloned into. Julia can be completely uninstalled by deleting this directory.
+Julia does not install anything outside the directory it was cloned into. Julia can be completely uninstalled by deleting this directory. Julia packages are installed in `~/.julia` by default, and can be uninstalled by deleting `~/.julia`.
 
 <a name="Platform-Specific-Notes"/>
 ## Platform-Specific Build Notes
