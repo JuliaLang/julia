@@ -123,23 +123,23 @@ end
 # Convert # of Rata Die days to proleptic Gregorian calendar y,m,d,w
 # Reference: http://mysite.verizon.net/aesir_research/date/date0.htm
 function _day2date(days)
-    z = days + 306; h = 100z - 25; a = div(h,3652425); b = a - div(a,4);
-    y = div(100b+h,36525); c = b + z - 365y - div(y,4); m = div(5c+456,153); 
+    z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4);
+    y = fld(100b+h,36525); c = b + z - 365y - fld(y,4); m = div(5c+456,153);
     d = c - div(153m-457,5); return m > 12 ? (y+1,m-12,d) : (y,m,d)
 end
 function _year(days)
-   z = days + 306; h = 100z - 25; a = div(h,3652425); b = a - div(a,4);
-   y = div(100b+h,36525); c = b + z - 365y - div(y,4); m = div(5c+456,153); 
+   z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4);
+   y = fld(100b+h,36525); c = b + z - 365y - fld(y,4); m = div(5c+456,153); 
    return m > 12 ? y+1 : y
 end 
 function _month(days)
-    z = days + 306; h = 100z - 25; a = div(h,3652425); b = a - div(a,4);
-    y = div(100b+h,36525); c = b + z - 365y - div(y,4); m = div(5c+456,153); 
+    z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4);
+    y = fld(100b+h,36525); c = b + z - 365y - fld(y,4); m = div(5c+456,153); 
     return m > 12 ? m-12 : m
 end
 function _day(days)
-    z = days + 306; h = 100z - 25; a = div(h,3652425); b = a - div(a,4);
-    y = div(100b+h,36525); c = b + z - 365y - div(y,4); m = div(5c+456,153); 
+    z = days + 306; h = 100z - 25; a = fld(h,3652425); b = a - fld(a,4);
+    y = fld(100b+h,36525); c = b + z - 365y - fld(y,4); m = div(5c+456,153); 
     return c - div(153m-457,5)
 end
 # https://en.wikipedia.org/wiki/Talk:ISO_week_date#Algorithms
@@ -152,30 +152,37 @@ end
 
 # Accessor functions
 _days(dt::Date)               = dt.instant.days
-_days{T}(dt::ISODatetime{T})  = div(dt.instant.ms - getoffset(T,dt.instant.ms),86400000)
+_days{T}(dt::ISODatetime{T})  = fld(dt.instant.ms - getoffset(T,dt.instant.ms),86400000)
 year(dt::TimeType)            = _year(_days(dt))
 month(dt::TimeType)           = _month(_days(dt))
 week(dt::TimeType)            = _week(_days(dt))
 day(dt::TimeType)             = _day(_days(dt))
-hour{T}(dt::ISODatetime{T})   = div(dt.instant.ms - getoffset(T,dt.instant.ms),3600000) % 24
-minute{T}(dt::ISODatetime{T}) = div(dt.instant.ms - getoffset(T,dt.instant.ms),60000) % 60
+hour{T}(dt::ISODatetime{T})   = mod(fld(dt.instant.ms - getoffset(T,dt.instant.ms),3600000),24)
+minute{T}(dt::ISODatetime{T}) = mod(fld(dt.instant.ms - getoffset(T,dt.instant.ms),60000),60)
 function second{T}(dt::ISODatetime{T})
-    s = div(dt.instant.ms - getoffsetsecond(T,dt.instant.ms),1000) % 60
-    return s == 0 ? (dt.instant.ms - (dt.instant.ms % 1000) in GETLEAPS ? 60 : 0) : s
+    s = mod(fld(dt.instant.ms - getoffsetsecond(T,dt.instant.ms),1000),60)
+    return s == 0 ? (dt.instant.ms - millisecond(dt) in GETLEAPS ? 60 : 0) : s
 end
-millisecond(dt::Datetime) = dt.instant.ms % 1000
+millisecond{T}(dt::ISODatetime{T}) = mod(dt.instant.ms,1000)
 
-ratadays2date(days) = _day2date(days)
-date2ratadays(dt::TimeType) = _days(dt)
+@vectorize_1arg TimeType year
+@vectorize_1arg TimeType month
+@vectorize_1arg TimeType day
+@vectorize_1arg TimeType week
+@vectorize_1arg Datetime hour
+@vectorize_1arg Datetime minute
+@vectorize_1arg Datetime second
+@vectorize_1arg Datetime millisecond
 
 # Conversion/Promotion
-Datetime(dt::Date) = Datetime(year(dt),month(dt),day(dt))
-#Datetime(dt::Date,tz::Type{T}) = Datetime(year(dt),month(dt),day(dt),0,0,0,0,tz)
-#Datetime(dt::Date,tz::String) = Datetime(year(dt),month(dt),day(dt),0,0,0,0,timezone(tz))
-Date(dt::Datetime) = Date(year(dt),month(dt),day(dt))
 #different calendars?
 #different timezones?
 #different precision levels?
+Datetime(dt::Date) = Datetime(year(dt),month(dt),day(dt))
+Date(dt::Datetime) = Date(year(dt),month(dt),day(dt))
+
+@vectorize_1arg Datetime Date
+@vectorize_1arg Date Datetime
 
 # Traits, Equality
 hash(dt::TimeType) = hash(dt.instant)
@@ -196,20 +203,20 @@ typemin(::Type{Date}) = Date(-252522163911150,1,1)
 function string{T}(dt::ISODatetime{T})
     y,m,d = _day2date(_days(dt))
     h,mi,s = hour(dt),minute(dt),second(dt)
-    yy = y < 0 ? lpad(y,5,"0") : lpad(y,4,"0")
+    yy = y < 0 ? @sprintf("%05i",y) : lpad(y,4,"0")
     mm = lpad(m,2,"0")
     dd = lpad(d,2,"0")
     hh = lpad(h,2,"0")
     mii = lpad(mi,2,"0")
     ss = lpad(s,2,"0")
-    ms = millisecond(dt) == 0 ? "" : string(millisecond(dt)/1000)[2:end]
+    ms = millisecond(dt) == 0 ? "" : string(millisecond(dt)/1000.0)[2:end]
     abbr = getabbr(T,dt.instant.ms)
     return "$yy-$mm-$(dd)T$hh:$mii:$ss$ms $abbr"
 end
 show{T}(io::IO,x::ISODatetime{T}) = print(io,string(x))
 function string(dt::Date)
     y,m,d = _day2date(dt.instant.days)
-    yy = y < 0 ? lpad(y,5,"0") : lpad(y,4,"0")
+    yy = y < 0 ? @sprintf("%05i",y) : lpad(y,4,"0")
     mm = lpad(m,2,"0")
     dd = lpad(d,2,"0")
     return "$yy-$mm-$dd"
