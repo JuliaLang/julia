@@ -254,7 +254,8 @@ ifeq ($(OS), WINNT)
 	cd $(DESTDIR)$(PREFIX)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 	$(call spawn,./dist-extras/nsis/makensis.exe) /NOCD /DVersion=$(VERSDIR) /DArch=$(ARCH) /DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
 	./dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
-	cat ./dist-extras/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "Julia Installer ${VERSDIR}-${ARCH}.exe"
+	cat ./dist-extras/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${VERSDIR}-${ARCH}.exe"
+	-rm -f julia-installer.exe
 else
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
 endif
