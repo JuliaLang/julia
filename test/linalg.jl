@@ -383,7 +383,7 @@ C = randn(2,2)
 
 for elty in (Float32, Float64, Complex64, Complex128, Int)
     if elty == Int
-        srand(61516384)
+        srand(61516300)
         d = rand(1:100, n)
         dl = -rand(0:10, n-1)
         du = -rand(0:10, n-1)
