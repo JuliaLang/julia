@@ -197,7 +197,6 @@ include("linalg/factorization.jl")
 
 include("linalg/bunchkaufman.jl")
 include("linalg/triangular.jl")
-include("linalg/hermitian.jl")
 include("linalg/symmetric.jl")
 include("linalg/woodbury.jl")
 include("linalg/tridiag.jl")
