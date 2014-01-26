@@ -6,7 +6,7 @@ export UmfpackLU,
        increment,
        increment!
 
-import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, nnz, show, size
+import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
 
 import ..LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact, lufact!, solve
 

@@ -185,6 +185,8 @@ Deprecated or removed
   * `myindexes` has been renamed to `localindexes` ([#5475])
 
   * `factorize!` is deprecated in favor of `factorize`. ([#5526])
+  
+  * `nnz` is removed. Use `countnz` or `nfilled` instead ([#5538])
 
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
@@ -230,6 +232,7 @@ Deprecated or removed
 [#4888]: https://github.com/JuliaLang/julia/pull/4888
 [#5475]: https://github.com/JuliaLang/julia/pull/5475
 [#5526]: https://github.com/JuliaLang/julia/pull/5526
+[#5538]: https://github.com/JuliaLang/julia/pull/5538
 
 Julia v0.2.0 Release Notes
 ==========================
