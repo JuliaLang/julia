@@ -6,7 +6,7 @@ Introduction
 The Julia standard library contains a range of functions and macros appropriate for performing scientific and numerical computing, but as broad as many general purpose programming languages.  Additional functionality is available from a growing collection of :ref:`available-packages`. Functions are grouped by topic below.  
 
 Some general notes:
-
+z
 * Except for functions in :ref:`built-in-modules`, all functions documented here are directly available for use in programs.
 * To use module functions, use ``import Module`` to import the module, and ``Module.fn(x)`` to use the functions.
 * Alternatively, ``using ModuleName`` will import all exported ``Module`` functions into the current namespace.
@@ -445,7 +445,7 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 
    For a set of iterable objects, returns an iterable of tuples, where the ``i``\ th tuple contains the ``i``\ th component of each input iterable.
 
-   Note that ``zip`` is it's own inverse: ``[zip(zip(a...)...)...] == [a...]``.
+   Note that ``zip`` is its own inverse: ``[zip(zip(a...)...)...] == [a...]``.
 
 .. function:: enumerate(iter)
 
