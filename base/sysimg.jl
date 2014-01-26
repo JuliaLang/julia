@@ -55,6 +55,8 @@ include("intset.jl")
 include("dict.jl")
 include("set.jl")
 include("iterator.jl")
+include("arrayviews.jl")
+importall .ArrayViews
 
 # compiler
 import Core.Undef  # used internally by compiler
