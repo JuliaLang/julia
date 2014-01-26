@@ -9,7 +9,6 @@ export
     BLAS,
 
 # Types
-    BunchKaufman,
     SymTridiagonal,
     Tridiagonal,
     Bidiagonal,
