@@ -9,6 +9,7 @@ include $(JULIAHOME)/Make.inc
 # so that PREFIX/share/julia/VERSDIR can be overwritten without touching
 # third-party code).
 VERSDIR = v`cut -d. -f1-2 < VERSION`
+VERSION = `cat VERSION`
 INSTALL_F = install -pm644
 INSTALL_M = install -pm755
 
@@ -252,9 +253,9 @@ ifeq ($(OS), WINNT)
 	    mkdir ../$(PREFIX)/Git && \
 	    7z x PortableGit.7z -o"../$(PREFIX)/Git" )
 	cd $(DESTDIR)$(PREFIX)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
-	$(call spawn,./dist-extras/nsis/makensis.exe) /NOCD /DVersion=$(VERSDIR) /DArch=$(ARCH) /DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
+	$(call spawn,./dist-extras/nsis/makensis.exe) /NOCD /DVersion=$(VERSION) /DArch=$(ARCH) /DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
 	./dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
-	cat ./dist-extras/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${VERSDIR}-${ARCH}.exe"
+	cat ./dist-extras/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${VERSION}-${ARCH}.exe"
 	-rm -f julia-installer.exe
 else
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
