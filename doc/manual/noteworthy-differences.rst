@@ -18,11 +18,11 @@ differences that may trip up Julia users accustomed to MATLAB:
 -  Values are passed and assigned by reference. If a function modifies
    an array, the changes will be visible in the caller.
 -  Matlab combines allocation and assignment into single statements,
-   e.g., `a(4) = 3.2` to create the array `a = [0 0 0 3.2]` and `a(5) = 7`
-   to grow the array by one. Julia separates allocation and assignment:
-   if `a` is of length 4, `a[5] = 7` yields an error. Julia has a `push!`
-   function which grows `Vector`s much more efficiently than Matlab's
-   `a(end+1) = val`.
+   e.g., ``a(4) = 3.2`` creates the array ``a = [0 0 0 3.2]`` and ``a(5) = 7``
+   grows it. Julia separates allocation and assignment:
+   if ``a`` is of length 4, ``a[5] = 7`` yields an error. Julia has a ``push!``
+   function which grows ``Vectors`` much more efficiently than Matlab's
+   ``a(end+1) = val``.
 -  The imaginary unit ``sqrt(-1)`` is represented in julia with ``im``.
 -  Multiple values are returned and assigned with parentheses,
    ``return (a, b)`` and ``(a, b) = f(x)``.
@@ -72,11 +72,11 @@ differences that may trip up Julia users accustomed to MATLAB:
 -  The variable ``ans`` is set to the value of the last expression issued
    in an interactive session, but not set when Julia code is run in other
    ways.
--  The closest analog to Julia's `type`s are Matlab's
-   `class`es. Matlab's `struct`s behave somewhere between Julia's
-   `type`s and `Dict`s; in particular, if you need to be able to add
-   fields to the `struct` on-the-fly, use a `Dict` rather than a
-   `type`.
+-  The closest analog to Julia's ``types`` are Matlab's
+   ``classes``. Matlab's ``structs`` behave somewhere between Julia's
+   ``types`` and ``Dicts``; in particular, if you need to be able to add
+   fields to a ``struct`` on-the-fly, use a ``Dict`` rather than a
+   ``type``.
 
 
 Noteworthy differences from R
