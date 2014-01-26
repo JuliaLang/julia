@@ -422,6 +422,10 @@ end
 
 full(A::HessenbergQ) = LAPACK.orghr!(1, size(A.factors, 1), copy(A.factors), A.tau)
 
+#######################
+# Eigendecompositions #
+#######################
+
 # Eigenvalues
 type Eigen{T,V} <: Factorization{T}
     values::Vector{V}
@@ -429,7 +433,7 @@ type Eigen{T,V} <: Factorization{T}
 end
 
 # Generalized eigenvalue problem.
-type GeneralizedEigen{T,V}
+type GeneralizedEigen{T,V} <: Factorization{T}
     values::Vector{V}
     vectors::Matrix{T}
 end
@@ -439,6 +443,8 @@ function getindex(A::Union(Eigen,GeneralizedEigen), d::Symbol)
     d == :vectors && return A.vectors
     throw(KeyError(d))
 end
+
+isposdef(A::Union(Eigen,GeneralizedEigen)) = all(A.values .> 0)
 
 function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; balance::Symbol=:balance)
     n = size(A, 2)
