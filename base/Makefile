@@ -3,38 +3,9 @@ include ../Make.inc
 
 PCRE_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
 
-# These are all the values needed for the BUILD_INFO struct in build_h.jl
-version_string = $(shell cat ../VERSION)
-commit = $(shell git rev-parse HEAD 2>/dev/null)
-commit_short = $(shell git rev-parse --short HEAD 2>/dev/null)
-git_branch = $(shell git branch 2>/dev/null | sed -n '/\* /s///p')
-
-last_tag = $(shell git describe --tags --abbrev=0 2>/dev/null)
-tagged_commit = $(shell [ $$(git describe --tags --exact-match 2>/dev/null) ] && echo true || echo false)
-
-origin = $(shell [ -d ../.git/refs/remotes/origin ] && echo "origin/")
-
-build_number = $(shell git rev-list --count HEAD ^"$(last_tag)" 2>/dev/null || echo 0)
-fork_master_distance = $(shell git rev-list --count HEAD ^"$(origin)master" 2>/dev/null || echo 0)
-fork_master_timestamp = $(shell git show -s $$(git merge-base HEAD $(origin)master 2>/dev/null) --format=format:"%ct" 2>/dev/null || echo 0)
-
-git_time = $(shell git log -1 --pretty=format:%ct 2>/dev/null)
-ifneq ($(git_time), )
-	ifneq (,$(filter $(OS), Darwin FreeBSD))
-		date_string = "$(shell /bin/date -jr $(git_time) -u '+%Y-%m-%d %H:%M %Z')"
-	else
-		date_string = "$(shell /bin/date --date=@$(git_time) -u '+%Y-%m-%d %H:%M %Z')"
-	endif
-else
-	date_string = ""
-endif
-
-dirty = $(shell [ -z "$(shell git status --porcelain 2>/dev/null)" ] && echo "" || echo "*" )
-
 TAGGED_RELEASE_BANNER = ""
 
-
-all: pcre_h.jl errno_h.jl build_h.jl.phony fenv_constants.jl file_constants.jl uv_constants.jl
+all: pcre_h.jl errno_h.jl build_h.jl.phony fenv_constants.jl file_constants.jl uv_constants.jl version_git.jl.phony
 
 pcre_h.jl:
 	@$(call PRINT_PERL, $(CPP) -dM $(shell $(PCRE_CONFIG) --prefix)/include/pcre.h | perl -nle '/^\s*#define\s+PCRE_(\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "const $$1 = uint32($$2)"' | sort > $@)
@@ -69,33 +40,8 @@ else
 	@echo "const USE_BLAS64 = false" >> $@
 endif
 	@echo "const SYSCONFDIR = \"$(SYSCONFDIR)\"" >> $@
-
-	@echo "immutable BuildInfo" >> $@
-	@echo "    version_string::String" >> $@
-	@echo "    commit::String" >> $@
-	@echo "    commit_short::String" >> $@
-	@echo "    branch::String" >> $@
-	@echo "    build_number::Int" >> $@
-	@echo "    date_string::String" >> $@
-	@echo "    tagged_commit::Bool" >> $@
-	@echo "    fork_master_distance::Int" >> $@
-	@echo "    fork_master_timestamp::Float64" >> $@
-	@echo "    TAGGED_RELEASE_BANNER::String" >> $@
-	@echo "end" >> $@
-
-
-	@echo "const BUILD_INFO = BuildInfo( \
-			'\"$(version_string)\"', \
-			'\"$(commit)\"', \
-			'\"$(commit_short)$(dirty)\"', \
-			'\"$(git_branch)\"', \
-			$(build_number), \
-			'\"$(date_string)\"', \
-			$(tagged_commit), \
-			$(fork_master_distance), \
-			$(fork_master_timestamp)., \
-			'\"$(TAGGED_RELEASE_BANNER)\"' \
-			)" | xargs >> $@
+	@echo "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@
+	@echo "const TAGGED_RELEASE_BANNER = \"$(TAGGED_RELEASE_BANNER)\"" >> $@
 
 	@# This to ensure that we always rebuild this file, but only when it is modified do we touch build_h.jl,
 	@# ensuring we rebuild the system image as infrequently as possible
@@ -106,7 +52,30 @@ endif
 		rm -f $@; \
 	fi
 
-.PHONY: build_h.jl.phony
+version_git.jl.phony:
+ifneq ($(NO_GIT), 1)
+	@sh version_git.sh > $@
+	@# This to avoid touching git_version.jl when it is not modified,
+	@# so that the system image does not need to be rebuilt.
+	@if ! cmp -s $@ version_git.jl; then \
+	    $(call PRINT_PERL,) \
+	    mv $@ version_git.jl; \
+	else \
+	    rm -f $@; \
+	fi
+else
+ifeq ($(shell [ -f version_git.jl ] && echo "true"), true)
+	@# Give warning if boilerplate git is used
+	@if grep -q "Default output if git is not available" version_git.jl; then \
+	    echo "WARNING: Using boilerplate git version info" >&2; \
+	fi
+else
+	$(warning "WARNING: Using boilerplate git version info")
+	@sh version_git.sh NO_GIT > version_git.jl
+endif
+endif
+
+.PHONY: build_h.jl.phony version_git.jl.phony
 
 
 
@@ -115,6 +84,9 @@ clean:
 	rm -f pcre_h.jl
 	rm -f errno_h.jl
 	rm -f build_h.jl
+	rm -f build_h.jl.phony
 	rm -f fenv_constants.jl
 	rm -f uv_constants.jl
 	rm -f file_constants.jl
+	rm -f version_git.jl
+	rm -f version_git.jl.phony

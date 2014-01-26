@@ -32,6 +32,13 @@ endif
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,base test doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
 
+git-submodules:
+ifneq ($(NO_GIT), 1)
+	@-git submodule update --init
+else
+       $(warn "Submodules could not be updated because git is unavailible")
+endif
+
 debug release: | $(DIRS) $(BUILD)/share/julia/base $(BUILD)/share/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples $(BUILD)/etc/julia/juliarc.jl
 	@$(MAKE) $(QUIET_MAKE) julia-$@
 	@export JL_PRIVATE_LIBDIR=$(JL_PRIVATE_LIBDIR) && \
@@ -43,9 +50,7 @@ julia-debug-symlink:
 julia-release-symlink:
 	@ln -sf $(BUILD)/bin/julia-$(DEFAULT_REPL) julia
 
-julia-debug julia-release:
-	@-git submodule init --quiet
-	@-git submodule update
+julia-debug julia-release: git-submodules
 	@$(MAKE) $(QUIET_MAKE) -C deps
 	@$(MAKE) $(QUIET_MAKE) -C src lib$@
 	@$(MAKE) $(QUIET_MAKE) -C base
@@ -261,6 +266,27 @@ else
 endif
 	rm -fr julia-$(JULIA_COMMIT)
 
+
+source-dist: git-submodules
+	# Save git information
+	-@$(MAKE) -C base version_git.jl.phony
+	# Get all the dependencies downloaded
+	@$(MAKE) -C deps getall
+
+	# Create file source-dist.tmp to hold all the filenames that goes into the tarball
+	echo "base/version_git.jl" > source-dist.tmp
+	git ls-files >> source-dist.tmp
+	ls deps/*.tar.gz deps/*.tar.bz2 deps/*.tgz deps/random/*.tar.gz >> source-dist.tmp
+	git submodule --quiet foreach 'git ls-files | sed "s&^&$$path/&"' >> source-dist.tmp
+
+	# Remove unwanted files
+	sed '/\.git/d' source-dist.tmp > source-dist.tmp1
+	sed '/\.travis/d' source-dist.tmp1 > source-dist.tmp
+
+	# Create tarball
+	tar -cz -T source-dist.tmp --no-recursion -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
+	rm -f source-dist.tmp source-dist.tmp1
+
 clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C base clean
 	@$(MAKE) -C src clean
@@ -272,6 +298,7 @@ clean: | $(CLEAN_TARGETS)
 	@rm -f julia
 	@rm -f *~ *# *.tar.gz
 	@rm -fr $(BUILD)/$(JL_PRIVATE_LIBDIR)
+	@rm -f source-dist.tmp source-dist.tmp1
 # Temporarily add this line to the Makefile to remove extras
 	@rm -fr $(BUILD)/share/julia/extras
 
@@ -291,7 +318,7 @@ distclean: cleanall
 .PHONY: default debug release julia-debug julia-release \
 	test testall testall1 test-* clean distclean cleanall \
 	run-julia run-julia-debug run-julia-release run \
-	install dist
+	install dist source-dist git-submodules
 
 ifeq ($(VERBOSE),1)
 .SILENT:

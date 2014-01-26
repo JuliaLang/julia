@@ -16,6 +16,26 @@ GPL licensed, as various dependent libraries such as `FFTW`, `Rmath`,
 `SuiteSparse`, and `git` are GPL licensed. We do hope to have a
 non-GPL distribution of Julia in the future.
 
+Versioning and Git
+------------------
+The Makefile uses both the `VERSION` file and commit hashes and tags from the
+git repository to generate the `base/version_git.jl` with information we use to
+fill the splash screen and the `versioninfo()` output. If you for some reason
+don't want to have the git repository available when building you should
+pregenerate the `base/version_git.jl` file with:
+
+    make -C base version_git.jl.phony
+
+Juila has lots of build dependencies where we use patched versions that has not
+yet been included by the popular package managers. These dependencies will usually
+be automatically downloaded when you build, but if you want to be able to build
+Julia on a computer without internet access you should create a source-dist archive
+with the special make targed
+
+   make source-dist
+
+that creates a julia-version-commit.tar.gz archive with all required dependencies.
+
 When compiling a tagged release in the git repository, we don't display the
 branch/commit hash info in the splash screen. You can use this line to show
 a release description of up to 45 characters. To set this line you have
@@ -35,16 +55,6 @@ for an example of what metadata is needed for creating `.deb` packages
 for Debian and Ubuntu-based systems. Although we have not yet experimented
 with it, [Alien](https://wiki.debian.org/Alien) could be used to
 generate Julia packages for various Linux distributions.
-
-Julia looks for git versioning information when building.  If it does
-not find the git executable or the `.git/` directory is unreadable,
-the build process will continue, however all versioning information
-will be unavailable.  This is the case, for instance, on Canonical's
-build servers where the [Ubuntu
-nightlies](https://launchpad.net/~staticfloat/+archive/julianightlies)
-are built.  Therefore, a workaround must be enacted, where the git
-versioning information [is encoded into the
-source](https://github.com/staticfloat/julia-nightly-packaging/blob/master/build_ubuntu.sh#L76-78) before upload for building, and the source is modified to [not attempt to look for it](https://github.com/staticfloat/julia-nightly-packaging/blob/master/nogit-workaround.patch) when building.
 
 By default, Julia loads `$PREFIX/etc/julia/juliarc.jl` as an
 installation-wide initialization file. This file can be used by
