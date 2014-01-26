@@ -635,7 +635,6 @@ export
     qrp,
     qrpfact!,
     qrpfact,
-    randsym,
     rank,
     rref,
     scale!,
