@@ -224,12 +224,14 @@ imi = BigFloat(-Inf)
 
 # total ordering
 @test isless(big(-0.0), big(0.0))
-@test cmp(big(-0.0), big(0.0)) == -1
-@test cmp(big(0.0), big(-0.0)) == 1
 @test isless(big(1.0), big(NaN))
-@test cmp(big(1.0), big(NaN)) == -1
-@test cmp(big(NaN), big(NaN)) == 0
-@test cmp(big(NaN), big(1.0)) == 1
+
+# cmp
+@test cmp(big(-0.0), big(0.0)) == 0
+@test cmp(big(0.0), big(-0.0)) == 0
+@test_throws cmp(big(1.0), big(NaN))
+@test_throws cmp(big(NaN), big(NaN))
+@test_throws cmp(big(NaN), big(1.0))
 
 # signbit
 @test signbit(BigFloat(-1.0)) == 1

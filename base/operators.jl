@@ -25,6 +25,7 @@ isequal(x,y) = is(x,y)
 # this definition allows Number types to implement < instead of isless,
 # which is more idiomatic:
 isless(x::Real, y::Real) = x<y
+lexcmp(x::Real, y::Real) = isless(x,y) ? -1 : ifelse(isless(y,x), 1, 0)
 
 ifelse(c::Bool, x, y) = Intrinsics.select_value(c, x, y)
 
