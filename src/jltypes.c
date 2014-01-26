@@ -1696,8 +1696,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                 if (check && !jl_is_typevar(val) && !jl_subtype(val, t, 0)) {
                     jl_type_error_rt("type parameter",
                                      ((jl_tvar_t*)t)->name->name,
-                                     ((jl_tvar_t*)t)->ub,
-                                     val);
+                                     t, val);
                 }
                 return val;
             }
@@ -1760,8 +1759,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                     if (!jl_subtype(iparams[i], tv, 0)) {
                         jl_type_error_rt(tt->name->name->name,
                                          ((jl_tvar_t*)tv)->name->name,
-                                         ((jl_tvar_t*)tv)->ub,
-                                         iparams[i]);
+                                         tv, iparams[i]);
                     }
                 }
             }
