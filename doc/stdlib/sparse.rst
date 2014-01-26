@@ -39,6 +39,10 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    Convert a sparse matrix ``S`` into a dense matrix.
 
+.. function:: nfilled(A)
+
+   Returns the number of stored (filled) elements in a sparse matrix.
+
 .. function:: spzeros(m,n)
 
    Create an empty sparse matrix of size ``m x n``.

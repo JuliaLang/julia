@@ -1056,7 +1056,7 @@ function find(testf::Function, A::AbstractArray)
 end
 
 function find(A::AbstractArray)
-    nnzA = nnz(A)
+    nnzA = countnz(A)
     I = Array(Int, nnzA)
     count = 1
     for i=1:length(A)
@@ -1074,7 +1074,7 @@ find(testf::Function, x) = find(testf(x))
 findn(A::AbstractVector) = find(A)
 
 function findn(A::AbstractMatrix)
-    nnzA = nnz(A)
+    nnzA = countnz(A)
     I = Array(Int, nnzA)
     J = Array(Int, nnzA)
     count = 1
@@ -1089,7 +1089,7 @@ function findn(A::AbstractMatrix)
 end
 
 function findnz{T}(A::AbstractMatrix{T})
-    nnzA = nnz(A)
+    nnzA = countnz(A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
     NZs = zeros(T, nnzA)
@@ -1109,7 +1109,7 @@ function findnz{T}(A::AbstractMatrix{T})
 end
 
 function nonzeros{T}(A::AbstractArray{T})
-    nnzA = nnz(A)
+    nnzA = countnz(A)
     V = Array(T, nnzA)
     count = 1
     if nnzA > 0

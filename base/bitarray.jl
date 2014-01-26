@@ -1599,9 +1599,9 @@ end
 
 #TODO: rol!, ror!
 
-## nnz & find ##
+## countnz & find ##
 
-function nnz(B::BitArray)
+function countnz(B::BitArray)
     n = 0
     Bc = B.chunks
     @inbounds for i = 1:length(Bc)
@@ -1705,7 +1705,7 @@ end
 
 function find(B::BitArray)
     l = length(B)
-    nnzB = nnz(B)
+    nnzB = countnz(B)
     I = Array(Int, nnzB)
     if nnzB == 0
         return I
@@ -1741,7 +1741,7 @@ end
 findn(B::BitVector) = find(B)
 
 function findn(B::BitMatrix)
-    nnzB = nnz(B)
+    nnzB = countnz(B)
     I = Array(Int, nnzB)
     J = Array(Int, nnzB)
     count = 1
@@ -1760,13 +1760,13 @@ function findnz(B::BitMatrix)
     return (I, J, trues(length(I)))
 end
 
-nonzeros(B::BitArray) = trues(nnz(B))
+nonzeros(B::BitArray) = trues(countnz(B))
 
 ## Reductions ##
 
 sum(A::BitArray, region) = reducedim(+,A,region,0,Array(Int,reduced_dims(A,region)))
 
-sum(B::BitArray) = nnz(B)
+sum(B::BitArray) = countnz(B)
 
 function all(B::BitArray)
     length(B) == 0 && return true
