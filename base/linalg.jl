@@ -18,6 +18,7 @@ export
     Cholesky,
     CholeskyPivoted,
     Eigen,
+    GeneralizedEigen,
     GeneralizedSVD,
     GeneralizedSchur,
     Hessenberg,
