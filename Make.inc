@@ -354,7 +354,7 @@ endif
 endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
-  LIBUTF8PROC = /usr/lib/libutf8proc.a
+  LIBUTF8PROC = -lutf8proc
 else
   LIBUTF8PROC = $(BUILD)/$(JL_LIBDIR)/libutf8proc.a
 endif
