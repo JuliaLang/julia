@@ -1,4 +1,4 @@
-## Hermitian matrices
+#Symmetric and Hermitian matrices
 
 for ty in (:Hermitian, :Symmetric)
     @eval begin

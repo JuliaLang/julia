@@ -292,41 +292,17 @@ function sqrtm{T<:Real}(A::StridedMatrix{T}, cond::Bool)
     
     n = chksquare(A)
     SchurF = schurfact!(complex(A))
-    R = zeros(eltype(SchurF[:T]), n, n)
-    for j = 1:n
-        R[j,j] = sqrt(SchurF[:T][j,j])
-        for i = j - 1:-1:1
-            r = SchurF[:T][i,j]
-            for k = i + 1:j - 1
-                r -= R[i,k]*R[k,j]
-            end
-            if r != 0
-                R[i,j] = r / (R[i,i] + R[j,j])
-            end
-        end
-    end
+    R = full(sqrtm(Triangular(SchurF[:T])))
     retmat = SchurF[:vectors]*R*SchurF[:vectors]'
     retmat2= all(imag(retmat) .== 0) ? real(retmat) : retmat
-    cond ? (retmat2, alpha) : retmat2
+    cond ? (retmat2, norm(R)^2/norm(SchurF[:T])) : retmat2
 end
 function sqrtm{T<:Complex}(A::StridedMatrix{T}, cond::Bool)
     ishermitian(A) && return sqrtm(Hermitian(A), cond)
     
     n = chksquare(A)
     SchurF = schurfact(A)
-    R = zeros(eltype(SchurF[:T]), n, n)
-    for j = 1:n
-        R[j,j] = sqrt(SchurF[:T][j,j])
-        for i = j - 1:-1:1
-            r = SchurF[:T][i,j]
-            for k = i + 1:j - 1
-                r -= R[i,k]*R[k,j]
-            end
-            if r != 0
-                R[i,j] = r / (R[i,i] + R[j,j])
-            end
-        end
-    end
+    R = full(sqrtm(Triangular(SchurF[:T])))
     retmat = SchurF[:vectors]*R*SchurF[:vectors]'
     cond ? (retmat, norm(R)^2/norm(SchurF[:T])) : retmat
 end
