@@ -633,6 +633,8 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
 
 void julia_init(char *imageFile)
 {
+    jl_io_loop = uv_default_loop(); // this loop will internal events (spawining process etc.),
+                                    // best to call this first, since it also initializes libuv
     jl_page_size = jl_getpagesize();
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
@@ -660,7 +662,6 @@ void julia_init(char *imageFile)
     if (uv_dlsym(&jl_dbghelp, "SymRefreshModuleList", (void**)&hSymRefreshModuleList))
         hSymRefreshModuleList = 0;
 #endif
-    jl_io_loop = uv_default_loop(); //this loop will internal events (spawining process etc.)
     init_stdio();
 
 #if defined(__linux__)

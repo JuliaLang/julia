@@ -1,5 +1,5 @@
 testnames = [
-    "core", "keywordargs", "numbers", "strings", "unicode",
+    "core", "keywordargs", "numbers", "strings",
     "collections", "hashing", "remote", "iobuffer", "arrayops", "linalg",
     "blas", "fft", "dsp", "sparse", "bitarray", "random", "math",
     "functional", "bigint", "sorting", "statistics", "spawn", "parallel",
@@ -8,12 +8,13 @@ testnames = [
     "floatapprox", "readdlm", "regex", "float16", "combinatorics",
     "sysinfo", "rounding", "ranges", "mod2pi", "euler"
 ]
+@unix_only push!(testnames, "unicode")
 
 tests = ARGS==["all"] ? testnames : ARGS
 
 n = min(8, CPU_CORES, length(tests))
 
-@unix_only n > 1 && addprocs(n)
+n > 1 && addprocs(n)
 
 blas_set_num_threads(1)
 
