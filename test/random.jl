@@ -22,3 +22,10 @@ if sizeof(Int32) < sizeof(Int)
     @test typeof(r) == Int32
     @test -1 <= r <= typemax(Int32)
 end
+
+seed = rand(Uint) #leave state nondeterministic as above
+srand(seed)
+r = int64(rand(int32(97:122)))
+srand(seed)
+@test r == rand(int64(97:122))
+
