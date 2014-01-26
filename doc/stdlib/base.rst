@@ -445,7 +445,7 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 
    For a set of iterable objects, returns an iterable of tuples, where the ``i``\ th tuple contains the ``i``\ th component of each input iterable.
 
-   Note that ``zip`` is it's own inverse: ``[zip(zip(a...)...)...] == [a...]``.
+   Note that ``zip`` is its own inverse: ``[zip(zip(a...)...)...] == [a...]``.
 
 .. function:: enumerate(iter)
 
