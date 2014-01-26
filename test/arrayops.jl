@@ -677,6 +677,26 @@ begin
     @test c1 == -a
     c2 = mapslices(x-> maximum(-x), a, [1,2])
     @test c2 == maximum(-a)
+    
+    # other types than Number
+    @test mapslices(prod,["1" "2"; "3" "4"],1) == ["13" "24"]
+    
+    # issue #5177
+    
+    c = ones(2,3,4)
+    m1 = mapslices(x-> ones(2,3), c, [1,2])
+    m2 = mapslices(x-> ones(2,4), c, [1,3])
+    m3 = mapslices(x-> ones(3,4), c, [2,3])
+    @test size(m1) == size(m2) == size(m3) == size(c)
+    
+    n1 = mapslices(x-> ones(6), c, [1,2])
+    n2 = mapslices(x-> ones(6), c, [1,3])
+    n3 = mapslices(x-> ones(6), c, [2,3])
+    n1a = mapslices(x-> ones(1,6), c, [1,2])
+    n2a = mapslices(x-> ones(1,6), c, [1,3])
+    n3a = mapslices(x-> ones(1,6), c, [2,3])
+    @test size(n1a) == (1,6,4) && size(n2a) == (1,3,6)  && size(n3a) == (2,1,6)  
+    @test size(n1) == (6,1,4) && size(n2) == (6,3,1)  && size(n3) == (2,6,1)  
 end
 
 
