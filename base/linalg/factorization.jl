@@ -466,7 +466,7 @@ function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}; balance::Symbol=:balance)
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     ishermitian(A) && return eigfact!(Hermitian(A)) 
-    return Eigen(LAPACK.geevx!(balance == :balance ? 'B' : (balance == :diagonal ? 'S' : (balance == :permute ? 'P' : (balance == :nobalance ? 'N' : throw(ArgumentError("balance must be either ':balance', 'diagonal', 'permute' or 'nobalance'"))))), 'N', 'V', 'N', A)[[2,4]]...)
+    return Eigen(LAPACK.geevx!(balance == :balance ? 'B' : (balance == :diagonal ? 'S' : (balance == :permute ? 'P' : (balance == :nobalance ? 'N' : throw(ArgumentError("balance must be either ':balance', ':diagonal', ':permute' or ':nobalance'"))))), 'N', 'V', 'N', A)[[2,4]]...)
 end
 eigfact!(A::StridedMatrix; balance::Symbol=:balance) = eigfact!(float(A), balance=balance)
 eigfact{T<:BlasFloat}(x::StridedMatrix{T}; balance::Symbol=:balance) = eigfact!(copy(x), balance=balance)

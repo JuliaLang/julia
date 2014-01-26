@@ -108,7 +108,7 @@ Library improvements
 
   * `LinAlg` (linear algebra) improvements
 
-      * Balancing options for eigenvector calculations
+      * Balancing options for eigenvector calculations for general matrices ([#5428]).
 
     * Sparse linear algebra
 
@@ -206,6 +206,7 @@ Deprecated or removed
 [a448e080]: https://github.com/JuliaLang/julia/commit/a448e080dc736c7fb326426dfcb2528be36973d3
 [5e3f074b]: https://github.com/JuliaLang/julia/commit/5e3f074b9173044a0a4219f9b285879ff7cec041
 [#4967]: https://github.com/JuliaLang/julia/pull/4967
+[#5428]: https://github.com/JuliaLang/julia/pull/5428
 [#5468]: https://github.com/JuliaLang/julia/pull/5468
 
 Julia v0.2.0 Release Notes

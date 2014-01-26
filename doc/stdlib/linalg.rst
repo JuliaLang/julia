@@ -120,12 +120,16 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eigvecs(A, [eigvals,][balance=:balance])
 
    Returns the eigenvectors of ``A``.
+   The ``balance`` keyword is the same as for :func:`eigfact`.
 
-   For SymTridiagonal matrices, if the optional vector of eigenvalues ``eigvals`` is specified, returns the specific corresponding eigenvectors.
+   For ``SymTridiagonal`` matrices, if the optional vector of eigenvalues ``eigvals`` is specified, returns the specific corresponding eigenvectors.
+
 
 .. function:: eigfact(A,[balance=:balance])
 
-   Compute the eigenvalue decomposition of ``A`` and return an ``Eigen`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``. The following functions are available for ``Eigen`` objects: ``inv``, ``det``. For general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. Possible values are ``:balance``(default), ``:permute``,``:diagonal`` and ``:nobalance``.
+   Compute the eigenvalue decomposition of ``A`` and return an ``Eigen`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``. The following functions are available for ``Eigen`` objects: ``inv``, ``det``.
+   
+   For general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. Possible values are: ``:nobalance`` (do not balance), ``:permute`` (permute the matrix to become closer to upper triangular), ``:diagonal`` (scale the matrix by its diagonal elements to make rows and columns more equal in norm), and ``:balance`` (The default, i.e. both permute and scale the matrix).
 
 .. function:: eigfact(A, B)
 
