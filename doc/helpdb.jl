@@ -687,7 +687,7 @@
    the \"i\"th tuple contains the \"i\"th component of each input
    iterable.
 
-   Note that \"zip\" is it's own inverse: \"[zip(zip(a...)...)...] ==
+   Note that \"zip\" is its own inverse: \"[zip(zip(a...)...)...] ==
    [a...]\".
 
 "),
