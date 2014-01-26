@@ -62,6 +62,7 @@ export
     Matrix,
     MergeSort,
     Nullable,
+    MetaData,
     ObjectIdDict,
     OrdinalRange,
     PollingFileWatcher,
@@ -1050,6 +1051,8 @@ export
 # help and reflection
     apropos,
     current_module,
+    @doc,
+    doc,
     edit,
     code_typed,
     code_lowered,
@@ -1072,6 +1075,10 @@ export
     which,
     whos,
     workspace,
+    getmeta,
+    getmeta!,
+    setmeta!,
+    hasmeta,
 
 # loading source files
     evalfile,

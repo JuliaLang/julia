@@ -209,9 +209,9 @@ include("test.jl")
 include("meta.jl")
 include("i18n.jl")
 include("help.jl")
+include("metadata.jl")
 using .I18n
 using .Help
-push!(I18n.CALLBACKS, Help.clear_cache)
 
 # frontend
 include("Terminals.jl")
