@@ -102,7 +102,7 @@ end
 
 -(x::Float16) = reinterpret(Float16, reinterpret(Uint16,x) $ 0x8000)
 abs(x::Float16) = reinterpret(Float16, reinterpret(Uint16,x) & 0x7fff)
-for op in (:+,:-,:*,:/,:\)
+for op in (:+,:-,:*,:/,:\,:^)
     @eval ($op)(a::Float16, b::Float16) = float16(($op)(float32(a), float32(b)))
 end
 for op in (:<,:<=,:isless)
@@ -119,5 +119,6 @@ atan2(a::Float16, b::Float16) = float16(atan2(float32(a), float32(b)))
 hypot(a::Float16, b::Float16) = float16(hypot(float32(a), float32(b)))
 ldexp(a::Float16, b::Integer) = float16(ldexp(float32(a), b))
 exponent(x::Float16) = exponent(float32(x))
+^(x::Float16, y::Integer) = x^float16(y)
 
 hash(x::Float16) = hash(reinterpret(Uint16, isnan(x) ? NaN16 : x))
