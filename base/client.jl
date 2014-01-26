@@ -292,6 +292,10 @@ function process_options(args::Vector{UTF8String})
                 error("invalid option: ", args[i])
             end
         elseif args[i][1]!='-'
+            if startup
+                load_juliarc()
+                startup = false
+            end
             # program
             repl = false
             # remove julia's arguments
