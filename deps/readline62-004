@@ -1,0 +1,108 @@
+			   READLINE PATCH REPORT
+			   =====================
+
+Readline-Release: 6.2
+Patch-ID: readline62-004
+
+Bug-Reported-by:	Jakub Filak
+Bug-Reference-ID:
+Bug-Reference-URL:	https://bugzilla.redhat.com/show_bug.cgi?id=813289
+
+Bug-Description:
+
+Attempting to redo (using `.') the vi editing mode `cc', `dd', or `yy'
+commands leads to an infinite loop.
+
+Patch (apply with `patch -p0'):
+
+*** ../readline-6.2-patched/vi_mode.c	2011-02-25 11:17:02.000000000 -0500
+--- vi_mode.c	2012-06-02 12:24:47.000000000 -0400
+***************
+*** 1235,1243 ****
+        r = rl_domove_motion_callback (_rl_vimvcxt);
+      }
+!   else if (vi_redoing)
+      {
+        _rl_vimvcxt->motion = _rl_vi_last_motion;
+        r = rl_domove_motion_callback (_rl_vimvcxt);
+      }
+  #if defined (READLINE_CALLBACKS)
+    else if (RL_ISSTATE (RL_STATE_CALLBACK))
+--- 1297,1313 ----
+        r = rl_domove_motion_callback (_rl_vimvcxt);
+      }
+!   else if (vi_redoing && _rl_vi_last_motion != 'd')	/* `dd' is special */
+      {
+        _rl_vimvcxt->motion = _rl_vi_last_motion;
+        r = rl_domove_motion_callback (_rl_vimvcxt);
+      }
++   else if (vi_redoing)		/* handle redoing `dd' here */
++     {
++       _rl_vimvcxt->motion = _rl_vi_last_motion;
++       rl_mark = rl_end;
++       rl_beg_of_line (1, key);
++       RL_UNSETSTATE (RL_STATE_VIMOTION);
++       r = vidomove_dispatch (_rl_vimvcxt);
++     }
+  #if defined (READLINE_CALLBACKS)
+    else if (RL_ISSTATE (RL_STATE_CALLBACK))
+***************
+*** 1317,1325 ****
+        r = rl_domove_motion_callback (_rl_vimvcxt);
+      }
+!   else if (vi_redoing)
+      {
+        _rl_vimvcxt->motion = _rl_vi_last_motion;
+        r = rl_domove_motion_callback (_rl_vimvcxt);
+      }
+  #if defined (READLINE_CALLBACKS)
+    else if (RL_ISSTATE (RL_STATE_CALLBACK))
+--- 1387,1403 ----
+        r = rl_domove_motion_callback (_rl_vimvcxt);
+      }
+!   else if (vi_redoing && _rl_vi_last_motion != 'c')	/* `cc' is special */
+      {
+        _rl_vimvcxt->motion = _rl_vi_last_motion;
+        r = rl_domove_motion_callback (_rl_vimvcxt);
+      }
++   else if (vi_redoing)		/* handle redoing `cc' here */
++     {
++       _rl_vimvcxt->motion = _rl_vi_last_motion;
++       rl_mark = rl_end;
++       rl_beg_of_line (1, key);
++       RL_UNSETSTATE (RL_STATE_VIMOTION);
++       r = vidomove_dispatch (_rl_vimvcxt);
++     }
+  #if defined (READLINE_CALLBACKS)
+    else if (RL_ISSTATE (RL_STATE_CALLBACK))
+***************
+*** 1378,1381 ****
+--- 1456,1472 ----
+        r = rl_domove_motion_callback (_rl_vimvcxt);
+      }
++   else if (vi_redoing && _rl_vi_last_motion != 'y')	/* `yy' is special */
++     {
++       _rl_vimvcxt->motion = _rl_vi_last_motion;
++       r = rl_domove_motion_callback (_rl_vimvcxt);
++     }
++   else if (vi_redoing)			/* handle redoing `yy' here */
++     {
++       _rl_vimvcxt->motion = _rl_vi_last_motion;
++       rl_mark = rl_end;
++       rl_beg_of_line (1, key);
++       RL_UNSETSTATE (RL_STATE_VIMOTION);
++       r = vidomove_dispatch (_rl_vimvcxt);
++     }
+  #if defined (READLINE_CALLBACKS)
+    else if (RL_ISSTATE (RL_STATE_CALLBACK))
+*** ../readline-6.2-patched/patchlevel	2010-01-14 10:15:52.000000000 -0500
+--- patchlevel	2011-11-17 11:09:35.000000000 -0500
+***************
+*** 1,3 ****
+  # Do not edit -- exists only for use by patch
+  
+! 3
+--- 1,3 ----
+  # Do not edit -- exists only for use by patch
+  
+! 4
