@@ -1,5 +1,6 @@
 if !success(`iconv --version`)
 	warn("iconv not found, skipping unicode tests!")
+	@windows_only warn("Use WinRPM.install(\"win_iconv\") to run these tests")
 else
 	# Create unicode test data directory
 	unicodedir = mktempdir()
