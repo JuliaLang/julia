@@ -102,6 +102,26 @@ for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
     end
 end
 
+function sqrtm{T}(A::Triangular{T})
+    n = size(A, 1)
+    R = zeros(T, n, n)
+    if A.uplo == 'U'
+        for j = 1:n
+            (T<:Complex || A[j,j]>=0) ? (R[j,j]=sqrt(A[j,j])) : throw(SingularException(j))
+            for i = j-1:-1:1
+                r = A[i,j]
+                for k = i+1:j-1
+                    r -= R[i,k]*R[k,j]
+                end
+                r==0 || (R[i,j] = r / (R[i,i] + R[j,j]))
+            end
+        end
+        return Triangular(R)
+    else #A.uplo == 'L' #Not the usual case
+        return sqrtm(A.').'
+    end
+end
+
 #Generic solver using naive substitution
 function naivesub!(A::Triangular, b::AbstractVector, x::AbstractVector=b)
     N = size(A, 2)
