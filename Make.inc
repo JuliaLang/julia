@@ -262,6 +262,11 @@ BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/
 endif
 endif
 
+# We map amd64 to x86_64 for compatibility with systems that identify 64-bit systems as such
+ifeq ($(ARCH),amd64)
+ARCH = x86_64
+endif
+
 ifeq ($(USEGCC),1)
 ifneq ($(ARCH), ppc64)
   SHIPFLAGS += -momit-leaf-frame-pointer
