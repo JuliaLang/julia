@@ -33,6 +33,11 @@ function writemime(io::IO, ::MIME"text/plain", v::DataType)
     end
 end
 
+function writemime{K, V}(io::IO, ::MIME"text/plain", iter::Union(KeyIterator{Dict{K, V}}, ValueIterator{Dict{K, V}}))
+    print(io, "Iterator for ")
+    writemime(io, MIME("text/plain"), collect(iter))
+end
+
 # showing exception objects as descriptive error messages
 
 showerror(io::IO, e) = show(io, e)
