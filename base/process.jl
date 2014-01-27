@@ -5,7 +5,8 @@ type Cmd <: AbstractCmd
     ignorestatus::Bool
     detach::Bool
     env::Union(Array{ByteString},Nothing)
-    Cmd(exec::Vector{ByteString}) = new(exec,false,false,nothing)
+    dir::UTF8String
+    Cmd(exec::Vector{ByteString}) = new(exec,false,false,nothing,"")
 end
 
 type OrCmds <: AbstractCmd
@@ -29,19 +30,21 @@ end
 shell_escape(cmd::Cmd) = shell_escape(cmd.exec...)
 
 function show(io::IO, cmd::Cmd)
-    if isa(cmd.exec,Vector{ByteString})
-        esc = shell_escape(cmd)
-        print(io,'`')
-        for c in esc
-            if c == '`'
-                print(io,'\\')
-            end
-            print(io,c)
+    print_env = cmd.env !== nothing 
+    print_dir = !isempty(cmd.dir)
+    (print_env || print_dir) && print(io,"setenv(")
+    esc = shell_escape(cmd)
+    print(io,'`')
+    for c in esc
+        if c == '`'
+            print(io,'\\')
         end
-        print(io,'`')
-    else
-        print(io, cmd.exec)
+        print(io,c)
     end
+    print(io,'`')
+    print_env && (print(io,","); show(io,cmd.env))
+    print_dir && (print(io,"; dir="); show(io,cmd.dir))
+    (print_dir || print_env) && print(io,")")
 end
 
 function show(io::IO, cmds::OrCmds)
@@ -132,8 +135,9 @@ ignorestatus(cmd::Cmd) = (cmd.ignorestatus=true; cmd)
 ignorestatus(cmd::Union(OrCmds,AndCmds)) = (ignorestatus(cmd.a); ignorestatus(cmd.b); cmd)
 detach(cmd::Cmd) = (cmd.detach=true; cmd)
 
-setenv{S<:ByteString}(cmd::Cmd, env::Array{S}) = (cmd.env = ByteString[x for x in env];cmd)
-setenv(cmd::Cmd, env::Associative) = (cmd.env = ByteString[string(k)*"="*string(v) for (k,v) in env];cmd)
+setenv{S<:ByteString}(cmd::Cmd, env::Array{S}; dir="") = (cmd.env = ByteString[x for x in env]; setenv(cmd,dir=dir); cmd)
+setenv(cmd::Cmd, env::Associative; dir="") = (cmd.env = ByteString[string(k)*"="*string(v) for (k,v) in env]; setenv(cmd,dir=dir); cmd)
+setenv(cmd::Cmd; dir="") = (cmd.dir = dir; cmd)
 
 (&)(left::AbstractCmd,right::AbstractCmd) = AndCmds(left,right)
 (|>)(src::AbstractCmd,dest::AbstractCmd) = OrCmds(src,dest)
@@ -196,10 +200,10 @@ function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::
     error = ccall(:jl_spawn, Int32,
         (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
          Ptr{Void},    Int32,       Ptr{Void},     Int32,       Ptr{Void},
-         Int32, Ptr{Ptr{Uint8}}),
+         Int32, Ptr{Ptr{Uint8}}, Ptr{Uint8}),
          cmd,        argv,            loop,      proc,      pp,  uvtype(in),
          uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
-         pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env)
+         pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir)
     if error != 0
         c_free(proc)
         throw(UVError("spawn",error))
