@@ -233,6 +233,12 @@ JCFLAGS += -fsanitize=address -mllvm -asan-stack=0
 LDFLAGS += -fsanitize=address
 endif
 
+TAR=`which gtar || which tar`
+TAR_TEST := $(shell $(TAR) --help 2>&1  | grep strip-components)
+ifeq (,$(findstring components,$(TAR_TEST)))
+$(error "please install either GNU tar or bsdtar")
+endif
+
 # ===========================================================================
 
 BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
