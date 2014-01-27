@@ -103,7 +103,7 @@ function next(::EnvHash, i)
     if m == nothing
         error("malformed environment entry: $env")
     end
-    (m.captures, i+1)
+    (ByteString[convert(typeof(env),x) for x in m.captures], i+1)
 end
 end
 
@@ -124,7 +124,7 @@ function next(hash::EnvHash, pos::Ptr{Uint8})
     if m == nothing
         error("malformed environment entry: $env")
     end
-    (m.captures, pos+len+1)
+    (ByteString[convert(typeof(env),x) for x in m.captures], i+1)
 end
 end
 
