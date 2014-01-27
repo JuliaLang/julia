@@ -1,8 +1,6 @@
 char(x) = convert(Char, x)
 char(x::FloatingPoint) = char(iround(x))
 
-is_valid_char(c) = !('\ud800' <= c <= '\udfff' || '\U10ffff' < c)
-
 integer(x::Char) = int(x)
 unsigned(x::Char) = uint(x)
 
