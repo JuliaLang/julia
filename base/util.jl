@@ -94,8 +94,7 @@ function whicht(f, types)
         d = f.env.defs
         while !is(d,())
             if is(d.func.code, lsd)
-                display(d)
-                return
+                return d
             end
             d = d.next
         end
