@@ -659,7 +659,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
         if (b == jl_bottom_type)
             return b;
     }
-    if (var == invariant && !jl_has_typevars_(b,0)) {
+    if (var == invariant && !jl_has_typevars_(b,0) && !jl_is_typevar(b)) {
         int i;
         for(i=0; i < eqc->n; i+=2) {
             if (eqc->data[i] == (jl_value_t*)a) {

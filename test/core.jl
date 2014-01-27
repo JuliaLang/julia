@@ -56,6 +56,11 @@ let T = TypeVar(:T,true)
     # issue #5359
     @test typeintersect((Type{Array{T,1}},Array{T,1}),
                         (Type{AbstractVector},Vector{Int})) === None
+    # issue #5559
+    @test typeintersect((Type{Vector{Complex128}}, AbstractVector),
+                        (Type{Array{T,N}}, Array{S,N})) == (Type{Vector{Complex128}},Vector)
+    @test typeintersect((Type{Vector{Complex128}}, AbstractArray),
+                        (Type{Array{T,N}}, Array{S,N})) == (Type{Vector{Complex128}},Vector)
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
