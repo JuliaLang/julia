@@ -60,7 +60,7 @@ function package(
                 years:    $years
                 user:     $user
 
-            Julia Version $VERSION [$(Base.GIT_VERSION_INFO.short_commit)]
+            Julia Version $VERSION [$(Base.GIT_VERSION_INFO.commit_short)]
             """
 
             if isnew
