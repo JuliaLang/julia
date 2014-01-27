@@ -4641,7 +4641,7 @@ Distributed Arrays
 
 .. function:: @darray comprehension_expr [pids]
 
-   Constructs a DArray specified as a comprehension. An optional second argument specifies the list of processes participating in the distribution.
+   Constructs a DArray specified as a comprehension. An optional second argument specifies the list of workers participating in the distribution.
    
 Shared Arrays (Experimental, UNIX-only feature)
 -----------------------------------------------

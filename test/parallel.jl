@@ -118,7 +118,7 @@ et=toq()
 @test isready(rr1)
 @test !isready(rr3)
 
-# pmap with / without pids keyword arg
+# pmap with / without procs keyword arg
 resp = pmap(x->myid(), [1:32])
 @test all([x in workers() for x in resp])
 

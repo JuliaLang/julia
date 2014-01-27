@@ -1391,7 +1391,7 @@ macro parallel(args...)
     else
         throw(ArgumentError("wrong number of arguments to @parallel"))
     end
-    if !isa(loop,Expr) || !is(loop.head,:for)
+    if !isa(loop,Expr) || !is(loop.head,:for) || (loop.args[1].args[2].head != :(:))
         error("malformed @parallel loop")
     end
     var = loop.args[1].args[1]
