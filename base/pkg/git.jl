@@ -7,9 +7,7 @@ import Base: shell_escape
 function dir(d)
     g = joinpath(d,".git")
     isdir(g) && return g
-    c = `git rev-parse --git-dir`
-    isempty(d) || (c = `sh -c "cd $(shell_escape(d)) && $(shell_escape(c))"`)
-    normpath(d,Base.readchomp(c))
+    normpath(d, Base.readchomp(setenv(`git rev-parse --git-dir`, dir=d)))
 end
 
 function git(d)
