@@ -969,6 +969,9 @@
        (case nxt
 	 ((end)     (list 'if test then))
 	 ((elseif)
+	  (if (newline? (peek-token s))
+	      (error (string "missing condition in \"elseif\" at " current-filename
+			     ":" (- (input-port-line (ts:port s)) 1))))
 	  `(if ,test ,then
 	       ;; line number for elseif condition
 	       (block ,(line-number-node s)
