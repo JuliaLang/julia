@@ -49,6 +49,17 @@ fi
 fork_master_distance=$(git rev-list --count HEAD ^"$(echo $origin)master")
 fork_master_timestamp=$(git show -s $(git merge-base HEAD $(echo $origin)master) --format=format:"%ct")
 
+# Check for errrors and emit default value for missing numbers.
+if [ -z "$build_number" ]; then
+    build_number="0"
+fi
+if [ -z "$fork_master_distance" ]; then
+    fork_master_distance="-1"
+fi
+if [ -z "$fork_master_timestamp" ]; then
+    fork_master_timestamp="0"
+fi
+
 echo "const GIT_VERSION_INFO = GitVersionInfo("
 echo "    \"$commit\","
 echo "    \"$commit_short\","
