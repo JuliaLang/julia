@@ -1938,9 +1938,12 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
                 continue;
             }
             if (at == jl_pvalue_llvmt) {
-                argvals[idx] = boxed(emit_expr(args[i+1], ctx),ctx,expr_type(args[i+1],ctx));
+                Value *origval = emit_expr(args[i+1], ctx);
+                argvals[idx] = boxed(origval,ctx,expr_type(args[i+1],ctx));
                 assert(dyn_cast<UndefValue>(argvals[idx]) == 0);
-                if (might_need_root(args[i+1])) {
+                // TODO: there should be a function emit_rooted that handles this, leaving
+                // the value rooted if it was already, to avoid redundant stores.
+                if (origval->getType() != jl_pvalue_llvmt || might_need_root(args[i+1])) {
                     make_gcroot(argvals[idx], ctx);
                 }
             }
