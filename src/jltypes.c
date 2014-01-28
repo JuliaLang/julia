@@ -2947,4 +2947,5 @@ void jl_init_types(void)
     boundscheck_sym = jl_symbol("boundscheck");
     newvar_sym = jl_symbol("newvar");
     copyast_sym = jl_symbol("copyast");
+    simdloop_sym = jl_symbol("simdloop");
 }

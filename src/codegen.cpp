@@ -52,6 +52,7 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/MDBuilder.h"
 #define LLVM33 1
 #else
 #include "llvm/DerivedTypes.h" 
@@ -84,6 +85,9 @@
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Config/llvm-config.h"
+#ifdef DEBUG
+#include "llvm/Support/CommandLine.h"
+#endif
 #include "llvm/Transforms/Utils/Cloning.h"
 #include <setjmp.h>
 
@@ -124,6 +128,9 @@ void __attribute__(()) __stack_chk_fail()
 static LLVMContext &jl_LLVMContext = getGlobalContext();
 static IRBuilder<> builder(getGlobalContext());
 static bool nested_compile=false;
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
+static TargetMachine *jl_TargetMachine;
+#endif
 static ExecutionEngine *jl_ExecutionEngine;
 #ifdef USE_MCJIT
 static Module *shadow_module;
@@ -132,6 +139,7 @@ static RTDyldMemoryManager *jl_mcjmm;
 #else
 static Module *jl_Module;
 #endif
+static MDBuilder *mbuilder;
 static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
 
@@ -173,6 +181,23 @@ static Type *T_pfloat32;
 static Type *T_float64;
 static Type *T_pfloat64;
 static Type *T_void;
+
+// type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
+static MDNode* tbaa_user;           // User data
+static MDNode* tbaa_value;          // Julia value
+static MDNode* tbaa_array;              // Julia array
+static MDNode* tbaa_arrayptr;               // The pointer inside a jl_array_t
+static MDNode* tbaa_arraysize;              // A size in a jl_array_t
+static MDNode* tbaa_arraylen;               // The len in a jl_array_t
+static MDNode* tbaa_tuplelen;           // The len in a jl_tuple_t
+static MDNode* tbaa_func;           // A jl_function_t
+static MDNode* tbaa_datatype;       // A jl_datatype_t
+static MDNode* tbaa_const;          // Julia constant
+
+namespace llvm {
+    extern Pass *createLowerSimdLoopPass();
+    extern bool annotateSimdLoop( BasicBlock* latch );
+}
 
 // constants
 static Value *V_null;
@@ -1082,9 +1107,9 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         if (vari.closureidx != -1) {
             int idx = vari.closureidx;
 #ifdef OVERLAP_TUPLE_LEN
-            val = emit_nthptr((Value*)ctx->envArg, idx+1);
+            val = emit_nthptr((Value*)ctx->envArg, idx+1, tbaa_tuplelen);
 #else
-            val = emit_nthptr((Value*)ctx->envArg, idx+2);
+            val = emit_nthptr((Value*)ctx->envArg, idx+2, tbaa_tuplelen);
 #endif
         }
         else {
@@ -1450,7 +1475,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_apply && nargs==2 && ctx->vaStack &&
              symbol_eq(args[2], ctx->vaName)) {
         Value *theF = emit_expr(args[1],ctx);
-        Value *theFptr = builder.CreateBitCast(emit_nthptr(theF,1),jl_fptr_llvmt);
+        Value *theFptr = builder.CreateBitCast(emit_nthptr(theF,1, tbaa_func),jl_fptr_llvmt);
         Value *nva = emit_n_varargs(ctx);
 #ifdef _P64
         nva = builder.CreateTrunc(nva, T_int32);
@@ -1474,8 +1499,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 idx = emit_bounds_check(idx, valen, ctx);
                 idx = builder.CreateAdd(idx, ConstantInt::get(T_size, ctx->nReqArgs));
                 JL_GC_POP();
-                return builder.
-                    CreateLoad(builder.CreateGEP(ctx->argArray,idx),false);
+                return tbaa_decorate(tbaa_user, builder.
+                    CreateLoad(builder.CreateGEP(ctx->argArray,idx),false));
             }
             Value *arg1 = emit_expr(args[1], ctx);
             if (jl_is_long(args[2])) {
@@ -1490,7 +1515,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 }
                 if (idx==0 || (!isseqt && idx > tlen)) {
                     builder.CreateCall2(prepare_call(jlthrow_line_func),
-                                        builder.CreateLoad(prepare_global(jlboundserr_var)),
+                                        tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlboundserr_var))),
                                         ConstantInt::get(T_int32, ctx->lineno));
                     JL_GC_POP();
                     return V_null;
@@ -1772,11 +1797,11 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     if (is_structtype_all_pointers(stt)) {
                         idx = emit_bounds_check(idx, ConstantInt::get(T_size, nfields), ctx);
                         Value *fld =
-                            builder.
+                            tbaa_decorate(tbaa_user, builder.
                             CreateLoad(builder.
                                        CreateGEP(builder.
                                                  CreateBitCast(strct, jl_ppvalue_llvmt),
-                                                 builder.CreateAdd(idx,ConstantInt::get(T_size,1))));
+                                                 builder.CreateAdd(idx,ConstantInt::get(T_size,1)))));
                         null_pointer_check(fld, ctx);
                         JL_GC_POP();
                         return fld;
@@ -1935,7 +1960,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         }
         // extract pieces of the function object
         // TODO: try extractvalue instead
-        theFptr = builder.CreateBitCast(emit_nthptr(theFunc, 1), jl_fptr_llvmt);
+        theFptr = builder.CreateBitCast(emit_nthptr(theFunc, 1, tbaa_func), jl_fptr_llvmt);
         theF = theFunc;
     }
     else {
@@ -2049,9 +2074,9 @@ static Value *var_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
         assert(((Value*)ctx->envArg)->getType() == jl_pvalue_llvmt);
         if (isBoxed(s, ctx)) {
 #ifdef OVERLAP_TUPLE_LEN
-            return emit_nthptr_addr(emit_nthptr((Value*)ctx->envArg, idx+1), 1);
+            return emit_nthptr_addr(emit_nthptr((Value*)ctx->envArg, idx+1, tbaa_tuplelen), 1);
 #else
-            return emit_nthptr_addr(emit_nthptr((Value*)ctx->envArg, idx+2), 1);
+            return emit_nthptr_addr(emit_nthptr((Value*)ctx->envArg, idx+2, tbaa_tuplelen), 1);
 #endif
         }
 #ifdef OVERLAP_TUPLE_LEN
@@ -2405,7 +2430,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         Value *bp;
         if (iskw) {
             // fenv = theF->env
-            Value *fenv = emit_nthptr(theF, 2);
+            Value *fenv = emit_nthptr(theF, 2, tbaa_func);
             // bp = &((jl_methtable_t*)fenv)->kwsorter
             bp = emit_nthptr_addr(fenv, 7);
         }
@@ -2616,6 +2641,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
             }
         }
         return builder.CreateCall(prepare_call(jlcopyast_func), emit_expr(arg, ctx));
+    }
+    else if (head == simdloop_sym) {
+        if( !llvm::annotateSimdLoop(builder.GetInsertBlock()) )
+            JL_PRINTF(JL_STDERR,
+                      "Warning: could not attach metadata for @simd loop.\n");
+        return NULL;
     }
     else {
         if (!strcmp(head->name, "$"))
@@ -3243,7 +3274,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 
     // fetch env out of function object if we need it
     if (hasCapt) {
-        ctx.envArg = emit_nthptr(fArg, 2);
+        ctx.envArg = emit_nthptr(fArg, 2, tbaa_func);
     }
 
     // step 8. set up GC frame
@@ -3542,6 +3573,13 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 
 // --- initialization ---
 
+static MDNode* tbaa_make_child( const char* name, MDNode* parent, bool isConstant=false )
+{
+    MDNode* n = mbuilder->createTBAANode(name,parent,isConstant);
+    n->setValueName( ValueName::Create(name, name+strlen(name)));
+    return n;
+}
+
 static GlobalVariable *global_to_llvm(const std::string &cname, void *addr, Module *m)
 {
     GlobalVariable *gv =
@@ -3615,6 +3653,18 @@ extern "C" DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v)
 
 static void init_julia_llvm_env(Module *m)
 {
+    MDNode* tbaa_root = mbuilder->createTBAARoot("jtbaa");
+    tbaa_user = tbaa_make_child("jtbaa_user",tbaa_root);
+    tbaa_value = tbaa_make_child("jtbaa_value",tbaa_root);
+    tbaa_array = tbaa_make_child("jtbaa_array",tbaa_value);
+    tbaa_arrayptr = tbaa_make_child("jtbaa_arrayptr",tbaa_array);
+    tbaa_arraysize = tbaa_make_child("jtbaa_arraysize",tbaa_array);
+    tbaa_arraylen = tbaa_make_child("jtbaa_arraylen",tbaa_array);
+    tbaa_tuplelen = tbaa_make_child("jtbaa_arraysize",tbaa_value);
+    tbaa_func = tbaa_make_child("jtbaa_func",tbaa_value);
+    tbaa_datatype = tbaa_make_child("jtbaa_func",tbaa_value);
+    tbaa_const = tbaa_make_child("jtbaa_const",tbaa_root,true);
+
     // every variable or function mapped in this function must be
     // exported from libjulia, to support static compilation
     T_int1  = Type::getInt1Ty(getGlobalContext());
@@ -3978,6 +4028,10 @@ static void init_julia_llvm_env(Module *m)
 #endif
     FPM->add(jl_data_layout);
 
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
+    jl_TargetMachine->addAnalysisPasses(*FPM);
+#endif
+    FPM->add(createTypeBasedAliasAnalysisPass());
     // list of passes from vmkit
     FPM->add(createCFGSimplificationPass()); // Clean up disgusting code
     FPM->add(createPromoteMemoryToRegisterPass());// Kill useless allocas
@@ -4000,14 +4054,20 @@ static void init_julia_llvm_env(Module *m)
 
     FPM->add(createLoopIdiomPass()); //// ****
     FPM->add(createLoopRotatePass());           // Rotate loops.
+    // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
+    FPM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
     FPM->add(createLICMPass());                 // Hoist loop invariants
     FPM->add(createLoopUnswitchPass());         // Unswitch loops.
+    // Subsequent passes not stripping metadata from terminator
     FPM->add(createInstructionCombiningPass()); 
     FPM->add(createIndVarSimplifyPass());       // Canonicalize indvars
     //FPM->add(createLoopDeletionPass());         // Delete dead loops
     FPM->add(createLoopUnrollPass());           // Unroll small loops
     //FPM->add(createLoopStrengthReducePass());   // (jwb added)
     
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
+    FPM->add(createLoopVectorizePass());        // Vectorize loops
+#endif
     FPM->add(createInstructionCombiningPass()); // Clean up after the unroller
     FPM->add(createGVNPass());                  // Remove redundancies
     //FPM->add(createMemCpyOptPass());            // Remove memcpy / form memset  
@@ -4029,6 +4089,9 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen(void)
 {
+#ifdef DEBUG
+    cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
+#endif
     imaging_mode = jl_compileropts.build_path != NULL;
 
     InitializeNativeTarget();
@@ -4090,8 +4153,8 @@ extern "C" void jl_init_codegen(void)
     // Temporarily disable Haswell BMI2 features due to LLVM bug.
     const char *mattr[] = {"-bmi2", "-avx2"};
     std::vector<std::string> attrvec (mattr, mattr+2);
-    jl_ExecutionEngine = EngineBuilder(engine_module)
-        .setEngineKind(EngineKind::JIT)
+    EngineBuilder eb(engine_module);
+    eb  .setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
         .setJITMemoryManager(new JITMemoryManagerWin())
 #endif
@@ -4100,11 +4163,15 @@ extern "C" void jl_init_codegen(void)
         .setUseMCJIT(true)
         .setMAttrs(attrvec)
 #else
-        .setMAttrs(attrvec)
+        .setMAttrs(attrvec);
 #endif
-        .create();
+#if LLVM_VERSION_MINOR >= 3
+    jl_TargetMachine = eb.selectTarget();
+#endif
+    jl_ExecutionEngine = eb.create();
 #endif // LLVM VERSION
     jl_ExecutionEngine->DisableLazyCompilation();
+    mbuilder = new MDBuilder(getGlobalContext());
 
     init_julia_llvm_env(m);
 
