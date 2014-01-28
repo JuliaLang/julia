@@ -123,6 +123,45 @@ that pass only positional arguments.
 Passing dynamic lists of keyword arguments, as in ``f(x; keywords...)``,
 can be slow and should be avoided in performance-sensitive code.
 
+Declare types of tuple arguments
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In general, Julia automatically specializes functions on the types of
+their arguments regardless of the presence or absence of types in the
+method signature. However, because a large number of distinct tuple
+types that can potentially be constructed, Julia specializes on tuple
+types only when a type declaration is present. Consider::
+
+    function f(x)
+        ...
+    end
+
+While specialized code will be generated and executed for each of
+``f(false)``, ``f("false")``, and ``f(0)``, the same, less specialized
+code will be executed for ``f((false,))``, ``f(("false", "true"))``,
+and ``f((0, 1))``. If instead we define ``f`` as::
+
+    function f(x::(Integer...))
+        ...
+    end
+
+then different code is compiled and executed for ``f((false,))``,
+``f((1,))``, and ``f((1, 2))``. If ``f`` will be called with a small
+set of tuple types, adding a type declaration can substantially
+improve performance. However, if ``f`` will be called with many
+different tuple types, performance may actually worsen, since Julia
+must generate new code every time a new tuple type is encountered.
+
+It is the presence or absence of a type declaration, and not the type
+declaration itself, that determines whether a function is specialized
+for specific tuple types. To declare a function that specializes on any
+type including tuple types, you can use a static parameter::
+
+    function f{T}(x::T)
+        ...
+    end
+
+
 Break functions into multiple definitions
 -----------------------------------------
 
