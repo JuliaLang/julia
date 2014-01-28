@@ -1658,9 +1658,9 @@ Text I/O
 
    Read the entire contents of an I/O stream as a string.
 
-.. function:: readline(stream)
+.. function:: readline(stream=STDIN)
 
-   Read a single line of text, including a trailing newline character (if one is reached before the end of the input).
+   Read a single line of text, including a trailing newline character (if one is reached before the end of the input), from the given ``stream`` (defaults to ``STDIN``),
 
 .. function:: readuntil(stream, delim)
 
