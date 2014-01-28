@@ -58,6 +58,13 @@ if haskey(ENV, "TEST_SHARED_ARRAY")
         @test d[idxl] == p 
     end
 
+    # SharedArray as an array
+    # Since the data in d will depend on the nprocs, just test that these operations work
+    a = d[1:5]
+    @test_throws d[-1:5]
+    a = d[1,1,1:3:end]
+    d[2:4] = 7
+    d[5,1:2:4,8] = 19
 
     end # @unix_only(SharedArray tests)
 end
