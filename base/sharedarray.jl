@@ -154,14 +154,18 @@ convert(::Type{Array}, S::SharedArray) = S.loc_shmarr
 
 # # pass through getindex and setindex! - they always work on the complete array unlike DArrays
 getindex(S::SharedArray) = getindex(S.loc_shmarr)
-getindex(S::SharedArray,I::AbstractArray) = getindex(S.loc_shmarr,I)
-getindex(S::SharedArray,I::Range1) = getindex(S.loc_shmarr,I)
-getindex(S::SharedArray,I::Real...) = getindex(S.loc_shmarr, I...)
+getindex(S::SharedArray, I::Real) = getindex(S.loc_shmarr, I)
+getindex(S::SharedArray, I::AbstractArray) = getindex(S.loc_shmarr, I)
+getindex(S::SharedArray, I) = getindex(S.loc_shmarr, I)
+getindex(S::SharedArray, I, J) = getindex(S.loc_shmarr, I, J)
+getindex(S::SharedArray, I...) = getindex(S.loc_shmarr, I...)
 
 setindex!(S::SharedArray, x) = (setindex!(S.loc_shmarr, x); S)
-setindex!(S::SharedArray, x, I::Real...) = (setindex!(S.loc_shmarr, x, I...); S)
+setindex!(S::SharedArray, x, I::Real) = (setindex!(S.loc_shmarr, x, I); S)
 setindex!(S::SharedArray, x, I::AbstractArray) = (setindex!(S.loc_shmarr, x, I); S)
-setindex!(S::SharedArray, x, I::Range1) = (setindex!(S.loc_shmarr, x, I); S)
+setindex!(S::SharedArray, x, I) = (setindex!(S.loc_shmarr, x, I); S)
+setindex!(S::SharedArray, x, I, J) = (setindex!(S.loc_shmarr, x, I, J); S)
+setindex!(S::SharedArray, x, I...) = (setindex!(S.loc_shmarr, x, I...); S)
 
 # convenience constructors
 function shmem_fill(v, dims; kwargs...) 
