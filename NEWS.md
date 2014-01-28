@@ -36,7 +36,7 @@ New library functions
     a GitHub pull request to the package author.
 
   * `mod2pi` function ([#4799], [#4862]).
- 
+
   * New functions `minmax` and `extrema` ([#5275]).
 
 Library improvements
@@ -150,6 +150,13 @@ Library improvements
   * New function `deleteat!` deletes a specified index or indices and
     returns the updated collection
 
+  * `prevfloat` and `nextfloat` now saturate at -Inf and Inf, respectively, and
+    have otherwise been fixed to follow the IEEE-754 standard functions `nextDown`
+    and `nextUp` ([#5025]).
+
+  * The `setenv` function for external processes now accepts a `dir` keyword
+    argument for specifying the directory to start the child process in ([#4888]).
+
 Deprecated or removed
 ---------------------
 
@@ -208,6 +215,8 @@ Deprecated or removed
 [#4967]: https://github.com/JuliaLang/julia/pull/4967
 [#5428]: https://github.com/JuliaLang/julia/pull/5428
 [#5468]: https://github.com/JuliaLang/julia/pull/5468
+[#5025]: https://github.com/JuliaLang/julia/pull/5025
+[#4888]: https://github.com/JuliaLang/julia/pull/4888
 
 Julia v0.2.0 Release Notes
 ==========================
