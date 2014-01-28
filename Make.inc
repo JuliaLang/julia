@@ -234,7 +234,7 @@ LDFLAGS += -fsanitize=address
 endif
 
 TAR=`which gtar || which tar`
-TAR_TEST := $(shell $(TAR) --help 2>&1  | grep 'bsdtar\|strip-components')
+TAR_TEST := $(shell $(TAR) --help 2>&1  | egrep 'bsdtar|strip-components')
 ifeq (,$(findstring components,$(TAR_TEST)))
 ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
 $(error "please install either GNU tar or bsdtar")
