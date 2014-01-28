@@ -387,13 +387,13 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         d = rand(1:100, n)
         dl = -rand(0:10, n-1)
         du = -rand(0:10, n-1)
-        v = rand(1:100, n)
+        v = int(rand(int64(1:100), n))
         B = rand(1:100, n, 2)
 
-        # Woodbury
-        U = rand(1:100, n, 2)
-        V = rand(1:100, 2, n)
-        C = rand(1:100, 2, 2)
+        # Woodbury (use same integers on 32-bit and 64-bit systems)
+        U = int(rand(int64(1:100), n, 2))
+        V = int(rand(int64(1:100), 2, n))
+        C = int(rand(int64(1:100), 2, 2))
     else 
         d = convert(Vector{elty}, d)
         dl = convert(Vector{elty}, dl)
