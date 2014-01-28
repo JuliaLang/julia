@@ -1342,3 +1342,16 @@ let
     a = [1.0]
     f5457(pointer(a,1), sin)
 end
+
+# issue #5584
+# this is an intermittent memory bug, but this code is very likely to trigger it
+mapshape_5584{N}(s1::NTuple{N,Int}, s2::NTuple{N,Int}) =
+    (s1 == s2 || error("Argument dimensions are not map-compatible."); s1)
+function f5584()
+    for i = 1:1000000
+        a = rand(1:1000, 3)
+        # the bug was a failure to root these tuples
+        mapshape_5584(tuple(a...), tuple(a...))
+    end
+end
+f5584()
