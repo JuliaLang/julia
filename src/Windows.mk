@@ -31,6 +31,7 @@ OBJECTS = \
 	toplevel.obj \
 	jl_uv.obj \
 	jlapi.obj \
+	llvm-simdloop.obj \
 	gc.obj
 
 LIBFLISP = flisp\libflisp.lib
