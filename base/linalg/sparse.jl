@@ -466,30 +466,18 @@ function norm(A::SparseMatrixCSC,p::Number=1)
     elseif m == 1 || n == 1
         return norm(reshape(full(A), length(A)), p)
     elseif p==1
-        aa = A.nzval
-        ja = A.rowval
-        ia = A.colptr
         nA = real(zero(eltype(A))) 
         for j=1:n
             colSum = real(zero(eltype(A))) 
-            i1 = ia[j]
-            i2 = ia[j+1]-1
-            for i = i1:i2
-                colSum += abs(aa[i])
+            for i = A.colptr[j]:A.colptr[j+1]-1
+                colSum += abs(A.nzval[i])
             end
             nA = max(nA, colSum)
         end
     elseif p==Inf
-        aa = A.nzval
-        ja = A.rowval
-        ia = A.colptr
         rowSum = zeros(typeof(real(A[1])),m)
-        for j=1:n
-            i1 = ia[j]
-            i2 = ia[j+1]-1
-            for i = i1:i2
-                rowSum[ja[i]] += abs(aa[i])
-            end
+        for i=1:length(A.nzval)
+            rowSum[A.rowval[i]] += abs(A.nzval[i])
         end
         nA = maximum(rowSum)
     else
