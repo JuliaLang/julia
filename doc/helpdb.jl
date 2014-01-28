@@ -151,9 +151,9 @@
 
 ("Getting Around","Base","methodswith","methodswith(typ[, showparents])
 
-   Show all methods with an argument of type \"typ\". If optional
-   \"showparents\" is \"true\", also show arguments with a parent type
-   of \"typ\", excluding type \"Any\".
+   Return an array of methods with an argument of type \"typ\". If
+   optional \"showparents\" is \"true\", also return arguments with a
+   parent type of \"typ\", excluding type \"Any\".
 
 "),
 
@@ -446,9 +446,9 @@
 ("Types","Base","eps","eps([type])
 
    The distance between 1.0 and the next larger representable
-   floating-point value of \"type\". The only types that are sensible
-   arguments are \"Float32\" and \"Float64\". If \"type\" is omitted,
-   then \"eps(Float64)\" is returned.
+   floating-point value of \"type\". Only floating-point types are
+   sensible arguments. If \"type\" is omitted, then \"eps(Float64)\"
+   is returned.
 
 "),
 
@@ -1246,6 +1246,21 @@
 ("Dequeues","Base","insert!","insert!(collection, index, item)
 
    Insert an item at the given index.
+
+"),
+
+("Dequeues","Base","deleteat!","deleteat!(collection, index)
+
+   Remove the item at the given index, and return the modified
+   collection. Subsequent items are shifted to fill the resulting gap.
+
+"),
+
+("Dequeues","Base","deleteat!","deleteat!(collection, itr)
+
+   Remove the items at the indices given by *itr*, and return the
+   modified collection. Subsequent items are shifted to fill the
+   resulting gap.  *itr* must be sorted and unique.
 
 "),
 
@@ -2511,10 +2526,11 @@
 
 "),
 
-("Text I/O","Base","readline","readline(stream)
+("Text I/O","Base","readline","readline(stream=STDIN)
 
    Read a single line of text, including a trailing newline character
-   (if one is reached before the end of the input).
+   (if one is reached before the end of the input), from the given
+   \"stream\" (defaults to \"STDIN\"),
 
 "),
 
@@ -2538,15 +2554,15 @@
 
 ("Text I/O","Base","readdlm","readdlm(source, delim::Char, T::Type, eol::Char; has_header=false, use_mmap=false, ignore_invalid_chars=false)
 
-   Read a matrix from the source where each line (separated by \"eol\") 
-   gives one row, with elements separated by the given delimeter. The 
-   source can be a text file, stream or byte array. Memory mapped files 
-   can be used by passing the byte array representation of the mapped 
-   segment as source. 
+   Read a matrix from the source where each line (separated by
+   \"eol\") gives one row, with elements separated by the given
+   delimeter. The source can be a text file, stream or byte array.
+   Memory mapped files can be used by passing the byte array
+   representation of the mapped segment as source.
 
-   If \"T\" is a numeric type, the result is an array of that type, 
-   with any non-numeric elements as \"NaN\" for floating-point types, 
-   or zero. Other useful values of \"T\" include \"ASCIIString\", 
+   If \"T\" is a numeric type, the result is an array of that type,
+   with any non-numeric elements as \"NaN\" for floating-point types,
+   or zero. Other useful values of \"T\" include \"ASCIIString\",
    \"String\", and \"Any\".
 
    If \"has_header\" is \"true\", the first row of data would be read
@@ -2572,33 +2588,33 @@
 
 ("Text I/O","Base","readdlm","readdlm(source, delim::Char, T::Type; options...)
 
-   The end of line delimiter is taken as \"\\n\". 
+   The end of line delimiter is taken as \"\\n\".
 
 "),
 
 ("Text I/O","Base","readdlm","readdlm(source, delim::Char; options...)
 
-   The end of line delimiter is taken as \"\\n\". If all data is 
-   numeric, the result will be a numeric array. If some elements 
-   cannot be parsed as numbers, a cell array of numbers and 
-   strings is returned.
+   The end of line delimiter is taken as \"\\n\". If all data is
+   numeric, the result will be a numeric array. If some elements
+   cannot be parsed as numbers, a cell array of numbers and strings is
+   returned.
 
 "),
 
 ("Text I/O","Base","readdlm","readdlm(source, T::Type; options...)
 
-   The columns are assumed to be separated by one or more whitespaces. 
+   The columns are assumed to be separated by one or more whitespaces.
    The end of line delimiter is taken as \"\\n\".
 
 "),
 
-("Text I/O","Base","readdlm","readdlm(source, options...)
+("Text I/O","Base","readdlm","readdlm(source; options...)
 
-   The columns are assumed to be separated by one or more whitespaces. 
-   The end of line delimiter is taken as \"\\n\". If all data is 
-   numeric, the result will be a numeric array. If some elements 
-   cannot be parsed as numbers, a cell array of numbers and strings 
-   is returned.
+   The columns are assumed to be separated by one or more whitespaces.
+   The end of line delimiter is taken as \"\\n\". If all data is
+   numeric, the result will be a numeric array. If some elements
+   cannot be parsed as numbers, a cell array of numbers and strings is
+   returned.
 
 "),
 
@@ -3012,8 +3028,12 @@ popdisplay(d::Display)
 
 ("Mathematical Operators","Base","mod2pi","mod2pi(x)
 
-   Modulus after division by 2pi, returning in the range [0,2pi). More
-   accurate than mod(x,2pi).
+   Modulus after division by 2pi, returning in the range [0,2pi).
+
+   This function computes a floating point representation of the
+   modulus after division by numerically exact 2pi, and is therefore
+   not exactly the same as mod(x,2pi), which would compute the modulus
+   of x relative to division by the floating-point number 2pi.
 
 "),
 
@@ -3204,7 +3224,8 @@ popdisplay(d::Display)
 
    Return -1, 0, or 1 depending on whether \"x\" is less than, equal
    to, or greater than \"y\", respectively. Uses the total order
-   implemented by \"isless\".
+   implemented by \"isless\". For floating-point numbers, uses \"<\"
+   but throws an error for unordered arguments.
 
 "),
 
@@ -5573,6 +5594,13 @@ popdisplay(d::Display)
 
 "),
 
+("Combinatorics","Base","nthperm","nthperm(p)
+
+   Return the \"k\" that generated permutation \"p\". Note that
+   \"nthperm(nthperm([1:n], k)) == k\" for \"1 <= k <= factorial(n)\".
+
+"),
+
 ("Combinatorics","Base","nthperm!","nthperm!(v, k)
 
    In-place version of \"nthperm()\".
@@ -6586,6 +6614,36 @@ popdisplay(d::Display)
 
 "),
 
+("Shared Arrays (EXPERIMENTAL FEATURE)","Base","SharedArray","SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
+
+   Construct a SharedArray of a bitstype \"T\"  and size \"dims\"
+   across the processes specified by \"pids\" - all of which have to
+   be on the same host.
+
+   If an \"init\" function of the type \"initfn(S::SharedArray)\" is
+   specified, it is called on all the participating workers.
+
+"),
+
+("Shared Arrays (EXPERIMENTAL FEATURE)","Base","procs","procs(S::SharedArray)
+
+   Get the vector of processes that have mapped the shared array
+
+"),
+
+("Shared Arrays (EXPERIMENTAL FEATURE)","Base","sdata","sdata(S::SharedArray)
+
+   Returns the actual \"Array\" object backing \"S\"
+
+"),
+
+("Shared Arrays (EXPERIMENTAL FEATURE)","Base","indexpids","indexpids(S::SharedArray)
+
+   Returns the index of the current worker into the \"pids\" vector,
+   i.e., the list of workers mapping the SharedArray
+
+"),
+
 ("System","Base","run","run(command)
 
    Run a command object, constructed with backticks. Throws an error
@@ -6840,9 +6898,9 @@ popdisplay(d::Display)
 
 ("System","Base","@time","@time()
 
-   A macro to execute and expression, printing time it took to execute
-   and the total number of bytes its execution caused to be allocated,
-   before returning the value of the expression.
+   A macro to execute an expression, printing the time it took to
+   execute and the total number of bytes its execution caused to be
+   allocated, before returning the value of the expression.
 
 "),
 
@@ -7051,19 +7109,39 @@ popdisplay(d::Display)
 
 "),
 
-("C Interface","Base","c_malloc","c_malloc(size::Integer)
+("C Interface","Base","find_library","find_library(names, locations)
+
+   Searches for the first library in \"names\" in the paths in the
+   \"locations\" list, \"DL_LOAD_PATH\", or system library paths (in
+   that order) which can successfully be dlopen'd. On success, the
+   return value will be one of the names (potentially prefixed by one
+   of the paths in locations). This string can be assigned to a
+   \"global const\" and used as the library name in future
+   \"ccall\"'s. On failure, it returns the empty string.
+
+"),
+
+("C Interface","Base","DL_LOAD_PATH","DL_LOAD_PATH
+
+   When calling \"dlopen\", the paths in this list will be searched
+   first, in order, before searching the system locations for a valid
+   library handle.
+
+"),
+
+("C Interface","Base","c_malloc","c_malloc(size::Integer) -> Ptr{Void}
 
    Call \"malloc\" from the C standard library.
 
 "),
 
-("C Interface","Base","c_calloc","c_calloc(num::Integer, size::Integer)
+("C Interface","Base","c_calloc","c_calloc(num::Integer, size::Integer) -> Ptr{Void}
 
    Call \"calloc\" from the C standard library.
 
 "),
 
-("C Interface","Base","c_realloc","c_realloc(addr::Ptr, size::Integer)
+("C Interface","Base","c_realloc","c_realloc(addr::Ptr, size::Integer) -> Ptr{Void}
 
    Call \"realloc\" from the C standard library.
 
@@ -7179,23 +7257,28 @@ popdisplay(d::Display)
 
 "),
 
-("C Interface","Base","find_library","find_library(names, locations)
+("C Interface","Base","errno","errno([code])
 
-   Searches for the first library in \"names\" in the paths in the
-   \"locations\" list, \"DL_LOAD_PATH\", or system library paths (in
-   that order) which can successfully be dlopen'd. On success, the
-   return value will be one of the names (potentially prefixed by one
-   of the paths in locations). This string can be assigned to a
-   \"global const\" and used as the library name in future
-   \"ccall\"'s. On failure, it returns the empty string.
+   Get the value of the C library's \"errno\". If an argument is
+   specified, it is used to set the value of \"errno\".
+
+   The value of \"errno\" is only valid immediately after a \"ccall\"
+   to a C library routine that sets it. Specifically, you cannot call
+   \"errno\" at the next prompt in a REPL, because lots of code is
+   executed between prompts.
 
 "),
 
-("C Interface","Base","DL_LOAD_PATH","DL_LOAD_PATH
+("C Interface","Base","systemerror","systemerror(sysfunc, iftrue)
 
-   When calling \"dlopen\", the paths in this list will be searched
-   first, in order, before searching the system locations for a valid
-   library handle.
+   Raises a \"SystemError\" for \"errno\" with the descriptive string
+   \"sysfunc\" if \"bool\" is true
+
+"),
+
+("C Interface","Base","strerror","strerror(n)
+
+   Convert a system call error code to a descriptive string
 
 "),
 
@@ -7331,25 +7414,6 @@ popdisplay(d::Display)
 
    Get the backtrace of the current exception, for use within
    \"catch\" blocks.
-
-"),
-
-("Errors","Base","errno","errno()
-
-   Get the value of the C library's \"errno\"
-
-"),
-
-("Errors","Base","systemerror","systemerror(sysfunc, iftrue)
-
-   Raises a \"SystemError\" for \"errno\" with the descriptive string
-   \"sysfunc\" if \"bool\" is true
-
-"),
-
-("Errors","Base","strerror","strerror(n)
-
-   Convert a system call error code to a descriptive string
 
 "),
 
@@ -8224,13 +8288,7 @@ popdisplay(d::Display)
 
 ("Linear Algebra","Base","cross","cross(x, y)
 
-   Compute the cross product of two 3-vectors
-
-"),
-
-("Linear Algebra","Base","norm","norm(a)
-
-   Compute the norm of a \"Vector\" or a \"Matrix\"
+   Compute the cross product of two 3-vectors.
 
 "),
 
@@ -8242,7 +8300,7 @@ popdisplay(d::Display)
 
 ("Linear Algebra","Base","factorize","factorize(A)
 
-   Compute a convenient factorization (including LU, Cholesky, Bunch
+   Compute a convenient factorization (including LU, Cholesky, Bunch-
    Kaufman, Triangular) of A, based upon the type of the input matrix.
    The return value can then be reused for efficient solving of
    multiple systems. For example: \"A=factorize(A); x=A\\\\b;
@@ -8253,7 +8311,7 @@ popdisplay(d::Display)
 ("Linear Algebra","Base","factorize!","factorize!(A)
 
    \"factorize!\" is the same as \"factorize()\", but saves space by
-   overwriting the input A, instead of creating a copy.
+   overwriting the input \"A\", instead of creating a copy.
 
 "),
 
@@ -8291,22 +8349,27 @@ popdisplay(d::Display)
 
 ("Linear Algebra","Base","chol","chol(A[, LU]) -> F
 
-   Compute Cholesky factorization of a symmetric positive-definite
+   Compute the Cholesky factorization of a symmetric positive definite
    matrix \"A\" and return the matrix \"F\". If \"LU\" is \":L\"
    (Lower), \"A = L*L'\". If \"LU\" is \":U\" (Upper), \"A = R'*R\".
 
 "),
 
-("Linear Algebra","Base","cholfact","cholfact(A[, LU]) -> Cholesky
+("Linear Algebra","Base","cholfact","cholfact(A, [LU,][pivot=false,][tol=-1.0]) -> Cholesky
 
-   Compute the Cholesky factorization of a dense symmetric positive-
-   definite matrix \"A\" and return a \"Cholesky\" object. \"LU\" may
-   be \":L\" for using the lower part or \":U\" for the upper part.
-   The default is to use \":U\". The triangular matrix can be obtained
-   from the factorization \"F\" with: \"F[:L]\" and \"F[:U]\". The
-   following functions are available for \"Cholesky\" objects:
-   \"size\", \"\\\", \"inv\", \"det\". A \"LAPACK.PosDefException\"
-   error is thrown in case the matrix is not positive definite.
+   Compute the Cholesky factorization of a dense symmetric positive
+   (semi)definite matrix \"A\" and return either a \"Cholesky\" if
+   \"pivot=false\" or \"CholeskyPivoted\" if \"pivot=true\". \"LU\"
+   may be \":L\" for using the lower part or \":U\" for the upper
+   part. The default is to use \":U\". The triangular matrix can be
+   obtained from the factorization \"F\" with: \"F[:L]\" and
+   \"F[:U]\". The following functions are available for \"Cholesky\"
+   objects: \"size\", \"\\\", \"inv\", \"det\". For
+   \"CholeskyPivoted\" there is also defined a \"rank\". If
+   \"pivot=false\" a \"PosDefException\" exception is thrown in case
+   the matrix is not positive definite. The argument \"tol\"
+   determines the tolerance for determining the rank. For negative
+   values, the tolerance is the machine precision.
 
 "),
 
@@ -8327,101 +8390,54 @@ popdisplay(d::Display)
 
 "),
 
-("Linear Algebra","Base","cholfact!","cholfact!(A[, LU]) -> Cholesky
+("Linear Algebra","Base","cholfact!","cholfact!(A, [LU,][pivot=false,][tol=-1.0]) -> Cholesky
 
    \"cholfact!\" is the same as \"cholfact()\", but saves space by
-   overwriting the input A, instead of creating a copy.
+   overwriting the input \"A\", instead of creating a copy.
 
 "),
 
-("Linear Algebra","Base","cholpfact","cholpfact(A[, LU]) -> CholeskyPivoted
+("Linear Algebra","Base","qr","qr(A, [pivot=false,][thin=true]) -> Q, R, [p]
 
-   Compute the pivoted Cholesky factorization of a symmetric positive
-   semi-definite matrix \"A\" and return a \"CholeskyPivoted\" object.
-   \"LU\" may be \":L\" for using the lower part or \":U\" for the
-   upper part. The default is to use \":U\". The triangular factors
-   contained in the factorization \"F\" can be obtained with \"F[:L]\"
-   and \"F[:U]\", whereas the permutation can be obtained with
-   \"F[:P]\" or \"F[:p]\". The following functions are available for
-   \"CholeskyPivoted\" objects: \"size\", \"\\\", \"inv\", \"det\". A
-   \"LAPACK.RankDeficientException\" error is thrown in case the
-   matrix is rank deficient.
+   Compute the (pivoted) QR factorization of \"A\" such that either
+   \"A = Q*R\" or \"A[:,p] = Q*R\". Also see \"qrfact\". The default
+   is to compute a thin factorization. Note that \"R\" is not extended
+   with zeros when the full \"Q\" is requested.
 
 "),
 
-("Linear Algebra","Base","cholpfact!","cholpfact!(A[, LU]) -> CholeskyPivoted
+("Linear Algebra","Base","qrfact","qrfact(A[, pivot=false])
 
-   \"cholpfact!\" is the same as \"cholpfact\", but saves space by
-   overwriting the input A, instead of creating a copy.
-
-"),
-
-("Linear Algebra","Base","qr","qr(A[, thin]) -> Q, R
-
-   Compute the QR factorization of \"A\" such that \"A = Q*R\". Also
-   see \"qrfact\". The default is to compute a thin factorization.
-   Note that *R* is not extended with zeros when the full *Q* is
-   requested.
-
-"),
-
-("Linear Algebra","Base","qrfact","qrfact(A)
-
-   Computes the QR factorization of \"A\" and returns a \"QR\" type,
-   which is a \"Factorization\" \"F\" consisting of an orthogonal
-   matrix \"F[:Q]\" and a triangular matrix \"F[:R]\". The following
-   functions are available for \"QR\" objects: \"size\", \"\\\". The
-   orthogonal matrix \"Q=F[:Q]\" is a \"QRPackedQ\" type which has the
-   \"*\" operator overloaded to support efficient multiplication by
-   \"Q\" and \"Q'\". Multiplication with respect to either thin or
-   full \"Q\" is allowed, i.e. both \"F[:Q]*F[:R]\" and \"F[:Q]*A\"
-   are supported. A \"QRPackedQ\" matrix can be converted into a
-   regular matrix with \"full\".
+   Computes the QR factorization of \"A\" and returns either a \"QR\"
+   type if \"pivot=false\" or \"QRPivoted\" type if \"pivot=true\".
+   From a \"QR\" or  \"QRPivoted\" factorization \"F\", an orthogonal
+   matrix \"F[:Q]\" and a triangular matrix \"F[:R]\" can be
+   extracted. For \"QRPivoted\" it is also posiible to extract the
+   permutation vector \"F[:p]\" or matrix \"F[:P]\". The following
+   functions are available for the \"QR\" objects: \"size\", \"\\\".
+   When \"A\" is rectangular \"\\\" will return a least squares
+   solution and if the soultion is not unique, the one with smallest
+   norm is returned. The orthogonal matrix \"Q=F[:Q]\" is a
+   \"QRPackedQ\" type when \"F\" is a \"QR\" and a \"QRPivotedQ\" then
+   \"F\" is a \"QRPivoted\". Both have the \"*\" operator overloaded
+   to support efficient multiplication by \"Q\" and \"Q'\".
+   Multiplication with respect to either thin or full \"Q\" is
+   allowed, i.e. both \"F[:Q]*F[:R]\" and \"F[:Q]*A\" are supported. A
+   \"Q\" matrix can be converted into a regular matrix with \"full\"
+   which has a named argument \"thin\".
 
 "),
 
-("Linear Algebra","Base","qrfact!","qrfact!(A)
+("Linear Algebra","Base","qrfact!","qrfact!(A[, pivot=false])
 
    \"qrfact!\" is the same as \"qrfact()\", but saves space by
-   overwriting the input A, instead of creating a copy.
-
-"),
-
-("Linear Algebra","Base","qrp","qrp(A[, thin]) -> Q, R, p
-
-   Computes the QR factorization of \"A\" with pivoting, such that
-   \"A[:,p] = Q*R\", Also see \"qrpfact\". The default is to compute a
-   thin factorization.
-
-"),
-
-("Linear Algebra","Base","qrpfact","qrpfact(A) -> QRPivoted
-
-   Computes the QR factorization of \"A\" with pivoting and returns a
-   \"QRPivoted\" object, which is a \"Factorization\" \"F\" consisting
-   of an orthogonal matrix \"F[:Q]\", a triangular matrix \"F[:R]\",
-   and a permutation \"F[:p]\" (or  its matrix representation
-   \"F[:P]\"). The following functions are available for \"QRPivoted\"
-   objects: \"size\", \"\\\". The orthogonal matrix \"Q=F[:Q]\" is a
-   \"QRPivotedQ\" type which has the \"*\" operator overloaded to
-   support efficient multiplication by \"Q\" and \"Q'\".
-   Multiplication with respect to either the thin or full \"Q\" is
-   allowed, i.e. both \"F[:Q]*F[:R]\" and \"F[:Q]*A\" are supperted. A
-   \"QRPivotedQ\" matrix can be converted into a regular matrix with
-   \"full\".
-
-"),
-
-("Linear Algebra","Base","qrpfact!","qrpfact!(A) -> QRPivoted
-
-   \"qrpfact!\" is the same as \"qrpfact()\", but saves space by
-   overwriting the input A, instead of creating a copy.
+   overwriting the input \"A\", instead of creating a copy.
 
 "),
 
 ("Linear Algebra","Base","bkfact","bkfact(A) -> BunchKaufman
 
-   Compute the Bunch Kaufman factorization of a real symmetric or
+   Compute the Bunch-Kaufman factorization of a real symmetric or
    complex Hermitian matrix \"A\" and return a \"BunchKaufman\"
    object. The following functions are available for \"BunchKaufman\"
    objects: \"size\", \"\\\", \"inv\", \"issym\", \"ishermitian\".
@@ -8431,7 +8447,7 @@ popdisplay(d::Display)
 ("Linear Algebra","Base","bkfact!","bkfact!(A) -> BunchKaufman
 
    \"bkfact!\" is the same as \"bkfact()\", but saves space by
-   overwriting the input A, instead of creating a copy.
+   overwriting the input \"A\", instead of creating a copy.
 
 "),
 
@@ -8440,17 +8456,27 @@ popdisplay(d::Display)
    Compute the matrix square root of \"A\". If \"B = sqrtm(A)\", then
    \"B*B == A\" within roundoff error.
 
+   \"sqrtm\" uses a polyalgorithm, computing the matrix square root
+   using Schur factorizations (\"schurfact()\") unless it detects the
+   matrix to be Hermitian or real symmetric, in which case it computes
+   the matrix square root from an eigendecomposition (\"eigfact()\").
+   In the latter situation for positive definite matrices, the matrix
+   square root has \"Real\" elements, otherwise it has \"Complex\"
+   elements.
+
 "),
 
-("Linear Algebra","Base","eig","eig(A) -> D, V
+("Linear Algebra","Base","eig","eig(A[, balance=:balance]) -> D, V
 
-   Compute eigenvalues and eigenvectors of A
+   Compute eigenvalues and eigenvectors of \"A\". See \"eigfact()\"
+   for details on the \"balance\" keyword argument.
 
 "),
 
 ("Linear Algebra","Base","eig","eig(A, B) -> D, V
 
-   Compute generalized eigenvalues and vectors of A and B
+   Compute generalized eigenvalues and vectors of \"A\" with respect
+   to \"B\".
 
 "),
 
@@ -8472,23 +8498,32 @@ popdisplay(d::Display)
 
 "),
 
-("Linear Algebra","Base","eigvecs","eigvecs(A[, eigvals])
+("Linear Algebra","Base","eigvecs","eigvecs(A, [eigvals,][balance=:balance])
 
-   Returns the eigenvectors of \"A\".
+   Returns the eigenvectors of \"A\". The \"balance\" keyword is the
+   same as for \"eigfact()\".
 
-   For SymTridiagonal matrices, if the optional vector of eigenvalues
-   \"eigvals\" is specified, returns the specific corresponding
-   eigenvectors.
+   For \"SymTridiagonal\" matrices, if the optional vector of
+   eigenvalues \"eigvals\" is specified, returns the specific
+   corresponding eigenvectors.
 
 "),
 
-("Linear Algebra","Base","eigfact","eigfact(A)
+("Linear Algebra","Base","eigfact","eigfact(A[, balance=:balance])
 
    Compute the eigenvalue decomposition of \"A\" and return an
    \"Eigen\" object. If \"F\" is the factorization object, the
    eigenvalues can be accessed with \"F[:values]\" and the
    eigenvectors with \"F[:vectors]\". The following functions are
    available for \"Eigen\" objects: \"inv\", \"det\".
+
+   For general non-symmetric matrices it is possible to specify how
+   the matrix is balanced before the eigenvector calculation. Possible
+   values are: \":nobalance\" (do not balance), \":permute\" (permute
+   the matrix to become closer to upper triangular), \":diagonal\"
+   (scale the matrix by its diagonal elements to make rows and columns
+   more equal in norm), and \":balance\" (The default, i.e. both
+   permute and scale the matrix).
 
 "),
 
@@ -8540,14 +8575,14 @@ popdisplay(d::Display)
 
 ("Linear Algebra","Base","schurfact!","schurfact!(A)
 
-   Computer the Schur factorization of A, overwriting A in the
+   Computer the Schur factorization of \"A\", overwriting \"A\" in the
    process. See \"schurfact()\"
 
 "),
 
 ("Linear Algebra","Base","schur","schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
 
-   See schurfact
+   See \"schurfact()\"
 
 "),
 
@@ -8567,7 +8602,7 @@ popdisplay(d::Display)
 
 ("Linear Algebra","Base","schur","schur(A, B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
 
-   See schurfact
+   See \"schurfact()\"
 
 "),
 
@@ -8708,14 +8743,6 @@ popdisplay(d::Display)
 
 "),
 
-("Linear Algebra","Base","symmetrize!","symmetrize!(A[, UL::Char])
-
-   \"symmetrize!(A)\" converts from the BLAS/LAPACK symmetric storage
-   format, in which only the \"UL\" ('U'pper or 'L'ower, default 'U')
-   triangle is used, to a full symmetric matrix.
-
-"),
-
 ("Linear Algebra","Base","Tridiagonal","Tridiagonal(dl, d, du)
 
    Construct a tridiagonal matrix from the lower diagonal, diagonal,
@@ -8737,7 +8764,7 @@ popdisplay(d::Display)
 
 ("Linear Algebra","Base","SymTridiagonal","SymTridiagonal(d, du)
 
-   Construct a real-symmetric tridiagonal matrix from the diagonal and
+   Construct a real symmetric tridiagonal matrix from the diagonal and
    upper diagonal, respectively. The result is of type
    \"SymTridiagonal\" and provides efficient specialized eigensolvers,
    but may be converted into a regular matrix with \"full\".
@@ -8747,24 +8774,28 @@ popdisplay(d::Display)
 ("Linear Algebra","Base","Woodbury","Woodbury(A, U, C, V)
 
    Construct a matrix in a form suitable for applying the Woodbury
-   matrix identity
+   matrix identity.
 
 "),
 
 ("Linear Algebra","Base","rank","rank(M)
 
-   Compute the rank of a matrix
+   Compute the rank of a matrix.
 
 "),
 
 ("Linear Algebra","Base","norm","norm(A[, p])
 
-   Compute the \"p\"-norm of a vector or a matrix. \"p\" is \"2\" by
-   default, if not provided. If \"A\" is a vector, \"norm(A, p)\"
-   computes the \"p\"-norm. \"norm(A, Inf)\" returns the largest value
-   in \"abs(A)\", whereas \"norm(A, -Inf)\" returns the smallest. If
-   \"A\" is a matrix, valid values for \"p\" are \"1\", \"2\", or
-   \"Inf\". In order to compute the Frobenius norm, use \"normfro\".
+   Compute the \"p\"-norm of a vector or a matrix \"A\", defaulting to
+   the \"p=2\"-norm.
+
+   For vectors, \"p\" can be any numeric value is valid (even though
+   not all values produce a mathematically valid vector norm). In
+   particular, *norm(A, Inf)`* returns the largest value in
+   \"abs(A)\", whereas \"norm(A, -Inf)\" returns the smallest.
+
+   For matrices, valid values of \"p\" are \"1\", \"2\", or \"Inf\".
+   Use \"normfro()\" to compute the Frobenius norm.
 
 "),
 
@@ -8776,9 +8807,9 @@ popdisplay(d::Display)
 
 ("Linear Algebra","Base","cond","cond(M[, p])
 
-   Matrix condition number, computed using the p-norm. \"p\" is 2 by
-   default, if not provided. Valid values for \"p\" are \"1\", \"2\",
-   or \"Inf\".
+   Matrix condition number, computed using the \"p\"-norm. \"p\" is 2
+   by default, if not provided. Valid values for \"p\" are \"1\",
+   \"2\", or \"Inf\".
 
 "),
 
@@ -8796,7 +8827,7 @@ popdisplay(d::Display)
 
 ("Linear Algebra","Base","logdet","logdet(M)
 
-   Log of Matrix determinant. Equivalent to \"log(det(M))\", but may
+   Log of matrix determinant. Equivalent to \"log(det(M))\", but may
    provide increased accuracy and/or speed.
 
 "),
@@ -8809,13 +8840,13 @@ popdisplay(d::Display)
 
 ("Linear Algebra","Base","pinv","pinv(M)
 
-   Moore-Penrose inverse
+   Moore-Penrose pseudoinverse
 
 "),
 
 ("Linear Algebra","Base","null","null(M)
 
-   Basis for null space of M.
+   Basis for nullspace of \"M\".
 
 "),
 
@@ -8870,44 +8901,44 @@ popdisplay(d::Display)
 
 ("Linear Algebra","Base","isposdef","isposdef(A)
 
-   Test whether a matrix is positive-definite.
+   Test whether a matrix is positive definite.
 
 "),
 
 ("Linear Algebra","Base","isposdef!","isposdef!(A)
 
-   Test whether a matrix is positive-definite, overwriting A in the
-   processes.
+   Test whether a matrix is positive definite, overwriting \"A\" in
+   the processes.
 
 "),
 
 ("Linear Algebra","Base","istril","istril(A)
 
-   Test whether a matrix is lower-triangular.
+   Test whether a matrix is lower triangular.
 
 "),
 
 ("Linear Algebra","Base","istriu","istriu(A)
 
-   Test whether a matrix is upper-triangular.
+   Test whether a matrix is upper triangular.
 
 "),
 
 ("Linear Algebra","Base","ishermitian","ishermitian(A)
 
-   Test whether a matrix is hermitian.
+   Test whether a matrix is Hermitian.
 
 "),
 
 ("Linear Algebra","Base","transpose","transpose(A)
 
-   The transpose operator (\".'\").
+   The transposition operator (\".'\").
 
 "),
 
 ("Linear Algebra","Base","ctranspose","ctranspose(A)
 
-   The conjugate transpose operator (\"'\").
+   The conjugate transposition operator (\"'\").
 
 "),
 
@@ -8964,10 +8995,10 @@ popdisplay(d::Display)
 ("Linear Algebra","Base","peakflops","peakflops(n; parallel=false)
 
    \"peakflops\" computes the peak flop rate of the computer by using
-   BLAS dgemm. By default, if no arguments are specified, it
-   multiplies a matrix of size \"n x n\", where \"n = 2000\". If the
-   underlying BLAS is using multiple threads, higher flop rates are
-   realized. The number of BLAS threads can be set with
+   BLAS double precision \"gemm!()\". By default, if no arguments are
+   specified, it multiplies a matrix of size \"n x n\", where \"n =
+   2000\". If the underlying BLAS is using multiple threads, higher
+   flop rates are realized. The number of BLAS threads can be set with
    \"blas_set_num_threads(n)\".
 
    If the keyword argument \"parallel\" is set to \"true\",
@@ -9424,13 +9455,15 @@ popdisplay(d::Display)
 ("Package Manager Functions","Base.Pkg","checkout","checkout(pkg[, branch=\"master\"])
 
    Checkout the \"Pkg.dir(pkg)\" repo to the branch \"branch\".
-   Defaults to checking out the \"master\" branch.
+   Defaults to checking out the \"master\" branch. To go back to using
+   the newest compatible released version, use \"Pkg.free(pkg)\"
 
 "),
 
 ("Package Manager Functions","Base.Pkg","pin","pin(pkg)
 
-   Pin \"pkg\" at the current version.
+   Pin \"pkg\" at the current version. To go back to using the newest
+   compatible released version, use \"Pkg.free(pkg)\"
 
 "),
 
