@@ -157,24 +157,25 @@ rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
 
 immutable RandIntGen{T<:Integer, U<:Unsigned}
     a::T   # first element of the range
-    k::U   # range length
+    k::U   # range length or 0 for full range
     u::U   # maximum multiple of k within the domain of U
 
-    RandIntGen(a::T, k::U) = new(a, k, div(typemax(U),k)*k)
+    RandIntGen(a::T, k::U) = new(a, k, k == 0 ? k : div(typemax(U),k)*k)
 end
 
-RandIntGen{T<:Unsigned}(r::Range1{T}) = RandIntGen{T,T}(first(r), convert(T, length(r)))
+RandIntGen{T<:Unsigned}(r::Range1{T}) = length(r) == 0 ? error("Empty range") : RandIntGen{T,T}(first(r), convert(T, length(r)))
 
 # specialized versions
 for (T, U) in [(Uint8, Uint32), (Uint16, Uint32), (Int8, Uint32), (Int16, Uint32), 
                (Int32, Uint32), (Int64, Uint64), (Int128, Uint128), 
                (Bool, Uint32), (Char, Uint32)]
 
-    @eval RandIntGen(r::Range1{$T}) = RandIntGen{$T, $U}(first(r), convert($U, length(r)))
+    @eval RandIntGen(r::Range1{$T}) = length(r) == 0 ? error("Empty range") : RandIntGen{$T, $U}(first(r), convert($U, length(r))) # allow overflow when length(r) == typemax(U)
 end
 
 function rand{T<:Integer,U<:Unsigned}(g::RandIntGen{T,U})
     x = rand(U)
+    g.k == 0 && return convert(T, g.a + x)
     while x >= g.u
         x = rand(U)
     end

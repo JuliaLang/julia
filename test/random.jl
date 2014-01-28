@@ -21,4 +21,7 @@ if sizeof(Int32) < sizeof(Int)
     r = rand(int32(-1):typemax(Int32))
     @test typeof(r) == Int32
     @test -1 <= r <= typemax(Int32)
+    @test typeof(rand(typemin(Int32):typemax(Int32))) == Int32
 end
+
+
