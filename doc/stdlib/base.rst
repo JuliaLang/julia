@@ -4548,23 +4548,20 @@ Shared Arrays (EXPERIMENTAL FEATURE)
     If an ``init`` function of the type ``initfn(S::SharedArray)`` is specified, 
     it is called on all the participating workers. 
 
-    The following fields in type ``SharedArray`` are initialized appropriately on each 
-    participating process.
-    
-    ``loc_shmarr::Array{T,N}`` - the shared memory segment mapped appropriately into 
-    the current process. Note: For indexed access it is NOT required to use this field.
-    A ``SharedArray`` object can be used just like a regular array.
-    
-    ``loc_pididx::Int`` - index of the current process into the ``pids`` vector. Can be 
-    used while distributing computational work across participating workers
-    
-    ``loc_subarr_1d`` - a 1-d subarray of the entire array, when equally partitioned 
-    across participating workers. Can be used as a simple work partitioning scheme.
-    
-
 .. function:: procs(S::SharedArray)
 
    Get the vector of processes that have mapped the shared array 
+   
+.. function:: sdata(S::SharedArray)
+
+   Returns the actual ``Array`` object backing ``S``
+   
+.. function:: indexpids(S::SharedArray)
+
+   Returns the index of the current worker into the ``pids`` vector, i.e., the list of workers mapping
+   the SharedArray
+   
+
    
    
 System
