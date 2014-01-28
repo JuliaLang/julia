@@ -113,6 +113,9 @@ sign(z::Complex) = z/abs(z)
 # adding or multiplying real & complex is common
 *(x::Bool, z::Complex) = ifelse(x, z, zero(z))
 *(z::Complex, x::Bool) = ifelse(x, z, zero(z))
++(x::Bool, z::Complex) = Complex(x + real(z), imag(z))
++(z::Complex, x::Bool) = Complex(x + real(z), imag(z))
+
 *(x::Real, z::Complex) = Complex(x * real(z), x * imag(z))
 *(z::Complex, x::Real) = Complex(x * real(z), x * imag(z))
 +(x::Real, z::Complex) = Complex(x + real(z), imag(z))

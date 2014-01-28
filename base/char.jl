@@ -22,15 +22,18 @@ promote_rule(::Type{Char}, ::Type{Uint128}) = Uint128
 ## character operations & comparisons ##
 
 # numeric operations
-+(x::Char   , y::Char   ) = int(x)+int(y)
-*(x::Char   , y::Char   ) = int(x)*int(y)
-div(x::Char , y::Char   ) = div(int(x),int(y))
++(x::Char, y::Char) = int(x) + int(y)
+*(x::Char, y::Char) = int(x) * int(y)
+div(x::Char, y::Char) = div(int(x), int(y))
 
 # ordinal operations
-+(x::Char   , y::Integer) = char(int(x)+int(y))
-+(x::Integer, y::Char   ) = y+x
--(x::Char   , y::Char   ) = int(x)-int(y)
--(x::Char   , y::Integer) = char(int(x)-int(y))
++(x::Char, y::Bool) = char(int(x) + int(y))
++(x::Bool, y::Char) = y + x
+
++(x::Char,    y::Integer) = char(int(x) + int(y))
++(x::Integer, y::Char   ) = y + x
+-(x::Char,    y::Char   ) = int(x) - int(y)
+-(x::Char,    y::Integer) = char(int(x) - int(y))
 
 # bitwise operations
 (~)(x::Char) = char(~uint32(x))
