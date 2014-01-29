@@ -29,6 +29,7 @@ result2 = reshape({1.0, 1.0, 2.0, 1.0, 3.0, "", 4.0, ""}, 2, 4)
 @test readdlm(IOBuffer(",,,1,,,,2,3,,,4,\n,,,1,,,1\n"), ',') == result1
 @test readdlm(IOBuffer("   1    2 3   4 \n   1   1\n")) == result2
 @test readdlm(IOBuffer("   1    2 3   4 \n   1   1\n"), ' ') == result1
+@test readdlm(IOBuffer("1 2\n3 4 \n")) == [[1.0, 3.0] [2.0, 4.0]]
 
 result1[1,4] = "भारत" 
 @test readdlm(IOBuffer(",,,भारत,,,,2,3,,,4,\n,,,1,,,1\n"), ',') == result1
