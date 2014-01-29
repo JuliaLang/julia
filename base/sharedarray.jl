@@ -3,6 +3,10 @@ type SharedArray{T,N} <: DenseArray{T,N}
     pids::Vector{Int}
     refs::Array{RemoteRef}
     
+    # The segname is currently used only in the test scripts to ensure that 
+    # the shmem segment has been unlinked.
+    segname::String
+    
     # Fields below are not to be serialized
     # Local shmem map. 
     s::Array{T,N}
@@ -15,7 +19,7 @@ type SharedArray{T,N} <: DenseArray{T,N}
     # a subset of workers.
     loc_subarr_1d
     
-    SharedArray(d,p,r) = new(d,p,r)
+    SharedArray(d,p,r,sn) = new(d,p,r,sn)
 end
 
 function SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
@@ -42,9 +46,9 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
             shmmem_create_pid = myid()
             s = shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
         else
-            # The shared array is being created on a remote machine....
+            # The shared array is created on a remote machine....
             shmmem_create_pid = pids[1]
-            remotecall(pids[1], () -> begin shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR); nothing end) 
+            remotecall_fetch(pids[1], () -> begin shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR); nothing end) 
         end
 
         func_mapshmem = () -> shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR)
@@ -65,9 +69,9 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
         else
             remotecall_fetch(shmmem_create_pid, shm_unlink, shm_seg_name)  
         end
+        S = SharedArray{T,N}(dims, pids, refs, shm_seg_name)
         shm_seg_name = "" 
         
-        S = SharedArray{T,N}(dims, pids, refs)
         if onlocalhost
             init_loc_flds(S)
             
@@ -224,9 +228,7 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
     local A = nothing 
     try
         fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
-        if !(fd_mem > 0) 
-            error("shm_open() failed") 
-        end
+        systemerror("shm_open() failed for " * shm_seg_name, fd_mem <= 0)
 
         s = fdio(fd_mem, true)
         
@@ -234,10 +236,7 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
         # and only at creation time
         if (mode & JL_O_CREAT) == JL_O_CREAT
             rc = ccall(:ftruncate, Int, (Int, Int), fd_mem, prod(dims)*sizeof(T))
-            if rc != 0
-                ec = errno()
-                error("ftruncate() failed, errno : ", ec) 
-            end
+            systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
         end
         
         A = mmap_array(T, dims, s, 0, grow=false)
@@ -265,7 +264,6 @@ end
 
 
 function assert_same_host(procs)
-    myip = 
     resp = Array(Any, length(procs))
     
     @sync begin
