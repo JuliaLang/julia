@@ -176,12 +176,12 @@ for (T, U) in [(Uint8, Uint32), (Uint16, Uint32), (Int8, Uint32), (Int16, Uint32
 end
 
 
-function rand{T<:Integer}(g::RandIntGen{T,Uint64})
+function rand{T<:Union(Uint64, Int64)}(g::RandIntGen{T,Uint64})
     local x::Uint64
     if g.k >> 32 == 0
-        x = convert(Uint64,rand(Uint32))
+        x = rand(Uint32)
         while x >= g.u
-            x = convert(Uint64,rand(Uint32))
+            x = rand(Uint32)
         end
     else
         x = rand(Uint64)
