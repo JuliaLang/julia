@@ -1,5 +1,6 @@
 #!/bin/sh
 # Run as: fixup-libgfortran.sh <$JL_PRIVATE_LIBDIR>
+set +x
 
 if [[ -z "$1" ]]; then
     echo "Usage: $0 <JL_PRIVATE_LIBDIR>"
@@ -24,7 +25,7 @@ done
 
 # Do the JL_PRIVATE_LIBDIR libraries...
 cd $JL_PRIVATE_LIBDIR
-for name in openlibm quadmath.0 gfortran.3 openblas arpack lapack openlibm-extras; do
+for name in openlibm quadmath.0 gfortran.3 openblas arpack lapack openspecfun; do
     install_name_tool -change $LIBGFORTRAN_DIR/libgfortran.3.dylib @rpath/libgfortran.3.dylib lib$name.dylib
     install_name_tool -change $LIBGFORTRAN_DIR/libquadmath.0.dylib @rpath/libquadmath.0.dylib lib$name.dylib
     install_name_tool -change $LIBGFORTRAN_DIR/libgcc_s.1.dylib @rpath/libgcc_s.1.dylib lib$name.dylib
