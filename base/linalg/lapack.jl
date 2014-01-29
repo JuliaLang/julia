@@ -15,7 +15,7 @@ macro lapackerror() #Handle all nonzero info codes
 end
 
 macro assertnonsingular()
-    :(info[1]>0 && throw(SingularError(info[1])))
+    :(info[1]>0 && throw(SingularException(info[1])))
 end
 macro assertposdef()
     :(info[1]>0 && throw(PosDefException(info[1])))
