@@ -3,7 +3,7 @@ module Cache
 import ..Git
 using ..Types
 
-import ..Dir: pkgroot, path
+import ..Dir: pkgroot
 
 path(pkg::String) = abspath(".cache", pkg)
 
