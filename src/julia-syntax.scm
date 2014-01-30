@@ -1823,7 +1823,7 @@
      `(call colon ,.(map expand-forms (cdr e))))
 
    'hcat
-   (lambda (e) `(call hcat ,.(map expand-forms (cdr e))))
+   (lambda (e) (expand-forms `(call hcat ,.(map expand-forms (cdr e)))))
 
    'vcat
    (lambda (e)
