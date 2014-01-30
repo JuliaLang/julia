@@ -25,6 +25,7 @@
 #endif
 
 #include "julia.h"
+#include "julia_internal.h"
 #include "support/ios.h"
 #include "uv.h"
 
@@ -34,6 +35,13 @@ extern "C" {
 #endif
 
 /** libuv callbacks */
+
+enum CALLBACK_TYPE { CB_PTR, CB_INT32, CB_INT64 };
+#ifdef _P64
+#define CB_INT CB_INT64
+#else
+#define CB_INT CB_INT32
+#endif
 
 /*
  * Notes for adding new callbacks

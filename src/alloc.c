@@ -6,8 +6,7 @@
 #include <stdarg.h>
 #include <assert.h>
 #include "julia.h"
-#include "newobj_internal.h"
-#include "builtin_proto.h"
+#include "julia_internal.h"
 
 jl_value_t *jl_true;
 jl_value_t *jl_false;

@@ -1,5 +1,6 @@
 #include "platform.h"
 #include "julia.h"
+#include "julia_internal.h"
 
 /*
  * We include <mathimf.h> here, because somewhere below <math.h> is included also.

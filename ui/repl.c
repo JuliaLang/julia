@@ -155,8 +155,6 @@ static int exec_program(void)
  again: ;
     JL_TRY {
         if (err) {
-            //jl_lisp_prompt();
-            //return 1;
             jl_value_t *errs = jl_stderr_obj();
             jl_value_t *e = jl_exception_in_transit;
             if (errs != NULL) {
@@ -289,7 +287,6 @@ int main(int argc, char *argv[])
     libsupport_init();
     parse_opts(&argc, &argv);
     if (lisp_prompt) {
-        jl_init_frontend();
         jl_lisp_prompt();
         return 0;
     }

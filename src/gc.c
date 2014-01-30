@@ -7,22 +7,7 @@
 #include <string.h>
 #include <assert.h>
 #include "julia.h"
-
-// with MEMDEBUG, every object is allocated explicitly with malloc, and
-// filled with 0xbb before being freed.
-//#define MEMDEBUG
-
-// MEMPROFILE prints pool summary statistics after every GC
-//#define MEMPROFILE
-
-// GCTIME prints time taken by each phase of GC
-//#define GCTIME
-
-// GC_FINAL_STATS prints total GC stats at exit
-// set in julia.h
-
-// OBJPROFILE counts objects by type
-//#define OBJPROFILE
+#include "julia_internal.h"
 
 #ifdef _P64
 #define GC_PAGE_SZ (1536*sizeof(void*))//bytes
