@@ -6,6 +6,12 @@ copysign(x::Float32, y::Real) = copysign(x, float32(y))
 copysign(x::Float64, y::Real) = copysign(x, float64(y))
 @vectorize_2arg Real copysign
 
+flipsign(x::Float64, y::Float64) = box(Float64,xor_int(unbox(Float64,x),and_int(unbox(Float64,y),0x8000000000000000)))
+flipsign(x::Float32, y::Float32) = box(Float32,xor_int(unbox(Float32,x),and_int(unbox(Float32,y),0x80000000)))
+flipsign(x::Float32, y::Real) = flipsign(x, float32(y))
+flipsign(x::Float64, y::Real) = flipsign(x, float64(y))
+@vectorize_2arg Real flipsign
+
 signbit(x::Float64) = signbit(reinterpret(Int64,x))
 signbit(x::Float32) = signbit(reinterpret(Int32,x))
 signbit(x::Float16) = signbit(reinterpret(Int16,x))
