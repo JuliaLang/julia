@@ -126,7 +126,7 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one)
     first = true
     if !done(itr,state)
         while true
-            if isa(itr,Array) && !isdefined(itr,state)
+            if isa(itr,AbstractArray) && !isassigned(itr,state)
                 print(io, undef_ref_str)
                 state += 1
                 multiline = false
@@ -873,9 +873,10 @@ end
 
 function show_vector(io::IO, v, opn, cls)
     if _limit_output && length(v) > 20
-        show_delim_array(io, v[1:10], opn, ",", "", false)
+        show_delim_array(io, sub(v,1:10), opn, ",", "", false)
         print(io, "  \u2026  ")
-        show_delim_array(io, v[end-9:end], "", ",", cls, false)
+        n = length(v)
+        show_delim_array(io, sub(v,(n-9):n), "", ",", cls, false)
     else
         show_delim_array(io, v, opn, ",", cls, false)
     end
