@@ -831,7 +831,7 @@ DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt
 // system information
 DLLEXPORT int jl_errno(void);
 DLLEXPORT void jl_set_errno(int e);
-DLLEXPORT int32_t jl_stat(const char* path, char* statbuf);
+DLLEXPORT int32_t jl_stat(const char *path, char *statbuf);
 
 // environment entries
 DLLEXPORT jl_value_t *jl_environ(int i);
@@ -894,9 +894,9 @@ jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
 void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
 DLLEXPORT jl_value_t *jl_exception_occurred(void);
 DLLEXPORT void jl_exception_clear(void);
-STATIC_INLINE char* jl_get_exception_str(jl_value_t* exception)
+STATIC_INLINE char *jl_get_exception_str(jl_value_t *exception)
 {
-    return jl_string_data( jl_fieldref( exception ,0 ) );
+    return jl_string_data(jl_fieldref(exception, 0));
 }
 
 
