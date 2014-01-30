@@ -3,7 +3,7 @@ module Cache
 import ..Git
 using ..Types
 
-import ..Dir: pkgroot
+import ..Dir: pkgroot, path
 
 path(pkg::String) = abspath(".cache", pkg)
 
@@ -16,17 +16,11 @@ function mkcachedir()
     @windows_only mkdir(cache)
     @unix_only begin
         rootcache = joinpath(realpath(pkgroot()), ".cache")
-        if rootcache == cache
-            mkdir(cache)
-        elseif isdir(rootcache)
-            try
-                ln(rootcache, cache)
-            catch
-                mkdir(cache)
-            end
-        else
+        if !isdir(rootcache)
             mkdir(rootcache)
-            mkcachedir()
+        end
+        if rootcache != cache
+            run(`ln -s $rootcache $cache`)
         end
     end
 end
