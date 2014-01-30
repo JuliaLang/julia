@@ -2074,10 +2074,12 @@ Mathematical Operators
 
    Modulus after division by 2pi, returning in the range [0,2pi).
   
-   This function computes a floating point representation of the modulus after
-   division by numerically exact 2pi, and is therefore not exactly the same as
-   mod(x,2pi), which would compute the modulus of x relative to division by the
-   floating-point number 2pi.
+   This function is more accurate than mod(x,2pi) for large x, because it uses
+   a more accurate value for ``2pi`` than the ``Float64`` approximation.
+   Real numbers in a computer is usually an approximation, and the inaccuracy
+   in the argument will propagate to the answer. There are no ``Float64`` values
+   that return exactly ``0.0``, because the roundoff error gives that
+   ``2pi < 2*BigFloat(pi)``.
 
 .. function:: rem(x, m)
 
