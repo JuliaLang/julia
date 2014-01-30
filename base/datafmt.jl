@@ -167,7 +167,7 @@ function dlm_offsets(sbuff::UTF8String, dlm, eol, begin_offsets::Array{Int,2}, e
         (val == eol) && (row += 1; col = 0)
         got_data = false
     end
-    if last_offset < slen
+    if (last_offset < slen) && (col < maxcol)
         col += 1
         begin_offsets[row,col] = last_offset+1
         end_offsets[row,col] = slen
@@ -196,7 +196,7 @@ function dlm_offsets(dbuff::Vector{Uint8}, dlm::Uint8, eol::Uint8, begin_offsets
         (val == eol) && (row += 1; col = 0)
         got_data = false
     end
-    if last_offset < slen
+    if (last_offset < slen) && (col < maxcol)
         col += 1
         begin_offsets[row,col] = last_offset+1
         end_offsets[row,col] = slen
