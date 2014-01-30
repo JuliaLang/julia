@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include "julia.h"
+#include "julia_internal.h"
 
 static volatile ptrint_t* bt_data_prof = NULL;
 static volatile size_t bt_size_max = 0;

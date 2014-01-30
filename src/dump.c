@@ -8,9 +8,8 @@
 #include <malloc.h>
 #endif
 #include "julia.h"
+#include "julia_internal.h"
 #include "builtin_proto.h"
-#include "newobj_internal.h"
-#include "jltypes_internal.h"
 
 static htable_t ser_tag;
 static htable_t deser_tag;

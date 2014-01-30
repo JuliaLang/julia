@@ -11,8 +11,7 @@
 #include <malloc.h>
 #endif
 #include "julia.h"
-#include "newobj_internal.h"
-#include "jltypes_internal.h"
+#include "julia_internal.h"
 #include "builtin_proto.h"
 
 jl_datatype_t *jl_any_type;
@@ -120,7 +119,7 @@ int jl_has_typevars(jl_value_t *v)
     return jl_has_typevars_(v, 0);
 }
 
-DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
+int jl_is_leaf_type(jl_value_t *v)
 {
     if (jl_is_datatype(v)) {
         if (((jl_datatype_t*)v)->abstract) {
@@ -216,7 +215,6 @@ static int union_elt_morespecific(const void *a, const void *b)
 // type definitions. (issue #2365)
 int inside_typedef = 0;
 
-DLLEXPORT
 jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
 {
     size_t n = count_union_components(types);
@@ -1674,9 +1672,6 @@ jl_value_t *jl_cache_type_(jl_datatype_t *type)
     cache_type_((jl_value_t*)type);
     return (jl_value_t*)type;
 }
-
-JL_CALLABLE(jl_f_tuple);
-JL_CALLABLE(jl_f_ctor_trampoline);
 
 typedef struct _jl_typestack_t {
     jl_datatype_t *tt;

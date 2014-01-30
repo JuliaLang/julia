@@ -5,6 +5,7 @@
 #include <malloc.h>
 #endif
 #include "julia.h"
+#include "julia_internal.h"
 #include "builtin_proto.h"
 
 extern int jl_lineno;

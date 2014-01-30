@@ -25,6 +25,7 @@
 #endif
 #include <ctype.h>
 #include "julia.h"
+#include "julia_internal.h"
 #include "builtin_proto.h"
 
 // exceptions -----------------------------------------------------------------
@@ -301,8 +302,6 @@ JL_CALLABLE(jl_f_apply)
     JL_GC_POP();
     return result;
 }
-
-#include "newobj_internal.h"
 
 void jl_add_constructors(jl_datatype_t *t);
 

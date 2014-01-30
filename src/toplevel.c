@@ -15,7 +15,7 @@
 #include <unistd.h>
 #endif
 #include "julia.h"
-#include "builtin_proto.h"
+#include "julia_internal.h"
 
 // current line number in a file
 int jl_lineno = 0;

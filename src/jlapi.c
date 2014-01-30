@@ -208,14 +208,13 @@ DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a, jl_value_t *b, j
     return v;
 }
 
-JL_CALLABLE(jl_f_get_field);
 DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, char *fld)
 {
     jl_value_t *v;
     JL_TRY {
         jl_value_t *s = (jl_value_t*)jl_symbol(fld);
-        jl_value_t *args[2] = {o, s};
-        v = jl_f_get_field(NULL, args, 2);
+        int i = jl_field_index((jl_datatype_t*)jl_typeof(o), (jl_sym_t*)s, 1);
+        v = jl_get_nth_field(o, i);
     }
     JL_CATCH {
         v = NULL;

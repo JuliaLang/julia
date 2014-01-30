@@ -25,6 +25,7 @@
 #endif
 
 #include "julia.h"
+#include "julia_internal.h"
 #include <stdio.h>
 
 #ifdef _OS_WINDOWS_
@@ -155,7 +156,7 @@ volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
 #ifdef _OS_WINDOWS_
-void restore_signals()
+void restore_signals(void)
 {
     SetConsoleCtrlHandler(NULL, 0); //turn on ctrl-c handler
 }
@@ -313,7 +314,7 @@ EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, 
 
 #else // #ifdef _OS_WINDOWS_
 
-void restore_signals()
+void restore_signals(void)
 {
     sigset_t sset;
     sigemptyset(&sset);

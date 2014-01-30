@@ -3,6 +3,7 @@
 */
 #include <assert.h>
 #include "julia.h"
+#include "julia_internal.h"
 
 jl_module_t *jl_main_module=NULL;
 jl_module_t *jl_core_module=NULL;
