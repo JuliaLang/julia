@@ -233,7 +233,7 @@ export ComplexPair
 
 # @deprecate select!(v::AbstractVector,k::Union(Int,Range1),o::Ordering) select!(v,k,order=o)
 @deprecate select!(v::AbstractVector,k::Union(Int,Range1),f::Function) select!(v,k,lt=f)
-@deprecate select!(f::Function,v::AbstractVector,k::k::Union(Int,Range1)) select!(v,k,lt=f)
+@deprecate select!(f::Function,v::AbstractVector,k::Union(Int,Range1)) select!(v,k,lt=f)
 
 @deprecate sort(v::AbstractVector,o::Ordering) sort(v,order=o)
 @deprecate sort(v::AbstractVector,a::Algorithm) sort(v,alg=a)
