@@ -385,5 +385,7 @@ eval(Sys, :(@deprecate shlib_list dllist))
 @deprecate spzeros(m::Integer) spzeros(m, m)
 @deprecate spzeros(Tv::Type, m::Integer) spzeros(Tv, m, m)
 
+@deprecate myindexes localindexes
+
 # 0.3 discontinued functions
 

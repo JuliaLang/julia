@@ -1147,7 +1147,7 @@ export
     drandn,
     dzeros,
     localpart,
-    myindexes,
+    localindexes,
     procs,
 
 # shared arrays
