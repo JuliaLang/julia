@@ -288,6 +288,9 @@ Miscellaneous changes
   * `julia-release-*` executables renamed to `julia-*`,
     and `libjulia-release` renamed to `libjulia` ([#4177]).
 
+  * Packages will now be installed in `.julia/vX.Y`, where
+    X.Y is the current Julia version.
+
 Bugfixes and performance updates
 --------------------------------
 
