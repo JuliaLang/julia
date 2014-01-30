@@ -906,3 +906,26 @@ JL_CALLABLE(jl_f_new_box)
     ((jl_value_t**)box)[1] = args[0];
     return box;
 }
+
+JL_CALLABLE(jl_f_default_ctor_1)
+{
+    if (nargs != 1)
+        error("wrong number of arguments (expected 1)");
+    jl_value_t *ft = jl_t0(((jl_datatype_t*)F)->types);
+    if (!jl_subtype(args[0], ft, 1))
+        jl_type_error(((jl_datatype_t*)F)->name->name->name, ft, args[0]);
+    return jl_new_struct((jl_datatype_t*)F, args[0]);
+}
+
+JL_CALLABLE(jl_f_default_ctor_2)
+{
+    if (nargs != 2)
+        error("wrong number of arguments (expected 2)");
+    jl_value_t *ft = jl_t0(((jl_datatype_t*)F)->types);
+    if (!jl_subtype(args[0], ft, 1))
+        jl_type_error(((jl_datatype_t*)F)->name->name->name, ft, args[0]);
+    ft = jl_t1(((jl_datatype_t*)F)->types);
+    if (!jl_subtype(args[1], ft, 1))
+        jl_type_error(((jl_datatype_t*)F)->name->name->name, ft, args[1]);
+    return jl_new_struct((jl_datatype_t*)F, args[0], args[1]);
+}
