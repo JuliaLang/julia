@@ -167,3 +167,15 @@ function evalfile(path::String, args::Vector{UTF8String}=UTF8String[])
                      :(include($path))))
 end
 evalfile(path::String, args::Vector) = evalfile(path, UTF8String[args...])
+
+macro reexport(ex)
+    (isa(ex, Expr) && ex.head == :toplevel && begin
+        valid = true
+        for usingex in ex.args
+            valid &= isa(usingex, Expr) && usingex.head == :using
+        end
+        valid
+    end) || error("@reexport: syntax error")
+    esc(Expr(:toplevel, ex.args...,
+             [:(eval(Expr(:export, names($(usingex.args[end]))...))) for usingex in ex.args]...))
+end
