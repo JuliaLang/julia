@@ -7,6 +7,7 @@ export
     Operators,
     Pkg,
     Profile,
+    Time,
     Sys,
     Test,
     BLAS,
@@ -951,6 +952,8 @@ export
     time_ns,
     toc,
     toq,
+    Date,
+    Datetime,
 
 # errors
     assert,

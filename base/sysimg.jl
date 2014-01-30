@@ -231,6 +231,10 @@ include("graphics.jl")
 include("profile.jl")
 importall .Profile
 
+# Date/Datetime
+include("time.jl")
+importall .Time
+
 include("precompile.jl")
 
 include = include_from_node1
