@@ -5,15 +5,13 @@ import ..Git
 
 const DIR_NAME = ".julia"
 
-pkgroot() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(homedir(),DIR_NAME)))
-
 function path()
-    b = pkgroot()
+    b = abspath(get(ENV,"JULIA_PKGDIR",joinpath(homedir(),DIR_NAME)))
     x, y = VERSION.major, VERSION.minor
     d = joinpath(b,"v$x.$y")
-    if isdir(d) || !isdir(b) || !isdir(joinpath(b, "METADATA"))
-        return d
-    end
+    isdir(d) && return d
+    d = joinpath(b,"v$x")
+    isdir(d) && return d
     return b
 end
 path(pkg::String...) = normpath(path(),pkg...)
