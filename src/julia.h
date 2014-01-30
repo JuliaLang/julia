@@ -898,6 +898,7 @@ STATIC_INLINE char *jl_get_exception_str(jl_value_t *exception)
 DLLEXPORT void julia_init(char *imageFile);
 DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
 DLLEXPORT void jl_init(char *julia_home_dir);
+DLLEXPORT int jl_is_initialized(void);
 
 void jl_init_types(void);
 void jl_init_box_caches(void);
