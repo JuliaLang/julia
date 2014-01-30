@@ -1618,7 +1618,7 @@ function resolve_relative(sym, from, to, typ, orig)
         end
         m = _basemod()
         if is(from,m) || is(from,Core)
-            return tn(sym)
+            return TopNode(sym)
         end
     end
     return GetfieldNode(from, sym, typ)
@@ -1851,7 +1851,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
             return NF
         end
         if isa(spvals[i],Symbol)
-            spvals[i] = qn(spvals[i])
+            spvals[i] = QuoteNode(spvals[i])
         end
     end
     (ast, ty) = typeinf(linfo, meth[1], meth[2], linfo)
@@ -1950,12 +1950,8 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
     return (sym_replace(expr, args, spnames, argexprs, spvals), stmts)
 end
 
-tn(sym::Symbol) =
-    ccall(:jl_new_struct, Any, (Any,Any...), TopNode, sym, Any)
-qn(v) = ccall(:jl_new_struct, Any, (Any,Any...), QuoteNode, v)
-
-const top_tupleref = tn(:tupleref)
-const top_tuple = tn(:tuple)
+const top_tupleref = TopNode(:tupleref)
+const top_tuple = TopNode(:tuple)
 
 function mk_tupleref(texpr, i)
     e = :(($top_tupleref)($texpr, $i))
@@ -2040,10 +2036,10 @@ function inlining_pass(e::Expr, sv, ast)
                 if isa(a1,basenumtype) || ((isa(a1,Symbol) || isa(a1,SymbolNode)) &&
                                            exprtype(a1) <: basenumtype)
                     if e.args[3]==2
-                        e.args = {tn(:*), a1, a1}
+                        e.args = {TopNode(:*), a1, a1}
                         f = *
                     elseif e.args[3]==3
-                        e.args = {tn(:*), a1, a1, a1}
+                        e.args = {TopNode(:*), a1, a1, a1}
                         f = *
                     end
                 end

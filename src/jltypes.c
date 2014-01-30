@@ -2746,31 +2746,37 @@ void jl_init_types(void)
         jl_new_datatype(jl_symbol("LineNumberNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("line")),
                         jl_tuple(1, jl_long_type), 0, 0);
+    jl_linenumbernode_type->fptr = jl_f_default_ctor_1;
 
     jl_labelnode_type =
         jl_new_datatype(jl_symbol("LabelNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("label")),
                         jl_tuple(1, jl_long_type), 0, 0);
+    jl_labelnode_type->fptr = jl_f_default_ctor_1;
 
     jl_gotonode_type =
         jl_new_datatype(jl_symbol("GotoNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("label")),
                         jl_tuple(1, jl_long_type), 0, 0);
+    jl_gotonode_type->fptr = jl_f_default_ctor_1;
 
     jl_quotenode_type =
         jl_new_datatype(jl_symbol("QuoteNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("value")),
                         jl_tuple(1, jl_any_type), 0, 0);
+    jl_quotenode_type->fptr = jl_f_default_ctor_1;
 
     jl_newvarnode_type =
         jl_new_datatype(jl_symbol("NewvarNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("name")),
                         jl_tuple(1, jl_sym_type), 0, 0);
+    jl_newvarnode_type->fptr = jl_f_default_ctor_1;
 
     jl_topnode_type =
         jl_new_datatype(jl_symbol("TopNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("name")),
                         jl_tuple(1, jl_sym_type), 0, 0);
+    jl_topnode_type->fptr = jl_f_default_ctor_1;
 
     jl_module_type =
         jl_new_datatype(jl_symbol("Module"), jl_any_type, jl_null,
