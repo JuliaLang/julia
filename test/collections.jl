@@ -274,6 +274,9 @@ end
 @test setdiff(IntSet(1, 2, 3, 4), IntSet(2, 4, 5, 6)) == IntSet(1, 3)
 @test setdiff(Set(1, 2, 3, 4), Set(2, 4, 5, 6)) == Set(1, 3)
 
+@test symdiff(IntSet(1, 2, 3, 4), IntSet(2, 4, 5, 6)) == IntSet(1, 3, 5, 6)
+@test symdiff(Set(1, 2, 3, 4), Set(2, 4, 5, 6)) == Set(1, 3, 5, 6)
+
 s1 = Set(1, 2, 3, 4)
 setdiff!(s1, Set(2, 4, 5, 6))
 
