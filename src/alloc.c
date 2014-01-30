@@ -910,7 +910,7 @@ JL_CALLABLE(jl_f_new_box)
 JL_CALLABLE(jl_f_default_ctor_1)
 {
     if (nargs != 1)
-        error("wrong number of arguments (expected 1)");
+        jl_error("wrong number of arguments (expected 1)");
     jl_value_t *ft = jl_t0(((jl_datatype_t*)F)->types);
     if (!jl_subtype(args[0], ft, 1))
         jl_type_error(((jl_datatype_t*)F)->name->name->name, ft, args[0]);
@@ -920,7 +920,7 @@ JL_CALLABLE(jl_f_default_ctor_1)
 JL_CALLABLE(jl_f_default_ctor_2)
 {
     if (nargs != 2)
-        error("wrong number of arguments (expected 2)");
+        jl_error("wrong number of arguments (expected 2)");
     jl_value_t *ft = jl_t0(((jl_datatype_t*)F)->types);
     if (!jl_subtype(args[0], ft, 1))
         jl_type_error(((jl_datatype_t*)F)->name->name->name, ft, args[0]);
