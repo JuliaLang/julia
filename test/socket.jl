@@ -37,9 +37,10 @@ end
 wait(c)
 @test readall(connect(2134)) == "Hello World\n"
 
-isfile("testsocket") && Base.FS.unlink("testsocket")
+socketname = @windows ? "\\\\.\\pipe\\uv-test" : "testsocket"
+@unix_only isfile(socketname) && Base.FS.unlink(socketname)
 @async begin
-	s = listen("testsocket")
+	s = listen(socketname)
 	Base.notify(c)
 	sock = accept(s)
 	write(sock,"Hello World\n")
@@ -47,7 +48,7 @@ isfile("testsocket") && Base.FS.unlink("testsocket")
 	close(sock)
 end
 wait(c)
-@test readall(connect("testsocket")) == "Hello World\n"
+@test readall(connect(socketname)) == "Hello World\n"
 
 try 
     getaddrinfo(".invalid")
