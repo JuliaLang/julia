@@ -37,11 +37,14 @@ DLLEXPORT char *jl_locate_sysimg(char *jlhome, char* imgpath)
 
 DLLEXPORT void *jl_eval_string(char *str);
 
+int jl_is_initialized(void) { return jl_main_module!=NULL; }
+
 // argument is the usr/lib directory where libjulia is, or NULL to guess.
 // if that doesn't work, try the full path to the "lib" directory that
 // contains lib/julia/sys.ji
 DLLEXPORT void jl_init(char *julia_home_dir)
 {
+    if (jl_is_initialized()) return;
     libsupport_init();
     char *image_file = jl_locate_sysimg(julia_home_dir, JL_SYSTEM_IMAGE_PATH);
     julia_init(image_file);
