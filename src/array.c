@@ -353,6 +353,15 @@ jl_array_t *jl_alloc_cell_1d(size_t n)
     return jl_alloc_array_1d(jl_array_any_type, n);
 }
 
+jl_value_t *jl_apply_array_type(jl_datatype_t *type, size_t dim)
+{
+    jl_value_t *boxed_dim = jl_box_long(dim);
+    JL_GC_PUSH1(&boxed_dim);
+    jl_value_t *ret = jl_apply_type((jl_value_t*)jl_array_type, jl_tuple2(type, boxed_dim));
+    JL_GC_POP();
+    return ret;
+}
+
 // array primitives -----------------------------------------------------------
 
 #ifndef STORE_ARRAY_LEN
