@@ -4534,7 +4534,7 @@ Distributed Arrays
 
    Get the local piece of a distributed array. Returns an empty array if no local part exists on the calling process.
 
-.. function:: myindexes(d)
+.. function:: localindexes(d)
 
    A tuple describing the indexes owned by the local processor. Returns a tuple with empty ranges 
    if no local part exists on the calling process.

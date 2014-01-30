@@ -126,7 +126,7 @@ function localpart{T,N,A}(d::DArray{T,N,A})
         fetch(d.chunks[lpidx])::A
     end
 end
-function myindexes(d::DArray)
+function localindexes(d::DArray)
     lpidx = localpartindex(d)
     if lpidx == 0
         ntuple(ndims(d), i->1:0)

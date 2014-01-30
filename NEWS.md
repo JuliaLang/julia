@@ -175,6 +175,8 @@ Deprecated or removed
 
   * `symmetrize!` is deprecated in favor of `Base.LinAlg.copytri!` ([#5427])
 
+  * `myindexes` has been renamed to `localindexes` ([#5475])
+
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
 [#4026]: https://github.com/JuliaLang/julia/issues/4026
@@ -217,6 +219,7 @@ Deprecated or removed
 [#5468]: https://github.com/JuliaLang/julia/pull/5468
 [#5025]: https://github.com/JuliaLang/julia/pull/5025
 [#4888]: https://github.com/JuliaLang/julia/pull/4888
+[#5475]: https://github.com/JuliaLang/julia/pull/5475
 
 Julia v0.2.0 Release Notes
 ==========================
