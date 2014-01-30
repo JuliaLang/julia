@@ -258,19 +258,31 @@ be returned:
     julia> z = Incomplete();
 
 While you are allowed to create objects with uninitialized fields, any
-access to an uninitialized field is an immediate error:
+access to an uninitialized reference is an immediate error:
 
 .. doctest::
 
     julia> z.xx
     ERROR: access to undefined reference
 
-This prevents uninitialized fields from propagating throughout a program
-or forcing programmers to continually check for uninitialized fields,
-the way they have to check for ``null`` values everywhere in Java: if a
-field is uninitialized and it is used in any way, an error is thrown
-immediately so no error checking is required. You can also pass
-incomplete objects to other functions from inner constructors to
+This avoids the need to continually check for ``null`` values.
+However, not all object fields are references. Julia considers some
+types to be "plain data", meaning all of their data is self-contained
+and does not reference other objects. The plain data types consist of bits
+types (e.g. ``Int``) and immutable structs of other plain data types.
+The initial contents of a plain data type is undefined::
+
+    julia> type HasPlain
+             n::Int
+             HasPlain() = new()
+           end
+
+    julia> HasPlain()
+    HasPlain(438103441441)
+
+Arrays of plain data types exhibit the same behavior.
+
+You can pass incomplete objects to other functions from inner constructors to
 delegate their completion::
 
     type Lazy
