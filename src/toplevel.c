@@ -27,10 +27,10 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast);
 void jl_add_standard_imports(jl_module_t *m)
 {
     // using Base
-    jl_module_using(m, jl_base_module);
+    jl_module_using(m, jl_base_module, 0);
     // importall Base.Operators
     jl_module_importall(m, (jl_module_t*)jl_get_global(jl_base_module,
-                                                       jl_symbol("Operators")));
+                                                       jl_symbol("Operators")), 0);
 }
 
 extern int base_module_conflict;
@@ -272,9 +272,25 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
     return m;
 }
 
-static jl_module_t *eval_import_path(jl_array_t *args)
+static jl_module_t *eval_import_path(jl_array_t *args, jl_sym_t **name, int *reexported)
 {
-    return eval_import_path_(args, 0);
+    jl_value_t *e = (jl_value_t*)jl_cellref(args,0);
+    if (jl_is_expr(e)) {
+        jl_expr_t *ex = (jl_expr_t*)e;
+        if (jl_array_len(args) != 1 || ex->head != reexported_sym) {
+            jl_errorf("invalid import statement");
+            return NULL;
+        }
+        *reexported = 1;
+        args = ex->args;
+    } else {
+        *reexported = 0;
+    }
+
+    jl_module_t *m = eval_import_path_(args, 0);
+    if (m!=NULL)
+        *name = (jl_sym_t*)jl_cellref(args, jl_array_len(args)-1);
+    return m;
 }
 
 jl_value_t *jl_toplevel_eval_body(jl_array_t *stmts);
@@ -309,41 +325,44 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 
     // handle import, using, importall, export toplevel-only forms
     if (ex->head == importall_sym) {
-        jl_module_t *m = eval_import_path(ex->args);
+        int reexported;
+        jl_sym_t *name;
+        jl_module_t *m = eval_import_path(ex->args, &name, &reexported);
         if (m==NULL) return jl_nothing;
-        jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
         if (!jl_is_symbol(name))
             jl_error("syntax: malformed \"importall\" statement");
         m = (jl_module_t*)jl_eval_global_var(m, name);
         if (!jl_is_module(m))
-	    jl_errorf("invalid %s statement: name exists but does not refer to a module", ex->head->name);
-        jl_module_importall(jl_current_module, m);
+            jl_errorf("invalid %s statement: name exists but does not refer to a module", ex->head->name);
+        jl_module_importall(jl_current_module, m, reexported);
         return jl_nothing;
     }
 
     if (ex->head == using_sym) {
-        jl_module_t *m = eval_import_path(ex->args);
+        int reexported;
+        jl_sym_t *name;
+        jl_module_t *m = eval_import_path(ex->args, &name, &reexported);
         if (m==NULL) return jl_nothing;
-        jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
         if (!jl_is_symbol(name))
             jl_error("syntax: malformed \"using\" statement");
         jl_module_t *u = (jl_module_t*)jl_eval_global_var(m, name);
         if (jl_is_module(u)) {
-            jl_module_using(jl_current_module, u);
+            jl_module_using(jl_current_module, u, reexported);
         }
         else {
-            jl_module_use(jl_current_module, m, name);
+            jl_module_use(jl_current_module, m, name, reexported);
         }
         return jl_nothing;
     }
 
     if (ex->head == import_sym) {
-        jl_module_t *m = eval_import_path(ex->args);
+        int reexported;
+        jl_sym_t *name;
+        jl_module_t *m = eval_import_path(ex->args, &name, &reexported);
         if (m==NULL) return jl_nothing;
-        jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, jl_array_len(ex->args)-1);
         if (!jl_is_symbol(name))
             jl_error("syntax: malformed \"import\" statement");
-        jl_module_import(jl_current_module, m, name);
+        jl_module_import(jl_current_module, m, name, reexported);
         return jl_nothing;
     }
 

@@ -20,7 +20,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
     if (jl_core_module) {
-        jl_module_using(m, jl_core_module);
+        jl_module_using(m, jl_core_module, 0);
     }
     // export own name, so "using Foo" makes "Foo" itself visible
     jl_set_const(m, name, (jl_value_t*)m);
@@ -114,7 +114,7 @@ jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
 }
 
 static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
-                           int explici);
+                           int explici, int reexported);
 
 typedef struct _modstack_t {
     jl_module_t *m;
@@ -145,7 +145,7 @@ static jl_binding_t *jl_get_binding_(jl_module_t *m, jl_sym_t *var, modstack_t *
                 // do a full import to prevent the result of this lookup
                 // from changing, for example if this var is assigned to
                 // later.
-                module_import_(m, b->owner, var, 0);
+                module_import_(m, b->owner, var, 0, 0);
                 return b;
             }
         }
@@ -171,7 +171,7 @@ static int eq_bindings(jl_binding_t *a, jl_binding_t *b)
 
 // NOTE: we use explici since explicit is a C++ keyword
 static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
-                           int explici)
+                           int explici, int reexported)
 {
     if (to == from)
         return;
@@ -187,10 +187,12 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
         if (bto != HT_NOTFOUND) {
             if (bto == b) {
                 // importing a binding on top of itself. harmless.
+                bto->exportp |= (reexported!=0);
             }
             else if (bto->owner == b->owner) {
                 // already imported
                 bto->imported = (explici!=0);
+                bto->exportp |= (reexported!=0);
             }
             else if (bto->owner != to && bto->owner != NULL) {
                 // already imported from somewhere else
@@ -218,46 +220,51 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
             else {
                 bto->owner = b->owner;
                 bto->imported = (explici!=0);
+                bto->exportp |= (reexported!=0);
             }
         }
         else {
             jl_binding_t *nb = new_binding(s);
             nb->owner = b->owner;
             nb->imported = (explici!=0);
+            nb->exportp = (reexported!=0);
             *bp = nb;
         }
     }
 }
 
-void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
+void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s, int reexported)
 {
-    module_import_(to, from, s, 1);
+    module_import_(to, from, s, 1, reexported);
 }
 
-void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
+void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s, int reexported)
 {
-    module_import_(to, from, s, 0);
+    module_import_(to, from, s, 0, reexported);
 }
 
-void jl_module_importall(jl_module_t *to, jl_module_t *from)
+void jl_module_importall(jl_module_t *to, jl_module_t *from, int reexported)
 {
     void **table = from->bindings.table;
     for(size_t i=1; i < from->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->exportp && (b->owner==from || b->imported))
-                jl_module_import(to, from, b->name);
+            if (b->exportp && (b->owner==from || b->imported)) {
+                jl_module_import(to, from, b->name, reexported);
+            }
         }
     }
 }
 
-void jl_module_using(jl_module_t *to, jl_module_t *from)
+void jl_module_using(jl_module_t *to, jl_module_t *from, int reexported)
 {
     if (to == from)
         return;
-    for(size_t i=0; i < to->usings.len; i++) {
-        if (from == to->usings.items[i])
-            return;
+    if (!reexported) {
+        for(size_t i=0; i < to->usings.len; i++) {
+            if (from == to->usings.items[i])
+                return;
+        }
     }
     // print a warning if something visible via this "using" conflicts with
     // an existing identifier. note that an identifier added later may still
@@ -269,20 +276,32 @@ void jl_module_using(jl_module_t *to, jl_module_t *from)
             if (b->exportp && (b->owner==from || b->imported)) {
                 jl_sym_t *var = (jl_sym_t*)table[i-1];
                 jl_binding_t **tobp = (jl_binding_t**)ptrhash_bp(&to->bindings, var);
-                if (*tobp != HT_NOTFOUND && (*tobp)->owner != NULL &&
+                if (*tobp != HT_NOTFOUND && (*tobp)->owner != NULL) {
                     // don't warn for conflicts with the module name itself.
                     // see issue #4715
-                    var != to->name &&
-                    !eq_bindings(jl_get_binding(to,var), b)) {
-                    jl_printf(JL_STDERR,
-                              "Warning: using %s.%s in module %s conflicts with an existing identifier.\n",
-                              from->name->name, var->name, to->name->name);
+                    if(var != to->name &&
+                        !eq_bindings(jl_get_binding(to,var), b)) {
+                        jl_printf(JL_STDERR,
+                                  "Warning: using %s.%s in module %s conflicts with an existing identifier.\n",
+                                  from->name->name, var->name, to->name->name);
+                    }
+                    else if (reexported) {
+                        (*tobp)->exportp = 1;
+                    }
+                }
+                else if (reexported) {
+                    jl_binding_t *nb = *tobp == HT_NOTFOUND ? new_binding(var) : *tobp;
+                    nb->owner = b->owner;
+                    nb->imported = 0;
+                    nb->exportp = 1;
+                    *tobp = nb;
                 }
             }
         }
     }
 
-    arraylist_push(&to->usings, from);
+    if (!reexported)
+        arraylist_push(&to->usings, from);
 }
 
 void jl_module_export(jl_module_t *from, jl_sym_t *s)

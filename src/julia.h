@@ -425,6 +425,7 @@ extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
 extern jl_sym_t *compositetype_sym; extern jl_sym_t *type_goto_sym;
 extern jl_sym_t *global_sym;  extern jl_sym_t *tuple_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *copyast_sym;
+extern jl_sym_t *reexported_sym;
 
 
 // object accessors -----------------------------------------------------------
@@ -783,10 +784,10 @@ DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs);
 DLLEXPORT void jl_declare_constant(jl_binding_t *b);
-DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from);
-DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
-DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
-DLLEXPORT void jl_module_importall(jl_module_t *to, jl_module_t *from);
+DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, int reexported);
+DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s, int reexported);
+DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s, int reexported);
+DLLEXPORT void jl_module_importall(jl_module_t *to, jl_module_t *from, int reexported);
 DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 void jl_add_standard_imports(jl_module_t *m);
 STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)

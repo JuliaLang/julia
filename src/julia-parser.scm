@@ -1216,6 +1216,9 @@
 	(take-token s)
 	(loop (cons (symbol (string.sub (string nxt) 1))
 		    path)))
+       ((eq? nxt 'reexported)
+    (take-token s)
+    `(,word (reexported ,@(reverse path))))
        (else
 	(error (string "invalid \"" word "\" statement")))))))
 

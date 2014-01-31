@@ -696,7 +696,7 @@ void julia_init(char *imageFile)
         jl_core_module->parent = jl_main_module;
         jl_set_const(jl_main_module, jl_symbol("Core"),
                      (jl_value_t*)jl_core_module);
-        jl_module_using(jl_main_module, jl_core_module);
+        jl_module_using(jl_main_module, jl_core_module, 0);
         jl_current_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
@@ -743,7 +743,7 @@ void julia_init(char *imageFile)
         jl_add_standard_imports(jl_main_module);
     }
     // eval() uses Main by default, so Main.eval === Core.eval
-    jl_module_import(jl_main_module, jl_core_module, jl_symbol("eval"));
+    jl_module_import(jl_main_module, jl_core_module, jl_symbol("eval"), 0);
     jl_current_module = jl_main_module;
 
 
