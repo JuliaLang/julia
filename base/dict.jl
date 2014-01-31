@@ -529,6 +529,21 @@ function get!{K,V}(h::Dict{K,V}, key0, default)
     return v
 end
 
+function get!{K,V}(default::Function, h::Dict{K,V}, key0)
+    key = convert(K,key0)
+    if !isequal(key,key0)
+        error(key0, " is not a valid key for type ", K)
+    end
+
+    index = ht_keyindex2(h, key)
+
+    index > 0 && return h.vals[index]
+
+    v = convert(V,  default())
+    _setindex!(h, v, key, -index)
+    return v
+end
+
 function getindex{K,V}(h::Dict{K,V}, key)
     index = ht_keyindex(h, key)
     return (index<0) ? throw(KeyError(key)) : h.vals[index]::V

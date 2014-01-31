@@ -154,7 +154,10 @@ let
     def = {}
     @test get!(d, 8, 5) == 19
     @test get!(d, 19, 2) == 2
-    @test d == {8=>19, 19=>2}
+    @test get!(d, 42) do
+        int(e^2)
+    end == 7
+    @test d == {8=>19, 19=>2, 42=>7}
 end
 
 # issue #2540
