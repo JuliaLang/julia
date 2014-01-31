@@ -88,7 +88,7 @@ function setdiff!(s::IntSet, ns)
 end
 
 setdiff(a::IntSet, b::IntSet) = setdiff!(copy(a),b)
-symdiff(a::IntSet, b::IntSet) =
+symdiff(s1::IntSet, s2::IntSet) =
     (s1.limit >= s2.limit ? symdiff!(copy(s1), s2) : symdiff!(copy(s2), s1))
 
 function empty!(s::IntSet)
