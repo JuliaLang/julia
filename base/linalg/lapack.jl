@@ -286,7 +286,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             minmn = min(m, n)
             nb = size(T, 1)
             nb <= minmn || throw(ArgumentError("Block size $nb > $minmn too large"))
-            lda = max(1, m)
+            lda = max(1, stride(A,2))
             work = Array($elty, nb*n)
             if n > 0
                 info = Array(BlasInt, 1)
@@ -295,7 +295,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}),
                      &m, &n, &nb, A, 
-                     &lda, T, &nb, work,
+                     &lda, T, &max(1,stride(T,2)), work,
                      info)
                 @lapackerror
             end
@@ -455,8 +455,8 @@ for (tzrzf, ormrz, elty) in
             m, n = size(C)
             k = length(tau)
             l = size(A, 2) - size(A, 1)
-            lda = max(1, k)
-            ldc = max(1, m)
+            lda = max(1, stride(A,2))
+            ldc = max(1, stride(C,2))
             work = Array($elty, 1)
             lwork = -1
             info = Array(BlasInt, 1)
@@ -1661,7 +1661,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                 wss = m*k
             end
             1 <= nb <= k || throw(DimensionMismatch("Wrong value for nb"))
-            ldc = max(1, m)
+            ldc = max(1, stride(C,2))
             work = Array($elty, wss)
             info = Array(BlasInt, 1)
             ccall(($(string(gemqrt)), liblapack), Void,
@@ -1671,7 +1671,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                  Ptr{$elty}, Ptr{BlasInt}),
                 &side, &trans, &m, &n,
                 &k, &nb, V, &ldv,
-                T, &nb, C, &ldc,
+                T, &max(1,stride(T,2)), C, &ldc,
                 work, info)
             @lapackerror
             return C
