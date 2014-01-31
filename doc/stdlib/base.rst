@@ -618,11 +618,14 @@ Iterable Collections
 
    **Example**: ``all((i) -> i>i, [4,5,6]) = true``
 
-.. function:: map(f, c) -> collection
+.. function:: map(f, c...) -> collection
 
    Transform collection ``c`` by applying ``f`` to each element.
+   For multiple collection arguments, apply ``f`` elementwise.
 
-   **Example**: ``map((x) -> x * 2, [1, 2, 3]) = [2, 4, 6]``
+   **Examples**:
+     * ``map((x) -> x * 2, [1, 2, 3]) = [2, 4, 6]``
+     * ``map((x,y) -> x + y, [1, 2, 3], [10, 20, 30]) = [11, 22, 33]``
 
 .. function:: map!(function, collection)
 
