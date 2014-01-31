@@ -2,7 +2,7 @@ module Pkg
 
 export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry
 export dir, init, rm, add, available, installed, status, clone, checkout,
-       release, fix, update, resolve, register, tag, publish, generate
+       release, fix, update, resolve, register, tag, publish, generate, rmlock
 
 const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"
 const META_BRANCH = "metadata-v2"
@@ -11,6 +11,8 @@ for file in split("git dir github types reqs cache read query resolve write gene
     include("pkg/$file.jl")
 end
 const cd = Dir.cd
+
+const rmlock = Dir.rmlock
 
 dir(path...) = Dir.path(path...)
 init(meta::String=DEFAULT_META, branch::String=META_BRANCH) = Dir.init(meta,branch)
