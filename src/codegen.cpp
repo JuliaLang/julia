@@ -409,7 +409,13 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     assert(f != NULL);
     nested_compile = last_n_c;
     #ifdef DEBUG
+    #ifndef LLVM35
     if (verifyFunction(*f,PrintMessageAction)) {
+    #else
+    llvm::raw_fd_ostream out(1,false);
+    if (verifyFunction(*f,&out))
+    {
+    #endif
         f->dump();
         abort();
     }
