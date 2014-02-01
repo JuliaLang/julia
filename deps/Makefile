@@ -429,7 +429,7 @@ ifeq ($(OS),WINNT)
 READLINE_OBJ_TARGET = $(BUILD)/lib/libreadline.a
 READLINE_OBJ_SOURCE = readline-$(READLINE_VER)/libreadline.a
 READLINE_URL = https://github.com/JuliaLang/readline/tarball/master
-READLINE_OPTS = --disable-shared --enable-static --with-curses
+READLINE_OPTS = --disable-shared --enable-static --with-curses CFLAGS="-fPIC"
 READLINE_CFLAGS = LOCAL_DEFS="-include $(abspath .)/readline-win.h"
 readline-$(READLINE_VER).tar.gz:
 	$(JLDOWNLOAD) $@ $(READLINE_URL)

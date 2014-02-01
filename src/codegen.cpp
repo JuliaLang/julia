@@ -407,7 +407,13 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     assert(f != NULL);
     nested_compile = last_n_c;
     #ifdef DEBUG
+    #ifndef LLVM35
     if (verifyFunction(*f,PrintMessageAction)) {
+    #else
+    llvm::raw_fd_ostream out(1,false);
+    if (verifyFunction(*f,&out))
+    {
+    #endif
         f->dump();
         abort();
     }
@@ -2311,13 +2317,16 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     if (!jl_is_expr(expr)) {
         // numeric literals
         int needroot = 1;
+        #ifndef DISABLE_CACHE
         if (jl_is_int32(expr)) {
             needroot = !((uint32_t)(jl_unbox_int32(expr)+512) < 1024);
         }
         else if (jl_is_int64(expr)) {
             needroot = !((uint64_t)(jl_unbox_int64(expr)+512) < 1024);
         }
-        else if (jl_is_lambda_info(expr)) {
+        else 
+        #endif
+        if (jl_is_lambda_info(expr)) {
             return emit_lambda_closure(expr, ctx);
         }
         if (needroot) {
@@ -3016,9 +3025,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     m = jl_Module;
 #endif
 
-    std::string str2 = funcName.str();
-    std::cout << str2;
-
     funcName << globalUnique++;
 
     if (specsig) {
@@ -3166,19 +3172,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         ctx.argCount = argCount;
     }
 
-    /*
-    // step 6. (optional) check for stack overflow (the slower way)
-    Value *cur_sp =
-        builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
-                                                     Intrinsic::frameaddress),
-                           ConstantInt::get(T_int32, 0));
-    Value *sp_ok =
-        builder.CreateICmpUGT(cur_sp,
-                              ConstantInt::get(T_size,
-                                               (uptrint_t)jl_stack_lo));
-    error_unless(sp_ok, "stack overflow", &ctx);
-    */
-
     // step 7. allocate local variables
     // must be first for the mem2reg pass to work
     int n_roots = 0;
@@ -3223,6 +3216,17 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     // step 8. set up GC frame
     allocate_gc_frame(n_roots, &ctx);
     ctx.argSpaceInits = &b0->back();
+
+    // step 6. (optional) check for stack overflow (the slower way)
+    Value *cur_sp =
+        builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
+                                                     Intrinsic::frameaddress),
+                           ConstantInt::get(T_int32, 0));
+    Value *sp_ok =
+        builder.CreateICmpUGT(cur_sp,
+                              Constant::getIntegerValue(T_pint8,
+                                               APInt(sizeof(int8_t*)*8,(uint64_t)jl_stack_lo)));
+    error_unless(sp_ok, "stack overflow", &ctx);
 
     // get pointers for locals stored in the gc frame array (argTemp)
     int varnum = 0;
@@ -3943,7 +3947,7 @@ static void init_julia_llvm_env(Module *m)
 #endif
     FPM->add(jl_data_layout);
 
-    FPM->add(llvm::createMemorySanitizerPass(true,""));
+    //FPM->add(createAddressSanitizerFunctionPass());
 
     // list of passes from vmkit
     FPM->add(createCFGSimplificationPass()); // Clean up disgusting code
@@ -3990,6 +3994,15 @@ static void init_julia_llvm_env(Module *m)
 
     FPM->add(createAggressiveDCEPass());         // Delete dead instructions
     FPM->add(createCFGSimplificationPass());     // Merge & remove BBs
+
+    FPM->add(llvm::createMemorySanitizerPass(true,""));
+
+    FPM->add(createEarlyCSEPass());
+    FPM->add(createReassociatePass());
+    FPM->add(createLICMPass());
+    FPM->add(createGVNPass());
+    FPM->add(createInstructionCombiningPass());
+    FPM->add(createDeadStoreEliminationPass());
 
     FPM->doInitialization();
 }
@@ -4066,6 +4079,7 @@ extern "C" void jl_init_codegen(void)
 #ifdef USE_MCJIT
         .setUseMCJIT(true)
         .setMAttrs(attrvec)
+        .setRelocationModel(llvm::Reloc::PIC_)
 #else
         .setMAttrs(attrvec)
 #endif

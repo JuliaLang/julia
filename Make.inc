@@ -438,7 +438,11 @@ endif
 ifeq ($(OS), Linux)
 OSLIBS += -ldl -lrt -lpthread -Wl,--export-dynamic -Wl,--no-whole-archive $(LIBUNWIND)
 ifneq ($(SANITIZE_MEMORY),1)
+ifneq ($(SANITIZE),1)
+ifneq ($(LLVM_SANITIZE),1)
 OSLIBS += -Wl,--version-script=$(JULIAHOME)/src/julia.expmap
+endif
+endif
 endif
 JLDFLAGS = -Wl,-Bdynamic
 endif
