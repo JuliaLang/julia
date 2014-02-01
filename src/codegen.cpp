@@ -34,6 +34,9 @@
 #include "llvm/Bitcode/ReaderWriter.h"
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5
 #define LLVM35 1
+#include "llvm/IR/Verifier.h"
+#else
+#include "llvm/Analysis/Verifier.h"
 #endif
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 4
 #define LLVM34 1
