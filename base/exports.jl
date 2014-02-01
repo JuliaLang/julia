@@ -954,7 +954,7 @@ export
     toc,
     toq,
     Date,
-    Datetime,
+    DateTime,
 
 # errors
     assert,
