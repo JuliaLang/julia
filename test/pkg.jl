@@ -1,4 +1,4 @@
-ENV["JULIA_PKGDIR"] = abspath(string("tmp.",randstring()))
+ENV["JULIA_PKGDIR"] = string("tmp.",randstring())
 @test !isdir(Pkg.dir())
 try # ensure directory removal
 	Pkg.init()
