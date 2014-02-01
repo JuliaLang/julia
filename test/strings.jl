@@ -855,3 +855,23 @@ for T = (Uint8,Int8,Uint16,Int16,Uint32,Int32,Uint64,Int64,Uint128,Int128,BigInt
     n = T != BigInt ? rand(T) : BigInt(rand(Int128))
     @test parseint(T,base(b,n),b) == n
 end
+
+# normalize_string (Unicode normalization etc.):
+@test normalize_string("\u006e\u0303", :NFC) == "\u00f1"
+@test "\u006e\u0303" == normalize_string("\u00f1", :NFD)
+@test normalize_string("\ufb00", :NFC) != "ff"
+@test normalize_string("\ufb00", :NFKC) == "ff"
+@test normalize_string("\u006e\u0303\ufb00", :NFKC) == "\u00f1"*"ff"
+@test normalize_string("\u00f1\ufb00", :NFKD) == "\u006e\u0303"*"ff"
+@test normalize_string("\u006e\u0303", compose=true) == "\u00f1"
+@test "\u006e\u0303" == normalize_string("\u00f1", decompose=true)
+@test normalize_string("\u006e\u0303\u00b5",compat=true) == "\u00f1\u03bc"
+@test normalize_string("Σσς",casefold=true) == "σσσ"
+@test normalize_string("∕⁄", lump=true) == "//"
+@test normalize_string("\ua\n\r\r\ua", newline2lf=true) == "\ua\ua\ua\ua"
+@test normalize_string("\ua\n\r\r\ua", newline2ls=true) == "\u2028\u2028\u2028\u2028"
+@test normalize_string("\ua\n\r\r\ua", newline2ps=true) == "\u2029\u2029\u2029\u2029"
+@test normalize_string("\u00f1", stripmark=true) == "n"
+@test isempty(normalize_string("\u00ad", stripignore=true))
+@test normalize_string("\t\r", stripcc=true) == "  "
+@test normalize_string("\t\r", stripcc=true, newline2ls=true) == " \u2028"
