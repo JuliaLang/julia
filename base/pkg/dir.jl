@@ -6,6 +6,7 @@ import ..Git
 const DIR_NAME = ".julia"
 
 pkgroot() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(homedir(),DIR_NAME)))
+isversioned(p::String) = ((x,y) = (VERSION.major, VERSION.minor); basename(p) == "v$x.$y")
 
 function path()
     b = pkgroot()
