@@ -625,7 +625,7 @@ Iterable Collections
 
    **Examples**:
      * ``map((x) -> x * 2, [1, 2, 3]) = [2, 4, 6]``
-     * ``map((x,y) -> x + y, [1, 2, 3], [10, 20, 30]) = [11, 22, 33]``
+     * ``map(+, [1, 2, 3], [10, 20, 30]) = [11, 22, 33]``
 
 .. function:: map!(function, collection)
 
