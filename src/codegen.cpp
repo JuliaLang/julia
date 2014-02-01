@@ -30,7 +30,6 @@
 #include "llvm/ExecutionEngine/JITEventListener.h"
 #include "llvm/ExecutionEngine/JITMemoryManager.h"
 #include "llvm/PassManager.h"
-#include "llvm/Analysis/Verifier.h"
 #include "llvm/Analysis/Passes.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5
@@ -82,8 +81,6 @@
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Config/llvm-config.h"
-#include "llvm/Assembly/Parser.h"
-#include "llvm/Assembly/Writer.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include <setjmp.h>
 
@@ -4049,11 +4046,10 @@ extern "C" void jl_init_codegen(void)
 #endif
 #ifdef USE_MCJIT
     jl_mcjmm = new SectionMemoryManager();
-#else
+#endif
     // Temporarily disable Haswell BMI2 features due to LLVM bug.
     const char *mattr[] = {"-bmi2", "-avx2"};
     std::vector<std::string> attrvec (mattr, mattr+2);
-#endif
     jl_ExecutionEngine = EngineBuilder(engine_module)
         .setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
@@ -4062,6 +4058,7 @@ extern "C" void jl_init_codegen(void)
         .setTargetOptions(options)
 #ifdef USE_MCJIT
         .setUseMCJIT(true)
+        .setMAttrs(attrvec)
 #else
         .setMAttrs(attrvec)
 #endif
