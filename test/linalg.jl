@@ -908,6 +908,120 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
 end
 
+# Tests norms
+nnorm = 1000
+mmat = 100
+nmat = 80
+for elty in (Float16, Float32, Float64, BigFloat, Complex{Float16}, Complex{Float32}, Complex{Float64}, Complex{BigFloat}, Int32, Int64, BigInt)
+    debug && println(elty)
+    ## Vector
+    x = ones(elty,10)
+    xs = sub(x,1:2:10)
+    @test_approx_eq norm(x, -Inf) 1
+    @test_approx_eq norm(x, -1) 1/10
+    @test_approx_eq norm(x, 0) 10
+    @test_approx_eq norm(x, 1) 10
+    @test_approx_eq norm(x, 2) sqrt(10)
+    @test_approx_eq norm(x, 3) cbrt(10)
+    @test_approx_eq norm(x, Inf) 1
+    @test_approx_eq norm(xs, -Inf) 1
+    @test_approx_eq norm(xs, -1) 1/5
+    @test_approx_eq norm(xs, 0) 5
+    @test_approx_eq norm(xs, 1) 5
+    @test_approx_eq norm(xs, 2) sqrt(5)
+    @test_approx_eq norm(xs, 3) cbrt(5)
+    @test_approx_eq norm(xs, Inf) 1
+
+    for i = 1:10    
+        x = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) : 
+            elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) : 
+            convert(Vector{elty}, randn(nnorm))
+        xs = sub(x,1:2:nnorm)
+        y = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) : 
+            elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) : 
+            convert(Vector{elty}, randn(nnorm))        
+        ys = sub(y,1:2:nnorm)
+        α = elty <: Integer ? randn() : 
+            elty <: Complex ? convert(elty, complex(randn(),randn())) : 
+            convert(elty, randn())
+        # Absolute homogeneity
+        @test_approx_eq norm(α*x,-Inf) abs(α)*norm(x,-Inf)
+        @test_approx_eq norm(α*x,-1) abs(α)*norm(x,-1)
+        @test_approx_eq norm(α*x,1) abs(α)*norm(x,1)
+        @test_approx_eq norm(α*x) abs(α)*norm(x) # two is default
+        @test_approx_eq norm(α*x,3) abs(α)*norm(x,3)
+        @test_approx_eq norm(α*x,Inf) abs(α)*norm(x,Inf)
+        
+        @test_approx_eq norm(α*xs,-Inf) abs(α)*norm(xs,-Inf)
+        @test_approx_eq norm(α*xs,-1) abs(α)*norm(xs,-1)
+        @test_approx_eq norm(α*xs,1) abs(α)*norm(xs,1)
+        @test_approx_eq norm(α*xs) abs(α)*norm(xs) # two is default
+        @test_approx_eq norm(α*xs,3) abs(α)*norm(xs,3)
+        @test_approx_eq norm(α*xs,Inf) abs(α)*norm(xs,Inf)
+
+        # Triangle inequality
+        @test norm(x + y,1) <= norm(x,1) + norm(y,1)
+        @test norm(x + y) <= norm(x) + norm(y) # two is default
+        @test norm(x + y,3) <= norm(x,3) + norm(y,3)
+        @test norm(x + y,Inf) <= norm(x,Inf) + norm(y,Inf)
+        
+        @test norm(xs + ys,1) <= norm(xs,1) + norm(ys,1)
+        @test norm(xs + ys) <= norm(xs) + norm(ys) # two is default
+        @test norm(xs + ys,3) <= norm(xs,3) + norm(ys,3)
+        @test norm(xs + ys,Inf) <= norm(xs,Inf) + norm(ys,Inf)
+
+        # Against vectorized versions
+        @test_approx_eq norm(x,-Inf) minimum(abs(x))
+        @test_approx_eq norm(x,-1) inv(sum(1./abs(x)))
+        @test_approx_eq norm(x,0) sum(x .!= 0)
+        @test_approx_eq norm(x,1) sum(abs(x))
+        @test_approx_eq norm(x) sqrt(sum(abs2(x)))
+        @test_approx_eq norm(x,3) cbrt(sum(abs(x).^3.))
+        @test_approx_eq norm(x,Inf) maximum(abs(x))
+    end
+    ## Matrix (Operator)
+        A = ones(elty,10,10)
+        As = sub(A,1:5,1:5)
+        @test_approx_eq norm(A, 1) 10
+        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(A, 2) 10
+        @test_approx_eq norm(A, Inf) 10
+        @test_approx_eq norm(As, 1) 5
+        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(As, 2) 5
+        @test_approx_eq norm(As, Inf) 5
+
+    for i = 1:10
+        A = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) : 
+            elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) : 
+            convert(Matrix{elty}, randn(mmat, nmat))
+        As = sub(A,1:nmat,1:nmat)
+        B = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) : 
+            elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) : 
+            convert(Matrix{elty}, randn(mmat, nmat))        
+        Bs = sub(B,1:nmat,1:nmat)
+        α = elty <: Integer ? randn() :
+            elty <: Complex ? convert(elty, complex(randn(),randn())) : 
+            convert(elty, randn())
+
+        # Absolute homogeneity
+        @test_approx_eq norm(α*A,1) abs(α)*norm(A,1)
+        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(α*A) abs(α)*norm(A) # two is default
+        @test_approx_eq norm(α*A,Inf) abs(α)*norm(A,Inf)
+        
+        @test_approx_eq norm(α*As,1) abs(α)*norm(As,1)
+        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(α*As) abs(α)*norm(As) # two is default
+        @test_approx_eq norm(α*As,Inf) abs(α)*norm(As,Inf)
+
+        # Triangle inequality
+        @test norm(A + B,1) <= norm(A,1) + norm(B,1)
+        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test norm(A + B) <= norm(A) + norm(B) # two is default
+        @test norm(A + B,Inf) <= norm(A,Inf) + norm(B,Inf)
+        
+        @test norm(As + Bs,1) <= norm(As,1) + norm(Bs,1)
+        elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test norm(As + Bs) <= norm(As) + norm(Bs) # two is default
+        @test norm(As + Bs,Inf) <= norm(As,Inf) + norm(Bs,Inf)
+    end
+end
+
 ## Issue related tests
 # issue 1447
 let
