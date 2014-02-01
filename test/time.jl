@@ -675,18 +675,18 @@ a = Time.DateTime(1972,6,30,23,59,59)
 @test string(typemin(Time.Date)) == "-252522163911150-01-01"
 
 # Name functions
-jan = DateTime(2013,1,1)
-feb = DateTime(2013,2,2)
-mar = DateTime(2013,3,3)
-apr = DateTime(2013,4,4)
-may = DateTime(2013,5,5)
-jun = DateTime(2013,6,7)
-jul = DateTime(2013,7,7)
-aug = DateTime(2013,8,8)
-sep = DateTime(2013,9,9)
-oct = DateTime(2013,10,10)
-nov = DateTime(2013,11,11)
-dec = DateTime(2013,12,11)
+jan = Time.DateTime(2013,1,1)
+feb = Time.DateTime(2013,2,2)
+mar = Time.DateTime(2013,3,3)
+apr = Time.DateTime(2013,4,4)
+may = Time.DateTime(2013,5,5)
+jun = Time.DateTime(2013,6,7)
+jul = Time.DateTime(2013,7,7)
+aug = Time.DateTime(2013,8,8)
+sep = Time.DateTime(2013,9,9)
+oct = Time.DateTime(2013,10,10)
+nov = Time.DateTime(2013,11,11)
+dec = Time.DateTime(2013,12,11)
 monthnames = ["January","February","March","April",
                 "May","June","July","August","September",
                 "October","November","December"]
@@ -750,24 +750,24 @@ end
 @test Time.dayofyear(Time.DateTime(20013,1,1)) == 1
 @test Time.dayofyear(Time.DateTime(2000,12,31)) == 366
 @test Time.dayofyear(Time.DateTime(2001,12,31)) == 365
-dt = DateTime(2000,1,1)
+dt = Time.DateTime(2000,1,1)
 for i = 1:366
 	@test Time.dayofyear(dt) == i
 	dt += Time.Day(1)
 end
-dt = DateTime(2001,1,1)
+dt = Time.DateTime(2001,1,1)
 for i = 1:365
 	@test Time.dayofyear(dt) == i
 	dt += Time.Day(1)
 end
 
-a = Date(2014,1,5)
-b = Date(2014,1,6)
-c = Date(2014,1,7)
-d = Date(2014,1,8)
-e = Date(2014,1,9)
-f = Date(2014,1,10)
-g = Date(2014,1,11)
+a = Time.Date(2014,1,5)
+b = Time.Date(2014,1,6)
+c = Time.Date(2014,1,7)
+d = Time.Date(2014,1,8)
+e = Time.Date(2014,1,9)
+f = Time.Date(2014,1,10)
+g = Time.Date(2014,1,11)
 @test Time.firstdayofweek(a) == a
 @test Time.firstdayofweek(b) == a
 @test Time.firstdayofweek(c) == a
@@ -780,13 +780,13 @@ for i = 0:364
 	@test Time.firstdayofweek(dt) == a + Time.Week(div(i,7))
 	dt += Time.Day(1)
 end
-a = DateTime(2014,1,5)
-b = DateTime(2014,1,6)
-c = DateTime(2014,1,7)
-d = DateTime(2014,1,8)
-e = DateTime(2014,1,9)
-f = DateTime(2014,1,10)
-g = DateTime(2014,1,11)
+a = Time.DateTime(2014,1,5)
+b = Time.DateTime(2014,1,6)
+c = Time.DateTime(2014,1,7)
+d = Time.DateTime(2014,1,8)
+e = Time.DateTime(2014,1,9)
+f = Time.DateTime(2014,1,10)
+g = Time.DateTime(2014,1,11)
 @test Time.firstdayofweek(a) == a
 @test Time.firstdayofweek(b) == a
 @test Time.firstdayofweek(c) == a
@@ -800,13 +800,13 @@ for i = 0:364
 	dt += Time.Day(1)
 end
 @test Time.firstdayofweek(Time.DateTime(2013,12,24)) == Time.DateTime(2013,12,22)
-a = Date(2014,1,5)
-b = Date(2014,1,6)
-c = Date(2014,1,7)
-d = Date(2014,1,8)
-e = Date(2014,1,9)
-f = Date(2014,1,10)
-g = Date(2014,1,11)
+a = Time.Date(2014,1,5)
+b = Time.Date(2014,1,6)
+c = Time.Date(2014,1,7)
+d = Time.Date(2014,1,8)
+e = Time.Date(2014,1,9)
+f = Time.Date(2014,1,10)
+g = Time.Date(2014,1,11)
 @test Time.lastdayofweek(a) == g
 @test Time.lastdayofweek(b) == g
 @test Time.lastdayofweek(c) == g
@@ -819,13 +819,13 @@ for i = 0:364
 	@test Time.lastdayofweek(dt) == g + Time.Week(div(i,7))
 	dt += Time.Day(1)
 end
-a = DateTime(2014,1,5)
-b = DateTime(2014,1,6)
-c = DateTime(2014,1,7)
-d = DateTime(2014,1,8)
-e = DateTime(2014,1,9)
-f = DateTime(2014,1,10)
-g = DateTime(2014,1,11)
+a = Time.DateTime(2014,1,5)
+b = Time.DateTime(2014,1,6)
+c = Time.DateTime(2014,1,7)
+d = Time.DateTime(2014,1,8)
+e = Time.DateTime(2014,1,9)
+f = Time.DateTime(2014,1,10)
+g = Time.DateTime(2014,1,11)
 @test Time.lastdayofweek(a) == g
 @test Time.lastdayofweek(b) == g
 @test Time.lastdayofweek(c) == g
@@ -848,8 +848,8 @@ end
 startdate = Date(2014,1,1)
 stopdate = Date(2014,2,1)
 januarymondays2014 = [Date(2014,1,6),Date(2014,1,13),Date(2014,1,20),Date(2014,1,27)]
-@test recur(x->dayofweek(x)==Time.Monday,startdate,stopdate) == januarymondays2014
-@test recur(x->!(dayofweek(x)==Time.Monday),startdate,stopdate;inclusion=false) == januarymondays2014
+@test Time.recur(x->Time.dayofweek(x)==Time.Monday,startdate,stopdate) == januarymondays2014
+@test Time.recur(x->!(Time.dayofweek(x)==Time.Monday),startdate,stopdate;inclusion=false) == januarymondays2014
 
 # Tests from here: http://en.wikipedia.org/wiki/Unix_time
 @test string(Time.unix2date(1095379198.75)) == string("2004-09-16T23:59:58.75 UTC")
