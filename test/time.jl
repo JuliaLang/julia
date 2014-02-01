@@ -44,29 +44,28 @@ function test_dates(from,to)
 end
 test_dates(-2000,2000)
 
-test = Time.Datetime{Time.Millisecond,:UTC,Time.ISOCalendar}(Time.Millisecond(63492681625000))
-@test Time.Datetime(2013) == test
-@test Time.Datetime(2013,1) == test
-@test Time.Datetime(2013,1,1) == test
-@test Time.Datetime(2013,1,1,0) == test
-@test Time.Datetime(2013,1,1,0,0) == test
-@test Time.Datetime(2013,1,1,0,0,0) == test
-@test Time.Datetime(2013,1,1,0,0,0,0) == test
-@test Time.Datetime(2013,1,1,0,0,0,0,Time.UTC) == test
+test = Time.DateTime{Time.Millisecond,0,Time.ISOCalendar}(Time.Millisecond(63492681625000))
+@test Time.DateTime(2013) == test
+@test Time.DateTime(2013,1) == test
+@test Time.DateTime(2013,1,1) == test
+@test Time.DateTime(2013,1,1,0) == test
+@test Time.DateTime(2013,1,1,0,0) == test
+@test Time.DateTime(2013,1,1,0,0,0) == test
+@test Time.DateTime(2013,1,1,0,0,0,0) == test
 test = Time.Date(Time.Day(734869))
 @test Time.Date(2013) == test
 @test Time.Date(2013,1) == test
 @test Time.Date(2013,1,1) == test
 @test string(Time.Date(1,1,1)) == "0001-01-01" # January 1st, 1 AD/CE
 @test string(Time.Date(0,12,31)) == "0000-12-31" # December 31, 1 BC/BCE
-@test Time.Date(1,1,1) - Time.Date(0,12,31) == Day(1)
-@test Date(Day(-306)) == Date(0,2,29)
+@test Time.Date(1,1,1) - Time.Date(0,12,31) == Time.Day(1)
+@test Date(Time.Day(-306)) == Date(0,2,29)
 @test string(Time.Date(0,1,1)) == "0000-01-01" # January 1st, 1 BC/BCE
 @test string(Time.Date(-1,1,1)) == "-0001-01-01" # January 1st, 2 BC/BCE
 @test string(Time.Date(-1000000,1,1)) == "-1000000-01-01"
 @test string(Time.Date(1000000,1,1)) == "1000000-01-01"
 
-# Test various input types for Date/Datetime
+# Test various input types for Date/DateTime
 test = Date(1,1,1)
 @test Date(int8(1),int8(1),int8(1)) == test
 @test Date(uint8(1),uint8(1),uint8(1)) == test
@@ -82,9 +81,9 @@ test = Date(1,1,1)
 @test Date(big(1),big(1),big(1)) == test
 @test Date('\x01','\x01','\x01') == test
 @test Date(true,true,true) == test
-@test Date(false,true,false) == test - Year(1) - Day(1)
-@test Date(false,true,true) == test - Year(1)
-@test Date(true,true,false) == test - Day(1)
+@test Date(false,true,false) == test - Time.Year(1) - Time.Day(1)
+@test Date(false,true,true) == test - Time.Year(1)
+@test Date(true,true,false) == test - Time.Day(1)
 @test_throws Date(BigFloat(1),BigFloat(1),BigFloat(1))
 @test_throws Date(complex(1),complex(1),complex(1))
 @test_throws Date(float64(1),float64(1),float64(1))
@@ -100,14 +99,14 @@ function test_dates()
 			for d = 1:Time._lastdayofmonth(y,m)
 				for h = 0:23
 					for mi = 0:59
-						dt = Time.Datetime(y,m,d,h,mi)
-						@test y == year(dt)
-						@test m == month(dt)
-						@test d == day(dt)
-						@test h == hour(dt)
-						@test mi == minute(dt)
-						#@test s == second(dt)
-						#@test ms == millisecond(dt)
+						dt = Time.DateTime(y,m,d,h,mi)
+						@test y == Time.year(dt)
+						@test m == Time.month(dt)
+						@test d == Time.day(dt)
+						@test h == Time.hour(dt)
+						@test mi == Time.minute(dt)
+						#@test s == Time.second(dt)
+						#@test ms == Time.millisecond(dt)
 					end
 				end
 			end
@@ -125,13 +124,13 @@ function test_dates()
 				for h in [0,12,23]
 					for s = 0:59
 						for ms in [0,1,500,999]
-							dt = Time.Datetime(y,m,d,h,mi,s,ms)
-							@test y == year(dt)
-							@test m == month(dt)
-							@test d == day(dt)
-							@test h == hour(dt)
-							@test s == second(dt)
-							@test ms == millisecond(dt)
+							dt = Time.DateTime(y,m,d,h,mi,s,ms)
+							@test y == Time.year(dt)
+							@test m == Time.month(dt)
+							@test d == Time.day(dt)
+							@test h == Time.hour(dt)
+							@test s == Time.second(dt)
+							@test ms == Time.millisecond(dt)
 						end
 					end
 				end
@@ -147,9 +146,9 @@ function test_dates(from,to)
 		for m = 1:12
 			for d = 1:Time._lastdayofmonth(y,m)
 				dt = Time.Date(y,m,d)
-				@test y == year(dt)
-				@test m == month(dt)
-				@test d == day(dt)
+				@test y == Time.year(dt)
+				@test m == Time.month(dt)
+				@test d == Time.day(dt)
 			end
 		end
 	end
@@ -157,37 +156,37 @@ end
 test_dates(-2000,2000)
 
 # Months must be in range
-@test_throws Time.Datetime(2013,0,1)
-@test_throws Time.Datetime(2013,13,1)
+@test_throws Time.DateTime(2013,0,1)
+@test_throws Time.DateTime(2013,13,1)
 
 # Days/Hours/Minutes/Seconds/Milliseconds roll back/forward
-@test Time.Datetime(2013,1,0) == Time.Datetime(2012,12,31)
-@test Time.Datetime(2013,1,32) == Time.Datetime(2013,2,1)
-@test Time.Datetime(2013,1,1,24) == Time.Datetime(2013,1,2)
-@test Time.Datetime(2013,1,1,-1) == Time.Datetime(2012,12,31,23)
+@test Time.DateTime(2013,1,0) == Time.DateTime(2012,12,31)
+@test Time.DateTime(2013,1,32) == Time.DateTime(2013,2,1)
+@test Time.DateTime(2013,1,1,24) == Time.DateTime(2013,1,2)
+@test Time.DateTime(2013,1,1,-1) == Time.DateTime(2012,12,31,23)
 @test Time.Date(2013,1,0) == Time.Date(2012,12,31)
 @test Time.Date(2013,1,32) == Time.Date(2013,2,1)
 
-# Datetime arithmetic
-dt = Time.Datetime(1999,12,27)
-@test dt + Time.Year(1) == Time.Datetime(2000,12,27)
-@test dt + Time.Year(100) == Time.Datetime(2099,12,27)
-@test dt + Time.Year(1000) == Time.Datetime(2999,12,27)
-@test dt - Time.Year(1) == Time.Datetime(1998,12,27)
-@test dt - Time.Year(100) == Time.Datetime(1899,12,27)
-@test dt - Time.Year(1000) == Time.Datetime(999,12,27)
-dt = Time.Datetime(2000,2,29)
-@test dt + Time.Year(1) == Time.Datetime(2001,2,28)
-@test dt - Time.Year(1) == Time.Datetime(1999,2,28)
-@test dt + Time.Year(4) == Time.Datetime(2004,2,29)
-@test dt - Time.Year(4) == Time.Datetime(1996,2,29)
-dt = Time.Datetime(1972,6,30,23,59,60)
-@test dt + Time.Year(1) == Time.Datetime(1973,6,30,23,59,59)
-@test dt - Time.Year(1) == Time.Datetime(1971,6,30,23,59,59)
-dt = Time.Datetime(1972,6,30,23,59,59)
-@test dt + Time.Year(1) == Time.Datetime(1973,6,30,23,59,59)
-@test dt - Time.Year(1) == Time.Datetime(1971,6,30,23,59,59)
-@test dt + Time.Year(-1) == Time.Datetime(1971,6,30,23,59,59)
+# DateTime arithmetic
+dt = Time.DateTime(1999,12,27)
+@test dt + Time.Year(1) == Time.DateTime(2000,12,27)
+@test dt + Time.Year(100) == Time.DateTime(2099,12,27)
+@test dt + Time.Year(1000) == Time.DateTime(2999,12,27)
+@test dt - Time.Year(1) == Time.DateTime(1998,12,27)
+@test dt - Time.Year(100) == Time.DateTime(1899,12,27)
+@test dt - Time.Year(1000) == Time.DateTime(999,12,27)
+dt = Time.DateTime(2000,2,29)
+@test dt + Time.Year(1) == Time.DateTime(2001,2,28)
+@test dt - Time.Year(1) == Time.DateTime(1999,2,28)
+@test dt + Time.Year(4) == Time.DateTime(2004,2,29)
+@test dt - Time.Year(4) == Time.DateTime(1996,2,29)
+dt = Time.DateTime(1972,6,30,23,59,60)
+@test dt + Time.Year(1) == Time.DateTime(1973,6,30,23,59,59)
+@test dt - Time.Year(1) == Time.DateTime(1971,6,30,23,59,59)
+dt = Time.DateTime(1972,6,30,23,59,59)
+@test dt + Time.Year(1) == Time.DateTime(1973,6,30,23,59,59)
+@test dt - Time.Year(1) == Time.DateTime(1971,6,30,23,59,59)
+@test dt + Time.Year(-1) == Time.DateTime(1971,6,30,23,59,59)
 
 # Wrapping arithemtic for Months
 @test Time.monthwrap(1,-14) == 11
@@ -286,123 +285,123 @@ dt = Time.Datetime(1972,6,30,23,59,59)
 @test Time.yearwrap(2000,12,37) == 2004
 @test Time.yearwrap(2000,12,3600) == 2300
 
-dt = Time.Datetime(1999,12,27)
-@test dt + Time.Month(1) == Time.Datetime(2000,1,27)
-@test dt + Time.Month(-1) == Time.Datetime(1999,11,27)
-@test dt + Time.Month(-11) == Time.Datetime(1999,1,27)
-@test dt + Time.Month(11) == Time.Datetime(2000,11,27)
-@test dt + Time.Month(-12) == Time.Datetime(1998,12,27)
-@test dt + Time.Month(12) == Time.Datetime(2000,12,27)
-@test dt + Time.Month(13) == Time.Datetime(2001,1,27)
-@test dt + Time.Month(100) == Time.Datetime(2008,4,27)
-@test dt + Time.Month(1000) == Time.Datetime(2083,4,27)
-@test dt - Time.Month(1) == Time.Datetime(1999,11,27)
-@test dt - Time.Month(-1) == Time.Datetime(2000,1,27)
-@test dt - Time.Month(100) == Time.Datetime(1991,8,27)
-@test dt - Time.Month(1000) == Time.Datetime(1916,8,27)
-dt = Time.Datetime(2000,2,29)
-@test dt + Time.Month(1) == Time.Datetime(2000,3,29)
-@test dt - Time.Month(1) == Time.Datetime(2000,1,29)
-dt = Time.Datetime(1972,6,30,23,59,60)
-@test dt + Time.Month(1) == Time.Datetime(1972,7,30,23,59,59)
-@test dt - Time.Month(1) == Time.Datetime(1972,5,30,23,59,59)
-dt = Time.Datetime(1972,6,30,23,59,59)
-@test dt + Time.Month(1) == Time.Datetime(1972,7,30,23,59,59)
-@test dt - Time.Month(1) == Time.Datetime(1972,5,30,23,59,59)
-@test dt + Time.Month(-1) == Time.Datetime(1972,5,30,23,59,59)
+dt = Time.DateTime(1999,12,27)
+@test dt + Time.Month(1) == Time.DateTime(2000,1,27)
+@test dt + Time.Month(-1) == Time.DateTime(1999,11,27)
+@test dt + Time.Month(-11) == Time.DateTime(1999,1,27)
+@test dt + Time.Month(11) == Time.DateTime(2000,11,27)
+@test dt + Time.Month(-12) == Time.DateTime(1998,12,27)
+@test dt + Time.Month(12) == Time.DateTime(2000,12,27)
+@test dt + Time.Month(13) == Time.DateTime(2001,1,27)
+@test dt + Time.Month(100) == Time.DateTime(2008,4,27)
+@test dt + Time.Month(1000) == Time.DateTime(2083,4,27)
+@test dt - Time.Month(1) == Time.DateTime(1999,11,27)
+@test dt - Time.Month(-1) == Time.DateTime(2000,1,27)
+@test dt - Time.Month(100) == Time.DateTime(1991,8,27)
+@test dt - Time.Month(1000) == Time.DateTime(1916,8,27)
+dt = Time.DateTime(2000,2,29)
+@test dt + Time.Month(1) == Time.DateTime(2000,3,29)
+@test dt - Time.Month(1) == Time.DateTime(2000,1,29)
+dt = Time.DateTime(1972,6,30,23,59,60)
+@test dt + Time.Month(1) == Time.DateTime(1972,7,30,23,59,59)
+@test dt - Time.Month(1) == Time.DateTime(1972,5,30,23,59,59)
+dt = Time.DateTime(1972,6,30,23,59,59)
+@test dt + Time.Month(1) == Time.DateTime(1972,7,30,23,59,59)
+@test dt - Time.Month(1) == Time.DateTime(1972,5,30,23,59,59)
+@test dt + Time.Month(-1) == Time.DateTime(1972,5,30,23,59,59)
 
-dt = Time.Datetime(1999,12,27)
-@test dt + Time.Week(1) == Time.Datetime(2000,1,3)
-@test dt + Time.Week(100) == Time.Datetime(2001,11,26)
-@test dt + Time.Week(1000) == Time.Datetime(2019,2,25)
-@test dt - Time.Week(1) == Time.Datetime(1999,12,20)
-@test dt - Time.Week(100) == Time.Datetime(1998,1,26)
-@test dt - Time.Week(1000) == Time.Datetime(1980,10,27)
-dt = Time.Datetime(2000,2,29)
-@test dt + Time.Week(1) == Time.Datetime(2000,3,7)
-@test dt - Time.Week(1) == Time.Datetime(2000,2,22)
-dt = Time.Datetime(1972,6,30,23,59,60)
-@test dt + Time.Week(1) == Time.Datetime(1972,7,7,23,59,59)
-@test dt - Time.Week(1) == Time.Datetime(1972,6,23,23,59,59)
-dt = Time.Datetime(1972,6,30,23,59,59)
-@test dt + Time.Week(1) == Time.Datetime(1972,7,7,23,59,59)
-@test dt - Time.Week(1) == Time.Datetime(1972,6,23,23,59,59)
-@test dt + Time.Week(-1) == Time.Datetime(1972,6,23,23,59,59)
+dt = Time.DateTime(1999,12,27)
+@test dt + Time.Week(1) == Time.DateTime(2000,1,3)
+@test dt + Time.Week(100) == Time.DateTime(2001,11,26)
+@test dt + Time.Week(1000) == Time.DateTime(2019,2,25)
+@test dt - Time.Week(1) == Time.DateTime(1999,12,20)
+@test dt - Time.Week(100) == Time.DateTime(1998,1,26)
+@test dt - Time.Week(1000) == Time.DateTime(1980,10,27)
+dt = Time.DateTime(2000,2,29)
+@test dt + Time.Week(1) == Time.DateTime(2000,3,7)
+@test dt - Time.Week(1) == Time.DateTime(2000,2,22)
+dt = Time.DateTime(1972,6,30,23,59,60)
+@test dt + Time.Week(1) == Time.DateTime(1972,7,7,23,59,59)
+@test dt - Time.Week(1) == Time.DateTime(1972,6,23,23,59,59)
+dt = Time.DateTime(1972,6,30,23,59,59)
+@test dt + Time.Week(1) == Time.DateTime(1972,7,7,23,59,59)
+@test dt - Time.Week(1) == Time.DateTime(1972,6,23,23,59,59)
+@test dt + Time.Week(-1) == Time.DateTime(1972,6,23,23,59,59)
 
-dt = Time.Datetime(1999,12,27)
-@test dt + Time.Day(1) == Time.Datetime(1999,12,28)
-@test dt + Time.Day(100) == Time.Datetime(2000,4,5)
-@test dt + Time.Day(1000) == Time.Datetime(2002,9,22)
-@test dt - Time.Day(1) == Time.Datetime(1999,12,26)
-@test dt - Time.Day(100) == Time.Datetime(1999,9,18)
-@test dt - Time.Day(1000) == Time.Datetime(1997,4,1)
-dt = Time.Datetime(1972,6,30,23,59,60)
-@test dt + Time.Day(1) == Time.Datetime(1972,7,1,23,59,59)
-@test dt - Time.Day(1) == Time.Datetime(1972,6,29,23,59,59)
-dt = Time.Datetime(1972,6,30,23,59,59)
-@test dt + Time.Day(1) == Time.Datetime(1972,7,1,23,59,59)
-@test dt - Time.Day(1) == Time.Datetime(1972,6,29,23,59,59)
-@test dt + Time.Day(-1) == Time.Datetime(1972,6,29,23,59,59)
+dt = Time.DateTime(1999,12,27)
+@test dt + Time.Day(1) == Time.DateTime(1999,12,28)
+@test dt + Time.Day(100) == Time.DateTime(2000,4,5)
+@test dt + Time.Day(1000) == Time.DateTime(2002,9,22)
+@test dt - Time.Day(1) == Time.DateTime(1999,12,26)
+@test dt - Time.Day(100) == Time.DateTime(1999,9,18)
+@test dt - Time.Day(1000) == Time.DateTime(1997,4,1)
+dt = Time.DateTime(1972,6,30,23,59,60)
+@test dt + Time.Day(1) == Time.DateTime(1972,7,1,23,59,59)
+@test dt - Time.Day(1) == Time.DateTime(1972,6,29,23,59,59)
+dt = Time.DateTime(1972,6,30,23,59,59)
+@test dt + Time.Day(1) == Time.DateTime(1972,7,1,23,59,59)
+@test dt - Time.Day(1) == Time.DateTime(1972,6,29,23,59,59)
+@test dt + Time.Day(-1) == Time.DateTime(1972,6,29,23,59,59)
 
-dt = Time.Datetime(1999,12,27)
-@test dt + Time.Hour(1) == Time.Datetime(1999,12,27,1)
-@test dt + Time.Hour(100) == Time.Datetime(1999,12,31,4)
-@test dt + Time.Hour(1000) == Time.Datetime(2000,2,6,16)
-@test dt - Time.Hour(1) == Time.Datetime(1999,12,26,23)
-@test dt - Time.Hour(100) == Time.Datetime(1999,12,22,20)
-@test dt - Time.Hour(1000) == Time.Datetime(1999,11,15,8)
-dt = Time.Datetime(1972,6,30,23,59,60)
-@test dt + Time.Hour(1) == Time.Datetime(1972,7,1,0,59,59)
-@test dt - Time.Hour(1) == Time.Datetime(1972,6,30,22,59,59)
-dt = Time.Datetime(1972,6,30,23,59,59)
-@test dt + Time.Hour(1) == Time.Datetime(1972,7,1,0,59,59)
-@test dt - Time.Hour(1) == Time.Datetime(1972,6,30,22,59,59)
-@test dt + Time.Hour(-1) == Time.Datetime(1972,6,30,22,59,59)
+dt = Time.DateTime(1999,12,27)
+@test dt + Time.Hour(1) == Time.DateTime(1999,12,27,1)
+@test dt + Time.Hour(100) == Time.DateTime(1999,12,31,4)
+@test dt + Time.Hour(1000) == Time.DateTime(2000,2,6,16)
+@test dt - Time.Hour(1) == Time.DateTime(1999,12,26,23)
+@test dt - Time.Hour(100) == Time.DateTime(1999,12,22,20)
+@test dt - Time.Hour(1000) == Time.DateTime(1999,11,15,8)
+dt = Time.DateTime(1972,6,30,23,59,60)
+@test dt + Time.Hour(1) == Time.DateTime(1972,7,1,0,59,59)
+@test dt - Time.Hour(1) == Time.DateTime(1972,6,30,22,59,59)
+dt = Time.DateTime(1972,6,30,23,59,59)
+@test dt + Time.Hour(1) == Time.DateTime(1972,7,1,0,59,59)
+@test dt - Time.Hour(1) == Time.DateTime(1972,6,30,22,59,59)
+@test dt + Time.Hour(-1) == Time.DateTime(1972,6,30,22,59,59)
 
-dt = Time.Datetime(1999,12,27)
-@test dt + Time.Minute(1) == Time.Datetime(1999,12,27,0,1)
-@test dt + Time.Minute(100) == Time.Datetime(1999,12,27,1,40)
-@test dt + Time.Minute(1000) == Time.Datetime(1999,12,27,16,40)
-@test dt - Time.Minute(1) == Time.Datetime(1999,12,26,23,59)
-@test dt - Time.Minute(100) == Time.Datetime(1999,12,26,22,20)
-@test dt - Time.Minute(1000) == Time.Datetime(1999,12,26,7,20)
-dt = Time.Datetime(1972,6,30,23,59,60)
-@test dt + Time.Minute(1) == Time.Datetime(1972,7,1,0,0,59)
-@test dt - Time.Minute(1) == Time.Datetime(1972,6,30,23,58,59)
-dt = Time.Datetime(1972,6,30,23,59,59)
-@test dt + Time.Minute(1) == Time.Datetime(1972,7,1,0,0,59)
-@test dt - Time.Minute(1) == Time.Datetime(1972,6,30,23,58,59)
-@test dt + Time.Minute(-1) == Time.Datetime(1972,6,30,23,58,59)
+dt = Time.DateTime(1999,12,27)
+@test dt + Time.Minute(1) == Time.DateTime(1999,12,27,0,1)
+@test dt + Time.Minute(100) == Time.DateTime(1999,12,27,1,40)
+@test dt + Time.Minute(1000) == Time.DateTime(1999,12,27,16,40)
+@test dt - Time.Minute(1) == Time.DateTime(1999,12,26,23,59)
+@test dt - Time.Minute(100) == Time.DateTime(1999,12,26,22,20)
+@test dt - Time.Minute(1000) == Time.DateTime(1999,12,26,7,20)
+dt = Time.DateTime(1972,6,30,23,59,60)
+@test dt + Time.Minute(1) == Time.DateTime(1972,7,1,0,0,59)
+@test dt - Time.Minute(1) == Time.DateTime(1972,6,30,23,58,59)
+dt = Time.DateTime(1972,6,30,23,59,59)
+@test dt + Time.Minute(1) == Time.DateTime(1972,7,1,0,0,59)
+@test dt - Time.Minute(1) == Time.DateTime(1972,6,30,23,58,59)
+@test dt + Time.Minute(-1) == Time.DateTime(1972,6,30,23,58,59)
 
-dt = Time.Datetime(1999,12,27)
-@test dt + Time.Second(1) == Time.Datetime(1999,12,27,0,0,1)
-@test dt + Time.Second(100) == Time.Datetime(1999,12,27,0,1,40)
-@test dt + Time.Second(1000) == Time.Datetime(1999,12,27,0,16,40)
-@test dt - Time.Second(1) == Time.Datetime(1999,12,26,23,59,59)
-@test dt - Time.Second(100) == Time.Datetime(1999,12,26,23,58,20)
-@test dt - Time.Second(1000) == Time.Datetime(1999,12,26,23,43,20)
-dt = Time.Datetime(1972,6,30,23,59,60)
-@test dt + Time.Second(1) == Time.Datetime(1972,7,1)
-@test dt - Time.Second(1) == Time.Datetime(1972,6,30,23,59,59)
-dt = Time.Datetime(1972,6,30,23,59,59)
-@test dt + Time.Second(1) == Time.Datetime(1972,6,30,23,59,60)
-@test dt - Time.Second(1) == Time.Datetime(1972,6,30,23,59,58)
-@test dt + Time.Second(-1) == Time.Datetime(1972,6,30,23,59,58)
+dt = Time.DateTime(1999,12,27)
+@test dt + Time.Second(1) == Time.DateTime(1999,12,27,0,0,1)
+@test dt + Time.Second(100) == Time.DateTime(1999,12,27,0,1,40)
+@test dt + Time.Second(1000) == Time.DateTime(1999,12,27,0,16,40)
+@test dt - Time.Second(1) == Time.DateTime(1999,12,26,23,59,59)
+@test dt - Time.Second(100) == Time.DateTime(1999,12,26,23,58,20)
+@test dt - Time.Second(1000) == Time.DateTime(1999,12,26,23,43,20)
+dt = Time.DateTime(1972,6,30,23,59,60)
+@test dt + Time.Second(1) == Time.DateTime(1972,7,1)
+@test dt - Time.Second(1) == Time.DateTime(1972,6,30,23,59,59)
+dt = Time.DateTime(1972,6,30,23,59,59)
+@test dt + Time.Second(1) == Time.DateTime(1972,6,30,23,59,60)
+@test dt - Time.Second(1) == Time.DateTime(1972,6,30,23,59,58)
+@test dt + Time.Second(-1) == Time.DateTime(1972,6,30,23,59,58)
 
-dt = Time.Datetime(1999,12,27)
-@test dt + Time.Millisecond(1) == Time.Datetime(1999,12,27,0,0,0,1)
-@test dt + Time.Millisecond(100) == Time.Datetime(1999,12,27,0,0,0,100)
-@test dt + Time.Millisecond(1000) == Time.Datetime(1999,12,27,0,0,1)
-@test dt - Time.Millisecond(1) == Time.Datetime(1999,12,26,23,59,59,999)
-@test dt - Time.Millisecond(100) == Time.Datetime(1999,12,26,23,59,59,900)
-@test dt - Time.Millisecond(1000) == Time.Datetime(1999,12,26,23,59,59)
-dt = Time.Datetime(1972,6,30,23,59,60)
-@test dt + Time.Millisecond(1) == Time.Datetime(1972,6,30,23,59,60,1)
-@test dt - Time.Millisecond(1) == Time.Datetime(1972,6,30,23,59,59,999)
-dt = Time.Datetime(1972,6,30,23,59,59)
-@test dt + Time.Millisecond(1) == Time.Datetime(1972,6,30,23,59,59,1)
-@test dt - Time.Millisecond(1) == Time.Datetime(1972,6,30,23,59,58,999)
-@test dt + Time.Millisecond(-1) == Time.Datetime(1972,6,30,23,59,58,999)
+dt = Time.DateTime(1999,12,27)
+@test dt + Time.Millisecond(1) == Time.DateTime(1999,12,27,0,0,0,1)
+@test dt + Time.Millisecond(100) == Time.DateTime(1999,12,27,0,0,0,100)
+@test dt + Time.Millisecond(1000) == Time.DateTime(1999,12,27,0,0,1)
+@test dt - Time.Millisecond(1) == Time.DateTime(1999,12,26,23,59,59,999)
+@test dt - Time.Millisecond(100) == Time.DateTime(1999,12,26,23,59,59,900)
+@test dt - Time.Millisecond(1000) == Time.DateTime(1999,12,26,23,59,59)
+dt = Time.DateTime(1972,6,30,23,59,60)
+@test dt + Time.Millisecond(1) == Time.DateTime(1972,6,30,23,59,60,1)
+@test dt - Time.Millisecond(1) == Time.DateTime(1972,6,30,23,59,59,999)
+dt = Time.DateTime(1972,6,30,23,59,59)
+@test dt + Time.Millisecond(1) == Time.DateTime(1972,6,30,23,59,59,1)
+@test dt - Time.Millisecond(1) == Time.DateTime(1972,6,30,23,59,58,999)
+@test dt + Time.Millisecond(-1) == Time.DateTime(1972,6,30,23,59,58,999)
 
 dt = Time.Date(1999,12,27)
 @test dt + Time.Year(1) == Time.Date(2000,12,27)
@@ -448,7 +447,7 @@ dt = Time.Date(1999,12,27)
 @test dt - Time.Day(1000) == Time.Date(1997,4,1)
 
 # week function
-dt = Time.Datetime(1999,12,27)
+dt = Time.DateTime(1999,12,27)
 dt1 = Time.Date(1999,12,27)
 check = (52,52,52,52,52,52,52,1,1,1,1,1,1,1,2,2,2,2,2,2,2)
 for i = 1:21
@@ -457,7 +456,7 @@ for i = 1:21
 	dt = dt + Time.Day(1)
 	dt1 = dt1 + Time.Day(1)
 end
-dt = Time.Datetime(2000,12,25)
+dt = Time.DateTime(2000,12,25)
 dt1 = Time.Date(2000,12,25)
 for i = 1:21
 	@test Time.week(dt) == check[i]
@@ -465,7 +464,7 @@ for i = 1:21
 	dt = dt + Time.Day(1)
 	dt1 = dt1 + Time.Day(1)
 end
-dt = Time.Datetime(2030,12,23)
+dt = Time.DateTime(2030,12,23)
 dt1 = Time.Date(2030,12,23)
 for i = 1:21
 	@test Time.week(dt) == check[i]
@@ -473,7 +472,7 @@ for i = 1:21
 	dt = dt + Time.Day(1)
 	dt1 = dt1 + Time.Day(1)
 end
-dt = Time.Datetime(2004,12,20)
+dt = Time.DateTime(2004,12,20)
 dt1 = Time.Date(2004,12,20)
 check = (52,52,52,52,52,52,52,53,53,53,53,53,53,53,1,1,1,1,1,1,1)
 for i = 1:21
@@ -484,209 +483,210 @@ for i = 1:21
 end
 
 # Leapseconds
-a = Time.Datetime(1972,6,29,23,59,59)
-b = Time.Datetime(1972,6,29,23,59,60) #not a leapsecond, rolls forward
+a = Time.DateTime(1972,6,29,23,59,59)
+b = Time.DateTime(1972,6,29,23,59,60) #not a leapsecond, rolls forward
 @test b.instant.ms - a.instant.ms == 1000
 @test string(b) == "1972-06-30T00:00:00 UTC"
 
-a = Time.Datetime(1972,6,30,23,59,59)
-b = Time.Datetime(1972,6,30,23,59,60)
-c = Time.Datetime(1972,7,1,0,0,0)
+a = Time.DateTime(1972,6,30,23,59,59)
+b = Time.DateTime(1972,6,30,23,59,60)
+c = Time.DateTime(1972,7,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1972-06-30T23:59:60 UTC"
 @test string(c) == "1972-07-01T00:00:00 UTC"
-a = Time.Datetime(1972,12,31,23,59,59)
-b = Time.Datetime(1972,12,31,23,59,60)
-c = Time.Datetime(1973,1,1,0,0,0)
+a = Time.DateTime(1972,12,31,23,59,59)
+b = Time.DateTime(1972,12,31,23,59,60)
+c = Time.DateTime(1973,1,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1972-12-31T23:59:60 UTC"
 @test string(c) == "1973-01-01T00:00:00 UTC"
-a = Time.Datetime(1973,12,31,23,59,59)
-b = Time.Datetime(1973,12,31,23,59,60)
-c = Time.Datetime(1974,1,1,0,0,0)
+a = Time.DateTime(1973,12,31,23,59,59)
+b = Time.DateTime(1973,12,31,23,59,60)
+c = Time.DateTime(1974,1,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1973-12-31T23:59:60 UTC"
 @test string(c) == "1974-01-01T00:00:00 UTC"
-a = Time.Datetime(1974,12,31,23,59,59)
-b = Time.Datetime(1974,12,31,23,59,60)
-c = Time.Datetime(1975,1,1,0,0,0)
+a = Time.DateTime(1974,12,31,23,59,59)
+b = Time.DateTime(1974,12,31,23,59,60)
+c = Time.DateTime(1975,1,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1974-12-31T23:59:60 UTC"
 @test string(c) == "1975-01-01T00:00:00 UTC"
-a = Time.Datetime(1975,12,31,23,59,59)
-b = Time.Datetime(1975,12,31,23,59,60)
-c = Time.Datetime(1976,1,1,0,0,0)
+a = Time.DateTime(1975,12,31,23,59,59)
+b = Time.DateTime(1975,12,31,23,59,60)
+c = Time.DateTime(1976,1,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1975-12-31T23:59:60 UTC"
 @test string(c) == "1976-01-01T00:00:00 UTC"
-a = Time.Datetime(1976,12,31,23,59,59)
-b = Time.Datetime(1976,12,31,23,59,60)
-c = Time.Datetime(1977,1,1,0,0,0)
+
+a = Time.DateTime(1976,12,31,23,59,59)
+b = Time.DateTime(1976,12,31,23,59,60)
+c = Time.DateTime(1977,1,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1976-12-31T23:59:60 UTC"
 @test string(c) == "1977-01-01T00:00:00 UTC"
-a = Time.Datetime(1977,12,31,23,59,59)
-b = Time.Datetime(1977,12,31,23,59,60)
-c = Time.Datetime(1978,1,1,0,0,0)
+a = Time.DateTime(1977,12,31,23,59,59)
+b = Time.DateTime(1977,12,31,23,59,60)
+c = Time.DateTime(1978,1,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1977-12-31T23:59:60 UTC"
 @test string(c) == "1978-01-01T00:00:00 UTC"
-a = Time.Datetime(1978,12,31,23,59,59)
-b = Time.Datetime(1978,12,31,23,59,60)
-c = Time.Datetime(1979,1,1,0,0,0)
+a = Time.DateTime(1978,12,31,23,59,59)
+b = Time.DateTime(1978,12,31,23,59,60)
+c = Time.DateTime(1979,1,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1978-12-31T23:59:60 UTC"
 @test string(c) == "1979-01-01T00:00:00 UTC"
-a = Time.Datetime(1979,12,31,23,59,59)
-b = Time.Datetime(1979,12,31,23,59,60)
-c = Time.Datetime(1980,1,1,0,0,0)
+a = Time.DateTime(1979,12,31,23,59,59)
+b = Time.DateTime(1979,12,31,23,59,60)
+c = Time.DateTime(1980,1,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1979-12-31T23:59:60 UTC"
 @test string(c) == "1980-01-01T00:00:00 UTC"
-a = Time.Datetime(1981,6,30,23,59,59)
-b = Time.Datetime(1981,6,30,23,59,60)
-c = Time.Datetime(1981,7,1,0,0,0)
+a = Time.DateTime(1981,6,30,23,59,59)
+b = Time.DateTime(1981,6,30,23,59,60)
+c = Time.DateTime(1981,7,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1981-06-30T23:59:60 UTC"
 @test string(c) == "1981-07-01T00:00:00 UTC"
-a = Time.Datetime(1982,6,30,23,59,59)
-b = Time.Datetime(1982,6,30,23,59,60)
-c = Time.Datetime(1982,7,1,0,0,0)
+a = Time.DateTime(1982,6,30,23,59,59)
+b = Time.DateTime(1982,6,30,23,59,60)
+c = Time.DateTime(1982,7,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1982-06-30T23:59:60 UTC"
 @test string(c) == "1982-07-01T00:00:00 UTC"
-a = Time.Datetime(1983,6,30,23,59,59)
-b = Time.Datetime(1983,6,30,23,59,60)
-c = Time.Datetime(1983,7,1,0,0,0)
+a = Time.DateTime(1983,6,30,23,59,59)
+b = Time.DateTime(1983,6,30,23,59,60)
+c = Time.DateTime(1983,7,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1983-06-30T23:59:60 UTC"
 @test string(c) == "1983-07-01T00:00:00 UTC"
-a = Time.Datetime(1985,6,30,23,59,59)
-b = Time.Datetime(1985,6,30,23,59,60)
-c = Time.Datetime(1985,7,1,0,0,0)
+a = Time.DateTime(1985,6,30,23,59,59)
+b = Time.DateTime(1985,6,30,23,59,60)
+c = Time.DateTime(1985,7,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1985-06-30T23:59:60 UTC"
 @test string(c) == "1985-07-01T00:00:00 UTC"
-a = Time.Datetime(1987,12,31,23,59,59)
-b = Time.Datetime(1987,12,31,23,59,60)
-c = Time.Datetime(1988,1,1,0,0,0)
+a = Time.DateTime(1987,12,31,23,59,59)
+b = Time.DateTime(1987,12,31,23,59,60)
+c = Time.DateTime(1988,1,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1987-12-31T23:59:60 UTC"
 @test string(c) == "1988-01-01T00:00:00 UTC"
-a = Time.Datetime(1989,12,31,23,59,59)
-b = Time.Datetime(1989,12,31,23,59,60)
-c = Time.Datetime(1990,1,1,0,0,0)
+a = Time.DateTime(1989,12,31,23,59,59)
+b = Time.DateTime(1989,12,31,23,59,60)
+c = Time.DateTime(1990,1,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1989-12-31T23:59:60 UTC"
 @test string(c) == "1990-01-01T00:00:00 UTC"
-a = Time.Datetime(1990,12,31,23,59,59)
-b = Time.Datetime(1990,12,31,23,59,60)
-c = Time.Datetime(1991,1,1,0,0,0)
+a = Time.DateTime(1990,12,31,23,59,59)
+b = Time.DateTime(1990,12,31,23,59,60)
+c = Time.DateTime(1991,1,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1990-12-31T23:59:60 UTC"
 @test string(c) == "1991-01-01T00:00:00 UTC"
-a = Time.Datetime(1992,6,30,23,59,59)
-b = Time.Datetime(1992,6,30,23,59,60)
-c = Time.Datetime(1992,7,1,0,0,0)
+a = Time.DateTime(1992,6,30,23,59,59)
+b = Time.DateTime(1992,6,30,23,59,60)
+c = Time.DateTime(1992,7,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1992-06-30T23:59:60 UTC"
 @test string(c) == "1992-07-01T00:00:00 UTC"
-a = Time.Datetime(1993,6,30,23,59,59)
-b = Time.Datetime(1993,6,30,23,59,60)
-c = Time.Datetime(1993,7,1,0,0,0)
+a = Time.DateTime(1993,6,30,23,59,59)
+b = Time.DateTime(1993,6,30,23,59,60)
+c = Time.DateTime(1993,7,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1993-06-30T23:59:60 UTC"
 @test string(c) == "1993-07-01T00:00:00 UTC"
-a = Time.Datetime(1994,6,30,23,59,59)
-b = Time.Datetime(1994,6,30,23,59,60)
-c = Time.Datetime(1994,7,1,0,0,0)
+a = Time.DateTime(1994,6,30,23,59,59)
+b = Time.DateTime(1994,6,30,23,59,60)
+c = Time.DateTime(1994,7,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1994-06-30T23:59:60 UTC"
 @test string(c) == "1994-07-01T00:00:00 UTC"
-a = Time.Datetime(1995,12,31,23,59,59)
-b = Time.Datetime(1995,12,31,23,59,60)
-c = Time.Datetime(1996,1,1,0,0,0)
+a = Time.DateTime(1995,12,31,23,59,59)
+b = Time.DateTime(1995,12,31,23,59,60)
+c = Time.DateTime(1996,1,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1995-12-31T23:59:60 UTC"
 @test string(c) == "1996-01-01T00:00:00 UTC"
-a = Time.Datetime(1997,6,30,23,59,59)
-b = Time.Datetime(1997,6,30,23,59,60)
-c = Time.Datetime(1997,7,1,0,0,0)
+a = Time.DateTime(1997,6,30,23,59,59)
+b = Time.DateTime(1997,6,30,23,59,60)
+c = Time.DateTime(1997,7,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1997-06-30T23:59:60 UTC"
 @test string(c) == "1997-07-01T00:00:00 UTC"
-a = Time.Datetime(1998,12,31,23,59,59)
-b = Time.Datetime(1998,12,31,23,59,60)
-c = Time.Datetime(1999,1,1,0,0,0)
+a = Time.DateTime(1998,12,31,23,59,59)
+b = Time.DateTime(1998,12,31,23,59,60)
+c = Time.DateTime(1999,1,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "1998-12-31T23:59:60 UTC"
 @test string(c) == "1999-01-01T00:00:00 UTC"
-a = Time.Datetime(2005,12,31,23,59,59)
-b = Time.Datetime(2005,12,31,23,59,60)
-c = Time.Datetime(2006,1,1,0,0,0)
+a = Time.DateTime(2005,12,31,23,59,59)
+b = Time.DateTime(2005,12,31,23,59,60)
+c = Time.DateTime(2006,1,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "2005-12-31T23:59:60 UTC"
 @test string(c) == "2006-01-01T00:00:00 UTC"
-a = Time.Datetime(2008,12,31,23,59,59)
-b = Time.Datetime(2008,12,31,23,59,60)
-c = Time.Datetime(2009,1,1,0,0,0)
+a = Time.DateTime(2008,12,31,23,59,59)
+b = Time.DateTime(2008,12,31,23,59,60)
+c = Time.DateTime(2009,1,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "2008-12-31T23:59:60 UTC"
 @test string(c) == "2009-01-01T00:00:00 UTC"
-a = Time.Datetime(2012,6,30,23,59,59)
-b = Time.Datetime(2012,6,30,23,59,60)
-c = Time.Datetime(2012,7,1,0,0,0)
+a = Time.DateTime(2012,6,30,23,59,59)
+b = Time.DateTime(2012,6,30,23,59,60)
+c = Time.DateTime(2012,7,1,0,0,0)
 @test b.instant.ms - a.instant.ms == 1000
 @test c.instant.ms - b.instant.ms == 1000
 @test string(b) == "2012-06-30T23:59:60 UTC"
 @test string(c) == "2012-07-01T00:00:00 UTC"
 
-a = Time.Datetime(1972,6,30,23,59,59)
+a = Time.DateTime(1972,6,30,23,59,59)
 @test Time.calendar(a) == Time.ISOCalendar
-@test Time.timezone(a) == :UTC
+@test Time.timezone(a) == Time.UTC
 @test Time.precision(a) == Time.Millisecond
-@test string(typemax(Time.Datetime)) == "292277024-12-31T23:59:59 UTC"
-@test string(typemin(Time.Datetime)) == "-292277022-01-01T00:00:00 UTC"
+@test string(typemax(Time.DateTime)) == "292277024-12-31T23:59:59 UTC"
+@test string(typemin(Time.DateTime)) == "-292277023-01-01T00:00:00 UTC"
 @test string(typemax(Time.Date)) == "252522163911149-12-31"
 @test string(typemin(Time.Date)) == "-252522163911150-01-01"
 
 # Name functions
-jan = Datetime(2013,1,1)
-feb = Datetime(2013,2,2)
-mar = Datetime(2013,3,3)
-apr = Datetime(2013,4,4)
-may = Datetime(2013,5,5)
-jun = Datetime(2013,6,7)
-jul = Datetime(2013,7,7)
-aug = Datetime(2013,8,8)
-sep = Datetime(2013,9,9)
-oct = Datetime(2013,10,10)
-nov = Datetime(2013,11,11)
-dec = Datetime(2013,12,11)
+jan = DateTime(2013,1,1)
+feb = DateTime(2013,2,2)
+mar = DateTime(2013,3,3)
+apr = DateTime(2013,4,4)
+may = DateTime(2013,5,5)
+jun = DateTime(2013,6,7)
+jul = DateTime(2013,7,7)
+aug = DateTime(2013,8,8)
+sep = DateTime(2013,9,9)
+oct = DateTime(2013,10,10)
+nov = DateTime(2013,11,11)
+dec = DateTime(2013,12,11)
 monthnames = ["January","February","March","April",
                 "May","June","July","August","September",
                 "October","November","December"]
@@ -695,12 +695,12 @@ daysofweek = [Time.Tue,Time.Sat,Time.Sun,Time.Thu,Time.Sun,Time.Fri,
 dows = ["Tuesday","Saturday","Sunday","Thursday","Sunday","Friday",
 		"Sunday","Thursday","Monday","Thursday","Monday","Wednesday"]
 for (i,dt) in enumerate([jan,feb,mar,apr,may,jun,jul,aug,sep,oct,nov,dec])
-	@test month(dt) == i
-	@test monthname(dt) == monthnames[i]
-	@test monthabbr(dt) == monthnames[i][1:3]
-	@test dayofweek(dt) == daysofweek[i]
-	@test dayname(dt) == dows[i]
-	@test dayabbr(dt) == dows[i][1:3]
+	@test Time.month(dt) == i
+	@test Time.monthname(dt) == monthnames[i]
+	@test Time.monthabbr(dt) == monthnames[i][1:3]
+	@test Time.dayofweek(dt) == daysofweek[i]
+	@test Time.dayname(dt) == dows[i]
+	@test Time.dayabbr(dt) == dows[i][1:3]
 end
 
 # Date functions
@@ -718,47 +718,47 @@ end
 @test Time._lastdayofmonth(2000,12) == 31
 @test Time._lastdayofmonth(2001,2) == 28
 
-@test Time.isleap(Time.Datetime(1900)) == false
-@test Time.isleap(Time.Datetime(2000)) == true
-@test Time.isleap(Time.Datetime(2004)) == true
-@test Time.isleap(Time.Datetime(2008)) == true
-@test Time.isleap(Time.Datetime(0)) == true
-@test Time.isleap(Time.Datetime(1)) == false
-@test Time.isleap(Time.Datetime(-1)) == false
-@test Time.isleap(Time.Datetime(4)) == true
-@test Time.isleap(Time.Datetime(-4)) == true
+@test Time.isleap(Time.DateTime(1900)) == false
+@test Time.isleap(Time.DateTime(2000)) == true
+@test Time.isleap(Time.DateTime(2004)) == true
+@test Time.isleap(Time.DateTime(2008)) == true
+@test Time.isleap(Time.DateTime(0)) == true
+@test Time.isleap(Time.DateTime(1)) == false
+@test Time.isleap(Time.DateTime(-1)) == false
+@test Time.isleap(Time.DateTime(4)) == true
+@test Time.isleap(Time.DateTime(-4)) == true
 
-@test Time.dayofweek(Time.Datetime(2013,12,22)) == 0
-@test Time.dayofweek(Time.Datetime(2013,12,23)) == 1
-@test Time.dayofweek(Time.Datetime(2013,12,24)) == 2
-@test Time.dayofweek(Time.Datetime(2013,12,25)) == 3
-@test Time.dayofweek(Time.Datetime(2013,12,26)) == 4
-@test Time.dayofweek(Time.Datetime(2013,12,27)) == 5
-@test Time.dayofweek(Time.Datetime(2013,12,28)) == 6
-@test Time.dayofweek(Time.Datetime(2013,12,29)) == 0
+@test Time.dayofweek(Time.DateTime(2013,12,22)) == 0
+@test Time.dayofweek(Time.DateTime(2013,12,23)) == 1
+@test Time.dayofweek(Time.DateTime(2013,12,24)) == 2
+@test Time.dayofweek(Time.DateTime(2013,12,25)) == 3
+@test Time.dayofweek(Time.DateTime(2013,12,26)) == 4
+@test Time.dayofweek(Time.DateTime(2013,12,27)) == 5
+@test Time.dayofweek(Time.DateTime(2013,12,28)) == 6
+@test Time.dayofweek(Time.DateTime(2013,12,29)) == 0
 
-@test Time.dayofweekofmonth(Time.Datetime(2013,12,1)) == 1
-@test Time.dayofweekofmonth(Time.Datetime(2013,12,8)) == 2
-@test Time.dayofweekofmonth(Time.Datetime(2013,12,15)) == 3
-@test Time.dayofweekofmonth(Time.Datetime(2013,12,22)) == 4
-@test Time.dayofweekofmonth(Time.Datetime(2013,12,29)) == 5
+@test Time.dayofweekofmonth(Time.DateTime(2013,12,1)) == 1
+@test Time.dayofweekofmonth(Time.DateTime(2013,12,8)) == 2
+@test Time.dayofweekofmonth(Time.DateTime(2013,12,15)) == 3
+@test Time.dayofweekofmonth(Time.DateTime(2013,12,22)) == 4
+@test Time.dayofweekofmonth(Time.DateTime(2013,12,29)) == 5
 
-@test Time.daysofweekinmonth(Time.Datetime(2013,12,1)) == 5
+@test Time.daysofweekinmonth(Time.DateTime(2013,12,1)) == 5
 
-@test Time.dayofyear(Time.Datetime(2000,1,1)) == 1
-@test Time.dayofyear(Time.Datetime(2004,1,1)) == 1
-@test Time.dayofyear(Time.Datetime(20013,1,1)) == 1
-@test Time.dayofyear(Time.Datetime(2000,12,31)) == 366
-@test Time.dayofyear(Time.Datetime(2001,12,31)) == 365
-dt = Datetime(2000,1,1)
+@test Time.dayofyear(Time.DateTime(2000,1,1)) == 1
+@test Time.dayofyear(Time.DateTime(2004,1,1)) == 1
+@test Time.dayofyear(Time.DateTime(20013,1,1)) == 1
+@test Time.dayofyear(Time.DateTime(2000,12,31)) == 366
+@test Time.dayofyear(Time.DateTime(2001,12,31)) == 365
+dt = DateTime(2000,1,1)
 for i = 1:366
-	@test dayofyear(dt) == i
-	dt += Day(1)
+	@test Time.dayofyear(dt) == i
+	dt += Time.Day(1)
 end
-dt = Datetime(2001,1,1)
+dt = DateTime(2001,1,1)
 for i = 1:365
-	@test dayofyear(dt) == i
-	dt += Day(1)
+	@test Time.dayofyear(dt) == i
+	dt += Time.Day(1)
 end
 
 a = Date(2014,1,5)
@@ -768,38 +768,38 @@ d = Date(2014,1,8)
 e = Date(2014,1,9)
 f = Date(2014,1,10)
 g = Date(2014,1,11)
-@test firstdayofweek(a) == a
-@test firstdayofweek(b) == a
-@test firstdayofweek(c) == a
-@test firstdayofweek(d) == a
-@test firstdayofweek(e) == a
-@test firstdayofweek(f) == a
-@test firstdayofweek(g) == a
+@test Time.firstdayofweek(a) == a
+@test Time.firstdayofweek(b) == a
+@test Time.firstdayofweek(c) == a
+@test Time.firstdayofweek(d) == a
+@test Time.firstdayofweek(e) == a
+@test Time.firstdayofweek(f) == a
+@test Time.firstdayofweek(g) == a
 dt = a
 for i = 0:364
-	@test firstdayofweek(dt) == a + Week(div(i,7))
-	dt += Day(1)
+	@test Time.firstdayofweek(dt) == a + Time.Week(div(i,7))
+	dt += Time.Day(1)
 end
-a = Datetime(2014,1,5)
-b = Datetime(2014,1,6)
-c = Datetime(2014,1,7)
-d = Datetime(2014,1,8)
-e = Datetime(2014,1,9)
-f = Datetime(2014,1,10)
-g = Datetime(2014,1,11)
-@test firstdayofweek(a) == a
-@test firstdayofweek(b) == a
-@test firstdayofweek(c) == a
-@test firstdayofweek(d) == a
-@test firstdayofweek(e) == a
-@test firstdayofweek(f) == a
-@test firstdayofweek(g) == a
+a = DateTime(2014,1,5)
+b = DateTime(2014,1,6)
+c = DateTime(2014,1,7)
+d = DateTime(2014,1,8)
+e = DateTime(2014,1,9)
+f = DateTime(2014,1,10)
+g = DateTime(2014,1,11)
+@test Time.firstdayofweek(a) == a
+@test Time.firstdayofweek(b) == a
+@test Time.firstdayofweek(c) == a
+@test Time.firstdayofweek(d) == a
+@test Time.firstdayofweek(e) == a
+@test Time.firstdayofweek(f) == a
+@test Time.firstdayofweek(g) == a
 dt = a
 for i = 0:364
-	@test firstdayofweek(dt) == a + Week(div(i,7))
-	dt += Day(1)
+	@test Time.firstdayofweek(dt) == a + Time.Week(div(i,7))
+	dt += Time.Day(1)
 end
-@test Time.firstdayofweek(Time.Datetime(2013,12,24)) == Time.Datetime(2013,12,22)
+@test Time.firstdayofweek(Time.DateTime(2013,12,24)) == Time.DateTime(2013,12,22)
 a = Date(2014,1,5)
 b = Date(2014,1,6)
 c = Date(2014,1,7)
@@ -807,42 +807,42 @@ d = Date(2014,1,8)
 e = Date(2014,1,9)
 f = Date(2014,1,10)
 g = Date(2014,1,11)
-@test lastdayofweek(a) == g
-@test lastdayofweek(b) == g
-@test lastdayofweek(c) == g
-@test lastdayofweek(d) == g
-@test lastdayofweek(e) == g
-@test lastdayofweek(f) == g
-@test lastdayofweek(g) == g
+@test Time.lastdayofweek(a) == g
+@test Time.lastdayofweek(b) == g
+@test Time.lastdayofweek(c) == g
+@test Time.lastdayofweek(d) == g
+@test Time.lastdayofweek(e) == g
+@test Time.lastdayofweek(f) == g
+@test Time.lastdayofweek(g) == g
 dt = a
 for i = 0:364
-	@test lastdayofweek(dt) == g + Week(div(i,7))
-	dt += Day(1)
+	@test Time.lastdayofweek(dt) == g + Time.Week(div(i,7))
+	dt += Time.Day(1)
 end
-a = Datetime(2014,1,5)
-b = Datetime(2014,1,6)
-c = Datetime(2014,1,7)
-d = Datetime(2014,1,8)
-e = Datetime(2014,1,9)
-f = Datetime(2014,1,10)
-g = Datetime(2014,1,11)
-@test lastdayofweek(a) == g
-@test lastdayofweek(b) == g
-@test lastdayofweek(c) == g
-@test lastdayofweek(d) == g
-@test lastdayofweek(e) == g
-@test lastdayofweek(f) == g
-@test lastdayofweek(g) == g
+a = DateTime(2014,1,5)
+b = DateTime(2014,1,6)
+c = DateTime(2014,1,7)
+d = DateTime(2014,1,8)
+e = DateTime(2014,1,9)
+f = DateTime(2014,1,10)
+g = DateTime(2014,1,11)
+@test Time.lastdayofweek(a) == g
+@test Time.lastdayofweek(b) == g
+@test Time.lastdayofweek(c) == g
+@test Time.lastdayofweek(d) == g
+@test Time.lastdayofweek(e) == g
+@test Time.lastdayofweek(f) == g
+@test Time.lastdayofweek(g) == g
 dt = a
 for i = 0:364
-	@test lastdayofweek(dt) == g + Week(div(i,7))
-	dt += Day(1)
+	@test Time.lastdayofweek(dt) == g + Time.Week(div(i,7))
+	dt += Time.Day(1)
 end
-@test Time.lastdayofweek(Time.Datetime(2013,12,24)) == Time.Datetime(2013,12,28)
+@test Time.lastdayofweek(Time.DateTime(2013,12,24)) == Time.DateTime(2013,12,28)
 
-@test Date(Datetime(Date(2012,7,1))) == Date(2012,7,1)
-@test Time.unix2date(Time.date2unix(Datetime(2000,1,1))) == Datetime(2000,1,1)
-@test Time.Datetime(1970).instant.ms == Time.UNIXEPOCH
+@test Date(DateTime(Date(2012,7,1))) == Date(2012,7,1)
+@test Time.unix2date(Time.date2unix(DateTime(2000,1,1))) == DateTime(2000,1,1)
+@test Time.DateTime(1970).instant.ms == Time.UNIXEPOCH
 #@test Time.date2unix(now()) == time()
 
 startdate = Date(2014,1,1)
@@ -879,111 +879,146 @@ januarymondays2014 = [Date(2014,1,6),Date(2014,1,13),Date(2014,1,20),Date(2014,1
 @test Time.date2ratadays(Date(Time.ratadays2date(734869)...)) == 734869
 
 # Tests from here: http://mysite.verizon.net/aesir_research/date/back.htm#JDN
-@test Time.julian2date(1721119.5) == Datetime(0,3,1)
-@test Time.julian2date(1721424.5) == Datetime(0,12,31)
-@test Time.julian2date(1721425.5) == Datetime(1,1,1)
-@test Time.julian2date(2299149.5) == Datetime(1582,10,4)
-@test Time.julian2date(2415020.5) == Datetime(1900,1,1)
-@test Time.julian2date(2415385.5) == Datetime(1901,1,1)
-@test Time.julian2date(2440587.5) == Datetime(1970,1,1)
-@test Time.julian2date(2444239.5) == Datetime(1980,1,1)
-@test Time.julian2date(2452695.625) == Datetime(2003,2,25,3)
-@test Time.date2julian(Datetime(2013,12,3,21)) == 2456630.375
+@test Time.julian2date(1721119.5) == DateTime(0,3,1)
+@test Time.julian2date(1721424.5) == DateTime(0,12,31)
+@test Time.julian2date(1721425.5) == DateTime(1,1,1)
+@test Time.julian2date(2299149.5) == DateTime(1582,10,4)
+@test Time.julian2date(2415020.5) == DateTime(1900,1,1)
+@test Time.julian2date(2415385.5) == DateTime(1901,1,1)
+@test Time.julian2date(2440587.5) == DateTime(1970,1,1)
+@test Time.julian2date(2444239.5) == DateTime(1980,1,1)
+@test Time.julian2date(2452695.625) == DateTime(2003,2,25,3)
+@test Time.date2julian(DateTime(2013,12,3,21)) == 2456630.375
 
-# Datetime parsing
+# DateTime parsing
 #'1996-January-15'
-# dt = Time.Datetime(1996,1,15)
-# a = "96-01-15"
-# f = "yy-mm-dd"
-# @test Time.Datetime(a,f) + Time.Year(1900) == dt
-# b = "96/Feb/15"
-# f = "yy/mmm/dd"
-# @test Time.Datetime(b,f) + Time.Year(1900) == dt + Time.Month(1)
-# c = "96:15:01"
-# f = "yy:dd:mm"
-# @test Time.Datetime(c,f) + Time.Year(1900) == dt
-# d = "1996,Jan,15"
-# f = "yyyy,mmm,dd"
-# @test Time.Datetime(d,f) == dt
-# e = "1996.January.15"
-# f = "yyyy.mmmm.dd"
-# @test Time.Datetime(e,f) == dt
-# f = "1996 1 15"
-# fo = "yyyy m dd"
-# @test Time.Datetime(f,fo) == dt
-# g = "1996-1-1"
-# f = "yyyy-m-d"
-# @test Time.Datetime(g,f) == dt - Time.Day(14)
-# # h = "1996-01-15 10 pm"
-# # f = "yyyy-mm-dd HH aa"
-# # Time.Datetime(h,f)
-# # i = "1996-01-15 10 am"
-# # f = "yyyy-mm-dd HH aa"
-# j = "1996-01-15 UTC"
-# f = "yyyy-mm-dd zzz"
-# @test Time.Datetime(j,f) == dt
-# k = "1996-01-15 10:00:00 UTC"
-# f = "yyyy-mm-dd HH:MM:SS zzz"
-# @test Time.Datetime(k,f) == dt + Time.Hour(10)
-# l = "1996-01-15 10:10:10.25 UTC"
-# f = "yyyy-mm-dd HH:MM:SS.ss zzz"
-# @test Time.Datetime(l,f) == dt + Time.Hour(10) + Time.Minute(10) + Time.Second(10) + Time.Millisecond(250)
+dt = Time.DateTime(1996,1,15)
+f = "yy-mm-dd"
+a = "96-01-15"
+@test Time.DateTime(a,f) + Time.Year(1900) == dt
+a1 = "96-1-15"
+@test Time.DateTime(a1,f) + Time.Year(1900) == dt
+a2 = "96-1-1"
+@test Time.DateTime(a2,f) + Time.Year(1900) + Time.Day(14) == dt
+a3 = "1996-1-15"
+@test Time.DateTime(a3,f) == dt
+a4 = "1996-Jan-15"
+@test_throws Time.DateTime(a4,f) # Trying to use month name, but specified only "mm"
 
-# # m = "1996-01-15 10:00:00 -0800"
-# # f = "yyyy-mm-dd HH:MM:SS.ss zzz"
-# # n = "1996-01-15 10:00:00 +0800"
-# # o = "1996-01-15 10:00:00-08:00"
-# # p = "1996-01-15 10:00:00+08:45"
-# # q = "1996-01-15 10:00:00 GMT+08:45"
+f = "yy/mmm/dd"
+b = "96/Feb/15"
+@test Time.DateTime(b,f) + Time.Year(1900) == dt + Time.Month(1)
+b1 = "1996/Feb/15"
+@test Time.DateTime(b1,f) == dt + Time.Month(1)
+b2 = "96/Feb/1"
+@test Time.DateTime(b2,f) + Time.Year(1900) + Time.Day(14) == dt + Time.Month(1)
+# Here we've specifed the month name, yet fail to parse and default to January
+b3 = "96/2/15"
+@test Time.DateTime(b3,f) == dt - Time.Year(1900) 
 
-# r = "1/15/1996" # Excel
-# f = "m/dd/yyyy"
-# @test Time.Datetime(r,f) == dt
-# s = "19960115"
-# f = "yyyymmdd"
-# @test Time.Datetime(s,f) == dt
-# # t = "1996-01-15 10 PST"
-# # f = "yyyy-mm-dd HH zzz"
-# # Time.Datetime(t,f) == dt + Time.Hour(10)
-# # u = "1996-01-15 10:00 PST"
-# # f = "yyyy-mm-dd HH:MM zzz"
-# # Time.Datetime(u,f) == dt + Time.Hour(10)
-# v = "1996-01-15 10:00:00"
-# f = "yyyy-mm-dd HH:MM:SS"
-# @test Time.Datetime(v,f) == dt + Time.Hour(10)
-# w = "1996-01-15T10:00:00 UTC"
-# f = "yyyy-mm-ddTHH:MM:SS zzz"
-# @test Time.Datetime(w,f;sep="T") == dt + Time.Hour(10)
-# # x = "1996-01-15 10:00:00 America/Chicago"
-# # f = "yyyy-mm-dd HH:MM:SS zzzz"
-# # Time.Datetime(x,f) == dt + Time.Hour(10)
-# y = "1996/1"
-# f = "yyyy/m"
-# @test Time.Datetime(y,f) == dt - Time.Day(14)
-# z = "1996"
-# f = "yyyy"
-# @test Time.Datetime(z,f) == dt - Time.Day(14)
-# aa = "1/5/1996"
-# f = "m/d/yyyy"
-# @test Time.Datetime(aa,f) == dt - Time.Day(10)
-# bb = "5/1/1996"
-# f = "d/m/yyyy"
-# @test Time.Datetime(bb,f) == dt - Time.Day(10)
-# cc = "01151996"
-# f = "mmddyyyy"
-# @test Time.Datetime(cc,f) == dt
-# dd = "15011996"
-# f = "ddmmyyyy"
-# @test Time.Datetime(dd,f) == dt
-# ee = "01199615"
-# f = "mmyyyydd"
-# @test Time.Datetime(ee,f) == dt
-# ff = "1996-15-Jan"
-# f = "yyyy-dd-mmm"
-# @test Time.Datetime(ff,f) == dt
-# gg = "Jan-1996-15"
-# f = "mmm-yyyy-dd"
-# @test Time.Datetime(gg,f) == dt
+f = "yy:dd:mm"
+c = "96:15:01"
+@test Time.DateTime(c,f) + Time.Year(1900) == dt
+c1 = "1996:15:01"
+@test Time.DateTime(c1,f) == dt
+c2 = "96:15:1"
+@test Time.DateTime(c2,f) + Time.Year(1900) == dt
+c3 = "96:1:01"
+@test Time.DateTime(c3,f) + Time.Year(1900) + Time.Day(14) == dt
+c4 = "96:15:01 # random comment"
+@test_throws Time.DateTime(c4,f) # Currently doesn't handle trailing comments
+
+f = "yyyy,mmm,dd"
+d = "1996,Jan,15"
+@test Time.DateTime(d,f) == dt
+d1 = "96,Jan,15"
+@test Time.DateTime(d1,f) + Time.Year(1900) == dt
+d2 = "1996,Jan,1"
+@test Time.DateTime(d2,f) + Time.Day(14) == dt
+d3 = "1996,2,15"
+@test Time.DateTime(d3,f) != Time.DateTime(1996,2,15) # Same as above
+
+f = "yyyy.mmmm.dd"
+e = "1996.January.15"
+@test Time.DateTime(e,f) == dt
+e1 = "96.January.15"
+@test Time.DateTime(e1,f) + Time.Year(1900) == dt
+
+fo = "yyyy m dd"
+f = "1996 1 15"
+@test Time.DateTime(f,fo) == dt
+f1 = "1996 01 15"
+@test Time.DateTime(f1,fo) == dt
+f2 = "1996 1 1"
+@test Time.DateTime(f2,fo) + Time.Day(14) == dt
+
+j = "1996-01-15 UTC"
+f = "yyyy-mm-dd zzz"
+@test Time.DateTime(j,f) == dt
+k = "1996-01-15 10:00:00 UTC"
+f = "yyyy-mm-dd HH:MM:SS zzz"
+@test Time.DateTime(k,f) == dt + Time.Hour(10)
+l = "1996-01-15 10:10:10.25 UTC"
+f = "yyyy-mm-dd HH:MM:SS.ss zzz"
+@test Time.DateTime(l,f) == dt + Time.Hour(10) + Time.Minute(10) + Time.Second(10) + Time.Millisecond(250)
+
+r = "1/15/1996" # Excel
+f = "m/dd/yyyy"
+@test Time.DateTime(r,f) == dt
+s = "19960115"
+f = "yyyymmdd"
+@test Time.DateTime(s,f) == dt
+v = "1996-01-15 10:00:00"
+f = "yyyy-mm-dd HH:MM:SS"
+@test Time.DateTime(v,f) == dt + Time.Hour(10)
+w = "1996-01-15T10:00:00 UTC"
+f = "yyyy-mm-ddTHH:MM:SS zzz"
+@test Time.DateTime(w,f;sep="T") == dt + Time.Hour(10)
+
+f = "yyyy/m"
+y = "1996/1"
+@test Time.DateTime(y,f) == dt - Time.Day(14)
+y1 = "1996/1/15"
+@test_throws Time.DateTime(y1,f)
+y2 = "96/1"
+@test Time.DateTime(y2,f) + Time.Year(1900) == dt - Time.Day(14)
+
+f = "yyyy"
+z = "1996"
+@test Time.DateTime(z,f) == dt - Time.Day(14)
+z1 = "1996-3"
+@test Time.DateTime(z1,f) != Time.DateTime(1996,3)
+z2 = "1996-3-1"
+@test Time.DateTime(z2,f) != Time.DateTime(1996,3)
+
+aa = "1/5/1996"
+f = "m/d/yyyy"
+@test Time.DateTime(aa,f) == dt - Time.Day(10)
+bb = "5/1/1996"
+f = "d/m/yyyy"
+@test Time.DateTime(bb,f) == dt - Time.Day(10)
+cc = "01151996"
+f = "mmddyyyy"
+@test Time.DateTime(cc,f) == dt
+dd = "15011996"
+f = "ddmmyyyy"
+@test Time.DateTime(dd,f) == dt
+ee = "01199615"
+f = "mmyyyydd"
+@test Time.DateTime(ee,f) == dt
+ff = "1996-15-Jan"
+f = "yyyy-dd-mmm"
+@test Time.DateTime(ff,f) == dt
+gg = "Jan-1996-15"
+f = "mmm-yyyy-dd"
+@test Time.DateTime(gg,f) == dt
+
+@test_throws DateTime("18/05/2009","mm/dd/yyyy") # switched month and day
+@test_throws DateTime("18/05/2009 16","mm/dd/yyyy hh") # same
+@test DateTime("18/05/2009 16:12","mm/dd/yyyy hh:mm") == DateTime(2009,12,16) # here they used mm instead of MM for minutes
+@test_throws DateTime("18:05:2009","mm/dd/yyyy")
+@test Date("2009年12月01日","yyyy年mm月dd日") == Date(2009,12,1)
+@test Date("2009-12-01","yyyy-mm-dd") == Date(2009,12,1)
 
 # Period testing
 @test -Time.Year(1) == Time.Year(-1)
@@ -1013,16 +1048,16 @@ h = Time.Hour(1)
 mi = Time.Minute(1)
 s = Time.Second(1)
 ms = Time.Millisecond(1)
-@test Time.Datetime(y) == Time.Datetime(1)
-@test Time.Datetime(y,m) == Time.Datetime(1,1)
-@test Time.Datetime(y,m,d) == Time.Datetime(1,1,1)
-@test Time.Datetime(y,m,d,h) == Time.Datetime(1,1,1,1)
-@test Time.Datetime(y,m,d,h,mi) == Time.Datetime(1,1,1,1,1)
-@test Time.Datetime(y,m,d,h,mi,s) == Time.Datetime(1,1,1,1,1,1)
-@test Time.Datetime(y,m,d,h,mi,s,ms) == Time.Datetime(1,1,1,1,1,1,1)
-@test_throws Time.Datetime(Day(10),Month(2),y)
-@test_throws Time.Datetime(Second(10),Month(2),y,Hour(4))
-@test_throws Time.Datetime(Year(1),Month(2),Day(1),Hour(4),Second(10))
+@test Time.DateTime(y) == Time.DateTime(1)
+@test Time.DateTime(y,m) == Time.DateTime(1,1)
+@test Time.DateTime(y,m,d) == Time.DateTime(1,1,1)
+@test Time.DateTime(y,m,d,h) == Time.DateTime(1,1,1,1)
+@test Time.DateTime(y,m,d,h,mi) == Time.DateTime(1,1,1,1,1)
+@test Time.DateTime(y,m,d,h,mi,s) == Time.DateTime(1,1,1,1,1,1)
+@test Time.DateTime(y,m,d,h,mi,s,ms) == Time.DateTime(1,1,1,1,1,1,1)
+@test_throws Time.DateTime(Time.Day(10),Time.Month(2),y)
+@test_throws Time.DateTime(Time.Second(10),Time.Month(2),y,Time.Hour(4))
+@test_throws Time.DateTime(Time.Year(1),Time.Month(2),Time.Day(1),Time.Hour(4),Time.Second(10))
 @test Time.Date(y) == Time.Date(1)
 @test Time.Date(y,m) == Time.Date(1,1)
 @test Time.Date(y,m,d) == Time.Date(1,1,1)
@@ -1090,7 +1125,7 @@ ms = Time.Millisecond(1)
 @test_throws 1 == y
 t = [y,y,y,y,y]
 @test t .+ Time.Year(2) == [Time.Year(3),Time.Year(3),Time.Year(3),Time.Year(3),Time.Year(3)]
-dt = Time.Datetime(2012,12,21)
+dt = Time.DateTime(2012,12,21)
 test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test test == dt + y - m + w - d + h - mi + s - ms
 @test test == y - m + w - d + dt + h - mi + s - ms
