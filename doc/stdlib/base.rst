@@ -961,14 +961,15 @@ Strings
    Alternatively, finer control and additional transformations may be
    be obtained by calling `normalize_string(s; keywords...)`, where
    any number of the following boolean keywords options (which all default
-   to ``false``) are specified:
+   to ``false`` except for ``compose``) are specified:
 
-   * ``compose=true`` or ``decompose=true``: canonical composition or decomposition, respectively
-   * ``compat=true``: compatibility equivalents are canonicalized (implies `compose=true` unless `decompose=true` was specified)
+   * ``compose=false``: do not perform canonical composition
+   * ``decompose=true``: do canonical decomposition instead of canonical composition (``compose=true`` is ignored if present)
+   * ``compat=true``: compatibility equivalents are canonicalized
    * ``casefold=true``: perform Unicode case folding, e.g. for case-insensitive string comparison
    * ``lump=true``: non--standard canonicalization of various similar-looking characters into a single ASCII character, as defined by the utf8proc library (e.g. fraction and division slashes, space characters, dash characters, etcetera)
    * ``newline2lf=true``, ``newline2ls=true``, or ``newline2ps=true``: convert various newline sequences (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or paragraph-separation (PS) character, respectively
-   * ``stripmark=true``: strip diacritical marks (e.g. accents) (implies `compose=true` unless `decompose=true` was specified)
+   * ``stripmark=true``: strip diacritical marks (e.g. accents)
    * ``stripignore=true``: strip Unicode's "default ignorable" characters (e.g. the soft hyphen or the left-to-right marker)
    * ``stripcc=true``: strip control characters; horizontal tabs and form feeds are converted to spaces; newlines are also converted to spaces unless a newline-conversion flag was specified
    * ``rejectna=true``: throw an error if unassigned code points are found
