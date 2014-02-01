@@ -602,6 +602,7 @@ for p in (:Year,:Month,:Week,:Day,:Hour,:Minute,:Second,:Millisecond)
     @eval $p(x::$p) = x
 end
 convert{R<:Real}(::Type{R},x::Period) = convert(R,value(x))
+convert{P<:Period}(::Type{P},x::Real) = P(int64(x))
 
 #Print/show/traits
 _units(x::Period) = " " * lowercase(string(typeof(x).name)) * (abs(value(x)) == 1 ? "" : "s")
@@ -609,8 +610,7 @@ string{P<:Period}(x::P) = string(value(x),_units(x))
 show(io::IO,x::Period) = print(io,string(x))
 typemin{P<:Period}(::Type{P}) = P(typemin(Int64))
 typemax{P<:Period}(::Type{P}) = P(typemax(Int64))
-zero{P<:Period}(::Type{P}) = P(int64(0))
-one{P<:Period}(::Type{P}) =  P(int64(1))
+
 
 (-){P<:Period}(x::P) = P(-value(x))
 isless{P<:Period}(x::P,y::P) = isless(value(x),value(y))
