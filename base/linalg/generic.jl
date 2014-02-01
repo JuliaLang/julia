@@ -43,36 +43,59 @@ diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagon
 
 #diagm{T}(v::AbstractVecOrMat{T})
 
-function norm{T}(x::AbstractVector{T}, p::Number)
-    if length(x) == 0
-        a = zero(T)
-    elseif p == Inf
-        a = maximum(abs(x))
-    elseif p == -Inf
-        a = minimum(abs(x))
-    else
-        absx = abs(x)
-        dx = maximum(absx)
-        if dx != zero(T)
-            scale!(absx, 1/dx)
-            a = dx * (sum(absx.^p).^(1/p))
-        else
-            a = sum(absx.^p).^(1/p)
-        end
+function normMinusInf(x::AbstractVector)
+    n = length(x)
+    n > 0 || return real(zero(eltype(x)))
+    a = abs(x[1])
+    @inbounds for i = 2:n
+        a = min(a, abs(x[i]))
     end
-    float(a)
+    return a
 end
-norm{T<:Integer}(x::AbstractVector{T}, p::Number) = norm(float(x), p)
-norm(x::AbstractVector) = norm(x, 2)
+function normInf(x::AbstractVector)
+    a = real(zero(eltype(x)))
+    @inbounds for i = 1:length(x)
+        a = max(a, abs(x[i]))
+    end
+    return a
+end
+function norm1(x::AbstractVector)
+    a = real(zero(eltype(x)))
+    @inbounds for i = 1:length(x)
+        a += abs(x[i])
+    end
+    return a
+end
+function norm2(x::AbstractVector)
+    nrmInfInv = inv(norm(x,Inf))
+    isinf(nrmInfInv) && return zero(nrmInfInv)
+    a = abs2(x[1]*nrmInfInv)
+    @inbounds for i = 2:length(x)
+        a += abs2(x[i]*nrmInfInv)
+    end
+    return sqrt(a)/nrmInfInv
+end
+function normp(x::AbstractVector,p::Number)
+    absx = convert(Vector{typeof(sqrt(abs(x[1])))}, abs(x))
+    dx = maximum(absx)
+    dx == 0 && return zero(typeof(absx))
+    scale!(absx, 1/dx)
+    pp = convert(eltype(absx), p)
+    return dx*sum(absx.^pp)^inv(pp)
+end
+function norm(x::AbstractVector, p::Number=2)
+    p == 0 && return nnz(x)
+    p == Inf && return normInf(x)
+    p == -Inf && return normMinusInf(x)
+    p == 1 && return norm1(x)
+    p == 2 && return norm2(x)
+    normp(x,p)
+end
 
-function norm{T}(A::AbstractMatrix{T}, p::Number=2)
-    m, n = size(A)
-    if m == 0 || n == 0
-        return zero(real(zero(T)))
-    elseif m == 1 || n == 1
-        return norm(reshape(A, length(A)), p)
-    elseif p == 1
-        nrm = zero(real(zero(T)))
+function norm1{T}(A::AbstractMatrix{T})
+    m,n = size(A)
+    nrm = zero(real(zero(T)))
+    @inbounds begin
         for j = 1:n
             nrmj = zero(real(zero(T)))
             for i = 1:m
@@ -80,11 +103,18 @@ function norm{T}(A::AbstractMatrix{T}, p::Number=2)
             end
             nrm = max(nrm,nrmj)
         end
-        return nrm
-    elseif p == 2
-        return svdvals(A)[1]
-    elseif p == Inf
-        nrm = zero(real(zero(T)))
+    end
+    return nrm
+end
+function norm2(A::AbstractMatrix)
+    m,n = size(A)
+    if m == 0 || n == 0 return real(zero(eltype(A))) end
+    svdvals(A)[1]
+end
+function normInf{T}(A::AbstractMatrix{T})
+    m,n = size(A)
+    nrm = zero(real(zero(T)))
+    @inbounds begin
         for i = 1:m
             nrmi = zero(real(zero(T)))
             for j = 1:n
@@ -92,10 +122,14 @@ function norm{T}(A::AbstractMatrix{T}, p::Number=2)
             end
             nrm = max(nrm,nrmi)
         end
-        return nrm
-    else
-        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
     end
+    return nrm
+end
+function norm{T}(A::AbstractMatrix{T}, p::Number=2)
+    p == 1 && return norm1(A)
+    p == 2 && return norm2(A)
+    p == Inf && return normInf(A)
+    throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
 end
 
 norm(x::Number, p=nothing) = abs(x)

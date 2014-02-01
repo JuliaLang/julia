@@ -14,34 +14,16 @@ isposdef{T<:Number}(A::Matrix{T}, UL::Char) = isposdef!(float64(A), UL)
 isposdef{T<:Number}(A::Matrix{T}) = isposdef!(float64(A))
 isposdef(x::Number) = imag(x)==0 && real(x) > 0
 
-norm{T<:BlasFloat}(x::Vector{T}) = BLAS.nrm2(length(x), x, 1)
-
-function norm{T<:BlasFloat, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}))
+function norm{T<:BlasFloat, TI<:Integer}(x::StridedVector{T}, rx::Union(Range1{TI},Range{TI}))
     (minimum(rx) < 1 || maximum(rx) > length(x)) && throw(BoundsError())
     BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
-function norm{T<:BlasFloat}(x::Vector{T}, p::Number)
-    n = length(x)
-    if n == 0
-        return zero(T)
-    elseif p == 2
-        return BLAS.nrm2(n, x, 1)
-    elseif p == 1
-        return BLAS.asum(n, x, 1)
-    elseif p == Inf
-        return maximum(abs(x))
-    elseif p == -Inf
-        return minimum(abs(x))
-    elseif p == 0
-        return convert(T, nnz(x))
-    else
-        absx = abs(x)
-        dx = maximum(absx)
-        dx==zero(T) && return zero(T)
-        scale!(absx, 1/dx)
-        return dx * (sum(absx.^p).^(1/p))
-    end
+function norm{T<:BlasFloat}(x::StridedVector{T}, p::Number=2)
+    length(x) == 0 && return zero(T)
+    p == 1 && T <: Real && return BLAS.asum(x)
+    p == 2 && return BLAS.nrm2(x)
+    invoke(norm, (AbstractVector, Number), x, p)
 end
 
 function triu!{T}(M::Matrix{T}, k::Integer)
