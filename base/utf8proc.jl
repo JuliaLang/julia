@@ -41,14 +41,16 @@ let
     end
 end
 
-function normalize_string(s::String; stable::Bool=false, compat::Bool=false, compose::Bool=false, decompose::Bool=false, stripignore::Bool=false, rejectna::Bool=false, newline2ls::Bool=false, newline2ps::Bool=false, newline2lf::Bool=false, stripcc::Bool=false, casefold::Bool=false, lump::Bool=false, stripmark::Bool=false)
+function normalize_string(s::String; stable::Bool=false, compat::Bool=false, compose::Bool=true, decompose::Bool=false, stripignore::Bool=false, rejectna::Bool=false, newline2ls::Bool=false, newline2ps::Bool=false, newline2lf::Bool=false, stripcc::Bool=false, casefold::Bool=false, lump::Bool=false, stripmark::Bool=false)
     flags = 0
     stable && (flags = flags | UTF8PROC_STABLE)
-    compat && (flags = flags | UTF8PROC_COMPAT | (decompose ? 0 : UTF8PROC_COMPOSE))
-    compose && (flags = flags | UTF8PROC_COMPOSE)
+    compat && (flags = flags | UTF8PROC_COMPAT)
     if decompose
-        compose && throw(ArgumentError("compose=true and decompose=true cannot both be specified"))
         flags = flags | UTF8PROC_DECOMPOSE
+    elseif compose
+        flags = flags | UTF8PROC_COMPOSE
+    elseif compat || stripmark
+        throw(ArgumentError("compat=true or stripmark=true require compose=true or decompose=true"))
     end
     stripignore && (flags = flags | UTF8PROC_IGNORE)
     rejectna && (flags = flags | UTF8PROC_REJECTNA)
@@ -59,7 +61,7 @@ function normalize_string(s::String; stable::Bool=false, compat::Bool=false, com
     stripcc && (flags = flags | UTF8PROC_STRIPCC)
     casefold && (flags = flags | UTF8PROC_CASEFOLD)
     lump && (flags = flags | UTF8PROC_LUMP)
-    stripmark && (flags = flags | UTF8PROC_STRIPMARK | (decompose ? 0 : UTF8PROC_COMPOSE))
+    stripmark && (flags = flags | UTF8PROC_STRIPMARK)
     utf8proc_map(s, flags)
 end
 
