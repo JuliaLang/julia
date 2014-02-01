@@ -239,7 +239,7 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
             systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
         end
         
-        A = mmap_array(T, dims, s, 0, grow=false)
+        A = mmap_array(T, dims, s, zero(FileOffset), grow=false)
     catch e
         print_shmem_limits(prod(dims)*sizeof(T))
         rethrow(e)
