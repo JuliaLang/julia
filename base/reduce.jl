@@ -157,6 +157,19 @@ end
 
 ## sum
 
+function sum(itr)
+    s = start(itr)
+    if done(itr, s)
+        return 0
+    end
+    (v, s) = next(itr, s)
+    while !done(itr, s)
+        (x, s) = next(itr, s)
+        v += x
+    end
+    return v
+end
+
 sum(A::AbstractArray{Bool}) = nnz(A)
 
 # a fast implementation of sum in sequential order (from left to right)
