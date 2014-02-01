@@ -415,20 +415,21 @@ type TimeFormat
     regs::Array{Regex,1}
     tms::Array{String,1}
 end
-type DatetimeFormat
+type DateTimeFormat
     date::DateFormat
     time::TimeFormat
     sep::String
 end
 # y-m-d
 function date_regex(f,i,sep,monthoption)
+    endregex = isdefined(sep,i) ? "(?=\\$(sep[i]))" : "\$"
     if monthoption == 0
         i == 1        ? Regex("^\\d{1,4}(?=\\$(sep[i]))") : 
-        i == endof(f) ? Regex("(?<=\\$(sep[i-1]))\\d{1,4}") : 
+        i == endof(f) ? Regex("(?<=\\$(sep[i-1]))\\d{1,4}$endregex") :
                         Regex("(?<=\\$(sep[i-1]))\\d{1,4}(?=\\$(sep[i]))")
     else
         i == 1        ? Regex("^.+?(?=\\$(sep[i]))") : 
-        i == endof(f) ? Regex("(?<=\\$(sep[i-1])).+?") : 
+        i == endof(f) ? Regex("(?<=\\$(sep[i-1])).+?$endregex") : 
                         Regex("(?<=\\$(sep[i-1])).+?(?=\\$(sep[i]))")
     end
 end
@@ -525,7 +526,6 @@ end
 function _format(dt::String,f::TimeFormat)
     cursor = 1
     H = M = S = s = 0
-    z = "UTC"
     for i = 1:length(f.regs)
         m = match(f.regs[i],dt[cursor:end])
         t = f.tms[i]
@@ -537,17 +537,15 @@ function _format(dt::String,f::TimeFormat)
             S = m.match
         elseif t == "s"
             s = m.match
-        elseif t == "z"
-            z = m.match
         else # delimiter
            # pass 
         end
         cursor += length(m.match)
     end
-    return (int(H),int(M),int(S),int(s)*10,eval(symbol(z)))
+    return (int(H),int(M),int(S),int(s)*10)
 end
 # Parses a format string
-function DatetimeFormat(dt::String,sep::String="")
+function DateTimeFormat(dt::String,sep::String="")
     if sep == ""
         sep = (s = match(r"(?<=[ymd])\W+(?=[HMSz])",dt)) == nothing ? "" : s.match
     end
@@ -555,45 +553,33 @@ function DatetimeFormat(dt::String,sep::String="")
     if sep != ""
         dt, tm = split(dt,sep,2)
     end
-    return DatetimeFormat(DateFormat(dt),TimeFormat(tm),sep)
+    return DateTimeFormat(DateFormat(dt),TimeFormat(tm),sep)
 end
-function Datetime(dt::String,format::String;sep::String="")
-    f = DatetimeFormat(format,sep)
-    return Datetime(dt,f)
+function DateTime(dt::String,format::String=ISODateTimeFormat;sep::String="")
+    f = DateTimeFormat(format,sep)
+    return DateTime(dt,f)
 end
-const ISOFormat = DatetimeFormat("yyyy-mm-ddTHH:MM:SS zzz","T")
-function Datetime(dt::String,f::DatetimeFormat)
+const ISODateTimeFormat = DateTimeFormat("yyyy-mm-ddTHH:MM:SS zzz","T")
+const ISODateFormat = DateFormat("yyyy-mm-dd")
+function DateTime(dt::String,f::DateTimeFormat)
     if f.sep != ""
         dt, tm = split(dt,f.sep,2)
     else
         tm = ""
     end
     y, m, d = _format(dt,f.date)
-    H, M, S, s, z = _format(tm,f.time)
-    return Datetime(y,m,d,H,M,S,s,z)
+    H, M, S, s = _format(tm,f.time)
+    return DateTime(y,m,d,H,M,S,s)
 end
-function Date(dt::String,format::String)
+function Date(dt::String,format::String=ISODateFormat)
     f = DateFormat(format)
     y, m, d = _format(dt,f)
     return Date(y,m,d)
 end
-# Best guess at Date
-function Date(s::String)
-    if ismatch(r"[\/|\-|\.|,|\s]",s)
-        m = match(r"[\/|\-|\.|,|\s]",s)
-        a,b,c = split(s,m.match)
-        y = length(a) == 4 ? int64(a) : length(c) == 4 ? int64(c) : 0
-        a,b,c = int64(a),int64(b),int64(c)
-        y == 0 && (y = c > 49 ? c + 1900 : c + 2000)
-        m,d = y == a ? (b,c) : (a,b)
-        return m > 12 ? Date(y,d,m) : Date(y,m,d)
-    else
-        error("Can't parse Date, please use Date(datestring,format)")
-    end
-end
-function Datetime{T<:String}(y::AbstractArray{T},x::T)
-    f = DatetimeFormat(x)
-    return reshape([Datetime(y[i],f) for i in 1:length(y)], size(y))
+
+function DateTime{T<:String}(y::AbstractArray{T},x::T)
+    f = DateTimeFormat(x)
+    return reshape([DateTime(y[i],f) for i in 1:length(y)], size(y))
 end
 function Date{T<:String}(y::AbstractArray{T},x::T)
     f = DateFormat(x)
