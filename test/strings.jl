@@ -875,3 +875,56 @@ end
 @test isempty(normalize_string("\u00ad", stripignore=true))
 @test normalize_string("\t\r", stripcc=true) == "  "
 @test normalize_string("\t\r", stripcc=true, newline2ls=true) == " \u2028"
+
+#Tests from Unicode SA#15, "Unicode normalization forms"
+#http://www.unicode.org/reports/tr15/
+ 
+#1. Canonical equivalence
+==(a::Array{Char},b::Array{Char}) =
+normalize_string(string(a...), :NFC)==normalize_string(string(b...), :NFC)
+@test ['C', '̧'] == ['Ç']
+@test ['q', '̇', '̣'] == ['q', '̣', '̇']
+@test ['가'] == ['ᄀ', 'ᅡ']
+@test ['Ω'] == ['Ω']
+ 
+#2. Compatibility Equivalence
+==(a::Array{Char},b::Array{Char}) =
+normalize_string(string(a...), :NFKC)==normalize_string(string(b...), :NFKC)
+@test ['ℌ'] == ['ℍ'] == ['H']
+@test ['ﻨ'] == ['ﻧ'] == ['ﻦ'] == ['ﻥ']
+@test ['①'] == ['1']
+@test ['ｶ'] == ['カ']
+@test ['︷'] == ['{']
+@test ['⁹'] == ['₉']
+@test ['㌀'] == ['ア', 'パ', 'ー', 'ト']
+@test ['¼'] == ['1', '⁄', '4']
+@test ['ǆ'] == ['d', 'ž']
+ 
+#3. Singletons
+@test normalize_string("\U212b", :NFD) == "A\U030a"
+@test normalize_string("\U212b", :NFC) == "\U00c5"
+@test normalize_string("\U2126", :NFC) == normalize_string("\U2126", :NFD) == "\U03a9"
+ 
+#4. Canonical Composites
+@test normalize_string("\U00c5", :NFC) == "\U00c5"
+@test normalize_string("\U00c5", :NFD) == "A\U030a"
+@test normalize_string("\U00f4", :NFC) == "\U00f4"
+@test normalize_string("\U00f4", :NFD) == "o\U0302"
+ 
+#5. Multiple Combining Marks
+@test normalize_string("\U1e69", :NFD) == "s\U0323\U0307"
+@test normalize_string("\U1e69", :NFC) == "\U1e69"
+@test normalize_string("\U1e0b\U0323", :NFD) == "d\U0323\U0307"
+@test normalize_string("\U1e0b\U0323", :NFC) == "\U1e0d\U0307"
+@test normalize_string("q\U0307\U0323", :NFC) == "q\U0323\U0307"
+@test normalize_string("q\U0307\U0323", :NFD) == "q\U0323\U0307"
+ 
+#6. Compatibility Composites
+@test normalize_string("\Ufb01", :NFD) == normalize_string("\Ufb01", :NFC) == "\Ufb01"
+@test normalize_string("\Ufb01", :NFKD) == normalize_string("\Ufb01", :NFKC) == "fi"
+@test normalize_string("2\U2075", :NFD) == normalize_string("2\U2075", :NFC) == "2\U2075"
+@test normalize_string("2\U2075", :NFKD) == normalize_string("2\U2075", :NFKC) == "25"
+@test normalize_string("\U1e9b\U0323", :NFD) == "\U017f\U0323\U0307"
+@test normalize_string("\U1e9b\U0323", :NFC) == "\U1e9b\U0323"
+@test normalize_string("\U1e9b\U0323", :NFKD) == "s\U0323\U0307"
+@test normalize_string("\U1e9b\U0323", :NFKC) == "\U1e69"
