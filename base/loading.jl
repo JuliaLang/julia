@@ -120,9 +120,7 @@ function include_from_node1(path::String)
             result = Core.include(path)
             nprocs()>1 && sleep(0.005)
         else
-            include_string(remotecall_fetch(1, readall, path), path)
-            # don't bother sending last value for remote include
-            result = nothing
+            result = include_string(remotecall_fetch(1, readall, path), path)
         end
     finally
         if prev == nothing
