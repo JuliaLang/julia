@@ -155,8 +155,9 @@ function lufact!{T}(A::AbstractMatrix{T})
                 A[kp,i] = tmp
             end
             # Scale first column
+            Akkinv = inv(A[k,k])
             for i = k+1:m
-                A[i,k] /= A[k,k]
+                A[i,k] *= Akkinv
             end
         elseif info == 0
             info = k
@@ -276,7 +277,7 @@ function qrfact!{T}(A::AbstractMatrix{T}; pivot=false)
     m, n = size(A)
     τ = zeros(T, min(m,n))
     @inbounds begin
-        for k = 1:min(m-1+(T<:Complex),n)
+        for k = 1:min(m-1+!(T<:Real),n)
             τk = elementaryLeft!(A, k, k)
             τ[k] = τk
             for j = k+1:n
@@ -295,7 +296,7 @@ function qrfact!{T}(A::AbstractMatrix{T}; pivot=false)
     QR(A, τ)
 end
 qrfact{T<:BlasFloat}(A::StridedMatrix{T}; pivot=false) = qrfact!(copy(A),pivot=pivot)
-qrfact{T}(A::StridedMatrix{T}; pivot=false) = (S = typeof(sqrt(one(T)));S != T ? qrfact!(convert(Matrix{S},A), pivot=pivot) : qrfact!(copy(A),pivot=pivot))
+qrfact{T}(A::StridedMatrix{T}; pivot=false) = (S = typeof(one(T)/norm(one(T)));S != T ? qrfact!(convert(Matrix{S},A), pivot=pivot) : qrfact!(copy(A),pivot=pivot))
 qrfact(x::Number) = QR(fill(one(x), 1, 1), fill(x, 1, 1))
 
 function qr(A::Union(Number, AbstractMatrix); pivot=false, thin::Bool=true)
@@ -598,7 +599,7 @@ Hessenberg(A::StridedMatrix) = Hessenberg(LAPACK.gehrd!(A)...)
 
 hessfact!{T<:BlasFloat}(A::StridedMatrix{T}) = Hessenberg(A)
 hessfact{T<:BlasFloat}(A::StridedMatrix{T}) = hessfact!(copy(A))
-hessfact{T}(A::StridedMatrix{T}) = (S = promote_type(Float32,typeof(sqrt(one(T)))); S != T ? hessfact!(convert(Matrix{S},A)) : hessfact!(copy(A)))
+hessfact{T}(A::StridedMatrix{T}) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? hessfact!(convert(Matrix{S},A)) : hessfact!(copy(A)))
 
 immutable HessenbergQ{T} <: AbstractMatrix{T}
     hh::Matrix{T}
@@ -670,7 +671,7 @@ function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}; balance::Symbol=:balance)
     return Eigen(LAPACK.geevx!(balance == :balance ? 'B' : (balance == :diagonal ? 'S' : (balance == :permute ? 'P' : (balance == :nobalance ? 'N' : throw(ArgumentError("balance must be either ':balance', ':diagonal', ':permute' or ':nobalance'"))))), 'N', 'V', 'N', A)[[2,4]]...)
 end
 eigfact{T<:BlasFloat}(A::StridedMatrix{T}; balance::Symbol=:balance) = eigfact!(copy(A), balance=balance)
-eigfact{T}(A::StridedMatrix{T}; balance::Symbol=:balance) = (S = promote_type(Float32,typeof(sqrt(one(T)))); S != T ? eigfact!(convert(Matrix{S}, A), balance=balance) : eigfact!(copy(A), balance=balance))
+eigfact{T}(A::StridedMatrix{T}; balance::Symbol=:balance) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigfact!(convert(Matrix{S}, A), balance=balance) : eigfact!(copy(A), balance=balance))
 eigfact(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
 function eig(A::Union(Number, AbstractMatrix), args...)
@@ -691,9 +692,9 @@ function eigvals!{T<:BlasComplex}(A::StridedMatrix{T})
     return LAPACK.geev!('N', 'N', A)[1]
 end
 eigvals{T<:BlasFloat}(A::StridedMatrix{T}) = eigvals!(copy(A))
-eigvals{T}(A::AbstractMatrix{T}) = (S = promote_type(Float32,typeof(sqrt(one(T)))); S != T ? eigvals!(convert(Matrix{S}, A)) : eigvals!(copy(A)))
+eigvals{T}(A::AbstractMatrix{T}) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigvals!(convert(Matrix{S}, A)) : eigvals!(copy(A)))
 
-eigvals(x::Number) = [one(x)]
+eigvals{T<:Number}(x::T) = (val = convert(promote_type(Float32,typeof(one(T)/norm(one(T)))),x); imag(val) == 0 ? [real(val)] : [val])
 
 #Computes maximum and minimum eigenvalue
 function eigmax(A::Union(Number, AbstractMatrix))
@@ -736,7 +737,7 @@ function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
     return GeneralizedEigen(alpha./beta, vr)
 end
 eigfact{T<:BlasFloat}(A::AbstractMatrix{T}, B::StridedMatrix{T}) = eigfact!(copy(A),copy(B))
-eigfact{TA,TB}(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) = (S = promote_type(Float32,typeof(sqrt(one(TA))),TB); eigfact!(S != TA ? convert(Matrix{S},A) : copy(A), S != TB ? convert(Matrix{S},B) : copy(B)))
+eigfact{TA,TB}(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) = (S = promote_type(Float32,typeof(one(TA)/norm(one(TA))),TB); eigfact!(S != TA ? convert(Matrix{S},A) : copy(A), S != TB ? convert(Matrix{S},B) : copy(B)))
 
 function eig(A::AbstractMatrix, B::AbstractMatrix)
     F = eigfact(A, B)
@@ -754,7 +755,7 @@ function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}, B::StridedMatrix{T})
     alpha./beta
 end
 eigvals{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}) = eigvals!(copy(A),copy(B))
-eigvals{TA,TB}(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) = (S = promote_type(Float32,typeof(sqrt(one(TA))),TB); eigvals!(S != TA ? convert(Matrix{S},A) : copy(A), S != TB ? convert(Matrix{S},B) : copy(B)))
+eigvals{TA,TB}(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) = (S = promote_type(Float32,typeof(one(TA)/norm(one(TA))),TB); eigvals!(S != TA ? convert(Matrix{S},A) : copy(A), S != TB ? convert(Matrix{S},B) : copy(B)))
 
 # SVD
 immutable SVD{T<:BlasFloat,Tr} <: Factorization{T}
@@ -772,7 +773,7 @@ function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}; thin::Bool=true)
     SVD(u,s,vt)
 end
 svdfact{T<:BlasFloat}(A::StridedMatrix{T};thin=true) = svdfact!(copy(A),thin=thin)
-svdfact{T}(A::StridedVecOrMat{T};thin=true) = (S = promote_type(Float32,typeof(sqrt(one(T)))); S != T ? svdfact!(convert(Matrix{S},A),thin=thin) : svdfact!(copy(A),thin=thin))
+svdfact{T}(A::StridedVecOrMat{T};thin=true) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? svdfact!(convert(Matrix{S},A),thin=thin) : svdfact!(copy(A),thin=thin))
 svdfact(x::Number; thin::Bool=true) = SVD(x == 0 ? fill(one(x), 1, 1) : fill(x/abs(x), 1, 1), [abs(x)], fill(one(x), 1, 1))
 svdfact(x::Integer; thin::Bool=true) = svdfact(float(x), thin=thin)
 
@@ -791,7 +792,7 @@ end
 
 svdvals!{T<:BlasFloat}(A::StridedMatrix{T}) = any([size(A)...].==0) ? zeros(T, 0) : LAPACK.gesdd!('N', A)[2]
 svdvals{T<:BlasFloat}(A::StridedMatrix{T}) = svdvals!(copy(A))
-svdvals{T}(A::StridedMatrix{T}) = (S = promote_type(Float32,typeof(sqrt(one(T)))); S != T ? svdvals!(convert(Matrix{S}, A)) : svdvals!(copy(A)))
+svdvals{T}(A::StridedMatrix{T}) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? svdvals!(convert(Matrix{S}, A)) : svdvals!(copy(A)))
 svdvals(x::Number) = [abs(x)]
 
 # SVD least squares
@@ -819,7 +820,7 @@ function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
     GeneralizedSVD(U, V, Q, a, b, int(k), int(l), R)
 end
 svdfact{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = svdfact!(copy(A),copy(B))
-svdfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}) = (S = promote_type(Float32,typeof(sqrt(one(TA))),TB); svdfact!(S != TA ? convert(Matrix{S},A) : copy(A), S != TB ? convert(Matrix{S},B) : copy(B)))
+svdfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}) = (S = promote_type(Float32,typeof(one(TA)/norm(one(TA))),TB); svdfact!(S != TA ? convert(Matrix{S},A) : copy(A), S != TB ? convert(Matrix{S},B) : copy(B)))
 
 function svd(A::AbstractMatrix, B::AbstractMatrix)
     F = svdfact(A, B)
@@ -863,7 +864,7 @@ function svdvals!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
     a[1:k + l] ./ b[1:k + l]
 end
 svdvals{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}) = svdvals!(copy(A),copy(B))
-svdvals{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}) = (S = promote_type(Float32,typeof(sqrt(one(TA))),TB); svdvals!(S != TA ? convert(Matrix{S}, A) : copy(A), S != TB ? convert(Matrix{S}, B) : copy(B)))
+svdvals{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}) = (S = promote_type(Float32,typeof(one(T)/norm(one(TA))),TB); svdvals!(S != TA ? convert(Matrix{S}, A) : copy(A), S != TB ? convert(Matrix{S}, B) : copy(B)))
 
 immutable Schur{Ty<:BlasFloat} <: Factorization{Ty}
     T::Matrix{Ty}
@@ -873,7 +874,7 @@ end
 
 schurfact!{T<:BlasFloat}(A::StridedMatrix{T}) = Schur(LinAlg.LAPACK.gees!('V', A)...)
 schurfact{T<:BlasFloat}(A::StridedMatrix{T}) = schurfact!(copy(A))
-schurfact{T}(A::StridedMatrix{T}) = (S = promote_type(Float32,typeof(sqrt(one(T)))); S != T ? schurfact!(convert(Matrix{S},A)) : schurfact!(copy(A)))
+schurfact{T}(A::StridedMatrix{T}) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? schurfact!(convert(Matrix{S},A)) : schurfact!(copy(A)))
 
 function getindex(F::Schur, d::Symbol)
     (d == :T || d == :Schur) && return F.T
@@ -898,7 +899,7 @@ end
 
 schurfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = GeneralizedSchur(LinAlg.LAPACK.gges!('V', 'V', A, B)...)
 schurfact{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}) = schurfact!(copy(A),copy(B))
-schurfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}) = (S = promote_type(Float32,typeof(sqrt(one(TA))),TB); schurfact!(S != TA ? convert(Matrix{S},A) : copy(A), S != TB ? convert(Matrix{S},B) : copy(B)))
+schurfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}) = (S = promote_type(Float32,typeof(one(TA)/norm(one(TA))),TB); schurfact!(S != TA ? convert(Matrix{S},A) : copy(A), S != TB ? convert(Matrix{S},B) : copy(B)))
 
 function getindex(F::GeneralizedSchur, d::Symbol)
     d == :S && return F.S
