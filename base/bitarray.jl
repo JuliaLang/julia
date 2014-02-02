@@ -1,7 +1,7 @@
 # preliminary definitions: constants, macros
 # and functions used throughout the code
 const _msk64 = ~uint64(0)
-macro _mskr(l) :(_msk64 >>> (63&(64-$(esc(l))))) end
+macro _mskr(l) :(_msk64 >>> (63 & (64-$(esc(l))))) end
 macro _div64(l) :($(esc(l)) >>> 6) end
 macro _mod64(l) :($(esc(l)) & 63) end
 macro _msk_end(l) :(@_mskr @_mod64 $(esc(l))) end
@@ -89,13 +89,13 @@ function copy_chunks(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint64}, 
 
     u = _msk64
     if delta_kd == 0
-        msk_d0 = ~(u << ld0) | (u << ld1 << 1)
+        msk_d0 = ~(u << ld0) | (u << (ld1+1))
     else
         msk_d0 = ~(u << ld0)
-        msk_d1 = (u << ld1 << 1)
+        msk_d1 = (u << (ld1+1))
     end
     if delta_ks == 0
-        msk_s0 = (u << ls0) & ~(u << ls1 << 1)
+        msk_s0 = (u << ls0) & ~(u << (ls1+1))
     else
         msk_s0 = (u << ls0)
     end
@@ -111,7 +111,7 @@ function copy_chunks(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint64}, 
     for i = 1 : kd1 - kd0 - 1
         chunk_s1 = glue_src_bitchunks(src, ks0 + i, ks1, msk_s0, ls0)
 
-        chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
+        chunk_s = (chunk_s0 >>> (64 - ld0)) | (chunk_s1 << ld0)
 
         dest[kd0 + i] = chunk_s
 
@@ -124,7 +124,7 @@ function copy_chunks(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint64}, 
         chunk_s1 = uint64(0)
     end
 
-    chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
+    chunk_s = (chunk_s0 >>> (64 - ld0)) | (chunk_s1 << ld0)
 
     dest[kd1] = (dest[kd1] & msk_d1) | (chunk_s & ~msk_d1)
 
@@ -154,22 +154,22 @@ function copy_chunks_rtol(chunks::Vector{Uint64}, pos_d::Integer, pos_s::Integer
         delta_ks = ks1 - ks0
 
         if delta_kd == 0
-            msk_d0 = ~(u << ld0) | (u << ld1 << 1)
+            msk_d0 = ~(u << ld0) | (u << (ld1+1))
         else
             msk_d0 = ~(u << ld0)
-            msk_d1 = (u << ld1 << 1)
+            msk_d1 = (u << (ld1+1))
         end
         if delta_ks == 0
-            msk_s0 = (u << ls0) & ~(u << ls1 << 1)
+            msk_s0 = (u << ls0) & ~(u << (ls1+1))
         else
             msk_s0 = (u << ls0)
         end
 
-        chunk_s0 = glue_src_bitchunks(chunks, ks0, ks1, msk_s0, ls0) & ~(u << (s-1) << 1)
+        chunk_s0 = glue_src_bitchunks(chunks, ks0, ks1, msk_s0, ls0) & ~(u << s)
         chunks[kd0] = (chunks[kd0] & msk_d0) | ((chunk_s0 << ld0) & ~msk_d0)
 
         if delta_kd != 0
-            chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1)
+            chunk_s = (chunk_s0 >>> (64 - ld0))
 
             chunks[kd1] = (chunks[kd1] & msk_d1) | (chunk_s & ~msk_d1)
         end
