@@ -311,7 +311,10 @@ int complete_method_table()
     char **methods = malloc(sizeof(char *)*(nallocmethods+1));
     methods[0] = NULL;
     methods[1] = strtok_r(completions, "\n", &strtok_saveptr);
-    if (methods[1] == NULL) return 0;
+    if (methods[1] == NULL) {
+       free(methods);
+       return 0;
+    }
     int maxlen = strlen(methods[1]);
     int nmethods = 1;
 

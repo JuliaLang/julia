@@ -118,7 +118,7 @@ void parse_opts(int *argcp, char ***argvp)
     }
     if (image_file) {
         if (image_file[0] != PATHSEP) {
-            struct stat stbuf;
+            uv_stat_t stbuf;
             char path[512];
             if (!imagepathspecified) {
                 // build time path relative to JULIA_HOME

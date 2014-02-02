@@ -136,6 +136,7 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
             break;
         }
     }
+    va_end(argp);
     v = jl_apply(f,(jl_value_t**)argv,count);
     JL_GC_POP();
     return v;
