@@ -155,6 +155,8 @@ end
 @test parseint("-10") == -10
 @test parseint(Int64,"3830974272") == 3830974272
 @test parseint(Int64,"-3830974272") == -3830974272
+@test parseint('3') == 3
+@test parseint('3', 8) == 3
 
 parsebin(s) = parseint(s,2)
 parseoct(s) = parseint(s,8)
