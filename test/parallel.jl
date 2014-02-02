@@ -13,8 +13,8 @@ id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 @fetch begin myid() end
 
 d = drand((200,200), [id_me, id_other])
-s = convert(Array, d[1:150, 1:150])
-a = convert(Array, d)
+s = convert(Matrix{Float64}, d[1:150, 1:150])
+a = convert(Matrix{Float64}, d)
 @test a[1:150,1:150] == s
 
 @test fetch(@spawnat id_me localpart(d)[1,1]) == d[1,1]
