@@ -1430,6 +1430,7 @@ function parseint(c::Char, base::Integer=36, a::Int=(base <= 36 ? 10 : 36))
         'A' <= c <= 'Z' ? c-'A'+10 :
         'a' <= c <= 'z' ? c-'a'+a  : error("invalid digit: $(repr(c))")
     d < base || error("invalid base $base digit $(repr(c))")
+    d
 end
 parseint{T<:Integer}(::Type{T}, c::Char, base::Integer) = convert(T,parseint(c,base))
 parseint{T<:Integer}(::Type{T}, c::Char) = convert(T,parseint(c))
