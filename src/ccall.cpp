@@ -557,7 +557,6 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                     msg << sym.f_lib;
                 }
                 emit_error(msg.str(), ctx);
-                res = literal_static_pointer_val(NULL, lrt);
             }
             // since we aren't saving this code, there's no sense in
             // putting anything complicated here: just JIT the address of the cglobal
