@@ -35,8 +35,20 @@ debug && println("(Automatic) upper Cholesky factor")
     if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement cholesky decomposition in julia
         capd  = factorize(apd)
         r     = capd[:U]
-        @test_approx_eq r'*r apd
-        @test_approx_eq_eps b apd * (capd\b) 6500ε
+        κ     = cond(apd) #condition number
+
+        #Test error bound on reconstruction of matrix: LAWNS 14, Lemma 2.1
+        E = abs(apd - r'*r)
+        for i=1:n, j=1:n
+            @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
+        end
+
+        #Test error bound on linear solver: LAWNS 14, Theorem 2.1
+        #This is a surprisingly loose bound...
+        x = capd\b
+        @test norm(x-apd\b)/norm(x) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+        @test norm(apd*x-b)/norm(b) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+
         @test_approx_eq apd * inv(capd) eye(n)
         @test_approx_eq_eps a*(capd\(a'*b)) b 800ε
         @test_approx_eq det(capd) det(apd)
