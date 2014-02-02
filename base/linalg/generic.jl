@@ -132,7 +132,11 @@ function norm{T}(A::AbstractMatrix{T}, p::Number=2)
     throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2, Inf"))
 end
 
-norm(x::Number, p=nothing) = abs(x)
+function norm(x::Number, p=2)
+    if p == 1 || p == Inf || p == -Inf return abs(x) end
+    p == 0 && return ifelse(x != 0, 1, 0)
+    float(abs(x))
+end
 
 normfro(A::AbstractMatrix) = norm(reshape(A, length(A)))
 normfro(x::Number) = abs(x)
