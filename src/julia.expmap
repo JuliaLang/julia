@@ -33,6 +33,7 @@
     wcwidth;
     uv_*;
     add_library_mapping;
+    utf8proc_*;
 
     /* freebsd */
     environ;
