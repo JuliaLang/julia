@@ -4,19 +4,19 @@ export @ngenerate, @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, n
 
 ### @ngenerate, for auto-generation of separate versions of functions for different dimensionalities
 # Examples (deliberately trivial):
-#     @ngenerate N myndims{T,N}(A::Array{T,N}) = N
+#     @ngenerate N returntype myndims{T,N}(A::Array{T,N}) = N
 # or alternatively
 #     function gen_body(N::Int)
 #         quote
 #             return $N
 #         end
 #     end
-#     eval(ngenerate(:N, :(myndims{T,N}(A::Array{T,N})), gen_body))
+#     eval(ngenerate(:N, returntypeexpr, :(myndims{T,N}(A::Array{T,N})), gen_body))
 # The latter allows you to use a single gen_body function for both ngenerate and
 # when your function maintains its own method cache (e.g., reduction or broadcasting).
 #
 # Special syntax for function prototypes:
-#   @ngenerate N function myfunction(A::AbstractArray, I::NTuple{N, Int}...)
+#   @ngenerate N returntype function myfunction(A::AbstractArray, I::NTuple{N, Int}...)
 # for N = 3 translates to
 #   function myfunction(A::AbstractArray, I_1::Int, I_2::Int, I_3::Int)
 # and for the generic (cached) case as
@@ -30,16 +30,16 @@ export @ngenerate, @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, n
 
 const CARTESIAN_DIMS = 2   # FIXME: increase after testing is complete
 
-macro ngenerate(itersym, funcexpr)
+macro ngenerate(itersym, returntypeexpr, funcexpr)
     isfuncexpr(funcexpr) || error("Requires a function expression")
-    esc(ngenerate(itersym, funcexpr.args[1], N->sreplace!(copy(funcexpr.args[2]), itersym, N)))
+    esc(ngenerate(itersym, returntypeexpr, funcexpr.args[1], N->sreplace!(copy(funcexpr.args[2]), itersym, N)))
 end
 
 generate1(itersym, prototype, bodyfunc, N::Int, varname, T) =
     Expr(:function, spliceint!(sreplace!(resolvesplat!(copy(prototype), varname, T, N), itersym, N)),
          resolvesplats!(bodyfunc(N), varname, N))
 
-function ngenerate(itersym, prototype, bodyfunc, dims=1:CARTESIAN_DIMS, makecached::Bool = true)
+function ngenerate(itersym, returntypeexpr, prototype, bodyfunc, dims=1:CARTESIAN_DIMS, makecached::Bool = true)
     varname, T = get_splatinfo(prototype, itersym)
     # Generate versions for specific dimensions
     fdim = [generate1(itersym, prototype, bodyfunc, N, varname, T) for N in dims]
@@ -71,7 +71,7 @@ function ngenerate(itersym, prototype, bodyfunc, dims=1:CARTESIAN_DIMS, makecach
                      _F_
                  end)
              end
-             $(dictname)[$itersym]($(fargs...))
+             ($(dictname)[$itersym]($(fargs...)))::$returntypeexpr
          end)
     Expr(:block, fdim..., quote
             let $dictname = Dict{Int,Function}()

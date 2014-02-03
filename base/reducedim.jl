@@ -76,8 +76,7 @@ function reducedim!(f::Function, R, A)
     else
         func = reducedim_cache[key]
     end
-    func(R, A)
-    R
+    func(R, A)::typeof(R)
 end
 end  # let reducedim_cache
 
@@ -92,6 +91,8 @@ function gen_reduction_body(N, f::Function)
             (size(R, i) == size(A, i) || size(R, i) == 1) || throw(DimensionMismatch("Reduction on array of size $(size(A)) with output of size $(size(R))"))
         end
         @nextract $N sizeR d->size(R,d)
+        # If we're reducing along dimension 1, for efficiency we can make use of a temporary.
+        # Otherwise, keep the result in R so that we traverse A in storage order.
         if size(R, 1) < size(A, 1)
             @nloops $N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
                 @inbounds tmp = (@nref $N R j)
@@ -105,6 +106,7 @@ function gen_reduction_body(N, f::Function)
                 @inbounds (@nref $N R j) = ($F)((@nref $N R j), (@nref $N A i))
             end
         end
+        R
     end
 end
 
@@ -115,25 +117,19 @@ reduction_init{T}(A::AbstractArray, region, initial::T) = fill!(similar(A,T,redu
 # For performance, these bypass reducedim_cache
 
 all(A::AbstractArray{Bool}, region) = all!(reduction_init(A,region,true), A)
-all!(R, A) = (_all!(R,A); return R)
-eval(ngenerate(:N, :(_all!{N}(R::AbstractArray, A::AbstractArray{Bool,N})), N->gen_reduction_body(N, &)))
+eval(ngenerate(:N, :(typeof(R)), :(all!{N}(R::AbstractArray, A::AbstractArray{Bool,N})), N->gen_reduction_body(N, &)))
 any(A::AbstractArray{Bool}, region) = any!(reduction_init(A,region,false), A)
-any!(R, A) = (_any!(R,A); return R)
-eval(ngenerate(:N, :(_any!{N}(R::AbstractArray, A::AbstractArray{Bool,N})), N->gen_reduction_body(N, |)))
+eval(ngenerate(:N, :(typeof(R)), :(any!{N}(R::AbstractArray, A::AbstractArray{Bool,N})), N->gen_reduction_body(N, |)))
 maximum{T}(A::AbstractArray{T}, region) =
     isempty(A) ? similar(A,reduced_dims0(A,region)) : maximum!(reduction_init(A,region,typemin(T)), A)
-maximum!(R, A) = (_maximum!(R,A); return R)
-eval(ngenerate(:N, :(_maximum!{T,N}(R::AbstractArray, A::AbstractArray{T,N})), N->gen_reduction_body(N, scalarmax)))
+eval(ngenerate(:N, :(typeof(R)), :(maximum!{T,N}(R::AbstractArray, A::AbstractArray{T,N})), N->gen_reduction_body(N, scalarmax)))
 minimum{T}(A::AbstractArray{T}, region) =
     isempty(A) ? similar(A,reduced_dims0(A,region)) : minimum!(reduction_init(A,region,typemax(T)), A)
-minimum!(R, A) = (_minimum!(R,A); return R)
-eval(ngenerate(:N, :(_minimum!{T,N}(R::AbstractArray, A::AbstractArray{T,N})), N->gen_reduction_body(N, scalarmin)))
+eval(ngenerate(:N, :(typeof(R)), :(minimum!{T,N}(R::AbstractArray, A::AbstractArray{T,N})), N->gen_reduction_body(N, scalarmin)))
 sum{T}(A::AbstractArray{T}, region) = sum!(reduction_init(A,region,zero(T)), A)
 sum(A::AbstractArray{Bool}, region) = sum!(reduction_init(A,region,0), A)
-sum!(R, A) = (_sum!(R,A); return R)
-eval(ngenerate(:N, :(_sum!{T,N}(R::AbstractArray, A::AbstractArray{T,N})), N->gen_reduction_body(N, +)))
+eval(ngenerate(:N, :(typeof(R)), :(sum!{T,N}(R::AbstractArray, A::AbstractArray{T,N})), N->gen_reduction_body(N, +)))
 prod{T}(A::AbstractArray{T}, region) = prod!(reduction_init(A,region,one(T)), A)
-prod!(R, A) = (_prod!(R,A); return R)
-eval(ngenerate(:N, :(_prod!{T,N}(R::AbstractArray, A::AbstractArray{T,N})), N->gen_reduction_body(N, *)))
+eval(ngenerate(:N, :(typeof(R)), :(prod!{T,N}(R::AbstractArray, A::AbstractArray{T,N})), N->gen_reduction_body(N, *)))
 
 prod(A::AbstractArray{Bool}, region) = error("use all() instead of prod() for boolean arrays")

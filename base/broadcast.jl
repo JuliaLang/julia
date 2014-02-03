@@ -109,7 +109,7 @@ broadcast!_function(f::Function) = (B, As...) -> broadcast!(f, B, As...)
 broadcast_function(f::Function) = (As...) -> broadcast(f, As...)
 
 broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex!(Array(eltype(src), broadcast_shape(I...)), src, I...)
-@ngenerate N function broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::NTuple{N, AbstractArray}...)
+@ngenerate N typeof(dest) function broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::NTuple{N, AbstractArray}...)
     check_broadcast_shape(size(dest), I...)  # unnecessary if this function is never called directly
     checkbounds(src, I...)
     @nloops N i dest d->(@nexprs N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
@@ -119,7 +119,7 @@ broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex
     dest
 end
 
-@ngenerate N function broadcast_setindex!(A::AbstractArray, x, I::NTuple{N, AbstractArray}...)
+@ngenerate N typeof(A) function broadcast_setindex!(A::AbstractArray, x, I::NTuple{N, AbstractArray}...)
     checkbounds(A, I...)
     shape = broadcast_shape(I...)
     @nextract N shape d->(length(shape) < d ? 1 : shape[d])
