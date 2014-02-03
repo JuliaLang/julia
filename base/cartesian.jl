@@ -274,13 +274,15 @@ function _nref(N::Int, A::Symbol, ex)
 end
 
 # Generate f(arg1, arg2, ...)
-macro ncall(N, f, sym)
-    _ncall(N, f, sym)
+macro ncall(N, f, sym...)
+    _ncall(N, f, sym...)
 end
 
-function _ncall(N::Int, f, ex)
+function _ncall(N::Int, f, args...)
+    pre = args[1:end-1]
+    ex = args[end]
     vars = [ inlineanonymous(ex,i) for i = 1:N ]
-    Expr(:escape, Expr(:call, f, vars...))
+    Expr(:escape, Expr(:call, f, pre..., vars...))
 end
 
 # Generate N expressions
