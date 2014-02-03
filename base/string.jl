@@ -573,6 +573,7 @@ endof(s::UTF32String) = length(s.chars)
 length(s::UTF32String) = length(s.chars)
 
 utf32(x) = convert(UTF32String, x)
+convert(::Type{UTF32String}, s::UTF32String) = s
 convert(::Type{UTF32String}, s::String) = UTF32String(Char[c for c in s])
 convert{T<:String}(::Type{T}, v::Vector{Char}) = convert(T, UTF32String(v))
 convert(::Type{Array{Char,1}}, s::UTF32String) = s.chars
