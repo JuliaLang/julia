@@ -1,29 +1,27 @@
 ### From array.jl
 
-@ngenerate N function _checksize(A::AbstractArray, I::NTuple{N, Any}...)
+@ngenerate N Nothing function checksize(A::AbstractArray, I::NTuple{N, Any}...)
     @nexprs N d->(size(A, d) == length(I_d) || throw(DimensionMismatch("Index $d has length $(length(I_d)), but size(A, $d) = $(size(A,d))")))
     nothing
 end
-checksize(A, I) = (_checksize(A, I); return nothing)
-checksize(A, I, J) = (_checksize(A, I, J); return nothing)
-checksize(A, I...) = (_checksize(A, I...); return nothing)
 
 unsafe_getindex(v::Real, ind::Integer) = v
 unsafe_getindex(v::Ranges, ind::Integer) = first(v) + (ind-1)*step(v)
 unsafe_getindex(v::AbstractArray, ind::Integer) = v[ind]
 
 # Version that uses cartesian indexing for src
-@ngenerate N function _getindex!(dest::Array, src::AbstractArray, I::NTuple{N,Union(Int,AbstractVector)}...)
+@ngenerate N typeof(dest) function _getindex!(dest::Array, src::AbstractArray, I::NTuple{N,Union(Int,AbstractVector)}...)
     checksize(dest, I...)
     k = 1
     @nloops N i dest d->(@inbounds j_d = unsafe_getindex(I_d, i_d)) begin
         @inbounds dest[k] = (@nref N src j)
         k += 1
     end
+    dest
 end
 
 # Version that uses linear indexing for src
-@ngenerate N function _getindex!(dest::Array, src::Array, I::NTuple{N,Union(Int,AbstractVector)}...)
+@ngenerate N typeof(dest) function _getindex!(dest::Array, src::Array, I::NTuple{N,Union(Int,AbstractVector)}...)
     checksize(dest, I...)
     stride_1 = 1
     @nexprs N d->(stride_{d+1} = stride_d*size(src,d))
@@ -33,6 +31,7 @@ end
         @inbounds dest[k] = src[offset_0]
         k += 1
     end
+    dest
 end
 
 getindex!(dest, src, I) = (checkbounds(src, I); _getindex!(dest, src, to_index(I)); return dest)
@@ -57,7 +56,7 @@ function getindex(A::Array, I::Union(Real,AbstractVector), J::Union(Real,Abstrac
 end
 
 
-@ngenerate N function _setindex!(A::Array, x, I::NTuple{N,Union(Int,AbstractArray)}...)
+@ngenerate N typeof(A) function _setindex!(A::Array, x, I::NTuple{N,Union(Int,AbstractArray)}...)
     stride_1 = 1
     @nexprs N d->(stride_{d+1} = stride_d*size(A,d))
     @nexprs N d->(offset_d = 1)  # really only need offset_$N = 1
@@ -75,6 +74,7 @@ end
             k += 1
         end
     end
+    A
 end
 
 function setindex!(A::Array, x, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray))
@@ -94,7 +94,7 @@ function setindex!(A::Array, x, I::Union(Real,AbstractArray)...)
 end
 
 
-@ngenerate N function findn{T,N}(A::AbstractArray{T,N})
+@ngenerate N NTuple{N,Vector{Int}} function findn{T,N}(A::AbstractArray{T,N})
     nnzA = countnz(A)
     @nexprs N d->(I_d = Array(Int, nnzA))
     k = 1
@@ -127,7 +127,7 @@ function gen_getindex_body(N::Int)
     end
 end
 
-eval(ngenerate(:N, :(getindex{T}(s::SubArray{T,N}, ind::Integer)), gen_getindex_body, 2:5, false))
+eval(ngenerate(:N, nothing, :(getindex{T}(s::SubArray{T,N}, ind::Integer)), gen_getindex_body, 2:5, false))
 
 
 function gen_setindex!_body(N::Int)
@@ -145,18 +145,17 @@ function gen_setindex!_body(N::Int)
     end
 end
 
-eval(ngenerate(:N, :(setindex!{T}(s::SubArray{T,N}, v, ind::Integer)), gen_setindex!_body, 2:5, false))
+eval(ngenerate(:N, nothing, :(setindex!{T}(s::SubArray{T,N}, v, ind::Integer)), gen_setindex!_body, 2:5, false))
 
 
 ### from abstractarray.jl
 
-@ngenerate N function _fill!{T,N}(A::AbstractArray{T,N}, x)
+@ngenerate N typeof(A) function fill!{T,N}(A::AbstractArray{T,N}, x)
     @nloops N i A begin
         @inbounds (@nref N A i) = x
     end
+    A
 end
-
-fill!(A::AbstractArray, x) = (_fill!(A, x); return A)
 
 
 ### from bitarray.jl
@@ -173,7 +172,7 @@ function getindex(B::BitArray, I0::Range1)
 end
 
 # TODO: extend to I:Union(Real,AbstractArray)... (i.e. not necessarily contiguous)
-@ngenerate N function getindex(B::BitArray, I0::Range1, I::NTuple{N,Union(Real,Range1)}...)
+@ngenerate N BitArray{length(I)+1} function getindex(B::BitArray, I0::Range1, I::NTuple{N,Union(Real,Range1)}...)
     ndims(B) < N+1 && error("wrong number of dimensions")
     checkbounds(B, I0, I...)
     X = BitArray(index_shape(I0, I...))
@@ -207,7 +206,7 @@ end
     return X
 end
 
-@ngenerate N function getindex(B::BitArray, I::NTuple{N,Union(Real,AbstractVector)}...)
+@ngenerate N BitArray{length(I)} function getindex(B::BitArray, I::NTuple{N,Union(Real,AbstractVector)}...)
     checkbounds(B, I...)
     @nexprs N d->(I_d = to_index(I_d))
     X = BitArray(index_shape(I...))
@@ -237,7 +236,7 @@ function setindex!(B::BitArray, X::BitArray, I0::Range1)
 end
 
 # TODO: extend to I:Union(Real,AbstractArray)... (i.e. not necessarily contiguous)
-@ngenerate N function setindex!(B::BitArray, X::BitArray, I0::Range1, I::NTuple{N,Union(Real,Range1)}...)
+@ngenerate N typeof(B) function setindex!(B::BitArray, X::BitArray, I0::Range1, I::NTuple{N,Union(Real,Range1)}...)
     ndims(B) != N+1 && error("wrong number of dimensions in assigment")
     I0 = to_index(I0)
     lI = length(I0)
@@ -275,7 +274,7 @@ end
     return B
 end
 
-@ngenerate N function setindex!(B::BitArray, X::AbstractArray, I::NTuple{N,Union(Real,AbstractArray)}...)
+@ngenerate N typeof(B) function setindex!(B::BitArray, X::AbstractArray, I::NTuple{N,Union(Real,AbstractArray)}...)
     checkbounds(B, I...)
     @nexprs N d->(I_d = to_index(I_d))
     nel = 1
@@ -294,7 +293,7 @@ end
     return B
 end
 
-@ngenerate N function setindex!(B::BitArray, x, I::NTuple{N,Union(Real,AbstractArray)}...)
+@ngenerate N typeof(B) function setindex!(B::BitArray, x, I::NTuple{N,Union(Real,AbstractArray)}...)
     x = convert(Bool, x)
     checkbounds(B, I...)
     @nexprs N d->(I_d = to_index(I_d))
@@ -305,7 +304,7 @@ end
     return B
 end
 
-@ngenerate N function findn{N}(B::BitArray{N})
+@ngenerate N NTuple{N,Vector{Int}} function findn{N}(B::BitArray{N})
     nnzB = countnz(B)
     I = ntuple(N, x->Array(Int, nnzB))
     if nnzB > 0
@@ -322,7 +321,7 @@ end
 
 for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
     @eval begin
-    @ngenerate N function permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
+    @ngenerate N typeof(P) function permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
         dimsB = size(B)
         (length(perm) == N && isperm(perm)) || error("no valid permutation of dimensions")
         dimsP = size(P)
