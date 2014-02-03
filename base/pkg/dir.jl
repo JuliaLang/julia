@@ -5,10 +5,11 @@ import ..Git
 
 const DIR_NAME = ".julia"
 
-pkgroot() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(homedir(),DIR_NAME)))
+_pkgroot() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(homedir(),DIR_NAME)))
+isversioned(p::String) = ((x,y) = (VERSION.major, VERSION.minor); basename(p) == "v$x.$y")
 
 function path()
-    b = pkgroot()
+    b = _pkgroot()
     x, y = VERSION.major, VERSION.minor
     d = joinpath(b,"v$x.$y")
     if isdir(d) || !isdir(b) || !isdir(joinpath(b, "METADATA"))
