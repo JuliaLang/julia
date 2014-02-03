@@ -5,7 +5,7 @@ typealias RangeIndex Union(Int, Range{Int}, Range1{Int})
 type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     parent::A
     indexes::I
-    dims::Dims
+    dims::NTuple{N,Int}
     strides::Array{Int,1}  # for accessing parent with linear indexes
     first_index::Int
 
