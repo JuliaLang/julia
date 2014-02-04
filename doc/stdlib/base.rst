@@ -3432,9 +3432,9 @@ Basic functions
 
    Returns the number of elements in A
 
-.. function:: nnz(A)
+.. function:: countnz(A)
 
-   Counts the number of nonzero values in array A (dense or sparse)
+   Counts the number of nonzero values in array A (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use ``nfilled`` instead.
 
 .. function:: conj!(A)
 

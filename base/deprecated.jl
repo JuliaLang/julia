@@ -390,3 +390,10 @@ eval(Sys, :(@deprecate shlib_list dllist))
 
 # 0.3 discontinued functions
 
+function nnz(X)
+    depwarn("nnz has been renamed to countnz and is no longer computed in constant time for sparse matrices. Instead, use nfilled() for the number of elements in a sparse matrix.", :nnz)
+    countnz(X)
+end
+export nnz
+
+
