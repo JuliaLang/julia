@@ -121,7 +121,7 @@
       nil
     (if (and (equal (char-after (point)) ?#)
 	     (evenp (julia-strcount
-		     (buffer-substring p0 (point)) ?\")))
+		     (buffer-substring p0 (point)) ?\"))) ;" ;<-- Makes it display nicely on github
 	t
       (if (= (point) p0)
 	  nil
