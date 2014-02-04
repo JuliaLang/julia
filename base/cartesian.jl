@@ -2,7 +2,7 @@ module Cartesian
 
 export @ngenerate, @nsplat, @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, ngenerate
 
-const CARTESIAN_DIMS = 2   # FIXME: increase after testing is complete
+const CARTESIAN_DIMS = 4
 
 ### @ngenerate, for auto-generation of separate versions of functions for different dimensionalities
 # Examples (deliberately trivial):
