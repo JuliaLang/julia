@@ -351,7 +351,7 @@ function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     systemerror("opening file $fname",
                 ccall(:ios_file, Ptr{Void},
                       (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
-                      s.ios, fname, rd, wr, cr, tr) == C_NULL)
+                      s.ios, bytestring(fname), rd, wr, cr, tr) == C_NULL)
     if ff
         systemerror("seeking to end of file $fname", ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios) != 0)
     end
