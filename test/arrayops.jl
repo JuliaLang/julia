@@ -865,7 +865,7 @@ A = [NaN]; B = [NaN]
 
 include("reducedim.jl")
 # Inferred types
-Nmax = Base.Cartesian.CARTESIAN_DIMS+1 # TODO: go up to CARTESIAN_DIMS+2 (currently this exposes problems)
+Nmax = 3 # TODO: go up to CARTESIAN_DIMS+2 (currently this exposes problems)
 for N = 1:Nmax
     #indexing with (Range1, Range1, Range1)
     args = ntuple(N, d->Range1{Int})
