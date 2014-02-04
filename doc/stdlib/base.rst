@@ -973,7 +973,6 @@ Strings
    * ``decompose=true``: do canonical decomposition instead of canonical composition (``compose=true`` is ignored if present)
    * ``compat=true``: compatibility equivalents are canonicalized
    * ``casefold=true``: perform Unicode case folding, e.g. for case-insensitive string comparison
-   * ``lump=true``: non--standard canonicalization of various similar-looking characters into a single ASCII character, as defined by the utf8proc library (e.g. fraction and division slashes, space characters, dash characters, etcetera)
    * ``newline2lf=true``, ``newline2ls=true``, or ``newline2ps=true``: convert various newline sequences (LF, CRLF, CR, NEL) into a linefeed (LF), line-separation (LS), or paragraph-separation (PS) character, respectively
    * ``stripmark=true``: strip diacritical marks (e.g. accents)
    * ``stripignore=true``: strip Unicode's "default ignorable" characters (e.g. the soft hyphen or the left-to-right marker)
