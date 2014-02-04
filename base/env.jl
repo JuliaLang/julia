@@ -1,15 +1,16 @@
 ## core libc calls ##
 
 @unix_only begin
-    _getenv(var::String) = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), var)
+    _getenv(var::String) = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), 
+                                 bytestring(var))
     _hasenv(s::String) = _getenv(s) != C_NULL
 end
 @windows_only begin
-_getenvlen(var::String) = ccall(:GetEnvironmentVariableA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32),var,C_NULL,0)
+_getenvlen(var::String) = ccall(:GetEnvironmentVariableA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32),bytestring(var),C_NULL,0)
 _hasenv(s::String) = _getenvlen(s)!=0
 function _jl_win_getenv(s::String,len::Uint32)
     val=zeros(Uint8,len-1)
-    ret=ccall(:GetEnvironmentVariableA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32),s,val,len)
+    ret=ccall(:GetEnvironmentVariableA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32),bytestring(s),val,len)
     if ret==0||ret!=len-1 #Trailing 0 is only included on first call to GetEnvA
         error("unknown system error: ", s, len, ret)
     end
@@ -37,12 +38,13 @@ end
 
 function _setenv(var::String, val::String, overwrite::Bool)
 @unix_only begin
-    ret = ccall(:setenv, Int32, (Ptr{Uint8},Ptr{Uint8},Int32), var, val, overwrite)
+    ret = ccall(:setenv, Int32, (Ptr{Uint8},Ptr{Uint8},Int32),
+                bytestring(var), bytestring(val), overwrite)
     systemerror(:setenv, ret != 0)
 end
 @windows_only begin
     if overwrite||!_hasenv(var)
-        ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),var,val)
+        ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),bytestring(var),bytestring(val))
         systemerror(:setenv, ret == 0)
     end
 end
@@ -52,11 +54,11 @@ _setenv(var::String, val::String) = _setenv(var, val, true)
 
 function _unsetenv(var::String)
 @unix_only begin
-    ret = ccall(:unsetenv, Int32, (Ptr{Uint8},), var)
+    ret = ccall(:unsetenv, Int32, (Ptr{Uint8},), bytestring(var))
     systemerror(:unsetenv, ret != 0)
 end
 @windows_only begin
-    ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),var,C_NULL)
+    ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),bytestring(var),C_NULL)
     systemerror(:setenv, ret == 0)
 end
 end

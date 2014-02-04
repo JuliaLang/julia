@@ -197,7 +197,7 @@ function parse_input_line(s::String)
     #     throw(ParseError("extra input after end of expression"))
     # end
     # expr
-    ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), s)
+    ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), bytestring(s))
 end
 
 function parse_input_line(io::IO)

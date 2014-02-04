@@ -9,8 +9,8 @@ function pwd()
 end
 
 function cd(dir::String) 
-    @windows_only systemerror("chdir $dir", ccall(:_chdir,Int32,(Ptr{Uint8},),dir) == -1)
-    @unix_only systemerror("chdir $dir", ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
+    @windows_only systemerror("chdir $dir", ccall(:_chdir,Int32,(Ptr{Uint8},),bytestring(dir)) == -1)
+    @unix_only systemerror("chdir $dir", ccall(:chdir,Int32,(Ptr{Uint8},),bytestring(dir)) == -1)
 end
 cd() = cd(homedir())
 
@@ -100,7 +100,7 @@ end
 GetTempFileName(uunique::Uint32) = GetTempFileName(GetTempPath(), uunique)
 function GetTempFileName(temppath::String,uunique::Uint32)
     tname = Array(Uint8,261)
-    uunique = ccall(:GetTempFileNameA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32,Ptr{Uint8}),temppath,"julia",uunique,tname)
+    uunique = ccall(:GetTempFileNameA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32,Ptr{Uint8}),bytestring(temppath),"julia",uunique,tname)
     lentname = findfirst(tname,0)-1
     if uunique == 0 || lentname <= 0
         error("GetTempFileName failed")

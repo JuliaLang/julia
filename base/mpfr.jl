@@ -64,7 +64,7 @@ end
 
 function BigFloat(x::String, base::Int)
     z = BigFloat()
-    err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{Uint8}, Int32, Int32), &z, x, base, ROUNDING_MODE[end])
+    err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{Uint8}, Int32, Int32), &z, bytestring(x), base, ROUNDING_MODE[end])
     if err != 0; error("incorrectly formatted number"); end
     return z
 end
