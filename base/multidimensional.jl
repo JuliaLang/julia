@@ -138,6 +138,16 @@ eval(ngenerate(:N, nothing, :(setindex!{T}(s::SubArray{T,N}, v, ind::Integer)), 
     A
 end
 
+@ngenerate N typeof(dest) function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
+    if @nall N d->(size(dest,d) == size(src,d))
+        @nloops N i dest begin
+            @inbounds (@nref N dest i) = (@nref N src i)
+        end
+    else
+        invoke(copy!, (typeof(dest), Any), dest, src)
+    end
+    dest
+end
 
 ### from bitarray.jl
 
