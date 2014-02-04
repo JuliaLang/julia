@@ -328,7 +328,7 @@ function sparse_diff1{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     m,n = size(S)
     m > 1 && return SparseMatrixCSC{Tv,Ti}(0, n, ones(n+1), Ti[], Tv[])
     colptr = Array(Ti, n+1)
-    numnz = 2 * nnz(S) # upper bound; will shrink later
+    numnz = 2 * nfilled(S) # upper bound; will shrink later
     rowval = Array(Ti, numnz)
     nzval = Array(Tv, numnz)
     numnz = 0
@@ -368,7 +368,7 @@ function sparse_diff2{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti})
 
     m,n = size(a)
     colptr = Array(Ti, max(n,1))
-    numnz = 2 * nnz(a) # upper bound; will shrink later
+    numnz = 2 * nfilled(a) # upper bound; will shrink later
     rowval = Array(Ti, numnz)
     nzval = Array(Tv, numnz)
 
@@ -463,8 +463,8 @@ diff(a::SparseMatrixCSC, dim::Integer)= dim==1 ? sparse_diff1(a) : sparse_diff2(
 # kron
 
 function kron{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, b::SparseMatrixCSC{Tv,Ti})
-    numnzA = nnz(a)
-    numnzB = nnz(b)
+    numnzA = nfilled(a)
+    numnzB = nfilled(b)
 
     numnz = numnzA * numnzB
 
@@ -529,7 +529,7 @@ inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be den
 function scale!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC, b::Vector)
     m, n = size(A)
     (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch(""))
-    numnz = nnz(A)
+    numnz = nfilled(A)
     C.colptr = convert(Array{Ti}, A.colptr)
     C.rowval = convert(Array{Ti}, A.rowval)
     C.nzval = Array(Tv, numnz)
@@ -542,7 +542,7 @@ end
 function scale!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, b::Vector, A::SparseMatrixCSC)
     m, n = size(A)
     (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch(""))
-    numnz = nnz(A)
+    numnz = nfilled(A)
     C.colptr = convert(Array{Ti}, A.colptr)
     C.rowval = convert(Array{Ti}, A.rowval)
     C.nzval = Array(Tv, numnz)

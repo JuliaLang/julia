@@ -14,7 +14,7 @@ export                                  # types
 using Base.LinAlg.UMFPACK               # for decrement, increment, etc.
  
 import Base: (*), convert, copy, ctranspose, eltype, findnz, getindex, hcat,
-             isvalid, nnz, show, size, sort!, transpose, vcat
+             isvalid, nfilled, show, size, sort!, transpose, vcat
 
 import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
                  cholfact, cholfact!, copy, det, diag,
@@ -778,7 +778,7 @@ for Ti in (:Int32,:Int64)
                   (Ptr{c_CholmodSparse{Tv,$Ti}},Ptr{c_CholmodSparse{Tv,$Ti}},Cint,Ptr{Uint8}),
                   &A.c,&B.c,true,cmn($Ti))
         end
-        function nnz{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti})
+        function nfilled{Tv<:CHMVTypes}(A::CholmodSparse{Tv,$Ti})
             ccall((@chm_nm "nnz" $Ti
                    ,:libcholmod), Int, (Ptr{c_CholmodSparse{Tv,$Ti}},Ptr{Uint8}),&A.c,cmn($Ti))
         end
