@@ -175,7 +175,7 @@ type LocalProcess
     id::Int
 end
 
-const LPROC = LocalProcess(0)
+const LPROC = LocalProcess(1)
 
 const map_pid_wrkr = Dict{Int, Union(Worker, LocalProcess)}()
 const map_sock_wrkr = ObjectIdDict()

@@ -315,9 +315,9 @@ const roottask = current_task()
 is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
+const LOAD_PATH = ByteString[]
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    global const LOAD_PATH = ByteString[]
     if haskey(ENV,"JULIA_LOAD_PATH")
         prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @windows? ';' : ':'))    
     end
