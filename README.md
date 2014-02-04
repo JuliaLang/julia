@@ -114,7 +114,7 @@ If the gcc44 and gfortran44 packages are installed, you can specify their use by
     CC = gcc44
     CXX = g++44
 
-Otherwise, install or contact your systems adminstrator to install a more recent version of gcc.
+Otherwise, install or contact your systems administrator to install a more recent version of gcc.
 
 #### Linux Build Troubleshooting
 
