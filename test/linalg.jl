@@ -189,18 +189,15 @@ debug && println("Generalized svd")
 
 debug && println("Solve square general system of equations")
     x = a \ b
-    κ = (eltya == BigFloat ? cond(float64(a)) : cond(a) ) * (eltya <: Complex ? sqrt(2) : 1)
-    @test_approx_eq_eps a*x b κ*ε
+    @test_approx_eq_eps a*x b 80ε
 
-debug && println("Solve upper triangular system")
+debug && println("Solve upper trianguler system")
     x = triu(a) \ b
-    κ = (eltya == BigFloat ? cond(float64(triu(a))) : cond(triu(a)) ) * (eltya <: Complex ? sqrt(2) : 1)
-    @test_approx_eq_eps triu(a)*x b κ*ε #Error bound for general matrices
+    @test_approx_eq_eps triu(a)*x b 15000ε
 
 debug && println("Solve lower triangular system")
-    x = tril(a) \ b
-    κ = (eltya == BigFloat ? cond(float64(tril(a))) : cond(tril(a)) ) * (eltya <: Complex ? sqrt(2) : 1)
-    @test_approx_eq_eps tril(a)*x b κ*ε #Error bound for general matrices
+    x = tril(a)\b
+    @test_approx_eq_eps tril(a)*x b 1000ε
 
 debug && println("Test null")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
