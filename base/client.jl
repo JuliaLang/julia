@@ -60,7 +60,7 @@ function repl_cmd(cmd)
         end
         println(pwd())
     else
-        run(ignorestatus(@windows? cmd : `$shell -i -c "($(shell_escape(cmd))) && true"`))
+        run(ignorestatus(@windows? cmd : (isa(STDIN, TTY) ? `$shell -i -c "($(shell_escape(cmd))) && true"` : `$shell -c "($(shell_escape(cmd))) && true"`)))
     end
     nothing
 end
