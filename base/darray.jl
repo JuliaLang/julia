@@ -166,8 +166,6 @@ function distribute(a::AbstractArray)
     end
 end
 
-convert{T,N}(::Type{Array}, d::SubOrDArray{T,N}) = convert(Array{T,N}, d)
-
 function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
     a = Array(S, size(d))
     @sync begin
