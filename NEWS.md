@@ -106,6 +106,9 @@ Library improvements
 
     * `CharString` is renamed to `UTF32String` ([#4943]).
 
+    * `normalize_string` function to perform Unicode normalization, case-folding,
+      and other transformations ([#5576]).
+
   * `LinAlg` (linear algebra) improvements
 
       * Balancing options for eigenvector calculations for general matrices ([#5428]).
