@@ -589,12 +589,7 @@ end
 immutable Hessenberg{T} <: Factorization{T}
     factors::Matrix{T}
     τ::Vector{T}
-    function Hessenberg(hh::Matrix{T}, τ::Vector{T})
-        chksquare(hh)
-        new(hh, τ)
-    end
 end
-Hessenberg{T<:BlasFloat}(hh::Matrix{T}, τ::Vector{T}) = Hessenberg{T}(hh, τ)
 Hessenberg(A::StridedMatrix) = Hessenberg(LAPACK.gehrd!(A)...)
 
 hessfact!{T<:BlasFloat}(A::StridedMatrix{T}) = Hessenberg(A)
@@ -602,7 +597,7 @@ hessfact{T<:BlasFloat}(A::StridedMatrix{T}) = hessfact!(copy(A))
 hessfact{T}(A::StridedMatrix{T}) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? hessfact!(convert(Matrix{S},A)) : hessfact!(copy(A)))
 
 immutable HessenbergQ{T} <: AbstractMatrix{T}
-    hh::Matrix{T}
+    factors::Matrix{T}
     τ::Vector{T}
 end
 HessenbergQ(A::Hessenberg) = HessenbergQ(A.factors, A.τ)
