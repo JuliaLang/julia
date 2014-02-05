@@ -240,14 +240,8 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
         jl_pgcstack = t->gcstack;
 #endif
         jl_current_task->current_module = jl_current_module;
+        jl_current_module = t->current_module;
         t->last = jl_current_task;
-        // by default, parent is first task to switch to this one
-        if (t->current_module == NULL) { //TODO: jwn is pretty sure this isn't logical
-            t->current_module = jl_current_module;
-        }
-        else {
-            jl_current_module = t->current_module;
-        }
         jl_current_task = t;
 
 #ifdef COPY_STACKS
@@ -402,6 +396,8 @@ static void start_task(jl_task_t *t)
     jl_value_t *arg = jl_task_arg_in_transit;
     jl_value_t *res;
     JL_GC_PUSH1(&arg);
+    assert(!t->started);
+    t->started = 1;
 
 #ifdef COPY_STACKS
     ptrint_t local_sp = (ptrint_t)jl_pgcstack;
@@ -777,10 +773,11 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->type = (jl_value_t*)jl_task_type;
     ssize = LLT_ALIGN(ssize, pagesz);
     t->ssize = ssize;
-    t->current_module = NULL;
+    t->current_module = jl_current_module;
     t->last = jl_current_task;
     t->tls = jl_nothing;
     t->consumers = jl_nothing;
+    t->started = 0;
     t->done = 0;
     t->runnable = 1;
     t->start = start;
@@ -878,21 +875,22 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_task_type = jl_new_datatype(jl_symbol("Task"),
                                    jl_any_type,
                                    jl_null,
-                                   jl_tuple(10,
+                                   jl_tuple(11,
                                             jl_symbol("current_module"),
                                             jl_symbol("last"),
                                             jl_symbol("storage"),
                                             jl_symbol("consumers"),
+                                            jl_symbol("started"),
                                             jl_symbol("done"),
                                             jl_symbol("runnable"),
                                             jl_symbol("result"),
                                             jl_symbol("donenotify"),
                                             jl_symbol("exception"),
                                             jl_symbol("code")),
-                                   jl_tuple(10,
+                                   jl_tuple(11,
                                             jl_any_type, jl_any_type,
                                             jl_any_type, jl_any_type,
-                                            jl_bool_type, jl_bool_type,
+                                            jl_bool_type, jl_bool_type, jl_bool_type,
                                             jl_any_type, jl_any_type,
                                             jl_any_type, jl_function_type),
                                    0, 1);
@@ -914,6 +912,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->last = jl_current_task;
     jl_current_task->tls = NULL;
     jl_current_task->consumers = NULL;
+    jl_current_task->started = 1;
     jl_current_task->done = 0;
     jl_current_task->runnable = 1;
     jl_current_task->start = NULL;

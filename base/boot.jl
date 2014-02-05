@@ -107,6 +107,7 @@
 #     last::Task
 #     storage::Any
 #     consumers
+#     started::Bool
 #     done::Bool
 #     runnable::Bool
 # end
