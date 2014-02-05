@@ -321,8 +321,12 @@ function search(s::String, t::String, i::Integer=start(s))
     end
 end
 
-rsearch(s::String, c::Chars, i::Integer=endof(s)) =
-    endof(s)-search(RevString(s), c, endof(s)-i+1)+1
+function rsearch(s::String, c::Chars, i::Integer=endof(s))
+    e = endof(s)
+    j = search(RevString(s), c, e-i+1)
+    j == 0 && return 0
+    e-j+1
+end
 
 function _rsearchindex(s, t, i)
     if isempty(t)
@@ -628,7 +632,12 @@ function next(s::SubString, i::Int)
     c, i-s.offset
 end
 
-getindex(s::SubString, i::Int) = getindex(s.string, i+s.offset)
+function getindex(s::SubString, i::Int)
+    if i < 1 || i > s.endof
+        error(BoundsError)
+    end
+    getindex(s.string, i+s.offset)
+end
 
 isempty(s::SubString) = s.endof == 0
 

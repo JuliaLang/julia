@@ -707,6 +707,13 @@ write(b, u)
 
 @test replace("\u2202", '*', '\0') == "\u2202"
 
+# search and SubString (issue #5679)
+str = "Hello, world!"
+u = SubString(str, 1, 5)
+@test rsearch(u, "World") == 0:-1
+@test rsearch(u, 'z') == 0
+@test rsearch(u, "ll") == 3:4
+
 # quotes + interpolation (issue #455)
 @test "$("string")" == "string"
 arr = ["a","b","c"]
