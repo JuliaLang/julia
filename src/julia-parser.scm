@@ -128,7 +128,7 @@
 ;; characters that can be in an operator
 (define (opchar? c) (and (char? c) (string.find op-chars c)))
 ;; characters that can follow . in an operator
-(define (dot-opchar? c) (and (char? c) (string.find ".*^/\\+-'" c)))
+(define (dot-opchar? c) (and (char? c) (string.find ".*^/\\+-'<>!=%" c)))
 (define (operator? c) (memq c operators))
 
 (define (skip-to-eol port)
