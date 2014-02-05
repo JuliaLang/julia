@@ -774,6 +774,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     ssize = LLT_ALIGN(ssize, pagesz);
     t->ssize = ssize;
     t->current_module = jl_current_module;
+    t->parent = jl_current_task;
     t->last = jl_current_task;
     t->tls = jl_nothing;
     t->consumers = jl_nothing;
@@ -876,7 +877,7 @@ void jl_init_tasks(void *stack, size_t ssize)
                                    jl_any_type,
                                    jl_null,
                                    jl_tuple(11,
-                                            jl_symbol("current_module"),
+                                            jl_symbol("parent"),
                                             jl_symbol("last"),
                                             jl_symbol("storage"),
                                             jl_symbol("consumers"),
@@ -909,6 +910,7 @@ void jl_init_tasks(void *stack, size_t ssize)
 #endif
     jl_current_task->stkbuf = NULL;
     jl_current_task->current_module = jl_current_module;
+    jl_current_task->parent = jl_current_task;
     jl_current_task->last = jl_current_task;
     jl_current_task->tls = NULL;
     jl_current_task->consumers = NULL;

@@ -103,7 +103,7 @@
 #end
 
 # type Task
-#     current_module::Module
+#     parent::Task
 #     last::Task
 #     storage::Any
 #     consumers

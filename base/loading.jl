@@ -95,11 +95,16 @@ macro __FILE__() source_path() end
 
 function source_path(default::Union(String,Nothing)="")
     t = current_task()
-    s = t.storage
-    if !is(s, nothing) && haskey(s, :SOURCE_PATH)
-        return s[:SOURCE_PATH]
+    while true
+        s = t.storage
+        if !is(s, nothing) && haskey(s, :SOURCE_PATH)
+            return s[:SOURCE_PATH]
+        end
+        if is(t, t.parent)
+            return default
+        end
+        t = t.parent
     end
-    return default
 end
 
 function include_from_node1(path::String)

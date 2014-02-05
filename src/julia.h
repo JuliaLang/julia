@@ -1082,7 +1082,7 @@ typedef struct _jl_handler_t {
 
 typedef struct _jl_task_t {
     JL_DATA_TYPE
-    jl_module_t *current_module; // saved current module
+    struct _jl_task_t *parent;
     struct _jl_task_t *last;
     jl_value_t *tls;
     jl_value_t *consumers;
@@ -1107,6 +1107,7 @@ typedef struct _jl_task_t {
     jl_handler_t *eh;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
+    jl_module_t *current_module; // saved current module
 } jl_task_t;
 
 extern DLLEXPORT jl_task_t * volatile jl_current_task;
