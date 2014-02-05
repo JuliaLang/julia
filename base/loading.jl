@@ -91,8 +91,6 @@ include_string(txt::ByteString, fname::ByteString) =
 
 include_string(txt::ByteString) = include_string(txt, "string")
 
-macro __FILE__() source_path() end
-
 function source_path(default::Union(String,Nothing)="")
     t = current_task()
     while true
@@ -106,6 +104,8 @@ function source_path(default::Union(String,Nothing)="")
         t = t.parent
     end
 end
+
+macro __FILE__() source_path() end
 
 function include_from_node1(path::String)
     prev = source_path(nothing)

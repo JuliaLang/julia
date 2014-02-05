@@ -916,8 +916,8 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->ssize = ssize;
 #endif
     jl_current_task->stkbuf = NULL;
-    jl_current_task->current_module = jl_current_module;
     jl_current_task->parent = jl_current_task;
+    jl_current_task->current_module = jl_current_module;
     jl_current_task->last = jl_current_task;
     jl_current_task->tls = NULL;
     jl_current_task->consumers = NULL;

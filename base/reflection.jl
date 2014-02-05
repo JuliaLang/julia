@@ -2,7 +2,6 @@
 module_name(m::Module) = ccall(:jl_module_name, Any, (Any,), m)::Symbol
 module_parent(m::Module) = ccall(:jl_module_parent, Any, (Any,), m)::Module
 current_module() = ccall(:jl_get_current_module, Any, ())::Module
-current_module(t::Task) = (t === current_task() ? current_module() : t.current_module::Module)
 
 fullname(m::Module) = m===Main ? () : tuple(fullname(module_parent(m))...,
                                             module_name(m))
