@@ -84,7 +84,7 @@ function normp(x::AbstractVector,p::Number)
     return dx*sum(absx.^pp)^inv(pp)
 end
 function norm(x::AbstractVector, p::Number=2)
-    p == 0 && return nnz(x)
+    p == 0 && return countnz(x)
     p == Inf && return normInf(x)
     p == -Inf && return normMinusInf(x)
     p == 1 && return norm1(x)
