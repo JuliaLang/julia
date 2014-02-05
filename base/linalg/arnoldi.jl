@@ -24,7 +24,7 @@ function eigs(A;nev::Integer=6, ncv::Integer=20, which::ASCIIString="LM",
         mode = 1
         linop(x) = A * x
     else
-        C = lufact(A - sigma*eye(T,n))
+        C = lufact(A - sigma*eye(A))
         if cmplx
             mode = 3
             linop(x) = C\x
