@@ -73,9 +73,9 @@ enum CALLBACK_TYPE { CB_PTR, CB_INT32, CB_INT64 };
 #define XX(hook) static jl_function_t *JULIA_HOOK(hook) = 0;
 JL_CB_TYPES(XX)
 #undef XX
-DLLEXPORT void jl_get_uv_hooks()
+DLLEXPORT void jl_get_uv_hooks(int force)
 {
-    if (JULIA_HOOK(close)) return; // only do this once
+    if (!force && JULIA_HOOK(close)) return; // only do this once
 #define XX(hook) JULIA_HOOK(hook) = JULIA_HOOK_(jl_base_module, hook);
     JL_CB_TYPES(XX)
 #undef XX

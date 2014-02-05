@@ -747,21 +747,22 @@ function perform_work()
 end
 
 function perform_work(t::Task)
+    ct = current_task()
+    if ct.runnable && t !== ct
+        # still runnable; ensure we will return here
+        enq_work(ct)
+    end
     if !istaskstarted(t)
         # starting new task
-        yieldto(t)
+        result = yieldto(t)
     else
         # continuing interrupted work item
         arg = t.result
         t.result = nothing
         t.runnable = true
-        yieldto(t, arg)
+        result = yieldto(t, arg)
     end
-    t = current_task().last
-    if t.runnable
-        # still runnable; return to queue
-        enq_work(t)
-    end
+    return result
 end
 
 function deliver_result(sock::IO, msg, oid, value)
@@ -956,11 +957,9 @@ function start_worker(out::IO)
 
     ccall(:jl_install_sigint_handler, Void, ())
 
-    global const Scheduler = current_task()
-
     try
         check_master_connect(60.0)
-        event_loop(false)
+        client_event_loop()
     catch err
         print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")
     end
@@ -1532,14 +1531,44 @@ end
 # end
 
 ## event processing, I/O and work scheduling ##
-
-function yield(args...)
+in_scheduler = false
+function yield()
     ct = current_task()
     # preserve Task.last across calls to the scheduler
     prev = ct.last
-    v = yieldto(Scheduler, args...)
-    ct.last = prev
-    return v
+    global in_scheduler
+    if in_scheduler
+        # we don't want to execute yield recursively, because
+        # the return condition would be ill-defined
+        warn("yielding from inside scheduler callback")
+    end
+    try
+        in_scheduler = true
+        if ct.runnable || !isempty(Workqueue)
+            process_events(false)
+        end
+        while !ct.runnable && isempty(Workqueue)
+            global any_gc_flag
+            if any_gc_flag
+                flush_gc_msgs()
+            end
+            c = process_events(true)
+            if c==0 && eventloop()!=C_NULL && isempty(Workqueue) && !any_gc_flag && !ct.runnable
+                # if there are no active handles and no runnable tasks, just
+                # wait for signals.
+                pause()
+            end
+        end
+    finally
+        in_scheduler = false
+        ct.last = prev
+    end
+    if !isempty(Workqueue)
+        result = perform_work()
+    else
+        result = ()
+    end
+    return result
 end
 
 function pause()
@@ -1547,7 +1576,7 @@ function pause()
     @windows_only ccall(:Sleep,stdcall, Void, (Uint32,), 0xffffffff)
 end
 
-function event_loop(isclient)
+function client_event_loop()
     iserr, lasterr, bt = false, nothing, {}
     while true
         try
@@ -1557,20 +1586,7 @@ function event_loop(isclient)
                 iserr, lasterr, bt = false, nothing, {}
             else
                 while true
-                    if isempty(Workqueue)
-                        if any_gc_flag
-                            flush_gc_msgs()
-                        end
-                        c = process_events(true)
-                        if c==0 && eventloop()!=C_NULL && isempty(Workqueue) && !any_gc_flag
-                            # if there are no active handles and no runnable tasks, just
-                            # wait for signals.
-                            pause()
-                        end
-                    else
-                        perform_work()
-                        process_events(false)
-                    end
+                    yield()
                 end
             end
         catch err
@@ -1583,12 +1599,6 @@ function event_loop(isclient)
             end
             iserr, lasterr = true, err
             bt = catch_backtrace()
-            if isclient && isa(err,InterruptException)
-                # root task is waiting for something on client. allow C-C
-                # to interrupt.
-                interrupt_waiting_task(roottask,err)
-                iserr, lasterr = false, nothing
-            end
         end
     end
 end

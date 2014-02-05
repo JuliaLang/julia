@@ -230,7 +230,8 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
     if (!jl_setjmp(jl_current_task->ctx, 0)) {
 #ifdef COPY_STACKS
         jl_task_t *lastt = jl_current_task;
-        save_stack(lastt);
+        if (!lastt->done)
+            save_stack(lastt);
 #endif
 
         // set up global state for new task
@@ -241,8 +242,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
         jl_current_task->current_module = jl_current_module;
         t->last = jl_current_task;
         // by default, parent is first task to switch to this one
-        if (t->parent == NULL) {
-            t->parent = jl_current_task;
+        if (t->current_module == NULL) { //TODO: jwn is pretty sure this isn't logical
             t->current_module = jl_current_module;
         }
         else {
@@ -391,6 +391,9 @@ static void finish_task(jl_task_t *t, jl_value_t *resultval)
             jl_apply(task_done_hook_func, (jl_value_t**)&t, 1);
         }
     }
+    jl_function_t* yield_f = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("yield"));
+    (void)jl_apply(yield_f,NULL,0);
+    assert(0);
 }
 
 static void start_task(jl_task_t *t)
@@ -425,11 +428,6 @@ static void start_task(jl_task_t *t)
     }
     JL_GC_POP();
     finish_task(t, res);
-    jl_task_t *cont = t->parent;
-    // if parent task has exited, try its parent, and so on
-    while (cont->done)
-        cont = cont->parent;
-    jl_switchto(cont, t->result);
     assert(0);
 }
 
@@ -736,21 +734,15 @@ void NORETURN throw_internal(jl_value_t *e)
         jl_longjmp(jl_current_task->eh->eh_ctx, 1);
     }
     else {
+        JL_PRINTF(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
+        jl_static_show(JL_STDERR, e);
+        JL_PRINTF(JL_STDERR, "\n");
         if (jl_current_task == jl_root_task) {
-            JL_PRINTF(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
-            jl_static_show(JL_STDERR, e);
-            JL_PRINTF(JL_STDERR, "\n");
             exit(1);
         }
-        jl_task_t *cont = jl_current_task->parent;
-        while (cont->done || cont->eh == NULL)
-            cont = cont->parent;
-        // for now, exit the task
         jl_current_task->exception = e;
         finish_task(jl_current_task, e);
-        jl_current_task->exception = jl_nothing;
-        ctx_switch(cont, &cont->eh->eh_ctx);
-        // TODO: continued exception
+        assert(0);
     }
     jl_exit(1);
 }
@@ -785,7 +777,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->type = (jl_value_t*)jl_task_type;
     ssize = LLT_ALIGN(ssize, pagesz);
     t->ssize = ssize;
-    t->parent = NULL;
+    t->current_module = NULL;
     t->last = jl_current_task;
     t->tls = jl_nothing;
     t->consumers = jl_nothing;
@@ -887,7 +879,7 @@ void jl_init_tasks(void *stack, size_t ssize)
                                    jl_any_type,
                                    jl_null,
                                    jl_tuple(10,
-                                            jl_symbol("parent"),
+                                            jl_symbol("current_module"),
                                             jl_symbol("last"),
                                             jl_symbol("storage"),
                                             jl_symbol("consumers"),
@@ -918,7 +910,6 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->ssize = ssize;
 #endif
     jl_current_task->stkbuf = NULL;
-    jl_current_task->parent = jl_current_task;
     jl_current_task->current_module = jl_current_module;
     jl_current_task->last = jl_current_task;
     jl_current_task->tls = NULL;

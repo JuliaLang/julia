@@ -93,16 +93,11 @@ include_string(txt::ByteString) = include_string(txt, "string")
 
 function source_path(default::Union(String,Nothing)="")
     t = current_task()
-    while true
-        s = t.storage
-        if !is(s, nothing) && haskey(s, :SOURCE_PATH)
-            return s[:SOURCE_PATH]
-        end
-        if is(t, t.parent)
-            return default
-        end
-        t = t.parent
+    s = t.storage
+    if !is(s, nothing) && haskey(s, :SOURCE_PATH)
+        return s[:SOURCE_PATH]
     end
+    return default
 end
 
 macro __FILE__() source_path() end

@@ -325,21 +325,15 @@ function init_load_path()
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))
 end
 
-function init_sched()
-    global const Workqueue = Any[]
-end
+global const Workqueue = Any[]
 
 function init_head_sched()
     # start in "head node" mode
-    global const Scheduler = Task(()->event_loop(true), 1024*1024)
     global PGRP
     global LPROC
     LPROC.id = 1
     assert(length(PGRP.workers) == 0)
     register_worker(LPROC)
-    # make scheduler aware of current (root) task
-    unshift!(Workqueue, roottask)
-    yield()
 end
 
 function init_profiler()
@@ -379,7 +373,6 @@ function _start()
 
     #atexit(()->flush(STDOUT))
     try
-        init_sched()
         any(a->(a=="--worker"), ARGS) || init_head_sched()
         init_load_path()
         (quiet,repl,startup,color_set,history) = process_options(copy(ARGS))
