@@ -241,7 +241,8 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
 #endif
         jl_current_task->current_module = jl_current_module;
         jl_current_module = t->current_module;
-        t->last = jl_current_task;
+        if (!jl_current_task->done)
+            t->last = jl_current_task;
         jl_current_task = t;
 
 #ifdef COPY_STACKS
@@ -385,8 +386,14 @@ static void finish_task(jl_task_t *t, jl_value_t *resultval)
             jl_apply(task_done_hook_func, (jl_value_t**)&t, 1);
         }
     }
-    jl_function_t* yield_f = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("yield"));
-    (void)jl_apply(yield_f,NULL,0);
+    jl_task_t *cont = jl_current_task->last;
+    if (!cont->done) {
+        jl_switchto(cont, t->result);
+    } else {
+        jl_function_t* yield_f = (jl_function_t*)jl_get_global(
+                jl_base_module, jl_symbol("yield"));
+        (void)jl_apply(yield_f,NULL,0);
+    }
     assert(0);
 }
 
@@ -775,7 +782,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->ssize = ssize;
     t->current_module = jl_current_module;
     t->parent = jl_current_task;
-    t->last = jl_current_task;
+    t->last = NULL;
     t->tls = jl_nothing;
     t->consumers = jl_nothing;
     t->started = 0;
