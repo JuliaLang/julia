@@ -913,7 +913,6 @@ void jl_get_builtin_hooks(void)
     jl_root_task->donenotify = jl_nothing;
     jl_root_task->exception = jl_nothing;
     jl_root_task->result = jl_nothing;
-    jl_root_task->current_module = jl_core_module;
 
     jl_char_type    = (jl_datatype_t*)core("Char");
     jl_int8_type    = (jl_datatype_t*)core("Int8");
