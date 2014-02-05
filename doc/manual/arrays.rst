@@ -610,8 +610,8 @@ reference.
 +-----------------------+-------------------+----------------------------------------+
 | ``speye(n)``          | ``eye(n)``        | Creates a *n*-by-*n* identity matrix.  |
 +-----------------------+-------------------+----------------------------------------+
-| ``dense(S)``          | ``sparse(A)``     | Interconverts between dense            |
-| ``full(S)``           |                   | and sparse formats.                    |
+| ``full(S)``           | ``sparse(A)``     | Interconverts between dense            |
+|                       |                   | and sparse formats.                    |
 +-----------------------+-------------------+----------------------------------------+
 | ``sprand(m,n,d)``     | ``rand(m,n)``     | Creates a *m*-by-*n* random matrix (of |
 |                       |                   | density *d*) with iid non-zero elements|
