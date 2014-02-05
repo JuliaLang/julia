@@ -47,10 +47,10 @@ macro assert(ex,msgs...)
         # message is an expression needing evaluating
         msg = :(string("assertion failed: ", $(esc(msg))))
     elseif isdefined(Base,:string)
-        msg = string("assertion failed: ", msg)
+        msg = string("assertion failed: ", string(msg)[4:end-2])
     else
         # string() might not be defined during bootstrap
-        msg = :(string("assertion failed: ", $(Expr(:quote,msg))))
+        msg = :(string("assertion failed: ", string($(Expr(:quote,msg)))[4:end-2]))
     end
     :($(esc(ex)) ? $(nothing) : error($msg))
 end
