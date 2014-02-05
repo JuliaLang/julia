@@ -959,7 +959,7 @@ function start_worker(out::IO)
 
     try
         check_master_connect(60.0)
-        client_event_loop()
+        wait()
     catch err
         print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")
     end
@@ -1574,33 +1574,6 @@ end
 function pause()
     @unix_only    ccall(:pause, Void, ())
     @windows_only ccall(:Sleep,stdcall, Void, (Uint32,), 0xffffffff)
-end
-
-function client_event_loop()
-    iserr, lasterr, bt = false, nothing, {}
-    while true
-        try
-            if iserr
-                display_error(lasterr, bt)
-                println(STDERR)
-                iserr, lasterr, bt = false, nothing, {}
-            else
-                while true
-                    yield()
-                end
-            end
-        catch err
-            if iserr
-                ccall(:jl_, Void, (Any,), (
-                    "\n!!!An ERROR occurred while printing the last error!!!\n",
-                    lasterr,
-                    bt
-                ))
-            end
-            iserr, lasterr = true, err
-            bt = catch_backtrace()
-        end
-    end
 end
 
 # force a task to stop waiting with an exception
