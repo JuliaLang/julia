@@ -467,7 +467,14 @@ function del_clients(pairs::(Any,Any)...)
     end
 end
 
-any_gc_flag = false
+any_gc_flag = Condition()
+function start_gc_msgs_task()
+    enq_work(Task(()->
+        while true
+            wait(any_gc_flag)
+            flush_gc_msgs()
+        end))
+end
 
 function send_del_client(rr::RemoteRef)
     if rr.where == myid()
@@ -480,7 +487,7 @@ function send_del_client(rr::RemoteRef)
         w = worker_from_id(rr.where)
         push!(w.del_msgs, (rr2id(rr), myid()))
         w.gcflag = true
-        global any_gc_flag = true
+        notify(any_gc_flag)
     end
 end
 
@@ -508,7 +515,7 @@ function send_add_client(rr::RemoteRef, i)
         #println("$(myid()) adding $((rr2id(rr), i)) for $(rr.where)")
         push!(w.add_msgs, (rr2id(rr), i))
         w.gcflag = true
-        global any_gc_flag = true
+        notify(any_gc_flag)
     end
 end
 
@@ -1532,8 +1539,12 @@ end
 
 ## event processing, I/O and work scheduling ##
 in_scheduler = false
-function yield()
+yield() = yield_until(nothing)
+function yield_until(return_test::Union(Function,Nothing))
     ct = current_task()
+    if return_test === nothing
+        return_test = (ct)->ct.runnable
+    end
     # preserve Task.last across calls to the scheduler
     prev = ct.last
     global in_scheduler
@@ -1543,32 +1554,36 @@ function yield()
         warn("yielding from inside scheduler callback")
     end
     try
-        in_scheduler = true
-        if ct.runnable || !isempty(Workqueue)
+        if isempty(Workqueue) && return_test(ct)
             process_events(false)
         end
-        while !ct.runnable && isempty(Workqueue)
-            global any_gc_flag
-            if any_gc_flag
-                flush_gc_msgs()
-            end
-            c = process_events(true)
-            if c==0 && eventloop()!=C_NULL && isempty(Workqueue) && !any_gc_flag && !ct.runnable
-                # if there are no active handles and no runnable tasks, just
-                # wait for signals.
-                pause()
+        if isempty(Workqueue) && return_test(ct)
+            return ()
+        end
+        in_scheduler = true
+        while true
+            if isempty(Workqueue)
+                c = process_events(true)
+                if c==0 && eventloop()!=C_NULL && isempty(Workqueue)
+                    # if there are no active handles and no runnable tasks, just
+                    # wait for signals.
+                    pause()
+                end
+            else
+                in_scheduler = false
+                result = perform_work()
+                in_scheduler = true
+                process_events(false)
+                if return_test(ct)
+                    return result
+                end
             end
         end
     finally
         in_scheduler = false
         ct.last = prev
     end
-    if !isempty(Workqueue)
-        result = perform_work()
-    else
-        result = ()
-    end
-    return result
+    @assert false
 end
 
 function pause()

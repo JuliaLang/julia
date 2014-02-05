@@ -370,6 +370,7 @@ function _start()
     LinAlg.init()
     GMP.gmp_init()
     init_profiler()
+    start_gc_msgs_task()
 
     #atexit(()->flush(STDOUT))
     try

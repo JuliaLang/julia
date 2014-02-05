@@ -49,9 +49,7 @@ function produce(v)
         # make a task waiting for us runnable again
         notify1(q)
     end
-    r = yieldto(ct.last, v)
-    enq_work(ct.last) # always exit to last consumer
-    r
+    yieldto(ct.last, v)
 end
 produce(v...) = produce(v)
 
@@ -66,6 +64,9 @@ function consume(P::Task, values...)
     prev = ct.last
     ct.runnable = false
     v = yieldto(P, values...)
+    if ct.last !== P
+        v = yield_until((ct)->ct.last === P)
+    end
     ct.last = prev
     ct.runnable = true
     if P.done
