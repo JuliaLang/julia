@@ -2,7 +2,7 @@ show(io::IO, t::Task) = print(io, "Task")
 
 current_task() = ccall(:jl_get_current_task, Any, ())::Task
 istaskdone(t::Task) = t.done
-istaskstarted(t::Task) = isdefined(t,:parent)
+istaskstarted(t::Task) = isdefined(t,:current_module)
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, exc)
@@ -50,7 +50,7 @@ function produce(v)
         notify1(q)
     end
     r = yieldto(ct.last, v)
-    ct.parent = ct.last  # always exit to last consumer
+    enq_work(ct.last) # always exit to last consumer
     r
 end
 produce(v...) = produce(v)
@@ -106,15 +106,12 @@ end
 
 function wait(c::Condition)
     ct = current_task()
-    if ct === Scheduler
-        error("cannot execute blocking function from scheduler")
-    end
 
     push!(c.waitq, ct)
 
     ct.runnable = false
     try
-        yield(c)
+        return yield()
     catch
         filter!(x->x!==ct, c.waitq)
         rethrow()
@@ -123,11 +120,8 @@ end
 
 function wait()
     ct = current_task()
-    if ct === Scheduler
-        error("cannot execute blocking function from scheduler")
-    end
     ct.runnable = false
-    yield()
+    return yield()
 end
 
 function notify(t::Task, arg::ANY=nothing; error=false)
