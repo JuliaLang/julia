@@ -94,15 +94,17 @@ function whicht(f, types)
         d = f.env.defs
         while !is(d,())
             if is(d.func.code, lsd)
-                display(d)
-                return
+                return d
             end
             d = d.next
         end
     end
 end
 
-which(f, args...) = whicht(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
+function which(f, args...)
+    method = whicht(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
+    method != nothing ? method : throw(MethodError(f, args))
+end
 
 macro which(ex0)
     if isa(ex0,Expr) &&
