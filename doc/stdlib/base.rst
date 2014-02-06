@@ -927,7 +927,7 @@ Strings
 
 .. function:: repr(x)
 
-   Create a string from any value using the ``show`` function.
+   Create a string from any value using the ``showall`` function.
 
 .. function:: bytestring(::Ptr{Uint8})
 
