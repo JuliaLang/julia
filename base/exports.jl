@@ -1037,6 +1037,7 @@ export
 
 # I/O and events
     accept,
+    bind,
     close,
     connect,
     countlines,
@@ -1084,9 +1085,11 @@ export
     redirect_stderr,
     redirect_stdin,
     redirect_stdout,
+    recv,
     seek,
     seekend,
     seekstart,
+    send,
     serialize,
     skip,
     skipchars,
@@ -1102,6 +1105,7 @@ export
     write,
     writecsv,
     writedlm,
+    UdpSocket,
 
 # multiprocessing
     addprocs,
