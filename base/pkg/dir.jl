@@ -4,9 +4,36 @@ import ..Pkg: DEFAULT_META, META_BRANCH
 import ..Git
 
 const DIR_NAME = ".julia"
+const LOCK_NAME = "pkg.lck"
 
 _pkgroot() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(homedir(),DIR_NAME)))
 isversioned(p::String) = ((x,y) = (VERSION.major, VERSION.minor); basename(p) == "v$x.$y")
+
+function transact(f::Function)
+    lockpath = joinpath(pkgroot(), LOCK_NAME)
+    if isfile(lockpath)
+        error("Could not lock package directory;
+        If you are sure another instance of Pkg is not
+        being used, run Pkg.rmlock()")
+    end
+    try
+        open(lockpath, "w") do fh
+            write(fh, "")
+        end
+        return f()
+    finally
+        if isfile(lockpath)
+            rm(lockpath)
+        end
+    end
+end
+
+function rmlock()
+    lockpath = joinpath(pkgroot(), LOCK_NAME)
+    if isfile(lockpath)
+        rm(lockpath)
+    end
+end
 
 function path()
     b = _pkgroot()
@@ -25,7 +52,9 @@ function cd(f::Function, args...; kws...)
         !haskey(ENV,"JULIA_PKGDIR") ? init() :
             error("package directory $dir doesn't exist; run Pkg.init() to create it.")
     end
-    Base.cd(()->f(args...; kws...), dir)
+    transact() do
+        Base.cd(()->f(args...; kws...), dir)
+    end
 end
 
 function init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
@@ -33,16 +62,20 @@ function init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
     info("Initializing package repository $dir")
     if isdir(joinpath(dir,"METADATA"))
         info("Package directory $dir is already initialized.")
-        Git.set_remote_url(meta, dir=joinpath(dir,"METADATA"))
+        transact() do 
+            Git.set_remote_url(meta, dir=joinpath(dir,"METADATA"))
+        end
         return
     end
     try
         mkpath(dir)
-        Base.cd(dir) do
-            info("Cloning METADATA from $meta")
-            run(`git clone -q -b $branch $meta METADATA`)
-            Git.set_remote_url(meta, dir="METADATA")
-            run(`touch REQUIRE`)
+        transact() do
+            Base.cd(dir) do
+                info("Cloning METADATA from $meta")
+                run(`git clone -q -b $branch $meta METADATA`)
+                Git.set_remote_url(meta, dir="METADATA")
+                run(`touch REQUIRE`)
+            end
         end
     catch e
         run(`rm -rf $dir`)
