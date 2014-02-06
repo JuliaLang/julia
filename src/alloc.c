@@ -765,6 +765,10 @@ BOX_FUNC(float64, double, jl_box, 3)
 
 #define NBOX_C 1024
 
+#ifdef DISABLE_CACHE
+#define SIBOX_FUNC(typ,c_type,nw) BOX_FUNC(typ,c_type,jl_box,nw)
+#define UIBOX_FUNC(typ,c_type,nw) BOX_FUNC(typ,c_type,jl_box,nw)
+#else
 #define SIBOX_FUNC(typ,c_type,nw)                       \
 static jl_value_t *boxed_##typ##_cache[NBOX_C];         \
 jl_value_t *jl_box_##typ(c_type x)                      \
@@ -788,6 +792,7 @@ jl_value_t *jl_box_##typ(c_type x)                 \
     *(c_type*)jl_data_ptr(v) = x;                  \
     return v;                                      \
 }
+#endif
 SIBOX_FUNC(int16,  int16_t, 2)
 SIBOX_FUNC(int32,  int32_t, 2)
 UIBOX_FUNC(uint16, uint16_t, 2)
@@ -801,6 +806,22 @@ SIBOX_FUNC(int64,  int64_t, 3)
 UIBOX_FUNC(uint64, uint64_t, 3)
 #endif
 
+#ifdef DISABLE_CACHE
+jl_value_t *jl_box_int8(int32_t x)
+{
+    jl_value_t *v = alloc_2w();
+    v->type = (jl_value_t*)jl_int8_type;
+    *(int8_t*)jl_data_ptr(v) = x;
+    return v;
+}
+jl_value_t *jl_box_uint8(uint32_t x)
+{
+    jl_value_t *v = alloc_2w();
+    v->type = (jl_value_t*)jl_uint8_type;
+    *(uint8_t*)jl_data_ptr(v) = x;
+    return v;
+}
+#else
 static jl_value_t *boxed_int8_cache[256];
 jl_value_t *jl_box_int8(int32_t x)
 {
@@ -811,7 +832,13 @@ jl_value_t *jl_box_uint8(uint32_t x)
 {
     return boxed_uint8_cache[(uint8_t)x];
 }
+#endif
 
+#ifdef DISABLE_CACHE
+void jl_init_int32_int64_cache(void) {}
+void jl_init_box_caches(void) {}
+void jl_mark_box_caches(void) {}
+#else
 void jl_init_int32_int64_cache(void)
 {
     int64_t i;
@@ -855,6 +882,7 @@ void jl_mark_box_caches(void)
         jl_gc_setmark(boxed_uint64_cache[i]);
     }
 }
+#endif
 #endif
 
 jl_value_t *jl_box_bool(int8_t x)

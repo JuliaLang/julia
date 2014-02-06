@@ -173,7 +173,11 @@ LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+Asserts
 endif
 LLVM_FLAVOR := $(LLVM_BUILDTYPE)
 ifeq ($(LLVM_SANITIZE),1)
-LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+Sanitize
+ifeq ($(SANITIZE_MEMORY),1)
+LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+MSAN
+else
+LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+ASAN
+endif
 endif
 
 LLVM_LIB_FILE = libLLVMJIT.a
@@ -254,7 +258,20 @@ endif
 
 
 ifeq ($(LLVM_SANITIZE),1)
-LLVM_CC = CXXFLAGS="-fsanitize=address" CFLAGS="-fsanitize=address" LDFLAGS="-fsanitize=address"
+ifeq ($(SANITIZE_MEMORY),1)
+SANITIZE_FLAGS = -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
+ifeq ($(LIBCXX_PATH),)
+$(error "Memory sanitizer requires an instrumented libcxxx. Please set the path")
+else
+SANITIZE_FLAGS += -stdlib=libc++ -I$(LIBCXX_PATH)/include -L$(LIBCXX_PATH)/lib -Wl,-R$(LIBCXX_PATH)/lib -lc++abi
+endif
+else
+SANITIZE_FLAGS = -fsanitize=address
+endif 
+LLVM_CC = CXXFLAGS="$(SANITIZE_FLAGS)" CFLAGS="$(SANITIZE_FLAGS)" LDFLAGS="$(SANITIZE_FLAGS)"
+ifeq ($(SANITIZE_MEMORY),1)
+LLVM_CC += --disable-terminfo
+endif
 LLVM_MFLAGS += TOOL_NO_EXPORTS= HAVE_LINK_VERSION_SCRIPT=0
 else
 LLVM_CC =
@@ -355,7 +372,6 @@ ifeq ($(BUILD_LLDB), 1)
 	([ -d llvm-$(LLVM_VER)/tools/lldb ] && \
 		(cd llvm-$(LLVM_VER)/tools/lldb && \
 		git fetch))
-	cd llvm-$(LLVM_VER)/tools/lldb && git checkout origin/release_32
 endif
 ifeq ($(OS),WINNT)
 ifeq ($(ARCH),x86_64)
@@ -413,7 +429,7 @@ ifeq ($(OS),WINNT)
 READLINE_OBJ_TARGET = $(BUILD)/lib/libreadline.a
 READLINE_OBJ_SOURCE = readline-$(READLINE_VER)/libreadline.a
 READLINE_URL = https://github.com/JuliaLang/readline/tarball/master
-READLINE_OPTS = --disable-shared --enable-static --with-curses
+READLINE_OPTS = --disable-shared --enable-static --with-curses CFLAGS="-fPIC"
 READLINE_CFLAGS = LOCAL_DEFS="-include $(abspath .)/readline-win.h"
 readline-$(READLINE_VER).tar.gz:
 	$(JLDOWNLOAD) $@ $(READLINE_URL)
@@ -509,7 +525,7 @@ libuv/config.status: $(JULIAHOME)/.git/modules/deps/libuv/HEAD
 endif
 libuv/config.status: libuv/configure
 	cd libuv && \
-	./configure --with-pic $(CONFIGURE_COMMON)
+	./configure --with-pic $(CONFIGURE_COMMON) CFLAGS="-O0"
 	touch -c $@
 $(UV_SRC_TARGET): libuv/config.status
 	touch -c libuv/aclocal.m4

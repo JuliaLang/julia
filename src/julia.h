@@ -1176,7 +1176,6 @@ void jl_longjmp(jmp_buf _Buf,int _Value);
         for (i__ca=1, jl_eh_restore_state(&__eh); i__ca; i__ca=0)
 #endif
 
-
 // I/O system -----------------------------------------------------------------
 
 #define JL_STREAM uv_stream_t
@@ -1265,7 +1264,14 @@ DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v);
 void jl_print_gc_stats(JL_STREAM *s);
 #endif
 
-// compiler options -----------------------------------------------------------
+// Disable box cache when using msan so we can track unitialized values past boxing
+#if defined(__has_feature)
+#  if __has_feature(memory_sanitizer)
+#    define DISABLE_CACHE
+#  endif
+#endif
+
+// Compiler options
 
 typedef struct {
     char *build_path;

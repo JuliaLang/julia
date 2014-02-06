@@ -240,6 +240,7 @@ static int32_t jl_assign_functionID(Function *functionObject)
 
 static Value *julia_gv(const char *cname, void *addr)
 {
+    assert(imaging_mode);
     // emit a GlobalVariable for a jl_value_t named "cname"
     std::map<void*, jl_value_llvm>::iterator it;
     // first see if there already is a GlobalVariable for this address

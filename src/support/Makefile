@@ -46,9 +46,14 @@ HEADERS = $(wildcard *.h) $(JULIAHOME)/deps/libuv/include/uv.h
 %.do: %.S
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
-release debug: libsupport.a
+release: libsupport.a
+debug: libsupport-debug.a
 
-libsupport.a: $(XOBJS)
+libsupport.a: $(OBJS)
+	rm -rf $@
+	@$(call PRINT_LINK, $(AR) -rcs $@ $^)
+
+libsupport-debug.a: $(DOBJS)
 	rm -rf $@
 	@$(call PRINT_LINK, $(AR) -rcs $@ $^)
 
