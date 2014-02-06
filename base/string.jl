@@ -565,29 +565,29 @@ next(s::GenericString, i::Int) = next(s.string, i)
 ## plain old character arrays ##
 
 immutable UTF32String <: DirectIndexString
-    chars::Array{Char,1}
+    data::Array{Char,1}
 
     UTF32String(a::Array{Char,1}) = new(a)
     UTF32String(c::Char...) = new([ c[i] for i=1:length(c) ])
 end
 UTF32String(x...) = UTF32String(map(char,x)...)
 
-next(s::UTF32String, i::Int) = (s.chars[i], i+1)
-endof(s::UTF32String) = length(s.chars)
-length(s::UTF32String) = length(s.chars)
+next(s::UTF32String, i::Int) = (s.data[i], i+1)
+endof(s::UTF32String) = length(s.data)
+length(s::UTF32String) = length(s.data)
 
 utf32(x) = convert(UTF32String, x)
 convert(::Type{UTF32String}, s::UTF32String) = s
 convert(::Type{UTF32String}, s::String) = UTF32String(Char[c for c in s])
 convert{T<:String}(::Type{T}, v::Vector{Char}) = convert(T, UTF32String(v))
-convert(::Type{Array{Char,1}}, s::UTF32String) = s.chars
-convert(::Type{Array{Char}}, s::UTF32String) = s.chars
+convert(::Type{Array{Char,1}}, s::UTF32String) = s.data
+convert(::Type{Array{Char}}, s::UTF32String) = s.data
 
-reverse(s::UTF32String) = UTF32String(reverse(s.chars))
+reverse(s::UTF32String) = UTF32String(reverse(s.data))
 
-sizeof(s::UTF32String) = sizeof(s.chars)
+sizeof(s::UTF32String) = sizeof(s.data)
 convert{T<:Union(Int32,Uint32,Char)}(::Type{Ptr{T}}, s::UTF32String) =
-    convert(Ptr{T}, s.chars)
+    convert(Ptr{T}, s.data)
 
 ## substrings reference original strings ##
 
@@ -1665,3 +1665,12 @@ function repr(x)
     showall(s, x)
     takebuf_string(s)
 end
+
+# pointer conversions of ASCII/UTF8/UTF16/UTF32 strings:
+pointer(x::Union(ByteString,UTF16String,UTF32String)) = pointer(x.data)
+pointer{T<:ByteString}(x::SubString{T}) = pointer(x.string.data) + x.offset
+pointer(x::ByteString, i::Integer) = pointer(x.data)+(i-1)
+pointer{T<:ByteString}(x::SubString{T}, i::Integer) = pointer(x.string.data) + x.offset + (i-1)
+pointer(x::Union(UTF16String,UTF32String), i::Integer) = pointer(x)+(i-1)*sizeof(eltype(x.data))
+pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}) = pointer(x.string.data) + x.offset*sizeof(eltype(x.data))
+pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}, i::Integer) = pointer(x.string.data) + (x.offset + (i-1))*sizeof(eltype(x.data))
