@@ -193,7 +193,7 @@ debug && println("Solve square general system of equations")
 
 debug && println("Solve upper trianguler system")
     x = triu(a) \ b
-    @test_approx_eq_eps triu(a)*x b 15000ε
+    @test_approx_eq_eps triu(a)*x b 20000ε
 
 debug && println("Solve lower triangular system")
     x = tril(a)\b
