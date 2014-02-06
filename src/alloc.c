@@ -77,6 +77,7 @@ jl_sym_t *line_sym;    jl_sym_t *jl_incomplete_sym;
 // head symbols for each expression type
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
 jl_sym_t *label_sym;   jl_sym_t *return_sym;
+jl_sym_t *symboliclabel_sym; jl_sym_t *symbolicgoto_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
 jl_sym_t *null_sym;    jl_sym_t *body_sym;
 jl_sym_t *macro_sym;   jl_sym_t *method_sym;

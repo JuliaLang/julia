@@ -3222,6 +3222,8 @@ void jl_init_types(void)
     goto_sym = jl_symbol("goto");
     goto_ifnot_sym = jl_symbol("gotoifnot");
     label_sym = jl_symbol("label");
+    symboliclabel_sym = jl_symbol("symboliclabel");
+    symbolicgoto_sym = jl_symbol("symbolicgoto");
     return_sym = jl_symbol("return");
     lambda_sym = jl_symbol("lambda");
     macro_sym = jl_symbol("macro");

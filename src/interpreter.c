@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <setjmp.h>
 #include <assert.h>
 #ifdef _OS_WINDOWS_
@@ -470,6 +471,25 @@ static int label_idx(jl_value_t *tgt, jl_array_t *stmts)
     return j;
 }
 
+static int symboliclabel_idx(jl_value_t *tgt, jl_array_t *stmts)
+{
+    size_t j;
+    jl_sym_t* stgt = (jl_sym_t*)tgt;
+    assert(jl_is_symbol(tgt));
+    for(j=0; j < stmts->nrows; j++) {
+        jl_value_t *l = jl_cellref(stmts,j);
+        if (jl_is_expr(l) && ((jl_expr_t*)l)->head == symboliclabel_sym) {
+            assert(jl_array_len(((jl_expr_t*)l)->args));
+            jl_value_t* labeltgt = jl_cellref(((jl_expr_t*)l)->args, 0);
+            if (jl_is_symbol(labeltgt) && (jl_sym_t*)labeltgt == stgt) {
+                break;
+            }
+        }
+    }
+    assert(j < stmts->nrows);
+    return j;
+}
+
 jl_value_t *jl_toplevel_eval_body(jl_array_t *stmts)
 {
     return eval_body(stmts, NULL, 0, 0, 1);
@@ -489,7 +509,13 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
         }
         if (jl_is_expr(stmt)) {
             jl_sym_t *head = ((jl_expr_t*)stmt)->head;
-            if (head == goto_ifnot_sym) {
+            if (head == symbolicgoto_sym) {
+                assert(jl_array_len(((jl_expr_t*)stmt)->args) == 1);
+                i = symboliclabel_idx(jl_cellref(((jl_expr_t*)stmt)->args, 0),
+                                      stmts);
+                continue;
+            }
+            else if (head == goto_ifnot_sym) {
                 jl_value_t *cond = eval(jl_exprarg(stmt,0), locals, nl);
                 if (cond == jl_false) {
                     i = label_idx(jl_exprarg(stmt,1), stmts);

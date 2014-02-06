@@ -2987,6 +2987,19 @@ So far only the second case can actually occur.
 			   (let ((l (make&mark-label)))
 			     (set! label-map
 				   (cons (cons (cadr e) l) label-map))))))
+        ((symboliclabel) (let ((m (assq (cadr e) label-map)))
+               (if m
+               (emit `(label ,(cdr m)))
+               (let ((l (make&mark-label)))
+                 (set! label-map
+                   (cons (cons (cadr e) l) label-map))))))
+        ((symbolicgoto) (let ((m (assq (cadr e) label-map)))
+               (if m
+                   (emit `(goto ,(cdr m)))
+                   (let ((l (make-label)))
+                 (set! label-map
+                       (cons (cons (cadr e) l) label-map))
+                 (emit `(goto ,l))))))
 	    ((type_goto) (let ((m (assq (cadr e) label-map)))
 			   (if m
 			       (emit `(type_goto ,(cdr m) ,@(cddr e)))
@@ -3155,11 +3168,11 @@ So far only the second case can actually occur.
 (define (resolve-expansion-vars- e env m inarg)
   (cond ((or (eq? e 'true) (eq? e 'false) (eq? e 'end))
 	 e)
-	((symbol? e)
-	 (let ((a (assq e env)))
-	   (if a (cdr a)
-	       (if m `(|.| ,m (quote ,e))
-		   e))))
+    ((symbol? e)
+     (let ((a (assq e env)))
+       (if a (cdr a)
+           (if m `(|.| ,m (quote ,e))
+           e))))
 	((or (not (pair? e)) (quoted? e))
 	 e)
 	(else
@@ -3170,6 +3183,8 @@ So far only the second case can actually occur.
 	    `(macrocall ,.(map (lambda (x)
 				 (resolve-expansion-vars- x env m inarg))
 			       (cdr e))))
+       ((symboliclabel) e)
+       ((symbolicgoto) e)
 	   ((type)
 	    `(type ,(cadr e) ,(resolve-expansion-vars- (caddr e) env m inarg)
 		   ;; type has special behavior: identifiers inside are
