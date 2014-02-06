@@ -2681,7 +2681,7 @@ So far only the second case can actually occur.
 	     (let* ((outer    (append usedv (vars-used-outside context e)))
 		    ;; only rename conflicted vars
 		    (to-ren   (filter (lambda (v) (memq v outer)) vars))
-		    (newnames (map (lambda (x) (gensy)) to-ren))
+		    (newnames (map named-gensy to-ren))
 		    (bod      (rename-vars (remove-scope-blocks body e outer)
 					   (map cons to-ren newnames))))
 	       (set! scope-block-vars (nconc newnames scope-block-vars))
