@@ -338,6 +338,7 @@ extern DLLEXPORT jl_datatype_t *jl_errorexception_type;
 extern DLLEXPORT jl_datatype_t *jl_loaderror_type;
 extern DLLEXPORT jl_datatype_t *jl_typeerror_type;
 extern DLLEXPORT jl_datatype_t *jl_methoderror_type;
+extern DLLEXPORT jl_datatype_t *jl_undefvarerror_type;
 extern DLLEXPORT jl_value_t *jl_stackovf_exception;
 extern DLLEXPORT jl_value_t *jl_memory_exception;
 extern DLLEXPORT jl_value_t *jl_diverror_exception;
@@ -822,6 +823,7 @@ DLLEXPORT void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t
 DLLEXPORT void jl_type_error_rt(const char *fname, const char *context,
                                 jl_value_t *ty, jl_value_t *got);
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
+DLLEXPORT void jl_undefined_var_error(jl_sym_t *var);
 void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
 DLLEXPORT jl_value_t *jl_exception_occurred(void);
 DLLEXPORT void jl_exception_clear(void);

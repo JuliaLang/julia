@@ -85,6 +85,11 @@ void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
     jl_type_error_rt(fname, "", expected, got);
 }
 
+void jl_undefined_var_error(jl_sym_t *var)
+{
+    jl_throw(jl_new_struct(jl_undefvarerror_type, var));
+}
+
 JL_CALLABLE(jl_f_throw)
 {
     JL_NARGS(throw, 1, 1);

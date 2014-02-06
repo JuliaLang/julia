@@ -938,6 +938,7 @@ void jl_get_builtin_hooks(void)
         jl_apply((jl_function_t*)core("InexactError"), NULL, 0);
     jl_undefref_exception =
         jl_apply((jl_function_t*)core("UndefRefError"),NULL,0);
+    jl_undefvarerror_type = (jl_datatype_t*)core("UndefVarError");
     jl_interrupt_exception =
         jl_apply((jl_function_t*)core("InterruptException"),NULL,0);
     jl_bounds_exception =

@@ -857,7 +857,7 @@ function i2619()
 end
 i2619()
 @test !bad2619
-@test isa(e2619,ErrorException) && e2619.msg == "f not defined"
+@test isa(e2619,UndefVarError) && e2619.var === :f
 
 # issue #2919
 typealias Foo2919 Int
