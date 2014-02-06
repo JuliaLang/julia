@@ -131,7 +131,7 @@ export
     # errors
     BoundsError, DivideError, DomainError, Exception,
     InexactError, InterruptException, MemoryError, OverflowError,
-    StackOverflowError, UndefRefError,
+    StackOverflowError, UndefRefError, UndefVarError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
     GetfieldNode,
@@ -207,6 +207,9 @@ type InexactError       <: Exception end
 type MemoryError        <: Exception end
 type StackOverflowError <: Exception end
 type UndefRefError      <: Exception end
+type UndefVarError      <: Exception
+    var::Symbol
+end
 type InterruptException <: Exception end
 
 abstract String

@@ -203,6 +203,7 @@ static Function *jlthrow_func;
 static Function *jlthrow_line_func;
 static Function *jlerror_func;
 static Function *jltypeerror_func;
+static Function *jlundefvarerror_func;
 static Function *jlcheckassign_func;
 static Function *jldeclareconst_func;
 static Function *jltopeval_func;
@@ -2065,10 +2066,7 @@ static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx)
     BasicBlock *ifok = BasicBlock::Create(getGlobalContext(), "ok");
     builder.CreateCondBr(ok, ifok, err);
     builder.SetInsertPoint(err);
-    std::string msg;
-    msg += std::string(name->name);
-    msg += " not defined";
-    just_emit_error(msg, ctx);
+    builder.CreateCall(jlundefvarerror_func, literal_pointer_val((jl_value_t*)name));
     builder.CreateBr(ifok);
     ctx->f->getBasicBlockList().push_back(ifok);
     builder.SetInsertPoint(ifok);
@@ -3722,6 +3720,13 @@ static void init_julia_llvm_env(Module *m)
                          "jl_throw", m);
     jlthrow_func->setDoesNotReturn();
     add_named_global(jlthrow_func, (void*)&jl_throw);
+
+    jlundefvarerror_func =
+        Function::Create(FunctionType::get(T_void, args1_, false),
+                         Function::ExternalLinkage,
+                         "jl_undefined_var_error", m);
+    jlundefvarerror_func->setDoesNotReturn();
+    add_named_global(jlundefvarerror_func, (void*)&jl_undefined_var_error);
 
     std::vector<Type*> args2_throw(0);
     args2_throw.push_back(jl_pvalue_llvmt);
