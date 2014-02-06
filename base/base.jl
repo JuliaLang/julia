@@ -203,6 +203,14 @@ macro inbounds(blk)
     :(@boundscheck false $(esc(blk)))
 end
 
+macro label(name::Symbol)
+    Expr(:symboliclabel, name)
+end
+
+macro goto(name::Symbol)
+    Expr(:symbolicgoto, name)
+end
+
 # NOTE: Base shares Array with Core so we can add definitions to it
 
 Array{T,N}(::Type{T}, d::NTuple{N,Int}) =

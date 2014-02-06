@@ -414,6 +414,7 @@ extern jl_sym_t *export_sym;  extern jl_sym_t *import_sym;
 extern jl_sym_t *importall_sym; extern jl_sym_t *using_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
+extern jl_sym_t *symboliclabel_sym;  extern jl_sym_t *symbolicgoto_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
 extern jl_sym_t *null_sym;    extern jl_sym_t *body_sym;
 extern jl_sym_t *macro_sym;   extern jl_sym_t *method_sym;
