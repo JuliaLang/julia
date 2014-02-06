@@ -179,6 +179,9 @@ export PipeString
 @deprecate symmetrize!(A)      Base.LinAlg.copytri!(A, 'U')
 @deprecate symmetrize!(A, uplo)      Base.LinAlg.copytri!(A, uplo)
 @deprecate factorize!(A)       factorize(A)
+@deprecate svdfact(A,thin)      svdfact(A,thin=thin)
+@deprecate svdfact!(A,thin)     svdfact(A,thin=thin)
+@deprecate svd(A,thin)          svd(A,thin=thin)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
