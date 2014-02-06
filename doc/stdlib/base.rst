@@ -86,15 +86,17 @@ Getting Around
 
 .. function:: which(f, args...)
 
-   Show which method of ``f`` will be called for the given arguments.
+   Return the method of ``f`` (a ``Method`` object) that will be called for the given arguments.
 
 .. function:: @which
 
    Evaluates the arguments to the function call, determines their types, and calls the ``which`` function on the resulting expression
 
-.. function:: methods(f)
+.. function:: methods(f, [types])
 
    Show all methods of ``f`` with their argument types.
+
+   If ``types`` is specified, an array of methods whose types match is returned.
 
 .. function:: methodswith(typ[, showparents])
 

@@ -88,22 +88,10 @@ end
 
 # searching definitions
 
-function whicht(f, types)
-    for m in methods(f, types)
-        lsd = m.func.code::LambdaStaticData
-        d = f.env.defs
-        while !is(d,())
-            if is(d.func.code, lsd)
-                return d
-            end
-            d = d.next
-        end
-    end
-end
-
 function which(f, args...)
-    method = whicht(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
-    method != nothing ? method : throw(MethodError(f, args))
+    ms = methods(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
+    isempty(ms) && throw(MethodError(f, args))
+    ms[1]
 end
 
 macro which(ex0)
