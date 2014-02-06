@@ -87,6 +87,12 @@ void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
 
 void jl_undefined_var_error(jl_sym_t *var)
 {
+    if (var->name[0] == '#') {
+        // convention for renamed variables: #...#original_name
+        char *nxt = strchr(var->name+1, '#');
+        if (nxt)
+            var = jl_symbol(nxt+1);
+    }
     jl_throw(jl_new_struct(jl_undefvarerror_type, var));
 }
 
