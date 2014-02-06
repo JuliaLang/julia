@@ -11,33 +11,130 @@ function in(p::(Any,Any), a::Associative)
     !is(v, secret_table_token) && (v == p[2])
 end
 
-function show{K,V}(io::IO, t::Associative{K,V})
-    if isempty(t)
-        print(io, typeof(t),"()")
-    else
-        if K === Any && V === Any
-            delims = ['{','}']
-        else
-            delims = ['[',']']
-        end
+function summary(t::Associative)
+    n = length(t)
+    string(typeof(t), " with ", n, (n==1 ? " entry" : " entries"))
+end
+
+function showcompact{K,V}(io::IO, t::Associative{K,V})
+    print(io, summary(t))
+    if !isempty(t)
+        print(io, ": ")
+        delims = (K == V == Any) ? ('{', '}') : ('[', ']')
         print(io, delims[1])
         first = true
-        for (k, v) = t
-            first || print(io, ',')
-            first = false
-            show(io, k)
+        for (k, v) in t
+            first || (print(io, ','); first = false)
+            showcompact(io, k)
             print(io, "=>")
-            show(io, v)
+            showcompact(io, v)
         end
         print(io, delims[2])
     end
 end
+
+function _truncate_at_width_or_chars(str, width, chars="", truncmark="…")
+    truncwidth = strwidth(truncmark)
+    (width <= 0 || width < truncwidth) && return ""
+    width == truncwidth && return bytestring(truncmark)
+
+    wid = truncidx = lastidx = 0
+    idx = start(str)
+    while !done(str, idx)
+        lastidx = idx
+        c, idx = next(str, idx)
+        wid += charwidth(c)
+        wid >= width - truncwidth && truncidx == 0 && (truncidx = lastidx)
+        (wid >= width || c in chars) && break
+    end
+
+    str[lastidx] in chars && (lastidx = prevind(str, lastidx))
+    truncidx == 0 && (truncidx = lastidx)
+    if lastidx < sizeof(str)
+        return bytestring(SubString(str, 1, truncidx) * truncmark)
+    else
+        return bytestring(str)
+    end
+end
+
+function showdict{K,V}(io::IO, t::Associative{K,V}, limit_output::Bool = false,
+                       rows = tty_rows()-3, cols = tty_cols())
+    print(io, summary(t))
+    isempty(t) && return
+    print(io, ":")
+
+    if limit_output
+        rows < 2   && (print(io, " …"); return)
+        cols < 12  && (cols = 12) # Minimum widths of 2 for key, 4 for value
+        cols -= 6 # Subtract the widths of prefix "  " separator " => "
+        rows -= 2 # Subtract the summary and final ⋮ continuation lines
+
+        # determine max key width to align the output, caching the strings
+        ks = Array(String, min(rows, length(t)))
+        keylen = 0
+        for (i, k) in enumerate(keys(t))
+            i > rows && break
+            ks[i] = sprint(show, k)
+            keylen = clamp(length(ks[i]), keylen, div(cols, 3))
+        end
+    end
+
+    for (i, (k, v)) in enumerate(t)
+        print(io, "\n  ")
+        limit_output && i > rows && (print(io, rpad("⋮", keylen), " => ⋮"); break)
+
+        if limit_output
+            key = rpad(_truncate_at_width_or_chars(ks[i], keylen, "\r\n"), keylen)
+        else
+            key = sprint(show, k)
+        end
+        print(io, key)
+        print(io, " => ")
+
+        val = sprint(show, v)
+        if limit_output
+            val = _truncate_at_width_or_chars(val, cols - keylen, "\r\n")
+        end
+        print(io, val)
+    end
+end
+
+show{K,V}(io::IO, t::Associative{K,V}) = showdict(io, t, false)
+showlimited{K,V}(io::IO, t::Associative{K,V}) = showdict(io, t, true)
 
 immutable KeyIterator{T<:Associative}
     dict::T
 end
 immutable ValueIterator{T<:Associative}
     dict::T
+end
+
+summary{T<:Union(KeyIterator,ValueIterator)}(iter::T) =
+    string(T.name, " for a ", summary(iter.dict))
+
+show(io::IO, iter::Union(KeyIterator,ValueIterator)) = showkv(io, iter, false)
+showlimited(io::IO, iter::Union(KeyIterator,ValueIterator)) = showkv(io, iter, true)
+
+function showkv{T<:Union(KeyIterator,ValueIterator)}(io::IO, iter::T, limit_output::Bool = false,
+                                                     rows = tty_rows()-3, cols = tty_cols())
+    print(io, summary(iter))
+    isempty(iter) && return
+    print(io, ". ", T<:KeyIterator ? "Keys" : "Values", ":")
+    if limit_output
+        rows < 2 && (print(io, " …"); return)
+        cols < 4 && (cols = 4)
+        cols -= 2 # For prefix "  "
+        rows -= 2 # For summary and final ⋮ continuation lines
+    end
+
+    for (i, v) in enumerate(iter)
+        print(io, "\n  ")
+        limit_output && i >= rows && (print(io, "⋮"); break)
+
+        str = sprint(show, v)
+        limit_output && (str = _truncate_at_width_or_chars(str, cols, "\r\n"))
+        print(io, str)
+    end
 end
 
 length(v::Union(KeyIterator,ValueIterator)) = length(v.dict)
