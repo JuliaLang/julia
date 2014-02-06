@@ -104,10 +104,20 @@ SharedArray(T, I::Int...; kwargs...) = SharedArray(T, I; kwargs...)
 
 length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
+
 procs(S::SharedArray) = S.pids
-sdata(S::SharedArray) = S.s
 indexpids(S::SharedArray) = S.pididx
 
+sdata(S::SharedArray) = S.s
+sdata(A::AbstractArray) = A
+
+localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : error("SharedArray is not mapped to this process")
+
+convert{T}(::Type{Ptr{T}}, S::SharedArray) = convert(Ptr{T}, sdata(S))
+
+convert(::Type{SharedArray}, A::Array) = (S = SharedArray(eltype(A), size(A)); copy!(S, A))
+convert{T}(::Type{SharedArray{T}}, A::Array) = (S = SharedArray(T, size(A)); copy!(S, A))
+convert{TS,TA,N}(::Type{SharedArray{TS,N}}, A::Array{TA,N}) = (S = SharedArray(TS, size(A)); copy!(S, A))
 
 function range_1dim(S::SharedArray, n) 
     l = length(S)
