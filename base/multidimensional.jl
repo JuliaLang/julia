@@ -34,29 +34,26 @@ end
     dest
 end
 
-getindex!(dest, src, I) = (checkbounds(src, I); _getindex!(dest, src, to_index(I)); return dest)
-getindex!(dest, src, I, J) = (checkbounds(src, I, J); _getindex!(dest, src, to_index(I), to_index(J)); return dest)
-getindex!(dest, src, I...) = (checkbounds(src, I...); _getindex!(dest, src, to_index(I)...); return dest)
+# It's most efficient to call checkbounds first, then to_index, and finally
+# allocate the output. Hence the different variants.
+_getindex(A, I::(Union(Int,AbstractVector)...)) =
+    _getindex!(similar(A, index_shape(I...)), A, I...)
 
-getindex(A::Array, I::Union(Real,AbstractVector)) = getindex!(similar(A, index_shape(I)), A, I)
-function getindex(A::Array, I::Union(Real,AbstractVector)...)
+@nsplat N function getindex(A::Array, I::NTuple{N,Union(Real,AbstractVector)}...)
     checkbounds(A, I...)
-    Ii = to_index(I)
-    dest = similar(A, index_shape(Ii...))
-    _getindex!(dest, A, Ii...)
-    dest
+    _getindex(A, to_index(I...))
 end
-# Version of the above for 2d without the splats
-function getindex(A::Array, I::Union(Real,AbstractVector), J::Union(Real,AbstractVector))
-    checkbounds(A, I, J)
-    Ii, Ji = to_index(I), to_index(J)
-    dest = similar(A, index_shape(Ii,Ji))
-    _getindex!(dest, A, Ii, Ji)
-    dest
+
+# Also a safe version of getindex!
+@nsplat N function getindex!(dest, src, I::NTuple{N,Union(Real,AbstractVector)}...)
+    checkbounds(src, I...)
+    _getindex!(dest, src, to_index(I...)...)
 end
 
 
-@ngenerate N typeof(A) function _setindex!(A::Array, x, I::NTuple{N,Union(Int,AbstractArray)}...)
+@ngenerate N typeof(A) function setindex!(A::Array, x, J::NTuple{N,Union(Real,AbstractArray)}...)
+    @ncall N checkbounds A J
+    @nexprs N d->(I_d = to_index(J_d))
     stride_1 = 1
     @nexprs N d->(stride_{d+1} = stride_d*size(A,d))
     @nexprs N d->(offset_d = 1)  # really only need offset_$N = 1
@@ -66,7 +63,7 @@ end
         end
     else
         X = x
-        setindex_shape_check(X, I...)
+        @ncall N setindex_shape_check X I
         # TODO? A variant that can use cartesian indexing for RHS
         k = 1
         @nloops N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
@@ -74,22 +71,6 @@ end
             k += 1
         end
     end
-    A
-end
-
-function setindex!(A::Array, x, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray))
-    checkbounds(A, I, J)
-    _setindex!(A, x, to_index(I), to_index(J))
-    A
-end
-function setindex!(A::Array, x, I::Union(Real,AbstractArray))
-    checkbounds(A, I)
-    _setindex!(A, x, to_index(I))
-    A
-end
-function setindex!(A::Array, x, I::Union(Real,AbstractArray)...)
-    checkbounds(A, I...)
-    _setindex!(A, x, to_index(I)...)
     A
 end
 
