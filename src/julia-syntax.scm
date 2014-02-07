@@ -46,10 +46,10 @@
 		((cell1d) (string #\{ (deparse-arglist (cdr e)) #\}))
 		((call)   (string (deparse (cadr e)) #\( (deparse-arglist (cddr e)) #\)))
 		((ref)    (string (deparse (cadr e)) #\[ (deparse-arglist (cddr e)) #\]))
+		((curly)  (string (deparse (cadr e)) #\{ (deparse-arglist (cddr e)) #\}))
 		((quote)  (string ":(" (deparse (cadr e)) ")"))
 		((vcat)   (string #\[ (deparse-arglist (cdr e)) #\]))
 		((hcat)   (string #\[ (deparse-arglist (cdr e) " ") #\]))
-		((curly)  (string (deparse (cadr e)) #\{ (deparse (caddr e)) #\}))
 		((global local const)
 		 (string (car e) " " (deparse (cadr e))))
 		((:)
@@ -73,7 +73,10 @@
 	(else
 	 (case (car v)
 	   ((... kw)      (decl-var (cadr v)))
-	   ((|::|)        (decl-var v))
+	   ((|::|)
+	    (if (not (symbol? (cadr v)))
+		(bad-formal-argument (cadr v)))
+	    (decl-var v))
 	   (else (bad-formal-argument v))))))
 
 ; convert a lambda list into a list of just symbols
@@ -98,7 +101,10 @@
 	(else
 	 (case (car v)
 	   ((...)         `(... ,(decl-type (cadr v))))
-	   ((|::|)        (decl-type v))
+	   ((|::|)
+	    (if (not (symbol? (cadr v)))
+		(bad-formal-argument (cadr v)))
+	    (decl-type v))
 	   (else (bad-formal-argument v))))))
 
 ; get just argument types
@@ -1823,7 +1829,7 @@
      `(call colon ,.(map expand-forms (cdr e))))
 
    'hcat
-   (lambda (e) `(call hcat ,.(map expand-forms (cdr e))))
+   (lambda (e) (expand-forms `(call hcat ,.(map expand-forms (cdr e)))))
 
    'vcat
    (lambda (e)
@@ -2675,7 +2681,7 @@ So far only the second case can actually occur.
 	     (let* ((outer    (append usedv (vars-used-outside context e)))
 		    ;; only rename conflicted vars
 		    (to-ren   (filter (lambda (v) (memq v outer)) vars))
-		    (newnames (map (lambda (x) (gensy)) to-ren))
+		    (newnames (map named-gensy to-ren))
 		    (bod      (rename-vars (remove-scope-blocks body e outer)
 					   (map cons to-ren newnames))))
 	       (set! scope-block-vars (nconc newnames scope-block-vars))

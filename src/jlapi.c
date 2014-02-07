@@ -37,11 +37,14 @@ DLLEXPORT char *jl_locate_sysimg(char *jlhome, char* imgpath)
 
 DLLEXPORT void *jl_eval_string(char *str);
 
+int jl_is_initialized(void) { return jl_main_module!=NULL; }
+
 // argument is the usr/lib directory where libjulia is, or NULL to guess.
 // if that doesn't work, try the full path to the "lib" directory that
 // contains lib/julia/sys.ji
 DLLEXPORT void jl_init(char *julia_home_dir)
 {
+    if (jl_is_initialized()) return;
     libsupport_init();
     char *image_file = jl_locate_sysimg(julia_home_dir, JL_SYSTEM_IMAGE_PATH);
     julia_init(image_file);
@@ -129,6 +132,38 @@ DLLEXPORT const char *jl_bytestring_ptr(jl_value_t *s)
     return jl_string_data(s);
 }
 
+DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs)
+{
+    jl_value_t *v;
+    JL_TRY {
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, nargs+1);
+        argv[0] = (jl_value_t*) f;
+        for(int i=1; i<nargs+1; i++)
+            argv[i] = args[i-1];
+        v = jl_apply(f, args, nargs);
+        JL_GC_POP();
+    }
+    JL_CATCH {
+        v = NULL;
+    }
+    return v;
+}
+
+DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
+{
+    jl_value_t *v;
+    JL_TRY {
+        JL_GC_PUSH1(&f);
+        v = jl_apply(f, NULL, 0);
+        JL_GC_POP();
+    }
+    JL_CATCH {
+        v = NULL;
+    }
+    return v;
+}
+
 DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
 {
     jl_value_t *v;
@@ -158,14 +193,28 @@ DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b)
     return v;
 }
 
-JL_CALLABLE(jl_f_get_field);
+DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a, jl_value_t *b, jl_value_t *c)
+{
+    jl_value_t *v;
+    JL_TRY {
+        JL_GC_PUSH4(&f,&a,&b,&c);
+        jl_value_t *args[3] = {a,b,c};
+        v = jl_apply(f, args, 3);
+        JL_GC_POP();
+    }
+    JL_CATCH {
+        v = NULL;
+    }
+    return v;
+}
+
 DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, char *fld)
 {
     jl_value_t *v;
     JL_TRY {
         jl_value_t *s = (jl_value_t*)jl_symbol(fld);
-        jl_value_t *args[2] = {o, s};
-        v = jl_f_get_field(NULL, args, 2);
+        int i = jl_field_index((jl_datatype_t*)jl_typeof(o), (jl_sym_t*)s, 1);
+        v = jl_get_nth_field(o, i);
     }
     JL_CATCH {
         v = NULL;

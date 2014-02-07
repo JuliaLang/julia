@@ -108,21 +108,21 @@ t1 = randbool(n1, n2)
 @check_bit_operation setindex!(b1, true, t1) BitMatrix
 
 t1 = randbool(n1, n2)
-b2 = randbool(nnz(t1))
+b2 = randbool(countnz(t1))
 @check_bit_operation setindex!(b1, b2, t1) BitMatrix
 
 m1 = rand(1:n1)
 m2 = rand(1:n2)
 
 t1 = randbool(n1)
-b2 = randbool(nnz(t1), m2)
+b2 = randbool(countnz(t1), m2)
 k2 = randperm(m2)
 @check_bit_operation setindex!(b1, b2, t1, 1:m2)       BitMatrix
 @check_bit_operation setindex!(b1, b2, t1, n2-m2+1:n2) BitMatrix
 @check_bit_operation setindex!(b1, b2, t1, k2)         BitMatrix
 
 t2 = randbool(n2)
-b2 = randbool(m1, nnz(t2))
+b2 = randbool(m1, countnz(t2))
 k1 = randperm(m1)
 @check_bit_operation setindex!(b1, b2, 1:m1, t2)       BitMatrix
 @check_bit_operation setindex!(b1, b2, n1-m1+1:n1, t2) BitMatrix
@@ -601,10 +601,10 @@ end
 
 timesofar("datamove")
 
-## nnz & find ##
+## countnz & find ##
 
 b1 = randbool(v1)
-@check_bit_operation nnz(b1) Int
+@check_bit_operation countnz(b1) Int
 
 @check_bit_operation findfirst(b1) Int
 @check_bit_operation findfirst(trues(v1)) Int

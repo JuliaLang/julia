@@ -1,12 +1,33 @@
 module Cache
 
-import ..Git
+import ..Git, ..Dir
 using ..Types
 
 path(pkg::String) = abspath(".cache", pkg)
 
+function mkcachedir()
+    cache = joinpath(realpath("."), ".cache")
+    if isdir(cache)
+        return
+    end
+
+    @windows_only mkdir(cache)
+    @unix_only begin
+        if Dir.isversioned(pwd())
+            rootcache = joinpath(realpath(".."), ".cache")
+            if !isdir(rootcache)
+                mkdir(rootcache)
+            end
+            run(`ln -s $rootcache $cache`)
+            return
+        end
+        mkdir(cache)
+    end
+end
+
+
 function prefetch{S<:String}(pkg::String, url::String, sha1s::Vector{S})
-    isdir(".cache") || mkdir(".cache")
+    isdir(".cache") || mkcachedir()
     cache = path(pkg)
     if !isdir(cache)
         info("Cloning cache of $pkg from $url")

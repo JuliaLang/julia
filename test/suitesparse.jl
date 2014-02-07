@@ -152,4 +152,9 @@ y = afiro'*ones(size(afiro,1))
 sol = Base.solve(chmaf, afiro*y) # least squares solution
 @test isvalid(sol)
 pred = afiro'*sol
-@test norm(afiro * (y.mat - pred.mat)) < 1e-8 
+@test norm(afiro * (y.mat - pred.mat)) < 1e-8
+
+# explicit zeros
+a = SparseMatrixCSC(2,2,[1,3,5],[1,2,1,2],[1.0,0.0,0.0,1.0]) 
+@test_approx_eq lufact(a)\[2.0,3.0] [2.0,3.0]
+@test_approx_eq cholfact(a)\[2.0,3.0] [2.0,3.0]

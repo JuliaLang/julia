@@ -36,7 +36,7 @@ New library functions
     a GitHub pull request to the package author.
 
   * `mod2pi` function ([#4799], [#4862]).
- 
+
   * New functions `minmax` and `extrema` ([#5275]).
 
 Library improvements
@@ -106,9 +106,14 @@ Library improvements
 
     * `CharString` is renamed to `UTF32String` ([#4943]).
 
+    * `normalize_string` function to perform Unicode normalization, case-folding,
+      and other transformations ([#5576]).
+
   * `LinAlg` (linear algebra) improvements
 
       * Balancing options for eigenvector calculations for general matrices ([#5428]).
+
+      * Mutating linear algebra functions no longer promote ([#5526]).
 
     * Sparse linear algebra
 
@@ -147,8 +152,17 @@ Library improvements
 
       * LU factorization ([#5381] and [#5430])
 
+      * QR factorization ([#5526])
+
   * New function `deleteat!` deletes a specified index or indices and
     returns the updated collection
+
+  * `prevfloat` and `nextfloat` now saturate at -Inf and Inf, respectively, and
+    have otherwise been fixed to follow the IEEE-754 standard functions `nextDown`
+    and `nextUp` ([#5025]).
+
+  * The `setenv` function for external processes now accepts a `dir` keyword
+    argument for specifying the directory to start the child process in ([#4888]).
 
 Deprecated or removed
 ---------------------
@@ -167,6 +181,12 @@ Deprecated or removed
     `cholfact(...,pivot=true)` and `qrfact(...,pivot=true)` ([#5330]) 
 
   * `symmetrize!` is deprecated in favor of `Base.LinAlg.copytri!` ([#5427])
+
+  * `myindexes` has been renamed to `localindexes` ([#5475])
+
+  * `factorize!` is deprecated in favor of `factorize`. ([#5526])
+  
+  * `nnz` is removed. Use `countnz` or `nfilled` instead ([#5538])
 
 [#4042]: https://github.com/JuliaLang/julia/issues/4042
 [#5164]: https://github.com/JuliaLang/julia/issues/5164
@@ -208,6 +228,11 @@ Deprecated or removed
 [#4967]: https://github.com/JuliaLang/julia/pull/4967
 [#5428]: https://github.com/JuliaLang/julia/pull/5428
 [#5468]: https://github.com/JuliaLang/julia/pull/5468
+[#5025]: https://github.com/JuliaLang/julia/pull/5025
+[#4888]: https://github.com/JuliaLang/julia/pull/4888
+[#5475]: https://github.com/JuliaLang/julia/pull/5475
+[#5526]: https://github.com/JuliaLang/julia/pull/5526
+[#5538]: https://github.com/JuliaLang/julia/pull/5538
 
 Julia v0.2.0 Release Notes
 ==========================
@@ -500,6 +525,9 @@ Miscellaneous changes
 
   * `julia-release-*` executables renamed to `julia-*`,
     and `libjulia-release` renamed to `libjulia` ([#4177]).
+
+  * Packages will now be installed in `.julia/vX.Y`, where
+    X.Y is the current Julia version.
 
 Bugfixes and performance updates
 --------------------------------

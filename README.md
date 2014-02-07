@@ -114,7 +114,7 @@ If the gcc44 and gfortran44 packages are installed, you can specify their use by
     CC = gcc44
     CXX = g++44
 
-Otherwise, install or contact your systems adminstrator to install a more recent version of gcc.
+Otherwise, install or contact your systems administrator to install a more recent version of gcc.
 
 #### Linux Build Troubleshooting
 
@@ -219,7 +219,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 
 If you already have one or more of these packages installed on your system, you can prevent Julia from compiling duplicates of these libraries by passing `USE_SYSTEM_...=1` to `make` or adding the line to `Make.user`. The complete list of possible flags can be found in `Make.inc`. 
 
-Please be aware that this procedure is not officially supported, as it introduces additional variablity into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
+Please be aware that this procedure is not officially supported, as it introduces additional variability into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
 
 ### SuiteSparse
 

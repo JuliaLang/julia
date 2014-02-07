@@ -126,7 +126,7 @@ function localpart{T,N,A}(d::DArray{T,N,A})
         fetch(d.chunks[lpidx])::A
     end
 end
-function myindexes(d::DArray)
+function localindexes(d::DArray)
     lpidx = localpartindex(d)
     if lpidx == 0
         ntuple(ndims(d), i->1:0)
@@ -165,8 +165,6 @@ function distribute(a::AbstractArray)
         remotecall_fetch(owner, ()->fetch(rr)[I...])
     end
 end
-
-convert{T,N}(::Type{Array}, d::SubOrDArray{T,N}) = convert(Array{T,N}, d)
 
 function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
     a = Array(S, size(d))

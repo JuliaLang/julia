@@ -6,8 +6,7 @@
 #include <stdarg.h>
 #include <assert.h>
 #include "julia.h"
-#include "newobj_internal.h"
-#include "builtin_proto.h"
+#include "julia_internal.h"
 
 jl_value_t *jl_true;
 jl_value_t *jl_false;
@@ -50,6 +49,7 @@ jl_datatype_t *jl_errorexception_type=NULL;
 jl_datatype_t *jl_typeerror_type;
 jl_datatype_t *jl_methoderror_type;
 jl_datatype_t *jl_loaderror_type;
+jl_datatype_t *jl_undefvarerror_type;
 jl_datatype_t *jl_pointer_type;
 jl_datatype_t *jl_voidpointer_type;
 jl_value_t *jl_an_empty_cell=NULL;
@@ -906,4 +906,27 @@ JL_CALLABLE(jl_f_new_box)
     box->type = jl_box_any_type;
     ((jl_value_t**)box)[1] = args[0];
     return box;
+}
+
+JL_CALLABLE(jl_f_default_ctor_1)
+{
+    if (nargs != 1)
+        jl_error("wrong number of arguments (expected 1)");
+    jl_value_t *ft = jl_t0(((jl_datatype_t*)F)->types);
+    if (!jl_subtype(args[0], ft, 1))
+        jl_type_error(((jl_datatype_t*)F)->name->name->name, ft, args[0]);
+    return jl_new_struct((jl_datatype_t*)F, args[0]);
+}
+
+JL_CALLABLE(jl_f_default_ctor_2)
+{
+    if (nargs != 2)
+        jl_error("wrong number of arguments (expected 2)");
+    jl_value_t *ft = jl_t0(((jl_datatype_t*)F)->types);
+    if (!jl_subtype(args[0], ft, 1))
+        jl_type_error(((jl_datatype_t*)F)->name->name->name, ft, args[0]);
+    ft = jl_t1(((jl_datatype_t*)F)->types);
+    if (!jl_subtype(args[1], ft, 1))
+        jl_type_error(((jl_datatype_t*)F)->name->name->name, ft, args[1]);
+    return jl_new_struct((jl_datatype_t*)F, args[0], args[1]);
 }

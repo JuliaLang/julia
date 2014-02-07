@@ -126,9 +126,9 @@ function contains(eq::Function, itr, x)
     return false
 end
 
-## nnz & count
+## countnz & count
 
-function nnz{T}(a::AbstractArray{T})
+function countnz{T}(a::AbstractArray{T})
     n = 0
     z = zero(T)
     for i = 1:length(a)
@@ -137,7 +137,7 @@ function nnz{T}(a::AbstractArray{T})
     return n
 end
 
-function nnz(a::AbstractArray{Bool})
+function countnz(a::AbstractArray{Bool})
     n = 0
     for x in a
         if x; n += 1; end
@@ -157,7 +157,20 @@ end
 
 ## sum
 
-sum(A::AbstractArray{Bool}) = nnz(A)
+function sum(itr)
+    s = start(itr)
+    if done(itr, s)
+        return 0
+    end
+    (v, s) = next(itr, s)
+    while !done(itr, s)
+        (x, s) = next(itr, s)
+        v += x
+    end
+    return v
+end
+
+sum(A::AbstractArray{Bool}) = countnz(A)
 
 # a fast implementation of sum in sequential order (from left to right)
 function sum_seq{T}(a::AbstractArray{T}, ifirst::Int, ilast::Int)

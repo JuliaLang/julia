@@ -11,8 +11,7 @@
 #include <malloc.h>
 #endif
 #include "julia.h"
-#include "newobj_internal.h"
-#include "jltypes_internal.h"
+#include "julia_internal.h"
 #include "builtin_proto.h"
 
 jl_datatype_t *jl_any_type;
@@ -120,7 +119,7 @@ int jl_has_typevars(jl_value_t *v)
     return jl_has_typevars_(v, 0);
 }
 
-DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
+int jl_is_leaf_type(jl_value_t *v)
 {
     if (jl_is_datatype(v)) {
         if (((jl_datatype_t*)v)->abstract) {
@@ -216,7 +215,6 @@ static int union_elt_morespecific(const void *a, const void *b)
 // type definitions. (issue #2365)
 int inside_typedef = 0;
 
-DLLEXPORT
 jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
 {
     size_t n = count_union_components(types);
@@ -659,7 +657,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
         if (b == jl_bottom_type)
             return b;
     }
-    if (var == invariant && !jl_has_typevars_(b,0)) {
+    if (var == invariant && !jl_has_typevars_(b,0) && !jl_is_typevar(b)) {
         int i;
         for(i=0; i < eqc->n; i+=2) {
             if (eqc->data[i] == (jl_value_t*)a) {
@@ -1674,9 +1672,6 @@ jl_value_t *jl_cache_type_(jl_datatype_t *type)
     cache_type_((jl_value_t*)type);
     return (jl_value_t*)type;
 }
-
-JL_CALLABLE(jl_f_tuple);
-JL_CALLABLE(jl_f_ctor_trampoline);
 
 typedef struct _jl_typestack_t {
     jl_datatype_t *tt;
@@ -2751,31 +2746,37 @@ void jl_init_types(void)
         jl_new_datatype(jl_symbol("LineNumberNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("line")),
                         jl_tuple(1, jl_long_type), 0, 0);
+    jl_linenumbernode_type->fptr = jl_f_default_ctor_1;
 
     jl_labelnode_type =
         jl_new_datatype(jl_symbol("LabelNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("label")),
                         jl_tuple(1, jl_long_type), 0, 0);
+    jl_labelnode_type->fptr = jl_f_default_ctor_1;
 
     jl_gotonode_type =
         jl_new_datatype(jl_symbol("GotoNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("label")),
                         jl_tuple(1, jl_long_type), 0, 0);
+    jl_gotonode_type->fptr = jl_f_default_ctor_1;
 
     jl_quotenode_type =
         jl_new_datatype(jl_symbol("QuoteNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("value")),
                         jl_tuple(1, jl_any_type), 0, 0);
+    jl_quotenode_type->fptr = jl_f_default_ctor_1;
 
     jl_newvarnode_type =
         jl_new_datatype(jl_symbol("NewvarNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("name")),
                         jl_tuple(1, jl_sym_type), 0, 0);
+    jl_newvarnode_type->fptr = jl_f_default_ctor_1;
 
     jl_topnode_type =
         jl_new_datatype(jl_symbol("TopNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("name")),
                         jl_tuple(1, jl_sym_type), 0, 0);
+    jl_topnode_type->fptr = jl_f_default_ctor_1;
 
     jl_module_type =
         jl_new_datatype(jl_symbol("Module"), jl_any_type, jl_null,

@@ -44,7 +44,6 @@ Function        Description
 ``eltype(A)``   the type of the elements contained in A
 ``length(A)``   the number of elements in A
 ``ndims(A)``    the number of dimensions of A
-``nnz(A)``      the number of nonzero values in A
 ``size(A)``     a tuple containing the dimensions of A
 ``size(A,n)``   the size of A in a particular dimension
 ``stride(A,k)`` the stride (linear index distance between adjacent elements) along dimension k
@@ -494,8 +493,15 @@ the CSC data structure for performance, and to avoid expensive operations.
 If you have data in CSC format from a different application or library, 
 and wish to import it in Julia, make sure that you use 1-based indexing.
 The row indices in every column need to be sorted. If your `SparseMatrixCSC` 
-ojbect contains unsorted row indices, one quick way to sort them is by
+object contains unsorted row indices, one quick way to sort them is by
 doing a double transpose.
+
+In some applications, it is convenient to store explicit zero values in 
+a `SparseMatrixCSC`. These *are* accepted by functions in ``Base`` (but
+there is no guarantee that they will be preserved in mutating operations).
+Because of this, ``countnz`` is not a constant-time operation; instead,
+``nfilled`` should be used to obtain the number of elements in a sparse
+matrix.
 
 Sparse matrix constructors
 --------------------------
@@ -508,10 +514,10 @@ you can use the same names with an ``sp`` prefix:
 .. doctest::
 
     julia> spzeros(3,5)
-    3x5 sparse matrix with 0 Float64 nonzeros:
+    3x5 sparse matrix with 0 Float64 entries:
 
     julia> speye(3,5)
-    3x5 sparse matrix with 3 Float64 nonzeros:
+    3x5 sparse matrix with 3 Float64 entries:
             [1, 1]  =  1.0
             [2, 2]  =  1.0
             [3, 3]  =  1.0
@@ -527,7 +533,7 @@ values. ``sparse(I,J,V)`` constructs a sparse matrix such that
     julia> I = [1, 4, 3, 5]; J = [4, 7, 18, 9]; V = [1, 2, -5, 3];
 
     julia> S = sparse(I,J,V)
-    5x18 sparse matrix with 4 Int64 nonzeros:
+    5x18 sparse matrix with 4 Int64 entries:
             [1 ,  4]  =  1
             [4 ,  7]  =  2
             [5 ,  9]  =  3
@@ -550,7 +556,7 @@ into a sparse matrix using the ``sparse`` function:
 .. doctest::
 
     julia> sparse(eye(5))
-    5x5 sparse matrix with 5 Float64 nonzeros:
+    5x5 sparse matrix with 5 Float64 entries:
             [1, 1]  =  1.0
             [2, 2]  =  1.0
             [3, 3]  =  1.0
@@ -574,7 +580,7 @@ matrices. Indexing of, assignment into, and concatenation of sparse
 matrices work in the same way as dense matrices. Indexing operations,
 especially assignment, are expensive, when carried out one element at
 a time. In many cases it may be better to convert the sparse matrix
-into ``(I,J,V)`` format using ``find_nzs``, manipulate the non-zeroes or
+into ``(I,J,V)`` format using ``findnz``, manipulate the non-zeroes or
 the structure in the dense vectors ``(I,J,V)``, and then reconstruct
 the sparse matrix.
 
@@ -604,8 +610,8 @@ reference.
 +-----------------------+-------------------+----------------------------------------+
 | ``speye(n)``          | ``eye(n)``        | Creates a *n*-by-*n* identity matrix.  |
 +-----------------------+-------------------+----------------------------------------+
-| ``dense(S)``          | ``sparse(A)``     | Interconverts between dense            |
-| ``full(S)``           |                   | and sparse formats.                    |
+| ``full(S)``           | ``sparse(A)``     | Interconverts between dense            |
+|                       |                   | and sparse formats.                    |
 +-----------------------+-------------------+----------------------------------------+
 | ``sprand(m,n,d)``     | ``rand(m,n)``     | Creates a *m*-by-*n* random matrix (of |
 |                       |                   | density *d*) with iid non-zero elements|

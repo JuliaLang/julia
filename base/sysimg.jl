@@ -23,6 +23,7 @@ end
 include("base.jl")
 include("reflection.jl")
 include("build_h.jl")
+include("version_git.jl")
 include("c.jl")
 
 # core operations & types
@@ -76,6 +77,8 @@ include("utf8.jl")
 include("utf16.jl")
 include("iobuffer.jl")
 include("string.jl")
+include("utf8proc.jl")
+importall .UTF8proc
 include("regex.jl")
 include("base64.jl")
 importall .Base64

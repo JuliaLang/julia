@@ -25,6 +25,7 @@
 #endif
 #include <ctype.h>
 #include "julia.h"
+#include "julia_internal.h"
 #include "builtin_proto.h"
 
 // exceptions -----------------------------------------------------------------
@@ -82,6 +83,17 @@ void jl_type_error_rt(const char *fname, const char *context,
 void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
 {
     jl_type_error_rt(fname, "", expected, got);
+}
+
+void jl_undefined_var_error(jl_sym_t *var)
+{
+    if (var->name[0] == '#') {
+        // convention for renamed variables: #...#original_name
+        char *nxt = strchr(var->name+1, '#');
+        if (nxt)
+            var = jl_symbol(nxt+1);
+    }
+    jl_throw(jl_new_struct(jl_undefvarerror_type, var));
 }
 
 JL_CALLABLE(jl_f_throw)
@@ -301,8 +313,6 @@ JL_CALLABLE(jl_f_apply)
     JL_GC_POP();
     return result;
 }
-
-#include "newobj_internal.h"
 
 void jl_add_constructors(jl_datatype_t *t);
 

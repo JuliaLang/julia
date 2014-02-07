@@ -11,7 +11,7 @@
 #include <signal.h>
 #include <errno.h>
 #include "julia.h"
-#include "builtin_proto.h"
+#include "julia_internal.h"
 #if defined(_OS_WINDOWS_)
 #include <winbase.h>
 #include <malloc.h>

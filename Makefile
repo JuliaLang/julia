@@ -32,6 +32,13 @@ endif
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,base test doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
 
+git-submodules:
+ifneq ($(NO_GIT), 1)
+	@-git submodule update --init
+else
+       $(warn "Submodules could not be updated because git is unavailible")
+endif
+
 debug release: | $(DIRS) $(BUILD)/share/julia/base $(BUILD)/share/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples $(BUILD)/etc/julia/juliarc.jl
 	@$(MAKE) $(QUIET_MAKE) julia-$@
 	@export JL_PRIVATE_LIBDIR=$(JL_PRIVATE_LIBDIR) && \
@@ -43,9 +50,7 @@ julia-debug-symlink:
 julia-release-symlink:
 	@ln -sf $(BUILD)/bin/julia-$(DEFAULT_REPL) julia
 
-julia-debug julia-release:
-	@-git submodule init --quiet
-	@-git submodule update
+julia-debug julia-release: git-submodules
 	@$(MAKE) $(QUIET_MAKE) -C deps
 	@$(MAKE) $(QUIET_MAKE) -C src lib$@
 	@$(MAKE) $(QUIET_MAKE) -C base
@@ -252,14 +257,35 @@ ifeq ($(OS), WINNT)
 	    mkdir ../$(PREFIX)/Git && \
 	    7z x PortableGit.7z -o"../$(PREFIX)/Git" )
 	cd $(DESTDIR)$(PREFIX)/bin && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
-	$(call spawn,./dist-extras/nsis/makensis.exe) /NOCD /DVersion=$(VERSDIR) /DArch=$(ARCH) /DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
+	$(call spawn,./dist-extras/nsis/makensis.exe) /NOCD /DVersion=$(JULIA_VERSION) /DArch=$(ARCH) /DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
 	./dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
-	cat ./dist-extras/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${VERSDIR}-${ARCH}.exe"
+	cat ./contrib/windows/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${JULIA_VERSION}-${ARCH}.exe"
 	-rm -f julia-installer.exe
 else
-	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
+	$(TAR) zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
 endif
 	rm -fr julia-$(JULIA_COMMIT)
+
+
+source-dist: git-submodules
+	# Save git information
+	-@$(MAKE) -C base version_git.jl.phony
+	# Get all the dependencies downloaded
+	@$(MAKE) -C deps getall
+
+	# Create file source-dist.tmp to hold all the filenames that goes into the tarball
+	echo "base/version_git.jl" > source-dist.tmp
+	git ls-files >> source-dist.tmp
+	ls deps/*.tar.gz deps/*.tar.bz2 deps/*.tgz deps/random/*.tar.gz >> source-dist.tmp
+	git submodule --quiet foreach 'git ls-files | sed "s&^&$$path/&"' >> source-dist.tmp
+
+	# Remove unwanted files
+	sed '/\.git/d' source-dist.tmp > source-dist.tmp1
+	sed '/\.travis/d' source-dist.tmp1 > source-dist.tmp
+
+	# Create tarball
+	tar -cz -T source-dist.tmp --no-recursion -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
+	rm -f source-dist.tmp source-dist.tmp1
 
 clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C base clean
@@ -272,6 +298,7 @@ clean: | $(CLEAN_TARGETS)
 	@rm -f julia
 	@rm -f *~ *# *.tar.gz
 	@rm -fr $(BUILD)/$(JL_PRIVATE_LIBDIR)
+	@rm -f source-dist.tmp source-dist.tmp1
 # Temporarily add this line to the Makefile to remove extras
 	@rm -fr $(BUILD)/share/julia/extras
 
@@ -291,7 +318,7 @@ distclean: cleanall
 .PHONY: default debug release julia-debug julia-release \
 	test testall testall1 test-* clean distclean cleanall \
 	run-julia run-julia-debug run-julia-release run \
-	install dist
+	install dist source-dist git-submodules
 
 ifeq ($(VERBOSE),1)
 .SILENT:
@@ -326,22 +353,21 @@ ifneq (,$(filter $(ARCH), i386 i486 i586 i686))
 	cd dist-extras && \
 	wget -O 7z920.exe http://downloads.sourceforge.net/sevenzip/7z920.exe && \
 	7z x -y 7z920.exe 7z.exe 7z.dll && \
-	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP3/noarch/mingw32-libexpat-2.0.1-5.3.noarch.rpm && \
-	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP3/noarch/mingw32-zlib-1.2.8-1.1.noarch.rpm
+	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP3/noarch/mingw32-libexpat-2.0.1-5.5.noarch.rpm && \
+	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win32/SLE_11_SP3/noarch/mingw32-zlib-1.2.8-1.2.noarch.rpm
 else ifeq ($(ARCH),x86_64)
 	cd dist-extras && \
 	wget -O 7z920-x64.msi http://downloads.sourceforge.net/sevenzip/7z920-x64.msi && \
 	7z x -y 7z920-x64.msi _7z.exe _7z.dll && \
 	mv _7z.dll 7z.dll && \
 	mv _7z.exe 7z.exe && \
-	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-libexpat-2.0.1-4.3.noarch.rpm && \
-	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-zlib-1.2.8-1.1.noarch.rpm
+	wget -O mingw-libexpat.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-libexpat-2.0.1-4.5.noarch.rpm && \
+	wget -O mingw-zlib.rpm http://download.opensuse.org/repositories/windows:/mingw:/win64/SLE_11_SP3/noarch/mingw64-zlib-1.2.8-1.3.noarch.rpm
 else
 	$(error no win-extras target for ARCH=$(ARCH))
 endif
 	cd dist-extras && \
 	wget -O 7z920_extra.7z http://downloads.sourceforge.net/sevenzip/7z920_extra.7z && \
-	7z x -y 7z920_extra.7z 7zS.sfx && \
 	wget -O nsis-2.46.5-Unicode-setup.exe https://unsis.googlecode.com/files/nsis-2.46.5-Unicode-setup.exe && \
 	$(call spawn,./7z.exe) x -y -onsis nsis-2.46.5-Unicode-setup.exe && \
 	chmod a+x ./nsis/makensis.exe && \

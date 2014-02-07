@@ -5,9 +5,9 @@
 
 MIRROR_HOST=http://d304tytmzqn1fl.cloudfront.net
 
-WGET=/usr/bin/wget
-CURL=/usr/bin/curl
-FETCH=/usr/bin/fetch
+WGET=$(which wget)
+CURL=$(which curl)
+FETCH=$(which fetch)
 
 TIMEOUT=15 # seconds
 WGET_OPTS="--no-check-certificate --tries=1 --timeout=$TIMEOUT"

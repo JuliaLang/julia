@@ -164,17 +164,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    See :func:`schurfact`
 
-.. function:: svdfact(A, [thin]) -> SVD
+.. function:: svdfact(A, [thin=true]) -> SVD
 
    Compute the Singular Value Decomposition (SVD) of ``A`` and return an ``SVD`` object. ``U``, ``S``, ``V`` and ``Vt`` can be obtained from the factorization ``F`` with ``F[:U]``, ``F[:S]``, ``F[:V]`` and ``F[:Vt]``, such that ``A = U*diagm(S)*Vt``. If ``thin`` is ``true``, an economy mode decomposition is returned. The algorithm produces ``Vt`` and hence ``Vt`` is more efficient to extract than ``V``. The default is to produce a thin decomposition.
 
-.. function:: svdfact!(A, [thin]) -> SVD
+.. function:: svdfact!(A, [thin=true]) -> SVD
 
    ``svdfact!`` is the same as :func:`svdfact`, but saves space by overwriting the input A, instead of creating a copy. If ``thin`` is ``true``, an economy mode decomposition is returned. The default is to produce a thin decomposition.
 
-.. function:: svd(A, [thin]) -> U, S, V
+.. function:: svd(A, [thin=true]) -> U, S, V
 
-   Compute the SVD of A, returning ``U``, vector ``S``, and ``V`` such that ``A == U*diagm(S)*V'``. If ``thin`` is ``true``, an economy mode decomposition is returned.
+   Compute the SVD of A, returning ``U``, vector ``S``, and ``V`` such that ``A == U*diagm(S)*V'``. If ``thin`` is ``true``, an economy mode decomposition is returned. The default is to produce a thin decomposition.
 
 .. function:: svdvals(A)
 
@@ -270,9 +270,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: norm(A, [p])
 
-   Compute the ``p``-norm of a vector or a matrix ``A``, defaulting to the ``p=2``-norm.
+   Compute the ``p``-norm of a vector or the operator norm of a matrix ``A``, defaulting to the ``p=2``-norm.
 
-   For vectors, ``p`` can be any numeric value is valid (even though not all values produce a mathematically valid vector norm). In particular, `norm(A, Inf)`` returns the largest value in ``abs(A)``, whereas ``norm(A, -Inf)`` returns the smallest.
+   For vectors, ``p`` can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, `norm(A, Inf)`` returns the largest value in ``abs(A)``, whereas ``norm(A, -Inf)`` returns the smallest.
 
    For matrices, valid values of ``p`` are ``1``, ``2``, or ``Inf``. Use :func:`normfro` to compute the Frobenius norm.
 

@@ -5,6 +5,7 @@
 #include <malloc.h>
 #endif
 #include "julia.h"
+#include "julia_internal.h"
 #include "builtin_proto.h"
 
 extern int jl_lineno;
@@ -63,7 +64,7 @@ jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
 {
     jl_value_t *v = jl_get_global(m, e);
     if (v == NULL)
-        jl_errorf("%s not defined", e->name);
+        jl_undefined_var_error(e);
     return v;
 }
 
@@ -111,7 +112,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             v = jl_get_global(jl_current_module, (jl_sym_t*)e);
         }
         if (v == NULL) {
-            jl_errorf("%s not defined", ((jl_sym_t*)e)->name);
+            jl_undefined_var_error((jl_sym_t*)e);
         }
         return v;
     }
@@ -125,7 +126,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_sym_t *s = (jl_sym_t*)jl_fieldref(e,0);
         jl_value_t *v = jl_get_global(jl_base_relative_to(jl_current_module),s);
         if (v == NULL)
-            jl_errorf("%s not defined", s->name);
+            jl_undefined_var_error(s);
         return v;
     }
     if (!jl_is_expr(e)) {

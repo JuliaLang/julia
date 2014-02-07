@@ -178,6 +178,10 @@ export PipeString
 @deprecate cholpfact(A)             cholfact(A, :U, pivot=true)
 @deprecate symmetrize!(A)      Base.LinAlg.copytri!(A, 'U')
 @deprecate symmetrize!(A, uplo)      Base.LinAlg.copytri!(A, uplo)
+@deprecate factorize!(A)       factorize(A)
+@deprecate svdfact(A,thin)      svdfact(A,thin=thin)
+@deprecate svdfact!(A,thin)     svdfact(A,thin=thin)
+@deprecate svd(A,thin)          svd(A,thin=thin)
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
@@ -233,7 +237,7 @@ export ComplexPair
 
 # @deprecate select!(v::AbstractVector,k::Union(Int,Range1),o::Ordering) select!(v,k,order=o)
 @deprecate select!(v::AbstractVector,k::Union(Int,Range1),f::Function) select!(v,k,lt=f)
-@deprecate select!(f::Function,v::AbstractVector,k::k::Union(Int,Range1)) select!(v,k,lt=f)
+@deprecate select!(f::Function,v::AbstractVector,k::Union(Int,Range1)) select!(v,k,lt=f)
 
 @deprecate sort(v::AbstractVector,o::Ordering) sort(v,order=o)
 @deprecate sort(v::AbstractVector,a::Algorithm) sort(v,alg=a)
@@ -385,5 +389,14 @@ eval(Sys, :(@deprecate shlib_list dllist))
 @deprecate spzeros(m::Integer) spzeros(m, m)
 @deprecate spzeros(Tv::Type, m::Integer) spzeros(Tv, m, m)
 
+@deprecate myindexes localindexes
+
 # 0.3 discontinued functions
+
+function nnz(X)
+    depwarn("nnz has been renamed to countnz and is no longer computed in constant time for sparse matrices. Instead, use nfilled() for the number of elements in a sparse matrix.", :nnz)
+    countnz(X)
+end
+export nnz
+
 

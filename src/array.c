@@ -8,6 +8,7 @@
 #include <malloc.h>
 #endif
 #include "julia.h"
+#include "julia_internal.h"
 
 // array constructors ---------------------------------------------------------
 
@@ -20,9 +21,6 @@ int jl_array_store_unboxed(jl_value_t *el_type)
 {
     return store_unboxed(el_type);
 }
-
-// at this size use malloc
-#define MALLOC_THRESH 1048576
 
 #if defined(_P64) && defined(UINT128MAX)
 typedef __uint128_t wideint_t;
@@ -353,6 +351,15 @@ jl_array_t *jl_alloc_cell_1d(size_t n)
     return jl_alloc_array_1d(jl_array_any_type, n);
 }
 
+jl_value_t *jl_apply_array_type(jl_datatype_t *type, size_t dim)
+{
+    jl_value_t *boxed_dim = jl_box_long(dim);
+    JL_GC_PUSH1(&boxed_dim);
+    jl_value_t *ret = jl_apply_type((jl_value_t*)jl_array_type, jl_tuple2(type, boxed_dim));
+    JL_GC_POP();
+    return ret;
+}
+
 // array primitives -----------------------------------------------------------
 
 #ifndef STORE_ARRAY_LEN
@@ -508,6 +515,9 @@ void jl_arrayunset(jl_array_t *a, size_t i)
     if (a->ptrarray)
         memset(ptail, 0, a->elsize);
 }
+
+// at this size and bigger, allocate resized array data with malloc
+#define MALLOC_THRESH 1048576
 
 // allocate buffer of newlen elements, placing old data at given offset (in #elts)
 static void array_resize_buffer(jl_array_t *a, size_t newlen, size_t oldlen, size_t offs)

@@ -31,13 +31,13 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    Convert a dense vector ``A`` into a sparse matrix of size ``m x 1``. In julia, sparse vectors are really just sparse matrices with one column.
 
-.. function:: dense(S)
-
-   Convert a sparse matrix ``S`` into a dense matrix.
-
 .. function:: full(S)
 
    Convert a sparse matrix ``S`` into a dense matrix.
+
+.. function:: nfilled(A)
+
+   Returns the number of stored (filled) elements in a sparse matrix.
 
 .. function:: spzeros(m,n)
 

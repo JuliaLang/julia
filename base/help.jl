@@ -15,7 +15,7 @@ function clear_cache()
 end
 
 function decor_help_desc(func::String, mfunc::String, desc::String)
-    sd = split(desc, '\n')
+    sd = convert(Array{ByteString,1}, split(desc, '\n'))
     for i = 1:length(sd)
         if beginswith(sd[i], func)
             sd[i] = mfunc * sd[i][length(func)+1:end]

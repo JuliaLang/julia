@@ -451,7 +451,7 @@ equal the number of processors.
 ``localpart(a::DArray)`` obtains the locally-stored portion
 of a ``DArray``.
 
-``myindexes(a::DArray)`` gives a tuple of the index ranges owned by the
+``localindexes(a::DArray)`` gives a tuple of the index ranges owned by the
 local process.
 
 ``convert(Array, a::DArray)`` brings all the data to the local processor.

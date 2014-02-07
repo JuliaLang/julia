@@ -197,7 +197,11 @@ void jl_dump_function_asm(void* Fptr, size_t Fsize,
         // Fall through
 
         case MCDisassembler::Success:
+        #ifdef LLVM35
+            Streamer->EmitInstruction(Inst, *STI);
+        #else
             Streamer->EmitInstruction(Inst);
+        #endif
         break;
         }
     }

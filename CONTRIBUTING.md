@@ -80,6 +80,21 @@ Note: These instructions are for adding functionality to the base library. Usual
 
 Build as usual, and do `make clean testall` to test your contribution. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git). Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a `Good to merge` message.
 
+##### General Formatting Guidelines For Julia code contributions
+
+ - 4 space indent
+ - use whitespace to make the code more readable
+ - comments are good, especially when they explain the algorithm
+
+##### General Formatting Guidelines For C code contributions
+
+ - 4 space indent
+ - space between if and ( (if (x) ...)
+ - newline before opening { in function definitions
+ - f(void) for 0-argument function declarations
+ - newline between } and else instead of } else {
+ - if one part of an if..else chain uses { } then all should
+
 ## Getting help
 
 While getting familiar with Julia, remember to check out [the docs](http://docs.Julialang.org/en/latest/), keeping in mind that they are [searchable](http://docs.Julialang.org/en/latest/search/). (If you use a script blocker then you'll have to unblock that page.) The [source code](https://github.com/JuliaLang/julia) is an excellent source of examples (and it's mostly pretty approachable). If you're still stumped, post something on [the dev list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev), but you may want to search the archives first to see if there's already been a discussion about what you're stuck on.

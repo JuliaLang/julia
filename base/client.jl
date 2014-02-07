@@ -60,7 +60,7 @@ function repl_cmd(cmd)
         end
         println(pwd())
     else
-        run(ignorestatus(@windows? cmd : `$shell -i -c "($(shell_escape(cmd))) && true"`))
+        run(ignorestatus(@windows? cmd : (isa(STDIN, TTY) ? `$shell -i -c "($(shell_escape(cmd))) && true"` : `$shell -c "($(shell_escape(cmd))) && true"`)))
     end
     nothing
 end
@@ -315,9 +315,9 @@ const roottask = current_task()
 is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
+const LOAD_PATH = ByteString[]
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
-    global const LOAD_PATH = ByteString[]
     if haskey(ENV,"JULIA_LOAD_PATH")
         prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @windows? ';' : ':'))    
     end

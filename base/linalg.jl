@@ -66,7 +66,6 @@ export
     sqrtm,
     eye,
     factorize,
-    factorize!,
     givens,
     gradient,
     hessfact,

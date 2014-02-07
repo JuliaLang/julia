@@ -172,6 +172,6 @@ allows you to do things like::
 
 At the base of this functionality is the getaddrinfo function which will do the appropriate address resolution::
         
-    julia> Base.getaddrinfo("google.com")
+    julia> getaddrinfo("google.com")
     IPv4(74.125.226.225)
 

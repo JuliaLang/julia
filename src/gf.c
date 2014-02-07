@@ -13,14 +13,7 @@
 #include <malloc.h>
 #endif
 #include "julia.h"
-#include "builtin_proto.h"
-
-#define ENABLE_INFERENCE
-
-// debugging options
-//#define TRACE_INFERENCE
-//#define JL_TRACE
-//#define JL_GF_PROFILE
+#include "julia_internal.h"
 
 static jl_methtable_t *new_method_table(jl_sym_t *name)
 {
@@ -305,8 +298,6 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
     JL_GC_POP();
     return nli;
 }
-
-JL_CALLABLE(jl_trampoline);
 
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
 {
@@ -1614,7 +1605,6 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
 }
 
 void jl_add_constructors(jl_datatype_t *t);
-JL_CALLABLE(jl_f_ctor_trampoline);
 
 // return a cell array of tuples, each describing a method match:
 // {(t, spvals, li, cenv), ...}

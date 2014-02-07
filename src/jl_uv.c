@@ -25,6 +25,7 @@
 #endif
 
 #include "julia.h"
+#include "julia_internal.h"
 #include "support/ios.h"
 #include "uv.h"
 
@@ -34,6 +35,13 @@ extern "C" {
 #endif
 
 /** libuv callbacks */
+
+enum CALLBACK_TYPE { CB_PTR, CB_INT32, CB_INT64 };
+#ifdef _P64
+#define CB_INT CB_INT64
+#else
+#define CB_INT CB_INT32
+#endif
 
 /*
  * Notes for adding new callbacks
@@ -128,6 +136,7 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
             break;
         }
     }
+    va_end(argp);
     v = jl_apply(f,(jl_value_t**)argv,count);
     JL_GC_POP();
     return v;
@@ -330,7 +339,7 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
                        uv_handle_type stdin_type, uv_pipe_t *stdin_pipe,
                        uv_handle_type stdout_type, uv_pipe_t *stdout_pipe,
                        uv_handle_type stderr_type, uv_pipe_t *stderr_pipe, 
-                       int detach, char **env)
+                       int detach, char **env, char *cwd)
 {
     uv_process_options_t opts;
     uv_stdio_container_t stdio[3];
@@ -342,7 +351,7 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
 #else
     opts.flags = UV_PROCESS_RESET_SIGPIPE;
 #endif
-    opts.cwd = NULL;
+    opts.cwd = cwd;
     opts.args = argv;
     if (detach)
         opts.flags |= UV_PROCESS_DETACHED;

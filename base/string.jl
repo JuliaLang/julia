@@ -321,8 +321,12 @@ function search(s::String, t::String, i::Integer=start(s))
     end
 end
 
-rsearch(s::String, c::Chars, i::Integer=endof(s)) =
-    endof(s)-search(RevString(s), c, endof(s)-i+1)+1
+function rsearch(s::String, c::Chars, i::Integer=endof(s))
+    e = endof(s)
+    j = search(RevString(s), c, e-i+1)
+    j == 0 && return 0
+    e-j+1
+end
 
 function _rsearchindex(s, t, i)
     if isempty(t)
@@ -573,6 +577,7 @@ endof(s::UTF32String) = length(s.chars)
 length(s::UTF32String) = length(s.chars)
 
 utf32(x) = convert(UTF32String, x)
+convert(::Type{UTF32String}, s::UTF32String) = s
 convert(::Type{UTF32String}, s::String) = UTF32String(Char[c for c in s])
 convert{T<:String}(::Type{T}, v::Vector{Char}) = convert(T, UTF32String(v))
 convert(::Type{Array{Char,1}}, s::UTF32String) = s.chars
@@ -627,7 +632,12 @@ function next(s::SubString, i::Int)
     c, i-s.offset
 end
 
-getindex(s::SubString, i::Int) = getindex(s.string, i+s.offset)
+function getindex(s::SubString, i::Int)
+    if i < 1 || i > s.endof
+        error(BoundsError)
+    end
+    getindex(s.string, i+s.offset)
+end
 
 isempty(s::SubString) = s.endof == 0
 
@@ -641,6 +651,8 @@ nextind(s::SubString, i::Integer) = nextind(s.string, i+s.offset)-s.offset
 prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 
 convert{T<:String}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
+
+bytestring{T <: ByteString}(p::SubString{T}) = bytestring(pointer(p.string.data)+p.offset, nextind(p, p.endof)-1)
 
 function serialize{T}(s, ss::SubString{T})
     # avoid saving a copy of the parent string, keeping the type of ss
@@ -1247,11 +1259,12 @@ lpad(s, n::Integer, p=" ") = lpad(string(s),n,string(p))
 rpad(s, n::Integer, p=" ") = rpad(string(s),n,string(p))
 cpad(s, n::Integer, p=" ") = rpad(lpad(s,div(n+strwidth(s),2),p),n,p)
 
+
 # splitter can be a Char, Vector{Char}, String, Regex, ...
 # any splitter that provides search(s::String, splitter)
-
-function split(str::String, splitter, limit::Integer, keep_empty::Bool)
-    strs = String[]
+split{T<:SubString}(str::T, splitter, limit::Integer, keep_empty::Bool) = _split(str, splitter, limit, keep_empty, T[])
+split{T<:String}(str::T, splitter, limit::Integer, keep_empty::Bool) = _split(str, splitter, limit, keep_empty, SubString{T}[])
+function _split{T<:String,U<:Array}(str::T, splitter, limit::Integer, keep_empty::Bool, strs::U)
     i = start(str)
     n = endof(str)
     r = search(str,splitter,i)
@@ -1259,7 +1272,7 @@ function split(str::String, splitter, limit::Integer, keep_empty::Bool)
     while 0 < j <= n && length(strs) != limit-1
         if i < k
             if keep_empty || i < j
-                push!(strs, str[i:prevind(str,j)])
+                push!(strs, SubString(str,i,prevind(str,j)))
             end
             i = k
         end
@@ -1268,7 +1281,7 @@ function split(str::String, splitter, limit::Integer, keep_empty::Bool)
         j, k = first(r), nextind(str,last(r))
     end
     if keep_empty || !done(str,i)
-        push!(strs, str[i:end])
+        push!(strs, SubString(str,i))
     end
     return strs
 end
@@ -1278,10 +1291,12 @@ split(s::String, spl)             = split(s, spl, 0, true)
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 const _default_delims = [' ','\t','\n','\v','\f','\r']
-split(str::String) = split(str, _default_delims, 0, false)
+split(str::String)                = split(str, _default_delims, 0, false)
 
-function rsplit(str::String, splitter, limit::Integer, keep_empty::Bool)
-    strs = String[]
+
+rsplit{T<:SubString}(str::T, splitter, limit::Integer, keep_empty::Bool) = _rsplit(str, splitter, limit, keep_empty, T[])
+rsplit{T<:String}(str::T, splitter, limit::Integer, keep_empty::Bool) = _rsplit(str, splitter, limit, keep_empty, SubString{T}[])
+function _rsplit{T<:String,U<:Array}(str::T, splitter, limit::Integer, keep_empty::Bool, strs::U)
     i = start(str)
     n = endof(str)
     r = rsearch(str,splitter)
@@ -1289,7 +1304,7 @@ function rsplit(str::String, splitter, limit::Integer, keep_empty::Bool)
     k = last(r)
     while((0 <= j < n) && (length(strs) != limit-1))
         if i <= k
-            (keep_empty || (k < n)) && unshift!(strs, str[k+1:n])
+            (keep_empty || (k < n)) && unshift!(strs, SubString(str,k+1,n))
             n = j
         end
         (k <= j) && (j = prevind(str,j))
@@ -1297,14 +1312,13 @@ function rsplit(str::String, splitter, limit::Integer, keep_empty::Bool)
         j = first(r)-1
         k = last(r)
     end
-    (keep_empty || (n > 0)) && unshift!(strs, str[1:n])
+    (keep_empty || (n > 0)) && unshift!(strs, SubString(str,1,n))
     return strs
 end
 rsplit(s::String, spl, n::Integer) = rsplit(s, spl, n, true)
 rsplit(s::String, spl, keep::Bool) = rsplit(s, spl, 0, keep)
 rsplit(s::String, spl)             = rsplit(s, spl, 0, true)
 #rsplit(str::String) = rsplit(str, _default_delims, 0, false)
-
 
 function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     n = 1
@@ -1426,6 +1440,7 @@ function parseint(c::Char, base::Integer=36, a::Int=(base <= 36 ? 10 : 36))
         'A' <= c <= 'Z' ? c-'A'+10 :
         'a' <= c <= 'z' ? c-'a'+a  : error("invalid digit: $(repr(c))")
     d < base || error("invalid base $base digit $(repr(c))")
+    d
 end
 parseint{T<:Integer}(::Type{T}, c::Char, base::Integer) = convert(T,parseint(c,base))
 parseint{T<:Integer}(::Type{T}, c::Char) = convert(T,parseint(c))

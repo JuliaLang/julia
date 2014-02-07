@@ -88,21 +88,11 @@ end
 
 # searching definitions
 
-function whicht(f, types)
-    for m in methods(f, types)
-        lsd = m.func.code::LambdaStaticData
-        d = f.env.defs
-        while !is(d,())
-            if is(d.func.code, lsd)
-                display(d)
-                return
-            end
-            d = d.next
-        end
-    end
+function which(f, args...)
+    ms = methods(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
+    isempty(ms) && throw(MethodError(f, args))
+    ms[1]
 end
-
-which(f, args...) = whicht(f, map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
 
 macro which(ex0)
     if isa(ex0,Expr) &&
@@ -359,8 +349,8 @@ end
 
 function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "Julia Version $VERSION")
-    if !isempty(BUILD_INFO.commit_short)
-      println(io,             "Commit $(BUILD_INFO.commit_short) ($(BUILD_INFO.date_string))")
+    if !isempty(GIT_VERSION_INFO.commit_short)
+      println(io,             "Commit $(GIT_VERSION_INFO.commit_short) ($(GIT_VERSION_INFO.date_string))")
     end
     if ccall(:jl_is_debugbuild, Bool, ())
         println(io, "DEBUG build")

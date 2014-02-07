@@ -50,8 +50,19 @@ endif
 # disable automatic Makefile rules
 .SUFFIXES:
 
+# find out if git repository is availible
+ifeq ($(shell [ -e $(JULIAHOME)/.git ] && echo true || echo "Warning: git information unavailable; versioning information limited" >&2), true)
+NO_GIT = 0
+else
+NO_GIT = 1
+endif
+
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
+ifneq ($(NO_GIT), 1)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
+else
+JULIA_COMMIT = $JULIA_VERSION
+endif
 
 # LLVM Options
 LLVMROOT = $(BUILD)
@@ -60,7 +71,7 @@ LLVM_DEBUG = 0
 # set to 1 to get clang and compiler-rt
 BUILD_LLVM_CLANG = 0
 # set to 1 to get lldb (often does not work, no chance with llvm3.2 and earlier)
-# see http://lldb.llvm.org/build.html for dependancies
+# see http://lldb.llvm.org/build.html for dependencies
 BUILD_LLDB = 0
 
 BUILD = $(JULIAHOME)/usr
@@ -222,6 +233,14 @@ JCFLAGS += -fsanitize=address -mllvm -asan-stack=0
 LDFLAGS += -fsanitize=address
 endif
 
+TAR=`which gtar || which tar`
+TAR_TEST := $(shell $(TAR) --help 2>&1  | egrep 'bsdtar|strip-components')
+ifeq (,$(findstring components,$(TAR_TEST)))
+ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
+$(error "please install either GNU tar or bsdtar")
+endif
+endif
+
 # ===========================================================================
 
 BUILD_MACHINE := $(shell $(HOSTCC) -dumpmachine)
@@ -243,6 +262,11 @@ ARCH = x86_64
 endif
 BUILD_MACHINE := $(ARCH)$(shell echo $(BUILD_MACHINE) | sed "s/[^-]*\(.*\)$$/\1/")
 endif
+endif
+
+# We map amd64 to x86_64 for compatibility with systems that identify 64-bit systems as such
+ifeq ($(ARCH),amd64)
+ARCH = x86_64
 endif
 
 ifeq ($(USEGCC),1)
@@ -354,7 +378,7 @@ endif
 endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
-  LIBUTF8PROC = /usr/lib/libutf8proc.a
+  LIBUTF8PROC = -lutf8proc
 else
   LIBUTF8PROC = $(BUILD)/$(JL_LIBDIR)/libutf8proc.a
 endif
