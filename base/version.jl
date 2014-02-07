@@ -196,10 +196,15 @@ function banner(io::IO = STDOUT)
         commit_string = ""
     else
         days = int(floor((ccall(:clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
-        if GIT_VERSION_INFO.fork_master_distance == 0
-            commit_string = "Commit $(GIT_VERSION_INFO.commit_short) ($(days) days old master)"
+        unit = days == 1 ? "day" : "days"
+        distance = GIT_VERSION_INFO.fork_master_distance
+        commit = GIT_VERSION_INFO.commit_short
+
+        if distance == 0
+            commit_string = "Commit $(commit) ($(days) $(unit) old master)"
         else
-            commit_string = "$(GIT_VERSION_INFO.branch)/$(GIT_VERSION_INFO.commit_short) (fork: $(GIT_VERSION_INFO.fork_master_distance) commits, $(days) days)"
+            branch = GIT_VERSION_INFO.branch
+            commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
         end
     end
     commit_date = GIT_VERSION_INFO.date_string != "" ? " ($(GIT_VERSION_INFO.date_string))": ""
