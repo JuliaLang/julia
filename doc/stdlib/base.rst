@@ -766,11 +766,7 @@ Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``Array``, ``BitArra
 Set-Like Collections
 --------------------
 
-.. function:: add!(collection, key)
-
-   Add an element to a set-like collection.
-
-.. function:: Set(x...)
+,. function:: Set(x...)
 
    Construct a ``Set`` with the given elements. Should be used instead of ``IntSet`` for sparse integer sets, or for sets of arbitrary objects.
 
