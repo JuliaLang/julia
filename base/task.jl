@@ -63,12 +63,16 @@ function consume(P::Task, values...)
     ct = current_task()
     prev = ct.last
     ct.runnable = false
-    v = yieldto(P, values...)
-    if ct.last !== P
-        v = yield_until((ct)->ct.last === P)
+    local v
+    try
+        v = yieldto(P, values...)
+        if ct.last !== P
+            v = yield_until((ct)->ct.last === P)
+        end
+    finally
+        ct.last = prev
+        ct.runnable = true
     end
-    ct.last = prev
-    ct.runnable = true
     if P.done
         q = P.consumers
         if !is(q, nothing)
