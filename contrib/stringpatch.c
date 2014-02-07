@@ -20,7 +20,7 @@ int main( int argc, char ** argv ) {
 	}
 
 	if( strlen(replacement) > maxlen ) {
-		printf( "ERROR: Replacement string length (%d) is greater than maxlen! (%d)\n", strlen(replacement), maxlen );
+		printf( "ERROR: Replacement string length (%lu) is greater than maxlen! (%lu)\n", strlen(replacement), maxlen );
 		return -1;
 	}
 	
