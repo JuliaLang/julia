@@ -384,21 +384,31 @@ function _start()
         init_load_path()
         (quiet,repl,startup,color_set,history) = process_options(copy(ARGS))
         global _use_history = history
+
+        if repl
+            if !isa(STDIN,TTY)
+                global is_interactive = !isa(STDIN,Union(File,IOStream))
+                color_set || (global have_color = false)
+            else
+                global is_interactive = true
+                if !color_set
+                    @windows_only global have_color = true
+                    @unix_only global have_color =
+                        (beginswith(get(ENV,"TERM",""),"xterm") || success(`tput setaf 0`))
+                end
+            end
+        end
+
         startup && load_juliarc()
 
         if repl
             if !isa(STDIN,TTY)
-                if !color_set
-                    global have_color = false
-                end
                 # note: currently IOStream is used for file STDIN
                 if isa(STDIN,File) || isa(STDIN,IOStream)
                     # reading from a file, behave like include
-                    global is_interactive = false
                     eval(parse_input_line(readall(STDIN)))
                 else
                     # otherwise behave repl-like
-                    global is_interactive = true
                     while !eof(STDIN)
                         eval_user_input(parse_input_line(STDIN), true)
                     end
@@ -408,20 +418,7 @@ function _start()
                 end
                 quit()
             end
-
-            if !color_set
-                @unix_only global have_color = (beginswith(get(ENV,"TERM",""),"xterm") || success(`tput setaf 0`))
-                @windows_only global have_color = true
-            end
-
-            global is_interactive = true
             quiet || banner()
-
-            if haskey(ENV,"JL_ANSWER_COLOR")
-                warn("JL_ANSWER_COLOR is deprecated, use JULIA_ANSWER_COLOR instead.")
-                ENV["JULIA_ANSWER_COLOR"] = ENV["JL_ANSWER_COLOR"]
-            end
-
             run_repl()
         end
     catch err
