@@ -54,4 +54,8 @@ else
 	@test length(u16) == 4
 	@test utf8(u16) == u8
 	@test collect(u8) == collect(u16)
+
+	ascii_array = ["a", "b", "c"]
+	@test typeof(ascii_array) == Array{ASCIIString,1}
+	@test typeof(utf8(ascii_array)) == Array{UTF8String,1}
 end
