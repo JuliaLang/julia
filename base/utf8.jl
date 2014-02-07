@@ -182,5 +182,8 @@ function convert(::Type{UTF8String}, a::Array{Uint8,1}, invalids_as::String)
 end
 convert(::Type{UTF8String}, s::String) = utf8(bytestring(s))
 
+# Allow utf8() to operate on arrays
+utf8{T<:String}(a::AbstractVector{T}) = UTF8String[utf8(s) for s in a]
+
 # The last case is the replacement character 0xfffd (3 bytes)
 utf8sizeof(c::Char) = c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : c < 0x110000 ? 4 : 3
