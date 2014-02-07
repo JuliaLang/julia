@@ -37,7 +37,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
 .. function:: nfilled(A)
 
-   Returns the number of stored (filled) elements in a sparse matrix.
+   Returns the number of stored (filled) elements in a sparse matrix. For dense arrays, this returns the length of the array.
 
 .. function:: spzeros(m,n)
 

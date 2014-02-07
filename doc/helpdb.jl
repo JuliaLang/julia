@@ -132,7 +132,8 @@
 
 ("Getting Around","Base","which","which(f, args...)
 
-   Show which method of \"f\" will be called for the given arguments.
+   Return the method of \"f\" (a \"Method\" object) that will be
+   called for the given arguments.
 
 "),
 
@@ -143,9 +144,12 @@
 
 "),
 
-("Getting Around","Base","methods","methods(f)
+("Getting Around","Base","methods","methods(f[, types])
 
    Show all methods of \"f\" with their argument types.
+
+   If \"types\" is specified, an array of methods whose types match is
+   returned.
 
 "),
 
@@ -1344,7 +1348,7 @@
 
 ("Strings","Base","repr","repr(x)
 
-   Create a string from any value using the \"show\" function.
+   Create a string from any value using the \"showall\" function.
 
 "),
 
@@ -8677,7 +8681,7 @@ popdisplay(d::Display)
 
 "),
 
-("Linear Algebra","Base","svdfact","svdfact(A[, thin]) -> SVD
+("Linear Algebra","Base","svdfact","svdfact(A[, thin=true]) -> SVD
 
    Compute the Singular Value Decomposition (SVD) of \"A\" and return
    an \"SVD\" object. \"U\", \"S\", \"V\" and \"Vt\" can be obtained
@@ -8689,7 +8693,7 @@ popdisplay(d::Display)
 
 "),
 
-("Linear Algebra","Base","svdfact!","svdfact!(A[, thin]) -> SVD
+("Linear Algebra","Base","svdfact!","svdfact!(A[, thin=true]) -> SVD
 
    \"svdfact!\" is the same as \"svdfact()\", but saves space by
    overwriting the input A, instead of creating a copy. If \"thin\" is
@@ -8698,11 +8702,12 @@ popdisplay(d::Display)
 
 "),
 
-("Linear Algebra","Base","svd","svd(A[, thin]) -> U, S, V
+("Linear Algebra","Base","svd","svd(A[, thin=true]) -> U, S, V
 
    Compute the SVD of A, returning \"U\", vector \"S\", and \"V\" such
    that \"A == U*diagm(S)*V'\". If \"thin\" is \"true\", an economy
-   mode decomposition is returned.
+   mode decomposition is returned. The default is to produce a thin
+   decomposition.
 
 "),
 
@@ -9847,6 +9852,7 @@ popdisplay(d::Display)
 ("Sparse Matrices","Base","nfilled","nfilled(A)
 
    Returns the number of stored (filled) elements in a sparse matrix.
+   For dense arrays, this returns the length of the array.
 
 "),
 
