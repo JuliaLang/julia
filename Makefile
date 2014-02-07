@@ -188,8 +188,9 @@ install:
 	done
 	$(INSTALL_M) $(BUILD)/bin/julia* $(DESTDIR)$(PREFIX)/bin/
 	# $(INSTALL_F) $(BUILD)/bin/llc$(EXE) $(DESTDIR)$(PREFIX)/libexec # this needs libLLVM-3.3.$(SHLIB_EXT)
-	-$(INSTALL_M) $(BUILD)/bin/*.dll $(BUILD)/bin/*.bat $(DESTDIR)$(PREFIX)/bin/
-ifneq ($(OS),WINNT)
+ifeq ($(OS),WINNT)
+	$(INSTALL_M) $(BUILD)/bin/*.dll $(BUILD)/bin/*.bat $(DESTDIR)$(PREFIX)/bin/
+else
 	-cp -a $(BUILD)/libexec $(DESTDIR)$(PREFIX)
 	cd $(DESTDIR)$(PREFIX)/bin && ln -sf julia-$(DEFAULT_REPL) julia
 endif
