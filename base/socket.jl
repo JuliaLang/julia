@@ -430,7 +430,7 @@ _recv_start(sock::UdpSocket) = uv_error("recv_start",ccall(:uv_udp_recv_start,Ci
 _recv_stop(sock::UdpSocket) = uv_error("recv_stop",ccall(:uv_udp_recv_stop,Cint,(Ptr{Void},),sock.handle))
 
 function recv(sock::UdpSocket)
-    # If the socket has not been bound, it will be bound implicityly to ::0 and a random port
+    # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     if sock.status != StatusInit && sock.status != StatusOpen 
         error("Invalid socket state")
     end
@@ -458,7 +458,7 @@ function _send(sock::UdpSocket,ipaddr::IPv6,port::Uint16,buf)
 end
 
 function send(sock::UdpSocket,ipaddr,port,msg)
-    # If the socket has not been bound, it will be bound implicityly to ::0 and a random port
+    # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     if sock.status != StatusInit && sock.status != StatusOpen 
         error("Invalid socket state")
     end
