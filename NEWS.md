@@ -115,6 +115,8 @@ Library improvements
 
       * Mutating linear algebra functions no longer promote ([#5526]).
 
+      * `condskeel` for Skeel condition numbers ([#5726]).
+
     * Sparse linear algebra
 
       * Faster sparse `kron` ([#4958]).
@@ -233,6 +235,7 @@ Deprecated or removed
 [#5475]: https://github.com/JuliaLang/julia/pull/5475
 [#5526]: https://github.com/JuliaLang/julia/pull/5526
 [#5538]: https://github.com/JuliaLang/julia/pull/5538
+[#5726]: https://github.com/JuliaLang/julia/pull/5726
 
 Julia v0.2.0 Release Notes
 ==========================
