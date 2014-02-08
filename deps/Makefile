@@ -746,8 +746,8 @@ install-random: $(LIBRANDOM_OBJ_TARGET)
 
 ## Rmath ##
 
-RMATH_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libRmath.$(SHLIB_EXT)
-RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
+RMATH_OBJ_TARGET = $(BUILD)/$(JL_LIBDIR)/libRmath-julia.$(SHLIB_EXT)
+RMATH_OBJ_SOURCE = Rmath/src/libRmath-julia.$(SHLIB_EXT)
 
 RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
 			   OS="$(OS)" ARCH="$(ARCH)" \
@@ -766,7 +766,7 @@ $(RMATH_OBJ_SOURCE): Rmath/Make.inc $(LIBRANDOM_OBJ_TARGET)
 	touch -c $@
 $(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE) | $(BUILD)/lib
 	cp $< $@
-	$(INSTALL_NAME_CMD)libRmath.$(SHLIB_EXT) $@
+	$(INSTALL_NAME_CMD)libRmath-julia.$(SHLIB_EXT) $@
 
 clean-Rmath:
 	-$(MAKE) -C Rmath/src clean
