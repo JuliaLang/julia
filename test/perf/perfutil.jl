@@ -39,7 +39,7 @@ function submit_to_codespeed(vals,name,desc,unit,test_group,lessisbetter=true)
 
     println( "$name: $(mean(vals))" )
     ret = post( "http://$codespeed_host/result/add/json/", json({"json" => [csdata]}) )
-    if( !ismatch(r".*202 ACCEPTED.*", ret.headers[1][1]) )
+    if ret.http_code != 400
         error("Error submitting $name, dumping headers and text: $(ret.headers[1])\n$(ret.text)\n\n")
         return false
     end
