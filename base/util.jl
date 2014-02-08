@@ -508,3 +508,32 @@ end
 
 warn(err::Exception; prefix="ERROR: ", kw...) =
     warn(sprint(io->showerror(io,err)), prefix=prefix; kw...)
+
+# @as macro for expression chaining
+
+function asexpand(expr)
+    if isa(expr,Expr) && expr.head == :call && expr.args[1] == :|>
+        return [asexpand(expr.args[2]) expr.args[3]]
+    else
+        return expr
+    end
+end
+
+
+macro as(name, bindings)
+    if !isa(bindings, Expr)
+        error("malformed @as bindings")
+    end
+
+    if bindings.head == :block
+        exprs = filter(x-> !isa(x,Expr) || x.head != :line, bindings.args)
+    elseif bindings.head == :call
+        exprs = asexpand(bindings)
+    end
+
+    quote
+        let $([Expr(:(=),name,expr) for expr in exprs]...)
+            $name
+        end
+    end
+end

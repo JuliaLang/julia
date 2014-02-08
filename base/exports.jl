@@ -1156,7 +1156,7 @@ export
 # shared arrays
     sdata,
     indexpids,
-    
+
 # paths and file names
     abspath,
     basename,
@@ -1299,4 +1299,5 @@ export
     @sprintf,
     @deprecate,
     @boundscheck,
-    @inbounds
+    @inbounds,
+    @as
