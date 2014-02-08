@@ -94,6 +94,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s);
 static jl_value_t *jl_deserialize_value_internal(ios_t *s);
 static jl_value_t ***sysimg_gvars = NULL;
 
+extern int globalUnique;
+
 static void jl_load_sysimg_so(char *fname)
 {
     // attempt to load the pre-compiled sysimg at fname
@@ -102,6 +104,7 @@ static void jl_load_sysimg_so(char *fname)
     uv_lib_t *sysimg_handle = jl_load_dynamic_library_e(fname, JL_RTLD_DEFAULT);
     if (sysimg_handle != 0) {
         sysimg_gvars = (jl_value_t***)jl_dlsym(sysimg_handle, "jl_sysimg_gvars");
+        globalUnique = *(size_t*)jl_dlsym(sysimg_handle, "jl_globalUnique");
     }
     else {
         sysimg_gvars = 0;

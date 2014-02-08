@@ -358,6 +358,8 @@ static Type *NoopType;
 
 // --- utilities ---
 
+extern "C" int globalUnique = 0;
+
 #include "cgutils.cpp"
 
 
@@ -2066,7 +2068,7 @@ static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx)
     BasicBlock *ifok = BasicBlock::Create(getGlobalContext(), "ok");
     builder.CreateCondBr(ok, ifok, err);
     builder.SetInsertPoint(err);
-    builder.CreateCall(jlundefvarerror_func, literal_pointer_val((jl_value_t*)name));
+    builder.CreateCall(prepare_call(jlundefvarerror_func), literal_pointer_val((jl_value_t*)name));
     builder.CreateBr(ifok);
     ctx->f->getBasicBlockList().push_back(ifok);
     builder.SetInsertPoint(ifok);
@@ -2796,8 +2798,11 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
 // generate a julia-callable function that calls f (AKA lam)
 static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Function *f)
 {
+    std::stringstream funcName;
+    funcName << "jlcall_" << f->getName().str();
+
     Function *w = Function::Create(jl_func_sig, Function::ExternalLinkage,
-                                   f->getName(), f->getParent());
+                                   funcName.str(), f->getParent());
     Function::arg_iterator AI = w->arg_begin();
     AI++; //const Argument &fArg = *AI++;
     Value *argArray = AI++;
@@ -2864,8 +2869,6 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
 
     return w;
 }
-
-static int globalUnique = 0;
 
 // cstyle = compile with c-callable signature, not jlcall
 static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
