@@ -103,7 +103,7 @@ include("process.jl")
 include("multimedia.jl")
 importall .Multimedia
 reinit_stdio()
-ccall(:jl_get_uv_hooks, Void, ())
+ccall(:jl_get_uv_hooks, Void, (Cint,), 0)
 include("grisu.jl")
 import .Grisu.print_shortest
 include("printf.jl")

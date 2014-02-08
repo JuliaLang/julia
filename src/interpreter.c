@@ -32,15 +32,18 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
 {
     jl_value_t *v=NULL;
     jl_module_t *last_m = jl_current_module;
+    jl_module_t *task_last_m = jl_current_task->current_module;
     JL_TRY {
-        jl_current_module = m;
+        jl_current_task->current_module = jl_current_module = m;
         v = eval(e, locals, nl);
     }
     JL_CATCH {
         jl_current_module = last_m;
+        jl_current_task->current_module = task_last_m;
         jl_rethrow();
     }
     jl_current_module = last_m;
+    jl_current_task->current_module = task_last_m;
     assert(v);
     return v;
 }

@@ -639,7 +639,7 @@ static void gc_mark_module(jl_module_t *m, int d)
 static void gc_mark_task(jl_task_t *ta, int d)
 {
     if (ta->parent) gc_push_root(ta->parent, d);
-    gc_push_root(ta->last, d);
+    if (ta->last) gc_push_root(ta->last, d);
     gc_push_root(ta->tls, d);
     gc_push_root(ta->consumers, d);
     gc_push_root(ta->donenotify, d);
