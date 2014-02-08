@@ -44,7 +44,7 @@ function test_dates(from,to)
 end
 test_dates(-2000,2000)
 
-test = Time.DateTime{Time.Millisecond,0,Time.ISOCalendar}(Time.Millisecond(63492681625000))
+test = Time.DateTime{Time.Millisecond,Time.ISOCalendar}(Time.Millisecond(63492681625000))
 @test Time.DateTime(2013) == test
 @test Time.DateTime(2013,1) == test
 @test Time.DateTime(2013,1,1) == test
@@ -667,7 +667,7 @@ c = Time.DateTime(2012,7,1,0,0,0)
 
 a = Time.DateTime(1972,6,30,23,59,59)
 @test Time.calendar(a) == Time.ISOCalendar
-@test Time.timezone(a) == Time.UTC
+@test Time.timezone(a) == "UTC"
 @test Time.precision(a) == Time.Millisecond
 @test string(typemax(Time.DateTime)) == "292277024-12-31T23:59:59 UTC"
 @test string(typemin(Time.DateTime)) == "-292277023-01-01T00:00:00 UTC"
