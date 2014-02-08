@@ -636,11 +636,11 @@ end
 
 isposdef(A::Union(Eigen,GeneralizedEigen)) = all(A.values .> 0)
 
-function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; balance::Symbol=:balance)
+function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     n = size(A, 2)
     n==0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     issym(A) && return eigfact!(Symmetric(A))
-    A, WR, WI, VL, VR, _ = LAPACK.geevx!(balance == :balance ? 'B' : (balance == :diagonal ? 'S' : (balance == :permute ? 'P' : (balance == :nobalance ? 'N' : throw(ArgumentError("balance must be either ':balance', ':diagonal', ':permute' or ':nobalance'"))))), 'N', 'V', 'N', A)
+    A, WR, WI, VL, VR, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)
     all(WI .== 0.) && return Eigen(WR, VR)
     evec = zeros(Complex{T}, n, n)
     j = 1
@@ -657,45 +657,48 @@ function eigfact!{T<:BlasReal}(A::StridedMatrix{T}; balance::Symbol=:balance)
     return Eigen(complex(WR, WI), evec)
 end
 
-function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}; balance::Symbol=:balance)
+function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
     ishermitian(A) && return eigfact!(Hermitian(A)) 
-    return Eigen(LAPACK.geevx!(balance == :balance ? 'B' : (balance == :diagonal ? 'S' : (balance == :permute ? 'P' : (balance == :nobalance ? 'N' : throw(ArgumentError("balance must be either ':balance', ':diagonal', ':permute' or ':nobalance'"))))), 'N', 'V', 'N', A)[[2,4]]...)
+    return Eigen(LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)[[2,4]]...)
 end
-eigfact{T<:BlasFloat}(A::StridedMatrix{T}; balance::Symbol=:balance) = eigfact!(copy(A), balance=balance)
-eigfact{T}(A::StridedMatrix{T}; balance::Symbol=:balance) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigfact!(convert(Matrix{S}, A), balance=balance) : eigfact!(copy(A), balance=balance))
+eigfact{T<:BlasFloat}(A::StridedMatrix{T}; kwargs...) = eigfact!(copy(A); kwargs...)
+eigfact{T}(A::StridedMatrix{T}; kwargs...) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigfact!(convert(Matrix{S}, A); kwargs...) : eigfact!(copy(A); kwargs...))
 eigfact(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
-function eig(A::Union(Number, AbstractMatrix), args...)
-    F = eigfact(A, args...)
+# function eig(A::Union(Number, AbstractMatrix); permute::Bool=true, scale::Bool=true)
+#     F = eigfact(A, permute=permute, scale=scale)
+#     F[:values], F[:vectors]
+# end
+function eig(A::Union(Number, AbstractMatrix); kwargs...)
+    F = eigfact(A, kwargs...)
     F[:values], F[:vectors]
 end
-
 #Calculates eigenvectors
-eigvecs(A::Union(Number, AbstractMatrix); balance::Symbol=:balance) = eigfact(A, balance=balance)[:vectors]
+eigvecs(A::Union(Number, AbstractMatrix); kwargs...) = eigfact(A; kwargs...)[:vectors]
 
-function eigvals!{T<:BlasReal}(A::StridedMatrix{T})
+function eigvals!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     issym(A) && return eigvals!(Symmetric(A))
-    valsre, valsim, _, _ = LAPACK.geev!('N', 'N', A)
+    _, valsre, valsim, _ = LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)
     return all(valsim .== 0) ? valsre : complex(valsre, valsim)
 end
-function eigvals!{T<:BlasComplex}(A::StridedMatrix{T})
+function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     ishermitian(A) && return eigvals(Hermitian(A))
-    return LAPACK.geev!('N', 'N', A)[1]
+    return LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)[2]
 end
-eigvals{T<:BlasFloat}(A::StridedMatrix{T}) = eigvals!(copy(A))
-eigvals{T}(A::AbstractMatrix{T}) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigvals!(convert(Matrix{S}, A)) : eigvals!(copy(A)))
+eigvals{T<:BlasFloat}(A::StridedMatrix{T}; kwargs...) = eigvals!(copy(A); kwargs...)
+eigvals{T}(A::AbstractMatrix{T}; kwargs...) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigvals!(convert(Matrix{S}, A); kwargs...) : eigvals!(copy(A); kwargs...))
 
-eigvals{T<:Number}(x::T) = (val = convert(promote_type(Float32,typeof(one(T)/norm(one(T)))),x); imag(val) == 0 ? [real(val)] : [val])
+eigvals{T<:Number}(x::T; kwargs...) = (val = convert(promote_type(Float32,typeof(one(T)/norm(one(T)))),x); imag(val) == 0 ? [real(val)] : [val])
 
 #Computes maximum and minimum eigenvalue
-function eigmax(A::Union(Number, AbstractMatrix))
-    v = eigvals(A)
+function eigmax(A::Union(Number, AbstractMatrix); kwargs...)
+    v = eigvals(A; kwargs...)
     iseltype(v,Complex) ? error("DomainError: complex eigenvalues cannot be ordered") : maximum(v)
 end
-function eigmin(A::Union(Number, AbstractMatrix))
-    v = eigvals(A)
+function eigmin(A::Union(Number, AbstractMatrix); kwargs...)
+    v = eigvals(A; kwargs...)
     iseltype(v,Complex) ? error("DomainError: complex eigenvalues cannot be ordered") : minimum(v)
 end
 
