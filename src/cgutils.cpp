@@ -227,6 +227,13 @@ static void jl_gen_llvm_gv_array()
             GlobalVariable::ExternalLinkage,
             ConstantArray::get(atype, ArrayRef<Constant*>(jl_sysimg_gvars)),
             "jl_sysimg_gvars");
+    new GlobalVariable(
+            *jl_Module,
+            T_size,
+            true,
+            GlobalVariable::ExternalLinkage,
+            ConstantInt::get(T_size,globalUnique+1),
+            "jl_globalUnique");
 }
 
 static int32_t jl_assign_functionID(Function *functionObject)
@@ -246,10 +253,13 @@ static Value *julia_gv(const char *cname, void *addr)
     it = jl_value_to_llvm.find(addr);
     if (it != jl_value_to_llvm.end())
         return builder.CreateLoad(it->second.gv);
+
+    std::stringstream gvname;
+    gvname << cname << globalUnique++;
     // no existing GlobalVariable, create one and store it
     GlobalValue *gv = new GlobalVariable(*jl_Module, jl_pvalue_llvmt,
                            false, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
-                           ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt), cname);
+                           ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt), gvname.str());
 
     // make the pointer valid for this session
 #ifdef USE_MCJIT

@@ -140,7 +140,9 @@ void jl_dump_function_asm(void* Fptr, size_t Fsize,
     }
 
     Streamer.reset(TheTarget->createAsmStreamer(Ctx, stream, /*asmverbose*/true,
+#ifndef LLVM35
                                            /*useLoc*/ true,
+#endif
                                            /*useCFI*/ true,
                                            /*useDwarfDirectory*/ true,
                                            IP, CE, MAB, ShowInst));
