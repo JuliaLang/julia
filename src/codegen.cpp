@@ -358,7 +358,9 @@ static Type *NoopType;
 
 // --- utilities ---
 
-extern "C" int globalUnique = 0;
+extern "C" {
+    int globalUnique = 0;
+}
 
 #include "cgutils.cpp"
 
