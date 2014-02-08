@@ -33,6 +33,8 @@ void jl_add_standard_imports(jl_module_t *m)
                                                        jl_symbol("Operators")));
 }
 
+extern void jl_get_system_hooks(void);
+extern void jl_get_uv_hooks(int);
 extern int base_module_conflict;
 jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 {
@@ -55,11 +57,13 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     jl_module_t *newm = jl_new_module(name);
     newm->parent = parent_module;
     b->value = (jl_value_t*)newm;
+    int newbase = 0;
     if (parent_module == jl_main_module && name == jl_symbol("Base")) {
         base_module_conflict = (jl_base_module != NULL);
         jl_old_base_module = jl_base_module;
         // pick up Base module during bootstrap
         jl_base_module = newm;
+        newbase = 1;
     }
     // export all modules from Main
     if (parent_module == jl_main_module)
@@ -73,7 +77,8 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     }
 
     JL_GC_PUSH1(&last_module);
-    jl_current_module = newm;
+    jl_module_t *task_last_m = jl_current_task->current_module;
+    jl_current_task->current_module = jl_current_module = newm;
 
     jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
     JL_TRY {
@@ -85,10 +90,21 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     }
     JL_CATCH {
         jl_current_module = last_module;
+        jl_current_task->current_module = task_last_m;
         jl_rethrow();
     }
     JL_GC_POP();
     jl_current_module = last_module;
+    jl_current_task->current_module = task_last_m;
+
+    if (newbase) {
+        // reinitialize global variables
+        // to pick up new types from Base
+        jl_errorexception_type = NULL;
+        jl_get_system_hooks();
+        jl_get_uv_hooks(1);
+        jl_current_task->tls = jl_nothing;
+    }
 
 #if 0
     // some optional post-processing steps

@@ -1086,6 +1086,7 @@ typedef struct _jl_task_t {
     struct _jl_task_t *last;
     jl_value_t *tls;
     jl_value_t *consumers;
+    int8_t started;
     int8_t done;
     int8_t runnable;
     jl_value_t *result;
@@ -1106,7 +1107,7 @@ typedef struct _jl_task_t {
     jl_handler_t *eh;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
-    // saved current module
+    // current module, or NULL if this task has not set one
     jl_module_t *current_module;
 } jl_task_t;
 

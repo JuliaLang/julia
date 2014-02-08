@@ -394,24 +394,6 @@ type RemoteRef
     RemoteRef(w::Worker) = RemoteRef(w.id)
     RemoteRef() = RemoteRef(myid())
 
-    global WeakRemoteRef
-    function WeakRemoteRef(w, wh, id)
-        return new(w, wh, id)
-    end
-
-    function WeakRemoteRef(pid::Integer)
-        rr = WeakRemoteRef(pid, myid(), REQ_ID)
-        REQ_ID += 1
-        if mod(REQ_ID,200) == 0
-            gc()
-        end
-        rr
-    end
-
-    WeakRemoteRef(w::LocalProcess) = WeakRemoteRef(myid())
-    WeakRemoteRef(w::Worker) = WeakRemoteRef(w.id)
-    WeakRemoteRef() = WeakRemoteRef(myid())
-
     global next_id
     next_id() = (id=(myid(),REQ_ID); REQ_ID+=1; id)
 end
@@ -467,7 +449,14 @@ function del_clients(pairs::(Any,Any)...)
     end
 end
 
-any_gc_flag = false
+any_gc_flag = Condition()
+function start_gc_msgs_task()
+    enq_work(Task(()->
+        while true
+            wait(any_gc_flag)
+            flush_gc_msgs()
+        end))
+end
 
 function send_del_client(rr::RemoteRef)
     if rr.where == myid()
@@ -480,7 +469,7 @@ function send_del_client(rr::RemoteRef)
         w = worker_from_id(rr.where)
         push!(w.del_msgs, (rr2id(rr), myid()))
         w.gcflag = true
-        global any_gc_flag = true
+        notify(any_gc_flag)
     end
 end
 
@@ -508,7 +497,7 @@ function send_add_client(rr::RemoteRef, i)
         #println("$(myid()) adding $((rr2id(rr), i)) for $(rr.where)")
         push!(w.add_msgs, (rr2id(rr), i))
         w.gcflag = true
-        global any_gc_flag = true
+        notify(any_gc_flag)
     end
 end
 
@@ -735,35 +724,6 @@ end
 take_ref(rid) = take(lookup_ref(rid))
 take(rr::RemoteRef) = call_on_owner(take_ref, rr)
 
-## work queue ##
-
-function enq_work(t::Task)
-    ccall(:uv_stop,Void,(Ptr{Void},),eventloop())
-    unshift!(Workqueue, t)
-end
-
-function perform_work()
-    perform_work(pop!(Workqueue))
-end
-
-function perform_work(t::Task)
-    if !istaskstarted(t)
-        # starting new task
-        yieldto(t)
-    else
-        # continuing interrupted work item
-        arg = t.result
-        t.result = nothing
-        t.runnable = true
-        yieldto(t, arg)
-    end
-    t = current_task().last
-    if t.runnable
-        # still runnable; return to queue
-        enq_work(t)
-    end
-end
-
 function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
     if is(msg,:call_fetch)
@@ -956,11 +916,9 @@ function start_worker(out::IO)
 
     ccall(:jl_install_sigint_handler, Void, ())
 
-    global const Scheduler = current_task()
-
     try
         check_master_connect(60.0)
-        event_loop(false)
+        wait()
     catch err
         print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")
     end
@@ -1216,37 +1174,6 @@ end
 
 ## higher-level functions: spawn, pmap, pfor, etc. ##
 
-sync_begin() = task_local_storage(:SPAWNS, ({}, get(task_local_storage(), :SPAWNS, ())))
-
-function sync_end()
-    spawns = get(task_local_storage(), :SPAWNS, ())
-    if is(spawns,())
-        error("sync_end() without sync_begin()")
-    end
-    refs = spawns[1]
-    task_local_storage(:SPAWNS, spawns[2])
-    for r in refs
-        wait(r)
-    end
-end
-
-macro sync(block)
-    quote
-        sync_begin()
-        v = $(esc(block))
-        sync_end()
-        v
-    end
-end
-
-function sync_add(r)
-    spawns = get(task_local_storage(), :SPAWNS, ())
-    if !is(spawns,())
-        push!(spawns[1], r)
-    end
-    r
-end
-
 let nextidx = 1
     global chooseproc
     function chooseproc(thunk::Function)
@@ -1295,23 +1222,6 @@ end
 macro fetchfrom(p, expr)
     expr = localize_vars(:(()->($expr)), false)
     :(remotecall_fetch($(esc(p)), $(esc(expr))))
-end
-
-function spawnlocal(thunk)
-    t = Task(thunk)
-    sync_add(t)
-    enq_work(t)
-    t
-end
-
-macro async(expr)
-    expr = localize_vars(:(()->($expr)), false)
-    :(spawnlocal($(esc(expr))))
-end
-
-macro spawnlocal(expr)
-    warn_once("@spawnlocal is deprecated, use @async instead.")
-    :(@async $(esc(expr)))
 end
 
 function at_each(f, args...)
@@ -1531,75 +1441,6 @@ end
 #     2/(nc/niter)
 # end
 
-## event processing, I/O and work scheduling ##
-
-function yield(args...)
-    ct = current_task()
-    # preserve Task.last across calls to the scheduler
-    prev = ct.last
-    v = yieldto(Scheduler, args...)
-    ct.last = prev
-    return v
-end
-
-function pause()
-    @unix_only    ccall(:pause, Void, ())
-    @windows_only ccall(:Sleep,stdcall, Void, (Uint32,), 0xffffffff)
-end
-
-function event_loop(isclient)
-    iserr, lasterr, bt = false, nothing, {}
-    while true
-        try
-            if iserr
-                display_error(lasterr, bt)
-                println(STDERR)
-                iserr, lasterr, bt = false, nothing, {}
-            else
-                while true
-                    if isempty(Workqueue)
-                        if any_gc_flag
-                            flush_gc_msgs()
-                        end
-                        c = process_events(true)
-                        if c==0 && eventloop()!=C_NULL && isempty(Workqueue) && !any_gc_flag
-                            # if there are no active handles and no runnable tasks, just
-                            # wait for signals.
-                            pause()
-                        end
-                    else
-                        perform_work()
-                        process_events(false)
-                    end
-                end
-            end
-        catch err
-            if iserr
-                ccall(:jl_, Void, (Any,), (
-                    "\n!!!An ERROR occurred while printing the last error!!!\n",
-                    lasterr,
-                    bt
-                ))
-            end
-            iserr, lasterr = true, err
-            bt = catch_backtrace()
-            if isclient && isa(err,InterruptException)
-                # root task is waiting for something on client. allow C-C
-                # to interrupt.
-                interrupt_waiting_task(roottask,err)
-                iserr, lasterr = false, nothing
-            end
-        end
-    end
-end
-
-# force a task to stop waiting with an exception
-function interrupt_waiting_task(t::Task, err)
-    if !t.runnable
-        t.exception = err
-        enq_work(t)
-    end
-end
 
 function check_master_connect(timeout)
     # If we do not have at least process 1 connect to us within timeout
