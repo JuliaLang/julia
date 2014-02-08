@@ -546,23 +546,87 @@ is ``DArray``\ -specific, but we list it here for completeness::
 Shared Arrays (EXPERIMENTAL FEATURE)
 ------------------------------------
 
-Shared Arrays use system shared memory to map the same array across many processes.
+Shared Arrays use system shared memory to map the same array across
+many processes.  While there are some similarities to a ``DArray``,
+the behavior of a ``SharedArray`` is quite different. In a ``DArray``,
+each process has local access to just a chunk of the data, and no two
+processes share the same chunk; in contrast, in a ``SharedArray`` each
+"participating" process has access to the entire array.  A
+``SharedArray`` is a good choice when you want to have a large amount
+of data jointly accessible to two or more processes on the same machine.
+
+``SharedArray`` indexing (assignment and accessing values) works just
+as with regular arrays, and is efficient because the underlying memory
+is available to the local process.  Therefore, most algorithms work
+naturally on ``SharedArrays``, albeit in single-process mode.  In
+cases where an algorithm insists on an ``Array`` input, the underlying
+array can be retrieved from a ``SharedArray`` by calling ``sdata(S)``.
+For other ``AbstractArray`` types, ``sdata`` just returns the object
+itself, so it's safe to use ``sdata`` on any Array-type object.
 
 The constructor for a shared array is of the form 
-  ``SharedArray(T::Type, dims::NTuple; init=false, pids=workers())``
-which creates a shared array of a bitstype ``T``  and size ``dims`` across the processes
-specified by ``pids`` - all of which have to be on the same host. 
-
-If an ``init`` function of the type ``initfn(S::SharedArray)`` is specified, 
-it is called on all the participating workers. 
-
-Unlike distributed arrays, a shared array is accessible only from those participating workers 
-specified by the ``pids`` named argument (and the creating process too, if it is on the same host).
+  ``SharedArray(T::Type, dims::NTuple; pids=workers(), init=false)``
+which creates a shared array of a bitstype ``T`` and size ``dims``
+across the processes specified by ``pids``.  Unlike distributed
+arrays, a shared array is accessible only from those participating
+workers specified by the ``pids`` named argument (and the creating
+process too, if it is on the same host).
   
-SharedArray indexing (assignment and accessing values) is just like a regular array.
+If an ``init`` function, of signature ``initfn(S::SharedArray)``, is
+specified, it is called on all the participating workers.  You can
+arrange it so that each worker runs the ``init`` function on a
+distinct portion of the array, thereby parallelizing initialization.
+
+Here's a brief example::
+
+  julia> addprocs(3)
+  3-element Array{Any,1}:
+   2
+   3
+   4
+
+  julia> S = SharedArray(Int, (3,4), init = S -> S[localindexes(S)] = myid())
+  3x4 SharedArray{Int64,2}:
+   2  2  3  4
+   2  3  3  4
+   2  3  4  4
+
+  julia> S[3,2] = 7
+  7
+
+  julia> S
+  3x4 SharedArray{Int64,2}:
+   2  2  3  4
+   2  3  3  4
+   2  7  4  4
+
+``localindexes`` provides disjoint one-dimensional ranges of indexes,
+and is sometimes convenient for splitting up tasks among processes.
+You can, of course, divide the work any way you wish::
+
+  julia> S = SharedArray(Int, (3,4), init = S -> S[myid()-1:nworkers():length(S)] = myid())
+  3x4 SharedArray{Int64,2}:
+   2  2  2  2
+   3  3  3  3
+   4  4  4  4
+
+Since all processes have access to the underlying data, you do have to
+be careful not to set up conflicts.  For example::
+
+  @sync begin
+      for p in workers()
+          @async begin
+              remotecall_wait(p, fill!, S, p)
+          end
+      end
+  end
+
+would result in undefined behavior: because each process fills the
+*entire* array with its own ``pid``, whichever process is the last to
+execute (for any particular element of ``S``) will have its ``pid``
+retained.
 
 
-    
 ClusterManagers
 ---------------
 
