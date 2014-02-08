@@ -1054,7 +1054,7 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
                 jl_add_linfo_root(ctx->linfo, jt);
                 v = allocate_box_dynamic(emit_tupleref(literal_pointer_val(jt),
                                                        ival, jl_typeof(jt), ctx),
-                                         ConstantInt::get(T_size,ty->getScalarSizeInBits()), v);
+                                         ConstantInt::get(T_size,ty->getScalarSizeInBits()/8), v);
             }
         }
         return v;
