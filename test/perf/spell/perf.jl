@@ -28,7 +28,7 @@ function train(features)
     return model
 end
 
-const NWORDS = train(words(get("http://norvig.com/big.txt").body))
+const NWORDS = train(words(bytestring(get("http://norvig.com/big.txt").body)))
 
 const alphabet = "abcdefghijklmnopqrstuvwxyz"
 
