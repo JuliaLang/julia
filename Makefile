@@ -261,6 +261,9 @@ else ifeq ($(OS), WINNT)
 	-cat ./contrib/windows/juliarc.jl >> $(DESTDIR)$(prefix)/etc/julia/juliarc.jl
 endif
 
+	# purge sys.{dll,so,dylib} as that file is not relocatable across processor architectures
+	-rm -f julia-$(JULIA_COMMIT)/$(private_libdir)/sys.$(SHLIB_EXT)
+
 ifeq ($(OS), WINNT)
 	[ ! -d dist-extras ] || ( cd dist-extras && \
 		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll ../$(bindir) && \
