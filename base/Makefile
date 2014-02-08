@@ -39,7 +39,6 @@ ifeq ($(USE_BLAS64), 1)
 else
 	@echo "const USE_BLAS64 = false" >> $@
 endif
-	@echo "const SYSCONFDIR = \"$(SYSCONFDIR)\"" >> $@
 	@echo "const VERSION_STRING = \"$(JULIA_VERSION)\"" >> $@
 	@echo "const TAGGED_RELEASE_BANNER = \"$(TAGGED_RELEASE_BANNER)\"" >> $@
 	@echo "const SYSCONFDIR = \"$(sysconfdir)\"" >> $@
