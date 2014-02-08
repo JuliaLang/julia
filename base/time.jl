@@ -4,7 +4,7 @@ import Base: hash, isless, isequal, isfinite, convert, precision,
              typemax, typemin, zero, one, string, show,
              step, next, colon, last, +, -, *, /, div
 
-export Calendar, ISOCalendar, TimeZone, UTC,
+export Calendar, ISOCalendar,
     Date, DateTime, UTCDateTime, ISODateTime,
     Period, Year, Month, Week, Day, Hour, Minute, Second, Millisecond,
     # accessors
@@ -28,10 +28,6 @@ abstract Calendar <: AbstractTime
 # ISOCalendar Implements the ISO 8601 standard (en.wikipedia.org/wiki/ISO_8601)
 # Notably based on the proleptic Gregorian calendar
 immutable ISOCalendar <: Calendar end
-
-abstract TimeZone <: AbstractTime
-immutable UTCTimeZone <: TimeZone tz::Int end
-const UTC = UTCTimeZone(0)
 
 abstract Period     <: AbstractTime
 abstract DatePeriod <: Period
@@ -75,11 +71,10 @@ abstract TimeType <: AbstractTime
 
 # The DateTime type is a generic Period wrapper parameterized by
 # different Period precision levels, TimeZone types, and Calendars
-immutable DateTime{P<:Period,T,C<:Calendar} <: TimeType
+immutable DateTime{P<:Period,C<:Calendar} <: TimeType
     instant::P
 end 
-typealias UTCDateTime DateTime{Millisecond,UTC.tz,ISOCalendar}
-typealias ISODateTime{T} DateTime{Millisecond,T,ISOCalendar}
+typealias UTCDateTime DateTime{Millisecond,ISOCalendar}
 
 immutable Date <: TimeType
     instant::Day
@@ -87,7 +82,7 @@ immutable Date <: TimeType
 end
 
 include("leapseconds.jl")
-
+    
 # Convert y,m,d to # of Rata Die days
 const MONTHDAYS = [306,337,0,31,61,92,122,153,184,214,245,275]
 function totaldays(y,m,d)
@@ -96,20 +91,14 @@ function totaldays(y,m,d)
     return d + mdays + 365z + fld(z,4) - fld(z,100) + fld(z,400) - 306
 end
 
-setoffset(tz,ms) = setleaps(ms)
-setoffsetsecond(tz,ms) = setleapsecond(ms)
-getoffset(tz,ms) = getleaps(ms)
-getoffsetsecond(tz,ms) = getleapsecond(ms)
-getabbr(tz,ms) = "UTC"
-
 # DateTime constructor with defaults
-function DateTime(y,m=1,d=1,h=0,mi=0,s=0,ms=0)
+function DateTime(y::Integer,m::Integer=1,d::Integer=1,h::Integer=0,mi::Integer=0,s::Integer=0,ms::Integer=0)
     # RFC: Month is the only Period we check because it can throw a
     # BoundsError() in construction (see totaldays())
     # all other Periods "roll over"; should we make these consistent?
     0 < m < 13 || error("Month out of range")
     rata = ms + 1000*(s + 60mi + 3600h + 86400*totaldays(y,m,d))
-    return ISODateTime{0}(Millisecond(
+    return UTCDateTime(Millisecond(
         rata + (s == 60 ? setleapsecond(rata) : setleaps(rata))))
 end
 
@@ -150,18 +139,18 @@ end
 
 # Accessor functions
 _days(dt::Date)               = dt.instant.days
-_days{T}(dt::ISODateTime{T})  = fld(dt.instant.ms - getoffset(T,dt.instant.ms),86400000)
+_days(dt::DateTime)           = fld(dt.instant.ms - getleaps(dt.instant.ms),86400000)
 year(dt::TimeType)            = _year(_days(dt))
 month(dt::TimeType)           = _month(_days(dt))
 week(dt::TimeType)            = _week(_days(dt))
 day(dt::TimeType)             = _day(_days(dt))
-hour{T}(dt::ISODateTime{T})   = mod(fld(dt.instant.ms - getoffset(T,dt.instant.ms),3600000),24)
-minute{T}(dt::ISODateTime{T}) = mod(fld(dt.instant.ms - getoffset(T,dt.instant.ms),60000),60)
-function second{T}(dt::ISODateTime{T})
-    s = mod(fld(dt.instant.ms - getoffsetsecond(T,dt.instant.ms),1000),60)
+hour(dt::DateTime)   = mod(fld(dt.instant.ms - getleaps(dt.instant.ms),3600000),24)
+minute(dt::DateTime) = mod(fld(dt.instant.ms - getleaps(dt.instant.ms),60000),60)
+function second(dt::DateTime)
+    s = mod(fld(dt.instant.ms - getleapsecond(dt.instant.ms),1000),60)
     return s == 0 ? (dt.instant.ms - millisecond(dt) in GETLEAPS ? 60 : 0) : s
 end
-millisecond{T}(dt::ISODateTime{T}) = mod(dt.instant.ms,1000)
+millisecond(dt::DateTime) = mod(dt.instant.ms,1000)
 
 @vectorize_1arg TimeType year
 @vectorize_1arg TimeType month
@@ -178,6 +167,8 @@ millisecond{T}(dt::ISODateTime{T}) = mod(dt.instant.ms,1000)
 #different precision levels?
 DateTime(dt::Date) = DateTime(year(dt),month(dt),day(dt))
 Date(dt::DateTime) = Date(year(dt),month(dt),day(dt))
+convert{R<:Real}(::Type{R},x::DateTime) = convert(R,x.instant.ms)
+convert{R<:Real}(::Type{R},x::Date)     = convert(R,x.instant.days)
 
 @vectorize_1arg DateTime Date
 @vectorize_1arg Date DateTime
@@ -187,18 +178,18 @@ hash(dt::TimeType) = hash(dt.instant)
 isless(x::TimeType,y::TimeType) = isless(x.instant,y.instant)
 isequal(x::TimeType,y::TimeType) = isequal(x.instant,y.instant)
 isfinite(::TimeType) = true
-calendar{P,T,C}(dt::DateTime{P,T,C}) = C
+calendar{P,C}(dt::DateTime{P,C}) = C
 calendar(dt::Date) = ISOCalendar
-timezone{P,T,C}(dt::DateTime{P,T,C}) = UTC
-precision{P,T,C}(dt::DateTime{P,T,C}) = P
-precision(dt::Date) = Day
+timezone(dt::DateTime) = "UTC"
+precision{P,C}(dt::DateTime{P,C}) = P
+precision(dt::Date) = day
 typemax{T<:DateTime}(::Type{T}) = DateTime(292277024,12,31,23,59,59)
 typemin{T<:DateTime}(::Type{T}) = DateTime(-292277023,1,1,0,0,0)
 typemax(::Type{Date}) = Date(252522163911149,12,31)
 typemin(::Type{Date}) = Date(-252522163911150,1,1)
 
 # TODO: optimize this?
-function string{T}(dt::ISODateTime{T})
+function string(dt::DateTime)
     y,m,d = _day2date(_days(dt))
     h,mi,s = hour(dt),minute(dt),second(dt)
     yy = y < 0 ? @sprintf("%05i",y) : lpad(y,4,"0")
@@ -208,9 +199,9 @@ function string{T}(dt::ISODateTime{T})
     mii = lpad(mi,2,"0")
     ss = lpad(s,2,"0")
     ms = millisecond(dt) == 0 ? "" : string(millisecond(dt)/1000.0)[2:end]
-    return "$yy-$mm-$(dd)T$hh:$mii:$ss$ms $(getabbr(T,dt.instant.ms))"
+    return "$yy-$mm-$(dd)T$hh:$mii:$ss$ms UTC"
 end
-show{T}(io::IO,x::ISODateTime{T}) = print(io,string(x))
+show(io::IO,x::DateTime) = print(io,string(x))
 function string(dt::Date)
     y,m,d = _day2date(dt.instant.days)
     yy = y < 0 ? @sprintf("%05i",y) : lpad(y,4,"0")
@@ -272,12 +263,12 @@ function daysofweekinmonth(dt::TimeType)
            ld == 30 ? ((d in [1,2,8,9,15,16,22,23,29,30]) ? 5 : 4) :
            (d in [1,2,3,8,9,10,15,16,17,22,23,24,29,30,31]) ? 5 : 4
 end
-function firstdayofweek{T}(dt::ISODateTime{T})
+function firstdayofweek(dt::DateTime)
     d = firstdayofweek(Date(dt))
     return DateTime(d)
 end
 firstdayofweek(dt::Date) = Date(dt.instant - dayofweek(dt))
-function lastdayofweek{T}(dt::ISODateTime{T})
+function lastdayofweek(dt::DateTime)
     d = lastdayofweek(Date(dt))
     return DateTime(d)
 end
@@ -294,25 +285,25 @@ dayofyear(dt::TimeType) = _days(dt) - totaldays(year(dt),1,1) + 1
 @vectorize_1arg TimeType dayofyear
 
 const UNIXEPOCH = DateTime(1970).instant.ms #Rata Die milliseconds for 1970-01-01T00:00:00 UTC
-function unix2date{T<:TimeZone}(x,tz::T=UTC)
+function unix2date(x)
     rata = UNIXEPOCH + int64(1000*x)
-    return ISODateTime{tz.tz}(Millisecond(rata + setoffset(tz,rata)))
+    return UTCDateTime(Millisecond(rata + setleaps(rata)))
 end
 # Returns unix seconds since 1970-01-01T00:00:00 UTC
-date2unix{T}(dt::ISODateTime{T}) = (dt.instant.ms - getoffset(T,dt.instant.ms) - UNIXEPOCH)/1000.0
-now() = unix2date(time(),UTC)
+date2unix(dt::DateTime) = (dt.instant.ms - getleaps(dt.instant.ms) - UNIXEPOCH)/1000.0
+now() = unix2date(time())
 
 ratadays2date(days) = _day2date(days)
 date2ratadays(dt::TimeType) = _days(dt)
 
 # Julian conversions
 const JULIANEPOCH = DateTime(-4713,11,24,12).instant.ms
-function julian2date{T<:TimeZone}(f,tz::T=UTC)
+function julian2date(f)
     rata = JULIANEPOCH + int64(86400000*f)
-    return ISODateTime{tz.tz}(Millisecond(rata + setoffset(tz,rata)))
+    return UTCDateTime(Millisecond(rata + setleaps(rata)))
 end
 # Returns # of julian days since -4713-11-24T12:00:00 UTC
-date2julian{T}(dt::ISODateTime{T}) = (dt.instant.ms - getoffset(T,dt.instant.ms) - JULIANEPOCH)/86400000.0
+date2julian(dt::DateTime) = (dt.instant.ms - getleaps(dt.instant.ms) - JULIANEPOCH)/86400000.0
 
 #wrapping arithmetic
 monthwrap(m1,m2) = (v = (m1 + m2) % 12; return v == 0 ? 12 : v < 0 ? 12 + v : v)
@@ -369,18 +360,18 @@ end
 (-)(x::Date,y::Week) = return Date(x.instant - 7*y.weeks)
 (+)(x::Date,y::Day)  = return Date(x.instant + y.days)
 (-)(x::Date,y::Day)  = return Date(x.instant - y.days)
-(+){T}(x::ISODateTime{T},y::Week)   = (x=x.instant.ms+604800000*value(y)-getoffset(T,x.instant.ms); return ISODateTime{T}(Millisecond(x+setoffset(T,x))))
-(-){T}(x::ISODateTime{T},y::Week)   = (x=x.instant.ms-604800000*value(y)-getoffset(T,x.instant.ms); return ISODateTime{T}(Millisecond(x+setoffset(T,x))))
-(+){T}(x::ISODateTime{T},y::Day)    = (x=x.instant.ms+86400000 *value(y)-getoffset(T,x.instant.ms); return ISODateTime{T}(Millisecond(x+setoffset(T,x))))
-(-){T}(x::ISODateTime{T},y::Day)    = (x=x.instant.ms-86400000 *value(y)-getoffset(T,x.instant.ms); return ISODateTime{T}(Millisecond(x+setoffset(T,x))))
-(+){T}(x::ISODateTime{T},y::Hour)   = (x=x.instant.ms+3600000  *value(y)-getoffset(T,x.instant.ms); return ISODateTime{T}(Millisecond(x+setoffset(T,x))))
-(-){T}(x::ISODateTime{T},y::Hour)   = (x=x.instant.ms-3600000  *value(y)-getoffset(T,x.instant.ms); return ISODateTime{T}(Millisecond(x+setoffset(T,x))))
-(+){T}(x::ISODateTime{T},y::Minute) = (x=x.instant.ms+60000    *value(y)-getoffset(T,x.instant.ms); return ISODateTime{T}(Millisecond(x+setoffset(T,x))))
-(-){T}(x::ISODateTime{T},y::Minute) = (x=x.instant.ms-60000    *value(y)-getoffset(T,x.instant.ms); return ISODateTime{T}(Millisecond(x+setoffset(T,x))))
-(+){T}(x::ISODateTime{T},y::Second)      = ISODateTime{T}(Millisecond(x.instant.ms+1000*y.s))
-(-){T}(x::ISODateTime{T},y::Second)      = ISODateTime{T}(Millisecond(x.instant.ms-1000*y.s))
-(+){T}(x::ISODateTime{T},y::Millisecond) = ISODateTime{T}(Millisecond(x.instant.ms+y.ms))
-(-){T}(x::ISODateTime{T},y::Millisecond) = ISODateTime{T}(Millisecond(x.instant.ms-y.ms))
+(+)(x::DateTime,y::Week)   = (x=x.instant.ms+604800000*value(y)-getleaps(x.instant.ms); return UTCDateTime(Millisecond(x+setleaps(x))))
+(-)(x::DateTime,y::Week)   = (x=x.instant.ms-604800000*value(y)-getleaps(x.instant.ms); return UTCDateTime(Millisecond(x+setleaps(x))))
+(+)(x::DateTime,y::Day)    = (x=x.instant.ms+86400000 *value(y)-getleaps(x.instant.ms); return UTCDateTime(Millisecond(x+setleaps(x))))
+(-)(x::DateTime,y::Day)    = (x=x.instant.ms-86400000 *value(y)-getleaps(x.instant.ms); return UTCDateTime(Millisecond(x+setleaps(x))))
+(+)(x::DateTime,y::Hour)   = (x=x.instant.ms+3600000  *value(y)-getleaps(x.instant.ms); return UTCDateTime(Millisecond(x+setleaps(x))))
+(-)(x::DateTime,y::Hour)   = (x=x.instant.ms-3600000  *value(y)-getleaps(x.instant.ms); return UTCDateTime(Millisecond(x+setleaps(x))))
+(+)(x::DateTime,y::Minute) = (x=x.instant.ms+60000    *value(y)-getleaps(x.instant.ms); return UTCDateTime(Millisecond(x+setleaps(x))))
+(-)(x::DateTime,y::Minute) = (x=x.instant.ms-60000    *value(y)-getleaps(x.instant.ms); return UTCDateTime(Millisecond(x+setleaps(x))))
+(+)(x::DateTime,y::Second)      = UTCDateTime(Millisecond(x.instant.ms+1000*y.s))
+(-)(x::DateTime,y::Second)      = UTCDateTime(Millisecond(x.instant.ms-1000*y.s))
+(+)(x::DateTime,y::Millisecond) = UTCDateTime(Millisecond(x.instant.ms+y.ms))
+(-)(x::DateTime,y::Millisecond) = UTCDateTime(Millisecond(x.instant.ms-y.ms))
 (+)(y::Period,x::TimeType) = x + y
 (-)(y::Period,x::TimeType) = x - y
 typealias TimeTypePeriod Union(TimeType,Period)
