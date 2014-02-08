@@ -174,6 +174,10 @@ end
 cond(x::Number) = x == 0 ? Inf : 1.0
 cond(x::Number, p) = cond(x)
 
+#Skeel condition numbers
+condskeel(A::AbstractMatrix, p::Real=Inf) = norm(abs(inv(A))*abs(A), p)
+condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf) = norm(abs(inv(A))*abs(A)*abs(x), p)
+
 function issym(A::AbstractMatrix)
     m, n = size(A)
     m==n || return false
