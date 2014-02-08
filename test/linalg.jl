@@ -50,7 +50,7 @@ debug && println("(Automatic) upper Cholesky factor")
         @test norm(apd*x-b)/norm(b) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
 
         @test_approx_eq apd * inv(capd) eye(n)
-        @test_approx_eq_eps a*(capd\(a'*b)) b 800ε
+        @test_approx_eq_eps a*(capd\(a'*b)) b 8000ε
         @test_approx_eq det(capd) det(apd)
         @test_approx_eq logdet(capd) log(det(capd)) # logdet is less likely to overflow
 
