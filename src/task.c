@@ -238,8 +238,17 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
         jl_current_task->gcstack = jl_pgcstack;
         jl_pgcstack = t->gcstack;
 #endif
-        jl_current_task->current_module = jl_current_module;
-        jl_current_module = t->current_module;
+
+        // restore task's current module, looking at parent tasks
+        // if it hasn't set one.
+        jl_task_t *last = t;
+        while (last->current_module == NULL && last != jl_root_task) {
+            last = last->parent;
+        }
+        if (last->current_module != NULL) {
+            jl_current_module = last->current_module;
+        }
+
         t->last = jl_current_task;
         jl_current_task = t;
 
@@ -387,9 +396,10 @@ static void finish_task(jl_task_t *t, jl_value_t *resultval)
     jl_task_t *cont = jl_current_task->last;
     if (!cont->done) {
         jl_switchto(cont, t->result);
-    } else {
-        jl_function_t* yield_f = (jl_function_t*)jl_get_global(
-                jl_base_module, jl_symbol("yield"));
+    }
+    else {
+        jl_function_t* yield_f =
+            (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("yield"));
         (void)jl_apply(yield_f,NULL,0);
     }
     assert(0);
@@ -778,7 +788,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->type = (jl_value_t*)jl_task_type;
     ssize = LLT_ALIGN(ssize, pagesz);
     t->ssize = ssize;
-    t->current_module = jl_current_module;
+    t->current_module = NULL;
     t->parent = jl_current_task;
     t->last = NULL;
     t->tls = jl_nothing;

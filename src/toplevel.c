@@ -77,7 +77,8 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     }
 
     JL_GC_PUSH1(&last_module);
-    jl_current_module = newm;
+    jl_module_t *task_last_m = jl_current_task->current_module;
+    jl_current_task->current_module = jl_current_module = newm;
 
     jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
     JL_TRY {
@@ -89,10 +90,12 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     }
     JL_CATCH {
         jl_current_module = last_module;
+        jl_current_task->current_module = task_last_m;
         jl_rethrow();
     }
     JL_GC_POP();
     jl_current_module = last_module;
+    jl_current_task->current_module = task_last_m;
 
     if (newbase) {
         // reinitialize global variables

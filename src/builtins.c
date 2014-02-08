@@ -373,17 +373,20 @@ JL_CALLABLE(jl_f_top_eval)
         return v;
     }
     jl_module_t *last_m = jl_current_module;
+    jl_module_t *task_last_m = jl_current_task->current_module;
     JL_TRY {
-        jl_current_module = m;
+        jl_current_task->current_module = jl_current_module = m;
         v = jl_toplevel_eval(ex);
     }
     JL_CATCH {
         jl_lineno = last_lineno;
         jl_current_module = last_m;
+        jl_current_task->current_module = task_last_m;
         jl_rethrow();
     }
     jl_lineno = last_lineno;
     jl_current_module = last_m;
+    jl_current_task->current_module = task_last_m;
     assert(v);
     return v;
 }
