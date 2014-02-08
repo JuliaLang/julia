@@ -18,7 +18,7 @@ perf:
 
 clean:
 	@$(MAKE) -C perf $@
-	-rm -f libccalltest.${SHLIB_EXT} ccalltest
+	-rm -f libccalltest.$(SHLIB_EXT) ccalltest
 
 .PHONY: $(TESTS) perf clean
 

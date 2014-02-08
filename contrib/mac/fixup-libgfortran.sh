@@ -1,6 +1,5 @@
 #!/bin/sh
 # Run as: fixup-libgfortran.sh <$private_libdir>
-set +x
 
 if [[ -z "$1" ]]; then
     echo "Usage: $0 <private_libdir>"

@@ -348,7 +348,7 @@ function init_profiler()
 end
 
 function load_juliarc()
-    # If the user built us with a specifi Base.SYSCONFDIR, check that location first for a juliarc.jl file
+    # If the user built us with a specific Base.SYSCONFDIR, check that location first for a juliarc.jl file
     #   If it is not found, then continue on to the relative path based on JULIA_HOME
     if !isempty(Base.SYSCONFDIR) && isfile(joinpath(Base.SYSCONFDIR,"julia","juliarc.jl"))
         include(abspath(Base.SYSCONFDIR,"julia","juliarc.jl"))
