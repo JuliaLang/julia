@@ -11,11 +11,10 @@
 # @kmsquire, 2013-11-29
 #
 
-Pkg.add("Curl")
 Pkg.add("DataStructures")
 
-import Curl
 using DataStructures
+using HTTPClient.HTTPC
 
 include("../perfutil.jl")
 
@@ -29,7 +28,7 @@ function train(features)
     return model
 end
 
-const NWORDS = train(words(Curl.get("http://norvig.com/big.txt").text))
+const NWORDS = train(words(get("http://norvig.com/big.txt").body))
 
 const alphabet = "abcdefghijklmnopqrstuvwxyz"
 
