@@ -512,10 +512,8 @@ function A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::Strid
     LAPACK.ormrz!('L', iseltype(B, Complex) ? 'C' : 'T', C, τ, sub(B,1:nA,1:nrhs))
     return isa(A,QRPivoted) ? B[invperm(A[:p]),:] : B[1:nA,:], rnk
 end
-A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::StridedVector, rcond::Real) = A_ldiv_B!(A,reshape(B,length(B),1), rcond)[:]
+A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::StridedVector{T}) = A_ldiv_B!(A,reshape(B,length(B),1))[:]
 A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::StridedVecOrMat{T}) = A_ldiv_B!(A, B, sqrt(eps(real(float(one(eltype(B)))))))[1]
-# A_ldiv_B!(A::QRCompactWY, B::StridedVector) = A_ldiv_B!(Triangular(A[:R], :U), Ac_mul_B(A[:Q], B))[1:size(A, 2)]
-# A_ldiv_B!(A::QRCompactWY, B::StridedMatrix) = A_ldiv_B!(Triangular(A[:R], :U), Ac_mul_B(A[:Q], B))[1:size(A, 2),:]
 function A_ldiv_B!{T}(A::QR{T},B::StridedMatrix{T})
     m, n = size(A)
     minmn = min(m,n)

@@ -3172,14 +3172,14 @@ for (gecon, elty) in
 #       INTEGER            IWORK( * )
 #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
             chkstride1(A)
-            n = size(A, 2)
-            lda = max(1, size(A, 1))
+            n = chksquare(A)
+            lda = max(1, stride(A, 2))
             rcond = Array($elty, 1)
             work = Array($elty, 4n)
             iwork = Array(BlasInt, n)
             info = Array(BlasInt, 1)
             ccall(($(string(gecon)),liblapack), Void,
-                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}),
                   &normtype, &n, A, &lda, &anorm, rcond, work, iwork,
