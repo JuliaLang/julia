@@ -21,7 +21,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: dot(x, y)
 
-   Compute the dot product. For complex vectors the first vector is conjugated.
+   Compute the dot product. For complex vectors, the first vector is conjugated.
 
 .. function:: cross(x, y)
 
@@ -202,7 +202,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: triu!(M)
 
-   Upper triangle of a matrix, overwriting M in the process.
+   Upper triangle of a matrix, overwriting ``M`` in the process.
 
 .. function:: tril(M)
 
@@ -210,7 +210,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: tril!(M)
 
-   Lower triangle of a matrix, overwriting M in the process.
+   Lower triangle of a matrix, overwriting ``M`` in the process.
 
 .. function:: diagind(M[, k])
 
@@ -253,8 +253,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: Bidiagonal(dv, ev, isupper)
 
-   Constructs an upper (isupper=true) or lower (isupper=false) bidiagonal matrix
-   using the given diagonal (dv) and off-diagonal (ev) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with ``full``.
+   Constructs an upper (``isupper=true``) or lower (``isupper=false``) bidiagonal matrix
+   using the given diagonal (``dv``) and off-diagonal (``ev``) vectors.  The result is of type ``Bidiagonal`` and provides efficient specialized linear solvers, but may be converted into a regular matrix with ``full``.
 
 .. function:: SymTridiagonal(d, du)
 
@@ -282,7 +282,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: cond(M, [p])
 
-   Matrix condition number, computed using the ``p``-norm. ``p`` is 2 by default, if not provided. Valid values for ``p`` are ``1``, ``2``, or ``Inf``.
+   Matrix condition number, computed using the ``p``-norm. Valid values for ``p`` are ``1``, ``2`` (default), or ``Inf``.
 
 .. function:: trace(M)
 
