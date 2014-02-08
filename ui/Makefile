@@ -51,14 +51,14 @@ julia-readline: $(build_bindir)/julia-readline$(EXE)
 julia-debug-readline: $(build_bindir)/julia-debug-readline$(EXE)
 
 $(build_bindir)/julia-basic$(EXE): repl.o repl-basic.o
-	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -ljulia $(JLDFLAGS))
+	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia $(JLDFLAGS))
 $(build_bindir)/julia-debug-basic$(EXE): repl.do repl-basic.do
-	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -ljulia-debug $(JLDFLAGS))
+	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia-debug $(JLDFLAGS))
 
 $(build_bindir)/julia-readline$(EXE): repl.o repl-readline.o
-	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(build_private_libdir) -L$(build_libdir) -ljulia $(JLDFLAGS)) || (echo "*** Please ensure that the ncurses-devel package is installed on your OS, and try again. ***" && false)
+	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia $(JLDFLAGS)) || (echo "*** Please ensure that the ncurses-devel package is installed on your OS, and try again. ***" && false)
 $(build_bindir)/julia-debug-readline$(EXE): repl.do repl-readline.do
-	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(build_private_libdir) -L$(build_libdir) -ljulia-debug $(JLDFLAGS))
+	@$(call PRINT_LINK, $(CXX) $(LINK_FLAGS) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -ljulia-debug $(JLDFLAGS))
 
 clean: | $(CLEAN_TARGETS)
 	rm -f *.o *.do

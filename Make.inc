@@ -83,12 +83,6 @@ build_datarootdir = $(build_prefix)/share
 build_includedir = $(build_prefix)/include
 build_sysconfdir = $(build_prefix)/etc
 
-# On Windows, we want shared library files to end up in $(build_bindir), instead of $(build_libdir)
-ifeq ($(OS),WINNT)
-build_shlibdir = $(build_bindir)
-else
-build_shlibdir = $(build_libdir)
-endif
 
 # This used for debian packaging, to conform to library layout guidelines
 ifeq ($(MULTIARCH_INSTALL), 1)
@@ -250,6 +244,13 @@ private_libdir_rel = $(shell $(JULIAHOME)/contrib/relative_path.sh $(bindir) $(p
 
 # if not absolute, then relative to the directory of the julia executable
 JCFLAGS += "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.ji\""
+
+# On Windows, we want shared library files to end up in $(build_bindir), instead of $(build_libdir)
+ifeq ($(OS),WINNT)
+build_shlibdir = $(build_bindir)
+else
+build_shlibdir = $(build_libdir)
+endif
 
 ifeq (exists, $(shell [ -e $(JULIAHOME)/Make.user ] && echo exists ))
 include $(JULIAHOME)/Make.user
