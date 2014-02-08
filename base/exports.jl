@@ -590,6 +590,7 @@ export
     cholpfact!,
     cholpfact,
     cond,
+    condskeel,
     cross,
     ctranspose,
     det,

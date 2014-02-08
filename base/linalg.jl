@@ -45,6 +45,7 @@ export
     cholpfact,
     cholpfact!,
     cond,
+    condskeel,
     copy!,
     cross,
     ctranspose,
