@@ -1107,7 +1107,7 @@ typedef struct _jl_task_t {
     jl_handler_t *eh;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
-    // saved current module
+    // current module, or NULL if this task has not set one
     jl_module_t *current_module;
 } jl_task_t;
 

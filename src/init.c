@@ -745,6 +745,7 @@ void julia_init(char *imageFile)
     // eval() uses Main by default, so Main.eval === Core.eval
     jl_module_import(jl_main_module, jl_core_module, jl_symbol("eval"));
     jl_current_module = jl_main_module;
+    jl_root_task->current_module = jl_current_module;
 
 
 #ifndef _OS_WINDOWS_
