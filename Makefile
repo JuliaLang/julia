@@ -150,12 +150,12 @@ endif
 
 ifeq ($(OS),WINNT)
 define std_dll
-debug release: | $$(build_libdir)/lib$(1).dll
-$$(build_libdir)/lib$(1).dll: | $$(build_libdir)
+debug release: | $$(build_bindir)/lib$(1).dll
+$$(build_bindir)/lib$(1).dll: | $$(build_bindir)
 ifeq ($$(BUILD_OS),$$(OS))
-	cp $$(call pathsearch,lib$(1).dll,$$(PATH)) $$(build_libdir) ;
+	cp $$(call pathsearch,lib$(1).dll,$$(PATH)) $$(build_bindir) ;
 else
-	cp $$(call wine_pathsearch,lib$(1).dll,$$(STD_LIB_PATH)) $$(build_libdir) ;
+	cp $$(call wine_pathsearch,lib$(1).dll,$$(STD_LIB_PATH)) $$(build_bindir) ;
 endif
 JL_LIBS += $(1)
 endef
