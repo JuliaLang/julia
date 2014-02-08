@@ -190,7 +190,6 @@ ifeq ($(OS),WINNT)
 else
 	-cp -a $(build_libexecdir) $(DESTDIR)$(prefix)
 	cd $(DESTDIR)$(bindir) && ln -sf julia-$(DEFAULT_REPL) julia
-endif
 
 	for suffix in $(JL_LIBS) ; do \
 		$(INSTALL_M) $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)* $(DESTDIR)$(private_libdir) ; \
@@ -198,6 +197,8 @@ endif
 	for suffix in $(JL_PRIVATE_LIBS) ; do \
 		$(INSTALL_M) $(build_libdir)/lib$${suffix}*.$(SHLIB_EXT)* $(DESTDIR)$(private_libdir) ; \
 	done
+endif
+
 ifeq ($(USE_SYSTEM_LIBUV),0)
 ifeq ($(OS),WINNT)
 	$(INSTALL_M) $(build_libdir)/libuv.a $(DESTDIR)$(private_libdir)
