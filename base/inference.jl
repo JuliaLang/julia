@@ -1093,26 +1093,6 @@ f_argnames(ast) =
 
 is_rest_arg(arg::ANY) = (ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
 
-# function typeinf_task(caller)
-#     result = ()
-#     while true
-#         (caller, args) = yieldto(caller, result)
-#         result = typeinf_ext_(args...)
-#     end
-# end
-
-#Inference_Task = Task(typeinf_task, 2097152)
-#yieldto(Inference_Task, current_task())
-
-#function typeinf_ext(linfo, atypes, sparams, cop)
-    #C = current_task()
-    #args = (linfo, atypes, sparams, cop)
-    #if is(C, Inference_Task)
-    #    return typeinf_ext_(args...)
-    #end
-    #return yieldto(Inference_Task, C, args)
-#end
-
 function typeinf_ext(linfo, atypes::ANY, sparams::ANY, def)
     global inference_stack
     last = inference_stack
