@@ -1539,12 +1539,9 @@ end
 
 ## event processing, I/O and work scheduling ##
 in_scheduler = false
-yield() = yield_until(nothing)
-function yield_until(return_test::Union(Function,Nothing))
+yield() = yield_until()
+function yield_until(return_test = (t::Task)->t.runnable)
     ct = current_task()
-    if return_test === nothing
-        return_test = (ct)->ct.runnable
-    end
     # preserve Task.last across calls to the scheduler
     prev = ct.last
     global in_scheduler
@@ -1556,9 +1553,9 @@ function yield_until(return_test::Union(Function,Nothing))
     try
         if isempty(Workqueue) && return_test(ct)
             process_events(false)
-        end
-        if isempty(Workqueue) && return_test(ct)
-            return ()
+            if isempty(Workqueue) && return_test(ct)
+                return nothing
+            end
         end
         in_scheduler = true
         while true

@@ -33,6 +33,12 @@ end
 
 # NOTE: you can only wait for scheduled tasks
 function wait(t::Task)
+    if istaskdone(t)
+        if t.exception !== nothing
+            throw(t.exception)
+        end
+        return t.result
+    end
     if is(t.donenotify, nothing)
         t.donenotify = Condition()
     end
@@ -152,7 +158,7 @@ function notify(c::Condition, arg::ANY=nothing; all=true, error=false)
         empty!(c.waitq)
     elseif !isempty(c.waitq)
         t = shift!(c.waitq)
-        !error? (t.result = arg) : (t.exception = arg)
+        !error ? (t.result = arg) : (t.exception = arg)
         enq_work(t)
     end
     nothing
