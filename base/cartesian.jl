@@ -1,22 +1,24 @@
 module Cartesian
 
-export @ngenerate, @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, ngenerate
+export @ngenerate, @nsplat, @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, ngenerate
+
+const CARTESIAN_DIMS = 4
 
 ### @ngenerate, for auto-generation of separate versions of functions for different dimensionalities
 # Examples (deliberately trivial):
-#     @ngenerate N myndims{T,N}(A::Array{T,N}) = N
+#     @ngenerate N returntype myndims{T,N}(A::Array{T,N}) = N
 # or alternatively
 #     function gen_body(N::Int)
 #         quote
 #             return $N
 #         end
 #     end
-#     eval(ngenerate(:N, :(myndims{T,N}(A::Array{T,N})), gen_body))
+#     eval(ngenerate(:N, returntypeexpr, :(myndims{T,N}(A::Array{T,N})), gen_body))
 # The latter allows you to use a single gen_body function for both ngenerate and
 # when your function maintains its own method cache (e.g., reduction or broadcasting).
 #
 # Special syntax for function prototypes:
-#   @ngenerate N function myfunction(A::AbstractArray, I::NTuple{N, Int}...)
+#   @ngenerate N returntype function myfunction(A::AbstractArray, I::NTuple{N, Int}...)
 # for N = 3 translates to
 #   function myfunction(A::AbstractArray, I_1::Int, I_2::Int, I_3::Int)
 # and for the generic (cached) case as
@@ -27,19 +29,52 @@ export @ngenerate, @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, n
 # To avoid ambiguity, it would be preferable to have some specific syntax for this, such as
 #   myfunction(A::AbstractArray, I::Int...N)
 # where N can be an integer or symbol. Currently T...N generates a parser error.
-
-const CARTESIAN_DIMS = 2   # FIXME: increase after testing is complete
-
-macro ngenerate(itersym, funcexpr)
+macro ngenerate(itersym, returntypeexpr, funcexpr)
     isfuncexpr(funcexpr) || error("Requires a function expression")
-    esc(ngenerate(itersym, funcexpr.args[1], N->sreplace!(copy(funcexpr.args[2]), itersym, N)))
+    esc(ngenerate(itersym, returntypeexpr, funcexpr.args[1], N->sreplace!(copy(funcexpr.args[2]), itersym, N)))
+end
+
+# @nsplat takes an expression like
+#    @nsplat N 2:3 myfunction(A, I::NTuple{N,Real}...) = getindex(A, I...)
+# and generates
+#    myfunction(A, I_1::Real, I_2::Real) = getindex(A, I_1, I_2)
+#    myfunction(A, I_1::Real, I_2::Real, I_3::Real) = getindex(A, I_1, I_2, I_3)
+#    myfunction(A, I::Real...) = getindex(A, I...)
+# An @nsplat function _cannot_ have any other Cartesian macros in it.
+# If you omit the range, it uses 1:CARTESIAN_DIMS.
+macro nsplat(itersym, args...)
+    local rng
+    if length(args) == 1
+        rng = 1:CARTESIAN_DIMS
+        funcexpr = args[1]
+    elseif length(args) == 2
+        rangeexpr = args[1]
+        funcexpr = args[2]
+        if !isa(rangeexpr, Expr) || rangeexpr.head != :(:) || length(rangeexpr.args) != 2
+            error("First argument must be a from:to expression")
+        end
+        rng = rangeexpr.args[1]:rangeexpr.args[2]
+    else
+        error("Wrong number of arguments")
+    end
+    isfuncexpr(funcexpr) || error("Second argument must be a function expression")
+    prototype = funcexpr.args[1]
+    body = funcexpr.args[2]
+    varname, T = get_splatinfo(prototype, itersym)
+    isempty(varname) && error("Last argument must be a splat")
+    explicit = [Expr(:function, resolvesplat!(copy(prototype), varname, T, N),
+                     resolvesplats!(copy(body), varname, N)) for N in rng]
+    protosplat = resolvesplat!(copy(prototype), varname, T, 0)
+    protosplat.args[end] = Expr(:..., protosplat.args[end])
+    splat = Expr(:function, protosplat, body)
+    esc(Expr(:block, explicit..., splat))
 end
 
 generate1(itersym, prototype, bodyfunc, N::Int, varname, T) =
     Expr(:function, spliceint!(sreplace!(resolvesplat!(copy(prototype), varname, T, N), itersym, N)),
          resolvesplats!(bodyfunc(N), varname, N))
 
-function ngenerate(itersym, prototype, bodyfunc, dims=1:CARTESIAN_DIMS, makecached::Bool = true)
+function ngenerate(itersym, returntypeexpr, prototype, bodyfunc, dims=1:CARTESIAN_DIMS, makecached::Bool = true)
     varname, T = get_splatinfo(prototype, itersym)
     # Generate versions for specific dimensions
     fdim = [generate1(itersym, prototype, bodyfunc, N, varname, T) for N in dims]
@@ -71,7 +106,7 @@ function ngenerate(itersym, prototype, bodyfunc, dims=1:CARTESIAN_DIMS, makecach
                      _F_
                  end)
              end
-             $(dictname)[$itersym]($(fargs...))
+             ($(dictname)[$itersym]($(fargs...)))::$returntypeexpr
          end)
     Expr(:block, fdim..., quote
             let $dictname = Dict{Int,Function}()
@@ -117,7 +152,8 @@ end
 # Replace splatted with desplatted for a specific number of arguments
 function resolvesplat!(prototype, varname, T::Union(Type,Symbol,Expr), N::Int)
     if !isempty(varname)
-        prototype.args[end] = Expr(:(::), symbol(string(varname, "_1")), T)
+        prototype.args[end] = N > 0 ? Expr(:(::), symbol(string(varname, "_1")), T) :
+                                      Expr(:(::), symbol(varname), T)
         for i = 2:N
             push!(prototype.args, Expr(:(::), symbol(string(varname, "_", i)), T))
         end
@@ -274,13 +310,15 @@ function _nref(N::Int, A::Symbol, ex)
 end
 
 # Generate f(arg1, arg2, ...)
-macro ncall(N, f, sym)
-    _ncall(N, f, sym)
+macro ncall(N, f, sym...)
+    _ncall(N, f, sym...)
 end
 
-function _ncall(N::Int, f, ex)
+function _ncall(N::Int, f, args...)
+    pre = args[1:end-1]
+    ex = args[end]
     vars = [ inlineanonymous(ex,i) for i = 1:N ]
-    Expr(:escape, Expr(:call, f, vars...))
+    Expr(:escape, Expr(:call, f, pre..., vars...))
 end
 
 # Generate N expressions
