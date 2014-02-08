@@ -30,10 +30,6 @@ endif
 
 debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_datarootdir)/julia/doc $(build_datarootdir)/julia/examples $(build_sysconfdir)/julia/juliarc.jl
 	@$(MAKE) $(QUIET_MAKE) julia-$@
-# If we're on windows, we want all .dll's that are in /lib to be in /bin
-ifeq ($(OS),WINNT)
-	cp -a $(build_libdir)/*.$(SHLIB_EXT) $(build_bindir)/
-endif
 	@export private_libdir=$(private_libdir) && \
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
 
@@ -77,7 +73,7 @@ $(build_private_libdir)/sys%o: $(build_private_libdir)/sys%bc
 .PRECIOUS: $(build_private_libdir)/sys%o
 
 $(build_private_libdir)/sys%$(SHLIB_EXT): $(build_private_libdir)/sys%o
-	$(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -o $@ $< \
+	$(CXX) -shared -fPIC -L$(build_private_libdir) -L$(build_libdir) -L$(build_shlibdir) -o $@ $< \
 		$$([ $(OS) = Darwin ] && echo -Wl,-undefined,dynamic_lookup || echo -Wl,--unresolved-symbols,ignore-all ) \
 		$$([ $(OS) = WINNT ] && echo -ljulia -lssp)
 
@@ -337,10 +333,6 @@ distclean: cleanall
 	test testall testall1 test-* clean distclean cleanall \
 	run-julia run-julia-debug run-julia-release run \
 	install dist source-dist git-submodules
-
-ifeq ($(VERBOSE),1)
-.SILENT:
-endif
 
 test: release
 	@$(MAKE) $(QUIET_MAKE) -C test default

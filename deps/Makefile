@@ -100,7 +100,7 @@ endif
 ifeq ($(USE_SYSTEM_MPFR), 0)
 STAGE2_DEPS += mpfr
 ifeq ($(USE_SYSTEM_GMP), 0)
-MPFR_OPTS = --with-gmp-include=$(abspath $(build_includedir)) --with-gmp-lib=$(abspath $(build_libdir))
+MPFR_OPTS = --with-gmp-include=$(abspath $(build_includedir)) --with-gmp-lib=$(abspath $(build_shlibdir))
 endif
 endif
 ifeq ($(BUILD_OS),WINNT)
@@ -1070,7 +1070,7 @@ $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) arpack-ng-$(ARPACK_VER)/checked | $(b
 	cd arpack-ng-$(ARPACK_VER) && \
 	$(MAKE) install $(ARPACK_MFLAGS) $(MAKE_COMMON)
 ifeq ($(OS), WINNT)
-	mv $(build_libdir)/libarpack-2.dll $@
+	mv $(build_shlibdir)/libarpack-2.dll $@
 endif
 	$(INSTALL_NAME_CMD)libarpack.$(SHLIB_EXT) $(build_shlibdir)/libarpack.$(SHLIB_EXT)
 ifeq ($(OS), Linux)
@@ -1147,7 +1147,7 @@ ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CMD)libfftw3f_threads.$(SHLIB_EXT) $(build_shlibdir)/libfftw3f_threads.$(SHLIB_EXT)
 	$(INSTALL_NAME_CHANGE_CMD) $(build_shlibdir)/libfftw3f.3.dylib $(INSTALL_NAME_ID_DIR)libfftw3f.dylib $(build_shlibdir)/libfftw3f_threads.dylib
 else ifeq ($(OS), WINNT)
-	mv -f $(build_shlibdir)/libfftw3f-3.dll $@
+	-mv -f $(build_shlibdir)/libfftw3f-3.dll $@
 else ifeq ($(OS), Linux)
 	for filename in $(build_shlibdir)/libfftw3f_threads.so* ; do \
 		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
@@ -1184,7 +1184,7 @@ ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CMD)libfftw3_threads.$(SHLIB_EXT) $(build_shlibdir)/libfftw3_threads.$(SHLIB_EXT)
 	$(INSTALL_NAME_CHANGE_CMD) $(build_shlibdir)/libfftw3.3.dylib $(INSTALL_NAME_ID_DIR)libfftw3.dylib $(build_shlibdir)/libfftw3_threads.dylib
 else ifeq ($(OS), WINNT)
-	mv -f $(build_shlibdir)/libfftw3-3.dll $@
+	-mv -f $(build_shlibdir)/libfftw3-3.dll $@
 else ifeq ($(OS), Linux)
 	for filename in $(build_shlibdir)/libfftw3_threads.so* ; do \
 		[ -L $$filename ] || $(PATCHELF) --set-rpath '$$ORIGIN' $$filename ;\
@@ -1461,6 +1461,9 @@ endif
 	echo 1 > $@
 $(GMP_OBJ_TARGET): $(GMP_SRC_TARGET) gmp-$(GMP_VER)/checked
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD) install $(MAKE_COMMON)
+ifeq ($(OS),WINNT)
+	-mv -f $(build_libdir)/libgmp.$(SHLIB_EXT) $@
+endif
 	$(INSTALL_NAME_CMD)libgmp.dylib $@
 	touch -c $@
 
