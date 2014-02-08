@@ -233,7 +233,7 @@ JCFLAGS += -fsanitize=address -mllvm -asan-stack=0
 LDFLAGS += -fsanitize=address
 endif
 
-TAR=`which gtar || which tar`
+TAR=`which gtar 2>/dev/null || which tar 2>/dev/null`
 TAR_TEST := $(shell $(TAR) --help 2>&1  | egrep 'bsdtar|strip-components')
 ifeq (,$(findstring components,$(TAR_TEST)))
 ifneq (bsdtar,$(findstring bsdtar,$(TAR_TEST)))
