@@ -83,6 +83,13 @@ build_datarootdir = $(build_prefix)/share
 build_includedir = $(build_prefix)/include
 build_sysconfdir = $(build_prefix)/etc
 
+# On Windows, we want shared library files to end up in $(build_bindir), instead of $(build_libdir)
+ifeq ($(OS),WINNT)
+build_shlibdir = $(build_bindir)
+else
+build_shlibdir = $(build_libdir)
+endif
+
 # This used for debian packaging, to conform to library layout guidelines
 ifeq ($(MULTIARCH_INSTALL), 1)
 MULTIARCH = $(shell gcc -print-multiarch)
