@@ -727,6 +727,17 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
    Return the value stored for the given key, or the given default value if no mapping for the key is present.
 
+.. function:: get(f::Function, collection, key)
+
+   Return the value stored for the given key, or if no mapping for the key is present, return ``f()``.  Use ``get!`` to also store the default value in the dictionary.
+
+   This is intended to be called using ``do`` block syntax::
+
+     get(dict, key) do
+         # default value calculated here
+	 time()
+     end
+
 .. function:: get!(collection, key, default)
 
    Return the value stored for the given key, or if no mapping for the key is present, store ``key => default``, and return ``default``.

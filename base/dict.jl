@@ -554,6 +554,11 @@ function get{K,V}(h::Dict{K,V}, key, deflt)
     return (index<0) ? deflt : h.vals[index]::V
 end
 
+function get{K,V}(deflt::Function, h::Dict{K,V}, key)
+    index = ht_keyindex(h, key)
+    return (index<0) ? deflt() : h.vals[index]::V
+end
+
 haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
 in{T<:Dict}(key, v::KeyIterator{T}) = (ht_keyindex(v.dict, key) >= 0)
 
@@ -665,6 +670,9 @@ function getkey{K}(wkh::WeakKeyDict{K}, kk, deflt)
 end
 
 get{K}(wkh::WeakKeyDict{K}, key, def) = get(wkh.ht, key, def)
+get{K}(def::Function, wkh::WeakKeyDict{K}, key) = get(def, wkh.ht, key)
+get!{K}(wkh::WeakKeyDict{K}, key, def) = get!(wkh.ht, key, def)
+get!{K}(def::Function, wkh::WeakKeyDict{K}, key) = get!(def, wkh.ht, key)
 pop!{K}(wkh::WeakKeyDict{K}, key) = pop!(wkh.ht, key)
 pop!{K}(wkh::WeakKeyDict{K}, key, def) = pop!(wkh.ht, key, def)
 delete!{K}(wkh::WeakKeyDict{K}, key) = delete!(wkh.ht, key)
