@@ -191,13 +191,39 @@ debug && println("Solve square general system of equations")
     x = a \ b
     @test_approx_eq_eps a*x b 80ε
 
-debug && println("Solve upper trianguler system")
+debug && println("Solve upper triangular system")
     x = triu(a) \ b
-    @test_approx_eq_eps triu(a)*x b 20000ε
+
+    #Test forward error [JIN 5705] if this is not a BigFloat
+    γ = n*ε/(1-n*ε)
+    if eltya != BigFloat
+        bigA = big(triu(a))
+        ̂x = bigA \ b
+        for i=1:size(b, 2)
+            @test norm(̂x[:,i]-x[:,i], Inf)/norm(x[:,i], Inf) <= abs(condskeel(bigA, x[:,i])*γ/(1-condskeel(bigA)*γ))
+        end
+    end
+    #Test backward error [JIN 5705]
+    for i=1:size(b, 2)
+        @test norm(abs(b[:,i] - triu(a)*x[:,i]), Inf) <= γ * norm(triu(a), Inf) * norm(x[:,i], Inf)
+    end
 
 debug && println("Solve lower triangular system")
     x = tril(a)\b
-    @test_approx_eq_eps tril(a)*x b 10000ε
+
+    #Test forward error [JIN 5705] if this is not a BigFloat
+    γ = n*ε/(1-n*ε)
+    if eltya != BigFloat
+        bigA = big(tril(a))
+        ̂x = bigA \ b
+        for i=1:size(b, 2)
+            @test norm(̂x[:,i]-x[:,i], Inf)/norm(x[:,i], Inf) <= abs(condskeel(bigA, x[:,i])*γ/(1-condskeel(bigA)*γ))
+        end
+    end
+    #Test backward error [JIN 5705]
+    for i=1:size(b, 2)
+        @test norm(abs(b[:,i] - tril(a)*x[:,i]), Inf) <= γ * norm(tril(a), Inf) * norm(x[:,i], Inf)
+    end
 
 debug && println("Test null")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia

@@ -17,7 +17,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: \\(A, B)
    :noindex:
 
-   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper- or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the BunchKaufman factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by reducing ``A`` to bidiagonal form and solving the bidiagonal least squares problem.  For sparse, square ``A`` the LU factorization (from UMFPACK) is used.
+   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper- or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the ``BunchKaufman`` factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by reducing ``A`` to bidiagonal form and solving the bidiagonal least squares problem.  For sparse, square ``A`` the LU factorization (from UMFPACK) is used.
 
 .. function:: dot(x, y)
 
@@ -272,7 +272,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the ``p``-norm of a vector or the operator norm of a matrix ``A``, defaulting to the ``p=2``-norm.
 
-   For vectors, ``p`` can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, `norm(A, Inf)`` returns the largest value in ``abs(A)``, whereas ``norm(A, -Inf)`` returns the smallest.
+   For vectors, ``p`` can assume any numeric value (even though not all values produce a mathematically valid vector norm). In particular, ``norm(A, Inf)`` returns the largest value in ``abs(A)``, whereas ``norm(A, -Inf)`` returns the smallest.
 
    For matrices, valid values of ``p`` are ``1``, ``2``, or ``Inf``. Use :func:`normfro` to compute the Frobenius norm.
 
@@ -282,7 +282,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: cond(M, [p])
 
-   Matrix condition number, computed using the ``p``-norm. Valid values for ``p`` are ``1``, ``2`` (default), or ``Inf``.
+   Condition number of the matrix ``M``, computed using the operator ``p``-norm. Valid values for ``p`` are ``1``, ``2`` (default), or ``Inf``.
+
+.. function:: condskeel(M, [x, p])
+
+   .. math::
+      \kappa_S(M, p) & = & \left\Vert \left\vert M \right\vert \left\vert M^{-1} \right\vert  \right\Vert_p \\
+      \kappa_S(M, x, p) & = & \left\Vert \left\vert M \right\vert \left\vert M^{-1} \right\vert \left\vert x \right\vert \right\Vert_p
+
+   Skeel condition number :math:`\kappa_S` of the matrix ``M``, optionally with respect to the vector ``x``, as computed using the operator ``p``-norm. ``p`` is ``Inf`` by default, if not provided. Valid values for ``p`` are ``1``, ``2``, or ``Inf``.
+
+   This quantity is also known in the literature as the Bauer condition number, relative condition number, or componentwise relative condition number.
 
 .. function:: trace(M)
 
