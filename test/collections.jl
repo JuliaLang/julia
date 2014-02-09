@@ -149,10 +149,10 @@ d4[1001] = randstring(3)
 
 # get! (get with default values assigned to the given location)
 
-let
-    f(x) = x^2
-    d = {8=>19}
+let f(x) = x^2,
+    d = {8=>19},
     def = {}
+
     @test get!(d, 8, 5) == 19
     @test get!(d, 19, 2) == 2
 
