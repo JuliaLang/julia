@@ -90,7 +90,7 @@ The ISO 8601 standard is also particular about BC/BCE dates. In common text, the
 
 Constructors
 ^^^^^^^^^^^^
-``Date`` and ``DateTime`` types can be constructed by parts, or by parsing::
+``Date`` and ``DateTime`` types can be constructed by parts with integers or Period types, or by parsing::
 
   julia> DateTime(2013)
   2013-01-01T00:00:00 UTC
@@ -119,7 +119,120 @@ Constructors
   julia> Date(2013,7,1)
   2013-07-01
 
-TODO: Document parsing
+Date or DateTime parsing is accomplished by the use of ``format`` strings. The easiest way to understand is to see some examples in action. Also refer to the function reference below for additional information::
+
+  dt = Time.DateTime(1996,1,15)
+  f = "yy-mm-dd"
+  a = "96-01-15"
+  Time.DateTime(a,f) + Time.Year(1900) == dt
+  a1 = "96-1-15"
+  Time.DateTime(a1,f) + Time.Year(1900) == dt
+  a2 = "96-1-1"
+  Time.DateTime(a2,f) + Time.Year(1900) + Time.Day(14) == dt
+  a3 = "1996-1-15"
+  Time.DateTime(a3,f) == dt
+
+  f = "yy/mmm/dd"
+  b = "96/Feb/15"
+  Time.DateTime(b,f) + Time.Year(1900) == dt + Time.Month(1)
+  b1 = "1996/Feb/15"
+  Time.DateTime(b1,f) == dt + Time.Month(1)
+  b2 = "96/Feb/1"
+  Time.DateTime(b2,f) + Time.Year(1900) + Time.Day(14) == dt + Time.Month(1)
+
+  f = "yy:dd:mm"
+  c = "96:15:01"
+  Time.DateTime(c,f) + Time.Year(1900) == dt
+  c1 = "1996:15:01"
+  Time.DateTime(c1,f) == dt
+  c2 = "96:15:1"
+  Time.DateTime(c2,f) + Time.Year(1900) == dt
+  c3 = "96:1:01"
+  Time.DateTime(c3,f) + Time.Year(1900) + Time.Day(14) == dt
+
+  f = "yyyy,mmm,dd"
+  d = "1996,Jan,15"
+  Time.DateTime(d,f) == dt
+  d1 = "96,Jan,15"
+  Time.DateTime(d1,f) + Time.Year(1900) == dt
+  d2 = "1996,Jan,1"
+  Time.DateTime(d2,f) + Time.Day(14) == dt
+
+  f = "yyyy.mmmm.dd"
+  e = "1996.January.15"
+  Time.DateTime(e,f) == dt
+  e1 = "96.January.15"
+  Time.DateTime(e1,f) + Time.Year(1900) == dt
+
+  fo = "yyyy m dd"
+  f = "1996 1 15"
+  Time.DateTime(f,fo) == dt
+  f1 = "1996 01 15"
+  Time.DateTime(f1,fo) == dt
+  f2 = "1996 1 1"
+  Time.DateTime(f2,fo) + Time.Day(14) == dt
+
+  j = "1996-01-15 UTC"
+  f = "yyyy-mm-dd zzz"
+  Time.DateTime(j,f) == dt
+  k = "1996-01-15 10:00:00 UTC"
+  f = "yyyy-mm-dd HH:MM:SS zzz"
+  Time.DateTime(k,f) == dt + Time.Hour(10)
+  l = "1996-01-15 10:10:10.25 UTC"
+  f = "yyyy-mm-dd HH:MM:SS.ss zzz"
+  Time.DateTime(l,f) == dt + Time.Hour(10) + Time.Minute(10) + Time.Second(10) + Time.Millisecond(250)
+
+  r = "1/15/1996" # Excel
+  f = "m/dd/yyyy"
+  Time.DateTime(r,f) == dt
+  s = "19960115"
+  f = "yyyymmdd"
+  Time.DateTime(s,f) == dt
+  v = "1996-01-15 10:00:00"
+  f = "yyyy-mm-dd HH:MM:SS"
+  Time.DateTime(v,f) == dt + Time.Hour(10)
+  w = "1996-01-15T10:00:00 UTC"
+  f = "yyyy-mm-ddTHH:MM:SS zzz"
+  Time.DateTime(w,f;sep="T") == dt + Time.Hour(10)
+
+  f = "yyyy/m"
+  y = "1996/1"
+  Time.DateTime(y,f) == dt - Time.Day(14)
+  y2 = "96/1"
+  Time.DateTime(y2,f) + Time.Year(1900) == dt - Time.Day(14)
+
+  f = "yyyy"
+  z = "1996"
+  Time.DateTime(z,f) == dt - Time.Day(14)
+  z1 = "1996-3"
+  Time.DateTime(z1,f) != Time.DateTime(1996,3)
+  z2 = "1996-3-1"
+  Time.DateTime(z2,f) != Time.DateTime(1996,3)
+
+  aa = "1/5/1996"
+  f = "m/d/yyyy"
+  Time.DateTime(aa,f) == dt - Time.Day(10)
+  bb = "5/1/1996"
+  f = "d/m/yyyy"
+  Time.DateTime(bb,f) == dt - Time.Day(10)
+  cc = "01151996"
+  f = "mmddyyyy"
+  Time.DateTime(cc,f) == dt
+  dd = "15011996"
+  f = "ddmmyyyy"
+  Time.DateTime(dd,f) == dt
+  ee = "01199615"
+  f = "mmyyyydd"
+  Time.DateTime(ee,f) == dt
+  ff = "1996-15-Jan"
+  f = "yyyy-dd-mmm"
+  Time.DateTime(ff,f) == dt
+  gg = "Jan-1996-15"
+  f = "mmm-yyyy-dd"
+  Time.DateTime(gg,f) == dt
+
+  Date("2009年12月01日","yyyy年mm月dd日") == Date(2009,12,1)
+  Date("2009-12-01","yyyy-mm-dd") == Date(2009,12,1)
 
 Durations/Comparisons
 ^^^^^^^^^^^^^^^^^^^^^
@@ -218,3 +331,287 @@ This type of arithmetic is called *calendrical* arithmetic, which is a slightly 
 
   julia> dt - Time.Month(1) == Time.DateTime(1972,5,30,23,59,59)
   true
+
+Function Reference
+------------------
+
+.. currentmodule:: Base
+
+.. function:: DateTime(y, [m, [d,] [h,] [mi,] [s,] [ms]])
+
+   Construct a DateTime type by parts. Arguments must be of type
+   ``::Integer``. Returned DateTime corresponds to ISO 8601, UTC.
+
+.. function:: DateTime([y::Year, [m::Month,] [d::Day,] [h::Hour,] [mi::Minute,] [s::Second,] [ms::Millisecond]])
+
+   Constuct a DateTime type by ``Period`` type parts. Arguments must be
+   in order of greatest value (Year) to least (Millisecond).
+
+.. function:: DateTime(dt::String, [format::String=ISODateTimeFormat]; sep::String="")
+
+   Construct a DateTime type by parsing a ``dt`` string given a ``format`` string.
+   The default format string is ``ISODateTimeFormat`` which is how 
+   DateTime types are represented. The ``sep`` keyword specifies the substring that
+   separates the date and time parts of a DateTime string. If no ``sep`` is provided,
+   a best guess for a non-word character is sought that divides the date and time
+   components. The following codes can be used for constructing format strings:
+
+   ===============  ========  ============================
+   Code             Matches   Comment
+   ---------------  --------  ----------------------------
+   ``yy``            96       Returns year of ``0096``
+   ``yyyy``          1996     Returns year of ``1996``
+   ``m`` or ``mm``   1, 01    Matches 1 or 2-digit months
+   ``mmm``           Jan      Matches abbreviated months
+   ``mmmm``          January  Matches full month names
+   ``d`` or ``dd``   1, 01    Matches 1 or 2-digit days
+   ``HH``            00       Matches hours
+   ``MM``            00       Matches minutes
+   ``SS``            00       Matches seconds
+   ``.s``            .500     Matches milliseconds
+   ===============  ========  ============================
+
+.. function:: Date(y, [m, [d,])
+
+   Construct a Date type by parts. Arguments must be of type
+   ``::Integer``. Returned Date corresponds to ISO 8601.
+
+.. function:: Date([y::Year, [m::Month,] [d::Day])
+
+   Constuct a Date type by ``Period`` type parts. Arguments must be
+   in order of greatest value (Year) to least (Day).
+
+.. function:: Date(dt::String, [format::String=ISODateTimeFormat]; sep::String="")
+
+   Construct a Date type by parsing a ``dt`` string given a ``format`` string.
+   The default format string is ``ISODateFormat`` which is how 
+   Date types are represented. Same codes and rules for DateTime types
+   apply for Dates.
+.. currentmodule:: Base.Time
+
+Period Constructors
+^^^^^^^^^^^^^^^^^^^
+
+.. function:: Year(y::Integer)
+
+   Construct a ``Year`` Period type with the given ``Integer`` value.
+
+.. function:: Month(y::Integer)
+
+   Construct a ``Month`` Period type with the given ``Integer`` value.
+
+.. function:: Week(y::Integer)
+
+   Construct a ``Week`` Period type with the given ``Integer`` value.
+
+.. function:: Day(y::Integer)
+
+   Construct a ``Day`` Period type with the given ``Integer`` value.
+
+.. function:: Hour(y::Integer)
+
+   Construct a ``Hour`` Period type with the given ``Integer`` value.
+
+.. function:: Minute(y::Integer)
+
+   Construct a ``Minute`` Period type with the given ``Integer`` value.
+
+.. function:: Second(y::Integer)
+
+   Construct a ``Second`` Period type with the given ``Integer`` value.
+
+.. function:: Millisecond(y::Integer)
+
+   Construct a ``Millisecond`` Period type with the given ``Integer`` value.      
+
+Accessor Functions
+^^^^^^^^^^^^^^^^^^
+
+.. function:: year(dt::TimeType) -> Int64
+
+   Return the year part of a Date or DateTime.
+
+.. function:: month(dt::TimeType) -> Int64
+
+   Return the month part of a Date or DateTime.
+
+.. function:: week(dt::TimeType) -> Int64
+
+   Return the ISO 8601 week number of a Date or DateTime.
+
+.. function:: day(dt::TimeType) -> Int64
+
+   Return the day part of a Date or DateTime.
+
+.. function:: hour(dt::TimeType) -> Int64
+
+   Return the hour part of a DateTime.
+
+.. function:: minute(dt::TimeType) -> Int64
+
+   Return the minute part of a DateTime.
+
+.. function:: second(dt::TimeType) -> Int64
+
+   Return the second part of a DateTime.
+
+.. function:: millisecond(dt::TimeType) -> Int64
+
+   Return the millisecond part of a DateTime.
+
+Date Functions
+^^^^^^^^^^^^^^
+
+.. function:: now() -> DateTime
+
+   Returns a DateTime type corresponding to the user's system
+   time, converted to UTC.
+
+.. function:: monthname(dt::TimeType) -> String
+
+   Return the full name of the month of the Date or DateTime.
+
+.. function:: monthabbr(dt::TimeType) -> String
+
+   Return the abbreviated month name of the Date or DateTime.
+
+.. function:: dayname(dt::TimeType) -> String
+
+   Return the full day name corresponding to the day of the week
+   of the Date or DateTime.
+
+.. function:: dayabbr(dt::TimeType) -> String
+
+   Return the abbreviated name corresponding to the day of the week
+   of the Date or DateTime.
+
+.. function:: isleap(dt::TimeType) -> Bool
+
+   Returns if the year of the Date or DateTime is a leap year.
+
+.. function:: lastdayofmonth(dt::TimeType) -> TimeType
+
+   Returns a Date or DateTime corresponding to the last day of the
+   month of the Date or DateTime.
+
+.. function:: firstdayofmonth(dt::TimeType) -> TimeType
+
+   Similar to ``lastdayofmonth``, but for the 1st day of the month.
+
+.. function:: dayofweek(dt::TimeType) -> Int
+
+   Returns the day of the week of the Date or DateTime as an ``Int``.
+   0 => Sunday, 1 => Monday...6 => Saturday
+
+.. function:: dayofweekofmonth(dt::TimeType) -> Int
+
+   Returns the number of the day of the week of the Date or DateTime
+   in the month. For example, if the day of the week for a Date is 1
+   (Monday), ``dayofweekofmonth`` will return a value between 1 and 5
+   corresponding to the 1st Monday, 2nd Monday...5th Monday of the month.
+
+.. function:: daysofweekinmonth(dt::TimeType) -> 4 or 5
+
+   Returns 4 or 5, corresponding to the total number of days of the week
+   for the given Date or DateTime. 
+
+.. function:: firstdayofweek(dt::TimeType) -> TimeType
+
+   Returns a Date or DateTime corresponding to midnight Sunday of the
+   week of the given Date or DateTime.
+
+.. function:: lastdayofweek(dt::TimeType) -> TimeType
+
+   Returns a Date or DateTime corresponding to midnight Saturday of the
+   week of the given Date or DateTime.
+
+.. function:: dayofyear(dt::TimeType) -> Int
+
+   Returns the day of the year for the Date or DateTime.
+
+.. function:: recur(fun::Function, start::TimeType, stop::TimeType[, step::Period]; inclusion=true) -> Array{TimeType,1}
+
+   ``recur`` takes a boolean function as 1st argument (or used with a ``do`` block), and will
+   apply the boolean function for each Date or DateTime from ``start`` to ``stop`` incrementing
+   by ``step``. If the boolean function returns ``true``, the evaluated Date or DateTime is 
+   "included" in the returned ``Array``. The ``inclusion`` keyword specifies whether the boolean
+   function will "include" or "exclude" the TimeType from the set.
+
+
+Conversion Functions
+^^^^^^^^^^^^^^^^^^^^
+
+.. function:: unix2date(x::Float64) -> DateTime
+
+   Takes the number of seconds since unix epoch ``1970-01-01T00:00:00 UTC``
+   and converts to the corresponding DateTime.
+
+.. function:: date2unix(dt::DateTime) -> Float64
+
+   Takes the given DateTime and returns the number of seconds since
+   the unix epoch as a ``Float64``.
+
+.. function:: julian2date(j) -> DateTime
+
+   Takes the number of Julian calendar days since epoch 
+   ``-4713-11-24T12:00:00`` and returns the corresponding DateTime.
+.. function:: date2julian(dt::DateTime) -> Float64
+
+   Takes the given DateTime and returns teh number of Julian calendar days
+   since the julian epoch as a ``Float64``.
+
+.. function:: ratadays2date(days) -> DateTime
+
+   Takes the number of Rata Die days since epoch ``0000-12-31T00:00:00``
+   and returns the corresponding DateTime.
+
+.. function:: date2ratadays(dt::TimeType) -> Int64
+
+   Returns the number of Rata Die days since epoch from the
+   given Date or DateTime.
+
+
+Constants
+^^^^^^^^^
+
+Days of the Week:
+
+  ``Sunday``     = ``Sun`` = 0
+
+  ``Monday``     = ``Mon`` = 1
+
+  ``Tuesday``    = ``Tue`` = 2
+
+  ``Wednesday``  = ``Wed`` = 3
+
+  ``Thursday``   = ``Thu`` = 4
+
+  ``Friday``     = ``Fri`` = 5
+
+  ``Saturday``   = ``Sat`` = 6
+
+Months of the Year:
+
+  ``January``    = ``Jan`` = 1
+
+  ``February``   = ``Feb`` = 2
+
+  ``March``      = ``Mar`` = 3
+
+  ``April``      = ``Apr`` = 4
+
+  ``May``        = ``May`` = 5
+
+  ``June``       = ``Jun`` = 6
+
+  ``July``       = ``Jul`` = 7
+
+  ``August``     = ``Aug`` = 8
+
+  ``September``  = ``Sep`` = 9
+
+  ``October``    = ``Oct`` = 10
+
+  ``November``   = ``Nov`` = 11
+
+  ``December``   = ``Dec`` = 12
