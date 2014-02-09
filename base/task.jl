@@ -1,6 +1,6 @@
 ## basic task functions and TLS
 
-show(io::IO, t::Task) = print(io, "Task")
+show(io::IO, t::Task) = print(io, "Task @0x$(hex(unsigned(pointer_from_objref(t)), WORD_SIZE>>2))")
 
 macro task(ex)
     :(Task(()->$(esc(ex))))
@@ -54,29 +54,29 @@ function wait(t::Task)
     t.result
 end
 
-function notify(t::Task, arg::ANY=nothing; error=false)
-    if t.runnable
-        Base.error("tried to resume task that is not stopped")
-    end
-    if error
-        t.exception = arg
-    else
-        t.result = arg
-    end
-    enq_work(t)
-    nothing
-end
-notify_error(t::Task, err) = notify(t, err, error=true)
-
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
-    if isa(t.donenotify, Condition)
-        if isdefined(t,:exception) && t.exception !== nothing
-            # TODO: maybe wrap this in a TaskExited exception
-            notify_error(t.donenotify, t.exception)
-        else
-            notify(t.donenotify, t.result)
+    err = isdefined(t,:exception) && t.exception !== nothing
+    result = err ? t.exception : t.result
+
+    nexttask = t.last
+
+    q = t.consumers
+
+    if isa(q,Condition) && !isempty(q.waitq)
+        nexttask = shift!(q.waitq)
+        notify(q, result, error=err)
+    end
+
+    isa(t.donenotify,Condition) && notify(t.donenotify, result, error=err)
+
+    if nexttask.runnable
+        if err
+            nexttask.exception = t.exception
         end
+        yieldto(nexttask, t.result)
+    else
+        wait()
     end
 end
 
@@ -84,43 +84,30 @@ end
 ## produce, consume, and task iteration
 
 function produce(v)
-    ct = current_task()
-    q = ct.consumers
-    if isa(q,Condition)
-        # make a task waiting for us runnable again
-        notify1(q)
-    end
-    yieldto(ct.last, v)
+    q = current_task().consumers
+    yieldto(shift!(q.waitq), v)
+    q.waitq[1].result
 end
 produce(v...) = produce(v)
 
 function consume(P::Task, values...)
-    while !(P.runnable || P.done)
-        if P.consumers === nothing
-            P.consumers = Condition()
-        end
-        wait(P.consumers)
-    end
-    ct = current_task()
-    prev = ct.last
-    ct.runnable = false
-    local v
-    try
-        v = yieldto(P, values...)
-        if ct.last !== P
-            v = yield_until((ct)->ct.last === P)
-        end
-    finally
-        ct.last = prev
-        ct.runnable = true
-    end
     if P.done
-        q = P.consumers
-        if !is(q, nothing)
-            notify(q, P.result)
-        end
+        return wait(P)
     end
-    v
+    if P.consumers === nothing
+        P.consumers = Condition()
+    end
+
+    ct = current_task()
+
+    push!(P.consumers.waitq, ct)
+    ct.result = length(values)==1 ? values[1] : values
+
+    if P.runnable
+        return yieldto(P)
+    else
+        return wait()
+    end
 end
 
 start(t::Task) = nothing
@@ -144,9 +131,8 @@ function wait(c::Condition)
 
     push!(c.waitq, ct)
 
-    ct.runnable = false
     try
-        return yield()
+        return wait()
     catch
         filter!(x->x!==ct, c.waitq)
         rethrow()
@@ -156,14 +142,12 @@ end
 function notify(c::Condition, arg::ANY=nothing; all=true, error=false)
     if all
         for t in c.waitq
-            !error ? (t.result = arg) : (t.exception = arg)
-            enq_work(t)
+            schedule(t, arg, error=error)
         end
         empty!(c.waitq)
     elseif !isempty(c.waitq)
         t = shift!(c.waitq)
-        !error ? (t.result = arg) : (t.exception = arg)
-        enq_work(t)
+        schedule(t, arg, error=error)
     end
     nothing
 end
@@ -178,19 +162,11 @@ notify1_error(c::Condition, err) = notify(c, err, error=true, all=false)
 
 function enq_work(t::Task)
     ccall(:uv_stop,Void,(Ptr{Void},),eventloop())
-    unshift!(Workqueue, t)
-end
-
-function perform_work()
-    perform_work(pop!(Workqueue))
+    push!(Workqueue, t)
+    t
 end
 
 function perform_work(t::Task)
-    ct = current_task()
-    if ct.runnable && t !== ct
-        # still runnable; ensure we will return here
-        enq_work(ct)
-    end
     if !istaskstarted(t)
         # starting new task
         result = yieldto(t)
@@ -215,54 +191,35 @@ end
 
 schedule(t::Task) = enq_work(t)
 
+function schedule(t::Task, arg; error=false)
+    # schedule a task to be (re)started with the given value or exception
+    if error
+        t.exception = arg
+    else
+        t.result = arg
+    end
+    enq_work(t)
+end
+
+yield() = (enq_work(current_task()); wait())
+
 function wait()
     ct = current_task()
     ct.runnable = false
-    return yield()
-end
-
-# yield() --- called for all blocking operations
-in_scheduler = false
-yield() = yield_until()
-function yield_until(return_test = (t::Task)->t.runnable)
-    ct = current_task()
-    # preserve Task.last across calls to the scheduler
-    prev = ct.last
-    global in_scheduler
-    if in_scheduler
-        # we don't want to execute yield recursively, because
-        # the return condition would be ill-defined
-        warn("yielding from inside scheduler callback")
-    end
-    try
-        if isempty(Workqueue) && return_test(ct)
+    while true
+        if isempty(Workqueue)
+            c = process_events(true)
+            if c==0 && eventloop()!=C_NULL && isempty(Workqueue)
+                # if there are no active handles and no runnable tasks, just
+                # wait for signals.
+                pause()
+            end
+        else
+            result = perform_work(shift!(Workqueue))
             process_events(false)
-            if isempty(Workqueue) && return_test(ct)
-                return nothing
-            end
+            # return when we come out of the queue
+            return result
         end
-        in_scheduler = true
-        while true
-            if isempty(Workqueue)
-                c = process_events(true)
-                if c==0 && eventloop()!=C_NULL && isempty(Workqueue)
-                    # if there are no active handles and no runnable tasks, just
-                    # wait for signals.
-                    pause()
-                end
-            else
-                in_scheduler = false
-                result = perform_work()
-                in_scheduler = true
-                process_events(false)
-                if return_test(ct)
-                    return result
-                end
-            end
-        end
-    finally
-        in_scheduler = false
-        ct.last = prev
     end
     assert(false)
 end
@@ -270,14 +227,6 @@ end
 function pause()
     @unix_only    ccall(:pause, Void, ())
     @windows_only ccall(:Sleep,stdcall, Void, (Uint32,), 0xffffffff)
-end
-
-# force a task to stop waiting with an exception
-function interrupt_waiting_task(t::Task, err)
-    if !t.runnable
-        t.exception = err
-        enq_work(t)
-    end
 end
 
 
@@ -324,9 +273,4 @@ end
 macro async(expr)
     expr = localize_vars(:(()->($expr)), false)
     :(async_run_thunk($(esc(expr))))
-end
-
-macro spawnlocal(expr)
-    warn_once("@spawnlocal is deprecated, use @async instead.")
-    :(@async $(esc(expr)))
 end

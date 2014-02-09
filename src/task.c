@@ -386,23 +386,12 @@ static void finish_task(jl_task_t *t, jl_value_t *resultval)
 #ifdef COPY_STACKS
     t->stkbuf = NULL;
 #endif
-    if (t->donenotify && t->donenotify != jl_nothing) {
-        if (task_done_hook_func == NULL) {
-            task_done_hook_func = (jl_function_t*)jl_get_global(jl_base_module,
-                                                                jl_symbol("task_done_hook"));
-        }
-        if (task_done_hook_func != NULL) {
-            jl_apply(task_done_hook_func, (jl_value_t**)&t, 1);
-        }
+    if (task_done_hook_func == NULL) {
+        task_done_hook_func = (jl_function_t*)jl_get_global(jl_base_module,
+                                                            jl_symbol("task_done_hook"));
     }
-    jl_task_t *cont = jl_current_task->last;
-    if (!cont->done) {
-        jl_switchto(cont, t->result);
-    }
-    else {
-        jl_function_t* yield_f =
-            (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("yield"));
-        (void)jl_apply(yield_f,NULL,0);
+    if (task_done_hook_func != NULL) {
+        jl_apply(task_done_hook_func, (jl_value_t**)&t, 1);
     }
     assert(0);
 }

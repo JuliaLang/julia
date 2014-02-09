@@ -288,7 +288,7 @@ function worker_from_id(pg::ProcessGroup, i)
     end
     start = time()
     while (!haskey(map_pid_wrkr, i) && ((time() - start) < 60.0))
-        sleep(0.1)		
+        sleep(0.1)
         yield()
     end
     map_pid_wrkr[i]
@@ -451,11 +451,10 @@ end
 
 any_gc_flag = Condition()
 function start_gc_msgs_task()
-    enq_work(Task(()->
-        while true
-            wait(any_gc_flag)
-            flush_gc_msgs()
-        end))
+    @schedule while true
+        wait(any_gc_flag)
+        flush_gc_msgs()
+    end
 end
 
 function send_del_client(rr::RemoteRef)
@@ -577,7 +576,7 @@ function schedule_call(rid, thunk)
     rv = RemoteValue()
     (PGRP::ProcessGroup).refs[rid] = rv
     push!(rv.clientset, rid[1])
-    enq_work(@task(run_work_thunk(rv,thunk)))
+    schedule(@task(run_work_thunk(rv,thunk)))
     rv
 end
 
@@ -673,7 +672,7 @@ function remote_do(w::LocalProcess, f, args...)
     # does when it gets a :do message.
     # same for other messages on LocalProcess.
     thk = local_remotecall_thunk(f, args)
-    enq_work(Task(thk))
+    schedule(Task(thk))
     nothing
 end
 
@@ -766,7 +765,7 @@ function accept_handler(server::TcpServer, status::Int32)
 end
 
 function create_message_handler_loop(sock::AsyncStream) #returns immediately
-    enq_work(@task begin
+    schedule(@task begin
         global PGRP
         #println("message_handler_loop")
         start_reading(sock)

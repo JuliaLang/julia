@@ -113,7 +113,7 @@ t = @async begin
     @test p.exitcode == 0
 end
 yield()
-Base.interrupt_waiting_task(t, InterruptException())
+schedule(t, InterruptException(), error=true)
 yield()
 put(r,11)
 yield()

@@ -759,10 +759,10 @@ function _uv_hook_writecb_task(s::AsyncStream,req::Ptr{Void},status::Int32)
         err = UVError("write",status)
         close(s)
         if d != C_NULL
-            notify_error(unsafe_pointer_to_objref(d)::Task,err)
+            schedule(unsafe_pointer_to_objref(d)::Task,err,error=true)
         end
     elseif d != C_NULL
-        notify(unsafe_pointer_to_objref(d)::Task)
+        schedule(unsafe_pointer_to_objref(d)::Task)
     end
 end
 
