@@ -912,6 +912,7 @@ for yr = {
         f = fld(x,y)
         r = rem(x,y)
         m = mod(x,y)
+	@test div_rem(x,y) == (d, r)
 
         t1 = isa(x,Rational) && isa(y,Rational) ?
                                promote_type(typeof(num(x)),typeof(num(y))) :
@@ -939,6 +940,8 @@ for yr = {
             sf = fld(sx,sy)
             sr = rem(sx,sy)
             sm = mod(sx,sy)
+
+	    @test div_rem(sx, sy) == (sd, sr)
 
             @test typeof(sd) <: t1
             @test typeof(sf) <: t1
@@ -1073,6 +1076,12 @@ for x=0:5, y=1:5
     @test rem(x,uint(y)) == rem(x,y)
     @test rem(uint(x),-y) == rem(x,-y)
     @test rem(-x,uint(y)) == rem(-x,y)
+
+    @test div_rem(uint(x), uint(y)) == (div(x, y), rem(x, y))
+    @test div_rem(uint(x),y) == (div(x,y), rem(x,y))
+    @test div_rem(x,uint(y)) == (div(x,y), rem(x,y))
+    @test div_rem(uint(x),-y) == (div(x,-y), rem(x,-y))
+    @test div_rem(-x,uint(y)) == (div(-x,y), rem(-x,y))
 
     @test mod(uint(x),uint(y)) == mod(x,y)
     @test mod(uint(x),y) == mod(x,y)
@@ -1676,14 +1685,18 @@ end
 # other divide-by-zero errors
 @test_throws div(1,0)
 @test_throws rem(1,0)
+@test_throws div_rem(1,0)
 @test_throws mod(1,0)
 @test_throws div(-1,0)
 @test_throws rem(-1,0)
+@test_throws div_rem(-1,0)
 @test_throws mod(-1,0)
 @test_throws div(uint(1),uint(0))
 @test_throws rem(uint(1),uint(0))
+@test_throws div_rem(uint(1),uint(0))
 @test_throws mod(uint(1),uint(0))
 @test_throws div(typemin(Int),-1)
+@test_throws div_rem(typemin(Int),-1)
 @test rem(typemin(Int),-1) == 0
 @test mod(typemin(Int),-1) == 0
 
