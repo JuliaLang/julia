@@ -161,16 +161,37 @@ immutable RandIntGen{T<:Integer, U<:Unsigned}
     u::U   # maximum multiple of k within the domain of U
 
     RandIntGen(a::T, k::U) = new(a, k, div(typemax(U),k)*k)
+
+    RandIntGen(a::Uint64, k::Uint64) = new(a::T, k::U, div((k >> 32 != 0)*0xFFFFFFFF00000000 + 0x00000000FFFFFFFF, k)*k)
+    RandIntGen(a::Int64, k::Uint64) = new(a::T, k::U, div((k >> 32 != 0)*0xFFFFFFFF00000000 + 0x00000000FFFFFFFF, k)*k)
+
 end
 
 RandIntGen{T<:Unsigned}(r::Range1{T}) = RandIntGen{T,T}(first(r), convert(T, length(r)))
-
 # specialized versions
 for (T, U) in [(Uint8, Uint32), (Uint16, Uint32), (Int8, Uint32), (Int16, Uint32), 
                (Int32, Uint32), (Int64, Uint64), (Int128, Uint128), 
                (Bool, Uint32), (Char, Uint32)]
 
     @eval RandIntGen(r::Range1{$T}) = RandIntGen{$T, $U}(first(r), convert($U, length(r)))
+end
+
+# this function uses 32 bit entropy for small ranges of length <= typemax(Uint32)
+# the constructor of RandIntGen is responsible for providing the right value of k
+function rand{T<:Union(Uint64, Int64)}(g::RandIntGen{T,Uint64})
+    local x::Uint64
+    if g.k >> 32 == 0
+        x = rand(Uint32)
+        while x >= g.u
+            x = rand(Uint32)
+        end
+    else
+        x = rand(Uint64)
+        while x >= g.u
+            x = rand(Uint64)
+        end
+    end
+    return convert(T, g.a + rem(x, g.k))
 end
 
 function rand{T<:Integer,U<:Unsigned}(g::RandIntGen{T,U})
