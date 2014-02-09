@@ -1282,7 +1282,6 @@ export
     @sync,
     @async,
     @spawn,
-    @spawnlocal,  # deprecated
     @spawnat,
     @fetch,
     @fetchfrom,

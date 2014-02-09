@@ -4468,7 +4468,7 @@ Parallel Computing
 
    Call a function asynchronously on the given arguments on the specified processor. Returns a ``RemoteRef``.
 
-.. function:: wait(x)
+.. function:: wait([x])
 
    Block the current task until some event occurs, depending on the type
    of the argument:
@@ -4482,6 +4482,9 @@ Parallel Computing
    * ``Task``: Wait for a ``Task`` to finish, returning its result value.
 
    * ``RawFD``: Wait for changes on a file descriptor (see `poll_fd` for keyword arguments and return code)
+
+   If no argument is passed, the task blocks until it is explicitly restarted, usually
+   by a call to ``schedule``.
 
 .. function:: fetch(RemoteRef)
 
@@ -5212,7 +5215,7 @@ Tasks
 
 .. function:: yield()
 
-   For scheduled tasks, switch back to the scheduler to allow another scheduled task to run. A task that calls this function is still runnable, and will be restarted immediately if there are no other runnable tasks.
+   Switch to the scheduler to allow another scheduled task to run. A task that calls this function is still runnable, and will be restarted immediately if there are no other runnable tasks.
 
 .. function:: task_local_storage(symbol)
 
@@ -5246,11 +5249,15 @@ Tasks
    only one is. If ``error`` is true, the passed value is raised as an
    exception in the woken tasks.
 
-.. function:: schedule(t::Task)
+.. function:: schedule(t::Task, [val]; error=false)
 
    Add a task to the scheduler's queue. This causes the task to run constantly
    when the system is otherwise idle, unless the task performs a blocking
    operation such as ``wait``.
+
+   If a second argument is provided, it will be passed to the task (via the
+   return value of ``yieldto``) when it runs again. If ``error`` is true,
+   the value is raised as an exception in the woken task.
 
 .. function:: @schedule
 
