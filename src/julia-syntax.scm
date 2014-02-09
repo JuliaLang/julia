@@ -2896,7 +2896,7 @@ So far only the second case can actually occur.
 (define (goto-form e)
   (let ((code '())
 	(label-counter 0)
-	(label-map '())
+    (label-map (table))
 	(handler-level 0))
     (define (emit c)
       (set! code (cons c code)))
@@ -2981,31 +2981,27 @@ So far only the second case can actually occur.
 			(if (> handler-level 0)
 			    (emit `(leave ,handler-level)))
 			(emit (goto-form e))))
-	    ((label) (let ((m (assq (cadr e) label-map)))
+        ((label) (let ((m (get label-map (cadr e) #f)))
 		       (if m
-			   (emit `(label ,(cdr m)))
+			   (emit `(label ,m))
 			   (let ((l (make&mark-label)))
-			     (set! label-map
-				   (cons (cons (cadr e) l) label-map))))))
-        ((symboliclabel) (let ((m (assq (cadr e) label-map)))
+                 (put! label-map (cadr e) l)))))
+        ((symboliclabel) (let ((m (get label-map (cadr e) #f)))
                (if m
-               (emit `(label ,(cdr m)))
+               (emit `(label ,m))
                (let ((l (make&mark-label)))
-                 (set! label-map
-                   (cons (cons (cadr e) l) label-map))))))
-        ((symbolicgoto) (let ((m (assq (cadr e) label-map)))
+                 (put! label-map (cadr e) l)))))
+        ((symbolicgoto) (let ((m (get label-map (cadr e) #f)))
                (if m
-                   (emit `(goto ,(cdr m)))
+                   (emit `(goto ,m))
                    (let ((l (make-label)))
-                 (set! label-map
-                       (cons (cons (cadr e) l) label-map))
+                 (put! label-map (cadr e) l)
                  (emit `(goto ,l))))))
-	    ((type_goto) (let ((m (assq (cadr e) label-map)))
+	    ((type_goto) (let ((m (get label-map (cadr e) #f)))
 			   (if m
-			       (emit `(type_goto ,(cdr m) ,@(cddr e)))
+			       (emit `(type_goto ,m ,@(cddr e)))
 			       (let ((l (make-label)))
-				 (set! label-map
-				       (cons (cons (cadr e) l) label-map))
+                 (put! label-map (cadr e) l)
 				 (emit `(type_goto ,l ,@(cddr e)))))))
 	    ;; exception handlers are lowered using
 	    ;; (enter L) - push handler with catch block at label L
