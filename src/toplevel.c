@@ -63,7 +63,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         jl_old_base_module = jl_base_module;
         // pick up Base module during bootstrap
         jl_base_module = newm;
-        newbase = 1;
+        newbase = base_module_conflict;
     }
     // export all modules from Main
     if (parent_module == jl_main_module)
@@ -94,17 +94,39 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         jl_rethrow();
     }
     JL_GC_POP();
-    jl_current_module = last_module;
-    jl_current_task->current_module = task_last_m;
 
     if (newbase) {
         // reinitialize global variables
         // to pick up new types from Base
+        jl_current_module = jl_main_module;
+        jl_current_task->current_module = jl_main_module;
+        jl_main_module->constant_table = NULL;
+        size_t i;
+        void **table = jl_main_module->bindings.table;
+        for(i=1; i < jl_main_module->bindings.size; i+=2) {
+            if (table[i] != HT_NOTFOUND) {
+                jl_binding_t *b = (jl_binding_t*)table[i];
+                if (   b->value != (jl_value_t*)jl_main_module &&
+                       b->value != (jl_value_t*)jl_core_module &&
+                       b->value != (jl_value_t*)jl_base_module) {
+                    table[i] = HT_NOTFOUND;
+                }
+            }
+        }
+        jl_module_using(jl_main_module, jl_core_module);
+        jl_module_export(jl_main_module, jl_main_module->name);
+
+        jl_root_task->tls = jl_nothing;
+        jl_add_standard_imports(jl_main_module);
+        // eval() uses Main by default, so Main.eval === Core.eval
+        jl_module_import(jl_main_module, jl_core_module, jl_symbol("eval"));
+
         jl_errorexception_type = NULL;
         jl_get_system_hooks();
         jl_get_uv_hooks(1);
-        jl_current_task->tls = jl_nothing;
     }
+    jl_current_module = last_module;
+    jl_current_task->current_module = task_last_m;
 
 #if 0
     // some optional post-processing steps
