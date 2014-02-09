@@ -140,21 +140,19 @@ type Tridiagonal{T} <: AbstractMatrix{T}
     dl::Vector{T}    # sub-diagonal
     d::Vector{T}     # diagonal
     du::Vector{T}    # sup-diagonal
-    dutmp::Vector{T} # scratch space for vector RHS solver, sup-diagonal
-    rhstmp::Vector{T}# scratch space, rhs
 
     function Tridiagonal(N::Integer)
-        dutmp = Array(T, N-1)
-        rhstmp = Array(T, N)
-        new(dutmp, rhstmp, similar(dutmp), similar(dutmp), similar(rhstmp))
+        dl = Array(T, N-1)
+        d = Array(T, N)
+        new(dl, d, similar(dl))
     end
 
     function Tridiagonal(dl::Vector{T}, d::Vector{T}, du::Vector{T})
         N = length(d)
-        if (length(dl) != N-1 || length(du) != N-1)
+        if !(length(dl) == length(du) == N-1)
             error(string("Cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: (", length(dl), ", ", length(d), ", ", length(du),")"))
         end
-        new(copy(dl), copy(d), copy(du), Array(T,N-1), Array(T,N))
+        new(copy(dl), copy(d), copy(du))
     end
 end
 
@@ -253,16 +251,15 @@ end
 # Allocation-free variants
 # Note that solve is non-aliasing, so you can use the same array for
 # input and output
+# XXX This is no longer allocation-free!!!!
 function solve!{T<:BlasFloat}(x::AbstractArray{T}, xrng::Ranges{Int}, M::Tridiagonal{T}, rhs::AbstractArray{T}, rhsrng::Ranges{Int})
     d = M.d
     N = length(d)
-    if length(xrng) != N || length(rhsrng) != N
-        throw(DimensionMismatch(""))
-    end
+    length(xrng) == length(rhsrng) == N || throw(DimensionMismatch(""))
     dl = M.dl
     du = M.du
-    dutmp = M.dutmp
-    rhstmp = M.rhstmp
+    dutmp = similar(M.du)
+    rhstmp = similar(rhs)
     xstart = first(xrng)
     xstride = step(xrng)
     rhsstart = first(rhsrng)
@@ -294,7 +291,6 @@ function solve!{T<:BlasFloat}(x::AbstractArray{T}, xrng::Ranges{Int}, M::Tridiag
         x[ix] = xlast
         ix -= xstride
     end
-    nothing
 end
 
 function solve!(x::StridedVector, M::Tridiagonal, rhs::StridedVector)
