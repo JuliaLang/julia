@@ -350,6 +350,7 @@ Function        Description
 ``div(x,y)``    truncated division; quotient rounded towards zero
 ``fld(x,y)``    floored division; quotient rounded towards ``-Inf``
 ``rem(x,y)``    remainder; satisfies ``x == div(x,y)*y + rem(x,y)``; sign matches ``x``
+``div_rem(x,y)``    returns (div(x, y), rem(x, y))
 ``mod(x,y)``    modulus; satisfies ``x == fld(x,y)*y + mod(x,y)``; sign matches ``y``
 ``mod2pi(x)``   modulus with respect to 2pi;  ``0 <= mod2pi(x)  < 2pi``
 ``gcd(x,y...)`` greatest common divisor of ``x``, ``y``,...; sign matches ``x``

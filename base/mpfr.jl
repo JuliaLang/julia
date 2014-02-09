@@ -526,6 +526,10 @@ function rem(x::BigFloat, y::BigFloat)
     return z
 end
 
+function div_rem(x::BigFloat, y::BigFloat)
+    return div(x, y), rem(x, y)
+end
+
 function sum(arr::AbstractArray{BigFloat})
     z = BigFloat(0)
     for i in arr
