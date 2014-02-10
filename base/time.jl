@@ -33,35 +33,36 @@ abstract Period     <: AbstractTime
 abstract DatePeriod <: Period
 abstract TimePeriod <: Period
 
-immutable Year           <: DatePeriod
+immutable Year <: DatePeriod
     years::Int64
-    Year(x::Integer)        = new(int64(x))
+    Year(x::Integer) = new(int64(x))
 end
-immutable Month          <: DatePeriod
+immutable Month <: DatePeriod
     months::Int64
-    Month(x::Integer)       = new(int64(x))
+    Month(x::Integer) = new(int64(x))
 end
-immutable Week           <: DatePeriod
+immutable Week <: DatePeriod
     weeks::Int64
-    Week(x::Integer)        = new(int64(x))
+    Week(x::Integer) = new(int64(x))
 end
-immutable Day            <: DatePeriod
+immutable Day <: DatePeriod
     days::Int64
-    Day(x::Integer)         = new(int64(x))
+    Day(x::Integer) = new(int64(x))
 end
-immutable Hour           <: TimePeriod
+
+immutable Hour <: TimePeriod
     h::Int64
-    Hour(x::Integer)        = new(int64(x))
+    Hour(x::Integer) = new(int64(x))
 end
-immutable Minute         <: TimePeriod
+immutable Minute <: TimePeriod
     m::Int64
-    Minute(x::Integer)      = new(int64(x))
+    Minute(x::Integer) = new(int64(x))
 end
-immutable Second         <: TimePeriod
+immutable Second <: TimePeriod
     s::Int64
-    Second(x::Integer)      = new(int64(x))
+    Second(x::Integer) = new(int64(x))
 end
-immutable Millisecond    <: TimePeriod
+immutable Millisecond <: TimePeriod
     ms::Int64
     Millisecond(x::Integer) = new(int64(x))
 end
@@ -138,12 +139,12 @@ function _week(days)
 end
 
 # Accessor functions
-_days(dt::Date)               = dt.instant.days
-_days(dt::DateTime)           = fld(dt.instant.ms - getleaps(dt.instant.ms),86400000)
-year(dt::TimeType)            = _year(_days(dt))
-month(dt::TimeType)           = _month(_days(dt))
-week(dt::TimeType)            = _week(_days(dt))
-day(dt::TimeType)             = _day(_days(dt))
+_days(dt::Date) = dt.instant.days
+_days(dt::DateTime) = fld(dt.instant.ms - getleaps(dt.instant.ms),86400000)
+year(dt::TimeType) = _year(_days(dt))
+month(dt::TimeType) = _month(_days(dt))
+week(dt::TimeType) = _week(_days(dt))
+day(dt::TimeType) = _day(_days(dt))
 hour(dt::DateTime)   = mod(fld(dt.instant.ms - getleaps(dt.instant.ms),3600000),24)
 minute(dt::DateTime) = mod(fld(dt.instant.ms - getleaps(dt.instant.ms),60000),60)
 function second(dt::DateTime)
