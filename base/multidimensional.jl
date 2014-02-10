@@ -313,7 +313,6 @@ end
 
 @ngenerate N typeof(B) function setindex!(B::BitArray, x::Bool, I::NTuple{N,Union(Int,AbstractArray{Int})}...)
     checkbounds(B, I...)
-    @nexprs N d->(length(I_d) == 0 && throw_setindex_mismatch(x, tuple(I...)))
     @nloops N i d->I_d begin
         (@nref N B i) = x # TODO: should avoid bounds checking
     end
