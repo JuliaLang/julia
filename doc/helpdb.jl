@@ -491,11 +491,11 @@
 
 "),
 
-("Types","Base","setfield","setfield(value, name::Symbol, x)
+("Types","Base","setfield!","setfield!(value, name::Symbol, x)
 
    Assign \"x\" to a named field in \"value\" of composite type. The
-   syntax \"a.b = c\" calls \"setfield(a, :b, c)\", and the syntax
-   \"a.(b) = c\" calls \"setfield(a, b, c)\".
+   syntax \"a.b = c\" calls \"setfield!(a, :b, c)\", and the syntax
+   \"a.(b) = c\" calls \"setfield!(a, b, c)\".
 
 "),
 

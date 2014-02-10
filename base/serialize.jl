@@ -505,7 +505,7 @@ function deserialize(s, t::DataType)
         for i in 1:length(t.names)
             tag = int32(read(s, Uint8))
             if tag==0 || !is(deser_tag[tag], UndefRefTag)
-                setfield(x, i, handle_deserialize(s, tag))
+                setfield!(x, i, handle_deserialize(s, tag))
             end
         end
         return x

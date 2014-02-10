@@ -301,11 +301,11 @@ Types
    Extract a named field from a value of composite type. The syntax ``a.b`` calls
    ``getfield(a, :b)``, and the syntax ``a.(b)`` calls ``getfield(a, b)``.
 
-.. function:: setfield(value, name::Symbol, x)
+.. function:: setfield!(value, name::Symbol, x)
 
    Assign ``x`` to a named field in ``value`` of composite type.
-   The syntax ``a.b = c`` calls ``setfield(a, :b, c)``, and the syntax ``a.(b) = c``
-   calls ``setfield(a, b, c)``.
+   The syntax ``a.b = c`` calls ``setfield!(a, :b, c)``, and the syntax ``a.(b) = c``
+   calls ``setfield!(a, b, c)``.
 
 .. function:: fieldoffsets(type)
 
