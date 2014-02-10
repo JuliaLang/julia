@@ -97,14 +97,14 @@ function DateTime(y::Integer,m::Integer=1,d::Integer=1,h::Integer=0,mi::Integer=
     # RFC: Month is the only Period we check because it can throw a
     # BoundsError() in construction (see totaldays())
     # all other Periods "roll over"; should we make these consistent?
-    0 < m < 13 || error("Month out of range")
+    0 < m < 13 || throw(ArgumentError("Month: $m out of range (1:12)"))
     rata = ms + 1000*(s + 60mi + 3600h + 86400*totaldays(y,m,d))
     return UTCDateTime(Millisecond(
         rata + (s == 60 ? setleapsecond(rata) : setleaps(rata))))
 end
 
 function Date(y,m=1,d=1)
-    0 < m < 13 || error("Month out of range")
+    0 < m < 13 || throw(ArgumentError("Month: $m out of range (1:12)"))
     return Date(Day(totaldays(y,m,d)))
 end
 
@@ -672,7 +672,7 @@ show(io::IO,x::CompoundPeriod) = print(io,string(x))
 function DateTime(y::Year=Year(1),m::Month=Month(1),d::Day=Day(1),
                   h::Hour=Hour(0),mi::Minute=Minute(0),
                   s::Second=Second(0),ms::Millisecond=Millisecond(0))
-    0 < m.months < 13 || error("Month out of range")
+    0 < m.months < 13 || throw(ArgumentError("Month: $m out of range (1:12)"))
     rata = ms + 1000*(s.s + 60mi.m + 3600h.h + 
                          86400*totaldays(y.years,m.months,d.days))
     return UTCDateTime(rata + (s.s == 60 ? 
@@ -680,7 +680,7 @@ function DateTime(y::Year=Year(1),m::Month=Month(1),d::Day=Day(1),
 end
 DateTime(x::Period...) = error("Required argument order is DateTime(y,m,d,h,mi,s,ms)")
 function Date(y::Year,m::Month=Month(1),d::Day=Day(1))
-    0 < m.months < 13 || error("Month out of range")
+    0 < m.months < 13 || throw(ArgumentError("Month: $m out of range (1:12)"))
     return Date(Day(totaldays(y.years,m.months,d.days)))
 end
 Date(x::Period...) = error("Required argument order is Date(y,m,d)")
