@@ -7,11 +7,6 @@
 source=$1
 target=$2
 
-if [[ ! "$source" == /* ]] || [[ ! "$target" == /* ]]; then
-    echo "ERROR: paths must be absolute paths, they must start with a forward slash!"
-    exit 1
-fi
-
 common_part=$source # for now
 result="" # for now
 
