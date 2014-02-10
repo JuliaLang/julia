@@ -872,6 +872,7 @@ januarymondays2014 = [Date(2014,1,6),Date(2014,1,13),Date(2014,1,20),Date(2014,1
 @test string(Time.unix2date(915148800.25)) == string("1999-01-01T00:00:00.25 UTC")
 @test string(Time.unix2date(915148800.50)) == string("1999-01-01T00:00:00.5 UTC")
 @test string(Time.unix2date(915148800.75)) == string("1999-01-01T00:00:00.75 UTC")
+@test string(Time.unix2date(915148800.00;convert_to_leapsecond=true)) == string("1998-12-31T23:59:60 UTC")
 @test string(Time.unix2date(915148801.00)) == string("1999-01-01T00:00:01 UTC")
 @test string(Time.unix2date(915148801.25)) == string("1999-01-01T00:00:01.25 UTC")
 

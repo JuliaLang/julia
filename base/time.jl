@@ -286,9 +286,13 @@ dayofyear(dt::TimeType) = _days(dt) - totaldays(year(dt),1,1) + 1
 @vectorize_1arg TimeType dayofyear
 
 const UNIXEPOCH = DateTime(1970).instant.ms #Rata Die milliseconds for 1970-01-01T00:00:00 UTC
-function unix2date(x)
+function unix2date(x; convert_to_leapsecond::Bool=false)
     rata = UNIXEPOCH + int64(1000*x)
-    return UTCDateTime(Millisecond(rata + setleaps(rata)))
+    if rata in SETLEAPS && convert_to_leapsecond
+        return UTCDateTime(Millisecond(rata + setleapsecond(rata)))
+    else
+        return UTCDateTime(Millisecond(rata + setleaps(rata)))
+    end
 end
 # Returns unix seconds since 1970-01-01T00:00:00 UTC
 date2unix(dt::DateTime) = (dt.instant.ms - getleaps(dt.instant.ms) - UNIXEPOCH)/1000.0
