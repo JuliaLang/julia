@@ -1456,7 +1456,7 @@
 		`(block
 		  ,.(if (eq? aa a) '() `((= ,aa ,(expand-forms a))))
 		  ,.(if (eq? bb b) '() `((= ,bb ,(expand-forms b))))
-		  (call (top setfield) ,aa ,bb
+		  (call (top setfield!) ,aa ,bb
 			(call (top convert)
 			      (call (top fieldtype) ,aa ,bb)
 			      ,(expand-forms rhs)))))))
