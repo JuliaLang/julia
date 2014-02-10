@@ -11,14 +11,17 @@ type Rotation{T}
 end
 typealias AbstractRotation Union(Givens, Rotation)
 
-function givensAlgorithm{T<:FloatingPoint}(f::T, g::T)
+realmin2(::Type{Float64}) = 1.0010415475915505e-146
+realmin2(::Type{Float32}) = 4.440892f-16
+
+function givensAlgorithm{T<:BlasReal}(f::T, g::T)
     zeropar = zero(T)
     onepar = one(T)
     twopar = 2one(T)
 
     safmin = realmin(T)
     epspar = eps(T)
-    safmn2 = twopar^itrunc(log(safmin/epspar)/log(twopar)/twopar)
+    safmn2 = realmin2(T)
     safmx2 = onepar/safmn2
 
     if g == 0
@@ -77,14 +80,14 @@ function givensAlgorithm{T<:FloatingPoint}(f::T, g::T)
     return cs, sn, r
 end
 
-function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
+function givensAlgorithm{T<:BlasReal}(f::Complex{T}, g::Complex{T})
     twopar, onepar, zeropar = 2one(T), one(T), zero(T)
     czero = zero(Complex{T})
 
     abs1(ff) = max(abs(real(ff)), abs(imag(ff)))
     safmin = realmin(T)
     epspar = eps(T)
-    safmn2 = twopar^itrunc(log(safmin/epspar)/log(twopar)/twopar)
+    safmn2 = realmin2(T)
     safmx2 = onepar/safmn2
     scalepar = max(abs1(f), abs1(g))
     fs = f
@@ -179,6 +182,17 @@ function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
         end
     end
     return cs, sn, r
+end
+
+# Fallback algorithm. Does not assume commutativity of f and g.
+function givensAlgorithm(f::Number, g::Number)
+    af = abs(f)
+    ag = abs(g)
+    hfgi = inv(hypot(af,ag))
+    c = af*hfgi
+    s = f*g'*(hfgi/af)
+    r = f/c
+    return c,s,r
 end
 
 givens{T}(f::T, g::T, i1::Integer, i2::Integer, size::Integer) = i2 <= size ? (i1 < i2 ? Givens(size, i1, i2, convert((T,T,T), givensAlgorithm(f, g))...) : error("second index must be larger than the first")) : error("indices cannot be larger than size Givens rotation matrix")
