@@ -894,3 +894,19 @@ possible to make the scheduler run a task whenever it can, without necessarily
 waiting for any events. This is done by calling ``schedule(task)``, or using
 the ``@schedule`` or ``@async`` macros (see :ref:`man-parallel-computing` for
 more details).
+
+Task states
+~~~~~~~~~~~
+
+Tasks have a ``state`` field that describes their execution status. A task
+state is one of the following symbols:
+
+=============  ==================================================
+Symbol         Meaning
+=============  ==================================================
+``:runnable``  Currently running, or available to be switched to
+``:waiting``   Blocked waiting for a specific event
+``:queued``    In the scheduler's run queue about to be restarted
+``:done``      Successfully finished executing
+``:failed``    Finished with an uncaught exception
+=============  ==================================================

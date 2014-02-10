@@ -135,12 +135,15 @@ static void _probe_arch(void)
   - stack growth
 */
 
+static jl_sym_t *done_sym;
+static jl_sym_t *failed_sym;
+static jl_sym_t *runnable_sym;
+
 extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
 DLLEXPORT jl_task_t * volatile jl_current_task;
 jl_task_t *jl_root_task;
 jl_value_t * volatile jl_task_arg_in_transit;
-static volatile int n_args_in_transit;
 jl_value_t *jl_exception_in_transit;
 #ifdef JL_GC_MARKSWEEP
 jl_gcframe_t *jl_pgcstack = NULL;
@@ -153,7 +156,7 @@ jl_jmp_buf * volatile jl_jmp_target;
 
 static void save_stack(jl_task_t *t)
 {
-    if (t->done)
+    if (t->state == done_sym || t->state == failed_sym)
         return;
     volatile int _x;
     size_t nb = (char*)t->stackbase - (char*)&_x;
@@ -265,7 +268,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
 extern int jl_in_gc;
 static jl_value_t *switchto(jl_task_t *t)
 {
-    if (t->done) {
+    if (t->state == done_sym || t->state == failed_sym) {
         jl_task_arg_in_transit = (jl_value_t*)jl_null;
         if (t->exception != jl_nothing)
             jl_throw(t->exception);
@@ -370,7 +373,6 @@ static void rebase_state(jl_jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
 {
     jl_task_arg_in_transit = arg;
-    n_args_in_transit = 1;
     return switchto(t);
 }
 
@@ -378,9 +380,10 @@ static jl_function_t *task_done_hook_func=NULL;
 
 static void finish_task(jl_task_t *t, jl_value_t *resultval)
 {
-    assert(t->done==0);
-    t->done = 1;
-    t->runnable = 0;
+    if (t->exception != jl_nothing)
+        t->state = failed_sym;
+    else
+        t->state = done_sym;
     t->result = resultval;
     // TODO: early free of t->stkbuf
 #ifdef COPY_STACKS
@@ -402,8 +405,6 @@ static void start_task(jl_task_t *t)
     jl_value_t *arg = jl_task_arg_in_transit;
     jl_value_t *res;
     JL_GC_PUSH1(&arg);
-    assert(!t->started);
-    t->started = 1;
 
 #ifdef COPY_STACKS
     ptrint_t local_sp = (ptrint_t)jl_pgcstack;
@@ -417,17 +418,7 @@ static void start_task(jl_task_t *t)
         switch_stack(jl_current_task, jl_jmp_target);
     }
 #endif
-    if (n_args_in_transit == 0) {
-        res = jl_apply(t->start, NULL, 0);
-    }
-    else if (n_args_in_transit == 1) {
-        res = jl_apply(t->start, &arg, 1);
-    }
-    else {
-        assert(jl_is_tuple(jl_task_arg_in_transit));
-        res = jl_apply(t->start, &jl_tupleref(jl_task_arg_in_transit,0),
-                       n_args_in_transit);
-    }
+    res = jl_apply(t->start, NULL, 0);
     JL_GC_POP();
     finish_task(t, res);
     assert(0);
@@ -784,9 +775,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->last = NULL;
     t->tls = jl_nothing;
     t->consumers = jl_nothing;
-    t->started = 0;
-    t->done = 0;
-    t->runnable = 1;
+    t->state = runnable_sym;
     t->start = start;
     t->result = jl_nothing;
     t->donenotify = jl_nothing;
@@ -856,12 +845,11 @@ JL_CALLABLE(jl_f_yieldto)
 {
     JL_NARGSV(yieldto, 1);
     JL_TYPECHK(yieldto, task, args[0]);
-    n_args_in_transit = nargs-1;
     if (nargs == 2) {
         jl_task_arg_in_transit = args[1];
     }
     else if (nargs > 2) {
-        jl_task_arg_in_transit = jl_f_tuple(NULL, &args[1], n_args_in_transit);
+        jl_task_arg_in_transit = jl_f_tuple(NULL, &args[1], nargs-1);
     }
     else {
         jl_task_arg_in_transit = (jl_value_t*)jl_null;
@@ -882,27 +870,28 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_task_type = jl_new_datatype(jl_symbol("Task"),
                                    jl_any_type,
                                    jl_null,
-                                   jl_tuple(11,
+                                   jl_tuple(9,
                                             jl_symbol("parent"),
                                             jl_symbol("last"),
                                             jl_symbol("storage"),
+                                            jl_symbol("state"),
                                             jl_symbol("consumers"),
-                                            jl_symbol("started"),
-                                            jl_symbol("done"),
-                                            jl_symbol("runnable"),
-                                            jl_symbol("result"),
                                             jl_symbol("donenotify"),
+                                            jl_symbol("result"),
                                             jl_symbol("exception"),
                                             jl_symbol("code")),
-                                   jl_tuple(11,
+                                   jl_tuple(9,
                                             jl_any_type, jl_any_type,
+                                            jl_any_type, jl_sym_type,
                                             jl_any_type, jl_any_type,
-                                            jl_bool_type, jl_bool_type, jl_bool_type,
-                                            jl_any_type, jl_any_type,
-                                            jl_any_type, jl_function_type),
+                                            jl_any_type, jl_any_type, jl_function_type),
                                    0, 1);
     jl_tupleset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
     jl_task_type->fptr = jl_f_task;
+
+    done_sym = jl_symbol("done");
+    failed_sym = jl_symbol("failed");
+    runnable_sym = jl_symbol("runnable");
 
     jl_current_task = (jl_task_t*)allocobj(sizeof(jl_task_t));
     jl_current_task->type = (jl_value_t*)jl_task_type;
@@ -920,9 +909,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->last = jl_current_task;
     jl_current_task->tls = NULL;
     jl_current_task->consumers = NULL;
-    jl_current_task->started = 1;
-    jl_current_task->done = 0;
-    jl_current_task->runnable = 1;
+    jl_current_task->state = runnable_sym;
     jl_current_task->start = NULL;
     jl_current_task->result = NULL;
     jl_current_task->donenotify = NULL;

@@ -1,14 +1,14 @@
 ## basic task functions and TLS
 
-show(io::IO, t::Task) = print(io, "Task @0x$(hex(unsigned(pointer_from_objref(t)), WORD_SIZE>>2))")
+show(io::IO, t::Task) = print(io, "Task ($(t.state)) @0x$(hex(unsigned(pointer_from_objref(t)), WORD_SIZE>>2))")
 
 macro task(ex)
     :(Task(()->$(esc(ex))))
 end
 
 current_task() = ccall(:jl_get_current_task, Any, ())::Task
-istaskdone(t::Task) = t.done
-istaskstarted(t::Task) = t.started
+istaskdone(t::Task) = ((t.state == :done) | (t.state == :failed))
+istaskstarted(t::Task) = isdefined(t, :last)
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, exc)
@@ -39,26 +39,24 @@ end
 
 # NOTE: you can only wait for scheduled tasks
 function wait(t::Task)
-    if istaskdone(t)
-        if t.exception !== nothing
-            throw(t.exception)
+    if !istaskdone(t)
+        if is(t.donenotify, nothing)
+            t.donenotify = Condition()
         end
-        return t.result
-    end
-    if is(t.donenotify, nothing)
-        t.donenotify = Condition()
     end
     while !istaskdone(t)
         wait(t.donenotify)
     end
-    t.result
+    if t.state == :failed
+        throw(t.exception)
+    end
+    return t.result
 end
 
 # runtime system hook called when a task finishes
 function task_done_hook(t::Task)
-    err = isdefined(t,:exception) && t.exception !== nothing
-    result = err ? t.exception : t.result
-
+    err = (t.state == :failed)
+    result = t.result
     nexttask = t.last
 
     q = t.consumers
@@ -70,7 +68,7 @@ function task_done_hook(t::Task)
 
     isa(t.donenotify,Condition) && notify(t.donenotify, result, error=err)
 
-    if nexttask.runnable
+    if nexttask.state == :runnable
         if err
             nexttask.exception = t.exception
         end
@@ -91,7 +89,7 @@ end
 produce(v...) = produce(v)
 
 function consume(P::Task, values...)
-    if P.done
+    if istaskdone(P)
         return wait(P)
     end
     if P.consumers === nothing
@@ -103,7 +101,7 @@ function consume(P::Task, values...)
     push!(P.consumers.waitq, ct)
     ct.result = length(values)==1 ? values[1] : values
 
-    if P.runnable
+    if P.state == :runnable
         return yieldto(P)
     else
         return wait()
@@ -129,6 +127,7 @@ end
 function wait(c::Condition)
     ct = current_task()
 
+    ct.state = :waiting
     push!(c.waitq, ct)
 
     try
@@ -158,30 +157,14 @@ notify_error(c::Condition, err) = notify(c, err, error=true)
 notify1_error(c::Condition, err) = notify(c, err, error=true, all=false)
 
 
-## work queue
+## scheduler and work queue
 
 function enq_work(t::Task)
     ccall(:uv_stop,Void,(Ptr{Void},),eventloop())
     push!(Workqueue, t)
+    t.state = :queued
     t
 end
-
-function perform_work(t::Task)
-    if !istaskstarted(t)
-        # starting new task
-        result = yieldto(t)
-    else
-        # continuing interrupted work item
-        arg = t.result
-        t.result = nothing
-        t.runnable = true
-        result = yieldto(t, arg)
-    end
-    return result
-end
-
-
-## scheduler
 
 # schedule an expression to run asynchronously, with minimal ceremony
 macro schedule(expr)
@@ -205,7 +188,6 @@ yield() = (enq_work(current_task()); wait())
 
 function wait()
     ct = current_task()
-    ct.runnable = false
     while true
         if isempty(Workqueue)
             c = process_events(true)
@@ -215,7 +197,11 @@ function wait()
                 pause()
             end
         else
-            result = perform_work(shift!(Workqueue))
+            t = shift!(Workqueue)
+            arg = t.result
+            t.result = nothing
+            t.state = :runnable
+            result = yieldto(t, arg)
             process_events(false)
             # return when we come out of the queue
             return result

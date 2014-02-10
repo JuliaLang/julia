@@ -235,14 +235,13 @@ function serialize(s, linfo::LambdaStaticData)
 end
 
 function serialize(s, t::Task)
-    if istaskstarted(t) && !t.done
+    if istaskstarted(t) && !istaskdone(t)
         error("cannot serialize a running Task")
     end
     writetag(s, Task)
     serialize(s, t.code)
     serialize(s, t.storage)
-    serialize(s, t.done)
-    serialize(s, t.runnable)
+    serialize(s, t.state == :queued || t.state == :waiting ? (:runnable) : t.state)
     serialize(s, t.result)
     serialize(s, t.exception)
 end
@@ -466,8 +465,7 @@ deserialize{T}(s, ::Type{Ptr{T}}) = pointer(T, 0)
 function deserialize(s, ::Type{Task})
     t = Task(deserialize(s))
     t.storage = deserialize(s)
-    t.done = deserialize(s)
-    t.runnable = deserialize(s)
+    t.state = deserialize(s)
     t.result = deserialize(s)
     t.exception = deserialize(s)
     t
