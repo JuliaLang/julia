@@ -678,12 +678,12 @@ function DateTime(y::Year=Year(1),m::Month=Month(1),d::Day=Day(1),
     return UTCDateTime(rata + (s.s == 60 ? 
                 setleapseond(rata.ms) : setleaps(rata.ms)))
 end
-DateTime(x::Period...) = error("Required argument order is DateTime(y,m,d,h,mi,s,ms)")
+DateTime(x::Period...) = throw(ArgumentError("Required argument order is DateTime(y,m,d,h,mi,s,ms)"))
 function Date(y::Year,m::Month=Month(1),d::Day=Day(1))
     0 < m.months < 13 || throw(ArgumentError("Month: $m out of range (1:12)"))
     return Date(Day(totaldays(y.years,m.months,d.days)))
 end
-Date(x::Period...) = error("Required argument order is Date(y,m,d)")
+Date(x::Period...) = throw(ArgumentError("Required argument order is Date(y,m,d)"))
 
 function (+)(x::TimeType,y::CompoundPeriod)
     for p in y.periods
