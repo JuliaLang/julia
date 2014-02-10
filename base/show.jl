@@ -119,6 +119,41 @@ function show(io::IO, l::LambdaStaticData)
     print(io, ")")
 end
 
+function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one)
+    print(io, op)
+    newline = true
+    first = true
+    i = 1
+    l = length(itr)
+    if l > 0
+        while true
+            if !isassigned(itr, i)
+                print(io, undef_ref_str)
+                multiline = false
+            else
+                x = itr[i]
+                multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
+                newline && multiline && println(io)
+                show(io, x)
+            end
+            i += 1
+            if i > l
+                delim_one && first && print(io, delim)
+                break
+            end
+            first = false
+            print(io, delim)
+            if multiline
+                println(io); println(io)
+                newline = false
+            else
+                newline = true
+            end
+        end
+    end
+    print(io, cl)
+end
+
 function show_delim_array(io::IO, itr, op, delim, cl, delim_one)
     print(io, op)
     state = start(itr)
@@ -126,28 +161,19 @@ function show_delim_array(io::IO, itr, op, delim, cl, delim_one)
     first = true
     if !done(itr,state)
         while true
-            if isa(itr,AbstractArray) && !isassigned(itr,state)
-                print(io, undef_ref_str)
-                state += 1
-                multiline = false
-            else
-                x, state = next(itr,state)
-                multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
-                if newline
-                    if multiline; println(io); end
-                end
-                show(io, x)
-            end
+            x, state = next(itr,state)
+            multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
+            newline && multiline && println(io)
+            show(io, x)
             if done(itr,state)
-                if delim_one && first
-                    print(io, delim)
-                end
+                delim_one && first && print(io, delim)
                 break
             end
             first = false
             print(io, delim)
             if multiline
-                println(io); println(io); newline=false
+                println(io); println(io)
+                newline = false
             else
                 newline = true
             end

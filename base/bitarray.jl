@@ -56,6 +56,8 @@ size(B::BitArray) = B.dims
 size(B::BitVector, d) = (d==1 ? B.len : d>1 ? 1 : error("dimensions should be positive (got $d)"))
 size{N}(B::BitArray{N}, d) = (d>N ? 1 : B.dims[d])
 
+isassigned{N}(B::BitArray{N}, i::Int) = 1 <= i <= length(B)
+
 ## Aux functions ##
 
 get_chunks_id(i::Integer) = @_div64(int(i)-1)+1, @_mod64(int(i)-1)
@@ -186,8 +188,6 @@ end
 start(B::BitArray) = 0
 next(B::BitArray, i::Int) = (B.chunks[@_div64(i)+1] & (uint64(1)<<@_mod64(i)) != 0, i+1)
 done(B::BitArray, i::Int) = i >= length(B)
-
-isassigned(B::BitArray, i::Int) = 0 <= i < length(B)
 
 ## similar, fill!, copy! etc ##
 

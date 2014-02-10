@@ -359,6 +359,20 @@ setindex!(B::BitArray, x) = setindex!(B, convert(Bool,x))
     return I
 end
 
+## isassigned
+
+@ngenerate N Bool function isassigned(B::BitArray, I_0::Int, I::NTuple{N,Int}...)
+    stride = 1
+    index = I_0
+    @nexprs N d->begin
+        l = size(B,d)
+        stride *= l
+        1 <= I_{d-1} <= l || return false
+        index += (I_d - 1) * stride
+    end
+    return isassigned(B, index)
+end
+
 ## permutedims
 
 for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
