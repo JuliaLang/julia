@@ -187,6 +187,8 @@ start(B::BitArray) = 0
 next(B::BitArray, i::Int) = (B.chunks[@_div64(i)+1] & (uint64(1)<<@_mod64(i)) != 0, i+1)
 done(B::BitArray, i::Int) = i >= length(B)
 
+isassigned(B::BitArray, i::Int) = 0 <= i < length(B)
+
 ## similar, fill!, copy! etc ##
 
 similar(B::BitArray) = BitArray(size(B))
