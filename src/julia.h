@@ -1085,12 +1085,10 @@ typedef struct _jl_task_t {
     struct _jl_task_t *parent;
     struct _jl_task_t *last;
     jl_value_t *tls;
+    jl_sym_t *state;
     jl_value_t *consumers;
-    int8_t started;
-    int8_t done;
-    int8_t runnable;
-    jl_value_t *result;
     jl_value_t *donenotify;
+    jl_value_t *result;
     jl_value_t *exception;
     jl_function_t *start;
     jl_jmp_buf ctx;

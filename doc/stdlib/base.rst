@@ -5188,11 +5188,11 @@ Tasks
 
 .. function:: Task(func)
 
-   Create a ``Task`` (i.e. thread, or coroutine) to execute the given function. The task exits when this function returns.
+   Create a ``Task`` (i.e. thread, or coroutine) to execute the given function (which must be callable with no arguments). The task exits when this function returns.
 
 .. function:: yieldto(task, args...)
 
-   Switch to the given task. The first time a task is switched to, the task's function is called with ``args``. On subsequent switches, ``args`` are returned from the task's last call to ``yieldto``.
+   Switch to the given task. The first time a task is switched to, the task's function is called with no arguments. On subsequent switches, ``args`` are returned from the task's last call to ``yieldto``.
 
 .. function:: current_task()
 
