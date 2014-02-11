@@ -5,13 +5,16 @@ import ..Pkg: DEFAULT_META, META_BRANCH
 
 const DIR_NAME = ".julia"
 
+_pkgroot() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(homedir(),DIR_NAME)))
+isversioned(p::String) = ((x,y) = (VERSION.major, VERSION.minor); basename(p) == "v$x.$y")
+
 function path()
-    b = abspath(get(ENV,"JULIA_PKGDIR",joinpath(homedir(),DIR_NAME)))
+    b = _pkgroot()
     x, y = VERSION.major, VERSION.minor
     d = joinpath(b,"v$x.$y")
-    isdir(d) && return d
-    d = joinpath(b,"v$x")
-    isdir(d) && return d
+    if isdir(d) || !isdir(b) || !isdir(joinpath(b, "METADATA"))
+        return d
+    end
     return b
 end
 path(pkg::String...) = normpath(path(),pkg...)
