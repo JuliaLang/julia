@@ -594,6 +594,7 @@ static jl_value_t *julia_type_of_without_metadata(Value *v, bool err=true)
 static jl_value_t *julia_type_of(Value *v)
 {
     MDNode *mdn;
+    assert(v != NULL);
     if (dyn_cast<Instruction>(v) == NULL ||
         (mdn = ((Instruction*)v)->getMetadata("julia_type")) == NULL) {
         return julia_type_of_without_metadata(v, true);
