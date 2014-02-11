@@ -724,13 +724,17 @@ write(s::TTY, p::Ptr, nb::Integer) = @uv_write nb ccall(:jl_write_no_copy, Int32
 
 function write(s::AsyncStream, b::Uint8)
     @uv_write 1 ccall(:jl_putc_copy, Int32, (Uint8, Ptr{Void}, Ptr{Void}, Ptr{Void}), b, handle(s), uvw, uv_jl_writecb_task::Ptr{Void})
-    uv_req_set_data(uvw,current_task())
+    ct = current_task()
+    uv_req_set_data(uvw,ct)
+    ct.state = :waiting
     wait()
     return 1
 end
 function write(s::AsyncStream, c::Char)
     @uv_write utf8sizeof(c) ccall(:jl_pututf8_copy, Int32, (Ptr{Void},Uint32, Ptr{Void}, Ptr{Void}), handle(s), c, uvw, uv_jl_writecb_task::Ptr{Void})
-    uv_req_set_data(uvw,current_task())
+    ct = current_task()
+    uv_req_set_data(uvw,ct)
+    ct.state = :waiting
     wait()
     return utf8sizeof(c)
 end
@@ -738,7 +742,9 @@ function write{T}(s::AsyncStream, a::Array{T})
     if isbits(T)
         n = uint(length(a)*sizeof(T))
         @uv_write n ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}, Ptr{Void}), handle(s), a, n, uvw, uv_jl_writecb_task::Ptr{Void})
-        uv_req_set_data(uvw,current_task())
+        ct = current_task()
+        uv_req_set_data(uvw,ct)
+        ct.state = :waiting
         wait()
         return int(length(a)*sizeof(T))
     else
@@ -748,7 +754,9 @@ function write{T}(s::AsyncStream, a::Array{T})
 end
 function write(s::AsyncStream, p::Ptr, nb::Integer)
     @uv_write nb ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, Uint, Ptr{Void}, Ptr{Void}), handle(s), p, nb, uvw, uv_jl_writecb_task::Ptr{Void})
-    uv_req_set_data(uvw,current_task())
+    ct = current_task()
+    uv_req_set_data(uvw,ct)
+    ct.state = :waiting
     wait()
     return int(nb)
 end
