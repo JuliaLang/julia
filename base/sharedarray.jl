@@ -173,16 +173,12 @@ convert(::Type{Array}, S::SharedArray) = S.s
 getindex(S::SharedArray) = getindex(S.s)
 getindex(S::SharedArray, I::Real) = getindex(S.s, I)
 getindex(S::SharedArray, I::AbstractArray) = getindex(S.s, I)
-getindex(S::SharedArray, I) = getindex(S.s, I)
-getindex(S::SharedArray, I, J) = getindex(S.s, I, J)
-getindex(S::SharedArray, I...) = getindex(S.s, I...)
+@nsplat N 1:5 getindex(S::SharedArray, I::NTuple{N,Any}...) = getindex(S.s, I...)
 
 setindex!(S::SharedArray, x) = (setindex!(S.s, x); S)
 setindex!(S::SharedArray, x, I::Real) = (setindex!(S.s, x, I); S)
 setindex!(S::SharedArray, x, I::AbstractArray) = (setindex!(S.s, x, I); S)
-setindex!(S::SharedArray, x, I) = (setindex!(S.s, x, I); S)
-setindex!(S::SharedArray, x, I, J) = (setindex!(S.s, x, I, J); S)
-setindex!(S::SharedArray, x, I...) = (setindex!(S.s, x, I...); S)
+@nsplat N 1:5 setindex!(S::SharedArray, x, I::NTuple{N,Any}...) = (setindex!(S.s, x, I...); S)
 
 # convenience constructors
 function shmem_fill(v, dims; kwargs...) 
