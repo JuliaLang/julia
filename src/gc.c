@@ -801,6 +801,7 @@ static void gc_mark_uv_state(uv_loop_t *loop)
 }
 
 extern jl_module_t *jl_old_base_module;
+extern jl_array_t *typeToTypeId;
 
 static void gc_mark(void)
 {
@@ -823,6 +824,7 @@ static void gc_mark(void)
     gc_push_root(jl_bottom_func, 0);
     gc_push_root(jl_typetype_type, 0);
     gc_push_root(jl_tupletype_type, 0);
+    gc_push_root(typeToTypeId, 0);
 
     // constants
     gc_push_root(jl_null, 0);
