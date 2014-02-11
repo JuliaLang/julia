@@ -21,7 +21,7 @@ ifeq ($(USE_LLVM_SHLIB),1)
 LLVMLINK = -lLLVM-$(LLVM_VER)
 endif
 
-LIBS = $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(build_libdir) $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(call exec,$(LLVM_CONFIG) --ldflags) $(LLVMLINK) $(OSLIBS)
+LIBS = $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBUTF8PROC) $(NO_WHOLE_ARCHIVE) $(call exec,$(LLVM_CONFIG) --ldflags) $(LLVMLINK) $(OSLIBS)
 
 ifneq ($(MAKECMDGOALS),debug)
 TARGET =
@@ -75,13 +75,13 @@ support/libsupport.a: support/*.h support/*.c
 flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 	$(MAKE) -C flisp
 
-$(build_libdir)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a $(LIBUV)
+$(build_shlibdir)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a $(LIBUV)
 	@$(call PRINT_LINK, $(CXX) $(DEBUGFLAGS) $(DOBJS) $(RPATH_ORIGIN) -shared -o $@ $(LDFLAGS) $(LIBS))
 	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
 libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	@$(call PRINT_LINK, ar -rcs $@ $(DOBJS))
-libjulia-debug: $(build_libdir)/libjulia-debug.$(SHLIB_EXT)
+libjulia-debug: $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT)
 
 ifeq ($(SHLIB_EXT), so)
   SONAME = -Wl,-soname=libjulia.so
@@ -89,16 +89,16 @@ else
   SONAME =
 endif
 
-$(build_libdir)/libjulia.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a $(LIBUV)
+$(build_shlibdir)/libjulia.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a $(LIBUV)
 	@$(call PRINT_LINK, $(CXX) $(SHIPFLAGS) $(OBJS) $(RPATH_ORIGIN) -shared -o $@ $(LDFLAGS) $(LIBS) $(SONAME))
 	$(INSTALL_NAME_CMD)libjulia.$(SHLIB_EXT) $@
 libjulia.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	@$(call PRINT_LINK, ar -rcs $@ $(OBJS))
-libjulia-release: $(build_libdir)/libjulia.$(SHLIB_EXT)
+libjulia-release: $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 
 clean:
-	-rm -f $(build_libdir)/libjulia*
+	-rm -f $(build_shlibdir)/libjulia*
 	-rm -f julia_flisp.boot julia_flisp.boot.inc
 	-rm -f *.do *.o *~ *# *.$(SHLIB_EXT) *.a h2j
 
