@@ -27,6 +27,7 @@ export
     BitVector,
     BunchKaufman,
     CFILE,
+    Channel,
     Cholesky,
     CholeskyPivoted,
     Cmd,

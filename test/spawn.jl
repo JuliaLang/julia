@@ -104,7 +104,7 @@ close(stdin)
 
 # issue #3373
 # fixing up Conditions after interruptions
-r = RemoteRef()
+r = Channel()
 t = @async begin
     try
         wait(r)

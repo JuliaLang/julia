@@ -98,10 +98,10 @@ workloads = hist(@parallel((a,b)->[a,b], for i=1:7; myid(); end), nprocs())[2]
 # @parallel reduction should work even with very short ranges
 @test @parallel(+, for i=1:2; i; end) == 3
 
-# Testing timedwait on multiple RemoteRefs
-rr1 = RemoteRef()
-rr2 = RemoteRef()
-rr3 = RemoteRef()
+# Testing timedwait on multiple Channels
+rr1 = Channel()
+rr2 = Channel()
+rr3 = Channel()
 
 @async begin sleep(0.5); put(rr1, :ok) end
 @async begin sleep(1.0); put(rr2, :ok) end
@@ -117,6 +117,38 @@ et=toq()
 @test (et >= 1.0) && (et <= 1.5)
 @test isready(rr1)
 @test !isready(rr3)
+
+
+c = Channel(; sz=10)
+put(c, 1)
+put(c, "Hello")
+put(c, 5.0)
+
+@test isready(c) == true
+@test fetch(c) == 1
+@test fetch(c) == 1   # Should not have been popped previously
+@test take(c) == 1   
+@test take(c) == "Hello"   
+@test fetch(c) == 5.0
+@test take(c) == 5.0
+@test isready(c) == false
+
+# same test mixed with another worker...
+c = Channel(id_other; sz=10)
+put(c, 1)
+remotecall_fetch(id_other, ch -> put(ch, "Hello"), c)
+put(c, 5.0)
+
+@test isready(c) == true
+@test remotecall_fetch(id_other, ch -> fetch(ch), c) == 1
+@test fetch(c) == 1   # Should not have been popped previously
+@test take(c) == 1   
+@test remotecall_fetch(id_other, ch -> take(ch), c) == "Hello"
+@test fetch(c) == 5.0
+@test remotecall_fetch(id_other, ch -> take(ch), c) == 5.0
+@test remotecall_fetch(id_other, ch -> isready(ch), c) == false
+@test isready(c) == false
+
 
 
 # TODO: The below block should be always enabled but the error is printed by the event loop

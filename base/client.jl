@@ -146,7 +146,7 @@ end
 _eval_done = Condition()
 
 function run_repl()
-    global const repl_channel = RemoteRef()
+    global const repl_channel = Channel()
 
     ccall(:jl_init_repl, Void, (Cint,), _use_history)
 
