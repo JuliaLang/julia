@@ -95,9 +95,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    ``sqrtm`` uses a polyalgorithm, computing the matrix square root using Schur factorizations (:func:`schurfact`) unless it detects the matrix to be Hermitian or real symmetric, in which case it computes the matrix square root from an eigendecomposition (:func:`eigfact`). In the latter situation for positive definite matrices, the matrix square root has ``Real`` elements, otherwise it has ``Complex`` elements.
 
-.. function:: eig(A,[balance=:balance]) -> D, V
+.. function:: eig(A,[permute=true,][scale=true]) -> D, V
 
-   Compute eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for details on the ``balance`` keyword argument.
+   Compute eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for details on the ``permute`` and ``scale`` keyword arguments.
 
 .. function:: eig(A, B) -> D, V
 
@@ -115,18 +115,18 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Returns the smallest eigenvalue of ``A``.
 
-.. function:: eigvecs(A, [eigvals,][balance=:balance])
+.. function:: eigvecs(A, [eigvals,][permute=true,][scale=true])
 
    Returns the eigenvectors of ``A``.
-   The ``balance`` keyword is the same as for :func:`eigfact`.
+   The ``permute`` and ``scale`` keywords are the same as for :func:`eigfact`.
 
    For ``SymTridiagonal`` matrices, if the optional vector of eigenvalues ``eigvals`` is specified, returns the specific corresponding eigenvectors.
 
-.. function:: eigfact(A,[balance=:balance])
+.. function:: eigfact(A,[permute=true,][scale=true])
 
    Compute the eigenvalue decomposition of ``A`` and return an ``Eigen`` object. If ``F`` is the factorization object, the eigenvalues can be accessed with ``F[:values]`` and the eigenvectors with ``F[:vectors]``. The following functions are available for ``Eigen`` objects: ``inv``, ``det``.
    
-   For general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. Possible values are: ``:nobalance`` (do not balance), ``:permute`` (permute the matrix to become closer to upper triangular), ``:diagonal`` (scale the matrix by its diagonal elements to make rows and columns more equal in norm), and ``:balance`` (The default, i.e. both permute and scale the matrix).
+   For general non-symmetric matrices it is possible to specify how the matrix is balanced before the eigenvector calculation. The option ``permute=true`` permutes the matrix to become closer to upper triangular, and ``scale=true`` scales the matrix by its diagonal elements to make rows and columns more equal in norm. The default is ``true`` for both options.
 
 .. function:: eigfact(A, B)
 
