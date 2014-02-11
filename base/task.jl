@@ -61,18 +61,23 @@ function task_done_hook(t::Task)
 
     q = t.consumers
 
-    if isa(q,Condition) && !isempty(q.waitq)
-        nexttask = shift!(q.waitq)
+    #### un-optimized version
+    #isa(q,Condition) && notify(q, result, error=err)
+    if isa(q,Task)
+        nexttask = q
+    elseif isa(q,Condition) && !isempty(q.waitq)
         notify(q, result, error=err)
     end
+
+    t.consumers = nothing
 
     isa(t.donenotify,Condition) && notify(t.donenotify, result, error=err)
 
     if nexttask.state == :runnable
         if err
-            nexttask.exception = t.exception
+            nexttask.exception = result
         end
-        yieldto(nexttask, t.result)
+        yieldto(nexttask, result)
     else
         wait()
     end
@@ -82,9 +87,34 @@ end
 ## produce, consume, and task iteration
 
 function produce(v)
-    q = current_task().consumers
-    yieldto(shift!(q.waitq), v)
-    q.waitq[1].result
+    #### un-optimized version
+    #q = current_task().consumers
+    #t = shift!(q.waitq)
+    #empty = isempty(q.waitq)
+    ct = current_task()
+    q = ct.consumers
+    if isa(q,Condition)
+        t = shift!(q.waitq)
+        empty = isempty(q.waitq)
+    else
+        t = q
+        ct.consumers = nothing
+        empty = true
+    end
+
+    if empty
+        schedule_and_wait(t, v)
+    else
+        schedule(t, v)
+    end
+
+    #### un-optimized version
+    #q.waitq[1].result
+    if isa(ct.consumers,Condition)
+        return ct.consumers.waitq[1].result
+    else
+        return ct.consumers.result
+    end
 end
 produce(v...) = produce(v)
 
@@ -92,20 +122,30 @@ function consume(P::Task, values...)
     if istaskdone(P)
         return wait(P)
     end
-    if P.consumers === nothing
-        P.consumers = Condition()
-    end
 
     ct = current_task()
-
-    push!(P.consumers.waitq, ct)
     ct.result = length(values)==1 ? values[1] : values
 
-    if P.state == :runnable
-        return yieldto(P)
+    #### un-optimized version
+    #if P.consumers === nothing
+    #    P.consumers = Condition()
+    #end
+    #push!(P.consumers.waitq, ct)
+    # optimized version that avoids the queue for 1 consumer
+    if P.consumers === nothing || (isa(P.consumers,Condition)&&isempty(P.consumers.waitq))
+        P.consumers = ct
     else
-        return wait()
+        if P.consumers === nothing
+            P.consumers = Condition()
+        elseif isa(P.consumers, Task)
+            t = P.consumers
+            P.consumers = Condition()
+            push!(P.consumers.waitq, t)
+        end
+        push!(P.consumers.waitq, ct)
     end
+
+    schedule_and_wait(P)
 end
 
 start(t::Task) = nothing
@@ -182,6 +222,22 @@ function schedule(t::Task, arg; error=false)
         t.result = arg
     end
     enq_work(t)
+end
+
+# fast version of schedule(t,v);wait()
+function schedule_and_wait(t, v=nothing)
+    if isempty(Workqueue)
+        if t.state == :runnable
+            return yieldto(t, v)
+        end
+    else
+        if t.state == :runnable
+            t.result = v
+            push!(Workqueue, t)
+            t.state = :queued
+        end
+    end
+    wait()
 end
 
 yield() = (enq_work(current_task()); wait())
