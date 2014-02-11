@@ -265,7 +265,7 @@ comparisons can be arbitrarily chained:
 
 Chaining comparisons is often quite convenient in numerical code.
 Chained comparisons use the ``&&`` operator for scalar comparisons,
-and the ``&`` operator for element-wise comparisons, which allows them to
+and the ``&`` operator for elementwise comparisons, which allows them to
 work on arrays. For example, ``0 .< A .< 1`` gives a boolean array whose
 entries are true where the corresponding elements of ``A`` are between 0
 and 1.

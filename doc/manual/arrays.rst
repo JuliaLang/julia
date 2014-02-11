@@ -275,20 +275,25 @@ Expression          Calls
 Vectorized Operators and Functions
 ----------------------------------
 
-The following operators are supported for arrays. In case of binary operators,
-the dot (element-wise) version of the operator should be used when both inputs
-are non-scalar, and any version of the operator may be used if one of the
-inputs is a scalar.
+The following operators are supported for arrays. The dot version of a binary
+operator should be used for elementwise operations.
 
 1.  Unary arithmetic — ``-``, ``+``, ``!``
 2.  Binary arithmetic — ``+``, ``-``, ``*``, ``.*``, ``/``, ``./``,
     ``\``, ``.\``, ``^``, ``.^``, ``div``, ``mod``
-3.  Comparison — ``==``, ``!=``, ``<``, ``<=``, ``>``, ``>=``
+3.  Comparison — ``.==``, ``.!=``, ``.<``, ``.<=``, ``.>``, ``.>=``
 4.  Unary Boolean or bitwise — ``~``
 5.  Binary Boolean or bitwise — ``&``, ``|``, ``$``
 
+Some operators without dots operate elementwise anyway when one argument is a
+scalar. These operators are ``+``, ``-``, ``*``, ``/``, ``\``, and the bitwise
+operators.
+
+Note that comparisons such as ``==`` operate on whole arrays, giving a single
+boolean answer. Use dot operators for elementwise comparisons.
+
 The following built-in functions are also vectorized, whereby the functions act
-element-wise::
+elementwise::
 
     abs abs2 angle cbrt
     airy airyai airyaiprime airybi airybiprime airyprime
@@ -311,7 +316,11 @@ element-wise::
     copysign max min significand
     sqrt hypot
 
-Furthermore, Julia provides the ``@vectorize_1arg`` and ``@vectorize_2arg``
+Note that there is a difference between ``min`` and ``max``, which operate
+elementwise over multiple array arguments, and ``minimum`` and ``maximum``, which
+find the smallest and largest values within an array.
+
+Julia provides the ``@vectorize_1arg`` and ``@vectorize_2arg``
 macros to automatically vectorize any function of one or two arguments
 respectively.  Each of these takes two arguments, namely the ``Type`` of
 argument (which is usually chosen to be to be the most general possible) and
