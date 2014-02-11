@@ -4981,8 +4981,9 @@ C Interface
 
 .. function:: pointer(a[, index])
 
-   Get the native address of an array element. Be careful to ensure that a julia
-   reference to ``a`` exists as long as this pointer will be used.
+   Get the native address of an array or string element. Be careful to
+   ensure that a julia reference to ``a`` exists as long as this
+   pointer will be used.
 
 .. function:: pointer(type, int)
 

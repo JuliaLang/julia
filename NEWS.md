@@ -106,8 +106,11 @@ Library improvements
 
     * `CharString` is renamed to `UTF32String` ([#4943]).
 
-    * `normalize_string` function to perform Unicode normalization, case-folding,
-      and other transformations ([#5576]).
+    * `normalize_string` function to perform Unicode normalization,
+      case-folding, and other transformations ([#5576]).
+
+    * `pointer(s, i=1)` for `ByteString`, `UTF16String`, `UTF32String`,
+      and `SubString`s thereof ([#5703]).
 
   * `LinAlg` (linear algebra) improvements
 
