@@ -8,7 +8,7 @@ static GlobalVariable *prepare_global(GlobalVariable *G)
         GlobalVariable *gv = jl_Module->getGlobalVariable(G->getName());
         if (!gv) {
             gv = new GlobalVariable(*jl_Module, G->getType()->getElementType(),
-                                    true, GlobalVariable::ExternalLinkage,
+                                    G->isConstant(), GlobalVariable::ExternalLinkage,
                                     NULL, G->getName());
         }
         return gv;     
