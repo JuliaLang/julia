@@ -543,7 +543,9 @@ static bool is_tupletype_homogeneous(jl_tuple_t *t)
 // --- scheme for tagging llvm values with julia types using metadata ---
 
 static std::map<int, jl_value_t*> typeIdToType;
-static jl_array_t *typeToTypeId;
+extern "C" {
+    jl_array_t *typeToTypeId;
+}
 static int cur_type_id = 1;
 
 static int jl_type_to_typeid(jl_value_t *t)
@@ -555,7 +557,7 @@ static int jl_type_to_typeid(jl_value_t *t)
             jl_error("internal compiler error: too many bits types");
         JL_GC_PUSH1(&id);
         id = jl_box_long(mine);
-        jl_eqtable_put(typeToTypeId, t, id);
+        typeToTypeId = jl_eqtable_put(typeToTypeId, t, id);
         typeIdToType[mine] = t;
         JL_GC_POP();
         return mine;
