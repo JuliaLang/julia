@@ -65,6 +65,7 @@ function task_done_hook(t::Task)
     #isa(q,Condition) && notify(q, result, error=err)
     if isa(q,Task)
         nexttask = q
+        nexttask.state = :runnable
     elseif isa(q,Condition) && !isempty(q.waitq)
         notify(q, result, error=err)
     end
@@ -102,18 +103,26 @@ function produce(v)
         empty = true
     end
 
+    t.state = :runnable
     if empty
-        schedule_and_wait(t, v)
+        if isempty(Workqueue)
+            yieldto(t, v)
+        else
+            schedule_and_wait(t, v)
+        end
+        while true
+            # wait until there are more consumers
+            q = ct.consumers
+            if isa(q,Task)
+                return q.result
+            elseif isa(q,Condition) && !isempty(q.waitq)
+                return q.waitq[1].result
+            end
+            wait()
+        end
     else
         schedule(t, v)
-    end
-
-    #### un-optimized version
-    #q.waitq[1].result
-    if isa(ct.consumers,Condition)
-        return ct.consumers.waitq[1].result
-    else
-        return ct.consumers.result
+        return q.waitq[1].result
     end
 end
 produce(v...) = produce(v)
@@ -144,6 +153,7 @@ function consume(P::Task, values...)
         end
         push!(P.consumers.waitq, ct)
     end
+    ct.state = :waiting
 
     schedule_and_wait(P)
 end

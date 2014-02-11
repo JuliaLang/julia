@@ -917,7 +917,7 @@ function start_worker(out::IO)
 
     try
         check_master_connect(60.0)
-        wait()
+        while true; wait(); end
     catch err
         print(STDERR, "unhandled exception on $(myid()): $(err)\nexiting.\n")
     end

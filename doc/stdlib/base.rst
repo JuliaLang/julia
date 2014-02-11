@@ -4483,8 +4483,13 @@ Parallel Computing
 
    * ``RawFD``: Wait for changes on a file descriptor (see `poll_fd` for keyword arguments and return code)
 
-   If no argument is passed, the task blocks until it is explicitly restarted, usually
-   by a call to ``schedule``.
+   If no argument is passed, the task blocks for an undefined period. If the task's
+   state is set to ``:waiting``, it can only be restarted by an explicit call to
+   ``schedule`` or ``yieldto``. If the task's state is ``:runnable``, it might be
+   restarted unpredictably.
+
+   Often ``wait`` is called within a ``while`` loop to ensure a waited-for condition
+   is met before proceeding.
 
 .. function:: fetch(RemoteRef)
 
@@ -5192,7 +5197,7 @@ Tasks
 
 .. function:: yieldto(task, args...)
 
-   Switch to the given task. The first time a task is switched to, the task's function is called with no arguments. On subsequent switches, ``args`` are returned from the task's last call to ``yieldto``.
+   Switch to the given task. The first time a task is switched to, the task's function is called with no arguments. On subsequent switches, ``args`` are returned from the task's last call to ``yieldto``. This is a low-level call that only switches tasks, not considering states or scheduling in any way.
 
 .. function:: current_task()
 
