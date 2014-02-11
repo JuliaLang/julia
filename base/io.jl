@@ -486,7 +486,7 @@ function readbytes!(s::IOStream, b::Array{Uint8}, nb=length(b))
         end
         nr += int(ccall(:ios_readall, Uint,
                         (Ptr{Void}, Ptr{Void}, Uint),
-                        s.ios, pointer(b, nr+1), lb - nr))
+                        s.ios, pointer(b, nr+1), nb - nr))
     end
     if lb > olb
         resize!(b, nr) # shrink to just contain input data if was resized
