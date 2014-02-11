@@ -391,6 +391,8 @@ eval(Sys, :(@deprecate shlib_list dllist))
 
 @deprecate myindexes localindexes
 
+@deprecate setfield setfield!
+
 # 0.3 discontinued functions
 
 function nnz(X)

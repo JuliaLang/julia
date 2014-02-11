@@ -538,15 +538,15 @@ begin
     @test_throws getfield(z, 3)
 
     strct = LoadError("", 0, "")
-    setfield(strct, 2, 8)
+    setfield!(strct, 2, 8)
     @test strct.line == 8
-    setfield(strct, 3, "hi")
+    setfield!(strct, 3, "hi")
     @test strct.error == "hi"
-    setfield(strct, 1, "yo")
+    setfield!(strct, 1, "yo")
     @test strct.file == "yo"
     @test_throws getfield(strct, 10)
-    @test_throws setfield(strct, 0, "")
-    @test_throws setfield(strct, 4, "")
+    @test_throws setfield!(strct, 0, "")
+    @test_throws setfield!(strct, 4, "")
 end
 
 # allow typevar in Union to match as long as the arguments contain

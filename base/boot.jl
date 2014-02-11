@@ -138,7 +138,7 @@ export
     GetfieldNode,
     # object model functions
     apply, arraylen, arrayref, arrayset, arraysize, fieldtype, getfield,
-    setfield, yieldto, throw, tuple, tuplelen, tupleref, is, ===, isdefined,
+    setfield!, yieldto, throw, tuple, tuplelen, tupleref, is, ===, isdefined,
     convert_default, convert_tuple, kwcall,
     # type reflection
     issubtype, typeassert, typeof, apply_type, isa,
