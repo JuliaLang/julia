@@ -4143,7 +4143,6 @@ extern "C" void jl_init_codegen(void)
                                          (void*)&restore_arg_area_loc);
 
     typeToTypeId = jl_alloc_cell_1d(16);
-    jl_gc_preserve((jl_value_t*)typeToTypeId);
 }
 
 /*
