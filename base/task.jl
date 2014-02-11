@@ -243,7 +243,6 @@ end
 yield() = (enq_work(current_task()); wait())
 
 function wait()
-    ct = current_task()
     while true
         if isempty(Workqueue)
             c = process_events(true)
