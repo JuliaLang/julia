@@ -138,7 +138,7 @@ endif
 #JL_PRIVATE_LIBS += z
 #endif
 ifeq ($(USE_SYSTEM_RMATH),0)
-JL_PRIVATE_LIBS += Rmath
+JL_PRIVATE_LIBS += Rmath-julia
 endif
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
@@ -172,7 +172,7 @@ $(eval $(call std_dll,ssp-0))
 endif
 endif
 
-prefix ?= julia-$(JULIA_COMMIT)
+prefix ?= $(abspath julia-$(JULIA_COMMIT))
 install: $(build_bindir)/stringpatch
 	@$(MAKE) $(QUIET_MAKE) release
 	@$(MAKE) $(QUIET_MAKE) debug
