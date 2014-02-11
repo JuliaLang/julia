@@ -500,13 +500,13 @@ JL_CALLABLE(jl_f_get_field)
 
 JL_CALLABLE(jl_f_set_field)
 {
-    JL_NARGS(setfield, 3, 3);
+    JL_NARGS(setfield!, 3, 3);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
     if (vt == (jl_value_t*)jl_module_type)
         jl_error("cannot assign variables in other modules");
     if (!jl_is_datatype(vt))
-        jl_type_error("setfield", (jl_value_t*)jl_datatype_type, v);
+        jl_type_error("setfield!", (jl_value_t*)jl_datatype_type, v);
     jl_datatype_t *st = (jl_datatype_t*)vt;
     if (!st->mutabl)
         jl_errorf("type %s is immutable", st->name->name->name);
@@ -517,12 +517,12 @@ JL_CALLABLE(jl_f_set_field)
             jl_throw(jl_bounds_exception);
     }
     else {
-        JL_TYPECHK(setfield, symbol, args[1]);
+        JL_TYPECHK(setfield!, symbol, args[1]);
         idx = jl_field_index(st, (jl_sym_t*)args[1], 1);
     }
     jl_value_t *ft = jl_tupleref(st->types, idx);
     if (!jl_subtype(args[2], ft, 1)) {
-        jl_type_error("setfield", ft, args[2]);
+        jl_type_error("setfield!", ft, args[2]);
     }
     jl_set_nth_field(v, idx, args[2]);
     return args[2];
@@ -995,7 +995,7 @@ void jl_init_primitives(void)
     add_builtin_func("tupleref",  jl_f_tupleref);
     add_builtin_func("tuplelen",  jl_f_tuplelen);
     add_builtin_func("getfield",  jl_f_get_field);
-    add_builtin_func("setfield",  jl_f_set_field);
+    add_builtin_func("setfield!",  jl_f_set_field);
     add_builtin_func("fieldtype", jl_f_field_type);
 
     add_builtin_func("arraylen", jl_f_arraylen);

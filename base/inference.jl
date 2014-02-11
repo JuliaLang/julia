@@ -326,7 +326,7 @@ const getfield_tfunc = function (A, s, name)
     end
 end
 t_func[getfield] = (2, 2, getfield_tfunc)
-t_func[setfield] = (3, 3, (o, f, v)->v)
+t_func[setfield!] = (3, 3, (o, f, v)->v)
 const fieldtype_tfunc = function (A, s, name)
     if !isa(s,DataType)
         return Type
