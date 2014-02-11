@@ -98,10 +98,10 @@ workloads = hist(@parallel((a,b)->[a,b], for i=1:7; myid(); end), nprocs())[2]
 # @parallel reduction should work even with very short ranges
 @test @parallel(+, for i=1:2; i; end) == 3
 
-# Testing timedwait on multiple RemoteRefs
-rr1 = RemoteRef()
-rr2 = RemoteRef()
-rr3 = RemoteRef()
+# Testing timedwait on multiple Channels
+rr1 = Channel()
+rr2 = Channel()
+rr3 = Channel()
 
 @async begin sleep(0.5); put(rr1, :ok) end
 @async begin sleep(1.0); put(rr2, :ok) end
@@ -119,7 +119,7 @@ et=toq()
 @test !isready(rr3)
 
 
-c = Channel()
+c = Channel(; sz=10)
 put(c, 1)
 put(c, "Hello")
 put(c, 5.0)
@@ -134,7 +134,7 @@ put(c, 5.0)
 @test isready(c) == false
 
 # same test mixed with another worker...
-c = Channel(id_other)
+c = Channel(id_other; sz=10)
 put(c, 1)
 remotecall_fetch(id_other, ch -> put(ch, "Hello"), c)
 put(c, 5.0)

@@ -391,6 +391,9 @@ eval(Sys, :(@deprecate shlib_list dllist))
 
 @deprecate myindexes localindexes
 
+@deprecate RemoteRef() Channel()
+@deprecate RemoteRef(pid) Channel(pid)
+
 # 0.3 discontinued functions
 
 function nnz(X)

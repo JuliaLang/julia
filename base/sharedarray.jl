@@ -1,7 +1,7 @@
 type SharedArray{T,N} <: DenseArray{T,N}
     dims::NTuple{N,Int}
     pids::Vector{Int}
-    refs::Array{RemoteRef}
+    refs::Array{Channel}
     
     # The segname is currently used only in the test scripts to ensure that 
     # the shmem segment has been unlinked.
@@ -53,7 +53,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
 
         func_mapshmem = () -> shm_mmap_array(T, dims, shm_seg_name, JL_O_RDWR)
         
-        refs = Array(RemoteRef, length(pids))
+        refs = Array(Channel, length(pids))
         for (i, p) in enumerate(pids)
             refs[i] = remotecall(p, func_mapshmem)
         end

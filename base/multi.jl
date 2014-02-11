@@ -6,13 +6,13 @@
 ##
 ## remotecall(w, func, args...) -
 ##     tell a worker to call a function on the given arguments.
-##     returns a RemoteRef to the result.
+##     returns a Channel to the result.
 ##
 ## remote_do(w, f, args...) - remote function call with no result
 ##
-## wait(rr) - wait for a RemoteRef to be finished computing
+## wait(rr) - wait for a Channel to be finished computing
 ##
-## fetch(rr) - wait for and get the value of a RemoteRef
+## fetch(rr) - wait for and get the value of a Channel
 ##
 ## remotecall_fetch(w, func, args...) - faster fetch(remotecall(...))
 ##
@@ -20,14 +20,14 @@
 ##     call a function on each element of lst (some 1-d thing), in
 ##     parallel.
 ##
-## RemoteRef() - create an uninitialized RemoteRef on the local processor
+## Channel() - create an uninitialized Channel on the local processor
 ##
-## RemoteRef(p) - ...or on a particular processor
+## Channel(p) - ...or on a particular processor
 ##
-## put(r, val) - store a value to an uninitialized RemoteRef
+## put(r, val) - store a value to an uninitialized Channel
 ##
 ## @spawn expr -
-##     evaluate expr somewhere. returns a RemoteRef. all variables in expr
+##     evaluate expr somewhere. returns a Channel. all variables in expr
 ##     are copied to the remote processor.
 ##
 ## @spawnat p expr - @spawn specifying where to run
@@ -334,7 +334,7 @@ function deregister_worker(pg, pid)
     end
     push!(map_del_wrkr, pid)
 
-    # delete this worker from our RemoteRef client sets
+    # delete this worker from our Channel client sets
     ids = {}
     tonotify = {}
     for (id,rv) in pg.refs
@@ -360,13 +360,13 @@ end
 
 const client_refs = WeakKeyDict()
 
-type RemoteRef
+type Channel
     where::Int
     whence::Int
     id::Int
     # TODO: cache value if it's fetched, but don't serialize the cached value
 
-    function RemoteRef(w, wh, id)
+    function Channel(w::Int, wh::Int, id::Int)
         r = new(w,wh,id)
         found = getkey(client_refs, r, false)
         if !is(found,false)
@@ -378,8 +378,9 @@ type RemoteRef
     end
 
     REQ_ID::Int = 0
-    function RemoteRef(pid::Integer)
-        rr = RemoteRef(pid, myid(), REQ_ID)
+    function Channel(pid::Integer; sz=1, eltype::Type=Any)
+        assert(sz > 0)
+        rr = Channel(pid, myid(), REQ_ID)
         REQ_ID += 1
         if mod(REQ_ID,200) == 0
             # force gc after making a lot of refs since they take up
@@ -387,40 +388,62 @@ type RemoteRef
             # is responsible for freeing them.
             gc()
         end
+
+        if (eltype != Any) || (sz > 1)
+            # For any and size 1, the ChannelBuffer is created only at the time of first access
+            # this saves a round trip. However for other types/sizes, we will need to create it 
+            # at Channel creation time itself.
+            call_on_owner(setup_ref, rr, eltype, sz)
+        end
         rr
     end
 
-    RemoteRef(w::LocalProcess) = RemoteRef(w.id)
-    RemoteRef(w::Worker) = RemoteRef(w.id)
-    RemoteRef() = RemoteRef(myid())
+    Channel(w::LocalProcess) = Channel(w.id; eltype=Any)
+    Channel(w::Worker) = Channel(w.id; eltype=Any)
+    Channel(; kwargs...) = Channel(myid(); kwargs...)
 
     global next_id
     next_id() = (id=(myid(),REQ_ID); REQ_ID+=1; id)
 end
 
-hash(r::RemoteRef) = hash(r.whence)+3*hash(r.id)
-isequal(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
+hash(r::Channel) = hash(r.whence)+3*hash(r.id)
+isequal(r::Channel, s::Channel) = (r.whence==s.whence && r.id==s.id)
 
-rr2id(r::RemoteRef) = (r.whence, r.id)
+eltype_ref(rid) = eltype(lookup_ref(rid))
+eltype(c::Channel) = call_on_owner(eltype_ref, c)
+
+size_ref(rid) = size(lookup_ref(rid))
+size(c::Channel) = call_on_owner(size_ref, c)
+
+
+rr2id(r::Channel) = (r.whence, r.id)
 
 lookup_ref(id) = lookup_ref(PGRP, id)
 function lookup_ref(pg, id)
     rv = get(pg.refs, id, false)
     if rv === false
         # first we've heard of this ref
-        rv = RemoteValue()
-        pg.refs[id] = rv
-        push!(rv.clientset, id[1])
+        rv = setup_ref(pg, id, Any, 1)
     end
     rv
 end
+
+setup_ref(id, T, sz) = setup_ref(PGRP, id, T, sz)
+function setup_ref(pg, id, T, sz)
+    rv = ChannelBuffer(T, sz)
+    pg.refs[id] = rv
+    push!(rv.clientset, id[1])
+    rv
+end
+
+
 
 # is a ref uninitialized? (for locally-owned refs only)
 #function ref_uninitialized(id)
 #    wi = lookup_ref(id)
 #    !wi.done && is(wi.thunk,bottom_func)
 #end
-#ref_uninitialized(r::RemoteRef) = (assert(r.where==myid());
+#ref_uninitialized(r::Channel) = (assert(r.where==myid());
 #                                   ref_uninitialized(rr2id(r)))
 
 del_client(id, client) = del_client(PGRP, id, client)
@@ -449,7 +472,7 @@ function start_gc_msgs_task()
         end))
 end
 
-function send_del_client(rr::RemoteRef)
+function send_del_client(rr::Channel)
     if rr.where == myid()
         del_client(rr2id(rr), myid())
     else
@@ -477,7 +500,7 @@ function add_clients(pairs::(Any,Any)...)
     end
 end
 
-function send_add_client(rr::RemoteRef, i)
+function send_add_client(rr::Channel, i)
     if rr.where == myid()
         add_client(rr2id(rr), i)
     elseif i != rr.where
@@ -492,7 +515,7 @@ function send_add_client(rr::RemoteRef, i)
     end
 end
 
-function serialize(s, rr::RemoteRef)
+function serialize(s, rr::Channel)
     i = worker_id_from_socket(s)
     #println("$(myid()) serializing $rr to $i")
     if i != -1
@@ -502,102 +525,62 @@ function serialize(s, rr::RemoteRef)
     invoke(serialize, (Any, Any), s, rr)
 end
 
-function deserialize(s, t::Type{RemoteRef})
+function deserialize(s, t::Type{Channel})
     rr = invoke(deserialize, (Any, DataType), s, t)
     where = rr.where
     if where == myid()
         add_client(rr2id(rr), myid())
     end
     # call ctor to make sure this rr gets added to the client_refs table
-    RemoteRef(where, rr.whence, rr.id)
+    Channel(where, rr.whence, rr.id)
 end
 
-# data stored by the owner of a RemoteRef
-type RemoteValue
-    done::Bool        # Ununsed in case 'val' field is of type ChannelQ   
-    val
+# data stored by the owner of a Channel
+type ChannelBuffer
+    q::Vector
+    sz::Int
     full::Condition   # waiting for a value
     empty::Condition  # waiting for value to be removed
     clientset::IntSet
     waitingfor::Int   # processor we need to hear from to fill this, or 0
-
-    RemoteValue() = new(false, nothing, Condition(), Condition(), IntSet(), 0)
 end
 
-type ChannelQ
-    q::Vector
-    limit
+function ChannelBuffer(T, sz)
+    assert(sz > 0)
+    ChannelBuffer(Array(T, 0), sz, Condition(), Condition(), IntSet(), 0)
 end
 
-type Channel
-    rr::RemoteRef
-    function Channel(id; limit=1000) 
-        rr = RemoteRef(id)
-        put(rr, ChannelQ(Array(Any, 0), limit))
-        new(rr)
-    end
+eltype(rv::ChannelBuffer) = eltype(rv.q)
+size(rv::ChannelBuffer) = rv.sz
 
-    Channel(;kwargs...) = Channel(myid(); kwargs...)
-end
-
-
-function isready(rr::RemoteRef)
+function isready(rr::Channel)
     rid = rr2id(rr)
     if rr.where == myid()
-        lookup_ref(rid).done
+        return length(lookup_ref(rid).q) > 0
     else
-        remotecall_fetch(rr.where, id->lookup_ref(id).done, rid)
-    end
-end
-
-function isready(c::Channel)
-    rr = c.rr
-    rid = rr2id(rr)
-    if rr.where == myid()
-        return length(lookup_ref(rid).val.q) > 0
-    else
-        remotecall_fetch(rr.where, id -> (length(lookup_ref(rid).val.q) > 0), rid)
+        remotecall_fetch(rr.where, id -> (length(lookup_ref(rid).q) > 0), rid)
     end
 end
 
 
-function work_result(rv::RemoteValue)
-    v = rv.val
+function work_result(rv::ChannelBuffer)
+    v = rv.q[1]
     if isa(v,WeakRef)
         v = v.value
-    elseif isa(v,ChannelQ)
-        if length(v.q) > 0
-            v = v.q[1]
-        else
-            # Only during Channel construction.
-            v = v.q
-        end
     end
     v
 end
 
-function wait_full(rv::RemoteValue)
-    if isa(rv.val, ChannelQ)
-        while length(rv.val.q) == 0
-            wait(rv.full)
-        end
-    else
-        while !rv.done
-            wait(rv.full)
-        end
+function wait_full(rv::ChannelBuffer)
+    while length(rv.q) == 0
+        wait(rv.full)
     end
     return work_result(rv)
 end
 
-function wait_empty(rv::RemoteValue)
-    if isa(rv.val, ChannelQ)
-        while length(rv.val.q) >= rv.val.limit
-            wait(rv.empty)
-        end
-    else
-        while rv.done
-            wait(rv.empty)
-        end
+function wait_empty(rv::ChannelBuffer)
+    while length(rv.q) >= rv.sz
+        wait(rv.empty)
     end
     return nothing
 end
@@ -616,12 +599,12 @@ function run_work_thunk(thunk)
     end
     result
 end
-function run_work_thunk(rv::RemoteValue, thunk)
+function run_work_thunk(rv::ChannelBuffer, thunk)
     put(rv, run_work_thunk(thunk))
 end
 
 function schedule_call(rid, thunk)
-    rv = RemoteValue()
+    rv = ChannelBuffer(Any, 1)
     (PGRP::ProcessGroup).refs[rid] = rv
     push!(rv.clientset, rid[1])
     enq_work(@task(run_work_thunk(rv,thunk)))
@@ -630,7 +613,7 @@ end
 
 #localize_ref(b::Box) = Box(localize_ref(b.contents))
 
-#function localize_ref(r::RemoteRef)
+#function localize_ref(r::Channel)
 #    if r.where == myid()
 #        fetch(r)
 #    else
@@ -664,13 +647,13 @@ function local_remotecall_thunk(f, args)
 end
 
 function remotecall(w::LocalProcess, f, args...)
-    rr = RemoteRef(w)
+    rr = Channel(w)
     schedule_call(rr2id(rr), local_remotecall_thunk(f,args))
     rr
 end
 
 function remotecall(w::Worker, f, args...)
-    rr = RemoteRef(w)
+    rr = Channel(w)
     #println("$(myid()) asking for $rr")
     send_msg(w, :call, rr2id(rr), f, args)
     rr
@@ -705,7 +688,7 @@ function remotecall_wait(w::Worker, f, args...)
     prid = next_id()
     rv = lookup_ref(prid)
     rv.waitingfor = w.id
-    rr = RemoteRef(w)
+    rr = Channel(w)
     send_msg(w, :call_wait, rr2id(rr), prid, f, args)
     wait_full(rv)
     delete!(PGRP.refs, prid)
@@ -732,7 +715,7 @@ end
 remote_do(id::Integer, f, args...) = remote_do(worker_from_id(id), f, args...)
 
 # have the owner of rr call f on it
-function call_on_owner(f, rr::RemoteRef, args...)
+function call_on_owner(f, rr::Channel, args...)
     rid = rr2id(rr)
     if rr.where == myid()
         f(rid, args...)
@@ -742,46 +725,31 @@ function call_on_owner(f, rr::RemoteRef, args...)
 end
 
 wait_ref(rid) = (wait_full(lookup_ref(rid)); nothing)
-wait(r::RemoteRef) = (call_on_owner(wait_ref, r); r)
-wait(c::Channel) = (call_on_owner(wait_ref, c.rr); c)
+wait(r::Channel) = (call_on_owner(wait_ref, r); r)
 
 fetch_ref(rid) = wait_full(lookup_ref(rid))
-fetch(r::RemoteRef) = call_on_owner(fetch_ref, r)
-fetch(c::Channel) = call_on_owner(fetch_ref, c.rr)
+fetch(r::Channel) = call_on_owner(fetch_ref, r)
 fetch(x::ANY) = x
 
 # storing a value to a Ref
-function put(rv::RemoteValue, val::ANY)
+function put(rv::ChannelBuffer, val)
     wait_empty(rv)
-    if isa(rv.val, ChannelQ)
-        push!(rv.val.q, val)
-    else
-        rv.val = val
-        rv.done = true
-    end
+    push!(rv.q, val)
     notify_full(rv)
 end
 
 put_ref(rid, v) = put(lookup_ref(rid), v)
-put(rr::RemoteRef, val::ANY) = (call_on_owner(put_ref, rr, val); val)
-put(c::Channel, val::ANY) = (call_on_owner(put_ref, c.rr, val); val)
+put(rr::Channel, val::ANY) = (call_on_owner(put_ref, rr, val); val)
 
-function take(rv::RemoteValue)
+function take(rv::ChannelBuffer)
     wait_full(rv)
-    if isa(rv.val, ChannelQ)
-        val = shift!(rv.val.q)
-    else
-        val = rv.val
-        rv.done = false
-        rv.val = nothing
-    end
+    val = shift!(rv.q)
     notify_empty(rv)
     val
 end
 
 take_ref(rid) = take(lookup_ref(rid))
-take(rr::RemoteRef) = call_on_owner(take_ref, rr)
-take(c::Channel) = call_on_owner(take_ref, c.rr)
+take(rr::Channel) = call_on_owner(take_ref, rr)
 
 function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
@@ -810,8 +778,8 @@ function deliver_result(sock::IO, msg, oid, value)
 end
 
 # notify waiters that a certain job has finished or Ref has been emptied
-notify_full (rv::RemoteValue) = notify(rv.full, work_result(rv))
-notify_empty(rv::RemoteValue) = notify(rv.empty)
+notify_full (rv::ChannelBuffer) = notify(rv.full, work_result(rv))
+notify_empty(rv::ChannelBuffer) = notify(rv.empty)
 
 ## message event handlers ##
 
@@ -868,7 +836,7 @@ function create_message_handler_loop(sock::AsyncStream) #returns immediately
                     args = deserialize(sock)
                     #print("got args: $args\n")
                     @schedule begin
-                        run_work_thunk(RemoteValue(), ()->f(args...))
+                        run_work_thunk(ChannelBuffer(), ()->f(args...))
                     end
                 elseif is(msg, :result)
                     # used to deliver result of wait or fetch
@@ -1243,7 +1211,7 @@ let nextidx = 1
                 if isa(v,Box)
                     v = v.contents
                 end
-                if isa(v,RemoteRef)
+                if isa(v,Channel)
                     p = v.where; break
                 end
             end
@@ -1520,7 +1488,7 @@ end
 
 function timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
     start = time()
-    done = RemoteRef()
+    done = Channel()
     timercb(aw, status) = begin
         try
             if testcb()

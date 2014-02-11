@@ -135,7 +135,7 @@ end
 function reload_path(path::String)
     had = haskey(package_list, path)
     if !had
-        package_locks[path] = RemoteRef()
+        package_locks[path] = Channel()
     end
     package_list[path] = time()
     tls = task_local_storage()
