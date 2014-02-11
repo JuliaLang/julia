@@ -39,8 +39,8 @@ function submit_to_codespeed(vals,name,desc,unit,test_group,lessisbetter=true)
 
     println( "$name: $(mean(vals))" )
     ret = post( "http://$codespeed_host/result/add/json/", {"json" => json([csdata])} )
-    if ret.http_code != 200
-        error("Error submitting $name, dumping headers and text: $(ret.headers)\n$(bytestring(ret.body))\n\n")
+    if ret.http_code != 200 && ret.http_code != 202
+        error("Error submitting $name [HTTP code $(ret.http_code)], dumping headers and text: $(ret.headers)\n$(bytestring(ret.body))\n\n")
         return false
     end
     return true
