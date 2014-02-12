@@ -246,3 +246,5 @@ begin
 end
 
 end # baremodule Base
+
+Base.isfile("userimg.jl") && Base.include("userimg.jl")
