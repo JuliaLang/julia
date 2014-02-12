@@ -543,8 +543,8 @@ is ``DArray``\ -specific, but we list it here for completeness::
 
 
     
-Shared Arrays (EXPERIMENTAL FEATURE)
-------------------------------------
+Shared Arrays (Experimental, UNIX-only feature)
+-----------------------------------------------
 
 Shared Arrays use system shared memory to map the same array across
 many processes.  While there are some similarities to a ``DArray``,
