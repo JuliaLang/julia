@@ -274,6 +274,8 @@ function update(branch::String)
     end
     info("Computing changes...")
     resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
+    # Don't use instd here since it may have changed
+    updatehook(sort!([keys(installed())...]))
 end
 
 function pull_request(dir::String, commit::String="", url::String="")
@@ -630,5 +632,35 @@ function build(pkgs::Vector)
     """)
 end
 build() = build(sort!([keys(installed())...]))
+
+function updatehook!(pkgs::Vector, errs::Dict, seen::Set=Set())
+    for pkg in pkgs
+        pkg in seen && continue
+        updatehook!(Read.requires_list(pkg),errs,push!(seen,pkg))
+        path = abspath(pkg,"deps","update.jl")
+        isfile(path) || continue
+        info("Running update script for $pkg")
+        cd(dirname(path)) do
+            try evalfile(path)
+            catch err
+                warnbanner(err, label="[ ERROR: $pkg ]")
+                errs[pkg] = err
+            end
+        end
+    end
+end
+
+function updatehook(pkgs::Vector)
+    errs = Dict()
+    updatehook!(pkgs,errs)
+    isempty(errs) && return
+    println(STDERR)
+    warnbanner(label="[ UPDATE ERRORS ]", """
+    WARNING: $(join(map(x->x[1],errs),", "," and ")) had update errors.
+
+     - Unrelated packages are unaffected
+     - To retry, run Pkg.update() again
+    """)
+end
 
 end # module
