@@ -245,8 +245,11 @@ endif
 ifneq ($(prefix),$(abspath julia-$(JULIA_COMMIT)))
 	$(error prefix must not be set for make dist)
 endif
+ifneq ($(DESTDIR),)
+	$(error DESTDIR must not be set for make dist)
+endif
 	@$(MAKE) install
-	cp LICENSE.md julia-$(JULIA_COMMIT)
+	cp LICENSE.md $(prefix)
 ifeq ($(OS), Darwin)
 	-./contrib/mac/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
 endif
@@ -260,22 +263,22 @@ else ifeq ($(OS), WINNT)
 endif
 
 	# purge sys.{dll,so,dylib} as that file is not relocatable across processor architectures
-	-rm -f julia-$(JULIA_COMMIT)/$(private_libdir)/sys.$(SHLIB_EXT)
+	-rm -f $(DESTDIR)$(prefix)/$(private_libdir)/sys.$(SHLIB_EXT)
 
 ifeq ($(OS), WINNT)
 	[ ! -d dist-extras ] || ( cd dist-extras && \
-		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll ../$(bindir) && \
-	    mkdir ../$(prefix)/Git && \
-	    7z x PortableGit.7z -o"../$(prefix)/Git" )
+		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll $(bindir) && \
+	    mkdir $(DESTDIR)$(prefix)/Git && \
+	    7z x PortableGit.7z -o"$(DESTDIR)$(prefix)/Git" )
 	cd $(DESTDIR)$(bindir) && rm -f llvm* llc.exe lli.exe opt.exe LTO.dll bugpoint.exe macho-dump.exe
 	$(call spawn,./dist-extras/nsis/makensis.exe) /NOCD /DVersion=$(JULIA_VERSION) /DArch=$(ARCH) /DCommit=$(JULIA_COMMIT) ./contrib/windows/build-installer.nsi
 	./dist-extras/7z a -mx9 "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" julia-installer.exe
 	cat ./contrib/windows/7zS.sfx ./contrib/windows/7zSFX-config.txt "julia-install-$(JULIA_COMMIT)-$(ARCH).7z" > "julia-${JULIA_VERSION}-${ARCH}.exe"
 	-rm -f julia-installer.exe
 else
-	$(TAR) zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
+	$(TAR) zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz $(prefix)
 endif
-	rm -fr julia-$(JULIA_COMMIT)
+	rm -fr $(prefix)
 
 
 source-dist: git-submodules
