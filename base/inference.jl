@@ -244,14 +244,20 @@ t_func[typeassert] =
                        Any))
 
 const tupleref_tfunc = function (A, t, i)
-    if is(t,())
-        return None
+    wrapType = false
+    if isType(t)
+        t = t.parameters[1]
+        wrapType = true
     end
     if isa(t,DataType) && is(t.name,NTuple.name)
-        return t.parameters[2]
+        T = t.parameters[2]
+        return wrapType ? Type{T} : T
     end
     if !isa(t,Tuple)
         return Any
+    end
+    if is(t,())
+        return None
     end
     n = length(t)
     last = tupleref(t,n)
@@ -261,16 +267,16 @@ const tupleref_tfunc = function (A, t, i)
         i = A[2]
         if i > n
             if vararg
-                return last.parameters[1]
+                T = last.parameters[1]
             else
                 return None
             end
         elseif i == n && vararg
-            return last.parameters[1]
+            T = last.parameters[1]
         elseif i <= 0
             return None
         else
-            return tupleref(t,i)
+            T = tupleref(t,i)
         end
     else
         # index unknown, could be anything from the tuple
@@ -279,12 +285,19 @@ const tupleref_tfunc = function (A, t, i)
         else
             types = t
         end
-        return reduce(tmerge, None, types)
+        T = reduce(tmerge, None, types)
+        if wrapType
+            return isleaftype(T) ? Type{T} : Type{TypeVar(:_,T)}
+        else
+            return T
+        end
     end
+    return wrapType ? Type{T} : T
 end
 t_func[tupleref] = (2, 2, tupleref_tfunc)
 
-const getfield_tfunc = function (A, s, name)
+const getfield_tfunc = function (A, s0, name)
+    s = s0
     if isType(s)
         s = typeof(s.parameters[1])
         if s === TypeVar
@@ -305,6 +318,15 @@ const getfield_tfunc = function (A, s, name)
         end
         if s === Module
             return Top
+        end
+        if isType(s0)
+            sp = s0.parameters[1]
+            if fld === :parameters && isleaftype(sp.parameters)
+                return Type{sp.parameters}
+            end
+            if fld === :types && isleaftype(sp.types)
+                return Type{sp.types}
+            end
         end
         for i=1:length(s.names)
             if is(s.names[i],fld)

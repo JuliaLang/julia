@@ -154,7 +154,7 @@ function searchsortedlast(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
 end
 
 # returns the range of indices of v equal to x
-# if v does not contain x, returns a 0-length range 
+# if v does not contain x, returns a 0-length range
 # indicating the insertion point of x
 function searchsorted(v::AbstractVector, x, lo::Int, hi::Int, o::Ordering)
     lo = lo-1
@@ -257,17 +257,29 @@ end
 function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering)
     @inbounds while lo < hi
         hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
-        pivot = v[(lo+hi)>>>1]
-        i, j = lo, hi
-        while true
-            while lt(o, v[i], pivot); i += 1; end
-            while lt(o, pivot, v[j]); j -= 1; end
-            i <= j || break
-            v[i], v[j] = v[j], v[i]
-            i += 1; j -= 1
+        mi = (lo+hi)>>>1
+        if lt(o, v[mi], v[lo])
+            v[mi], v[lo] = v[lo], v[mi]
         end
-        lo < j && sort!(v, lo, j, a, o)
-        lo = i
+        if lt(o, v[hi], v[mi])
+            v[hi], v[mi] = v[mi], v[hi]
+        end
+        if lt(o, v[mi], v[lo])
+            v[mi], v[lo] = v[lo], v[mi]
+        end
+        v[mi], v[lo] = v[lo], v[mi]
+        i, j = lo, hi
+        pivot = v[lo]
+        while true
+            i += 1; j -= 1;
+            while lt(o, v[i], pivot); i += 1; end;
+            while lt(o, pivot, v[j]); j -= 1; end;
+            i >= j && break
+            v[i], v[j] = v[j], v[i]
+        end
+        v[j], v[lo] = v[lo], v[j]
+        lo < (j-1) && sort!(v, lo, j-1, a, o)
+        lo = j+1
     end
     return v
 end
