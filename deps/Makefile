@@ -23,15 +23,11 @@ MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(
 unexport CONFIG_SITE
 
 STAGE1_DEPS = random double-conversion
-STAGE2_DEPS =
+STAGE2_DEPS = Rmath
 STAGE3_DEPS = suitesparse-wrapper
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
 STAGE1_DEPS += uv
-endif
-
-ifeq ($(USE_SYSTEM_RMATH), 0)
-STAGE1_DEPS += Rmath
 endif
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
