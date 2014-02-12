@@ -197,12 +197,13 @@ end
 
 bitmix(a::Union(Int32,Uint32), b::Union(Int32,Uint32)) =
     ccall(:int64to32hash, Uint32, (Uint64,),
-          or_int(shl_int(zext_int(Uint64,unbox(Uint32,a)), 32), zext_int(Uint64,unbox(Uint32,b))))
+          box(Uint64, or_int(shl_int(zext_int(Uint64,unbox(Uint32,a)), 32),
+                             zext_int(Uint64,unbox(Uint32,b)))))
 
 bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
     ccall(:int64hash, Uint64, (Uint64,),
-          xor_int(unbox(Uint64,a), or_int(lshr_int(unbox(Uint64,b), 32),
-                                           shl_int(unbox(Uint64,b), 32))))
+          box(Uint64, xor_int(unbox(Uint64,a), or_int(lshr_int(unbox(Uint64,b), 32),
+                                                      shl_int(unbox(Uint64,b), 32)))))
 
 if WORD_SIZE == 64
     hash64(x::Float64) =
@@ -232,8 +233,8 @@ function hash(x::Integer)
     return h
 end
 
-hash(x::Float32) = hash(reinterpret(Uint32, isnan(x) ? NaN32 : x))
-hash(x::Float64) = hash(reinterpret(Uint64, isnan(x) ? NaN   : x))
+hash(x::Float32) = hash(reinterpret(Uint32, ifelse(isnan(x), NaN32, x)))
+hash(x::Float64) = hash(reinterpret(Uint64, ifelse(isnan(x), NaN, x)))
 
 function hash(t::Tuple)
     h::Uint = 0
