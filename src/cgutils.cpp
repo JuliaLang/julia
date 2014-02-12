@@ -1521,7 +1521,16 @@ static Value *boxed(Value *v,  jl_codectx_t *ctx, jl_value_t *jt)
     if (jb == jl_uint32_type) return builder.CreateCall(prepare_call(box_uint32_func), v);
     if (jb == jl_uint64_type) return builder.CreateCall(prepare_call(box_uint64_func), v);
     if (jb == jl_char_type)   return builder.CreateCall(prepare_call(box_char_func), v);
-    if (!jl_isbits(jt)) {
+
+    if (!jl_is_leaf_type(jt)) {
+        // we can get a sharper type from julia_type_of than expr_type in some
+        // cases, due to ccall's compile-time evaluations of types. see issue #5752
+        jl_value_t *jt2 = julia_type_of(v);
+        if (jl_subtype(jt2, jt, 0))
+            jt = jt2;
+    }
+
+    if (!jl_isbits(jt) || !jl_is_leaf_type(jt)) {
         assert("Don't know how to box this type" && false);
         return NULL;
     }

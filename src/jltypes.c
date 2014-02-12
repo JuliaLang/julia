@@ -1848,8 +1848,10 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             }
             if (tn == jl_array_typename)
                 ndt->pointerfree = 0;
-            if (jl_tuple_len(ftypes) == 0)
+            if (jl_tuple_len(ftypes) == 0) {
                 ndt->alignment = ndt->size = dt->size;
+                ndt->pointerfree = dt->pointerfree;
+            }
         }
         if (cacheable) cache_type_((jl_value_t*)ndt);
         result = (jl_value_t*)ndt;
