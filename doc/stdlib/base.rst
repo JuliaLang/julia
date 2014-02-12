@@ -4614,8 +4614,8 @@ Distributed Arrays
    Get the vector of processors storing pieces of ``d``
 
    
-Shared Arrays (EXPERIMENTAL FEATURE)
-------------------------------------
+Shared Arrays (Experimental, UNIX-only feature)
+-----------------------------------------------
 
 .. function:: SharedArray(T::Type, dims::NTuple; init=false, pids=workers())
 
