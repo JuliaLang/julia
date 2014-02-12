@@ -137,9 +137,6 @@ endif
 #ifeq ($(USE_SYSTEM_ZLIB),0)
 #JL_PRIVATE_LIBS += z
 #endif
-ifeq ($(USE_SYSTEM_RMATH),0)
-JL_PRIVATE_LIBS += Rmath-julia
-endif
 ifeq ($(OS),Darwin)
 ifeq ($(USE_SYSTEM_BLAS),1)
 ifeq ($(USE_SYSTEM_LAPACK),0)
