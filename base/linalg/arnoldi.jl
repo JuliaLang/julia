@@ -13,6 +13,7 @@ function eigs(A;nev::Integer=6, ncv::Integer=20, which::ASCIIString="LM",
     T     = eltype(A)
     cmplx = T<:Complex
     bmat  = "I"
+    const arpack_which = "LM"   # always looking for largest EV
     if !isempty(v0)
         length(v0)==n || throw(DimensionMismatch(""))
         eltype(v0)==T || error("Starting vector must have eltype $T")
@@ -20,11 +21,18 @@ function eigs(A;nev::Integer=6, ncv::Integer=20, which::ASCIIString="LM",
         v0=zeros(T,(0,))
     end
 
-    if sigma == 0
+    if sigma == 0 && which == "LM"
+        # normal iteration
         mode = 1
         linop(x) = A * x
     else
-        C = lufact(A - sigma*eye(A))
+        if sigma == 0 && which == "SM"
+            # invert only
+            C = lufact(A)
+        else
+            # shift and invert
+            C = lufact(A - sigma*eye(A))
+        end
         if cmplx
             mode = 3
             linop(x) = C\x
@@ -41,10 +49,10 @@ function eigs(A;nev::Integer=6, ncv::Integer=20, which::ASCIIString="LM",
         
     # Compute the Ritz values and Ritz vectors
     (resid, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork, TOL) = 
-       ARPACK.aupd_wrapper(T, linop, n, sym, cmplx, bmat, nev, ncv, which, tol, maxiter, mode, v0)
+       ARPACK.aupd_wrapper(T, linop, n, sym, cmplx, bmat, nev, ncv, arpack_which, tol, maxiter, mode, v0)
     
     # Postprocessing to get eigenvalues and eigenvectors
-    ARPACK.eupd_wrapper(T, n, sym, cmplx, bmat, nev, which, ritzvec, TOL,
+    ARPACK.eupd_wrapper(T, n, sym, cmplx, bmat, nev, arpack_which, ritzvec, TOL,
         resid, ncv, v, ldv, sigma, iparam, ipntr, workd, workl, lworkl, rwork)
 
 end
