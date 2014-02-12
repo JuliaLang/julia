@@ -300,19 +300,6 @@ function TcpServer()
     this
 end
 
-#type UdpSocket <: Socket
-#    handle::Ptr{Void}
-#    open::Bool
-#    line_buffered::Bool
-#    buffer::IOBuffer
-#    readcb::Callback
-#    readnotify::Condition
-#    ccb::Callback
-#    connectnotify::Condition
-#    closecb::Callback
-#    closenotify::Condition
-#end
-
 isreadable(io::TcpSocket) = true
 iswritable(io::TcpSocket) = true
 
@@ -320,9 +307,6 @@ show(io::IO,sock::TcpSocket) = print(io,"TcpSocket(",uv_status_string(sock),", "
     nb_available(sock.buffer)," bytes waiting)")
 
 show(io::IO,sock::TcpServer) = print(io,"TcpServer(",uv_status_string(sock),")")
-
-#show(io::IO,sock::UdpSocket) = print(io,"UdpSocket(",uv_status_string(sock),", ",
-#    nb_available(sock.buffer)," bytes waiting)")
 
 ## VARIOUS METHODS TO BE MOVED TO BETTER LOCATION
 
@@ -339,27 +323,56 @@ accept(server::PipeServer) = accept(server, Pipe())
 ##
 
 bind(sock::TcpServer, addr::InetAddr) = bind(sock,addr.host,addr.port)
-bind(sock::TcpServer, host::IpAddr, port) = bind(sock, InetAddr(host,port))
 
-function bind(sock::TcpServer, host::IPv4, port::Uint16)
-    @assert sock.status == StatusInit
-    err = ccall(:jl_tcp_bind, Int32, (Ptr{Void}, Uint16, Uint32),
-	        sock.handle, hton(port), hton(host.host))
-    if err < 0
-        if err != UV_EADDRINUSE && err != UV_EACCES
-            error(UVError("bind",err))
-        else
-            return false
-        end
-    end
-    sock.status = StatusOpen
-    true
-end
+_bind(sock::TcpServer, host::IPv4, port::Uint16) = ccall(:jl_tcp_bind, Int32, (Ptr{Void}, Uint16, Uint32),
+            sock.handle, hton(port), hton(host.host))
 
-function bind(sock::TcpServer, host::IPv6, port::Uint16)
-    @assert sock.status == StatusInit
-    err = ccall(:jl_tcp_bind6, Int32, (Ptr{Void}, Uint16, Ptr{Uint128}),
+_bind(sock::TcpServer, host::IPv6, port::Uint16) = ccall(:jl_tcp_bind6, Int32, (Ptr{Void}, Uint16, Ptr{Uint128}),
             sock.handle, hton(port), &hton(host.host))
+
+# UDP 
+
+type UdpSocket <: Socket
+    handle::Ptr{Void}
+    status::Int
+    recvnotify::Condition
+    sendnotify::Condition
+    closenotify::Condition
+    UdpSocket(handle::Ptr) = new(handle, StatusUninit, Condition(), Condition(), Condition())
+end
+
+function UdpSocket()
+    this = UdpSocket(c_malloc(_sizeof_uv_udp))
+    associate_julia_struct(this.handle, this)
+    err = ccall(:uv_udp_init,Cint,(Ptr{Void},Ptr{Void}),
+                  eventloop(),this.handle)
+    if err != 0 
+        c_free(this.handle)
+        this.handle = C_NULL
+        error(UVError("failed to create udp socket",err))
+    end
+    this.status = StatusInit
+    this
+end
+
+function _uv_hook_close(sock::UdpSocket)
+    sock.handle = 0
+    sock.status = StatusClosed
+    notify(sock.closenotify)
+    notify(sock.sendnotify)
+    notify_error(sock.recvnotify,EOFError())
+end
+
+# Disables dual stack mode. Only available when using ipv6 binf
+const UV_UDP_IPV6ONLY = 1
+
+# Indicates message was truncated because read buffer was too small. The
+# remainder was discarded by the OS. 
+const UV_UDP_PARTIAL = 2
+
+function bind(sock::Union(TcpServer,UdpSocket), host::IPv4, port::Integer)
+    @assert sock.status == StatusInit
+    err = _bind(sock,host,uint16(port))
     if err < 0
         if err != UV_EADDRINUSE && err != UV_EACCES
             error(UVError("bind",err))
@@ -370,6 +383,98 @@ function bind(sock::TcpServer, host::IPv6, port::Uint16)
     sock.status = StatusOpen
     true
 end
+
+_bind(sock::UdpSocket, host::IPv4, port::Uint16) = ccall(:jl_udp_bind, Int32, (Ptr{Void}, Uint16, Uint32, Uint32),
+            sock.handle, hton(port), hton(host.host), 0)
+
+_bind(sock::UdpSocket, host::IPv6, port::Uint16, flags::Uint32 = uint32(0)) = ccall(:jl_udp_bind6, Int32, (Ptr{Void}, Uint16, Ptr{Uint128}, Uint32),
+            sock.handle, hton(port), &hton(host.host), flags)
+
+function bind(sock::UdpSocket, host::IPv6, port::Uint16; ipv6only = false)
+    @assert sock.status == StatusInit
+    err = _bind(sock,host,ipv6only ? UV_UDP_IPV6ONLY : 0)
+    if err < 0
+        if err != UV_EADDRINUSE && err != UV_EACCES
+            error(UVError("bind",err))
+        else
+            return false
+        end
+    end
+    sock.status = StatusOpen
+    true
+end
+
+
+function setopt(sock::UdpSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
+    if sock.status == StatusUninit 
+        error("Cannot set options on unitialized socket")
+    end
+    if multicast_loop !== nothing
+        uv_error("multicast_loop",ccall(:uv_udp_set_multicast_loop,Cint,(Ptr{Void},Cint),sock.handle,multicast_loop) < 0)
+    end
+    if multicast_ttl !== nothing
+        uv_error("multicast_ttl",ccall(:uv_udp_set_multicast_ttl,Cint,(Ptr{Void},Cint),sock.handle,multicast_ttl))
+    end
+    if enable_broadcast !== nothing
+        uv_error("enable_broadcast",ccall(:uv_udp_set_broadcast,Cint,(Ptr{Void},Cint),sock.handle,enable_broadcast))
+    end
+    if ttl !== nothing
+        uv_error("ttl",ccall(:uv_udp_set_ttl,Cint,(Ptr{Void},Cint),sock.handle,ttl))
+    end
+end
+
+_uv_hook_alloc_buf(sock::UdpSocket,size::Int32) = (c_malloc(size),size)
+
+_recv_start(sock::UdpSocket) = uv_error("recv_start",ccall(:uv_udp_recv_start,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),
+                                                sock.handle,cglobal(:jl_uv_alloc_buf),cglobal(:jl_uv_recvcb)))
+_recv_stop(sock::UdpSocket) = uv_error("recv_stop",ccall(:uv_udp_recv_stop,Cint,(Ptr{Void},),sock.handle))
+
+function recv(sock::UdpSocket)
+    # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
+    if sock.status != StatusInit && sock.status != StatusOpen 
+        error("Invalid socket state")
+    end
+    _recv_start(sock)
+    wait(sock.recvnotify)::Vector{Uint8}
+end
+
+function _uv_hook_recv(sock::UdpSocket, nread::Ptr{Void}, buf_addr::Ptr{Void}, buf_size::Int32, addr::Ptr{Void}, flags::Int32)
+    nread = convert(Cssize_t,nread)
+    if flags & UV_UDP_PARTIAL > 0
+        # TODO: Decide what to do in this case. For now throw an error
+        c_free(buf_addr)
+        notify_error(sock.recvnotify,"Partial message received")
+    end
+    buf = pointer_to_array(convert(Ptr{Uint8},buf_addr),int(buf_size),true)
+    notify(sock.recvnotify,buf[1:nread])
+end
+
+function _send(sock::UdpSocket,ipaddr::IPv4,port::Uint16,buf) 
+    ccall(:jl_udp_send,Cint,(Ptr{Void},Uint16,Uint32,Ptr{Uint8},Csize_t),sock.handle,hton(port),hton(ipaddr.host),buf,sizeof(buf))
+end
+
+function _send(sock::UdpSocket,ipaddr::IPv6,port::Uint16,buf) 
+    ccall(:jl_udp_send6,Cint,(Ptr{Void},Uint16,Ptr{Uint128},Ptr{Uint8},Csize_t),sock.handle,hton(port),&hton(ipaddr.host),buf,sizeof(buf))
+end
+
+function send(sock::UdpSocket,ipaddr,port,msg)
+    # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
+    if sock.status != StatusInit && sock.status != StatusOpen 
+        error("Invalid socket state")
+    end
+    uv_error("send",_send(sock,ipaddr,uint16(port),msg))
+    wait(sock.sendnotify)
+    nothing
+end
+
+function _uv_hook_send(sock::UdpSocket,status::Cint)
+    if status < 0
+        notify_error(sock.sendnotify,UVError("UDP send failed",status))
+    end
+    notify(sock.sendnotify)
+end
+
+##
 
 callback_dict = ObjectIdDict()
 

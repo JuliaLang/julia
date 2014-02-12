@@ -80,3 +80,21 @@ try
 catch e
     @test typeof(e) == Base.UVError
 end
+
+a = UdpSocket()
+b = UdpSocket()
+bind(a,ip"127.0.0.1",2134)
+bind(b,ip"127.0.0.1",2135)
+
+c = Condition()
+@async begin
+    @test bytestring(recv(a)) == "Hello World"
+    notify(c)
+end
+send(b,ip"127.0.0.1",2134,"Hello World")
+wait(c)
+
+@test_throws bind(UdpSocket(),2134)
+
+close(a)
+close(b)
