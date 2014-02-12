@@ -63,8 +63,8 @@ end
 #### Internal interface
 ####
 immutable LineInfo
-    func::ASCIIString
-    file::ASCIIString
+    func::ByteString
+    file::ByteString
     line::Int
 end
 
@@ -250,7 +250,7 @@ function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, 
     ntext = cols-nindent-ndigcounts-ndigline-5
     widthfile = ifloor(0.4ntext)
     widthfunc = ifloor(0.6ntext)
-    strs = Array(ASCIIString, length(lilist))
+    strs = Array(ByteString, length(lilist))
     showextra = false
     if level > nindent
         nextra = level-nindent
@@ -375,7 +375,7 @@ function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, combine::Bool,
 end
 
 # Utilities
-function truncto(str::ASCIIString, w::Int)
+function truncto(str::ByteString, w::Int)
     ret = str;
     if length(str) > w
         ret = string("...", str[end-w+4:end])
@@ -385,7 +385,7 @@ end
 
 # Order alphabetically (file, function) and then by line number
 function liperm(lilist::Vector{LineInfo})
-    comb = Array(ASCIIString, length(lilist))
+    comb = Array(ByteString, length(lilist))
     for i = 1:length(lilist)
         li = lilist[i]
         if li != UNKNOWN
