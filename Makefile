@@ -242,7 +242,7 @@ ifneq ($(OPENBLAS_DYNAMIC_ARCH),1)
 	@false
 endif
 endif
-ifneq ($(prefix),julia-$(JULIA_COMMIT))
+ifneq ($(prefix),$(abspath julia-$(JULIA_COMMIT)))
 	$(error prefix must not be set for make dist)
 endif
 	@$(MAKE) install
