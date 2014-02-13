@@ -161,3 +161,9 @@ if haskey(ENV, "PTEST_FULL")
     println("END of parallel tests that print errors")
 end
 
+# Load different code in worker than is running in this process
+wait(includeat(id_other, "netload/workercode.jl"))
+x = 7
+y = -8
+xysum, xyprod = fetch(@spawnat_by_name id_other MyWorker.compute(x, y))
+@test xysum == -1 && xyprod == -56

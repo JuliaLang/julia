@@ -1237,6 +1237,17 @@ macro everywhere(ex)
     end
 end
 
+# Functions for cases where the worker and driver processes are running different code
+includeat(p, filename) = eval(Main, :(@spawnat $p Core.include($filename)))
+requireat(p, filename) = eval(Main, :(@spawnat $p Core.include(Base.find_in_path($filename))))
+
+macro spawnat_by_name(p, expr)
+    (isa(expr, Expr) && expr.head == :call) || error("Second argument must be a call")
+    name = expr.args[1]
+    args = expr.args[2:end]
+    :(eval(Main, :(@spawnat $($(esc(p))) eval(Main, $($(Expr(:quote, name))))($($(map(esc, args)...))))))
+end
+
 function pmap_static(f, lsts...)
     np = nprocs()
     n = length(lsts[1])

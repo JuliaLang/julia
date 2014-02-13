@@ -1015,6 +1015,8 @@ export
     include_string,
     reload,
     require,
+    includeat,
+    requireat,
 
 # RTS internals
     finalizer,
@@ -1287,6 +1289,7 @@ export
     @async,
     @spawn,
     @spawnat,
+    @spawnat_by_name,
     @fetch,
     @fetchfrom,
     @everywhere,
