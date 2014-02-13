@@ -119,6 +119,38 @@ et=toq()
 @test !isready(rr3)
 
 
+c = Channel()
+put(c, 1)
+put(c, "Hello")
+put(c, 5.0)
+
+@test isready(c) == true
+@test fetch(c) == 1
+@test fetch(c) == 1   # Should not have been popped previously
+@test take(c) == 1   
+@test take(c) == "Hello"   
+@test fetch(c) == 5.0
+@test take(c) == 5.0
+@test isready(c) == false
+
+# same test mixed with another worker...
+c = Channel(id_other)
+put(c, 1)
+remotecall_fetch(id_other, ch -> put(ch, "Hello"), c)
+put(c, 5.0)
+
+@test isready(c) == true
+@test remotecall_fetch(id_other, ch -> fetch(ch), c) == 1
+@test fetch(c) == 1   # Should not have been popped previously
+@test take(c) == 1   
+@test remotecall_fetch(id_other, ch -> take(ch), c) == "Hello"
+@test fetch(c) == 5.0
+@test remotecall_fetch(id_other, ch -> take(ch), c) == 5.0
+@test remotecall_fetch(id_other, ch -> isready(ch), c) == false
+@test isready(c) == false
+
+
+
 # TODO: The below block should be always enabled but the error is printed by the event loop
 
 # Hence in the event of any relevant changes to the parallel codebase,

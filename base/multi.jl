@@ -423,15 +423,6 @@ end
 #ref_uninitialized(r::RemoteRef) = (assert(r.where==myid());
 #                                   ref_uninitialized(rr2id(r)))
 
-function isready(rr::RemoteRef)
-    rid = rr2id(rr)
-    if rr.where == myid()
-        lookup_ref(rid).done
-    else
-        remotecall_fetch(rr.where, id->lookup_ref(id).done, rid)
-    end
-end
-
 del_client(id, client) = del_client(PGRP, id, client)
 function del_client(pg, id, client)
     rv = lookup_ref(id)
@@ -522,8 +513,8 @@ end
 
 # data stored by the owner of a RemoteRef
 type RemoteValue
-    done::Bool
-    result
+    done::Bool        # Ununsed in case 'val' field is of type ChannelQ   
+    val
     full::Condition   # waiting for a value
     empty::Condition  # waiting for value to be removed
     clientset::IntSet
@@ -532,24 +523,80 @@ type RemoteValue
     RemoteValue() = new(false, nothing, Condition(), Condition(), IntSet(), 0)
 end
 
+type ChannelQ
+    q::Vector
+    limit
+end
+
+type Channel
+    rr::RemoteRef
+    function Channel(id; limit=1000) 
+        rr = RemoteRef(id)
+        put(rr, ChannelQ(Array(Any, 0), limit))
+        new(rr)
+    end
+
+    Channel(;kwargs...) = Channel(myid(); kwargs...)
+end
+
+
+function isready(rr::RemoteRef)
+    rid = rr2id(rr)
+    if rr.where == myid()
+        lookup_ref(rid).done
+    else
+        remotecall_fetch(rr.where, id->lookup_ref(id).done, rid)
+    end
+end
+
+function isready(c::Channel)
+    rr = c.rr
+    rid = rr2id(rr)
+    if rr.where == myid()
+        return length(lookup_ref(rid).val.q) > 0
+    else
+        remotecall_fetch(rr.where, id -> (length(lookup_ref(rid).val.q) > 0), rid)
+    end
+end
+
+
 function work_result(rv::RemoteValue)
-    v = rv.result
+    v = rv.val
     if isa(v,WeakRef)
         v = v.value
+    elseif isa(v,ChannelQ)
+        if length(v.q) > 0
+            v = v.q[1]
+        else
+            # Only during Channel construction.
+            v = v.q
+        end
     end
     v
 end
 
 function wait_full(rv::RemoteValue)
-    while !rv.done
-        wait(rv.full)
+    if isa(rv.val, ChannelQ)
+        while length(rv.val.q) == 0
+            wait(rv.full)
+        end
+    else
+        while !rv.done
+            wait(rv.full)
+        end
     end
     return work_result(rv)
 end
 
 function wait_empty(rv::RemoteValue)
-    while rv.done
-        wait(rv.empty)
+    if isa(rv.val, ChannelQ)
+        while length(rv.val.q) >= rv.val.limit
+            wait(rv.empty)
+        end
+    else
+        while rv.done
+            wait(rv.empty)
+        end
     end
     return nothing
 end
@@ -695,33 +742,45 @@ end
 
 wait_ref(rid) = (wait_full(lookup_ref(rid)); nothing)
 wait(r::RemoteRef) = (call_on_owner(wait_ref, r); r)
+wait(c::Channel) = (call_on_owner(wait_ref, c.rr); c)
 
 fetch_ref(rid) = wait_full(lookup_ref(rid))
 fetch(r::RemoteRef) = call_on_owner(fetch_ref, r)
+fetch(c::Channel) = call_on_owner(fetch_ref, c.rr)
 fetch(x::ANY) = x
 
 # storing a value to a Ref
 function put(rv::RemoteValue, val::ANY)
     wait_empty(rv)
-    rv.result = val
-    rv.done = true
+    if isa(rv.val, ChannelQ)
+        push!(rv.val.q, val)
+    else
+        rv.val = val
+        rv.done = true
+    end
     notify_full(rv)
 end
 
 put_ref(rid, v) = put(lookup_ref(rid), v)
 put(rr::RemoteRef, val::ANY) = (call_on_owner(put_ref, rr, val); val)
+put(c::Channel, val::ANY) = (call_on_owner(put_ref, c.rr, val); val)
 
 function take(rv::RemoteValue)
     wait_full(rv)
-    val = rv.result
-    rv.done = false
-    rv.result = nothing
+    if isa(rv.val, ChannelQ)
+        val = shift!(rv.val.q)
+    else
+        val = rv.val
+        rv.done = false
+        rv.val = nothing
+    end
     notify_empty(rv)
     val
 end
 
 take_ref(rid) = take(lookup_ref(rid))
 take(rr::RemoteRef) = call_on_owner(take_ref, rr)
+take(c::Channel) = call_on_owner(take_ref, c.rr)
 
 function deliver_result(sock::IO, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
