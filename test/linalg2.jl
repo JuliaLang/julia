@@ -9,7 +9,7 @@ n = 5
 
 srand(123)
 
-d = 1 + rand(n)
+d = 1 .+ rand(n)
 dl = -rand(n-1)
 du = -rand(n-1)
 v = randn(n)
@@ -651,6 +651,47 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         end
     end
 end
+
+# Uniform scaling
+@test I[1,1] == 1 # getindex
+@test I[1,2] == 0 # getindex
+@test I === I' # transpose
+λ = complex(randn(),randn())
+J = UniformScaling(λ)
+@test J*eye(2) == conj(J'eye(2)) # ctranpose (and A(c)_mul_B)
+@test I + I === UniformScaling(2) # +
+B = randbool(2,2)
+@test B + I == B + eye(B)
+@test I + B == B + eye(B)
+A = randn(2,2)
+@test A + I == A + eye(A)
+@test I + A == A + eye(A)
+@test I - I === UniformScaling(0)
+@test B - I == B - eye(B)
+@test I - B == eye(B) - B
+@test A - I == A - eye(A)
+@test I - A == eye(A) - A
+@test I*J === UniformScaling(λ)
+@test B*J == B*λ
+@test J*B == B*λ
+S = sprandn(3,3,0.5)
+@test S*J == S*λ
+@test J*S == S*λ
+@test A*J == A*λ
+@test J*A == A*λ
+@test J*ones(3) == ones(3)*λ
+@test λ*J === UniformScaling(λ*J.λ)
+@test J*λ === UniformScaling(λ*J.λ)
+@test J/I === J
+@test I/A == inv(A)
+@test A/I == A
+@test I/λ === UniformScaling(1/λ)
+@test I\J === J
+T = Triangular(randn(3,3),:L)
+@test T\I == inv(T)
+@test I\A == A
+@test A\I == inv(A)
+@test λ\I === UniformScaling(1/λ)
 
 ## Issue related tests
 # issue 1447

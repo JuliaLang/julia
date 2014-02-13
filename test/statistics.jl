@@ -35,7 +35,7 @@
 
 A = Complex128[exp(i*im) for i in 1:10^4]
 @test_approx_eq varm(A,0.) sum(map(abs2,A))/(length(A)-1)
-@test_approx_eq varm(A,mean(A)) var(A,1)
+@test_approx_eq varm(A,mean(A)) var(A)
 
 @test midpoints(1.0:1.0:10.0) == 1.5:1.0:9.5
 @test midpoints(1:10) == 1.5:9.5

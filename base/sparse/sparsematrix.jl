@@ -1229,7 +1229,7 @@ function vcat(X::SparseMatrixCSC...)
             rX2 = X[i].colptr[c + 1] - 1
             rr2 = rr1 + (rX2 - rX1)
 
-            rowval[rr1 : rr2] = X[i].rowval[rX1 : rX2] + mX_sofar
+            rowval[rr1 : rr2] = X[i].rowval[rX1 : rX2] .+ mX_sofar
             nzval[rr1 : rr2] = X[i].nzval[rX1 : rX2]
             mX_sofar += mX[i]
             rr1 = rr2 + 1
@@ -1261,7 +1261,7 @@ function hcat(X::SparseMatrixCSC...)
     nnz_sofar = 0
     nX_sofar = 0
     for i = 1 : num
-        colptr[(1 : nX[i] + 1) + nX_sofar] = X[i].colptr + nnz_sofar
+        colptr[(1 : nX[i] + 1) + nX_sofar] = X[i].colptr .+ nnz_sofar
         rowval[(1 : nnzX[i]) + nnz_sofar] = X[i].rowval
         nzval[(1 : nnzX[i]) + nnz_sofar] = X[i].nzval
         nnz_sofar += nnzX[i]
@@ -1303,8 +1303,8 @@ function blkdiag(X::SparseMatrixCSC...)
     nX_sofar = 0
     mX_sofar = 0
     for i = 1 : num
-        colptr[(1 : nX[i] + 1) + nX_sofar] = X[i].colptr + nnz_sofar
-        rowval[(1 : nnzX[i]) + nnz_sofar] = X[i].rowval + mX_sofar
+        colptr[(1 : nX[i] + 1) + nX_sofar] = X[i].colptr .+ nnz_sofar
+        rowval[(1 : nnzX[i]) + nnz_sofar] = X[i].rowval .+ mX_sofar
         nzval[(1 : nnzX[i]) + nnz_sofar] = X[i].nzval
         nnz_sofar += nnzX[i]
         nX_sofar += nX[i]
