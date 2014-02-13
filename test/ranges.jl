@@ -150,3 +150,12 @@ let s = 0
     end
     @test s == 2
 end
+
+# sums (see #5798)
+if WORD_SIZE == 64
+    @test sum(int128(1:10^18)) == div(10^18 * (int128(10^18)+1), 2)
+    @test sum(int128(1:10^18-1)) == div(10^18 * (int128(10^18)-1), 2)
+else
+    @test sum(int64(1:10^9)) == div(10^9 * (int64(10^9)+1), 2)
+    @test sum(int64(1:10^9-1)) == div(10^9 * (int64(10^9)-1), 2)
+end
