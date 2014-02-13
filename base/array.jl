@@ -782,7 +782,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
         end
     end
 end
-for f in (:+, :-, :.*, :./, :.%, :div, :mod, :rem, :&, :|, :$)
+for f in (:.+, :.-, :.*, :./, :.%, :div, :mod, :rem, :&, :|, :$)
     @eval begin
         function ($f){T}(A::Number, B::StridedArray{T})
             F = similar(B, promote_array_type(typeof(A),T))
@@ -802,7 +802,7 @@ for f in (:+, :-, :.*, :./, :.%, :div, :mod, :rem, :&, :|, :$)
 end
 
 # functions that should give an Int result for Bool arrays
-for f in (:+, :-)
+for f in (:.+, :.-)
     @eval begin
         function ($f)(A::Bool, B::StridedArray{Bool})
             F = Array(Int, size(B))
@@ -818,12 +818,16 @@ for f in (:+, :-)
             end
             return F
         end
+    end
+end
+for f in (:+, :-)
+    @eval begin
         function ($f)(A::StridedArray{Bool}, B::StridedArray{Bool})
             F = Array(Int, promote_shape(size(A), size(B)))
             for i=1:length(A)
                 @inbounds F[i] = ($f)(A[i], B[i])
             end
-            return F
+            return F        
         end
     end
 end

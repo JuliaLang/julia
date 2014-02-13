@@ -51,7 +51,8 @@ for them in LAPACK are available.
 +--------------------+-----------------------------------------------------------------------------------+
 | ``Diagonal``       | `Diagonal matrix <http://en.wikipedia.org/wiki/Diagonal_matrix>`_                 |
 +--------------------+-----------------------------------------------------------------------------------+
-
+| ``UniformScaling`` | `Uniform scaling operator <http://en.wikipedia.org/wiki/Uniform_scaling>`_        |
++--------------------+-----------------------------------------------------------------------------------+
 
 Elementary operations
 ---------------------
@@ -73,6 +74,8 @@ Elementary operations
 +--------------------+-------+-------+-------+-------+---------------------+
 | ``Diagonal``       |   X   |   X   |  XY   |   XY  | ``inv``, ``det``,   |
 |                    |       |       |       |       | ``logdet``, ``/``   |
++--------------------+-------+-------+-------+-------+---------------------+
+| ``UniformScaling`` |   X   |   X   |  XYZ  |  XYZ  | ``/``               |
 +--------------------+-------+-------+-------+-------+---------------------+
 
 Legend:
@@ -115,4 +118,8 @@ Legend:
 +---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
 | D | An optimized method to find the characteristic vectors corresponding to the characteristic values ``x=[x1, x2,...]`` is available | ``eigvecs(M, x)``      |
 +---+-----------------------------------------------------------------------------------------------------------------------------------+------------------------+
+
+The uniform scaling operator
+--------------------------
+A ``UniformScaling`` operator represents a scalar times the identity operator, ``λ*I``. The identity operator ``I`` is defined as a constant and is an instance of ``UniformScaling``. The size of these operators are generic and match the other matrix in the binary operations ``+``,``-``,``*`` and ``\``. For ``A+I`` and ``A-I`` this means that ``A`` must be square. Multiplication with the identity operator ``I`` is a noop (except for checking that the scaling factor is one) and therefore almost without overhead. 
 

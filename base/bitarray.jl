@@ -898,7 +898,7 @@ for f in (:+, :-)
         return r
     end
 end
-for f in (:+, :-),
+for f in (:.+, :.-),
     (arg1, arg2, T, fargs) in ((:(B::BitArray), :(x::Bool)    , Int                                   , :(b, x)),
                                (:(B::BitArray), :(x::Number)  , :(promote_array_type(typeof(x), Bool)), :(b, x)),
                                (:(x::Bool)    , :(B::BitArray), Int                                   , :(x, b)),

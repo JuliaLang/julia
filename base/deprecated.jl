@@ -189,6 +189,16 @@ export PipeString
 @deprecate svdfact(A,thin)      svdfact(A,thin=thin)
 @deprecate svdfact!(A,thin)     svdfact(A,thin=thin)
 @deprecate svd(A,thin)          svd(A,thin=thin)
+@deprecate (+)(A::Array{Bool},x::Bool)      A .+ x
+@deprecate (+)(x::Bool,A::Array{Bool})      x .+ A 
+@deprecate (-)(A::Array{Bool},x::Bool)      A .- x
+@deprecate (-)(x::Bool,A::Array{Bool})      x .- A
+@deprecate (+)(A::Array,x::Number)          A .+ x
+@deprecate (+)(x::Number,A::Array)          x .+ A
+@deprecate (-)(A::Array,x::Number)          A .- x
+@deprecate (-)(x::Number,A::Array)          x .- A
+@deprecate (/)(x::Number,A::Array)          x ./ A
+@deprecate (\)(A::Array,x::Number)          A .\ x
 
 deprecated_ls() = run(`ls -l`)
 deprecated_ls(args::Cmd) = run(`ls -l $args`)
