@@ -65,11 +65,11 @@ varm(v::Ranges, m::Number) = var(v)
 ## variance
 function var(v::Ranges)
     s = step(v)
-    l = length(v)
-    if l == 0 || l == 1
+    ℓ = length(v)
+    if ℓ == 0 || ℓ == 1
         return NaN
     end
-    return abs2(s) * (l + 1) * l / 12
+    return abs2(s) * (ℓ + 1) * ℓ / 12
 end
 var(v::AbstractArray) = varm(v, mean(v))
 function var(v::AbstractArray, region)

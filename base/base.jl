@@ -118,19 +118,19 @@ function append_any(xs...)
     # must be a separate function from append(), since apply() needs this
     # exact function.
     out = Array(Any, 4)
-    l = 4
+    ℓ = 4
     i = 1
     for x in xs
         for y in x
-            if i > l
+            if i > ℓ
                 ccall(:jl_array_grow_end, Void, (Any, Uint), out, 16)
-                l += 16
+                ℓ += 16
             end
             arrayset(out, y, i)
             i += 1
         end
     end
-    ccall(:jl_array_del_end, Void, (Any, Uint), out, l-i+1)
+    ccall(:jl_array_del_end, Void, (Any, Uint), out, ℓ-i+1)
     out
 end
 

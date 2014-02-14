@@ -199,10 +199,10 @@ getindex{T}(s::SubArray{T,2}, i::Integer, j::Integer) =
     s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2]]
 getindex{T}(s::SubArray{T,3}, i::Integer, j::Integer, k::Integer) =
     s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2] + (k-1)*s.strides[3]]
-getindex{T}(s::SubArray{T,4}, i::Integer, j::Integer, k::Integer, l::Integer) =
-    s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2] + (k-1)*s.strides[3] + (l-1)*s.strides[4]]
-getindex{T}(s::SubArray{T,5}, i::Integer, j::Integer, k::Integer, l::Integer, m::Integer) =
-    s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2] + (k-1)*s.strides[3] + (l-1)*s.strides[4] + (m-1)*s.strides[5]]
+getindex{T}(s::SubArray{T,4}, i::Integer, j::Integer, k::Integer, ℓ::Integer) =
+    s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2] + (k-1)*s.strides[3] + (ℓ-1)*s.strides[4]]
+getindex{T}(s::SubArray{T,5}, i::Integer, j::Integer, k::Integer, ℓ::Integer, m::Integer) =
+    s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2] + (k-1)*s.strides[3] + (ℓ-1)*s.strides[4] + (m-1)*s.strides[5]]
 
 getindex(s::SubArray, i::Real) = getindex(s, to_index(i))
 getindex(s::SubArray, i0::Real, i1::Real) =
@@ -369,11 +369,11 @@ setindex!{T}(s::SubArray{T,2}, v, i::Integer, j::Integer) =
 setindex!{T}(s::SubArray{T,3}, v, i::Integer, j::Integer, k::Integer) =
     setindex!(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]+(k-1)*s.strides[3])
 
-setindex!{T}(s::SubArray{T,4}, v, i::Integer, j::Integer, k::Integer, l::Integer) =
-    setindex!(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]+(k-1)*s.strides[3]+(l-1)*s.strides[4])
+setindex!{T}(s::SubArray{T,4}, v, i::Integer, j::Integer, k::Integer, ℓ::Integer) =
+    setindex!(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]+(k-1)*s.strides[3]+(ℓ-1)*s.strides[4])
 
-setindex!{T}(s::SubArray{T,5}, v, i::Integer, j::Integer, k::Integer, l::Integer, m::Integer) =
-    setindex!(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]+(k-1)*s.strides[3]+(l-1)*s.strides[4]+(m-1)*s.strides[5])
+setindex!{T}(s::SubArray{T,5}, v, i::Integer, j::Integer, k::Integer, ℓ::Integer, m::Integer) =
+    setindex!(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]+(k-1)*s.strides[3]+(ℓ-1)*s.strides[4]+(m-1)*s.strides[5])
 
 setindex!{T}(s::SubArray{T,1}, v, I::Range1{Int}) =
     setindex!(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))

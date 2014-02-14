@@ -518,14 +518,14 @@ function prepend!{T}(a::Array{T,1}, items::AbstractVector)
 end
 
 function resize!(a::Vector, nl::Integer)
-    l = length(a)
-    if nl > l
-        ccall(:jl_array_grow_end, Void, (Any, Uint), a, nl-l)
+    ℓ = length(a)
+    if nl > ℓ
+        ccall(:jl_array_grow_end, Void, (Any, Uint), a, nl-ℓ)
     else
         if nl < 0
             throw(BoundsError())
         end
-        ccall(:jl_array_del_end, Void, (Any, Uint), a, l-nl)
+        ccall(:jl_array_del_end, Void, (Any, Uint), a, ℓ-nl)
     end
     return a
 end
@@ -588,8 +588,8 @@ end
 function deleteat!{T<:Integer}(a::Vector, r::Range1{T})
     n = length(a)
     f = first(r)
-    l = last(r)
-    if !(1 <= f && l <= n)
+    ℓ = last(r)
+    if !(1 <= f && ℓ <= n)
         throw(BoundsError())
     end
     return _deleteat!(a, f, length(r))
@@ -649,22 +649,22 @@ function splice!{T<:Integer}(a::Vector, r::Range1{T}, ins::AbstractArray=_defaul
 
     n = length(a)
     f = first(r)
-    l = last(r)
+    ℓ = last(r)
     d = length(r)
 
     if m < d
         delta = d - m
-        if f-1 < n-l
+        if f-1 < n-ℓ
             _deleteat_beg!(a, f, delta)
         else
-            _deleteat_end!(a, l-delta+1, delta)
+            _deleteat_end!(a, ℓ-delta+1, delta)
         end
     elseif m > d
         delta = m - d
-        if f-1 < n-l
+        if f-1 < n-ℓ
             _growat_beg!(a, f, delta)
         else
-            _growat_end!(a, l+1, delta)
+            _growat_end!(a, ℓ+1, delta)
         end
     end
 
@@ -861,19 +861,19 @@ function slicedim(A::Array, d::Integer, i::Integer)
     B = similar(A, d_out)
     index_offset = 1 + (i-1)*M
 
-    l = 1
+    ℓ = 1
 
     if M==1
         for j=0:stride:(N-stride)
-            B[l] = A[j + index_offset]
-            l += 1
+            B[ℓ] = A[j + index_offset]
+            ℓ += 1
         end
     else
         for j=0:stride:(N-stride)
             offs = j + index_offset
             for k=0:(M-1)
-                B[l] = A[offs + k]
-                l += 1
+                B[ℓ] = A[offs + k]
+                ℓ += 1
             end
         end
     end
@@ -1172,9 +1172,9 @@ end
 function findin(a, b::Range1)
     ind = Array(Int, 0)
     f = first(b)
-    l = last(b)
+    ℓ = last(b)
     for i = 1:length(a)
-        if f <= a[i] <= l
+        if f <= a[i] <= ℓ
             push!(ind, i)
         end
     end

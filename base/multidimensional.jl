@@ -161,9 +161,9 @@ end
     stride = 1
     index = I_0
     @nexprs N d->begin
-        l = size(B,d)
-        stride *= l
-        1 <= I_{d-1} <= l || throw(BoundsError())
+        ℓ = size(B,d)
+        stride *= ℓ
+        1 <= I_{d-1} <= ℓ || throw(BoundsError())
         index += (I_d - 1) * stride
     end
     return B[index]
@@ -246,9 +246,9 @@ end
     stride = 1
     index = I_0
     @nexprs N d->begin
-        l = size(B,d)
-        stride *= l
-        1 <= I_{d-1} <= l || throw(BoundsError())
+        ℓ = size(B,d)
+        stride *= ℓ
+        1 <= I_{d-1} <= ℓ || throw(BoundsError())
         index += (I_d - 1) * stride
     end
     B[index] = x
@@ -364,9 +364,9 @@ end
     stride = 1
     index = I_0
     @nexprs N d->begin
-        l = size(B,d)
-        stride *= l
-        1 <= I_{d-1} <= l || return false
+        ℓ = size(B,d)
+        stride *= ℓ
+        1 <= I_{d-1} <= ℓ || return false
         index += (I_d - 1) * stride
     end
     return isassigned(B, index)

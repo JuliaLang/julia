@@ -180,10 +180,10 @@ function convert{S,T,N}(::Type{Array{S,N}}, s::SubDArray{T,N})
     I = s.indexes
     d = s.parent
     if isa(I,(Range1{Int}...)) && S<:T && T<:S
-        l = locate(d, map(first, I)...)
-        if isequal(d.indexes[l...], I)
+        ℓ = locate(d, map(first, I)...)
+        if isequal(d.indexes[ℓ...], I)
             # SubDArray corresponds to a chunk
-            return chunk(d, l...)
+            return chunk(d, ℓ...)
         end
     end
     a = Array(S, size(s))

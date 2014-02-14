@@ -114,7 +114,7 @@ function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
 end
 
 ## Bounds-checking without errors ##
-in_bounds(l::Int, i::Integer) = 1 <= i <= l
+in_bounds(ℓ::Int, i::Integer) = 1 <= i <= ℓ
 function in_bounds(sz::Dims, I::Int...)
     n = length(I)
     for dim = 1:(n-1)
@@ -1128,9 +1128,9 @@ ind2sub(dims::(Integer,Integer,Integer), ind::Int) =
 
 function ind2sub{T<:Integer}(dims::(Integer,Integer...), ind::AbstractVector{T})
     n = length(dims)
-    l = length(ind)
-    t = ntuple(n, x->Array(Int, l))
-    for i = 1:l
+    ℓ = length(ind)
+    t = ntuple(n, x->Array(Int, ℓ))
+    for i = 1:ℓ
         s = ind2sub(dims, ind[i])
         for j = 1:n
             t[j][i] = s[j]

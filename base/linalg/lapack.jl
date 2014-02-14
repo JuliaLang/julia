@@ -454,7 +454,7 @@ for (tzrzf, ormrz, elty) in
         function ormrz!(side::BlasChar, trans::BlasChar, A::StridedMatrix{$elty}, tau::StridedVector{$elty}, C::StridedMatrix{$elty})
             m, n = size(C)
             k = length(tau)
-            l = size(A, 2) - size(A, 1)
+            ℓ = size(A, 2) - size(A, 1)
             lda = max(1, stride(A,2))
             ldc = max(1, stride(C,2))
             work = Array($elty, 1)
@@ -467,7 +467,7 @@ for (tzrzf, ormrz, elty) in
                      Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}, Ptr{BlasInt}),
                     &side, &trans, &m, &n, 
-                    &k, &l, A, &lda, 
+                    &k, &ℓ, A, &lda, 
                     tau, C, &ldc, work, 
                     &lwork, info)
                 if i == 1
@@ -1112,7 +1112,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             if size(B, 2) != n; throw(DimensionMismatch("")); end
             p = size(B, 1)
             k = Array(BlasInt, 1)
-            l = Array(BlasInt, 1)
+            ℓ = Array(BlasInt, 1)
             lda = max(1,stride(A, 2))
             ldb = max(1,stride(B, 2))
             alpha = Array($relty, n)
@@ -1137,7 +1137,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
                     &jobu, &jobv, &jobq, &m, 
-                    &n, &p, k, l, 
+                    &n, &p, k, ℓ, 
                     A, &lda, B, &ldb, 
                     alpha, beta, U, &ldu, 
                     V, &ldv, Q, &ldq, 
@@ -1151,19 +1151,19 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                     &jobu, &jobv, &jobq, &m, 
-                    &n, &p, k, l, 
+                    &n, &p, k, ℓ, 
                     A, &lda, B, &ldb, 
                     alpha, beta, U, &ldu, 
                     V, &ldv, Q, &ldq, 
                     work, iwork, info)
             end
             @lapackerror
-            if m - k[1] - l[1] >= 0
-                R = triu(A[1:k[1] + l[1],n - k[1] - l[1] + 1:n])
+            if m - k[1] - ℓ[1] >= 0
+                R = triu(A[1:k[1] + ℓ[1],n - k[1] - ℓ[1] + 1:n])
             else
-                R = triu([A[1:m, n - k[1] - l[1] + 1:n]; B[m - k[1] + 1:l[1], n - k[1] - l[1] + 1:n]])
+                R = triu([A[1:m, n - k[1] - ℓ[1] + 1:n]; B[m - k[1] + 1:ℓ[1], n - k[1] - ℓ[1] + 1:n]])
             end
-            U, V, Q, alpha, beta, k[1], l[1], R
+            U, V, Q, alpha, beta, k[1], ℓ[1], R
         end
     end
 end

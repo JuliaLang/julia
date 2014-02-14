@@ -1,10 +1,10 @@
 # preliminary definitions: constants, macros
 # and functions used throughout the code
 const _msk64 = ~uint64(0)
-macro _mskr(l) :(_msk64 >>> (63 & (64-$(esc(l))))) end
-macro _div64(l) :($(esc(l)) >>> 6) end
-macro _mod64(l) :($(esc(l)) & 63) end
-macro _msk_end(l) :(@_mskr @_mod64 $(esc(l))) end
+macro _mskr(ℓ) :(_msk64 >>> (63 & (64-$(esc(ℓ))))) end
+macro _div64(ℓ) :($(esc(ℓ)) >>> 6) end
+macro _mod64(ℓ) :($(esc(ℓ)) & 63) end
+macro _msk_end(ℓ) :(@_mskr @_mod64 $(esc(ℓ))) end
 num_bit_chunks(n::Int) = @_div64 (n+63)
 const bitcache_chunks = 64 # this can be changed
 const bitcache_size = 64 * bitcache_chunks # do not change this
@@ -288,8 +288,8 @@ convert{T,N}(::Type{BitArray}, A::AbstractArray{T,N}) = convert(BitArray{N},A)
 function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
     B = BitArray(size(A))
     Bc = B.chunks
-    l = length(B)
-    if l == 0
+    ℓ = length(B)
+    if ℓ == 0
         return B
     end
     ind = 1
@@ -308,7 +308,7 @@ function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
         end
         u = uint64(1)
         c = uint64(0)
-        for j = 0:@_mod64(l-1)
+        for j = 0:@_mod64(ℓ-1)
             if bool(A[ind])
                 c |= u
             end
@@ -462,8 +462,8 @@ function push!(B::BitVector, item)
 
     Bc = B.chunks
 
-    l = @_mod64 length(B)
-    if l == 0
+    ℓ = @_mod64 length(B)
+    if ℓ == 0
         ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, 1)
         Bc[end] = uint64(0)
     end
@@ -549,8 +549,8 @@ function pop!(B::BitVector)
     item = B[end]
     B[end] = false
 
-    l = @_mod64 length(B)
-    if l == 1
+    ℓ = @_mod64 length(B)
+    if ℓ == 1
         ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, 1)
     end
     B.len -= 1
@@ -563,8 +563,8 @@ function unshift!(B::BitVector, item)
 
     Bc = B.chunks
 
-    l = @_mod64 length(B)
-    if l == 0
+    ℓ = @_mod64 length(B)
+    if ℓ == 0
         ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, 1)
         Bc[end] = uint64(0)
     end
@@ -593,8 +593,8 @@ function shift!(B::BitVector)
             Bc[i] = (Bc[i] >>> 1) | (Bc[i+1] << 63)
         end
 
-        l = @_mod64 length(B)
-        if l == 1
+        ℓ = @_mod64 length(B)
+        if ℓ == 1
             ccall(:jl_array_del_end, Void, (Any, Uint), Bc, 1)
         else
             Bc[end] >>>= 1
@@ -620,8 +620,8 @@ function insert!(B::BitVector, i::Integer, item)
 
         k, j = get_chunks_id(i)
 
-        l = @_mod64 length(B)
-        if l == 0
+        ℓ = @_mod64 length(B)
+        if ℓ == 0
             ccall(:jl_array_grow_end, Void, (Any, Uint), Bc, 1)
             Bc[end] = uint64(0)
         end
@@ -658,9 +658,9 @@ function _deleteat!(B::BitVector, i::Integer)
             Bc[t] = (Bc[t] >>> 1) | (Bc[t + 1] << 63)
         end
 
-        l = @_mod64 length(B)
+        ℓ = @_mod64 length(B)
 
-        if l == 1
+        if ℓ == 1
             ccall(:jl_array_del_end, Void, (Any, Uint), Bc, 1)
         elseif length(Bc) > k
             Bc[end] >>>= 1
@@ -821,8 +821,8 @@ end
 
 function (-)(B::BitArray)
     A = zeros(Int, size(B))
-    l = length(B)
-    if l == 0
+    ℓ = length(B)
+    if ℓ == 0
         return A
     end
     Bc = B.chunks
@@ -840,7 +840,7 @@ function (-)(B::BitArray)
     end
     u = uint64(1)
     c = Bc[end]
-    for j = 0:@_mod64(l-1)
+    for j = 0:@_mod64(ℓ-1)
         if c & u != 0
             A[ind] = -1
         end
@@ -1098,8 +1098,8 @@ function (.^){T<:Number}(B::BitArray, x::T)
     end
 end
 
-function bitcache_pow{T}(A::BitArray, B::Array{T}, l::Int, ind::Int, C::Vector{Bool})
-    left = l - ind + 1
+function bitcache_pow{T}(A::BitArray, B::Array{T}, ℓ::Int, ind::Int, C::Vector{Bool})
+    left = ℓ - ind + 1
     for j = 1:min(bitcache_size, left)
         C[j] = bool(A[ind] .^ B[ind])
         ind += 1
@@ -1110,16 +1110,16 @@ end
 function (.^){T<:Integer}(A::BitArray, B::Array{T})
     F = BitArray(promote_shape(size(A),size(B)))
     Fc = F.chunks
-    l = length(F)
-    if l == 0
+    ℓ = length(F)
+    if ℓ == 0
         return F
     end
     C = Array(Bool, bitcache_size)
     ind = 1
     cind = 1
-    nFc = num_bit_chunks(l)
-    for i = 1:div(l + bitcache_size - 1, bitcache_size)
-        ind = bitcache_pow(A, B, l, ind, C)
+    nFc = num_bit_chunks(ℓ)
+    for i = 1:div(ℓ + bitcache_size - 1, bitcache_size)
+        ind = bitcache_pow(A, B, ℓ, ind, C)
         dumpbitcache(Fc, cind, C)
         cind += bitcache_chunks
     end
@@ -1179,8 +1179,8 @@ for (f, cachef, scalarf) in ((:.==, :bitcache_eq , :(==)),
                                              :(A[ind]), :B,
                                              :(size(A))))
         @eval begin
-            function ($cachef)(A::$sigA, B::$sigB, l::Int, ind::Int, C::Vector{Bool})
-                left = l - ind + 1
+            function ($cachef)(A::$sigA, B::$sigB, ℓ::Int, ind::Int, C::Vector{Bool})
+                left = ℓ - ind + 1
                 @inbounds begin
                     for j = 1:min(bitcache_size, left)
                         C[j] = ($scalarf)($expA, $expB)
@@ -1193,16 +1193,16 @@ for (f, cachef, scalarf) in ((:.==, :bitcache_eq , :(==)),
             function ($f)(A::$sigA, B::$sigB)
                 F = BitArray($shape)
                 Fc = F.chunks
-                l = length(F)
-                if l == 0
+                ℓ = length(F)
+                if ℓ == 0
                     return F
                 end
                 C = Array(Bool, bitcache_size)
                 ind = 1
                 cind = 1
-                nFc = num_bit_chunks(l)
-                for i = 1:div(l + bitcache_size - 1, bitcache_size)
-                    ind = ($cachef)(A, B, l, ind, C)
+                nFc = num_bit_chunks(ℓ)
+                for i = 1:div(ℓ + bitcache_size - 1, bitcache_size)
+                    ind = ($cachef)(A, B, ℓ, ind, C)
                     dumpbitcache(Fc, cind, C)
                     cind += bitcache_chunks
                 end
@@ -1253,19 +1253,19 @@ function slicedim(A::BitArray, d::Integer, i::Integer)
     B = BitArray(d_out)
     index_offset = 1 + (i-1)*M
 
-    l = 1
+    ℓ = 1
 
     if M==1
         for j=0:stride:(N-stride)
-            B[l] = A[j + index_offset]
-            l += 1
+            B[ℓ] = A[j + index_offset]
+            ℓ += 1
         end
     else
         for j=0:stride:(N-stride)
             offs = j + index_offset
             for k=0:(M-1)
-                B[l] = A[offs + k]
-                l += 1
+                B[ℓ] = A[offs + k]
+                ℓ += 1
             end
         end
     end
@@ -1353,12 +1353,12 @@ function reverse!(B::BitVector)
 
     i = hnc + 1
     j = hnc << 6
-    l = (@_mod64 (n+63)) + 1
-    msk = @_mskr l
+    ℓ = (@_mod64 (n+63)) + 1
+    msk = @_mskr ℓ
 
     aux_chunks[1] = reverse_bits(B.chunks[i] & msk)
-    aux_chunks[1] >>>= (64 - l)
-    copy_chunks(B.chunks, j+1, aux_chunks, 1, l)
+    aux_chunks[1] >>>= (64 - ℓ)
+    copy_chunks(B.chunks, j+1, aux_chunks, 1, ℓ)
 
     return B
 end
@@ -1460,8 +1460,8 @@ function findnextnot(B::BitArray, start::Integer)
     end
 
     Bc = B.chunks
-    l = length(Bc)
-    if l == 0
+    ℓ = length(Bc)
+    if ℓ == 0
         return 0
     end
 
@@ -1474,7 +1474,7 @@ function findnextnot(B::BitArray, start::Integer)
             return (chunk_start-1) << 6 + trailing_ones(Bc[chunk_start] | mask) + 1
         end
 
-        for i = chunk_start+1:l-1
+        for i = chunk_start+1:ℓ-1
             if Bc[i] != _msk64
                 return (i-1) << 6 + trailing_ones(Bc[i]) + 1
             end
@@ -1482,7 +1482,7 @@ function findnextnot(B::BitArray, start::Integer)
         ce = Bc[end]
     end
     if ce != @_msk_end length(B)
-        return (l-1) << 6 + trailing_ones(ce) + 1
+        return (ℓ-1) << 6 + trailing_ones(ce) + 1
     end
     return 0
 end
@@ -1517,7 +1517,7 @@ end
 #findfirst(testf::Function, B::BitArray) = findnext(testf, B, 1)  ## defined in array.jl
 
 function find(B::BitArray)
-    l = length(B)
+    ℓ = length(B)
     nnzB = countnz(B)
     I = Array(Int, nnzB)
     if nnzB == 0
@@ -1540,7 +1540,7 @@ function find(B::BitArray)
     end
     u = uint64(1)
     c = Bc[end]
-    for j = 0:@_mod64(l-1)
+    for j = 0:@_mod64(ℓ-1)
         if c & u != 0
             I[Icount] = Bcount
             Icount += 1
@@ -1686,19 +1686,19 @@ end
 function form_8x8_chunk(Bc::Vector{Uint64}, i1::Int, i2::Int, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::Uint64)
     x = uint64(0)
 
-    k, l = get_chunks_id(i1 + (i2 - 1) * m)
+    k, ℓ = get_chunks_id(i1 + (i2 - 1) * m)
     r = 0
     for j = 1 : 8
         if k > nc
             break
         end
-        x |= ((Bc[k] >>> l) & msk8) << r
-        if l + 8 >= 64 && nc > k
-            r0 = 8 - (@_mod64 (l + 8))
+        x |= ((Bc[k] >>> ℓ) & msk8) << r
+        if ℓ + 8 >= 64 && nc > k
+            r0 = 8 - (@_mod64 (ℓ + 8))
             x |= (Bc[k + 1] & (msk8 >>> r0)) << (r + r0)
         end
-        k += cgap + (l + cinc >= 64 ? 1 : 0)
-        l = @_mod64 (l + cinc)
+        k += cgap + (ℓ + cinc >= 64 ? 1 : 0)
+        ℓ = @_mod64 (ℓ + cinc)
         r += 8
     end
     return x
@@ -1706,19 +1706,19 @@ end
 
 # note: assumes B is filled with 0's
 function put_8x8_chunk(Bc::Vector{Uint64}, i1::Int, i2::Int, x::Uint64, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::Uint64)
-    k, l = get_chunks_id(i1 + (i2 - 1) * m)
+    k, ℓ = get_chunks_id(i1 + (i2 - 1) * m)
     r = 0
     for j = 1 : 8
         if k > nc
             break
         end
-        Bc[k] |= ((x >>> r) & msk8) << l
-        if l + 8 >= 64 && nc > k
-            r0 = 8 - (@_mod64 (l + 8))
+        Bc[k] |= ((x >>> r) & msk8) << ℓ
+        if ℓ + 8 >= 64 && nc > k
+            r0 = 8 - (@_mod64 (ℓ + 8))
             Bc[k + 1] |= ((x >>> (r + r0)) & (msk8 >>> r0))
         end
-        k += cgap + (l + cinc >= 64 ? 1 : 0)
-        l = @_mod64 (l + cinc)
+        k += cgap + (ℓ + cinc >= 64 ? 1 : 0)
+        ℓ = @_mod64 (ℓ + cinc)
         r += 8
     end
     return

@@ -147,12 +147,12 @@ function ind2chr(s::String, i::Integer)
     j = 1
     k = start(s)
     while true
-        c, l = next(s,k)
+        c, ℓ = next(s,k)
         if i <= k
             return j
         end
         j += 1
-        k = l
+        k = ℓ
     end
 end
 
@@ -163,12 +163,12 @@ function chr2ind(s::String, i::Integer)
     j = 1
     k = start(s)
     while true
-        c, l = next(s,k)
+        c, ℓ = next(s,k)
         if i == j
             return k
         end
         j += 1
-        k = l
+        k = ℓ
     end
 end
 
@@ -335,12 +335,12 @@ function _rsearchindex(s, t, i)
     end
     t = RevString(t)
     rs = RevString(s)
-    l = endof(s)
+    ℓ = endof(s)
     t1, j2 = next(t,start(t))
     while true
         i = rsearch(s,t1,i)
         if i == 0 return 0 end
-        c, ii = next(rs,l-i+1)
+        c, ii = next(rs,ℓ-i+1)
         j = j2; k = ii
         matched = true
         while !done(t,j)
@@ -356,9 +356,9 @@ function _rsearchindex(s, t, i)
             end
         end
         if matched
-            return nextind(s,l-k+1)
+            return nextind(s,ℓ-k+1)
         end
-        i = l-ii+1
+        i = ℓ-ii+1
     end
 end
 
@@ -1234,24 +1234,24 @@ end
 function lpad(s::String, n::Integer, p::String=" ")
     m = n - strwidth(s)
     if m <= 0; return s; end
-    l = strwidth(p)
-    if l==1
+    ℓ = strwidth(p)
+    if ℓ==1
         return bytestring(p^m * s)
     end
-    q = div(m,l)
-    r = m - q*l
+    q = div(m,ℓ)
+    r = m - q*ℓ
     bytestring(p^q*p[1:chr2ind(p,r)]*s)
 end
 
 function rpad(s::String, n::Integer, p::String=" ")
     m = n - strwidth(s)
     if m <= 0; return s; end
-    l = strwidth(p)
-    if l==1
+    ℓ = strwidth(p)
+    if ℓ==1
         return bytestring(s * p^m)
     end
-    q = div(m,l)
-    r = m - q*l
+    q = div(m,ℓ)
+    r = m - q*ℓ
     bytestring(s*p^q*p[1:chr2ind(p,r)])
 end
 

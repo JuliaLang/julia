@@ -228,11 +228,11 @@ next(itr::EachLine, nada) = (readline(itr.stream), nothing)
 
 function readlines(s, fx::Function...)
     a = {}
-    for l in eachline(s)
+    for ℓ in eachline(s)
         for f in fx
-          l = f(l)
+          ℓ = f(ℓ)
         end
-        push!(a, l)
+        push!(a, ℓ)
     end
     return a
 end
@@ -496,31 +496,31 @@ end
 
 # based on code by Glen Hertz
 function readuntil(s::IO, t::String)
-    l = length(t)
-    if l == 0
+    ℓ = length(t)
+    if ℓ == 0
         return ""
     end
-    if l > 40
+    if ℓ > 40
         warn("readuntil(IO,String) will perform poorly with a long string")
     end
     out = IOBuffer()
-    m = Array(Char, l)  # last part of stream to match
+    m = Array(Char, ℓ)  # last part of stream to match
     t = collect(t)
     i = 0
     while !eof(s)
         i += 1
         c = read(s, Char)
         write(out, c)
-        if i <= l
+        if i <= ℓ
             m[i] = c
         else
             # shift to last part of s
-            for j = 2:l
+            for j = 2:ℓ
                 m[j-1] = m[j]
             end
-            m[l] = c
+            m[ℓ] = c
         end
-        if i >= l && m == t
+        if i >= ℓ && m == t
             break
         end
     end
