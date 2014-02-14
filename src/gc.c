@@ -782,6 +782,13 @@ double clock_now(void);
 static void gc_mark_uv_handle(uv_handle_t *handle, void *arg)
 {
     if (handle->data) {
+        if (handle->type == UV_TTY || handle->type == UV_TCP || handle->type == UV_UDP || handle->type == UV_NAMED_PIPE)
+        {
+            char preserve = *(((char*)handle)-1);
+            if (preserve == 0)
+                return;
+            assert(preserve == 1);
+        }
         gc_push_root((jl_value_t*)(handle->data), 0);
     }
 }

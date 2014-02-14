@@ -260,18 +260,22 @@ type TcpSocket <: Socket
         false,Condition())
 end
 function TcpSocket()
-    this = TcpSocket(c_malloc(_sizeof_uv_tcp))
-    associate_julia_struct(this.handle, this)
+    this = TcpSocket(c_malloc(_sizeof_uv_tcp+1)+1)
+    unpreserve_handle(this)
+    associate_julia_struct(this.handle,this)
+    finalizer(this,_close)
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0 
-        c_free(this.handle)
+        c_free(this.handle-1)
         this.handle = C_NULL
         error(UVError("failed to create tcp socket",err))
     end
     this.status = StatusInit
     this
 end
+
+none_waiting(x::TcpSocket) = isempty(x.readnotify.waitq) && isempty(x.connectnotify.waitq) && isempty(x.closenotify.waitq)
 
 type TcpServer <: UVServer
     handle::Ptr{Void}
@@ -287,18 +291,25 @@ type TcpServer <: UVServer
         false,Condition())
 end
 function TcpServer()
-    this = TcpServer(c_malloc(_sizeof_uv_tcp))
-    associate_julia_struct(this.handle, this)
+    this = TcpServer(c_malloc(_sizeof_uv_tcp+1)+1)
+    unpreserve_handle(this)
+    associate_julia_struct(this.handle,this)
+    finalizer(this,_close)
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0 
-        c_free(this.handle)
+        c_free(this.handle-1)
         this.handle = C_NULL
         error(UVError("failed to create tcp server",err))
     end
     this.status = StatusInit
     this
 end
+
+preserve_handle(x::Union(TcpSocket,TcpServer)) = x.handle != C_NULL && unsafe_store!(convert(Ptr{Uint8},x.handle-1),uint8(1))
+unpreserve_handle(x::Union(TcpSocket,TcpServer)) = x.handle != C_NULL && unsafe_store!(convert(Ptr{Uint8},x.handle-1),uint8(0))
+
+none_waiting(x::TcpServer) = isempty(x.readnotify.waitq) && isempty(x.connectnotify.waitq) && isempty(x.closenotify.waitq)
 
 isreadable(io::TcpSocket) = true
 iswritable(io::TcpSocket) = true
@@ -343,7 +354,8 @@ end
 
 function UdpSocket()
     this = UdpSocket(c_malloc(_sizeof_uv_udp))
-    associate_julia_struct(this.handle, this)
+    disassociate_julia_struct(this.handle)
+    finalizer(this,_close)
     err = ccall(:uv_udp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0 
@@ -355,7 +367,10 @@ function UdpSocket()
     this
 end
 
+none_waiting(x::UdpSocket) = isempty(x.recvnotify.waitq) && isempty(x.sendnotify.waitq) && isempty(x.closenotify.waitq)
+
 function _uv_hook_close(sock::UdpSocket)
+    c_free(sock.handle)
     sock.handle = 0
     sock.status = StatusClosed
     notify(sock.closenotify)
@@ -435,7 +450,7 @@ function recv(sock::UdpSocket)
         error("Invalid socket state")
     end
     _recv_start(sock)
-    wait(sock.recvnotify)::Vector{Uint8}
+    stream_wait(sock,sock.recvnotify)::Vector{Uint8}
 end
 
 function _uv_hook_recv(sock::UdpSocket, nread::Ptr{Void}, buf_addr::Ptr{Void}, buf_size::Int32, addr::Ptr{Void}, flags::Int32)
@@ -462,8 +477,9 @@ function send(sock::UdpSocket,ipaddr,port,msg)
     if sock.status != StatusInit && sock.status != StatusOpen 
         error("Invalid socket state")
     end
+    associate_julia_struct(sock.handle,sock)
     uv_error("send",_send(sock,ipaddr,uint16(port),msg))
-    wait(sock.sendnotify)
+    stream_wait(sock,sock.sendnotify)
     nothing
 end
 
