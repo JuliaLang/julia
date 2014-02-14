@@ -813,6 +813,7 @@ static void gc_mark(void)
 
     // modules
     gc_push_root(jl_main_module, 0);
+    gc_push_root(jl_internal_main_module, 0);
     gc_push_root(jl_current_module, 0);
     if (jl_old_base_module) gc_push_root(jl_old_base_module, 0);
 
