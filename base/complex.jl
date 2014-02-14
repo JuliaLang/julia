@@ -34,6 +34,9 @@ real(x::Real) = x
 imag(x::Real) = zero(x)
 reim(z) = (real(z), imag(z))
 
+real{T<:Real}(::Type{T}) = T
+real{T<:Real}(::Type{Complex{T}}) = T
+
 isreal(x::Real) = true
 isreal(z::Complex) = imag(z) == 0
 isimag(z::Number) = real(z) == 0

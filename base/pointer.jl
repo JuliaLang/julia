@@ -50,6 +50,15 @@ unsafe_store!(p::Ptr{Any}, x::ANY, i::Integer) = pointerset(p, x, Int(i))
 unsafe_store!{T}(p::Ptr{T}, x, i::Integer) = pointerset(p, convert(T,x), Int(i))
 unsafe_store!{T}(p::Ptr{T}, x) = pointerset(p, convert(T,x), 1)
 
+# unsafe pointer to string conversions (don't make a copy, unlike bytestring)
+function pointer_to_string(p::Ptr{Uint8}, len::Integer, own::Bool=false)
+    a = ccall(:jl_ptr_to_array_1d, Vector{Uint8},
+              (Any, Ptr{Uint8}, Csize_t, Cint), Vector{Uint8}, p, len, own)
+    ccall(:jl_array_to_string, Any, (Any,), a)::ByteString
+end
+pointer_to_string(p::Ptr{Uint8}, own::Bool=false) =
+    pointer_to_string(p, ccall(:strlen, Csize_t, (Ptr{Uint8},), p), own)
+
 # convert a raw Ptr to an object reference, and vice-versa
 unsafe_pointer_to_objref(x::Ptr) = ccall(:jl_value_ptr, Any, (Ptr{Void},), x)
 pointer_from_objref(x::ANY) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)

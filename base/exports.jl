@@ -1314,6 +1314,7 @@ export
     pointer,
     pointer_from_objref,
     pointer_to_array,
+    pointer_to_string,
     reenable_sigint,
     unsafe_copy!,
     unsafe_load,

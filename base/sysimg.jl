@@ -264,11 +264,10 @@ include("sparse.jl")
 importall .SparseMatrix
 
 # signal processing
-if USE_GPL_LIBS
-    include("fftw.jl")
-    include("dsp.jl")
-    importall .DSP
-end
+include("dft.jl")
+importall .DFT
+include("dsp.jl")
+importall .DSP
 
 # system information
 include("sysinfo.jl")
