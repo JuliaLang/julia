@@ -115,13 +115,13 @@ emantissa           = Int64(2)^52
 ziggurat_exp_r      = parse(BigFloat,"7.69711747013104971404462804811408952334296818528283253278834867283241051210533")
 exp_section_area    = (ziggurat_exp_r + 1)*exp(-ziggurat_exp_r)
 
-const ki = Array(UInt64, ziggurat_table_size)
-const wi = Array(Float64, ziggurat_table_size)
-const fi = Array(Float64, ziggurat_table_size)
+ki = Array(UInt64, ziggurat_table_size)
+wi = Array(Float64, ziggurat_table_size)
+fi = Array(Float64, ziggurat_table_size)
 # Tables for exponential variates
-const ke = Array(UInt64, ziggurat_table_size)
-const we = Array(Float64, ziggurat_table_size)
-const fe = Array(Float64, ziggurat_table_size)
+ke = Array(UInt64, ziggurat_table_size)
+we = Array(Float64, ziggurat_table_size)
+fe = Array(Float64, ziggurat_table_size)
 function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
     wib = big(wi)
     fib = big(fi)

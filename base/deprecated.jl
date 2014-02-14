@@ -474,13 +474,11 @@ export float32_isvalid, float64_isvalid
 @deprecate ($)(x::Char, y::Char)  Char(UInt32(x) $ UInt32(y))
 
 # 11241
-
 @deprecate is_valid_char(ch::Char)          isvalid(ch)
 @deprecate is_valid_ascii(str::ASCIIString) isvalid(str)
 @deprecate is_valid_utf8(str::UTF8String)   isvalid(str)
 @deprecate is_valid_utf16(str::UTF16String) isvalid(str)
 @deprecate is_valid_utf32(str::UTF32String) isvalid(str)
-
 @deprecate is_valid_char(ch)   isvalid(Char, ch)
 @deprecate is_valid_ascii(str) isvalid(ASCIIString, str)
 @deprecate is_valid_utf8(str)  isvalid(UTF8String, str)
@@ -488,8 +486,18 @@ export float32_isvalid, float64_isvalid
 @deprecate is_valid_utf32(str) isvalid(UTF32String, str)
 
 # 11379
-
 @deprecate utf32(c::Integer...)   UTF32String(UInt32[c...,0])
+
+# 12087
+@deprecate call(P::Base.DFT.Plan, A) P * A
+for f in (:plan_fft, :plan_ifft, :plan_bfft, :plan_fft!, :plan_ifft!, :plan_bfft!, :plan_rfft)
+    @eval @deprecate $f(A, dims, flags) $f(A, dims; flags=flags)
+    @eval @deprecate $f(A, dims, flags, tlim) $f(A, dims; flags=flags, timelimit=tlim)
+end
+for f in (:plan_brfft, :plan_irfft)
+    @eval @deprecate $f(A, d, dims, flags) $f(A, d, dims; flags=flags)
+    @eval @deprecate $f(A, d, dims, flags, tlim) $f(A, d, dims; flags=flags, timelimit=tlim)
+end
 
 # 10862
 
