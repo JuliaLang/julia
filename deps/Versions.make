@@ -7,7 +7,7 @@ DSFMT_VER = 2.2
 ifeq ($(OS),WINNT)
 OPENBLAS_VER = v0.2.9.rc1
 else
-OPENBLAS_VER = v0.2.8
+OPENBLAS_VER = master
 endif
 LAPACK_VER = 3.4.2
 ARPACK_VER = 3.1.3
