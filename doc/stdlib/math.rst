@@ -1352,7 +1352,7 @@ Statistics
 Signal Processing
 -----------------
 
-Fast Fourier transform (FFT) functions in Julia are largely
+Fast Fourier transform (FFT) functions in Julia are
 implemented by calling functions from `FFTW
 <http://www.fftw.org>`_. By default, Julia does not use multi-threaded
 FFTW. Higher performance may be obtained by experimenting with
@@ -1423,12 +1423,24 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    Same as :func:`bfft`, but operates in-place on ``A``.
 
-.. function:: plan_fft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_fft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
    matching the shape and type of ``A``.  (The first two arguments have
-   the same meaning as for :func:`fft`.)  Returns a function ``plan(A)``
-   that computes ``fft(A, dims)`` quickly.
+   the same meaning as for :func:`fft`.)  Returns an object ``P`` which
+   represents the linear operator computed by the FFT, and which contains
+   all of the information needed to compute ``fft(A, dims)`` quickly.
+
+   To apply ``P`` to an array ``A``, use ``P * A``; in general, the
+   syntax for applying plans is much like that of matrices.  (A plan
+   can only be applied to arrays of the same size as the ``A`` for
+   which the plan was created.)  You can also apply a plan with a
+   preallocated output array ``Â`` by calling ``A_mul_B!(Â, plan,
+   A)``.  You can compute the inverse-transform plan by ``inv(P)`` and
+   apply the inverse plan with ``P \ Â`` (the inverse plan is cached
+   and reused for subsequent calls to ``inv`` or ``\``), and apply the
+   inverse plan to a pre-allocated output array ``A`` with
+   ``A_ldiv_B!(A, P, Â)``.
 
    The ``flags`` argument is a bitwise-or of FFTW planner flags, defaulting
    to ``FFTW.ESTIMATE``.  e.g. passing ``FFTW.MEASURE`` or ``FFTW.PATIENT``
@@ -1445,25 +1457,25 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
    are similar but produce plans that perform the equivalent of
    the inverse transforms :func:`ifft` and so on.
 
-.. function:: plan_ifft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_ifft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Same as :func:`plan_fft`, but produces a plan that performs inverse transforms
    :func:`ifft`.
 
-.. function:: plan_bfft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_bfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Same as :func:`plan_fft`, but produces a plan that performs an unnormalized
    backwards transform :func:`bfft`.
 
-.. function:: plan_fft!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_fft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Same as :func:`plan_fft`, but operates in-place on ``A``.
 
-.. function:: plan_ifft!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_ifft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Same as :func:`plan_ifft`, but operates in-place on ``A``.
 
-.. function:: plan_bfft!(A [, dims [, flags [, timelimit]]])
+.. function:: plan_bfft!(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Same as :func:`plan_bfft`, but operates in-place on ``A``.
 
@@ -1500,21 +1512,21 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
    of the sizes of the transformed dimensions (of the real output array)
    in order to obtain the inverse transform.
 
-.. function:: plan_rfft(A [, dims [, flags [, timelimit]]])
+.. function:: plan_rfft(A [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Pre-plan an optimized real-input FFT, similar to :func:`plan_fft`
    except for :func:`rfft` instead of :func:`fft`.  The first two
    arguments, and the size of the transformed result, are the same as
    for :func:`rfft`.
 
-.. function:: plan_brfft(A, d [, dims [, flags [, timelimit]]])
+.. function:: plan_brfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Pre-plan an optimized real-input unnormalized transform, similar to
    :func:`plan_rfft` except for :func:`brfft` instead of :func:`rfft`.
    The first two arguments and the size of the transformed result, are
    the same as for :func:`brfft`.
 
-.. function:: plan_irfft(A, d [, dims [, flags [, timelimit]]])
+.. function:: plan_irfft(A, d [, dims]; flags=FFTW.ESTIMATE;  timelimit=Inf)
 
    Pre-plan an optimized inverse real-input FFT, similar to :func:`plan_rfft`
    except for :func:`irfft` and :func:`brfft`, respectively.  The first

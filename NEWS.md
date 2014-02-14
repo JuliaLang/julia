@@ -193,6 +193,11 @@ Library improvements
 
     * New `vecdot` function, analogous to `vecnorm`, for Euclidean inner products over any iterable container ([#11067]).
 
+  * `p = plan_fft(x)` and similar functions now return a `Base.DFT.Plan` object, rather
+    than an anonymous function.  Calling it via `p(x)` is deprecated in favor of
+    `p * x` or `p \ x` (for the inverse), and it can also be used with `A_mul_B!`
+    to employ pre-allocated output arrays ([#12087]).
+
   * Strings
 
     * NUL-terminated strings should now be passed to C via the new `Cstring` type, not `Ptr{UInt8}` or `Ptr{Cchar}`,
@@ -1519,3 +1524,4 @@ Too numerous to mention.
 [#11922]: https://github.com/JuliaLang/julia/issues/11922
 [#11985]: https://github.com/JuliaLang/julia/issues/11985
 [#12031]: https://github.com/JuliaLang/julia/issues/12031
+[#12087]: https://github.com/JuliaLang/julia/issues/12087
