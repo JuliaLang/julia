@@ -428,3 +428,17 @@ A[:] = complex(1,1)
 A2 = A^2
 @test A2[1,1] == 20im
 
+# test sparse matrix norms
+Ac = sprandn(10,10,.1) + im* sprandn(10,10,.1)
+Ar = sprandn(10,10,.1)
+Ai = int(ceil(Ar*100))
+@test_approx_eq norm(Ac,1)     norm(full(Ac),1)
+@test_approx_eq norm(Ac,Inf)   norm(full(Ac),Inf)
+@test_approx_eq normfro(Ac)    normfro(full(Ac))
+@test_approx_eq norm(Ar,1)     norm(full(Ar),1)
+@test_approx_eq norm(Ar,Inf)   norm(full(Ar),Inf)
+@test_approx_eq normfro(Ar)    normfro(full(Ar))
+@test_approx_eq norm(Ai,1)     norm(full(Ai),1)
+@test_approx_eq norm(Ai,Inf)   norm(full(Ai),Inf)
+@test_approx_eq normfro(Ai)    normfro(full(Ai))
+
