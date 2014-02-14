@@ -145,7 +145,7 @@ versus ``-1 + 0im`` even though ``-1 == -1 + 0im``::
     0.0 + 1.0im
 
 The :ref:`literal numeric coefficient notation <man-numeric-literal-coefficients>`
-does work when constructing complex number from variables. Instead, the
+does not work when constructing complex number from variables. Instead, the
 multiplication must be explicitly written out::
 
     julia> a = 1; b = 2; a + b*im
