@@ -4556,9 +4556,32 @@ Parallel Computing
 
 .. function:: @sync
 
-   Wait until all dynamically-enclosed uses of ``@async``, ``@spawn``, and
-   ``@spawnat`` complete.
+   Wait until all dynamically-enclosed uses of ``@async``, ``@spawn``, 
+   ``@spawnat`` and ``@parallel`` are complete.
 
+.. function:: @parallel 
+
+   A parallel for loop of the form ::
+
+        @parallel [reducer] for var = range
+            body
+        end
+   
+   The specified range is partitioned and locally executed across all workers. 
+   In case an optional reducer function is specified, @parallel performs local
+   reductions on each worker with a final reduction on the calling process.
+   
+   Note that without a reducer function, @parallel executes asynchronously, 
+   i.e. it spawns independent tasks on all available workers and returns 
+   immediately without waiting for completion. To wait for completion, prefix 
+   the call with ``@sync``, like ::
+   
+        @sync @parallel for var = range
+            body
+        end
+        
+    
+    
 Distributed Arrays
 ------------------
 
