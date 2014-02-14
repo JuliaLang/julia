@@ -263,7 +263,7 @@ else ifeq ($(OS), WINNT)
 endif
 
 	# purge sys.{dll,so,dylib} as that file is not relocatable across processor architectures
-	-rm -f $(DESTDIR)$(prefix)/$(private_libdir)/sys.$(SHLIB_EXT)
+	-rm -f $(DESTDIR)$(private_libdir)/sys.$(SHLIB_EXT)
 
 ifeq ($(OS), WINNT)
 	[ ! -d dist-extras ] || ( cd dist-extras && \
