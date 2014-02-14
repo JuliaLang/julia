@@ -531,6 +531,13 @@ macro as(name, bindings)
         exprs = asexpand(bindings)
     end
 
+    # expand function calls
+    for i in 1:length(exprs)
+        if isa(exprs[i],Symbol)
+            exprs[i] = Expr(:call,exprs[i],name)
+        end
+    end
+
     quote
         let $([Expr(:(=),name,expr) for expr in exprs]...)
             $name
