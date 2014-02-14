@@ -130,9 +130,18 @@ bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM) {
         return false;
 
     DEBUG(dbgs() << "LSL: simd_loop found\n");
-    BasicBlock* latch = L->getLoopLatch();
+#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 4
+    MDNode* n = L->getLoopID();
+    if( !n ) {
+        // Loop does not have a LoopID yet, so give it one.
+        n = MDNode::get(getGlobalContext(), ArrayRef<Value*>(NULL));
+        n->replaceOperandWith(0,n);
+        L->setLoopID(n);
+    }
+#else
     MDNode* n = MDNode::get(getGlobalContext(), ArrayRef<Value*>());
-    latch->getTerminator()->setMetadata("llvm.loop.parallel", n);
+    L->getLoopLatch()->getTerminator()->setMetadata("llvm.loop.parallel", n);
+#endif
     MDNode* m = MDNode::get(getGlobalContext(), ArrayRef<Value*>(n));
 
     // Mark memory references so that Loop::isAnnotatedParallel will return true for this loop.
