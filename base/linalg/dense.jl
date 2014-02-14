@@ -107,10 +107,10 @@ end
 function kron{T,S}(a::Matrix{T}, b::Matrix{S})
     R = Array(promote_type(T,S), size(a,1)*size(b,1), size(a,2)*size(b,2))
     m = 1
-    for j = 1:size(a,2), l = 1:size(b,2), i = 1:size(a,1)
+    for j = 1:size(a,2), ℓ = 1:size(b,2), i = 1:size(a,1)
         aij = a[i,j]
         for k = 1:size(b,1)
-            R[m] = aij*b[k,l]
+            R[m] = aij*b[k,ℓ]
             m += 1
         end
     end
@@ -157,8 +157,8 @@ function rref{T}(A::Matrix{T})
             for k = 1:nr
                 if k != i
                     d = U[k,j]
-                    for l = j:nc
-                        U[k,l] -= d*U[i,l]
+                    for ℓ = j:nc
+                        U[k,ℓ] -= d*U[i,ℓ]
                     end
                 end
             end

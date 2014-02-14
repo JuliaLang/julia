@@ -97,20 +97,20 @@ convert(::Type{ASCIIString}, s::ASCIIString) = s
 convert(::Type{ASCIIString}, s::UTF8String) = ascii(s.data)
 convert(::Type{ASCIIString}, a::Array{Uint8,1}) = is_valid_ascii(a) ? ASCIIString(a) : error("invalid ASCII sequence")
 function convert(::Type{ASCIIString}, a::Array{Uint8,1}, invalids_as::ASCIIString)
-    l = length(a)
+    ℓ = length(a)
     idx = 1
     iscopy = false
-    while idx <= l
+    while idx <= ℓ
         (a[idx] < 0x80) && (idx +=1; continue)
         !iscopy && (a = copy(a); iscopy = true)
         endn = idx
-        while endn <= l
+        while endn <= ℓ
             (a[endn] < 0x80) && break
             endn += 1
         end
         (endn > idx) && (endn -= 1)
         splice!(a, idx:endn, invalids_as.data)
-        l = length(a)
+        ℓ = length(a)
     end
     convert(ASCIIString, a)
 end

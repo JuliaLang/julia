@@ -350,10 +350,10 @@ function sprand(m::Integer, n::Integer, density::FloatingPoint, rng::Function, v
     #        otherwise, we'll randomly generate the indices to skip
     K = (density > 0.5) ? N*(1-density) : N*density
     # Use Newton's method to invert the birthday problem
-    l = log(1.0-1.0/N)
+    ℓ = log(1.0-1.0/N)
     k = K
-    k = k + ((1-K/N)*exp(-k*l) - 1)/l
-    k = k + ((1-K/N)*exp(-k*l) - 1)/l # for K<N/2, 2 iterations suffice
+    k = k + ((1-K/N)*exp(-k*ℓ) - 1)/ℓ
+    k = k + ((1-K/N)*exp(-k*ℓ) - 1)/ℓ # for K<N/2, 2 iterations suffice
     ik = int(k)
     ind = sort(rand(1:N, ik))
     uind = Array(Int, 0)   # unique indices

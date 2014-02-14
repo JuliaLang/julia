@@ -297,9 +297,9 @@ function kronrod{T<:FloatingPoint}(::Type{T}, n::Integer)
     for m = 0:n-2
         u = zero(T)
         for k = div(m+1,2):-1:0
-            l = m - k + 1
+            ℓ = m - k + 1
             k1 = k + n + 2
-            u += b[k1]*s[k+1] - b[l]*s[k+2]
+            u += b[k1]*s[k+1] - b[ℓ]*s[k+2]
             s[k+2] = u
         end
         s,t = t,s
@@ -310,10 +310,10 @@ function kronrod{T<:FloatingPoint}(::Type{T}, n::Integer)
     for m = n-1:2n-3
         u = zero(T)
         for k = m+1-n:div(m-1,2)
-            l = m - k + 1
-            j = n - l
+            ℓ = m - k + 1
+            j = n - ℓ
             k1 = k + n + 2
-            u -= b[k1]*s[j+2] - b[l]*s[j+3]
+            u -= b[k1]*s[j+2] - b[ℓ]*s[j+3]
             s[j+2] = u
         end
         k = div(m+1,2)

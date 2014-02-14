@@ -77,11 +77,11 @@ reenable_sigint(f::Function) = try sigatomic_end(); f(); finally sigatomic_begin
 function find_library{T<:ByteString, S<:ByteString}(libnames::Array{T,1}, extrapaths::Array{S,1}=ASCIIString[])
     for lib in libnames
         for path in extrapaths
-            l = joinpath(path, lib)
-            p = dlopen_e(l, RTLD_LAZY)
+            ℓ = joinpath(path, lib)
+            p = dlopen_e(ℓ, RTLD_LAZY)
             if p != C_NULL
                 dlclose(p)
-                return l
+                return ℓ
             end
         end
         p = dlopen_e(lib, RTLD_LAZY)

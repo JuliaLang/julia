@@ -1118,7 +1118,7 @@ function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
         sshflags = config[:sshflags]
         cman.machines[i] = machine_def[1]
         
-        io, pobj = readsfrom(detach(`ssh -n $sshflags $(machine_def[1]) "sh -l -c \"cd $dir && $exename $exeflags\""`))
+        io, pobj = readsfrom(detach(`ssh -n $sshflags $(machine_def[1]) "sh -ℓ -c \"cd $dir && $exename $exeflags\""`))
         io_objs[i] = io
         configs[i] = merge(config, {:machine => cman.machines[i]})
     end

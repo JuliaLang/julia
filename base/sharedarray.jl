@@ -120,12 +120,12 @@ convert{T}(::Type{SharedArray{T}}, A::Array) = (S = SharedArray(T, size(A)); cop
 convert{TS,TA,N}(::Type{SharedArray{TS,N}}, A::Array{TA,N}) = (S = SharedArray(TS, size(A)); copy!(S, A))
 
 function range_1dim(S::SharedArray, n) 
-    l = length(S)
+    ℓ = length(S)
     nw = length(S.pids)
-    partlen = div(l, nw)
+    partlen = div(ℓ, nw)
 
     if n == nw
-        return (((n-1) * partlen) + 1):l
+        return (((n-1) * partlen) + 1):ℓ
     else
         return (((n-1) * partlen) + 1):(n*partlen) 
     end

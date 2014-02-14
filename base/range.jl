@@ -405,10 +405,10 @@ sortperm(r::Range1) = 1:length(r)
 sortperm{T<:Real}(r::Range{T}) = issorted(r) ? (1:1:length(r)) : (length(r):-1:1)
 
 function sum{T<:Real}(r::Ranges{T})
-    l = length(r)
-    # note that a little care is required to avoid overflow in l*(l-1)/2
-    return l * first(r) + (iseven(l) ? (step(r) * (l-1)) * (l>>1)
-                                     : (step(r) * l) * ((l-1)>>1))
+    ℓ = length(r)
+    # note that a little care is required to avoid overflow in ℓ*(ℓ-1)/2
+    return ℓ * first(r) + (iseven(ℓ) ? (step(r) * (ℓ-1)) * (ℓ>>1)
+                                     : (step(r) * ℓ) * ((ℓ-1)>>1))
 end
 
 function map!(f::Callable, dest, r::Ranges)

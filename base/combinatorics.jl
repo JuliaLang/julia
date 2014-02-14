@@ -249,9 +249,9 @@ function next(p::Permutations, s)
     if k == 0
         s[1] = length(s)+1   # done
     else
-        l = length(s)
-        while s[k] >= s[l];  l -= 1;  end
-        s[k],s[l] = s[l],s[k]
+        ℓ = length(s)
+        while s[k] >= s[ℓ];  ℓ -= 1;  end
+        s[k],s[ℓ] = s[ℓ],s[k]
         reverse!(s,k+1)
     end
     (perm,s)
