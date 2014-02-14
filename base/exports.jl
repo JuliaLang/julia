@@ -1110,13 +1110,12 @@ export
     UdpSocket,
 
 # multiprocessing
+    AbstractRemoteSyncObj,
     addprocs,
-    channel,
     ClusterManager,
     fetch,
     interrupt,
     isready,
-    kvspace,
     myid,
     nprocs,
     nworkers,
@@ -1128,8 +1127,9 @@ export
     remotecall_wait,
     rmprocs,
     take!,
+    SyncObjData,
+    syncobj_create,
     timedwait,
-    tspace,
     wait,
     workers,
 

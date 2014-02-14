@@ -365,7 +365,7 @@ function deregister_worker(pg, pid)
     ids = {}
     tonotify = {}
     for (id,rv) in pg.refs
-        if in(pid,rv.clientset)
+        if in(pid,rv.so.clientset)
             push!(ids, id)
         end
         if waitingfor(rv) == pid
@@ -378,7 +378,7 @@ function deregister_worker(pg, pid)
 
     # throw exception to tasks waiting for this pid
     for (id,rv) in tonotify
-        notify_error(rv.cantake, ProcessExitedException())
+        notify_error(rv.so.cantake, ProcessExitedException())
         delete!(pg.refs, id)
     end
 end
@@ -435,8 +435,7 @@ function lookup_ref(pg, id)
     rv = get(pg.refs, id, false)
     if rv === false
         # first we've heard of this ref
-        rv = RemoteValue()
-        register_remote_obj(pg, id, rv)
+        rv = syncobj(pg, id, RemoteValue)
     end
     rv
 end
@@ -452,8 +451,8 @@ end
 del_client(id, client) = del_client(PGRP, id, client)
 function del_client(pg, id, client)
     rv = lookup_ref(id)
-    delete!(rv.clientset, client)
-    if isempty(rv.clientset)
+    delete!(rv.so.clientset, client)
+    if isempty(rv.so.clientset)
         delete!(pg.refs, id)
         #print("$(myid()) collected $id\n")
     end
@@ -492,7 +491,7 @@ end
 function add_client(id, client)
     #println("$(myid()) adding client $client to $id")
     rv = lookup_ref(id)
-    push!(rv.clientset, client)
+    push!(rv.so.clientset, client)
     nothing
 end
 
@@ -537,184 +536,95 @@ function deserialize(s, t::Type{RemoteRef})
     RemoteRef(where, rr.whence, rr.id)
 end
 
-# data stored by the owner of a RemoteRef
-abstract AbstractRemoteObject
-type RemoteValue <: AbstractRemoteObject
-    done::Bool           
-    val
+type SyncObjData
     cantake::Condition   # waiting for a value
     canput::Condition  # waiting for value to be removed
     clientset::IntSet
     waitingfor::Int   # processor we need to hear from to fill this, or 0 - used by remotecall* methods
 
-    RemoteValue() = new(false, nothing, Condition(), Condition(), IntSet(), 0)
+    SyncObjData() = new (Condition(), Condition(), IntSet(), 0)
 end
 
-type RemoteChannel <: AbstractRemoteObject
-    q::Vector
-    sz
-    cantake::Condition   
-    canput::Condition  
-    clientset::IntSet
-
-    RemoteChannel(T, sz) = new(Array(T, 0), sz, Condition(), Condition(), IntSet())
+# data stored by the owner of a RemoteRef
+abstract AbstractRemoteSyncObj
+type RemoteValue <: AbstractRemoteSyncObj
+    done::Bool           
+    val
+    so::SyncObjData
+    test_cantake::Function
+    test_canput::Function
+    fetch::Function
+    put::Function
+    take::Function
+    
+    RemoteValue() = new(false, nothing, SyncObjData(), rvcantake, rvcanput, rvfetch, rvput, rvtake)
 end
 
-type RemoteKVSpace <: AbstractRemoteObject
-    space::Dict
-    sz
-    cantake::Condition   
-    canput::Condition  
-    clientset::IntSet
+rvcantake(rv::RemoteValue) = rv.done
+rvcanput(rv::RemoteValue, args...) = !rv.done
 
-    RemoteKVSpace(sz) = new(Dict(), sz, Condition(), Condition(), IntSet())
+function register_remote_obj(pg, id, rw)
+    pg.refs[id] = rw
+    push!(rw.so.clientset, id[1])
 end
 
-type RemoteTSpace <: AbstractRemoteObject
-    space::Vector{Tuple}
-    sz
-    cantake::Condition   
-    canput::Condition  
-    clientset::IntSet
-
-    RemoteTSpace(sz) = new(Array(Tuple, 0), sz, Condition(), Condition(), IntSet())
+syncobj(id, T, args...) = syncobj(PGRP, id, T, args...)
+function syncobj(pg::ProcessGroup, id, T::Type, args...) 
+    rw = T(args...)
+    register_remote_obj(pg, id, rw)
+    rw
 end
 
-function register_remote_obj(pg, id, rv)
-    pg.refs[id] = rv
-    push!(rv.clientset, id[1])
-    rv
-end
-
-setup_tspace(id, sz) = setup_tspace(PGRP, id, sz)
-function setup_tspace(pg, id, sz)
-    rv = RemoteTSpace(sz)
-    register_remote_obj(pg, id, rv)
-    nothing
-end
-
-function tspace(pid=myid(); sz=1000) 
+function syncobj_create(pid, T, args...)
     rr = RemoteRef(pid)
-    call_on_owner(setup_tspace, rr, sz)
+    call_on_owner(syncobj, rr, T, args...)
     rr
 end
 
-
-setup_kvspace(id, sz) = setup_kvspace(PGRP, id, sz)
-function setup_kvspace(pg, id, sz)
-    rv = RemoteKVSpace(sz)
-    register_remote_obj(pg, id, rv)
-    nothing
-end
-
-function kvspace(pid=myid(); sz=1000) 
-    rr = RemoteRef(pid)
-    call_on_owner(setup_kvspace, rr, sz)
-    rr
-end
-
-setup_channel(id, T, sz) = setup_channel(PGRP, id, T, sz)
-function setup_channel(pg, id, T, sz)
-    rv = RemoteChannel(T, sz)
-    register_remote_obj(pg, id, rv)
-    nothing
-end
-
-function channel(pid=myid(); eltype=Any, sz=1000) 
-    rr = RemoteRef(pid)
-    call_on_owner(setup_channel, rr, eltype, sz)
-    rr
-end
+waitingfor(rv::AbstractRemoteSyncObj) = rv.so.waitingfor
 
 
-cantake(rv::RemoteValue) = rv.done
-canput(rv::RemoteValue) = !rv.done
-waitingfor(rv::RemoteValue) = rv.waitingfor
-
-cantake(rv::RemoteChannel) = (length(rv.q) > 0)
-canput(rv::RemoteChannel) = (length(rv.q) < rv.sz)
-waitingfor(rv::RemoteChannel) = 0
-
-cantake(rv::RemoteKVSpace, key) = haskey(rv.space, key)
-canput(rv::RemoteKVSpace) = (length(rv.space) < rv.sz)
-waitingfor(rv::RemoteKVSpace) = 0
-
-cantake(rv::RemoteTSpace, key) = key in [x[1] for x in rv.space]
-function cantake(rv::RemoteTSpace, r::Regex)
-    for x in rv.space
-        k = x[1]
-        if testmatch(r, k)
-            return true
-        end
-    end
-    return false
-end
-testmatch(r::Regex, k) = false
-testmatch(r::Regex, k::String) = ismatch(r, k)
-
-canput(rv::RemoteTSpace) = (length(rv.space) < rv.sz)
-waitingfor(rv::RemoteTSpace) = 0
-
-
-
-function push!(rv::RemoteValue, val)
+function rvput(rv::RemoteValue, val)
     rv.val = val
     rv.done = true
 end
-push!(rv::RemoteChannel, val) = push!(rv.q, val)
-push!(rv::RemoteKVSpace, key, val) = (rv.space[key] = val)
-push!(rv::RemoteTSpace, val::Tuple) = push!(rv.space, val)
 
-function shift!(rv::RemoteValue)
+function rvtake(rv::RemoteValue)
     val = rv.val
     rv.done = false
     rv.val = nothing
     val
 end
-shift!(rv::RemoteChannel) = shift!(rv.q)
-take!(rv::RemoteKVSpace, key) = (val = rv.space[key]; delete!(rv.space, key); val)
-take!(rv::RemoteTSpace, key) = (idx = findfirst(x->x==key, {t[1] for t in rv.space}); splice!(rv.space, idx))
-take!(rv::RemoteTSpace, r::Regex) = (idx = findfirst(x->testmatch(r,x), {t[1] for t in rv.space}); splice!(rv.space, idx))
 
 
 function isready(rr::RemoteRef, args...)
     rid = rr2id(rr)
     if rr.where == myid()
-        cantake(lookup_ref(rid), args...)
+        rv = lookup_ref(rid)
+        rv.test_cantake(rv, args...)
     else
-        remotecall_fetch(rr.where, (id, rargs...) -> cantake(lookup_ref(id), rargs...), rid, args...)
+        remotecall_fetch(rr.where, (id, rargs...) -> begin rv = lookup_ref(rid); rv.test_cantake(rv, rargs...) end, rid, args...)
     end
 end
 
-function work_result(rv::RemoteValue)
+function rvfetch(rv::RemoteValue)
     v = rv.val
     if isa(v,WeakRef)
         v = v.value
     end
     v
 end
-work_result(rv::RemoteChannel) = rv.q[1]
-work_result(rv::RemoteKVSpace, key) = rv.space[key] 
-work_result(rv::RemoteTSpace, key) = (idx = findfirst(x->x==key, {t[1] for t in rv.space}); rv.space[idx])
-work_result(rv::RemoteTSpace, r::Regex) = (idx = findfirst(x->testmatch(r,x), {t[1] for t in rv.space}); rv.space[idx])
 
-function wait_cantake(rv::AbstractRemoteObject)
-    while !cantake(rv)
-        wait(rv.cantake)
+function wait_cantake(rv::AbstractRemoteSyncObj, args...)
+    while !rv.test_cantake(rv, args...)
+        wait(rv.so.cantake)
     end
-    return work_result(rv)
+    return rv.fetch(rv, args...)
 end
 
-function wait_cantake(rv::Union(RemoteKVSpace, RemoteTSpace), key)
-    while !cantake(rv, key)
-        wait(rv.cantake)
-    end
-    return work_result(rv, key)
-end
-
-function wait_canput(rv::AbstractRemoteObject)
-    while !canput(rv)
-        wait(rv.canput)
+function wait_canput(rv::AbstractRemoteSyncObj, args...)
+    while !rv.test_canput(rv, args...)
+        wait(rv.so.canput)
     end
     return nothing
 end
@@ -739,9 +649,7 @@ function run_work_thunk(rv::RemoteValue, thunk)
 end
 
 function schedule_call(rid, thunk)
-    rv = RemoteValue()
-    (PGRP::ProcessGroup).refs[rid] = rv
-    push!(rv.clientset, rid[1])
+    rv = syncobj(PGRP, rid, RemoteValue) 
     schedule(@task(run_work_thunk(rv,thunk)))
     rv
 end
@@ -806,7 +714,7 @@ function remotecall_fetch(w::Worker, f, args...)
     # itself, it only gets the result.
     oid = next_id()
     rv = lookup_ref(oid)
-    rv.waitingfor = w.id
+    rv.so.waitingfor = w.id
     send_msg(w, :call_fetch, oid, f, args)
     v = wait_cantake(rv)
     delete!(PGRP.refs, oid)
@@ -822,7 +730,7 @@ remotecall_wait(w::LocalProcess, f, args...) = wait(remotecall(w,f,args...))
 function remotecall_wait(w::Worker, f, args...)
     prid = next_id()
     rv = lookup_ref(prid)
-    rv.waitingfor = w.id
+    rv.so.waitingfor = w.id
     rr = RemoteRef(w)
     send_msg(w, :call_wait, rr2id(rr), prid, f, args)
     wait_cantake(rv)
@@ -859,52 +767,28 @@ function call_on_owner(f, rr::RemoteRef, args...)
     end
 end
 
-wait_ref(rid) = (wait_cantake(lookup_ref(rid)); nothing)
-wait_ref(rid, key) = (wait_cantake(lookup_ref(rid), key); nothing)
-wait(r::RemoteRef) = (call_on_owner(wait_ref, r); r)
-wait(r::RemoteRef, key) = (call_on_owner(wait_ref, r, key); r)
+wait_ref(rid, args...) = (wait_cantake(lookup_ref(rid), args...); nothing)
+wait(r::RemoteRef, args...) = (call_on_owner(wait_ref, r, args...); r)
 
-fetch_ref(rid) = wait_cantake(lookup_ref(rid))
-fetch_ref(rid, key) = wait_cantake(lookup_ref(rid), key)
-fetch(r::RemoteRef) = call_on_owner(fetch_ref, r)
-fetch(r::RemoteRef, key) = call_on_owner(fetch_ref, r, key)
+fetch_ref(rid, args...) = wait_cantake(lookup_ref(rid), args...)
+fetch(r::RemoteRef, args...) = call_on_owner(fetch_ref, r, args...)
 fetch(x::ANY) = x
 
 # storing a value to a Ref
-function put!(rv::AbstractRemoteObject, val::ANY)
-    wait_canput(rv)
-    push!(rv, val)
-    notify_cantake(rv)
+function put!(rv::AbstractRemoteSyncObj, args...)
+    wait_canput(rv, args...)
+    rv.put(rv, args...)
+    notify(rv.so.cantake, rv.fetch(rv))
 end
 
-function put!(rv::RemoteKVSpace, key::ANY, val::ANY)
-    wait_canput(rv)
-    push!(rv, key, val)
-    notify_cantake(rv, key)
-end
 
-function put!(rv::RemoteTSpace, val::Tuple)
-    wait_canput(rv)
-    push!(rv, val)
-    notify_cantake(rv, val[1])
-end
+put_ref(rid, args...) = put(lookup_ref(rid), args...)
+put!(rr::RemoteRef, args...) = (call_on_owner(put_ref, rr, args...); rr)
 
-put_ref(rid, v) = put(lookup_ref(rid), v)
-put_ref(rid, k, v) = put(lookup_ref(rid), k, v)
-put!(rr::RemoteRef, val::ANY) = (call_on_owner(put_ref, rr, val); rr)
-put!(rr::RemoteRef, key::ANY, val::ANY) = (call_on_owner(put_ref, rr, key, val); rr)
-
-function take!(rv::AbstractRemoteObject)
-    wait_cantake(rv)
-    val = shift!(rv)
-    notify_canput(rv)
-    val
-end
-
-function take!(rv::Union(RemoteKVSpace, RemoteTSpace), key)
-    wait_cantake(rv, key)
-    val = take!(rv, key)
-    notify_canput(rv)
+function take!(rv::AbstractRemoteSyncObj, args...)
+    wait_cantake(rv, args...)
+    val = rv.take(rv, args...)
+    notify(rv.so.canput)
     val
 end
 
@@ -938,11 +822,6 @@ function deliver_result(sock::IO, msg, oid, value)
         end
     end
 end
-
-# notify waiters that a certain job has finished or Ref has been emptied
-notify_cantake (rv::AbstractRemoteObject) = notify(rv.cantake, work_result(rv))
-notify_cantake (rv::Union(RemoteKVSpace, RemoteTSpace), key) = notify(rv.cantake, work_result(rv, key))
-notify_canput(rv::AbstractRemoteObject) = notify(rv.canput)
 
 ## message event handlers ##
 
