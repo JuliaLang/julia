@@ -371,6 +371,12 @@ function ifftshift(x,dim)
 end
 
 ##############################################################################
+# Native Julia FFTs:
+
+include("fft/ctfft.jl")
+include("fft/fftn.jl")
+
+##############################################################################
 
 # FFTW module (may move to an external package at some point):
 if Base.USE_GPL_LIBS

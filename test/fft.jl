@@ -229,6 +229,16 @@ for (f,fi,pf,pfi) in ((fft,ifft,plan_fft,plan_ifft),
     end # !mkl
 end
 
+import Base.rand
+rand(::Type{Complex{BigFloat}}) = big(rand(Complex128))
+function rand(::Type{Complex{BigFloat}}, n)
+    a = Array(Complex{BigFloat}, n)
+    for i = 1:n
+        a[i] = rand(Complex128)
+    end
+    return a
+end
+
 # FFT self-test algorithm (for unscaled 1d forward FFTs):
 #   Funda Ergün, "Testing multivariate linear functions: Overcoming
 #   the generator bottleneck," Proc. 27th ACM Symposium on the Theory
@@ -326,4 +336,9 @@ for x in (randn(10),randn(10,12))
     end
     # note: inference doesn't work for plan_fft_ since the
     #       algorithm steps are included in the CTPlan type
+end
+
+for n in [1:32]
+    x = zeros(Complex{BigFloat}, n)
+    fft_test(plan_fft(x))
 end
