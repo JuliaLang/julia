@@ -423,25 +423,30 @@ hash(x::Prehashed) = x.hash
     hashes = zeros(Uint, size(A, dim))
 
     # Compute hash for each row
-    j = 0
-    @nloops N i A d->(if d == dim; j = i_d; end) begin
-       @inbounds hashes[j] = bitmix(hashes[j], hash((@nref N A i)))
+    k = 0
+    @nloops N i A d->(if d == dim; k = i_d; end) begin
+       @inbounds hashes[k] = bitmix(hashes[k], hash((@nref N A i)))
     end
 
     # Collect index of first row for each hash
     uniquerow = Array(Int, size(A, dim))
     firstrow = Dict{Prehashed,Int}()
-    for j = 1:size(A, dim)
-        uniquerow[j] = get!(firstrow, Prehashed(hashes[j]), j)
+    for k = 1:size(A, dim)
+        uniquerow[k] = get!(firstrow, Prehashed(hashes[k]), k)
     end
     uniquerows = collect(values(firstrow))
 
     # Check for collisions
     collided = falses(size(A, dim))
     @inbounds begin
-        @nloops N i A d->(if d == dim; j = i_d; end) begin
-            if (@nref N A d->ifelse(d == dim, uniquerow[j], i_d)) != (@nref N A i)
-                collided[j] = true
+        @nloops N i A d->(if d == dim
+                              k = i_d
+                              j_d = uniquerow[k]
+                          else
+                              j_d = i_d
+                          end) begin
+            if (@nref N A j) != (@nref N A i)
+                collided[k] = true
             end
         end
     end
@@ -463,12 +468,15 @@ hash(x::Prehashed) = x.hash
             fill!(nowcollided, false)
             @nloops N i A d->begin
                                  if d == dim
-                                     j = i_d
-                                     (!collided[j] || uniquerow[j] == j) && continue
+                                     k = i_d
+                                     j_d = uniquerow[k]
+                                     (!collided[k] || j_d == k) && continue
+                                 else
+                                     j_d = i_d
                                  end
                              end begin
-                if (@nref N A d->ifelse(d == dim, uniquerow[j], i_d)) != (@nref N A i)
-                    nowcollided[j] = true
+                if (@nref N A j) != (@nref N A i)
+                    nowcollided[k] = true
                 end
             end
             (collided, nowcollided) = (nowcollided, collided)
