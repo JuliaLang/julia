@@ -410,3 +410,70 @@ for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
         return P
     end
 end
+
+## unique across dim
+
+immutable Prehashed
+    hash::Uint
+end
+hash(x::Prehashed) = x.hash
+
+@ngenerate N typeof(A) function unique{T,N}(A::AbstractArray{T,N}, dim::Int)
+    1 <= dim <= N || return copy(A)
+    hashes = zeros(Uint, size(A, dim))
+
+    # Compute hash for each row
+    j = 0
+    @nloops N i A d->(if d == dim; j = i_d; end) begin
+       @inbounds hashes[j] = bitmix(hashes[j], hash((@nref N A i)))
+    end
+
+    # Collect index of first row for each hash
+    uniquerow = Array(Int, size(A, dim))
+    firstrow = Dict{Prehashed,Int}()
+    for j = 1:size(A, dim)
+        uniquerow[j] = get!(firstrow, Prehashed(hashes[j]), j)
+    end
+    uniquerows = collect(values(firstrow))
+
+    # Check for collisions
+    collided = falses(size(A, dim))
+    @inbounds begin
+        @nloops N i A d->(if d == dim; j = i_d; end) begin
+            if (@nref N A d->ifelse(d == dim, uniquerow[j], i_d)) != (@nref N A i)
+                collided[j] = true
+            end
+        end
+    end
+
+    if any(collided)
+        nowcollided = BitArray(size(A, dim))
+        while any(collided)
+            # Collect index of first row for each collided hash
+            empty!(firstrow)
+            for j = 1:size(A, dim)
+                collided[j] || continue
+                uniquerow[j] = get!(firstrow, Prehashed(hashes[j]), j)
+            end
+            for v in values(firstrow)
+                push!(uniquerows, v)
+            end
+
+            # Check for collisions
+            fill!(nowcollided, false)
+            @nloops N i A d->begin
+                                 if d == dim
+                                     j = i_d
+                                     (!collided[j] || uniquerow[j] == j) && continue
+                                 end
+                             end begin
+                if (@nref N A d->ifelse(d == dim, uniquerow[j], i_d)) != (@nref N A i)
+                    nowcollided[j] = true
+                end
+            end
+            (collided, nowcollided) = (nowcollided, collided)
+        end
+    end
+
+    @nref N A d->d == dim ? sort!(uniquerows) : (1:size(A, d))
+end
