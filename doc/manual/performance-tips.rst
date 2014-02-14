@@ -474,7 +474,7 @@ Here is an example with both forms of markup::
         s
     end
 
-The range for a ``@simd for`` loop must use the colon syntax, with two subexpresions.
+The range for a ``@simd for`` loop should be a one-dimensional range.
 A variable used for accumulating, such as ``s`` in the example, is called
 a *reduction variable*. By using``@simd``, you are asserting several
 properties of the loop:
