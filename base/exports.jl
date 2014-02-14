@@ -1110,10 +1110,12 @@ export
 
 # multiprocessing
     addprocs,
+    channel,
     ClusterManager,
     fetch,
     interrupt,
     isready,
+    kvspace,
     myid,
     nprocs,
     nworkers,
@@ -1126,6 +1128,7 @@ export
     rmprocs,
     take,
     timedwait,
+    tspace,
     wait,
     workers,
 
