@@ -869,11 +869,18 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
             free(build_ji);
             char *build_o;
             if (asprintf(&build_o, "%s.o",build_path) > 0) {
-                jl_dump_objfile(build_o);
+                jl_dump_objfile(build_o,0);
                 free(build_o);
+                char *build_jlo;
+                if (asprintf(&build_jlo, "%s.jlo",build_path) > 0) {
+                    jl_dump_objfile(build_jlo,1);
+                    free(build_jlo);
+                } else {
+                    ios_printf(ios_stderr,"FATAL: failed to create string for .jlo build path");
+                }
             }
             else {
-                ios_printf(ios_stderr,"FATAL: failed to create string for .bc build path");
+                ios_printf(ios_stderr,"FATAL: failed to create string for .o build path");
             }
         }
         else {

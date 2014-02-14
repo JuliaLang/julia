@@ -37,6 +37,7 @@
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 5
 #define LLVM35 1
 #include "llvm/IR/Verifier.h"
+#include "llvm/Object/ObjectFile.h"
 #else
 #include "llvm/Analysis/Verifier.h"
 #endif
@@ -298,7 +299,7 @@ void jl_dump_bitcode(char* fname)
 }
 
 extern "C"
-void jl_dump_objfile(char* fname)
+void jl_dump_objfile(char* fname, int jit_model)
 {
     std::string err;
     raw_fd_ostream OS(fname, err);
@@ -314,8 +315,12 @@ void jl_dump_objfile(char* fname)
         jl_TargetMachine->getTargetCPU(),
         jl_TargetMachine->getTargetFeatureString(),
         jl_TargetMachine->Options,
-        Reloc::Default,
-        CodeModel::Default,
+#ifdef _OS_LINUX_
+        Reloc::PIC_,
+#else
+        jit_model ? Reloc::PIC_ : Reloc::Default,
+#endif
+        jit_model ? CodeModel::JITDefault : CodeModel::Default,
         CodeGenOpt::Aggressive // -O3
         ));
 
@@ -4186,16 +4191,28 @@ extern "C" void jl_init_codegen(void)
     typeToTypeId = jl_alloc_cell_1d(16);
 }
 
-/*
-maybe this reads the dwarf info for a MachineFunction:
+extern "C" jl_value_t ***sysimg_gvars;
 
-MCContext &mc = Details.MF->getContext()
-DenseMap<const MCSection*,MCLineSection*> &secs = mc.getMCLineSectionOrder();
-std::vector<const MCSection*> &sec2line = mc.getMCLineSections();
-MCLineSection *line = sec2line[secs[0]];
-const MCLineEntryCollection *lec = line->getMCLineEntries();
-MCLineEntryCollection::iterator it = lec->begin();
+#if defined(LLVM35) && defined(USE_MCJIT)
+extern "C" int jl_load_sysimg_o(char *fname)
+{
+    // attempt to load the pre-compiled sysimg at fname
+    // if this succeeds, sysimg_gvars will be a valid array
+    // otherwise, it will be NULL
+    OwningPtr< MemoryBuffer > membuf;
+    error_code error = MemoryBuffer::getFile(fname,membuf);
+    if (error)
+        return 0;
 
-addr = (*it).getLabel()->getVariableValue()
-line = (*it).getLine()
-*/
+    jl_ExecutionEngine->addObjectFile(*object::ObjectFile::createObjectFile(membuf.take()));
+    
+    sysimg_gvars = (jl_value_t***)jl_ExecutionEngine->getGlobalValueAddress(StringRef("jl_sysimg_gvars"));
+    globalUnique = *(size_t*)jl_ExecutionEngine->getGlobalValueAddress(StringRef("jl_globalUnique"));
+    return 1;
+}
+#else
+extern "C" int jl_load_sysimg_o(char *fname)
+{
+    return 0;
+}
+#endif

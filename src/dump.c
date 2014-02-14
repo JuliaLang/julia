@@ -92,7 +92,7 @@ static void write_as_tag(ios_t *s, uint8_t tag)
 static void jl_serialize_value_(ios_t *s, jl_value_t *v);
 static jl_value_t *jl_deserialize_value(ios_t *s);
 static jl_value_t *jl_deserialize_value_internal(ios_t *s);
-static jl_value_t ***sysimg_gvars = NULL;
+jl_value_t ***sysimg_gvars = NULL;
 
 extern int globalUnique;
 
@@ -989,6 +989,7 @@ extern int jl_boot_file_loaded;
 extern void jl_get_builtin_hooks(void);
 extern void jl_get_system_hooks(void);
 extern void jl_get_uv_hooks(int);
+extern int asprintf(char **str, const char *fmt, ...);
 
 DLLEXPORT
 void jl_restore_system_image(char *fname)
@@ -1010,7 +1011,20 @@ void jl_restore_system_image(char *fname)
         strcpy(fname_shlib, fname);
         char *fname_shlib_dot = strrchr(fname_shlib, '.');
         if (fname_shlib_dot != NULL) *fname_shlib_dot = 0;
-        jl_load_sysimg_so(fname_shlib);
+        char *ofile;
+        if (asprintf(&ofile, "%s.jlo",fname_shlib))
+        {
+            if (jl_load_sysimg_o(ofile) != 0) {
+                free(ofile);
+            } else {
+                goto try_so;
+                free(ofile);
+            }
+        } else {
+            try_so:
+            jl_load_sysimg_so(fname_shlib);
+        }
+        
     }
 #ifdef JL_GC_MARKSWEEP
     int en = jl_gc_is_enabled();
