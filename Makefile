@@ -208,8 +208,8 @@ endif
 	# Copy in all .jl sources as well
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
 	# Remove git repository of juliadoc
-	rm -r $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.git
-	rm $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.gitignore
+	-rm -r $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.git
+	-rm $(DESTDIR)$(datarootdir)/julia/doc/juliadoc/.gitignore
 	# Copy in beautiful new man page!
 	$(INSTALL_F) $(build_datarootdir)/man/man1/julia.1 $(DESTDIR)$(datarootdir)/man/man1/
 
