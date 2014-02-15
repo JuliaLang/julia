@@ -331,6 +331,32 @@ for i = tensors
     @test isequal(i,permutedims(ipermutedims(i,perm),perm))
 end
 
+## unique across dim ##
+
+# All rows and columns unique
+A = ones(10, 10)
+A[diagind(A)] = shuffle!([1:10])
+@test unique(A, 1) == A
+@test unique(A, 2) == A
+
+# 10 repeats of each row
+B = A[shuffle!(repmat(1:10, 10)), :]
+C = unique(B, 1)
+@test sortrows(C) == sortrows(A)
+@test unique(B, 2) == B
+@test unique(B.', 2).' == C
+
+# Along third dimension
+D = cat(3, B, B)
+@test unique(D, 1) == cat(3, C, C)
+@test unique(D, 3) == cat(3, B)
+
+# With hash collisions
+immutable HashCollision
+    x::Float64
+end
+Base.hash(::HashCollision) = uint(0)
+@test map(x->x.x, unique(map(HashCollision, B), 1)) == C
 
 ## reduce ##
 
