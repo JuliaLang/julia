@@ -11,8 +11,6 @@ typealias Complex128 Complex{Float64}
 typealias Complex64  Complex{Float32}
 typealias Complex32  Complex{Float16}
 
-sizeof{T<:Real}(::Type{Complex{T}}) = 2*sizeof(T)
-
 convert{T<:Real}(::Type{Complex{T}}, x::Real) = Complex{T}(x,0)
 convert{T<:Real}(::Type{Complex{T}}, z::Complex) = Complex{T}(real(z),imag(z))
 convert{T<:Real}(::Type{T}, z::Complex) =

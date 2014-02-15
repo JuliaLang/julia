@@ -164,11 +164,7 @@ oftype{T}(x::T,c) = convert(T,c)
 
 widen{T<:Number}(x::T) = convert(widen(T), x)
 
-sizeof(T::Type) = error(string("size of type ",T," unknown"))
-sizeof(T::DataType) = if isleaftype(T) T.size else error("type does not have a native size") end
-sizeof(::Type{Symbol}) = error("type does not have a native size")
-sizeof{T<:Array}(::Type{T}) = error("type $(T) does not have a native size")
-sizeof(x) = sizeof(typeof(x))
+sizeof(x) = Core.sizeof(x)
 
 # copying immutable things
 copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
