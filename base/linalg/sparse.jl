@@ -457,6 +457,34 @@ end
 diff(a::SparseMatrixCSC, dim::Integer)= dim==1 ? sparse_diff1(a) : sparse_diff2(a)
 
 ## norm and rank
+normfro(A::SparseMatrixCSC) = norm(A.nzval,2)
+
+function norm(A::SparseMatrixCSC,p::Number=1)
+    m, n = size(A)
+    if m == 0 || n == 0 || isempty(A)
+        return real(zero(eltype(A))) 
+    elseif m == 1 || n == 1
+        return norm(reshape(full(A), length(A)), p)
+    elseif p==1
+        nA = real(zero(eltype(A))) 
+        for j=1:n
+            colSum = real(zero(eltype(A))) 
+            for i = A.colptr[j]:A.colptr[j+1]-1
+                colSum += abs(A.nzval[i])
+            end
+            nA = max(nA, colSum)
+        end
+    elseif p==Inf
+        rowSum = zeros(typeof(real(A[1])),m)
+        for i=1:length(A.nzval)
+            rowSum[A.rowval[i]] += abs(A.nzval[i])
+        end
+        nA = maximum(rowSum)
+    else
+        throw(ArgumentError("invalid p-norm p=$p. Valid: 1, Inf"))
+    end
+    return nA
+end
 
 # TODO
 
